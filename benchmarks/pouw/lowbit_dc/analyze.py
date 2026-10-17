@@ -189,9 +189,9 @@ def gemm_main(argv: list[str]) -> int:
     return 0 if s["gates"] and s["gates_exact"] == s["gates"] else 4
 
 
-PG_ROUTES = ("k4s", "i8c", "i8r", "pf8", "pi8", "k4p")  # pgemm's Route and Mode enums, in order
+PG_ROUTES = ("k4s", "i8c", "i8r", "pf8", "pi8", "k4p", "k4b")  # pgemm's Route and Mode enums, in order
 PG_MODES = ("full", "ext", "ld", "mma", "foldonly", "mmares", "fullres")
-PG_DITHER = ("k4s", "k4p", "i8c", "i8r")
+PG_DITHER = ("k4s", "k4p", "k4b", "i8c", "i8r")
 SM100_ALU, SM100_IMAD, SM100_ISSUE = 2.0, 2.0, 4.0  # warp instructions a SM a clock (dc/README.md, sm_100's census)
 ALU_OPS = ("LOP3", "LEA", "IADD3", "SHF", "ISETP", "PLOP3", "SEL")
 NOT_LANE = ("U", "BRA", "NOP", "SYNCS", "LDTM", "STTM", "BSSY", "BSYNC", "ELECT", "FENCE", "VOTEU", "S2UR", "LDCU", "UTC")

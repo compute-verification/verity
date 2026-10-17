@@ -28,6 +28,8 @@
 //   K4P  k4s with the offset receipt: each word absorbed as S_w = T_w + (w + 1) 0x4B400000 (mod 2^32), a public
 //        per-word offset, so the extraction is S += bits, a two-input add that ptxas may put on the IMAD pipe
 //        (IMAD.IADD) beside duo's LOP3 and LEA.HI on the ALU pipe; C is T, as for every route
+//   K4B  k4s's receipt with K4P's running sum: t += bits, then the word T_w = t - (w + 1) 0x4B400000 (a second
+//        two-input add, of a per-word uniform) into duo; two adds a word that ptxas may split between ALU and IMAD
 // Fold-warp modes M (the time split): FULL (the kernel of record), EXT (read and extract, no duo; C written), LD (read,
 // and K4S's restore or I8C's copy, nothing computed), MMAONLY (wait for each word and release it, no read: the tensor
 // and the operand pipeline alone), FOLDONLY (no tensor, no TMEM: the fold warps extract and fold register words, as
@@ -75,13 +77,13 @@ constexpr int KS = 64;   // bytes of k a stage: two k32 slices
 constexpr int SMEM_RING = 192 * 1024;
 constexpr uint32_t MAGIC_BITS = 0x4B400000u;
 
-enum Route { K4S = 0, I8C = 1, I8R = 2, PF8 = 3, PI8 = 4, K4P = 5 };
+enum Route { K4S = 0, I8C = 1, I8R = 2, PF8 = 3, PI8 = 4, K4P = 5, K4B = 6 };
 enum Mode { FULL = 0, EXT = 1, LD = 2, MMAONLY = 3, FOLDONLY = 4, MMARES = 5, FULLRES = 6 };
 // MMARES and FULLRES are MMAONLY and FULL with resident operands: the loader fills the ring once and then completes each
 // stage's barrier without a copy, so the MMAs reread stale tiles (timing only: C and the receipts are wrong).
 DC_HD constexpr int fold_mode(int m) { return m == MMARES ? MMAONLY : m == FULLRES ? FULL : m; }
 DC_HD constexpr bool resident(int m) { return m == MMARES || m == FULLRES; }
-DC_HD constexpr bool is_k4(int r) { return r == K4S || r == K4P; }
+DC_HD constexpr bool is_k4(int r) { return r == K4S || r == K4P || r == K4B; }
 DC_HD constexpr int planes_of(int r) { return is_k4(r) ? 2 : 1; }
 DC_HD constexpr bool is_plain(int r) { return r == PF8 || r == PI8; }
 DC_HD constexpr int nbuf_of(int r) { return is_plain(r) ? 1 : r == I8C ? 2 : 4; }
@@ -141,7 +143,7 @@ DC_DEV void pin(uint32_t (&r)[K]) {
 
 // Chunk U (32 columns of the receipt tile, keys 2U and 2U + 1) of a word into the chains.
 template <int R, int M, int U, int BNR>
-DC_DEV void fold_chunk(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], const uint32_t* r) {
+DC_DEV void fold_chunk(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], const uint32_t* r, uint32_t cw) {
   if constexpr (M == FULL || M == EXT || M == FOLDONLY) {
 #pragma unroll
     for (int c = 0; c < 32; c++) {
@@ -152,6 +154,9 @@ DC_DEV void fold_chunk(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], const uint32_t* r) 
       } else if constexpr (R == I8R || R == K4P) {
         t[32 * U + c] += r[c];
         p = t[32 * U + c];
+      } else if constexpr (R == K4B) {
+        t[32 * U + c] += r[c];
+        p = t[32 * U + c] + cw;
       } else {
         p = r[c];
       }
@@ -167,15 +172,15 @@ DC_DEV void fold_chunk(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], const uint32_t* r) 
 // store). LD mode keeps one word of each chunk (x), or ptxas drops the load.
 template <int R, int M, int U, int BNR>
 DC_DEV void word_chunks(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], uint32_t (&ra)[32], uint32_t (&rb)[32], uint32_t tsrc,
-                        const uint32_t (&c0)[32], uint32_t& x) {
+                        const uint32_t (&c0)[32], uint32_t& x, uint32_t cw) {
   if constexpr (U < BNR / 32) {
     tmem_wait_ld();
     pin(ra);
     if constexpr (is_k4(R)) tmem_st32(tsrc + 32 * U, c0);
     if constexpr (U + 1 < BNR / 32) tmem_ld32(tsrc + 32 * (U + 1), rb);
     if constexpr (M == LD) x ^= ra[0];
-    fold_chunk<R, M, U, BNR>(ch, t, ra);
-    word_chunks<R, M, U + 1, BNR>(ch, t, rb, ra, tsrc, c0, x);
+    fold_chunk<R, M, U, BNR>(ch, t, ra, cw);
+    word_chunks<R, M, U + 1, BNR>(ch, t, rb, ra, tsrc, c0, x, cw);
   }
 }
 template <int U, int BNR>
@@ -193,10 +198,10 @@ DC_DEV void st_all(uint32_t* v, uint32_t tdst) {
   }
 }
 template <int R, int M, int U, int BNR>
-DC_DEV void fold_all(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], const uint32_t* v) {
+DC_DEV void fold_all(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], const uint32_t* v, uint32_t cw) {
   if constexpr (U < BNR / 32) {
-    fold_chunk<R, M, U, BNR>(ch, t, v + 32 * U);
-    fold_all<R, M, U + 1, BNR>(ch, t, v);
+    fold_chunk<R, M, U, BNR>(ch, t, v + 32 * U, cw);
+    fold_all<R, M, U + 1, BNR>(ch, t, v, cw);
   }
 }
 
@@ -345,7 +350,7 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
       uint32_t t[BNR];
 #pragma unroll
       for (int i = 0; i < BNR; i++) t[i] = 0;
-      uint32_t x = 0;
+      uint32_t x = 0, cw = 0;  // cw: K4B's offset removal, -(w + 1) 1.5 2^23 at word w
       if constexpr (M == FOLDONLY) {
         // Register words the compiler must treat as new each word (pin), so nothing is hoisted or shared.
         uint32_t v[BNR];
@@ -354,7 +359,8 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
 #pragma unroll 1
         for (int wd = 0; wd < words; wd++) {
           pin(v);
-          fold_all<R, M, 0, BNR>(ch, t, v);
+          cw -= MAGIC_BITS;
+          fold_all<R, M, 0, BNR>(ch, t, v, cw);
         }
       } else if constexpr (R == I8C) {
         uint32_t v[BNR];
@@ -375,7 +381,7 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
           tc_before_sync();
           __syncwarp();
           if (wd + 1 < words && lane == 0) mbar_arrive(&tempty[(b + 1) % NB]);
-          fold_all<R, M, 0, BNR>(ch, t, v);
+          fold_all<R, M, 0, BNR>(ch, t, v, 0u);
         }
         if constexpr (M == FULL || M == EXT) {
 #pragma unroll
@@ -393,7 +399,8 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
           tc_after_sync();
           if constexpr (M != MMAONLY) {
             tmem_ld32(tsrc, ra);
-            word_chunks<R, M, 0, BNR>(ch, t, ra, rb, tsrc, c0, x);
+            cw -= MAGIC_BITS;
+            word_chunks<R, M, 0, BNR>(ch, t, ra, rb, tsrc, c0, x, cw);
             if constexpr (is_k4(R)) tmem_wait_st();
           }
           tc_before_sync();
@@ -404,7 +411,7 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
       if constexpr (M == LD) {
         if (write) crow[0] = (int32_t)x;
       }
-      if constexpr (R == K4P) {
+      if constexpr (R == K4P || R == K4B) {
 #pragma unroll
         for (int c = 0; c < BNR; c++) t[c] -= (uint32_t)words * MAGIC_BITS;
       }
@@ -531,7 +538,7 @@ struct Arm {
   int r, m, L, fw;
 };
 static const char* route_name(int r) {
-  static const char* n[] = {"k4s", "i8c", "i8r", "pf8", "pi8", "k4p"};
+  static const char* n[] = {"k4s", "i8c", "i8r", "pf8", "pi8", "k4p", "k4b"};
   return n[r];
 }
 static const char* mode_name(int m) {
@@ -595,6 +602,7 @@ static void launch(const Arm& a, const uint8_t* A, const uint8_t* B, int m, int 
   bool ok = true;
   if (a.r == K4S) ok = launch_m<K4S>(a, g, A, B, m, n, k, seed, C, Rc, write, st);
   else if (a.r == K4P) ok = launch_m<K4P>(a, g, A, B, m, n, k, seed, C, Rc, write, st);
+  else if (a.r == K4B) ok = launch_m<K4B>(a, g, A, B, m, n, k, seed, C, Rc, write, st);
   else if (a.r == I8C) ok = launch_m<I8C>(a, g, A, B, m, n, k, seed, C, Rc, write, st);
   else if (a.r == I8R) ok = launch_m<I8R>(a, g, A, B, m, n, k, seed, C, Rc, write, st);
   else if (a.r == PF8 && a.m == FULLRES) launch_t<PF8, FULLRES, 32, 2>(g, A, B, m, n, k, seed, C, Rc, write, st);
@@ -611,22 +619,22 @@ static void launch(const Arm& a, const uint8_t* A, const uint8_t* B, int m, int 
 static std::vector<Arm> record_arms() {
   std::vector<Arm> v;
   for (int L : {32, 64})
-    for (int r : {K4S, K4P, I8C, I8R})
+    for (int r : {K4S, K4P, K4B, I8C, I8R})
       for (int fw : {2, 1})
-        if (r != K4P || fw == 2) v.push_back({r, FULL, L, fw});
+        if ((r != K4P && r != K4B) || fw == 2) v.push_back({r, FULL, L, fw});
   return v;
 }
 static std::vector<Arm> split_arms() {
   std::vector<Arm> v;
   for (int L : {32, 64})
-    for (int r : {K4S, K4P, I8C, I8R})
+    for (int r : {K4S, K4P, K4B, I8C, I8R})
       for (int md : {EXT, LD, MMAONLY, FOLDONLY, MMARES, FULLRES}) v.push_back({r, md, L, 2});
   return v;
 }
 
 struct Operands {
-  uint8_t* A[6] = {};
-  uint8_t* B[6] = {};
+  uint8_t* A[7] = {};
+  uint8_t* B[7] = {};
   int32_t* C = nullptr;
   uint32_t* R = nullptr;
   size_t c_words, r_words;
@@ -641,8 +649,8 @@ struct Operands {
     }
     A[I8R] = A[PI8] = A[I8C];
     B[I8R] = B[PI8] = B[I8C];
-    A[K4P] = A[K4S];
-    B[K4P] = B[K4S];
+    A[K4P] = A[K4B] = A[K4S];
+    B[K4P] = B[K4B] = B[K4S];
     c_words = (size_t)m * n;
     r_words = (size_t)m * (n / 64) * NCH;
     CK(cudaMalloc(&C, c_words * 4));
@@ -696,7 +704,7 @@ static int run_gate(int m, int n, int k, uint32_t seed, bool edge) {
       for (const Arm& a : record_arms())
         if (a.L == L && a.fw == fw) check(a, Cr, a.r == K4P ? &Rp : &Rr);
       if (fw == 2)
-        for (int r : {K4S, K4P, I8R}) check({r, EXT, L, 2}, Cr, nullptr);
+        for (int r : {K4S, K4P, K4B, I8R}) check({r, EXT, L, 2}, Cr, nullptr);
     }
   // Plain: C = X W^T over the codes (PI8) and over the l limbs in FP32 (PF8: every partial sum an integer below 2^24).
   std::vector<int32_t> Ci((size_t)m * n), Cf((size_t)m * n);

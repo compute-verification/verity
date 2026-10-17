@@ -314,9 +314,9 @@ def test_build_selftest(tmp_path):
 @pytest.mark.skipif(not (_tool("nvcc") and _tool("cuobjdump")), reason="needs nvcc and cuobjdump (CUDA 13)")
 def test_pgemm_build_selftest_issue(tmp_path):
     """What only the compiler shows: pgemm.cu's host encoding is exact (selftest), every Dither route's FULL kernel at
-    FW 2 compiles without spills (FW 1's k4s and k4p spill, FOLDONLY 4 bytes), and the word loop's issue cost is the
-    route's: k4s 3 ALU-pipe ops a word (64/3 words/SM/clk), k4p and i8r 2 ALU plus 2 IMAD, i8c duo alone. A
-    rematerialized tcgen05.st constant, which once cost k4s a move a word, fails the last."""
+    FW 2 compiles without spills (FW 1's k4s and k4p spill, FOLDONLY a few bytes), and the word loop's issue cost is
+    the route's: k4s 3 ALU-pipe ops a word (64/3 words/SM/clk), k4p and i8r 2 ALU plus 2 IMAD, k4b those and a VIADD,
+    i8c duo alone. A rematerialized tcgen05.st constant, which once cost k4s a move a word, fails the last."""
     binary = tmp_path / "pgemm"
     r = subprocess.run([_tool("nvcc"), "-std=c++17", "-O3", "-Xptxas", "-v", "-gencode",
                         "arch=compute_100a,code=sm_100a", "-o", str(binary), str(HERE / "pgemm.cu")],
@@ -338,7 +338,8 @@ def test_pgemm_build_selftest_issue(tmp_path):
         for r in ("k4p", "i8r"):
             assert word[r]["alu_word"] == pytest.approx(2, abs=0.1) and word[r]["imad_word"] == pytest.approx(2, abs=0.1)
         assert word["i8c"]["alu_word"] == pytest.approx(2, abs=0.1) and word["i8c"]["imad_word"] < 1.1
-        assert all(w["instrs_word"] < 4.7 for w in word.values()), word
+        assert word["k4b"]["alu_word"] < 2.3 and word["k4b"]["imad_word"] == pytest.approx(2, abs=0.1)
+        assert all(w["instrs_word"] < (5.7 if r == "k4b" else 4.7) for r, w in word.items()), word
 
 
 @pytest.mark.slow
