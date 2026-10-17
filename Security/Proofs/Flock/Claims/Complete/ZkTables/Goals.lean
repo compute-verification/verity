@@ -11,8 +11,8 @@ import Proofs.Flock.Claims.Complete.ZkTables.Decode
 `Run.jsonJ`. Its checks follow (`recordJsonJ`): the draw, the live reads, custody (each table's `root_B`, no public
 words, the points, one round per round message and each round its message), the decode, each table's public words, the
 proof digests listing the rep streams (each found under its name, `find?_name`), every rep's stream, and each table's
-extra claims. What `RecordAt` asks of the proof files (`FilesAt`: their sizes, each rep's file decoding at the table's shape
-to a proof of its parameters, cap and pads' root) is left named, and `RecordJ` follows from it (`recordJ_of`); so
+extra claims. What `RecordAt` asks of the proof files (`FilesAt`: their sizes, each rep's file decoding at the table's
+shape to a proof of its parameters, cap and pads' root) is left named, and `RecordJ` follows from it (`recordJ_of`); so
 `complete` holds with `FilesJ` in place of `RecordJ` (`completeJ`).
 -/
 
