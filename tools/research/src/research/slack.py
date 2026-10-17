@@ -890,6 +890,8 @@ class Routes:
         if not NAME_RE.match(name):
             return None
         if name in self.local and not fresh:
+            if self.local[name].get("closed") and (pub := self._fetched.get(name)) and not pub.get("closed"):
+                return pub                                           # reopened since this clone was pulled
             return self.local[name]
         if name not in self._fetched or fresh:
             raw = self.get(f"{self.base}{name}.json")
@@ -1017,6 +1019,8 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     for name in route_targets(msg, root, reg, inboxes, history, branches):
         if name in humans:
             continue                                                 # people read Slack itself
+        if name not in routes.local or routes.local[name].get("closed"):
+            routes.get_route(name, fresh=True)                       # a clone not pulled since the name (re)opened
         to, r = routes.resolve(name)
         if not r or (r.get("closed") and not r.get("forward_to")):
             h = next((h for h in reg["handles"] if h["handle"] == name), None)
