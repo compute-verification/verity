@@ -26,8 +26,9 @@
 //   fattn gate DIR S H REP SEED   poisoned buffers. Unfused: h_l7qs a KV head at a time (S stored), hsref, apv.cu's four
 //                                 producers and apv_l7qs. Fused: hm_l7qs (causal; and over all tiles), hsm, lred, uedit,
 //                                 vedit, vsum, apv_fu. Bitwise: hm's receipts against h_l7qs's on every tile it runs, P_prob
-//                                 on every byte apv reads, s_q, z_q, apv_fu's f and receipts against apv_l7qs's; a
-//                                 no-write control; sampled query columns' X, W^, S, P_prob, s_q, z_q to DIR for fattn_ref.py
+//                                 on every byte apv reads, s_q, z_q, apv_fu's f and receipts against apv_l7qs's (and again
+//                                 with vfold for vedit and vsum, from vfold's outputs poisoned); a no-write control; sampled
+//                                 query columns' X, W^, S, P_prob, s_q, z_q to DIR for fattn_ref.py
 //   fattn bench REPS S H REP      hot items interleaved across FA_ARMS, one JSON line
 //   fattn one ARM S H REP         three warm-up calls, then one between cudaProfilerStart and Stop (for ncu)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a fattn.cu -lcuda -lcublasLt -lnvidia-ml
@@ -115,7 +116,7 @@ template <bool R> struct FL : EL<R ? DUO : NONE, R ? 7 : 0, R ? 4 : 0, true> {
   }
 };
 
-__global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs(const __grid_constant__ FaArgs a) {
+template <bool H1> DEV void hm_body(const FaArgs& a) {
   using L = FL<true>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
@@ -142,7 +143,8 @@ __global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs(const __grid_constant__ Fa
     }
     int acc[MI][NI][4];
     ml.tile1(acc, ch, kr, 0u);
-    htail<L>(ml, acc, ch);
+    if constexpr (H1) htail_h1<L>(ml, acc, ch);
+    else htail<L>(ml, acc, ch);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
     int* mc = a.M + (size_t)kvh * a.rep * a.s + col0;
     // a tile strictly below the diagonal needs no key <= pos test (EDGE: the tiles that do)
@@ -172,6 +174,9 @@ __global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs(const __grid_constant__ Fa
     r[1] = make_uint4(finish<DUO>(ch, 4), finish<DUO>(ch, 5), finish<DUO>(ch, 6), finish<DUO>(ch, 7));
   }
 }
+__global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs(const __grid_constant__ FaArgs a) { hm_body<false>(a); }
+// cohalf H1 (co32c-u16): the digit-split tail (htail_h1), Q/K floored at top 111
+__global__ void __launch_bounds__(MLW::NT, 1) hm_l7qs_h1(const __grid_constant__ FaArgs a) { hm_body<true>(a); }
 
 __global__ void __launch_bounds__(MLW::NT, 1) hsm(const __grid_constant__ FaArgs a) {
   using L = FL<false>;
@@ -304,7 +309,9 @@ struct FA {
   size_t tpk = 0;
   uint32_t seed = 0, inst = 0, A = 0;
   float inv7 = 0.5f;
+  bool h1 = false;    // cohalf H1's QK^T (co32c-u16, decision 82): Q/K floored at top 111, the digit-split tail
   uint16_t* x;
+  float2* qa = nullptr;   // cohalf H1's per (head, token) (max(x), max(-x)), filled by hrow_s for hquant_h1
   int8_t *W7, *X, *PA, *Wp, *PB, *Wh;
   int *M, *L, *E0, *S = nullptr;
   uint32_t *R, *R2 = nullptr;
@@ -322,6 +329,8 @@ static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool
   if (s % 1024 && unf) { fprintf(stderr, "s %d: the unfused h_l7qs needs s %% 1024 == 0 (EL's raster groups)\n", s); exit(2); }
   apsetup(F.V, s, H, rep, seed, gate);
   F.s = s; F.H = H; F.rep = rep; F.kvh = H / rep; F.seed = seed; F.A = fa_A();
+  const char* num = getenv("CG_NUMERICS");
+  F.h1 = num && !strcmp(num, "h1");
   const int tq = s / 128, tn = rep * s / 128;
   F.tpk = (size_t)tq * tn;
   std::vector<int4> hf;
@@ -337,6 +346,7 @@ static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool
   F.grid = nsm;
   const size_t kr = (size_t)F.kvh * s, qr = (size_t)H * s, nr = (size_t)F.kvh * F.tpk * MLW::NCT * 8;
   CK(cudaMalloc(&F.x, kr * 128 * 2)); CK(cudaMalloc(&F.X, kr * 128)); CK(cudaMalloc(&F.PA, kr * 128));
+  if (F.h1) CK(cudaMalloc(&F.qa, kr * sizeof(float2)));
   CK(cudaMalloc(&F.W7, qr * 128)); CK(cudaMalloc(&F.Wp, qr * 128)); CK(cudaMalloc(&F.PB, qr * 128)); CK(cudaMalloc(&F.Wh, qr * 128));
   CK(cudaMalloc(&F.M, qr * 4)); CK(cudaMalloc(&F.L, qr * 4)); CK(cudaMalloc(&F.E0, qr * 4));
   CK(cudaMalloc(&F.R, nr * 4));
@@ -351,7 +361,9 @@ static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool
   fa_lut_host(lut);
   CK(cudaMemcpyToSymbol(fa_lut, lut, FA_LUT));
   xfill<<<4096, 256, 0, F.V.st>>>(F.x, kr * 128, mix32(seed ^ 0x3333u), 128, gate);
-  wfill<<<4096, 256, 0, F.V.st>>>(F.W7, qr * 128, mix32(seed ^ 0x6666u), 128, gate);
+  // the query: cohalf H1's pre-bit Q in [-112, 110] (floor top 111); the 7-bit arm's in [-64, 62]
+  const int wlo = F.h1 ? -112 : -64, whi = F.h1 ? 110 : 62;
+  wfill<<<4096, 256, 0, F.V.st>>>(F.W7, qr * 128, mix32(seed ^ 0x6666u), 128, gate, wlo, whi);
   F.mq = upload_maps(Maps{tmap(F.X, 128, kr, 128), tmap(F.Wp, 128, qr, 128), tmap(F.PA, 128, kr, 128), tmap(F.PB, 128, qr, 128)});
   F.ms = upload_maps(Maps{tmap(F.Wh, 128, qr, 128), tmap(F.X, 128, kr, 128), tmap(F.Wh, 128, qr, 128), tmap(F.X, 128, kr, 128)});
   if (unf)
@@ -361,14 +373,16 @@ static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool
                                       tmap(F.PB + qo, 128, (size_t)rep * s, 128)}));
     }
   CK(cudaFuncSetAttribute(hm_l7qs, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
+  CK(cudaFuncSetAttribute(hm_l7qs_h1, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
   CK(cudaFuncSetAttribute(hsm, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
   CK(cudaFuncSetAttribute(h_l7qs, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
+  CK(cudaFuncSetAttribute(h_l7qs_h1, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
   CK(cudaStreamSynchronize(F.V.st));
   CK(cudaGetLastError());
 }
 static void fafree(FA& F) {
   CK(cudaDeviceSynchronize());
-  for (void* p : {(void*)F.x, (void*)F.X, (void*)F.PA, (void*)F.W7, (void*)F.Wp, (void*)F.PB, (void*)F.Wh, (void*)F.M, (void*)F.L,
+  for (void* p : {(void*)F.x, (void*)F.qa, (void*)F.X, (void*)F.PA, (void*)F.W7, (void*)F.Wp, (void*)F.PB, (void*)F.Wh, (void*)F.M, (void*)F.L,
                   (void*)F.E0, (void*)F.S, (void*)F.R, (void*)F.R2, (void*)F.tabc, (void*)F.tabf, (void*)F.mq, (void*)F.ms})
     if (p) CK(cudaFree(p));
   for (Maps* m : F.mk) CK(cudaFree(m));
@@ -376,16 +390,25 @@ static void fafree(FA& F) {
 }
 static void fq(FA& F, const Sig& sg) {
   const int kr = F.kvh * F.s, qr = F.H * F.s;
-  hquant<<<hq_blocks(kr), 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, F.inv7, sg);
-  hwedit<true><<<hw_blocks(qr), 256, 0, F.V.st>>>(reinterpret_cast<const uint8_t*>(F.W7), reinterpret_cast<uint8_t*>(F.Wp),
-                                                   reinterpret_cast<uint8_t*>(F.PB), qr, sg, reinterpret_cast<uint8_t*>(F.Wh));
+  const uint8_t* W = reinterpret_cast<const uint8_t*>(F.W7);
+  uint8_t *Wp = reinterpret_cast<uint8_t*>(F.Wp), *PB = reinterpret_cast<uint8_t*>(F.PB), *Wh = reinterpret_cast<uint8_t*>(F.Wh);
+  if (F.h1) {
+    hrow_s<<<(kr + 7) / 8, 256, 0, F.V.st>>>(F.x, F.qa, kr);
+    hquant_h1<<<hq_blocks(kr), 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, F.qa, sg);
+    hwedit<true, true><<<hw_blocks(qr), 256, 0, F.V.st>>>(W, Wp, PB, qr, sg, Wh);
+  } else {
+    hquant<<<hq_blocks(kr), 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, F.inv7, sg);
+    hwedit<true><<<hw_blocks(qr), 256, 0, F.V.st>>>(W, Wp, PB, qr, sg, Wh);
+  }
 }
 static FaArgs faargs(FA& F, const Maps* m, bool full, uint32_t* R) {
   return FaArgs{m, full ? F.tabf : F.tabc, full ? F.ntf : F.ntc, F.s, F.rep, F.seed, F.A, R, F.M, F.L, F.E0, F.V.P};
 }
 static void fhm(FA& F, bool full, uint32_t* R) {
   CK(cudaMemsetAsync(F.M, 0x80, (size_t)F.H * F.s * 4, F.V.st));
-  hm_l7qs<<<std::min(F.grid, full ? F.ntf : F.ntc), MLW::NT, CSMEM, F.V.st>>>(faargs(F, F.mq, full, R));
+  const int g = std::min(F.grid, full ? F.ntf : F.ntc);
+  if (F.h1) hm_l7qs_h1<<<g, MLW::NT, CSMEM, F.V.st>>>(faargs(F, F.mq, full, R));
+  else hm_l7qs<<<g, MLW::NT, CSMEM, F.V.st>>>(faargs(F, F.mq, full, R));
 }
 static void fsm(FA& F) {
   CK(cudaMemsetAsync(F.L, 0, (size_t)F.H * F.s * 4, F.V.st));
@@ -394,12 +417,15 @@ static void fsm(FA& F) {
 static void flr(FA& F) { lred<<<(F.H * F.s + 255) / 256, 256, 0, F.V.st>>>(F.L, F.E0, F.V.sp, F.V.sz, F.H * F.s); }
 static void fqks(FA& F) { fhm(F, false, F.R); fsm(F); flr(F); }
 static void fpv(FA& F, const Sig& sg) { ued(F.V, sg); ved(F.V, sg); vsm(F.V); aprun(F.V, apv_fu, F.V.R3); }
+// pv with apv.cu's vfold (X, DG, Sq and X(0) in one pass over V) for vedit and vsum
+static void fpv_vf(FA& F, const Sig& sg) { ued(F.V, sg); vfd(F.V, sg); aprun(F.V, apv_fu, F.V.R3); }
 // the unfused QK^T: h_l7qs a KV head at a time, O (= S^T) to S
 static void fhqk(FA& F, uint32_t* R) {
   const size_t nk = (size_t)F.tpk * MLW::NCT * 8, sk = (size_t)F.s * F.rep * F.s;
   for (int k = 0; k < F.kvh; k++) {
     Args a{F.mk[k], F.S + k * sk, R + k * nk, F.s, F.rep * F.s, 128, 8, fa_seed(F.seed, k), 0, 1, 0, 0, {0, 0, 0, 0}, nullptr, 0};
-    h_l7qs<<<std::min(F.grid, (int)F.tpk), MLW::NT, CSMEM, F.V.st>>>(a);
+    if (F.h1) h_l7qs_h1<<<std::min(F.grid, (int)F.tpk), MLW::NT, CSMEM, F.V.st>>>(a);
+    else h_l7qs<<<std::min(F.grid, (int)F.tpk), MLW::NT, CSMEM, F.V.st>>>(a);
   }
 }
 static void fsref(FA& F) {
@@ -409,7 +435,8 @@ static void fsref(FA& F) {
 }
 // an arm: hquant (with hwedit<true>: the QK^T operands), hm (causal), hm_full (every tile), hsm (with L's memset),
 // lred, qks (hm, hsm, lred: QK^T and the softmax, S never stored), pv (uedit, vedit, vsum, apv_fu), attn (the operands,
-// qks and pv under one key), fu (apv_fu alone), hqk (the unfused h_l7qs, S stored)
+// qks and pv under one key), pv_vf and attn_vf (pv's and attn's with vfold for vedit and vsum), fu (apv_fu alone), hqk
+// (the unfused h_l7qs, S stored)
 static std::function<void(FA&)> farm(const std::string& a) {
   if (a == "hquant") return [](FA& F) { fq(F, sigma(F.seed, F.inst++)); };
   if (a == "hm") return [](FA& F) { fhm(F, false, F.R); };
@@ -418,10 +445,15 @@ static std::function<void(FA&)> farm(const std::string& a) {
   if (a == "lred") return [](FA& F) { flr(F); };
   if (a == "qks") return [](FA& F) { fqks(F); };
   if (a == "pv") return [](FA& F) { fpv(F, sigma(F.seed, F.inst++)); };
+  if (a == "pv_vf") return [](FA& F) { fpv_vf(F, sigma(F.seed, F.inst++)); };
   if (a == "fu") return [](FA& F) { aprun(F.V, apv_fu, F.V.R3); };
   if (a == "attn") return [](FA& F) {
     const Sig sg = sigma(F.seed, F.inst++);
     fq(F, sg); fqks(F); fpv(F, sg);
+  };
+  if (a == "attn_vf") return [](FA& F) {
+    const Sig sg = sigma(F.seed, F.inst++);
+    fq(F, sg); fqks(F); fpv_vf(F, sg);
   };
   if (a == "hqk") return [](FA& F) {
     if (!F.S) { fprintf(stderr, "hqk needs FA_UNF=1\n"); exit(2); }
@@ -493,7 +525,17 @@ static int fagate(const std::string& dir, int s, int H, int rep, uint32_t seed) 
   CK(cudaGetLastError());
   const unsigned long long r_bad = rbad(F.R, F.tabc, F.ntc), p_bad = pbad(), sp_bad = apbad(V, V.sp, spr, qr),
                            sz_bad = apbad(V, V.sz, szr, qr), f_bad = apbad(V, V.F, V.Fr, fw), pr_bad = apbad(V, V.R3, Rr, rw);
-  const bool ok = full_r == 0 && r_bad == 0 && p_bad == 0 && sp_bad == 0 && sz_bad == 0 && f_bad == 0 && pr_bad == 0;
+  // pv_vf from vfold's outputs and its own poisoned: f and receipts against the reference's
+  const size_t vb = (size_t)V.kvh * 128 * s, dgb = (size_t)V.kvh * V.nJ * 128 * 128, sqb = (size_t)V.kvh * V.nJ * 128 * 4,
+               x0b = (size_t)V.kvh * 128 * 4;
+  for (auto [p, b] : {std::pair<void*, size_t>{V.Xt, vb}, {V.DG, dgb}, {V.Sq, sqb}, {V.X0, x0b}, {V.F, fw * 4}, {V.R3, rw * 4}})
+    CK(cudaMemsetAsync(p, 0xA5, b, V.st));
+  fpv_vf(F, sg);
+  CK(cudaStreamSynchronize(V.st));
+  CK(cudaGetLastError());
+  const unsigned long long vf_f_bad = apbad(V, V.F, V.Fr, fw), vf_r_bad = apbad(V, V.R3, Rr, rw);
+  const bool ok = full_r == 0 && r_bad == 0 && p_bad == 0 && sp_bad == 0 && sz_bad == 0 && f_bad == 0 && pr_bad == 0 && vf_f_bad == 0 &&
+                  vf_r_bad == 0;
   // sampled query columns for fattn_ref.py: KV heads 0 and kvh - 1, X whole, and each sampled query's W^ row, S column
   // (h_l7qs's), P_prob row, s_q and z_q (the fused path's, equal to the reference's when ok), e(0) and m
   std::vector<int> ks = {0};
@@ -527,15 +569,16 @@ static int fagate(const std::string& dir, int s, int H, int rep, uint32_t seed) 
   FILE* fp = fopen((dir + "/meta.json").c_str(), "w");
   fprintf(fp, "{\"s\": %d, \"H\": %d, \"rep\": %d, \"seed\": %u, \"A\": %u, \"ntiles_causal\": %d, \"ntiles_full\": %d, "
               "\"cols\": [%s], \"lut\": [%s], \"device\": {\"hm_full_r_bad\": %llu, \"hm_r_bad\": %llu, \"p_bad\": %llu, "
-              "\"sp_bad\": %llu, \"sz_bad\": %llu, \"f_bad\": %llu, \"pv_r_bad\": %llu}, \"control\": [%llu, %llu, %llu, %llu, "
-              "%llu, %llu], \"device_ok\": %s, \"control_rejected\": %s}\n",
-          s, H, rep, seed, F.A, F.ntc, F.ntf, cj.c_str(), lj.c_str(), full_r, r_bad, p_bad, sp_bad, sz_bad, f_bad, pr_bad, c_r, c_p,
-          c_sp, c_sz, c_f, c_pr, ok ? "true" : "false", control_rejected ? "true" : "false");
+              "\"sp_bad\": %llu, \"sz_bad\": %llu, \"f_bad\": %llu, \"pv_r_bad\": %llu, \"pv_vf_f_bad\": %llu, \"pv_vf_r_bad\": %llu}, "
+              "\"control\": [%llu, %llu, %llu, %llu, %llu, %llu], \"device_ok\": %s, \"control_rejected\": %s}\n",
+          s, H, rep, seed, F.A, F.ntc, F.ntf, cj.c_str(), lj.c_str(), full_r, r_bad, p_bad, sp_bad, sz_bad, f_bad, pr_bad, vf_f_bad, vf_r_bad,
+          c_r, c_p, c_sp, c_sz, c_f, c_pr, ok ? "true" : "false", control_rejected ? "true" : "false");
   fclose(fp);
   printf("{\"gate\": \"%s\", \"s\": %d, \"H\": %d, \"rep\": %d, \"device_ok\": %s, \"control_rejected\": %s, \"hm_full_r_bad\": %llu, "
-         "\"hm_r_bad\": %llu, \"p_bad\": %llu, \"sp_bad\": %llu, \"sz_bad\": %llu, \"f_bad\": %llu, \"pv_r_bad\": %llu}\n",
+         "\"hm_r_bad\": %llu, \"p_bad\": %llu, \"sp_bad\": %llu, \"sz_bad\": %llu, \"f_bad\": %llu, \"pv_r_bad\": %llu, "
+         "\"pv_vf_f_bad\": %llu, \"pv_vf_r_bad\": %llu}\n",
          dir.c_str(), s, H, rep, ok ? "true" : "false", control_rejected ? "true" : "false", full_r, r_bad, p_bad, sp_bad, sz_bad, f_bad,
-         pr_bad);
+         pr_bad, vf_f_bad, vf_r_bad);
   for (void* p : {(void*)Pr, (void*)spr, (void*)szr, (void*)Rr}) CK(cudaFree(p));
   fafree(F);
   return ok && control_rejected ? 0 : 1;
