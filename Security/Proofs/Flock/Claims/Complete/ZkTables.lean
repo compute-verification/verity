@@ -19,6 +19,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Files
 import Proofs.Flock.Claims.Complete.ZkTables.Reps
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
+import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
@@ -58,4 +59,7 @@ tables, `setupTables_spec`, a printable subset draw, `good_subset`, and the mask
 the extra claims' algebra (`RingSwitch`: `ringSwitchJ`, `RsExtrasAt`), which holds at the deployed relation from
 `RelS`, each table satisfied by its share (`Case.model`, `Run.rsExtras`), so there completeness asks per rep only the
 masked Ligerito and the inner proof (`LgInnerAt`; `completeRel`, and `completeJRel` from `complete_zk_relation`'s
-premises at one table). -/
+premises at one table). The statement's premise holds at one table too (`StmtOne`: `stmt_of_one`, from `setupOne`'s
+statement, its header's draw the statement's, a printable stratified or subset draw, `good_stratified`), so `StmtAt`
+holds at every good case (`stmtAt_all`) and `StmtOkZk` holds (`stmtOkZk`), and `completeRelS`, `completeJRelS` drop
+it. -/
