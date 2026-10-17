@@ -1,6 +1,5 @@
 import Proofs.Flock.Claims.Complete.Zk.Run
 import Proofs.Flock.Claims.Complete.Coins
-import Proofs.Flock.Claims.Complete.Runs
 
 /-!
 # δcZk: where the honest masked prover can fail
@@ -20,12 +19,8 @@ fail.
 * **The inner proof's `β`** (`betaSlotsZk`): refused at `0` (round `2` of the inner proof), by the verifier and the
   prover alike.
 
-`εZk` is their count, each pair coin twice, over `2^128`; `pr_badZk_le` is the union bound. `δcZk H` is `εZk` on the
-statements the masked verifier can accept against `H` at one table (`readyZk H`, as `ready H`: the setup against `H`
-is the one at SHA-512, which at `sha512` asks no more, `readyZk_sha512`; the table's regions fit; the honest masked
-record fits its length word, `RecordFitsZkAt`), and `1` elsewhere. The slots read the
-statement's `m`, `k_log`, regions and points, as Deploy's `repRounds true`, and the `--zk` schedule's `k_0` and levels;
-rep `q` is table `q / 2`'s rep `q % 2`, its first coin after the link's and every earlier rep's rounds (`repStartZk`).
+`εZk` (`Complete.Ready`, with the slots and `readyZk`) is their count, each pair coin twice, over `2^128`;
+`pr_badZk_le` is the union bound, and `complete_zk_of` the composition at `deployZk`'s error, `δcZk H`.
 -/
 
 namespace FlockComplete
@@ -134,9 +129,7 @@ theorem pr_rho_le {k : ℕ} (a : ℕ) : Claims.Pr (fun r : Fin k → Coin => rho
     · simp only [rhoDep, ha, false_and]
     · rw [Claims.Pr_false]; positivity
 
-/-! ## δcZk
-
-The slots, `εZk`, `readyZk` and `δcZk` are `Complete.Ready`'s, which the deployed record (`DeployCode`) reads. -/
+/-! ## The bad coins -/
 
 /-- **The bad coins** of the masked verifier: a zerocheck outer coin is `1`, an inner `β` is `0`, or a pair of
 level-0 coins is dependent. -/
@@ -169,13 +162,14 @@ theorem pr_badZk_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Co
 
 /-- **Completeness from acceptance at the good coins**, at the masked verifier: if, on every statement in scope that it
 can accept and every witness in the relation, the honest masked prover is accepted at every tape and every coin outside
-`BadZk`, then Flock's masked verifier is complete for `honestPZk` with error `δcZk H`. -/
+`BadZk`, then Flock's masked verifier is complete for `honestPZk` at the record's error, `δcZk H`. -/
 theorem complete_zk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →
       readyZk H x = true → ∀ (ω : TapeZk) (r : Fin ((V true).k x) → Coin), ¬ BadZk x r →
         (Claims.run H (honestPZk w) (V true) x ω r).out = .acc) :
-    Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H) := by
-  intro x w hs hr ω
+    Claims.Flock.Complete H (deployZk rel) := by
+  intro _ x w hs hr ω
+  show 1 - δcZk H x ≤ _
   unfold δcZk
   split
   · rename_i hready

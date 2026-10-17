@@ -53,7 +53,8 @@ and coin-tree checks passing on it (`checkHello_ok`, `checkRecord_ok`, with `Jso
 which it decodes as the plain record of `specZ` (`decodeWith_specZ`); `Json.Decode` reads it back: decoded, live, and
 its draw (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `Json.Session` is what the one-table
 masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`); `Json.Goals` proves
-the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`);
+the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`), and
+`Json.Stmt` `StmtOkZk` from the case's setup (`stmtOkZk`, with `Same.good` and `good_subset`);
 `Json.Files` the proof files' goals, given `RepShapedZk` (`RunZk.rep`, `repDecodesZk_goal`, `repParamsZk_goal`,
 `padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal`, the record's length from `readyZk`); `Json.Runs` the
 session running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Count` the sends fitting the rounds (`sendCountZk_goal`);

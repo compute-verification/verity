@@ -7,8 +7,8 @@ import Proofs.Flock.Claims.Complete.Zk.Verdict
 # The masked completeness proof's skeleton
 
 `complete_zk_of_goals`: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`
-(`Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H)`), given one goal per check the honest masked run must
-pass.
+(`Claims.Flock.Complete H (deployZk rel)`, at `deployZk`'s prover and error), given one goal per check the honest masked
+run must pass.
 
 * **The setting.** A good case (`CaseZk`): a statement in scope that the masked verifier can accept at one table
   (`readyZk H`), at its setup, a witness in the relation, a masked tape, and coins outside `BadZk`. The honest run at it
@@ -495,7 +495,7 @@ end Proved
 /-- **Masked completeness from the goals**: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`,
 given each goal. -/
 theorem complete_zk_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (g : GoalsZk H rel) : Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H) := by
+    (g : GoalsZk H rel) : Claims.Flock.Complete H (deployZk rel) := by
   refine complete_zk_of H rel fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf true x = some (s, spec, sts) := by
     unfold readyZk at hready

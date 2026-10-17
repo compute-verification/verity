@@ -145,11 +145,7 @@ def RecordFitsZkAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : Sess
 
 open Classical in
 /-- **The statements the masked verifier can accept** against `H`: as `ready H`, of the masked session, at one table,
-with a `Hello` that names the keyed coin tree. It sets up the session at one table, the session draws a unit, the
-statement is under `2^64` bytes, the table's regions fit (`RegionsFit`), its setup against `H` is the one at SHA-512,
-its `Hello` names the keyed coin tree (the masked verifier refuses any other session), and the honest masked record
-fits (`RecordFitsZkAt`). The `--zk` scope admits several tables, whose masked record is per table; `δcZk H` is `1`
-there until it is. -/
+with a `Hello` that names the keyed coin tree. -/
 noncomputable def readyZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
   match setupOf true x with
   | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
