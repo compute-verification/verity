@@ -2,17 +2,17 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3m-16) re-solves here to the τ, τ at 600 W, U/F_low and
+checks every attack against it. Each named vector (VF … VF3n-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3l-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3l-16, the vector of record by decision 62)
-uv run machine-model census VF3l-16 --kind ATOMS64
-uv run machine-model attacks VF3l-16 -n 3 # the cheapest attacks of every design
+uv run machine-model solve VF3n-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current` (VF3n-16, the vector of record since 17 Oct; VF3l-16 by decision 62 before it)
+uv run machine-model census VF3n-16 --kind ATOMS64
+uv run machine-model attacks VF3n-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 ~~~
@@ -80,6 +80,10 @@ A joint row a re-measurement finds violated (a measured point past 1) is unsound
 at the epoch before, and the new frontier's rows replace it. `opcode_probe/eps1.py facets --prior data/rows.csv --emit
 EPOCH` prints them, the upper hull of the new points and the old rows' vertices with the 2% margin. VF3m-16 closed R2-R4,
 KIMAD, KHFMA2 and KSHFL that way for EIMAD, EHFMA2 and ESHFL, and replaced the ASSUMED SHFL by its measured 8 SMSP-cycles.
+VF3n-16 closed the joint issue rows JI3e_0..2 for JI3n_0..2 (note:20261017T0321Z-draft-eps1-tensor): IMMA m16n8k16 and
+TF32 m16n8k4 beside IADD3 load JI3e_1 past 1. Each JI3n row is JI3e's refit over every native mma.sync form's programs and
+VF3e's at the 2% margin, then divided by 1.07 for the 6.9% one program's time varied between builds; MMA takes every form's
+least, and each form is its own kind on them (`IMMA16816`, `HMMA1684T`, …, with its `copy16` line).
 
 ## Where the data came from
 
