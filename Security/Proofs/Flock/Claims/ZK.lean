@@ -19,9 +19,9 @@ import Proofs.Flock.Claims.ZK.Prefinal
 import Proofs.Flock.Claims.ZK.Deployed
 import Proofs.Flock.Claims.ZK.Reference
 import Proofs.Flock.Claims.ZK.CoinLayer
-import Proofs.Flock.Claims.ZK.Session
 import Proofs.Flock.Claims.ZK.Tape
 import Proofs.Flock.Claims.ZK.Capacity
+import Proofs.Flock.Claims.ZK.Session
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -110,8 +110,6 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   committed schedule's places, the opening read from `Resp::Coins`'s words, the coin handed on its words), and
   **`Flock.zk_deployZk_ref`** at it, at every rep rounds' coin counts; `Claims.Witness.Flock.ZK_meets` states its coin
   layer and `ZK_coins_fails` that the degenerate one (every opening passes, the coin is the opening) is not it.
-* `Session`: `RefSession.HonestMsgs` as its three rounds (`HonestPre`, `HonestFin`, `HonestOff`: `enc`, `fin` and `off`
-  each `ZkTables.honestP`'s message), and `Flock.zk_deployZk_ref_rounds` at them.
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
@@ -122,6 +120,8 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   size at each statement in `A`, each table's randomness being read from it so (`fibersEq_tabRand`). With it,
   **`Flock.zk_deployZk_ref_on`** (and `_gap`) at `zkDeployed`, the tape asked for only as the tables' tape read with
   fibers of one size on `A`, where `Flock.zk_deployZk_ref`'s `TapeOK` fails at every unbounded table count.
+* `Session`: `RefSession.HonestMsgsOn A` as its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`: `enc`, `fin`
+  and `off` each `ZkTables.honestP`'s message), and `Flock.zk_deployZk_ref_on_rounds` at them.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
