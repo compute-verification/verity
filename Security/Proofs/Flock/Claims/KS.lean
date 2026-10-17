@@ -53,6 +53,10 @@ import Proofs.Flock.Claims.KS.PlainWire
 import Proofs.Flock.Claims.KS.PlainClashL
 import Proofs.Flock.Claims.KS.ForkCoupling
 import Proofs.Flock.Claims.KS.PlainDraw
+import Proofs.Flock.Claims.KS.PlainDrawAcc
+import Proofs.Flock.Claims.KS.PlainDrawDec
+import Proofs.Flock.Claims.KS.PlainDrawSim
+import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainSim
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
@@ -238,9 +242,19 @@ simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on the en
 `FlockDeploy.KS.forkCoinCoupling_plain`). The verdict at the statement's draw reads `verify` at the setup at that draw,
 not the record's, so an accepting run gives it at its live outcome whatever draw its record carries (`PlainDraw`:
 `Claims.Bridge.PlainDraw.AcceptsAtD`, `Claims.Bridge.PlainDraw.wrPD`, `FlockDeploy.KS.plainVerdictAt`,
-`FlockDeploy.KS.plainVerdictAt_of_run`). The plain simulator runs `P` round by round on the plain wire, at deployed
-coins it rebuilds from a tape of uniform functions of the revealed live history and the entries the live session
-revealed, which are the coins `fnAt` gives on the live history; a live prover whose messages along the live history
-are known has those rounds as its live outcome (`PlainSim`: `FlockDeploy.KS.plainSim`, `FlockDeploy.KS.plainΦ`,
-`FlockDeploy.KS.Pr_plainΦ`, `FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`).
+`FlockDeploy.KS.plainVerdictAt_of_run`). The acceptance lemmas the plain decoders read hold at a draw value by their
+proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
+`FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the draw
+(`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
+`FlockDeploy.KS.plain_hdecHAt`), and KS at the deployed plain verifier's trimmed record holds from a simulator at
+that verdict alone, with nothing asked of the record's draw (`PlainDrawSim`: `FlockDeploy.KS.plain_first_of_simD`,
+`FlockDeploy.KS.PlainSimWrPAtD`, `FlockDeploy.KS.PlainSimWD`, `FlockDeploy.KS.plain_KS_of_simD`). At the coupling's
+chances with every revealed length positive, each `δ_t` is at most `2^{-128}`, a fork's slack weights fall
+geometrically past its round, and the slack fits level 0's room in the plain weight whatever the number of rounds
+(`PlainSlackFit`: `Claims.Flock.sum_slackW_le`, `Claims.Flock.sum_slackC_le`, `Claims.Flock.slack_fits_fast100`,
+`FlockDeploy.KS.plain_slack_fits`). The plain simulator runs `P` round by round on the plain wire, at deployed coins it
+rebuilds from a tape of uniform functions of the revealed live history and the entries the live session revealed, which
+are the coins `fnAt` gives on the live history; a live prover whose messages along the live history are known has those
+rounds as its live outcome (`PlainSim`: `FlockDeploy.KS.plainSim`, `FlockDeploy.KS.plainΦ`, `FlockDeploy.KS.Pr_plainΦ`,
+`FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`).
 -/
