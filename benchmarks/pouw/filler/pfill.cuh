@@ -79,6 +79,15 @@
 #ifndef PF_SHA_ROLL
 #define PF_SHA_ROLL 1  // pf_compress (16 rounds a loop iteration); 0: rs_compress (all 80 unrolled); same digests
 #endif
+// PF_PIPE 1: B fragment j + 1's four MMAs go out under j's folds, chain by chain, so a warp never waits on the tensor pipe
+// with folds it could issue; each chain absorbs the same words in the same order, so the receipts are the same. PF_JU is
+// the unroll of the loop over B fragments in either schedule.
+#ifndef PF_PIPE
+#define PF_PIPE 0
+#endif
+#ifndef PF_JU
+#define PF_JU 4
+#endif
 #define PF_TN 1024
 #ifndef PF_PW
 #define PF_PW 8  // the phase filler's warps a block (dfill_p): its tile is PF_PW warps x 128 PF_PW columns
@@ -396,7 +405,31 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
           a[c][3] = pf_s8x4<KD>((r[g + 8] >> (16 + 4 * t)) & 15);
         }
       }
-#pragma unroll 4
+#if PF_PIPE
+      uint32_t dn[4][4];
+      {
+        const uint2 b = *(const uint2*)bp;
+#pragma unroll
+        for (int c = 0; c < 4; c++) {
+          if (F4) pf_omma(dn[c], a[c], b);
+          else pf_mma(dn[c], a[c], b);
+        }
+      }
+#pragma unroll PF_JU
+      for (int j = 1; j < TN / 8; j++) {
+        const uint2 b = *(const uint2*)(bp + j * 256);
+#pragma unroll
+        for (int c = 0; c < 4; c++) {
+          const uint32_t d0 = dn[c][0], d1 = dn[c][1], d2 = dn[c][2], d3 = dn[c][3];
+          if (F4) pf_omma(dn[c], a[c], b);
+          else pf_mma(dn[c], a[c], b);
+          pf_absorb<NC>(y[c], z[c], d0, d1, d2, d3, key);
+        }
+      }
+#pragma unroll
+      for (int c = 0; c < 4; c++) pf_absorb<NC>(y[c], z[c], dn[c][0], dn[c][1], dn[c][2], dn[c][3], key);
+#else
+#pragma unroll PF_JU
       for (int j = 0; j < TN / 8; j++) {
         const uint2 b = *(const uint2*)(bp + j * 256);
 #pragma unroll
@@ -407,6 +440,7 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
           pf_absorb<NC>(y[c], z[c], d[0], d[1], d[2], d[3], key);
         }
       }
+#endif
     }
     const uint64_t K = dseed(c0, c1, tile);
     uint64_t h = 0;
