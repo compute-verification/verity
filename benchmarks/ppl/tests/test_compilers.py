@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import torch
 
+import matmul
 import spec
 import steps
 from test_engine import evaluate, passed, ppl
@@ -28,6 +29,15 @@ def test_every_route_recombines_every_int8_pair_from_held_planes(route):
     assert all(steps.holds(fmt, p) for p in a + b)
     got = sum(c * a[i].double() * b[j].double() for i, j, c in pairs)
     assert torch.equal(got, x[:, None].double() * x[None, :].double())
+
+
+def test_exact_mm_splits_a_wide_operand_and_stays_exact():
+    g = torch.Generator().manual_seed(3)
+    levels = torch.tensor(steps.LEVELS["e4m3i"], dtype=torch.float32)
+    a = levels[torch.randint(0, len(levels), (4, 3000), generator=g)]
+    b = levels[torch.randint(0, len(levels), (3000, 5), generator=g)]
+    a[:, :1500], b[:1500] = 448, 448
+    assert torch.equal(matmul.exact_mm(a, b, 448 * 448), a.double() @ b.double())
 
 
 def test_to_format_rounds_to_the_nearest_value():

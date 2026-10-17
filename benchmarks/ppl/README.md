@@ -203,7 +203,8 @@ exits 1.
 - `grid_range`: instead of `int8_range`, for a quantizer that declares a wider grid (block-scaled E2M1, ±180): every
   operand within that bound, on every call.
 - `accumulator`: each product's s32 accumulator, bounded a priori by k max|x| max|w|, on every call (a wider grid's
-  product, FP32 chunks summed in float64, or one float64 GEMM: within 2^53).
+  product, FP32 chunks summed in float64, its wide operand split into base-16 limbs when chunks would be short: within
+  2^53).
 - `emulation`: every call of `emulate`: each limb plane exact in its format and the recombined product equal to the
   int8 one it replaces.
 - `product_exact`: on the check window (window 0), every layer, each integer product against a float64 recomputation

@@ -32,14 +32,17 @@ def int_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 
 def exact_mm(a: torch.Tensor, b: torch.Tensor, term: int) -> torch.Tensor:
     """a @ b for integer-valued FP32 a, b with |a_ik b_kj| <= term: FP32 GEMMs over k-chunks whose every partial sum is
-    <= 2^24 (so exact in any order), summed in float64; one float64 GEMM when the chunks would be shorter than 1024
-    (exact too while k term < 2^53, which the accumulator gate bounds)."""
+    <= 2^24 (so exact in any order), summed in float64. When the chunks would be shorter than 1024, b is split first
+    into b = 16 hi + lo (lo in [-8, 7]) and each part's product is taken the same way."""
     c = max(1, FP32_EXACT // max(1, term))
     k = a.shape[-1]
     if k <= c:
         return (a @ b).double()
-    if c < 1024:
-        return a.double() @ b.double()
+    am, bm = (float(t.abs().max()) for t in (a, b))
+    if c < 1024 and am < 2048 and bm > 15:
+        hi = torch.floor((b + 8) / 16)
+        lo = b - 16 * hi
+        return 16 * exact_mm(a, hi, int(am * float(hi.abs().max()))) + exact_mm(a, lo, int(am * 8))
     out = None
     for i in range(0, k, c):
         part = (a[..., i:i + c] @ b[..., i:i + c, :]).double()
