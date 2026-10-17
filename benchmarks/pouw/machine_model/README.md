@@ -2,7 +2,7 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3n-16) re-solves here to the τ, τ at 600 W, U/F_low and
+checks every attack against it. Each named vector (VF … VF3o-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
@@ -84,6 +84,11 @@ VF3n-16 closed the joint issue rows JI3e_0..2 for JI3n_0..2 (note:20261017T0321Z
 TF32 m16n8k4 beside IADD3 load JI3e_1 past 1. Each JI3n row is JI3e's refit over every native mma.sync form's programs and
 VF3e's at the 2% margin, then divided by 1.07 for the 6.9% one program's time varied between builds; MMA takes every form's
 least, and each form is its own kind on them (`IMMA16816`, `HMMA1684T`, …, with its `copy16` line).
+VF3o-16 puts UNI on the issue rows (EPS1 P10, r20261017-055801-e051, note:20261017T0332Z-draft-eps1-datasheet): in the
+honest step a uniform instruction costs 0.6-1.1 SMSP-cycles with a third of issue idle, so it takes the slot (1 on
+`issue`; 0.872 of a vector instruction's coefficient on JI3n_0..2, the share no `uniform.cu` point beats), and UP's
+bound rises to the fastest uniform form alone, 0.766 a SMSP-cycle. It keeps VF3n-16's τ and margin; UNI leaves the copy
+routes under 16 MACs a word.
 
 ## Where the data came from
 

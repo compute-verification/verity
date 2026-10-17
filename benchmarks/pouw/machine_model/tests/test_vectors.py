@@ -21,8 +21,8 @@ def solved(name):
 
 
 def test_every_named_vector_is_here():
-    assert NAMES[0] == "VF" and NAMES[-7:] == ["VF3l-16", "VF3l-16-copy16", "VF3l-16-copy16-fan32", "VF3l-16-copy32",
-                                              "VF3l-16-copy32-fan16", "VF3m-16", "VF3n-16"]
+    assert NAMES[0] == "VF" and NAMES[-8:] == ["VF3l-16", "VF3l-16-copy16", "VF3l-16-copy16-fan32", "VF3l-16-copy32",
+                                              "VF3l-16-copy32-fan16", "VF3m-16", "VF3n-16", "VF3o-16"]
     assert {"VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict", "VF3j", "VF3j-8",
             "VF3j-16", "VF3k-16"} < set(NAMES)
 
@@ -41,6 +41,7 @@ PUBLISHED = {
     "VF3l-16-copy32": (0.0518, 0.0405, 1.3125, 2.000),
     "VF3m-16": (0.0591, 0.0462, 1.1563, 2.000),       # note:20261017T0332Z-draft-eps1-datasheet
     "VF3n-16": (0.0586, 0.0459, 1.1563, 2.000),       # note:20261017T0321Z-draft-eps1-tensor
+    "VF3o-16": (0.0586, 0.0459, 1.1563, 2.000),       # note:20261017T0332Z-draft-eps1-datasheet
 }
 
 
@@ -118,6 +119,7 @@ CLAIMED = {
     "VF3l-16-copy32": ([], []),
     "VF3m-16": ([], []),
     "VF3n-16": ([], []),
+    "VF3o-16": ([], []),
 }
 
 
@@ -129,11 +131,11 @@ def test_claims(name):
 
 
 # π_c ≥ 16 by vector: what is under it, and its cheapest copy route a word. VF3k-16 and VF3l-16 price the UR fan-out
-# under it; each copy candidate raises the routes it names
+# under it; each copy candidate raises the routes it names; VF3o-16's issue slot lifts UNI over it
 UR_FANOUT = ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"]
 COPIES = {"VF3k-16": (UR_FANOUT, 1), "VF3l-16": (UR_FANOUT, 1), "VF3l-16-copy16": ([], 16),
           "VF3l-16-copy16-fan32": ([], 16), "VF3l-16-copy32-fan16": ([], 16), "VF3l-16-copy32": ([], 32),
-          "VF3m-16": (UR_FANOUT, 1), "VF3n-16": (UR_FANOUT, 1)}
+          "VF3m-16": (UR_FANOUT, 1), "VF3n-16": (UR_FANOUT, 1), "VF3o-16": (UR_FANOUT[1:], 1)}
 
 
 @pytest.mark.parametrize("name", sorted(COPIES))
