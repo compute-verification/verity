@@ -14,11 +14,14 @@ shape the masked verifier decodes it at.
 * **The cap** is level 0's masked commitment's (`commitRowsP_capSize`); **Ligerito's lengths** and `t_pad` padding
   coefficients are level 0's (`Level0.ProverShape`).
 * **The inner proof's** salts are the pads' commitment's, fitted to 192 bytes (`innerCommitP_salts`), and its path
-  entries are its tree's nodes, each a 64-byte digest (`innerTree_entry`), at columns below its width.
-* **The file fits its length word** (`encZk_lt`): the commitment and PIOP are plain's bound with level 0's rows
-  `EXTRA_LANES` wider (`wProofZk_size_le`, `schedPartZk`), level 0's messages `105 + 32·t_pad` bytes, and the inner
-  proof at most `424 + 16·|y| + 168·(232 + 64·depth)`; every `--zk` schedule's part is under `2^32`
-  (`zkSchedule_file`), and a good case's table has at most 2,050 claims (`Case.extras_le`).
+  entries are its tree's leaves and nodes, each a 64-byte digest (`innerTree_entry`), at columns below its width
+  (`inZ_shape`).
+* **The file fits its length word**: the commitment and PIOP are plain's bound with level 0's rows `EXTRA_LANES` wider
+  (`wProofZk_size_le`, `schedPartZk`), level 0's messages `105 + 32·t_pad` bytes (`wLevel0_size`), and the inner
+  proof at most `424 + 16·|y| + 168·(232 + 64·depth)` (`wInner_size_le`); every `--zk` schedule's part is under
+  `2^32` (`zkSchedule_file`), and a good case's table has at most 2,050 claims (`Case.extras_le`).
+
+`complete_jsonT_of_level0`: so `complete_jsonT` follows from level 0's four premises alone.
 -/
 
 namespace FlockComplete.ZkTables
