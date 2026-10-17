@@ -181,6 +181,48 @@ DC_DEV void wg_mix(const OpArgs& a) {
   OP_SINK(fold_acc(d) ^ l.fold() ^ threadIdx.x)
 }
 
+// The honest LI-CP-W loop, static-trip (OP_LOOP, so a warp-collective redux gates on sm_90, unlike the dynamic-trip
+// OP_UNTIL loop the gate refuses, DC EPS1 r9): each warpgroup issues its 4 wgmma, then folds the four segments' 512
+// committed words with LI (LOP3 to absorb a word, IMAD to multiply by an odd a) and, for CP > 0, LI-CP-W's per-segment
+// checkpoint (4 LOP3 to XOR a lane's 8 chains, then the warp reduces once by `redux.sync.xor.b32` (CP 1) or the 5-shuffle
+// butterfly fallback (CP 2)), then waits. No filler (that is the design's): this is the honest profile's own loop, and
+// its tensor fraction (the wgmma's rate beside it over its rate alone) is dc90-licpw-redux-l32's measured cycles a MMA.
+template <int CP>
+DC_DEV void li_fold(Lane& l) {
+#pragma unroll
+  for (int c = 0; c < 256; c++) {
+    l.op<L_LOP3>(c);
+    l.op<L_IMAD>(c);
+  }
+  if constexpr (CP > 0) {
+#pragma unroll
+    for (int s = 0; s < 4; s++) {
+      l.op<L_LOP3>(0);
+      l.op<L_LOP3>(2);
+      l.op<L_LOP3>(4);
+      l.op<L_LOP3>(6);
+      if constexpr (CP == 1) l.op<L_REDUX>(0);
+      else l.op<L_REDUCE>(0);
+    }
+  }
+}
+template <int CP>
+DC_DEV void wg_li(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  const Tiles t = fill_tiles<0>(sm, a.mode);
+  int d[128] = {};
+  Lane l(threadIdx.x);
+  OP_BEGIN
+  OP_LOOP(it) {
+    group4<F_s8_n256>(d, t);
+    li_fold<CP>(l);
+    wgmma_wait<0>();
+  }
+  wgmma_hold(d);
+  OP_END
+  OP_SINK(fold_acc(d) ^ l.fold() ^ threadIdx.x)
+}
+
 DC_DEV void mma_s8k32(int32_t* d, const uint32_t* a, const uint32_t* b) {
   asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
                : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
@@ -330,6 +372,9 @@ OP_KERNEL(wgmix_shfl_r32, 256) { wg_mix<L_SHFL, 32>(a); }
 OP_KERNEL(wgmix_shfl_r128, 256) { wg_mix<L_SHFL, 128>(a); }
 OP_KERNEL(wgmix_redux_r64, 256) { wg_mix<L_REDUX, 64>(a); }
 OP_KERNEL(wgmix_reduce_r8, 256) { wg_mix<L_REDUCE, 8>(a); }
+OP_KERNEL(wgli_base, 256) { wg_li<0>(a); }
+OP_KERNEL(wgli_redux, 256) { wg_li<1>(a); }
+OP_KERNEL(wgli_reduce, 256) { wg_li<2>(a); }
 JOINT(duo, L_DUO, 96)
 JOINT(duo, L_DUO, 384)
 #undef JOINT
@@ -395,6 +440,12 @@ static const OpProbe PROBES[] = {
      .expect = "IGMMA.64x256x32.S8.S8*=4,REDUX*=64", .iters = 4096},
     {.name = "wgmix_reduce_r8", .kernel = (const void*)wgmix_reduce_r8, .tpb = 256,
      .expect = "IGMMA.64x256x32.S8.S8*=4,SHFL.BFLY=40,LOP3.LUT=40", .iters = 4096},
+    {.name = "wgli_base", .kernel = (const void*)wgli_base, .tpb = 256,
+     .expect = "IGMMA.64x256x32.S8.S8*=4,LOP3.LUT=256,IMAD=256", .iters = 4096},
+    {.name = "wgli_redux", .kernel = (const void*)wgli_redux, .tpb = 256,
+     .expect = "IGMMA.64x256x32.S8.S8*=4,LOP3.LUT=272,IMAD=256,REDUX*=4", .iters = 4096},
+    {.name = "wgli_reduce", .kernel = (const void*)wgli_reduce, .tpb = 256,
+     .expect = "IGMMA.64x256x32.S8.S8*=4,LOP3.LUT=292,IMAD=256,SHFL.BFLY=20", .iters = 4096},
     P_JOINT(duo, 96, "LOP3.LUT=32,IMAD=32"),
     P_JOINT(duo, 384, "LOP3.LUT=128,IMAD=128"),
 #undef P_JOINT

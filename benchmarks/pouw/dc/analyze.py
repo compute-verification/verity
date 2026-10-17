@@ -209,6 +209,11 @@ def analyze(family: str, d: Path) -> dict:
         for name, row in rows.items():
             if lane_of(name):
                 joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
+            elif name.startswith("wgli_") and t_alone:
+                # the honest LI-CP-W loop (static-trip): its wgmma rate over the wgmma alone is the profile's tensor
+                # fraction, and dc90-licpw's measured cycles a MMA = the plain GEMM's cycles over it
+                joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone,
+                                "issue": issue_rates(row, verdicts.get(name))}
             elif name.startswith("wgU_sync") and t_alone:
                 joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone, "exact": True,
                                 "issue": issue_rates(row, verdicts.get(name)),
