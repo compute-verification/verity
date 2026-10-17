@@ -185,4 +185,6 @@ def problems(root: Path = HERE) -> list[str]:
         for key in ("K", "Gamma", "b_tok"):
             if not isinstance(c.get(key), (int, float)) or c[key] <= 0:
                 out.append(f"calibration {c.get('id')}: {key} must be a positive number")
+        if not isinstance(c.get("theta_cap"), bool):
+            out.append(f"calibration {c.get('id')}: theta_cap must be true or false")
     return out

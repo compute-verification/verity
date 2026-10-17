@@ -22,6 +22,8 @@ in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
   token; at the best split (``U_s = K / 2``) a block's intensity is ``4 crossings w_cut U_token / (K flops_per_token)``,
   padded to ``alpha``. It assumes updated state spread evenly over a token's compute, and that a block's work cap
   never binds (``shard`` checks it).
+* ``theta_cap``: a calibration without a cap on the committed parameters' size lets a row decode from a committed table
+  (its ``decode_flops_table``) instead of regenerating it, as a seed-based method's noise.
 * ``chain``: the earlier chain bound ``kappa * F`` (``Nci.Guarantees.UpdatedMatMul``), for comparison. The lock marks it
   as resting on wiring-form incompressibility of the declared circuit, which Daniel ruled false.
 """
@@ -132,6 +134,8 @@ def construction_upper(i: dict, K: float, Gamma: float, b_tok: float) -> tuple[f
 
 def bracket(row: dict, calibration: dict, parameters: list[dict]) -> dict:
     i = {name: catalog.resolve(ref, parameters) for name, ref in row["inputs"].items()}
+    if not calibration["theta_cap"] and "decode_flops_table" in row:
+        i["decode_flops"] = min(i["decode_flops"], row["decode_flops_table"])
     K, Gamma = calibration["K"], calibration["Gamma"]
     b_tok = calibration["b_tok"]
     upper, basis = construction_upper(i, K, Gamma, b_tok)

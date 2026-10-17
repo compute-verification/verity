@@ -136,6 +136,29 @@ The widest brackets are the research targets:
 - **The seed-based rows.** Their lower bound is 1, so their cost is whatever the best construction pays.
 - **`pretrain-full`**. The proven bound (1e5) and the construction (1.5e7) are 140x apart.
 
+## What the committed parameters may hold
+
+Today the policy puts no limit on θ, the values committed before monitoring. That matters most for seed-based training.
+A developer may commit a noise table, one entry per parameter per direction, and then decode an update with one
+multiply-add per parameter instead of a PRNG draw.
+
+- **Without a cap** (`kimi-k2-1m-raw-uncapped`), `zo-seed-pool` costs about 1.1 and `es-population-30` about 1.5.
+- **With θ capped** at the registered models' size, which every other calibration assumes (`theta_cap`), they cost 970
+  and 7,070.
+
+Three restrictions are proposed, all checkable from structure:
+
+- θ holds only registered inputs.
+- Its total width is capped.
+- Committed text enters only as tokens at the embedding lookup, charged like a prompt.
+
+They don't close one gap. Structure can't tell weights from data: a one-hot activation copies any θ entry. A corpus
+can also hide in a checkpoint's slack bits, about 2×10¹¹ tokens for a 1T-parameter model requantized within 1% loss.
+So small-model training on smuggled data stays bounded, not closed.
+
+The thread guarantees say nothing about a developer whose data is in θ, since `Declaration.Contains` fails. A lemma
+for data that enters as tokens (`contains_of_tokenChannel`) would extend them.
+
 ## What changed from the prior draft's appendix
 
 The prior review's citations all resolve, but these uses don't hold up. Each item cites its finding:

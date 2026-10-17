@@ -236,7 +236,7 @@
    "crossings": 1,
    "flops_per_token": 128000000000.0
   },
-  "notes": "decode = 2e4 steps x 10 flops x 1.04e12 parameters = 2.1e17. Two forward passes per step, so 4 flops per active parameter per token. Whether it fits depends on Gamma: it needs Gamma >= 4.2e17 to decode in one block.",
+  "notes": "decode = 2e4 steps x 10 flops x 1.04e12 parameters = 2.1e17. Two forward passes per step, so 4 flops per active parameter per token. Whether it fits depends on Gamma: it needs Gamma >= 4.2e17 to decode in one block. With a committed noise table (only possible without a cap on the committed parameters), decoding costs 2 flops per parameter per direction: 4.2e+16.",
   "sources": [
    "malladi-2023-mezo"
   ],
@@ -246,7 +246,8 @@
     "malladi-2023-mezo/4"
    ],
    "note": "within 1% of fine-tuning on 7/11 tasks at 13B"
-  }
+  },
+  "decode_flops_table": 4.16e+16
  },
  {
   "id": "es-population-30",
@@ -270,7 +271,7 @@
    "crossings": 1,
    "flops_per_token": 64000000000.0
   },
-  "notes": "decode = 1.5e4 perturbations x 10 flops x 1.04e12 = 1.6e17.",
+  "notes": "decode = 1.5e4 perturbations x 10 flops x 1.04e12 = 1.6e17. With a committed noise table (only possible without a cap on the committed parameters), decoding costs 2 flops per parameter per direction: 3.1e+16.",
   "sources": [
    "qiu-2025-es-at-scale"
   ],
@@ -280,7 +281,8 @@
     "qiu-2025-es-at-scale/3"
    ],
    "note": "beats PPO and GRPO on Countdown at 7-8B; a re-run finds near-parity"
-  }
+  },
+  "decode_flops_table": 3.12e+16
  },
  {
   "id": "zo-seed-pool",
@@ -304,10 +306,11 @@
    "crossings": 1,
    "flops_per_token": 128000000000.0
   },
-  "notes": "decode = 4096 seeds x 10 flops x 1.04e12 parameters = 4.3e16, whatever the number of steps. The price is a 4096-dimensional update subspace.",
+  "notes": "decode = 4096 seeds x 10 flops x 1.04e12 parameters = 4.3e16, whatever the number of steps. The price is a 4096-dimensional update subspace. With a committed noise table (only possible without a cap on the committed parameters), decoding costs 2 flops per parameter per direction: 8.5e+15.",
   "sources": [
    "qin-2024-fedkseed"
-  ]
+  ],
+  "decode_flops_table": 8519680000000000.0
  },
  {
   "id": "context-playbook",
