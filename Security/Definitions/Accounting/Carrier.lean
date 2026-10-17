@@ -1,6 +1,7 @@
 import Definitions.Accounting.RateAuditSketchDeployed
 import Definitions.Accounting.RateAuditDeployed
 import Definitions.Accounting.Gates.Codec
+import Mathlib.Data.ENat.Lattice
 
 /-!
 # Carriers: device memory whose post-seed contents are a circuit's values (trusted)
@@ -19,7 +20,7 @@ on them in two ways only:
 * `input x f`: `x` bits the prover feeds the circuit, any function `f` of the store (the prover knows all of it);
 * `encode t x _ f`: `x ≤ m·256` bits of tile `t`'s encoding, any `x`-bit function `f` of it, which the circuit
   computes itself (exact-integer ops on the tile's payload, the tile's other bits among what it may hold), at a cost in
-  roundings that depends only on `x`.
+  budgeted gates that depends only on `x`.
 
 A `Provenance` is the circuit seen through those two channels: every other gate is a function of the values so far,
 folded into the continuations, so the gates themselves are not here. It covers every value a carrier's contents
@@ -33,9 +34,10 @@ a pass's certified stream and oracle, receipts it computed elsewhere among them:
 whose inputs are any function of the store, the stream and the oracle. A device reads such a carrier through its side
 sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts the side link without them.
 
-**The encode cost.** An `encode` step of `x` bits is charged `encodeBitsCost`: the circuit model's encode cost
-(`Gates.encodeCost`, budgeted gates) of the codec words that `x` bits fill, so the provenances' `roundings` count
-budgeted gates of `Definitions/Accounting/Gates`.
+**The encode cost.** An `encode` step of `x` bits is charged `encodeBitsCost`: the fewest budgeted gates of a circuit of
+the gate model (`Definitions/Accounting/Gates`) that computes the codec words `x` bits fill, and `⊤` when no circuit of
+the model's restricted class computes them, so that such a step exceeds every budget. The provenances' `gates` count
+them.
 -/
 
 namespace Accounting.RateSketch
@@ -73,12 +75,12 @@ def encoded (E : SketchStore N m) : Provenance N m α → ℕ
   | input _ f k => (k (f E)).encoded E
   | encode t x _ f k => (k (f fun u => E (t, u))).encoded E + x
 
-/-- The roundings the encodes cost at store `E`, at `cost x` per `encode` step of `x` bits. The circuit's other
-roundings only add to its count, so a budget on its roundings bounds this. -/
-def roundings (cost : ℕ → ℕ) (E : SketchStore N m) : Provenance N m α → ℕ
+/-- The budgeted gates the encodes cost at store `E`, at `cost x` per `encode` step of `x` bits. The circuit's other
+budgeted gates only add to its count, so a budget on its budgeted gates bounds this. -/
+def gates (cost : ℕ → ℕ∞) (E : SketchStore N m) : Provenance N m α → ℕ∞
   | done _ => 0
-  | input _ f k => (k (f E)).roundings cost E
-  | encode t x _ f k => (k (f fun u => E (t, u))).roundings cost E + cost x
+  | input _ f k => (k (f E)).gates cost E
+  | encode t x _ f k => (k (f fun u => E (t, u))).gates cost E + cost x
 
 end Provenance
 
@@ -128,11 +130,11 @@ def encoded (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance
   | input _ f k => (k (f E R O)).encoded E R O
   | encode j x _ f k => (k (f (E j))).encoded E R O + x
 
-/-- The roundings the encodes cost, at `cost x` per `encode` step of `x` bits. -/
-def roundings (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ
+/-- The budgeted gates the encodes cost, at `cost x` per `encode` step of `x` bits. -/
+def gates (cost : ℕ → ℕ∞) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ∞
   | done _ => 0
-  | input _ f k => (k (f E R O)).roundings cost E R O
-  | encode j x _ f k => (k (f (E j))).roundings cost E R O + cost x
+  | input _ f k => (k (f E R O)).gates cost E R O
+  | encode j x _ f k => (k (f (E j))).gates cost E R O + cost x
 
 end PassProvenance
 
@@ -157,12 +159,13 @@ end Accounting.Rate
 
 namespace Accounting
 
-/-- **The encode cost of `x` bits of a block's encoding**, in budgeted gates: the circuit model's encode cost
-(`Gates.encodeCost`, the fewest budgeted gates of a restricted circuit with no run input that computes that many codec
-words over `F` at `k` rounds, budgeted fan-in at most `f`, values within `w` bits, on more than `εnum/εden` of the
-draws) of the `⌈x / (8·bytes)⌉` words that `x` bits fill. A function of a block's encoding is charged as the whole
-words its bits would fill. -/
-noncomputable def encodeBitsCost (F : Gates.Field) (k f w εnum εden x : ℕ) : ℕ :=
-  Gates.encodeCost F k f w εnum εden ((x + 8 * F.bytes - 1) / (8 * F.bytes))
+/-- **The encode cost of `x` bits of a block's encoding**, in budgeted gates: the fewest budgeted gates of a circuit of
+`Gates.encodeCosts` (a restricted circuit with no run input that computes that many codec words over `F` at `k` rounds,
+budgeted fan-in at most `f`, values within `w` bits, on more than `εnum/εden` of the draws) for the `⌈x / (8·bytes)⌉`
+words that `x` bits fill, and `⊤` when the gate model has no such circuit. A function of a block's encoding is charged
+as the whole words its bits would fill; one a circuit gets without computing those words (a word's parity, the Legendre
+symbol of its last round's input, which is why the words' targets leave it out) enters a provenance as an input. -/
+noncomputable def encodeBitsCost (F : Gates.Field) (k f w εnum εden x : ℕ) : ℕ∞ :=
+  ⨅ c ∈ Gates.encodeCosts F k f w εnum εden ((x + 8 * F.bytes - 1) / (8 * F.bytes)), (c : ℕ∞)
 
 end Accounting
