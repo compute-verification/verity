@@ -173,15 +173,21 @@ def circuitOf (tags : Tags) (file : ByteArray) (tables : List (String × ByteArr
 def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) : V Public :=
   if tags.hiddenOutputs then HmOut.loadPublic tags c file else HmRow.loadPublic tags c file
 
+/-- **The most tables a `--zk` session may have**, `2^16`: ZK's tape premise holds only over a bounded table count. -/
+def zkTableCap : Nat := 65536
+
 /-- The forms of `verify`'s statement the proof covers, each with what a statement outside it is: an hm96-sha512 row
 statement (`Stmt.setupTables`, the setup the proof models), untyped, with retained rounds and `hm96-sha512/v1` leaves, at
-most one table without `--zk`, and no public input ports (the proof's setup takes no `--public-inputs`). -/
+most one table without `--zk` and `zkTableCap` with it, and no public input ports (the proof's setup takes no
+`--public-inputs`). -/
 def statementRules (tags : Tags) (zk : Bool) (count : Nat) (publicInputs : Bool) : List (Bool × String) :=
   [(tags.hm96Rows, s!"{tags.name}, a statement before hm96-sha512 rows"),
    (!tags.typed, s!"{tags.name}, a typed statement"),
    (tags.retainRounds, s!"{tags.name}, a statement without retained rounds"),
    (tags.merkleLeaf == "hm96-sha512/v1", s!"{tags.name}, a statement with {tags.merkleLeaf} leaves"),
-   (zk || decide (count ≤ 1), s!"{count} tables in a session without --zk"),
+   (decide (count ≤ if zk then zkTableCap else 1),
+    if zk then s!"{count} tables in a --zk session, more than {zkTableCap}"
+    else s!"{count} tables in a session without --zk"),
    (!publicInputs, "public input ports (--public-inputs)")]
 
 /-- The first rule that fails, by what it refuses. -/
