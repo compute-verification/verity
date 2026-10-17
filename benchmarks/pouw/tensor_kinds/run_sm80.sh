@@ -22,7 +22,7 @@ echo "{\"run_id\":\"${RESEARCH_RUN_ID:-unknown}\",\"host\":\"$(hostname)\",\"sta
 
 pids=()
 for g in $GROUPS_; do
-  "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -arch=sm_80 -Xptxas -v -DGROUP="$g" -o "$WORK/sm80_g$g" \
+  "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -arch=sm_80 --no-compress -Xptxas -v -DGROUP="$g" -o "$WORK/sm80_g$g" \
     "$SRC/sm80.cu" -ldl >"$OUT/build/g$g.log" 2>&1 &
   pids+=($!)
 done

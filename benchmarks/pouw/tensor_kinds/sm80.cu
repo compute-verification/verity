@@ -245,13 +245,20 @@ __device__ __forceinline__ void op1(Lane& s, int bank, int i) {
   if (OP == OP_POPC) asm volatile("popc.b32 %0,%1;" : "=r"(r[j]) : "r"(r[n]));
   if (OP == OP_LDS) asm volatile("ld.shared.u32 %0,[%0];" : "+r"(s.l[j]));
 }
+constexpr int q_bank(int p, int q) { return p == q || (p != OP_FFMA) == (q != OP_FFMA) ? 1 : 0; }
 template <int X>
 __device__ __forceinline__ void lane_op(Lane& s, int i) {
   constexpr int P = X & 15, Q = X >> 4;
   if (Q == OP_NONE) op1<P>(s, 0, i);
-  else if (i & 1) op1<Q>(s, P == Q || (P != OP_FFMA) == (Q != OP_FFMA) ? 1 : 0, i >> 1);
+  else if (i & 1) op1<Q>(s, q_bank(P, Q), i >> 1);
   else op1<P>(s, 0, i >> 1);
 }
+// The banks program X writes (1 r, 2 q, 4 f, 8 g, 16 l), so the sink reads only those and no unused bank stays live.
+enum { B_R = 1, B_Q = 2, B_F = 4, B_G = 8, B_L = 16 };
+constexpr int bank_of(int op, int bank) {
+  return op == OP_NONE ? 0 : op == OP_LDS ? B_L : op == OP_FFMA ? (bank ? B_G : B_F) : (bank ? B_Q : B_R);
+}
+constexpr int banks(int x) { return bank_of(x & 15, 0) | ((x >> 4) == OP_NONE ? 0 : bank_of(x >> 4, q_bank(x & 15, x >> 4))); }
 template <int X>
 constexpr bool uses_lds() { return (X & 15) == OP_LDS || (X >> 4) == OP_LDS; }
 
@@ -276,10 +283,18 @@ __device__ __forceinline__ void init_r(Lane& s, uint32_t tid) {
     __syncthreads();
   }
 }
+template <int X>
 __device__ __forceinline__ uint32_t consume(const Lane& s) {
+  constexpr int B = banks(X);
   uint32_t x = s.k;
 #pragma unroll
-  for (int i = 0; i < 8; i++) x += (s.r[i] ^ s.q[i] ^ s.l[i]) + (__float_as_uint(s.f[i]) ^ __float_as_uint(s.g[i]));
+  for (int i = 0; i < 8; i++) {
+    if (B & B_R) x += s.r[i];
+    if (B & B_Q) x ^= s.q[i];
+    if (B & B_L) x += s.l[i];
+    if (B & B_F) x ^= __float_as_uint(s.f[i]);
+    if (B & B_G) x += __float_as_uint(s.g[i]);
+  }
   return x;
 }
 
@@ -312,7 +327,7 @@ __global__ void __launch_bounds__(1024) k_opalone(int iters, uint32_t* sink, Blo
     for (int q = 0; q < 64; q++) lane_op<X>(r, q);
   }
   CLK_END(rec)
-  sink[blockIdx.x * blockDim.x + threadIdx.x] = threadIdx.x + consume(r);
+  sink[blockIdx.x * blockDim.x + threadIdx.x] = threadIdx.x + consume<X>(r);
 }
 
 // MMA alone: NW warps a SMSP, 8 independent accumulators a warp.
@@ -334,7 +349,7 @@ __global__ void __launch_bounds__(128 * NW) k_alone(int iters, uint32_t* sink, B
 
 // Warp-specialized: 16 warps a SM; SMSP r hosts warps {r, r+4} (MMA) and {r+8, r+12} (lane); R/8 ops a MMA.
 template <class F, int R, int X>
-__global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockClk* rec) {
+__global__ void __launch_bounds__(512, 1) k_spec(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
   const bool mma_role = warp < (blockDim.x >> 6);
   uint32_t a[4], b[4], e;
@@ -359,13 +374,13 @@ __global__ void __launch_bounds__(512) k_spec(int iters, uint32_t* sink, BlockCl
   CLK_END(rec)
   uint32_t x = lane;
   if (mma_role) x ^= fold_acc<F>(d);
-  else x += consume(r);
+  else x += consume<X>(r);
   sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
 }
 
 // Interleaved: every warp issues a MMA then R/8 lane ops, 8 accumulators, body unrolled x8 (64 MMAs an iteration).
 template <class F, int R, int X>
-__global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockClk* rec) {
+__global__ void __launch_bounds__(512, 1) k_mixu(int iters, uint32_t* sink, BlockClk* rec) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t a[4], b[4], e;
   init_ops<F>(lane, a, b, e);
@@ -386,7 +401,7 @@ __global__ void __launch_bounds__(512) k_mixu(int iters, uint32_t* sink, BlockCl
     }
   }
   CLK_END(rec)
-  uint32_t x = (lane ^ fold_acc<F>(d)) + consume(r);
+  uint32_t x = (lane ^ fold_acc<F>(d)) + consume<X>(r);
   sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
 }
 
