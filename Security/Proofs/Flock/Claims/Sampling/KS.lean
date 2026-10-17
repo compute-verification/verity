@@ -823,12 +823,12 @@ theorem KS_of {H : Msg → Msg} {D : Deploy Coin Col T} (iroots : Msg → Seen �
     (hbind : D.commit.Binds H) (hsess : SessionKS H D) (hopens : SessionOpens H D iroots)
     (hfix : InteriorFixed H D iroots) (hdraw : DrawLaw D) (hrefuse : Refuses H D) (hε : ∀ x, 0 ≤ D.εtable x) :
     KS H D := by
-  intro δ decode hδ hdec
+  intro δ decode hδ hdec x _
   exact KSLin_of_ownColl H D.V (R H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D)
     (fun x Ω P s => (run H P D.V x s.1 s.2.1).out = .acc ∧ Fails H D decode δ x (run H P D.V x s.1) s.2.2)
     (fun x Ω P s hacc hfail =>
       (split decode δ iroots hbind hopens hfix hrefuse x P s.1 s.2.1 s.2.2 hacc hfail).imp_left fun h => ⟨hacc, h⟩)
-    fun x Ω _ _ P => Pr_fails_le H D decode hdec hδ hsess hdraw x (hε x) Ω P
+    (fun x Ω _ _ P => Pr_fails_le H D decode hdec hδ hsess hdraw x (hε x) Ω P) x
 
 /-- **Sampling: bits from Flock's KS**: `KS_of`, with the extractor's expected reruns and own SHA-512 calls. -/
 theorem Bits_of {H : Msg → Msg} {D : Deploy Coin Col T} (iroots : Msg → Seen → ℕ → List Msg)
@@ -852,13 +852,13 @@ theorem Pa_le_miss (d : Design) (P : Partition) {t : ℕ} {B : Finset ℕ} (hB :
 /-- **Sampling: the count form from KS**: `KS` at `δ = max(0, miss(t))` (`missAt`), a faulty set in `M_δ` having
 fewer than `t` units (`Pa_le_miss`). -/
 theorem KSCount_of_KS {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) : KSCount H D := by
-  intro t decode hdec x Ω _ _ P
+  intro t decode hdec x hx Ω _ _ P
   have h0 : 0 ≤ missAt D t x := by
     unfold missAt
     split
     · exact le_max_left _ _
     · exact le_rfl
-  have hk := h (missAt D t x) decode h0 hdec x Ω P
+  have hk := h (missAt D t x) decode h0 hdec x hx Ω P
   unfold PrBad at hk ⊢
   refine le_trans (Pr_mono fun s hs => ⟨hs.1, fun hR => hs.2 ?_⟩) hk
   revert hR
