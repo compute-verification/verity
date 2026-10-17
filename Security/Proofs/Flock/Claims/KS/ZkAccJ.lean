@@ -20,7 +20,9 @@ accepted live run (`LiveSelfClashZ`, `selfClash_le_liveJZ`, `mean_selfClash_le_l
 self-clash read on accepted live runs; it gives `ZkLiveAtJ` (`zkLiveAtJ_of_acc`) and every table's bound with escapes on
 accepted runs (`zk_tableBoundJAccAt_of_liveJ`, through `zk_le_sessionsJ`). At the deployed masked record that is
 `zk_tableBoundJAccAt_live` (at `zk_atTabs`), and at every statement, from `ZkLiveAccJ` where some run accepts,
-`zk_tableBoundJAccAt`. `zk_KS_of_liveAccJ` is `zk_KS_of_liveJ` from it.
+`zk_tableBoundJAccAt`. `zk_KS_of_liveAccJ` is `zk_KS_of_liveJ` from it. At a statement with a table, every table's bound
+gives table 0's, `TableBoundθAccAt` with the same escapes (`TableBoundJAccAt.tableBoundθAccAt`), so the masked
+`plain_tableBoundθAccAt` follows from `ZkLiveAccJ` where some run accepts (`zk_tableBoundθAccAt`).
 -/
 
 namespace Claims.Flock
@@ -81,6 +83,15 @@ theorem tableBoundJAccAt_of_noAcc (H : Msg → Msg) (D : Deploy Coin Col T) (N :
   have := Pr_nonneg fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
     ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen j) p.val = some u ∧ u ≠ C p
   linarith
+
+/-- **Table 0's bound from every table's**: at a statement with a table, `TableBoundJAccAt` is `TableBoundθAccAt` at
+table 0's word length with the same escapes, at columns whose check gives table 0's. -/
+theorem TableBoundJAccAt.tableBoundθAccAt [Nonempty Coin] {H : Msg → Msg} {D : Deploy Coin Col T}
+    {N : Msg → ℕ → ℕ} {Ok : Msg → ℕ → Col → Prop} {Ok₀ : Msg → Col → Prop} {x : Msg} (h : TableBoundJAccAt H D N Ok x)
+    (hn : 0 < nTab D x) (hok : ∀ u, Ok₀ x u → Ok x 0 u) : TableBoundθAccAt H D (fun x => N x 0) Ok₀ x := by
+  intro Ω _ _ P
+  obtain ⟨e, ha, hf, hb⟩ := h Ω P
+  exact ⟨e, ha, hf, fun ω C hC hg => hb ω 0 hn C (fun p => hok _ (hC p)) hg⟩
 
 end At
 
@@ -389,6 +400,38 @@ theorem zk_tableBoundJAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x
   · obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
     obtain ⟨ins, spec, sts, record, proofs, hset, hv, -⟩ := acc_check hno
     exact zk_tableBoundJAccAt_live hs hin hset (served_zk (by simpa using hv)).1 (hl x hno)
+
+theorem wordLenJ_zero (zk : Bool) : (fun x => wordLenJ zk x 0) = wordLen zk :=
+  funext fun x => by unfold wordLenJ wordLen; cases tables zk x <;> rfl
+
+theorem wideJ_zero_of_wide {zk : Bool} {x : Claims.Msg} (hx : tables zk x ≠ []) {u : List 𝔽} (h : wide zk x u) :
+    wideJ zk x 0 u := by
+  obtain ⟨⟨spec, st⟩, l, hl⟩ := List.exists_cons_of_ne_nil hx
+  unfold wide zeroCol at h
+  unfold wideJ
+  rw [hl] at h ⊢
+  simpa using h
+
+/-- **Table 0's masked bound at every statement, with escapes on accepted runs**, at full-width columns, from
+`ZkLiveAccJ` at the statements some run accepts: there the statement sets up at least one table and it is
+`zk_tableBoundJAccAt` at table 0, and elsewhere no run accepts. The masked `plain_tableBoundθAccAt`. -/
+theorem zk_tableBoundθAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccJ x) (x : Claims.Msg) :
+    Claims.Flock.TableBoundθAccAt sha512 (deployZk Readable.relation) (wordLen true) (wide true) x := by
+  by_cases hno : Claims.Flock.NoAcc sha512 (V true) x
+  · exact Claims.Flock.tableBoundθAccAt_of_noAcc _ _ _ _ x hno (zk_k_le Readable.relation x)
+      (εtable_nonneg true x)
+  · obtain ⟨s, hs, -⟩ := acc_inScope Readable.relation hno
+    obtain ⟨ins, spec, sts, record, proofs, hset, hv, -⟩ := acc_check hno
+    have h0 := (served_zk (by simpa using hv)).1
+    have hlen : (tables true x).length = sts.size := by
+      unfold tables
+      rw [hset]
+      simp
+    have hn : Claims.Flock.nTab (deployZk Readable.relation) x = (tables true x).length := by
+      rw [Claims.Flock.nTab_of_parse (D := deployZk Readable.relation) hs, tables_length hs (by rw [hset]; rfl)]
+    rw [← wordLenJ_zero]
+    exact (zk_tableBoundJAccAt hl x).tableBoundθAccAt (by omega)
+      fun u hu => wideJ_zero_of_wide (List.ne_nil_of_length_pos (by omega)) hu
 
 /-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the live
 sessions' bound with escapes on accepted runs at the statements some run accepts (`ZkLiveAccJ`) and `ExtendJ` at
