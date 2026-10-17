@@ -69,6 +69,7 @@ import Proofs.Flock.Claims.KS.ZkXferW
 import Proofs.Flock.Claims.KS.ZkTrimW
 import Proofs.Flock.Claims.KS.ZkSimW
 import Proofs.Flock.Claims.KS.ZkAbortR
+import Proofs.Flock.Claims.KS.ZkAbortJR
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -340,4 +341,10 @@ counted per round once the escapes with the conflict fork are merged by round (`
 `Claims.Recursion.oneWaitAbort_of_tableBoundR`, `Claims.Recursion.KSAbort_of_tableBoundOnAccR`), so the masked record
 the claims read meets `Inner.KSAbort`, and the recursion's KS over it holds, from that bound and one table wherever
 some run accepts (`FlockDeploy.KS.zk_KSAbortR`, `FlockDeploy.KS.zk_KSFlockR`), so from a simulator of each prover
-(`FlockDeploy.KS.zk_KSAbort_of_simWJ`, `FlockDeploy.KS.zk_KSFlock_of_simWJ`). -/
+(`FlockDeploy.KS.zk_KSAbort_of_simWJ`, `FlockDeploy.KS.zk_KSFlock_of_simWJ`). At every number of tables, with no
+premise of one table, one wait over draws holds at every table's positions (`ZkAbortJR`: `Claims.Recursion.oneWaitDJ`),
+so the chain holds from every table's bound counted per round (`Claims.Recursion.TableBoundJOnAccR`,
+`Claims.Recursion.oneWaitAbort_of_tableBoundJR`, `Claims.Recursion.KSAbort_of_tableBoundJOnAccR`), and the masked
+record the claims read meets `Inner.KSAbort`, and the recursion's KS over it holds, from that bound alone
+(`FlockDeploy.KS.zk_KSAbortJR`, `FlockDeploy.KS.zk_KSFlockJR`), so from a simulator of each prover
+(`FlockDeploy.KS.zk_KSAbort_of_simWJ_tables`, `FlockDeploy.KS.zk_KSFlock_of_simWJ_tables`). -/
