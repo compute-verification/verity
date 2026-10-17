@@ -17,6 +17,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Prover
 import Proofs.Flock.Claims.Complete.ZkTables.Goals
 import Proofs.Flock.Claims.Complete.ZkTables.Files
 import Proofs.Flock.Claims.Complete.ZkTables.Reps
+import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
@@ -49,4 +50,7 @@ follow from the masked Ligerito (`lanesJ`), and every round is consumed (`consum
 checks reduce to what `complete_zk` takes at one table, per rep the ring switch, the masked Ligerito and the inner proof
 (`RepChecksAt`, `openAt_of`; at several tables `RepChecksJ`, `openJ_of`, `completeJO`). None of these asks for several
 tables, so completeness holds at every number of tables from the four per-table premises at every good case
-(`completeAll`: `StmtAt`, `ProverRunsAt`, `RepShapedAt`, `RepChecksAt`), with no premise of `complete_zk`'s. -/
+(`completeAll`: `StmtAt`, `ProverRunsAt`, `RepShapedAt`, `RepChecksAt`), with no premise of `complete_zk`'s. The
+statement's premise holds at every case of several tables (`Stmt`: `Case.stmtAt`, `stmtOkJ`, from the setup of several
+tables, `setupTables_spec`, a printable subset draw, `good_subset`, and the masked `Hello`'s read-back, `hello_ok`), so
+`completeJS` and `completeAllS` drop it, keeping `StmtOkZk` at one table. -/

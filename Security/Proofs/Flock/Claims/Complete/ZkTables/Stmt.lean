@@ -6,7 +6,18 @@ import Proofs.Flock.Verifier.Hash
 # What the masked record needs of the statement, at several tables
 
 `Case.stmtAt`: at every good case of several tables, `StmtAt` holds under the JSON library's specification
-(`JsonSpec`), from the case's setup alone.
+(`JsonSpec`), from the case's setup alone (`Case.setupTables`: the scope's statements hold no public inputs). So
+`StmtOkJ` holds (`stmtOkJ`), and `completeJS`, `completeAllS` are `completeJO`, `completeAll` without it.
+
+* A session of several tables (`setupTables_spec`) keeps the statement's draw, which is a subset draw (the setup refuses
+  any other law at several tables) whose units are the session's instances; its `Σ` is a SHA-512 digest; and its
+  `Hello` is `helloOf`'s at the tables' names.
+* A subset draw that decodes is an object of exactly `law`, `population`, `k` and `units` (`UnitDraw.ofJson`'s key
+  count), a string, natural numbers and an array of them, so it is printable and has no closure (`good_subset`); the
+  statement's draw is JSON that `Json.parse` read, so it is well formed.
+* A masked statement's coins are its keyed coin tree (`zkCoins`), so the `Hello`'s `coins` entry is the tree's spec with
+  a nonce, an object; `canon` prints the `Hello` and `parse` reads back an alike object (`hello_ok`), which stays
+  printable with the prover's nonce put in (`good_of_same`, `good_insert`).
 -/
 
 namespace FlockComplete.ZkTables
@@ -267,5 +278,184 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
             exact (mem_of_getObjVal hm hv).1)
           (by rw [← Std.TreeMap.Raw.size_toArray hm]; simpa using hc) hcl
         simp at this
+
+/-! ## The setup of several tables -/
+
+private theorem mapM_some_ok {d : Json} {u? : Option Draw.UnitDraw}
+    (h : Option.mapM Draw.UnitDraw.ofJson (some d) = .ok u?) : ∃ u, u? = some u ∧ Draw.UnitDraw.ofJson d = .ok u := by
+  simp only [Option.mapM_some] at h
+  cases hd : Draw.UnitDraw.ofJson d with
+  | error e => rw [hd] at h; cases h
+  | ok u => rw [hd] at h; cases h; exact ⟨u, rfl, rfl⟩
+
+set_option maxHeartbeats 4000000 in
+/-- **The session spec of several tables**: its draw the statement's, a subset draw whose units are its instances, its
+`Σ` a SHA-512 digest, and its `Hello` `helloOf`'s at the tables' names. -/
+theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
+    {tables : List (String × ByteArray)} {draw partition : Option Json} {program : Option ByteArray}
+    {work : Option (ℕ × Array (String × ℕ × ℕ))} {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))}
+    {spec : SessionSpec} {sts : Array Flock.Stmt}
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
+      .ok (spec, sts)) (hs : 1 < sts.size) :
+    spec.unitDraw = draw ∧ spec.sigma.size = 64 ∧
+      (∀ d, draw = some d → ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ (∃ k, D.law = .subset k) ∧
+        spec.instances = D.units.size) ∧
+      Flock.helloOf tags spec.sigma spec.mPts coins (tags.tableNames count) = .ok spec.hello := by
+  unfold Stmt.setupTables at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
+  replace h : jp0 () = .ok (spec, sts) := by
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp0] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
+  replace h : jp1 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp1] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
+  replace h : jp2 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp2] at h
+  dsimp only at h
+  simp only [throw_bind', pure_bind] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+  all_goals first
+    | exact absurd hs (Nat.lt_irrefl 1)
+    | refine ⟨rfl, Sha512.hash_size _, ?_, ‹_›⟩
+  all_goals
+    intro d hd
+    subst hd
+    obtain ⟨u, hu, hd⟩ := mapM_some_ok ‹Option.mapM Draw.UnitDraw.ofJson (some d) = _›
+    cases hu <;> first
+      | exact absurd ‹some _ = none› (by simp)
+      | exact (‹∀ u, some _ = some u → False› _ rfl).elim
+      | (cases ‹some _ = some _›; exact ⟨_, hd, ⟨_, ‹_ = Draw.Law.subset _›⟩, rfl⟩)
+
+/-! ## The statement at a good case of several tables -/
+
+private theorem Raw.ins_draw {w : Raw} {s : Ins} (h : w.ins = .ok s) :
+    w.draw.mapM (jsonOf "draw") = .ok s.read.draw := by
+  unfold Raw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; assumption)
+
+/-- The statement's draw is JSON that `Json.parse` read. -/
+private theorem draw_parse {x : Claims.Msg} {s : Ins} (hs : insOf true x = some s) {d : Json}
+    (hd : s.read.draw = some d) : ∃ t, Json.parse t = .ok d := by
+  unfold insOf at hs
+  obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 hs
+  by_cases hz : w.zk ≠ true
+  · simp [hz] at hw
+  simp only [hz, ↓reduceIte] at hw
+  cases hi : w.ins with
+  | error e => rw [hi] at hw; cases hw
+  | ok s' =>
+    rw [hi] at hw
+    cases hw
+    have h := Raw.ins_draw hi
+    rw [hd] at h
+    cases hb : w.draw with
+    | none => rw [hb] at h; cases h
+    | some b =>
+      rw [hb] at h
+      simp only [Option.mapM_some] at h
+      cases hj : jsonOf "draw" b with
+      | error e => rw [hj] at h; cases h
+      | ok d' =>
+        rw [hj] at h
+        cases h
+        unfold jsonOf at hj
+        split at hj
+        · cases hj
+        · rename_i t _
+          cases hp : Json.parse t with
+          | error e => rw [hp] at hj; cases hj
+          | ok j => rw [hp] at hj; cases hj; exact ⟨t, hp⟩
+
+private theorem ofJson_obj {j : Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) : j ≠ Json.null := by
+  rintro rfl
+  cases h
+
+variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+
+/-- **A good case's setup** is `Stmt.setupTables` on what the statement reads, with no public inputs. -/
+theorem Case.setupTables (c : Case H rel) :
+    Stmt.setupTables c.s.read.tags c.s.read.I.circuitFile c.s.read.I.publicFile c.s.read.coins c.s.read.I.count
+      c.s.read.I.tables c.s.read.draw c.s.read.I.partition c.s.read.I.program c.s.read.I.work c.s.read.I.stratified
+      c.s.read.I.closure = .ok (c.spec, c.sts) := by
+  obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk rel) rel (readOf true) rfl
+    (fun _ _ h => readOf_zk h) c.x).1 c.scope
+  have hi := (setupOf_some c.setup).1
+  unfold Readable.parseBytes readOf at hp
+  rw [hi] at hp
+  have ht := Readable.toRead_of_parse (r := c.s.read) hp
+  obtain ⟨hc, -⟩ := (Readable.scope_ok_iff p).1 hsc
+  have hR := ((Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hc).1
+  have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hR.2.2.2.2.2])
+  have hset := Ins.setup_read (setupOf_some c.setup).2
+  rw [← ht] at hset
+  unfold Readable.Read.setup at hset
+  rw [hpi] at hset
+  rw [ht] at hset
+  exact hset
+
+/-- **What the masked record needs of the statement holds at every good case of several tables** (`StmtAt`), under
+the JSON library's specification: `Σ` is a SHA-512 digest, the session's draw is the statement's, a subset draw that is
+printable and decodes to the session's instances, and its `Hello` reads back with `coins` an object. -/
+theorem Case.stmtAt (S : JsonSpec) (c : Case H rel) (hc : 1 < c.sts.size) : StmtAt c := by
+  obtain ⟨hu, hsig, hd, hh⟩ := setupTables_spec c.setupTables hc
+  have hzk : c.s.read.zk = true := readOf_zk (x := c.x) (by
+    unfold readOf
+    rw [(setupOf_some c.setup).1]
+    rfl)
+  have hco : c.s.read.coins = .tree (Zk.coinSpec (c.s.read.I.tags.tableNames c.s.read.I.count)) := by
+    simp [Readable.Read.coins, hzk, FlockSoundness.Discharge.ZkExec.zkCoins]
+  rw [hco] at hh
+  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok S hh
+  refine ⟨by rw [hsig]; omega, ?_, hu, m, kvs, hp, hm, hkv, hmg, hg⟩
+  unfold DrawOk
+  rw [hu]
+  cases hdr : c.s.read.draw with
+  | none => trivial
+  | some d =>
+    obtain ⟨D, hD, ⟨k, hk⟩, hn⟩ := hd d hdr
+    obtain ⟨t, ht⟩ := draw_parse (setupOf_some c.setup).1 hdr
+    obtain ⟨hgd, hcl⟩ := good_subset (S.parse_wf t d ht) hD hk
+    refine ⟨ofJson_obj hD, hgd, D, hD, ?_⟩
+    rw [hn]
+    simp [Draw.UnitDraw.proved, hcl]
+
+/-- **`StmtOkJ` holds**, under the JSON library's specification. -/
+theorem stmtOkJ (S : JsonSpec) : StmtOkJ H rel := fun c hc => c.stmtAt S hc
+
+/-- `StmtAt` at every good case: one table's is `StmtOkZk`'s, several's `Case.stmtAt`. -/
+theorem stmtAt_of (S : JsonSpec) (hS : StmtOkZk H rel) (c : Case H rel) : StmtAt c :=
+  c.one_or_several.elim (fun h1 => hS (c.toZk h1)) (c.stmtAt S)
+
+/-! ## Completeness without the statement's premise at several tables -/
+
+/-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
+any number of tables: `completeJO` with the statement's premise at several tables proved (`stmtOkJ`). -/
+theorem completeJS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
+    (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
+    (hIn : FlockComplete.Inner H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
+    (hCJ : RepChecksJ H rel) : Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
+  completeJO H rel S h64 hS hR hPR hRS hLg hIn (stmtOkJ S) hPRJ hRJ hCJ
+
+/-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
+any number of tables: `completeAll` with the statement's premise `StmtOkZk`'s at one table and proved at several. -/
+theorem completeAllS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
+    (hPR : ∀ c : Case H rel, ProverRunsAt c) (hR : ∀ c : Case H rel, RepShapedAt c)
+    (hC : ∀ o : Run H rel, RepChecksAt H rel o) : Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
+  completeAll H rel S h64 (stmtAt_of S hS) hPR hR hC
 
 end FlockComplete.ZkTables
