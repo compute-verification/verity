@@ -99,7 +99,7 @@ theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array
       rw [hr, this]; omega
 
 theorem slots_length (c : Array (Array Slots.RU)) :
-    (c.toList.map fun s => s.toList.map fun r => r.pus.toList.map puGates).flatten.length = (popRUs c).length := by
+    (c.toList.map fun s => s.toList.map fun r => r.pus.toList).flatten.length = (popRUs c).length := by
   simp [popRUs, List.length_flatten, List.length_flatMap, Function.comp_def]
 
 /-- **The design's `P_a` on `Slots.layout`'s partition**: the population's first stage on its window of `B`, times the

@@ -62,8 +62,7 @@ def graph (P : Prog) (d : Nat) (full : Bool := true) : V Graph := do
     wide := wide.push isWide
     external := external.push (lo > 0)
     opStart := opStart.push ops.size
-  for _ in [0:Steps.FUEL] do
-    if stack.size == 0 then break
+  while stack.size > 0 do
     let (sc, k, m) := stack.back!
     let body := (P.defs[sc.d]!).body
     if k ≥ body.nodes.size then
@@ -110,7 +109,6 @@ def graph (P : Prog) (d : Nat) (full : Bool := true) : V Graph := do
     wide := wide.push isWide
     external := external.push ext
     opStart := opStart.push ops.size
-  if stack.size > 0 then throw "a walk of more steps than this verifier follows"
   if prim.size != n then throw s!"{defn.key}: {prim.size} gates laid out, {n} declared"
   let opsOf := fun (x : Nat) => ops.extract opStart[x]! opStart[x + 1]!
   -- structure: constants (no parameters) and wiring, then values computed from constants alone
@@ -222,10 +220,9 @@ def separable (P : Prog) (d : Nat) : Option (Array (Nat × Nat)) := Id.run do
   return some (body.nodes.map fun x => (x.fn, x.members))
 
 /-- `cut.evaluate_definition` with its memo (by definition): a primitive is one unit, none when it has no parameters or is
-wiring; a separable body is its members' cuts; any other body is `cutWord` of its graph. Definitions nest at most `fuel` deep. -/
-def evalDefIn (fuel : Nat) (P : Prog) (X : Nat) (memo : Std.HashMap Nat Qword.DCut) (d : Nat) :
+wiring; a separable body is its members' cuts; any other body is `cutWord` of its graph. -/
+partial def evalDef (P : Prog) (X : Nat) (memo : Std.HashMap Nat Qword.DCut) (d : Nat) :
     V (Qword.DCut × Std.HashMap Nat Qword.DCut) := do
-  let n + 1 := fuel | throw "definitions nest deeper than this verifier follows"
   if let some c := memo[d]? then return (c, memo)
   let defn := P.defs[d]!
   let (c, memo) ← if defn.prim then
@@ -235,7 +232,7 @@ def evalDefIn (fuel : Nat) (P : Prog) (X : Nat) (memo : Std.HashMap Nat Qword.DC
         let mut memo := memo
         let mut ps := #[]
         for (callee, m) in parts do
-          let (c, memo') ← evalDefIn n P X memo callee
+          let (c, memo') ← evalDef P X memo callee
           memo := memo'
           ps := ps.push ((if c.gates > 0 then some c else none), m)
         pure (.parts ps, memo)
@@ -244,10 +241,6 @@ def evalDefIn (fuel : Nat) (P : Prog) (X : Nat) (memo : Std.HashMap Nat Qword.DC
         let (own, kinds, _) := Qword.cutWord gr.g X
         pure (.flat (own.map Int.toNat) kinds, memo)
   return (c, memo.insert d c)
-
-def evalDef (P : Prog) (X : Nat) (memo : Std.HashMap Nat Qword.DCut) (d : Nat) :
-    V (Qword.DCut × Std.HashMap Nat Qword.DCut) :=
-  evalDefIn Steps.FUEL P X memo d
 
 /-- `partition_object.Partition`: the Program's Calls (root nodes that are not Input nodes, each a `call` or `primitive`
 node), each with its Definition's cut. -/
