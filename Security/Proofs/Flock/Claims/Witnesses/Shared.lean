@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.ZK.NonVacuous
+import Proofs.Flock.Claims.ZK.Interact
 
 /-!
 # Refutation witnesses: the shared claim forms
@@ -18,7 +19,9 @@ outputs `([0], [1])`, a collision of the constant hash `constH`, whose outputs a
   `Complete_vacuous`: at a prover with no tape, every verifier meets it at `δ_c = 0`.
 * `ScopeMatches_fails`: an empty scope and a check that takes everything.
 * `ZKmalR_fails` (`ZKMal.not_zkmalR_collSim`): the colliding simulator, which met the form before `Fork`, fails it.
-  `SimCost_fails`: that simulator's two calls exceed a bound of `1`.
+  `ZKmalR_vacuous`: the honest prover is a parameter, so a prover that ignores its witness and calls nothing
+  (`ZKMal.quietP`) meets it at `ε_zk = 0` and `γ = 0`, at the simulator that runs that prover (`quietSim`).
+  `SimCost_fails`: the colliding simulator's two calls exceed a bound of `1`.
 * `ExtractRunsLe_fails`, `ExtractRunsExpLe_fails`: `onceE` reruns once, above a bound of `0`.
 * `Nontrivial_fails`: a recorded run that `rejV` rejects.
 * `StrictBirthday_fails`, `ExpectedCR_fails`: `pairFinder` finds `constH`'s collision at no cost;
@@ -216,6 +219,32 @@ theorem ZKmalR_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonemp
     (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
     ¬ ZKmalR H (fun _ => 1) (fun _ : Unit => ZKMal.quietP N Ω []) (fun _ _ => True) (ZKMal.collSim u v) εzk γ :=
   ZKMal.not_zkmalR_collSim H _ _ u v εzk γ x () trivial one_pos hε
+
+/-- The simulator that runs the quiet prover against the verifier for `k x` rounds. -/
+def quietSim (k : Msg → ℕ) : Simulator where
+  C _ := Unit
+  prog x _ := ZKMal.spRun (fun _ => .ret []) (k x) []
+
+/-- **`ZKmalR` is met by a prover that ignores its witness**, at `ε_zk = 0`, `γ = 0` and every relation: the quiet
+prover's transcript against any `V*` is `quietSim`'s. -/
+theorem ZKmalR_vacuous {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
+    (k : Msg → ℕ) (R : Rel W) : ZKmalR H k (fun _ => ZKMal.quietP N Ω []) R (quietSim k) 0 0 := by
+  intro x w _ Θ Vs θ hk Ev
+  let τ := ZKMal.interact (fun as => ((Vs.next x as θ).eval H).1) (fun _ => []) (k x) []
+  have hτ : ∀ ω, (runStar H (ZKMal.quietP N Ω []) Vs x ω θ).msgs = τ := fun ω => by
+    rw [ZKMal.runStar_msgs, hk]
+    rfl
+  have hS : ∀ c, (quietSim k).out H Vs θ x c = τ := fun _ =>
+    ZKMal.spRun_eval H (fun as => ((Vs.next x as θ).eval H).1) (fun _ => .ret []) (k x) []
+  have e₁ : (Pr fun ω : N × Ω => Ev (runStar H (ZKMal.quietP N Ω []) Vs x ω θ).msgs) = Pr fun _ : N × Ω => Ev τ :=
+    Pr_congr fun ω => by rw [hτ ω]
+  have e₂ : (Pr fun c : (quietSim k).C x => Ev ((quietSim k).out H Vs θ x c)) =
+      Pr fun _ : (quietSim k).C x => Ev τ :=
+    Pr_congr fun c => by rw [hS c]
+  rw [e₁, e₂]
+  by_cases hE : Ev τ
+  · simp only [hE, ZKMal.Pr_true]; simp
+  · simp only [hE, Pr_false]; simp
 
 /-- **`SimCost` fails** at the colliding simulator, whose two calls exceed a bound of `1`. -/
 theorem SimCost_fails (H : Msg → Msg) (u v : Msg) : ¬ SimCost H (ZKMal.collSim u v) fun _ => 1 := by
