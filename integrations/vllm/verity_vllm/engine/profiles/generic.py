@@ -17,7 +17,7 @@ One constructor per ARCHITECTURE class, selected by the family facts table (`fam
 divided by the world; `tp.embedding_shard.EmbeddingShardCuda` and `tp.collective_pattern.TpCollective(world)` registered first; the sampler over the
 all-gathered vocabulary; the header check re-shards the recorded FULL config) -- it replaced the two hand-written `*_tp2rank` modules and the
 TP2 half of `gen_ov_moe_qwen3` after the claim in their docstrings ("the rank profile is the base module's build_profile over the world-divided
-configuration") was checked object by object (`tests/test_profiles_generic.py`, fixtures `profiles/expected/`).
+configuration") was checked object by object (`tests/engine/test_profiles_generic.py`).
 
 Module names (the `--profile NAME` every consumer imports as `verity_vllm.engine.profiles.NAME`, materialised by the finder in `profiles/__init__.py`):
   `derived_<ROLE>`          -- the TP1 profile of a checkpoint role (any architecture),

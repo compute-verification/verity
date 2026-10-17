@@ -1,8 +1,5 @@
 """[P6, 2026-09-23] `profiles.generic`: every checkpoint role's κ profile from its HF config.json and the family facts table -- no per-model
-module, no role -> module table.  The per-role fixtures `profiles/expected/derived_<ROLE>[_tp<W>].json` pin the canonical form
-(`profiles.canonical`) the generic constructor produced when the hand-written modules were retired (they were shown equal to it, object by
-object, by the `test_profiles_generic_equals_hand.py` that left with those modules); a change here is a deliberate re-pin
-(`verity-vllm canonical-profiles --write`, reviewed in the diff)."""
+module, no role -> module table.  Every shipped config.json builds a profile or is refused with its reason."""
 from __future__ import annotations
 
 import dataclasses
@@ -15,63 +12,27 @@ import pytest
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import TokenSelectArgmax
-from verity_vllm.engine.profiles import canonical as K
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles import generic as G
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
 
-FIXTURES = sorted(K.EXPECTED_DIR.glob("derived_*.json"))
-ROLES = K.fixture_roles()
+SHIPPED = sorted(p.name[: -len(".config.json")] for p in dg.HF_CONFIG_DIR.glob("*.config.json"))
+#: the tensor-parallel worlds with recorded runs (the retired `*_tp2rank` hand modules and the Qwen3-MoE TP2 half)
+TP2_ROLES = ("B1", "LLAMA32_1B", "QWEN3_30B_A3B")
+ROLES = [(r, 1) for r in SHIPPED] + [(r, 2) for r in TP2_ROLES]
+#: shipped configs the constructor refuses, by the reason it states
+REFUSED = {"QWEN15_AWQ": "awq"}
 
 
-def _diff(a, b, path="", out=None):
-    out = [] if out is None else out
-    if isinstance(a, dict) and isinstance(b, dict):
-        for k in sorted(set(a) | set(b)):
-            if k not in a or k not in b:
-                out.append(f"{path}.{k}: {'only expected' if k in a else 'only built'}")
-            else:
-                _diff(a[k], b[k], f"{path}.{k}", out)
-    elif isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
-        for i, (x, y) in enumerate(zip(a, b)):
-            _diff(x, y, f"{path}[{i}]", out)
-    elif a != b:
-        out.append(f"{path}: expected {json.dumps(a, default=repr)[:200]} built {json.dumps(b, default=repr)[:200]}")
-    return out
+# ------------------------------------------------------------------------------------------------------------------- shipped configs
 
-
-# --------------------------------------------------------------------------------------------------------------------- the pinned form
-
-def test_every_shipped_config_has_a_fixture_and_vice_versa():
-    """The fixture set IS the shipped-config set (at TP1 and the recorded TP worlds) minus the roles the constructor refuses."""
-    names = {p.stem for p in FIXTURES}
-    expected = set()
-    for role, world in ROLES:
-        try:
-            G.make_module(f"verity_vllm.engine.profiles.{G.module_name(role, world)}")
-        except ImportError:
-            continue
-        expected.add(G.module_name(role, world))
-    assert names == expected, (sorted(names - expected), sorted(expected - names))
-
-
-@pytest.mark.parametrize("fixture", FIXTURES, ids=[p.stem for p in FIXTURES])
-def test_generic_profile_equals_its_fixture(fixture):
-    role, world = G.parse_module(fixture.stem)
-    built = json.loads(K.dumps(K.canonical_of_role(role, world)))     # through JSON: the fixture's own value domain
-    expected = json.loads(fixture.read_text())
-    delta = _diff(expected, built)
-    assert not delta, f"{fixture.name}: {len(delta)} differences (a deliberate re-pin is `verity-vllm canonical-profiles --write`):\n  " + "\n  ".join(delta[:40])
-
-
-def test_fixture_config_sha_is_the_manifest_bytes():
-    """The config.json a fixture was derived from is the manifest's byte copy (sha256 == checkpoints.json's config_sha256)."""
-    for role, world in ROLES:
-        if world != 1:
-            continue
+def test_shipped_config_sha_is_the_manifest_bytes():
+    """A role's config.json is the manifest's byte copy (sha256 == checkpoints.json's config_sha256)."""
+    for role in SHIPPED:
         hit = dg.find_hf_config(role)
         assert hit is not None, role
         path, source, entry = hit
@@ -90,10 +51,12 @@ def test_module_name_grammar():
     assert G.parse_module("gen_llama_llama32_1b") is None and G.parse_module("vllm_d9105ea80_sm89_eager") is None
 
 
-def test_finder_materialises_every_fixture_module_and_the_x07_name():
-    for fixture in FIXTURES:
-        mod = importlib.import_module(f"verity_vllm.engine.profiles.{fixture.stem}")
-        assert mod.PROFILE.id == json.loads(fixture.read_text())["id"]
+def test_finder_materialises_every_role_module_and_the_x07_name():
+    for role, world in ROLES:
+        if role in REFUSED:
+            continue
+        mod = importlib.import_module(f"verity_vllm.engine.profiles.{G.module_name(role, world)}")
+        assert mod.PROFILE.id == G.profile_id(role, mod.C, world)
         assert callable(mod.weight_field) and callable(mod.root_class) and callable(mod.check_header) and callable(mod.build_profile)
     dense = importlib.import_module("verity_vllm.engine.profiles.dense_MISTRAL7B")
     assert dense.PROFILE.id == importlib.import_module("verity_vllm.engine.profiles.derived_MISTRAL7B").PROFILE.id
@@ -109,17 +72,28 @@ def test_the_x07_name_is_for_dense_architectures_only():
 def test_profile_module_for_case_is_derived_not_looked_up():
     from verity_vllm.engine import profiles
     assert not hasattr(profiles, "PROFILE_BY_CASE")
-    refused = {"QWEN15_AWQ": "awq"}                                             # shipped configs the constructor refuses by name
     for role, world in ROLES:
-        if role in refused:
+        if role in REFUSED:
             continue
         assert profile_module_for_case(role, world) == G.module_name(role, world)
         assert profile_for_case(role, world).notes["case"] == role
-    for role, why in refused.items():
+    for role, why in REFUSED.items():
         with pytest.raises(KeyError, match=why):
             profile_module_for_case(role)
     with pytest.raises(KeyError, match="no HF config.json"):
         profile_module_for_case("NO_SUCH_ROLE")
+
+
+def test_derived_b0_is_the_protected_base_profile_behind_the_tuned_gemm():
+    """The golden corpus's profile (`vllm_d9105ea80_sm89_eager`) is what the generic constructor derives from SmolLM2's config.json: the
+    same C up to the identity fields and unset keys, the same pattern list after the target's tuned-GEMM specialization."""
+    derived = importlib.import_module("verity_vllm.engine.profiles.derived_B0").PROFILE
+
+    def facts(C):
+        return {k: v for k, v in C.items() if k not in ("family", "revision", "profile") and v is not None}
+
+    assert facts(derived.config) == facts(BASE.PROFILE.config)
+    assert [p.name for p in derived.patterns] == ["gemm.matmul_kernel_persistent.tuned"] + [p.name for p in BASE.PROFILE.patterns]
 
 
 # ------------------------------------------------------------------------------------------------------------------- family facts
@@ -171,14 +145,6 @@ def test_moe_hand_facts_and_derived_router_vpt():
 
 
 # --------------------------------------------------------------------------------------------------------------------- world > 1
-
-TP2_ROLES = sorted(r for r, w in K.fixture_roles() if w == 2)
-
-
-def test_the_recorded_tp2_worlds_are_pinned():
-    """The two retired `*_tp2rank` hand modules and the Qwen3-MoE TP2 half: three roles have a TP2 fixture (data, not a table)."""
-    assert len(TP2_ROLES) == 3
-
 
 @pytest.mark.parametrize("role", TP2_ROLES)
 def test_rank_profile_is_the_world_divided_configuration(role):
