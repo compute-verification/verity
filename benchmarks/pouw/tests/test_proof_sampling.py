@@ -82,6 +82,14 @@ def test_aware_is_no_worse_than_its_perturbations():
             assert P.best_response(c, v, s, caps=False).lam >= best * (1 - 1e-9)
 
 
+@pytest.mark.parametrize("s", [1, 2])
+def test_aware_is_the_exact_minimax_against_the_capped_cheater(s):
+    for c in (P.cell(P.LLAMA_8B, "prefill", 2048), P.cell(P.LLAMA_70B, "decode", 2048)):
+        eps, x = P.capped_optimum(c, s)
+        assert P.best_response(c, x, s).eps == pytest.approx(eps, rel=1e-6)
+        assert P.evaluate(c, "aware", s)[0].eps == pytest.approx(eps, rel=1e-4)
+
+
 def test_aware_and_closure_bounds_hold_in_every_cell():
     """The σ-aware draw is within 25% of ε_luck at one draw; a closure leaves ε_luck alone at any s."""
     for c in CELLS:

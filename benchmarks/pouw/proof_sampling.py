@@ -11,7 +11,8 @@ Proposition E2 with s draws bounds Σ_rounds [c_luck(s)·ρ(deficient) + s·ρ(w
 cheater's best response to a draw is a fractional knapsack over these attacks with per-round supplies
 (`best_response`). The verifier's minimax draw is a covering LP whose optimum is closed-form: a DP's weight is its MACs
 times max(1/c_luck(s), (1 + F)/s), F the largest fan-out of the levers its row carries (`optimal`); knowing σ (public
-before the draw), the verifier puts each row's lever excess only on the coordinates every lever needs (`aware`). A
+before the draw), the verifier puts each row's lever excess only on the coordinates every lever needs (`aware`), which
+attains `capped_optimum`, the exact minimax against the cheater with per-round supplies, solved as one LP. A
 closure, r producer DPs proved at random noise-active coordinates of each drawn consumer's operand row, detects a
 steered consumer as if it had failed (`closure`). ε_luck + ε_adapt = luck factor × (saving / S).
 
@@ -319,6 +320,53 @@ def aware(c: Cell, s: int) -> np.ndarray:
 
 STRATEGIES = {"work": work, "uniform": uniform, "stratified": stratified, "fanout": fanout, "optimal": optimal,
               "aware": aware}
+
+
+def capped_optimum(c: Cell, s: int) -> tuple[float, np.ndarray]:
+    """The exact minimax draw against the capped cheater, as one LP, and its ε.
+
+    The cheater's knapsack (max Σ y·save, Σ y·det(ρ) ≤ L, 0 ≤ y ≤ S·supply) has the dual
+    min L·μ + S·Σ supply·ν subject to μ·det_a(ρ) + ν_a ≥ save_a. With x = μρ the verifier's choice of ρ joins it as one
+    LP over x ≥ 0, ν ≥ 0, and z_class ≤ x (the outlier, the row's cheapest DP). It is solved in MAC units, since
+    shares of a round's MACs fall below the solver's tolerances.
+    """
+    from scipy import sparse
+    from scipy.optimize import linprog
+
+    cl, nsub, nlev, ncls = c_luck(s), c.k.size, c.lev_k.size, c.class_row.size
+    ix, iz, ind, inl = 0, nsub, nsub + ncls, 2 * nsub + ncls
+    cost = np.concatenate([LN_INV_DELTA * c.count, np.zeros(ncls), ROUNDS * c.count, ROUNDS * c.lev_rows])
+    sub = np.arange(nsub)
+    rows = [sub, sub]
+    cols = [ix + sub, ind + sub]
+    vals = [np.full(nsub, -cl), np.full(nsub, -1.0)]
+    act_n = np.zeros((ncls, 3))
+    for i in range(3):
+        on = (c.bits >> i & 1).astype(bool)
+        np.add.at(act_n[:, i], c.parent[on], c.count[on])
+    order = np.argsort(c.parent, kind="stable")
+    start = np.searchsorted(c.parent[order], np.arange(ncls))
+    width = np.searchsorted(c.parent[order], np.arange(ncls), side="right") - start
+    lev = np.arange(nlev)
+    for o in range(int(width.max())):
+        ok = o < width[c.lev_class]
+        j = lev[ok]
+        u = order[start[c.lev_class[j]] + o]
+        on = (c.bits[u] >> c.lev_bit[j] & 1).astype(bool)
+        j, u = j[on], u[on]
+        rows.append(nsub + j)
+        cols.append(ix + u)
+        vals.append(-s * c.lev_forced[j] * c.count[u] / act_n[c.lev_class[j], c.lev_bit[j]])
+    rows += [nsub + lev, nsub + lev, nsub + nlev + sub, nsub + nlev + sub]
+    cols += [iz + c.lev_class, inl + lev, iz + c.parent, ix + sub]
+    vals += [np.full(nlev, -float(s)), np.full(nlev, -1.0), np.ones(nsub), -np.ones(nsub)]
+    rhs = np.concatenate([-c.k, -(c.lev_consumer + (c.lev_forced + 1) * c.lev_k), np.zeros(nsub)])
+    a = sparse.csr_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
+                          shape=(rhs.size, cost.size))
+    res = linprog(cost, A_ub=a, b_ub=rhs, bounds=(0, None), method="highs")
+    if res.status != 0:
+        raise RuntimeError(f"capped minimax LP: {res.message}")
+    return LUCK_FACTOR * res.fun / c.macs / ROUNDS, res.x[ix:iz]
 
 
 # ---- the cheater's best response ----
