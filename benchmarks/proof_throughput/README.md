@@ -9,7 +9,8 @@ verity bench proof_throughput workloads                       the VU families an
 verity bench proof_throughput plan  [--workload W] [--store]  each point's identity (and its passing prover run)
 verity bench proof_throughput run   [--workload W] [--lo B] [--hi B] [--store] [--dry-run]   one recorded prover run per point
 verity bench proof_throughput verify --prove-run RUN          the Lean verifier point on that run's bundle (vy-nebius-cpu-3)
-verity bench proof_throughput table RESULT... | --store --workload W [--commit C]   the frontier, rendered from results
+verity bench proof_throughput table RESULT... | --baseline | --store --workload W [--commit C]   the frontier, from results
+verity bench proof_throughput baseline [--workload W] [--lock RESULT...]   the pinned hill-climb baseline, or pin one sweep
 verity bench proof_throughput compare BASELINE CANDIDATE [--allow FIELD]   refuses results whose identities differ
 verity bench proof_throughput zk                              configuration 2: what is measured, stood in for, or stubbed
 ~~~
@@ -52,7 +53,9 @@ imported as it is and checked by its `validate()` before it is written:
   target (Fast100, 2 repetitions, 2^-100), plus the workload, its VU, the configuration and the instance set's reference.
 
 `compare` and `table` refuse results that don't conform, didn't pass, or whose identities differ (`table` lets B alone
-vary). Tables are rendered on demand from results, never committed.
+vary). Tables are rendered on demand from results, never committed. The hill-climb baseline is `baseline.json`: per
+workload, the commit one full sweep ran at and each B's verifier run id, no numbers (`baseline --lock` writes it from
+the sweep's results, `table --baseline` renders it, and a candidate is `compare`d against the pinned run at its B).
 
 ### Native peak
 

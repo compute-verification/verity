@@ -80,6 +80,21 @@ def frontier(results: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+BASELINE_SCHEMA = "proof-throughput/baseline/v1"
+
+
+def baseline(results: Sequence[Mapping[str, Any]], commit: str) -> dict[str, Any]:
+    """The pin of one sweep: its workload, configuration and commit, and each B's result by run id (``baseline.json``).
+    The numbers stay in the results; ``table --baseline`` renders them."""
+    rows = frontier(results)
+    if not rows:
+        raise Refused("no passing result to pin")
+    fp = next(r for r in results if r.get("run_id") == rows[0]["run"])["workload_fingerprint"]
+    return {"schema": BASELINE_SCHEMA, "workload": fp["workload"], "config": fp["config"], "vu": fp["vu"], "commit": commit,
+            "instances": {k: fp["instances"][k] for k in ("dataset", "tier", "manifest_sha256")},
+            "points": {str(r["B"]): r["run"] for r in rows}}
+
+
 def best(rows: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
     """The row with the highest VU throughput."""
     rows = [r for r in rows if r.get("vu.per_second")]

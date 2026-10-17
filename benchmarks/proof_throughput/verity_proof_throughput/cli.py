@@ -5,7 +5,8 @@
     verify   --prove-run RUN [--node vy-nebius-cpu-3] [--dry-run]   the Lean verifier point on a prover run's bundle
     check    [--workload W] ...                          exit 0 only when every point has a passing prover run
     compare  A B [--allow FIELD]                         accept two results only when their identities agree
-    table    [RESULT ...] [--store --workload W [--commit C]] [--json]   the throughput frontier over B, from results
+    table    [RESULT ...] [--store --workload W [--commit C]] [--baseline] [--json]   the throughput frontier over B
+    baseline [--workload W] [--lock RESULT ...]          the pinned hill-climb baseline (baseline.json), or pin one sweep
     instances --workload W [--write]                     regenerate the workload's frozen instance manifest
     workloads                                            the VU families and their B caps
     zk                                                   what configuration 2 measures today, and what it stubs
@@ -326,8 +327,33 @@ ORDER BY a.start_utc
 """.strip()
 
 
+BASELINE = Path(__file__).resolve().parents[1] / "baseline.json"
+
+
+def _baselines() -> dict:
+    return _read_json(BASELINE) or {}
+
+
+def cmd_baseline(a) -> int:
+    """``--lock RESULT...``: pin those results as the workload's hill-climb baseline; else print the pinned one's run ids."""
+    pins = _baselines()
+    if not a.lock:
+        print(json.dumps(pins.get(a.workload) or {}, indent=1))
+        return 0 if pins.get(a.workload) else 1
+    try:
+        pin = R.baseline([_load_result(r) for r in a.lock], a.commit or _git_head() or "unknown")
+    except R.Refused as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 2
+    BASELINE.write_text(json.dumps({**pins, pin["workload"]: pin}, indent=1, sort_keys=True) + "\n")
+    print(f"{BASELINE}: {pin['workload']} at {pin['commit'][:12]}, B = {', '.join(pin['points'])}")
+    return 0
+
+
 def cmd_table(a) -> int:
     refs = list(a.results)
+    if a.baseline:
+        refs += list((_baselines().get(a.workload) or {}).get("points", {}).values())
     if a.store:
         commit = f"AND a.source_commit = '{a.commit}'" if a.commit else ""
         proc = subprocess.run(["research", "data", "sql", STORE_QUERY.format(workload=a.workload, commit=commit), "--json"],
@@ -402,6 +428,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--allow", action="append", default=[], help="an identity field the comparison deliberately varies")
     p = sub.add_parser("table"); p.add_argument("results", nargs="*"); p.add_argument("--store", action="store_true")
     p.add_argument("--workload", default=DEFAULT_WORKLOAD); p.add_argument("--commit", default=None); p.add_argument("--json", action="store_true")
+    p.add_argument("--baseline", action="store_true", help="the workload's pinned baseline (baseline.json)")
+    p = sub.add_parser("baseline"); p.add_argument("--workload", default=DEFAULT_WORKLOAD)
+    p.add_argument("--lock", nargs="+", default=None, metavar="RESULT", help="pin these results (one sweep) as the baseline")
+    p.add_argument("--commit", default=None, help="the commit the sweep ran at (default HEAD)")
     p = sub.add_parser("instances"); p.add_argument("--workload", default=DEFAULT_WORKLOAD); p.add_argument("--write", action="store_true")
     sub.add_parser("workloads")
     sub.add_parser("zk")
@@ -422,6 +452,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--bundle", default=None); p.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     return {"plan": cmd_plan, "check": cmd_check, "run": cmd_run, "verify": cmd_verify, "compare": cmd_compare, "table": cmd_table,
+            "baseline": cmd_baseline,
             "instances": cmd_instances, "workloads": cmd_workloads, "zk": cmd_zk, "defs": cmd_defs,
             "check-instances": cmd_check_instances, "staged": cmd_staged, "probe": cmd_probe, "lean-verdict": cmd_lean_verdict,
             "point-result": cmd_point_result, "put-bundle": cmd_put_bundle, "fetch-bundle": cmd_fetch_bundle}[a.cmd](a)

@@ -2,6 +2,7 @@ import copy
 
 import pytest
 
+from verity_proof_throughput import instances as I
 from verity_proof_throughput import report as R
 from verity_proof_throughput import result as RS
 from verity_proof_throughput.workloads import workload
@@ -55,3 +56,13 @@ def test_the_frontier_is_one_row_per_b_and_refuses_a_mixed_sweep(record, hardwar
     other["cpu"]["count"] = 128
     with pytest.raises(R.Refused, match="not the same sweep"):
         R.frontier([result(record, hardware, 1, "a"), result(record, other, 2, "b")])
+
+
+def test_the_baseline_pins_one_sweep_by_run_id(record, hardware):
+    pin = R.baseline([result(record, hardware, b, f"r{b}") for b in (4, 1)], "c" * 40)
+    assert pin["points"] == {"1": "r1", "4": "r4"} and pin["workload"] == W.name and pin["commit"] == "c" * 40
+    assert pin["instances"]["manifest_sha256"] == I.manifest_sha256(W)
+    bad = copy.deepcopy(record)
+    bad["live"] |= {"accepted": False, "why": "prove exited 1"}
+    with pytest.raises(R.Refused, match="no passing result"):
+        R.baseline([result(bad, hardware, 1, "a")], "c" * 40)
