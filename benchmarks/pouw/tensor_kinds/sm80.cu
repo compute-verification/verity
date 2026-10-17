@@ -255,7 +255,7 @@ __device__ __forceinline__ void op1(Lane& s, int bank, int i) {
   if (OP == OP_POPC) asm volatile("popc.b32 %0,%1;" : "=r"(r[j]) : "r"(r[n]));
   if (OP == OP_LDS) asm volatile("ld.shared.u32 %0,[%0];" : "+r"(s.l[j]));
   // ldmatrix: lane L's register 0 is matrix 0's row L / 4, word L % 4, which holds L's own row address (init_r); the
-  // other matrices' words are loaded and dropped. LDS.128: each lane's 16 bytes start with their own address.
+  // other matrices' words are loaded and dropped. LDS.128: each lane's 16 bytes start with their own address, then 0s.
   uint32_t d1, d2, d3;
   if (OP == OP_LDSM4)
     asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0,%1,%2,%3},[%4];"
@@ -263,8 +263,10 @@ __device__ __forceinline__ void op1(Lane& s, int bank, int i) {
   if (OP == OP_LDSM2)
     asm volatile("ldmatrix.sync.aligned.m8n8.x2.shared.b16 {%0,%1},[%2];" : "=r"(s.m[j]), "=r"(d1) : "r"(s.m[j]));
   if (OP == OP_LDSM1) asm volatile("ldmatrix.sync.aligned.m8n8.x1.shared.b16 {%0},[%1];" : "=r"(s.m[j]) : "r"(s.m[j]));
+  // words 1-3 hold 0 and are folded into the address (ptxas narrows a v4 load whose other words are dead to LDS.32)
   if (OP == OP_LDS128)
-    asm volatile("ld.shared.v4.u32 {%0,%1,%2,%3},[%4];" : "=r"(s.v[j]), "=r"(d1), "=r"(d2), "=r"(d3) : "r"(s.v[j]));
+    asm volatile("ld.shared.v4.u32 {%0,%1,%2,%3},[%0];\n\txor.b32 %0,%0,%1;\n\txor.b32 %0,%0,%2;\n\txor.b32 %0,%0,%3;"
+                 : "+r"(s.v[j]), "=&r"(d1), "=&r"(d2), "=&r"(d3));
 }
 constexpr int q_bank(int p, int q) { return p == q || (p != OP_FFMA) == (q != OP_FFMA) ? 1 : 0; }
 template <int X>
@@ -309,7 +311,9 @@ __device__ __forceinline__ void init_r(Lane& s, uint32_t tid) {
       const uint32_t j = tid >> 5, l = tid & 31;
       g_smem[tid] = base + 4 * tid;
       g_smem[(LDSM_OFF + 512 * j + 4 * l) / 4] = base + LDSM_OFF + 512 * j + 16 * l;
-      g_smem[(V_OFF + 512 * j + 16 * l) / 4] = base + V_OFF + 512 * j + 16 * l;
+      const uint32_t v = (V_OFF + 512 * j + 16 * l) / 4;
+      g_smem[v] = base + V_OFF + 512 * j + 16 * l;
+      g_smem[v + 1] = g_smem[v + 2] = g_smem[v + 3] = 0;
     }
     __syncthreads();
   }
