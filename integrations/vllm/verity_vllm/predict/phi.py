@@ -1,10 +1,12 @@
 """φ — the base context known before execution, from which the predictor builds a Program without tracing.
 
     Phi.model     the pinned checkpoint: repo, revision and its `config.json` (the HF config the model class is built from)
-    Phi.target    the declared `TargetProfile` (capability, SM count, batch invariance, numerics profile, FA version knob)
+    Phi.target    the declared `TargetProfile` (capability, SM count, batch invariance, numerics profile, FA version knob), and the
+                  `device_name` its GPU reports where the row's class names one (`engine.profiles.devices`: vLLM's tuned configs)
     Phi.tp        {"world", "rank"}
     Phi.sampling  the row's declared sampling policy (`pipeline.build.sampling_policy` shape: greedy | stochastic)
-    Phi.engine    scheduler facts (block_size, max_num_seqs, max_num_batched_tokens, chunked prefill, prefix caching)
+    Phi.engine    the engine args (block_size, max_num_seqs, max_num_batched_tokens, chunked prefill, prefix caching,
+                  disable_custom_all_reduce) and the `env` its engines run under (the all-reduce switches)
     Phi.workload  the workload manifest's requests (request_id, prompt length, max_tokens, arrive_step, seed, n)
     Phi.execution the row's execution label (`bi-eager`)
 
