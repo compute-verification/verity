@@ -29,6 +29,8 @@ NODE_IP = "10.80.0.42"
 PORT = 47310
 REMOTES = {"cpu1": ("research@10.80.0.89", 47311), "node1": ("research@10.80.0.18", 47312)}
 TAUS_US = (50, 100, 150, 300, 840)
+CUDA = "/usr/local/cuda"
+NVCC = f"{CUDA}/bin/nvcc"
 VENV = "/workspace/jobs/venv312/bin/python"
 MODEL = "unsloth/Meta-Llama-3.1-8B-Instruct"
 REC = struct.Struct("<IIIHH")
@@ -191,12 +193,13 @@ def main() -> None:
     src = open(os.path.join(HERE, "lat.cu"), "rb").read()
     lat = os.path.join(scratch, "lat")
     log("build")
-    subprocess.run(["nvcc", "-O2", "-std=c++17", "-arch=sm_120", "-o", lat, os.path.join(HERE, "lat.cu"), "-lcublas"], check=True)
+    subprocess.run([NVCC, "-O2", "-std=c++17", "-arch=sm_120", "-o", lat, os.path.join(HERE, "lat.cu"), "-lcublas",
+                    "-Xlinker", f"-rpath={CUDA}/lib64"], check=True)
     resp_cpu, chal_cpu, load_cpus = plan_cpus()
     env = {"hostname": os.uname().nodename, "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
            "affinity": sorted(os.sched_getaffinity(0)), "responder_cpu": resp_cpu, "challenger_cpu": chal_cpu,
            "load_cpus": load_cpus, "nice": os.nice(0), "loadavg": open("/proc/loadavg").read().strip(),
-           "nvidia_smi": gpu_sample(), "nvcc": sh(["nvcc", "--version"]).strip().splitlines()[-1],
+           "nvidia_smi": gpu_sample(), "nvcc": sh([NVCC, "--version"]).strip().splitlines()[-1],
            "cmdline": open("/proc/cmdline").read().strip(), "argv": sys.argv}
     json.dump(env, open(os.path.join(out, "env.json"), "w"), indent=1)
     log(f"cpus: responder {resp_cpu}, challenger {chal_cpu}, load {load_cpus}")
