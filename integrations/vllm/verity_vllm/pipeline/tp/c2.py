@@ -326,3 +326,88 @@ def seal(out: Path, summ: dict[str, Any], rows: list[dict[str, Any]], bundles_of
     if summ.get("only_arm"):
         summ["commit_pass"] = None
     summ["replay_deferred"] = {"record": DEFERRED, "pending_pairs": pending, "bundles": bundles}
+
+
+def weights_pin_component(rows: list[dict], versions: dict) -> dict:
+    """[manbind MAN-09 / COORD M-0614 (1)] value_correspondence.components.weights_pin folded over ranks and instrumented pairs: True only when
+    every rank of every pair compared its served shards to the checkpoint-composed digests of record with no difference; a rank without a
+    record is 'unpinned' (result None -> the Commit FAILs closed under --required-manifest)."""
+    per_rank: dict[str, dict] = {}
+    results: list = []
+    for r in rows:
+        if r.get("arm") == "control":
+            continue
+        for rk, c in ((r.get("commit") or {}).get("per_rank") or {}).items():
+            wp = c.get("weights_pin") or {}
+            results.append(wp.get("result"))
+            per_rank[str(rk)] = {k: wp.get(k) for k in ("result", "root_of_record", "compared", "mismatched_n", "missing", "unpinned", "all_shards_pinned", "committed_weights_root", "why")}
+    res = (all(x is True for x in results) if results and all(x is not None for x in results) else (False if any(x is False for x in results) else None))
+    return {"result": res, "per_rank": per_rank, "pairs": len({id(r) for r in rows if r.get("arm") != "control"}),
+            "method": "MAN-09 per rank: sha256(served shard bytes) == digest composed from the PINNED checkpoint shards by the rank Program's shard map, every weight field",
+            "reference": "the checkpoint of record (manifests/checkpoints.json revision + shard sha256), never the live engine (rev-cb M-0610)",
+            "checkpoint_dir": (versions.get("weights_pin") or {}).get("checkpoint_dir"),
+            "why": (None if res is True else ("weights unpinned (MAN-09) on a rank" if res is None else "served weights differ from the checkpoint of record on a rank"))}
+
+
+def linkage_component(rows: list[dict], versions: dict) -> dict:
+    """[report M-0407 / DECISIONS-2 §4] `components.linkage` = the per-(request, engine step) token gate: every committed sampled-ids row
+    of every rank is the Match record's k-th generated id of the request the rank's request->rows map names (tp2_worker._tp2_attribution).
+    Shape per report's interface: {result, method, checked, why} (+ per_rank)."""
+    pr = last_per_rank(rows)
+    if not versions.get("match_record") or not pr:
+        return {"result": None, "method": "per-(request, engine step) committed sampled_token_ids vs the Match record", "checked": 0,
+                "why": "not run (no --match-dir Match record)" if not versions.get("match_record") else "no instrumented pair finalized"}
+    atts = {r_: (c.get("attribution") or {}) for r_, c in pr.items()}
+    ok = all(a.get("ok") is True for a in atts.values()) and len(atts) > 0
+    return {"result": ok,
+            "method": ("per rank: committed runner.sampler/sampled_token_ids row j of engine step s -> request of row j in the rank's request->rows map "
+                       "(InputBatch.req_ids x num_scheduled_tokens at sample time) -> k-th generated id of that request in the Match record "
+                       f"({versions['match_record']['path']}, tp2_match capture arm, an independent instrumented run); every step, every row, both ranks"),
+            "checked": sum(int(a.get("rows_checked") or 0) for a in atts.values()),
+            "why": (None if ok else "; ".join(str(a.get("why")) for a in atts.values() if not a.get("ok"))),
+            "per_rank": {r_: {k2: a.get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "requests")} for r_, a in atts.items()}}
+
+
+def oracle_compare_component(rows: list[dict], versions: dict, man_doc: dict | None) -> dict:
+    """[coord M-0481 C2 form (B), as far as a TP2 row can carry it] `components.oracle_compare` = committed values vs the INDEPENDENT Match
+    observation (tp2_match capture arm, a different instrumented run): (a) `attribution` = every committed sampled-ids row vs the record's
+    k-th generated id of its request (rev-cb T6-3 / F-cb-23), (b) `tp_partials` = every committed TP partial / MoE received output vs the
+    recorder's stored collective input/output per (step, k) (TPPartialSource.compare_match_oracle).  `complete` is FALSE by construction:
+    this Match is collective-level, so the manifest's instance_outputs / fa2 stream / input ids / weights have no TP Match oracle --
+    the families covered and the identity counts are stated, never rounded up to 'every committed value'."""
+    pr = last_per_rank(rows)
+    if not versions.get("match_record") or not pr:
+        return {"result": None, "complete": False, "reference": "not run (no --match-dir: no Match record to compare the committed values against)"}
+    atts = {r_: (c.get("attribution") or {}) for r_, c in pr.items()}
+    mos = {r_: (c.get("match_oracle") or {}) for r_, c in pr.items()}
+    att_ok = len(atts) > 0 and all(a.get("ok") is True for a in atts.values())
+    mo_ran = any(m for m in mos.values())
+    mo_ok = mo_ran and all(m.get("verdict") == "PASS" for m in mos.values())
+    fam = (man_doc or {}).get("populations", {}).get("by_family") or {}
+    covered = [f for f in ("tp_rank_partials", "sampled_token_ids") if f in fam] if fam else ["tp_rank_partials", "sampled_token_ids"]
+    if not mo_ran:
+        covered = [f for f in covered if f != "tp_rank_partials"]
+    # [rev-pm M-0585] the oracle is the Match run's capture: if that Match run FAILED its own check, its capture still compares, but the
+    # component says so and its result is not True (a commit == a failed Match's bytes is not a PASS ingredient)
+    mv = versions["match_record"].get("tp2_match_verdict")
+    oracle_failed_match = (mv is False)
+    result = (att_ok and (mo_ok if mo_ran else True)) if (att_ok is not None) else None
+    if oracle_failed_match and result:
+        result = None
+    return {"result": result,
+            "complete": False,
+            "oracle_match_verdict": mv,
+            "oracle_is_failed_match_run": oracle_failed_match,
+            **({"oracle_note": "oracle is a FAILED Match run (tp2_match.json pass False): compared, not a PASS ingredient"} if oracle_failed_match else {}),
+            "reference": (f"Match record {versions['match_record']['path']} (tp2_match capture arm, independent instrumented run; tp2_match verdict "
+                          f"{versions['match_record'].get('tp2_match_verdict')}): (a) sampled ids per (request, engine step) [attribution]; "
+                          "(b) TP partials / MoE received outputs vs the recorder's stored collectives per (step, k) [tp_partials]; per rank"),
+            "attribution": {"complete": all(a.get("ok") is not None and int(a.get("steps_checked") or 0) > 0 for a in atts.values()) and len(atts) > 0, "result": att_ok,
+                            "per_rank": {r_: a.get("ok") for r_, a in atts.items()}, "rows_checked_per_rank": {r_: a.get("rows_checked") for r_, a in atts.items()}},
+            "tp_partials": ({"result": mo_ok, "per_rank": {r_: {k2: m.get(k2) for k2 in ("verdict", "steps_compared", "tensors", "equal", "mismatch_n", "missing_n", "not_in_oracle_n", "by_member", "why", "error")}
+                                                          for r_, m in mos.items()}} if mo_ran else {"result": None, "reference": "not run (--no-match-oracle or no stored capture steps)"}),
+            "identities": {"families_covered": covered, "families_not_covered": [f for f in fam if f not in covered] if fam else ["instance_outputs", "fa2_hidden_m1_stream", "input_token_ids", "weights"],
+                           "covered_n": sum(int(fam.get(f) or 0) for f in covered) if fam else None, "total_n": sum(int(v or 0) for v in fam.values()) if fam else None},
+            "why": (None if (att_ok and (mo_ok or not mo_ran)) else "; ".join([f"rank {r_}: attribution {a.get('why')}" for r_, a in atts.items() if not a.get("ok")]
+                                                                          + [f"rank {r_}: match oracle {m.get('verdict')} {m.get('why') or m.get('error') or ''} mismatch {m.get('mismatch_n')} missing {m.get('missing_n')} not_in_oracle {m.get('not_in_oracle_n')}"
+                                                                             for r_, m in mos.items() if m and m.get("verdict") != "PASS"]))}
