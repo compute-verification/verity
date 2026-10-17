@@ -56,6 +56,10 @@ struct Bars {
   uint32_t tslot;
 };
 
+DC_DEV void mbar_arrive(uint64_t* bar) {
+  asm volatile("mbarrier.arrive.shared::cta.b64 _, [%0];" ::"r"(smem_u32(bar)) : "memory");
+}
+
 DC_DEV void hand_back(uint64_t* empty, uint32_t lane) {
   tc_before_sync();
   __syncwarp();
