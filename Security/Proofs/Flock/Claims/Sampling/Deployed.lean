@@ -24,7 +24,8 @@ fixes set, and the sampled verifier's code (`SamplingDeploy.Code`) as its parame
 * `Tape`, `P`: the sampled reference prover (`Reference.refP`), at the code's framing, on a Flock tape per session
   statement: in each session, Flock's masked reference prover on what it reveals, checked by this commitment.
 * `δc`: the sessions' count (`Code.sessions`) times the largest of Flock's masked error `FlockComplete.δcZk`, capped
-  at `1`, over the sessions' statements at `x` (`Reference.sessErrAt`): the union bound over the run's sessions.
+  at `1`, over the statements of the reference prover's sessions at `x`, at an honest witness and coins that check
+  their units (`Reference.sessErrAt`): the union bound over the run's sessions.
   One session that proves every drawn unit has error `δcZk` at its statement.
 * The rest is the code's: the verifier in public-coin form, its parser, scope check and partition evaluation, its draw
   layout, the checked units' sessions and what their witnesses reveal, the sessions' `N₀` and count, and the reference
@@ -192,7 +193,8 @@ noncomputable def deploy (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Re
   openCalls x := c.reveals x * (4 + depth c.own)
   Tape := Reference.Tape
   P := Reference.refP c.step c.parse c.reads (commit c) c.wit
-  δc H x := c.sessions x * Reference.sessErrAt c.session (FlockComplete.δcZk H) x
+  δc H x := c.sessions x * Reference.sessErrAt H (Rhon H (commit c) c.parse c.partition)
+    (Reference.refP c.step c.parse c.reads (commit c) c.wit) c.V c.checked c.session (FlockComplete.δcZk H) x
 
 variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : Code)
 

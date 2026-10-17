@@ -76,21 +76,25 @@ def AcceptsSessions (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
       (run H (D.P w) D.V x ω r).out = .acc
 
 /-- **A session's completeness error at `x`**: the largest Flock error (`D.flock.δc H`), capped at `1`, over the
-statements of the sessions `x` sets up; `0` where it sets up none. -/
+statements of the reference prover's sessions at `x`, at an honest witness and coins that check the session's unit; `0`
+where there are none. -/
 noncomputable def sessErr (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) : ℝ :=
-  sessErrAt D.session (D.flock.δc H) x
+  sessErrAt H (Rhon H D.commit D.parse D.partition) D.P D.V D.checked D.session (D.flock.δc H) x
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 theorem sessErr_nonneg (H : Msg → Msg) (D : Deploy Coin Col T) (hnn : ∀ xS, 0 ≤ D.flock.δc H xS) (x : Msg) :
     0 ≤ sessErr H D x :=
   Real.iSup_nonneg fun xS => le_min zero_le_one (hnn xS.1)
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem le_sessErr (H : Msg → Msg) (D : Deploy Coin Col T) {x xS : Msg} {u : ℕ × ℕ} {v vS : Seen}
-    (h : D.session x u v = some (xS, vS)) : min 1 (D.flock.δc H xS) ≤ sessErr H D x := by
+omit [Fintype Coin] [Nonempty Coin] in
+theorem le_sessErr (H : Msg → Msg) (D : Deploy Coin Col T) {x xS : Msg} {w : Wit} {ω : D.Tape}
+    {r : Fin (D.V.k x) → Coin} {u : ℕ × ℕ} {vS : Seen} (hw : Rhon H D.commit D.parse D.partition x w)
+    (hu : u ∈ D.checked x r) (h : D.session x u (run H (D.P w) D.V x ω r).seen = some (xS, vS)) :
+    min 1 (D.flock.δc H xS) ≤ sessErr H D x := by
   unfold sessErr sessErrAt
-  refine le_ciSup (f := fun xS : {xS : Msg // ∃ u v vS, D.session x u v = some (xS, vS)} =>
-    min 1 (D.flock.δc H xS.1)) ⟨1, ?_⟩ ⟨xS, u, v, vS, h⟩
+  refine le_ciSup (f := fun xS : {xS : Msg // ∃ w ω r u vS, Rhon H D.commit D.parse D.partition x w ∧
+    u ∈ D.checked x r ∧ D.session x u (run H (D.P w) D.V x ω r).seen = some (xS, vS)} =>
+    min 1 (D.flock.δc H xS.1)) ⟨1, ?_⟩ ⟨xS, w, ω, r, u, vS, hw, hu, h⟩
   rintro _ ⟨y, rfl⟩
   exact min_le_left _ _
 
@@ -167,7 +171,7 @@ theorem Pr_slot_le (H : Msg → Msg) (D : Deploy Coin Col T) (hF : Claims.Flock.
           le_min (by linarith [Pr_nonneg (fun c : Fin (D.flock.V.k xS) → Coin =>
               (run H (D.flock.P wF) D.flock.V xS ωF c).out = .acc)])
             (by linarith [hF h64 xS wF hsc hR ωF])
-        _ ≤ sessErr H D x := le_sessErr H D hd
+        _ ≤ sessErr H D x := le_sessErr H D hw (List.mem_of_getElem? hu) hd
   calc Pr Bad = Ex (fun r => if Bad r then (1 : ℝ) else 0) := (Ex_ind Bad).symm
     _ = Ex (fun d => Ex fun σ => if Bad (forkOn (slotRounds D x p d) d σ) then (1 : ℝ) else 0) :=
       (Ex_resample (slotRounds D x p) (slotRounds_fork D hfix hle hx p) _).symm

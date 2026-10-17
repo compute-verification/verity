@@ -24,8 +24,9 @@ A session is named by its statement, so one session may prove several drawn unit
 What it reveals opens and is the committed value `Wit.val` reads (`found_opens`, `found_val`), and covers every read
 position with a committed value (`found_covers`).
 
-`sessErrAt`: the largest of Flock's errors, capped at `1`, over the statements of the sessions at `x`; the record's
-completeness error is the proof units' count times it at Flock's `δcZk`.
+`sessErrAt`: the largest of Flock's errors, capped at `1`, over the statements of the reference prover's sessions at
+`x`, at an honest witness and coins that check the session's unit; the record's completeness error is the sessions'
+count times it at Flock's `δcZk`.
 -/
 
 namespace Claims.Sampling.Reference
@@ -74,10 +75,13 @@ def refP (step : Msg → List (Msg × Msg) → Step) (parse : Msg → Option Stm
           (FlockComplete.honestPZk (wit s xS os)).next xS hS (ω xS)
       | none => .ret []⟩
 
-/-- **The sessions' error at `x`**: the largest of `δ`, capped at `1`, over the statements of the sessions `x` sets up;
-`0` where it sets up none. -/
-noncomputable def sessErrAt (session : Msg → ℕ × ℕ → Seen → Option (Msg × Seen)) (δ : Msg → ℝ) (x : Msg) : ℝ :=
-  ⨆ xS : {xS : Msg // ∃ u v vS, session x u v = some (xS, vS)}, min 1 (δ xS.1)
+/-- **The sessions' error at `x`**: the largest of `δ`, capped at `1`, over the statements of the sessions of `P`'s runs
+at a witness `R` relates to `x` and coins that check the session's unit; `0` where there are none. -/
+noncomputable def sessErrAt {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (R : Msg → Wit → Prop)
+    (P : Wit → Prover Ω) (V : Verifier Coin) (checked : (x : Msg) → (Fin (V.k x) → Coin) → List (ℕ × ℕ))
+    (session : Msg → ℕ × ℕ → Seen → Option (Msg × Seen)) (δ : Msg → ℝ) (x : Msg) : ℝ :=
+  ⨆ xS : {xS : Msg // ∃ w ω r u vS, R x w ∧ u ∈ checked x r ∧
+      session x u (run H (P w) V x ω r).seen = some (xS, vS)}, min 1 (δ xS.1)
 
 /-! ## What it reveals -/
 
