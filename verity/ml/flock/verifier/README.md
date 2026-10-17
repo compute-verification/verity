@@ -230,8 +230,9 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   `ci.py --live`: 20/20, 21/21, 20/20, 21/21, reproduced by red-team-proofs-554 in `art:bc6367e3`). On flat RoPE the honest
   sessions pass every check, so digest and Σ are the prover's (they have no draw, so their verdict is that refusal, D12),
   and every negative is refused by its check, `output_row_committed_false` (an
-  output row's `b ‖ c` not the circuit's outputs) included; flat GEMM (a unit reading two input groups) and both typed
-  sets are D12 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
+  output row's `b ‖ c` not the circuit's outputs) included. Flat GEMM (a unit reading two input groups, a tail stage
+  returning the outputs) is the general instance form, which the check passes, so its honest sessions meet the same
+  draw-less refusal (set 3: 21/21); both typed sets are D12 (§16.15), every session refused for its form. `test_lean_hidden_outputs.py` verifies four of each set's
   cases (the honest session and the three false statements) from a fetched fixture
   (`verity/ml/flock/tests/fixtures/hidden-outputs`), so `check` runs it. A replayable set needs a pinned upstream build
   with `flock-circuit replay` (the selftest's `record_replays_offline` already replays in process).
