@@ -34,7 +34,13 @@ LANES = {"iadd3": ("L_IADD3", "IADD3", "ALU"),
          "fmul": ("L_FMUL", "FMUL", "FFMA"), "fadd": ("L_FADD", "FADD", "FFMA"),
          "hfma2": ("L_HFMA2", "HFMA2*", "HFMA2"), "mnmx": ("L_MNMX", "*MNMX*", "VIMNMX"),
          "dmul": ("L_DMUL", "DMUL", "DMUL"), "dfma": ("L_DFMA", "DFMA", "W2"), "mufu": ("L_MUFU", "MUFU.EX2", "XU"),
-         "popc": ("L_POPC", "POPC", "XU")}
+         "popc": ("L_POPC", "POPC", "XU"),
+         # the register-light lanes (ji family); a pair is (the op on even rounds of a chain, on odd ones), see lane_pat
+         "fmuli": ("L_FMULI", "FMUL", "FFMA"), "faddi": ("L_FADDI", "FADD", "FFMA"),
+         "axi": ("L_AXI", ("IADD3", "LOP3.LUT"), "ALU"), "shfi": ("L_SHFI", "SHF.*", "ALU"),
+         "prmti": ("L_PRMTI", "PRMT", "ALU"), "imadwi": ("L_IMADWI", "IMAD.WIDE.U32", "IMADW"),
+         "dp4a": ("L_DP4A", "IDP.4A.*", "IMAD"), "dp4ai": ("L_DP4AI", "IDP.4A.*", "IMAD"),
+         "uaxi": ("L_UAXI", ("UIADD3", "ULOP3.LUT"), "UNI")}
 #: the lanes the targeted part puts beside IMMA.16832 (one class each: the 2-D sections of the joint rows)
 TARGET_LANES = ("sel", "imadw", "iadd64", "ffma", "fmul", "dmul", "dfma", "lop3", "iadd3", "shf", "prmt", "imad",
                 "hfma2", "mnmx", "mufu", "popc", "imadi", "ffmai")
@@ -79,8 +85,25 @@ def load_kinds(g: dict, q: int) -> str:
     return g["d2"] if g.get("d2") and q % g["r"] == g["r"] - 1 else g["d1"]
 
 
+def lane_pat(lane: str, k: int) -> str:
+    """The SASS pattern of a lane's k-th op (mix.cuh's op<L>(k)): an alternating lane's by the chain's round."""
+    pat = LANES[lane][1]
+    return pat if isinstance(pat, str) else pat[(k >> 3) & 1]
+
+
+def lanes_of(g: dict) -> list[str]:
+    return [x for x in (g.get("l1"), g.get("l2"), g.get("l3")) if x]
+
+
 def name_of(g: dict) -> str:
     w = g["tpb"] // 32
+    if g["kind"] in ("jm", "js"):
+        ls = "_".join(lanes_of(g)) or "none"
+        sched = f"a{g['na']}u{g['u']}"
+        if g["kind"] == "js":
+            return f"js_{g['form']}_{ls}_{sched}_m{g['mw']}_w{w}"
+        ld = f"_{g['d']}x{g['qd']}" if g.get("d") else ""
+        return f"jm_{g['form']}_{ls}_q{g['q']}_p{g['p']}_{sched}{ld}_w{w}"
     if g["kind"] == "l2":
         return f"l2_{g['d1']}_{g['pat']}_q{g['q']}_w{w}"
     if g["kind"] in ("ld", "ldmma"):
@@ -101,16 +124,30 @@ def expect_of(g: dict) -> tuple[str, str, int]:
     """(expect, warps, until) for the probe table: each loop's exact opcode counts an iteration."""
     def lane_counts(n: int) -> dict[str, int]:
         out: dict[str, int] = {}
-        ls = [g["l1"]] + ([g["l2"]] if g.get("l2") else [])
-        for i in range(n):
-            pat = LANES[ls[i % len(ls)]][1]
+        ls = lanes_of(g)
+        for i in range(n if ls else 0):
+            pat = lane_pat(ls[i % len(ls)], i // len(ls))
             out[pat] = out.get(pat, 0) + 1
         return out
 
     def fmt(d: dict[str, int]) -> str:
         return ",".join(f"{k}={v}" for k, v in d.items())
 
+    def add(d: dict[str, int], e: dict[str, int]) -> dict[str, int]:
+        for k, v in e.items():
+            d[k] = d.get(k, 0) + v
+        return d
+
     w = g["tpb"] // 32
+    if g["kind"] == "jm":
+        d = add({FORMS[g["form"]][1]: 8 * g["u"]}, lane_counts(g["u"] * g["q"]))
+        if g.get("d"):
+            d = add(d, {LOADS[g["d"]][1]: g["u"] * g["qd"]})
+        if "uaxi" in lanes_of(g):  # where ptxas keeps the chains uniform, the loop's counter is a UIADD3 too
+            d = add(d, {"UIADD3": 1})
+        return fmt(d), "", 0
+    if g["kind"] == "js":
+        return (f"{FORMS[g['form']][1]}={8 * g['u']};{fmt(lane_counts(g['lq']))}", f"{4 * g['mw']};{w - 4 * g['mw']}", 2)
     if g["kind"] == "l2":
         return f"{L2_LOADS[g['d1']][1]}={g['q']}", "", 0
     if g["kind"] in ("ld", "ldmma"):
@@ -306,11 +343,132 @@ def sampled_l2(seed: int, n: int) -> list[dict]:
             for _ in range(n)]
 
 
+#: the ji family's lanes: the register-light ones, and the mix family's at the warps a SMSP it didn't time (1, 3, 6)
+JI_NEW = ("fmuli", "faddi", "axi", "shfi", "prmti", "imadwi", "dp4a", "dp4ai", "uaxi")
+JI_OLD = ("ffmai", "ffma", "iadd3", "lop3", "imad", "imadi", "imadw", "prmt", "shf")
+#: two and three lanes in turn: a FMA-pipe lane beside an ALU or IMAD one (two dispatch pipes), and the uniform datapath
+JI_MULTI = (("fmuli", "axi"), ("ffmai", "axi"), ("ffmai", "shfi"), ("fmuli", "prmti"), ("ffmai", "imadi"),
+            ("fmuli", "dp4ai"), ("axi", "dp4ai"), ("ffmai", "dp4a"), ("fmuli", "imadwi"), ("axi", "imadi"),
+            ("fmuli", "faddi"), ("ffma", "axi"), ("ffmai", "uaxi"), ("fmuli", "axi", "imadi"),
+            ("ffmai", "axi", "dp4ai"), ("fmuli", "shfi", "imadwi"), ("ffmai", "iadd3", "imad"), ("fmuli", "axi", "uaxi"),
+            ("ffma", "lop3", "imad"))
+#: the schedule sweep's lanes (placement, accumulators, unroll depth)
+JI_SCHED = ("ffmai", "fmuli", "axi", ("fmuli", "axi"), ("ffmai", "axi"), ("ffmai", "imadi"))
+#: lanes whose SASS no load's address arithmetic or the OP_UNTIL trip counter shares (IADD3, LOP3.LUT would collide)
+JI_LOADSAFE = (("ffmai",), ("fmuli",), ("fmuli", "imadi"), ("ffmai", "dp4ai"))
+JI_SPEC = ("ffmai", "fmuli", "faddi", "ffma", "dp4ai", "imadi", "shfi", "prmti", ("fmuli", "shfi"), ("ffmai", "imadi"),
+           ("fmuli", "dp4ai", "prmti"))
+#: (MMA warps, warps) a SMSP of the warp-specialized programs
+JI_SPLITS = ((1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 8), (2, 3), (2, 4), (2, 5), (2, 6), (2, 8), (3, 4), (3, 6),
+             (4, 6), (4, 8))
+
+
+def _jm(form: str, ls, q: int, w: int, p: int = 0, na: int = 8, u: int = 1, d: str = "", qd: int = 0) -> dict:
+    ls = (ls,) if isinstance(ls, str) else tuple(ls)
+    g = {"kind": "jm", "form": form, "q": q, "p": p, "na": na, "u": u, "tpb": 128 * w}
+    g |= {f"l{i + 1}": x for i, x in enumerate(ls)}
+    return g | ({"d": d, "qd": qd} if d else {})
+
+
+def _js(form: str, ls, mw: int, w: int, na: int = 8, u: int = 1) -> dict:
+    ls = (ls,) if isinstance(ls, str) else tuple(ls)
+    g = {"kind": "js", "form": form, "na": na, "u": u, "mw": mw, "lq": 24 if len(ls) == 3 else 16, "tpb": 128 * w}
+    return g | {f"l{i + 1}": x for i, x in enumerate(ls)}
+
+
+def targeted_ji() -> list[dict]:
+    """The JI3q search: IMMA.16832 beside each register-light lane (1 to 8 warps a SMSP) and the mix family's lanes at
+    1, 3 and 6; two and three lanes in turn; placement, accumulators and unroll depth; loads beside the MMAs and lanes;
+    warp-specialized splits of 1 to 4 MMA warps a SMSP; then HMMA.16816.F16 and HMMA.1688.TF32 over the same axes."""
+    out: list[dict] = []
+    i = "i16832"
+    for lane in JI_NEW:
+        for q in (32, 64, 96, 128, 160, 192, 256):
+            for w in (1, 2, 4, 8):
+                out.append(_jm(i, lane, q, w))
+    for lane in JI_OLD:
+        for q in (64, 96, 128, 160, 192):
+            for w in (1, 3, 6):
+                out.append(_jm(i, lane, q, w))
+    for ls in JI_MULTI:
+        for q in (64, 96, 128, 160, 192, 256):
+            for w in (2, 4, 8):
+                out.append(_jm(i, ls, q, w))
+    for ls in JI_SCHED:
+        for q in (96, 128, 160):
+            for w in (2, 4):
+                for p in (1, 2, 3):
+                    out.append(_jm(i, ls, q, w, p=p))
+                for na, u in ((4, 1), (16, 1), (8, 2), (8, 4), (16, 2)):
+                    out.append(_jm(i, ls, q, w, na=na, u=u))
+    for d in ("lds32", "lds128", "ldg32", "ldg128"):
+        for qd in (2, 4, 8, 16):
+            for w in (2, 4, 8):
+                out.append(_jm(i, (), 0, w, d=d, qd=qd))
+                for ls in JI_LOADSAFE:
+                    for q in (64, 128):
+                        out.append(_jm(i, ls, q, w, d=d, qd=qd))
+    for ls in JI_SPEC:
+        for mw, w in JI_SPLITS:
+            out.append(_js(i, ls, mw, w))
+    for ls in ("ffmai", "fmuli", ("ffmai", "imadi")):
+        for mw, w in ((1, 4), (2, 4), (1, 2)):
+            for na, u in ((4, 1), (16, 1), (8, 2)):
+                out.append(_js(i, ls, mw, w, na=na, u=u))
+    for form in ("h16816f16", "h1688t"):
+        for lane in ("ffmai", "fmuli", "axi", "ffma", "dp4ai", "imadi", "shfi", "faddi"):
+            for q in (64, 96, 112, 128, 160, 192):
+                for w in (1, 2, 4, 8):
+                    out.append(_jm(form, lane, q, w))
+        for ls in (("fmuli", "axi"), ("ffmai", "axi"), ("ffmai", "imadi"), ("fmuli", "dp4ai"), ("fmuli", "axi", "imadi")):
+            for q in (96, 128, 160, 192):
+                for w in (2, 4, 8):
+                    out.append(_jm(form, ls, q, w))
+        for ls in ("ffmai", ("fmuli", "axi")):
+            for q in (112, 128):
+                for w in (2, 4):
+                    for p in (1, 2, 3):
+                        out.append(_jm(form, ls, q, w, p=p))
+                    for na, u in ((4, 1), (16, 1), (8, 2)):
+                        out.append(_jm(form, ls, q, w, na=na, u=u))
+        for ls in ("ffmai", "fmuli", ("ffmai", "imadi")):
+            for mw, w in ((1, 2), (1, 4), (2, 4), (1, 6), (2, 6), (1, 8)):
+                out.append(_js(form, ls, mw, w))
+        for d in ("lds128", "ldg128"):
+            for qd in (4, 8):
+                for w in (4, 8):
+                    for ls in (("ffmai",), ("fmuli",)):
+                        out.append(_jm(form, ls, 128, w, d=d, qd=qd))
+    return [g for g in out if g["na"] < 16 or g["tpb"] <= 512]
+
+
+def sampled_ji(seed: int, n: int) -> list[dict]:
+    rng = random.Random(seed)
+    lanes = sorted(set(JI_NEW) | set(JI_OLD))
+    out = []
+    while len(out) < n:
+        form = rng.choice(("i16832", "i16832", "h16816f16", "h1688t"))
+        ls = tuple(rng.sample(lanes, rng.choice((1, 2, 2, 3))))
+        w = rng.choice((1, 2, 3, 4, 5, 6, 8))
+        na, u = rng.choice(((8, 1), (8, 1), (4, 1), (16, 1), (8, 2), (16, 2), (8, 4)))
+        if na == 16 and w > 4:
+            continue
+        if rng.random() < 0.8:
+            out.append(_jm(form, ls, rng.choice((32, 48, 64, 80, 96, 112, 128, 144, 160, 192, 224, 256)), w,
+                           p=rng.choice((0, 0, 1, 2, 3)), na=na, u=u))
+        else:
+            ls = tuple(x for x in ls if x not in ("axi", "iadd3", "uaxi")) or ("ffmai",)
+            mw = rng.choice([m for m in (1, 2, 3, 4) if m < w] or [1])
+            if mw < w:
+                out.append(_js(form, ls, mw, w, na=na, u=u))
+    return out
+
+
 def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "mix") -> list[dict]:
     """The programs of one batch: the family's targeted part (if asked) and `n` sampled ones, unique by name, in order."""
     seen, out = set(), []
     tg, sm = {"mix": (targeted, sampled), "mem": (targeted_mem, sampled_mem), "fine": (targeted_fine, sampled),
-              "l2": (targeted_l2, sampled_l2)}[family]
+              "l2": (targeted_l2, sampled_l2), "ji": (targeted_ji, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -321,6 +479,11 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
 
 def smem_of(g: dict) -> tuple[str, str]:
     """(smem_ops, smem function) for the gate's bank check: the loop's shared loads in slot order, and mem.cuh's soff."""
+    if g["kind"] == "jm":
+        if not g.get("d") or not LOADS[g["d"]][3]:
+            return "", ""
+        n = g["u"] * g["qd"]
+        return ",".join([f"{LOADS[g['d']][1]}*1"] * n), f"fb::soff<fb::{LOADS[g['d']][0]}, fb::D_NONE, 1, fb::P_LINE, {n}>"
     if g["kind"] not in ("ld", "ldmma"):
         return "", ""
     ops = [LOADS[load_kinds(g, q)][1] for q in range(g["q"]) if LOADS[load_kinds(g, q)][3]]
@@ -332,10 +495,20 @@ def smem_of(g: dict) -> tuple[str, str]:
 
 
 def emit_cu(gs: list[dict]) -> str:
-    inc = (HERE / "mem.cuh").resolve()
+    inc = (HERE / "ji.cuh").resolve()
     lines = [f"// generated by facet_break/generate.py: {len(gs)} programs", f'#include "{inc}"', ""]
     for g in gs:
         f = FORMS[g["form"]][0] if g.get("form") else ""
+        if g["kind"] in ("jm", "js"):
+            ls = [LANES[x][0] for x in lanes_of(g)]
+            ls += ["L_NONE"] * (3 - len(ls))
+            head = f"{g['name']}, {f}, {g['na']}, {g['u']}, {', '.join(ls)}"
+            if g["kind"] == "jm":
+                d = LOADS[g["d"]][0] if g.get("d") else "D_NONE"
+                lines.append(f"FB_JMIX({head}, {g['q']}, {g['p']}, {d}, {g.get('qd', 0)}, {g['tpb']})")
+            else:
+                lines.append(f"FB_JSPEC({head}, {g['mw']}, {g['lq']}, {g['tpb']})")
+            continue
         if g["kind"] == "l2":
             lines.append(f"FB_L2({g['name']}, {L2_LOADS[g['d1']][0]}, {L2_PATS[g['pat']]}, {g['q']}, {g['tpb']})")
             continue
@@ -359,6 +532,8 @@ def emit_cu(gs: list[dict]) -> str:
     for g in gs:
         ex, warps, until = expect_of(g)
         iters = 1024 if g["kind"] in ("mix", "mma", "ldmma") else 2048 if g["kind"] in ("ld", "l2") else 4096
+        if g["kind"] in ("jm", "js"):
+            iters = (1024 if g["kind"] == "jm" else 4096) // g["u"]
         ops, fn = smem_of(g)
         sm = f', .smem_ops = "{ops}", .smem = {fn}' if ops else ""
         lines.append(f'    {{.name = "{g["name"]}", .kernel = (const void*){g["name"]}, .tpb = {g["tpb"]}, '
@@ -374,14 +549,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
-    p.add_argument("--family", choices=("mix", "mem", "fine", "l2"), default="mix",
+    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji"), default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
-                        "against the table route's L2 facet")
+                        "against the table route's L2 facet; ji: the joint issue rows' schedule search (ji.cuh)")
+    p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
     a = p.parse_args(argv)
     gs = grid(a.seed, a.n, not a.no_targeted, a.family)
+    if a.forms:
+        gs = [g for g in gs if g.get("form") in a.forms.split(",")]
     if a.only:
         keep = set(a.only.read_text().split())
         gs = [g for g in gs if g["name"] in keep]
