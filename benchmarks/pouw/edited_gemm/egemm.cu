@@ -127,6 +127,22 @@ template <int RK, int T, int E> DEV void fr_word(St& s, uint32_t p) {
     }
   }
 }
+// Verified-filler stand-ins: duo folds the end of a dependent chain of x lane ops from the word (t = t a_i + p, IMAD,
+// and t = t ^ p ^ k_i, LOP3, alternating from an IMAD), so a word costs x + 3 ops and no op can be dropped. FX45
+// (x = 4.5): 4 ops on words 0 and 2, 5 on 1 and 3. Timing variants, not receipts
+constexpr int FX45 = -145, FX8 = -108, FX12 = -112, FX24 = -124;
+__host__ __device__ constexpr bool is_fx(int k) { return k == FX45 || k == FX8 || k == FX12 || k == FX24; }
+__host__ __device__ constexpr int fx_ops(int k, int e) { return k == FX45 ? 4 + e % 2 : k == FX8 ? 8 : k == FX12 ? 12 : 24; }
+template <int RK, int T, int E, int I = 0> DEV uint32_t fx_chain(uint32_t t, uint32_t p) {
+  if constexpr (I == fx_ops(RK, E)) {
+    return t;
+  } else {
+    constexpr int c = (4 * T + E) * 32 + I;
+    if constexpr (I % 2 == 0) t = t * key_mul(1, c) + p;
+    else t = t ^ p ^ key_xor(1, c);
+    return fx_chain<RK, T, E, I + 1>(t, p);
+  }
+}
 
 // d ^= z & zero in one LOP3 (LUT 0x78 = a ^ (b & c); ptxas otherwise splits it into an AND and an XOR), or (FMA) d += z zero
 // in one IMAD, on the FMA pipe
@@ -149,8 +165,10 @@ DEV void mbar_sleep_warp(uint32_t bar, uint32_t parity) {
 // named by its last tile; LAG: unit j is absorbed after MMA j + LAG (past the atom's end, MMA j + LAG - 8 of the next), or
 // with LAG -1 after MMA min(2 j + 2, j + 7) (DUO64's spread: an absorb every second MMA over a receipting atom and the
 // next). TIE: a tie before every |TIE|-th MMA (0: none; negative: the IMAD tie) on the state the last absorb wrote.
-// SLEEP: a consumer waits for its stage with mbar_sleep_warp
-template <int RK, int LAG, int TIE, bool SLEEP = false> struct EL : MLW {
+// SLEEP: a consumer waits for its stage with mbar_sleep_warp. UF: UF uniform-datapath instructions a MMA after each atom
+// (two pairs of dependent warp-uniform chains from the seed, folded into the receipt at the tile's end), the uniform
+// filler's stand-in
+template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0> struct EL : MLW {
   static_assert(LAG >= -1 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
   static constexpr bool R = RK != NONE, TB = is_tb(RK), XF = RK == XIN || RK == XIN64 || RK == XIN13,
                         HALF = RK == DUO64 || RK == XIN64;
@@ -204,6 +222,16 @@ template <int RK, int LAG, int TIE, bool SLEEP = false> struct EL : MLW {
     if constexpr (SLEEP) mbar_sleep_warp(full(s), ph);
     else mbar_wait_warp(full(s), ph);
   }
+  uint32_t uf[4] = {0, 0, 0, 0};
+  DEV void ufill() {
+#pragma unroll
+    for (int i = 0; i < UF * MI * NI / 4; i++) {
+      uf[0] = uf[0] * 0x9E3779B1u + uf[1];
+      uf[1] = uf[1] ^ uf[0] ^ (0x7F4A7C15u + 2u * i);
+      uf[2] = uf[2] * 0x85EBCA77u + uf[3];
+      uf[3] = uf[3] ^ uf[2] ^ (0x165667B1u + 2u * i);
+    }
+  }
   // the schedule: atom POS of a stage receipts (DUO64, XIN64: the odd ones, so the odd steps), unit j's first tile and slot
   __host__ __device__ static constexpr bool rc(int pos) { return !HALF || pos % 2 == 1; }
   __host__ __device__ static constexpr bool unit(int j) { return B == TB2W ? j % 2 == 1 : B == TB1W ? j % NI == NI - 1 : true; }
@@ -256,6 +284,12 @@ template <int RK, int LAG, int TIE, bool SLEEP = false> struct EL : MLW {
       fr_word<RK, J, 1>(ch[H + 1], (uint32_t)w[1]);
       fr_word<RK, J, 2>(ch[H + 2], (uint32_t)w[2]);
       fr_word<RK, J, 3>(ch[H + 3], (uint32_t)w[3]);
+    } else if constexpr (is_fx(RK)) {
+      constexpr int H = 4 * (J % 2);
+      duo<DUO, 0, J>(ch[H], fx_chain<RK, J, 0>((uint32_t)w[0], (uint32_t)w[0]));
+      duo<DUO, 0, J>(ch[H + 1], fx_chain<RK, J, 1>((uint32_t)w[1], (uint32_t)w[1]));
+      duo<DUO, 0, J>(ch[H + 2], fx_chain<RK, J, 2>((uint32_t)w[2], (uint32_t)w[2]));
+      duo<DUO, 0, J>(ch[H + 3], fx_chain<RK, J, 3>((uint32_t)w[3], (uint32_t)w[3]));
     } else if constexpr (XF) {
       St& c = ch[J % 4];
       c.y = (rotl(c.y, ROT0) ^ (uint32_t)w[0]) * kr[0] + (uint32_t)w[1];
@@ -318,16 +352,20 @@ template <int RK, int LAG, int TIE, bool SLEEP = false> struct EL : MLW {
     const uint32_t sb = stage(s), done = empty(s);
     load(fa[1], fb[1], sb, 1);
     atom<FIRST, 0>(acc, ch, kr, fa[0], fb[0], zero);
+    if constexpr (UF > 0) ufill();
     load(fa[0], fb[0], sb, 2);
     atom<false, 1>(acc, ch, kr, fa[1], fb[1], zero);
+    if constexpr (UF > 0) ufill();
     load(fa[1], fb[1], sb, 3);
     atom<false, 2>(acc, ch, kr, fa[0], fb[0], zero);
+    if constexpr (UF > 0) ufill();
     advance();
     if (!LAST) {
       wait_full();
       load(fa[0], fb[0], stage(s), 0);
     }
     atom<false, 3>(acc, ch, kr, fa[1], fb[1], zero);
+    if constexpr (UF > 0) ufill();
     release(done);
   }
   DEV void tile_il(int K, int (&acc)[MI][NI][4], St (&ch)[8], const uint32_t (&kr)[NKR], uint32_t zero) {
@@ -393,8 +431,8 @@ template <int RK, int LAG, int TIE, bool SLEEP = false> struct EL : MLW {
 };
 constexpr int PEEL2_MAXK = 4096;   // |S| <= 128 k / 32, so S_2 = 0 at k <= 4096; a longer k takes the 3-atom tail
 
-template <int RK, int LAG, int TIE, bool THREE, bool SLEEP = false> DEV void e_body(const Args& a) {
-  using L = EL<RK, LAG, TIE, SLEEP>;
+template <int RK, int LAG, int TIE, bool THREE, bool SLEEP = false, int UF = 0> DEV void e_body(const Args& a) {
+  using L = EL<RK, LAG, TIE, SLEEP, UF>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, true, 1);
@@ -413,6 +451,9 @@ template <int RK, int LAG, int TIE, bool THREE, bool SLEEP = false> DEV void e_b
     kr[0] = k.x, kr[1] = k.y;
   } else if constexpr (L::TB) L::template keys<RK>(kr, lane);
   else kr[0] = 0;
+  if constexpr (UF > 0) {
+    ml.uf[0] = a.seed, ml.uf[1] = a.seed ^ 0x3C6EF372u, ml.uf[2] = (uint32_t)a.KR, ml.uf[3] = a.seed + 0xA54FF53Au;
+  }
   typename L::Place pl{0, 0};
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
     int tm, tn;
@@ -428,6 +469,7 @@ template <int RK, int LAG, int TIE, bool THREE, bool SLEEP = false> DEV void e_b
     int acc[MI][NI][4];
     ml.tile_il(a.K, acc, ch, kr, zero);
     ml.template peel<THREE>(acc);
+    if constexpr (UF > 0) ch[0].y ^= ml.uf[0] ^ ml.uf[1], ch[1].y ^= ml.uf[2] ^ ml.uf[3];
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
 #pragma unroll
     for (int mi = 0; mi < MI; mi++)
@@ -497,6 +539,18 @@ EGEMM(f15_l2q, FR15, 2, 4)
 EGEMM(f20_l2q, FR20, 2, 4)
 EGEMM(f25_l2q, FR25, 2, 4)
 EGEMM(f40_l2q, FR40, 2, 4)
+// the model's predictions against H's schedule (e_l7qs): r = 2 (f20), duo on x-op filler chains (fx<x>), duo with UF
+// uniform-datapath instructions a MMA (u<UF>)
+#define EGEMMU(NAME, RK, LAG, TIE, UF)                                                                                             \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, false, true, UF>(a); } \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_k3(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, true, true, UF>(a); }
+EGEMMS(f20_l7qs, FR20, 7, 4)
+EGEMMS(fx45_l7qs, FX45, 7, 4)
+EGEMMS(fx8_l7qs, FX8, 7, 4)
+EGEMMS(fx12_l7qs, FX12, 7, 4)
+EGEMMS(fx24_l7qs, FX24, 7, 4)
+EGEMMU(u8_l7qs, DUO, 7, 4, 8)
+EGEMMU(u16_l7qs, DUO, 7, 4, 16)
 
 // ---------------------------------------------------------------- the operands
 // x (rows x k bf16) to X (rows x k int8): a warp a group of 4 rows, its lanes 8 columns each (512 contiguous bytes of x a
@@ -736,7 +790,8 @@ static const EKn EK[] = {
     EKE(x13_l2o, "xin13"),
     EKE(t4_l2, "tb4"), EKE(t4c_l2, "tb4c"), EKE(t2w_l0, "tb2w"), EKE(t2w_l2, "tb2w"),
     EKE(t1w_l0, "tb1w"), EKE(t1w_l2, "tb1w"),
-    EKE(f10_l2q, ""), EKE(f15_l2q, ""), EKE(f20_l2q, ""), EKE(f25_l2q, ""), EKE(f40_l2q, "")};
+    EKE(f10_l2q, ""), EKE(f15_l2q, ""), EKE(f20_l2q, ""), EKE(f25_l2q, ""), EKE(f40_l2q, ""), EKE(f20_l7qs, ""),
+    EKE(fx45_l7qs, ""), EKE(fx8_l7qs, ""), EKE(fx12_l7qs, ""), EKE(fx24_l7qs, ""), EKE(u8_l7qs, ""), EKE(u16_l7qs, "")};
 static const EKn* ekern(const std::string& n) {
   for (auto& e : EK) if (n == e.name) return &e;
   fprintf(stderr, "no kernel %s\n", n.c_str());

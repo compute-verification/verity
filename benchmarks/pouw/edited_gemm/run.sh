@@ -10,7 +10,8 @@
 # r9's XOR-in (13, 19) beside x_l2o and e_l4q; EG_SET=eps1 the fold-cost sweep at 8192^3 and Llama-3.1-8B's o_proj and
 # gate_up at m = 2048, with ncu's sections on every arm at every shape (out/ncu/, read by eps_profile.py), EG_SET=eps1lag
 # duo's absorb lag and tie spacing there, EG_SET=eps1sleep consumers that sleep on a stage's mbarrier, EG_SET=eps1wave
-# the best of them at all four linears at m = 2048 and at a shape whose tiles fill whole waves. The small gate's seed has
+# the best of them at all four linears at m = 2048 and at a shape whose tiles fill whole waves, EG_SET=eps1pred the machine
+# model's predictions against kernels with extra scalar work and duo's counts across k. The small gate's seed has
 # a key that key_ok_r9 rejects. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
@@ -60,6 +61,7 @@ export LAYERS=${LAYERS:-"qkv:8192:6144:4096 gate_up:8192:28672:4096 down:8192:40
 case "${EG_SET:-all}" in
   eps1 | eps1lag | eps1sleep) O_SHAPE="8192 8192 8192" LAYERS="o2k:2048:4096:4096 gu2k:2048:28672:4096" ;;
   eps1wave) O_SHAPE="2048 6016 4096" LAYERS="q2k:2048:6144:4096 o2k:2048:4096:4096 gu2k:2048:28672:4096 dn2k:2048:4096:14336" ;;
+  eps1pred) O_SHAPE="8192 8192 8192" LAYERS="gu2k:2048:28672:4096 k1k:2048:4096:1024 k2k:2048:4096:2048 k8k:2048:4096:8192 q8k:2048:6144:8192" ;;
 esac
 gzip -c "$BIN/egemm.sass" > "$O/egemm.sass.gz"
 export W="$BIN/gates"
@@ -128,8 +130,8 @@ if [ "${EG_SET:-all}" = x13 ]; then
 fi
 # EG_SET=eps1: the fold-cost sweep at r = 0 (e_plain), 1, 1.5, 2, 2.5, 3 (duo, e_l2q), 4 ops a word, all at e_l2q's
 # schedule, beside cuBLASLt, duo's e_l4q and XIN's x_l2o; ncu on every arm at every shape (NCU_ONE: its sections;
-# NCU_FULL: --set full)
-export NCU_ONE="" NCU_FULL=""
+# NCU_FULL: --set full; both only at the shapes NCU_SHAPES names when it is set, NCU_EVERY's arms at the others)
+export NCU_ONE="" NCU_FULL="" NCU_SHAPES="" NCU_EVERY=""
 if [ "${EG_SET:-all}" = eps1 ]; then
   sweep="e_plain f10_l2q f15_l2q f20_l2q f25_l2q e_l2q f40_l2q"
   arms="plain" il="e_plain:plain e_l2q:plain edited:e_l2q:plain"
@@ -157,6 +159,15 @@ if [ "${EG_SET:-all}" = eps1wave ]; then
   arms="plain,e_plain,e_plains,e_l7q,e_l7qs" il="e_l7qs:plain"
   cold="" larms=$arms lil=$il ncu="" stall=""
   NCU_ONE="plain e_plains e_l7qs"
+fi
+# EG_SET=eps1pred: the machine model's predictions (note:20261017T0320Z-draft-eps1-calc) against kernels at e_l7qs's
+# schedule: r = 2 (f20), duo on x-op filler chains (fx<x>, x = 4.5, 8, 12, 24), duo with 8 or 16 uniform-datapath
+# instructions a MMA (u8, u16); ncu on every arm at 8192^3 and gate_up, and e_l7qs's counts at k = 1024 to 8192 for its
+# closed-form instruction counts
+if [ "${EG_SET:-all}" = eps1pred ]; then
+  arms="plain,e_plains,e_l7qs,f20_l7qs,fx45_l7qs,fx8_l7qs,fx12_l7qs,fx24_l7qs,u8_l7qs,u16_l7qs" il=""
+  cold="" larms=$arms lil="" ncu="" stall=""
+  NCU_ONE=${arms//,/ } NCU_SHAPES="o gu2k" NCU_EVERY="e_plains e_l7qs"
 fi
 export EG_ARMS=${EG_ARMS:-$arms} IL=${IL:-$il} IL_COLD=${IL_COLD:-$cold}
 export LAYER_ARMS=${LAYER_ARMS:-$larms} LAYER_IL=${LAYER_IL:-$lil}
@@ -199,7 +210,9 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
        --section SchedulerStats --section SourceCounters --section LaunchStats --section Occupancy)
     for sh in "o:$(echo $O_SHAPE | tr " " :)" $LAYERS; do
       IFS=: read -r name m n k <<< "$sh"
-      for a in $NCU_FULL $NCU_ONE; do
+      arms_="$NCU_FULL $NCU_ONE"
+      case " ${NCU_SHAPES:-$name} " in *" $name "*) ;; *) arms_=$NCU_EVERY ;; esac
+      for a in $arms_; do
         case " $NCU_FULL " in *" $a "*) set_=(--set full) ;; *) set_=("${S[@]}") ;; esac
         ncu --clock-control none --profile-from-start off --import-source no "${set_[@]}" -f -o "$O/ncu/$name-${a//:/_}" \
           "$BIN/egemm" one "$a" "$m" "$n" "$k" > "$O/ncu/$name-${a//:/_}.log" 2>&1 || echo "ncu one $name $a rc $?" >> "$O/rc.txt"
