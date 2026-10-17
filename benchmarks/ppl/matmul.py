@@ -177,15 +177,22 @@ class MM:
         return f"{self.run.arm.name}/s{self.seed} layer {self.layer} {self.name}{g} window {self.window}"
 
     def int_product(self, x: torch.Tensor | None = None, w: torch.Tensor | None = None) -> torch.Tensor:
-        """The exact integer product of x and w (default: this matmul's), gated: both within int8 and the accumulator
+        """The exact integer product of x and w (default: this matmul's), gated: both within int8 (or, when the
+        quantizer declared a wider grid with `integer(..., top=T)`, within +-T: `grid_range`) and the accumulator
         within s32 by k max|x| max|w| on every call, and on the check window against float64 on CHECK_ROWS rows."""
         x = self.x if x is None else x
         w = self.weight() if w is None else w
-        self.gate("int8_range", G.int8_ok(x, w))
+        top = self.extra.get("top", 127)
+        if top > 127:
+            self.gate("grid_range", G.within(top, x, w), top)
+        else:
+            self.gate("int8_range", G.int8_ok(x, w))
         k = x.shape[-1]
         bound = k * G.absmax(x) * G.absmax(w)
         self.gate("accumulator", bound <= G.S32, bound)
-        if self.kind == "linear":
+        if self.kind == "linear" and top > 127:
+            acc = exact_mm(x.float(), w.float().T, int(G.absmax(x) * G.absmax(w)))
+        elif self.kind == "linear":
             acc = int_mm(x, w)
         else:
             acc = exact_mm(x, w.transpose(-1, -2) if self.kind == "qk" else w, int(G.absmax(x) * G.absmax(w)))

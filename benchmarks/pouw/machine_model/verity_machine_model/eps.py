@@ -47,6 +47,7 @@ A warp instruction does 32 lane instructions; a uniform instruction does one. Ev
 from __future__ import annotations
 
 import math
+import re
 import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -80,6 +81,7 @@ class Honest:
     measured_source: str
     floor: dict[str, float]      # the least operand delivery any program pays a MMA, warp instructions by class
     floor_source: str
+    cls: str = MMA               # the MMA's census class: sm_120's MMA, a SASS form on another device (IMMA16816)
 
     def base(self) -> dict[str, float]:
         """Warp instructions a MMA without the fold."""
@@ -99,7 +101,7 @@ class Honest:
         floor = self.floor if floor is None else floor
         if operands == "floor" and not floor:
             raise SystemExit(f"{self.name}: no [operands] floor")
-        out = {MMA: self.per_mma[MMA]}
+        out = {self.cls: self.per_mma[self.cls]}
         _add(out, floor if operands == "floor" else {}, 1.0)
         return out
 
@@ -204,13 +206,14 @@ def honest(name: str, data: Path = DATA) -> Honest:
     t = tomllib.loads(p.read_text())
     fold = dict(t["fold"])
     m, ops = t.get("measured", {}), t.get("operands", {})
-    if MMA not in t["per_mma"]:
-        raise SystemExit(f"{name}: per_mma has no {MMA}")
+    cls = t["mma"].get("class", MMA)
+    if cls not in t["per_mma"]:
+        raise SystemExit(f"{name}: per_mma has no {cls}")
     return Honest(name=t["name"], status=t["status"], source=t["source"], L=t["L"], mma=t["mma"]["kind"],
                   words=t["mma"]["words"], depth=t["mma"]["depth"], per_mma=dict(t["per_mma"]),
                   fold_name=fold.pop("name"), fold=fold, measured=m.get("cycles_per_mma"),
                   measured_source=m.get("source", ""), floor=dict(ops.get("floor", {})),
-                  floor_source=ops.get("source", ""))
+                  floor_source=ops.get("source", ""), cls=cls)
 
 
 def design(name: str, data: Path = DATA) -> Design:
@@ -246,23 +249,23 @@ def profiles(data: Path = DATA) -> list[str]:
 @dataclass(frozen=True)
 class Table:
     """The table route (data/table.toml): q lane instructions and `bytes` of L2 reads a word, L2 at `l2` bytes a
-    second over `sms` SMs at `mhz`."""
+    second over `sms` SMs at `mhz`; `l2` None (unmeasured on the device) leaves the route bound by its slots alone."""
     q: float
     bytes: float
-    l2: float
+    l2: float | None
     sms: int
     mhz: float
     source: str
 
-    def per_cycle(self) -> float:
+    def per_cycle(self) -> float | None:
         """L2 bytes a SMSP-cycle (4 SMSPs an SM)."""
-        return self.l2 / (self.sms * 4 * self.mhz * 1e6)
+        return None if self.l2 is None else self.l2 / (self.sms * 4 * self.mhz * 1e6)
 
 
 def table(data: Path = DATA, q: float | None = None, l2: float | None = None, nbytes: float | None = None) -> Table:
     t = tomllib.loads((data / "table.toml").read_text())
     return Table(q=t["q"] if q is None else q, bytes=t["bytes"] if nbytes is None else nbytes,
-                 l2=t["l2"] if l2 is None else l2, sms=t["sms"], mhz=t["mhz"], source=t["source"])
+                 l2=t.get("l2") if l2 is None else l2, sms=t["sms"], mhz=t["mhz"], source=t["source"])
 
 
 @dataclass(frozen=True)
@@ -275,8 +278,14 @@ class Adapt:
     selection: str = ""
 
 
+def _adapt_file(data: Path) -> Path:
+    """A proof unit's ε_adapt doesn't depend on the device: a device directory reads data/adapt.toml."""
+    p = data / "adapt.toml"
+    return p if p.is_file() else DATA / "adapt.toml"
+
+
 def adapt(name: str = "", data: Path = DATA) -> Adapt:
-    t = tomllib.loads((data / "adapt.toml").read_text())
+    t = tomllib.loads(_adapt_file(data).read_text())
     name = name or t["default"]
     if name not in t or not isinstance(t[name], dict):
         raise SystemExit(f"no proof unit {name!r} in adapt.toml: one of {', '.join(adapts(data))}")
@@ -284,11 +293,13 @@ def adapt(name: str = "", data: Path = DATA) -> Adapt:
 
 
 def adapts(data: Path = DATA) -> list[str]:
-    return [k for k, v in tomllib.loads((data / "adapt.toml").read_text()).items() if isinstance(v, dict)]
+    return [k for k, v in tomllib.loads(_adapt_file(data).read_text()).items() if isinstance(v, dict)]
 
 
 def designs(data: Path = DATA) -> list[str]:
-    return sorted(p.stem for p in (data / "designs").glob("*.toml"))
+    """The design names, their numbers in numeric order (dither-1s-l32 before dither-1s-l128)."""
+    key = lambda n: [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", n)]
+    return sorted((p.stem for p in (data / "designs").glob("*.toml")), key=key)
 
 
 @dataclass(frozen=True)
@@ -372,7 +383,13 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     (ln(1/δ)/S; 0 leaves none). The tensor route pays `tensor_mma` a MMA (default honest's). q None closes the lane
     route, q_uniform None the uniform route (and the fold alone there), `baseline` opens the design's baseline
     program, and `table` the table route: table.q lane instructions from the lanes' class pool and table.bytes on an
-    L2 facet a word, folded on lanes."""
+    L2 facet a word, folded on lanes. A census with no uniform line (sm_89's: ptxas keeps uniform chains on lanes)
+    closes the uniform route."""
+    uni = UNI in pi.c
+    if not uni:
+        q_uniform = None
+        if any(f.route == "uniform" for f, _ in fillers):
+            raise SystemExit(f"{pi.vector}: no {UNI} census line for a filler on the uniform datapath")
     tensor: dict[str, float] = {}
     _add(tensor, h.base() if tensor_mma is None else tensor_mma, d.L / (h.depth * h.words))
     _add(tensor, d.fold, 1 / LANES)
@@ -407,7 +424,8 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
             a[i_xu] = d.fold_cost()
         return a
 
-    cols = {k: col(k) for k in set(tensor) | set(on_lanes) | set(base) | set(S) | {k for f in fl for k in f} | {UNI}}
+    cols = {k: col(k) for k in set(tensor) | set(on_lanes) | set(base) | set(S) | {k for f in fl for k in f}
+            | ({UNI} if uni else set())}
     missing = set(cols) - set(pi.c)
     if missing:
         raise SystemExit(f"{pi.vector}: no census line for {', '.join(sorted(missing))}")
@@ -423,7 +441,7 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
             A_ub.append(a)
             b_ub.append(0.0)
             rows.append(row)
-    if table is not None:
+    if table is not None and table.l2 is not None:
         a = [0.0] * nv
         a[i_tb], a[iT] = table.bytes / table.per_cycle(), -1.0
         A_ub.append(a)
@@ -459,6 +477,8 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     for j, (f, _) in enumerate(fillers):
         if not cheat:
             bounds[fu[j] if f.route == "lanes" else fv[j]] = (0, 0)
+        if not uni:
+            bounds[fu[j]] = (0, 0)
     obj = [0.0] * nv
     obj[iT] = 1.0
     s = linprog(obj, A_ub=A_ub, b_ub=b_ub, A_eq=eq, b_eq=[1.0, 0.0, 0.0] + [1.0] * nf, bounds=bounds, method="highs")
@@ -469,7 +489,7 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     n = {k: v for k, v in n.items() if v > 1e-12}
     lam = {r: -float(m) for r, m in zip(rows, s.ineqlin.marginals) if -m > 1e-9}
     load = pi.load(n)
-    if table is not None:
+    if table is not None and table.l2 is not None:
         load["L2"] = x[i_tb] * table.bytes / table.per_cycle()
     return Mix(T=x[iT], words={"tensor": x[it], "lanes": x[il], "baseline": x[ib], "uniform": x[iu], "table": x[i_tb]},
                filler_uniform=tuple(x[i] for i in fu), n=n, binding=binding(load, x[iT]), pi=lam,
@@ -588,6 +608,11 @@ class Eps:
     def route(self) -> float:
         """ε_route(π*) = ε_machine − ε_cert(π*)."""
         return self.machine_eps - self.cert
+
+    @property
+    def gamma_clock(self) -> float:
+        """γ with the clock gap: honest's time a useful MMA at f_H over the plain GEMM's model time at f_max."""
+        return self.gamma / (1 - self.design.clock.eps)
 
     @property
     def credit_ratio(self) -> float:

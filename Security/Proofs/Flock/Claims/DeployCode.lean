@@ -4,6 +4,7 @@ import Proofs.Flock.Claims.DecodeFlock
 import Proofs.Flock.Claims.NumbersGamma
 import Proofs.Flock.Claims.NumbersNMin
 import Proofs.Flock.Claims.NumbersTable
+import Proofs.Flock.Claims.GS.RadiusDeploy
 
 /-!
 # Flock's deployed instances of `Claims.Flock.Deploy`
@@ -20,12 +21,14 @@ the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Re
   The masked record reads every table of the session; the plain one table `0` only (`plainTableCols`), the one table
   its scope admits.
 * `enc`, `len`, `θ`, `read`: the level-0 code at each `m` the verifier serves, read as one (`IRS.famEnc`): the plain
-  one (`plainEncD`, `22 ≤ m ≤ 35`) and the masked one (`zkEncD`, `25 ≤ m ≤ 35`), each trace's codeword length `2^d`
-  and radius `1 − √ρ − 1/200` at its `m` (`plainLenD`, `plainThetaD`, `zkLenD`, `zkThetaD`), and its read step, the
-  tables' traces read as one witness, interleaved as the relation reads them (`Claims.Flock.readTables`, table `c`'s
-  hidden value `a` at `a·J + c`: `deployZk_read_getD`). A decoder meeting `ListWithin` at them exists for each
-  (`GS.listWithin_deployPlain`, `GS.listWithin_deployZk`). At one table both records read as before
-  (`deployPlain_one`, `deployZk_one`, `Claims.Flock.assemble_of_tables_eq_one`).
+  one (`plainEncD`, `22 ≤ m ≤ 35`, in `DeployPlainCode`) and the masked one (`zkEncD`, `25 ≤ m ≤ 35`), each trace's
+  codeword length `2^d` and radius `1 − √ρ − 1/200` at its `m` (`plainLenD`, `plainThetaD`, `zkLenD`, `zkThetaD`), and
+  its read step, the tables' traces read as one witness, interleaved as the relation reads them
+  (`Claims.Flock.readTables`, table `c`'s hidden value `a` at `a·J + c`: `deployZk_read_getD`). At one table both
+  records read as before (`deployPlain_one`, `deployZk_one`, `Claims.Flock.assemble_of_tables_eq_one`).
+* `dec`: the counted radius decoder at that code (`GS.plainCountedRD`, `GS.zkCountedRD`: the counted Guruswami–Sudan
+  decoder at each `m`, its count summed over the `m`s). It meets `ListWithin` at `len`, `enc` and `θ`
+  (`FlockDeploy.listWithin_plain`, `FlockDeploy.listWithin_zk`).
 * `assemble`, table by table: what it returns is one decoded trace per table, each in its own statement's relation
   read alone (`Claims.Flock.assemble_eq_some`), and it returns where every table has one
   (`Claims.Flock.assemble_isSome`).
@@ -48,84 +51,6 @@ namespace Claims.Flock
 open FlockSoundness FlockSoundness.Model
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## The plain level-0 code at each `m` -/
-
-/-- **The plain verifier's schedule at `m`**: `fast100`'s; the default where the verifier refuses `m`. -/
-def plainSched (m : ℕ) : _root_.Flock.Schedule := (_root_.Flock.fast100 m).getD default
-
-/-- The plain verifier's level 0 at `m`. -/
-def plainLevel0 (m : ℕ) : _root_.Flock.Level := (plainSched m).levels.getD 0 default
-
-/-- The plain verifier's `m`, `22 + i`. -/
-abbrev PlainIdx := Fin 14
-
-/-- The statement's `m` at index `i`. -/
-def PlainIdx.m (i : PlainIdx) : ℕ := 22 + i.val
-
-/-- Level 0's lanes (log), columns (log) and codeword length (log) at index `i`. -/
-def plainLanes (i : PlainIdx) : ℕ := (plainLevel0 i.m).lanes
-def plainCols (i : PlainIdx) : ℕ := (plainLevel0 i.m).cols
-def plainLen (i : PlainIdx) : ℕ := (plainLevel0 i.m).d
-
-/-- **The plain shapes**: `fast100` accepts every `m = 22 + i`; level 0 has `k0` lanes (log), `m − 7 − k0` columns
-(log), at least `2^9`, rate `1/2` (`d = cols + 1`, `d ≤ 40`) and `218` queries. -/
-theorem plainShape_table : ∀ i : PlainIdx,
-    (_root_.Flock.fast100 i.m).isSome = true ∧ plainLanes i = (plainSched i.m).k0 ∧ plainCols i + plainLanes i + 7 = i.m ∧
-      plainLen i = plainCols i + 1 ∧ plainLen i ≤ 40 ∧ 9 ≤ plainCols i ∧ (plainLevel0 i.m).q = 218 := by
-  decide +kernel
-
-theorem plainCols_le (i : PlainIdx) : plainCols i ≤ 40 := by
-  have := plainShape_table i
-  omega
-
-/-- **The deployed plain level-0 code at index `i`**: #2104's `levelZero` in the executable's arithmetic, `2^k0` lanes
-of `2^cols` columns. -/
-noncomputable def flockPlainLevelZero (i : PlainIdx) :
-    IRS 𝔽 (Message 𝔽 (plainLanes i) (plainCols i)) (2 ^ plainLanes i) :=
-  levelZero execArith execArith_correct (plainLanes i) (plainCols i) (plainCols_le i)
-
-/-- **A plain trace candidate**: the statement's `m` (as `PlainIdx`) and a message of its level-0 code. -/
-abbrev PlainTrace := Σ i : PlainIdx, Message 𝔽 (plainLanes i) (plainCols i)
-
-/-- **The deployed plain code**: a candidate's column at `q`, its code's lanes as a list. -/
-noncomputable def plainEncD (M : PlainTrace) (q : ℕ) : List 𝔽 :=
-  IRS.famEnc flockPlainLevelZero M q
-
-theorem plainEncD_eq (M : PlainTrace) (q : ℕ) :
-    plainEncD M q = List.ofFn (levelZeroEnc execArith (plainLanes M.1) (plainCols M.1) M.2 q) := by
-  unfold plainEncD IRS.famEnc flockPlainLevelZero
-  rw [levelZero_enc]
-
-/-- **The plain code's length** at a candidate: `2^d` at its `m`. -/
-def plainLenD (M : PlainTrace) : ℕ := 2 ^ plainLen M.1
-
-/-- **The plain code's radius** at a candidate: `1 − √ρ − 1/200` at its `m`, `ρ = 2^cols/2^d`. -/
-noncomputable def plainThetaD (M : PlainTrace) : ℝ :=
-  1 - Real.sqrt ((2 : ℝ) ^ plainCols M.1 / 2 ^ plainLen M.1) - 1 / 200
-
-/-- **The deployed plain code's Johnson count** at `agree`: `⌊(2^cols + 1)/agree²⌋ + 1` at the candidate's `m`. -/
-noncomputable def plainNMinD (agree : ℝ) (M : PlainTrace) : ℕ :=
-  IRS.famNMin flockPlainLevelZero agree M
-
-theorem plainNMinD_eq (agree : ℝ) (M : PlainTrace) :
-    plainNMinD agree M = johnsonCount (2 ^ plainCols M.1) agree := rfl
-
-/-- **The deployed plain decoder**: each `m`'s level-0 decoder on the opened columns read at its width. -/
-noncomputable def plainDecodeD (agree : ℝ) (os : List (ℕ × List 𝔽)) : List PlainTrace :=
-  IRS.famDecode flockPlainLevelZero agree os
-
-/-- **The deployed plain decoder meets `ListComplete`** at its Johnson count, at every `agree > 0`. -/
-theorem listComplete_plainDecodeD (agree : ℝ) (ha : 0 < agree) :
-    ListComplete plainEncD agree (plainNMinD agree) (plainDecodeD agree) :=
-  IRS.listComplete_famDecode flockPlainLevelZero agree ha
-
-/-- **The deployed plain read step**: the level-0 message's trace at the candidate's `m`, `2^m` hidden values. -/
-noncomputable def plainReadD (M : PlainTrace) : Wit :=
-  readTrace execArith M.1.m (plainLanes M.1) (plainCols M.1) M.2
-
-theorem plainReadD_hid_length (M : PlainTrace) : (plainReadD M).hid.length = 2 ^ M.1.m :=
-  readTrace_hid_length _ _ _ _ _
 
 /-! ## A plain run's opened level-0 columns -/
 
@@ -505,6 +430,7 @@ noncomputable def deployPlain (rel : Readable.Parsed → Readable.Relation) :
   enc := Claims.Flock.plainEncD
   len := Claims.Flock.plainLenD
   θ := Claims.Flock.plainThetaD
+  dec := Claims.GS.plainCountedRD
   read := Claims.Flock.readTables Claims.Flock.plainReadD
   εtable := εtable false
   N₀ := N₀ false
@@ -524,6 +450,7 @@ noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
   enc := Claims.Flock.zkEncD
   len := Claims.Flock.zkLenD
   θ := Claims.Flock.zkThetaD
+  dec := Claims.GS.zkCountedRD
   read := Claims.Flock.readTables Claims.Flock.zkReadD
   εtable := εtable true
   N₀ := N₀ true

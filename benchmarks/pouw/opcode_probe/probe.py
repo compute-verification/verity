@@ -16,7 +16,7 @@ The rate is the gate's count: a loop that `expect` says holds N instructions of 
 `iters` times by `warps` warps of each of the blocks (one an SM), over the block's cycles; the median block, then the
 median rep.
 
-  python probe.py build [--out DIR] [SOURCE...]                    # probes/*.cu -> DIR/STEM, sm_120a SASS only
+  python probe.py build [--out DIR] [--arch SM] [SOURCE...]        # probes/*.cu -> DIR/STEM, SM's SASS only (sm_120a)
   python probe.py gate BINARY... [--json OUT]                      # CPU only; exit 8 when a verdict isn't the declared one
   python probe.py run BINARY... --out DIR [--reps N] [--scale X] [--since EPOCH] [--run-id ID]   # one GPU
 """
@@ -35,7 +35,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 EXIT_FAIL = 8
-NVCC_FLAGS = ("-std=c++20", "-O3", "-gencode", "arch=compute_120a,code=sm_120a", "-ldl")
+NVCC_FLAGS = ("-std=c++20", "-O3", "-ldl")
+#: the one SASS target a binary carries; the datacenter probes (`../dc/`) build for sm_90a and sm_100a
+ARCHES = ("sm_120a", "sm_90a", "sm_100a")
 
 
 def _load(name: str, path: Path):
@@ -63,12 +65,13 @@ def nvcc() -> str:
     raise SystemExit("probe: no nvcc (set NVCC or CUDA_HOME)")
 
 
-def build(out: Path, sources: list[Path]) -> list[Path]:
+def build(out: Path, sources: list[Path], arch: str = "sm_120a") -> list[Path]:
     out.mkdir(parents=True, exist_ok=True)
+    gencode = f"arch=compute_{arch.removeprefix('sm_')},code={arch}"
     built = []
     for src in sources:
         dst = out / src.stem
-        subprocess.run([nvcc(), *NVCC_FLAGS, "-o", str(dst), str(src)], check=True)
+        subprocess.run([nvcc(), *NVCC_FLAGS, "-gencode", gencode, "-o", str(dst), str(src)], check=True)
         built.append(dst)
     return built
 
@@ -125,12 +128,19 @@ def rate_of(p: dict, times: list[dict]) -> dict:
     warps = [int(w) for w in p["warps"].split(";")] if p["warps"] else [p["tpb"] // 32] * len(ex)
     counted = p["counted"] or next(iter(ex[0]))
     loop = next(i for i, e in enumerate(ex) if counted in e)
+    until = p.get("until", 0) - 1
     per_rep: dict[str, list[float]] = {}
+    stop_gap = []
     for t in times:
         cyc = statistics.median(t["cyc"])
+        if until >= 0:
+            # the OP_UNTIL loop ran only while the fixed role did: its trips over the stop's cycles, block by block
+            per_block = [tr / st for tr, st in zip(t["trips"], t["stop"]) if st > 0]
+            stop_gap.append(statistics.median([1 - st / c for st, c in zip(t["stop"], t["cyc"]) if c > 0]))
         for i, e in enumerate(ex):
             for pat, n in e.items():
-                per_rep.setdefault(f"{i}:{pat}", []).append(n * t["iters"] * warps[i] / cyc)
+                r = n * statistics.median(per_block) if i == until else n * t["iters"] * warps[i] / cyc
+                per_rep.setdefault(f"{i}:{pat}", []).append(r)
     rates = {k: statistics.median(v) for k, v in per_rep.items()}
     reps = per_rep[f"{loop}:{counted}"]
     mhz = [t["sm_mhz"]["during"] or t["sm_mhz"]["after"] for t in times]
@@ -139,7 +149,8 @@ def rate_of(p: dict, times: list[dict]) -> dict:
             "spread": (max(reps) - min(reps)) / statistics.median(reps), "rates": rates,
             "sm_mhz": statistics.median(mhz) if mhz else None,
             "distinct_sms": min(len(set(t["smid"])) for t in times), "blocks": times[0]["blocks"],
-            "throttled": any(int(t["throttle"], 16) & 0xEC for t in times)}
+            "throttled": any(int(t["throttle"], 16) & 0xEC for t in times),
+            "stop_gap": statistics.median(stop_gap) if stop_gap else None}
 
 
 def make_rows(binary: Path, probes: list[dict], verdicts: list[dict], lines: list[dict], run_id: str,
@@ -208,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--out", type=Path, default=Path("build"))
+    b.add_argument("--arch", choices=ARCHES, default="sm_120a")
     b.add_argument("sources", nargs="*", type=Path)
     g = sub.add_parser("gate")
     g.add_argument("binaries", nargs="+", type=Path)
@@ -222,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
 
     if a.cmd == "build":
-        for out in build(a.out, a.sources or sorted((HERE / "probes").glob("*.cu"))):
+        for out in build(a.out, a.sources or sorted((HERE / "probes").glob("*.cu")), a.arch):
             print(out)
         return 0
 
