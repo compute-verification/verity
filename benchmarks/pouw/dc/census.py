@@ -18,7 +18,7 @@ The rows (warp instructions/SM/clk, derated by the 2% noise; facets in SMSP-cycl
 - JI90_k / JI100_k: the issue facets beside the honest tensor form (its coefficient c_M, every other kind's c_X), over
   every lane-beside-tensor point, the tensor alone and the best scalar issue; other tensor forms carry c_X, a lower
   bound on their issue cost.
-- J<row><family>_k: a lane pipe's facets beside the honest form, only where the lane loses rate beside it.
+- JP<row><family>_k: a lane pipe's facets beside the honest form, only where the lane loses rate beside it.
 
 The tables: T1 a form (note:20261017T0321Z-draft-eps1-tensor §3: slots a warp instruction, depth, rate, slots/SM/clk,
 fraction of ρ_T), the family's ε_tensor at L = 32 and the L where honest holds ρ_T, the joint issue rows, q* (the
@@ -334,7 +334,7 @@ def census(dev: Device) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
             continue
         pipe = SCALAR[kind][0]
         for i, f in enumerate(non_axis(pts)):
-            r = f"J{pipe}{sfx}_{i}"
+            r = f"JP{pipe}{sfx}_{i}"
             lines.append(cycles_line(honest, r, f["MMA"], every))
             lines.append(cycles_line(kind, r, f["X"], every))
             row(r, "joint", every, f"{honest} {f['MMA']:.3f} + {kind} {f['X']:.3f} SMSP-cycles (DC's exact {lane} "
@@ -428,8 +428,9 @@ def tables(dev: Device) -> str:
     duo = max((a["duo_words"] or 0) for a in dev.analyses)
     beside = max((j["lane_rate"] * 32 for _, n, j in dev.joints if j.get("exact") and analyze.lane_of(n) == "duo"
                   and (j.get("tensor_fraction") or 0) >= 1 - MARGIN), default=None)
-    out.append(f"L_bal (duo, 3 ops a word): 32 rho_T / duo = {32 * rho / duo:.1f} alone ({duo:.2f} words/SM/clk)"
-               + (f", {32 * rho / beside:.1f} beside the saturated tensor ({beside:.2f})" if beside else ""))
+    if duo:
+        out.append(f"L_bal (duo, 3 ops a word): 32 rho_T / duo = {32 * rho / duo:.1f} alone ({duo:.2f} words/SM/clk)"
+                   + (f", {32 * rho / beside:.1f} beside the saturated tensor ({beside:.2f})" if beside else ""))
     return "\n".join(out) + "\n"
 
 

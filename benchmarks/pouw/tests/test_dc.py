@@ -3,6 +3,7 @@ dgemm.cu's host reference (pinned), and analyze.py's slot arithmetic and pass li
 themselves need an H200 or a B200 (dgemm gate, run.sh)."""
 from __future__ import annotations
 
+import csv
 import hashlib
 import importlib.util
 import json
@@ -124,6 +125,90 @@ def test_analyze_sm100_tmem_model(tmp_path):
     assert abs(m4["honest_fraction_L32"] - 6 / 11) < 1e-9 and not m4["pass"]
     assert abs(m4["eps_tensor_L32"] - (5 / 11 * 64) / (6 / 11 * 256 + 5 / 11 * 64)) < 1e-9
     assert m4["L_saturated"] == 32 * 41   # 0.024 loaded at tensor 0.98: one slot in 41
+
+
+def _gate(d: Path, loops: dict[str, list[tuple[int, dict[str, int]]]]):
+    """gate.json beside rows.jsonl: each probe's timed loops in SASS order, as (instructions, {pattern: count})."""
+    vs = []
+    for probe, ls in loops.items():
+        out, at = [], 0
+        for n, counts in ls:
+            out.append({"head": hex(at), "tail": hex(at + 16 * (n - 1)), "counts": counts})
+            at += 16 * (n + 4)
+        vs.append({"probe": probe, "verdict": {"loops": out}})
+    (d / "gate.json").write_text(json.dumps({"verdicts": vs}))
+
+
+WGI = "IGMMA.64x256x32.S8.S8*"
+
+
+def _sm90_run(d: Path, sync_rate: float) -> Path:
+    """A synthetic sm90 run: the tensor alone at 128 slots/SM/clk (a loop of 8 with 4 IGMMA), scalar issue 4 a SM-clock,
+    mix lanes beside the saturated tensor issuing 2, IMAD lanes beside it at half their alone rate, mma.sync beside it
+    at sync_rate warp instructions/SM/clk with the tensor at 0.9."""
+    t = 128 / 4096
+    _rows(d, {"wg_s8_n256_a1": {f"0:{WGI}": t}, "imma_s8_k16": {"0:IMMA.16816.S8.S8": 0.5},
+              "s_lop3": {"0:LOP3.LUT": 2.0}, "s_imad": {"0:IMAD": 2.0}, "s_shfl": {"0:SHFL.BFLY": 1.0},
+              "s_ffma": {"0:FFMA": 3.8}, "p_ffma_lop3": {"0:FFMA": 2.0, "0:LOP3.LUT": 2.0},
+              "wgU_mix": {f"0:{WGI}": t, "1:FFMA": 1.0, "1:I*ADD*": 1.0},
+              "wgU_imad": {f"0:{WGI}": t, "1:IMAD": 1.0},
+              "wgU_sync_k16": {f"0:{WGI}": 0.9 * t, "1:IMMA.16816.S8.S8": sync_rate}})
+    _gate(d, {"wg_s8_n256_a1": [(8, {WGI: 4})], "p_ffma_lop3": [(8, {"FFMA": 4, "LOP3.LUT": 4})],
+              "wgU_mix": [(8, {WGI: 4}), (64, {"FFMA": 32, "I*ADD*": 32})]})
+    return d
+
+
+def _census_tables(census, lines, rows):
+    by_row: dict[str, dict[str, float]] = {}
+    for ln in lines:
+        assert (ln["kind"] not in by_row.get(ln["row"], {})), f"two lines for {ln['kind']} on {ln['row']}"
+        by_row.setdefault(ln["row"], {})[ln["kind"]] = census.rowsmod.u_of(
+            census.rowsmod.CYCLE_U, ln["rate"], ln["noise"], ln["cycles"], ln["u"])
+    assert set(by_row) == {r["row"] for r in rows}
+    return by_row
+
+
+def test_census_sm90_rows(tmp_path):
+    """The issue facet through scalar issue (0, 1) and the mix point (1/128, 0.5078) a SMSP-cycle is IGMMA 63 + other 1
+    (x 0.98); IMAD at half beside the tensor gives its pipe facet IGMMA 64 + IMAD 2 (x 0.98); mma.sync inside the
+    shared line joins M, outside it gets MS."""
+    census = _load("census")
+    run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
+    dev = census.Device("sm90", [run])
+    lines, rows = census.census(dev)
+    cu = census.rowsmod.CYCLE_U
+    by_row = _census_tables(census, lines, rows)
+    assert abs(by_row["JI90_0"]["IGMMA_S8_N256"] / cu - 0.98 * 63) < 1e-6
+    assert abs(by_row["JI90_0"]["FFMA"] / cu - 0.98) < 1e-9 and abs(by_row["JI90_0"]["IMMA16816_S8"] / cu - 0.98) < 1e-9
+    assert abs(by_row["JPI90_0"]["IGMMA_S8_N256"] / cu - 0.98 * 64) < 1e-6
+    assert abs(by_row["JPI90_0"]["IMAD"] / cu - 0.98 * 2) < 1e-9
+    assert {"IGMMA_S8_N256", "IMMA16816_S8"} <= set(by_row["M"]) and "MS" not in by_row
+    assert set(by_row["issue"]) == {"IGMMA_S8_N256", "IMMA16816_S8", "ALU", "IMAD", "SHFL", "FFMA"}
+    assert "FFMA" not in {k for r, ks in by_row.items() if r in ("A", "I", "SHFL") for k in ks}
+    assert all(ln["runs"] == "r20261017-000000-abcd" for ln in lines)
+    text = census.tables(dev)
+    assert "q*: c_M 61.740 SMSP-cycles over 128 words a lane" in text
+    run2 = _sm90_run(tmp_path / "r20261017-000001-abce" / "out", 0.2)
+    by_row = _census_tables(census, *census.census(census.Device("sm90", [run2])))
+    assert "IMMA16816_S8" in by_row["MS"] and "IMMA16816_S8" not in by_row["M"]
+
+
+def test_device_census_is_well_formed():
+    """Every device directory's lines are lines machine_model reads (one of rate, cycles and u), each on a row rows.csv
+    states, once a row, naming its runs."""
+    census = _load("census")
+    devices = DC.parent / "machine_model" / "data" / "devices"
+    dirs = sorted(p for p in devices.iterdir() if p.is_dir()) if devices.exists() else []
+    for d in dirs:
+        with open(d / "census.csv", newline="") as f:
+            lines = list(csv.DictReader(f))
+        with open(d / "rows.csv", newline="") as f:
+            rows = list(csv.DictReader(f))
+        assert tuple(lines[0]) == census.rowsmod.CENSUS_COLUMNS
+        by_row = _census_tables(census, lines, rows)
+        assert {"issue", "M", "A", "I", "SHFL"} <= set(by_row), d
+        for ln in lines + rows:
+            assert ln["runs"] and all(census.rowsmod.RUN_ID.fullmatch(r) for r in ln["runs"].split()), (d, ln)
 
 
 def test_analyze_sm90_pass_line(tmp_path):
