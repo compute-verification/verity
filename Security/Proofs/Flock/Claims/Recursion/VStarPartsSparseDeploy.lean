@@ -28,7 +28,7 @@ theorem vstarAccepts_sparse_deployRec {H : Msg → Msg} {IV : Verifier FlockDepl
     {decode : Msg → Option Flock.Readable.Read} (hb : b.rd = RecDeploy.readersOf L)
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hC : ∀ s, PartLinks H (RecDeploy.deployRec IV ivScope b) decode L Form.Sparse shows chk s)
-    (hO : ∀ s, PartOpens H (RecDeploy.deployRec IV ivScope b) DO L Form.Sparse opening cmt s)
+    (hO : ∀ s, PartOpens H (RecDeploy.deployRec IV ivScope b) DO L Form.Sparse shows opening cmt s)
     (hS : Staged H (RecDeploy.deployRec IV ivScope b) I L Form.Sparse shows cmt)
     (hD : Decomp H (RecDeploy.deployRec IV ivScope b) IV Form.Sparse chk) :
     VStarAcceptsR H (RecDeploy.deployRec IV ivScope b) I DO Form.Sparse :=
@@ -44,7 +44,7 @@ theorem vstarAccepts_sparse_deployZkRec {H : Msg → Msg} {IV : Verifier FlockDe
     (hb : b.rd = RecDeploy.readersOf L)
     (hC : ∀ s, PartLinks H (RecDeploy.deployRec IV ivScope b) RecDeploy.readOfO L Form.Sparse shows chk s)
     (hO : ∀ s, PartOpens H (RecDeploy.deployRec IV ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      Form.Sparse opening cmt s)
+      Form.Sparse shows opening cmt s)
     (hS : Staged H (RecDeploy.deployRec IV ivScope b) I L Form.Sparse shows cmt)
     (hD : Decomp H (RecDeploy.deployRec IV ivScope b) IV Form.Sparse chk) :
     VStarAcceptsR H (RecDeploy.deployRec IV ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation)
@@ -63,9 +63,9 @@ theorem vstarParts_sparse_deployZkRec {H : Msg → Msg} {IV : Verifier FlockDepl
     (hC : ∀ s, PartLinks H (RecDeploy.deployRec IV ivScope b) RecDeploy.readOfO L Form.Sparse shows chk s)
     (hL : ∀ s, SparseLogs H (RecDeploy.deployRec IV ivScope b) RecDeploy.readOfO L shows logs s)
     (hO : ∀ s, HeldOpens (RecDeploy.deployRec IV ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      Form.Sparse opening dig s)
+      Form.Sparse shows opening dig s)
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec IV ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      Form.Sparse cmt dig s)
+      Form.Sparse shows cmt dig s)
     (hS : Staged H (RecDeploy.deployRec IV ivScope b) I L Form.Sparse shows cmt)
     (hD : Decomp H (RecDeploy.deployRec IV ivScope b) I.V Form.Sparse chk)
     (hLD : LogDecomp H (RecDeploy.deployRec IV ivScope b) I.V Form.Sparse logs)

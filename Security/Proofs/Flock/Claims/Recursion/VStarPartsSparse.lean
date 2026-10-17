@@ -628,7 +628,7 @@ theorem vstarAccepts_sparse_of_links {H : Msg → Msg} {D : Deploy Coin} {I : In
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D)
     (hC : ∀ s, PartLinks H D decode L Form.Sparse shows chk s)
-    (hO : ∀ s, PartOpens H D DO L Form.Sparse opening cmt s) (hS : Staged H D I L Form.Sparse shows cmt)
+    (hO : ∀ s, PartOpens H D DO L Form.Sparse shows opening cmt s) (hS : Staged H D I L Form.Sparse shows cmt)
     (hD : Decomp H D IV Form.Sparse chk) : VStarAcceptsR H D I DO Form.Sparse :=
   vstarAccepts_sparse hR hVL (fun s => partChecks_of_links hDO (hC s)) hO hS hD
 
@@ -641,7 +641,7 @@ theorem vstarPartsStaging_sparse_of_links {H : Msg → Msg} {D : Deploy Coin} {I
     {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hC : ∀ s, PartLinks H D decode L Form.Sparse shows chk s)
-    (hO : ∀ s, PartOpens H D DO L Form.Sparse opening cmt s)
+    (hO : ∀ s, PartOpens H D DO L Form.Sparse shows opening cmt s)
     (hL : ∀ s, PartLogs H D DO L Form.Sparse shows logs s) (hV : VstarShows D I L Form.Sparse decC shows cmt)
     (hD : Decomp H D I.V Form.Sparse chk) (hLD : LogDecomp H D I.V Form.Sparse logs) (hH : Held D I L Form.Sparse) :
     VStarPartsStaging D I DO H L opening decC Form.Sparse :=
@@ -656,7 +656,7 @@ theorem vstarParts_sparse_of_links {H : Msg → Msg} {D : Deploy Coin} {I : Inne
     {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hC : ∀ s, PartLinks H D decode L Form.Sparse shows chk s)
-    (hO : ∀ s, PartOpens H D DO L Form.Sparse opening cmt s)
+    (hO : ∀ s, PartOpens H D DO L Form.Sparse shows opening cmt s)
     (hL : ∀ s, PartLogs H D DO L Form.Sparse shows logs s) (hS : Staged H D I L Form.Sparse shows cmt)
     (hD : Decomp H D I.V Form.Sparse chk) (hLD : LogDecomp H D I.V Form.Sparse logs) (hH : Held D I L Form.Sparse) :
     VStarParts H D I DO L opening Form.Sparse :=
@@ -688,7 +688,8 @@ theorem vstarParts_sparse {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {cmt dig : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hC : ∀ s, PartLinks H D decode L Form.Sparse shows chk s) (hL : ∀ s, SparseLogs H D decode L shows logs s)
-    (hO : ∀ s, HeldOpens D DO L Form.Sparse opening dig s) (hRC : ∀ s, RegClimbs H D DO L Form.Sparse cmt dig s)
+    (hO : ∀ s, HeldOpens D DO L Form.Sparse shows opening dig s)
+    (hRC : ∀ s, RegClimbs H D DO L Form.Sparse shows cmt dig s)
     (hS : Staged H D I L Form.Sparse shows cmt) (hD : Decomp H D I.V Form.Sparse chk)
     (hLD : LogDecomp H D I.V Form.Sparse logs) (hH : Held D I L Form.Sparse) :
     VStarParts H D I DO L opening Form.Sparse :=

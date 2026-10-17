@@ -554,25 +554,26 @@ theorem coll_of_chains {Coin : Type} {H : Msg → Msg} {D : Deploy Coin} {xO : M
         ⟨hne, hH⟩)
 
 /-- **Part `s` opens what it holds to a public digest** (a code fact about part `s`'s circuit and the layout):
-wherever the part's outer relation holds at a V* statement `xO` of a compiled statement `x` of the shape, each inner
-round's message the part holds opens under `opening` the digest `dig x i xO` that `xO`'s public file names for that
-round (the `b ‖ c` the part's hm96 row computes), through calls the part records. -/
+wherever the part's outer relation holds at a V* statement `xO` of a compiled statement `x` of the shape that shows
+coins for part `s`, each inner round's message the part holds opens under `opening` the digest `dig x i xO` that `xO`'s
+public file names for that round (the `b ‖ c` the part's hm96 row computes), through calls the part records. -/
 def HeldOpens {Coin Col T : Type} (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
-    (opening : Opening) (dig : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
+    (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (opening : Opening) (dig : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
-    Flock.check DO.parse xO w = true → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
+    Flock.check DO.parse xO w = true → ∀ c, shows s x xO c → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
       ∃ cs, cs ⊆ L.calls x s w ∧ opening.opens (dig x i xO) m cs
 
 /-- **The setup climbs each held round's digest and commit string to one root** (a code fact about the V* setup at
 part `s`, its registered reads: `Registered.opens` at the digest, and the root the setup rebuilds from the round's
 commit string): wherever the part's outer relation holds at a V* statement `xO` of a compiled statement `x` of the
-shape, at each inner round the part holds a message at, the digest `dig x i xO` and the commit string `cmt x i xO`
-climb to one value through steps that keep their values apart (`StepsApart`), and every input either climb hashes is
-one the setup evaluates at `xO` (`D.setup xO`) or one the part records. -/
+shape that shows coins for part `s`, at each inner round the part holds a message at, the digest `dig x i xO` and the
+commit string `cmt x i xO` climb to one value through steps that keep their values apart (`StepsApart`), and every
+input either climb hashes is one the setup evaluates at `xO` (`D.setup xO`) or one the part records. -/
 def RegClimbs {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout)
-    (shape : Form → Prop) (cmt dig : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
+    (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt dig : Msg → ℕ → Msg → Msg) (s : ℕ) :
+    Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
-    Flock.check DO.parse xO w = true → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
+    Flock.check DO.parse xO w = true → ∀ c, shows s x xO c → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
       ∃ fs gs : List (Msg → Msg), StepsApart fs gs ∧ chainH H fs (dig x i xO) = chainH H gs (cmt x i xO) ∧
         ∀ u ∈ chainIns H fs (dig x i xO) ++ chainIns H gs (cmt x i xO), u ∈ D.setup xO ∨ (u, H u) ∈ L.calls x s w
 
@@ -581,14 +582,17 @@ through recorded calls (`HeldOpens`); where that digest is the round's commit st
 where it isn't, the setup's two climbs to one root collide (`chain_coll`), a registered tie or a collision among the
 recorded calls (`coll_of_chains`). -/
 theorem partOpens_of_climbs {Coin Col T : Type} {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T}
-    {L : Layout} {shape : Form → Prop} {opening : Opening} {cmt dig : Msg → ℕ → Msg → Msg} {s : ℕ}
-    (hO : HeldOpens D DO L shape opening dig s) (hC : RegClimbs H D DO L shape cmt dig s) :
-    PartOpens H D DO L shape opening cmt s := by
-  intro x st hst hf xO w hck htrue i hi m hm
-  obtain ⟨cs, hcs, ho⟩ := hO x st hst hf xO w hck i hi m hm
+    {L : Layout} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {opening : Opening}
+    {cmt dig : Msg → ℕ → Msg → Msg} {s : ℕ} (hO : HeldOpens D DO L shape shows opening dig s)
+    (hC : RegClimbs H D DO L shape shows cmt dig s) : PartOpens H D DO L shape shows opening cmt s := by
+  intro x st hst hf xO w hck htrue
+  by_cases hcoll : (findColl (L.calls x s w)).isSome ∨ SetupColl H D xO (L.calls x s w)
+  · exact Or.inr hcoll
+  refine Or.inl fun c hc i hi m hm => ?_
+  obtain ⟨cs, hcs, ho⟩ := hO x st hst hf xO w hck c hc i hi m hm
   by_cases hd : dig x i xO = cmt x i xO
-  · exact Or.inl ⟨cs, hcs, hd ▸ ho⟩
-  · obtain ⟨fs, gs, hap, heq, hin⟩ := hC x st hst hf xO w hck i hi m hm
-    exact Or.inr (coll_of_chains htrue hin (chain_coll H hap hd heq))
+  · exact ⟨cs, hcs, hd ▸ ho⟩
+  · obtain ⟨fs, gs, hap, heq, hin⟩ := hC x st hst hf xO w hck c hc i hi m hm
+    exact absurd (coll_of_chains htrue hin (chain_coll H hap hd heq)) hcoll
 
 end Claims.Recursion.VStar

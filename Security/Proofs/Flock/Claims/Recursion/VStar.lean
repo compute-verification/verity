@@ -474,15 +474,17 @@ def PartChecks (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T
       (findColl (L.calls x s w)).isSome ∨ SetupColl H D xO (L.calls x s w)
 
 /-- **V\* part `s` opens what it holds** (a code fact about V*'s part `s` and the layout): wherever the part's outer
-relation holds at a V* statement `xO` of a compiled statement `x` of the shape, and its recorded calls are true
-evaluations, each inner round's message the part holds opens under `opening` the round's commit string that `xO` shows
-(`cmt x i xO`), through calls the part records; or two of its recorded calls collide, or one of them ties with an
-evaluation the setup makes at `xO` (a climb whose top node is a registered root through other children). -/
+relation holds at a V* statement `xO` of a compiled statement `x` of the shape that shows coins for part `s`, and its
+recorded calls are true evaluations, each inner round's message the part holds opens under `opening` the round's
+commit string that `xO` shows (`cmt x i xO`), through calls the part records; or two of its recorded calls collide, or
+one of them ties with an evaluation the setup makes at `xO` (a climb whose top node is a registered root through other
+children). -/
 def PartOpens (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
-    (opening : Opening) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
+    (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (opening : Opening) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
-    Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) → ∀ i < L.rounds x, ∀ m,
-      L.held x s w i = some m → (∃ cs, cs ⊆ L.calls x s w ∧ opening.opens (cmt x i xO) m cs) ∨
+    Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
+      (∀ (c : ℕ → Coin), shows s x xO c → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
+        ∃ cs, cs ⊆ L.calls x s w ∧ opening.opens (cmt x i xO) m cs) ∨
         (findColl (L.calls x s w)).isSome ∨ SetupColl H D xO (L.calls x s w)
 
 /-- **The staged V\* statements show the run** (a code fact about the V* statements the compiled verifier stages): on
@@ -594,7 +596,7 @@ one round, which open one commit string (`Staged`) two ways (`PartOpens`), a col
 theorem agree_or_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {IV : Verifier Coin} {L : Layout} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {opening : Opening} {cmt : Msg → ℕ → Msg → Msg} (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D)
-    (hO : ∀ s, PartOpens H D DO L shape opening cmt s) (hS : Staged H D I L shape shows cmt) {x : Msg} {st : Stmt}
+    (hO : ∀ s, PartOpens H D DO L shape shows opening cmt s) (hS : Staged H D I L shape shows cmt) {x : Msg} {st : Stmt}
     (hst : D.parse x = some st) (hf : shape st.form) {Ω : Type} {P : Prover Ω} {ω : Ω} {r : Fin (D.V.k x) → Coin}
     (hacc : (run H P D.V x ω r).out = .acc) {ws : List Flock.Wit}
     (ho : OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws) (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) :
@@ -608,9 +610,11 @@ theorem agree_or_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO
   by_cases hdiff : ∃ i < L.rounds x, ∃ s, ∃ hs : s < ws.length, ∃ s', ∃ hs' : s' < ws.length, ∃ m m',
       L.held x s ws[s] i = some m ∧ L.held x s' ws[s'] i = some m' ∧ m ≠ m'
   · obtain ⟨i, hi, s, hs, s', hs', m, m', hm, hm', hne⟩ := hdiff
-    rcases hO s x st hst hf _ ws[s] (hchk s hs) (hpt s hs) i hi m hm with ⟨cs, hcs, hop⟩ | hc
-    · rcases hO s' x st hst hf _ ws[s'] (hchk s' hs') (hpt s' hs') i hi m' hm' with ⟨cs', hcs', hop'⟩ | hc'
-      · rw [(hS x st hst hf Ω P ω r hacc s (hlen ▸ hs)).2 i hi] at hop
+    rcases hO s x st hst hf _ ws[s] (hchk s hs) (hpt s hs) with hop | hc
+    · obtain ⟨cs, hcs, hop⟩ := hop _ (hS x st hst hf Ω P ω r hacc s (hlen ▸ hs)).1 i hi m hm
+      rcases hO s' x st hst hf _ ws[s'] (hchk s' hs') (hpt s' hs') with hop' | hc'
+      · obtain ⟨cs', hcs', hop'⟩ := hop' _ (hS x st hst hf Ω P ω r hacc s' (hlen ▸ hs')).1 i hi m' hm'
+        rw [(hS x st hst hf Ω P ω r hacc s (hlen ▸ hs)).2 i hi] at hop
         rw [(hS x st hst hf Ω P ω r hacc s' (hlen ▸ hs')).2 i hi] at hop'
         refine Or.inr (Or.inl ?_)
         rw [hR.2 x ws] at htrue ⊢
@@ -645,7 +649,7 @@ theorem vstarAccepts_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     {IV : Verifier Coin} {L : Layout} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg}
     (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D) (hC : ∀ s, PartChecks H D DO L shape shows chk s)
-    (hO : ∀ s, PartOpens H D DO L shape opening cmt s) (hS : Staged H D I L shape shows cmt)
+    (hO : ∀ s, PartOpens H D DO L shape shows opening cmt s) (hS : Staged H D I L shape shows cmt)
     (hD : Decomp H D IV shape chk) : VStarAcceptsR H D I DO shape := by
   intro x st hst hf Ω P ω r hacc ws ho htrue
   rcases agree_or_coll hR hVL hO hS hst hf hacc ho htrue with hag | hcoll
@@ -675,7 +679,7 @@ theorem vstarAccepts_dense {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     {IV : Verifier Coin} {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg}
     (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D)
-    (hC : ∀ s, PartChecks H D DO L Form.Dense shows chk s) (hO : ∀ s, PartOpens H D DO L Form.Dense opening cmt s)
+    (hC : ∀ s, PartChecks H D DO L Form.Dense shows chk s) (hO : ∀ s, PartOpens H D DO L Form.Dense shows opening cmt s)
     (hS : Staged H D I L Form.Dense shows cmt) (hD : Decomp H D IV Form.Dense chk) :
     VStarAcceptsR H D I DO Form.Dense :=
   vstarAccepts_of_parts hR hVL hC hO hS hD
@@ -687,7 +691,7 @@ theorem vstarAccepts_holo {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {IV : Verifier Coin} {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg}
     (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D)
-    (hC : ∀ s, PartChecks H D DO L Form.Holo shows chk s) (hO : ∀ s, PartOpens H D DO L Form.Holo opening cmt s)
+    (hC : ∀ s, PartChecks H D DO L Form.Holo shows chk s) (hO : ∀ s, PartOpens H D DO L Form.Holo shows opening cmt s)
     (hS : Staged H D I L Form.Holo shows cmt) (hD : Decomp H D IV Form.Holo chk) :
     VStarAcceptsR H D I DO Form.Holo :=
   vstarAccepts_of_parts hR hVL hC hO hS hD
@@ -699,7 +703,8 @@ theorem vstarAccepts_sparse {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin 
     {IV : Verifier Coin} {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg}
     (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D)
-    (hC : ∀ s, PartChecks H D DO L Form.Sparse shows chk s) (hO : ∀ s, PartOpens H D DO L Form.Sparse opening cmt s)
+    (hC : ∀ s, PartChecks H D DO L Form.Sparse shows chk s)
+    (hO : ∀ s, PartOpens H D DO L Form.Sparse shows opening cmt s)
     (hS : Staged H D I L Form.Sparse shows cmt) (hD : Decomp H D IV Form.Sparse chk) :
     VStarAcceptsR H D I DO Form.Sparse :=
   vstarAccepts_of_parts hR hVL hC hO hS hD
@@ -736,12 +741,13 @@ theorem innerAcceptsR_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
     {cmtD cmtH cmtS : Msg → ℕ → Msg → Msg} (hRef : Refuses H D) (hT : CallsTrue H D I DO)
     (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D)
     (hCD : ∀ s, PartChecks H D DO L Form.Dense showsD chkD s)
-    (hOD : ∀ s, PartOpens H D DO L Form.Dense opening cmtD s)
+    (hOD : ∀ s, PartOpens H D DO L Form.Dense showsD opening cmtD s)
     (hSD : Staged H D I L Form.Dense showsD cmtD) (hDD : Decomp H D IV Form.Dense chkD)
-    (hCH : ∀ s, PartChecks H D DO L Form.Holo showsH chkH s) (hOH : ∀ s, PartOpens H D DO L Form.Holo opening cmtH s)
+    (hCH : ∀ s, PartChecks H D DO L Form.Holo showsH chkH s)
+    (hOH : ∀ s, PartOpens H D DO L Form.Holo showsH opening cmtH s)
     (hSH : Staged H D I L Form.Holo showsH cmtH) (hDH : Decomp H D IV Form.Holo chkH)
     (hCS : ∀ s, PartChecks H D DO L Form.Sparse showsS chkS s)
-    (hOS : ∀ s, PartOpens H D DO L Form.Sparse opening cmtS s) (hSS : Staged H D I L Form.Sparse showsS cmtS)
+    (hOS : ∀ s, PartOpens H D DO L Form.Sparse showsS opening cmtS s) (hSS : Staged H D I L Form.Sparse showsS cmtS)
     (hDS : Decomp H D IV Form.Sparse chkS) : InnerAcceptsR H D I DO :=
   innerAcceptsR_of_vstar hRef hT (vstarAccepts_dense hR hVL hCD hOD hSD hDD)
     (vstarAccepts_holo hR hVL hCH hOH hSH hDH) (vstarAccepts_sparse hR hVL hCS hOS hSS hDS)
@@ -773,9 +779,9 @@ that part opens it to the round's commit string its V* statement shows (`PartOpe
 theorem opensPlayed_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {L : Layout} {shape : Form → Prop} {opening : Opening} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {cmt : Msg → ℕ → Msg → Msg} (hR : ReadsThrough H D I.V L.msgs L.calls) (hVL : VstarLen D)
-    (hH : Held D I L shape) (hO : ∀ s, PartOpens H D DO L shape opening cmt s) (hS : Staged H D I L shape shows cmt)
-    {decO : List (ℕ × Col) → List T} {x : Msg} {Ω : Type} {P : Prover Ω} {ω : Ω} {r : Fin (D.V.k x) → Coin}
-    {c : (EO D I DO decO).C x} {ws : List Flock.Wit} (hg : EOGives H D I DO decO P x ω r c ws)
+    (hH : Held D I L shape) (hO : ∀ s, PartOpens H D DO L shape shows opening cmt s)
+    (hS : Staged H D I L shape shows cmt) {decO : List (ℕ × Col) → List T} {x : Msg} {Ω : Type} {P : Prover Ω}
+    {ω : Ω} {r : Fin (D.V.k x) → Coin} {c : (EO D I DO decO).C x} {ws : List Flock.Wit} (hg : EOGives H D I DO decO P x ω r c ws)
     (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : Stmt} (hst : D.parse x = some st) (hf : shape st.form) :
     ∀ j < (D.innerView H x r ws).msgs.length, (∃ cs, cs ⊆ D.calls x ws ∧
       opening.opens (((run H P D.V x ω r).msgs.map Prod.fst).getD j [])
@@ -792,8 +798,9 @@ theorem opensPlayed_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
   obtain ⟨s, hs, hh⟩ := (hH x st hst hf).2 j hjr
   obtain ⟨s₀, hs₀, hm⟩ := Layout.msgs_getD_held hjr (hlen ▸ hs) hh
   rcases hO s₀ x st hst hf _ ws[s₀] (hchk s₀ hs₀)
-      (fun e he => htrue e (by rw [hR.2 x ws]; exact mem_calls_of_part hs₀ he)) j hjr _ hm with ⟨cs, hcs, ho⟩ | hc
-  · rw [(hS x st hst hf Ω P ω r hg.1 s₀ (hlen ▸ hs₀)).2 j hjr] at ho
+      (fun e he => htrue e (by rw [hR.2 x ws]; exact mem_calls_of_part hs₀ he)) with ho | hc
+  · obtain ⟨cs, hcs, ho⟩ := ho _ (hS x st hst hf Ω P ω r hg.1 s₀ (hlen ▸ hs₀)).1 j hjr _ hm
+    rw [(hS x st hst hf Ω P ω r hg.1 s₀ (hlen ▸ hs₀)).2 j hjr] at ho
     refine Or.inl ⟨cs, fun e he => ?_, ho⟩
     rw [hR.2 x ws]
     exact mem_calls_of_part hs₀ (hcs he)
@@ -806,11 +813,11 @@ theorem callsOpenPlayed_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner 
     {L : Layout} {opening : Opening} {showsD showsH showsS : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {cmtD cmtH cmtS : Msg → ℕ → Msg → Msg} (hRef : Refuses H D) (hT : CallsTrue H D I DO)
     (hR : ReadsThrough H D I.V L.msgs L.calls) (hVL : VstarLen D)
-    (hHD : Held D I L Form.Dense) (hOD : ∀ s, PartOpens H D DO L Form.Dense opening cmtD s)
+    (hHD : Held D I L Form.Dense) (hOD : ∀ s, PartOpens H D DO L Form.Dense showsD opening cmtD s)
     (hSD : Staged H D I L Form.Dense showsD cmtD)
-    (hHH : Held D I L Form.Holo) (hOH : ∀ s, PartOpens H D DO L Form.Holo opening cmtH s)
+    (hHH : Held D I L Form.Holo) (hOH : ∀ s, PartOpens H D DO L Form.Holo showsH opening cmtH s)
     (hSH : Staged H D I L Form.Holo showsH cmtH)
-    (hHS : Held D I L Form.Sparse) (hOS : ∀ s, PartOpens H D DO L Form.Sparse opening cmtS s)
+    (hHS : Held D I L Form.Sparse) (hOS : ∀ s, PartOpens H D DO L Form.Sparse showsS opening cmtS s)
     (hSS : Staged H D I L Form.Sparse showsS cmtS) : CallsOpenPlayed H D I DO opening := by
   intro decO x Ω P ω r c ws hg
   obtain ⟨st, hst, -⟩ := hRef x Ω P ω r hg.1
@@ -1040,7 +1047,7 @@ theorem logColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
     {L : Layout} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg}
     (hR : ReadsThrough H D I.V L.msgs L.calls) (hVL : VstarLen D) (hL : ∀ s, PartLogs H D DO L shape shows logs s)
-    (hO : ∀ s, PartOpens H D DO L shape opening cmt s) (hS : Staged H D I L shape shows cmt)
+    (hO : ∀ s, PartOpens H D DO L shape shows opening cmt s) (hS : Staged H D I L shape shows cmt)
     (hLD : LogDecomp H D I.V shape logs) {decO : List (ℕ × Col) → List T} {x : Msg} {Ω : Type} {P : Prover Ω}
     {ω : Ω} {r : Fin (D.V.k x) → Coin} {c : (EO D I DO decO).C x} {ws : List Flock.Wit}
     (hg : EOGives H D I DO decO P x ω r c ws) (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : Stmt}
@@ -1081,12 +1088,13 @@ theorem callsLogColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     {cmtD cmtH cmtS : Msg → ℕ → Msg → Msg} (hRef : Refuses H D) (hT : CallsTrue H D I DO)
     (hR : ReadsThrough H D I.V L.msgs L.calls) (hVL : VstarLen D)
     (hLD : ∀ s, PartLogs H D DO L Form.Dense showsD logsD s)
-    (hOD : ∀ s, PartOpens H D DO L Form.Dense opening cmtD s)
+    (hOD : ∀ s, PartOpens H D DO L Form.Dense showsD opening cmtD s)
     (hSD : Staged H D I L Form.Dense showsD cmtD) (hDD : LogDecomp H D I.V Form.Dense logsD)
-    (hLH : ∀ s, PartLogs H D DO L Form.Holo showsH logsH s) (hOH : ∀ s, PartOpens H D DO L Form.Holo opening cmtH s)
+    (hLH : ∀ s, PartLogs H D DO L Form.Holo showsH logsH s)
+    (hOH : ∀ s, PartOpens H D DO L Form.Holo showsH opening cmtH s)
     (hSH : Staged H D I L Form.Holo showsH cmtH) (hDH : LogDecomp H D I.V Form.Holo logsH)
     (hLS : ∀ s, PartLogs H D DO L Form.Sparse showsS logsS s)
-    (hOS : ∀ s, PartOpens H D DO L Form.Sparse opening cmtS s) (hSS : Staged H D I L Form.Sparse showsS cmtS)
+    (hOS : ∀ s, PartOpens H D DO L Form.Sparse showsS opening cmtS s) (hSS : Staged H D I L Form.Sparse showsS cmtS)
     (hDS : LogDecomp H D I.V Form.Sparse logsS) : CallsLogColl H D I DO := by
   intro decO x Ω P ω r c ws hg
   obtain ⟨st, hst, -⟩ := hRef x Ω P ω r hg.1
@@ -1236,7 +1244,7 @@ def VStarParts (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Floc
     (opening : Opening) (shape : Form → Prop) : Prop :=
   ∃ (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop)
     (cmt : Msg → ℕ → Msg → Msg) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)),
-    (∀ s, PartChecks H D DO L shape shows chk s) ∧ (∀ s, PartOpens H D DO L shape opening cmt s) ∧
+    (∀ s, PartChecks H D DO L shape shows chk s) ∧ (∀ s, PartOpens H D DO L shape shows opening cmt s) ∧
       (∀ s, PartLogs H D DO L shape shows logs s) ∧ Staged H D I L shape shows cmt ∧ Decomp H D I.V shape chk ∧
       LogDecomp H D I.V shape logs ∧ Held D I L shape
 
@@ -1269,7 +1277,7 @@ def VStarPartsStaging (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Co
     (opening : Opening) (decC : Msg → Msg → Coin) (shape : Form → Prop) : Prop :=
   ∃ (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop)
     (cmt : Msg → ℕ → Msg → Msg) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)),
-    (∀ s, PartChecks H D DO L shape shows chk s) ∧ (∀ s, PartOpens H D DO L shape opening cmt s) ∧
+    (∀ s, PartChecks H D DO L shape shows chk s) ∧ (∀ s, PartOpens H D DO L shape shows opening cmt s) ∧
       (∀ s, PartLogs H D DO L shape shows logs s) ∧ VstarShows D I L shape decC shows cmt ∧
         Decomp H D I.V shape chk ∧ LogDecomp H D I.V shape logs ∧ Held D I L shape
 
