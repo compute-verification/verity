@@ -6,9 +6,9 @@
 # builds), and fstep co (FILL_SMS -1, FW = AFW = 0: the step beside the pump at the lowest priority) for each CP_RUNS
 # entry, against the cuBLASLt step alone on the whole GPU; the control (c1) is the same co step with flin's default
 # tiles. A co run may take only the linears or only attention (FSTEP_KIND), flin without PDL, and another pump shape.
-# Builds: fit (FLIN_FIT), fit2 (FLIN_FIT=2), fitx (FLIN_FIT, the pump's NC 4 the provisional XIN13 fold), fitxy and
-# fitxtNS (fitx, its pump waiting out, or sleeping NS ns a read on, the SMs flin's CTAs occupy: PF_YIELD), c1 (default
-# tiles), all with the 1-block pump; dgate runs on every build, and every build's dfill_k registers and SASS are kept.
+# Builds: fit (FLIN_FIT), fit2 (FLIN_FIT=2), fitx (FLIN_FIT, the pump's NC 4 the provisional XIN13 fold), fitxy...
+# and fitxtNS... (fitx, its pump waiting out, or sleeping NS ns a read on, the SMs flin's CTAs occupy: PF_YIELD; below),
+# c1 (default tiles), all with the 1-block pump; dgate runs on every build, and every build's dfill_k registers and SASS are kept.
 # (A software-pipelined pump, B fragment j + 1's MMAs under j's folds, was slower alone and beside the step,
 # r20261017-090156-4ab8: ptxas already spaces the MMAs, and duo's fold is bound by the ALU-heavy pipe.) CP_ALONE
 # ("BUILD:NC:S ...") runs the pump alone (dalone) and CP_NCU ("BUILD:NC:S ...") ncu over one of its launches, with
@@ -31,12 +31,18 @@ export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
 for v in CP_RUNS CP_PAD CP_FGATE CP_FLIN CP_ALONE CP_NCU CP_NCU_METRICS; do echo "$v=${!v}"; done > "$O/params.txt"
 
-# fitxy, fitxtNS: fitx whose pump yields the SMs flin's CTAs occupy (PF_YIELD 1: waits; 2: sleeps NS ns a read)
-declare -A FLAGS=([fit]="-DFLIN_FIT" [fit2]="-DFLIN_FIT=2" [fitx]="-DFLIN_FIT -DPFILL_XIN13" [c1]=""
-  [fitxy]="-DFLIN_FIT -DPFILL_XIN13 -DPF_YIELD=1")
+declare -A FLAGS=([fit]="-DFLIN_FIT" [fit2]="-DFLIN_FIT=2" [fitx]="-DFLIN_FIT -DPFILL_XIN13" [c1]="")
 builds=$(for x in fit $CP_FGATE $CP_FLIN $CP_RUNS $CP_ALONE $CP_NCU; do x=${x%%,*}; echo "${x%%:*}"; done | sort -u)
+# fitx(y|tNS)[jJ][e]: fitx whose pump yields the SMs flin's CTAs occupy (PF_YIELD): y waits the mark out, tNS sleeps NS ns
+# a read while it holds; jJ reads it every J B fragments (default 16); e marks from the CTA's start
 for b in $builds; do
-  case $b in fitxt[0-9]*) FLAGS[$b]="-DFLIN_FIT -DPFILL_XIN13 -DPF_YIELD=2 -DPF_YIELD_NS=${b#fitxt}" ;; esac
+  if [[ $b =~ ^fitx(y|t([0-9]+))(j([0-9]+))?(e)?$ ]]; then
+    f="-DFLIN_FIT -DPFILL_XIN13"
+    if [ "${BASH_REMATCH[1]}" = y ]; then f+=" -DPF_YIELD=1"; else f+=" -DPF_YIELD=2 -DPF_YIELD_NS=${BASH_REMATCH[2]}"; fi
+    [ -n "${BASH_REMATCH[4]}" ] && f+=" -DPF_YIELD_J=${BASH_REMATCH[4]}"
+    [ -n "${BASH_REMATCH[5]}" ] && f+=" -DPF_YIELD_EARLY=1"
+    FLAGS[$b]=$f
+  fi
 done
 # shellcheck disable=SC2086
 export BUILDS; BUILDS=$(echo $builds)

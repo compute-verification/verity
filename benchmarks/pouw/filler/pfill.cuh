@@ -128,10 +128,14 @@ constexpr bool PF_R9 = false;
 #endif
 static_assert(PF_ROUNDS >= 1 && PF_ROUNDS <= 64, "PF_ROUNDS is 1..64");
 // PF_YIELD: a pump warp yields its SM while a serving CTA marks it (pf_busy[smid] > 0: flin's consumer warps, from
-// griddepcontrol.wait to their flush), read every PF_YIELD_J B fragments one read ahead. 1 waits until the mark clears,
-// 2 sleeps PF_YIELD_NS a read while it holds. What a tile computes is unchanged; only when.
+// griddepcontrol.wait to their flush, or with PF_YIELD_EARLY from the CTA's start), read every PF_YIELD_J B fragments
+// one read ahead. 1 waits until the mark clears, 2 sleeps PF_YIELD_NS a read while it holds. What a tile computes is
+// unchanged; only when.
 #ifndef PF_YIELD
 #define PF_YIELD 0
+#endif
+#ifndef PF_YIELD_EARLY
+#define PF_YIELD_EARLY 0
 #endif
 #ifndef PF_YIELD_J
 #define PF_YIELD_J 16
