@@ -64,13 +64,15 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "for bit, on every rank.  Apart from that verdict, h7168.ok says the same at vLLM's defaults of 7168-wide "
              "tensor_model_parallel_all_reduce (the hidden-7168 pass): FlashInfer's to 36 tokens, multimem past it at its own probe's "
              "trees and FTZ."),
-    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v3",
+    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v5",
              "On the capture's Hopper GPU, the two served workloads' MoE gates (GateLinear) run cuteDSL ll_bf16_gemm on the "
              "kernel's registered dispatch at M <= 16 and cuBLAS past it, and under vLLM's default cuBLAS route every f32 gate word "
              "equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1, GemmF32Out_v1 or "
              "CublasSplitKGemmF32Out_v1 at the captured split count, every recorded compressor word the selected f32-output "
              "form, every lm_head-shard and indexer-projection word the selected core or split-K bf16-output form, and every "
-             "GLM-5.3 q_nope / v absorb word BatchedGemm_v1, bit for bit."),
+             "GLM-5.3 q_nope / v absorb word BatchedGemm_v1, bit for bit; past M 256 the same holds at the first decode batch of "
+             "each model the scan of 256 to 1024 reads out of cuBLAS's words (a fitted split count or the serial chain, every "
+             "regime one of them) and at 1024."),
     Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v2",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
