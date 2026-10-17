@@ -6,8 +6,9 @@
 # builds), and fstep co (FILL_SMS -1, FW = AFW = 0: the step beside the pump at the lowest priority) for each CP_RUNS
 # entry, against the cuBLASLt step alone on the whole GPU; the control (c1) is the same co step with flin's default
 # tiles. A co run may take only the linears or only attention (FSTEP_KIND), flin without PDL, and another pump shape.
-# Builds: fit (FLIN_FIT), fit2 (FLIN_FIT=2), fitx (FLIN_FIT, the pump's NC 4 the provisional XIN13 fold), fitxy and fitxt
-# (fitx, its pump yielding the SMs flin's CTAs occupy: PF_YIELD), c1 (default tiles), all with the 1-block pump; dgate runs on every build, and every build's dfill_k registers and SASS are kept.
+# Builds: fit (FLIN_FIT), fit2 (FLIN_FIT=2), fitx (FLIN_FIT, the pump's NC 4 the provisional XIN13 fold), fitxy and
+# fitxtNS (fitx, its pump waiting out, or sleeping NS ns a read on, the SMs flin's CTAs occupy: PF_YIELD), c1 (default
+# tiles), all with the 1-block pump; dgate runs on every build, and every build's dfill_k registers and SASS are kept.
 # (A software-pipelined pump, B fragment j + 1's MMAs under j's folds, was slower alone and beside the step,
 # r20261017-090156-4ab8: ptxas already spaces the MMAs, and duo's fold is bound by the ALU-heavy pipe.) CP_ALONE
 # ("BUILD:NC:S ...") runs the pump alone (dalone) and CP_NCU ("BUILD:NC:S ...") ncu over one of its launches, with
@@ -22,18 +23,21 @@ export B; B=$(mktemp -d /tmp/capfillf.XXXXXX); trap 'rm -rf "$B"' EXIT
 # (default: the fit build at each decode point, then the control at B 32, whole steps beside the pump at 8:2:256)
 export CP_RUNS=${CP_RUNS:-"fit,1,2048,2,1,8:2:256 fit,32,2048,2,1,8:2:256 fit,128,2048,2,1,8:2:256 fit,256,2048,2,1,8:2:256 c1,32,2048,2,1,8:2:256"}
 export CP_PAD=${CP_PAD:-4} CP_FGATE=${CP_FGATE:-fit} CP_FLIN=${CP_FLIN:-fit} CP_ALONE=${CP_ALONE:-} CP_NCU=${CP_NCU:-}
-export CP_NCU_METRICS=${CP_NCU_METRICS:-} CP_YIELD_NS=${CP_YIELD_NS:-1000}
+export CP_NCU_METRICS=${CP_NCU_METRICS:-}
 [ "$CP_FGATE" = none ] && CP_FGATE=""
 [ "$CP_FLIN" = none ] && CP_FLIN=""
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
-for v in CP_RUNS CP_PAD CP_FGATE CP_FLIN CP_ALONE CP_NCU CP_NCU_METRICS CP_YIELD_NS; do echo "$v=${!v}"; done > "$O/params.txt"
+for v in CP_RUNS CP_PAD CP_FGATE CP_FLIN CP_ALONE CP_NCU CP_NCU_METRICS; do echo "$v=${!v}"; done > "$O/params.txt"
 
-# fitxy, fitxt: fitx whose pump yields the SMs flin's CTAs occupy (PF_YIELD 1: waits; 2: sleeps CP_YIELD_NS a read)
+# fitxy, fitxtNS: fitx whose pump yields the SMs flin's CTAs occupy (PF_YIELD 1: waits; 2: sleeps NS ns a read)
 declare -A FLAGS=([fit]="-DFLIN_FIT" [fit2]="-DFLIN_FIT=2" [fitx]="-DFLIN_FIT -DPFILL_XIN13" [c1]=""
-  [fitxy]="-DFLIN_FIT -DPFILL_XIN13 -DPF_YIELD=1" [fitxt]="-DFLIN_FIT -DPFILL_XIN13 -DPF_YIELD=2 -DPF_YIELD_NS=$CP_YIELD_NS")
+  [fitxy]="-DFLIN_FIT -DPFILL_XIN13 -DPF_YIELD=1")
 builds=$(for x in fit $CP_FGATE $CP_FLIN $CP_RUNS $CP_ALONE $CP_NCU; do x=${x%%,*}; echo "${x%%:*}"; done | sort -u)
+for b in $builds; do
+  case $b in fitxt[0-9]*) FLAGS[$b]="-DFLIN_FIT -DPFILL_XIN13 -DPF_YIELD=2 -DPF_YIELD_NS=${b#fitxt}" ;; esac
+done
 # shellcheck disable=SC2086
 export BUILDS; BUILDS=$(echo $builds)
 pids=()
