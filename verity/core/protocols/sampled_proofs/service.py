@@ -533,16 +533,6 @@ def selection_law(rule: Selection, n: int) -> dict[str, Any]:
     return D.parse_law((rule.replay if isinstance(rule, TwoStage) else rule).text)
 
 
-def count_varies(law: Mapping[str, Any]) -> bool:
-    """Whether `law` (a `selection_law`) draws a count that varies from draw to draw, so the sessions of one registration
-    set up tables of different shapes: `bernoulli` at 0 < p < 1. A work law's closure varies too, but the work draw with
-    a producer closure is a planned design, so it is not refused. The Lean verifier's `Run.countVaries` is this."""
-    if law.get("law") != "bernoulli":
-        return False
-    num, _, den = str(law.get("p")).partition("/")
-    return D.digits(num) and D.digits(den) and 0 < int(num) < int(den)
-
-
 def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable[[int], bytes], *,
                 closure: Mapping[int, Sequence[int]] | None = None, sampler: Sampler | None = None) -> dict[str, Any]:
     """The challenger's draw object over [0, n) under its expanded `law`: every unit for `All`, reading no coins;
@@ -750,8 +740,7 @@ class Stream:
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
         (`Registration.salted_at`, `received_at`) and is logged with them. Raises
         `Refused`: when the stream has stopped or its epoch ended (`epoch-ended`), while it holds as many registrations
-        without a final outcome as it may (`open`, `ready`), when it is late, when either check fails, or, after both,
-        when the law draws a count that varies (`shapes`, `count_varies`)."""
+        without a final outcome as it may (`open`, `ready`), when it is late, or when either check fails."""
         self.ready()
         d = self.spec.check.registration_deadline
         received_at = None
@@ -775,8 +764,6 @@ class Stream:
                     work_table, registered)
         if not v.ok:
             raise Refused(v)
-        if count_varies(law):
-            raise _refuse("shapes", {"law": law})
         if earlier is self._log:
             earlier = self._log[:]
         salted_at = None if d is None else self._salted_at

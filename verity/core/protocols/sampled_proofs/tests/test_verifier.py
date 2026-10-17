@@ -126,7 +126,7 @@ def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatc
     assert asked["rule"] == {"rule": "law", "law": "subset:2"} and asked["query"] == dict(QUERY)
     got = real("select", asked)
     assert draw.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"])) > 0
-    for rule, law in ((S.All(), {"law": "subset", "k": 6}), (S.Law("subset:3"), {"law": "subset", "k": 3})):
+    for rule, law in ((S.All(), {"law": "subset", "k": 6}), (S.Law("bernoulli:1/2"), {"law": "bernoulli", "p": "1/2"})):
         seen.clear()
         s = _stream(_spec(rule), coins=b"\x5a")
         d = s.select(s.register(_record(law=law), _ports(6)))

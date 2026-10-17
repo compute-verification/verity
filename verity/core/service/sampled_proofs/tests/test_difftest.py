@@ -891,8 +891,7 @@ def _receipt(rec, challenger: str, received: str) -> dict:
 def run(j):
     """`Run.run`: a `Stream`'s run of one registration from its public check through its verdict, the pieces above in its
     order. `register`: `check_public` on the boundary values and declared items, the population, R1-R7 under
-    `service.selection_law` over it, a law whose drawn count varies (`service.count_varies`: `shapes`), and the
-    receipt; `select`: the draw from the source's bytes (`select`); `interior`
+    `service.selection_law` over it, and the receipt; `select`: the draw from the source's bytes (`select`); `interior`
     (`register_interiors`): a two-stage rule that drew some RU, `check_public` on the interior values, the K proved RUs'
     population, R1-R7 on the interiors' copies under the run's query and `subset:K`, and the receipt; `deliver`: one or
     more sessions, each matching `service._DIGEST`, and the interiors registered first when a two-stage rule drew some RU;
@@ -942,8 +941,6 @@ def run(j):
     codes = _registration({**p, "law": law}, rec)
     if codes:
         return {"codes": list(codes), "step": "register"}
-    if service.count_varies(law):
-        return {"codes": ["shapes"], "step": "register"}
     receipt = _receipt(rec, j["challenger"], j["received"])
     try:
         derived = DR.derive(p["program"], p["query"], law, p["work_table"])
@@ -2484,9 +2481,8 @@ def test_the_record_is_compared_field_by_field(pieces):
     assert [json.loads(json.loads(D.replay(RECORD_PORT, c, pieces)[1]))["accepted"] for c in cases] == [True] * 12 + [False, True]
 
 
-def _v1_audit(kind: str, s: Setup = SETUPS[3], p: str = "1/1") -> dict:
-    """One valid v1 audit of `s` under a law of `kind` (a Bernoulli one at `p`, which a run refuses at 0 < p < 1), its
-    verdicts accepting."""
+def _v1_audit(kind: str, s: Setup = SETUPS[3], p: str = "1/2") -> dict:
+    """One valid v1 audit of `s` under a law of `kind` (a Bernoulli one at `p`), its verdicts accepting."""
     law = {"law": "bernoulli", "p": p} if kind == "bernoulli" else {"k": 3, "law": kind}
     table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
     table = {t: w for t, w in table.items() if t in s.templates} if kind == "work" else None
@@ -2557,27 +2553,3 @@ def test_the_run_holds_the_interiors(pieces):
         assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out))
         seen.append(out.get("codes") or out["symbol"])
     assert seen[-2:] == ["accept", ["interior-empty"]]
-
-
-def test_the_run_refuses_a_count_that_varies(pieces):
-    """A registration whose law draws a count that varies, a Bernoulli one at 0 < p < 1, one-stage or as a two-stage
-    rule's replay, is refused at its registration (`shapes`), Lean's the Python's whole: its sessions would set up tables
-    of different shapes. At p = 0 or 1, and under subset, stratified and work, the run goes on; R1-R7 come first."""
-    source = hashlib.shake_256(b"run").hexdigest(600)
-    seen = []
-    for s, p, two_stage in [(SETUPS[3], "1/2", False), (SETUPS[3], "2/3", False), (SETUPS[3], "2/4", False),
-                            (SETUPS[2], "1/2", True), (SETUPS[3], "0/1", False), (SETUPS[3], "1/1", False),
-                            (SETUPS[3], "3/3", False), (SETUPS[2], "0/1", True)]:
-        case = _run_case(_v1_audit("bernoulli", s, p), source, 2, ["credited"], two_stage)
-        for changed in (case, {**case, "record": {**case["record"], "previous": "11" * 64}}):
-            out = run(copy.deepcopy(changed))
-            assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out)), (p, out)
-            seen.append((p, out.get("codes") or out["symbol"]))
-    assert [c for _, c in seen[0:8:2]] == [["shapes"]] * 4
-    assert all(c != ["shapes"] for _, c in seen[8::2]) and all(c != ["shapes"] for _, c in seen[1::2])
-    for kind in ("subset", "stratified", "work"):
-        out = run(copy.deepcopy(_run_case(_v1_audit(kind), source, 2, ["credited"], False)))
-        assert out["symbol"] == "accept"
-    assert service.count_varies({"law": "bernoulli", "p": "1/2"})
-    assert not any(service.count_varies(law) for law in ({"law": "bernoulli", "p": "0/1"}, {"law": "bernoulli", "p": "1/1"},
-                                                         {"k": 2, "law": "subset"}, {"k": 2, "law": "work"}))
