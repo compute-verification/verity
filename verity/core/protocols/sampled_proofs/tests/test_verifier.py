@@ -116,6 +116,35 @@ def test_a_disagreement_is_refused_naming_both(monkeypatch):
     assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["verifiers"]
 
 
+def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatch):
+    seen = []
+    real = V.lean
+    monkeypatch.setattr(V, "lean", lambda f, value: (seen.append(value) if f == "select" else None) or real(f, value))
+    stream, reg, draw = _drawn()
+    (asked,) = seen
+    assert asked["rule"] == {"rule": "law", "law": "subset:2"} and asked["query"] == dict(QUERY)
+    got = real("select", asked)
+    assert draw.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"])) > 0
+    for rule, law in ((S.All(), {"law": "subset", "k": 6}), (S.Law("bernoulli:1/2"), {"law": "bernoulli", "p": "1/2"})):
+        seen.clear()
+        s = _stream(_spec(rule), coins=b"\x5a")
+        d = s.select(s.register(_record(law=law), _ports(6)))
+        (asked,) = seen
+        got = real("select", asked)
+        assert d.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"]))
+        assert (got["read"] == 0) == isinstance(rule, S.All)
+    _lean_answering(monkeypatch, "select", lambda got: {**got, "draw": {**got["draw"], "units": got["draw"]["units"][::-1]}})
+    stream = _stream()
+    with pytest.raises(S.Refused) as e:
+        stream.select(stream.register(_record(), _ports(6)))
+    assert e.value.verdict.codes == (V.DISAGREE,) and e.value.verdict.verifiers["python"]["read"] > 0
+    _lean_answering(monkeypatch, "select", lambda got: {**got, "read": got["read"] + 1})
+    stream = _stream()
+    with pytest.raises(S.Refused) as e:
+        stream.select(stream.register(_record(), _ports(6)))
+    assert e.value.verdict.codes == (V.DISAGREE,)
+
+
 def test_a_public_items_disagreement_refuses_the_registration(monkeypatch):
     _lean_answering(monkeypatch, "check_public", lambda got: {**got, "ok": False, "codes": ["undeclared"],
                                                               "detail": {"undeclared": ["leaves:x"]}})
