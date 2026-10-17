@@ -20,9 +20,11 @@ Parts:
 - B. Per-cell F₂ cross blocks from pair differences of the words evaluated at bit points with ≤ 2 ones, in both
   orientations (rows (word, peeled bit) or (word, served coin)), at the zero, a random and a structured instance; the
   same-side blocks vanish exactly (Lemma G's hypothesis on either side). CO's swapped block has rank k + r, the honest
-  count; Dither's and checked1's best is k, r short.
+  count; Dither's and checked1's best is k, r short. co32c's same-side blocks vanish over F₂ only, and both its
+  orientations have rank k + r, so a single flattening doesn't see its D words' (m − 1)·r products.
 - C. The F₂ tensor rank of the coin–coin target with affine-operand products of any mixing and no purity, by SAT at
-  tiny shapes (one cell, a column of two rows, a row of two columns, a 2×2 block); each SAT model is checked.
+  tiny shapes (one cell, a column of two rows, a row of two columns, a 2×2 block); each SAT model is checked. co32c's
+  one-cell rank is k + m·r, its D product counted.
 - D. The collapses: one-sided, P2 = T_last at P = 0; KSW's four products equal at the zero instance; per-product
   independent noise admits no recovering combination; CO at zero serves the random 0/1 product c·b.
 - E. Priced strategies, each verified word for word against the honest words: int8 MAC = 1, FP4 (E2M1) MAC = ½, one
@@ -67,6 +69,9 @@ W_EVEN = np.array([2, 2, 4, 8, 16, 32, 64], dtype=np.int64)
 FP4 = {0, 1, 2, 3, 4, 6, -1, -2, -3, -4, -6}
 DESIGNS = {"dither": (False, ("T",)), "checked1": (False, ("T", "O")), "co": (True, ("T", "O")),
            "co_p2": (True, ("T", "P2"))}
+#: co32c (committed digits) has the same bits plus its carry coins z on the served side; it is checked apart from
+#: DESIGNS because its same-side blocks vanish only mod 2 (a carry makes a (b, b) pair −64·ΔΔ⌊Y/128⌋ over Z/2³²).
+ALL_DESIGNS = {**DESIGNS, "co32c": (True, ("T", "D", "Op"))}
 
 
 def s32(x):
@@ -74,21 +79,24 @@ def s32(x):
 
 
 class Block:
-    """A block of n rows and n′ columns of one design, with its bit layout: U's planes, then c, then b."""
+    """A block of n rows and n′ columns of one design, with its bit layout: U's planes, then c, then b, then (co32c)
+    the carry coins z, m − 1 digits by r by n′."""
 
     def __init__(self, design, n, k, n2, r, L, w=W_RE):
         assert k % L == 0 and k % r == 0
         self.design, self.n, self.k, self.n2, self.r, self.L, self.w = design, n, k, n2, r, L, np.asarray(w)
-        self.two, self.kinds = DESIGNS[design]
+        self.two, self.kinds = ALL_DESIGNS[design]
         self.np = len(self.w)
         self.nU = n * r * self.np
         self.nc = n * k if self.two else 0
         self.nb = k * n2
-        self.nbits = self.nU + self.nc + self.nb
+        self.m = n_digits((k // r) * -128, (k // r) * 127) if design == "co32c" else 1
+        self.nz = (self.m - 1) * r * n2
+        self.nbits = self.nU + self.nc + self.nb + self.nz
         self.left = list(range(self.nU + self.nc))
         self.right = list(range(self.nU + self.nc, self.nbits))
         self.T = k // L
-        self.per_cell = self.T * ("T" in self.kinds) + sum(x != "T" for x in self.kinds)
+        self.per_cell = self.T * ("T" in self.kinds) + sum(x != "T" for x in self.kinds) + (self.m - 2) * ("D" in self.kinds)
 
     def __str__(self):
         return f"{self.design} (n, k, n', r, L) = ({self.n}, {self.k}, {self.n2}, {self.r}, {self.L})"
@@ -100,12 +108,13 @@ class Block:
         U = -64 + beta @ self.w
         c = Z[:, self.nU:self.nU + self.nc].reshape(N, self.n, self.k) if self.two else np.zeros((N, self.n, self.k),
                                                                                                     np.int64)
-        b = Z[:, self.nU + self.nc:].reshape(N, self.k, self.n2)
-        return U, c, b
+        b = Z[:, self.nU + self.nc:self.nU + self.nc + self.nb].reshape(N, self.k, self.n2)
+        z = Z[:, self.nU + self.nc + self.nb:].reshape(N, self.m - 1, self.r, self.n2).transpose(1, 0, 2, 3)
+        return U, c, b, z
 
     def words(self, P, V, Z):
         """Every committed word of every cell at the bit points Z (N × nbits), over Z/2³² (as int64 mod 2³²)."""
-        U, c, b = self.fields(Z)
+        U, c, b, z = self.fields(Z)
         Ph = P[None] + c
         Pt = Ph + U[:, :, np.arange(self.k) % self.r]
         X = V[None] + b
@@ -117,13 +126,20 @@ class Block:
         O = np.einsum("nik,nkl->nil", Ph, X)
         Y = X.reshape(X.shape[0], self.k // self.r, self.r, self.n2).sum(1)
         P2 = np.einsum("nir,nrl->nil", U, Y)
+        one, D = {"O": O, "P2": P2}, []
+        if self.design == "co32c":
+            A = digits(Y, z, self.m)
+            D = [np.einsum("nir,nrl->nil", U, a) for a in A[1:]]
+            one["Op"] = Ts[-1] - np.einsum("nir,nrl->nil", U, A[0])
         for i in range(self.n):
             for l in range(self.n2):
                 for kind in self.kinds:
                     if kind == "T":
                         out.extend(T[:, i, l] for T in Ts)
+                    elif kind == "D":
+                        out.extend(d[:, i, l] for d in D)
                     else:
-                        out.append((O if kind == "O" else P2)[:, i, l])
+                        out.append(one[kind][:, i, l])
         return np.stack(out, axis=1) & MASK
 
 
@@ -166,9 +182,9 @@ def pair_diffs(B: Block, P, V, pairs, chunk=8192):
     return out
 
 
-def cross_ranks(B: Block, P, V):
-    """(rank of rows (word, peeled bit) × served coins, rank of rows (word, served coin) × peeled bits, same-side
-    pair differences all zero over Z/2³²), for a one-cell block."""
+def cross_ranks(B: Block, P, V, mod=MASK):
+    """(rank of rows (word, peeled bit) × served coins, rank of rows (word, served coin) × peeled bits, the number of
+    same-side pair differences nonzero mod `mod` + 1: over Z/2³², or with mod = 1 over F₂), for a one-cell block."""
     pairs = [(x, y) for x in B.left for y in B.right]
     D = pair_diffs(B, P, V, pairs) & 1
     nw = D.shape[1]
@@ -176,7 +192,7 @@ def cross_ranks(B: Block, P, V):
     rows1 = f2.from_matrix(D.transpose(2, 0, 1).reshape(nw * len(B.left), len(B.right)))
     rows2 = f2.from_matrix(D.transpose(2, 1, 0).reshape(nw * len(B.right), len(B.left)))
     same = [p for p in itertools.combinations(B.left, 2)] + [p for p in itertools.combinations(B.right, 2)]
-    S = pair_diffs(B, P, V, same)
+    S = pair_diffs(B, P, V, same) & mod
     return f2.rank(rows1), f2.rank(rows2), int(np.count_nonzero(S))
 
 
@@ -618,6 +634,14 @@ def main():
                          f"structured instance; same-side blocks 0",
                          all(x[:2] == w_ for x in res) and all(x[2] == 0 for x in res),
                          f"{[x[:2] for x in res]}, same-side nonzero {[x[2] for x in res]}; honest count {kk + rr}")
+    for (kk, rr, LL) in [(128, 32, 32), (64, 32, 32), (96, 16, 32)]:
+        Bc = Block("co32c", 1, kk, 1, rr, LL)
+        res = [cross_ranks(Bc, *instance(Bc, kind, rng), mod=1) for kind in ("zero", "random", "balanced")]
+        rank_tab[f"co32c k={kk} r={rr} L={LL}"] = list(res[0][:2])
+        checks.check(f"B {Bc}: both cross ranks k + r = {kk + rr} at the zero, a random and a structured instance, "
+                     f"same-side blocks 0 over F₂; one flattening can't see D's (m − 1)·r products (honest "
+                     f"{kk + Bc.m * rr})", all(x[:2] == (kk + rr, kk + rr) and x[2] == 0 for x in res),
+                     f"{[x[:2] for x in res]}, F₂ same-side nonzero {[x[2] for x in res]}")
     out["ranks"] = rank_tab
     if checks.mutations:
         for name, kw in [("co with an even alphabet (U's parity constant)", {"w": W_EVEN}),
@@ -632,7 +656,8 @@ def main():
     sat_tab = {}
     cases = [("co", 1, 2, 1, 1, 1, 3), ("co", 1, 3, 1, 1, 1, 4), ("co", 1, 4, 1, 2, 2, 6), ("co", 1, 4, 1, 1, 2, 5),
              ("co", 2, 2, 1, 1, 1, 6), ("co", 1, 2, 2, 1, 1, 6), ("dither", 1, 4, 1, 2, 2, 4),
-             ("checked1", 1, 4, 1, 2, 2, 4), ("co_p2", 1, 4, 1, 2, 2, 6)]
+             ("checked1", 1, 4, 1, 2, 2, 4), ("co_p2", 1, 4, 1, 2, 2, 6), ("co32c", 1, 2, 1, 1, 1, 4),
+             ("co32c", 1, 4, 1, 1, 2, 6)]
     for design, nn, kk, nn2, rr, LL, target in cases:
         Bs = Block(design, nn, kk, nn2, rr, LL, w=np.array([1]))
         tg = f2_targets(Bs, rng)
@@ -640,7 +665,7 @@ def main():
         hi_ok, prog = sat_products(tg, Bs.nbits, target)
         valid = hi_ok and check_program(tg, Bs.nbits, prog)
         sat_tab[str(Bs)] = target
-        honest = nn * nn2 * (kk + rr)
+        honest = nn * nn2 * (kk + Bs.m * rr)
         checks.check(f"C {Bs}: F2 tensor rank (affine products, no purity) = {target}; honest count {honest}",
                      lo_ok is False and valid, f"{target - 1} UNSAT, {target} SAT (model checked)")
     if "--full" in checks.args:
