@@ -482,7 +482,8 @@ theorem zkVerifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : 
   rw [hr₁] at R₂
   rw [hr₂, hr₁] at R₃
   rw [hr₃, hr₂, hr₁] at R₅
-  have R := readsN_append (readsN_append (readsN_append R₁ hk₁ R₂) (by rw [hk₂, hk₁]; simp only [List.length_append]; omega) R₃)
+  have R := readsN_append (readsN_append (readsN_append R₁ hk₁ R₂)
+    (by rw [hk₂, hk₁]; simp only [List.length_append]; omega) R₃)
     (by rw [hk₃, hk₂, hk₁]; simp only [List.length_append]; omega) R₅
   refine map_n_of_readsN R ?_
   rw [← c2, hk₅, hk₃, hk₂, hk₁]
