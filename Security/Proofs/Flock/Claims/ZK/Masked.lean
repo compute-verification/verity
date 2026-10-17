@@ -24,6 +24,8 @@ The session's Props at every plan:
 * `TapeOK` is `FibersEq (U.tape x)` on `Live` statements (`Flock.zk_deployZk_masked`, a Prop of the tape plan), or, on
   the tape of one statement's tables' randomness (`TapePlan.at`), a theorem (`fibersEq_at`,
   `Flock.zk_deployZk_masked_at`): what statement-indexed tapes read at that statement.
+* hm96's hiding is at the pinned key's gap, with no premise (`Flock.zk_deployZk_masked_gap`,
+  `Flock.zk_deployZk_masked_at_gap`).
 * `HonestMsgs` is its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`) on `Live`. At a round plan whose last
   message where a table refuses is the empty one (`RoundPlan.stop`, what `ZkTables.prog` returns once `sessionPZk`
   stops), `HonestOffOn` is about the reference prover alone (`honestOffOn_stop_iff`).
@@ -226,5 +228,43 @@ theorem Flock.zk_deployZk_masked_at (H : Msg → Msg) (nr : Msg → ℕ → ℕ)
     (tableData P Q (TapePlan.at x₀ z)) (fun x => x = x₀ ∧ Live x) t ht hT1 hδ₁ (tables P Q _ nr) (complete P Q _ nr _)
     (dummyReg P Q _ nr) (RoundPlan.causal hc _ nr) (by rintro x ⟨rfl, -⟩; exact fibersEq_at x z) hpre hfin hoff)
     (fun _ _ hR => and_congr_right fun _ => live_iff hR) fun _ => le_rfl
+
+open Classical in
+/-- **`Flock.zk_deployZk_masked` at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): no hiding premise. -/
+theorem Flock.zk_deployZk_masked_gap (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
+    (Q : RoundPlan (tabC P)) (U : TapePlan (tabC P)) (t : ℕ) (ht : 0 < t) (hc : Q.Causal)
+    (hT : ∀ x, Live x → FibersEq (U.tape x))
+    (hpre : (session nr (tableData P Q U)).HonestPreOn Live H coinOfD fun ω => U.tapeZk ω.2)
+    (hfin : (session nr (tableData P Q U)).HonestFinOn Live H coinOfD fun ω => U.tapeZk ω.2)
+    (hoff : (session nr (tableData P Q U)).HonestOffOn Live H coinOfD fun ω => U.tapeZk ω.2) :
+    Claims.Flock.ZK H (zkDeployed _root_.Flock.Readable.relation nr (tableData P Q U) t)
+      (fun x => if Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x then
+        8 * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash +
+          8 * t * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t else 1)
+      fun _ => 4 * t * 3 ^ t := by
+  have h := Flock.zk_deployZk_masked H nr P Q U t ht
+    (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) ENNReal.ofReal_ne_top hc hT hpre hfin hoff
+  rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg _ _)] at h
+
+open Classical in
+/-- **`Flock.zk_deployZk_masked_at` at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): at one statement's
+tape, under the round plan's `Causal` and the three rounds alone. -/
+theorem Flock.zk_deployZk_masked_at_gap (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
+    (Q : RoundPlan (tabC P)) (x₀ : Msg) (z : Rand (tabC P) x₀ → FlockComplete.TapeZk) (t : ℕ) (ht : 0 < t)
+    (hc : Q.Causal)
+    (hpre : (session nr (tableData P Q (TapePlan.at x₀ z))).HonestPreOn (fun x => x = x₀ ∧ Live x) H coinOfD
+      fun ω => z ω.2)
+    (hfin : (session nr (tableData P Q (TapePlan.at x₀ z))).HonestFinOn (fun x => x = x₀ ∧ Live x) H coinOfD
+      fun ω => z ω.2)
+    (hoff : (session nr (tableData P Q (TapePlan.at x₀ z))).HonestOffOn (fun x => x = x₀ ∧ Live x) H coinOfD
+      fun ω => z ω.2) :
+    Claims.Flock.ZK H (zkDeployed _root_.Flock.Readable.relation nr (tableData P Q (TapePlan.at x₀ z)) t)
+      (fun x => if x = x₀ ∧ Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x then
+        8 * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash +
+          8 * t * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t else 1)
+      fun _ => 4 * t * 3 ^ t := by
+  have h := Flock.zk_deployZk_masked_at H nr P Q x₀ z t ht
+    (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) ENNReal.ofReal_ne_top hc hpre hfin hoff
+  rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg _ _)] at h
 
 end Claims.ZKMal

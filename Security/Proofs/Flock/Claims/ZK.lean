@@ -134,7 +134,7 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   round encodings) and a tape plan (`TapePlan`). **`Flock.zk_deployZk_masked`**: `Claims.Flock.ZK` at `zkDeployed`
   there at `ε_zk` on the masked scope, under the round plan's `Causal`, the tape plan read with fibers of one size on
   `Live`, and the three rounds; `Flock.zk_deployZk_masked_at`, at one statement's tape (`TapePlan.at`), without the
-  tape premise.
+  tape premise; each at the pinned key's hiding gap with no hiding premise (`…_gap`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
