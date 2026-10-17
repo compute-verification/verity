@@ -157,8 +157,9 @@ VF3q-16 is FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; `fac
 and the measured programs at the 2% margin. R1 and KFFMA0 become EFFMA0..6 (interleaved IMMA + FFMA beat R1 by 41%);
 JI3o_0 becomes JI3q_0..11 (HMMA.16816.F16 beside FFMA beat it by 9.8%), each form's hull taken alone and every row at a
 vector coefficient one of those hulls has, each form at the most it carries beside it, while JI3o_1 and JI3o_2 hold; LDG
-becomes ELDG0..2 over LDG128 and LDG32; KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 their E families; LDS128 on R6r
-and TLD2 on ROW_TLDW2 scale to their fastest program. The six loads the census priced at 0 (LDS.64, LDG.E.64, the
+becomes ELDG0..2 over LDG128 and LDG32; KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 their E families; R6r becomes
+ER6r0..1 over LDS128 and UBLKCP4K (broadcast LDS.128 beside a 4 KB bulk copy out of shared memory beat it by 5.1%, at
+LDS128's fastest program); TLD2 on ROW_TLDW2 scales to its fastest program. The six loads the census priced at 0 (LDS.64, LDG.E.64, the
 256-bit LDG.E.ENL2.256 and the L1-skipping LDG.E.NA.128, .128.STRONG.GPU and .ENL2.256.STRONG.GPU) are kinds with rows
 of their own at their fastest program, the L1-skipping three on one row of the L2 bytes they read (ROW_L2RD).
 

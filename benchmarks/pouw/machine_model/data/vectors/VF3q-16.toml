@@ -1,11 +1,11 @@
-# VF3q-16: VF3p-16 with FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; runs @FB): R1 and KFFMA0 as EFFMA0-6, JI3o_0 as JI3q_0-11 (each MMA form at the most it carries beside a lower vector coefficient), LDG as ELDG0-2, LDS128 on R6r 8.657 and TLD2 on ROW_TLDW2 8.676 SMSP-cycles, the joint rows KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 as their E families, and the six loads the census didn't price (LDS.64, LDG.E.64, LDG.E.ENL2.256 and the L1-skipping .NA/.STRONG.GPU loads) on rows of their own.
+# VF3q-16: VF3p-16 with FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; runs @FB): R1 and KFFMA0 as EFFMA0-6, JI3o_0 as JI3q_0-11 (each MMA form at the most it carries beside a lower vector coefficient), LDG as ELDG0-2, R6r as ER6r0-1 (LDS128 beside the 4 KB bulk copy out of shared memory, which R6r priced as one pool) and TLD2 on ROW_TLDW2 8.676 SMSP-cycles, the joint rows KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 as their E families, and the six loads the census didn't price (LDS.64, LDG.E.64, LDG.E.ENL2.256 and the L1-skipping .NA/.STRONG.GPU loads) on rows of their own.
 name = "VF3q-16"
 epoch = "VF3q-16"
-summary = "VF3p-16 with FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; runs @FB): R1 and KFFMA0 as EFFMA0-6, JI3o_0 as JI3q_0-11 (each MMA form at the most it carries beside a lower vector coefficient), LDG as ELDG0-2, LDS128 on R6r 8.657 and TLD2 on ROW_TLDW2 8.676 SMSP-cycles, the joint rows KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 as their E families, and the six loads the census didn't price (LDS.64, LDG.E.64, LDG.E.ENL2.256 and the L1-skipping .NA/.STRONG.GPU loads) on rows of their own."
+summary = "VF3p-16 with FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; runs @FB): R1 and KFFMA0 as EFFMA0-6, JI3o_0 as JI3q_0-11 (each MMA form at the most it carries beside a lower vector coefficient), LDG as ELDG0-2, R6r as ER6r0-1 (LDS128 beside the 4 KB bulk copy out of shared memory, which R6r priced as one pool) and TLD2 on ROW_TLDW2 8.676 SMSP-cycles, the joint rows KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 as their E families, and the six loads the census didn't price (LDS.64, LDG.E.64, LDG.E.ENL2.256 and the L1-skipping .NA/.STRONG.GPU loads) on rows of their own."
 note = "note:20261017T0524Z-draft-eps1-facet-break"
 rows = [
     "issue", "M", "F", "VMNX", "H", "I", "A", "F2FS",
-    "XU", "R6r", "LDSi", "R6w", "L2red", "UP", "IW", "JI3o_1",
+    "XU", "ER6r0", "ER6r1", "LDSi", "R6w", "L2red", "UP", "IW", "JI3o_1",
     "JI3o_2", "A64", "DP", "DPM", "ROW_TLD1", "ROW_TLD2", "ROW_TLD4w", "ROW_TLD2D1",
     "ROW_TLD2D4", "ROW_TEX1", "ROW_TEX4", "ROW_TLD4G", "ROW_TEXBIL", "ROW_SULD1", "ROW_SULD4", "ROW_LDCUNI",
     "ROW_SURED", "ROW_LDCDIV", "ROW_LDC64", "ROW_UTMA", "ROW_UTMA8", "ROW_UTMA512", "ROW_G4_16", "ROW_G4_32",
@@ -46,7 +46,7 @@ credits = [
 ]
 
 [published]  # as `machine-model solve VF3q-16` printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
-tau = 0.0566
-tau_600w = 0.0442
+tau = 0.0564
+tau_600w = 0.0441
 uf_low = 1.1563
 margin = 2.0

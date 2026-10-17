@@ -36,8 +36,8 @@ VF3Q_LOADS = ["LDS64", "LDG64", "LDG256", "LDG128NA", "LDG128CG", "LDG256CG"]
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
-    assert d["vector"] == "VF3q-16" and round(d["tau"], 4) == 0.0566 and d["failures"] == [] and d["unreproduced"] == []
-    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0442, 1.1563, 2.0)
+    assert d["vector"] == "VF3q-16" and round(d["tau"], 4) == 0.0564 and d["failures"] == [] and d["unreproduced"] == []
+    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0441, 1.1563, 2.0)
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
                            "loads16": {"kinds": 15, "below": [], "absent": []},
                            "copy16": {"kinds": 83, "below": ["UNI64 1.00 a word < 16"], "absent": []}}
