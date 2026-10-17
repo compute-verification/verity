@@ -13,9 +13,10 @@ SCRIPT = Path(__file__).resolve().parents[1] / "theory" / "isa_escape.py"
 
 
 def test_isa_escape(tmp_path):
-    """The ISA-escape reconciliation and its checkable arithmetic (reducers have no multiply, SAD != dot product, the
-    64-plane b1 and 4-nibble s4 int8 reconstructions, f16/bf16 exactness vs E4M3/E2M1, every tensor form's int8 TOPS <=
-    IMMA's, the floors): only running it checks the claims."""
+    """The ISA-escape reconciliation and its checkable arithmetic (reducers have no multiply, a cross-lane reduce as a
+    fold costs 32 lane-instructions/word > duo's 3, SAD != dot product, the 64-plane b1 and 4-nibble s4 int8
+    reconstructions, f16/bf16 exactness vs E4M3/E2M1, every tensor form's int8 TOPS <= IMMA's, the floors): only running
+    it checks the claims."""
     verdict = tmp_path / "verdict.json"
     proc = subprocess.run([sys.executable, "-B", str(SCRIPT), "--mutations", "--verdict", str(verdict)],
                           capture_output=True, text=True, cwd=tmp_path)

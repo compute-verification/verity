@@ -17,7 +17,9 @@ packing tricks, the wide multiply, and the uniform datapath beside an asynchrono
 whether the instruction can even form an exact int8 product, the factor by which an int8 committed word decomposes onto
 it, and the verdict. A committed word that is a sum of 32 int8 products needs a MULTIPLY; an instruction with no multiply
 can at most sum or move words that already exist (not fresh), and an instruction whose multiply is lower precision pays a
-decomposition factor D (int8 = D unit-products) that its raw rate must beat the honest IMMA route by to escape.
+decomposition factor D (int8 = D unit-products) that its raw rate must beat the honest IMMA route by to escape. A
+committed word is also an input to the receipt fold, so a cross-lane reducer is also tested as a FOLD: it collapses the
+warp to one result (one word a warp instruction = 32 lane instructions a word), so it cannot undercut duo's 3 (FOLD).
 
 The checkable arithmetic is verified here, bit-exact over Z/2^32 and the operand alphabets; the measured rates are cited
 (tensor_kinds / opcode_probe census, DATASHEET). The conclusion for sm_120 is that every candidate is closed, by one of:
@@ -39,12 +41,20 @@ from __future__ import annotations
 import csv
 import random
 import sys
+import tomllib
 from pathlib import Path
 
 from exact_kit.checks import Checks
 
 M32 = 0xFFFFFFFF
-FLOORS = Path(__file__).resolve().parents[1] / "machine_model" / "data" / "floors.csv"
+DATA = Path(__file__).resolve().parents[1] / "machine_model" / "data"
+FLOORS = DATA / "floors.csv"
+DESIGNS = DATA / "designs.toml"
+
+# A warp has 32 lanes. A per-lane (vertical) fold keeps every lane busy on its own word; a cross-lane (horizontal)
+# reduction (redux.sync, warp-shuffle trees) collapses all 32 lanes to one result, so it heads one word a warp
+# instruction = 32 lane instructions a word, whatever the reduce op.
+LANES = 32
 
 # The design's operand alphabets (decisions 29, 44, 51): activations are int8 (the dithered floor), weights are capped at
 # |w| <= 63. A committed word sums 32 such products, so it ranges within ~2^19 << 2^24 (f32's exact-integer limit).
@@ -82,8 +92,9 @@ CANDIDATES = [
         "cls": "NO-MULTIPLY", "D": None, "escape": False,
         "isa": "redux.sync.{add,min,max,and,or,xor}.{u32,s32} reduces one 32-bit value across the warp to one result; no "
                "multiply, no new product",
-        "reason": "a reducer: its output is a sum (or min/max) of 32 words that already exist, a one-op function of other "
-                  "committed words, so not fresh; it forms no product, so the 32 MACs a word still cost on a multiply unit",
+        "reason": "no multiply, so the 32 MACs a word still cost on a product unit; and as a FOLD of existing words it is "
+                  "a cross-lane reduction, 1 word a warp instruction = 32 lane instructions a word, >> duo's 3 (FOLD) and "
+                  "q* (>= 1.22), so it cannot head a fresh word nor lower the fold",
     },
     {
         "name": "L2 reduction / atomic (red.global.add.s32, atom.add)", "device": "all",
@@ -245,6 +256,25 @@ def main() -> int:
     checks.check("redux/red.add output is the exact sum of existing committed words (not fresh)", red_is_sum)
     checks.check("a reducer's output is not a product of two operands (no multiply -> no fresh dot-product term)",
                  red_ne_prod)
+
+    # -- redux/shuffle-tree as a FOLD: a cross-lane reduction forfeits SIMT, so it cannot undercut duo's fold ----------
+    # The committed word is also "an input to the receipt fold", so a cheaper FOLD would raise eps_mand. duo folds
+    # vertically: each of the 32 lanes folds its own word, so a warp instruction advances 32 words at once and the fold
+    # costs (ALU + IMAD) = 3 lane instructions a word. redux reduces horizontally: all 32 lanes collapse to one result,
+    # so one warp instruction heads one word -- 32 lane instructions a word, whatever the op and however it is masked
+    # (redux.sync emits one reduced value per instruction, so k segment-sums need k instructions). 32 >> 3, and 32 is
+    # also well past q* (>= 1.22 with tables, 2.03 without), so redux beats neither the fold nor the lane route.
+    design = tomllib.loads(DESIGNS.read_text(encoding="utf-8"))
+    fold_cost = sum(v for v in design["fold"].values() if isinstance(v, int))  # duo: ALU 2 + IMAD 1 = 3
+    redux_fold_cost = LANES  # one word a warp instruction = 32 lane instructions a word
+    checks.check("designs.toml fold is duo at 3 lane instructions a word (FOLD's assumption)", fold_cost == 3,
+                 f"{design['fold']['name']} = {fold_cost}")
+    checks.check("redux/shuffle-tree fold (cross-lane, 1 word a warp instruction) costs 32 lane instructions a word > "
+                 "duo's (FOLD holds: no cheaper fold, so eps_mand stays 0)", redux_fold_cost > fold_cost,
+                 f"redux {redux_fold_cost} vs duo {fold_cost} lane-instructions/word")
+    checks.check("redux fold (32 lane-instructions/word) is also well past q* (>= 1.22), so it never beats the lane route",
+                 redux_fold_cost > 1.22)
+
     sad_ne_dp = False
     for _ in range(2000):
         a = [rng.randrange(256) for _ in range(4)]
@@ -335,6 +365,8 @@ def main() -> int:
         checks.mutation("b1 with 56 planes (one bit short) is wrong: int8 needs all 64", short != a * b)
         checks.mutation("BMMA at a 64x raw rate would tie IMMA (so D=64 is the binding closure, not an arbitrary bound)",
                         (256 / 32) * 64.0 / 64 >= 1.0)
+        checks.mutation("a per-lane fold at 1 lane-instruction/word WOULD beat duo (so the 32 is the cross-lane cost, "
+                        "not an arbitrary bound): redux's cost is 32 only because it collapses the warp", LANES > 1)
 
     return checks.finish()
 
