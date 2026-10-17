@@ -4,16 +4,16 @@ import Proofs.Flock.Claims.KS.ZkDecJ
 # The masked live sessions' bound at the deployed decoders
 
 `ZkLiveAccJ` asks, at each prover, tape and table `C`, for decoders right at C-Flock ZK's padded tables (`hdec`) at a
-verdict that accepts table `j` with no level-0 opening off `C` (`_hok`). The deployed decoders (`opnD`, `decD`) are
-right at the verdict `accepted` (`ZkDecJ`), and so at that verdict on the live outcomes whose decoded table `j` has no
-opening off `C`. So `ZkLiveAccJ` follows from the live sessions' bound at the deployed decoders, which chooses no
-decoder (`ZkXferJ`):
+verdict that accepts table `j` with no level-0 opening off `C` unless it self-clashes (`_hok`). The deployed decoders
+(`opnD`, `decD`) are right at the verdict `accepted` (`ZkDecJ`), and so at that verdict on the live outcomes whose
+decoded table `j` has no such opening. So `ZkLiveAccJ` follows from the live sessions' bound at the deployed decoders,
+which chooses no decoder (`ZkXferJ`):
 
 * `decodesTable_at`: a decoder right at `ok` on `pL` is right at `ok` and `Q` at table `j₀` on the live outcomes of
   `pL` whose table `j₀` reps play, on the decoded tapes, only to outputs of `Q`.
-* `AccOffJ`, `OkOffJ`, `decodesOff_deploy`: the live outcomes `verify --zk` accepts at `wrD` whose decoded table `j`
-  has no level-0 opening off `C`, the verdict `accepted` with no such opening at table `j`, and the deployed decoders
-  right there.
+* `OffNoClashZ`, `AccOffJ`, `OkOffJ`, `decodesOff_deploy`: an opening off `C` without a self-clash, the live outcomes
+  `verify --zk` accepts at `wrD` whose decoded table `j` has none, the verdict `accepted` with none at table `j`, and
+  the deployed decoders right there.
 * `ZkXferJ`, `zkLiveAccJ_of_xferJ`, `zk_KS_of_xferJ`: the live sessions' bound at the deployed decoders gives
   `ZkLiveAccJ` where some run accepts, so `Flock.KS` at the deployed masked record follows from it and `ExtendJ`.
 -/
@@ -50,9 +50,15 @@ theorem decodesTable_at (j₀ : Fin J) (Q : OutT → Prop) {i : Fin J}
 
 end At
 
-/-- **The deployed live verdict, with no opening off `C` at table `j`**: `verify --zk` accepts at `wrD` of the draw
-`d`, and every output table `j`'s reps play to on the tapes `decD` decodes, at the openings `opnD` and the cap of the
-outcome's `root_B[j]`, has no level-0 opening off `C` at the cap of `rootB₀[j]` (`Off₀Z`). -/
+/-- **A masked output opens a level-0 position off `C` without a self-clash**, at the cap `cap₀`. -/
+def OffNoClashZ {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (cap₀ : Model.Cap D)
+    (C : Model.Oracle 𝔽) (o : OutZC 𝔽 D Sl) : Prop :=
+  Off₀Z Hs T cap₀ C o ∧ ¬ SelfClashZ Hs T o
+
+/-- **The deployed live verdict, with no opening off `C` at table `j` unless it self-clashes**: `verify --zk` accepts
+at `wrD` of the draw `d`, and every output table `j`'s reps play to on the tapes `decD` decodes, at the openings `opnD`
+and the cap of the outcome's `root_B[j]`, has no level-0 opening off `C` at the cap of `rootB₀[j]` without a
+self-clash (`OffNoClashZ`). -/
 def AccOffJ (I : Exec.Inputs) (sts : Array Stmt) {mPts : ℕ} (n : ℕ) (T : ℕ → TabZK 𝔽 mPts) (d : Lean.Json)
     {j : ℕ} (hj : j < n) (rootB₀ : Array ByteArray) (C : Model.Oracle 𝔽) (o : LiveOutJ (tabsJ n T).length mPts) :
     Prop :=
@@ -63,14 +69,15 @@ def AccOffJ (I : Exec.Inputs) (sts : Array Stmt) {mPts : ℕ} (n : ℕ) (T : ℕ
         (repTapeJ (decD (tabsJ n T)) (fun _ _ => true) (fun _ _ _ => []) o (finJ T hj) 0) pend.1 →
       PlaysT (repJ execArith ZkExec.hs512 (tabsJ n T) (finJ T hj) o.pts 1)
         (repTapeJ (decD (tabsJ n T)) (fun _ _ => true) (fun _ _ _ => []) o (finJ T hj) 1) pend.2 →
-      ¬ Off₀Z ZkExec.hs512 (T j) (Exec.capOfRoot rootB₀[j]!) C
+      ¬ OffNoClashZ ZkExec.hs512 (T j) (Exec.capOfRoot rootB₀[j]!) C
         (outJ ZkExec.hs512 (tabsJ n T) (finJ T hj) (Exec.capOfRoot o.rootB[j]!) pend
           (opnD sts (tabsJ n T) o.proofs (finJ T hj)))
 
-/-- **The verdict `accepted`, with no level-0 opening off `C` at table `j`** at the cap of `rootB₀[j]`. -/
+/-- **The verdict `accepted`, with no level-0 opening off `C` at table `j` unless it self-clashes**, at the cap of
+`rootB₀[j]`. -/
 def OkOffJ {mPts n : ℕ} (T : ℕ → TabZK 𝔽 mPts) {j : ℕ} (hj : j < n) (rootB₀ : Array ByteArray)
     (C : Model.Oracle 𝔽) (j' : Fin (tabsJ n T).length) (o : OutZC 𝔽 Refine.Dig (List UInt8)) : Prop :=
-  o.accepted = true ∧ (j' = finJ T hj → ¬ Off₀Z ZkExec.hs512 (T j) (Exec.capOfRoot rootB₀[j]!) C o)
+  o.accepted = true ∧ (j' = finJ T hj → ¬ OffNoClashZ ZkExec.hs512 (T j) (Exec.capOfRoot rootB₀[j]!) C o)
 
 /-- **The deployed decoders are right at `OkOffJ` on `AccOffJ`** at a masked statement in scope that `Deploy.V` sets
 up at the draw `d` (`decodesTable_deploy`, `decodesTable_at`). -/
@@ -90,10 +97,11 @@ theorem decodesOff_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
       (opnD sts (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
       (decD (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) (fun _ _ => true) (fun _ _ _ => [])
       (fun rs j => Exec.capOfRoot rs[j.val]!)
-      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) i :=
-  decodesTable_at (finJ (zkTabs h0 L hz hk hlay) hj)
-    (fun o => ¬ Off₀Z ZkExec.hs512 (zkTabs h0 L hz hk hlay j) (Exec.capOfRoot rootB₀[j]!) C o)
+      (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) i := by
+  have h := decodesTable_at (finJ (zkTabs h0 L hz hk hlay) hj)
+    (fun o => ¬ OffNoClashZ ZkExec.hs512 (zkTabs h0 L hz hk hlay j) (Exec.capOfRoot rootB₀[j]!) C o)
     (decodesTable_deploy hs hin hset h0 L hz hk hlay hd () i)
+  exact h
 
 open Classical in
 /-- **The masked live sessions' bound at the deployed decoders**: `ZkLiveAccJ` with its decoders and verdicts fixed,
@@ -101,9 +109,9 @@ at every masked statement in scope that `Deploy.V` sets up at a draw `d` and at 
 tables `zkTabs`, every prover has escapes at injective fork rounds on accepted deployed runs, tied to collisions, such
 that at every tape and table `C` of full-width columns a mixture of live strategies with common roots `rootB₀` bounds
 the deployed runs accepting with no column off `C` by its acceptance with table `j` decoded with no opening off `C`
-(`AccOffJ`), and the escapes' events bound the `Adv`s of its simulated strategies after `Commit` (`simAtJZ` at the
-deployed decoders `opnD`, `decD`, no tail and table `j`'s cap from `root_B[j]`, right at `OkOffJ` by
-`decodesOff_deploy`) and its decoded self-clashes of table `j` on accepted live runs. -/
+unless it self-clashes (`AccOffJ`), and the escapes' events bound the `Adv`s of its simulated strategies after
+`Commit` (`simAtJZ` at the deployed decoders `opnD`, `decD`, no tail and table `j`'s cap from `root_B[j]`, right at
+`OkOffJ` by `decodesOff_deploy`) and its decoded self-clashes of table `j` on accepted live runs. -/
 def ZkXferJ (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -178,7 +186,7 @@ def ZkXferJ (x : Claims.Msg) : Prop :=
 
 /-- **`ZkXferJ` gives `ZkLiveAccJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
 carries a draw (`acc_draw`), and the deployed decoders are right at `OkOffJ` on `AccOffJ` (`decodesOff_deploy`), whose
-verdict at table `j` accepts with no opening off `C`. -/
+verdict at table `j` accepts with no opening off `C` unless it self-clashes. -/
 theorem zkLiveAccJ_of_xferJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferJ x) :
     ZkLiveAccJ x := by
   intro ins spec sts hset h0 L hz hk hlay Ω _ _ P
