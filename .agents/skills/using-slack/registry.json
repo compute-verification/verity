@@ -77,11 +77,11 @@
         "archive/",
         "benchmarks/one_stage/",
         "benchmarks/commitments/",
+        "benchmarks/multi_unit/",
         "archive/sp1/benchmarks/dot_product/",
         "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
-        "benchmarks/multi_unit/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
       ],
       "branch_suffixes": [
