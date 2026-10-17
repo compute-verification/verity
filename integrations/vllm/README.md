@@ -323,9 +323,14 @@ cd integrations/vllm
 uv run pytest tests/program verity_vllm        # the CPU oracle; tests that need CUDA / vLLM / a pod tree skip or fail by name
 ~~~
 
-Tests and tools read fixtures relative to this directory: run them from here.  The repository's merge gate (`check`,
-`tools/verity/check/check.py`) does not collect them: `integrations/vllm` is outside the root `pyproject.toml` testpaths.  Every tool is a `verity-vllm` command
+Tests and tools read fixtures relative to this directory: run them from here.  The repository's merge gate (`check`) runs them as
+the suite `verity-vllm` (`tools/verity/check/suites.py --list`).  Every tool is a `verity-vllm` command
 (`verity-vllm --help`); a sweep row runs with `verity-vllm row run <row-id> <ROLE> <hf-repo> <revision>`.
+
+A refactor that is meant to leave the circuits alone keeps two sets of pins.  The suite's `tests/program/test_derive_neutrality.py`
+derives GLM-5.3's constructions on vLLM-free stand-ins, in seconds.  `verity-vllm neutrality --tier fast|heavy`
+(`pipeline/neutrality.py`) rebuilds the rows of record in `manifests/programs_of_record.json` on a CPU pod and fails when a
+per-rank Program digest moved: fast is the small TP1/TP2 rows, heavy is GLM-5.3's 8 ranks.
 
 The pod runtime (Python 3.12, torch cu129, vLLM `d9105ea80`, native taps, `hidden_gpu`) is built by `verity_vllm/ops/pod_bootstrap.sh`
 and exercised through `research run --source <sha> --on <machine>`.  On a pod without a GPU (`nvidia-smi` absent, or `--cpu`)
