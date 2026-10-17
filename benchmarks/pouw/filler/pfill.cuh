@@ -88,6 +88,7 @@
 #ifndef PF_JU
 #define PF_JU 4
 #endif
+constexpr int pf_ju = PF_JU;  // #pragma unroll takes a constant expression, not a macro
 #define PF_TN 1024
 #ifndef PF_PW
 #define PF_PW 8  // the phase filler's warps a block (dfill_p): its tile is PF_PW warps x 128 PF_PW columns
@@ -415,7 +416,7 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
           else pf_mma(dn[c], a[c], b);
         }
       }
-#pragma unroll PF_JU
+#pragma unroll pf_ju
       for (int j = 1; j < TN / 8; j++) {
         const uint2 b = *(const uint2*)(bp + j * 256);
 #pragma unroll
@@ -429,7 +430,7 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
 #pragma unroll
       for (int c = 0; c < 4; c++) pf_absorb<NC>(y[c], z[c], dn[c][0], dn[c][1], dn[c][2], dn[c][3], key);
 #else
-#pragma unroll PF_JU
+#pragma unroll pf_ju
       for (int j = 0; j < TN / 8; j++) {
         const uint2 b = *(const uint2*)(bp + j * 256);
 #pragma unroll
