@@ -6,8 +6,9 @@ for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank worker
 `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  Each rank also
 attaches the route source (`route_source`) when a capture map describes its model, and every rank must have; beside it the attention
-source (`attention_source`), which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap, and, when the rank's
-rows name `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`).  The single-rank
+source (`attention_source`), which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap, when the rank's
+rows name `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`), and, when they name the
+MoE align Definitions, the Marlin experts' align schedule (`moe_align_source`).  The single-rank
 `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the manifest names `call_boundaries` identities;
 `attached` names what it attaches for a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`).  Both
 `attach` and every rank's `attach_rank` arm a derived-S Program's prescribed split count (`prescribe_idle_splits`), taps or none."""
@@ -19,8 +20,8 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import (attention_source, call_boundary_source, linear_quant_source, norm_scale_source, route_source,
-                                         router_softmax_source, scale_products_source, vocab_range_source)
+from verity_vllm.acquire.sources import (attention_source, call_boundary_source, linear_quant_source, moe_align_source, norm_scale_source,
+                                         route_source, router_softmax_source, scale_products_source, vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
 from verity_vllm.program.registry.topp_geometry import splits_for_v1
@@ -95,14 +96,15 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     manifest of other tap policies) and, on one rank, the call-boundary source when the manifest names call boundaries no other source
     claims and the scale-products source when it names scale products (a TP Commit attaches neither); on several ranks, the attention
     source when a capture map that binds through it describes the manifest's model at its ranks (`route_source.manifest_map`: every rank
-    attaches it, `attach_rank`)."""
+    attaches it, `attach_rank`), and the MoE align source when the manifest names the align Definitions."""
     fams = {r.get("family") for r in (manifest or {}).get("identities") or []}
     one = int((manifest or {}).get("ranks") or 1) == 1
     cmap = None if one else route_source.manifest_map(manifest)
     return [*(cls.short_name for _f, _key, _mod, fam, cls in SOURCES if fam in fams),
             *([call_boundary_source.CallBoundarySource.short_name] if one and call_boundary_source.manifest_sites(manifest) else []),
             *([scale_products_source.ScaleProductsSource.short_name] if one and SP.manifest_sites(manifest) else []),
-            *([attention_source.AttentionSource.short_name] if cmap is not None and attention_source.binds(cmap) else [])]
+            *([attention_source.AttentionSource.short_name] if cmap is not None and attention_source.binds(cmap) else []),
+            *([moe_align_source.MoeAlignSource.short_name] if not one and moe_align_source.manifest_names_it(manifest) else [])]
 
 
 def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **given: Any) -> dict[str, Any]:
@@ -132,6 +134,12 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **gi
             out["linear_quant_source"] = {"sites": len(lq.sites)}
     except (ValueError, RuntimeError, AttributeError) as e:
         out["linear_quant_source"] = {"error": repr(e)[:200]}
+    try:
+        ma = moe_align_source.attach(com, model, mine)
+        if ma is not None:
+            out["moe_align_source"] = {"layers": len(ma.layers)}
+    except (ValueError, RuntimeError, AttributeError, ImportError) as e:
+        out["moe_align_source"] = {"error": repr(e)[:200]}
     return out
 
 
