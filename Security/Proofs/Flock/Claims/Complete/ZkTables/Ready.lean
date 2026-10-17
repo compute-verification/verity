@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Honest
 import Proofs.Flock.Claims.Complete.Zk.Coins
+import Proofs.Flock.Claims.Complete.Runs
 
 /-!
 # The masked verifier's error at any number of tables
@@ -8,8 +9,9 @@ import Proofs.Flock.Claims.Complete.Zk.Coins
 `ready` holds and `1` elsewhere. `εZk` already counts every table's reps (`outerSlotsZk`, `betaSlotsZk`, `rhoSlotsZk`
 run over `2·|tables|` reps), so `δc H` is the masked verifier's union bound at every number of tables.
 
-* **The regions** (`RegionsFit`): where some region's bytes at some block are not its free bits, the extra claims
-  refuse (`Stmt.regionValue`), the honest prover's as the verifier's, so the honest masked session cannot run.
+* **The regions** (`JsonRT.RegionsFit`, the plain `ready`'s): where some region's bytes at some block are not its free
+  bits, the extra claims refuse (`Stmt.regionValue`), the honest prover's as the verifier's, so the honest masked
+  session cannot run; where they fit, the extra claims return (`JsonRT.extraClaims_ok`).
 * `complete_of`: if the honest masked prover (`honestP`) is accepted at every coin outside `BadZk`, on every statement
   in scope, ready, with a witness in the relation, it is complete with error `δc H`.
 * **Against `readyZk`**: a setup with several tables is never `readyZk` (`readyZk_tables`), so `δcZk H` is `1` there;
@@ -21,18 +23,15 @@ namespace FlockComplete.ZkTables
 
 open Flock FlockDeploy
 
-/-- **A statement's regions fit**: each region's bytes at each block are its free bits. -/
-def RegionsFit (st : Flock.Stmt) : Prop :=
-  ∀ reg ∈ st.regions, ∀ b < 2 ^ st.nbl, (reg.bytes b).size * 8 = 2 ^ reg.free.size
-
 open Classical in
 /-- **The statements the masked verifier can accept** against `H`, at any number of tables: the session draws a unit,
 the statement is under `2^56` bytes, every table's regions fit, its setup against `H` is the one at SHA-512, and its
 `Hello` names the keyed coin tree. -/
 noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
   match setupOf true x with
-  | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 56) && decide (∀ st ∈ sts, RegionsFit st) &&
-      decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) && spec.coinTree.isSome
+  | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
+      decide (∀ st ∈ sts, JsonRT.RegionsFit st) && decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) &&
+      spec.coinTree.isSome
   | none => false
 
 /-- **Flock's `δc` at the masked verifier**, at any number of tables: `εZk` where the verifier can accept, else `1`. -/
@@ -43,7 +42,7 @@ open Classical in
 theorem ready_sha512 (x : Claims.Msg) :
     ready sha512 x = match setupOf true x with
       | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
-          decide (∀ st ∈ sts, RegionsFit st) && spec.coinTree.isSome
+          decide (∀ st ∈ sts, JsonRT.RegionsFit st) && spec.coinTree.isSome
       | none => false := by
   unfold ready
   split
@@ -83,7 +82,8 @@ theorem readyZk_tables {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {s : Ins
 
 /-- **Where `readyZk` holds and the regions fit, `ready` holds.** -/
 theorem ready_of_readyZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyZk H x = true)
-    (hfit : ∀ s spec sts, setupOf true x = some (s, spec, sts) → ∀ st ∈ sts, RegionsFit st) : ready H x = true := by
+    (hfit : ∀ s spec sts, setupOf true x = some (s, spec, sts) → ∀ st ∈ sts, JsonRT.RegionsFit st) :
+    ready H x = true := by
   unfold readyZk at h
   unfold ready
   split at h
@@ -97,7 +97,8 @@ theorem ready_of_readyZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : r
 
 /-- **Where `readyZk` holds and the regions fit, `δc H` is `δcZk H`.** -/
 theorem δc_eq_δcZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyZk H x = true)
-    (hfit : ∀ s spec sts, setupOf true x = some (s, spec, sts) → ∀ st ∈ sts, RegionsFit st) : δc H x = δcZk H x := by
+    (hfit : ∀ s spec sts, setupOf true x = some (s, spec, sts) → ∀ st ∈ sts, JsonRT.RegionsFit st) :
+    δc H x = δcZk H x := by
   simp [δc, δcZk, h, ready_of_readyZk h hfit]
 
 end FlockComplete.ZkTables

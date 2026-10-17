@@ -319,7 +319,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 /-- `ready` at the case's setup: the session draws a unit, the statement is under `2^56` bytes, every table's regions
 fit, the setup against `H` is the case's, and the session's coins are the keyed coin tree. -/
 theorem Case.ready_parts (c : Case H rel) :
-    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
+    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧ (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧
       setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true := by
   have h := c.ready
   unfold ZkTables.ready at h
