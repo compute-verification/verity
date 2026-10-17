@@ -69,7 +69,7 @@ def test_point_result_on_the_prover_then_the_verifier(tmp_path, record, hardware
     lean.write_text("".join(json.dumps(v) + "\n" for v in drawless))
     cli.main(["point-result", "--workload", "bf16-k6144", "--B", "16", "--dir", str(tmp_path), "--lean", str(lean), "--out", str(out)])
     doc = json.loads(out.read_text())
-    assert doc["validation"]["status"] == "passed" and "refused only for having no draw" in doc["validation"]["detail"]
+    assert doc["validation"]["status"] == "failed" and RS.D12_LABEL in doc["validation"]["detail"]
 
     lean.write_text(json.dumps({"session": "l0000-1", "accepted": False, "why": "bad"}) + "\n" + lean.read_text().split("\n", 1)[1])
     cli.main(["point-result", "--workload", "bf16-k6144", "--B", "16", "--dir", str(tmp_path), "--lean", str(lean), "--out", str(out)])
