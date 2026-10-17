@@ -793,3 +793,14 @@ def test_the_lean_check_is_never_deferred(world, monkeypatch):
 
     d = Driver(h.q, on="m1", defer=frozenset({"lean-audit", "circuit-check"}))
     assert d.defer == {"circuit-check", "flock-rust-tests"}                 # the step after circuit-check in its group
+
+
+def test_with_circuit_check_deferred_no_pr_pre_warms_and_running_pre_warms_are_cancelled(world, monkeypatch):
+    """17 Oct 13:40Z: under --defer, eight pre-warms took every slot drive counts, and no train ran."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"verity/ml/circuits/x.py": "1\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [] and len(h.launched) == 1          # pre-warming
+    h.d.defer = frozenset({"circuit-check", "flock-rust-tests"})
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1] and h.cancelled                   # admitted; the pre-warm is cancelled

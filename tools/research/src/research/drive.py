@@ -713,7 +713,7 @@ class Driver:
         head's pre-warm, one recorded check of that head (`prewarm`), hasn't ended.  Its passes then reach the trains it joins,
         which run warm, and no warm PR waits hours on it above it (16 Oct: #2158 and #2199, each at the bottom of `next`, made
         every train above them cold, until a lander held them by hand)."""
-        if self._drive is None:
+        if self._drive is None or "circuit-check" in self.defer:      # deferred, a cold circuit-check holds no landing up
             return None
         pw, key = self._drive.setdefault("prewarm", {}), f"{p.number}@{p.head}"
         if (rec := pw.get(key)) is None:
@@ -736,6 +736,11 @@ class Driver:
         active = 0
         for key, rec in pw.items():
             if rec.get("done"):
+                continue
+            if "circuit-check" in self.defer:                          # nothing waits on it: its slot goes to trains
+                rec["done"] = True
+                if live := [r for r, (st, *_) in self._states(rec.get("ids") or []).items() if st in ACTIVE]:
+                    self.cancel(self.repo, live, "drive: circuit-check is deferred, so a pre-warm holds nothing up")
                 continue
             if rec.get("ids"):
                 states = self._states(rec["ids"])
