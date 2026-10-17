@@ -1,669 +1,648 @@
-"""The census of a Program (`verity/census` v1): what its gates are, by class, per Definition, per step and in total,
-counted from the IR alone (Definitions and primitive ids, never kernels).
+"""census/v1: what a `Program` computes, counted by class, and the values its root's Calls pass each other.
 
-A gate's class is its primitive's identity, from the pinned table `KINDS` (and the gather family `GATHER_ID`):
+A census is a pure function of a Program's IR, written as canonical JSON (`codec.canonical_json`, RFC 8785 on its integer domain)
+under a SHA-512 digest. Classes come from Definitions and primitives only: a class is a descriptor id (`codec.descriptor_id`, the
+family `Name_vN` with its static bindings), never a kernel.
 
-- **matmul steps** (`Mma`): an FP tensor-core step (``fp``), or an exact s8 IMMA step (``s8-imma``, `BlackwellS8ImmaDot32_v1`),
-  each with its k products;
-- **roundings**: narrowing casts (``cast``), special functions and table reads (``special``), FP32 adds, the add of an FMA and
-  every other FP32 rounding (``arith``), integer and bit operations (``integer``);
-- **comparisons and selections** (``compare_select``), among them |x| (`F32Fabs_v1`, a comparison with 0 and a select);
-- **gathers**: a data-dependent read of one of V words, with its fan-in V;
-- **products**: scalar products, by the provenance of their two operands (below), and the k products of each matmul step.
+The root's body is the Program's step structure. Its first `inputs` nodes are the input nodes (`batch(Input<w>_v1 |
+RegisteredInput<w>_v1, n)`), and every later node is a Call (an activation directly under the root), in execution order. A step is a
+run of consecutive Calls: `ends` are the root-node indices that end the steps (exclusive), so step `s` is root nodes
+`[ends[s - 1], ends[s])`, with `ends[-1]` read as `inputs`. An engine step's Program is one step (the default); a request Program's
+steps end after each sampling event (`step_ends`). Inputs belong to no step.
 
-A primitive the table doesn't list is **unclassified**: the census counts it by id and the property (`verity.ml.circuits.stacking`)
-refuses it, so a gate nobody classified is never free. Exact value embeddings and negation (`Bf16ToF32_v1`, `E4m3ToF32_v1`,
-`F32Neg_v1`) are free, and so is every primitive without parameters (constants and inputs: structure). This differs from
-`cut.WIRING`, which also frees `F32Fabs_v1` and `F32BitsShl23_v1` as bit rearrangements: on values they are |x| and
-x mod 2^9 (scaled), nonlinear, so the census charges them as a comparison and an integer operation.
+    {"schema": "verity/census/v1",
+     "program": <the Program's digest (`codec.program_digest`)> | null,
+     "classes": {<descriptor id>: {
+         "family": "Name_vN",
+         "statics": {<static>: <its descriptor JSON>},           # {} for a primitive
+         "kind": "composite" | "primitive" | "input",
+         "binding": "run" | "registration" | null,              # an input's binding time
+         "instances": <activations in the Program>,               # a primitive's: its gates
+         "gates": <gates per instance>,
+         "primitives": {<primitive id>: <gates per instance>},
+         "served_macs": <per instance>, "tail_atoms": <per instance>, "receipt_folds": <per instance>}},
+     "callees": [<descriptor id>],                                # the classes of the root's nodes
+     "inputs": <the number of input nodes>,
+     "nodes": {"callee": [<index into callees>], "n": [<activations: a batch's members, a scan's iterations, else 1>]},
+     "steps": {"ends": [...], "gates": [...], "served_macs": [...], "tail_atoms": [...], "receipt_folds": [...],
+               "select_gates": [...], "select_bits": [...]},
+     "values": {"producer": [<root node>], "lo": [...], "hi": [...], "bits": [...], "reads": [[<root node>]], "output": [<bool>]},
+     "selects": {"call": [<root node>], "gates": [...], "bits": [...], "values": [[<value>]]},
+     "totals": {"gates", "computed_gates", "inputs": {"run" | "registration": {"gates", "bits"}}, "values", "value_bits",
+                "classes", "served_macs", "tail_atoms", "receipt_folds", "select_gates", "select_bits"},
+     "approximate": <bool>,
+     "digest": <SHA-512 of the canonical JSON of every other field>}
 
-Provenance. Every collection is marked constant, registered (a registered input: fixed before any seed), selected (a
-registered word read through a gather whose index is a run value: an embedding row, an MoE expert) or run (anything that
-depends on a run input). A primitive's output is the largest of its operands', a selected operand counting as run (a selected
-word stays selected only through a gather), and a `scan`'s carry is the largest of all its arguments'. A scalar class is
-counted only for gates with an operand that is selected or run; a matmul step's products are counted when an operand
-(``a`` or ``b``) is, by `product_class`; every matmul step is counted in ``mma``, whatever its operands. These are the rules of
-the stacking campaign's counter (``benchmarks/stacking_budgets/count_budgets.py``), so the classes agree with its numbers on the same
-Programs, apart from the charges above.
+Every column of `nodes`, `steps`, `values` and `selects` has one entry per root node, step, value or selecting Call.
 
-Exactness. Each s8 IMMA step computes ``D = C + sum_k a_k * b_k`` and clamps D to s32 (``.satfinite``). An interval pass over the
-Program bounds every step's D from its operands' ranges: a constant is its value, an IMMA output its D, and every other value
-any word of its width (an s8 operand -128..127, an accumulator all of s32). A step is proven exact when D's bound lies in
-s32; every other step is ``unproven`` and listed in ``may_overflow`` by its Definition and node.
+**Counts.** `instances` is top-down (a `batch` or `scan` node multiplies by its length); `gates`, `primitives` and the three
+counters are bottom-up, per instance. An instance of a tensor-core step (a word primitive, or the Boolean Definition computing it)
+performs `PRODUCTS[family]` products, and every one counts as a served MAC. A family named in `FAMILY_COUNTS` takes its
+counters from its rule over its statics instead: that is how a matmul family states
+its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the same product) and a fold Definition its receipt folds; the
+class's ancestors add up what the rule says.
 
-Steps. A Program's Calls (its root's non-input nodes) are split into steps at the Call indices `census(program, steps)`
-names (one step if none). Per step the census gives the classes of its Calls and its memory: the input bits it reads first
-(run and registered), the dynamic bits it writes that a later step reads, by the distance in steps to their last read
-(``lifetimes``), the run input bits it first reads that a later step reads again (``held_input_bits``, by distance in
-``input_lifetimes``: a run input is dynamic memory too), and the output bits it writes. The total adds them up, with the
-longest distance (``max_lifetime``).
+**Values.** A value is a run `[lo, hi)` of one root node's output leaves whose readers, candidacy and output status are the same
+throughout. `bits` is the sum of its leaves' widths. `reads` are the Calls with a gate that takes one of its leaves as an operand
+(a direct read, which no value decides), and `output` says the root returns it. A value nobody reads is listed with no reads. A
+leaf a node passes through (a Call that returns one of its arguments, a scan's carry) is not that node's value: whoever reads it
+reads the value passed, and its producer's.
 
-The table is fixed and versioned: changing an entry is a new `VERSION`, and so a new `digest()`.
+**Selects.** A primitive with `evaluate_lazy` reads its scalar operands directly and selects among its array operands by a value
+(a gather, a table read, an indexed expert): those array operands are candidates, not reads. Per Call with such gates, `gates`
+counts them, `bits` sums the widths they return (what a selection moves), and `values` are the root's values among their candidates
+(a selection among values computed inside the Call names none).
+
+**Approximation.** A batch whose members read different parts of a mapped argument, too many to enumerate
+(`liveness._MEMBER_LIMIT`), is taken to read all of it; `approximate` is then true and `reads` a superset.
 """
+
 from __future__ import annotations
 
+import bisect
 import hashlib
-import re
 from collections import Counter
-from dataclasses import asdict, dataclass
-from typing import Any, Sequence
+from dataclasses import dataclass
+from functools import lru_cache
+from typing import Any, Callable, Iterable
 
-from .codec import canonical_json
-from .defs import Body, CompositeDefinition, PrimitiveDefinition, bind
-from .intervals import Intervals, norm, ref_intervals, restrict, total
-from .program import RUN as RUN_BINDING
-from .program import Program, input_id, is_input
-from .refs import Affine, Concat, Explicit, Refs, Strided
-from .types import Array, Record, Type
+from .codec import _static_json, canonical_json, descriptor_id, jcs_domain_error
+from .defs import Node, PrimitiveDefinition
+from .intervals import Intervals, complement, contains, full, isect, norm, ref_intervals, total
+from .layout import resolve
+from .liveness import _MEMBER_LIMIT
+from .program import input_id, is_input
+from .refs import Affine, Concat, Explicit, Refs, concat
+from .types import Array, Record, Tuple as TupleT, Type, Value
 
-TAG = "verity/census"
-VERSION = 1
-SCHEMA = f"{TAG}/v{VERSION}"
+SCHEMA = "verity/census/v1"
 
-CONSTANT, REGISTERED, SELECTED, RUN = 0, 1, 2, 3
-
-S8 = (-(1 << 7), (1 << 7) - 1)
-S32 = (-(1 << 31), (1 << 31) - 1)
-
-#: a constant primitive's id (`PROTOCOL.md` §9)
-CONST_ID = re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$")
-#: the gathers: (index: i32, column: Array<V, word>) -> column[index]
-GATHER_ID = re.compile(r"^Gather(?:Bf16|F32)x([1-9][0-9]*)_v1$")
-
-ROUNDINGS = ("cast", "special", "arith", "integer")
-PRODUCTS = ("rr", "rsel", "rs")
-
-
-@dataclass(frozen=True)
-class Mma:
-    """A matmul step: ``kind`` ``fp`` or ``s8-imma``, k products a step, parameters (acc, a, b, ...). An s8 IMMA step's
-    operands lie in ``operand`` and its result is clamped to ``acc``."""
-
-    kind: str
-    k: int
-    operand: tuple[int, int] | None = None
-    acc: tuple[int, int] | None = None
-
-
-@dataclass(frozen=True)
-class Kind:
-    """What one gate of a primitive is: its roundings by class, comparisons and selections, scalar products (pairs of
-    parameter indices), a division's rounding (``divisor``: special when that parameter is selected or run, else arith), a
-    gather's fan-in, or a matmul step."""
-
-    cast: int = 0
-    special: int = 0
-    arith: int = 0
-    integer: int = 0
-    compare: int = 0
-    products: tuple[tuple[int, int], ...] = ()
-    divisor: int | None = None
-    gather: int = 0
-    mma: Mma | None = None
-
-
-_FREE = Kind()
-_CAST, _SPECIAL, _ARITH, _INTEGER, _COMPARE = Kind(cast=1), Kind(special=1), Kind(arith=1), Kind(integer=1), Kind(compare=1)
-_PRODUCT = Kind(arith=1, products=((0, 1),))
-_ACT_MUL = Kind(special=1, cast=2, products=((0, 1),))
-
-
-def _v(names: str, *versions: int) -> list[str]:
-    return [f"{n}_v{v}" for n in names.split() for v in versions]
-
-
-KINDS: dict[str, Kind] = {
-    **dict.fromkeys(_v("Bf16ToF32 E4m3ToF32 F32Neg", 1), _FREE),
-    **dict.fromkeys(_v("F2fpBf16 F32ToBf16Rn F32ToE4m3Sat F32ToE2m1Sat Bf16Add Bf16AddF2fp", 1), _CAST),
-    **dict.fromkeys(_v("MufuEx2Ftz MufuRcpFtz MufuSqrtFtz MufuTanh RsqrtApprox DivFullRcp Fa2InvSum TanhF32Rn", 1), _SPECIAL),
-    **dict.fromkeys(_v("F32Max F32GtStrict F32Fmaxf F32Fminf Bf16GtStrict F32Eq I32Le I32Eq F32IsFinite GuardNegInfZero F32Sat "
-                       "SelectBf16 SelectF32 SelectI32 F32Fabs", 1), _COMPARE),
-    **dict.fromkeys(_v("DivFullScaleA", 1, 2), _COMPARE),
-    **dict.fromkeys(_v("I32Add BitAnd BitNot BitOr F32BitsShl23", 1), _INTEGER),
-    **dict.fromkeys(_v("F32Add F32AddFtz F32Sub F32SubFtz", 1, 2), _ARITH),
-    **dict.fromkeys(_v("F32Mul F32MulFtz F32Fma F32FmaFtz F32FmaSubFtz F32FmaRm", 1, 2), _PRODUCT),
-    **dict.fromkeys(_v("F32Div", 1, 2), Kind(products=((0, 1),), divisor=1)),
-    **dict.fromkeys(_v("Bf16MulBf16 Bf16MulF32", 1), Kind(cast=1, products=((0, 1),))),
-    **dict.fromkeys(_v("SiluMulBf16", 1, 2) + _v("GeluTanhMulBf16", 1), _ACT_MUL),
-    "RopeOut_v1": Kind(arith=1, cast=1, products=((0, 2), (1, 3))),
-    "RopeOutAdd_v1": Kind(arith=1, cast=1, products=((1, 2), (0, 3))),
-    **dict.fromkeys(_v("AmpereBF16TcDot16", 2) + _v("HopperBF16WgmmaDot16", 1), Kind(mma=Mma("fp", 16))),
-    **dict.fromkeys(_v("HopperE4m3QgmmaDot32 HopperE4m3MmaV2Dot32 BlackwellE4m3QmmaDot32 BlackwellE5m2QmmaDot32", 1),
-                    Kind(mma=Mma("fp", 32))),
-    **dict.fromkeys(_v("BlackwellNvf4OmmaDot64 BlackwellMxf4OmmaDot64", 1), Kind(mma=Mma("fp", 64))),
-    "BlackwellS8ImmaDot32_v1": Kind(mma=Mma("s8-imma", 32, S8, S32)),
+#: products an instance of each tensor-core step family performs (its k): the word primitives, and the Boolean Definitions that
+#: compute them (`ml.circuits.ops.boolean.gemm`)
+PRODUCTS: dict[str, int] = {
+    "AmpereBF16TcDot16_v1": 16, "AmpereBF16TcDot16_v2": 16, "HopperBF16WgmmaDot16_v1": 16, "HopperTf32WgmmaDot8_v1": 8,
+    "HopperE4m3QgmmaDot32_v1": 32, "HopperE4m3MmaV2Dot32_v1": 32, "BlackwellE4m3QmmaDot32_v1": 32,
+    "BlackwellE5m2QmmaDot32_v1": 32, "BlackwellNvf4OmmaDot64_v1": 64, "BlackwellMxf4OmmaDot64_v1": 64,
+    "PouwDot16U8S8_v1": 16, "NcpDot16I7_v1": 16,
+    "AmpereBF16TcDot16_v3": 16, "HopperBF16WgmmaDot16_v2": 16, "HopperE4m3QgmmaDot32_v2": 32, "HopperE4m3MmaV2Dot32_v2": 32,
+    "BlackwellE4m3QmmaDot32_v2": 32, "BlackwellE5m2QmmaDot32_v2": 32, "BlackwellNvf4OmmaDot64_v2": 64,
+    "BlackwellMxf4OmmaDot64_v2": 64,
 }
 
+COUNTERS = ("served_macs", "tail_atoms", "receipt_folds")
 
-def kind(fid: str) -> Kind | None:
-    """The class of a primitive's gate by its id, or None when it is unclassified."""
-    k = KINDS.get(fid)
-    if k is not None:
-        return k
-    m = GATHER_ID.fullmatch(fid)
-    return Kind(gather=int(m[1])) if m else None
+#: family `Name_vN` -> its counters per instance from its statics (a subset of `COUNTERS`; the rest stay bottom-up)
+FAMILY_COUNTS: dict[str, Callable[[dict], dict[str, int]]] = {}
 
 
-def product_class(a: int, b: int) -> str:
-    """``rr`` (two run or selected values, but not one of each), ``rsel`` (a run value and a selected one) or ``rs`` (a run
-    or selected value and a constant or registered one)."""
-    if min(a, b) >= SELECTED:
-        return "rsel" if {a, b} == {RUN, SELECTED} else "rr"
-    return "rs"
+def family(fn: Any) -> str:
+    """The family `Name_vN` of a Definition or primitive."""
+    return fn.id if isinstance(fn, PrimitiveDefinition) else fn.base_id
 
 
-def spec() -> dict:
-    """The table as canonical data: what `digest` hashes."""
-    return _plain({"format": TAG, "version": VERSION, "gather": GATHER_ID.pattern,
-                   "kinds": {fid: {k: v for k, v in asdict(kd).items() if v not in (0, (), None)} for fid, kd in sorted(KINDS.items())}})
+def seal(doc: dict) -> dict:
+    """`doc` with its `digest`: the SHA-512 of the canonical JSON of every other field (refused outside that JSON's domain)."""
+    body = {k: v for k, v in doc.items() if k != "digest"}
+    err = jcs_domain_error(body)
+    if err is not None:
+        raise ValueError(f"{doc.get('schema')}: outside the canonical JSON domain: {err}")
+    return body | {"digest": hashlib.sha512(canonical_json(body)).hexdigest()}
 
 
-def digest() -> str:
-    """``SHA-512(TAG || "/v" || version || 0 || canon(spec))``: the table version a census names and a statement can pin."""
-    return hashlib.sha512(f"{TAG}/v{VERSION}".encode() + b"\0" + canonical_json(spec())).hexdigest()
+def step_ends(program: Any, families: Iterable[str]) -> list[int]:
+    """Step ends that close a step after each root Call of one of `families` (a request Program's sampling events), and after the
+    last node."""
+    fams = set(families)
+    nodes = program.root.body.nodes
+    ends = [k + 1 for k, nd in enumerate(nodes) if not is_input(nd.fn) and family(nd.fn) in fams]
+    if nodes and (not ends or ends[-1] != len(nodes)):
+        ends.append(len(nodes))
+    return ends
 
 
-def _plain(v: Any) -> Any:
-    if isinstance(v, dict):
-        return {k: _plain(x) for k, x in v.items()}
-    if isinstance(v, (list, tuple)):
-        return [_plain(x) for x in v]
-    return v
-
-
-# ---- provenance and the classes ----------------------------------------------------------------------------------------
-
-Raw = dict  # {(primitive id, operand provenance): gates}
-
-
-def _colls(refs: Refs) -> set[tuple[str, int]]:
-    if isinstance(refs, (Affine, Strided)):
-        return {(refs.space, refs.idx)} if refs.count else set()
-    if isinstance(refs, Concat):
-        return set().union(*(_colls(p) for p in refs.parts))
-    if isinstance(refs, Explicit):
-        return {(s, i) for s, i, _leaf in refs.items}
-    return {(s, i) for s, i, _leaf in refs}
-
-
-class _Provenance:
-    def __init__(self) -> None:
-        self.memo: dict[tuple[int, tuple[int, ...]], tuple[Raw, int]] = {}
-        self.keep: list[Any] = []
-
-    def prim(self, fn: PrimitiveDefinition, ts: tuple[int, ...]) -> tuple[Raw, int]:
-        if GATHER_ID.fullmatch(fn.id) and ts and ts[0] == RUN and max(ts[1:], default=CONSTANT) <= REGISTERED:
-            return {(fn.id, ts): 1}, SELECTED
-        t = max(ts, default=CONSTANT)
-        return {(fn.id, ts): 1}, RUN if t >= SELECTED else t
-
-    def call(self, fn: Any, ts: tuple[int, ...]) -> tuple[Raw, int]:
-        if isinstance(fn, PrimitiveDefinition):
-            return self.prim(fn, ts)
-        key = (id(fn), ts)
-        hit = self.memo.get(key)
-        if hit is None:
-            self.keep.append(fn)
-            out: Counter = Counter()
-            node_t: list[int] = []
-            for _k, nd, ats, sub, ot in self.walk(fn.body, ts, node_t):
-                m = nd.n if nd.form in ("batch", "scan") else 1
-                for k, v in sub.items():
-                    out[k] += m * v
-            hit = self.memo[key] = (dict(out), _taint(fn.body.ret, ts, node_t))
-        return hit
-
-    def walk(self, body: Body, ts: tuple[int, ...], node_t: list[int]):
-        """Each node of `body` with its arguments' provenance, its one call's census and its output's provenance."""
-        for k, nd in enumerate(body.nodes):
-            ats = [_taint(a.refs, ts, node_t) for a in nd.args]
-            if nd.form == "scan":
-                ats[0] = max(ats)
-            sub, ot = self.call(nd.fn, tuple(ats))
-            ot = max(ot, ats[0]) if nd.form == "scan" else ot
-            node_t.append(ot)
-            yield k, nd, tuple(ats), sub, ot
-
-
-def _taint(refs: Refs, ts: Sequence[int], node_t: Sequence[int]) -> int:
-    t = CONSTANT
-    for s, i in _colls(refs):
-        t = max(t, ts[i] if s == "p" else node_t[i])
-    return t
-
-
-def _blank() -> dict:
-    return {"macs": {"exact_s8": 0, "other": 0}, "mma": {}, "roundings": dict.fromkeys(ROUNDINGS, 0), "compare_select": 0,
-            "gathers": 0, "gather_fanin": 0, "products": dict.fromkeys(PRODUCTS, 0), "mma_acc": dict.fromkeys(PRODUCTS, 0),
-            "unclassified": {}, "primitives": {}}
-
-
-def classify(raw: Raw, unproven: dict[str, int] | None = None) -> dict:
-    """The classes (the census's ``counts`` form) of a primitive census ``{(id, operand provenance): gates}``, with the s8 IMMA
-    steps the interval pass did not prove exact (``{id: steps}``)."""
-    c = _blank()
-    r, p, acc = c["roundings"], c["products"], c["mma_acc"]
-    prims: Counter = Counter()
-    uncl: Counter = Counter()
-    for (fid, ts), n in raw.items():
-        if not ts:
-            continue
-        runtime = max(ts) >= SELECTED
-        if runtime:
-            prims[fid] += n
-        kd = kind(fid)
-        if kd is None:
-            uncl[fid] += n
-            continue
-        if kd.mma is not None:
-            m = c["mma"].setdefault(fid, {"kind": kd.mma.kind, "k": kd.mma.k, "steps": 0, "exact": 0})
-            m["steps"] += n
-            if max(ts[1], ts[2]) >= SELECTED:
-                cls = product_class(ts[1], ts[2])
-                p[cls] += kd.mma.k * n
-                acc[cls] += n
-            continue
-        if not runtime:
-            continue
-        for name in ROUNDINGS:
-            r[name] += getattr(kd, name) * n
-        c["compare_select"] += kd.compare * n
-        for i, j in kd.products:
-            p[product_class(ts[i], ts[j])] += n
-        if kd.divisor is not None:
-            r["special" if ts[kd.divisor] >= SELECTED else "arith"] += n
-        if kd.gather:
-            c["gathers"] += n
-            c["gather_fanin"] += kd.gather * n
-    for fid, m in c["mma"].items():
-        if m["kind"] == "s8-imma":
-            m["exact"] = m["steps"] - min(m["steps"], (unproven or {}).get(fid, 0))
-        c["macs"]["exact_s8"] += m["k"] * m["exact"]
-        c["macs"]["other"] += m["k"] * (m["steps"] - m["exact"])
-    c["mma"] = dict(sorted(c["mma"].items()))
-    c["unclassified"] = dict(sorted(uncl.items()))
-    c["primitives"] = dict(sorted(prims.items()))
-    return c
-
-
-def _add_raw(acc: Counter, raw: Raw, m: int = 1) -> None:
-    for k, v in raw.items():
-        acc[k] += m * v
-
-
-# ---- the interval pass: s8 IMMA exactness ------------------------------------------------------------------------------
-
-Range = tuple[int, int] | None  # a value's signed range at its width; None: any word of its width
-Segs = tuple[tuple[int, int, Range], ...]  # a collection's leaves [lo, hi) and their range, covering it
-_EMPTY = (1, 0)  # the union's identity: an empty range
-_EXACT_ITERATIONS = 1 << 16  # a scan's carry is iterated exactly this many times, then widened to any word
-
-
-def _union(a: Range, b: Range) -> Range:
-    if a is None or b is None:
-        return None
-    if a[0] > a[1]:
-        return b
-    if b[0] > b[1]:
-        return a
-    return (min(a[0], b[0]), max(a[1], b[1]))
-
-
-def _signed(w: int, v: int) -> int:
-    return v - (1 << w) if v >> (w - 1) else v
-
-
-class _Intervals:
-    def __init__(self) -> None:
-        self.memo: dict[tuple[int, tuple[Range, ...]], tuple[Segs, Counter]] = {}
-        self.has: dict[int, bool] = {}
-        self.keep: list[Any] = []
-        self.sites: dict[tuple[str, int], tuple[Range, Range]] = {}
-
-    def has_imma(self, fn: Any) -> bool:
-        if isinstance(fn, PrimitiveDefinition):
-            k = kind(fn.id)
-            return k is not None and k.mma is not None and k.mma.kind == "s8-imma"
-        hit = self.has.get(id(fn))
-        if hit is None:
-            self.keep.append(fn)
-            self.has[id(fn)] = False  # (a Definition never calls itself)
-            hit = self.has[id(fn)] = any(self.has_imma(nd.fn) for nd in fn.body.nodes)
-        return hit
-
-    def prim(self, fn: PrimitiveDefinition, args: Sequence[Range], where: tuple[str, int]) -> tuple[Range, int]:
-        """(output range, 1 if it is an s8 IMMA step not proven exact else 0)."""
-        m = CONST_ID.fullmatch(fn.id)
-        if m:
-            v = _signed(int(m[1]), int(m[2], 16))
-            return (v, v), 0
-        kd = kind(fn.id)
-        if kd is None or kd.mma is None or kd.mma.kind != "s8-imma":
-            return None, 0
-        mm = kd.mma
-        c = _clip(args[0], mm.acc)
-        a, b = _clip(args[1], mm.operand), _clip(args[2], mm.operand)
-        corners = (a[0] * b[0], a[0] * b[1], a[1] * b[0], a[1] * b[1])
-        d = (c[0] + mm.k * min(corners), c[1] + mm.k * max(corners))
-        if mm.acc[0] <= d[0] and d[1] <= mm.acc[1]:
-            return d, 0
-        prev = self.sites.get(where)
-        self.sites[where] = (c, d) if prev is None else (_union(prev[0], c), _union(prev[1], d))
-        return (max(d[0], mm.acc[0]), min(d[1], mm.acc[1])), 1
-
-    def call(self, fn: Any, args: tuple[Range, ...], where: tuple[str, int]) -> tuple[Segs, Counter]:
-        if isinstance(fn, PrimitiveDefinition):
-            r, u = self.prim(fn, args, where)
-            return ((0, 1, r),), Counter({fn.id: u}) if u else Counter()
-        key = (id(fn), args)
-        hit = self.memo.get(key)
-        if hit is None:
-            self.keep.append(fn)
-            segs: list[Segs] = []
-            out: Counter = Counter()
-            for _k, _nd, s, u in self.walk(fn.body, args, fn.id, segs):
-                out.update(u)
-            hit = self.memo[key] = (_read_segs(fn.body.ret, args, segs), out)
-        return hit
-
-    def walk(self, body: Body, params: Sequence[Range], def_id: str, segs: list[Segs]):
-        """Each node of `body` with its output's segments and the IMMA steps of its gates not proven exact."""
-        for k, nd in enumerate(body.nodes):
-            ars = [_read(a.refs, params, segs) for a in nd.args]
-            if nd.form in ("primitive", "call"):
-                s, u = self.call(nd.fn, tuple(ars), (def_id, k))
-            elif nd.form == "batch":
-                s1, u1 = self.call(nd.fn, tuple(ars), (def_id, k))
-                s = ((0, nd.out.leaves, _seg_union(s1)),)
-                u = Counter({i: nd.n * v for i, v in u1.items()})
-            else:
-                s, u = self.scan(nd, ars, def_id, k)
-            segs.append(s)
-            yield k, nd, s, u
-
-    def scan(self, nd: Any, ars: list[Range], def_id: str, k: int) -> tuple[Segs, Counter]:
-        carry_t = nd.out.fields[0]
-        cl = carry_t.leaves
-        carry, rest = ars[0], tuple(ars[1:])
-        ys: Range = _EMPTY
-        u: Counter = Counter()
-        for i in range(nd.n):
-            if i == _EXACT_ITERATIONS:
-                carry = None
-            s, ui = self.call(nd.fn, (carry,) + rest, (def_id, k))
-            nxt = _union(carry, _seg_union(s, 0, cl))
-            ys = _union(ys, _seg_union(s, cl, None))
-            if nxt == carry:
-                u.update({j: (nd.n - i) * v for j, v in ui.items()})
-                break
-            u.update(ui)
-            carry = nxt
-        return ((0, cl, carry), (cl, nd.out.leaves, ys)), u
-
-
-def _clip(r: Range, bound: tuple[int, int]) -> tuple[int, int]:
-    if r is None or r[0] > r[1]:
-        return bound
-    return (max(r[0], bound[0]), min(r[1], bound[1]))
-
-
-def _seg_union(segs: Segs, lo: int = 0, hi: int | None = None) -> Range:
-    out: Range = _EMPTY
-    for a, b, r in segs:
-        if b > lo and (hi is None or a < hi):
-            out = _union(out, r)
-    return out
-
-
-def _read(refs: Refs, params: Sequence[Range], segs: Sequence[Segs]) -> Range:
-    ivs: dict[tuple[str, int], list] = {}
-    ref_intervals(refs, ivs)
-    out: Range = _EMPTY
-    for (s, i), iv in ivs.items():
-        if s == "p":
-            out = _union(out, params[i])
-            continue
-        for lo, hi in norm(iv):
-            out = _union(out, _seg_union(segs[i], lo, hi))
-    return out
-
-
-_MAX_SEGS = 256  # a return with more segments is one segment, their union
-
-
-def _read_segs(refs: Refs, params: Sequence[Range], segs: Sequence[Segs]) -> Segs:
-    """The segments of a body's return, in leaf order: an affine run of a node's leaves keeps that node's segments."""
-    out: list[tuple[int, int, Range]] = []
-    pos = 0
-    for part in (refs.parts if isinstance(refs, Concat) else [refs]):
-        n = part.count
-        if n and isinstance(part, Affine) and part.space == "n":
-            for a, b, r in segs[part.idx]:
-                lo, hi = max(a, part.base), min(b, part.base + n)
-                if lo < hi:
-                    out.append((pos + lo - part.base, pos + hi - part.base, r))
-        elif n:
-            out.append((pos, pos + n, _read(part, params, segs)))
-        pos += n
-    merged: list[tuple[int, int, Range]] = []
-    for a, b, r in out:
-        if merged and merged[-1][2] == r and merged[-1][1] == a:
-            merged[-1] = (merged[-1][0], b, r)
-        else:
-            merged.append((a, b, r))
-    if len(merged) > _MAX_SEGS:
-        return ((0, pos, _seg_union(tuple(merged))),)
-    return tuple(merged)
-
-
-# ---- the census ----------------------------------------------------------------------------------------------------------
+# -- reads -----------------------------------------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
-class Census:
-    """A Program's census: ``total``, ``definitions`` (each Definition the root calls: its Calls and their classes), ``steps``
-    (each step's first Call, its Calls' classes and its memory), ``memory`` (the whole Program's) and ``may_overflow`` (the
-    s8 IMMA steps not proven exact, by Definition and node, with their accumulator's and result's bounds)."""
-
-    program: str
-    total: dict
-    definitions: dict
-    steps: tuple
-    memory: dict
-    may_overflow: tuple
-
-    def to_json(self) -> dict:
-        return {"schema": SCHEMA, "classes": digest(), "program": self.program, "total": self.total,
-                "definitions": self.definitions, "steps": list(self.steps), "memory": self.memory,
-                "may_overflow": list(self.may_overflow)}
+class _Reads:
+    """What one activation of a Definition reads of its parameters, per parameter."""
+    direct: tuple[Intervals, ...]
+    pool: tuple[Intervals, ...]  # candidates of its data-dependent gates
+    select_gates: int
+    select_bits: int
+    approximate: bool
 
 
-def count(fn: Any, provenance: Sequence[int], ranges: Sequence[Range] | None = None) -> dict:
-    """The classes of one call of `fn` (a Definition or a primitive) whose parameters have `provenance` (`CONSTANT`,
-    `REGISTERED`, `SELECTED` or `RUN` each) and value ranges `ranges` (None: any word)."""
-    if isinstance(fn, CompositeDefinition):
-        fn = bind(fn)
-    ts = tuple(provenance)
-    raw, _t = _Provenance().call(fn, ts)
-    iv = _Intervals()
-    unproven: Counter = Counter()
-    if iv.has_imma(fn):
-        _s, unproven = iv.call(fn, tuple(ranges) if ranges is not None else (None,) * len(ts), ("", 0))
-    return classify(raw, unproven)
+class _Marks:
+    """Leaf intervals one body's nodes read, in one space of that body (`p` inside a Definition, `n` at the root)."""
+
+    def __init__(self, space: str) -> None:
+        self.space = space
+        self.direct: dict[int, list] = {}
+        self.pool: dict[int, list] = {}
+        self.select_gates = self.select_bits = 0
+        self.approximate = False
+
+    def walk(self, refs: Refs, into: dict) -> None:
+        if isinstance(refs, Concat):
+            for p in refs.parts:
+                self.walk(p, into)
+        elif isinstance(refs, Explicit):
+            for s, i, leaf in refs.items:
+                if s == self.space:
+                    into.setdefault(i, []).append((leaf, leaf + 1))
+        elif refs.count and refs.space == self.space:
+            t: dict = {}
+            ref_intervals(refs, t)
+            into.setdefault(refs.idx, []).extend(t[(refs.space, refs.idx)])
+
+    def mark(self, refs: Refs, sub: Intervals | None, into: dict) -> None:
+        if sub is None or total(sub) == refs.count:
+            self.walk(refs, into)
+        else:
+            for lo, hi in sub:
+                self.walk(refs.slice(lo, hi), into)
+
+    def mapped(self, a, ax: int | None, n: int, sub: Intervals, into: dict) -> None:
+        """Mark what `n` members (a batch's members, a scan's iterations) each reading `sub` of their part of `a` read of `a`."""
+        if not sub or not n:
+            return
+        if ax is None:
+            self.mark(a.refs, sub, into)
+            return
+        L = a.type.leaves // n
+        if total(sub) == L:
+            self.walk(a.refs, into)
+        elif n * len(sub) > _MEMBER_LIMIT:
+            self.walk(a.refs, into)
+            self.approximate = True
+        elif ax == 0:
+            for m in range(n):
+                for lo, hi in sub:
+                    self.walk(a.refs.slice(m * L + lo, m * L + hi), into)
+        else:
+            for m in range(n):
+                self.mark(a.take(ax, m).refs, sub, into)
+
+    def reads(self, params: int) -> _Reads:
+        return _Reads(tuple(norm(self.direct.get(i, ())) for i in range(params)),
+                      tuple(norm(self.pool.get(i, ())) for i in range(params)), self.select_gates, self.select_bits, self.approximate)
 
 
-def census(program: Program, steps: Sequence[int] | None = None) -> Census:
-    """The census of `program`. `steps`: the index, among the root's Calls, of each step's first Call, ascending from 0 (None:
-    one step)."""
-    body = program.root.body
-    calls = [k for k, nd in enumerate(body.nodes) if not is_input(nd.fn)]
-    starts = [0] if steps is None else list(steps)
-    if not starts or starts[0] != 0 or any(b <= a for a, b in zip(starts, starts[1:])) or (calls and starts[-1] >= len(calls)):
-        raise ValueError(f"steps start at Call 0 and ascend strictly below {len(calls)} Calls, not {starts}")
-    step_of: dict[int, int] = {}
-    for s, (a, b) in enumerate(zip(starts, starts[1:] + [len(calls)])):
-        for k in calls[a:b]:
-            step_of[k] = s
-    nsteps = len(starts)
-
-    prov = _Provenance()
-    node_t: list[int] = []
-    raws: dict[int, Raw] = {}
-    root_ts: tuple[int, ...] = ()
-    for k, nd in enumerate(body.nodes):
-        if k not in step_of:
-            when = input_id(nd.fn.id)[0]  # type: ignore[index]
-            node_t.append(RUN if when == RUN_BINDING else REGISTERED)
-            continue
-        ats = [_taint(a.refs, root_ts, node_t) for a in nd.args]
-        if nd.form == "scan":
-            ats[0] = max(ats)
-        sub, ot = prov.call(nd.fn, tuple(ats))
-        node_t.append(max(ot, ats[0]) if nd.form == "scan" else ot)
-        m = nd.n if nd.form in ("batch", "scan") else 1
-        raws[k] = {key: m * v for key, v in sub.items()}
-
-    iv = _Intervals()
-    unproven: dict[int, Counter] = {}
-    if any(iv.has_imma(body.nodes[k].fn) for k in calls):
-        segs: list[Segs] = []
-        for k, nd, _s, u in iv.walk(body, (), program.root.id, segs):
-            if k in step_of:
-                unproven[k] = u
-
-    def classes(ks: Sequence[int]) -> dict:
-        raw: Counter = Counter()
-        unp: Counter = Counter()
-        for k in ks:
-            _add_raw(raw, raws[k])
-            unp.update(unproven.get(k, {}))
-        return classify(dict(raw), unp)
-
-    by_def: dict[str, list[int]] = {}
-    for k in calls:
-        by_def.setdefault(body.nodes[k].fn.id, []).append(k)
-    definitions = {fid: {"calls": len(ks), **classes(ks)} for fid, ks in sorted(by_def.items())}
-    mem = _memory(body, calls, step_of, nsteps)
-    step_list = []
-    for s, a in enumerate(starts):
-        ks = [k for k in calls if step_of[k] == s]
-        step_list.append({"first_call": a, "calls": len(ks), **classes(ks), "memory": mem[s]})
-    sites = tuple({"definition": d, "node": n, "acc": list(c), "sum": list(r)} for (d, n), (c, r) in sorted(iv.sites.items()))
-    return Census(program.fn.id, classes(calls), definitions, tuple(step_list), _memory_total(mem), sites)
+def _flat(r: Refs) -> list[Refs]:
+    return [q for p in r.parts for q in _flat(p)] if isinstance(r, Concat) else [r]
 
 
-# ---- memory --------------------------------------------------------------------------------------------------------------
+def _through(r: Refs, args) -> Refs:
+    """Refs over a callee's parameters, as the caller's refs its arguments name."""
+    parts: list[Refs] = []
+    for p in _flat(r):
+        if isinstance(p, Affine):
+            parts.append(args[p.idx].refs.slice(p.base, p.base + p.count))
+        else:
+            parts.extend(args[i].refs.slice(leaf, leaf + 1) for _s, i, leaf in p)
+    return concat(parts)
 
 
-def _minus(a: Intervals, b: Intervals) -> Intervals:
-    out: list[tuple[int, int]] = []
-    j = 0
-    for lo, hi in a:
-        while j < len(b) and b[j][1] <= lo:
-            j += 1
-        pos, i = lo, j
-        while i < len(b) and b[i][0] < hi:
-            if b[i][0] > pos:
-                out.append((pos, b[i][0]))
-            pos = max(pos, b[i][1])
-            i += 1
-        if pos < hi:
-            out.append((pos, hi))
-    return tuple(out)
+class _Aliases:
+    """The output leaves of one body's nodes that are leaves of something else passed through (a callee returning its argument,
+    a scan's carry), and what refs resolve to once every pass-through is followed."""
 
+    def __init__(self, an: "_Analysis", body: Any) -> None:
+        self.an, self.body = an, body
+        self._nodes: dict[int, list[tuple[int, int, Refs]]] = {}
 
-def _bits(t: Type, iv: Intervals) -> int:
-    """The bits of the leaves `iv` of a collection of type `t`."""
-    if not iv:
-        return 0
-    w = t.homogeneous_width()
-    if w is not None:
-        return w * total(iv)
-    if isinstance(t, Array):
-        e = t.elem.leaves
-        out = 0
-        for lo, hi in iv:
-            for i in range(lo // e, (hi - 1) // e + 1):
-                out += _bits(t.elem, restrict(((lo, hi),), i * e, (i + 1) * e))
+    def node(self, k: int) -> list[tuple[int, int, Refs]]:
+        """Runs `[lo, hi)` of node `k`'s output leaves that pass through the refs (in this body's spaces) given with each, by `lo`."""
+        hit = self._nodes.get(k)
+        if hit is not None:
+            return hit
+        nd = self.body.nodes[k]
+        sub = self.an.alias(nd.fn)
+        runs: list[tuple[int, int, Refs]] = []
+        if not sub:
+            pass
+        elif nd.form == "call":
+            runs = [(lo, hi, _through(r, nd.args)) for lo, hi, r in sub]
+        elif nd.form == "batch":
+            L = nd.fn.out_leaves
+            for m in range(nd.n):
+                args = [a if ax is None else a.take(ax, m) for a, ax in zip(nd.args, nd.axes)]
+                runs.extend((m * L + lo, m * L + hi, _through(r, args)) for lo, hi, r in sub)
+        else:  # scan: iteration i's carry parameter is the init (i = 0) or the carry iteration i - 1 returned
+            c, y = nd.out.fields[0].leaves, nd.out.fields[1].elem.leaves
+            amap = {lo + t: r[t] for lo, hi, r in sub for t in range(hi - lo)}
+            src: list = [nd.args[0].refs[t] for t in range(c)]
+            for i in range(nd.n):
+                def ref(pi: int, leaf: int, i: int = i, src: list = src):
+                    if pi == 0:
+                        return src[leaf]
+                    a = nd.args[pi]
+                    return a.refs[i * a.type.elem.leaves + leaf] if pi <= nd.n_xs else a.refs[leaf]
+                for t in range(c, c + y):
+                    if t in amap and (r := ref(amap[t][1], amap[t][2])) is not None:
+                        runs.append((c + i * y + t - c, c + i * y + t - c + 1, Explicit((r,))))
+                src = [ref(amap[t][1], amap[t][2]) if t in amap else None for t in range(c)]
+            runs.extend((t, t + 1, Explicit((r,))) for t, r in enumerate(src) if r is not None)
+            runs.sort(key=lambda x: x[0])
+        self._nodes[k] = runs
+        return runs
+
+    def resolve(self, r: Refs, own: bool) -> list[tuple[int, Refs, bool]]:
+        """`r` with every pass-through followed, as pieces `(position, refs, passed)`: `passed` pieces are the body's parameters,
+        the others leaves its nodes produce (listed only when `own`)."""
+        out: list[tuple[int, Refs, bool]] = []
+        pos = 0
+        for p in _flat(r):
+            n = p.count
+            if isinstance(p, Explicit):
+                for t, (s, i, leaf) in enumerate(p.items):
+                    self._leaf(s, i, leaf, pos + t, own, out)
+            elif p.space == "p":
+                if n:
+                    out.append((pos, p, True))
+            elif not (runs := self.node(p.idx)):
+                if own and n:
+                    out.append((pos, p, False))
+            elif isinstance(p, Affine):
+                b, e, cur = p.base, p.base + n, p.base
+                for lo, hi, s in runs:
+                    if hi <= cur or lo >= e:
+                        continue
+                    if lo > cur and own:
+                        out.append((pos + cur - b, Affine("n", p.idx, cur, lo - cur), False))
+                    a0, a1 = max(lo, cur), min(hi, e)
+                    out.extend((pos + a0 - b + q, x, f) for q, x, f in self.resolve(s.slice(a0 - lo, a1 - lo), own))
+                    cur = a1
+                if cur < e and own:
+                    out.append((pos + cur - b, Affine("n", p.idx, cur, e - cur), False))
+            else:
+                for t, (s, i, leaf) in enumerate(p):
+                    self._leaf(s, i, leaf, pos + t, own, out)
+            pos += n
         return out
-    fields = [ft for _n, ft in t.fields] if isinstance(t, Record) else list(t.fields)  # type: ignore[attr-defined]
+
+    def _leaf(self, s: str, i: int, leaf: int, pos: int, own: bool, out: list) -> None:
+        if s == "p":
+            out.append((pos, Affine(s, i, leaf, 1), True))
+            return
+        runs = self.node(i)
+        j = bisect.bisect_right(runs, leaf, key=lambda x: x[0]) - 1
+        if j >= 0 and runs[j][0] <= leaf < runs[j][1]:
+            lo, _, r = runs[j]
+            out.extend((pos + q, x, f) for q, x, f in self.resolve(r.slice(leaf - lo, leaf - lo + 1), own))
+        elif own:
+            out.append((pos, Affine(s, i, leaf, 1), False))
+
+
+class _Analysis:
+    def __init__(self) -> None:
+        self._reads: dict[int, tuple[Any, _Reads]] = {}  # id(fn) -> (fn, reads): the object keeps the id valid
+        self._alias: dict[int, tuple[Any, tuple]] = {}
+        self._repeats: dict[int, tuple[Any, bool]] = {}
+
+    def alias(self, fn: Any) -> tuple[tuple[int, int, Refs], ...]:
+        """Runs `[lo, hi)` of `fn`'s return leaves that are its parameters' leaves passed through, with those leaves (refs over
+        `p`), by `lo`."""
+        if isinstance(fn, PrimitiveDefinition):
+            return ()
+        hit = self._alias.get(id(fn))
+        if hit is not None:
+            return hit[1]
+        got = tuple((q, q + x.count, x) for q, x, passed in _Aliases(self, fn.body).resolve(fn.body.ret, False) if passed)
+        self._alias[id(fn)] = (fn, got)
+        return got
+
+    def repeats(self, fn: Any) -> bool:
+        """Whether `fn`'s return names a gate it produces twice (a scan step's carry that is also its y)."""
+        if isinstance(fn, PrimitiveDefinition):
+            return False
+        hit = self._repeats.get(id(fn))
+        if hit is not None:
+            return hit[1]
+        t: dict = {}
+        named: Counter = Counter()
+        for _q, x, passed in _Aliases(self, fn.body).resolve(fn.body.ret, True):
+            if not passed:
+                ref_intervals(x, t)
+                named[x.idx] += x.count
+        got = any(named[k] > total(norm(t[("n", k)])) or self.repeats(fn.body.nodes[k].fn) for k in named)
+        self._repeats[id(fn)] = (fn, got)
+        return got
+
+    def reads(self, fn: Any) -> _Reads:
+        hit = self._reads.get(id(fn))
+        if hit is not None:
+            return hit[1]
+        if isinstance(fn, PrimitiveDefinition):
+            lazy = getattr(fn, "evaluate_lazy", None) is not None
+            cand = [lazy and not isinstance(t, Value) for _, t in fn.params]
+            r = _Reads(tuple(() if c else full(t.leaves) for c, (_, t) in zip(cand, fn.params)),
+                       tuple(full(t.leaves) if c else () for c, (_, t) in zip(cand, fn.params)),
+                       int(lazy), fn.ret.w if lazy else 0, False)
+        else:
+            m = _Marks("p")
+            for node in fn.body.nodes:
+                self.node(node, m)
+            r = m.reads(len(fn.body.params))
+        self._reads[id(fn)] = (fn, r)
+        return r
+
+    def node(self, node: Node, m: _Marks) -> None:
+        r = self.reads(node.fn)
+        n = node.n if node.form in ("batch", "scan") else 1
+        m.select_gates += n * r.select_gates
+        m.select_bits += n * r.select_bits
+        m.approximate |= r.approximate
+        for got, into in ((r.direct, m.direct), (r.pool, m.pool)):
+            if node.form in ("primitive", "call"):
+                for a, sub in zip(node.args, got):
+                    m.mark(a.refs, sub, into)
+            elif node.form == "batch":
+                for a, ax, sub in zip(node.args, node.axes, got):
+                    m.mapped(a, ax, node.n, sub, into)
+            else:  # scan: iteration 0 reads the init as its carry; the others read the carry the one before returned
+                k = node.n_xs
+                m.mark(node.args[0].refs, got[0], into)
+                for a, sub in zip(node.args[1:1 + k], got[1:1 + k]):
+                    m.mapped(a, 0, node.n, sub, into)
+                for a, sub in zip(node.args[1 + k:], got[1 + k:]):
+                    m.mark(a.refs, sub, into)
+
+
+# -- classes ---------------------------------------------------------------------------------------------------------
+
+
+def _kind(fn: Any) -> tuple[str, str | None]:
+    if isinstance(fn, PrimitiveDefinition):
+        when = input_id(fn.id)
+        return ("input", when[0]) if when else ("primitive", None)
+    return "composite", None
+
+
+def _rule(fn: Any) -> dict[str, int] | None:
+    rule = FAMILY_COUNTS.get(family(fn))
+    if rule is None:
+        return None
+    got = rule(dict(fn.bindings))
+    bad = {k: v for k, v in got.items() if k not in COUNTERS or not isinstance(v, int) or isinstance(v, bool) or v < 0}
+    if bad:
+        raise ValueError(f"FAMILY_COUNTS[{family(fn)!r}] gives {bad} for {descriptor_id(fn)}: a rule gives non-negative ints for "
+                         f"{', '.join(COUNTERS)}")
+    return got
+
+
+def _classes(root: Any) -> tuple[dict[str, dict], dict[int, str], dict[int, tuple[int, ...]]]:
+    """The classes under `root`: their entries, the descriptor id by `id(fn)`, and each class's counters per instance."""
+    fns: dict[int, Any] = {}
+    kids: dict[int, Counter] = {}
+    post: list[Any] = []
+    seen: set[int] = set()
+    stack: list = [(root, None)]
+    while stack:
+        fn, it = stack.pop()
+        if it is None:
+            if id(fn) in seen:
+                continue
+            seen.add(id(fn))
+            if isinstance(fn, PrimitiveDefinition):
+                post.append(fn)
+                continue
+            c = kids[id(fn)] = Counter()
+            for nd in fn.body.nodes:
+                fns[id(nd.fn)] = nd.fn
+                c[id(nd.fn)] += nd.n if nd.form in ("batch", "scan") else 1
+            it = iter(list(c))
+        nxt = next(it, None)
+        if nxt is None:
+            post.append(fn)
+        else:
+            stack.append((fn, it))
+            stack.append((fns[nxt], None))
+
+    ids: dict[int, str] = {}
+    prims: dict[int, Counter] = {}
+    counts: dict[int, tuple[int, ...]] = {}
+    for fn in post:
+        i = id(fn)
+        if isinstance(fn, PrimitiveDefinition):
+            prims[i] = Counter({fn.id: 1})
+            counts[i] = (PRODUCTS.get(fn.id, 0), 0, 0)
+        else:
+            p: Counter = Counter()
+            c = [0, 0, 0]
+            for k, mult in kids[i].items():
+                for pid, g in prims[k].items():
+                    p[pid] += mult * g
+                for j in range(3):
+                    c[j] += mult * counts[k][j]
+            if family(fn) in PRODUCTS:
+                c[0] = PRODUCTS[family(fn)]
+            rule = _rule(fn) if fn is not root else None
+            if rule:
+                c = [rule.get(name, c[j]) for j, name in enumerate(COUNTERS)]
+            prims[i], counts[i] = p, tuple(c)
+        if fn is not root:
+            ids[i] = descriptor_id(fn)
+
+    inst: Counter = Counter({id(root): 1})
+    for fn in reversed(post):
+        for k, mult in kids.get(id(fn), {}).items():
+            inst[k] += inst[id(fn)] * mult
+
+    classes: dict[str, dict] = {}
+    for fn in post:
+        if fn is root:
+            continue
+        cid = ids[id(fn)]
+        if cid in classes:  # two objects under one id are one definition (`E_IDENTITY` refuses anything else)
+            classes[cid]["instances"] += inst[id(fn)]
+            continue
+        kind, binding = _kind(fn)
+        statics = {} if isinstance(fn, PrimitiveDefinition) else {k: _static_json(fn.bindings[k]) for k in fn.defn.statics}
+        classes[cid] = {"family": family(fn), "statics": statics, "kind": kind, "binding": binding, "instances": inst[id(fn)],
+                        "gates": fn.gates, "primitives": dict(sorted(prims[id(fn)].items())),
+                        **dict(zip(COUNTERS, counts[id(fn)]))}
+    return classes, ids, counts
+
+
+# -- values ----------------------------------------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=None)
+def _width(t: Type) -> int | None:
+    return t.homogeneous_width()
+
+
+@lru_cache(maxsize=None)
+def _all_bits(t: Type) -> int:
+    return _bits(t, 0, t.leaves)
+
+
+def _bits(t: Type, lo: int, hi: int) -> int:
+    """The summed widths of leaves `[lo, hi)` of `t`, computed structurally."""
+    if hi <= lo:
+        return 0
+    w = _width(t)
+    if w is not None:
+        return (hi - lo) * w
+    if isinstance(t, Array):
+        L = t.elem.leaves
+        a, b = lo // L, (hi - 1) // L
+        if a == b:
+            return _bits(t.elem, lo - a * L, hi - a * L)
+        return _bits(t.elem, lo - a * L, L) + (b - a - 1) * _all_bits(t.elem) + _bits(t.elem, 0, hi - b * L)
+    fields = t.fields if isinstance(t, TupleT) else [ft for _, ft in t.fields] if isinstance(t, Record) else None
+    if fields is None:
+        raise TypeError(t)
     out, pos = 0, 0
     for ft in fields:
-        out += _bits(ft, restrict(iv, pos, pos + ft.leaves))
-        pos += ft.leaves
+        n = ft.leaves
+        if pos + n > lo and pos < hi:
+            out += _bits(ft, max(lo, pos) - pos, min(hi, pos + n) - pos)
+        pos += n
     return out
 
 
-def _passes(by_step: dict[int, list], ascending: bool) -> list[tuple[int, Intervals]]:
-    """[(step, the leaves whose first (ascending) or last read is that step)]."""
-    out, seen = [], ()
-    for t in sorted(by_step, reverse=not ascending):
-        iv = norm(by_step[t])
-        new = _minus(iv, seen)
-        if new:
-            out.append((t, new))
-        seen = norm(seen + iv)
-    return out
+def _minus(a: Intervals, b: list[tuple[int, int]]) -> Intervals:
+    n = max((hi for _, hi in a), default=0)
+    return isect(a, tuple(complement(norm((max(lo, 0), min(hi, n)) for lo, hi in b), n)))
 
 
-def _memory(body: Body, calls: Sequence[int], step_of: dict[int, int], nsteps: int) -> list[dict]:
-    reads: dict[int, dict[int, list]] = {}
-    for k in calls:
-        out: dict[tuple[str, int], list] = {}
-        for a in body.nodes[k].args:
-            ref_intervals(a.refs, out)
-        for (_s, j), iv in out.items():
-            reads.setdefault(j, {}).setdefault(step_of[k], []).extend(iv)
-    outs: dict[tuple[str, int], list] = {}
-    ref_intervals(body.ret, outs)
-    mem = [{"inputs": {"run_bits": 0, "registered_bits": 0}, "written_bits": 0, "lifetimes": Counter(), "held_input_bits": 0,
-            "input_lifetimes": Counter(), "output_bits": 0} for _ in range(nsteps)]
-    for j, by_step in reads.items():
-        nd = body.nodes[j]
-        if j in step_of:
-            births, written, life = [(step_of[j], ((0, nd.out.leaves),))], "written_bits", "lifetimes"
+def _segments(L: int, spans: list[tuple[int, int, tuple]]) -> Iterable[tuple[int, int, frozenset]]:
+    """`[0, L)` cut into maximal runs over which the set of tags of the spans covering a leaf is the same."""
+    ev: list[tuple[int, int, tuple]] = []
+    for lo, hi, tag in spans:
+        ev.append((lo, 1, tag))
+        ev.append((hi, 0, tag))
+    ev.sort(key=lambda e: (e[0], e[1]))
+    active: Counter = Counter()
+    pos, i, run = 0, 0, None
+    while pos < L:
+        while i < len(ev) and ev[i][0] <= pos:
+            _, start, tag = ev[i]
+            active[tag] += 1 if start else -1
+            if not active[tag]:
+                del active[tag]
+            i += 1
+        nxt = min(ev[i][0] if i < len(ev) else L, L)
+        tags = frozenset(active)
+        if run is not None and run[2] == tags:
+            run = (run[0], nxt, tags)
         else:
-            when = "run_bits" if input_id(nd.fn.id)[0] == RUN_BINDING else "registered_bits"  # type: ignore[index]
-            births = _passes(by_step, True)
-            for t, iv in births:
-                mem[t]["inputs"][when] += _bits(nd.out, iv)
-            if when != "run_bits":
+            if run is not None:
+                yield run
+            run = (pos, nxt, tags)
+        pos = nxt
+    if run is not None:
+        yield run
+
+
+def census(program: Any, ends: list[int] | None = None, digest: str | None = None) -> dict:
+    """The census/v1 of `program` (a `Program` or a `DecodedProgram`) over the steps `ends` (default: one step), naming the
+    Program by `digest` (`codec.program_digest`) when given."""
+    root = program.root
+    nodes = root.body.nodes
+    I = sum(1 for nd in nodes if is_input(nd.fn))
+    if any(not is_input(nd.fn) for nd in nodes[:I]):
+        raise ValueError("a root's input nodes come first (PROTOCOL.md §5.2)")
+    ends = list(ends) if ends is not None else ([len(nodes)] if len(nodes) > I else [])
+    if any(b <= a for a, b in zip([I] + ends, ends)) or (ends and ends[-1] != len(nodes)) or (not ends and len(nodes) > I):
+        raise ValueError(f"step ends {ends[:8]} are not increasing root-node indices past the {I} input nodes ending at {len(nodes)}")
+
+    classes, ids, counts = _classes(root)
+    callees = sorted({ids[id(nd.fn)] for nd in nodes})
+    at = {c: i for i, c in enumerate(callees)}
+    mult = [nd.n if nd.form in ("batch", "scan") else 1 for nd in nodes]
+
+    an = _Analysis()
+    spans: list[list[tuple[int, int, tuple]]] = [[] for _ in nodes]
+    sel: dict[int, tuple[int, int]] = {}
+    approximate = False
+    for k in range(I, len(nodes)):
+        m = _Marks("n")
+        an.node(nodes[k], m)
+        approximate |= m.approximate
+        for tag, got in ((0, m.direct), (1, m.pool)):
+            for j, ivs in got.items():
+                spans[j].extend((lo, hi, (tag, k)) for lo, hi in norm(ivs))
+        if m.select_gates:
+            sel[k] = (m.select_gates, m.select_bits)
+    out = _Marks("n")
+    out.walk(root.body.ret, out.direct)
+    for j, ivs in out.direct.items():
+        spans[j].extend((lo, hi, (2, 0)) for lo, hi in norm(ivs))
+    al = _Aliases(an, root.body)
+    for j in range(len(nodes) - 1, I - 1, -1):  # a leaf a node passes through is its producer's value: its readers read that
+        runs = [(lo + q, lo + q + x.count, x) for lo, _hi, s in al.node(j) for q, x, _ in al.resolve(s, True)]
+        if an.repeats(nodes[j].fn):  # and a leaf naming the gate an earlier one names is that one
+            passed = norm((lo, hi) for lo, hi, _ in runs)
+            first: dict[int, int] = {}
+            for t in range(nodes[j].out.leaves):
+                if not contains(passed, t):
+                    g = first.setdefault(resolve(program.circuit.root_scope, ("n", j, t)), t)
+                    if g != t:
+                        runs.append((t, t + 1, Affine("n", j, g, 1)))
+        if not runs:
+            continue
+        kept, moved = [], []
+        for a, b, tag in spans[j]:
+            for lo, hi, x in runs:
+                if lo < b and hi > a:
+                    m = _Marks("n")
+                    m.walk(x.slice(max(a, lo) - lo, min(b, hi) - lo), m.direct)
+                    moved.extend((p, u, v, tag) for p, ivs in m.direct.items() for u, v in norm(ivs))
+            kept.extend((u + a, v + a, tag) for u, v in _minus(((0, b - a),), [(lo - a, hi - a) for lo, hi, _ in runs]))
+        spans[j] = kept + [(lo, hi, (3, 0)) for lo, hi, _ in runs]
+        for p, u, v, tag in moved:  # an earlier node's, or this one's own first naming of a gate
+            spans[p].append((u, v, tag))
+
+    values: dict[str, list] = {"producer": [], "lo": [], "hi": [], "bits": [], "reads": [], "output": []}
+    pools: dict[int, list[int]] = {k: [] for k in sel}
+    for j, nd in enumerate(nodes):
+        for lo, hi, tags in _segments(nd.out.leaves, spans[j]):
+            if (3, 0) in tags:
                 continue
-            written, life = "held_input_bits", "input_lifetimes"
-        lasts = _passes(by_step, False)
-        for tb, ivb in births:
-            for tl, ivl in lasts:
-                if tl > tb and (n := _bits(nd.out, _isect(ivb, ivl))):
-                    mem[tb][written] += n
-                    mem[tb][life][tl - tb] += n
-    for (_s, j), iv in outs.items():
-        if j in step_of:
-            mem[step_of[j]]["output_bits"] += _bits(body.nodes[j].out, norm(iv))
-    for m in mem:
-        for life in ("lifetimes", "input_lifetimes"):
-            m[life] = {str(d): n for d, n in sorted(m[life].items())}
-    return mem
+            v = len(values["producer"])
+            values["producer"].append(j)
+            values["lo"].append(lo)
+            values["hi"].append(hi)
+            values["bits"].append(_bits(nd.out, lo, hi))
+            values["reads"].append(sorted(k for t, k in tags if t == 0))
+            values["output"].append((2, 0) in tags)
+            for t, k in tags:
+                if t == 1:
+                    pools.setdefault(k, []).append(v)
+    ks = sorted(pools)
+    selects = {"call": ks, "gates": [sel.get(k, (0, 0))[0] for k in ks], "bits": [sel.get(k, (0, 0))[1] for k in ks],
+               "values": [pools[k] for k in ks]}
+
+    steps: dict[str, list] = {"ends": ends, "gates": [], **{c: [] for c in COUNTERS}, "select_gates": [], "select_bits": []}
+    for a, b in zip([I] + ends, ends):
+        steps["gates"].append(sum(nodes[k].gates for k in range(a, b)))
+        for j, c in enumerate(COUNTERS):
+            steps[c].append(sum(mult[k] * counts[id(nodes[k].fn)][j] for k in range(a, b)))
+        steps["select_gates"].append(sum(sel[k][0] for k in range(a, b) if k in sel))
+        steps["select_bits"].append(sum(sel[k][1] for k in range(a, b) if k in sel))
+
+    inputs = {when: {"gates": 0, "bits": 0} for when in ("run", "registration")}
+    for nd in nodes[:I]:
+        inputs[input_id(nd.fn.id)[0]]["gates"] += nd.gates
+        inputs[input_id(nd.fn.id)[0]]["bits"] += _all_bits(nd.out)
+    top = [sum(mult[k] * counts[id(nodes[k].fn)][j] for k in range(I, len(nodes))) for j in range(3)]
+    totals = {"gates": root.gates, "computed_gates": root.gates - sum(x["gates"] for x in inputs.values()), "inputs": inputs,
+              "value_bits": sum(b for p, b in zip(values["producer"], values["bits"]) if p >= I),
+              "values": len(values["producer"]), "classes": len(classes), **dict(zip(COUNTERS, top)),
+              "select_gates": sum(g for g, _ in sel.values()), "select_bits": sum(b for _, b in sel.values())}
+    return seal({"schema": SCHEMA, "program": digest, "classes": classes, "callees": callees, "inputs": I,
+                 "nodes": {"callee": [at[ids[id(nd.fn)]] for nd in nodes], "n": mult}, "steps": steps, "values": values,
+                 "selects": selects, "totals": totals, "approximate": approximate})
 
 
-def _isect(a: Intervals, b: Intervals) -> Intervals:
-    return _minus(a, _minus(a, b))
+def step_of(doc: dict) -> Callable[[int], int]:
+    """Root node -> its step in a census (-1 for an input node)."""
+    I, ends = doc["inputs"], doc["steps"]["ends"]
+    return lambda k: -1 if k < I else bisect.bisect_right(ends, k)
 
 
-def _memory_total(mem: list[dict]) -> dict:
-    out: dict[str, Any] = {"inputs": {w: sum(m["inputs"][w] for m in mem) for w in ("run_bits", "registered_bits")}}
-    longest = 0
-    for written, life in (("written_bits", "lifetimes"), ("held_input_bits", "input_lifetimes")):
-        acc: Counter = Counter()
-        for m in mem:
-            acc.update({int(d): n for d, n in m[life].items()})
-        out[written] = sum(m[written] for m in mem)
-        out[life] = {str(d): n for d, n in sorted(acc.items())}
-        longest = max(longest, max(acc, default=0))
-    out["max_lifetime"] = longest
-    out["output_bits"] = sum(m["output_bits"] for m in mem)
-    return out
-
-
-__all__ = ["CONSTANT", "CONST_ID", "Census", "GATHER_ID", "KINDS", "Kind", "Mma", "PRODUCTS", "REGISTERED", "ROUNDINGS", "RUN",
-           "S32", "S8", "SCHEMA", "SELECTED", "TAG", "VERSION", "census", "classify", "count", "digest", "kind", "product_class",
-           "spec"]
+__all__ = ["SCHEMA", "PRODUCTS", "COUNTERS", "FAMILY_COUNTS", "census", "family", "seal", "step_ends", "step_of"]

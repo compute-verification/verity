@@ -63,7 +63,6 @@ import Flock.Firewall
 import Flock.Firewall.Contract
 import Flock.Firewall.Assumptions
 import Flock.Firewall.Released
-import Flock.Firewall.Frame
 import Flock.Witness
 import Flock.With.Returns
 import Flock.With.ReturnsWalk

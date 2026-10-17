@@ -1,252 +1,239 @@
-"""`verity.ml.circuits.census` and `verity.ml.circuits.stacking` on small synthetic Programs: exact int8 Programs pass, and a
-clamping, wrapping, FP-smuggling, rounding-heavy or input-holding one fails with its reason."""
+"""`verity.ml.circuits.census`: census/v1 against the lowered circuit (each value's bits, readers, candidates and output from the
+gates' operands, its classes from the activations), served MACs and family rules, steps, and the digest."""
 from __future__ import annotations
 
-import json
+from collections import Counter, defaultdict
 
 import pytest
 
-from verity.ml.circuits import census as C
-from verity.ml.circuits import stacking as P
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
-from verity.ml.circuits.ops import prims
-from verity.ml.circuits.ops import fp32
+from test_ir_liveness import Add16, Add32, Embedding, Gemm, Mul16, comp, prim, programs as liveness_programs
+from verity.ml.circuits import census as CE
+from verity.ml.circuits.census import census, seal, step_ends
+from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of, tuple_of
-from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, s32_value, s32_word
-from verity.ml.circuits.types import Array, Tuple as TupleT, Value
+from verity.ml.circuits.refs import Coll, array_of, strided_view, tuple_of
+from verity.ml.circuits.types import Array, Tuple, Value
 
-S8, S32 = Value(8), Value(32)
-IMMA = prims.BlackwellS8ImmaDot32
-QMMA = prims.BlackwellE4m3QmmaDot32
+V16, V32 = Value(16), Value(32)
+A4 = Array(4, V16)
 
-#: a wrapping s8 step (the IMMA without .satfinite, which has no registry entry): unclassified
-WRAP = PrimitiveDefinition("TestS8ImmaWrap", 1, (("acc", S32), ("a", Array(32, S8)), ("b", Array(32, S8))), S32,
-                           lambda *v: 0, register=False)
+Lookup = prim("TLookup16", [("i", V32), ("xs", Array(16, V16))], V16, lambda i, *xs: xs[i % 16])
+Lookup.evaluate_lazy = lambda get: get(1 + get(0) % 16)  # type: ignore[attr-defined]
+Argmax = prim("TArgmax", [("a", A4)], V32, lambda *a: max(range(4), key=lambda j: a[j]))
+Dup = comp("TDup", [("x", V32)], Tuple(V32, V32), lambda Bd, S, x: tuple_of(x, Bd.call(Add32, x, x)))
 
-
-def _step(K: int, mma=IMMA) -> CompositeDefinition:
-    """One step: acc + x . w over K s8 lanes, as K/32 chained steps of `mma`."""
-    def body(B, _S, acc, x, w):
-        for j in range(K // 32):
-            acc = B.call(mma, acc, x[32 * j:32 * (j + 1)], w[32 * j:32 * (j + 1)])
-        return acc
-    return CompositeDefinition(f"TestStep{K}{mma.name}", 1, (), lambda _S: ((("acc", S32), ("x", Array(K, S8)), ("w", Array(K, S8))), S32),
-                               body, register=False)
+Embed = comp("TEmbed", [("tok", V32), ("table", Array(16, A4))], A4,
+             lambda Bd, S, tok, table: Bd.batch(Lookup, tok, Coll(Array(4, Array(16, V16)), strided_view(table, 0, 16, 1, 4, 64)),
+                                                axes=(None, 0)))
 
 
-def _fma_epilogue(B, _S, acc):
-    """Two FP32 roundings on an accumulator word, one of them the add of a run x run product."""
-    return B.call(fp32.F32Add, B.call(fp32.F32Fma, acc, acc, acc), acc)
+def _layer(Bd, S, h, w):
+    k = Bd.batch(Mul16, h, w, axes=(0, 0))
+    return tuple_of(k, Bd.batch(Add16, h, k, axes=(0, 0)))
 
 
-EPILOGUE = CompositeDefinition("TestEpilogue", 1, (), lambda _S: ((("acc", S32),), S32), _fma_epilogue, register=False)
+Layer = comp("TLayer", [("h", A4), ("w", A4)], Tuple(A4, A4), _layer)
 
 
-def int8_program(S: int = 3, K: int = 64, *, mmas=None, acc0="zero", epilogue=False, reread=None) -> tuple[Program, list[int]]:
-    """S steps: step s reads its run input x[s] and the registered w, and starts from step s-1's accumulator (dynamic memory);
-    step 0 from zero, or from the run input `c` when acc0 = "input". `epilogue`: each step also outputs `EPILOGUE` of its
-    accumulator. `reread`: (step, earlier step) whose x that step reads again. Returns the Program and its steps' first Calls."""
-    steps = [_step(K, m) for m in (mmas or [IMMA] * S)]
-    params = [("x", Array(S, Array(K, S8))), ("w", Array(K, S8))] + ([("c", S32)] if acc0 == "input" else [])
-    starts: list[int] = []
-
-    def body(B, _S, x, w, *c):
-        inputs = len(B.nodes)
-        starts[:] = [0]
-        acc = c[0] if acc0 == "input" else B.call(prims.ZERO32)
-        outs = []
-        for s, st in enumerate(steps):
-            if s:
-                starts.append(len(B.nodes) - inputs)
-            acc = B.call(st, acc, x[s], w)
-            if reread and reread[0] == s:
-                acc = B.call(_step(K), acc, x[reread[1]], w)
-            outs.append(B.call(EPILOGUE, acc) if epilogue else acc)
-        return array_of(outs)
-
-    fn = CompositeDefinition("TestInt8Program", 1, (), lambda _S: (tuple(params), Array(S, S32)), body, register=False)
-    return Program(fn, registered=("w",)), list(starts)
+def _attn(Bd, S, q, kv):
+    acc = q
+    for t in range(S.T):
+        acc = Bd.batch(Add16, acc, kv[t], axes=(0, 0))
+    return acc
 
 
-def test_the_s8_step_is_the_silicon_model():
-    a, b = [127] * 32, [0x80] * 32  # 127 x -128
-    assert IMMA.evaluate(s32_word(5), *a, *b) == BLACKWELL_SM120_S8_M16N8K32.step(s32_word(5), a, b)
-    assert s32_value(IMMA.evaluate(s32_word(5), *a, *b)) == 5 - 32 * 127 * 128
-    assert s32_value(IMMA.evaluate(s32_word(C.S32[0]), *a, *b)) == C.S32[0]  # .satfinite clamps once, at D
+Attn = CompositeDefinition("TAttn", 1, ("T",), lambda S: ((("q", A4), ("kv", Array(S.T, A4))), A4), _attn, register=False)
+Select = comp("TSelect", [("a", A4)], V32, lambda Bd, S, a: Bd.call(Argmax, a))
 
 
-def test_an_exact_int8_program_passes():
-    program, starts = int8_program()
-    cen = C.census(program, starts)
-    t = cen.total
-    assert t["mma"] == {"BlackwellS8ImmaDot32_v1": {"kind": "s8-imma", "k": 32, "steps": 6, "exact": 6}}
-    assert t["macs"] == {"exact_s8": 192, "other": 0}
-    assert t["products"] == {"rr": 0, "rsel": 0, "rs": 192} and t["mma_acc"] == {"rr": 0, "rsel": 0, "rs": 6}
-    assert P.roundings(t) == 0 and not t["unclassified"] and not cen.may_overflow
-    mem = [s["memory"] for s in cen.steps]
-    assert [m["inputs"] for m in mem] == [{"run_bits": 512, "registered_bits": 512}] + [{"run_bits": 512, "registered_bits": 0}] * 2
-    assert [m["lifetimes"] for m in mem] == [{"1": 32}, {"1": 32}, {}]
-    assert [m["output_bits"] for m in mem] == [32, 32, 32]
-    assert cen.memory["max_lifetime"] == 1
-    v = P.check(cen, c=0, R_in=64, L=1, windows=[P.Window(range(s, s + 1), 64) for s in range(3)])
-    assert v.ok and v.reasons == (), v.reasons
-    assert v.numbers["windows"][0] == {"steps": [0, 1], "reads": 64, "roundings": 0, "products": 0, "input_bytes": "64"}
+def _request(Bd, S, toks, table, w):
+    tok, kvs, out = toks[0], [], []
+    for s in range(S.T):
+        kq = Bd.call(Layer, Bd.call(Embed, tok, table), w)
+        kvs.append(kq[0])
+        tok = Bd.call(Select, Bd.call(bind(Attn, T=s + 1), kq[1], array_of(kvs)))
+        out.append(tok)
+    return array_of(out)
 
 
-def test_the_census_json_is_canonical_and_names_its_table():
-    program, starts = int8_program()
-    j = C.census(program, starts).to_json()
-    assert j["schema"] == "verity/census/v1" and j["classes"] == C.digest()
-    assert json.loads(canonical_json(j)) == j
-    assert C.census(program, starts).to_json() == j
-    assert set(j["definitions"]) == {"Const32[0x00000000]_v1", "TestStep64BlackwellS8ImmaDot32_v1"}
-    assert j["definitions"]["TestStep64BlackwellS8ImmaDot32_v1"]["calls"] == 3
+Request = CompositeDefinition("TRequest", 1, ("T",), lambda S: ((("toks", Array(1, V32)), ("table", Array(16, A4)), ("w", A4)),
+                                                                Array(S.T, V32)), _request, register=False)
 
 
-@pytest.mark.parametrize("unrolled", [True, False])
-def test_an_accumulation_that_can_clamp_fails_and_one_step_shorter_is_exact(unrolled):
-    """32 n products of s8 codes reach (-128)^2 * 32 n: exact in s32 up to n = 4095 chained steps, past it at 4096."""
-    for n, exact in ((4095, True), (4096, False)):
-        if unrolled:
-            program, starts = int8_program(S=1, K=32 * n)
-        else:
-            program, starts = _scan_program(n)
-        cen = C.census(program, starts)
-        m = cen.total["mma"]["BlackwellS8ImmaDot32_v1"]
-        assert m["steps"] == n
-        if exact:
-            assert m["exact"] == n and not cen.may_overflow
+def request(T: int = 3) -> Program:
+    """Steps of an embedding gather (a selection among the registered table), a layer that writes a KV row, attention over every
+    row so far and a sampling event (`TSelect_v1`)."""
+    return Program(bind(Request, T=T), registered=("table", "w"))
+
+
+def _passes(Bd, S, x):
+    d = Bd.call(Dup, x[0])
+    return Bd.call(Add32, d[0], Bd.call(Add32, d[1], x[1]))
+
+
+Col = comp("TCol", [("x", Array(3, V32))], V32, lambda Bd, S, x: Bd.call(Add32, x[0], x[2]))
+
+
+def programs():
+    yield from liveness_programs()
+    yield "request", request()
+    yield "pass-through", Program(comp("TPasses", [("x", Array(2, V32))], V32, _passes))
+    yield "columns", Program(comp("TColumns", [("M", Array(3, Array(4, V32)))], Array(4, V32),
+                                  lambda Bd, S, M: Bd.batch(Col, M, axes=(1,))))
+
+
+def brute(P: Program) -> dict:
+    """Per leaf a root node produces (the first naming of each gate): its width, the Calls whose gates take it as a direct operand,
+    those that have it among a selection's candidates, and whether the root returns it."""
+    C, nodes, off = P.circuit, P.root.body.nodes, P.root.body.offsets
+    first: dict[int, tuple[int, int]] = {}
+    for j, nd in enumerate(nodes):
+        for t in range(nd.out.leaves):
+            first.setdefault(resolve(C.root_scope, ("n", j, t)), (j, t))
+    leaves = {leaf: {"bits": C.gate(g).prim.ret.w, "reads": set(), "cands": set(), "output": False} for g, leaf in first.items()}
+    for k, nd in enumerate(nodes):
+        for g in range(off[k], off[k + 1]):
+            gate = C.gate(g)
+            lazy = hasattr(gate.prim, "evaluate_lazy")
+            pos = 0
+            for _, t in gate.prim.params:
+                for o in gate.operands[pos:pos + t.leaves]:
+                    if not off[k] <= o < off[k + 1]:
+                        leaves[first[o]]["cands" if lazy and not isinstance(t, Value) else "reads"].add(k)
+                pos += t.leaves
+    for g in C.root_outputs():
+        leaves[first[g]]["output"] = True
+    return leaves
+
+
+def signatures(c: dict) -> list[dict]:
+    """Per value: its readers, the Calls it is a candidate of, and whether it is an output."""
+    cands: dict[int, set] = defaultdict(set)
+    for k, vs in zip(c["selects"]["call"], c["selects"]["values"]):
+        for v in vs:
+            cands[v].add(k)
+    v = c["values"]
+    return [{"reads": set(r), "cands": cands[i], "output": o} for i, (r, o) in enumerate(zip(v["reads"], v["output"]))]
+
+
+def per_leaf(c: dict) -> dict:
+    v, sig = c["values"], signatures(c)
+    return {(j, t): sig[i] for i, (j, lo, hi) in enumerate(zip(v["producer"], v["lo"], v["hi"])) for t in range(lo, hi)}
+
+
+@pytest.mark.parametrize("label,P", list(programs()), ids=lambda x: x if isinstance(x, str) else "")
+def test_values_are_the_gates_operands(label, P):
+    """Every leaf a root node produces is in exactly one value; its readers, candidacy and output are the lowered circuit's, and a
+    value's bits are its gates' widths."""
+    c = census(P)
+    want = brute(P)
+    got = per_leaf(c)
+    assert set(got) == set(want), label
+    for leaf, w in want.items():
+        assert got[leaf] == {k: w[k] for k in ("reads", "cands", "output")}, (label, leaf)
+    v, sig = c["values"], signatures(c)
+    for j, lo, hi, bits in zip(v["producer"], v["lo"], v["hi"], v["bits"]):
+        assert bits == sum(want[(j, t)]["bits"] for t in range(lo, hi)), label
+    for i in range(1, len(sig)):  # maximal runs: adjacent values of one producer differ
+        if v["producer"][i] == v["producer"][i - 1] and v["lo"][i] == v["hi"][i - 1]:
+            assert sig[i] != sig[i - 1], label
+    assert not c["approximate"]
+
+
+def _activations(P: Program) -> Counter:
+    got: Counter = Counter()
+    todo = list(P.circuit.root_calls(primitive_batches=None))
+    while todo:
+        fc = todo.pop()
+        if fc.is_primitive:
             continue
-        assert m["exact"] < n and cen.may_overflow
-        site = cen.may_overflow[0]
-        assert site["sum"][1] > C.S32[1]
-        v = P.check(cen, c=0, R_in=10 ** 9, L=1, windows=[P.Window(range(1), 10 ** 9)])
-        assert [r["code"] for r in v.reasons] == ["s8-may-overflow"]
+        got[descriptor_id(fc.fn)] += 1
+        todo.extend(fc.children())
+    return got
 
 
-def _scan_program(n: int) -> tuple[Program, list[int]]:
-    """One step: the accumulator carried through a scan over n blocks of 32 lanes."""
-    def step_body(B, _S, acc, x, w):
-        d = B.call(IMMA, acc, x, w)
-        return tuple_of(d, d)
-
-    step = CompositeDefinition("TestScanStep", 1, (), lambda _S: ((("acc", S32), ("x", Array(32, S8)), ("w", Array(32, S8))),
-                                                                 TupleT((S32, S32))), step_body, register=False)
-
-    def body(B, _S, x, w):
-        out = B.scan(step, B.call(prims.ZERO32), xs=[x], shared=[w])
-        return out[0]
-
-    fn = CompositeDefinition("TestScanProgram", 1, (), lambda _S: ((("x", Array(n, Array(32, S8))), ("w", Array(32, S8))), S32), body,
-                             register=False)
-    return Program(fn, registered=("w",)), [0]
+@pytest.mark.parametrize("label,P", list(programs()), ids=lambda x: x if isinstance(x, str) else "")
+def test_classes_count_the_activations_and_gates(label, P):
+    c = census(P)
+    C = P.circuit
+    prims = Counter(C.gate(g).prim.id for g in range(C.size))
+    cl = c["classes"]
+    assert {k: e["instances"] for k, e in cl.items() if e["kind"] != "composite"} == dict(prims), label
+    assert {k: e["instances"] for k, e in cl.items() if e["kind"] == "composite"} == dict(_activations(P)), label
+    for e in cl.values():
+        assert e["gates"] == sum(e["primitives"].values())
+    assert sum(e["instances"] for e in cl.values() if e["kind"] != "composite") == c["totals"]["gates"] == P.gates
+    inputs = c["totals"]["inputs"]
+    assert inputs["run"]["gates"] + inputs["registration"]["gates"] == P.input_gates
+    assert c["totals"]["computed_gates"] == sum(c["steps"]["gates"]) == P.gates - P.input_gates
 
 
-def test_an_accumulator_from_a_run_input_can_clamp():
-    program, starts = int8_program(acc0="input")
-    cen = C.census(program, starts)
-    assert cen.total["mma"]["BlackwellS8ImmaDot32_v1"]["exact"] < 6
-    assert cen.may_overflow[0]["acc"] == list(C.S32)
-    v = P.check(cen, c=0, R_in=10 ** 9, L=1, windows=[P.Window(range(3), 192)])
-    assert "s8-may-overflow" in [r["code"] for r in v.reasons]
+def test_the_request_census():
+    P = request()
+    c = census(P, step_ends(P, {"TSelect_v1"}))
+    assert c["inputs"] == 3 and c["steps"]["ends"] == [7, 11, 15]
+    assert [c["callees"][i] for i in c["nodes"]["callee"][3:7]] == ["TEmbed_v1", "TLayer_v1", "TAttn_v1{T=1}", "TSelect_v1"]
+    assert c["classes"]["TLookup16_v1"] == {"family": "TLookup16_v1", "statics": {}, "kind": "primitive", "binding": None,
+                                            "instances": 12, "gates": 1, "primitives": {"TLookup16_v1": 1}, "served_macs": 0,
+                                            "tail_atoms": 0, "receipt_folds": 0}
+    assert c["classes"]["TAttn_v1{T=2}"]["statics"] == {"T": 2} and c["classes"]["TAttn_v1{T=2}"]["gates"] == 8
+    assert c["classes"]["RegisteredInput16_v1"]["binding"] == "registration" and c["classes"]["Input32_v1"]["binding"] == "run"
+    assert c["totals"]["inputs"] == {"run": {"gates": 1, "bits": 32}, "registration": {"gates": 68, "bits": 1088}}
+    assert c["steps"]["select_gates"] == [4, 4, 4] and c["steps"]["select_bits"] == [64, 64, 64]
+    # each Embed selects among the whole table (input node 1), which no gate reads directly
+    table = [i for i, j in enumerate(c["values"]["producer"]) if j == 1]
+    assert c["selects"]["values"] == [table] * 3 and all(c["values"]["reads"][i] == [] for i in table)
+    # a KV row (a TLayer's k) is read by its own step's attention and every later one's
+    kv = [i for i, (j, lo) in enumerate(zip(c["values"]["producer"], c["values"]["lo"])) if j in (4, 8, 12) and lo == 0]
+    assert [c["values"]["reads"][i] for i in kv] == [[5, 9, 13], [9, 13], [13]]
 
 
-def test_a_wrapping_step_is_unclassified_and_fails():
-    program, starts = int8_program(mmas=[IMMA, WRAP, IMMA])
-    cen = C.census(program, starts)
-    assert cen.total["unclassified"] == {"TestS8ImmaWrap_v1": 2}
-    v = P.check(cen, c=0, R_in=10 ** 9, L=1, windows=[P.Window(range(3), 192)])
-    assert [r["code"] for r in v.reasons] == ["unclassified", "s8-may-overflow"]
-    assert v.reasons[0]["primitives"] == {"TestS8ImmaWrap_v1": 2}
-    assert v.reasons[1]["steps"] == {"BlackwellS8ImmaDot32_v1": 2}  # the next step starts from any s32 word
+def test_served_macs_and_family_rules(monkeypatch):
+    P = Program(bind(Gemm, K=32, N=6))
+    assert census(P)["totals"]["served_macs"] == 0
+    monkeypatch.setitem(CE.PRODUCTS, "TDot16_v1", 16)
+    c = census(P)
+    assert c["classes"]['TGemmCoordinate_v1{K=32}']["served_macs"] == 32 and c["totals"]["served_macs"] == 6 * 32
+    assert c["steps"]["served_macs"] == [192]
+    monkeypatch.setitem(CE.FAMILY_COUNTS, "TGemmCoordinate_v1", lambda S: {"served_macs": S["K"] - 2, "tail_atoms": 1})
+    c = census(P)
+    assert {k: c["totals"][k] for k in CE.COUNTERS} == {"served_macs": 180, "tail_atoms": 6, "receipt_folds": 0}
+    assert c["classes"]['TGemmCoordinate_v1{K=32}']["tail_atoms"] == 1 and c["steps"]["tail_atoms"] == [6]
+    assert c["classes"]['TDot_v1{K=32}']["served_macs"] == 32  # under the rule's class, the bottom-up count stays the class's own
+    monkeypatch.setitem(CE.FAMILY_COUNTS, "TGemmCoordinate_v1", lambda S: {"served": 1})
+    with pytest.raises(ValueError, match="non-negative ints"):
+        census(P)
 
 
-def test_a_program_smuggling_fp_mmas_fails():
-    program, starts = int8_program(mmas=[IMMA, QMMA, IMMA])
-    cen = C.census(program, starts)
-    t = cen.total
-    assert t["mma"]["BlackwellE4m3QmmaDot32_v1"] == {"kind": "fp", "k": 32, "steps": 2, "exact": 0}
-    assert t["macs"] == {"exact_s8": 64, "other": 128}  # step 2 starts from an FP word: any s32 word
-    v = P.check(cen, c=0, R_in=10 ** 9, L=1, windows=[P.Window(range(3), 192)])
-    assert [r["code"] for r in v.reasons] == ["fp-mma", "s8-may-overflow"]
-    assert v.reasons[0]["steps"] == {"BlackwellE4m3QmmaDot32_v1": 2}
-    assert cen.steps[1]["macs"] == {"exact_s8": 0, "other": 64}
+def test_step_ends_and_their_refusals():
+    P = request()
+    assert step_ends(P, ()) == [len(P.root.body.nodes)] == [15] and step_ends(P, {"TSelect_v1"}) == [7, 11, 15]
+    assert census(P)["steps"]["ends"] == [15]
+    for bad in ([7, 11], [7, 7, 15], [2, 15], []):
+        with pytest.raises(ValueError, match="step ends"):
+            census(P, bad)
 
 
-def test_roundings_are_budgeted_per_certified_byte_read():
-    """An FMA epilogue on every step: 2 FP32 roundings and 1 run x run product a step. Over c (or c_rr) per certified byte
-    read it fails; within both it passes."""
-    program, starts = int8_program(epilogue=True)
-    cen = C.census(program, starts)
-    assert cen.total["roundings"]["arith"] == 6 and cen.total["products"]["rr"] == 3
-    assert cen.steps[0]["roundings"]["arith"] == 2
-    windows = [P.Window(range(3), 192)]
-    assert P.check(cen, c=0, R_in=192, L=1, windows=windows).reasons[0]["code"] == "roundings"
-    assert P.check(cen, c="1/32", R_in=192, L=1, windows=windows).ok
-    bad = P.check(cen, c="1/32", c_rr="1/128", R_in=192, L=1, windows=windows)
-    assert [r["code"] for r in bad.reasons] == ["products"] and bad.reasons[0]["products"] == 3
-    assert P.check(cen, c="1/32", c_rr="1/64", R_in=192, L=1, windows=windows).ok
+def test_the_digest_is_of_the_canonical_json():
+    P = request()
+    a, b = census(P, digest="ab" * 64), census(request())
+    assert a["digest"] == seal({k: v for k, v in a.items() if k != "digest"})["digest"]
+    assert a["program"] == "ab" * 64 and b["program"] is None and a["digest"] != b["digest"]
+    assert census(request())["digest"] == b["digest"] != census(request(2))["digest"]
+    with pytest.raises(ValueError, match="canonical JSON domain"):
+        seal({"schema": "x", "n": 2 ** 53})
 
 
-def test_inputs_lifetimes_and_coverage():
-    program, starts = int8_program(reread=(2, 0))
-    cen = C.census(program, starts)
-    assert cen.steps[0]["memory"]["input_lifetimes"] == {"2": 512}
-    assert cen.memory["max_lifetime"] == 2
-    one = [P.Window(range(s, s + 1), 64) for s in range(3)]
-    v = P.check(cen, c=0, R_in=64, L=1, windows=one)
-    assert [r["code"] for r in v.reasons] == ["lifetime"] and v.reasons[0] == {"code": "lifetime", "max_lifetime": 2, "L": 1}
-    assert P.check(cen, c=0, R_in=64, L=2, windows=one).ok
-    v = P.check(cen, c=0, R_in=63, L=2, windows=one[:2])
-    assert [r["code"] for r in v.reasons] == ["uncovered", "inputs", "inputs"]
-    assert v.reasons[0]["steps"] == [2] and v.reasons[1]["input_bytes"] == "64"
+def test_a_batch_too_large_to_enumerate_is_marked_approximate(monkeypatch):
+    monkeypatch.setattr(CE, "_MEMBER_LIMIT", 0)
+    c = census(Program(comp("TColumns2", [("M", Array(3, Array(4, V32)))], Array(4, V32),
+                            lambda Bd, S, M: Bd.batch(Col, M, axes=(1,)))))
+    assert c["approximate"] and c["values"]["reads"][0] == [1]  # every leaf of M taken as read
 
 
-def test_check_refuses_another_table_and_bad_windows():
-    program, starts = int8_program()
-    j = C.census(program, starts).to_json()
-    with pytest.raises(ValueError, match="census"):
-        P.check(dict(j, classes="00"), c=0, R_in=0, L=0, windows=[])
-    for w in (P.Window(range(0, 4), 1), P.Window(range(2, 2), 1), P.Window(range(0, 3, 2), 1), P.Window(range(3), -1)):
-        with pytest.raises(ValueError, match="window"):
-            P.check(j, c=0, R_in=0, L=0, windows=[w])
-    with pytest.raises(ValueError, match="steps"):
-        C.census(program, [1])
-
-
-def test_a_gather_selects_and_its_products_are_rsel():
-    """A run index into a registered column outputs a selected word; a product of it with a run value is ``rsel``."""
-    gather = PrimitiveDefinition("GatherBf16x4", 1, (("token", S32), ("column", Array(4, Value(16)))), Value(16),
-                                 lambda t, *c: c[t], register=False)
-    assert C.kind(gather.id) == C.Kind(gather=4)
-    raw, t = C._Provenance().call(gather, (C.RUN, C.REGISTERED))
-    assert t == C.SELECTED
-    counts = C.classify({**raw, ("Bf16MulBf16_v1", (C.SELECTED, C.RUN)): 3, ("F32Mul_v1", (C.RUN, C.REGISTERED)): 2,
-                         ("F32Mul_v1", (C.REGISTERED, C.REGISTERED)): 7})
-    assert counts["gathers"] == 1 and counts["gather_fanin"] == 4
-    assert counts["products"] == {"rr": 0, "rsel": 3, "rs": 2}
-    assert counts["roundings"] == {"cast": 3, "special": 0, "arith": 2, "integer": 0}
-
-
-def test_product_classes_and_charges():
-    assert [C.product_class(a, b) for a, b in ((C.RUN, C.RUN), (C.RUN, C.SELECTED), (C.SELECTED, C.SELECTED), (C.RUN, C.REGISTERED),
-                                               (C.SELECTED, C.CONSTANT))] == ["rr", "rsel", "rr", "rs", "rs"]
-    assert C.kind("F32Fabs_v1") == C.Kind(compare=1) and C.kind("F32BitsShl23_v1") == C.Kind(integer=1)
-    assert C.kind("Bf16ToF32_v1") == C.Kind() and C.kind("And2_v1") is None
-    assert C.kind("BlackwellS8ImmaDot32_v1").mma == C.Mma("s8-imma", 32, C.S8, C.S32)
-    div = C.classify({("F32Div_v2", (C.RUN, C.RUN)): 1, ("F32Div_v2", (C.RUN, C.REGISTERED)): 1})
-    assert div["roundings"]["special"] == 1 and div["roundings"]["arith"] == 1 and div["products"] == {"rr": 1, "rsel": 0, "rs": 1}
-
-
-def test_count_reads_a_definition_with_given_ranges():
-    st = _step(64)
-    assert C.count(st, (C.RUN, C.RUN, C.REGISTERED))["mma"]["BlackwellS8ImmaDot32_v1"]["exact"] == 0
-    assert C.count(st, (C.RUN, C.RUN, C.REGISTERED), ranges=((0, 0), None, None))["mma"]["BlackwellS8ImmaDot32_v1"]["exact"] == 2
-
-
-def test_the_table_is_pinned():
-    assert C.spec()["kinds"]["BlackwellS8ImmaDot32_v1"] == {"mma": {"kind": "s8-imma", "k": 32, "operand": [-128, 127],
-                                                                    "acc": [-(1 << 31), (1 << 31) - 1]}}
-    assert len(C.digest()) == 128
+def test_embedding_without_evaluate_lazy_reads_its_table():
+    c = census(Program(bind(Embedding)))
+    assert c["selects"] == {"call": [], "gates": [], "bits": [], "values": []}
+    assert c["values"]["reads"][:2] == [[2], [2]]
