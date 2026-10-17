@@ -341,7 +341,7 @@ class Terms:
 @dataclass(frozen=True)
 class Outcome:
     """A registration's final outcome. `verdict.codes` is empty when accepted, and otherwise the one visible symbol
-    (`reject` or `late`). `profile`: the integrity profile of an     accepted sampled selection; `exhaustive`: the fact of an
+    (`reject` or `late`). `profile`: the integrity profile of an accepted sampled selection; `exhaustive`: the fact of an
     accepted `All`. `public`: the check's public outputs, as the verifier of record reported them. `record`: the SHA-512
     of the outcome's record, which binds the registration, the draw, the delivered sessions, the audit record and, for a
     draw a `Session` covers, the session's rounds."""
