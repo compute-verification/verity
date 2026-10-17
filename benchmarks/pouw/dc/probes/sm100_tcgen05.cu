@@ -20,7 +20,8 @@
 //                         (p: two buffers, a load in flight while the other folds; f: one FFMA filler op in 8 words)
 //   tc_mxf4_m128_n256     kind::mxf4 128x256x64 alone; tcfU_<lane>: lanes beside it, exact (a deep form's coupling)
 //   tck_<mma>_n<NF>[_t<P>] honest's x128 LI lanes with NF FFMA filler a 128 words (46: L = 96's 0.36 a word), P loads a
-//                         trip, beside warp 0's i8 MMA, kind::mxf4 MMA or no MMA (a sleep), all exact (OP_UNTIL)
+//                         trip, beside warp 0's i8 MMA, kind::mxf4 MMA or no MMA (a sleep), all exact (OP_UNTIL);
+//                         tck_d<S>_n<NF>: beside 4 kind::mxf4 MMAs and an S ns sleep a trip (a part-busy deep form)
 // dc/analyze.py turns rows.jsonl into words a cycle and the joint facets.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
@@ -640,14 +641,13 @@ DC_DEV void li_foldn(Lane& l, const uint32_t (&z)[C]) {
   }
 }
 // li_until_mma's x<C> lanes (LW warps, PER loads and folds a trip, NF filler a load) beside warp 0 running, for fixed
-// iterations, MMA = 0: 4 kind::i8 MMAs (honest's), 1: 4 kind::mxf4 MMAs (the deep form), 2: no MMA (a sleep). The lane
-// rate is OP_UNTIL trips over the stop in all three, so the MMA-free point is the most the lanes reach when MMA work is
-// removed (MONO), and 1 - (rate beside i8) / (rate MMA-free) caps what any deeper MMA schedule can save beside them.
-template <int C, int LW, int NF, int PER, int MMA>
+// iterations, MMA = 0: 4 kind::i8 MMAs (honest's), 1: 4 kind::mxf4 MMAs (the deep form), 2: no MMA (a sleep), 3: 4
+// kind::mxf4 MMAs and an SL ns sleep (the deep form part-busy). The lane rate is OP_UNTIL trips over the stop in all.
+template <int C, int LW, int NF, int PER, int MMA, int SL = 256>
 DC_DEV void li_until_k(const OpArgs& a) {
   __shared__ __align__(1024) Smem s;
   const uint32_t tmem = setup<0>(s, a.mode);
-  if constexpr (MMA == 1) sf_fill(tmem);
+  if constexpr (MMA == 1 || MMA == 3) sf_fill(tmem);
   const uint64_t da = desc_a(s), db = desc_b(s);
   constexpr uint32_t idesc = idesc_of<0>(128, 256);
   const uint32_t w = warp_u(), col = tmem + ((32u * (w & 3u)) << 16) + 256u + (((w - 4u) >> 2) * C) % 256u;
@@ -660,7 +660,7 @@ DC_DEV void li_until_k(const OpArgs& a) {
         __nanosleep(256);
       } else {
         if (elect_one()) {
-          if constexpr (MMA == 1) {
+          if constexpr (MMA == 1 || MMA == 3) {
             mxf4x4(tmem, da, db);
           } else {
             umma_i8(tmem, da, db, idesc, 0);
@@ -670,6 +670,7 @@ DC_DEV void li_until_k(const OpArgs& a) {
           }
         }
         __syncwarp();
+        if constexpr (MMA == 3) __nanosleep(SL);
       }
     }
     OP_DONE
@@ -786,6 +787,22 @@ OP_KERNEL(tck_no_n16_t2, 384) { li_until_k<128, 8, 16, 2, 2>(a); }
 OP_KERNEL(tck_i8_n0, 384) { li_until_k<128, 8, 0, 1, 0>(a); }
 OP_KERNEL(tck_f4_n0, 384) { li_until_k<128, 8, 0, 1, 1>(a); }
 OP_KERNEL(tck_no_n0, 384) { li_until_k<128, 8, 0, 1, 2>(a); }
+OP_KERNEL(tck_i8_n32, 384) { li_until_k<128, 8, 32, 1, 0>(a); }
+OP_KERNEL(tck_f4_n32, 384) { li_until_k<128, 8, 32, 1, 1>(a); }
+OP_KERNEL(tck_no_n32, 384) { li_until_k<128, 8, 32, 1, 2>(a); }
+OP_KERNEL(tck_no_n32_t2, 384) { li_until_k<128, 8, 32, 2, 2>(a); }
+OP_KERNEL(tck_i8_n36, 384) { li_until_k<128, 8, 36, 1, 0>(a); }
+OP_KERNEL(tck_f4_n36, 384) { li_until_k<128, 8, 36, 1, 1>(a); }
+OP_KERNEL(tck_no_n36, 384) { li_until_k<128, 8, 36, 1, 2>(a); }
+OP_KERNEL(tck_no_n36_t2, 384) { li_until_k<128, 8, 36, 2, 2>(a); }
+OP_KERNEL(tck_i8_n40, 384) { li_until_k<128, 8, 40, 1, 0>(a); }
+OP_KERNEL(tck_f4_n40, 384) { li_until_k<128, 8, 40, 1, 1>(a); }
+OP_KERNEL(tck_no_n40, 384) { li_until_k<128, 8, 40, 1, 2>(a); }
+OP_KERNEL(tck_no_n40_t2, 384) { li_until_k<128, 8, 40, 2, 2>(a); }
+OP_KERNEL(tck_d128_n46, 384) { li_until_k<128, 8, 46, 1, 3, 128>(a); }
+OP_KERNEL(tck_d512_n46, 384) { li_until_k<128, 8, 46, 1, 3, 512>(a); }
+OP_KERNEL(tck_d128_n36, 384) { li_until_k<128, 8, 36, 1, 3, 128>(a); }
+OP_KERNEL(tck_d512_n36, 384) { li_until_k<128, 8, 36, 1, 3, 512>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -885,6 +902,22 @@ static const OpProbe PROBES[] = {
     {.name = "tck_i8_n0", .kernel = (const void*)tck_i8_n0, .tpb = 384, .expect = UI ";LDTM.x128=1,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
     {.name = "tck_f4_n0", .kernel = (const void*)tck_f4_n0, .tpb = 384, .expect = "UTC*MMA*=4;LDTM.x128=1,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
     {.name = "tck_no_n0", .kernel = (const void*)tck_no_n0, .tpb = 384, .expect = "NANOSLEEP=1;LDTM.x128=1,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_i8_n32", .kernel = (const void*)tck_i8_n32, .tpb = 384, .expect = UI ";LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=32", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_f4_n32", .kernel = (const void*)tck_f4_n32, .tpb = 384, .expect = "UTC*MMA*=4;LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=32", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_no_n32", .kernel = (const void*)tck_no_n32, .tpb = 384, .expect = "NANOSLEEP=1;LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=32", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_no_n32_t2", .kernel = (const void*)tck_no_n32_t2, .tpb = 384, .expect = "NANOSLEEP=1;LDTM.x128=2,LOP3.LUT=128,IMAD=128,FFMA=64", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_i8_n36", .kernel = (const void*)tck_i8_n36, .tpb = 384, .expect = UI ";LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=36", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_f4_n36", .kernel = (const void*)tck_f4_n36, .tpb = 384, .expect = "UTC*MMA*=4;LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=36", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_no_n36", .kernel = (const void*)tck_no_n36, .tpb = 384, .expect = "NANOSLEEP=1;LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=36", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_no_n36_t2", .kernel = (const void*)tck_no_n36_t2, .tpb = 384, .expect = "NANOSLEEP=1;LDTM.x128=2,LOP3.LUT=128,IMAD=128,FFMA=72", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_i8_n40", .kernel = (const void*)tck_i8_n40, .tpb = 384, .expect = UI ";LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=40", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_f4_n40", .kernel = (const void*)tck_f4_n40, .tpb = 384, .expect = "UTC*MMA*=4;LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=40", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_no_n40", .kernel = (const void*)tck_no_n40, .tpb = 384, .expect = "NANOSLEEP=1;LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=40", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_no_n40_t2", .kernel = (const void*)tck_no_n40_t2, .tpb = 384, .expect = "NANOSLEEP=1;LDTM.x128=2,LOP3.LUT=128,IMAD=128,FFMA=80", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_d128_n46", .kernel = (const void*)tck_d128_n46, .tpb = 384, .expect = "UTC*MMA*=4,NANOSLEEP=1;LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=46", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_d512_n46", .kernel = (const void*)tck_d512_n46, .tpb = 384, .expect = "UTC*MMA*=4,NANOSLEEP=1;LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=46", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_d128_n36", .kernel = (const void*)tck_d128_n36, .tpb = 384, .expect = "UTC*MMA*=4,NANOSLEEP=1;LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=36", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tck_d512_n36", .kernel = (const void*)tck_d512_n36, .tpb = 384, .expect = "UTC*MMA*=4,NANOSLEEP=1;LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=36", .warps = "1;8", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
