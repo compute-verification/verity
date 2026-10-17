@@ -18,13 +18,15 @@
 // the same bytes. Partial tiles meet in D by integer red.add, exact in any order; D must start at zero, so each CTA also
 // zeroes its share of the next linear's output (Z, zn ints, a multiple of 4).
 constexpr int FLIN_BN = 128;
-// FLIN_FIT: tiles whose GEMM-only CTA (FW = 0) fits beside one pump block on its SM (≤ 32 K registers, ≤ 41 KB of shared
-// memory), so a co-scheduled pump never holds a linear off (flin_cfg); FLIN_FIT=2 takes M 32 in four half stages and M 128
-// with four consumer warps. M > 128 keeps its tile, whose accumulators alone are BN · M = 32 K registers at M 256.
+// FLIN_FIT: tiles whose GEMM-only CTA (FW = 0) fits beside one pump block on its SM, so a co-scheduled pump never holds a
+// linear off (flin_cfg): ≤ 41 KB of shared memory, and registers by SMSP, since each SMSP's file is 16 K and the pump's
+// two warps there hold 8 K. A 5-warp CTA puts two warps on one SMSP, so ≤ 128 a thread (launch bounds of 4 blocks: 102);
+// M 128's 9 warps put three on one, ≤ 85, which its accumulators (64 a thread) and fragments don't leave, so it fits the
+// SM's file but not an SMSP's (r20261017-083215-99e0). FLIN_FIT=2 takes M 32 in four half stages. M > 128 keeps its tile.
 #ifdef FLIN_FIT
-#define FLIN_MINB 2
+#define FLIN_MINB(CW) ((CW) <= 4 ? 4 : 2)
 #else
-#define FLIN_MINB 1
+#define FLIN_MINB(CW) 1
 #endif
 
 __device__ __forceinline__ uint32_t sa(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -328,7 +330,7 @@ struct FlinArgs {
 };
 
 template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
-__global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB : 1) flin_k(const FlinArgs a) {
+__global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB(CWN * CWM) : 1) flin_k(const FlinArgs a) {
   constexpr int BN = FLIN_BN, CW = CWN * CWM, FM = BN / CWN / 16, TN = M / CWM / 8, KC = BK / 32;
   constexpr int WB = BN * BK, XB = M * BK, SB = WB + XB;
   static_assert(FM >= 1 && TN >= 1 && KC % 2 == 0, "flin tile shape");
@@ -583,12 +585,8 @@ static bool flin_m_ok(int M) { return M == 32 || M == 64 || M == 128 || M == 160
 // the flin tile height a batch of B rows runs at (its rows past B are computed and ignored)
 static int flin_m_for(int B) { return B <= 32 ? 32 : B <= 64 ? 64 : B <= 128 ? 128 : B <= 160 ? 160 : B <= 192 ? 192 : 256; }
 static FlinCfg flin_cfg(int M) {
-#if FLIN_FIT == 2
-  if (M == 32) return {64, 4, 4};
-  if (M == 64) return {64, 3, 4};
-  if (M == 128) return {64, 2, 4};
-#elif defined(FLIN_FIT)
-  if (M == 32) return {128, 2, 4};
+#ifdef FLIN_FIT
+  if (M == 32) return FLIN_FIT == 2 ? FlinCfg{64, 4, 4} : FlinCfg{128, 2, 4};
   if (M == 64) return {64, 3, 4};
   if (M == 128) return {64, 2, 8};
 #endif
@@ -677,7 +675,7 @@ static bool flin_launch(int M, const FlinArgs& a, int grid, int FW, int NC, cuda
 #if FLIN_FIT == 2
     case 32: return flin_fw<32, 64, 4, 4, 1>(a, grid, FW, NC, st);
     case 64: return flin_fw<64, 64, 3, 4, 1>(a, grid, FW, NC, st);
-    case 128: return flin_fw<128, 64, 2, 4, 1>(a, grid, FW, NC, st);
+    case 128: return flin_fw<128, 64, 2, 4, 2>(a, grid, FW, NC, st);
 #elif defined(FLIN_FIT)
     case 32: return flin_fw<32, 128, 2, 4, 1>(a, grid, FW, NC, st);
     case 64: return flin_fw<64, 64, 3, 4, 1>(a, grid, FW, NC, st);
