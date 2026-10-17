@@ -18,7 +18,10 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
             "adopted-no-smooth": ("all", "int8-all", True), "adopted-qkd": ("all", "int8-all", True),
             "adopted-bd": ("all", "int8-all", True), "adopted-bd-lm": ("all", "int8-all", True),
             "co": ("all", "int8-all", True), "ncp": ("all", "int8-all", True),
-            "cb": ("all", "int8-all", True), "co32c": ("all", "int8-all", True)}
+            "cb": ("all", "int8-all", True), "co32c": ("all", "int8-all", True),
+            "co32c-pv": ("all", "int8-all", True), "adopted-bd-lm-pv": ("all", "int8-all", True)}
+    for b in (256, 512, 1024):
+        want[f"co32c-pv{b}"] = want[f"adopted-bd-lm-pv{b}"] = ("all", "int8-all", True)
     for b in (2, 3, 4):
         want[f"adopted-bd-lm-d{b}"] = want[f"co32c-d{b}"] = ("all", "int8-all", True)
     for side in ("lin-act", "lin-w", "qk-q", "qk-k"):
@@ -141,6 +144,19 @@ def test_co_and_ncp_serve_seven_bit_sides():
     c32 = {s.defn.name: s.kw for s in co32c.linear}["int8"]
     assert (c32["act"], c32["act_top"], c32["weight_top"]) == ("dither", 127, 63)   # 8-bit activations
     assert co32c.attention == co.attention
+    pv = spec.load("co32c-pv")
+    pkw = {s.defn.name: s.kw for s in pv.attention}
+    assert pv.linear == co32c.linear and (pkw["int8"]["p"], pkw["int8"]["p_top"]) == ("dither", 127)
+    assert {**pkw["int8"], "p": "round"} == {s.defn.name: s.kw for s in co32c.attention}["int8"]
+    assert pkw["peel"] == {s.defn.name: s.kw for s in co32c.attention}["peel"]
+    a, apv = spec.load("adopted-bd-lm"), spec.load("adopted-bd-lm-pv")
+    assert apv.linear == a.linear and [s.kw for s in apv.attention] == [
+        {**s.kw, "p": "dither"} if s.defn.name == "int8" else s.kw for s in a.attention]
+    for base in (pv, apv):
+        for b in (256, 512, 1024):
+            blocked = spec.load(f"{base.name}{b}")
+            assert blocked.linear == base.linear and [s.kw for s in blocked.attention] == [
+                {**s.kw, "p_block": b} if s.defn.name == "int8" else s.kw for s in base.attention]
 
 
 def test_a_dithered_operand_stays_within_its_top():
