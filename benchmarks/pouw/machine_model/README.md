@@ -2,7 +2,7 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3p-16) re-solves here to the τ, τ at 600 W, U/F_low and
+checks every attack against it. Each named vector (VF … VF3q-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
@@ -152,6 +152,15 @@ SMSP-cycles, so UNI is 1 on issue and 0.7416 of a vector instruction's coefficie
 every uniform.cu point at the 2% margin (0.8168 holds them exactly), and UP rises to the fastest form alone, 0.766 a
 SMSP-cycle. A uniform row's measurement is valid only on ptxas 13.0 with the uniform chain gated by its exact uniform and
 MMA counts in SASS, inside a loop whose vector work reads the MMAs' results (ptxas moves the chain to lanes otherwise).
+VF3q-16 is FACET-BREAK's refit (note:20261017T0524Z-draft-eps1-facet-break; `facet_break/loads.py family`, runs `@FB`):
+3505 programs over every facet beat 18 rows, and each beaten family closes for the upper hull of its old rows' vertices
+and the measured programs at the 2% margin. R1 and KFFMA0 become EFFMA0..6 (interleaved IMMA + FFMA beat R1 by 41%);
+JI3o_0 becomes JI3q_0..11 (HMMA.16816.F16 beside FFMA beat it by 9.8%), each form's hull taken alone and every row at a
+vector coefficient one of those hulls has, each form at the most it carries beside it, while JI3o_1 and JI3o_2 hold; LDG
+becomes ELDG0..2 over LDG128 and LDG32; KALU*, KSEL*, KALU64*, KIMADW*, KW20 and KDMUL0 their E families; LDS128 on R6r
+and TLD2 on ROW_TLDW2 scale to their fastest program. The six loads the census priced at 0 (LDS.64, LDG.E.64, the
+256-bit LDG.E.ENL2.256 and the L1-skipping LDG.E.NA.128, .128.STRONG.GPU and .ENL2.256.STRONG.GPU) are kinds with rows
+of their own at their fastest program, the L1-skipping three on one row of the L2 bytes they read (ROW_L2RD).
 
 ## Where the data came from
 
