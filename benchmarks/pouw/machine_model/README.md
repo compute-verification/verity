@@ -107,8 +107,8 @@ lookups): q_T lane instructions a word from the lanes' class pool plus 8 B of L2
 card's bandwidth, honest's own L2 traffic uncharged (`--lookup-q`, `--l2` override the file). ε_machine's floor is its
 value with the lane and uniform routes closed (the table route, priced by its bytes, stays as set), which no q* lowers,
 and the threshold is the least q* at which ε_machine reaches it. `--uni-issue C` charges each uniform instruction C
-SMSP-cycles on the issue rows too (`issue`, `JI3e_0`), which the census has left out since VF3 and PREDICT's u16s_l7qs
-measured at 0.92 (r20261017-045133-67bf). The uniform route then closes without UPFILL, and UPFILL costs honest issue
+times an ALU instruction's cost on the issue rows too (`issue` and the joint `JI…_0` row), which the census has left out
+since VF3 and PREDICT's u16s_l7qs measured at 0.92 (r20261017-045133-67bf). The uniform route then closes without UPFILL, and UPFILL costs honest issue
 time while the cheater does its checked work on lanes, 32 values a warp instruction.
 
 ## Adopt a probe's census

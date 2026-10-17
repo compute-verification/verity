@@ -23,8 +23,8 @@
                                               word of verified filler on lanes, --upfill filler keeping the uniform
                                               datapath busy; --lookups opens the table route (data/table.toml: lane
                                               instructions and L2 bytes a word against an L2 facet; --lookup-q, --l2);
-                                              --uni-issue C also charges a uniform instruction C SMSP-cycles on the
-                                              issue rows
+                                              --uni-issue C also charges a uniform instruction C times an ALU's cost
+                                              on the issue rows
     machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--upfill] [--operands O] [--credit C]
                       [--q Q] [--lookups] [--uni-issue C]
                                               one line a design (every design by default; with --fold-sweep, each at
@@ -360,8 +360,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--lookup-q", type=float, help="with --lookups: lane instructions a table word (default: the file's)")
     e.add_argument("--l2", type=float, help="with --lookups: L2 read bytes a second (default: the file's)")
     e.add_argument("--uni-issue", type=float, metavar="C",
-                   help="put the uniform classes on the issue rows (issue, JI3e_0) at C SMSP-cycles a warp instruction "
-                        "(PREDICT's u16s_l7qs measured 0.92, r20261017-045133-67bf)")
+                   help="put the uniform classes on the issue rows (issue, the joint JI…_0) at C times an ALU's "
+                        "cost there (PREDICT's u16s_l7qs measured 0.92, r20261017-045133-67bf)")
     args = p.parse_args(argv)
     if args.cmd is None:
         print(__doc__)

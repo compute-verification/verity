@@ -275,13 +275,15 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
 
 
 def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
-    """Π with each uniform class (UNI, UNI64) also on the issue rows (issue, JI3e_0) at `cycles` SMSP-cycles a warp
-    instruction, where the census since VF3 has it on UP alone."""
+    """Π with each uniform class (UNI, UNI64) also on the issue rows at `cycles` times an ALU instruction's cost there:
+    `issue`, and the joint row pricing every other vector-pipe instruction (JI3e_0, JI3n_0), where the census since VF3
+    has it on UP alone."""
     c = {k: dict(v) for k, v in pi.c.items()}
+    rows = [r for r in pi.rows if r == "issue" or (r.startswith("JI") and r.endswith("_0"))]
     for k in ("UNI", "UNI64"):
-        for r in ("issue", "JI3e_0"):
-            if k in c and r in pi.rows:
-                c[k][r] = cycles
+        for r in rows:
+            if k in c and r in c["ALU"]:
+                c[k][r] = cycles * c["ALU"][r]
     return replace(pi, vector=f"{pi.vector} (UNI on issue at {cycles:g})", c=c)
 
 
