@@ -658,7 +658,7 @@ class SingleRow(Row):
                 self.tl(f"{stage}.weights_of_record", "end", ("rc", 1))
                 self.log(f"WARNING weights of record not derived (see weights_of_record.log): {last}")
         elif not os.path.isfile(wor):
-            self.log(f"WARNING weights of record NOT derived: no local checkpoint dir for the workload's (model, tokenizer_revision) (CK='{ck}'; "
+            self.log(f"WARNING weights of record NOT derived: no local checkpoint dir for the workload's (model, engine.revision) (CK='{ck}'; "
                      "checkpoints.json local_path / HF hub snapshot absent on this pod) -- the Commit will FAIL 'weights unpinned (MAN-09)' by name")
             self.tl(f"{stage}.weights_of_record", "mark", ("reused", "false"), ("derived", "false"))
         else:

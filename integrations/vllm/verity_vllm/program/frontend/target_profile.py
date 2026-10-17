@@ -23,7 +23,7 @@ import json
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
-from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, parse_protocols
+from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
 
 SCHEMA = "verity/aot-artifact/v1"
 
@@ -160,7 +160,7 @@ class TargetProfile:
     num_sms: int = 128
     batch_invariant: bool = True
     attention_backend: str | None = None
-    vllm_revision: str = "d9105ea80"
+    vllm_revision: str = VLLM
     numerics_profile: str = "b1-eager-v3"
     flash_attn_version: int | None = None
     compilation: str | None = None
