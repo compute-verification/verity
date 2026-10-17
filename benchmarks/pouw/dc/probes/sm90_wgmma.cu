@@ -138,6 +138,32 @@ DC_DEV void wg_spec(const OpArgs& a) {
   OP_SINK((mma_role ? fold_acc(d) : l.fold()) ^ threadIdx.x)
 }
 
+// wg_spec exact on both sides: the two wgmma warpgroups fixed, each SMSP's lane warp running only while they do
+// (OP_UNTIL), so neither rate counts time at the barrier.
+template <int X, int R>
+DC_DEV void wg_until(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  const Tiles t = fill_tiles<0>(sm, a.mode);
+  const bool mma_role = threadIdx.x < 256;
+  int d[128] = {};
+  Lane l(threadIdx.x);
+  OP_BEGIN_STOP
+  if (mma_role) {
+    OP_LOOP(it) {
+      group4<F_s8_n256>(d, t);
+      wgmma_wait<1>();
+    }
+    wgmma_wait<0>();
+    OP_DONE
+    wgmma_hold(d);
+  } else {
+    OP_UNTIL(n) { lane_ops<X, R>(l); }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  OP_SINK((mma_role ? fold_acc(d) : l.fold()) ^ threadIdx.x)
+}
+
 template <int X, int R>
 DC_DEV void wg_mix(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
@@ -226,6 +252,49 @@ DC_DEV void imma_alone(const OpArgs& a) {
   OP_SINK(s)
 }
 
+// mma.sync beside wgmma, exact on both sides (as wg_until): the two wgmma warpgroups fixed, each SMSP's mma.sync warp
+// until. (The other way round, the wgmma warps until, spills.)
+template <int K>
+DC_DEV void wg_sync_until(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  const Tiles t = fill_tiles<0>(sm, a.mode);
+  const bool mma_role = threadIdx.x < 256;
+  const uint32_t lane = threadIdx.x & 31;
+  int d[128] = {};
+  uint32_t x[4] = {dc_mix32(lane), dc_mix32(lane + 32), dc_mix32(lane + 64), dc_mix32(lane + 96)};
+  uint32_t y[2] = {dc_mix32(lane + 128), dc_mix32(lane + 160)};
+  int32_t e[8][4] = {};
+  auto imma8 = [&] {
+#pragma unroll
+    for (int c = 0; c < 8; c++) {
+      if constexpr (K == 32) mma_s8k32(e[c], x, y);
+      else mma_s8k16(e[c], x, y);
+    }
+  };
+  OP_BEGIN_STOP
+  if (mma_role) {
+    OP_LOOP(it) {
+      group4<F_s8_n256>(d, t);
+      wgmma_wait<1>();
+    }
+    wgmma_wait<0>();
+    OP_DONE
+    wgmma_hold(d);
+  } else {
+    OP_UNTIL(n) { imma8(); }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  uint32_t s = lane;
+  if (mma_role) {
+    s ^= fold_acc(d);
+  } else {
+#pragma unroll
+    for (int c = 0; c < 8; c++) s ^= (uint32_t)(e[c][0] ^ e[c][1] ^ e[c][2] ^ e[c][3]);
+  }
+  OP_SINK(s ^ threadIdx.x)
+}
+
 #define ALONE(NAME)                                                         \
   OP_KERNEL(wg_##NAME##_a0, 256) { wg_alone<F_##NAME, 0>(a); }               \
   OP_KERNEL(wg_##NAME##_a1, 256) { wg_alone<F_##NAME, 1>(a); }
@@ -262,6 +331,12 @@ OP_KERNEL(wgmix_shfl_r128, 256) { wg_mix<L_SHFL, 128>(a); }
 JOINT(duo, L_DUO, 96)
 JOINT(duo, L_DUO, 384)
 #undef JOINT
+OP_KERNEL(wgU_mix, 384) { wg_until<L_MIX, 64>(a); }
+OP_KERNEL(wgU_imad, 384) { wg_until<L_IMAD, 64>(a); }
+OP_KERNEL(wgU_lop3, 384) { wg_until<L_LOP3, 64>(a); }
+OP_KERNEL(wgU_duo, 384) { wg_until<L_DUO, 48>(a); }
+OP_KERNEL(wgU_sync_k16, 384) { wg_sync_until<16>(a); }
+OP_KERNEL(wgU_sync_k32, 384) { wg_sync_until<32>(a); }
 OP_KERNEL(imma_s8_k32, 512) { imma_alone<32>(a); }
 OP_KERNEL(imma_s8_k16, 512) { imma_alone<16>(a); }
 #define SYNC(NAME) OP_KERNEL(sync_##NAME, 512) { sync_alone<S_##NAME>(a); }
@@ -317,6 +392,17 @@ static const OpProbe PROBES[] = {
     P_JOINT(duo, 96, "LOP3.LUT=32,IMAD=32"),
     P_JOINT(duo, 384, "LOP3.LUT=128,IMAD=128"),
 #undef P_JOINT
+#define WGI "IGMMA.64x256x32.S8.S8*=4"
+#define P_UNTIL(NAME, LPAT) \
+  {.name = #NAME, .kernel = (const void*)NAME, .tpb = 384, .expect = WGI ";" LPAT, .warps = "8;4", .iters = 4096, .until = 2}
+    P_UNTIL(wgU_mix, "I*ADD*=32,FFMA=32"),
+    P_UNTIL(wgU_imad, "IMAD=64"),
+    P_UNTIL(wgU_lop3, "LOP3.LUT=64"),
+    P_UNTIL(wgU_duo, "LOP3.LUT=16,IMAD=16"),
+    P_UNTIL(wgU_sync_k16, "IMMA.16816.S8.S8=8"),
+    P_UNTIL(wgU_sync_k32, "IMMA.16832.S8.S8=8"),
+#undef P_UNTIL
+#undef WGI
     {.name = "imma_s8_k32", .kernel = (const void*)imma_s8_k32, .tpb = 512, .expect = "IMMA.16832.S8.S8=8", .iters = 4096},
     {.name = "imma_s8_k16", .kernel = (const void*)imma_s8_k16, .tpb = 512, .expect = "IMMA.16816.S8.S8=8", .iters = 4096},
 #define P_SYNC(NAME, PAT) \
