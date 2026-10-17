@@ -583,7 +583,6 @@ theorem Flock.zkAt_sw_of {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy
       ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
       (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t := by
-  obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := S.coinCheck
   have hA : ∀ x w, Flock.R D.parse x w → ∀ (ν : S.Nonce)
       (V : FlockSoundness.ZK.Responder Msg Out (refK x + 1)) (E : (Fin (refK x + 1) → Msg) → Prop),
       |Pr (fun r : S.Tape => E (FlockSoundness.ZK.run ((S.swPS vs).preStrat H x ν ((S.swPS vs).msg x w ν)) V r)) -
@@ -592,8 +591,8 @@ theorem Flock.zkAt_sw_of {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy
     (S.swPreModel vs H x ν).runs_close_sw H hT1 hδ₁ ν w
       (S.swPreModel_link vs H _ A hV hD hc hsc hT x (hRA x w hR) w hR ν) ((S.swTablesOK vs H hS).1 x ν) V E
   rw [← S.swPS_prover vs, ← S.swPS_simulatorE vs]
-  exact Flock.zkR_gkE_hm96 H D (S.swPS vs) t ht hzk hk δ₁ S.nLeaves S.nLeaves hA
-    (S.swPS_shvzk vs H _ A hT1 hδ₁ hV hD hc hsc hT hRA hS) Tr nb root parse pos idx n depth dc hchk hdec
+  exact Flock.zkR_gkE_hm96_bind H D (S.swPS vs) t ht hzk hk δ₁ S.nLeaves S.nLeaves hA
+    (S.swPS_shvzk vs H _ A hT1 hδ₁ hV hD hc hsc hT hRA hS) (S.binding H)
 
 /-- **Flock's zero knowledge at the switched reference prover, with the honest prover's simulator**: `Claims.Flock.ZKAt`
 at `P_zk = swP vs`'s prover, at any values `vs` the workers supply whose round encoding is causal, and the simulator of

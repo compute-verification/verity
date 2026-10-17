@@ -114,9 +114,11 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
 * `Capacity`: the tape asked for on a class `A` of statements only (`RefSession.TapeOKOn`, `RefSession.HonestMsgsOn`),
   as a tape of bounded size can meet it where `A` bounds the tables, at the record whose parser refuses the rest
-  (`deployOn`): **`Flock.zk_deployZk_ref_on`**, `Claims.Flock.ZK` at `RefSession.zkD` at `Flock.zk_deployZk_ref`'s
-  `ε_zk` on `A` and `1` outside it (`zkmalR_on`). `RefSession.tapeOKOn_of_tape`: `TapeOKOn A` from the tape read with
-  fibers of one size at each statement in `A`, each table's randomness being read from it so (`fibersEq_tabRand`).
+  (`deployOn`): `Flock.zk_zkD_ref_on`, `Claims.Flock.ZK` at `RefSession.zkD` at `Flock.zk_zkD_ref`'s `ε_zk` on `A`
+  and `1` outside it (`zkmalR_on`). `RefSession.tapeOKOn_of_tape`: `TapeOKOn A` from the tape read with fibers of one
+  size at each statement in `A`, each table's randomness being read from it so (`fibersEq_tabRand`). With it,
+  **`Flock.zk_deployZk_ref_on`** (and `_gap`) at `zkDeployed`, the tape asked for only as the tables' tape read with
+  fibers of one size on `A`, where `Flock.zk_deployZk_ref`'s `TapeOK` fails at every unbounded table count.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
