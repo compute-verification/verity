@@ -64,6 +64,8 @@ every generated GEMM at a predicted launch configuration and every predicted con
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
+
 import argparse
 import contextlib
 import glob
