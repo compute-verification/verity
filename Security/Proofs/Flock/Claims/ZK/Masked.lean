@@ -24,7 +24,9 @@ The session's Props at every plan:
 * `TapeOK` is `FibersEq (U.tape x)` on `Live` statements (`Flock.zk_deployZk_masked`, a Prop of the tape plan), or, on
   the tape of one statement's tables' randomness (`TapePlan.at`), a theorem (`fibersEq_at`,
   `Flock.zk_deployZk_masked_at`): what statement-indexed tapes read at that statement.
-* `HonestMsgs` is its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`) on `Live`.
+* `HonestMsgs` is its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`) on `Live`. At a round plan whose last
+  message where a table refuses is the empty one (`RoundPlan.stop`, what `ZkTables.prog` returns once `sessionPZk`
+  stops), `HonestOffOn` is about the reference prover alone (`honestOffOn_stop_iff`).
 -/
 
 namespace Claims.ZKMal
@@ -135,6 +137,27 @@ def RoundPlan.Causal {C : Tabs} (Q : RoundPlan C) : Prop :=
 theorem RoundPlan.causal {P : Composed.LigProver} {Q : RoundPlan (tabC P)} (h : Q.Causal) (U : TapePlan (tabC P))
     (nr : Msg → ℕ → ℕ) : (session nr (tableData P Q U)).Causal :=
   h
+
+/-- **A round plan whose last message where a table refuses is the empty one**: what `ZkTables.prog` returns once
+`sessionPZk` stops (`.error _ => pure []`), the session's `abort`. -/
+def RoundPlan.stop {C : Tabs} (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (C x j).Rest)
+    (enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((C x j).T (cz x c j)).tab.Cut) → Msg)
+    (fin : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((C x j).T (cz x c j)).tab.View) → Msg) :
+    RoundPlan C :=
+  ⟨cz, enc, fin, fun _ _ _ => []⟩
+
+/-- **`HonestOffOn` at a stopping round plan is the reference prover's**: after `refK x` openings whose coins some table
+refuses, `ZkTables.honestP`'s next message is the empty one. -/
+theorem honestOffOn_stop_iff {P : Composed.LigProver} {cz enc fin} (U : TapePlan (tabC P)) (nr : Msg → ℕ → ℕ)
+    (A : Msg → Prop) (H : Msg → Msg) :
+    (session nr (tableData P (RoundPlan.stop cz enc fin) U)).HonestOffOn A H coinOfD (fun ω => U.tapeZk ω.2) ↔
+      ∀ x, A x → ∀ w t (ops : List (Msg × Msg)), ops.length = refK x →
+        ¬ (session nr (tableData P (RoundPlan.stop cz enc fin) U)).Admits x
+          ((session nr (tableData P (RoundPlan.stop cz enc fin) U)).pad (ops.map fun p => rd p.2)) →
+        (((FlockComplete.ZkTables.honestP w).next x (ops.map fun p => (p.1, coinOfD p.2)) (U.tapeZk t)).eval H).1 =
+          [] :=
+  ⟨fun h x hx w t ops hl hA => (h x hx w (Classical.arbitrary _) t ops hl hA).symm,
+    fun h x hx w _ t ops hl hA => (h x hx w t ops hl hA).symm⟩
 
 open Classical in
 /-- **The tape of one statement's tables' randomness**: at `x₀` the tape is `x₀`'s tables' randomness, read as itself;
