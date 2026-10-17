@@ -240,15 +240,15 @@ theorem sampling_deployed (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeplo
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
     (hComplete : Complete H (deploy rel c))
-    {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (Pz : Wit → Prover (Nz × Ωz)) (S : SimLeak)
-    (εzk γzk : Msg → ℝ) (hZK : ZK H (deploy rel c) Pz S εzk γzk) :
+    {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (tapeOf : Nz × Ωz → c.Tape) (S : SimLeak)
+    (εzk γzk : Msg → ℝ) (hZK : ZK H ((deploy rel c).mask Nz Ωz tapeOf S) εzk γzk) :
     ScopeMatches (deploy rel c) ∧ Binding (deploy rel c) ∧ Universal (deploy rel c) ∧ FaultyBoundary ∧
       KS H (deploy rel c) ∧ KSCount H (deploy rel c) ∧ Bits H (deploy rel c) ∧
       Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) ∧
-      ZK H (deploy rel c) Pz S εzk γzk :=
+      ZK H ((deploy rel c).mask Nz Ωz tapeOf S) εzk γzk :=
   sampling_assembled rel (deploy rel c) H (deploy_flock rel c) hKS (deploy_εtable_nonneg rel c) c.own c.at_
     (row c.place c.bits) c.salt c.π c.layer (deploy_commit rel c) (row_places c.place c.bits) hfixed hsessions
     (innerNumbers_deploy rel c hnum) hslots iroots hopens hfix hprog hchecks (openCallsLe_deploy rel c H hreveals)
-    (universalIs_deploy rel c) hComplete Pz S εzk γzk hZK
+    (universalIs_deploy rel c) hComplete tapeOf S εzk γzk hZK
 
 end SamplingDeploy

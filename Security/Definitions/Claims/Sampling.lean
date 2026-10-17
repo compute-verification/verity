@@ -36,8 +36,8 @@ the code side's.
    reference prover's tape as a finite nonce and rest, and the simulator).
 6. **Claims**, on the statements in scope: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at
    the units' sessions and `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`;
-   `Complete`; `ScopeMatches`; `ZK`, of the masked deployment's reference prover and simulator, relative to the trace's
-   published leaf layer; `Bits`; `Efficient`; and `Nontrivial`.
+   `Complete`; `ScopeMatches`; `ZK`, of the masked deployment's reference prover and simulator, relative to the
+   trace's published leaf layer; `Bits`; `Efficient`; and `Nontrivial`.
 7. **Assumptions used**: `StrictBirthday` (for `B`), `ExpectedCR` (for `Bext`), and `trustedBase`. `ZK` gives the
    simulator the leaf layer the protocol publishes, so it reads no hiding assumption of the leaves.
 8. **Status**: stated; `FaultyBoundary` is proved (`Proofs.Flock.SamplingBoundary`), no other claim is.
