@@ -21,11 +21,14 @@
 // T on sm_90a, so BN = 64), where native int8 keeps it in its accumulator.
 //
 // Kernels (dgemm's correctness-first single-stage mainloop: load, fence, multiply, wait, fold a step at a time):
-//   eg100<R, BN>  sm_100a: four warps, a 128 x BN tile, R = 0 kind::i8 into TMEM, 1 k3z (3 kind::f8f6f4), 2 k4s (4)
+//   eg100<R, BN>  sm_100a: four warps, a 128 x BN tile, R = 0 kind::i8 into TMEM, 1 k3z (3 kind::f8f6f4), 2 k4s (4),
+//                 3 i8r (kind::i8 from a fresh accumulator each step, the word in registers as k4s keeps it)
 //   eg90<R, BN>   sm_90a: one warpgroup, a 64 x BN tile, R = 0 wgmma s8, R = 1 k3h (3 wgmma E4M3)
 //   split<FAM, SIDE>  the limb planes of one side (X's is the served operand's per-request cost; W's is offline)
-//   RES (bench only): the operand tiles are loaded once and every step multiplies them again, so the time is the
-//   on-chip pipeline alone (MMA, extraction, fold) without global loads; its words are not the product's.
+//   RES: the operand tiles are loaded once and every step multiplies them again, so the time is the on-chip pipeline
+//   alone (MMA, extraction, fold) without global loads; its words are the product of operands whose every k-slice is
+//   slice 0. PIPE (sm_100a, R != 0, resident): two TMEM buffers, step s + 1's MMAs issued before step s is absorbed,
+//   so the tensor runs beside extraction and fold; gated against that product's host reference.
 // Modes:
 //   egemm gate M N K SEED DIST       DIST uniform (dgemm's codes) or edge (limb extremes: -128, 127, 119, 120, -120, -121,
 //                                    0, 1): every route and tile against the host reference, poisoned with 0xA5, and the
@@ -259,24 +262,43 @@ DC_DEV void absorb100k4(DuoSt (&ch)[NCH], uint32_t (&t)[BN], uint32_t trow, cons
     absorb100k4<U + 1, BN, FOLD>(ch, t, trow, c0);
   }
 }
+// i8r: each step's s32 product from a fresh accumulator, the running word in registers (k4s's shape with int8).
+template <int U, int BN, bool FOLD>
+DC_DEV void absorb100r(DuoSt (&ch)[NCH], uint32_t (&t)[BN], uint32_t trow) {
+  if constexpr (U < BN / 16) {
+    uint32_t r[16];
+    tmem_ld16(trow + 16 * U, r);
+    tmem_wait_ld();
+#pragma unroll
+    for (int c = 0; c < 16; c++) {
+      t[16 * U + c] += r[c];
+      if constexpr (FOLD) duo<U % 16>(ch[c], t[16 * U + c]);
+    }
+    absorb100r<U + 1, BN, FOLD>(ch, t, trow);
+  }
+}
 
-template <int R, int BN, bool FOLD, bool WRITE, bool RES>
+// R: 0 i8 (the word in TMEM), 1 k3z, 2 k4s, 3 i8r. PIPE (resident only, R != 0): two TMEM buffers, and step s + 1's
+// MMAs are issued before the threads absorb step s, so the tensor overlaps extraction and fold.
+template <int R, int BN, bool FOLD, bool WRITE, bool RES, bool PIPE>
 __global__ void __launch_bounds__(128) eg100(const uint8_t* A, const uint8_t* B, int m, int n, int k, uint32_t seed,
                                              int32_t* C, uint32_t* Rc) {
 #if defined(__CUDA_ARCH_FEAT_SM100_ALL)
-  constexpr int BM = 128, NP = R == 0 ? 1 : R == 1 ? 3 : 2, TCOLS = R == 1 ? 2 * BN : BN;
+  static_assert(!PIPE || (RES && R != 0), "PIPE: resident operands, and a route whose word is in registers");
+  constexpr int BM = 128, NP = R == 1 ? 3 : R == 2 ? 2 : 1, TCOLS = R == 1 ? 2 * BN : BN;
+  constexpr int NBUF = PIPE ? 2 : 1;
   __shared__ __align__(1024) unsigned char sA[NP][BM * L];
   __shared__ __align__(1024) unsigned char sB[NP][BN * L];
-  __shared__ uint64_t bar;
+  __shared__ uint64_t bar[NBUF];
   __shared__ uint32_t tslot;
   const int tn = blockIdx.x, tm = blockIdx.y, tiles_n = gridDim.x;
   const uint32_t w = __shfl_sync(0xffffffffu, threadIdx.x >> 5, 0), lane = threadIdx.x & 31;
   const int row = tm * BM + 32 * w + lane;
   if (threadIdx.x == 0) {
-    mbar_init(&bar, 1);
+    for (int b = 0; b < NBUF; b++) mbar_init(&bar[b], 1);
     fence_mbar_init();
   }
-  if (w == 0) tmem_alloc(&tslot, TCOLS);
+  if (w == 0) tmem_alloc(&tslot, NBUF * TCOLS);
   tc_before_sync();
   __syncthreads();
   tc_after_sync();
@@ -287,7 +309,7 @@ __global__ void __launch_bounds__(128) eg100(const uint8_t* A, const uint8_t* B,
     da[p] = umma_desc(smem_u32(sA[p]), kmaj_lbo(), kmaj_sbo(L));
     db[p] = umma_desc(smem_u32(sB[p]), kmaj_lbo(), kmaj_sbo(L));
   }
-  constexpr uint32_t idesc = R == 0 ? umma_idesc(2, 1, 1, BM, BN) : umma_idesc(1, 0, 0, BM, BN);
+  constexpr uint32_t idesc = R == 0 || R == 3 ? umma_idesc(2, 1, 1, BM, BN) : umma_idesc(1, 0, 0, BM, BN);
   DuoSt ch[NCH];
   if constexpr (FOLD) {
 #pragma unroll
@@ -302,53 +324,90 @@ __global__ void __launch_bounds__(128) eg100(const uint8_t* A, const uint8_t* B,
   for (int c = 0; c < 16; c++) c0[c] = MAGIC_BITS;
   if constexpr (R == 2) {
 #pragma unroll
-    for (int u = 0; u < BN / 16; u++) tmem_st16(trow + 16 * u, c0);
+    for (int u = 0; u < NBUF * BN / 16; u++) tmem_st16(trow + 16 * u, c0);
     tmem_wait_st();
   }
-  for (int s = 0; s < k / L; s++) {
-    if (!RES || s == 0) {
+  // Step s's MMAs into buffer b (one elected thread of warp 0), committed to bar[b].
+  auto issue = [&](int s, int b) {
+    if (w == 0) {
+      if (elect_one()) {
+        const uint32_t tb = tmem + b * TCOLS;
+        if constexpr (R == 0) {
+          umma_i8(tb, da[0], db[0], idesc, s > 0);
+        } else if constexpr (R == 3) {
+          umma_i8(tb, da[0], db[0], idesc, 0);
+        } else if constexpr (R == 1) {
+          umma_f8f6f4(tb, da[0], db[0], idesc, 0);
+          umma_f8f6f4(tb, da[NP - 1], db[NP - 1], idesc, 1);
+          umma_f8f6f4(tb + BN, da[NP - 2], db[NP - 2], idesc, 0);
+        } else {
 #pragma unroll
-      for (int p = 0; p < NP; p++) {
-        load_slice(sA[p], A + (size_t)p * m * k + (size_t)tm * BM * k, BM, k, s * L);
-        load_slice(sB[p], B + (size_t)p * n * k + (size_t)tn * BN * k, BN, k, s * L);
+          for (int pa = 0; pa < 2; pa++)
+#pragma unroll
+            for (int pb = 0; pb < 2; pb++) umma_f8f6f4(tb, da[pa & (NP - 1)], db[pb & (NP - 1)], idesc, 1);
+        }
+        umma_commit(&bar[b]);
       }
+      __syncwarp();
+    }
+  };
+  auto absorb = [&](int b) {
+    const uint32_t tr = trow + b * TCOLS;
+    if constexpr (R == 0) {
+      if constexpr (FOLD) absorb100<0, BN / 16, true, false>(ch, tr, crow);
+    } else if constexpr (R == 1) {
+      absorb100k3<0, BN, FOLD>(ch, t, tr);
+    } else if constexpr (R == 3) {
+      absorb100r<0, BN, FOLD>(ch, t, tr);
+    } else {
+      absorb100k4<0, BN, FOLD>(ch, t, tr, c0);
+      tmem_wait_st();
+    }
+  };
+  const int steps = k / L;
+  if constexpr (PIPE) {
+#pragma unroll
+    for (int p = 0; p < NP; p++) {
+      load_slice(sA[p], A + (size_t)p * m * k + (size_t)tm * BM * k, BM, k, 0);
+      load_slice(sB[p], B + (size_t)p * n * k + (size_t)tn * BN * k, BN, k, 0);
     }
     fence_async_smem();
     tc_before_sync();
     __syncthreads();
     tc_after_sync();
-    if (w == 0) {
-      if (elect_one()) {
-        if constexpr (R == 0) {
-          umma_i8(tmem, da[0], db[0], idesc, s > 0);
-        } else if constexpr (R == 1) {
-          umma_f8f6f4(tmem, da[0], db[0], idesc, 0);
-          umma_f8f6f4(tmem, da[NP - 1], db[NP - 1], idesc, 1);
-          umma_f8f6f4(tmem + BN, da[NP - 2], db[NP - 2], idesc, 0);
-        } else {
+    issue(0, 0);
+    for (int s = 0; s < steps; s++) {
+      const int b = s & 1;
+      mbar_wait(&bar[b], (uint32_t)((s >> 1) & 1));
+      tc_after_sync();
+      if (s + 1 < steps) issue(s + 1, b ^ 1);  // buffer b ^ 1 was absorbed (and restarted) before the last barrier
+      absorb(b);
+      tc_before_sync();
+      __syncthreads();
+      tc_after_sync();
+    }
+  } else {
+    for (int s = 0; s < steps; s++) {
+      if (!RES || s == 0) {
 #pragma unroll
-          for (int pa = 0; pa < 2; pa++)
-#pragma unroll
-            for (int pb = 0; pb < 2; pb++) umma_f8f6f4(tmem, da[pa & (NP - 1)], db[pb & (NP - 1)], idesc, 1);
+        for (int p = 0; p < NP; p++) {
+          load_slice(sA[p], A + (size_t)p * m * k + (size_t)tm * BM * k, BM, k, s * L);
+          load_slice(sB[p], B + (size_t)p * n * k + (size_t)tn * BN * k, BN, k, s * L);
         }
-        umma_commit(&bar);
       }
-      __syncwarp();
+      fence_async_smem();
+      tc_before_sync();
+      __syncthreads();
+      tc_after_sync();
+      issue(s, 0);
+      mbar_wait(&bar[0], (uint32_t)(s & 1));
+      tc_after_sync();
+      absorb(0);
+      tc_before_sync();
+      __syncthreads();
     }
-    mbar_wait(&bar, (uint32_t)(s & 1));
     tc_after_sync();
-    if constexpr (R == 0) {
-      if constexpr (FOLD) absorb100<0, BN / 16, true, false>(ch, trow, crow);
-    } else if constexpr (R == 1) {
-      absorb100k3<0, BN, FOLD>(ch, t, trow);
-    } else {
-      absorb100k4<0, BN, FOLD>(ch, t, trow, c0);
-      tmem_wait_st();
-    }
-    tc_before_sync();
-    __syncthreads();
   }
-  tc_after_sync();
   if constexpr (WRITE) {
     if constexpr (R == 0) {
       absorb100<0, BN / 16, false, true>(ch, trow, crow);
@@ -365,7 +424,7 @@ __global__ void __launch_bounds__(128) eg100(const uint8_t* A, const uint8_t* B,
   tc_before_sync();
   __syncthreads();
   tc_after_sync();
-  if (w == 0) tmem_dealloc(tmem, TCOLS);
+  if (w == 0) tmem_dealloc(tmem, NBUF * TCOLS);
 #endif
 }
 
@@ -376,28 +435,39 @@ struct Arm {
   const char* name;
 };
 // Family arms: native int8 at each emulated tile (the like-for-like ratio), int8 at dgemm's tile, emulated. On sm_100a
-// the emulated routes at BN = 64 hold half the running words (k4s: 246 registers at BN = 128, two CTAs a SM).
+// the emulated routes at BN = 64 hold half the running words (k4s: 246 registers at BN = 128, two CTAs a SM), and i8r
+// is native int8 in k4s's shape (a fresh accumulator each step, the word in registers), the baseline PIPE can run.
 static std::vector<Arm> arms() {
   if (g_sm == 100)
-    return {{0, 128, 64, "i8_bn64"},   {1, 128, 64, "k3z_bn64"},   {2, 128, 64, "k4s_bn64"}, {0, 128, 128, "i8_bn128"},
+    return {{0, 128, 64, "i8_bn64"},   {3, 128, 64, "i8r_bn64"},   {1, 128, 64, "k3z_bn64"},
+            {2, 128, 64, "k4s_bn64"},  {0, 128, 128, "i8_bn128"}, {3, 128, 128, "i8r_bn128"},
             {1, 128, 128, "k3z_bn128"}, {2, 128, 128, "k4s_bn128"}, {0, 128, 256, "i8_bn256"}};
   return {{0, 64, 64, "i8_bn64"}, {0, 64, 128, "i8_bn128"}, {1, 64, 64, "k3h_bn64"}};
 }
 // The split of an arm's route: 100 k3z, 104 k4s, 90 k3h.
 static int fam_of(int route) { return g_sm == 90 ? 90 : route == 2 ? 104 : 100; }
+static bool has_planes(int route) { return route == 1 || route == 2; }
+static bool can_pipe(const Arm& a) { return g_sm == 100 && a.route != 0; }
 
-template <bool FOLD, bool WRITE, bool RES>
+template <int R, bool FOLD, bool WRITE, bool RES, bool PIPE>
+static void launch100(int bn, dim3 grid, const uint8_t* A, const uint8_t* B, int m, int n, int k, uint32_t seed,
+                      int32_t* C, uint32_t* Rc, cudaStream_t st) {
+  if (bn == 64) eg100<R, 64, FOLD, WRITE, RES, PIPE><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, Rc);
+  else if (bn == 128) eg100<R, 128, FOLD, WRITE, RES, PIPE><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, Rc);
+  else if constexpr (R == 0) eg100<R, 256, FOLD, WRITE, RES, PIPE><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, Rc);
+}
+
+template <bool FOLD, bool WRITE, bool RES, bool PIPE = false>
 static void launch(const Arm& a, const uint8_t* A, const uint8_t* B, int m, int n, int k, uint32_t seed, int32_t* C,
                    uint32_t* R, cudaStream_t st) {
   const dim3 grid(n / a.bn, m / a.bm);
   if (g_sm == 100) {
-    if (a.route == 0 && a.bn == 64) eg100<0, 64, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
-    else if (a.route == 0 && a.bn == 128) eg100<0, 128, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
-    else if (a.route == 0) eg100<0, 256, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
-    else if (a.route == 1 && a.bn == 64) eg100<1, 64, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
-    else if (a.route == 1) eg100<1, 128, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
-    else if (a.bn == 64) eg100<2, 64, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
-    else eg100<2, 128, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
+    if constexpr (!PIPE) {
+      if (a.route == 0) launch100<0, FOLD, WRITE, RES, false>(a.bn, grid, A, B, m, n, k, seed, C, R, st);
+    }
+    if (a.route == 1) launch100<1, FOLD, WRITE, RES, PIPE>(a.bn, grid, A, B, m, n, k, seed, C, R, st);
+    else if (a.route == 2) launch100<2, FOLD, WRITE, RES, PIPE>(a.bn, grid, A, B, m, n, k, seed, C, R, st);
+    else if (a.route == 3) launch100<3, FOLD, WRITE, RES, PIPE>(a.bn, grid, A, B, m, n, k, seed, C, R, st);
   } else {
     if (a.route == 0 && a.bn == 64) eg90<0, 64, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
     else if (a.route == 0) eg90<0, 128, FOLD, WRITE, RES><<<grid, 128, 0, st>>>(A, B, m, n, k, seed, C, R);
@@ -516,8 +586,12 @@ struct Dev {
       launch_split(fam_of(r), 1, W, Wp[r], nw, 0);
     }
   }
-  const uint8_t* a(const Arm& arm) const { return arm.route ? Xp[arm.route] : reinterpret_cast<const uint8_t*>(X); }
-  const uint8_t* b(const Arm& arm) const { return arm.route ? Wp[arm.route] : reinterpret_cast<const uint8_t*>(W); }
+  const uint8_t* a(const Arm& arm) const {
+    return has_planes(arm.route) ? Xp[arm.route] : reinterpret_cast<const uint8_t*>(X);
+  }
+  const uint8_t* b(const Arm& arm) const {
+    return has_planes(arm.route) ? Wp[arm.route] : reinterpret_cast<const uint8_t*>(W);
+  }
 };
 
 static int run_gate(int m, int n, int k, uint32_t seed, bool edge) {
@@ -542,34 +616,44 @@ static int run_gate(int m, int n, int k, uint32_t seed, bool edge) {
     split_bad += (xp != host_split(fam_of(r), 0, X)) + (wp != host_split(fam_of(r), 1, W));
   }
   bool all = split_bad == 0;
-  int last_bn = 0;
+  // PIPE runs resident: every step multiplies k-slice 0 again, which is the product of operands whose every k-slice is
+  // slice 0, so those operands' host reference is PIPE's.
+  std::vector<int8_t> Xr(X.size()), Wr(W.size());
+  for (size_t i = 0; i < X.size(); i++) Xr[i] = X[i / k * k + i % k % L];
+  for (size_t i = 0; i < W.size(); i++) Wr[i] = W[i / k * k + i % k % L];
   std::vector<int32_t> Cr, C((size_t)m * n);  // arms are ordered by tile, so each width's reference is computed once
   std::vector<uint32_t> Rr, R;
-  for (const Arm& a : arms()) {
-    if (a.bn != last_bn) host_ref(m, n, k, a.bn, seed, X, W, Cr, Rr), last_bn = a.bn;
-    R.resize(Rr.size());
-    auto call = [&](bool write) {
-      CK(cudaMemset(d.C, 0xA5, C.size() * 4));
-      CK(cudaMemset(d.R, 0xA5, R.size() * 4));
-      if (write) launch<true, true, false>(a, d.a(a), d.b(a), m, n, k, seed, d.C, d.R, 0);
-      else launch<true, false, false>(a, d.a(a), d.b(a), m, n, k, seed, d.C, d.R, 0);
-      CK(cudaDeviceSynchronize());
-      CK(cudaMemcpy(C.data(), d.C, C.size() * 4, cudaMemcpyDeviceToHost));
-      CK(cudaMemcpy(R.data(), d.R, R.size() * 4, cudaMemcpyDeviceToHost));
-      size_t bc = 0, br = 0;
-      for (size_t i = 0; i < C.size(); i++) bc += C[i] != Cr[i];
-      for (size_t i = 0; i < R.size(); i++) br += R[i] != Rr[i];
-      return std::make_pair(bc, br);
-    };
-    const auto ctl = call(false);
-    const auto got = call(true);
-    const bool ok = got.first == 0 && got.second == 0, rejected = ctl.first > 0 && ctl.second > 0;
-    all = all && ok && rejected;
-    printf("{\"mode\": \"gate\", \"arch\": \"sm_%da\", \"arm\": \"%s\", \"dist\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, "
-           "\"exact\": %s, \"c_bad\": %zu, \"r_bad\": %zu, \"control_rejected\": %s, \"split_bad\": %zu, \"words\": %zu, "
-           "\"receipts\": %zu}\n",
-           g_sm, a.name, edge ? "edge" : "uniform", m, n, k, ok ? "true" : "false", got.first, got.second,
-           rejected ? "true" : "false", split_bad, C.size(), R.size());
+  for (int pipe = 0; pipe < 2; pipe++) {
+    int last_bn = 0;
+    for (const Arm& a : arms()) {
+      if (pipe && !can_pipe(a)) continue;
+      if (a.bn != last_bn) host_ref(m, n, k, a.bn, seed, pipe ? Xr : X, pipe ? Wr : W, Cr, Rr), last_bn = a.bn;
+      R.resize(Rr.size());
+      auto call = [&](bool write) {
+        CK(cudaMemset(d.C, 0xA5, C.size() * 4));
+        CK(cudaMemset(d.R, 0xA5, R.size() * 4));
+        if (pipe && write) launch<true, true, true, true>(a, d.a(a), d.b(a), m, n, k, seed, d.C, d.R, 0);
+        else if (pipe) launch<true, false, true, true>(a, d.a(a), d.b(a), m, n, k, seed, d.C, d.R, 0);
+        else if (write) launch<true, true, false>(a, d.a(a), d.b(a), m, n, k, seed, d.C, d.R, 0);
+        else launch<true, false, false>(a, d.a(a), d.b(a), m, n, k, seed, d.C, d.R, 0);
+        CK(cudaDeviceSynchronize());
+        CK(cudaMemcpy(C.data(), d.C, C.size() * 4, cudaMemcpyDeviceToHost));
+        CK(cudaMemcpy(R.data(), d.R, R.size() * 4, cudaMemcpyDeviceToHost));
+        size_t bc = 0, br = 0;
+        for (size_t i = 0; i < C.size(); i++) bc += C[i] != Cr[i];
+        for (size_t i = 0; i < R.size(); i++) br += R[i] != Rr[i];
+        return std::make_pair(bc, br);
+      };
+      const auto ctl = call(false);
+      const auto got = call(true);
+      const bool ok = got.first == 0 && got.second == 0, rejected = ctl.first > 0 && ctl.second > 0;
+      all = all && ok && rejected;
+      printf("{\"mode\": \"gate\", \"arch\": \"sm_%da\", \"arm\": \"%s%s\", \"dist\": \"%s\", \"m\": %d, \"n\": %d, "
+             "\"k\": %d, \"exact\": %s, \"c_bad\": %zu, \"r_bad\": %zu, \"control_rejected\": %s, \"split_bad\": %zu, "
+             "\"words\": %zu, \"receipts\": %zu}\n",
+             g_sm, a.name, pipe ? "_pipe" : "", edge ? "edge" : "uniform", m, n, k, ok ? "true" : "false", got.first,
+             got.second, rejected ? "true" : "false", split_bad, C.size(), R.size());
+    }
   }
   return all ? 0 : 4;
 }
@@ -590,27 +674,30 @@ static int run_bench(int reps, int m, int n, int k) {
   struct Run {
     std::string name;
     int arm;  // >= 0 an arm; -1 - r the split of route r's X, -11 - r its W
-    bool fold, res;
+    bool fold, res, pipe;
   };
   std::vector<Run> runs;
   const auto as = arms();
-  for (int res = 0; res < 2; res++)
+  for (int mode = 0; mode < 3; mode++)
     for (int i = 0; i < (int)as.size(); i++) {
-      const std::string sfx = res ? "_res" : "";
-      runs.push_back({std::string(as[i].name) + "_fold" + sfx, i, true, res == 1});
-      runs.push_back({std::string(as[i].name) + "_nofold" + sfx, i, false, res == 1});
+      if (mode == 2 && !can_pipe(as[i])) continue;
+      const std::string sfx = mode == 0 ? "" : mode == 1 ? "_res" : "_pipe";
+      runs.push_back({std::string(as[i].name) + "_fold" + sfx, i, true, mode > 0, mode == 2});
+      runs.push_back({std::string(as[i].name) + "_nofold" + sfx, i, false, mode > 0, mode == 2});
     }
   for (int r = 1; r < (g_sm == 100 ? 3 : 2); r++) {
     const std::string sfx = r == 1 ? "" : "_k4s";
-    runs.push_back({"split_x" + sfx, -1 - r, false, false});
-    runs.push_back({"split_w" + sfx, -11 - r, false, false});
+    runs.push_back({"split_x" + sfx, -1 - r, false, false, false});
+    runs.push_back({"split_w" + sfx, -11 - r, false, false, false});
   }
   auto go = [&](const Run& r) {
     if (r.arm <= -11) launch_split(fam_of(-11 - r.arm), 1, d.W, d.Wp[-11 - r.arm], W.size(), 0);
     else if (r.arm < 0) launch_split(fam_of(-1 - r.arm), 0, d.X, d.Xp[-1 - r.arm], X.size(), 0);
     else {
       const Arm& a = as[r.arm];
-      if (r.fold && r.res) launch<true, true, true>(a, d.a(a), d.b(a), m, n, k, 1, d.C, d.R, 0);
+      if (r.pipe && r.fold) launch<true, true, true, true>(a, d.a(a), d.b(a), m, n, k, 1, d.C, d.R, 0);
+      else if (r.pipe) launch<false, true, true, true>(a, d.a(a), d.b(a), m, n, k, 1, d.C, d.R, 0);
+      else if (r.fold && r.res) launch<true, true, true>(a, d.a(a), d.b(a), m, n, k, 1, d.C, d.R, 0);
       else if (r.fold) launch<true, true, false>(a, d.a(a), d.b(a), m, n, k, 1, d.C, d.R, 0);
       else if (r.res) launch<false, true, true>(a, d.a(a), d.b(a), m, n, k, 1, d.C, d.R, 0);
       else launch<false, true, false>(a, d.a(a), d.b(a), m, n, k, 1, d.C, d.R, 0);

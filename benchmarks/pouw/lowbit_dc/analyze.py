@@ -92,12 +92,13 @@ def windows(win: list[dict]) -> list[dict]:
 
 
 def gemm_summary(gates: list[dict], bench: list[dict], dbench: list[dict]) -> dict:
-    """egemm's gates and its time. Per shape and emulated arm (k3*, k4*), streamed and resident (RES: operands loaded
-    once, the on-chip pipeline alone): the time against native int8 at the emulated arm's tile (the like-for-like ratio),
-    against int8 at dgemm's tile and against cuBLASLt int8 (dgemm bench), and committed words a SM a clock at the
-    device's reported clock."""
+    """egemm's gates and its time. Per shape and emulated arm (k3*, k4*), streamed, resident (RES: operands loaded once,
+    the on-chip pipeline alone) and pipelined (PIPE: resident with the next step's MMAs beside this step's absorb, against
+    i8r, native int8 in the same shape): the time against native int8 at the emulated arm's tile (the like-for-like
+    ratio), against int8 at dgemm's tile and against cuBLASLt int8 (dgemm bench), and committed words a SM a clock at
+    the device's reported clock."""
     dg = {(d["m"], d["n"], d["k"]): d for d in dbench}
-    rows = []
+    rows, native = [], []
     for b in bench:
         arms = sorted({k[: -len("_fold_ms")] for k in b if k.endswith("_fold_ms")})
         words = b["m"] * b["n"] * b["k"] / 32
@@ -114,29 +115,37 @@ def gemm_summary(gates: list[dict], bench: list[dict], dbench: list[dict]) -> di
             split = "split_x_k4s" if emu.startswith("k4s") else "split_x"
             row = {"m": b["m"], "n": b["n"], "k": b["k"], "emu": emu, "i8_same_tile": same, "i8_dgemm_tile": other,
                    "split_x_ms": b.get(f"{split}_ms")}
-            for mode, sfx in (("streamed", ""), ("resident", "_res")):
-                if f"{emu}_fold{sfx}_ms" not in b:
+            for mode, sfx, base in (("streamed", "", same), ("resident", "_res", same),
+                                    ("pipelined", "_pipe", f"i8r_{tile}")):
+                if f"{emu}_fold{sfx}_ms" not in b or f"{base}_fold{sfx}_ms" not in b:
                     continue
-                e, i8 = b[f"{emu}_fold{sfx}_ms"], b[f"{same}_fold{sfx}_ms"]
+                e, i8 = b[f"{emu}_fold{sfx}_ms"], b[f"{base}_fold{sfx}_ms"]
+                ref = b[f"{other}_fold{'_res' if sfx else ''}_ms"]
                 row[mode] = {
-                    "emu_fold_ms": e, "emu_nofold_ms": b[f"{emu}_nofold{sfx}_ms"], "i8_fold_ms": i8,
-                    "i8_nofold_ms": b[f"{same}_nofold{sfx}_ms"], "i8_dgemm_tile_fold_ms": b[f"{other}_fold{sfx}_ms"],
+                    "base": base, "emu_fold_ms": e, "emu_nofold_ms": b[f"{emu}_nofold{sfx}_ms"], "i8_fold_ms": i8,
+                    "i8_nofold_ms": b[f"{base}_nofold{sfx}_ms"], "i8_dgemm_tile_fold_ms": ref,
                     "fold_ratio_same_tile": e / i8,
-                    "nofold_ratio_same_tile": b[f"{emu}_nofold{sfx}_ms"] / b[f"{same}_nofold{sfx}_ms"],
-                    "fold_ratio_dgemm_tile": e / b[f"{other}_fold{sfx}_ms"],
-                    "emu_words_sm_clk": rate(e), "i8_words_sm_clk": rate(i8),
-                    "i8_dgemm_tile_words_sm_clk": rate(b[f"{other}_fold{sfx}_ms"]),
+                    "nofold_ratio_same_tile": b[f"{emu}_nofold{sfx}_ms"] / b[f"{base}_nofold{sfx}_ms"],
+                    "fold_ratio_dgemm_tile": e / ref,
+                    "emu_words_sm_clk": rate(e), "i8_words_sm_clk": rate(i8), "i8_dgemm_tile_words_sm_clk": rate(ref),
                 }
             if "cublaslt_ms" in d:
                 row |= {"cublaslt_ms": d["cublaslt_ms"], "emu_fold_over_cublaslt": b[f"{emu}_fold_ms"] / d["cublaslt_ms"]}
             if row["split_x_ms"] is not None:
                 row["split_x_over_i8_fold"] = row["split_x_ms"] / b[f"{same}_fold_ms"]
             rows.append(row)
+        for i8r in (a for a in arms if a.startswith("i8r_") and f"{a}_fold_pipe_ms" in b):
+            same = "i8_" + i8r.split("_")[1]
+            native.append({"m": b["m"], "n": b["n"], "k": b["k"], "arm": i8r,
+                           "res_over_i8_res": b[f"{i8r}_fold_res_ms"] / b[f"{same}_fold_res_ms"],
+                           "pipe_over_i8_res": b[f"{i8r}_fold_pipe_ms"] / b[f"{same}_fold_res_ms"],
+                           "pipe_words_sm_clk": rate(b[f"{i8r}_fold_pipe_ms"])})
     return {
         "gates": len(gates),
         "gates_exact": sum(g["exact"] and g["control_rejected"] and g["split_bad"] == 0 for g in gates),
         "gate_arms": sorted({g["arm"] for g in gates}),
         "bench": rows,
+        "i8r": native,
     }
 
 
@@ -152,19 +161,27 @@ def gemm_main(argv: list[str]) -> int:
     s = gemm_summary(load(a.out / "gate.jsonl"), load(a.out / "bench.jsonl"), load(a.out / "dgemm-bench.jsonl"))
     print(f"# egemm: int8 emulated in FP8 against native int8\n\ngates exact (route, receipts, control rejected, split): "
           f"{s['gates_exact']} of {s['gates']} over arms {', '.join(s['gate_arms'])}\n")
-    print("| m x n x k | arm | mode | emu fold ms | i8 same tile fold ms | ratio | nofold ratio | ratio to dgemm tile | "
+    print("| m x n x k | arm | mode | emu fold ms | int8 same tile fold ms (arm) | ratio | nofold ratio | ratio to dgemm tile | "
           "emu words/SM/clk | i8 words/SM/clk | emu / cuBLASLt | split X / i8 |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in s["bench"]:
-        for mode in ("streamed", "resident"):
+        for mode in ("streamed", "resident", "pipelined"):
             if mode not in r:
                 continue
             m = r[mode]
-            print(f"| {r['m']}x{r['n']}x{r['k']} | {r['emu']} | {mode} | {m['emu_fold_ms']:.4f} | {m['i8_fold_ms']:.4f} | "
-                  f"{m['fold_ratio_same_tile']:.2f} | {m['nofold_ratio_same_tile']:.2f} | {m['fold_ratio_dgemm_tile']:.2f} | "
-                  f"{_f(m['emu_words_sm_clk'], '.2f')} | {_f(m['i8_words_sm_clk'], '.2f')} | "
+            print(f"| {r['m']}x{r['n']}x{r['k']} | {r['emu']} | {mode} | {m['emu_fold_ms']:.4f} | {m['i8_fold_ms']:.4f} "
+                  f"({m['base']}) | {m['fold_ratio_same_tile']:.2f} | {m['nofold_ratio_same_tile']:.2f} | "
+                  f"{m['fold_ratio_dgemm_tile']:.2f} | {_f(m['emu_words_sm_clk'], '.2f')} | "
+                  f"{_f(m['i8_words_sm_clk'], '.2f')} | "
                   f"{_f(r.get('emu_fold_over_cublaslt') if mode == 'streamed' else None, '.1f')} | "
                   f"{_f(r.get('split_x_over_i8_fold') if mode == 'streamed' else None, '.2f')} |")
+    if s["i8r"]:
+        print("\nNative int8 in k4s's shape (i8r: fresh accumulator each step, word in registers), against i8 resident:\n")
+        print("| m x n x k | arm | i8r resident / i8 resident | i8r pipelined / i8 resident | i8r pipelined words/SM/clk |")
+        print("|---|---|---|---|---|")
+        for r in s["i8r"]:
+            print(f"| {r['m']}x{r['n']}x{r['k']} | {r['arm']} | {r['res_over_i8_res']:.2f} | {r['pipe_over_i8_res']:.2f} | "
+                  f"{_f(r['pipe_words_sm_clk'], '.2f')} |")
     if a.json:
         a.json.write_text(json.dumps(s, indent=1))
     return 0 if s["gates"] and s["gates_exact"] == s["gates"] else 4
