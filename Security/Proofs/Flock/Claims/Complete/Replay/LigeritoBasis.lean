@@ -133,9 +133,9 @@ theorem claims_xsize (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22
       exact (regionClaim_rel' st hwf (regionsOf st) reg (hrw.regions reg hreg) hrw.hm st.mPts hrw.mPts r
         (hpts r hr) (fun t => fOf r[t.val]!) (fun t => rfl) v hv).x_size
 
-/-- **`BasisOk` at the deployed relation**: at every rep, the verifier's basis is the batched basis's extension. -/
-theorem basisOk_relation (H : Claims.Msg → Claims.Msg) : BasisOk H Readable.relation := by
-  intro o i hi r _ q e y hqe hy
+/-- **At the deployed relation, every claim a rep opens has `m − 6` coordinates.** -/
+theorem _root_.FlockComplete.Run.claims_xsize {H : Claims.Msg → Claims.Msg} (o : Run H Readable.relation) {i : ℕ}
+    (hi : i < o.tabs.size) (r : ℕ) : ∀ c ∈ o.claims i r, c.x.size = o.tabs[i]!.m - 6 := by
   obtain ⟨st, hsts, hwf, hrw, -, -⟩ := o.model
   obtain ⟨st', hsts', hspec, h22, -⟩ := o.table
   obtain rfl : st = st' := by
@@ -148,14 +148,16 @@ theorem basisOk_relation (H : Claims.Msg → Claims.Msg) : BasisOk H Readable.re
       (Lc.out st.circuitFold st.m (o.trace 0) (Zc.out st.m (o.zcCoins 0 r) (o.trace 0)) (o.lcCoins 0 r)) ++
         val (st.extraClaims o.sess.points) := by
     simp only [Run.claims, Run.lcOut, Run.zcOut, Run.extras, ht, Setup.ofCircuit]
-  have hx := claims_xsize st hwf hrw h22 (o.trace 0) (o.zcCoins 0 r) (o.lcCoins 0 r) o.sess.points
+  rw [hcl, show o.tabs[0]!.m = st.m by rw [ht]; rfl]
+  exact Replay.claims_xsize st hwf hrw h22 (o.trace 0) (o.zcCoins 0 r) (o.lcCoins 0 r) o.sess.points
     (o.sess_points hspec)
-  rw [← hcl] at hx
+
+/-- **`BasisOk` at the deployed relation**: at every rep, the verifier's basis is the batched basis's extension. -/
+theorem basisOk_relation (H : Claims.Msg → Claims.Msg) : BasisOk H Readable.relation := by
+  intro o i hi r _ q e y hqe hy
   obtain ⟨⟨hn7, -⟩, hsm⟩ := fast100_dims _ _ (o.sch_fast100 hi)
-  have hm : o.tabs[0]!.m = st.m := by rw [ht]; rfl
-  have hn : (o.sch 0).n = st.m - 7 := by rw [hn7, hsm, hm]
+  have hn : (o.sch i).n = o.tabs[i]!.m - 7 := by rw [hn7, hsm]
   rw [hn] at hqe ⊢
-  rw [hm]
-  exact Lg.basis_sws (o.claims 0 r) (o.rsCoins 0 r) st.m hx q e y hqe hy
+  exact Lg.basis_sws (o.claims i r) (o.rsCoins i r) _ (o.claims_xsize hi r) q e y hqe hy
 
 end FlockComplete.Replay

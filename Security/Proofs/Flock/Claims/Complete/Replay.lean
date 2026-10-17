@@ -20,6 +20,7 @@ import Proofs.Flock.Claims.Complete.Replay.RepRounds
 import Proofs.Flock.Claims.Complete.Replay.ProverOk
 import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
 import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
+import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`, `Agrees`),
@@ -58,9 +59,11 @@ basis, `repP_lig`, so `LgFinal` holds at every rep the walk runs on the trace's 
 honest Ligerito's final identity, `Lg.Honest`, ring switching's claim on the packed table, `RsSum`, and the verifier's
 basis as the batched basis's extension, `BasisOk`, `lgFinal_of`; `LigeritoBasis`: every claim a rep opens has `m − 6`
 coordinates, `claims_xsize`, so the verifier's basis is the extension of the prover's batched basis on the cube,
-`Lg.fOf_basisVals`, `Lg.basis_bHat`, and `BasisOk` holds at the deployed relation, `basisOk_relation`), and the prover's
-pieces (`RepRounds`: a returning rep records a round, each of at most `65536` coins, `repP_repOk`, every squeeze of the
-models being few coins, `Bnd`; `ProverOk`: the case's table has a registered scheme and at most 1,024 regions,
-`Case.schemeOk`, so at an oracle of 64-byte outputs its digests have the scheme's width, `opsWith_widths`,
-`schemeWidths`, its level-0 cap is non-empty and under `2^64` bytes, `commitP_cap`, and `ProverOk` holds, `proverOk`).
--/
+`Lg.fOf_basisVals`, `Lg.basis_bHat`, and `BasisOk` holds at the deployed relation, `basisOk_relation`; `LigeritoSum`: a
+bit of a sum is the sum of the bits, `Lg.bF_bit_sumF`, so ring switching's `T` is the packed table's sum against the
+batched basis, `Lg.rsSum_eq`, `RsSum` holds at the deployed relation, `rsSum_relation`, and `LgFinal` there rests on
+`RepWalkP` and `Lg.Honest`, `lgFinal_relation`), and the prover's pieces (`RepRounds`: a returning rep records a round,
+each of at most `65536` coins, `repP_repOk`, every squeeze of the models being few coins, `Bnd`; `ProverOk`: the case's
+table has a registered scheme and at most 1,024 regions, `Case.schemeOk`, so at an oracle of 64-byte outputs its digests
+have the scheme's width, `opsWith_widths`, `schemeWidths`, its level-0 cap is non-empty and under `2^64` bytes,
+`commitP_cap`, and `ProverOk` holds, `proverOk`). -/
