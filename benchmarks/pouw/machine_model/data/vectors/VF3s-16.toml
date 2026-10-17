@@ -1,7 +1,7 @@
-# VF3s-16: VF3r-16 with RT-FACET's refit of the joint issue rows (note:20261017T1930Z-draft-rt-facet; runs @JI3t): FMUL or FADD beside IMMA.16832 on 3 accumulators, 120 lane ops a 8 MMAs, unrolled 16-20 deep, beats JI3s_0-5 (JI3s_2 at 1.0131); JI3s_0-16 as JI3t_0-35 (each MMA form's upper hull of JI3s's vertices and the measured programs at the 2% margin, each form at the most it carries beside each vector coefficient), JI3s_17-20 kept
+# VF3s-16: VF3r-16 with RT-FACET's refit of the joint issue rows (note:20261017T1930Z-draft-rt-facet; runs @JI3t): FMUL beside an MMA, 2-3 accumulators, 112-128 lane ops a 8 MMAs, unrolled 16-20 deep, beats JI3s_0-9 (IMMA.SP.16864 loaded JI3s_1 1.0408; IMMA.16832 loaded JI3s_2 1.0131); JI3s_0-17 as JI3t_0-38 (each MMA form's upper hull of JI3s's vertices and the measured programs at the 2% margin, each form at the most it carries beside each vector coefficient), kept JI3s_18, JI3s_19, JI3s_20
 name = "VF3s-16"
 epoch = "VF3s-16"
-summary = "VF3r-16 with RT-FACET's refit of the joint issue rows (note:20261017T1930Z-draft-rt-facet; runs @JI3t): FMUL or FADD beside IMMA.16832 on 3 accumulators, 120 lane ops a 8 MMAs, unrolled 16-20 deep, beats JI3s_0-5 (JI3s_2 at 1.0131); JI3s_0-16 as JI3t_0-35 (each MMA form's upper hull of JI3s's vertices and the measured programs at the 2% margin, each form at the most it carries beside each vector coefficient), JI3s_17-20 kept"
+summary = "VF3r-16 with RT-FACET's refit of the joint issue rows (note:20261017T1930Z-draft-rt-facet; runs @JI3t): FMUL beside an MMA, 2-3 accumulators, 112-128 lane ops a 8 MMAs, unrolled 16-20 deep, beats JI3s_0-9 (IMMA.SP.16864 loaded JI3s_1 1.0408; IMMA.16832 loaded JI3s_2 1.0131); JI3s_0-17 as JI3t_0-38 (each MMA form's upper hull of JI3s's vertices and the measured programs at the 2% margin, each form at the most it carries beside each vector coefficient), kept JI3s_18, JI3s_19, JI3s_20"
 note = "note:20261017T1930Z-draft-rt-facet"
 rows = [
     "issue", "M", "F", "VMNX", "H", "I", "A", "F2FS",
@@ -14,12 +14,13 @@ rows = [
     "ROW_LDSMR1", "ROW_LDSMR2", "ROW_LDSMR4", "ROW_STSMR1", "ROW_STSMR2", "ROW_STSMR4", "ROW_SHFLM", "ROW_UTMA1K",
     "ROW_UTMA2K", "ROW_UTMA4K", "ROW_UTMA8K", "ROW_UTMA16K", "ROW_UTMA32K", "ROW_UTMA48K", "ROW_UTMA64K", "ROW_UTMABIG",
     "ROW_G4_256", "ROW_G4_1K", "ROW_TMAB", "ROW_ATOME32P", "ROW_LDGSTS16", "ROW_UBLKCP4K", "ROW_DSMST4P", "ELDG0",
-    "ELDG1", "ELDG2", "ROW_LDS64", "ROW_LDG64", "ROW_LDG256", "ROW_L2RD", "JI3s_17", "JI3s_18",
-    "JI3s_19", "JI3s_20", "JI3t_0", "JI3t_1", "JI3t_2", "JI3t_3", "JI3t_4", "JI3t_5",
-    "JI3t_6", "JI3t_7", "JI3t_8", "JI3t_9", "JI3t_10", "JI3t_11", "JI3t_12", "JI3t_13",
-    "JI3t_14", "JI3t_15", "JI3t_16", "JI3t_17", "JI3t_18", "JI3t_19", "JI3t_20", "JI3t_21",
-    "JI3t_22", "JI3t_23", "JI3t_24", "JI3t_25", "JI3t_26", "JI3t_27", "JI3t_28", "JI3t_29",
-    "JI3t_30", "JI3t_31", "JI3t_32", "JI3t_33", "JI3t_34", "JI3t_35", "EFFMB0", "EFFMB1",
+    "ELDG1", "ELDG2", "ROW_LDS64", "ROW_LDG64", "ROW_LDG256", "ROW_L2RD", "JI3s_18", "JI3s_19",
+    "JI3s_20", "JI3t_0", "JI3t_1", "JI3t_2", "JI3t_3", "JI3t_4", "JI3t_5", "JI3t_6",
+    "JI3t_7", "JI3t_8", "JI3t_9", "JI3t_10", "JI3t_11", "JI3t_12", "JI3t_13", "JI3t_14",
+    "JI3t_15", "JI3t_16", "JI3t_17", "JI3t_18", "JI3t_19", "JI3t_20", "JI3t_21", "JI3t_22",
+    "JI3t_23", "JI3t_24", "JI3t_25", "JI3t_26", "JI3t_27", "JI3t_28", "JI3t_29", "JI3t_30",
+    "JI3t_31", "JI3t_32", "JI3t_33", "JI3t_34", "JI3t_35", "JI3t_36", "JI3t_37", "JI3t_38",
+    "EFFMB0", "EFFMB1",
 ]
 # [kind, MACs]: the kind's price is at least that many tensor MACs
 credits = [
