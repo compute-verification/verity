@@ -742,3 +742,18 @@ def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to,
 
     monkeypatch.setattr(drive.subprocess, "run", run)
     assert drive.merge_thread_post(f"{' '.join(to)} queue: b22a0c54d29e on `next` (#1 #2) failed its check", to, sender=sender)
+
+
+def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
+    """17 Oct, r20261017-104751-c19c on cpu-2: the Security/Proofs replay was OOM-killed (exit 137), lean-audit failed with rc 1,
+    and the fallback on Lean sources ejected #2224 and #2231, whose heads had passed."""
+    from research.drive import killed
+
+    d = tmp_path / "run"
+    d.mkdir()
+    (d / "steps.jsonl").write_text('{"step": "lean-audit", "status": "failed", "rc": 1, "log": "lean-audit.log"}\n')
+    (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n  replay: killed (exit 137; out of "
+                                      "memory?), which is not a kernel verdict: rerun it alone\n")
+    assert killed(d)
+    (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n    error: build failed\n")
+    assert not killed(d)
