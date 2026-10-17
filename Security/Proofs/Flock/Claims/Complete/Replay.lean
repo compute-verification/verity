@@ -14,6 +14,8 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
 import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
 import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
+import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`, `Agrees`),
@@ -42,4 +44,9 @@ identity, `LgFinal`, `ligerito_goal`, and `Consumed` once each rep's stream hold
 `consumed_goal`; `LigeritoProver`: the honest prover's Ligerito ends where the model does on the proof it returns,
 `ligeritoP_go`; `LigeritoRep`: a returning rep's transcript ends at the model's, `repP_ligerito`, so `LgAt` and `LgCount`
 follow from the recorded stream carrying the rep's rounds, `Run.lgAt_of`, `Run.lgCount_of`, and lincheck's circuit fold
-returns at a returning rep, `Run.lcFold_of`). -/
+returns at a returning rep, `Run.lcFold_of`; `LigeritoMerkle`: a committed table's Merkle openings pass,
+`commitP_tree`, `merkle_open`, the honest prover opens at the model's query rounds, `ligeritoP_opens`, and so every
+level's Merkle check passes, `merkleOk_of_opens`; `LigeritoWalk`: a returning rep opens honestly, `repP_opens`, so
+`LgMerkle` follows from the session walk at each rep, `RepWalk`, and the schemes' widths, `SchemeWidths`,
+`lgMerkle_of_walk`, and `Ligerito` and `Consumed` rest on those and `LgFinal`, `ligerito_goal_walk`,
+`consumed_goal_walk`). -/
