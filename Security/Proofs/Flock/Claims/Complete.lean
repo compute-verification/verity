@@ -36,4 +36,5 @@ prover's rounds (`zerocheckWith_of`, `lincheckWith_of`, `ringSwitchWith_of`, and
 decodes it at (`repShaped`). `Walk` aligns every rep's recorded stream with its run (`Run.walkAt`) and composes the
 goals into `Claims.Flock.Complete` at the deployed relation from named premises (`complete_plain`). `WalkPacked` runs
 every rep on the trace's packed table (`Run.repWalkP`), so the premise `LgFinal` rests on the honest Ligerito's final
-identity alone (`lgFinal_walk`, `complete_plain_honest`). -/
+identity alone (`lgFinal_walk`, `complete_plain_honest`), which holds (`Lg.Exact.honest`), so completeness rests on the
+record's JSON and the oracle's 64-byte outputs alone (`complete_plain_json`). -/

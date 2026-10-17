@@ -7,7 +7,9 @@ The honest session commits each table's packed trace at level 0 and runs both re
 `sessionS`), so the session walk holds on the packed table at every rep (`Run.repWalkP`, `RepWalkP`). With ring
 switching's claim and the verifier's basis proved at the deployed relation (`lgFinal_relation`), Ligerito's final
 identity there rests on the honest Ligerito's alone (`lgFinal_walk`), and so does Flock's completeness at the deployed
-plain verifier, beside the record's JSON and the oracle's 64-byte outputs (`complete_plain_honest`).
+plain verifier, beside the record's JSON and the oracle's 64-byte outputs (`complete_plain_honest`). With the honest
+Ligerito's final identity proved (`Lg.Exact.honest`), both rest on the record's JSON and the oracle's 64-byte outputs
+alone (`lgFinal_json`, `complete_plain_json`).
 -/
 
 namespace FlockComplete.Replay
@@ -129,5 +131,17 @@ record's JSON (`JsonSpec`), the oracle's 64-byte outputs (`Out64`) and the hones
 theorem complete_plain_honest (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
     (h64 : Claims.Out64 H) (hH : Lg.Honest) : Claims.Flock.Complete H (deployPlain Readable.relation) :=
   complete_plain H S h64 (lgFinal_walk H S h64 hH)
+
+/-- **Ligerito's final identity at the deployed relation** (`LgFinal`), at the record's JSON and the oracle's 64-byte
+outputs. -/
+theorem lgFinal_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) :
+    LgFinal H Readable.relation :=
+  lgFinal_walk H S h64 Lg.Exact.honest
+
+/-- **Flock's completeness at the deployed plain verifier**, at the deployed relation and the record's error, from the
+record's JSON (`JsonSpec`) and the oracle's 64-byte outputs (`Out64`) alone. -/
+theorem complete_plain_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+    (h64 : Claims.Out64 H) : Claims.Flock.Complete H (deployPlain Readable.relation) :=
+  complete_plain_honest H S h64 Lg.Exact.honest
 
 end FlockComplete.Replay
