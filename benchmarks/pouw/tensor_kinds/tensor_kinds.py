@@ -150,8 +150,10 @@ def loops(body: list[tuple[int, str, str]]) -> list[dict]:
             continue
         seg = [o for o in (opcode(x) for _, _, x in body[i : j + 1]) if o != "NOP"]
         mma = [o for o in seg if MMA.match(o)]
+        # sm_89's ptxas moves part of an add.u32 stream to the FMA pipe as IMAD.IADD: an add all the same
         out.append({"mma": len(mma), "mma_ops": sorted(set(mma)), "other": len(seg) - len(mma),
-                    "iadd3": sum(o.startswith("IADD3") for o in seg), "ffma": sum(o.startswith("FFMA") for o in seg)})
+                    "iadd3": sum(o.startswith(("IADD3", "IMAD.IADD")) for o in seg),
+                    "ffma": sum(o.startswith("FFMA") for o in seg)})
     return out
 
 
