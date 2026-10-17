@@ -120,6 +120,9 @@ structure Circuit where
   outNet : Nat := 0
   /-- `outNet`'s output ports that are the output words (a stage), in output-leaf order (META `out_net_ports`) -/
   outNetPorts : Array Nat := #[]
+  /-- each output word's slot of `outNet`, where META `out_net_ports` lists `[slot, port]` pairs (a repeated last stage);
+  `none` where it lists ports alone, each of slot 0 -/
+  outNetSlots : Option (Array Nat) := none
   /-- the unit inputs that are row words (`(unit, input port, leaf)`): the low 16 bits are the word's message bits -/
   leafCuts : Array (Nat × Nat × Nat) := #[]
   /-- a typed template's block (item 1e): the unit is its instance's root, beside its parts -/

@@ -1372,6 +1372,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - When a tail stage returns the outputs: the unit range need not be a power of two and the units return none; that stage's
     only output group is one 16-bit port per output word (`16 · words` a power of two); and the `Out` region is that group,
     free bits `[0, log2(16 · words))` and the stage range's slot bits, valued at each VU's output words (u16 LE).
+  - A repeated last stage (`per_vu` above 1, a second repeated unit type) returns them as `out_net_ports` of `[slot, port]`
+    pairs, a plain port meaning slot 0: one pair per output word, each a 16-bit output port of a slot of the stage below its
+    `per_vu`, no pair twice. Only a statement with hidden outputs may (its output rows hash each word at its slot's port,
+    `HmOut.outCol`); with public outputs the `Out` region pins one slot per VU, so pairs are refused there.
   - Any range may be packed except those a region reads (`hm96`, `out_net`, the mask).
   - A leaf cut wires a unit's cut input from a row word: bit `t < 16` copies the word's message bit (as a unit leaf does),
     the higher bits the forced-zero row. Each wires its port once, and Δ lists them after the unit leaf wiring, before the
@@ -1617,7 +1621,8 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    `sha512/row/v1` row of `16 · words` bits in at least one chunk (`a row that is not a sha512/row/v1 row of 16 · words
    bits in at least one chunk`). Under hidden outputs (§16.13) the check is `ProvedScope.scopeOkI`, the general instance
    form: the unit repeated, reading any number of committed input groups, and any number of stages the verifier
-   evaluates, each reading wires from earlier outputs, any of them returning the outputs (rule 7 orders them); the unit
+   evaluates, each reading wires from earlier outputs, any of them returning the outputs, a repeated last stage from any
+   of its slots (`out_net_ports` of `[slot, port]` pairs, §16.10; rule 7 orders them); the unit
    of at most `2^32` rows reading only port bits as above, and every
    row a `sha512/row/v1` row as above, or every row, in any mix, either an unsegmented `sha512/row/v2` row (§16.14) of
    `16 · words` bits whose last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block
