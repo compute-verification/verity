@@ -195,6 +195,22 @@ _define_once("dsv4_sparse_attn(Tensor q, Tensor nope, Tensor scale, Tensor rope,
              "SymInt topk, float softmax_scale, float eps) -> Tensor", "dsv4_sparse_attn",
              lambda q, nope, scale, rope, positions, cos_sin, sink, state_kv, state_score, norm_weight, layer_name, heads, ratio, window,
                   topk, softmax_scale, eps: q.new_empty((q.shape[0], heads, q.shape[-1])))
+
+
+# `vllm::fused_inv_rope_fp8_quant_kernel` (vllm/models/deepseek_v4/common/ops/fused_inv_rope_fp8_quant.py), the o-projection's
+# input: (bytes [G, T, d] e4m3, scales [G, T, scale_inner] f32, or int32 packed UE8M0 when TMA-aligned, over a buffer of
+# tma_aligned_T rows a group)
+def _inv_rope_quant_fake(o, positions, cos_sin_cache, heads_per_group, quant_group_size, chunks_per_head, rope_start, half_rope,
+                         tma_aligned_scales, fp8_max, tma_aligned_T, num_tokens, n_groups, d, scale_inner):
+    scale = o.new_empty(n_groups * scale_inner * tma_aligned_T, dtype=torch.int32 if tma_aligned_scales else torch.float32)
+    return (o.new_empty((n_groups, num_tokens, d), dtype=torch.float8_e4m3fn),
+            scale.as_strided((n_groups, num_tokens, scale_inner), (scale_inner * tma_aligned_T, 1, tma_aligned_T)))
+
+
+_define_once("fused_inv_rope_fp8_quant_kernel(Tensor o, Tensor positions, Tensor cos_sin_cache, SymInt heads_per_group, "
+             "SymInt quant_group_size, SymInt chunks_per_head, SymInt rope_start, SymInt half_rope, bool tma_aligned_scales, "
+             "float fp8_max, SymInt tma_aligned_T, SymInt num_tokens, SymInt n_groups, SymInt d, SymInt scale_inner) -> (Tensor, Tensor)",
+             "fused_inv_rope_fp8_quant_kernel", _inv_rope_quant_fake)
 # DeepGEMM's `fp8_einsum(expr, (a, a_scale), (b, b_scale), d, c=None, recipe)` (csrc/apis/einsum.hpp), which writes `d`
 # (`export_compat.deep_gemm_fp8_einsum_leaf`)
 _define_once("deep_gemm_fp8_einsum(str expr, Tensor a, Tensor a_scale, Tensor b, Tensor b_scale, Tensor(a!) d, int[] recipe) -> ()",

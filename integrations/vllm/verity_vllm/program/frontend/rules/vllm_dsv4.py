@@ -14,7 +14,8 @@ over the leaves `dsv4_leaves.dsv4_attention_leaves` exports in place of its kern
         (`registry.dsv4_compressor`) and FlashMLA's sparse decode or prefill over the rows each token reads (`registry.flashmla`,
         `registry.flashmla_prefill`)
 
-A role the vocabulary lacks refuses by name.
+and vLLM's `fused_inv_rope_fp8_quant_kernel`, the o-projection's input, per token and head (`registry.dsv4_indexer`).  A role
+the vocabulary lacks refuses by name.
 """
 
 from __future__ import annotations
@@ -26,12 +27,14 @@ from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import _vllm_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _positions, _rows, _static_float, _table, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vllm_mhc import _args
 from verity_vllm.program.kernels.flashmla_twin import num_sm_parts, request_splits, sched_meta
 from verity_vllm.program.registry import dsv4_compressor as C
+from verity_vllm.program.registry import dsv4_indexer as I
 from verity_vllm.program.registry import dsv4_qnorm_insert as Q
 from verity_vllm.program.registry.flashmla import FLASHMLA_DSV4
 
@@ -46,6 +49,7 @@ ROLE_KERNELS = {"dsv4_qnorm_rope_kv_insert": "the query norm, RoPE and window ca
                 "flashmla_decode": "FlashMLA's sparse fp8 decode (FlashMlaDecode_v1)",
                 "flashmla_gather_row": "the prefill's K-cache gather (FlashMlaGatherRow_v1)",
                 "flashmla_prefill": "FlashMLA's sparse prefill (FlashMlaPrefill_v1)",
+                "dsv4_inv_rope_quant_head": "the o-projection input's inverse RoPE and FP8 quantisation (Dsv4InvRopeQuantHead_v1)",
                 "const": "a constant word"}
 
 #: FlashMLA's sparse fp8 decode and prefill (cc 9.0) and the head-512 compressors by (head, rope) width: the scale group (the
@@ -215,7 +219,7 @@ class Dsv4SparseAttnRule(StateRule):
             return "numerics_unregistered: the attention takes its scale as a static; no registered-values twin"
         tp = active_target_profile()
         if tp.compute_capability != (9, 0):
-            return f"numerics_unregistered: the FlashMLA Definitions are its cc 9.0 kernels; the target is {tp.capability_str}"
+            return f"numerics_unregistered: the FlashMLA Definitions are its cc 9.0 kernels; the target is cc {tp.capability_str}"
         if (r := _value(ctx, a["q"], BF16, (T, None, None), "q")):
             return r
         _, NHP, D = shape(ctx, a["q"])
@@ -354,7 +358,79 @@ class Dsv4SparseAttnRule(StateRule):
         return out[0], out[2][:(D - QB) // QB], out[1]
 
 
-VLLM_DSV4_RULES = [Dsv4QNormRopeKvInsertRule(), Dsv4CompressorStateRule(), Dsv4SparseAttnRule()]
+class Dsv4InvRopeQuantRule(OpRule):
+    """`vllm.fused_inv_rope_fp8_quant_kernel`, the o-projection's input (`deep_gemm_fp8_o_proj`), per token and head:
+    `Dsv4InvRopeQuantHead_v1{CHUNKS,QG,ROPE}` of o[t, h] and cos_sin[positions[t]].  Head h = g * heads_per_group + j writes its
+    bytes at [g, t, j * HD : (j + 1) * HD] and its CHUNKS f32 scales at [g, t, j * CHUNKS : (j + 1) * CHUNKS]; the scale buffer's
+    rows past T (its TMA alignment) hold no value."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("Dsv4InvRopeQuant[vllm-dsv4]", 1, "op-binding", applies_to="vllm.fused_inv_rope_fp8_quant_kernel",
+                    preconditions=("the target's compute capability is 9.0 and tma_aligned_scales false: f32 scales (cc 10.0 packs UE8M0)",
+                                   "positions a static 1-D index of num_tokens = T rows; o [T, n_groups * heads_per_group, HD] bf16",
+                                   "cos_sin an f32 rotary cache [MAX_POS, 2 half_rope] holding every position",
+                                   "HD = chunks_per_head * quant_group_size, the rotary suffix quant_group_size - rope_start = 2 half_rope, "
+                                   "d = heads_per_group * HD, scale_inner = heads_per_group * chunks_per_head; fp8_max 448",
+                                   "not under registered_values"),
+                    evidence_domain="structural; numerics: Dsv4InvRopeQuantHead_v1 (registry.dsv4_indexer)")
 
-__all__ = ["COMPRESSORS", "Dsv4CompressorStateRule", "Dsv4QNormRopeKvInsertRule", "Dsv4SparseAttnRule", "FLASHMLA_GEOMETRY",
-           "VLLM_DSV4_RULES"]
+    def targets(self):
+        return _vllm_op("fused_inv_rope_fp8_quant_kernel") | {iface.fused_inv_rope_fp8_quant_kernel.default}
+
+    @staticmethod
+    def _geometry(a) -> tuple[int, int, int, int, int]:
+        return a["n_groups"], a["heads_per_group"], a["chunks_per_head"], a["quant_group_size"], 2 * a["half_rope"]
+
+    def applies(self, node, ctx):
+        if (r := _missing(ctx, ["dsv4_inv_rope_quant_head"], ROLE_KERNELS)):
+            return r
+        if ctx.registered_values:
+            return "numerics_unregistered: the quantisation has no registered-values twin"
+        a = _args(node)
+        sizes = ("heads_per_group", "quant_group_size", "chunks_per_head", "rope_start", "half_rope", "num_tokens", "n_groups", "d",
+                 "scale_inner")
+        if not (all(isinstance(a[k], int) for k in sizes) and isinstance(a["tma_aligned_scales"], bool) and _static_float(a["fp8_max"])):
+            return "the launch's sizes, tma_aligned_scales and fp8_max are not statics"
+        tp = active_target_profile()
+        if tp.compute_capability != (9, 0) or a["tma_aligned_scales"]:
+            return (f"numerics_unregistered: the Definition is the cc 9.0 PTX with f32 scales; the target is cc {tp.capability_str}, "
+                    f"tma_aligned_scales {a['tma_aligned_scales']}")
+        if float(a["fp8_max"]) != 448.0:
+            return f"numerics_unregistered: fp8_max {a['fp8_max']} (the Definition clamps to 448)"
+        pos = _positions(ctx, a["positions"])
+        if isinstance(pos, str):
+            return pos
+        T, (G, HPG, CH, QG, ROPE) = len(pos), self._geometry(a)
+        if (r := _value(ctx, a["o"], BF16, (T, G * HPG, CH * QG), "o") or _table(ctx, a["cos_sin_cache"], ROPE, pos, "cos_sin", F32)):
+            return r
+        if (a["num_tokens"], a["d"], a["scale_inner"], QG - a["rope_start"]) != (T, HPG * CH * QG, HPG * CH, ROPE):
+            return (f"the launch is not {T} tokens of {HPG} heads a group, each {CH} groups of {QG} with a rotary suffix of {ROPE}: "
+                    f"num_tokens {a['num_tokens']}, d {a['d']}, scale_inner {a['scale_inner']}, rope_start {a['rope_start']}")
+        try:
+            I.check_head_statics(QG, ROPE)
+        except ValueError as e:
+            return f"numerics_unregistered: {e}"
+        return True
+
+    def emit(self, node, ctx):
+        a = _args(node)
+        pos = ctx.static_index(a["positions"]).flat()
+        T, h, (G, HPG, CH, QG, ROPE) = len(pos), ctx.hint_name(node), self._geometry(a)
+        fn = ctx.kind("dsv4_inv_rope_quant_head", node, CHUNKS=CH, QG=QG, ROPE=ROPE)
+        o, cs = _rows(ctx, a["o"], 16), ctx.coll(a["cos_sin_cache"])
+        outs = [[ctx.call(fn, o[i][k], cs[p], node=node, rule=self, name=f"{h}[t={p},h={k}]") for k in range(G * HPG)]
+                for i, p in enumerate(pos)]
+
+        def grouped(k: int, n: int, w: int) -> Coll:
+            refs = [outs[i][g * HPG + j][k].refs for g in range(G) for i in range(T) for j in range(HPG)]
+            return Coll(Array(G, Array(T, Array(HPG * n, Value(w)))), concat(refs))
+
+        ctx.define(node, [grouped(0, CH * QG, 8), grouped(1, CH, 32)])
+        ctx.bind_weight_role(a["cos_sin_cache"], self, "rope.cos_sin_cache", D=ROPE)
+        ctx.record(self, node, {"T": T, "positions": [pos[0], pos[-1]], "G": G, "HPG": HPG, "CHUNKS": CH, "QG": QG, "ROPE": ROPE},
+                   emitted=f"{fn.id} x{T * G * HPG}")
+
+
+VLLM_DSV4_RULES = [Dsv4QNormRopeKvInsertRule(), Dsv4CompressorStateRule(), Dsv4SparseAttnRule(), Dsv4InvRopeQuantRule()]
+
+__all__ = ["COMPRESSORS", "Dsv4CompressorStateRule", "Dsv4InvRopeQuantRule", "Dsv4QNormRopeKvInsertRule", "Dsv4SparseAttnRule",
+           "FLASHMLA_GEOMETRY", "VLLM_DSV4_RULES"]

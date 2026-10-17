@@ -486,7 +486,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                ir_bind(_flashmla.FlashMlaDecode, NH=NH, SPLITS=SPLITS, NW=NW, DN=DN, DR=DR, QT=QT, BN=BN, DOT=DOT, SCALE=SCALE),
            "flashmla_gather_row": lambda DN, DR, QT: ir_bind(_flashmla_prefill.FlashMlaGatherRow, DN=DN, DR=DR, QT=QT),
            "flashmla_prefill": lambda NH, NP, D, BN, DOT, SCALE:
-               ir_bind(_flashmla_prefill.FlashMlaPrefill, NH=NH, NP=NP, D=D, BN=BN, DOT=DOT, SCALE=SCALE)},
+               ir_bind(_flashmla_prefill.FlashMlaPrefill, NH=NH, NP=NP, D=D, BN=BN, DOT=DOT, SCALE=SCALE),
+           "dsv4_inv_rope_quant_head": lambda CHUNKS, QG, ROPE:
+               ir_bind(_dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=CHUNKS, QG=QG, ROPE=ROPE)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -596,7 +598,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "flashmla_decode": "FlashMlaDecode_v1{NH,SPLITS,NW,DN,DR,QT,BN,DOT,SCALE}: FlashMLA's sparse fp8 decode of one token over "
                               "its window and compressed rows, at the planner's splits",
            "flashmla_gather_row": "FlashMlaGatherRow_v1{DN,DR,QT}: the prefill's K-cache gather of one fp8_ds_mla row to bf16",
-           "flashmla_prefill": "FlashMlaPrefill_v1{NH,NP,D,BN,DOT,SCALE}: FlashMLA's sparse prefill of one token over its gathered rows"})
+           "flashmla_prefill": "FlashMlaPrefill_v1{NH,NP,D,BN,DOT,SCALE}: FlashMLA's sparse prefill of one token over its gathered rows",
+           "dsv4_inv_rope_quant_head": "Dsv4InvRopeQuantHead_v1{CHUNKS,QG,ROPE}: fused_inv_rope_fp8_quant's one head, its rotary suffix "
+                                       "inverse-rotated and each group of QG quantised to e4m3 with an f32 scale"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

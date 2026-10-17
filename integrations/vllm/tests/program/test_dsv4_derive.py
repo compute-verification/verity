@@ -18,7 +18,9 @@
   (`kernels.dsv4_qnorm_insert_twin`, FlashMLA's `fadd`), and statics the Definitions do not take or positions the tables do not
   hold refuse by name; the sparse attention over a request's prefill and decodes, at ratios 4, 128 and 1, derives word for word
   the twins' composition over its histories (the compressors, FlashMLA's gather and prefill, its decode at the planner's splits),
-  and a geometry, head padding, selection, history or target the Definitions do not take refuses by name;
+  and a geometry, head padding, selection, history or target the Definitions do not take refuses by name; the o-projection
+  input's inverse RoPE and quantisation derives per token and head word for word the reference (`test_dsv4_indexer.head`) in
+  the wrapper's [T, G, ...] layout, and another scale layout, clamp, rotary split or target refuses by name;
 * `vllm_meta.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
   leaves them."""
 from __future__ import annotations
@@ -54,6 +56,7 @@ from verity_vllm.program.kernels import mhc_twin as W
 from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import hopper
 from tests.program.test_dsa_norm import ptx_block_model
+from tests.program.test_dsv4_indexer import head as inv_rope_head
 
 
 class _Overlapped(nn.Module):
@@ -733,6 +736,53 @@ def test_a_sparse_attention_beyond_the_definitions_refuses_by_name(over, refusal
         VB.observe_target_profile(over["target"])
     model = _SparseAttn(rng, 4, 28, (30,), **{k: v for k, v in over.items() if k in ("NHP", "topk", "p0")})
     rep = _derive_mhc(model, tuple(map(_tensor, _sparse_inputs(rng, model))))
+    assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
+
+class _OProjInput(nn.Module):
+    """`deep_gemm_fp8_o_proj`'s `fused_inv_rope_fp8_quant` on the live heads at positions p0 ..: 2 groups of 2 heads, each head 2
+    quantisation groups of 32 with a rotary suffix of 16, the returns transposed to [T, G, ...] as the wrapper returns them."""
+
+    def __init__(self, rng, tma: bool = False, fp8_max: float = 448.0, rope_start: int = 16, p0: int = 3) -> None:
+        super().__init__()
+        self.tma, self.fp8_max, self.rope_start, self.p0 = tma, fp8_max, rope_start, p0
+        self.cos_sin_cache = nn.Parameter(_tensor(TQ._cs(rng, (16, 16))), requires_grad=False)
+
+    def forward(self, o):
+        T = o.shape[0]
+        positions = torch.arange(self.p0, self.p0 + T, dtype=torch.int64)
+        fp8, scale = iface.fused_inv_rope_fp8_quant_kernel(o, positions, self.cos_sin_cache, 2, 32, 2, self.rope_start, 8, self.tma,
+                                                           self.fp8_max, -(-T // 4) * 4, T, 2, 2 * 64, 2 * 2)
+        return fp8.transpose(0, 1), scale.transpose(0, 1)
+
+
+def test_the_o_projections_inverse_rope_quant_derives_per_token_and_head_word_for_word_the_reference(served):
+    rng = np.random.default_rng(5)
+    model, o = _OProjInput(rng), W.bf16(_f32(rng, 3, 4, 64, sd=4.0))
+    rep = _derive_mhc(model, (_tensor(o),))
+    assert rep.program is not None, rep.unsupported
+    (app,) = [a["preconditions_checked"] for a in rep.provenance["applications"] if a["rule"] == "Dsv4InvRopeQuant[vllm-dsv4]_v1"]
+    assert (app["G"], app["HPG"], app["CHUNKS"], app["QG"], app["ROPE"]) == (2, 2, 2, 32, 16)
+    assert rep.provenance["weight_roles"]["cos_sin_cache"]["role"] == "rope.cos_sin_cache"
+    cs = np.array(_words(model.cos_sin_cache), np.uint32).reshape(16, 16)
+    heads = [[inv_rope_head(o[t, h].tolist(), cs[3 + t].tolist(), 32) for h in range(4)] for t in range(3)]
+    assert _run(rep, model, (_tensor(o),)) == [v for k in (slice(0, 64), slice(64, 66)) for row in heads for hd in row for v in hd[k]]
+
+
+@pytest.mark.parametrize("over, refusal", [
+    ({"tma": True}, "with f32 scales; the target is cc 9.0, tma_aligned_scales True"),
+    ({"fp8_max": 240.0}, "fp8_max 240.0 (the Definition clamps to 448)"),
+    ({"rope_start": 8}, "the launch is not 3 tokens of 2 heads a group, each 2 groups of 32 with a rotary suffix of 16"),
+    ({"p0": 14}, "a position outside cos_sin (16 rows)"),
+    ({"target": TargetProfile(compute_capability=(12, 0), num_sms=188, batch_invariant=False, moe_backend="triton")},
+     "the Definition is the cc 9.0 PTX with f32 scales; the target is cc 12.0"),
+])
+def test_an_inverse_rope_quant_launch_beyond_the_definition_refuses_by_name(over, refusal, served):
+    rng = np.random.default_rng(0)
+    if "target" in over:
+        VB.observe_target_profile(over["target"])
+    model = _OProjInput(rng, **{k: v for k, v in over.items() if k != "target"})
+    rep = _derive_mhc(model, (_tensor(W.bf16(_f32(rng, 3, 4, 64))),))
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
 
 
