@@ -35,7 +35,7 @@ cs = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(cs)
 
 T = 128
-DITHER_TAG, C_TAG, Z_TAG, BETA_TAG = 7, 8, 9, 10
+DITHER_TAG, C_TAG, Z_TAG, BETA_TAG, HBETA_TAG = 7, 8, 9, 10, 11
 
 
 def block(key: bytes, tag: int, j: int) -> bytes:
@@ -69,8 +69,62 @@ def z_rows(key: bytes, row0: int, rows: int, m: int) -> np.ndarray:
     return z[:, :32 * (m - 1)].reshape(rows, m - 1, 32).transpose(1, 2, 0)
 
 
+def u_rows_half(key: bytes, row0: int, rows: int) -> np.ndarray:
+    """cohalf's U, rows x 64: row i's tag-11 digest byte r gives beta(i, r) (bits 0..6)."""
+    v = np.stack([np.frombuffer(block(key, HBETA_TAG, i), np.uint8) for i in range(row0, row0 + rows)])
+    return -64 + np.unpackbits(v[..., None], axis=-1, bitorder="little")[..., :7] @ cs.W_RE
+
+
+def check_half(d: Path, meta: dict) -> dict:
+    """cohalf (QK^T, k = 128, r = 64): K (the served side, 7-bit) and Q (the peeled, in [-64, 62]); words T_0..T_3 and
+    O = T_last - U Y (`checked_strip.honest_words` at r = 64, L = 32), absorbed in that order."""
+    m_, n, k, seed, inv_s = meta["m"], meta["n"], meta["k"], meta["seed"], np.float32(meta["inv_s"])
+    key = b"".join(struct.pack(">Q", int(w, 16)) for w in meta["key"])
+    tiles_n = n // T
+    out = {"dir": str(d), "m": m_, "n": n, "k": k, "design": "cohalf", "device_ok": meta["device_ok"],
+           "control_rejected": meta["control_rejected"], "device": meta["device"], "tiles": {}}
+    ok = bool(meta["device_ok"]) and bool(meta["control_rejected"]) and k == 128
+    for tm, tn in meta["tiles"]:
+        sfx = f"_{tm}_{tn}.bin"
+        rd = lambda name, dt: np.fromfile(d / (name + sfx), dt)  # noqa: E731
+        x = (rd("x", np.uint16).astype(np.uint32) << 16).view(np.float32).reshape(T, k)
+        Vq = np.clip(np.floor(x * inv_s), -64, 62).astype(np.int64)
+        b = patch_bits(key, DITHER_TAG, tm * T, T, k)
+        X = Vq + b
+        W = rd("W", np.int8).astype(np.int64).reshape(T, k)
+        c = patch_bits(key, C_TAG, tn * T, T, k)
+        U = u_rows_half(key, tn * T, T)
+        Wp = W + c + U[:, np.arange(k) % 64]
+        Y = X[:, :64] + X[:, 64:]
+        zero = np.zeros((T, 32), np.int64)
+        PA = np.concatenate([Y, zero, zero], axis=1)
+        PB = np.concatenate([-U, zero, zero], axis=1)
+        Ts, O = cs.honest_words(W, Vq.T, U, c, b.T, 64, 32)
+        strip = (Ts[-1].astype(np.int64) - U @ Y.T) & cs.MASK
+        want_r = tile_receipts(seed, [t.T for t in Ts] + [O.T], tm * tiles_n + tn)
+        res = {
+            "X": bool((rd("X", np.int8).reshape(T, k) == X).all()),
+            "X_range": [int(X.min()), int(X.max())],
+            "PA": bool((rd("PA", np.int8).reshape(T, 128) == PA).all()),
+            "PA_s8": bool(-128 <= int(Y.min()) and int(Y.max()) <= 127),
+            "Wp": bool((rd("Wp", np.int8).reshape(T, k) == Wp).all()),
+            "Wp_range": [int(Wp.min()), int(Wp.max())],
+            "PB": bool((rd("PB", np.int8).reshape(T, 128) == PB).all()),
+            "O_is_strip": bool((strip == O.astype(np.int64)).all()),
+            "O": bool((rd("Y_h_l7qs", np.int32).reshape(T, T).view(np.uint32) == O.T).all()),
+            "R": bool((rd("R_h_l7qs", np.uint32).reshape(NCT, 8) == want_r).all()),
+        }
+        out["tiles"][f"{tm},{tn}"] = res
+        ok &= all(v for v in res.values() if isinstance(v, bool))
+        ok &= -64 <= res["X_range"][0] and res["X_range"][1] <= 63 and -128 <= res["Wp_range"][0] and res["Wp_range"][1] <= 127
+    out["ok"] = bool(ok)
+    return out
+
+
 def check(d: Path) -> dict:
     meta = json.loads((d / "meta.json").read_text())
+    if "cohalf" in meta.get("kinds", {}).values():
+        return check_half(d, meta)
     m_, n, k, seed, inv_s = meta["m"], meta["n"], meta["k"], meta["seed"], np.float32(meta["inv_s"])
     key = b"".join(struct.pack(">Q", int(w, 16)) for w in meta["key"])
     tiles_n = n // T

@@ -50,7 +50,14 @@ cuobjdump -sass "$BIN/cgemm" > "$BIN/cgemm.sass" 2>/dev/null
 awk '/Function :/{f=$3} /[[:space:]](LDL|STL)[.[:space:]]/{n[f]++} END{for (f in n) print n[f], f}' "$BIN/cgemm.sass" | sort -k2 \
   > "$O/sass_local_mem_ops.txt" 2>&1
 gzip -c "$BIN/cgemm.sass" > "$O/cgemm.sass.gz"
-# small (m = 2 digits), small3 (k > 4096: m = 3), Llama-3.1-8B's linears at 2048 tokens, and 8192^3 (o, PROFILE's shape)
+# small (m = 2 digits), small3 (k > 4096: m = 3), Llama-3.1-8B's linears at 2048 tokens, and 8192^3 (o, PROFILE's shape);
+# a shape at k = 128 is cohalf's QK^T (keys x queries x head dimension; h8k's 4,096 tiles are 16 heads at 2,048 tokens),
+# its arms CG_ARMS_H and NCU_H. CG_SET=half: cohalf's shapes, and c_l7qs_v's gate and profile beside c_l7qs at o2k, dn2k
+case "${CG_SET:-all}" in
+  half) SHAPES=${SHAPES:-"hs:1024:256:128 h2k:2048:2048:128 h8k:8192:8192:128 small:1024:256:512 o2k:2048:4096:4096 dn2k:2048:4096:14336"}
+    BENCH_SHAPES=${BENCH_SHAPES:-"h2k h8k o2k dn2k"} CG_ARMS=${CG_ARMS:-"plain,e_l7qs,c_l7qs,c_l7qs_o,c_l7qs_v"}
+    NCU_ONE=${NCU_ONE:-"c_l7qs c_l7qs_o c_l7qs_v"} NCU_VEC=${NCU_VEC:-"-"} ;;
+esac
 export SHAPES=${SHAPES:-"small:1024:256:512 small3:1024:256:8192 q2k:2048:6144:4096 o2k:2048:4096:4096 gu2k:2048:28672:4096 dn2k:2048:4096:14336 o:8192:8192:8192"}
 export W="$BIN/gates"
 # shellcheck disable=SC2016
@@ -82,6 +89,10 @@ export REPS=${REPS:-15}
 export CG_ARMS=${CG_ARMS:-"plain,plainq,e_plains,e_l7qs,c_l7qs,c_l7qs_o,editedq:e_l7qs,cedited:c_l7qs,qdither,cquant,cquant_s,cquant_d,wedit,cwedit"}
 export NCU_ONE=${NCU_ONE:-"plain e_plains e_l7qs c_l7qs c_l7qs_o"}
 export NCU_VEC=${NCU_VEC:-"qdither cquant cquant_s cquant_d wedit cwedit"} NCU_VEC_SHAPES=${NCU_VEC_SHAPES:-"o2k dn2k"}
+[ "$NCU_VEC" = - ] && NCU_VEC=""
+# cohalf: cquant and cwedit are hquant and hwedit there; egemm.cu's quantizers don't run at k = 128
+export CG_ARMS_H=${CG_ARMS_H:-"plain,e_plains,e_l7qs,h_l7qs,cedited:h_l7qs,cquant,cwedit"}
+export NCU_H=${NCU_H:-"plain e_plains e_l7qs h_l7qs cquant cwedit"}
 export BENCH_SHAPES=${BENCH_SHAPES:-"q2k o2k gu2k dn2k o"}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min 30 -- bash -c '
@@ -90,7 +101,9 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
   for s in $SHAPES; do
     IFS=: read -r name m n k <<< "$s"
     case " $BENCH_SHAPES " in *" $name "*) ;; *) continue ;; esac
-    "$BIN/cgemm" bench "$REPS" "$m" "$n" "$k" >> "$O/bench.jsonl" 2>> "$O/bench.err"; echo "bench $name rc $?" >> "$O/rc.txt"
+    arms_=$CG_ARMS
+    [ "$k" = 128 ] && arms_=$CG_ARMS_H
+    CG_ARMS=$arms_ "$BIN/cgemm" bench "$REPS" "$m" "$n" "$k" >> "$O/bench.jsonl" 2>> "$O/bench.err"; echo "bench $name rc $?" >> "$O/rc.txt"
   done
   kill $smi
   mkdir -p "$O/ncu"
@@ -101,6 +114,7 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
     case " $BENCH_SHAPES " in *" $name "*) ;; *) continue ;; esac
     arms_=$NCU_ONE
     case " $NCU_VEC_SHAPES " in *" $name "*) arms_="$arms_ $NCU_VEC" ;; esac
+    [ "$k" = 128 ] && arms_=$NCU_H
     for a in $arms_; do
       ncu --clock-control none --profile-from-start off --import-source no "${S[@]}" -f -o "$O/ncu/$name-${a//:/_}" \
         "$BIN/cgemm" one "$a" "$m" "$n" "$k" > "$O/ncu/$name-${a//:/_}.log" 2>&1 || echo "ncu one $name $a rc $?" >> "$O/rc.txt"
@@ -117,5 +131,5 @@ for r in "$O"/ncu/*.ncu-rep; do
 done
 cat "$O/rc.txt"
 $PY $D/eps_profile.py "$O" --mm benchmarks/pouw/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
-  --toml-arms "c_l7qs,c_l7qs_o,e_l7qs,e_plains,plain" > "$O/profile.md" 2> "$O/profile.err"
+  --toml-arms "c_l7qs,c_l7qs_o,c_l7qs_v,h_l7qs,e_l7qs,e_plains,plain" > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" | tee -a "$O/rc.txt"

@@ -237,10 +237,113 @@ __global__ void __launch_bounds__(256) cwedit(const uint8_t* __restrict__ W, uin
   __shared__ uint32_t us[64];
   cwedit_blk(blockIdx.x, cs, us, W, Wp, PB, k, sg);
 }
-// W^ = W' - U, the served weights, for the gate's cuBLASLt reference
-__global__ void phat(const int8_t* __restrict__ Wp, const int8_t* __restrict__ PB, int8_t* __restrict__ Wh, size_t n, int k) {
+// W^ = W' - U, the served weights, for the gate's cuBLASLt reference (HALF: cohalf's P_B, -U at byte k % 64)
+template <bool HALF> __global__ void phat(const int8_t* __restrict__ Wp, const int8_t* __restrict__ PB, int8_t* __restrict__ Wh, size_t n, int k) {
   for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < n * k; i += (size_t)gridDim.x * blockDim.x)
-    Wh[i] = (int8_t)(Wp[i] - PB[(i / k) * 128 + 32 + (i % k) % 32]);
+    Wh[i] = HALF ? (int8_t)(Wp[i] + PB[(i / k) * 128 + (i % k) % 64]) : (int8_t)(Wp[i] - PB[(i / k) * 128 + 32 + (i % k) % 32]);
+}
+
+// ---------------------------------------------------------------- cohalf: QK^T at k = 128, r = k / 2 = 64, Q and K 7-bit
+constexpr uint32_t HBETA_TAG = 11;
+// the served side (K): X = clamp(floor(x / s), -64, 62) + b (b as cquant's, tag 7, block = row / 4 at k = 128) and
+// P_A = [Y_lo | Y_hi | 0 | 0], Y(r) = X(r) + X(r + 64) in [-128, 126]; a warp 4 rows, lane l columns 4 l .. 4 l + 3
+__global__ void __launch_bounds__(256) hquant(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
+                                              int rows, float inv_s, const __grid_constant__ Sig sg) {
+  __shared__ uint32_t dgs[8 * 16];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blockIdx.x * 8 + warp;
+  if (grp * 4 >= rows) return;
+  uint32_t* dg = dgs + 16 * warp;
+  if (lane == 0) {
+    uint64_t st[8];
+    sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | (uint64_t)grp, st);
+#pragma unroll
+    for (int i = 0; i < 8; i++) {
+      dg[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+      dg[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+    }
+  }
+  __syncwarp();
+  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dg);
+#pragma unroll 1
+  for (int rr = 0; rr < 4; rr++) {
+    const size_t r = (size_t)grp * 4 + rr;
+    const uint2 w = __ldg(reinterpret_cast<const uint2*>(x + r * 128) + lane);
+    const uint32_t bits = (bytes[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
+    const uint32_t ww[2] = {w.x, w.y};
+    int qv[4];
+#pragma unroll
+    for (int h = 0; h < 2; h++) {
+      const float f0 = __uint_as_float(ww[h] << 16) * inv_s, f1 = __uint_as_float(ww[h] & 0xFFFF0000u) * inv_s;
+      qv[2 * h] = min(max(__float2int_rd(f0), -64), 62) + (int)((bits >> (2 * h)) & 1u);
+      qv[2 * h + 1] = min(max(__float2int_rd(f1), -64), 62) + (int)((bits >> (2 * h + 1)) & 1u);
+    }
+    const uint32_t xw = __byte_perm(__byte_perm(qv[0], qv[1], 0x0040), __byte_perm(qv[2], qv[3], 0x0040), 0x5410);
+    reinterpret_cast<uint32_t*>(X + r * 128)[lane] = xw;
+    const uint32_t hi = __shfl_down_sync(~0u, xw, 16);
+    reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = lane < 16 ? add_noise<false>(xw, hi) : 0u;
+  }
+}
+// the peeled side (Q in [-64, 62]): Q' = Q + c + U(i, k mod 64) (c as cwedit's, tag 8; U(i, r) from digest byte r of
+// row i's tag-11 block, r < 64, as cwedit's beta) and P_B = [-U_lo | -U_hi | 0 | 0]; a warp 4 rows
+__global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB, int rows,
+                                              const __grid_constant__ Sig sg) {
+  __shared__ uint32_t cds[8 * 16];
+  __shared__ uint32_t uds[8 * 64];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blockIdx.x * 8 + warp;
+  if (grp * 4 >= rows) return;
+  uint32_t* cd = cds + 16 * warp;
+  uint32_t* ud = uds + 64 * warp;
+  if (lane < 5) {
+    uint64_t st[8];
+    sha_block(sg.w, lane == 0 ? ((uint64_t)C_TAG << 56 | (uint64_t)grp) : ((uint64_t)HBETA_TAG << 56 | (uint64_t)(4 * grp + lane - 1)), st);
+    if (lane == 0) {
+#pragma unroll
+      for (int i = 0; i < 8; i++) {
+        cd[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+        cd[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+      }
+    } else {
+#pragma unroll
+      for (int q = 0; q < 16; q++) {
+        uint32_t v = 0;
+#pragma unroll
+        for (int b = 0; b < 4; b++) {
+          const int e = 4 * q + b;
+          v |= ((uint32_t)u_beta((uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu) & 0xFFu) << (8 * b);
+        }
+        ud[16 * (lane - 1) + q] = v;
+      }
+    }
+  }
+  __syncwarp();
+  const uint8_t* cb = reinterpret_cast<const uint8_t*>(cd);
+#pragma unroll 1
+  for (int rr = 0; rr < 4; rr++) {
+    const size_t r = (size_t)grp * 4 + rr;
+    const uint32_t w = __ldg(reinterpret_cast<const uint32_t*>(W + r * 128) + lane);
+    const uint32_t nib = (cb[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu, u = ud[16 * rr + (lane & 15)];
+    reinterpret_cast<uint32_t*>(Wp + r * 128)[lane] = add_noise<false>(add_noise<false>(w, bits01(nib)), u);
+    reinterpret_cast<uint32_t*>(PB + r * 128)[lane] = lane < 16 ? add_noise<false>(~u, 0x01010101u) : 0u;
+  }
+}
+// pv's served epilogue for the gate: F = float(2 O + 127 S_row) (s_row s_col), c_body's SERVE 2 op for op
+__global__ void vref(const int* __restrict__ O, const uint8_t* __restrict__ eb, float* __restrict__ F, int M, int N) {
+  const int* S = reinterpret_cast<const int*>(eb);
+  const float* sr = reinterpret_cast<const float*>(S + M);
+  const float* sc = sr + M;
+  const int r = blockIdx.y;
+  for (int c = blockIdx.x * blockDim.x + threadIdx.x; c < N; c += gridDim.x * blockDim.x)
+    F[(size_t)r * N + c] = __int2float_rn(2 * O[(size_t)r * N + c] + 127 * S[r]) * (sr[r] * sc[c]);
+}
+// eb: S in [-32768, 32767], the scales in [2^-10, 2^-9)
+__global__ void ebfill(uint8_t* eb, int M, int N, uint32_t seed) {
+  int* S = reinterpret_cast<int*>(eb);
+  float* s = reinterpret_cast<float*>(S + M);
+  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < 2 * M + N; i += gridDim.x * blockDim.x) {
+    const uint32_t h = mix32(seed ^ mix32((uint32_t)i));
+    if (i < M) S[i] = (int)(h & 0xFFFFu) - 32768;
+    else s[i - M] = __uint_as_float(0x3A800000u | (h & 0x7FFFFFu));
+  }
 }
 // W in [-64, 62]; the gate's rows 0 and 1 at 62 and -64
 __global__ void wfill(int8_t* W, size_t count, uint32_t seed, size_t k, int ends) {
@@ -303,8 +406,31 @@ template <class L, bool THREE, bool SERVE> DEV void ctail(L& ml, int (&acc)[L::M
   ml.release(ml.empty(ml.s));
   ml.advance();
 }
+// cohalf's tail stage P_A = [Y_lo | Y_hi | 0 | 0], P_B = [-U_lo | -U_hi | 0 | 0]: O = T_last - U Y (atoms 0 and 1
+// accumulated onto T_last), absorbed
+template <class L> DEV void htail(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8]) {
+  constexpr int MI = L::MI, NI = L::NI;
+  ml.wait_full();
+  const uint32_t tb = ml.stage(ml.s);
+  uint32_t fa[MI][4], fb[NI][2];
+#pragma unroll
+  for (int kk = 0; kk < 2; kk++) {
+    ml.load_b(fb, tb, kk);
+#pragma unroll
+    for (int mi = 0; mi < MI; mi++) {
+      ml.load_a(fa[mi], tb, kk, mi);
+#pragma unroll
+      for (int ni = 0; ni < NI; ni++) imma(acc[mi][ni], fa[mi], fb[ni]);
+    }
+  }
+  cabs_all<L>(ch, acc);
+  ml.release(ml.empty(ml.s));
+  ml.advance();
+}
 
-template <int LAG, int TIE, bool SLEEP, bool THREE, bool SERVE> DEV void c_body(const Args& a) {
+// TAIL 0: co32c's (ctail), 1: cohalf's (htail). SERVE 0: O' to U; 1: O; 2: P.V's served value as float, f = float(2 O + 127 S_row) (s_row s_col) with eb = [S (M ints) |
+// s_row (M floats) | s_col (N floats)] (pv's epilogue on a full key block, S per channel: the epilogue's cost a cell)
+template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0> DEV void c_body(const Args& a) {
   using L = EL<DUO, LAG, TIE, SLEEP>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
@@ -332,72 +458,124 @@ template <int LAG, int TIE, bool SLEEP, bool THREE, bool SERVE> DEV void c_body(
     }
     int acc[MI][NI][4];
     ml.tile_il(a.K, acc, ch, kr, zero);
-    ctail<L, THREE, SERVE>(ml, acc, ch);
+    if constexpr (TAIL == 1) htail<L>(ml, acc, ch);
+    else ctail<L, THREE, SERVE != 0>(ml, acc, ch);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
+    if constexpr (SERVE == 2) {
+      const int* S = reinterpret_cast<const int*>(a.eb);
+      const float* sr = reinterpret_cast<const float*>(S + a.M);
+      const float* sc = sr + a.M;
+      int sv[MI][2];
+      float rs[MI][2];
+      float2 cs[NI];
 #pragma unroll
-    for (int mi = 0; mi < MI; mi++)
+      for (int mi = 0; mi < MI; mi++)
 #pragma unroll
-      for (int ni = 0; ni < NI; ni++) {
-        int* p = a.U + (size_t)(row0 + 16 * mi) * a.N + col0 + 8 * ni;
-        *reinterpret_cast<int2*>(p) = make_int2(acc[mi][ni][0], acc[mi][ni][1]);
-        *reinterpret_cast<int2*>(p + (size_t)8 * a.N) = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
-      }
+        for (int h = 0; h < 2; h++) { sv[mi][h] = __ldg(S + row0 + 16 * mi + 8 * h); rs[mi][h] = __ldg(sr + row0 + 16 * mi + 8 * h); }
+#pragma unroll
+      for (int ni = 0; ni < NI; ni++) cs[ni] = __ldg(reinterpret_cast<const float2*>(sc + col0 + 8 * ni));
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++) {
+          float f[4];
+#pragma unroll
+          for (int e = 0; e < 4; e++)
+            f[e] = __int2float_rn(2 * acc[mi][ni][e] + 127 * sv[mi][e / 2]) * (rs[mi][e / 2] * (e % 2 ? cs[ni].y : cs[ni].x));
+          float* p = reinterpret_cast<float*>(a.U) + (size_t)(row0 + 16 * mi) * a.N + col0 + 8 * ni;
+          *reinterpret_cast<float2*>(p) = make_float2(f[0], f[1]);
+          *reinterpret_cast<float2*>(p + (size_t)8 * a.N) = make_float2(f[2], f[3]);
+        }
+    } else {
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++) {
+          int* p = a.U + (size_t)(row0 + 16 * mi) * a.N + col0 + 8 * ni;
+          *reinterpret_cast<int2*>(p) = make_int2(acc[mi][ni][0], acc[mi][ni][1]);
+          *reinterpret_cast<int2*>(p + (size_t)8 * a.N) = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
+        }
+    }
     uint4* r = reinterpret_cast<uint4*>(a.R) + ((size_t)tile_id * L::NCT + ctid) * 2;
     r[0] = make_uint4(finish<DUO>(ch, 0), finish<DUO>(ch, 1), finish<DUO>(ch, 2), finish<DUO>(ch, 3));
     r[1] = make_uint4(finish<DUO>(ch, 4), finish<DUO>(ch, 5), finish<DUO>(ch, 6), finish<DUO>(ch, 7));
   }
 }
 // NAME (m = 2) and NAME_k3 (m = 3, k > 4096); _o: O' written instead of O
-#define CGEMM(NAME, LAG, TIE, SLEEP)                                                                                                     \
-  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { c_body<LAG, TIE, SLEEP, false, true>(a); }       \
-  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_k3(const __grid_constant__ Args a) { c_body<LAG, TIE, SLEEP, true, true>(a); }   \
-  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_o(const __grid_constant__ Args a) { c_body<LAG, TIE, SLEEP, false, false>(a); }  \
-  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_o_k3(const __grid_constant__ Args a) { c_body<LAG, TIE, SLEEP, true, false>(a); }
+#define CGEMM(NAME, LAG, TIE, SLEEP)                                                                                                \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { c_body<LAG, TIE, SLEEP, false, 1>(a); }     \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_k3(const __grid_constant__ Args a) { c_body<LAG, TIE, SLEEP, true, 1>(a); } \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_o(const __grid_constant__ Args a) { c_body<LAG, TIE, SLEEP, false, 0>(a); }  \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_o_k3(const __grid_constant__ Args a) { c_body<LAG, TIE, SLEEP, true, 0>(a); }
 CGEMM(c_l7qs, 7, 4, true)
 CGEMM(c_l2q, 2, 4, false)
+// _v: pv's served epilogue (SERVE 2)
+__global__ void __launch_bounds__(MLW::NT, 1) c_l7qs_v(const __grid_constant__ Args a) { c_body<7, 4, true, false, 2>(a); }
+__global__ void __launch_bounds__(MLW::NT, 1) c_l7qs_v_k3(const __grid_constant__ Args a) { c_body<7, 4, true, true, 2>(a); }
+// cohalf (k = 128)
+__global__ void __launch_bounds__(MLW::NT, 1) h_l7qs(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 1>(a); }
+__global__ void __launch_bounds__(MLW::NT, 1) h_l2q(const __grid_constant__ Args a) { c_body<2, 4, false, false, 1, 1>(a); }
 
 // ---------------------------------------------------------------- host
 struct CKn { const char* name; Kern k, k3; };
 static const CKn CKERN[] = {{"c_l7qs", c_l7qs, c_l7qs_k3}, {"c_l7qs_o", c_l7qs_o, c_l7qs_o_k3}, {"c_l2q", c_l2q, c_l2q_k3},
-                          {"c_l2q_o", c_l2q_o, c_l2q_o_k3}};
+                          {"c_l2q_o", c_l2q_o, c_l2q_o_k3}, {"c_l7qs_v", c_l7qs_v, c_l7qs_v_k3}, {"h_l7qs", h_l7qs, h_l7qs},
+                          {"h_l2q", h_l2q, h_l2q}};
 static const CKn* ckern(const std::string& n) {
   for (auto& e : CKERN) if (n == e.name) return &e;
   return nullptr;
 }
 // egemm.cu's EP (its operands, cuBLASLt plans and arms) and co32c's own: W in [-64, 62], X and P_A from cquant, W' and
-// P_B from cwedit, W^ for the reference
+// P_B from cwedit, W^ for the reference; at k = 128 (half) cohalf's: X and P_A from hquant (at inv_s / 2: 7 bits), W'
+// and P_B from hwedit. eb: c_l7qs_v's S and scales
 struct CP {
   EP E;
   int8_t *W7, *X, *PA, *Wp, *PB, *Wh;
   int *Y, *Yr;
   uint32_t *R, *R2;
+  uint8_t* eb;
   Maps* mC;
   LtG ref;
   uint32_t inst = 0;
+  bool half = false;
+  float inv7 = 0;
 };
 using CqK = void (*)(const uint16_t*, int8_t*, int8_t*, int, int, float, Sig);
 static void cq(CP& C, const Sig& s, CqK f = cquant) {
   EP& P = C.E;
+  if (C.half) {
+    hquant<<<(P.m + 31) / 32, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
+    return;
+  }
   f<<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, P.inv_s, s);
 }
 static void cw(CP& C, const Sig& s) {
   EP& P = C.E;
+  if (C.half) {
+    hwedit<<<(P.n + 31) / 32, 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(C.W7), reinterpret_cast<uint8_t*>(C.Wp),
+                                               reinterpret_cast<uint8_t*>(C.PB), P.n, s);
+    return;
+  }
   cwedit<<<P.n / 8, 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(C.W7), reinterpret_cast<uint8_t*>(C.Wp), reinterpret_cast<uint8_t*>(C.PB),
                                      P.k, s);
 }
 static Kern cpick(const CP& C, const CKn* e) { return n_dig(C.E.k) == 3 ? e->k3 : e->k; }
 static void cgemm_run(CP& C, Kern kern, int* Y, uint32_t* R) {
   EP& P = C.E;
-  Args a{C.mC, Y, R, P.m, P.n, P.k, 8, P.seed, 0, 1, 0, 0, {0, 0, 0, 0}, nullptr, 0};
+  Args a{C.mC, Y, R, P.m, P.n, P.k, 8, P.seed, 0, 1, 0, 0, {0, 0, 0, 0}, C.eb, 0};
   kern<<<P.grid, MLW::NT, CSMEM, P.st>>>(a);
 }
 static void csetup(CP& C, int m, int n, int k, uint32_t seed, bool gate) {
   EP& P = C.E;
   esetup(P, m, n, k, seed, gate);
+  C.half = k == 128;
+  C.inv7 = P.inv_s * 0.5f;
   CK(cudaMalloc(&C.W7, (size_t)n * k)); CK(cudaMalloc(&C.X, (size_t)m * k)); CK(cudaMalloc(&C.PA, (size_t)m * 128));
   CK(cudaMalloc(&C.Wp, (size_t)n * k)); CK(cudaMalloc(&C.PB, (size_t)n * 128)); CK(cudaMalloc(&C.Wh, (size_t)n * k));
   CK(cudaMalloc(&C.Y, P.ny * 4)); CK(cudaMalloc(&C.Yr, P.ny * 4));
   CK(cudaMalloc(&C.R, P.nr * 4)); CK(cudaMalloc(&C.R2, P.nr * 4));
+  CK(cudaMalloc(&C.eb, (size_t)(2 * m + n) * 4));
+  ebfill<<<256, 256, 0, P.st>>>(C.eb, m, n, mix32(seed ^ 0x7777u));
   wfill<<<4096, 256, 0, P.st>>>(C.W7, (size_t)n * k, mix32(seed ^ 0x6666u), k, gate);
   const Sig s0 = sigma(seed, 0xFFFFFFFFu);
   cq(C, s0);
@@ -412,7 +590,7 @@ static void csetup(CP& C, int m, int n, int k, uint32_t seed, bool gate) {
 static void cfree(CP& C) {
   CK(cudaDeviceSynchronize());
   for (void* p : {(void*)C.W7, (void*)C.X, (void*)C.PA, (void*)C.Wp, (void*)C.PB, (void*)C.Wh, (void*)C.Y, (void*)C.Yr, (void*)C.R,
-                  (void*)C.R2, (void*)C.mC})
+                  (void*)C.R2, (void*)C.eb, (void*)C.mC})
     CK(cudaFree(p));
   efree(C.E);
 }
@@ -448,7 +626,8 @@ static int cgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   const Sig s = sigma(seed, 0);
   cq(C, s);
   cw(C, s);
-  phat<<<4096, 256, 0, P.st>>>(C.Wp, C.PB, C.Wh, (size_t)n, k);
+  if (C.half) phat<true><<<4096, 256, 0, P.st>>>(C.Wp, C.PB, C.Wh, (size_t)n, k);
+  else phat<false><<<4096, 256, 0, P.st>>>(C.Wp, C.PB, C.Wh, (size_t)n, k);
   ltg_run(C.ref, P.st);
   CK(cudaStreamSynchronize(P.st));
   CK(cudaGetLastError());
@@ -470,28 +649,38 @@ static int cgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
       dump(dir, ("Y_" + name + sfx).c_str(), yt.data(), yt.size() * 4, false);
     }
   };
-  // c_l7qs: O against cuBLASLt's X W^T; its receipts are the reference for the other schedule
+  // the main kernel (c_l7qs, cohalf's h_l7qs): O against cuBLASLt's X W^T; its receipts are the reference for the
+  // other schedule (c_l2q, h_l2q) and the other outputs (c_*_o: O', c_l7qs_v: pv's served epilogue against vref's)
+  const std::string km = C.half ? "h_l7qs" : "c_l7qs";
   CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st));
-  cgemm_run(C, cpick(C, ckern("c_l7qs")), C.Y, C.R2);
+  cgemm_run(C, cpick(C, ckern(km)), C.Y, C.R2);
   CK(cudaStreamSynchronize(P.st));
   CK(cudaGetLastError());
   {
     const unsigned long long y = ecmp(P, C.Y, C.Yr, P.ny);
-    rec("c_l7qs", y, -1);
+    rec(km, y, -1);
     ok &= y == 0;
-    dump_tiles("c_l7qs", C.Y, C.R2);
+    dump_tiles(km, C.Y, C.R2);
   }
-  for (const char* name : {"c_l2q", "c_l7qs_o", "c_l2q_o"}) {
-    const bool o = strstr(name, "_o") != nullptr;
+  float* F = nullptr;
+  if (!C.half) {
+    CK(cudaMalloc(&F, P.ny * 4));
+    vref<<<dim3((n + 255) / 256, m), 256, 0, P.st>>>(C.Yr, C.eb, F, m, n);
+  }
+  const std::vector<std::string> others =
+      C.half ? std::vector<std::string>{"h_l2q"} : std::vector<std::string>{"c_l2q", "c_l7qs_o", "c_l2q_o", "c_l7qs_v"};
+  for (const std::string& name : others) {
+    const bool o = name.find("_o") != std::string::npos, v = name.find("_v") != std::string::npos;
     CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
     cgemm_run(C, cpick(C, ckern(name)), C.Y, C.R);
     CK(cudaStreamSynchronize(P.st));
     CK(cudaGetLastError());
-    const unsigned long long y = o ? 0 : ecmp(P, C.Y, C.Yr, P.ny), r = ecmp(P, C.R, C.R2, P.nr);
+    const unsigned long long y = o ? 0 : ecmp(P, C.Y, v ? (const void*)F : (const void*)C.Yr, P.ny), r = ecmp(P, C.R, C.R2, P.nr);
     rec(name, y, (long long)r);
     ok &= y == 0 && r == 0;
-    if (!strcmp(name, "c_l7qs_o")) dump_tiles(name, C.Y, nullptr);
+    if (name == "c_l7qs_o") dump_tiles(name, C.Y, nullptr);
   }
+  if (F) CK(cudaFree(F));
   // the no-write control: poisoned, nothing run; both compares must fail
   CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
   const unsigned long long cy = ecmp(P, C.Y, C.Yr, P.ny), cr = ecmp(P, C.R, C.R2, P.nr);
@@ -511,10 +700,11 @@ static int cgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   }
   FILE* fp = fopen((dir + "/meta.json").c_str(), "w");
   fprintf(fp, "{\"m\": %d, \"n\": %d, \"k\": %d, \"seed\": %u, \"inv_s\": %.9g, \"grid\": %d, \"key\": [\"%016llx\", \"%016llx\", "
-              "\"%016llx\", \"%016llx\"], \"tiles\": [%s], \"kinds\": {\"c_l7qs\": \"co32c\"}, \"device\": {%s}, \"device_ok\": %s, "
+              "\"%016llx\", \"%016llx\"], \"tiles\": [%s], \"kinds\": {\"%s\": \"%s\"}, \"device\": {%s}, \"device_ok\": %s, "
               "\"control_rejected\": %s}\n",
-          m, n, k, seed, P.inv_s, P.grid, (unsigned long long)s.w[0], (unsigned long long)s.w[1], (unsigned long long)s.w[2],
-          (unsigned long long)s.w[3], tj.c_str(), res.c_str(), ok ? "true" : "false", control_rejected ? "true" : "false");
+          m, n, k, seed, C.half ? C.inv7 : P.inv_s, P.grid, (unsigned long long)s.w[0], (unsigned long long)s.w[1],
+          (unsigned long long)s.w[2], (unsigned long long)s.w[3], tj.c_str(), km.c_str(), C.half ? "cohalf" : "co32c", res.c_str(),
+          ok ? "true" : "false", control_rejected ? "true" : "false");
   fclose(fp);
   printf("{\"gate\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"device_ok\": %s, \"control_rejected\": %s, \"device\": {%s}}\n",
          dir.c_str(), m, n, k, ok ? "true" : "false", control_rejected ? "true" : "false", res.c_str());
