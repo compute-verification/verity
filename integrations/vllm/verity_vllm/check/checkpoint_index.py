@@ -47,20 +47,24 @@ def shard_names(ckpt_dir: str) -> list[str]:
     return sorted(fn for fn in os.listdir(ckpt_dir) if fn.endswith(".safetensors"))
 
 
+CHECKPOINT_NAMES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "engine", "profiles", "checkpoint_names.json")
+
+
 def renames(config: dict[str, Any]) -> dict[str, tuple] | None:
-    """vLLM's rename (`hf_to_vllm_mapper`) of a checkpoint whose tensor names are not the served model's, by config.json, as the
-    `regex`, `substr`, `prefix` and `suffix` steps `WeightsMapper._map_name` applies in that order (a name mapped to None is not
-    loaded); None for a checkpoint named as served.  DeepSeek-V4: `deepseek_v4.nvidia.model._make_deepseek_v4_weights_mapper`, whose
-    MXFP4 experts' `.scale` is their `weight_scale` (FP8 experts': `weight_scale_inv`, as every other block scale)."""
-    if config.get("model_type") != "deepseek_v4":
+    """vLLM's rename (`hf_to_vllm_mapper`) of a checkpoint whose tensor names are not the served model's, by config.json's ``model_type``
+    (model facts, kept as data in the engine profiles' `checkpoint_names.json`): the `regex`, `substr`, `prefix` and `suffix` steps
+    `WeightsMapper._map_name` applies in that order, a replacement chosen by a config key where it names one (``by``); None for a
+    checkpoint named as served."""
+    with open(CHECKPOINT_NAMES) as f:
+        entry = json.load(f).get(config.get("model_type"))
+    if entry is None:
         return None
-    expert = r"\1.weight_scale" if config.get("expert_dtype") == "fp4" else r"\1.weight_scale_inv"
-    return {"regex": ((re.compile(r"(\.experts\.\d+\.w[123])\.scale$"), expert), (re.compile(r"\.scale$"), ".weight_scale_inv")),
-            "substr": ((".shared_experts.w2", ".shared_experts.down_proj"), ("mtp.", None)),
-            "prefix": (("layers.", "model.layers."), ("embed.", "model.embed."), ("norm.", "model.norm."), ("hc_head", "model.hc_head"),
-                       ("mtp.", "model.mtp.")),
-            "suffix": (("head.weight", "lm_head.weight"), ("embed.weight", "embed_tokens.weight"),
-                       (".ffn.gate.bias", ".ffn.gate.e_score_correction_bias"))}
+
+    def pick(new: Any) -> str | None:
+        return new.get(str(config.get(new["by"])), new["else"]) if isinstance(new, dict) else new
+
+    return {"regex": tuple((re.compile(p), pick(n)) for p, n in entry["regex"]),
+            **{step: tuple((old, pick(new)) for old, new in entry[step]) for step in ("substr", "prefix", "suffix")}}
 
 
 def renamed(name: str, rules: dict[str, tuple]) -> str | None:

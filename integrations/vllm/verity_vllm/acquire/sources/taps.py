@@ -139,7 +139,7 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **gi
         ma = moe_align_source.attach(com, model, mine)
         if ma is not None:
             out["moe_align_source"] = {"layers": len(ma.layers)}
-    except (ValueError, RuntimeError, AttributeError, ImportError) as e:
+    except (ValueError, RuntimeError, AttributeError) as e:
         out["moe_align_source"] = {"error": repr(e)[:200]}
     return out
 
