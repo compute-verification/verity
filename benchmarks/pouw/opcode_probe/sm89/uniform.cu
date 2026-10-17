@@ -5,7 +5,8 @@
 // only in a loop with MMAs, so "alone" keeps the MMAs with their results unread (ptxas deletes them after placing the
 // chain). The gate pins every loop opcode, vector and uniform alike, so a chain that lands on lanes refuses.
 //   u<F>_<K><S>   F: z alone (the MMAs unread); t 8 IMMA.16816 a step, accumulators carried to the sink (the tensor
-//                 pipe saturated); h honest16 (the MMAs and duo on each accumulator: the ALU pipe binds)
+//                 pipe saturated); h honest16 (the MMAs and duo on each accumulator: the ALU pipe binds); g h and 64
+//                 FFMA on the accumulators' bits (FACET-BREAK's: issue binds)
 //                 S, the uniform step on each of four chain pairs: x ULOP3; a UIADD3 + ULOP3; s USHF + ULOP3;
 //                 p UPRMT + ULOP3; m UIMAD + ULOP3
 //   i<F>_<op>[_N] the IMAD forms of the fold's ALU work: op imad (mad.lo, a register multiplier), hi (mad.hi with its
@@ -60,7 +61,27 @@ struct UChains {
   __device__ uint32_t fold() const { return u[0] ^ u[1] ^ u[2] ^ u[3] ^ u[4] ^ u[5] ^ u[6] ^ u[7]; }
 };
 
-enum { F_Z, F_T, F_H };
+enum { F_Z, F_T, F_H, F_G };
+
+// FACET-BREAK's issue-bound setting: 64 FFMA a warp-iteration on the honest step's accumulator bits
+struct Feed {
+  float f[8], g;
+  __device__ explicit Feed(int mode) {
+    g = __uint_as_float(0x3F800001u ^ (uint32_t)mode);
+#pragma unroll
+    for (int c = 0; c < 8; c++) f[c] = 0.f;
+  }
+  __device__ __forceinline__ void step(const Honest& h) {
+#pragma unroll
+    for (int q = 0; q < 64; q++) f[q & 7] = __fmaf_rn(__int_as_float(h.d[q & 7][(q >> 3) & 3]), g, f[q & 7]);
+  }
+  __device__ uint32_t fold() const {
+    uint32_t s = 0;
+#pragma unroll
+    for (int c = 0; c < 8; c++) s ^= __float_as_uint(f[c]);
+    return s;
+  }
+};
 
 __device__ __forceinline__ uint32_t acc_fold(const Honest& h) {
   uint32_t s = 0;
@@ -73,14 +94,16 @@ template <int F, int S, int K>
 __device__ __forceinline__ void uni(const OpArgs& a) {
   UChains<K, S> u(0x5eed0000u ^ (uint32_t)a.mode);
   Honest h(a.mode);
+  Feed e(a.mode);
   OP_BEGIN
   OP_LOOP(it) {
-    if constexpr (F == F_H) h.step<8, true, true>();
+    if constexpr (F == F_H || F == F_G) h.step<8, true, true>();
     else h.step<8, false, true>();
+    if constexpr (F == F_G) e.step(h);
     u.step();
   }
   OP_END
-  OP_SINK(u.fold() ^ h.fold() ^ (F == F_T ? acc_fold(h) : 0u))
+  OP_SINK(u.fold() ^ h.fold() ^ (F == F_T ? acc_fold(h) : 0u) ^ (F == F_G ? e.fold() : 0u))
 }
 
 enum { O_IMAD, O_HI, O_SHL };
@@ -135,7 +158,8 @@ __device__ __forceinline__ void imad_honest(const OpArgs& a) {
 }
 
 // duo's word with z = rotl(u, r) + y on the IMAD pipe: umulhi(u, 2^r) + y = (u >> (32 - r)) + y, then u * 2^r + that
-__device__ __forceinline__ void duo_word_imad(uint32_t& y, uint32_t& z, uint32_t d, uint32_t k, uint32_t a, uint32_t pr) {
+__device__ __forceinline__ void duo_word_imad(uint32_t& y, uint32_t& z, uint32_t d, uint32_t k, uint32_t a,
+                                              uint32_t pr) {
   const uint32_t u = y ^ d ^ k;
   y = u * a + z;
   uint32_t t;
@@ -143,7 +167,8 @@ __device__ __forceinline__ void duo_word_imad(uint32_t& y, uint32_t& z, uint32_t
   asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(z) : "r"(u), "r"(pr), "r"(t));
 }
 
-// honest16 with words (word w of accumulator c, w * 8 + c < W) folded in duo's IMAD form: the same (y, z) as rf_duo_step
+// honest16 with words (word w of accumulator c, w * 8 + c < W) folded in duo's IMAD form: the same (y, z) as
+// rf_duo_step
 template <int W>
 __device__ __forceinline__ void duo_mixed(const OpArgs& a) {
   Honest h(a.mode);
@@ -192,6 +217,10 @@ UK(uh_64s, F_H, S_S, 64)
 UK(uh_64p, F_H, S_P, 64)
 UK(uh_64m, F_H, S_M, 64)
 UK(uh_128m, F_H, S_M, 128)
+UK(ug_0, F_G, S_X, 0)
+UK(ug_32x, F_G, S_X, 32)
+UK(ug_64a, F_G, S_A, 64)
+UK(ug_64m, F_G, S_M, 64)
 
 #define IA(nm, O) \
   OP_KERNEL(nm, TPB) { imad_alone<O>(a); }
@@ -245,6 +274,10 @@ static const OpProbe PROBES[] = {
     P_U(uh_64p, "UPRMT=64,IMAD=32,LEA.HI=32,LOP3.LUT=32,ULOP3.LUT=32,IMMA.16816.S8.S8=8,IADD3=1,ISETP.GE.AND=1", "IMMA.16816.S8.S8"),
     P_U(uh_64m, "IMAD=32,LEA.HI=32,LOP3.LUT=32,UIMAD=32,ULOP3.LUT=32,IMMA.16816.S8.S8=8,IADD3=1,ISETP.GE.AND=1", "IMMA.16816.S8.S8"),
     P_U(uh_128m, "UIMAD=64,ULOP3.LUT=64,IMAD=32,LEA.HI=32,LOP3.LUT=32,IMMA.16816.S8.S8=8,IADD3=1,ISETP.GE.AND=1", "IMMA.16816.S8.S8"),
+    P_U(ug_0, "FFMA=64,IMAD=32,LEA.HI=32,LOP3.LUT=32,IMMA.16816.S8.S8=8,IADD3=1,ISETP.GE.AND=1", "IMMA.16816.S8.S8"),
+    P_U(ug_32x, "FFMA=64,ULOP3.LUT=48,IMAD=32,LEA.HI=32,LOP3.LUT=32,IMMA.16816.S8.S8=8,IADD3=1,ISETP.GE.AND=1", "IMMA.16816.S8.S8"),
+    P_U(ug_64a, "FFMA=64,IMAD=32,LEA.HI=32,LOP3.LUT=32,UIADD3=32,ULOP3.LUT=32,IMMA.16816.S8.S8=8,IADD3=1", "IMMA.16816.S8.S8"),
+    P_U(ug_64m, "FFMA=64,IMAD=32,LEA.HI=32,LOP3.LUT=32,UIMAD=32,ULOP3.LUT=32,IMMA.16816.S8.S8=8,IADD3=1", "IMMA.16816.S8.S8"),
     P_U(ia_imad, "IMAD=16,LOP3.LUT=16,IADD3=1,ISETP.GE.AND=1", "IMAD"),
     P_U(ia_hi, "IMAD.HI.U32=16,LOP3.LUT=16,IMAD.MOV.U32=10,MOV=3,IADD3=1,ISETP.GE.AND=1", "IMAD.HI.U32"),
     P_U(ia_shl, "IMAD.SHL.U32=6,SHF.L.U32=2,IADD3=1,ISETP.GE.AND=1", "IMAD.SHL.U32"),
