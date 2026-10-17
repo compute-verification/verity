@@ -24,6 +24,7 @@ import Proofs.Flock.Claims.KS.OnAcc
 import Proofs.Flock.Claims.KS.PlainAcc
 import Proofs.Flock.Claims.KS.RoundsN
 import Proofs.Flock.Claims.KS.RoundsNZk
+import Proofs.Flock.Claims.KS.LevelZero
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -104,4 +105,6 @@ custody reads each round message's coin at the session's count (`FlockDeploy.pla
 `FlockDeploy.custody_vals_plain`). So under `--zk` (`RoundsNZk`): each round of an accepted masked rep issued its
 statement's coins (`FlockDeploy.zkRepNs`, `FlockDeploy.zkVerifyRepWith_readsN`; per rep stream,
 `FlockDeploy.zkRepNsOf`, `FlockDeploy.streams_ns_zk`), and custody reads each masked round message's coin at the
-session's count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). -/
+session's count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted Ligerito run's first model request is
+level 0's, at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
+`FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`). -/
