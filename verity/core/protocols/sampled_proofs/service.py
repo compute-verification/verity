@@ -28,6 +28,8 @@ declares them; the joint note's §6 step 0 allows that on test prompts, and hidi
 **The draw.** The challenger draws from its own bytes as the Lean verifier's `Flock.Draw.drawWith` does
 (`two_stage.draw_first` over `two_stage.OwnRandomness`), with no hash and no derivation, after the receipt. A work draw
 carries the challenger's closure map's closure (`two_stage.closure_of`), which the proof proves with the drawn units.
+From the selection rule to the draw object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
+verifier's `SampledProofs.Select` ports, held to them by its difftest on fixed coins.
 
 **The two-stage rule** (`TwoStage(replay, check="all")`): the Spec's boundary values (committed by serve time) are
 registered first, and the stream draws replay units (RUs) by `replay`; the drawn RUs' interiors (phase `interior`,
@@ -50,8 +52,9 @@ epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither t
 
 **No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is drawn once, after its receipt (`select`); its
 interiors are registered once; its proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
-redraws. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject.
-Each failure is one visible symbol, `reject` or `late`, or a late registration's refusal, `late-registration`.
+redraws. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject,
+and so is a draw whose proof is not delivered by then: a `Stream` refuses a check without a proof deadline, so every draw
+ends. Each failure is one visible symbol, `reject` or `late`, or a late registration's refusal, `late-registration`.
 
 **The failure budget.** A stream counts its failures, and at the `budget`-th it stops and refuses further registrations.
 It holds one open registration at a time, so it never ends with more than `budget` failures.
@@ -218,7 +221,8 @@ class Check:
     `query`: its proof units, one-stage's template query over that Program's Definition. `window`: the window statement's
     Program's SHA-512, proved once per window over the committed layout. `public_outputs`: what the verifier reports that
     the auditor reads. `deadline`: a timed session's (PoUS's rounds). `proof_deadline`: seconds on the challenger's clock
-    from the draw; a proof delivered later is a reject. `registration_deadline`: seconds on the challenger's clock from
+    from the draw; a proof delivered later, or none by then, is a reject (`late`), and a `Stream` refuses a check
+    without one. `registration_deadline`: seconds on the challenger's clock from
     the salt coin's release (`Stream.salt`, or `Stream.salt_released`'s `released_at`); a registration received later,
     or before any salt, is refused (`late-registration`) and ends the epoch. The interiors' registration is not held to
     it: it follows the draw, which `proof_deadline` bounds."""
@@ -472,6 +476,36 @@ def check_verdicts(verdicts: Mapping[str, Mapping[str, Any]], sessions: Sequence
 Sampler = Callable[[Mapping[str, Any], int], Sequence[int]]
 
 
+def selection_law(rule: Selection, n: int) -> dict[str, Any]:
+    """The law a selection rule names over `n` proof units, before `draw.derive` expands it over the check's program and
+    query: `subset:n` for `All`, a `Law`'s own, and a two-stage rule's `replay` (over its RUs)."""
+    if isinstance(rule, All):
+        return {"law": "subset", "k": n}
+    return D.parse_law((rule.replay if isinstance(rule, TwoStage) else rule).text)
+
+
+def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable[[int], bytes], *,
+                closure: Mapping[int, Sequence[int]] | None = None, sampler: Sampler | None = None) -> dict[str, Any]:
+    """The challenger's draw object over [0, n) under its expanded `law`: every unit for `All`, reading no coins;
+    otherwise `sampler`'s draw, or `two_stage.draw_first` on `coins` read in order. With `closure`, the challenger's
+    closure map, a work draw carries the drawn units' closure (`two_stage.closure_of`) when it is not empty. Raises
+    `Refused` (`closure`) for a closure map on another law or outside [0, n), before any coin is read, and `ValueError`
+    where `draw_first` does. The Lean verifier's `Select.select` is this, from the rule on."""
+    if closure is not None and not (law["law"] == "work" and isinstance(closure, Mapping) and all(
+            type(u) is int and 0 <= u < n and isinstance(cs, Sequence) and all(type(c) is int and 0 <= c < n for c in cs)
+            for u, cs in closure.items())):
+        raise _refuse("closure", f"a closure map {{unit: [units]}} over [0, {n}) widens a work draw only")
+    if isinstance(rule, All):
+        units = list(range(n))
+    else:
+        units = sorted(int(u) for u in (sampler(dict(law), n) if sampler is not None
+                                        else draw_first(OwnRandomness(coins), law, n)["units"]))
+    obj = {**law, "population": n, "units": units}
+    if closure is not None and closure_of(closure, units):
+        obj["closure"] = closure_of(closure, units)
+    return obj
+
+
 @dataclass
 class _Entry:
     registration: Registration
@@ -510,6 +544,9 @@ class Stream:
                              "(check='all'); a count needs a second draw after the interiors are registered")
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
+        if spec.check.proof_deadline is None:
+            raise ValueError("a stream's check has a proof deadline (Check.proof_deadline), so that a draw whose proof "
+                             "never arrives ends as a reject (late)")
         if P.program_digest(Program(unit)) != spec.check.program:
             raise ValueError("the challenger's unit is not the check's program")
         if dict(spec.check.query) != P.template_instance_query(unit):
@@ -645,9 +682,7 @@ class Stream:
         if not (type(n) is int and n >= 1):
             raise _refuse("population", n)
         program = P.population_program(self.unit, n)
-        rule = self.spec.selection
-        law = {"law": "subset", "k": n} if isinstance(rule, All) else D.parse_law(
-            (rule.replay if isinstance(rule, TwoStage) else rule).text)
+        law = selection_law(self.spec.selection, n)
         v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, self._log, None,
                     work_table, registered)
         if not v.ok:
@@ -687,7 +722,7 @@ class Stream:
 
     def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
-        the selection rule's law (`All` draws every unit and reads no coins). `closure` is the challenger's closure map
+        the selection rule's law (`select_draw`; `All` draws every unit and reads no coins). `closure` is the challenger's closure map
         (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work law only: the draw carries the
         drawn units' closure (`two_stage.closure_of`), which `draw.proved` and `draw.check_proved` count. Raises `Refused`
         for a registration drawn before (nothing redraws), a closure map on another law or outside [0, N) (before any
@@ -695,27 +730,13 @@ class Stream:
         e = self._entry(registration)
         if e.draw is not None:
             raise _refuse("drawn", {"order": registration.order})
-        n = registration.record["population"]
-        if closure is not None and not (e.law["law"] == "work" and isinstance(closure, Mapping) and all(
-                type(u) is int and 0 <= u < n and isinstance(cs, Sequence) and all(type(c) is int and 0 <= c < n for c in cs)
-                for u, cs in closure.items())):
-            raise _refuse("closure", f"a closure map {{unit: [units]}} over [0, {n}) widens a work draw only")
-        if isinstance(self.spec.selection, All):
-            units = list(range(n))
-        else:
-            units = sorted(int(u) for u in (self._sampler(dict(e.law), n) if self._sampler is not None
-                                            else self._sample(e.law, n)))
-        obj = {**e.law, "population": n, "units": units}
-        if closure is not None and closure_of(closure, units):
-            obj["closure"] = closure_of(closure, units)
+        obj = select_draw(self.spec.selection, e.law, registration.record["population"], self._coins, closure=closure,
+                          sampler=self._sampler)
         v = V.check_draw(obj, registration.record, e.law)
         if not v.ok:
             raise Refused(v)
         e.draw, e.drawn_at = Draw(registration, e.law, obj), self._clock()
         return e.draw
-
-    def _sample(self, law: Mapping[str, Any], n: int) -> list[int]:
-        return draw_first(OwnRandomness(self._coins), law, n)["units"]
 
     def register_interiors(self, draw: Draw, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *,
                            leaf_layer: str | None = None, anchors: Sequence[Any] = ()) -> Registration:
@@ -757,8 +778,8 @@ class Stream:
         return e.interior
 
     def _late(self, e: _Entry) -> bool:
-        d = self.spec.check.proof_deadline
-        return d is not None and e.drawn_at is not None and self._clock() - e.drawn_at > d
+        assert e.drawn_at is not None and self.spec.check.proof_deadline is not None
+        return self._clock() - e.drawn_at > self.spec.check.proof_deadline
 
     def deliver(self, draw: Draw, sessions: Sequence[str]) -> Outcome | None:
         """The firewall delivers the draw's proof, once: `sessions` are its session records' SHA-512, which the outcome
@@ -866,4 +887,4 @@ def _why(symbol: str, audit: Mapping[str, Any] | None, interior: Mapping[str, An
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "HIDING", "KINDS", "LATE", "Law", "Outcome", "PHASES", "Pending",
            "Public", "REJECT", "Refused", "Registration", "SCHEME", "SOURCES", "Selection", "Sequential", "Spec", "Stream",
-           "Terms", "TwoStage", "Value", "check_public", "check_verdicts"]
+           "Terms", "TwoStage", "Value", "check_public", "check_verdicts", "select_draw", "selection_law"]

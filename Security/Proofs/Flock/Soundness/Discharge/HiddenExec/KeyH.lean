@@ -484,7 +484,8 @@ theorem keyRowsH_computes
       rfl
     have hbq : c.ports[q.val]!.bits = 16 * c.ports[q.val]!.words :=
       hrf.bits16 _ (by rw [getElem!_pos c.ports q.val q.isLt]; exact Array.getElem_mem_toList q.isLt)
-    have hb := bc_site_commitH (si.acc S R u hu) (by rw [hce]; exact ho) (by rw [hce]; exact hrf) hM
+    have hb := bc_site_commitH (si.acc S R u hu)
+      (Hm.upv_pos (si.acc S R u hu).unitFacts.check (by rw [hce]; exact ho)) (by rw [hce]; exact hrf) hM
       (si.o S R u hu) (si.hvu S R u hu) hq
     have hpq : (si.acc S R u hu).st.c.ports[q.val]! = c.ports[q.val]! := by rw [hce]
     rw [hpq] at hb
