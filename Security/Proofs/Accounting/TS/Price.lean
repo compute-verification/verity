@@ -83,7 +83,61 @@ theorem stars_nonneg [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : La
 theorem head_dominates (Z : Model K R T L U F X) (P : Labelled K) (A : Anatomy K T L U) (hZ : Z.Wf P)
     (hA : A.Split) (hW : WordsWritten Z A) (hS : ScalarRoute Z A) (hU : SideUnits Z A) :
     ∀ hd r, A.words hd * Z.demand hd r ≤ Z.G.load (A.nword hd) r := by
-  sorry
+  obtain ⟨ha, -, -, -, hom, -⟩ := hZ
+  obtain ⟨hnw, -, -, hwd, -⟩ := hA
+  have hterm : ∀ hd r k, Z.G.a r k * A.nword hd k ≤ Z.G.load (A.nword hd) r := fun hd r k =>
+    Finset.single_le_sum (f := fun k => Z.G.a r k * A.nword hd k)
+      (fun k _ => mul_nonneg (ha r k) (hnw hd k)) (Finset.mem_univ k)
+  have hvec : ∀ hd r, (∑ k ∈ Z.vec, A.nword hd k) * Z.vecMin r ≤ Z.G.load (A.nword hd) r := by
+    intro hd r
+    calc (∑ k ∈ Z.vec, A.nword hd k) * Z.vecMin r = ∑ k ∈ Z.vec, A.nword hd k * Z.vecMin r := by
+          rw [Finset.sum_mul]
+      _ ≤ ∑ k ∈ Z.vec, Z.G.a r k * A.nword hd k := Finset.sum_le_sum fun k hk => by
+          rw [mul_comm]; exact mul_le_mul_of_nonneg_right (vecMin_le Z r hk) (hnw hd k)
+      _ ≤ ∑ k, Z.G.a r k * A.nword hd k :=
+          Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _)
+            fun k _ _ => mul_nonneg (ha r k) (hnw hd k)
+  have hvm : ∀ r, 0 ≤ Z.vecMin r / 32 := fun r => div_nonneg (vecMin_nonneg Z ha r) (by norm_num)
+  intro hd r
+  cases hd with
+  | writer t =>
+    simp only [Model.demand]
+    calc A.words (.writer t) * (Z.G.a r (Z.cls t) / Z.omega t)
+        ≤ Z.omega t * A.nword (.writer t) (Z.cls t) * (Z.G.a r (Z.cls t) / Z.omega t) :=
+          mul_le_mul_of_nonneg_right (hW t) (div_nonneg (ha r _) (hom t).le)
+      _ = Z.G.a r (Z.cls t) * A.nword (.writer t) (Z.cls t) := by
+          rw [mul_comm (Z.omega t), mul_assoc, mul_div_cancel₀ _ (hom t).ne', mul_comm]
+      _ ≤ _ := hterm _ r _
+  | vector =>
+    simp only [Model.demand]
+    calc A.words .vector * (Z.q / 32 * Z.vecMin r) = Z.q * A.words .vector * (Z.vecMin r / 32) := by ring
+      _ ≤ 32 * (∑ k ∈ Z.vec, A.nword .vector k) * (Z.vecMin r / 32) :=
+          mul_le_mul_of_nonneg_right hS.1 (hvm r)
+      _ = (∑ k ∈ Z.vec, A.nword .vector k) * Z.vecMin r := by ring
+      _ ≤ _ := hvec _ r
+  | table l =>
+    simp only [Model.demand]
+    obtain ⟨hql, hbl⟩ := hS.2 l
+    rw [mul_max_of_nonneg _ _ (hwd _)]
+    refine max_le ?_ ?_
+    · calc A.words (.table l) * (Z.qT / 32 * Z.vecMin r)
+          = Z.qT * A.words (.table l) * (Z.vecMin r / 32) := by ring
+        _ ≤ 32 * (∑ k ∈ Z.vec, A.nword (.table l) k) * (Z.vecMin r / 32) :=
+            mul_le_mul_of_nonneg_right hql (hvm r)
+        _ = (∑ k ∈ Z.vec, A.nword (.table l) k) * Z.vecMin r := by ring
+        _ ≤ _ := hvec _ r
+    · calc A.words (.table l) * (Z.bT * Z.G.a r (Z.bytes l))
+          = Z.bT * A.words (.table l) * Z.G.a r (Z.bytes l) := by ring
+        _ ≤ A.nword (.table l) (Z.bytes l) * Z.G.a r (Z.bytes l) :=
+            mul_le_mul_of_nonneg_right hbl (ha r _)
+        _ = Z.G.a r (Z.bytes l) * A.nword (.table l) (Z.bytes l) := mul_comm _ _
+        _ ≤ _ := hterm _ r _
+  | side u =>
+    simp only [Model.demand, Machine.load, Finset.mul_sum]
+    exact Finset.sum_le_sum fun k _ =>
+      calc A.words (.side u) * (Z.G.a r k * Z.side u k) = Z.G.a r k * (A.words (.side u) * Z.side u k) := by
+            ring
+        _ ≤ Z.G.a r k * A.nword (.side u) k := mul_le_mul_of_nonneg_left (hU u k) (ha r k)
 
 /-- (RD) in price form from the parts (I2)–(I6): at every certificate,
 `fixed·w* + (1 − μ_f)N_w φ* + (1 − μ_x)χ* ≤ π·n(M)`. -/
