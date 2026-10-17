@@ -52,15 +52,17 @@ many reads of a node's registered blocks the node made in each window, from rece
    kind (under sketch-sha512, the block's sketch from the pass's signs first).  A window is accepted only if every opening checks,
    and a rejected window ends its session.
 8. The record (`Session.record`): per window each pass's length and step, its challenge's release and its deadline on the
-   verifier's clock, its openings coin's release, and an `IntegrityProfile` over its receipts with `Subset(s)` drawn;
+   verifier's clock, its openings coin's release, and an `IntegrityProfile` over its receipts with `Subset(s)` drawn,
+   and the chain over the session's appends (`Record.appends`);
    `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
    pooled over the session's horizon (`pooled`, `floors`).  It credits a receipt of a block appended after the seed
    only on the property's verdict on the circuits that wrote it (`credit_post_seed`, I2's), and then charges what
    their carriers may hold (μ_carrier); without one, those receipts are certified but not credited.  On the served
    circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
-   the census's layout rule), each pass's credit is its receipts at the link's D bits each, at most the circuit's reads
-   at its step (`Ledger.linked`); without one the credit is the node's reads of its store.
+   the census's layout rule, the memory-map unit's verdict on the record's appends among them, `mapped`), each pass's
+   credit is its receipts at the link's D bits each, at most the circuit's reads at its step (`Ledger.linked`);
+   without one the credit is the node's reads of its store.
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
 The verifier's clock is injected (`clock`, nanoseconds, `time.monotonic_ns` by default).  Openings are checked in the
@@ -571,8 +573,10 @@ class Record:
     and the receipt kind the registration names, whether its receipts bind z, its codec, its block layout and its sketch
     rows (its digest binds all five; the record repeats them, since what a receipt rests on depends on the kind, `bind`
     and the rows, μ_rebuild on the codec, and which bytes a credited block is on the layout), the blocks the
-    session appended after the codec seed and released, and the lifetime cap it held them to (`Params.lifetime`, None
-    in a record no session made).  `public` is what acceptance makes public;
+    session appended after the codec seed and released, the lifetime cap it held them to (`Params.lifetime`, None
+    in a record no session made), and the chain over its appends in the order received (`append_head`, None without
+    one), which the memory-map unit's verdict is on (`RequirementLink.mapped`).  `public` is what acceptance makes
+    public;
     `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`)."""
 
@@ -589,6 +593,7 @@ class Record:
     appended: int = 0
     released: int = 0
     lifetime: int | None = None
+    appends: bytes | None = None
 
     @property
     def start_ns(self) -> int:
@@ -613,7 +618,8 @@ class Record:
         return sum(w.receipts for w in self.windows)
 
     def public(self) -> dict:
-        return {"appended": self.appended, "bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks,
+        return {"appended": self.appended, "appends": None if self.appends is None else self.appends.hex(),
+                "bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks,
                 "codec": self.codec.name, "codec_params": self.codec.to_json(), "coins": self.coins.hex(),
                 "layout": self.layout, "lifetime": self.lifetime, "passes": [w.passes for w in self.windows],
                 "post_seed": [sum(w.post_seed) for w in self.windows], "protocol": PROTOCOL_ID,
@@ -949,7 +955,7 @@ class Session:
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
-                      self.params.lifetime)
+                      self.params.lifetime, self._head)
 
 
 REGISTRY_SCHEMA = "verity/remote-bandwidth/registry/v0"
@@ -1132,8 +1138,12 @@ class RequirementLink(Protocol):
     in `verity.ml.circuits`).  It holds once the proof units have shown, for every pass, that its plan holds only
     blocks the circuit reads at the pass's step (`PlanMatches`; the plan unit, I4's), each carrying at least D of its
     values' bits (`Packs` under the census's layout rule), and that every free in the memory map, of a registered
-    block or a written one, is at its values' last read (the memory-map unit, I4's).  Those checks are theirs; the
-    ledger takes the link as given."""
+    block or a written one, is at its values' last read (the memory-map unit, I4's).  `mapped(appends)` is the
+    memory-map unit's verdict on this session's appends, the chain `Record.appends` (None without one): that W's memory
+    map, the one the plan unit's plans are of, makes exactly those appends, each a write at its production step, in
+    the map's order, at the index the verifier gave it, a re-key only at the lifetime cap and of the same payload,
+    and no other (PROTOCOL.md §8, "The memory map's choices").  Those checks are theirs; the ledger takes the link as
+    given, and refuses one whose `mapped` isn't True of the record's appends."""
 
     @property
     def holds(self) -> bool: ...
@@ -1142,6 +1152,8 @@ class RequirementLink(Protocol):
     def density_bits(self) -> int: ...
 
     def read_bits(self, step: int) -> int: ...
+
+    def mapped(self, appends: bytes | None) -> bool: ...
 
 
 class _Terms:
@@ -1310,8 +1322,8 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     `credit_post_seed`, the property's verdict on the circuits that wrote them (I2's; None credits none, and a verdict
     that fails is refused).  Crediting them charges μ_carrier, each pass the least of the verdict's carrier bytes and
     its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
-    On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold), a
-    pass's credit is its credited receipts at D bits each, at most the bits the circuit reads at the pass's step, so
+    On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold, its
+    memory-map unit making the record's appends, `mapped`), a pass's credit is its credited receipts at D bits each, at most the bits the circuit reads at the pass's step, so
     the credit is the circuit's reads (`Ledger.linked`); `sample` still charges a whole block for a wrong receipt."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
@@ -1320,6 +1332,10 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
         if requirement.holds is not True:
             raise ValueError("a requirement link whose proofs don't hold caps nothing: pass None, and the credit is "
                              "the node's reads of its store, not the circuit's")
+        if requirement.mapped(record.appends) is not True:
+            raise ValueError("a requirement link whose memory-map unit doesn't make this record's appends (its "
+                             "`appends` chain) caps nothing: frees, re-keys and append order chosen after the seed are "
+                             "advice no term charges")
         density = requirement.density_bits
         if type(density) is not int or not 1 <= density <= 8 * record.block_bytes:
             raise ValueError(f"a link's density is a whole number of bits from 1 to a block's {8 * record.block_bytes}")

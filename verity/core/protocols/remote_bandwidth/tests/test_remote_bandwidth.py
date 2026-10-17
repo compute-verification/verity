@@ -171,7 +171,8 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
     assert SCHEDULE.passes == (4, 3, 3) and SCHEDULE.deadlines == (1000 + A, 2000 + A, 3000 + A)
-    assert r.public() == {"appended": 0, "bind": False, "block_bytes": 4096, "blocks": N, "codec": "p1024/k2/masked",
+    assert r.public() == {"appended": 0, "appends": None, "bind": False, "block_bytes": 4096, "blocks": N,
+                          "codec": "p1024/k2/masked",
                           "codec_params": {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2},
                           "coins": s.commitment.root.hex(), "layout": "store-order/v0",
                           "lifetime": audit.LIFETIME, "passes": [4, 3, 3],
