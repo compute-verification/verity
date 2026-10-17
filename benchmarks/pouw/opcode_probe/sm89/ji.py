@@ -3,6 +3,7 @@ program's load on every sm_89 row.
 
   python ji.py emit K [--pins GATE.json] > jiK.cu  # IMMA.168{K}'s grid (K 16 or 32), pinned from the unpinned build's gate
   python ji.py loads OUT...                         # each timed program's load on every row ADA-89 holds, heaviest first
+  python ji.py worst OUT...                         # each row's heaviest load and its program
 
 The grid (each program `j<K>_<lane>_q<Q>_a<NA>u<U>_w<W>`: Q lane ops a 8 MMAs, NA accumulators, U groups of 8 MMAs an
 iteration, W warps a SMSP, one block a SM): FMUL by an immediate at 2-8 accumulators, Q 16-160, 1, 2 or 4 warps a SMSP;
@@ -133,10 +134,20 @@ def loads(outs: list[Path]) -> list[dict]:
             ld = {}
             for k, xk in x.items():
                 for row, u in cen.get(k, {}).items():
-                    ld[row] = ld.get(row, 0) + u * xk
+                    ld[row] = ld.get(row, 0) + u * xk / m.cycle_u
             res.append({"probe": r["probe"], "run": r.get("run"), "x": x, "unpriced": unpriced,
                         "loads": dict(sorted(ld.items(), key=lambda t: -t[1]))})
     return res
+
+
+def worst(res: list[dict]) -> dict[str, tuple[float, str]]:
+    """Each row's heaviest load and its program."""
+    out: dict[str, tuple[float, str]] = {}
+    for r in res:
+        for row, v in r["loads"].items():
+            if v > out.get(row, (-1.0, ""))[0]:
+                out[row] = (v, r["probe"])
+    return dict(sorted(out.items(), key=lambda t: -t[1][0]))
 
 
 def main() -> None:
@@ -145,14 +156,17 @@ def main() -> None:
     e = sub.add_parser("emit")
     e.add_argument("k", type=int, choices=(16, 32))
     e.add_argument("--pins", type=Path)
-    lo = sub.add_parser("loads")
-    lo.add_argument("outs", nargs="+", type=Path)
+    for c in ("loads", "worst"):
+        sub.add_parser(c).add_argument("outs", nargs="+", type=Path)
     a = ap.parse_args()
     if a.cmd == "emit":
         sys.stdout.write(emit(a.k, a.pins))
-    else:
+    elif a.cmd == "loads":
         for r in loads(a.outs):
             print(json.dumps(r))
+    else:
+        for row, (v, p) in worst(loads(a.outs)).items():
+            print(f"{row:10s} {v:.4f}  {p}")
 
 
 if __name__ == "__main__":
