@@ -80,8 +80,11 @@ value, so the lanes it serves past the first are copies, credited only by copy l
 
 ## ε in the tensor–scalar model
 
-`eps` computes 1 − ε = (1 − ε_skip − ε_mand − ε_machine − ε_luck − ε_adapt)(1 − ε_sched)(1 − ε_clock), each term a fraction of
-honest time. Π is the current vector's rows at its epoch, read as the price LP reads them (SMSP-cycles a warp
+`eps` reports two layers that are never mixed (Daniel, 17 Oct 06:29Z). The protocol with 100% checking, every word and
+operand verified, has the core ε, 1 − ε_core = (1 − ε_skip − ε_mand − ε_machine)(1 − ε_sched)(1 − ε_clock)
+(`--checking full`, the default). The sampling compiler adds ε_sample = ε_luck + ε_adapt, a function of the proof unit,
+its budget and its selection rule, 0 at 100% sampling, on its own line and in its own columns (`--checking sampled`).
+Each term is a fraction of honest time. Π is the current vector's rows at its epoch, read as the price LP reads them (SMSP-cycles a warp
 instruction a row). ε_machine is one LP, SPEC's §0.8 (note:20261017T0324Z-draft-eps1-spec): a program writes every
 committed word on one of four routes, folds every word and does the filler, and its time is its largest row. The routes
 are the tensor pipe (`L/32` MMAs for 128 words, with their operand delivery), CUDA lanes at q* lane instructions a word
@@ -113,8 +116,10 @@ times an ALU instruction's cost on the issue rows too (`issue` and the joint `JI
 since VF3 and PREDICT's u16s_l7qs measured at 0.92 (r20261017-045133-67bf). The uniform route then closes without UPFILL, and UPFILL costs honest issue
 time while the cheater does its checked work on lanes, 32 values a warp instruction. ε_adapt is the proof unit's, SPEC's
 Theorem D under the one-σ order (`data/adapt.toml`): today's segment spot check ≈ 21%, whole dot products +0.35%, and 0
-for whole-dot-product proofs that recompute their operands one stage back or for per-stage coins. `eps` charges today's
-by default and `--adapt UNIT` another; the Python `eps()` charges none unless given one.
+for whole-dot-product proofs that recompute their operands one stage back or for per-stage coins. `--checking sampled`
+charges today's by default and `--adapt UNIT` another; the Python `eps()` charges none unless given one. The table
+route's defaults (`data/table.toml`) are SCALAR-ROUTE as restated: 1.22 slots and 3.5 B of L2 a word, `--lookup-bytes 6`
+for single-field tables.
 
 ## Adopt a probe's census
 
