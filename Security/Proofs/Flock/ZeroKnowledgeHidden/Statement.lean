@@ -36,8 +36,10 @@ valid witness and admitted coins it never fires if the clear protocol is complet
 which `inner_complete` takes as a hypothesis), and nothing here proves that.
 
 Which verifiers: honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the refused.
-It covers a verifier that chooses its coins because the coin server commits every coin at `Hello`, before the prover's
-first message, under `keyed-cr`, which no statement here models yet.
+A verifier that chooses its coins is `Claims.Flock.ZK`'s (`Definitions/Claims.lean`, `ZKmalR`): zero knowledge against
+every malicious verifier of the deployed interaction's rounds, the masked verifier committing to every coin at `Hello`
+before the prover's first message, with a coin opened two ways charged to a collision among the honest prover's SHA-512 calls
+in two real runs (`Fork`).
 
 `δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
 `ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.

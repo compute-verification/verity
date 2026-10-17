@@ -2062,6 +2062,7 @@ dependencies = [
     { name = "research" },
     { name = "verity" },
     { name = "verity-difftest" },
+    { name = "verity-exact-kit" },
     { name = "verity-vllm" },
 ]
 
@@ -2072,6 +2073,7 @@ requires-dist = [
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
     { name = "verity-difftest", editable = "verity/core/difftest" },
+    { name = "verity-exact-kit", editable = "benchmarks/pouw/exact_kit" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 

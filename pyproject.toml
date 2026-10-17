@@ -59,6 +59,7 @@ verity-circuit-check = { workspace = true }
 torch = { index = "pytorch-cpu", extra = "torch-cpu" }
 verity-cli = { workspace = true }
 verity-difftest = { workspace = true }
+verity-exact-kit = { workspace = true }
 verity-proof-throughput = { workspace = true }
 
 [dependency-groups]
