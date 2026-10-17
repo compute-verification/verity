@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# LOWBIT-DC's job on one GPU (B200 sm_100a or H200 sm_90a; the family is read from the device).
+# LOWBIT-DC's job on one GPU (B200 sm_100a, H200 sm_90a, or fpx alone on B300 sm_103a; the family is read from the
+# device).
 #   run.sh       fpx: build fpx.cu and dump its SASS; under one gpu-lease `fpx run` (records.jsonl, windows.jsonl,
 #                summary.json); then analyze.py's tables (analysis.md, analysis.json).
 #   run.sh gemm  egemm: build egemm.cu and ../dc/dgemm.cu (with cuBLASLt) and dump their SASS; egemm selftest; under one
@@ -19,10 +20,11 @@ NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "run.sh: no nvcc" >&2; exit 2; }
 export PATH="$(dirname "$NVCC"):$PATH"
 cap=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
-case "${cap%%.*}" in
-  9) ARCH=90a ;;
-  10) ARCH=100a ;;
-  *) echo "run.sh: needs sm_90a or sm_100a, the device reports '$cap'" >&2; exit 2 ;;
+case "$cap" in
+  9.0) ARCH=90a ;;
+  10.0) ARCH=100a ;;
+  10.3) ARCH=103a ;;
+  *) echo "run.sh: needs sm_90a, sm_100a or sm_103a, the device reports '$cap'" >&2; exit 2 ;;
 esac
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -45,6 +47,7 @@ if [ "$MODE" = fpx ]; then
   exit $rc
 fi
 [ "$MODE" = gemm ] || { echo "run.sh: mode fpx or gemm, not $MODE" >&2; exit 2; }
+[ "$ARCH" != 103a ] || { echo "run.sh: egemm's native int8 arms need kind::i8, which sm_103a lacks; run fpx" >&2; exit 2; }
 
 G="$OUT/gemm"
 mkdir -p "$G"

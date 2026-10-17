@@ -220,3 +220,18 @@ def test_build_selftest(tmp_path):
             spilled
         out = json.loads(subprocess.run([str(binary), "selftest"], capture_output=True, text=True, check=True).stdout)
         assert out["encode_bad"] == 0 and out["identity_bad"] == 0 and out["identity_pairs"] == 3 * 65536
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not (_tool("nvcc") and _tool("cuobjdump")), reason="needs nvcc and cuobjdump (CUDA 13)")
+def test_fpx_builds_for_b300(tmp_path):
+    """fpx is B300's exactness run: on sm_103a its tcgen05 kernels must compile to the same MMAs as on sm_100a, not to
+    the empty bodies an sm_100-only guard leaves."""
+    counts = {}
+    for arch in ("100a", "103a"):
+        binary = tmp_path / f"fpx{arch}"
+        subprocess.run([_tool("nvcc"), "-std=c++17", "-O3", "-gencode", f"arch=compute_{arch},code=sm_{arch}", "-o",
+                        str(binary), str(HERE / "fpx.cu")], capture_output=True, check=True)
+        sass = subprocess.run([_tool("cuobjdump"), "-sass", str(binary)], capture_output=True, text=True, check=True).stdout
+        counts[arch] = (len(re.findall(r"\bUTCQMMA\b", sass)), len(re.findall(r"\bUTCOMMA\b", sass)))
+    assert counts["103a"] == counts["100a"] and counts["103a"][0] > 0 and counts["103a"][1] == 2, counts

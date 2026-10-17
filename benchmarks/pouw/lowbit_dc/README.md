@@ -47,5 +47,9 @@ Each run builds and dumps SASS before it takes the lease (one GPU, `gpu-lease 1 
 minute on the GPU. `run.sh gemm` gates three shapes × two code distributions (uniform, limb extremes) and benches only if
 every gate is exact. The time ratios are same-kernel ones: the skeleton is 14–75× slower than cuBLASLt int8.
 
-Not covered: a production-grade (TMA, multi-stage, warp-specialized) emulated kernel, FP4 emulation of int8 (emu8's
-FP4 route is counted in `../emu8/accounting.py`, not built), and B300 itself (no kind::i8; `../dc/README.md`).
+On a B300 (sm_103a, no kind::i8) `run.sh` runs fpx as on the B200 (the same tcgen05 kinds; its NVF4 form is
+UTCOMMA.BLOCK16 there); that run is what k4s rests on there: B200's adder (exact whenever representable, round toward
+zero per MMA) holding on sm_103. `run.sh gemm` refuses on sm_103a, since its baselines are native int8.
+
+Not covered: a production-grade (TMA, multi-stage, warp-specialized) emulated kernel, and FP4 emulation of int8 (emu8's
+FP4 route is counted in `../emu8/accounting.py`, not built).

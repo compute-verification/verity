@@ -25,7 +25,7 @@
 //   fpx run OUT      every config of this device's family: OUT/records.jsonl, OUT/windows.jsonl, OUT/summary.json
 //   fpx list         the configs (no GPU)
 // Exit 0: every exactness verdict as stated (controls caught); 4: a bad_rep, a bad word or a missed control; 2: no device.
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a (or compute_90a,sm_90a) fpx.cu -o fpx
+// Build: nvcc -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a (or 103a for B300, or 90a) fpx.cu -o fpx
 #include <cuda_runtime.h>
 
 #include <cmath>
@@ -334,7 +334,7 @@ __device__ inline void e4r_step(const Cfg& c, OutState& o, int T, uint32_t g, Ta
 }
 
 // ---- sm_100a: tcgen05 ----------------------------------------------------------------------------------------------------
-#if defined(__CUDA_ARCH_FEAT_SM100_ALL)
+#if defined(__CUDA_ARCH_FEAT_SM100_ALL) || defined(__CUDA_ARCH_FEAT_SM103_ALL)
 DC_DEV void umma_mxf4(uint32_t d, uint64_t da, uint64_t db, uint32_t idesc, uint32_t sfa, uint32_t sfb, uint32_t acc) {
   asm volatile(
       "{\n.reg .pred p;\nsetp.ne.b32 p, %6, 0;\n"
@@ -366,7 +366,7 @@ DC_HD constexpr uint32_t idesc_bs(uint32_t m, uint32_t n, uint32_t ue8m0) {
 }
 
 __global__ void __launch_bounds__(128) fpx100(const Cfg* cfgs, Rec* recs, uint32_t* dump, int* encbad_out) {
-#if defined(__CUDA_ARCH_FEAT_SM100_ALL)
+#if defined(__CUDA_ARCH_FEAT_SM100_ALL) || defined(__CUDA_ARCH_FEAT_SM103_ALL)
   constexpr int BM = 128;
   const Cfg c = cfgs[blockIdx.x];
   __shared__ __align__(1024) uint8_t sA[3][BM * KBY];
@@ -748,7 +748,7 @@ int main(int argc, char** argv) {
   cudaDeviceProp p;
   if (cudaGetDeviceProperties(&p, 0) != cudaSuccess) { fprintf(stderr, "ERR no device\n"); return 2; }
   const int fam = p.major;
-  if (fam != 9 && fam != 10) { fprintf(stderr, "ERR sm_%d%d: fpx is for sm_90a and sm_100a\n", p.major, p.minor); return 2; }
+  if (fam != 9 && fam != 10) { fprintf(stderr, "ERR sm_%d%d: fpx is for sm_90a, sm_100a and sm_103a\n", p.major, p.minor); return 2; }
   auto cfgs = configs(fam);
   const int n = (int)cfgs.size();
   Cfg* dC; Rec* dR; uint32_t* dD; int* dE;
