@@ -73,7 +73,7 @@ theorem forkCoinCoupling_plain {D : Type} [Fintype D] [DecidableEq D] {Ω : Type
       (Claims.Flock.simForkPr sha512 (V false) P x (τ := Fin ((V false).k x) → D → Claims.Bridge.Live.LCoin 65536)
         (LC := Claims.Bridge.Live.LCoin 65536) (fun q => Claims.Bridge.Live.fnAt h n key q.1 q.2)
         (fun t => Claims.Flock.FnFork.forkN t) ω) ω :=
-  Claims.Flock.forkCoinCoupling_fnAt («X» := FlockLevel3.GF128) (M := 65536) (hI := instInhabitedCoin) sha512
+  Claims.Flock.forkCoinCoupling_fnAt (A := FlockLevel3.GF128) (M := 65536) (hI := instInhabitedCoin) sha512
     (V false) P x ω h n hk
 
 end FlockDeploy.KS
