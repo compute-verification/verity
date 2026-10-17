@@ -9,9 +9,20 @@ note:20261017T0801Z-draft-lean-stmt).
 
 namespace Accounting.SecurityProofs.TS
 
+open Accounting.TS
+
 /-- Lemma 1. -/
 theorem TimeBound : Accounting.Guarantees.TS.TimeBound := by
-  sorry
+  intro K R _ _ _ G P h
+  obtain ⟨-, hcyc, hclk, hfmax, hr⟩ := h
+  rw [div_le_iff₀ (hclk.trans_le hfmax), Machine.bound]
+  refine ciSup_le fun r => ?_
+  cases hs : G.smClocked r
+  · linarith [(hr r).2 hs]
+  · calc G.load P.n r ≤ P.cycles := (hr r).1 hs
+      _ ≤ P.time * G.fmax := by
+        rw [Run.time, div_mul_eq_mul_div, le_div_iff₀ hclk]
+        exact mul_le_mul_of_nonneg_left hfmax hcyc
 
 /-- Corollary D1, one binding facet. -/
 theorem BindingFacetD1 : Accounting.Guarantees.TS.BindingFacetD1 := by
