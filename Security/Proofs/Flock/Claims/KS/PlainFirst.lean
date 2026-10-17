@@ -33,7 +33,8 @@ the last message's record has the draw of the statement it decides, as the same 
 up to `JsonEquiv`, and one draw parsed with its keys in another order is another term, so this is a premise on `P`, not
 a consequence of acceptance, which gives `RecordDrawEquiv` (`recordDrawEquiv`). Two reads ask for the term:
 `Exec.setupOf` sets the session up at the record's draw (`Stmt.setupTables` keeps it as `SessionSpec.unitDraw` and
-hashes the header that carries it through `canon`, a `partial def`), and `RecordsLiveAtP` asks for the draw `d`. -/
+hashes the header that carries it through `canon`, the same on equivalent draws, `canon_drawEq`, but its field reads
+agree on equivalent draws only when their trees are well formed), and `RecordsLiveAtP` asks for the draw `d`. -/
 def RecordDrawVerbatim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Prop :=
   ∀ r : Fin ((V false).k x) → Coin, (Claims.run sha512 P (V false) x ω r).out = .acc →
     ∀ s spec sts link c₁ mids f,
