@@ -1,6 +1,6 @@
-"""`engine.served`: what sets each kernel-selecting switch of a served engine, the verdict on what a serving process reads back, the
-read-back itself, that every row file gives a reason for each switch it moves away from vLLM's default, and that a row's Build and
-its engine run under one batch invariance."""
+"""`engine.served`: what sets each kernel-selecting switch of a served engine (vLLM's own config among them), the verdict on what a
+serving process reads back, the read-back itself, that every row file gives a reason for each switch it moves away from vLLM's
+default, and that a row's Build and its engine run under one batch invariance."""
 from __future__ import annotations
 
 import enum
@@ -27,6 +27,10 @@ GLM_SERVED = {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_DEEP_GEMM": True, "VLLM_D
               "VLLM_USE_FLASHINFER_SAMPLER": False, "VLLM_USE_V2_MODEL_RUNNER": True, "NCCL_P2P_DISABLE": None,
               "disable_custom_all_reduce": False, "enforce_eager": True, "compilation_mode": "NONE", "cudagraph_mode": "NONE",
               "attention_backend": None, "flash_attn_version": None, "moe_backend": "triton"}
+LLAMA_BI = "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+#: What the one rank of LLAMA_BI's first Commit read back (art:6bdd8171952edfb0705e4328bcb2aba9880fd400b3c01fdc4042a614ed52d24a,
+#: summary.json ``served.ranks``): vLLM's batch invariance had turned the custom all-reduce off.
+LLAMA_BI_SERVED = {**GLM_SERVED, "VLLM_BATCH_INVARIANT": True, "disable_custom_all_reduce": True, "moe_backend": "auto"}
 
 
 def _is_row(stem: str) -> bool:
@@ -89,6 +93,19 @@ def test_glm53s_commit_of_record_passes_with_its_reasons_and_fails_on_the_one_it
     bare = {**wl, "engine": {**wl["engine"], "reasons": {}}}
     assert SV.judge(GLM_SERVED, SV.declared(bare, target)) == [
         "moe_backend='triton' (row file) is not vLLM's default 'auto' and has no reason (the row file's engine.reasons)"]
+
+
+def test_vllms_batch_invariance_turns_the_custom_all_reduce_off_over_the_row_file():
+    """`ParallelConfig._verify_args` sets ``disable_custom_all_reduce`` under ``VLLM_BATCH_INVARIANT`` after every argument, so a
+    batch-invariant row declares it whatever its row file says, and a row that is not batch invariant still may not carry it."""
+    wl = va.load_workload(WORKLOADS / f"{LLAMA_BI}.json")
+    d = SV.declared(wl, va.target_of_workload(wl))
+    assert d["disable_custom_all_reduce"] == {"value": True, "source": "vLLM ParallelConfig", "reason": SV.BATCH_INVARIANT[1]}
+    assert SV.judge(LLAMA_BI_SERVED, d) == []
+    told_on = {**wl, "engine": {**wl["engine"], "args": {**wl["engine"]["args"], "disable_custom_all_reduce": False}}}
+    assert SV.declared(told_on, va.target_of_workload(wl))["disable_custom_all_reduce"]["value"] is True
+    assert SV.judge({**GLM_SERVED, "disable_custom_all_reduce": True}, SV.declared(*_glm())) == [
+        "disable_custom_all_reduce=True where row file declares False"]
 
 
 @pytest.mark.parametrize("p", ROWS, ids=lambda p: p.stem)
