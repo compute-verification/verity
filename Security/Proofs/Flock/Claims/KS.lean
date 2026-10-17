@@ -17,6 +17,7 @@ import Proofs.Flock.Claims.KS.TableBound
 import Proofs.Flock.Claims.KS.Refit
 import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.KS.Mixture
+import Proofs.Flock.Claims.KS.SessionSC
 import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.KS.PlainKS
 import Proofs.Flock.Claims.KS.Escapes
@@ -87,11 +88,14 @@ a mixture of strategies (`FlockDeploy.KS.mean_epsSL_le`, `FlockDeploy.KS.mean_ep
 `FlockDeploy.KS.plainJ_inj`), at which the old escapes fit the plain weight (`FlockDeploy.KS.oldEsc_fitsFork_plainJ`).
 At one table the model does not commit to, a live verdict is no likelier than the simulated strategy's `ε_c⁻` after
 `Commit` and its probability of accepting off the table (`Mixture`: `FlockDeploy.KS.live_le_epsSL`; over a mixture of
-live strategies, `FlockDeploy.KS.mean_live_le`). At a plain statement of one table, `TableBoundθAt` follows from, at
-each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C` bounds the deployed
-runs accepting on `C`, and whose `Adv` and self-clash the escapes' events bound, the escapes at the plain fork rounds
-(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). `Flock.KS` at the plain record follows from the live
-sessions' bound at table 0 and `Extendθ` (`PlainKS`: `FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit`
+live strategies, `FlockDeploy.KS.mean_live_le`). The session's bound with its level-0 term only on runs that do not
+self-clash, a self-clash being in `ε_c⁻` already (`SessionSC`: `FlockSoundness.Discharge.Exec.bad_pointwise_ofL_sc`,
+`FlockSoundness.Discharge.Exec.session_sound_of_table_accL_sc`). At a plain statement of one table, `TableBoundθAt`
+follows from, at each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C`
+unless it self-clashes bounds the deployed runs accepting on `C`, and whose `Adv` and self-clash the escapes' events
+bound, the escapes at the plain fork rounds (`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`).
+`Flock.KS` at the plain record follows from the live sessions' bound at table 0 and `Extendθ` (`PlainKS`:
+`FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit`
 against the simulated strategy arises only on live runs the live verdict accepts, whose decoded outputs self-clash
 (`Escapes`: `FlockDeploy.KS.selfClash_le_live`, `FlockDeploy.KS.mean_selfClash_le_live`). Escapes on accepted runs
 (`OnAcc`, `Claims.Escapes.OnAcc`): `Flock.TableBoundθAccAt` is `TableBoundθAt` with them, which gives it
