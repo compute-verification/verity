@@ -274,6 +274,17 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
     return Machine(vector=v.name, rows=v.rows, c=c, cuda=cuda)
 
 
+def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
+    """Π with each uniform class (UNI, UNI64) also on the issue rows (issue, JI3e_0) at `cycles` SMSP-cycles a warp
+    instruction, where the census since VF3 has it on UP alone."""
+    c = {k: dict(v) for k, v in pi.c.items()}
+    for k in ("UNI", "UNI64"):
+        for r in ("issue", "JI3e_0"):
+            if k in c and r in pi.rows:
+                c[k][r] = cycles
+    return replace(pi, vector=f"{pi.vector} (UNI on issue at {cycles:g})", c=c)
+
+
 def _add(n: dict[str, float], prog: dict[str, float], x: float) -> None:
     for k, v in prog.items():
         n[k] = n.get(k, 0.0) + v * x

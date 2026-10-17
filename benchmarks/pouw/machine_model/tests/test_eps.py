@@ -117,6 +117,22 @@ def test_upfill_closes_the_uniform_route():
         d.with_upfill()
 
 
+def test_a_uniform_instruction_on_the_issue_rows():
+    """Charged an issue slot, the uniform route costs the cheater at least the lane route at q* ≥ the threshold without
+    UPFILL. UPFILL then costs honest issue time, and the cheater does its checked work on lanes, 32 values a warp
+    instruction, so it opens more than it closes."""
+    pi = E.uniform_on_issue(PI, 1.0)
+    assert pi.c["UNI"]["issue"] == pi.c["UNI"]["JI3e_0"] == 1.0 and pi.c["UNI"]["UP"] == UP
+    assert "issue" not in PI.c["UNI"] and "UNI on issue at 1" in pi.vector
+    old, new = E.setup(DUO, PI, credit="floor"), E.setup(DUO, pi, credit="floor")
+    assert new.baseline.T == pytest.approx(old.baseline.T, rel=1e-9)
+    assert E.threshold(old) is None and E.threshold(new) == pytest.approx(E.threshold(old, uniform=False), abs=1e-5)
+    assert new.machine_eps(8) == pytest.approx(new.floor(), abs=1e-9)
+    assert new.machine_eps(8) < old.machine_eps(8) - 0.005
+    up = E.setup(DUO.with_upfill(), pi, credit="floor")
+    assert up.baseline.T > 1.5 * new.baseline.T and up.machine_eps(8) > 0.3
+
+
 def test_lane_filler_dilutes_the_operand_floor():
     """x lane instructions a word of verified filler add 4x issue-cycles a MMA to honest, and the cheater must run them
     too, so what it saves on operands is a smaller share. The design file is DUO's two-sided twin with 4.5 of them."""
@@ -281,6 +297,9 @@ def test_cli(capsys):
     assert d["lookups"]["q"] == 1.906 and d["cheat"]["words"]["table"] > 0 and "L2" in d["cheat"]["binding"]
     with pytest.raises(SystemExit):
         main(["eps", "--l2", "1e12"])
+    assert main(["eps", "--credit", "floor", "--uni-issue", "0.92", "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["vector"] == "VF3l-16 (UNI on issue at 0.92)" and d["threshold"] == pytest.approx(2.029, abs=1e-3)
     assert main(["eps", "--table", "dither-duo", "--fold-sweep", "1.5,3", "--operands", "floor", "--q", "2.16"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("Π VF3l-16, operands floor")

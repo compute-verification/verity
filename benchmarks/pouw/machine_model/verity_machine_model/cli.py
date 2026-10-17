@@ -11,7 +11,7 @@
     machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) into data/ at EPOCH,
                                               the last epoch: each (kind, row) keeps the faster of its old and new line
     machine-model eps [DESIGN] [--q Q] [--q-uniform QU] [--operands O] [--credit C] [--fold-cost R] [--fill X]
-                      [--upfill] [--lookups [--lookup-q QT] [--l2 B]] [--vector V] [--json]
+                      [--upfill] [--lookups [--lookup-q QT] [--l2 B]] [--uni-issue C] [--vector V] [--json]
                                               a design's ε budget (data/designs, default dither-duo) at q* = Q (default
                                               8): every term with its source, ε_machine's LP (the credited and the
                                               cheater's mix, binding rows and certificate π*), the ε(q*) curve for q*
@@ -22,9 +22,11 @@
                                               the floor program ♭ (--credit floor); --fill adds X lane instructions a
                                               word of verified filler on lanes, --upfill filler keeping the uniform
                                               datapath busy; --lookups opens the table route (data/table.toml: lane
-                                              instructions and L2 bytes a word against an L2 facet; --lookup-q, --l2)
+                                              instructions and L2 bytes a word against an L2 facet; --lookup-q, --l2);
+                                              --uni-issue C also charges a uniform instruction C SMSP-cycles on the
+                                              issue rows
     machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--upfill] [--operands O] [--credit C]
-                      [--q Q] [--lookups]
+                      [--q Q] [--lookups] [--uni-issue C]
                                               one line a design (every design by default; with --fold-sweep, each at
                                               each fold cost; with --upfill, each without and with it): γ, the credited
                                               time, ε_sched, ε_machine at q* = 2, 4, 8, 16 and its floor, ε_luck, ε at
@@ -254,6 +256,7 @@ def _eps_table(args, pi: E.Machine) -> int:
 
 def _eps(args) -> int:
     pi = E.machine(args.vector or "", args.data)
+    pi = pi if args.uni_issue is None else E.uniform_on_issue(pi, args.uni_issue)
     if args.table:
         return _eps_table(args, pi)
     if len(args.designs) > 1:
@@ -356,6 +359,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="open the cheater's table route: words from register-indexed L2 lookups (data/table.toml)")
     e.add_argument("--lookup-q", type=float, help="with --lookups: lane instructions a table word (default: the file's)")
     e.add_argument("--l2", type=float, help="with --lookups: L2 read bytes a second (default: the file's)")
+    e.add_argument("--uni-issue", type=float, metavar="C",
+                   help="put the uniform classes on the issue rows (issue, JI3e_0) at C SMSP-cycles a warp instruction "
+                        "(PREDICT's u16s_l7qs measured 0.92, r20261017-045133-67bf)")
     args = p.parse_args(argv)
     if args.cmd is None:
         print(__doc__)
