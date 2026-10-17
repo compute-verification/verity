@@ -106,6 +106,113 @@ theorem clmul_spec (a b : UInt64) :
   rw [clmulGo_spec a 64 0 b 0 0 (by norm_num)]
   simp [w128, poly64, Nat.mod_eq_of_lt b.toNat_lt]
 
+theorem mask_and (bb t x : UInt64) (ht : t.toNat < 64) :
+    x &&& ((0 : UInt64) - ((bb >>> t) &&& 1)) = if bb.toNat.testBit t.toNat then x else 0 := by
+  have hc : (bb >>> t) &&& 1 = if bb.toNat.testBit t.toNat then 1 else 0 := by
+    apply UInt64.toNat_inj.mp
+    rw [UInt64.toNat_and, UInt64.toNat_shiftRight, Nat.mod_eq_of_lt ht, UInt64.toNat_one, Nat.and_one_is_mod,
+      Nat.shiftRight_eq_div_pow, Nat.testBit_eq_decide_div_mod_eq]
+    rcases Nat.mod_two_eq_zero_or_one (bb.toNat / 2 ^ t.toNat) with h | h <;> simp [h]
+  rw [hc]
+  split
+  · apply UInt64.toBitVec_inj.mp
+    simp
+  · simp
+
+theorem hi_false' (x : UInt64) (k : ℕ) (hk : 64 ≤ k) : x.toNat.testBit k = false :=
+  Nat.testBit_lt_two_pow (lt_of_lt_of_le x.toNat_lt (Nat.pow_le_pow_right (by norm_num) hk))
+
+/-- One masked step of `clmulFast`: `a · x^i` added into `(lo, hi)` when bit `t` of `bb` is set. -/
+theorem clmulStep_w128 (a bb t i lo hi : UInt64) (ht : t.toNat < 64) (hi64 : i.toNat < 64) :
+    w128 (F128.clmulStep a bb t i lo hi).lo (F128.clmulStep a bb t i lo hi).hi =
+      w128 lo hi ^^^ (if bb.toNat.testBit t.toNat then a.toNat <<< i.toNat else 0) := by
+  simp only [F128.clmulStep, mask_and _ _ _ ht]
+  split
+  · have h63 : (63 - i).toNat = 63 - i.toNat := by
+      rw [UInt64.toNat_sub_of_le _ _ (by rw [UInt64.le_iff_toNat_le]; simp; omega)]; rfl
+    apply Nat.eq_of_testBit_eq
+    intro j
+    have hlt : ∀ x : UInt64, x.toNat < 2 ^ 64 := fun x => x.toNat_lt
+    unfold w128
+    rw [Nat.testBit_two_pow_mul_add _ (hlt _), Nat.testBit_xor, Nat.testBit_two_pow_mul_add _ (hlt _)]
+    simp only [UInt64.toNat_xor, Nat.testBit_xor, UInt64.toNat_shiftLeft, Nat.testBit_mod_two_pow,
+      Nat.testBit_shiftLeft, Nat.mod_eq_of_lt hi64, UInt64.toNat_shiftRight, Nat.testBit_shiftRight, h63,
+      Nat.mod_eq_of_lt (show 63 - i.toNat < 64 by omega), show (1 : UInt64).toNat % 64 = 1 from rfl]
+    by_cases hj : j < 64
+    · simp [hj]
+    · simp only [hj, ite_false]
+      by_cases hij : i.toNat ≤ j
+      · simp [show j ≥ i.toNat by omega, show 1 + (63 - i.toNat + (j - 64)) = j - i.toNat by omega]
+      · simp [show ¬ j ≥ i.toNat by omega, hi_false' a (1 + (63 - i.toNat + (j - 64))) (by omega)]
+  · simp [w128]
+
+theorem natPoly_ite_shift (c : Bool) (x i : ℕ) :
+    natPoly (if c then x <<< i else 0) = C (b2 c) * X ^ i * natPoly x := by
+  cases c <;> simp [natPoly_shiftLeft, b2_true, b2_false, natPoly_zero]
+
+theorem natPoly_mod_16 (n : ℕ) :
+    natPoly (n % 2 ^ 4) = C (b2 (n.testBit 0)) + C (b2 (n.testBit 1)) * X + C (b2 (n.testBit 2)) * X ^ 2 +
+      C (b2 (n.testBit 3)) * X ^ 3 := by
+  rw [natPoly_mod_succ, natPoly_mod_succ, natPoly_mod_succ, natPoly_mod_succ]
+  simp only [Nat.testBit_shiftRight, pow_zero, Nat.mod_one, natPoly_zero]
+  ring
+
+/-- `clmulFast`'s window: bits `0 … 3` of `bb` as `a · x^s, …, a · x^(s+3)`. -/
+theorem clmulWindow_spec (a bb s lo hi : UInt64) (hs : s.toNat + 4 ≤ 64) :
+    natPoly (w128 (F128.clmulWindow a bb s lo hi).lo (F128.clmulWindow a bb s lo hi).hi) =
+      natPoly (w128 lo hi) + X ^ s.toNat * poly64 a * natPoly (bb.toNat % 2 ^ 4) := by
+  have e1 : (s + 1).toNat = s.toNat + 1 := by rw [UInt64.toNat_add]; simp; omega
+  have e2 : (s + 2).toNat = s.toNat + 2 := by rw [UInt64.toNat_add]; simp; omega
+  have e3 : (s + 3).toNat = s.toNat + 3 := by rw [UInt64.toNat_add]; simp; omega
+  simp only [F128.clmulWindow]
+  rw [clmulStep_w128 _ _ _ _ _ _ (by decide) (by omega), clmulStep_w128 _ _ _ _ _ _ (by decide) (by omega),
+    clmulStep_w128 _ _ _ _ _ _ (by decide) (by omega), clmulStep_w128 _ _ _ _ _ _ (by decide) (by omega)]
+  simp only [natPoly_xor, natPoly_ite_shift, natPoly_mod_16, poly64, e1, e2, e3, UInt64.toNat_zero,
+    UInt64.toNat_one, show (2 : UInt64).toNat = 2 from rfl, show (3 : UInt64).toNat = 3 from rfl]
+  ring
+
+theorem natPoly_mod_four_succ (n f : ℕ) :
+    natPoly (n % 2 ^ (4 * (f + 1))) = natPoly (n % 2 ^ 4) + X ^ 4 * natPoly ((n >>> 4) % 2 ^ (4 * f)) := by
+  have h : n % 2 ^ (4 * (f + 1)) = 2 ^ 4 * ((n >>> 4) % 2 ^ (4 * f)) + n % 2 ^ 4 := by
+    rw [show 4 * (f + 1) = 4 + 4 * f by ring, pow_add, Nat.mod_mul, Nat.shiftRight_eq_div_pow]
+    ring
+  rw [h, natPoly_split _ _ 4 (Nat.mod_lt _ (by positivity))]
+  ring
+
+/-- `clmulFast`'s loop: after the remaining `fuel` windows of `bb`, from bit `s`. -/
+theorem clmulWin_spec (a : UInt64) : ∀ (fuel : ℕ) (s bb lo hi : UInt64), s.toNat + 4 * fuel ≤ 64 →
+    natPoly (w128 (F128.clmulWin a fuel s bb lo hi).lo (F128.clmulWin a fuel s bb lo hi).hi) =
+      natPoly (w128 lo hi) + X ^ s.toNat * poly64 a * natPoly (bb.toNat % 2 ^ (4 * fuel)) := by
+  intro fuel
+  induction fuel with
+  | zero => intro s bb lo hi _; simp [F128.clmulWin, Nat.mod_one]
+  | succ f ih =>
+    intro s bb lo hi hf
+    have e4 : (s + 4).toNat = s.toNat + 4 := by rw [UInt64.toNat_add]; simp; omega
+    have hshr : (bb >>> 4).toNat = bb.toNat >>> 4 := by simp [UInt64.toNat_shiftRight]
+    simp only [F128.clmulWin]
+    rw [ih _ _ _ _ (by omega), clmulWindow_spec a bb s lo hi (by omega), e4, hshr, natPoly_mod_four_succ]
+    ring
+
+theorem clmulFast_spec (a b : UInt64) :
+    natPoly (w128 (F128.clmulFast a b).1 (F128.clmulFast a b).2) = poly64 a * poly64 b := by
+  simp only [F128.clmulFast]
+  rw [clmulWin_spec a 16 0 b 0 0 (by simp)]
+  simp [w128, poly64, Nat.mod_eq_of_lt b.toNat_lt]
+
+/-- `F128.mul`'s windowed carry-less product is the bit-serial `F128.clmul`. -/
+theorem clmulFast_eq_clmul (a b : UInt64) : F128.clmulFast a b = F128.clmul a b := by
+  have h := natPoly_injective _ _ ((clmulFast_spec a b).trans (clmul_spec a b).symm)
+  generalize F128.clmulFast a b = p at h ⊢
+  generalize F128.clmul a b = q at h ⊢
+  obtain ⟨p1, p2⟩ := p
+  obtain ⟨q1, q2⟩ := q
+  simp only [w128] at h
+  have := p1.toNat_lt; have := p2.toNat_lt; have := q1.toNat_lt; have := q2.toNat_lt
+  have e1 : p1.toNat = q1.toNat := by omega
+  have e2 : p2.toNat = q2.toNat := by omega
+  rw [UInt64.toNat_inj.mp e1, UInt64.toNat_inj.mp e2]
+
 end FlockLevel3
 
 namespace FlockLevel3
@@ -259,7 +366,7 @@ polynomial. -/
 theorem F128.poly_mul (a b : F128) : F128.poly (a * b) = (F128.poly a * F128.poly b) %ₘ G := by
   show F128.poly (F128.mul a b) = _
   unfold F128.mul
-  simp only
+  simp only [clmulFast_eq_clmul]
   rw [reduce_spec]
   congr 1
   have h0 := clmul_spec' a.lo b.lo

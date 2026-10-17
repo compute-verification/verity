@@ -34,6 +34,31 @@ def clmulGo (a : UInt64) : Nat → Nat → UInt64 → UInt64 → UInt64 → UInt
 /-- Carry-less product of two 64-bit words, as (low word, high word). -/
 def clmul (a b : UInt64) : UInt64 × UInt64 := clmulGo a 64 0 b 0 0
 
+/-- `(lo, hi) + a · x^i` if bit `t` of `bb` is set, else `(lo, hi)`, without a branch (`i < 64`; `a · x^i`'s high word
+is `(a >>> 1) >>> (63 − i)`, `0` at `i = 0`). -/
+@[inline] def clmulStep (a bb t i lo hi : UInt64) : F128 :=
+  let m := (0 : UInt64) - ((bb >>> t) &&& 1)
+  ⟨lo ^^^ ((a <<< i) &&& m), hi ^^^ (((a >>> 1) >>> (63 - i)) &&& m)⟩
+
+/-- `clmulStep` on bits `0, 1, 2, 3` of `bb`, as `a · x^s, …, a · x^(s+3)`. -/
+@[inline] def clmulWindow (a bb s lo hi : UInt64) : F128 :=
+  let r0 := clmulStep a bb 0 s lo hi
+  let r1 := clmulStep a bb 1 (s + 1) r0.lo r0.hi
+  let r2 := clmulStep a bb 2 (s + 2) r1.lo r1.hi
+  clmulStep a bb 3 (s + 3) r2.lo r2.hi
+
+/-- `clmulGo` four bits at a time: `fuel` windows of `bb`, from bit `s`. -/
+def clmulWin (a : UInt64) : Nat → UInt64 → UInt64 → UInt64 → UInt64 → F128
+  | 0, _, _, lo, hi => ⟨lo, hi⟩
+  | fuel + 1, s, bb, lo, hi =>
+    let r := clmulWindow a bb s lo hi
+    clmulWin a fuel (s + 4) (bb >>> 4) r.lo r.hi
+
+/-- `clmul`, the one `mul` computes: sixteen 4-bit windows, branch-free, with no `Nat` but the fuel. -/
+@[inline] def clmulFast (a b : UInt64) : UInt64 × UInt64 :=
+  let r := clmulWin a 16 0 b 0 0
+  (r.lo, r.hi)
+
 /-- Reduce the 256-bit carry-less product `r3·2^192 + r2·2^128 + r1·2^64 + r0` modulo the GHASH polynomial. -/
 @[inline] def reduce (r0 r1 r2 r3 : UInt64) : F128 :=
   let tl := r2 ^^^ (r2 <<< 1) ^^^ (r2 <<< 2) ^^^ (r2 <<< 7)
@@ -42,9 +67,9 @@ def clmul (a b : UInt64) : UInt64 × UInt64 := clmulGo a 64 0 b 0 0
   ⟨r0 ^^^ tl ^^^ o ^^^ (o <<< 1) ^^^ (o <<< 2) ^^^ (o <<< 7), r1 ^^^ th⟩
 
 def mul (a b : F128) : F128 :=
-  let (p0l, p0h) := clmul a.lo b.lo
-  let (p2l, p2h) := clmul a.hi b.hi
-  let (ml, mh) := clmul (a.lo ^^^ a.hi) (b.lo ^^^ b.hi)
+  let (p0l, p0h) := clmulFast a.lo b.lo
+  let (p2l, p2h) := clmulFast a.hi b.hi
+  let (ml, mh) := clmulFast (a.lo ^^^ a.hi) (b.lo ^^^ b.hi)
   let m1l := ml ^^^ p0l ^^^ p2l
   let m1h := mh ^^^ p0h ^^^ p2h
   reduce p0l (p0h ^^^ m1l) (p2l ^^^ m1h) p2h
