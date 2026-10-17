@@ -5,7 +5,8 @@ Runs vLLM d9105ea80's default (non-batch-invariant) BF16 ``rms_norm_kernel`` and
 Every normed and residual word is checked twice for determinism and against the numpy twins.
 CUDA profiler traces provide each launch's grid/block dimensions and kernel symbol.  vLLM runs at its defaults, as it serves:
 `engine.env.served_defaults` clears every switch the process inherited, and `served` reads back the two vLLM's RMSNorm reads,
-both of which the verdict needs off.
+both of which the verdict needs off.  The SASS reproduction (`cuda_rmsnorm_sass.cu`, `sass`) compiles with a served engine's
+toolchain (`toolchain`).
 
 Exit 0 is GO, 1 is NO-GO, and 3 is a device-gate failure (cc 9.0, 132 SMs, driver >= 575).
 
@@ -18,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -31,6 +33,7 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from verity_vllm.engine.env import served_defaults
+from verity_vllm.pipeline.cli import MACHINE
 from verity_vllm.program.kernels import cuda_rmsnorm_rows as R
 from verity_vllm.program.kernels import derived_rows as D
 from verity_vllm.program.registry import cuda_rmsnorm as M
@@ -241,6 +244,15 @@ def one_case(work: Path, kind: str, m: int, n: int) -> dict[str, Any]:
             "residual_sha256": hashlib.sha256(got_res.tobytes()).hexdigest() if kind != "rms_norm" else None}
 
 
+def toolchain() -> dict[str, str]:
+    """A served engine's toolchain, which `sass` compiles with: `CUDA_HOME` (an exported one winning) and `RunEnv.cuda_bin` on
+    `PATH` after the interpreter's directory, as `pipeline.row_driver` sets them."""
+    env = {"CUDA_HOME": os.environ.get("CUDA_HOME") or MACHINE["RunEnv.cuda_home"],
+           "PATH": f"{os.path.dirname(sys.executable)}:{MACHINE['RunEnv.cuda_bin']}:{os.environ.get('PATH', '')}"}
+    os.environ.update(env)
+    return env
+
+
 def served() -> dict[str, Any]:
     """The switches vLLM's RMSNorm reads, as vLLM read them: batch invariance (`RMSNorm.forward_cuda` takes
     `rms_norm_batch_invariant` under it, layernorm.py:96-115) and Oink (first in the IR ops' priority under it, platforms/cuda.py:
@@ -279,9 +291,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"GLM53-CUDA-RMSNORM GATE-FAIL {gate}")
         return 3
     doc: dict[str, Any] = {"schema": SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                           "argv": sys.argv, "gate": gate, "env_cleared": cleared, "served": served(),
+                           "argv": sys.argv, "gate": gate, "env": toolchain(), "env_cleared": cleared, "served": served(),
                            "sass": sass(out), "cases": [], "errors": {}}
-    print(f"[cuda-rmsnorm] served {json.dumps(doc['served'])} cleared {sorted(cleared)}")
+    print(f"[cuda-rmsnorm] served {json.dumps(doc['served'])} cleared {sorted(cleared)} sass ok={doc['sass']['ok']} "
+          f"nvcc={doc['sass'].get('nvcc')} error={doc['sass'].get('error', '')[:600]}")
     with tempfile.TemporaryDirectory(dir=a.scratch) as td:
         work = Path(td)
         for n in WIDTHS:
@@ -299,8 +312,8 @@ def main(argv: list[str] | None = None) -> int:
     sealed = seal_record(doc, _verdict(doc))
     (out / RECORD).write_text(json.dumps(sealed, indent=1) + "\n")
     verdict = "GO" if sealed["ok"] else "NO-GO"
-    print(f"GLM53-CUDA-RMSNORM {verdict} served={doc['served']['ok']} cases={len(doc['cases'])} errors={len(doc['errors'])} "
-          f"digest={sealed['digest']}")
+    print(f"GLM53-CUDA-RMSNORM {verdict} served={doc['served']['ok']} sass={doc['sass']['ok']} cases={len(doc['cases'])} "
+          f"errors={len(doc['errors'])} digest={sealed['digest']}")
     return 0 if sealed["ok"] else 1
 
 

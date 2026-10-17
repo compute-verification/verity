@@ -87,12 +87,23 @@ def test_planted_rows_and_numpy_models_include_both_in_place_outputs() -> None:
 
 
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
-    """`main` with the launches stood in for, every served-default switch inherited set: cleared before vLLM reads them, its
-    switches read back, GO; with batch invariance read back on, NO-GO."""
+    """`main` with the launches and the SASS build stood in for, every served-default switch inherited set: cleared before vLLM
+    reads them, its switches read back, the SASS built with a served engine's toolchain, GO; with batch invariance read back on, or
+    the SASS build failing, NO-GO."""
     import os
 
+    from verity_vllm.pipeline.cli import MACHINE
+
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
-    monkeypatch.setattr(X, "sass", lambda out: {"ok": True})
+    sass_ok = [True]
+
+    def stub_sass(out):
+        assert os.environ["PATH"].split(":")[:2] == [os.path.dirname(X.sys.executable), MACHINE["RunEnv.cuda_bin"]]
+        return {"ok": sass_ok[0], "nvcc": ["Build cuda_13.0"]}
+
+    monkeypatch.setattr(X, "sass", stub_sass)
+    monkeypatch.setenv("PATH", os.environ["PATH"])
+    monkeypatch.delenv("CUDA_HOME", raising=False)
     for k in SERVED_DEFAULTS:
         monkeypatch.setenv(k, "0")
     _stub_envs(monkeypatch)
@@ -109,12 +120,26 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["ok"] and doc["digest"] == digest_of(doc) and len(doc["cases"]) == 24
     assert doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS} and doc["served"]["ok"] is True
+    assert doc["env"]["CUDA_HOME"] == MACHINE["RunEnv.cuda_home"]
     assert {c["eps"] for c in doc["cases"] if c["N"] == 6144} == {1e-5}
     assert {c["eps"] for c in doc["cases"] if c["N"] == 7168} == {1e-6}
-    assert "GLM53-CUDA-RMSNORM GO served=True cases=24 errors=0" in capsys.readouterr().out
+    assert "GLM53-CUDA-RMSNORM GO served=True sass=True cases=24 errors=0" in capsys.readouterr().out
+    sass_ok[0] = False
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path)]) == 1
+    assert "GLM53-CUDA-RMSNORM NO-GO served=True sass=False" in capsys.readouterr().out
+    sass_ok[0] = True
     _stub_envs(monkeypatch, VLLM_BATCH_INVARIANT=True)
     assert X.main(["--out", str(out), "--scratch", str(tmp_path)]) == 1
     assert "GLM53-CUDA-RMSNORM NO-GO served=False" in capsys.readouterr().out
+
+
+def test_the_sass_source_reduces_with_vllms_operator() -> None:
+    """vLLM's cub_helpers.h CubAddOp in both block reductions: CCCL 3 (CUDA 13) has no cub::Sum, which the reproduction named
+    until the served toolchain was CUDA 13's."""
+    src = X.SASS_SOURCE.read_text()
+    assert src.count("Reduce(variance, CubAddOp{}, blockDim.x)") == 2 and "cub::Sum{}" not in src
+    includes = [line for line in src.splitlines() if line.startswith("#include")]
+    assert "#if CUB_VERSION >= 200800" in src and "#include <cub/cub.cuh>" not in includes
 
 
 def test_device_gate_failure_runs_nothing(tmp_path, monkeypatch) -> None:
