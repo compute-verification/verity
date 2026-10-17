@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.ZK.Statement
 import Proofs.Flock.Claims.ZK.GK
 import Proofs.Flock.Claims.ZK.Interact
 import Proofs.Flock.Claims.ZK.Coins
+import Proofs.Flock.Claims.ZK.Congr
 import Proofs.Flock.Claims.ZK.Pin
 import Proofs.Flock.Claims.ZK.Forced
 import Proofs.Flock.Claims.ZK.Rewind
@@ -36,9 +37,10 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 * `Coins`: what the coin checks evaluate to: a transcript opens `c` exactly when every opening is answered and passes
   the check (`cls_eq_some_iff`), the forced walk agrees (`cls_eq_some_iff_fcls`), and a mismatch is two checked
   openings within the walk's calls (`fcls_eq_mism`).
+* `Congr`: `ZKmalR` carries over to a prover with the same messages and more calls within the rounds
+  (`zkmalR_congr`).
 * `Pin`: `Claims.Flock.ZK` reads the masked record's own reference prover (`ZkDeploy.prover`) and simulator; the proofs
-  prove `Claims.Flock.ZKAt` at a committed-coin protocol's prover, and `ZKmalR` carries over to a prover with the same
-  messages and more calls within the rounds (`zkmalR_congr`). The masked record at a protocol `G` (`zkOf`) has
+  prove `Claims.Flock.ZKAt` at a committed-coin protocol's prover. The masked record at a protocol `G` (`zkOf`) has
   `honestPZk` behind `G`'s `Hello` and opening checks; where `G`'s messages are `honestPZk`'s (`Proto.Honest`, a named
   Prop), `ZKAt` at `G.prover` is `Claims.Flock.ZK` at `zkOf` (`zk_zkOf`).
 * `Forced`: the forced run at `c` with the honest prover's messages at `c` opens all of `c` exactly when the real run

@@ -61,6 +61,11 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   prover (`Flock.Deploy.P`), not of a prover the claim takes. The form first frozen held at an empty tape type for every
   verifier, and its prover was whatever its discharge chose, so an assembled claim's completeness premise was met for
   free.
+* (17 Oct) Zero knowledge is of the masked record's own reference prover and simulator (`Flock.ZkDeploy`): its prover
+  is `Flock.Deploy.P`, the prover completeness reads, behind the `Hello` and the opening checks of the coins it
+  commits, on a finite nonce and rest (`Flock.ZkDeploy.prover`), and its simulator is the record's
+  (`Flock.ZkDeploy.S`). The form before took the prover and the simulator as arguments, so a prover that ignores its
+  witness, with the simulator that runs it, met it at every masked record at `ε_zk = 0`.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.

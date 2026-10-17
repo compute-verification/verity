@@ -1,4 +1,5 @@
-import Proofs.Flock.Claims.ZK.Pin
+import Proofs.Flock.Claims.ZK.Congr
+import Proofs.Flock.Claims.DeployOC
 
 /-!
 # `ZKmalR` is not vacuous
