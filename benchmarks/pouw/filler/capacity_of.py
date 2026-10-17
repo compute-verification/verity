@@ -110,18 +110,21 @@ def dfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
 def fstep_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
     """dcap fstep lines: the step through flin and dcap's attention beside the pump, on a split or co-scheduled on every
     SM (place co), its filler warps' MMAs (if any) with the pump's. Shares in a line are of the whole GPU's tensor peak at
-    its run clock, so at `mhz` they scale by run clock / mhz."""
+    its run clock, so at `mhz` they scale by run clock / mhz. A line's own "fold" (the probe's tag for its build) wins over
+    `fold`."""
     rows = []
     for r in recs:
+        rf = r.get("fold", fold)
+
         def at(mhz):
             k = r["mhz"] / mhz
             fill = (r["pump"]["share"] + r["fill_share_lin"] + r["fill_share_att"]) * k
             srv = r["step_share_fused"] * k
-            return C.window(pi, [(1.0, C.tensor_filler(fill, fold) + C.served(srv, served_fold))])
+            return C.window(pi, [(1.0, C.tensor_filler(fill, rf) + C.served(srv, served_fold))])
 
         top = at(F_MAX_MHZ)
         rows.append({"B": r["B"], "L": r["L"], "place": r.get("place", "split"), "build": r.get("build"), "M": r["M"],
-                     "kind": r.get("kind", 2), "pdl": r.get("pdl", 1), "pump_nc": r["pump"].get("NC"),
+                     "kind": r.get("kind", 2), "pdl": r.get("pdl", 1), "pump_nc": r["pump"].get("NC"), "fold": rf,
                      "pad_kb": r.get("pad_kb"), "fill_sms": r["fill_sms"], "slowdown": r["slowdown"],
                      "co_cost": r["fused_ms"] / r["fused0_ms"], "fused0_vs_base": r["fused0_vs_base"],
                      "pump_share": r["pump"]["share"], "pump_alone": r["pump"]["alone_share"], "mhz": r["mhz"],
@@ -153,8 +156,8 @@ def main(argv=None) -> int:
             return 0
         for r in rows:
             part = ("linears", "attention", "step")[r["kind"]]
-            print(f"  B {r['B']:3d} L {r['L']:5d} {r['place']:5s} {r['build'] or '':4s} M {r['M']:3d} {part:9s} pdl "
-                  f"{r['pdl']} pump NC {r['pump_nc']}  slowdown "
+            print(f"  B {r['B']:3d} L {r['L']:5d} {r['place']:5s} {r['fill_sms']:3d} {r['build'] or '':4s} M {r['M']:3d} "
+                  f"{part:9s} pdl {r['pdl']} {r['fold']:5s} NC {r['pump_nc']}  slowdown "
                   f"{r['slowdown']:.3f} (flin alone {r['fused0_vs_base']:.3f}, pump's cost {r['co_cost']:.3f})  pump "
                   f"{r['pump_share']:.3f} (alone {r['pump_alone']:.3f})  σ {r['sigma']:.3f} at f_max "
                   f"({r['sigma_run_clock']:.3f} at {r['mhz']:.0f} MHz)  bind {','.join(r['binding'])}  bad {r['rec_bad']} "
