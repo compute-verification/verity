@@ -256,8 +256,9 @@ at round `t` is at most the deployed fork there and `δ_t` times the simulated f
 that two coins agree on the entries the key reads, which is `ForkCoinCoupling`'s shape (`FnFork`:
 `Claims.Flock.FnFork.PrefixKey`, `Claims.Flock.FnFork.prefixKey_histKey`, `Claims.Flock.FnFork.fnC_coupling`,
 `Claims.Flock.FnFork.fnAt_coupling`). Where `verify --zk` sets its session up at a draw (`FlockDeploy.KS.setupAt`),
-the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's
-(`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's
+the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`,
+`FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`,
+`FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's
 draw to the statement's only up to key order, so the old discharge is read at the setup at the statement's draw, which
 reads no draw in the record, with a writer that records the live session there (`ZkDrawJ`:
 `FlockSoundness.Discharge.Composed.AcceptsAt`, `FlockSoundness.Discharge.Composed.runsAtZCJ_live`,
