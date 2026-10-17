@@ -11,10 +11,10 @@ from verity_vllm.engine.profiles.transport import P2P_SYS_TARGETS, row_p2p_env
 from verity_vllm.pipeline import workload as W
 
 
-def _generate(tmp_path, row_id: str) -> dict:
+def _generate(tmp_path, row_id: str, target: str | None = None) -> dict:
     out = tmp_path / "w.json"
     a = W.Options(row_id=row_id, hf_repo="org/x", revision="0" * 40, batch=1, max_input=256, max_output=32, case="X",
-                  lengths_only=True, check=True, out=str(out))
+                  lengths_only=True, check=True, out=str(out), target=target)
     assert W.main(a) == 0
     return json.loads(out.read_text())
 
@@ -27,6 +27,14 @@ def _generate(tmp_path, row_id: str) -> dict:
 ])
 def test_a_tp_workload_requires_nccl_p2p_disable_on_a_sys_target_only(tmp_path, row_id, p2p):
     assert _generate(tmp_path, row_id)["env_required"] == {**p2p, "VLLM_BATCH_INVARIANT": "1"}
+
+
+def test_a_tp_workload_requires_the_batch_invariance_its_target_declares(tmp_path):
+    """A `--target` without batch invariance (vLLM's default kernels) makes the row's engines run VLLM_BATCH_INVARIANT=0, as its
+    Build does (`TargetProfile.env`)."""
+    target = json.dumps({"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False})
+    doc = _generate(tmp_path, "x__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", target)
+    assert doc["env_required"] == {"VLLM_BATCH_INVARIANT": "0"} and doc["target"]["batch_invariant"] is False
 
 
 @pytest.mark.parametrize("target", sorted(TARGETS))

@@ -335,7 +335,8 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
     }
     doc["sweep"]["lengths_only"] = tok is None
     # [lane vllm-tp-n] a tensor-parallel row (`__tp<N>__` in the row id, N >= 2): the engine's world, the manifests' TP flags of record
-    # (#70 / #75: VLLM_BATCH_INVARIANT=1; on a SYS target, where P2P hangs, disable_custom_all_reduce and NCCL_P2P_DISABLE=1) and `sweep.tp`
+    # (#70 / #75: VLLM_BATCH_INVARIANT=1, or what a `--target` declares; on a SYS target, where P2P hangs, disable_custom_all_reduce and
+    # NCCL_P2P_DISABLE=1) and `sweep.tp`
     world = row_world(p["row_id"])
     if world > 1:
         doc["engine_args_required"].update({"tensor_parallel_size": int(world),
@@ -424,6 +425,8 @@ def main(a: Options) -> int:
         tp = TargetProfile.from_json({**TargetProfile.default().to_json(), **t})   # validates the fields; cc / SMs come from the host at run time
         doc["target"] = t
         doc["engine_args_required"].update(tp.engine_args())
+        if "env_required" in doc:
+            doc["env_required"].update(tp.env())
         doc["sweep"]["execution"] = tp.execution_label
         exec_suffix = a.row_id.rsplit("__", 1)[-1]
         if exec_suffix != tp.execution_label:
