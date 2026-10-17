@@ -22,6 +22,7 @@ import Proofs.Flock.Claims.ZK.CoinLayer
 import Proofs.Flock.Claims.ZK.Tape
 import Proofs.Flock.Claims.ZK.Capacity
 import Proofs.Flock.Claims.ZK.Session
+import Proofs.Flock.Claims.ZK.Masked
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -123,6 +124,10 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   fibers of one size on `A`, where `Flock.zk_deployZk_ref`'s `TapeOK` fails at every unbounded table count.
 * `Session`: `RefSession.HonestMsgsOn A` as its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`: `enc`, `fin`
   and `off` each `ZkTables.honestP`'s message), and `Flock.zk_deployZk_ref_on_rounds` at them.
+* `Masked`: the deployed masked session's table data (`Masked.tableData`): its tables `setupOf true x`'s, each
+  `coinedOf` at its `TabZK`, the witness's table witnesses its shares; the tables' plan (`TabPlan`) and the rest
+  (`SessionPlan`: tape, coins, dummy, round encodings) named. `Masked.tables_hidden`: `Tables` there at the
+  hidden-output form. `Masked.OneTableLowers`: the lowering's completeness at one table, which `Complete` needs.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
