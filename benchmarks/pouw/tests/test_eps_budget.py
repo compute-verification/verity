@@ -47,9 +47,9 @@ def test_dither_1s_skips_its_peels_and_the_clean_lm_head_but_not_forming():
 
 
 def test_two_sided_meets_the_target_everywhere():
-    """The program's target, ε < 1% (note:20261017T0013Z-report-epsilon-program)."""
+    """The program's target, ε < 1% (note:20261017T0013Z-report-epsilon-program), as `design_skip` quotes it."""
     for m, c, ph in CELLS:
-        s = E.summary(m, c, ph, design("dither-2s"))
+        s = E.summary(m, c, ph, design("dither-2s"), credit="floor" if ph == "prefill" else "honest")
         assert s.eps_mac < 1e-2 and s.eps_time < 1e-2, (m, c, ph)
         assert s.gamma < 2.2, (m, c, ph)
         skipped = {r["component"] for r in s.rows if r["eps_mac"] or r["eps_time"]}
@@ -68,10 +68,11 @@ def test_checked_designs_skip_no_product_only_vector_work(name):
 
 
 def test_the_designs_reproduce_skips_figures():
-    """SKIP's calculator before the registry (#2234), by honest time, P in one block and every served output free, all
-    at 8B 2K: A 0.557% with its peel at BC-KERNEL r2's measured apv_l7qs (0.131% at the model's tail and no sums); Ap
-    0.155% and Bc 0.217% at BC-KERNEL's measured pv costs (0.078% at 8B 2K and 0.145% at 8B 8K at the model's)."""
-    for name, eps, ctx in (("dither-2s", 0.0055742, 2048), ("dither-2s-pv", 0.0015473, 2048),
+    """SKIP's calculator before the registry (#2234), P in one block and every served output free, all at 8B 2K: A
+    0.327% under the floor credit with its peel at BC-KERNEL r2's apv_l7qs (0.557% by honest time; 0.131% at the model's
+    tail and no sums); Ap 0.155% and Bc 0.217% by honest time at BC-KERNEL's measured pv costs (0.078% at 8B 2K and
+    0.145% at 8B 8K at the model's)."""
+    for name, eps, ctx in (("dither-2s", 0.0032750, 2048), ("dither-2s-pv", 0.0015473, 2048),
                            ("dither-c", 0.0021662, 2048)):
         q = E.design_skip(design(name))
         assert (q.model, q.ctx, q.phase) == ("llama-3.1-8b", ctx, "prefill"), name
@@ -89,10 +90,33 @@ def test_the_registry_skip_is_eps_budgets_number():
             f"[skip.served] eps = {float(f'{want:.3g}')} in data/designs/{name}.toml (or its base's)")
 
 
+def test_h1_under_the_floor_credit_is_specs_table():
+    """SPEC §2.9's H1 table (note:20261017T0324Z-draft-eps1-spec): Corollary D3's ε_skip, prefill, served free (served
+    checked), each piece at its model price over B_♭. Its "line 209 alone" row, vsum at its issue rate over honest's
+    measured time, understates it."""
+    d = design("dither-c-peel")
+    spec = {("llama-3.1-8b", 2048): (0.405, 0.340), ("llama-3.1-8b", 8192): (0.373, 0.315),
+            ("llama-3.1-8b", 32768): (0.292, 0.252), ("llama-3.1-70b", 2048): (0.184, 0.150),
+            ("llama-3.1-70b", 8192): (0.180, 0.148), ("llama-3.1-70b", 32768): (0.166, 0.140)}
+    for (m, c), (free, chk) in spec.items():
+        f = E.summary(m, c, "prefill", d, credit="floor")
+        k = E.summary(m, c, "prefill", d, checked=True, credit="floor")
+        assert round(100 * f.eps_time, 3) == free and round(100 * k.eps_time, 3) == chk, (m, c)
+        assert f.gamma == E.summary(m, c, "prefill", d).gamma, (m, c)        # honest's latency stays in γ
+    m = "llama-3.1-8b"
+    rows = E.summary(m, 2048, "prefill", d, credit="floor").rows
+    split = {r["component"]: round(100 * r["eps_time"], 3) for r in rows if round(100 * r["eps_time"], 3)}
+    assert split == {"linears": 0.073, "QKᵀ": 0.005, "P·V": 0.328}      # tail 0.209, sums 0.105, served f 0.013
+    mixed = E.summary(m, 2048, "prefill", d, {**E.RATES, "t_vsum": 0.135 * E.RATES["t_vsum"]})
+    assert round(100 * mixed.eps_time, 3) == 0.307
+    with pytest.raises(ValueError, match="prefill only"):
+        E.summary(m, 2048, "decode", d, credit="floor")
+
+
 def test_the_peel_is_priced_at_bc_kernels_measured_kernel():
-    """BC-KERNEL r2's apv_l7qs: the tail at 2.8 mainloop MACs a strip product, the sums a one-hot P row frees, and the
-    served epilogue. Checked downstream, the cheater pays the 4th IMMA and the epilogue and still skips the sums; at the
-    model's tail with no sums, H1's 0.193% (8B 2K) comes back."""
+    """By honest time (γ's input), BC-KERNEL r2's apv_l7qs: the tail at 2.8 mainloop MACs a strip product, the sums a
+    one-hot P row frees, and the served epilogue. Checked downstream, the cheater pays the 4th IMMA and the epilogue and
+    still skips the sums; at the model's tail with no sums, H1's 0.193% (8B 2K) comes back."""
     d, m, c = design("dither-c-peel"), "llama-3.1-8b", 2048
     free, chk = E.summary(m, c, "prefill", d), E.summary(m, c, "prefill", d, checked=True)
     assert chk.eps_time < free.eps_time and chk.gamma == free.gamma
