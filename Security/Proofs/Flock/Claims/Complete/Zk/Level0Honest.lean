@@ -56,6 +56,49 @@ theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × �
     hlig.cap, by have := hlig.dims; omega⟩
   exact Nat.pos_iff_ne_zero.1 (hlv _ (getD_mem _ hj)).2.1
 
+/-! ## The masked prover's own steps -/
+
+section Steps
+
+variable {p : LigeritoProof} {L : ℕ} {β : Type}
+
+/-- An F256 absorbed, read by the model as `vM`: they agree once the rest of the run fixes `v = vM`. -/
+theorem HRuns.absorbKM (v vM : F256) (c : Cur) (tm : Transcript) (J : TW → Prop) :
+    HRuns p L (liftT (liftTM (absorbK v))) c tm c (ap (pKv vM) tm) (fun _ => True) (fun _ => v = vM) J
+      fun _ => J := by
+  refine ⟨fun st t l b st' t' l' hl h => ?_, fun st t l b st' t' l' hl h hE _ hc ht hJ => ?_⟩
+  · obtain ⟨hq, hg, hl', hc⟩ := PRuns.absorb (p := p) (L := L) (absorbK v) (pKv v)
+      (fun t => Flock.RecAlgebra.absorbSlice_eq _ t) c tm st t l b st' t' l' hl h
+    exact ⟨hq, hg, hl', fun hE hx hc' ht => by subst hx; exact hc hE trivial hc' ht⟩
+  · exact (HRuns.absorb (p := p) (L := L) _ (pKv v) (fun t => Flock.RecAlgebra.absorbSlice_eq _ t) c tm J).2
+      st t l b st' t' l' hl h hE trivial hc ht hJ
+
+/-- F coordinates absorbed, read by the model as `vsM`: they agree once the rest of the run fixes `vs = vsM`. -/
+theorem HRuns.absorbSliceM (vs vsM : Array F128) (c : Cur) (tm : Transcript) (J : TW → Prop) :
+    HRuns p L (liftT (liftTM (absorbSlice vs))) c tm c (ap (pSlice vsM) tm) (fun _ => True) (fun _ => vs = vsM) J
+      fun _ => J := by
+  refine ⟨fun st t l b st' t' l' hl h => ?_, fun st t l b st' t' l' hl h hE _ hc ht hJ => ?_⟩
+  · obtain ⟨hq, hg, hl', hc⟩ := PRuns.absorb (p := p) (L := L) (absorbSlice vs) (pSlice vs)
+      (fun t => Flock.RecAlgebra.absorbSlice_eq _ t) c tm st t l b st' t' l' hl h
+    exact ⟨hq, hg, hl', fun hE hx hc' ht => by subst hx; exact hc hE trivial hc' ht⟩
+  · exact (HRuns.absorb (p := p) (L := L) _ (pSlice vs) (fun t => Flock.RecAlgebra.absorbSlice_eq _ t) c tm J).2
+      st t l b st' t' l' hl h hE trivial hc ht hJ
+
+theorem HRuns.label (s : String) (c : Cur) (tm : Transcript) (J : TW → Prop) :
+    HRuns p L (liftT (liftTM (Transcript.label s))) c tm c (ap (pLabel s) tm) (fun _ => True) (fun _ => True) J
+      fun _ => J :=
+  HRuns.absorb _ _ (fun t => Flock.RecAlgebra.label_eq s t) c tm J
+
+/-- A refusal followed by anything never returns. -/
+theorem HRuns.throwBind {α : Type} (e : String) (f : α → LP PS β) (c c' : Cur) (tm tm' : Transcript)
+    (Q Xb : β → Prop) (J : TW → Prop) (J' : β → TW → Prop) :
+    HRuns p L (throw e >>= f) c tm c' tm' Q Xb J J' := by
+  refine ⟨fun st t l b st' t' l' _ h => ?_, fun st t l b st' t' l' _ h => ?_⟩ <;>
+  · obtain ⟨_, _, _, _, h0, _⟩ := lp_bind_ok h
+    cases h0
+
+end Steps
+
 /-! ## Level 0 -/
 
 section Mid
