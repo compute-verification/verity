@@ -9,7 +9,7 @@ import pytest
 
 from verity_machine_model import eps as E
 from verity_machine_model.cli import main
-from verity_machine_model.model import census, model, vector
+from verity_machine_model.model import DATA, DEVICES, census, device, devices, model, rows, vector
 
 PIN = "VF3l-16"                    # the vector these hand-checked numbers were read on, whatever is current
 PI = E.machine(PIN)
@@ -353,3 +353,84 @@ def test_cli(capsys):
     assert lines[1].split()[-4:] == ["|", "luck", "adapt", "sample"] and lines[2].split()[-4] == "|"
     luck, adapt, sample = (float(x.rstrip("%")) for x in lines[2].split()[-3:])
     assert adapt == 0.35 and sample == pytest.approx(luck + adapt, abs=1e-3)
+
+
+SM89 = DEVICES / "sm_89"
+
+
+def test_devices_follow_the_layout():
+    """README "Devices": sm_120 is data/ and the default; any other device is data/devices/sm_NN/, priced once it has a
+    model.toml, with its vector's rows its census's and every design's honest MMA a class of its census."""
+    assert device() == device("sm_120") == device("sm120") == DATA and devices()[0] == "sm_120"
+    assert device("sm89") == device("sm_89") == SM89 and "sm_89" in devices()
+    for name in devices()[1:]:
+        d = device(name)
+        pi = E.machine("", d)
+        assert set(pi.rows) == set(rows(d)), name
+        for n in E.designs(d):
+            ds = E.design(n, d)
+            h = E.honest(ds.honest, d)
+            assert h.cls in pi.c and h.L == ds.L and ds.name == n, (name, n)
+            assert set(ds.fold) | set(ds.baseline) | set(ds.floor) | set(h.per_mma) <= set(pi.c), (name, n)
+    with pytest.raises(SystemExit, match="isn't a device directory"):
+        device("sm_7")
+
+
+def test_sm89_the_fold_binds_honest():
+    """The L40S (EPS1 ADA): at L = 16 duo's two ALU-pipe instructions a word hold the floor program on row A, 8 a MMA at
+    ALU's measured rate, above IMMA.16816's issue, so no route saves time at any q* and the core ε is ε_skip. At L = 32
+    IMMA.16832's joint facets with ALU bind, and lane words on other pipes save time until q* reaches dp4a's 8.5."""
+    pi = E.machine("", SM89)
+    assert E.UNI not in pi.c and pi.vector == "ADA-89"   # no uniform-datapath line: the uniform route is closed
+    alu = 4 / (1.9985 * 1.02)                            # an ALU instruction's SMSP-cycles on A, its rate + 2%
+    d16 = E.design("dither-1s-l16", SM89)
+    s16 = E.setup(d16, pi, SM89, "floor", "floor")
+    assert s16.as_built.T * 128 == pytest.approx(8 * alu, rel=1e-9) and "A" in s16.as_built.binding
+    e = E.eps(d16, pi, 2.0, SM89, operands="floor", credit="floor")
+    assert e.machine_eps == 0 and E.threshold(s16) == 0 and e.core() == pytest.approx(e.skip, abs=1e-12)
+    assert e.T_honest * 128 == pytest.approx(19.069) and e.T_honest_source == "measured"
+    assert e.gamma_clock == pytest.approx(e.gamma * 2520 / 1680, rel=1e-6)
+    s32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor")
+    assert E.threshold(s32) == pytest.approx(8.5, abs=1e-5)   # dp4a: 8 IDP4A and 0.5 LDS.128 a word
+    assert s32.machine_eps(8.5) == pytest.approx(0, abs=1e-9) and 0 < s32.machine_eps(8) < s32.machine_eps(2)
+    t = E.table(SM89)
+    assert t.l2 is None and t.per_cycle() is None and t.mhz == 2520 and t.sms == 142
+    open32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor", table=t)
+    assert open32.machine_eps(8) == pytest.approx(s32.machine_eps(t.q), abs=1e-9)   # unbounded L2: lanes at q*_T
+
+
+def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
+    """EPS1 DC's H200 and B200: duo binds the floor program on each one's joint ALU facet at L = 32. On sm_90 a wgmma
+    takes 62.77 SMSP-cycles of that facet and 62.74 of issue, so lane words save time at every q* (no threshold) and
+    ε_machine is 4% at q* = 2.03; on sm_100 a tcgen05.mma takes 1.09 of issue, so only dp4a's 8 IMAD bound q*. At
+    L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit spacing's cost."""
+    sm90, sm100 = DEVICES / "sm_90", DEVICES / "sm_100"
+    assert E.designs(sm90) == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
+    p90 = E.machine("", sm90)
+    s = E.setup(E.design("dither-2s-l32", sm90), p90, sm90, "floor", "floor")
+    assert s.as_built.T * 4096 == pytest.approx(62.7735919 + 256 * 1.99077535, rel=1e-6)
+    assert s.as_built.binding == ("JPA90_0",) and E.threshold(s) is None
+    assert s.machine_eps(2.03) > 0.04 and s.machine_eps(8) < 0.001
+    p100 = E.machine("", sm100)
+    s = E.setup(E.design("dither-2s-l32", sm100), p100, sm100, "floor", "floor")
+    assert s.as_built.T * 32768 == pytest.approx(10.9668404 + 2048 * 1.9602715, rel=1e-6)
+    assert s.as_built.binding == ("JPA100_0",) and E.threshold(s) == pytest.approx(8, abs=1e-4)
+    assert p100.load(s.as_built.n)["TM100_0"] * 32768 == pytest.approx(19.911599 + 32 * 16.5392944, rel=1e-6)
+    assert s.machine_eps(2.03) < 0.001
+    far = E.setup(E.design("dither-2s-l256", sm100), p100, sm100, "floor", "floor")
+    assert far.as_built.binding == ("JPA100_1",) and far.machine_eps(2.03) > 0.2
+
+
+def test_cli_device(capsys):
+    assert main(["eps", "--device", "sm89", "--table", "--credit", "floor", "--operands", "floor"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("Π ADA-89") and lines[1].split()[3:5] == ["γ", "γ_f"]
+    assert [x.split()[0] for x in lines[2:]] == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (16, 32)]
+    assert main(["--device", "sm_89", "eps", "dither-2s-l16", "--lookups", "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["lookups"]["l2"] is None and d["gamma_clock"] > d["gamma"] and d["data"] == str(SM89)
+    assert main(["--device", "sm89", "eps", "--lookups"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("dither-1s-l16: ") and "L2 unbounded: unmeasured on this device" in out
+    with pytest.raises(SystemExit, match="--device or --data"):
+        main(["--data", str(SM89), "--device", "sm89", "eps"])
