@@ -11,7 +11,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), and `--jitter-ms`; the coin commitment sent first, then
    σ_0, a boundary message every window, each root fed to `Session.receive` stamped with the time its last byte was
-   read, each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
+   read (with the appends and releases its message carries first, and its plan as a change when it carries one:
+   `Verifier.root`), each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
    verdict as `Session.verify`'s) or by `Session.verify` on a thread of the verifier's, so a window's checks run while
    the next window's passes arrive; once every window is accepted the record (`Session.record`) and its γ terms
@@ -245,9 +246,12 @@ class Verifier:
                 t, i = head["t"], head["i"]
                 self._stamp = stamp
                 try:
-                    v = session.receive(t, i, bytes.fromhex(head["root"]))
+                    v = self.root(session, head)
                 except audit.SessionError:
                     failure = failed()
+                    break
+                except (TypeError, ValueError, KeyError):
+                    failure = {"t": t, "failure": "malformed", "at": None}
                     break
                 finally:
                     self._stamp = None
@@ -320,6 +324,7 @@ class Verifier:
         out = {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": self.samples, "delta": self.delta, "window_ns": self.T, "windows": W,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
+               "appended": session.extent - reg.blocks, "released": session.released,
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
                "verify_latency_ns": {t: v.get("checked_ns") for t, v in sorted(verdicts.items())},
                "check_workers": self.checks.workers if self.checks else 0,
@@ -337,6 +342,23 @@ class Verifier:
             out["end_ns"] = record.end_ns
             out["ledger"] = self.ledgers(record, arrivals)
         return out
+
+    @staticmethod
+    def root(session: audit.Session, head: dict) -> audit.Verdict | None:
+        """A root's message to the session in the order the prover sends it: its appends (`Session.append`), then the
+        blocks it releases (`Session.release`), then the root with its plan, a change from the last plan if it carries
+        one and the registered store otherwise (`Session.receive`).  The first rejection, if any."""
+        for root, count in head.get("appends", ()):
+            got = session.append(bytes.fromhex(root), count)
+            if isinstance(got, audit.Verdict):
+                return got
+        if head.get("released") and (v := session.release([tuple(r) for r in head["released"]])) is not None:
+            return v
+        change = head.get("change")
+        if change is not None:
+            added, removed = change
+            change = ([tuple(r) for r in added], [tuple(r) for r in removed])
+        return session.receive(head["t"], head["i"], bytes.fromhex(head["root"]), change=change)
 
     def ledgers(self, record: audit.Record, arrivals: list[list[int]] = ()) -> dict:
         """γ against the node's R at spec and measured (`timing.SPEC_BYTES_PER_S`, `timing.READ_BYTES_PER_S`: every
@@ -361,7 +383,9 @@ class Verifier:
                           "chip_bytes": timing.CHIP_BYTES, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
-                          "reads_bytes": record.receipts * record.block_bytes}}
+                          "reads_bytes": record.receipts * record.block_bytes,
+                          "post_seed_receipts": sum(sum(w.post_seed) for w in record.windows),
+                          "post_seed_credited": False}}
         tiers = cal.get("read_tiers")
         spacings = sorted(b - a for arr in arrivals for a, b in zip(arr, arr[1:]))
         parts = None
@@ -437,9 +461,11 @@ def main() -> int:
         r = v.session(k, allowance, not_before)
         results.append(r)
         not_before = r.get("end_ns", v.clock.now())
-        lg = r.get("ledger", {}).get("spec", {})
+        lg, pub = r.get("ledger", {}).get("spec", {}), r.get("record", {}).get("public", {})
         print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
-              f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')}", flush=True)
+              f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')} "
+              f"appended={r['appended']} released={r['released']} post_seed={pub.get('post_seed')}",
+              flush=True)
         record()
     conn.send({"type": "bye"})
     if checks:
