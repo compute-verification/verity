@@ -47,7 +47,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Sequence
 
 from .codec import canonical_json
-from .defs import Body, PrimitiveDefinition
+from .defs import Body, CompositeDefinition, PrimitiveDefinition, bind
 from .intervals import Intervals, norm, ref_intervals, restrict, total
 from .program import RUN as RUN_BINDING
 from .program import Program, input_id, is_input
@@ -152,13 +152,13 @@ def product_class(a: int, b: int) -> str:
 
 def spec() -> dict:
     """The table as canonical data: what `digest` hashes."""
-    return {"format": TAG, "version": VERSION, "gather": GATHER_ID.pattern,
-            "kinds": {fid: {k: v for k, v in asdict(kd).items() if v not in (0, (), None)} for fid, kd in sorted(KINDS.items())}}
+    return _plain({"format": TAG, "version": VERSION, "gather": GATHER_ID.pattern,
+                   "kinds": {fid: {k: v for k, v in asdict(kd).items() if v not in (0, (), None)} for fid, kd in sorted(KINDS.items())}})
 
 
 def digest() -> str:
     """``SHA-512(TAG || "/v" || version || 0 || canon(spec))``: the table version a census names and a statement can pin."""
-    return hashlib.sha512(f"{TAG}/v{VERSION}".encode() + b"\0" + canonical_json(_plain(spec()))).hexdigest()
+    return hashlib.sha512(f"{TAG}/v{VERSION}".encode() + b"\0" + canonical_json(spec())).hexdigest()
 
 
 def _plain(v: Any) -> Any:
@@ -479,6 +479,8 @@ class Census:
 def count(fn: Any, provenance: Sequence[int], ranges: Sequence[Range] | None = None) -> dict:
     """The classes of one call of `fn` (a Definition or a primitive) whose parameters have `provenance` (`CONSTANT`,
     `REGISTERED`, `SELECTED` or `RUN` each) and value ranges `ranges` (None: any word)."""
+    if isinstance(fn, CompositeDefinition):
+        fn = bind(fn)
     ts = tuple(provenance)
     raw, _t = _Provenance().call(fn, ts)
     iv = _Intervals()
