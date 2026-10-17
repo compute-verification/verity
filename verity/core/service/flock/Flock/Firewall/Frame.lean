@@ -167,11 +167,19 @@ def Masker.ofJson (j : Json) : V Masker := do
     pure (⟨u64OfLE b 0, u64OfLE b 8⟩ : F128)
   Masker.new l pads (← unhex (← j.getObjValAs? String "root"))
 
-partial def readExact (h : IO.FS.Stream) (n : Nat) (acc : ByteArray := .empty) : IO ByteArray := do
-  if acc.size ≥ n then return acc
-  let b ← h.read (n - acc.size).toUSize
-  if b.isEmpty then throw (IO.userError s!"frame: input closed {acc.size} bytes into a {n}-byte round")
-  readExact h n (acc ++ b)
+/-- `n` bytes of `h`. Each read that returns nothing ends the input, so `n` reads that each return a byte or more
+suffice. -/
+def readExact (h : IO.FS.Stream) (n : Nat) : IO ByteArray := go n .empty
+where
+  go : Nat → ByteArray → IO ByteArray
+    | 0, acc =>
+      if acc.size ≥ n then pure acc
+      else throw (IO.userError s!"frame: {acc.size} bytes after {n} reads of a {n}-byte round")
+    | fuel + 1, acc => do
+      if acc.size ≥ n then return acc
+      let b ← h.read (n - acc.size).toUSize
+      if b.isEmpty then throw (IO.userError s!"frame: input closed {acc.size} bytes into a {n}-byte round")
+      go fuel (acc ++ b)
 
 /-- `flock-firewall frame`: one rep's release, served on stdin and stdout. The first line starts the rep
 (`Masker.ofJson`) and is answered `ok`; then `round N LEN` followed by the device round's `LEN` bytes is answered
