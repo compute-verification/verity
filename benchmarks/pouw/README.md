@@ -59,12 +59,13 @@ directory's `*.sh` builds and runs it through `research run`, and each `*ref.py`
 | The served GEMM on the floored int8 grid, its receipt kernels (duo, DUOS, tb) and their reference | `floored_gemm/fgemm.cu`, `ref.py`, `run.sh`, `tb_run.sh` | `masked_gemm/sha_noise.cuh` |
 | SHA-512 counter-mode noise, as one generator and as separate passes | `masked_gemm/sha_noise.cuh`, `sha_pass.cuh` | `pearl_c/sha512.cuh` |
 | The masked GEMM (full and low rank), the first edited GEMM (noise from {±5, ±7}), its noise expanded from σ, P·V's noise, the one-side peel | `masked_gemm/mgemm.cu`, `egemm.cu`, `sgemm.cu`, `pvgemm.cu`, `lpgemm.cu`, each with its `*ref.py`, `*run.sh` and `*table.py` | `floored_gemm/fgemm.cu` |
-| The adopted design's edited GEMM (decision 29), its receipt folds and its profile | `edited_gemm/egemm.cu`, `egemm_ref.py`, `prof.cu`, `run.sh`, `profile.sh` | `masked_gemm/lpgemm.cu` |
+| The adopted design's edited GEMM (decision 29), its receipt folds and its profile, also ncu's against the machine model (eps_sched, the fold-cost sweep) | `edited_gemm/egemm.cu`, `egemm_ref.py`, `prof.cu`, `run.sh`, `profile.sh`, `eps_profile.py` | `masked_gemm/lpgemm.cu` |
 | That GEMM with its windowed receipts and X's tile leaves hashed in its CTAs | `hashed_gemm/hgemm.cu`, `hgref.py`, `segment_e2e.py`, `run.sh` | `edited_gemm/egemm.cu`, `commit_gpu/commit_gpu.cuh` |
 | The committer: hm96-sha512 row leaves in frame-v3-sha512 trees | `commit_gpu/commit_gpu.cuh`, `sha512.cuh`, `commit_gpu.cu`, `reference.py`, `gpu.sh` | |
 | Stage coins and the deferred edit | `stage_cost/stage.cu`, `prep.py`, `report.py`, `run.sh` | `filler/dcap.cu`, `served_zk/hm96_rows.cu` |
 | Their overlap in prefill, with the committer's small path, and the edited arms (EGEMM's GEMM with windowed receipts) | `stage_ovl/ovl.cu`, `eg.cu`, `eg.h`, `eref.py`, `report.py`, `run.sh` | `stage_cost/stage.cu`, `commit_gpu/commit_gpu.cuh`, `edited_gemm/egemm.cu` |
 
-`edited_gemm/egemm_ref.py` imports the E2E slice's `derive.py` from `e2e_slice/` beside it, which lands in its own PR;
+`edited_gemm/egemm_ref.py` imports the E2E slice's `derive.py` from `e2e_slice/` beside it (the slice's receipt and noise
+derivation, as cursor/egemm-ea24 has it);
 `edited_gemm/receipt_folds_r9.py` is P2-FF r9's reference as recorded (art:91c156a1…), held by its sha256, so leave it
 unedited.
