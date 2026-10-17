@@ -20,6 +20,13 @@ the form the session's models read (`Deployed`):
 * `Proto.TabModel.SwLink`, `Proto.TabModel.shvzk_sw`: where the prover goes on, a prover whose messages are `lift` of the
   tables' switched views at the workers' values meets `SHVZK` against `simOut`, the honest prover's simulator, within
   `2·n·δ₁`, as `TabModel.shvzk` has it at `TabModel.Link`.
+* `Proto.TPreModel.SwLink`, `Proto.TPreModel.runs_close_sw`; `Proto.TOffModel.SwLink`, `Proto.TOffModel.close_sw`:
+  before the last coin and where the prover refuses, Lemma C between the switched prover at the workers' values and the
+  honest prover on the dummy, within `2·|L|·δ₁`, as `runs_close` and `close` have it at the honest prover.
+* `Proto.TSwLink`, `Proto.withSim_shvzk_sw`, `Flock.zk_deployZk_of_tables_sw`: **`Claims.Flock.ZK` at the switched
+  prover**, with the honest prover's simulator and the same `ε_zk` and `γ`, with `TMsgLink` replaced by `TSwLink`: the
+  prover's messages are the switched prover's at values the workers supply, which read the mask slot and the extra
+  lanes and never the pads.
 -/
 
 namespace Claims.ZKMal
@@ -341,6 +348,193 @@ theorem TabModel.shvzk_sw {W : Type} {G : Proto W} {x : Msg} (M : G.TabModel x) 
   rw [eReal, eSim, abs_le]
   constructor <;> linarith
 
+/-- The switched prover's messages before the last coin at the answers `a`, on table witnesses `wt` and the workers'
+values `vs a`, bases `ω` and pre-final leaves `lv`. -/
+noncomputable def TPreModel.swMsgs {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x)
+    (wt : ∀ j, FlockSoundness.Model.Witness (M.C j).S.m) (vs : ∀ a j, ((M.C j).T (M.cz a j)).tab.Vals)
+    (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi) (a : Fin (G.K x + 1) → Out)
+    (lv : ZkView.Leaves (fun j => (M.C j).z) → ByteArray) : Fin (G.K x + 1) → Msg :=
+  M.out a (swCutAt M.C (M.cz a) wt (vs a) ω lv)
+
+/-- **The switched prover's round encoding reads the answers before each round only**, whatever each leaf's pair
+`(M·y, c(y))`, as `TPreModel.Causal` has the honest prover's. -/
+def TPreModel.SwCausal {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x)
+    (wt : ∀ j, FlockSoundness.Model.Witness (M.C j).S.m) (vs : ∀ a j, ((M.C j).T (M.cz a j)).tab.Vals) : Prop :=
+  ∀ (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi) (p : ZkView.Leaves (fun j => (M.C j).z) → ZkView.Bits × ByteArray)
+    (a a' : Fin (G.K x + 1) → Out) (i : Fin (G.K x + 1)), (∀ j, j < i → a j = a' j) →
+    M.swMsgs wt vs ω a (fun l => ZkView.leafH (swDigOf M.C (M.cz a) wt (vs a) ω l + (p l).1, (p l).2)) i =
+      M.swMsgs wt vs ω a' (fun l => ZkView.leafH (swDigOf M.C (M.cz a') wt (vs a') ω l + (p l).1, (p l).2)) i
+
+/-- **Before the last coin, the prover's messages on `w` are the switched prover's at values the workers supply** (`vs`,
+read from the mask slot and the extra lanes alone, never the pads), its round encoding causal, at the executable's
+leaves; on the dummy they are the honest prover's (`TPreModel.Link`'s second half). -/
+def TPreModel.SwLink {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x) (H : Msg → Msg) (ν : G.Nonce) (w : W) :
+    Prop :=
+  (∀ j, (M.C j).Valid (M.wt w j)) ∧
+    (∀ a j, ((M.C j).T (M.cz a j)).tab.sReg (M.wt₀ j) = ((M.C j).T (M.cz a j)).tab.pubReg) ∧ M.Causal ∧
+    (∀ p, Nat.card {r // M.eR r = p} = M.kR) ∧
+    (∃ vs : ∀ a j, ((M.C j).T (M.cz a j)).tab.Vals, M.SwCausal (M.wt w) vs ∧
+      ∀ r a, (G.preStrat H x ν (G.msg x w ν)).msg r a =
+        M.swMsgs (M.wt w) vs (M.eR r).1 a (swExeOf M.C (M.cz a) (M.wt w) (vs a) (M.eR r).1 (M.eR r).2)) ∧
+    ∀ r a, (G.preStrat H x ν (G.dmsg x ν)).msg r a =
+      M.msgs M.wt₀ (M.eR r).1 a (exeOf M.C (M.cz a) M.wt₀ (M.eR r).1 (M.eR r).2)
+
+/-- **Lemma C's bound on the runs before the last coin at the switched prover** (`runs_close_of_ideal`, its two table
+witnesses the switched prover on `w` and the honest one on the dummy), within `2·|L|·δ₁`, whatever values the workers
+supply. -/
+theorem TPreModel.runs_close_sw {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x) (H : Msg → Msg)
+    {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (ν : G.Nonce) (w : W)
+    (hL : M.SwLink H ν w) (hOK : M.OK) (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1))
+    (E : (Fin (G.K x + 1) → Msg) → Prop) :
+    |Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.msg x w ν)) V r)) -
+      Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.dmsg x ν)) V r))|
+      ≤ 2 * M.size * δ₁.toReal := by
+  obtain ⟨hv, hreg₀, hc, heR, ⟨vs, hsc, hlink⟩, hlink₀⟩ := hL
+  let msgs : Bool → (∀ j, ZkView.Base (M.C j).z (M.C j).Hi) → (Fin (G.K x + 1) → Out) →
+      (ZkView.Leaves (fun j => (M.C j).z) → ByteArray) → Fin (G.K x + 1) → Msg := fun b ω a lv =>
+    cond b (M.swMsgs (M.wt w) vs ω a lv) (M.msgs M.wt₀ ω a lv)
+  let dig : Bool → (∀ j, ZkView.Base (M.C j).z (M.C j).Hi) → (Fin (G.K x + 1) → Out) →
+      ZkView.Leaves (fun j => (M.C j).z) → ZkView.Bits := fun b ω a =>
+    cond b (swDigOf M.C (M.cz a) (M.wt w) (vs a) ω) (digOf M.C (M.cz a) M.wt₀ ω)
+  let P : Bool → FlockSoundness.ZK.Strategy
+      ((∀ j, ZkView.Base (M.C j).z (M.C j).Hi) × (ZkView.Leaves (fun j => (M.C j).z) → ZkView.Bits × ByteArray))
+      Msg Out (G.K x + 1) := fun b =>
+    { msg := fun q a => msgs b q.1 a fun l => ZkView.leafH (dig b q.1 a l + (q.2 l).1, (q.2 l).2)
+      causal := fun q a a' i h => by
+        cases b
+        · exact hc M.wt₀ q.1 q.2 a a' i h
+        · exact hsc q.1 q.2 a a' i h }
+  have hP1 : ∀ ω p a, (P true).msg (ω, p) a = M.swMsgs (M.wt w) vs ω a
+      fun l => ZkView.leafH (swDigOf M.C (M.cz a) (M.wt w) (vs a) ω l + (p l).1, (p l).2) := fun _ _ _ => rfl
+  have hP0 : ∀ ω p a, (P false).msg (ω, p) a = M.msgs M.wt₀ ω a
+      fun l => ZkView.leafH (digOf M.C (M.cz a) M.wt₀ ω l + (p l).1, (p l).2) := fun _ _ _ => rfl
+  have hl : ∀ r, (G.preStrat H x ν (G.msg x w ν)).msg r =
+      (P true).msg ((M.eR r).1, fun l => (ZkView.My ((M.eR r).2 l), ZkView.saltHash ((M.eR r).2 l))) :=
+    fun r => funext fun a => by rw [hP1, hlink r a, swExeOf_eq]
+  have hl₀ : ∀ r, (G.preStrat H x ν (G.dmsg x ν)).msg r =
+      (P false).msg ((M.eR r).1, fun l => (ZkView.My ((M.eR r).2 l), ZkView.saltHash ((M.eR r).2 l))) :=
+    fun r => funext fun a => by rw [hP0, hlink₀ r a, exeOf_eq]
+  have : Nonempty (∀ j, ZkView.Base (M.C j).z (M.C j).Hi) := ⟨fun _ => 0⟩
+  exact G.runs_close_of_ideal H x ν w ZkView.My ZkView.saltHash hT1 hδ₁ ZkView.leafH msgs dig P
+    (fun _ _ _ _ => rfl) true false
+    (fun a σ => card_swCutAt_ideal M.C (M.cz a) (M.wt w) M.wt₀ (vs a) (fun j => (hOK j).ok.2 _ _ (hv j)) (hreg₀ a)
+      (M.out a) σ)
+    M.eR M.kR heR hl hl₀ V E
+
+/-- **Where the prover refuses at `c`, its messages on `w` are `out` of the switched prover's cut view at values the
+workers supply**, at the executable's leaves; on the dummy they are the honest prover's (`TOffModel.Link`'s second
+half). -/
+def TOffModel.SwLink {W : Type} {G : Proto W} {x : Msg} (M : G.TOffModel x) (H : Msg → Msg) (ν : G.Nonce)
+    (c : Fin (G.K x) → G.Coin) (w : W) : Prop :=
+  (∀ j, (M.C j).Valid (M.wt w j)) ∧
+    (∀ j, ((M.C j).T (M.cz j)).tab.sReg (M.wt₀ j) = ((M.C j).T (M.cz j)).tab.pubReg) ∧
+    (∀ p, Nat.card {r // M.eR r = p} = M.kR) ∧
+    (∃ vs : ∀ j, ((M.C j).T (M.cz j)).tab.Vals, ∀ r, G.realVec H x w ν r c =
+      M.out (swCutAt M.C M.cz (M.wt w) vs (M.eR r).1 (swExeOf M.C M.cz (M.wt w) vs (M.eR r).1 (M.eR r).2))) ∧
+    ∀ r, G.dVec H x ν r c = M.out (cutAt M.C M.cz M.wt₀ (M.eR r).1 (exeOf M.C M.cz M.wt₀ (M.eR r).1 (M.eR r).2))
+
+/-- **Lemma C where the prover refuses, at the switched prover** (`refused_close_of_ideal`, its two table witnesses the
+switched prover on `w` and the honest one on the dummy): within `2·|L|·δ₁`, whatever values the workers supply. -/
+theorem TOffModel.close_sw {W : Type} {G : Proto W} {x : Msg} (M : G.TOffModel x) (H : Msg → Msg) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
+    (w : W) (hL : M.SwLink H ν c w) (hOK : M.OK) (E : List Msg → Prop) :
+    |Pr (fun r : G.Rand => E (G.realVec H x w ν r c)) - Pr (fun r : G.Rand => E (G.dVec H x ν r c))|
+      ≤ 2 * M.size * δ₁.toReal := by
+  obtain ⟨hv, hreg₀, heR, ⟨vs, hR⟩, hD⟩ := hL
+  have : Nonempty (∀ j, ZkView.Base (M.C j).z (M.C j).Hi) := ⟨fun _ => 0⟩
+  exact G.refused_close_of_ideal H x w ν c ZkView.My ZkView.saltHash hT1 hδ₁ ZkView.leafH
+    (fun b ω lv => cond b (M.out (swCutAt M.C M.cz (M.wt w) vs ω lv)) (M.out (cutAt M.C M.cz M.wt₀ ω lv)))
+    (fun b ω => cond b (swDigOf M.C M.cz (M.wt w) vs ω) (digOf M.C M.cz M.wt₀ ω)) true false
+    (fun σ => card_swCutAt_ideal M.C M.cz (M.wt w) M.wt₀ vs (fun j => (hOK j).ok.2 _ _ (hv j)) hreg₀ M.out σ)
+    M.eR M.kR heR
+    (fun r => (hR r).trans (congrArg (fun lv => M.out (swCutAt M.C M.cz (M.wt w) vs (M.eR r).1 lv))
+      (swExeOf_eq M.C M.cz (M.wt w) vs (M.eR r).1 (M.eR r).2)))
+    (fun r => (hD r).trans (congrArg (fun lv => M.out (cutAt M.C M.cz M.wt₀ (M.eR r).1 lv))
+      (exeOf_eq M.C M.cz M.wt₀ (M.eR r).1 (M.eR r).2))) E
+
+/-- The switched prover's message link at a coin vector: `TabModel.SwLink` at some values the workers supply where
+the prover goes on, `TOffModel.SwLink` where it refuses. -/
+def TCoinModel.SwLink {W : Type} {G : Proto W} {x : Msg} :
+    G.TCoinModel x → (Msg → Msg) → G.Nonce → (Fin (G.K x) → G.Coin) → W → Prop
+  | .inl M => fun H ν c w => ∃ vs, M.SwLink H ν c w vs
+  | .inr M => M.SwLink
+
+/-- **`SHVZK` of the switched prover at a coin vector, from its model**, for any simulator that is `simAt` on a tape
+read through a map with fibers of one size: the honest prover's simulator, whatever values the workers supply. -/
+theorem TCoinModel.shvzk_sw {W : Type} {G : Proto W} {x : Msg} (H : Msg → Msg) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
+    (w : W) {n : ℕ} (E : List Msg → Prop) {Ω : Type} [Fintype Ω] [Nonempty Ω] (sim : Ω → List Msg) :
+    ∀ (M : G.TCoinModel x) (ev : Ω → M.SimAt) (kS : ℕ), (∀ p, Nat.card {s // ev s = p} = kS) →
+      (∀ s, sim s = ((M.simAt (ev s) ν c).eval H).1) → M.SwLink H ν c w → M.OK → M.size ≤ n →
+      |Pr (fun r : G.Rand => E (G.realVec H x w ν r c)) - Pr (fun s : Ω => E (sim s))| ≤ 2 * n * δ₁.toReal
+  | .inl M, ev, _, hev, hsim, ⟨vs, hL⟩, hOK, hn => by
+      have : sim = fun s => M.simOut (ev s) := funext hsim
+      subst this
+      exact M.shvzk_sw H hT1 hδ₁ ν c w vs hL hOK ev hev hn E
+  | .inr M, ev, _, hev, hsim, hL, hOK, hn => by
+      have hD : ∀ s, sim s = G.dVec H x ν (ev s) c := fun s => by
+        rw [hsim s]
+        simp only [TCoinModel.simAt, ocSeq_eval, List.map_map]
+        rfl
+      have e : Pr (fun s : Ω => E (sim s)) = Pr (fun r : G.Rand => E (G.dVec H x ν r c)) := by
+        simp only [hD]
+        exact Pr_comp_fiber ev hev fun r => E (G.dVec H x ν r c)
+      rw [e]
+      have hn' : (M.size : ℝ) ≤ n := by exact_mod_cast hn
+      calc _ ≤ 2 * M.size * δ₁.toReal := M.close_sw H hT1 hδ₁ ν c w hL hOK E
+        _ ≤ 2 * n * δ₁.toReal := by gcongr
+
+/-- **`SHVZK` of the simulator the models give, at the switched prover**, within `2·n_B·δ₁`, from the switched message
+links and the tables: the honest prover's simulator (`withSim`), whatever values the workers supply. -/
+theorem withSim_shvzk_sw {W : Type} (G : Proto W) [Fintype G.Coin] (H : Msg → Msg) (R : Rel W) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤)
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nB : Msg → ℕ)
+    (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x) (hL : ∀ x w, R x w → ∀ ν c, (Mc x ν c).SwLink H ν c w)
+    (hOK : ∀ x ν c, (Mc x ν c).OK) : (G.withSim Mc).SHVZK H R fun x => 2 * nB x * δ₁.toReal := by
+  intro x w hR ν c E
+  obtain ⟨p₀⟩ := TCoinModel.instNonemptySimAt (Mc x ν c)
+  exact TCoinModel.shvzk_sw (G := G) H hT1 hδ₁ ν c w E (Ω := (G.withSim Mc).SimRand x)
+    (fun s => (((G.withSim Mc).sim x ν c s).eval H).1) (Mc x ν c) (fun s => s (ν, c)) _
+    (fun p => eval_fiber_card (β := fun q : G.Nonce × (Fin (G.K x) → G.Coin) => (Mc x q.1 q.2).SimAt) (ν, c) p p₀)
+    (fun _ => rfl) (hL x w hR ν c) (hOK x ν c) (hnB x ν c)
+
+/-- **The switched prover's message link at the session's tables**: before the last coin, and at each coin vector, the
+prover's messages are the switched prover's at values the workers supply (`TPreModel.SwLink`, `TCoinModel.SwLink`). -/
+def TSwLink {W : Type} (G : Proto W) (H : Msg → Msg) (R : Rel W) (Mp : ∀ x, G.Nonce → G.TPreModel x)
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) : Prop :=
+  ∀ x w, R x w → ∀ ν, (Mp x ν).SwLink H ν w ∧ ∀ c, (Mc x ν c).SwLink H ν c w
+
 end Proto
+
+/-- **Flock's zero knowledge at the switched prover, at the tables the session sets up**: `Flock.zk_deployZk_of_tables`
+with `TMsgLink` replaced by `TSwLink`. At `P_zk = G.prover`, a prover whose messages on each witness are the switched
+prover's at whatever values the workers supply (read from the mask slot and the extra lanes, never the pads), and the
+honest prover's simulator, `Claims.Flock.ZK` holds at the same `ε_zk` and `γ`. -/
+theorem Flock.zk_deployZk_of_tables_sw (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
+    (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (Mp : ∀ x, G.Nonce → G.TPreModel x)
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Msg → ℕ)
+    (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
+    (hL : G.TSwLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
+    (hC : G.CoinCheck) :
+    Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
+  obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := hC
+  have hA : ∀ x w, Flock.R (FlockDeploy.deployZk rel).parse x w → ∀ (ν : G.Nonce)
+      (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1)) (E : (Fin (G.K x + 1) → Msg) → Prop),
+      |Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.msg x w ν)) V r)) -
+        Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.dmsg x ν)) V r))| ≤
+        2 * nL x * δ₁.toReal := by
+    intro x w hR ν V E
+    calc _ ≤ 2 * (Mp x ν).size * δ₁.toReal :=
+          (Mp x ν).runs_close_sw H hT1 hδ₁ ν w (hL x w hR ν).1 (hOK.1 x ν) V E
+      _ ≤ 2 * nL x * δ₁.toReal := by
+          have : ((Mp x ν).size : ℝ) ≤ nL x := by exact_mod_cast hnL x ν
+          gcongr
+  rw [← G.withSim_prover Mc]
+  exact Flock.zkR_gkE_hm96_deployZk H rel (G.withSim Mc) t ht hK δ₁ nL nB hA
+    (G.withSim_shvzk_sw H _ hT1 hδ₁ Mc nB hnB (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) Tr nb root parse pos idx n
+    depth dc hchk hdec
 
 end Claims.ZKMal
