@@ -23,6 +23,8 @@ PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --own
   || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2
 export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache} FC_COINS=${FC_COINS:-os}
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
+# every instance's own rows: the verifiers refuse a plain statement's shared-row public file (ProvedScope.sharedRowsOk)
+export FLOCK_OWN_ROWS=${FLOCK_OWN_ROWS:-1}
 unset CARGO_TARGET_DIR
 S=$(mktemp -d "$FLOCK_WORK/scratch.XXXXXX"); trap 'rm -rf "$S"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
@@ -104,9 +106,9 @@ if [ "${BUNDLE:-1}" = 1 ] && [ -n "$D" ] && [ -n "$C" ] && [ -s "$O/results.json
   cp "$C/circuit.txt" "$C/pub-$B.bin" "$BD/" && cp -r "$D/sessions" "$BD/sessions"
   for f in $BUNDLED; do [ -e "$O/$f" ] && cp "$O/$f" "$BD/"; done
   du -sb "$BD" | tee -a "$O/job.log"
-  PYTHONPATH=$REPO/tools/research/src python3 -m research data put --kind proof-throughput/bundle/v1 --tree "$BD" --preserve --json \
-    --meta "{\"workload\": \"$WORKLOAD\", \"B\": $B, \"run\": \"${RESEARCH_RUN_ID:-local}\"}" > "$O/bundle.json" 2> "$O/bundle.err" \
-    || log "bundle put failed: $(tail -3 "$O/bundle.err")"
+  PT put-bundle --tree "$BD" --out "$O/bundle.json" \
+    --meta "{\"what\": \"proof_throughput bundle\", \"workload\": \"$WORKLOAD\", \"B\": $B, \"run\": \"${RESEARCH_RUN_ID:-local}\"}" \
+    > "$O/bundle.id" 2> "$O/bundle.err" && log "bundle: $(cat "$O/bundle.id")" || { log "bundle put failed: $(tail -3 "$O/bundle.err")"; rc=1; }
 fi
 log "done"
 [ $rc = 0 ]

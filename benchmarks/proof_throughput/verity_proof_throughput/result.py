@@ -127,7 +127,7 @@ def software(rec: Mapping[str, Any], *, commit: str | None, dirty: bool | None, 
     lv = rec.get("live") or {}
     return {"backend": {"name": "flock-circuit", "commit": commit, "dirty": dirty, "binary_sha256": binary_sha256,
                         "prover": lv.get("prover"),
-                        "env": {k: os.environ.get(k) for k in ("FC_PIPELINE_DEPTH", "FC_HOST_PREPIN", "FC_COINS")}},
+                        "env": {k: os.environ.get(k) for k in ("FC_PIPELINE_DEPTH", "FC_HOST_PREPIN", "FC_COINS", "FLOCK_OWN_ROWS")}},
             "verifier": {"name": "flock-verify", "language": "Lean (compiled)", "sha256": None, "build_key": None},
             "toolchain": {"python": sys.version.split()[0], "cuda": os.environ.get("PT_CUDA")}}
 

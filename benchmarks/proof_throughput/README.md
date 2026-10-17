@@ -21,7 +21,10 @@ A point is one statement of B coordinates of one workload, the first B instances
 1. **Prover run** (`job.sh`, a `research run --queue --on vy-nebius-1 --gpu-host` job, tool `proof_throughput_prover`): builds
    `flock-circuit` with CUDA for sm_120, stages the statement and checks its instances against the manifest outside any GPU
    lease, then proves `WARM` warm and `RUNS` timed sessions on one GPU taken by `gpu-lease` (the kernel-engineering skill's
-   sharing rule), with live coins from a loopback `flock-circuit serve` (`FC_COINS=os`). ZK is off. It puts the circuit,
+   sharing rule), with live coins from a loopback `flock-circuit serve` (`FC_COINS=os`). ZK is off. The statement gives every
+   coordinate its own rows (`FLOCK_OWN_ROWS=1`), x included: the verifiers refuse a plain statement whose public file shares
+   rows (`ProvedScope.sharedRowsOk` covers that only for a registered ZK session), so x is committed once per coordinate
+   rather than once per Call, and that cost is in the numbers. It puts the circuit,
    the public file and every session in the evidence store as one bundle (`out/bundle.json`) and writes the contract
    result with the live verdicts only.
 2. **Verifier run** (`verify.sh`, a `research run --on vy-nebius-cpu-3` or `-cpu-2` job, tool `proof_throughput_verifier`):

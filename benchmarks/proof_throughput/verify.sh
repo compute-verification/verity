@@ -44,7 +44,7 @@ export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/
 [ "${BUILD_ONLY:-0}" = 1 ] && { log "BUILD_ONLY: $LEAN ($(cat "$O/lean.sha256"))"; exit 0; }
 
 log "fetching $BUNDLE"
-PYTHONPATH=$REPO/tools/research/src python3 -m research data fetch "$BUNDLE" --to "$S/b" > "$O/fetch.txt" 2>&1 || { tail -5 "$O/fetch.txt"; log "fetch failed"; exit 1; }
+"$PYBIN" -m verity_proof_throughput fetch-bundle "$BUNDLE" --to "$S/b" > "$O/fetch.txt" 2>&1 || { tail -5 "$O/fetch.txt"; log "fetch failed"; exit 1; }
 BD=$(dirname "$(find "$S/b" -name circuit.txt | head -1)")
 [ -f "$BD/circuit.txt" ] || { log "the bundle has no circuit.txt"; exit 1; }
 for f in "$BD"/*; do [ -f "$f" ] && case $f in *.txt|*.bin) ;; *) cp "$f" "$O/" ;; esac; done

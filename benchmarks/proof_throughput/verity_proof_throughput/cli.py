@@ -10,7 +10,8 @@
     workloads                                            the VU families and their B caps
     zk                                                   what configuration 2 measures today, and what it stubs
 
-The job scripts call the rest: ``defs``, ``check-instances``, ``staged``, ``probe``, ``lean-verdict`` and ``point-result``.
+The job scripts call the rest: ``defs``, ``check-instances``, ``staged``, ``probe``, ``put-bundle``, ``fetch-bundle``,
+``lean-verdict`` and ``point-result``.
 A RESULT is a ``result.json`` path or a run id (its result fetched from the evidence store).
 """
 from __future__ import annotations
@@ -198,6 +199,35 @@ def cmd_point_result(a) -> int:
     return 0
 
 
+BUNDLE_KIND = "proof/v1"
+
+
+def cmd_put_bundle(a) -> int:
+    """Put the point's bundle in the evidence store (``--preserve``) and write its ``research data put --json`` answer."""
+    from .store import research_data
+
+    p = research_data("put", "--kind", BUNDLE_KIND, "--tree", a.tree, "--preserve", "--json", "--meta", a.meta)
+    if p.returncode:
+        print(f"research data put: {(p.stderr or p.stdout).strip()[-600:]}", file=sys.stderr)
+        return 1
+    Path(a.out).write_text(p.stdout)
+    doc = json.loads(p.stdout)
+    print(doc.get("id"))
+    if doc.get("pending"):
+        print(f"{doc.get('id')} is not preserved, so the verifier node can't fetch it: {doc['pending']}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def cmd_fetch_bundle(a) -> int:
+    from .store import research_data
+
+    p = research_data("fetch", a.art, "--to", a.to)
+    if p.returncode:
+        print(f"research data fetch {a.art}: {(p.stderr or p.stdout).strip()[-600:]}", file=sys.stderr)
+    return p.returncode
+
+
 def _probe_cpu() -> dict:
     from verity_numerical.bench import contract
 
@@ -380,6 +410,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", required=True)
     p = sub.add_parser("staged"); p.add_argument("--results", required=True); p.add_argument("--cache-dir", action="store_true")
     p = sub.add_parser("probe"); p.add_argument("--out", required=True); p.add_argument("--gpu-csv", default=None)
+    p = sub.add_parser("put-bundle"); p.add_argument("--tree", required=True); p.add_argument("--meta", required=True)
+    p.add_argument("--out", required=True)
+    p = sub.add_parser("fetch-bundle"); p.add_argument("art"); p.add_argument("--to", required=True)
     p = sub.add_parser("lean-verdict")
     for f in ("--session", "--time", "--stdout", "--stderr"):
         p.add_argument(f, required=True)
@@ -391,4 +424,4 @@ def main(argv: list[str] | None = None) -> int:
     return {"plan": cmd_plan, "check": cmd_check, "run": cmd_run, "verify": cmd_verify, "compare": cmd_compare, "table": cmd_table,
             "instances": cmd_instances, "workloads": cmd_workloads, "zk": cmd_zk, "defs": cmd_defs,
             "check-instances": cmd_check_instances, "staged": cmd_staged, "probe": cmd_probe, "lean-verdict": cmd_lean_verdict,
-            "point-result": cmd_point_result}[a.cmd](a)
+            "point-result": cmd_point_result, "put-bundle": cmd_put_bundle, "fetch-bundle": cmd_fetch_bundle}[a.cmd](a)
