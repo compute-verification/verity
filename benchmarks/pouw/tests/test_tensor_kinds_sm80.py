@@ -157,8 +157,8 @@ def test_the_coefficient_q0_and_census(tmp_path: Path):
     assert "IADD3+FFMA alternating, 0.973 a SMSP-cycle" in rows["issue"]["description"]
     lines = {(d["kind"], d["row"]): d for d in csv.DictReader(io.StringIO(census_csv))}
     assert set(lines) == ({("IMMA16832", "M"), ("ALU", "A"), ("IMMA16832", "JIM")}
-                          | {(k, r) for k in ["IMMA16832", *SM.SCALAR] for r in ("JIM", "issue")})
-    assert all(lines[k, "issue"]["cycles"] == "1" for k in ["IMMA16832", *SM.SCALAR])
+                          | {(k, r) for k in ["IMMA16832", *SM.SCALAR, *SM.ISSUE_ONLY] for r in ("JIM", "issue")})
+    assert all(lines[k, "issue"]["cycles"] == "1" for k in ["IMMA16832", *SM.SCALAR, *SM.ISSUE_ONLY])
     assert lines["ALU", "issue"]["runs"] == "r20261017-072600-1397 r20261017-081119-98b5"
     scale = 0.98 / (5.125 / 5.1)
     assert abs(float(lines["IMMA16832", "JIM"]["cycles"]) - 5.1 * scale) < 1e-5

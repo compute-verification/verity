@@ -9,7 +9,8 @@
 // 0xA5-poisoned sink, which every thread must overwrite, and the no-write control must leave it poisoned (gk::poison_gate);
 // NVML's SM clock is read before and after every timed rep.
 //
-// Build one binary per GROUP (0..NGROUPS-1): nvcc -O3 -std=c++17 -arch=sm_80 -DGROUP=g sm80.cu -ldl.
+// Build one binary per GROUP (0..11; 8..11 are M1c's extension and the shared-memory loads): nvcc -O3 -std=c++17
+// -arch=sm_80 -DGROUP=g sm80.cu -ldl.
 #include "../gpu_kit/bench.cuh"
 #include "../receipts/receipt_folds.cuh"
 
@@ -222,15 +223,18 @@ __device__ __forceinline__ void init_ops(uint32_t lane, uint32_t* a, uint32_t* b
 // A lane program X is one op, or two ops alternating (X = P + 16 Q, Q = OP_NONE for one op). Each op runs on its own bank
 // of 8 registers (a second op of the same file uses the second bank), so the 8 chains a bank give ILP 8.
 enum { OP_IADD3 = 0, OP_FFMA = 1, OP_LOP3 = 2, OP_IMAD = 3, OP_DP4A = 4, OP_SHFL = 5, OP_POPC = 6, OP_LDS = 7, OP_IADD3R = 8,
-       OP_LOP3I = 9, OP_NONE = 15 };
+       OP_LOP3I = 9, OP_LDSM4 = 10, OP_LDSM2 = 11, OP_LDSM1 = 12, OP_LDS128 = 13, OP_NONE = 15 };
 constexpr int lane1(int p) { return p + 16 * OP_NONE; }
 constexpr int lane2(int p, int q) { return p + 16 * q; }
 constexpr int LANE_IADD3 = lane1(OP_IADD3), LANE_MIX = lane2(OP_IADD3, OP_FFMA);
+constexpr bool is_ldsm(int op) { return op == OP_LDSM4 || op == OP_LDSM2 || op == OP_LDSM1; }
 
 struct Lane {
-  uint32_t r[8], q[8], l[8], k;
+  uint32_t r[8], q[8], l[8], m[8], v[8], k;
   float f[8], g[8];
 };
+// shared-memory regions (bytes) of the ldmatrix and LDS.128 chains; LDS.32's is at 0
+constexpr uint32_t LDSM_OFF = 16384, V_OFF = 8192;
 
 template <int OP>
 __device__ __forceinline__ void op1(Lane& s, int bank, int i) {
@@ -250,6 +254,19 @@ __device__ __forceinline__ void op1(Lane& s, int bank, int i) {
   if (OP == OP_SHFL) asm volatile("shfl.sync.bfly.b32 %0,%1,1,0x1f,0xffffffff;" : "=r"(r[j]) : "r"(r[n]));
   if (OP == OP_POPC) asm volatile("popc.b32 %0,%1;" : "=r"(r[j]) : "r"(r[n]));
   if (OP == OP_LDS) asm volatile("ld.shared.u32 %0,[%0];" : "+r"(s.l[j]));
+  // ldmatrix: lane L's register 0 is matrix 0's row L / 4, word L % 4, which holds L's own row address (init_r); the
+  // other matrices' words are loaded and dropped. LDS.128: each lane's 16 bytes start with their own address, then 0s.
+  uint32_t d1, d2, d3;
+  if (OP == OP_LDSM4)
+    asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0,%1,%2,%3},[%4];"
+                 : "=r"(s.m[j]), "=r"(d1), "=r"(d2), "=r"(d3) : "r"(s.m[j]));
+  if (OP == OP_LDSM2)
+    asm volatile("ldmatrix.sync.aligned.m8n8.x2.shared.b16 {%0,%1},[%2];" : "=r"(s.m[j]), "=r"(d1) : "r"(s.m[j]));
+  if (OP == OP_LDSM1) asm volatile("ldmatrix.sync.aligned.m8n8.x1.shared.b16 {%0},[%1];" : "=r"(s.m[j]) : "r"(s.m[j]));
+  // words 1-3 hold 0 and are folded into the address (ptxas narrows a v4 load whose other words are dead to LDS.32)
+  if (OP == OP_LDS128)
+    asm volatile("ld.shared.v4.u32 {%0,%1,%2,%3},[%0];\n\txor.b32 %0,%0,%1;\n\txor.b32 %0,%0,%2;\n\txor.b32 %0,%0,%3;"
+                 : "+r"(s.v[j]), "=&r"(d1), "=&r"(d2), "=&r"(d3));
 }
 constexpr int q_bank(int p, int q) { return p == q || (p != OP_FFMA) == (q != OP_FFMA) ? 1 : 0; }
 template <int X>
@@ -259,14 +276,17 @@ __device__ __forceinline__ void lane_op(Lane& s, int i) {
   else if (i & 1) op1<Q>(s, q_bank(P, Q), i >> 1);
   else op1<P>(s, 0, i >> 1);
 }
-// The banks program X writes (1 r, 2 q, 4 f, 8 g, 16 l), so the sink reads only those and no unused bank stays live.
-enum { B_R = 1, B_Q = 2, B_F = 4, B_G = 8, B_L = 16 };
+// The banks program X writes (1 r, 2 q, 4 f, 8 g, 16 l, 32 m, 64 v), so the sink reads only those and no unused bank
+// stays live.
+enum { B_R = 1, B_Q = 2, B_F = 4, B_G = 8, B_L = 16, B_M = 32, B_V = 64 };
 constexpr int bank_of(int op, int bank) {
-  return op == OP_NONE ? 0 : op == OP_LDS ? B_L : op == OP_FFMA ? (bank ? B_G : B_F) : (bank ? B_Q : B_R);
+  return op == OP_NONE ? 0 : op == OP_LDS ? B_L : is_ldsm(op) ? B_M : op == OP_LDS128 ? B_V
+       : op == OP_FFMA ? (bank ? B_G : B_F) : (bank ? B_Q : B_R);
 }
 constexpr int banks(int x) { return bank_of(x & 15, 0) | ((x >> 4) == OP_NONE ? 0 : bank_of(x >> 4, q_bank(x & 15, x >> 4))); }
+constexpr bool smem_op(int op) { return op == OP_LDS || is_ldsm(op) || op == OP_LDS128; }
 template <int X>
-constexpr bool uses_lds() { return (X & 15) == OP_LDS || (X >> 4) == OP_LDS; }
+constexpr bool uses_lds() { return smem_op(X & 15) || smem_op(X >> 4); }
 
 extern __shared__ uint32_t g_smem[];
 // LDS chains: chain j of a lane holds the shared address of word lane + 32 j, and that word holds its own address, so
@@ -282,10 +302,19 @@ __device__ __forceinline__ void init_r(Lane& s, uint32_t tid) {
     s.f[i] = 1.0f + (float)(s.r[i] & 0xffu) * 0x1p-12f;
     s.g[i] = 1.0f + (float)(s.q[i] & 0xffu) * 0x1p-12f;
     s.l[i] = base + 4 * (lane + 32 * i);
+    s.m[i] = base + LDSM_OFF + 512 * i + 16 * lane;
+    s.v[i] = base + V_OFF + 512 * i + 16 * lane;
   }
   s.k = (tid * 0x27d4eb2fu) | 1u;
   if (uses_lds<X>()) {
-    if (tid < 256) g_smem[tid] = base + 4 * tid;
+    if (tid < 256) {
+      const uint32_t j = tid >> 5, l = tid & 31;
+      g_smem[tid] = base + 4 * tid;
+      g_smem[(LDSM_OFF + 512 * j + 4 * l) / 4] = base + LDSM_OFF + 512 * j + 16 * l;
+      const uint32_t v = (V_OFF + 512 * j + 16 * l) / 4;
+      g_smem[v] = base + V_OFF + 512 * j + 16 * l;
+      g_smem[v + 1] = g_smem[v + 2] = g_smem[v + 3] = 0;
+    }
     __syncthreads();
   }
 }
@@ -298,6 +327,8 @@ __device__ __forceinline__ uint32_t consume(const Lane& s) {
     if (B & B_R) x += s.r[i];
     if (B & B_Q) x ^= s.q[i];
     if (B & B_L) x += s.l[i];
+    if (B & B_M) x += s.m[i];
+    if (B & B_V) x ^= s.v[i];
     if (B & B_F) x ^= __float_as_uint(s.f[i]);
     if (B & B_G) x += __float_as_uint(s.g[i]);
   }
@@ -780,6 +811,32 @@ static void beside() {
   spec<F, 64, lane2(OP_LOP3I, OP_FFMA)>(); spec<F, 64, lane2(OP_IADD3, OP_IMAD)>();
 }
 
+// M1c on sm_80 (the search's second extension, after FACET-BREAK beat sm_120's joint rows with an f16 MMA, #2244): each
+// form that sets a joint coefficient, beside the lane mixes M1 left out (other pipes, register reads, the operand loads),
+// interleaved at three densities and 4, 6 and 8 warps a SMSP, and warp-specialized; M1's IADD3+FFMA least as control.
+template <class F, int X>
+static void search_lane() {
+  mixu<F, 16, X, 4>(); mixu<F, 32, X, 4>(); mixu<F, 64, X, 4>();
+  mixu<F, 16, X, 8>(); mixu<F, 32, X, 8>(); mixu<F, 64, X, 8>();
+  mixu<F, 24, X, 6>(); mixu<F, 48, X, 6>();
+  spec<F, 32, X>(); spec<F, 64, X>();
+}
+template <class F>
+static void search() {
+  alone<F, 4>(); alone<F, 8, 4>();
+  mixu<F, 48, LANE_MIX, 8, 2>(); mixu<F, 32, LANE_MIX, 8, 3>(); mixu<F, 40, LANE_MIX, 6, 2>();
+  search_lane<F, lane1(OP_LOP3)>();
+  search_lane<F, lane1(OP_LOP3I)>();
+  search_lane<F, lane2(OP_LOP3, OP_IMAD)>();
+  search_lane<F, lane2(OP_LOP3, OP_FFMA)>();
+  search_lane<F, lane2(OP_LOP3I, OP_FFMA)>();
+  search_lane<F, lane2(OP_IADD3, OP_IMAD)>();
+  search_lane<F, lane2(OP_IMAD, OP_FFMA)>();
+  search_lane<F, lane2(OP_DP4A, OP_LOP3)>();
+  search_lane<F, lane2(OP_LDSM4, OP_FFMA)>();
+  search_lane<F, lane2(OP_LDS128, OP_IADD3)>();
+}
+
 int main() {
   int dev = 0;
   CK(cudaGetDevice(&dev));
@@ -829,6 +886,23 @@ int main() {
 #elif GROUP == 7
   form<HmmaSpF16k32>(); form<HmmaSpF16k16>(); form<HmmaSpTf32k16>(); form<DmmaF64>();
   form<ImmaS8k32>();  // the reference again, last, so drift across the run shows
+#elif GROUP == 8
+  // the shared-memory loads alone, beside FFMA and IADD3 (one pipe with issue?) and beside saturated IMMA; M1's lane
+  // gate (IADD3+FFMA alone) again, so this run's joint coefficients count
+  opalone<LANE_MIX>(); opalone<lane1(OP_IADD3)>(); opalone<lane1(OP_FFMA)>(); opalone<lane1(OP_DP4A)>();
+  opalone<lane1(OP_LDSM4)>(); opalone<lane1(OP_LDSM2)>(); opalone<lane1(OP_LDSM1)>(); opalone<lane1(OP_LDS128)>();
+  opalone<lane2(OP_LDSM4, OP_FFMA)>(); opalone<lane2(OP_LDS128, OP_FFMA)>(); opalone<lane2(OP_LDSM4, OP_IADD3)>();
+  opalone<lane2(OP_LDS128, OP_IADD3)>(); opalone<lane2(OP_DP4A, OP_LOP3)>(); opalone<lane2(OP_LOP3I, OP_FFMA)>();
+  spec<ImmaS8k32, 64, lane1(OP_LDSM4)>(); spec<ImmaS8k32, 64, lane1(OP_LDS128)>();
+  spec<ImmaS8k16, 64, lane1(OP_LDSM4)>(); spec<ImmaS8k16, 64, lane1(OP_LDS128)>();
+  search<ImmaS8k32>(); search<ImmaS8k16>();
+#elif GROUP == 9
+  search<ImmaS8m8k16>(); search<HmmaF16k16F32>();
+#elif GROUP == 10
+  search<HmmaF16k16F16>(); search<HmmaF16k8F32>();
+#elif GROUP == 11
+  search<HmmaTf32k8>(); search<HmmaF16k8F16>();
+  alone<ImmaS8k32, 4>(); mixu<ImmaS8k32, 48, LANE_MIX, 8, 2>();  // the reference again, last, so drift shows
 #endif
   printf("{\"probe\":\"tensor_kinds_sm80\",\"group\":%d,\"done\":true,\"num_sms\":%d}\n", GROUP, g_sms);
   return 0;

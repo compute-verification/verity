@@ -36,7 +36,9 @@ REF = "ImmaS8k32"
 MMA = re.compile(r"^(IMMA|HMMA|BMMA|DMMA)")
 #: lane op codes (sm80.cu's OP_*) -> (name, the SASS opcode pattern the gate counts)
 OPS = {0: ("iadd3", "IADD3"), 1: ("ffma", "FFMA"), 2: ("lop3", "LOP3*"), 3: ("imad", "IMAD"), 4: ("dp4a", "IDP.4A*"),
-       5: ("shfl", "SHFL.BFLY*"), 6: ("popc", "POPC"), 7: ("lds", "LDS*"), 8: ("iadd3r", "IADD3"), 9: ("lop3i", "LOP3*")}
+       5: ("shfl", "SHFL.BFLY*"), 6: ("popc", "POPC"), 7: ("lds", "LDS*"), 8: ("iadd3r", "IADD3"), 9: ("lop3i", "LOP3*"),
+       10: ("ldsm4", "LDSM.16.M88.4"), 11: ("ldsm2", "LDSM.16.M88.2"), 12: ("ldsm1", "LDSM.16.M88*"),
+       13: ("lds128", "LDS.128")}
 OP_NONE = 15
 #: SASS MMAs a PTX mma.sync, where not 1
 SASS_PER_PTX: dict[str, int] = {}
@@ -426,7 +428,12 @@ def render(s: dict) -> str:
 
 #: the scalar census kinds (sm_120's names where one exists) -> (row, the lanes whose per-op rate prices it)
 SCALAR = {"ALU": ("A", ["iadd3", "lop3"]), "FFMA": ("I", ["ffma"]), "IMAD": ("I", ["imad", "dp4a"]),
-          "XU": ("XU", ["popc"]), "SHFL": ("SHFL", ["shfl"]), "LDS32": ("LDSi", ["lds"])}
+          "IDP4A": ("I", ["dp4a", "imad"]), "XU": ("XU", ["popc"]), "SHFL": ("SHFL", ["shfl"]),
+          "LDS32": ("LDSi", ["lds"]), "LDS128": ("R6r", ["lds128"]), "LDSM_X1": ("LDSM_X1", ["ldsm1"]),
+          "LDSM_X2": ("LDSM_X2", ["ldsm2"]), "LDSM_X4": ("LDSM_X4", ["ldsm4"])}
+#: kinds with no pipe row, priced on the issue rows only: every instruction a profile counts that no row above holds
+#: (branches, barriers, cp.async's LDGSTS, the uniform datapath, stores, special registers)
+ISSUE_ONLY = ["NOROW"]
 ROWS = {
     "issue": "1 warp instruction a SMSP-cycle, every kind (the best scalar issue: IADD3+FFMA alternating, {iadd3+ffma} a "
              "SMSP-cycle)",
@@ -439,6 +446,10 @@ ROWS = {
     "XU": "XU: POPC + 2%",
     "SHFL": "SHFL.BFLY + 2%",
     "LDSi": "LDS.32 + 2% (one warp a SM-cycle: 128 B/SM/clk)",
+    "R6r": "LDS.128 {lds128} warp instructions a SMSP-cycle alone + 2%, each lane's 16 bytes its own address",
+    "LDSM_X1": "LDSM.16.M88 (ldmatrix x1) {ldsm1} warp instructions a SMSP-cycle alone + 2%",
+    "LDSM_X2": "LDSM.16.M88.2 (ldmatrix x2) {ldsm2} warp instructions a SMSP-cycle alone + 2%",
+    "LDSM_X4": "LDSM.16.M88.4 (ldmatrix x4) {ldsm4} warp instructions a SMSP-cycle alone + 2%",
     "JIM": "M1's issue facet: a(kind) #MMA + every other warp instruction 1 <= T SMSP-cycles, a the least (T - #other)/#MMA "
            "over every gated program that holds the kind's MMA (beside IADD3+FFMA, which issues {iadd3+ffma} a SMSP-cycle "
            "alone, beside IADD3 and the other lanes, duo, alone); every coefficient x 0.98 (2% noise) / {margin} "
@@ -498,7 +509,7 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
     fmt = {k: f"{v:.3f}" for k, v in pairs.items()}
     fmt.update({k: f"{rate[c][0] / 4:.3f}" for c, (_, lns) in SCALAR.items() for k in lns[:1] if c in rate})
     if issue_runs:
-        for kind in sorted(alone) + list(SCALAR):
+        for kind in sorted(alone) + list(SCALAR) + ISSUE_ONLY:
             lines.append(f"{kind},issue,,,1,,,,{' '.join(sorted(issue_runs))}")
         cites["issue"] |= issue_runs
     for kind, (v, runs) in sorted(alone.items()):
@@ -522,7 +533,7 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
             lines.append(f"{kind},JIM,,,{v * scale:.6g},,,,{' '.join(sorted(runs))}")
             cites["JIM"] |= runs
         cites["JIM"] |= ext_runs
-        for other in SCALAR:
+        for other in list(SCALAR) + ISSUE_ONLY:
             lines.append(f"{other},JIM,,,{scale:.6g},,,,{' '.join(sorted(cites['JIM']))}")
         fmt.update(margin=f"{1 + m:.4f}", ext=" ".join(sorted(ext_runs)))
     rows = ["row,status,runs,description"]
