@@ -42,7 +42,7 @@ theorem cEval_zero (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (cs : Zc.Coin
     ZerocheckMasked.evalL ((ZerocheckMasked.computedC lay (ZcZ.proof lay h m cs tr) cs.z).add
       (ZerocheckMasked.fcL lay (ZcZ.proof lay h m cs tr))) h = 0 := by
   rw [ZerocheckMasked.c_eval_eval lay h _ _ (m - 6) (zcZ_masks lay h m cs tr) cs.z]
-  exact Zerocheck.add_self' _
+  exact ZerocheckMasked.add_self' _
 
 /-- **`zerocheck final a·b` vanishes at the masked prover's pads** where `h_ab = h_a·h_b`, for a trace satisfying the
 block R1CS bitwise and outer coins other than `1`. -/
@@ -53,8 +53,8 @@ theorem finalAB_zero (lay : Zk.PadLayout) (h : Array F128) {m : ℕ} (hm : 14 �
       (m - 6)).add (ZerocheckMasked.prodL lay (ZcZ.proof lay h m cs tr))) h = 0 := by
   have hf := Zc.fold_final hm cs tr hR1CS hc1
   rw [Zc.zcFold_fst (cs.r m) (Zc.proof m cs tr) (fun i => #[cs.ρ i]) (pushes cs.ρ (m - 6)) (m - 6)
-    (fun k hk => by rw [pushes_get _ _ k hk]; rfl) cs.z (m - 6) le_rfl] at hf
+    (fun k hk => (pushes_get cs.ρ (m - 6) k hk).symm) cs.z (m - 6) le_rfl] at hf
   rw [ZerocheckMasked.final_eval lay h _ _ (m - 6) hn (zcZ_masks lay h m cs tr) hab, hf]
-  exact Zerocheck.add_self' _
+  exact ZerocheckMasked.add_self' _
 
 end FlockComplete.Replay
