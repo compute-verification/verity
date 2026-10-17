@@ -227,7 +227,7 @@ def main(argv: list[str]) -> int:
         import socket
 
         by = (getattr(ns, "by", None) or os.environ.get("RESEARCH_LANE") or f"{os.environ.get('USER', '?')}@{socket.gethostname()}").replace(" ", "_")
-        cmd = lease.extend_argv(int(ns.hours * 3600), by) if argv[0] == "extend" else ["sh", f"{lease.LEASE_DIR}/lease.sh", "show"]
+        cmd = lease.remote_argv("extend", str(int(ns.hours * 3600)), by) if argv[0] == "extend" else lease.remote_argv("show")
         try:
             r = remote.ssh_run(ssh_base(ns.target), cmd, timeout=90)
         except (remote.Refused, OSError) as e:

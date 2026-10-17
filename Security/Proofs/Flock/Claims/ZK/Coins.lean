@@ -8,6 +8,8 @@ import Proofs.Flock.Claims.ZK.Interact
   answered, passes the check and reads as `c`'s coin (`TCons`); a rewind at `c` is a binding failure at the first
   opening that passes the check and reads as another coin. `cls_log`, `fcls_eq_mism`: those checks' calls are in the
   classification's.
+* `allOk_log`, `strat_log_cons`: the check of an opening after a passing prefix is among the committed-coin prover's
+  calls for that round.
 -/
 
 namespace Claims.ZKMal
@@ -38,6 +40,31 @@ theorem allOk_eval (acc : ℕ → Msg → OC Bool) : ∀ (ms : List Msg) (j : �
         · intro h i hi
           have := h (i + 1) (by simpa using hi)
           simpa [Nat.add_assoc, Nat.add_comm 1] using this
+
+/-- When the checks before position `l` pass, the check at `l` is among `allOk`'s calls. -/
+theorem allOk_log (acc : ℕ → Msg → OC Bool) : ∀ (ms : List Msg) (j l : ℕ) (hl : l < ms.length),
+    (∀ i (hi : i < l), ((acc (j + i) (ms[i]'(by omega))).eval H).1 = true) →
+      ((acc (j + l) ms[l]).eval H).2 ⊆ ((allOk acc j ms).eval H).2
+  | [], _, _, hl, _ => absurd hl (by simp)
+  | m :: ms, j, 0, _, _ => by
+      simp only [allOk, ocBind_eval, Nat.add_zero, List.getElem_cons_zero]
+      exact List.subset_append_left _ _
+  | m :: ms, j, l + 1, hl, h => by
+      have h0 := h 0 (by omega)
+      simp only [Nat.add_zero, List.getElem_cons_zero] at h0
+      simp only [allOk, ocBind_eval, h0, ite_true]
+      refine List.Subset.trans ?_ (List.subset_append_right _ _)
+      have := allOk_log acc ms (j + 1) l (by simpa using hl) fun i hi => by
+        have := h (i + 1) (by omega)
+        simpa [Nat.add_assoc, Nat.add_comm 1] using this
+      simpa [Nat.add_assoc, Nat.add_comm 1] using this
+
+/-- A committed-coin prover's checks of the openings so far are among its next message's calls. -/
+theorem strat_log_cons {Coin : Type} (hello abort : Msg) (dec : Msg → Coin) (acc : Msg → ℕ → Msg → OC Bool)
+    (gen : List Coin → OC Msg) (a ρ : Msg) (ops : List (Msg × Msg)) :
+    ((allOk (acc ρ) 0 (ops.map Prod.snd)).eval H).2 ⊆ ((strat hello abort dec acc gen ((a, ρ) :: ops)).eval H).2 := by
+  simp only [strat, ocBind_eval]
+  exact List.subset_append_left _ _
 
 theorem strat_eval_nil {Coin : Type} (hello abort : Msg) (dec : Msg → Coin) (acc : Msg → ℕ → Msg → OC Bool)
     (gen : List Coin → OC Msg) : ((strat hello abort dec acc gen []).eval H).1 = hello := by
@@ -77,6 +104,33 @@ theorem resp_eq_some {τ : List (Msg × Out)} {i : ℕ} {m : Msg} :
 
 theorem resp_take {τ : List (Msg × Out)} {n i : ℕ} (h : i < n) : resp (τ.take n) i = resp τ i := by
   simp [resp, h]
+
+/-- A round answered with a message is followed by another while rounds are left. -/
+theorem interact_length_of_resp (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (i : ℕ) (m : Msg), resp (interact ask pm n hist) i = some m → i + 1 < n →
+      i + 1 < (interact ask pm n hist).length
+  | 0, _, _, _, _, hn => absurd hn (by omega)
+  | n + 1, hist, i, m, h, hn => by
+      simp only [interact] at h ⊢
+      cases hb : ask (hist.map Prod.fst ++ [pm hist]) with
+      | msg m' =>
+          rw [hb] at h
+          simp only [List.length_cons]
+          cases i with
+          | zero =>
+              obtain ⟨n', rfl⟩ : ∃ n', n = n' + 1 := ⟨n - 1, by omega⟩
+              have := interact_head ask pm n' (hist ++ [(pm hist, m')])
+              have hpos : 0 < (interact ask pm (n' + 1) (hist ++ [(pm hist, m')])).length := by
+                rcases hl : interact ask pm (n' + 1) (hist ++ [(pm hist, m')]) with _ | ⟨p, l⟩
+                · rw [hl] at this; simp at this
+                · simp
+              omega
+          | succ i =>
+              rw [resp_cons_succ] at h
+              have := interact_length_of_resp ask pm n _ i m h (by omega)
+              omega
+      | acc => rw [hb] at h; cases i <;> simp [resp] at h
+      | rej => rw [hb] at h; cases i <;> simp [resp] at h
 
 theorem coinAt_eq_some {Coin : Type} {K : ℕ} (c : Fin K → Coin) (j : ℕ) (b : Coin) :
     coinAt c j = some b ↔ ∃ h : j < K, c ⟨j, h⟩ = b := by

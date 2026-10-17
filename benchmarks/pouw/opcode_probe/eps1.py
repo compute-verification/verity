@@ -3,7 +3,7 @@
   python eps1.py facets OUT/rows.jsonl... [--margin 0.02] [--prior rows.csv] [--emit EPOCH]
       # frontier.cu's MMA + X points (every run given) -> facets (SMSP-cycles a warp instruction, x (1 - margin)), with
       # the points each is tight at; --prior adds the points the published K* facets were fitted to (their vertices),
-      # --emit prints the facets as rows.csv and census.csv lines
+      # --emit prints the facets as rows.csv and census/EPOCH.csv lines
   python eps1.py side OUT/rows.jsonl                     # side.cu: honest alone, and each unit alone and beside it
   python eps1.py clock OUT/sustain.jsonl [--skip-s 3]    # power.cu: each kernel's clock, power and work rate a phase
   python eps1.py uniform OUT                             # uniform.cu: issue slots a uniform instruction, each setting
@@ -144,7 +144,7 @@ def cmd_facets(a) -> int:
                 print(f'rows.csv: {new}{i},joint,{cite},"{desc}"')
                 for k, c in (("MMA", f["MMA"]), (kind, f["X"])):
                     if c > 0:
-                        print(f"census.csv: {k},{new}{i},,,{c:.9g},,{a.emit},,{cite}")
+                        print(f"census/{a.emit}.csv: {k},{new}{i},,,{c:.9g},,{a.emit},,{cite}")
             continue
         print(f"## MMA + {x} ({pat}); points (MMA, {x}) a SMSP-cycle:")
         for m, v, n in sorted(pts):
