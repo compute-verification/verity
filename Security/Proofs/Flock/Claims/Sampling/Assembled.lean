@@ -58,7 +58,8 @@ import Proofs.Flock.SamplingBoundary
   port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
   gates compute `Netlist.eval` is proved (`universal_correct`); the deployed record's unit is the Definition's
   (`SamplingDeploy.universalIs_deploy`).
-* `hComplete : Complete H D P δc`: waits on the reference prover (ruling 4), so `P` and `δc` are any.
+* `hComplete : Complete H D`: of the record's reference prover (`D.P`) at its error (`D.δc H`); it waits on that
+  prover (ruling 4).
 * `hZK : ZK H D Pz S εzk γzk`: the masked sessions' zero knowledge with the leaf layer's simulator, its binding term
   `γzk` times `Fork`'s collisions among the honest prover's calls in two real runs on one nonce (#2201); no branch
   proves it yet, so `Pz`, `S`, `εzk` and `γzk` are any.
@@ -83,11 +84,11 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope H D)
     (hopen : OpenCallsLe H D) (huniv : UniversalIs D)
-    {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H D P δc)
+    (hComplete : Complete H D)
     {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (Pz : Wit → Prover (Nz × Ωz)) (S : SimLeak)
     (εzk γzk : Msg → ℝ) (hZK : ZK H D Pz S εzk γzk) :
     ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ KS H D ∧ KSCount H D ∧ Bits H D ∧
-      Efficient H D FlockDeploy.zkStepPoly ∧ Complete H D P δc ∧ ZK H D Pz S εzk γzk := by
+      Efficient H D FlockDeploy.zkStepPoly ∧ Complete H D ∧ ZK H D Pz S εzk γzk := by
   have hbind : Binding D := Binding_of_hm96 D own at_ row salt π layer hcommit hrow
   have hscope : ScopeMatches D := scopeMatches_of D hslots hprog
   have hrefuse : Refuses H D := refuses_of H D hscope hchecks
