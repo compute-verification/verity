@@ -14,10 +14,13 @@ Which form each takes:
   checked by measurement (Daniel, 8 Oct): a corpus program that runs faster than a facet falsifies it.
 * (I2) and the uniform part of (I4): `WordsWritten`, the ISA's `ω` (P12). Lemma 2 (`Accounting.Guarantees.TS.OutputCount`)
   is its counting; the ISA fact that an instruction writes at most `ω` words is the assumption.
-* (I3) `ScalarRoute`: SCALAR-ROUTE as restated at 06:15Z, at its floors `(q, q_T, b_T) = (2.03, 1.22, 3.5)`. QSTAR
-  derives it from class P and ISA-CAP (each sm_120 ALU instruction creates at most 32/7 incidences); class P is a
-  modeling restriction and ISA-CAP is likely false as stated (QSTAR r3: IMAD.WIDE 8, IDP 5), so it stays an
-  assumption.
+* (I3) `ScalarRoute`: SCALAR-ROUTE at its floors `(q, q_T, b_T)`, which QSTAR's joint statement gives from class P
+  and a per-instruction cap `κ` (every sm_120 ALU instruction creates at most `κ` incidences): `q = 2.03` for
+  `κ < 27.2` a slot, `q_T = 1.22` for `κ ≤ 128`, and `b_T = 32(28 − 1.03κ)/(c_L − κ)` bytes a word (`c_L = 216` in
+  any format, 128 single-field), 3.0 at `κ = 8`. The floors are the model's parameters, so every statement here holds
+  at every `κ`. ISA-CAP (`κ = 32/7`, which gave 3.5) is false (REFEREE Q4: an IDP.4A writes 5 incidences into one
+  word, a signed IMAD.WIDE 8) and is no premise. No cap is proved yet and class P is a modeling restriction, so it
+  stays an assumption.
 * (I5) `SideUnits` (measured per-word vectors, P11) and `NoSum` (NOSUM, P13), a measured statement: no unit outside
   the menu heads a fresh word.
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
@@ -52,14 +55,18 @@ def FacetCeilings (G : Machine K R) (P : Run K) : Prop :=
       (G.smClocked r = false → G.load P.n r ≤ G.fmax * P.time)
 
 /-- `accounting-ts-words-written` (ISA, P12). **An instruction writes at most `ω` words**: the owned right fixed words
-headed by writer kind `t` are at most `ω_t` times the instructions of `t`'s class the labelling gives them. -/
+headed by writer kind `t` are at most `ω_t` times the instructions of `t`'s class the labelling gives them. An MMA
+kind's `ω_t` counts one committed word a slot: design A's packed `T_1` words, two a s32 slot through int8 B entries
+`s_j + 64·s_j′` (REFEREE S14), fit no route at the stated `ω` and floors (as writer words they exceed `ω`, as vector
+words their ½–1 op of extraction is below `q`) and need their own (a side unit) or 2-bit entries. -/
 def WordsWritten (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ t, A.words (.writer t) ≤ Z.omega t * A.nword (.writer t) (Z.cls t)
 
-/-- `accounting-ts-scalar-route` (assumed; QSTAR: from class P and ISA-CAP). **SCALAR-ROUTE**, in §0.6's units
-(lane-instructions a word, net of the mandatory fold and of operand delivery): the gather-free vector-headed words
-cost at least `q` lane-instructions each (2.03), and the table words served from level `l` at least `q_T`
-lane-instructions (1.22) and `b_T` bytes read from `l` (3.5) each. -/
+/-- `accounting-ts-scalar-route` (assumed; QSTAR's joint statement, from class P and a per-instruction cap `κ`).
+**SCALAR-ROUTE**, in §0.6's units (lane-instructions a word, net of the mandatory fold and of operand delivery): the
+gather-free vector-headed words cost at least `q` lane-instructions each (2.03, for `κ < 27.2` a slot), and the table
+words served from level `l` at least `q_T` lane-instructions (1.22, for `κ ≤ 128`) and `b_T` bytes read from `l` each
+(`32(28 − 1.03κ)/(c_L − κ)`, 3.0 at `κ = 8`). -/
 def ScalarRoute (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   Z.q * A.words .vector ≤ 32 * ∑ k ∈ Z.vec, A.nword .vector k ∧
     ∀ l, Z.qT * A.words (.table l) ≤ 32 * ∑ k ∈ Z.vec, A.nword (.table l) k ∧

@@ -88,7 +88,12 @@ def DIdealFloor : Prop :=
 adaptive work share and whose check is the drawn units' proofs, under (I1)–(I6) as in `DIdeal`, (C1)–(C3) with (I8)
 as `ProofsSound`, and any `Λ > 0` bounding the round's saving per unit of detection (`RoundGame.BudgetAt Λ`, Λ's
 definition): for every certificate `π`, outside an event of probability at most `δ`, every accepted run satisfies
-(2.7) with `ε_sample = (Λ − 1/ln(1/p))·(ln(1/δ′)/S)·κ(π)` subtracted in the first factor. -/
+(2.7) with `ε_sample = (Λ − 1/ln(1/p))·(ln(1/δ′)/S)·κ(π)` subtracted in the first factor. This is Lemma C(b), at a
+given `Λ`. Lemma C(a), `Λ ≤ max(Λ_luck, Fan_Q/s)`, is not stated: it needs (C4), that every unit holding a C1′
+derivation a steer passes through (residual adds included) has `Q`-weight at least its consumers' work share over a
+stated Fan cap, or a closure that checks `h = h_prev + y` (REFEREE S13). Without it, a direct write to the residual
+steers every consumer from a unit of near-zero `Q`-mass, and `BudgetAt` holds only at a `Λ` of about the steered
+share over that mass: this bound stays true, and is vacuous there. -/
 def CompilerC : Prop :=
   ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
     [Nonempty R] [Nonempty F] [Nonempty X]
@@ -107,7 +112,10 @@ def CompilerC : Prop :=
 /-- **Corollary D3 (credit at the floor).** Given (Π), (RD) and (Lk) as in `DecompositionD`, for every labelled
 program ♭ and certificate `π`: outside an event of probability at most `δ`, every accepted run satisfies
 `T(M)/T_cred ≥ 1 − ε^♭_skip − ε^♭_cert − ε^♭_route − ε^♭_mand − ε^♭_luck − ε^♭_adapt`; when ♭ is on the known menu
-(and its skippable work, `d̄` and `ā` are `≥ 0`) every term is `≥ 0`; and `T(H) = γ_♭·T_cred`. -/
+(and its skippable work, `d̄` and `ā` are `≥ 0`) every term is `≥ 0`; and `T(H) = γ_♭·T_cred`. It holds at every ♭,
+`π` and fold menu, so the fold's instructions a word `f` are no hypothesis. Its numbers (`ε^♭ ≤ 0.3%`) need
+`f ≥ f* = 2.53` (REFEREE X1; `R_eff ≥ 1.69` for XOR-in): below it JI3e_1 binds honest, where `S_V` at `q = 8` (eight
+IDP.4A a word) is cheaper than `T_κ`, and the terms reach 0.83–3.0% on 8B's linears at `R = 1`. -/
 def FloorCreditD3 : Prop :=
   ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
     [Nonempty R] [Nonempty F] [Nonempty X]
@@ -157,7 +165,8 @@ def RoutesOffD2 : Prop :=
 
 /-- **T1 (tensor slot counting).** A program that commits `N` fresh words, each read whole by the fold from its own
 slot write of a tensor instruction (freshness makes the map injective), holds the tensor pipe at least `N/ρ_T`
-cycles: `Σ_i c(i) n_i ≥ N/ρ_T`. -/
+cycles: `Σ_i c(i) n_i ≥ N/ρ_T`. Injectivity is the premise (one word a slot): design A's packed `T_1` words, two a
+s32 slot (REFEREE S14), are outside it. -/
 def TensorSlotCount : Prop :=
   ∀ (ι : Type) [Fintype ι] [Nonempty ι] (w c n : ι → ℕ) (N : ℕ) (slot : Fin N → SlotWrite ι w n),
     (∀ i, 0 < c i) → Function.Injective slot → (N : ℝ) / rhoT w c ≤ ∑ i, (c i : ℝ) * n i

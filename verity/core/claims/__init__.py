@@ -255,9 +255,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "a uniform instruction), so the owned right words it heads are at most ω per instruction",
           "TS words per instruction", "measured"),
     Entry("accounting-ts-scalar-route", "assumption",
-          "SCALAR-ROUTE: every right fresh gather-free vector-headed committed word costs at least 2.03 lane-instructions "
-          "net of the fold and of operand delivery, and one whose production reads a data-dependent load at least 1.22 "
-          "lane-instructions and 3.5 bytes read from its memory level (QSTAR: from class P and ISA-CAP)",
+          "SCALAR-ROUTE at a per-instruction cap κ (every ALU instruction creates at most κ incidences): every right "
+          "fresh gather-free vector-headed committed word costs at least 2.03 lane-instructions net of the fold and of "
+          "operand delivery (for κ < 27.2 a slot), and one whose production reads a data-dependent load at least 1.22 "
+          "lane-instructions (for κ ≤ 128) and 32(28 − 1.03κ)/(c_L − κ) bytes read from its memory level, 3.0 at κ = 8 "
+          "(QSTAR's joint statement, from class P and the cap κ; no cap is proved, and ISA-CAP's 32/7 is false)",
           "SCALAR-ROUTE", "conjectured"),
     Entry("accounting-ts-side-units", "assumption",
           "A side unit's committed words cost at least its measured per-word vector", "TS side units", "measured"),
