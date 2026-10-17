@@ -12,6 +12,7 @@
   and GP-01 recomposed (``eos-truncated``); then, with a rank profile (default ``derived_<ROLE>_tp<W>``; ``--fold-profile ''``
   = collective-level only, named), the per-rank fold Match (``tp-fold-match``).  A leased item's capture and control each hold the
   task's GPUs from right before their engine to their exit (``Row.run_gpu``); everything after them runs on the CPU, unleased.
+  ``--match-phase gpu`` runs the capture and control alone (no Build needed: they can overlap it), ``--match-phase cpu`` the rest.
 * **Commit**: the manifest over the W ranks, complete, then ``tp-commit`` with the windowed staging in its environment
   (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and a config run's ``VERITY_STAGING_BOUNDED``: flags it does not have) and ``--require-fold-match``
   when a fold Match is on disk.  The ranks run the guarded-max FA2 tap build and every tap the manifest names the family of
@@ -32,6 +33,7 @@ single-GPU row (``row_stages``).
 from __future__ import annotations
 
 import glob
+import json
 import os
 import shutil
 import time
@@ -324,11 +326,12 @@ class TpRow(Row):
     def match(self) -> None:
         """The capture and the control, the GPU legs, each under the item's lease when it has one (`Row.run_gpu`: all the task's GPUs from
         right before the leg's engine to its exit, recorded in ``match/lease/<leg>/``); the check, the served-shape derives and the fold
-        Match after them, on the CPU, with no device and no lease."""
-        cm, M = self.cm, self.M
+        Match after them, on the CPU, with no device and no lease.  ``--match-phase gpu`` runs the GPU legs alone, which need no Build, and
+        stops the row; ``--match-phase cpu`` runs the rest over the legs ``match/gpu_legs.json`` records."""
+        cm, M, phase = self.cm, self.M, self.cm.match_phase
         to_m, to_f = cm.match_timeout or 3600, cm.fold_timeout or 7200
         self.to_b = self.cb.build_timeout or 7200
-        for r in range(self.W):
+        for r in range(self.W if phase != "gpu" else 0):
             if not R.derived_ok(f"{self.rank(r)}/build_step"):
                 self.verdict("match", "FAIL", f"no step Program for rank {r} ({self.rank(r)}/build_step): Build first")
                 raise Stop(11)
@@ -337,12 +340,27 @@ class TpRow(Row):
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", *self.engine)
         t0 = int(time.time())
         self.tl("stage.match", "start")
-        rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
-                              lease_dir=f"{M}/lease/capture", kept=MATCH_LEG_KEPT)
-        ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
-        self.log(f"match capture rc={rc_cap} {(ranks + ' ' if ranks else '')[:300]}")
-        rc_ctl = self.run_gpu("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"],
-                              lease_dir=f"{M}/lease/control", kept=MATCH_LEG_KEPT)
+        if phase == "cpu":
+            legs = R.load_json(f"{M}/gpu_legs.json")
+            if not legs:
+                self.verdict("match", "FAIL", f"MATCH_PHASE=cpu without {M}/gpu_legs.json: run the GPU legs first (--match-phase gpu or all)")
+                raise Stop(11)
+            rc_cap, rc_ctl = legs["capture_rc"], legs["control_rc"]
+            self.log(f"match: MATCH_PHASE=cpu over the GPU legs already in {M} (capture rc={rc_cap}, control rc={rc_ctl})")
+        else:
+            rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
+                                  lease_dir=f"{M}/lease/capture", kept=MATCH_LEG_KEPT)
+            ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
+            self.log(f"match capture rc={rc_cap} {(ranks + ' ' if ranks else '')[:300]}")
+            rc_ctl = self.run_gpu("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"],
+                                  lease_dir=f"{M}/lease/control", kept=MATCH_LEG_KEPT)
+            with open(f"{M}/gpu_legs.json", "w") as f:
+                json.dump({"capture_rc": rc_cap, "control_rc": rc_ctl}, f)
+        if phase == "gpu":
+            ok, wall = "PASS" if rc_cap == 0 and rc_ctl == 0 else "FAIL", int(time.time()) - t0
+            self.verdict("match-gpu", ok, f"rc={rc_cap}/{rc_ctl} wall={wall}s: the check and the fold Match run with --match-phase cpu")
+            self.tl("stage.match", "end", ("ok", ok), ("wall_s", wall))
+            raise Stop(0 if ok == "PASS" else 11)
         rc_chk = self.run_tl("match.check", to_m, f"{M}/check.log", self.cli("tp-match", "--arm", "check", "--out", M, *br))
         chk = R.tp_check_line(M)
         self.log(f"match check rc={rc_chk}: {chk or 'no tp2_match.json'}")

@@ -419,6 +419,9 @@ class SingleRow(Row):
 
     def match(self) -> None:
         d, cm = self.d, self.cm
+        if cm.match_phase == "gpu":
+            self.verdict("match", "FAIL", "MATCH_PHASE=gpu is the TP Match's: a single-GPU row runs all or cpu")
+            raise Stop(12)
         sb, st = max(1, self.B), max(1, (self.I + self.O + 287) // 288)
         to = cm.match_timeout or min(CAP, 1800 * sb * st)
         to_c = cm.compare_timeout or min(CAP, 600 * max(sb, 4) * st)
