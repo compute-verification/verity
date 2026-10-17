@@ -28,7 +28,7 @@ filled with the commit strings of fixed digests under its own salts, kinds `fixe
   obligation of the server's definition, `ZkServer.Ref`: at honest worker values, its frame is `P`'s message.
 * `split`: for every worker, that holds but with probability `∑ ε` over the check coins, the masked checks' soundness
   `ZkServer.CheckSound ε`, a second obligation of the server's definition (exact recomputation meets it at `ε = 0`,
-  `checkSound_exact`).
+  `checkSound_exact`; the server that recomputes everything meets both, `solo_ok`).
 * `zk_server`: zero knowledge carries over from `ZKmalR` of the reference prover with a guessing loss: the released,
   scheduled transcript is within a factor `k + 1` of `leaky`'s, the simulator that guesses the stop round, plus
   `(k + 1)·(ε_zk + γ·Fork)` and `∑ ε`. `Flock.zk_server_ref` is it at `refP` and `Flock.zk_deployZk_ref`.
@@ -581,6 +581,27 @@ theorem zk_server {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [None
           push_cast
           ring
   linarith
+
+/-- **The server that recomputes everything**: one recomputed slot a round, `P`'s message. -/
+def solo {W R : Type} (H : Msg → Msg) (P : W → Prover R) : ZkServer W R where
+  Chk := Unit
+  Val := Msg
+  nS _ _ := 1
+  kind _ _ _ := .recomputed
+  cst _ _ _ := []
+  own _ _ _ _ _ := []
+  recomp x _ _ w ρ h _ := (((P w).next x h ρ).eval H).1
+  mask _ _ _ _ _ v := v
+  rel _ _ _ _ _ _ _ _ _ := true
+  honest x _ _ w ρ h := (((P w).next x h ρ).eval H).1
+  frame _ _ v := v 0
+  stop := []
+  sched _ j := j
+
+/-- `solo` meets both obligations: the split's hypotheses are not vacuous. -/
+theorem solo_ok {W R : Type} (H : Msg → Msg) (P : W → Prover R) (x : Msg) (w : W) :
+    (solo H P).Ref H P x w ∧ (solo H P).CheckSound fun _ _ _ => 0 :=
+  ⟨fun _ _ => rfl, fun _ _ _ _ _ _ _ _ hm _ => nomatch hm⟩
 
 /-- **Exact recomputation is sound**: a masked check that compares with the honest value meets `CheckSound` at `0`. -/
 theorem checkSound_exact {W R : Type} (S : ZkServer W R)
