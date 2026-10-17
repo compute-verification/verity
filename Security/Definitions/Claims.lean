@@ -19,7 +19,8 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
 * (16 Oct) Zero knowledge is against a malicious verifier of the protocol's rounds, with a black-box simulator
   (`ZKmalR`), and its bound adds the probability that the simulator's own SHA-512 calls hold a collision (`simLog`):
   the coin commitment binds only computationally. The form first frozen, `ZKmal`, held only at `ε_zk ≥ 1`. The
-  simulator's cost is its expected calls over its coins (`SimCost`).
+  simulator's cost is its expected calls over its coins (`SimCost`). Flock's rounds are the masked verifier's
+  `D.V.k` plus the `Hello` that commits every coin (`Flock.ZK`), since `D.V` models the coins in the clear.
 * Efficiency is the structural cost claims (`ExtractRunsLe`, `ExtractRunsExpLe`, `ERepCost`: reruns of the prover;
   `RP.eval` also counts SHA-512 calls) and a separate stated complexity claim for the decoder's pure computation
   (`DecoderComplexity`).
@@ -656,10 +657,12 @@ def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → 
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
 
 /-- **Flock: zero knowledge** of the masked verifier's honest prover, against every malicious verifier of the deployed
-verifier's rounds `D.V.k`: `Hello`, answered by the commitment to every coin, then the rounds that open them. -/
+interaction's `D.V.k + 1` rounds: the extra round is the `Hello`, at which the masked verifier sends its commitment to
+every coin, and then come `D.V`'s rounds, which open the coins. `D.V` models the coins in the clear; the commitment's
+hiding is the live-coins assumption of `trustedBase`. -/
 def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (S : Simulator)
     (εzk : Msg → ℝ) : Prop :=
-  D.zk = true ∧ ZKmalR H D.V.k P (R D.parse) S εzk
+  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) P (R D.parse) S εzk
 
 /-- **Flock: bits**, `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ) − 1`, at every decoder that meets the spec, the one decoder
 of every table. -/

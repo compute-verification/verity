@@ -144,7 +144,9 @@
         "Security/Models/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
+        "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
+        "benchmarks/ppl/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocol_options/pouw.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py",
@@ -200,7 +202,8 @@
         "integrations/vllm/verity_vllm/protocol_options/pous.py",
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
-        "verity/core/protocols/pous/"
+        "verity/core/protocols/pous/",
+        "verity/core/protocols/remote_bandwidth/"
       ],
       "branch_suffixes": [
         "3cf5",
@@ -231,11 +234,10 @@
     },
     {
       "handle": "console",
-      "holder": "Daniel's desktop agent (f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc), on his laptop: no Slack inbox, reached through its Linear team CON (Daniel, 2026-10-14 3:38 PM PDT)",
+      "holder": "Daniel's desktop agent (f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc), on his laptop beside the console's dev server: it reads its Slack inbox whenever Daniel opens it, so asks queue there, and nothing wakes it (Daniel, 2026-10-16 2:37 PM PDT)",
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
       "charter": "Daniel, 2026-10-11 (via top)",
-      "usergroup": "S0C5LSDENA1",
-      "linear": "CON"
+      "usergroup": "S0C5LSDENA1"
     },
     {
       "handle": "ci",

@@ -1,0 +1,132 @@
+{
+ "llama3": {
+  "c4/2048": {
+   "bos_lead": true,
+   "sha256": "1ca575b1129dc9262d4e9882795f5cfb1decb7952fb8b9c383ea9691399a0664",
+   "stream_tokens": 1316848,
+   "windows": [
+    0,
+    15
+   ]
+  },
+  "c4/2048/calibration": {
+   "bos_lead": true,
+   "sha256": "d9788b2e4d3c48bd5fa425cf3cee1049cfe6088ec57c9fe9b37b86b0bfe42331",
+   "stream_tokens": 1316848,
+   "windows": [
+    100,
+    115
+   ]
+  },
+  "c4/32768": {
+   "bos_lead": true,
+   "sha256": "2b4ffdf25176d3b1daf67813cb3fbe295b0ce163b46e6d01bb674a3eec87ccb1",
+   "stream_tokens": 1316848,
+   "windows": [
+    0,
+    3
+   ]
+  },
+  "c4/8192": {
+   "bos_lead": true,
+   "sha256": "0241c28c13bc7e8038e5b4c9bf73de5b56b4bf3db4513600dcad6ec20db89bca",
+   "stream_tokens": 1316848,
+   "windows": [
+    0,
+    15
+   ]
+  },
+  "wikitext2/2048": {
+   "bos_lead": true,
+   "sha256": "f6fc553d5167ab35a6216a766735f67f9fd5ece1ecd62d7bbc4687a91b414f96",
+   "stream_tokens": 289076,
+   "windows": [
+    0,
+    15
+   ]
+  },
+  "wikitext2/32768": {
+   "bos_lead": true,
+   "sha256": "a7fd206d07458369f7e95cbc45a9ec396cec25f2b763aa9efd8f5b07e7c79264",
+   "stream_tokens": 289076,
+   "windows": [
+    0,
+    3
+   ]
+  },
+  "wikitext2/8192": {
+   "bos_lead": true,
+   "sha256": "690f6828db96dc7fb6474b99c68ed36cc44690abcae4e0d6396df550661811ba",
+   "stream_tokens": 289076,
+   "windows": [
+    0,
+    15
+   ]
+  }
+ },
+ "qwen2.5": {
+  "c4/2048": {
+   "bos_lead": false,
+   "sha256": "e447d26408c9b671b772f9ab48c6aedd3262bf85523969ffda9808ee6d65cee6",
+   "stream_tokens": 1339655,
+   "windows": [
+    0,
+    15
+   ]
+  },
+  "c4/2048/calibration": {
+   "bos_lead": false,
+   "sha256": "ed1413dfd81436bbda0c0915defc961d4a2ad234d342cfd5ff353cf07b8dae60",
+   "stream_tokens": 1339655,
+   "windows": [
+    100,
+    115
+   ]
+  },
+  "c4/32768": {
+   "bos_lead": false,
+   "sha256": "b4dd540f8ad4b2d9a98b85e758d329144811b7ea6bb87657aeea002254e929c9",
+   "stream_tokens": 1339655,
+   "windows": [
+    0,
+    3
+   ]
+  },
+  "c4/8192": {
+   "bos_lead": false,
+   "sha256": "b4dd540f8ad4b2d9a98b85e758d329144811b7ea6bb87657aeea002254e929c9",
+   "stream_tokens": 1339655,
+   "windows": [
+    0,
+    15
+   ]
+  },
+  "wikitext2/2048": {
+   "bos_lead": false,
+   "sha256": "231c8057fb76211650323905ea830e74b868e4dca22002a66ae91face6ebf461",
+   "stream_tokens": 299078,
+   "windows": [
+    0,
+    15
+   ]
+  },
+  "wikitext2/32768": {
+   "bos_lead": false,
+   "sha256": "9723a95d2f65e5fc8e1eebf72d837688005e594b2b8b0a0b291427cdaa4bcfcc",
+   "stream_tokens": 299078,
+   "windows": [
+    0,
+    3
+   ]
+  },
+  "wikitext2/8192": {
+   "bos_lead": false,
+   "sha256": "9723a95d2f65e5fc8e1eebf72d837688005e594b2b8b0a0b291427cdaa4bcfcc",
+   "stream_tokens": 299078,
+   "windows": [
+    0,
+    15
+   ]
+  }
+ }
+}

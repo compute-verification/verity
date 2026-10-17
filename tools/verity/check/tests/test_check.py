@@ -250,7 +250,8 @@ def test_the_recorded_check_takes_cpu_only_torch():
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.command[:5] == ["uv", "run", "--locked", "--extra", "torch-cpu"]
+    assert tool.CHECK.command[:6] == ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu"], \
+        "every member's own dependencies, not only the root's dev group (CI-36: #2159's new member lacked scipy)"
     import tomllib
     cpu = [p for p in tomllib.loads((ROOT / "uv.lock").read_text())["package"] if p["name"] == "torch" and "+cpu" in p["version"]]
     assert cpu and all("download.pytorch.org/whl/cpu" in p["source"]["registry"] for p in cpu)
@@ -1343,7 +1344,7 @@ def test_train_sh_against_keeps_the_quick_tiers_bounds_and_lean_build():
     text = (ROOT / "tools" / "verity" / "check" / "train.sh").read_text()
     assert f"wait_s={queue.REMOTE_WAIT_S} run_s={queue.REMOTE_TIMEOUT_S}" in text
     assert "".join(f" --lean {d}" for d in queue.LEAN_BUILDS) + " --head" in text
-    assert "uv run --locked --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
+    assert "uv run --locked --all-packages --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
 
 
 def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_path):

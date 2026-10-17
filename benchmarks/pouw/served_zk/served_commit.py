@@ -118,6 +118,9 @@ DRAW_DOMAIN = CC.DRAW_DOMAIN
 PORT = "entries"
 #: a window stream's failure budget: its first failure stops it
 BUDGET = 1
+#: the window's proof deadline (`Check.proof_deadline`), seconds on the challenger's clock from the draw, unless the
+#: parameters give ``proof_deadline``: a day
+PROOF_DEADLINE = 86400.0
 #: the frame's owner, as C-Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
 OWNER = -1
 SALT_BYTES = 192
@@ -194,11 +197,13 @@ def law_of(params: dict, ell: int) -> dict:
 def spec_of(params: dict, ell: int) -> S.Spec:
     """P1's Spec of a window at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
     Program and query as the check, and `LAYOUT` declared.  With ``registration_deadline`` in `params` (seconds on the
-    challenger's clock from the epoch's salt coin's release), the check carries it: `Pouw.AcceptsBy`'s td."""
+    challenger's clock from the epoch's salt coin's release), the check carries it: `Pouw.AcceptsBy`'s td.  Its proof
+    deadline is ``proof_deadline`` in `params`, else `PROOF_DEADLINE`."""
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
                   selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
                   check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
+                                proof_deadline=params.get("proof_deadline", PROOF_DEADLINE),
                                 registration_deadline=params.get("registration_deadline")),
                   public=tuple(S.Public(i, k, r) for i, k, r in LAYOUT), context=params["context"].encode())
 
@@ -633,11 +638,12 @@ class Challenger:
     `Recorded` in a replay); the window's draw coin keys `sampler` (Lean's draw, or its twin `python_sampler`).  A Spec
     fixes one law and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
     registration it accepted is held by name.  A control stream `replay`s an earlier draw and opens no coin, so a
-    control's verdicts are judged on the honest draw's units.  The window's Check has no proof deadline.  Under a
+    control's verdicts are judged on the honest draw's units.  The window's Check has a proof deadline (`spec_of`): a
+    drawn window whose proof isn't delivered by it is `late`.  Under a
     ``registration_deadline`` the salt coin's opening reads the clock (its release), and each stream records the epoch's
     salt at that release (`Stream.salt_released`) before its first registration, so a window received later than the
     deadline, or before the salt is open, is refused (`late-registration`) and earns no credit.  Without one the clock
-    decides nothing; it counts the challenger's reads of it unless `clock` is given."""
+    decides only the proof deadline; it counts the challenger's reads of it unless `clock` is given."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
                  clock: Callable[[], float] | None = None, record: OR.Record | None = None) -> None:
