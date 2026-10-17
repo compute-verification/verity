@@ -3923,24 +3923,6 @@
    "assumptions": [],
    "type_hash": "5285cb8cbec9dd6a634d4653607b825be7d9eea4c260b93e29cb3fad67b09cee"
   },
-  "Pouw.SecurityProofs.Eps1.ClassPPacked": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.Eps1.ClassPPacked : Pouw.Guarantees.Eps1.ClassPPacked"],
-   "assumptions": [],
-   "type_hash": "e0ae0f4fd373b0c795359c585a78a0dc22add952ea14e31b12dea604e6e5ac39"
-  },
-  "Pouw.SecurityProofs.Eps1.WordLocalGeneral": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.Eps1.WordLocalGeneral : Pouw.Guarantees.Eps1.WordLocalGeneral"],
-   "assumptions": [],
-   "type_hash": "1041bbd48cd05f1f54a2e4f797037ed088fa1d9fa4edf12c7dabbdab9a05b0bf"
-  },
-  "Pouw.SecurityProofs.Eps1.WordLocalZero": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.Eps1.WordLocalZero : Pouw.Guarantees.Eps1.WordLocalZero"],
-   "assumptions": [],
-   "type_hash": "a96cc7438f5c013c2d14993f5e2aaae093d604177b9e895e3dc79cd618a08824"
-  },
   "Pouw.SecurityProofs.GammaFromTT": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.GammaFromTT : Pouw.Guarantees.GammaFromTT"],
@@ -5427,10 +5409,7 @@
    "Accounting.SecurityProofs.TS.RoutesOffD2": "lemma: Corollary D2 of EPS1-SPEC, B(M) >= B0/(1 + sum kappa_u s_u) from its two hypotheses on the run's loads.",
    "Accounting.SecurityProofs.TS.TensorSlotCount": "frozen (no-function): T1 of EPS1-TENSOR over any tensor run's slot writes, injective by freshness (a hypothesis), not a Lean function.",
    "Accounting.SecurityProofs.TS.TensorSlotTight": "lemma: T1's tightness criterion (epsilon_tensor = 0 iff L = d_H and rho_H = rho_T), arithmetic.",
-   "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
-   "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
-   "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
-   "Pouw.SecurityProofs.Eps1.ClassPPacked": "frozen (no-function): Theorem C of EPS1-QSTAR, over every class-P (radix-packed) M3 program at the zero instance, not a Lean function."
+   "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
