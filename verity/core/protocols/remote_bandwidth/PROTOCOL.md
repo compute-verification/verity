@@ -198,8 +198,12 @@ c_r         LE(XOF(D ‖ u8 5 ‖ "p1024" ‖ seed ‖ u32be r)[0 : 136]) mod p,
 τ           the same at r = 2^32 − 1, and 1 in place of 0;  t(i) = τ · i mod p
 K           LE(XOF(D ‖ u8 5 ‖ "p1024" ‖ seed ‖ u32be 2^32 − 2)[0 : 128]): 1,024 bits, not reduced mod p
 σ_K(x)      x ⊕ K if that is below p, else x: an involution on [0, p)
-encode      from the payload word, for r = 0 … k − 1: x ↦ σ_K(x) if r ≥ 1, then x ↦ ρ(x + c_r + t(i))
-decode      for r = k − 1 … 0: x ↦ ρ⁻¹(x) − c_r − t(i), then x ↦ σ_K(x) if r ≥ 1
+d_j         a bound block's digest: sha512/row/v2(payload_j) = SHA512(P(32768) ‖ payload_j), its payload leaf's x_j
+b_j         a bound block's offset: LE(XOF(D ‖ u8 5 ‖ "p1024" ‖ seed ‖ u32be 2^32 − 3 ‖ u64be j ‖ d_j)[0 : 64]) mod p;
+            0 under the seed's key
+encode      from the payload word, for r = 0 … k − 1: x ↦ σ_K(x) if r ≥ 1, then x ↦ ρ(x + c_r + t(i) + b_j)
+decode      for r = k − 1 … 0: x ↦ ρ⁻¹(x) − c_r − t(i) − b_j, then x ↦ σ_K(x) if r ≥ 1; under a bound key, refused
+            unless the payload's digest is d_j
 ~~~
 
 For \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\) a block is kv/v0's token-layer: a token's keys and values in
@@ -208,14 +212,42 @@ one layer, 4,096 bytes, are 32 words at 1,024 bits. Encoding a block costs \(32k
 its top 16 bits are all ones, a bf16 NaN (and its top byte 0xFF, an E4M3 NaN), so every block of finite values encodes.
 \(k = 1\) is refused, because a word can then be partly kept and completed for less than an encode (red team F27).
 
+**A block's key** is the seed's or its own (MEM-29). A block whose payload the payload root committed before the codec
+seed was drawn (every block of a registration) is encoded under the seed's key, \(b_j = 0\), as above. A block whose
+payload is written after the seed (a KV page, or any block appended to a registered store) must be encoded under its
+bound key, whose offset \(b_j\) is derived from the seed, \(j\) and its payload's digest \(d_j\)
+(`codec.encode(..., bound=True)`, `codec.decode(..., d)`): only bound blocks may be registered after the seed. Under the
+seed's key alone, such a block's encoding is fixed by the seed and its address, so its writer, a circuit that can learn
+the key, picks the encoding \(E\) (all zeros, or another block's) and writes the payload \(\text{decode}(E)\). The store
+then holds the picked encoding, the prover holds nothing for it, and each of its receipts is computable without a read
+(`tests/test_key_binding.py` runs it against the reference: a prover that holds only the weights' block passes a window
+that draws the KV block's receipts). Under the bound key, a picked \(E\) decodes under digest \(d\)'s key to a payload
+whose digest is \(d\) only if \(d\) is a fixed point of that map, which a try hits with chance about \(2^{-512}\). So
+the writer chooses only the payload, and its encoding costs an encode. Binding is necessary, not sufficient: it stops
+the writer picking an encoding, not stacking. A writer that can learn the key can compute another registered block's
+encoding in the circuit, or take it as input, and write it (or any cheap invertible function of it) as a bound block's
+payload. Decoding that carrier then yields the other block's encoding, and one read serves both blocks' receipts. A
+carrier costs one encode, what the honest prover pays a write, so binding doesn't price it. So a block written after
+the seed is credited only once the share of the store its writers can program is bounded (the stacking campaign,
+note:20261017T0723Z-draft-stacking-model); until then no plan holds one, and the credited store is the registration's,
+whose payloads no writer chose after the seed. \(d_j\) is the payload leaf's \(x_j\), so the
+leaf hashes the payload once for both (34 compressions), and \(b_j\) is one SHA-512 output, 2 compressions. The prover
+keeps \(d_j\), or \(b_j\) in its place, beside the block: 64 bytes a 4 KiB block, 1.6%. Blocks under the seed's key are
+unchanged, byte for byte. The bound key is `kv.py`'s
+`encode_token_layer(..., bound=True)` for \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\), byte for byte, and
+the tests pin it (`kv_vectors.json`'s "bound", and `vectors.json`'s `codec.bound`); `kv.cu`, `kv_twin.py` and
+vLLM's encoded store take the seed's key only (§8).
+
 Three properties of registration matter:
 
 - **The order is the point.** If the codec seed came before the payloads, the prover would register
   \(\text{payload}_j = \text{decode}(0)\) and hold a store of zeros. Drawn after, each \(E_j\) costs \(k\) square roots
   a word to produce, whatever the payload, all-zero weights included. That is the only rebuild bound: no
-  incompressibility is assumed, and every bound is decode-free.
-- **No commitment to \(E\) is needed.** ρ and \(\sigma_K\) permute the canonical words, so `decode` is a bijection from
-  canonical blocks to payloads, and the payload root plus the codec seed fix \(E\). An opened block that isn't canonical fails
+  incompressibility is assumed, and every bound is decode-free. A block written after the seed can't be ordered this
+  way, so its bound key does the ordering: its key follows its payload.
+- **No commitment to \(E\) is needed.** ρ and \(\sigma_K\) permute the canonical words, so `decode` under the seed's key
+  is a bijection from canonical blocks to payloads, and the payload root plus the codec seed fix \(E\). Under a bound
+  key the payload root fixes \(d_j = x_j\) too, so it still fixes \(E\). An opened block that isn't canonical fails
   (`codec`).
 - **The node is in the codec seed.** Two nodes registering the same weights hold different stores, and the tweak
   \(\tau i\) separates every word of one store.
@@ -585,7 +617,10 @@ its decode is three inverted rounds, each a squaring with the sign rule less \(c
 rounds \(r = 2\) and \(r = 1\) (XOR with \(K\), kept only if the result is below \(p\)). A block is then 96 squarings mod
 a 1,024-bit prime and 64 masks, where it was 128 mod a 512-bit prime. In the proof unit (§8), where a product's cost
 grows about as the square of its width, that is about three times the decode check's multiplications; the fallback is
-64 squarings and 32 masks, about twice. The opening is the same size: a block is 4,096 bytes under every codec.
+64 squarings and 32 masks, about twice. The opening is the same size: a block is 4,096 bytes under every codec. Every
+block of a v0 registration is under the seed's key; a bound block (§3, appended as §8 says) is decoded less
+\(c_r + t(i) + b_j\), with \(b_j\) 2 compressions from \(d_j = x_j\), which the payload leaf's check hashes anyway, and
+refused (`codec`) unless its decoding's digest is \(d_j\).
 
 A window is accepted only if every opening checks. A rejected window ends its session: every later call is refused,
 and nothing of the session is recorded. A pass whose seed is not the chain's (passes of a window run at once, a window
@@ -654,11 +689,18 @@ and each window's, from it plus the node's capacities.
   batch's shape and context lengths over time, not their contents. Hiding them goes with the zero-knowledge openings:
   the plan committed, its distinctness and each opening's \(j = \text{plan}[p]\) proved, only \(L\) public (the draws
   need it).
-- **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so it can't be bound by
-  registration order the way weights and filler are. It is bound only by integrity: sampled proofs prove it is the
-  model's actual computation. The reference registers a fixed store. Appending pages needs their payload roots
-  committed before the passes that read them, and fresh store indices. Until then, a block being rewritten stays out
-  of every plan, as the prover-side registry already does with blocks a write has touched.
+- **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
+  its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
+  but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that
+  can learn the key can compute another registered block's encoding as that payload. So a KV page is credited only
+  once the share its writers can program is bounded (§3); until then it stays out of every plan. Only bound blocks may
+  be registered after the seed. The reference registers a fixed store, every
+  block under the seed's key. Appending pages needs their payload roots committed before the passes that read them,
+  fresh store indices, each page encoded under its bound key with \(d_j\) kept beside it, and an opening of one that
+  carries \(d_j\), its payload leaf's \(x_j\), which check 3 decodes under. Until then, a block being rewritten stays
+  out of every plan, as the prover-side registry already does with blocks a write has touched. A KV block under the
+  seed's key, as `kv.cu` and vLLM's encoded store (whose `Codec` is keyed by the store index alone) encode them today,
+  is not to be credited: its writer may have picked its encoding, and then its receipts need no read.
 - **Multi-GPU trees.** Each GPU's blocks should be an aligned power-of-two range of leaves, so that a pass's root is
   its GPUs' subtree roots combined. That keeps \(g\) to an all-gather, a few hashes and the next seed's broadcast.
 - **Sketch receipts** (a ±1 projection hashed, `RateAuditSketch`) are the stated receipt, sketch-sha512 (§4). Three
