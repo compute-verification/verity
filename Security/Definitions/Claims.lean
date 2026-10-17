@@ -522,6 +522,7 @@ structure Form where
   readsOnlyPortBits : Bool
   rowsV1 : Bool
   rowsV2OrSeg : Bool
+  wiresAcyclic : Bool
 
 /-- **Flock's statement**: `2^m` trace bits in blocks of `2^kLog`, the block circuit `C`, the blocks' inputs and outputs
 (`inp b`, `out b`, reading the public or the hidden values), the public values, and the statement's form. The
@@ -573,14 +574,18 @@ def check (parse : Msg → Option Stmt) (x : Msg) (w : Wit) : Bool :=
 /-- **Flock's scope, readable**: the deployed parameters (`22 ≤ m ≤ 35`, `25 ≤ m` under `--zk`, `6 ≤ kLog ≤ min(m, 27)`)
 and the forms the soundness proof covers: hm96-sha512 rows, untyped, retained rounds, `hm96-sha512/v1` leaves, at most
 one table without `--zk`, no public input ports, shared rows only in a `--zk` session with hidden outputs and registered
-reads; a unit reading one input group and returning the outputs, of at most `2^32` rows, reading only port bits; every
-row a `sha512/row/v1` row, or, with hidden outputs, every row a `sha512/row/v2` or `sha512/row-seg/v1` row. -/
+reads; a unit of at most `2^32` rows reading only port bits, which reads one input group and returns the outputs, or,
+with hidden outputs, the general instance form: the unit repeated, reading any number of committed input groups, and
+any number of stages the verifier evaluates, reading wires from earlier outputs, with an order of the wires that
+computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
+row a `sha512/row/v2` or `sha512/row-seg/v1` row. -/
 def InScope (zk : Bool) (s : Stmt) : Prop :=
   (if zk then 25 else 22) ≤ s.m ∧ s.m ≤ 35 ∧ 6 ≤ s.kLog ∧ s.kLog ≤ min s.m 27 ∧
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧ s.form.leaf = "hm96-sha512/v1" ∧
     (zk ∨ s.form.tables ≤ 1) ∧ ¬ s.form.publicInputs ∧
     (s.form.sharedRows → zk ∧ s.form.hiddenOutputs ∧ s.form.registeredReads) ∧
-    s.form.unitInputGroups = 1 ∧ ¬ s.form.tail ∧ s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
+    ((s.form.unitInputGroups = 1 ∧ ¬ s.form.tail) ∨ (s.form.hiddenOutputs ∧ s.form.wiresAcyclic)) ∧
+    s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
     (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg))
 
 /-- **The zero-filled word** of length `n`: at each position the first opened column there, zero where none was opened.
