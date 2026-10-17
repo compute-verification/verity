@@ -12,6 +12,7 @@ Schemas (from vllm/csrc/torch_bindings.cpp, `d9105ea80`):
     fused_add_rms_norm(Tensor! input, Tensor! residual, Tensor weight, float epsilon) -> ()
     rotary_embedding(Tensor positions, Tensor! query, Tensor!? key, int head_size, Tensor cos_sin_cache, bool is_neox) -> ()
     silu_and_mul(Tensor! result, Tensor input) -> ()
+    silu_and_mul_with_clamp(Tensor! result, Tensor input, float limit, float alpha=1., float beta=0.) -> ()
     gelu_tanh_and_mul(Tensor! out, Tensor input) -> ()
     silu_and_mul_per_block_quant(Tensor! out, Tensor input, Tensor! scales, int group_size, Tensor? scale_ub, bool is_scale_transposed) -> ()
     per_token_group_fp8_quant(Tensor input, Tensor! output_q, Tensor! output_s, int group_size, float eps, float fp8_min,
@@ -48,6 +49,8 @@ _define_once("fused_add_rms_norm(Tensor(a!) input, Tensor(b!) residual, Tensor w
 _define_once("rotary_embedding(Tensor positions, Tensor(a!) query, Tensor(b!)? key, int head_size, Tensor cos_sin_cache, bool is_neox) -> ()",
              "rotary_embedding", lambda positions, query, key, head_size, cos_sin_cache, is_neox: None)
 _define_once("silu_and_mul(Tensor(a!) result, Tensor input) -> ()", "silu_and_mul", lambda result, input: None)
+_define_once("silu_and_mul_with_clamp(Tensor(a!) result, Tensor input, float limit, float alpha=1., float beta=0.) -> ()",
+             "silu_and_mul_with_clamp", lambda result, input, limit, alpha=1.0, beta=0.0: None)
 _define_once("gelu_tanh_and_mul(Tensor(a!) out, Tensor input) -> ()", "gelu_tanh_and_mul", lambda out, input: None)
 _define_once("silu_and_mul_per_block_quant(Tensor(a!) out, Tensor input, Tensor(b!) scales, int group_size, Tensor? scale_ub, "
              "bool is_scale_transposed) -> ()", "silu_and_mul_per_block_quant",

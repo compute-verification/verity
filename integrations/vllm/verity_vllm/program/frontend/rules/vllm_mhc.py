@@ -24,7 +24,7 @@ import torch
 
 from verity.ml.circuits.refs import array_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.common import call_args, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _rows, _static_float, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
@@ -46,13 +46,6 @@ ROLE_KERNELS = {"mhc_pre_broadcast": "layer 0's TF32 pre (MhcPreBroadcast_v1)",
                 "mhc_post_pre_tf32": "the post and TF32 pre above 16 tokens (MhcPostPreTf32_v1)",
                 "mhc_post": "mhc_post_tilelang (MhcPost_v1)",
                 "hc_head": "hc_head_fuse_tilelang (HcHead_v1)"}
-
-def _args(node) -> dict:
-    """The call's arguments by their schema names, with the defaults the export leaves out of a call that passes them."""
-    names = node.target._schema.arguments
-    return {**{x.name: x.default_value for x in names if x.has_default_value()}, **dict(zip((x.name for x in names), node.args)),
-            **node.kwargs}
-
 
 def _geometry(H: int) -> dict | str:
     g = MHC_GEOMETRY.get(H)
@@ -120,7 +113,7 @@ class MhcPreBroadcastRule(OpRule):
         return {iface.mhc_pre_broadcast_tilelang.default}
 
     def _statics(self, node, ctx):
-        a = _args(node)
+        a = call_args(node)
         s = shape(ctx, a["residual"])
         if s is None or len(s) != 2:
             return "residual is not [T, H]"
@@ -178,7 +171,7 @@ class MhcFusedPostPreRule(OpRule):
         return targets_for("mhc_fused_post_pre_tilelang")
 
     def _statics(self, node, ctx):
-        a = _args(node)
+        a = call_args(node)
         s = shape(ctx, a["residual"])
         if s is None or len(s) != 3:
             return "residual is not [T, HC, H]"
@@ -229,14 +222,14 @@ class MhcPostRule(OpRule):
     def applies(self, node, ctx):
         if (r := _missing(ctx, ["mhc_post"], ROLE_KERNELS)):
             return r
-        a = _args(node)
+        a = call_args(node)
         s = shape(ctx, a["residual"])
         if s is None or len(s) != 3:
             return "residual is not [T, HC, H]"
         return _value(ctx, a["residual"], BF16, s, "residual") or _mixes(ctx, a, *s) or True
 
     def emit(self, node, ctx):
-        a = _args(node)
+        a = call_args(node)
         T, HC, H = shape(ctx, a["residual"])
         h = ctx.hint_name(node)
         fn = ctx.kind("mhc_post", node, HC=HC, N=H)
@@ -260,7 +253,7 @@ class HcHeadRule(OpRule):
     def applies(self, node, ctx):
         if (r := _missing(ctx, ["hc_head"], ROLE_KERNELS)):
             return r
-        a = _args(node)
+        a = call_args(node)
         s = shape(ctx, a["hs_flat"])
         if s is None or len(s) != 3:
             return "hs_flat is not [T, HC, H]"
@@ -275,7 +268,7 @@ class HcHeadRule(OpRule):
         return g if isinstance(g, str) else True
 
     def emit(self, node, ctx):
-        a = _args(node)
+        a = call_args(node)
         T, HC, H = shape(ctx, a["hs_flat"])
         h = ctx.hint_name(node)
         S = {"HC": HC, "H": H, "TH": MHC_GEOMETRY[H]["TH_HEAD"], "EPS": float(a["rms_eps"]), "HC_EPS": float(a["hc_eps"])}

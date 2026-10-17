@@ -16,7 +16,7 @@ from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm
 from verity_vllm.program.registry import dsv4_indexer as _dsv4_indexer, dsv4_qnorm_insert as _dsv4_qnorm
-from verity_vllm.program.registry import dsv4_compressor as _dsv4_compressor
+from verity_vllm.program.registry import dsv4_compressor as _dsv4_compressor, dsv4_moe as _dsv4_moe
 from verity_vllm.program.registry import flashmla as _flashmla, flashmla_prefill as _flashmla_prefill
 from verity_vllm.program.registry import deepgemm as _deepgemm
 from verity_vllm.program.registry import boolean_rope as _rope
@@ -490,7 +490,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "flashmla_prefill": lambda NH, NP, D, BN, DOT, SCALE:
                ir_bind(_flashmla_prefill.FlashMlaPrefill, NH=NH, NP=NP, D=D, BN=BN, DOT=DOT, SCALE=SCALE),
            "dsv4_inv_rope_quant_head": lambda CHUNKS, QG, ROPE:
-               ir_bind(_dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=CHUNKS, QG=QG, ROPE=ROPE)},
+               ir_bind(_dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=CHUNKS, QG=QG, ROPE=ROPE),
+           # vLLM's clamped SwiGLU (registry.dsv4_moe). `rules/vllm_bindings/elementwise.py` asks for it.
+           "silu_mul_clamp": lambda I, LIMIT: ir_bind(_dsv4_moe.SiluMulClamp, I=I, LIMIT=LIMIT)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -604,7 +606,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "flashmla_gather_row": "FlashMlaGatherRow_v1{DN,DR,QT}: the prefill's K-cache gather of one fp8_ds_mla row to bf16",
            "flashmla_prefill": "FlashMlaPrefill_v1{NH,NP,D,BN,DOT,SCALE}: FlashMLA's sparse prefill of one token over its gathered rows",
            "dsv4_inv_rope_quant_head": "Dsv4InvRopeQuantHead_v1{CHUNKS,QG,ROPE}: fused_inv_rope_fp8_quant's one head, its rotary suffix "
-                                       "inverse-rotated and each group of QG quantised to e4m3 with an f32 scale"})
+                                       "inverse-rotated and each group of QG quantised to e4m3 with an f32 scale",
+           "silu_mul_clamp": "SiluMulClamp_v1{I,LIMIT}: _C.silu_and_mul_with_clamp(alpha 1, beta 0) on one row -- gate fminf'd to LIMIT, "
+                             "up clamped to [-LIMIT, LIMIT], then SiluMulBf16_v2 per element"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

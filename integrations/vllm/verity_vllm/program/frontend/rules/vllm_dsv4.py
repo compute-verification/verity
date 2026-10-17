@@ -26,11 +26,10 @@ from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.common import call_args, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _positions, _rows, _static_float, _table, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
-from verity_vllm.program.frontend.rules.vllm_mhc import _args
 from verity_vllm.program.kernels.flashmla_twin import num_sm_parts, request_splits, sched_meta
 from verity_vllm.program.registry import dsv4_compressor as C
 from verity_vllm.program.registry import dsv4_indexer as I
@@ -77,7 +76,7 @@ class Dsv4QNormRopeKvInsertRule(OpRule):
             return r
         if ctx.registered_values:
             return "numerics_unregistered: the insert takes eps as a static; no registered-values twin"
-        a = _args(node)
+        a = call_args(node)
         pos = _positions(ctx, a["positions"])
         if isinstance(pos, str):
             return pos
@@ -100,7 +99,7 @@ class Dsv4QNormRopeKvInsertRule(OpRule):
         return True
 
     def emit(self, node, ctx):
-        a = _args(node)
+        a = call_args(node)
         pos = ctx.static_index(a["positions"]).flat()
         T, h = len(pos), ctx.hint_name(node)
         _, NH, D = shape(ctx, a["q"])
@@ -129,7 +128,7 @@ class Dsv4CompressorStateRule(OpRule):
     def applies(self, node, ctx):
         if (r := _missing(ctx, ["dsv4_compressor_score"], ROLE_KERNELS)):
             return r
-        a = _args(node)
+        a = call_args(node)
         pos = _positions(ctx, a["positions"])
         if isinstance(pos, str):
             return pos
@@ -141,7 +140,7 @@ class Dsv4CompressorStateRule(OpRule):
         return _value(ctx, a["kv_score"], F32, (len(pos), 2 * W), "kv_score") or True
 
     def emit(self, node, ctx):
-        a = _args(node)
+        a = call_args(node)
         pos = ctx.static_index(a["positions"]).flat()
         h = ctx.hint_name(node)
         R, W = shape(ctx, a["ape"])
@@ -200,7 +199,7 @@ class Dsv4SparseAttnRule(StateRule):
         return {iface.dsv4_sparse_attn.default}
 
     def applies(self, node, ctx):
-        a = _args(node)
+        a = call_args(node)
         layer, NH, ratio, window, topk = (a[k] for k in ("layer_name", "heads", "ratio", "window", "topk"))
         if not (isinstance(layer, str) and all(isinstance(x, int) for x in (NH, ratio, window, topk)) and window >= 1
                 and _static_float(a["softmax_scale"])):
@@ -258,7 +257,7 @@ class Dsv4SparseAttnRule(StateRule):
         return True
 
     def emit(self, node, ctx):
-        a = _args(node)
+        a = call_args(node)
         layer, NH, ratio, window, scale = a["layer_name"], a["heads"], a["ratio"], a["window"], float(a["softmax_scale"])
         mp, h = ctx.module_path(node), ctx.hint_name(node)
         pos = ctx.static_index(a["positions"]).flat()
@@ -384,7 +383,7 @@ class Dsv4InvRopeQuantRule(OpRule):
             return r
         if ctx.registered_values:
             return "numerics_unregistered: the quantisation has no registered-values twin"
-        a = _args(node)
+        a = call_args(node)
         sizes = ("heads_per_group", "quant_group_size", "chunks_per_head", "rope_start", "half_rope", "num_tokens", "n_groups", "d",
                  "scale_inner")
         if not (all(isinstance(a[k], int) for k in sizes) and isinstance(a["tma_aligned_scales"], bool) and _static_float(a["fp8_max"])):
@@ -411,7 +410,7 @@ class Dsv4InvRopeQuantRule(OpRule):
         return True
 
     def emit(self, node, ctx):
-        a = _args(node)
+        a = call_args(node)
         pos = ctx.static_index(a["positions"]).flat()
         T, h, (G, HPG, CH, QG, ROPE) = len(pos), ctx.hint_name(node), self._geometry(a)
         fn = ctx.kind("dsv4_inv_rope_quant_head", node, CHUNKS=CH, QG=QG, ROPE=ROPE)

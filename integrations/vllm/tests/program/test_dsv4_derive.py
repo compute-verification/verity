@@ -23,6 +23,8 @@
   the wrapper's [T, G, ...] layout, and another scale layout, clamp, rotary split or target refuses by name;
 * `DeepGemmFp8EinsumRule`: the o-projection's `fp8_einsum` over that quant's words and scales derives per token word for word the
   grouped DeepGEMM twin (`kernels.deepgemm_twins`), and another expression or recipe refuses by name;
+* `SiluAndMulWithClampRule`: the shared expert's clamped SwiGLU derives per row word for word the twin the capture holds to the
+  served kernel (`dsv4_moe_capture_gpu.clamp_twin`), and SwiGLU-OAI's alpha and beta or a limit that is no bf16 value refuses by name;
 * `vllm_meta.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
   leaves them."""
 from __future__ import annotations
@@ -60,6 +62,7 @@ from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import hopper
 from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
+from tests.properties.dsv4_moe_capture_gpu import clamp_twin
 
 
 class _Overlapped(nn.Module):
@@ -413,7 +416,7 @@ def _words(t: torch.Tensor) -> list[int]:
 def _run(rep, model: nn.Module, inputs) -> list[int]:
     held = dict(model.named_parameters())
     weights = [v for w in rep.provenance["weights"] for v in _words(held[w["name"]])]
-    t = materialize(rep.program, [_words(x) for x in inputs] + [weights])
+    t = materialize(rep.program, [_words(x) for x in inputs] + ([weights] if rep.provenance["weights"] else []))
     return [int(t[g]) for g in rep.program.circuit.root_outputs()]
 
 
@@ -848,6 +851,39 @@ def test_an_fp8_einsum_beyond_the_definition_refuses_by_name(over, refusal, serv
     rep = _derive_mhc(_OProj(rng, **over), (_tensor(W.bf16(_f32(rng, 3, 4, 128))),))
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
 
+
+
+class _ClampedSwiGlu(nn.Module):
+    """`SiluAndMulWithClamp.forward_cuda`: `out` [T, I] allocated, then `_C.silu_and_mul_with_clamp(out, x, limit, alpha, beta)`."""
+
+    def __init__(self, limit: float = 10.0, alpha: float = 1.0, beta: float = 0.0) -> None:
+        super().__init__()
+        self.limit, self.alpha, self.beta = limit, alpha, beta
+
+    def forward(self, x):
+        out = torch.empty(*x.shape[:-1], x.shape[-1] // 2, dtype=x.dtype)
+        iface.silu_and_mul_with_clamp(out, x, self.limit, self.alpha, self.beta)
+        return out
+
+
+def test_the_clamped_swiglu_derives_per_row_word_for_word_the_twin(served):
+    rng = np.random.default_rng(5)
+    gu = W.bf16(_f32(rng, 3, 2 * 24, sd=8.0))
+    gu[0, 0], gu[1, 30], gu[2, 5] = 0x7FC0, 0xFF80, 0x4120
+    rep = _derive_mhc(_ClampedSwiGlu(), (_tensor(gu),))
+    assert rep.program is not None, rep.unsupported
+    (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "SiluAndMulWithClamp[vllm]_v1"]
+    assert app["emitted"] == "SiluMulClamp_v1{I=24,LIMIT=10.0} x3"
+    assert _run(rep, _ClampedSwiGlu(), (_tensor(gu),)) == clamp_twin(gu, 10.0).reshape(-1).tolist()
+
+
+@pytest.mark.parametrize("over, refusal", [
+    ({"alpha": 1.702, "beta": 1.0}, "alpha 1.702, beta 1.0; SiluMulClamp_v1 is the clamp at alpha 1.0, beta 0.0"),
+    ({"limit": 10.1}, "LIMIT must be a positive finite bf16 value, got 10.1"),
+])
+def test_a_clamped_swiglu_beyond_the_definition_refuses_by_name(over, refusal, served):
+    rep = _derive_mhc(_ClampedSwiGlu(**over), (torch.empty(3, 48, dtype=torch.bfloat16, device="meta"),))
+    assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
 
 class _Fp8Linear(nn.Module):
     def __init__(self, scale_dtype, g: int = 0) -> None:
