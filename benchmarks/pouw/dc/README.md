@@ -21,7 +21,7 @@ there; the rates and the GEMM's exactness need the GPU (`run.sh`).
 | `analyze.py` | rows.jsonl → slots a SM a clock, every loop's issue rate, a (issue cycles a tensor instruction takes from the lane beside it), M3's and M4's pass lines, sm_100's TMEM model (honest at L = 32, the L that saturates the tensor, the two-stage LP's ε), the fold's words a clock; `agree A B` checks a repeat |
 | `census.py` | Runs → machine_model's census lines, a device directory a family (`../machine_model/data/devices/sm_90/`, `sm_100/`: census.csv and rows.csv), and the tables: T1 a form, ε_tensor at L = 32, the joint issue rows, q*, L_bal |
 | `run.sh` | The job for one family (below); `DC_BUILD_ONLY=1` builds and gates without a GPU |
-| `probes/uniform.cuh`, `probes/sm90_uniform.cu`, `probes/sm100_uniform.cu` | The uniform datapath: 8 warp-uniform chains of UIMAD + ULOP3, ULOP3, UIADD3 + ULOP3, USHF (funnel shift), UPRMT and ULEA/USHF alone (`uz_`), and beside the honest step (8 IMMA m16n8k32 + duo reading the accumulators: `uh_`), beside it with 64 FFMA (`ug_`) or 32 LOP3 (`ul_`), and beside 32 IMMA a fold (`um_`); each family's table pins every loop's opcodes as the gate saw them, since ptxas keeps the chains uniform only beside an MMA whose accumulators the lanes read (FACET-BREAK) |
+| `probes/uniform.cuh`, `probes/sm90_uniform.cu`, `probes/sm100_uniform.cu`, `probes/sm90_issue.cu`, `probes/sm100_issue.cu` | The uniform datapath: 8 warp-uniform chains of UIMAD + ULOP3, ULOP3, UIADD3 + ULOP3, USHF (funnel shift), UPRMT and ULEA/USHF alone (`uz_`), and beside the honest step (8 IMMA m16n8k32 + duo reading the accumulators: `uh_`), beside it with 64 FFMA (`ug_`) or 32 LOP3 (`ul_`), beside 32 IMMA a fold (`um_`), and beside it with 256 FFMA (`ub_`, the `issue` tables: the most issue-loaded stream); each family's table pins every loop's opcodes as the gate saw them, since ptxas keeps the chains uniform only beside an MMA whose accumulators the lanes read (FACET-BREAK) |
 | `probes/imad_forms.cuh`, `probes/sm90_imad.cu`, `probes/sm100_imad.cu` | The IMAD forms of duo's ALU work: IMAD.HI.U32 alone, beside duo against IMAD and LOP3, and duo with its LEA.HI as IMAD.HI + IMAD on every word (`f_duoi`) and on one in three (`f_duom`) |
 | `uni.sh`, `uniform.py` | Their job for one family and its analysis: UP (the uniform pipe), UNI's lines (UP; an issue slot on the issue rows; no other row, each row's limit recorded), every facet checked at every point, and the IMAD forms; `census --write` puts UNI's lines in the device directory, which census.py's `--write` keeps |
 
@@ -43,7 +43,8 @@ python3 benchmarks/pouw/dc/pipe.py analyze ~/.research/runs/RUN/out --census SM1
 python3 benchmarks/pouw/dc/pipe.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
 python3 benchmarks/pouw/dc/census.py sm90 ~/.research/runs/RUN/out... --write benchmarks/pouw/machine_model/data/devices/sm_90
 research run --on vy-dc-b200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
-python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out --write
+research run --on vy-dc-b200 ... --env UNI_TABLES=issue ... -- bash benchmarks/pouw/dc/uni.sh sm100
+python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/ISSUE_RUN/out --write
 ~~~
 
 The node needs CUDA 13.0 (`/usr/local/cuda-13.0`, driver ≥ 580). Each run builds and SASS-gates everything before it
@@ -114,8 +115,9 @@ that), s4 m16n8k64 a CALL (not timed).
 
 ## The uniform datapath and the IMAD forms (`uni.sh`, 1× H200, 1× B200)
 
-Runs r20261017-095350-02ff (H200) and r20261017-095350-0a80 (B200), 68 gates each, all passing: every uniform chain
-stays uniform alone and beside the honest step, FFMA, LOP3 and the MMA-heavy stream.
+Runs r20261017-095350-02ff and r20261017-103944-a0bf (H200), r20261017-095350-0a80 and r20261017-103944-35c5 (B200),
+76 gates each, all passing: every uniform chain stays uniform alone and beside the honest step, FFMA, LOP3, the
+MMA-heavy stream and the issue-loaded one.
 
 - **UP: one uniform instruction every 2 SMSP-cycles on both** (0.500 a SMSP-cycle for ULOP3, UIADD3, USHF, UPRMT, UIMAD
   and ULEA alike; 1.957 and 1.961 SMSP-cycles with the 2% margin on sm_100 and sm_90).
@@ -124,6 +126,12 @@ stays uniform alone and beside the honest step, FFMA, LOP3 and the MMA-heavy str
   a lane pipe or the tensor pipe to its limit beside the chains (the honest step is latency-bound; the MMA-heavy
   stream reaches 0.74 of M on the B200 and 0.61 on the H200, with mma.sync, not tcgen05 or wgmma), so UNI holds UP
   and an issue slot, and no other row.
+- **Its issue slot is decision 73's, not measured.** No point allows more than 1.18 (B200) or 1.28 (H200) SMSP-cycles
+  of issue a uniform instruction. Beside the honest step a chain costs 0.10 to 1.08 a uniform instruction, and beside
+  the issue-loaded `ub_` stream 0.50 to 0.95 (B200) and 0.81 to 1.23 (H200), but that stream issues only 0.72 of its
+  SMSP's slots without chains (0.81–0.87 with 128), so neither bounds the slot from below. With the issue rows at the
+  least cost beside it (0.49 on the B200, 0.79 on the H200, 2% off, as sm_89's are beside its honest step), the B200's
+  ε at L = 32 would be 1.726 / 1.227 / 1.184% (L = 64: 2.368 / 1.366 / 1.284%); the H200's doesn't move.
 - **The IMAD form of duo's LEA.HI is slower on both.** IMAD.HI.U32 costs 4.19 (B200) and 4.18 (H200) SMSP-cycles,
   twice an IMAD, so rotl(u, r) + y′ as IMAD.HI + IMAD costs about 6 cycles of the IMAD pipe against LEA.HI's 2 of
   the ALU's. Duo with 29% (B200) and 33% (H200) of its LEA.HI in that form takes 17% and 21% longer a word than duo.
