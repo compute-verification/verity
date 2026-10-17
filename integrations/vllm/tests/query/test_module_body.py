@@ -254,6 +254,9 @@ def test_merge_ranks_binds_every_collective_output_to_the_peers_partial_and_keep
     assert g["program_digest_per_rank"] == {"0": m0["program_digest"], "1": m1["program_digest"]}
     assert {x["program_digest"] for x in g["identities"] if x["rank"] == 1} == {m1["program_digest"]}
     assert len(g["identities"]) == len(m0["identities"]) + len(m1["identities"])
+    dead = dict(m1["identities"][-1], output_member="dead")
+    listed = merge_ranks([m0, dict(m1, unreturned=[dead])])
+    assert listed["unreturned"] == [dead] and listed["unreturned_digest"] == fmt.manifest_digest([dead]) != g["unreturned_digest"]
     lost = dict(m1, identities=[x for x in m1["identities"] if x["output_member"] != "shard_rank1"])
     bad = merge_ranks([m0, lost])
     assert not bad["complete"] and bad["tp_peer_binding"]["n_unbound"] == 1 and any(k[:16] == "tp peer binding:" for k in bad["unmodelled"])

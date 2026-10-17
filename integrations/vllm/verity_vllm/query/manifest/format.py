@@ -563,6 +563,13 @@ def manifest_digest(identities: list[dict[str, Any]]) -> str:
     return h.hexdigest()
 
 
+def unreturned_block(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """A manifest's UNRETURNED outputs (`required.Population.unreturned`: no Call reads them, the Program does not return them, no policy
+    requires them): identity rows outside `identities`, with their own digest, so what the word check skipped is auditable."""
+    rows = sorted(rows, key=row_key)
+    return {"unreturned": rows, "unreturned_digest": manifest_digest(rows)}
+
+
 def programs_for(fx: dict[str, Any], programs_root: str) -> dict[str, Any]:
     """The request Program per declared request (build-global / verify), loaded: see `program_dirs_for` for the lookup."""
     return {rid: load_program(d) for rid, d in program_dirs_for(fx, programs_root).items()}
