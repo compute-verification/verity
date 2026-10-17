@@ -79,6 +79,14 @@ import Proofs.Flock.Claims.KS.ZkSlackW
 import Proofs.Flock.Claims.KS.ForkCoupling
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.ZkSlackFit
+import Proofs.Flock.Claims.KS.PlainDraw
+import Proofs.Flock.Claims.KS.PlainDrawAcc
+import Proofs.Flock.Claims.KS.PlainDrawDec
+import Proofs.Flock.Claims.KS.PlainDrawSim
+import Proofs.Flock.Claims.KS.PlainSim
+import Proofs.Flock.Claims.KS.PlainLock
+import Proofs.Flock.Claims.KS.PlainStep
+import Proofs.Flock.Claims.KS.PlainParts
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -398,4 +406,38 @@ a query and level 0's weight under `2^40`, the joined weights are at most `2^41`
 at chances at most `2^{-128}`, so at the coupling's chances where every revealed length before the last round is
 positive (`ZkSlackFit`: `Claims.Flock.sum_slackCW_le`, `Claims.Flock.sum_slackTW_le`, `Claims.Flock.slackFitW_of_le`,
 `Claims.Flock.joinCW_le_room`, `FlockDeploy.KS.m1_slackNums`, `FlockDeploy.KS.zk_slackFitW`,
-`FlockDeploy.KS.zk_slackFitW_δN`). -/
+`FlockDeploy.KS.zk_slackFitW_δN`). The verdict at the statement's draw reads `verify` at the setup at that draw, not the
+record's, so an accepting run gives it at its live outcome whatever draw its record carries (`PlainDraw`:
+`Claims.Bridge.PlainDraw.AcceptsAtD`, `Claims.Bridge.PlainDraw.wrPD`, `FlockDeploy.KS.plainVerdictAt`,
+`FlockDeploy.KS.plainVerdictAt_of_run`). The acceptance lemmas the plain decoders read hold at a draw value by their
+proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
+`FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the draw
+(`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
+`FlockDeploy.KS.plain_hdecHAt`), and KS at the deployed plain verifier's trimmed record holds from a simulator at that
+verdict alone, with nothing asked of the record's draw (`PlainDrawSim`: `FlockDeploy.KS.plain_first_of_simD`,
+`FlockDeploy.KS.PlainSimWrPAtD`, `FlockDeploy.KS.PlainSimWD`, `FlockDeploy.KS.plain_KS_of_simD`). At the coupling's
+chances with every revealed length before the last round positive, each `δ_t` there is at most `2^{-128}`, the plain
+fork rounds are before the last round, a fork's slack weights fall geometrically past its round, and the slack fits
+level 0's room in the plain weight whatever the number of rounds, and a fork bound at most the simulated fork at `fnAt`
+is at most the plain fork's and that slack (`PlainSlackFit`: `Claims.Flock.sum_slackW_le`, `Claims.Flock.sum_slackC_le`,
+`Claims.Flock.slack_fits_fast100`, `FlockDeploy.KS.plainJ_succ_lt`, `FlockDeploy.KS.plain_slack_fits`,
+`FlockDeploy.KS.plain_fork_le_fnAt`). The plain simulator runs `P` round by round on the plain wire, at deployed coins
+it rebuilds from a tape of uniform functions of the revealed live history and the entries the live session revealed,
+which are the coins `fnAt` gives on the live history; a live prover whose messages along the live history are known has
+those rounds as its live outcome (`PlainSim`: `FlockDeploy.KS.plainSim`, `FlockDeploy.KS.plainΦ`,
+`FlockDeploy.KS.Pr_plainΦ`, `FlockDeploy.KS.liveOut_known`, `FlockDeploy.KS.plainSim_root`). A deployed run's messages
+are `P`'s at the history of its coins' bytes, and its acceptance does not read its last coin (`PlainLock`:
+`FlockDeploy.KS.run_dep`, `FlockDeploy.KS.depMsg_congr`, `FlockDeploy.KS.run_acc_iff_last`); along the live history the
+simulator's coins are `plainΦ`'s wherever it has revealed them, so it sends `P`'s rounds and its live outcome is theirs
+(`FlockDeploy.KS.simCoins_agree`, `FlockDeploy.KS.plainSim_msg`, `FlockDeploy.KS.plainSim_liveOut`). Where `P`'s run
+decides and accepts, the record's two rep streams hold `P`'s round messages with their coins, each of the table's coin
+counts, so the simulator's live outcome has the record's reps and proof files at every plain statement in scope, whose
+link points fit a live coin (`PlainStep`: `FlockDeploy.KS.plain_decides_record`, `FlockDeploy.KS.plain_mPts`,
+`FlockDeploy.KS.PlainSimLockstep`, `FlockDeploy.KS.plainSimLockstep`), and with the link coin's points it is the
+record's view (`FlockDeploy.KS.plainSimPts`, `FlockDeploy.KS.plainSimRun`); where it is rejected, the simulator's last
+message is empty, and the verdict at the draw refuses an outcome without proof files (`FlockDeploy.KS.PlainSimAbortAt`,
+`FlockDeploy.KS.plainSimAbortAt`). So KS at the deployed plain verifier's trimmed record holds from two parts of the
+concrete simulator: its live self-clashes give `P`'s accepting runs a raw clash, and its fork advantage is at most its
+simulated fork (`PlainParts`: `FlockDeploy.KS.PlainSimClashAt`, `FlockDeploy.KS.PlainSimForkLe`,
+`FlockDeploy.KS.plainSimWrPAtD_of_parts`, `FlockDeploy.KS.plain_KS_of_parts`).
+-/
