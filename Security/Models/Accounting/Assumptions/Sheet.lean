@@ -48,8 +48,10 @@ a warp instruction) per SMSP are at most a quarter of `width p` a cycle. -/
 def SheetPipe (S : Sheet K P) (Q : Run K) : Prop :=
   ∀ p, ∑ k, (if S.pipe k = some p then (32 : ℝ) else 0) * Q.n k ≤ S.width p / 4 * Q.cycles
 
-/-- `accounting-sheet-smem` (CUDA C++ Programming Guide, Shared Memory). **A5 SMEM**: shared memory moves at most 32
-banks × 4 B = 128 B an SM clock, loads and stores together: 32 B an SMSP-cycle. -/
+/-- `accounting-sheet-smem` (CUDA C++ Programming Guide, Shared Memory). **A5 SMEM**: shared memory serves a request's
+distinct banks together, 32 banks × 4 B = 128 B an SM clock, loads and stores together: 32 B an SMSP-cycle. A
+request's distinct bytes can be one word's (a broadcast load, a store to one address), so a shared-memory class holds
+one request's 128 B whatever its width. -/
 def SheetSmem (S : Sheet K P) (Q : Run K) : Prop := ∑ k, S.smem k * Q.n k ≤ 32 * Q.cycles
 
 end Run

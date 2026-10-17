@@ -12,7 +12,9 @@ is SM-clocked, and each row is in SMSP-cycles a warp instruction (four SMSPs an 
   operand type (A3);
 * one facet per pipe `p`: `128 / width_p` for the classes on `p`, `width_p` the Programming Guide's results an SM
   clock (A4);
-* shared memory: `smem_k / 32`, a class's bytes over a quarter of the SM's 128 B a clock (A5).
+* shared memory: `smem_k / 32`, the bank bytes a class's warp instruction holds over a quarter of the SM's 128 B a
+  clock (A5): one request's 128 B for every shared-memory class, since a broadcast load or a store to one address
+  moves fewer distinct bytes than its width.
 
 The machine model's `DS-NN` vectors are these rows at each device's vendor values (status `datasheet`).
 -/
@@ -22,7 +24,7 @@ namespace Accounting.TS
 /-- **A device's data sheet** over classes `K` and pipes `P`: its maximum boost clock `fmax`; per class, the dense
 tensor MACs `macs k` one warp instruction does (`0` off the tensor pipe; a sparse form at its dense equivalent), the
 sheet's dense MACs an SM clock `peak k` for its operand type, the Nsight Compute pipe `pipe k` it issues to (`none`:
-issue only) and the shared-memory bytes `smem k` it moves; per pipe, the Programming Guide's results an SM clock
+issue only) and the shared-memory bank bytes `smem k` it holds at least (`0` off shared memory); per pipe, the Programming Guide's results an SM clock
 `width p`. -/
 structure Sheet (K P : Type) where
   fmax : ℝ
