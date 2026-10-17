@@ -11,8 +11,9 @@ The goals of `Goals` on the record, proved at every honest run (`Run`) from thre
   since `Json.parse`, `canon` and `Json`'s `==` are opaque.
 * `Claims.Out64 H`: the oracle's outputs are 64 bytes, as SHA-512's, which `Claims.Complete` reads. S12 compares each
   round digest's length with the empty message's, so an oracle with outputs of varying length fails the honest record.
-* `ProverOk`: at the case's table, the commitment's cap is non-empty and under `2^64` bytes, and each rep records a
-  round, each of at most `65536` coins (`RepOk`).
+* `ProverOk`: at the case's table, the commitment's cap is non-empty and under `2^64` bytes, and each rep, on the
+  table's extra claims, records a round, each of at most `65536` coins (`RepOk`); it holds at `Out64`
+  (`Replay.proverOk`).
 
 What they read of the statement, `StmtOk` (no keyed coin tree, a non-empty `Σ`, a printable draw that decodes, and the
 statement's draw), holds at every good case under `JsonSpec` (`stmtOk`, `Stmt`).

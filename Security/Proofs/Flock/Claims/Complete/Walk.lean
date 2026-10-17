@@ -394,14 +394,15 @@ theorem _root_.FlockComplete.Run.walkAt {H : Claims.Msg → Claims.Msg} {rel : R
     rfl
 
 /-- **Flock's completeness at the deployed plain verifier**, at the deployed relation (`Readable.relation`), from the
-named premises: the record's JSON (`JsonSpec`), the oracle's 64-byte outputs (`Out64`), what the record needs of the
-prover's pieces (`ProverOk`), the printed record's length (`RecordFits`), the Merkle schemes' digest widths
-(`SchemeWidths`), and Ligerito's final identity at every rep (`LgFinal`). The session walk (`Run.walkAt`,
-`Run.repWalk`) aligns every rep. -/
+named premises: the record's JSON (`JsonSpec`), the oracle's 64-byte outputs (`Out64`), the printed record's length
+(`RecordFits`), and Ligerito's final identity at every rep (`LgFinal`). What the record needs of the prover's pieces
+(`ProverOk`, `proverOk`) and the Merkle schemes' digest widths (`SchemeWidths`, `schemeWidths`) follow from `Out64`, and
+the session walk (`Run.walkAt`, `Run.repWalk`) aligns every rep. -/
 theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H)
-    (hP : JsonRT.ProverOk H Readable.relation) (hF : JsonRT.RecordFits H Readable.relation)
-    (hW : SchemeWidths H Readable.relation) (hfin : LgFinal H Readable.relation) :
+    (hF : JsonRT.RecordFits H Readable.relation) (hfin : LgFinal H Readable.relation) :
     Claims.Flock.Complete H (deployPlain Readable.relation) (δc H) := by
+  have hP : JsonRT.ProverOk H Readable.relation := proverOk h64
+  have hW : SchemeWidths H Readable.relation := schemeWidths h64
   have w : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2,
       ZcAt o i r ∧ LcAt o i r ∧ RsAt o i r ∧ LgAt o i r ∧ LgCount o i r :=
     fun o _ hi _ hr => o.walkAt S h64 hP hi hr
