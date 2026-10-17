@@ -6,8 +6,8 @@
 # builds), and fstep co (FILL_SMS -1, FW = AFW = 0: the step beside the pump at the lowest priority) for each CP_RUNS
 # entry, against the cuBLASLt step alone on the whole GPU; the control (c1) is the same co step with flin's default
 # tiles. A co run may take only the linears or only attention (FSTEP_KIND), flin without PDL, and another pump shape.
-# Builds: fit (FLIN_FIT), fit2 (FLIN_FIT=2), fitx (FLIN_FIT, the pump's NC 4 the provisional XIN13 fold), c1 (default
-# tiles), all with the 1-block pump; dgate runs on every build, and every build's dfill_k registers and SASS are kept.
+# Builds: fit (FLIN_FIT), fit2 (FLIN_FIT=2), fitx (FLIN_FIT, the pump's NC 4 the provisional XIN13 fold), fitxy and fitxt
+# (fitx, its pump yielding the SMs flin's CTAs occupy: PF_YIELD), c1 (default tiles), all with the 1-block pump; dgate runs on every build, and every build's dfill_k registers and SASS are kept.
 # (A software-pipelined pump, B fragment j + 1's MMAs under j's folds, was slower alone and beside the step,
 # r20261017-090156-4ab8: ptxas already spaces the MMAs, and duo's fold is bound by the ALU-heavy pipe.) CP_ALONE
 # ("BUILD:NC:S ...") runs the pump alone (dalone) and CP_NCU ("BUILD:NC:S ...") ncu over one of its launches, with
@@ -17,19 +17,22 @@ export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/pouw/filler
 export B; B=$(mktemp -d /tmp/capfillf.XXXXXX); trap 'rm -rf "$B"' EXIT
-# CP_RUNS: BUILD,B,L,FSTEP_KIND,FLIN_PDL,W:NC:S[,FILL_SMS] a step each, co unless FILL_SMS > 0 puts the pump on a split
+# CP_RUNS: BUILD,B,L,FSTEP_KIND,FLIN_PDL,W:NC:S[,FILL_SMS[,FLIN_GRID]] a step each, co unless FILL_SMS > 0 puts the pump on
+# a split, FLIN_GRID flin's CTAs (default one an SM)
 # (default: the fit build at each decode point, then the control at B 32, whole steps beside the pump at 8:2:256)
 export CP_RUNS=${CP_RUNS:-"fit,1,2048,2,1,8:2:256 fit,32,2048,2,1,8:2:256 fit,128,2048,2,1,8:2:256 fit,256,2048,2,1,8:2:256 c1,32,2048,2,1,8:2:256"}
 export CP_PAD=${CP_PAD:-4} CP_FGATE=${CP_FGATE:-fit} CP_FLIN=${CP_FLIN:-fit} CP_ALONE=${CP_ALONE:-} CP_NCU=${CP_NCU:-}
-export CP_NCU_METRICS=${CP_NCU_METRICS:-}
+export CP_NCU_METRICS=${CP_NCU_METRICS:-} CP_YIELD_NS=${CP_YIELD_NS:-1000}
 [ "$CP_FGATE" = none ] && CP_FGATE=""
 [ "$CP_FLIN" = none ] && CP_FLIN=""
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
-for v in CP_RUNS CP_PAD CP_FGATE CP_FLIN CP_ALONE CP_NCU CP_NCU_METRICS; do echo "$v=${!v}"; done > "$O/params.txt"
+for v in CP_RUNS CP_PAD CP_FGATE CP_FLIN CP_ALONE CP_NCU CP_NCU_METRICS CP_YIELD_NS; do echo "$v=${!v}"; done > "$O/params.txt"
 
-declare -A FLAGS=([fit]="-DFLIN_FIT" [fit2]="-DFLIN_FIT=2" [fitx]="-DFLIN_FIT -DPFILL_XIN13" [c1]="")
+# fitxy, fitxt: fitx whose pump yields the SMs flin's CTAs occupy (PF_YIELD 1: waits; 2: sleeps CP_YIELD_NS a read)
+declare -A FLAGS=([fit]="-DFLIN_FIT" [fit2]="-DFLIN_FIT=2" [fitx]="-DFLIN_FIT -DPFILL_XIN13" [c1]=""
+  [fitxy]="-DFLIN_FIT -DPFILL_XIN13 -DPF_YIELD=1" [fitxt]="-DFLIN_FIT -DPFILL_XIN13 -DPF_YIELD=2 -DPF_YIELD_NS=$CP_YIELD_NS")
 builds=$(for x in fit $CP_FGATE $CP_FLIN $CP_RUNS $CP_ALONE $CP_NCU; do x=${x%%,*}; echo "${x%%:*}"; done | sort -u)
 # shellcheck disable=SC2086
 export BUILDS; BUILDS=$(echo $builds)
@@ -87,10 +90,11 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
     ncu --import "$r.ncu-rep" --page raw --csv > "$r-raw.csv" 2>&1
   done
   for run in $CP_RUNS; do
-    IFS=, read -r b bb l kind pdl pump fsm <<< "$run"
+    IFS=, read -r b bb l kind pdl pump fsm grid <<< "$run"
     fold=duo; case $b in fitx*) fold=xin13 ;; esac
     case $pump in *:9:*) fold=arx ;; esac
-    FSTEP_KIND=$kind FLIN_PDL=$pdl FSTEP_PUMP=$pump DFILL_PAD_KB=$CP_PAD FLIN_LM=1 "$B/dcap_$b" fstep "$bb" "$l" 0 2 0 0 \
+    FSTEP_KIND=$kind FLIN_PDL=$pdl FSTEP_PUMP=$pump DFILL_PAD_KB=$CP_PAD FLIN_LM=1 FLIN_GRID=${grid:-0} \
+      "$B/dcap_$b" fstep "$bb" "$l" 0 2 0 0 \
       "${fsm:--1}" 2>> "$O/errors.txt" \
       | sed "s/^{\"mode\": \"fstep\"/{\"mode\": \"fstep\", \"build\": \"$b\", \"fold\": \"$fold\", \"pad_kb\": $CP_PAD/" \
       >> "$O/fstep.jsonl"

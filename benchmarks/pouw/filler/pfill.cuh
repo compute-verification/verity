@@ -127,6 +127,19 @@ constexpr bool PF_R9 = false;
 #define PF_ROUNDS 1
 #endif
 static_assert(PF_ROUNDS >= 1 && PF_ROUNDS <= 64, "PF_ROUNDS is 1..64");
+// PF_YIELD: a pump warp yields its SM while a serving CTA marks it (pf_busy[smid] > 0: flin's consumer warps, from
+// griddepcontrol.wait to their flush), read every PF_YIELD_J B fragments one read ahead. 1 waits until the mark clears,
+// 2 sleeps PF_YIELD_NS a read while it holds. What a tile computes is unchanged; only when.
+#ifndef PF_YIELD
+#define PF_YIELD 0
+#endif
+#ifndef PF_YIELD_J
+#define PF_YIELD_J 16
+#endif
+#ifndef PF_YIELD_NS
+#define PF_YIELD_NS 256
+#endif
+static_assert(PF_YIELD >= 0 && PF_YIELD <= 2 && PF_YIELD_J % 4 == 0, "PF_YIELD is 0, 1 or 2; PF_YIELD_J a multiple of 4");
 __host__ __device__ constexpr uint64_t pf_dom(int kd) {
   return kd == PF_E2M1 ? PF_DOM4 : kd == PF_BITS ? PF_DOM01 : kd == PF_BU ? PF_DOM_BU : PF_DOM;
 }
@@ -229,6 +242,9 @@ __host__ __device__ inline uint32_t pf_z0(uint32_t pos) { return rf_pfill_z0(pos
 __host__ __device__ inline uint64_t pf_fold(uint64_t K, uint32_t pos, uint64_t v) { return smix(smix(K ^ pos) ^ v); }
 
 #ifdef __CUDACC__
+#if PF_YIELD
+__device__ int pf_busy[256];
+#endif
 // rs_compress's rounds, 16 a loop iteration: a fifth of its code, so the hashing phases fetch fewer instructions
 __device__ __forceinline__ void pf_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f,
                                          uint64_t& g, uint64_t& h, uint64_t k, uint64_t wi) {
@@ -376,6 +392,15 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
     int f0 = 0, next = (w >> 2) & 1 ? P / 2 : P;
     agen(0);
     const uint8_t* bp = Bs + g * 32 + 8 * t;
+#if PF_YIELD
+    const volatile int* busy;
+    {
+      unsigned sm;
+      asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
+      busy = &pf_busy[sm & 255];
+    }
+    int mark = 0;
+#endif
 #pragma unroll 1
     for (int f = 0; f < S; f += 4) {
       if (f == next) {
@@ -403,6 +428,18 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
       }
 #pragma unroll 4
       for (int j = 0; j < TN / 8; j++) {
+#if PF_YIELD
+        if (j % PF_YIELD_J == 0) {
+          if (mark > 0) {
+            if (PF_YIELD == 1)
+              while (*busy > 0) __nanosleep(PF_YIELD_NS);
+            else
+              __nanosleep(PF_YIELD_NS);
+            __syncwarp();
+          }
+          mark = *busy;
+        }
+#endif
         const uint2 b = *(const uint2*)(bp + j * 256);
 #pragma unroll
         for (int c = 0; c < 4; c++) {

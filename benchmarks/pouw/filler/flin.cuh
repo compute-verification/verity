@@ -394,6 +394,15 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB
   // consumer
   const int wn = warp % CWN, wm = warp / CWN, g = lane >> 2, t = lane & 3;
   asm volatile("griddepcontrol.wait;" ::: "memory");
+#if PF_YIELD
+  int* busy = nullptr;
+  if (lane == 0) {
+    unsigned sm;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
+    busy = &pf_busy[sm & 255];
+    atomicAdd(busy, 1);
+  }
+#endif
   {
     const long long n4 = a.zn / 4, z0 = (long long)blockIdx.x * n4 / gridDim.x, z1 = (long long)(blockIdx.x + 1) * n4 / gridDim.x;
     int4* z = reinterpret_cast<int4*>(a.Z);
@@ -462,6 +471,9 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), FW == 0 ? FLIN_MINB
   flush(nt);
   __syncwarp();
   if (lane == 0) atomicAdd(&flag[0], 1);
+#if PF_YIELD
+  if (lane == 0) atomicSub(busy, 1);
+#endif
 }
 
 // ---------------------------------------------------------------- attention blocks with filler warps
@@ -1252,7 +1264,8 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
 // receipts are reported with the rest. FILL_SMS -1 (co): the pump on every SM at the lowest stream priority and the flin
 // arms on the whole GPU at the highest, so with FW = AFW = 0 the last arm is the step beside a co-resident pump (a
 // FLIN_FIT build with a 1-block pump, PF_CTAS=1). FSTEP_KIND=0|1 runs only the linears and lm_head, or only attention, in
-// every arm. A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
+// every arm. FLIN_GRID > 0: flin's CTAs (default one an SM; a split's step SMs); in a PF_YIELD build the pump yields the
+// SMs they occupy. A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
 // step at B. The filler warps' MACs are their step counts over the last rep's launches (each step's tiles are the next
 // `per` ids, fused_layout); the last linear's output is checked on every row when down runs through flin, and so is
 // lm_head's when it does.
@@ -1299,6 +1312,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   const std::vector<Lt> p = lin_plans(d, B);
   Flin f;
   flin_prepare(d, f, flin_m_for(B), true);
+  if (const char* e = getenv("FLIN_GRID"); e && atoi(e) > 0) f.grid = atoi(e);
   if (g_flin_lm && !seq.empty()) flin_prepare_lm(d, f);
   f.thr = thr;
   f.stop = g_flin_stop;
@@ -1407,7 +1421,8 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
          co ? "co" : "split", lo, hi, smem_sm, flin_smem(f.M), (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1],
          pw, pnc, ps, fs ? pf.tiles : 0, fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
-  printf("\"M\": %d, \"kind\": %d, ", f.M, g_fstep_kind);
+  printf("\"M\": %d, \"kind\": %d, \"flin_grid\": %d, \"yield\": [%d, %d, %d], ", f.M, g_fstep_kind, f.grid, PF_YIELD,
+         PF_YIELD_J, PF_YIELD_NS);
   printf("\"APS\": %d, \"ALZ\": %d, \"LM\": %d, \"lm_mismatches\": %llu, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.lazy,
          (int)f.lm, lm_bad, a.pg[0], a.pg[1]);
   printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, \"ANC\": %d, "
