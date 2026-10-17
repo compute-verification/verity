@@ -936,3 +936,15 @@ def test_the_daily_run_publishes_nothing_after_a_probe_a_refusal_an_unclean_tree
     assert D.daily(n, lines.append) == rc
     assert why in lines[-1] and "nothing published" in lines[-1], lines
     assert not b.objects
+
+
+def test_a_dependency_whose_name_lean_escapes_counts_as_fetched(tmp_path):
+    """Lake writes a name Lean must escape as `«doc-gen4»` in the manifest and `doc-gen4` on disk; reading the manifest's
+    name raw made every package depending on doc-gen4 (Security/Proofs) look unfetched, and the cache built it from source."""
+    (tmp_path / "lake-manifest.json").write_text(json.dumps({"packages": [
+        {"name": "«doc-gen4»", "type": "git"}, {"name": "Arklib", "type": "git"}, {"name": "security", "type": "path"}]}))
+    (tmp_path / ".lake" / "packages" / "Arklib").mkdir(parents=True)
+    assert not C.fetched_deps(tmp_path)
+    (tmp_path / ".lake" / "packages" / "doc-gen4").mkdir()
+    assert C.fetched_deps(tmp_path)
+    assert C.unescape("«doc-gen4»") == "doc-gen4" and C.unescape("Arklib") == "Arklib"

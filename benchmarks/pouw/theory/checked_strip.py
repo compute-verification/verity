@@ -42,7 +42,14 @@ Parts:
   words are narrow there too (T at 8 binary products an IMMA, co32c's D at 7), and every route's fraction is chosen at
   once by an exact minimum over the vertices of a small linear program. O's route gains nothing at r = 32 and beats
   r = 32's ε at r = k/2 for any x below about 24; co32c's linears gain nothing from any route at fold 3 for x ≥ 4, or
-  at cheaper folds for x ≥ 8.
+  at cheaper folds for x ≥ 8. co32c's recombination at folds 3, 2, 1.5 and 1, and with O committed as one more word.
+- P. P·V with committed strip digits (`pv`, `PVBlock`): P peeled (P = P_prob − 64 in Lean coordinates, P_prob ∈
+  [0, 126], with U and a fresh bit c), V served (X = V + b), keys after the query masked. Ycum, V's residue sums over
+  the complete key blocks before the query's, is shared by its 32-query block and committed as co32c's digits; the
+  diagonal block's noise W goes into O′ = T_last − U·A_0 − W, so every honest product (k + L + m·r a cell) feeds a
+  committed word. The s32 identities and the served output 2(O + 64S) − S = Σ (2P_prob + 2c − 1)X; the collapse c
+  removes (without c a one-hot P row makes O a copy and frees U·A_0 and W); cross ranks (q + 1) + r at every instance;
+  the TS model's prefill ε and γ against adopted P·V's at a one-hot P row, with the zero-instance routes.
 
 Run from the repository root: `uv run --no-project --with numpy --with python-sat --with-editable
 benchmarks/pouw/exact_kit python -B benchmarks/pouw/theory/checked_strip.py --mutations` (`--full` adds the 2×2
@@ -143,7 +150,106 @@ class Block:
         return np.stack(out, axis=1) & MASK
 
 
+class PVBlock(Block):
+    """P·V's block (design `pv`): n query rows at key positions q_i (default the last n keys) over k keys, P peeled (in
+    Lean coordinates P = P_prob − 64, P_prob ∈ [0, 126]) and V served, keys κ > q_i masked. The last L keys are the
+    diagonal block; Ycum, V's residue sums over the complete blocks before it, is shared by the query block, and its
+    redundant base-128 digits are committed with carry coins z. The diagonal block's noise U·X goes into O′. `two`
+    False drops c (P clean, as adopted). Bits: U's planes, c, b, z."""
+
+    def __init__(self, n, k, n2, r, L, w=W_RE, two=True, q=None):
+        assert k % L == 0 and L % r == 0 and n <= L
+        self.design, self.n, self.k, self.n2, self.r, self.L, self.w = "pv", n, k, n2, r, L, np.asarray(w)
+        self.two, self.kinds = two, ("T", "D", "Op")
+        self.q = np.array(q if q is not None else [k - n + i for i in range(n)])
+        assert len(self.q) == n and all(k - L <= x < k for x in self.q)
+        self.np = len(self.w)
+        self.nU = n * r * self.np
+        self.nc = n * k if two else 0
+        self.nb = k * n2
+        g = (k - L) // r
+        self.m = n_digits(g * -128, g * 127) if g else 1
+        self.nz = (self.m - 1) * r * n2
+        self.nbits = self.nU + self.nc + self.nb + self.nz
+        self.left = list(range(self.nU + self.nc))
+        self.right = list(range(self.nU + self.nc, self.nbits))
+        self.T = k // L
+
+    def __str__(self):
+        return f"pv{'' if self.two else ' without c'} (n, k, n', r, L) = ({self.n}, {self.k}, {self.n2}, {self.r}, " \
+               f"{self.L}), q = {self.q.tolist()}"
+
+    def mask(self):
+        return (np.arange(self.k)[None, :] <= self.q[:, None]).astype(np.int64)
+
+    def words(self, P, V, Z):
+        U, c, b, z = self.fields(Z)
+        out = pv_words(P, V, U, c, b, z, self.r, self.L, self.m, self.mask())
+        T, D, Op = out
+        cells = []
+        for i in range(self.n):
+            for l in range(self.n2):
+                cells.extend(t[:, i, l] for t in T)
+                cells.extend(d[:, i, l] for d in D)
+                cells.append(Op[:, i, l])
+        return np.stack(cells, axis=1) & MASK
+
+
+def pv_words(P, V, U, c, b, z, r, L, m, M, led=None):
+    """P·V's words, batched over a leading axis (or none): T_t (masked P̃X), D_d = U·A_d(Ycum) (1 ≤ d < m) and
+    O′ = T_last − U·A_0(Ycum) − W, W = Σ_{diagonal κ ≤ q} U(·, κ mod r) X(κ). With a ledger (unbatched), every product
+    is priced as computed, masked entries included (an IMMA computes them)."""
+    k = P.shape[-1]
+    mm = led.int8 if led is not None else (lambda A_, B_, what: np.matmul(A_.astype(np.int64), B_.astype(np.int64)))
+    Ph = (P + c) * M
+    Ue = U[..., np.arange(k) % r]
+    Pt = Ph + Ue * M
+    X = V + b
+    T, acc = [], 0
+    for t in range(k // L):
+        sl = slice(t * L, (t + 1) * L)
+        acc = acc + mm(Pt[..., sl], X[..., sl, :], f"T segment {t}")
+        T.append(acc)
+    g = (k - L) // r
+    Yc = X[..., :k - L, :].reshape(*X.shape[:-2], g, r, X.shape[-1]).sum(-3) if g else 0 * X[..., :r, :]
+    A = digits(Yc, z, m)
+    D = [mm(U, a, f"D_{d + 1}") for d, a in enumerate(A[1:])]
+    sl = slice(k - L, k)
+    W = mm(Ue[..., sl] * M[..., sl], X[..., sl, :], "W (diagonal block's noise)")
+    Op = T[-1] - mm(U, A[0], "U·A_0") - W
+    return T, D, Op
+
+
+def pv_served(Op, D, X, M):
+    """(O, S, 2·served): O = O′ − Σ 128^d D_d = Σ_κ M P̂ X (Lean coordinates, s32), S = Σ_{κ ≤ q} X, and the served
+    output doubled, 2(O + 64 S) − S = Σ M (2 P_prob + 2c − 1) X, exact (the bench's (P_prob + c − ½)·X)."""
+    O = Op.astype(np.int64) - sum(d.astype(np.int64) << (7 * (j + 1)) for j, d in enumerate(D))
+    S = M.astype(np.int64) @ X.astype(np.int64)
+    return O, S, 2 * (O + 64 * S) - S
+
+
 def instance(B: Block, kind, rng, vbits=8):
+    if isinstance(B, PVBlock):
+        V = rng.integers(-128, 127, (B.k, B.n2))
+        if kind == "zero":
+            return np.zeros((B.n, B.k), np.int64), np.zeros((B.k, B.n2), np.int64)
+        if kind == "random":
+            return rng.integers(0, 127, (B.n, B.k)) - 64, V
+        if kind == "p0":
+            return np.full((B.n, B.k), -64, np.int64), V
+        if kind == "onehot":
+            P = np.zeros((B.n, B.k), np.int64)
+            P[np.arange(B.n), rng.integers(0, B.q + 1)] = 126
+            return P - 64, V
+        if kind == "balanced":
+            g = (B.k - B.L) // B.r
+            a = rng.integers(1, 128, (B.r, B.n2))
+            sign = np.where(np.arange(g) % 2 == 0, 1, -1)
+            V[:B.k - B.L] = (sign[:, None, None] * a[None]).reshape(B.k - B.L, B.n2)
+            if g % 2:
+                V[B.k - B.L - B.r:B.k - B.L] = 0
+            return rng.integers(0, 127, (B.n, B.k)) - 64, V
+        raise ValueError(kind)
     vlo, vhi = (-128, 126) if vbits == 8 else (-64, 62)
     if kind == "zero":
         return np.zeros((B.n, B.k), np.int64), np.zeros((B.k, B.n2), np.int64)
@@ -518,12 +624,55 @@ def word_routes(design, k, x):
     return routes
 
 
-def ts_best(design, k, n, fold, routes):
+#: P·V's vector work a tile beyond the folds, in warp instructions (unmeasured estimates): extracting one digit of one
+#: Ycum entry (mask or shift, then the carry), and the epilogue's one extra op a cell for the offset and the centring.
+PV_DIGIT_OPS = 2.0
+PV_SERVE_OPS = 4.0
+
+
+def ts_pv(k, fold, rep):
+    """(honest, cheater, served-output part) as (MMAs, other warp instructions) for one P·V tile, 16 queries of a
+    32-query block by 8 channels, at depth k keys (the diagonal block included), with `rep` query heads sharing a KV
+    head and so its Ycum, digits and prefix sums. Honest: k/32 T IMMAs, m − 1 D IMMAs, U·A_0 and the diagonal block's
+    W; folds of k/32 + m words; the served output's 4(m − 1) IMADs and PV_SERVE_OPS; Ycum's and S's adds (128 entries
+    each a tile) and Ycum's digits. The cheater does every MMA and fold (each feeds a committed word) and is given the
+    rest free: the sums, the digits and the served output."""
+    g = k // 32 - 1
+    m = n_digits(g * -128, g * 127) if g else 1
+    mmas = k // 32 + (m + 1 if g else 1)
+    folds = 4 * fold * (k // 32 + m)
+    serve = 4 * (m - 1) + PV_SERVE_OPS
+    sums = (4 + 4 + 4 * m * PV_DIGIT_OPS) / rep
+    return (mmas, folds + serve + sums), (mmas, folds), serve, m
+
+
+def ts_pv_adopted(k, fold, rep):
+    """(honest, cheater) for adopted P·V's tile in the same units: T's k/32 IMMAs, the peel's strip U·Ycum on two int8
+    limbs and its diagonal triangle (3 IMMAs), folds of T and the checked O (k/32 + 1 words), the offset and the
+    epilogue, and Ycum's and S's adds and limb split. At a one-hot P row O is a copy (127·X(κ*)), so the cheater
+    serves it and does T alone: the strip, the sums and the epilogue are free."""
+    folds = 4 * fold * (k // 32 + 1)
+    honest = (k // 32 + (3 if k > 32 else 1), folds + PV_SERVE_OPS + (4 + 4 + 4 * 2 * PV_DIGIT_OPS / 2) / rep)
+    return honest, (k // 32, folds)
+
+
+def pv_routes(k, x):
+    """P·V's zero-instance routes (P_prob = 0, V = 0): T increments (c + U)·b at 8x an IMMA, D_d = U·z at 7x, W = U·b
+    at 7x, and O′ through O = c·b at x·k/32 in place of U·A_0 and W."""
+    g = k // 32 - 1
+    m = n_digits(g * -128, g * 127) if g else 1
+    routes = [(-(k // 32), 8 * x * (k // 32)), (-1, 7 * x), (-(2 if g else 1), x * k / 32)]
+    if m > 1:
+        routes.append((-(m - 1), 7 * x * (m - 1)))
+    return routes
+
+
+def ts_best(design, k, n, fold, routes, tile=None):
     """(honest's time, the best cheater's) when the cheater moves any fraction φ_j ∈ [0, 1] of each route's work off
     its tile, changing (MMAs, other instructions) by Σ φ_j (dM_j, dO_j). Minimising the max of the facets over the box
     is a linear program in (φ, t); its optimum is a vertex, where len(routes) + 1 of the facet and box constraints
-    are tight, so every such vertex is solved for and the feasible minimum taken."""
-    hon, (Mc, Oc) = ts_tile(design, k, n, fold)
+    are tight, so every such vertex is solved for and the feasible minimum taken. `tile` overrides ts_tile."""
+    hon, (Mc, Oc) = tile or ts_tile(design, k, n, fold)
     R = len(routes)
     dM = np.array([d[0] for d in routes], float)
     dO = np.array([d[1] for d in routes], float)
@@ -975,6 +1124,155 @@ def main():
     checks.check("H co32c when the served output feeds a checked value (the cheater recombines O too): ε < 0.1% on "
                  "Llama-3.1 8B and 70B linears at every fold", all(v < 1e-3 for v in recomb.values()),
                  str(out["ts_co32c_recombination_charged"]))
+    rc = {}
+    for f in (3, 2, 1.5, 1):
+        for mname, shapes in TS_SHAPES.items():
+            acc = {"free": [0.0, 0.0], "charged": [0.0, 0.0], "O committed": [0.0, 0.0], "plain": 0.0}
+            for _, kk, nn in shapes:
+                m_ = n_digits((kk // 32) * -128, (kk // 32) * 127)
+                (Mh, Oh), (Mc, Oc) = ts_tile("co32c", kk, nn, f)
+                th = ts_time(Mh, Oh)
+                th_o = ts_time(Mh, Oh + 4 * f)
+                via_imma = (1.0, -4.0 * (m_ - 1))
+                tile_o = ((Mh, Oh + 4 * f), (Mc, Oc + 4 * f + 4 * (m_ - 1)))
+                for key, (h_, c_) in {"free": (th, ts_time(Mc, Oc)),
+                                      "charged": (th, ts_time(Mc, Oc + 4 * (m_ - 1))),
+                                      "O committed": (th_o, ts_best("co32c", kk, nn, f, [via_imma], tile_o)[1])}.items():
+                    acc[key][0] += h_ * nn
+                    acc[key][1] += c_ * nn
+                acc["plain"] += 16 * (kk // 32) * nn
+            for key in ("free", "charged", "O committed"):
+                rc[f"fold={f} {mname} eps {key}"] = acc[key][0] / acc[key][1] - 1
+                rc[f"fold={f} {mname} gamma {key}"] = acc[key][0] / acc["plain"]
+    out["ts_co32c_recombination"] = {k_: (f"{v:.4%}" if " eps " in k_ else f"{v:.4f}") for k_, v in rc.items()}
+    checks.check("H co32c's recombination at folds 3, 2, 1.5, 1: committing O as one more word (the cheater's IMADs, "
+                 "or at A = B = 0 one IMMA O = T_last − U·Y, either way charged) gives the charged ε, the residue "
+                 "sums' share (< 0.08% at fold 3, < 0.031% at fold ≤ 2), for γ ≤ 0.4% above co32c's",
+                 all(abs(rc[f"fold={f} {m} eps O committed"] - rc[f"fold={f} {m} eps charged"]) < 1e-5
+                     and rc[f"fold={f} {m} eps O committed"] < (8e-4 if f == 3 else 3.1e-4)
+                     and rc[f"fold={f} {m} gamma O committed"] < 1.004 * rc[f"fold={f} {m} gamma free"]
+                     for f in (3, 2, 1.5, 1) for m in TS_SHAPES),
+                 str(out["ts_co32c_recombination"]))
+
+    # ------------------------------------------------------------ P: P·V with committed strip digits (`pv`)
+    n, k, n2, r, L = 16, 2048, 8, 32, 32
+    qs = [k - L + 2 * i for i in range(n)]
+    Bp = PVBlock(n, k, n2, r, L, q=qs)
+    M = Bp.mask()
+    m = Bp.m
+    pv_ok, fresh = {}, {}
+    for inst in ("random", "zero", "p0", "onehot", "balanced"):
+        P, V = instance(Bp, inst, rng)
+        U, c, b = draw(rng, n, k, n2, r)
+        z = rng.integers(0, 2, (m - 1, r, n2))
+        T, D, Op = pv_words(P, V, U, c, b, z, r, L, m, M)
+        X = V + b
+        O, S, served2 = pv_served(Op, D, X, M)
+        T32, D32, Op32 = [s32(t) for t in T], [s32(d) for d in D], s32(Op)
+        O32 = s32(Op32.astype(np.int64) - sum(d.astype(np.int64) << (7 * (j + 1)) for j, d in enumerate(D32)))
+        direct = (M * (P + c)) @ X
+        Pt = M * (P + c + U[:, np.arange(k) % r])
+        pv_ok[inst] = (np.array_equal(O32, s32(direct)) and np.array_equal(O, direct)
+                       and np.array_equal(served2, (M * (2 * (P + 64) + 2 * c - 1)) @ X)
+                       and np.array_equal(T32[-1], s32(Pt @ X)) and Pt.min() >= -128 and Pt.max() <= 127
+                       and all(int(a.min()) >= -128 and int(a.max()) <= 127
+                               for a in digits(X[:k - L].reshape(-1, r, n2).sum(0), z, m)))
+        fresh[inst] = (int(np.count_nonzero(D32[0])) if D32 else None,
+                       np.array_equal(O + 64 * S * (inst == "p0"), (M * c) @ X) if inst in ("zero", "p0") else None)
+    out["pv_identities"] = {"shape": str(Bp), "m": m, "ok": pv_ok, "D_1 nonzero cells, O = c·X": fresh}
+    checks.check("P1 P·V (`pv`, k = 2048 keys, 16 queries across the diagonal block, r = L = 32): O′ − Σ 128^d D_d = "
+                 "Σ_{κ ≤ q} P̂X in s32, the served 2(O + 64S) − S = Σ (2P_prob + 2c − 1)X exactly, T_last = P̃X, P̃ "
+                 "and every digit int8, at a random, the zero, P_prob = 0, a one-hot P and a structured V",
+                 all(pv_ok.values()), str(out["pv_identities"]))
+    checks.check("P2 at the zero instance (O) and at P_prob = 0 (O + 64S, P being −64 in Lean coordinates) the served "
+                 "product is c·X, the dither's product, so O′ is fresh; D_1 is nonzero in ≥ 95% of the cells", all(fresh[i][1] and fresh[i][0] >= 0.95 * n * n2
+                                                      for i in ("zero", "p0")), str(fresh))
+    pv_m = {ctx: n_digits((ctx // 32 - 1) * -128, (ctx // 32 - 1) * 127) for ctx in (2048, 8192, 32768, 131072)}
+    out["pv_digits"] = pv_m
+    checks.check("P3 Ycum's digits at full context (keys − 32 terms over 32 residues, 8-bit X): m = 2 at 2K, 3 at 8K, "
+                 "32K and 128K", pv_m == {2048: 2, 8192: 3, 32768: 3, 131072: 3}, str(pv_m))
+    P, V = instance(Bp, "onehot", rng)
+    U, c, b = draw(rng, n, k, n2, r)
+    z = rng.integers(0, 2, (m - 1, r, n2))
+    cut = {}
+    for two in (False, True):
+        cc = c if two else np.zeros_like(c)
+        T, D, Op = pv_words(P, V, U, cc, b, z, r, L, m, M)
+        X = V + b
+        hot = np.argmax(P, axis=1)
+        copy = 126 * X[hot] - 64 * (M @ X)
+        cut[two] = np.array_equal(s32(copy + sum(d << (7 * (j + 1)) for j, d in enumerate(D))), s32(Op))
+    checks.check("P4 the collapse c removes: without c, at a one-hot P row O = 126·X(κ*) − 64·S is a copy, so "
+                 "O′ = O + Σ 128^d D_d without U·A_0 or W (L + r products a cell free); with c the same shortcut is "
+                 "wrong", cut[False] and not cut[True], str(cut))
+    led = Ledger()
+    got = pv_words(P, V, U, c, b, z, r, L, m, M, led)
+    same = all(np.array_equal(x, y) for x, y in zip(got[0] + got[1] + [got[2]],
+                                                    (lambda w: w[0] + w[1] + [w[2]])(pv_words(P, V, U, c, b, z, r, L,
+                                                                                              m, M))))
+    out["pv_price"] = {"honest": str(led.price()), "k + L + m r": k + L + m * r,
+                       "eps_products without c (one-hot P)": f"{(L + r) / (k + (m - 1) * r):.4%}"}
+    checks.check("P5 priced: honest's P·V products a cell are k + L + m·r (T, W, U·A_0 and the D_d, masked entries "
+                 "included), every one a committed word's; without c a one-hot row frees L + r of them",
+                 same and led.price() == k + L + m * r, str(out["pv_price"]))
+    pv_rank = {}
+    for kk, rr, LL, qq in [(128, 32, 32, 127), (128, 32, 32, 111), (64, 32, 32, 63), (96, 16, 32, 80)]:
+        Bc = PVBlock(1, kk, 1, rr, LL, q=[qq])
+        res = [cross_ranks(Bc, *instance(Bc, kind, rng), mod=1) for kind in ("zero", "onehot", "random", "balanced")]
+        pv_rank[str(Bc)] = [x[:2] for x in res]
+        w_ = (qq + 1 + rr * (Bc.m > 1), qq + 1 + rr)
+        checks.check(f"P6 {Bc}: cross ranks {w_} (peeled rows: (q + 1) + r, the z columns, when Ycum has a second "
+                     f"digit; coin rows: (q + 1) + r) at the zero instance, a one-hot P, a random and a structured V; "
+                     f"same-side blocks 0 over F₂ (honest {kk + LL + Bc.m * rr})",
+                     all(x[:2] == w_ and x[2] == 0 for x in res),
+                     f"{[x[:2] for x in res]}, F₂ same-side nonzero {[x[2] for x in res]}")
+    out["pv_ranks"] = pv_rank
+    if checks.mutations:
+        Bm = PVBlock(1, 64, 1, 32, 32, two=False, q=[63])
+        r1, r2, _ = cross_ranks(Bm, *instance(Bm, "onehot", rng), mod=1)
+        with checks.mutant("pv without c (P clean, as adopted)"):
+            checks.check("M pv without c, one-hot P: certified max rank = (q + 1) + r", max(r1, r2) == 64 + 32,
+                         f"ranks {r1}, {r2}")
+
+    pv_ts = {}
+    for rep, mname in ((4, "Llama-3.1-8B"), (8, "Llama-3.1-70B")):
+        for ctx in (2048, 8192, 32768):
+            for f in (3, 2, 1.5, 1):
+                acc = np.zeros(8)
+                for beta in range(ctx // 32):
+                    if beta >= 256 and beta % 8:
+                        continue
+                    wt = 1 if beta < 256 else 8
+                    kk = 32 * (beta + 1)
+                    hon, cht, serve, _ = ts_pv(kk, f, rep)
+                    ah, ac = ts_pv_adopted(kk, f, rep)
+                    acc += wt * np.array([ts_time(*hon), ts_time(*cht), ts_time(cht[0], cht[1] + serve),
+                                          16 * (kk // 32), ts_best(None, kk, 0, f, pv_routes(kk, 12), (hon, cht))[1],
+                                          ts_best(None, kk, 0, f, pv_routes(kk, 12),
+                                                  (hon, (cht[0], cht[1] + serve)))[1], ts_time(*ah), ts_time(*ac)])
+                key = f"{mname} prefill ctx={ctx} fold={f}"
+                pv_ts[f"{key} eps served free"] = acc[0] / acc[1] - 1
+                pv_ts[f"{key} eps served checked"] = acc[0] / acc[2] - 1
+                pv_ts[f"{key} eps served free, zero-instance routes x=12"] = acc[0] / acc[4] - 1
+                pv_ts[f"{key} eps served checked, zero-instance routes x=12"] = acc[0] / acc[5] - 1
+                pv_ts[f"{key} gamma over plain int8"] = acc[0] / acc[3]
+                pv_ts[f"{key} eps adopted P·V at a one-hot P"] = acc[6] / acc[7] - 1
+                pv_ts[f"{key} gamma adopted P·V over plain int8"] = acc[6] / acc[3]
+    out["ts_pv"] = {k_: (f"{v:.4%}" if " eps " in k_ else f"{v:.4f}") for k_, v in pv_ts.items()}
+    sel = lambda tail: [v for k_, v in pv_ts.items() if k_.endswith(tail)]
+    checks.check("P7 TS model, P·V prefill (Llama-3.1 8B and 70B, 2K–32K; past 8K every 8th query block, weighted): "
+                 "with the sums, digits and served output given to the cheater free ε < 2% (< 0.7% from 8K), with "
+                 "the served output checked downstream < 0.9% (< 0.3% from 8K); the zero-instance routes at x = 12 "
+                 "add < 0.2%; below adopted P·V's ε at a one-hot P everywhere; γ ≤ 1.38 at fold 3, ≤ 1.21 at fold ≤ 2",
+                 max(sel("eps served free")) < 0.02 and max(sel("eps served checked")) < 0.009
+                 and all(v < 0.007 for k_, v in pv_ts.items() if k_.endswith("eps served free") and "2048" not in k_)
+                 and all(v < 0.003 for k_, v in pv_ts.items() if k_.endswith("eps served checked") and "2048" not in k_)
+                 and all(pv_ts[k_] - pv_ts[k_.replace(", zero-instance routes x=12", "")] < 0.002
+                         for k_ in pv_ts if k_.endswith("routes x=12"))
+                 and all(pv_ts[k_.replace("eps adopted P·V at a one-hot P", "eps served free")] < v
+                         for k_, v in pv_ts.items() if k_.endswith("one-hot P"))
+                 and all(v <= 1.38 if "fold=3 " in k_ else v <= 1.21 for k_, v in pv_ts.items()
+                         if k_.endswith("gamma over plain int8")), str(out["ts_pv"]))
 
     import json
     print("\nRESULTS " + json.dumps(out, default=str, sort_keys=True))
