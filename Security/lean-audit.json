@@ -1435,6 +1435,15 @@
    "assumptions": [],
    "type_hash": "5cd9789694c0df8e5c5a09cd026a4f45b7c72ae8be8393f286cb479d9cac04d0"
   },
+  "Accounting.SecurityProofs.TS.DuoFoldFanIn": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.FoldFanIn": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.Fx1FoldFanIn": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.TS.FanInCount": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.FanInCount : Accounting.Guarantees.TS.FanInCount"],
@@ -5019,6 +5028,9 @@
    "Proofs.Flock.Recursive.Premises"
   ],
   "properties": {
+   "Accounting.SecurityProofs.TS.DuoFoldFanIn": {"function": "Pouw.Receipt.duoRun", "outcome": "none"},
+   "Accounting.SecurityProofs.TS.FoldFanIn": {"function": "Accounting.TS.foldRun", "outcome": "none"},
+   "Accounting.SecurityProofs.TS.Fx1FoldFanIn": {"function": "Pouw.Receipt.fx1Run", "outcome": "none"},
    "Flock.SecurityProofs.PublicAudit": {
     "conjuncts": [
      {
