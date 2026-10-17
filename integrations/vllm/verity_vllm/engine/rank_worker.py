@@ -166,6 +166,25 @@ def swap_label(label: str, sw: dict | None, step: int | None) -> str:
     return label
 
 
+def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
+    """The tensors the loader's post-load hook keeps as plain attributes (DeepSeek-V4's `hc_attn_fn_broadcast`), registered as Parameters
+    under the same names, as the rank's Build registers them (`vllm_meta.post_load_tensors_as_the_loader_does`): the weights the rank
+    registers, pins and replays are its `named_parameters`.  The forward reads the same tensor."""
+    import torch
+    mods = dict(model.named_modules())
+    for n in names:
+        mname, _, attr = n.rpartition(".")
+        parent = mods.get(mname)
+        v = getattr(parent, attr, None)
+        if isinstance(v, torch.nn.Parameter):
+            continue
+        if not isinstance(v, torch.Tensor):
+            raise TypeError(f"the Build registers the post-load tensor {n!r} as a Parameter; the served model holds no tensor there")
+        delattr(parent, attr)
+        parent.register_parameter(attr, torch.nn.Parameter(v, requires_grad=False))
+    return names
+
+
 class TP2CaptureWorkerExtension:
     """Mixed into vLLM's Worker (`worker_extension_cls`); `self` is the Worker of one rank."""
 
@@ -593,7 +612,8 @@ class TP2CaptureWorkerExtension:
                         request_ids: dict[str, str] | None = None, match_tokens: dict[str, list[int]] | None = None,
                         tp_swap_requests: dict | None = None, match_capture_dir: str | None = None, replay: dict | None = None,
                         weights_pin: dict | None = None, flip_weight: dict | None = None, tp_partials_flip_site: dict | None = None,
-                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None) -> dict[str, Any]:
+                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None,
+                        post_load_tensors: dict[str, list[str]] | None = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
         the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
@@ -605,10 +625,11 @@ class TP2CaptureWorkerExtension:
         rank = int(facts["tp"]["rank"])
         runner = self.model_runner
         model = runner.get_model()
+        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
         eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
         args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
-        res: dict[str, Any] = {"rank": rank, "committer": com.name}
+        res: dict[str, Any] = {"rank": rank, "committer": com.name, "post_load_tensors": post_load}
         from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, attention_hidden, make_hidden_source
         man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
         if (res.setdefault("attention_hidden", attention_hidden(man, model))["family"] and hidden_so):   # MLA / DSA: no hidden class, no FA2 source
