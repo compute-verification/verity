@@ -1,8 +1,9 @@
 """The machine model's sm_89 census (`benchmarks/pouw/machine_model/data/devices/sm_89/`) from a run of `run.sh`
-(scalar.cu) and a run of tensor_kinds with TK_ARCH=89, in the machine model's schema with one epoch (no `since` or
-`until`).
+(scalar.cu), a run of tensor_kinds with TK_ARCH=89 and a run of `SRC=uniform run.sh` (uniform.cu), in the machine
+model's schema with one epoch (no `since` or `until`).
 
-  python census.py SCALAR_OUT TENSOR_KINDS_OUT [--write DIR]   # prints rows.csv and census.csv, or writes them in DIR
+  python census.py SCALAR_OUT TENSOR_KINDS_OUT [--uniform UNIFORM_OUT] [--write DIR]   # prints rows.csv and census.csv,
+                                                                                      # or writes them in DIR
 
 Every kind is one warp instruction; MMA kinds are tensor_kinds' (one a SASS form, `KIND`). The rows:
 
@@ -16,6 +17,11 @@ Every kind is one warp instruction; MMA kinds are tensor_kinds' (one a SASS form
 - the `E*` facets of each MMA + X family (eps1.py `facets`), with every non-MMA instruction of a probe's loops counted
   as X: an overhead instruction could be an X in an attacker's program, so the facets stay sound, and loose at the X
   axis, where the pipe row binds.
+- `UP` (with the uniform run): the uniform pipe, UNI (one uniform instruction, any form) at the largest rate its alone
+  loops reach, every uniform instruction of a loop counted. UNI is on `issue` at the least SMSP-cycles a uniform
+  instruction adds beside honest16 (the fold binding) or beside honest16 with 64 FFMA, less the noise margin, and on
+  `JI89` at that over SCHED. Beside
+  saturated IMMA.16816 the loops take the larger of the two pipes' times, so UNI holds no tensor row.
 
 FFMA has no pipe row: it issues 1.000 a SMSP-cycle alone (tensor_kinds' lane ops), so `issue` binds first.
 """
@@ -69,6 +75,12 @@ PIPES = {
     "FFMA": (None, (), ""),
 }
 MARGIN = 0.02
+#: uniform.cu's loops: the uniform chains alone, beside saturated IMMA.16816 (ut_0 the MMAs alone), and each base loop
+#: with the loops that add uniform chains to it: honest16 (the ALU pipe binds), honest16 + 64 FFMA (FACET-BREAK's)
+UNI_ALONE = ("uz_64x", "uz_64a", "uz_64s", "uz_64p", "uz_64m")
+UNI_TENSOR = ("ut_0", "ut_32x", "ut_64x", "ut_128x", "ut_64a", "ut_64s", "ut_64p", "ut_64m", "ut_128m")
+UNI_BESIDE = {"uh_0": ("uh_32x", "uh_64x", "uh_64a", "uh_64s", "uh_64p", "uh_64m", "uh_128m"),
+              "ug_0": ("ug_32x", "ug_64a", "ug_64m")}
 
 
 def pipe_class(op: str) -> str:
@@ -175,6 +187,45 @@ def build(scalar: Path, tk: Path) -> tuple[list[list[str]], list[list[str]]]:
     return rws, cen
 
 
+def warp_iter(row: dict, verdict: dict) -> tuple[float, int]:
+    """(SMSP-cycles a warp-iteration, uniform instructions a warp-iteration) of a one-loop probe."""
+    (lp,) = verdict["loops"]
+    per_iter = row["rates"]["0:" + row["counted"]] / lp["top"][row["counted"]]
+    return 4 / per_iter, sum(n for op, n in lp["top"].items() if op.startswith("U"))
+
+
+def uniform(out: Path, rws: list[list[str]], cen: list[list[str]]) -> None:
+    """The uniform run's lines: UNI on UP, issue and JI89, the UP row, and UNI's cost in the issue and JI89 rows."""
+    rows = {r["probe"]: r for r in E.load(out / "rows.jsonl")}
+    gate = {v["probe"]: v["verdict"] for v in json.loads((out / "gate.json").read_text())["verdicts"]}
+    run = next(iter(rows.values()))["run"]
+    t = {p: warp_iter(rows[p], gate[p]) for p in (*UNI_ALONE, *UNI_TENSOR, *UNI_BESIDE, *sum(UNI_BESIDE.values(), ()))}
+    alone = {p: 4 * t[p][1] / t[p][0] for p in UNI_ALONE}
+    up = max(alone.values())
+    tensor = t["ut_0"][0]
+    over = max(t[p][0] / max(tensor, 4 * n / up) - 1 for p, (_, n) in t.items() if p in UNI_TENSOR)
+    added = {p: (t[p][0] - t[b][0]) / t[p][1] for b, ps in UNI_BESIDE.items() for p in ps}
+    least = min(added, key=added.get)
+    c = added[least] / (1 + MARGIN)
+    cen += [["UNI", "UP", f"{up:.6g}", f"{MARGIN}", "", "", "", "", run],
+            ["UNI", "issue", "", "", f"{c:.6g}", "", "", "", run],
+            ["UNI", "JI89", "", "", f"{c / TK.SCHED:.9g}", "", "", "", run]]
+    for r in rws:
+        if r[0] == "issue":
+            r[2] += f" {run}"
+            r[3] += (f"; UNI {c:.3f}: beside honest16, and beside honest16 with 64 FFMA, a uniform instruction "
+                     f"adds {added[least]:.3f}-{max(added.values()):.3f} SMSP-cycles (uniform.cu's uh_* "
+                     f"and ug_*, least at {least}), less 2%")
+        if r[0] == "JI89":
+            r[2] += f" {run}"
+            r[3] += f"; UNI its issue cost {c:.3f}, / {TK.SCHED}"
+    rws.append(["UP", "measured", run, f"uniform pipe: ULOP3, UIADD3, USHF, UPRMT, UIMAD {up:.5f} uniform instructions/"
+                "SM/clk + 2%, every uniform instruction of the loop counted (" + ", ".join(
+                    f"{p} {v:.5f}" for p, v in alone.items()) + f"); beside 8 IMMA.16816 a warp-iteration each loop "
+                f"takes the larger of the tensor pipe's and UP's times within {over:.1%} (ut_*), so UNI holds no "
+                "tensor row"])
+
+
 def csv_text(header: list[str], lines: list[list[str]]) -> str:
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
@@ -187,9 +238,12 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("scalar", type=Path)
     ap.add_argument("tensor_kinds", type=Path)
+    ap.add_argument("--uniform", type=Path, metavar="UNIFORM_OUT", help="a run of `SRC=uniform run.sh`: UNI and UP")
     ap.add_argument("--write", type=Path, metavar="DIR")
     a = ap.parse_args(argv)
     rws, cen = build(a.scalar, a.tensor_kinds)
+    if a.uniform:
+        uniform(a.uniform, rws, cen)
     out = {"rows.csv": csv_text(["row", "status", "runs", "description"], rws),
            "census.csv": csv_text(["kind", "row", "rate", "noise", "cycles", "u", "since", "until", "runs"], cen)}
     for name, text in out.items():

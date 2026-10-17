@@ -153,6 +153,7 @@ lm_head's weights, or their activations, on ±127; `side-qk-q` and `side-qk-k` r
 (the record's sides without U). `dither_plot.py` draws perplexity against B per side choice.
 `co32c-uN` (N = 8, 16, 32, 64) is `adopted-bd-lm` with the linears' and lm_head's weights capped at ±(127 − N): co32c's
 linears with the peeled U on ±N (`benchmarks/pouw/theory/narrow_u.py`) and design A's attention.
+`co32c-u16-cohalf` is `co32c-u16` with Dither-C's cohalf Q Kᵀ at U on ±16 (Q and K dithered within ±111).
 `frontier_plot.py` draws perplexity against core ε (`machine-model eps --checking full`) under each reading of the table
 route, and writes the table.
 Any other file passes as a path.
