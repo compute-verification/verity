@@ -223,6 +223,11 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
     )
     shared = next(p for p in profile.patterns if isinstance(p, MoEFusedSharedExpertsFp8))
     assert shared.group == 128 and shared.gate_spec is None
+    wf = profile.weight_field                                           # the family's `params`: dense below FIRST_DENSE = 3, MoE from it on
+    assert wf("model.layers.0.mlp.gate_up_proj.weight") == ("dense_layers", 0, "gate_up_w")
+    assert wf("model.layers.3.mlp.experts.routed_experts.w13_weight") == ("layers", 0, "w13")
+    assert wf("model.layers.6.self_attn.indexer.wq_b.weight") == ("indexers", 3, "wq_b_w")      # INDEXER_LAYERS = (0, 1, 2, 6, ...)
+    assert wf("model.layers.4.self_attn.indexer.k_norm.bias") is None
     assert profile.notes["moe"]["status"].startswith("constructive")
     vals, prov = FF.resolve_facts(G.rank_hf_config(cfg, 8), {})
     assert {k: vals[k] for k in ("NUM_EXPERTS", "N_GROUP", "TOPK_GROUP", "RENORMALIZE", "SCORING", "ROUTED_SCALING_FACTOR", "SHARED_I",
