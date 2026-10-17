@@ -494,9 +494,9 @@ channels; `channels:history` for a public one), `reactions:write` (`close`), and
 `usergroups:write`. It must be a member of both channels (`chat:write.public` does not reach private channels), and Cursor's
 Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
-Routing: each handle holder subscribes to its own inbox thread, not to the top level. The site's router
-(`/api/agent-slack/events`) rings the doorbells of the names a post addresses, by the rule in `route_targets` (`slack.py`),
-which `tests/slack_routing_vectors.json` pins for both.
+Routing: each handle holder subscribes to its own inbox thread, not to the top level. The sender rings the doorbells of
+the names a post addresses right after posting, by the rule in `route_targets` (`slack.py`), which
+`tests/slack_routing_vectors.json` pins.
 
 ### Notes and evidence over MCP
 
