@@ -10,9 +10,9 @@
                                               the N cheapest attacks of each design (or of D) at NAME's prices
     machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) at EPOCH, the last
                                               epoch, into data/census/EPOCH.csv: each (kind, row) keeps its faster line
-    machine-model eps [DESIGN] [--q Q] [--q-uniform QU] [--operands O] [--credit C] [--fold-cost R] [--fill X]
-                      [--upfill] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]] [--uni-issue C]
-                      [--checking full|sampled [--adapt UNIT]] [--vector V] [--json]
+    machine-model eps [DESIGN] [--q Q] [--q-uniform QU] [--operands O] [--credit C] [--fold-cost R]
+                      [--fill X [--fill-mix K=V,...]] [--upfill] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]]
+                      [--uni-issue C] [--checking full|sampled [--adapt UNIT]] [--vector V] [--mma-form FORM] [--json]
                                               a design's ε budget (data/designs, default dither-duo) at q* = Q (default
                                               8): every term with its source, ε_machine's LP (the credited and the
                                               cheater's mix, binding rows and certificate π*), the ε(q*) curve for q*
@@ -21,16 +21,20 @@
                                               cheater's operand delivery is free (default), at the noise's floor, or
                                               honest's; ε is a fraction of honest's kernel (--credit H, default) or of
                                               the floor program ♭ (--credit floor); --fill adds X lane instructions a
-                                              word of verified filler on lanes, --upfill filler keeping the uniform
-                                              datapath busy; --lookups opens the table route (data/table.toml: lane
-                                              instructions and L2 bytes a word against an L2 facet; --lookup-q,
-                                              --lookup-bytes, --l2); --uni-issue C also charges a uniform instruction
+                                              word of verified filler on lanes (LOP3 and IMAD alike, or --fill-mix's
+                                              class weights); --mma-form prices the MMA class at one form's own
+                                              census line (IMMA16832) instead of the least over the forms; --upfill
+                                              filler keeping the uniform datapath busy; --lookups opens the table
+                                              route (data/table.toml: lane instructions and L2 bytes a word against an
+                                              L2 facet; --lookup-q, --lookup-bytes, --l2); --uni-issue C also charges
+                                              a uniform instruction
                                               C times an ALU's cost on the issue rows; --checking full (default) is the
                                               protocol with every word and operand verified, the core ε alone, and
                                               --checking sampled adds ε_sample = ε_luck + ε_adapt on its own line, for
                                               --adapt UNIT's proof unit (data/adapt.toml, today's segment by default)
-    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--upfill] [--operands O] [--credit C]
-                      [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
+    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X [--fill-mix K=V,...]] [--upfill]
+                      [--operands O] [--credit C] [--q Q] [--lookups ...] [--uni-issue C] [--mma-form FORM]
+                      [--checking full|sampled [--adapt UNIT]]
                                               one line a design (every design by default; with --fold-sweep, each at
                                               each fold cost; with --upfill, each without and with it), in two column
                                               groups: the core (γ, the credited time, ε_skip, ε_sched, ε_machine at
