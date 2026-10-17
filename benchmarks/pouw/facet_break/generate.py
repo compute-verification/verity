@@ -454,6 +454,34 @@ def targeted_ji() -> list[dict]:
     return [g for g in out if g["na"] < 16 or g["tpb"] <= 512]
 
 
+def targeted_jifine() -> list[dict]:
+    """The near-frontier sweep of the ji family's break (r20261017-085714-2f2a: FMUL by an immediate on 4 accumulators at
+    2 warps a SMSP beat JI3q_1..10 and EFFMA1..6; on 8 accumulators it doesn't): the one-read FP lanes and FFMA at 2 to 6
+    accumulators, 1 to 4 warps a SMSP, densities from the MMA end (JI3q_11) to the vector end (JI3q_0), each form."""
+    out: list[dict] = []
+    dense = (32, 48, 64, 80, 96, 112, 128, 144, 160, 192, 224)
+    for lane in ("fmuli", "faddi"):
+        for na in (2, 3, 4, 6):
+            for q in dense:
+                for w in (1, 2, 3, 4):
+                    out.append(_jm("i16832", lane, q, w, na=na))
+    for na in (3, 4):
+        for q in dense:
+            for w in (2, 4):
+                out.append(_jm("i16832", ("fmuli", "faddi"), q, w, na=na))
+        for lane in ("ffmai", "ffma"):
+            for q in (64, 80, 96, 112, 128, 160):
+                for w in (2, 3, 4):
+                    out.append(_jm("i16832", lane, q, w, na=na))
+    for form in ("h16816f16", "h1688t"):
+        for lane in ("fmuli", "faddi"):
+            for na in (3, 4, 6):
+                for q in (48, 64, 80, 96, 112, 128, 160, 192):
+                    for w in (2, 4):
+                        out.append(_jm(form, lane, q, w, na=na))
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -480,7 +508,8 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
     """The programs of one batch: the family's targeted part (if asked) and `n` sampled ones, unique by name, in order."""
     seen, out = set(), []
     tg, sm = {"mix": (targeted, sampled), "mem": (targeted_mem, sampled_mem), "fine": (targeted_fine, sampled),
-              "l2": (targeted_l2, sampled_l2), "ji": (targeted_ji, sampled_ji)}[family]
+              "l2": (targeted_l2, sampled_l2), "ji": (targeted_ji, sampled_ji),
+              "jifine": (targeted_jifine, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -566,10 +595,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
-    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji"), default="mix",
+    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine"), default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
-                        "against the table route's L2 facet; ji: the joint issue rows' schedule search (ji.cuh)")
+                        "against the table route's L2 facet; ji: the joint issue rows' schedule search (ji.cuh); "
+                        "jifine: the sweep around its break")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
