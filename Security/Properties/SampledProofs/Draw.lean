@@ -20,7 +20,6 @@ and its bytes, and every input is in it, the `L` bytes included, however few.
 
 open Lean (Json)
 open SampledProofs
-open Flock.TemplateQuery (Desc)
 
 namespace Properties.SampledProofs
 
@@ -41,7 +40,7 @@ def oneStageOf : Flock.Draw.Law → Claims.Sampling.OneStage
 /-- **The design `Slots.select` draws** under `rule` on `d` and `query` with the work `table`: the population's first
 stage, the law `Select.select` samples (`all` for the `All` rule), and the input class drawn `all`, each class checking
 every proof unit of a drawn replay unit. An error where `Select.select` refuses before it samples. -/
-def slotDesign (rule : Select.Rule) (d : Desc) (query : Json) (table : Option Json) : Flock.V Claims.Sampling.Design := do
+def slotDesign (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) : Flock.V Claims.Sampling.Design := do
   let n ← Partition.units d query
   let named ← rule.lawOver n
   let derived ← Draw.deriveLaw d query named table
@@ -54,7 +53,7 @@ def slotDesign (rule : Select.Rule) (d : Desc) (query : Json) (table : Option Js
 
 /-- The bound: `P_a(B)` of the design on the partition the draw runs over, and `0` where the draw is refused before it
 samples. -/
-noncomputable def missBound (rule : Select.Rule) (d : Desc) (query : Json) (table : Option Json) (B : Finset ℕ) : ℝ :=
+noncomputable def missBound (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (B : Finset ℕ) : ℝ :=
   match Slots.layout d query, slotDesign rule d query table with
   | .ok l, .ok D => D.Pa (slotPartition l) B
   | _, _ => 0
@@ -71,7 +70,7 @@ def Misses (B : Finset ℕ) (c : Array (ℕ × ℕ)) : Prop := ∀ v ∈ B, ∀ 
 closure map and number `L` of uniform bytes, and every set `B` of slots, the draw `Slots.select` makes from the bytes is
 accepted and checks no proof unit of a replay unit in `B` with probability at most `missBound`. -/
 def DrawMisses : Prop :=
-  ∀ (rule : Select.Rule) (d : Desc) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int))) (L : ℕ)
+  ∀ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int))) (L : ℕ)
     (B : Finset ℕ),
     Claims.Pr (fun src : Fin L → Fin 256 =>
       (Slots.select rule d query table cm (bytesOf src)).isOk = true ∧

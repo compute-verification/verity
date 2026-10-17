@@ -13,7 +13,7 @@ def lawObj (named : Json) (derived : Option Flock.Draw.Law) : Json := (derived.m
 /-- **`Select.select`'s steps**: an accepted draw read the population `n`, the rule's law over it and its expansion, and
 proves every unit it drew: all of `[0, n)` under `All`, else the units `drawUnits` draws from the coins under the law
 `flockLaw` accepts. -/
-theorem select_ok (rule : Select.Rule) (d : Flock.TemplateQuery.Desc) (query : Json) (table : Option Json)
+theorem select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (draw : Json) (proved : Array ℕ) (read : ℕ)
     (h : Select.select rule d query table cm src = .ok (draw, proved, read)) :
     ∃ n named derived, Partition.units d query = .ok n ∧ rule.lawOver n = .ok named ∧
@@ -111,7 +111,7 @@ theorem flockLaw_cases (law : Json) (n : ℕ) (parsed : Flock.Draw.Law) (h : Dra
 
 /-- **`deriveLaw`'s expansion**: none for a law of neither kind `stratified` nor `work`, else the stratified or work law
 `Flock.Draw.derive` or `Flock.Draw.deriveWork` expands over the query's strata. -/
-theorem deriveLaw_cases (d : Flock.TemplateQuery.Desc) (query law : Json) (table : Option Json)
+theorem deriveLaw_cases (d : Program) (query law : Json) (table : Option Json)
     (derived : Option Flock.Draw.Law) (h : Draw.deriveLaw d query law table = .ok derived) :
     (derived = none ∧ kindOf law ≠ "stratified" ∧ kindOf law ≠ "work") ∨
       ∃ S k law', Partition.strata d query = .ok S ∧ derived = some law' ∧
@@ -212,7 +212,7 @@ theorem deriveWork_ok (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (tab 
       · exact (Except.ok.inj h).symm
 
 /-- `Slots.select`'s steps: the layout, and the checked proof units of the units `Select.select` proves. -/
-theorem slots_select_ok (rule : Select.Rule) (d : Flock.TemplateQuery.Desc) (query : Json) (table : Option Json)
+theorem slots_select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (l : Slots.Layout) (c : Array (ℕ × ℕ))
     (h : Slots.select rule d query table cm src = .ok (l, c)) :
     Slots.layout d query = .ok l ∧ ∃ draw proved read, Select.select rule d query table cm src = .ok (draw, proved, read) ∧
@@ -224,7 +224,7 @@ theorem slots_select_ok (rule : Select.Rule) (d : Flock.TemplateQuery.Desc) (que
   exact ⟨hl, draw, proved, read, hs, rfl⟩
 
 /-- The design under the `All` rule draws both classes `all`. -/
-theorem slotDesign_all (d : Flock.TemplateQuery.Desc) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
+theorem slotDesign_all (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.Law) (hn : Partition.units d query = .ok n) (hnamed : Select.Rule.all.lawOver n = .ok named)
     (hd : Draw.deriveLaw d query named table = .ok derived) :
     Properties.SampledProofs.slotDesign .all d query table = .ok ⟨[⟨.all, none⟩, ⟨.all, none⟩]⟩ := by
@@ -233,7 +233,7 @@ theorem slotDesign_all (d : Flock.TemplateQuery.Desc) (query : Json) (table : Op
   rfl
 
 /-- The design under a law draws the population as the law `Select.select` samples and the inputs `all`. -/
-theorem slotDesign_law (rule : Select.Rule) (d : Flock.TemplateQuery.Desc) (query : Json) (table : Option Json) (n : ℕ)
+theorem slotDesign_law (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (n : ℕ)
     (named : Json) (derived : Option Flock.Draw.Law) (parsed : Flock.Draw.Law) (hne : rule ≠ .all)
     (hn : Partition.units d query = .ok n) (hnamed : rule.lawOver n = .ok named)
     (hd : Draw.deriveLaw d query named table = .ok derived) (hp : Draw.flockLaw (lawObj named derived) n = .ok parsed) :

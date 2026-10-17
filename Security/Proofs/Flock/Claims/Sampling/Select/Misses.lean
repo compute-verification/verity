@@ -43,7 +43,7 @@ theorem laysOut_units : ∀ (S : List (String × Array (ℕ × ℕ))) (pop : Lis
         exact this
       simp only [List.map_cons, this, ih3]
 
-theorem inputClass_rus (d : Flock.TemplateQuery.Desc) : ∀ r ∈ popRUs (inputClass d), r.unit = none ∧ r.pus.size = 1 := by
+theorem inputClass_rus (d : Program) : ∀ r ∈ popRUs (inputClass d), r.unit = none ∧ r.pus.size = 1 := by
   intro r hr
   unfold popRUs inputClass at hr
   dsimp only at hr
@@ -115,7 +115,7 @@ theorem pa_slots (first : OneStage) (pop ic : Array (Array Slots.RU)) (B : Finse
   simp [Function.comp_def]
 
 /-- `slotDesign`'s steps: the population, the rule's law and its expansion, and the design they give. -/
-theorem slotDesign_ok (rule : Select.Rule) (d : Flock.TemplateQuery.Desc) (query : Lean.Json) (table : Option Lean.Json)
+theorem slotDesign_ok (rule : Select.Rule) (d : Program) (query : Lean.Json) (table : Option Lean.Json)
     (D : Design) (h : slotDesign rule d query table = .ok D) :
     ∃ n named derived, Partition.units d query = .ok n ∧ rule.lawOver n = .ok named ∧
       Draw.deriveLaw d query named table = .ok derived ∧
@@ -135,11 +135,11 @@ theorem slotDesign_ok (rule : Select.Rule) (d : Flock.TemplateQuery.Desc) (query
     rw [pure_bind] at h
     exact Or.inr ⟨fun e => hne e, parsed, hp, (Except.ok.inj h).symm⟩
 
-theorem units_eq (d : Flock.TemplateQuery.Desc) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
+theorem units_eq (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
     (he : Partition.evaluate d query = .ok rs) : Partition.units d query = .ok (Flock.TemplateQuery.population rs) := by
   unfold Partition.units; rw [he]; rfl
 
-theorem strata_eq (d : Flock.TemplateQuery.Desc) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
+theorem strata_eq (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
     (he : Partition.evaluate d query = .ok rs) :
     Partition.strata d query = .ok (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))) := by
   unfold Partition.strata; rw [he]; rfl
@@ -180,7 +180,7 @@ theorem totalWork_eq (ws : Array Flock.Draw.WorkStratum) :
 
 /-- **The population's first stage misses `W`** with probability at most the claims' `P_a(W)` of the law it samples, on
 the population's strata: the units `drawUnits` draws hold none at a slot of `W`. -/
-theorem law_bound (d : Flock.TemplateQuery.Desc) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
+theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
     (he : Partition.evaluate d query = .ok rs) (pop : Array (Array Slots.RU))
     (hlays : List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList
       pop.toList)

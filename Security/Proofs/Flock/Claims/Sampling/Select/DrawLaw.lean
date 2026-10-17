@@ -114,7 +114,7 @@ theorem size_checked_le (l : Slots.Layout) (proved : Array ℕ) :
 
 /-- **The proof units the deployed draw checks** on the bytes `src`: `Slots.select`'s, and every proof unit of the
 layout `l` where it is refused, where the run rejects. -/
-def drawChecked (rule : Select.Rule) (d : Flock.TemplateQuery.Desc) (query : Json) (table : Option Json)
+def drawChecked (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (src : ByteArray) : Array (ℕ × ℕ) :=
   match Slots.select rule d query table cm src with
   | .ok (_, c) => c
@@ -134,7 +134,7 @@ rule, work table and closure map, whose layout `l` is the statement's partition 
 `L` bytes of the coins, uniform when the coins are; and the checked proof units the draw's on them (`drawChecked`). -/
 def DrawSlots (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s.prog s.query = some Pt → InScope Pt s →
-  ∃ (rule : Select.Rule) (d : Flock.TemplateQuery.Desc) (query : Json) (table : Option Json)
+  ∃ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (L : ℕ) (bytes : (Fin (D.V.k x) → Coin) → Fin L → Fin 256),
     Slots.layout d query = .ok l ∧ Pt = slotPartition l ∧ slotDesign rule d query table = .ok s.design ∧
       (∀ E : (Fin L → Fin 256) → Prop, Pr (fun c => E (bytes c)) = Pr E) ∧

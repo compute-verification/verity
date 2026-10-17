@@ -222,7 +222,38 @@ theorem evaluate_tiles (d : Flock.TemplateQuery.Desc) (ts : Array String) (rs : 
             exact tiles_push _ 0 at₀ _ _ hb
   · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
 
-theorem partition_evaluate_tiles (d : Flock.TemplateQuery.Desc) (query : Lean.Json)
+/-- The step of `Partition.callRanges`' fold. -/
+def callStep (acc : Array Flock.TemplateQuery.TRange × ℕ) (x : ℕ × String × ℕ) : Array Flock.TemplateQuery.TRange × ℕ :=
+  if x.2.2 == 0 then acc else (acc.1.push ⟨x.1, x.2.1, acc.2, x.2.2⟩, acc.2 + x.2.2)
+
+theorem callStep_tiles : ∀ (l : List (ℕ × String × ℕ)) (acc : Array Flock.TemplateQuery.TRange × ℕ),
+    Tiles (acc.1.map fun r => (r.template, r.first, r.count)).toList 0 acc.2 →
+      Tiles ((l.foldl callStep acc).1.map fun r => (r.template, r.first, r.count)).toList 0 (l.foldl callStep acc).2
+  | [], _, h => h
+  | x :: l, acc, h => by
+    rw [List.foldl_cons]
+    refine callStep_tiles l _ ?_
+    unfold callStep
+    split
+    · exact h
+    · simp only [Array.map_push, Array.toList_push]
+      exact tiles_push _ 0 acc.2 _ _ h
+
+/-- **A Call query's ranges tile the population**: `callRanges` lays each Call with units where the last one ends. -/
+theorem callRanges_tiles (cs : Array (ℕ × String × ℕ)) :
+    Tiles ((Partition.callRanges cs).map fun r => (r.template, r.first, r.count)).toList 0
+      (Flock.TemplateQuery.population (Partition.callRanges cs)) := by
+  have heq : Partition.callRanges cs = (cs.toList.foldl callStep (#[], 0)).1 := by
+    unfold Partition.callRanges; rw [Array.foldl_toList]; rfl
+  have h := callStep_tiles cs.toList (#[], 0) (by simp [Tiles])
+  have hpop : Flock.TemplateQuery.population (Partition.callRanges cs) = (cs.toList.foldl callStep (#[], 0)).2 := by
+    unfold Flock.TemplateQuery.population
+    rw [heq, ← Array.foldl_toList, ← tiles_sum _ 0 _ h, Array.toList_map, List.foldl_map]
+  rw [hpop, heq]; exact h
+
+/-- **The query's ranges tile the population**: a template query's (`evaluate_tiles`) or a Call query's
+(`callRanges_tiles`). -/
+theorem partition_evaluate_tiles (d : Program) (query : Lean.Json)
     (rs : Array Flock.TemplateQuery.TRange) (h : Partition.evaluate d query = .ok rs) :
     Tiles (rs.map fun r => (r.template, r.first, r.count)).toList 0 (Flock.TemplateQuery.population rs) := by
   unfold Partition.evaluate at h
@@ -230,11 +261,15 @@ theorem partition_evaluate_tiles (d : Flock.TemplateQuery.Desc) (query : Lean.Js
   split at h
   · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
   · split at h
-    · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
-    · rename_i ts _
-      cases hts : ts with
-      | error e => rw [hts] at h; exact absurd h (by rw [bind_error]; simp)
-      | ok ts' => rw [hts, bind_ok] at h; exact evaluate_tiles d ts' rs h
+    · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
+    · split at h
+      · rename_i ts _
+        cases hts : ts with
+        | error e => rw [hts] at h; exact absurd h (by rw [bind_error]; simp)
+        | ok ts' => rw [hts, bind_ok] at h; exact evaluate_tiles d.desc ts' rs h
+      · obtain ⟨cs, _, h⟩ := bind_eq_ok.1 h
+        obtain rfl := (Except.ok.inj h).symm
+        exact callRanges_tiles cs
 
 theorem list_mapM_ok {α β ε : Type} (f : α → Except ε β) :
     ∀ (xs : List α) (ys : List β), xs.mapM f = .ok ys → List.Forall₂ (fun a b => f a = .ok b) xs ys
@@ -270,8 +305,8 @@ theorem toList_expandArr (ranges : Array (ℕ × ℕ)) :
 
 /-- The input class `Slots.layout` lays after the population: every gate of the root's input nodes, one replay unit
 each, or no stratum when there are none. -/
-def inputClass (d : Flock.TemplateQuery.Desc) : Array (Array Slots.RU) :=
-  let inputs := (Slots.inputGates d).map fun g => ({ unit := none, pus := #[(g, g + 1)] } : Slots.RU)
+def inputClass (d : Program) : Array (Array Slots.RU) :=
+  let inputs := (Slots.inputGates d.desc).map fun g => ({ unit := none, pus := #[(g, g + 1)] } : Slots.RU)
   if inputs.isEmpty then #[] else #[inputs]
 
 /-- A population stratum as `Slots.layout` lays it: its units in order, each one replay unit of one proof unit. -/
@@ -279,13 +314,14 @@ def LaysOut (p : String × Array (ℕ × ℕ)) (s : Array Slots.RU) : Prop :=
   s.toList.map (·.unit) = (expand p.2.toList).map some ∧ ∀ r ∈ s.toList, r.pus.size = 1
 
 /-- **`Slots.layout`'s classes**: the strata of the evaluated query, each laid out unit by unit, then the input class. -/
-theorem layout_ok (d : Flock.TemplateQuery.Desc) (query : Lean.Json) (l : Slots.Layout)
+theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.Layout)
     (h : Slots.layout d query = .ok l) :
     ∃ rs, Partition.evaluate d query = .ok rs ∧ ∃ pop : Array (Array Slots.RU),
       l = { classes := #[pop, inputClass d] } ∧
       List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList pop.toList := by
   unfold Slots.layout at h
   obtain ⟨rs, he, h⟩ := bind_eq_ok.1 h
+  obtain ⟨gs, _, h⟩ := bind_eq_ok.1 h
   dsimp only at h
   obtain ⟨pop, hp, h⟩ := bind_eq_ok.1 h
   refine ⟨rs, he, pop, (Except.ok.inj h).symm, ?_⟩
@@ -295,9 +331,9 @@ theorem layout_ok (d : Flock.TemplateQuery.Desc) (query : Lean.Json) (l : Slots.
   have hf := mapM_ok _ _ _ hs
   rw [toList_expandArr] at hf
   have key : ∀ (us : List ℕ) (rus : List Slots.RU), List.Forall₂ (fun u (r : Slots.RU) =>
-      (match Flock.TemplateQuery.gates d rs u with
+      (match gs[u]? with
         | some g => pure { unit := some u, pus := #[g] }
-        | _ => throw (toString "unit " ++ toString u ++ toString " has no instance") : Except String Slots.RU) =
+        | _ => throw (toString "unit " ++ toString u ++ toString " has no gates") : Except String Slots.RU) =
         .ok r) us rus → rus.map (·.unit) = us.map some ∧ ∀ r ∈ rus, r.pus.size = 1 := by
     intro us rus hF
     induction hF with
