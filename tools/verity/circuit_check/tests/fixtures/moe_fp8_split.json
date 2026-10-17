@@ -1559,7 +1559,7 @@
   ],
   [
    "definition",
-   "ScaledMmFp8BlockSharedScale_v2{K=64,N=32,G=32}",
+   "ScaledMmFp8BlockSharedScale_v2{K=64,N=2,G=32}",
    {}
   ],
   [
