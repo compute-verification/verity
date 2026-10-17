@@ -12,6 +12,9 @@ import Proofs.Flock.Claims.ZK.Prefix
 import Proofs.Flock.Claims.ZK.Shvzk
 import Proofs.Flock.Claims.ZK.Flock
 import Proofs.Flock.Claims.ZK.Hypotheses
+import Proofs.Flock.Claims.ZK.Prefinal
+import Proofs.Flock.Claims.ZK.Deployed
+import Proofs.Flock.Claims.ZK.Reference
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 
@@ -62,6 +65,20 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 * `Hypotheses`: what the `--zk` instance still needs, as five Props about models of the masked prover (`MsgLink`,
   `SimLink`, `NonDegenerate`, `InnerHolds`, `CoinCheck`), and the claim from them under `Claims.Hm96Hiding`
   (`Flock.zk_of_models`; **`Flock.zk_deployZk_of_models`** at `FlockDeploy.deployZk`).
+* `Prefinal`: Lemma C from world `W₀` alone, for any family of tables of their own types (`famCard_cut_eq`), and its
+  bounds on the runs before the last coin and where the prover refuses (`Proto.runs_close_of_ideal`,
+  `Proto.refused_close_of_ideal`).
+* `Deployed`: the same at the tables `verify --zk` sets up, each with its own types (`Proto.TPreModel`,
+  `Proto.TabModel`, `Proto.TOffModel`), where `NonDegenerate` and `InnerHolds` are `CoinedOK`'s (`SetupTable.ok`,
+  `ZkHidden.zkViewAtJ_of_ok`), Lemma C's tables, leaves and world `W₀` are the session's by definition
+  (`card_cutAt_ideal`, `exeOf_eq`) and the simulator is the models' (`Proto.withSim`, so `SimLink` holds by
+  construction): **`Flock.zk_deployZk_of_tables`** under `Claims.Hm96Hiding` and three Props (`TMsgLink`, `TablesOK`,
+  `CoinCheck`), and under those alone at the pinned key's hiding gap (`Flock.zk_deployZk_of_tables_gap`).
+* `Reference`: the reference prover those three Props are about, `RefSession.refP`, defined from the session's data
+  (its round encoding of the cut view, its final message of the tables' real views, refusing where a table doesn't
+  admit the coins); `CoinCheck` holds of it by definition, `TablesOK` from `Tables` and `TMsgLink` from `Complete`,
+  `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is the cut view the round
+  messages encode): **`Flock.zk_deployZk_ref`**, and at the pinned key's hiding gap (`Flock.zk_deployZk_ref_gap`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail Flock's `ZK` at
