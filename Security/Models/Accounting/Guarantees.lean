@@ -7,6 +7,7 @@ import Models.Accounting.Guarantees.BoundSketch
 import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Capacity
 import Models.Accounting.Guarantees.Confidence
+import Models.Accounting.Guarantees.FillerLuck
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Localization
 import Models.Accounting.Guarantees.Memory
@@ -35,4 +36,5 @@ composed guarantee for the remote bandwidth audit as deployed and its deployed i
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, localization, composition and fit, the obligations B1, B2 and B4, the tag and sketch
 guarantees, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
-receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, and PoUW's work lower bound on an isolated node. -/
+receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an
+isolated node, and the filler's per-check luck. -/
