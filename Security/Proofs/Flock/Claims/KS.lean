@@ -61,6 +61,7 @@ import Proofs.Flock.Claims.KS.PlainSim
 import Proofs.Flock.Claims.KS.PlainLock
 import Proofs.Flock.Claims.KS.PlainStep
 import Proofs.Flock.Claims.KS.PlainParts
+import Proofs.Flock.Claims.KS.PlainClash0
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -276,4 +277,7 @@ rejected, the simulator's last message is empty, and the verdict at the draw ref
 record holds from two parts of the concrete simulator: its live self-clashes give `P`'s accepting runs a raw clash, and
 its fork advantage is at most its simulated fork (`PlainParts`: `FlockDeploy.KS.PlainSimClashAt`,
 `FlockDeploy.KS.PlainSimForkLe`, `FlockDeploy.KS.plainSimWrPAtD_of_parts`, `FlockDeploy.KS.plain_KS_of_parts`).
+The level-0 case of that clash holds: a level-0 self-clash there is two of the reps' entries at one position with
+different columns, which are the run's raw columns, so the clash needs only its case past level 0 (`PlainClash0`:
+`FlockDeploy.KS.plainClashQ₀`, `FlockDeploy.KS.PlainSimLaterClashAt`, `FlockDeploy.KS.plain_KS_of_later`).
 -/
