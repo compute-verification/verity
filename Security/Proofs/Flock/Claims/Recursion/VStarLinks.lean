@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 import Proofs.Flock.Claims.Recursion.VStarCross
 import Proofs.Flock.Recursive.VStarCheck
+import Proofs.Flock.Claims.Recursion.DeployLayout
 
 /-!
 # V*'s part links, shared across the shapes
@@ -46,6 +47,11 @@ that link once for every kind and every shape, with what is the circuit's own pr
   holds `b` there, and every agreeing list of messages has `b` at round `i`. Bits read back as the bytes they spell
   (`bytesOf_bitL`). This is the message half of the input tie, at any layout that reads its messages at the copies'
   input columns.
+* **The held tie at `layoutOf`** (`agrees_layoutOf`): M9's layout reads its messages there. At a part shown at
+  `showsPart`, of one table, the circuit `partCircuit` parses off the raw part is the staged statement's
+  (`partCircuit_staged`), whose input leaves are its input words in order (`checkParsed`), so each round the part holds
+  is read at a port's input columns in an instance's copy (`layoutOf_msgAt_staged`), and every agreeing list of
+  messages has there the bytes those columns hold.
 * **A table of V\*'s statement, by its kind** (`StmtUnit`, `stmtUnit_of_check`): a table named as V\*'s statement
   `sv` that passes `checkPart sv` is that kind's unit, with the kind's outputs (`UnitOuts`): a level's `LevelOuts`, an
   algebra part's or R's opening part's `ResOuts` at its parameters, RecSparse's `SparseReadOuts`. With `AllOuts`,
@@ -1381,7 +1387,7 @@ theorem checkStmt_circuit {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables
       · cases h
 
 /-- **A table checked at part `s`** is named as V\*'s statement `s` at the inner shape, and passes its kind's
-`checkPart` (`checkCircuit_ok`, `check_ok`). -/
+`checkPart` and V\*'s parse check (`checkCircuit_ok`, `check_ok`). -/
 theorem stagedTable {i0 : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {registered : Option (Array Flock.Registered.Port)} {s : ℕ} {bindings : Option VStar.Bindings}
@@ -1389,20 +1395,21 @@ theorem stagedTable {i0 : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : Li
     (h : Flock.RecVStar.checkStmt (some i0) tags tables st circuitB partition program registered (some s) bindings
       rows = .ok ()) :
     ∃ ss sv, Flock.RecVStar.statements i0 = .ok ss ∧ ss[s]? = some sv ∧ sv.name = st.c.unit.name ∧
-      Flock.RecVStar.checkPart sv st.c = .ok () := by
+      Flock.RecVStar.checkPart sv st.c = .ok () ∧ Flock.RecVStar.checkParsed sv st.c = .ok () := by
   obtain ⟨j, f, sv, hj, -, hc⟩ := checkStmt_circuit h
   cases hj
-  obtain ⟨hck, -, -, hp⟩ := FlockSoundness.Discharge.Recursion.checkCircuit_ok hc
+  obtain ⟨hck, -, hq, hp⟩ := FlockSoundness.Discharge.Recursion.checkCircuit_ok hc
   obtain ⟨ss, hss, hs, hn, -, -⟩ := FlockSoundness.Discharge.Recursion.check_ok hck
-  exact ⟨ss, sv, hss, hs, hn, hp⟩
+  exact ⟨ss, sv, hss, hs, hn, hp, hq⟩
 
 /-- **A staged part's tables**: it parses untyped, without public input words, at `x`'s inner shape, with at least
-one table, each named as V\*'s statement `s` there and passing its kind's `checkPart`. -/
+one table, each named as V\*'s statement `s` there and passing its kind's `checkPart` and V\*'s parse check. -/
 theorem stagedTables {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x xO) :
     ∃ (p : Flock.Readable.Parsed) (r : XR) (sv : VStar.Stmt),
       Flock.Readable.parseBytes readOfO xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       readX x = some r ∧ (∃ ss, Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) ∧ 0 < p.sts.size ∧
-      ∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ Flock.RecVStar.checkPart sv p.sts[t].c = .ok () := by
+      ∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ Flock.RecVStar.checkPart sv p.sts[t].c = .ok () ∧
+        Flock.RecVStar.checkParsed sv p.sts[t].c = .ok () := by
   obtain ⟨ms, i, spec, sts, rfl, hsu, hck⟩ := h
   obtain ⟨hins, hset⟩ := setupO_some hsu
   obtain ⟨r, hr, hinner, -⟩ := insO_staged hins
@@ -1414,15 +1421,15 @@ theorem stagedTables {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x 
     unfold Flock.Readable.Read.setup at hrd
     rw [hpi] at hrd
     exact (FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hrd).1
-  obtain ⟨ss, sv, hss, hs, -, -⟩ := stagedTable (checks_stmt hC 0 hsz)
+  obtain ⟨ss, sv, hss, hs, -, -, -⟩ := stagedTable (checks_stmt hC 0 hsz)
   refine ⟨{ i.base.read with sts }, r, sv, parse_of_setupO hsu,
     ((Flock.Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hck).1.2.1, hpi, hr, ⟨ss, hss, hs⟩, hsz, fun t ht => ?_⟩
-  obtain ⟨ss', sv', hss', hs', hn, hp⟩ := stagedTable (checks_stmt hC t ht)
+  obtain ⟨ss', sv', hss', hs', hn, hp, hq⟩ := stagedTable (checks_stmt hC t ht)
   rw [hss] at hss'
   cases hss'
   rw [hs] at hs'
   cases hs'
-  exact ⟨hn.symm, hp⟩
+  exact ⟨hn.symm, hp, hq⟩
 
 /-- **What a part shown at `showsPart` reads**: `stagedTables`, with each table's unit and its outputs by kind
 (`StmtUnit`, from the parser's checks: `stmtUnit_of_check`). -/
@@ -1434,7 +1441,206 @@ theorem stagedReads {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} (h : 
   obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := stagedTables h.2
   refine ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, fun t htl => ⟨(htab t htl).1, ?_⟩⟩
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi htl
-  exact Flock.Readable.stmtUnit_of_check P (htab t htl).1 (htab t htl).2
+  exact Flock.Readable.stmtUnit_of_check P (htab t htl).1 (htab t htl).2.1
+
+/-! ## The held tie at `layoutOf`
+
+`layoutOf` (`DeployLayout.lean`) holds round `j + 1` at part `s` at the hidden values of a registered port's row in an
+instance's copy (`partHolds`, `rowHidden`), in the circuit `partCircuit` parses off the raw part. At a staged part that
+circuit is the parsed statement's first table's (`partCircuit_staged`: the staged statement is the raw part with its
+public file swapped, which the circuit's parse doesn't read), whose input leaves are its input words in order (V\*'s
+parse check, `checkParsed_ok`). So, at one table, those hidden values are a run of the copy's input columns
+(`copyPs`), from the port's first word, and every agreeing list of messages has, at the round, the bytes those
+columns hold (`agrees_layoutOf`). -/
+
+theorem mapM_some_eq_map {α β : Type} {f : α → Option β} {g : α → β} :
+    ∀ {l : List α} {l' : List β}, (∀ a ∈ l, ∀ b, f a = some b → b = g a) → l.mapM f = some l' → l' = l.map g
+  | [], l', _, h => by simpa using h.symm
+  | a :: l, l', hf, h => by
+    rw [List.mapM_cons] at h
+    cases ha : f a with
+    | none => simp [ha] at h
+    | some b =>
+      cases hl : l.mapM f with
+      | none => simp [ha, hl] at h
+      | some bs =>
+        simp only [ha, hl, Option.bind_some, Option.some.injEq, bind, pure] at h
+        subst h
+        rw [List.map_cons, hf a (by simp) b ha,
+          mapM_some_eq_map (fun a' ha' => hf a' (List.mem_cons_of_mem _ ha')) hl]
+
+theorem findIdx_range_ofNat {N w k : ℕ}
+    (h : ((Array.range N).map Int.ofNat).findIdx? (· == (w : Int)) = some k) : k = w := by
+  obtain ⟨hk, hp, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 h
+  simp at hp
+  omega
+
+/-- With unit `0`'s input leaves its input words in order, row bit `i` of port `q` is the input column `16 w + i`,
+`w` the port's first word. -/
+theorem portCol_of_leaves {c : Flock.Circuit} {N q i k : ℕ}
+    (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (h : portCol c 0 q i = some k) :
+    k = 16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + i := by
+  unfold portCol at h
+  rw [hl] at h
+  obtain ⟨k', hf, hk⟩ := Option.bind_eq_some_iff.1 h
+  cases hk
+  rw [findIdx_range_ofNat hf]
+  omega
+
+theorem rowHidden_of_leaves {c : Flock.Circuit} {N : ℕ} {nm : String} {n : ℕ} {ps : List ℕ}
+    (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (h : rowHidden c nm n = some ps) :
+    ∃ (q : ℕ) (pt : Flock.Port), c.ports.findIdx? (·.name == nm) = some q ∧ c.ports[q]? = some pt ∧
+      ps = (List.range pt.bits).map fun i => n / c.g * 2 ^ c.kLog +
+        (c.unitRange.slot (n % c.g * c.upv) + (16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + i)) := by
+  unfold rowHidden at h
+  obtain ⟨q, hq, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨pt, hpt, h⟩ := Option.bind_eq_some_iff.1 h
+  refine ⟨q, pt, hq, hpt, mapM_some_eq_map (fun i _ b hb => ?_) h⟩
+  obtain ⟨k, hk, rfl⟩ := Option.map_eq_some_iff.1 hb
+  rw [portCol_of_leaves hl hk]
+
+theorem copyPs_one {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (ht : 0 < p.sts.size) (o g base m : ℕ) :
+    Claims.Recursion.VStar.copyPs p 0 ht o g 0 base m = (List.range m).map fun i =>
+      o * 2 ^ p.sts[0].c.kLog + (p.sts[0].c.unitRange.slot (g * p.sts[0].c.upv) + (base + i)) := by
+  simp [Claims.Recursion.VStar.copyPs, Claims.Recursion.VStar.copyIdx, h1]
+
+theorem mem_partHolds {r : XR} {s j : ℕ} {ps : List ℕ} (h : (j, ps) ∈ partHolds r s) :
+    ∃ sv c rs q k rep, ((Flock.RecVStar.statements r.shape).toOption.bind fun vs => vs[s]?) = some sv ∧
+      r.w.parts[s]?.bind partCircuit = some c ∧ repSched r.shape = some rs ∧ q ∈ Flock.RecVStar.ownPorts sv ∧
+      Flock.RecVStar.cIndex q.2.1 = some k ∧ msgRound rs rep k = some j ∧ rowHidden c q.1 rep = some ps := by
+  unfold partHolds at h
+  split at h
+  · rename_i sv c rs hsv hc hrs
+    obtain ⟨q, hq, h⟩ := List.mem_flatMap.1 h
+    split at h
+    · rename_i k hk
+      obtain ⟨row, -, h⟩ := List.mem_filterMap.1 h
+      obtain ⟨rep, -, h⟩ := Option.bind_eq_some_iff.1 h
+      obtain ⟨j', hj, h⟩ := Option.bind_eq_some_iff.1 h
+      obtain ⟨ps', hps, h⟩ := Option.bind_eq_some_iff.1 h
+      cases h
+      exact ⟨sv, c, rs, q, k, rep, hsv, hc, hrs, hq, hk, hj, hps⟩
+    · cases h
+  · cases h
+
+theorem layoutOf_msgAt_succ {x : Msg} {s j : ℕ} {ps : List ℕ} (h : layoutOf.msgAt x s (j + 1) = some ps) :
+    ∃ r, readX x = some r ∧ (j, ps) ∈ partHolds r s := by
+  obtain ⟨r, hr, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨e, he, rfl⟩ := Option.map_eq_some_iff.1 h
+  have hj : e.1 = j := by simpa using List.find?_some he
+  refine ⟨r, hr, ?_⟩
+  rw [← hj]
+  exact List.mem_of_find?_eq_some he
+
+/-- A raw statement's read: its masking, circuit file, tables, count, and tags (`Raw.ins`), none of them off its public
+file. -/
+theorem rawIns_fields {w : FlockDeploy.Raw} {i : FlockDeploy.Ins} (h : w.ins = .ok i) :
+    i.read.zk = w.zk ∧ i.read.I.circuitFile = w.circuit ∧ i.read.I.tables = w.tables ∧ i.read.I.count = w.count ∧
+      ∃ tags, Flock.Tags.find? w.statement = some tags ∧ i.read.I.tags = tags.withCoins
+        (if w.zk then .tree (Flock.Zk.coinSpec (tags.tableNames w.count)) else if w.osCoins then .os else .seed) := by
+  unfold FlockDeploy.Raw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  all_goals
+    cases h
+    exact ⟨rfl, rfl, rfl, rfl, _, by assumption, by dsimp only; split_ifs; simp_all⟩
+
+/-- **A raw statement with its public file swapped reads the same tags, circuit file and tables.** -/
+theorem rawIns_publicFile {w : FlockDeploy.Raw} {pf : ByteArray} {i i' : FlockDeploy.Ins} (h : w.ins = .ok i)
+    (h' : ({ w with publicFile := pf } : FlockDeploy.Raw).ins = .ok i') :
+    i'.read.tags = i.read.tags ∧ i'.read.I.circuitFile = i.read.I.circuitFile ∧ i'.read.I.tables = i.read.I.tables := by
+  obtain ⟨hz, hc, htb, hn, tags, ht, htg⟩ := rawIns_fields h
+  obtain ⟨hz', hc', htb', hn', tags', ht', htg'⟩ := rawIns_fields h'
+  have e : tags' = tags := Option.some.inj (ht'.symm.trans ht)
+  subst e
+  refine ⟨?_, hc'.trans hc.symm, htb'.trans htb.symm⟩
+  simp only [Flock.Readable.Read.tags, FlockSoundness.Discharge.ZkExec.zkTags, FlockSoundness.Discharge.ZkExec.zkCoins,
+    hz, hz', htg, htg', hn, hn', hc, hc']
+
+theorem tablesOf_of_parse {x : Msg} {p : Flock.Readable.Parsed}
+    (h : Flock.Readable.parseBytes readOfO x = some p) :
+    readOfO x = some p.toRead ∧ p.toRead.tablesOf = some p.sts := by
+  unfold Flock.Readable.parseBytes at h
+  obtain ⟨r, hr, h⟩ := Option.bind_eq_some_iff.1 h
+  unfold Flock.Readable.Read.parse at h
+  obtain ⟨sts, hs, rfl⟩ := Option.map_eq_some_iff.1 h
+  exact ⟨hr, hs⟩
+
+/-- **A staged part's circuit is `partCircuit`'s**: part `s`'s V\* statement parses with first table the circuit
+`partCircuit` parses off the raw part (`table0`: the first table's circuit is `ProvedScope.circuitOf`'s at the read,
+which is the raw part's with its public file swapped, `rawIns_publicFile`). -/
+theorem partCircuit_staged {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x xO)
+    {p : Flock.Readable.Parsed} (hp : Flock.Readable.parseBytes readOfO xO = some p) (ht : p.tags.typed = false)
+    (hpi : p.publicInputs = none) {r : XR} (hr : readX x = some r) {c : Flock.Circuit}
+    (hc : r.w.parts[s]?.bind partCircuit = some c) (h0 : 0 < p.sts.size) : p.sts[0].c = c := by
+  obtain ⟨ms, i, spec, sts, rfl, hsu, -⟩ := h
+  obtain ⟨hins, -⟩ := setupO_some hsu
+  have hread : readOfO (staged st x ms s) = some i.base.read := by rw [readOfO, hins, Option.map_some]
+  have hne : staged st x ms s ≠ [] := fun he => by rw [he, insO_nil] at hins; cases hins
+  obtain ⟨r', pt, hr', hpt, hd⟩ := staged_decode hne
+  rw [hr] at hr'
+  cases hr'
+  rw [hpt, Option.bind_some] at hc
+  unfold partCircuit at hc
+  obtain ⟨ins, hins', hc⟩ := Option.bind_eq_some_iff.1 hc
+  unfold insO at hins
+  rw [hd] at hins
+  simp only [Option.bind_eq_bind, Option.bind_some] at hins
+  split_ifs at hins
+  · simp at hins
+  have h' : (partRaw r st x ms s pt).ins.toOption = some i := by simpa using hins
+  obtain ⟨htg, hcf, htb⟩ := rawIns_publicFile (toOption_eq_some hins') (RecRaw.ins_base (toOption_eq_some h'))
+  obtain ⟨-, hcf', htb', -⟩ := rawIns_fields (toOption_eq_some hins')
+  obtain ⟨hr0, hts⟩ := tablesOf_of_parse hp
+  have he : p.toRead = i.base.read := Option.some.inj (hr0.symm.trans hread)
+  obtain ⟨st0, hst0, hc0, -⟩ := Flock.Readable.table0 hts ht hpi
+  rw [he, htg, hcf, htb, hcf', htb'] at hc0
+  rw [toOption_eq_some hc] at hc0
+  rw [Array.getElem?_eq_getElem h0] at hst0
+  rw [Option.some.inj hst0]
+  exact (Except.ok.inj hc0).symm
+
+/-- **What a staged part holds at `layoutOf` is a run of a copy's input columns**: at one table, the hidden values
+`layoutOf` reads round `j + 1` at are a port's row's bits in some instance `rep`'s copy (block `rep / g`, VU
+`rep % g`), the input columns from the port's first word (`copyPs`). -/
+theorem layoutOf_msgAt_staged {st : Stage} {s j : ℕ} {x xO : Msg} (h : StagedPart st s x xO)
+    {p : Flock.Readable.Parsed} (hp : Flock.Readable.parseBytes readOfO xO = some p) (ht : p.tags.typed = false)
+    (hpi : p.publicInputs = none) (h0 : 0 < p.sts.size) (h1 : p.sts.size = 1) {N : ℕ}
+    (hl : p.sts[0].c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) {ps : List ℕ}
+    (hm : layoutOf.msgAt x s (j + 1) = some ps) :
+    ∃ (q : ℕ) (pt : Flock.Port) (rep : ℕ), p.sts[0].c.ports[q]? = some pt ∧
+      ps = Claims.Recursion.VStar.copyPs p 0 h0 (rep / p.sts[0].c.g) (rep % p.sts[0].c.g) 0
+        (16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) pt.bits := by
+  obtain ⟨r, hr, hmem⟩ := layoutOf_msgAt_succ hm
+  obtain ⟨sv, c, rs, q, k, rep, -, hc, -, -, -, -, hrh⟩ := mem_partHolds hmem
+  have hce := partCircuit_staged h hp ht hpi hr hc h0
+  subst hce
+  obtain ⟨qi, pt, -, hpt, rfl⟩ := rowHidden_of_leaves hl hrh
+  refine ⟨qi, pt, rep, hpt, ?_⟩
+  rw [copyPs_one h1 h0]
+
+/-- **The input tie's messages at `layoutOf`**: at a part shown at `showsPart`, of one table, on every list of
+messages agreeing with what the part holds, each round `j + 1` the part holds is the bytes a port's columns hold in
+some instance's copy, from the port's first word (`layoutOf_msgAt_staged`, `agrees_colsHold`), the port's leaves in
+order by V\*'s parse check (`checkParsed_ok`). -/
+theorem agrees_layoutOf {b : Brings} {s j : ℕ} {x xO : Msg} {c : ℕ → Coin} (hs : showsPart b s x xO c)
+    {p : Flock.Readable.Parsed} (hp : Flock.Readable.parseBytes readOfO xO = some p) (h0 : 0 < p.sts.size)
+    (h1 : p.sts.size = 1) {w : Claims.Flock.Wit} {ms : List Msg}
+    (hA : Claims.Recursion.VStar.Agrees layoutOf x s w ms) (hj : j + 1 < layoutOf.rounds x) {ps : List ℕ}
+    (hm : layoutOf.msgAt x s (j + 1) = some ps) :
+    ∃ (q : ℕ) (pt : Flock.Port) (rep : ℕ), p.sts[0].c.ports[q]? = some pt ∧ ∀ bs : ByteArray, 8 * bs.size = pt.bits →
+      16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0 + pt.bits ≤ p.sts[0].c.unit.constPos + 1 →
+      FlockVBridge.ColsHold (Flock.Readable.copyOf p 0 h0 w (rep / p.sts[0].c.g) (rep % p.sts[0].c.g) 0)
+        (16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) bs → ms.getD (j + 1) [] = bs.data.toList := by
+  obtain ⟨p', r, sv, hp', ht, hpi, -, -, -, htab⟩ := stagedTables hs.2
+  rw [hp] at hp'
+  cases hp'
+  obtain ⟨u, -, -, -, hl, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
+  obtain ⟨q, pt, rep, hpt, hps⟩ := layoutOf_msgAt_staged hs.2 hp ht hpi h0 h1 hl hm
+  refine ⟨q, pt, rep, hpt, fun bs hb htop hcol => ?_⟩
+  rw [hps, ← hb] at hm
+  exact Claims.Recursion.VStar.agrees_colsHold hA hj hm (by omega) hcol
 
 end RecDeploy
 
