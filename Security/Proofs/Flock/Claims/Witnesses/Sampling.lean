@@ -23,9 +23,8 @@ Each of the sampling compiler's claims (`Definitions.Claims.Sampling`) fails at 
 `FaultyBoundary` is a theorem (`Claims.Sampling.faultyBoundary`), so it has no refutation. `BitsLin`, `KSLin` and the
 scoped `KSLinOn` are refuted through `Bits_fails`, `KS_fails` and `KSCount_fails`, whose proofs read each.
 
-Still met by a trivial instance, as Flock's: `ZK_vacuous` (a prover that ignores its witness, at every masked
-deployment, `ε_zk = 0` and `γ = 0`), since `ZK` reads the honest prover as a parameter where `Complete` reads the
-deployment's (`Sampling.Deploy.P`).
+Still met by a trivial instance, as Flock's: `Complete_vacuous` (a prover with no tape) and `ZK_vacuous` (a prover
+that ignores its witness, at every masked deployment, `ε_zk = 0` and `γ = 0`).
 -/
 
 namespace Claims.Witness.Sampling
@@ -192,9 +191,6 @@ noncomputable def sksD (Coin : Type) : Deploy Coin Unit Unit where
   εtable _ := 0
   weight _ := 0
   openCalls _ := 0
-  Tape := Unit
-  P _ := silentP
-  δc _ _ := 0
 
 /-- The toy deployment of `Complete`, `Nontrivial`, `ZK`, `Binding` and `Universal`: the verifier rejects, every
 opening passes, and the universal unit returns nothing. -/
@@ -217,9 +213,6 @@ noncomputable def compSD (Coin : Type) : Deploy Coin Unit Unit where
   εtable _ := 0
   weight _ := 0
   openCalls _ := 0
-  Tape := Unit
-  P _ := silentP
-  δc _ _ := 0
 
 /-- The empty column, the zero of a word of field-element lists. -/
 local instance zeroCol : Zero (List Bool) := ⟨[]⟩
@@ -245,9 +238,6 @@ def effSD (Coin : Type) : Deploy Coin (List Bool) Unit where
   εtable _ := 0
   weight _ := 0
   openCalls _ := 0
-  Tape := Unit
-  P _ := silentP
-  δc _ _ := 0
 
 /-! ## `sksD`'s numbers -/
 
@@ -541,12 +531,17 @@ theorem Universal_fails : ¬ Universal (compSD Coin) := fun h => by
   simp [compSD, Prog.eval, Netlist.eval] at this
 
 omit [Nonempty Coin] in
-/-- **The sampling `Complete` fails** at `compSD`, whose reference prover is silent, at its error `δ_c = 0`. -/
-theorem Complete_fails : ¬ Claims.Sampling.Complete constH (compSD Coin) :=
-  Witness.Complete_fails (compSD Coin).P _ _ ((compSD Coin).δc constH) (x := []) (w := toyWit)
-    ⟨toyStmt, toyPart, rfl, rfl, inScope_toy⟩
-    ⟨toyStmt, toyPart, rfl, rfl, by show faulty constH accCm toyStmt toyPart toyWit = ∅; rw [toy_faulty, toyWit_val]; rfl⟩
-    (show (0 : ℝ) < 1 from zero_lt_one)
+/-- **The sampling `Complete` fails** at `compSD`, at every prover with a tape and every `δ_c < 1`. -/
+theorem Complete_fails {Ω : Type} [Nonempty Ω] (P : Wit → Prover Ω) (δc : Msg → ℝ) (x : Msg) (hδ : δc x < 1) :
+    ¬ Claims.Sampling.Complete constH (compSD Coin) P δc :=
+  Witness.Complete_fails P _ _ δc (x := x) (w := toyWit) ⟨toyStmt, toyPart, rfl, rfl, inScope_toy⟩
+    ⟨toyStmt, toyPart, rfl, rfl, by show faulty constH accCm toyStmt toyPart toyWit = ∅; rw [toy_faulty, toyWit_val]; rfl⟩ hδ
+
+omit [Nonempty Coin] in
+/-- **The sampling `Complete` is met at a prover with no tape**, at every hash and deployment and `δ_c = 0`. -/
+theorem Complete_vacuous {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) :
+    Claims.Sampling.Complete H D noTape 0 :=
+  Witness.Complete_vacuous H D.V _ _
 
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **The sampling `Nontrivial` fails** at `compSD`, which rejects the recorded run. -/

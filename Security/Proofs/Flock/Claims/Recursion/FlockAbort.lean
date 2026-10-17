@@ -64,9 +64,6 @@ noncomputable def qDI : Flock.Deploy Bool ℕ Unit where
   weight := fun _ => 0
   waits := fun _ => 2
   cap := fun _ => 204800
-  Tape := Unit
-  P := fun _ => ⟨fun _ _ _ => .ret []⟩
-  δc := fun _ _ => 0
 
 /-- A decoder within the radius: the word, where both positions read `1`. -/
 def qDec (os : List (ℕ × ℕ)) : List Unit :=
