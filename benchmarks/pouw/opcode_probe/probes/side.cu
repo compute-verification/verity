@@ -1,7 +1,8 @@
 // Side units beside the honest kernel (EPS1's eps_side, note:20261017T0310Z-report-eps1-program): the words a cycle a unit
 // that works off the SM's vector pipes (L2 reductions and atomics, cp.async, TMA bulk copies and reductions, DSMEM,
-// texture point fetch and bilinear filtering over 32 MB, and tld1c/texc over a window the texture cache holds; redblk:
-// REDG.32 and a 1 KB bulk reduce a warp in one trip, both L2 paths) adds
+// texture point fetch and bilinear filtering over 32 MB, and tld1c/texc over a window the texture cache holds; tld1d,
+// texd, atomgd: tld1, texbil, atomg32 with 4x, 2x, 4x the fetches in flight; redblk: REDG.32 and a 1 KB bulk reduce a
+// warp in one trip, both L2 paths) adds
 // beside a saturated int8 IMMA kernel that folds every output word with duo (receipt_folds.cuh, the served fold), and
 // whether the MMAs keep their rate. Joint points, rows.jsonl only.
 //   honest        16 warps: 8 IMMA an iteration, then rf_duo_step on each accumulator's 4 words (side warps idle)
@@ -19,10 +20,12 @@ typedef unsigned long long u64;
 
 enum {
   S_RED32, S_RED64, S_REDV4, S_REDV4H, S_ATOMG32, S_LDGSTS, S_BLKRED512, S_BLKRED4K, S_BLKCP4K, S_DSM_ST4, S_DSM_RED,
-  S_TLD1, S_TEXBIL, S_REDBLK, S_TLD1C, S_TEXC
+  S_TLD1, S_TEXBIL, S_REDBLK, S_TLD1C, S_TEXC, S_TLD1D, S_TEXD, S_ATOMGD
 };
 
 __host__ __device__ constexpr bool bulk(int s) { return s == S_BLKRED512 || s == S_BLKRED4K || s == S_BLKCP4K; }
+// ops a trip: R, but the deep roles (TLD, TEX, ATOMG with a result) keep 4x or 2x as many fetches in flight a warp
+__host__ __device__ constexpr int ops(int s) { return s == S_TLD1D || s == S_ATOMGD ? 4 * R : s == S_TEXD ? 2 * R : R; }
 __host__ __device__ constexpr unsigned bulk_bytes(int s) { return s == S_BLKRED512 ? 512u : 4096u; }
 
 __device__ __forceinline__ unsigned mapa(unsigned addr, unsigned rank) {
@@ -59,7 +62,7 @@ struct Side {
   }
   template <int S>
   __device__ __forceinline__ void op(int q, uint32_t trip) {
-    const uint32_t seq = trip * R + q, v = gtid * 2654435761u ^ seq;
+    const uint32_t seq = trip * ops(S) + q, v = gtid * 2654435761u ^ seq;
     if constexpr (S == S_RED32 || S == S_REDBLK) {
       constexpr uint32_t pool = (S == S_REDBLK ? 32u << 20 : 64u << 20) / 4;
       uint32_t* p = reinterpret_cast<uint32_t*>(g) + ((gtid + seq * total) & (pool - 1));
@@ -81,7 +84,7 @@ struct Side {
       asm volatile("red.global.add.noftz.v4.bf16x2 [%0], {%1, %2, %3, %4};" ::"l"(p), "r"(h), "r"(h ^ 1u),
                    "r"(h ^ 2u), "r"(h ^ 3u) : "memory");
     }
-    if constexpr (S == S_ATOMG32) {
+    if constexpr (S == S_ATOMG32 || S == S_ATOMGD) {
       uint32_t* p = reinterpret_cast<uint32_t*>(g) + ((gtid + seq * total) & ((64u << 20) / 4 - 1));
       uint32_t r;
       asm volatile("atom.global.add.u32 %0, [%1], %2;" : "=r"(r) : "l"(p), "r"(v) : "memory");
@@ -101,8 +104,9 @@ struct Side {
       const unsigned s = peer + ((sw * R + q) * 32u + lane) * 4u;
       asm volatile("red.shared::cluster.add.u32 [%0], %1;" ::"r"(s), "r"(v) : "memory");
     }
-    if constexpr (S == S_TLD1) acc ^= tex1Dfetch<unsigned>(tex1, (int)((gtid + seq * total) & ((64u << 20) / 4 - 1)));
-    if constexpr (S == S_TEXBIL) {
+    if constexpr (S == S_TLD1 || S == S_TLD1D)
+      acc ^= tex1Dfetch<unsigned>(tex1, (int)((gtid + seq * total) & ((64u << 20) / 4 - 1)));
+    if constexpr (S == S_TEXBIL || S == S_TEXD) {
       // off-texel coordinates, so every fetch blends 4 texels with nonzero weights
       const float x = (float)((gtid + seq * 37u) & 1023u) + 0.25f, y = (float)((gtid >> 10) + seq) + 0.75f;
       const float4 f = tex2D<float4>(tex2, x, y);
@@ -142,7 +146,7 @@ struct Side {
       if (lane == 0) bulk_trip<S>();
     } else {
 #pragma unroll
-      for (int q = 0; q < R; q++) op<S>(q, t);
+      for (int q = 0; q < ops(S); q++) op<S>(q, t);
       if constexpr (S == S_LDGSTS) asm volatile("cp.async.commit_group;\n\tcp.async.wait_group 2;" ::: "memory");
       if constexpr (S == S_REDBLK) {
         // and one 1 KB bulk reduce a warp, from lane 0, into the warp's own region past the REDG pool
@@ -224,6 +228,9 @@ SIDE(texbil, S_TEXBIL, NOCL)
 SIDE(redblk, S_REDBLK, NOCL)
 SIDE(tld1c, S_TLD1C, NOCL)
 SIDE(texc, S_TEXC, NOCL)
+SIDE(tld1d, S_TLD1D, NOCL)
+SIDE(texd, S_TEXD, NOCL)
+SIDE(atomgd, S_ATOMGD, NOCL)
 
 #define IMMA "IMMA.16832.S8.S8"
 #define HTPB ((HW + SW) * 32)
@@ -259,6 +266,9 @@ static const OpProbe PROBES[] = {
     P_SIDE_X(redblk, "REDG*", 8, 32, 1, 1024, 4, ",UBLKRED*=1"),
     P_SIDE(tld1c, "TLD*", 8, 32, 1, 1024, 4),
     P_SIDE(texc, "TEX*", 8, 128, 1, 512, 4),
+    P_SIDE(tld1d, "TLD*", 32, 32, 1, 256, 4),
+    P_SIDE(texd, "TEX*", 16, 128, 1, 256, 4),
+    P_SIDE(atomgd, "ATOMG*", 32, 32, 1, 256, 4),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
