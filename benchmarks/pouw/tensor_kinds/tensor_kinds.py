@@ -1,0 +1,194 @@
+"""M1 of EPS1 TENSOR: fit each sm_120 MMA form's joint issue coefficient from a tensor_kinds run.
+
+    python tensor_kinds.py OUT_DIR    # reads OUT_DIR/tensor_kinds.jsonl and OUT_DIR/sass/tensor_kinds.sass
+
+For every timed case it reads the kernel's loops in the SASS (a loop is the instructions from a label to the backward
+branch that targets it), counts MMA and other instructions an iteration, and turns the run's per-SM counts into
+per-SMSP counts over the timed window. On the facet a·#MMA + #other <= cycles (one issue a SMSP-cycle for every other
+instruction, as JI3e_0), each case bounds a <= (cycles - #other) / #MMA; a form's coefficient is the least bound over
+its cases. The form's issue price a slot is a / slots. The tensor theorem's issue form is tight when no form's price a
+slot is below IMMA s8 m16n8k32's (2% noise margin).
+
+Writes OUT_DIR/tensor_kinds.json and OUT_DIR/tensor_kinds.md; exits 3 when a gate fails (the case is named).
+"""
+from __future__ import annotations
+
+import json
+import re
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+MMA = re.compile(r"^(IMMA|HMMA|QMMA|OMMA|DMMA|BMMA)")
+REF = "imma_s8_m16n8k32"
+NOISE = 0.02
+STRUCTS = {
+    "ImmaS8k32": "imma_s8_m16n8k32",
+    "ImmaU8S8k32": "imma_u8s8_m16n8k32",
+    "ImmaS8k16": "imma_s8_m16n8k16",
+    "ImmaS8m8k16": "imma_s8_m8n8k16",
+    "ImmaSpS8k64": "imma_sp_s8_m16n8k64",
+    "HmmaF16k16F32": "hmma_f16_m16n8k16_f32",
+    "HmmaF16k16F16": "hmma_f16_m16n8k16_f16",
+    "HmmaTf32k8": "hmma_tf32_m16n8k8",
+    "QmmaE4m3k32": "qmma_e4m3_m16n8k32_f32",
+    "OmmaNvf4k64": "omma_nvf4_m16n8k64",
+}
+#: PTX MMAs an iteration of the loop that issues them (k_alone and k_spec: 8; k_mixu: 64).
+PTX_MMAS = {"alone": 8, "spec": 8, "mixu": 64}
+
+
+def parse_sass(text: str) -> dict[str, list[tuple[int, str, str]]]:
+    """Function name -> [(address, label or '', instruction)] in address order (cuobjdump -sass)."""
+    funcs: dict[str, list[tuple[int, str, str]]] = {}
+    cur = None
+    pending = ""
+    for line in text.splitlines():
+        m = re.match(r"\s*Function : (\S+)", line)
+        if m:
+            cur = m.group(1)
+            funcs[cur] = []
+            continue
+        if cur is None:
+            continue
+        lab = re.match(r"\s*(\.L_x_\d+):", line)
+        if lab:
+            pending = lab.group(1)
+            continue
+        ins = re.match(r"\s*/\*([0-9a-fA-F]{4,})\*/\s+(.*?)\s*;", line)
+        if ins:
+            funcs[cur].append((int(ins.group(1), 16), pending, ins.group(2)))
+            pending = ""
+    return funcs
+
+
+def opcode(ins: str) -> str:
+    toks = ins.split()
+    if toks and toks[0].startswith("@"):
+        toks = toks[1:]
+    return toks[0] if toks else ""
+
+
+def loops(body: list[tuple[int, str, str]]) -> list[dict]:
+    """Each backward branch's loop (target a label or an address): its MMA opcodes and counts an iteration."""
+    by_label = {lab: i for i, (_, lab, _) in enumerate(body) if lab}
+    by_addr = {a: i for i, (a, _, _) in enumerate(body)}
+    out = []
+    for j, (_, _, ins) in enumerate(body):
+        if opcode(ins).split(".")[0] != "BRA":
+            continue
+        m = re.search(r"`\((\.L_x_\d+)\)", ins)
+        h = re.search(r"\b0x([0-9a-fA-F]+)\b", ins)
+        i = by_label.get(m.group(1)) if m else (by_addr.get(int(h.group(1), 16)) if h else None)
+        if i is None or i > j:
+            continue
+        seg = [o for o in (opcode(x) for _, _, x in body[i : j + 1]) if o != "NOP"]
+        mma = [o for o in seg if MMA.match(o)]
+        out.append({"mma": len(mma), "mma_ops": sorted(set(mma)), "other": len(seg) - len(mma),
+                    "iadd3": sum(o.startswith("IADD3") for o in seg)})
+    return out
+
+
+def kernel_key(name: str) -> tuple[str, str, int] | None:
+    """(mode, form, R) of a mangled kernel name, e.g. _Z6k_specI11QmmaE4m3k32Li32EEviPjP8BlockClk."""
+    m = re.match(r"_Z\d+(k_alone|k_spec|k_mixu)I(\d+)", name)
+    if not m:
+        return None
+    n, rest = int(m.group(2)), name[m.end():]
+    struct, tail = rest[:n], rest[n:]
+    r = re.match(r"Li(\d+)E", tail)
+    return m.group(1)[2:], STRUCTS.get(struct, struct), int(r.group(1)) if r else 0
+
+
+def analyze(out: Path) -> tuple[dict, list[str]]:
+    rows = [json.loads(x) for x in (out / "tensor_kinds.jsonl").read_text().splitlines() if x.startswith("{")]
+    cases = [r for r in rows if "form" in r]
+    num_sms = next((r["num_sms"] for r in rows if r.get("done")), None)
+    fails: list[str] = [] if num_sms else ["the run did not finish (no done line)"]
+    sass = parse_sass((out / "sass" / "tensor_kinds.sass").read_text())
+    kl = {}
+    for fn, body in sass.items():
+        k = kernel_key(fn)
+        if k:
+            kl[k] = loops(body)
+    by_form: dict[str, list[dict]] = defaultdict(list)
+    for r in cases:
+        mode, form = r["mode"], r["form"]
+        R = int(round(r["ops_per_mma"] * 8)) if mode != "alone" else 0
+        key = (mode, form, R)
+        L = kl.get(key)
+        if L is None:
+            fails.append(f"{key}: no SASS for the kernel")
+            continue
+        mma_loops = [x for x in L if x["mma"]]
+        op_loops = [x for x in L if not x["mma"]]
+        if len(mma_loops) != 1 or (mode == "spec") != (len(op_loops) == 1):
+            fails.append(f"{key}: loops {L} (want one MMA loop{' and one IADD3 loop' if mode == 'spec' else ''})")
+            continue
+        ml = mma_loops[0]
+        sass_per_ptx = ml["mma"] / PTX_MMAS[mode]
+        if ml["mma"] % PTX_MMAS[mode]:
+            fails.append(f"{key}: {ml['mma']} SASS MMAs a loop, not a multiple of {PTX_MMAS[mode]}")
+        want_iadd3 = {"alone": 0, "spec": 0, "mixu": 8 * R}[mode]
+        if mode == "mixu" and ml["iadd3"] < want_iadd3:
+            fails.append(f"{key}: {ml['iadd3']} IADD3 in the loop, want >= {want_iadd3}")
+        if mode == "spec" and op_loops[0]["iadd3"] < R:
+            fails.append(f"{key}: {op_loops[0]['iadd3']} IADD3 in the lane loop, want >= {R}")
+        it = r["iters"]
+        if mode == "alone":
+            n_mma, n_other = 2 * it * PTX_MMAS[mode], 2 * it * ml["other"]
+        elif mode == "spec":
+            n_mma = 2 * it * PTX_MMAS[mode]
+            n_other = 2 * it * ml["other"] + 2 * it * op_loops[0]["other"]
+        else:
+            n_mma, n_other = 4 * it * PTX_MMAS[mode], 4 * it * ml["other"]
+        T = r["cyc_med"]
+        if num_sms and r["distinct_sms"] != num_sms:
+            fails.append(f"{key}: blocks on {r['distinct_sms']} of {num_sms} SMs")
+        by_form[form].append({
+            "mode": mode, "R": R, "ops_per_mma": n_other / n_mma, "cycles_per_mma": T / n_mma,
+            "a_bound": (T - n_other) / n_mma, "sass_mma_per_ptx": sass_per_ptx, "mma_ops": ml["mma_ops"],
+            "slots": r["slots"], "macs": r["macs"], "mhz": r["mhz"],
+        })
+    summary = {}
+    for form, pts in by_form.items():
+        mixed = [p for p in pts if p["mode"] != "alone"]
+        alone = [p["cycles_per_mma"] for p in pts if p["mode"] == "alone"]
+        a = min(p["a_bound"] for p in mixed) if mixed else None
+        slots = pts[0]["slots"]
+        summary[form] = {
+            "slots": slots, "macs": pts[0]["macs"], "mma_ops": pts[0]["mma_ops"],
+            "alone_smsp_cycles_per_mma": min(alone) if alone else None,
+            "a": a, "a_per_slot": a / slots if a is not None else None, "points": pts,
+        }
+    ref = summary.get(REF, {}).get("a_per_slot")
+    for form, s in summary.items():
+        s["vs_ref"] = s["a_per_slot"] / ref if ref and s["a_per_slot"] else None
+        s["below_ref"] = bool(s["vs_ref"] is not None and s["vs_ref"] < 1 - NOISE)
+    return summary, fails
+
+
+def render(summary: dict) -> str:
+    lines = ["| form | SASS | slots | alone SMSP-cycles a MMA | a (issue-cycles a MMA) | a a slot | vs IMMA s8 k32 |",
+             "|---|---|---|---|---|---|---|"]
+    for form, s in summary.items():
+        f = lambda v, d=3: "–" if v is None else f"{v:.{d}f}"
+        lines.append(f"| {form} | {', '.join(s['mma_ops'])} | {s['slots']:.0f} | {f(s['alone_smsp_cycles_per_mma'], 2)} | "
+                     f"{f(s['a'])} | {f(s['a_per_slot'], 4)} | {f(s['vs_ref'])}{' **below**' if s['below_ref'] else ''} |")
+    return "\n".join(lines) + "\n"
+
+
+def main(argv: list[str]) -> int:
+    out = Path(argv[1])
+    summary, fails = analyze(out)
+    (out / "tensor_kinds.json").write_text(json.dumps({"summary": summary, "gate_failures": fails}, indent=1))
+    md = render(summary)
+    (out / "tensor_kinds.md").write_text(md + ("\nGate failures:\n" + "\n".join(f"- {x}" for x in fails) if fails else ""))
+    print(md)
+    for x in fails:
+        print("GATE", x)
+    return 3 if fails else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
