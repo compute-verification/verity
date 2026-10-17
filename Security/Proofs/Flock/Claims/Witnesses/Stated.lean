@@ -55,16 +55,6 @@ theorem ZKmalR_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonemp
 theorem SimCost_fails (H : Msg → Msg) : ∃ S : Simulator, ¬ Claims.SimCost H S fun _ => 1 :=
   ⟨_, Witness.SimCost_fails H [] []⟩
 
-/-- **`ExtractRunsLe` fails**: at every verifier, some extractor reruns the prover. -/
-theorem ExtractRunsLe_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
-    (V : Verifier Coin) : ∃ E : Extractor Coin W V, ¬ Claims.ExtractRunsLe H E fun _ => 0 :=
-  ⟨_, Witness.ExtractRunsLe_fails H V⟩
-
-/-- **`ExtractRunsExpLe` fails**: at every verifier, some extractor reruns the prover in expectation. -/
-theorem ExtractRunsExpLe_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
-    (V : Verifier Coin) : ∃ E : Extractor Coin W V, ¬ Claims.ExtractRunsExpLe H E fun _ => 0 :=
-  ⟨_, Witness.ExtractRunsExpLe_fails H V⟩
-
 /-- **`Nontrivial` fails**: some verifier rejects a recorded run. -/
 theorem Nontrivial_fails {Coin : Type} [Inhabited Coin] (H : Msg → Msg) :
     ∃ (V : Verifier Coin) (recs : List (Claims.Recorded V)), ¬ Claims.Nontrivial H V recs :=
@@ -180,11 +170,6 @@ theorem Sampling.ScopeMatches_fails {Coin : Type} [Fintype Coin] [Nonempty Coin]
     ∃ (z : Zero (List Bool)) (D : Claims.Sampling.Deploy Coin (List Bool) Unit),
       ¬ (letI := z; Claims.Sampling.ScopeMatches D) :=
   ⟨Witness.Sampling.zeroCol, _, Witness.Sampling.ScopeMatches_fails⟩
-
-/-- **`ExtractOwnLe` fails**: at every verifier, some extractor calls `H`. -/
-theorem Sampling.ExtractOwnLe_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
-    (V : Verifier Coin) : ∃ E : Extractor Coin W V, ¬ Claims.Sampling.ExtractOwnLe H E fun _ => 0 :=
-  ⟨_, Witness.Sampling.ExtractOwnLe_fails H V⟩
 
 /-! ## The ZK-recursion compiler -/
 

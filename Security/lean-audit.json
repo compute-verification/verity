@@ -388,14 +388,6 @@
     "fails": "Claims.Complete_fails",
     "meets": []
    },
-   "Claims.ExtractRunsExpLe": {
-    "fails": "Claims.ExtractRunsExpLe_fails",
-    "meets": []
-   },
-   "Claims.ExtractRunsLe": {
-    "fails": "Claims.ExtractRunsLe_fails",
-    "meets": []
-   },
    "Claims.Flock.Bits": {
     "fails": "Claims.Flock.Bits_fails",
     "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
@@ -508,10 +500,6 @@
     "fails": "Claims.Sampling.Efficient_fails",
     "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
    },
-   "Claims.Sampling.ExtractOwnLe": {
-    "fails": "Claims.Sampling.ExtractOwnLe_fails",
-    "meets": []
-   },
    "Claims.Sampling.KS": {
     "fails": "Claims.Sampling.KS_fails",
     "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
@@ -552,6 +540,8 @@
   "not": {
    "Claims.Collision": "a helper the claims read: two inputs with one output",
    "Claims.ERepCost": "proved at every deployment (`Claims.ERep_cost`); Flock's `Efficient` reads it",
+   "Claims.ExtractRunsExpLe": "a helper the claims read: an extractor's expected reruns, at most a bound, which every `Efficient` reads",
+   "Claims.ExtractRunsLe": "a helper the claims read: an extractor's reruns, at most a bound, which every `Efficient` reads",
    "Claims.Flock.InScope": "a helper the claims read: the forms Flock proves, which its scope reads",
    "Claims.Flock.ListWithin": "the list-decoding spec Flock's KS, Bits and Efficient ask of a decoder, proved of both deployed decoders (`FlockDeploy.listWithin_plain`, `listWithin_zk`)",
    "Claims.Flock.RelS": "a helper the claims read: a statement's relation, which `Flock.R` reads",
@@ -564,6 +554,7 @@
    "Claims.Sampling.BoundaryFaulty": "a helper the claims read: a faulty unit on the boundary trace, which `FaultyBoundary` reads",
    "Claims.Sampling.Commitment.Binds": "a helper the claims read: a commitment's binding, which `Binding` reads",
    "Claims.Sampling.Design.WellFormed": "a helper the claims read: a well-formed design, one well-formed rule per class",
+   "Claims.Sampling.ExtractOwnLe": "a helper the claims read: an extractor's own calls, at most a bound, which the sampling `Efficient` reads",
    "Claims.Sampling.Faulty": "a helper the claims read: a faulty unit, which the sampling relation reads",
    "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",
    "Claims.Sampling.InScope": "a helper the claims read: the programs and partitions the sampling scope takes",
@@ -1728,25 +1719,6 @@
    "assumptions": [],
    "type_hash": "da863c78e48aaca44e3a208e5e7b0f1bbb16381ed10e86cbd748228d32e9a200"
   },
-  "Claims.ExtractRunsExpLe_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.ExtractRunsExpLe_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
-    "  (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin) :",
-    "  Exists fun E => Not (Claims.ExtractRunsExpLe H E fun x => 0)"
-   ],
-   "assumptions": [],
-   "type_hash": "2fbbae975d81c74004ed48125741aa18b6cdd7a445c8be21c57d4005b6096dbf"
-  },
-  "Claims.ExtractRunsLe_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.ExtractRunsLe_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)",
-    "  (V : Claims.Verifier Coin) : Exists fun E => Not (Claims.ExtractRunsLe H E fun x => 0)"
-   ],
-   "assumptions": [],
-   "type_hash": "94d9d53aba8d8c8a9982206262d1e672bd663f67aa594b9f73aa1a6321ce1517"
-  },
   "Claims.Flock.Bits_fails": {
    "owner": "@proofs",
    "signature": [
@@ -2057,16 +2029,6 @@
    ],
    "assumptions": [],
    "type_hash": "e6fee080a0a0fdd851f04b5bc8f495b6adadfaf2c8da896e19119409f50b879c"
-  },
-  "Claims.Sampling.ExtractOwnLe_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.Sampling.ExtractOwnLe_fails {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
-    "  (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin) :",
-    "  Exists fun E => Not (Claims.Sampling.ExtractOwnLe H E fun x => 0)"
-   ],
-   "assumptions": [],
-   "type_hash": "e0145d674f9c8b4e6d68ce8328e2983e54baf3d0294db5c4ba31f5e934402466"
   },
   "Claims.Sampling.KSCount_fails": {
    "owner": "@proofs",
