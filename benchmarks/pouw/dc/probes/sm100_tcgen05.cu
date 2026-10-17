@@ -603,6 +603,28 @@ DC_DEV void li_until_mma(const OpArgs& a) {
   teardown(tmem);
   OP_SINK(v ^ threadIdx.x)
 }
+// li_until_mma's lane warps with no MMA (warps 0-3 idle), fixed iterations: the most these lanes reach when the MMA's
+// work is removed, which caps what any MMA schedule beside them can give the lanes.
+template <int C, int LW, bool FILL = false>
+DC_DEV void li_alone(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  const uint32_t tmem = setup<0>(s, a.mode);
+  const uint32_t w = warp_u(), col = tmem + ((32u * (w & 3u)) << 16) + 256u + (((w - 4u) >> 2) * C) % 256u;
+  Lane l(threadIdx.x);
+  uint32_t z[C];
+  OP_BEGIN
+  if (w >= 4 && w < 4 + LW) {
+    OP_LOOP(it) {
+      tmem_ldc<C>(col, z);
+      tmem_wait_ld();
+      li_fold<C, FILL>(l, z);
+    }
+  }
+  OP_END
+  const uint32_t v = sink_ld(tmem, 0) ^ l.fold();
+  teardown(tmem);
+  OP_SINK(v ^ threadIdx.x)
+}
 
 OP_KERNEL(tc_i8_m128_n32, 128) { tc_alone<0, 128, 32>(a); }
 OP_KERNEL(tc_i8_m128_n64, 128) { tc_alone<0, 128, 64>(a); }
@@ -676,6 +698,9 @@ OP_KERNEL(tclaneU_lif_r512, 512) { lane_until_mma<L_LIF, 512>(a); }
 OP_KERNEL(tcfU_lif, 512) { lane_until_mma<L_LIF, 64, true>(a); }
 OP_KERNEL(tcfU_lif_r128, 512) { lane_until_mma<L_LIF, 128, true>(a); }
 OP_KERNEL(tcfU_lif_r512, 512) { lane_until_mma<L_LIF, 512, true>(a); }
+OP_KERNEL(tcliU_x128f, 384) { li_until_mma<128, 8, false, true>(a); }
+OP_KERNEL(tclia_x128, 384) { li_alone<128, 8>(a); }
+OP_KERNEL(tclia_x128f, 384) { li_alone<128, 8, true>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -757,6 +782,9 @@ static const OpProbe PROBES[] = {
     {.name = "tcfU_lif", .kernel = (const void*)tcfU_lif, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=28,IMAD=28,FFMA=8", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcfU_lif_r128", .kernel = (const void*)tcfU_lif_r128, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=56,IMAD=56,FFMA=16", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcfU_lif_r512", .kernel = (const void*)tcfU_lif_r512, .tpb = 512, .expect = "UTC*MMA*=4;LOP3.LUT=224,IMAD=224,FFMA=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcliU_x128f", .kernel = (const void*)tcliU_x128f, .tpb = 384, .expect = UI ";LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=16", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tclia_x128", .kernel = (const void*)tclia_x128, .tpb = 384, .expect = "LDTM.x128=1,LOP3.LUT=64,IMAD=64", .warps = "8", .iters = 2048},
+    {.name = "tclia_x128f", .kernel = (const void*)tclia_x128f, .tpb = 384, .expect = "LDTM.x128=1,LOP3.LUT=64,IMAD=64,FFMA=16", .warps = "8", .iters = 2048},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
