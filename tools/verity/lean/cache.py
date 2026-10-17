@@ -77,6 +77,8 @@ STATE_TTL_S = 300
 KEY_FILE = "/etc/verity/lean-cache.env"
 #: the read-only credential every development machine holds (the Cursor secrets)
 READ_ENV = ("LEAN_CACHE_R2_ACCESS_KEY_ID", "LEAN_CACHE_R2_SECRET_ACCESS_KEY", "LEAN_CACHE_R2_ENDPOINT", "LEAN_CACHE_BUCKET")
+#: under HOME, the same credential as `KEY=value` lines where a node's research user holds it (0600)
+READ_FILE = ".config/verity/lean-cache-read.env"
 #: the names in `KEY_FILE`, the publisher's read-write key
 WRITE_ENV = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "R2_ENDPOINT", "R2_BUCKET")
 MAX_BYTES = 32 << 30
@@ -223,19 +225,28 @@ class S3:
 
 
 def reader(env=os.environ) -> S3 | None:
-    """The bucket through the read-only credential, or None when this machine has none."""
+    """The bucket through the read-only credential, or None when this machine has none: READ_ENV from ``env``, else those four
+    keys from READ_FILE under ``env``'s HOME (where the nodes' research user holds it)."""
     v = [env.get(k, "") for k in READ_ENV]
+    if not all(v) and env.get("HOME") and (f := Path(env["HOME"]) / READ_FILE).is_file():
+        held = _key_lines(f)
+        v = [held.get(k, "") for k in READ_ENV]
     return S3(v[2], v[3], v[0], v[1]) if all(v) else None
 
 
-def writer(path: str = KEY_FILE) -> S3:
-    """The bucket through the publisher's key, read from ``path`` (`KEY=value` lines)."""
+def _key_lines(path: Path) -> dict[str, str]:
     env = {}
-    for line in Path(path).read_text().splitlines():
+    for line in path.read_text().splitlines():
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
             k, v = line.removeprefix("export ").split("=", 1)
             env[k.strip()] = v.strip().strip("'\"")
+    return env
+
+
+def writer(path: str = KEY_FILE) -> S3:
+    """The bucket through the publisher's key, read from ``path`` (`KEY=value` lines)."""
+    env = _key_lines(Path(path))
     missing = [k for k in WRITE_ENV if not env.get(k)]
     if missing:
         raise CacheError(f"{path} lacks {', '.join(missing)}")
