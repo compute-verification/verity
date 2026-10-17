@@ -155,9 +155,9 @@ sets replaces the inherited one whole, and `name`, `title`, `summary` and `alias
 |---|---|---|---|---|
 | `dither-1s` | Dither-1S | `dither-duo`, `record`, `adopted` | one-sided, clean, one-sided, peel | `adopted` |
 | `dither-2s` | Dither-2S | `dither-two-sided`, `A`, `adopted-bd-lm` | two-sided, two-sided, two-sided, peel | `adopted-bd-lm` |
-| `dither-2s-pv` | Dither-2S, pv P·V | `dither-two-sided-pv`, `Ap` | two-sided, two-sided, two-sided, pv | none on main |
+| `dither-2s-pv` | Dither-2S, pv P·V | `dither-two-sided-pv`, `Ap` | two-sided, two-sided, two-sided, pv | `adopted-bd-lm-pv` |
 | `dither-2s-fill` | Dither-2S, lane filler | `dither-two-sided-fill` | Dither-2S's, with 4.5 lane instructions a word of verified filler | `adopted-bd-lm` |
-| `dither-c` | Dither-C | `co-dither-pv`, `Bc-pv`, `co32c-pv` | co32c, co32c, cohalf, pv | none on main |
+| `dither-c` | Dither-C | `co-dither-pv`, `Bc-pv`, `co32c-pv` | co32c, co32c, cohalf, pv | `co32c-pv` |
 | `dither-c-peel` | Dither-C, peel P·V | `co-dither`, `Bc` | co32c, co32c, cohalf, peel | `co32c` |
 
 The noise leaves are `NOISE` in `eps.py`, and `designs` prints them as a legend:
@@ -180,13 +180,16 @@ Beside its names, a design file has these keys:
 - `[coins]`: `bits`, the width of a noised entry's coin, one σ a request.
 - `[table]`: `bits` on the operand a table route indexes, by default the coins' width and never below it.
 - `ppl`: a spec in `benchmarks/ppl/specs/`, or `""` while the design's arm isn't on main.
-- The ε terms' accounting: `[skip.PART]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
-  `[baseline]` and `[routes]`.
+- The ε terms' accounting: `[skip.served]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
+  `[baseline]` and `[routes]`. `[skip.served]` is the number SKIP's calculator, `../eps_budget.py`, gives the design's
+  `[noise]` (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served
+  output free), and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
 
 A new design is a file with its own name, title and summary, and a `base` if it varies one. The tests refuse:
 
 - an alias that names two designs;
 - a noise leaf or a proof unit that isn't defined;
+- a `[skip]` that isn't `eps_budget.py`'s number for the design's noise, or a noise leaf it can't price;
 - an arm that isn't a spec;
 - a filler off lanes.
 
@@ -206,7 +209,7 @@ fraction of honest time:
 
 | Term | What it is | Set by |
 |---|---|---|
-| ε_skip | Honest work Verify doesn't require: peeled strips, clean products, unchecked limbs, the vector work a checked strip leaves free | The design's `[skip.PART]`, from SKIP's calculator (`../eps_budget.py`) |
+| ε_skip | Honest work Verify doesn't require: peeled strips, clean products, unchecked limbs, the vector work a checked strip leaves free | The design's `[skip.served]`, SKIP's calculator's number for its noise (`../eps_budget.py`, `design_skip`) |
 | ε_mand | The fold or the filler done in fewer instructions than honest's | `[mand.PART]`: 0 for duo, under FOLD's named assumption |
 | ε_machine = ε_cert + ε_route | The cheater's best mix over Π at q*, from the LP below. ε_cert = 1 − π*·n(H)/B(H) is honest's own slack at the certificate π*; ε_route is what the cheater's routes add | The vector and the design |
 | ε_sched | Honest's measured time above its model time; 0 unmeasured | `[measured]` in `data/honest/NAME.toml` |
