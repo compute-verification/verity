@@ -29,6 +29,11 @@ the inner verifier.
   every part holds what the readers read, so every part's inner check holds on the readers' messages, and `Decomp`
   gives an accepted inner view. `vstarAccepts_dense`, `vstarAccepts_holo` and `vstarAccepts_sparse` are it at the
   three shapes, and `innerAcceptsColl_of_parts` gives `InnerAcceptsColl` from them.
+* Reading through readers also gives three of the other code facts the recursion's KS reads: `InnerViewRun` at
+  `I.V` (`innerViewRun_of_readsThrough`: the inner view is `I.V`'s run of the readers' messages, and replaying a
+  run's own messages is the run, `run_replay_self`), `CallsNil` (`callsNil_of_readsThrough`), and `CallsRecord`'s
+  second half, every recorded call a true evaluation, from each part's SHA-512 gadgets (`PartCallsTrue`,
+  `callsRecord_of_parts`, which takes its first half as a hypothesis).
 * `Opening.twoCalls`: an opening of a commit string `b ‖ c` through two recorded calls, its salt's hash `c` and its
   message's digest under the salt's mask, as hm96 rows open (`Deploy.zeroCommit`'s form). It binds wherever the salt's
   and the message's encodings are injective.
@@ -94,6 +99,76 @@ theorem Layout.msgs_getD {L : Layout} {x : Msg} {ws : List Flock.Wit} {i : ℕ} 
     simp only [List.getElem?_eq_getElem hs₀', Option.bind] at h₀
     exact hall s₀ hs₀' m₀ h₀
 
+/-! ## Replaying a run's own messages -/
+
+/-- A round the verifier answers with a message: the rounds go on from the history and the trace it extends. -/
+theorem stepWith_msg {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) (n : ℕ)
+    (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) {m : Msg}
+    (hv : ((vn (as ++ [((P.next x hist ω).eval H).1])).eval H).1 = .msg m) :
+    stepWith H P x ω vn (n + 1) hist as t =
+      stepWith H P x ω vn n (hist ++ [(((P.next x hist ω).eval H).1, m)]) (as ++ [((P.next x hist ω).eval H).1])
+        { t with
+          msgs := t.msgs ++ [(((P.next x hist ω).eval H).1, ((vn (as ++ [((P.next x hist ω).eval H).1])).eval H).1)],
+          pLog := t.pLog ++ ((P.next x hist ω).eval H).2,
+          vLog := t.vLog ++ ((vn (as ++ [((P.next x hist ω).eval H).1])).eval H).2 } := by
+  simp only [stepWith]
+  rw [hv]
+
+/-- Two replayed message lists that agree at every round the run plays give one run. -/
+theorem stepWith_replay_congr (H : Msg → Msg) (x : Msg) (vn : List Msg → OC Out) (ms : List Msg) :
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (ms' : List Msg), hist.length = t.msgs.length →
+      (∀ j, t.msgs.length ≤ j → j < (stepWith H (replay ms) x () vn n hist as t).msgs.length →
+        ms'.getD j [] = ms.getD j []) →
+      stepWith H (replay ms') x () vn n hist as t = stepWith H (replay ms) x () vn n hist as t
+  | 0, _, _, _, _, _, _ => rfl
+  | n + 1, hist, as, t, ms', hl, h => by
+    have hlt : t.msgs.length < (stepWith H (replay ms) x () vn (n + 1) hist as t).msgs.length := by
+      have := congrArg List.length (stepWith_succ_fst_take H (replay ms) x () vn n hist as t)
+      simp only [List.length_take, List.length_map, List.length_append, List.length_singleton] at this
+      omega
+    have hm : ms'.getD hist.length [] = ms.getD hist.length [] := h _ hl.ge (hl ▸ hlt)
+    have e1 : ((replay ms').next x hist ()).eval H = ((replay ms).next x hist ()).eval H := by
+      simp only [replay, OC.eval, hm]
+    simp only [stepWith]
+    rw [e1]
+    split
+    · next m hv =>
+      rw [stepWith_msg H _ x () vn n hist as t hv] at h
+      exact stepWith_replay_congr H x vn ms n _ _ _ ms' (by simp [hl])
+        fun j hj1 hj2 => h j (by simp only [List.length_append, List.length_singleton] at hj1; omega) hj2
+    · rfl
+    · rfl
+
+/-- A replayed run's message at each round it plays is the replayed list's there. -/
+theorem stepWith_replay_fst (H : Msg → Msg) (x : Msg) (vn : List Msg → OC Out) (ms : List Msg) :
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), hist.length = t.msgs.length →
+      ∀ j, t.msgs.length ≤ j → j < (stepWith H (replay ms) x () vn n hist as t).msgs.length →
+        ((stepWith H (replay ms) x () vn n hist as t).msgs.map Prod.fst).getD j [] = ms.getD j []
+  | 0, _, _, t, _, j, hj1, hj => by simp only [stepWith] at hj; omega
+  | n + 1, hist, as, t, hl, j, hj1, hj => by
+    rcases Nat.lt_or_ge j (t.msgs.length + 1) with hlt | hge
+    · obtain rfl : j = t.msgs.length := by omega
+      have h2 : ((stepWith H (replay ms) x () vn (n + 1) hist as t).msgs.map Prod.fst)[t.msgs.length]? =
+          some (((replay ms).next x hist ()).eval H).1 := by
+        have := congrArg (·[t.msgs.length]?) (stepWith_succ_fst_take H (replay ms) x () vn n hist as t)
+        simpa [List.getElem?_take] using this
+      rw [List.getD_eq_getElem?_getD, h2]
+      simp [replay, OC.eval, hl]
+    · rcases hv : ((vn (as ++ [(((replay ms).next x hist ()).eval H).1])).eval H).1 with m | _ | _
+      · rw [stepWith_msg H _ x () vn n hist as t hv] at hj ⊢
+        exact stepWith_replay_fst H x vn ms n _ _ _ (by simp [hl]) j (by simpa using hge) hj
+      · simp only [stepWith, hv, List.length_append, List.length_singleton] at hj
+        omega
+      · simp only [stepWith, hv, List.length_append, List.length_singleton] at hj
+        omega
+
+/-- **Replaying a run's own messages is the run.** -/
+theorem run_replay_self {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (x : Msg) (ms : List Msg)
+    (r : Fin (V.k x) → Coin) :
+    run H (replay ((run H (replay ms) V x () r).msgs.map Prod.fst)) V x () r = run H (replay ms) V x () r := by
+  exact stepWith_replay_congr H x _ ms (V.k x) [] [] _ _ rfl fun j _ hj =>
+    stepWith_replay_fst H x _ ms (V.k x) [] [] _ rfl j (Nat.zero_le _) hj
+
 /-! ## The compiled verifier reads through the readers -/
 
 section Facts
@@ -114,6 +189,33 @@ theorem mem_calls_of_part {calls : Msg → ℕ → Flock.Wit → List (Msg × Ms
     e ∈ (ws.mapIdx fun s w => calls x s w).flatten :=
   List.mem_flatten.2 ⟨_, List.getElem_mem (l := ws.mapIdx fun s w => calls x s w) (by simpa using hs),
     by simpa [List.getElem_mapIdx] using he⟩
+
+/-- A call read through the readers is some part's. -/
+theorem part_of_mem_calls {calls : Msg → ℕ → Flock.Wit → List (Msg × Msg)} {x : Msg} {ws : List Flock.Wit}
+    {e : Msg × Msg} (he : e ∈ (ws.mapIdx fun s w => calls x s w).flatten) :
+    ∃ s, ∃ hs : s < ws.length, e ∈ calls x s ws[s] := by
+  obtain ⟨l, hl, he⟩ := List.mem_flatten.1 he
+  obtain ⟨s, hs, rfl⟩ := List.getElem_of_mem hl
+  exact ⟨s, by simpa using hs, by simpa [List.getElem_mapIdx] using he⟩
+
+/-- **The inner view is the inner verifier's run** (`InnerViewRun`) wherever `D` reads through readers at `I.V`: it is
+`I.V`'s run of the readers' messages, and replaying a run's own messages is the run (`run_replay_self`). -/
+theorem innerViewRun_of_readsThrough {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
+    {DO : Flock.Deploy Coin Col T} {msgs : Msg → List Flock.Wit → List Msg}
+    {calls : Msg → ℕ → Flock.Wit → List (Msg × Msg)} (hR : ReadsThrough H D I.V msgs calls) :
+    InnerViewRun H D I DO := by
+  intro decO x Ω P ω r c ws _
+  unfold innerRun
+  rw [hR.1 x r ws]
+  exact congrArg Trace.seen (run_replay_self H I.V (xI D x) (msgs x ws) _).symm
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- **No witnesses record no calls** (`CallsNil`) wherever `D` reads through readers. -/
+theorem callsNil_of_readsThrough {H : Msg → Msg} {D : Deploy Coin} {IV : Verifier Coin}
+    {msgs : Msg → List Flock.Wit → List Msg} {calls : Msg → ℕ → Flock.Wit → List (Msg × Msg)}
+    (hR : ReadsThrough H D IV msgs calls) : CallsNil H D := fun x e he => by
+  rw [hR.2 x []] at he
+  simp at he
 
 /-! ## V*'s parts -/
 
@@ -156,6 +258,32 @@ def Decomp (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : For
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     (∀ s < D.nS x, chk s x c ms) → (run H (replay ms) IV (xI D x) () fun i => c i.val).out = .acc
+
+/-- **V\* part `s`'s SHA-512 gadgets compute `H`** (a code fact about V*'s part `s` and the layout, at the oracle):
+wherever the part's outer relation holds at a V* statement of a compiled statement that parses, each evaluation the
+part records is a true evaluation of `H`. -/
+def PartCallsTrue (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (s : ℕ) : Prop :=
+  ∀ (x : Msg) (st : Stmt), D.parse x = some st → ∀ (xO : Msg) (w : Flock.Wit), Flock.check DO.parse xO w = true →
+    ∀ e ∈ L.calls x s w, H e.1 = e.2
+
+/-- **`CallsRecord` from V\*'s parts**: its second half, every recorded call a true evaluation, holds wherever the
+compiled verifier reads through the deployed readers and every part's SHA-512 gadgets compute `H`, at an accepted run,
+whose statement parses (`Refuses`) and whose witnesses are in the outer relation at its V* statements
+(`eoGives_outerHolds`); its first half, the inner verifier's calls among the recorded ones, is `hlog`. -/
+theorem callsRecord_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    {IV : Verifier Coin} {L : Layout} (hRef : Refuses H D) (hR : ReadsThrough H D IV L.msgs L.calls)
+    (hT : ∀ s, PartCallsTrue H D DO L s)
+    (hlog : ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω)
+      (r : Fin (D.V.k x) → Coin) (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
+      ∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws) :
+    CallsRecord H D I DO := by
+  intro decO x Ω P ω r c ws hg
+  refine ⟨hlog decO x Ω P ω r c ws hg, fun e he => ?_⟩
+  obtain ⟨st, hst, -⟩ := hRef x Ω P ω r hg.1
+  obtain ⟨hlen, hchk⟩ := eoGives_outerHolds hg
+  rw [hR.2 x ws] at he
+  obtain ⟨s, hs, he⟩ := part_of_mem_calls he
+  exact hT s x st hst _ ws[s] (hchk s hs) e he
 
 /-! ## `VStarAccepts` from V*'s parts -/
 
