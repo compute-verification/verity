@@ -15,14 +15,14 @@ namespace Flock.Guarantees
 /-- **The claims are stated**: the tuple of Flock's claims (`KS`, `Complete`, `ScopeMatches`, `ZK`, `Bits`, `Efficient`,
 `Nontrivial`), the list-decoding spec they read (`Flock.ListWithin`), the shared claims they instantiate (`Claims.KS`,
 `KSLin`, `Complete`, `ScopeMatches`, `ZKmalR`, `SimCost`, `Bits`, `ExtractRunsLe`, `ExtractRunsExpLe`, `ERepCost`,
-`Nontrivial`), the named assumptions (`StrictBirthday`, `ExpectedCR`, `Hm96Hiding`) and `trustedBase`, equal to
-itself. -/
+`Nontrivial`), the named assumptions (`StrictBirthday`, `ExpectedCR`, `Hm96Hiding`, `JsonSpec`) and `trustedBase`,
+equal to itself. -/
 def ClaimsStated : Prop :=
   let claims := (@Claims.Flock.KS, @Claims.Flock.Complete, @Claims.Flock.ScopeMatches, @Claims.Flock.ZK,
     @Claims.Flock.Bits, @Claims.Flock.Efficient, @Claims.Flock.Nontrivial, @Claims.Flock.ListWithin,
     @Claims.KS, @Claims.KSLin, @Claims.Complete, @Claims.ScopeMatches, @Claims.ZKmalR, @Claims.SimCost, @Claims.Bits,
     @Claims.ExtractRunsLe, @Claims.ExtractRunsExpLe, @Claims.ERepCost, @Claims.Nontrivial,
-    @Claims.StrictBirthday, @Claims.ExpectedCR, @Claims.Hm96Hiding, Claims.trustedBase)
+    @Claims.StrictBirthday, @Claims.ExpectedCR, @Claims.Hm96Hiding, @Claims.JsonSpec, Claims.trustedBase)
   claims = claims
 
 end Flock.Guarantees
