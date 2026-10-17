@@ -17,8 +17,8 @@
 //     each step's start (tcgen05.st after each word leaves); word T += bits(acc) - 0x4B400000, one IADD3: the
 //     extraction a cheater on int8-free hardware also pays (NOBITS), where k3z pays three lane ops.
 //   Every FFMA lands in [2^23, 2^24) (ulp 1), so the bits difference is the integer increment.
-// The emulated route keeps T in registers (one row a thread on sm_100a, so BN = 128; 3 x BN / 2 accumulators plus T on
-// sm_90a, so BN = 64), where native int8 keeps it in its accumulator.
+// The emulated route keeps T in registers (one row a thread on sm_100a, so BN = 64 or 128; 3 x BN / 2 accumulators plus
+// T on sm_90a, so BN = 64), where native int8 keeps it in its accumulator.
 //
 // Kernels (dgemm's correctness-first single-stage mainloop: load, fence, multiply, wait, fold a step at a time):
 //   eg100<R, BN>  sm_100a: four warps, a 128 x BN tile, R = 0 kind::i8 into TMEM, 1 k3z (3 kind::f8f6f4), 2 k4s (4)
