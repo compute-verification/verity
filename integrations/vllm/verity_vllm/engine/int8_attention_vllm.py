@@ -10,14 +10,16 @@ block sizes, `reshape_and_cache_flash` writing K after RoPE and V as bf16).  The
 bf16 on every window: K's per-token scales could be stored with an int8 K (a cache spec of its own, more than a backend), but V's
 per-channel scale reads the whole window, so an int8 V would have to be requantized as the window grows.
 
-`Int8AttentionImpl.forward` runs `engine.int8_attention.paged_attention` on the cache and counts its calls (`int8_arm` and `calls`,
-read back by `kernel_readback.int8_exact_of` and `int8_attention.applied_record`).  It refuses what the step does not define:
+`Int8AttentionImpl.forward` runs `engine.int8_attention.paged_attention` on the cache, with its layer's K scales (the served
+checkpoint's `engine.int8_k_scales` table, looked up by the model's revision when the impl is built and by the layer's name in each
+call), and counts its calls (`int8_arm` and `calls`, read back by `kernel_readback.int8_exact_of` and `int8_attention.applied_record`).  It refuses what the step does not define:
 ALiBi, a sliding window, a logit soft cap, sinks, non-decoder attention, a quantized KV cache, cascade attention, decode context
 parallelism, non-causal metadata, fused output quantization, and queries that are not bf16.
 """
 from __future__ import annotations
 
 from functools import cache
+from pathlib import Path
 
 import torch
 from vllm.utils.torch_utils import is_quantized_kv_cache
@@ -26,6 +28,7 @@ from vllm.v1.attention.backends.flash_attn import FlashAttentionBackend, FlashAt
 from vllm.v1.attention.backends.registry import AttentionBackendEnum, register_backend
 
 from verity_vllm.engine import int8_attention as A
+from verity_vllm.engine import int8_k_scales as K
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NAME = TargetProfile.INT8_EXACT_ATTENTION_BACKEND
@@ -45,6 +48,17 @@ class Int8AttentionImpl(FlashAttentionImpl):
                                     (f"KV cache {self.kv_cache_dtype}", is_quantized_kv_cache(self.kv_cache_dtype))) if hit]
         if bad:
             raise ValueError(f"int8 attention does not define {', '.join(bad)}")
+        self.k_table = torch.from_numpy(K.table(served_revision()))
+        if self.k_table.shape[1] != self.num_kv_heads:
+            raise ValueError(f"int8 attention: K scales for {self.k_table.shape[1]} KV heads, the layer has {self.num_kv_heads}")
+        self._k_on: dict[tuple[str, int], torch.Tensor] = {}
+
+    def k_scales(self, layer_name: str, device: torch.device) -> torch.Tensor:
+        """The layer's K scales [G] (float32) on `device`."""
+        key = (str(device), K.layer_index(layer_name))
+        if key not in self._k_on:
+            self._k_on[key] = self.k_table[key[1]].to(device)
+        return self._k_on[key]
 
     def forward(self, layer: torch.nn.Module, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, kv_cache: torch.Tensor,
                 attn_metadata, output: torch.Tensor, output_scale: torch.Tensor | None = None,
@@ -61,8 +75,15 @@ class Int8AttentionImpl(FlashAttentionImpl):
         key_cache, value_cache = kv_cache.transpose(1, 2).split(self.head_size, dim=-1)
         self.calls += 1
         A.paged_attention(query[:n], key_cache, value_cache, attn_metadata.query_start_loc, attn_metadata.seq_lens,
-                          attn_metadata.block_table, self.scale, output[:n])
+                          attn_metadata.block_table, self.k_scales(layer.layer_name, query.device), self.scale, output[:n])
         return output
+
+
+def served_revision() -> str:
+    """The revision of the model vLLM is building: its model config's `revision`, else the snapshot directory's name."""
+    from vllm.config import get_current_vllm_config
+    mc = get_current_vllm_config().model_config
+    return mc.revision or Path(mc.model).name
 
 
 class Int8AttentionBackend(FlashAttentionBackend):

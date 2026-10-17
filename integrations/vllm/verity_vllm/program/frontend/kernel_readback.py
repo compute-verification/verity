@@ -6,7 +6,7 @@ one, '<mixed>' when the layers disagree (both are mismatches against a declarati
 """
 from __future__ import annotations
 
-#: the arm an exact-int8 linear method or attention impl reports (`int8_arm`): `benchmarks/ppl/steps.py`'s plain int8 step
+#: the arm an exact-int8 linear method or attention impl reports (`int8_arm`): steps.py's plain int8 linear, the LUT-softmax attention
 INT8_ARM = "plain"
 
 

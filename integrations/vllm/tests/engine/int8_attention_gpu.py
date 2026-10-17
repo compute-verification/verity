@@ -1,25 +1,26 @@
 """The attention half of `int8_exact_gpu.py` (`--int8-exact attention|all`): taps on served attention layers and their checks.
 
 `AttnTaps` wraps the forward of chosen `Int8AttentionImpl`s and keeps, per call and request, the query rows, the request's window
-(k, v gathered from the paged cache after the call, as the step read them) and the served output rows, on the CPU.  `compare`
-judges one kept request:
+(k, v gathered from the paged cache after the call, as the step read them), the layer's K scales and the served output rows, on
+the CPU.  `compare` judges one kept request, every check bit for bit (the LUT softmax has no device-dependent step):
 
-  rerun        `int8_attention.window_attention` again on the GPU                                    (equal, bit for bit)
-  gpu_softmax  `window_attention` on the CPU with only its softmax run on the GPU                    (equal: every other step
-               of the GPU's served value is the CPU's)
-  oracle       `benchmarks/ppl`'s own `edited_attention` on the CPU (`ppl_oracle.int8_attention`)     (counted: torch.softmax
-               rounds apart on the two devices, so these may differ; `cpu_oracle` is ours on the CPU against it, equal)
-  p_ints       how many of P's integers the two devices' softmax moves, and by how much at most
-  cache        a prefill's window from the cache against the K and V the layer was handed (equal)
+  rerun     `int8_attention.window_attention` again on the GPU
+  cpu       `window_attention` on the CPU
+  oracle    `fattn_oracle.attention` (fattn_ref.py's softmax, apv_ref.py's served f) on the CPU
+  fattn_ref the window's last query row of its first head: `fattn_ref.check` on the GPU's own S, P, m, e(0), s_q and z_q (head
+            dimension 128 only)
+  cache     a prefill's window from the cache against the K and V the layer was handed
 """
 from __future__ import annotations
 
 import hashlib
+import tempfile
+from pathlib import Path
 from typing import Any
 
 import torch
 
-from tests.engine import ppl_oracle as O
+from tests.engine import fattn_oracle as O
 from verity_vllm.engine import int8_attention as A
 
 
@@ -56,6 +57,7 @@ class AttnTaps:
             self.calls[(self.phase, name)] = self.calls.get((self.phase, name), 0) + 1
             impl = self.impls[name]
             kc, vc = kv_cache.transpose(1, 2).split(impl.head_size, dim=-1)
+            ks = impl.k_scales(layer.layer_name, query.device).cpu()
             qsl, lens = attn_metadata.query_start_loc.tolist(), attn_metadata.seq_lens.tolist()
             for r, s in enumerate(lens):
                 q0, q1 = qsl[r], qsl[r + 1]
@@ -63,7 +65,7 @@ class AttnTaps:
                     continue
                 k, v = A.window_of(kc, vc, attn_metadata.block_table[r], s)
                 rec = {"call": self.calls[(self.phase, name)] - 1, "request": r, "s": s, "n": q1 - q0, "scale": impl.scale,
-                       "q": query[q0:q1].cpu(), "k": k.cpu(), "v": v.cpu(), "out": output[q0:q1].cpu()}
+                       "k_scales": ks, "q": query[q0:q1].cpu(), "k": k.cpu(), "v": v.cpu(), "out": output[q0:q1].cpu()}
                 if q1 - q0 == s:
                     rec["handed"] = (key[q0:q1].cpu(), value[q0:q1].cpu())
                 self.got.setdefault((self.phase, name), []).append(rec)
@@ -75,40 +77,36 @@ class AttnTaps:
             impl.forward = self.saved[n]
 
 
-def _gpu_softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
-    return torch.softmax(x.cuda(), dim).cpu()
-
-
-def p_ints(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, scale: float) -> tuple[int, int, int]:
-    """(P integers, how many the GPU's softmax moves from the CPU's, the largest move) over the window's KV groups."""
-    n, h, d = q.shape
-    s, g_heads, _ = k.shape
-    rep = h // g_heads
-    causal = torch.arange(s)[None, :] <= torch.arange(s - n, s)[:, None]
-    total = moved = most = 0
-    for g in range(g_heads):
-        qi, sq = A.quant(q[:, g * rep:(g + 1) * rep].transpose(0, 1).float(), -1)
-        ki, sk = A.quant(k[:, g].float(), -1)
-        logits = ((A.int_mm(qi.reshape(rep * n, d), ki).view(rep, n, s).float() * (sq * sk.T[None])) * scale).masked_fill(~causal, float("-inf"))
-        cpu, gpu = A.quant_p(torch.softmax(logits, -1))[0], A.quant_p(_gpu_softmax(logits, -1))[0]
-        diff = (cpu - gpu).abs()
-        total, moved, most = total + diff.numel(), moved + int((diff > 0).sum()), max(most, int(diff.max()))
-    return total, moved, most
+def fattn_ref_row(q: torch.Tensor, k: torch.Tensor, ks: torch.Tensor, scale: float) -> bool | None:
+    """fattn_ref.check on the GPU's softmax of the window's last row of query head 0 (KV head 0); None off head dimension 128."""
+    n, _, d = q.shape
+    s = k.shape[0]
+    if d != 128:
+        return None
+    qi, sq = A.quant(q[-1:, 0].float().cuda(), -1)
+    ki = A.quant_static(k[:, 0].float().cuda(), ks[0])
+    S = A.int_mm(qi, ki)
+    a = A.fixed_point_a(sq, ks[0], scale)
+    causal = torch.ones(1, s, dtype=torch.bool, device=S.device)
+    e, m = A.lut_e(S, a, causal)
+    p, r, z = A.lut_softmax(S, a, causal)
+    served = {"P": p[0].cpu().numpy(), "m": int(m[0, 0]), "e0": int(e[0, 0]), "sp": r[0].cpu().numpy(), "sz": z[0].cpu().numpy()}
+    with tempfile.TemporaryDirectory() as tmp:
+        got = O.check(O.gate_dir(Path(tmp) / "gate", ki.cpu().numpy(), qi[0].cpu().numpy(), s - 1, int(a[0, 0]), served,
+                                 S[0].cpu().numpy()))
+    return bool(got["ok"])
 
 
 def compare(rec: dict[str, Any]) -> dict[str, Any]:
-    q, k, v, out, s, n, scale = rec["q"], rec["k"], rec["v"], rec["out"], rec["s"], rec["n"], rec["scale"]
-    q_full = torch.cat([torch.zeros(s - n, *q.shape[1:], dtype=q.dtype), q])          # rows before the call's are not read
-    oracle = O.int8_attention(q_full, k, v)[s - n:]
-    ours_cpu = A.window_attention(q, k, v, scale)
-    rerun = A.window_attention(q.cuda(), k.cuda(), v.cuda(), scale).cpu()
-    gpu_sm = A.window_attention(q, k, v, scale, _gpu_softmax)
-    total, moved, most = p_ints(q, k, v, scale)
+    q, k, v, out, s, n, scale, ks = rec["q"], rec["k"], rec["v"], rec["out"], rec["s"], rec["n"], rec["scale"], rec["k_scales"]
+    rerun = A.window_attention(q.cuda(), k.cuda(), v.cuda(), ks.cuda(), scale).cpu()
+    cpu = A.window_attention(q, k, v, ks, scale)
+    oracle = O.attention(q, k, v, ks, scale)
     ow = _words(out)
     got = {"s": s, "n": n, "words": int(ow.numel()), "rerun_mismatch": int((_words(rerun) != ow).sum()),
-           "gpu_softmax_mismatch": int((_words(gpu_sm) != ow).sum()), "oracle_mismatch": int((_words(oracle) != ow).sum()),
-           "cpu_oracle_mismatch": int((_words(ours_cpu) != _words(oracle)).sum()), "p_ints": total, "p_ints_moved": moved,
-           "p_ints_max_move": most, "scale_is_head_dim": scale == q.shape[-1] ** -0.5}
+           "cpu_mismatch": int((_words(cpu) != ow).sum()), "oracle_mismatch": int((_words(oracle) != ow).sum()),
+           "fattn_ref": fattn_ref_row(q, k, ks, scale), "scale_is_head_dim": scale == q.shape[-1] ** -0.5,
+           "k_clamped": int((k.float().abs() / ks[None, :, None] > 127.5).sum())}
     if "handed" in rec:
         got["cache_mismatch"] = int(not (torch.equal(rec["handed"][0], k) and torch.equal(rec["handed"][1], v)))
     return got
