@@ -9,21 +9,31 @@
 // at or above Q, so ptxas folds q into the instruction's immediate, can't merge two loads, and the loop is not invariant.
 // The lane's offset in its line is the pattern's: LINE, lane l at l x the load's width (one 128-byte phase each, no bank
 // conflict); BCAST, every lane the line's first word; QUAD, lanes 4j..4j+3 the line's j-th word.
+//
+//   FB_L2(name, D, P, Q, tpb)                  every warp: Q L2-resident loads an iteration (the L2 facet of table.toml)
+//
+// An L2 program's table is the block's own 256 KB region of `a.g` (188 blocks: 47 MB, inside the 128 MB L2 and twice an
+// SM's L1), swept before a step repeats: load q of warp w's iteration reads step (QL (it W' + w) + q) mod ring, W' the
+// odd number at W + 1 or W + 2.
+// LINE: lane l at l x width of a 32 x width line; SCAT: lane l in its own 8 KB of the region, one 32-byte sector a load
+// (a gather's traffic: 32 sectors an instruction). The .NA (L1::no_allocate) and .STRONG.GPU (.cg) forms skip L1.
 #pragma once
 #include "mix.cuh"
 
 namespace fb {
 
 enum Ld { D_NONE, D_LDS32, D_LDS64, D_LDS128, D_LDSU8, D_LDG32, D_LDGNC32, D_LDG64, D_LDG128, D_TLD1, D_TLD2, D_TLD4,
-          D_TLD4N };
-enum Pat { P_LINE, P_BCAST, P_QUAD };
+          D_TLD4N, D_LDG256, D_L2G128, D_L2G128NA, D_L2G128CG, D_L2G256, D_L2G256CG };
+enum Pat { P_LINE, P_BCAST, P_QUAD, P_SCAT };
 
-constexpr unsigned FB_LINE = 512, FB_RING = 64, FB_RINGB = FB_LINE * FB_RING;
+constexpr unsigned FB_LINE = 512, FB_RING = 64, FB_RINGB = FB_LINE * FB_RING, FB_L2B = 256u << 10;
 
 __host__ __device__ constexpr bool shared_ld(int d) { return d >= D_LDS32 && d <= D_LDSU8; }
 // bytes between two lanes' words: the load's width, or its texel's (tex1's texel is 4 B whatever the fetch's width)
 __host__ __device__ constexpr unsigned lane_stride(int d) {
-  return d == D_LDS64 || d == D_LDG64 ? 8 : d == D_LDS128 || d == D_LDG128 || d == D_TLD4 ? 16 : 4;
+  return d == D_LDS64 || d == D_LDG64 ? 8
+         : d == D_LDG256 || d == D_L2G256 || d == D_L2G256CG ? 32
+         : d == D_LDS128 || d == D_LDG128 || d == D_TLD4 || d >= D_L2G128 ? 16 : 4;
 }
 __host__ __device__ constexpr unsigned qlines(int q) { return q <= 1 ? 1 : 2 * qlines((q + 1) / 2); }
 __host__ __device__ constexpr int kind_at(int d1, int d2, int r, int q) { return d2 != D_NONE && q % r == r - 1 ? d2 : d1; }
@@ -46,7 +56,7 @@ __host__ __device__ unsigned soff(int slot, int lane, int warp, int it) {
 
 template <int D>
 __device__ __forceinline__ uint32_t ld(const OpArgs& a, uint32_t sbase, const unsigned char* gb, unsigned gel, unsigned o) {
-  uint32_t r0 = 0, r1 = 0, r2 = 0, r3 = 0;
+  uint32_t r0 = 0, r1 = 0, r2 = 0, r3 = 0, r4 = 0, r5 = 0, r6 = 0, r7 = 0;
   if constexpr (D == D_LDS32) asm volatile("ld.shared.u32 %0, [%1];" : "=r"(r0) : "r"(sbase + o));
   if constexpr (D == D_LDS64) asm volatile("ld.shared.v2.u32 {%0,%1}, [%2];" : "=r"(r0), "=r"(r1) : "r"(sbase + o));
   if constexpr (D == D_LDS128)
@@ -55,8 +65,19 @@ __device__ __forceinline__ uint32_t ld(const OpArgs& a, uint32_t sbase, const un
   if constexpr (D == D_LDG32) asm volatile("ld.global.u32 %0, [%1];" : "=r"(r0) : "l"(gb + o));
   if constexpr (D == D_LDGNC32) asm volatile("ld.global.nc.u32 %0, [%1];" : "=r"(r0) : "l"(gb + o));
   if constexpr (D == D_LDG64) asm volatile("ld.global.v2.u32 {%0,%1}, [%2];" : "=r"(r0), "=r"(r1) : "l"(gb + o));
-  if constexpr (D == D_LDG128)
+  if constexpr (D == D_LDG128 || D == D_L2G128)
     asm volatile("ld.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "l"(gb + o));
+  if constexpr (D == D_L2G128NA)
+    asm volatile("ld.global.L1::no_allocate.v4.u32 {%0,%1,%2,%3}, [%4];"
+                 : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "l"(gb + o));
+  if constexpr (D == D_L2G128CG)
+    asm volatile("ld.global.cg.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "l"(gb + o));
+  if constexpr (D == D_LDG256 || D == D_L2G256)
+    asm volatile("ld.global.v8.u32 {%0,%1,%2,%3,%4,%5,%6,%7}, [%8];"
+                 : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3), "=r"(r4), "=r"(r5), "=r"(r6), "=r"(r7) : "l"(gb + o));
+  if constexpr (D == D_L2G256CG)
+    asm volatile("ld.global.cg.v8.u32 {%0,%1,%2,%3,%4,%5,%6,%7}, [%8];"
+                 : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3), "=r"(r4), "=r"(r5), "=r"(r6), "=r"(r7) : "l"(gb + o));
   if constexpr (D == D_TLD1) r0 = tex1Dfetch<unsigned>((cudaTextureObject_t)a.tex1, (int)(gel + o / 4));
   if constexpr (D == D_TLD2) {
     const uint2 v = tex1Dfetch<uint2>((cudaTextureObject_t)a.tex1, (int)(gel + o / 4));
@@ -67,7 +88,7 @@ __device__ __forceinline__ uint32_t ld(const OpArgs& a, uint32_t sbase, const un
                                 : tex1Dfetch<uint4>((cudaTextureObject_t)a.tex1, (int)(gel + o / 4));
     r0 = v.x; r1 = v.y; r2 = v.z; r3 = v.w;
   }
-  return r0 ^ r1 ^ r2 ^ r3;
+  return r0 ^ r1 ^ r2 ^ r3 ^ r4 ^ r5 ^ r6 ^ r7;
 }
 
 // The block's table: shared (filled, nonzero) when a kind reads shared memory; gel is its region of g in 4-byte texels.
@@ -122,8 +143,31 @@ __device__ __forceinline__ void ld_mma(const OpArgs& a) {
   OP_SINK((acc ^ m.fold()))
 }
 
+template <int D, int P, int Q, int W>
+__device__ __forceinline__ unsigned l2_off(int w, int it, int q, int lane) {
+  constexpr unsigned step = P == P_SCAT ? 32 : 32 * lane_stride(D), ring = (P == P_SCAT ? FB_L2B / 32 : FB_L2B) / step;
+  // it's odd multiplier: with QL W a multiple of the ring the step would not depend on it, and ptxas hoists the loads
+  return ((qlines(Q) * (unsigned)(it * ((W + 1) | 1) + w) + (unsigned)q) & (ring - 1)) * step +
+         (P == P_SCAT ? lane * (FB_L2B / 32) : lane * lane_stride(D));
+}
+
+template <int D, int P, int Q, int TPB>
+__device__ __forceinline__ void ld_l2(const OpArgs& a) {
+  const unsigned char* gb = a.g + (size_t)(blockIdx.x % (unsigned)(a.gbytes / FB_L2B)) * FB_L2B;
+  const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
+  uint32_t acc = threadIdx.x + 1;
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int q = 0; q < Q; q++) acc ^= ld<D>(a, 0, gb, 0, l2_off<D, P, Q, TPB / 32>(w, it, q, lane));
+  }
+  OP_END
+  OP_SINK(acc)
+}
+
 }  // namespace fb
 
 #define FB_LD(name, D1, D2, R, P, Q, TPB) OP_KERNEL(name, TPB) { fb::ld_alone<fb::D1, fb::D2, R, fb::P, Q>(a); }
 #define FB_LDMMA(name, F, D1, D2, R, P, Q, TPB) \
   OP_KERNEL(name, TPB) { fb::ld_mma<fb::F, fb::D1, fb::D2, R, fb::P, Q>(a); }
+#define FB_L2(name, D, P, Q, TPB) OP_KERNEL(name, TPB) { fb::ld_l2<fb::D, fb::P, Q, TPB>(a); }

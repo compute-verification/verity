@@ -120,6 +120,33 @@ def unpriced(row: dict) -> dict[str, float]:
     return out
 
 
+#: the table route's L2 facet (`../machine_model/data/table.toml`, what ε's `--lookups` prices a lookup's bytes against):
+#: L2 read bytes a second ≤ `l2`. Only loads that skip L1 (.NA, .STRONG.GPU) count, so their bytes are L2's, and each at
+#: its own width (a 16-byte load of a 32-byte sector counts 16), so the load is a lower bound.
+L2_ROW = "L2tbl"
+_L2_BYPASS = re.compile(r"^LDG\..*\.(NA|STRONG\.GPU)(\.|$)")
+_L2_WIDTH = ((".256", 32), (".128", 16), (".64", 8))
+
+
+def l2_default() -> float | None:
+    t = MM / "data" / "table.toml"
+    if not t.exists():
+        return None
+    import tomllib
+    return float(tomllib.loads(t.read_text())["l2"])
+
+
+def l2_bytes_per_s(row: dict) -> float:
+    """The program's L2 read bytes a second: each L1-skipping load's rate a SM-clock, x 32 lanes x its width, x the SMs
+    timed (one block an SM) x the measured clock."""
+    b = 0.0
+    for key, rate in (row.get("rates") or {}).items():
+        pat = key.split(":", 1)[1]
+        if _L2_BYPASS.match(pat) and not re.search(r"\.[US](8|16)\b", pat):
+            b += rate * 32 * next((w for s, w in _L2_WIDTH if s in pat), 4)
+    return b * (row.get("blocks") or 0) * (row.get("sm_mhz") or 0) * 1e6
+
+
 #: the form the generic `MMA` lines were measured with (the honest kernel's mma.sync): it loads every row its own kind has
 #: no line on through `MMA`. Every other form is its own kind with lines on M, issue and JI3n only, so the model prices it
 #: at 0 on the rest; `generic=True` loads it through `MMA` there too (advisory: a form's missing line can't be violated).
@@ -145,11 +172,14 @@ def facet_loads(x: dict[str, float], c: dict[str, dict[str, float]], cycle_u: fl
     return load
 
 
-def program(row: dict, c, cycle_u: float, generic: bool = False) -> dict:
+def program(row: dict, c, cycle_u: float, generic: bool = False, l2: float | None = None) -> dict:
     x = row["x"] if "x" in row else rates_by_class(row)
     load = facet_loads(x, c, cycle_u, generic)
+    bps = l2_bytes_per_s(row)
+    if l2 and bps > 0:
+        load[L2_ROW] = bps / l2
     return {"probe": row.get("probe"), "run": row.get("run"), "sass": (row.get("sass_sha256") or "")[:16],
-            "sm_mhz": row.get("sm_mhz"), "tags": row.get("tags", []), "x": x, "load": load}
+            "sm_mhz": row.get("sm_mhz"), "tags": row.get("tags", []), "x": x, "load": load, "l2_bps": bps}
 
 
 #: tensor_kinds (EPS1 TENSOR M1, `cursor/eps1-tensor-ea24`): each form name's census kind, and each mode's lane op split
@@ -218,7 +248,7 @@ def cmd_loads(a) -> int:
     epoch = a.epoch or m.current
     c = census(m, epoch)
     for row in load_rows(a.rows):
-        p = program(row, c, m.cycle_u, a.generic)
+        p = program(row, c, m.cycle_u, a.generic, a.l2)
         top = sorted(p["load"].items(), key=lambda t: -t[1])[: a.top]
         if a.probe and p["probe"] != a.probe:
             continue
@@ -235,7 +265,7 @@ def cmd_table(a) -> int:
     c = census(m, epoch)
     vrows = in_vector(epoch)
     for row in load_rows(a.rows):
-        p = program(row, c, m.cycle_u, a.generic)
+        p = program(row, c, m.cycle_u, a.generic, a.l2)
         top = max(p["load"].items(), key=lambda t: t[1]) if p["load"] else ("", 0.0)
         print(json.dumps({"epoch": epoch, **p, "max_row": top[0], "max_load": top[1], "max_in_vector": top[0] in vrows,
                           "load": {r: round(v, 6) for r, v in sorted(p["load"].items())}, "unpriced": unpriced(row)}))
@@ -250,11 +280,12 @@ def cmd_summary(a) -> int:
     rowinfo = mm_rows()
     viol = []
     for row in load_rows(a.rows):
-        p = program(row, c, m.cycle_u, a.generic)
+        p = program(row, c, m.cycle_u, a.generic, a.l2)
         for r, v in p["load"].items():
             if v > 1 + a.margin:
                 viol.append({"row": r, "load": v, "probe": p["probe"], "run": p["run"], "sass": p["sass"],
-                             "sm_mhz": p["sm_mhz"], "in_vector": r in vrows, "tags": p["tags"], "x": p["x"]})
+                             "sm_mhz": p["sm_mhz"], "in_vector": r in vrows, "tags": p["tags"], "x": p["x"],
+                             "l2_bps": p["l2_bps"]})
     viol.sort(key=lambda d: -d["load"])
     if a.json:
         print(json.dumps(viol, indent=1))
@@ -284,6 +315,8 @@ def cmd_summary(a) -> int:
     for d in viol:
         star = " [ε]" if d["in_vector"] else ""
         mix = ", ".join(f"{k} {x:.4f}" for k, x in sorted(d["x"].items(), key=lambda t: -t[1]))
+        if d["row"] == L2_ROW:
+            mix = f"L2 reads {d['l2_bps'] / 1e12:.3f} TB/s against l2 {a.l2 / 1e12:.3f}" + (f"; {mix}" if mix else "")
         print(f"  {d['row']:12s} load {d['load']:.4f}{star}  {d['probe']} @ {d['run']} sass {d['sass']} "
               f"({d['sm_mhz']}MHz{', ' + ','.join(d['tags']) if d['tags'] else ''})")
         print(f"      mix: {mix}")
@@ -297,7 +330,7 @@ def cmd_refit(a) -> int:
     m = model()
     epoch = a.epoch or m.current
     c = census(m, epoch)
-    progs = [program(row, c, m.cycle_u, a.generic) for row in load_rows(a.rows)]
+    progs = [program(row, c, m.cycle_u, a.generic, a.l2) for row in load_rows(a.rows)]
     hits = [p for p in progs if a.row in p["load"]]
     if not hits:
         print(f"no program loads {a.row}", file=sys.stderr)
@@ -305,6 +338,10 @@ def cmd_refit(a) -> int:
     hit = max(hits, key=lambda p: p["load"][a.row])
     worst = hit["load"][a.row]
     print(f"{a.row}: worst load {worst:.4f} by {hit['probe']} @ {hit['run']} (mix {hit['x']})")
+    if a.row == L2_ROW:
+        print(f"refit: l2 {a.l2:.4g} -> {hit['l2_bps'] / (1 - a.margin):.4g} B/s (the worst program's "
+              f"{hit['l2_bps']:.4g} at {1 - a.margin:.2f})")
+        return 0
     support = sorted(k for k in c if a.row in c[k])
     others = [k for k in support if k != "MMA" and k not in MMA_FORMS]
     form = a.form or max((k for k in hit["x"] if k in MMA_FORMS or k == "MMA"), key=lambda k: hit["x"][k], default=None)
@@ -363,6 +400,9 @@ def main(argv: list[str] | None = None) -> int:
         s.add_argument("--epoch")
         s.add_argument("--generic", action="store_true",
                        help="load every MMA form through MMA's lines where it has none (advisory, not the model)")
+        s.add_argument("--l2", type=float, default=l2_default(),
+                       help="the L2 facet, read bytes a second (default: machine_model/data/table.toml's l2; none: "
+                            "no L2tbl row)")
     sub.choices["loads"].add_argument("--probe")
     sub.choices["loads"].add_argument("--top", type=int, default=4)
     sub.choices["summary"].add_argument("--margin", type=float, default=0.0,
