@@ -134,6 +134,32 @@ DC_DEV void tmem_ld32(uint32_t taddr, uint32_t (&r)[32]) {
       : "r"(taddr)
       : "memory");
 }
+#define DC_O4(i) "=r"(r[i]), "=r"(r[i + 1]), "=r"(r[i + 2]), "=r"(r[i + 3])
+#define DC_O16(i) DC_O4(i), DC_O4(i + 4), DC_O4(i + 8), DC_O4(i + 12)
+#define DC_O64(i) DC_O16(i), DC_O16(i + 16), DC_O16(i + 32), DC_O16(i + 48)
+#define DC_REGS64                                                                                                   \
+  "%0,%1,%2,%3,%4,%5,%6,%7,%8,%9,%10,%11,%12,%13,%14,%15,%16,%17,%18,%19,%20,%21,%22,%23,%24,%25,%26,%27,"          \
+  "%28,%29,%30,%31,%32,%33,%34,%35,%36,%37,%38,%39,%40,%41,%42,%43,%44,%45,%46,%47,%48,%49,%50,%51,%52,%53,"        \
+  "%54,%55,%56,%57,%58,%59,%60,%61,%62,%63"
+DC_DEV void tmem_ld64(uint32_t taddr, uint32_t (&r)[64]) {
+  asm volatile("tcgen05.ld.sync.aligned.32x32b.x64.b32 {" DC_REGS64 "}, [%64];"
+               : DC_O64(0)
+               : "r"(taddr)
+               : "memory");
+}
+DC_DEV void tmem_ld128(uint32_t taddr, uint32_t (&r)[128]) {
+  asm volatile("tcgen05.ld.sync.aligned.32x32b.x128.b32 {" DC_REGS64 ","
+               "%64,%65,%66,%67,%68,%69,%70,%71,%72,%73,%74,%75,%76,%77,%78,%79,%80,%81,%82,%83,%84,%85,%86,%87,%88,"
+               "%89,%90,%91,%92,%93,%94,%95,%96,%97,%98,%99,%100,%101,%102,%103,%104,%105,%106,%107,%108,%109,%110,"
+               "%111,%112,%113,%114,%115,%116,%117,%118,%119,%120,%121,%122,%123,%124,%125,%126,%127}, [%128];"
+               : DC_O64(0), DC_O64(64)
+               : "r"(taddr)
+               : "memory");
+}
+#undef DC_REGS64
+#undef DC_O64
+#undef DC_O16
+#undef DC_O4
 // 16x256b.x4: 16 lanes x 256 bits x 4 = 16 words a thread, the other load geometry (half the lanes, wider rows).
 DC_DEV void tmem_ld16x256(uint32_t taddr, uint32_t (&r)[16]) {
   asm volatile(

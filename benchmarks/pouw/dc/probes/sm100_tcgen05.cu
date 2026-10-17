@@ -5,9 +5,13 @@
 //   tc_<kind>_m<M>_n<N>   4 tcgen05.mma an iteration into two accumulators (M4a: slots written a tensor-pipe cycle;
 //                         cta_group::2 needs a cluster pair and is not probed yet)
 //   ld_<shape>            8 warps, 4 groups an iteration of 4 tcgen05.ld (x32: 2) and a tcgen05.wait::ld (M4b alone):
-//                         32x32b.x{1,4,16,32}, 16x64b.x16, 16x128b.x8, 16x256b.x4 (x64 and x128 are not probed yet)
-//   ldmma_w<LW>           warp 0: tcgen05.mma i8 128x256x32 into columns 0-255; LW warps: 8 tcgen05.ld.32x32b.x32 of
-//                         columns 256-511 an iteration (M4b joint facet: 64, 128 words a clock asked)
+//                         32x32b.x{1,4,16,32,64,128}, 16x64b.x16, 16x128b.x8, 16x256b.x4; ld16w_*: 16 warps
+//   ldmma_w<LW>[_r<R>]    warp 0: tcgen05.mma i8 128x256x32 into columns 0-255; LW warps: R tcgen05.ld.32x32b.x32 of
+//                         columns 256-511 an iteration (M4b joint facet: 2 LW R words a clock asked; block-timed, so a
+//                         saturated point's faster role is a lower bound)
+//   ldU_w<LW>, mmaU_ld8   the same roles, exact on both sides: MMA fixed and LW loaders running only while it does
+//                         (OP_UNTIL), or 8 loaders fixed and the MMA until
+//   syncU_k*, mmaU_sync_k32  syncmma's roles, exact on both sides in the same way
 //   imma_s8_k32 / _k16    mma.sync alone on sm_100 (M4c)
 //   syncmma_k32 / _k16    thread 0 tcgen05.mma beside 8 warps of mma.sync (M4c: does mma.sync share the tcgen05 pipe?)
 //   tclane_<lane>_r<R>    thread 0 tcgen05.mma beside 12 warps of lane ops (the scalar pipes beside a saturated MMA)
@@ -123,6 +127,7 @@ DC_DEV void ld_alone(const OpArgs& a) {
   uint32_t r0[32], r1[32];
   uint32_t q0[16], q1[16], q2[16], q3[16];
   uint32_t v0[4], v1[4], v2[4], v3[4];
+  uint32_t h[64], z[128];
   uint32_t acc = 0;
   OP_BEGIN
   OP_LOOP(it) {
@@ -157,11 +162,19 @@ DC_DEV void ld_alone(const OpArgs& a) {
         tmem_ld4(col(64 * g + 48), v3);
         tmem_wait_ld();
         acc += v0[0] ^ v1[1] ^ v2[2] ^ v3[3];
-      } else {
+      } else if constexpr (SHAPE == 6) {
         tmem_ld1(col(64 * g), v0[0]); tmem_ld1(col(64 * g + 16), v1[0]); tmem_ld1(col(64 * g + 32), v2[0]);
         tmem_ld1(col(64 * g + 48), v3[0]);
         tmem_wait_ld();
         acc += v0[0] ^ v1[0] ^ v2[0] ^ v3[0];
+      } else if constexpr (SHAPE == 7) {
+        tmem_ld64(col(64 * g), h);  // one in flight: two (128 registers) spill
+        tmem_wait_ld();
+        acc += h[0] ^ h[1];
+      } else {
+        tmem_ld128(col(128 * g), z);
+        tmem_wait_ld();
+        acc += z[0] ^ z[1];
       }
     }
   }
@@ -211,6 +224,67 @@ DC_DEV void ld_beside_mma(const OpArgs& a) {
     }
   }
   OP_END
+  mbar_wait(&s.bar, 0);
+  tc_after_sync();
+  x ^= sink_ld(tmem, 0);
+  teardown(tmem);
+  OP_SINK(x)
+}
+
+// ld_beside_mma's roles with exact rates on both sides: the fixed role runs a.iters (OP_LOOP), the other runs only while
+// it does (OP_UNTIL), flat out, so neither rate includes time it sat at the barrier. MMA_FIXED: the MMA warp fixed and LW
+// loaders until (the most a loader gets while the MMA runs at whatever rate it keeps); else the loaders fixed, MMA until.
+template <int LW, bool MMA_FIXED>
+DC_DEV void ld_until_mma(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  const uint32_t tmem = setup<0>(s, a.mode);
+  const uint64_t da = desc_a(s), db = desc_b(s);
+  constexpr uint32_t idesc = idesc_of<0>(128, 256);
+  const uint32_t w = warp_u(), sub = (w - 4u) >> 2, base = tmem + ((32u * (w & 3u)) << 16) + 256u;
+  const bool loader = w >= 4 && w < 4 + LW;
+  uint32_t r0[32], r1[32];
+  uint32_t x = threadIdx.x;
+  auto mma = [&] {
+    if (elect_one()) {
+      umma_i8(tmem, da, db, idesc, 0);
+      umma_i8(tmem, da, db, idesc, 1);
+      umma_i8(tmem, da, db, idesc, 1);
+      umma_i8(tmem, da, db, idesc, 1);
+    }
+    __syncwarp();
+  };
+  auto loads = [&] {
+#pragma unroll
+    for (int j = 0; j < 4; j++) {
+      tmem_ld32(base + (64u * (j + sub)) % 256u, r0);
+      tmem_ld32(base + (64u * (j + sub) + 32u) % 256u, r1);
+      tmem_wait_ld();
+      x += r0[0] ^ r1[1];
+    }
+  };
+  OP_BEGIN_STOP
+  if constexpr (MMA_FIXED) {
+    if (w == 0) {
+      OP_LOOP(it) { mma(); }
+      OP_DONE
+    } else if (loader) {
+      OP_UNTIL(n) { loads(); }
+      OP_TRIPS(n)
+    }
+  } else {
+    if (loader) {
+      OP_LOOP(it) { loads(); }
+      OP_DONE
+    } else if (w == 0) {
+      OP_UNTIL(n) { mma(); }
+      OP_TRIPS(n)
+    }
+  }
+  OP_END_STOP
+  if (w == 0) {
+    if (elect_one()) umma_commit(&s.bar);
+    __syncwarp();
+  }
   mbar_wait(&s.bar, 0);
   tc_after_sync();
   x ^= sink_ld(tmem, 0);
@@ -285,6 +359,50 @@ DC_DEV void sync_beside_mma(const OpArgs& a) {
   teardown(tmem);
   OP_SINK(v ^ threadIdx.x)
 }
+// sync_beside_mma with exact rates on both sides (as ld_until_mma): MMA_FIXED, the tcgen05 warp fixed and the mma.sync
+// warps until; else the mma.sync warps fixed and the tcgen05 warp until.
+template <int K, bool MMA_FIXED>
+DC_DEV void sync_until_mma(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  const uint32_t tmem = setup<0>(s, a.mode);
+  const uint64_t da = desc_a(s), db = desc_b(s);
+  uint32_t x[4], y[2];
+  imma_ops(threadIdx.x & 31, x, y);
+  int32_t d[8][4] = {};
+  const uint32_t w = warp_u();
+  auto mma = [&] {
+    if (elect_one()) mma4<0, 128, 256>(tmem, da, db);
+    __syncwarp();
+  };
+  OP_BEGIN_STOP
+  if constexpr (MMA_FIXED) {
+    if (w == 0) {
+      OP_LOOP(it) { mma(); }
+      OP_DONE
+    } else if (w >= 8) {
+      OP_UNTIL(n) { imma8<K>(d, x, y); }
+      OP_TRIPS(n)
+    }
+  } else {
+    if (w >= 8) {
+      OP_LOOP(it) { imma8<K>(d, x, y); }
+      OP_DONE
+    } else if (w == 0) {
+      OP_UNTIL(n) { mma(); }
+      OP_TRIPS(n)
+    }
+  }
+  OP_END_STOP
+  if (w == 0) {
+    if (elect_one()) umma_commit(&s.bar);
+    __syncwarp();
+  }
+  mbar_wait(&s.bar, 0);
+  tc_after_sync();
+  const uint32_t v = sink_ld(tmem, 0) ^ fold8(d);
+  teardown(tmem);
+  OP_SINK(v ^ threadIdx.x)
+}
 
 // ---- lane ops beside tcgen05.mma ---------------------------------------------------------------------------------------
 // thread 0: tcgen05.mma; warps 4-15 (3 a SMSP): R lane ops an iteration.
@@ -332,6 +450,15 @@ OP_KERNEL(ld_32x32b_x4, 256) { ld_alone<5>(a); }
 OP_KERNEL(ld_32x32b_x1, 256) { ld_alone<6>(a); }
 OP_KERNEL(ld16w_32x32b_x32, 512) { ld_alone<0, 16>(a); }
 OP_KERNEL(ld16w_32x32b_x16, 512) { ld_alone<1, 16>(a); }
+OP_KERNEL(ld_32x32b_x64, 256) { ld_alone<7>(a); }
+OP_KERNEL(ld_32x32b_x128, 256) { ld_alone<8>(a); }
+OP_KERNEL(ldU_w4, 256) { ld_until_mma<4, true>(a); }
+OP_KERNEL(ldU_w8, 384) { ld_until_mma<8, true>(a); }
+OP_KERNEL(ldU_w12, 512) { ld_until_mma<12, true>(a); }
+OP_KERNEL(mmaU_ld8, 384) { ld_until_mma<8, false>(a); }
+OP_KERNEL(syncU_k32, 512) { sync_until_mma<32, true>(a); }
+OP_KERNEL(syncU_k16, 512) { sync_until_mma<16, true>(a); }
+OP_KERNEL(mmaU_sync_k32, 512) { sync_until_mma<32, false>(a); }
 OP_KERNEL(ldmma_w4, 256) { ld_beside_mma<4>(a); }
 OP_KERNEL(ldmma_w8, 384) { ld_beside_mma<8>(a); }
 OP_KERNEL(ldmma_w12, 512) { ld_beside_mma<12>(a); }
@@ -372,6 +499,8 @@ static const OpProbe PROBES[] = {
     P_LD(ld_32x32b_x1, "LDTM=16"),
     {.name = "ld16w_32x32b_x32", .kernel = (const void*)ld16w_32x32b_x32, .tpb = 512, .expect = "LDTM.x32=8", .iters = 4096},
     {.name = "ld16w_32x32b_x16", .kernel = (const void*)ld16w_32x32b_x16, .tpb = 512, .expect = "LDTM.x16=16", .iters = 4096},
+    P_LD(ld_32x32b_x64, "LDTM.x64=4"),
+    P_LD(ld_32x32b_x128, "LDTM.x128=4"),
 #undef P_TC
 #undef P_LD
     {.name = "ldmma_w4", .kernel = (const void*)ldmma_w4, .tpb = 256, .expect = UI ";LDTM.x32=8", .warps = "1;4", .iters = 2048},
@@ -379,6 +508,13 @@ static const OpProbe PROBES[] = {
     {.name = "ldmma_w12", .kernel = (const void*)ldmma_w12, .tpb = 512, .expect = UI ";LDTM.x32=8", .warps = "1;12", .iters = 2048},
     {.name = "ldmma_w8_r16", .kernel = (const void*)ldmma_w8_r16, .tpb = 384, .expect = UI ";LDTM.x32=16", .warps = "1;8", .iters = 2048},
     {.name = "ldmma_w12_r16", .kernel = (const void*)ldmma_w12_r16, .tpb = 512, .expect = UI ";LDTM.x32=16", .warps = "1;12", .iters = 2048},
+    {.name = "ldU_w4", .kernel = (const void*)ldU_w4, .tpb = 256, .expect = UI ";LDTM.x32=8", .warps = "1;4", .iters = 2048, .until = 2},
+    {.name = "ldU_w8", .kernel = (const void*)ldU_w8, .tpb = 384, .expect = UI ";LDTM.x32=8", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "ldU_w12", .kernel = (const void*)ldU_w12, .tpb = 512, .expect = UI ";LDTM.x32=8", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "mmaU_ld8", .kernel = (const void*)mmaU_ld8, .tpb = 384, .expect = "LDTM.x32=8;" UI, .warps = "8;1", .iters = 2048, .until = 2},
+    {.name = "syncU_k32", .kernel = (const void*)syncU_k32, .tpb = 512, .expect = UI ";IMMA.16832.S8.S8=8", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "syncU_k16", .kernel = (const void*)syncU_k16, .tpb = 512, .expect = UI ";IMMA.16816.S8.S8=8", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "mmaU_sync_k32", .kernel = (const void*)mmaU_sync_k32, .tpb = 512, .expect = "IMMA.16832.S8.S8=8;" UI, .warps = "8;1", .iters = 2048, .until = 2},
     {.name = "imma_s8_k32", .kernel = (const void*)imma_s8_k32, .tpb = 512, .expect = "IMMA.16832.S8.S8=8", .iters = 4096},
     {.name = "imma_s8_k16", .kernel = (const void*)imma_s8_k16, .tpb = 512, .expect = "IMMA.16816.S8.S8=8", .iters = 4096},
     {.name = "syncmma_k32", .kernel = (const void*)syncmma_k32, .tpb = 512, .expect = UI ";IMMA.16832.S8.S8=8", .warps = "1;8", .iters = 2048},

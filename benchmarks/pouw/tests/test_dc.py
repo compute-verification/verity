@@ -101,7 +101,7 @@ def _rows(d: Path, rows: dict[str, dict[str, float]]):
 def test_analyze_sm100_pass_line(tmp_path):
     an = _load("analyze")
     t5 = {"0:UTCIMMA*": 1 / 128}   # 256 slots a SM a clock at 128 x 256
-    base = {"tc_i8_m128_n256": t5, "ld_32x32b_x32": {"0:LDTM.x32": 0.3}, "imma_s8_k16": {"0:IMMA.16816.S8.S8": 0.5},
+    base = {"tc_i8_m128_n256": t5, "ld_32x32b_x32": {"0:LDTM.x32": 0.25}, "imma_s8_k16": {"0:IMMA.16816.S8.S8": 0.5},
             "s_duo": {"0:LOP3.LUT": 2.0}}
     _rows(tmp_path / "a", {**base, "ldmma_w8": {**t5, "1:LDTM.x32": 0.25}})
     out = an.analyze("sm100", tmp_path / "a")
@@ -109,6 +109,21 @@ def test_analyze_sm100_pass_line(tmp_path):
     assert out["M4"]["pass"] and out["fold_headroom"] == 64 / 256
     _rows(tmp_path / "b", {**base, "ldmma_w8": {**t5, "1:LDTM.x32": 0.2}})
     assert not an.analyze("sm100", tmp_path / "b")["M4"]["pass"]
+
+
+def test_analyze_sm100_tmem_model(tmp_path):
+    """An exact (OP_UNTIL) point at tensor 0.5 loading 0.6 of ρ_T5, ld alone 0.8: honest at L = 32 is where the edge to
+    the MMA alone crosses t = l (6/11), and the adversary adds mma.sync's share of the pipe the MMA leaves (5/11)."""
+    an = _load("analyze")
+    assert an.upper([(0.5, 0.6)], 0.25) == 0.6 and an.upper([(0.5, 0.6)], 0.75) == 0.0
+    t5 = {"0:UTCIMMA*": 1 / 128}
+    _rows(tmp_path, {"tc_i8_m128_n256": t5, "ld_32x32b_x32": {"0:LDTM.x32": 0.8 / 4},
+                     "imma_s8_k16": {"0:IMMA.16816.S8.S8": 0.5}, "s_duo": {"0:LOP3.LUT": 2.0},
+                     "ldU_w8": {"0:UTCIMMA*": 0.5 / 128, "1:LDTM.x32": 0.6 / 4}})
+    m4 = an.analyze("sm100", tmp_path)["M4"]
+    assert abs(m4["honest_fraction_L32"] - 6 / 11) < 1e-9 and not m4["pass"]
+    assert abs(m4["eps_tensor_L32"] - (5 / 11 * 64) / (6 / 11 * 256 + 5 / 11 * 64)) < 1e-9
+    assert m4["L_saturated"] == 32 * 41   # 0.024 loaded at tensor 0.98: one slot in 41
 
 
 def test_analyze_sm90_pass_line(tmp_path):

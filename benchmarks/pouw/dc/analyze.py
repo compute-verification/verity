@@ -27,7 +27,8 @@ K_OF = {"s8": 32, "u8s8": 32, "e4m3": 32, "e5m2": 32, "f16": 16, "bf16": 16, "tf
 SYNC_SLOTS = 128
 #: tcgen05.ld 32-bit registers a thread for each probe
 LD_REGS = {"ld_32x32b_x32": 32, "ld_32x32b_x16": 16, "ld_16x256b_x4": 16, "ld_16x64b_x16": 16, "ld_16x128b_x8": 16,
-           "ld_32x32b_x4": 4, "ld_32x32b_x1": 1, "ld16w_32x32b_x32": 32, "ld16w_32x32b_x16": 16}
+           "ld_32x32b_x4": 4, "ld_32x32b_x1": 1, "ld16w_32x32b_x32": 32, "ld16w_32x32b_x16": 16,
+           "ld_32x32b_x64": 64, "ld_32x32b_x128": 128}
 TENSOR = ("IGMMA", "QGMMA", "HGMMA", "BGMMA", "UTC", "LDTM", "IMMA", "HMMA", "BMMA")
 LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo"}
 
@@ -128,6 +129,58 @@ def joint(name: str, row: dict, rows: dict, verdict: dict | None, t_alone: float
     return out
 
 
+def rate_of(row: dict, prefix: str) -> float | None:
+    """The rate of the first pattern (any loop) whose opcode starts with prefix."""
+    return next((r for k, r in row["rates"].items() if k.split(":", 1)[1].startswith(prefix)), None)
+
+
+def upper(points: list[tuple[float, float]], x0: float) -> float:
+    """The most y at x0 over the convex hull of points with free disposal (doing less of either is always possible)."""
+    pts = {(0.0, 0.0)} | {q for x, y in points for q in ((x, y), (x, 0.0), (0.0, y))}
+    best = max((y for x, y in pts if x >= x0), default=0.0)
+    for x1, y1 in pts:
+        for x2, y2 in pts:
+            if x1 < x0 < x2:
+                best = max(best, y1 + (y2 - y1) * (x0 - x1) / (x2 - x1))
+    return best
+
+
+def balanced(points: list[tuple[float, float]]) -> float:
+    """The largest t with upper(points, t) ≥ t: honest at L = depth, which loads every slot it writes."""
+    lo, hi = 0.0, 1.0
+    for _ in range(50):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if upper(points, mid) >= mid else (lo, mid)
+    return lo
+
+
+def tmem_model(joints: dict, ld_alone: float, rho5: float, rho_sync: float | None) -> dict:
+    """sm_100's two stages from the exact joint points (TENSOR §3, sm_100), all as fractions of ρ_T5.
+
+    TMEM region: (tensor fraction, words loaded / ρ_T5) over every MMA-beside-load point, ld alone and the MMA alone.
+    Every point is a program's rates over one period, so each is achievable; a block-timed point lies inside the region,
+    an exact (OP_UNTIL) one can lie on its edge. Honest at L = 32 loads every slot it writes, so it runs at the region's
+    balanced point h. At L = 32 m it loads one slot in m, so its tensor is saturated from the smallest m with
+    upper(0.98) ≥ 0.98 / m. Pipe region: (tensor fraction, mma.sync slots / ρ_sync alone) over every sync point, which
+    holds the shared-pipe line t + s = 1. The adversary keeps h's tcgen05 words and adds the mma.sync slots the pipe
+    region leaves at h (mma.sync writes registers, so no TMEM load; conservative: no contention between mma.sync and
+    the loads is counted)."""
+    tm = [(1.0, 0.0), (0.0, ld_alone / rho5)] + [(j["tensor_fraction"], j["ld_words"] / rho5)
+                                                for j in joints.values() if "ld_words" in j and "tensor_fraction" in j]
+    h = balanced(tm)
+    at_full = upper(tm, 1 - MARGIN)
+    m = next((m for m in range(1, 65) if at_full >= (1 - MARGIN) / m), None)
+    out = {"tmem_points": tm, "honest_fraction_L32": h, "honest_words_L32": h * rho5,
+           "ld_beside_saturated": at_full * rho5, "L_saturated": m and 32 * m}
+    if rho_sync:
+        sp = [(1.0, 0.0), (0.0, 1.0)] + [(j["tensor_fraction"], j["sync_slots"] / rho_sync)
+                                         for j in joints.values() if "sync_slots" in j and "tensor_fraction" in j]
+        extra = upper(sp, h) * rho_sync
+        out |= {"sync_points": sp, "adversary_words_L32": h * rho5 + extra,
+                "eps_tensor_L32": extra / (h * rho5 + extra)}
+    return out
+
+
 def duo_words(rows: dict) -> float | None:
     r = rows.get("s_duo")
     return r["rates"].get("0:LOP3.LUT", 0) * 32 if r else None
@@ -162,6 +215,15 @@ def analyze(family: str, d: Path) -> dict:
         for name, row in rows.items():
             if lane_of(name) or name.startswith(("ldmma_", "syncmma_")):
                 joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
+            elif name.startswith(("ldU_", "mmaU_", "syncU_")) and t_alone:
+                # OP_UNTIL points: both rates exact (neither includes time at the barrier)
+                j = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
+                     "issue": issue_rates(row, verdicts.get(name))}
+                if rate_of(row, "LDTM"):
+                    j["ld_words"] = rate_of(row, "LDTM") * 32 * 32
+                if rate_of(row, "IMMA"):
+                    j["sync_slots"] = rate_of(row, "IMMA") * SYNC_SLOTS
+                joints[name] = j
         rho5 = t5["slots"] if t5 else 256.0
         for name in [n for n in joints if n.startswith("ldmma_")]:
             ld = loop_rate(rows[name], 1, ("LDTM",))
@@ -184,11 +246,17 @@ def analyze(family: str, d: Path) -> dict:
                          if "ld_words" in j and j.get("tensor_fraction", 0) >= 1 - MARGIN), default=None)
         honest = max((j["honest_fraction"] for j in joints.values() if "honest_fraction" in j), default=None)
         rho_sync = max((f["slots"] for n, f in forms.items() if n.startswith("imma_")), default=None)
+        model = {}
+        if rho_t5 and ld_alone:
+            model = tmem_model(joints, ld_alone, rho_t5, rho_sync)
+            ld_beside, honest = model["ld_beside_saturated"], model["honest_fraction_L32"]
         rho_ld = min(x for x in (ld_alone, ld_beside) if x is not None) if (ld_alone or ld_beside) else None
         out["M4"] = {"rho_T5": rho_t5, "rho_ld_alone": ld_alone, "rho_ld_beside_mma": ld_beside, "rho_ld": rho_ld,
                      "rho_sync": rho_sync, "honest_tensor_fraction": honest,
                      "pass": bool(rho_t5 and rho_ld and rho_sync and rho_ld >= rho_t5 * (1 - MARGIN)
-                                  and rho_sync <= rho_t5 * (1 + MARGIN))}
+                                  and rho_sync <= rho_t5 * (1 + MARGIN)),
+                     **{k: v for k, v in model.items() if not k.endswith("_points")}}
+        out["tmem_model"] = model
     out["joints"] = joints
     rho = (out.get("M3") or {}).get("rho_T") or (out.get("M4") or {}).get("rho_T5")
     if rho and out["duo_words"]:
