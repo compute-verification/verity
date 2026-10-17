@@ -86,6 +86,7 @@ def table(path: Path) -> list[dict]:
     """The rows of an ncu --csv export, from its header line on."""
     if not path.exists():
         return []
+    csv.field_size_limit(sys.maxsize)   # a raw export's metric instances can be one field of megabytes
     lines = path.read_text(errors="replace").splitlines()
     i = next((i for i, x in enumerate(lines) if x.startswith('"') and ("Source" in x or "ID" in x)), None)
     return [] if i is None else list(csv.DictReader(io.StringIO("\n".join(lines[i:]))))
