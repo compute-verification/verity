@@ -192,12 +192,21 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "outside it", "Rate sketch store as blocks"),
     # stacking's bridge from a carrier's rounding budget to the blocks its circuit can encode, q <= b * R / rEnc:
     # `Accounting.Assumptions.CircuitEncodeHardness` (Security/Models/Accounting/Assumptions/Stacking.lean), read by
-    # Accounting.Guarantees.StackedSessionConservationSketchDeployed; false for circuits with FP8 or BF16 matmuls
+    # Accounting.Guarantees.StackedSessionConservationSketchDeployed and StackedSessionConservationRelay; false for
+    # circuits with FP8 or BF16 matmuls
     Entry("circuit-encode-hardness", "assumption",
           "Circuit encode hardness: an exact-integer circuit (integer matrix products that neither wrap nor clamp, linear "
           "maps, roundings) computing x of a block's b encoded bits, from the block's payload and anything else it holds, "
           "uses at least x * rEnc / b roundings, with no amortization across blocks",
           "Circuit encode hardness", "conjectured"),
+    # what lets the stacking guarantees treat a programmed store (blocks written after the seed) as uniform:
+    # `Accounting.Assumptions.KeyBinding` (Security/Models/Accounting/Assumptions/Stacking.lean); the seed's key alone
+    # lets a writer choose a block's encoding (verity/core/protocols/remote_bandwidth/tests/test_key_binding.py)
+    Entry("key-binding", "assumption",
+          "Key binding: a store whose blocks written after the seed are encoded under keys bound to their payloads' "
+          "digests, K_j = H(seed || j || d_j), is within delta of a uniform store on every event, with delta at most the "
+          "writers' SHA-512 searches over 2^512; a writer that grinds among payloads by their encodings, or writes during "
+          "a session, is outside it", "Key binding", "conjectured"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
