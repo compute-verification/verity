@@ -819,10 +819,8 @@ class Driver:
             if c not in on_chain and not dry_run and not set(v["ids"]) & following:
                 live = [rid for rid, (st, *_) in self._states(v["ids"]).items()
                         if st in ACTIVE and st != "unknown"]
-                if live and v.get("failing"):
-                    q.log(f"research queue drive: {' '.join(live)} of {c[:12]}, no longer on `{q.branch}`, keeps going for the "
-                          f"full picture of its failure ({v['failing']})")
-                elif live:
+                if live:                                   # a failed one too: drive acted on its failure, and its slot is a
+                                                           # train's (17 Oct 14:41Z: two held slots 40 min with 32 PRs queued)
                     self.cancel(self.repo, live, f"drive: {c[:12]} is no longer on `{q.branch}` (rebuilt); no check of it lands")
                     q.log(f"research queue drive: cancelled {' '.join(live)}: {c[:12]} is no longer on `{q.branch}`")
         drive["launched"] = {c: v for c, v in drive["launched"].items() if c in on_chain}

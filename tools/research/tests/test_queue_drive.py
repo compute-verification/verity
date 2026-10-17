@@ -187,9 +187,10 @@ def test_a_dry_run_tells_nobody_and_a_real_tick_after_it_still_does(world, monke
     assert len(h.posts) == 1 and "failed its check" in h.posts[0]
 
 
-def test_a_check_that_has_already_failed_is_told_while_it_keeps_going_and_its_rebuild_cancels_it_not(world, monkeypatch):
+def test_a_check_that_has_already_failed_is_told_while_it_keeps_going_and_its_rebuild_cancels_it(world, monkeypatch):
     """12 Oct: cc39's repository suite failed at 20:25Z and drive told it at 20:55Z, when `--keep-going` let the check end.  What
-    a running check has failed so far is a failure now; once the PR is ejected, the check runs on for the full picture."""
+    a running check has failed so far is a failure now.  Once the PR is ejected the rebuild cancels it (17 Oct: two such checks,
+    kept for the full picture, held train slots 40 min with 32 PRs queued)."""
     h = Harness(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
@@ -203,8 +204,7 @@ def test_a_check_that_has_already_failed_is_told_while_it_keeps_going_and_its_re
     assert len(h.posts) == 1 and h.cancelled == []
     h.q.eject(2, "breaks the repository suite", "ci")
     h.tick()
-    assert [m.pr for m in h.q.chain()] == [1] and h.cancelled == []
-    assert any("keeps going for the full picture" in x for x in world.logs)
+    assert [m.pr for m in h.q.chain()] == [1] and h.cancelled == [rid]
 
 
 def _failed_run(tmp_path, test: str, trace: str, steps: str = '{"step": "lean-suites", "status": "failed"}\n'):
