@@ -58,12 +58,12 @@ import Proofs.Flock.SamplingBoundary
   port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
   gates compute `Netlist.eval` is proved (`universal_correct`); the deployed record's unit is the Definition's
   (`SamplingDeploy.universalIs_deploy`).
-* `hComplete : Complete H D`: of the record's reference prover (`D.P`) at its error (`D.δc H`); it waits on that
-  prover (ruling 4).
-* `hZK : ZK H (D.mask Nz Ωz tapeOf S) εzk γzk`: the zero knowledge of the record's reference prover on the masked
-  tapes `tapeOf (ν, r)`, with the leaf layer's simulator `S`, its binding term `γzk` times `Fork`'s collisions among
-  the honest prover's calls in two real runs on one nonce (#2201); `Sampling.ZK` reduces it to a committed-coin
-  protocol's models (`SamplingDeploy.zk_deploy_of_models_gap`).
+* `hComplete : Complete H D`: of the record's reference prover (`D.P`) at its error (`D.δc H`); at the deployed record,
+  from Flock's masked completeness and the sampled verifier's and the code's facts (`SamplingDeploy.complete_deploy`).
+* `hZK : ZK H (D.mask Nz Ωz tapeOf S) εzk γzk`: the zero knowledge of the record's reference prover on the masked tapes
+  `tapeOf (ν, r)`, with the leaf layer's simulator `S`, its binding term `γzk` times `Fork`'s collisions among the
+  honest prover's calls in two real runs on one nonce (#2201); `Sampling.ZK` reduces it to a committed-coin protocol's
+  models (`SamplingDeploy.zk_deploy_of_models_gap`).
 -/
 
 namespace Claims.Sampling
