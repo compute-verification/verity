@@ -10,6 +10,7 @@ import Proofs.Flock.Claims.ZK.GKProof
 import Proofs.Flock.Claims.ZK.GKCost
 import Proofs.Flock.Claims.ZK.GKExp
 import Proofs.Flock.Claims.ZK.CoinCheck
+import Proofs.Flock.Claims.ZK.CoinBind
 import Proofs.Flock.Claims.ZK.Prefix
 import Proofs.Flock.Claims.ZK.Shvzk
 import Proofs.Flock.Claims.ZK.Flock
@@ -17,6 +18,7 @@ import Proofs.Flock.Claims.ZK.Hypotheses
 import Proofs.Flock.Claims.ZK.Prefinal
 import Proofs.Flock.Claims.ZK.Deployed
 import Proofs.Flock.Claims.ZK.Reference
+import Proofs.Flock.Claims.ZK.CoinLayer
 import Proofs.Flock.Claims.ZK.Tape
 import Proofs.Flock.Claims.ZK.Capacity
 import Proofs.Flock.Claims.ZK.Worker
@@ -64,6 +66,10 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 * `CoinCheck`: the coin-tree check (`coin-tree/hm96-sha512/v2`) as an oracle program that logs its hash calls
   (`treeChk`); a protocol whose check it is meets `Binding` with no hypothesis on `H` (`Proto.binding_of_tree`), T6's
   aligned hash inputs being among the two walks' calls (`coinPairs_mem`).
+* `CoinBind`: the same where the coin is read from the whole message: two different passing openings of one position
+  are a collision among the two walks' calls (`GK.coinPairs_coll_any`), so a protocol whose check is the walk on the
+  message read at its round, and whose reading is one coin for two messages that read as one opening, meets `Binding`
+  (`Proto.binding_of_open`).
 * `Prefix`: runs of a Claims `V*` as runs of the session analysis's model: the committed-coin prover's first `K + 1`
   messages as a causal strategy (`Proto.preStrat`) against `V*`'s responder (`vResp`), whose run is a transcript's
   first `K + 1` messages (`run_prefix`) and determines what the extraction run passes on (`view0_run`); so
@@ -89,14 +95,20 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   `ZkHidden.zkViewAtJ_of_ok`), Lemma C's tables, leaves and world `W₀` are the session's by definition
   (`card_cutAt_ideal`, `exeOf_eq`) and the simulator is the models' (`Proto.withSim`, so `SimLink` holds by
   construction): **`Flock.zk_deployZk_of_tables`** under `Claims.Hm96Hiding` and three Props (`TMsgLink`, `TablesOK`,
-  `CoinCheck`), and under those alone at the pinned key's hiding gap (`Flock.zk_deployZk_of_tables_gap`).
+  `CoinCheck`, or `Binding` itself in `_bind`), and under those alone at the pinned key's hiding gap
+  (`Flock.zk_deployZk_of_tables_gap`).
 * `Reference`: the reference prover those three Props are about, `RefSession.refP`, defined from the session's data
   (its round encoding of the cut view, its final message of the tables' real views, refusing where a table doesn't
-  admit the coins); `CoinCheck` holds of it by definition, `TablesOK` from `Tables` and `TMsgLink` from `Complete`,
-  `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is the cut view the round
-  messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and **`Flock.zk_deployZk_ref`** at the session's masked
-  record `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `honestPZk`'s, a named Prop), each also at
-  the pinned key's hiding gap (`_gap`).
+  admit the coins); `Binding` holds of it with no hypothesis (`Proto.binding_of_open`), `TablesOK` from `Tables` and
+  `TMsgLink` from `Complete`, `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is
+  the cut view the round messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and `Flock.zk_zkD_ref` at the session's masked record
+  `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `honestPZk`'s, a named Prop), each also at the
+  pinned key's hiding gap (`_gap`).
+* `CoinLayer`: the deployed masked record `zkDeployed`, `RefSession.zkD` at `coin-tree/hm96-sha512/v2`'s coin layer
+  (the 32-byte nonce, `Hello`'s frame with its hex, `Hello`'s answer of root and hm96 key, the keyed tree, the
+  committed schedule's places, the opening read from `Resp::Coins`'s words, the coin handed on its words), and
+  **`Flock.zk_deployZk_ref`** at it, at every rep rounds' coin counts; `Claims.Witness.Flock.ZK_meets` states its coin
+  layer and `ZK_coins_fails` that the degenerate one (every opening passes, the coin is the opening) is not it.
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
