@@ -31,12 +31,13 @@ import Proofs.Flock.SamplingBoundary
 ## What remains: the hypotheses
 
 * `hKS : Claims.Flock.KS H (deployZk rel)`: E4 (`cursor/claims-ks-c7a9`), the hypothesis `flock_zk_assembled` takes.
-* `hflock : D.flock = deployZk rel`, `hε : ∀ x, 0 ≤ D.εtable x`: the deployed sampling record's, which is the Lean
-  sampled-proofs verifier's (`cursor/sampled-lean-verifier-c7a9`): its sessions are C-Flock's masked proofs, and its
-  inner `ε_table`, which bounds each session's (`InnerNumbers`), a sum of tables' errors as Flock's is.
+* `hflock : D.flock = deployZk rel`, `hε : ∀ x, 0 ≤ D.εtable x`: facts about the deployed record
+  (`SamplingDeploy.deploy_flock`, `SamplingDeploy.deploy_εtable_nonneg`): its sessions are C-Flock's masked proofs,
+  and its inner `ε_table`, which bounds each session's (`InnerNumbers`), is the tables' count times their bound.
 * `hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer` and `hrow : RowPlaces row`: the
   deployed trace commitment's opening program, hm96 leaves of rows that place the opened bit under the verifier's own
-  registered path check; that verifier's port of the opening.
+  registered path check; at the deployed record by definition and proved (`SamplingDeploy.deploy_commit`,
+  `SamplingDeploy.row_places`).
 * `DrawFixed`, `SessionRuns`, `InnerNumbers` (`Sampling.Session`): the checked units' sessions are in the second stage
   and the draw doesn't read them; a checked unit's session is a Flock run on its own rounds that decides the run, with
   the Flock verifier's `H` calls among the sampled verifier's; the inner numbers are Flock's at each session. The Lean
@@ -50,12 +51,13 @@ import Proofs.Flock.SamplingBoundary
   theorem (`designWellFormed`); the program part waits on the claims' program and the verifier's being one, and on the
   claims' proof units covering a `Q_word` unit, whose gates another unit's may interleave.
 * `hopen : OpenCallsLe H D`: checking what one checked unit's Flock witness reveals makes at most `openCalls` SHA-512
-  calls; the deployed opening check's count, the Lean sampled-proofs verifier's. With it the extractor's own calls are
-  `Efficient`'s (`E_own_le`); its reruns are, at every deployment (`E_runs_le`), and its expected reruns are with
-  `DrawFixed` (`E_runs_exp`).
+  calls; at the deployed record, from the reveal count (`SamplingDeploy.openCallsLe_deploy`). With it the extractor's
+  own calls are `Efficient`'s (`E_own_le`); its reruns are, at every deployment (`E_runs_le`), and its expected reruns
+  are with `DrawFixed` (`E_runs_exp`).
 * `huniv : UniversalIs D`: the deployed universal unit computes what its Definition's gates do (`universalProg`, the
   port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
-  gates compute `Netlist.eval` is proved (`universal_correct`).
+  gates compute `Netlist.eval` is proved (`universal_correct`); the deployed record's unit is the Definition's
+  (`SamplingDeploy.universalIs_deploy`).
 * `hComplete : Complete H D P δc`: waits on the reference prover (ruling 4), so `P` and `δc` are any.
 * `hZK : ZK H D Pz S εzk γzk`: the masked sessions' zero knowledge with the leaf layer's simulator, its binding term
   `γzk` times `Fork`'s collisions among the honest prover's calls in two real runs on one nonce (#2201); no branch

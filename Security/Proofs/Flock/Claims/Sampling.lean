@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Count
+import Proofs.Flock.Claims.Sampling.Deployed
 import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.ExecBernoulli
@@ -26,4 +27,5 @@ KS (`Sampling.Bext`); the waits' truncation and union bound (`Sampling.Wait`); t
 bits from Flock's KS at the checked units' sessions and the deployed sampled verifier's named facts (`Sampling.KS`);
 Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`); the deployed draw's miss bound and `DrawLaw`
 from it (`Sampling.Select`); the universal unit's gates computing its netlist (`Sampling.Universal`); and the block's
-claims assembled, with what remains as hypotheses (`Sampling.Assembled`). -/
+claims assembled, with what remains as hypotheses (`Sampling.Assembled`), and at the deployed record
+(`Sampling.Deployed`). -/
