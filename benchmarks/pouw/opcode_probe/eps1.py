@@ -3,7 +3,7 @@
   python eps1.py facets OUT/rows.jsonl... [--margin 0.02] [--prior rows.csv] [--emit EPOCH]
       # frontier.cu's MMA + X points (every run given) -> facets (SMSP-cycles a warp instruction, x (1 - margin)), with
       # the points each is tight at; --prior adds the points the published K* facets were fitted to (their vertices),
-      # --emit prints the facets as rows.csv and census.csv lines
+      # --emit prints the facets as rows.csv and census/EPOCH.csv lines
   python eps1.py side OUT/rows.jsonl                     # side.cu: honest alone, and each unit alone and beside it
   python eps1.py clock OUT/sustain.jsonl [--skip-s 3]    # power.cu: each kernel's clock, power and work rate a phase
 
@@ -109,10 +109,13 @@ def prior_points(rows_csv: Path, prefix: str, kind: str, margin: float) -> tuple
     return pts + [(s / fs[-1][0], 0.0, f"{fs[-1][2]}:axis")], runs
 
 
-OPS = {"imad": "IMAD", "hfma2": "HFMA2*", "lop3": "LOP3.LUT", "shfl": "SHFL.BFLY"}
-#: each family's census kind, its published rows (VF3f, r20261016-093909-ac84) and the rows its facets become
+OPS = {"imad": "IMAD", "hfma2": "HFMA2*", "lop3": "LOP3.LUT", "shfl": "SHFL.BFLY", "iadd3": "IADD3", "ffma": "FFMA",
+       "idp4a": "IDP.4A*", "popc": "POPC"}
+#: each family's census kind, its published rows (VF3f, r20261016-093909-ac84) and the rows its facets become; iadd3,
+#: ffma, idp4a and popc are sm89/scalar.cu's
 FAMILY = {"imad": ("IMAD", "KIMAD", "EIMAD"), "hfma2": ("HFMA2", "KHFMA2", "EHFMA2"), "lop3": ("ALU", "KALU", "EALU"),
-          "shfl": ("SHFL", "KSHFL", "ESHFL")}
+          "shfl": ("SHFL", "KSHFL", "ESHFL"), "iadd3": ("ALU", "KIADD3", "EIADD3"), "ffma": ("FFMA", "KFFMA", "EFFMA"),
+          "idp4a": ("IDP4A", "KIDP4A", "EIDP4A"), "popc": ("XU", "KXU", "EXU")}
 
 
 def cmd_facets(a) -> int:
@@ -141,7 +144,7 @@ def cmd_facets(a) -> int:
                 print(f'rows.csv: {new}{i},joint,{cite},"{desc}"')
                 for k, c in (("MMA", f["MMA"]), (kind, f["X"])):
                     if c > 0:
-                        print(f"census.csv: {k},{new}{i},,,{c:.9g},,{a.emit},,{cite}")
+                        print(f"census/{a.emit}.csv: {k},{new}{i},,,{c:.9g},,{a.emit},,{cite}")
             continue
         print(f"## MMA + {x} ({pat}); points (MMA, {x}) a SMSP-cycle:")
         for m, v, n in sorted(pts):
@@ -199,7 +202,8 @@ def windows(lines: list[dict], skip_s: float) -> dict[tuple[str, str], list[dict
     return split
 
 
-MMAS = {"p_honest": 8, "p_half": 4, "p_mma": 8, "p_mma0": 8, "p_fold": 0, "p_ffma": 0, "p_mixed": 4}
+MMAS = {"p_honest": 8, "p_half": 4, "p_mma": 8, "p_mma0": 8, "p_fold": 0, "p_ffma": 0, "p_mixed": 4, "p_honest16": 8,
+        "p_mma16": 8, "p_mma16z": 8, "p_light": 0}
 
 
 def cmd_clock(a) -> int:
