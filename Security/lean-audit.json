@@ -18052,9 +18052,9 @@
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
   "Models.Flock.Guarantees.SamplingClaims": {
-   "digest": "0cb2dd5650d2bc8b8d6ba9ae34d2ad88ca908bc8a21c235114c5babed82c1e9f",
+   "digest": "1c387c5dcb907e59f7d40374998b22ccb9f8db4972aaec68d25b6276c5fd869d",
    "definitions": {
-    "Flock.Guarantees.SamplingClaimsStated": "6ca630249e2063f4f8a390134bfead1c17f0c898ce9cc43ed32c2781a940c89c"
+    "Flock.Guarantees.SamplingClaimsStated": "0ae4ae43f4661b771203af63bb676492d17b74af002d3a57e12ebca352f2a68c"
    },
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
