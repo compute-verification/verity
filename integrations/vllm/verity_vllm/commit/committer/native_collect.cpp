@@ -647,7 +647,7 @@ struct Collector {
     }
   }
 
-  // R11: size-adaptive gather geometry.  `blocks_per_desc` is the CAP (32 = R10's Llama geometry, needed for the 2-5 MB prefill tensors);
+  // R11: size-adaptive gather geometry.  `blocks_per_desc` is the CAP (the committer's default 1024; 32 was R10's Llama geometry);
   // a decode window whose largest descriptor is a few KB gets ceil(max_nbytes / auto_bytes_per_block) blocks instead (1-2), so the 49
   // launches per decode step stop occupying thousands of mostly idle thread blocks on the serving stream (SM time the worker's SHA
   // kernels and the model's own kernels then compete for).  Same descriptors, same bytes, same destination offsets.
