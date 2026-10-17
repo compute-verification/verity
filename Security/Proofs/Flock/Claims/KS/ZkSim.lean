@@ -410,7 +410,7 @@ theorem zk_simFork_le {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : 
         Claims.Flock.forkSlack sha512 (V true) P x (Claims.Flock.FnFork.δN 𝔽 65536 (zkNOf x spec sts)) t.val ω := by
   rw [zkΦ_eq (zkN_add hset)]
   exact Claims.Flock.slack_of_coupling sha512 (V true) P x
-    (fun t => Claims.Flock.FnFork.δN_nonneg (X := 𝔽) (M := 65536) _ t)
+    (fun t => Claims.Flock.FnFork.δN_nonneg (X := 𝔽) (M := 65536) (zkNOf x spec sts) t)
     (forkCoinCoupling_zk P x ω (zkN_add hset) (zkNOf x spec sts) (Claims.Flock.FnFork.prefixKey_histKey _)) t
 
 /-! ## The simulator -/
@@ -736,7 +736,7 @@ theorem zkSimWJ_of_parts {x : Claims.Msg} (hrun : ZkSimRunAt x) (habort : ZkSimA
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω _ _ P
   refine ⟨zkRd hset h0 L hz hk hlay, zkRd_inj hset h0 L hz hk hlay, zkRd_zero hset h0 L hz hk hlay,
     Claims.Flock.FnFork.δN 𝔽 65536 (zkNOf x spec sts),
-    fun t => Claims.Flock.FnFork.δN_nonneg (X := 𝔽) (M := 65536) _ t,
+    fun t => Claims.Flock.FnFork.δN_nonneg (X := 𝔽) (M := 65536) (zkNOf x spec sts) t,
     zk_slackFitW_δN (n := (tables true x).length) (stJ h0) (zk_m_range hs hin hset h0)
       (fun j => (zkTabs h0 L hz hk hlay j).sch) (zk_sch_m1 hset h0 L hz hk hlay) (fun j => (zkTabs h0 L hz hk hlay j).N)
       (zkRd hset h0 L hz hk hlay) (fun j _ i => zkRd_succ_lt hset h0 L hz hk hlay j i) (zkNOf x spec sts)
