@@ -229,7 +229,8 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     verifies with the tile's z."""
     from verity.core.protocols.remote_bandwidth import audit
     from verity.core.protocols.remote_bandwidth import receipts as rb
-    from verity_vllm.store.registry import RemoteBandwidthReceipt, verify_opening
+    from verity_vllm.store.registry import RemoteBandwidthReceipt
+    from verity_vllm.store.verify import verify_opening
 
     s, recs, tiles = Store(salt_key=bytes(32)), [], audit.NoiseTiles()
     b = Binder(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)

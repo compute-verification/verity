@@ -11,4 +11,6 @@ Terms are the design's (store, block, tier, registration, receipt, pass, window,
 - `registry`: `Store`, the reference implementation of both interfaces over any `Backing` (host bytes, or a CUDA
   tensor read back for an opening).  Tests drive it with a fake codec and receipt.
 - `binder`: installs the hooks into a vLLM engine (`verity_vllm.engine.hooks`), all of them undone by `uninstall`.
+- `verify`: `verify_opening`, the verifier's side of one opening, the reference the store's openings are tested
+  against.
 """
