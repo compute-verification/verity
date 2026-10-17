@@ -2,6 +2,8 @@
 
     python tensor_kinds.py OUT_DIR            # reads OUT_DIR/tensor_kinds.jsonl and OUT_DIR/sass/tensor_kinds.sass
     python tensor_kinds.py refit OUT_DIR...   # VF3n-16's JI3n rows from every program of these runs, as JSON
+    python tensor_kinds.py search OUT_DIR     # a search.sh run (M1c): every schedule's program, the control, the gates
+    python tensor_kinds.py refit OUT_DIR... --search SEARCH_DIR...   # VF3o-16's JI3o rows, the margin measured
 
 For every timed case it reads the kernel's loops in the SASS (a loop is the instructions from a label to the backward
 branch that targets it), counts MMA and other instructions an iteration, and turns the run's per-SM counts into
@@ -18,7 +20,8 @@ Writes OUT_DIR/tensor_kinds.json and OUT_DIR/tensor_kinds.md; exits 3 when a gat
 `refit` writes the machine model's JI3n_0..2 (VF3n-16): each JI3e row's MMA coefficient refit over every program of the
 runs (a program constrains a row whatever the lane gate says) and VF3e's, at the noise margin with the row's other
 coefficient kept, then the whole row divided by SCHED, the schedule spread between builds of one program. MMA takes every
-form's least; each form's kind (KIND) gets its own.
+form's least; each form's kind (KIND) gets its own. With `--search`, the search's programs join the fit and SCHED gives
+way to each row's measured margin: how far the fastest schedule found moved any searched kind's coefficient below M1's.
 """
 from __future__ import annotations
 

@@ -139,3 +139,47 @@ def test_an_unfinished_run_fails_the_gate(tmp_path: Path):
     (tmp_path / "sass" / "tensor_kinds.sass").write_text("")
     _, fails = TK.analyze(tmp_path)
     assert fails == ["the run did not finish (no done line)", "opalone: no iadd3_ffma row"]
+
+
+def test_kernel_names_of_the_search_decode():
+    assert TK.tpl_key("_Z7k_spec2I9ImmaS8k16Li64ELi0ELi8ELi1ELi1EEviPjP8BlockClk") == (
+        "k_spec2", "imma_s8_m16n8k16", (64, 0, 8, 1, 1))
+    assert TK.tpl_key("_Z6k_mix2I11ImmaS8m8k16Li32ELi4ELi16ELi6ELi2EEviPjP8BlockClk") == (
+        "k_mix2", "imma_s8_m8n8k16", (32, 4, 16, 6, 2))
+    assert TK.tpl_key("_Z6k_specI9ImmaS8k16Li64ELi0EEviPjP8BlockClk") == ("k_spec", "imma_s8_m16n8k16", (64, 0))
+    assert TK.tpl_key("_Z9k_opaloneILi2EEviPjP8BlockClk") is None and TK.tpl_key("_Z4mainv") is None
+
+
+def test_a_faster_schedule_joins_the_refit_and_measures_the_margin(tmp_path: Path):
+    # M1: IMMA.16816 + IADD3 x8 (spec) at 17.4 SMSP-cycles a MMA; the search finds the same program at 17.0 (k_spec2,
+    # 2 + 2 warps a SMSP) and re-times M1's own at 17.5 (the control). Both 8.75 others a MMA.
+    k16 = ["IMMA.16816.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    lane = ["IADD3 R3, R3, R4, RZ"] * 64 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    m1 = tmp_path / "m1"
+    m1.mkdir()
+    _write(m1, [_opalone(1000, 8 * 67 / 0.98), _case("spec", "imma_s8_m16n8k16", "ImmaS8k16", 64, 1000, 16000 * 17.4, k16, lane)])
+    srch = tmp_path / "m1c"
+    (srch / "sass").mkdir(parents=True)
+    names = {"k_spec2": "_Z7k_spec2I9ImmaS8k16Li64ELi0ELi8ELi2ELi2EEviPjP8BlockClk",
+             "k_spec": "_Z6k_specI9ImmaS8k16Li64ELi0EEviPjP8BlockClk"}
+    (srch / "sass" / "search-ImmaS8k16_R64.sass").write_text("\n".join(_fn(n, k16, lane) for n in names.values()) + "\n")
+    recs = [{"kernel": k, "form": "imma_s8_m16n8k16", "tpl": tpl, "mma_warps": 2, "lane_warps": 2, "warps": 0, "iters": 1000,
+             "cyc_med": 16000 * cyc, "distinct_sms": 188, "mhz": 2100.0}
+            for k, tpl, cyc in [("k_spec", [64, 0], 17.5), ("k_spec2", [64, 0, 8, 2, 2], 17.0)]]
+    (srch / "search-ImmaS8k16_R64.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in recs + [{"done": True, "num_sms": 188}]) + "\n")
+    pts, fails = TK.search_points(srch)
+    assert fails == [] and [round(p["cycles_per_mma"], 9) for _, p in pts] == [17.5, 17.0]
+    assert all(abs(p["ops_per_mma"] - 8.75) < 1e-12 for _, p in pts) and [p["control"] for _, p in pts] == [True, False]
+
+    a, b = TK.JI3E["JI3e_1"]
+    fit = TK.refit([m1], search=[srch])
+    m = (0.98 * 17.4 - b * 8.75) / (0.98 * 17.0 - b * 8.75)
+    assert abs(fit["sched"]["JI3o_1"] - m) < 1e-12
+    assert abs(fit["rows"]["JI3o_1"]["MMA"] - (0.98 * 17.0 - b * 8.75) / m) < 1e-9
+    assert abs(fit["rows"]["JI3o_1"]["other"] - b / m) < 1e-12
+    # on JI3e_0 the margin is IMMA16816's own move (8.302 to 7.910), larger than the class's (VF3e's 8.115 to 7.910)
+    m0 = (0.98 * 17.4 - 8.75) / (0.98 * 17.0 - 8.75)
+    assert abs(fit["sched"]["JI3o_0"] - m0) < 1e-12 and abs(fit["rows"]["JI3o_0"]["MMA"] - (0.98 * 17.0 - 8.75) / m0) < 1e-9
+    assert TK.main(["tensor_kinds.py", "search", str(srch)]) == 0
+    assert json.loads((srch / "search.json").read_text())["gate_failures"] == []
