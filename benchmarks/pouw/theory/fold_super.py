@@ -84,6 +84,12 @@ def li_run(y, pairs):
     return y
 
 
+def xin13_half(y, d0, d1, a0, rot):
+    """One xin13 half-step (the filler's XIN13 pump and EGEMM's x13_l2o fold): y <- (rotl(y, rot) ^ d0)*a0 + d1. Absorbs
+    two words at a rotate (SHF) + an XOR-in (LOP3) + an IMAD = 3 ops a pair, 1.5 a word."""
+    return u32(u32(rotl(y, rot) ^ d0) * a0 + d1)
+
+
 # ---- helpers --------------------------------------------------------------------------------------------------------------
 
 def is_affine_z2(f, nargs, trials=96, seed=0x1357):
@@ -336,12 +342,41 @@ def main() -> int:
     checks.check("FFMA: float32 (24-bit mantissa) cannot reproduce the exact 32-bit fold multiply u*a",
                  ffma_bad)
 
+    # E3b. IDP.4A (dp4a) sums four signed int8 products; it cannot produce a 32-bit multiply u*a (the operands are bytes).
+    dp4a_bad = any(dp4a(u, a0) != u32(u * a0) for u in (next(gg) | 0x01010101 for _ in range(50)))
+    checks.check("dp4a: four signed int8 products cannot reproduce the 32-bit fold multiply u*a",
+                 dp4a_bad)
+
     # E4. The uniform datapath writes one warp-uniform word an instruction; the fold is per-lane. At one served position
     # the 32 lanes' starts differ, so their u = y^d^k differ -- the warp-uniform datapath cannot produce a warp of them.
     starts = [RF.pfill_start(p) for p in range(32)]
     us = {u32(y ^ 0 ^ k0) for (y, z) in starts}
     checks.check("uniform: the fold is per-lane (u differs across a warp's 32 lane starts), not a warp-uniform word",
                  len(us) > 1, f"{len(us)} distinct u across 32 lanes")
+
+    # ---- G. the filler's pump fold (FILL-OPT) and EGEMM's xin13 -----------------------------------------------------
+
+    # FILL-OPT is the same complexity claim for the verified filler. The filler's inputs are the public live coins, so the
+    # fan-in bound gives it no floor (ISA-FANIN): it is purely complexity-type. The filler's per-word work is a pump whose
+    # fold is XIN13 (or duo), so the duo attacks above cover duo-pump fillers; here is XIN13's half-step.
+    rot13, rot19 = 13, 19
+    xin_half = [xin13_half(v[0], v[2], v[3], a0, rot13) for v in vectors]
+    pool_xin = make_pool2(k0, k1, a0, a1, r0, r1, vectors)
+    checks.check("filler/xin13: a half-step (rotl(y,13)^d0)*a0 + d1 is not one instruction (rotate + XOR-in + IMAD, 1.5 a word)",
+                 FO.single_instruction(xin_half, pool_xin) is None, FO.single_instruction(xin_half, pool_xin))
+    honest_xin = [u32(u32(rotl(v[0], rot13) ^ v[2]) * a0 + v[3]) for v in vectors]
+    checks.check("filler/xin13: the honest form (SHF rotate, LOP3 XOR-in, IMAD) reproduces it", honest_xin == xin_half)
+
+    def xin_two(y, d0, d1, d2, d3):
+        y = xin13_half(y, d0, d1, a0, rot13)
+        return xin13_half(y, d2, d3, a1, rot19)
+    checks.check("filler/xin13: two half-steps do not compose (not degree-1), so the pump's N words need N*1.5 ops",
+                 not is_poly_deg1(xin_two, 5))
+
+    # The filler's word-production cheats (pfill_ref.q_receipt / packed_receipt) are MAC-route, not fold-route: they feed
+    # the same fold fewer products (ram's Q, or a packed IMMA word + a table), and are already priced where the committed
+    # word is produced (SCALAR-ROUTE / the census). They do not make the fold itself cheaper, so FILL-OPT's fold stands or
+    # falls with FOLD-OPT above.
 
     # ---- F. randomised superopt hunt over the real opcode menu ----------------------------------------------------
 
@@ -476,6 +511,8 @@ def superopt_hunt(budget, k0, k1, a0, a1, r0, r1, ax, kx):
     targets.append(("fx1.y1", 4, fx))
     lip = [li_half(y, d0, d1, k0, a0) for (y, z, d0, d1) in pts]
     targets.append(("li.pair", 2, lip))
+    xh = [xin13_half(y, d0, d1, a0, 13) for (y, z, d0, d1) in pts]
+    targets.append(("xin13.pair", 3, xh))
 
     hits = []
     tried = 0
@@ -494,13 +531,23 @@ def superopt_hunt(budget, k0, k1, a0, a1, r0, r1, ax, kx):
 
 
 def _rand_prog(rnd, L, consts):
+    """A random straight-line program. Operand selection is biased toward the four inputs, the keys and the most recent
+    results (where a real shortcut would read), so the hunt spends its budget on meaningful programs, not dead values."""
     nin = 4
     nconst = len(consts)
     prog = []
     for i in range(L):
         op = rnd.choice(_MENU)
         navail = nin + nconst + i
-        ops = [rnd.randrange(navail) for _ in range(op[1])]
+        ops = []
+        for _ in range(op[1]):
+            roll = rnd.random()
+            if roll < 0.45:               # an input
+                ops.append(rnd.randrange(nin))
+            elif roll < 0.70 and i > 0:   # a recent result
+                ops.append(nin + nconst + rnd.randrange(i))
+            else:                         # a key or immediate
+                ops.append(nin + rnd.randrange(nconst))
         prog.append((op, ops))
     return prog
 
@@ -534,6 +581,8 @@ def _target_fn(name, k0, k1, a0, a1, r0, r1, ax, kx):
         return lambda y, z, d0, d1: duo_word(*duo_word(y, z, d0, k0, a0, r0), d1, k1, a1, r1)[1]
     if name == "fx1.y1":
         return lambda y, z, d0, d1: fx1_word(y, z, d0, kx, ax, k0, a0, r0)[0]
+    if name == "xin13.pair":
+        return lambda y, z, d0, d1: xin13_half(y, d0, d1, a0, 13)
     return lambda y, z, d0, d1: li_half(y, d0, d1, k0, a0)
 
 
