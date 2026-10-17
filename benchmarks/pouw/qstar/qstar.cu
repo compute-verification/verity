@@ -163,14 +163,16 @@ extern "C" __global__ void __launch_bounds__(256, 1) k_imma_zero(const uint4* Ap
                                                               int n, Clk* rec) {
   imma_body<true>(Ap, Bp, out, L, n, rec);
 }
-// The zero instance's IMMA on the columns [0, ni), persistent over the units (16 rows by 256 columns, unit u at row
-// block u % MB). The host gives it dynamic shared memory it doesn't use, a third of the SM's, so that at most two blocks
-// sit on an SM and a concurrent scalar kernel (no shared memory) gets the registers and warps left over.
+// The zero instance's IMMA on the columns [0, ni), persistent over the units (16 rows by 32·W columns for W warps a
+// block, unit u at row block u % MB). The host gives it dynamic shared memory it doesn't use, so that at most B blocks
+// sit on an SM and a concurrent scalar kernel (no shared memory) gets the registers and warps left over. The register
+// file is split among the SM's four sub-partitions: 8-warp blocks two an SM leave 4096 registers a sub-partition (one
+// warp of at most 128 registers), 4-warp blocks three an SM leave 7168 (one fr16_c32 warp, 168).
 extern "C" __global__ void __maxnreg__(96) k_imma_p(const uint4* Ap, const uint2* Bp, uint32_t* out, int L,
                                                            int n, int MB, int ni) {
-  const int units = MB * (ni / 256), warp = threadIdx.x >> 5;
+  const int W = blockDim.x >> 5, units = MB * (ni / (32 * W)), warp = threadIdx.x >> 5;
   for (int u = blockIdx.x; u < units; u += gridDim.x)
-    imma_warp<true>(Ap, Bp, out, L, n, u % MB, ((u / MB) * 8 + warp) * WN, nullptr, false);
+    imma_warp<true>(Ap, Bp, out, L, n, u % MB, ((u / MB) * W + warp) * WN, nullptr, false);
 }
 
 // ---- dp4a: a block tile of 64 rows by 128 columns, a thread 4 rows by 8 columns (columns tx + 16c), one segment's Ã
@@ -586,14 +588,15 @@ static T* upload(const std::vector<T>& h) {
 
 enum Arm {
   IMMA_GEN, IMMA_ZERO, DP4A_GEN, DP4A_ZERO, BITS, FR8, FR16_C16, FR16_C32, CO_NONE, CO_FR8, CO_BITS,
-  IMMA_P, CO2_NONE, CO2_FR16, NARM
+  IMMA_P, CO2_NONE, CO2_FR16, CO2_C16, IMMA_P3, CO3_NONE, CO3_C32, NARM
 };
-static const char* NAMES[NARM] = {"imma_gen", "imma_zero", "dp4a_gen", "dp4a_zero", "bits",   "fr8",      "fr16_c16",
-                                  "fr16_c32", "co_none",   "co_fr8",   "co_bits",   "imma_p", "co2_none", "co2_fr16"};
+static const char* NAMES[NARM] = {"imma_gen", "imma_zero", "dp4a_gen", "dp4a_zero", "bits",     "fr8",
+                                  "fr16_c16", "fr16_c32",  "co_none",  "co_fr8",    "co_bits",  "imma_p",
+                                  "co2_none", "co2_fr16",  "co2_c16",  "imma_p3",   "co3_none", "co3_c32"};
 static bool zero_arm(Arm a) { return a != IMMA_GEN && a != DP4A_GEN; }
 
 struct Dev {
-  int m, k, n, L, share, co2, sms, p_smem;
+  int m, k, n, L, share, co2, sms, p_smem2, p_smem3;
   cudaStream_t s2;
   cudaEvent_t fork, join;
   const uint4 *Ap_g, *Ap_z, *Aw_g, *Aw_z, *Bw_g, *Bw_z;
@@ -609,10 +612,20 @@ constexpr size_t FR16_TABLE_BYTES = (size_t)64 << 20;  // a launch's passes, in 
 
 // The scalar arm's share of the columns beside IMMA: n/share, a multiple of 256 so IMMA's [0, ni) is whole units.
 static int co_ni(const Dev& d) { return d.n - std::max(256, (d.n / d.share) / 256 * 256); }
-// The two-stream arms: k_imma_p on [0, n - co2) and, for co2_fr16, fr16_c32 on [n - co2, n) on a second stream.
-static int co2_ni(Arm a, const Dev& d) { return a == IMMA_P ? d.n : d.n - d.co2; }
+// The two-stream arms: k_imma_p on [0, n - co2) (co2*: 8-warp blocks two an SM; co3*: 4-warp blocks three an SM) and
+// fr16 on [n - co2, n) on a second stream (cpt 32 for co2_fr16 and co3_c32, 16 for co2_c16); imma_p* take all n.
+struct Co {
+  int warps, cpt, ni;
+};
+static Co co_of(Arm a, const Dev& d) {
+  const int w = a == IMMA_P3 || a == CO3_NONE || a == CO3_C32 ? 4 : 8;
+  const int cpt = a == CO2_FR16 || a == CO3_C32 ? 32 : a == CO2_C16 ? 16 : 0;
+  return {w, cpt, a == IMMA_P || a == IMMA_P3 ? d.n : d.n - d.co2};
+}
 // The columns written, for the gate: a control leaves the scalar columns unwritten
-static int written(Arm a, const Dev& d) { return a == CO_NONE ? co_ni(d) : a == CO2_NONE ? co2_ni(a, d) : d.n; }
+static int written(Arm a, const Dev& d) {
+  return a == CO_NONE ? co_ni(d) : a == CO2_NONE || a == CO3_NONE ? co_of(a, d).ni : d.n;
+}
 
 // fr16 on the columns [j0, j1): per launch, the tables of P passes of cpt columns, then their lookups
 static void fr16_launch(const Dev& d, int cpt, int j0, int j1, cudaStream_t s) {
@@ -648,15 +661,20 @@ static void launch(Arm a, const Dev& d, cudaStream_t s) {
     case FR16_C32: fr16_launch(d, a == FR16_C16 ? 16 : 32, 0, n, s); break;
     case IMMA_P:
     case CO2_NONE:
-    case CO2_FR16: {
-      const int ni = co2_ni(a, d);
-      if (a == CO2_FR16) {
+    case CO2_FR16:
+    case CO2_C16:
+    case IMMA_P3:
+    case CO3_NONE:
+    case CO3_C32: {
+      const Co c = co_of(a, d);
+      if (c.cpt) {
         CK(cudaEventRecord(d.fork, s));
         CK(cudaStreamWaitEvent(d.s2, d.fork, 0));
-        fr16_launch(d, 32, ni, n, d.s2);
+        fr16_launch(d, c.cpt, c.ni, n, d.s2);
       }
-      k_imma_p<<<2 * d.sms, 256, d.p_smem, s>>>(d.Ap_z, d.Uf, d.out, L, n, m / 16, ni);
-      if (a == CO2_FR16) {
+      if (c.warps == 8) k_imma_p<<<2 * d.sms, 256, d.p_smem2, s>>>(d.Ap_z, d.Uf, d.out, L, n, m / 16, c.ni);
+      else k_imma_p<<<3 * d.sms, 128, d.p_smem3, s>>>(d.Ap_z, d.Uf, d.out, L, n, m / 16, c.ni);
+      if (c.cpt) {
         CK(cudaEventRecord(d.join, d.s2));
         CK(cudaStreamWaitEvent(s, d.join, 0));
       }
@@ -752,8 +770,9 @@ int main(int argc, char** argv) {
   CK(cudaEventCreateWithFlags(&d.fork, cudaEventDisableTiming));
   CK(cudaEventCreateWithFlags(&d.join, cudaEventDisableTiming));
   d.sms = prop.multiProcessorCount;
-  d.p_smem = (int)(prop.sharedMemPerMultiprocessor / 3) + 1024;  // two blocks an SM fit, three don't
-  CK(cudaFuncSetAttribute(k_imma_p, cudaFuncAttributeMaxDynamicSharedMemorySize, d.p_smem));
+  d.p_smem2 = (int)(prop.sharedMemPerMultiprocessor / 3) + 1024;  // two blocks an SM fit, three don't
+  d.p_smem3 = (int)(prop.sharedMemPerMultiprocessor / 4) + 1024;  // three fit, four don't
+  CK(cudaFuncSetAttribute(k_imma_p, cudaFuncAttributeMaxDynamicSharedMemorySize, d.p_smem2));
   CK(cudaFuncSetAttribute(k_imma_p, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
 
   if (mode == "gate") {

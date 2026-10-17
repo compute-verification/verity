@@ -45,9 +45,9 @@ done
 IFS=, read -r m k n <<<"${shapes[0]}"
 for c in 512 1024; do
   t="co2-\$c-\$m-\$k-\$n"
-  "$WORK/qstar" --mode gate --m \$m --k \$k --n \$n --co2 \$c --arms co2_none co2_fr16 --dump "$WORK/dump-\$t" \
+  "$WORK/qstar" --mode gate --m \$m --k \$k --n \$n --co2 \$c --arms co2_none co2_fr16 co2_c16 co3_none co3_c32 --dump "$WORK/dump-\$t" \
     >"$OUT/gate-\$t.txt" 2>&1 || { cat "$OUT/gate-\$t.txt"; exit 3; }
-  "$WORK/qstar" --mode time --m \$m --k \$k --n \$n --co2 \$c --arms imma_p co2_none co2_fr16 --reps 10 \
+  "$WORK/qstar" --mode time --m \$m --k \$k --n \$n --co2 \$c --arms imma_p co2_none co2_fr16 co2_c16 imma_p3 co3_none co3_c32 --reps 10 \
     --items "$OUT/items-\$t.jsonl" >"$OUT/time-\$t.txt" 2>&1 || exit 4
   cat "$OUT/gate-\$t.txt" "$OUT/time-\$t.txt"
 done
