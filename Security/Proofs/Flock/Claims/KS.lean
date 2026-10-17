@@ -116,8 +116,8 @@ level 0's, at the positions of the coins of the round `k0 + 6` after Ligerito's 
 `FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`), so an accepted
 rep's is at the stream's round `plainQueryRound` (`FlockSoundness.Refine.lincheck_moves`,
 `FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). At flock-verify's acceptance,
-every result of each table's reps' runs requests level 0 first there (`LevelZeroAcc`:
-`FlockSoundness.Discharge.Exec.accepts_req0`). A position the deployed reader is given below `2^d` is looked up, to a
-column it was given there, so an output whose level-0 openings verify and are the reader's entries opens a position
-off `C` without a self-clash only where the reader looks up a column off `C` (`OffSC`:
-`Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`). -/
+every result of each table's reps' runs requests level 0 first there, and every request has its level's lanes and
+path length (`LevelZeroAcc`: `FlockSoundness.Discharge.Exec.accepts_req0`). A position the deployed reader is given
+below `2^d` is looked up, to a column it was given there, so an output whose level-0 openings verify and are the
+reader's entries opens a position off `C` without a self-clash only where the reader looks up a column off `C`
+(`OffSC`: `Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`). -/
