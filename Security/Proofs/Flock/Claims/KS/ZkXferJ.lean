@@ -15,7 +15,8 @@ which chooses no decoder (`ZkXferJ`):
   `verify --zk` accepts at the setup at the statement's draw at `wrS` whose decoded table `j` has none, the verdict
   `accepted` with none at table `j`, and the deployed decoders right there.
 * `ZkXferJ`, `zkLiveAccJ_of_xferJ`, `zk_KS_of_xferJ`: the live sessions' bound at the deployed decoders gives
-  `ZkLiveAccJ` where some run accepts, so `Flock.KS` at the deployed masked record follows from it and `ExtendJ`.
+  `ZkLiveAccJ` where some run accepts, so `Flock.KS` at the deployed masked record follows from it and `ExtendJ`, and
+  table 0's bound with escapes on accepted runs from it alone (`zk_tableBoundθAccAt_of_xferJ`).
 
 At `oracleOf C` the verdict's level-0 term reads both reps' extra lanes, which a table `C` of witness-lane columns reads
 as `0`, so a run whose level-0 opening has a nonzero extra lane is off `C` there (`ZkPads`): the deployed prover's own
@@ -189,13 +190,13 @@ def ZkXferJ (x : Claims.Msg) : Prop :=
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
 /-- **`ZkXferJ` gives `ZkLiveAccJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
-carries a draw (`acc_draw`), and the deployed decoders are right at `OkOffJ` on `AccOffJ` (`decodesOff_deploy`), whose
-verdict at table `j` accepts with no opening off `C` unless it self-clashes. -/
+carries a draw (`acc_draw_of_setup`), and the deployed decoders are right at `OkOffJ` on `AccOffJ`
+(`decodesOff_deploy`), whose verdict at table `j` accepts with no opening off `C` unless it self-clashes. -/
 theorem zkLiveAccJ_of_xferJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferJ x) :
     ZkLiveAccJ x := by
   intro ins spec sts hset h0 L hz hk hlay Ω _ _ P
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
-  obtain ⟨d, hd⟩ := acc_draw hno hset
+  obtain ⟨d, hd⟩ := acc_draw_of_setup hno hset
   obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ := hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
   refine ⟨rd, hrd, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hC => ?_⟩
   obtain ⟨dg, N, rootB₀, τ, _, _, σL, hσ, htr, hadv, hP, hTau, hsc⟩ := hω ω j hj C hC
@@ -210,5 +211,13 @@ theorem zk_KS_of_xferJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → 
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=
   zk_KS_of_liveAccJ (fun x hno => zkLiveAccJ_of_xferJ hno (hx x hno)) hext
+
+/-- **Table 0's masked bound at every statement, with escapes on accepted runs**, at full-width columns, from the live
+sessions' bound at the deployed decoders at the statements some run accepts (`zk_tableBoundθAccAt`,
+`zkLiveAccJ_of_xferJ`). -/
+theorem zk_tableBoundθAccAt_of_xferJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkXferJ x)
+    (x : Claims.Msg) :
+    Claims.Flock.TableBoundθAccAt sha512 (deployZk Readable.relation) (wordLen true) (wide true) x :=
+  zk_tableBoundθAccAt (fun x hno => zkLiveAccJ_of_xferJ hno (hx x hno)) x
 
 end FlockDeploy.KS
