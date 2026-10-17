@@ -208,4 +208,108 @@ theorem Seq.msgs_eq {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB) (PA : WA → Prove
     rw [← hl, List.take_left, List.drop_left, List.append_nil]
   · rfl
 
+/-! ## The prover's calls -/
+
+/-- **Every call in a run's `pLog` is one round's**: the trace's own, or the prover's on the history before some
+round. -/
+theorem stepWith_pLog_mem {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as = hist.map Prod.fst →
+      ∀ e ∈ (stepWith H P x ω vnext n hist as t).pLog, e ∈ t.pLog ∨
+        ∃ i < (interact (fun as => ((vnext as).eval H).1) (fun h => ((P.next x h ω).eval H).1) n hist).length,
+          e ∈ ((P.next x (hist ++ histOf ((interact (fun as => ((vnext as).eval H).1)
+            (fun h => ((P.next x h ω).eval H).1) n hist).take i)) ω).eval H).2
+  | 0, _, _, _, _, e, he => by simp only [stepWith] at he; exact Or.inl he
+  | n + 1, hist, as, t, has, e, he => by
+      subst has
+      simp only [stepWith, interact] at he ⊢
+      cases hb : ((vnext (List.map Prod.fst hist ++ [((P.next x hist ω).eval H).1])).eval H).1 with
+      | msg m =>
+          rw [hb] at he
+          simp only at he ⊢
+          rcases stepWith_pLog_mem H P x ω vnext n _ _ _ (by simp) e he with h | ⟨i, hi, h⟩
+          · rcases List.mem_append.mp h with h | h
+            · exact Or.inl h
+            · exact Or.inr ⟨0, by simp, by simpa [histOf] using h⟩
+          · refine Or.inr ⟨i + 1, by simpa using hi, ?_⟩
+            simpa [histOf, msgOf, List.take_succ_cons] using h
+      | acc =>
+          rw [hb] at he
+          simp only at he
+          rcases List.mem_append.mp he with h | h
+          · exact Or.inl h
+          · exact Or.inr ⟨0, by simp, by simpa [histOf] using h⟩
+      | rej =>
+          rw [hb] at he
+          simp only at he
+          rcases List.mem_append.mp he with h | h
+          · exact Or.inl h
+          · exact Or.inr ⟨0, by simp, by simpa [histOf] using h⟩
+
+theorem runStar_pLog_mem {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs : VStar Θ) (x : Msg) (ω : Ω) (θ : Θ) :
+    ∀ e ∈ (runStar H P Vs x ω θ).pLog, ∃ i < (runStar H P Vs x ω θ).msgs.length,
+      e ∈ ((P.next x (histOf ((runStar H P Vs x ω θ).msgs.take i)) ω).eval H).2 := by
+  intro e he
+  rcases stepWith_pLog_mem H P x ω (fun as => Vs.next x as θ) (Vs.k x) [] [] ⟨[], [], [], .rej⟩ rfl e he with h | h
+  · simp at h
+  · rw [ZKMal.runStar_msgs]
+    simpa using h
+
+theorem runStar_msgs_length_le {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs : VStar Θ) (x : Msg) (ω : Ω)
+    (θ : Θ) : (runStar H P Vs x ω θ).msgs.length ≤ Vs.k x := by
+  rw [ZKMal.runStar_msgs]
+  exact interact_length_le _ _ _ _
+
+/-- **`A`'s calls are the composed run's.** -/
+theorem Seq.pLog_A {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB)
+    (w : WA) (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB nB : Msg → ℕ)
+    (hk : ∀ u, kB (Q.xB x u) = nB x) (hV : Vs.k x = Q.kA x + nB x) (ωA : ΩA) (ωB : ΩB) :
+    ∀ e ∈ (runStar H (PA w) (Vs.head Q.kA) x ωA θ).pLog, e ∈ (runStar H (Q.prover PA PB w) Vs x (ωA, ωB) θ).pLog := by
+  intro e he
+  obtain ⟨i, hi, he⟩ := runStar_pLog_mem H (PA w) (Vs.head Q.kA) x ωA θ e he
+  have hle : (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.length ≤ Q.kA x :=
+    runStar_msgs_length_le H (PA w) (Vs.head Q.kA) x ωA θ
+  have hm := Q.msgs_eq PA PB w H Vs θ x kB nB hk hV ωA ωB
+  have htake : (runStar H (Q.prover PA PB w) Vs x (ωA, ωB) θ).msgs.take i =
+      (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.take i := by
+    rw [hm]; unfold cont; split
+    · exact List.take_append_of_le_length hi.le
+    · rfl
+  have hlt : i < (runStar H (Q.prover PA PB w) Vs x (ωA, ωB) θ).msgs.length := by
+    rw [hm]; unfold cont; split
+    · rw [List.length_append]; omega
+    · exact hi
+  refine runStar_round_log H (Q.prover PA PB w) Vs x (ωA, ωB) θ i hlt ?_
+  rw [htake]
+  have hs : (histOf ((runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.take i)).length < Q.kA x := by
+    rw [histOf_length, List.length_take]; omega
+  simpa only [Seq.prover, hs, ite_true] using he
+
+/-- **Where `A`'s run goes on, `B`'s calls are the composed run's.** -/
+theorem Seq.pLog_B {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB)
+    (w : WA) (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB nB : Msg → ℕ)
+    (hk : ∀ u, kB (Q.xB x u) = nB x) (hV : Vs.k x = Q.kA x + nB x) (ωA : ΩA) (ωB : ΩB)
+    (hgo : goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs = true) :
+    ∀ e ∈ (runStar H (PB (Q.wB w x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))
+          (Vs.after x kB) (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))) ωB
+          (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)).pLog,
+      e ∈ (runStar H (Q.prover PA PB w) Vs x (ωA, ωB) θ).pLog := by
+  intro e he
+  obtain ⟨i, hi, he⟩ := runStar_pLog_mem H _ _ _ ωB _ e he
+  have hm := Q.msgs_eq PA PB w H Vs θ x kB nB hk hV ωA ωB
+  simp only [cont, hgo, ite_true] at hm
+  have hlen := goesOn_length hgo
+  refine runStar_round_log H (Q.prover PA PB w) Vs x (ωA, ωB) θ (Q.kA x + i) ?_ ?_
+  · rw [hm, List.length_append, hlen]; omega
+  · rw [hm, ← hlen, List.take_length_add_append, histOf_append]
+    have hl : (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs).length = Q.kA x := by
+      rw [histOf_length, hlen]
+    have hn : ¬ (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs ++
+        histOf ((runStar H (PB (Q.wB w x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))
+          (Vs.after x kB) (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))) ωB
+          (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)).msgs.take i)).length < Q.kA x := by
+      rw [List.length_append, hl]; omega
+    simp only [Seq.prover, hn, ite_false]
+    rw [← hl, List.take_left, List.drop_left]
+    exact he
+
 end Claims.ZKMal
