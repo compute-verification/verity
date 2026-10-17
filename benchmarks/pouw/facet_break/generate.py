@@ -48,10 +48,35 @@ BASE_Q = (2, 4, 8, 16, 24, 32, 48, 64, 96, 128)
 WARP_LANES = ("ffma", "sel", "imadw", "iadd64", "iadd3", "imad", "lop3")
 QMAX = 192
 
+#: load: (mem.cuh enum, SASS opcode, census class or None where the census has no kind, shared?). TLD's width is in its
+#: operands, not its opcode, so loads.py reads a TLD's class off the program's name (`_tld4_` etc).
+LOADS = {"lds32": ("D_LDS32", "LDS", "LDS32", True), "lds64": ("D_LDS64", "LDS.64", None, True),
+         "lds128": ("D_LDS128", "LDS.128", "LDS128", True), "ldsu8": ("D_LDSU8", "LDS.U8", None, True),
+         "ldg32": ("D_LDG32", "LDG.E", "LDG32", False), "ldgnc32": ("D_LDGNC32", "LDG.E.CONSTANT", "LDG32", False),
+         "ldg64": ("D_LDG64", "LDG.E.64", None, False), "ldg128": ("D_LDG128", "LDG.E.128", "LDG128", False),
+         "tld1": ("D_TLD1", "TLD.LZ", "TLD1", False), "tld2": ("D_TLD2", "TLD.LZ", "TLD2", False),
+         "tld4": ("D_TLD4", "TLD.LZ", "TLD4w", False), "tld4n": ("D_TLD4N", "TLD.LZ", "TLD4w", False)}
+PATS = {"line": "P_LINE", "bcast": "P_BCAST", "quad": "P_QUAD"}
+#: two loads in one loop: the shared-memory pair (R6r, LDSi), the global pair (LDG), and one of each space (issue, JI3n)
+LOAD_PAIRS = (("lds32", "lds128"), ("lds32", "lds64"), ("lds128", "lds64"), ("ldg32", "ldg128"), ("ldgnc32", "ldg128"),
+              ("lds32", "ldg32"), ("lds128", "ldg128"), ("lds32", "tld1"), ("lds128", "tld4"), ("ldg32", "tld1"),
+              ("ldg128", "tld4"))
+#: the loads timed beside IMMA.16832 (M, JI3n, issue: a table route co-running with the tensor pipe)
+MMA_LOADS = ("lds32", "lds128", "lds64", "ldg32", "ldgnc32", "ldg128", "tld1", "tld4", "tld4n")
+
+
+def load_kinds(g: dict, q: int) -> str:
+    """The load of slot q (mem.cuh's kind_at): d2 when q % r == r - 1."""
+    return g["d2"] if g.get("d2") and q % g["r"] == g["r"] - 1 else g["d1"]
+
 
 def name_of(g: dict) -> str:
-    lanes = g["l1"] + (f"_{g['l2']}" if g.get("l2") else "")
     w = g["tpb"] // 32
+    if g["kind"] in ("ld", "ldmma"):
+        ds = g["d1"] + (f"_{g['d2']}_r{g['r']}" if g.get("d2") else "")
+        pre = "ld" if g["kind"] == "ld" else f"lm_{g['form']}"
+        return f"{pre}_{ds}_{g['pat']}_q{g['q']}_w{w}"
+    lanes = g["l1"] + (f"_{g['l2']}" if g.get("l2") else "")
     if g["kind"] == "mix":
         return f"mx_{g['form']}_{lanes}_q{g['q']}_p{g['p']}_w{w}"
     if g["kind"] == "spec":
@@ -75,6 +100,12 @@ def expect_of(g: dict) -> tuple[str, str, int]:
         return ",".join(f"{k}={v}" for k, v in d.items())
 
     w = g["tpb"] // 32
+    if g["kind"] in ("ld", "ldmma"):
+        d = {FORMS[g["form"]][1]: 8} if g["kind"] == "ldmma" else {}
+        for q in range(g["q"]):
+            pat = LOADS[load_kinds(g, q)][1]
+            d[pat] = d.get(pat, 0) + 1
+        return fmt(d), "", 0
     if g["kind"] == "mix":
         d = {FORMS[g["form"]][1]: 8}
         for k, v in lane_counts(g["q"]).items():
@@ -170,10 +201,55 @@ def sampled(seed: int, n: int) -> list[dict]:
     return out
 
 
-def grid(seed: int = 0, n: int = 0, targeted_part: bool = True) -> list[dict]:
-    """The programs of one batch: the targeted part (if asked) and `n` sampled ones, unique by name, in order."""
+def targeted_mem() -> list[dict]:
+    """The table routes' loads: each alone (three patterns, 2 to 8 warps a SMSP), each pair at 1:1, 3:1 and 1:3, and each
+    beside IMMA.16832 at 2 to 32 loads a 8 MMAs (and beside HMMA.16816.F16, the form that beat JI3n_0)."""
+    out: list[dict] = []
+    ld = {"kind": "ld", "d2": "", "r": 1}
+    for d in LOADS:
+        for pat in PATS:
+            for tpb in (256, 512, 1024):
+                for q in (8, 16):
+                    out.append(ld | {"d1": d, "pat": pat, "q": q, "tpb": tpb})
+    for d1, d2 in LOAD_PAIRS:
+        for pat in ("line", "bcast"):
+            for tpb in (512, 1024):
+                for a, b, r in ((d1, d2, 2), (d1, d2, 4), (d2, d1, 4)):
+                    out.append({"kind": "ld", "d1": a, "d2": b, "r": r, "pat": pat, "q": 16, "tpb": tpb})
+    for d in MMA_LOADS:
+        for pat in ("line", "bcast"):
+            for tpb in (512, 1024):
+                for q in (2, 4, 8, 16, 32):
+                    out.append({"kind": "ldmma", "form": "i16832", "d1": d, "d2": "", "r": 1, "pat": pat, "q": q,
+                                "tpb": tpb})
+    for d in ("lds32", "lds128", "ldg32", "tld1"):
+        for q in (8, 16, 32):
+            out.append({"kind": "ldmma", "form": "h16816f16", "d1": d, "d2": "", "r": 1, "pat": "line", "q": q,
+                        "tpb": 512})
+    return out
+
+
+def sampled_mem(seed: int, n: int) -> list[dict]:
+    rng = random.Random(seed)
+    out = []
+    for _ in range(n):
+        d1 = rng.choice(sorted(LOADS))
+        d2 = rng.choice([""] * 2 + [d for d in sorted(LOADS) if LOADS[d][1] != LOADS[d1][1]])
+        g = {"d1": d1, "d2": d2, "r": rng.choice((2, 3, 4)) if d2 else 1, "pat": rng.choice(sorted(PATS)),
+             "tpb": 32 * rng.choice((8, 12, 16, 24, 32))}
+        if rng.random() < 0.5:
+            g |= {"kind": "ld", "q": rng.choice((4, 8, 12, 16, 24, 32))}
+        else:
+            g |= {"kind": "ldmma", "form": rng.choice(sorted(FORMS)), "q": rng.choice((2, 4, 6, 8, 12, 16, 24, 32))}
+        out.append(g)
+    return out
+
+
+def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "mix") -> list[dict]:
+    """The programs of one batch: the family's targeted part (if asked) and `n` sampled ones, unique by name, in order."""
     seen, out = set(), []
-    for g in (targeted() if targeted_part else []) + sampled(seed, n):
+    tg, sm = (targeted, sampled) if family == "mix" else (targeted_mem, sampled_mem)
+    for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
             seen.add(nm)
@@ -181,11 +257,29 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True) -> list[dict]:
     return out
 
 
+def smem_of(g: dict) -> tuple[str, str]:
+    """(smem_ops, smem function) for the gate's bank check: the loop's shared loads in slot order, and mem.cuh's soff."""
+    if g["kind"] not in ("ld", "ldmma"):
+        return "", ""
+    ops = [LOADS[load_kinds(g, q)][1] for q in range(g["q"]) if LOADS[load_kinds(g, q)][3]]
+    if not ops:
+        return "", ""
+    d2 = LOADS[g["d2"]][0] if g.get("d2") else "D_NONE"
+    fn = f"fb::soff<fb::{LOADS[g['d1']][0]}, fb::{d2}, {g['r']}, fb::{PATS[g['pat']]}, {g['q']}>"
+    return ",".join(f"{op}*1" for op in ops), fn
+
+
 def emit_cu(gs: list[dict]) -> str:
-    inc = (HERE / "mix.cuh").resolve()
+    inc = (HERE / "mem.cuh").resolve()
     lines = [f"// generated by facet_break/generate.py: {len(gs)} programs", f'#include "{inc}"', ""]
     for g in gs:
         f = FORMS[g["form"]][0] if g.get("form") else ""
+        if g["kind"] in ("ld", "ldmma"):
+            d1 = LOADS[g["d1"]][0]
+            d2 = LOADS[g["d2"]][0] if g.get("d2") else "D_NONE"
+            args = f"{d1}, {d2}, {g['r']}, {PATS[g['pat']]}, {g['q']}, {g['tpb']}"
+            lines.append(f"FB_LD({g['name']}, {args})" if g["kind"] == "ld" else f"FB_LDMMA({g['name']}, {f}, {args})")
+            continue
         l1 = LANES[g["l1"]][0] if g.get("l1") else "L_NONE"
         l2 = LANES[g["l2"]][0] if g.get("l2") else "L_NONE"
         if g["kind"] == "mix":
@@ -199,9 +293,11 @@ def emit_cu(gs: list[dict]) -> str:
     lines += ["", "static const OpProbe PROBES[] = {"]
     for g in gs:
         ex, warps, until = expect_of(g)
-        iters = 1024 if g["kind"] in ("mix", "mma") else 4096
+        iters = 1024 if g["kind"] in ("mix", "mma", "ldmma") else 2048 if g["kind"] == "ld" else 4096
+        ops, fn = smem_of(g)
+        sm = f', .smem_ops = "{ops}", .smem = {fn}' if ops else ""
         lines.append(f'    {{.name = "{g["name"]}", .kernel = (const void*){g["name"]}, .tpb = {g["tpb"]}, '
-                     f'.expect = "{ex}", .warps = "{warps}", .iters = {iters}, .until = {until}}},')
+                     f'.expect = "{ex}", .warps = "{warps}"{sm}, .iters = {iters}, .until = {until}}},')
     lines += ["};", "", "int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }", ""]
     return "\n".join(lines)
 
@@ -213,10 +309,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
+    p.add_argument("--family", choices=("mix", "mem"), default="mix",
+                   help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
     a = p.parse_args(argv)
-    gs = grid(a.seed, a.n, not a.no_targeted)
+    gs = grid(a.seed, a.n, not a.no_targeted, a.family)
     if a.only:
         keep = set(a.only.read_text().split())
         gs = [g for g in gs if g["name"] in keep]

@@ -47,6 +47,9 @@ CLASS_RULES: list[tuple[str, str]] = [
     (r"HMMA\.SP\.16832", "HMMASP16832"), (r"HMMA\.1688", "HMMA1688T"), (r"HMMA\.1684", "HMMA1684T"),
     (r"QMMA\.SF\.16832", "QMMASF16832"), (r"QMMA\.SP\.16864", "QMMASP16864"), (r"QMMA\.16832", "QMMA16832"),
     (r"OMMA\.SF\.16864|OMMA", "OMMASF16864"),
+    # loads (the table routes'); LDS.64, LDS.U8/U16, LDG.E.64 and LDG.E.U8 have no census kind: `unpriced`
+    (r"^LDS$", "LDS32"), (r"^LDS\.128$", "LDS128"),
+    (r"^LDG\.E(\.CONSTANT)?$", "LDG32"), (r"^LDG\.E\.128(\.CONSTANT)?$", "LDG128"),
     # scalar / CUDA lane classes (floors.csv and census share these names)
     (r"IMAD\.WIDE", "IMADW"), (r"IADD\.64", "ALU64"), (r"DFMA|DADD", "W2"), (r"DMUL", "DMUL"),
     (r"IMAD|IMUL|IADD3|IADD|LEA\b|LEA\.HI", "ALU_OR_IMAD"),  # resolved below
@@ -87,14 +90,33 @@ MMA_FORMS = frozenset({"IMMA16832", "IMMA16816", "IMMA8816", "IMMASP16864", "IMM
 JI3N = ("JI3n_0", "JI3n_1", "JI3n_2")
 
 
+#: a TLD's class is its width (the registers it writes), which its operands show and its opcode doesn't: a generated
+#: memory program names it (`_tld4_`: a 16-byte texel, `_tld4n_`: four registers from a 4-byte texel)
+TLD_BY_NAME = {"tld1": "TLD1", "tld2": "TLD2", "tld4": "TLD4w", "tld4n": "TLD4w"}
+_TLD_NAME = re.compile(r"_(tld4n|tld4|tld2|tld1)_")
+
+
 def rates_by_class(row: dict) -> dict[str, float]:
     """x_k a SMSP-cycle for each census class k the probe's loops touched (its `rates`, keyed `loop:pattern`)."""
     out: dict[str, float] = {}
     for key, rate in row["rates"].items():
         pat = key.split(":", 1)[1]
         k = class_of(pat)
+        if k is None and pat.startswith("TLD") and (t := _TLD_NAME.search(row.get("probe") or "")):
+            k = TLD_BY_NAME[t.group(1)]
         if k is not None:
             out[k] = out.get(k, 0.0) + rate / SMSPS
+    return out
+
+
+def unpriced(row: dict) -> dict[str, float]:
+    """The program's load opcodes that have no census class, x a SMSP-cycle: Π prices them at 0."""
+    out: dict[str, float] = {}
+    for key, rate in (row.get("rates") or {}).items():
+        pat = key.split(":", 1)[1]
+        named_tld = pat.startswith("TLD") and _TLD_NAME.search(row.get("probe") or "")
+        if pat.split(".")[0] in ("LDS", "LDG", "TLD") and class_of(pat) is None and not named_tld:
+            out[pat] = out.get(pat, 0.0) + rate / SMSPS
     return out
 
 
@@ -216,7 +238,7 @@ def cmd_table(a) -> int:
         p = program(row, c, m.cycle_u, a.generic)
         top = max(p["load"].items(), key=lambda t: t[1]) if p["load"] else ("", 0.0)
         print(json.dumps({"epoch": epoch, **p, "max_row": top[0], "max_load": top[1], "max_in_vector": top[0] in vrows,
-                          "load": {r: round(v, 6) for r, v in sorted(p["load"].items())}}))
+                          "load": {r: round(v, 6) for r, v in sorted(p["load"].items())}, "unpriced": unpriced(row)}))
     return 0
 
 
@@ -237,7 +259,15 @@ def cmd_summary(a) -> int:
     if a.json:
         print(json.dumps(viol, indent=1))
         return 1 if viol else 0
-    print(f"epoch {epoch}: {len(load_rows(a.rows))} programs, margin {a.margin}")
+    rows = load_rows(a.rows)
+    print(f"epoch {epoch}: {len(rows)} programs, margin {a.margin}")
+    free: dict[str, tuple[float, str]] = {}
+    for row in rows:
+        for pat, x in unpriced(row).items():
+            if x > free.get(pat, (0.0, ""))[0]:
+                free[pat] = (x, f"{row.get('probe')} @ {row.get('run')}")
+    for pat, (x, by) in sorted(free.items()):
+        print(f"unpriced: {pat} (no census class: Π prices it at 0) at up to {x:.4f} a SMSP-cycle, {by}")
     if not viol:
         print("no facet beaten (every program loads <= 1 + margin on every row)")
         return 0
@@ -277,25 +307,38 @@ def cmd_refit(a) -> int:
     print(f"{a.row}: worst load {worst:.4f} by {hit['probe']} @ {hit['run']} (mix {hit['x']})")
     support = sorted(k for k in c if a.row in c[k])
     others = [k for k in support if k != "MMA" and k not in MMA_FORMS]
-    if "MMA" in support and len(others) == 1:
+    form = a.form or max((k for k in hit["x"] if k in MMA_FORMS or k == "MMA"), key=lambda k: hit["x"][k], default=None)
+    if form in support:
+        cf, mma_ok, fname = c[form][a.row], {form}, form
+    elif form in (MMA_MEASURED_WITH, "MMA", None) and "MMA" in support:
+        cf, mma_ok, fname = c["MMA"][a.row], {MMA_MEASURED_WITH, "MMA"} | (MMA_FORMS if a.generic else set()), "MMA"
+    else:
+        cf = None
+    if cf and others:
+        # one tensor axis (the form) and one vector axis: each other class weighted by its coefficient over the row's
+        # commonest one, so a row over MMA and one class (R1, KALU*) is that class, and JI3n's vector instructions sum
         sys.path.insert(0, str(HERE.parent / "opcode_probe"))
         from eps1 import facets
-        X = others[0]
-        mma_ok = {MMA_MEASURED_WITH} | (MMA_FORMS if a.generic else set())
+        cref = max(set(c[k][a.row] for k in others), key=lambda u: sum(c[k][a.row] == u for k in others))
+        X = others[0] if len(others) == 1 else "V"
         pts = []
         for p in progs:
             if any(k in MMA_FORMS and k not in mma_ok and v > 0 for k, v in p["x"].items()):
                 continue
-            mm = sum(v for k, v in p["x"].items() if k in mma_ok or k == "MMA")
-            if mm > 0 or p["x"].get(X, 0) > 0:
-                pts.append((mm, p["x"].get(X, 0.0), f"{p['probe']}@{p['run']}"))
+            mm = sum(v for k, v in p["x"].items() if k in mma_ok)
+            vv = sum(c[k][a.row] / cref * v for k, v in p["x"].items() if k in others)
+            if mm > 0 or vv > 0:
+                pts.append((mm, vv, f"{p['probe']}@{p['run']}"))
         s = 1 - a.margin
-        pts.append((s * m.cycle_u / c["MMA"][a.row], 0.0, f"{a.row}:MMA-axis"))
-        pts.append((0.0, s * m.cycle_u / c[X][a.row], f"{a.row}:{X}-axis"))
-        print(f"refit: the upper hull of {len(pts)} points (MMA, {X}) a SMSP-cycle, x (1 - {a.margin}):")
+        pts.append((s * m.cycle_u / cf, 0.0, f"{a.row}:{fname}-axis"))
+        pts.append((0.0, s * m.cycle_u / cref, f"{a.row}:{X}-axis"))
+        if X == "V":
+            print(f"V: every vector class on {a.row} by its coefficient over {cref / m.cycle_u:.4f} SMSP-cycles "
+                  f"({len(others)} classes)")
+        print(f"refit: the upper hull of {len(pts)} points ({fname}, {X}) a SMSP-cycle, x (1 - {a.margin}):")
         for f in facets(pts, a.margin):
             load = max(f["MMA"] * p[0] + f["X"] * p[1] for p in pts)
-            print(f"  MMA {f['MMA']:.3f} + {X} {f['X']:.3f} SMSP-cycles  (tight at {' and '.join(f['tight'])}; "
+            print(f"  {fname} {f['MMA']:.3f} + {X} {f['X']:.3f} SMSP-cycles  (tight at {' and '.join(f['tight'])}; "
                   f"max load {load:.3f})")
         return 0
     scale = (1 - a.margin) / worst
@@ -322,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["summary"].add_argument("--worst", action="store_true", help="only the worst program of each row")
     sub.choices["refit"].add_argument("--row", required=True)
     sub.choices["refit"].add_argument("--margin", type=float, default=0.02)
+    sub.choices["refit"].add_argument("--form", help="the MMA form on the tensor axis (default: the worst program's)")
     a = p.parse_args(argv)
     sys.path.insert(0, str(HERE))
     return {"loads": cmd_loads, "summary": cmd_summary, "refit": cmd_refit, "table": cmd_table}[a.cmd](a)

@@ -58,8 +58,31 @@ def test_class_of():
     want = {"IMMA.16832.S8.S8": "IMMA16832", "HMMA.1684.F32.TF32": "HMMA1684T", "IMAD": "IMAD", "IMAD.WIDE.U32": "IMADW",
             "IADD3": "ALU", "LOP3.LUT": "ALU", "SHF.*": "ALU", "IADD.64": "ALU64", "SEL": "SEL", "FFMA": "FFMA",
             "FMUL": "FFMA", "HFMA2*": "HFMA2", "*MNMX*": "VIMNMX", "DMUL": "DMUL", "DFMA": "W2", "MUFU.EX2": "XU",
-            "POPC": "XU", "SHFL.BFLY": "SHFL", "MOV": "NOROW", "NOP": None}
+            "POPC": "XU", "SHFL.BFLY": "SHFL", "MOV": "NOROW", "NOP": None, "LDS": "LDS32", "LDS.128": "LDS128",
+            "LDG.E": "LDG32", "LDG.E.CONSTANT": "LDG32", "LDG.E.128": "LDG128", "LDS.64": None, "LDS.U8": None,
+            "LDG.E.64": None, "TLD.LZ": None}
     assert {op: loads.class_of(op) for op in want} == want
+
+
+def test_a_tld_takes_its_width_from_the_program_and_unpriced_loads_are_listed():
+    row = {"probe": "lm_i16832_tld4n_line_q8_w16", "rates": {"0:IMMA.16832.S8.S8": 0.2, "0:TLD.LZ": 0.4}}
+    assert loads.rates_by_class(row) == pytest.approx({"IMMA16832": 0.05, "TLD4w": 0.1})
+    assert loads.unpriced(row) == {}
+    row = {"probe": "ld_lds32_lds64_r2_line_q16_w32", "rates": {"0:LDS": 0.4, "0:LDS.64": 0.4}}
+    assert loads.rates_by_class(row) == pytest.approx({"LDS32": 0.1})
+    assert loads.unpriced(row) == pytest.approx({"LDS.64": 0.1})
+    assert loads.unpriced({"probe": "side_tld", "rates": {"0:TLD.LZ": 0.4}}) == pytest.approx({"TLD.LZ": 0.1})
+
+
+def test_mem_grid_is_seeded_unique_and_counts_each_slot():
+    a = gen.grid(2, 30, family="mem")
+    assert a == gen.grid(2, 30, family="mem") and len({g["name"] for g in a}) == len(a)
+    g = next(g for g in a if g["name"] == "ld_lds32_lds128_r4_line_q16_w32")
+    assert gen.expect_of(g)[0] == "LDS=12,LDS.128=4"
+    ops, fn = gen.smem_of(g)
+    assert ops.count("LDS.128*1") == 4 and ops.count("LDS*1") == 12 and fn.startswith("fb::soff<fb::D_LDS32, ")
+    g = next(g for g in a if g["name"] == "lm_i16832_ldg32_line_q4_w16")
+    assert gen.expect_of(g)[0] == "IMMA.16832.S8.S8=8,LDG.E=4" and gen.smem_of(g) == ("", "")
 
 
 def test_only_imma16832_takes_the_generic_mma_lines(census):
@@ -145,8 +168,10 @@ def test_grid_slice_builds_and_gates(tmp_path):
     picks = {"mx_i16832_ffma_q32_p0_w16", "mx_i16832_sel_q64_p0_w16", "mx_i16832_imadw_q16_p0_w16",
              "mx_i16832_iadd3_ffma_q64_p0_w16", "sp_i16832_ffma_m8_w16", "al_iadd64_w16", "mm_h1684t_w8",
              "mx_h16816f16_lop3_q64_p0_w16"}
-    gs = [g for g in gen.grid(0, 0) if g["name"] in picks]
-    assert {g["name"] for g in gs} == picks
+    mem = {"ld_lds32_lds128_r2_line_q16_w32", "ld_lds64_quad_q16_w32", "ld_tld4_line_q8_w16", "ld_ldgnc32_bcast_q8_w8",
+           "lm_i16832_lds128_bcast_q8_w16", "lm_h16816f16_tld1_line_q16_w16"}
+    gs = [g for g in gen.grid(0, 0) if g["name"] in picks] + [g for g in gen.grid(0, 0, family="mem") if g["name"] in mem]
+    assert {g["name"] for g in gs} == picks | mem
     src = tmp_path / "slice.cu"
     src.write_text(gen.emit_cu(gs))
     _, verdicts = probe.gate_all(probe.build(tmp_path / "b", [src]))
