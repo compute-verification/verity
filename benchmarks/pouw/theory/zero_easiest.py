@@ -14,10 +14,15 @@ Parts:
 - C. The antipodal reduction. z̄ = (J − R, −U) is a measure-preserving involution of the draw, and
   T_{A,B}(z) + T_{A,B}(z̄) = 2T₀(z) + ((2A+J)B)♭ − (JS)♭. Two calls give T₀ (recovered from 2T₀ mod 2³²), right
   wherever both calls are, so with probability ≥ 2δ − 1; tight. The one-sided flips give (A,0) and (0,B).
+  The mask-sign family g_{f,c} = (R ⊕ 1⊗f̃, c·U∘σ) preserves the law; a combination Σ α_c T(g_c z) leaves the data
+  terms R·diag(Σ α_c σ_c)·B and A·diag(Σ α_c c_c σ_c)·S, so one call never cancels them and the only two-call
+  combinations that do are antipodal pairs, with an even coefficient on T₀.
 - D. A model where zero is not easiest: with zero products skipped, the expected work is Σ Pr[A+R ≠ 0]·Pr[B+S ≠ 0].
   S is never 0 but B+S is, w.p. 1/128, so (0, B) with B nowhere 0 costs 127/128 of the zero instance, the minimum.
 - E. Special instances: periodic A (A = WΠᵀ), periodic B (B = ΠVᵀ, the zero instance on the shifted alphabet U + V)
   and low-rank B, with what their correction ℓ costs.
+- F. Luck: a word's largest point mass (what a free guess wins), exactly. At L = 1, (0, b ≠ 0) is likelier than zero
+  (129/256 against 1/2); at L = 32 no instance tried beats zero.
 
 Run: `uv run --no-project --with numpy --with-editable benchmarks/pouw/exact_kit python -B zero_easiest.py --mutations`
 (from this directory, or with the path).
@@ -597,6 +602,64 @@ def part_c(ch: Checks, mut=None):
     ch.check(f"C3 the reduction is right wherever both calls are, exhaustively over {N} draws", ok, detail)
 
 
+def g_image(R, U, f, c):
+    """g_{f,c}(R, U) = (R ⊕ (1 ⊗ f̃), c·U∘σ), σ = 1 − 2f, f ∈ {0,1}^L read periodically along t."""
+    L = U.shape[-1]
+    ft = f[np.arange(R.shape[-1]) % L]
+    return np.where(ft == 1, 1 - R, R), c * U * (1 - 2 * f)
+
+
+def part_c_masks(ch: Checks, mut=None):
+    """The mask-sign family: what each image costs, and that only the antipodal pair cancels both data terms."""
+    m, k, n, L = 8, 256, 8, 32
+    s = k // L
+    A, B = instance(m, k, n)
+    R, U = draw(m, k, n, L)
+    T0 = ring(t_zero(R, U))
+    ok = True
+    for trial in range(4):
+        f = RNG.integers(0, 2, size=L)
+        sig_t = (1 - 2 * f)[np.arange(k) % L]
+        for c in (1, -1):
+            Rg, Ug = g_image(R, U, f, c)
+            corr = ring(-c * (np.arange(s) + 1)[None, None, :] * U[:, f == 1].sum(axis=1)[None, :, None]
+                        * np.ones((m, 1, 1), dtype=np.int64))
+            M = np.broadcast_to(f[np.arange(k) % L], (m, k))
+            rhs = (pref(A + M, B, L) + ring(c) * fold_times(fold(A * sig_t, L), U) + pref(R * sig_t, B, L)
+                   + ring(c) * T0 + corr)
+            ok &= np.array_equal(t_zero(Rg, Ug), m32(ring(c) * T0 + corr))
+            ok &= np.array_equal(transcript(A, B, Rg, Ug), m32(rhs))
+    ch.check("C4 g_(f,c) = (R ⊕ 1⊗f̃, c·U∘σ): T₀(gz) = c·T₀ + row-constant term; T_(A,B)(gz) = ((A+M)B)♭ "
+             "+ c·(A∘σ̃)♯Uᵀ + (R·diag σ̃·B)♭ + c·T₀ + row-constant term", bool(ok),
+             "8 images at (8,256,8,32); the row-constant term is −c(ℓ+1)Σ_{f_q=1}U[j,q], O(nL) work")
+    # Σ_c α_c T(g_c z) has data terms R·diag(D_R)·B and A·diag(D_U)·S, D_R = Σ α_c σ_c, D_U = Σ α_c c_c σ_c, and
+    # T₀'s coefficient Σ α_c c_c. Enumerate every two-call combination over Z/2^w at small L.
+    w, Ls = 8, 3
+    mod = 1 << w
+    sigs = np.array(np.meshgrid(*([[1, -1]] * Ls), indexing="ij")).reshape(Ls, -1).T  # (8, L)
+    gs = [(sg, c) for sg in sigs for c in (1, -1)]
+    al = np.arange(mod)
+    a1, a2 = np.meshgrid(al, al, indexing="ij")
+    a1, a2 = a1.ravel(), a2.ravel()
+    found, one_call = [], True
+    for (s1, c1) in gs:
+        one_call &= not np.all((al[1:, None] * s1[None, :]) % mod == 0, axis=1).any()
+        for (s2, c2) in gs:
+            DR = (a1[:, None] * s1 + a2[:, None] * s2) % mod
+            DU = (a1[:, None] * c1 * s1 + a2[:, None] * c2 * s2) % mod
+            coef = (a1 * c1 + a2 * c2) % mod
+            hit = np.all(DR == 0, axis=1) & np.all(DU == 0, axis=1) & (coef != 0)
+            if mut == "two-call-any":
+                hit = np.all(DR == 0, axis=1) & (coef != 0)
+            for i in np.flatnonzero(hit):
+                found.append((tuple(s1), c1, tuple(s2), c2, int(a1[i]), int(a2[i]), int(coef[i])))
+    anti = all(s2 == tuple(-np.array(s1)) and c2 == c1 and x1 == x2 and co % 2 == 0
+               for (s1, c1, s2, c2, x1, x2, co) in found)
+    ch.check(f"C5 over Z/2^{w}, L = {Ls}: no one-call combination cancels the data terms; every two-call one is the "
+             "antipodal pair (σ₂ = −σ₁, c₂ = c₁, α₂ = α₁), and T₀'s coefficient is even",
+             bool(one_call and found and anti), f"{len(found)} cancelling two-call combinations of {len(gs) ** 2 * mod ** 2}")
+
+
 def part_d(ch: Checks, mut=None):
     """Zero-skipping: expected nonzero products, exactly."""
     alphabet = ALPHABET if mut != "zero-in-alphabet" else np.arange(-64, 64)
@@ -673,6 +736,71 @@ def part_e(ch: Checks):
              f"the B-term is mkr + (mk/L)·r·n MACs: r/L = {r / L:.4f} of the GEMM")
 
 
+SLOT = 33  # bytes a coefficient: every count is ≤ 256^32 = 2^256
+
+
+def poly_mul(p, q):
+    """Exact product of two count polynomials (lists of ints) by Kronecker substitution."""
+    enc = [int.from_bytes(b"".join(c.to_bytes(SLOT, "little") for c in x), "little") for x in (p, q)]
+    n = len(p) + len(q) - 1
+    raw = (enc[0] * enc[1]).to_bytes(n * SLOT, "little")
+    return [int.from_bytes(raw[i * SLOT:(i + 1) * SLOT], "little") for i in range(n)]
+
+
+def term_poly(a, b, alphabet):
+    """(lo, counts) of X = (a + r)(b + u), r ∈ {0,1}, u ∈ alphabet: counts out of 2·|alphabet|."""
+    vals = [(a + r) * (b + int(u)) for r in (0, 1) for u in alphabet]
+    lo, hi = min(vals), max(vals)
+    cnt = [0] * (hi - lo + 1)
+    for v in vals:
+        cnt[v - lo] += 1
+    return lo, cnt
+
+
+def word_poly(pairs, alphabet):
+    """(lo, counts) of one segment's word Σ_q (a_q + r_q)(b_q + u_q), the q independent."""
+    lo, acc = 0, [1]
+    for (a, b) in pairs:
+        l2, c2 = term_poly(a, b, alphabet)
+        lo, acc = lo + l2, poly_mul(acc, c2)
+    return lo, acc
+
+
+def part_f(ch: Checks, mut=None):
+    """Luck: a word's largest point mass, the success of a guess that costs nothing."""
+    alphabet = ALPHABET if mut != "zero-in-alphabet" else np.arange(-64, 64)
+    _, c0 = term_poly(0, 0, alphabet)
+    p0 = Fraction(max(c0), sum(c0))
+    pb = [Fraction(max(term_poly(0, b, alphabet)[1]), 2 * len(alphabet)) for b in range(-63, 64) if b != 0]
+    hits = sum(1 for r in (0, 1) for u in alphabet if r * int(u) == -r * 5)
+    aff = Fraction(hits, 2 * len(alphabet))
+    ch.check("F1 L = 1: a free constant guess is right w.p. 1/2 on zero and 129/256 on every (0, b ≠ 0); zero's "
+             "affine guess −r·b also gets 129/256 (Theorem Z)", p0 == Fraction(1, 2)
+             and all(p == Fraction(129, 256) for p in pb) and aff == Fraction(129, 256),
+             "so at L = 1 zero is not the easiest where only constants are free, by 1/256")
+    L = 32
+    fam = [(a, b) for a in (-2, -1, 0, 1) for b in (-63, -32, -8, -1, 0, 1, 8, 32, 63)]
+    rng = np.random.default_rng(32)
+    mixed = [list(zip(rng.integers(-2, 2, size=L).tolist(), rng.integers(-63, 64, size=L).tolist()))
+             for _ in range(6)]
+    mixed += [list(zip([0] * L, rng.integers(-63, 64, size=L).tolist())) for _ in range(3)]
+    mixed += [list(zip(rng.integers(-1, 1, size=L).tolist(), [0] * L)) for _ in range(3)]
+    tot = (2 * len(alphabet)) ** L
+    best = {}
+    for (a, b) in fam:
+        best[f"({a},{b})"] = max(word_poly([(a, b)] * L, alphabet)[1])
+    for i, pr in enumerate(mixed):
+        best[f"mixed {i}"] = max(word_poly(pr, alphabet)[1])
+    z = best["(0,0)"]
+    ties = sorted(kk for kk, v in best.items() if v == z)
+    ok = all(v <= z for v in best.values())
+    runner = max((kk for kk, v in best.items() if v < z), key=lambda kk: best[kk])
+    ch.check("F2 L = 32, one segment's word, exactly: no instance tried has a word likelier to guess than zero's",
+             ok, f"zero's largest point mass {float(Fraction(z, tot)):.6f}; ties: {len(ties)} "
+             f"(a ∈ {{0,−1}}, b = 0); the next best, {runner}, is {float(Fraction(best[runner], z)):.5f}× zero's; "
+             f"{len(best)} instances (a, b) constant along q or mixed")
+
+
 def main():
     ch = Checks()
     part_a(ch)
@@ -680,8 +808,10 @@ def main():
     part_b_affine_served(ch)
     part_b_transform(ch)
     part_c(ch)
+    part_c_masks(ch)
     part_d(ch)
     part_e(ch)
+    part_f(ch)
     if ch.mutations:
         with ch.mutant("A without the fold (A's block in place of A♯)"):
             part_a(ch, mut="no-fold")
@@ -693,8 +823,12 @@ def main():
             part_c(ch, mut="flip-R-only")
         with ch.mutant("C on an asymmetric alphabet 1..128"):
             part_c(ch, mut="asym-alphabet")
+        with ch.mutant("C5 cancelling only the R-side data term"):
+            part_c_masks(ch, mut="two-call-any")
         with ch.mutant("D with 0 in U's alphabet (−64..63)"):
             part_d(ch, mut="zero-in-alphabet")
+        with ch.mutant("F with 0 in U's alphabet (−64..63)"):
+            part_f(ch, mut="zero-in-alphabet")
     sys.exit(ch.finish())
 
 
