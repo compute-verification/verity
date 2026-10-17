@@ -9,6 +9,7 @@ import csv
 import importlib.util
 import io
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -228,6 +229,32 @@ def test_one_census_line_a_kind_and_row(tmp_path):
     assert "0.500000" in probe.row_line(by["atoms_add32"]) and "macs/word=" in probe.row_line(by["atoms_add32"])
     unnamed = probe.make_rows(binary, probes[:1], verdicts, lines, "", "")
     assert unnamed[0]["census"] is None and "names the run" in unnamed[0]["census_refused"]
+
+
+def test_uniform_reads_each_loop_from_its_sass(tmp_path, capsys):
+    """`eps1.py uniform`: V and U from the gate's loop in the listing, T = 4 n / rate, and a uniform instruction's cost as
+    T's slope in U within a fixed stream (the K = 0 point included, a step variant left out of the fit)."""
+    out = tmp_path / "out"
+    (out / "sass").mkdir(parents=True)
+    body = ["IMMA.16832.S8.S8 R0, R4, R8, R0 ;", "LOP3.LUT R1, R1, R2, R3, 0x96, !PT ;", "UIADD3 UR4, UPT, UPT, UR4, 0x1, URZ ;"]
+    loops = {"ux_0": body, "ux_16": body + ["UIMAD UR5, UR5, UR6, URZ ;"] * 16,
+             "ux_16s": body + ["@UP0 USHF.L.U32 UR5, UR5, 0x3, URZ ;"] * 16}
+    sass, verdicts = [], []
+    for name, ops in loops.items():
+        ins = [f"        /*{16 * i:04x}*/                   {op}" for i, op in enumerate(ops + ["BRA.U UP0, 0x0 ;"])]
+        sass += [f"\t\tFunction : {name}", "        /*fff0*/                   NOP ;", *ins]
+        verdicts.append({"probe": name, "passed": True,
+                         "verdict": {"loops": [{"head": "0000", "tail": f"{16 * len(ops):04x}"}]}})
+    (out / "sass" / "uniform.sass").write_text("\n".join(sass) + "\n")
+    (out / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    rates = {"ux_0": 4 / 10, "ux_16": 4 / 26, "ux_16s": 4 / 18}
+    (out / "rows.jsonl").write_text("".join(json.dumps({"probe": p, "rate": r, "counted": "IMMA.16832.S8.S8", "tags": []})
+                                            + "\n" for p, r in rates.items()))
+    assert eps1.main(["uniform", str(out)]) == 0
+    got = capsys.readouterr().out
+    assert re.search(r"^ux_16 +3 +17 +26\.000 .* 1\.000 *$", got, re.M)
+    assert re.search(r"^ux_16s +3 +17 +18\.000 .* 0\.500 *$", got, re.M)
+    assert "  ux: 1->17:1.000  fit 1.000 over U 1..17" in got
 
 
 # ---- the probes themselves -------------------------------------------------------------------------------------------
