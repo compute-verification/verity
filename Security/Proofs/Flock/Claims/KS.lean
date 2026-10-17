@@ -36,6 +36,7 @@ import Proofs.Flock.Claims.KS.PlainWrP
 import Proofs.Flock.Claims.KS.PlainEvent
 import Proofs.Flock.Claims.KS.LiveMix
 import Proofs.Flock.Claims.KS.PlainFirst
+import Proofs.Flock.Claims.KS.PlainThird
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -153,4 +154,6 @@ the mixture's first bound holds (`PlainFirst`: `FlockDeploy.KS.PlainSim`, `Flock
 `FlockDeploy.KS.plain_first_of_sim`), and at the coins that merge each live coin with the rest of a deployed coin, from
 the simulation of the runs alone (`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`,
 `FlockDeploy.KS.plainSim_of_run`, `FlockDeploy.KS.plain_first_of_run`); the checks compare draws only up to
-`JsonEquiv`, which holds between different terms (`FlockDeploy.KS.drawEq_ne`). -/
+`JsonEquiv`, which holds between different terms (`FlockDeploy.KS.drawEq_ne`). At those coins, a deployed event
+that the live event implies bounds the mixture, the third bound's form (`PlainThird`:
+`FlockDeploy.KS.plainMix_le_of_run`). -/
