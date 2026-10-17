@@ -46,13 +46,18 @@ def marlin_block_size_m(M: int, topk: int, E: int, global_num_experts: int) -> i
     return block_size_m
 
 
-def _marlin_layers(model) -> list:
+def mxfp4_marlin_layers(model) -> dict[str, torch.nn.Module]:
+    """The model's MXFP4 MoE layers on the Marlin backend, by qualified name."""
     mxfp4 = sys.modules.get(_MXFP4)
     if model is None or mxfp4 is None:
-        return []
+        return {}
     backend = importlib.import_module(_ORACLE).Mxfp4MoeBackend.MARLIN
-    return [m for m in model.modules() if isinstance(getattr(m, "quant_method", None), mxfp4.Mxfp4MoEMethod)
-            and m.quant_method.mxfp4_backend == backend and m.quant_method.moe_kernel is None and hasattr(m, "w13_weight")]
+    return {n: m for n, m in model.named_modules() if isinstance(getattr(m, "quant_method", None), mxfp4.Mxfp4MoEMethod)
+            and m.quant_method.mxfp4_backend == backend and hasattr(m, "w13_weight")}
+
+
+def _marlin_layers(model) -> list:
+    return [m for m in mxfp4_marlin_layers(model).values() if m.quant_method.moe_kernel is None]
 
 
 @contextmanager
@@ -102,4 +107,4 @@ def mxfp4_marlin_moe_leaf(model=None):
         yield
 
 
-__all__ = ["marlin_block_size_m", "mxfp4_marlin_moe_leaf"]
+__all__ = ["marlin_block_size_m", "mxfp4_marlin_layers", "mxfp4_marlin_moe_leaf"]
