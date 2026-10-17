@@ -103,8 +103,8 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
 
 /-- **Completeness at a record read through `f` is the record's**: `Deploy.mapCols` keeps the verifier, the parser,
 the reference prover and its error. -/
-theorem _root_.Claims.Flock.complete_mapCols {Coin Col T : Type} (H : Claims.Msg → Claims.Msg)
-    (D : Claims.Flock.Deploy Coin Col T) (f : Col → Col) :
+theorem _root_.Claims.Flock.complete_mapCols {Coin Col T : Type} [Fintype Coin] [Inhabited Coin]
+    (H : Claims.Msg → Claims.Msg) (D : Claims.Flock.Deploy Coin Col T) (f : Col → Col) :
     Claims.Flock.Complete H (D.mapCols f) ↔ Claims.Flock.Complete H D :=
   Iff.rfl
 
@@ -126,7 +126,8 @@ theorem flock_plain_assembled_relation (H : Claims.Msg → Claims.Msg)
       Claims.Flock.Efficient H (deployPlainTrim Readable.relation) plainStepPoly ∧
       Claims.Flock.Complete H (deployPlainTrim Readable.relation) :=
   flock_plain_assembled Readable.relation H hKS
-    ((Claims.Flock.complete_mapCols H _ trimCol).2 (FlockComplete.Replay.complete_plain_json H S))
+    ((Claims.Flock.complete_mapCols H (deployPlain Readable.relation) trimCol).2
+      (FlockComplete.Replay.complete_plain_json H S))
 
 /-- **Flock's claims at the deployed plain verifier at the deployed relation, at SHA-512**: `flock_plain_assembled_relation`
 with KS from the live sessions' bound with escapes on accepted runs at the statements some run accepts
