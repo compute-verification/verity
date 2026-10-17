@@ -373,9 +373,6 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
-  },
-  "Accounting.Assumptions.EncodeChainHardness": {
-   "owner": "@memory-accounting"
   }
  },
  "meaning": [
