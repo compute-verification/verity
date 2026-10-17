@@ -93,8 +93,10 @@ from verity_vllm.program.registry.moe import ONE32, NvExpf
 from verity_vllm.program.registry.prims import BF16, F32
 
 
-_CONF = ("model-untested: read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1; tests/properties/glm53_block_fp8_capture_gpu.py "
-         "is its hardware check")
+_CONF = ("exact-model-tested as the `_v3` forms at DOT = HopperE4m3QgmmaDot32_v1, of which these are the function "
+         "(tests/program/test_fp8_moe_dot.py): vLLM d9105ea80's fused_moe_kernel (Triton 3.7.1) on the H200 at vLLM's defaults, "
+         "GLM-5.3's wgmma tiles 16x64x128 and 16x128x128 under SWAP_AB, 18,432,000 w13 and w2 words, 0 mismatches (property "
+         "glm53_block_fp8_capture/v4, run r20261017-125608-3071, art:41943522)")
 
 
 def check_statics(K: int, G: int, KB: int) -> None:
@@ -183,8 +185,11 @@ DOT_CONF = ("exact-model-tested at cc 12.0's DOT (GemmTarget.fp8_moe_dot), Black
              "moe/prefill: fused_experts (E 128, top 8, hidden 4096, I 192) under TritonExperts, every block-[64, 64] fused_moe_kernel "
              "launch at 64x64x32, 11,791,360 w13 and w2 words, 0 mismatches; Hopper's step, the swapped and CUTLASS scale orders and an "
              "unfused mul + add each refuted (3,942, 577, 568 and 575 words); read from vLLM d9105ea80 fused_moe_kernel and Triton 3.7.1 "
-             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); at DOT = HopperE4m3QgmmaDot32_v1 (cc 9.0's) the function of "
-             "the `_v1` forms (tests/program/test_fp8_moe_dot.py), which are model-untested")
+             "(each 32-wide tile one QMMA.16832.F32.E4M3.E4M3 from RZ); and at cc 9.0's DOTs (`sm90_dot`), G = 128, KB = 128, SWAP "
+             "both: property glm53_block_fp8_capture/v4 on the H200 at vLLM's defaults, run r20261017-125608-3071, art:41943522: "
+             "GLM-5.3's served chain under vLLM's FusedMoEKernel / TritonExperts (E 256, top 8, hidden 6144, I 256 and 2048), "
+             "every launch at its tuned tile, HopperE4m3MmaV2Dot32_v1 at 8x32x128 and 8x64x128/SWAP_AB (638,976 words) and "
+             "HopperE4m3QgmmaDot32_v1 at 16x64x128 and 16x128x128/SWAP_AB (18,432,000 words), 0 mismatches")
 
 
 def coordinate_sig(routed: bool, e4m3=E4M3, f32=F32, bf16=BF16):

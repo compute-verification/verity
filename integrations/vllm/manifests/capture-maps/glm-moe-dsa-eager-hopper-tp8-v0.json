@@ -173,7 +173,7 @@
    "captures": [
     "glm53_block_fp8_capture"
    ],
-   "note": "torch.ops._C.silu_and_mul (CUDA act_and_mul_kernel): SiluMul_v2, the Build's silu_mul. SiluMul_v1 is not this kernel's function (NaN, gate -inf, gates past expf overflow, -0). The MoE's activation (moe.act) is this kernel between the w13 launch and the activation's ue8m0 quant; tests/properties/glm53_block_fp8_capture_gpu.py compares it inside the served chain on the H200"
+   "note": "torch.ops._C.silu_and_mul (CUDA act_and_mul_kernel): SiluMul_v2, the Build's silu_mul. SiluMul_v1 is not this kernel's function (NaN, gate -inf, gates past expf overflow, -0). The MoE's activation (moe.act) is this kernel between the w13 launch and the activation's ue8m0 quant; tests/properties/glm53_block_fp8_capture_gpu.py compares it inside the served chain on the H200: GO (v4, run r20261017-125608-3071, 2,792 rows, 0 mismatches)"
   },
   "silu-mul-block-quant": {
    "status": "port",
@@ -200,7 +200,7 @@
    "captures": [
     "glm53_block_fp8_capture"
    ],
-   "note": "ops.moe_sum over the TOPK down rows (already weighted by the router in the down launch): MoeSum_v1{TOPK=8, H=6144}; tests/properties/glm53_block_fp8_capture_gpu.py compares it inside the served chain and on planted rows (overflow, NaN payloads, ties, subnormals, cancellations) that refute the competing orders and accumulators on the H200"
+   "note": "ops.moe_sum over the TOPK down rows (already weighted by the router in the down launch): MoeSum_v1{TOPK=8, H=6144}; tests/properties/glm53_block_fp8_capture_gpu.py compares it inside the served chain and on planted rows (overflow, NaN payloads, ties, subnormals, cancellations) that refute the competing orders and accumulators on the H200: GO (v4, run r20261017-125608-3071, 357 rows, 0 mismatches)"
   },
   "token-select": {
    "status": "exists",
@@ -248,7 +248,7 @@
    "captures": [
     "glm53_block_fp8_capture"
    ],
-   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): the cc 9.0 oracle moves Triton to the front for dynamic-128 activations, static 128-block weights and no expert parallelism even when DeepGEMM is enabled by default. The expert input quant is per_token_group_quant_fp8 with use_ue8m0 = is_deep_gemm_e8m0_used(): True at vLLM's sm_90 defaults (DeepGEMM on), binding deepgemm.Fp8GroupQuantUe8m0_v1; False binding fp8.Fp8GroupQuant_v1. Both quants (the input's before the w13 launch, the activation's before the w2 launch) are this group quant; the launches are fp8_moe_experts.MoeExpertFp8Gemm(W)_v1{E, K, N, G, KB, SWAP, DOT} per (token, slot) pair, Booleans _v2; tests/properties/glm53_block_fp8_capture_gpu.py (v4) runs vLLM's own FusedMoEKernel at its defaults (the switches read back) and compares every link of the chain on the H200: the input's ue8m0 quant, the w13 launch at its served tile and DOT, silu_and_mul (silu-mul), the activation's ue8m0 quant, the w2 launch and moe_sum (moe-sum), with an operand probe that refutes the competing models of HopperE4m3MmaV2Dot32_v1 on the decode tiles"
+   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): the cc 9.0 oracle moves Triton to the front for dynamic-128 activations, static 128-block weights and no expert parallelism even when DeepGEMM is enabled by default. The expert input quant is per_token_group_quant_fp8 with use_ue8m0 = is_deep_gemm_e8m0_used(): True at vLLM's sm_90 defaults (DeepGEMM on), binding deepgemm.Fp8GroupQuantUe8m0_v1; False binding fp8.Fp8GroupQuant_v1. Both quants (the input's before the w13 launch, the activation's before the w2 launch) are this group quant; the launches are fp8_moe_experts.MoeExpertFp8Gemm(W)_v1{E, K, N, G, KB, SWAP, DOT} per (token, slot) pair, Booleans _v2; tests/properties/glm53_block_fp8_capture_gpu.py (v4) runs vLLM's own FusedMoEKernel at its defaults (the switches read back) and compares every link of the chain on the H200: the input's ue8m0 quant, the w13 launch at its served tile and DOT, silu_and_mul (silu-mul), the activation's ue8m0 quant, the w2 launch and moe_sum (moe-sum), with an operand probe that refutes the competing models of HopperE4m3MmaV2Dot32_v1 on the decode tiles: GO (run r20261017-125608-3071, 19,070,976 expert words, 0 mismatches)"
   },
   "fused-rmsnorm-triton": {
    "status": "port",

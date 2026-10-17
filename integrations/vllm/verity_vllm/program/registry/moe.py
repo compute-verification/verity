@@ -696,7 +696,14 @@ def MoeExpertGemmWV2(B, S, x, e, g, w):
 # ---------------------------------------------------------------------------------------------------------
 
 
-@composite("MoeSumCoordinate", 1, ["TOPK"], lambda S: ((("col", Array(S.TOPK, BF16)),), BF16), conformance="not-yet-established")
+SUM_CONF = ("exact-model-tested at TOPK = 8, H = 6144: vLLM d9105ea80's moe_sum (moe_sum_vec_kernel<bf16, int32, 8>) on the H200 "
+            "at vLLM's defaults, inside GLM-5.3's served FusedMoEKernel (349 token rows) and on 8 planted rows (-0s, a tie into "
+            "infinity, overflow, NaN payloads, infinities, ties, bf16 subnormals, order-dependent cancellations) on which descending "
+            "order, a pairwise tree, the first slot's start, a bf16 accumulator, FTZ, NaN payloads kept and truncation each differ, "
+            "0 mismatches (property glm53_block_fp8_capture/v4, run r20261017-125608-3071, art:41943522)")
+
+
+@composite("MoeSumCoordinate", 1, ["TOPK"], lambda S: ((("col", Array(S.TOPK, BF16)),), BF16), conformance=SUM_CONF)
 def MoeSumCoordinate(B, S, col):
     """`out = bf16(sum_k f32(col[k]))`, ascending k from a zero f32 accumulator, one RNE conversion at the end."""
     acc = B.call(b1.ZERO32)
@@ -706,7 +713,7 @@ def MoeSumCoordinate(B, S, col):
 
 
 @composite("MoeSum", 1, ["TOPK", "H"], lambda S: ((("y", Array(S.TOPK, Array(S.H, BF16))),), Array(S.H, BF16)),
-           conformance="not-yet-established")
+           conformance=SUM_CONF)
 def MoeSum(B, S, y):
     """`out[t, :] = sum_k cache3[t, k, :]` for one token (the TOPK weighted expert outputs of the token)."""
     cols = Coll(Array(S.H, Array(S.TOPK, BF16)), strided_view(y, 0, S.TOPK, 1, S.H, S.H * S.TOPK))

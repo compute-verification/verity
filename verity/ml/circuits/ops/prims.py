@@ -112,12 +112,14 @@ def HopperE4m3QgmmaDot32(acc: int, *ab: int) -> int:
 
 
 @primitive("HopperE4m3MmaV2Dot32", 1, [("acc", F32), ("a", A32_8), ("b", A32_8)], F32,
-           conformance="model-untested: read from Triton 3.7.1 (AccelerateMatmul.cpp supportMMA v3 and mmav2SupportsFp8Operands, "
-                       "MMAv2.cpp's kWidth-4 register order) and its offline sm_90 compile of vLLM d9105ea80's fused_moe_kernel at the "
-                       "tuned H200 tiles 8x32x128 and 8x64x128/SWAP_AB (8 chained mma.sync.m16n8k16.f32.f16.f16.f32 per 128-wide K "
-                       "tile, cvt.rn.f16x2.e4m3x2; SASS F2FP.F16.E4M3.UNPACK_B, HMMA.16816.F32); HMMA.16816.F32 from +0 is "
-                       "HOPPER_BF16_M16N8K16's group on the H100 (r20260922-184111-671e, 0 mismatches), with a nonzero accumulator "
-                       "unmeasured: integrations/vllm/tests/properties/glm53_block_fp8_capture_gpu.py is its hardware check")
+           conformance="exact-model-tested; vLLM d9105ea80's fused_moe_kernel on the H200 (cc 9.0, 132 SMs) at vLLM's defaults, at "
+                       "GLM-5.3's tuned decode tiles 8x32x128 and 8x64x128/SWAP_AB (Triton 3.7.1: 8 chained "
+                       "mma.sync.m16n8k16.f32.f16.f16.f32 per 128-wide K tile, cvt.rn.f16x2.e4m3x2; SASS F2FP.F16.E4M3.UNPACK_B, "
+                       "HMMA.16816.F32): 638,976 w13 and w2 words, 0 mismatches, and an operand probe (+448 * +448 and +448 * -448 "
+                       "in the two k16 halves over small codes) on which the natural k order, the halves swapped, adder widths 24, "
+                       "25, 27 and 28, Ampere's 8 + 8 groups, one k32 group, QGMMA's step and a chain of FMAs each differ "
+                       "(integrations/vllm/tests/properties/glm53_block_fp8_capture_gpu.py v4; run r20261017-125608-3071, "
+                       "art:41943522); HMMA.16816.F32 from +0 is HOPPER_BF16_M16N8K16's group on the H100 (r20260922-184111-671e)")
 def HopperE4m3MmaV2Dot32(acc: int, *ab: int) -> int:
     """One 32-wide k block of an e4m3 `tl.dot` that Triton 3.7.1 lowers to MMAv2 on sm_90 (a dot whose M is not a multiple of 64 or
     whose N is not a multiple of 16, or under fewer than 4 warps): the operands promoted to f16 exactly, then two chained
