@@ -222,11 +222,12 @@ __device__ __forceinline__ void init_ops(uint32_t lane, uint32_t* a, uint32_t* b
   e = 0x44444444u;
 }
 
-// ---- lane op: one fused IADD3 (two dependent PTX adds; ptxas fuses them) --------------------------------------------
-__device__ __forceinline__ void iadd3(uint32_t& x, uint32_t y, uint32_t z) {
-  asm volatile("add.u32 %0, %0, %1;\n\tadd.u32 %0, %0, %2;" : "+r"(x) : "r"(y), "r"(z));
+// ---- lane op: ISSUE r5's iadd3_32, one add.u32 (IADD3 with two register sources) ------------------------------------
+// Two fused adds (IADD3 with three register sources) issue at ~0.45 a SMSP-cycle (r20261017-035218-d3c7), so beside an
+// MMA they bind on their own rate and the fit overstates a.
+__device__ __forceinline__ void op(uint32_t* r, int i) {
+  asm volatile("add.u32 %0,%0,%1;" : "+r"(r[i & 7]) : "r"(r[(i + 1) & 7]));
 }
-__device__ __forceinline__ void op(uint32_t* r, int i) { iadd3(r[i & 7], r[(i + 1) & 7], r[(i + 2) & 7]); }
 __device__ __forceinline__ void init_r(uint32_t* r, uint32_t tid) {
 #pragma unroll
   for (int i = 0; i < 8; i++) r[i] = (tid * 0x9e3779b9u + i * 0x85ebca6bu) | 1u;
@@ -243,6 +244,24 @@ __device__ __forceinline__ uint32_t fold_acc(typename F::Acc (*d)[4]) {
       x ^= *reinterpret_cast<uint32_t*>(&v);
     }
   return x;
+}
+
+// The lane op alone at 8 warps a SMSP (ISSUE's saturation geometry): tensor_kinds.py gates on it issuing at ~1 a
+// SMSP-cycle, so the mixed points sit on the issue facet rather than on the lane op's own rate.
+__global__ void __launch_bounds__(1024) k_opalone(int iters, uint32_t* sink, BlockClk* rec) {
+  uint32_t r[8];
+  init_r(r, threadIdx.x);
+  CLK_BEGIN
+#pragma unroll 1
+  for (int it = 0; it < iters; it++) {
+#pragma unroll
+    for (int q = 0; q < 64; q++) op(r, q);
+  }
+  CLK_END(rec)
+  uint32_t x = threadIdx.x;
+#pragma unroll
+  for (int i = 0; i < 8; i++) x += r[i];
+  sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
 }
 
 // MMA alone: 2 MMA warps a SMSP, 8 independent accumulators, the geometry k_spec's MMA warps use.
@@ -355,6 +374,11 @@ static void emit(const char* mode, const char* form, double macs, double slots, 
   fflush(stdout);
 }
 
+static void opalone() {
+  int iters;
+  Timing t = timed(k_opalone, 32, &iters);
+  emit("opalone", "iadd3_32", 0, 0, 64, 0, 32, iters, 0, 32.0 * iters * 64, t);
+}
 template <class F>
 static void alone() {
   int iters;
@@ -386,8 +410,9 @@ int main() {
   int d = 0;
   CK(cudaGetDevice(&d));
   CK(cudaDeviceGetAttribute(&g_sms, cudaDevAttrMultiProcessorCount, d));
-  CK(cudaMalloc(&g_sink, (size_t)g_sms * 512 * 4));
+  CK(cudaMalloc(&g_sink, (size_t)g_sms * 1024 * 4));
   CK(cudaMalloc(&g_rec, (size_t)g_sms * sizeof(BlockClk)));
+  opalone();
   // Reference first and last, so drift across the run shows as a difference between its two passes.
   form<ImmaS8k32>();
   form<ImmaU8S8k32>();

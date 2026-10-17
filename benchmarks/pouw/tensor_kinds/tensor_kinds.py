@@ -7,7 +7,8 @@ branch that targets it), counts MMA and other instructions an iteration, and tur
 per-SMSP counts over the timed window. On the facet a·#MMA + #other <= cycles (one issue a SMSP-cycle for every other
 instruction, as JI3e_0), each case bounds a <= (cycles - #other) / #MMA; a form's coefficient is the least bound over
 its cases. The form's issue price a slot is a / slots. The tensor theorem's issue form is tight when no form's price a
-slot is below IMMA s8 m16n8k32's (2% noise margin).
+slot is below IMMA s8 m16n8k32's (2% noise margin). The fit counts only if the lane op alone issues at >= 0.9 a
+SMSP-cycle; a slower lane op binds the mixed points on its own rate and overstates a.
 
 Writes OUT_DIR/tensor_kinds.json and OUT_DIR/tensor_kinds.md; exits 3 when a gate fails (the case is named).
 """
@@ -22,6 +23,9 @@ from pathlib import Path
 MMA = re.compile(r"^(IMMA|HMMA|QMMA|OMMA|DMMA|BMMA)")
 REF = "imma_s8_m16n8k32"
 NOISE = 0.02
+#: The lane op alone must issue at least this many warp instructions a SMSP-cycle, or the mixed points bind on its own
+#: rate instead of the issue facet and overstate a.
+LANE_MIN = 0.9
 STRUCTS = {
     "ImmaS8k32": "imma_s8_m16n8k32",
     "ImmaU8S8k32": "imma_u8s8_m16n8k32",
@@ -80,7 +84,7 @@ def loops(body: list[tuple[int, str, str]]) -> list[dict]:
         m = re.search(r"`\((\.L_x_\d+)\)", ins)
         h = re.search(r"\b0x([0-9a-fA-F]+)\b", ins)
         i = by_label.get(m.group(1)) if m else (by_addr.get(int(h.group(1), 16)) if h else None)
-        if i is None or i > j:
+        if i is None or i >= j:  # i == j: the idle `BRA self` after EXIT ending every function
             continue
         seg = [o for o in (opcode(x) for _, _, x in body[i : j + 1]) if o != "NOP"]
         mma = [o for o in seg if MMA.match(o)]
@@ -91,6 +95,8 @@ def loops(body: list[tuple[int, str, str]]) -> list[dict]:
 
 def kernel_key(name: str) -> tuple[str, str, int] | None:
     """(mode, form, R) of a mangled kernel name, e.g. _Z6k_specI11QmmaE4m3k32Li32EEviPjP8BlockClk."""
+    if name == "_Z9k_opaloneiPjP8BlockClk":
+        return "opalone", "iadd3_32", 64
     m = re.match(r"_Z\d+(k_alone|k_spec|k_mixu)I(\d+)", name)
     if not m:
         return None
@@ -112,8 +118,22 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         if k:
             kl[k] = loops(body)
     by_form: dict[str, list[dict]] = defaultdict(list)
+    lane = None
+    for r in [r for r in cases if r["mode"] == "opalone"]:
+        L = kl.get(("opalone", "iadd3_32", 64))
+        if not L or len(L) != 1 or L[0]["mma"] or L[0]["iadd3"] < 64:
+            fails.append(f"opalone: loops {L} (want one loop of >= 64 IADD3)")
+            continue
+        # 8 warps a SMSP, every instruction of the loop body an iteration
+        lane = 8 * r["iters"] * (L[0]["other"]) / r["cyc_med"]
+        if lane < LANE_MIN:
+            fails.append(f"opalone: the lane op issues {lane:.3f} a SMSP-cycle alone, below {LANE_MIN}")
+    if lane is None and not any("opalone" in f for f in fails):
+        fails.append("opalone: no lane-op-alone row")
     for r in cases:
         mode, form = r["mode"], r["form"]
+        if mode == "opalone":
+            continue
         R = int(round(r["ops_per_mma"] * 8)) if mode != "alone" else 0
         key = (mode, form, R)
         L = kl.get(key)
@@ -161,10 +181,12 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
             "alone_smsp_cycles_per_mma": min(alone) if alone else None,
             "a": a, "a_per_slot": a / slots if a is not None else None, "points": pts,
         }
-    ref = summary.get(REF, {}).get("a_per_slot")
+    ref = summary[REF]["a_per_slot"] if REF in summary else None
     for form, s in summary.items():
         s["vs_ref"] = s["a_per_slot"] / ref if ref and s["a_per_slot"] else None
         s["below_ref"] = bool(s["vs_ref"] is not None and s["vs_ref"] < 1 - NOISE)
+    if lane is not None:
+        summary["lane_op_alone"] = {"op": "iadd3_32", "issue_per_smsp_cycle": lane}
     return summary, fails
 
 
@@ -172,9 +194,14 @@ def render(summary: dict) -> str:
     lines = ["| form | SASS | slots | alone SMSP-cycles a MMA | a (issue-cycles a MMA) | a a slot | vs IMMA s8 k32 |",
              "|---|---|---|---|---|---|---|"]
     for form, s in summary.items():
+        if form == "lane_op_alone":
+            continue
         f = lambda v, d=3: "–" if v is None else f"{v:.{d}f}"
         lines.append(f"| {form} | {', '.join(s['mma_ops'])} | {s['slots']:.0f} | {f(s['alone_smsp_cycles_per_mma'], 2)} | "
                      f"{f(s['a'])} | {f(s['a_per_slot'], 4)} | {f(s['vs_ref'])}{' **below**' if s['below_ref'] else ''} |")
+    if "lane_op_alone" in summary:
+        lines.append(f"\nLane op alone (iadd3_32, 8 warps a SMSP): "
+                     f"{summary['lane_op_alone']['issue_per_smsp_cycle']:.3f} warp instructions a SMSP-cycle.")
     return "\n".join(lines) + "\n"
 
 
