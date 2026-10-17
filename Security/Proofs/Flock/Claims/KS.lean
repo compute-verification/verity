@@ -147,4 +147,5 @@ mixture's first bound reads gives that verdict at the run's live outcome (`Plain
 rest of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the
 merged coins being uniform (`LiveMix`: `Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_le_liveMix`). From a
 simulation of the deployed prover by a live prover on coins of uniform law, and the record's draw on accepting runs,
-the mixture's first bound holds (`PlainFirst`: `FlockDeploy.KS.plain_first_of_sim`). -/
+the mixture's first bound holds (`PlainFirst`: `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.RecordDrawVerbatim`,
+`FlockDeploy.KS.plain_first_of_sim`). -/
