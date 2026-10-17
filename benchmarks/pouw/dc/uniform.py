@@ -37,12 +37,12 @@ MARGIN = 0.02
 MIN_UNI = 16
 ALU = re.compile(r"^(LOP3|LEA|IADD3|SHF|PRMT|ISETP)")
 TABLE = re.compile(r'P_[UI]\((\w+), "([^"]*)", "([^"]*)"\)')
-WARPS = {"uniform": 16, "issue": 16, "imad": 32}
+WARPS = {"uniform": 16, "issue": 16, "sat": 16, "imad": 32}
 
 
 def tables(fam: str) -> dict[str, dict]:
     out = {}
-    for kind in ("uniform", "issue", "imad"):
+    for kind in ("uniform", "issue", "sat", "imad"):
         for name, ex, cnt in TABLE.findall((HERE / "probes" / f"{fam}_{kind}.cu").read_text()):
             out[name] = {"counts": {k: int(v) for k, v in (p.split("=") for p in ex.split(","))}, "counted": cnt,
                          "warps": WARPS[kind], "binary": f"{fam}_{kind}"}

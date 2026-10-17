@@ -7,7 +7,9 @@
 //                h the honest step (beside duo's fold); g h + 64 FFMA reading the accumulators (issue binds); l h + 32
 //                LOP3 reading them (the ALU pipe binds harder); m 32 IMMA and one fold (mma.sync binds the tensor pipe
 //                that tcgen05 and wgmma share; without a fold reading the accumulators ptxas puts the chains on lanes);
-//                b h + 256 FFMA reading the accumulators (issue saturated: what a uniform instruction costs issue)
+//                b h + 256 FFMA reading the accumulators (issue-loaded, 0.72 of issue: each warp waits on its MMAs);
+//                s h + 512 FFMA on 16 accumulators and 64 IADD3 + 64 LOP3 on 8 pairs, none reading the MMAs (UVec:
+//                issue binds alone, the ALU at about half, so a uniform instruction's slowdown is its issue price)
 //                S, the uniform step on each chain pair: i UIMAD + ULOP3; x ULOP3; a UIADD3 + ULOP3; f USHF + ULOP3;
 //                p UPRMT + ULOP3; s USHF/ULEA + ULOP3
 #pragma once
@@ -89,6 +91,53 @@ struct UFeed {
   }
 };
 
+template <int NF, int NI>
+struct UVec {
+  float f[16], g;
+  uint32_t v[16];
+  __device__ explicit UVec(int mode) {
+    const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
+    g = __uint_as_float(0x3A800000u + (t & 0xFFFFu) + (uint32_t)mode);
+#pragma unroll
+    for (int c = 0; c < 16; c++) {
+      f[c] = __uint_as_float(0x3F800000u + t * 16u + (uint32_t)c);
+      v[c] = t * 0x9E3779B9u + (uint32_t)c;
+    }
+  }
+  __device__ __forceinline__ void step() {
+#pragma unroll
+    for (int q = 0; q < NF; q++) f[q & 15] = __fmaf_rn(f[q & 15], 0.99993896484375f, g);
+#pragma unroll
+    for (int q = 0; q < NI / 2; q++) {
+      const int p = (q & 7) * 2;
+      const uint32_t k = 0x85EBCA6Bu + (uint32_t)q * 0xC2B2AE35u;
+      v[p] = v[p] + v[p + 1] + k;
+      v[p + 1] = v[p + 1] ^ v[p] ^ (k >> 5);
+    }
+  }
+  __device__ uint32_t fold() const {
+    uint32_t s = 0;
+#pragma unroll
+    for (int c = 0; c < 16; c++) s ^= __float_as_uint(f[c]) ^ v[c];
+    return s;
+  }
+};
+
+template <int S, int K>
+__device__ __forceinline__ void uni_sat(const OpArgs& a) {
+  UChains<K, S> u(0x5eed0000u ^ (uint32_t)a.mode);
+  Honest h(a.mode);
+  UVec<512, 128> w(a.mode);
+  OP_BEGIN
+  OP_LOOP(it) {
+    h.step();
+    w.step();
+    u.step();
+  }
+  OP_END
+  OP_SINK(u.fold() ^ h.fold() ^ w.fold())
+}
+
 template <int F, int S, int K>
 __device__ __forceinline__ void uni(const OpArgs& a) {
   UChains<K, S> u(0x5eed0000u ^ (uint32_t)a.mode);
@@ -139,5 +188,19 @@ UK(ub_0, F_B, S_I, 0)
 UFORMS(F_B, b, 64)
 UK(ub_128i, F_B, S_I, 128)
 UK(ub_128x, F_B, S_X, 128)
+
+#define USK(nm, S, K) \
+  OP_KERNEL(nm, UTPB) { uni_sat<S, K>(a); }
+#define USAT(K)              \
+  USK(us_##K##x, S_X, K)     \
+  USK(us_##K##a, S_A, K)     \
+  USK(us_##K##i, S_I, K)
+USK(us_0, S_I, 0)
+USAT(16)
+USAT(32)
+USAT(64)
+USAT(128)
+USK(us_64f, S_F, 64)
+USK(us_64p, S_P, 64)
 
 #define P_U(nm, EX, CNT) {.name = #nm, .kernel = (const void*)nm, .tpb = UTPB, .expect = EX, .counted = CNT, .iters = UITERS}
