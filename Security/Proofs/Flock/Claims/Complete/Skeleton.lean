@@ -185,9 +185,9 @@ def FinalFits (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readabl
 
 /-! ### B's checks -/
 
-/-- **The record's draw is the statement's.** -/
+/-- **The record's draw is the statement's**, whatever its key order (`drawEq`). -/
 def DrawMatches (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ o : Run H rel, (FlockSoundness.Discharge.Exec.recordDraw o.record == o.s.read.draw) = true
+  ∀ o : Run H rel, drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
 /-- **The record's live session reads** (`liveOf`: the record is JSON with its link, points and streams). -/
 def LiveReads (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, liveOf o.spec o.record = .ok o.live
