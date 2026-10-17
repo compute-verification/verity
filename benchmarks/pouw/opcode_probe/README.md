@@ -16,6 +16,10 @@ by the check it names, or nothing is timed at all.
 | `probes/atom.cu` | ATOMS, ATOMG, REDG and ATOM.E, 32- and 64-bit (ATOME64: generic EXCH.64 and CAS.64 to shared); each global form on 16 SMs (its row) and on every SM (L2red) |
 | `probes/cl.cu` | DSMEM atomics and reductions in a 2-CTA cluster, to the own CTA (ATOME32; ATOME64's EXCH.64 and CAS.64, and the known-invalid red.add.u64) and the peer (joint) |
 | `probes/mma.cu` | IMMA s8, QMMA E4M3, OMMA MXFP4 and NVFP4, dense and 2:4-sparse, at unit scales, and a `_data` probe a format on the sweep's drawn operands and mix scales (a data-dependent-clock check; joint points, no census line; `../fp_exact/` reads them) |
+| `probes/frontier.cu` | EPS1's joint frontiers: IMMA beside IMAD, HFMA2, LOP3 and SHFL.BFLY at 2 to 128 ops per 8 IMMA in one stream, warp-specialized points, each op alone (joint points, no census line) |
+| `probes/side.cu` | EPS1's side units, each alone (`sa_*`) and beside the honest kernel (`hs_*`, an `until` loop): REDG .32/.64/v4, ATOMG.32, LDGSTS, UBLKRED and UBLKCP (one lane), DSMEM stores and reductions to the peer CTA, TLD and filtered TEX, RED beside UBLKRED; deep roles (more fetches in flight a warp) and 12-warp roles for the latency-bound TLD, TEX and ATOMG |
+| `probes/honest.cuh`, `probes/power.cu` | The honest kernel (8 IMMA on drawn int8 operands, then the duo fold of their words), and EPS1's clock kernels, which `power.sh` (`power_lease.sh` inside the lease) sustains at the node's lock and, given clock permission, at the default clocks |
+| `eps1.py` | EPS1's readings: `facets` (the upper hull of frontier.cu's points with the 2% margin; `--prior` adds machine_model's K rows' vertices, `--emit` prints rows and census lines), `side` (words a clock alone and beside honest, MMA kept), `clock` |
 
 ## Write a probe
 
@@ -45,6 +49,10 @@ by the check it names, or nothing is timed at all.
    address comes from a function `(slot, lane, warp, it) -> byte offset` that the host can call too
    (`__host__ __device__`), so the bank check reads the kernel's own addresses.
 
+   ptxas wraps some uniform ops (UBLKRED) in an ELECT loop that runs once a lane: issue them from one lane, and the gate
+   counts that loop as one trip. A SHFL in a warp-divergent role gets a BRA.DIV fallback past the closing clock read, so
+   the gate refuses its loop (frontier.cu has no warp-specialized SHFL point).
+
 2. **The table entry.** One `OpProbe` a probe, in a `PROBES` array, and `main` returns `op_main(argc, argv, PROBES)`:
 
    ~~~cpp
@@ -62,6 +70,11 @@ by the check it names, or nothing is timed at all.
    - `words`: the 4-byte words a warp instruction of the counted class moves, for MACs a word.
    - `smem_ops` and `smem`: the loop's shared accesses in order (`LDSM.16.M88*8`) and the offset function.
    - `warps`, `iters`, `dyn_smem`, `cluster`, `blocks` (0: one block on every SM), `fn` (a second probe on one kernel).
+   - `until`: a joint point whose second role runs only while the first does (`OP_BEGIN_STOP`, `OP_DONE`, `OP_UNTIL`,
+     `OP_TRIPS`, `OP_END_STOP`; `probe.cuh` says how). That loop's rate is its trips over the stop's cycles, and the row
+     records `stop_gap`, the share of the kernel the first role's warps had stopped for.
+   - The kernel's `OpArgs` carries `g` as two texture objects, `tex1` (1D u32, TLD) and `tex2` (pitch-2D float4,
+     linear filtering, TEX).
    - `refuse` (`loops`, `smem`, `sink` or `forbid`): a known-invalid probe, kept as the gate's regression test.
 
 3. **Gate it on the CPU**, then run it on a GPU from a pushed commit:

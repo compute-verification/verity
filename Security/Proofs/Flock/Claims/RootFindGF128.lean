@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.RootFind
 import Proofs.Flock.Level3.ArithFacts
-import Definitions.Claims
+import Proofs.Flock.Claims.Counted
 
 /-!
 # The root finder over GF(2^128)
