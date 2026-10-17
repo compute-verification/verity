@@ -123,14 +123,16 @@ theorem Case.one_or_several (c : Case H rel) : c.sts.size = 1 ∨ 1 < c.sts.size
 any number of tables: from `complete_zk`'s premises, which give every check at one table, and at several tables the
 session running (`SessionRunsJ`), the record's checks (`RecordJ`) and the checks open at one table (`OpenJ`). -/
 theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hP : JsonRT.ProverOkZk H rel)
-    (hR : JsonRT.RepShapedZk H rel) (hF : JsonRT.RecordFitsZk H rel) (hSR : FlockComplete.SessionRunsZk H rel)
-    (hN : FlockComplete.SendCountZk H rel) (hRp : FlockComplete.Replay H rel)
-    (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
-    (hLC : FlockComplete.LaneConstraints H rel) (hIn : FlockComplete.Inner H rel)
-    (hCo : FlockComplete.ConsumedZk H rel) (hSRJ : SessionRunsJ H rel) (hRec : RecordJ H rel) (hOp : OpenJ H rel) :
+    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hRR : JsonRT.RepRoundsZk H rel)
+    (hR : JsonRT.RepShapedZk H rel) (hF : JsonRT.RecordFitsZk H rel) (hPR : JsonRT.ProverRunsZk H rel)
+    (hRp : FlockComplete.Replay H rel) (hRS : FlockComplete.RingSwitchZk H rel)
+    (hLg : FlockComplete.LigeritoZk H rel) (hLC : FlockComplete.LaneConstraints H rel)
+    (hIn : FlockComplete.Inner H rel) (hCo : FlockComplete.ConsumedZk H rel) (hSRJ : SessionRunsJ H rel)
+    (hRec : RecordJ H rel) (hOp : OpenJ H rel) :
     Claims.Flock.Complete H (deployZk rel) honestP (δc H) := by
-  have hl := linkFirstZk_goal H h64 rel
+  have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 hRR
+  have hSR : FlockComplete.SessionRunsZk H rel := JsonRT.sessionRunsZk_goal S hS hPR
+  have hN : FlockComplete.SendCountZk H rel := sendCountZk_goal H rel
   have rec1 : ∀ o : Run H rel, (h1 : o.sts.size = 1) → RecordAt H rel o := fun o h1 =>
     { finalFits := JsonRT.finalFitsZk_goal S h64 hS hP hR hF (o.toZk h1)
       draw := JsonRT.drawMatchesZk_goal S h64 hS hP (o.toZk h1)
