@@ -266,6 +266,7 @@ theorem check_whole {c : Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j 
       HmNets.netOf (RecResiduals.unitName m k cl j) (RecResiduals.unitLaid S ns nv) = .ok c.unit ∧
       RecResiduals.partlyRead (RecResiduals.readIns c.unit) ns = none ∧ ∃ W,
         RecResiduals.partW { sh with holo } j = .ok W ∧
+        RecResiduals.hUnread (RecAlgebra.wNames { sh with holo }) W (RecResiduals.readIns c.unit) ns = none ∧
         RecResiduals.misnamed c ns W.size (fun a => RecResiduals.roundNames (RecAlgebra.rounds { sh with holo })
           (RecAlgebra.wNames { sh with holo })[W[a]!]?) = none := by
   unfold RecResiduals.check at h
@@ -294,9 +295,12 @@ theorem check_whole {c : Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j 
               · cases h
               · rename_i W hW
                 split at h
-                · rename_i hmis
-                  exact ⟨S, ns, nv, hpart, hg, hn, W, hW, hmis⟩
                 · cases h
+                · rename_i hh
+                  split at h
+                  · rename_i hmis
+                    exact ⟨S, ns, nv, hpart, hg, hn, W, hW, hh, hmis⟩
+                  · cases h
             · cases h
           · cases h
 
