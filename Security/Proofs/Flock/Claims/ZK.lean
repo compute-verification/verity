@@ -95,11 +95,11 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`Flock.zk_deployZk_of_tables_gap`).
 * `Reference`: the reference prover those three Props are about, `RefSession.refP`, defined from the session's data
   (its round encoding of the cut view, its final message of the tables' real views, refusing where a table doesn't
-  admit the coins); `CoinCheck` holds of it by definition, `TablesOK` from `Tables` and `TMsgLink` from `Complete`,
-  `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is the cut view the round
-  messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and **`Flock.zk_deployZk_ref`** at the session's masked
-  record `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `honestPZk`'s, a named Prop), each also at
-  the pinned key's hiding gap (`_gap`).
+  admit the coins); `Binding` holds of it with no hypothesis (`Proto.binding_of_open`), `TablesOK` from `Tables` and
+  `TMsgLink` from `Complete`, `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is
+  the cut view the round messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and `Flock.zk_zkD_ref` at the session's masked record
+  `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `honestPZk`'s, a named Prop), each also at the
+  pinned key's hiding gap (`_gap`).
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
