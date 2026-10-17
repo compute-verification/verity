@@ -358,8 +358,8 @@ theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
     rw [ByteArray.size_append, ByteArray.size_append]
     change _ ≤ _ + 32 * (st.m - 6) + 32 * (st.c.kLog - 6) + 2064 * (2 + e.size) at hw
     omega
-  exact ⟨by rw [hH]; norm_num, by show 1 ≤ v.1.levels.size - 1; omega, hfit, hcap, h1ab, h1c, hrounds, hlr, hzp, hrs, hrs128, g1, g2, g3, g4, g5,
-    g6, g7, g8, g9, g10, g11, g12, g13, hsalt, hpath⟩
+  exact ⟨by rw [hH]; norm_num, by show 1 ≤ v.1.levels.size - 1; omega, hfit, hcap, h1ab, h1c, hrounds, hlr, hzp,
+    hrs, hrs128, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, hsalt, hpath⟩
 
 /-- **Masked completeness from level 0**: `complete_jsonT` from level 0's four premises (`Level0`) alone;
 `RepShapedT` beyond level 0's shape (`shapeRest`) and `ProverRunsT` beyond level 0 (`runsRest`) hold. -/
