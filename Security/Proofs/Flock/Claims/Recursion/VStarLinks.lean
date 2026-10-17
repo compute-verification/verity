@@ -17,13 +17,15 @@ that link once for every kind and every shape, with what is the circuit's own pr
 * **The input tie's values are the columns'** (`openIns_reads`, `inCols_readElems`, `sparseIn_reads_any`): any copy's
   input columns hold, at each port, the values they read there (`openRow`…, `rowsRead`, `vRead`, `sparseW`, `sparseV`,
   and with `T > 1` the slots' types `sparseT`). So no link carries an existential for them.
-* **The output tie from `Flock.check`** (`unitOuts_of_check`): where the outer relation holds, the named copy's output
-  columns hold the unit's outputs at the values its input columns read (`UnitOuts`: `LevelOuts`, `ResOuts`,
-  `SparseReadOuts`): `climbAt_of_check`, `partCols_of_check_at`, `partCols_of_check_opening`, `sparseOuts_of_check`.
+* **The output tie from `Flock.check`** (`unitOuts_of_check`, at every copy `allOuts_of_check`): where the outer
+  relation holds, each copy's output columns hold the unit's outputs at the values its input columns read (`UnitOuts`:
+  `LevelOuts`, `ResOuts`, `SparseReadOuts`): `climbAt_of_check`, `partCols_of_check_at`, `partCols_of_check_opening`,
+  `sparseOuts_of_check`.
 * **A part's links** (`PartReads` at one V* statement, `PartReadsTo` at every V* statement the part's coins are shown
-  on, with `PartChecks`' fallback): the staging, a copy, and the read outputs giving the goal on every list of messages
-  agreeing with what the part holds. `partChecks_of_partReadsTo` and `partLogs_of_partReadsTo` give `PartChecks` and
-  `PartLogs` at any shape. M's algebra links are instances (`partReadsTo_of_resReads`).
+  on, with `PartChecks`' fallback): the staging, and every V* copy's read outputs (`AllOuts`) giving the goal on every
+  list of messages agreeing with what the part holds; a goal read off one copy is `partReads_of_copy`.
+  `partChecks_of_partReadsTo` and `partLogs_of_partReadsTo` give `PartChecks` and `PartLogs` at any shape. M's algebra
+  links are instances (`partReadsTo_of_resReads`).
 * **A linked part** (`LinkedPart`: `PartReadsTo` toward its check, and its calls either none where its coins are shown,
   `LogsNil`, or `PartReadsTo` toward them), at any shape. `vstarAccepts_of_linked`, `vstarParts_of_linked` and
   `vstarPartsStaging_of_linked` are `VStarAcceptsR`, `VStarParts` and `VStarPartsStaging` at any shape from every
@@ -144,6 +146,18 @@ theorem unitOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg}
     · exact partCols_of_check_opening h hx ht hpi htl P.recOpening hp hsh hpart ho hg hu _ _
         (fun _ he => readElems_ge he) (fun _ he => readElems_ge he) (inCols_readElems ns nv _)
   · exact sparseOuts_of_check h hx ht hpi htl hp ho hg hu _ _ _ (sparseIn_reads_any sh _)
+
+/-- **Every copy of every V\* unit holds its outputs at what its inputs read**: at each table whose unit is one of
+V*'s, with outputs `K` there (`UnitOuts`), every copy of the unit (block `o`, VU `g`, copy `u`). -/
+def AllOuts (p : Parsed) (w : Claims.Flock.Wit) : Prop :=
+  ∀ (t : ℕ) (ht : t < p.sts.size) (K : (ℕ → Bool) → Prop), UnitOuts p.sts[t].c K → ∀ o g u,
+    o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) → g < p.sts[t].c.g → u < p.sts[t].c.upv → K (copyOf p t ht w o g u)
+
+/-- **The output tie at every copy** (`unitOuts_of_check` at each). -/
+theorem allOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+    (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
+    (ht : p.tags.typed = false) (hpi : p.publicInputs = none) : AllOuts p w :=
+  fun _ htl _ hK _ _ _ ho hg hu => unitOuts_of_check h hx ht hpi htl hK ho hg hu
 
 end Flock.Readable
 
@@ -288,28 +302,37 @@ variable {Coin Col T : Type}
 
 /-- **A part's links at one V\* statement** (a code fact about V*'s staging, the layout and the goal at part `s`, none
 of it the circuit's semantics): at the compiled statement `x` and the V* statement `xO`,
-* the staging: `xO` decodes (`decode`) to an untyped statement without public input words one of whose tables has a
-  V* unit (`UnitOuts`: a level under either name, a table of residuals at either holo flag, or the RecSparse unit);
-* the copy: the statement names a copy of that table's unit (block `o`, VU `g`, copy `u`);
+* the staging: `xO` decodes (`decode`) to an untyped statement without public input words;
 * the input and output ties: on every witness and every list of inner messages agreeing with what the part holds
-  (`Agrees`), the unit's outputs at the values the copy's input columns read (`K`) give the goal `G`.
-The unit's check, the input tie's values and the unit's semantics are the circuit's (`unitOuts_of_check`). -/
+  (`Agrees`), the outputs of every copy of every V* unit among its tables, at the values the copy's input columns read
+  (`AllOuts`), give the goal `G`.
+The units' checks, the input tie's values and the units' semantics are the circuit's (`allOuts_of_check`). A part's
+goal may read many copies (a level part's every query); `partReads_of_copy` is the case of one. -/
 def PartReads (decode : Msg → Option Flock.Readable.Read) (L : Layout) (s : ℕ) (x xO : Msg)
     (G : Flock.Wit → List Msg → Prop) : Prop :=
   ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
-    ∃ t, ∃ ht : t < p.sts.size, ∃ K : (ℕ → Bool) → Prop, Flock.Readable.UnitOuts p.sts[t].c K ∧
-      ∃ o g u, o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) ∧ g < p.sts[t].c.g ∧ u < p.sts[t].c.upv ∧
-        ∀ (w : Flock.Wit) (ms : List Msg), Agrees L x s w ms → K (Flock.Readable.copyOf p t ht w o g u) → G w ms
+    ∀ (w : Flock.Wit) (ms : List Msg), Agrees L x s w ms → Flock.Readable.AllOuts p w → G w ms
+
+/-- **A part's links through one copy**: a table with a V* unit (`UnitOuts`) and a copy of it (block `o`, VU `g`, copy
+`u`) whose outputs give the goal on every agreeing list of messages. -/
+theorem partReads_of_copy {decode : Msg → Option Flock.Readable.Read} {L : Layout} {s : ℕ} {x xO : Msg}
+    {G : Flock.Wit → List Msg → Prop} {p : Flock.Readable.Parsed}
+    (hx : Flock.Readable.parseBytes decode xO = some p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none)
+    {t : ℕ} (htl : t < p.sts.size) {K : (ℕ → Bool) → Prop} (hK : Flock.Readable.UnitOuts p.sts[t].c K) {o g u : ℕ}
+    (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv)
+    (h : ∀ (w : Flock.Wit) (ms : List Msg), Agrees L x s w ms → K (Flock.Readable.copyOf p t htl w o g u) → G w ms) :
+    PartReads decode L s x xO G :=
+  ⟨p, hx, ht, hpi, fun w ms hA hO => h w ms hA (hO t htl K hK o g u ho hg hu)⟩
 
 /-- **The goal from a part's links at one V\* statement**: at the deployed parser, wherever the outer relation holds at
-`xO`, the links there give their goal on every agreeing list of messages (`unitOuts_of_check`). -/
+`xO`, the links there give their goal on every agreeing list of messages (`allOuts_of_check`). -/
 theorem goal_of_partReads {DO : Flock.Deploy Coin Col T} {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode) {L : Layout} {s : ℕ} {x xO : Msg}
     {w : Flock.Wit} {G : Flock.Wit → List Msg → Prop} (hck : Flock.check DO.parse xO w = true)
     (h : PartReads decode L s x xO G) {ms : List Msg} (hms : Agrees L x s w ms) : G w ms := by
   rw [hDO] at hck
-  obtain ⟨p, hx, ht, hpi, t, htl, K, hK, o, g, u, ho, hg, hu, hlink⟩ := h
-  exact hlink w ms hms (Flock.Readable.unitOuts_of_check hck hx ht hpi htl hK ho hg hu)
+  obtain ⟨p, hx, ht, hpi, hlink⟩ := h
+  exact hlink w ms hms (Flock.Readable.allOuts_of_check hck hx ht hpi)
 
 /-- **Part `s`'s links toward a goal** (`PartLinksTo` read off the copy's columns): wherever a V* statement `xO` of a
 compiled statement `x` of the shape shows the coins `c` for part `s`, the part's links hold there (`PartReads`), each
@@ -363,9 +386,9 @@ theorem partReadsTo_of_resReads {H : Msg → Msg} {D : Deploy Coin} {decode : Ms
   intro x st hst hf xO c hc
   obtain ⟨p, hx, ht, hpi, t, htl, m, k, cl, j, sh, S, ns, nv, -, hp, hsh, hh, hpart, o, g, u, ho, hg, hu, hlink⟩ :=
     h x st hst hf xO c hc
-  exact ⟨p, hx, ht, hpi, t, htl, _, Or.inr (Or.inl ⟨S, ns, nv,
-    Flock.Readable.resPartAny_of_resPart (Or.inl ⟨m, k, cl, j, sh, hp, hsh, hh, hpart⟩), rfl⟩), o, g, u, ho, hg, hu,
-    fun w ms hms hout => Or.inl (hlink w ms hms hout)⟩
+  exact partReads_of_copy hx ht hpi htl (Or.inr (Or.inl ⟨S, ns, nv,
+    Flock.Readable.resPartAny_of_resPart (Or.inl ⟨m, k, cl, j, sh, hp, hsh, hh, hpart⟩), rfl⟩)) ho hg hu
+    fun w ms hms hout => Or.inl (hlink w ms hms hout)
 
 /-- **Part `s` is linked** (at any shape): its links toward its inner check (`PartReadsTo`), and for its calls either
 none where its coins are shown (`LogsNil`: the residuals' and the RecSparse unit's checks make no SHA-512 call) or its
