@@ -192,7 +192,9 @@ def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec
              rows: int | None = None, nonce: bytes | None = None) -> Registration:
     """The verifier's side of registration: the codec seed, drawn from its own secret `source` and a fresh nonce only
     after the payload root has arrived.  Drawn before it, the prover would register `decode(0)` and hold a store of
-    zeros; drawn after, each encoded block costs k square roots a word to produce, whatever the payload.  None of the
+    zeros; drawn after, each encoded block costs k square roots a word to produce, whatever the payload.  Every block
+    registered here is under the seed's key; a block written after the seed takes its bound key (`codec.binding`,
+    PROTOCOL.md §3), which the reference has no append for yet.  None of the
     receipt kind, `bind`, the block layout and the sketch rows (`receipts.sketch_rows`: the kind's default if None) is
     in the codec seed's context, since the store depends on none of them; the digest binds all four."""
     receipts.store_blocks(blocks)
