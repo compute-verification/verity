@@ -29,6 +29,8 @@
 //   apv_l7qs         the tile GEMM with its words and receipts, f to F; apv_l7qs_i: O to O (for the CPU reference)
 //   apv_plain        the same tiles on P_prob and V with no edit: f = (float(P_prob V) s_q + z_q float(V(0))) s_ch, the
 //                    baseline (P_prob zero at key 0 and past the query, as the quantizer leaves it)
+//   apv_cf, apv_cc   timing only: ts_pv_adopted's cheater at a one-hot P row (T's words and O's fold, no tail stage), f
+//                    not served (cf) or served (cc)
 // Modes:
 //   apv gate DIR S H REP SEED       poisoned buffers, every tile: apv_l7qs_i's receipts against apv_l7qs's, a no-write
 //                                   control; sampled tiles' operands, O, f and receipts to DIR for apv_ref.py
@@ -57,9 +59,9 @@ struct ApArgs {
   uint32_t seed, KR;
 };
 
-// e_l7qs's loop with its tiles from the table: the producer loads a tile's qt + 1 stages of P~ and X^T, then (honest) its
+// e_l7qs's loop with its tiles from the table: the producer loads a tile's qt + 1 stages of P~ and X^T, then (TAIL) its
 // tail stage, P_A's 128 query rows alone
-template <bool PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ? 0 : 4, true> {
+template <bool PLAIN, bool TAIL = !PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ? 0 : 4, true> {
   using E = EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ? 0 : 4, true>;
   using E::s; using E::pt; using E::pkt; using E::ps; using E::pph; using E::maps; using E::issuer;
   using E::stage; using E::full; using E::empty; using E::advance; using E::wait_full; using E::load; using E::load_a;
@@ -68,7 +70,7 @@ template <bool PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ?
   const int4* tab = nullptr;
   int ntiles = 0, s_len = 0;
   int jpt = -1, jA = 0, jB = 0, jKT = 0, jPA = 0;
-  DEV APL(uint8_t* smem, const Maps* m) : E(smem, m, 128, 128, 256, 8, !PLAIN, 1) {}
+  DEV APL(uint8_t* smem, const Maps* m) : E(smem, m, 128, 128, 256, 8, TAIL, 1) {}
   DEV void issue() {
     if (pt >= ntiles) return;
     if (pt != jpt) {
@@ -85,7 +87,7 @@ template <bool PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ?
       mbar_expect_tx(full(ps), E::A_BYTES);
       tma_load(stage(ps), &maps->pa, full(ps), 0, jPA);
     }
-    if (++pkt == jKT + (PLAIN ? 0 : 1)) { pkt = 0; pt += gridDim.x; }
+    if (++pkt == jKT + (TAIL ? 1 : 0)) { pkt = 0; pt += gridDim.x; }
     if (++ps == E::NST) { ps = 0; pph ^= 1; }
   }
   DEV void prologue() {
@@ -208,9 +210,11 @@ template <bool PLAIN> struct APL : EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ?
   }
 };
 
-// OUT 0: f to F; 1: O to O (s32). PLAIN: no edit, no words, f = (float(acc) s_q + z_q float(V(0))) s_ch
+// OUT 0: f to F; 1: O to O (s32). PLAIN: no edit, no words, f = (float(acc) s_q + z_q float(V(0))) s_ch. OUT 2 and 3 time
+// ts_pv_adopted's cheater at a one-hot P row, where O is a copy: T's words, then O folded from T_last with no tail stage
+// (the strip, its triangle and the sums skipped); 2 serves nothing (served free), 3 runs f's epilogue (served checked)
 template <bool PLAIN, int OUT> DEV void apv_body(const ApArgs& a) {
-  using L = APL<PLAIN>;
+  using L = APL<PLAIN, !PLAIN && OUT < 2>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps);
@@ -244,7 +248,8 @@ template <bool PLAIN, int OUT> DEV void apv_body(const ApArgs& a) {
       } else {
         ml.template dstage<true>(0, bl, acc, ch);
       }
-      ml.template atail<OUT>(acc, ch, a.DG + ((size_t)(kvh * a.nJ + bl) * 128 + wn * 32) * 128, g, q);
+      if constexpr (OUT < 2) ml.template atail<OUT>(acc, ch, a.DG + ((size_t)(kvh * a.nJ + bl) * 128 + wn * 32) * 128, g, q);
+      else cabs_all<L>(ch, acc);
     }
     const int r0 = wm * 32 + g, c0 = wn * 32 + 2 * q;
     const size_t orow = (size_t)h * a.s + 128 * qt + r0;
@@ -257,7 +262,7 @@ template <bool PLAIN, int OUT> DEV void apv_body(const ApArgs& a) {
           *reinterpret_cast<int2*>(p) = make_int2(acc[mi][ni][0], acc[mi][ni][1]);
           *reinterpret_cast<int2*>(p + 8 * 128) = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
         }
-    } else {
+    } else if constexpr (OUT != 2) {
       float rs[MI][2], rz[MI][2];
 #pragma unroll
       for (int mi = 0; mi < MI; mi++)
@@ -302,6 +307,8 @@ using ApKern = void (*)(const ApArgs);
 APK(apv_l7qs, false, 0)
 APK(apv_l7qs_i, false, 1)
 APK(apv_plain, true, 0)
+APK(apv_cf, false, 2)
+APK(apv_cc, false, 3)
 
 // ---------------------------------------------------------------- producers
 DEV int u_of(uint32_t byte) { const int u = (int)(byte & 63u) + 1; return byte & 64u ? -u : u; }
@@ -450,13 +457,15 @@ __global__ void apfill(float* sp, float* sz, int nq, float* sv, int nc, uint32_t
     else sv[i - 2 * nq] = __uint_as_float(0x3A800000u | (h & 0x7FFFFFu));
   }
 }
-// P_prob as the quantizer leaves it: 0 at key 0 (its own block) and past the query; V(0) a channel, plain's sink operand
-__global__ void apmask(int8_t* P, size_t rows, int s, const int8_t* Vt, int* V0, int vrows) {
-  for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < rows * (size_t)s; i += (size_t)gridDim.x * blockDim.x) {
-    const int key = (int)(i % s), qq = (int)((i / s) % s);
-    if (key == 0 || key > qq) P[i] = 0;
-    if (i < (size_t)vrows) V0[i] = Vt[i * s];
-  }
+// P_prob as the quantizer leaves it: 0 at key 0 (its own block) and past the query; V(0) a channel, plain's sink operand.
+// A block a (query, head) row, so no index is divided (the SASS gate pins no runtime integer division)
+__global__ void apmask(int8_t* P, int s, const int8_t* Vt, int* V0, int vrows) {
+  const int qq = blockIdx.x;
+  int8_t* row = P + ((size_t)blockIdx.y * s + qq) * s;
+  for (int key = threadIdx.x; key < s; key += blockDim.x)
+    if (key == 0 || key > qq) row[key] = 0;
+  if (qq == 0 && blockIdx.y == 0)
+    for (int i = threadIdx.x; i < vrows; i += blockDim.x) V0[i] = Vt[(size_t)i * s];
 }
 __global__ void apcmp(const uint32_t* a, const uint32_t* b, size_t n, unsigned long long* bad) {
   unsigned long long c = 0;
@@ -518,11 +527,12 @@ static void apsetup(AP& V, int s, int H, int rep, uint32_t seed, bool gate) {
     }
     CK(cudaMemsetAsync(V.Vt, 0x7E, s, V.st)); CK(cudaMemsetAsync(V.Vt + s, 0x80, s, V.st));
   }
-  apmask<<<4096, 256, 0, V.st>>>(V.P, (size_t)H * s, s, V.Vt, V.V0, V.kvh * 128);
+  apmask<<<dim3(s, H), 256, 0, V.st>>>(V.P, s, V.Vt, V.V0, V.kvh * 128);
   apfill<<<256, 256, 0, V.st>>>(V.sp, V.sz, H * s, V.sv, V.kvh * 128, mix32(seed ^ 0x3333u));
   V.maps = upload_maps(Maps{tmap(V.Pt, s, H * s, 128), tmap(V.Xt, s, V.kvh * 128, 128), tmap(V.PA, 128, s, 128), tmap(V.PA, 128, s, 128)});
   V.pmaps = upload_maps(Maps{tmap(V.P, s, H * s, 128), tmap(V.Vt, s, V.kvh * 128, 128), tmap(V.PA, 128, s, 128), tmap(V.PA, 128, s, 128)});
-  for (ApKern k : {apv_l7qs, apv_l7qs_i, apv_plain}) CK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
+  for (ApKern k : {apv_l7qs, apv_l7qs_i, apv_plain, apv_cf, apv_cc})
+    CK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
   CK(cudaStreamSynchronize(V.st));
   CK(cudaGetLastError());
 }
@@ -544,11 +554,13 @@ static void aprun(AP& V, ApKern k, uint32_t* R) {
   ApArgs a{plain ? V.pmaps : V.maps, V.tab, V.ntiles, V.DG, V.Sq, plain ? V.V0 : V.X0, V.sp, V.sz, V.sv, V.F, V.O, R, V.s, V.nJ, V.seed, 0};
   k<<<V.grid, MLW::NT, CSMEM, V.st>>>(a);
 }
-// an arm: apv (apv_l7qs), apv_i, plain (apv_plain, eps_profile.py's baseline), uedit, pedit, vedit, vsum, or apvedited
-// (the four producers and apv under one key)
+// an arm: apv (apv_l7qs), apv_i, plain (apv_plain, eps_profile.py's baseline), cf and cc (the one-hot cheater, served free
+// and served checked), uedit, pedit, vedit, vsum, or apvedited (the four producers and apv under one key)
 static std::function<void(AP&)> aparm(const std::string& a) {
   if (a == "apv") return [](AP& V) { aprun(V, apv_l7qs, V.R); };
   if (a == "apv_i") return [](AP& V) { aprun(V, apv_l7qs_i, V.R); };
+  if (a == "cf") return [](AP& V) { aprun(V, apv_cf, V.R); };
+  if (a == "cc") return [](AP& V) { aprun(V, apv_cc, V.R); };
   if (a == "plain" || a == "apv_plain") return [](AP& V) { aprun(V, apv_plain, V.R); };
   if (a == "uedit") return [](AP& V) { ued(V, sigma(V.seed, V.inst++)); };
   if (a == "pedit") return [](AP& V) { ped(V); };
@@ -641,7 +653,7 @@ static int apgate(const std::string& dir, int s, int H, int rep, uint32_t seed) 
 
 static int apbench(int reps, int s, int H, int rep) {
   Nv nv;
-  const std::vector<std::string> names = split(getenv("APV_ARMS"), "plain,apv,uedit,pedit,vedit,vsum,apvedited");
+  const std::vector<std::string> names = split(getenv("APV_ARMS"), "plain,apv,cf,cc,uedit,pedit,vedit,vsum,apvedited");
   AP V;
   apsetup(V, s, H, rep, 0x5EED0000u + s + H, false);
   producers(V, sigma(V.seed, 0xFFFFFFFFu));
