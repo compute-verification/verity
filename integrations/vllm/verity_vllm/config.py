@@ -412,7 +412,8 @@ class MatchConfig:
     compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
                                          help="seconds per comparator (default scales with B and the envelope)")
     fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for the per-rank fold Match (default 7200)")
+                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 7200); "
+                                           "tp-fold-match as a whole gets four legs' worth, the cross-rank leg included")
     fold_profile: str | None = option("--fold-profile", env="FOLD_PROFILE", env_empty=True, default=None,
                                       help="TP: rank profile module (default derived_<ROLE>_tp<W>; empty = collective-level Match only)")
 
