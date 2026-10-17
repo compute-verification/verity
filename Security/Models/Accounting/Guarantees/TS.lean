@@ -11,16 +11,15 @@ note:20261017T0321Z-draft-eps1-tensor), each `def G : Prop`, proved (or a `sorry
 * `DecompositionD`: Theorem D(a), the master inequality from (Π), (RD) and (Lk).
 * `DIdeal`, `DIdealFloor`: Theorem D-ideal, (2.7) and (2.7♭), in 𝒫_full from (I1)–(I8).
 * `CompilerC`: Lemma C, the compiler, in 𝒫_samp: the same bound with `ε_sample` added.
+* `ProofsSoundOfPinned`: (I8) `ProofsSound` from binding at `δ_bind`, proof soundness at `δ_ZK`, the Definitions'
+  pinning and E1(c) (`RightFixed`); `BindingOfFork`: binding's failure squared is at most its fork form's, two runs
+  off one commitment opening it differently, so `δ_bind = √δ_fork`.
 * `FloorCreditD3`: Corollary D3, the credit at the floor, with every term `≥ 0` and `T(H) = γ_♭·T_cred`.
 * `BindingFacetD1`, `VectorThresholdD1`: Corollary D1, one binding facet, and the vector route's threshold
   `q ≥ 32(α + β·φ_del)/(β·ω)`.
 * `RoutesOffD2`: Corollary D2, routes off the binding facet.
 * `TensorSlotCount`, `TensorSlotTight`: T1, the tensor slot count, and its tightness criterion.
 * `OutputCount`: Lemma 2's count, owned committed positions at most `Σ_k ω_k n_k`.
-* `ProofsSoundOfPinned`: (I8) `ProofsSound` from binding at `δ_bind`, proof soundness at `δ_ZK`, the Definitions'
-  pinning and E1(c) (`RightFixed`).
-* `BindingOfFork`: binding's failure squared is at most its fork form's, two runs off one commitment opening it
-  differently, so `δ_bind = √δ_fork`.
 
 Probability statements put acceptance in the event: the probability that the window is accepted and the bound fails is
 at most `δ`.

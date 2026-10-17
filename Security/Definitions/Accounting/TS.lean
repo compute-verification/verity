@@ -5,6 +5,5 @@ import Definitions.Accounting.TS.Slots
 import Definitions.Accounting.TS.ProofLayer
 
 /-! The tensor–scalar model (EPS1, note:20261017T0324Z-draft-eps1-spec): the machine, its facets and bound, routes and
-labelled programs with the terms of the decomposition, the full-checking and sampled plays, a window's proofs (what
-(I8) reads of the proof service), and the counting objects
+labelled programs with the terms of the decomposition, the full-checking and sampled plays, and the counting objects
 of the tensor slot count, the output count and LIN-STEER. -/
