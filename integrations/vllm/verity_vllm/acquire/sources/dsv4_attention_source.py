@@ -18,8 +18,17 @@ module of the committer's acquired classes.  On every attention layer this sourc
   and the rows FlashMLA wrote into `out` (`o_padded`) over the local heads, split at the decode rows `flash_mla_with_kvcache` attended;
 
 and, in the modules that call them, the globals `fused_q_kv_rmsnorm` (qr and kv), `flash_mla_with_kvcache` (its SWA and extra
-indices and lengths over the decode rows), `fused_inv_rope_fp8_quant` (o_fp8 and o_scale) and `fp8_einsum` (its output `z`, the
-wo_a einsum, after it returns).
+indices and lengths over the decode rows), `flash_mla_sparse_fwd` (the rows of its workspace `kv` the prefill's tokens read,
+`gathered_rows`), `fused_inv_rope_fp8_quant` (o_fp8 and o_scale) and `fp8_einsum` (its output `z`, the wo_a einsum, after it
+returns).
+
+Each value is committed under its tap's name, its identity in the manifest of record (`query.manifest.bind`).  A cache row is
+committed as its parts: an fp8_ds_mla row's NoPE bytes, RoPE dims and scale bytes (`MLA_PARTS`, a tap each), which are the insert's
+ports 1, 3 and 2 at the SWA slots and the compress kernel's members `compress.0`, `.1` and `.2` at the compressed slots, and a
+compressor's state row [kv | score + ape] as its score half, `Dsv4CompressorScore_v1`'s row (the kv half is kv_score's).  A Call of
+the attention's body is committed under a label its Definition's port declares (`PORTS`, `ports_of`), and the source claims those
+`call_boundaries` identities (`claims`).  The gathered rows are the Program's `FlashMlaGatherRow_v1` rows of one prefill chunk, so a
+layer that runs `flash_mla_sparse_fwd` twice at a step fails the step.
 
 Each wrapped call runs on the step's current stream, after `execute_in_parallel` joined the aux streams the indexer and compressors
 ran on, and the committer copies on that stream.  A cache is read in its layout: the fp8_ds_mla SWA and compressed caches
@@ -51,19 +60,21 @@ from typing import Any, Mapping
 
 import torch
 
+from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.attention_source import pitched_2d
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.engine.hooks import Hooks
+from verity_vllm.query.manifest.bind import Port
 
 BINDER = "dsv4_attention"
 FORWARD, PROJECTIONS, INSERT, ATTEND = "forward", "_run_parallel_input_projections", "_fused_qnorm_rope_kv_insert", "_sparse_indexer_and_attn"
-NORM, DECODE, INV_ROPE, EINSUM, O_PROJ = ("fused_q_kv_rmsnorm", "flash_mla_with_kvcache", "fused_inv_rope_fp8_quant", "fp8_einsum",
-                                          "deep_gemm_fp8_o_proj")
+NORM, DECODE, SPARSE, INV_ROPE, EINSUM, O_PROJ = ("fused_q_kv_rmsnorm", "flash_mla_with_kvcache", "flash_mla_sparse_fwd",
+                                                  "fused_inv_rope_fp8_quant", "fp8_einsum", "deep_gemm_fp8_o_proj")
 #: each global -> the method of the attention class whose module calls it (INV_ROPE and EINSUM: the module of O_PROJ, a global there)
-CALLER = {NORM: "_split_qkv_and_norm", DECODE: "_forward_decode", INV_ROPE: "_o_proj", EINSUM: "_o_proj"}
+CALLER = {NORM: "_split_qkv_and_norm", DECODE: "_forward_decode", SPARSE: "_forward_prefill", INV_ROPE: "_o_proj", EINSUM: "_o_proj"}
 #: each global -> the roles it binds
 GLOBALS = {NORM: ("attn.qr", "attn.kv"), DECODE: ("attn.swa_indices", "attn.swa_lens", "attn.extra_indices", "attn.extra_lens"),
-           INV_ROPE: ("attn.o_fp8", "attn.o_scale"), EINSUM: ("attn.o_einsum",)}
+           SPARSE: ("attn.gather",), INV_ROPE: ("attn.o_fp8", "attn.o_scale"), EINSUM: ("attn.o_einsum",)}
 #: flash_mla_with_kvcache's argument for each role it binds
 DECODE_ARGUMENTS = {"attn.swa_indices": "indices", "attn.swa_lens": "topk_length", "attn.extra_indices": "extra_indices_in_kvcache",
                     "attn.extra_lens": "extra_topk_length"}
@@ -74,12 +85,32 @@ WRITER = {"attn.compressed_rows": "compressor.state", "indexer.k_cache": "indexe
 #: a byte cache -> the scale bytes each slot holds after its data bytes
 SCALE_BYTES = {"attn.swa_rows": 8, "attn.compressed_rows": 8, "indexer.k_cache": 4}
 CACHES = ("attn.swa_rows", *STATE, *COMPRESSED)
+#: the fp8_ds_mla caches, whose row is tapped as its parts in byte order (`<cache>.<part>`): e4m3 NoPE, bf16 RoPE, scale bytes
+MLA, MLA_PARTS = ("attn.swa_rows", "attn.compressed_rows"), ("nope", "rope", "scale")
 TOPK_ROLES = ("indexer.topk_short", "indexer.topk")
 POSITIONS = "attn.positions"
-ROLES = frozenset({*(r for rs in GLOBALS.values() for r in rs), *CACHES, *TOPK_ROLES, POSITIONS, "attn.q", "compressor.kv_score",
+ROLES = frozenset({*(r for rs in GLOBALS.values() for r in rs), *(c for c in CACHES if c not in MLA),
+                   *(f"{c}.{p}" for c in MLA for p in MLA_PARTS), *TOPK_ROLES, POSITIONS, "attn.q", "compressor.kv_score",
                    "indexer.compressor.kv_score", "indexer.q_fp8", "indexer.weights", "attn.out.decode", "attn.out.prefill"})
 #: FlashMLA's C128A decode index width is a multiple of this (`_C128A_TOPK_ALIGNMENT`)
 C128A_ALIGN = 128
+INSERT_DEF, DECODE_DEF, PREFILL_DEF, INV_ROPE_DEF = ("Dsv4QNormRopeKvInsert_v1", "FlashMlaDecode_v1", "FlashMlaPrefill_v1",
+                                                     "Dsv4InvRopeQuantHead_v1")
+#: the `call_boundaries` identities this source binds (`claims`): Calls of Definitions only DeepSeek-V4's attention body makes
+CLAIMED = frozenset({INSERT_DEF, DECODE_DEF, PREFILL_DEF, INV_ROPE_DEF})
+
+
+def _call(definitions: tuple[str, ...], port: str) -> Port:
+    return Port(frozenset(definitions), port, call_boundary=True)
+
+
+#: `bind.Binder`'s declared labels: each role -> the port of the Call of the attention's body whose value it commits (`ports_of`)
+PORTS = {"attn.q": _call((INSERT_DEF,), "0"), "attn.swa_rows.nope": _call((INSERT_DEF,), "1"),
+         "attn.swa_rows.scale": _call((INSERT_DEF,), "2"), "attn.swa_rows.rope": _call((INSERT_DEF,), "3"),
+         "compressor.kv_score": _call(("CublasSplitKGemmF32Out_v1", "GemmF32Out_v1"), "out"),
+         "attn.out.decode": _call((DECODE_DEF,), "out"), "attn.out.prefill": _call((PREFILL_DEF,), "out"),
+         "attn.o_fp8": _call((INV_ROPE_DEF,), "0"), "attn.o_scale": _call((INV_ROPE_DEF,), "1"),
+         "attn.o_einsum": _call(("ScaledMmFp8BlockGrouped_v1",), "out")}
 
 
 def binds(cmap: Mapping[str, Any]) -> bool:
@@ -89,6 +120,41 @@ def binds(cmap: Mapping[str, Any]) -> bool:
 def role_of(tap: Mapping[str, Any]) -> str:
     """What a tap is at its layer: its id without the layer set it is split by (`.csa`, `.hca`)."""
     return tap["id"].removesuffix(".csa").removesuffix(".hca")
+
+
+def cache_of(role: str) -> str:
+    """The cache a role's tap reads: an fp8_ds_mla row part's cache, else the role itself."""
+    cache, _, part = role.rpartition(".")
+    return cache if cache in MLA and part in MLA_PARTS else role
+
+
+def ports_of(cmap: Mapping[str, Any]) -> dict[str, Port]:
+    """`bind.Binder`'s declared labels for the taps of `cmap` this source binds: each tap's label (its commit name's last part) -> its
+    role's port (`PORTS`)."""
+    return {t["commit"]["name"].rsplit("/", 1)[1]: PORTS[role_of(t)] for t in cmap["taps"]
+            if (t.get("commit") or {}).get("binder") == BINDER and role_of(t) in PORTS}
+
+
+def claims(r: Mapping[str, Any]) -> str | None:
+    """`call_boundary_source.CLAIMS`: a call boundary of the attention's body is this source's."""
+    return BINDER if r.get("family") == CB.FAMILY and str(r.get("spec") or "").split("{", 1)[0] in CLAIMED else None
+
+
+if claims not in CB.CLAIMS:
+    CB.CLAIMS.append(claims)
+
+
+def gathered_rows(kv: Any, indices: Any, lengths: Any = None) -> Any:
+    """The rows of FlashMLA's sparse prefill workspace `kv` ([N, 1, D]) its tokens read, each once, in first-read order: the entries
+    of `indices` ([T, 1, K]) that are not -1 and lie below their token's `lengths` (when given), token by token."""
+    idx = indices.reshape(indices.shape[0], -1).long()
+    valid = idx >= 0
+    if lengths is not None:
+        valid &= torch.arange(idx.shape[1], device=idx.device)[None] < lengths.reshape(-1, 1)
+    read = idx[valid]
+    rows, inverse = torch.unique(read, return_inverse=True)
+    first = torch.full_like(rows, read.numel()).scatter_reduce_(0, inverse, torch.arange(read.numel(), device=read.device), "amin")
+    return kv.reshape(-1, kv.shape[-1])[rows[first.argsort()]]
 
 
 def split_rows(cache: Any, slots: Any, width: int, scale_bytes: int, block_size: int | None = None) -> Any:
@@ -144,9 +210,8 @@ class Dsv4AttentionSource:
         #: (role, layer) -> tap; role -> layer -> the committed name (the target_only ones on the target only)
         self.taps: dict[tuple[str, int], Mapping[str, Any]] = {}
         self.names: dict[str, dict[int, str]] = {}
-        #: (cache role, layer) -> the module holding the cache (its `kv_cache` read at the call, its `prefix` the metadata key)
+        #: (cache, layer) -> the module holding the cache (its `kv_cache` read at the call, its `prefix` the metadata key)
         self.owners: dict[tuple[str, int], Any] = {}
-        self.width: dict[tuple[str, int], int] = {}
         self.layers: dict[int, Any] = {}
         for t in taps:
             role = role_of(t)
@@ -154,15 +219,32 @@ class Dsv4AttentionSource:
                 self.taps[(role, i)] = t
                 if self.on_target or not t.get("target_only"):
                     self.names.setdefault(role, {})[i] = CM.at_layer(t["commit"]["name"], i)
-                if role in CACHES:
+                if cache_of(role) in CACHES:
                     target = CM.at_layer(t["site"]["target"], i)
                     owner = module(target.removesuffix(".kv_cache"))
                     if not target.endswith(".kv_cache") or not isinstance(getattr(owner, "prefix", None), str):
                         raise ValueError(f"capture map {cid}: {t['id']}'s site {target} is no cache module's kv_cache")
-                    self.owners[(role, i)] = owner
-                    self.width[(role, i)] = int(CM.dim(t["shape"][-1], self.env, free))
+                    self.owners[(cache_of(role), i)] = owner
                 if role == "attn.q":
                     self.layers[i] = module(CM.at_layer(t["module"], i))
+        #: (cache, layer) -> its row's width (bytes, or a state row's f32 words), and each of its taps as (role, the row's columns
+        #: [lo, hi) it commits, viewed as the tap's dtype): an fp8_ds_mla row's parts in byte order, a state row's score half
+        self.width: dict[tuple[str, int], int] = {}
+        self.cuts: dict[tuple[str, int], list[tuple[str, int, int, Any]]] = {}
+        for cache, i in self.owners:
+            roles = [f"{cache}.{p}" for p in MLA_PARTS] if cache in MLA else [cache]
+            if any((r, i) not in self.taps for r in roles):
+                raise ValueError(f"capture map {cid}: layer {i}'s {cache} has no tap for each of {roles}")
+            cuts, lo = [], 0
+            for r in roles:
+                t = self.taps[(r, i)]
+                dtype = getattr(torch, t["dtype"])
+                n = int(CM.dim(t["shape"][-1], self.env, free)) * (dtype.itemsize if cache in MLA else 1)
+                cuts.append((r, lo, lo + n, dtype))
+                lo += n
+            if cache in STATE:
+                cuts, lo = [(r, a + lo, b + lo, d) for r, a, b, d in cuts], 2 * lo
+            self.cuts[(cache, i)], self.width[(cache, i)] = cuts, lo
         rc = self.cmap.get("row_counts")
         if rc and [t["id"] for t in taps if role_of(t) == POSITIONS] != [rc.get("positions")]:
             raise ValueError(f"capture map {cid}: its row counts read {rc.get('positions')!r}, not the {POSITIONS} tap this source binds")
@@ -176,7 +258,7 @@ class Dsv4AttentionSource:
             if comp is None or getattr(comp, "k_cache_prefix", None) != owner.prefix:
                 raise ValueError(f"capture map {cid}: layer {i}'s {role} has no compressor writing it beside {WRITER[role]}")
             self.ratio[(role, i)] = int(comp.compress_ratio)
-            count = CM.row_count_of(self.cmap, self.taps[(role, i)])
+            count = CM.row_count_of(self.cmap, self.taps[(self.cuts[(role, i)][0][0], i)])
             if rc and (count is None or self.ratio[(role, i)] != int(CM.evaluate(rc["ratios"][count], self.env))):
                 raise ValueError(f"capture map {cid}: layer {i}'s {role} compressor has ratio {self.ratio[(role, i)]}, not the ratio "
                                  f"of its row count {count}")
@@ -204,6 +286,7 @@ class Dsv4AttentionSource:
         self._decode_rows: dict[int, int] = {}
         self._actives: dict[tuple[int, int, int, int], tuple[tuple[Any, ...], Any]] = {}
         self._positions_at: tuple[int, tuple[int, ...]] | None = None
+        self._gathered: set[int] = set()
         #: engine step -> the names a compressor wrote no row for on it
         self.empty: dict[int, list[str]] = {}
         #: engine step -> the positions bound on it (`POSITIONS`), as read when bound
@@ -227,7 +310,7 @@ class Dsv4AttentionSource:
 
     def on_step_begin(self) -> None:
         self._layer = None
-        self._pending, self._decode_rows, self._actives, self._positions_at = {}, {}, {}, None
+        self._pending, self._decode_rows, self._actives, self._positions_at, self._gathered = {}, {}, {}, None, set()
 
     def begin_run(self) -> None:
         self.empty, self.positions = {}, {}
@@ -237,22 +320,30 @@ class Dsv4AttentionSource:
     def declaration_classes(self) -> list[dict]:
         return []
 
+    def ports(self) -> dict[str, Port]:
+        return ports_of(self.cmap)
+
     def extra_step_bytes(self, envelope: Mapping[str, Any], model: Any) -> dict[str, int]:
         """Every tap this source binds, as bytes per token: a bound, since each leading dimension (M, MD, MP, NC4, NC128) is at most
-        the step's tokens; the HCA decode index width NX is FlashMLA's at the envelope's max_model_len."""
+        the step's tokens; the HCA decode index width NX is FlashMLA's at the envelope's max_model_len.  A prefill chunk's gathered
+        rows (GR) are at most its tokens' windows, plus per sequence the SW - 1 rows before them and every compressed row at
+        max_model_len."""
         max_model_len = int(envelope.get("max_model_len")
                             or max(1, int(envelope.get("max_prompt") or 1)) + max(1, int(envelope.get("max_new") or 1)))
         env = {**self.env, "NX": _cdiv(_cdiv(max_model_len, int(self.env["HCA_R"])), C128A_ALIGN) * C128A_ALIGN}
-        per_token = n = 0
+        per_token = per_seq = n = 0
         for role, layers in self.names.items():
             for i in layers:
                 t = self.taps[(role, i)]
                 words = 1
                 for d in t["shape"][1:]:
                     words *= d if isinstance(d, int) else int(CM.evaluate(d.removeprefix("="), env))
-                per_token += words * torch.empty((), dtype=getattr(torch, t["dtype"])).element_size()
+                row = words * torch.empty((), dtype=getattr(torch, t["dtype"])).element_size()
+                per_token += row
+                if t["shape"][0] == "GR":
+                    per_seq += row * (int(self.env["SW"]) - 1 + _cdiv(max_model_len, self.ratio[("attn.compressed_rows", i)]))
                 n += 1
-        return {"per_token_bytes": per_token, "per_seq_bytes": 0, "tensors_per_step": n}
+        return {"per_token_bytes": per_token, "per_seq_bytes": per_seq, "tensors_per_step": n}
 
     # -- binding ----------------------------------------------------------------------------------------------------------------
     def _bind(self, role: str, layer: int, t: Any, job: Any) -> bool:
@@ -271,11 +362,13 @@ class Dsv4AttentionSource:
         self.stats["by_tap"][role] = self.stats["by_tap"].get(role, 0) + 1
         return True
 
-    def _bind_rows(self, role: str, layer: int, rows: Any, job: Any) -> None:
+    def _bind_rows(self, cache: str, layer: int, rows: Any, job: Any) -> None:
+        """A cache's rows as its taps (`cuts`)."""
         if rows is None:
             self.stats["layout_refused"] += 1
             return
-        self._bind(role, layer, rows, job)
+        for role, lo, hi, dtype in self.cuts[(cache, layer)]:
+            self._bind(role, layer, rows[:, lo:hi].view(dtype), job)
 
     def _fail(self, msg: str) -> None:
         self.c.errors.append(msg[:200])
@@ -314,25 +407,25 @@ class Dsv4AttentionSource:
 
     def _caches(self, layer: int, md: Mapping[str, Any], positions: Any, rows: int, job: Any) -> None:
         """The state rows and compressed rows `_prepare_and_attn` wrote for `layer` this step (metadata `md`)."""
-        for role in STATE:
-            owner = self.owners.get((role, layer))
-            if owner is None or layer not in self.names.get(role, {}):
+        for cache in STATE:
+            owner = self.owners.get((cache, layer))
+            if owner is None:
                 continue
             smd = md.get(owner.prefix)
-            got = None if smd is None else state_rows(owner.kv_cache, smd.slot_mapping[:rows].long(), self.width[(role, layer)],
+            got = None if smd is None else state_rows(owner.kv_cache, smd.slot_mapping[:rows].long(), self.width[(cache, layer)],
                                                       smd.block_size)
-            self._bind_rows(role, layer, got, job)
-        for role in COMPRESSED:
-            owner = self.owners.get((role, layer))
-            if owner is None or layer not in self.names.get(role, {}):
+            self._bind_rows(cache, layer, got, job)
+        for cache in COMPRESSED:
+            owner = self.owners.get((cache, layer))
+            if owner is None:
                 continue
-            kmd, smd = md.get(owner.prefix), md.get(self.owners[(WRITER[role], layer)].prefix)
+            kmd, smd = md.get(owner.prefix), md.get(self.owners[(WRITER[cache], layer)].prefix)
             got = None
             if kmd is not None and smd is not None:
                 kv_slots = kmd.slot_mapping
-                idx = self._active(smd.slot_mapping, kv_slots, positions, self.ratio[(role, layer)])
-                got = split_rows(owner.kv_cache, kv_slots.long()[idx], self.width[(role, layer)], SCALE_BYTES[role])
-            self._bind_rows(role, layer, got, job)
+                idx = self._active(smd.slot_mapping, kv_slots, positions, self.ratio[(cache, layer)])
+                got = split_rows(owner.kv_cache, kv_slots.long()[idx], self.width[(cache, layer)], SCALE_BYTES[cache])
+            self._bind_rows(cache, layer, got, job)
 
     def _forward(self, layer: int) -> Any:
         me = self
@@ -379,7 +472,7 @@ class Dsv4AttentionSource:
                     return out
                 me._pending[layer] = md
                 owner = me.owners.get(("attn.swa_rows", layer))
-                if owner is not None and layer in me.names.get("attn.swa_rows", {}):
+                if owner is not None:
                     smd = md.get(owner.prefix)
                     got = None if smd is None else split_rows(owner.kv_cache, smd.slot_mapping[: int(out.shape[0])].long(),
                                                               me.width[("attn.swa_rows", layer)], SCALE_BYTES["attn.swa_rows"],
@@ -469,6 +562,13 @@ class Dsv4AttentionSource:
                 if x is not None:
                     x = x[:rows].reshape(rows, -1) if role.endswith("indices") else x[:rows]
                 self._bind(role, layer, x, job)
+        elif f == SPARSE:
+            if layer in self._gathered:
+                self._fail(f"dsv4_attention: layer {layer} ran {SPARSE} on two prefill chunks at one step; the Program gathers one")
+                return
+            self._gathered.add(layer)
+            a = sig.bind(*args, **kwargs).arguments
+            self._bind("attn.gather", layer, gathered_rows(a["kv"], a["indices"], a.get("topk_length")), job)
         elif f == EINSUM:
             z = args[3] if len(args) > 3 else None
             if not isinstance(z, torch.Tensor):
@@ -477,4 +577,5 @@ class Dsv4AttentionSource:
             self._bind("attn.o_einsum", layer, z, job)
 
 
-__all__ = ["Dsv4AttentionSource", "BINDER", "POSITIONS", "ROLES", "binds", "role_of", "split_rows", "state_rows"]
+__all__ = ["Dsv4AttentionSource", "BINDER", "CLAIMED", "MLA_PARTS", "PORTS", "POSITIONS", "ROLES", "binds", "cache_of", "claims",
+           "gathered_rows", "ports_of", "role_of", "split_rows", "state_rows"]

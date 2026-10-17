@@ -223,7 +223,8 @@
   "CTX": "the indexer logits' key width: compressed keys of the prefill chunk, or of max_model_len on a decode step",
   "NC4": "compressed rows a CSA layer's compressor writes this step: tokens whose position + 1 is a multiple of CSA_R (row_counts)",
   "NC128": "compressed rows an HCA layer's compressor writes this step: tokens whose position + 1 is a multiple of HCA_R (row_counts)",
-  "NX": "the HCA decode index width: on sm_90 the step's active_topk_width, min(max(next_power_of_2(max_seq_len // HCA_R), 128), c128a_max_compressed) (sparse_mla.py:246-252, 328-332), c128a_max_compressed = cdiv(cdiv(max_model_len, HCA_R), 128) * 128"
+  "NX": "the HCA decode index width: on sm_90 the step's active_topk_width, min(max(next_power_of_2(max_seq_len // HCA_R), 128), c128a_max_compressed) (sparse_mla.py:246-252, 328-332), c128a_max_compressed = cdiv(cdiv(max_model_len, HCA_R), 128) * 128",
+  "GR": "the rows a prefill chunk's FlashMLA reads, each once: its tokens' compressed rows and windows (at most MP + SW - 1 + the compressed rows a token reads)"
  },
  "row_counts": {
   "positions": "attn.positions",
@@ -1599,7 +1600,7 @@
     }
    ],
    "commit": {
-    "name": "model.layers.{i}.attn/qr",
+    "name": "model.layers.{i}.attn/q",
     "binder": "dsv4_attention"
    }
   },
@@ -1684,7 +1685,7 @@
     "kind": "function_return",
     "target": "vllm/models/deepseek_v4/attention.py:DeepseekV4Attention._fused_qnorm_rope_kv_insert",
     "output": 0,
-    "detail": "the normed, roped query zero-padded to NHP heads"
+    "detail": "the normed, roped query zero-padded to NHP heads: Dsv4QNormRopeKvInsert_v1's port 0"
    },
    "dtype": "bfloat16",
    "shape": [
@@ -1705,12 +1706,12 @@
     }
    ],
    "commit": {
-    "name": "model.layers.{i}.attn/q",
+    "name": "model.layers.{i}.attn/kv_insert.q",
     "binder": "dsv4_attention"
    }
   },
   {
-   "id": "attn.swa_rows",
+   "id": "attn.swa_rows.nope",
    "op": "layers.{i}.attn.swa_cache_layer",
    "port": 0,
    "layers": "all",
@@ -1718,12 +1719,12 @@
    "site": {
     "kind": "cache_rows",
     "target": "model.layers.{i}.attn.swa_cache_layer.kv_cache",
-    "detail": "the 584-byte rows at the step's SWA slot mapping after the insert: 448 e4m3 NoPE bytes, 64 bf16 RoPE dims, 7 ue8m0 scales and a pad byte (the block's data and scale bytes regrouped per row)"
+    "detail": "the DN e4m3 NoPE bytes of each 584-byte row at the step's SWA slot mapping after the insert (the block's data and scale bytes regrouped per row): Dsv4QNormRopeKvInsert_v1's port 1"
    },
    "dtype": "uint8",
    "shape": [
     "M",
-    "SWAB"
+    "DN"
    ],
    "program": "dsv4-qnorm-rope-kv-insert",
    "tp": "replicated",
@@ -1739,7 +1740,75 @@
    ],
    "note": "what the next SW tokens' attention reads; kv itself is not read again",
    "commit": {
-    "name": "model.layers.{i}.attn.swa_cache_layer/rows",
+    "name": "model.layers.{i}.attn/kv_insert.nope",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.swa_rows.rope",
+   "op": "layers.{i}.attn.swa_cache_layer",
+   "port": 1,
+   "layers": "all",
+   "module": "model.layers.{i}.attn.swa_cache_layer",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.swa_cache_layer.kv_cache",
+    "detail": "the DR bf16 RoPE dims (its bytes DN .. DN + 2 * DR) of each 584-byte row at the step's SWA slot mapping after the insert (the block's data and scale bytes regrouped per row): Dsv4QNormRopeKvInsert_v1's port 3"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "M",
+    "DR"
+   ],
+   "program": "dsv4-qnorm-rope-kv-insert",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "note": "what the next SW tokens' attention reads; kv itself is not read again",
+   "commit": {
+    "name": "model.layers.{i}.attn/kv_insert.rope",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.swa_rows.scale",
+   "op": "layers.{i}.attn.swa_cache_layer",
+   "port": 2,
+   "layers": "all",
+   "module": "model.layers.{i}.attn.swa_cache_layer",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.swa_cache_layer.kv_cache",
+    "detail": "the DN / 64 ue8m0 scales and the pad byte (its scale bytes) of each 584-byte row at the step's SWA slot mapping after the insert (the block's data and scale bytes regrouped per row): Dsv4QNormRopeKvInsert_v1's port 2"
+   },
+   "dtype": "uint8",
+   "shape": [
+    "M",
+    "=DN // 64 + 1"
+   ],
+   "program": "dsv4-qnorm-rope-kv-insert",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "note": "what the next SW tokens' attention reads; kv itself is not read again",
+   "commit": {
+    "name": "model.layers.{i}.attn/kv_insert.scale",
     "binder": "dsv4_attention"
    }
   },
@@ -1773,7 +1842,7 @@
     }
    ],
    "commit": {
-    "name": "model.layers.{i}.attn.compressor/kv_score",
+    "name": "model.layers.{i}.attn/compressor.kv_score",
     "binder": "dsv4_attention"
    }
   },
@@ -1786,12 +1855,12 @@
    "site": {
     "kind": "cache_rows",
     "target": "model.layers.{i}.attn.compressor.state_cache.kv_cache",
-    "detail": "the f32 rows at the step's state slot mapping after save_partial_states: [kv | score + ape[pos % ratio]]"
+    "detail": "the score half of the f32 rows at the step's state slot mapping after save_partial_states, which writes [kv | score + ape[pos % ratio]] (the kv half is kv_score's): Dsv4CompressorScore_v1's row"
    },
    "dtype": "float32",
    "shape": [
     "M",
-    "=4 * HD"
+    "=2 * HD"
    ],
    "program": "dsv4-compressor-state",
    "tp": "replicated",
@@ -1807,12 +1876,12 @@
    ],
    "note": "the state the next boundary's compression pools: a later step reads rows this one wrote",
    "commit": {
-    "name": "model.layers.{i}.attn.compressor.state_cache/rows",
+    "name": "model.layers.{i}.attn.compressor/out",
     "binder": "dsv4_attention"
    }
   },
   {
-   "id": "attn.compressed_rows.csa",
+   "id": "attn.compressed_rows.nope.csa",
    "op": "layers.{i}.attn.compressed_cache",
    "port": 0,
    "layers": "csa",
@@ -1820,12 +1889,12 @@
    "site": {
     "kind": "cache_rows",
     "target": "model.layers.{i}.attn.kv_cache",
-    "detail": "the 584-byte fp8_ds_mla rows compress_norm_rope_store_cutedsl wrote this step, at the compressed slot mapping"
+    "detail": "the DN e4m3 NoPE bytes of each 584-byte fp8_ds_mla row compress_norm_rope_store_cutedsl wrote this step, at the compressed slot mapping: the compress Definition's port 0"
    },
    "dtype": "uint8",
    "shape": [
     "NC4",
-    "SWAB"
+    "DN"
    ],
    "program": "dsv4-compress-512",
    "tp": "replicated",
@@ -1845,7 +1914,83 @@
    ],
    "note": "one row per CSA_R tokens; the decode attention reads them at the indexer's top-k",
    "commit": {
-    "name": "model.layers.{i}.attn/compressed_rows",
+    "name": "model.layers.{i}.attn/compress.0",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.compressed_rows.rope.csa",
+   "op": "layers.{i}.attn.compressed_cache",
+   "port": 1,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.kv_cache",
+    "detail": "the DR bf16 RoPE dims (its bytes DN .. DN + 2 * DR) of each 584-byte fp8_ds_mla row compress_norm_rope_store_cutedsl wrote this step, at the compressed slot mapping: the compress Definition's port 1"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "NC4",
+    "DR"
+   ],
+   "program": "dsv4-compress-512",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.compressor.norm.weight",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "note": "one row per CSA_R tokens; the decode attention reads them at the indexer's top-k",
+   "commit": {
+    "name": "model.layers.{i}.attn/compress.1",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.compressed_rows.scale.csa",
+   "op": "layers.{i}.attn.compressed_cache",
+   "port": 2,
+   "layers": "csa",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.kv_cache",
+    "detail": "the DN / 64 ue8m0 scales and the pad byte (its scale bytes) of each 584-byte fp8_ds_mla row compress_norm_rope_store_cutedsl wrote this step, at the compressed slot mapping: the compress Definition's port 2"
+   },
+   "dtype": "uint8",
+   "shape": [
+    "NC4",
+    "=DN // 64 + 1"
+   ],
+   "program": "dsv4-compress-512",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.compressor.norm.weight",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "note": "one row per CSA_R tokens; the decode attention reads them at the indexer's top-k",
+   "commit": {
+    "name": "model.layers.{i}.attn/compress.2",
     "binder": "dsv4_attention"
    }
   },
@@ -1879,7 +2024,7 @@
     }
    ],
    "commit": {
-    "name": "model.layers.{i}.attn.compressor/kv_score",
+    "name": "model.layers.{i}.attn/compressor.kv_score",
     "binder": "dsv4_attention"
    }
   },
@@ -1892,12 +2037,12 @@
    "site": {
     "kind": "cache_rows",
     "target": "model.layers.{i}.attn.compressor.state_cache.kv_cache",
-    "detail": "the f32 rows at the step's state slot mapping after save_partial_states: [kv | score + ape[pos % ratio]]"
+    "detail": "the score half of the f32 rows at the step's state slot mapping after save_partial_states, which writes [kv | score + ape[pos % ratio]] (the kv half is kv_score's): Dsv4CompressorScore_v1's row"
    },
    "dtype": "float32",
    "shape": [
     "M",
-    "=2 * HD"
+    "HD"
    ],
    "program": "dsv4-compressor-state",
    "tp": "replicated",
@@ -1913,12 +2058,12 @@
    ],
    "note": "the state the next boundary's compression pools: a later step reads rows this one wrote",
    "commit": {
-    "name": "model.layers.{i}.attn.compressor.state_cache/rows",
+    "name": "model.layers.{i}.attn.compressor/out",
     "binder": "dsv4_attention"
    }
   },
   {
-   "id": "attn.compressed_rows.hca",
+   "id": "attn.compressed_rows.nope.hca",
    "op": "layers.{i}.attn.compressed_cache",
    "port": 0,
    "layers": "hca",
@@ -1926,12 +2071,12 @@
    "site": {
     "kind": "cache_rows",
     "target": "model.layers.{i}.attn.kv_cache",
-    "detail": "the 584-byte fp8_ds_mla rows compress_norm_rope_store_cutedsl wrote this step, at the compressed slot mapping"
+    "detail": "the DN e4m3 NoPE bytes of each 584-byte fp8_ds_mla row compress_norm_rope_store_cutedsl wrote this step, at the compressed slot mapping: the compress Definition's port 0"
    },
    "dtype": "uint8",
    "shape": [
     "NC128",
-    "SWAB"
+    "DN"
    ],
    "program": "dsv4-compress-512",
    "tp": "replicated",
@@ -1951,7 +2096,83 @@
    ],
    "note": "one row per HCA_R tokens, written only on a step that crosses a boundary (c128_boundary); the decode attention reads every one",
    "commit": {
-    "name": "model.layers.{i}.attn/compressed_rows",
+    "name": "model.layers.{i}.attn/compress.0",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.compressed_rows.rope.hca",
+   "op": "layers.{i}.attn.compressed_cache",
+   "port": 1,
+   "layers": "hca",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.kv_cache",
+    "detail": "the DR bf16 RoPE dims (its bytes DN .. DN + 2 * DR) of each 584-byte fp8_ds_mla row compress_norm_rope_store_cutedsl wrote this step, at the compressed slot mapping: the compress Definition's port 1"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "NC128",
+    "DR"
+   ],
+   "program": "dsv4-compress-512",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.compressor.norm.weight",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "note": "one row per HCA_R tokens, written only on a step that crosses a boundary (c128_boundary); the decode attention reads every one",
+   "commit": {
+    "name": "model.layers.{i}.attn/compress.1",
+    "binder": "dsv4_attention"
+   }
+  },
+  {
+   "id": "attn.compressed_rows.scale.hca",
+   "op": "layers.{i}.attn.compressed_cache",
+   "port": 2,
+   "layers": "hca",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.attn.kv_cache",
+    "detail": "the DN / 64 ue8m0 scales and the pad byte (its scale bytes) of each 584-byte fp8_ds_mla row compress_norm_rope_store_cutedsl wrote this step, at the compressed slot mapping: the compress Definition's port 2"
+   },
+   "dtype": "uint8",
+   "shape": [
+    "NC128",
+    "=DN // 64 + 1"
+   ],
+   "program": "dsv4-compress-512",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "instance_outputs",
+   "weights": [
+    {
+     "param": "model.layers.{i}.attn.compressor.norm.weight",
+     "provenance": "checkpoint"
+    },
+    {
+     "param": "model.layers.{i}.attn.rotary_emb.cos_sin_cache",
+     "provenance": "computed at init (deepseek_yarn, compress_rope_theta 160000, factor 16)",
+     "shared": true
+    }
+   ],
+   "note": "one row per HCA_R tokens, written only on a step that crosses a boundary (c128_boundary); the decode attention reads every one",
+   "commit": {
+    "name": "model.layers.{i}.attn/compress.2",
     "binder": "dsv4_attention"
    }
   },
@@ -2032,12 +2253,12 @@
    "site": {
     "kind": "cache_rows",
     "target": "model.layers.{i}.attn.indexer.compressor.state_cache.kv_cache",
-    "detail": "the f32 rows at the step's state slot mapping after save_partial_states"
+    "detail": "the score half of the f32 rows at the step's state slot mapping after save_partial_states, which writes [kv | score + ape[pos % ratio]] (the kv half is kv_score's): Dsv4CompressorScore_v1's row"
    },
    "dtype": "float32",
    "shape": [
     "M",
-    "=4 * ID"
+    "=2 * ID"
    ],
    "program": "dsv4-compressor-state",
    "tp": "replicated",
@@ -2052,7 +2273,7 @@
     }
    ],
    "commit": {
-    "name": "model.layers.{i}.attn.indexer.compressor.state_cache/rows",
+    "name": "model.layers.{i}.attn.indexer.compressor/out",
     "binder": "dsv4_attention"
    }
   },
@@ -2464,7 +2685,7 @@
      "provenance": "checkpoint"
     }
    ],
-   "note": "reads the SWA rows and compressed rows earlier steps committed (attn.swa_rows, attn.compressed_rows) at the decode indices",
+   "note": "reads the SWA rows and compressed rows earlier steps committed (attn.swa_rows.*, attn.compressed_rows.*) at the decode indices",
    "commit": {
     "name": "model.layers.{i}.attn/out_decode",
     "binder": "dsv4_attention"
@@ -2504,6 +2725,34 @@
     "name": "model.layers.{i}.attn/out_prefill",
     "binder": "dsv4_attention"
    }
+  },
+  {
+   "id": "attn.gather",
+   "op": "layers.{i}.attn.flashmla",
+   "port": 2,
+   "layers": "all",
+   "module": "model.layers.{i}.attn",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/models/deepseek_v4/nvidia/flashmla.py:flash_mla_sparse_fwd",
+    "detail": "kv: the chunk's workspace (dequantize_and_gather_k_cache's bf16 rows of the compressed and SWA caches), each row the chunk's tokens read (indices below topk_length) once, in first-read order: token by token, its compressed rows, then its window"
+   },
+   "dtype": "bfloat16",
+   "shape": [
+    "GR",
+    "HD"
+   ],
+   "program": "flashmla-sparse-prefill",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "route": "prefill-tokens",
+   "commit": {
+    "name": "model.layers.{i}.attn/gather",
+    "binder": "dsv4_attention"
+   },
+   "note": "FlashMlaGatherRow_v1's rows, which every prefill token's FlashMlaPrefill_v1 reads: the Program gathers one chunk"
   },
   {
    "id": "attn.o_fp8",
@@ -3240,8 +3489,12 @@
    "taps": [
     "attn.positions",
     "attn.q",
-    "attn.compressed_rows.csa",
-    "attn.compressed_rows.hca",
+    "attn.compressed_rows.nope.csa",
+    "attn.compressed_rows.rope.csa",
+    "attn.compressed_rows.scale.csa",
+    "attn.compressed_rows.nope.hca",
+    "attn.compressed_rows.rope.hca",
+    "attn.compressed_rows.scale.hca",
     "attn.swa_indices",
     "attn.swa_lens",
     "attn.extra_indices.csa",
@@ -3250,6 +3503,7 @@
     "attn.extra_lens.hca",
     "attn.out.decode",
     "attn.out.prefill",
+    "attn.gather",
     "attn.o_fp8",
     "attn.o_scale"
    ],
@@ -3294,7 +3548,9 @@
    "type": "DeepseekV4SWACache",
    "disposition": "taps",
    "taps": [
-    "attn.swa_rows"
+    "attn.swa_rows.nope",
+    "attn.swa_rows.rope",
+    "attn.swa_rows.scale"
    ]
   },
   {
@@ -3303,9 +3559,15 @@
    "disposition": "fused",
    "taps": [
     "attn.q",
-    "attn.swa_rows",
-    "attn.compressed_rows.csa",
-    "attn.compressed_rows.hca",
+    "attn.swa_rows.nope",
+    "attn.swa_rows.rope",
+    "attn.swa_rows.scale",
+    "attn.compressed_rows.nope.csa",
+    "attn.compressed_rows.rope.csa",
+    "attn.compressed_rows.scale.csa",
+    "attn.compressed_rows.nope.hca",
+    "attn.compressed_rows.rope.hca",
+    "attn.compressed_rows.scale.hca",
     "indexer.k_cache",
     "indexer.q_fp8",
     "attn.o_fp8"
@@ -3327,8 +3589,12 @@
    "taps": [
     "compressor.kv_score.csa",
     "compressor.kv_score.hca",
-    "attn.compressed_rows.csa",
-    "attn.compressed_rows.hca"
+    "attn.compressed_rows.nope.csa",
+    "attn.compressed_rows.rope.csa",
+    "attn.compressed_rows.scale.csa",
+    "attn.compressed_rows.nope.hca",
+    "attn.compressed_rows.rope.hca",
+    "attn.compressed_rows.scale.hca"
    ],
    "reason": "forward(kv_score, positions, rotary_emb) runs on every step and returns nothing: it writes the state rows and, at a boundary, the compressed rows; its ape is the score's position bias"
   },
@@ -3347,8 +3613,12 @@
    "type": "RMSNorm",
    "disposition": "fused",
    "taps": [
-    "attn.compressed_rows.csa",
-    "attn.compressed_rows.hca"
+    "attn.compressed_rows.nope.csa",
+    "attn.compressed_rows.rope.csa",
+    "attn.compressed_rows.scale.csa",
+    "attn.compressed_rows.nope.hca",
+    "attn.compressed_rows.rope.hca",
+    "attn.compressed_rows.scale.hca"
    ],
    "reason": "its weight is read by compress_norm_rope_store_cutedsl; its forward is not called"
   },
