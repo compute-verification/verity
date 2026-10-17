@@ -29,6 +29,7 @@ uv run machine-model eps --table --credit floor --lookups --index-bits 2   # 2-b
 uv run machine-model eps --table --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
 uv run machine-model eps --device sm89 --table --credit floor --operands floor   # the L40S: Dither-1S/2S/C at L = 16, 32
 uv run machine-model eps --device sm100 --table --credit floor --operands floor   # the B200 at L = 32 to 256
+uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
 ~~~
 
 | Path | What |
@@ -51,6 +52,7 @@ uv run machine-model eps --device sm100 --table --credit floor --operands floor 
 | `data/designs.toml` | What every design reads unless its file sets it: honest's profile, L, the proof unit, the coins, the fold (duo), ε_clock, Theorem S's δ, p and checks, honest's baseline program (dp4a) and the routes, all sm_120's |
 | `data/adapt.toml` | The proof units ε_adapt prices (SPEC's Theorem D): whole dot products (the designs' unit, decision 72), whole with operands recomputed one stage back, per-stage coins, and the segment spot check it replaced |
 | `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
+| `verity_machine_model/capacity.py` | `capacity`: the certified share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity, hidden(n̄) the useful work any program could still add beside the pooled certified load n̄ (the filler workstream, decision 77; note:20261017T0652Z-draft-filler) |
 
 An *epoch* is a state of the census and the attacks, named after the vector that introduced it. A census line or an attack
 holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector re-solves on
