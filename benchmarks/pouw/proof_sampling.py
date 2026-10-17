@@ -438,17 +438,24 @@ def eps_luck(s: int) -> float:
 
 
 def table(cs: list[Cell], strategies: list[str], draws: list[int], closure_r: int) -> str:
-    lines = ["| cell | strategy | " + " | ".join(f"s = {s}" for s in draws) + " |",
-             "|---|---|" + "---:|" * len(draws)]
+    """ε and Λ, the worst cell per model and design, against the round's proof cost (its worst cell)."""
+    groups: dict[str, list[Cell]] = {}
     for c in cs:
-        for st in strategies:
-            row = []
-            for s in draws:
-                r, cost = evaluate(c, st, s, closure_r)
-                top = max(r.by_attack, key=r.by_attack.get)
-                row.append(f"{100 * r.eps:.3f}% ({top}; {cost.gpu_s:.3f} GPU-s)")
+        groups.setdefault(f"{c.label.split()[0]} {c.label.split('(')[1].rstrip(')')}", []).append(c)
+    lines = ["| strategy | s | " + " | ".join(f"ε {g}" for g in groups) +
+             " | Λ (max) | worst cell: its top attack | GPU-s a round | proved MACs a round |",
+             "|---|---:|" + "---:|" * len(groups) + "---:|---|---:|---:|"]
+    for st in strategies:
+        for s in draws:
+            got = {c.label: evaluate(c, st, s, closure_r) for c in cs}
+            eps = [max(got[c.label][0].eps for c in cl) for cl in groups.values()]
+            worst = max(got, key=lambda lab: got[lab][0].eps)
+            r = got[worst][0]
             name = f"closure r={closure_r}" if st == "closure" else st
-            lines.append(f"| {c.label} | {name} | " + " | ".join(row) + " |")
+            lines.append(f"| {name} | {s} | " + " | ".join(f"{100 * e:.3f}%" for e in eps) +
+                         f" | {max(g[0].lam for g in got.values()):.3f} | {worst}: {max(r.by_attack, key=r.by_attack.get)}"
+                         f" | {max(g[1].gpu_s for g in got.values()):.3f}"
+                         f" | {max(g[1].macs for g in got.values()):.3g} |")
     return "\n".join(lines)
 
 
