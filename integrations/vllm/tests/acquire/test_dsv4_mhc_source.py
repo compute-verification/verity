@@ -172,7 +172,7 @@ def test_post_pre_returns_are_declared_as_their_ports_and_the_rest_committed_as_
     assert {label: p.port for label, p in ports.items()} == {
         f"hc_{side}_{v}{split}": port for side in ("attn", "ffn") for split in ("", "_split")
         for v, port in zip(("residual", "post_mix", "comb_mix", "x"), ("0", "2", "3", "1"))}
-    assert all(p.call_boundary and p.families == MS.POST_PRE_FAMILIES for p in ports.values())
+    assert all(p.call_boundary and p.families == {"MhcFusedPostPre_v1", "MhcPostPreTf32_v1"} for p in ports.values())
     others = {CM.at_layer(t["commit"]["name"], 0) for t in TAPS_ if MS.function_of(t) != MS.POST_PRE}
     assert others == {"model.layers.0/streams", "model.layers.0/pre.0", "model.layers.0/pre.1", "model.layers.0/pre.2", "model/post", "model/head"}
 

@@ -42,8 +42,7 @@ PRE, POST_PRE, POST, HEAD = ("mhc_pre_broadcast_tilelang", "mhc_fused_post_pre_t
 FUNCTIONS = (PRE, POST_PRE, POST, HEAD)
 DECISION = "hc"
 #: the post_pre's returns (residual, post mix, comb mix, sublayer input) are ports 0, 2, 3, 1 of either path's Definition
-POST_PRE_FAMILIES = frozenset({"MhcFusedPostPre_v1", "MhcPostPreTf32_v1"})
-POST_PRE_PORTS = ("0", "2", "3", "1")
+POST_PRE_PORTS = tuple(Port(frozenset({"MhcFusedPostPre_v1", "MhcPostPreTf32_v1"}), p, call_boundary=True) for p in "0231")
 
 
 def binds(cmap: Mapping[str, Any]) -> bool:
@@ -57,7 +56,7 @@ def function_of(tap: Mapping[str, Any]) -> str:
 
 def ports_of(cmap: Mapping[str, Any]) -> dict[str, Port]:
     """`bind.Binder`'s declared labels: each post_pre tap's, its return's port of the fused post_pre (`POST_PRE_PORTS`)."""
-    return {t["commit"]["name"].rsplit("/", 1)[1]: Port(POST_PRE_FAMILIES, POST_PRE_PORTS[int(t["site"]["output"])], call_boundary=True)
+    return {t["commit"]["name"].rsplit("/", 1)[1]: POST_PRE_PORTS[int(t["site"]["output"])]
             for t in cmap["taps"] if (t.get("commit") or {}).get("binder") == BINDER and function_of(t) == POST_PRE}
 
 
