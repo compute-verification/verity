@@ -4,10 +4,10 @@ import Std.Data.TreeMap.Raw.Lemmas
 /-!
 # What the record's round trip needs from the JSON library
 
-`Json.parse`, `Json.compress`, `Json`'s `==` and the verifier's `canon` are `partial` definitions: Lean runs them, and no
-proof unfolds them. So the session record's round trip (the prover's `compress`, then `Record.decodeWith`'s, `liveOf`'s
-and `recordDraw`'s `parse`) is proved from their specification, `JsonSpec`, a named assumption the record's theorems take
-as a hypothesis.
+`Json.parse`, `Json.compress` and `Json`'s `==` are `partial` definitions: Lean runs them, and no proof unfolds them
+(the verifier's `canon` is total, and `JsonSpec`'s two fields on it are proved: `Canon.lean`). So the session record's
+round trip (the prover's `compress`, then `Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s `parse`) is proved from
+their specification, `JsonSpec`, a named assumption the record's theorems take as a hypothesis.
 
 * **Alike values** (`Same`): equal leaves, arrays alike element by element, and objects that are well-formed trees with
   one key set and alike values at each key. A Lean object is a tree whose shape is the order its keys were inserted in:
