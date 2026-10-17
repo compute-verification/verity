@@ -483,6 +483,25 @@ def targeted_jifine() -> list[dict]:
     return out
 
 
+def targeted_jipair() -> list[dict]:
+    """Two dispatch pipes beside the HMMA forms (r20261017-092045-f7f6: HMMA.16816.F16 beside FFMA-immediate and
+    add/xor-immediate in turn beat JI3q_11): a FMA-pipe lane and AXI at 3, 4 and 8 accumulators, 2 and 4 warps a SMSP,
+    48-128 lane ops a 8 MMAs; IMMA.16832 beside FFMA-immediate and AXI at 3 and 4."""
+    out: list[dict] = []
+    qs = (48, 64, 80, 96, 112, 128)
+    for form in ("h16816f16", "h1688t"):
+        for ls in (("ffmai", "axi"), ("ffma", "axi"), ("fmuli", "axi")):
+            for na in (3, 4, 8):
+                for q in qs:
+                    for w in (2, 4):
+                        out.append(_jm(form, ls, q, w, na=na))
+    for na in (3, 4):
+        for q in qs:
+            for w in (2, 4):
+                out.append(_jm("i16832", ("ffmai", "axi"), q, w, na=na))
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -510,7 +529,7 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
     seen, out = set(), []
     tg, sm = {"mix": (targeted, sampled), "mem": (targeted_mem, sampled_mem), "fine": (targeted_fine, sampled),
               "l2": (targeted_l2, sampled_l2), "ji": (targeted_ji, sampled_ji),
-              "jifine": (targeted_jifine, sampled_ji)}[family]
+              "jifine": (targeted_jifine, sampled_ji), "jipair": (targeted_jipair, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -596,11 +615,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
-    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine"), default="mix",
+    p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair"), default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
                         "against the table route's L2 facet; ji: the joint issue rows' schedule search (ji.cuh); "
-                        "jifine: the sweep around its break")
+                        "jifine: the sweep around its break; jipair: two dispatch pipes beside the HMMA forms")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
