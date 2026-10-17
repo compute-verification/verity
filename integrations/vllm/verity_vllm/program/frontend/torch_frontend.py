@@ -1000,6 +1000,22 @@ def _permute(x: Coll, dims: Sequence[int], where: str) -> Coll:
     if dims == tuple(range(len(shape))):
         return x
     strides = _row_major(shape)
+    k = len(dims)
+    while dims[k - 1] == k - 1:
+        k -= 1
+    lead = math.prod(shape[:k])
+    # past the Explicit limit only: below it the Explicit form stays, so the Programs that derive today keep their bytes
+    if (not isinstance(x.refs, Affine) and _constant_run(x.refs) is None and x.type.leaves > _EXPLICIT_LIMIT
+            and k < len(shape) and lead <= _VIEW_PARTS_LIMIT):
+        L, rows = x.type.leaves // lead, _row_major(shape[:k])
+        parts = []
+        for j in range(lead):     # a permute of the leading axes reorders whole rows of the trailing ones
+            rem, row = j, 0
+            for d in reversed(dims[:k]):
+                rem, q = divmod(rem, shape[d])
+                row += q * rows[d]
+            parts.append(x.refs.slice(row * L, (row + 1) * L))
+        return Coll(_tensor_type([shape[d] for d in dims], w), concat(parts))
     return _view(x, [shape[d] for d in dims], [strides[d] for d in dims], 0, where, f"permute {dims}")
 
 
