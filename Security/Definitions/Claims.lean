@@ -1,6 +1,5 @@
 import Mathlib
 import Definitions.Claims.Hm96
-import Definitions.Claims.Json
 
 /-!
 # Claims: the shared definitions and Flock's claim statements (frozen before any proof work)
@@ -55,19 +54,12 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   positions. The relation splits by table, each table's units their own statement, so `assemble` checks each table's
   list once, at most `J·L` checks where every combination would be `L^J`, and `Flock.Efficient` bounds each list by
   the decoder's polynomial, which counts them. At one table this is the text it replaces.
-* (16 Oct) Completeness is at a hash whose outputs are 64 bytes (`Out64`), as the deployed oracle's are, SHA-512 with
-  its whole output, and as the random-oracle model draws them. It fixes the length only: `H` stays a parameter.
-* (17 Oct) Completeness is at a nonempty tape type (`Complete`), and Flock's is of the deployed record's reference
-  prover (`Flock.Deploy.P`), not of a prover the claim takes. The form first frozen held at an empty tape type for every
-  verifier, and its prover was whatever its discharge chose, so an assembled claim's completeness premise was met for
-  free.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
-The named assumptions: `StrictBirthday`, `ExpectedCR`, hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
-which the soundness proofs read), and the JSON library's specification, `JsonSpec` (`Definitions/Claims/Json.lean`,
-which only completeness reads). What the claims rest on and no Lean statement can say is `trustedBase`.
+The named assumptions: `StrictBirthday`, `ExpectedCR`, and hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
+which the soundness proofs read). What the claims rest on and no Lean statement can say is `trustedBase`.
 
 Frozen by `Flock.Guarantees.ClaimsStated` (`Models/Flock/Guarantees/Claims.lean`), whose statement reads every claim
 here: the lock records each one's text under `reads`, so a changed claim is a changed record.
@@ -83,10 +75,6 @@ abbrev Msg := List UInt8
 
 /-- A collision of `H`. -/
 def Collision (H : Msg → Msg) (u v : Msg) : Prop := u ≠ v ∧ H u = H v
-
-/-- **`H`'s outputs are 64 bytes**: the deployed oracle is SHA-512 with its whole output, and the random-oracle model
-draws 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
-def Out64 (H : Msg → Msg) : Prop := ∀ m, (H m).length = 64
 
 /-! ## AND/XOR circuits -/
 
@@ -373,14 +361,11 @@ def KSLin (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : Extractor Coin 
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H V R E x P ≤ κ x + Real.sqrt (γ x * PrB H V P x) + β x * (Fe Ω P x).Pr H
 
-/-- `Complete(V, P, R, Scope, δ_c)`: at a hash whose outputs are 64 bytes (`Out64`), on every statement in scope and
-witness in the relation, the honest prover `P(w; ω)` is accepted with probability at least `1 − δ_c(x)` over the
-verifier's coins, at every tape. The tapes are a nonempty type: over an empty one, "at every tape" holds of every
-verifier. -/
-def Complete {Ω : Type} [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (P : W → Prover Ω) (R : Rel W)
-    (Scope : Msg → Prop) (δc : Msg → ℝ) : Prop :=
-  Out64 H →
-    ∀ x w, Scope x → R x w → ∀ ω : Ω, 1 - δc x ≤ Pr fun r : Fin (V.k x) → Coin => (run H (P w) V x ω r).out = .acc
+/-- `Complete(V, P, R, Scope, δ_c)`: on every statement in scope and witness in the relation, the honest prover
+`P(w; ω)` is accepted with probability at least `1 − δ_c(x)` over the verifier's coins, at every tape. -/
+def Complete {Ω : Type} (H : Msg → Msg) (V : Verifier Coin) (P : W → Prover Ω) (R : Rel W) (Scope : Msg → Prop)
+    (δc : Msg → ℝ) : Prop :=
+  ∀ x w, Scope x → R x w → ∀ ω : Ω, 1 - δc x ≤ Pr fun r : Fin (V.k x) → Coin => (run H (P w) V x ω r).out = .acc
 
 /-- The readable scope is the verifier's own scope check. -/
 def ScopeMatches (Scope : Msg → Prop) (check : Msg → Bool) : Prop := ∀ x, Scope x ↔ check x = true
@@ -634,11 +619,7 @@ code. A single-table statement is its own table `0`, and reads table `0`'s colum
 `dec` is a named, counted program: on opened columns it returns its list and the steps it took, counted along the same
 computation, one step per field operation (arithmetic or a comparison of field elements), per position compared and
 per column entry read, moving data free. `Flock.Efficient` reads that count; that it is the cost of running the
-decoder is `trustedBase`'s.
-
-`P` is the reference prover, the honest prover the deployment runs, on its tapes (`Tape`, a nonempty type):
-completeness is its (`Complete`), so the claim is about the deployed prover and no other. `δc` is its completeness
-error as the deployment states it, at each hash (`δc H x` at `H`): `Complete` is at that error and no other. -/
+decoder is `trustedBase`'s. -/
 structure Deploy (Coin Col T : Type) where
   zk : Bool
   V : Verifier Coin
@@ -656,12 +637,6 @@ structure Deploy (Coin Col T : Type) where
   weight : Msg → ℝ
   waits : Msg → ℕ
   cap : Msg → ℕ
-  Tape : Type
-  [tapeNonempty : Nonempty Tape]
-  P : Wit → Prover Tape
-  δc : (Msg → Msg) → Msg → ℝ
-
-instance Deploy.instNonemptyTape {Coin Col T : Type} (D : Deploy Coin Col T) : Nonempty D.Tape := D.tapeNonempty
 
 /-- The deployed decoder's list, without its count. -/
 def Deploy.decode {Coin Col T : Type} (D : Deploy Coin Col T) (os : List (ℕ × Col)) : List T := (D.dec os).1
@@ -693,10 +668,9 @@ def Scope (D : Deploy Coin Col T) (x : Msg) : Prop := ∃ s, D.parse x = some s 
 def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ decode, ListWithin D.len D.enc D.θ decode → Claims.KS H D.V (R D.parse) (E D decode) (κ D) (γ D)
 
-/-- **Flock: Complete**, on the statements in scope, of the deployed record's reference prover (`D.P`), at the
-deployed error (`D.δc H`). -/
-def Complete (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  Claims.Complete H D.V D.P (R D.parse) (Scope D) (D.δc H)
+/-- **Flock: Complete**, on the statements in scope. -/
+def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (δc : Msg → ℝ) : Prop :=
+  Claims.Complete H D.V P (R D.parse) (Scope D) δc
 
 /-- **Flock: the readable scope is the verifier's.** -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck

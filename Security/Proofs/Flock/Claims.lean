@@ -45,7 +45,6 @@ import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Assembled
 import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.ZK
-import Proofs.Flock.Claims.CompleteFails
 import Proofs.Flock.Claims.Witnesses
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
