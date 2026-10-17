@@ -23,7 +23,8 @@ coins for every unit (`ZKmalR.at_pi`) or on coins in bijection with its simulato
 
 Both are proved at one statement (`zkmalAt_seqU`, `zkmalAt_iter`, from `A`'s and `B`'s `ZKmalAt` there) and read at
 every statement: nothing at `x` reads another statement, so the tapes and the number of sessions may be chosen per
-statement.
+statement. A session whose tape is its own type at each unit's statement is one prover on one tape at `x` through
+bijections of the nonces and of the rests (`ZKmalAt.of_equiv`).
 -/
 
 namespace Claims.ZKMal
@@ -111,6 +112,24 @@ theorem stepWith_comap {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (f : Ω
 theorem runStar_comap {Ω Ω' Θ : Type} (H : Msg → Msg) (P : Prover Ω) (f : Ω' → Ω) (Vs : VStar Θ) (x : Msg)
     (ω : Ω') (θ : Θ) : runStar H (P.comap f) Vs x ω θ = runStar H P Vs x (f ω) θ :=
   stepWith_comap H P f x ω _ _ _ _ _
+
+/-- The run reads the prover only at `x` and its tape. -/
+theorem stepWith_congr {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (P' : Prover Ω') (x : Msg) (ω : Ω) (ω' : Ω')
+    (vnext : List Msg → OC Out) (h : ∀ hist, P'.next x hist ω' = P.next x hist ω) :
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+      stepWith H P' x ω' vnext n hist as t = stepWith H P x ω vnext n hist as t
+  | 0, _, _, _ => rfl
+  | n + 1, hist, as, t => by
+      simp only [stepWith, h hist]
+      split
+      · exact stepWith_congr H P P' x ω ω' vnext h n _ _ _
+      · rfl
+      · rfl
+
+theorem runStar_congr {Ω Ω' Θ : Type} (H : Msg → Msg) (P : Prover Ω) (P' : Prover Ω') (Vs : VStar Θ) (x : Msg)
+    (ω : Ω) (ω' : Ω') (θ : Θ) (h : ∀ hist, P'.next x hist ω' = P.next x hist ω) :
+    runStar H P' Vs x ω' θ = runStar H P Vs x ω θ :=
+  stepWith_congr H P P' x ω ω' _ h _ _ _ _
 
 /-! ## Two protocols in turn -/
 
@@ -540,6 +559,29 @@ theorem _root_.Claims.ZKmalR.at_equiv {W N Ω : Type} [Fintype N] [Nonempty N] [
   intro w hw Θ Vs θ hV Ev
   rw [Pr_equiv e (fun c => Ev (spOut H Vs θ xs (S.prog xs c)))]
   exact h xs w hw Θ Vs θ hV Ev
+
+/-- **`ZKmalAt` for a prover that runs `P` at `x` on its tape through a bijection of nonces and one of rests**: a
+session whose tape at each unit's statement is its own type is, at `x`, one prover on one tape for every unit. -/
+theorem ZKmalAt.of_equiv {W N Ω N' Ω' : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] [Fintype N']
+    [Nonempty N'] [Fintype Ω'] [Nonempty Ω'] {H : Msg → Msg} {k : ℕ} {P : W → Prover (N × Ω)} {R : W → Prop}
+    {x : Msg} {C : Type} [Fintype C] {prog : C → SP (List (Msg × Out))} {ε γ : ℝ}
+    (h : ZKmalAt H k P R x C prog ε γ) (P' : W → Prover (N' × Ω')) (eN : N' ≃ N) (eΩ : Ω' ≃ Ω)
+    (hP : ∀ w hist ω, (P' w).next x hist ω = (P w).next x hist (eN ω.1, eΩ ω.2)) :
+    ZKmalAt H k P' R x C prog ε γ := by
+  intro w hw Θ Vs θ hV Ev
+  have hrun : ∀ ω : N' × Ω', runStar H (P' w) Vs x ω θ = runStar H (P w) Vs x (eN ω.1, eΩ ω.2) θ :=
+    fun ω => runStar_congr H (P w) (P' w) Vs x _ ω θ fun hist => hP w hist ω
+  have hr : Pr (fun ω : N' × Ω' => Ev (runStar H (P' w) Vs x ω θ).msgs) =
+      Pr (fun ω : N × Ω => Ev (runStar H (P w) Vs x ω θ).msgs) := by
+    simp only [hrun]
+    exact Pr_equiv (Equiv.prodCongr eN eΩ) fun ω => Ev (runStar H (P w) Vs x ω θ).msgs
+  have hf : (Fork H (P' w) Vs θ x).Pr H = (Fork H (P w) Vs θ x).Pr H := by
+    simp only [Finder.Pr, Fork, hrun]
+    exact Pr_equiv (Equiv.prodCongr eN (Equiv.prodCongr eΩ eΩ)) fun s : N × Ω × Ω => ∃ u v,
+      findColl ((runStar H (P w) Vs x (s.1, s.2.1) θ).pLog ++ (runStar H (P w) Vs x (s.1, s.2.2) θ).pLog) =
+        some (u, v) ∧ Collision H u v
+  rw [hr, hf]
+  exact h w hw Θ Vs θ hV Ev
 
 /-- **Sequential composition at one statement.** At `x`, `A` then `B` at the unit `A`'s history selects is `ZKmalAt`
 with the simulator that runs `SA`, then `B`'s program at that unit on coins of their own (`simU`): `ε` adds up, with
