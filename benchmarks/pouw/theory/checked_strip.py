@@ -30,10 +30,14 @@ Parts:
 - H. The tensor–scalar model (note:20261017T0310Z-report-eps1-program): a 128-cell tile's MMAs and other warp
   instructions, honest against the cheapest cheater found, timed on the measured facets (the tensor pipe and JI3e), for
   CO at r = 32, CO at r = k/2 and Dither as built, at fold costs 3, 1.5 and 1 a word, on Llama-3.1 8B and 70B linears.
+  At A = B = 0, O = c·b is a depth-k binary product with no commit inside, so a cheater may make any fraction of it off
+  its strip: bit-sliced on the CUDA cores (x warp instructions per 32 × 128 bit products, a parameter), with b1 MMAs
+  (emulated on sm_120; native elsewhere) or FP4 MMAs. The best mix is an exact minimum over the facets' kinks. It
+  gains nothing at r = 32 and beats r = 32's ε at r = k/2 for any x below about 24.
 
 Run from the repository root: `uv run --no-project --with numpy --with python-sat --with-editable
 benchmarks/pouw/exact_kit python -B benchmarks/pouw/theory/checked_strip.py --mutations` (`--full` adds the 2×2
-block's SAT case, a few minutes). The suite in `tests/` runs it.
+block's SAT case, unbounded). `benchmarks/pouw/tests/test_theory_checked_strip.py` runs it in the pouw suite.
 """
 from __future__ import annotations
 
@@ -300,6 +304,46 @@ class Ledger:
         return sum(K * p for _, K, p in self.items)
 
 
+def n_digits(lo, hi):
+    """Base-128 digits `digits` needs for values in [lo, hi]: the least m with −128^m ≤ lo and ⌊hi/128^{m−1}⌋ ≤ 127."""
+    m = 1
+    while not (lo >= -(128 ** m) and hi // 128 ** (m - 1) <= 127):
+        m += 1
+    return m
+
+
+def digits(Y, z, m):
+    """Y = Σ_d 128^d A_d with m int8 digits: A_d = (R_d mod 128) − 128 z_d for d < m − 1 and A_{m−1} = R_{m−1}, where
+    R_0 = Y and R_{d+1} = ⌊R_d/128⌋ + z_d. Each fresh coin z_d (one an entry) picks one of the digit's two int8
+    representatives; the last is taken as 0 where ⌊R/128⌋ = 127, so that the top digit stays int8."""
+    R, A = np.asarray(Y, np.int64), []
+    for d in range(m - 1):
+        q = R >> 7
+        zd = np.where(q == 127, 0, z[d]) if d == m - 2 else z[d]
+        A.append((R & 127) - 128 * zd)
+        R = q + zd
+    A.append(R)
+    return A
+
+
+def co32c_words(P, V, U, c, b, z, r, L, m, led=None):
+    """CO with committed digits: T_t, D_d = U·A_d (1 ≤ d < m) and O′ = T_last − U·A_0, for Y's digits A_d; the
+    served output is O = O′ − Σ_d 128^d D_d. With a ledger, every product is priced as computed."""
+    k = P.shape[1]
+    mm = led.int8 if led is not None else (lambda A_, B_, what: A_.astype(np.int64) @ B_.astype(np.int64))
+    Pt = P + c + U[:, np.arange(k) % r]
+    X = V + b
+    T, acc = [], np.zeros((P.shape[0], V.shape[1]), np.int64)
+    for t in range(k // L):
+        sl = slice(t * L, (t + 1) * L)
+        acc = acc + mm(Pt[:, sl], X[sl], f"T segment {t}")
+        T.append(acc.copy())
+    A = digits(X.reshape(k // r, r, -1).sum(0), z, m)
+    D = [mm(U, A[d], f"D_{d}") for d in range(1, m)]
+    Op = T[-1] + mm(-U, A[0], "O′")
+    return [s32(x) for x in T], [s32(x) for x in D], s32(Op)
+
+
 def honest_words(P, V, U, c, b, r, L):
     k = P.shape[1]
     Ph = P + c
@@ -386,7 +430,9 @@ def ts_tile(design, k, n, fold):
     """((MMAs, other warp instructions) of honest, of the cheapest cheater found) for one m16n8 tile of 128 cells at
     depth k, n rows sharing the served side's residue sums. A word group (128 words) is folded at `fold` instructions a
     word, 4·fold warp instructions (4 words a lane). Honest's residue sums are one add an X entry, k·n′ adds for n·n′
-    cells (4k/n a tile; 2k/n at r = k/2); the cheater's are taken as free (its b-only sums are popcounts)."""
+    cells (4k/n a tile; 2k/n at r = k/2); the cheater's are taken as free (its b-only sums are popcounts). co32c
+    commits each digit's product (`co32c_words`), so the cheater does every MMA honest does and saves only the
+    served output's recombination O = O′ − Σ 128^d D_d (4 IMADs a digit) and the residue sums."""
     g = 4 * fold
     if design == "co32":
         honest = (k // 32 + 2, g * (k // 32 + 1) + 4 + 4 * k / n)
@@ -394,6 +440,10 @@ def ts_tile(design, k, n, fold):
     elif design == "cohalf":
         honest = (k // 32 + k // 64, g * (k // 32 + 1) + 2 * k / n)
         cheat = (k // 32 + k // 64, g * (k // 32 + 1))
+    elif design == "co32c":
+        m = n_digits((k // 32) * -128, (k // 32) * 127)
+        honest = (k // 32 + m, g * (k // 32 + m) + 4 * (m - 1) + 4 * k / n)
+        cheat = (k // 32 + m, g * (k // 32 + m))
     elif design == "dither":
         honest = (k // 32 + 2, g * (k // 32) + 4 + 4 * k / n)
         cheat = (k // 32, g * (k // 32))
@@ -427,7 +477,7 @@ def o_routes(design, k):
     32 × 128 bit products; `b1_emulated`, sm_120's b1 MMAs priced as issue; `b1_native`, b1 MMAs at an IMMA's cost
     (sm_80 to sm_89); `fp4`, FP4 k64 MMAs plus NOBITS (one instruction a word). Returns {route: (dM, dO)} with
     `scalar` a function of x."""
-    strip = 1 if design == "co32" else k // 64
+    strip = k // 64 if design == "cohalf" else 1
     return {"scalar": lambda x: (-strip, x * k / 32), "b1_emulated": (-strip, B1_EMULATED * k / 256),
             "b1_native": (-strip + k / 256, 0.0), "fp4": (-strip + k / 64, 4.0)}
 
@@ -476,6 +526,36 @@ def main():
     Yb = (Vb + bb).reshape(k // r, r, n2).sum(0)
     checks.check("A5 structured instance (Y(V) = 0): Y = residue sums of b, in [0, k/r], 1 limb",
                  np.array_equal(Yb, bb.reshape(k // r, r, n2).sum(0)) and limbs(int(Yb.min()), int(Yb.max())) == 1)
+    dig, dig_ok = {}, True
+    for kk in (256, 4096, 8192, 14336, 28672):
+        lo, hi = (kk // 32) * -128, (kk // 32) * 127
+        m = n_digits(lo, hi)
+        dig[kk] = m
+        Ys = np.concatenate([np.arange(lo, lo + 300), np.arange(hi - 300, hi + 1), np.arange(-300, 300),
+                             rng.integers(lo, hi + 1, 2000)])
+        for zs in (np.zeros((m - 1, Ys.size), np.int64), np.ones((m - 1, Ys.size), np.int64),
+                   rng.integers(0, 2, (m - 1, Ys.size))):
+            A = digits(Ys, zs, m)
+            dig_ok &= all(int(a.min()) >= -128 and int(a.max()) <= 127 for a in A)
+            dig_ok &= np.array_equal(sum(a * 128 ** d for d, a in enumerate(A)), Ys)
+    out["digits"] = dig
+    checks.check("A6 the strip operand's redundant base-128 digits (r = 32, 8-bit X): every digit int8 and Σ 128^d A_d = "
+                 "Y at both ends of the range, around 0 and at random, for coins all 0, all 1 and random",
+                 dig_ok and dig == {256: 2, 4096: 2, 8192: 3, 14336: 3, 28672: 3}, f"digits {dig}")
+    nz, k6, r6 = 16, 256, 32
+    m6 = n_digits((k6 // r6) * -128, (k6 // r6) * 127)
+    U6, c6, b6 = draw(rng, nz, k6, nz, r6)
+    z6 = rng.integers(0, 2, (m6 - 1, r6, nz))
+    Z6 = np.zeros((nz, k6), np.int64), np.zeros((k6, nz), np.int64)
+    T6, D6, Op6 = co32c_words(*Z6, U6, c6, b6, z6, r6, L, m6)
+    Pr, Vr = rng.integers(-63, 63, (nz, k6)), rng.integers(-128, 127, (k6, nz))
+    Tr, Dr, Opr = co32c_words(Pr, Vr, U6, c6, b6, z6, r6, L, m6)
+    served = lambda Op, D: s32(Op.astype(np.int64) - sum(Dd.astype(np.int64) << (7 * (d + 1)) for d, Dd in enumerate(D)))
+    checks.check("A7 committed digits: the served output O = O′ − Σ 128^d D_d in s32 (random and zero instance); at "
+                 "A = B = 0 D_1 = U·z_0 (Y < 128 there), a fresh word, nonzero in ≥ 95% of 256 cells",
+                 np.array_equal(served(Opr, Dr), s32((Pr + c6) @ (Vr + b6))) and np.array_equal(served(Op6, D6),
+                 s32(c6 @ b6)) and np.array_equal(D6[0], s32(U6 @ z6[0])) and np.count_nonzero(D6[0]) >= 0.95 * nz * nz,
+                 f"m = {m6}, D_1 nonzero in {np.count_nonzero(D6[0])} of {nz * nz} cells")
 
     # ------------------------------------------------------------ B
     one = lambda k, r, L: ((k // L) * min(r, L), r)
@@ -600,6 +680,26 @@ def main():
             checks.check("E r = k/2, 7-bit X: honest k + k/2, every enumerated cheater ≥ k + k/2 (tie)",
                          hon == k + k // 2 and adv == k + k // 2, f"{hon} vs {adv}")
     out["prices_test"] = price
+    m = n_digits((k // 32) * -128, (k // 32) * 127)
+    U, c, b = draw(rng, n, k, n2, 32)
+    z = rng.integers(0, 2, (m - 1, 32, n2))
+    cprice = {}
+    for inst in ("random", "zero", "balanced"):
+        P, V = instance(Block("co", n, k, n2, 32, L), inst, rng)
+        if inst == "random":
+            V = np.where(rng.random((k, n2)) < 0.5, -128, 126)
+        led = Ledger()
+        got = co32c_words(P, V, U, c, b, z, 32, L, m, led)
+        want = co32c_words(P, V, U, c, b, z, 32, L, m)
+        same = all(np.array_equal(x, y) for x, y in zip(got[0] + got[1] + [got[2]], want[0] + want[1] + [want[2]]))
+        Y = (V + b).reshape(k // 32, 32, n2).sum(0)
+        skip = s32(want[0][-1].astype(np.int64) - U @ Y)
+        cprice[inst] = (led.price(), same, not np.array_equal(skip, want[2]))
+    out["prices_co32c"] = {a: str(v[0]) for a, v in cprice.items()}
+    checks.check("E committed digits at r = 32 (k = 256): every product is a committed word's, so honest and the cheater "
+                 "at the zero and the structured instance pay k + m·r alike, and the 1-limb shortcut O′ = T_last − U·Y "
+                 "gives a wrong O′", all(v[0] == k + m * 32 and v[1] and v[2] for v in cprice.values()),
+                 f"m = {m}, prices {out['prices_co32c']}")
 
     def eps_cell(kk, rr, vb):
         g = kk // rr
@@ -680,20 +780,19 @@ def main():
     for fold in (3, 1.5, 1):
         for mname, shapes in TS_SHAPES.items():
             rows = {}
-            tot = {d: [0.0, 0.0] for d in ("co32", "cohalf", "dither")}
+            tot = {d: [0.0, 0.0, 0.0] for d in ("co32", "co32c", "cohalf", "dither")}
             for name, kk, nn in shapes:
                 for d in tot:
                     (Mh, Oh), (Mc, Oc) = ts_tile(d, kk, nn, fold)
                     th, tc = ts_time(Mh, Oh), ts_time(Mc, Oc)
                     tot[d][0] += th * nn
                     tot[d][1] += tc * nn
+                    tot[d][2] += 16 * (kk // 32) * nn
                     rows[f"{name} {d}"] = f"{th / tc - 1:.4%}"
-                Mp = kk // 32
-                rows[f"{name} gamma co32 over plain int8"] = f"{ts_time(*ts_tile('co32', kk, nn, fold)[0]) / (16 * Mp) - 1:.4%}"
-                rows[f"{name} gamma cohalf over plain int8"] = \
-                    f"{ts_time(*ts_tile('cohalf', kk, nn, fold)[0]) / (16 * Mp) - 1:.4%}"
-            for d, (h, c_) in tot.items():
+                    rows[f"{name} gamma {d} over plain int8"] = f"{th / (16 * (kk // 32)) - 1:.4%}"
+            for d, (h, c_, p_) in tot.items():
                 rows[f"weighted {d}"] = f"{h / c_ - 1:.4%}"
+                rows[f"weighted gamma {d} over plain int8"] = f"{h / p_ - 1:.4%}"
             ts[f"fold={fold} {mname}"] = rows
     out["ts"] = ts
     w8 = ts["fold=3 Llama-3.1-8B"]
@@ -726,7 +825,7 @@ def main():
         return hi
 
     zero = {}
-    for design in ("co32", "cohalf"):
+    for design in ("co32", "co32c", "cohalf"):
         for mname in TS_SHAPES:
             for x in (8, 12, 16, 24):
                 zero[f"{design} {mname} scalar x={x}"] = weighted(design, lambda kk: o_routes(design, kk)["scalar"](x),
@@ -738,13 +837,20 @@ def main():
             th, tb = ts_mix(design, 128, 4096, 3, *o_routes(design, 128)["scalar"](x))
             zero[f"{design} QK^T scalar x={x}"] = th / tb - 1
     out["ts_zero_instance_O"] = {kk_: (f"{v:.4%}" if "breakeven" not in kk_ else f"{v:.2f}") for kk_, v in zero.items()}
-    base = {(d, m): weighted(d, lambda kk: (0.0, 0.0), m) for d in ("co32", "cohalf") for m in TS_SHAPES}
-    checks.check("H co32 at A = B = 0: making O = c·b on scalar units (any x ≥ 2), with b1 MMAs (emulated or native) "
-                 "or with FP4 gains nothing over the 1-limb strip",
-                 all(abs(zero[f"co32 {m} {r}"] - base[("co32", m)]) < 1e-12 for m in TS_SHAPES
+    base = {(d, m): weighted(d, lambda kk: (0.0, 0.0), m) for d in ("co32", "co32c", "cohalf") for m in TS_SHAPES}
+    checks.check("H r = 32 (co32, co32c) at A = B = 0: making O = c·b on scalar units (any x ≥ 2), with b1 MMAs "
+                 "(emulated or native) or with FP4 gains nothing over the cheater's one-IMMA strip",
+                 all(abs(zero[f"{d} {m} {r}"] - base[(d, m)]) < 1e-12 for d in ("co32", "co32c") for m in TS_SHAPES
                      for r in ("scalar x=8", "b1_emulated", "b1_native", "fp4"))
-                 and all(breakeven("co32", kk, nn) <= 2 for m in TS_SHAPES for _, kk, nn in TS_SHAPES[m]),
+                 and all(breakeven(d, kk, nn) <= 2 for d in ("co32", "co32c") for m in TS_SHAPES
+                         for _, kk, nn in TS_SHAPES[m]),
                  str({k_: v for k_, v in out["ts_zero_instance_O"].items() if k_.startswith("co32")}))
+    checks.check("H committed digits (co32c) close the second-limb gap: the cheater's saving is the recombination "
+                 "(4 IMADs a digit) and the residue sums, below co32's ε on every Llama-3.1 linear at every fold",
+                 all(float(ts[f"fold={f} {m}"][f"{name} co32c"][:-1]) < float(ts[f"fold={f} {m}"][f"{name} co32"][:-1])
+                     for f in (3, 1.5, 1) for m, shapes in TS_SHAPES.items() for name, _, _ in shapes),
+                 str({f"fold={f} {m}": {d: ts[f"fold={f} {m}"][f"weighted {d}"] for d in ("co32", "co32c")}
+                      for f in (3, 1.5, 1) for m in TS_SHAPES}))
     checks.check("H cohalf at A = B = 0: a cheater that makes a fraction of O = c·b on scalar units beats co32's ε "
                  "for x ≤ 16 warp instructions per IMMA-equivalent (Llama-3.1-8B and 70B, weighted); FP4 never helps",
                  all(zero[f"cohalf {m} scalar x={x}"] > base[("co32", m)] for m in TS_SHAPES for x in (8, 12, 16))
