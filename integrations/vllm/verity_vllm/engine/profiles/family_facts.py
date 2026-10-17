@@ -222,6 +222,8 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
             "INDEX_SKIP_TOPK_OFFSET": {"key": "index_skip_topk_offset", "default": 2, "provenance": f"{_DSA_ATTN}:164-168"},
             "INDEX_ROPE_INTERLEAVE": {"key": "indexer_rope_interleave", "default": False,
                                       "provenance": f"{_DSA_ATTN}:236,270-276 indexer_rope_emb = get_rope(..., is_neox_style=not indexer_rope_interleave)"},
+            "INDEX_K_EPS": {"const": 1e-6, "provenance": f"{_DSA_ATTN}:84 DeepseekV32Indexer.k_norm = LayerNorm(head_dim, eps=1e-6); :312 its eps "
+                                                         f"is the fused norm-rope kernel's index_k_eps"},
             "FIRST_DENSE": {"key": "first_k_dense_replace",
                             "provenance": f"{_DSA}:85-108 layers from first_k_dense_replace on are DeepseekV2MoE, the ones below DeepseekV2MLP(intermediate_size)"},
             "NUM_EXPERTS": {"key": "n_routed_experts", "provenance": f"{_DSV2}:317-321,373 GateLinear(hidden, n_routed_experts), FusedMoE num_experts"},
@@ -278,7 +280,31 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
                           f"(kv_b_proj), :68-84 DeepseekV32Indexer (wq_b, wk_weights_proj with quant_config=None, k_norm = LayerNorm with bias); "
                           f"{_DSV2}:257-265 DeepseekV2MLP (gate_up_proj, down_proj), :317-328 (gate, e_score_correction_bias), :360-368 "
                           f"(shared_experts), :370-373 FusedMoEFactory -> {_FMOE}:369 routed_experts (w13_weight, w2_weight); "
-                          f"vllm/model_executor/layers/quantization/fp8.py:354-355 a block-FP8 linear's scales are its weight_scale_inv",
+                          f"vllm/model_executor/layers/quantization/fp8.py:354-355 a block-FP8 linear's scales are its weight_scale_inv. "
+                          f"order / buffers: vllm_meta.py:242-264 (W_UK_T, W_UV registered on the attention module itself); {_DSA_ATTN}:176-217 "
+                          f"kv_b_proj and the indexer built before MLAAttention.__init__ (which sets the four scale buffers, "
+                          f"vllm/model_executor/layers/attention/attention.py:127-135), :239-264 the remaining projections, then rotary_emb (one "
+                          f"cos_sin_cache shared by every layer and the indexer's rope); {_DSA}:85-113 mlp, then the two layer norms; {_FMOE}:369 "
+                          f"routed_experts' w13 / w2 weights, then their scales",
+            # a decoder layer's parameters and buffers in `named_parameters` / `named_buffers` order (a module's own, then its children's in
+            # registration order); a name the layer does not hold (the map above gives it no field there) is skipped
+            "order": (
+                "self_attn.W_UK_T", "self_attn.W_UV", "self_attn.kv_b_proj.weight", "self_attn.kv_b_proj.weight_scale_inv",
+                "self_attn.indexer.wq_b.weight", "self_attn.indexer.wq_b.weight_scale_inv", "self_attn.indexer.wk_weights_proj.weight",
+                "self_attn.indexer.k_norm.weight", "self_attn.indexer.k_norm.bias",
+                "self_attn.fused_qkv_a_proj.weight", "self_attn.fused_qkv_a_proj.weight_scale_inv", "self_attn.q_a_layernorm.weight",
+                "self_attn.q_b_proj.weight", "self_attn.q_b_proj.weight_scale_inv", "self_attn.kv_a_layernorm.weight",
+                "self_attn.o_proj.weight", "self_attn.o_proj.weight_scale_inv",
+                "mlp.gate_up_proj.weight", "mlp.gate_up_proj.weight_scale_inv", "mlp.down_proj.weight", "mlp.down_proj.weight_scale_inv",
+                "mlp.gate.weight", "mlp.gate.e_score_correction_bias", "mlp.shared_experts.gate_up_proj.weight",
+                "mlp.shared_experts.gate_up_proj.weight_scale_inv", "mlp.shared_experts.down_proj.weight",
+                "mlp.shared_experts.down_proj.weight_scale_inv", "mlp.experts.routed_experts.w13_weight",
+                "mlp.experts.routed_experts.w2_weight", "mlp.experts.routed_experts.w13_weight_scale_inv",
+                "mlp.experts.routed_experts.w2_weight_scale_inv",
+                "input_layernorm.weight", "post_attention_layernorm.weight",
+            ),
+            "buffers": ("self_attn._k_scale", "self_attn._v_scale", "self_attn._q_scale", "self_attn._prob_scale",
+                        "self_attn.rotary_emb.cos_sin_cache"),
         },
         "moe_width_key": "moe_intermediate_size",
         "moe_width_provenance": f"{_DSV2}:376 FusedMoE(intermediate_size=config.moe_intermediate_size); intermediate_size is the dense layers' width "
