@@ -26,7 +26,7 @@ import pytest
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import serving_rows as SRT
-from verity_vllm.pipeline.tp.commit import TP_ROOT_TAG, tp_run_root
+from verity_vllm.pipeline.tp.run_root import TP_ROOT_TAG, tp_run_root
 
 WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w"}
 RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "generated_tokens": 4, "prompt_tokens": 3, "tokens": {"q0": [5, 6, 7, 8]}}

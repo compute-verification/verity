@@ -30,7 +30,7 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2") -
     from verity_vllm.pipeline import deferred_rows as DRW
     from verity_vllm.pipeline import replay_bundle as RB
     from verity_vllm.pipeline.tp import serving_rows as SRT
-    from verity_vllm.pipeline.tp.commit import TP_ROOT_TAG, tp_run_root
+    from verity_vllm.pipeline.tp.run_root import TP_ROOT_TAG, tp_run_root
 
     root.mkdir(parents=True, exist_ok=True)
     pf = root / "partition.json"
