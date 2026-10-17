@@ -346,6 +346,11 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
                    '[filler]\nper_word = 4\nmix = { ALU = 1 }\nroute = "uniform"\n')
     with pytest.raises(SystemExit, match="decision 73"):
         E.design("x", data)
+    bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[coins]\nbits = 2\nsource = "x"\n')
+    assert E.design("x", data).index_bits == 2 and two.index_bits == 1
+    bad.write_text(bad.read_text() + "[table]\nbits = 1\n")
+    with pytest.raises(SystemExit, match="below the design's 2-bit coins"):
+        E.design("x", data)
 
 
 def test_cli(capsys):

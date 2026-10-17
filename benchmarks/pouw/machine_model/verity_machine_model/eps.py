@@ -173,7 +173,8 @@ class Design:
     lanes: bool = True
     uniform: bool = True
     q_uniform: float | None = None   # uniform instructions a word on the uniform datapath; None: q*
-    index_bits: int = 1              # bits a noise entry on the operand a table route indexes (`[table] bits`)
+    index_bits: int = 1              # bits a noise entry on the operand a table route indexes (`[table] bits`, else
+                                     # the coins')
     title: str = ""              # decision 79's name
     aliases: tuple[str, ...] = ()    # the names tonight's notes and data used
     base: str = ""               # the design this one varies
@@ -265,6 +266,10 @@ def design(name: str, data: Path = DATA) -> Design:
     if t["unit"] not in adapts(data):
         raise SystemExit(f"{name}: unit {t['unit']!r} is not a proof unit of adapt.toml ({', '.join(adapts(data))})")
     coins = t["coins"]
+    index_bits = t.get("table", {}).get("bits", coins["bits"])
+    if index_bits < coins["bits"]:
+        raise SystemExit(f"{name}: [table] bits {index_bits} is below the design's {coins['bits']}-bit coins: an entry "
+                         "on the indexed operand has at least the coins' bits")
     return Design(name=t["name"], summary=t["summary"], honest=t["honest"], L=t["L"], work=t.get("work", 1.0),
                   fold_name=fold.pop("name"), fold=fold, filler=(filler,) if filler.per_word else (),
                   skip=_parts(t.get("skip", {})),
@@ -274,7 +279,7 @@ def design(name: str, data: Path = DATA) -> Design:
                   baseline_source=base.get("source", ""), floor=dict(ops.get("floor", {})),
                   floor_source=ops.get("source", ""), plain=t.get("plain", 0.0), lanes=routes.get("lanes", True),
                   uniform=routes.get("uniform", True), q_uniform=routes.get("q_uniform"),
-                  index_bits=t.get("table", {}).get("bits", 1), title=t["title"],
+                  index_bits=index_bits, title=t["title"],
                   aliases=tuple(t.get("aliases", ())), base=t.get("base", ""), ppl=t.get("ppl", ""), noise=noise,
                   unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"])
 
