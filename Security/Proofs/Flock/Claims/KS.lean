@@ -90,6 +90,8 @@ import Proofs.Flock.Claims.KS.PlainStep
 import Proofs.Flock.Claims.KS.PlainParts
 import Proofs.Flock.Claims.KS.PlainClash0
 import Proofs.Flock.Claims.KS.PlainLevels
+import Proofs.Flock.Claims.KS.LevelsAll
+import Proofs.Flock.Claims.KS.PlainClashLater
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -448,12 +450,19 @@ columns, so the clash needs only its case past level 0 (`PlainClash0`: `FlockDep
 `FlockDeploy.KS.PlainSimLaterClashAt`, `FlockDeploy.KS.plain_KS_of_later`). Past level 0, an accepted plain rep passed
 every later level's Merkle check on its proof's rows at the positions of that level's query round, against the flattened
 recursive cap before it, so two rows a rep opens at one later-level position that differ clash in the run's log
-(`PlainLevels`: `FlockDeploy.KS.plainLevels_verifyWithM`, `FlockDeploy.KS.plain_levelClash`). The masked simulator runs
-each prover round by round at uniform functions of the live coins' history, its rounds on the masked wire at their
-stream and count, with each table's fork rounds at its reps' caps, pads and `τ` and level 0 at the link coin; it meets
-`ZkSimWJ`, so masked KS and the recursion's premise hold, from four named Props: its lockstep, its abort, its fork
-bounds and a view's self-clash giving a column clash (`ZkSim`: `FlockDeploy.KS.zkSim`, `FlockDeploy.KS.zkΦ`,
-`FlockDeploy.KS.zkRd`, `FlockDeploy.KS.zk_simFork_le`, `FlockDeploy.KS.ZkSimRunAt`, `FlockDeploy.KS.ZkSimAbortAt`,
+(`PlainLevels`: `FlockDeploy.KS.plainLevels_verifyWithM`, `FlockDeploy.KS.plain_levelClash`). On the model's side, the
+same accepted rep's requests after level 0's are levels `1, …, R` in order, each at the positions of the coins of its
+query round (`LevelsAll`: `FlockSoundness.Refine.LaterAt`, `FlockSoundness.Refine.find?_later`,
+`FlockSoundness.Refine.rep_refines_reqs`). So a self-clash past level 0 at the concrete simulator's outcome is two of
+one rep's level-`ℓ` entries at one position with different columns, which are the run's level-`ℓ` rows and clash in its
+log, and KS at the deployed plain verifier's trimmed record holds from the simulator's fork bound alone
+(`PlainClashLater`: `FlockSoundness.Discharge.AtDraw.accepts_opensLD`, `FlockDeploy.KS.plainClashQL`,
+`FlockDeploy.KS.plainSimLaterClashAt`, `FlockDeploy.KS.plain_KS_of_fork`). The masked simulator runs each prover round
+by round at uniform functions of the live coins' history, its rounds on the masked wire at their stream and count, with
+each table's fork rounds at its reps' caps, pads and `τ` and level 0 at the link coin; it meets `ZkSimWJ`, so masked KS
+and the recursion's premise hold, from four named Props: its lockstep, its abort, its fork bounds and a view's
+self-clash giving a column clash (`ZkSim`: `FlockDeploy.KS.zkSim`, `FlockDeploy.KS.zkΦ`, `FlockDeploy.KS.zkRd`,
+`FlockDeploy.KS.zk_simFork_le`, `FlockDeploy.KS.ZkSimRunAt`, `FlockDeploy.KS.ZkSimAbortAt`,
 `FlockDeploy.KS.ZkSimForkLe`, `FlockDeploy.KS.ZkViewClash`, `FlockDeploy.KS.zkSimWJ_of_parts`,
 `FlockDeploy.KS.zk_KS_of_parts`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_parts`, `FlockDeploy.KS.zk_KSFlock_of_parts`).
 -/
