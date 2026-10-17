@@ -4,7 +4,8 @@ import Definitions.Pouw.Eps1.M3
 # Dither's CUDA-core lower bounds in model M3 (trusted)
 
 EPS1-QSTAR's proved lower bounds (note:20261017T0344Z-draft-eps1-qstar, (b)), over `Pouw.Eps1`'s model M3, each
-proved (or a `sorry` stub) as `Pouw.SecurityProofs.Eps1.G` in `Proofs.Pouw.Eps1`:
+proved as `Pouw.SecurityProofs.Eps1.G` in `Proofs.Pouw.Eps1`. `ClassPPacked` isn't proved yet, so `lean-audit.json`
+lists it under `shape.frozen` as `unstated`, not under `guarantees`:
 
 * `WordLocalZero`: Theorem B at the zero instance, a word-local program costs at least 4 instructions a word;
 * `WordLocalGeneral`: Theorem B at a general instance, at least 8 a word (met by dp4a's 8 IDP.4A);

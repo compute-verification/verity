@@ -3929,12 +3929,6 @@
    "assumptions": [],
    "type_hash": "5285cb8cbec9dd6a634d4653607b825be7d9eea4c260b93e29cb3fad67b09cee"
   },
-  "Pouw.SecurityProofs.Eps1.ClassPPacked": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.Eps1.ClassPPacked : Pouw.Guarantees.Eps1.ClassPPacked"],
-   "assumptions": [],
-   "type_hash": "e0ae0f4fd373b0c795359c585a78a0dc22add952ea14e31b12dea604e6e5ac39"
-  },
   "Pouw.SecurityProofs.Eps1.WordLocalGeneral": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Eps1.WordLocalGeneral : Pouw.Guarantees.Eps1.WordLocalGeneral"],
@@ -5436,7 +5430,7 @@
    "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
-   "Pouw.SecurityProofs.Eps1.ClassPPacked": "frozen (no-function): Theorem C of EPS1-QSTAR, over every class-P (radix-packed) M3 program at the zero instance, not a Lean function.",
+   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
    "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier."
   },
   "conjectures": {
@@ -8768,11 +8762,7 @@
     "Pouw.Eps1.zeroPrefix": "5e65b6f7d51a63dd5fc41559ec511b591728e0efd66217359d4dc06e8c19f89b",
     "Pouw.Eps1.zeroSeg": "3dd23aad55a841780af33c88c4f8c8847586d596b4e92c51500f1e2dc3a21ba1"
    },
-   "guarantees": [
-    "Pouw.SecurityProofs.Eps1.ClassPPacked",
-    "Pouw.SecurityProofs.Eps1.WordLocalGeneral",
-    "Pouw.SecurityProofs.Eps1.WordLocalZero"
-   ]
+   "guarantees": ["Pouw.SecurityProofs.Eps1.WordLocalGeneral", "Pouw.SecurityProofs.Eps1.WordLocalZero"]
   },
   "Definitions.Pouw.Fp8Atom.Atom": {
    "digest": "ac94661d29300afde0e3a6146a4f199f42d253ec3b64dad58699e2e3e10496ee",
@@ -17955,11 +17945,7 @@
     "Pouw.Guarantees.Eps1.WordLocalGeneral": "06b1ba2c4f60b3a0a2072cfbddedd342e3660c3110e75667c92473c62c892b4f",
     "Pouw.Guarantees.Eps1.WordLocalZero": "8605a67a07179eaac27dc2366f8f349c0ef6ec8cf34acbe87292092454859e2e"
    },
-   "guarantees": [
-    "Pouw.SecurityProofs.Eps1.ClassPPacked",
-    "Pouw.SecurityProofs.Eps1.WordLocalGeneral",
-    "Pouw.SecurityProofs.Eps1.WordLocalZero"
-   ]
+   "guarantees": ["Pouw.SecurityProofs.Eps1.WordLocalGeneral", "Pouw.SecurityProofs.Eps1.WordLocalZero"]
   },
   "Models.Pouw.Guarantees.Game": {
    "digest": "064ea4e3db6eda646acb0c5d37b084297521cb4a0c034f43ba08118bb232db1a",
