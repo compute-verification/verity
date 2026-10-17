@@ -133,11 +133,13 @@ __device__ __forceinline__ void spec(const OpArgs& a) {
 #define MIXES(x, X)                                                                                                  \
   ALONE(x, X) MIX(x, X, 2) MIX(x, X, 4) MIX(x, X, 8) MIX(x, X, 16) MIX(x, X, 24) MIX(x, X, 32) MIX(x, X, 48)        \
   MIX(x, X, 64) MIX(x, X, 128)
-#define KERNELS(x, X) MIXES(x, X) SPEC(x, X, 4) SPEC(x, X, 8)
+#define KNEE(x, X) MIX(x, X, 40) MIX(x, X, 56) MIX(x, X, 80) MIX(x, X, 96)
+#define KERNELS(x, X) MIXES(x, X) KNEE(x, X) SPEC(x, X, 4) SPEC(x, X, 8)
 KERNELS(imad, X_IMAD)
 KERNELS(hfma2, X_HFMA2)
 KERNELS(lop3, X_LOP3)
 MIXES(shfl, X_SHFL)
+MIX(shfl, X_SHFL, 18) MIX(shfl, X_SHFL, 20) MIX(shfl, X_SHFL, 22) MIX(shfl, X_SHFL, 28)
 
 #define IMMA "IMMA.16832.S8.S8"
 #define P_ALONE(x, OP, KIND, ROW)                                                                                    \
@@ -152,7 +154,8 @@ MIXES(shfl, X_SHFL)
 #define P_MIXES(x, OP, KIND, ROW)                                                                                    \
   P_ALONE(x, OP, KIND, ROW), P_MIX(x, OP, 2), P_MIX(x, OP, 4), P_MIX(x, OP, 8), P_MIX(x, OP, 16), P_MIX(x, OP, 24),  \
   P_MIX(x, OP, 32), P_MIX(x, OP, 48), P_MIX(x, OP, 64), P_MIX(x, OP, 128)
-#define PROBES_OF(x, OP, KIND, ROW) P_MIXES(x, OP, KIND, ROW), P_SPEC(x, OP, 4), P_SPEC(x, OP, 8)
+#define P_KNEE(x, OP) P_MIX(x, OP, 40), P_MIX(x, OP, 56), P_MIX(x, OP, 80), P_MIX(x, OP, 96)
+#define PROBES_OF(x, OP, KIND, ROW) P_MIXES(x, OP, KIND, ROW), P_KNEE(x, OP), P_SPEC(x, OP, 4), P_SPEC(x, OP, 8)
 
 // shfl has no spec probe: in a warp-divergent role ptxas gives SHFL a BRA.DIV fallback placed after the closing clock read
 // that branches back into the loop, so the loop straddles the clock (r20261017-033312-5546).
@@ -162,6 +165,8 @@ static const OpProbe PROBES[] = {
     PROBES_OF(hfma2, "HFMA2*", "", ""),
     PROBES_OF(lop3, "LOP3.LUT", "ALU", "A"),
     P_MIXES(shfl, "SHFL.BFLY", "", ""),
+    P_MIX(shfl, "SHFL.BFLY", 18), P_MIX(shfl, "SHFL.BFLY", 20), P_MIX(shfl, "SHFL.BFLY", 22),
+    P_MIX(shfl, "SHFL.BFLY", 28),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

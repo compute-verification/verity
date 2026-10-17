@@ -93,6 +93,16 @@ def cmd_facets(a) -> int:
     return 0
 
 
+#: words a warp instruction of a side loop's other patterns, by unit (the counted pattern's are the probe's `words`)
+MORE_WORDS = {"redblk": {"UBLKRED*": 256}}
+
+
+def side_words(row: dict, unit: str) -> float:
+    """The side role's words/SM/clk: every pattern of its loop at its words a warp instruction."""
+    words = {row["counted"]: row["words"] or 0, **MORE_WORDS.get(unit, {})}
+    return sum(r * words.get(k.split(":", 1)[1], 0) for k, r in row["rates"].items() if k.split(":", 1)[1] != IMMA)
+
+
 def cmd_side(a) -> int:
     rows = {r["probe"]: r for r in load(a.rows)}
     base = rows.get("honest") or {}
@@ -102,9 +112,8 @@ def cmd_side(a) -> int:
     for name in sorted(n for n in rows if n.startswith("hs_")):
         u = name[3:]
         hs, sa = rows[name], rows.get("sa_" + u)
-        w = hs["words"] or 0
-        beside = hs["rate"] * w
-        alone = sa["rate"] * w if sa else float("nan")
+        beside = side_words(hs, u)
+        alone = side_words(sa, u) if sa else float("nan")
         ref = rows.get("honest_cl" if u.startswith("dsm") else "honest")
         kept = loop_rate(hs, IMMA) / loop_rate(ref, IMMA) if ref else float("nan")
         print(f"{u:10s} {alone:18.4f} {beside:20.4f} {kept:9.4f} {hs.get('stop_gap') or 0:8.4f}")

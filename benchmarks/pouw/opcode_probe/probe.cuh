@@ -24,6 +24,8 @@ struct OpArgs {
   unsigned char* g;    // a global buffer of gbytes, zeroed
   unsigned long long gbytes;
   int iters, mode;
+  unsigned long long tex1 = 0;  // g as a 1D linear texture of u32 (tex1Dfetch: TLD)
+  unsigned long long tex2 = 0;  // g as a 1024-wide pitch-2D texture of float4 with linear filtering (tex2D: TEX)
 };
 
 #define OP_KERNEL(name, tpb) extern "C" __global__ void __launch_bounds__(tpb, 1) name(OpArgs a)
@@ -169,6 +171,29 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
   unsigned char* g;
   GK_CK(cudaMalloc(&g, gbytes));
   GK_CK(cudaMemsetAsync(g, 0, gbytes, s));
+  cudaTextureObject_t tex1 = 0, tex2 = 0;
+  {
+    cudaResourceDesc r{};
+    cudaTextureDesc t{};
+    r.resType = cudaResourceTypeLinear;
+    r.res.linear.devPtr = g;
+    r.res.linear.desc = cudaCreateChannelDesc<unsigned>();
+    r.res.linear.sizeInBytes = gbytes;
+    t.readMode = cudaReadModeElementType;
+    GK_CK(cudaCreateTextureObject(&tex1, &r, &t, nullptr));
+    cudaResourceDesc r2{};
+    cudaTextureDesc t2{};
+    r2.resType = cudaResourceTypePitch2D;
+    r2.res.pitch2D.devPtr = g;
+    r2.res.pitch2D.desc = cudaCreateChannelDesc<float4>();
+    r2.res.pitch2D.width = 1024;
+    r2.res.pitch2D.height = gbytes / (1024 * sizeof(float4));
+    r2.res.pitch2D.pitchInBytes = 1024 * sizeof(float4);
+    t2.filterMode = cudaFilterModeLinear;
+    t2.addressMode[0] = t2.addressMode[1] = cudaAddressModeWrap;
+    t2.readMode = cudaReadModeElementType;
+    GK_CK(cudaCreateTextureObject(&tex2, &r2, &t2, nullptr));
+  }
   std::vector<const OpProbe*> ps;
   for (const std::string& nm : names) {
     const OpProbe* q = nullptr;
@@ -192,7 +217,7 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
     GK_CK(cudaMalloc(&b.sink, sizeof(unsigned) * b.blocks * q->tpb));
     if (q->dyn_smem)
       GK_CK(cudaFuncSetAttribute(q->kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, q->dyn_smem));
-    b.args = OpArgs{b.rec, b.sink, g, gbytes, std::max(1, (int)(q->iters * scale)), q->mode};
+    b.args = OpArgs{b.rec, b.sink, g, gbytes, std::max(1, (int)(q->iters * scale)), q->mode, tex1, tex2};
     bufs.push_back(b);
   }
   for (size_t i = 0; i < ps.size(); i++) {
