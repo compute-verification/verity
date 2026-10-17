@@ -12,6 +12,10 @@ set -uo pipefail
 : "${BUNDLE:?BUNDLE=art:... is required}"
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/ptv-$$}/out}; mkdir -p "$O"
 W=${PT_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$W"
+PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$W" --owner @proofs --expires 14d --priority low \
+  --regenerate "bash benchmarks/proof_throughput/verify.sh BUNDLE=$BUNDLE" \
+  --why "proof_throughput's Lean verifier builds and venv: a cache, rebuilt by the next point" > "$O/keep.json" 2>&1 \
+  || echo "no retention record on $W: $(tail -1 "$O/keep.json")" >&2
 S=$(mktemp -d "$W/scratch.XXXXXX"); trap 'rm -rf "$S"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"

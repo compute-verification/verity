@@ -17,6 +17,10 @@ set -uo pipefail
 : "${WORKLOAD:?WORKLOAD= is required}" "${B:?B= is required}"
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/pt-$$}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK"
+PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @proofs --expires 14d --priority low \
+  --regenerate "bash benchmarks/proof_throughput/job.sh WORKLOAD=$WORKLOAD B=$B" \
+  --why "proof_throughput's prover builds, venv and stage cache: a cache, rebuilt by the next point" > "$O/keep.json" 2>&1 \
+  || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2
 export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache} FC_COINS=${FC_COINS:-os}
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 unset CARGO_TARGET_DIR
