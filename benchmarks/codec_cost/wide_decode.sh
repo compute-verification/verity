@@ -2,10 +2,11 @@
 # The wide-word codec (benchmarks/codec_tensor: wt.cu, bench.py) at 1,536 to 4,096 bits, plain and masked: gates against
 # wide.py, then the read rate, compute-only rates and the standalone store decode at k = 1, 2 (cwd = the source tree).
 # 3,072 and 4,096 are not wide.py's fields, so a scratch copy of codec_tensor gets p = 2^3072 - 2165 and 2^4096 - 2549
-# (both 3 mod 4) and the tree is left as it is. Builds run outside the lease, the bench under one gpu-lease. $OUT gets
+# (both 3 mod 4) and the tree is left as it is. Builds run outside the lease, the bench under one gpu-lease, over
+# whichever builds finished within BUILD_S seconds. FIELDS and MASKS ("0 1") pick the builds. $OUT gets
 # codec-tensor.json and bench.log.
 #
-#   research run --on vy-nebius-2 --queue --gpu-host --preemptible --cpus 8 --mem-gb 32 --cwd source \
+#   research run --on vy-nebius-2 --queue --gpu-host --preemptible --cpus 8 --mem-gb 32 --max-min 60 --cwd source \
 #     -- bash benchmarks/codec_cost/wide_decode.sh
 set -uxo pipefail
 O=${OUT:?}
@@ -31,7 +32,10 @@ edits = {
     "wt.cu": [('#else\n#error "WT_FIELD is one of wide.FIELDS"',
                '#elif WT_FIELD == 3072\nconstexpr int NBITS = 3072, TW = 22;\nconstexpr u32 CF = 2165;\n'
                '#elif WT_FIELD == 4096\nconstexpr int NBITS = 4096, TW = 16;\nconstexpr u32 CF = 2549;\n'
-               '#else\n#error "WT_FIELD is one of wide.FIELDS"')],
+               '#else\n#error "WT_FIELD is one of wide.FIELDS"'),
+              # the tensor-core digit mask, unused past 2,048 bits (no TC), is a host-side error at 8U > 64
+              ('constexpr u64 MASK = DB == 64 ? ~0ull : (1ull << DB) - 1;',
+               'constexpr u64 MASK = DB >= 64 ? ~0ull : (1ull << (DB < 64 ? DB : 0)) - 1;')],
 }
 for name, pairs in edits.items():
     p = ct / name
@@ -49,7 +53,7 @@ FIELDS=${FIELDS:-"1536 2048 3072 4096"}
 declare -A PIDS=()
 BUILDS=()
 for n in $FIELDS; do
-  for m in 0 1; do
+  for m in ${MASKS:-0 1}; do
     timeout "${BUILD_S:-1500}" nvcc "${FLAGS[@]}" -DWT_FIELD="$n" -DWT_MASK=$m -o "$B/wt-$n-m$m.so" "$CT/wt.cu" \
       > "$O/wt-$n-m$m.ptxas" 2>&1 & PIDS[$n-m$m]=$!
     BUILDS+=("$n-m$m")
