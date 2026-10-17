@@ -58,7 +58,7 @@ def test_a_control_must_stop_where_the_firewall_did_and_for_its_reason():
 
 def test_a_stop_at_finish_for_rows_that_fail_on_the_pads_is_judged_at_the_first_failing_check():
     t = transcript([{"masked": {}}, check(True, 0, []), check(False, 1, []), check(False, 1, [])],
-                   stopped="FIREWALL-REFUSED: circuit: 2 constraints fail on a rep's pads")
+                   stopped="FIREWALL-REFUSED: circuit: the constraints zerocheck final a·b fail on a rep's pads")
     assert OA.judge("algebra", t, {"accepted": False, "released": 2, "why": "the relation r fails"}) == (True, "")
     assert not OA.judge("algebra", t, {"accepted": False, "released": 3, "why": "the relation r fails"})[0]
     assert not OA.judge("honest", t, {"accepted": True, "released": 4, "why": None})[0]

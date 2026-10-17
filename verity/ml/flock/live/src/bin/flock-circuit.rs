@@ -3357,9 +3357,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             // a failed check, or a constraint that fails on the pads, stops the session at its Finish (§10.1): every round of the
             // table left on schedule
             if let Some(g) = &firewall {
-                let rows = buckets[table_buckets..].iter().map(|b| b["constraints_failing_on_pads"].as_u64().unwrap_or(0)).find(|&n| n > 0);
+                let rows = buckets[table_buckets..].iter()
+                    .filter_map(|b| b["constraints_failing_on_pads"].as_array().filter(|r| !r.is_empty()))
+                    .map(|r| r.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", ")).next();
                 let why = g.lock().unwrap_or_else(PoisonError::into_inner).why.clone()
-                    .or_else(|| rows.map(|n| format!("FIREWALL-REFUSED: {}: {n} constraints fail on a rep's pads", tb.name)));
+                    .or_else(|| rows.map(|r| format!("FIREWALL-REFUSED: {}: the constraints {r} fail on a rep's pads", tb.name)));
                 if let Some(w) = why {
                     stop_at_finish.get_or_insert(w);
                 }
