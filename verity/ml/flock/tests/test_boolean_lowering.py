@@ -10,6 +10,7 @@ import pytest
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops import gemm as G
@@ -176,17 +177,36 @@ def test_a_template_unit_holding_an_activation_lowers_it_by_its_builder() -> Non
     assert np.array_equal(got, E.evaluate_batch(d, s, x).astype(np.uint64).reshape(T, -1))
 
 
-def test_a_definition_with_statics_lowers_by_its_builder_on_them() -> None:
-    """`sampling_boolean.traced_family`'s builders take the Definition's statics before its elements (``build(C, S, *elements)``)."""
-    from verity_vllm.program.registry import sampling_boolean as SB
+def _rounds(C, S, s, *x):
+    for i in range(S.N):
+        s = _mix(C, s, x[i])
+    return s
 
-    d, T, n = bind(SB.ArgmaxLeaf, G=8, FIRST=1, FINAL=1), 64, 8 * 16
-    C, _ = _lower(d, [1] * n)
-    assert C.counts()["ands"] == SB.ArgmaxLeaf.traced(d).counts["and"]
-    x = _bits(np.random.default_rng(5), T, 8, 16)
-    got_s, fail = C.evaluate({f"in{j}": IL.slice_words(x.reshape(T, -1)[:, j], 1) for j in range(n)}, T)
-    assert not fail
-    assert np.array_equal(IL.unslice_words(got_s["out"], T), _pack(E.evaluate_batch(d, x).astype(np.uint64)))
+
+def _rounds_body(B, S, s, x):
+    ps, ret = [WORD, Array(S.N, WORD)], WORD
+    return TR.emit(TR.trace(lambda C, *e: _rounds(C, S, *e), ps, ret), ps, ret, B, s, x)
+
+
+#: N rounds of `_mix` in one Boolean Definition with a static, built as `sampling_boolean.traced_family` builds its own: the
+#: builder takes ``S`` before the elements
+ROUNDS = CompositeDefinition("TestCommitMixRounds", 1, ("N",), lambda S: ((("s", WORD), ("x", Array(S.N, WORD))), WORD),
+                             _rounds_body, register=False)
+ROUNDS.build = _rounds  # type: ignore[attr-defined]
+
+
+def test_a_definition_with_statics_lowers_by_its_builder_on_them() -> None:
+    """The lowering runs ``build(C, S, *elements)``: N rounds keep N rounds' commits, and compute the reference."""
+    per, T, rng = MIX.traced().counts["and"], 64, np.random.default_rng(5)
+    for n in (1, 2, 4):
+        d = bind(ROUNDS, N=n)
+        C, _ = _lower(d, [1] * ((n + 1) * W))
+        assert C.counts()["ands"] == n * (per + W)
+        s, x = _bits(rng, T, W), _bits(rng, T, n, W)
+        cols = np.concatenate([s, x.reshape(T, -1)], axis=1)
+        got_s, fail = C.evaluate({f"in{j}": IL.slice_words(cols[:, j], 1) for j in range(cols.shape[1])}, T)
+        assert not fail
+        assert np.array_equal(IL.unslice_words(got_s["out"], T), _pack(E.evaluate_batch(d, s, x).astype(np.uint64)))
 
 
 @pytest.mark.parametrize("n", [2, 3, 8, 33])
