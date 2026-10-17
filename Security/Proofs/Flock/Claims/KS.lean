@@ -20,6 +20,8 @@ import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.KS.PlainKS
 import Proofs.Flock.Claims.KS.Escapes
+import Proofs.Flock.Claims.KS.OnAcc
+import Proofs.Flock.Claims.KS.PlainAcc
 import Proofs.Flock.Claims.KS.MixtureZk
 import Proofs.Flock.Claims.KS.ZkBound
 import Proofs.Flock.Claims.KS.ZkKS
@@ -92,7 +94,13 @@ runs accepting on `C`, and whose `Adv` and self-clash the escapes' events bound,
 (`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). `Flock.KS` at the plain record follows from the live
 sessions' bound at table 0 and `Extendθ` (`PlainKS`: `FlockDeploy.KS.plain_KS_of_live`). The self-clash after `Commit`
 against the simulated strategy arises only on live runs the live verdict accepts, whose decoded outputs self-clash
-(`Escapes`: `FlockDeploy.KS.selfClash_le_live`, `FlockDeploy.KS.mean_selfClash_le_live`).
+(`Escapes`: `FlockDeploy.KS.selfClash_le_live`, `FlockDeploy.KS.mean_selfClash_le_live`). Escapes on accepted runs
+(`OnAcc`, `Claims.Escapes.OnAcc`): `Flock.TableBoundθAccAt` is `TableBoundθAt` with them, which gives it
+(`Flock.TableBoundθAccAt.tableBoundθAt`) and holds with none where no run accepts (`Flock.tableBoundθAccAt_of_noAcc`);
+the old escapes are on accepted runs where their events are (`Flock.oldEsc_onAcc`, `Flock.oldEscZ_onAcc`). With the
+live sessions' bound at escapes on accepted runs, whose events bound the decoded self-clashes on accepted live runs
+(`PlainAcc`: `FlockDeploy.KS.PlainLiveAcc`, which gives `PlainLive`, `FlockDeploy.KS.plainLive_of_acc`), the plain
+table bound holds with escapes on accepted runs at every statement (`FlockDeploy.KS.plain_tableBoundθAccAt`).
 At `--zk`, one table's compiled session is `Commit`'s
 cap and then `sessAtZ` with no other game, so a live verdict at one masked table is no likelier than any verdict after
 `Commit` the decoder is right for (`MixtureZk`: `FlockDeploy.KS.live_le_simAtZ`, `FlockDeploy.KS.mean_live_le_simAtZ`),
