@@ -26,7 +26,8 @@ import Proofs.Flock.SamplingBoundary
 * `Bits` from `KS`, the extractor's expected reruns (`E_runs_exp`) and its own calls (`Bits_of_KS`);
 * `Efficient` at `FlockDeploy.zkStepPoly`: the extractor's reruns (`E_runs_le`), expected reruns (`E_runs_exp`, with
   the draw before the sessions) and own calls (`E_own_le`) at the record's decoder, and that decoder's `ListWithin`
-  and step count at `deployZk` (`FlockDeploy.efficient_zk`).
+  at `deployZk` (`FlockDeploy.listWithin_zk`) and its step count, the trimmed record's (`FlockDeploy.efficient_zk`),
+  whose decoder is `deployZk`'s (`FlockDeploy.decode_zk`).
 
 ## What remains: the hypotheses
 
@@ -110,8 +111,8 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (drawLaw_of_slots D hslots) hrefuse hε
   have hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
       ∀ os, (D.flock.dec os).2 ≤ FlockDeploy.zkStepPoly.eval (Claims.Flock.wordLen os) := by
-    rw [hflock]
-    exact ⟨(FlockDeploy.efficient_zk H rel).2.1, (FlockDeploy.efficient_zk H rel).2.2.1⟩
+    rw [hflock, show (FlockDeploy.deployZk rel).decode = Claims.GS.zkDecodeRD from FlockDeploy.decode_zk rel]
+    exact ⟨FlockDeploy.listWithin_zk rel, (FlockDeploy.efficient_zk H rel).2.2.1⟩
   exact ⟨hscope, hbind, Universal_of huniv, faultyBoundary, hks, KSCount_of_KS hks,
     Bits_of_KS hks (E_runs_exp H D hfixed) (E_own_le hopen) hε,
     ⟨E_runs_le H D _, E_runs_exp H D hfixed _, E_own_le hopen _, hdec.1, hdec.2⟩, hComplete, hZK⟩

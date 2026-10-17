@@ -38,13 +38,13 @@ namespace Claims
 theorem Flock.decoder_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
     Claims.Flock.ListWithin (deployPlain rel).len (deployPlain rel).enc (deployPlain rel).θ
       (deployPlain rel).decode := by
-  rw [decode_plain]
+  rw [show (deployPlain rel).decode = Claims.GS.plainDecodeRD from decode_plain rel]
   exact listWithin_plain rel
 
 /-- **The masked record's decoder meets the list-decoding spec** at the record's code, length and radius. -/
 theorem Flock.decoder_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
     Claims.Flock.ListWithin (deployZk rel).len (deployZk rel).enc (deployZk rel).θ (deployZk rel).decode := by
-  rw [decode_zk]
+  rw [show (deployZk rel).decode = Claims.GS.zkDecodeRD from decode_zk rel]
   exact listWithin_zk rel
 
 /-- **The masked record is the masked verifier.** -/
