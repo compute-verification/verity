@@ -5,8 +5,8 @@ import Proofs.Flock.Level3.Placed
 /-!
 # Flock's honest prover at the deployed plain verifier (`honestP`)
 
-The plain record's reference prover (`(deployPlain rel).P`), the prover of `Claims.Flock.Complete H (deployPlain rel)
-(δc H)`, against B's plain record (`FlockDeploy.V false`).
+The plain record's reference prover (`(deployPlain rel).P`), the prover of `Claims.Flock.Complete H (deployPlain rel)`
+(at its error `δc H`), against B's plain record (`FlockDeploy.V false`).
 
 * **Its program** (`PI`): oracle queries, and sends, each answered by the verifier's reply. `PV := ExceptT String PI`
   is a verdict monad the session prover (`sessionP`) runs in, with SHA-512 the oracle (`Hashes.pi`) and the two sends of

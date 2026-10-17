@@ -393,14 +393,14 @@ theorem _root_.FlockComplete.Run.walkAt {H : Claims.Msg → Claims.Msg} {rel : R
   · rw [hrs]
     rfl
 
-/-- **Flock's completeness at the deployed plain verifier**, at the deployed relation (`Readable.relation`), from the
-named premises: the record's JSON (`JsonSpec`), the oracle's 64-byte outputs (`Out64`), the printed record's length
-(`RecordFits`), and Ligerito's final identity at every rep (`LgFinal`). What the record needs of the prover's pieces
-(`ProverOk`, `proverOk`) and the Merkle schemes' digest widths (`SchemeWidths`, `schemeWidths`) follow from `Out64`, and
-the session walk (`Run.walkAt`, `Run.repWalk`) aligns every rep. -/
+/-- **Flock's completeness at the deployed plain verifier**, at the deployed relation (`Readable.relation`) and the
+record's error (`δc H`, `Complete.Ready`), from the named premises: the record's JSON (`JsonSpec`), the oracle's
+64-byte outputs (`Out64`), and Ligerito's final identity at every rep (`LgFinal`). What the record needs of the
+prover's pieces (`ProverOk`, `proverOk`) and the Merkle schemes' digest widths (`SchemeWidths`, `schemeWidths`) follow
+from `Out64`, and the session walk (`Run.walkAt`, `Run.repWalk`) aligns every rep. -/
 theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H)
-    (hF : JsonRT.RecordFits H Readable.relation) (hfin : LgFinal H Readable.relation) :
-    Claims.Flock.Complete H (deployPlain Readable.relation) (δc H) := by
+    (hfin : LgFinal H Readable.relation) :
+    Claims.Flock.Complete H (deployPlain Readable.relation) := by
   have hP : JsonRT.ProverOk H Readable.relation := proverOk h64
   have hW : SchemeWidths H Readable.relation := schemeWidths h64
   have w : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2,
@@ -416,7 +416,7 @@ theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec prin
     { session := JsonRT.sessionRuns_goal S
       sends := sendCount_goal H _
       linkFirst := linkFirst_goal H h64 _
-      finalFits := JsonRT.finalFits_goal S h64 hP hF
+      finalFits := JsonRT.finalFits_goal S h64 hP
       draw := JsonRT.drawMatches_goal S h64 hP
       liveReads := JsonRT.liveReads_goal S h64 hP
       rootB := JsonRT.custodyRootB_goal S h64 hP

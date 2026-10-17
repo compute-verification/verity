@@ -3,7 +3,7 @@ name = "verity-pouw-benchmarks"
 version = "0.0.0"
 description = "PoUW's benchmarks and their tests."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-vllm", "verity-difftest", "numpy", "blake3>=1.0"]
+dependencies = ["research", "verity", "verity-vllm", "verity-difftest", "verity-exact-kit", "numpy", "blake3>=1.0"]
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]
@@ -14,14 +14,16 @@ verity = { workspace = true }
 research = { workspace = true }
 verity-vllm = { workspace = true }
 verity-difftest = { workspace = true }
+verity-exact-kit = { workspace = true }
 
 [tool.verity.tests]
 # Test-only: test_hidden_zk_stage runs hidden_zk/stage.py, which stages through C-Flock's Python; harness/price_twins.py
 # reads the lifted PoUW guarantees' sources and Security's lock. The PoUW × C-Flock statement's Guarantees definition is
 # in Proofs (`reads_exempt` in the lock). Of `verity`, the difftest harness, vLLM's integration and `research`, what the
 # tests import, in place of those trees; the Lean the served challenger's `lake build` reads is keyed by the binaries it
-# builds (`artifacts`), and the C++ the tests compile is this suite's own.  benchmarks/pouw/receipts, filler and machine_model are suites of their own, which
-# this suite's tests read (test_receipts_adopters, test_opcode_probe), so they're named here.
+# builds (`artifacts`), and the C++ the tests compile is this suite's own. benchmarks/pouw/receipts, filler and
+# machine_model are suites of their own, which this suite's tests read (test_receipts_adopters, test_opcode_probe),
+# so they're named here. The theory scripts (`theory/`) import the exact kit's package.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
@@ -35,7 +37,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "tools/research/src/research/result.py", "tools/research/src/research/secret_hint.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "Security/Models/Pouw/Guarantees", "Security/Proofs/Pouw/PearlC/FlockTile/Statement.lean", "Security/lean-audit.json",
-          "benchmarks/pouw/receipts", "benchmarks/pouw/filler", "benchmarks/pouw/machine_model"]
+          "benchmarks/pouw/exact_kit/exact_kit", "benchmarks/pouw/receipts", "benchmarks/pouw/filler",
+          "benchmarks/pouw/machine_model"]
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
 artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",
              "verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check-difftest",

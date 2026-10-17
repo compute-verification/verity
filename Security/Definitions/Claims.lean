@@ -637,7 +637,8 @@ per column entry read, moving data free. `Flock.Efficient` reads that count; tha
 decoder is `trustedBase`'s.
 
 `P` is the reference prover, the honest prover the deployment runs, on its tapes (`Tape`, a nonempty type):
-completeness is its (`Complete`), so the claim is about the deployed prover and no other. -/
+completeness is its (`Complete`), so the claim is about the deployed prover and no other. `δc` is its completeness
+error as the deployment states it, at each hash (`δc H x` at `H`): `Complete` is at that error and no other. -/
 structure Deploy (Coin Col T : Type) where
   zk : Bool
   V : Verifier Coin
@@ -658,6 +659,7 @@ structure Deploy (Coin Col T : Type) where
   Tape : Type
   [tapeNonempty : Nonempty Tape]
   P : Wit → Prover Tape
+  δc : (Msg → Msg) → Msg → ℝ
 
 instance Deploy.instNonemptyTape {Coin Col T : Type} (D : Deploy Coin Col T) : Nonempty D.Tape := D.tapeNonempty
 
@@ -691,9 +693,10 @@ def Scope (D : Deploy Coin Col T) (x : Msg) : Prop := ∃ s, D.parse x = some s 
 def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ decode, ListWithin D.len D.enc D.θ decode → Claims.KS H D.V (R D.parse) (E D decode) (κ D) (γ D)
 
-/-- **Flock: Complete**, on the statements in scope, of the deployed record's reference prover (`D.P`). -/
-def Complete (H : Msg → Msg) (D : Deploy Coin Col T) (δc : Msg → ℝ) : Prop :=
-  Claims.Complete H D.V D.P (R D.parse) (Scope D) δc
+/-- **Flock: Complete**, on the statements in scope, of the deployed record's reference prover (`D.P`), at the
+deployed error (`D.δc H`). -/
+def Complete (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
+  Claims.Complete H D.V D.P (R D.parse) (Scope D) (D.δc H)
 
 /-- **Flock: the readable scope is the verifier's.** -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck

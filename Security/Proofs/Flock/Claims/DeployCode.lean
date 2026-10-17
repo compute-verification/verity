@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.NumbersTable
 import Proofs.Flock.Claims.GS.RadiusDeploy
 import Proofs.Flock.Claims.Complete.Honest
 import Proofs.Flock.Claims.Complete.Zk.Honest
+import Proofs.Flock.Claims.Complete.Ready
 
 /-!
 # Flock's deployed instances of `Claims.Flock.Deploy`
@@ -46,6 +47,9 @@ the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Re
 * `Tape`, `P`: the reference prover, each verifier's honest prover on its tapes: `FlockComplete.honestP` on
   `FlockComplete.Tape` (`Complete.Honest`), and `FlockComplete.honestPZk` on `FlockComplete.TapeZk`
   (`Complete.Zk.Honest`).
+* `δc`: the reference prover's completeness error at each hash `H`, `ε` (`εZk`), the bad coins' count over `2^128`, on
+  the statements the verifier can accept against `H` (`FlockComplete.ready H`, `readyZk H`), and `1` elsewhere
+  (`FlockComplete.δc`, `δcZk`, in `Complete.Ready`, which states that set).
 
 One run opens fewer level-0 columns than `nMin` of every trace (`cols_length_lt_nMin_plain`, `_zk`): ruling 2's count
 is reached only by `E^rep`'s columns, gathered over its accepted reruns.
@@ -444,6 +448,7 @@ noncomputable def deployPlain (rel : Readable.Parsed → Readable.Relation) :
   cap _ := Claims.Flock.Numbers.cap
   Tape := FlockComplete.Tape
   P := FlockComplete.honestP
+  δc := FlockComplete.δc
 
 /-- **Flock's deployed masked (`--zk`) verifier**, as the record Flock's claims read. -/
 noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
@@ -466,6 +471,7 @@ noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
   cap _ := Claims.Flock.Numbers.cap
   Tape := FlockComplete.TapeZk
   P := FlockComplete.honestPZk
+  δc := FlockComplete.δcZk
 
 /-! ## What the instances meet -/
 

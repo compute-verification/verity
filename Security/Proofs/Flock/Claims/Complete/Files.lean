@@ -4,8 +4,9 @@ import Proofs.Flock.VBridge.Family.Files
 /-!
 # The honest run's proof files
 
-The rep goals on the proof files, `RepDecodes`, `RepParams` and `CapCommitted`, and `FinalFits` but for the record's
-length, at every honest run, under the record goals' hypotheses (`JsonSpec`, `Claims.Out64`, `ProverOk`). Each proof a
+The rep goals on the proof files, `RepDecodes`, `RepParams` and `CapCommitted`, and `FinalFits` (the record's length
+from `ready`, `Run.recordFits`), at every honest run, under the record goals' hypotheses (`JsonSpec`, `Claims.Out64`,
+`ProverOk`). Each proof a
 rep returns is `ProofShaped` at the shape the verifier decodes it at (`Shaped`'s `repShaped`), so
 `decodeProof_encodeProof` reads it back.
 
@@ -130,10 +131,6 @@ theorem sessionP_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The printed honest record is under `2^64` bytes**: `Run.json`'s `printJ` of the honest record object. -/
-def RecordFits (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ o : Run H rel, o.record.toUTF8.size < 2 ^ 64
-
 /-- **Each rep's decoded proof is the honest one**: at the run's one table, with schedule `sch` and level-0
 commitment `cm`, the record's `root_B` is `cm`'s cap, two proof files, each under `2^64` bytes, and each rep's file
 decodes at the verifier's shape to a proof with `cm`'s cap and the table's PCS parameters. -/
@@ -230,11 +227,11 @@ theorem capCommitted_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims
   rw [bne, bytes_beq_self]
   rfl
 
-/-- **The last message's lengths fit their words**: the goal `FinalFits`, given the printed record's length. -/
-theorem finalFits_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel)
-    (hF : RecordFits H rel) : FinalFits H rel := by
+/-- **The last message's lengths fit their words**: the goal `FinalFits`. -/
+theorem finalFits_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+    FinalFits H rel := by
   intro o
   obtain ⟨st, sch, cm, -, -, -, hsz, hb, -⟩ := Run.rep S h64 hP o
-  exact ⟨hF o, by omega, hb⟩
+  exact ⟨o.recordFits, by omega, hb⟩
 
 end FlockComplete.JsonRT

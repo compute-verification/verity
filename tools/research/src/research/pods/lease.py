@@ -140,6 +140,12 @@ def extend_argv(seconds: int, by: str, lease_dir: str = LEASE_DIR) -> list[str]:
     return ["sh", f"{lease_dir}/lease.sh", "extend", str(int(seconds)), by]
 
 
+def remote_argv(*args: str) -> list[str]:
+    """lease.sh ARGS over ssh, in the machine's own LEASE_DIR: a Nebius VM keeps its lease in the research user's home and sets
+    LEASE_DIR in /etc/environment (vm_setup.sh); a RunPod pod has none and uses LEASE_DIR's default."""
+    return ["sh", "-c", f'exec sh "${{LEASE_DIR:-{LEASE_DIR}}}/lease.sh" "$@"', "lease", *args]
+
+
 def machine_extend(seconds: float, by: str, *, lease_dir: str | None = None) -> dict[str, Any]:
     """Machine side of `research run --on` (launch-request): push this pod's lease to at least now + seconds.  A machine without a
     lease (the control pod, a pod made before leases) has nothing to extend and says so."""
