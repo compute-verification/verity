@@ -34,7 +34,7 @@ open FlockSoundness.Discharge.ZkExec in
 /-- **Every later level's queries over the oracle**, masked: in an accepted masked Ligerito run on at least two levels,
 level `ℓ ≥ 1`'s Merkle check passes against the proof's `ℓ − 1`-th recursive cap, on its level-`ℓ` rows, siblings and
 salts, at the positions of round `t.k + 2 + levRound k0 R ℓ`'s coins. -/
-theorem zkLigeritoWith_levels (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128)
+theorem zkLigeritoWith_levels (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0)
     (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (h2 : 2 ≤ sch.levels.size)
     (hq : ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0) {t t' : Transcript} {rc : Zk.L0Rec}
@@ -230,7 +230,7 @@ open FlockSoundness.Discharge.ZkExec (shapeZK zk_schedule_seams) in
 schedule of its table, a rep that `Zk.verifyRepWith hs` accepts (in `V`, any oracle) passed level `ℓ`'s Merkle check,
 for every level `1 ≤ ℓ`, against the proof's `ℓ − 1`-th recursive cap on its level-`ℓ` rows at the positions of round
 `zkLevelRound`'s coins, and the reader's level-`ℓ` rows (`zkLevelRowsOf`) are those positions with those rows. -/
-theorem zkLevels_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : ℕ)
+theorem zkLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : ℕ)
     (sess : Session) (i r : ℕ) (bytes cap : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof),
@@ -287,7 +287,7 @@ theorem zkLevels_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Setup)
 open FlockSoundness.Discharge.ZkExec (shapeZK) in
 /-- **Every later level's query round in an accepted masked session** (`Zk.verifyWithM` in `V`, any oracle):
 `zkLevels_verifyRepWith` at every table `i` and rep `r < 2` (`verifyWithM_reps`). -/
-theorem zkLevels_verifyWithM (hs : Hashes V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
+theorem zkLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ sess : Session, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Schedule) (tPad : ℕ), Zk.schedule tabs[i].m = .ok (sch, tPad) ∧
