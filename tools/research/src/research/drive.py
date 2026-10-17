@@ -45,6 +45,8 @@ TRACE_RE = re.compile(r'^\s*([\w./+-]+\.py):\d+:|File "([^"]+\.py)", line \d+', 
 NAMED_RE = re.compile(r"(?<![\w./-])((?:[\w+-]+/)+[\w+.-]*\w\.\w+)")
 #: pytest's failing tests in its short summary
 FAILED_RE = re.compile(r"^FAILED ([^\s:]+)::", re.M)
+#: a test module pytest couldn't collect, in its short summary (`ERROR tests/x.py - KeyError: ...`)
+ERROR_RE = re.compile(r"^ERROR ([^\s:]+\.py)", re.M)
 #: in lean-audit's log: the package an audit failed (its path under the audit's scratch tree), and a Lean error's file, relative
 #: to that package
 LEAN_AUDIT_RE = re.compile(r"^AUDIT \S*?/lean-audit-scratch-[^/\s]+/(\S+?): FAIL", re.M)
@@ -336,6 +338,12 @@ def implicated(run_dir: Path) -> set[str] | None:
         return None
     for s in suites:
         base, tests = s.get("suite") or "", s.get("failed_tests") or []
+        log = ""
+        if s.get("log"):
+            with contextlib.suppress(OSError):
+                log = (run_dir / "suites" / Path(s["log"]).name).read_text(errors="replace")
+        if not tests and (errors := ERROR_RE.findall(log)):     # 17 Oct: a collection error (#2299's test of a vector only
+            tests = errors                                       # #2286 adds) named no file, and 8 PRs were ejected by inputs
         if not tests:
             out, child = s.get("outside") or {}, s.get("child_outside") or {}
             modules = list(out.values() if isinstance(out, dict) else ()) + list(child)
@@ -345,9 +353,8 @@ def implicated(run_dir: Path) -> set[str] | None:
             paths |= {os.path.normpath(p) for p in files} | {os.path.normpath(m) for m in modules if m and m != "*"}
             continue
         paths |= {os.path.normpath(os.path.join(base, t.split("::")[0])) for t in tests}
-        if s.get("log"):
-            with contextlib.suppress(OSError):
-                paths |= _named((run_dir / "suites" / Path(s["log"]).name).read_text(errors="replace"), base)
+        if log:
+            paths |= _named(log, base)
     return paths
 
 

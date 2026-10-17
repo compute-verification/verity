@@ -804,3 +804,19 @@ def test_with_circuit_check_deferred_no_pr_pre_warms_and_running_pre_warms_are_c
     h.d.defer = frozenset({"circuit-check", "flock-rust-tests"})
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1] and h.cancelled                   # admitted; the pre-warm is cancelled
+
+
+def test_a_collection_error_names_its_test_module(tmp_path):
+    """17 Oct 14:19Z: filler's suite failed collecting #2299's tests/test_capacity_of.py (a vector only #2286 adds); the
+    failure named no file, and the fallback on the suite's inputs ejected 8 PRs instead of #2299."""
+    import json
+
+    from research.drive import implicated
+
+    d = tmp_path / "run"
+    (d / "suites").mkdir(parents=True)
+    (d / "steps.jsonl").write_text('{"step": "pytest", "status": "failed"}\n')
+    (d / "suites.json").write_text(json.dumps([{"name": "filler", "suite": "benchmarks/pouw/filler", "status": "failed",
+                                                "failed_tests": [], "log": "/x/suites/filler.log"}]))
+    (d / "suites" / "filler.log").write_text("ERROR tests/test_capacity_of.py - KeyError: 'VF3r-16'\n1 error in 2.1s\n")
+    assert "benchmarks/pouw/filler/tests/test_capacity_of.py" in implicated(d)
