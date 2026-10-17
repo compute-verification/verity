@@ -59,7 +59,9 @@ imported as it is and checked by its `validate()` before it is written:
 - `overhead.vs_native_peak` = R_native / R_proved through `contract.rate_measurements` at the workload's profile.
 - `mem.peak_host_bytes`: the prover's peak RSS. `mem.peak_device_bytes`: the leased GPU's memory use sampled every 200 ms.
 - `proof_bytes`, `transcript.bytes` (`net.bytes_out` from the prover, `net.bytes_in` from the verifier).
-- `verifier.seconds`: the Lean verifier's median wall seconds per timed session; `verify.cpu_s`, `verify.peak_rss_bytes`.
+- `verifier.seconds`: the Lean verifier's median wall seconds per timed session, one session per call; `verify.cpu_s`,
+  `verify.peak_rss_bytes`, and its two parts `verify.setup_s` (the statement's setup, parsing the circuit, which a call
+  verifying several sessions pays once) and `verify.session_s` (one session's checks).
 - `fixed.setup_seconds`: staging the statement, once per B. `rounds.protocol`: the live session's rounds.
 - The identity (`contract.IDENTITY_FIELDS`): proof class `NON_ZK_PROOF`, profile, K, B, the probed hardware, the security
   target (Fast100, 2 repetitions, 2^-100), plus the workload, its VU, the configuration and the instance set's reference.

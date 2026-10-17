@@ -122,6 +122,10 @@ def verifier_measurements(lean: Sequence[Mapping[str, Any]]) -> list[dict[str, A
     rss = [v["max_rss_kb"] for v in timed if v.get("max_rss_kb")]
     if rss:
         ms.append(m("verify.peak_rss_bytes", max(rss) * 1024, "B"))
+    for key, name in (("setup_ms", "verify.setup_s"), ("session_ms", "verify.session_s")):
+        got = [v[key] for v in timed if v.get(key) is not None]
+        if got:
+            ms.append(m(name, statistics.median(got) / 1000, "s"))
     return ms
 
 
