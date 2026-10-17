@@ -261,6 +261,11 @@ class Population:
                 for port in p.port_table:
                     self.record_fields[ValueRef(p.id, port.name)] = port.name
         prescribed = frozenset(self.record_fields) | frozenset(self.supplied)
+        #: a rank Program's WITNESS input (`format.SCHEDULE_PARAM`): its readers' keys, which the replay binds to each reader's own
+        #: committed rank -- never token ids, and no identity of the manifest names it
+        self.witness: frozenset[ValueRef] = frozenset(ValueRef(p.id, port.name) for p in P.params if p.name == fmt.SCHEDULE_PARAM
+                                                      for port in p.port_table)
+        self.witness_readers: list[int] = [c.id for c in P.calls if any(r in self.witness for r in param_reads(c))] if self.witness else []
         self.world, self.rank = int((tp or {}).get("world") or 1), int((tp or {}).get("rank") or 0)
         self.collectives: dict[int, str] = {}              # collective Call -> "all_reduce" | "all_gather"
         self.operand: dict[int, ValueRef] = {}             # collective Call -> its rank-local operand
@@ -270,6 +275,11 @@ class Population:
         self.norm_site: dict[int, str] = {}                # a carried collective that is a norm's -> the norm module (`<norm site>`)
         self.peer_inputs: frozenset[ValueRef] = frozenset()
         self.tp_faults: list[str] = []
+        for cid in self.witness_readers:
+            if P.call(cid).family not in fmt.SCHEDULE_READERS:
+                self.tp_faults.append(f"{P.call(cid).family} under {corr.implementation_path(corr.module_of(cid))} reads the "
+                                      f"`{fmt.SCHEDULE_PARAM}` witness (only {sorted(fmt.SCHEDULE_READERS)} may: the replay binds a reader's "
+                                      f"keys to its own committed rank)")
         if self.world > 1:
             self._rank_partials()
         self.literals = literals = literal_calls(P)
@@ -632,7 +642,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     # --- the token ids a module body consumes: prompt input or a sampling event's output -------------------------------------------
     ids_rows: Counter = Counter()
     event_set = frozenset(events)
-    non_ids = pop.peer_inputs                                   # a rank Program's received peer partials are not token ids
+    non_ids = pop.peer_inputs | pop.witness                     # a rank Program's received peer partials and its witness are not token ids
     for c in P.calls:
         m = corr.module_of(c.id)
         if not m or c.family in SAMPLING_EVENTS:            # a selector's runtime inputs are the sampler's (above), wherever it sits (TP: `inner`)
@@ -693,6 +703,9 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
         q["policy"]["protocol_required"].append(f"TP-04 (world {prog_world}): every collective output and its rank-local partial, with every "
                                                 "port of the partial's producer")
         q["tp"] = {"world": prog_world, "collectives": len(pop.collectives), "peer_inputs": len(pop.peer_inputs)}
+        if pop.witness:
+            q["tp"]["witness_inputs"] = {fmt.SCHEDULE_PARAM: {"readers": len(pop.witness_readers),
+                                                              "binding": "each reader's own committed rank (port 0)"}}
     if moe_layers:
         q["required_families"].append("moe_block_stream")
         q["moe_layers"] = sorted(moe_layers)
