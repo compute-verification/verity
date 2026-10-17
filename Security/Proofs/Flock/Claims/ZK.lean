@@ -50,7 +50,7 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`zkmalR_congr`).
 * `Pin`: `Claims.Flock.ZK` reads the masked record's own reference prover (`ZkDeploy.prover`) and simulator; the proofs
   prove `Claims.Flock.ZKAt` at a committed-coin protocol's prover. The masked record at a protocol `G` (`zkOf`) has
-  `ZkTables.honestP` behind `G`'s `Hello` and opening checks; where `G`'s messages are `ZkTables.honestP`'s (`Proto.Honest`, a named
+  `ZkTables.honestPR` behind `G`'s `Hello` and opening checks; where `G`'s messages are `ZkTables.honestPR`'s (`Proto.Honest`, a named
   Prop), `ZKAt` at `G.prover` is `Claims.Flock.ZK` at `zkOf` (`zk_zkOf`).
 * `Forced`: the forced run at `c` with the honest prover's messages at `c` opens all of `c` exactly when the real run
   opens `c`, and is then the real run (`fcls_succ_iff`, `forced_eq_of_cls`, `real_eq_of_fcls`); one that stops before a
@@ -106,7 +106,7 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   admit the coins); `Binding` holds of it with no hypothesis (`Proto.binding_of_open`), `TablesOK` from `Tables` and
   `TMsgLink` from `Complete`, `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is
   the cut view the round messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and `Flock.zk_zkD_ref` at the session's masked record
-  `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `ZkTables.honestP`'s, a named Prop), each also at the
+  `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `ZkTables.honestPR`'s, a named Prop), each also at the
   pinned key's hiding gap (`_gap`).
 * `CoinLayer`: the deployed masked record `zkDeployed`, `RefSession.zkD` at `coin-tree/hm96-sha512/v2`'s coin layer
   (the 32-byte nonce, `Hello`'s frame with its hex, `Hello`'s answer of root and hm96 key, the keyed tree, the
@@ -124,7 +124,7 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   **`Flock.zk_deployZk_ref_on`** (and `_gap`) at `zkDeployed`, the tape asked for only as the tables' tape read with
   fibers of one size on `A`, where `Flock.zk_deployZk_ref`'s `TapeOK` fails at every unbounded table count.
 * `Session`: `RefSession.HonestMsgsOn A` as its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`: `enc`, `fin`
-  and `off` each `ZkTables.honestP`'s message), and `Flock.zk_deployZk_ref_on_rounds` at them.
+  and `off` each `ZkTables.honestPR`'s message), and `Flock.zk_deployZk_ref_on_rounds` at them.
 * `MaskedTables`: the deployed masked session's tables (`Masked.tabC`): `setupOf true x`'s, each `coinedOf` at its
   `--zk` table from its statement alone (`ZkHidden.ZkTab.table`), on the statements each of whose tables has one
   (`Masked.Live`, the masked scope at a witness: `live_iff`). `Tables` (`setupTable_tabC`), `DummyReg` at a witness of

@@ -21,8 +21,9 @@ the masked verifier's union bound at every number of tables.
   are `BadZk`'s: the outer coins' (`refuse_outer`) are `BadZk`'s first kind, the rank check's (`mask_rank_ok`) its
   last, so they cost no error past `εZk`.
 * `complete_of`: if the honest masked prover (`honestP`) is accepted at every coin outside `BadZk`, on every statement
-  in scope, ready, with a witness in the relation, it is complete with error `δc H`: `Claims.Flock.Complete H
-  (deployZk rel)`, given the mask slots' rank bound (`MaskRank.MaskRankBound`, open).
+  in scope, ready, with a witness in the relation, and the relation keeps a witness whatever its mask slots hold
+  (`MaskFree`), then `honestPR` is complete with error `δc H`: `Claims.Flock.Complete H (deployZk rel)`, given the mask
+  slots' rank bound (`MaskRank.MaskRankBound`, open).
 * **Against `readyZk`**: a setup with several tables is never `readyZk` (`readyZk_tables`), so `δcZk H` is `1` there;
   where `readyZk` holds, `ready` holds (`ready_of_readyZk`, `Complete.Ready`: at one table the honest record is
   `honestPZk`'s), and there `δc H` is `δcZk H` (`δc_eq_δcZk`).
@@ -124,9 +125,10 @@ def MaskFree (rel : Readable.Parsed → Readable.Relation) : Prop :=
 
 /-- **Completeness from acceptance at the good coins**, at any number of tables: if, on every statement in scope that
 the masked verifier can accept and every witness in the relation, the honest masked prover is accepted at every tape and
-every coin outside `BadZk`, then Flock's masked verifier is complete for `honestP` with error `δc H`. -/
+every coin outside `BadZk`, and the relation does not read the mask slots, then Flock's masked verifier is complete
+for the deployed prover (`honestPR`) with error `δc H`. -/
 theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (hMR : MaskRank.MaskRankBound)
+    (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel)
     (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →
       ready H x = true → ∀ (ω : TapeZk) (r : Fin ((V true).k x) → Coin), ¬ BadZk x r →
         (Claims.run H (honestP w) (V true) x ω r).out = .acc) :
@@ -140,8 +142,10 @@ theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
           linarith [pr_badZk_le hMR x (k := (V true).k x)]
       _ = Claims.Pr (fun r : Fin ((V true).k x) → Coin => ¬ BadZk x r) := (Pr_not _).symm
       _ ≤ Claims.Pr (fun r : Fin ((V true).k x) → Coin =>
-            (Claims.run H (honestP w) (V true) x ω r).out = .acc) :=
-          Claims.Pr_mono fun r hr' => hacc x w hs hr hready ω r hr'
+            (Claims.run H (honestPR w) (V true) x ω r).out = .acc) :=
+          Claims.Pr_mono fun r hr' => by
+            rw [run_honestPR H x w ω r hr']
+            exact hacc x _ hs (hMF x w ω.mask hs hr) hready ω r hr'
   · rw [sub_self]
     exact Claims.Pr_nonneg _
 

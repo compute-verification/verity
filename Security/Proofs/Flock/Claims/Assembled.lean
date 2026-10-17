@@ -19,7 +19,7 @@ every relation's fields `rel` and every hash `H`, the conjunction of Flock's cla
 * `Efficient` at the record's own counted decoder (`GS.plainCountedRD`, `GS.zkCountedRD`): `E^rep`'s reruns at every
   deployment (`ERep_cost`), the decoder's `ListWithin`, and its count and lists at most `plainStepPoly` (`zkStepPoly`)
   at the opened word's encoded length, which bounds `assemble`'s checks (`efficient_plain`, `efficient_zk`);
-* `Complete` at the record's reference prover (`honestP`, `ZkTables.honestP`) at the record's error (`δc`,
+* `Complete` at the record's reference prover (`honestP`, `ZkTables.honestPR`) at the record's error (`δc`,
   `ZkTables.δc`): a hypothesis, which at the deployed relation follows from the record's JSON at the plain record
   (`flock_plain_assembled_relation`), and at the masked record from it and three premises on the honest masked run
   (`flock_zk_assembled_relation`).
@@ -38,8 +38,9 @@ every relation's fields `rel` and every hash `H`, the conjunction of Flock's cla
   antecedent, so `flock_plain_assembled_relation` takes `JsonSpec` in its place. At any other `rel` it stays a
   hypothesis: `rel` gives the readable statement's circuit, which the relation's witnesses satisfy, and where it is not
   the verifier's tables' the honest prover's trace need not satisfy them.
-* `hComplete : Flock.Complete H (deployZk rel)`, of the masked record's reference prover `FlockComplete.ZkTables.honestP`
-  (each table run on its share of the witness) at its error `FlockComplete.ZkTables.δc H`, at any number of tables: at
+* `hComplete : Flock.Complete H (deployZk rel)`, of the masked record's reference prover
+  `FlockComplete.ZkTables.honestPR` (`flock-circuit --zk`'s: each table run on its share of the witness with the tape's
+  mask words, stopped at an outer coin `1`) at its error `FlockComplete.ZkTables.δc H`, at any number of tables: at
   the deployed relation it follows from the record's JSON and three premises on the honest masked run, each at every
   good case or run and every table of it (`FlockComplete.ZkTables.complete_json`), so `flock_zk_assembled_relation`
   takes those in its place: the masked prover's pieces return (`ProverRunsAt`), its rep proofs fit their shapes
@@ -123,7 +124,7 @@ theorem flock_plain_assembled_relation (H : Claims.Msg → Claims.Msg)
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
 readable scope is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the radius decoder
 at every bound on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the record's
-reference prover (`FlockComplete.ZkTables.honestP` at `FlockComplete.ZkTables.δc`). `hKS` (E4) and `hComplete` are what
+reference prover (`FlockComplete.ZkTables.honestPR` at `FlockComplete.ZkTables.δc`). `hKS` (E4) and `hComplete` are what
 remains. -/
 theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployZk rel))

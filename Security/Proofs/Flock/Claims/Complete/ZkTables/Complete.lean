@@ -124,8 +124,9 @@ theorem Case.one_or_several (c : Case H rel) : c.sts.size = 1 ∨ 1 < c.sts.size
 checks and the rep's checks at every run. -/
 theorem complete_of_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hSR : SessionRunsZk H rel) (hRec : ∀ o : Run H rel, RecordAt H rel o)
-    (hOp : ∀ o : Run H rel, OpenAt H rel o) (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk rel) :=
-  complete_of_goals H rel hMR
+    (hOp : ∀ o : Run H rel, OpenAt H rel o) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :
+    Claims.Flock.Complete H (deployZk rel) :=
+  complete_of_goals H rel hMR hMF
     { session := hSR
       sends := sends_goal H rel
       linkFirst := linkFirst_goal H h64 rel
@@ -165,8 +166,8 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
-    (hPRJ : ProverRunsJ H rel) (hRec : RecordJ H rel) (hOp : OpenJ H rel) (hMR : MaskRank.MaskRankBound) :
-    Claims.Flock.Complete H (deployZk rel) := by
+    (hPRJ : ProverRunsJ H rel) (hRec : RecordJ H rel) (hOp : OpenJ H rel) (hMR : MaskRank.MaskRankBound)
+    (hMF : MaskFree rel) : Claims.Flock.Complete H (deployZk rel) := by
   have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H rel)
   have hD : FlockComplete.RepDecodesZk H rel := JsonRT.repDecodesZk_goal S h64 hS hP hR
   have hRp : FlockComplete.Replay H rel := replay_goal S h64 hS hP hR
@@ -200,7 +201,7 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
       inner := hIn (o.toZk h1)
       consumed := consumedZk_goal S h64 hS hP hRp hRS hLg hIn (o.toZk h1) }
   refine complete_of_at H rel h64 (fun c => (c.one_or_several).elim (fun h1 => ?_) (sessionRunsJ_goal S hSJ hPRJ c))
-    (fun o => (o.one_or_several).elim (rec1 o) (hRec o)) (fun o => (o.one_or_several).elim (open1 o) (hOp o)) hMR
+    (fun o => (o.one_or_several).elim (rec1 o) (hRec o)) (fun o => (o.one_or_several).elim (open1 o) (hOp o)) hMR hMF
   obtain ⟨record, proofs, bodies, hran⟩ := hSR (c.toZk h1)
   exact ⟨record, proofs, bodies, (sessionS_one h1 c.w c.ω).trans hran⟩
 

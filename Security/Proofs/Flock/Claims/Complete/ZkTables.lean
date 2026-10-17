@@ -25,7 +25,10 @@ import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 import Proofs.Flock.Claims.Complete.ZkTables.Table
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
-table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
+table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the record's
+prover is `flock-circuit --zk`'s (`Faithful`: `honestPR`, `honestP` at the tape's mask words, `maskWOf`, stopped at an
+outer coin `1`), whose run is `honestP`'s outside `BadZk` (`Ready`: `run_honestPR`), at a witness the deployed relation
+still holds (`MaskFree`: `maskFree_relation`); the masked
 verifier's error drops `readyZk`'s one-table condition and asks the regions and the honest record to fit (`Ready`:
 `ready`, `RecordFitsAt`, `δc`, `complete_of`; `δc H` is `δcZk H` where both `readyZk` and `ready` hold); the honest run
 is the pure masked session (`Run`: `run_acc_of`, `honestRun_eq`); the skeleton is `Zk/Skeleton.lean`'s at this run

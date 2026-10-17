@@ -45,7 +45,7 @@ import Proofs.Flock.Claims.Complete.Zk.MaskRank
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
-the masked record's prover `ZkTables.honestP`): the honest masked prover (`Honest`: `honestPZk`, on
+the masked record's prover `ZkTables.honestPR`): the honest masked prover (`Honest`: `honestPZk`, on
 the masked tape `TapeZk` and pads `padsOf` of `Tape`, the masked zerocheck and lincheck of `Piop`, level 0's masked
 Ligerito of `Ligerito`, the pads' commitment and inner proof of `Inner`, the session of `Session`), its run against
 `V true` (`Run`: `run_acc_of_zk`), that run as a pure session (`Sim`: `honestRunZk_eq`), `δcZk H` with the composition
