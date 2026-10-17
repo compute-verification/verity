@@ -329,16 +329,21 @@ the suite `verity-vllm` (`tools/verity/check/suites.py --list`).  Every tool is 
 
 A row's one config is its file `workloads/<row-id>.json`, schema `verity-vllm/workload/v2`, read as `config.RowConfig`: the
 checkpoint's repo (`model`) and role (`case`), an `engine` block (`config.RowEngine`: the checkpoint's full `revision`, the
-`vllm` commit, the engine `args`, the `env` that selects kernels, and the declared `target`), and the workload (requests,
-sampling, the sweep's parameters).  `verity-vllm workload` writes it.  The κ profile a Match folds with is the role's
+`vllm` commit, the engine `args`, the `env` that selects kernels, the declared `target`, and `reasons`: why the row sets a served
+switch away from vLLM's default), and the workload (requests, sampling, the sweep's parameters).  `verity-vllm workload` writes it.  The κ profile a Match folds with is the role's
 (`engine.profiles.generic.module_name`), never a field.  The stages' flags and variables override how a run goes, never the
-file; `row run` writes what a run used, its effective config, to `<sweep dir>/<row>/effective_config.json`.
+file; `row run` writes what a run used, its effective config, to `<sweep dir>/<row>/effective_config.json`.  Every Commit reads back,
+on every rank, the switches that select its kernels (`engine/served.py`: batch invariance, DeepGEMM, the shared-experts stream,
+the FlashInfer sampler, the model runner, NCCL P2P, the custom all-reduce, eager and compilation modes, the attention backend and
+FlashAttention version, the MoE backend) and fails closed unless each is vLLM's default or declared, with a reason, by the engine
+profile (`engine/env.py`), the row's execution label (only a `bi-*` row is batch invariant) or the row file; `served` in its
+versions.json and summary.json records them.
 
 The circuit database (`verity_vllm/records.py`) keeps, per row of record, the exact circuit it served and the evidence that it is
 faithful, by row id; committed values are never kept.  A row's entry is a preserved `vllm-config-record/v1` artifact labelled
 `row=<id>`: its payload is the row's config record (`pipeline/config_record.py`, `verity-vllm/config-record/v1`: the row file without
 its requests and its sha256, the κ profile, each rank's Program digests, the Match and Commit verdicts, every Commit gate, the run
-roots and the code it ran), and its refs are the evidence: the `vllm-build/v1` holding every rank's Program descriptors
+roots, the served switches and the code it ran), and its refs are the evidence: the `vllm-build/v1` holding every rank's Program descriptors
 (`research-outputs write ... build`), the manifest, the Match and Commit records and the conformance captures by property.
 `manifests/records.json` indexes them: per row id the record's art: id and the circuit's pins, every rank's Program digests (step,
 request shapes, GP-01's workload) as the record's Build made them, with the tier of the row's rebuild (`records publish --tier`;
