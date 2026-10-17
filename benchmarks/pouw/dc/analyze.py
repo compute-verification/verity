@@ -224,7 +224,7 @@ def analyze(family: str, d: Path) -> dict:
         for name, row in rows.items():
             if lane_of(name) or name.startswith(("ldmma_", "syncmma_")):
                 joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
-            elif name.startswith(("ldU_", "mmaU_", "syncU_")) and t_alone:
+            elif name.startswith(("ldU_", "mmaU_", "syncU_", "tcliU_")) and t_alone:
                 # OP_UNTIL points: both rates exact (neither includes time at the barrier)
                 j = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
                      "issue": issue_rates(row, verdicts.get(name))}
