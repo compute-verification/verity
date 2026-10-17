@@ -584,7 +584,7 @@ kept as an early tripwire).
 | the frame skeleton: domain, every label, each item's op, kind and length, every round's coin count | constant | a function of the statement's shape; the firewall refuses any other label or item |
 | statement digest (`bind_statement`) | constant | the digest of the statement the firewall loaded |
 | witness cap: `Commit`'s root, `bind_statement`'s cap, Ligerito level 0's `bytes cap` | recomputed | the level-0 recheck (§10.2): `commit_zk` of the host witness under the session's level-0 salts and hiding |
-| pads label and root | the firewall's own | the Lean frame inserts them after the zerocheck's label |
+| pads label and root | the firewall's own | the masking challenger inserts them |
 | masked algebraic values: `round1_ab'`, `round1_c'`, `G_j`, `final_a'`, `final_b'`, `q_j`, `z_partial'` | masked | the wire carries `v + h` with `h` uniform and host-only, so it is uniform whatever `v` is. `v` enters the view only through §4's rows, which the self-check holds before anything that depends on them leaves (§5); a `v` that breaks a row stops the session |
 | `final_c'` | the firewall's own | the inner proof sends it, from the host |
 | `s_hat_v` of the masked claims (ab, c) | recomputed | `Σ_x eq(p_w, x) z[128x + v]` over the host witness (§6); the claim points are coins |
@@ -664,8 +664,7 @@ JSON. The two agree whenever the schedule's `Hello` holds only integers, as `sch
 ### 10.4 The prototype (`FC_FIREWALL=1`)
 
 `flock-circuit prove --zk` with `FC_FIREWALL=1` runs the firewall (`firewall.rs`, and `Firewall` in `flock-circuit.rs`) on the GPU path and
-the CPU path alike, for a statement of one table on the device and of one or several (`--session-tables`) on the CPU; it
-refuses to start without `FC_HOST_WITNESS=1`. It is stricter than
+the CPU path alike, for a statement of one table; it refuses to start without `FC_HOST_WITNESS=1`. It is stricter than
 §10.1 in one place: the shadow recomputes the whole opening, level 0's lane rounds included, in lock step with the device.
 Each of the device's opening frames must equal the shadow's byte for byte (`firewall_opening_rounds` counts the rounds
 compared), and the opening that leaves is the shadow's. The lincheck's folded comb is the firewall's (`zk_finish` folds it),
@@ -675,26 +674,8 @@ zerocheck and lincheck vector's length), the replay of the values the firewall p
 the zerocheck and lincheck that leave are rebuilt from the passed values (`zk_veil::from_exposed`), as the opening that leaves
 is the shadow's: nothing of the device's returned proof leaves.
 
-Every round that leaves is computed in Lean. Each rep runs one `flock-firewall frame` process (`Flock.Firewall.Frame` in the
-Lean verifier, `firewall::LeanFrame`; `FC_FIREWALL_LEAN` names the binary, by default the Lean verifier's build in the
-checkout, and the firewall refuses to start a rep without it). It takes each round the firewall passed, the device's frames
-with their values unmasked, and returns the round that leaves: the pads' label and root after the zerocheck's label, each
-value absorbed in a masked phase as `v + h_i` under the next pad of `Layout::absorbed`'s order, everything else as framed,
-and no domain frame. The masking challenger still runs as the speed reference. Its inner challenger (`firewall::Gate`) frames
-what it would send, holds that to the Lean round byte for byte, refuses on any difference, and hands the stream only the
-Lean round. At the rep's end the Lean frame must have closed every masked phase with every pad of the layout used. The
-`final_c'`, inner proof, recheck and shadow opening are still Rust's (`FirewallComputes`).
-
-In a session of several tables each table has a firewall of its own in turn: its salt context, recheck, skeleton and shadow,
-one table's ending before the next table's begins. A later table's level-0 root leaves in table 0's `Commit`, before any
-stream opens, and the host computes it from the host witness under the table's level-0 hiding and salts (`level0_root`, the
-recheck's own computation), so no root the device computed is in that `Commit`. Before anything of a later table is sent,
-its recheck must give the root that `Commit` carried (`FIREWALL-REFUSED: circuit-01's level-0 root: the session's Commit
-carried … where the recheck has …`), and the table's device root is then held to it like table 0's.
-
 `FC_FIREWALL_TAMPER` makes the device dishonest in one named way. Each is refused by name, before the tampered message leaves
-or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), before the inner proof does. `later-NAME` is `NAME`
-on every table of a several-table session but the first, and is refused the same way at the second table:
+or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), before the inner proof does:
 
 | `FC_FIREWALL_TAMPER` | the device | refusal |
 |---|---|---|
@@ -706,7 +687,7 @@ on every table of a several-table session but the first, and is refused the same
 | `algebra-proof` | flips a masked value in its returned proof only | `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
 | `shape` | appends a value to its returned proof's `round1_ab`, past the ones the firewall compares | `FIREWALL-REFUSED: the proof's shape (…) is [65, 64, …] where the statement's is [64, 64, …]` |
 
-With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only, a statement of one table: several are refused), each gated session also writes what the firewall let out as a
+With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only), each gated session also writes what the firewall let out as a
 `verity/firewall-transcript/v0` transcript, `DIR/session-<k>.json`, for the firewall's contract (`flock-firewall contract`):
 `firewall_transcript.rs` reads the wire after the coin tree's check and the firewall's candidates, and changes nothing the firewall
 sends. Where the firewall refuses, the transcript holds the refused candidate's items (from `firewall.gate.from`) up to the
@@ -843,14 +824,12 @@ neither stopped nor released its last statement, on a stream that had not stoppe
 outer session of the stream and every open, and `rec_live` closes the next connection before anything is served. A
 recursive session the worker abandons, asking for no statement after some release, ends where it stands for the
 challenger (its next proof never comes, `late`), but the firewall records no stop until a request comes, so its own count
-misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (`Stream(budget=...)`,
-`verity/core/protocols/sampled_proofs/service.py`, bound into the stream's digest), and the two must agree in three
-places: the same b, the same stream (one firewall stream a challenger stream), and one recursive session a proof session
-of the challenger's: one registration's, or the consecutive registrations one `Stream.session` covers (at most the stream's
-`rounds`, at most 4). So each firewall failure is a `reject` or `late` there for each round the session
-covers: the challenger's count is never below the firewall's, and it holds at most `budget` minus its failures
-registrations open, so neither ends past b. A stop shows the challenger a cut or a missing proof, which is `late` or
-`reject`; a session the firewall refuses after its stop sends nothing, and is no further failure on either side.
+misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (P1's `Stream(budget=...)`,
+`verity/core/protocols/sampled_proofs/service.py` on `cursor/proof-service-95d4`, bound into the stream's digest),
+and the two must agree in three places: the same b, the same stream (one firewall stream a challenger stream), and one
+recursive session a registration, so that each firewall failure is one `reject` or `late` there. A stop shows the
+challenger a cut or a missing proof, which is `late` or `reject`; a session the firewall refuses after its stop sends
+nothing, and is no further failure on either side.
 
 **Proofs leave at public times.** `rec_live --parts L0,...,alg --release-windows-ms w0,...,w7` gives each recursive
 session a release schedule, recorded at its open: `start_ms`, the time its connection was accepted, and one public window

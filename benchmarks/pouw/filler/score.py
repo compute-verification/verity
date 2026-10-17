@@ -52,7 +52,7 @@ filler-scorer/v5, the lock (`scoring.SCORER`, active since the coordinator's 12:
 correction, decision 43), keeps v4's gates, the slowdown gate on the measured step against clean serving. It reads the
 receipt's fold (`scoring.fold_reading`) from `Filler.fold` or the lineage's receipt tag and the build's `fold_facts`:
 ram and the XOR-family folds halve a theorem entry (Theorem K's proved half; their full reading, if P2-FF r10's
-select-charging lemma lands, is a secondary readout, `scoring.SELECT_LEMMA`), and duo, whose receipt takes in every word
+select-charging lemma lands, is a secondary readout, `scoring.SELECT_LEMMA`), and duo, which binds every word
 (`scoring.FOLDS`), reads in full where the build confirms it. Its SCORE is the measured filler part plus a MODELLED served part (`scoring.score_v5`; `served_part_modelled` in
 score.json and the record): every served MAC at Theorem K's 0.9 over the wall time the edited design would take
 (`scoring.served_model`'s named constants and their sources, decode's deferred pass calibrated to measurement,
