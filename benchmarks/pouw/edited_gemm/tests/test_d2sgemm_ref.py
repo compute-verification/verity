@@ -82,6 +82,45 @@ def test_a_negative_device_verdict_fails(tmp_path, field):
     assert not R.check(tmp_path)["ok"]
 
 
+def write_qk_gate(d: Path, head_rows: bool = True, seed: int = 0x9ABC) -> None:
+    """Q K^T's tile (3, 1) of H = 2 heads at 256 tokens (head 1's second query tile against its second key tile), K'
+    drawn on head 1's rows (or, head_rows False, on head 0's, as a kernel that lost the head offset would)."""
+    rng = np.random.default_rng(11)
+    tokens, tm, tn, k = 256, 3, 1, 128
+    inv_s = np.float32(1.0)
+    bf = lambda a: (a.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)  # noqa: E731
+    xb, kb = bf(rng.uniform(-127.5, 127.5, (T, k))), bf(rng.uniform(-127.5, 127.5, (T, k)))
+    up = lambda b: (b.astype(np.uint32) << 16).view(np.float32)  # noqa: E731
+    key = b"".join(struct.pack(">Q", w) for w in KEY)
+    wrow = (tm // (tokens // T)) * tokens * head_rows + tn * T
+    X, Wp = R.served(up(xb), inv_s, R.floor_q(up(kb), inv_s), key, tm * T, wrow)
+    rec = R.tile_receipts(seed, list(R.prefix_words(X, Wp)), tm * (tokens // T) + tn)
+    sfx = f"_{tm}_{tn}.bin"
+    xb.tofile(d / ("x" + sfx))
+    kb.tofile(d / ("xk" + sfx))
+    X.astype(np.int8).tofile(d / ("X" + sfx))
+    Wp.astype(np.int8).tofile(d / ("Wp" + sfx))
+    (X @ Wp.T).astype(np.int32).tofile(d / ("Y_qk_l7qs" + sfx))
+    for name in ("qk_l7qs", "qk_l2q"):
+        rec.astype(np.uint32).tofile(d / ("R_" + name + sfx))
+    meta = {"mode": "qk", "served": "qk_l7qs", "m": 2 * tokens, "n": tokens, "k": k, "H": 2, "Hkv": 1, "T": tokens,
+            "seed": seed, "inv_s": float(inv_s), "key": [f"{w:016x}" for w in KEY], "tiles": [[tm, tn]],
+            "kinds": {"qk_l7qs": "duo32", "qk_l2q": "duo32"}, "device": {}, "device_ok": True, "control_rejected": True}
+    (d / "meta.json").write_text(json.dumps(meta))
+
+
+def test_qk_gate_passes_and_needs_the_head_offset(tmp_path):
+    """Q K^T's mode: K'_h's bits are on head h's rows (h T + t), so a K' drawn on another head's rows fails."""
+    (tmp_path / "right").mkdir()
+    (tmp_path / "wrong").mkdir()
+    write_qk_gate(tmp_path / "right")
+    write_qk_gate(tmp_path / "wrong", head_rows=False)
+    r = R.check(tmp_path / "right")
+    assert r["ok"], r
+    assert r["tiles"]["3,1"]["words"] == 4
+    assert not R.check(tmp_path / "wrong")["ok"]
+
+
 def test_the_dither_bits_are_the_patch_layout():
     """b and c are bit e % 8 of digest byte e / 8 of block (row / 4) (k / 128) + col / 128, e = (row % 4) 128 + col % 128
     (sha_noise.cuh's layout, which d2quant and d2wedit read), and the two tags draw different bits."""

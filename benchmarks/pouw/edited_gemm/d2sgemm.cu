@@ -164,12 +164,15 @@ __global__ void w0fill(int8_t* W, size_t count, uint32_t seed, size_t k, int end
 
 // ---------------------------------------------------------------- the GEMM
 // e_body without the peel: the mainloop's stages are the k / 128 of X and W' (no tail stage), T_1 .. T_last absorbed by
-// tile_il's schedule and flush, and the served output is the accumulator T_last
-template <int RK, int LAG, int TIE, bool SLEEP> DEV void d_body(const Args& a) {
-  using L = EL<RK, LAG, TIE, SLEEP>;
+// tile_il's schedule and flush, and the served output is the accumulator T_last. BAT (Q K^T): A's rows are the problems
+// stacked, 2^a.batch row tiles each, every one against its own N rows of B. !STORE: the served output is consumed in
+// registers as a fused attention's softmax would start, its row maxima atomically into a.U (one int a row)
+template <int RK, int LAG, int TIE, bool SLEEP, bool BAT = false, bool STORE = true> DEV void d_body(const Args& a) {
+  using L = EL<RK, LAG, TIE, SLEEP, 0, 0, BAT>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, false, 1);
+  if constexpr (BAT) ml.bsh = a.batch;
   ml.init(threadIdx.x);
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   ml.prologue();
@@ -194,14 +197,28 @@ template <int RK, int LAG, int TIE, bool SLEEP> DEV void d_body(const Args& a) {
     int acc[MI][NI][4];
     ml.tile_il(a.K, acc, ch, kr, zero);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
+    if constexpr (STORE) {
 #pragma unroll
-    for (int mi = 0; mi < MI; mi++)
+      for (int mi = 0; mi < MI; mi++)
 #pragma unroll
-      for (int ni = 0; ni < NI; ni++) {
-        int* p = a.U + (size_t)(row0 + 16 * mi) * a.N + col0 + 8 * ni;
-        *reinterpret_cast<int2*>(p) = make_int2(acc[mi][ni][0], acc[mi][ni][1]);
-        *reinterpret_cast<int2*>(p + (size_t)8 * a.N) = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
-      }
+        for (int ni = 0; ni < NI; ni++) {
+          int* p = a.U + (size_t)(row0 + 16 * mi) * a.N + col0 + 8 * ni;
+          *reinterpret_cast<int2*>(p) = make_int2(acc[mi][ni][0], acc[mi][ni][1]);
+          *reinterpret_cast<int2*>(p + (size_t)8 * a.N) = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
+        }
+    } else {
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+        for (int h = 0; h < 2; h++) {
+          int v = max(acc[mi][0][2 * h], acc[mi][0][2 * h + 1]);
+#pragma unroll
+          for (int ni = 1; ni < NI; ni++) v = max(v, max(acc[mi][ni][2 * h], acc[mi][ni][2 * h + 1]));
+          v = max(v, __shfl_xor_sync(0xFFFFFFFFu, v, 1));
+          v = max(v, __shfl_xor_sync(0xFFFFFFFFu, v, 2));
+          if (q == 0) atomicMax(a.U + row0 + 16 * mi + 8 * h, v);
+        }
+    }
     if constexpr (L::R) {
       uint4* r = reinterpret_cast<uint4*>(a.R) + ((size_t)tile_id * L::NCT + ctid) * 2;
       r[0] = make_uint4(finish<DUO>(ch, 0), finish<DUO>(ch, 1), finish<DUO>(ch, 2), finish<DUO>(ch, 3));
@@ -214,6 +231,66 @@ template <int RK, int LAG, int TIE, bool SLEEP> DEV void d_body(const Args& a) {
 D2GEMM(d_l7qs, DUO, 7, 4, true)
 D2GEMM(d_l2q, DUO, 2, 4, false)
 D2GEMM(d_plains, NONE, 0, 0, true)
+#define D2QK(NAME, RK, LAG, TIE, SLEEP, STORE) \
+  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { d_body<RK, LAG, TIE, SLEEP, true, STORE>(a); }
+D2QK(qk_l7qs, DUO, 7, 4, true, true)
+D2QK(qk_l2q, DUO, 2, 4, false, true)
+D2QK(qk_plains, NONE, 0, 0, true, true)
+D2QK(qk_l7qs_m, DUO, 7, 4, true, false)
+D2QK(qk_plains_m, NONE, 0, 0, true, false)
+
+// ---------------------------------------------------------------- Q K^T's operands
+// Q K^T with both operands dithered (benchmarks/ppl/steps.py's int8_attention at q = k = "dither"): Q' = clamp(floor(q
+// inv_s), -126, 126) + b and K'_h = clamp(floor(k_(h / rep) inv_s), -126, 126) + c_h, fresh bits an entry, K's for every
+// query head; one inv_s for the tensor (steps.py's scale is per (head, token): a scale only multiplies before the floor).
+// Both written head-major (row h T + t, 128 bytes) from q [T][H][128] and k [T][Hkv][128] bf16, the bits in the patch
+// layout over those rows (k = 128: block row / 4; b tag 7, c tag 8, under the call's key). !DITHER: the plain quantizer,
+// round(x inv_s) clamped to [-127, 127]. A warp 128 rows, its lanes hashing their 32 patches, then 4 columns a lane a row
+template <bool DITHER>
+__global__ void __launch_bounds__(64) qkquant(const uint16_t* __restrict__ src, int8_t* __restrict__ dst, int lgT, int hs,
+                                              int lgrep, float inv_s, uint32_t tag, const __grid_constant__ Sig sg) {
+  __shared__ uint32_t dgs[2 * 512];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, row0 = (blockIdx.x * 2 + warp) * 128;
+  uint32_t* dg = dgs + 512 * warp;
+  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dg);
+  if constexpr (DITHER) {
+    uint64_t st[8];
+    sha_block(sg.w, (uint64_t)tag << 56 | (uint64_t)(row0 / 4 + lane), st);
+#pragma unroll
+    for (int i = 0; i < 8; i++) {
+      dg[16 * lane + 2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+      dg[16 * lane + 2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+    }
+    __syncwarp();
+  }
+  const int tmask = (1 << lgT) - 1;
+#pragma unroll 4
+  for (int rr = 0; rr < 128; rr++) {
+    const int r = row0 + rr, t = r & tmask, h = r >> lgT;
+    const uint2 w = __ldg(reinterpret_cast<const uint2*>(src + ((size_t)t * hs + (h >> lgrep)) * 128) + lane);
+    const float f[4] = {__uint_as_float(w.x << 16) * inv_s, __uint_as_float(w.x & 0xFFFF0000u) * inv_s,
+                        __uint_as_float(w.y << 16) * inv_s, __uint_as_float(w.y & 0xFFFF0000u) * inv_s};
+    int v[4];
+    if constexpr (DITHER) {
+      const uint32_t bits = (uint32_t)bytes[16 * rr + lane / 2] >> (4 * (lane & 1));
+#pragma unroll
+      for (int i = 0; i < 4; i++) v[i] = min(max(__float2int_rd(f[i]), -D2_TOP), D2_TOP) + (int)((bits >> i) & 1u);
+    } else {
+#pragma unroll
+      for (int i = 0; i < 4; i++) v[i] = min(max(__float2int_rn(f[i]), -127), 127);
+    }
+    reinterpret_cast<uint32_t*>(dst + (size_t)r * 128)[lane] =
+        __byte_perm(__byte_perm(v[0], v[1], 0x0040), __byte_perm(v[2], v[3], 0x0040), 0x5410);
+  }
+}
+// S's row maxima, the reference for the !STORE kernels
+__global__ void rowmax_ref(const int* __restrict__ S, int* __restrict__ mx, size_t rows, int n) {
+  for (size_t r = (size_t)blockIdx.x * blockDim.x + threadIdx.x; r < rows; r += (size_t)gridDim.x * blockDim.x) {
+    int v = S[r * n];
+    for (int j = 1; j < n; j++) v = max(v, S[r * n + j]);
+    mx[r] = v;
+  }
+}
 
 // ---------------------------------------------------------------- host
 struct DKn { const char* name; Kern k; const char* kind; };
@@ -508,12 +585,277 @@ static int done(const std::string& arm, int m, int n, int k) {
   return 0;
 }
 
+// ---------------------------------------------------------------- Q K^T: host
+// H query heads, Hkv KV heads, T tokens (one sequence's prefill, every key against every query: no causal skip). Q' and
+// K' head-major (H T x 128 each, K' a copy a query head with its own bits), S = Q'_h K'_h^T stacked (H T x T s32)
+struct QP {
+  int H, Hkv, T, lgT, lgrep, bsh, grid;
+  uint32_t seed, inst = 0;
+  float inv_s = 1.f;
+  uint16_t *q, *k;
+  int8_t *Q, *K, *Qq, *Kq;
+  int *S, *Sr, *mx, *mxr;
+  uint32_t *R, *R2;
+  size_t ns, nr, nq;
+  Maps *mD, *mP;
+  LtG lt, ltq;
+  cudaStream_t st;
+  unsigned long long* bad;
+};
+static int lg2(int x) {
+  int l = 0;
+  while ((1 << l) < x) l++;
+  return (1 << l) == x ? l : -1;
+}
+static unsigned long long qcmp(QP& P, const void* a, const void* b, size_t words) {
+  CK(cudaMemsetAsync(P.bad, 0, 8, P.st));
+  cmp_words<<<1024, 256, 0, P.st>>>((const uint32_t*)a, (const uint32_t*)b, words, P.bad);
+  unsigned long long h;
+  CK(cudaMemcpyAsync(&h, P.bad, 8, cudaMemcpyDeviceToHost, P.st));
+  CK(cudaStreamSynchronize(P.st));
+  return h;
+}
+static void qq(QP& P, bool dither, const Sig& s) {
+  const int blocks = P.H * P.T / 256;
+  if (dither) {
+    qkquant<true><<<blocks, 64, 0, P.st>>>(P.q, P.Q, P.lgT, P.H, 0, P.inv_s, DITHER_TAG, s);
+    qkquant<true><<<blocks, 64, 0, P.st>>>(P.k, P.K, P.lgT, P.Hkv, P.lgrep, P.inv_s, C_TAG, s);
+  } else {
+    qkquant<false><<<blocks, 64, 0, P.st>>>(P.q, P.Qq, P.lgT, P.H, 0, P.inv_s, 0, s);
+    qkquant<false><<<blocks, 64, 0, P.st>>>(P.k, P.Kq, P.lgT, P.Hkv, P.lgrep, P.inv_s, 0, s);
+  }
+}
+static void qrun(QP& P, Kern kern, int* U, uint32_t* R, const Maps* maps) {
+  Args a{maps, U, R, P.H * P.T, P.T, 128, 8, P.seed, 0, P.bsh, 0, 0, {0, 0, 0, 0}, nullptr, 0};
+  kern<<<P.grid, MLW::NT, CSMEM, P.st>>>(a);
+}
+static void qsetup(QP& P, int H, int Hkv, int T, uint32_t seed, bool gate) {
+  P.H = H; P.Hkv = Hkv; P.T = T; P.seed = seed;
+  P.lgT = lg2(T); P.lgrep = Hkv > 0 && H % Hkv == 0 ? lg2(H / Hkv) : -1; P.bsh = lg2(T / 128);
+  if (T % 1024 || P.lgT < 0 || P.lgrep < 0 || (H * T) % 256) {
+    fprintf(stderr, "qk %d %d %d: T a power of 2 and a multiple of 1024 (EL's raster groups inside a head), H / Hkv a power of 2\n", H, Hkv, T);
+    exit(2);
+  }
+  int nsm;
+  CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
+  const int tiles = (H * T / 128) * (T / 128);
+  P.grid = std::min(tiles, nsm);
+  P.nq = (size_t)H * T * 128;
+  P.ns = (size_t)H * T * T;
+  P.nr = (size_t)tiles * 512 * 8;
+  CK(cudaStreamCreate(&P.st));
+  CK(cudaMalloc(&P.q, (size_t)T * H * 128 * 2)); CK(cudaMalloc(&P.k, (size_t)T * Hkv * 128 * 2));
+  CK(cudaMalloc(&P.Q, P.nq)); CK(cudaMalloc(&P.K, P.nq)); CK(cudaMalloc(&P.Qq, P.nq)); CK(cudaMalloc(&P.Kq, P.nq));
+  CK(cudaMalloc(&P.S, P.ns * 4)); CK(cudaMalloc(&P.Sr, P.ns * 4));
+  CK(cudaMalloc(&P.mx, (size_t)H * T * 4)); CK(cudaMalloc(&P.mxr, (size_t)H * T * 4));
+  CK(cudaMalloc(&P.R, P.nr * 4)); CK(cudaMalloc(&P.R2, P.nr * 4));
+  CK(cudaMalloc(&P.bad, 8));
+  xfill<<<4096, 256, 0, P.st>>>(P.q, (size_t)T * H * 128, mix32(seed ^ 0x3333u), 128, gate);
+  xfill<<<4096, 256, 0, P.st>>>(P.k, (size_t)T * Hkv * 128, mix32(seed ^ 0x6666u), 128, gate);
+  qq(P, true, sigma(seed, 0xFFFFFFFFu));
+  qq(P, false, sigma(seed, 0xFFFFFFFFu));
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaGetLastError());
+  P.lt = ltg(I8, T, T, 128, 128, 128, T, P.Q, P.K, P.Sr, 0, P.st, H);
+  P.ltq = ltg(I8, T, T, 128, 128, 128, T, P.Qq, P.Kq, P.Sr, 0, P.st, H);
+  P.mD = upload_maps(Maps{tmap(P.Q, 128, H * T, 128), tmap(P.K, 128, H * T, 128), tmap(P.Q, 128, H * T, 128), tmap(P.K, 128, H * T, 128)});
+  P.mP = upload_maps(Maps{tmap(P.Qq, 128, H * T, 128), tmap(P.Kq, 128, H * T, 128), tmap(P.Qq, 128, H * T, 128), tmap(P.Kq, 128, H * T, 128)});
+  for (Kern kern : {qk_l7qs, qk_l2q, qk_plains, qk_l7qs_m, qk_plains_m})
+    CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
+}
+static void qfree(QP& P) {
+  CK(cudaDeviceSynchronize());
+  for (void* p : {(void*)P.q, (void*)P.k, (void*)P.Q, (void*)P.K, (void*)P.Qq, (void*)P.Kq, (void*)P.S, (void*)P.Sr, (void*)P.mx,
+                  (void*)P.mxr, (void*)P.R, (void*)P.R2, (void*)P.bad, (void*)P.mD, (void*)P.mP})
+    CK(cudaFree(p));
+  CK(cudaStreamDestroy(P.st));
+}
+// Q K^T's arms: qk_l7qs, qk_l2q (S written; on Q', K'), qk_plains (the plain mainloop on the rounded operands), the _m
+// twins (S's row maxima only), qk_lt / qk_ltq (cuBLASLt's batched GEMM on Q', K' / on the rounded operands), qkq_d and
+// qkq_plain (both operands' quantizers, dithered under a fresh key / rounded), and the served calls: qk_served (qkq_d,
+// qk_l7qs under one key), qk_plainq (qkq_plain, qk_ltq), qk_served_m (qkq_d, qk_l7qs_m), qk_plainq_m (qkq_plain, qk_plains_m)
+static std::function<void(QP&)> qarm(const std::string& a) {
+  auto mxr = [](QP& P) { CK(cudaMemsetAsync(P.mx, 0x80, (size_t)P.H * P.T * 4, P.st)); };
+  if (a == "qk_l7qs") return [](QP& P) { qrun(P, qk_l7qs, P.S, P.R, P.mD); };
+  if (a == "qk_l2q") return [](QP& P) { qrun(P, qk_l2q, P.S, P.R, P.mD); };
+  if (a == "qk_plains") return [](QP& P) { qrun(P, qk_plains, P.S, nullptr, P.mP); };
+  if (a == "qk_l7qs_m") return [mxr](QP& P) { mxr(P); qrun(P, qk_l7qs_m, P.mx, P.R, P.mD); };
+  if (a == "qk_plains_m") return [mxr](QP& P) { mxr(P); qrun(P, qk_plains_m, P.mx, nullptr, P.mP); };
+  if (a == "qk_lt") return [](QP& P) { ltg_run(P.lt, P.st); };
+  if (a == "qk_ltq") return [](QP& P) { ltg_run(P.ltq, P.st); };
+  if (a == "qkq_d") return [](QP& P) { qq(P, true, sigma(P.seed, P.inst++)); };
+  if (a == "qkq_plain") return [](QP& P) { qq(P, false, sigma(P.seed, 0)); };
+  if (a == "qk_served") return [](QP& P) { qq(P, true, sigma(P.seed, P.inst++)); qrun(P, qk_l7qs, P.S, P.R, P.mD); };
+  if (a == "qk_plainq") return [](QP& P) { qq(P, false, sigma(P.seed, 0)); ltg_run(P.ltq, P.st); };
+  if (a == "qk_served_m") return [mxr](QP& P) { qq(P, true, sigma(P.seed, P.inst++)); mxr(P); qrun(P, qk_l7qs_m, P.mx, P.R, P.mD); };
+  if (a == "qk_plainq_m") return [mxr](QP& P) { qq(P, false, sigma(P.seed, 0)); mxr(P); qrun(P, qk_plains_m, P.mx, nullptr, P.mP); };
+  fprintf(stderr, "no qk arm %s\n", a.c_str());
+  exit(2);
+}
+static int qgate(const std::string& dir, int H, int Hkv, int T, uint32_t seed) {
+  QP P;
+  qsetup(P, H, Hkv, T, seed, true);
+  for (auto [p, b] : {std::pair<void*, size_t>{P.Q, P.nq}, {P.K, P.nq}, {P.S, P.ns * 4}, {P.Sr, P.ns * 4}, {P.R, P.nr * 4},
+                      {P.R2, P.nr * 4}, {P.mx, (size_t)H * T * 4}, {P.mxr, (size_t)H * T * 4}})
+    CK(cudaMemsetAsync(p, 0xA5, b, P.st));
+  const Sig s = sigma(seed, 0);
+  qq(P, true, s);
+  ltg_run(P.lt, P.st);
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaGetLastError());
+  rowmax_ref<<<(H * T + 255) / 256, 256, 0, P.st>>>(P.Sr, P.mxr, (size_t)H * T, T);
+  bool ok = true;
+  std::string res;
+  auto rec = [&](const std::string& name, unsigned long long y, long long r) {
+    res += (res.empty() ? "" : ", ") + std::string("\"") + name + "\": {\"y_bad\": " + std::to_string(y) + ", \"r_bad\": " + std::to_string(r) + "}";
+    ok &= y == 0 && r <= 0;
+  };
+  const int tiles_m = H * T / 128, tiles_n = T / 128;
+  const int tl[3][2] = {{0, 0}, {tiles_m / 2 + tiles_n / 2, tiles_n / 2 - 1}, {tiles_m - 1, tiles_n - 1}};
+  auto dump_tiles = [&](const std::string& name, const int* Y, const uint32_t* R) {
+    for (int i = 0; i < 3; i++) {
+      const int tm = tl[i][0], tn = tl[i][1];
+      const std::string sfx = "_" + std::to_string(tm) + "_" + std::to_string(tn) + ".bin";
+      if (R) dump(dir, ("R_" + name + sfx).c_str(), R + (size_t)(tm * tiles_n + tn) * 512 * 8, 512 * 8 * 4, true);
+      if (Y) {
+        std::vector<int> yt(128 * 128);
+        CK(cudaMemcpy2D(yt.data(), 128 * 4, Y + (size_t)tm * 128 * T + tn * 128, (size_t)T * 4, 128 * 4, 128, cudaMemcpyDeviceToHost));
+        dump(dir, ("Y_" + name + sfx).c_str(), yt.data(), yt.size() * 4, false);
+      }
+    }
+  };
+  qrun(P, qk_l7qs, P.S, P.R2, P.mD);
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaGetLastError());
+  rec("qk_l7qs", qcmp(P, P.S, P.Sr, P.ns), -1);
+  dump_tiles("qk_l7qs", P.S, P.R2);
+  for (auto [name, kern, rk] : {std::tuple<const char*, Kern, bool>{"qk_l2q", qk_l2q, true}, {"qk_plains", qk_plains, false}}) {
+    CK(cudaMemsetAsync(P.S, 0xA5, P.ns * 4, P.st)); CK(cudaMemsetAsync(P.R, 0xA5, P.nr * 4, P.st));
+    qrun(P, kern, P.S, P.R, P.mD);
+    CK(cudaStreamSynchronize(P.st));
+    CK(cudaGetLastError());
+    rec(name, qcmp(P, P.S, P.Sr, P.ns), rk ? (long long)qcmp(P, P.R, P.R2, P.nr) : -1);
+    if (rk) dump_tiles(name, nullptr, P.R);
+  }
+  for (auto [name, kern, rk] : {std::tuple<const char*, Kern, bool>{"qk_l7qs_m", qk_l7qs_m, true}, {"qk_plains_m", qk_plains_m, false}}) {
+    CK(cudaMemsetAsync(P.mx, 0x80, (size_t)H * T * 4, P.st)); CK(cudaMemsetAsync(P.R, 0xA5, P.nr * 4, P.st));
+    qrun(P, kern, P.mx, P.R, P.mD);
+    CK(cudaStreamSynchronize(P.st));
+    CK(cudaGetLastError());
+    rec(name, qcmp(P, P.mx, P.mxr, (size_t)H * T), rk ? (long long)qcmp(P, P.R, P.R2, P.nr) : -1);
+  }
+  // the plain quantizer's operands through the plain mainloop against cuBLASLt's on the same
+  CK(cudaMemsetAsync(P.S, 0xA5, P.ns * 4, P.st)); CK(cudaMemsetAsync(P.Sr, 0x5A, P.ns * 4, P.st));
+  ltg_run(P.ltq, P.st);
+  qrun(P, qk_plains, P.S, nullptr, P.mP);
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaGetLastError());
+  rec("qk_plains_rounded", qcmp(P, P.S, P.Sr, P.ns), -1);
+  CK(cudaMemsetAsync(P.S, 0xA5, P.ns * 4, P.st)); CK(cudaMemsetAsync(P.R, 0xA5, P.nr * 4, P.st));
+  const unsigned long long cy = qcmp(P, P.S, P.Sr, P.ns), cr = qcmp(P, P.R, P.R2, P.nr);
+  const bool control_rejected = cy > 0 && cr > 0;
+  res += ", \"control\": {\"y_bad\": " + std::to_string(cy) + ", \"r_bad\": " + std::to_string(cr) + "}";
+  std::string tj;
+  for (int i = 0; i < 3; i++) {
+    const int tm = tl[i][0], tn = tl[i][1], h = tm / tiles_n, t0 = (tm % tiles_n) * 128, k0 = tn * 128;
+    const std::string sfx = "_" + std::to_string(tm) + "_" + std::to_string(tn) + ".bin";
+    std::vector<uint16_t> xs(128 * 128), ks(128 * 128);
+    CK(cudaMemcpy2D(xs.data(), 256, P.q + ((size_t)t0 * H + h) * 128, (size_t)H * 256, 256, 128, cudaMemcpyDeviceToHost));
+    CK(cudaMemcpy2D(ks.data(), 256, P.k + ((size_t)k0 * Hkv + (h >> P.lgrep)) * 128, (size_t)Hkv * 256, 256, 128, cudaMemcpyDeviceToHost));
+    dump(dir, ("x" + sfx).c_str(), xs.data(), xs.size() * 2, false);
+    dump(dir, ("xk" + sfx).c_str(), ks.data(), ks.size() * 2, false);
+    dump(dir, ("X" + sfx).c_str(), P.Q + (size_t)tm * 128 * 128, 128 * 128, true);
+    dump(dir, ("Wp" + sfx).c_str(), P.K + ((size_t)h * T + k0) * 128, 128 * 128, true);
+    tj += std::string(i ? ", " : "") + "[" + std::to_string(tm) + ", " + std::to_string(tn) + "]";
+  }
+  FILE* fp = fopen((dir + "/meta.json").c_str(), "w");
+  fprintf(fp, "{\"mode\": \"qk\", \"served\": \"qk_l7qs\", \"m\": %d, \"n\": %d, \"k\": 128, \"H\": %d, \"Hkv\": %d, \"T\": %d, "
+              "\"seed\": %u, \"inv_s\": %.9g, \"grid\": %d, \"key\": [\"%016llx\", \"%016llx\", \"%016llx\", \"%016llx\"], "
+              "\"tiles\": [%s], \"kinds\": {\"qk_l7qs\": \"duo32\", \"qk_l2q\": \"duo32\"}, \"device\": {%s}, \"device_ok\": %s, "
+              "\"control_rejected\": %s}\n",
+          H * T, T, H, Hkv, T, seed, P.inv_s, P.grid, (unsigned long long)s.w[0], (unsigned long long)s.w[1], (unsigned long long)s.w[2],
+          (unsigned long long)s.w[3], tj.c_str(), res.c_str(), ok ? "true" : "false", control_rejected ? "true" : "false");
+  fclose(fp);
+  printf("{\"gate\": \"%s\", \"qk\": [%d, %d, %d], \"device_ok\": %s, \"control_rejected\": %s, \"device\": {%s}}\n", dir.c_str(), H,
+         Hkv, T, ok ? "true" : "false", control_rejected ? "true" : "false", res.c_str());
+  qfree(P);
+  return ok && control_rejected ? 0 : 1;
+}
+static int qbench(int reps, int H, int Hkv, int T) {
+  Nv nv;
+  const std::vector<std::string> names = split(getenv("QK_ARMS"),
+      "qk_ltq,qk_lt,qk_plains,qk_l7qs,qk_l2q,qk_plains_m,qk_l7qs_m,qkq_plain,qkq_d,qk_plainq,qk_served,qk_plainq_m,qk_served_m");
+  QP P;
+  qsetup(P, H, Hkv, T, 0x5EED0000u + H + T, false);
+  std::vector<std::function<void(QP&)>> arms;
+  for (auto& a : names) arms.push_back(qarm(a));
+  const int NA = (int)arms.size();
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
+  auto time_arm = [&](int j, int calls) {
+    CK(cudaEventRecord(e0, P.st));
+    for (int c = 0; c < calls; c++) arms[j](P);
+    CK(cudaEventRecord(e1, P.st));
+    CK(cudaEventSynchronize(e1));
+    float ms;
+    CK(cudaEventElapsedTime(&ms, e0, e1));
+    return (double)ms / calls;
+  };
+  std::vector<int> calls(NA);
+  for (int j = 0; j < NA; j++) {
+    time_arm(j, 1);
+    const double t = time_arm(j, 2);
+    calls[j] = std::max(2, std::min(400, (int)(20.0 / std::max(t, 1e-4))));
+  }
+  CK(cudaGetLastError());
+  std::vector<std::vector<double>> ms(NA), mhz(NA);
+  for (int r = 0; r < reps; r++)
+    for (int j = 0; j < NA; j++) {
+      const int a = (j + r) % NA;
+      ms[a].push_back(time_arm(a, calls[a]));
+      mhz[a].push_back(nv.sm());
+    }
+  CK(cudaGetLastError());
+  printf("{\"qk\": [%d, %d, %d], \"m\": %d, \"n\": %d, \"k\": 128, \"grid\": %d, \"lt_algo\": %d, \"arms\": {", H, Hkv, T, H * T, T,
+         P.grid, P.lt.algo_id);
+  for (int j = 0; j < NA; j++) {
+    printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"calls\": %d, \"ms_all\": [", j ? ", " : "", names[j].c_str(), median(ms[j]),
+           median(mhz[j]), calls[j]);
+    for (size_t i = 0; i < ms[j].size(); i++) printf("%s%.6f", i ? ", " : "", ms[j][i]);
+    printf("]}");
+  }
+  printf("}}\n");
+  fflush(stdout);
+  CK(cudaEventDestroy(e0)); CK(cudaEventDestroy(e1));
+  qfree(P);
+  return 0;
+}
+static int qone(const std::string& arm, int H, int Hkv, int T) {
+  QP P;
+  qsetup(P, H, Hkv, T, 0x5EED0000u + H + T, false);
+  auto f = qarm(arm);
+  for (int i = 0; i < 3; i++) f(P);
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaProfilerStart());
+  f(P);
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaProfilerStop());
+  CK(cudaGetLastError());
+  printf("{\"one\": \"%s\", \"qk\": [%d, %d, %d], \"grid\": %d}\n", arm.c_str(), H, Hkv, T, P.grid);
+  qfree(P);
+  return 0;
+}
+
 int main(int argc, char** argv) {
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
+  if (argc >= 7 && !strcmp(argv[1], "qkgate")) return qgate(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), (uint32_t)strtoul(argv[6], 0, 0));
+  if (argc >= 6 && !strcmp(argv[1], "qkbench")) return qbench(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
+  if (argc >= 6 && !strcmp(argv[1], "qkone")) return qone(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
   if (argc >= 7 && !strcmp(argv[1], "gate")) return dgate(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), (uint32_t)strtoul(argv[6], 0, 0));
   if (argc >= 6 && !strcmp(argv[1], "bench")) return dbench(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
   if (argc >= 6 && !strcmp(argv[1], "one")) return done(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
-  fprintf(stderr, "usage: d2sgemm gate DIR M N K SEED | bench REPS M N K | one ARM M N K\n");
+  fprintf(stderr, "usage: d2sgemm gate DIR M N K SEED | bench REPS M N K | one ARM M N K | qkgate DIR H HKV T SEED | "
+                  "qkbench REPS H HKV T | qkone ARM H HKV T\n");
   return 2;
 }
