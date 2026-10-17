@@ -9,15 +9,16 @@ import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 on `sessAtZ`. At one table they meet: `sessionZC [T]` is `Commit`'s cap, then `sessAtZ` with no other game
 (`sessAfterZC_one`), and at any verdict `ok` on the table's output that the decoder is right for, a live verdict is no
 likelier than `ok` after `Commit` against the simulated strategy (`simSessZG`, `live_le_sessionZG`,
-`prob_sessionZC_oneG`). The simulated `Commit` sends the cap the live roots decode to (`simSessZG_fst`), so over a
-mixture of live strategies whose roots agree, the strategies after `Commit` share one cap (`simAtZ`, `live_le_simAtZ`,
-`mean_live_le_simAtZ`).
+`prob_sessionZC_oneG`), with the simulation's dead branches, past which no live run is accepted, sending empty
+openings (`nulOpZ`, `Claims.Bridge.Sim.mapDead`). The simulated `Commit` sends the cap the live roots decode to
+(`simSessZG_fst`), so over a mixture of live strategies whose roots agree, the strategies after `Commit` share one cap
+(`simAtZ`, `live_le_simAtZ`, `mean_live_le_simAtZ`).
 -/
 
 namespace FlockDeploy.KS
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession
-open FlockSoundness.Discharge.Tables (LiveOutJ liveSession DecodesTable simSession live_le_session)
+open FlockSoundness.Discharge.Tables (LiveOutJ liveSession DecodesTable simSession)
 open FlockSoundness.Discharge.Composed (outJ repJ sessionZC_eq_modelSession)
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -40,7 +41,13 @@ noncomputable def afterOneZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T 
 
 variable [Inhabited D] [Inhabited Sl]
 
-/-- The simulated strategy of the masked session (`simSessZJ`) at any verdict `ok` on each table's output. -/
+/-- **Empty masked openings**: every slot's row and path empty at the default salts, and every pads pair and `τ` zero
+with an empty path. -/
+noncomputable def nulOpZ : OpensZ 𝔽 D Sl :=
+  ⟨fun _ _ _ => ([], []), fun _ _ _ => default, fun _ => ⟨fun _ => ((0, 0), default, []), (0, default)⟩⟩
+
+/-- The simulated strategy of the masked session (`simSessZJ`) at any verdict `ok` on each table's output, its dead
+branches sending empty openings (`nulOpZ`). -/
 noncomputable def simSessZG (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -49,8 +56,9 @@ noncomputable def simSessZG (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts
     (N : ℕ) (hdec : ∀ j, DecodesTable (outJ Hs ts) (fun _ o => ok o) pL opn dec one fin capOf (repJ A Hs ts) j)
     (Pr : Strategy (liveSession dg ts.length mPts N)) : Strategy (sessionZC A Hs ts) :=
   sessionZC_eq_modelSession A Hs ts ▸
-    (simSession (outJ Hs ts) (fun _ o => ok o) dfltOutZC pL opn dg dec one fin capOf N (repJ A Hs ts)
-      (fun j pts r => allInh_repZCAt A Hs (ts.get j) pts r) hdec).strategy Pr
+    (Claims.Bridge.Sim.mapDead (Claims.Bridge.answerWith (nulOpZ (D := D) (Sl := Sl)))
+      (simSession (outJ Hs ts) (fun _ o => ok o) dfltOutZC pL opn dg dec one fin capOf N (repJ A Hs ts)
+        (fun j pts r => allInh_repZCAt A Hs (ts.get j) pts r) hdec)).strategy Pr
 
 /-- The simulated strategy's `Commit` sends the caps the live prover's roots decode to. -/
 theorem simSessZG_fst (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
@@ -78,7 +86,7 @@ theorem live_le_sessionZG (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts :
         (simSessZG A Hs ts ok pL opn dg dec one fin capOf N hdec Pr) := by
   unfold simSessZG
   rw [FlockSoundness.Discharge.Exec.prob_cast]
-  exact live_le_session _ _ _ pL opn dg dec one fin capOf N _ _ hdec Pr
+  exact Claims.Bridge.Sim.prob_le_mapDead _ _ Pr
 
 omit [Fintype K] in
 open Classical in
