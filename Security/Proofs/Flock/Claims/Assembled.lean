@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.DeployEfficient
+import Proofs.Flock.Claims.Complete.WalkPacked
 import Proofs.Flock.Claims.ZK.Hypotheses
 import Proofs.Flock.Claims.Complete.Coins
 import Proofs.Flock.Claims.Complete.Zk.Coins
@@ -42,7 +43,9 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
   `Flock.OneWait`, with `k ≥ 8` and the relation splitting by table wherever the verifier accepts
   (`FlockDeploy.KS.plain_of_oneWait`).
 * `hComplete`: `Flock.Complete` at the plain record, unfolded, of `honestP` at `δc H`.
-  `FlockComplete.complete_of_goals` concludes it from the honest run's goals, `FlockComplete.Goals H rel`.
+  `FlockComplete.complete_of_goals` concludes it from the honest run's goals, `FlockComplete.Goals H rel`. At the
+  deployed relation (`Readable.relation`) it follows from the record's JSON (`Claims.JsonSpec printJ canon`,
+  `FlockComplete.Replay.complete_plain_json`), so `flock_plain_assembled_relation` takes `JsonSpec` in its place.
 
 `flock_zk_assembled`:
 * `hKS : Flock.KS H (deployZkTrim rel)` (`FlockDeploy.KS.zk_KS_trim`, and `FlockDeploy.KS.zk_of_oneWait`, as at the
@@ -146,6 +149,24 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
       Claims.Complete H (deployPlainTrim rel).V FlockComplete.honestP (Claims.Flock.R (deployPlainTrim rel).parse)
         (Claims.Flock.Scope (deployPlainTrim rel)) (FlockComplete.δc H) :=
   ⟨scopeMatches_plain rel, hKS, bits_plain rel H hKS, bits_ge_plain rel H hKS, efficient_plain H rel, hComplete⟩
+
+/-- **Flock's claims at the deployed plain verifier at the deployed relation** (`Readable.relation`), at every hash:
+`flock_plain_assembled` with its completeness from the record's JSON (`complete_plain_json`). `hKS` (E4) is what
+remains. -/
+theorem flock_plain_assembled_relation (H : Claims.Msg → Claims.Msg)
+    (hKS : Claims.Flock.KS H (deployPlainTrim Readable.relation))
+    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) :
+    Claims.Flock.ScopeMatches (deployPlainTrim Readable.relation) ∧
+      Claims.Flock.KS H (deployPlainTrim Readable.relation) ∧
+      Claims.Flock.Bits H (deployPlainTrim Readable.relation) ∧
+      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployPlainTrim Readable.relation) x ≤ 2 ^ (-a x)) →
+        (∀ x, Claims.Flock.γ (deployPlainTrim Readable.relation) x ≤ 2 ^ b x) →
+        Claims.Bits H (deployPlainTrim Readable.relation).V (Claims.Flock.R (deployPlainTrim Readable.relation).parse)
+          (Claims.Flock.E (deployPlainTrim Readable.relation) (deployPlainTrim Readable.relation).decode)
+          fun x => min (a x) (255.5 - b x / 2) - 1) ∧
+      Claims.Flock.Efficient H (deployPlainTrim Readable.relation) plainStepPoly ∧
+      Claims.Flock.Complete H (deployPlainTrim Readable.relation) :=
+  flock_plain_assembled Readable.relation H hKS (FlockComplete.Replay.complete_plain_json H S)
 
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
 readable scope is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the record's
