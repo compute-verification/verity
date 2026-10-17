@@ -54,6 +54,7 @@ import Proofs.Flock.Claims.KS.ZkSessionW
 import Proofs.Flock.Claims.KS.ZkOffSC
 import Proofs.Flock.Claims.KS.ZkEntries
 import Proofs.Flock.Claims.KS.ZkDecodeW
+import Proofs.Flock.Claims.KS.ZkEvent
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -240,4 +241,6 @@ of table `j` off `C`, table `j`'s accepted output opens no position off `C` on a
 `FlockSoundness.Discharge.Composed.runsAtZCJ_live_offW`, `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_offW`),
 and the deployed decoders are right at that verdict on those outcomes, at a masked statement in scope
 (`FlockDeploy.KS.OkOffWJ`, `FlockDeploy.KS.AccTxJ`, `FlockDeploy.KS.decodesTableW_zkTabs`,
-`FlockDeploy.KS.decodesTableHW_zkTabs`, `FlockDeploy.KS.decodesTableW_deploy`). -/
+`FlockDeploy.KS.decodesTableHW_zkTabs`, `FlockDeploy.KS.decodesTableW_deploy`). On an accepting deployed masked
+run, the event of no column of table `j` off `C` gives that verdict at the run's live outcome (`ZkEvent`:
+`FlockDeploy.KS.cols_zk`, `FlockDeploy.KS.accTxJ_of_run`). -/
