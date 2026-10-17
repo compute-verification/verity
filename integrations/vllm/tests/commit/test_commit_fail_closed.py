@@ -200,7 +200,7 @@ def test_e2e_windowed_release_before_keep_fails_openings(tmp_path: Path):
 _WATCHDOG_PROG = r"""
 import os, sys, time, threading
 import torch
-from verity_vllm.acquire import native_collect as nc
+from verity_vllm.commit.committer import native_collect as nc
 c = nc.ext().Collector()
 marker = sys.argv[1]; grace = float(sys.argv[2]); mode = sys.argv[3]
 c.set_watchdog(marker, grace)
