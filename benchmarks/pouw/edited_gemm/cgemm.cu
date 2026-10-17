@@ -292,9 +292,11 @@ __global__ void __launch_bounds__(256) hquant(const uint16_t* __restrict__ x, in
   }
 }
 // the peeled side (Q in [-64, 62]): Q' = Q + c + U(i, k mod 64) (c as cwedit's, tag 8; U(i, r) from digest byte r of
-// row i's tag-11 block, r < 64, as cwedit's beta) and P_B = [-U_lo | -U_hi | 0 | 0]; a warp 4 rows
+// row i's tag-11 block, r < 64, as cwedit's beta) and P_B = [-U_lo | -U_hi | 0 | 0]; a warp 4 rows. WH: also
+// W^ = Q + c (phat<true>'s bytes) to Wh
+template <bool WH = false>
 __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB, int rows,
-                                              const __grid_constant__ Sig sg) {
+                                              const __grid_constant__ Sig sg, uint8_t* __restrict__ Wh = nullptr) {
   __shared__ uint32_t cds[8 * 16];
   __shared__ uint32_t uds[8 * 64];
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blockIdx.x * 8 + warp;
@@ -330,7 +332,9 @@ __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uin
     const size_t r = (size_t)grp * 4 + rr;
     const uint32_t w = __ldg(reinterpret_cast<const uint32_t*>(W + r * 128) + lane);
     const uint32_t nib = (cb[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu, u = ud[16 * rr + (lane & 15)];
-    reinterpret_cast<uint32_t*>(Wp + r * 128)[lane] = add_noise<false>(add_noise<false>(w, bits01(nib)), u);
+    const uint32_t wc = add_noise<false>(w, bits01(nib));
+    reinterpret_cast<uint32_t*>(Wp + r * 128)[lane] = add_noise<false>(wc, u);
+    if constexpr (WH) reinterpret_cast<uint32_t*>(Wh + r * 128)[lane] = wc;
     reinterpret_cast<uint32_t*>(PB + r * 128)[lane] = lane < 16 ? add_noise<false>(~u, 0x01010101u) : 0u;
   }
 }
