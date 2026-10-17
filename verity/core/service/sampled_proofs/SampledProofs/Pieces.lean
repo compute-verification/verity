@@ -257,19 +257,31 @@ def checkVerdicts (j : Json) : V Json := do
   if (sortStrings outputs).toList.eraseDups.length != outputs.size then throw "an output twice"
   return (← Service.checkVerdicts vs ss outputs).toJson
 
-/-- `{"params", "record", "rule", "values", "public", "challenger", "received", "source", "closure", "sessions",
-"verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served", "session_roots"}` to the stream's run
-of one registration (`Run.run`): `registration`'s parameters, the record, `select`'s rule, closure map and hex source,
-`check_public`'s values and declared items, the challenger's name and the log's length at the receipt (strings),
-`check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots, with the
-proved units and instances null for the draw's own. -/
+private def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
+  let .arr vs := j | throw s!"{what} is not a list"
+  vs.mapM fun v => match getD v "name", getD v "registered" with
+    | .str name, .bool registered => pure ({ name, registered } : Service.Value)
+    | _, _ => throw "a value is not a string name with a boolean"
+
+/-- `{"params", "record", "rule", "values", "interior_values", "public", "challenger", "received", "source", "closure",
+"interior", "sessions", "verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served",
+"session_roots"}` to the stream's run of one registration (`Run.run`): `registration`'s parameters, the record,
+`select`'s rule, closure map and hex source, `check_public`'s boundary and interior values and declared items, the
+challenger's name and the log's length at the receipt (strings), the interiors' registration (null, or `{"params",
+"record", "received"}`), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and
+session roots, with the proved units and instances null for the draw's own. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
   let rule ← Select.Rule.ofJson (getD j "rule")
-  let .arr vs := getD j "values" | throw "values is not a list"
-  let values ← vs.mapM fun v => match getD v "name", getD v "registered" with
-    | .str name, .bool registered => pure ({ name, registered } : Service.Value)
-    | _, _ => throw "a value is not a string name with a boolean"
+  let values ← valuesOf (getD j "values") "values"
+  let innerValues ← match getD j "interior_values" with
+    | .null => pure #[]
+    | vs => valuesOf vs "interior_values"
+  let interior ← match getD j "interior" with
+    | .null => pure none
+    | ir => do
+      let .str received := getD ir "received" | throw "the interior's received is not a string"
+      pure (some ({ params := ← params (getD ir "params"), record := getD ir "record", received } : Run.Interior))
   let .arr ps := getD j "public" | throw "public is not a list"
   let declared ← ps.mapM fun
     | .str s => pure s
@@ -296,8 +308,8 @@ def run (j : Json) : V Json := do
     | x => match int? x with
       | some n => pure (some n)
       | none => throw "instances is not an integer"
-  Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
-            source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
+  Run.run { params := p, record := getD j "record", rule, values, innerValues, declared, challenger, received,
+            source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, interior, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots" }
 

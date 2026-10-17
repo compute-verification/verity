@@ -101,10 +101,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
   partitions. It is the `Stream`'s draw of record: `Stream.select` hands it the bytes of the challenger's coins the
   Python draw read, and refuses the draw (`disagree`) unless the Lean draws the same object from exactly those bytes.
-  The Lean also runs a one-stage registration whole, from the registration through the verdict (`SampledProofs/Run.lean`,
-  `verifier.run`): the public-items rule, R1-R7, the receipt, the draw from those bytes and its checks, the hold on the
-  verdicts and the audit record. `Stream.outcome` holds each outcome on a draw from the coins to it, and an outcome the
-  two don't make alike is a reject whose audit record fails `run`. `SampledProofs/Slots.lean` puts that draw in the claims' terms
+  The Lean also runs a registration whole, from the registration through the verdict (`SampledProofs/Run.lean`,
+  `verifier.run`): the public-items rule, R1-R7, the receipt, the draw from those bytes and its checks, under
+  `TwoStage` the interiors' registration after the draw and before the proof, the hold on the verdicts and the audit
+  records. `Stream.outcome` holds each outcome on a draw from the coins to it, and an outcome the two don't make alike
+  is a reject whose audit record fails `run`. `SampledProofs/Slots.lean` puts that draw in the claims' terms
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
@@ -415,7 +416,8 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   interiors is refused (`interior`), unless no RU was drawn or the proof is late. The outcome accepts only when both
   registrations' audit records accept, `session_roots` split between them by value, and its profile is the boundary's,
   the replay sampling design's over the RUs. Its refusals are `rule`, `not-drawn`, `final`, `delivered`,
-  `interior-registered`, `interior-empty` and `interior-population`, then the public-items rule's and R1 to R7's.
+  `interior-registered`, `interior-empty` and `interior-population` (a population other than the integer
+  `len(draw.proved)`), then the public-items rule's and R1 to R7's.
 - **The salt and the registration deadline.** A stream runs one epoch with one salt. `salt(n=64)` issues it, `n` bytes
   of the challenger's coins (read in order with the draws'), and reads its release on the challenger's clock
   (`salted_at`). `salt_released(salt, released_at)` instead records a salt released elsewhere, such as PoUW's epoch

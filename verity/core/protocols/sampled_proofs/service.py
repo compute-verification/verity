@@ -542,6 +542,8 @@ class _Entry:
     drawn_at: float | None = None
     interior: Registration | None = None
     interior_draw: dict[str, Any] | None = None
+    #: what `register_interiors` handed R1-R7 besides the record: (program, ports, leaf_layer, anchors, the log's records)
+    interior_copies: tuple[Any, ...] = ()
     sessions: list[str] | None = None
     outcome: Outcome | None = None
 
@@ -844,14 +846,17 @@ class Stream:
         v = self._public(record, interior=True)
         if not v.ok:
             raise Refused(v)
-        if record.get("population") != n:
+        if not (type(record.get("population")) is int and record["population"] == n):
             raise _refuse("interior-population", {"registered": record.get("population"), "proved": n})
         law = {"law": "subset", "k": n}
-        v = V.check(record, P.population_program(self.unit, n), self.spec.check.query, law, SCHEME, ports, leaf_layer,
-                    anchors, self._earlier(record))
+        program, earlier = P.population_program(self.unit, n), self._earlier(record)
+        v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier)
         if not v.ok:
             raise Refused(v)
+        if earlier is self._log:
+            earlier = self._log[:]
         e.interior, e.interior_draw = self._log_record(record, order), {**law, "population": n, "units": list(range(n))}
+        e.interior_copies = (program, ports, leaf_layer, anchors, earlier)
         return e.interior
 
     def _late(self, e: _Entry) -> bool:
@@ -890,8 +895,8 @@ class Stream:
         its, and the registered roots it reads are the verdicts' own) decides accept or reject. Under `TwoStage` with
         interiors, the interior registration's audit record (all of its units proved, by the same statement and
         verdicts) must accept too, and `session_roots` (`{port: root}` from the sessions' statements) is split between
-        the two by value. Without interiors, on a draw from the coins and an audit record its two verifiers agree on, the
-        whole run is held to the verifier of record's (`verifier.run`, the Lean's `Run.run` from the registration on):
+        the two by value. On a draw from the coins and audit records its two verifiers agree on, the whole run, interiors
+        included, is held to the verifier of record's (`verifier.run`, the Lean's `Run.run` from the registration on):
         where they differ the outcome is a reject, its audit record failing `run`. Raises `Refused` for a second outcome,
         a verdict of record about other sessions, or public outputs the verdicts of record don't report alike."""
         e = self._entry(draw.registration)
@@ -928,10 +933,21 @@ class Stream:
                                        list(e.interior_draw["units"]), instances, statement, verdicts, self.delta,
                                        e.sessions, None, interior_roots)
         accepted = rec["accepted"] and (inner_rec is None or inner_rec["accepted"])
-        if e.interior is None and e.read is not None and rec["verifiers"]["agree"]:
+        if e.read is not None and rec["verifiers"]["agree"] and (inner_rec is None or inner_rec["verifiers"]["agree"]):
             reg = draw.registration
             ports, leaf_layer, anchors, earlier, registered = e.copies
+            staged = isinstance(self.spec.selection, TwoStage)
+            interior = None
+            if e.interior is not None:
+                assert e.interior_draw is not None
+                program, i_ports, i_leaf_layer, i_anchors, i_earlier = e.interior_copies
+                interior = {"program": program, "law": D.law_of(e.interior_draw), "ports": i_ports,
+                            "leaf_layer": i_leaf_layer, "anchors": i_anchors, "log": i_earlier,
+                            "record": e.interior.record, "received": e.interior.receipt["received"]}
             v = V.run({"receipt": dict(reg.receipt), "draw": dict(draw.draw), "read": len(e.read),
+                       "interior": None if inner_rec is None else {
+                           "receipt": dict(e.interior.receipt),
+                           "audit": {k: x for k, x in inner_rec.items() if k != "verifiers"}},
                        "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
                        "audit": {k: x for k, x in rec.items() if k != "verifiers"}},
                       reg.record, e.program, self.spec.check.query,
@@ -939,7 +955,9 @@ class Stream:
                       earlier, e.work_table, registered, self.spec.selection.to_json(),
                       [(x.name, x.registered) for x in self._values(interior=False)], [p.item for p in self.spec.public],
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
-                      statement, self.delta, *asked, served, roots)
+                      statement, self.delta, *asked, served, session_roots,
+                      interior_values=[(x.name, x.registered) for x in self._values(interior=True)] if staged else (),
+                      interior=interior)
             if not v.ok:
                 accepted = False
                 rec = {**rec, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
