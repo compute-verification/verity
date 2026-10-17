@@ -2,6 +2,8 @@ import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.ZK.Hypotheses
+import Proofs.Flock.Claims.Complete.Coins
+import Proofs.Flock.Claims.Complete.Zk.Coins
 import Proofs.Flock.Soundness.CompiledSound
 
 /-!
@@ -12,24 +14,44 @@ every relation's fields `rel` and every hash `H`, the conjunction of Flock's cla
 
 * `ScopeMatches`: the readable scope is the verifier's (`scopeMatches_plain`, `scopeMatches_zk`);
 * `KS` at `E^rep` and every decoder meeting `ListWithin`: a hypothesis;
-* `Bits` at every such decoder (`Flock.Bits_of_KS`), and at the radius decoder `min(a, 255.5 − b/2) − 1` bits at every
-  bound `κ ≤ 2^{−a}`, `γ ≤ 2^b` (`Flock.Bits_ge`), from `KS` with `ε_table ≥ 0` and `γ > 0` (`εtable_nonneg`,
-  `γ_pos`);
-* `Efficient` at the record's own counted decoder (`GS.plainCountedRD`, `GS.zkCountedRD`): `E^rep`'s reruns at every
-  deployment (`ERep_cost`), the decoder's `ListWithin`, and its count and lists at most `plainStepPoly` (`zkStepPoly`)
-  at the opened word's encoded length, which bounds `assemble`'s checks (`efficient_plain`, `efficient_zk`);
-* `Complete` at the honest prover `P` with error `δc`: a hypothesis.
+* `Bits` at every such decoder, and at the record's own decoder `min(a, 255.5 − b/2) − 1` bits at every bound
+  `κ ≤ 2^{−a}`, `γ ≤ 2^b`, from `KS` alone (`bits_plain`, `bits_zk`, `bits_ge_plain`, `bits_ge_zk`: `Flock.Bits_of_KS`
+  and `Flock.Bits_ge` with `ε_table ≥ 0` and `γ > 0`, `εtable_nonneg`, `γ_pos`);
+* `ZK`, at the masked record: `Flock.ZK` at the protocol model `G`'s prover and its simulator, from the premises of
+  `Flock.zk_deployZk_of_models`;
+* `Efficient` at the record's own counted decoder (`Deploy.dec`): `E^rep`'s reruns at every deployment (`ERep_cost`),
+  the decoder's `ListWithin`, and its count and lists at most `plainStepPoly` (`zkStepPoly`) at the opened word's
+  encoded length, which bounds `assemble`'s checks (`efficient_plain`, `efficient_zk`);
+* `Complete` at Flock's honest prover and its error, on the prover's tape: `FlockComplete.honestP` with
+  `FlockComplete.δc H` on `Tape` at the plain record, `FlockComplete.honestPZk` with `FlockComplete.δcZk H` on `TapeZk`
+  at the masked one: a hypothesis.
 
-## What remains: the hypotheses
+At a prover and error left free, `Complete` holds whatever the verifier does: at an empty tape, or at `δc = 1`. Here
+both are the honest prover's, and both tapes are inhabited (`instInhabitedTape`, `instInhabitedTapeZk`). The statements
+leave `Claims.Flock.Complete` folded, so they read it as `Definitions/Claims.lean` states it: with or without its
+hash's 64-byte outputs (`Out64 H`) as a premise, and with a `[Nonempty Ω]` binder met by the tapes' instances.
 
-* `hKS : Flock.KS H (deployPlain rel)`, and at `deployZk rel`: E4, `cursor/claims-ks-c7a9`. There KS at SHA-512 rests
-  on `TableBoundθ` at the statements that set up (`plain_KSθ_of_setup`, `zk_KSθ_of_setup`; `ConflictTied` and
-  `ColsOk` are proved there), but it concludes the branch's radius form `KSθ`, not `Flock.KS`. `KSθ`'s extractor
-  decodes the word filled to table 0's level-0 length with a zero column of the lanes' width (`Eθ`, `fillWord`,
-  `zeroCol`), at every decoder meeting `ListCompleteθ`; `Flock.KS`'s decodes the opened columns, at every decoder
-  meeting `ListWithin`, whose word has `[]` where no column was opened. So the hypothesis is `Flock.KS` itself.
-* `hComplete : Flock.Complete H (deployPlain rel) P δc`: C3, `cursor/claims-complete-c7a9`, whose honest prover
-  (`honestP`, with its `δc`) is not on main, so `P` and `δc` are any. At `deployZk rel` no branch proves it yet.
+## What remains: the hypotheses, exactly
+
+`flock_plain_assembled`:
+* `hKS : Flock.KS H (deployPlain rel)`. Main reduces it to one wait's bound, `Flock.OneWait`, with `k ≥ 8` and the
+  relation splitting by table wherever the verifier accepts (`FlockDeploy.KS.plain_of_oneWait`).
+* `hComplete : Flock.Complete H (deployPlain rel) honestP (δc H)`. `FlockComplete.complete_of_goals` concludes it from
+  the honest run's goals, `FlockComplete.Goals H rel`.
+
+`flock_zk_assembled`:
+* `hKS : Flock.KS H (deployZk rel)` (`FlockDeploy.KS.zk_of_oneWait`, as at the plain record).
+* `hComplete : Flock.Complete H (deployZk rel) honestPZk (δcZk H)` (`FlockComplete.complete_zk_of_goals`, from
+  `FlockComplete.GoalsZk H rel`). `δcZk H` is `1` at a statement of several tables (`readyZk`).
+* ZK's, as `Flock.zk_deployZk_of_models` takes them:
+  * the named assumption `hT1 : Hm96Hiding My cs δ₁`, with `hδ₁ : δ₁ ≠ ⊤`;
+  * the model: `G` and its rounds, `hK : G.K x = (V true).k x − 1`; the pre-coin and coin models `Mp` and `Mc` over
+    the salt, blinding and commitment spaces `Salt`, `B` and `Cc`, with `My` and `cs`; their leaf bounds
+    `hnL : card (Mp x ν).L ≤ nL x` and `hnB : (Mc x ν c).size ≤ nB x`; the repetitions `t`, `ht : 0 < t`;
+  * the five premises `hL : G.MsgLink`, `hS : G.SimLink`, `hN : G.NonDegenerate`, `hI : G.InnerHolds` and
+    `hC : G.CoinCheck`.
+
+ZK is at `G.prover`, which no theorem yet ties to `honestPZk`.
 -/
 
 namespace FlockDeploy.Assembled
@@ -96,13 +118,12 @@ theorem bits_ge_zk (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg
     (decode_zk rel ▸ listWithin_zk rel)
 
 /-- **Flock's claims at the deployed plain verifier**, at every relation's fields and every hash: the readable scope
-is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the radius decoder at every bound
-on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the honest prover. `hKS` (E4) and
-`hComplete` (C3) are what remains. -/
+is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the record's decoder at every
+bound on `κ` and `γ`; efficiency at the record's decoder with its count; and completeness at the honest prover
+`honestP` with error `δc H`. What remains is exactly `hKS` and `hComplete`. -/
 theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployPlain rel))
-    {Ω : Type} (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → ℝ)
-    (hComplete : Claims.Flock.Complete H (deployPlain rel) P δc) :
+    (hComplete : Claims.Flock.Complete H (deployPlain rel) FlockComplete.honestP (FlockComplete.δc H)) :
     Claims.Flock.ScopeMatches (deployPlain rel) ∧
       Claims.Flock.KS H (deployPlain rel) ∧
       Claims.Flock.Bits H (deployPlain rel) ∧
@@ -111,17 +132,17 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
         Claims.Bits H (deployPlain rel).V (Claims.Flock.R (deployPlain rel).parse)
           (Claims.Flock.E (deployPlain rel) (deployPlain rel).decode) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
       Claims.Flock.Efficient H (deployPlain rel) plainStepPoly ∧
-      Claims.Flock.Complete H (deployPlain rel) P δc :=
+      Claims.Flock.Complete H (deployPlain rel) FlockComplete.honestP (FlockComplete.δc H) :=
   ⟨scopeMatches_plain rel, hKS, bits_plain rel H hKS, bits_ge_plain rel H hKS, efficient_plain H rel, hComplete⟩
 
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
-readable scope is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the radius decoder
-at every bound on `κ` and `γ`; efficiency at the radius decoder with its count; and completeness at the honest prover.
-`hKS` (E4) and `hComplete` (no owner yet) are what remains. -/
+readable scope is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the record's
+decoder at every bound on `κ` and `γ`; zero knowledge at the model `G`'s prover and simulator; efficiency at the
+record's decoder with its count; and completeness at the honest masked prover `honestPZk` with error `δcZk H`. What
+remains is exactly `hKS`, `hComplete` and `Flock.zk_deployZk_of_models`' hypotheses, `hT1` its named assumption. -/
 theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployZk rel))
-    {Ω : Type} (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → ℝ)
-    (hComplete : Claims.Flock.Complete H (deployZk rel) P δc)
+    (hComplete : Claims.Flock.Complete H (deployZk rel) FlockComplete.honestPZk (FlockComplete.δcZk H))
     (G : Claims.ZKMal.Proto Claims.Flock.Wit) (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (V true).k x - 1)
     {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
     [DecidableEq B] (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
@@ -139,7 +160,7 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
       Claims.Flock.ZK H (deployZk rel) G.prover (G.simulatorE t (t * 3 ^ t))
         (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) (fun _ => 4 * t * 3 ^ t) ∧
       Claims.Flock.Efficient H (deployZk rel) zkStepPoly ∧
-      Claims.Flock.Complete H (deployZk rel) P δc :=
+      Claims.Flock.Complete H (deployZk rel) FlockComplete.honestPZk (FlockComplete.δcZk H) :=
   ⟨scopeMatches_zk rel, hKS, bits_zk rel H hKS, bits_ge_zk rel H hKS,
     Claims.ZKMal.Flock.zk_deployZk_of_models H rel G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB hL hS hN hI hC,
     efficient_zk H rel, hComplete⟩
