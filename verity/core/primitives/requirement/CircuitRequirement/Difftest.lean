@@ -12,14 +12,18 @@ takes an instance, value by value, with the store, a plan per step, the block si
 
     {"width": [w], "registered": [v], "ops": [[v]], "uses": [[v]], "step": [s | null], "value": [x],
      "block": [j], "offset": [o], "store": {"registered": N, "written": [[j]], "freed": [[j]], "payload": [hex]},
-     "plans": [[j]], "block_bits": B, "steps": T}
+     "plans": [[j]], "block_bits": B, "steps": T,
+     "leaf": [x], "ticks": [[tick]], "price": [π],
+     "windows": [{"devices": [x], "marked": [v], "lo": a, "hi": b, "start": s, "len": l}]}
 
-A payload is lowercase hex (Python writes no integer of more than 4,300 digits, a block's payload among them). It refuses
-an instance that isn't one (a field missing or of the wrong kind, a per-value list not of one entry per value, a
-registered value that isn't one, a plan count that isn't `T`) and an execution that doesn't follow its wiring. For each
-step `t < T` it returns the live and read values, their bits, the blocks that hold them with the bits in each, the
-resident blocks, and whether the store and the plan are `W`'s (`storeMatches`, `planMatches`), with `held` and `read`
-over the `T` steps.
+A step is an engine step; `ticks` gives, device by device, the tick at which it begins each engine step. A payload is
+lowercase hex (Python writes no integer of more than 4,300 digits, a block's payload among them). It refuses an instance
+that isn't one (a field missing or of the wrong kind, a per-value list not of one entry per value, a registered value
+that isn't one, a plan count that isn't `T`) and an execution that doesn't follow its wiring. For each step `t < T` it
+returns the live and read values, their bits, the blocks that hold them with the bits in each, the resident blocks, and
+whether the store and the plan are `W`'s (`storeMatches`, `planMatches`), with `held` and `read` over the `T` steps; and
+for each window, PoUW's over the placed execution: the region at its ticks and at its engine steps, its ingress and its
+credits at the pricing `price`.
 -/
 
 namespace CircuitRequirement.Difftest
@@ -68,7 +72,38 @@ def decode (j : Json) : Flock.V Instance := do
     block := ← perValue j "block" n Flock.J.asNat
     offset := ← perValue j "offset" n Flock.J.asNat }
 
+def placement (j : Json) (n : Nat) : Flock.V Placement := do
+  return {
+    leaf := ← perValue j "leaf" n Flock.J.asNat
+    ticks := ← (← Flock.J.arr j "ticks" "input").mapM fun t => do
+      return (← nats t "ticks").toArray }
+
+/-- A window of PoUW's: the devices `X`, the marked values, the ticks `[lo, hi)` and the engine steps
+`[start, start + len)`. -/
+structure Window where
+  devices : List Nat
+  marked : List Nat
+  lo : Nat
+  hi : Nat
+  start : Nat
+  len : Nat
+
+def window (j : Json) : Flock.V Window := do
+  return {
+    devices := ← nats (← Flock.J.get j "devices" "window") "window.devices"
+    marked := ← nats (← Flock.J.get j "marked" "window") "window.marked"
+    lo := ← Flock.J.nat j "lo" "window"
+    hi := ← Flock.J.nat j "hi" "window"
+    start := ← Flock.J.nat j "start" "window"
+    len := ← Flock.J.nat j "len" "window" }
+
 def natsJson (l : List Nat) : Json := .arr (l.map toJson).toArray
+
+def windowJson (i : Instance) (p : Placement) (price : Array Nat) (w : Window) : Json :=
+  Json.mkObj [("region", natsJson (i.region p w.devices w.lo w.hi)),
+    ("step_region", natsJson (i.stepRegion p w.devices w.start w.len)),
+    ("ingress", toJson (i.ingress p w.devices w.lo w.hi)),
+    ("credits", toJson (i.credits p price w.devices w.marked w.lo w.hi))]
 
 def byBlock (i : Instance) (S : List Nat) : Json :=
   .arr ((i.blocks S).map fun j => Json.arr #[toJson j, toJson (i.bitsIn S j)]).toArray
@@ -88,9 +123,13 @@ def requirement (j : Json) : Flock.V Json := do
   let B ← Flock.J.nat j "block_bits" "input"
   let T ← Flock.J.nat j "steps" "input"
   if plans.size != T then throw s!"plans has {plans.size} entries, not one per step ({T})"
+  let p ← placement j i.width.size
+  let price ← perValue j "price" i.width.size Flock.J.asNat
+  let windows ← (← Flock.J.arr j "windows" "input").mapM window
   if !i.follows then throw "the execution does not follow its wiring (`Execution.Follows`)"
   return Json.mkObj [("held", toJson (i.held 0 T)), ("read", toJson (i.read 0 T)),
-    ("steps", .arr ((List.range T).map fun t => stepJson i s (plans.getD t []) B t).toArray)]
+    ("steps", .arr ((List.range T).map fun t => stepJson i s (plans.getD t []) B t).toArray),
+    ("windows", .arr (windows.map (windowJson i p price)))]
 
 def table := _root_.Difftest.table [("requirement", requirement)]
 

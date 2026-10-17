@@ -216,6 +216,63 @@ theorem planMatches_iff (plan : List ℕ) (B t : ℕ) :
   simp only [Instance.planMatches, Bool.and_eq_true, sameSet_iff, blocks_eq, packs_iff i (reads_nodup i t), reads_eq,
     Accounting.Requirement.PlanMatches, Accounting.Requirement.readBlocks]
 
+/-! ## Placement -/
+
+theorem not_contains_iff {l : List ℕ} {a : ℕ} : (!(Std.HashSet.ofList l).contains a) = true ↔ a ∉ l := by
+  simp [Std.HashSet.contains_ofList]
+
+theorem distinct_nodup (l : List ℕ) : (distinct l).Nodup :=
+  (List.mergeSort_perm _ _).nodup_iff.mpr ((Std.HashSet.ofList l).distinct_toList.imp fun h => by simpa using h)
+
+variable (p : CircuitRequirement.Placement) (X : List ℕ)
+
+theorem mem_region {lo hi g : ℕ} : g ∈ i.region p X lo hi ↔
+    g ∈ i.ran ∧ g ∉ i.registered ∧ p.leafOf g ∈ X ∧ lo ≤ i.tick p g ∧ i.tick p g < hi := by
+  simp only [Instance.region, List.mem_filter, Bool.and_eq_true, not_contains_iff, contains_iff, decide_eq_true_eq,
+    and_assoc]
+
+theorem region_nodup (lo hi : ℕ) : (i.region p X lo hi).Nodup := by
+  simp only [Instance.region]
+  exact (ran_nodup i).filter _
+
+theorem region_eq (lo hi : ℕ) : (i.region p X lo hi).toFinset =
+    Accounting.Requirement.region (wiring i) (placement i p) X.toFinset (Set.Ico lo hi) := by
+  ext g
+  simp only [List.mem_toFinset, mem_region, Accounting.Requirement.region, Finset.mem_filter, wiring, placement,
+    execution, Accounting.Requirement.Placement.tick, Instance.tick, Set.mem_Ico]
+
+theorem stepRegion_eq (start len : ℕ) : (i.stepRegion p X start len).toFinset =
+    Accounting.Requirement.stepRegion (wiring i) (placement i p) X.toFinset ⟨start, len⟩ := by
+  ext g
+  simp only [Instance.stepRegion, List.mem_toFinset, List.mem_filter, Bool.and_eq_true, not_contains_iff, contains_iff,
+    decide_eq_true_eq, Accounting.Requirement.stepRegion, Finset.mem_filter, wiring, placement, execution,
+    Accounting.Window.ticks, Finset.mem_Ico, and_assoc]
+
+theorem mem_into {S : List ℕ} {a : ℕ} : a ∈ i.into S ↔ (∃ g ∈ S, a ∈ i.usesOf g) ∧ a ∉ S := by
+  simp only [Instance.into, mem_distinct, List.mem_filter, List.mem_flatMap, not_contains_iff]
+
+theorem ingress_eq (lo hi : ℕ) :
+    i.ingress p X lo hi = Accounting.Requirement.ingress (wiring i) (placement i p) X.toFinset (Set.Ico lo hi) := by
+  have h : ((i.into (i.region p X lo hi)).filter fun a => !(Std.HashSet.ofList X).contains (p.leafOf a)).Nodup :=
+    (distinct_nodup _).filter _
+  show i.bits _ = _
+  rw [bits_eq i h, Accounting.Requirement.ingress, ← region_eq]
+  congr 1
+  ext a
+  simp only [List.mem_toFinset, List.mem_filter, not_contains_iff, mem_into, Finset.mem_filter,
+    Accounting.Requirement.into, Finset.mem_sdiff, Finset.mem_biUnion, wiring, placement]
+
+theorem credits_eq (price : Array ℕ) (marked : List ℕ) (lo hi : ℕ) :
+    i.credits p price X marked lo hi = Accounting.Requirement.work (fun g => price.getD g 0)
+      (Accounting.Requirement.region (wiring i) (placement i p) X.toFinset (Set.Ico lo hi) \ marked.toFinset) := by
+  have h : ((i.region p X lo hi).filter fun g => !(Std.HashSet.ofList marked).contains g).Nodup :=
+    (region_nodup i p X lo hi).filter _
+  show Instance.work price _ = _
+  rw [Instance.work, ← List.sum_toFinset _ h, Accounting.Requirement.work, ← region_eq]
+  congr 1
+  ext g
+  simp only [List.mem_toFinset, List.mem_filter, not_contains_iff, Finset.mem_sdiff]
+
 end Instance
 
 /-! ## The equalities -/
@@ -234,5 +291,9 @@ theorem readIn : ReadIn := readIn_eq
 theorem resident : Resident := resident_eq
 theorem storeMatches : StoreMatches := storeMatches_iff
 theorem planMatches : PlanMatches := planMatches_iff
+theorem region : Region := region_eq
+theorem stepRegion : StepRegion := stepRegion_eq
+theorem ingress : Ingress := ingress_eq
+theorem credits : Credits := fun i p price X marked lo hi => credits_eq i p X price marked lo hi
 
 end Properties.Requirement

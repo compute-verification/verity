@@ -129,6 +129,41 @@ class Execution:
 
 
 @dataclass(frozen=True)
+class Placement:
+    """An execution placed on devices, as `Accounting.Requirement.Placement` holds it: each value's device (`leaf`, the
+    device, never an SM, an SMSP or a unit; 0 where unnamed), and the tick at which each device begins each engine step
+    (`ticks`, device by device; 0 past its end). A value is placed at the tick its device begins its step (`tick`), and
+    PoUW's credits and help over the placed execution are `credits` and `ingress` (`RequirementCredits`,
+    `RequirementHelp`)."""
+
+    leaf: Mapping[int, int]
+    ticks: Mapping[int, Sequence[int]]
+
+    def tick(self, ex: Execution, v: int) -> int:
+        ts, s = self.ticks.get(self.leaf.get(v, 0), ()), ex.step_of(v)
+        return ts[s] if s < len(ts) else 0
+
+    def region(self, ex: Execution, devices, lo: int, hi: int) -> frozenset[int]:
+        """`region X [lo, hi)`: the values `ex` produces but the registered ones, on `devices` at a tick of `[lo, hi)`."""
+        return frozenset(g for g in ex.ran - ex.registered if self.leaf.get(g, 0) in devices and lo <= self.tick(ex, g) < hi)
+
+    def step_region(self, ex: Execution, devices, start: int, length: int) -> frozenset[int]:
+        """`stepRegion X w`: the same at the engine steps `[start, start + length)`."""
+        return frozenset(g for g in ex.ran - ex.registered
+                         if self.leaf.get(g, 0) in devices and start <= ex.step_of(g) < start + length)
+
+    def ingress(self, ex: Execution, devices, lo: int, hi: int) -> int:
+        """`ingress X [lo, hi)`: the bits of the values placed outside `devices` that the region uses."""
+        region = self.region(ex, devices, lo, hi)
+        into = {a for g in region for a in ex.uses.get(g, ())} - region
+        return sum(ex.width.get(a, 0) for a in into if self.leaf.get(a, 0) not in devices)
+
+    def credits(self, ex: Execution, price: Mapping[int, int], devices, marked, lo: int, hi: int) -> int:
+        """PoUW's credits over the placed execution: the price of the region less the marked values."""
+        return sum(price.get(g, 0) for g in self.region(ex, devices, lo, hi) - frozenset(marked))
+
+
+@dataclass(frozen=True)
 class Requirement:
     """A scheduled execution's requirement: each value's width, when it exists (`born`: -1 for a registered value, else
     the step that produces it or a run input's arrival) and its last structural reader's step (`last`), the values each

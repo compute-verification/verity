@@ -2,13 +2,16 @@
 
 `requirement-difftest` (`CircuitRequirement.Difftest.table`) serves `requirement`: an instance's live and read values at
 each step, their bits, by value and by block, the resident blocks, and whether the store and the step's plan are W's
-(`StoreMatches`, `PlanMatches`), with `held` and `read` over its steps. The reference is `requirement.py`'s:
-`Requirement.of` on the instance's `Execution`, its `live`, `reads` and bits, `Layout.blocks` and `bits_in`,
-`Store.resident`, `store_matches` and `plan_matches`.
+(`StoreMatches`, `PlanMatches`), with `held` and `read` over its steps; and, the execution placed on devices, PoUW's
+windows over it: each window's region at its ticks and at its engine steps, its ingress and its credits. The reference is
+`requirement.py`'s: `Requirement.of` on the instance's `Execution`, its `live`, `reads` and bits, `Layout.blocks` and
+`bits_in`, `Store.resident`, `store_matches`, `plan_matches` and `Placement`'s `region`, `step_region`, `ingress` and
+`credits`.
 
 Drawn instances are small wirings with executions that follow them and some that don't, under `pack`'s layout and store,
-a mutation of them or a random one, and malformed instances, which both refuse. Then Programs end to end, each through
-`requirement.execution` and `pack`, where Lean must find the honest store and plans W's at every step: the toy decoder of
+a mutation of them or a random one, placed on a few devices (sometimes in lockstep, with windows of whole steps), and
+malformed instances, which both refuse. Then Programs end to end, each through `requirement.execution`, `pack` and
+`placed`, where Lean must find the honest store and plans W's at every step: the toy decoder of
 `verity/ml/circuits/tests/test_requirement.py`, and two rows of the vLLM registry, `b1.Serve` at the vLLM tests' tiny
 configuration (a two-layer model's prefill of three tokens and two decode steps, 37,172 gates) and
 `b1.RMSNormFusedCudaV1` at N = 64.
@@ -20,6 +23,7 @@ import json
 import random
 import re
 import shutil
+from itertools import accumulate
 from pathlib import Path
 
 import numpy as np
@@ -79,6 +83,11 @@ def _per_value(i, k: str, n: int, f) -> list:
     return out
 
 
+def _window(w) -> tuple:
+    return (frozenset(_nats(_get(w, "devices"), "window.devices")), frozenset(_nats(_get(w, "marked"), "window.marked")),
+            *(_nat(_get(w, k), f"window.{k}") for k in ("lo", "hi", "start", "len")))
+
+
 def requirement(i) -> dict:
     width = _nats(_get(i, "width"), "width")
     n = len(width)
@@ -86,7 +95,9 @@ def requirement(i) -> dict:
     if any(v >= n for v in registered):
         raise D.Reject("registered: a value the circuit doesn't have")
     ops, uses, step = (_per_value(i, k, n, f) for k, f in (("ops", _nats), ("uses", _nats), ("step", _step)))
-    value, block, offset = (_per_value(i, k, n, _nat) for k in ("value", "block", "offset"))
+    value, block, offset, leaf, price = (_per_value(i, k, n, _nat) for k in ("value", "block", "offset", "leaf", "price"))
+    ticks = [_nats(t, "ticks") for t in _list(_get(i, "ticks"), "ticks")]
+    windows = [_window(w) for w in _list(_get(i, "windows"), "windows")]
     s = _get(i, "store")
     store = R.Store(_nat(_get(s, "registered"), "store.registered"),
                     {t: frozenset(_nats(js, "store.written")) for t, js in enumerate(_list(_get(s, "written"), "written"))},
@@ -115,15 +126,29 @@ def requirement(i) -> dict:
                 "resident": sorted(store.resident(t)), "store_matches": R.store_matches(req, layout, store, B, t),
                 "plan_matches": R.plan_matches(req, layout, plans[t], B, t)}
 
-    return {"held": req.held(0, T), "read": req.read(0, T), "steps": [at(t) for t in range(T)]}
+    p, pr = R.Placement(dict(enumerate(leaf)), dict(enumerate(ticks))), dict(enumerate(price))
+
+    def window(X, marked, lo: int, hi: int, start: int, length: int) -> dict:
+        return {"region": sorted(p.region(ex, X, lo, hi)), "step_region": sorted(p.step_region(ex, X, start, length)),
+                "ingress": p.ingress(ex, X, lo, hi), "credits": p.credits(ex, pr, X, marked, lo, hi)}
+
+    return {"held": req.held(0, T), "read": req.read(0, T), "steps": [at(t) for t in range(T)],
+            "windows": [window(*w) for w in windows]}
 
 
-def encode(ex: R.Execution, layout: R.Layout, store: R.Store, plans, block_bits: int, steps: int) -> dict:
+#: a window of PoUW's: the devices, the marked values, the ticks [lo, hi) and the engine steps [start, start + len)
+Window = tuple[frozenset[int], frozenset[int], int, int, int, int]
+
+
+def encode(ex: R.Execution, layout: R.Layout, store: R.Store, plans, block_bits: int, steps: int,
+           placement: R.Placement = R.Placement({}, {}), price=None, windows: list[Window] = ()) -> dict:
     """The instance `requirement` takes: `ex`'s values `0 … n - 1` (a value it has no width for is 0 bits, one with no
-    block is in block 0), the store's steps and blocks up to the last it names."""
+    block is in block 0, one with no device on device 0, one with no price priced 0), the store's steps and blocks up to
+    the last it names, and the placement's devices up to the last it gives ticks for."""
     n = 1 + max([*ex.width, *ex.ops, *ex.registered, *ex.step], default=-1)
     top = 1 + max([*store.written, *store.freed], default=-1)
     blocks = 1 + max(store.payload, default=-1)
+    price = price or {}
     return {"width": [ex.width.get(v, 0) for v in range(n)], "registered": sorted(ex.registered),
             "ops": [list(ex.ops.get(v, ())) for v in range(n)], "uses": [sorted(ex.uses.get(v, ())) for v in range(n)],
             "step": [ex.step.get(v) for v in range(n)], "value": [ex.values.get(v, 0) for v in range(n)],
@@ -132,7 +157,12 @@ def encode(ex: R.Execution, layout: R.Layout, store: R.Store, plans, block_bits:
                       "written": [sorted(store.written.get(t, ())) for t in range(top)],
                       "freed": [sorted(store.freed.get(t, ())) for t in range(top)],
                       "payload": [format(store.payload.get(j, 0), "x") for j in range(blocks)]},
-            "plans": [sorted(p) for p in plans], "block_bits": block_bits, "steps": steps}
+            "plans": [sorted(p) for p in plans], "block_bits": block_bits, "steps": steps,
+            "leaf": [placement.leaf.get(v, 0) for v in range(n)],
+            "ticks": [list(placement.ticks.get(x, ())) for x in range(1 + max(placement.ticks, default=-1))],
+            "price": [price.get(v, 0) for v in range(n)],
+            "windows": [{"devices": sorted(X), "marked": sorted(m), "lo": lo, "hi": hi, "start": s, "len": length}
+                        for X, m, lo, hi, s, length in windows]}
 
 
 # --- drawn instances ---------------------------------------------------------------------------------------------------
@@ -200,7 +230,33 @@ def _mutated(rng: random.Random, layout: R.Layout, store: R.Store, B: int) -> tu
     return R.Layout(layout.block, {**layout.offset, v: layout.offset[v] + rng.choice([1, B])}), store
 
 
-MALFORMED = ["no key", "short list", "registered", "plans", "negative", "bool", "string", "hex", "store", "not an object"]
+def _placement(rng: random.Random, n: int, T: int) -> tuple[R.Placement, dict[int, int], list[Window]]:
+    """A placement on one to three devices, and values on one more that has no ticks; each device's ticks paced or not,
+    or all in lockstep; a price per value; and up to four windows, those of a lockstep placement often with ends that
+    begin steps on every device."""
+    devices = rng.randrange(1, 4)
+    paced = lambda: list(accumulate(rng.randrange(1, 4) for _ in range(T + 2)))  # noqa: E731
+    shared = paced() if rng.random() < 0.5 else None
+    ticks = {x: shared or (paced() if rng.random() < 0.7 else [rng.randrange(12) for _ in range(rng.randrange(T + 2))])
+             for x in range(devices)}
+    leaf = {v: rng.randrange(devices + 1) for v in range(n)}
+    price = {v: rng.randrange(100) for v in range(n)}
+    windows = []
+    for _ in range(rng.randrange(5)):
+        X = frozenset(x for x in range(devices + 1) if rng.random() < 0.6)
+        marked = frozenset(v for v in range(n) if rng.random() < 0.2)
+        start, length = rng.randrange(T + 1), rng.randrange(T + 1)
+        if shared and start + length < len(shared) and rng.random() < 0.7:
+            lo, hi = shared[start], shared[start + length]
+        else:
+            lo = rng.randrange(15)
+            hi = lo + rng.randrange(15)
+        windows.append((X, marked, lo, hi, start, length))
+    return R.Placement(leaf, ticks), price, windows
+
+
+MALFORMED = ["no key", "short list", "registered", "plans", "negative", "bool", "string", "hex", "store", "ticks",
+             "window", "not an object"]
 
 
 def _malformed(rng: random.Random, value: dict) -> object:
@@ -209,7 +265,7 @@ def _malformed(rng: random.Random, value: dict) -> object:
         k = rng.choice(sorted(value))
         return {key: x for key, x in value.items() if key != k}
     if kind == "short list":
-        k = rng.choice(["width", "ops", "uses", "step", "value", "block", "offset"])
+        k = rng.choice(["width", "ops", "uses", "step", "value", "block", "offset", "leaf", "price"])
         return {**value, k: value[k][:-1] if value[k] else [0]}
     if kind == "registered":
         return {**value, "registered": value["registered"] + [len(value["width"])]}
@@ -217,12 +273,20 @@ def _malformed(rng: random.Random, value: dict) -> object:
         return {**value, "plans": value["plans"] + [[]]}
     if kind in ("negative", "bool", "string"):
         bad = {"negative": -1, "bool": True, "string": "1"}[kind]
-        k = rng.choice(["width", "value", "block", "offset", "block_bits", "steps"])
+        k = rng.choice(["width", "value", "block", "offset", "leaf", "price", "block_bits", "steps"])
         return {**value, k: bad} if not isinstance(value[k], list) or not value[k] else {**value, k: [bad, *value[k][1:]]}
     if kind == "hex":
         return {**value, "store": {**value["store"], "payload": [rng.choice(["0x1", "A", "g", " 1"])]}}
     if kind == "store":
         return {**value, "store": []}
+    if kind == "ticks":
+        return {**value, "ticks": rng.choice([[1], [[0, -1]], {}, [[True]]])}
+    if kind == "window":
+        whole = {"devices": [0], "marked": [], "lo": 0, "hi": 1, "start": 0, "len": 1}
+        k = rng.choice(sorted(whole))
+        missing = {key: x for key, x in whole.items() if key != k}
+        wrong = {**whole, k: -1 if k in ("lo", "hi", "start", "len") else 0}
+        return {**value, "windows": [*value["windows"], rng.choice([missing, wrong, 1, []])]}
     return [value]
 
 
@@ -244,7 +308,7 @@ def drawn(seed: int) -> object:
     else:
         layout, store = _random_layout(rng, n, B)
         plans = [set(rng.sample(range(6), rng.randrange(3))) for _ in range(T)]
-    value = encode(ex, layout, store, plans, B, T)
+    value = encode(ex, layout, store, plans, B, T, *_placement(rng, n, T))
     return _malformed(rng, value) if rng.random() < 0.1 else value
 
 
@@ -270,21 +334,72 @@ def test_the_drawn_links_both_hold_and_fail(server):
     assert seen == {(k, b) for k in ("store_matches", "plan_matches") for b in (True, False)}
 
 
+def _whole_steps(value: dict) -> set[int]:
+    """The windows of `value` whose ends begin steps `start` and `start + len` on each of their devices, each of which
+    begins every step a value of it is at, at strictly increasing ticks: those `RequirementSteps` makes whole steps."""
+    ticks, top = value["ticks"], max((s for s in value["step"] if s is not None), default=0)
+
+    def whole(w) -> bool:
+        a, b = w["start"], w["start"] + w["len"]
+        return bool(w["devices"]) and all(
+            x < len(ticks) and max(b, top) < len(ticks[x]) and all(u < v for u, v in zip(ticks[x], ticks[x][1:]))
+            and (ticks[x][a], ticks[x][b]) == (w["lo"], w["hi"]) for x in w["devices"])
+
+    return {k for k, w in enumerate(value["windows"]) if whole(w)}
+
+
+def test_windows_of_whole_steps(server):
+    """`RequirementSteps` on Lean's outputs: a drawn window whose ends begin its engine steps on each of its devices has
+    the region of those steps, and the drawn windows that don't often have another."""
+    whole = differ = 0
+    for seed in range(400):
+        if (out := _lean(value := drawn(seed), server)) is None:
+            continue
+        ks = _whole_steps(value)
+        for k, w in enumerate(out["windows"]):
+            if k in ks:
+                assert w["region"] == w["step_region"]
+                whole += 1
+            differ += w["region"] != w["step_region"]
+    assert whole > 30 and differ > 30, (whole, differ)
+
+
 # --- Programs ----------------------------------------------------------------------------------------------------------
+
+def placed(ex: R.Execution, steps: int) -> tuple[R.Placement, dict[int, int], list[Window]]:
+    """A placement of a Program's execution on three devices: its inputs stored on device 0 and each computed gate on
+    device 1 or 2 by its index's parity, device `x` beginning engine step `s` at tick `10 s + x`; each gate priced at its
+    width. Its windows: device 1 at each step's ticks (a whole step), devices 1 and 2 over the whole run, and device 2
+    at ticks `[15, 25)` (step 2's, not step 1's) with five of its gates marked."""
+    leaf = {v: 1 + v % 2 if v in ex.ops else 0 for v in ex.width}
+    ticks = {x: [10 * s + x for s in range(steps + 1)] for x in range(3)}
+    windows: list[Window] = [(frozenset({1}), frozenset(), 10 * s + 1, 10 * s + 11, s, 1) for s in range(steps)]
+    windows.append((frozenset({1, 2}), frozenset(), 0, 10 * steps + 3, 0, steps))
+    windows.append((frozenset({2}), frozenset(sorted(g for g in ex.ops if g % 2)[:5]), 15, 25, 1, 1))
+    return R.Placement(leaf, ticks), {g: ex.width[g] for g in ex.ops}, windows
+
 
 def case(program: Program, schedule: R.Schedule, inputs: dict[int, int], block_bits: int) -> dict:
     """`program` on `schedule` with the run's `inputs`, under `pack`'s layout and store at `block_bits`, with the blocks
-    each step reads as its plan: the honest audit's instance."""
+    each step reads as its plan, placed as `placed` places it: the honest audit's instance."""
     ex = R.execution(program, schedule, inputs)
     req = R.Requirement.of(ex)
     layout, store = R.pack(req, block_bits)
-    return encode(ex, layout, store, [R.read_blocks(req, layout, t) for t in range(req.steps)], block_bits, req.steps)
+    return encode(ex, layout, store, [R.read_blocks(req, layout, t) for t in range(req.steps)], block_bits, req.steps,
+                  *placed(ex, req.steps))
 
 
 def honest(value: dict, server) -> dict:
-    """Lean's output on `value`, which Python's equals, with the store and every plan W's at every step."""
+    """Lean's output on `value`, which Python's equals, with the store and every plan W's at every step; each step's
+    window on device 1 the region of that engine step (`RequirementSteps`), taking in bits from the other devices; and
+    the whole run's window every computed gate, its credits their price."""
     out = _lean(value, server)
     assert out is not None and all(s["store_matches"] and s["plan_matches"] for s in out["steps"])
+    T, windows = value["steps"], out["windows"]
+    assert all(w["region"] == w["step_region"] and w["ingress"] > 0 for w in windows[:T])
+    computed = [v for v, s in enumerate(value["step"]) if s is not None and value["leaf"][v]]
+    assert windows[T]["region"] == computed and windows[T]["credits"] == sum(value["price"][v] for v in computed)
+    assert windows[T + 1]["region"] != windows[T + 1]["step_region"]
     return out
 
 

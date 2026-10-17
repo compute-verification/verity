@@ -4,9 +4,11 @@ import Std.Data.HashSet
 # A declared circuit's requirement, computed
 
 `Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) on one instance: a declared circuit's
-wiring, one scheduled execution of it and a layout of its values (`Instance`), and the audit's store (`Store`). This is
-code, so it requires nothing of `Security/`: `Properties.Accounting.Requirement` states that each function here is the
-definition it computes, on the wiring, execution, layout and store an instance denotes, and
+wiring, one scheduled execution of it and a layout of its values (`Instance`), the audit's store (`Store`), and a
+placement of the execution on devices (`Placement`), whose regions, ingress and credits are PoUW's over the placed
+execution (`Models/Accounting/Guarantees/RequirementPouw.lean`). A step is always an engine step, never a device tick.
+This is code, so it requires nothing of `Security/`: `Properties.Accounting.Requirement` states that each function here
+is the definition it computes, on the wiring, execution, layout, store and placement an instance denotes, and
 `Properties.Proofs.Accounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which
 holds them to `verity.ml.circuits.requirement` (`tests/test_requirement_difftest.py`).
 
@@ -38,8 +40,8 @@ structure Instance where
   ops : Array (List Nat)
   /-- the operands each gate uses at this execution's values (`Wiring.uses` at `Execution.value`) -/
   uses : Array (List Nat)
-  /-- the step at which the execution produces each value (`Execution.step`), `none` for one it produces only by
-  registration or not at all -/
+  /-- the engine step (never a device tick) at which the execution produces each value (`Execution.step`), `none` for one
+  it produces only by registration or not at all -/
   step : Array (Option Nat)
   /-- each value, as its bits (`Execution.value`) -/
   value : Array Nat
@@ -70,6 +72,21 @@ def resident (t : Nat) : List Nat :=
   distinct ((List.range s.registered ++ (List.range t).flatMap s.writtenAt).filter fun j => !freed.contains j)
 
 end Store
+
+/-- An instance's execution placed on devices (`Accounting.Requirement.Placement`): each value's device, and the tick at
+which each device begins each engine step, device by device. -/
+structure Placement where
+  leaf : Array Nat
+  ticks : Array (Array Nat)
+
+namespace Placement
+
+variable (p : Placement)
+
+def leafOf (v : Nat) : Nat := p.leaf.getD v 0
+def ticksOf (x s : Nat) : Nat := (p.ticks.getD x #[]).getD s 0
+
+end Placement
 
 namespace Instance
 
@@ -158,6 +175,42 @@ def storeMatches (s : Store) (B t : Nat) : Bool :=
 def planMatches (plan : List Nat) (B t : Nat) : Bool :=
   let S := i.reads t
   sameSet plan (i.blocks S) && i.packs B S
+
+/-- `Placement.tick`: the tick at which a value's device begins its engine step. -/
+def tick (p : Placement) (v : Nat) : Nat := p.ticksOf (p.leafOf v) (i.stepOf v)
+
+/-- `region X [lo, hi)`: the values the execution produces but the registered ones, on the devices `X` at a tick of
+`[lo, hi)`. -/
+def region (p : Placement) (X : List Nat) (lo hi : Nat) : List Nat :=
+  let reg := Std.HashSet.ofList i.registered
+  let xs := Std.HashSet.ofList X
+  i.ran.filter fun g => !reg.contains g && xs.contains (p.leafOf g) && decide (lo ≤ i.tick p g) && decide (i.tick p g < hi)
+
+/-- `stepRegion X w`: the same at the engine steps `[start, start + len)`. -/
+def stepRegion (p : Placement) (X : List Nat) (start len : Nat) : List Nat :=
+  let reg := Std.HashSet.ofList i.registered
+  let xs := Std.HashSet.ofList X
+  i.ran.filter fun g =>
+    !reg.contains g && xs.contains (p.leafOf g) && decide (start ≤ i.stepOf g) && decide (i.stepOf g < start + len)
+
+/-- `into S`: the values outside `S` that a gate of `S` uses. -/
+def into (S : List Nat) : List Nat :=
+  let s := Std.HashSet.ofList S
+  distinct ((S.flatMap i.usesOf).filter fun a => !s.contains a)
+
+/-- `ingress X [lo, hi)`: the bits of the values placed outside `X` that the region uses. -/
+def ingress (p : Placement) (X : List Nat) (lo hi : Nat) : Nat :=
+  let xs := Std.HashSet.ofList X
+  i.bits ((i.into (i.region p X lo hi)).filter fun a => !xs.contains (p.leafOf a))
+
+/-- `work π R` at the pricing `price`, a value's price read as 0 past its end. -/
+def work (price : Array Nat) (R : List Nat) : Nat := (R.map fun g => price.getD g 0).sum
+
+/-- PoUW's credits over the placed execution (`PouwWork.credits`, by `RequirementCredits`): the work of the region less
+the marked values. -/
+def credits (p : Placement) (price : Array Nat) (X marked : List Nat) (lo hi : Nat) : Nat :=
+  let m := Std.HashSet.ofList marked
+  work price ((i.region p X lo hi).filter fun g => !m.contains g)
 
 end Instance
 
