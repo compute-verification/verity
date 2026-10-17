@@ -31,11 +31,11 @@ theorem table_layH (y : DrawSetupZKH I mPts S d) : ZkTabLay y.table (Setup.ofCir
 
 end Table
 
-theorem runsZC_liveHI : RunsZCLiveHI := by
-  intro n mPts Reg I ht c hc dj S₀ y₀ wr L hTab hT hRec hDraw ω R o hacc
+theorem runsZC_liveH : RunsZCLiveH := by
+  intro n mPts Reg I ht c hc ho dj S₀ y₀ wr L hTab hT hRec hDraw ω R o hacc
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
   obtain ⟨st, sch, tPad, -, -, hst, hz, y, rfl, rfl, rfl, hTy, hextR⟩ :=
-    hTab I ht hc dj y₀ wr hh hc1 hRec (L.draw ω) R o (hDraw ω) hacc
+    hTab I ht hc ho dj y₀ wr hh hc1 hRec (L.draw ω) R o (hDraw ω) hacc
   obtain ⟨hd, hprf, hrec⟩ := hRec _ R o hacc
   obtain ⟨spec, sts, hs, -, hv⟩ := hacc
   have hh' : (zkTags I).hiddenOutputs = true := (zkTags_hiddenOutputs I).trans hh
@@ -153,9 +153,5 @@ theorem runsZC_liveHI : RunsZCLiveHI := by
   · show accZ _ _ _ (outZ hs512 _ _ _ (fun _ => capOfRoot o.rootB) (p₀, p₁) _) = true
     rw [hopn, ← hroot]
     exact hacc'
-
-theorem runsZC_liveH : RunsZCLiveH := by
-  intro n mPts Reg I ht c hc _ dj S₀ y₀ wr L _ hT hRec hDraw
-  exact runsZC_liveHI I ht hc dj y₀ wr L tablesAtZKH_liveI hT hRec hDraw
 
 end FlockSoundness.Discharge.ZkHidden
