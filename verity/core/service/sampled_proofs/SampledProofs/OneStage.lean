@@ -103,7 +103,7 @@ private def logRecord (j : Json) : V Json := do
 def paramsOfJson (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   exactly j (if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS) "the parameters"
-  let program ← Flock.TemplateQuery.Desc.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
+  let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
   let law ← rule (getD j "law")
   let workTable ← match getD j "work_table" with
@@ -133,7 +133,7 @@ def paramsOfJson (j : Json) : V Params := do
     let registered ← (entries (← obj (getD j "registered") "registered")).mapM fun (v, w) => match nat? w with
       | some w => pure (v, w)
       | none => throw s!"registered: the words of {v} are not a natural number"
-    pure (registered, ← Registered.params program (getD j "parameters"))
+    pure (registered, ← Registered.params program.desc (getD j "parameters"))
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"

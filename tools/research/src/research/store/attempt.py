@@ -27,6 +27,7 @@ from .. import env as E
 from .. import record, result
 from ..telemetry.events import utc_now_ms
 from ..telemetry.job import write_json_atomic
+from . import canon
 from . import derivation as D
 from .tool import Tool
 
@@ -35,6 +36,24 @@ PUBLISH_ERROR_SCHEMA = "research/store-publish-error/v0.1"
 OUTPUTS_SCHEMA = "research/outputs/v0.1"
 TERMINAL = ("done", "failed", "cancelled")
 DEFAULT_RESULT_KIND = "bench-result/v1"
+#: the result artifact's payload when its fields don't fit a manifest's meta (META_MAX_BYTES): the fields `fit_meta` moved out
+RESULT_FIELDS = "result-fields.json"
+
+
+def fit_meta(meta: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(``meta`` within a manifest's META_MAX_BYTES, the fields moved out of it): the largest fields go to the payload, largest first,
+    until the rest fits, and ``payload_fields`` names them. A result.json of 593 KB (r20261010-162750-3ea6's circuit-check) made
+    a 358 KB meta, so its attempt never published and custody retried it every round (INF-43)."""
+    from .model import META_MAX_BYTES
+
+    if len(canon.dumps(meta)) <= META_MAX_BYTES:
+        return meta, {}
+    kept, moved = dict(meta), {}
+    for k in sorted(meta, key=lambda k: -len(canon.dumps(meta[k]))):
+        moved[k] = kept.pop(k)
+        if len(canon.dumps({**kept, "payload_fields": sorted(moved)})) <= META_MAX_BYTES:
+            break
+    return {**kept, "payload_fields": sorted(moved)}, moved
 
 
 def store_root(explicit: str | os.PathLike[str] | None = None) -> Path:
@@ -347,10 +366,15 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
                 n, missing = _stage_run_files(run_dir, rels, Path(tmp))
                 if n:
                     outputs["run_files"] = st.put_artifact("run-files/v1", {"run_id": run_id, "files": n, "listed": rels, "missing": missing}, tree=Path(tmp))
-        meta = {k: v for k, v in doc.items() if k not in ("artifacts", "measurement_files")}
+        meta, spilled = fit_meta({k: v for k, v in doc.items() if k not in ("artifacts", "measurement_files")})
         kind = doc.get("kind") if isinstance(doc.get("kind"), str) else DEFAULT_RESULT_KIND
         refs = {"run_files": outputs["run_files"]} if outputs["run_files"] else None
-        outputs["result"] = st.put_artifact(kind, meta, refs)
+        if spilled:
+            with tempfile.TemporaryDirectory(prefix="research-result-") as tmp:
+                (Path(tmp) / RESULT_FIELDS).write_bytes(canon.dumps(spilled))
+                outputs["result"] = st.put_artifact(kind, meta, refs, file=Path(tmp) / RESULT_FIELDS)
+        else:
+            outputs["result"] = st.put_artifact(kind, meta, refs)
     outputs.update(typed_outputs(run_dir, st, run_id))               # outputs.json: named, typed artifacts the workload declared
     if run_record:                                                   # the whole run dir, logs included (store.custody)
         from .custody import put_run_record

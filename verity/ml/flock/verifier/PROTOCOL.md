@@ -1636,6 +1636,19 @@ population's statement, and its verdict is
 passed and its statement's form is covered, so a session without a draw that fails a check keeps that check's reason. A
 claim for the draw of every unit would cover it; none is proved.
 
+Under `--rec-inner` (one of V*'s statements), a session whose draw is not the `subset` draw of every unit of its
+population with no closure is refused after that, once every check has passed (`RecSetup.fullDraw`, the draw
+`Witness.fullDraw` checks and the recursive audit's `RecordCustody` reads). The draw's population is the registered
+population's (`HmRow.drawn`), and V*'s statement check pins the circuit, so a V* part's numbers (its rounds, table
+error, `N₀` and weight) are the ones its circuit and population fix. The verdict is
+`refused: <why>: a V* session draws every unit of its population, the only draw the recursion's proof covers`, `<why>`
+`the draw is subset:<k> of <n> units over <N>, not every one of <N>` or `the draw's law is not subset`. A recursive
+session (the verifier holds `--rec-part`, `--rec-bindings` or `--rec-rows`) without `--rec-inner` is refused at the same
+point, whatever its draw (`RecSetup.noInner`), since V*'s checks and the full-draw refusal run under the verifier's inner
+shape: `refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) without the verifier's own inner shape
+(--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no session
+without it` (one line).
+
 The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
 the one theorem: at every statement, with or without `--zk` and `--registered F`, it states the headline of the

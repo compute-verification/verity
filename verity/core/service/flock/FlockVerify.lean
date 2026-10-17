@@ -210,6 +210,43 @@ theorem zk_verify_eq_verifyWith_of_buildSession (tags : Tags) (circuitB pubB com
   Zk.verify_eq_verifyWith_of_returns (buildSession_named tags circuitB pubB compB coins tables count draw partition program
     work stratified closure registered publicInputs identifier) h record proofs
 
+/-- `buildSession` on the circuit `ProvedScope.circuitOf` returns (`parsed`), which `verifyCmd` parses once for the scope
+check and every setup: a statement with hidden outputs sets up on it (`Stmt.setupTablesOf`), any other as `buildSession`
+does (`buildSessionOf_eq`). -/
+def buildSessionOf (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none)
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
+    (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none)
+    (identifier : Option String := none) : V (SessionSpec × Array Stmt) :=
+  if tags.hiddenOutputs && tags.hm96Rows then do
+    let (spec, sts) ← Stmt.setupTablesOf parsed tags circuitB pubB coins count tables draw partition program work stratified
+      closure publicInputs
+    for st in sts do
+      checkRegistered st registered
+      checkIdentifier st identifier
+    Registered.checkFull registered draw
+    return (spec, sts)
+  else buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
+    publicInputs identifier
+
+/-- **`verifyCmd`'s one parse sets up what `buildSession` sets up**: `buildSessionOf` on `ProvedScope.circuitOf`'s circuit is
+`buildSession`. -/
+theorem buildSessionOf_eq (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Lean.Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) :
+    buildSessionOf (ProvedScope.circuitOf tags circuitB tables) tags circuitB pubB compB coins tables count draw partition
+        program work stratified closure registered publicInputs identifier
+      = buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
+        publicInputs identifier := by
+  unfold buildSessionOf
+  cases hh : tags.hiddenOutputs <;> cases hr : tags.hm96Rows <;> simp only [Bool.and_false, Bool.and_true, Bool.false_eq_true,
+    ↓reduceIte]
+  unfold buildSession
+  simp only [hr, ↓reduceIte, ProvedScope.circuitOf, hh, Stmt.setupTables_eq]
+
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
 def programInput (args : List String) : IO (Except String (Option ByteArray)) := do
@@ -594,7 +631,8 @@ and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; o
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
 soundness proof does not cover (`ProvedScope.check`, then its tables' `m`, `ProvedScope.sizesOk`, §16.15) is refused, and
-so is a session without a draw, both after
+so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, and a
+session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), all after
 every check has passed (so the reason is the refusal only when nothing else fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
@@ -677,11 +715,13 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- a drawn statement that sets up is still refused when no soundness claim draws by its draw's law
   -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
-  let scope := ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome registered.isSome
+  -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`)
+  let parsed := ProvedScope.circuitOf tags circuitB tables
+  let scope := ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         RecSetup.checkInner recInner recCoins recBound
-        let r ← buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
+        let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
@@ -732,10 +772,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
       let (spec, tabs, _) ← st
       if zk then Zk.verify spec tabs record proofs else verify spec tabs record proofs
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
-      -- tables' sizes), then a draw-less session's
+      -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
+      -- short of every unit
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk draw
+      RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok

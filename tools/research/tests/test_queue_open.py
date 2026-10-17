@@ -84,3 +84,20 @@ def test_the_broker_wrapper_is_preferred_when_the_checkout_has_one(checkout):
     wrapper.parent.mkdir(parents=True)
     wrapper.write_text("#!/bin/sh\n")
     assert broker_gh(work) == str(wrapper)
+
+
+def test_open_with_dry_run_sends_nothing(tmp_path, monkeypatch, capsys):
+    """17 Oct (CI-52): `research queue open --dry-run` opened #2276 for real."""
+    import subprocess
+
+    from research import queue as Q
+    from research.cli import main as research_main
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.chdir(tmp_path)
+    body = tmp_path / "body.md"
+    body.write_text("Lane ci\n")
+    monkeypatch.setattr(Q, "open_pr", lambda *a, **k: (_ for _ in ()).throw(AssertionError("opened a PR on a dry run")))
+    assert research_main(["queue", "open", "--dry-run", "--head", "cursor/x", "--title", "T", "--body-file", str(body),
+                          "--remote", "https://github.com/o/verity.git"]) == 0
+    assert "would open cursor/x onto main in o/verity" in capsys.readouterr().out

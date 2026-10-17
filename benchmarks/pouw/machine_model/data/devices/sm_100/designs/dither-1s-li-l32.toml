@@ -1,0 +1,51 @@
+# Dither-1S with the LI fold at L = 32 on the B200 (sm_100): one-sided dither and the linears' peel, LI receipts on
+# every committed word. The noise and ε_skip are dither-1s-l32's; the fold, honest and ε_mand are DC-DESIGN's
+# (note:20261017T0805Z-draft-dc-design §3, §4): LI binds honest on the B200's lane facet, so output counting closes the
+# lane route.
+name = "dither-1s-li-l32"
+title = "Dither-1S, LI, L = 32"
+summary = "Dither-1S on the B200 at L = 32: one-sided dither, LI receipts on every committed word, the linears' peel"
+honest = "dc100-li-l32"
+L = 32
+work = 1.0
+
+[noise]
+linears = "one-sided"
+lm_head = "clean"
+qk = "one-sided"
+pv = "peel"
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDTM_32X32B_X128 = 8 }
+source = "tcgen05.mma reads both operands from shared memory by descriptor (TMA fills it), so delivery costs no warp instruction a MMA; the accumulator's 32768 words leave TMEM by 8 tcgen05.ld.32x32b.x128 a MMA at L = 32 (4096 words each), which every tensor-route word pays to be folded on lanes"
+
+[fold]
+name = "li"          # LOP3 (^ d0 ^ k0) on one word, IMAD (·a0 + d1) on the next
+ALU = 0.5
+IMAD = 0.5
+
+[skip.peel]
+eps = 0.0063
+source = "the linears' peel L/k, MAC-weighted over Llama-3.1-8B's linears (k = 4096 and 14336): 0.63% at L = 32 (note:20261017T0310Z-report-eps1-program §3, note:20261017T0031Z-draft-eps-budget)"
+
+[mand.fold]
+eps = 0.0
+source = "named assumptions: LI at 1 lane instruction a word is the cheapest implementation of the fold (FOLD-OPT); LI's binding rests on KLI₂₄ (decision 65), (RT), (G₃) and (HO_U) (decision 59; (HO) itself fails in serving)"
+
+[clock]
+eps = 0.0
+source = "f_H unmeasured on the B200 (EPS1 DC measured f_max = 1965 MHz at default clocks, 06:01Z): 0 here, so γ with the clock gap is γ, a lower bound"
+
+[luck]
+delta = 4.547473508864641e-13
+p = 0.75
+checks = 48000
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 8 }
+source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
+
+[routes]
+lanes = true

@@ -401,15 +401,20 @@ The design for malicious-verifier zero knowledge for one batched session, in the
 by round, and a Goldreich–Kahan simulator rewinds once, to just after that commitment. It is not yet zero knowledge
 against every committed coin sequence: the prover must also refuse a zerocheck outer coin `r_j = 1` (see Status).
 
-**The coin commitment** (`src/coin_tree.rs`, scheme `coin-tree/hm96-sha512/v1`, `SessionConfig::coin_tree`).
-- The schedule is pinned in `Hello` (`coins: {scheme, streams, rounds_log, block}`): streams `session`, `circuit/rep0`,
-  `circuit/rep1`; `2^8` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most 277 coins in one
-  (level 0's queries); the session stream's round 0 is the two link points.
-- At `Hello` the verifier draws every block and a 192-byte salt per (stream, round) and commits: per block the chain
-  `T_512 = SHA-512(TAIL)`, `T_i = SHA-512(CHAIN ‖ c_i ‖ T_{i+1})`; the leaf's digest `x = SHA-512(ROUND ‖ u32be(stream) ‖
-  u32be(round) ‖ T_0)` and the leaf `hm96::leaf(x, salt)`; each stream's leaves under a SHA-512 tree (a subtree), and the
-  streams' roots under one more, padded with `SHA-512(PAD)`. The 64-byte root is `Hello`'s answer (4 F128 words), before
-  the prover's first message (`Commit`).
+**The coin commitment** (`src/coin_tree.rs`, the keyed coin tree `coin-tree/hm96-sha512/v2`,
+`SessionConfig::coin_tree`; the verifier's side is `verity/ml/flock/verifier/PROTOCOL.md` §7.4).
+- The schedule is pinned in `Hello` (`coins: {block, nonce, rounds_log, scheme, streams}`): streams `session`,
+  `circuit/rep0`, `circuit/rep1`; `2^8` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most
+  277 coins in one (level 0's queries); the session stream's round 0 is the two link points.
+- The tree is keyed to the session: the prover's `Hello` carries a fresh 32-byte nonce `ν`, and every SHA-512 input of
+  the tree is prefixed by it, `H_ν(m) = SHA-512(ν ‖ m)`.
+- At `Hello` the verifier draws a fresh 256-byte hm96 key `K` for this session's tree (never reused, never revealed
+  before its answer), then every block and a 192-byte salt `y` per (stream, round), and commits: per block the chain
+  `T_512 = H_ν(TAIL)`, `T_i = H_ν(CHAIN ‖ c_i ‖ T_{i+1})`; the leaf's digest
+  `x = H_ν(ROUND ‖ u32be(stream) ‖ u32be(round) ‖ T_0)` and the keyed hm96 leaf `H_ν(LEAF_PREFIX(K) ‖ x ⊕ M(K)·y ‖ c)`
+  with `c = H_ν(SALT_PREFIX ‖ y)`; each stream's leaves under a SHA-512 tree (a subtree), and the streams' roots under
+  one more, padded with `H_ν(PAD)`. The 64-byte root and the key are `Hello`'s answer, before the prover's first message
+  (`Commit`).
 - Every answer is the round's `n` coins, `T_n`, the salt and the path (`Spec::opening_words(n)`), so an opening reveals only
   the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`)
   and stops at one that does not open, before it answers anything that depends on it.
@@ -417,9 +422,10 @@ against every committed coin sequence: the prover must also refuse a zerocheck o
   rank, dependent `ρ`, an outer coin `r_j = 1`) stay functions of committed coins.
 - **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses: statistical in the standard model
   (hm96 `PROTOCOL.md` §3), since every block and salt comes from `/dev/urandom`; no random oracle. *Binding* is the one
-  assumption M2's zero knowledge adds: SHA-512 collision resistance (`cr/sha-512`), which holds whatever salts V* chooses
-  (hm96 §4 holds for every key), so a rewound V* cannot open another coin. Against quantum verifiers the commitment must
-  be collapse-binding (ASSUMPTIONS.md §6).
+  assumption M2's zero knowledge adds: collision resistance of `x ↦ SHA-512(ν ‖ x)` under the session's nonce
+  (`cr/sha-512`), so a collision in V*'s auxiliary input, made before `ν` existed, opens nothing. It holds whatever
+  salts V* chooses (hm96 §4 holds for every key), so a rewound V* cannot open another coin. Against quantum verifiers
+  the commitment must be collapse-binding (ASSUMPTIONS.md §6).
 
 **The simulator** (`gk_simulate` in `flock-circuit.rs`), for every verifier V* as a black box on its random tape
 (rewinding V* is a fresh instance on the same tape, replayed to the same point):
@@ -578,7 +584,7 @@ kept as an early tripwire).
 | the frame skeleton: domain, every label, each item's op, kind and length, every round's coin count | constant | a function of the statement's shape; the firewall refuses any other label or item |
 | statement digest (`bind_statement`) | constant | the digest of the statement the firewall loaded |
 | witness cap: `Commit`'s root, `bind_statement`'s cap, Ligerito level 0's `bytes cap` | recomputed | the level-0 recheck (§10.2): `commit_zk` of the host witness under the session's level-0 salts and hiding |
-| pads label and root | the firewall's own | the masking challenger inserts them |
+| pads label and root | the firewall's own | the Lean frame inserts them after the zerocheck's label |
 | masked algebraic values: `round1_ab'`, `round1_c'`, `G_j`, `final_a'`, `final_b'`, `q_j`, `z_partial'` | masked | the wire carries `v + h` with `h` uniform and host-only, so it is uniform whatever `v` is. `v` enters the view only through §4's rows, which the self-check holds before anything that depends on them leaves (§5); a `v` that breaks a row stops the session |
 | `final_c'` | the firewall's own | the inner proof sends it, from the host |
 | `s_hat_v` of the masked claims (ab, c) | recomputed | `Σ_x eq(p_w, x) z[128x + v]` over the host witness (§6); the claim points are coins |
@@ -658,7 +664,8 @@ JSON. The two agree whenever the schedule's `Hello` holds only integers, as `sch
 ### 10.4 The prototype (`FC_FIREWALL=1`)
 
 `flock-circuit prove --zk` with `FC_FIREWALL=1` runs the firewall (`firewall.rs`, and `Firewall` in `flock-circuit.rs`) on the GPU path and
-the CPU path alike, for a statement of one table; it refuses to start without `FC_HOST_WITNESS=1`. It is stricter than
+the CPU path alike, for a statement of one table on the device and of one or several (`--session-tables`) on the CPU; it
+refuses to start without `FC_HOST_WITNESS=1`. It is stricter than
 §10.1 in one place: the shadow recomputes the whole opening, level 0's lane rounds included, in lock step with the device.
 Each of the device's opening frames must equal the shadow's byte for byte (`firewall_opening_rounds` counts the rounds
 compared), and the opening that leaves is the shadow's. The lincheck's folded comb is the firewall's (`zk_finish` folds it),
@@ -668,8 +675,26 @@ zerocheck and lincheck vector's length), the replay of the values the firewall p
 the zerocheck and lincheck that leave are rebuilt from the passed values (`zk_veil::from_exposed`), as the opening that leaves
 is the shadow's: nothing of the device's returned proof leaves.
 
+Every round that leaves is computed in Lean. Each rep runs one `flock-firewall frame` process (`Flock.Firewall.Frame` in the
+Lean verifier, `firewall::LeanFrame`; `FC_FIREWALL_LEAN` names the binary, by default the Lean verifier's build in the
+checkout, and the firewall refuses to start a rep without it). It takes each round the firewall passed, the device's frames
+with their values unmasked, and returns the round that leaves: the pads' label and root after the zerocheck's label, each
+value absorbed in a masked phase as `v + h_i` under the next pad of `Layout::absorbed`'s order, everything else as framed,
+and no domain frame. The masking challenger still runs as the speed reference. Its inner challenger (`firewall::Gate`) frames
+what it would send, holds that to the Lean round byte for byte, refuses on any difference, and hands the stream only the
+Lean round. At the rep's end the Lean frame must have closed every masked phase with every pad of the layout used. The
+`final_c'`, inner proof, recheck and shadow opening are still Rust's (`FirewallComputes`).
+
+In a session of several tables each table has a firewall of its own in turn: its salt context, recheck, skeleton and shadow,
+one table's ending before the next table's begins. A later table's level-0 root leaves in table 0's `Commit`, before any
+stream opens, and the host computes it from the host witness under the table's level-0 hiding and salts (`level0_root`, the
+recheck's own computation), so no root the device computed is in that `Commit`. Before anything of a later table is sent,
+its recheck must give the root that `Commit` carried (`FIREWALL-REFUSED: circuit-01's level-0 root: the session's Commit
+carried … where the recheck has …`), and the table's device root is then held to it like table 0's.
+
 `FC_FIREWALL_TAMPER` makes the device dishonest in one named way. Each is refused by name, before the tampered message leaves
-or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), before the inner proof does:
+or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), before the inner proof does. `later-NAME` is `NAME`
+on every table of a several-table session but the first, and is refused the same way at the second table:
 
 | `FC_FIREWALL_TAMPER` | the device | refusal |
 |---|---|---|
@@ -681,7 +706,7 @@ or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), befor
 | `algebra-proof` | flips a masked value in its returned proof only | `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
 | `shape` | appends a value to its returned proof's `round1_ab`, past the ones the firewall compares | `FIREWALL-REFUSED: the proof's shape (…) is [65, 64, …] where the statement's is [64, 64, …]` |
 
-With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only), each gated session also writes what the firewall let out as a
+With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only, a statement of one table: several are refused), each gated session also writes what the firewall let out as a
 `verity/firewall-transcript/v0` transcript, `DIR/session-<k>.json`, for the firewall's contract (`flock-firewall contract`):
 `firewall_transcript.rs` reads the wire after the coin tree's check and the firewall's candidates, and changes nothing the firewall
 sends. Where the firewall refuses, the transcript holds the refused candidate's items (from `firewall.gate.from`) up to the
@@ -818,12 +843,14 @@ neither stopped nor released its last statement, on a stream that had not stoppe
 outer session of the stream and every open, and `rec_live` closes the next connection before anything is served. A
 recursive session the worker abandons, asking for no statement after some release, ends where it stands for the
 challenger (its next proof never comes, `late`), but the firewall records no stop until a request comes, so its own count
-misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (P1's `Stream(budget=...)`,
-`verity/core/protocols/sampled_proofs/service.py` on `cursor/proof-service-95d4`, bound into the stream's digest),
-and the two must agree in three places: the same b, the same stream (one firewall stream a challenger stream), and one
-recursive session a registration, so that each firewall failure is one `reject` or `late` there. A stop shows the
-challenger a cut or a missing proof, which is `late` or `reject`; a session the firewall refuses after its stop sends
-nothing, and is no further failure on either side.
+misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (`Stream(budget=...)`,
+`verity/core/protocols/sampled_proofs/service.py`, bound into the stream's digest), and the two must agree in three
+places: the same b, the same stream (one firewall stream a challenger stream), and one recursive session a proof session
+of the challenger's: one registration's, or the consecutive registrations one `Stream.session` covers (at most the stream's
+`rounds`, at most 4). So each firewall failure is a `reject` or `late` there for each round the session
+covers: the challenger's count is never below the firewall's, and it holds at most `budget` minus its failures
+registrations open, so neither ends past b. A stop shows the challenger a cut or a missing proof, which is `late` or
+`reject`; a session the firewall refuses after its stop sends nothing, and is no further failure on either side.
 
 **Proofs leave at public times.** `rec_live --parts L0,...,alg --release-windows-ms w0,...,w7` gives each recursive
 session a release schedule, recorded at its open: `start_ms`, the time its connection was accepted, and one public window

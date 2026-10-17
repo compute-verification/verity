@@ -20,6 +20,7 @@ class Harness:
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
         monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
+        monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
                         post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
@@ -297,6 +298,33 @@ def test_a_lean_audit_failure_ejects_the_pr_that_changed_the_failing_file(world,
     assert [m.pr for m in h.q.chain()] == [1]
 
 
+def test_a_suite_failure_whose_files_no_pr_touches_ejects_the_pr_that_changed_the_suites_inputs(world, monkeypatch, tmp_path):
+    """16 Oct: #2164's train failed in benchmarks/pouw's suite (its test in tests/), and the cause was its own change to that
+    suite's pyproject.toml inputs."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"pkg/pyproject.toml": "[tool.verity.tests]\ninputs = ['data/x.json']\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "suite pkg's inputs" in h.posts[0], h.posts
+
+
+def test_a_failure_nothing_in_the_train_reaches_is_resent_as_a_machines_fault(world, monkeypatch, tmp_path):
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    launched = len(h.launched)
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert not h.posts and len(h.launched) == launched + 1 and any("resent" in x for x in world.logs)
+
+
 def _killed_run(tmp_path, name: str):
     d = tmp_path / name
     d.mkdir(parents=True)
@@ -325,7 +353,7 @@ def test_a_killed_check_that_names_no_file_is_resent_once_and_told_when_killed_a
     h.clock += PUBLISH_GRACE_S + 1                                       # killed again, and no attempt of it published
     h.evidence = [_killed_run(tmp_path, "two")]
     h.tick()
-    assert len(h.posts) == 1 and "killed again on its resend" in h.posts[0] and len(h.launched) == launched + 1, h.posts
+    assert len(h.posts) == 1 and "failed again on its resend" in h.posts[0] and len(h.launched) == launched + 1, h.posts
 
 
 LINT_LOG = """..........F........                                                      [100%]
@@ -483,10 +511,34 @@ def test_a_pr_that_makes_circuit_check_run_cold_goes_above_the_warm_ones_and_the
     h.d.train_size = 6
     for n, f in ((1, "a.txt"), (2, "verity/ml/circuits/library.py"), (3, "Security/X.lean")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
+    head2 = next(p.head for p in world.gh.open_prs() if p.number == 2)
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 3]                          # #2 pre-warms off `next`
+    assert h.launched[0][0] == head2 and len(h.launched) == 2
+    warm = h.launched[1][0]
+    (pre, *_) = sorted(h.run_state)
+    h.run_state[pre] = ("done", 1, None)                                  # its pre-warm ended, passed or not
+    h.tick()                                                              # it's marked done after this tick's sync
     h.tick()
     members = h.q.chain()
-    assert [m.pr for m in members] == [1, 3, 2]
-    assert [c for c, _, _ in h.launched] == [members[1].commit, members[2].commit]
+    assert [m.pr for m in members] == [1, 3, 2] and members[1].commit == warm
+    assert h.launched[-1][0] == members[2].commit
+
+
+def test_a_cold_pr_already_on_next_leaves_it_to_pre_warm_and_comes_back_above_the_warm_ones(world, monkeypatch):
+    """17 Oct 07:44Z: #2199 (tools/verity/circuit_check/) became the bottom of `next` when the PRs below it landed, and every
+    train above it ran circuit-check cold until top, as lander, ejected it by hand (CI-47)."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 6
+    world.gh.put(1, world.change({"tools/verity/circuit_check/x.py": "1\n"}))
+    h.d.q.warming = None                                                  # admitted before pre-warming existed
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1]
+    h.d.q.warming = h.d.warming
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [2]
+    assert any("pre-warming #1" in x for x in world.logs)
 
 
 def test_two_cold_prs_side_by_side_share_one_cold_train(world, monkeypatch):
@@ -711,15 +763,51 @@ def test_a_new_head_keeps_the_running_train_at_the_head_it_checks_and_rejoins_ab
 
 def test_a_new_head_after_its_own_train_failed_rebuilds_without_waiting(world, monkeypatch, tmp_path):
     h = Harness(world, monkeypatch)
-    h.d.train_size = 2
+    h.d.train_size, h.d.max_running = 1, 2
     old = world.change({"a.txt": "1\n"})
     world.gh.put(1, old)
     world.gh.put(2, world.change({"b.txt": "2\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()                                                              # failed: told (or resent), nothing frozen
+    h.tick()                                                              # #1's own train, and the one above it with #2
+    own = h.q.chain()[0].commit
+    _check(world, monkeypatch, own, ("false",))
+    h.evidence = [_killed_run(tmp_path, "one")]
+    h.tick()                                                              # resent
+    rid = h.d.q.load_state()["drive"]["launched"][own]["ids"][0]
+    h.run_state[rid] = ("done", 1, None)
+    h.clock += PUBLISH_GRACE_S + 1
+    h.evidence = [_killed_run(tmp_path, "two")]
+    h.tick()                                                              # failed again: told, nobody ejected
+    assert len(h.posts) == 1 and "failed again on its resend" in h.posts[0], h.posts
     fixed = world.change({"a.txt": "1 fixed\n"}, base=old)
-    world.gh.put(1, fixed)
+    world.gh.put(1, fixed)                                                # the train above still runs, but #1's own failed
     h.tick()
-    assert all(m.head != old for m in h.q.chain() if m.pr == 1)
+    assert [m.head for m in h.q.chain() if m.pr == 1] == [fixed]
+
+
+def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
+    """17 Oct, r20261017-104751-c19c on cpu-2: the Security/Proofs replay was OOM-killed (exit 137), lean-audit failed with rc 1,
+    and the fallback on Lean sources ejected #2224 and #2231, whose heads had passed."""
+    from research.drive import killed
+
+    d = tmp_path / "run"
+    d.mkdir()
+    (d / "steps.jsonl").write_text('{"step": "lean-audit", "status": "failed", "rc": 1, "log": "lean-audit.log"}\n')
+    (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n  replay: killed (exit 137; out of "
+                                      "memory?), which is not a kernel verdict: rerun it alone\n")
+    assert killed(d)
+    (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n    error: build failed\n")
+    assert not killed(d)
+
+def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
+    """CI-48: nothing deleted a landed PR's branch or an idle one, and the repository reached 3,543 branches."""
+    from research.drive import BRANCH_SWEEP_S
+
+    h = Harness(world, monkeypatch)
+    calls = []
+    monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: calls.append(a) or (2, 1))
+    h.tick()
+    h.tick()
+    assert len(calls) == 1 and any("branch sweep: 2 deleted (on main), 1 archived" in x for x in world.logs)
+    h.clock += BRANCH_SWEEP_S + 1
+    h.tick()
+    assert len(calls) == 2

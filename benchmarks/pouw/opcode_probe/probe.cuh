@@ -26,6 +26,7 @@ struct OpArgs {
   int iters, mode;
   unsigned long long tex1 = 0;  // g as a 1D linear texture of u32 (tex1Dfetch: TLD)
   unsigned long long tex2 = 0;  // g as a 1024-wide pitch-2D texture of float4 with linear filtering (tex2D: TEX)
+  unsigned long long tex4 = 0;  // g as a 1D linear texture of uint4, a 16-byte texel (tex1Dfetch<uint4>: TLD, 4 words)
 };
 
 #define OP_KERNEL(name, tpb) extern "C" __global__ void __launch_bounds__(tpb, 1) name(OpArgs a)
@@ -167,18 +168,18 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
   gk::Nvml nv(0);
   cudaStream_t s;
   GK_CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
-  const unsigned long long gbytes = 64ull << 20;
+  const unsigned long long gbytes = 512ull << 20;  // holds l2gather.cu's tables past the L2 (others mask into their own pools)
   unsigned char* g;
   GK_CK(cudaMalloc(&g, gbytes));
   GK_CK(cudaMemsetAsync(g, 0, gbytes, s));
-  cudaTextureObject_t tex1 = 0, tex2 = 0;
+  cudaTextureObject_t tex1 = 0, tex2 = 0, tex4 = 0;
   {
     cudaResourceDesc r{};
     cudaTextureDesc t{};
     r.resType = cudaResourceTypeLinear;
     r.res.linear.devPtr = g;
     r.res.linear.desc = cudaCreateChannelDesc<unsigned>();
-    r.res.linear.sizeInBytes = gbytes;
+    r.res.linear.sizeInBytes = std::min(gbytes, 256ull << 20);  // within the 1D linear texture limit (l2gather's tex tables are 64/128 MB)
     t.readMode = cudaReadModeElementType;
     GK_CK(cudaCreateTextureObject(&tex1, &r, &t, nullptr));
     cudaResourceDesc r2{};
@@ -193,6 +194,8 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
     t2.addressMode[0] = t2.addressMode[1] = cudaAddressModeWrap;
     t2.readMode = cudaReadModeElementType;
     GK_CK(cudaCreateTextureObject(&tex2, &r2, &t2, nullptr));
+    r.res.linear.desc = cudaCreateChannelDesc<uint4>();
+    GK_CK(cudaCreateTextureObject(&tex4, &r, &t, nullptr));
   }
   std::vector<const OpProbe*> ps;
   for (const std::string& nm : names) {
@@ -217,7 +220,7 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
     GK_CK(cudaMalloc(&b.sink, sizeof(unsigned) * b.blocks * q->tpb));
     if (q->dyn_smem)
       GK_CK(cudaFuncSetAttribute(q->kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, q->dyn_smem));
-    b.args = OpArgs{b.rec, b.sink, g, gbytes, std::max(1, (int)(q->iters * scale)), q->mode, tex1, tex2};
+    b.args = OpArgs{b.rec, b.sink, g, gbytes, std::max(1, (int)(q->iters * scale)), q->mode, tex1, tex2, tex4};
     bufs.push_back(b);
   }
   for (size_t i = 0; i < ps.size(); i++) {
