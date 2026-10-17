@@ -138,6 +138,6 @@ on accepted live runs (`ZkAccJ`: `FlockDeploy.KS.not_selfClashZ_nul`, `FlockDepl
 the live sessions' bound at escapes on accepted runs (`FlockDeploy.KS.ZkLiveAccJ`, which gives `ZkLiveJ`,
 `FlockDeploy.KS.zkLiveJ_of_acc`), every table's bound holds with escapes on accepted runs at every statement
 (`Flock.TableBoundJAccAt`, `FlockDeploy.KS.zk_tableBoundJAccAt`). Each round of an accepted masked rep issued the coins
-its statement fixes (`RoundsNZk`: `FlockDeploy.repNsZ`, `FlockDeploy.zkVerifyRepWith_readsN`; per rep stream,
-`FlockDeploy.zkRepNs`, `FlockDeploy.streams_ns_zk`), and custody reads each round message's coin at the session's count
-(`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). -/
+its statement fixes (`RoundsNZk`: `FlockDeploy.zkRepNs`, `FlockDeploy.zkVerifyRepWith_readsN`; per rep stream,
+`FlockDeploy.zkRepNsOf`, `FlockDeploy.streams_ns_zk`), and custody reads each round message's coin at the session's
+count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). -/
