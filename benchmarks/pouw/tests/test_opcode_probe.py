@@ -263,15 +263,15 @@ def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
     and beside, the MMA kept beside the honest step, and whether any path beats QSTAR's 3.3 TB/s."""
     out = tmp_path / "out"
     out.mkdir()
-    imma = "IMMA.16832.S8.S8"
+    imma, ldg = "IMMA.16832.S8.S8", "LDG.E.ENL2.256.STRONG.GPU"
     jl = [
         {"probe": "honest", "rate": 2.0, "words": None, "blocks": 100, "sm_mhz": 2000, "rates": {f"0:{imma}": 2.0}},
         {"probe": "gl_w32", "rate": 0.01, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s128",
-         "rates": {"0:LDG.E*": 0.01}},
+         "rates": {f"0:{ldg}": 0.01}},
         {"probe": "gl_w32_fast", "rate": 0.02, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s16",
-         "rates": {"0:LDG.E*": 0.02}},
+         "rates": {f"0:{ldg}": 0.02}},
         {"probe": "gh_w32", "rate": 0.008, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s128 beside",
-         "rates": {f"0:{imma}": 1.0, "1:LDG.E*": 0.008}},
+         "rates": {f"0:{imma}": 1.0, f"1:{ldg}": 0.008}},
     ]
     (out / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in jl))
     assert eps1.main(["l2gather", str(out)]) == 0
