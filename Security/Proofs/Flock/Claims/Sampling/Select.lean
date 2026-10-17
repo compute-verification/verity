@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.Sampling.Select.Misses
 import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 import Proofs.Flock.Claims.Sampling.Select.Design
 import Proofs.Flock.Claims.Sampling.Select.Scope
+import Proofs.Flock.Claims.Sampling.Select.Refusals
 
 /-! The deployed sampled verifier's draw (`SampledProofs.Slots.select`) against the claims' `P_a`: a sequential draw's
 stopping-time bound (`Select.Seq`); the draw's coins read in order and its law's stages (`Select.Take`); the
@@ -14,4 +15,5 @@ verifier's partition as the claims' slots (`Select.Layout`); `Select.select`'s s
 (`Select.Steps`); each law's miss bound on its coins (`Select.Bounds`); `drawMisses`, which proves
 `Properties.SampledProofs.DrawMisses` (`Select.Misses`); `DrawLaw` at a deployment whose draw is `Slots.select`'s
 (`Select.DrawLaw`); `designWellFormed`, which proves `Properties.SampledProofs.DesignWellFormed` (`Select.Design`); and
-`ScopeMatches` and `Refuses` from it, where the scope check is the readable scope's program part (`Select.Scope`). -/
+`ScopeMatches` and `Refuses` from it, where the scope check is the readable scope's program part (`Select.Scope`); and that
+program part as five refusals of the verifier's evaluation, each needed (`Select.Refusals`). -/
