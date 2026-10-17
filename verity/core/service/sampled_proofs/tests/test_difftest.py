@@ -42,7 +42,8 @@ from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registered as G, registration as R
-from verity.core.protocols.sampled_proofs.two_stage import OwnRandomness, draw_first
+from verity.core.protocols.sampled_proofs.two_stage import (OwnRandomness, ReplayUnit, Stage, TwoStageLaw, draw_first,
+                                                            select_proof_units, select_replay_units)
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
@@ -972,6 +973,76 @@ def run(j):
     return {"audit": codec.canonical_json(out).decode(), "draw": drawn["draw"], "interior": interior,
             "public": shown if accepted else {}, "read": drawn["read"], "receipt": receipt,
             "symbol": "accept" if accepted else "reject"}
+
+
+def _two_stage_law(j) -> TwoStageLaw:
+    """`TwoStage.lawOfJson`: `{class: stage}` as `TwoStageLaw.to_json` writes it, each stage exactly `{"p", "k"}` (`p`
+    NUM/DEN or NUM) or `{"law", "k"}` (a one-stage law object), `k` null or a natural number, and refused where `Stage`
+    refuses it."""
+    if not isinstance(j, dict):
+        raise D.Reject("a two-stage law is an object of stages")
+    stages = {}
+    for cls, s in j.items():
+        if not (isinstance(s, dict) and set(s) in ({"k", "p"}, {"k", "law"})):
+            raise D.Reject("a stage is {p, k} or {law, k}")
+        if not (s["k"] is None or _nat(s["k"])):
+            raise D.Reject("a stage needs k >= 0")
+        if "p" in s:
+            num, sep, den = s["p"].partition("/") if isinstance(s["p"], str) else ("", "", "")
+            if not (DR.digits(num) and (not sep or DR.digits(den) and int(den) > 0)):
+                raise D.Reject("a stage's p is NUM/DEN")
+            first = Fraction(int(num), int(den) if sep else 1)
+        elif isinstance(s["law"], dict):
+            first = s["law"]
+        else:
+            raise D.Reject("a stage's law is a one-stage law object")
+        try:
+            stages[cls] = Stage(first, s["k"])
+        except (ValueError, TypeError) as e:
+            raise D.Reject(str(e)) from None
+    return TwoStageLaw(stages)
+
+
+def _rus(j) -> list[ReplayUnit]:
+    if not (isinstance(j, list) and all(isinstance(u, list) and len(u) == 3 and _int(u[0]) and isinstance(u[1], str)
+                                        and _nat(u[2]) for u in j)):
+        raise D.Reject("replay units are a list of [index, class, n_v]")
+    return [ReplayUnit(*u) for u in j]
+
+
+def _two_stage_draw(j, units: str, sample):
+    """`sample` on the case's law and RUs, the source's bytes read in order (`OwnRandomness` raises `ValueError` when they
+    run out), with the number read; it raises `ValueError` and `KeyError` where Lean refuses."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    law, rus = _two_stage_law(j.get("law")), _rus(j.get(units))
+    if not isinstance(j.get("source"), str):
+        raise D.Reject("source is not hex")
+    src, at = PR.unhex(j["source"]), 0
+
+    def coins(n: int) -> bytes:
+        nonlocal at
+        b = src[at:at + n]
+        at += len(b)
+        return b
+    try:
+        out = sample(OwnRandomness(coins), law, rus)
+    except (ValueError, KeyError) as e:
+        raise D.Reject(str(e)) from None
+    return out, at
+
+
+def replay_units(j):
+    """`select_replay_units`: the drawn RUs' indices in the given order, and the bytes read."""
+    out, read = _two_stage_draw(j, "units", select_replay_units)
+    return {"read": read, "units": [u.index for u in out]}
+
+
+def proof_units(j):
+    """`select_proof_units`: each selected RU's index and the positions checked in it, in order, and the bytes read."""
+    out, read = _two_stage_draw(j, "selected", select_proof_units)
+    return {"read": read, "units": [[i, list(ps)] for i, ps in out.items()]}
 
 
 # --- strategies ------------------------------------------------------------------------------------------------------
@@ -1950,19 +2021,107 @@ RUN = D.Port(PIECES, "run", run, st.one_of(
     runs([RECORD], 1), runs([PARAMS], 1), runs([ENTRIES, REGISTERED_PARAMS], 1), runs([EVIDENCE, VERDICTS_OF], 1),
     JSON), package=PACKAGE)
 
+RU_CLASSES = ["decode", "prefill", "tile"]
+
+
+@functools.cache
+def _expanded(kind: str, a: int, b: int, k: int) -> dict | None:
+    """A `stratified` or `work` law of `k` expanded over `a` PAIRs then `b` TRIPLEs (`draw.derive`), or None where it
+    refuses."""
+    members = [(PAIR, a), (TRIPLE, b)] if b else [(PAIR, a)]
+    query = P.template_instances_query([t.id for t, _ in members])
+    table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}} if b else {PAIR.id: 2}
+    try:
+        return DR.derive(P.mixed_population_program(members), query, {"k": k, "law": kind}, table if kind == "work" else None)
+    except (P.QueryRefused, ValueError):
+        return None
+
+
+@st.composite
+def two_stage_stages(draw, n: int, bad: bool):
+    """A class of `n` RUs' stage: a probability, or a one-stage law over them (a subset, a Bernoulli law, or a stratified
+    or work law expanded over two templates), mostly checking every proof unit; with `bad`, one the stage refuses (`k`,
+    `p` or the law) or junk."""
+    kind = draw(st.integers(0, 6))
+    k = draw(st.sampled_from([-1, True, "1"]) if bad and kind % 3 == 0 else st.sampled_from([None, None, 0, 1, 2, 3, 7]))
+    if kind < 3:
+        den = draw(st.integers(1, 9))
+        p = draw(st.sampled_from(["5/4", "1/0", "a", "1/2/3", "01/2", "", "/2", "1/", 5]) if bad and kind == 1 else
+                 st.sampled_from([f"{draw(st.integers(0, den))}/{den}", "0", "1", f"{2 * den}/{4 * den}"]))
+        return {"k": k, "p": p}
+    if kind < 6:
+        a = draw(st.integers(1, max(n, 1)))
+        law = draw(st.sampled_from([{"k": draw(st.integers(0, n + 1 if bad else n)), "law": "subset"},
+                                    {"law": "bernoulli", "p": f"{draw(st.integers(0, 4))}/4"},
+                                    _expanded("stratified", a, max(n - a, 0), draw(st.integers(1, max(n, 1)))),
+                                    _expanded("work", a, max(n - a, 0), draw(st.integers(1, max(n, 1))))]))
+        law = law or {"k": min(1, n), "law": "subset"}
+        return {"k": k if law["law"] == "bernoulli" or bad and kind == 3 else None, "law": law}
+    return draw(st.just({"k": None, "law": {"k": 1, "law": "subset", "x": 1}}) | JSON) if bad else {"k": None, "p": "1/2"}
+
+
+@st.composite
+def two_stage_cases(draw, units: str) -> dict:
+    """RUs of up to three classes in a shuffled order, indices distinct but sometimes repeated, with each class's stage
+    and the coins; sometimes one change: a stage refused, a class without one, a law or RUs that aren't, or short coins."""
+    n = draw(st.integers(0, 12))
+    order = draw(st.permutations(range(n)))
+    change = draw(st.integers(0, 15))
+    rus = [[draw(st.integers(-2, 40)) if change == 0 else 3 * i - 5, draw(st.sampled_from(RU_CLASSES)),
+            draw(st.integers(0, 6))] for i in order]
+    sizes = {c: sum(u[1] == c for u in rus) for c in RU_CLASSES}
+    bad = draw(st.sampled_from(RU_CLASSES)) if change == 1 else None
+    law = {c: draw(two_stage_stages(sizes[c], c == bad)) for c in RU_CLASSES if sizes[c] or draw(st.booleans())}
+    if rus and change == 2:
+        law.pop(rus[0][1], None)
+    if change == 3:
+        law = draw(JSON)
+    if change == 4:
+        rus = draw(st.sampled_from([[[0, "decode", -1]], [[0, 5, 1]], [[True, "decode", 1]], [[0, "decode"]], "u", None]))
+    return {"law": law, "source": draw(SHORT_SOURCE if change == 5 else SOURCE), units: rus}
+
+
+REPLAY_UNITS = D.Port(PIECES, "replay_units", replay_units, st.one_of(*[two_stage_cases("units")] * 5, JSON),
+                      package=PACKAGE)
+PROOF_UNITS = D.Port(PIECES, "proof_units", proof_units, st.one_of(*[two_stage_cases("selected")] * 5, JSON),
+                     package=PACKAGE)
+
 pieces = D.server_fixture(DECODE)
 
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500)]
+              (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
+
+
+def test_the_two_stage_samplers_read_the_coins_in_order(pieces):
+    """Both stages on one stream of coins, Lean's the Python's whole: RUs in a shuffled order, a class drawn at a rate RU by
+    RU (and one at p = 1, which reads nothing) around two classes drawn together under a stratified and a work law when
+    their first RU comes up, then the drawn RUs' proof units on the bytes after them, a `k`-subset of the larger RUs and
+    every position of the rest."""
+    law = {"decode": {"k": 2, "p": "1/2"}, "prefill": {"k": None, "law": _expanded("stratified", 3, 2, 2)},
+           "tile": {"k": None, "law": _expanded("work", 2, 2, 2)}, "cap": {"k": 1, "p": "1"}}
+    rus = [[11, "decode", 5], [7, "prefill", 3], [3, "tile", 4], [1, "decode", 1], [9, "prefill", 2], [0, "cap", 3],
+           [4, "tile", 2], [2, "prefill", 1], [8, "decode", 3], [6, "tile", 6], [5, "prefill", 4], [10, "prefill", 2],
+           [12, "tile", 1], [13, "decode", 4]]
+    source = hashlib.shake_256(b"two-stage").hexdigest(800)
+    case = {"law": law, "source": source, "units": rus}
+    first = replay_units(copy.deepcopy(case))
+    assert D.replay(REPLAY_UNITS, case, pieces) == ("output", D.canonical(first))
+    drawn = [u for u in rus if u[0] in first["units"]]
+    assert [u[0] for u in drawn] == first["units"] and {"cap", "prefill", "tile"} <= {u[1] for u in drawn}
+    second = {"law": law, "selected": drawn, "source": source[2 * first["read"]:]}
+    picks = proof_units(copy.deepcopy(second))
+    assert D.replay(PROOF_UNITS, second, pieces) == ("output", D.canonical(picks))
+    assert picks["read"] > 0 and all(len(ps) == (min(2 if c == "decode" else 1, n) if c in ("decode", "cap") else n)
+                                     for (i, ps), (_, c, n) in zip(picks["units"], drawn))
 
 
 def test_the_select_piece_draws_every_rule(pieces):

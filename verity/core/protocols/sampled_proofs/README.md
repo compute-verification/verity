@@ -534,6 +534,10 @@ proof-unit draw after the interiors are.
   each of `2 k_s · width(n_s) + 64` bytes, extended by as many again and rerun whenever it runs out. The result is the
   one-stage draw object, which `draw.check_draw` holds to the registration and the sampling design; the verifier's
   closure map widens a work draw only, as `flock-verify draw --closure` does (`closure_of` is Lean's `closureOf`).
+- `select_replay_units` (a rate stage's `uniform(den) < num` per RU, a sampling design's `draw_first` over the class's
+  RUs) and `select_proof_units` (`subset(k, n_v)` of each drawn RU with `k < n_v`) are the sampled verifier's
+  `TwoStage.selectReplayUnits` and `TwoStage.selectProofUnits`, read from the same bytes in the same order and held to
+  the Python by the difftest's `replay_units` and `proof_units` pieces.
 - Nothing here derives a draw, the proof service's included (`service.Stream.select` is `draw_first` on the
   challenger's coins, by `select_draw`, and its draw of record is Lean's `Select.select` on the bytes it read, by
   `verifier.select`).

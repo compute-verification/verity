@@ -21,7 +21,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
 * `check_public`: the proof service's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`);
-* `run`: the stream's run of one registration from its public check through its verdict (`Run.run`).
+* `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
+* `replay_units`, `proof_units`: the two-stage law's samplers on given bytes of the verifier's own coins
+  (`TwoStage.selectReplayUnits`, `TwoStage.selectProofUnits`).
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -31,6 +33,7 @@ import SampledProofs.OneStage
 import SampledProofs.Slots
 import SampledProofs.Service
 import SampledProofs.Run
+import SampledProofs.TwoStage
 
 namespace SampledProofs.Pieces
 
@@ -313,13 +316,30 @@ def run (j : Json) : V Json := do
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots" }
 
+/-- `{"law", "units", "source"}` (a `TwoStageLaw.to_json`, RUs as `[index, class, n_v]`, hex coins) to the first stage's
+`{"units": the drawn RUs' indices, "read"}`. -/
+def replayUnits (j : Json) : V Json := do
+  let law ← TwoStage.lawOfJson (getD j "law")
+  let units ← TwoStage.rusOfJson (getD j "units")
+  let (drawn, read) ← TwoStage.selectReplayUnits (← Flock.unhex (← Flock.J.str j "source" "the draw")) law units
+  return Json.mkObj [("units", intsJson drawn), ("read", Lean.toJson read)]
+
+/-- `{"law", "selected", "source"}` to the second stage's `{"units": [[index, positions]], "read"}`. -/
+def proofUnits (j : Json) : V Json := do
+  let law ← TwoStage.lawOfJson (getD j "law")
+  let selected ← TwoStage.rusOfJson (getD j "selected")
+  let (picks, read) ← TwoStage.selectProofUnits (← Flock.unhex (← Flock.J.str j "source" "the draw")) law selected
+  return Json.mkObj [("units", Json.arr (picks.map fun (i, ps) => Json.arr #[Lean.toJson i, natsJson ps])),
+    ("read", Lean.toJson read)]
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
    ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
    ("bound", bound),
    ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
-   ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run)]
+   ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("replay_units", replayUnits),
+   ("proof_units", proofUnits)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
