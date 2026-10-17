@@ -34,6 +34,7 @@ import Proofs.Flock.Claims.KS.ZkAccJ
 import Proofs.Flock.Claims.KS.RoundsNZk
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
+import Proofs.Flock.Claims.KS.ZkDecJ
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -147,4 +148,6 @@ count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). Where `verify --zk` s
 `FlockDeploy.KS.planZJ_eq_tabsJ`), so at the empty draw the deployed `--zk` decoders are right at them
 (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`); so are the hidden-output plan's and decoders
 (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`,
-`FlockDeploy.KS.decodesTableH_zkTabs`). -/
+`FlockDeploy.KS.decodesTableH_zkTabs`). So at every masked statement in scope that `Deploy.V` sets up at a draw, which
+every statement some run accepts carries (`FlockDeploy.KS.acc_draw`), the deployed decoders are right at `zkTabs`
+(`ZkDecJ`: `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. -/

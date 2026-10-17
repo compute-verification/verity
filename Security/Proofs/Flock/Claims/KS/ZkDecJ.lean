@@ -1,0 +1,142 @@
+import Proofs.Flock.Claims.KS.ZkPlanHJ
+import Proofs.Flock.Claims.KS.ZkAccJ
+
+/-!
+# The deployed `--zk` decoders at the masked statement
+
+`ZkLiveAccAtJ`'s decoders (`hdec`) at the deployed statement, from `ZkPlanJ` and `ZkPlanHJ`: where the statement parses
+in scope and `Deploy.V` sets it up at a draw, the old `--zk` openings and decoder, at public or hidden outputs, are
+right at C-Flock ZK's padded tables (`zkTabs`) on the outcomes `verify --zk` accepts at `wrD`.
+
+* `draw_some_of_checks`, `next_acc_draw`, `acc_draw`: the checks refuse a session without a draw (`drawLaw zk none`),
+  so wherever some run accepts, the statement carries a draw.
+* `setupAt_of_setupOf`: `Deploy.V`'s setup of the statement is `verify --zk`'s at its draw (`setupAt`), with no
+  `--public-inputs` (`InScope` refuses them, `publicInputs_none_of_inScope`).
+* `tags_of_inScope`: the scope gives `verify --zk`'s inputs untyped tags with retained rounds and `hm96-sha512/v1`
+  leaves (`Read.form`).
+* `decodesTable_deploy`: the deployed decoders are right at `zkTabs` (`decodesTable_zkTabs` at public outputs,
+  `decodesTableH_zkTabs` at hidden outputs, whose circuit file `HmOut.parse` accepts as table 0's statement shows).
+-/
+
+namespace FlockDeploy.KS
+
+open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession
+open FlockSoundness.Discharge
+open FlockSoundness.Discharge.Composed (outJ repJ)
+open FlockSoundness.Discharge.Tables (DecodesTable)
+
+local notation "𝔽" => FlockLevel3.GF128
+
+/-- **The checks refuse a session without a draw**: their last step is `drawLaw zk none` there. -/
+theorem draw_some_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d := by
+  unfold checks at h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  cases hd : s.read.draw with
+  | none => simp [hd, ProvedScope.drawLaw] at h
+  | some d => exact ⟨d, rfl⟩
+
+/-- **An accepting step at SHA-512 carries a draw**: it is a decision whose checks passed (`draw_some_of_checks`). -/
+theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (h : ((next zk x as cs).eval sha512).1 = .acc) :
+    ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
+  cases ha : act zk x as cs with
+  | rej => simp [next_rej sha512 ha] at h
+  | coin c => simp [next_coin sha512 ha] at h
+  | decide s spec sts link c₁ mids f =>
+    obtain ⟨-, hc⟩ := (next_decide_sha512 ha).1 h
+    obtain ⟨d, hd⟩ := draw_some_of_checks hc
+    exact ⟨s, spec, sts, d, act_decide ha, hd⟩
+
+/-- **A statement some run accepts carries a draw**, at the inputs `Deploy.V` reads of it (`next_acc_draw`). -/
+theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) :
+    ∃ d, ins.read.draw = some d := by
+  unfold Claims.Flock.NoAcc at hacc
+  push Not at hacc
+  obtain ⟨Ω, P, ω, r, hr⟩ := hacc
+  obtain ⟨as, has⟩ := stepWith_acc _ _ _ _ _ _ _ _ _ hr
+  obtain ⟨ins', spec', sts', d, hset', hd⟩ := next_acc_draw has
+  obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj (hset'.symm.trans hset))
+  exact ⟨d, hd⟩
+
+/-- **`Deploy.V`'s setup of a masked statement in scope is `verify --zk`'s at its draw**: `Read.setup` under `--zk`
+reads `zkTags` and `zkCoins` (`zkInputs`), and the scope refuses `--public-inputs`. -/
+theorem setupAt_of_setupOf {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) :
+    ins.read.zk = true ∧ setupAt (ZkExec.zkInputs ins.read.I) ins.read.draw = .ok (spec, sts) := by
+  obtain ⟨hins, hsetup⟩ := setupOf_some hset
+  have hzk : ins.read.zk = true := readOf_zk (x := x) (by simp [readOf, hins])
+  have hpi := Claims.Bridge.Custody.publicInputs_none_of_inScope hs hin hins
+  refine ⟨hzk, ?_⟩
+  rw [← Ins.setup_read hsetup]
+  simp only [setupAt, Readable.Read.setup, Readable.Read.tags, Readable.Read.coins, ZkExec.zkInputs, hzk, hpi,
+    ite_true]
+
+/-- **The scope fixes `verify --zk`'s tags**: at a masked statement in scope, the inputs `Deploy.V` reads are untyped,
+with retained rounds and `hm96-sha512/v1` leaves (`InScope`'s `form`, which is `Read.form` at `zkTags`). -/
+theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) :
+    ins.read.I.tags.typed = false ∧ ins.read.I.tags.retainRounds = true ∧
+      ins.read.I.tags.merkleLeaf = "hm96-sha512/v1" := by
+  have hzk := (setupAt_of_setupOf hs hin hset).1
+  obtain ⟨p, hp, rfl, -, -, -⟩ := parsed_of_parse hs
+  obtain ⟨-, hpr, -⟩ := parseBytes_setup hp hset
+  obtain ⟨-, -, -, -, -, ht, hrr, hl, -⟩ := hin
+  simp only [Readable.toReadable, Readable.Read.form, Bool.not_eq_true] at ht hrr hl
+  have htags : p.toRead.tags = ZkExec.zkTags ins.read.I := by
+    rw [hpr]
+    simp [Readable.Read.tags, hzk]
+  rw [htags] at ht hrr hl
+  exact ⟨(ZkExec.zkTags_typed _).symm.trans ht, (ZkExec.zkTags_retainRounds _).symm.trans hrr,
+    (ZkExec.zkTags_merkleLeaf _).symm.trans hl⟩
+
+/-- **The deployed `--zk` decoders are right at `zkTabs` at a masked statement in scope**: where the statement parses
+in scope, `Deploy.V` sets it up at the draw `d` and at least one table, at every layout and link layout at the
+session's link points, some openings and decoder are right at `zkTabs` on the outcomes `verify --zk` accepts at `wrD`
+of the draw `d` (`DecodesTable`, `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`): at public outputs
+`decodesTable_zkTabs` under `TagsOkZJ`, at hidden outputs `decodesTableH_zkTabs` under `TagsOkZHJ`, the circuit file
+being table 0's circuit under `HmOut.parse` (`setupHidden_spec'`, `parseH_tagsAt`) and every table passing the shape
+check (`setup_shapeOk`). -/
+theorem decodesTable_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d) {Reg : Type} (R : Reg) :
+    ∃ (opn : Array ByteArray → Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length →
+        OpensZ 𝔽 Refine.Dig (List UInt8))
+      (dec : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length → ℕ → ByteArray → List Msg),
+      ∀ i, DecodesTable (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
+        (fun _ o => o.accepted = true)
+        (fun o => ZkExec.AcceptsZK ins.read.I (Claims.Bridge.Custody.wrD ins.read.I (fun _ : Finset (Fin 0) => d)
+          (fun _ _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) ∅ R o))
+        opn dec (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
+        (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) i := by
+  have hlen : (tables true x).length = sts.size := by
+    unfold tables
+    rw [hset]
+    simp
+  rw [hlen]
+  obtain ⟨hzk, hsA⟩ := setupAt_of_setupOf hs hin hset
+  rw [hd] at hsA
+  obtain ⟨ht, hrr, hl⟩ := tags_of_inScope hs hin hset
+  cases hh : ins.read.I.tags.hiddenOutputs
+  · exact decodesTable_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA h0 L hz hk hlay R
+  · have hshape := Claims.Bridge.Custody.setup_shapeOk (setupOf_some hset).2 hzk
+    obtain ⟨-, hstJ⟩ := setupAt_tableJH hh hsA
+    have hp := (Hidden.setupHidden_spec' (hstJ 0 h0)).parse
+    have hc : HmOut.parse (ZkExec.zkTags ins.read.I) ins.read.I.circuitFile ins.read.I.tables = .ok sts[0].c :=
+      (ZkHidden.parseH_tagsAt ((ZkExec.zkTags_typed _).trans ht) _ _ _ _).symm.trans hp
+    exact decodesTableH_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay R
+
+end FlockDeploy.KS
