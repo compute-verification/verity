@@ -11,7 +11,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/edited_gemm
+export D=benchmarks/pouw/edited_gemm   # exported: the gpu-lease `bash -c` subshell runs egemm_ref.py as "$D/egemm_ref.py"
 export B; B=$(mktemp -d /tmp/egdial.XXXXXX); trap 'rm -rf "$B"' EXIT
 export EG_R_LIST=${EG_R_LIST:-"1 2 4"} EG_NCU_R=${EG_NCU_R:-"1 2 4"}
 export GSHP=${GSHP:-"2048 2048 4096"} GSHP3=${GSHP3:-"2048 2048 8192"} TSHP=${TSHP:-"8192 8192 8192"}
