@@ -32,14 +32,17 @@ MMA_FORMS = ["HMMA16816", "HMMA16816F16", "HMMA1684T", "HMMA1688T", "HMMASP16832
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
-    assert d["vector"] == "VF3l-16" and round(d["tau"], 4) == 0.0603 and d["failures"] == [] and d["unreproduced"] == []
+    assert d["vector"] == "VF3n-16" and round(d["tau"], 4) == 0.0586 and d["failures"] == [] and d["unreproduced"] == []
+    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0459, 1.1563, 2.0)
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
                            "loads16": {"kinds": 9, "below": [], "absent": []},
-                           "copy16": {"kinds": 63, "below": ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"],
-                                      "absent": MMA_FORMS}}
+                           "copy16": {"kinds": 77, "below": ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"],
+                                      "absent": []}}
     uni = d["copies"][1]
     assert [c["kind"] for c in d["copies"][:2]] == ["UNI64", "UNI"] and uni["words"] == 32
     assert round(uni["price"], 2) == 2.0 and uni["measured"] > 32 and uni["what"].startswith("UR fan-out")
+    assert main(["solve", "VF3l-16", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["floors"]["copy16"]["absent"] == MMA_FORMS
 
 
 def test_list_census_attacks(capsys):

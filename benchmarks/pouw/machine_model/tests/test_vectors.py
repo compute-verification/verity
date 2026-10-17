@@ -117,6 +117,7 @@ CLAIMED = {
     "VF3l-16-copy16": ([], []),
     "VF3l-16-copy32": ([], []),
     "VF3m-16": ([], []),
+    "VF3n-16": ([], []),
 }
 
 
@@ -132,14 +133,14 @@ def test_claims(name):
 UR_FANOUT = ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"]
 COPIES = {"VF3k-16": (UR_FANOUT, 1), "VF3l-16": (UR_FANOUT, 1), "VF3l-16-copy16": ([], 16),
           "VF3l-16-copy16-fan32": ([], 16), "VF3l-16-copy32-fan16": ([], 16), "VF3l-16-copy32": ([], 32),
-          "VF3m-16": (UR_FANOUT, 1)}
+          "VF3m-16": (UR_FANOUT, 1), "VF3n-16": (UR_FANOUT, 1)}
 
 
 @pytest.mark.parametrize("name", sorted(COPIES))
 def test_copy_routes(name):
     r = solved(name)
     below, cheapest = COPIES[name]
-    assert r.floors["copy16"][1] == below and r.floors["copy16"][0] == len(r.copies) == 63
+    assert r.floors["copy16"][1] == below and r.floors["copy16"][0] == len(r.copies) == 63 + 14 * ("IMMA16832" in r.census)
     assert r.copies[0][2] == pytest.approx(cheapest)
     assert all(p <= mc * (1 + 1e-9) for _k, _w, p, mc, _ in r.copies)  # no copy route priced over its measured cost
 
