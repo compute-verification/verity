@@ -15,6 +15,7 @@ import Proofs.Flock.Claims.NumbersNMin
 import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.Claims.NumbersRadius
 import Proofs.Flock.Claims.Counted
+import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 import Proofs.Flock.Claims.ZkDecode
