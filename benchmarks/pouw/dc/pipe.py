@@ -25,7 +25,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 CENSUS = HERE.parent / "machine_model" / "data" / "devices" / "sm_100" / "census.csv"
-ARMS = {0: "pipeline", 1: "TMEM stage", 2: "honest"}
+ARMS = {0: "pipeline", 1: "TMEM stage", 2: "honest", 3: "MMA self-wait"}
 SLOTS_MMA, LANES, SMSPS = 128 * 256, 32, 4
 #: duo's lane instructions a word by pipe (dc.cuh): u = y ^ p ^ k (LOP3), y = u a + z (IMAD), z = rotl(u, r) + y (LEA.HI)
 DUO = {"ALU": 2, "IMAD": 1}
@@ -102,7 +102,7 @@ def fold_profile(ops: list[str], nb: int, lw: int) -> dict:
     return {"instructions": len(seg) / words, **{k: v / words for k, v in sorted(by.items())}, "words": words}
 
 
-KERNELS = 12   # (NB, LW) in (2, 1) (2, 2) (4, 1) (4, 2), three modes each
+KERNELS = 16   # (NB, LW) in (2, 1) (2, 2) (4, 1) (4, 2), four modes each
 REGS_SMSP = 16384
 
 
@@ -124,7 +124,7 @@ def gate_build(out: Path) -> int:
         local = sum(op.split(".")[0] in ("LDL", "STL") for op in ops)
         r = regs.get((nb, lw, mode), 0)
         cap = min(255, REGS_SMSP // (-(-(4 * lw + 1) // 4) * 32) // 8 * 8)
-        ok = n_mma > 0 and local == 0 and (mode == 0 or n_ld > 0) and 0 < r <= cap
+        ok = n_mma > 0 and local == 0 and (mode in (0, 3) or n_ld > 0) and 0 < r <= cap
         print(f"{'PASS' if ok else 'REFUSED'} pg100<{nb},{lw},{mode}>: UTCIMMA {n_mma}, LDTM.x32 {n_ld}, LDL/STL {local}, "
               f"registers {r} (launchable {cap})")
         if not ok:

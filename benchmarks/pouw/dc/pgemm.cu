@@ -13,7 +13,8 @@
 //   loader warpgroup w of LW (tiles b with b % LW == w; a thread owns one row): waits full[b], reads the row with
 //     tcgen05.ld.32x32b.x32 and tcgen05.wait::ld, arrives on empty[b] after the last load, and folds the words.
 // MODE 0: the loaders only hand the barrier back (the pipeline's own rate); 1: they load every word and don't fold (the
-// TMEM stage); 2: load and fold (honest).
+// TMEM stage); 2: load and fold (honest); 3: no loaders, the MMA warp waits on its own commit before it reissues a tile
+// (the round trip's MMA and commit part alone).
 // Operands are resident: the CTA's rows of X and W for k in [0, PER) go to shared memory once and step s reads stage
 // s % (PER / 32), so the kernel computes the GEMM of K-periodic inputs (period PER), which is what the gate feeds it. The
 // rate is the tensor, TMEM and fold stage's; operand streaming (TMA) is not in it.
@@ -146,7 +147,7 @@ __global__ void __maxnreg__(LW == 2 ? 168 : 255)
     for (int g = 0; g < groups; g++) {
 #pragma unroll
       for (int b = 0; b < NB; b++) {
-        if (g > 0) mbar_wait(&bars.empty[b], (uint32_t)((g - 1) & 1));
+        if (g > 0) mbar_wait(MODE == 3 ? &bars.full[b] : &bars.empty[b], (uint32_t)((g - 1) & 1));
         tc_after_sync();
         if (elect_one()) {
           for (int i = 0; i < lm; i++) {
@@ -159,7 +160,11 @@ __global__ void __maxnreg__(LW == 2 ? 168 : 255)
         __syncwarp();
       }
     }
-  } else {
+    if constexpr (MODE == 3) {
+#pragma unroll
+      for (int b = 0; b < NB; b++) mbar_wait(&bars.full[b], (uint32_t)((groups - 1) & 1));
+    }
+  } else if constexpr (MODE != 3) {
     const uint32_t wg = w >> 2, q = w & 3;
     const int row = tm * BM + 32 * (int)q + (int)lane;
     DuoSt ch[TPW][NCH];
@@ -224,7 +229,9 @@ struct Cfg {
   int nb, lw, mode;
   Kern k;
 };
-#define CFG(NB, LW) {NB, LW, 0, pg100<NB, LW, 0>}, {NB, LW, 1, pg100<NB, LW, 1>}, {NB, LW, 2, pg100<NB, LW, 2>}
+#define CFG(NB, LW)                                                                                   \
+  {NB, LW, 0, pg100<NB, LW, 0>}, {NB, LW, 1, pg100<NB, LW, 1>}, {NB, LW, 2, pg100<NB, LW, 2>}, \
+      {NB, LW, 3, pg100<NB, LW, 3>}
 static const Cfg CFGS[] = {CFG(2, 1), CFG(2, 2), CFG(4, 1), CFG(4, 2)};
 #undef CFG
 static const Cfg* find(int nb, int lw, int mode) {
@@ -404,9 +411,9 @@ static int run_rate(int reps, int ksteps) {
     const double cyc = median(p.med), slots = (double)ksteps * BM * CTA_N, ms = median(p.ms);
     printf("{\"mode\": \"rate\", \"nb\": %d, \"lw\": %d, \"arm\": %d, \"L\": %d, \"ksteps\": %d, \"ctas\": %d, "
            "\"reps\": %d, \"cycles\": %.0f, \"cycles_lo\": %.0f, \"cycles_hi\": %.0f, \"ms\": %.4f, \"mhz\": %.1f, "
-           "\"slots_per_clk\": %.3f, \"committed_words_per_clk\": %.3f}\n",
+           "\"slots_per_clk\": %.3f, \"committed_words_per_clk\": %.3f, \"group_clk\": %.1f}\n",
            p.c->nb, p.c->lw, p.c->mode, 32 * p.lm, ksteps, nsm, reps, cyc, median(p.lo), median(p.hi), ms,
-           cyc / (ms * 1e3), slots / cyc, slots / cyc / p.lm);
+           cyc / (ms * 1e3), slots / cyc, slots / cyc / p.lm, cyc / (ksteps / p.lm));
   }
   return 0;
 }
