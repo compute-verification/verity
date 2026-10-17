@@ -842,7 +842,7 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
         parts = by_rows(lambda r: rows(r, amax), w)
         return tuple(p[0] if p[0] is None or p[0].dim() == 0 else torch.cat(p) for p in zip(*parts))
 
-    wl, wg, sw, mw = mm.cached("native", weights)
+    wl, wg, sw, mw = mm.cached("native", weights, coinless=True)
     if act_grid == "int8":
         xq, sa = act_quant(mm.x, "dither", mm.coins(mm.x.shape), 127)
         sa, ma, xtop = sa[:, None], None, 127

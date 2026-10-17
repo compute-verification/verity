@@ -148,10 +148,11 @@ class MM:
         m.stage = "int"
         return m
 
-    def cached(self, name: str, fn: Callable):
+    def cached(self, name: str, fn: Callable, coinless: bool = False):
         """fn(), once per matmul (linear name, or the attention KV group), chain prefix and, if anything before it
-        is seeded, seed: the layer's linears share it across windows and arms; attention's across its row chunks."""
-        seeded = any(s.defn.seeded(s.kw) for s in self.prefix)
+        is seeded, seed: the layer's linears share it across windows and arms; attention's across its row chunks.
+        `coinless`: fn reads none of this step's coins, so only the steps before it decide whether it is per seed."""
+        seeded = any(s.defn.seeded(s.kw) for s in (self.prefix[:-1] if coinless else self.prefix))
         key = (self.name, tuple(s.key for s in self.prefix), name, self.seed if seeded else None)
         if key not in self.store:
             self.store[key] = fn()

@@ -183,7 +183,8 @@ The chain ends in the exact integer product, gated, or the FP32 product when the
 - `mm.x` and `mm.weight()`: the operands. W carries every earlier step's weight map, applied lazily.
 - `mm.replace(x=..., w=f | tensor)`: new operands. A callable `w` maps the weight.
 - `mm.integer(x, w)`: the quantizer's hand-off to the integer stage.
-- `mm.cached(name, fn)`: once per matmul and chain prefix, shared across windows and arms.
+- `mm.cached(name, fn)`: once per matmul and chain prefix, shared across windows and arms (and across seeds with
+  `coinless=True`, when fn reads none of the step's own coins).
 - `mm.shared(key, fn)`: once per run.
 - `mm.coins(shape)`: fresh bits from the arm's seed, the layer and the window.
 - `mm.checking`: this is the check window. `mm.gate(name, ok)` records a gate; `mm.int_product(x, w)` is a gated exact product.

@@ -97,6 +97,19 @@ def test_row_chunks_change_no_bit(llama, ids, calib, monkeypatch):
         assert np.array_equal(v, chunked["nll"][k]), k
 
 
+def test_a_native_weight_is_cached_once_across_seeds():
+    import types
+    import gates as G
+    step = next(s for s in spec.load("pc-c2-nvfp4-2s").linear if s.defn.name == "native")
+    store = {}
+    for seed in (0, 1, 2):
+        run = matmul.Run(types.SimpleNamespace(name="t"), seed, 0, types.SimpleNamespace(li=0), G.Gates(), store, {}, None)
+        mm = matmul.MM("linear", "mlp.up_proj", run, torch.zeros(2, 32), torch.zeros(4, 32)).enter(step)
+        mm.cached("native", object, coinless=True)
+        mm.cached("per-seed", object)
+    assert sorted(k[2] for k in store) == ["native"] + ["per-seed"] * 3
+
+
 def test_native_checks():
     with pytest.raises(ValueError, match="nv blocks"):
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "nv"}]}, "x")
