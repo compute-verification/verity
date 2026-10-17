@@ -55,6 +55,7 @@ import Proofs.Flock.Claims.KS.ForkCoupling
 import Proofs.Flock.Claims.KS.PlainDraw
 import Proofs.Flock.Claims.KS.PlainDrawAcc
 import Proofs.Flock.Claims.KS.PlainDrawDec
+import Proofs.Flock.Claims.KS.PlainDrawSim
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -243,5 +244,7 @@ not the record's, so an accepting run gives it at its live outcome whatever draw
 proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
 `FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the draw
 (`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
-`FlockDeploy.KS.plain_hdecHAt`).
+`FlockDeploy.KS.plain_hdecHAt`), and KS at the deployed plain verifier's trimmed record holds from a simulator at
+that verdict alone, with nothing asked of the record's draw (`PlainDrawSim`: `FlockDeploy.KS.plain_first_of_simD`,
+`FlockDeploy.KS.PlainSimWrPAtD`, `FlockDeploy.KS.PlainSimWD`, `FlockDeploy.KS.plain_KS_of_simD`).
 -/
