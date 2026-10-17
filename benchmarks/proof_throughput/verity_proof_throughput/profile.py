@@ -1,14 +1,19 @@
 """The Lean verifier's profile: one session of ``flock-verify verify`` under ``perf record`` (``verify.sh PROFILE=1``), its
-samples attributed two ways.
+samples attributed three ways.
 
+* **Stage**: the outermost frame of a sample that names one of ``verifyCmd``'s stages: the proved-scope check
+  (``ProvedScope.check``, which runs once, before the first session's clock starts), the session's setup (``buildSession``)
+  and its verification (``Flock.verify``).
 * **Phase**: the innermost frame of a sample that names a protocol step (the Lean declarations of ``Flock.Ligerito``,
   ``Flock.Piop``, ``Flock.Opening``, ``Flock.Statement``, ...; Lean's C keeps each declaration's path in its symbol, and a
-  specialization's symbol names the declaration it was made at).
+  specialization's symbol names the declaration it was made at). ``statement`` is the statement's matrices wherever they
+  are read: setup's tables and the lincheck's fold of them at the verifier's point (``Stmt.folded``), told apart by stage.
 * **Kernel**: the innermost frame that is a primitive the phases share: SHA-512 and SHA-256 compression, GF(2^128)
   arithmetic, JSON, the runtime's allocation and reference counting, byte arrays, memcpy.
 
-A sample neither names falls in ``other``. The setup and session seconds are the verifier's own (its stderr's ``inputs``,
-``setup`` and per-session lines); CPU seconds over wall seconds say how many threads it kept busy.
+A sample none names falls in ``other``. The setup and session seconds are the verifier's own (its stderr's ``inputs``,
+``setup`` and per-session lines); the wall seconds outside them (``unclocked_s``) are the proved-scope check and the
+process's start and exit. CPU seconds over wall seconds say how many threads it kept busy.
 """
 from __future__ import annotations
 
@@ -20,6 +25,12 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
+STAGES: tuple[tuple[str, str], ...] = (
+    ("scope_check", r"Flock_ProvedScope_check\b"),
+    ("setup", r"_buildSession\b"),
+    ("verify", r"Flock_verify$|Flock_Zk_verify$"),
+)
+
 PHASES: tuple[tuple[str, str], ...] = (
     ("merkle_paths", r"Flock_merkleCheck|Flock_MerkleScheme|Flock_climb|Flock_opens|Flock_sibsOf|Flock_saltCount"),
     ("ligerito", r"Flock_ligerito|Flock_queryLevel|Flock_Poly_|Flock_sIter|Flock_svTable|Flock_whats|Flock_eqTableK|"
@@ -30,12 +41,12 @@ PHASES: tuple[tuple[str, str], ...] = (
     ("lincheck", r"Flock_lincheck|Flock_halve|Flock_abcClaims"),
     ("transcript", r"Flock_Transcript|Flock_absorb|Flock_squeeze|Flock_sample|Flock_framed|Flock_Round"),
     ("proof_decode", r"Flock_decodeProof|Flock_Reader"),
-    ("statement_setup", r"Flock_Stmt|Flock_circuitFold|Flock_folded|Flock_foldRanges|Flock_foldedPartial|Flock_tensor|"
+    ("statement", r"Flock_Stmt|Flock_circuitFold|Flock_folded|Flock_foldRanges|Flock_foldedPartial|Flock_tensor|"
                         r"Flock_structured|Flock_project|Flock_regionPoint|Flock_regionValue|Flock_extraClaims|Flock_spec\b|"
                         r"Flock_placeSlot|Flock_placeRange|Flock_baseOf|Flock_slotBase|Flock_partialRanges|Flock_sumUpTo|"
                         r"Flock_Setup|Flock_pcsParams|Flock_addDelta"),
     ("public_load", r"Flock_Public|Flock_FV3"),
-    ("circuit_parse", r"Flock_Circuit|Flock_HmRow|Flock_Net|Flock_Comp|Flock_Layout|Flock_checkLayout|Flock_RowLeaf|Flock_Lookup"),
+    ("circuit_parse", r"Flock_Circuit|Flock_HmRow|Flock_HmOut|Flock_Net|Flock_Comp|Flock_Layout|Flock_checkLayout|Flock_RowLeaf|Flock_Lookup"),
     ("draw_partition", r"Flock_Draw|Flock_TemplateQuery|Flock_Partition|Flock_Program|Flock_Qword"),
     ("record", r"Flock_Record|Flock_recordDraw|Flock_verifyRep|Flock_verify\b|Flock_verifyCmd"),
 )
@@ -54,6 +65,7 @@ KERNELS: tuple[tuple[str, str], ...] = (
     ("string", r"String|lean_string"),
 )
 
+_STAGE_RE = [(n, re.compile(p)) for n, p in STAGES]
 _PHASE_RE = [(n, re.compile(p)) for n, p in PHASES]
 _KERNEL_RE = [(n, re.compile(p)) for n, p in KERNELS]
 
@@ -94,6 +106,11 @@ def attribute(frames: list[str]) -> tuple[str, str]:
     return _first(frames, _PHASE_RE) or "other", _first(frames, _KERNEL_RE) or "other"
 
 
+def stage(frames: list[str]) -> str:
+    """A sample's stage: the outermost frame naming one, else ``other``."""
+    return _first(frames[::-1], _STAGE_RE) or "other"
+
+
 def times(stderr: str) -> dict[str, float]:
     """The verifier's own seconds: ``inputs``, ``setup`` (summed over setups) and the sessions' (summed)."""
     out = {"inputs_s": 0.0, "setup_s": 0.0, "session_s": 0.0}
@@ -109,19 +126,23 @@ def times(stderr: str) -> dict[str, float]:
 
 
 def summarize(sample_frames: Iterable[list[str]]) -> dict[str, Any]:
-    phase, kernel, cell, leaf = Counter(), Counter(), Counter(), Counter()
+    stages, phase, kernel, cell, staged, leaf = Counter(), Counter(), Counter(), Counter(), Counter(), Counter()
     n = 0
     for frames in sample_frames:
         if not frames:
             continue
         n += 1
+        s = stage(frames)
         p, k = attribute(frames)
+        stages[s] += 1
         phase[p] += 1
         kernel[k] += 1
         cell[(p, k)] += 1
+        staged[(s, p)] += 1
         leaf[frames[0]] += 1
     frac = lambda c: {k: round(v / n, 4) for k, v in c.most_common()} if n else {}  # noqa: E731
-    return {"samples": n, "phase": frac(phase), "kernel": frac(kernel),
+    return {"samples": n, "stage": frac(stages), "phase": frac(phase), "kernel": frac(kernel),
+            "stage_phase": {f"{s}/{p}": round(v / n, 4) for (s, p), v in staged.most_common(40)} if n else {},
             "phase_kernel": {f"{p}/{k}": round(v / n, 4) for (p, k), v in cell.most_common(40)} if n else {},
             "leaf": {s: round(v / n, 4) for s, v in leaf.most_common(40)} if n else {}}
 
@@ -146,6 +167,8 @@ def result(summary: dict[str, Any], time_line: str, stderr: str, *, bundle: str 
           {"name": "profile.peak_rss_bytes", "value": int(rss_kb * 1024), "unit": "B"},
           {"name": "profile.samples", "value": summary["samples"], "unit": "count"}]
     ms += [{"name": f"profile.{k}", "value": round(v, 3), "unit": "s"} for k, v in t.items()]
+    ms.append({"name": "profile.unclocked_s", "value": round(max(0.0, wall - sum(t.values())), 3), "unit": "s"})
+    ms += [{"name": f"profile.stage.{k}", "value": v, "unit": "ratio"} for k, v in summary.get("stage", {}).items()]
     ms += [{"name": f"profile.phase.{k}", "value": v, "unit": "ratio"} for k, v in summary["phase"].items()]
     ms += [{"name": f"profile.kernel.{k}", "value": v, "unit": "ratio"} for k, v in summary["kernel"].items()]
     ran = summary["samples"] > 0 and bool(verdicts)
@@ -159,4 +182,4 @@ def result(summary: dict[str, Any], time_line: str, stderr: str, *, bundle: str 
             "measurements": ms, "measurement_files": ["out/profile.json"], "artifacts": []}
 
 
-__all__ = ["KERNELS", "PHASES", "attribute", "read_script", "result", "samples", "summarize", "times"]
+__all__ = ["KERNELS", "PHASES", "STAGES", "attribute", "read_script", "result", "samples", "stage", "summarize", "times"]

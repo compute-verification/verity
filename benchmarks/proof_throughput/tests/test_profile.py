@@ -39,6 +39,19 @@ def test_each_sample_is_its_innermost_phase_and_kernel():
                    ("ligerito", "gf128"), ("other", "other")]
 
 
+def test_a_samples_stage_is_its_outermost_stage_frame():
+    lp = "lp_flock__verifier_"
+    scope = [f"{lp}Flock_Net_parse", f"{lp}Flock_HmOut_parse", f"{lp}Flock_ProvedScope_check", f"{lp}verifyCmd"]
+    setup = [f"{lp}Flock_HmOut_parse", f"{lp}Flock_Stmt_setupHidden", f"{lp}buildSession", f"{lp}verifyCmd"]
+    fold = [f"{lp}Flock_F128_clmulGo", f"{lp}Flock_Stmt_baseOf", f"{lp}Flock_lincheck", f"{lp}Flock_verifyRep",
+            f"{lp}Flock_verify", f"{lp}verifyCmd"]
+    assert [PF.stage(f) for f in (scope, setup, fold, ["main"])] == ["scope_check", "setup", "verify", "other"]
+    assert PF.attribute(fold) == ("statement", "gf128")
+    s = PF.summarize([scope, setup, fold, fold])
+    assert s["stage"] == {"verify": 0.5, "scope_check": 0.25, "setup": 0.25}
+    assert s["stage_phase"]["verify/statement"] == 0.5 and s["stage_phase"]["setup/circuit_parse"] == 0.25
+
+
 def test_summary_shares_and_the_verifiers_own_seconds():
     s = PF.summarize(PF.samples(SCRIPT.splitlines()))
     assert s["samples"] == 5 and s["phase"]["ligerito"] == 0.2 and s["kernel"]["gf128"] == 0.4
@@ -60,4 +73,5 @@ def test_profile_phases_writes_a_result(tmp_path):
     assert rc == 0 and doc["validation"]["status"] == "passed"
     assert ms["profile.cpu_s"] == 169.5 and ms["profile.threads_busy"] == round(169.5 / 170.2, 3)
     assert ms["profile.session_s"] == 56.0 and ms["profile.phase.ligerito"] == 0.2
+    assert ms["profile.unclocked_s"] == round(170.2 - 16.0 - 48.0 - 56.0, 3)
     assert json.loads((tmp_path / "out" / "profile.json").read_text())["samples"] == 5
