@@ -28,23 +28,25 @@ is the pure masked session (`Run`: `run_acc_of`, `honestRun_eq`); the skeleton i
 and discharges five goals at any number of tables (`Discharge`: `tables_goal`, `schedules_goal`, `proofCount_goal`;
 `Link`: `linkFirst_goal`; `Count`: `sends_goal`, each table's two reps' rounds summed). At the deployed relation each
 table's trace is its share's and satisfies its block R1CS (`Trace`: `Case.traceR1CS`, `traceR1CS_goal`, from
-`Readable.relS_only`), which `tracesOf` reads only at one table. The session runs at several tables from the statement's
-`hello` and the prover's pieces, its reps run in stream order (`Runs`: `sessionRunsJ_goal` from `StmtOkJ`,
-`ProverRunsJ`). `Complete` composes them (`complete`): from `complete_zk`'s premises but `RecordFitsZk`, which give
-every check at one table, and at several tables `StmtOkJ`, `ProverRunsJ`, `RecordJ` and `OpenJ`. The bound at several
-tables loses nothing
-at one (`One`: `completeZk_of`, `honestP`'s completeness with error `δc H` gives `honestPZk`'s with error `δcZk H`).
-Toward `RecordJ`, the tables' names and the rep streams' are distinct (`Names`: `tableNames_nodup`, `repNames_nodup`,
-`rootBList_distinct`, `Case.tables_nodup`), and the session returns the printed honest masked record of one `root_B` per
-table and sends the link of them, then the streams' rounds (`Session`: `sessionPZk_factsJ`); that record decodes, each
-table's `root_B` read under its name and each rep stream found under its name, reads live and carries the draw
-(`Decode`: `decode_recordObjZkJ`, `live_recordObjZkJ`, `recordDraw_recordObjZkJ`). Every table's cap and reps are what
-the record needs (`Prover`: `Case.points_regions`, `proverOkJ`), so the record's checks hold at several tables but what
-they ask of the proof files (`Goals`: `Run.jsonJ`, `recordJsonJ`, `FilesJ`, `recordJ_of`), and `complete` holds with
-`FilesJ` for `RecordJ` (`completeJ`). Each table's reps' proof files decode to proofs of its parameters, its `root_B` as
-their cap and a 64-byte pads' root (`Files`: `sessionPZk_filesJ`, `Run.repJ`), so `FilesJ` holds from each table's
-`RepShapedZk` (`filesJ` from `RepShapedJ`; `completeJR`). Each proof file is
-the proof its rep returned, ending at its stream (`Reps`: `Run.walkJ`), so the masked replay passes (`replayJ`), level
-0's lanes follow from the masked Ligerito (`lanesJ`), and every round is consumed (`consumedJ`) at every table; so the
-rep's checks reduce to what `complete_zk` takes at one table, per rep the ring switch, the masked Ligerito and the
-inner proof (`RepChecksJ`, `openJ_of`; `completeJO`). -/
+`Readable.relS_only`), which `tracesOf` reads only at one table. The session runs at a good case from the statement's
+`hello` and the prover's pieces, its reps run in stream order (`Runs`: `Case.sessionRuns` from `StmtAt`,
+`ProverRunsAt`; at several tables `sessionRunsJ_goal`). `Complete` composes them (`complete_of_at`; `complete`: from
+`complete_zk`'s premises but `RecordFitsZk`, which give every check at one table, and at several tables `StmtOkJ`,
+`ProverRunsJ`, `RecordJ` and `OpenJ`). The bound at several tables loses nothing at one (`One`: `completeZk_of`,
+`honestP`'s completeness with error `δc H` gives `honestPZk`'s with error `δcZk H`). Toward `RecordAt`, the tables'
+names and the rep streams' are distinct (`Names`: `tableNames_nodup`, `repNames_nodup`, `rootBList_distinct`,
+`Case.tables_nodup`), and the session returns the printed honest masked record of one `root_B` per table and sends
+the link of them, then the streams' rounds (`Session`: `sessionPZk_factsJ`); that record decodes, each table's
+`root_B` read under its name and each rep stream found under its name, reads live and carries the draw (`Decode`:
+`decode_recordObjZkJ`, `live_recordObjZkJ`, `recordDraw_recordObjZkJ`). Every table's cap and reps are what the record
+needs (`Prover`: `Case.points_regions`, `proverOkJ`), so the record's checks hold but what they ask of the proof files
+(`Goals`: `Run.jsonJ`, `recordJsonJ`, `FilesAt`, `recordAt_of`, `recordJ_of`), and `complete` holds with `FilesJ` for
+`RecordJ` (`completeJ`). Each table's reps' proof files decode to proofs of its parameters, its `root_B` as their cap
+and a 64-byte pads' root (`Files`: `sessionPZk_filesJ`, `Run.repJ`), so `FilesAt` holds from each table's
+`RepShapedZk` (`filesAt` from `RepShapedAt`, `filesJ` from `RepShapedJ`; `completeJR`). Each proof file is the proof
+its rep returned, ending at its stream (`Reps`: `Run.walkJ`), so the masked replay passes (`replayJ`), level 0's lanes
+follow from the masked Ligerito (`lanesJ`), and every round is consumed (`consumedJ`) at every table; so the rep's
+checks reduce to what `complete_zk` takes at one table, per rep the ring switch, the masked Ligerito and the inner proof
+(`RepChecksAt`, `openAt_of`; at several tables `RepChecksJ`, `openJ_of`, `completeJO`). None of these asks for several
+tables, so completeness holds at every number of tables from the four per-table premises at every good case
+(`completeAll`: `StmtAt`, `ProverRunsAt`, `RepShapedAt`, `RepChecksAt`), with no premise of `complete_zk`'s. -/

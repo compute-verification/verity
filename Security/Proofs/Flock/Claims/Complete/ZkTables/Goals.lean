@@ -5,15 +5,15 @@ import Proofs.Flock.Claims.Complete.ZkTables.Decode
 /-!
 # The record's checks at the honest masked run of several tables
 
-`Zk/Json/Goals.lean` at a run of several tables (`Run`, `1 < |tables|`), from `StmtOkJ` and the prover's pieces
+`Zk/Json/Goals.lean` at a run of any number of tables (`Run`), from `StmtAt` and the prover's pieces
 (`proverOkJ`): the record is the printed honest masked record of one `root_B` per table (`sessionPZk_factsJ`), which
 `Record.decodeWith` reads as `sessOf` (`decode_recordObjZkJ`) and `liveOf` as its live session (`live_recordObjZkJ`):
 `Run.jsonJ`. Its checks follow (`recordJsonJ`): the draw, the live reads, custody (each table's `root_B`, no public
 words, the points, one round per round message and each round its message), the decode, each table's public words, the
 proof digests listing the rep streams (each found under its name, `find?_name`), every rep's stream, and each table's
 extra claims. What `RecordAt` asks of the proof files (`FilesAt`: their sizes, each rep's file decoding at the table's
-shape to a proof of its parameters, cap and pads' root) is left named, and `RecordJ` follows from it (`recordJ_of`); so
-`complete` holds with `FilesJ` in place of `RecordJ` (`completeJ`).
+shape to a proof of its parameters, cap and pads' root) is left named, and `RecordAt` follows from it (`recordAt_of`;
+at several tables `recordJ_of`); so `complete` holds with `FilesJ` in place of `RecordJ` (`completeJ`).
 -/
 
 namespace FlockComplete.ZkTables
@@ -25,10 +25,10 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 
 theorem tabsOf_size (sts : Array Flock.Stmt) : (tabsOf sts).size = sts.size := by simp [tabsOf]
 
-/-- **The honest masked run's record**, at several tables: it is the printed honest masked record of one `root_B` per
-table, `Record.decodeWith` reads it as `sessOf` and `liveOf` as its live session, the link is its `root_B`s and no
-public words, and the sends after the link are its streams' rounds. -/
-theorem Run.jsonJ (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (o : Run H rel) (hc : 1 < o.sts.size) :
+/-- **The honest masked run's record**, at any number of tables: it is the printed honest masked record of one
+`root_B` per table, `Record.decodeWith` reads it as `sessOf` and `liveOf` as its live session, the link is its
+`root_B`s and no public words, and the sends after the link are its streams' rounds. -/
+theorem Run.jsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
     ∃ rbs streams hz ct, rbs.size = o.spec.tables.size ∧ streams.size = o.spec.repStreams.size ∧
       o.proofs.size = o.spec.repStreams.size ∧
       o.link = (rbs.toList, (o.tabs.map fun _ => ByteArray.empty).toList) ∧
@@ -41,7 +41,7 @@ theorem Run.jsonJ (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (o : Run H
       liveOf o.spec o.record = .ok o.live ∧
       o.live = ⟨rbs, o.spec.tables.map fun _ => ByteArray.empty, pointsOf o.spec (Claims.coinSeq o.r 0),
         streams.map (·.map liveRound)⟩ := by
-  obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS o.toCase hc
+  obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS
   obtain ⟨hz, hcz⟩ := S.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hcz⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
@@ -146,12 +146,11 @@ structure RecordJsonAt (o : Run H rel) : Prop where
     (o.sess.streams.find? (·.name == s!"{o.spec.tables[i]!}/rep{r}")).isSome = true
   repExtras : ∀ i < o.tabs.size, o.tabs[i]!.extra o.sess.points = .ok (o.extras i)
 
-/-- **The record's checks hold at every run of several tables.** -/
-theorem recordJsonJ (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (o : Run H rel) (hc : 1 < o.sts.size) :
-    RecordJsonAt o := by
+/-- **The record's checks hold at every run** where the statement's `hello` prints. -/
+theorem recordJsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) : RecordJsonAt o := by
   obtain ⟨rbs, streams, hz, ct, hrbs, hss, hpf, hlink, ⟨bs, hbs, hrecs⟩, hrec, hsess, hdec, hlv, hlive⟩ :=
-    o.jsonJ S h64 hS hc
-  obtain ⟨-, hdraw, hdr, -⟩ := hS o.toCase hc
+    o.jsonJ S h64 hS
+  obtain ⟨-, hdraw, hdr, -⟩ := hS
   have hn := o.toCase.tables_nodup
   obtain ⟨-, -, hsz, -⟩ := o.toCase.tables
   have hrsz : o.spec.repStreams.size = 2 * o.tabs.size := by
@@ -271,29 +270,32 @@ variable (H rel) in
 /-- **What the record's checks ask of the proof files, at every run of several tables.** -/
 def FilesJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → FilesAt o
 
+/-- **The record's checks at a run** where the statement's `hello` prints, from what they ask of the proof files. -/
+theorem recordAt_of (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hFi : FilesAt o) :
+    RecordAt H rel o :=
+  have hJ := recordJsonJ S h64 o hS
+  { finalFits := hFi.finalFits
+    draw := hJ.draw
+    liveReads := hJ.liveReads
+    rootB := hJ.rootB
+    publicsLink := hJ.publicsLink
+    points := hJ.points
+    count := hJ.count
+    rounds := hJ.rounds
+    decodes := hJ.decodes
+    publics := hJ.publics
+    proofList := hJ.proofList
+    proofDigests := hJ.proofDigests
+    repStream := hJ.repStream
+    repExtras := hJ.repExtras
+    repDecodes := hFi.repDecodes
+    repParams := hFi.repParams
+    padsRoot := hFi.padsRoot
+    capCommitted := hFi.capCommitted }
+
 /-- **The record's checks at every run of several tables**, from what they ask of the proof files. -/
 theorem recordJ_of (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hF : FilesJ H rel) : RecordJ H rel :=
-  fun o hc =>
-    have hJ := recordJsonJ S h64 hS o hc
-    have hFi := hF o hc
-    { finalFits := hFi.finalFits
-      draw := hJ.draw
-      liveReads := hJ.liveReads
-      rootB := hJ.rootB
-      publicsLink := hJ.publicsLink
-      points := hJ.points
-      count := hJ.count
-      rounds := hJ.rounds
-      decodes := hJ.decodes
-      publics := hJ.publics
-      proofList := hJ.proofList
-      proofDigests := hJ.proofDigests
-      repStream := hJ.repStream
-      repExtras := hJ.repExtras
-      repDecodes := hFi.repDecodes
-      repParams := hFi.repParams
-      padsRoot := hFi.padsRoot
-      capCommitted := hFi.capCommitted }
+  fun o hc => recordAt_of S h64 o (hS o.toCase hc) (hF o hc)
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables, the record's checks discharged: from `complete`'s premises at one table and at several tables

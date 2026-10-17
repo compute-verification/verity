@@ -120,6 +120,43 @@ theorem Case.one_or_several (c : Case H rel) : c.sts.size = 1 ∨ 1 < c.sts.size
   have := c.tables.1
   omega
 
+/-- **Masked completeness at any number of tables** from the session running at every good case, and the record's
+checks and the rep's checks at every run. -/
+theorem complete_of_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+    (h64 : JsonRT.Out64 H) (hSR : SessionRunsZk H rel) (hRec : ∀ o : Run H rel, RecordAt H rel o)
+    (hOp : ∀ o : Run H rel, OpenAt H rel o) : Claims.Flock.Complete H (deployZk rel) honestP (δc H) :=
+  complete_of_goals H rel
+    { session := hSR
+      sends := sends_goal H rel
+      linkFirst := linkFirst_goal H h64 rel
+      finalFits := fun o => (hRec o).finalFits
+      draw := fun o => (hRec o).draw
+      liveReads := fun o => (hRec o).liveReads
+      rootB := fun o => (hRec o).rootB
+      publicsLink := fun o => (hRec o).publicsLink
+      points := fun o => (hRec o).points
+      count := fun o => (hRec o).count
+      rounds := fun o => (hRec o).rounds
+      tables := tables_goal H rel
+      decodes := fun o => (hRec o).decodes
+      publics := fun o => (hRec o).publics
+      schedules := schedules_goal H rel
+      proofCount := proofCount_goal H rel
+      proofList := fun o => (hRec o).proofList
+      proofDigests := fun o => (hRec o).proofDigests
+      repStream := fun o => (hRec o).repStream
+      repExtras := fun o => (hRec o).repExtras
+      repDecodes := fun o => (hRec o).repDecodes
+      repParams := fun o => (hRec o).repParams
+      padsRoot := fun o => (hRec o).padsRoot
+      replay := fun o => (hOp o).replay
+      ringSwitch := fun o => (hOp o).ringSwitch
+      ligerito := fun o => (hOp o).ligerito
+      lanes := fun o => (hOp o).lanes
+      inner := fun o => (hOp o).inner
+      consumed := fun o => (hOp o).consumed
+      capCommitted := fun o => (hRec o).capCommitted }
+
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: from `complete_zk`'s premises but the record's size (`ready`'s), which give every check at one
 table, and at several tables the statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the record's checks
@@ -162,41 +199,8 @@ theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
       lanes := laneConstraints_goal hLg hD (o.toZk h1)
       inner := hIn (o.toZk h1)
       consumed := consumedZk_goal S h64 hS hP hRp hRS hLg hIn (o.toZk h1) }
-  have recAll : ∀ o : Run H rel, RecordAt H rel o := fun o =>
-    (o.one_or_several).elim (rec1 o) (hRec o)
-  have openAll : ∀ o : Run H rel, OpenAt H rel o := fun o =>
-    (o.one_or_several).elim (open1 o) (hOp o)
-  refine complete_of_goals H rel
-    { session := fun c => (c.one_or_several).elim (fun h1 => ?_) (sessionRunsJ_goal S hSJ hPRJ c)
-      sends := sends_goal H rel
-      linkFirst := linkFirst_goal H h64 rel
-      finalFits := fun o => (recAll o).finalFits
-      draw := fun o => (recAll o).draw
-      liveReads := fun o => (recAll o).liveReads
-      rootB := fun o => (recAll o).rootB
-      publicsLink := fun o => (recAll o).publicsLink
-      points := fun o => (recAll o).points
-      count := fun o => (recAll o).count
-      rounds := fun o => (recAll o).rounds
-      tables := tables_goal H rel
-      decodes := fun o => (recAll o).decodes
-      publics := fun o => (recAll o).publics
-      schedules := schedules_goal H rel
-      proofCount := proofCount_goal H rel
-      proofList := fun o => (recAll o).proofList
-      proofDigests := fun o => (recAll o).proofDigests
-      repStream := fun o => (recAll o).repStream
-      repExtras := fun o => (recAll o).repExtras
-      repDecodes := fun o => (recAll o).repDecodes
-      repParams := fun o => (recAll o).repParams
-      padsRoot := fun o => (recAll o).padsRoot
-      replay := fun o => (openAll o).replay
-      ringSwitch := fun o => (openAll o).ringSwitch
-      ligerito := fun o => (openAll o).ligerito
-      lanes := fun o => (openAll o).lanes
-      inner := fun o => (openAll o).inner
-      consumed := fun o => (openAll o).consumed
-      capCommitted := fun o => (recAll o).capCommitted }
+  refine complete_of_at H rel h64 (fun c => (c.one_or_several).elim (fun h1 => ?_) (sessionRunsJ_goal S hSJ hPRJ c))
+    (fun o => (o.one_or_several).elim (rec1 o) (hRec o)) (fun o => (o.one_or_several).elim (open1 o) (hOp o))
   obtain ⟨record, proofs, bodies, hran⟩ := hSR (c.toZk h1)
   exact ⟨record, proofs, bodies, (sessionS_one h1 c.w c.ω).trans hran⟩
 

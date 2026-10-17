@@ -4,10 +4,11 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 /-!
 # The honest masked session runs, at several tables
 
-`Zk/Json/Runs.lean` at every table: the goal `SessionRunsJ` (the masked session runs at a good case of several
-tables), from the masked record's `hello` printing (`StmtOkJ`, `StmtOkZk`'s statement at several tables) and the masked
-prover's pieces returning (`ProverRunsJ`, `ProverRunsZk`'s at several tables: on table `i`'s trace of its share, the
-session's `2·|tables|` reps each return from where the one before stopped, `repRunJ`). Every table's regions fit
+`Zk/Json/Runs.lean` at every table: the masked session runs at a good case (`Case.sessionRuns`; at several tables the
+goal `SessionRunsJ`), from the masked record's `hello` printing (`StmtAt`, `StmtOkZk`'s statement at the case; at
+every case of several tables `StmtOkJ`) and the masked prover's pieces returning (`ProverRunsAt`, `ProverRunsZk`'s at
+the case: on table `i`'s trace of its share, the session's `2·|tables|` reps each return from where the one before
+stopped, `repRunJ`; at every case of several tables `ProverRunsJ`). Every table's regions fit
 (`ready`), so its extra claims return (`JsonRT.extraClaims_ok`); its `--zk` schedule returns (`zkSchedule_ok`), and
 through `Hashes.ofSha512` so do its masked level-0 commitment (`commitPZk_ok`) and its pads' (`innerCommitP_ok`); the
 session walks its rep streams in order (`JsonRT.Runs.forIn_idx`).
@@ -34,23 +35,15 @@ theorem mapM_array_ok_mem {α β : Type} (f : α → V β) (xs : Array α) (hf :
   obtain ⟨ys, h⟩ := mapM_list_ok_mem f xs.toList fun a ha => hf a (Array.mem_toList_iff.1 ha)
   exact ⟨ys.toArray, by rw [h]; rfl⟩
 
-section Several
-
-variable (H rel)
-
-/-- **The masked session runs** at every good case of several tables. -/
-def SessionRunsJ : Prop :=
-  ∀ c : Case H rel, 1 < c.sts.size →
-    ∃ record proofs bodies, sessionS H c.resp c.spec c.sts c.w c.ω = (.ok (record, proofs), bodies)
-
-/-- **What the masked record needs of the statement** (`StmtOkZk`), at every good case of several tables: a non-empty
-`Σ`, a printable draw that decodes to the statement's instances, the statement's draw the one it was set up at, and a
-`hello` that parses to an object with a `coins` object and prints. -/
-def StmtOkJ : Prop :=
-  ∀ c : Case H rel, 1 < c.sts.size → 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw ∧
+/-- **What the masked record needs of the statement** (`StmtOkZk`), at a good case: a non-empty `Σ`, a printable draw
+that decodes to the statement's instances, the statement's draw the one it was set up at, and a `hello` that parses to
+an object with a `coins` object and prints. -/
+def StmtAt (c : Case H rel) : Prop :=
+  0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw ∧
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m))
 
+variable (H rel) in
 /-- Rep `rep` of table `i` of a good case as the session runs it, from its stream's domain: on the table's `--zk`
 schedule `v`, its masked level-0 commitment `cm`, its extra claims `e` and its pads' commitment `ic`. -/
 def repRunJ (c : Case H rel) (i : ℕ) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (rep : ℕ)
@@ -62,14 +55,13 @@ def repRunJ (c : Case H rel) (i : ℕ) (v : Schedule × ℕ) (cm : Commit) (e : 
     (c.ω.extra i) (c.ω.lanePad i) (c.ω.salt i rep) (c.ω.nonce i rep)).run
     (Transcript.init #[] (c.spec.domain c.spec.tables[i]! rep).toUTF8)
 
-/-- **The masked prover's pieces return** (`ProverRunsZk`), at every good case of several tables: on each table `i`'s
-`--zk` schedule `v i`, its masked level-0 commitment `cm i` of its trace's packed table under the tape's level `i`, its
-extra claims `e i` at the link's points and its pads' commitments `ic i`, the session's `2·|tables|` reps in its rep
-streams' order (table `k / 2`'s rep `k % 2`) each return from where the one before stopped, the first from the link's
-send. The reps' coins are the case's at the session's rounds, where the masked prover's coin checks pass by
-`¬ BadZk`. -/
-def ProverRunsJ : Prop :=
-  ∀ c : Case H rel, 1 < c.sts.size → ∀ (v : ℕ → Schedule × ℕ) (cm : ℕ → Commit) (e : ℕ → Array Claim)
+/-- **The masked prover's pieces return** (`ProverRunsZk`), at a good case: on each table `i`'s `--zk` schedule `v i`,
+its masked level-0 commitment `cm i` of its trace's packed table under the tape's level `i`, its extra claims `e i` at
+the link's points and its pads' commitments `ic i`, the session's `2·|tables|` reps in its rep streams' order (table
+`k / 2`'s rep `k % 2`) each return from where the one before stopped, the first from the link's send. The reps' coins
+are the case's at the session's rounds, where the masked prover's coin checks pass by `¬ BadZk`. -/
+def ProverRunsAt (c : Case H rel) : Prop :=
+  ∀ (v : ℕ → Schedule × ℕ) (cm : ℕ → Commit) (e : ℕ → Array Claim)
     (ic : ℕ → ℕ → InnerCommit), (∀ i < c.sts.size, Zk.schedule (Setup.ofCircuit c.sts[i]!).m = .ok (v i) ∧
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit c.sts[i]!).merkle
         ((v i).1.levels.getD 0 default) (v i).2 (packed (traces c.sts c.w)[i]! (Setup.ofCircuit c.sts[i]!).m)
@@ -82,12 +74,28 @@ def ProverRunsJ : Prop :=
       (repRunJ H rel c (k / 2) (v (k / 2)) (cm (k / 2)) (e (k / 2)) (k % 2) (ic (k / 2) (k % 2))).go (ls k) =
         (.ok pt, ls (k + 1))
 
+section Several
+
+variable (H rel)
+
+/-- **The masked session runs** at every good case of several tables. -/
+def SessionRunsJ : Prop :=
+  ∀ c : Case H rel, 1 < c.sts.size →
+    ∃ record proofs bodies, sessionS H c.resp c.spec c.sts c.w c.ω = (.ok (record, proofs), bodies)
+
+/-- **What the masked record needs of the statement** (`StmtOkZk`), at every good case of several tables. -/
+def StmtOkJ : Prop := ∀ c : Case H rel, 1 < c.sts.size → StmtAt c
+
+/-- **The masked prover's pieces return** (`ProverRunsZk`), at every good case of several tables. -/
+def ProverRunsJ : Prop := ∀ c : Case H rel, 1 < c.sts.size → ProverRunsAt c
+
 end Several
 
-/-- **The masked session runs** at several tables: the goal `SessionRunsJ`. -/
-theorem sessionRunsJ_goal (S : JsonSpec) (hS : StmtOkJ H rel) (hR : ProverRunsJ H rel) : SessionRunsJ H rel := by
-  intro c hc
-  obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS c hc
+/-- **The masked session runs** at a good case where the statement's `hello` prints and the prover's pieces
+return. -/
+theorem Case.sessionRuns (S : JsonSpec) (c : Case H rel) (hS : StmtAt c) (hR : ProverRunsAt c) :
+    ∃ record proofs bodies, sessionS H c.resp c.spec c.sts c.w c.ω = (.ok (record, proofs), bodies) := by
+  obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS
   obtain ⟨hz, hcn⟩ := S.canon_ok _ hg
   obtain ⟨ct, hct⟩ : ∃ ct, c.spec.coinTree = some ct := Option.isSome_iff_exists.1 c.ready_parts.2.2.2.2
   have hfit := c.ready_parts.2.2.1
@@ -170,7 +178,7 @@ theorem sessionRunsJ_goal (S : JsonSpec) (hS : StmtOkJ H rel) (hR : ProverRunsJ 
   choose ic hic using fun i rep => innerCommitP_ok (Claims.hOf H) (padsOf c.ω i rep
     (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]!).m (Setup.ofCircuit c.sts[i]!).kLog schs[i]!.1.k0))
     (c.ω.innerSalt i rep)
-  obtain ⟨ls, hls0, hls⟩ := hR c hc (fun i => schs[i]!) (fun i => cms[i]!) e ic
+  obtain ⟨ls, hls0, hls⟩ := hR (fun i => schs[i]!) (fun i => cms[i]!) e ic
     (fun i hi => ⟨by rw [hst i hi]; exact hv i hi, by rw [hst i hi]; exact hcmi i hi, he i hi, hic i⟩) l₀ hl₀
   unfold afterLinkPZk
   refine Runs.bind (Q := fun _ _ => True) ?_ fun b l _ => ?_
@@ -215,5 +223,9 @@ theorem sessionRunsJ_goal (S : JsonSpec) (hS : StmtOkJ H rel) (hR : ProverRunsJ 
   rw [recordJson_eqZk _ hct hown hcn]
   simp only [pure_bind]
   exact Runs.pure trivial
+
+/-- **The masked session runs** at several tables: the goal `SessionRunsJ`. -/
+theorem sessionRunsJ_goal (S : JsonSpec) (hS : StmtOkJ H rel) (hR : ProverRunsJ H rel) : SessionRunsJ H rel :=
+  fun c hc => c.sessionRuns S (hS c hc) (hR c hc)
 
 end FlockComplete.ZkTables
