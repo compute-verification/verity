@@ -43,6 +43,9 @@ import Proofs.Flock.Claims.Complete.Zk.ConsReplay
 import Proofs.Flock.Claims.Complete.Zk.ConsCoins
 import Proofs.Flock.Claims.Complete.Zk.MaskRank
 import Proofs.Flock.Claims.Complete.Zk.Complete
+import Proofs.Flock.Claims.Complete.Zk.Level0Pad
+import Proofs.Flock.Claims.Complete.Zk.Level0Run
+import Proofs.Flock.Claims.Complete.Zk.Level0Premises
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
 the masked record's prover `ZkTables.honestP`): the honest masked prover (`Honest`: `honestPZk`, on
@@ -89,4 +92,7 @@ together on `Zk.replay`'s output wherever the plain checks pass at its coins (`r
 those coins the prover's on rounds carrying its sends, with the rows as `ConsHold` (`replay_coins`,
 `replay_consHold_agrees`); `MaskRank` the mask slot's span and the rank bound the prover's refusal needs (`RankFull`,
 `DeployedRankBound`); `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved,
-and `complete_zk_relation` at the deployed relation. -/
+and `complete_zk_relation` at the deployed relation. `Level0Pad` is level 0's masked query identity: a row's padded
+lanes combine to the blinded table's, the padding cancelling (`row_comb`, `consE0_honestZk`); `Level0Run` the masked
+Ligerito prover returning where its pair's coins are independent (`ligeritoPZk_ret`); `Level0Premises` the premises of
+`ZkTables.Level0` proved (`proverRuns`). -/
