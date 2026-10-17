@@ -24,7 +24,8 @@ import Proofs.Flock.Claims.Complete.Zk
 /-! Flock's completeness at the deployed plain verifier: the honest prover (`Honest`: `honestP`, on the session prover
 of `Prover/`: the transcript, the PIOP, Ligerito and the session record), its run against the verifier (`Run`:
 `run_acc_of`, acceptance from the honest run's shape and its last message's checks), that run as a pure session (`Sim`:
-`honestRun_eq`), the record's error `δc` and where it is `1` (`Ready`: `ready`, `δc`, `δcZk`), its bound and the
+`honestRun_eq`), the record's error `δc` and where it is `1` (`Ready`: `ready`, `δc`, `δcZk`, and the masked record's
+`ZkTables.ready`, `ZkTables.δc`), its bound and the
 composition into `Claims.Flock.Complete` (`Coins`: `pr_bad_le`, `complete_of`, and `Complete_meets_plain`,
 `Complete_meets_zk`, the error below `1`), the prover's messages read back (`Encode`: `linkOf_linkBody`,
 `finalOf_encode`), and the verdict and B's checks accepting when each of their checks passes (`Verdict`:
