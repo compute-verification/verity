@@ -103,8 +103,81 @@ def receipt(T: np.ndarray, seed: int = SEED) -> np.ndarray:
     a, kx, r = keys(L)
     y, z = chain_start(m, n, seed)
     for ell in range(L):
-        d = T[ell].astype(np.int64).astype(np.uint32)
+        d = (T[ell].astype(np.int64) & 0xFFFFFFFF).astype(np.uint32)
         y, z = rf.duo_word(y, z, d, np.uint32(kx[ell]), np.uint32(a[ell]), r[ell])
+    return rf.duo_final(y, z).astype(np.uint32)
+
+
+# ---- the m16n8k32 s8 fragments, packed so a lane loads its whole fragment in one vector load ------------------------
+#
+# PTX ISA, mma.m16n8k32 with .s8: lane = 4 g + t (g = groupID, t = threadID_in_group). A (16 × 32, row) is four .b32,
+# rows (g, g+8, g, g+8) and columns (4t, 4t, 16+4t, 16+4t), four bytes each, lowest address in the low byte. B (32 × 8,
+# col) is two .b32: column g, rows 4t and 16+4t. C (16 × 8) is c0..c3 at rows (g, g, g+8, g+8), columns (2t, 2t+1, 2t,
+# 2t+1). Both arms of a comparison use the same packed layout (a host reorder, outside the timing), so the layout favours
+# neither; it gives each lane its fragment in one LDG.128 (A) or LDG.64 (B), as ldmatrix would.
+
+_LANE = np.arange(32)
+_G, _T = _LANE // 4, _LANE % 4
+
+
+def pack_a(At: np.ndarray) -> np.ndarray:
+    """A fragments, uint32 (m/16, L, 32 lanes, 4 regs)."""
+    m, k = At.shape
+    X = np.ascontiguousarray(At).view(np.uint8).reshape(m // 16, 16, k // SEG, SEG).transpose(0, 2, 1, 3)
+    rows = np.stack([_G, _G + 8, _G, _G + 8], axis=1)                       # (32, 4)
+    cols = np.stack([4 * _T, 4 * _T, 16 + 4 * _T, 16 + 4 * _T], axis=1)     # (32, 4)
+    by = X[:, :, rows[:, :, None], cols[:, :, None] + np.arange(4)]          # (MB, L, 32, 4 regs, 4 bytes)
+    return np.ascontiguousarray(by).view(np.uint32)[..., 0]
+
+
+def pack_b(Bt: np.ndarray) -> np.ndarray:
+    """B fragments from B̃ᵀ, uint32 (n/8, L, 32 lanes, 2 regs)."""
+    n, k = Bt.shape
+    Y = np.ascontiguousarray(Bt).view(np.uint8).reshape(n // 8, 8, k // SEG, SEG).transpose(0, 2, 1, 3)
+    cols = np.stack([4 * _T, 16 + 4 * _T], axis=1)                            # (32, 2)
+    by = Y[:, :, _G[:, None, None], cols[:, :, None] + np.arange(4)]         # (NB, L, 32, 2 regs, 4 bytes)
+    return np.ascontiguousarray(by).view(np.uint32)[..., 0]
+
+
+def pack_u(U: np.ndarray) -> np.ndarray:
+    """The zero instance's B fragments, the same for every segment: uint32 (n/8, 32 lanes, 2 regs)."""
+    return pack_b(U)[:, 0]
+
+
+def mma_emulate(af: np.ndarray, bf: np.ndarray) -> np.ndarray:
+    """One m16n8k32 s8 MMA from packed fragments (32 × 4 and 32 × 2 uint32), as each lane's c0..c3 (32 × 4 int64)."""
+    ab = af.astype(np.uint32).view(np.uint8).reshape(32, 4, 4).view(np.int8).astype(np.int64)
+    bb = bf.astype(np.uint32).view(np.uint8).reshape(32, 2, 4).view(np.int8).astype(np.int64)
+    A, B = np.zeros((16, SEG), np.int64), np.zeros((SEG, 8), np.int64)
+    for lane in range(32):
+        g, t = lane // 4, lane % 4
+        A[g, 4 * t:4 * t + 4], A[g + 8, 4 * t:4 * t + 4] = ab[lane, 0], ab[lane, 1]
+        A[g, 16 + 4 * t:20 + 4 * t], A[g + 8, 16 + 4 * t:20 + 4 * t] = ab[lane, 2], ab[lane, 3]
+        B[4 * t:4 * t + 4, g], B[16 + 4 * t:20 + 4 * t, g] = bb[lane, 0], bb[lane, 1]
+    C = A @ B
+    return np.array([[C[g, 2 * t], C[g, 2 * t + 1], C[g + 8, 2 * t], C[g + 8, 2 * t + 1]]
+                     for g, t in zip(_G, _T)])
+
+
+def chain_words(At: np.ndarray, Bt: np.ndarray, pairs: np.ndarray) -> np.ndarray:
+    """T_ℓ[i, j] for the chains `pairs` (P × 2) alone, O(k) a chain: L × P int64."""
+    i, j = pairs[:, 0], pairs[:, 1]
+    L = At.shape[1] // SEG
+    a = At[i].astype(np.int64).reshape(len(i), L, SEG)
+    b = Bt[j].astype(np.int64).reshape(len(j), L, SEG)
+    return np.cumsum(np.einsum("plr,plr->pl", a, b), axis=1).T
+
+
+def receipt_at(At: np.ndarray, Bt: np.ndarray, pairs: np.ndarray, n: int, seed: int = SEED) -> np.ndarray:
+    """The receipt words of the chains `pairs`, without the whole transcript: the gate's sample at the timed shapes."""
+    W = chain_words(At, Bt, pairs)
+    a, kx, r = keys(W.shape[0])
+    idx = (pairs[:, 0].astype(np.uint64) * n + pairs[:, 1].astype(np.uint64)).astype(np.uint32)
+    y = rf.mix32(np.uint32(seed) ^ rf.mix32(idx))
+    z = rf.mix32(y + np.uint32(rf.GOLDEN))
+    for ell in range(W.shape[0]):
+        y, z = rf.duo_word(y, z, (W[ell] & 0xFFFFFFFF).astype(np.uint32), np.uint32(kx[ell]), np.uint32(a[ell]),
+                           r[ell])
     return rf.duo_final(y, z).astype(np.uint32)
 
 
