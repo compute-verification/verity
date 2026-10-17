@@ -30,7 +30,7 @@ FP8 blocks of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 rank):
                 shared experts' gate_up; 2048 is q_b, the indexer's wq_b and o_proj (one TP8 rank); 256 is the shared
                 expert's down_proj on one rank.  The routed experts run Triton's fused MoE (`moe-w13`, `moe-w2`).
     s8-coord    ScaledMmS8Coordinate_v2{K,DOT=BlackwellS8ImmaDot32_v2}: one output coordinate of a W8A8 linear on sm_120 (K/32
-                satfinite s8 IMMA steps, then CUTLASS c2x's ScaledEpilogue), x = a seeded N(0, 1) row quantized per token to s8
+                satfinite s8 IMMA steps, then steps.py's int8_linear scaling), x = a seeded N(0, 1) row quantized per token to s8
                 (scale absmax/127), w = a seeded N(0, 0.02) row quantized per channel the same way; the twin is the epilogue in
                 numpy (the exact int sum, two float32 multiplies, the bf16 round).  Llama-3.2-1B's statics: K = 2048 is q, k, v,
                 o, gate and up, 8192 is down.
@@ -103,8 +103,10 @@ def _fp8_coord_draw(S: dict, n: int, rng: np.random.Generator):
 
 
 def _s8_quant(v: np.ndarray) -> tuple[np.ndarray, np.float32]:
-    s = np.float32(np.abs(v).max() / 127)
-    return np.clip(np.rint(v / s), -128, 127).astype(np.int8), s
+    """steps.py's `quant_rows` at top 127, in float32."""
+    v = v.astype(np.float32)
+    s = np.abs(v).max() / np.float32(127)
+    return np.clip(np.rint(v / s), -127, 127).astype(np.int8), s
 
 
 def _s8_coord_draw(S: dict, n: int, rng: np.random.Generator):
@@ -114,7 +116,7 @@ def _s8_coord_draw(S: dict, n: int, rng: np.random.Generator):
         xq, sx = _s8_quant(rng.standard_normal(K))
         wq, sw = _s8_quant(rng.standard_normal(K) * 0.02)
         acc = np.int32((xq.astype(np.int64) * wq).sum())
-        y = np.float32(sx) * (np.float32(sw) * np.float32(acc))
+        y = (np.float32(acc) * np.float32(sx)) * np.float32(sw)
         xs.append(words(xq.view(np.uint8), np.array([sx], np.float32).view(np.uint32)))
         ws.append(words(wq.view(np.uint8), np.array([sw], np.float32).view(np.uint32)))
         twin.append(bf16(np.array([y], np.float32)))

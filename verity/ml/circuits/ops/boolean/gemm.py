@@ -206,9 +206,9 @@ def GemmAccumulatorS8(B, S, x, wrow):
            lambda S: ((("x", Array(S.K, E4M3)), ("sx", F32), ("wrow", Array(S.K, E4M3)), ("sw", F32)), BF16),
            conformance=G.ScaledMmS8Coordinate.conformance)
 def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
-    """One output word of a W8A8 linear on bits: `F2fpBf16_v2(sx * (sw * S32ToF32Rn_v2(acc)))` with `F32Mul_v4`."""
+    """One output word of a W8A8 linear on bits: `F2fpBf16_v2((S32ToF32Rn_v2(acc) * sx) * sw)` with `F32Mul_v4`."""
     acc = B.call(S32ToF32Rn, B.call(bind(GemmAccumulatorS8, K=S.K, DOT=S.DOT), x, wrow))
-    return B.call(F2fpBf16, B.call(EW.F32MulV4, sx, B.call(EW.F32MulV4, sw, acc)))
+    return B.call(F2fpBf16, B.call(EW.F32MulV4, B.call(EW.F32MulV4, acc, sx), sw))
 
 
 DotBf16.word = lambda b: bind(G.DotBf16, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]

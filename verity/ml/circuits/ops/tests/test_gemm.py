@@ -198,12 +198,18 @@ def test_nvfp4_coordinate_replays_every_recorded_rtx5090_vector() -> None:
         assert _ev(bind(G.GemmCoordinateNvf4, K=len(c["a"]), **G.GEMM_SM120_NVF4), *ops) == (f32_to_bf16_hw_word(int(c["d"], 16)),)
 
 
-def test_the_s8_coordinate_is_the_exact_sum_through_the_c2x_epilogue_and_the_row_its_coordinates() -> None:
-    """`ScaledMmS8Coordinate_v1` is bf16_rn(sx * (sw * f32_rn(acc))) on the exact integer sum (numpy's float32 products), and
-    `ScaledMmS8_v1` is the coordinates over W's rows."""
+def test_the_s8_coordinate_scales_as_steps_int8_linear_and_the_row_is_its_coordinates() -> None:
+    """`ScaledMmS8Coordinate_v1` is bf16_rn((f32_rn(acc) * sx) * sw) on the exact integer sum, `benchmarks/ppl/steps.py`'s
+    `int8_linear` order (numpy's float32 products), and `ScaledMmS8_v1` is the coordinates over W's rows. Some rows' scales
+    are searched for so that `sw` first (CUTLASS c2x's order) rounds to another bf16 word: random scales almost never tell
+    the two orders apart."""
     import numpy as np
 
     from verity.ml.circuits import evaluation as E
+
+    def bf16_rn(v):
+        u = v.view(np.uint32).astype(np.uint64)
+        return (u + 0x7FFF + ((u >> 16) & 1)) >> 16
 
     rng = np.random.default_rng(31)
     n, K, N = 300, 128, 3
@@ -212,8 +218,17 @@ def test_the_s8_coordinate_is_the_exact_sum_through_the_c2x_epilogue_and_the_row
     sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32)
     sw = (np.abs(rng.standard_normal((n, N))) * 0.02 / 127).astype(np.float32)
     acc = (x[:, None, :].astype(np.int64) * w).sum(-1).astype(np.int32)
-    y = sx[:, None] * (sw * acc.astype(np.float32))
+    f = acc[:64, :1].astype(np.float32)
+    cx = (np.abs(rng.standard_normal((64, 1 << 16))) / 127).astype(np.float32)
+    cw = (np.abs(rng.standard_normal((64, 1 << 16))) * 0.02 / 127).astype(np.float32)
+    apart = bf16_rn((f * cx) * cw) != bf16_rn(cx * (cw * f))
+    rows = np.flatnonzero(apart.any(1))
+    assert len(rows) >= 8
+    sx[rows], sw[rows, 0] = cx[rows, apart[rows].argmax(1)], cw[rows, apart[rows].argmax(1)]
+    y = (acc.astype(np.float32) * sx[:, None]) * sw
     want = np.vectorize(f32_to_bf16_hw_word, otypes=[np.uint64])(y.view(np.uint32))
+    c2x = sx[rows, None] * (sw[rows] * acc[rows].astype(np.float32))
+    assert (np.vectorize(f32_to_bf16_hw_word, otypes=[np.uint64])(c2x.view(np.uint32))[:, 0] != want[rows, 0]).all()
     u8, u32 = (lambda a: a.view(np.uint8)), (lambda a: a.view(np.uint32))
     coord = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
     got = E.evaluate_batch(coord, u8(x), u32(sx), u8(w[:, 0]), u32(sw[:, 0]), kernel="reference")

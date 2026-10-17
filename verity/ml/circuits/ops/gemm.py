@@ -19,9 +19,9 @@ and over the sm_120 s8 step (`GEMM_SM120_S8`: `BlackwellS8ImmaDot32_v1`), whose 
 word does not depend on the order the k steps run in:
 
     GemmAccumulatorS8_v1{K, DOT}      (x, wrow: s8[K]) -> s32: K/32 `DOT` steps from a zero accumulator
-    ScaledMmS8Coordinate_v1{K, DOT}   (x: s8[K], sx: f32, wrow: s8[K], sw: f32) -> bf16: the accumulator through CUTLASS c2x's
-                                      `ScaledEpilogue` (ScaleA = sx per token, ScaleB = sw per channel):
-                                      cvt.rn.bf16.f32(sx * (sw * cvt.rn.f32.s32(acc)))
+    ScaledMmS8Coordinate_v1{K, DOT}   (x: s8[K], sx: f32, wrow: s8[K], sw: f32) -> bf16: the accumulator scaled as
+                                      `benchmarks/ppl/steps.py`'s `int8_linear` (sx per token, sw per channel):
+                                      cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx) * sw)
     ScaledMmS8_v1{K, N, DOT}          (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]: the linear on one token row,
                                       `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` unit)
 
@@ -120,15 +120,16 @@ def GemmAccumulatorS8(B, S, x, wrow):
 
 @composite("ScaledMmS8Coordinate", 1, ["K", "DOT"],
            lambda S: ((("x", Array(S.K, S8)), ("sx", F32), ("wrow", Array(S.K, S8)), ("sw", F32)), BF16),
-           conformance="model-untested: the epilogue read from CUTLASS 2.x's ScaledEpilogue (vLLM's cutlass_scaled_mm on int8: "
-                       "Compute0 = multiplies(ScaleB, Accum) after NumericConverter<float, int32_t>, Compute1 = "
-                       "multiplies(ScaleA, Compute0), the bf16 store cvt.rn); the k step pinned (BlackwellS8ImmaDot32_v1)")
+           conformance="model-untested: the epilogue is benchmarks/ppl/steps.py's int8_linear, the int8 step vLLM's "
+                       "int8 profile serves through torch._int_mm: Y.float() * s_a[:, None] * s_w[None, :] (two f32 "
+                       "multiplies, the token's scale first), then the bf16 cast; the sum is exact for K < 2^17 whatever "
+                       "the kernel's k order; the k step pinned (BlackwellS8ImmaDot32_v1)")
 def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
-    """One output word of a W8A8 linear: `cvt.rn.bf16.f32(sx * (sw * cvt.rn.f32.s32(acc)))`, `acc` the
-    `GemmAccumulatorS8_v1{K, DOT}` sum, `sx` the token's scale and `sw` the output channel's."""
+    """One output word of a W8A8 linear: `cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx) * sw)`, `acc` the
+    `GemmAccumulatorS8_v1{K, DOT}` sum, `sx` the token's scale and `sw` the output channel's. Multiplying the two scales
+    first, or `sw` first (CUTLASS c2x's `ScaledEpilogue`), rounds differently."""
     acc = B.call(P.S32ToF32Rn, B.call(bind(GemmAccumulatorS8, K=S.K, DOT=S.DOT), x, wrow))
-    t = B.call(F.F32MulV2, sw, acc)                   # Compute0: multiplies(ScaleB, Accum)
-    return B.call(P.F2fpBf16, B.call(F.F32MulV2, sx, t))  # Compute1: multiplies(ScaleA, .)
+    return B.call(P.F2fpBf16, B.call(F.F32MulV2, B.call(F.F32MulV2, acc, sx), sw))
 
 
 @composite("ScaledMmS8", 1, ["K", "N", "DOT"],
