@@ -17,16 +17,18 @@ circuit of the model (`Model.lean`) computing its words is:
   `b = 0`; word `i` of block `j` is `i = 32j + w` at p1024).
 * **Draws.** A key is drawn after the circuit is declared: its round constants `c_r ∈ [0, p)`, its mask `K ∈ [0, 2^n)`
   and its tweak multiplier `τ ∈ [1, p)`, uniform (`draws`): the codec's seed expanded by an ideal XOF.
-* **Inputs.** The circuit's registered inputs are bytes of the payload `m`, bytes of the draw (each round constant's,
-  the mask's, each word's tweak), or values fixed before the draw (`CodecInputs`); its run inputs may be anything, a
-  function of the draw among them, and the bounds charge their bits.
+* **Inputs.** The circuit's registered and coin inputs are bytes of the payload `m`, bytes of the draw (each round
+  constant's, the mask's, each word's tweak), or values fixed before the draw (`CodecInputs`): a coin, a live verifier
+  coin of another audit (a noise or fold key), is independent of the codec's draw, so on the draws it is one value;
+  its run inputs may be anything, a function of the draw among them, and the bounds charge their bits.
 * **Targets.** Word `i`'s target is its encoding less its parity (`lessParity`: the low bit cleared), byte for byte in
   the store's layout (`byte`, little-endian). The parity is left out because each round's output parity is the Jacobi
   symbol of its input, which a circuit gets without the root.
-* **Computing.** A circuit computes words `words` on a draw when it is in its window there and its output gates
-  `out i l` hold the targets' bytes (`Encodes`). `encodeCost` is the fewest budgeted gates of any circuit of the model,
-  with its window proven, budgeted fan-in at most `f`, values within `w` bits and no run input, that computes `q`
-  distinct words on more than `ε` of the draws: the cost `CircuitEncodeHardness` names.
+* **Computing.** A circuit computes words `words` on a draw when its inputs and budgeted gates hold their declared
+  intervals there (`DeclaredHold`, which with `Proven` puts it in its window) and its output gates `out i l` hold the
+  targets' bytes (`Encodes`). `encodeCost` is the fewest budgeted gates of any circuit of the model, with its window
+  proven, budgeted fan-in at most `f`, values within `w` bits and no run input, that computes `q` distinct words on
+  more than `ε` of the draws: the `cost` 6a's carrier lemma reads.
 -/
 
 namespace Accounting.Gates
@@ -98,33 +100,32 @@ def Slot.value {k : ℕ} (F : Field) (d : Draw k) (m : ℕ → ℕ) : Slot → �
 
 variable {ι : Type} {k : ℕ}
 
-/-- The codec's inputs over draws `D`: each registered input is a canonical slot's byte on every draw, or one value
-on every draw (fixed before it). -/
-def CodecInputs (F : Field) (C : Circuit ι) (D : Finset (Draw k)) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) : Prop :=
-  ∀ g ∈ C, ∀ i, g.op = .input .registered i →
-    (∃ s : Slot, ∀ d ∈ D, x d i = s.value F d m) ∨ ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i
+/-- The codec's inputs over draws `D`: each registered or coin input is a canonical slot's byte on every draw, or one
+value on every draw (fixed before it, or a coin independent of it). -/
+def CodecInputs (F : Field) (C : Dag ι) (D : Finset (Draw k)) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) : Prop :=
+  ∀ i, FreeInput C i → (∃ s : Slot, ∀ d ∈ D, x d i = s.value F d m) ∨ ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i
 
-/-- On draw `d`, `C` is in its window and its outputs `out i l` hold the bytes of words `words`' encodings, less their
-parity. -/
-def Encodes (F : Field) (C : Circuit ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
+/-- On draw `d`, `C`'s inputs and budgeted gates hold their declared intervals and its outputs `out i l` hold the
+bytes of words `words`' encodings, less their parity. -/
+def Encodes (F : Field) (C : Dag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
     (d : Draw k) : Prop :=
-  InWindow C (x d) ∧
+  DeclaredHold C (x d) ∧
     ∀ i ∈ words, ∀ l < F.bytes,
       val C (x d) (out i l) = byte (lessParity (encodeWord F.p d.key (d.tweak F i) (m i))) l
 
 /-- `C` computes words `words` on more than `ε = εnum/εden` of the draws: on a set `good` of draws that large. -/
-def ComputesWords (F : Field) (k : ℕ) (C : Circuit ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ)
+def ComputesWords (F : Field) (k : ℕ) (C : Dag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ)
     (out : ℕ → ℕ → ℕ) (εnum εden : ℕ) : Prop :=
   ∃ good ⊆ draws F k, MoreThan (draws F k) good εnum εden ∧ ∀ d ∈ good, Encodes F C x m words out d
 
 /-- A circuit of the restricted class: its window proven, budgeted fan-in at most `f`, values within `w` bits. -/
-def Restricted (f w : ℕ) (C : Circuit ι) : Prop := Proven C ∧ FanIn f C ∧ Width w C
+def Restricted (f w : ℕ) (C : Dag ι) : Prop := Proven C ∧ FanIn f C ∧ Width w C
 
 /-- The budgeted gate counts of the restricted circuits with no run-input bits that compute `q` distinct words (each
 below `p`) of the codec's encoding, less parity, on more than `ε` of the draws, from the payload and whatever they
 registered before the draw. -/
 def encodeCosts (F : Field) (k f w εnum εden q : ℕ) : Set ℕ :=
-  {c | ∃ (ι : Type) (C : Circuit ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+  {c | ∃ (ι : Type) (C : Dag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     words.length = q ∧ words.Nodup ∧ (∀ i ∈ words, i < F.p) ∧ Restricted f w C ∧ runBits C = 0 ∧
       CodecInputs F C (draws F k) m x ∧ ComputesWords F k C x m words out εnum εden ∧ budgeted C = c}
 
