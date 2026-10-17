@@ -1,22 +1,23 @@
 // The adopted P.V (P's w64 peel, V dithered: ppl's `adopted-attention`, `checked_strip.ts_pv_adopted`) on sm_120a, a
 // (head, 128-query tile) at a time, on cgemm.cu's GEMM (e_l7qs's mainloop and duo receipts).
 //
-// Attention's P.V for H query heads sharing kvh = H / rep KV heads, s tokens (s <= 4096), head dimension 128. P_prob (H s
+// Attention's P.V for H query heads sharing kvh = H / rep KV heads, s tokens (s <= 32768), head dimension 128. P_prob (H s
 // x s, row h s + q, in [0, 127]: softmax's quantized P, one scale a query row) is the peeled side; key 0 is its own P block
 // (p_sink), so the unit's block is keys 1 .. q and M = [1 <= key <= q]. P~ = M (P_prob - 64 + U(q, key mod 32)), U on
 // +-1 .. +-64 drawn once a call (s x 32) and shared by the heads. V (kvh 128 x s, channel-major, floor-quantized) is the
 // served side: X = V + b (b a fresh bit an entry). A 32-query block j (warp row w of 128-query tile qt, j = 4 qt + w) has
 // b_l = j: its keys are 0 .. 32 (j + 1) - 1, Ycum(rho, ch) = sum of X(key, ch) over 1 <= key < 32 j with key = rho mod 32,
-// split as Ycum = Y0 + 256 Y1 (Y0 its low byte as s8, |Y1| <= 64 at s <= 4096), and its diagonal block's noise is
-// W = (U M_d) X_diag. Every cell commits, mod 2^32, in this order:
-//   T_t = sum_{keys < 32 (t + 1)} P~ X (t <= b_l), O = T_last - U Y0 - W - 256 U Y1 = sum M (P_prob - 64) X,
+// split as Ycum = Y0 + 256 Y1 + 65536 Y2 (Y0, Y1 its low bytes as s8; |Ycum| <= 4 s, so Y2 = 0 at s <= 4096 and |Y2| <= 2
+// at s <= 32768), and its diagonal block's noise is W = (U M_d) X_diag. Every cell commits, mod 2^32, in this order:
+//   T_t = sum_{keys < 32 (t + 1)} P~ X (t <= b_l), O = T_last - U Y0 - W - 256 U Y1 - 65536 U Y2 = sum M (P_prob - 64) X,
 // i.e. checked_strip.pv_words with c = 0, m = 1 (O' = O, no digits) and key 0's row of X zeroed. With S = sum M X the served
 // value is sum M P_prob X = O + 64 S, and key 0's block adds z_q 127 X(0) (z_q its scale): f = (float(O + 64 S) s_q +
 // z_q float(X(0))) s_ch, each operation rounded on its own.
 // A CTA tile is 128 queries (four query blocks, one a warp row) x the 128 channels over keys 0 .. 128 (qt + 1) - 1: qt
 // full stages on e_l7qs's interleaved absorbs, then the diagonal stage, warp row w absorbing its atoms t <= 4 qt + w right
 // after each. The tail stage's rows P_A = [-U | -U | -U M_d | 64 M_d] (shared by the heads, TMA) meet each warp's own DG
-// rows [Y0 | Y1 | X_diag | 0] for its b_l (global memory): atoms 0 and 2 onto T_last, atom 1 into 256 U Y1, O absorbed;
+// rows [Y0 | Y1 | X_diag | Y2] for its b_l (global memory): atoms 0 and 2 onto T_last, atom 1 into 256 U Y1 (and, at
+// s > 4096, P_A's atom 1 against Y2 into 65536 U Y2), O absorbed;
 // then atom 3 against X_diag adds 64 S_diag for f, and the epilogue adds 64 S over the blocks before b_l (Sq).
 // Noise from the per-call key (sha_pass.cuh's Sig; SHA-512(key || BE64(tag << 56 | j))): b under tag 7 in NS 1's patch
 // layout over V^T (as cpv.cu's vedit); U under tag 14 (row q: block q / 2, digest byte (q % 2) 32 + rho, U = (byte & 63) +
@@ -44,7 +45,8 @@
 #include "cgemm.cu"
 
 constexpr uint32_t AU_TAG = 14;
-constexpr int AP_MAXS = 4096;   // |Ycum| <= 128 s / 32, so Y1 = (Ycum - Y0) / 256 is s8
+constexpr int AP_Y1S = 4096;    // |Ycum| <= 128 s / 32: Y1 alone (Y2 = 0) up to here
+constexpr int AP_MAXS = 32768;  // |Y2| <= 2
 
 struct ApArgs {
   const Maps* maps;   // a: P~ (or P_prob) (H s x s), b: X^T (or V^T) (kvh 128 x s), pa: P_A (s x 128)
@@ -212,9 +214,9 @@ struct APL : EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ? 0 : 4, true> {
       fb[ni][1] = __ldg(reinterpret_cast<const uint32_t*>(p + 16));
     }
   }
-  // the tail stage: O = T_last + (-U) Y0 + (-U M_d) X_diag (atoms 0, 2) + 256 (-U) Y1 (atom 1), absorbed; OUT 0: then
-  // + 64 S_diag (atom 3, 64 M_d, against X_diag) for f
-  template <int OUT> DEV void atail(int (&acc)[MI][NI][4], St (&ch)[8], const int8_t* dgw, int g, int q) {
+  // the tail stage: O = T_last + (-U) Y0 + (-U M_d) X_diag (atoms 0, 2) + 256 (-U) Y1 (atom 1) + (Y2S) 65536 (-U) Y2
+  // (atom 1 against DG's fourth atom), absorbed; OUT 0: then + 64 S_diag (atom 3, 64 M_d, against X_diag) for f
+  template <int OUT> DEV void atail(int (&acc)[MI][NI][4], St (&ch)[8], const int8_t* dgw, int g, int q, bool y2s) {
     wait_full();
     const uint32_t tb = stage(s);
     uint32_t fa[MI][4], fb[NI][2];
@@ -242,6 +244,20 @@ struct APL : EL<PLAIN ? NONE : DUO, PLAIN ? 0 : 7, PLAIN ? 0 : 4, true> {
         imma0(hi, fa[mi], fb[ni]);
 #pragma unroll
         for (int e = 0; e < 4; e++) acc[mi][ni][e] = (int)((uint32_t)acc[mi][ni][e] + ((uint32_t)hi[e] << 8));
+      }
+    }
+    if (y2s) {
+      ldg_b<3>(fb, dgw, g, q);
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++) {
+        load_a(fa[mi], tb, 1, mi);
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++) {
+          int hi[4];
+          imma0(hi, fa[mi], fb[ni]);
+#pragma unroll
+          for (int e = 0; e < 4; e++) acc[mi][ni][e] = (int)((uint32_t)acc[mi][ni][e] + ((uint32_t)hi[e] << 16));
+        }
       }
     }
     cabs_all<APL>(ch, acc);
@@ -299,7 +315,8 @@ template <bool PLAIN, int OUT, bool FUSE> DEV void apv_body(const ApArgs& a) {
       } else {
         ml.template dstage<true>(0, bl, acc, ch);
       }
-      if constexpr (OUT < 2) ml.template atail<OUT>(acc, ch, a.DG + ((size_t)(kvh * a.nJ + bl) * 128 + wn * 32) * 128, g, q);
+      if constexpr (OUT < 2)
+        ml.template atail<OUT>(acc, ch, a.DG + ((size_t)(kvh * a.nJ + bl) * 128 + wn * 32) * 128, g, q, a.s > AP_Y1S);
       else cabs_all<L>(ch, acc);
     }
     const int r0 = wm * 32 + g, c0 = wn * 32 + 2 * q;
@@ -461,7 +478,7 @@ __global__ void __launch_bounds__(256) vedit(const int8_t* __restrict__ Vt, int8
     *reinterpret_cast<uint32_t*>(Xt + off) = add_noise<false>(__ldg(reinterpret_cast<const uint32_t*>(Vt + off)), bits01(bits));
   }
 }
-// DG's rows [Y0 | Y1 | X_diag | 0] and Sq of every query block of one KV head, a warp a channel and a lane a residue r:
+// DG's rows [Y0 | Y1 | X_diag | Y2] and Sq of every query block of one KV head, a warp a channel and a lane a residue r:
 // each lane walks the blocks once, Ycum[r] before block j its running sum of keys 32 j' + r (j' < j, key 0 left out),
 // S its warp sum; the block with j = 0 also writes X(0). Grid (128 / 4, KV heads), 4 warps a CTA
 __global__ void __launch_bounds__(128) vsum(const int8_t* __restrict__ Xt, int8_t* __restrict__ DG, int* __restrict__ Sq,
@@ -473,8 +490,8 @@ __global__ void __launch_bounds__(128) vsum(const int8_t* __restrict__ Xt, int8_
   for (int j = 0; j < nJ; j++) {
     const int xv = __ldg(xr + 32 * j + r);
     int8_t* dst = DG + ((size_t)(kvh * nJ + j) * 128 + ch) * 128;
-    const int y0 = (int)(int8_t)(Y & 0xFF), y1 = (Y - y0) >> 8;
-    dst[r] = (int8_t)y0; dst[32 + r] = (int8_t)y1; dst[64 + r] = (int8_t)xv; dst[96 + r] = 0;
+    const int y0 = (int)(int8_t)(Y & 0xFF), r1 = (Y - y0) >> 8, y1 = (int)(int8_t)(r1 & 0xFF), y2 = (r1 - y1) >> 8;
+    dst[r] = (int8_t)y0; dst[32 + r] = (int8_t)y1; dst[64 + r] = (int8_t)xv; dst[96 + r] = (int8_t)y2;
     if (r == 0) Sq[(size_t)(kvh * nJ + j) * 128 + ch] = S;
     if (j == 0 && r == 0) X0[kvh * 128 + ch] = xv;
     const int v = (j == 0 && r == 0) ? 0 : xv;
@@ -961,6 +978,7 @@ static int apone(const std::string& arm, int s, int H, int rep) {
   return 0;
 }
 
+#ifndef APV_LIB
 // ---------------------------------------------------------------- the V producers alone, at any s (past the GEMM's 4096)
 struct VP {
   int s = 0, kvh = 0, rows = 0;
@@ -1142,3 +1160,4 @@ int main(int argc, char** argv) {
                   "vone ARM S KVH\n");
   return 2;
 }
+#endif
