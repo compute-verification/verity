@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.Inner
 import Proofs.Flock.Claims.Recursion.Abort
+import Proofs.Flock.Claims.Recursion.Registered
 
 /-!
 # `InnerKS` does not follow from `Inner.KS` and the code facts; `Inner.KSAbort` excludes the deployment
@@ -431,6 +432,15 @@ theorem gPrBe (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) {Ω : T
     simp at huv
   · rfl
 
+theorem gPrBr (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) : PrBr H (gD H) gI gDO decO P x = 0 := by
+  unfold PrBr
+  split
+  · refine le_antisymm ((Pr_mono fun s h => ?_).trans_eq Pr_false) (Pr_nonneg _)
+    obtain ⟨u, v, huv, -⟩ := h
+    simp only [Br, setupCalls_eq_nil H (gD H) (fun _ => rfl), List.append_nil, findCollIn, reduceCtorEq] at huv
+  · rfl
+
 theorem gNums_k : gNums.k = 400 := by
   unfold Nums.k
   have : 4 * gNums.N₀ / Real.exp 1 = ((400 : ℕ) : ℝ) := by
@@ -467,14 +477,14 @@ theorem gκ (H : Msg → Msg) (x : Msg) : κ (gD H) gI x = 2 * gNums.κ := by
 theorem gNotKS (H : Msg → Msg) : ¬ KS H (gD H) gI gDO := by
   intro hK
   have h := hK gDecO gDecOK [] Unit (gP H)
-  rw [gPrB, gPrBe, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, gκ] at h
+  rw [gPrB, gPrBe, gPrBr, mul_zero, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, add_zero, gκ] at h
   linarith [gPrBad_ge H gDecO, gNums_κ_lt]
 
-/-- **The recursion's KS fails at the errors its proof gives**, as `B` and `Be` find nothing there either. -/
+/-- **The recursion's KS fails at the errors its proof gives**, as `B`, `Be` and `Br` find nothing there either. -/
 theorem gNotKSA (H : Msg → Msg) : ¬ KSA H (gD H) gI gDO := by
   intro hK
   have h := hK gDecO gDecOK [] Unit (gP H)
-  rw [gPrB, gPrBe, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, gκ] at h
+  rw [gPrB, gPrBe, gPrBr, mul_zero, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, add_zero, gκ] at h
   linarith [gPrBad_ge H gDecO, gNums_κ_lt]
 
 /-! ## `Inner.KSAbort` fails -/
