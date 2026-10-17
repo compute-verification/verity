@@ -32,6 +32,9 @@ circuit file byte for byte with `RecVStar.circuitFile`, and `RecResiduals.check`
   the circuit's (`ResLinks`): the staging (the V* statement the part's coins are shown on is an accepted algebra part),
   the input tie (a copy's input columns hold the messages the part holds and the coins' coefficients) and the output
   tie (the part's residuals there give its inner check).
+* **The input tie's elements** (`inCols_readElems`, `ResReads`, `partChecks_of_reads`): a copy's input columns always
+  hold the elements they read (`rowsRead`, `vRead`), so `ResReads` drops `ResLinks`' existential: S's residuals at
+  the elements the copy reads give the inner check.
 * **`PartChecks` at a rec-open part** (`partChecks_of_open`): the same, with the rec-open links (`OpenLinks`): an
   accepted rec-open table, a copy whose inputs hold the row, siblings, sums, coefficients and position (`OpenIns`), and
   the climb and consistency term on its outputs (`OpenOuts`) giving the inner check.
@@ -233,6 +236,41 @@ theorem climb_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w
   exact climb_of_satisfies L regs hz ho hg hu hv ms hms hrec hp r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc
     hcoef hdir
 
+/-- The columns of copy `u` of VU `g` in block `o` of table `t`, off the hidden values (`copyCol`). -/
+def copyOf (p : Parsed) (t : ℕ) (ht : t < p.sts.size) (w : Claims.Flock.Wit) (o g u : ℕ) : ℕ → Bool :=
+  copyCol p.sts.size t w p.sts[t].c.kLog o (p.sts[t].c.unitRange.slot (g * p.sts[t].c.upv + u))
+    p.sts[t].c.unit.constPos
+
+/-- The elements columns `v` hold where `col` puts their bits: element `e`'s bit `t` at `col (128 e + t)`, zero past
+`n` elements. -/
+def readElems (col : ℕ → ℕ) (n : ℕ) (v : ℕ → Bool) (e : ℕ) : Flock.F128 :=
+  if e < n then FlockVBridge.ofBits fun t => v (col (128 * e + t)) else 0
+
+theorem wbit_readElems {col : ℕ → ℕ} {n : ℕ} {v : ℕ → Bool} {q : ℕ} (hq : q < 128 * n) :
+    FlockVBridge.wbit (readElems col n v) q = v (col q) := by
+  have hn : q / 128 < n := by omega
+  unfold FlockVBridge.wbit readElems
+  simp only [hn, ↓reduceIte]
+  rw [FlockVBridge.bitOf_ofBits _ (Nat.mod_lt _ (by norm_num)), Nat.div_add_mod]
+
+theorem readElems_ge {col : ℕ → ℕ} {n : ℕ} {v : ℕ → Bool} {e : ℕ} (he : n ≤ e) : readElems col n v e = 0 := by
+  simp [readElems, show ¬e < n by omega]
+
+/-- The elements columns `v` hold on a part's row ports (`ns`'s total). -/
+def rowsRead (ns : List ℕ) (nv : ℕ) (v : ℕ → Bool) : ℕ → Flock.F128 :=
+  readElems (FlockVBridge.OfVStar.rowCol (partRep ns nv).ports 0) ns.sum v
+
+/-- The elements columns `v` hold on a part's `v` port (`nv` elements). -/
+def vRead (ns : List ℕ) (nv : ℕ) (v : ℕ → Bool) : ℕ → Flock.F128 :=
+  readElems (FlockVBridge.OfVStar.vBase (partRep ns nv) + ·) nv v
+
+/-- **An algebra part's input columns always hold elements**: any columns `v` hold, on a part's row ports and `v`'s
+port (`InCols`), the elements they read there (`readElems`), which are zero past the ports' sizes. So the input tie
+asks only that those elements be the held messages' and the coins' coefficients. -/
+theorem inCols_readElems (ns : List ℕ) (nv : ℕ) (v : ℕ → Bool) :
+    InCols (partRep ns nv) (rowsRead ns nv v) (vRead ns nv v) v :=
+  ⟨fun _ hq => (wbit_readElems hq).symm, fun _ hq => (wbit_readElems hq).symm⟩
+
 /-- **A rec-open copy's inputs** at `laid_unit`'s offsets: the columns `v` hold a row `r` of `LANES` elements, `H`
 64-byte siblings `ss`, the running sums `a` and 96 bytes `rest`, the `2 LANES` coefficients `cf` and the low `H` bits
 of the position `idx`. -/
@@ -311,6 +349,47 @@ theorem partChecks_of_res {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy
   obtain ⟨W, vv, hw0, hv0, hin, hout⟩ := hlink w ms hms
   rw [hDO] at hck
   exact hout (Flock.Readable.partCols_of_check hck hx ht hpi htl hrc hp hsh hh hpart ho hg hu W vv hw0 hv0 hin)
+
+/-- **An algebra part's links, read off the copy's columns**: `ResLinks` with the input tie's elements those the named
+copy's columns hold (`readElems`, which `InCols` always admits: `inCols_readElems`). The staging is as in `ResLinks`;
+what is left of the input tie sits in the output tie's premise: S's residuals at the elements the copy reads give the
+inner check, which they do once those elements are the held messages' and the coins' coefficients. -/
+def ResReads (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
+    (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
+  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+    ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
+      ∃ t, ∃ ht : t < p.sts.size, ∃ (m k cl j : ℕ) (sh : _root_.Flock.Shape) (S : _root_.Flock.RecOpen.GfS)
+        (ns : List ℕ) (nv : ℕ),
+        _root_.Flock.RecResiduals.check p.sts[t].c = .ok () ∧
+        _root_.Flock.RecResiduals.params p.sts[t].c.unit.name = some (m, k, cl, j) ∧
+        _root_.Flock.RecResiduals.shape? m k cl = some sh ∧ _root_.Flock.RecResiduals.holoOf p.sts[t].c = .ok false ∧
+        _root_.Flock.RecResiduals.part sh j = .ok (S, ns, nv) ∧
+        ∃ o g u, o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) ∧ g < p.sts[t].c.g ∧ u < p.sts[t].c.upv ∧
+          ∀ (w : Flock.Wit) (ms : List Msg), (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
+            PartCols S (Flock.Readable.rowsRead ns nv (Flock.Readable.copyOf p t ht w o g u))
+              (Flock.Readable.vRead ns nv (Flock.Readable.copyOf p t ht w o g u))
+              (Flock.Readable.copyOf p t ht w o g u) (partBase S ns nv) → chk s x c ms
+
+theorem resLinks_of_reads {D : Deploy Coin} {decode : Msg → Option Flock.Readable.Read} {L : Layout}
+    {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
+    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} (hR : ResReads D decode L shape shows chk s) :
+    ResLinks D decode L shape shows chk s := by
+  intro x st hst hf xO c hc
+  obtain ⟨p, hx, ht, hpi, t, htl, m, k, cl, j, sh, S, ns, nv, hrc, hp, hsh, hh, hpart, o, g, u, ho, hg, hu, hlink⟩ :=
+    hR x st hst hf xO c hc
+  refine ⟨p, hx, ht, hpi, t, htl, m, k, cl, j, sh, S, ns, nv, hrc, hp, hsh, hh, hpart, o, g, u, ho, hg, hu,
+    fun w ms hms => ?_⟩
+  exact ⟨Flock.Readable.rowsRead ns nv (Flock.Readable.copyOf p t htl w o g u),
+    Flock.Readable.vRead ns nv (Flock.Readable.copyOf p t htl w o g u),
+    fun _ he => Flock.Readable.readElems_ge he, fun _ he => Flock.Readable.readElems_ge he,
+    Flock.Readable.inCols_readElems ns nv _, hlink w ms hms⟩
+
+theorem partChecks_of_reads {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
+    {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
+    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} {decode : Msg → Option Flock.Readable.Read}
+    (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
+    (hR : ResReads D decode L shape shows chk s) : PartChecks H D DO L shape shows chk s :=
+  partChecks_of_res hDO (resLinks_of_reads hR)
 
 /-- **A rec-open part's links** (a code fact about V*'s staging, the layout and the inner check at part `s`, none of
 it the circuit's semantics): wherever a V* statement `xO` of a compiled statement `x` of the shape shows the coins `c`
