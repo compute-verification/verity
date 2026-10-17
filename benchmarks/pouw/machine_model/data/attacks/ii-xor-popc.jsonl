@@ -1,0 +1,28 @@
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word", "program": {"ALU": 0.00146484375, "XU": 0.0009765625}}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words", "program": {"ALU": 0.00286865234375, "XU": 6.103515625e-05}}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, integer work on UNI", "program": {"UNI": 0.078125}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, integer work on UNI", "program": {"UNI": 0.09375}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, ALU on UNI", "program": {"XU": 0.0009765625, "UNI": 0.046875}, "since": "VF3"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, XU on UNI", "program": {"ALU": 0.00146484375, "UNI": 0.03125}, "since": "VF3"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, ALU on UNI", "program": {"XU": 6.103515625e-05, "UNI": 0.091796875}, "since": "VF3"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, XU on UNI", "program": {"ALU": 0.00286865234375, "UNI": 0.001953125}, "since": "VF3"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, XU on UNI64", "program": {"ALU": 0.00146484375, "UNI64": 0.015625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, ALU on ALU64", "program": {"XU": 0.0009765625, "ALU64": 0.000732421875}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, ALU on ALU64, XU on UNI", "program": {"ALU64": 0.000732421875, "UNI": 0.03125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, ALU on ALU64, XU on UNI64", "program": {"ALU64": 0.000732421875, "UNI64": 0.015625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, ALU on UNI, XU on UNI64", "program": {"UNI": 0.046875, "UNI64": 0.015625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, ALU on UNI64", "program": {"XU": 0.0009765625, "UNI64": 0.0234375}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, ALU on UNI64, XU on UNI", "program": {"UNI64": 0.0234375, "UNI": 0.03125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, ALU on UNI64, XU on UNI64", "program": {"UNI64": 0.0390625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, XU on UNI64", "program": {"ALU": 0.00286865234375, "UNI64": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, ALU on ALU64", "program": {"XU": 6.103515625e-05, "ALU64": 0.001434326171875}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, ALU on ALU64, XU on UNI", "program": {"ALU64": 0.001434326171875, "UNI": 0.001953125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, ALU on ALU64, XU on UNI64", "program": {"ALU64": 0.001434326171875, "UNI64": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, ALU on UNI, XU on UNI64", "program": {"UNI": 0.091796875, "UNI64": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, ALU on UNI64", "program": {"XU": 6.103515625e-05, "UNI64": 0.0458984375}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, ALU on UNI64, XU on UNI", "program": {"UNI64": 0.0458984375, "UNI": 0.001953125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, ALU on UNI64, XU on UNI64", "program": {"UNI64": 0.046875}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, ALU on W2", "program": {"XU": 0.0009765625, "W2": 0.000732421875}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, ALU on W2", "program": {"XU": 6.103515625e-05, "W2": 0.001434326171875}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "LOP3 + POPC + ½ IADD3 a lane-word, ALU on DMUL", "program": {"XU": 0.0009765625, "DMUL": 0.000732421875}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) XOR + POPC", "name": "Harley–Seal CSA: 47 ALU + 1 POPC per 16 words, ALU on DMUL", "program": {"XU": 6.103515625e-05, "DMUL": 0.001434326171875}, "since": "VF3e"}
