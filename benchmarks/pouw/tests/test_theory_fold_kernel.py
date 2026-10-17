@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 THEORY = Path(__file__).resolve().parents[1] / "theory"
 sys.path.insert(0, str(THEORY))
@@ -25,6 +26,7 @@ def test_fold_kernel_matches_meet_in_the_middle(tmp_path):
     assert all(fk.g3_ok(word, w2, 6) for w2 in res[1])
 
 
+@pytest.mark.slow
 def test_chain_kernel_matches_brute_force(tmp_path):
     """At width 3 the meet in the middle finds exactly the two-word chain kernels that brute force over all 2^24 word
     pairs finds, split into per-word and cross-word elements the same way, for every (c0, c1) in {1, 2}^2."""
