@@ -64,7 +64,8 @@ structure Model (K R T L U F X : Type) where
   /-- `ω_t`, the words one instruction of writer kind `t` writes at most (P12: 128 for every m16n8 MMA kind, 64 for
   m8n8k16, 1 for a uniform instruction, 2 with a 64-bit destination) -/
   omega : T → ℝ
-  /-- the vector classes `V` -/
+  /-- the vector classes `V`, IDP.4A and IDP.2A among them: eight IDP.4A make a word of 32 int8 products, the route
+  `S_V` at `q = 8` (REFEREE X1) -/
   vec : Finset K
   /-- the class counting the bytes read from memory level `l` -/
   bytes : L → K

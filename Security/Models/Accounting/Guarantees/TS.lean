@@ -112,7 +112,10 @@ def CompilerC : Prop :=
 /-- **Corollary D3 (credit at the floor).** Given (Π), (RD) and (Lk) as in `DecompositionD`, for every labelled
 program ♭ and certificate `π`: outside an event of probability at most `δ`, every accepted run satisfies
 `T(M)/T_cred ≥ 1 − ε^♭_skip − ε^♭_cert − ε^♭_route − ε^♭_mand − ε^♭_luck − ε^♭_adapt`; when ♭ is on the known menu
-(and its skippable work, `d̄` and `ā` are `≥ 0`) every term is `≥ 0`; and `T(H) = γ_♭·T_cred`. -/
+(and its skippable work, `d̄` and `ā` are `≥ 0`) every term is `≥ 0`; and `T(H) = γ_♭·T_cred`. It holds at every ♭,
+`π` and fold menu, so the fold's instructions a word `f` are no hypothesis. Its numbers (`ε^♭ ≤ 0.3%`) need
+`f ≥ f* = 2.53` (REFEREE X1; `R_eff ≥ 1.69` for XOR-in): below it JI3e_1 binds honest, where `S_V` at `q = 8` (eight
+IDP.4A a word) is cheaper than `T_κ`, and the terms reach 0.83–3.0% on 8B's linears at `R = 1`. -/
 def FloorCreditD3 : Prop :=
   ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
     [Nonempty R] [Nonempty F] [Nonempty X]
