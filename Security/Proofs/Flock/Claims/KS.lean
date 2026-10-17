@@ -52,6 +52,7 @@ import Proofs.Flock.Claims.KS.FnFork
 import Proofs.Flock.Claims.KS.PlainWire
 import Proofs.Flock.Claims.KS.PlainClashL
 import Proofs.Flock.Claims.KS.ForkCoupling
+import Proofs.Flock.Claims.KS.PlainDraw
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -231,5 +232,10 @@ apart the revealed live history, the simulated fork at round `t` is at most the 
 simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on the entries the key reads,
 `|X|^{-min (n t) M}`, which is `ForkCoinCoupling`'s shape (`FnFork`: `Claims.Flock.FnFork.PrefixKey`,
 `Claims.Flock.FnFork.prefixKey_histKey`, `Claims.Flock.FnFork.fnC_coupling`, `Claims.Flock.FnFork.fnAt_coupling`,
-`Claims.Flock.FnFork.δAt_eq`).
+`Claims.Flock.FnFork.δAt_eq`), so the simulator on such a tape has the coupling at those `δ_t`, and its slack
+(`ForkCoupling`: `Claims.Flock.forkCoinCoupling_fnAt`, `Claims.Flock.slack_fnAt`,
+`FlockDeploy.KS.forkCoinCoupling_plain`). The verdict at the statement's draw reads `verify` at the setup at that draw,
+not the record's, so an accepting run gives it at its live outcome whatever draw its record carries (`PlainDraw`:
+`Claims.Bridge.PlainDraw.AcceptsAtD`, `Claims.Bridge.PlainDraw.wrPD`, `FlockDeploy.KS.plainVerdictAt`,
+`FlockDeploy.KS.plainVerdictAt_of_run`).
 -/
