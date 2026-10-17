@@ -539,7 +539,7 @@ class Setup:
     as_built: Mix                    # the credited kernel: the tensor route alone
     baseline: Mix                    # the credited program: the tensor route and the baseline program
     table: Table | None = None       # the cheater's table route, when open
-    forms: tuple[Form, ...] = ()     # the MMA forms the cheater's tensor route may mix; () honest's alone
+    forms: tuple[Form, ...] = ()     # the MMA forms the cheater's tensor route mixes, `undominated`; () honest's alone
 
     def cheat(self, q: float, *, lanes: bool | None = None, uniform: bool | None = None,
               q_uniform: float | None = None, luck: bool = False) -> Mix:
@@ -561,6 +561,15 @@ class Setup:
         return self.machine_eps(0.0, lanes=False, uniform=False)
 
 
+def undominated(fs: list[Form], pi: Machine) -> tuple[Form, ...]:
+    """The forms no other writes a word on as cheaply on every row of Π, the first of equals kept. The tensor routes
+    differ only in their MMA, so dropping the rest leaves the LP's optimum where it is."""
+    v = [[pi.c[f.kind].get(r, 0.0) / (f.depth * f.words) for r in pi.rows] for f in fs]
+    return tuple(f for i, f in enumerate(fs)
+                 if not any(j != i and all(a <= b for a, b in zip(v[j], v[i])) and (j < i or v[j] != v[i])
+                            for j in range(len(fs))))
+
+
 def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", credit: str = "H",
           table: Table | None = None) -> Setup:
     """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a):
@@ -568,7 +577,7 @@ def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", cre
     overhead. A saturating filler fills the uniform pipe's slack in the credited program's time. `table` opens the
     cheater's table route. The cheater writes on any MMA form Π prices, honest on its own."""
     h = honest(d.honest, data)
-    fms = sorted((f for f in forms(data) if f.kind in pi.c), key=lambda f: f.kind != h.form)
+    fms = undominated(sorted((f for f in forms(data) if f.kind in pi.c), key=lambda f: f.kind != h.form), pi)
     if d.L % h.depth:
         raise SystemExit(f"{d.name}: L = {d.L} is not a multiple of the MMA's depth {h.depth}")
     if credit not in CREDITS:
