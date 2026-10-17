@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.DeployOuter
 import Proofs.Flock.Claims.Recursion.Scope
 import Proofs.Flock.Claims.Complete.Zk.Honest
+import Proofs.Flock.Claims.Complete.Zk.Coins
 import Definitions.Claims.Recursion
 
 /-!
@@ -54,7 +55,10 @@ from the inner rounds and its commit strings (`Brings.hs`, `Brings.nC`), as the 
 (`refP`) is a composition: the native inner prover; that stager at the commit strings of its staged values' digests
 under the staging salts on its tape (`commitThen`), so the record's `stage` is its own; then Flock's masked honest
 prover `honestPZk` on each V* session, its witness read off the inner prover's tape and transcript. `OuterRef` names
-what a faithful one needs beyond it.
+what a faithful one needs beyond it. The record's completeness error (`δcRec`) is a union bound over the sessions:
+the inner session's plain `δc` (`FlockComplete.δc`) plus each V* session's masked one at the recursive setup (`δcO`,
+`FlockComplete.δcZk`'s bad coins at `setupO`), at the V* statements `nums` reads, and `1` wherever one of them cannot
+be accepted (`readyRec`).
 -/
 
 namespace RecDeploy
@@ -521,11 +525,75 @@ recursive setup (`setupO`), and is to be complete there, with error `δ`. -/
 def OuterRef (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (δ : Claims.Msg → ℝ) : Prop :=
   Claims.Flock.Complete H (deployZkRec rel) FlockComplete.honestPZk δ
 
+/-! ## The completeness error -/
+
+/-- **A V\* session's zerocheck outer coins**: the masked verifier's (`FlockComplete.outerSlotsZk`) at the recursive
+setup. -/
+def outerSlotsO (x : Claims.Msg) : List (ℕ × ℕ) :=
+  match setupO x with
+  | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
+      (List.range (sts[q / 2]!.m - 13)).map fun i => (FlockComplete.repStartZk spec sts q + 1, i)
+  | none => []
+
+/-- **A V\* session's level-0 pair coins** (`FlockComplete.rhoSlotsZk` at the recursive setup). -/
+def rhoSlotsO (x : Claims.Msg) : List ℕ :=
+  match setupO x with
+  | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
+      match Zk.schedule sts[q / 2]!.m with
+      | .ok (sch, _) =>
+        [FlockComplete.repStartZk spec sts q + FlockComplete.piopRoundsZk spec sts[q / 2]! + (sch.k0 + 2)]
+      | .error _ => []
+  | none => []
+
+/-- **A V\* session's inner `β`s** (`FlockComplete.betaSlotsZk` at the recursive setup). -/
+def betaSlotsO (x : Claims.Msg) : List ℕ :=
+  match setupO x with
+  | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
+      match Zk.schedule sts[q / 2]!.m with
+      | .ok (sch, _) =>
+        [FlockComplete.repStartZk spec sts q + FlockComplete.piopRoundsZk spec sts[q / 2]! +
+          (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 2]
+      | .error _ => []
+  | none => []
+
+/-- `εO`: a V\* session's outer coins, `β`s and twice its pairs, over `2^128` (`FlockComplete.εZk`). -/
+noncomputable def εO (x : Claims.Msg) : ℝ :=
+  ((outerSlotsO x).length + (betaSlotsO x).length + 2 * (rhoSlotsO x).length) / 2 ^ 128
+
+open Classical in
+/-- **The V\* statements the masked verifier can accept** against `H` (`FlockComplete.readyZk` at the recursive setup):
+one table, its setup against `H` the one at SHA-512, a drawn session, under `2^56` bytes, and the keyed coin tree. -/
+noncomputable def readyO (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
+  match setupO x with
+  | some (s, spec, sts) => sts.size == 1 && s.base.read.draw.isSome && decide (x.length < 2 ^ 56) &&
+      decide (FlockDeploy.setupWith (Claims.hOf H) s.base.read = .ok (spec, sts)) && spec.coinTree.isSome
+  | none => false
+
+/-- **A V\* session's masked `δc`** against `H`: `εO` where the masked verifier can accept at the recursive setup, else
+`1` (`FlockComplete.δcZk`). -/
+noncomputable def δcO (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if readyO H x then εO x else 1
+
+open Classical in
+/-- **The statements the compiled verifier can accept** against `H`: the inner session's plain verifier can accept the
+inner statement (`FlockComplete.ready`), and the masked verifier each part's V\* statement as `nums` reads it, the
+staged one at `pick`'s inner rounds (`readyO`). -/
+noncomputable def readyRec (st : Stage) (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
+  FlockComplete.ready H (xIOf x) && decide (∀ s < nS x, readyO H (staged st x (pick st x s) s) = true)
+
+/-- **The compiled verifier's `δc`** against `H`: where it can accept (`readyRec`), the inner session's plain `δc`
+(`FlockComplete.δc`) plus each V\* session's masked one (`δcO`), a union bound over the sessions; else `1`. -/
+noncomputable def δcRec (st : Stage) (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ :=
+  if readyRec st H x then
+    FlockComplete.δc H (xIOf x) + ∑ s ∈ Finset.range (nS x), δcO H (staged st x (pick st x s) s)
+  else 1
+
 /-! ## The record -/
 
 /-- **The compiled verifier**, as the record the recursion's claims read: the inner verifier `IV` and its scope
 check, and what the deployment brings (`b`). The inner view runs `IV` at the claim's oracle; the hm96 key is the pinned
-one (`Hm96.Default512`: its salt prefix, and its salt mask `Φ` as 64 bytes). -/
+one (`Hm96.Default512`: its salt prefix, and its salt mask `Φ` as 64 bytes). Its completeness error is `δcRec`, which
+reads the inner session as the deployed plain verifier's (`FlockComplete.δc`), the one the claims instantiate `IV`
+with. -/
 noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) :
     Claims.Recursion.Deploy Coin where
   V := V IV b.st
@@ -545,6 +613,7 @@ noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg �
   mask y i := (Hm96.Default512.mask ⟨Array.ofFn y⟩).get! i.val
   Tape := Tape b
   P := refP IV b
+  δc := δcRec b.st
 
 theorem xI_deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (x : Claims.Msg) :
     Claims.Recursion.xI (deployRec IV ivScope b) x = xIOf x := rfl
