@@ -1,7 +1,9 @@
 """EPS1's readings of the opcode probes (note:20261017T0310Z-report-eps1-program): joint facets, side units, clock.
 
-  python eps1.py facets OUT/rows.jsonl [--margin 0.02]   # frontier.cu's MMA + X points -> facets (SMSP-cycles a warp
-                                                         # instruction, x (1 - margin)), with the points each is tight at
+  python eps1.py facets OUT/rows.jsonl... [--margin 0.02] [--prior rows.csv] [--emit EPOCH]
+      # frontier.cu's MMA + X points (every run given) -> facets (SMSP-cycles a warp instruction, x (1 - margin)), with
+      # the points each is tight at; --prior adds the points the published K* facets were fitted to (their vertices),
+      # --emit prints the facets as rows.csv and census.csv lines
   python eps1.py side OUT/rows.jsonl                     # side.cu: honest alone, and each unit alone and beside it
   python eps1.py clock OUT/sustain.jsonl [--skip-s 3]    # power.cu: each kernel's clock, power and work rate a phase
 
@@ -12,7 +14,9 @@ every coefficient scaled by 1 - margin so a program measured at the hull still s
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import re
 import statistics
 import sys
 from pathlib import Path
@@ -60,36 +64,83 @@ def facets(points: list[tuple[float, float, str]], margin: float) -> list[dict]:
             continue
         out.append({"MMA": (1 - margin) * cm, "X": (1 - margin) * cx, "tight": [n1, n2]})
     out.append({"MMA": (1 - margin) / h[-1][0], "X": 0.0, "tight": [h[-1][2]]})
-    return out
+    # a facet within 0.2% (of each coefficient's largest) of one at least as tight on both coefficients adds nothing: an
+    # axis, or an edge between near-collinear points; dropping it loosens Π by at most that much, inside the margin
+    tol = {k: 0.002 * max(f[k] for f in out) for k in ("MMA", "X")}
+    keep = list(out)
+    for f in out:
+        if any(g is not f and all(g[k] >= f[k] - tol[k] for k in tol) for g in keep):
+            keep.remove(f)
+    return keep
 
 
 def frontier_points(rows: list[dict], x: str, pattern: str) -> list[tuple[float, float, str]]:
-    by = {r["probe"]: r for r in rows}
-    pts = [(loop_rate(by["imma_ref"], IMMA) / SMSPS, 0.0, "imma_ref"), (0.0, loop_rate(by[f"alone_{x}"], pattern) / SMSPS,
-                                                                       f"alone_{x}")]
-    for name, r in by.items():
-        if name.startswith((f"mix_{x}_", f"spec_{x}_w")):
-            pts.append((loop_rate(r, IMMA) / SMSPS, loop_rate(r, pattern) / SMSPS, name))
+    pts = []
+    for r in rows:
+        name = r["probe"]
+        if name == "imma_ref" or name == f"alone_{x}" or name.startswith((f"mix_{x}_", f"spec_{x}_w")):
+            pts.append((loop_rate(r, IMMA) / SMSPS, loop_rate(r, pattern) / SMSPS, f"{name}@{r['run']}"))
+    if not pts:
+        raise KeyError(f"no {x} probe")
     return pts
 
 
+def prior_points(rows_csv: Path, prefix: str, kind: str, margin: float) -> list[tuple[float, float, str]]:
+    """The points a published set of facets (rows.csv's `prefix`N rows, MMA a + KIND b) was fitted through: each
+    consecutive pair's intersection and the MMA-axis end, at 1 - margin of the facets (a published facet sits at 1 - margin
+    on its points). The KIND-axis end is left out: the run's own alone probe gives it (KSHFL0's is the ASSUMED SHFL)."""
+    pat = re.compile(rf"MMA ([0-9.]+) \+ {kind} ([0-9.]+) SMSP-cycles")
+    fs = []
+    with rows_csv.open(newline="") as f:
+        for d in csv.DictReader(f):
+            m = pat.search(d["description"])
+            if re.fullmatch(rf"{prefix}\d+", d["row"]) and m:
+                fs.append((float(m.group(1)), float(m.group(2)), d["row"]))
+    fs.sort()
+    if not fs:
+        return []
+    s = 1 - margin
+    pts = []
+    for (a1, b1, n1), (a2, b2, n2) in zip(fs, fs[1:]):
+        det = a1 * b2 - a2 * b1
+        pts.append((s * (b2 - b1) / det, s * (a1 - a2) / det, f"{n1}/{n2}"))
+    return pts + [(s / fs[-1][0], 0.0, f"{fs[-1][2]}:axis")]
+
+
 OPS = {"imad": "IMAD", "hfma2": "HFMA2*", "lop3": "LOP3.LUT", "shfl": "SHFL.BFLY"}
+#: each family's census kind, its published rows (VF3f, r20261016-093909-ac84) and the rows its facets become
+FAMILY = {"imad": ("IMAD", "KIMAD", "EIMAD"), "hfma2": ("HFMA2", "KHFMA2", "EHFMA2"), "lop3": ("ALU", "KALU", "EALU"),
+          "shfl": ("SHFL", "KSHFL", "ESHFL")}
 
 
 def cmd_facets(a) -> int:
-    rows = load(a.rows)
+    rows = [r for p in a.rows for r in load(p)]
+    runs = " ".join(sorted({r["run"] for r in rows}))
     for x, pat in OPS.items():
         try:
             pts = frontier_points(rows, x, pat)
         except KeyError as e:
-            print(f"{x}: no probe {e}", file=sys.stderr)
+            print(f"{x}: {e}", file=sys.stderr)
+            continue
+        kind, prior, new = FAMILY[x]
+        if a.prior:
+            pts += prior_points(a.prior, prior, kind, a.margin)
+        fs = facets(pts, a.margin)
+        if a.emit:
+            for i, f in enumerate(fs):
+                desc = (f"MMA {f['MMA']:.3f} + {kind} {f['X']:.3f} SMSP-cycles (EPS1 frontier, {x} for {kind}"
+                        f"{', with ' + prior + chr(39) + 's points' if a.prior else ''}, 2% noise margin; tight at "
+                        f"{' and '.join(t.split('@')[0] for t in f['tight'])})")
+                print(f'rows.csv: {new}{i},joint,{runs},"{desc}"')
+                for k, c in (("MMA", f["MMA"]), (kind, f["X"])):
+                    if c > 0:
+                        print(f"census.csv: {k},{new}{i},,,{c:.9g},,{a.emit},,{runs}")
             continue
         print(f"## MMA + {x} ({pat}); points (MMA, {x}) a SMSP-cycle:")
         for m, v, n in sorted(pts):
-            print(f"  {n:16s} MMA {m:.5f} ({16 * m:.4f} of peak) {x} {v:.5f}  MMA cycles {m * 16.064:.3f}"
-                  f" + {x} {v:.4f}")
-        for f in facets(pts, a.margin):
-            print(f"  facet MMA {f['MMA']:.3f} + {x.upper()} {f['X']:.3f} SMSP-cycles  (tight at {', '.join(f['tight'])})")
+            print(f"  {n:40s} MMA {m:.5f} ({16 * m:.4f} of peak) {x} {v:.5f}")
+        for f in fs:
+            print(f"  facet MMA {f['MMA']:.3f} + {kind} {f['X']:.3f} SMSP-cycles  (tight at {', '.join(f['tight'])})")
     return 0
 
 
@@ -170,8 +221,10 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     f = sub.add_parser("facets")
-    f.add_argument("rows", type=Path)
+    f.add_argument("rows", type=Path, nargs="+")
     f.add_argument("--margin", type=float, default=0.02)
+    f.add_argument("--prior", type=Path, help="rows.csv: add the points each family's published facets were fitted to")
+    f.add_argument("--emit", metavar="EPOCH", help="print the facets as rows.csv and census.csv lines from EPOCH")
     s = sub.add_parser("side")
     s.add_argument("rows", type=Path)
     c = sub.add_parser("clock")
