@@ -62,7 +62,8 @@ def graph (P : Prog) (d : Nat) (full : Bool := true) : V Graph := do
     wide := wide.push isWide
     external := external.push (lo > 0)
     opStart := opStart.push ops.size
-  while stack.size > 0 do
+  for _ in [0:Steps.FUEL] do
+    if stack.size == 0 then break
     let (sc, k, m) := stack.back!
     let body := (P.defs[sc.d]!).body
     if k ≥ body.nodes.size then
@@ -109,6 +110,7 @@ def graph (P : Prog) (d : Nat) (full : Bool := true) : V Graph := do
     wide := wide.push isWide
     external := external.push ext
     opStart := opStart.push ops.size
+  if stack.size > 0 then throw "a walk of more steps than this verifier follows"
   if prim.size != n then throw s!"{defn.key}: {prim.size} gates laid out, {n} declared"
   let opsOf := fun (x : Nat) => ops.extract opStart[x]! opStart[x + 1]!
   -- structure: constants (no parameters) and wiring, then values computed from constants alone

@@ -211,12 +211,14 @@ def Seq.ofParts (ps : Array Part) : Seq :=
   let (starts, count) := ps.foldl (fun (acc : Array Nat × Nat) q => (acc.1.push acc.2, acc.2 + q.count)) (#[], 0)
   { parts := ps, starts, count }
 
-/-- Reference `k` (`k < count`): the part holding it, by bisection over the starts. -/
+/-- Reference `k` (`k < count`): the part holding it, by bisection over the starts (each round narrows `[lo, hi)`, so as many
+rounds as parts finish it). -/
 def Seq.get (s : Seq) (k : Nat) : Ref := Id.run do
   if s.parts.size == 1 then return s.parts[0]!.get k
   let mut lo := 0
   let mut hi := s.parts.size
-  while hi - lo > 1 do
+  for _ in [0:s.parts.size] do
+    if hi - lo ≤ 1 then break
     let mid := (lo + hi) / 2
     if s.starts[mid]! ≤ k then lo := mid else hi := mid
   return s.parts[lo]!.get (k - s.starts[lo]!)
@@ -805,7 +807,8 @@ def Prog.orderViolation (P : Prog) : Option Json := Id.run do
   let mut seen : Std.HashSet Nat := {}
   let mut todo : Array Nat := #[P.root]
   let mut at_ := 0
-  while at_ < todo.size do
+  for _ in [0:Steps.FUEL] do
+    if at_ ≥ todo.size then break
     let d := todo[at_]!
     at_ := at_ + 1
     if seen.contains d then continue
@@ -826,6 +829,7 @@ def Prog.orderViolation (P : Prog) : Option Json := Id.run do
               return some (Json.mkObj [("definition", Json.str defn.key), ("node", Lean.toJson k), ("arg", Lean.toJson i),
                 ("reference", Json.arr #[Json.str (if p then "p" else "n"), Lean.toJson idx]), ("why", Json.str "not topological")])
       todo := todo.push node.fn
+  if at_ < todo.size then return some (Json.mkObj [("why", Json.str "a walk of more steps than this verifier follows")])
   return none
 
 /-- The root body's Calls (`partition_object.calls`): every node that is not an input node, with its root-body index. -/

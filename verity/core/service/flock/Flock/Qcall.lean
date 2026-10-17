@@ -70,7 +70,8 @@ def gates (P : Prog) (d : Nat) : V Gates := do
     prim := prim.push d
     ops := ops.push ((Array.range lo).map fun (j : Nat) => ((j : Int) - (lo : Int)))
   let mut stack : Array (Scope × Nat × Nat) := if defn.prim then #[] else #[(top, 0, 0)]
-  while stack.size > 0 do
+  for _ in [0:Steps.FUEL] do
+    if stack.size == 0 then break
     let (sc, k, m) := stack.back!
     let body := (P.defs[sc.d]!).body
     if k ≥ body.nodes.size then
@@ -100,6 +101,7 @@ def gates (P : Prog) (d : Nat) : V Gates := do
         mine := mine.push ((g : Int) - (lo : Int))
     prim := prim.push node.fn
     ops := ops.push mine
+  if stack.size > 0 then throw "a walk of more steps than this verifier follows"
   if prim.size != n then throw s!"{defn.key}: {prim.size} gates laid out, {n} declared"
   let computing := prim.map fun p => !(P.defs[p]!).params.isEmpty
   let width := prim.map fun p => match (P.defs[p]!).ret with
