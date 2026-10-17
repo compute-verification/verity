@@ -36,6 +36,7 @@ import Models.Pouw.Assumptions.NCP.GamePinned
 import Models.Pouw.Assumptions.NCP.RouteUAssumptions
 import Models.Pouw.Assumptions.NCP.RouteUGame
 import Models.Pouw.Assumptions.NCP.RouteUWord
+import Models.Pouw.Assumptions.Neekon
 import Models.Pouw.Assumptions.PearlC.Deadline
 import Models.Pouw.Assumptions.PearlC.DeviceChainCap
 import Models.Pouw.Assumptions.PearlC.DeviceChainCapKernel
