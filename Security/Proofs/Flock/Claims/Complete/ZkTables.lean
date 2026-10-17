@@ -68,4 +68,6 @@ stated once at a table, its trace, its tape row, its domain and its coins from t
 `TableT`, `RepIn`, `CoinsT`; `RepShapedT`, `ProverRunsT`, `LigeritoT`, `InnerT`), and give `RepShapedAt`,
 `ProverRunsAt` and `LgInnerAt` at each table `i` of every good case, its rep `r` starting after the `2 i + r` earlier
 reps (`repStartZk`; `Case.coinsT`, `Run.start_eq`), so masked completeness at any number of tables follows from the
-JSON specification and those four (`complete_jsonT`). -/
+JSON specification and those four (`complete_jsonT`); at table `0` of a good masked case or run
+(`CaseZk.toCase`, `RunZk.toRun`) they give `complete_zk`'s `RepShapedZk`, `ProverRunsZk`, `LigeritoZk` and `Inner`
+(`repShapedZk_of`, `proverRunsZk_of`, `lgInnerZk_of`). -/

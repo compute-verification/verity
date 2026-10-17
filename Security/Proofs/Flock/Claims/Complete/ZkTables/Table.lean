@@ -21,6 +21,9 @@ of a good case, its rep `r` from the sends after the link's and the `2 i + r` ea
 * `repShapedAt_of`, `proverRunsAt_of`, `lgInnerAt_of`: `RepShapedAt`, `ProverRunsAt` and `LgInnerAt` at every good case
   of the deployed relation, from the table-level forms. `complete_jsonT`: masked completeness at any number of tables
   from the JSON library's specification and the four table-level forms.
+* `repShapedZk_of`, `proverRunsZk_of`, `lgInnerZk_of`: `complete_zk`'s `RepShapedZk`, `ProverRunsZk`, `LigeritoZk` and
+  `Inner` at the deployed relation, from the table-level forms at table `0` of a good masked case (`CaseZk.toCase`) or
+  run (`RunZk.toRun`).
 -/
 
 namespace FlockComplete.ZkTables
@@ -437,5 +440,83 @@ theorem complete_jsonT (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec prin
     (hPR : ProverRunsT H) (hLg : LigeritoT H) (hIn : InnerT H) :
     Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
   completeRelS H S h64 (proverRunsAt_of hPR h64) (repShapedAt_of hR h64) (lgInnerAt_of S h64 hR hPR hLg hIn) h64
+
+/-! ## One table: `complete_zk`'s premises from the table-level ones -/
+
+/-- **A good masked case is a good case** (`readyZk` gives `ready`). -/
+def _root_.FlockComplete.CaseZk.toCase (c : CaseZk H rel) : Case H rel :=
+  ⟨c.x, c.w, c.ω, c.r, c.s, c.spec, c.sts, c.scope, c.rel_w, ready_of_readyZk c.ready, c.good, c.setup⟩
+
+/-- **A masked run is a run** of its one table. -/
+def _root_.FlockComplete.RunZk.toRun (o : RunZk H rel) : Run H rel :=
+  ⟨o.toCaseZk.toCase, o.record, o.proofs, o.bodies, (sessionS_one o.toCaseZk.ready_all.1 o.w o.ω).trans o.ran⟩
+
+/-- **A good masked case's one table and its trace** (`TableT`). -/
+theorem _root_.FlockComplete.CaseZk.tableT (c : CaseZk H Readable.relation) {st : Flock.Stmt} (hst : c.sts = #[st]) :
+    TableT st (tracesOf c.sts c.w)[0]! := by
+  have h1 : c.sts.size = 1 := by rw [hst]; rfl
+  have h := c.toCase.tableT (i := 0) (by show 0 < c.sts.size; omega)
+  change TableT c.sts[0]! (traces c.sts c.w)[0]! at h
+  rw [traces_one h1, show c.sts[0]! = st by rw [hst]; rfl] at h
+  exact h
+
+/-- The link's points of a good masked case have its one table's `m_pts`. -/
+theorem _root_.FlockComplete.CaseZk.points_mPts (c : CaseZk H rel) {st : Flock.Stmt} (hst : c.sts = #[st]) :
+    ∀ a ∈ pointsOf c.spec (Claims.coinSeq c.r 0), a.size = st.mPts := by
+  have h := c.toCase.points_mPts (i := 0) (by show 0 < c.sts.size; rw [hst]; simp)
+  change ∀ a ∈ pointsOf c.spec (Claims.coinSeq c.r 0), a.size = c.sts[0]!.mPts at h
+  rwa [show c.sts[0]! = st by rw [hst]; rfl] at h
+
+/-- **`RepShapedZk` at the deployed relation**, from `RepShapedT` at the one table. -/
+theorem repShapedZk_of (hR : RepShapedT H) (h64 : Claims.Out64 H) : JsonRT.RepShapedZk H Readable.relation := by
+  intro c st v cm e hst hv hcm hex rep ic hic d
+  exact hR h64 st _ (c.tableT hst) c.ω 0 d c.r v cm _ e rep ic ⟨hv, hcm, c.points_mPts hst, hex, hic⟩
+
+/-- **`ProverRunsZk` at the deployed relation**, from `ProverRunsT` at the one table: rep `0` runs from the link's
+send, where `¬ BadZk` gives its coins, and ends `repRounds` sends later, where rep `1`'s coins are good. -/
+theorem proverRunsZk_of (hPR : ProverRunsT H) (h64 : Claims.Out64 H) : JsonRT.ProverRunsZk H Readable.relation := by
+  intro c st v hst hv cm e hcm hex ic hic l₀ hl₀
+  have h1 : c.sts.size = 1 := by rw [hst]; rfl
+  have hst0 : c.sts[0]! = st := by rw [hst]; rfl
+  have hx := extras_size hex
+  have hin : ∀ rep, RepIn H st (tracesOf c.sts c.w)[0]! c.ω 0 v cm (pointsOf c.spec (Claims.coinSeq c.r 0)) e rep
+      (ic rep) := fun rep => ⟨hv, hcm, c.points_mPts hst, hex, hic rep⟩
+  have hv0 : Zk.schedule c.toCase.sts[0 / 2]!.m = .ok v := by
+    show Zk.schedule c.sts[0]!.m = .ok v
+    rw [hst0]
+    exact hv
+  have he0 : e.size = c.toCase.spec.points * c.toCase.sts[0 / 2]!.regions.size := by
+    show e.size = c.spec.points * c.sts[0]!.regions.size
+    rw [hst0]
+    exact hx
+  have hco0 := c.toCase.coinsT (q := 0) (by show 0 < 2 * c.sts.size; omega) hv0 he0
+  have hco1 := c.toCase.coinsT (q := 1) (by show 1 < 2 * c.sts.size; omega) hv0 he0
+  change CoinsT c.sts[0]! v e c.r (repStartZk c.spec c.sts 0) at hco0
+  change CoinsT c.sts[0]! v e c.r (repStartZk c.spec c.sts 1) at hco1
+  rw [hst0] at hco0 hco1
+  have hs0 : repStartZk c.spec c.sts 0 = 1 := by simp [repStartZk]
+  have hs1 : repStartZk c.spec c.sts 1 = 1 + repRounds true c.spec st := by
+    have h := repStart_succ c.spec c.sts 0
+    rw [Nat.zero_add, Nat.zero_div, hst0, hs0] at h
+    exact h
+  obtain ⟨hrun0, hcnt0⟩ := hPR h64 st _ (c.tableT hst) c.ω 0 (c.spec.domain c.spec.tables[0]! 0).toUTF8 c.r v cm _ e
+    0 (ic 0) (hin 0) (by norm_num)
+  obtain ⟨⟨p₀, t₀⟩, l₁, hgo0⟩ := hrun0 l₀ (by omega) (by rw [hl₀, ← hs0]; exact hco0)
+  refine ⟨_, l₁, hgo0, ?_⟩
+  have hc : t₀.rounds.size = repRoundsT st v e := hcnt0 l₀ _ l₁ hgo0
+  have hsz : l₁.size = repStartZk c.spec c.sts 1 := by
+    rw [repT_size H c.r _ _ _ _ _ _ _ _ _ _ hgo0, hc, hl₀, hs1, repRoundsT_eq (st := st) hv hx]
+  obtain ⟨hrun1, -⟩ := hPR h64 st _ (c.tableT hst) c.ω 0 (c.spec.domain c.spec.tables[0]! 1).toUTF8 c.r v cm _ e
+    1 (ic 1) (hin 1) (by norm_num)
+  obtain ⟨pt₁, l₂, hgo1⟩ := hrun1 l₁ (by rw [hsz, hs1]; omega) (by rw [hsz]; exact hco1)
+  exact ⟨pt₁, l₂, hgo1⟩
+
+/-- **`LigeritoZk` and `Inner` at the deployed relation**, from `LigeritoT` and `InnerT` at the one table: a masked run
+is a run of one table (`RunZk.toRun`), at which `lgInnerAt_of` gives both. -/
+theorem lgInnerZk_of (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (hPR : ProverRunsT H)
+    (hLg : LigeritoT H) (hIn : InnerT H) :
+    FlockComplete.LigeritoZk H Readable.relation ∧ FlockComplete.Inner H Readable.relation :=
+  ⟨fun o => (lgInnerAt_of S h64 hR hPR hLg hIn o.toRun).ligerito,
+    fun o => (lgInnerAt_of S h64 hR hPR hLg hIn o.toRun).inner⟩
 
 end FlockComplete.ZkTables
