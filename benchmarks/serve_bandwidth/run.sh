@@ -3,7 +3,8 @@
 # of MBT (default "8192 2048"), each its own nsys session, then timeline.py over its sqlite export. Results go to
 # $RESEARCH_RUN_DIR/out/mbt<N>/; a report under KEEP_MB (default 400) MB is kept there, a larger one is listed by size
 # and sha256. MODEL (default the 8B), TP (1), SECS (the trace, 30 s), HZ (GPU-metrics samples a second, 10000), MIX_ARGS.
-# SCRIPT=gemm_dtypes.py runs that instead, with ARGS.
+# SCRIPT=gemm_dtypes.py runs that instead, with ARGS; REDO=<a run's out/ on this node> exports and analyzes its kept
+# reports again.
 #
 #   research run --queue --gpus 1 --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 64 --max-min 30 \
 #     -- bash benchmarks/serve_bandwidth/run.sh
@@ -18,6 +19,19 @@ SB=benchmarks/serve_bandwidth
 if [ "${SCRIPT:-}" = gemm_dtypes.py ]; then
   # shellcheck disable=SC2086
   exec "$PY" $SB/gemm_dtypes.py --out "$O" ${ARGS:-}
+fi
+if [ -n "${REDO:-}" ]; then
+  # export and analyze again the reports a run kept on this node (REDO = its out/), CPU only
+  B=$(mktemp -d /tmp/serve-bw.XXXXXX); trap 'rm -rf "$B"' EXIT
+  rc=0
+  for rep in "$REDO"/mbt*/mix*.nsys-rep; do
+    src=$(dirname "$rep"); d=$O/$(basename "$src"); mkdir -p "$d"
+    nsys export --type sqlite --force-overwrite true -o "$B/x.sqlite" "$rep" > "$d/export.log" 2>&1 \
+      || { rc=7; tail -20 "$d/export.log"; continue; }
+    "$PY" $SB/timeline.py "$B/x.sqlite" --mix "$src/mix.json" --out "$d" | tee "$d/timeline.txt" || rc=8
+    rm -f "$B/x.sqlite"
+  done
+  exit $rc
 fi
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
 cat "$MODEL"/*.safetensors > /dev/null

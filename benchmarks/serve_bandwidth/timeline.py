@@ -101,36 +101,49 @@ def main() -> int:
 
     # NVTX: the trace, steps and idle waits (start/end and push/pop ranges)
     rows = db.execute("select start, end, coalesce(text, (select value from StringIds where id = textId)) "
-                      "from NVTX_EVENTS where end is not null").fetchall()
+                      "from NVTX_EVENTS").fetchall()
     trace = [(s, e) for s, e, t in rows if t == "trace"]
     if not trace:
         print("no `trace` range in the export", file=sys.stderr)
         return 3
     T0, T1 = trace[0]
+    if T1 is None:
+        # the capture stopped on the range's pop before nsys recorded its end
+        T1 = db.execute("select max(timestamp) from GPU_METRICS").fetchone()[0]
+        print("the `trace` range has no end: the trace runs to the last GPU-metrics sample", file=sys.stderr)
+    res["trace_end_recorded"] = trace[0][1] is not None
+    rows = [r for r in rows if r[1] is not None]
 
     def ranges_of(rx) -> list[tuple]:
         return sorted((s, e, int(m[2]), int(m[3]), int(m[4])) for s, e, t in rows
                       if (m := rx.match(t or "")) and s >= T0 and e <= T1)
 
     xsteps = ranges_of(XSTEP)
-    method = "launch" if xsteps and "CUPTI_ACTIVITY_KIND_RUNTIME" in have else "scheduler"
+    traced = "CUPTI_ACTIVITY_KIND_KERNEL" in have
+    method = "launch" if xsteps and traced and "CUPTI_ACTIVITY_KIND_RUNTIME" in have else "scheduler"
     steps = xsteps if method == "launch" else ranges_of(STEP)
     res["method"] = method
     idles = sorted((s, e) for s, e, t in rows if t == "idle" and s >= T0)
     idle_s = np.array([s for s, _ in idles], dtype=np.int64)
     idle_e = np.array([e for _, e in idles], dtype=np.int64)
 
-    # kernels by device and class, and (launch) by the step their launch falls in
-    names = {i: classify(v) for i, v in db.execute(
-        "select id, value from StringIds where id in (select distinct demangledName from CUPTI_ACTIVITY_KIND_KERNEL)")}
-    if method == "launch":
-        q = ("select k.deviceId, k.start, k.end, k.demangledName, coalesce(r.start, -1) from CUPTI_ACTIVITY_KIND_KERNEL k "
-             "left join CUPTI_ACTIVITY_KIND_RUNTIME r on r.correlationId = k.correlationId "
-             "where k.end > ? and k.start < ?")
+    # kernels by device and class, and (launch) by the step their launch falls in; an export without kernels (a
+    # process nsys didn't trace) gets phases only
+    names: dict = {}
+    kn = np.zeros((0, 5), dtype=np.int64)
+    if traced:
+        names = {i: classify(v) for i, v in db.execute(
+            "select id, value from StringIds where id in (select distinct demangledName from CUPTI_ACTIVITY_KIND_KERNEL)")}
+        if method == "launch":
+            q = ("select k.deviceId, k.start, k.end, k.demangledName, coalesce(r.start, -1) "
+                 "from CUPTI_ACTIVITY_KIND_KERNEL k left join CUPTI_ACTIVITY_KIND_RUNTIME r "
+                 "on r.correlationId = k.correlationId where k.end > ? and k.start < ?")
+        else:
+            q = ("select deviceId, start, end, demangledName, -1 from CUPTI_ACTIVITY_KIND_KERNEL "
+                 "where end > ? and start < ?")
+        kn = np.array(db.execute(q, (T0, T1)).fetchall(), dtype=np.int64).reshape(-1, 5)
     else:
-        q = ("select deviceId, start, end, demangledName, -1 from CUPTI_ACTIVITY_KIND_KERNEL "
-             "where end > ? and start < ?")
-    kn = np.array(db.execute(q, (T0, T1)).fetchall(), dtype=np.int64).reshape(-1, 5)
+        print("no kernels in the export: phases only, no class split", file=sys.stderr)
     kclass = np.array([CLASSES.index(names.get(int(n), "other")) for n in kn[:, 3]], dtype=np.int64)
     devices = sorted(int(d) for d in np.unique(kn[:, 0]))
     cov: dict = {}
@@ -161,7 +174,7 @@ def main() -> int:
             spans[d] = (s0, e0, uj)
     else:
         spans[None] = (st_s, st_e, np.arange(len(steps)))
-    res["kernels"] = {"count": int(len(kn)), "devices": devices,
+    res["kernels"] = {"traced": traced, "count": int(len(kn)), "devices": devices,
                       "names_by_class": {c: sum(1 for n in names.values() if n == c) for c in CLASSES},
                       "seconds_by_class": {c: round(float((kn[kclass == ci, 2] - kn[kclass == ci, 1]).sum()) / 1e9, 3)
                                            for ci, c in enumerate(CLASSES)}}
@@ -172,7 +185,7 @@ def main() -> int:
         if bw:
             peak[g.get("id")] = float(bw)
     types = sorted({t for t, _ in metrics})
-    if len(types) != len(devices) and len(devices) != 1:
+    if devices and len(types) != len(devices) and len(devices) != 1:
         print(f"GPU-metrics types {types} against kernel devices {devices}: mapping by order", file=sys.stderr)
     per_dev = []
     bins: dict[int, dict] = {}
