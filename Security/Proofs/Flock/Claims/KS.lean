@@ -44,6 +44,8 @@ import Proofs.Flock.Claims.KS.PlainWrP
 import Proofs.Flock.Claims.KS.PlainEvent
 import Proofs.Flock.Claims.KS.LiveMix
 import Proofs.Flock.Claims.KS.PlainFirst
+import Proofs.Flock.Claims.KS.PlainThird
+import Proofs.Flock.Claims.KS.PlainSimW
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Claims.KS.ZkDrawJ
@@ -193,21 +195,28 @@ statement's draw, the event the mixture's first bound reads gives that verdict a
 `FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the rest
 of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the merged
 coins being uniform, and the mixture by an event of the deployed coins the live event implies (`LiveMix`:
-`Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.liveMix_eq`, `Claims.Bridge.Live.Pr_le_liveMix`,
-`Claims.Bridge.Live.liveMix_le_Pr`). From a simulation of the deployed prover by a live prover on coins of uniform law,
-and the record's draw on accepting runs, the mixture's first bound holds (`PlainFirst`: `FlockDeploy.KS.PlainSim`,
-`FlockDeploy.KS.RecordDrawVerbatim`, `FlockDeploy.KS.plain_first_of_sim`); the checks compare draws only up to
-`JsonEquiv`, which holds between different terms (`FlockDeploy.KS.drawEq_ne`). Where `verify --zk` sets its session up
-at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`:
-`FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`:
-`FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's draw to the
-statement's only up to key order, so the old discharge is read at the setup at the statement's draw, which reads no draw
-in the record, with a writer that records the live session there (`ZkDrawJ`:
-`FlockSoundness.Discharge.Composed.AcceptsAt`, `FlockSoundness.Discharge.Composed.runsAtZCJ_live`,
-`FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`, `Claims.Bridge.Custody.wrS`,
-`Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted there
-(`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty draw the deployed `--zk` decoders are right at `zkTabs` at
-public and hidden outputs (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`,
+`Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_mergeAt`, `Claims.Bridge.Live.liveMix_eq`,
+`Claims.Bridge.Live.Pr_le_liveMix`, `Claims.Bridge.Live.liveMix_le_Pr`). From a simulation of the deployed prover by a
+live prover on coins of uniform law, and the record's draw on accepting runs, the mixture's first bound holds
+(`PlainFirst`: `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.RecordDrawVerbatim`, `FlockDeploy.KS.plain_first_of_sim`), and
+at the coins that merge each live coin with the rest of a deployed coin, from the simulation of the runs alone
+(`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`, `FlockDeploy.KS.plainSim_of_run`,
+`FlockDeploy.KS.plain_first_of_run`); the checks compare draws only up to `JsonEquiv`, which holds between different
+terms (`FlockDeploy.KS.drawEq_ne`). At those coins, a deployed event that the live event implies bounds the mixture, the
+third bound's form (`PlainThird`: `FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision
+as the events, KS at the deployed plain verifier holds from a live prover for each prover that simulates its accepting
+runs, whose self-clashes give its accepting runs with a collision and whose fork bound holds, the record's draw verbatim
+and `Extendθ` (`PlainSimW`: `FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
+`FlockDeploy.KS.plainLiveWrPAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). Where `verify --zk` sets its session up at a
+draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`,
+`FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`,
+`FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's draw to the statement's only up to key order,
+so the old discharge is read at the setup at the statement's draw, which reads no draw in the record, with a writer that
+records the live session there (`ZkDrawJ`: `FlockSoundness.Discharge.Composed.AcceptsAt`,
+`FlockSoundness.Discharge.Composed.runsAtZCJ_live`, `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`,
+`Claims.Bridge.Custody.wrS`, `Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted
+there (`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty draw the deployed `--zk` decoders are right at `zkTabs`
+at public and hidden outputs (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`,
 `FlockDeploy.KS.decodesTableH_zkTabs`), and so at every masked statement in scope that `Deploy.V` sets up at a draw,
 which every statement some run accepts carries (`FlockDeploy.KS.acc_draw_of_setup`; `ZkDecJ`:
 `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. The masked session's bound
