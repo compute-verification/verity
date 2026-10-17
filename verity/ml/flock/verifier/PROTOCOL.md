@@ -1252,8 +1252,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     `holo`, so exactly one net is accepted: a holo statement on plain parts refuses, and so does a plain statement on
     holo parts. With `--rec-inner`, V*'s statements are built at the verifier's own `--hide` (`holo` in
     `verity/rec-inner/v1`, `RecVStar.Inner.holo`), so a file's META `holo` must equal it, and every `VERDICT` line
-    carries it as `private_circuit`. The verifier refuses an inner shape with `holo` true until V*'s circuit writer
-    writes holo parts;
+    carries it as `private_circuit`. At `holo` true V*'s statements are its holo ones (`VStar.statementsHolo`: the parts
+    of `specHolo`, whose files carry META `holo`), and a part's message rounds are `holoRepRounds`', `h`'s among them;
+    an inner shape at which no group of the verifier's algebra (below) holds `h`'s round `m<hRound>` as a row port
+    (`RecVStar.hRound`, the round RecSparse reads as its port `h`) is refused before V*'s statements are built;
   - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
     its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
     residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 160 `sha512x3`
@@ -1267,6 +1269,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     `ir_lower.layout` lays it out, one 16-bit port per word;
   - its computed rows must read each row-port element in all 128 bits or in none (`RecResiduals.partlyRead`), refused
     by the first element read in part and how many of its bits are;
+  - its computed rows must read each element of `h` (`.h l`, at a holo shape) the part holds in all 128 bits
+    (`RecResiduals.hUnread`), refused by the first that is not and how many of its bits are, so the algebra unit's
+    decoded `h` is the registered row RecSparse reads as its port `h`;
   - at copy 0 and each copy below `units_per_vu`, a circuit port that keys a bit of an element of `w` (its leaf at the
     column's word, `HmRow.delta`'s copy) must be named `m<r>` for each round `r` that holds the element's key
     (`RecResiduals.misnamed`, `roundNames`), refused by the first copy, element, bit and port that is not.
@@ -1630,6 +1635,14 @@ population's statement, and its verdict is
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)` only once every check has
 passed and its statement's form is covered, so a session without a draw that fails a check keeps that check's reason. A
 claim for the draw of every unit would cover it; none is proved.
+
+Under `--rec-inner` (one of V*'s statements), a session whose draw is not the `subset` draw of every unit of its
+population with no closure is refused after that, once every check has passed (`RecSetup.fullDraw`, the draw
+`Witness.fullDraw` checks and the recursive audit's `RecordCustody` reads). The draw's population is the registered
+population's (`HmRow.drawn`), and V*'s statement check pins the circuit, so a V* part's numbers (its rounds, table
+error, `N₀` and weight) are the ones its circuit and population fix. The verdict is
+`refused: <why>: a V* session draws every unit of its population, the only draw the recursion's proof covers`, `<why>`
+`the draw is subset:<k> of <n> units over <N>, not every one of <N>` or `the draw's law is not subset`.
 
 The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is

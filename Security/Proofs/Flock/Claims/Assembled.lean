@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERepCost
-import Proofs.Flock.Claims.GS.RadiusDeploy
+import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Soundness.CompiledSound
 
 /-!
@@ -15,10 +15,9 @@ relation's fields `rel` and every hash `H`, the conjunction of Flock's claims:
 * `Bits` at every such decoder (`Flock.Bits_of_KS`), and at the radius decoder `min(a, 255.5 − b/2) − 1` bits at every
   bound `κ ≤ 2^{−a}`, `γ ≤ 2^b` (`Flock.Bits_ge`), from `KS` with `ε_table ≥ 0` and `γ > 0` (`εtable_nonneg`,
   `γ_pos`);
-* `Efficient` at the radius decoder (`GS.plainDecodeRD`, `GS.zkDecodeRD`): `E^rep`'s reruns at every deployment
-  (`ERep_cost`), the decoder's `ListWithin` and `DecoderComplexity` (`GS.radius_deployPlain`,
-  `GS.radius_deployZk`), and its lists at most `p(size)` long, which bounds `assemble`'s checks
-  (`GS.plainDecodeRD_length_le`, `GS.zkDecodeRD_length_le`);
+* `Efficient` at the record's own counted decoder (`GS.plainCountedRD`, `GS.zkCountedRD`): `E^rep`'s reruns at every
+  deployment (`ERep_cost`), the decoder's `ListWithin`, and its count and lists at most `plainStepPoly` (`zkStepPoly`)
+  at the opened word's encoded length, which bounds `assemble`'s checks (`efficient_plain`, `efficient_zk`);
 * `Complete` at the honest prover `P` with error `δc`: a hypothesis.
 
 ## What remains: the hypotheses
@@ -83,15 +82,12 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
         (∀ x, Claims.Flock.γ (deployPlainTrim rel) x ≤ 2 ^ b x) →
         Claims.Bits H (deployPlainTrim rel).V (Claims.Flock.R (deployPlainTrim rel).parse)
           (Claims.Flock.E (deployPlainTrim rel) Claims.GS.plainDecodeRD) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
-      Claims.Flock.Efficient H (deployPlainTrim rel) Claims.GS.plainDecodeRD Claims.GS.plainCountedRD
-        Claims.GS.plainSizeRD (Polynomial.C 14 * (Claims.GS.flockPolyR + Polynomial.X)) ∧
+      Claims.Flock.Efficient H (deployPlainTrim rel) plainStepPoly ∧
       Claims.Flock.Complete H (deployPlainTrim rel) P δc :=
   ⟨scopeMatches_plain rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg false),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg false) hκ
-      (fun x => γ_pos (deployPlainTrim rel) x (V_k_pos false x)) hγ _ (Claims.GS.listWithin_deployPlain rel),
-    Claims.Flock.Efficient_of_decoder H _ _ _ _ _ (Claims.GS.radius_deployPlain rel).1
-      (Claims.GS.radius_deployPlain rel).2 Claims.GS.plainDecodeRD_length_le,
-    hComplete⟩
+      (fun x => γ_pos (deployPlainTrim rel) x (V_k_pos false x)) hγ _ (listWithin_plain rel),
+    efficient_plain H rel, hComplete⟩
 
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
 readable scope is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the radius decoder
@@ -108,14 +104,11 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
         (∀ x, Claims.Flock.γ (deployZkTrim rel) x ≤ 2 ^ b x) →
         Claims.Bits H (deployZkTrim rel).V (Claims.Flock.R (deployZkTrim rel).parse)
           (Claims.Flock.E (deployZkTrim rel) Claims.GS.zkDecodeRD) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
-      Claims.Flock.Efficient H (deployZkTrim rel) Claims.GS.zkDecodeRD Claims.GS.zkCountedRD Claims.GS.zkSizeRD
-        (Polynomial.C 11 * (Claims.GS.zkPolyR + Polynomial.X)) ∧
+      Claims.Flock.Efficient H (deployZkTrim rel) zkStepPoly ∧
       Claims.Flock.Complete H (deployZkTrim rel) P δc :=
   ⟨scopeMatches_zk rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg true),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg true) hκ
-      (fun x => γ_pos (deployZkTrim rel) x (V_k_pos true x)) hγ _ (Claims.GS.listWithin_deployZk rel),
-    Claims.Flock.Efficient_of_decoder H _ _ _ _ _ (Claims.GS.radius_deployZk rel).1 (Claims.GS.radius_deployZk rel).2
-      Claims.GS.zkDecodeRD_length_le,
-    hComplete⟩
+      (fun x => γ_pos (deployZkTrim rel) x (V_k_pos true x)) hγ _ (listWithin_zk rel),
+    efficient_zk H rel, hComplete⟩
 
 end FlockDeploy.Assembled

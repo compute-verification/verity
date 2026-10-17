@@ -1,0 +1,90 @@
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1})", "program": {"ALU": 0.00390625}}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate)", "program": {"ALU": 0.0044921875, "NOROW": 0.0009765625, "LDS128": 3.338675213675214e-05}}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IMAD form (one row a lane)", "program": {"IMAD": 0.0078125}}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1})", "program": {"ALU": 0.005208333333333333}}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate)", "program": {"ALU": 0.005989583333333333, "NOROW": 0.0013020833333333333, "LDS128": 4.451566951566951e-05}}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IMAD form (one row a lane)", "program": {"IMAD": 0.010416666666666666}}
+{"design": "u5", "family": "(ii) CE7", "name": "16-bit fields (4 MACs a lane)", "program": {"ALU": 0.0078125}}
+{"design": "peeled wide U", "family": "(ii) CE7", "name": "branch on F, U rows in 10-bit fields (6 MACs a lane)", "program": {"ALU": 0.005208333333333333}}
+{"design": "U±8, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 10-bit fields", "program": {"ALU": 0.005208333333333333}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields", "program": {"ALU": 0.0078125}}
+{"design": "U±64, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields", "program": {"ALU": 0.0078125}}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1}), integer work on UNI", "program": {"UNI": 0.125}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), integer work on UNI", "program": {"LDS128": 3.338675213675214e-05, "UNI": 0.175}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IMAD form (one row a lane), integer work on UNI", "program": {"UNI": 0.25}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1}), integer work on UNI", "program": {"UNI": 0.16666666666666666}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), integer work on UNI", "program": {"LDS128": 4.451566951566951e-05, "UNI": 0.2333333333333333}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IMAD form (one row a lane), integer work on UNI", "program": {"UNI": 0.3333333333333333}, "since": "VF2"}
+{"design": "u5", "family": "(ii) CE7", "name": "16-bit fields (4 MACs a lane), integer work on UNI", "program": {"UNI": 0.25}, "since": "VF2"}
+{"design": "peeled wide U", "family": "(ii) CE7", "name": "branch on F, U rows in 10-bit fields (6 MACs a lane), integer work on UNI", "program": {"UNI": 0.16666666666666666}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 10-bit fields, integer work on UNI", "program": {"UNI": 0.16666666666666666}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields, integer work on UNI", "program": {"UNI": 0.25}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields, integer work on UNI", "program": {"UNI": 0.25}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI", "program": {"NOROW": 0.0009765625, "LDS128": 3.338675213675214e-05, "UNI": 0.14375}, "since": "VF3"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), NOROW on UNI", "program": {"ALU": 0.0044921875, "LDS128": 3.338675213675214e-05, "UNI": 0.03125}, "since": "VF3"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI", "program": {"NOROW": 0.0013020833333333333, "LDS128": 4.451566951566951e-05, "UNI": 0.19166666666666665}, "since": "VF3"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), NOROW on UNI", "program": {"ALU": 0.005989583333333333, "LDS128": 4.451566951566951e-05, "UNI": 0.041666666666666664}, "since": "VF3"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1}), ALU on ALU64", "program": {"ALU64": 0.001953125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1}), ALU on UNI64", "program": {"UNI64": 0.0625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), NOROW on MOV64", "program": {"ALU": 0.0044921875, "LDS128": 3.338675213675214e-05, "MOV64": 0.00048828125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), NOROW on UNI64", "program": {"ALU": 0.0044921875, "LDS128": 3.338675213675214e-05, "UNI64": 0.015625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on ALU64", "program": {"NOROW": 0.0009765625, "LDS128": 3.338675213675214e-05, "ALU64": 0.00224609375}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on ALU64, NOROW on MOV64", "program": {"LDS128": 3.338675213675214e-05, "ALU64": 0.00224609375, "MOV64": 0.00048828125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on ALU64, NOROW on UNI", "program": {"LDS128": 3.338675213675214e-05, "ALU64": 0.00224609375, "UNI": 0.03125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on ALU64, NOROW on UNI64", "program": {"LDS128": 3.338675213675214e-05, "ALU64": 0.00224609375, "UNI64": 0.015625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI, NOROW on MOV64", "program": {"LDS128": 3.338675213675214e-05, "UNI": 0.14375, "MOV64": 0.00048828125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI, NOROW on UNI64", "program": {"LDS128": 3.338675213675214e-05, "UNI": 0.14375, "UNI64": 0.015625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI64", "program": {"NOROW": 0.0009765625, "LDS128": 3.338675213675214e-05, "UNI64": 0.071875}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI64, NOROW on MOV64", "program": {"LDS128": 3.338675213675214e-05, "UNI64": 0.071875, "MOV64": 0.00048828125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI64, NOROW on UNI", "program": {"LDS128": 3.338675213675214e-05, "UNI64": 0.071875, "UNI": 0.03125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI64, NOROW on UNI64", "program": {"LDS128": 3.338675213675214e-05, "UNI64": 0.0875}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IMAD form (one row a lane), IMAD on IMADW", "program": {"IMADW": 0.00390625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IMAD form (one row a lane), IMAD on UNI64", "program": {"UNI64": 0.125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1}), ALU on ALU64", "program": {"ALU64": 0.0026041666666666665}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1}), ALU on UNI64", "program": {"UNI64": 0.08333333333333333}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), NOROW on MOV64", "program": {"ALU": 0.005989583333333333, "LDS128": 4.451566951566951e-05, "MOV64": 0.0006510416666666666}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), NOROW on UNI64", "program": {"ALU": 0.005989583333333333, "LDS128": 4.451566951566951e-05, "UNI64": 0.020833333333333332}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on ALU64", "program": {"NOROW": 0.0013020833333333333, "LDS128": 4.451566951566951e-05, "ALU64": 0.0029947916666666664}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on ALU64, NOROW on MOV64", "program": {"LDS128": 4.451566951566951e-05, "ALU64": 0.0029947916666666664, "MOV64": 0.0006510416666666666}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on ALU64, NOROW on UNI", "program": {"LDS128": 4.451566951566951e-05, "ALU64": 0.0029947916666666664, "UNI": 0.041666666666666664}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on ALU64, NOROW on UNI64", "program": {"LDS128": 4.451566951566951e-05, "ALU64": 0.0029947916666666664, "UNI64": 0.020833333333333332}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI, NOROW on MOV64", "program": {"LDS128": 4.451566951566951e-05, "UNI": 0.19166666666666665, "MOV64": 0.0006510416666666666}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI, NOROW on UNI64", "program": {"LDS128": 4.451566951566951e-05, "UNI": 0.19166666666666665, "UNI64": 0.020833333333333332}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI64", "program": {"NOROW": 0.0013020833333333333, "LDS128": 4.451566951566951e-05, "UNI64": 0.09583333333333333}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI64, NOROW on MOV64", "program": {"LDS128": 4.451566951566951e-05, "UNI64": 0.09583333333333333, "MOV64": 0.0006510416666666666}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI64, NOROW on UNI", "program": {"LDS128": 4.451566951566951e-05, "UNI64": 0.09583333333333333, "UNI": 0.041666666666666664}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on UNI64, NOROW on UNI64", "program": {"LDS128": 4.451566951566951e-05, "UNI64": 0.11666666666666665}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IMAD form (one row a lane), IMAD on IMADW", "program": {"IMADW": 0.005208333333333333}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IMAD form (one row a lane), IMAD on UNI64", "program": {"UNI64": 0.16666666666666666}, "since": "VF3c"}
+{"design": "u5", "family": "(ii) CE7", "name": "16-bit fields (4 MACs a lane), ALU on ALU64", "program": {"ALU64": 0.00390625}, "since": "VF3c"}
+{"design": "u5", "family": "(ii) CE7", "name": "16-bit fields (4 MACs a lane), ALU on UNI64", "program": {"UNI64": 0.125}, "since": "VF3c"}
+{"design": "peeled wide U", "family": "(ii) CE7", "name": "branch on F, U rows in 10-bit fields (6 MACs a lane), ALU on ALU64", "program": {"ALU64": 0.0026041666666666665}, "since": "VF3c"}
+{"design": "peeled wide U", "family": "(ii) CE7", "name": "branch on F, U rows in 10-bit fields (6 MACs a lane), ALU on UNI64", "program": {"UNI64": 0.08333333333333333}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 10-bit fields, ALU on ALU64", "program": {"ALU64": 0.0026041666666666665}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 10-bit fields, ALU on UNI64", "program": {"UNI64": 0.08333333333333333}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields, ALU on ALU64", "program": {"ALU64": 0.00390625}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields, ALU on UNI64", "program": {"UNI64": 0.125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields, ALU on ALU64", "program": {"ALU64": 0.00390625}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields, ALU on UNI64", "program": {"UNI64": 0.125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1}), ALU on W2", "program": {"W2": 0.001953125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on W2", "program": {"NOROW": 0.0009765625, "LDS128": 3.338675213675214e-05, "W2": 0.00224609375}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IMAD form (one row a lane), IMAD on W2", "program": {"W2": 0.00390625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1}), ALU on W2", "program": {"W2": 0.0026041666666666665}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on W2", "program": {"NOROW": 0.0013020833333333333, "LDS128": 4.451566951566951e-05, "W2": 0.0029947916666666664}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IMAD form (one row a lane), IMAD on W2", "program": {"W2": 0.005208333333333333}, "since": "VF3e"}
+{"design": "u5", "family": "(ii) CE7", "name": "16-bit fields (4 MACs a lane), ALU on W2", "program": {"W2": 0.00390625}, "since": "VF3e"}
+{"design": "peeled wide U", "family": "(ii) CE7", "name": "branch on F, U rows in 10-bit fields (6 MACs a lane), ALU on W2", "program": {"W2": 0.0026041666666666665}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 10-bit fields, ALU on W2", "program": {"W2": 0.0026041666666666665}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields, ALU on W2", "program": {"W2": 0.00390625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields, ALU on W2", "program": {"W2": 0.00390625}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1}), ALU on DMUL", "program": {"DMUL": 0.001953125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on DMUL", "program": {"NOROW": 0.0009765625, "LDS128": 3.338675213675214e-05, "DMUL": 0.00224609375}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) CE7", "name": "IMAD form (one row a lane), IMAD on DMUL", "program": {"DMUL": 0.00390625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 only (n³/8 at {±1}), ALU on DMUL", "program": {"DMUL": 0.0026041666666666665}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IADD3 + BRX, loads, renorm (round 5's estimate), ALU on DMUL", "program": {"NOROW": 0.0013020833333333333, "LDS128": 4.451566951566951e-05, "DMUL": 0.0029947916666666664}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) CE7", "name": "IMAD form (one row a lane), IMAD on DMUL", "program": {"DMUL": 0.005208333333333333}, "since": "VF3e"}
+{"design": "u5", "family": "(ii) CE7", "name": "16-bit fields (4 MACs a lane), ALU on DMUL", "program": {"DMUL": 0.00390625}, "since": "VF3e"}
+{"design": "peeled wide U", "family": "(ii) CE7", "name": "branch on F, U rows in 10-bit fields (6 MACs a lane), ALU on DMUL", "program": {"DMUL": 0.0026041666666666665}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 10-bit fields, ALU on DMUL", "program": {"DMUL": 0.0026041666666666665}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields, ALU on DMUL", "program": {"DMUL": 0.00390625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) CE7", "name": "branch on F, U·F rows in 13-bit fields, ALU on DMUL", "program": {"DMUL": 0.00390625}, "since": "VF3e"}

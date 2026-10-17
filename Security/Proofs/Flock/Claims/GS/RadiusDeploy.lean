@@ -1,30 +1,33 @@
 import Proofs.Flock.Claims.GS.RadiusFamily
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.DeployPlainCode
 
 /-!
-# The radius decoders at Flock's deployed instances
+# The radius decoders the deployed instances name
 
 `FlockDeploy.deployPlain rel` and `FlockDeploy.deployZk rel` fix the column type `List GF128`, the traces
 (`Flock.PlainTrace`, `m = 22..35`, and `Flock.ZkTrace`, `m = 25..35`) and their code (`enc`: `Flock.plainEncD`,
 `Flock.zkEncD`), and each trace's codeword length and radius (`len`, `θ`), read off the trace's `m`
-(`Flock.plainLenD`, `Flock.plainThetaD`, `Flock.zkLenD`, `Flock.zkThetaD`).
+(`Flock.plainLenD`, `Flock.plainThetaD`, `Flock.zkLenD`, `Flock.zkThetaD`). Their decoder (`dec`) is the counted
+family here, `plainCountedRD` and `zkCountedRD`, so this file reads the codes and not the records.
 
 * `plainDecodeR i`: at the plain level-0 code at `m = 22 + i` (`Flock.flockPlainLevelZero i`, rate `ρ = 2^cols/2^d`),
   fill the word, then `gsDecode` with `rf128` and `levelZeroReader` on its `n = 2^d` points at agreement
   `√ρ + 1/200`. It meets `ListWithin` at `θ = 1 − √ρ − 1/200` (`listWithin_plainDecodeR`; the Johnson count fits,
   `plainShape_nk`, least `n·k = 2^10·2^9` at `m = 22`), with `DecoderComplexity` `flockPolyR` at
   `(os.length + n)·2^k0·128` (`plainDecodeR_complexity`).
-* `plainDecodeRD`, the plain family (`famDecodeR`): `ListWithin` at the claims' record `deployPlainTrim rel`'s `len`,
-  `enc` (trimmed of trailing zeros) and `θ` (`listWithin_deployPlain`), with `DecoderComplexity` `14·(flockPolyR + X)`
-  at the schedules' sizes summed (`plainSizeRD`, `plainDecodeRD_complexity`), its lists at most that long
-  (`plainDecodeRD_length_le`).
-* `zkDecodeRD`, the masked family: `ListWithin` at `deployZkTrim rel`'s `len`, `enc` and `θ` (`listWithin_deployZk`),
-  with `DecoderComplexity` `11·(zkPolyR + X)` at `zkSizeRD` (`zkDecodeRD_complexity`), its lists at most that long
-  (`zkDecodeRD_length_le`).
+* `plainDecodeRD`, the plain family (`famDecodeR`): `ListWithin` at `deployPlain rel`'s `len`, `enc` and `θ`, its code
+  read through any column map that keeps a column's lanes, `deployPlainTrim rel`'s trimmed code among them
+  (`listWithin_plainDecodeRD`), with `DecoderComplexity` `14·(flockPolyR + X)` at the schedules' sizes summed
+  (`plainSizeRD`, `plainDecodeRD_complexity`), its lists at most that long (`plainDecodeRD_length_le`).
+* `zkDecodeRD`, the masked family (`GS.RadiusFamily`): `ListWithin` at `deployZk rel`'s `len`, `enc` and `θ`, read
+  the same way (`listWithin_zkDecodeRD`), with `DecoderComplexity` `11·(zkPolyR + X)` at `zkSizeRD`
+  (`zkDecodeRD_complexity`), its lists at most that long (`zkDecodeRD_length_le`).
 
-`radius_deployPlain` and `radius_deployZk` state each record's pair, `ListWithin` and `DecoderComplexity`;
-`efficient_deployPlain` and `efficient_deployZk` are `Claims.Flock.Efficient` at each record and its decoder.
+Each family's size is affine in the number of opened columns, at most its size on no columns times one more than
+that number (`plainSizeRD_le`, `zkSizeRD_le`), and so in the opened word's encoded length, which `Flock.Efficient`
+bounds the steps at (`FlockDeploy.efficient_plain`, `FlockDeploy.efficient_zk`). On no columns each family still fills
+its words, `2^d` lookups at each `m`, so it counts at least one step there (`plainCountedRD_nil_pos`,
+`zkCountedRD_nil_pos`).
 -/
 
 namespace Claims.GS
@@ -200,49 +203,66 @@ theorem plainDecodeRD_length_le (os : List (ℕ × List GF128)) :
   simp only [Fintype.card_fin, eval_mul, eval_C, eval_add, eval_X]
   exact Nat.mul_le_mul_left 14 (Nat.le_add_left _ _)
 
-/-! ## At the deployed instances -/
+/-! ## Each family's size, and its count on no columns -/
 
-/-- **The plain verifier's radius decoder meets `ListWithin`** at the plain record Flock's claims read, its code
-trimmed of trailing zeros: the spec `Flock.KS` and `Flock.Bits` ask of a decoder at that record. -/
-theorem listWithin_deployPlain (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.ListWithin (FlockDeploy.deployPlainTrim rel).len (FlockDeploy.deployPlainTrim rel).enc
-      (FlockDeploy.deployPlainTrim rel).θ plainDecodeRD :=
-  listWithin_plainDecodeRD FlockDeploy.trimCol FlockDeploy.trimCol_getD
+/-- A family's term `(L + n)·w·128` is at most its term on no columns, `n·w·128`, times `L + 1`, at `n ≥ 1`. -/
+theorem sizeTerm_le (L n w : ℕ) (hn : 1 ≤ n) : (L + n) * w * 128 ≤ (0 + n) * w * 128 * (L + 1) := by
+  have h : L + n ≤ n * (L + 1) := by
+    rw [mul_add_one]
+    exact Nat.add_le_add_right (Nat.le_mul_of_pos_left L hn) n
+  calc (L + n) * w * 128 ≤ n * (L + 1) * w * 128 := by gcongr
+    _ = (0 + n) * w * 128 * (L + 1) := by ring
 
-/-- **The masked verifier's radius decoder meets `ListWithin`** at the masked record Flock's claims read, its code
-trimmed of trailing zeros. -/
-theorem listWithin_deployZk (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.ListWithin (FlockDeploy.deployZkTrim rel).len (FlockDeploy.deployZkTrim rel).enc
-      (FlockDeploy.deployZkTrim rel).θ zkDecodeRD :=
-  listWithin_zkDecodeRD FlockDeploy.trimCol FlockDeploy.trimCol_getD
+/-- **The plain family's size is affine in the opened columns**: at most its size on no columns times one more than
+their number. -/
+theorem plainSizeRD_le (os : List (ℕ × List GF128)) : plainSizeRD os ≤ plainSizeRD [] * (os.length + 1) := by
+  unfold plainSizeRD
+  rw [Finset.sum_mul]
+  exact Finset.sum_le_sum fun i _ => sizeTerm_le _ _ _ Nat.one_le_two_pow
 
-/-- **The plain record's radius decoder**: `ListWithin` at its code, and `DecoderComplexity`. -/
-theorem radius_deployPlain (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.ListWithin (FlockDeploy.deployPlainTrim rel).len (FlockDeploy.deployPlainTrim rel).enc
-        (FlockDeploy.deployPlainTrim rel).θ plainDecodeRD ∧
-      DecoderComplexity plainDecodeRD plainCountedRD plainSizeRD (C 14 * (flockPolyR + Polynomial.X)) :=
-  ⟨listWithin_deployPlain rel, plainDecodeRD_complexity⟩
+/-- **The masked family's size is affine in the opened columns**: at most its size on no columns times one more than
+their number. -/
+theorem zkSizeRD_le (os : List (ℕ × List GF128)) : zkSizeRD os ≤ zkSizeRD [] * (os.length + 1) := by
+  unfold zkSizeRD
+  rw [Finset.sum_mul]
+  exact Finset.sum_le_sum fun i _ => sizeTerm_le _ _ _ Nat.one_le_two_pow
 
-/-- **The masked record's radius decoder**: `ListWithin` at its code, and `DecoderComplexity`. -/
-theorem radius_deployZk (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.ListWithin (FlockDeploy.deployZkTrim rel).len (FlockDeploy.deployZkTrim rel).enc
-      (FlockDeploy.deployZkTrim rel).θ zkDecodeRD ∧
-      DecoderComplexity zkDecodeRD zkCountedRD zkSizeRD (C 11 * (zkPolyR + Polynomial.X)) :=
-  ⟨listWithin_deployZk rel, zkDecodeRD_complexity⟩
+/-- The counted plain family computes `plainDecodeRD`. -/
+theorem plainCountedRD_fst (os : List (ℕ × List GF128)) : (plainCountedRD os).1 = plainDecodeRD os :=
+  (plainDecodeRD_complexity os).1
 
-/-- **Flock's `Efficient` at the plain record the claims read**: `E^rep`'s reruns, the radius decoder's `ListWithin`
-and `DecoderComplexity`, and its lists, which bound `assemble`'s checks, at most `14·(flockPolyR + X)` at
-`plainSizeRD`. -/
-theorem efficient_deployPlain (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.Efficient H (FlockDeploy.deployPlainTrim rel) plainDecodeRD plainCountedRD plainSizeRD
-      (C 14 * (flockPolyR + Polynomial.X)) :=
-  Flock.Efficient_of_decoder H _ _ _ _ _ (listWithin_deployPlain rel) plainDecodeRD_complexity plainDecodeRD_length_le
+/-- The counted masked family computes `zkDecodeRD`. -/
+theorem zkCountedRD_fst (os : List (ℕ × List GF128)) : (zkCountedRD os).1 = zkDecodeRD os :=
+  (zkDecodeRD_complexity os).1
 
-/-- **Flock's `Efficient` at the masked record the claims read**: `E^rep`'s reruns, the radius decoder's `ListWithin`
-and `DecoderComplexity`, and its lists, which bound `assemble`'s checks, at most `11·(zkPolyR + X)` at `zkSizeRD`. -/
-theorem efficient_deployZk (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.Efficient H (FlockDeploy.deployZkTrim rel) zkDecodeRD zkCountedRD zkSizeRD
-      (C 11 * (zkPolyR + Polynomial.X)) :=
-  Flock.Efficient_of_decoder H _ _ _ _ _ (listWithin_deployZk rel) zkDecodeRD_complexity zkDecodeRD_length_le
+/-- The fill step on no columns makes one step per point. -/
+theorem fillPtsC_nil_snd {Col : Type} [Zero Col] (n : ℕ) : (fillPtsC n ([] : List (ℕ × Col))).2 = n := by
+  simp [fillPtsC, lookupC]
+
+/-- **The counted plain family takes a step on no columns**: each `m`'s decoder fills its word of `2^d` points. -/
+theorem plainCountedRD_nil_pos : 0 < (plainCountedRD []).2 := by
+  have h0 : 0 < (plainCountedR 0 (IRS.colsAt (2 ^ Flock.plainLanes 0) [])).2 := by
+    have : (fillPtsC (2 ^ Flock.plainLen 0) (IRS.colsAt (2 ^ Flock.plainLanes 0) ([] : List (ℕ × List GF128)))).2 =
+        2 ^ Flock.plainLen 0 := fillPtsC_nil_snd _
+    simp only [plainCountedR, this]
+    exact Nat.add_pos_left (Nat.two_pow_pos _) _
+  unfold plainCountedRD famCountedR
+  exact lt_of_lt_of_le (lt_of_lt_of_le h0 (Nat.le_add_left _ _))
+    (Finset.single_le_sum (f := fun i : Flock.PlainIdx =>
+      ([] : List (ℕ × List GF128)).length * 2 ^ Flock.plainLanes i +
+        (plainCountedR i (IRS.colsAt (2 ^ Flock.plainLanes i) [])).2) (fun _ _ => Nat.zero_le _) (Finset.mem_univ 0))
+
+/-- **The counted masked family takes a step on no columns**: each `m`'s decoder fills its word of `2^d` points. -/
+theorem zkCountedRD_nil_pos : 0 < (zkCountedRD []).2 := by
+  have h0 : 0 < (zkCountedR 0 (IRS.colsAt (Flock.zkWidth 0) [])).2 := by
+    have : (fillPtsC (2 ^ Flock.zkLen 0) (IRS.colsAt (Flock.zkWidth 0) ([] : List (ℕ × List GF128)))).2 =
+        2 ^ Flock.zkLen 0 := fillPtsC_nil_snd _
+    simp only [zkCountedR, this]
+    exact Nat.add_pos_left (Nat.two_pow_pos _) _
+  unfold zkCountedRD famCountedR
+  exact lt_of_lt_of_le (lt_of_lt_of_le h0 (Nat.le_add_left _ _))
+    (Finset.single_le_sum (f := fun i : Flock.ZkIdx =>
+      ([] : List (ℕ × List GF128)).length * Flock.zkWidth i +
+        (zkCountedR i (IRS.colsAt (Flock.zkWidth i) [])).2) (fun _ _ => Nat.zero_le _) (Finset.mem_univ 0))
 
 end Claims.GS
