@@ -27,7 +27,6 @@ import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.Blind
-import Proofs.Flock.Claims.ZK.Release
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 
@@ -153,10 +152,6 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   every pad-blind worker within `D.V.k x + 2` of the guessing simulator, with no term for the masked checks, and at a
   statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`), at the deployed coin layer with the
   tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
-* `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled `Flock.Firewall.Frame.round`
-  (`LeanRelease.refMsg_toSrv`, by definition). Its `Ref` is D8 (a)'s `FirewallComputes` plus the item-stream refinement
-  `LeanRelease.ItemsRefine` (`LeanRelease.ref`), so **`Flock.zk_server_lean`** is `Flock.zk_server_ref` at it with
-  those two in place of `hRef`.
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
