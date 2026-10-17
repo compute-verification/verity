@@ -219,6 +219,133 @@ def test_batch_and_scan_carry_intervals():
     refused("E_PORT_BOUND", lambda: Program(init_bad), "PortsTestStep_v1 node 3 (primitive PortsTestMul_v1) parameter 'a'")
 
 
+def _dot4_interval(acc, a, b):
+    """acc plus four products of s8 operands, each read signed: the step's return while it stays in s32, else None (it wraps)."""
+    acc, a, b = P.as_reading(acc, 32), P.as_reading(a, 16), P.as_reading(b, 16)
+    if acc is None or a is None or b is None:
+        return None
+    p = [x * y for x in a for y in b]
+    lo, hi = acc[0] + 4 * min(p), acc[1] + 4 * max(p)
+    return (lo, hi) if -(1 << 31) <= lo and hi < 1 << 31 else None
+
+
+S8 = In(bound=(-128, 127))
+
+
+@primitive("PortsTestDot4", 1, (("acc", V32), ("a", Array(4, V16)), ("b", Array(4, V16))), V32,
+           ports=Ports(params={"a": S8, "b": S8}, transfer=_dot4_interval))
+def Dot4(acc, *ab):
+    """An exact s8 step: acc plus four s8 products, modulo 2^32."""
+    return (_s(acc, 32) + sum(_s(x, 16) * _s(y, 16) for x, y in zip(ab[:4], ab[4:]))) & 0xFFFFFFFF
+
+
+@primitive("PortsTestZero32", 1, (), V32)
+def Zero32():
+    return 0
+
+
+@primitive("PortsTestSplit17", 1, (("y", V32),), V8, ports=Ports(params={"y": In(bound=(-65536, 65536))}))
+def Split17(y):
+    """A limb split that is exact only for y within its bound (the s8 family's `Y`)."""
+    return y & 0xFF
+
+
+#: the chain's words T_t from zero over s8 operands: t steps of four products in [-16256, 16384]
+T_S8 = [(-65024 * t, 65536 * t) for t in (1, 2)]
+
+
+def chain(name: str, ivs=None, acc_param: bool = False) -> CompositeDefinition:
+    """The s8 family's shape: two exact steps from T_0 (zero, or the incoming `acc`), returning T_1 and T_2."""
+    def body(B, S, *args):
+        acc, a, b = args if acc_param else (B.call(Zero32), *args)
+        T = []
+        for s in range(2):
+            acc = B.call(Dot4, acc, a[4 * s:4 * s + 4], b[4 * s:4 * s + 4])
+            T.append(acc)
+        return array_of(T)
+
+    params = [("acc", V32)] * acc_param + [("a", Array(8, V16)), ("b", Array(8, V16))]
+    ret = None if ivs is None else Leaves(tuple((t, t + 1, Out(interval=iv)) for t, iv in enumerate(ivs)))
+    return comp(name, params, Array(2, V32), body, ports=Ports(params={"a": S8, "b": S8}, ret=ret))
+
+
+def test_a_transfer_gives_each_instance_its_operands_interval():
+    """An exact step's return carries the interval its transfer gives from that instance's operands: the chain's words from
+    s8 operands, and narrower ones from narrower inputs; a constant's interval is its value."""
+    f = comp("PortsTestChainUse", [("x", Array(8, V16))], Array(2, V32),
+             lambda B, S, x: B.call(chain("PortsTestChainT"), B.batch(Quant, x, axes=(0,)), B.batch(Quant, x, axes=(0,))))
+    prog = Program(f)
+    fx = P.facts(prog.root)
+    (sp,) = [sp for sp, _ in fx.definitions() if sp.id.startswith("PortsTestChainT")]
+    assert fx.params(sp)[0].one.interval == (-128, 127)
+    desc, dec = roundtrip(prog)
+    assert desc["definitions"]["PortsTestDot4_v1"]["ports"] == {
+        "params": [[1, 0, 4, {"bound": [-128, 127]}], [2, 0, 4, {"bound": [-128, 127]}]], "transfer": True}
+    narrow = comp("PortsTestChainNarrow", [("a", Array(8, V16)), ("b", Array(8, V16))], V32,
+                  lambda B, S, a, b: B.call(Dot4, B.call(Zero32), a[0:4], b[0:4]),
+                  ports=Ports(params={"a": In(bound=(-7, 7)), "b": In(bound=(-3, 0))}))
+    root = Program(narrow).root
+    fn = P.facts(root)
+    k_zero, k_dot = (next(k for k, n in enumerate(root.body.nodes) if n.fn is p) for p in (Zero32, Dot4))
+    assert fn.node(k_zero).one == P.fact((0, 0), ("static",))
+    assert fn.node(k_dot).one.interval == (-84, 84)
+
+
+def test_a_composite_over_exact_steps_declares_what_its_bounds_prove():
+    """The s8 chain declares its words' intervals and the Build holds its body to them; a limb split's bound then reads its
+    producer's word: T_1 is within it, T_2 is not. A word from an incoming accumulator with no interval proves none."""
+    use = lambda name, T, t: comp(name, [("x", Array(8, V16))], V8,
+                                  lambda B, S, x: B.call(Split17, B.call(T, B.batch(Quant, x, axes=(0,)), B.batch(Quant, x, axes=(0,)))[t]))
+    T = chain("PortsTestChainDecl", T_S8)
+    roundtrip(Program(use("PortsTestSplitT1", T, 0)))
+    refused("E_PORT_BOUND", lambda: Program(use("PortsTestSplitT2", T, 1)), "parameter 'y' leaf 0: its declared bound "
+            "[-65536, 65536] does not contain its producer's interval [-130048, 131072]")
+    tight = chain("PortsTestChainTight", [(-65024, 65535), T_S8[1]])
+    refused("E_PORT_INTERVAL", lambda: Program(use("PortsTestSplitTight", tight, 0)), "PortsTestChainTight_v1 declares "
+            "Out(interval=(-65024, 65535)) at return leaf 0, but its body returns its producer's interval [-65024, 65536]")
+    acc_in = chain("PortsTestChainAcc", T_S8, acc_param=True)
+    acc_use = comp("PortsTestChainAccUse", [("c", V32), ("x", Array(8, V16))], Array(2, V32),
+                   lambda B, S, c, x: B.call(acc_in, B.call(Add32, c, c), B.batch(Quant, x, axes=(0,)), B.batch(Quant, x, axes=(0,))))
+    refused("E_PORT_INTERVAL", lambda: Program(acc_use), "PortsTestChainAcc_v1 declares", "it declares none")
+
+
+def test_containment_is_of_encodings():
+    """A constant's value is its encoding read signed, and an unsigned bound holds it when it holds that encoding."""
+    u8 = primitive("PortsTestU8Bound", 1, (("x", V8),), V8, ports=Ports(params={"x": In(bound=(0, 200))}))(lambda x: x)
+    for code, ok in ((200, True), (201, False)):
+        c = primitive(f"PortsTestC{code}", 1, (), V8)(lambda code=code: code)
+        f = comp(f"PortsTestConst{code}", [], V8, lambda B, S, c=c: B.call(u8, B.call(c)))
+        if ok:
+            assert P.facts(Program(f).root).node(0).one.interval == (code - 256, code - 256)
+        else:
+            refused("E_PORT_BOUND", lambda: Program(f), f"[0, 200] does not contain its producer's interval [{code - 256}, {code - 256}]")
+    assert P.as_reading((-5, 5), 8) == (-5, 5) and P.as_reading((-5, 5), 8, signed=False) is None
+    assert P.as_reading((0, 255), 8) == (-128, 127) and P.as_reading((0, 200), 8) is None and P.as_reading((200, 250), 8) == (-56, -6)
+    assert P.reading((-5, 250), 8) is None and P.reading((-5, 250), 16) == (-5, 250)
+
+
+def test_a_transfer_is_a_primitives_and_gives_an_interval():
+    with pytest.raises(PortError, match="E_PORT_DECL.*only a primitive declares a transfer"):
+        Program(comp("PortsTestCompTransfer", [("x", V32)], V32, lambda B, S, x: x, ports=Ports(transfer=lambda x: x)))
+    with pytest.raises(PortError, match="E_PORT_DECL.*declare no Out\\(interval\\) beside it"):
+        primitive("PortsTestBoth", 1, (("x", V32),), V32, ports=Ports(ret=Out(interval=(0, 1)), transfer=lambda x: x))(lambda x: x)
+    bad = primitive("PortsTestBadTransfer", 1, (("x", V32),), V32, ports=Ports(transfer=lambda x: (5, 1)))(lambda x: x)
+    with pytest.raises(PortError, match="E_PORT_DECL.*PortsTestBadTransfer_v1's transfer"):
+        Program(comp("PortsTestBadTransferUse", [("x", V32)], V32, lambda B, S, x: B.call(bad, x)))
+    desc = encode_program(Program(comp("PortsTestTransferCodec", [("x", Array(8, V16))], Array(2, V32),
+                                       lambda B, S, x: B.call(chain("PortsTestChainCodec", T_S8), B.batch(Quant, x, axes=(0,)),
+                                                              B.batch(Quant, x, axes=(0,))))))
+    tampered = copy.deepcopy(desc)
+    del tampered["definitions"]["PortsTestDot4_v1"]["ports"]["transfer"]
+    with pytest.raises(ValueError, match="PortsTestDot4_v1 ports differ from the registry"):
+        decode_program(tampered, REGISTRY)
+    tampered = copy.deepcopy(desc)
+    (cid,) = [fid for fid in desc["definitions"] if fid.startswith("PortsTestChainCodec")]
+    tampered["definitions"][cid]["ports"]["transfer"] = True
+    with pytest.raises(PortError, match="E_PORT_DECL.*only a primitive declares a transfer"):
+        decode_program(tampered, REGISTRY)
+
+
 def test_malformed_interval_declarations():
     with pytest.raises(PortError, match="E_PORT_DECL.*no interval of a Value<8>"):
         primitive("PortsTestBadIv", 1, (("x", V8),), V8, ports=Ports(ret=Out(interval=(-200, 0))))(lambda x: x)

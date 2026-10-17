@@ -89,7 +89,7 @@ class PrimitiveDefinition(FunctionDefinition):
         bad = [k for _n, k in self.tables if k not in TABLE_KINDS]
         if bad:
             raise ValueError(f"{self.id}: a table is a {' or '.join(TABLE_KINDS)} table, not {bad}")
-        self.port_types = bind_ports(self.id, self.params, self.ret, self.ports)
+        self.port_types = bind_ports(self.id, self.params, self.ret, self.ports, primitive=True)
         if self.register:
             REGISTRY.add(self)
 

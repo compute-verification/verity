@@ -9,10 +9,14 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
 
 * **Intervals.** `Out(interval=(lo, hi))`: every leaf the Definition returns there is in [lo, hi] (a quantizer's clamp range).
   `In(bound=(lo, hi))`: the Definition assumes every operand leaf there is. An instance whose operand's producer interval is not
-  within the bound is refused (`E_PORT_BOUND`); a producer without one spans its width. An interval reads a `Value<w>` as
-  signed when lo < 0 and as unsigned when hi >= 2^(w-1) (either, when both fit), so containment is integer containment. A
-  composite's declared interval must hold of what its body returns (`E_PORT_INTERVAL`); a primitive's is a fact about its
-  evaluator, which circuit-check tests.
+  within the bound is refused (`E_PORT_BOUND`); a producer without one spans its width, and a constant's is its value. An
+  interval reads a `Value<w>` as signed when lo < 0 and as unsigned when hi >= 2^(w-1) (either, when both fit), and one is
+  within another when every encoding it holds is one the other holds. A composite's declared interval must hold of what its
+  body returns (`E_PORT_INTERVAL`); a primitive's is a fact about its evaluator, which circuit-check tests. A primitive whose
+  return's interval follows from its operands' (an exact step's sum) declares `Ports(transfer=f)` instead: `f(*operands)`
+  maps each operand's interval (None when it has none; `as_reading` reads it signed or unsigned) to its return's, or None,
+  and the Build gives each instance's return that interval. So a composite over such steps declares, and is held to, the
+  interval its operands' bounds prove (the s8 chain's words, which a limb split's bound reads).
 * **Sinks.** `Out(sink=True)` (a receipt fold's output) reaches only a receipt port (`In(receipt=True)`) or the program's
   outputs. A primitive reading a sink at any other port is refused (`E_PORT_SINK`). A sink passed to a composite is a sink in
   its body, and a composite that returns one declares it. A Definition with a receipt port returns only sinks.
@@ -28,9 +32,10 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
 
 Facts flow down every call and up through declarations. A parameter's facts, in a Definition's body, are the join over all its
 instances of its operands' facts, so a bound sees its operand's producer through any number of calls. A Definition's output
-carries what its `Out` declares, and the check holds a composite's body to it. `facts(root)` gives every leaf's facts (its
-interval: the producer's, or an input's declared bound; its origin; whether it is a sink; its word type) to the census and the
-property.
+carries what its `Out` declares (a primitive's with a transfer, the interval it gives from that instance's operands; a scanned
+one's, none), and the check holds a composite's body to it. `facts(root)` gives every leaf's facts (its interval: the
+producer's, or an input's declared bound, read at the leaf's width by `reading`; its origin; whether it is a sink; its word
+type) to the census and the property.
 """
 
 from __future__ import annotations
@@ -162,10 +167,13 @@ class Leaves:
 
 @dataclass(frozen=True, eq=False)
 class Ports:
-    """A Definition's declaration: `params` maps a parameter's name to its tree, `ret` is the return's tree."""
+    """A Definition's declaration: `params` maps a parameter's name to its tree, `ret` is the return's tree. `transfer`, a
+    primitive's only: its return's interval from its operands' (`f(*intervals) -> (lo, hi) | None`), a fact about its
+    evaluator like a declared interval, which circuit-check tests."""
 
     params: Mapping[str, Any] = field(default_factory=dict)
     ret: Any = None
+    transfer: Callable[..., tuple[int, int] | None] | None = None
 
 
 #: one run of a bound declaration: (lo, hi, port, w), typing leaves [lo, hi), all of width w (None when they differ)
@@ -175,11 +183,13 @@ Run = tuple
 @dataclass(frozen=True)
 class PortTypes:
     """A declaration bound to a signature: per parameter and for the return, its typed runs of leaves, ascending, maximal and
-    without defaults. A root's `inputs` are its input nodes' runs, `(node, lo, hi, port, w)`."""
+    without defaults. A root's `inputs` are its input nodes' runs, `(node, lo, hi, port, w)`. `transfer`: a primitive's
+    (`Ports.transfer`)."""
 
     params: tuple[tuple[Run, ...], ...]
     ret: tuple[Run, ...]
     inputs: tuple[tuple, ...] = ()
+    transfer: Callable[..., tuple[int, int] | None] | None = None
 
     def to_json(self) -> dict:
         """The descriptor's `ports` (PROTOCOL.md §12): only what is declared, in leaf order."""
@@ -191,6 +201,8 @@ class PortTypes:
             j["ret"] = [[lo, hi, o.to_json()] for lo, hi, o, _w in self.ret]
         if self.inputs:
             j["inputs"] = [[k, lo, hi, p.to_json()] for k, lo, hi, p, _w in self.inputs]
+        if self.transfer is not None:
+            j["transfer"] = True
         return j
 
     @staticmethod
@@ -198,6 +210,8 @@ class PortTypes:
                   nodes: Sequence[Type] | None = None) -> "PortTypes":
         """The descriptor's `ports` of `owner`, refused unless well formed and canonical. `nodes`: the root's node output types,
         for its input nodes' runs (only a root has them)."""
+        if isinstance(j, dict) and "transfer" in j:
+            raise _decl(f"{owner}: only a primitive declares a transfer; a composite's intervals are what its body returns")
         if not (isinstance(j, dict) and j and set(j) <= {"params", "ret", "inputs"}):
             raise _decl(f"{owner}: ports is a non-empty object with keys from params, ret and inputs, not {sorted(j) if isinstance(j, dict) else j!r}")
         if "inputs" in j and nodes is None:
@@ -257,6 +271,50 @@ def _widths(t: Type, lo: int, hi: int) -> frozenset:
 def full(iv: tuple[int, int], w: int) -> bool:
     """Whether an interval of `Value<w>` holds every encoding (it assumes nothing)."""
     return iv in ((-(1 << (w - 1)), (1 << (w - 1)) - 1), (0, (1 << w) - 1))
+
+
+def reading(iv: tuple[int, int] | None, w: int | None) -> tuple[int, int] | None:
+    """A fact's interval as an interval of a `Value<w>`: None when there is none, or when it is no interval of that width (a
+    hull of a signed and an unsigned reading: lo < 0 and hi >= 2^(w-1)), which holds nothing."""
+    if iv is None or w is None or (iv[0] < 0 and iv[1] >= 1 << (w - 1)) or iv[0] < -(1 << (w - 1)) or iv[1] > (1 << w) - 1:
+        return None
+    return iv
+
+
+def _codes(iv: tuple[int, int] | None, w: int | None) -> tuple[tuple[int, int], ...] | None:
+    """The encodings an interval of a `Value<w>` holds, as ascending ranges; None when it is none (`reading`)."""
+    r = reading(iv, w)
+    if r is None or w is None:
+        return None
+    lo, hi = r
+    m = 1 << w
+    if lo >= 0:
+        return ((lo, hi),)
+    if hi < 0:
+        return ((lo + m, hi + m),)
+    return ((0, hi), (lo + m, m - 1))
+
+
+def as_reading(iv: tuple[int, int] | None, w: int, signed: bool = True) -> tuple[int, int] | None:
+    """The encodings interval `iv` of a `Value<w>` holds, read as signed (or unsigned) integers: one interval, or None when
+    `iv` holds nothing (`reading`) or they are not one interval in that reading. A transfer reads its operands through it."""
+    cs = _codes(iv, w)
+    if cs is None:
+        return None
+    m, h = 1 << w, 1 << (w - 1)
+    parts: list[tuple[int, int]] = []
+    for a, b in cs:
+        if signed and a < h <= b:
+            parts += [(a, h - 1), (h - m, b - m)]
+        else:
+            parts.append((a - m, b - m) if signed and a >= h else (a, b))
+    parts.sort()
+    lo, hi = parts[0]
+    for a, b in parts[1:]:
+        if a > hi + 1:
+            return None
+        hi = max(hi, b)
+    return lo, hi
 
 
 def holds(iv: tuple[int, int], w: int, e: int) -> bool:
@@ -335,20 +393,28 @@ def _flatten(owner: str, where: str, t: Type, tree: Any, cls: type, base: int, o
     raise _decl(f"{owner}: {where}: a port tree is an In or Out, a tuple, a dict, Leaves or None, not {tree!r}")
 
 
-def _bound(owner: str, params: tuple, ret: tuple[Run, ...], ret_type: Type, inputs: tuple = ()) -> PortTypes | None:
-    if not (any(params) or ret or inputs):
+def _bound(owner: str, params: tuple, ret: tuple[Run, ...], ret_type: Type, inputs: tuple = (),
+           transfer: Callable | None = None) -> PortTypes | None:
+    if not (any(params) or ret or inputs or transfer):
         return None
     if any(p.receipt for rs in params for _lo, _hi, p, _w in rs) and sum(hi - lo for lo, hi, o, _w in ret if o.sink) != ret_type.leaves:
         raise _decl(f"{owner}: a Definition with a receipt port returns only sinks: declare Out(sink=True) on its whole return")
-    return PortTypes(tuple(params), ret, inputs)
+    return PortTypes(tuple(params), ret, inputs, transfer)
 
 
-def bind_ports(owner: str, params: Sequence[tuple[str, Type]], ret: Type, decl: Any) -> PortTypes | None:
-    """`decl` (a `Ports`, or None) bound to the signature `params -> ret` of `owner`; None when it declares nothing."""
+def bind_ports(owner: str, params: Sequence[tuple[str, Type]], ret: Type, decl: Any,
+               primitive: bool = False) -> PortTypes | None:
+    """`decl` (a `Ports`, or None) bound to the signature `params -> ret` of `owner` (a primitive's when `primitive`); None
+    when it declares nothing."""
     if decl is None:
         return None
     if not isinstance(decl, Ports):
         raise _decl(f"{owner}: ports are declared as Ports(params=..., ret=...), not {decl!r}")
+    if decl.transfer is not None:
+        if not primitive:
+            raise _decl(f"{owner}: only a primitive declares a transfer; a composite's intervals are what its body returns")
+        if not callable(decl.transfer):
+            raise _decl(f"{owner}: a transfer is a function of the operands' intervals, not {decl.transfer!r}")
     names = [n for n, _ in params]
     if not isinstance(decl.params, Mapping):
         raise _decl(f"{owner}: Ports.params maps parameter names to port trees, not {decl.params!r}")
@@ -363,7 +429,9 @@ def bind_ports(owner: str, params: Sequence[tuple[str, Type]], ret: Type, decl: 
     out = []
     _flatten(owner, "its return", ret, decl.ret, Out, 0, out)
     rs = _merged(owner, "its return", ret, out)
-    return _bound(owner, tuple(ps), rs, ret)
+    if decl.transfer is not None and any(o.interval is not None for _lo, _hi, o, _w in rs):
+        raise _decl(f"{owner}: its transfer gives its return's interval: declare no Out(interval) beside it")
+    return _bound(owner, tuple(ps), rs, ret, transfer=decl.transfer)
 
 
 def port_types(fn: Any) -> PortTypes | None:
@@ -652,9 +720,11 @@ def _covered(runs: Sequence[tuple[int, int]], a: int, b: int) -> int | None:
 
 
 def _within(iv: tuple[int, int] | None, bound: tuple[int, int], w: int | None) -> bool:
+    """Whether every encoding `iv` holds is one `bound` holds, each read as it reads itself."""
     if w is not None and full(bound, w):
         return True
-    return iv is not None and bound[0] <= iv[0] and iv[1] <= bound[1]
+    have, allowed = _codes(iv, w), _codes(bound, w)
+    return have is not None and allowed is not None and all(any(a <= lo and hi <= b for a, b in allowed) for lo, hi in have)
 
 
 def _producer(f: Fact, w: int | None) -> str:
@@ -785,6 +855,16 @@ def _reachable(root: Any) -> tuple[list, bool]:
     return post, typed
 
 
+def _value(fn: Any) -> tuple[int, int] | None:
+    """A constant's interval: its value, its encoding read as signed when its top bit is set (and w > 1); None for one that
+    reads a table."""
+    if fn.tables:
+        return None
+    e, w = int(fn.evaluate()), fn.ret.w
+    v = e - (1 << w) if w > 1 and e >> (w - 1) else e
+    return v, v
+
+
 def _declared_out(fn: Any, cache: dict) -> Runs:
     hit = cache.get(id(fn))
     if hit is not None and hit[0] is fn:
@@ -792,7 +872,7 @@ def _declared_out(fn: Any, cache: dict) -> Runs:
     from .defs import PrimitiveDefinition
 
     _, ret = fn.signature()
-    base = fact(origin=("static",)) if isinstance(fn, PrimitiveDefinition) and not fn.params else GATE
+    base = fact(_value(fn), ("static",)) if isinstance(fn, PrimitiveDefinition) and not fn.params else GATE
     pt = port_types(fn)
     B, pos = _Build(), 0
     for lo, hi, o, _w in (pt.ret if pt is not None else ()):
@@ -803,6 +883,39 @@ def _declared_out(fn: Any, cache: dict) -> Runs:
     r = B.done()
     cache[id(fn)] = (fn, r)
     return r
+
+
+def _width(t: Type) -> int | None:
+    ws = t.width_set()
+    return next(iter(ws)) if len(ws) == 1 else None
+
+
+def _transferred(fn: Any, pt: PortTypes, params: Sequence[tuple[str, Type]], ret: Type, ops: Sequence[Runs], out: Runs) -> Runs:
+    """A primitive instance's return facts `out` with the interval its transfer gives from its operands' facts `ops` (each
+    operand's interval the hull of its leaves', None when one has none)."""
+    ivs: list[tuple[int, int] | None] = []
+    for (_name, t), F in zip(params, ops):
+        w = _width(t)
+        iv: tuple[int, int] | None = None
+        for _a, _b, f in F.segments():
+            r = reading(f.interval, w)
+            if r is None:
+                iv = None
+                break
+            iv = r if iv is None else (min(iv[0], r[0]), max(iv[1], r[1]))
+        ivs.append(reading(iv, w))
+    transfer = pt.transfer
+    assert transfer is not None
+    r = transfer(*ivs)
+    if r is None:
+        return out
+    iv = _pair(r, f"{fn.id}'s transfer on {ivs} gives {r!r}: an interval")
+    assert iv is not None
+    _check_interval(fn.id, f"its transfer on {ivs}", iv, _width(ret))
+    B = _Build()
+    for a, b, f in out.segments():
+        B.add(b - a, fact(iv, f.origin, f.sink, f.word))
+    return B.done()
 
 
 def _receive(r: Runs, runs: Sequence[Run]) -> Runs:
@@ -878,7 +991,8 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
                 continue
             fpt = port_types(fn)
             fparams, fret = fn.signature()
-            need = not prim or sinks or (fpt is not None and any(fpt.params))
+            transfer = prim and fpt is not None and fpt.transfer is not None and node.form != "scan"
+            need = not prim or sinks or transfer or (fpt is not None and any(fpt.params))
             ops: list[Runs] = []
             if need:
                 if node.form == "scan":
@@ -905,6 +1019,8 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
                     for j, F in enumerate(ops):
                         slot[j] = join_runs(slot[j], F)
             out = _declared_out(fn, outs)
+            if transfer:
+                out = _transferred(fn, fpt, fparams, fret, ops, out)
             if node.form == "batch":
                 out = _repeat(out, node.n)
             elif node.form == "scan":
@@ -937,5 +1053,5 @@ def facts(root: Any) -> Facts:
 
 
 __all__ = ["In", "Out", "Ports", "Leaves", "PortTypes", "PortError", "Fact", "Facts", "Runs", "KINDS", "ORIGINS", "MIXED",
-           "GATE", "bind_ports", "check", "declared", "fact", "facts", "forward", "full", "gather", "harness", "holds", "join",
-           "join_runs", "port_types", "root_ports"]
+           "GATE", "as_reading", "bind_ports", "check", "declared", "fact", "facts", "forward", "full", "gather", "harness",
+           "holds", "join", "join_runs", "port_types", "reading", "root_ports"]
