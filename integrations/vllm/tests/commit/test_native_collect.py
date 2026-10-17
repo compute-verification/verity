@@ -66,6 +66,33 @@ def test_layout_matches_reference_and_gaps_are_zero(mod, gather):
     assert [(e[4], e[3]) for e in plan] == [(o, nb) for o, _, nb in ref]      # (name_id, dtype, sizes, nbytes, off, gap)
 
 
+@pytest.mark.parametrize("bpd,auto", [(1, False), (4, False), (32, False), (32, True), (1024, True)])
+def test_gather_writes_the_reference_layout_at_every_alignment_and_grid(mod, bpd, auto):
+    """The gather kernel's paths (16 B words between byte heads and tails when source and destination share their offset mod 16, 4 B
+    words when both are 4 B aligned, pitched rows by 16 B or 4 B words, bytes otherwise) write exactly the reference layout's bytes:
+    tensors of every length and source offset (slices of one buffer), three dtypes, pitched views, small ones and ones that take many
+    grid-stride rounds, under any grid."""
+    c = mod.Collector()
+    c.enable_gather(256)
+    c.blocks_per_desc, c.auto_blocks = bpd, auto
+    g = torch.Generator(device="cuda").manual_seed(bpd * 2 + auto)
+    base = torch.randint(-128, 128, (1 << 21,), dtype=torch.int8, device="cuda", generator=g)
+    f32, bf16 = base.view(torch.float32), base.view(torch.bfloat16)
+    ts = [base[off:off + nb] for off, nb in [(0, 1), (1, 7), (0, 16), (4, 36), (6, 70), (3, 255), (8, 4096), (12, 4100), (2, 4098),
+                                             (0, 300_001), (5, 262_147), (4, 524_292), (16, 65_536)]]
+    ts += [f32[1:1001], f32[3:70_003], bf16[3:2000], bf16[1:40_001], f32[:16_384].view(128, 128)[:, 3:67],
+           f32[:16_384].view(128, 128)[:, 4:68], bf16[:16_384].view(128, 128)[:, 1:4], bf16[:65_536].view(256, 256)[:, 2:200]]
+    arena = torch.full((4 << 20,), 0xAB, dtype=torch.uint8, device="cuda")
+    used, n, _changed, _version = _run_step(c, arena, ts, key=1, gather=True)
+    torch.cuda.synchronize()
+    ref, total = _reference_layout(ts)
+    assert (used, n) == (total, len(ts))
+    for k, (t, (off, gap, nb)) in enumerate(zip(ts, ref)):
+        if gap:
+            assert int(arena[off - gap:off].max()) == 0, f"tensor {k}: alignment gap not zero-filled"
+        assert torch.equal(arena[off:off + nb], _as_bytes(t)), f"tensor {k} (src offset {t.data_ptr() % 16}, dst offset {off % 16}, {nb} B)"
+
+
 def test_plan_hit_reuses_offsets_and_detects_shape_change(mod):
     c = mod.Collector()
     arena = torch.zeros(1 << 16, dtype=torch.uint8, device="cuda")

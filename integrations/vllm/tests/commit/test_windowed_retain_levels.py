@@ -91,6 +91,9 @@ def step_tensors(kv: tuple[int, ...]) -> list[tuple[str, torch.Tensor]]:
             n *= d
         v = (torch.arange(n, dtype=torch.int64) * 7 + seed * 13 + i * 31) % 251 - 125
         out.append((name, v.to(dtype).reshape(shape).cuda()))
+    # a pitched view 1000 B into each row of the first qkv output (RoPE's q): its segments straddle windows at a 4 B source offset
+    qkv = out[1][1]
+    out.append(("model.layers.0.self_attn.rotary_emb/q", qkv[:, H // 2:H // 2 + H]))
     return out
 
 
