@@ -826,6 +826,95 @@ theorem lv0Inv {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} 
   rw [ht₁k, hx₁k, hx₂k] at hcl
   exact hcl
 
+/-- **The final identity** at the model's end on the proof `P`: `Lg.Honest`'s conclusion. -/
+def Final (P : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
+    (t : Transcript) (basisAt : Array F256 → ℕ → Array F256) : Prop :=
+  lhsE P.finalProof.yr (out P cf sch T cap t).1.2.2.2
+    (resE basisAt sch.n (pre P cf sch T cap t).1 (out P cf sch T cap t).1.2.2.1 (out P cf sch T cap t).1.2.2.2
+      (out P cf sch T cap t).2.1) = (out P cf sch T cap t).2.1.s
+
+/-- **The last level gives the final identity**: from `LvInv` at the last step `j`, its four challenges (`SplitInv`),
+`y_r` the split of the folded table and the final rows the opening at the model's positions, once the proof agrees
+with the prover and its final proof is `fin`. -/
+theorem finStep {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} {T : F128} {cap : Array ByteArray}
+    {t : Transcript} {b : Array F128} {op0 : LevelProof} {ms : MerkleScheme} {j kk : ℕ} {σ : LoopSt}
+    {S S₄ S' : LigState} {basisAt : Array F256 → ℕ → Array F256} {fin : FinalProof}
+    (hL : 2 ≤ sch.levels.size) (hsd : sch.k0 + 3 * (sch.levels.size - 1) ≤ sch.n) (hD : DimSeam sch)
+    (hseam : LevelSeam (sch.levels.getD (sch.levels.size - 1) default)) (hj : j + 1 = sch.levels.size - 1)
+    (hbasis : ∀ q e y, q.size + e = sch.n → y < 2 ^ e →
+      gOf (basisAt q e)[y]! = Model.bHat execArith sch.n (fun w => fOf b[w]!) (q.toList.map gOf ++ Model.bitsK e y))
+    (hkk : kk = t.k + sch.k0 + 9 + 11 * j)
+    (h : LvInv P cf sch T cap t b op0 j σ S) (h4 : SplitInv cf kk S 3 S₄)
+    (hyr : fin.yr = splitK (foldKs (chsK cf kk 4) S.tab))
+    (hrows : fin.rows = (openP ms σ.2.1 (sch.levels.getD (sch.levels.size - 1) default)
+      (qPosK cf (sch.levels.getD (sch.levels.size - 1) default) (kk + 4))).rows)
+    (hG : Grow S₄ S') (hA : Agree P op0 σ.2.2.2.1 S') (hfin : P.finalProof = fin) :
+    Final P cf sch T cap t basisAt := by
+  obtain ⟨g, hgt, hgs, hrw, hJ⟩ := h.tab
+  have hG4 : Grow S S₄ :=
+    ⟨h4.pre, Pre.of_eq h4.oods.symm, Pre.of_eq h4.cbn.symm, Pre.of_eq h4.qn.symm, Pre.of_eq h4.cn.symm⟩
+  have hJ0 := hJ (hA.back (hG4.trans hG) (Pre.refl _))
+  have hext : sch.n - sch.k0 - 3 * j = sch.n - sch.k0 - 3 * (j + 1) + 3 := by omega
+  rw [hext] at hJ0
+  have hI := inv_loop P cf sch T cap t hL hsd j (by omega)
+  have hDn := done_out P cf sch T cap t hL hsd
+  have h4s := h4.size
+  have hcols : (sch.levels.getD (sch.levels.size - 1) default).cols = sch.n - sch.k0 - 3 * (j + 1) := by
+    rw [cols_getD hD _ (by omega), ← hj]
+  have hlanes : (sch.levels.getD (sch.levels.size - 1) default).lanes = 4 :=
+    hD.2.2.2.2.1 _ (by omega) (by omega)
+  rw [hj] at hrw
+  unfold Final
+  unfold out at hDn ⊢
+  rw [← hj, loop_stepL P cf sch _ (by omega)] at hDn ⊢
+  generalize loop P cf sch (x₀ P cf sch T cap t) j = x at hI hJ0 hDn ⊢
+  have hxm : x.2.1.msg = S.msgs.size := by rw [hI.msg, h.msgs]
+  have hxk : x.2.2.k = kk := by rw [hI.k, hkk]
+  have hx1 : x.1.1 - 4 = sch.n - sch.k0 - 3 * (j + 1) := by rw [hI.sd]; omega
+  have hP4 : ∀ i < S₄.msgs.size, P.messages[i]! = S₄.msgs[i]! := fun i hi =>
+    (hA.1.1.get_lt (by have := hG.1; obtain ⟨C, hC⟩ := this; rw [hC, Array.size_append]; omega)).trans
+      (hG.1.get_lt hi)
+  unfold stepL at hDn ⊢
+  simp only [hx1] at hDn ⊢
+  generalize htq : ap (fun Q => P.finalProof.yr.foldl (fun Q w => pF w Q) Q) (chals P cf #[] x.2.1 x.2.2 4).2.2 = tq
+    at hDn ⊢
+  have htqk : tq.k = kk + 4 := by rw [← htq, ap_k]; simp [hxk]
+  have hq : qPos cf (sch.levels.getD (sch.levels.size - 1) default) tq =
+      qPosK cf (sch.levels.getD (sch.levels.size - 1) default) (kk + 4) := by rw [← htqk]; rfl
+  have hl4 : ∀ l ∈ (x.1.2.2.1.push (chals P cf #[] x.2.1 x.2.2 4).1).toList, l.size = 4 := by
+    simp only [Array.toList_push, List.mem_append, List.mem_singleton]
+    rintro l (hl | rfl)
+    · exact hI.lv4 l hl
+    · simp
+  have horig : (origE (pre P cf sch T cap t).1 (x.1.2.2.1.push (chals P cf #[] x.2.1 x.2.2 4).1)).size +
+      (sch.n - sch.k0 - 3 * (j + 1)) = sch.n := by
+    rw [origE_size _ _ hl4]
+    simp [pre, hI.lvs]
+    omega
+  refine hJ0.final (cf := cf) (t := x.2.2) (tq := tq) (start := sch.levels.size - 1)
+    (fun k hk => by rw [hxm, hP4 _ (by omega), h4.msg k hk, chs_eq, hxk, hgt])
+    (by rw [hxm, hP4 _ (by omega), h4.last, h4.tab, h4.w, chs_eq, hxk, hgt]) rfl rfl hseam hlanes
+    (by rw [hgs, hlanes, hcols, hext]; ring_nf) hcols
+    (by rw [hfin, hrows, hq]; simp only [openP]; rw [hrw])
+    (by rw [hfin, hyr, chs_eq, hxk, hgt]) (by rw [hI.lvs]; omega) hl4 horig
+    (fun y hy => hbasis _ _ y horig hy) ?_ ?_
+  · intro o ho
+    have := hDn.oods o ho
+    unfold FlockSoundness.Refine.oodFixed OodDim at *
+    split at this
+    · rename_i hs
+      rw [hs, origE_size _ _ hDn.lv4, hDn.lvs]
+      simp [pre]
+      omega
+    · rename_i s hs
+      rw [hs, oodFixed_size _ hDn.lv4 (by rw [hDn.lvs]; exact this.1), hDn.lvs]
+      omega
+  · intro cs hc
+    have := hDn.conss cs hc
+    unfold ConsDim at this
+    rw [consFixed_size _ hDn.lv4, hDn.lvs]
+    omega
+
 end Lg
 
 end FlockComplete.Replay
