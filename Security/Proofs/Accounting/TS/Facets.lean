@@ -1,10 +1,10 @@
 import Models.Accounting.Guarantees.TS
 
 /-!
-# The tensor–scalar model's facet guarantees (stubs)
+# The tensor–scalar model's facet guarantees
 
-Lemma 1 and Corollaries D1 and D2 (EPS1-SPEC §1.1, §2.5), each a `sorry` until a prover takes it (gap list M1, M7–M9:
-note:20261017T0801Z-draft-lean-stmt).
+Lemma 1 and Corollaries D1 and D2 (EPS1-SPEC §1.1, §2.5), gap list M1, M7–M9
+(note:20261017T0801Z-draft-lean-stmt).
 -/
 
 namespace Accounting.SecurityProofs.TS
@@ -45,6 +45,16 @@ theorem VectorThresholdD1 : Accounting.Guarantees.TS.VectorThresholdD1 := by
 
 /-- Corollary D2. -/
 theorem RoutesOffD2 : Accounting.Guarantees.TS.RoutesOffD2 := by
-  sorry
+  intro K R ι _ _ _ G n rs cap N s κ B₀ _ hs hκ hB₀ hN
+  have hle : ∀ r, G.load n r ≤ G.bound n := fun r => le_ciSup (Set.finite_range _).bddAbove r
+  have hD : 0 < 1 + ∑ u, κ u * s u := by
+    linarith [Finset.sum_nonneg fun u (_ : u ∈ Finset.univ) => mul_nonneg (hκ u) (hs u)]
+  have hsum : ∑ u, N u * s u ≤ (∑ u, κ u * s u) * G.bound n := by
+    rw [Finset.sum_mul]
+    refine Finset.sum_le_sum fun u _ => ?_
+    have hNu : N u ≤ κ u * G.bound n := (hN u).trans (mul_le_mul_of_nonneg_left (hle (cap u)) (hκ u))
+    nlinarith [hs u]
+  rw [div_le_iff₀ hD]
+  linarith [hle rs]
 
 end Accounting.SecurityProofs.TS
