@@ -104,9 +104,13 @@ theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.M
   show 2 * ((deployZk rel).k x : ℝ) + _ + _ + _ ≤ 2 * weight true x
   rcases Nat.eq_zero_or_pos n with h0 | hpos
   · have := k_le_weight true x
-    rw [h0, Finset.sum_range_zero] at hz hroom
-    rw [h0, Finset.sum_range_zero, hk]
-    push_cast at hroom
+    have hj0 : Claims.Flock.joinCW n sch Np rd r₀ = 0 := by
+      unfold Claims.Flock.joinCW
+      rw [h0, Finset.sum_range_zero]
+    have hr0' : Claims.Flock.roomW n sch Np = 0 := by
+      unfold Claims.Flock.roomW
+      rw [h0, Finset.sum_range_zero]
+    rw [hj0, hr0', h0, Finset.sum_range_zero, hk]
     linarith
   have hper : ∀ j ∈ Finset.range n, 4 * tableLen true (st j) / Real.exp 1 +
       ∑ i, Claims.Flock.cZW (sch j) (Np j) i ≤ tableWeight true (st j) := fun j hj => by
