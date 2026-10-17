@@ -16,6 +16,7 @@ import zlib
 
 import torch
 
+import gates as G
 from spec import attention_step, linear_step
 
 GROUP = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj": "qkv", "self_attn.o_proj": "o",
@@ -97,14 +98,17 @@ def quant_rows(m: torch.Tensor, top: int) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.round(m / s[:, None]).clamp(-top, top), s
 
 
-def act_quant(x: torch.Tensor, mode: str, bits: torch.Tensor | None, top: int) -> tuple[torch.Tensor, torch.Tensor]:
+def act_quant(x: torch.Tensor, mode: str, bits: torch.Tensor | None, top: int,
+              coined: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
     """Integer rows and per-row scales: rounded to [-top, top], or the dither floor(v) + b with v = x / s on
-    [-top + 1, top - 1] (|X| <= top)."""
+    [-top + 1, top - 1] (|X| <= top). `coined` (a mask over k): the dither only there, round(v) on the same s elsewhere."""
     if mode == "round":
         return quant_rows(x, top)
     t = top - 1
     s = x.abs().amax(dim=1).clamp(min=1e-30) / t
-    return torch.floor((x / s[:, None]).clamp(-t, t)) + bits, s
+    v = (x / s[:, None]).clamp(-t, t)
+    q = torch.floor(v) + bits
+    return (q if coined is None else torch.where(coined, q, torch.round(v))), s
 
 
 def gptq_round(w: torch.Tensor, h: torch.Tensor, top: int, block: int = 128, damp: float = 0.01) -> tuple[torch.Tensor, torch.Tensor]:
@@ -188,16 +192,23 @@ def _check_int8_linear(p):
         raise ValueError("int8: tops within 127")
     if p["gptq"] and p["group"]:
         raise ValueError("int8: gptq runs on one scale per row")
+    per = p["density"] * WORD_K
+    if not 0 < p["density"] <= 1 or abs(per - round(per)) > 1e-9:
+        raise ValueError(f"int8.density is in (0, 1], a multiple of 1/{WORD_K}")
+    if p["density"] < 1 and p["act"] != "dither":
+        raise ValueError("int8.density thins the activations' dither: act = dither")
 
 
 @linear_step("int8", phase="quantize", seeded=lambda p: p["act"] == "dither", calib=lambda p: p["gptq"],
              check=_check_int8_linear)
 def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight_top: int = 127, group: int = 0,
-                gptq: bool = False):
+                gptq: bool = False, density: float = 1.0):
     """The int8 grid: activations one scale per token (`round` to [-act_top, act_top], or `dither`: floor(x / s) + b,
     b a fresh coin bit, s = absmax / (act_top - 1)), weights one scale per output row (or per (row, `group` inputs),
     each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded or by GPTQ (blocks of 128, on
-    the calibration windows' served inputs). The integer product is exact (s8 x s8 -> s32), scaled after."""
+    the calibration windows' served inputs). The integer product is exact (s8 x s8 -> s32), scaled after. `density`
+    < 1: the dither only on a coin-chosen density * 64 of every k64 word's positions (`coin_positions`), the rest
+    rounded on the same scale; a weight-side coin (the `peel` step's U) sits on every position."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
         if gptq:
@@ -219,7 +230,9 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight_top: 
 
     wq, sw = mm.cached("int8", weights)
     bits = mm.coins(mm.x.shape) if act == "dither" else None
-    xq, sa = act_quant(mm.x, act, bits, act_top)
+    k = mm.x.shape[1]
+    coined = mm.cached("pos", lambda: coin_positions(mm, k, density)) if density < 1 else None
+    xq, sa = act_quant(mm.x, act, bits, act_top, coined)
     if group:
         k = xq.shape[1]
         y = torch.zeros(xq.shape[0], wq.shape[0], device=xq.device)
@@ -417,6 +430,11 @@ GRIDS = {"fp4c": tuple(range(-4, 5)), "fp4": (-12, -8, -6, -4, -3, -2, -1, 0, 1,
 GRID_MODES = ("round", "dither")
 #: linears also take `sr`, unbiased stochastic rounding, whose coin is a uniform draw rather than one bit
 LINEAR_GRID_MODES = GRID_MODES + ("sr",)
+#: block scales a linear's `grid` may choose from, per block of k: the UE4M3 odd integers (an odd scale keeps every
+#: coin's bilinear coefficient odd) or every integer UE4M3 holds up to 15
+SCALES = {"odd": tuple(range(1, 16, 2)), "int": tuple(range(1, 16))}
+#: a committed word's length in k (one FP4 m16n8k64 firing); `density` picks its coined positions per word
+WORD_K = 64
 
 
 def bracket(v: torch.Tensor, grid: str) -> tuple[torch.Tensor, torch.Tensor]:
@@ -430,24 +448,64 @@ def bracket(v: torch.Tensor, grid: str) -> tuple[torch.Tensor, torch.Tensor]:
     return table[i], table[i + 1]
 
 
-def on_grid(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, dims) -> tuple[torch.Tensor, torch.Tensor]:
+def to_grid(v: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None,
+            coined: torch.Tensor | None = None) -> torch.Tensor:
+    """v (within the grid's range) onto the grid's levels: `round` the nearest, `dither` the level below or above by the
+    fair bit, `sr` the level above with probability (v - lo) / (hi - lo) (`bits` uniform in [0, 1)). `coined` (a mask
+    broadcast over v) keeps the coin only where it is set and rounds the rest."""
+    lo, hi = bracket(v, grid)
+    nearest = torch.where(v - lo <= hi - v, lo, hi)
+    if mode == "round":
+        return nearest
+    if mode == "sr":
+        bits = (bits < (v - lo) / (hi - lo)).float()
+    out = lo + bits * (hi - lo)
+    return out if coined is None else torch.where(coined, out, nearest)
+
+
+def on_grid(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, dims,
+            coined: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
     """Integers on the grid and scales s (one per slice over `dims`, kept) with x ~ q s: `round` the nearest level,
     s = absmax / top; `dither` the level below v = x / s or the one above it by the fair bit b, s = absmax / top
     (1 + 2^-20) so that |v| < top (on a uniform grid, floor(v) + b); `sr` the level above with probability
-    (v - lo) / (hi - lo), `bits` holding uniform draws in [0, 1), the same s (unbiased: E q = v)."""
+    (v - lo) / (hi - lo), `bits` holding uniform draws in [0, 1), the same s (unbiased: E q = v). `coined`: the coin
+    only at those positions, the rest rounded on the same s."""
     top = GRIDS[grid][-1]
     a = x.abs().amax(dim=dims, keepdim=True).clamp(min=1e-30)
-    if mode == "round":
-        s = a / top
-        v = x / s
-        lo, hi = bracket(v, grid)
-        return torch.where(v - lo <= hi - v, lo, hi), s
-    s = a * (1 + 2 ** -20) / top
-    v = x / s
-    lo, hi = bracket(v, grid)
-    if mode == "sr":
-        bits = (bits < (v - lo) / (hi - lo)).float()
-    return lo + bits * (hi - lo), s
+    s = a / top if mode == "round" else a * (1 + 2 ** -20) / top
+    return to_grid(x / s, grid, mode, bits, coined), s
+
+
+def on_blocks(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, block: int, scales: str,
+              coined: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    """NVFP4-style block scaling of the rows of x (m x k): one float scale s per row, s = absmax / (top * max scale)
+    (1 + 2^-20), and per block of `block` k-positions the smallest integer scale sigma in SCALES[scales] with the
+    block's |x / s| <= top * sigma; each element x / (s sigma) on the grid (`to_grid`). Returns the integers q sigma
+    (the FP4 code times its block scale: the integer the block-scaled MMA multiplies) and s."""
+    m, k = x.shape
+    top, table = GRIDS[grid][-1], torch.tensor(SCALES[scales], dtype=x.dtype, device=x.device)
+    s = x.abs().amax(dim=1, keepdim=True).clamp(min=1e-30) * (1 + 2 ** -20) / (top * table[-1])
+    v = (x / s).view(m, k // block, block)
+    need = (v.abs().amax(-1) / top).contiguous()
+    sigma = table[torch.searchsorted(table, need).clamp(max=len(table) - 1)][..., None]
+    b = None if bits is None else bits.view(m, k // block, block)
+    c = None if coined is None else coined.view(k // block, block)
+    return (to_grid(v / sigma, grid, mode, b, c) * sigma).view(m, k), s
+
+
+def coin_positions(mm, k: int, density: float) -> torch.Tensor:
+    """The coined k-positions: round(density * WORD_K) of every word of WORD_K, uniformly, drawn per (seed, layer,
+    linear) like the weight's coins (after commitment: nothing the server commits depends on them)."""
+    g = torch.Generator(device=mm.device)
+    g.manual_seed(zlib.crc32(f"pos/{mm.seed}/{mm.layer}/{mm.name}".encode()))
+    words = -(-k // WORD_K)
+    ranks = torch.rand(words, WORD_K, generator=g, device=mm.device).argsort(-1).argsort(-1)
+    mask = ranks < round(density * WORD_K)
+    r = k - (words - 1) * WORD_K
+    if r < WORD_K:  # a short last word: round(density * r) of its r positions
+        mask[-1] = False
+        mask[-1, :r] = ranks[-1, :r].argsort().argsort() < round(density * r)
+    return mask.view(-1)[:k]
 
 
 def weight_bits(mm, shape, mode: str = "dither") -> torch.Tensor:
@@ -480,20 +538,78 @@ def _check_grid(p, operands, modes=GRID_MODES):
             raise ValueError(f"grid.{o} is one of {modes}")
 
 
-@linear_step("grid", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"},
-             check=lambda p: _check_grid(p, ("act", "weight"), LINEAR_GRID_MODES))
-def grid_linear(mm, nxt, *, grid: str, act: str = "dither", weight: str = "dither"):
+def _check_grid_linear(p):
+    _check_grid(p, ("act", "weight"), LINEAR_GRID_MODES)
+    if p["block"] not in (0, 16):
+        raise ValueError("grid.block is 0 (one scale per row) or 16 (NVFP4's blocks)")
+    if p["scales"] not in SCALES:
+        raise ValueError(f"grid.scales is one of {sorted(SCALES)}")
+    per = p["density"] * WORD_K
+    if not 0 < p["density"] <= 1 or abs(per - round(per)) > 1e-9:
+        raise ValueError(f"grid.density is in (0, 1], a multiple of 1/{WORD_K}")
+
+
+@linear_step("grid", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_grid_linear)
+def grid_linear(mm, nxt, *, grid: str, act: str = "dither", weight: str = "dither", block: int = 0,
+                scales: str = "odd", density: float = 1.0):
     """Both operands on a low-bit grid (`GRIDS`: fp4c, fp4, int5): activations one scale per token, weights one per
-    output row, both applied after the exact integer product (no block scales over k); each `round`ed, `dither`ed or
-    `sr` (`on_grid`), the weight's coins drawn once per seed and layer (`weight_bits`)."""
+    output row, both applied after the exact integer product; each `round`ed, `dither`ed or `sr` (`on_grid`), the
+    weight's coins drawn once per seed and layer (`weight_bits`). `block = 16`: NVFP4's block scales over k on both
+    operands, integers from SCALES[`scales`] chosen per block from the data (`on_blocks`), multiplied into the integer
+    operands, the per-row and per-token float scales after accumulation. `density` < 1: only a coin-chosen
+    density * 64 of every k64 word's positions carry the coin, on both operands (`coin_positions`); the rest round."""
+    k = mm.x.shape[1]
+    if block and k % block:
+        raise ValueError(f"{mm.where}: k = {k} is not a multiple of the block")
+    coined = mm.cached("pos", lambda: coin_positions(mm, k, density)) if density < 1 else None
+    top = GRIDS[grid][-1] * (SCALES[scales][-1] if block else 1)
+
+    def quantize(x, mode, bits):
+        return on_blocks(x, grid, mode, bits, block, scales, coined) if block else on_grid(x, grid, mode, bits, 1, coined)
+
     def weights():
         w = mm.weight()
-        q, s = on_grid(w, grid, weight, weight_bits(mm, w.shape, weight) if weight != "round" else None, 1)
-        return q.to(torch.int8), s[:, 0]
+        q, s = quantize(w, weight, weight_bits(mm, w.shape, weight) if weight != "round" else None)
+        return q.to(torch.int8) if top <= 127 else q, s[:, 0]
 
     wq, sw = mm.cached("grid", weights)
-    xq, sa = on_grid(mm.x, grid, act, act_coins(mm, act), 1)
-    return nxt(mm.integer(xq, wq)).float() * sa * sw[None, :]
+    xq, sa = quantize(mm.x, act, act_coins(mm, act))
+    wide = {"top": top} if top > 127 else {}
+    return nxt(mm.integer(xq, wq, **wide)).float() * sa * sw[None, :]
+
+
+def _check_linear_peel(p):
+    if p["alphabet"] not in ("bit", "pm"):
+        raise ValueError("peel.alphabet is bit ({0, 1}) or pm (+-1..+-width)")
+    if not 1 <= p["width"] <= 64 or not 1 <= p["top"] <= 127:
+        raise ValueError("peel: width in 1..64, top in 1..127")
+
+
+@linear_step("peel", phase="integer", check=_check_linear_peel)
+def peel_linear(mm, nxt, *, alphabet: str = "bit", width: int = 1, top: int = 127):
+    """The weight-side coin of the int8 design: a low-rank U (output rows x PEEL_L, period PEEL_L in k) served as
+    W + U and peeled exactly, X (W + U)^T - fold(X) U^T with fold(X)_l = sum over k = l mod PEEL_L of X_k (L / k of the
+    GEMM). `alphabet`: `bit`, U in {0, 1} (one plane at weight 1), or `pm`, U uniform on +-1..+-`width` (the adopted
+    design's, -width + planes 1, 2, 4, ..., width + 1). The quantizer's weights must leave room: |W + U| <= `top`
+    (16: E4M3's exact integers). On the check window, every layer and linear: the served W + U within +-top and the
+    peeled product equal to the direct one. The product the chain returns is the direct one."""
+    acc = nxt(mm)
+    if not mm.checking:
+        return acc
+    w = mm.weight().float()
+    n, k = w.shape
+    g = torch.Generator(device=mm.device)
+    g.manual_seed(zlib.crc32(f"peel/{mm.seed}/{mm.layer}/{mm.name}".encode()))
+    if alphabet == "bit":
+        U = torch.randint(0, 2, (n, PEEL_L), generator=g, device=mm.device).float()
+    else:
+        U = draw_nonzero(width, (n, PEEL_L), g, mm.device)
+    served = w + U[:, torch.arange(k, device=mm.device) % PEEL_L]
+    fits = G.within(top, served)
+    fold = mm.x.double().view(mm.x.shape[0], k // PEEL_L, PEEL_L).sum(1)
+    got = mm.int_product(mm.x, served.clamp(-127, 127).to(torch.int8)).double() - fold @ U.double().T
+    mm.gate("peel", bool(fits and torch.equal(got, acc.double())), {"fits": fits})
+    return acc
 
 
 @attention_step("grid", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),

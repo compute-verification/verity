@@ -109,12 +109,13 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 |---|---|---|---|
 | `linear.smooth(alpha, kv_shared)` | real | SmoothQuant, x / m and W m; `kv_shared` is the foldable variant | D4-70B |
 | `linear.rotate(kind)` | real | x Q and W Q; `q` is exact_grid's rotation, `h` the flat Hadamard | D4-PPL |
-| `linear.int8(act, act_top, weight_top, group, gptq)` | quantize | activations per token, rounded or dithered; weights per row or per `group` inputs, capped at `weight_top`, rounded or GPTQ | D4-PPL, D4-70B |
+| `linear.int8(act, act_top, weight_top, group, gptq, density)` | quantize | activations per token, rounded or dithered (`density` < 1: dithered on a coin-chosen fraction of every k64 word's positions, rounded elsewhere); weights per row or per `group` inputs, capped at `weight_top`, rounded or GPTQ | D4-PPL, D4-70B, LOWBIT-DESIGN |
 | `attention.rotate()` | real | Q R, K R, V R and the output R⁻¹ | D4-ATTN |
 | `attention.center_keys()` | real | kc | D4-ATTN |
 | `attention.int8(q_top, k, k_top, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; K and V rounded or dithered; P per row or per key block, `p_sink` | D4-ATTN |
 | `attention.peel(operand, width, offset)` | integer | low-rank noise on Q or P, peeled exactly | D4-ATTN |
-| `linear.grid(grid, act, weight)` | quantize | both operands on a low-bit grid (`fp4c`, `fp4`, `int5`), per token and per row, each rounded, dithered or `sr` | D4-LOWBIT |
+| `linear.grid(grid, act, weight, block, scales, density)` | quantize | both operands on a low-bit grid (`fp4c`, `fp4`, `int5`), per token and per row, each rounded, dithered or `sr`; `block = 16` adds NVFP4's integer block scales over k (`scales`: `odd`, the UE4M3 odd integers 1–15, or `int`); `density` < 1 coins only a coin-chosen fraction of every k64 word's positions | D4-LOWBIT, LOWBIT-DESIGN |
+| `linear.peel(alphabet, width, top)` | integer | the int8 design's weight-side coin: W + U served, U low-rank (period 32 in k, {0,1} or ±1..±width), peeled exactly and gated on the check window, with \|W + U\| ≤ top | LOWBIT-DESIGN |
 | `attention.grid(grid, q, k, p, v, p_sink)` | quantize | Q, K, P and V on a low-bit grid, each rounded or dithered (P's bits only where key ≤ query) | D4-LOWBIT |
 
 `specs/` holds the arms in use: the three plain int8 arms, and the adopted design (`adopted`) with its halves
@@ -127,7 +128,14 @@ activations, rounding the weights as the adopted linears do; `GRID-MODE-all` put
 grid too, with no key blocks; `fp4c-dither-all-kv` dithers only K and V there, as the adopted attention does, with
 `p_sink`. A dithered operand serves the level below x / s or the one above it by a fresh fair bit (on a uniform grid,
 floor(x / s) + b), the weights' bits drawn once per seed and layer; `GRID-sr` rounds the linears' operands up with
-probability the fraction instead (unbiased, a uniform coin). Any other file passes as a path.
+probability the fraction instead (unbiased, a uniform coin). `nvfp4-MODE` puts the full E2M1 grid in blocks of 16
+with odd UE4M3 block scales (the integer operands q·σ reach 180, past int8, so their product takes the exact FP32-chunk
+route under the `grid_range` gate), `nvfp4-int-MODE` the same with every integer scale 1–15, `nvfp4c-MODE` the
+contiguous region in the same blocks, `nvfp4-qN`, `nvfp4c-qN` and `int5-qN` dither a coin-chosen 1/N of every k64
+word's positions on both operands, and `fp8-peel-wW[-gptq]` is the int8 design on E4M3's exact integers: activations
+dithered on −16..16, weights on ±W (rounded or GPTQ) served as W + U and peeled; `fp8-peel-w15-qN` dithers the
+activations on 1/N of the positions only (U still coins every position).
+Any other file passes as a path.
 
 ## Adding an intervention
 
@@ -177,10 +185,13 @@ Built in, and a run whose gates fail reports nothing: `results.json` holds the g
 exits 1.
 
 - `int8_range`: every integer product's operands within int8, on every call.
+- `grid_range`: instead of `int8_range`, for a quantizer that declares a wider grid (block-scaled E2M1, ±180): every
+  operand within that bound, on every call.
 - `accumulator`: each product's s32 accumulator, bounded a priori by k max|x| max|w|, on every call.
 - `product_exact`: on the check window (window 0), every layer, each integer product against a float64 recomputation
   on 32 rows (linears) or 64 (attention).
-- `peel`: on the check window, every layer, KV group and P block, each peel identity. The served product, peeled, must
+- `peel`: on the check window, every layer, KV group and P block (and every linear with `linear.peel`), each peel
+  identity. The served product, peeled, must
   equal the direct one exactly.
 - `hf_reference`: on the check window's batch, every layer, the engine's bf16 layer output and RoPE tables bit-equal
   to HF transformers' own decoder layer on the same input. A run where this never ran fails.
