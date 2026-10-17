@@ -1,0 +1,39 @@
+# Dither with the LI fold: y = (y ^ d0 ^ k0)·a0 + d1, 2 lane instructions a pair of words (decision 59, a candidate: it
+# rests on (RT), (G3) and (HO)).
+name = "dither-li"
+summary = "Dither with LI receipts (1 a word) at L = 32"
+honest = "dither-duo-l32"
+L = 32
+work = 1.0
+
+[fold]
+name = "li"      # LOP3 (^ d0 ^ k0), IMAD (·a0 + d1) a pair
+ALU = 0.5
+IMAD = 0.5
+
+[skip.peel]
+eps = 0.0063
+source = "the linears' peel L/k, MAC-weighted over Llama-3.1-8B's linears (note:20261017T0310Z-report-eps1-program §3)"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: LI at 1 lane instruction a word is the cheapest implementation of the fold (FOLD)"
+
+[clock]
+eps = 0.0
+source = "honest certified at f_max; DATASHEET measures whether a lighter program clocks higher under the 600 W cap"
+
+[luck]
+delta = 9.094947017729282e-13
+p = 0.75
+checks = 121180
+source = "note:20261016T0005Z-draft-luck-loss-round4 §2 (one week, γ_zk = 0.01, {±1})"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 8, LDS128 = 0.5 }   # lane instructions a word: 8 IDP4A at k = 32, operands for an 8x8 tile a lane
+source = "dp4a at 8 IDP4A a word (note:20261017T0310Z-report-eps1-program §3); its loads: 2(a + b)/(ab) LDS.128 a word at a = b = 8"
+
+[routes]
+lanes = true
+uniform = true

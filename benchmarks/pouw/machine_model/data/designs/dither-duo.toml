@@ -1,0 +1,38 @@
+# Dither as built: one-sided dither, duo receipts on every committed word at L = 32 (decisions 36, 45, 51, 57-65).
+name = "dither-duo"
+summary = "Dither as built: duo receipts (3 a word) at L = 32, the linears' peel"
+honest = "dither-duo-l32"
+L = 32
+work = 1.0
+
+[fold]
+name = "duo"
+ALU = 2
+IMAD = 1
+
+[skip.peel]
+eps = 0.0063
+source = "the linears' peel L/k, MAC-weighted over Llama-3.1-8B's linears (k = 4096 and 14336): 0.63% (note:20261017T0310Z-report-eps1-program §3, note:20261017T0031Z-draft-eps-budget); QK^T's 25% and decode's clean products are reported apart"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD)"
+
+[clock]
+eps = 0.0
+source = "honest certified at f_max; DATASHEET measures whether a lighter program clocks higher under the 600 W cap"
+
+[luck]              # Theorem S: ln(1/δ)/((1 − p)·S)
+delta = 9.094947017729282e-13   # 2^-40
+p = 0.75                        # {±1}: a check passes a deficient sub-window w.p. ≤ 3/4
+checks = 121180                 # one week at γ_zk = 0.01: 2.288e-6/((1 − p)·γ_zk) = 0.092%
+source = "note:20261016T0005Z-draft-luck-loss-round4 §2 (one week, γ_zk = 0.01, {±1})"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 8, LDS128 = 0.5 }   # lane instructions a word: 8 IDP4A at k = 32, operands for an 8x8 tile a lane
+source = "dp4a at 8 IDP4A a word (note:20261017T0310Z-report-eps1-program §3); its loads: 2(a + b)/(ab) LDS.128 a word at a = b = 8"
+
+[routes]
+lanes = true
+uniform = true
