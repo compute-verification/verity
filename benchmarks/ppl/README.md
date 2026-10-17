@@ -145,7 +145,8 @@ sides plus fresh bits), `co32c` (CHECKED-STRIP's: 7-bit weights and 8-bit activa
 attention), `ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention).
 PPL-COMPILE's arms (`pc-*`) cost running Dither-2S (`adopted-bd-lm`) on FP8 and FP4 hardware, every matmul including
 lm_head, after the same SmoothQuant, rotations and key centring: `pc-int8` and the format baselines `pc-fp8-tensor`,
-`pc-fp8-channel`, `pc-mxfp8`, `pc-nvfp4` and `pc-mxfp4` are plain quantization with no PoUW; `pc-c1-ROUTE` is
+`pc-fp8-channel`, `pc-mxfp8`, `pc-nvfp4` and `pc-mxfp4` are plain quantization with no PoUW, and each one's `-lin`
+twin quantizes only the linears in the format and keeps `pc-int8`'s attention (C2's and C3's scope); `pc-c1-ROUTE` is
 `adopted-bd-lm` with every int8 product emulated from limbs (its perplexity is `adopted-bd-lm`'s bit for bit);
 `pc-c2-GRID-2s|1s` puts the linears on a format's integer grid (`int5`, `e4m3i`, `e4m3i-t` per tensor, `mx8`, `nvfp4`
 with odd scales, `mxfp4`), both operands dithered or the activations only (`int5-1s` is `fp8-peel-w15`'s design), and
