@@ -20,9 +20,12 @@ __device__ __forceinline__ void mma_k16(int32_t* d, const uint32_t* a, const uin
                : "r"(a[0]), "r"(a[1]), "r"(b[0]));
 }
 
-__device__ __forceinline__ void init_mma(uint32_t lane, uint32_t* a, uint32_t* b) {
-  a[0] = 0x08080808u ^ lane; a[1] = 0x01010101u; a[2] = 0x08010801u; a[3] = 0x01080108u;
-  b[0] = 0x08080808u; b[1] = 0x01010101u ^ lane;
+// every operand through mode (0 at run time): ptxas rematerializes a constant operand with IMAD.MOV inside the timed
+// loop, and the first MMA of each trip waits on it
+__device__ __forceinline__ void init_mma(uint32_t lane, int mode, uint32_t* a, uint32_t* b) {
+  const uint32_t m = (uint32_t)mode;
+  a[0] = 0x08080808u ^ lane ^ m; a[1] = 0x01010101u ^ m; a[2] = 0x08010801u ^ m; a[3] = 0x01080108u ^ m;
+  b[0] = 0x08080808u ^ m; b[1] = 0x01010101u ^ lane ^ m;
 }
 
 enum { X_IADD3, X_LOP3, X_SHF, X_PRMT, X_IMAD, X_IDP4A, X_FFMA, X_HFMA2, X_IMNMX, X_SHFL, X_POPC, X_FLO };
@@ -81,7 +84,7 @@ template <int X, int Q>
 __device__ __forceinline__ void mix(const OpArgs& a) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t x[4], y[2];
-  init_mma(lane, x, y);
+  init_mma(lane, a.mode, x, y);
   int32_t d[8][4] = {};
   Ops o(a);
   OP_BEGIN
@@ -108,7 +111,7 @@ template <int X>
 __device__ __forceinline__ void spec(const OpArgs& a) {
   const uint32_t lane = threadIdx.x & 31;
   uint32_t x[4], y[2];
-  init_mma(lane, x, y);
+  init_mma(lane, a.mode, x, y);
   int32_t d[8][4] = {};
   Ops o(a);
   OP_BEGIN_STOP
