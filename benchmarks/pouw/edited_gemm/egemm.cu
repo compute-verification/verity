@@ -1239,6 +1239,7 @@ static int eone(const std::string& arm, int m, int n, int k) {
   return 0;
 }
 
+#ifndef EGEMM_LIB
 int main(int argc, char** argv) {
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
@@ -1249,3 +1250,4 @@ int main(int argc, char** argv) {
   fprintf(stderr, "usage: egemm gate DIR M N K SEED | bench REPS M N K | il REPS ARM BASE M N K | one ARM M N K\n");
   return 2;
 }
+#endif
