@@ -62,6 +62,7 @@ import Proofs.Flock.Claims.KS.ZkFirst
 import Proofs.Flock.Claims.KS.FitsR
 import Proofs.Flock.Claims.KS.ZkFitsW
 import Proofs.Flock.Claims.KS.ZkBoundW
+import Proofs.Flock.Claims.KS.ZkLiveW
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -287,4 +288,10 @@ with no level-0 opening off `C` on a witness lane (`ZkBoundW`: `Claims.Flock.old
 `FlockDeploy.KS.zk_le_sessionsJW`), so the masked sessions bounding every table at that verdict with events on accepted
 runs give every masked table's bound with the escapes counted per round (`FlockDeploy.KS.ZkSessWJ`,
 `Claims.Flock.TableBoundJAccAtR`, `Claims.Flock.TableBoundJAccAt.tableBoundJAccAtR`,
-`FlockDeploy.KS.zk_tableBoundJAccAtR_of_sessionsW`). -/
+`FlockDeploy.KS.zk_tableBoundJAccAtR_of_sessionsW`). The live sessions' bound at that verdict, with level 0's events
+bounding the simulated strategies' `Adv₀` after `Commit`, gives those sessions (`ZkLiveW`:
+`FlockDeploy.KS.ZkLiveAccAtWJ`, `FlockDeploy.KS.zkSessWJ_of_liveW`, `FlockDeploy.KS.zk_tableBoundJAccAtR_of_liveW`),
+so at the deployed masked record every table's bound and table 0's with escapes on accepted runs counted per round
+follow from `ZkLiveAccWJ` where some run accepts (`FlockDeploy.KS.ZkLiveAccWJ`, `FlockDeploy.KS.zk_tableBoundJAccAtR`,
+`Claims.Flock.TableBoundθAccAtR`, `Claims.Flock.TableBoundJAccAtR.tableBoundθAccAtR`,
+`FlockDeploy.KS.zk_tableBoundθAccAtR`). -/
