@@ -41,4 +41,3 @@ source = "dp4a at 32 IDP4A a word at L = 128, on IMAD's class as sm_120 prices i
 
 [routes]
 lanes = true
-uniform = false     # no uniform-datapath line in EPS1 DC's census
