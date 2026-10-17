@@ -250,7 +250,8 @@ that verdict alone, with nothing asked of the record's draw (`PlainDrawSim`: `Fl
 `FlockDeploy.KS.PlainSimWrPAtD`, `FlockDeploy.KS.PlainSimWD`, `FlockDeploy.KS.plain_KS_of_simD`). At the coupling's
 chances with every revealed length before the last round positive, each `δ_t` there is at most `2^{-128}`, the plain
 fork rounds are before the last round, a fork's slack weights fall geometrically past its round, and the slack fits
-level 0's room in the plain weight whatever the number of rounds (`PlainSlackFit`: `Claims.Flock.sum_slackW_le`,
+level 0's room in the plain weight whatever the number of rounds, and a fork bound at most the simulated fork at
+`fnAt` is at most the plain fork's and that slack (`PlainSlackFit`: `Claims.Flock.sum_slackW_le`,
 `Claims.Flock.sum_slackC_le`, `Claims.Flock.slack_fits_fast100`, `FlockDeploy.KS.plainJ_succ_lt`,
-`FlockDeploy.KS.plain_slack_fits`).
+`FlockDeploy.KS.plain_slack_fits`, `FlockDeploy.KS.plain_fork_le_fnAt`).
 -/
