@@ -15,7 +15,7 @@ import time
 from typing import Any
 
 from verity_vllm.commit.partition import word_check_refusal
-from verity_vllm.config import checkpoint_dir
+from verity_vllm.config import RowConfig, checkpoint_dir
 
 
 def load_json(path: str) -> Any:
@@ -42,7 +42,7 @@ def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
         r0 = w["requests"][0]
         lp = int(r0.get("prompt_len") or len(r0.get("prompt_token_ids") or [])); t = int(r0["max_tokens"]) - 1
         snap = "all"
-    ck = checkpoint_dir(w["model"], w["tokenizer_revision"], hf_home, checkpoints)
+    ck = checkpoint_dir(w["model"], RowConfig.of(w).engine.revision, hf_home, checkpoints)
     return {"B": int(s["batch"]), "I": int(s["max_input"]), "O": int(s["max_output"]), "LP": lp, "T": t, "snap": snap, "ck": ck}
 
 
@@ -574,13 +574,14 @@ def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     on sm_120 at TP2 for head_dim > 64: 2048 tokens in one request of max_model_len 288 for Qwen3-4B, Phi-3-mini, Mistral-7B; plain
     vLLM does the same, and passes at 288)."""
     w = json.load(open(wl)); s = w["sweep"]
-    req = w.get("engine_args_required") or {}
+    cfg = RowConfig.of(w)
+    req = cfg.engine.args
     mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
     batch = int(s["batch"])
     return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]),
             "shapes": sorted({(int(a), int(b) - 1) for a, b in zip(s["input_lengths"], s["output_caps"])}),
             "MML": mml, "MNBT": min(int(req.get("max_num_batched_tokens") or mml), batch * int(mml)),
-            "ck": checkpoint_dir(w["model"], w["tokenizer_revision"], hf_home, checkpoints) or ""}
+            "ck": checkpoint_dir(cfg.model, cfg.engine.revision, hf_home, checkpoints) or ""}
 
 
 def tp_world(wl: str) -> int:

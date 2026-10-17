@@ -5,7 +5,8 @@
   memory holds, at most ranks x (shapes + 1), as the single-GPU Build sizes them; the composes likewise, at most one per rank).  A PASS Build
   also builds the required-value manifest over the W ranks (``manifest build-global --programs-root build/rank<r>``), and
   the row stops (exit 21) when it names call boundaries (``Row.call_boundaries``: a TP Commit attaches no call-boundary source).
-  With ``--build-relabel on`` one template rank's request derives write the other ranks' (`pipeline.tp.relabel_build`).
+  With ``--build-relabel on`` one template rank's request derives write the other ranks' (`pipeline.tp.relabel_build`); with
+  ``--build-programs-only 1`` the Build ends at GP-01, with no manifest and no call-boundary check (`pipeline.neutrality`'s heavy tier).
 * **Match**: the capture under the observer and collective recorder, the ``--no-observer`` control, the collective-level
   check (``tp-match --arm check``); a request that stopped before its cap gets its served-shape Program derived per rank
   and GP-01 recomposed (``eos-truncated``); then, with a rank profile (default ``derived_<ROLE>_tp<W>``; ``--fold-profile ''``
@@ -39,7 +40,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
-from verity_vllm.engine.profiles.transport import row_p2p_env, workload_custom_all_reduce_off
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
@@ -163,11 +163,8 @@ class TpRow(Row):
             raise Stop(10)
 
     def p2p_env(self) -> str | None:
-        """The stages' NCCL_P2P_DISABLE: the workload's ``env_required`` value, else unset (one the caller's environment has is
-        dropped).  A workload written before it had ``env_required`` requires what the generator writes for its target
-        (`engine.profiles.transport.row_p2p_env`)."""
-        req = (R.load_json(self.path(self.wl)) or {}).get("env_required")
-        v = (row_p2p_env(self.row) if req is None else req).get("NCCL_P2P_DISABLE")
+        """The stages' NCCL_P2P_DISABLE: the row's ``engine.env`` value, else unset (one the caller's environment has is dropped)."""
+        v = self.config().engine.env.get("NCCL_P2P_DISABLE")
         if v is None:
             self.child_env.pop("NCCL_P2P_DISABLE", None)
             return None
@@ -175,11 +172,9 @@ class TpRow(Row):
         return str(v)
 
     def custom_all_reduce_off(self) -> bool:
-        """The engines' ``disable_custom_all_reduce`` (tp-capture's and tp-commit's ``--engine-arg``): the workload's
-        ``engine_args_required`` value.  Its fallback is not `p2p_env`'s: a workload without the field keeps True, what every TP row's
-        engines ran before (`engine.profiles.transport.workload_custom_all_reduce_off`), where a workload without ``env_required``
-        takes the generator's value for its target."""
-        return workload_custom_all_reduce_off(R.load_json(self.path(self.wl)) or {})
+        """The engines' ``disable_custom_all_reduce`` (tp-capture's and tp-commit's ``--engine-arg``): the row's ``engine.args``
+        value, which a TP row's file states (`config.RowConfig`)."""
+        return bool(self.config().engine.args["disable_custom_all_reduce"])
 
     def engine_args(self) -> list[str]:
         """The ``--engine-arg``s tp-capture and tp-commit share; ``disable_custom_all_reduce`` last."""
@@ -287,8 +282,8 @@ class TpRow(Row):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
         self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step")])
-        ok, rc = self.guarded_summary(), None
-        if ok == "PASS":                    # the Build's manifest, as SingleRow's: an incomplete one (rc 4) fails the Build its Commit would refuse
+        ok, rc, programs_only = self.guarded_summary(), None, self.cb.build_programs_only == "1"
+        if ok == "PASS" and not programs_only:   # the Build's manifest, as SingleRow's: an incomplete one (rc 4) fails the Build its Commit would refuse
             rc = self.manifest_global("build.required_manifest", self.to_b)
             self.log(f"build manifest rc={rc}: {R.tp_manifest_line(self.d) or 'no manifest.json'}")
             ok = "PASS" if rc == 0 else "FAIL"
@@ -304,7 +299,8 @@ class TpRow(Row):
             self.log(f"BUILD FAIL -> stop ({top})")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10)
-        self.call_boundaries(self.to_b)      # the Build passed, so its manifest was complete
+        if not programs_only:
+            self.call_boundaries(self.to_b)      # the Build passed, so its manifest was complete
 
     def guarded_summary(self) -> str:
         try:

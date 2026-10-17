@@ -1,8 +1,29 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "zai-org/GLM-5.3",
  "case": "GLM53",
- "tokenizer_revision": "aca966e4e02791568aa6a4ced368624b3d897f42",
+ "engine": {
+  "revision": "aca966e4e02791568aa6a4ced368624b3d897f42",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 2048,
+   "max_model_len": 288,
+   "tensor_parallel_size": 8,
+   "disable_custom_all_reduce": false
+  },
+  "env": {
+   "VLLM_BATCH_INVARIANT": "0"
+  },
+  "target": {
+   "compute_capability": [
+    9,
+    0
+   ],
+   "num_sms": 132,
+   "batch_invariant": false,
+   "moe_backend": "triton"
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,12 +49,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 32,
- "engine_args_required": {
-  "max_num_batched_tokens": 2048,
-  "max_model_len": 288,
-  "tensor_parallel_size": 8,
-  "disable_custom_all_reduce": false
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 19e773648cb4e65d (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   256
@@ -361,17 +376,5 @@
   "tp": 8,
   "execution": "eager"
  },
- "note": "R12 sweep glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager: B=1 I<=256 O<=32 greedy arrivals=none; prompt lens [256], caps [32], arrive steps [0]; every request to max_tokens => 32 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.  13 Oct: NCCL_P2P_DISABLE dropped (an L40S-row carry-over; Daniel's ruling: standard vLLM on H boxes).  13 Oct: disable_custom_all_reduce dropped (an L40S-row carry-over, set false = vLLM's default; Daniel's ruling: standard vLLM on H boxes).",
- "env_required": {
-  "VLLM_BATCH_INVARIANT": "0"
- },
- "target": {
-  "compute_capability": [
-   9,
-   0
-  ],
-  "num_sms": 132,
-  "batch_invariant": false,
-  "moe_backend": "triton"
- }
+ "note": "R12 sweep glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager: B=1 I<=256 O<=32 greedy arrivals=none; prompt lens [256], caps [32], arrive steps [0]; every request to max_tokens => 32 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.  13 Oct: NCCL_P2P_DISABLE dropped (an L40S-row carry-over; Daniel's ruling: standard vLLM on H boxes).  13 Oct: disable_custom_all_reduce dropped (an L40S-row carry-over, set false = vLLM's default; Daniel's ruling: standard vLLM on H boxes)."
 }

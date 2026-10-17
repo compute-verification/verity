@@ -38,7 +38,7 @@ def component(tmp_path, name: str, hist: dict | None, declared: dict | None):
 
 
 def manifest(**target):
-    return {"target": target} if target else {}
+    return {"engine": {"target": target}} if target else {}
 
 
 def test_undeclared_is_indexed_read_ordered_and_declared_indexed_read_composes_as_before(tmp_path):
@@ -105,9 +105,9 @@ def test_an_idle_padded_declaration_on_a_dense_workload_is_refused(tmp_path):
 
 def test_a_foreign_or_misspelt_field_is_refused_not_absorbed(tmp_path):
     shapes = {(256, 31): component(tmp_path, "c0", PADDED, {"compute_capability": [8, 9], "num_sms": 142, "moe_construction": "padded"})}
-    out = GP.workload_moe_construction({"target": {"moe_constructon": "padded"}}, shapes)
+    out = GP.workload_moe_construction(manifest(moe_constructon="padded"), shapes)
     assert out["value"] is None and "does not parse" in out["refusal"]
-    out = GP.workload_moe_construction({"target": {"moe_construction": "MOE-01"}}, shapes)
+    out = GP.workload_moe_construction(manifest(moe_construction="MOE-01"), shapes)
     assert out["value"] is None and "does not parse" in out["refusal"]
     shapes = {(256, 31): component(tmp_path, "c1", PADDED, {"compute_capability": [8, 9], "num_sms": 142, "moe_construction": "fixed-slot"})}
     out = GP.workload_moe_construction(manifest(moe_construction="padded"), shapes)
