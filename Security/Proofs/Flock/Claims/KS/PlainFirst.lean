@@ -12,7 +12,8 @@ the deployed runs:
   uniform coins, and a prover `P'` of the live session such that wherever `V false` accepts at `Φ (u, r')`, the live
   outcome of `P'` at the tape `(ω, u)` is the run's (`PlainSimRun`, `viewOf`);
 * the record's draw (`RecordDrawVerbatim`): on `V false`'s accepting runs the record carries the statement's draw
-  verbatim, which `plainVerdict_of_run` reads.
+  verbatim, which `plainVerdict_of_run` reads. Acceptance gives it only up to key order (`RecordDrawEquiv`,
+  `recordDrawEquiv`).
 
 Then `Pr_le_liveMix` moves the bound to the mixture of `P'`'s strategies, at the root of the prover's first message.
 At `plainCoins`, where each deployed coin takes a live coin's first entries and the rest from the tape, the law holds
@@ -30,7 +31,9 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **`P`'s accepting runs carry the statement's draw verbatim**: on every accepting run of `V false` at `x` and `ω`,
 the last message's record has the draw of the statement it decides, as the same term. `checks` compares the two only
 up to `JsonEquiv`, and one draw parsed with its keys in another order is another term, so this is a premise on `P`, not
-a consequence of acceptance. -/
+a consequence of acceptance, which gives `RecordDrawEquiv` (`recordDrawEquiv`). Two reads ask for the term:
+`Exec.setupOf` sets the session up at the record's draw (`Stmt.setupTables` keeps it as `SessionSpec.unitDraw` and
+hashes the header that carries it through `canon`, a `partial def`), and `RecordsLiveAtP` asks for the draw `d`. -/
 def RecordDrawVerbatim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Prop :=
   ∀ r : Fin ((V false).k x) → Coin, (Claims.run sha512 P (V false) x ω r).out = .acc →
     ∀ s spec sts link c₁ mids f,
@@ -38,6 +41,26 @@ def RecordDrawVerbatim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω :
           ((List.range ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst).length).map
             (Claims.coinSeq r)) = .decide s spec sts link c₁ mids f →
         Exec.recordDraw f.record = s.read.draw
+
+/-- **`P`'s accepting runs carry the statement's draw up to key order**: on every accepting run of `V false` at `x`
+and `ω`, the last message's record has a draw `JsonEquiv` to the statement's, what `checks` compares. -/
+def RecordDrawEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Prop :=
+  ∀ r : Fin ((V false).k x) → Coin, (Claims.run sha512 P (V false) x ω r).out = .acc →
+    ∀ s spec sts link c₁ mids f,
+      act false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
+          ((List.range ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst).length).map
+            (Claims.coinSeq r)) = .decide s spec sts link c₁ mids f →
+        Option.Rel JsonEquiv (Exec.recordDraw f.record) s.read.draw
+
+/-- **Every prover's accepting runs carry the statement's draw up to key order**: an accepting decision passes
+`checks`, whose draw check is `drawEq` (`checks_draw`). -/
+theorem recordDrawEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : RecordDrawEquiv P x ω := by
+  intro r h s spec sts link c₁ mids f hact
+  have hacc := run_acc_next sha512 P (V false) x ω r h
+  replace hacc : ((next false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
+      ((List.range ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst).length).map
+        (Claims.coinSeq r))).eval sha512).1 = .acc := hacc
+  exact Claims.Bridge.Custody.checks_draw ((next_decide_sha512 hact).1 hacc).2
 
 /-- **`drawEq` passes on different terms**: two objects with the same fields in trees of different shapes are
 `JsonEquiv`, so the checks passing does not give `RecordDrawVerbatim`. -/
