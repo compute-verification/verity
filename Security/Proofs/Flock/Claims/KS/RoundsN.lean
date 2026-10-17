@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.Bridge.Custody
 
 /-!
 # The coins each recorded round issues
@@ -8,7 +9,8 @@ refuses a rep whose rounds it did not all consume, so where a rep accepts, every
 of coins the statement fixes, whatever the hashes (`ReadsN`): zerocheck's at `m` (`zcNs`), lincheck's at `kLog`
 (`lcNs`), the ring switch's at its claims (`rsNs`) and Ligerito's at the schedule (`ligNs`, its levels' `levelNs`), in
 that order (`repNs`, `verifyRepWith_readsN`). So each rep stream of an accepted plain record issued its table's
-`plainRepNs` (`streams_ns_plain`).
+`plainRepNs` (`streams_ns_plain`), its rounds in `spec.repStreams` order the session's `plainNs`
+(`rounds_ns_plain`), and custody reads each round message's coin at that count (`custody_vals_plain`).
 -/
 
 namespace FlockDeploy
@@ -600,5 +602,38 @@ theorem streams_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array
     simp only [Claims.Flock.plainSched, hf, Option.getD_some]
   rw [map_n_of_forall₂ hfa, hns, hx, hpn, plainRepNs, hsch, Nat.mul_comm]
   rfl
+
+/-- The plain session's coins, round by round in `spec.repStreams` order: each table's two reps' `plainRepNs`. -/
+def plainNs (spec : SessionSpec) (sts : Array Stmt) : List ℕ :=
+  (List.range (2 * sts.size)).flatMap fun k => plainRepNs spec sts[k / 2]!
+
+/-- **An accepted plain record's rounds issued the session's coins**: when the plain verdict accepts the record at any
+hashes and `liveOf` reads it, its rounds, in `spec.repStreams` order, issued `plainNs spec sts`, one count per round. -/
+theorem rounds_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) :
+    (lv.streams.toList.flatMap (·.toList)).map Round.n = plainNs spec sts := by
+  obtain ⟨hsz, hall⟩ := streams_ns_plain hs hv hl
+  have e : lv.streams.toList = (List.range lv.streams.size).map fun k => lv.streams[k]! := by
+    refine List.ext_getElem (by simp) fun i h₁ h₂ => ?_
+    simp only [Array.length_toList] at h₁
+    simp [getElem!_pos lv.streams i h₁]
+  rw [List.map_flatMap, e, List.flatMap_map, plainNs, ← hsz, List.flatMap_def, List.flatMap_def]
+  refine congrArg List.flatten (List.map_congr_left fun k hk => ?_)
+  have hk' : k < lv.streams.size := List.mem_range.1 hk
+  rw [getElem!_pos lv.streams k hk']
+  exact hall k hk'
+
+/-- **Custody reads each round's coin at the statement's count**: where the plain verdict accepts the record at any
+hashes and its custody passes on the round messages `mids`, each message's coin is read at its round's count in
+`plainNs spec sts`, by a recorded round of that count carrying the message. -/
+theorem custody_vals_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} (hc : custody spec lv link c₁ mids = .ok ()) :
+    List.Forall₂ (fun (n : ℕ) (am : Claims.Msg × Coin) =>
+      ∃ rd : Round, rd.n = n ∧ rd.bytes = some ⟨am.1.toArray⟩ ∧ rd.coins = am.2.vals n) (plainNs spec sts) mids := by
+  rw [← rounds_ns_plain hs hv hl, List.forall₂_map_left_iff]
+  exact (Claims.Bridge.Custody.custody_ok hc).2.2.2.imp fun rd am h => ⟨rd, rfl, h⟩
 
 end FlockDeploy

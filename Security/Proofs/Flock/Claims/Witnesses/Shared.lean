@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.ZK.Interact
 Every claim definition carries a refutation witness: a theorem `<Claim>_fails` that exhibits a concrete toy instance at
 which the claim is false, so the definition constrains something. A claim whose definition no instance can refute is
 vacuous. This file holds the toys and the witnesses of `Definitions.Claims`' shared forms; Flock's are
-`Witnesses.Flock`, the sampling compiler's `Witnesses.Sampling`.
+`Witnesses.Flock`, the sampling compiler's `Witnesses.Sampling`, the ZK-recursion compiler's `Witnesses.Recursion`.
 
 The toys: `accV` accepts after one round and `rejV` rejects; `silentP` sends the empty message and calls nothing;
 `noneE` gives up at once and `onceE` reruns the judged run once and gives up; `noFinder` outputs nothing; `pairFinder`
