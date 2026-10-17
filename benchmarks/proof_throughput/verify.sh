@@ -4,16 +4,17 @@
 # and these verdicts. Runs on a CPU node (vy-nebius-cpu-2 or -cpu-3), never on the prover's:
 #   research run --on vy-nebius-cpu-3 --project verity --source . --cwd source --mem-gb 64 \
 #     --tool verity_proof_throughput.tool:VERIFIER_POINT -- bash benchmarks/proof_throughput/verify.sh BUNDLE=art:... PROVE_RUN=r...
-# env: BUNDLE=art:... PROVE_RUN= (the prover point's run id, recorded in the result)  JOBS=1 (sessions verified at once: more
+# env: BUNDLE=art:... PROVE_RUN= (the prover point's run id, recorded in the result)  BUILD_ONLY=1 (build the verifier, stop)
+#      JOBS=1 (sessions verified at once: more
 #      share the node's memory bandwidth, so the timings are one session's alone only at 1)
 #      PT_WORK=/workspace/jobs/proof-throughput (the Lean build, keyed by verity/core/service/flock's files, and the venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
-: "${BUNDLE:?BUNDLE=art:... is required}"
+[ "${BUILD_ONLY:-0}" = 1 ] || : "${BUNDLE:?BUNDLE=art:... is required}"
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/ptv-$$}/out}; mkdir -p "$O"
 W=${PT_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$W"
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$W" --owner @proofs --expires 14d --priority low \
-  --regenerate "bash benchmarks/proof_throughput/verify.sh BUNDLE=$BUNDLE" \
+  --regenerate "bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1" \
   --why "proof_throughput's Lean verifier builds and venv: a cache, rebuilt by the next point" > "$O/keep.json" 2>&1 \
   || echo "no retention record on $W: $(tail -1 "$O/keep.json")" >&2
 S=$(mktemp -d "$W/scratch.XXXXXX"); trap 'rm -rf "$S"' EXIT
@@ -39,6 +40,7 @@ if [ ! -x "$PYBIN" ]; then
   (exec 8>"$W/venv.lock"; flock 8; [ -x "$PYBIN" ] || { "$UV" venv -q --python 3.12 "$W/py" && "$UV" pip install -q --python "$PYBIN" numpy blake3; })
 fi
 export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/benchmarks/proof_throughput
+[ "${BUILD_ONLY:-0}" = 1 ] && { log "BUILD_ONLY: $LEAN ($(cat "$O/lean.sha256"))"; exit 0; }
 
 log "fetching $BUNDLE"
 PYTHONPATH=$REPO/tools/research/src python3 -m research data fetch "$BUNDLE" --to "$S/b" > "$O/fetch.txt" 2>&1 || { tail -5 "$O/fetch.txt"; log "fetch failed"; exit 1; }
