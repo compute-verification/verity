@@ -16,13 +16,13 @@ uv run machine-model attacks VF3l-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 uv run machine-model eps                  # Dither's ε budget at q* = 8: every term, the LP's mixes, the ε(q*) curve
-uv run machine-model eps dither-two-sided --upfill --q 2.2 --json
-uv run machine-model eps --table --upfill # every design, without and with filler on the uniform datapath
-uv run machine-model eps --table --upfill --operands floor   # the cheater's operands at the noise's floor φ_del
-uv run machine-model eps --table --upfill --credit floor     # ε a fraction of the floor program ♭, not honest's kernel
-uv run machine-model eps --table --upfill --credit floor --q 2.16 --lookups   # with QSTAR's table route against L2
+uv run machine-model eps dither-two-sided --q 2.2 --json
+uv run machine-model eps --table         # every design
+uv run machine-model eps --table --operands floor   # the cheater's operands at the noise's floor φ_del
+uv run machine-model eps --table --credit floor     # ε a fraction of the floor program ♭, not honest's kernel
+uv run machine-model eps --table --credit floor --q 2.16 --lookups   # with QSTAR's table route against L2
 uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
-uv run machine-model eps --table --upfill --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
+uv run machine-model eps --table --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
 ~~~
 
 | Path | What |
@@ -102,7 +102,8 @@ GEMM's model time: measured when the design runs the profile's kernel, otherwise
 model's difference between the design and that kernel (PREDICT's arms: within −0.7% to +8.4% of measured on lane
 work), and the model's alone without a measured profile.
 `--upfill` adds verified filler that keeps the uniform datapath busy for the credited program's time, which the cheater
-must then run on lanes or leave in place, and `--fill X` adds X lane instructions a word of verified filler on lanes,
+must then run on lanes or leave in place; it is not adopted (decision 73: a uniform instruction takes an issue slot, so
+UPFILL costs honest issue time, EPS1 P10, r20261017-055801-e051) and stays only for the tests' comparison. `--fill X` adds X lane instructions a word of verified filler on lanes,
 which dilutes what the cheater saves on operands at the cost of γ (`dither-two-sided-fill` is two-sided dither with
 4.5). `--lookups` opens a fifth route for the cheater, the table route (`data/table.toml`, QSTAR's register-indexed
 lookups): q_T lane instructions a word from the lanes' class pool plus 8 B of L2 reads, against an L2 facet at the

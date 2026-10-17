@@ -21,8 +21,9 @@
                                               honest's; ε is a fraction of honest's kernel (--credit H, default) or of
                                               the floor program ♭ (--credit floor); --fill adds X lane instructions a
                                               word of verified filler on lanes, --upfill filler keeping the uniform
-                                              datapath busy; --lookups opens the table route (data/table.toml: lane
-                                              instructions and L2 bytes a word against an L2 facet; --lookup-q, --l2);
+                                              datapath busy (not adopted: decision 73); --lookups opens the table
+                                              route (data/table.toml: lane instructions and L2 bytes a word against an
+                                              L2 facet; --lookup-q, --l2);
                                               --uni-issue C also charges a uniform instruction C times an ALU's cost
                                               on the issue rows; --adapt UNIT charges ε_adapt for a proof unit
                                               (data/adapt.toml, today's segment check by default)
@@ -361,7 +362,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--fold-sweep", help="with --table: each design at each of these fold costs")
     e.add_argument("--fill", type=float, help="add X lane instructions a word of verified filler on lanes")
     e.add_argument("--upfill", action="store_true",
-                   help="add verified filler keeping the uniform datapath busy (with --table: a row beside each)")
+                   help="add verified filler keeping the uniform datapath busy (with --table: a row beside each; "
+                        "not adopted, decision 73)")
     e.add_argument("--lookups", action="store_true",
                    help="open the cheater's table route: words from register-indexed L2 lookups (data/table.toml)")
     e.add_argument("--lookup-q", type=float, help="with --lookups: lane instructions a table word (default: the file's)")
