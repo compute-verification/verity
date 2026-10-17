@@ -45,7 +45,7 @@ theorem ringSwitchJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt 
   have hi' := Run.lt_sts hi
   obtain ⟨schs, cms, streams, hss, hbytes, -, -, hrep⟩ := Run.walkJ S h64 o hS hR
   obtain ⟨htabi, -, -, hreps⟩ := hrep i hi'
-  obtain ⟨hstream, p, ic, l, t', l', -, hzp, hst', hrun⟩ := hreps r hr
+  obtain ⟨hstream, p, ic, l, t', l', -, hzp, hst', -, -, hrun⟩ := hreps r hr
   have h25 := (o.toCase.tables.2.2.2 i hi').1
   have hm : 14 ≤ (Setup.ofCircuit o.sts[i]!).m := by
     show 14 ≤ o.sts[i]!.m

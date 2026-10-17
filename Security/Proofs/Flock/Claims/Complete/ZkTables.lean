@@ -20,6 +20,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Reps
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
+import Proofs.Flock.Claims.Complete.ZkTables.Table
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
@@ -62,4 +63,9 @@ masked Ligerito and the inner proof (`LgInnerAt`; `completeRel`, and `completeJR
 premises at one table). The statement's premise holds at one table too (`StmtOne`: `stmt_of_one`, from `setupOne`'s
 statement, its header's draw the statement's, a printable stratified or subset draw, `good_stratified`), so `StmtAt`
 holds at every good case (`stmtAt_all`) and `StmtOkZk` holds (`stmtOkZk`), and `completeRelS`, `completeJRelS` and
-`complete_zk_relationS` drop it. -/
+`complete_zk_relationS` drop it. The four premises left each say something of one rep of one table, so they are
+stated once at a table, its trace, its tape row, its domain and its coins from the rep's first send (`Table`:
+`TableT`, `RepIn`, `CoinsT`; `RepShapedT`, `ProverRunsT`, `LigeritoT`, `InnerT`), and give `RepShapedAt`,
+`ProverRunsAt` and `LgInnerAt` at each table `i` of every good case, its rep `r` starting after the `2 i + r` earlier
+reps (`repStartZk`; `Case.coinsT`, `Run.start_eq`), so masked completeness at any number of tables follows from the
+JSON specification and those four (`complete_jsonT`). -/

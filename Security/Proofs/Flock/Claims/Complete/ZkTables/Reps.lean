@@ -27,15 +27,18 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockComplete FlockDeploy JsonRT FlockComplete.Replay
 open Lean (Json JsonNumber)
 
-/-- **Rep `rep` of table `i`'s run**: the rep, on the table's trace `tr`, its packed table, the masked level-0
-commitment `cm`, the extra claims `e`, and the tape's pads at table `i` committed as `ic`, returns a proof with `q`,
-from the empty transcript at its domain, ending at the rounds `rs` (`RepRunZk` at table `i`). -/
+/-- **Rep `rep` of table `i`'s run**: the rep, on the table's trace `tr`, its packed table, its masked level-0
+commitment `cm` under the tape's level `i`, the extra claims `e`, and the tape's pads at table `i` committed as `ic`,
+returns a proof with `q`, from the empty transcript at its domain and `n` sends, ending at the rounds `rs`
+(`RepRunZk` at table `i`). -/
 def RepRunJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup)
     (v : Schedule × ℕ) (tr : Trace) (cm : Commit) (e : Array Claim) (tape : TapeZk) (i rep : ℕ) (rs : Array Round)
-    (q : Zk.ZkProof → Prop) : Prop :=
+    (n : ℕ) (q : Zk.ZkProof → Prop) : Prop :=
   ∃ p ic l t' l', innerCommitP (Hashes.ofSha512 h : Hashes V)
       (padsOf tape i rep (Zk.PadLayout.new st.m st.kLog v.1.k0)) (tape.innerSalt i rep) = .ok ic ∧ q p ∧
-    rs = t'.rounds ∧
+    rs = t'.rounds ∧ l.size = n ∧
+    commitPZk (Hashes.ofSha512 h : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 (packed tr st.m)
+      (tape.extra i) (tape.lanePad i) (tape.salt i 0 0) = .ok cm ∧
     ((repPZk (asksS resp) (Hashes.ofSha512 h) st v.1 v.2 rep (spec.domain spec.tables[i]! rep).toUTF8 tr
       (packed tr st.m) cm e (padsOf tape i rep (Zk.PadLayout.new st.m st.kLog v.1.k0)) ic (tape.extra i)
       (tape.lanePad i) (tape.salt i rep) (tape.nonce i rep)).run
@@ -57,7 +60,8 @@ theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
         o.sch i = schs[i]!.1 ∧ ∀ r < 2,
           (o.stream i r).rounds = streams[2 * i + r]!.map (roundRec o.spec (Claims.hOf H)) ∧
           RepRunJ o.resp (Claims.hOf H) o.spec (Setup.ofCircuit o.sts[i]!) schs[i]! (traces o.sts o.w)[i]! cms[i]!
-            (o.extras i) o.ω i r streams[2 * i + r]! fun p => o.zp i r = p := by
+            (o.extras i) o.ω i r streams[2 * i + r]!
+            (1 + ((streams.toList.take (2 * i + r)).flatMap Array.toList).length) fun p => o.zp i r = p := by
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := id hS
   obtain ⟨hz, hcz⟩ := S.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hcz⟩
@@ -158,7 +162,7 @@ theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
     rw [hv]
   refine ⟨htabi, hv, hsch, fun r hr => ⟨hstream i r (by rw [repStreams_size, hsz]; omega) hr, ?_⟩⟩
   have hj : 2 * i + r < o.proofs.size := by rw [hpsz, repStreams_size, hsz]; omega
-  obtain ⟨e, p, ic, l, t', l', hex, hic, hb, hrr, hp⟩ := hfiles (2 * i + r) hj
+  obtain ⟨e, p, ic, l, t', l', hex, hic, hb, hrr, hl, hp⟩ := hfiles (2 * i + r) hj
   have hji : (2 * i + r) / 2 = i := by omega
   have hjr : (2 * i + r) % 2 = r := by omega
   rw [hji] at hex hic hb hp
@@ -170,7 +174,7 @@ theorem Run.walkJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
     simp only [sessOf, hex]
     rfl
   have hps := Ret.go (hR i hi _ _ e hv hcm hex r ic hic) hp
-  refine ⟨p, ic, l, t', l', hic, ?_, hrr, by rw [hext]; exact hp⟩
+  refine ⟨p, ic, l, t', l', hic, ?_, hrr, hl, hcm, by rw [hext]; exact hp⟩
   have hdec' : Zk.decode (shapeZk o.tabs[i]! (o.sch i) (o.extras i).size) (o.bytes i r) = .ok p := by
     unfold Run.bytes
     rw [getElem!_pos o.proofs _ hj, hb, htabi, hsch, hext]
@@ -190,7 +194,7 @@ theorem replayJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.to
   intro i hi r hr
   obtain ⟨schs, cms, streams, hss, hbytes, -, -, hrep⟩ := Run.walkJ S h64 o hS hR
   obtain ⟨htabi, -, hsch, hreps⟩ := hrep i (Run.lt_sts hi)
-  obtain ⟨hstream, p, ic, l, t', l', -, hzp, hst', hrun⟩ := hreps r hr
+  obtain ⟨hstream, p, ic, l, t', l', -, hzp, hst', -, -, hrun⟩ := hreps r hr
   have hroot := (Ret.go (repPZk_fields _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun).2.2
   obtain ⟨R, rp, t₁, hre, C, hC⟩ := Ret.go (repPZk_replay _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
   refine FlockComplete.Replay.ok_val ?_

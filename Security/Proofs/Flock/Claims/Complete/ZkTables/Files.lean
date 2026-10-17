@@ -28,15 +28,15 @@ open Lean (Json JsonNumber)
 
 /-- Table `i`'s rep `rep`'s masked proof file `b` and stream `rs`: at the table's extra claims `e` at the points `pts`,
 `b` encodes, at the rep's shape, a masked proof the rep returned on the table's trace, its packed table, its masked
-level-0 commitment, and the tape's pads, committed, ending at the rounds `rs`. -/
+level-0 commitment, and the tape's pads, committed, from `n` sends, ending at the rounds `rs`. -/
 def RepFileJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup)
     (schs : Array (Schedule × ℕ)) (cms : Array Commit) (trs : Array Trace) (tape : TapeZk) (pts : Array (Array F128))
-    (i rep : ℕ) (rs : Array Round) (b : ByteArray) : Prop :=
+    (n i rep : ℕ) (rs : Array Round) (b : ByteArray) : Prop :=
   ∃ e p ic l t' l', tabs[i]!.extra pts = .ok e ∧
     innerCommitP (Hashes.ofSha512 h : Hashes V)
       (padsOf tape i rep (Zk.PadLayout.new tabs[i]!.m tabs[i]!.kLog schs[i]!.1.k0)) (tape.innerSalt i rep) = .ok ic ∧
     b = FlockSoundness.Discharge.ZkView.encZk (shapeZk tabs[i]! schs[i]!.1 e.size) p ∧ rs = t'.rounds ∧
-    ((repPZk (asksS resp) (Hashes.ofSha512 h) tabs[i]! schs[i]!.1 schs[i]!.2 rep
+    l.size = n ∧ ((repPZk (asksS resp) (Hashes.ofSha512 h) tabs[i]! schs[i]!.1 schs[i]!.2 rep
       (spec.domain spec.tables[i]! rep).toUTF8 trs[i]! (packed trs[i]! tabs[i]!.m) cms[i]! e
       (padsOf tape i rep (Zk.PadLayout.new tabs[i]!.m tabs[i]!.kLog schs[i]!.1.k0)) ic (tape.extra i)
       (tape.lanePad i) (tape.salt i rep) (tape.nonce i rep)).run
@@ -65,8 +65,8 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
       (∃ bs, bodies.toList = linkBody (cms.map fun c => flat c.cap).toList (tabs.map fun _ => ByteArray.empty).toList ::
         bs ∧ Recs resp 1 (streams.toList.flatMap Array.toList) bs) ∧
       r.2.size = spec.repStreams.size ∧ ∀ j (hj : j < r.2.size),
-        RepFileJ resp (Claims.hOf H) spec tabs schs cms trs tape (ptsOf spec (coinOf (resp 0))) (j / 2) (j % 2)
-          streams[j]! r.2[j] := by
+        RepFileJ resp (Claims.hOf H) spec tabs schs cms trs tape (ptsOf spec (coinOf (resp 0)))
+          (1 + ((streams.toList.take j).flatMap Array.toList).length) (j / 2) (j % 2) streams[j]! r.2[j] := by
   unfold sessionPZk at hrun
   obtain ⟨schs, l1, hA, hrun⟩ := go_bind_ok hrun
   obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.m = .ok v) _ fun a _ =>
@@ -108,7 +108,8 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
   have hinv := forIn_array_idx _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
       b.1.size = k ∧ b.2.size = k ∧ (∀ rs ∈ b.1, RoundsOk rs) ∧
         (∀ j (hj : j < b.2.size), RepFileJ resp (Claims.hOf H) spec tabs schs cms trs tape
-          (ptsOf spec (coinOf (resp 0))) (j / 2) (j % 2) b.1[j]! b.2[j]) ∧
+          (ptsOf spec (coinOf (resp 0))) (1 + ((b.1.toList.take j).flatMap Array.toList).length) (j / 2) (j % 2)
+          b.1[j]! b.2[j]) ∧
       ∃ bs, l.toList = linkBody (cms.map fun c => flat c.cap).toList (tabs.map fun _ => ByteArray.empty).toList ::
         bs ∧ Recs resp 1 (b.1.toList.flatMap Array.toList) bs)
     ?_ (by exact ⟨rfl, rfl, by simp, by simp, [], by simp, trivial⟩) hF
@@ -157,13 +158,16 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
         have := Recs.mem hrec' x (by rw [← hrs']; exact Array.mem_toList_iff.2 hx)
         exact ⟨this.1, hok.2 x hx, this.2⟩
     · by_cases hjk : j < ps.size
-      · rw [Array.getElem_push_lt hjk, push_getElem!_lt _ _ (by omega)]
+      · rw [Array.getElem_push_lt hjk, push_getElem!_lt _ _ (by omega), Array.toList_push,
+          List.take_append_of_le_length (by simp; omega)]
         exact h₄ j hjk
       · obtain rfl : j = ps.size := by simp only [Array.size_push] at hj; omega
         have hpush : (ss.push tr'.rounds)[ps.size]! = tr'.rounds := by rw [← h₁, push_getElem!_size]
-        rw [Array.getElem_push_eq, hpush]
+        have htake : (ss.push tr'.rounds).toList.take ps.size = ss.toList := by
+          rw [Array.toList_push, List.take_append_of_le_length (by simp; omega), List.take_of_length_le (by simp; omega)]
+        rw [Array.getElem_push_eq, hpush, htake]
         rw [htb _ hi] at e2
-        exact ⟨extras, pf, ic, _, tr', l₂, hex', hic, rfl, rfl, e2⟩
+        exact ⟨extras, pf, ic, _, tr', l₂, hex', hic, rfl, rfl, hsz, e2⟩
     · simp only [Transcript.init, List.nil_append] at hrs
       simp only [Array.toList_push, List.flatMap_append, List.flatMap_cons, List.flatMap_nil, List.append_nil, hrs]
       exact Recs.append hrec (by rw [← hsz]; exact hrec')
@@ -275,7 +279,7 @@ theorem Run.repJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.t
     have hi : j / 2 < o.sts.size := by
       rw [hpsz, repStreams_size, hsz] at hj
       omega
-    obtain ⟨e, p, ic, l, t', l', hex, hic, hb, -, hp⟩ := hfiles j hj
+    obtain ⟨e, p, ic, l, t', l', hex, hic, hb, -, -, hp⟩ := hfiles j hj
     rw [htab _ hi] at hex hic hb hp
     simp only [ptsOf_coin] at hex
     obtain ⟨hv, hcm⟩ := hsc' _ hi
