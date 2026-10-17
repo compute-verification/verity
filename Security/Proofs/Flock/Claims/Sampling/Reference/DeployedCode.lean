@@ -33,6 +33,9 @@ At this code:
   `Framed`, `AcceptsFramed`, `SessionsScope`, `SessionWit` and `SessionsIn` are exactly their one-session forms
   (`FramedOne`, `AcceptsOne`, `SessScope`, `SessWit`, `SessIn`). Each reads `sess` once at a run that checks some unit,
   with no unit named.
+* `N₀_of_shapes`, `sessIn_of_shapes`: `N₀` reads only the session's table sizes, so `SessIn`'s `N₀` clause holds when
+  every session at `x` has the tables `shape x` fixes (`ShapesFixed`), which the sampled verifier's refusal of
+  statements whose sessions differ in table shapes is to establish.
 * `complete_code`: `Complete` at the code from Flock's masked completeness and those premises.
 -/
 
@@ -239,6 +242,30 @@ theorem sessionsIn_code_iff : SessionsIn (code c reg L bytes sr sess) ↔ SessIn
     exact h x (0, 0) v xS vS hv
   · intro h x _ v xS vS hv
     exact h x v xS vS hv
+
+/-! ## The sessions' table shapes -/
+
+/-- **The session's table shapes are the statement's**: whatever a run shows, the session's statement sets up tables of
+sizes `shape x`, in order. The sampled verifier's refusal of statements whose sessions differ in table shapes is what
+establishes it. -/
+def ShapesFixed (shape : Msg → List ℕ) : Prop :=
+  ∀ x v xS vS, sess x v = some (xS, vS) → (FlockDeploy.tables true xS).map (fun p => p.2.m) = shape x
+
+/-- A shape's `N₀`: its tables' masked level-0 codeword lengths, summed. -/
+noncomputable def shapeN₀ (ms : List ℕ) : ℝ := (ms.map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
+
+/-- **`N₀` reads only the table shapes**: at fixed shapes, every session at `x` has `N₀` the shapes'. -/
+theorem N₀_of_shapes (shape : Msg → List ℕ) (h : ShapesFixed sess shape) (x : Msg) (v : Seen) (xS : Msg) (vS : Seen)
+    (hv : sess x v = some (xS, vS)) : FlockDeploy.N₀ true xS = shapeN₀ (shape x) := by
+  rw [← h x v xS vS hv, shapeN₀, List.map_map]
+  rfl
+
+/-- **`SessionsIn` from fixed shapes**: the sessions in Flock's masked scope with at most `tables` tables, their shapes
+the statement's, and the record's `N₀` the shapes'. -/
+theorem sessIn_of_shapes (shape : Msg → List ℕ)
+    (hin : ∀ x v xS vS, sess x v = some (xS, vS) → ∃ s spec sts, FlockDeploy.ZkIn xS s spec sts ∧ sts.size ≤ c.tables x)
+    (h : ShapesFixed sess shape) (hN : ∀ x, c.innerN₀ x = shapeN₀ (shape x)) : SessIn c sess :=
+  fun x v xS vS hv => ⟨hin x v xS vS hv, (N₀_of_shapes sess shape h x v xS vS hv).trans (hN x).symm⟩
 
 set_option synthInstance.maxSize 1024 in
 /-- **Sampling completeness at the code**: `complete_deploy` with `SessionSlots` proved, `DrawSlots` and `DrawFixed`
