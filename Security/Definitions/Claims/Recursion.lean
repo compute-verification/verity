@@ -9,16 +9,21 @@ compiled verifier's, parametric in the inner protocol (`Inner`, a `Deploy`-like 
 eight items:
 
 1. **Statement format.** `x` is the canonical bytes of what the compiled verifier reads, parsed by its own parser
-   (`Deploy.parse`) into the inner statement's bytes, the inner statement's dimensions as its parser reads them, the
-   commitment to the circuit (the private-circuit variant only) and the recursion's form (`Stmt`, `Form`).
+   (`Deploy.parse`) into the inner statement's bytes, the inner statement's dimensions as the verifier sets it up, the
+   commitment to the circuit (the private-circuit variant only), the recursion's form, and each V* session's draw as
+   its record holds it (`Stmt`, `Form`, `Draw`).
 2. **Witness.** The inner protocol's (`W`), in both variants. In the private-circuit one the circuit is in the inner
    witness, which the universal unit's relation reads, and its commitment is hm96 rows that unit outputs.
 3. **Relation (inherited).** `R(x, w) :⇔ x` parses, has no circuit commitment, and `R_I(x_I, w)` (`R`). The private
    variant: `x` parses with a circuit commitment, and `R_I(x_I, w)`, whose outputs bind it to the circuit (`RPriv`).
-4. **Scope, readable** (`Scope`, `InScope`): the inner scope, and candidate 3's form (a fast100 inner table,
-   `k_log ≥ 6`, two claims and two per region, no private circuit, a valid RecSparse phase at `T_LOG = 0` with
-   `6 ≤ ℓ ≤ k_log` and its unit range inside a block, R at `table_m` with two claims). `ScopeMatches` states that it is
-   the compiled verifier's own scope check.
+4. **Scope, readable** (`Scope`, `InScope`): the inner scope, and the inner shapes the compiled verifier accepts:
+   dense, holo (private inner circuits) and sparse (candidate 3's RecSparse phase and R). A fast100 inner table,
+   `k_log ≥ 6`, two claims and two per region, no circuit commitment; either no RecSparse phase and no R, or a valid
+   RecSparse phase at `T_LOG = 0` with `6 ≤ ℓ ≤ k_log`, the inner statement's dimensions the form's and its unit range
+   inside a block, and R at `table_m` with two claims. Every V* session draws every unit of its population
+   (`Draw.Full`). There is no recursion-level scope refusal: `ScopeMatches` states that this is the compiled
+   verifier's own scope check, its setup's checks of the inner shape and its refusal of a V* session whose draw is not
+   every unit.
 5. **Named pieces.** A run is the inner session's rounds, the prover's staging rounds (`Deploy.kS`), at which it stages
    the V* statements, then the V* sessions. `E*` (`E`): the outer extractor `E_O` (`EO`: per V* session, `E^rep` over
    forks of the judged run at the session's first round, with the outer Flock's assemble and check), then the inner one
@@ -270,10 +275,10 @@ end OfFlock
 
 /-! ## The compiled verifier's statement and scope -/
 
-/-- **The recursion's form**, as the compiled verifier reads it (candidate 3, `RecVStar.Inner`): the inner table's `m`,
-`k_log`, regions and claims, whether the inner circuits are private (`holo`), the RecSparse phase's shape
-`(NU, ELL, S_LOG, T_LOG)`, R's shape `(m, claims)`, and whether the RecSparse unit range's slots lie inside the
-block. -/
+/-- **The recursion's form**, as the compiled verifier reads it (its inner shape, `RecVStar.Inner`): the inner table's
+`m`, `k_log`, regions and claims, whether the inner circuits are private (`holo`), the RecSparse phase's shape
+`(NU, ELL, S_LOG, T_LOG)` and R's shape `(m, claims)` (candidate 3's sparse phase; neither at a dense or holo inner
+session), and whether the RecSparse unit range's slots lie inside the block. -/
 structure Form where
   m : ℕ
   kLog : ℕ
@@ -284,27 +289,45 @@ structure Form where
   stacked : Option (ℕ × ℕ)
   unitRangeInBlock : Bool
 
-/-- **The recursion's statement**: the inner statement's bytes, its `(m, k_log, regions)` as its own parser reads
-them, the commitment to the circuit (the private-circuit variant), and the form. -/
+/-- **A V* session's draw**, as its record holds it: its law's `k` when the law is `subset` (`none` for another law),
+its population, its units and its closure. -/
+structure Draw where
+  subset : Option ℕ
+  population : ℕ
+  units : List ℕ
+  closure : List ℕ
+
+/-- **The full draw**: the `subset` draw of every unit of its population, `0, …, N − 1` in order, with no closure. -/
+def Draw.Full (d : Draw) : Prop :=
+  d.subset = some d.population ∧ d.units = List.range d.population ∧ d.closure = []
+
+/-- **The recursion's statement**: the inner statement's bytes, its `(m, k_log, regions)` as the verifier sets it up
+from its files (`none` where the verifier holds none), the commitment to the circuit (the private-circuit variant),
+the form, and each V* session's draw as its record holds it (`none` where it holds none the verifier reads). -/
 structure Stmt where
   inner : Msg
-  innerDims : ℕ × ℕ × ℕ
+  innerDims : Option (ℕ × ℕ × ℕ)
   circ : Option Msg
   form : Form
+  draws : List (Option Draw)
 
 /-- RecSparse's `P_LOG` at `ℓ`: the bit length of `2ℓ + 1`. -/
 def pLog (ell : ℕ) : ℕ := Nat.log 2 (2 * ell + 1) + 1
 
-/-- **The recursion's scope, readable** (candidate 3): no circuit commitment and no private inner circuit; the form's
-inner shape is the inner statement's, at a fast100 `m` (`22 ≤ m ≤ 35`), `k_log ≥ 6`, two claims and two per region;
-a RecSparse phase at `NU ≥ 1`, `6 ≤ ℓ ≤ k_log`, `T_LOG = 0`, its unit range's slots inside the block; R at the phase's
-`table_m = max(22, NU + P_LOG)` with a fast100 schedule and the two reps' claims. -/
+/-- **The recursion's scope, readable**: the inner shapes the compiled verifier accepts, every V* session drawing every
+unit of its population. No circuit commitment; the inner table at a fast100 `m` (`22 ≤ m ≤ 35`), `k_log ≥ 6`, two
+claims and two per region, its circuits public or private (`holo` either way); and either no RecSparse phase and no R
+(a dense or holo inner session), or candidate 3's sparse phase: a RecSparse shape at `NU ≥ 1`, `6 ≤ ℓ ≤ k_log`,
+`T_LOG = 0`, the inner statement's `(m, k_log, regions)` the form's, its unit range's slots inside the block, and R at
+the phase's `table_m = max(22, NU + P_LOG)` with a fast100 schedule and the two reps' claims. Every V* session's
+record holds a draw, and it is the full draw (`Draw.Full`). -/
 def InScope (s : Stmt) : Prop :=
-  s.circ = none ∧ s.form.holo = false ∧ (s.form.m, s.form.kLog, s.form.regions) = s.innerDims ∧
-    22 ≤ s.form.m ∧ s.form.m ≤ 35 ∧ 6 ≤ s.form.kLog ∧ s.form.claims = 2 + 2 * s.form.regions ∧
-    s.form.unitRangeInBlock = true ∧
-    ∃ nu ell sLog, s.form.sparse = some (nu, ell, sLog, 0) ∧ 1 ≤ nu ∧ 6 ≤ ell ∧ ell ≤ s.form.kLog ∧
-      s.form.stacked = some (max 22 (nu + pLog ell), 2) ∧ max 22 (nu + pLog ell) ≤ 35
+  s.circ = none ∧ 22 ≤ s.form.m ∧ s.form.m ≤ 35 ∧ 6 ≤ s.form.kLog ∧ s.form.claims = 2 + 2 * s.form.regions ∧
+    (s.form.sparse = none ∧ s.form.stacked = none ∨
+      ∃ nu ell sLog, s.form.sparse = some (nu, ell, sLog, 0) ∧ 1 ≤ nu ∧ 6 ≤ ell ∧ ell ≤ s.form.kLog ∧
+        s.innerDims = some (s.form.m, s.form.kLog, s.form.regions) ∧ s.form.unitRangeInBlock = true ∧
+        s.form.stacked = some (max 22 (nu + pLog ell), 2) ∧ max 22 (nu + pLog ell) ≤ 35) ∧
+    ∀ d ∈ s.draws, ∃ e, d = some e ∧ e.Full
 
 /-! ## What the compiled verifier brings -/
 
@@ -562,7 +585,8 @@ nonempty tapes), at an inner protocol of Flock's witnesses. -/
 def Complete (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin Flock.Wit) (δc : Msg → ℝ) : Prop :=
   Claims.Complete H D.V D.P (R D I) (Scope D I) δc
 
-/-- **The recursion: the readable scope is the compiled verifier's.** -/
+/-- **The recursion: the readable scope is the compiled verifier's**: a statement is in `Scope` exactly when the
+compiled verifier's scope check takes it. -/
 def ScopeMatches (D : Deploy Coin) (I : Inner Coin W) : Prop := Claims.ScopeMatches (Scope D I) D.scopeCheck
 
 /-- **The recursion: zero knowledge** of the honest prover against every malicious verifier of the compiled verifier's
