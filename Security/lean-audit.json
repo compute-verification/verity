@@ -6660,14 +6660,14 @@
    ]
   },
   "Definitions.Accounting.TS.Play": {
-   "digest": "755541376928332608817b1f851cfc19e486e18b6be6e78dcf61a08c254165fe",
+   "digest": "1341fe8278dfd7b3ac596dcc6057d8e7b37456018825456780bca70ec680d074",
    "definitions": {
     "Accounting.TS.Play": "0a19c63985b76a029e766be1955d0db7b59cd18e49a947d38e5dbd302ca2cc94",
     "Accounting.TS.Play.accepts": "d5b18f31fb88ab2ec495b88ca47bd355fc8d1da09c47afc1a5657f3528eba728",
     "Accounting.TS.Play.game": "aa577a84048a3bf1691a92a903dc4fa585463d7691aa9e64bab030c71a8ef306",
     "Accounting.TS.Play.run": "5d43ee0a30cee63a628946da12c4265690d05b8964a594a12e64926011f862ba",
     "Accounting.TS.RoundGame.BudgetAt": "2f16c0729e46ca62ffa468aecaee7e70871547ad0127e148fb8a732c5363f803",
-    "Accounting.TS.RoundGame.LuckAt": "e5718e5c5b4cbcc8ee75fdd846faf85dae022b4658798fe24181de64cfce8749"
+    "Accounting.TS.RoundGame.LuckAt": "ed20de7ced73a673a93adb8b77525ccc0aa1979b64c52801b16d6f8813b3a096"
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.CompilerC",
@@ -8589,9 +8589,9 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Eps1.M3": {
-   "digest": "ef87bdf2416d166c6e9a2728e0315d40a5f5607830042b7f577ab7b407afa010",
+   "digest": "f2a4753a8120ee2b478c5e8d3b731c9883a623c8e75b7ac4249250e683dc48d6",
    "definitions": {
-    "Pouw.Eps1.ClassP": "3316e371abaf8a226932a7cdf5e520d19116d510a330dc9aba83d8aa52c2fa5c",
+    "Pouw.Eps1.ClassP": "a701827ced69a6601de286c0a09f129a13cb0c797905954636c3ae3ad8bb16d2",
     "Pouw.Eps1.Cols": "ddd2433ba8ded7d37960c6fe6dd23b4f66e5d14cffc795d7dad1fa886eaa440b",
     "Pouw.Eps1.ColsValid": "dd8588c5c8ca89bca32ad7f49e4e8b3288ef73448a382d2f6d4d65c0c7dff962",
     "Pouw.Eps1.Dither": "9fddd81cf94ff83c46caaddfe6ad4615561c7d4623d3e25087ef56da13f6e11c",
@@ -8602,6 +8602,7 @@
     "Pouw.Eps1.Field.β": "499ffab8d6d7b398996a4959a7859300e9e31f8d2c647f573dfd05831587b3a9",
     "Pouw.Eps1.Field.τ": "dbb7fb660a13c4b0ca794421f62c03c87f4550c77897364c202777864a4295d8",
     "Pouw.Eps1.GCols": "42178af7d97934917ea654c155fff4636d5eedd9d2ccaa72c410a44036e56add",
+    "Pouw.Eps1.Holds": "01f45b6308168cb7598df365d4154138da03a9e707cc7c4090fc7d2da6d586ee",
     "Pouw.Eps1.Int8Valid": "3c4084db5783f85e7c97d3fd14e1ff170607fe359289740c1609f8084aac60d0",
     "Pouw.Eps1.M3": "ac86c8c2429196e11767d29693e97c27dfad981e8397bd55101236366d0283f4",
     "Pouw.Eps1.M3.IsRun": "b4d51e1aed9022ba775b6c6892a54a43203f84c5871f5c924b17f9cd871f628b",
@@ -8610,7 +8611,7 @@
     "Pouw.Eps1.M3.earlier": "8fc1ce3ba363d446fa4d4d2844b16805dc485a306455601b17e0446f27451c45",
     "Pouw.Eps1.M3.op": "e83647ae3decddd1f8090a9aaf486ebb9a94aee2fce55f966ee475ed464d28a3",
     "Pouw.Eps1.Packing": "6553fcd1dd47b06d4a14c6e466006f56b22d0a65af6a88ae3ec76938eb251440",
-    "Pouw.Eps1.Packing.MixedRadix": "c98ee3220abc2cdffb4002bfafe551c6ad20c794fc755beb6776ad031e4b0e2e",
+    "Pouw.Eps1.Packing.MixedRadix": "eea8ecbb7cbdfaf79a321a048eb4b0794b21b308fd7f76a0a8fbd56c0c44915f",
     "Pouw.Eps1.Packing.fields": "cdd0be679aeec5c15e3f089fa9069dd80f38ff5c37e3635df8d64b8f22268dce",
     "Pouw.Eps1.Packing.word": "8655ac24cef8987f18dc11e4a76430f8d0cca294cca3fc9344e9d0fd294c51c6",
     "Pouw.Eps1.Prog": "25af16756c6dd4bca5f7ebd4adaaee42b23516685027fb26b3e58bebe67cdb9f",
