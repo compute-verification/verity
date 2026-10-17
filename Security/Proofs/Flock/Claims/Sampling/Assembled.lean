@@ -48,9 +48,12 @@ import Proofs.Flock.SamplingBoundary
 * `SessionOpens`, `InteriorFixed` (`Sampling.KS`): the same verifier.
 * `ProgramScope`, `ChecksScope` (`Sampling.Select.Scope`): the scope check is the readable scope's program part (a
   topologically ordered program, partitioned into proof units), and an accepted run passed it. The design part is a
-  theorem (`designWellFormed`); the program part waits on the claims' program and the verifier's being one. The
-  verifier's reading of the descriptor is total (C-Flock's verifier has no `partial` def); what remains is the
-  flattening of the program it decodes into the claims' gates.
+  theorem (`designWellFormed`); the program part waits on the claims' program and the verifier's being one. The claims
+  are over word gates: the program is the statement's bit gates (`prog`), the Boolean lowering of its word gates as the
+  statement brings it, and a `Q_word` unit is the set of its word gates' bit gates, so no Lean lowering of the served
+  primitives enters. The verifier's reading of the descriptor is total (C-Flock's verifier has no `partial` def); what
+  remains is its map from each word gate to that word gate's bit gates in `prog`, under which its `Q_word` evaluation is
+  `partition`.
 * `hopen : OpenCallsLe H D`: checking what one checked unit's Flock witness reveals makes at most `openCalls` SHA-512
   calls; at the deployed record, from the reveal count (`SamplingDeploy.openCallsLe_deploy`). With it the extractor's
   own calls are `Efficient`'s (`E_own_le`); its reruns are, at every deployment (`E_runs_le`), and its expected reruns
