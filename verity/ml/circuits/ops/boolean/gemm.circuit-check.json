@@ -16,52 +16,52 @@
    "and": 6864
   },
   "DotBf16_v3{K=16,DOT=AmpereBF16TcDot16_v3}": {
-   "and": 7996
+   "and": 7968
   },
   "DotBf16_v3{K=16,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 7604
+   "and": 7573
   },
   "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
-   "and": 32776
+   "and": 32748
   },
   "DotBf16_v3{K=64,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 31220
+   "and": 31189
   },
   "F2fpBf16_v2": {
    "and": 66
   },
   "GemmCoordinateE4m3_v2{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
-   "and": 18050
+   "and": 18002
   },
   "GemmCoordinateE4m3_v2{K=64,DOT=HopperE4m3MmaV2Dot32_v2}": {
-   "and": 19215
+   "and": 19170
   },
   "GemmCoordinateE4m3_v2{K=64,DOT=HopperE4m3QgmmaDot32_v2}": {
-   "and": 13445
+   "and": 13392
   },
   "GemmCoordinateMxf4_v2{K=128,DOT=BlackwellMxf4OmmaDot64_v2}": {
-   "and": 11511
+   "and": 11466
   },
   "GemmCoordinateNvf4_v2{K=128,DOT=BlackwellNvf4OmmaDot64_v2}": {
-   "and": 13401
+   "and": 13356
   },
   "GemmCoordinate_v3{K=32,DOT=AmpereBF16TcDot16_v3}": {
-   "and": 16322
+   "and": 16294
   },
   "GemmCoordinate_v3{K=32,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 15542
+   "and": 15511
   },
   "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
-   "and": 32842
+   "and": 32814
   },
   "GemmCoordinate_v3{K=64,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 31286
+   "and": 31255
   },
   "Gemm_v3{K=32,N=3,DOT=AmpereBF16TcDot16_v3}": {
-   "and": 48966
+   "and": 48882
   },
   "Gemm_v3{K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
-   "and": 46626
+   "and": 46533
   },
   "HopperBF16WgmmaDot16_v2": {
    "and": 7872

@@ -112,18 +112,21 @@ suite runs in one process.
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
 an hour, not its slot until the run's own timeout.
 
-`--mem-gb GB` (`check` passes its slot's share) bounds a parallel suite to as many xdist workers as GB holds at its `[tool.verity.tests]
-worker_gb`, what one of them may reach, else at `TEST_PROCESS_GB`.
+`--mem-gb GB` (`check` passes its slot's share) is the whole run's: the one-process suites hold `TEST_PROCESS_GB` each, and the
+parallel suites share the rest, each with as many xdist workers as it holds at its `[tool.verity.tests] worker_gb`, what one of
+them may reach, else at `TEST_PROCESS_GB`; one that overlaps another waits for its workers' GB (`wide_gb`).
 """
 from __future__ import annotations
 
 import argparse
 import ast
 import concurrent.futures
+import contextlib
 import hashlib
 import importlib.metadata
 import importlib.util
 import json
+import math
 import os
 import platform
 import re
@@ -135,7 +138,7 @@ import tempfile
 import threading
 import time
 import tomllib
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -1561,12 +1564,55 @@ class Slots:
                 self.cond.notify_all()
 
 
+#: the memory a check slot gives the run it holds (`tools/verity/check/slot.py`'s SLOT_MEM_ENV)
+SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+#: after a stop's SIGINT, how long a suite's process group has to end before it is killed
+STOP_GRACE_S = 30.0
+
+
+def slot_mem_gb() -> float | None:
+    """The check slot's memory, when this runs in one (17 Oct: a quick tier in proofs' 480 GB pool slot ran circuit_check's suite
+    on 94 workers, 784 GB, since only `check` passed `--mem-gb`)."""
+    v = os.environ.get(SLOT_MEM_ENV, "")
+    return float(v) if v.replace(".", "", 1).isdigit() else cgroup_mem_gb()
+
+
+def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
+    """The tightest cgroup v2 `memory.max` over this process, in GiB, or None when none is set: a job outside a check slot
+    (the cluster queue's scope, 17 Oct: two `suites.py verity-flock --fresh` runs OOM-killed there) sizes itself to it."""
+    try:
+        rel = next(line[3:].strip() for line in (root / "proc/self/cgroup").read_text().splitlines() if line.startswith("0::"))
+    except (OSError, StopIteration):
+        return None
+    top, limits = root / "sys/fs/cgroup", []
+    d = top / rel.strip("/")
+    for c in (d, *d.parents):
+        if not c.is_relative_to(top):
+            break
+        with contextlib.suppress(OSError):
+            if (m := (c / "memory.max").read_text().strip()).isdigit():
+                limits.append(int(m))
+    return min(limits) / 2**30 if limits else None
+
+
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
     """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
     at `TEST_PROCESS_GB` (16 Oct: verity_core_protocols_pous_check's undeclared workers reached 11 GB each)."""
     if mem_gb is None:
         return n
-    return max(1, min(n, int(mem_gb // (s.worker_gb if s.worker_gb > 0 else TEST_PROCESS_GB))))
+    return max(1, min(n, int(mem_gb // worker_gb(s))))
+
+
+def worker_gb(s: Suite) -> float:
+    return s.worker_gb if s.worker_gb > 0 else TEST_PROCESS_GB
+
+
+def wide_gb(mem_gb: float | None, serial: int) -> float | None:
+    """The GB the parallel suites share: ``mem_gb`` less `TEST_PROCESS_GB` for each of the ``serial`` processes that run the
+    one-process suites beside them. Parallel suites that overlap draw their workers' GB from it in turn, so two side by side can't
+    each size to the whole (17 Oct, note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent: circuit_check's 53 workers and
+    flock's 30, each sized to all of --mem-gb, reached 800 GB together on cpu-2)."""
+    return None if mem_gb is None else max(0.0, mem_gb - serial * TEST_PROCESS_GB)
 
 
 def serial_slots(seconds: list[float | None], parallel: int, jobs: int) -> int:
@@ -1644,8 +1690,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", "-j", type=int, default=default_jobs(),
                     help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use, "
                          f"at most one per {TEST_PROCESS_GB} GB of available memory)")
-    ap.add_argument("--mem-gb", type=float, default=None, metavar="GB",
-                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB undeclared)")
+    ap.add_argument("--mem-gb", type=float, default=slot_mem_gb(), metavar="GB",
+                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB "
+                         f"undeclared; default: the check slot's ${SLOT_MEM_ENV}, so a quick tier in a slot stays inside it)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
     ap.add_argument("--run", metavar="RUN", help="the recorded run this is (check passes its own): kept with each pass, so a reuse of it "
@@ -1760,6 +1807,8 @@ def main(argv: list[str] | None = None) -> int:
     r = serial_slots([known.get(s.name) for s in one], len(wide), jobs)
     lanes = {False: Slots(r), True: Slots(jobs - r)}
     turns = {s: lane.index(s) for lane in (wide, one) for s in lane}
+    shared_gb = wide_gb(a.mem_gb, r)
+    memory = Slots(int(shared_gb)) if shared_gb is not None else None
     if wide and one:
         print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes, beside {len(one)} others on {r}")
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(os.environ.get(MIN_S_ENV) or 0)
@@ -1769,8 +1818,9 @@ def main(argv: list[str] | None = None) -> int:
     stopping = threading.Event()
 
     def start(s: Suite, paths: list[str]) -> Result:
-        n = wide_workers(s, jobs - r, a.mem_gb) if s in wide else 1
-        with lanes[s in wide].take(turns[s], n):
+        n = wide_workers(s, jobs - r, shared_gb) if s in wide else 1
+        gb = min(int(shared_gb), math.ceil(n * worker_gb(s))) if memory and s in wide else 0
+        with lanes[s in wide].take(turns[s], n), (memory.take(turns[s], gb) if memory and s in wide else nullcontext()):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
             return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not covered(m, paths, cuts[s])],
@@ -1859,6 +1909,15 @@ def main(argv: list[str] | None = None) -> int:
             with _GROUPS_LOCK:
                 for g in list(_GROUPS):
                     kill_group(g, signal.SIGINT)
+
+            def kill_rest() -> None:                        # a pytest that ignores SIGINT (a node short of memory) would hold
+                with _GROUPS_LOCK:                          # the stop until its run ended (17 Oct, cpu-2: 94 workers)
+                    for g in list(_GROUPS):
+                        kill_group(g, signal.SIGKILL)
+
+            stop = threading.Timer(STOP_GRACE_S, kill_rest)
+            stop.daemon = True
+            stop.start()
             for fut in futures:
                 if fut not in handled:
                     finish(fut)

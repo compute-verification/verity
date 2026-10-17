@@ -240,6 +240,29 @@ def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables
         else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()
         else .error (refusal (scopeWhy tags.hiddenOutputs c))
 
+/-- `check` on its circuit as `circuitOf` returns it (`parsed`), which `verify` parses once for this and the setup
+(`check_eq`). -/
+def checkOf (parsed : V Circuit) (tags : Tags) (zk : Bool) (publicFile : ByteArray) (count : Nat)
+    (publicInputs registered : Bool) : Except String Unit :=
+  match firstFailure (statementRules tags zk count publicInputs) with
+  | some why => .error (refusal why)
+  | none => match parsed with
+    | .error e => .error (refusal s!"a circuit that does not parse ({e})")
+    | .ok c => match publicOf tags c publicFile with
+      | .error e => .error (refusal s!"a public file that does not load ({e})")
+      | .ok pub =>
+        if pub.tables.isSome && !sharedRowsOk tags zk registered then
+          .error (refusal "a shared-row public file (header shared_rows)")
+        else if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
+        else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()
+        else .error (refusal (scopeWhy tags.hiddenOutputs c))
+
+theorem check_eq (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray))
+    (count : Nat) (publicInputs registered : Bool) :
+    check tags zk circuitFile publicFile tables count publicInputs registered
+      = checkOf (circuitOf tags circuitFile tables) tags zk publicFile count publicInputs registered :=
+  rfl
+
 /-- What a draw's law is, when no soundness claim draws by it: the claims draw by the stratified law (with or without
 `--zk`) and, under `--zk`, by the subset law, so a bernoulli draw, a work draw (with or without a closure) and a subset
 draw without `--zk` are outside them. -/

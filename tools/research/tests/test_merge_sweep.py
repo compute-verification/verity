@@ -25,11 +25,12 @@ class FakeGitHub:
 
     def __init__(self, prs: list[dict]):
         self.open = {p["number"]: dict(p) for p in prs}
+        self.merged: list[dict] = []
         self.mutations: list[tuple[str, ...]] = []
 
     def __call__(self, *args: str) -> str:
         if args[:2] == ("pr", "list"):
-            return json.dumps(list(self.open.values()))
+            return json.dumps(self.merged if "merged" in args else list(self.open.values()))
         self.mutations.append(args)
         n = int(args[2])
         if args[:2] == ("pr", "close"):
@@ -615,3 +616,40 @@ def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_th
     assert not M.report_landings(repo, start, merge, api=Down(), reg=reg, gh=gh)
     assert f"the landings {start[:12]}..{merge[:12]} weren't posted to the merge thread: OSError" in capsys.readouterr().err
     assert M.report_landings(repo, merge, merge, api=Down(), reg=reg, gh=gh), "nothing landed, nothing to post"
+
+
+def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(tmp_path):
+    """17 Oct (CI-48): drive lands a PR's commits; GitHub then marks the PR merged, so it was never open for the sweep, and its
+    branch stayed: 2,119 of the repository's 3,543 branches were already on main."""
+    repo, gh, tips, _merge = _world(tmp_path)
+    del gh.open[1], gh.open[2]
+    gh.merged = [{"number": 1, "headRefName": "A", "headRefOid": tips["A"]}, {"number": 2, "headRefName": "B", "headRefOid": tips["B"]},
+                 {"number": 9, "headRefName": "D", "headRefOid": tips["D"]}]                       # D isn't on main: kept
+    M.sweep(repo, gh=gh, log=[].append)
+    assert _heads(repo) == {"main", "C", "D", "E"}
+
+
+def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_work(tmp_path):
+    now = 1_800_000_000                                                   # the sweep's clock, injected
+
+    repo, gh, tips, _merge = _world(tmp_path)
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    for name, base, days in (("old-landed", "main", 2), ("new-landed", "main", 0), ("old-work", "C", 5), ("new-work", "C", 1),
+                             ("cursor/verity-ci-3d4e", "C", 9)):
+        _git(repo, "checkout", "-q", "-b", name, base)
+        (repo / f"{name.replace('/', '_')}.txt").write_text(name)
+        _git(repo, "add", "-A")
+        when = f"@{now - days * 86400} +0000"
+        subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", name], cwd=repo, check=True,
+                       env={**env, "GIT_COMMITTER_DATE": when, "GIT_AUTHOR_DATE": when})
+        _git(repo, "push", "-q", "origin", name)
+    _git(repo, "checkout", "-q", "main")
+    for name in ("old-landed", "new-landed"):
+        _git(repo, "merge", "-q", "--no-ff", "-m", f"land {name}", name)
+    _git(repo, "push", "-q", "origin", "main")
+    del gh.open[1], gh.open[2]                                            # A and B landed; C, D and E stay open
+    for name in ("A", "B"):                                               # landed with the train, and fresh at ``now``
+        _git(repo, "push", "-q", "origin", f":refs/heads/{name}")
+    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (1, 1)  # old-landed deleted, old-work archived
+    assert _heads(repo) == {"main", "C", "D", "E", "new-landed", "new-work", "cursor/verity-ci-3d4e"}
+    assert "refs/archive/heads/old-work" in _git(repo, "ls-remote", "origin", "refs/archive/*")

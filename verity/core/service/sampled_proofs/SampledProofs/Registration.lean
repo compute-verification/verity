@@ -44,7 +44,7 @@ def queryDigest (q : Json) : V String := canonSha512 q
 
 /-- The verifier's own copies that R1–R7 hold the record to. -/
 structure Verifier where
-  program : Desc
+  program : Program
   query : Json
   /-- the agreed law: a rule, which `Draw.derive` expands -/
   law : Json
@@ -169,7 +169,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
   -- R7
   if v2 then
-    c := checkRegistered c (get "registered") (Registered.entries v.program v.params v.registered) (heldRoots v.log)
+    c := checkRegistered c (get "registered") (Registered.entries v.program.desc v.params v.registered) (heldRoots v.log)
   return c
 
 end SampledProofs.Registration
