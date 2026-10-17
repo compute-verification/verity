@@ -344,14 +344,34 @@ __global__ void __launch_bounds__(256) hquant(const uint16_t* __restrict__ x, in
     }
   }
 }
-// H1's served side (K): per (head, token) asymmetric floor at top 111 (steps.floor_quant at top 111, one bit): amax =
-// max(x), namax = max(-x) over the 128 head-dim entries, s = max(amax / 111, namax / 112) clamped to 1e-30 then * (1 +
-// 2^-20), X = floor(x / s) + b in [-112, 111] (the margin keeps floor(x / s) in [-112, 110], no clamp). Y(r) = X(r) +
-// X(r + 64) in [-224, 222] leaves s8, so the digit split Y = Y0 + 128 Y1 (Y0 = ((Y + 64) & 127) - 64 in [-64, 63],
-// Y1 = (Y - Y0) >> 7 in [-2, 2]) and P_A = [Y0_lo | Y0_hi | Y1_lo | Y1_hi]. Every divide (amax / 111, namax / 112, x / s)
-// shares the one pinned generic div.rn slow path.
+// H1's per (head, token) activation extremes for cohalf's QK^T: amax = max(x), namax = max(-x) over the 128 head-dim
+// (steps.floor_quant's x.amax and (-x).amax at top 111), packed as (amax, namax). A separate reduction (no division), so
+// hquant_h1's divides share the one pinned generic div.rn slow path, as crow_s does for cquant_h1 (an inline reduction
+// interleaves warp barriers that make ptxas emit an unpinned div slow-path body, probe r20261017-215903-5a44).
+__global__ void __launch_bounds__(256) hrow_s(const uint16_t* __restrict__ x, float2* __restrict__ an, int rows) {
+  const int w = (blockIdx.x * blockDim.x + threadIdx.x) / 32, lane = threadIdx.x % 32;
+  if (w >= rows) return;
+  const uint2 v = __ldg(reinterpret_cast<const uint2*>(x + (size_t)w * 128) + lane);
+  const uint32_t vv[2] = {v.x, v.y};
+  float pa = __uint_as_float(0xff800000u), na = pa;   // -inf
+#pragma unroll
+  for (int h = 0; h < 2; h++) {
+    const float a = __uint_as_float(vv[h] << 16), b = __uint_as_float(vv[h] & 0xFFFF0000u);
+    pa = fmaxf(fmaxf(pa, a), b);
+    na = fmaxf(fmaxf(na, -a), -b);
+  }
+#pragma unroll
+  for (int o = 16; o; o >>= 1) { pa = fmaxf(pa, __shfl_xor_sync(~0u, pa, o)); na = fmaxf(na, __shfl_xor_sync(~0u, na, o)); }
+  if (lane == 0) an[w] = make_float2(pa, na);
+}
+// H1's served side (K): per (head, token) asymmetric floor at top 111 (steps.floor_quant at top 111, one bit): with (amax,
+// namax) = hrow_s(x), s = max(amax / 111, namax / 112) clamped to 1e-30 then * (1 + 2^-20), X = floor(x / s) + b in
+// [-112, 111] (the margin keeps floor(x / s) in [-112, 110], no clamp). Y(r) = X(r) + X(r + 64) in [-224, 222] leaves s8,
+// so the digit split Y = Y0 + 128 Y1 (Y0 = ((Y + 64) & 127) - 64 in [-64, 63], Y1 = (Y - Y0) >> 7 in [-2, 2]) and
+// P_A = [Y0_lo | Y0_hi | Y1_lo | Y1_hi]. The scale read from memory keeps every divide (amax / 111, namax / 112, x / s)
+// on the one pinned generic div.rn slow path.
 __global__ void __launch_bounds__(256) hquant_h1(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
-                                                 int rows, const __grid_constant__ Sig sg) {
+                                                 int rows, const float2* __restrict__ an, const __grid_constant__ Sig sg) {
   __shared__ uint32_t dgs[HQ_G * 16];
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, g0 = blockIdx.x * HQ_G;
   if (threadIdx.x < HQ_G && (g0 + (int)threadIdx.x) * 4 < rows) {
@@ -379,12 +399,8 @@ __global__ void __launch_bounds__(256) hquant_h1(const uint16_t* __restrict__ x,
         xf[2 * h] = __uint_as_float(ww[h] << 16);
         xf[2 * h + 1] = __uint_as_float(ww[h] & 0xFFFF0000u);
       }
-      float px = xf[0], nx = -xf[0];
-#pragma unroll
-      for (int j = 1; j < 4; j++) { px = fmaxf(px, xf[j]); nx = fmaxf(nx, -xf[j]); }
-#pragma unroll
-      for (int o = 16; o; o >>= 1) { px = fmaxf(px, __shfl_xor_sync(~0u, px, o)); nx = fmaxf(nx, __shfl_xor_sync(~0u, nx, o)); }
-      const float s = fmaxf(fmaxf(px / 111.f, nx / 112.f), 1e-30f) * (1.f + 0x1p-20f);
+      const float2 pn = __ldg(an + r);
+      const float s = fmaxf(fmaxf(pn.x / 111.f, pn.y / 112.f), 1e-30f) * (1.f + 0x1p-20f);
       const uint32_t bits = (bytes[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
       int qv[4];
 #pragma unroll
@@ -392,18 +408,18 @@ __global__ void __launch_bounds__(256) hquant_h1(const uint16_t* __restrict__ x,
       const uint32_t xw = __byte_perm(__byte_perm(qv[0], qv[1], 0x0040), __byte_perm(qv[2], qv[3], 0x0040), 0x5410);
       reinterpret_cast<uint32_t*>(X + r * 128)[lane] = xw;
       const uint32_t hi = __shfl_down_sync(~0u, xw, 16);
-      if (lane < 16) {
-        uint32_t y0w = 0, y1w = 0;
+      uint32_t y0w = 0, y1w = 0;
 #pragma unroll
-        for (int b = 0; b < 4; b++) {
-          const int Y = (int)(int8_t)(xw >> (8 * b)) + (int)(int8_t)(hi >> (8 * b));
-          const int Y0 = ((Y + 64) & 127) - 64, Y1 = (Y - Y0) >> 7;
-          y0w |= ((uint32_t)(uint8_t)(int8_t)Y0) << (8 * b);
-          y1w |= ((uint32_t)(uint8_t)(int8_t)Y1) << (8 * b);
-        }
-        reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = y0w;
-        reinterpret_cast<uint32_t*>(PA + r * 128)[lane + 16] = y1w;
+      for (int b = 0; b < 4; b++) {
+        const int Y = (int)(int8_t)(xw >> (8 * b)) + (int)(int8_t)(hi >> (8 * b));
+        const int Y0 = ((Y + 64) & 127) - 64, Y1 = (Y - Y0) >> 7;
+        y0w |= ((uint32_t)(uint8_t)(int8_t)Y0) << (8 * b);
+        y1w |= ((uint32_t)(uint8_t)(int8_t)Y1) << (8 * b);
       }
+      // P_A row = [Y0 (cols 0..63) | Y1 (cols 0..63)]: lanes 0..15 hold Y0/Y1, a uniform store (lane l writes word l, Y1
+      // pulled from lane l - 16) in place of a lane < 16 branch, which the pinned slow path needs ptxas not to split
+      const uint32_t pw = lane < 16 ? y0w : __shfl_sync(~0u, y1w, lane - 16);
+      reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = pw;
     }
   }
 }
@@ -748,13 +764,16 @@ struct CP {
   bool h1 = false;    // H1's numerics (co32c-u16, decision 82): per-token scales, +-110 weights, the narrow U
   float inv7 = 0;
   float* amax_row = nullptr;   // H1's per-token activation amax (max|x|, clamped), filled by crow_s; cquant_h1 forms amax/126
+  float2* hqa = nullptr;       // cohalf H1's per (head, token) (max(x), max(-x)), filled by hrow_s; hquant_h1 forms amax/111, namax/112
 };
 using CqK = void (*)(const uint16_t*, int8_t*, int8_t*, int, int, float, Sig);
 static void cq(CP& C, const Sig& s, CqK f = cquant) {
   EP& P = C.E;
   if (C.half) {
-    if (C.h1) hquant_h1<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, s);
-    else hquant<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
+    if (C.h1) {
+      hrow_s<<<(P.m + 7) / 8, 256, 0, P.st>>>(P.x, C.hqa, P.m);
+      hquant_h1<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.hqa, s);
+    } else hquant<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
     return;
   }
   if (C.h1) {
@@ -796,6 +815,7 @@ static void csetup(CP& C, int m, int n, int k, uint32_t seed, bool gate) {
   CK(cudaMalloc(&C.R, P.nr * 4)); CK(cudaMalloc(&C.R2, P.nr * 4));
   CK(cudaMalloc(&C.eb, (size_t)(2 * m + n) * 4));
   if (C.h1 && !C.half) CK(cudaMalloc(&C.amax_row, (size_t)m * 4));
+  if (C.h1 && C.half) CK(cudaMalloc(&C.hqa, (size_t)m * sizeof(float2)));
   ebfill<<<256, 256, 0, P.st>>>(C.eb, m, n, mix32(seed ^ 0x7777u));
   // H1: the linears' W in [-110, 110]; cohalf's pre-bit query in [-112, 110] (floor top 111). co32c: [-64, 62]
   const int wlo = C.h1 ? (C.half ? -112 : -110) : -64, whi = C.h1 ? 110 : 62;
@@ -813,7 +833,7 @@ static void csetup(CP& C, int m, int n, int k, uint32_t seed, bool gate) {
 static void cfree(CP& C) {
   CK(cudaDeviceSynchronize());
   for (void* p : {(void*)C.W7, (void*)C.X, (void*)C.PA, (void*)C.Wp, (void*)C.PB, (void*)C.Wh, (void*)C.Y, (void*)C.Yr, (void*)C.R,
-                  (void*)C.R2, (void*)C.eb, (void*)C.mC, (void*)C.amax_row})
+                  (void*)C.R2, (void*)C.eb, (void*)C.mC, (void*)C.amax_row, (void*)C.hqa})
     CK(cudaFree(p));
   efree(C.E);
 }

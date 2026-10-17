@@ -311,6 +311,7 @@ struct FA {
   float inv7 = 0.5f;
   bool h1 = false;    // cohalf H1's QK^T (co32c-u16, decision 82): Q/K floored at top 111, the digit-split tail
   uint16_t* x;
+  float2* qa = nullptr;   // cohalf H1's per (head, token) (max(x), max(-x)), filled by hrow_s for hquant_h1
   int8_t *W7, *X, *PA, *Wp, *PB, *Wh;
   int *M, *L, *E0, *S = nullptr;
   uint32_t *R, *R2 = nullptr;
@@ -345,6 +346,7 @@ static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool
   F.grid = nsm;
   const size_t kr = (size_t)F.kvh * s, qr = (size_t)H * s, nr = (size_t)F.kvh * F.tpk * MLW::NCT * 8;
   CK(cudaMalloc(&F.x, kr * 128 * 2)); CK(cudaMalloc(&F.X, kr * 128)); CK(cudaMalloc(&F.PA, kr * 128));
+  if (F.h1) CK(cudaMalloc(&F.qa, kr * sizeof(float2)));
   CK(cudaMalloc(&F.W7, qr * 128)); CK(cudaMalloc(&F.Wp, qr * 128)); CK(cudaMalloc(&F.PB, qr * 128)); CK(cudaMalloc(&F.Wh, qr * 128));
   CK(cudaMalloc(&F.M, qr * 4)); CK(cudaMalloc(&F.L, qr * 4)); CK(cudaMalloc(&F.E0, qr * 4));
   CK(cudaMalloc(&F.R, nr * 4));
@@ -380,7 +382,7 @@ static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool
 }
 static void fafree(FA& F) {
   CK(cudaDeviceSynchronize());
-  for (void* p : {(void*)F.x, (void*)F.X, (void*)F.PA, (void*)F.W7, (void*)F.Wp, (void*)F.PB, (void*)F.Wh, (void*)F.M, (void*)F.L,
+  for (void* p : {(void*)F.x, (void*)F.qa, (void*)F.X, (void*)F.PA, (void*)F.W7, (void*)F.Wp, (void*)F.PB, (void*)F.Wh, (void*)F.M, (void*)F.L,
                   (void*)F.E0, (void*)F.S, (void*)F.R, (void*)F.R2, (void*)F.tabc, (void*)F.tabf, (void*)F.mq, (void*)F.ms})
     if (p) CK(cudaFree(p));
   for (Maps* m : F.mk) CK(cudaFree(m));
@@ -391,7 +393,8 @@ static void fq(FA& F, const Sig& sg) {
   const uint8_t* W = reinterpret_cast<const uint8_t*>(F.W7);
   uint8_t *Wp = reinterpret_cast<uint8_t*>(F.Wp), *PB = reinterpret_cast<uint8_t*>(F.PB), *Wh = reinterpret_cast<uint8_t*>(F.Wh);
   if (F.h1) {
-    hquant_h1<<<hq_blocks(kr), 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, sg);
+    hrow_s<<<(kr + 7) / 8, 256, 0, F.V.st>>>(F.x, F.qa, kr);
+    hquant_h1<<<hq_blocks(kr), 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, F.qa, sg);
     hwedit<true, true><<<hw_blocks(qr), 256, 0, F.V.st>>>(W, Wp, PB, qr, sg, Wh);
   } else {
     hquant<<<hq_blocks(kr), 256, 0, F.V.st>>>(F.x, F.X, F.PA, kr, F.inv7, sg);
