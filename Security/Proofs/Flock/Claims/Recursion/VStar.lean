@@ -27,8 +27,9 @@ the inner verifier.
 * `vstarAccepts_of_parts`: with `ReadsThrough`, these give `VStarAccepts shape`. Two parts holding different messages
   at one round open one commit string two ways, which is a collision among their calls (`Opening.bind`); otherwise
   every part holds what the readers read (`agree_or_coll`), so every part's inner check holds on the readers'
-  messages, and `Decomp` gives an accepted inner view. `vstarAccepts_dense`, `vstarAccepts_holo` and `vstarAccepts_sparse` are it at the
-  three shapes, and `innerAcceptsColl_of_parts` gives `InnerAcceptsColl` from them.
+  messages, and `Decomp` gives an accepted inner view. `vstarAccepts_dense`, `vstarAccepts_holo` and
+  `vstarAccepts_sparse` are it at the three shapes, and `innerAcceptsColl_of_parts` gives `InnerAcceptsColl` from
+  them.
 * `Decomp` is the inner verifier's checks together (`InnerConj`, a fact about the inner verifier alone) with parts
   that cover them (`Covers`, a fact about how the compiled statement cuts it into parts): `decomp_of_covers`.
 * Reading through readers also gives three of the other code facts the recursion's KS reads: `InnerViewRun` at
