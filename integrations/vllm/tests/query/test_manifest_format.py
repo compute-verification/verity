@@ -10,7 +10,8 @@ import json
 import pytest
 
 from verity_vllm.commit import binding as B
-from verity_vllm.query.manifest.format import canonical_identity, coverage_check, manifest_digest, spec_statics, split_name
+from verity_vllm.query.manifest.bind import coverage_check
+from verity_vllm.query.manifest.format import canonical_identity, manifest_digest, spec_statics, split_name
 from tests.check.test_sampled_replay import _program, v2_manifest
 
 EPS = 'EPS={"f64":"0x1.4f8b588e368f1p-17"}'
@@ -71,7 +72,7 @@ def test_coverage_positive_and_negatives():
 
     # (3) drop one output member of a two-member module and commit the other twice: same count, same module set -> coverage failure on
     # it.  The members are the fused norm's ports `0` / `1`, committed as tuple slots: one slot for two members places neither
-    # (`verity_vllm.commit.bind`), so both are missing and both tensors are extras
+    # (`verity_vllm.query.manifest.bind`), so both are missing and both tensors are extras
     two = next((s, op, sorted(ms)) for (s, op), ms in _members_by_step_op(checked).items() if len(ms) >= 2)
     s3, op3, (keep, drop) = two[0], two[1], two[2][:2]
     lay3 = copy.deepcopy(lay)

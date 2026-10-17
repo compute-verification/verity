@@ -44,8 +44,7 @@ METHOD = "oracle-compare (Match capture of the same attempt: snapshots at the fo
 NO_ORACLE_FAMILY_PREFIXES = ("fa2.m1/", "fa3.m1/", "moe/")          # kernel-interior streams: no dispatcher-level value in the Match record
 _ITEMSIZE = {"bfloat16": 2, "float16": 2, "float32": 4, "float64": 8, "int32": 4, "int64": 8, "int16": 2, "int8": 1, "uint8": 1, "bool": 1,
              "float8_e4m3fn": 1, "float8_e5m2": 1}
-#: RoPE's members (the Build's recorded hints) -> the Match fold's per-instance hint suffix: the two records name the same slot independently
-_ROPE_MEMBER = {"query": "rope.q", "key": "rope.k"}
+_ROPE_MEMBER = {"query": "rope.q", "key": "rope.k"}                # RoPE's members (the Build's hints) -> the Match fold's hint suffixes
 
 
 def _prod(xs) -> int:

@@ -2,7 +2,7 @@
 of 26,686 of rank 0's, by name): on a rank Program shaped like GLM's -- dense layer 0, MoE layers 3 and 4 with the shared expert under
 the runner's held path `_shared_experts._layer`, a prefill step on the unfused all-reduce + `RMSNormFusedCudaVector8` and DeepGEMM path
 and a decode step on the fused `AllReduceRmsNormMnnvl` and FlashInfer path -- every `instance_outputs` / `tp_rank_partials` identity
-binds (`verity_vllm.commit.bind`) from the names the capture map `glm-moe-dsa-eager-hopper-tp8-v0` commits and the ones the committer
+binds (`verity_vllm.query.manifest.bind`) from the names the capture map `glm-moe-dsa-eager-hopper-tp8-v0` commits and the ones the committer
 commits per call (`native_host.CALL_DEPENDENT_RE`):
 
 * `<norm>/all_reduce`, the unfused path's all-reduced tensor (`allreduce_norm`, from the norm's pre-hook), the norm site's member;
@@ -15,7 +15,7 @@ import pytest
 from tests.acquire.glm53_model import CMAP, ENV
 from verity_vllm.acquire.sources import linear_quant_source as LQ
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.commit.bind import Binder
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.commit.committer.native_host import CALL_DEPENDENT_RE
 from verity_vllm.correspondence.reader_for_query import Correspondence, held_module_paths, parse_call_name
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER

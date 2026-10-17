@@ -14,7 +14,7 @@
 Nothing in this package names a model or decides a member by a module-name or Definition-family table
 (`tests/program/test_lint.py` holds that): what a Call produces comes from its Definition's output signature, where it lives from the
 recorded correspondence, what crosses from the Program's own dataflow.  The committed tensors are bound to those identities by
-structure (`verity_vllm.commit.bind`), never by respelling an identity as a tap names it.
+structure (`verity_vllm.query.manifest.bind`), never by respelling an identity as a tap names it.
 
 Gate (Phase 2): the per-row records are `tests/query/gate/row<N>_*.json`; the narrative (rows table, the #57 / #60 / #67 differences
 explained, the named-residual table since retired, the v1 by-name tables this path does not use) lives in Notion, "v2 query gate -- Q_module_body_v1

@@ -1,4 +1,4 @@
-"""A `pouw:ncp-v2` linear's output, committed under the Linear's tuple slot, binds the manifest's `out` (`verity_vllm.commit.bind`).
+"""A `pouw:ncp-v2` linear's output, committed under the Linear's tuple slot, binds the manifest's `out` (`verity_vllm.query.manifest.bind`).
 
 The fixture is the PoUW-linear part of a real row Commit's records: the Build's `manifest.json` and the Commit's `binding_map_p0.json` of
 `r20260929-153141-1c72` (Qwen2.5-0.5B, `qwen25-05b__bf16__rtx4090__tp1__b1__i32__o4__mixed__greedy__bi-eager`), whose BINDING /
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.commit.bind import Binder
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.commit.binding import coverage_check
 from verity_vllm.correspondence.reader_for_query import parse_call_name
 from verity_vllm.query.program_view import CallView, Port

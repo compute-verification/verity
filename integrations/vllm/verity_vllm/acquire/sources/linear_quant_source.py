@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from verity_vllm.acquire.sources.allreduce_norm import _flush
-from verity_vllm.commit.bind import Port
+from verity_vllm.query.manifest.bind import Port
 from verity_vllm.engine import hooks
 
 GROUP_QUANT_OP = "per_token_group_fp8_quant"

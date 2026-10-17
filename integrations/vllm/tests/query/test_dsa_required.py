@@ -5,7 +5,7 @@ each step closed by an `o_proj` reading the W_UV product and a sampling event:
 * UNRETURNED: the indexer's MQA logits and top-k, which the correspondence lowers to no runtime tensor and no Call reads, are not
   required, so the prefill's logits rows of N = 1 and N = 2 keys never meet in one manifest group and the manifest is complete;
   q_c, which no Call of this Program reads either, keeps its rows (its fx node returns it);
-* every required attention Value binds from what the capture map's attention binder commits (`verity_vllm.commit.bind`): the
+* every required attention Value binds from what the capture map's attention binder commits (`verity_vllm.query.manifest.bind`): the
   module's own outputs by their label, the indexer's ports and the two call boundaries (the W_UK_T absorb and the sparse MLA) by the
   ports the source declares."""
 from __future__ import annotations
@@ -20,7 +20,7 @@ from tests.acquire.glm53_model import CMAP, ENV
 from tests.program import test_dsa_derive as T
 from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.commit.bind import Binder
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.program.frontend.emit import NAMESPACE
 from verity_vllm.program.frontend.rules import vllm_bindings as VB

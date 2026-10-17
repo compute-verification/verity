@@ -9,7 +9,7 @@ row kernel agrees.  The launch is the export's carrier (`verity_cba::triton_laun
 
 `GemmBias_v2{K,N,DOT}` is the same pair with `Gemm_v2`'s k16 step: the frontend binds it where the target's record says
 `gemm_bias_dot` (cc 12.0 and cc 9.0), at every M (vLLM's linear runs the same launch at M = 1); a family whose record lacks it keeps
-`Gemm_v2` + `BiasAdd_v1`.  Either one-Call form is its module's one member `out`, which `commit.bind` binds to the Linear's slot `0`.
+`Gemm_v2` + `BiasAdd_v1`.  Either one-Call form is its module's one member `out`, which `query.manifest.bind` binds to the Linear's slot `0`.
 """
 from __future__ import annotations
 
@@ -325,7 +325,7 @@ def test_a_one_call_biased_qkv_commits_one_member_and_no_call_boundary():
     """The Qwen2.5-1.5B B1 control on cc 12.0 (main without this binding) carried 3,584 more identities than the coverage Build: one
     `call_boundaries` row per (step, layer) at the pre-bias word `qkv_proj/triton_launch_1/out`, host-evaluated at Commit.  Under
     `Q_word` the one-Call form has none, and the module's one member `out` binds the Linear's committed slot `0`."""
-    from verity_vllm.commit.bind import Binder
+    from verity_vllm.query.manifest.bind import Binder
     from verity_vllm.correspondence.reader_for_query import Correspondence
     res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {},
            "target": {"declared": {"compute_capability": [12, 0]}}}

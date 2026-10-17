@@ -611,11 +611,10 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     if not schedule["all_equal_declared"]:
         print(f"[delta] engine schedule of record: arrivals observed {schedule['observed_arrive_steps']} vs declared {schedule['declared_arrive_steps']} "
               f"-> population placed by the {schedule['use'].upper()} schedule{'' if not schedule['why'] else ' (' + schedule['why'] + ')'}", flush=True)
-    # the manifest's identities, placed by the same schedule, bind the committed tensors (`verity_vllm.commit.bind`)
+    # the manifest's identities, placed by the same schedule, bind the committed tensors (`verity_vllm.query.manifest.bind`)
     binder = None
     if getattr(args, "required_manifest", None):
-        from verity_vllm.commit.bind import Binder, source_ports
-
+        from verity_vllm.query.manifest.bind import Binder, source_ports
         binder = Binder.of_manifest(_hdr, rank=0, ports=source_ports(getattr(com, "sources", []) or []), arrivals=arrivals)
         if binder.rebind:
             collector = dict(collector, promoted_inputs={"names": {k: list(v) for k, v in binder.rebind.items()}, "rule": "binding.PROMOTED_INPUT_RULE"})
@@ -1117,8 +1116,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if args.required_manifest:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
-        from verity_vllm.query.manifest.format import coverage_check as manifest_coverage_check
-        from verity_vllm.commit.bind import source_ports
+        from verity_vllm.query.manifest.bind import coverage_check as manifest_coverage_check, source_ports
         from verity_vllm.commit.partition import require_partition
         required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
         print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)

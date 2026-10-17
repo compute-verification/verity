@@ -17,7 +17,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm.commit import binding as B  # noqa: E402
-from verity_vllm.commit.bind import Binder  # noqa: E402
+from verity_vllm.query.manifest.bind import Binder  # noqa: E402
 from verity_vllm.query.manifest import format as RM  # noqa: E402
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta, _StepJob, _dtype_name  # noqa: E402
 

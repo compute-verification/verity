@@ -32,6 +32,7 @@ from collections import Counter
 from typing import Any, Iterable, Iterator
 
 from verity_vllm.commit import challenge as CH
+from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, split_name
 from verity_vllm.query.manifest.format import MOE_PLANES
 from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
 from verity_vllm.query.manifest.format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
@@ -40,7 +41,6 @@ from verity_vllm.query.manifest.format import promoted_observation as promoted_i
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 RULES_VERSION = "r14-v1"
 MAP_SCHEMA = "binding-map/1"
-HIDDEN_FAMILIES = ("fa2.m1/", "fa3.m1/", "moe/")
 MOE_FAMILY = "moe/"                 # [R15 moe] block-stream planes: per-token (pair-major) members, split by request rows at B>1 (not per-launch)
 
 # Fixed per-module-class output-member rule (pre-execution structural knowledge of the vLLM Llama-family forward, NOT observation).
@@ -56,22 +56,10 @@ FIRST_NORM_SUFFIX = ".layers.0.input_layernorm"
 
 #: [R19 int-20, F-r19-int-20] a promoted member's observation point (`PROMOTED_INPUT_RULE`, `promoted_input_acquisition`): the manifest
 #: module owns the rule (manifest_format.PROMOTED_OBSERVATION_RULE / promoted_observation, shared by the collector's arming, this map and
-#: the layout-level manifest_format.coverage_check); imported above under the binding's names for its callers (bench.commit_delta, tests).
+#: the layout-level manifest.bind.coverage_check); imported above under the binding's names for its callers (bench.commit_delta, tests).
 
 
 # ---------------------------------------------------------------------- names -> identity parts
-
-def split_name(name: str) -> tuple[str, str]:
-    """Committed tensor name -> (op_path, output_member)."""
-    for fam in HIDDEN_FAMILIES:
-        if name.startswith(fam):
-            parts = name.split("/")
-            return "/".join(parts[:2]), "/".join(parts[2:]) or "out"       # fa2.m1/L3/g4x64x128/... -> ("fa2.m1/L3", "g4x64x128/...")
-    if "/" in name:
-        base, member = name.rsplit("/", 1)                                 # `<module>/<fx node>/<member>`: a call boundary's op_path has a `/`
-        return base, member
-    return name, "out"
-
 
 def logical_request(rid: str, order: dict[str, str]) -> str:
     """Engine row id -> workload `r<i>` (`order`: workload request id -> `r<i>`).  vLLM v1 suffixes the external request id with
@@ -116,7 +104,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
     requests of that step (the scheduler's row order, recorded by the engine wrapper); without it the whole member binds `request_id`.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
-    `binder` (`verity_vllm.commit.bind.Binder`, from the required manifest): the identity each committed tensor binds; an entry bound
+    `binder` (`verity_vllm.query.manifest.bind.Binder`, from the required manifest): the identity each committed tensor binds; an entry bound
     other than by its label or a tuple slot says how (`observation`).  Without one (no manifest) a name is its identity (`split_name`)."""
     entries: list[dict[str, Any]] = []
     for step in sorted(layouts):

@@ -10,7 +10,7 @@ What this module DECIDES (structure + correspondence, no by-name table):
   collective SITE's at its enclosing module, invocation k (`collective_sites`).
 * WHAT the member is called, structurally (`member_name`): the port name when the Definition returns a tuple (`<hint>.<port>` when
   the Build recorded a hint, which names the Call); else the recorded return-slot hint; else `out`.  How a runtime tensor carries
-  it (vLLM's return slots, a tap's label) is the binding's (`verity_vllm.commit.bind`), never a spelling here.
+  it (vLLM's return slots, a tap's label) is the binding's (`verity_vllm.query.manifest.bind`), never a spelling here.
 * WHEN: the step of a Call = the number of sampling events before it (the sampling event ENDS a step).
 * Shared module instances (`op_path_aliases`): two module bodies that read the SAME registered parameter and have the same body
   signature are one module instance called twice; canonical = the body the parameter is registered under; invocation = body order.

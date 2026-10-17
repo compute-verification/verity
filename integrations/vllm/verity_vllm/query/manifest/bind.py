@@ -42,9 +42,11 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity_vllm.commit.binding import split_name
+from verity_vllm.query.manifest.format import promoted_observation
 
-__all__ = ["Port", "Binder", "source_ports"]
+__all__ = ["HIDDEN_FAMILIES", "Port", "Binder", "coverage_check", "source_ports", "split_name"]
+
+HIDDEN_FAMILIES = ("fa2.m1/", "fa3.m1/", "moe/")
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,18 @@ def source_ports(sources: Iterable[Any]) -> dict[str, Port]:
             if out.setdefault(label, p) != p:
                 raise ValueError(f"label {label!r}: declared as {out[label]} and as {p} ({type(s).__name__})")
     return out
+
+
+def split_name(name: str) -> tuple[str, str]:
+    """Committed tensor name -> (op_path, output_member)."""
+    for fam in HIDDEN_FAMILIES:
+        if name.startswith(fam):
+            parts = name.split("/")
+            return "/".join(parts[:2]), "/".join(parts[2:]) or "out"       # fa2.m1/L3/g4x64x128/... -> ("fa2.m1/L3", "g4x64x128/...")
+    if "/" in name:
+        base, member = name.rsplit("/", 1)                                 # `<module>/<fx node>/<member>`: a call boundary's op_path has a `/`
+        return base, member
+    return name, "out"
 
 
 def _family(spec: Any) -> str:
@@ -121,8 +135,6 @@ class Binder:
                     arrivals: Mapping[str, int] | None = None) -> "Binder":
         """The binder of a manifest document: its rows (of `rank`), its shared-instance aliases, its promoted observations and its
         declared requests."""
-        from verity_vllm.query.manifest.format import promoted_observation
-
         rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
         rebind = promoted_observation(dict(manifest))["names"] if any(r.get("promoted") for r in rows) else None
         declared = {str(d["request_id"]): f"r{int(d.get('index', i))}" for i, d in enumerate(manifest.get("requests_declared") or [])
@@ -196,3 +208,109 @@ class Binder:
                 if out[sl[slot]] is None:
                     out[sl[slot]] = (op, "", k, "unbound")
         return out  # type: ignore[return-value]
+
+
+def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[str, Any]]], *, request_id: str | int | None = None,
+                   rank: int = 0, max_report: int = 12, ports: Any = None) -> dict[str, Any]:
+    """Every manifest identity of (`request_id`, `rank`) must have a committed tensor bound to the same (step, op_path, output_member,
+    invocation) whose element range CONTAINS the manifest's; `layouts` = {step: [{"name", "numel"|"shape", ...} in layout order]}, each
+    name bound by the manifest's binder (`Binder`, with the committing sources' declared `ports`).  Reports missing
+    identities (by family / step), and the committed extras (allowed).  Identity coverage only -- value correspondence is bind's separate
+    check."""
+    if manifest.get("complete") is False:                                        # [MAN-02] an incomplete manifest never yields coverage
+        um = manifest.get("unmodelled") or {}
+        n = len(manifest.get("identities") or [])
+        return {"ok": False, "error": "manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted(um.items())),
+                "manifest_digest": manifest.get("manifest_digest"), "checked": n, "missing_n": n, "missing_by_family": {"(unmodelled)": n},
+                "checked_by_family": {}, "families_missing_entirely": sorted(um), "steps_with_missing": [], "missing": [],
+                "committed_unmatched_n": 0, "committed_unmatched": [], "committed_extras_n": 0, "duplicate_names_n": 0, "steps_committed": [], "unmodelled": um}
+    binder = Binder.of_manifest(manifest, rank=rank, ports=ports)
+    have: dict[tuple, list[int]] = {}
+    extras = 0
+    for step, metas in layouts.items():
+        for m, (op, member, inv, how) in zip(metas, binder.bind(int(step), [m["name"] for m in metas])):
+            if how == "unbound":
+                extras += 1
+                continue
+            numel = m.get("numel")
+            if numel is None:
+                numel = 1
+                for d in m.get("shape") or []:
+                    numel *= int(d)
+            have.setdefault((int(step), op, member, inv), []).append(int(numel))
+    missing: list[dict[str, Any]] = []
+    by_family_missing: Counter = Counter()
+    by_family_checked: Counter = Counter()
+    matched_keys: set[tuple] = set()
+    for r in manifest["identities"]:
+        if request_id is not None and str(r["request_id"]) not in (str(request_id), "*"):
+            continue
+        if int(r["rank"]) != int(rank):
+            continue
+        if r["family"] == "weights":
+            continue                                       # registered inputs: checked against the weights root registration, not the step layouts
+        by_family_checked[r["family"]] += 1
+        k = (int(r.get("engine_step", r["step"])), r["op_path"], r["output_member"], int(r["invocation"]))
+        lo, hi = r["element_range"]
+        got = have.get(k)
+        seq_short = None
+        if got is None and r.get("request_id") == "*" and isinstance(r.get("requests"), list) and r["requests"]:
+            # [R15 B8] a batch-level hidden row (B>1: one attention launch per layer per engine step over the co-scheduled sequences) names
+            # the padded whole-step geometry; the tap commits per-SEQUENCE planes (`s<i>/g<HB>x<M>x<NB>/<plane>`) at a segmented prefill, or
+            # one whole-launch plane set at decode.  The requirement is op-level per engine step: every co-scheduled sequence has its planes
+            # (>= n_seq distinct `s<i>` prefixes), or the launch is whole (unsegmented members present).  Same rule as binding.coverage_check.
+            seqs, whole, numels = set(), False, []
+            for (st, op, mem, inv), v in have.items():
+                if st == k[0] and op == k[1] and inv == k[3]:
+                    numels += v
+                    if mem.startswith("s") and "/" in mem and mem[1:mem.index("/")].isdigit():
+                        seqs.add(mem[:mem.index("/")])
+                    else:
+                        whole = True
+            if numels and (whole or len(seqs) >= len(r["requests"])):
+                got, hi = numels, None                                       # op-level: covered; matched below
+                for kk in list(have):
+                    if kk[0] == k[0] and kk[1] == k[1] and kk[3] == k[3]:
+                        matched_keys.add(kk)
+            elif numels:
+                got, seq_short = None, f"{len(seqs)} sequence plane sets committed, {len(r['requests'])} co-scheduled sequences declared ({sorted(seqs)})"
+        if not got or (hi is not None and max(got) < int(hi)):
+            missing.append({"family": r["family"], "step": r["step"], "engine_step": k[0], "request_id": r["request_id"], "op_path": r["op_path"],
+                            "output_member": r["output_member"], "invocation": r["invocation"], "want_range": [lo, hi], "committed_numel": got}
+                           | ({"why": seq_short} if seq_short else {}))
+            by_family_missing[r["family"]] += 1
+        else:
+            matched_keys.add(k)
+    unexpected = [k for k in have if k not in matched_keys]
+    dup = {k: len(v) for k, v in have.items() if len(v) > 1}
+    families_missing_whole = [f for f, n in by_family_checked.items() if by_family_missing.get(f, 0) == n]
+    steps_missing_whole = sorted({int(r["engine_step"]) for r in missing}) if missing else []
+    requests_missing = sorted({str(r["request_id"]) for r in missing}) if missing else []
+    # [R15 B8] global manifests address request-locally, so a layouts-only check cannot see WHICH request a block belongs to; it can and
+    # must see the declared composition's size per engine step: the packed ids member has exactly the declared rows and the sampled-ids
+    # member exactly one slot per co-scheduled sequence -- a request the server never ran shortens both (named per engine step).  The
+    # per-request partition itself is the binding map's `composition_check`.
+    composition: list[dict[str, Any]] = []
+    if manifest.get("global") and manifest.get("engine_steps") and request_id is None:
+        ref = manifest.get("composition_reference") or {}
+        for es in manifest["engine_steps"]:
+            e = int(es["engine_step"])
+            want_rows, want_seq = int(es.get("rows", sum(int(m["rows"]) for m in es["members"]))), int(es.get("n_seq", len(es["members"])))
+            for fam_name, want in (("input_token_ids", want_rows), ("sampled_token_ids", want_seq)):
+                rf = ref.get(fam_name)
+                if not rf:
+                    continue
+                got = have.get((e, rf["op_path"], rf["output_member"], 0))
+                if got is None:
+                    continue                                # the identities loop already reported the member as missing
+                if max(got) != want * int(rf.get("per_row", 1)):
+                    composition.append({"engine_step": e, "member": f"{rf['op_path']}/{rf['output_member']}", "declared": want, "committed": max(got),
+                                        "requests": [m["request_id"] for m in es["members"]]})
+    return {"ok": not missing and not composition, "manifest_digest": manifest["manifest_digest"], "checked": sum(by_family_checked.values()),
+            "missing_n": len(missing), "missing_by_family": dict(by_family_missing), "checked_by_family": dict(by_family_checked),
+            "families_missing_entirely": families_missing_whole, "steps_with_missing": sorted(set(steps_missing_whole) | {c["engine_step"] for c in composition})[:64],
+            "requests_with_missing": requests_missing[:64],
+            "missing": missing[:max_report], "committed_unmatched_n": len(unexpected), "committed_unmatched": [list(k) for k in unexpected[:max_report]],
+            "committed_extras_n": extras, "duplicate_names_n": len(dup), "steps_committed": sorted(int(s) for s in layouts),
+            "composition_mismatch_n": len(composition), "composition_mismatch": composition[:max_report],
+            **({"promoted_observed_as": dict(sorted((k, list(v)) for k, v in binder.rebind.items()))} if binder.rebind else {})}

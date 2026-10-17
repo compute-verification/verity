@@ -7,7 +7,7 @@ import copy
 import json
 
 import pytest
-from verity_vllm.commit.bind import Binder
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.units import ValueRef
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import norm_scales as NS

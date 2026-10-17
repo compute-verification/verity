@@ -25,7 +25,7 @@ from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.commit import binding as B
-from verity_vllm.commit.bind import Binder, source_ports
+from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
 
 NORM_ROPE = G.fused_norm_rope

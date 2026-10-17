@@ -996,11 +996,9 @@ class TP2CaptureWorkerExtension:
                 "missing_steps": missing[:8], "swap_requests_negative": st.get("swap_requests"), "value_source": rd.record(), "why": why}
 
     def _tp2_binding(self, rc: Any) -> dict[str, Any] | None:
-        """[R14 TP-03 x BIND-01] THIS rank's binding map (bind's `verity_vllm.commit.binding`: identity -> commitment location, fixed at
-        finalize before any challenge) and its coverage against the rank's required manifest, whose rows the committed tensors are bound to
-        (`verity_vllm.commit.bind`).  Without a manifest: the EXPECTED population = model structure x workload steps x this rank, where every
-        collective-issuing module additionally requires its rank-local member `part_rank<r>` / `shard_rank<r>` (the TP partial source's
-        sites), never read from what was emitted."""
+        """[R14 TP-03 x BIND-01] THIS rank's binding map (`verity_vllm.commit.binding`: identity -> commitment location, fixed at finalize
+        before any challenge) and its coverage against the rank's required manifest, whose rows the committed tensors bind (`query.manifest.bind`);
+        without one, against model structure x workload steps x this rank plus each collective site's `part_rank<r>` / `shard_rank<r>`."""
         st = self._tp2_commit
         pd = st.get("program_digest")
         if not pd:
@@ -1008,7 +1006,7 @@ class TP2CaptureWorkerExtension:
         n_req = int(st.get("n_requests") or 1)
         try:
             from verity_vllm.commit import binding as bd
-            from verity_vllm.commit.bind import Binder, source_ports
+            from verity_vllm.query.manifest.bind import Binder, source_ports
         except Exception as e:  # noqa: BLE001
             return {"skipped": f"binding module unavailable: {e!r}"}
         com, rank = st["com"], int(st["rank"])

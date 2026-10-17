@@ -1,9 +1,9 @@
-"""The binder's passes (`verity_vllm.commit.bind`) on hand-written manifest rows: what each pass binds, and what it refuses to guess."""
+"""The binder's passes (`verity_vllm.query.manifest.bind`) on hand-written manifest rows: what each pass binds, and what it refuses to guess."""
 from __future__ import annotations
 
 import pytest
 
-from verity_vllm.commit.bind import Binder, Port, source_ports
+from verity_vllm.query.manifest.bind import Binder, Port, source_ports
 
 LIN, ATT = "model.layers.0.mlp.down_proj", "model.layers.0.self_attn"
 QUANT = {"x_q": Port(frozenset({"DeepGemmFp8Linear_v1"}), "0"), "x_s": Port(frozenset({"DeepGemmFp8Linear_v1"}), "1")}

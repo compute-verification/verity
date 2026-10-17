@@ -24,7 +24,7 @@ other entry, which the copy-equality Program then refuses.  Taps the map marks `
 (`route_source.on_target`).  `capture-map ids --binder attention --names` prints what a step binds.
 
 Each tap that is a Program Call's port is declared to the binding (`ports`, `TAP_PORTS`), which binds it to the row that port
-produces whatever label the map commits it under (`verity_vllm.commit.bind`): the DSA indexer's query and weights (`DsaIndexerQ_v1`
+produces whatever label the map commits it under (`verity_vllm.query.manifest.bind`): the DSA indexer's query and weights (`DsaIndexerQ_v1`
 ports 0 / 1) and its cache row's key and scale (`DsaIndexerKRow_v1` ports 0 / 1).  Two of them are Values two Calls of the attention
 body exchange, `call_boundaries` identities `<layer>.self_attn/<fx node>` (`CALL_TAPS`): the sparse MLA of a layer (SparseMlaSplit_v1 /
 SparseMla_v1 per query row), which `forward_mqa` returns and the W_UV bmm reads (the `attn` tap), and the W_UK_T absorb's product the
@@ -43,7 +43,7 @@ import torch
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.commit.bind import Port
+from verity_vllm.query.manifest.bind import Port
 from verity_vllm.engine.hooks import Hooks
 
 BINDER = "attention"
