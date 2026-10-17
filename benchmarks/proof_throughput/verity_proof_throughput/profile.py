@@ -58,9 +58,12 @@ _PHASE_RE = [(n, re.compile(p)) for n, p in PHASES]
 _KERNEL_RE = [(n, re.compile(p)) for n, p in KERNELS]
 
 
+_FRAME = re.compile(r"\s*[0-9a-f]+\s+(\S+)")
+
+
 def samples(lines: Iterable[str]) -> Iterator[list[str]]:
-    """Each sample's frames, leaf first, from ``perf script -F comm,sym`` with call chains: a sample is its unindented header
-    line and then one indented frame per line (an address, then the symbol), ended by a blank line."""
+    """Each sample's frames, leaf first, from ``perf script -F comm,ip,sym`` with call chains: a sample is its header line (the
+    command, right-aligned, so indented) and then one frame per line (an address, then the symbol), ended by a blank line."""
     frames: list[str] | None = None
     for raw in lines:
         line = raw.rstrip("\n")
@@ -68,10 +71,8 @@ def samples(lines: Iterable[str]) -> Iterator[list[str]]:
             if frames is not None:
                 yield frames
             frames = None
-        elif line[0] in " \t":
-            if frames is not None:
-                parts = line.split()
-                frames.append(parts[1] if len(parts) > 1 and re.fullmatch(r"[0-9a-f]+", parts[0]) else parts[0])
+        elif (m := _FRAME.match(line)) and frames is not None:
+            frames.append(m.group(1))
         else:
             if frames is not None:
                 yield frames

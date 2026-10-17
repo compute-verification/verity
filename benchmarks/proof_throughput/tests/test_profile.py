@@ -4,7 +4,7 @@ import json
 from verity_proof_throughput import cli
 from verity_proof_throughput import profile as PF
 
-SCRIPT = """flock-verify
+SCRIPT = """    flock-verify 
 \t    7f01 l_Flock_Sha512_compress
 \t    7f02 l_Flock_MerkleScheme_climb
 \t    7f03 l_Flock_ligerito___lambda__2

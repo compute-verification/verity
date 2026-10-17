@@ -81,9 +81,10 @@ if [ "${PROFILE:-0}" = 1 ]; then
     "$LEAN" verify --statement verity/flock-circuit --coins os --circuit "$BD/circuit.txt" --public "$PUB" --partition "$PART" \
     $DRAW_FLAGS --session "$s" > "$O/profile.stdout" 2> "$O/profile.stderr"
   log "perf: exit $?, $(cat "$O/profile.time")"
-  perf report -i "$S/perf.data" --no-children --sort symbol --stdio --percent-limit 0.2 2> /dev/null | head -400 > "$O/perf-self.txt"
-  perf report -i "$S/perf.data" --children --sort symbol --stdio -g none --percent-limit 0.5 2> /dev/null | head -600 > "$O/perf-children.txt"
-  perf script -i "$S/perf.data" -F comm,sym 2> /dev/null | gzip > "$O/perf-script.txt.gz"
+  perf report -i "$S/perf.data" --no-children --sort symbol --stdio -g none --percent-limit 0.2 2>> "$O/perf.err" | head -400 > "$O/perf-self.txt"
+  perf report -i "$S/perf.data" --children --sort symbol --stdio -g none --percent-limit 0.5 2>> "$O/perf.err" | head -600 > "$O/perf-children.txt"
+  # the address field too: with call chains, `sym` alone prints no frames
+  perf script -i "$S/perf.data" -F comm,ip,sym 2>> "$O/perf.err" | gzip > "$O/perf-script.txt.gz"
   "$PYBIN" -m verity_proof_throughput profile-phases --script "$O/perf-script.txt.gz" --time "$O/profile.time" \
     --stderr "$O/profile.stderr" --stdout "$O/profile.stdout" --out "${RESEARCH_RUN_DIR:-$O}/result.json" --bundle "$BUNDLE" --prove-run "${PROVE_RUN:-}"
   exit $?
