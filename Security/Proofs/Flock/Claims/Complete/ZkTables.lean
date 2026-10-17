@@ -21,6 +21,9 @@ import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.Complete.ZkTables.Level0
+import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
+import Proofs.Flock.Claims.Complete.ZkTables.Parts
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
