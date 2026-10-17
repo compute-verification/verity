@@ -1,6 +1,6 @@
 // The MMA + X joint frontiers that rows.csv's R2 (IMAD), R3 (HFMA2), R4 (ALU) and SHFL rows assumed, re-measured as mix
 // points (EPS1, note:20261017T0310Z-report-eps1-program). Each probe but the alone ones is a joint point: rows.jsonl
-// holds both classes' rates, and frontier.py turns the points into facets with the 2% noise margin.
+// holds both classes' rates, and eps1.py turns the points into facets with the 2% noise margin.
 //   imma_ref        16 warps, 8 independent IMMA an iteration
 //   alone_<x>       16 warps, 16 ops of x an iteration on 8 chains (x's own rate)
 //   mix_<x>_<Q>     16 warps, every warp 8 IMMA and Q ops of x an iteration, the ops spread evenly after the IMMAs
@@ -130,13 +130,14 @@ __device__ __forceinline__ void spec(const OpArgs& a) {
 #define ALONE(x, X) OP_KERNEL(alone_##x, TPB) { alone<X>(a); }
 #define MIX(x, X, Q) OP_KERNEL(mix_##x##_##Q, TPB) { mix<X, Q>(a); }
 #define SPEC(x, X, W) OP_KERNEL(spec_##x##_w##W, (8 + W) * 32) { spec<X>(a); }
-#define KERNELS(x, X)                                                                                                \
+#define MIXES(x, X)                                                                                                  \
   ALONE(x, X) MIX(x, X, 2) MIX(x, X, 4) MIX(x, X, 8) MIX(x, X, 16) MIX(x, X, 24) MIX(x, X, 32) MIX(x, X, 48)        \
-  MIX(x, X, 64) MIX(x, X, 128) SPEC(x, X, 4) SPEC(x, X, 8)
+  MIX(x, X, 64) MIX(x, X, 128)
+#define KERNELS(x, X) MIXES(x, X) SPEC(x, X, 4) SPEC(x, X, 8)
 KERNELS(imad, X_IMAD)
 KERNELS(hfma2, X_HFMA2)
 KERNELS(lop3, X_LOP3)
-KERNELS(shfl, X_SHFL)
+MIXES(shfl, X_SHFL)
 
 #define IMMA "IMMA.16832.S8.S8"
 #define P_ALONE(x, OP, KIND, ROW)                                                                                    \
@@ -148,16 +149,19 @@ KERNELS(shfl, X_SHFL)
 #define P_SPEC(x, OP, W)                                                                                             \
   {.name = "spec_" #x "_w" #W, .kernel = (const void*)spec_##x##_w##W, .tpb = (8 + W) * 32,                          \
    .expect = IMMA "=8;" OP "=16", .warps = "8;" #W, .iters = 4096, .until = 2}
-#define PROBES_OF(x, OP, KIND, ROW)                                                                                  \
+#define P_MIXES(x, OP, KIND, ROW)                                                                                    \
   P_ALONE(x, OP, KIND, ROW), P_MIX(x, OP, 2), P_MIX(x, OP, 4), P_MIX(x, OP, 8), P_MIX(x, OP, 16), P_MIX(x, OP, 24),  \
-  P_MIX(x, OP, 32), P_MIX(x, OP, 48), P_MIX(x, OP, 64), P_MIX(x, OP, 128), P_SPEC(x, OP, 4), P_SPEC(x, OP, 8)
+  P_MIX(x, OP, 32), P_MIX(x, OP, 48), P_MIX(x, OP, 64), P_MIX(x, OP, 128)
+#define PROBES_OF(x, OP, KIND, ROW) P_MIXES(x, OP, KIND, ROW), P_SPEC(x, OP, 4), P_SPEC(x, OP, 8)
 
+// shfl has no spec probe: in a warp-divergent role ptxas gives SHFL a BRA.DIV fallback placed after the closing clock read
+// that branches back into the loop, so the loop straddles the clock (r20261017-033312-5546).
 static const OpProbe PROBES[] = {
     {.name = "imma_ref", .kernel = (const void*)imma_ref, .tpb = TPB, .expect = IMMA "=8", .iters = 4096},
     PROBES_OF(imad, "IMAD", "IMAD", "I"),
     PROBES_OF(hfma2, "HFMA2*", "", ""),
     PROBES_OF(lop3, "LOP3.LUT", "ALU", "A"),
-    PROBES_OF(shfl, "SHFL.BFLY", "", ""),
+    P_MIXES(shfl, "SHFL.BFLY", "", ""),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
