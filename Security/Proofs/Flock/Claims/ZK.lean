@@ -15,6 +15,7 @@ import Proofs.Flock.Claims.ZK.Hypotheses
 import Proofs.Flock.Claims.ZK.Prefinal
 import Proofs.Flock.Claims.ZK.Deployed
 import Proofs.Flock.Claims.ZK.Reference
+import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
