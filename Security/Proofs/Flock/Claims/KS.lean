@@ -77,6 +77,7 @@ import Proofs.Flock.Claims.KS.ZkAbortJR
 import Proofs.Flock.Claims.KS.ZkClashRaw
 import Proofs.Flock.Claims.KS.ZkSlackW
 import Proofs.Flock.Claims.KS.ForkCoupling
+import Proofs.Flock.Claims.KS.PlainSlackFit
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -388,4 +389,6 @@ position of some table, or a collision: each such column is a level-0 opening in
 `FlockDeploy.KS.ZkRawClashRun`, `FlockDeploy.KS.zkClashRun_of_raw`). A simulator reading uniform functions of the
 live coins' history through a prefix key has the fork's coin coupling, so its slack, at `δ_t = |X|^{-min (n t) M}`
 (`ForkCoupling`: `Claims.Flock.forkCoinCoupling_fnAt`, `Claims.Flock.slack_fnAt`,
-`FlockDeploy.KS.forkCoinCoupling_plain`). -/
+`FlockDeploy.KS.forkCoinCoupling_plain`). At chances at most `ε ≤ 1/2` before the last round and at most `1` there, a
+fork's slack weights before the last round fall geometrically past its round (`PlainSlackFit`:
+`Claims.Flock.sum_slackW_le`, `Claims.Flock.δN_le_inv`, `Claims.Flock.δN_le_one`). -/
