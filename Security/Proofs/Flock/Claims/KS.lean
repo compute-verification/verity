@@ -37,6 +37,7 @@ import Proofs.Flock.Claims.KS.LevelZero
 import Proofs.Flock.Claims.KS.LevelZeroAcc
 import Proofs.Flock.Claims.KS.OffSC
 import Proofs.Flock.Claims.KS.Entries
+import Proofs.Flock.Claims.KS.DecodeSC
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Claims.KS.ZkDrawJ
@@ -167,12 +168,15 @@ a position off `C` without a self-clash only where the reader looks up a column 
 `Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`); an accepted salted table's level-0
 openings verify (`Claims.Flock.verified_opens₀L`). At flock-verify's acceptance, every accepted salted output of a
 table's reps' runs has its level-0 openings verifying below `2^d`, with positions and rows its reps' `plainRepColsOf`
-entries (`Entries`: `FlockSoundness.Discharge.Exec.accepts_opens₀L`, `Claims.Flock.exists_ne_of_entries`). Where
-`verify --zk` sets its session up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs`
-(`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's
-(`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's
-draw to the statement's only up to key order, so the old discharge is read at the setup at the statement's draw, which
-reads no draw in the record, with a writer that records the live session there (`ZkDrawJ`:
+entries (`Entries`: `FlockSoundness.Discharge.Exec.accepts_opens₀L`, `Claims.Flock.exists_ne_of_entries`). So at `wrP`,
+at one table, the deployed plain decoders are right for accepting with no level-0 opening off `C` unless it
+self-clashes, on the outcomes flock-verify accepts at the live root where the deployed reader looks up no column off `C`
+(`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`, `Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). Where `verify --zk`
+sets its session up at a draw (`FlockDeploy.KS.setupAt`), the old `--zk` plan's tables are `zkTabs` (`ZkPlanJ`:
+`FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's (`ZkPlanHJ`:
+`FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's draw to the
+statement's only up to key order, so the old discharge is read at the setup at the statement's draw, which reads no draw
+in the record, with a writer that records the live session there (`ZkDrawJ`:
 `FlockSoundness.Discharge.Composed.AcceptsAt`, `FlockSoundness.Discharge.Composed.runsAtZCJ_live`,
 `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`, `Claims.Bridge.Custody.wrS`,
 `Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted there
