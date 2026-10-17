@@ -14,6 +14,9 @@
 * `CublasRouterRule`: a direct `torch.mm(x, W.T, out_dtype=float32)` binds the captured f32-output route;
 * `FusedQKvRmsNormRule`: the launch of `_fused_q_kv_rmsnorm_kernel` derives per token word for word its PTX's (`test_dsa_norm`), and
   another kernel body, a block of one element a thread or a stride outside the PTX's specialization refuses;
+* `rules/vllm_dsv4.py`: the insert and the compressor state derive per token word for word the numpy twin's
+  (`kernels.dsv4_qnorm_insert_twin`, FlashMLA's `fadd`), and statics the Definitions do not take or positions the tables do not
+  hold refuse by name;
 * `vllm_meta.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
   leaves them."""
 from __future__ import annotations
@@ -41,6 +44,8 @@ from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.vllm_meta import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
+from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as TQ
+from verity_vllm.program.kernels import flashmla_twin as FT
 from verity_vllm.program.kernels import mhc_twin as W
 from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import hopper
@@ -550,6 +555,53 @@ def test_a_fused_q_kv_rmsnorm_launch_beyond_the_ptx_refuses(over, refusal):
     rng = np.random.default_rng(1)
     model = _QKvNorm(rng, **{"Q": 256, "KV": 64, **over})
     rep = _derive_mhc(model, (_tensor(W.bf16(_f32(rng, 2, model.Q + model.KV + model.pad))),))
+    assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
+
+class _InsertState(nn.Module):
+    """The sparse MLA's compressor state and insert leaves at positions p0 .. p0 + T - 1: the state width 8 at ratio 4; 2 live
+    heads padded to NHP, head 64 of which 16 rotary, quant block QB."""
+
+    def __init__(self, rng, NHP: int = 4, QB: int = 16, p0: int = 5) -> None:
+        super().__init__()
+        self.NHP, self.QB, self.p0 = NHP, QB, p0
+        self.ape = nn.Parameter(_tensor(_f32(rng, 4, 8, sd=0.1)), requires_grad=False)
+        self.cos_sin_cache = nn.Parameter(_tensor(TQ._cs(rng, (32, 16))), requires_grad=False)
+
+    def forward(self, kv_score, q, kv):
+        positions = torch.arange(self.p0, self.p0 + q.shape[0], dtype=torch.int64)
+        return (*iface.dsv4_compressor_state(kv_score, positions, self.ape),
+                *iface.dsv4_qnorm_rope_kv_insert(q, kv, positions, self.cos_sin_cache, self.NHP, EPS, self.QB))
+
+
+def _insert_state_inputs(rng, T: int) -> tuple:
+    return _f32(rng, T, 16), TQ._bf16(rng, (T, 2, 64)), TQ._bf16(rng, (T, 64))
+
+
+@pytest.mark.parametrize("T", [1, 3])
+def test_the_insert_and_compressor_state_derive_per_token_word_for_word_the_twins(T):
+    rng = np.random.default_rng(T)
+    model, xs = _InsertState(rng), _insert_state_inputs(rng, T)
+    rep = _derive_mhc(model, tuple(map(_tensor, xs)))
+    assert rep.program is not None, rep.unsupported
+    apps = {a["rule"]: a["preconditions_checked"] for a in rep.provenance["applications"]}
+    assert apps["Dsv4QNormRopeKvInsert[vllm-dsv4]_v1"]["positions"] == apps["Dsv4CompressorState[vllm-dsv4]_v1"]["positions"] == [5, 4 + T]
+    roles = rep.provenance["weight_roles"]
+    assert (roles["ape"]["role"], roles["cos_sin_cache"]["role"]) == ("dsv4.compressor.ape", "rope.cos_sin_cache")
+    kv_score, q, kv = xs
+    pos = np.arange(5, 5 + T)
+    ape, cs = (np.array(_words(p), np.uint32).reshape(p.shape) for p in (model.ape, model.cos_sin_cache))
+    outs = (kv_score[:, :8], FT.fadd(kv_score[:, 8:], ape[pos % 4]), *TQ.insert(q, kv, cs[pos], NHP=4, DR=16, QB=16, EPS=EPS))
+    assert _run(rep, model, tuple(map(_tensor, xs))) == [int(v) for o in outs for v in np.asarray(o).reshape(-1)]
+
+
+@pytest.mark.parametrize("over, refusal", [({"NHP": 1}, "the live heads NH=2 must be in [1, NHP=1]"),
+                                           ({"QB": 20}, "QB=20 must divide DN=48"),
+                                           ({"p0": 30}, "a position outside cos_sin (32 rows)"),
+                                           ({"p0": -1}, "a negative position")])
+def test_an_insert_or_state_beyond_the_definitions_refuses_by_name(over, refusal):
+    rng = np.random.default_rng(0)
+    rep = _derive_mhc(_InsertState(rng, **over), tuple(map(_tensor, _insert_state_inputs(rng, 3))))
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
 
 

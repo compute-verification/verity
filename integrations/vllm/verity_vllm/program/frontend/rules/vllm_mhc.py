@@ -26,7 +26,7 @@ from verity.ml.circuits.refs import array_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
-from verity_vllm.program.frontend.rules.vllm_dsa import _rows, _static_float, _value
+from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _rows, _static_float, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.torch_frontend import _tensor_type
 from verity_vllm.program.kernels.mhc_twin import tf32_num_split
@@ -52,11 +52,6 @@ def _args(node) -> dict:
     names = node.target._schema.arguments
     return {**{x.name: x.default_value for x in names if x.has_default_value()}, **dict(zip((x.name for x in names), node.args)),
             **node.kwargs}
-
-
-def _missing(ctx, roles) -> str | None:
-    gone = [r for r in roles if not ctx.vocab.has(r)]
-    return "numerics_unregistered: the vocabulary has no " + "; no ".join(f"{r} ({ROLE_KERNELS[r]})" for r in gone) if gone else None
 
 
 def _geometry(H: int) -> dict | str:
@@ -145,7 +140,7 @@ class MhcPreBroadcastRule(OpRule):
         return a, T, {**S, "NS": tf32_num_split(T, H, active_target_profile().num_sms)}
 
     def applies(self, node, ctx):
-        if (r := _missing(ctx, ["mhc_pre_broadcast", "mhc_residual_broadcast"])):
+        if (r := _missing(ctx, ["mhc_pre_broadcast", "mhc_residual_broadcast"], ROLE_KERNELS)):
             return r
         S = self._statics(node, ctx)
         return S if isinstance(S, str) else True
@@ -203,7 +198,7 @@ class MhcFusedPostPreRule(OpRule):
         S = self._statics(node, ctx)
         if isinstance(S, str):
             return S
-        return _missing(ctx, [S[2]]) or True
+        return _missing(ctx, [S[2]], ROLE_KERNELS) or True
 
     def emit(self, node, ctx):
         a, T, role, S = self._statics(node, ctx)
@@ -232,7 +227,7 @@ class MhcPostRule(OpRule):
         return {iface.mhc_post_tilelang.default}
 
     def applies(self, node, ctx):
-        if (r := _missing(ctx, ["mhc_post"])):
+        if (r := _missing(ctx, ["mhc_post"], ROLE_KERNELS)):
             return r
         a = _args(node)
         s = shape(ctx, a["residual"])
@@ -263,7 +258,7 @@ class HcHeadRule(OpRule):
         return {iface.hc_head_fused_kernel_tilelang.default}
 
     def applies(self, node, ctx):
-        if (r := _missing(ctx, ["hc_head"])):
+        if (r := _missing(ctx, ["hc_head"], ROLE_KERNELS)):
             return r
         a = _args(node)
         s = shape(ctx, a["hs_flat"])

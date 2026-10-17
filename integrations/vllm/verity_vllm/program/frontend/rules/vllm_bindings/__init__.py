@@ -76,8 +76,9 @@ def vllm_ruleset():
                                                              VLLM_DSA_RULES)  # DeepSeek sparse attention's leaves (export_compat.dsa_leaves)
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES  # [R15 stoch] the seeded temperature + top-p token select (GumbelTopPTokenSelect_v1{V,S})
     from verity_vllm.program.frontend.rules.vllm_mhc import VLLM_MHC_RULES  # DeepSeek-V4's mHC ops
+    from verity_vllm.program.frontend.rules.vllm_dsv4 import VLLM_DSV4_RULES  # DeepSeek-V4's sparse MLA leaves
     return RuleSet("default+vllm-bindings", VLLM_DSA_PATTERN_RULES + base + VLLM_BINDING_RULES + VLLM_MOE_RULES + VLLM_MOE_FP8_RULES + VLLM_MOE_ROUTER_RULES
-                   + VLLM_DSA_RULES + list(VLLM_SAMPLING_RULES) + VLLM_MHC_RULES, list(DEFAULT_RULES.families))
+                   + VLLM_DSA_RULES + list(VLLM_SAMPLING_RULES) + VLLM_MHC_RULES + VLLM_DSV4_RULES, list(DEFAULT_RULES.families))
 
 
 __all__ = ["AllocViewRule", "GEMM_PINS", "LayerNormAtenRule", "MEAN_PINS", "QKV_RMS_PINS", "RMS_PINS", "TritonGemmRule", "VLLM_BINDING_RULES", "_OBSERVED", "_pins_ok",

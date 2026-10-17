@@ -15,6 +15,7 @@ from verity.ml.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm
+from verity_vllm.program.registry import dsv4_indexer as _dsv4_indexer, dsv4_qnorm_insert as _dsv4_qnorm
 from verity_vllm.program.registry import deepgemm as _deepgemm
 from verity_vllm.program.registry import boolean_rope as _rope
 from verity_vllm.program.registry import cublas_bf16 as _cublas_bf16, ll_bf16 as _ll_bf16
@@ -472,7 +473,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "mhc_post_pre_tf32": lambda HC, H, NS, TN, REPEAT, EPS, HC_EPS:
                ir_bind(_mhc.MhcPostPreTf32, HC=HC, H=H, NS=NS, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=HC_EPS),
            "mhc_post": lambda HC, N: ir_bind(_mhc.MhcPost, HC=HC, N=N),
-           "hc_head": lambda HC, H, TH, EPS, HC_EPS: ir_bind(_mhc.HcHead, HC=HC, H=H, TH=TH, EPS=EPS, HC_EPS=HC_EPS)},
+           "hc_head": lambda HC, H, TH, EPS, HC_EPS: ir_bind(_mhc.HcHead, HC=HC, H=H, TH=TH, EPS=EPS, HC_EPS=HC_EPS),
+           "dsv4_qnorm_rope_kv_insert": lambda NH, NHP, DN, DR, QB, EPS:
+               ir_bind(_dsv4_qnorm.Dsv4QNormRopeKvInsert, NH=NH, NHP=NHP, DN=DN, DR=DR, QB=QB, EPS=EPS),
+           "dsv4_compressor_score": lambda W: ir_bind(_dsv4_indexer.Dsv4CompressorScore, W=W)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -573,7 +577,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "mhc_post_pre_tf32": "MhcPostPreTf32_v1{HC,H,NS,TN,REPEAT,EPS,HC_EPS}: mhc_fused_post_pre_tilelang above 16 tokens -- "
                                 "mhc_post, DeepGEMM's TF32 hc-prenorm GEMM in NS splits, the big fuse",
            "mhc_post": "MhcPost_v1{HC,N}: mhc_post_tilelang, the streams after the last layer",
-           "hc_head": "HcHead_v1{HC,H,TH,EPS,HC_EPS}: hc_head_fuse_tilelang, the final streams' mix to one row"})
+           "hc_head": "HcHead_v1{HC,H,TH,EPS,HC_EPS}: hc_head_fuse_tilelang, the final streams' mix to one row",
+           "dsv4_qnorm_rope_kv_insert": "Dsv4QNormRopeKvInsert_v1{NH,NHP,DN,DR,QB,EPS}: the sparse MLA's query norm, RoPE and "
+                                        "fp8_ds_mla window row, one token",
+           "dsv4_compressor_score": "Dsv4CompressorScore_v1{W}: save_partial_states' score row plus ape[pos % ratio]"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:
