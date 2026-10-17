@@ -34,6 +34,7 @@ import Proofs.Flock.Claims.KS.DecodeDeploy
 import Proofs.Flock.Claims.KS.DecodeHidden
 import Proofs.Flock.Claims.KS.PlainWrP
 import Proofs.Flock.Claims.KS.PlainEvent
+import Proofs.Flock.Claims.KS.LiveMix
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -141,4 +142,6 @@ up at a draw, so the plain chain asks only for the mixture at those decoders, wh
 (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`, `FlockDeploy.KS.PlainLiveW`,
 `FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the statement's draw, the event the
 mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
-`FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). -/
+`FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the
+rest of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the
+merged coins being uniform (`LiveMix`: `Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_le_liveMix`). -/
