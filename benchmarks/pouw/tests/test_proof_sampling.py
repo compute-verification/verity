@@ -91,11 +91,13 @@ def test_aware_is_the_exact_minimax_against_the_capped_cheater(s):
 
 
 def test_aware_and_closure_bounds_hold_in_every_cell():
-    """The σ-aware draw is within 25% of ε_luck at one draw; a closure leaves ε_luck alone at any s."""
+    """The σ-aware draw is within 25% of ε_luck at one draw; a closure leaves ε_luck alone at any s, even with its
+    producers at any coordinate of the row rather than only at noise-active ones."""
     for c in CELLS:
         assert P.evaluate(c, "aware", 1)[0].eps <= 1.25 * P.eps_luck(1)
         for s in (1, 2, 16):
-            assert P.evaluate(c, "closure", s, 1)[0].eps == pytest.approx(P.eps_luck(s))
+            for closure in ("closure", "closure_any"):
+                assert P.evaluate(c, closure, s, 1)[0].eps == pytest.approx(P.eps_luck(s))
 
 
 def test_today_s_work_measure_loses_to_the_new_levers():
@@ -112,9 +114,14 @@ def test_the_early_token_attack_steers_every_layer_of_the_first_510_tokens():
     assert r.lev_used[pv].sum() / P.ROUNDS == pytest.approx(32 * 510, rel=1e-3)
 
 
-def test_a_session_is_the_cost_floor():
-    assert P.session_gpu_s(1) == P.session_gpu_s(16) == 0.054
-    assert P.session_gpu_s(64) == 0.069 and P.session_gpu_s(256) == 0.213
-    assert P.dp_slots(np.array([4096.0, 14336.0]))[0] == 1
+def test_the_cost_is_prf57s_and_bounds_the_draws_a_round():
+    """PRF-57's sessions; the recommended draw keeps up with 12.6 s rounds in a 2-round batch, while s = 64 never does,
+    because one prover a site sustains ≈ 77 whole DPs of length 4,096 a round."""
+    for dps, prove, wall in P.ZK_SESSION:
+        assert P.session_s(dps) == pytest.approx((prove, wall))
+    assert P.session_s(0)[1] == pytest.approx(12.13, abs=0.01)
+    assert P.sessions_s(512) == 84.0
     c = P.cell(P.LLAMA_8B, "prefill", 2048)
-    assert P.evaluate(c, "aware", 16)[1].gpu_s < 0.06
+    cost = P.evaluate(c, "closure_any", 2, 1)[1]
+    assert cost.dps < 16 and cost.batch() == 2 and cost.batch(today=True) <= 4
+    assert P.evaluate(c, "work", 64)[1].batch() is None

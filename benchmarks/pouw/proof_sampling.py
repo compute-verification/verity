@@ -14,11 +14,14 @@ times max(1/c_luck(s), (1 + F)/s), F the largest fan-out of the levers its row c
 before the draw), the verifier puts each row's lever excess only on the coordinates every lever needs (`aware`), which
 attains `capped_optimum`, the exact minimax against the cheater with per-round supplies, solved as one LP. A
 closure, r producer DPs proved at random noise-active coordinates of each drawn consumer's operand row, detects a
-steered consumer as if it had failed (`closure`). ε_luck + ε_adapt = luck factor × (saving / S).
+steered consumer as if it had failed (`closure`); at any coordinates of the row, it detects with the row's wrong
+fraction (`closure_any`). ε_luck + ε_adapt = luck factor × (saving / S).
 
-Inputs are SPEC's and SKIP's (note:20261017T0340Z-draft-skip) shapes and Theorem S's constants; the proof cost is
-ZKM28's (note:20261016T0220Z-draft-zk-proof-m28) GPU-busy time by session size, an estimate until the proofs team's
-cost model replaces it. Run `uv run benchmarks/pouw/proof_sampling.py` for the table.
+Inputs are SPEC's and SKIP's (note:20261017T0340Z-draft-skip) shapes and Theorem S's constants. The proof cost is the
+proofs team's (PRF-57): C-Flock's `--zk` CPU prover by session size, one session at a time per site, one per table
+until PRF-48. A round is 12.6 s, so proving keeps up only if a session batches enough rounds (`Cost.batch`); a round
+that waits for its own proofs is longer, and ε grows with it (`unbatched`). Run `uv run
+benchmarks/pouw/proof_sampling.py` for the table.
 """
 
 from __future__ import annotations
@@ -31,18 +34,18 @@ import numpy as np
 
 LN_INV_DELTA = 40 * math.log(2)
 ROUNDS = 48_000
+ROUND_S = 12.6
 P_PASS = 0.75
 LUCK_FACTOR = 0.403
-NODE_GPU_S = 100.8
 
 COMPONENTS = ("qkv", "qk", "pv", "o", "gu", "down", "lm")
 
-# GPU-busy seconds of one `flock-circuit --zk` session by its size in 2^24-AND instance slots (ZKM28, Circuit A; the
-# m = 28 point is Circuits A and B's mean). A session never costs less than its m = 28 floor.
-ZK_SESSION = ((16, 0.054), (64, 0.069), (256, 0.213))
-SLOT_ANDS = 2**24
-ANDS_PER_MAC = 1.06e3
-ANDS_PER_DP = 3e6
+# One `flock-circuit --zk` session on a 32-thread CPU prover (PRF-57, note:proofs/20261017T0552Z-report-proof-service-
+# cost-model; Pc4Tile_v1 at K = 4096): (whole DPs of length 4,096, prove s, process wall s). A DP's marginal cost is
+# linear in its length; below 16 DPs the 16–256 line runs down to the session's fixed cost (1.8 s prove, 12.1 s wall).
+# Sessions run one at a time per site, and until PRF-48 each DP shape (a padded length class) is its own session.
+ZK_SESSION = ((16, 2.4, 14.0), (256, 11.3, 42.0), (4096, 283.0, 950.0))
+DP_K = 4096
 
 
 @dataclass(frozen=True)
@@ -386,11 +389,13 @@ class Response:
 
 
 def best_response(c: Cell, w: np.ndarray, s: int, closure_r: int = 0, caps: bool = True,
-                  levers: np.ndarray | None = None) -> Response:
+                  levers: np.ndarray | None = None, closure_any: bool = False) -> Response:
     """The cheater's saving-maximizing attacks against draw weights w at s draws a round (fractional knapsack).
 
     Each attack saves MACs and spends E2's detection budget L = ln(1/δ) over the window: c_luck(s)·ρ per deficient DP,
-    s·ρ per wrong DP, and with a closure s·ρ(consumer group) for a steered consumer whose lever the closure covers.
+    s·ρ per wrong DP, and with a closure s·q·ρ(consumer group) for a steered consumer whose lever the closure covers. q is
+    1 for producers drawn at noise-active coordinates, and 1 − (1 − m/row)^r for `closure_any`'s producers drawn at
+    any coordinate of the row (a closure map that reads only the draw coin and the Program, not σ).
     With `caps` an attack is available once a round per row (or DP); without, its best ratio takes the whole budget.
     """
     rho = w / (c.count * w).sum()
@@ -411,9 +416,12 @@ def best_response(c: Cell, w: np.ndarray, s: int, closure_r: int = 0, caps: bool
     fan = c.fan()
     sel = np.ones(fan.size, bool) if levers is None else levers
     closed = np.zeros(fan.size, bool)
+    q = 1.0
     if closure_r:
         closed = (1 + fan) / s > 1 / cl
-    det_lev = s * (c.lev_forced * mean_act + rho_min[c.lev_class] + np.where(closed, c.lev_consumer / M, 0.0))
+        if closure_any:
+            q = 1 - (1 - np.minimum(1.0, m / c.class_row[c.lev_class])) ** closure_r
+    det_lev = s * (c.lev_forced * mean_act + rho_min[c.lev_class] + np.where(closed, q * c.lev_consumer / M, 0.0))
     save_lev = (c.lev_consumer + m * c.lev_k) / M
     save = np.concatenate([c.k / M, save_lev[sel]])
     det = np.concatenate([cl * rho, det_lev[sel]])
@@ -439,50 +447,101 @@ def best_response(c: Cell, w: np.ndarray, s: int, closure_r: int = 0, caps: bool
 # ---- proof cost ----
 
 
-def dp_slots(k: np.ndarray) -> np.ndarray:
-    """2^24-AND instance slots one whole-DP proof takes: ≈ 1,060 ANDs a MAC (int8 product and its rows' SHA-512) + 3·10⁶."""
-    return np.ceil((ANDS_PER_MAC * k + ANDS_PER_DP) / SLOT_ANDS)
+def session_s(dps: float) -> tuple[float, float]:
+    """A session's prove and process wall seconds at `dps` whole DPs of length 4,096 (or their MACs in longer ones)."""
+    (n0, p0, w0), (n1, p1, w1), (n2, p2, w2) = ZK_SESSION
+    if dps <= n1:
+        t = (dps - n0) / (n1 - n0)
+        return p0 + (p1 - p0) * t, w0 + (w1 - w0) * t
+    t = (dps - n1) / (n2 - n1)
+    return p1 + (p2 - p1) * t, w1 + (w2 - w1) * t
 
 
-def session_gpu_s(slots: float) -> float:
-    (n0, g0), (n1, g1), (n2, g2) = ZK_SESSION
-    if slots <= n0:
-        return g0
-    if slots <= n1:
-        return g0 + (g1 - g0) * (slots - n0) / (n1 - n0)
-    return g1 + (g2 - g1) * (slots - n1) / (n2 - n1)
+def sessions_s(dps: float) -> float:
+    """Wall seconds to prove `dps` DPs in back-to-back sessions of at most 256 (PRF-57's sweet spot)."""
+    full, rest = divmod(dps, ZK_SESSION[1][0])
+    return full * ZK_SESSION[1][2] + (session_s(rest)[1] if rest > 0 else 0.0)
+
+
+def shape(k: np.ndarray) -> np.ndarray:
+    """A DP's table: its length padded to a power of two (P·V's lengths, one per position, in ≈ 9 classes)."""
+    return 2 ** np.ceil(np.log2(k))
 
 
 @dataclass
 class Cost:
-    macs: float
-    slots: float
-    gpu_s: float
+    """A round's expected proofs: MACs and proofs per table (padded length class)."""
+
+    macs: dict[float, float]
+    draws: dict[float, float]
 
     @property
-    def node_share(self) -> float:
-        return self.gpu_s / NODE_GPU_S
+    def dps(self) -> float:
+        """Proved MACs in whole DPs of length 4,096."""
+        return sum(self.macs.values()) / DP_K
+
+    def n_tables(self, rounds: int = 1) -> float:
+        """Expected tables drawn over `rounds` rounds: each table's chance of at least one proof."""
+        return float(sum(1 - math.exp(-rounds * n) for n in self.draws.values()))
+
+    @property
+    def prove_s(self) -> float:
+        return session_s(self.dps)[0]
+
+    @property
+    def wall_s(self) -> float:
+        """One multi-table session a round (PRF-48)."""
+        return session_s(self.dps)[1]
+
+    def keep_up_s(self, rounds: int, today: bool = False) -> float:
+        """Wall seconds to prove `rounds` rounds' draws: as one multi-table batch (PRF-48), or `today` one per table."""
+        if not today:
+            return sessions_s(rounds * self.dps)
+        out = 0.0
+        for t, m in self.macs.items():
+            hit = 1 - math.exp(-rounds * self.draws[t])
+            if hit > 0:
+                out += hit * sessions_s(rounds * m / DP_K / hit)
+        return out
+
+    def batch(self, today: bool = False, most: int = 256) -> int | None:
+        """The fewest rounds a batch must cover so that proving keeps up with 12.6 s rounds (None: it never does)."""
+        for b in range(1, most + 1):
+            if self.keep_up_s(b, today) <= b * ROUND_S:
+                return b
+        return None
 
 
 def proof_cost(c: Cell, r: Response, s: int, closure_r: int = 0) -> Cost:
-    """Expected proved MACs and slots a round, and the session's GPU-busy seconds (one session a round)."""
-    per_macs = float((c.count * r.rho * c.k).sum())
-    per_slots = float((c.count * r.rho * dp_slots(c.k)).sum())
+    """A round's expected proved MACs, by table, with the closure's producers."""
+    macs: dict[float, float] = {}
+    draws: dict[float, float] = {}
+
+    def put(k: np.ndarray, n: np.ndarray) -> None:
+        for t, kk, nn in zip(shape(k), k, n):
+            macs[t] = macs.get(t, 0.0) + float(nn * kk)
+            draws[t] = draws.get(t, 0.0) + float(nn)
+
+    put(c.k, s * c.count * r.rho)
     if closure_r:
-        hit = c.lev_rows * c.lev_consumer / c.macs * r.closure
-        per_macs += closure_r * float((hit * c.lev_k).sum())
-        per_slots += closure_r * float((hit * dp_slots(c.lev_k)).sum())
-    slots = s * per_slots
-    return Cost(s * per_macs, slots, session_gpu_s(slots))
+        put(c.lev_k, s * closure_r * c.lev_rows * c.lev_consumer / c.macs * r.closure)
+    return Cost(macs, draws)
 
 
 # ---- the table ----
 
 
 def evaluate(c: Cell, strategy: str, s: int, closure_r: int = 0) -> tuple[Response, Cost]:
-    w = work(c, s) if strategy == "closure" else STRATEGIES[strategy](c, s)
-    r = best_response(c, w, s, closure_r=closure_r if strategy == "closure" else 0)
-    return r, proof_cost(c, r, s, closure_r if strategy == "closure" else 0)
+    """`closure` and `closure_any` are the work draw with producers at noise-active or at any coordinates."""
+    closed = strategy.startswith("closure")
+    w = work(c, s) if closed else STRATEGIES[strategy](c, s)
+    r = best_response(c, w, s, closure_r=closure_r if closed else 0, closure_any=strategy == "closure_any")
+    return r, proof_cost(c, r, s, closure_r if closed else 0)
+
+
+def unbatched(eps: float, wall_s: float) -> float:
+    """ε when each round lasts at least its own proofs' wall time: S shrinks, and ε ∝ 1/S."""
+    return eps * max(1.0, wall_s / ROUND_S)
 
 
 def cells(designs=(DESIGN_A, DESIGN_BC)) -> list[Cell]:
@@ -501,30 +560,39 @@ def eps_luck(s: int) -> float:
 
 
 def table(cs: list[Cell], strategies: list[str], draws: list[int], closure_r: int) -> str:
-    """ε and Λ, the worst cell per model and design, against the round's proof cost (its worst cell)."""
+    """ε and Λ, the worst cell per model and design, against the round's proof cost (each column's worst cell).
+
+    ε is at S = 48,000 rounds of 12.6 s, which holds when sessions batch enough rounds to keep up (the batch columns);
+    "unbatched" is ε when every round waits for its own session (PRF-48's one multi-table session a round).
+    """
     groups: dict[str, list[Cell]] = {}
     for c in cs:
         groups.setdefault(f"{c.label.split()[0]} {c.label.split('(')[1].rstrip(')')}", []).append(c)
     lines = ["| strategy | s | " + " | ".join(f"ε {g}" for g in groups) +
-             " | Λ (max) | worst cell: its top attack | GPU-s a round | proved MACs a round |",
-             "|---|---:|" + "---:|" * len(groups) + "---:|---|---:|---:|"]
+             " | Λ (max) | worst cell: its top attack | 4K DPs a round | tables a round | prove s | wall s"
+             " | ε unbatched | rounds a batch: PRF-48, today |",
+             "|---|---:|" + "---:|" * len(groups) + "---:|---|---:|---:|---:|---:|---:|---:|"]
     for st in strategies:
         for s in draws:
             got = {c.label: evaluate(c, st, s, closure_r) for c in cs}
             eps = [max(got[c.label][0].eps for c in cl) for cl in groups.values()]
             worst = max(got, key=lambda lab: got[lab][0].eps)
             r = got[worst][0]
-            name = f"closure r={closure_r}" if st == "closure" else st
+            costs = [g[1] for g in got.values()]
+            name = f"{st} r={closure_r}" if st.startswith("closure") else st
+            batches = [[x.batch(today) for x in costs] for today in (False, True)]
+            batch = ", ".join("—" if None in b else str(max(b)) for b in batches)
             lines.append(f"| {name} | {s} | " + " | ".join(f"{100 * e:.3f}%" for e in eps) +
                          f" | {max(g[0].lam for g in got.values()):.3f} | {worst}: {max(r.by_attack, key=r.by_attack.get)}"
-                         f" | {max(g[1].gpu_s for g in got.values()):.3f}"
-                         f" | {max(g[1].macs for g in got.values()):.3g} |")
+                         f" | {max(x.dps for x in costs):.1f} | {max(x.n_tables() for x in costs):.1f}"
+                         f" | {max(x.prove_s for x in costs):.1f} | {max(x.wall_s for x in costs):.1f}"
+                         f" | {100 * max(unbatched(g[0].eps, g[1].wall_s) for g in got.values()):.3f}% | {batch} |")
     return "\n".join(lines)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--strategies", default="work,uniform,stratified,fanout,optimal,aware,closure")
+    ap.add_argument("--strategies", default="work,uniform,stratified,fanout,optimal,aware,closure,closure_any")
     ap.add_argument("--draws", default="1,2,4,16,64,256")
     ap.add_argument("--closure-r", type=int, default=1)
     ap.add_argument("--designs", default="A,Bc")
