@@ -38,12 +38,13 @@
    "owner": "@compute-accounting",
    "digest": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b"
   },
+  "Accounting.Assumptions.TS.FanIn": {
+   "owner": "@compute-accounting",
+   "digest": "58d244d68b77d25572471c47056a7c4eac1f9e128db1d335c3cf3fc9a8414b71"
+  },
   "Accounting.Assumptions.TS.FillOpt": {
    "owner": "@compute-accounting",
    "digest": "32e6f1ad9b1cd5704affa13c87dae03fad67a20aa3acd62efdde326a1702a503"
-  },
-  "Accounting.Assumptions.TS.FanIn": {
-   "owner": "@compute-accounting"
   },
   "Accounting.Assumptions.TS.FoldOpt": {
    "owner": "@compute-accounting",
@@ -1416,11 +1417,29 @@
    "assumptions": [],
    "type_hash": "5cd9789694c0df8e5c5a09cd026a4f45b7c72ae8be8393f286cb479d9cac04d0"
   },
+  "Accounting.SecurityProofs.TS.FanInCount": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.FanInCount : Accounting.Guarantees.TS.FanInCount"],
+   "assumptions": [],
+   "type_hash": "3e1d5374cd0bc66c2c0b2ce69691138ba42b473ae7dad89b19127743e29d0b40"
+  },
+  "Accounting.SecurityProofs.TS.FillOptOfFanIn": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.FillOptOfFanIn : Accounting.Guarantees.TS.FillOptOfFanIn"],
+   "assumptions": [],
+   "type_hash": "568832759779f6343aa4730d2aa7371196de435e23c850b7fd3fb9757ff039f3"
+  },
   "Accounting.SecurityProofs.TS.FloorCreditD3": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.FloorCreditD3 : Accounting.Guarantees.TS.FloorCreditD3"],
    "assumptions": [],
    "type_hash": "010375a4f71170b4f5bce6e609521eeb3513178b58fb0ab590c0230ab29fee8f"
+  },
+  "Accounting.SecurityProofs.TS.FoldOptOfFanIn": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.FoldOptOfFanIn : Accounting.Guarantees.TS.FoldOptOfFanIn"],
+   "assumptions": [],
+   "type_hash": "22e2320fa4db7ad6c4182cab5d22d9df1ef0ede2c031c256c59be0e9997c4a1e"
   },
   "Accounting.SecurityProofs.TS.OutputCount": {
    "owner": "@compute-accounting",
@@ -1428,31 +1447,17 @@
    "assumptions": [],
    "type_hash": "f63122b9d09208627838844f85921930911249f025c810b9936cfc84542bef96"
   },
-  "Accounting.SecurityProofs.TS.FanInCount": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.FanInCount : Accounting.Guarantees.TS.FanInCount"]
-  },
-  "Accounting.SecurityProofs.TS.SeesOfInjective": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.SeesOfInjective : Accounting.Guarantees.TS.SeesOfInjective"]
-  },
-  "Accounting.SecurityProofs.TS.ThinFoldInjective": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.ThinFoldInjective : Accounting.Guarantees.TS.ThinFoldInjective"]
-  },
-  "Accounting.SecurityProofs.TS.FoldOptOfFanIn": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.FoldOptOfFanIn : Accounting.Guarantees.TS.FoldOptOfFanIn"]
-  },
-  "Accounting.SecurityProofs.TS.FillOptOfFanIn": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.FillOptOfFanIn : Accounting.Guarantees.TS.FillOptOfFanIn"]
-  },
   "Accounting.SecurityProofs.TS.RoutesOffD2": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.RoutesOffD2 : Accounting.Guarantees.TS.RoutesOffD2"],
    "assumptions": [],
    "type_hash": "910ce6a26665e311102a94c12eaccac326387b0accd53002a814c6795e97b5fc"
+  },
+  "Accounting.SecurityProofs.TS.SeesOfInjective": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.SeesOfInjective : Accounting.Guarantees.TS.SeesOfInjective"],
+   "assumptions": [],
+   "type_hash": "c937ea1687f1688063a1c90c1b8da809f1a119c468d6fd44e050ed5cc450bd27"
   },
   "Accounting.SecurityProofs.TS.TensorSlotCount": {
    "owner": "@compute-accounting",
@@ -1465,6 +1470,12 @@
    "signature": ["Accounting.SecurityProofs.TS.TensorSlotTight : Accounting.Guarantees.TS.TensorSlotTight"],
    "assumptions": [],
    "type_hash": "30d003c694a3bd08644494216c161e39705b04f4adbc08b3afa985e29b5e7501"
+  },
+  "Accounting.SecurityProofs.TS.ThinFoldInjective": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.ThinFoldInjective : Accounting.Guarantees.TS.ThinFoldInjective"],
+   "assumptions": [],
+   "type_hash": "05c11dc008c2a2607af95ee24298aeb442207dd73f0dc17980a992372e1e94ef"
   },
   "Accounting.SecurityProofs.TS.TimeBound": {
    "owner": "@compute-accounting",
@@ -6697,6 +6708,28 @@
     "Accounting.SecurityProofs.TimelyTicks"
    ]
   },
+  "Definitions.Accounting.TS.FanIn": {
+   "digest": "14abbaaf0750b664e1e0a60e94892364d0e5692e950a462bf0cae6e29ec22de2",
+   "definitions": {
+    "Accounting.TS.Dataflow": "71d86a964562ef29d79fe68c7e4255a74b48a6be8802cc5641acf376141533ca",
+    "Accounting.TS.Dataflow.Runs": "40634b2e7a2eab515450a98e875ace3b1421497dc4de80f971d169da87f1bf60",
+    "Accounting.TS.Dataflow.Sees": "1aaf6acf17a26090bb6aae2c0c56ee10b0ce47a73c72270c33101cea3e89a3a0",
+    "Accounting.TS.Dataflow.issued": "68f6df325f2d4db66dddd5c2b76dd9caba00300bac62d75d66a0c1f606db73c1",
+    "Accounting.TS.Dataflow.merges": "25a6c42a890dd16e21efb1f5f6c672f7dc86fe9071939557319da9a8eb3a345d",
+    "Accounting.TS.Dataflow.n": "b05b582735e5dbc794a63e5fc56f12b10ead2a9d43c2eb50dee380d34afefb66",
+    "Accounting.TS.Dataflow.op": "76d257614895b715217211ba6b497434cdab8ac5a89c4e9174d72f9a8d8689ca",
+    "Accounting.TS.Dataflow.src": "aa190418a579bfeb58d4cefaf0ebd7a16042d7e9e3d3154874e517493ea3526c",
+    "Accounting.TS.thinFold": "91a24891c397ebcda56b9407a92d7c0077da937455e207ce99a7585d48a41d8b",
+    "Accounting.TS.thinStep": "f23d750769766a0d93cda8d5c9bfafbf2c4148c618df2b5abb14ba22a493b986"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.FanInCount",
+    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
+    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
+    "Accounting.SecurityProofs.TS.SeesOfInjective",
+    "Accounting.SecurityProofs.TS.ThinFoldInjective"
+   ]
+  },
   "Definitions.Accounting.TS.Machine": {
    "digest": "14155d8d7579d0f76acfc5d2bfe15eb21dd222a817df9da2cd141ded2c31c6f0",
    "definitions": {
@@ -6722,7 +6755,9 @@
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
+    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.RoutesOffD2",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
@@ -6821,7 +6856,9 @@
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
+    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
   },
@@ -16805,9 +16842,10 @@
    ]
   },
   "Models.Accounting.Assumptions.TS": {
-   "digest": "1dc280d7e8e68052be922d55c6fe791e9b49a76282ad2f6e4e8c247f6b6c5746",
+   "digest": "74ed71873e628be3044e550f2ffaf25438ab059a5344a04ba66d71004660dc8c",
    "definitions": {
     "Accounting.Assumptions.TS.FacetCeilings": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b",
+    "Accounting.Assumptions.TS.FanIn": "58d244d68b77d25572471c47056a7c4eac1f9e128db1d335c3cf3fc9a8414b71",
     "Accounting.Assumptions.TS.FillOpt": "32e6f1ad9b1cd5704affa13c87dae03fad67a20aa3acd62efdde326a1702a503",
     "Accounting.Assumptions.TS.FoldOpt": "68ce0cf852f288923e7ba2879c1a6ecb92a012defbe6b431c1b6ebb6ffbbe3b3",
     "Accounting.Assumptions.TS.LuckAt": "28ff53f429206bbd8f8447d74044812a42bfe9123fb10443321873882cb02cac",
@@ -16822,7 +16860,9 @@
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
+    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.TimeBound"
    ]
   },
@@ -17240,18 +17280,23 @@
    ]
   },
   "Models.Accounting.Guarantees.TS": {
-   "digest": "3a5b8bc7e4763abfbef28a3d19661f915b19f4cad5ebf1aecdbd488b8b9304ac",
+   "digest": "d7427d3a751c307c29d70366ee74af66d21d29ab46ee8f1bd2f3744c6f4d541b",
    "definitions": {
     "Accounting.Guarantees.TS.BindingFacetD1": "a17c578d0bc020c50567b3b8f50848237bddadf7d54aab6ce18ef007d4af1c6e",
     "Accounting.Guarantees.TS.CompilerC": "f682a20b0128c7e27115eb3896b65e7979b26b401d5b9b453ec4b33356fe1ac1",
     "Accounting.Guarantees.TS.DIdeal": "77a519583df833db703098e098abccdb8e01aa5370400d7cc7b6f07174790679",
     "Accounting.Guarantees.TS.DIdealFloor": "91de155feb20dd52c94faa3da0da1246fc8d2153a753adc41713ba576fb74de5",
     "Accounting.Guarantees.TS.DecompositionD": "237b5d1e8dbe814eaa3942aa253b33b7b0d4856b390e60d95cd596728134446d",
+    "Accounting.Guarantees.TS.FanInCount": "4e0d50170ff6629c2482a916f67d65372e84abd7fe807c0002b25cf41f2ae968",
+    "Accounting.Guarantees.TS.FillOptOfFanIn": "2ee0a91e36c20f0235bb273dbb16885455a3ce273c27bdf38dc8872150ff93d6",
     "Accounting.Guarantees.TS.FloorCreditD3": "012916939463cfd453565042c4696d6cc8fbad47c52bd373d88d9258b3893e54",
+    "Accounting.Guarantees.TS.FoldOptOfFanIn": "e64d6ca924502dc29f1552d6a665ea376f37b395b25fc268a33d0b5eb176df8d",
     "Accounting.Guarantees.TS.OutputCount": "aec5f1a001e3ac62af705b8bcbf3a64f9664f671f3b2d0595814c9143f03e3e9",
     "Accounting.Guarantees.TS.RoutesOffD2": "8b5d8b812b583f648a13c6890d2c0b70eb09e092f01708ef3945f7f1a0f0b4e7",
+    "Accounting.Guarantees.TS.SeesOfInjective": "8c308b249f905c56ff79fef320af48088b1fd2a300d119fafcdb7286f25d263f",
     "Accounting.Guarantees.TS.TensorSlotCount": "749efbc6ec8a01cb4f02f3f2e68d33a67489e518b471a5d8873bbe3d85209045",
     "Accounting.Guarantees.TS.TensorSlotTight": "d6115b12104006a38f9ccceda9590623dacece975558f8d2869debd163255152",
+    "Accounting.Guarantees.TS.ThinFoldInjective": "dbec3572f7457ebd43b9a03179aefa0dc838674edc5d9dcedf119df0419b27ac",
     "Accounting.Guarantees.TS.TimeBound": "167e804d2f0758365a5401590f0a11076853f7e54a902672e6b8146a4a3d6497",
     "Accounting.Guarantees.TS.VectorThresholdD1": "28fc206aca7c35c86211bc5db5ea90b24f2de5d9f94b0128ab9877f519fd93d0"
    },
@@ -17261,11 +17306,16 @@
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
+    "Accounting.SecurityProofs.TS.FanInCount",
+    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.OutputCount",
     "Accounting.SecurityProofs.TS.RoutesOffD2",
+    "Accounting.SecurityProofs.TS.SeesOfInjective",
     "Accounting.SecurityProofs.TS.TensorSlotCount",
     "Accounting.SecurityProofs.TS.TensorSlotTight",
+    "Accounting.SecurityProofs.TS.ThinFoldInjective",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
