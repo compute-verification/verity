@@ -8,6 +8,7 @@ import Proofs.Flock.Claims.Complete.Replay.Trace
 import Proofs.Flock.Claims.Complete.Replay.Satisfies
 import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+import Proofs.Flock.Claims.Complete.Replay.Walk
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`, `Agrees`),
@@ -27,4 +28,6 @@ circuit the halved fold with `β` at the pin, `folded_ok`, the start `α·v_A + 
 `lcAlgebra`, so `Lincheck` holds without it, `lincheck_relation`; `RingSwitchAlgebra`: the ring switch's algebra there
 from `RelS`, every claim's value the witness's extension at its point, lincheck's `w`, `Lc.ab_eval`, zerocheck's
 `P_c(ζ)`, `Zc.c_claim_eval`, and the extra claims at link points of `m_pts` coordinates, `Region.regionClaim_holds`,
-`rsAlgebra`, so `RingSwitch` holds without it, `ringSwitch_relation`). -/
+`rsAlgebra`, so `RingSwitch` holds without it, `ringSwitch_relation`; `Walk`: the statement's circuit fold returns at
+every rep, `Run.fold_ok`, so the three goals hold there from the session walk alone, `ZcAt`, `LcWalk` and `RsAt`,
+`replay_goals`). -/
