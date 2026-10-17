@@ -38,7 +38,10 @@ theorem BindingFacetD1 : Accounting.Guarantees.TS.BindingFacetD1 := by
 
 /-- Corollary D1, the vector route's threshold. -/
 theorem VectorThresholdD1 : Accounting.Guarantees.TS.VectorThresholdD1 := by
-  sorry
+  intro K R T L U F X _ _ _ _ _ _ _ Z t phiDel r hβ hω
+  simp only [Model.tensorDemandDel, Model.demand]
+  rw [div_le_iff₀ hω, div_le_iff₀ (mul_pos hβ hω)]
+  constructor <;> intro h <;> linarith
 
 /-- Corollary D2. -/
 theorem RoutesOffD2 : Accounting.Guarantees.TS.RoutesOffD2 := by
