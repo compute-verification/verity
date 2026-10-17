@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.Matches
 import Proofs.Flock.VBridge.ResUnit
+import Proofs.Flock.VBridge.Verifier
 
 /-!
 # V*'s parts at the Claims relation: a unit copy's semantics, and the algebra parts
@@ -20,8 +21,13 @@ circuit file byte for byte with `RecVStar.circuitFile`, and `RecResiduals.check`
   of a shape's algebra, a copy whose input columns hold `W` on the row ports and `vv` on `v`'s (`InCols`) holds each
   of the part's residuals at `W`, `vv` on its output columns (`PartCols`): `laid_part` at the verifier's net
   (`check_part`).
-* **At the relation** (`relS_of_check`, `layout_of_check`, `partCols_of_check`): `Flock.check` at the deployed parser
-  gives every table's layout and satisfied model, so the above at every table, block, VU and copy.
+* **The rec-open parts** (`climb_of_satisfies`), the dense shape's first statements, one per Merkle level: where
+  `RecOpen.check` accepted the table's circuit, a copy whose input columns hold a row, its siblings, `acc`, the
+  coefficients and the position's bits holds the climb from the row's leaf and the consistency term on its output
+  columns: `laid_unit` at the verifier's net (`RecOpen.check_ok`).
+* **At the relation** (`relS_of_check`, `layout_of_check`, `partCols_of_check`, `climb_of_check`): `Flock.check` at
+  the deployed parser gives every table's layout and satisfied model, so the above at every table, block, VU and
+  copy.
 * **`PartChecks` at an algebra part** (`partChecks_of_res`): the circuit's semantics above, with the links that are not
   the circuit's (`ResLinks`): the staging (the V* statement the part's coins are shown on is an accepted algebra part),
   the input tie (a copy's input columns hold the messages the part holds and the coins' coefficients) and the output
@@ -102,6 +108,44 @@ theorem partCols_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
   rw [inWords_unitLaid hn] at hL
   exact laid_part S ns nv (part_small hpart) _ hL W vv hw0 hv0 hin
 
+/-- **The rec-open parts: a satisfied table's copies climb.** Let `RecOpen.check` accept the table's circuit, its unit
+named for `LANES` and `H` (`params`). In every block, at every VU and copy, whose columns are `v` (`copyCol`): if the
+input columns hold a row `r`, `H` siblings `ss`, `acc`'s first elements `a` and the rest `rest`, the coefficients `cf`
+and the position's bits `idx`, the output columns hold the verifier of record's climb from the row's leaf
+(`Flock.climb`) and 64 zero bytes, then the consistency term at `k = 0, 1` and `rest`: `laid_unit` at the verifier's
+net (`RecOpen.check_ok`). -/
+theorem climb_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {J c : ℕ} {w : Claims.Flock.Wit}
+    (hz : (L.model regs).Satisfies (zOf J w c st.m)) {o g u : ℕ} (ho : o < 2 ^ (st.m - st.c.kLog))
+    (hg : g < st.c.g) (hu : u < st.c.upv) {v : ℕ → Bool}
+    (hv : v = copyCol J c w st.c.kLog o (st.c.unitRange.slot (g * st.c.upv + u)) st.c.unit.constPos)
+    (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r))
+    (hrec : Flock.RecOpen.check st.c = .ok ()) {LANES H : ℕ}
+    (hp : Flock.RecOpen.params st.c.unit.name = some (LANES, H))
+    (r a cf : Array Flock.F128) (rest : ByteArray) (idx : ℕ) (ss : List ByteArray)
+    (hr : r.size = LANES) (ha : a.size = 2) (hcf : cf.size = 2 * LANES) (hrest : rest.size = 96)
+    (hss : ss.length = H) (hrow : FlockVBridge.ColsHold v 0 (Flock.MerkleScheme.rowBytes r))
+    (haux : ∀ i (hi : i < ss.length), ss[i].size = 64 ∧ FlockVBridge.ColsHold v (128 * LANES + 512 * i) ss[i])
+    (hacc : FlockVBridge.ColsHold v (128 * LANES + 1024 * max 1 ((H + 1) / 2))
+      (Flock.MerkleScheme.rowBytes a ++ rest))
+    (hcoef : FlockVBridge.ColsHold v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024)
+      (Flock.MerkleScheme.rowBytes cf))
+    (hdir : ∀ h < H, v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + h) = idx.testBit h) :
+    FlockVBridge.ColsHold v
+      (outStart ((Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)).run Flock.HmNets.St.empty).2
+        (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))
+      ((Flock.climb ms (Flock.Sha512.hash (Flock.MerkleScheme.rowBytes r)) idx ss ++ ⟨Array.replicate 64 0⟩) ++
+        (Flock.MerkleScheme.rowBytes #[FlockVBridge.consTerm LANES r a cf 0, FlockVBridge.consTerm LANES r a cf 1] ++
+          rest)) := by
+  subst hv
+  obtain ⟨hvalid, hl⟩ := Flock.RecOpen.check_ok hrec hp
+  have hH : H ≤ 32 := by
+    simp only [Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hvalid
+    exact hvalid.2
+  have hL := laidRows_of_satisfies L regs hz ho hg hu hl
+  rw [FlockVBridge.inWords_unit hl] at hL
+  exact FlockVBridge.laid_unit ms hms LANES H hH _ hL r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc hcoef hdir
+
 /-! ## At Flock's relation, at the deployed parser -/
 
 /-- **`Flock.check` at the deployed parser**: the statement bytes decode to a statement the verifier's parser returns
@@ -153,6 +197,38 @@ theorem partCols_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg}
       (p.sts[t].c.unitRange.slot (g * p.sts[t].c.upv + u)) p.sts[t].c.unit.constPos) (partBase S ns nv) := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
   exact partCols_of_satisfies L regs hz ho hg hu hc hp hsh hh hpart W vv hw0 hv0 hin
+
+/-- **A rec-open part's copies climb at `Flock.check`** (`climb_of_satisfies` at every table): wherever `Flock.check`
+holds at the deployed parser, at an untyped parsed statement without public input words, a table `RecOpen.check`
+accepted under `LANES` and `H` holds, at every copy whose input columns hold a row, its siblings, `acc`, the
+coefficients and the position's bits, the climb from the row's leaf and the consistency term on its output columns. -/
+theorem climb_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+    (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
+    (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
+    {o g u : ℕ} (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv)
+    {v : ℕ → Bool} (hv : v = copyCol p.sts.size t w p.sts[t].c.kLog o
+      (p.sts[t].c.unitRange.slot (g * p.sts[t].c.upv + u)) p.sts[t].c.unit.constPos)
+    (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r))
+    (hrec : Flock.RecOpen.check p.sts[t].c = .ok ()) {LANES H : ℕ}
+    (hp : Flock.RecOpen.params p.sts[t].c.unit.name = some (LANES, H))
+    (r a cf : Array Flock.F128) (rest : ByteArray) (idx : ℕ) (ss : List ByteArray)
+    (hr : r.size = LANES) (ha : a.size = 2) (hcf : cf.size = 2 * LANES) (hrest : rest.size = 96)
+    (hss : ss.length = H) (hrow : FlockVBridge.ColsHold v 0 (Flock.MerkleScheme.rowBytes r))
+    (haux : ∀ i (hi : i < ss.length), ss[i].size = 64 ∧ FlockVBridge.ColsHold v (128 * LANES + 512 * i) ss[i])
+    (hacc : FlockVBridge.ColsHold v (128 * LANES + 1024 * max 1 ((H + 1) / 2))
+      (Flock.MerkleScheme.rowBytes a ++ rest))
+    (hcoef : FlockVBridge.ColsHold v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024)
+      (Flock.MerkleScheme.rowBytes cf))
+    (hdir : ∀ h < H, v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + h) = idx.testBit h) :
+    FlockVBridge.ColsHold v
+      (outStart ((Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)).run Flock.HmNets.St.empty).2
+        (Flock.RecOpen.wordPorts (FlockVBridge.unitIn LANES H)) (Flock.RecOpen.wordPorts 2048))
+      ((Flock.climb ms (Flock.Sha512.hash (Flock.MerkleScheme.rowBytes r)) idx ss ++ ⟨Array.replicate 64 0⟩) ++
+        (Flock.MerkleScheme.rowBytes #[FlockVBridge.consTerm LANES r a cf 0, FlockVBridge.consTerm LANES r a cf 1] ++
+          rest)) := by
+  obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
+  exact climb_of_satisfies L regs hz ho hg hu hv ms hms hrec hp r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc
+    hcoef hdir
 
 end Flock.Readable
 
