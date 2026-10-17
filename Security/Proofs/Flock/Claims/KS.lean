@@ -162,11 +162,12 @@ masked record an output at the empty openings never self-clashes, so table `j`'s
 on accepted live runs (`ZkAccJ`: `FlockDeploy.KS.not_selfClashZ_nul`, `FlockDeploy.KS.mean_selfClash_le_liveJZ`); with
 the live sessions' bound at escapes on accepted runs (`FlockDeploy.KS.ZkLiveAccJ`, which gives `ZkLiveJ`,
 `FlockDeploy.KS.zkLiveJ_of_acc`), every table's bound holds with escapes on accepted runs at every statement
-(`Flock.TableBoundJAccAt`, `FlockDeploy.KS.zk_tableBoundJAccAt`). Each round of an accepted masked rep issued the coins
-its statement fixes (`RoundsNZk`: `FlockDeploy.zkRepNs`, `FlockDeploy.zkVerifyRepWith_readsN`; per rep stream,
-`FlockDeploy.zkRepNsOf`, `FlockDeploy.streams_ns_zk`), and custody reads each round message's coin at the session's
-count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted Ligerito run's first model request is level 0's,
-at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
+(`Flock.TableBoundJAccAt`, `FlockDeploy.KS.zk_tableBoundJAccAt`), and so table 0's (`Flock.TableBoundθAccAt`,
+`Flock.TableBoundJAccAt.tableBoundθAccAt`, `FlockDeploy.KS.zk_tableBoundθAccAt`). Each round of an accepted masked rep
+issued the coins its statement fixes (`RoundsNZk`: `FlockDeploy.zkRepNs`, `FlockDeploy.zkVerifyRepWith_readsN`; per rep
+stream, `FlockDeploy.zkRepNsOf`, `FlockDeploy.streams_ns_zk`), and custody reads each round message's coin at the
+session's count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted Ligerito run's first model request is
+level 0's, at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
 `FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`), so an accepted
 rep's is at the stream's round `plainQueryRound` (`FlockSoundness.Refine.lincheck_moves`,
 `FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). At flock-verify's acceptance, every
@@ -214,7 +215,8 @@ reads its level-0 term only on runs that do not self-clash, a self-clash being i
 self-clash (`ZkXferJ`: `FlockDeploy.KS.OffNoClashZ`, `FlockDeploy.KS.AccOffJ`, `FlockDeploy.KS.OkOffJ`,
 `FlockDeploy.KS.decodesOff_deploy`), the deployed decoders are right at a verdict accepting with none, so `ZkLiveAccJ`
 follows from the live sessions' bound at the deployed decoders (`FlockDeploy.KS.ZkXferJ`,
-`FlockDeploy.KS.zkLiveAccJ_of_xferJ`) and `Flock.KS` from it and `ExtendJ` (`FlockDeploy.KS.zk_KS_of_xferJ`). Level 0's
+`FlockDeploy.KS.zkLiveAccJ_of_xferJ`) and `Flock.KS` from it and `ExtendJ` (`FlockDeploy.KS.zk_KS_of_xferJ`), table 0's
+bound with escapes on accepted runs from it alone (`FlockDeploy.KS.zk_tableBoundθAccAt_of_xferJ`). Level 0's
 masked rows carry both reps' extra lanes, which the session's level-0 term reads and the claim's witness-lane columns do
 not, so a verifying opening with a nonzero extra lane is off every table of those columns (`ZkPads`:
 `FlockDeploy.KS.off₀Z_oracleOf_of_extra`, `FlockDeploy.KS.offNoClashZ_oracleOf_of_extra`), while whether a table is
@@ -224,11 +226,11 @@ term `√(2^{d₀}·2Q₀·Adv₀)` (`ZkSessionW`: `FlockSoundness.Discharge.ZkL
 `FlockSoundness.Discharge.ZkLink.session_sound_of_table_accZ_w`). The masked reader keeps each opened row's witness
 lanes, so a masked output whose level-0 openings verify and are, with those lanes, the reader's entries opens a position
 off `C` on a witness lane without a self-clash only where the reader looks up a column off `C` (`ZkOffSC`:
-`Claims.Flock.exists_ne_of_offW₀Z_sc`); an accepted masked table's level-0 openings verify at `width₀`
-(`Claims.Flock.verified_opens₀Z`). A compiled masked rep's first request is level 0's, at the positions of the coins of
-its stream's round `zkQueryRound` (`FlockSoundness.Discharge.ZkExec.zk_rep_reqs`), so at a rep's run its level-0
-openings, on the witness lanes, are the masked reader's entries (`ZkEntries`: `Claims.Flock.slotOpensZ_entries`,
-`Claims.Flock.zkRepColsOf_ok`, `FlockSoundness.Discharge.ZkExec.zk_rep_entries`,
-`Claims.Flock.exists_ne_of_zk_entries`), and where `Zk.verifyRep` accepts both reps of a table, every accepted output of
-their results has its level-0 openings verifying at `width₀` below `2^d`, with positions and witness lanes its reps'
+`Claims.Flock.exists_ne_of_offW₀Z_sc`, `Claims.Flock.exists_ne_of_zk_entries`). A compiled masked rep's first request is
+level 0's, at the positions of the coins of its stream's round `zkQueryRound`
+(`FlockSoundness.Discharge.ZkExec.zk_rep_reqs`), so at a rep's run its level-0 openings, on the witness lanes, are the
+masked reader's entries, and an accepted masked table's level-0 openings verify at `width₀` (`ZkEntries`:
+`Claims.Flock.slotOpensZ_entries`, `Claims.Flock.zkRepColsOf_ok`, `FlockSoundness.Discharge.ZkExec.zk_rep_entries`,
+`Claims.Flock.verified_opens₀Z`); so where `Zk.verifyRep` accepts both reps of a table, every accepted output of their
+results has its level-0 openings verifying at `width₀` below `2^d`, with positions and witness lanes its reps'
 `zkRepColsOf` entries (`FlockSoundness.Discharge.ZkExec.zk_table_opens₀Z`). -/

@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.KS.ZkSessionW
 import Proofs.Flock.Claims.KS.OffSC
+import Proofs.Flock.Claims.KS.ZkEntries
 
 /-!
 # Off the masked table on a witness lane without a self-clash, at the deployed reader
@@ -10,8 +11,8 @@ below `2^d` (`distinctBelow`). So a masked output whose level-0 openings all ver
 below `2^d`, and are, with their rows' witness lanes, the reader's entries, opens a position off the oracle of `C` on a
 witness lane without a self-clash only where the reader looks up a column off `C` (`exists_ne_of_offW₀Z_sc`): two
 verifying openings of one position with different rows are a self-clash, so the opening off `C` and the entry looked up
-there have one row. An accepted masked table's level-0 openings verify against its cap at `width₀` when both reps'
-level-0 requests have level 0's path length (`verified_slotOpensZ`, `verified_opens₀Z`).
+there have one row. `exists_ne_of_zk_entries` is it with the entries given as one list equation, which `ZkEntries`
+gives at `Zk.verifyRep`'s acceptance (`zk_table_opens₀Z`).
 -/
 
 namespace Claims.Flock
@@ -58,49 +59,19 @@ theorem exists_ne_of_offW₀Z_sc {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D 
     rw [hcap]
     exact ⟨y, hyo, x, hxo, hy1, hver y hyo, hver x hxo, hrow⟩
 
-/-- **A rep's level-0 openings verify** against the output's cap at `width₀` when its openings are `OpensOKZ` and its
-level-0 requests have paths of length `depth`. -/
-theorem verified_slotOpensZ {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
-    (out : OutZC 𝔽 D Sl) (r Q depth : ℕ)
-    (hok : OpensOKZ Hs.H Hs.E Hs.Lf (width₀ T) out.cap₀ r (if r = 0 then out.pend.1 else out.pend.2).lig
-      out.opens.rows out.opens.salts)
-    (h0 : ∀ R ∈ (if r = 0 then out.pend.1 else out.pend.2).lig.reqs, R.level = 0 → R.depth = depth) :
-    ∀ x ∈ slotOpensZ out r 0 Q, VerifiedZ Hs.H Hs.E Hs.Lf out.cap₀ (width₀ T) depth x := by
-  intro x hx
-  unfold slotOpensZ at hx
-  split at hx
-  · simp at hx
-  · rename_i req hreq
-    have hlv : req.level = 0 := by simpa using List.find?_some hreq
-    have hmem := List.mem_of_find?_eq_some hreq
-    have hd := h0 req hmem hlv
-    obtain ⟨cap, hcap, hall⟩ := hok req hmem
-    rw [hlv] at hcap hall
-    obtain rfl : out.cap₀ = cap := by simpa [Model.capOf] using hcap
-    obtain ⟨pj, hpj, rfl⟩ := List.mem_map.1 hx
-    have hg := List.mem_zipIdx_iff_getElem?.1 hpj
-    rw [List.getElem?_take] at hg
-    split_ifs at hg with hq
-    have hjl : pj.2 < req.positions.length := (List.getElem?_eq_some_iff.1 hg).1
-    have hpos : req.positions.getD pj.2 0 = pj.1 := by simp [List.getD, hg]
-    obtain ⟨h1, h2⟩ := hall pj.2 hjl
-    rw [ite_eq_left_of_eq_true _ _ (eq_true rfl)] at h1
-    rw [hd, hpos] at h2
-    exact ⟨h1, h2⟩
-
-/-- **An accepted masked table's level-0 openings verify** against its cap at `width₀` and level 0's path length, when
-both reps' level-0 requests have it: acceptance is both reps' `OpensOKZ` at the cap. -/
-theorem verified_opens₀Z {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (cap : Model.Cap D)
-    (pend : PendZ 𝔽 D Sl × PendZ 𝔽 D Sl) (os : OpensZ 𝔽 D Sl) (hacc : (outZC Hs T cap pend os).accepted = true)
-    (h0 : ∀ r < 2, ∀ R ∈ (if r = 0 then pend.1 else pend.2).lig.reqs, R.level = 0 →
-      R.depth = Model.pathLen (lvOf T.sch 0)) :
-    ∀ x ∈ opens₀Z T.sch (outZC Hs T cap pend os),
-      VerifiedZ Hs.H Hs.E Hs.Lf cap (width₀ T) (Model.pathLen (lvOf T.sch 0)) x := by
-  have hok := hacc
-  simp only [outZC, Bool.and_eq_true, decide_eq_true_eq] at hok
-  intro x hx
-  rcases List.mem_append.1 hx with hx | hx
-  · exact verified_slotOpensZ Hs T _ 0 _ _ hok.2.2.2.1 (h0 0 (by norm_num)) x hx
-  · exact verified_slotOpensZ Hs T _ 1 _ _ hok.2.2.2.2 (h0 1 (by norm_num)) x hx
+/-- **`exists_ne_of_offW₀Z_sc` at a list of entries**: when the level-0 openings verify at `width₀` below `2^d` and
+their positions and rows' witness lanes are `os`, an output that opens a position off the oracle of `C` on a witness
+lane without a self-clash has the reader look up a column off `C`. -/
+theorem exists_ne_of_zk_entries {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
+    (cap₀ : Model.Cap D) (out : OutZC 𝔽 D Sl) {N : ℕ} (hN : N = 2 ^ (lvOf T.sch 0).logLen) (C : Fin N → List 𝔽)
+    (d : ℕ) (os : List (ℕ × List 𝔽)) (hcap : out.cap₀ = cap₀)
+    (hver : ∀ x ∈ opens₀Z T.sch out,
+      VerifiedZ Hs.H Hs.E Hs.Lf cap₀ (width₀ T) (Model.pathLen (lvOf T.sch 0)) x ∧ x.1 < 2 ^ d)
+    (hent : (opens₀Z T.sch out).map (fun x => (x.1, x.2.1.take (2 ^ T.sch.k0))) = os)
+    (hoff : OffW₀Z Hs T cap₀ (oracleOf C) out) (hsc : ¬ SelfClashZ Hs T out) :
+    ∃ (p : Fin N) (u : List 𝔽), lookCol (distinctBelow d os) p.val = some u ∧ u ≠ C p :=
+  exists_ne_of_offW₀Z_sc Hs T cap₀ out hN C d os hcap (fun x hx => (hver x hx).1) (fun x hx => (hver x hx).2)
+    (fun e he => by rw [← hent] at he; exact List.mem_map.1 he)
+    (fun x hx => by rw [← hent]; exact List.mem_map_of_mem hx) hoff hsc
 
 end Claims.Flock
