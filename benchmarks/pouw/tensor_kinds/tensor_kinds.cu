@@ -211,6 +211,116 @@ struct OmmaNvf4k64 {
         : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : A4, B2, "r"(0x38383838u), "r"(0x38383838u));
   }
 };
+struct ImmaS8k32Sat {
+  static constexpr uint32_t W = 0x01020304u;
+  using Acc = int32_t;
+  static constexpr int NC = 4;
+  static constexpr double MACS = 16 * 8 * 32, SLOTS = 128;
+  static constexpr const char* NAME = "imma_s8_m16n8k32_sat";
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
+    asm volatile(
+        "mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+        : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : A4, B2);
+  }
+};
+struct ImmaSpS8k32 {  // 2:4 sparse, 16 useful MACs an output
+  static constexpr uint32_t W = 0x01020304u;
+  using Acc = int32_t;
+  static constexpr int NC = 4;
+  static constexpr double MACS = 16 * 8 * 16, SLOTS = 128;
+  static constexpr const char* NAME = "imma_sp_s8_m16n8k32";
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t e) {
+    asm volatile(
+        "mma.sp::ordered_metadata.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5}, {%6,%7}, "
+        "{%0,%1,%2,%3}, %8, 0x0;"
+        : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]) : A2, B2, "r"(e));
+  }
+};
+struct HmmaBf16k16F32 {
+  static constexpr uint32_t W = 0x3e003e00u;
+  using Acc = float;
+  static constexpr int NC = 4;
+  static constexpr double MACS = 16 * 8 * 16, SLOTS = 128;
+  static constexpr const char* NAME = "hmma_bf16_m16n8k16_f32";
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
+    asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+                 : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : A4, B2);
+  }
+};
+struct HmmaSpF16k32 {  // 2:4 sparse, 16 useful MACs an output
+  static constexpr uint32_t W = 0x14001400u;
+  using Acc = float;
+  static constexpr int NC = 4;
+  static constexpr double MACS = 16 * 8 * 16, SLOTS = 128;
+  static constexpr const char* NAME = "hmma_sp_f16_m16n8k32_f32";
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t e) {
+    asm volatile(
+        "mma.sp::ordered_metadata.sync.aligned.m16n8k32.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
+        "{%8,%9,%10,%11}, {%0,%1,%2,%3}, %12, 0x0;"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : A4, B4, "r"(e));
+  }
+};
+struct HmmaTf32k4 {
+  static constexpr uint32_t W = 0x3a800000u;
+  using Acc = float;
+  static constexpr int NC = 4;
+  static constexpr double MACS = 16 * 8 * 4, SLOTS = 128;
+  static constexpr const char* NAME = "hmma_tf32_m16n8k4";
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
+    asm volatile("mma.sync.aligned.m16n8k4.row.col.f32.tf32.tf32.f32 {%0,%1,%2,%3}, {%4,%5}, {%6}, {%0,%1,%2,%3};"
+                 : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : A2, "r"(b[0]));
+  }
+};
+struct QmmaE5m2k32 {
+  static constexpr uint32_t W = 0x30303030u;
+  using Acc = float;
+  static constexpr int NC = 4;
+  static constexpr double MACS = 16 * 8 * 32, SLOTS = 128;
+  static constexpr const char* NAME = "qmma_e5m2_m16n8k32_f32";
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
+    asm volatile("mma.sync.aligned.m16n8k32.row.col.f32.e5m2.e5m2.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+                 : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : A4, B2);
+  }
+};
+struct QmmaE2m1k32 {  // FP4 through kind::f8f6f4 (one FP4 value an 8-bit container)
+  static constexpr uint32_t W = 0x04040404u;
+  using Acc = float;
+  static constexpr int NC = 4;
+  static constexpr double MACS = 16 * 8 * 32, SLOTS = 128;
+  static constexpr const char* NAME = "qmma_e2m1_m16n8k32_f32";
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
+    asm volatile(
+        "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, "
+        "{%0,%1,%2,%3};"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : A4, B2);
+  }
+};
+struct QmmaSfE4m3k32 {  // block-scaled MXF8 (kind::mxf8f6f4, ue8m0 scale 1.0)
+  static constexpr uint32_t W = 0x20202020u;
+  using Acc = float;
+  static constexpr int NC = 4;
+  static constexpr double MACS = 16 * 8 * 32, SLOTS = 128;
+  static constexpr const char* NAME = "qmma_sf_e4m3_m16n8k32_f32";
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t) {
+    asm volatile(
+        "mma.sync.aligned.kind::mxf8f6f4.block_scale.scale_vec::1X.m16n8k32.row.col.f32.e4m3.e4m3.f32.ue8m0 "
+        "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3}, {%10}, {0, 0}, {%11}, {0, 0};"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : A4, B2, "r"(0x7f7f7f7fu), "r"(0x7f7f7f7fu));
+  }
+};
+struct QmmaSpE4m3k64 {  // 2:4 sparse FP8, 32 useful MACs an output
+  static constexpr uint32_t W = 0x20202020u;
+  using Acc = float;
+  static constexpr int NC = 4;
+  static constexpr double MACS = 16 * 8 * 32, SLOTS = 128;
+  static constexpr const char* NAME = "qmma_sp_e4m3_m16n8k64_f32";
+  __device__ static void mma(Acc* d, const uint32_t* a, const uint32_t* b, uint32_t e) {
+    asm volatile(
+        "mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32 {%0,%1,%2,%3}, "
+        "{%4,%5,%6,%7}, {%8,%9,%10,%11}, {%0,%1,%2,%3}, %12, 0x0;"
+        : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3]) : A4, B4, "r"(e));
+  }
+};
 
 // Small operands of each form's type, so no accumulator chain of millions of MMAs reaches inf or NaN; the integer
 // forms wrap. The sparse metadata 0x4444 4444 selects positions (0, 1) of every group of four (ordered, valid).
@@ -449,6 +559,15 @@ int main() {
   form<HmmaTf32k8>();
   form<QmmaE4m3k32>();
   form<OmmaNvf4k64>();
+  form<ImmaS8k32Sat>();
+  form<ImmaSpS8k32>();
+  form<HmmaBf16k16F32>();
+  form<HmmaSpF16k32>();
+  form<HmmaTf32k4>();
+  form<QmmaE5m2k32>();
+  form<QmmaE2m1k32>();
+  form<QmmaSfE4m3k32>();
+  form<QmmaSpE4m3k64>();
   form<ImmaS8k32>();
   printf("{\"probe\":\"tensor_kinds\",\"done\":true,\"num_sms\":%d}\n", g_sms);
   return 0;

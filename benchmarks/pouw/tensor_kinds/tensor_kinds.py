@@ -44,6 +44,15 @@ STRUCTS = {
     "HmmaTf32k8": "hmma_tf32_m16n8k8",
     "QmmaE4m3k32": "qmma_e4m3_m16n8k32_f32",
     "OmmaNvf4k64": "omma_nvf4_m16n8k64",
+    "ImmaS8k32Sat": "imma_s8_m16n8k32_sat",
+    "ImmaSpS8k32": "imma_sp_s8_m16n8k32",
+    "HmmaBf16k16F32": "hmma_bf16_m16n8k16_f32",
+    "HmmaSpF16k32": "hmma_sp_f16_m16n8k32_f32",
+    "HmmaTf32k4": "hmma_tf32_m16n8k4",
+    "QmmaE5m2k32": "qmma_e5m2_m16n8k32_f32",
+    "QmmaE2m1k32": "qmma_e2m1_m16n8k32_f32",
+    "QmmaSfE4m3k32": "qmma_sf_e4m3_m16n8k32_f32",
+    "QmmaSpE4m3k64": "qmma_sp_e4m3_m16n8k64_f32",
 }
 #: PTX MMAs an iteration of the loop that issues them (k_alone and k_spec: 8; k_mixu: 64).
 PTX_MMAS = {"alone": 8, "spec": 8, "mixu": 64}
