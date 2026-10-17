@@ -135,7 +135,7 @@ private theorem key_mem {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L
   rw [Std.TreeMap.Raw.length_keys hm, hs] at hle
   simp at hle
 
-private theorem mem_of_getObjVal {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {k : String} {v : Json}
+theorem mem_of_getObjVal {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {k : String} {v : Json}
     (h : (Json.obj m).getObjVal? k = .ok v) : k ∈ m ∧ m.get? k = some v := by
   simp only [Json.getObjVal?] at h
   cases hg : m.get? k with
@@ -147,24 +147,24 @@ private theorem mem_of_getObjVal {m : Std.TreeMap.Raw String Json compare} (hm :
     rw [← Std.TreeMap.Raw.get?_eq_getElem?, hg]
     rfl
 
-private theorem getObjVal_of_get {m : Std.TreeMap.Raw String Json compare} {k : String} {v : Json}
+theorem getObjVal_of_get {m : Std.TreeMap.Raw String Json compare} {k : String} {v : Json}
     (h : m.get? k = some v) : (Json.obj m).getObjVal? k = .ok v := by
   simp only [Json.getObjVal?, h]
   rfl
 
-private theorem getNat_ok {j : Json} {n : ℕ} (h : j.getNat? = .ok n) : j = .num ⟨Int.ofNat n, 0⟩ := by
+theorem getNat_ok {j : Json} {n : ℕ} (h : j.getNat? = .ok n) : j = .num ⟨Int.ofNat n, 0⟩ := by
   unfold Json.getNat? at h
   split at h
   · cases h; rfl
   · cases h
 
-private theorem asNat_good {j : Json} {c : String} {n : ℕ} (h : J.asNat j c = .ok n) : Good j := by
+theorem asNat_good {j : Json} {c : String} {n : ℕ} (h : J.asNat j c = .ok n) : Good j := by
   unfold J.asNat at h
   split at h
   · rename_i _ hg; cases h; rw [getNat_ok hg]; exact .num _
   · cases h
 
-private theorem get_ok {j : Json} {k c : String} {v : Json} (h : J.get j k c = .ok v) : j.getObjVal? k = .ok v := by
+theorem get_ok {j : Json} {k c : String} {v : Json} (h : J.get j k c = .ok v) : j.getObjVal? k = .ok v := by
   unfold J.get at h
   split at h
   · rename_i _ hg; cases h; exact hg
@@ -189,7 +189,7 @@ private theorem str_good {j : Json} {k c : String} {s : String} (h : J.str j k c
     | _ => cases hg
   · cases h
 
-private theorem arr_ok {j : Json} {k c : String} {a : Array Json} (h : J.arr j k c = .ok a) :
+theorem arr_ok {j : Json} {k c : String} {a : Array Json} (h : J.arr j k c = .ok a) :
     j.getObjVal? k = .ok (.arr a) := by
   unfold J.arr at h
   obtain ⟨v, hv, h⟩ := ebind_ok h
@@ -204,13 +204,13 @@ private theorem arr_ok {j : Json} {k c : String} {a : Array Json} (h : J.arr j k
     · cases hg
   · cases h
 
-private theorem getObj_ok {j : Json} {m : Std.TreeMap.Raw String Json compare} (h : j.getObj? = .ok m) :
+theorem getObj_ok {j : Json} {m : Std.TreeMap.Raw String Json compare} (h : j.getObj? = .ok m) :
     j = .obj m := by
   cases j with
   | obj m' => cases h; rfl
   | _ => cases h
 
-private theorem good_of_asNat_mapM {a : Array Json} {c : String} {b : Array ℕ}
+theorem good_of_asNat_mapM {a : Array Json} {c : String} {b : Array ℕ}
     (h : a.mapM (J.asNat · c) = .ok b) : Good (.arr a) :=
   .arr fun x hx => by
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hx
@@ -218,7 +218,7 @@ private theorem good_of_asNat_mapM {a : Array Json} {c : String} {b : Array ℕ}
     exact asNat_good (hb i hi (hs ▸ hi))
 
 /-- An object with exactly the keys of `L`, each holding a printable value, is printable. -/
-private theorem good_obj_of {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : List String} (hL : L.Nodup)
+theorem good_obj_of {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : List String} (hL : L.Nodup)
     (hs : m.toArray.size = L.length) (hk : ∀ k ∈ L, ∃ v, (Json.obj m).getObjVal? k = .ok v ∧ Good v) :
     Good (.obj m) := by
   refine .obj hm fun k v hv => ?_
@@ -347,7 +347,7 @@ private theorem Raw.ins_draw {w : Raw} {s : Ins} (h : w.ins = .ok s) :
   all_goals first | (cases h; done) | (cases h; assumption)
 
 /-- The statement's draw is JSON that `Json.parse` read. -/
-private theorem draw_parse {x : Claims.Msg} {s : Ins} (hs : insOf true x = some s) {d : Json}
+theorem draw_parse {x : Claims.Msg} {s : Ins} (hs : insOf true x = some s) {d : Json}
     (hd : s.read.draw = some d) : ∃ t, Json.parse t = .ok d := by
   unfold insOf at hs
   obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 hs
@@ -379,32 +379,40 @@ private theorem draw_parse {x : Claims.Msg} {s : Ins} (hs : insOf true x = some 
           | error e => rw [hp] at hj; cases hj
           | ok j => rw [hp] at hj; cases hj; exact ⟨t, hp⟩
 
-private theorem ofJson_obj {j : Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) : j ≠ Json.null := by
+theorem ofJson_obj {j : Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) : j ≠ Json.null := by
   rintro rfl
   cases h
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **A good case's setup** is `Stmt.setupTables` on what the statement reads, with no public inputs. -/
-theorem Case.setupTables (c : Case H rel) :
-    Stmt.setupTables c.s.read.tags c.s.read.I.circuitFile c.s.read.I.publicFile c.s.read.coins c.s.read.I.count
-      c.s.read.I.tables c.s.read.draw c.s.read.I.partition c.s.read.I.program c.s.read.I.work c.s.read.I.stratified
-      c.s.read.I.closure = .ok (c.spec, c.sts) := by
+/-- **A masked statement in scope is set up** by `Stmt.setupTables` on what it reads, with no public inputs. -/
+theorem setupTables_of {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+    (hsc : Claims.Flock.Scope (deployZk rel) x) (hs : setupOf true x = some (s, spec, sts)) :
+    Stmt.setupTables s.read.tags s.read.I.circuitFile s.read.I.publicFile s.read.coins s.read.I.count
+      s.read.I.tables s.read.draw s.read.I.partition s.read.I.program s.read.I.work s.read.I.stratified
+      s.read.I.closure = .ok (spec, sts) := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk rel) rel (readOf true) rfl
-    (fun _ _ h => readOf_zk h) c.x).1 c.scope
-  have hi := (setupOf_some c.setup).1
+    (fun _ _ h => readOf_zk h) x).1 hsc
+  have hi := (setupOf_some hs).1
   unfold Readable.parseBytes readOf at hp
   rw [hi] at hp
-  have ht := Readable.toRead_of_parse (r := c.s.read) hp
+  have ht := Readable.toRead_of_parse (r := s.read) hp
   obtain ⟨hc, -⟩ := (Readable.scope_ok_iff p).1 hsc
   have hR := ((Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hc).1
   have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hR.2.2.2.2.2])
-  have hset := Ins.setup_read (setupOf_some c.setup).2
+  have hset := Ins.setup_read (setupOf_some hs).2
   rw [← ht] at hset
   unfold Readable.Read.setup at hset
   rw [hpi] at hset
   rw [ht] at hset
   exact hset
+
+/-- **A good case's setup** is `Stmt.setupTables` on what the statement reads, with no public inputs. -/
+theorem Case.setupTables (c : Case H rel) :
+    Stmt.setupTables c.s.read.tags c.s.read.I.circuitFile c.s.read.I.publicFile c.s.read.coins c.s.read.I.count
+      c.s.read.I.tables c.s.read.draw c.s.read.I.partition c.s.read.I.program c.s.read.I.work c.s.read.I.stratified
+      c.s.read.I.closure = .ok (c.spec, c.sts) :=
+  setupTables_of c.scope c.setup
 
 /-- **What the masked record needs of the statement holds at every good case of several tables** (`StmtAt`), under
 the JSON library's specification: `Σ` is a SHA-512 digest, the session's draw is the statement's, a subset draw that is
