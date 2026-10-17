@@ -85,7 +85,7 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 /-- **The run's V\* statements**: `vstar` at the run's first `k_I` messages, the statements `E_O` extracts at. -/
 def runVstar (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin (D.V.k x) → Coin) : List Msg :=
-  D.vstar x ((run H P D.V x ω r).msgs.take (I.V.k (xI D x)))
+  D.vstar x ((run H P D.V x ω r).msgs.take (I.V.k (xI D x) + D.kS x))
 
 /-- **The outer witnesses are in the outer Flock's relation at the V\* statements `xs`**: `n` of them, each accepted
 by `Flock.check` at its session's statement. -/
@@ -120,7 +120,7 @@ def VStarAcceptsExact (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO
     (shape : Form → Prop) : Prop :=
   ∀ (x : Msg) (s : Stmt), D.parse x = some s → shape s.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
-      ∀ ws, OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws → (D.innerView x r ws).out = .acc
+      ∀ ws, OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws → (D.innerView H x r ws).out = .acc
 
 /-- **V\*'s circuits compute the inner verifier at the inner shape `shape`, off a collision** (a code fact about V*'s
 circuits, the compiled verifier's V* statements and the readers its inner view reads): on an accepted run of a statement
@@ -132,7 +132,7 @@ def VStarAccepts (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Fl
   ∀ (x : Msg) (s : Stmt), D.parse x = some s → shape s.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ ws, OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws → (∀ e ∈ D.calls x ws, H e.1 = e.2) →
-        (D.innerView x r ws).out = .acc ∨ ∃ u v, findColl (D.calls x ws) = some (u, v) ∧ Collision H u v
+        (D.innerView H x r ws).out = .acc ∨ ∃ u v, findColl (D.calls x ws) = some (u, v) ∧ Collision H u v
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem VStarAcceptsExact.toColl {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
@@ -144,7 +144,7 @@ read off them is accepted, or two of the witnesses' recorded calls are a collisi
 def InnerAcceptsColl (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
-    (D.innerView x r ws).out = .acc ∨ ∃ u v, findColl (D.calls x ws) = some (u, v) ∧ Collision H u v
+    (D.innerView H x r ws).out = .acc ∨ ∃ u v, findColl (D.calls x ws) = some (u, v) ∧ Collision H u v
 
 theorem InnerAccepts.toColl {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (h : InnerAccepts H D I DO) : InnerAcceptsColl H D I DO :=
@@ -185,7 +185,7 @@ witnesses there, and the inner view read off them is not accepted. -/
 def InnerRejects (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg)
     (t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Prop :=
-  ∃ ws, EOGives H D I DO decO P x t.1 t.2.1 t.2.2 ws ∧ (D.innerView x t.2.1 ws).out ≠ .acc
+  ∃ ws, EOGives H D I DO decO P x t.1 t.2.1 t.2.2 ws ∧ (D.innerView H x t.2.1 ws).out ≠ .acc
 
 theorem unifMap_judged {Ω R C : Type} [Fintype Ω] [Fintype R] [Fintype C] [Nonempty R] [Nonempty C] :
     UnifMap (fun t : Ω × R × R × C × C => (t.1, t.2.1, t.2.2.2.1)) := by

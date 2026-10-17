@@ -118,7 +118,7 @@ where its inner view doesn't reject, in place of `InnerAccepts`. -/
 theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decC : Msg → Msg → Coin} (hV : InnerViewRun H D I DO) (hpc : PublicCoin H I decC) (hR : InnerRounds D I)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) :
-    PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
+    PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
         (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
         (fun x => I.check (xI D x)) x P ≤
       I.PrBadAbort H (xI D x) (innerP H D I DO decO P x decC) (keepA H D I DO decO P x) +
@@ -134,11 +134,11 @@ theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
       (Fin (I.waits (xI D x)) → Fin (I.cap (xI D x)) → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) → Prop :=
     fun s => ∃ d ∈ (erepProg (I.waits (xI D x)) (I.k (xI D x)) (I.cap (xI D x)) I.opens (I.assemble (xI D x))
       (I.check (xI D x)) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
-        (servedRun H (Claims.outerStage (EO D I DO decO) (dec D) x) (run H P D.V x s.1)), Bad H D I DO decO P x s.1 d
+        (servedRun H (Claims.outerStage (EO D I DO decO) (dec H D) x) (run H P D.V x s.1)), Bad H D I DO decO P x s.1 d
   let Jb : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x ×
       (Fin (I.waits (xI D x)) → Fin (I.cap (xI D x)) → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) → Prop :=
     fun s => InnerRejects H D I DO decO P x (s.1, s.2.1, s.2.2.1)
-  have hYZ : PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
+  have hYZ : PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
       (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
       (fun x => I.check (xI D x)) x P ≤ Pr Yb + Pr Zb + Pr Jb := by
     refine (Pr_mono fun s hs => ?_).trans ((Pr_or_le (fun s => Yb s ∨ Zb s) Jb).trans
@@ -150,13 +150,13 @@ theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
     left; left
     have hnb : ∀ d ∈ (erepProg (I.waits (xI D x)) (I.k (xI D x)) (I.cap (xI D x)) I.opens (I.assemble (xI D x))
         (I.check (xI D x)) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
-          (servedRun H (Claims.outerStage (EO D I DO decO) (dec D) x) (run H P D.V x s.1)),
+          (servedRun H (Claims.outerStage (EO D I DO decO) (dec H D) x) (run H P D.V x s.1)),
         ¬ Bad H D I DO decO P x s.1 d := fun d hd hb => hz ⟨d, hd, hb⟩
     have heq := RP.eval_congr H _ (innerF H D I DO decO P x decC s.1) _ fun d hd =>
       servedRun_seen_eq hV hpc (hnb d hd)
     have hd₀ : (s.2.1, s.2.2.1) ∈ (erepProg (I.waits (xI D x)) (I.k (xI D x)) (I.cap (xI D x)) I.opens
         (I.assemble (xI D x)) (I.check (xI D x)) (s.2.1, s.2.2.1) s.2.2.2).rerunsAt H
-          (servedRun H (Claims.outerStage (EO D I DO decO) (dec D) x) (run H P D.V x s.1)) := List.mem_cons_self
+          (servedRun H (Claims.outerStage (EO D I DO decO) (dec H D) x) (run H P D.V x s.1)) := List.mem_cons_self
     have hgood := hs.2.1 _ hd₀
     obtain ⟨ws, hws⟩ : ∃ ws, eoOut H D I DO decO P x s.1 (s.2.1, s.2.2.1) = some ws := by
       rcases ho : eoOut H D I DO decO P x s.1 (s.2.1, s.2.2.1) with _ | ws
@@ -169,14 +169,14 @@ theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
       exact hnb _ hd₀ ⟨by rw [hws]; rfl, hn⟩
     refine ⟨?_, fun hI => hs.2.2 ?_⟩
     · rw [innerF_eq_innerRun hpc hws ha]
-      have hacc : (D.innerView x s.2.1 ws).out = .acc := by
+      have hacc : (D.innerView H x s.2.1 ws).out = .acc := by
         by_contra hne
         exact hj ⟨ws, eoGives_of_some hws, hne⟩
       rw [hV decO x Ω P s.1 s.2.1 s.2.2.1 ws (eoGives_of_some hws)] at hacc
       exact hacc
     · show (innerR D I).ext x (((erepProg (I.waits (xI D x)) (I.k (xI D x)) (I.cap (xI D x)) I.opens
         (I.assemble (xI D x)) (I.check (xI D x)) (s.2.1, s.2.2.1) s.2.2.2).serve
-          (Claims.outerStage (EO D I DO decO) (dec D) x)).eval H (run H P D.V x s.1)).1
+          (Claims.outerStage (EO D I DO decO) (dec H D) x)).eval H (run H P D.V x s.1)).1
       rw [(RP.serve_eval H _ _ _).1, heq]
       exact (innerR_ext D I x _).2 hI
   have hY : Pr Yb = I.PrBadAbort H (xI D x) (innerP H D I DO decO P x decC) (keepA H D I DO decO P x) := by
@@ -210,7 +210,7 @@ theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
     have hN : (NI D I x : ℝ) = 1 + (I.waits (xI D x) : ℝ) * (I.k (xI D x) : ℝ) := by
       simp only [NI]; push_cast; ring
     rw [hN]
-    exact Pr_exists_rerun_le H D.V (EO D I DO decO) (dec D) (fun x => I.waits (xI D x)) (fun x => I.k (xI D x))
+    exact Pr_exists_rerun_le H D.V (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x)) (fun x => I.k (xI D x))
       (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x)) (fun x => I.check (xI D x)) x P
       (Bad H D I DO decO P x)
   have hJ : Pr Jb = Pr (InnerRejects H D I DO decO P x) :=
