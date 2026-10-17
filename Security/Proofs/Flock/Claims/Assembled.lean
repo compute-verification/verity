@@ -11,8 +11,9 @@ import Proofs.Flock.Soundness.CompiledSound
 /-!
 # Flock's claims at the deployed records, with what remains as hypotheses
 
-`flock_plain_assembled` and `flock_zk_assembled`: at `FlockDeploy.deployPlain rel` and `FlockDeploy.deployZk rel`, at
-every relation's fields `rel` and every hash `H`, the conjunction of Flock's claims:
+`flock_plain_assembled` and `flock_zk_assembled`: at the records Flock's claims read, `FlockDeploy.deployPlainTrim rel`
+and `FlockDeploy.deployZkTrim rel` (the deployed instances with their columns trimmed of trailing zeros), at every
+relation's fields `rel` and every hash `H`, the conjunction of Flock's claims:
 
 * `ScopeMatches`: the readable scope is the verifier's (`scopeMatches_plain`, `scopeMatches_zk`);
 * `KS` at `E^rep` and every decoder meeting `ListWithin`: a hypothesis;
@@ -40,8 +41,10 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
 ## What remains: the hypotheses, exactly
 
 `flock_plain_assembled`:
-* `hKS : Flock.KS H (deployPlain rel)`. Main reduces it to one wait's bound, `Flock.OneWait`, with `k ≥ 8` and the
-  relation splitting by table wherever the verifier accepts (`FlockDeploy.KS.plain_of_oneWait`).
+* `hKS : Flock.KS H (deployPlainTrim rel)`. At SHA-512 it follows from the fixed-table bound over full-width tables at
+  the untrimmed instance (`FlockDeploy.KS.plain_KS_trim`). At the untrimmed record main reduces KS to one wait's bound,
+  `Flock.OneWait`, with `k ≥ 8` and the relation splitting by table wherever the verifier accepts
+  (`FlockDeploy.KS.plain_of_oneWait`).
 * `hComplete`: `Flock.Complete` at the plain record, unfolded, of `honestP` at `δc H`.
   `FlockComplete.complete_of_goals` concludes it from the honest run's goals, `FlockComplete.Goals H rel`. At the
   deployed relation (`Readable.relation`) it follows from the record's JSON (`Claims.JsonSpec printJ canon`,
@@ -105,51 +108,54 @@ theorem γ_pos {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (x : Cla
 /-- **Bits at the deployed plain record, from KS alone** (`Flock.Bits_of_KS`): the record's table error is
 nonnegative (`εtable_nonneg`). -/
 theorem bits_plain (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
-    (hKS : Claims.Flock.KS H (deployPlain rel)) : Claims.Flock.Bits H (deployPlain rel) :=
+    (hKS : Claims.Flock.KS H (deployPlainTrim rel)) : Claims.Flock.Bits H (deployPlainTrim rel) :=
   Claims.Flock.Bits_of_KS hKS (εtable_nonneg false)
 
 /-- **Bits at the deployed masked record, from KS alone** (`Flock.Bits_of_KS`), as at the plain one. -/
 theorem bits_zk (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
-    (hKS : Claims.Flock.KS H (deployZk rel)) : Claims.Flock.Bits H (deployZk rel) :=
+    (hKS : Claims.Flock.KS H (deployZkTrim rel)) : Claims.Flock.Bits H (deployZkTrim rel) :=
   Claims.Flock.Bits_of_KS hKS (εtable_nonneg true)
 
 /-- **Bits at bounds at the deployed plain record, from KS alone** (`Flock.Bits_ge`): at the record's own decoder,
 `min(a, 255.5 − b/2) − 1` bits at every bound `κ ≤ 2^{−a}`, `γ ≤ 2^b`; `γ > 0` because the verifier takes a round. -/
 theorem bits_ge_plain (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
-    (hKS : Claims.Flock.KS H (deployPlain rel)) (a b : Claims.Msg → ℝ)
-    (hκ : ∀ x, Claims.Flock.κ (deployPlain rel) x ≤ 2 ^ (-a x)) (hγ : ∀ x, Claims.Flock.γ (deployPlain rel) x ≤ 2 ^ b x) :
-    Claims.Bits H (deployPlain rel).V (Claims.Flock.R (deployPlain rel).parse)
-      (Claims.Flock.E (deployPlain rel) (deployPlain rel).decode) fun x => min (a x) (255.5 - b x / 2) - 1 :=
-  Claims.Flock.Bits_ge hKS (εtable_nonneg false) hκ (fun x => γ_pos (deployPlain rel) x (V_k_pos false x)) hγ _
-    (decode_plain rel ▸ listWithin_plain rel)
+    (hKS : Claims.Flock.KS H (deployPlainTrim rel)) (a b : Claims.Msg → ℝ)
+    (hκ : ∀ x, Claims.Flock.κ (deployPlainTrim rel) x ≤ 2 ^ (-a x))
+    (hγ : ∀ x, Claims.Flock.γ (deployPlainTrim rel) x ≤ 2 ^ b x) :
+    Claims.Bits H (deployPlainTrim rel).V (Claims.Flock.R (deployPlainTrim rel).parse)
+      (Claims.Flock.E (deployPlainTrim rel) (deployPlainTrim rel).decode) fun x => min (a x) (255.5 - b x / 2) - 1 :=
+  Claims.Flock.Bits_ge hKS (εtable_nonneg false) hκ (fun x => γ_pos (deployPlainTrim rel) x (V_k_pos false x)) hγ _
+    (decode_plain rel ▸ listWithin_plainTrim rel)
 
 /-- **Bits at bounds at the deployed masked record, from KS alone**, as at the plain one. -/
 theorem bits_ge_zk (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
-    (hKS : Claims.Flock.KS H (deployZk rel)) (a b : Claims.Msg → ℝ)
-    (hκ : ∀ x, Claims.Flock.κ (deployZk rel) x ≤ 2 ^ (-a x)) (hγ : ∀ x, Claims.Flock.γ (deployZk rel) x ≤ 2 ^ b x) :
-    Claims.Bits H (deployZk rel).V (Claims.Flock.R (deployZk rel).parse)
-      (Claims.Flock.E (deployZk rel) (deployZk rel).decode) fun x => min (a x) (255.5 - b x / 2) - 1 :=
-  Claims.Flock.Bits_ge hKS (εtable_nonneg true) hκ (fun x => γ_pos (deployZk rel) x (V_k_pos true x)) hγ _
-    (decode_zk rel ▸ listWithin_zk rel)
+    (hKS : Claims.Flock.KS H (deployZkTrim rel)) (a b : Claims.Msg → ℝ)
+    (hκ : ∀ x, Claims.Flock.κ (deployZkTrim rel) x ≤ 2 ^ (-a x))
+    (hγ : ∀ x, Claims.Flock.γ (deployZkTrim rel) x ≤ 2 ^ b x) :
+    Claims.Bits H (deployZkTrim rel).V (Claims.Flock.R (deployZkTrim rel).parse)
+      (Claims.Flock.E (deployZkTrim rel) (deployZkTrim rel).decode) fun x => min (a x) (255.5 - b x / 2) - 1 :=
+  Claims.Flock.Bits_ge hKS (εtable_nonneg true) hκ (fun x => γ_pos (deployZkTrim rel) x (V_k_pos true x)) hγ _
+    (decode_zk rel ▸ listWithin_zkTrim rel)
 
 /-- **Flock's claims at the deployed plain verifier**, at every relation's fields and every hash: the readable scope
 is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the record's decoder at every
 bound on `κ` and `γ`; efficiency at the record's decoder with its count; and completeness at the honest prover
 `honestP` with error `δc H`. What remains is exactly `hKS` and `hComplete`. -/
 theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
-    (hKS : Claims.Flock.KS H (deployPlain rel))
-    (hComplete : Claims.Complete H (deployPlain rel).V FlockComplete.honestP
-      (Claims.Flock.R (deployPlain rel).parse) (Claims.Flock.Scope (deployPlain rel)) (FlockComplete.δc H)) :
-    Claims.Flock.ScopeMatches (deployPlain rel) ∧
-      Claims.Flock.KS H (deployPlain rel) ∧
-      Claims.Flock.Bits H (deployPlain rel) ∧
-      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployPlain rel) x ≤ 2 ^ (-a x)) →
-        (∀ x, Claims.Flock.γ (deployPlain rel) x ≤ 2 ^ b x) →
-        Claims.Bits H (deployPlain rel).V (Claims.Flock.R (deployPlain rel).parse)
-          (Claims.Flock.E (deployPlain rel) (deployPlain rel).decode) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
-      Claims.Flock.Efficient H (deployPlain rel) plainStepPoly ∧
-      Claims.Complete H (deployPlain rel).V FlockComplete.honestP (Claims.Flock.R (deployPlain rel).parse)
-        (Claims.Flock.Scope (deployPlain rel)) (FlockComplete.δc H) :=
+    (hKS : Claims.Flock.KS H (deployPlainTrim rel))
+    (hComplete : Claims.Complete H (deployPlainTrim rel).V FlockComplete.honestP
+      (Claims.Flock.R (deployPlainTrim rel).parse) (Claims.Flock.Scope (deployPlainTrim rel)) (FlockComplete.δc H)) :
+    Claims.Flock.ScopeMatches (deployPlainTrim rel) ∧
+      Claims.Flock.KS H (deployPlainTrim rel) ∧
+      Claims.Flock.Bits H (deployPlainTrim rel) ∧
+      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployPlainTrim rel) x ≤ 2 ^ (-a x)) →
+        (∀ x, Claims.Flock.γ (deployPlainTrim rel) x ≤ 2 ^ b x) →
+        Claims.Bits H (deployPlainTrim rel).V (Claims.Flock.R (deployPlainTrim rel).parse)
+          (Claims.Flock.E (deployPlainTrim rel) (deployPlainTrim rel).decode)
+          fun x => min (a x) (255.5 - b x / 2) - 1) ∧
+      Claims.Flock.Efficient H (deployPlainTrim rel) plainStepPoly ∧
+      Claims.Complete H (deployPlainTrim rel).V FlockComplete.honestP (Claims.Flock.R (deployPlainTrim rel).parse)
+        (Claims.Flock.Scope (deployPlainTrim rel)) (FlockComplete.δc H) :=
   ⟨scopeMatches_plain rel, hKS, bits_plain rel H hKS, bits_ge_plain rel H hKS, efficient_plain H rel, hComplete⟩
 
 /-- **Flock's claims at the deployed plain verifier at the deployed relation** (`Readable.relation`), at every hash:
@@ -185,16 +191,16 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
     [DecidableEq B] (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
     (Mp : ∀ x, G.Nonce → G.PreModel x Salt B Cc) (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.CoinModel x Salt B Cc)
     (nL nB : Claims.Msg → ℕ) (hnL : ∀ x ν, Fintype.card (Mp x ν).L ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
-    (hL : G.MsgLink H (Claims.Flock.R (deployZk rel).parse) My cs Mp Mc) (hS : G.SimLink H Mc)
-    (hN : G.NonDegenerate Mc) (hI : G.InnerHolds (Claims.Flock.R (deployZk rel).parse) Mc) (hC : G.CoinCheck) :
-    Claims.Flock.ScopeMatches (deployZk rel) ∧
-      Claims.Flock.KS H (deployZk rel) ∧
-      Claims.Flock.Bits H (deployZk rel) ∧
-      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployZk rel) x ≤ 2 ^ (-a x)) →
-        (∀ x, Claims.Flock.γ (deployZk rel) x ≤ 2 ^ b x) →
-        Claims.Bits H (deployZk rel).V (Claims.Flock.R (deployZk rel).parse)
-          (Claims.Flock.E (deployZk rel) (deployZk rel).decode) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
-      Claims.Flock.ZK H (deployZk rel) G.prover (G.simulatorE t (t * 3 ^ t))
+    (hL : G.MsgLink H (Claims.Flock.R (deployZkTrim rel).parse) My cs Mp Mc) (hS : G.SimLink H Mc)
+    (hN : G.NonDegenerate Mc) (hI : G.InnerHolds (Claims.Flock.R (deployZkTrim rel).parse) Mc) (hC : G.CoinCheck) :
+    Claims.Flock.ScopeMatches (deployZkTrim rel) ∧
+      Claims.Flock.KS H (deployZkTrim rel) ∧
+      Claims.Flock.Bits H (deployZkTrim rel) ∧
+      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployZkTrim rel) x ≤ 2 ^ (-a x)) →
+        (∀ x, Claims.Flock.γ (deployZkTrim rel) x ≤ 2 ^ b x) →
+        Claims.Bits H (deployZkTrim rel).V (Claims.Flock.R (deployZkTrim rel).parse)
+          (Claims.Flock.E (deployZkTrim rel) (deployZkTrim rel).decode) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
+      Claims.Flock.ZK H (deployZkTrim rel) G.prover (G.simulatorE t (t * 3 ^ t))
         (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) (fun _ => 4 * t * 3 ^ t) ∧
       Claims.Flock.Efficient H (deployZk rel) zkStepPoly ∧
       Claims.Complete H (deployZk rel).V FlockComplete.ZkTables.honestP (Claims.Flock.R (deployZk rel).parse)
