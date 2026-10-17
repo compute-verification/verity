@@ -692,6 +692,140 @@ theorem lvStep {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} 
   rw [ht₁k, hx₁k, hx₂k] at hcl
   exact hcl
 
+/-- **Level 0 starts the level loop**: from the out-of-domain sample and first message (`S₁`), the `k0` challenges
+(`SplitInv`), level 1's commitment, two out-of-domain intros, level 0's query and the close, `LvInv` at `0`. -/
+theorem lv0Inv {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} {T : F128} {cm0 : Commit}
+    {t : Transcript} {tb b : Array F128} {ms : MerkleScheme} {K dim : ℕ} {S₁ S₂ S' : LigState} {cm1 : Commit}
+    {z z₁ z₂ g1 v : Array F128}
+    (hsd : sch.k0 + 3 * (sch.levels.size - 1) ≤ sch.n) (hD : DimSeam sch) (hk0 : sch.k0 ≠ 0)
+    (hseam : LevelSeam (sch.levels.getD 0 default))
+    (htb : tb.size = 2 ^ sch.n) (hb : b.size = 2 ^ sch.n) (hT : dot tb b = T)
+    (hcm0 : cm0.rows = encodeRows (sch.levels.getD 0 default) tb)
+    (hz : z = (Array.range sch.n).map (cf t.k))
+    (h1t : S₁.tab = embedF tb) (h1w : S₁.w = addScaled (embedF b) (embedF (eqTable z)) (cf (t.k + 1) 0))
+    (h1m : S₁.msgs = #[roundPoly (embedF tb) (addScaled (embedF b) (embedF (eqTable z)) (cf (t.k + 1) 0))])
+    (h1o : S₁.oods = #[mleF tb z]) (h1c : S₁.cbn.size = 1) (h1q : S₁.qn = #[]) (h1n : S₁.cn = #[])
+    (h2 : SplitInv cf (t.k + 2) S₁ (sch.k0 - 1) S₂)
+    (hK : K = t.k + 2 + sch.k0) (hdim : dim = sch.n - sch.k0 + 1)
+    (hg1 : g1 = S₂.tab.map F256.c0)
+    (hcm : cm1.rows = encodeRows (sch.levels.getD 1 default) g1)
+    (hz₁ : z₁ = (Array.range dim).map (cf K)) (hz₂ : z₂ = (Array.range dim).map (cf (K + 2)))
+    (hv : v = consW (sch.levels.getD 0 default).cols (qPosK cf (sch.levels.getD 0 default) (K + 4))
+      (qAlphaK cf (sch.levels.getD 0 default) (K + 4)))
+    (htab : S'.tab = S₂.tab)
+    (hw : S'.w = addScaled (addScaled (addScaled S₂.w (embedF (eqTable z₁)) (cf (K + 1) 0))
+      (embedF (eqTable z₂)) (cf (K + 3) 0)) (liftU (embedF v)) (cf (K + 6) 0))
+    (hmsgs : S'.msgs = ((S₂.msgs.push (roundPoly (embedF g1) (embedF (eqTable z₁)))).push
+      (roundPoly (embedF g1) (embedF (eqTable z₂)))).push (roundPoly (embedF g1) (liftU (embedF v))))
+    (hoods : S'.oods = (S₂.oods.push (mleF g1 z₁)).push (mleF g1 z₂))
+    (hcbn : ∃ a₁ a₂ a₃, S'.cbn = ((S₂.cbn.push a₁).push a₂).push a₃)
+    (hqn : ∃ a, S'.qn = S₂.qn.push a) (hcn : ∃ a, S'.cn = S₂.cn.push a) :
+    LvInv P cf sch T cm0.cap t b
+      (openP ms cm0 (sch.levels.getD 0 default) (qPosK cf (sch.levels.getD 0 default) (K + 4))) 0
+      (dim, cm1, #[cm1.cap], #[], default) S' := by
+  obtain ⟨a₁, a₂, a₃, hcbn⟩ := hcbn
+  obtain ⟨q₁, hqn⟩ := hqn
+  obtain ⟨c₁, hcn⟩ := hcn
+  have hk0n : sch.k0 ≤ sch.n := by omega
+  have hlanes0 : (sch.levels.getD 0 default).lanes = sch.k0 := hD.2.2.1
+  have hcols0 : (sch.levels.getD 0 default).cols = sch.n - sch.k0 := hD.2.2.2.1
+  have hj1 : sch.k0 - 1 + 1 = sch.k0 := Nat.sub_add_cancel (Nat.pos_of_ne_zero hk0)
+  have hX : S₂.tab = embedF (splitK (foldKs (chsK cf (t.k + 2) sch.k0) (embedF tb))) := by rw [h2.tab, hj1, h1t]
+  have hg1' : g1 = splitK (foldKs (chsK cf (t.k + 2) sch.k0) (embedF tb)) := by rw [hg1, hX, embedF_c0]
+  have hf : (foldKs (chsK cf (t.k + 2) sch.k0) (embedF tb)).size = 2 ^ (sch.n - sch.k0) := by
+    rw [foldKs_size, embedF_size, htb, chsK_length, Nat.pow_div hk0n (by norm_num)]
+  have hg1s : g1.size = 2 ^ (sch.n - sch.k0 - 3 * 0 + 1) := by
+    rw [hg1', (splitK_spec _).1, hf, Nat.mul_zero, Nat.sub_zero, pow_succ]; ring
+  have h2s := h2.size
+  have h1ms : S₁.msgs.size = 1 := by rw [h1m]; rfl
+  have h1os : S₁.oods.size = 1 := by rw [h1o]; rfl
+  have hG2 : Grow S₁ S₂ :=
+    ⟨h2.pre, Pre.of_eq h2.oods.symm, Pre.of_eq h2.cbn.symm, Pre.of_eq h2.qn.symm, Pre.of_eq h2.cn.symm⟩
+  have hGm : Pre S₂.msgs S'.msgs := by rw [hmsgs]; exact pre_push₃ _ _ _ _
+  have hG' : Grow S₂ S' := ⟨hGm, by rw [hoods]; exact pre_push₂ _ _ _, by rw [hcbn]; exact pre_push₃ _ _ _ _,
+    by rw [hqn]; exact Pre.push _ _, by rw [hcn]; exact Pre.push _ _⟩
+  refine ⟨by rw [hdim]; omega, rfl, ⟨g1, by rw [htab, hX, hg1'], hg1s, hcm, fun hA => ?_⟩, ?_, ?_, ?_, ?_, ?_⟩
+  rotate_left
+  · rw [hmsgs]; simp only [Array.size_push]; rw [h2s, h1ms]; omega
+  · rw [hoods]; simp only [Array.size_push]; rw [h2.oods, h1os]
+  · rw [hcbn]; simp only [Array.size_push]; rw [h2.cbn, h1c]
+  · rw [hqn]; simp only [Array.size_push]; rw [h2.qn, h1q]; rfl
+  · rw [hcn]; simp only [Array.size_push]; rw [h2.cn, h1n]; rfl
+  have hE2 : Ext P S₂ := hA.1.of_grow hG'
+  have hE1 : Ext P S₁ := hE2.of_grow hG2
+  have hzv : z = vec cf t sch.n := by rw [hz]; rfl
+  rw [hzv] at h1w h1m h1o
+  have hP2 : ∀ i < S₂.msgs.size, P.messages[i]! = S₂.msgs[i]! := fun i hi => hE2.1.get_lt hi
+  have hhk : (head P cf sch.n (init T) (start cm0.cap T t)).2.k = t.k + 2 := by simp
+  have hhm : (head P cf sch.n (init T) (start cm0.cap T t)).1.msg = S₁.msgs.size := by simp [h1ms]
+  have hp0 := JPre.pre0 (p := P) (cf := cf) (cap := cm0.cap) (t := t) (k0 := sch.k0) (e := sch.n - sch.k0)
+    (j := sch.k0 - 1) (by omega) (by omega) htb hb hT
+    (by have := hE1.2.1.get_lt (i := 0) (by rw [h1o]; simp); rw [this, h1o]; rfl)
+    (by have := hE1.1.get_lt (i := 0) (by rw [h1m]; simp); rw [this, h1m]; rfl)
+    (fun k hk => by rw [hhm, hP2 _ (by omega), h2.msg k hk, chs_eq, hhk, h1t, h1w])
+    (by rw [hhm, hP2 _ (by omega), h2.last, h2.tab, h2.w, hj1, chs_eq, hhk, h1t, h1w])
+  have hho : (head P cf sch.n (init T) (start cm0.cap T t)).1.ood = S₁.oods.size := by simp [h1os]
+  show JPre _ sch.n (List.map gOf (pre P cf sch T cm0.cap t).1.toList) (levelsOf #[])
+    (pre P cf sch T cm0.cap t).2.1 g1 S'.w (sch.n - sch.k0 - 3 * 0)
+  simp only [pre, lv0, Nat.mul_zero, Nat.sub_zero]
+  generalize hh : head P cf sch.n (init T) (start cm0.cap T t) = h₀ at hp0 hhk hhm hho ⊢
+  rw [← chals_fst P cf h₀.1 h₀.2 sch.k0] at hp0
+  have hfst : (chals P cf #[] h₀.1 h₀.2 sch.k0).1.toList = chsK cf (t.k + 2) sch.k0 := by
+    rw [chals_fst, chs_eq, hhk]
+  have hG : g1 = splitK (foldKs (chals P cf #[] h₀.1 h₀.2 sch.k0).1.toList (embedF tb)) := by rw [hg1', hfst]
+  have hck : (chals P cf #[] h₀.1 h₀.2 sch.k0).2.2.k = K := by simp [hhk, hK]
+  have hco : (chals P cf #[] h₀.1 h₀.2 sch.k0).2.1.ood = S₂.oods.size := by simp [hho, h2.oods]
+  have hcm' : (chals P cf #[] h₀.1 h₀.2 sch.k0).2.1.msg = S₂.msgs.size := by simp [hhm, h2s]; omega
+  have hPo : Pre ((S₂.oods.push (mleF g1 z₁)).push (mleF g1 z₂)) P.oodValues := hoods ▸ hA.1.2.1
+  have hPm : Pre (((S₂.msgs.push (roundPoly (embedF g1) (embedF (eqTable z₁)))).push
+      (roundPoly (embedF g1) (embedF (eqTable z₂)))).push (roundPoly (embedF g1) (liftU (embedF v))))
+      P.messages := hmsgs ▸ hA.1.1
+  generalize ht₁ : ap (pBytes (capBytes P.recursiveCaps[0]!)) (chals P cf #[] h₀.1 h₀.2 sch.k0).2.2 = t₁
+  have ht₁k : t₁.k = K := by rw [← ht₁, ap_k, hck]
+  have hv₁ : vec cf t₁ (sch.n - sch.k0 + 1) = z₁ := by rw [hz₁, hdim, vec, ht₁k]
+  have ho₁ := hp0.oodStep (p := P) (cf := cf) (t := t₁) (split := 0) rfl
+    (by rw [hv₁, hco, ← hG]; exact ((Pre.push _ _).trans hPo).get)
+    (by rw [hv₁, hcm', ← hG]; exact ((pre_push₂ _ _ _).trans hPm).get)
+  have hx₁o : (ood P cf (sch.n - sch.k0 + 1) 0 (chals P cf #[] h₀.1 h₀.2 sch.k0).2.1 t₁).1.ood =
+      S₂.oods.size + 1 := by simp [hho, h2.oods]
+  have hx₁m : (ood P cf (sch.n - sch.k0 + 1) 0 (chals P cf #[] h₀.1 h₀.2 sch.k0).2.1 t₁).1.msg =
+      S₂.msgs.size + 1 := by simp; omega
+  have hx₁k : (ood P cf (sch.n - sch.k0 + 1) 0 (chals P cf #[] h₀.1 h₀.2 sch.k0).2.1 t₁).2.k = K + 2 := by
+    simp [ht₁k]
+  generalize hx₁ : ood P cf (sch.n - sch.k0 + 1) 0 (chals P cf #[] h₀.1 h₀.2 sch.k0).2.1 t₁ = x₁
+    at ho₁ hx₁o hx₁m hx₁k ⊢
+  have hv₂ : vec cf x₁.2 (sch.n - sch.k0 + 1) = z₂ := by rw [hz₂, hdim, vec, hx₁k]
+  have ho₂ := ho₁.oodStep (p := P) (cf := cf) (t := x₁.2) (split := 0) rfl
+    (by
+      rw [hv₂, hx₁o, ← hG]
+      have := hPo.get
+      rwa [Array.size_push] at this)
+    (by
+      rw [hv₂, hx₁m, ← hG]
+      have := ((Pre.push _ _).trans hPm).get
+      rwa [Array.size_push] at this)
+  have hx₂m : (ood P cf (sch.n - sch.k0 + 1) 0 x₁.1 x₁.2).1.msg = S₂.msgs.size + 2 := by simp [hx₁m]
+  have hx₂k : (ood P cf (sch.n - sch.k0 + 1) 0 x₁.1 x₁.2).2.k = K + 4 := by simp [hx₁k]
+  generalize hx₂ : ood P cf (sch.n - sch.k0 + 1) 0 x₁.1 x₁.2 = x₂ at ho₂ hx₂m hx₂k ⊢
+  have hq : qPos cf (sch.levels.getD 0 default) x₂.2 = qPosK cf (sch.levels.getD 0 default) (K + 4) := by
+    rw [← hx₂k]; rfl
+  have hα : qAlpha cf (sch.levels.getD 0 default) x₂.2 = qAlphaK cf (sch.levels.getD 0 default) (K + 4) := by
+    rw [← hx₂k]; rfl
+  have hcl := ho₂.closeStep (lv := sch.levels.getD 0 default) (rows := P.initialProof.rows)
+    (cols := sch.n - sch.k0) (start := 0) hseam (by rw [hlanes0]; simp)
+    (by rw [hlanes0, hcols0, htb, Nat.add_sub_cancel' hk0n]) hcols0 rfl rfl
+    (by rw [hA.2.1, hq]; simp only [openP]; rw [hcm0])
+    (by
+      rw [hx₂m, ← hG, hq, hα, ← hv]
+      have := hPm.get
+      simp only [Array.size_push] at this
+      exact this)
+  have hv' : v = consW (sch.n - sch.k0) (qPos cf (sch.levels.getD 0 default) x₂.2)
+      (qAlpha cf (sch.levels.getD 0 default) x₂.2) := by rw [hv, hcols0, hq, hα]
+  rw [hG, hw, h2.w, hj1, h1w, ← hv₁, ← hv₂, hv', (hfst.symm : chsK cf (t.k + 2) sch.k0 = _)]
+  rw [ht₁k, hx₁k, hx₂k] at hcl
+  exact hcl
+
 end Lg
 
 end FlockComplete.Replay
