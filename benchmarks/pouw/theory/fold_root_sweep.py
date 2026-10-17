@@ -9,6 +9,10 @@ Each job is a key pair and a word at width n; `fold_root_kernel` finds K_1 .. K_
   lastsample `--keys` seeded random pairs whose keys pass only KJ19's last clause (`kj_last`), with the words of
              `filtered`
   sample     `--keys` seeded random pairs passing the scaled KJ and as many unfiltered, the zero word and one random word
+  addsweep   `--keys` pairs passing the scaled KJ (all of them if fewer), every add-limb pair (d1, d3) with one seeded
+             random (d0, d2) a pair: every word where an add-limb condition could open the kernel
+  xorsweep   the same over every XOR-limb pair (d0, d2), with one seeded random (d1, d3) a pair
+  symmetric  `--keys` seeded random pairs passing the scaled KJ, the four NOT-symmetric words (`not_symmetric`) a pair
 
 Writes `<set>-n<n>.txt` (the enumerator's S and E lines) and `<set>-n<n>.json` (counts) under --out.
 
@@ -59,6 +63,13 @@ def near_inverse(a0: int, a1: int, n: int) -> bool:
     return v2((p - 1) & m) >= n - 5 or v2((p + 1) & m) >= n - 5
 
 
+def not_symmetric(a0: int, a1: int, w, n: int) -> bool:
+    """2·d1 ≡ a0 − 1 and 2·d3 ≡ a1 − 1 mod 2^n: both half-rounds then commute with bitwise NOT, so F_w does, and
+    complementing d0 alone gives F_{w'} = NOT ∘ F_w, which agrees with F_w at every even R."""
+    m = (1 << n) - 1
+    return (2 * w[1] - a0 + 1) & m == 0 and (2 * w[3] - a1 + 1) & m == 0
+
+
 def words(n: int) -> list[tuple[int, int, int, int]]:
     """Structured words: zero, all ones, top bits, ones, and the half-zero mixes."""
     m, t = (1 << n) - 1, 1 << (n - 1)
@@ -95,12 +106,29 @@ def jobs_for(kind: str, n: int, rng: random.Random, nkeys: int, nrand: int, word
         for _ in range(nkeys):
             out.append((rng.randrange(1 << n) | 1, rng.randrange(1 << n) | 1) + rw())
         return out
+    pairs = [(a0, a1) for a0 in ok for a1 in ok]
+    if kind in ("addsweep", "xorsweep"):
+        pairs = pairs if len(pairs) <= nkeys else rng.sample(pairs, nkeys)
+        out = []
+        for a0, a1 in pairs:
+            p, q = rng.randrange(1 << n), rng.randrange(1 << n)
+            if kind == "addsweep":
+                out += [(a0, a1, p, d1, q, d3) for d1 in range(1 << n) for d3 in range(1 << n)]
+            else:
+                out += [(a0, a1, d0, p, d2, q) for d0 in range(1 << n) for d2 in range(1 << n)]
+        return out
+    if kind == "symmetric":
+        h, out = 1 << (n - 1), []
+        for a0, a1 in (rng.choice(pairs) for _ in range(nkeys)):
+            out += [(a0, a1, rng.randrange(1 << n), ((a0 - 1) // 2 + s) % (1 << n), rng.randrange(1 << n),
+                     ((a1 - 1) // 2 + u) % (1 << n)) for s in (0, h) for u in (0, h)]
+        return out
     raise SystemExit(f"unknown set {kind}")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--set", required=True, choices=("all", "filtered", "lastsample", "sample"))
+    ap.add_argument("--set", required=True, choices=("all", "filtered", "lastsample", "sample", "addsweep", "xorsweep", "symmetric"))
     ap.add_argument("--n", type=int, required=True)
     ap.add_argument("--rmax", type=int, default=6)
     ap.add_argument("--keys", type=int, default=1000)
@@ -139,15 +167,22 @@ def main() -> int:
         if not (pxn and all(k == ks[0] for k in ks) and g3bad == 0 and degen == 0):
             bad.append({"a0": a0, "a1": a1, "w": w, "K": ks, "pxn": pxn, "g3bad": g3bad, "degenerate": degen,
                         "kj_scaled": [kj_scaled(a0, a.n, r2), kj_scaled(a1, a.n, r2)],
-                        "kj_last": [kj_last(a0, r1), kj_last(a1, r1)], "near_inverse": near_inverse(a0, a1, a.n)})
+                        "kj_last": [kj_last(a0, r1), kj_last(a1, r1)], "near_inverse": near_inverse(a0, a1, a.n),
+                        "not_symmetric": not_symmetric(a0, a1, w, a.n)})
     summ["bad"] = len(bad)
     summ["bad_under_kj_scaled"] = sum(all(b["kj_scaled"]) for b in bad)
+    summ["bad_under_kj_scaled_not_symmetric_word"] = sum(all(b["kj_scaled"]) and not b["not_symmetric"] for b in bad)
+    summ["symmetric_words"] = sum(not_symmetric(j[0], j[1], j[2:], a.n) for j in jobs)
+    summ["symmetric_words_bad"] = sum(b["not_symmetric"] for b in bad)
+    summ["symmetric_words_K"] = sorted({tuple(b["K"]) for b in bad if b["not_symmetric"]})[:20]
     summ["bad_under_kj_last_and_not_near_inverse"] = sum(all(b["kj_last"]) and not b["near_inverse"] for b in bad)
     summ["bad_under_kj_last"] = sum(all(b["kj_last"]) for b in bad)
     summ["bad_cases"] = bad[:20000]
     (out / f"{tag}.json").write_text(json.dumps(summ, indent=1))
     print(f"{tag}: {summ['reported']}/{len(jobs)} reported, {len(bad)} with K_R != K_1 = P/X/N, of which "
-          f"{summ['bad_under_kj_scaled']} pass the scaled KJ; {summ['seconds']} s", file=sys.stderr, flush=True)
+          f"{summ['bad_under_kj_scaled']} pass the scaled KJ ({summ['bad_under_kj_scaled_not_symmetric_word']} at a word "
+          f"that isn't NOT-symmetric); NOT-symmetric words {summ['symmetric_words_bad']}/{summ['symmetric_words']} bad; "
+          f"{summ['seconds']} s", file=sys.stderr, flush=True)
     return 0 if summ["reported"] == len(jobs) else 1
 
 
