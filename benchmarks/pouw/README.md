@@ -21,6 +21,9 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `pouw_hash/` | RTX PRO 6000 | The PoUW hash kernels' bench and check (`run.sh`, `check.py`) |
 | `kernels/` | RTX 4090 | NCP's native u8xs8 route-U GEMM and Pearl's e4m3 GEMM on the `ada` device (`pouw_gemm.cu`), JIT-built as a torch extension |
 | `filler/` | RTX PRO 6000 | The DRAM-free filler beside the decode step, its arms and its locked scorer, one suite (below) |
+| `floored_gemm/`, `masked_gemm/`, `edited_gemm/`, `hashed_gemm/` | RTX PRO 6000 | The noised GEMMs, from the floored int8 grid to the adopted edited GEMM with its commitments hashed in its own CTAs (below) |
+| `commit_gpu/` | RTX PRO 6000 | The GPU hm96-sha512 committer, its small path beside a GEMM, and its byte gate against `verity.ml.commitments` (`reference.py`) |
+| `stage_cost/`, `stage_ovl/` | RTX PRO 6000 | What the stage coins and the deferred edit cost at Llama-3.1-8B's shapes, and their overlap in prefill with the committer |
 | `vllm_bench.py` | RTX 4090 | Overhead against plain vLLM for BF16, stock FP8, W7A7, NCP and Pearl by wrapping every `LinearBase` layer's apply; `pearl_c_vllm/` reads its prompts and model lookup |
 | `gamma.py` | CPU | γ accounting: each scheme's honest reference priced term by term under W1, split into checked and unchecked work |
 | `pearlc_census.py` | CPU | TT_OUT's falsification census for Pearl-C's ticket chain, bit-exact, on the H100's atom or sm_120's (`--atom`) |
@@ -51,3 +54,23 @@ of `pfill.cuh`, not a copy of the kernel. Its tests are one suite: `uv run tools
 | The fused linears with filler warps, FILL's arms | `flin.cuh`, `flin.sh`, `fused_score.py` on `fscore.cu`, `fused_arm.py` |
 | HC-PROVED's arms (the leader, `PFillBUDuoFPhase3`) and their runner over both drivers | `pfill_arm.py`, `pfill_fp_score.py`, `pfill_proved.py`, `pfill_phase_screen.py` |
 | The filler in tensor-parallel decode's collectives | `comm/tpcomm.cu`, `comm/tpcomm.sh`, `comm/report.py` |
+
+## Where the GEMM kernels and the committer live
+
+Each has one copy; a later kernel includes an earlier one rather than copying it, so change the file a row names. Each
+directory's `*.sh` builds and runs it through `research run`, and each `*ref.py` judges its dumps on the CPU.
+
+| Tool | Files | Includes |
+|---|---|---|
+| The served GEMM on the floored int8 grid, its receipt kernels (duo, DUOS, tb) and their reference | `floored_gemm/fgemm.cu`, `ref.py`, `run.sh`, `tb_run.sh` | `masked_gemm/sha_noise.cuh` |
+| SHA-512 counter-mode noise, as one generator and as separate passes | `masked_gemm/sha_noise.cuh`, `sha_pass.cuh` | `pearl_c/sha512.cuh` |
+| The masked GEMM (full and low rank), the first edited GEMM (noise from {±5, ±7}), its noise expanded from σ, P·V's noise, the one-side peel | `masked_gemm/mgemm.cu`, `egemm.cu`, `sgemm.cu`, `pvgemm.cu`, `lpgemm.cu`, each with its `*ref.py`, `*run.sh` and `*table.py` | `floored_gemm/fgemm.cu` |
+| The adopted design's edited GEMM (decision 29), its receipt folds and its profile | `edited_gemm/egemm.cu`, `egemm_ref.py`, `prof.cu`, `run.sh`, `profile.sh` | `masked_gemm/lpgemm.cu` |
+| That GEMM with its windowed receipts and X's tile leaves hashed in its CTAs | `hashed_gemm/hgemm.cu`, `hgref.py`, `segment_e2e.py`, `run.sh` | `edited_gemm/egemm.cu`, `commit_gpu/commit_gpu.cuh` |
+| The committer: hm96-sha512 row leaves in frame-v3-sha512 trees | `commit_gpu/commit_gpu.cuh`, `sha512.cuh`, `commit_gpu.cu`, `reference.py`, `gpu.sh` | |
+| Stage coins and the deferred edit | `stage_cost/stage.cu`, `prep.py`, `report.py`, `run.sh` | `filler/dcap.cu`, `served_zk/hm96_rows.cu` |
+| Their overlap in prefill, with the committer's small path, and the edited arms (EGEMM's GEMM with windowed receipts) | `stage_ovl/ovl.cu`, `eg.cu`, `eg.h`, `eref.py`, `report.py`, `run.sh` | `stage_cost/stage.cu`, `commit_gpu/commit_gpu.cuh`, `edited_gemm/egemm.cu` |
+
+`edited_gemm/egemm_ref.py` imports the E2E slice's `derive.py` from `e2e_slice/` beside it, which lands in its own PR;
+`edited_gemm/receipt_folds_r9.py` is P2-FF r9's reference as recorded (art:91c156a1…), held by its sha256, so leave it
+unedited.
