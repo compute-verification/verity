@@ -281,6 +281,9 @@ class BuildConfig:
     build_relabel: str = option("--build-relabel", env="BUILD_RELABEL", default="off", choices=("off", "on"),
                                 help="TP: one template rank's request derives write the other ranks' (pipeline.tp.relabel_build), behind a "
                                      "step guard over every rank and a canary request derived in full; default off")
+    build_programs_only: str = option("--build-programs-only", env="BUILD_PROGRAMS_ONLY", default="0",
+                                      help="TP: 1 = the Build ends at the rank Programs and GP-01: no required-value manifest, no call-boundary "
+                                           "check (the Commit builds the manifest it runs over); `verity-vllm neutrality`'s heavy tier")
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -102,6 +102,24 @@ def test_a_rebuild_is_the_rows_own_build_stage_into_out_with_no_device_visible(t
                        "--sweep-dir", str(tmp_path), "--build-jobs=2"] and world == 2
 
 
+def test_a_heavy_rows_rebuild_ends_at_its_programs_and_reports_no_manifest(tmp_path: Path, monkeypatch, capsys) -> None:
+    pins, out, flags = _pins(tmp_path, _programs()), tmp_path / "out", []
+    doc = json.loads(pins.read_text())
+    doc["rows"][ROW]["tier"] = "heavy"
+    pins.write_text(json.dumps(doc))
+
+    def rebuild(row: str, o: Path, f: list[str]) -> int:
+        flags.extend(f)
+        (_build(o / row, _programs()) / "manifest.json").unlink()
+        return 0
+
+    monkeypatch.setattr(N, "rebuild", rebuild)
+    assert cli(["neutrality", ROW, "--out", str(out), "--pins", str(pins), "--row-flag=--build-jobs=2"]) == 0
+    assert flags == ["--build-programs-only=1", "--build-jobs=2"]
+    assert json.loads((out / "neutrality.json").read_text())["rows"][ROW]["manifest_digest"] is None
+    assert capsys.readouterr().out.rstrip().endswith("NEUTRAL -- 2 rank(s)")
+
+
 def test_selection_is_by_row_or_tier_and_refuses_a_row_not_of_record() -> None:
     doc = {"rows": {"a": {"tier": "fast"}, "b": {"tier": "heavy"}}}
     assert N.select(doc, [], "fast") == ["a"] and N.select(doc, [], "all") == ["a", "b"] and N.select(doc, ["b"], "fast") == ["b"]

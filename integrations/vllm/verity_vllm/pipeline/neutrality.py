@@ -7,14 +7,15 @@ A circuit is its per-rank Program digests: the step Program, each request shape'
 record, with the tier of its rebuild and the Build they were taken from.  Each selected row (the ROWs named, else every row of
 `--tier`) is rebuilt by its own Build, `verity-vllm row run ROW ROLE REPO REV --stages build` (`epoch.resolve`), into OUT/<row>, and
 its digests compared with the pins; `--compare` compares the Builds already under OUT instead.  The manifest digest is reported, not
-compared: a naming change moves the manifest and leaves the circuit.  Exit 0 when every pinned digest is reproduced, 1 when one
-moved or is missing (each named), 2 on a usage error.  `--update` rewrites the selected rows' pins from what was built: the PR that
-changes a circuit on purpose re-pins it, and its diff names what moved (`pinned_from`: the Build, and under `research run` its run
-and source commit).  A row whose Build failed or left a Program undigested keeps its pins, is named, and the exit is 1.
+compared: a naming change moves the manifest and leaves the circuit; a heavy row's Build builds none (`TIER_FLAGS`).  Exit 0 when
+every pinned digest is reproduced, 1 when one moved or is missing (each named), 2 on a usage error.  `--update` rewrites the
+selected rows' pins from what was built: the PR that changes a circuit on purpose re-pins it, and its diff names what moved
+(`pinned_from`: the Build, and under `research run` its run and source commit).  A row whose Build failed or left a Program
+undigested keeps its pins, is named, and the exit is 1.
 
 The rebuild needs the pinned vLLM (`ops/pod_bootstrap.sh --cpu`) and each row's checkpoint metadata (the derive runs on the meta
 device and reads no weights), so it runs on a CPU pod, never in `check`; the suite's tier is `tests/program/test_derive_neutrality.py`.
-fast: small TP1/TP2 rows, minutes each; heavy: GLM-5.3's 8 ranks, about an hour on a 256-CPU pod.
+fast: small TP1/TP2 rows, minutes each; heavy: GLM-5.3's 8 ranks, about 50 minutes on a 256-CPU pod.
 """
 from __future__ import annotations
 
@@ -32,6 +33,9 @@ from verity_vllm.pipeline import epoch
 PINS = ROOT / "manifests" / "programs_of_record.json"
 SCHEMA = "verity-vllm/programs-of-record/v1"
 TIERS = ("fast", "heavy")
+#: `row run` flags a tier's rebuild adds: GLM-5.3's Build manifest (the word check over 8 ranks) takes hours at 200-450 GB a worker
+#: and decides no Program digest, so the heavy tier's Build ends at GP-01.
+TIER_FLAGS = {"fast": [], "heavy": ["--build-programs-only=1"]}
 
 
 def load(path: Path = PINS) -> dict[str, Any]:
@@ -103,14 +107,15 @@ def main(a: Options) -> int:
     out, report, failed, unpinned = Path(a.out), {"schema": "verity-vllm/neutrality/v1", "pins": a.pins, "rows": {}}, False, []
     out.mkdir(parents=True, exist_ok=True)
     for row in select(doc, a.rows, a.tier):
-        rc = None if a.compare_only else rebuild(row, out, a.row_flags)
+        pin = doc["rows"][row]
+        rc = None if a.compare_only else rebuild(row, out, [*TIER_FLAGS[pin["tier"]], *a.row_flags])
         rd = epoch.row_digests(out / row)
-        built, man, pin = rd["programs"], rd["manifest_digest"], doc["rows"][row]
+        built, man = rd["programs"], rd["manifest_digest"]
         diffs = compare(pin["programs"], built) if built else ["no build_summary.json: the Build did not finish"]
         report["rows"][row] = {"tier": pin["tier"], "build_rc": rc, "neutral": not diffs, "differences": diffs, "programs": built,
                                "manifest_digest": man, "manifest_digest_pinned": pin.get("manifest_digest")}
         failed |= bool(diffs)
-        moved = "" if man == pin.get("manifest_digest") else f"; manifest {str(man)[:16]} (pinned {str(pin.get('manifest_digest'))[:16]})"
+        moved = "" if man in (None, pin.get("manifest_digest")) else f"; manifest {man[:16]} (pinned {str(pin.get('manifest_digest'))[:16]})"
         print(f"[neutrality] {row}: {'NEUTRAL' if not diffs else 'MOVED'} -- {len(built)} rank(s){moved}"
               + "".join(f"\n    {d}" for d in diffs), flush=True)
         if a.update and rc in (0, None) and finished(built):

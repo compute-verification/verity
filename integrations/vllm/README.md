@@ -330,7 +330,8 @@ the suite `verity-vllm` (`tools/verity/check/suites.py --list`).  Every tool is 
 A refactor that is meant to leave the circuits alone keeps two sets of pins.  The suite's `tests/program/test_derive_neutrality.py`
 derives GLM-5.3's constructions on vLLM-free stand-ins, in seconds.  `verity-vllm neutrality --tier fast|heavy`
 (`pipeline/neutrality.py`) rebuilds the rows of record in `manifests/programs_of_record.json` on a CPU pod and fails when a
-per-rank Program digest moved: fast is the small TP1/TP2 rows (about 10 minutes with the bootstrap), heavy is GLM-5.3's 8 ranks.
+per-rank Program digest moved: fast is the small TP1/TP2 rows (about 10 minutes with the bootstrap), heavy is GLM-5.3's 8 ranks
+(about 50 minutes on a 256-CPU pod; its Build ends at GP-01, `--build-programs-only 1`, since its manifest takes hours).
 
 `verity-vllm rejudge RUN` (`pipeline/tp/rejudge.py`) recomputes a finished TP Commit's gates that need no GPU from what it saved
 (its runs in the row's `runs.jsonl`, each run's verdict from its ranks', manifest agreement, the cross-rank check, `summary.pass`),

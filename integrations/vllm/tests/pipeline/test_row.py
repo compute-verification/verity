@@ -536,6 +536,21 @@ def test_a_tp_row_stops_after_its_build_on_any_call_boundary(tmp_path, monkeypat
     assert gate[3].endswith(": a manifest of 2 ranks (the source serves one rank)") and " sources=none " in gate[3]
 
 
+def test_a_programs_only_tp_build_ends_at_its_programs(tmp_path, monkeypatch):
+    t = _tp_row(tmp_path, TP_DENSE, "--build-programs-only", "1")
+    os.makedirs(t.d, exist_ok=True)
+    t.shapes = []
+    for name, fn in (("derive_jobs", lambda shapes, derives: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", lambda ranks: None),
+                     ("guarded_summary", lambda: "PASS"), ("manifest_global", lambda stage, to: pytest.fail("built a manifest")),
+                     ("call_boundaries", lambda to, cmd=None: pytest.fail("checked call boundaries"))):
+        monkeypatch.setattr(t, name, fn)
+    monkeypatch.setattr(R, "tp_build_digests", lambda d: ("d" * 16, []))
+    monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: "w" * 16)
+    t.build()
+    (build,) = (ln.split(" ", 3) for ln in (Path(t.d) / "stages.txt").read_text().splitlines())
+    assert build[:2] == ["build", "PASS"] and "manifest_rc=None" in build[3]
+
+
 # ---------------------------------------------------------------------------------------------------------------- taps
 
 TP_MOE = "qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager"
