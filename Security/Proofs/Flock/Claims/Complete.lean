@@ -17,6 +17,7 @@ import Proofs.Flock.Claims.Complete.Runs
 import Proofs.Flock.Claims.Complete.Reps
 import Proofs.Flock.Claims.Complete.Replay
 import Proofs.Flock.Claims.Complete.Walk
+import Proofs.Flock.Claims.Complete.WalkPacked
 import Proofs.Flock.Claims.Complete.Shaped
 
 /-! Flock's completeness at the deployed plain verifier: the honest prover (`Honest`: `honestP`, on the session prover
@@ -33,4 +34,6 @@ send (`linkFirst_goal`), and `Count` the sends (`sendCount_goal`). `Replay` repl
 prover's rounds (`zerocheckWith_of`, `lincheckWith_of`, `ringSwitchWith_of`, and the goals `zerocheck_goal`,
 `lincheck_goal`, `ringSwitch_goal`). `Shaped` proves each proof an honest rep returns fits the shape the verifier
 decodes it at (`repShaped`). `Walk` aligns every rep's recorded stream with its run (`Run.walkAt`) and composes the
-goals into `Claims.Flock.Complete` at the deployed relation from named premises (`complete_plain`). -/
+goals into `Claims.Flock.Complete` at the deployed relation from named premises (`complete_plain`). `WalkPacked` runs
+every rep on the trace's packed table (`Run.repWalkP`), so the premise `LgFinal` rests on the honest Ligerito's final
+identity alone (`lgFinal_walk`, `complete_plain_honest`). -/
