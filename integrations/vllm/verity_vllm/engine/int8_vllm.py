@@ -54,7 +54,7 @@ class Int8PlainLinearMethod(LinearMethodBase):
                                                                             weight_loader=loader))
 
     def process_weights_after_loading(self, layer: torch.nn.Module) -> None:
-        w, s = layer.weight.data, layer.weight_scale.data.reshape(-1).contiguous()
+        w, s = layer.weight.data, layer.weight_scale.data.contiguous()
         if int(w.to(torch.int16).abs().max()) > E.W_MAX:
             raise ValueError(f"{self.prefix}: an int8 weight outside [-{E.W_MAX}, {E.W_MAX}]")
         if not bool((torch.isfinite(s) & (s > 0)).all()):

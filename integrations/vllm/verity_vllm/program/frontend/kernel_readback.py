@@ -36,6 +36,18 @@ def int8_exact_of(model) -> str | None:
     return {("linears",): "linears", ("attention",): "attention", ("linears", "attention"): "all"}.get(tuple(parts))
 
 
+def int8_k_scales_of(model) -> dict[str, list[int]]:
+    """{layer_name: the K scales as float32 bit patterns, one per KV head} of every attention layer whose impl carries them
+    (`engine.int8_attention_vllm.Int8AttentionImpl.k_scale_bits`)."""
+    out = {}
+    for name, mod in model.named_modules():
+        impl = getattr(mod, "impl", None)
+        if is_attention_impl(impl) and callable(kb := getattr(impl, "k_scale_bits", None)):
+            ln = getattr(mod, "layer_name", name)
+            out[ln] = [b & 0xFFFFFFFF for b in kb(ln)]
+    return out
+
+
 def is_attention_impl(obj) -> bool:
     return obj is not None and any(c.__name__ == "AttentionImpl" for c in type(obj).__mro__)
 

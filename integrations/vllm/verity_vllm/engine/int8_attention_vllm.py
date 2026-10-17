@@ -61,6 +61,10 @@ class Int8AttentionImpl(FlashAttentionImpl):
             self._k_on[key] = self.k_table[key[1]].to(device)
         return self._k_on[key]
 
+    def k_scale_bits(self, layer_name: str) -> list[int]:
+        """The layer's K scales as float32 bit patterns, one per KV head (read back by `vllm_meta.attention_impls`)."""
+        return [int(b) for b in self.k_table[K.layer_index(layer_name)].view(torch.int32).tolist()]
+
     def forward(self, layer: torch.nn.Module, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, kv_cache: torch.Tensor,
                 attn_metadata, output: torch.Tensor, output_scale: torch.Tensor | None = None,
                 output_block_scale: torch.Tensor | None = None) -> torch.Tensor:

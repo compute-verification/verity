@@ -2,7 +2,7 @@
 one node (`observe.fold.patterns.int8`) and an export keeps it as one (`program.frontend.rules.vllm_bindings.int8`):
 
     verity_int8::linear(Tensor x, Tensor w, Tensor s_w) -> (Tensor xq, Tensor s_a, Tensor y)
-        x bf16 [M, K], w int8 [N, K], s_w f32 [N]: `engine.int8_exact`'s plain linear, all three values it computes
+        x bf16 [M, K], w int8 [N, K], s_w f32 [N, 1] (or [N]): `engine.int8_exact`'s plain linear, all three values it computes
         (`registry.int8_exact.Int8Linear_v1{K,N}` per row)
     verity_int8::window_attention(Tensor q, Tensor key_cache, Tensor value_cache, Tensor blocks, int s, Tensor k_scales,
                                   float scale) -> Tensor out
