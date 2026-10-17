@@ -148,7 +148,8 @@ def main() -> None:
             def probe(role: str) -> None:
                 L, cpu = cells[role]
                 results[role] = remote_probe("node1", src, d, 0, 1000000, ns.seconds,
-                                             ("warm=500", f"ops={ns.ops}", "k=1", "gap_us=1000", f"cpu={cpu}"),
+                                             ("warm=500", f"ops={ns.ops}", f"dgram={ns.dgram}", "k=1", "gap_us=1000",
+                                              f"cpu={cpu}"),
                                              out=role, to=to, lport=L)
 
             threads = [threading.Thread(target=probe, args=(role,)) for role in cells]
