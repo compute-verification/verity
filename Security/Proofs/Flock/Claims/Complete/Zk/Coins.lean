@@ -134,95 +134,15 @@ theorem pr_rho_le {k : ℕ} (a : ℕ) : Claims.Pr (fun r : Fin k → Coin => rho
     · simp only [rhoDep, ha, false_and]
     · rw [Claims.Pr_false]; positivity
 
-/-! ## δcZk -/
+/-! ## δcZk
 
-/-- **Rep `q`'s first coin's index** at the masked verifier (table `q / 2`'s rep `q % 2`): the link's coin, then every
-earlier rep's recorded rounds. -/
-def repStartZk (spec : SessionSpec) (sts : Array Flock.Stmt) (q : ℕ) : ℕ :=
-  1 + ((List.range q).map fun q' => repRounds true spec sts[q' / 2]!).sum
-
-/-- A masked rep's rounds before Ligerito: the masked replay's `m + k_log − 6`, the ring switch's `claims + 1`. -/
-def piopRoundsZk (spec : SessionSpec) (st : Flock.Stmt) : ℕ :=
-  (st.m + st.c.kLog - 6) + (2 + spec.points * st.regions.size + 1)
-
-/-- **The zerocheck outer coins** of the masked session: rep `q`'s second round, elements `0` to `m − 14`. -/
-def outerSlotsZk (x : Claims.Msg) : List (ℕ × ℕ) :=
-  match setupOf true x with
-  | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      (List.range (sts[q / 2]!.m - 13)).map fun i => (repStartZk spec sts q + 1, i)
-  | none => []
-
-/-- **Level 0's pair coins**: rep `q`'s `ρ_0` (`ρ_1` the next), Ligerito's round `k_0 + 2`. -/
-def rhoSlotsZk (x : Claims.Msg) : List ℕ :=
-  match setupOf true x with
-  | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      match Zk.schedule sts[q / 2]!.m with
-      | .ok (sch, _) => [repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (sch.k0 + 2)]
-      | .error _ => []
-  | none => []
-
-/-- **The inner proof's `β`**: rep `q`'s inner round `2`, after Ligerito's `k_0 + 7 + 11R` rounds. -/
-def betaSlotsZk (x : Claims.Msg) : List ℕ :=
-  match setupOf true x with
-  | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      match Zk.schedule sts[q / 2]!.m with
-      | .ok (sch, _) =>
-        [repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 2]
-      | .error _ => []
-  | none => []
+The slots, `εZk`, `readyZk` and `δcZk` are `Complete.Ready`'s, which the deployed record (`DeployCode`) reads. -/
 
 /-- **The bad coins** of the masked verifier: a zerocheck outer coin is `1`, an inner `β` is `0`, or a pair of
 level-0 coins is dependent. -/
 def BadZk (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop :=
   (∃ p ∈ outerSlotsZk x, (Claims.coinSeq r p.1).at p.2 = 1) ∨
     (∃ b ∈ betaSlotsZk x, b < k ∧ (Claims.coinSeq r b).at 0 = 0) ∨ ∃ a ∈ rhoSlotsZk x, rhoDep r a
-
-/-- `εZk`: the outer coins, the `β`s and twice the pairs, over `2^128`. -/
-noncomputable def εZk (x : Claims.Msg) : ℝ :=
-  ((outerSlotsZk x).length + (betaSlotsZk x).length + 2 * (rhoSlotsZk x).length) / 2 ^ 128
-
-/-- **The honest masked record fits its length word** at the masked session `spec`, `sts` of `x`: at every witness,
-tape and coins, a record the honest masked session returns, run against `H` with each send answered by its coin
-(`PI.sim`), is under `2^64` bytes. -/
-def RecordFitsZkAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) :
-    Prop :=
-  ∀ (w : Claims.Flock.Wit) (ω : TapeZk) (r : Fin ((V true).k x) → Coin) (record : String) (proofs : Array ByteArray),
-    ((sessionPZk asks Hashes.pi spec (tabsOf sts) (tracesOf sts w) ω).run.sim H
-      (fun j => (Claims.coinSeq r j).bytes) 0).2 = .ok (record, proofs) →
-      record.toUTF8.size < 2 ^ 64
-
-open Classical in
-/-- **The statements the masked verifier can accept** against `H`: as `ready H`, of the masked session, at one table,
-with a `Hello` that names the keyed coin tree. It sets up the session at one table, the session draws a unit, the
-statement is under `2^64` bytes, the table's regions fit (`RegionsFit`), its setup against `H` is the one at SHA-512,
-its `Hello` names the keyed coin tree (the masked verifier refuses any other session), and the honest masked record
-fits (`RecordFitsZkAt`). The `--zk` scope admits several tables, whose masked record is per table; `δcZk H` is `1`
-there until it is. -/
-noncomputable def readyZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
-  match setupOf true x with
-  | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
-      decide (∀ st ∈ sts, JsonRT.RegionsFit st) &&
-      decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) && spec.coinTree.isSome &&
-      decide (RecordFitsZkAt H x spec sts)
-  | none => false
-
-open Classical in
-/-- **At SHA-512, `readyZk` asks no setup agreement** (`ready_sha512`). -/
-theorem readyZk_sha512 (x : Claims.Msg) :
-    readyZk sha512 x = match setupOf true x with
-      | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
-          decide (∀ st ∈ sts, JsonRT.RegionsFit st) && spec.coinTree.isSome &&
-          decide (RecordFitsZkAt sha512 x spec sts)
-      | none => false := by
-  unfold readyZk
-  split
-  · rename_i s spec sts hs
-    rw [hOf_sha512, setupWith_sha512, Ins.setup_read (setupOf_some hs).2]
-    simp
-  · rfl
-
-/-- **Flock's `δc` at the masked verifier** against `H`: `εZk` where the verifier can accept, else `1`. -/
-noncomputable def δcZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if readyZk H x then εZk x else 1
 
 theorem pr_list_le {k : ℕ} {β : Type} (E : β → (Fin k → Coin) → Prop) (L : List β) (c : ℝ)
     (h : ∀ b ∈ L, Claims.Pr (E b) ≤ c) : Claims.Pr (fun r => ∃ b ∈ L, E b r) ≤ L.length * c := by

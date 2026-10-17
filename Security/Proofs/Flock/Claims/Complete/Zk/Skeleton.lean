@@ -343,7 +343,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 table's regions fit, the setup against `H` is the case's, the session's coins are the keyed coin tree, and the honest
 masked record fits. -/
 theorem CaseZk.ready_all (c : CaseZk H rel) :
-    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧
+    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
       setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true ∧
       RecordFitsZkAt H c.x c.spec c.sts := by
   have h := c.ready
@@ -361,7 +361,7 @@ theorem CaseZk.ready_parts (c : CaseZk H rel) :
 
 /-- `readyZk` at the case's setup: the table's regions fit, and the honest masked record fits its length word. -/
 theorem CaseZk.ready_fits (c : CaseZk H rel) :
-    (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧ RecordFitsZkAt H c.x c.spec c.sts :=
+    (∀ st ∈ c.sts, RegionsFit st) ∧ RecordFitsZkAt H c.x c.spec c.sts :=
   ⟨c.ready_all.2.2.2.1, c.ready_all.2.2.2.2.2.2⟩
 
 /-- **The printed honest masked record is under `2^64` bytes**: `readyZk` asks it of every honest masked session, which
