@@ -200,7 +200,6 @@ theorem Flock.zk_server_lean (H : Msg → Msg) (rel : _root_.Flock.Readable.Pars
   have h := L.toSrv.zk_deferred L.fillOf H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (S.swP vs).prover _ _ _ _
     (Flock.zk_deployZk_sw H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT).2 x w hR wk
     (L.refD H _ _ wk x w spec hFC hI) Vs θ hk Ev
-  push_cast at h ⊢
   exact h
 
 end Claims.ZKServer
