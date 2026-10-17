@@ -6,9 +6,9 @@ Conditions: `quiet` (no load of ours; the node's other tenants as they are); `ge
 both GPUs, and the job's other declared CPUs spinning or copying memory); `hbm` (`gemm` plus 2 GiB device-to-device
 copies); `pcie` (`hbm` plus 64 MiB pinned H2D and D2H copies, both directions at once); `pcie1m` (the same in 1 MiB
 copies); `vllm` (vLLM generation on the responder's GPU). Those loads run in processes of their own, so the GPU
-time-slices between their CUDA contexts and the responder's; `gemm-in`, `hbm-in` and `pcie-in` run the same GPU load
-inside the responder's process (one context, where stream priority orders the work), the second GPU's and the CPUs'
-load as before. The responder and the local challenger each hold a whole core
+time-slices between their CUDA contexts and the responder's; `gemm-in`, `hbm-in`, `pcie-in` and `pcie1m-in` run the
+same GPU load inside the responder's process (one context, where stream priority orders the work), the second GPU's and
+the CPUs' load as before; `pcie-in-sm` is `pcie-in` challenged only on the SM-kernel and host paths (no copy engine). The responder and the local challenger each hold a whole core
 of the job's cpuset that no load touches, and the load takes the job's declared CPU count less those four. Everything goes to $OUT: per cell `<cond>/<challenger>.bin|json`, the load
 reports, the responder's stats, the environment, and `summary.json`."""
 
@@ -43,7 +43,10 @@ OPS = {1: "gpu", 5: "gpu_sm", 2: "host", 3: "ping"}
 LOADS = {"gemm": ["gemm=8192"], "hbm": ["gemm=8192", "d2d_mib=2048"],
          "pcie": ["gemm=8192", "d2d_mib=2048", "pcie_mib=64", "pcie=both"],
          "pcie1m": ["gemm=8192", "d2d_mib=2048", "pcie_mib=1", "pcie=both"]}
-IN_PROCESS = {f"{k}-in": v for k, v in LOADS.items() if k in ("gemm", "hbm", "pcie")}
+IN_PROCESS = {f"{k}-in": v for k, v in LOADS.items()}
+IN_PROCESS["pcie-in-sm"] = LOADS["pcie"]
+# The challenge ops a condition's probes cycle through, where not the default "1,5,1,5,2".
+PROBE_OPS = {"pcie-in-sm": "5,2"}
 
 
 def log(msg: str) -> None:
@@ -173,10 +176,10 @@ class Load:
         return [p.returncode for p in self.procs]
 
 
-def local_probe(lat: str, cpu: int, celldir: str, pings: int, rounds: int, max_s: int) -> dict:
+def local_probe(lat: str, cpu: int, celldir: str, pings: int, rounds: int, max_s: int, extra: tuple[str, ...] = ()) -> dict:
     out = os.path.join(celldir, "local")
     p = subprocess.run([lat, "probe", f"to=127.0.0.1:{PORT}", f"cpu={cpu}", f"pings={pings}", f"rounds={rounds}", f"max_s={max_s}",
-                        f"out={out}"],
+                        *extra, f"out={out}"],
                        capture_output=True, text=True, timeout=1800)
     return {"rc": p.returncode, "stderr": p.stderr[-2000:]}
 
@@ -230,7 +233,7 @@ def main() -> None:
     peers = [f"peer={dest.split('@')[1]}:{lport}" for dest, lport in REMOTES.values()]
 
     def start_responder(args: list[str], tag: str) -> subprocess.Popen:
-        ready = os.path.join(scratch, f"ready-{tag}")
+        ready = os.path.join(scratch, f"responder-ready-{tag}")
         p = subprocess.Popen([lat, "serve", f"port={PORT}", f"cpu={resp_cpu}", f"ready={ready}",
                               f"stats={out}/responder-stats-{tag}.json", *peers, *args],
                              stdout=open(f"{out}/responder-{tag}.log", "w"), stderr=subprocess.STDOUT, start_new_session=True)
@@ -267,17 +270,18 @@ def main() -> None:
                 cells["load_rc"] = load.stop()
                 continue
             cells["gpu_during"] = gpu_sample()
+            extra = (f"ops={PROBE_OPS[cond]}",) if cond in PROBE_OPS else ()
             for who in ns.challengers.split(","):
                 a = busy_ticks()
                 t0 = time.time()
                 if who == "local":
-                    r = local_probe(lat, chal_cpu, celldir, ns.pings, ns.rounds_local, ns.max_s_local)
+                    r = local_probe(lat, chal_cpu, celldir, ns.pings, ns.rounds_local, ns.max_s_local, extra)
                     name = "local"
                 else:
                     rounds, max_s = ((ns.rounds_node1, ns.max_s_node1) if who == "node1" else
                                      (ns.rounds_quiet_cpu1, ns.max_s_quiet_cpu1) if cond == "quiet" else
                                      (ns.rounds_remote, ns.max_s_remote))
-                    r = remote_probe(who, src, celldir, ns.pings, rounds, max_s)
+                    r = remote_probe(who, src, celldir, ns.pings, rounds, max_s, extra)
                     name = who
                 b = busy_ticks()
                 r.update(seconds=round(time.time() - t0, 1), responder_cpu_busy=busy_frac(a, b, [resp_cpu]),
