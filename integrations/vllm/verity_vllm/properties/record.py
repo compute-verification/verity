@@ -44,13 +44,14 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v3 at the launch's statics with that step as DOT, every "
              "activation quant equals Fp8GroupQuant_v1, and the experts' input quant with use_ue8m0=True (the default when DeepGEMM "
              "is on) equals Fp8GroupQuantUe8m0_v1, bit for bit."),
-    Property("deepgemm_sm90_capture", "verity-vllm/deepgemm-sm90-capture/v1",
-             "On the capture's Hopper GPU, vLLM selects FlashInferFp8DeepGEMMDynamicBlockScaledKernel for DeepSeek-V4-Pro's and "
-             "GLM-5.3's FP8 linears, M < 32 takes FlashInfer's branch and M >= 32 DeepGEMM's, DeepGEMM JIT-builds only the 1d2d "
-             "sm_90 GEMM (Normal and Batched, bf16, identity epilogue), and at the models' TP8 shapes every output word equals "
-             "FlashInferFp8Linear_v1, DeepGemmFp8Linear_v1 or, for DeepSeek-V4's wo_a einsum, ScaledMmFp8BlockGrouped_v1, every "
-             "DeepGEMM activation quant Fp8GroupQuantUe8m0_v1, and every processed weight block outside requant_band its twin's, "
-             "bit for bit."),
+    Property("deepgemm_capture", "verity-vllm/deepgemm-capture/v2",
+             "On the capture's cc 9.0, 132-SM GPU, vLLM selects FlashInferFp8DeepGEMMDynamicBlockScaledKernel for both served "
+             "models' FP8 linears, M < 32 takes FlashInfer's branch and M >= 32 DeepGEMM's, DeepGEMM JIT-builds only the 1d2d "
+             "GEMM (Normal and Batched, bf16, identity epilogue) at exactly the launch configurations kernels.deepgemm_schedule "
+             "predicts for the swept batches up to 1024, and at the models' TP8 shapes every compared output word equals "
+             "FlashInferFp8Linear_v1, DeepGemmFp8Linear_v1 or, for the o-projection einsum (wo_a), ScaledMmFp8BlockGrouped_v1, "
+             "every DeepGEMM activation quant Fp8GroupQuantUe8m0_v1, and every processed weight block outside requant_band its "
+             "twin's, bit for bit."),
     Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v3",
              "On the capture's 8 Hopper GPUs at the record's served setting (served.setting: vLLM's defaults, or its custom "
              "all-reduce off), each set of rank processes holding that setting's communicators, GLM-5.3's fused_allreduce_rms_norm "
@@ -64,13 +65,15 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "for bit, on every rank.  Apart from that verdict, h7168.ok says the same at vLLM's defaults of 7168-wide "
              "tensor_model_parallel_all_reduce (the hidden-7168 pass): FlashInfer's to 36 tokens, multimem past it at its own probe's "
              "trees and FTZ."),
-    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v3",
+    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v5",
              "On the capture's Hopper GPU, the two served workloads' MoE gates (GateLinear) run cuteDSL ll_bf16_gemm on the "
              "kernel's registered dispatch at M <= 16 and cuBLAS past it, and under vLLM's default cuBLAS route every f32 gate word "
              "equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1, GemmF32Out_v1 or "
              "CublasSplitKGemmF32Out_v1 at the captured split count, every recorded compressor word the selected f32-output "
              "form, every lm_head-shard and indexer-projection word the selected core or split-K bf16-output form, and every "
-             "GLM-5.3 q_nope / v absorb word BatchedGemm_v1, bit for bit."),
+             "GLM-5.3 q_nope / v absorb word BatchedGemm_v1, bit for bit; past M 256 the same holds at the first decode batch of "
+             "each model the scan of 256 to 1024 reads out of cuBLAS's words (a fitted split count or the serial chain, every "
+             "regime one of them) and at 1024."),
     Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v2",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "

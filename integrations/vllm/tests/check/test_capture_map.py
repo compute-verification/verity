@@ -156,7 +156,7 @@ def test_the_captures_are_registered_properties_and_the_map_is_its_checkpoints_a
     caps = CM.captures(CMAP)
     assert caps["glm53_dsa_capture"] == ["fused-rope-triton", "mla-sparse-attention", "dsa-indexer-q", "dsa-indexer-k", "dsa-mqa-logits",
                                          "dsa-topk"]
-    assert caps["glm53_fa3_split_capture"] == ["mla-sparse-attention"] and caps["deepgemm_sm90_capture"] == ["fp8-block-linear-deepgemm"]
+    assert caps["glm53_fa3_split_capture"] == ["mla-sparse-attention"] and caps["deepgemm_capture"] == ["fp8-block-linear-deepgemm"]
     cmap = copy.deepcopy(CMAP)
     cmap["programs"]["silu-mul"]["captures"] = ["glm53_silu_capture"]
     assert _check(cmap) == ["program silu-mul: capture 'glm53_silu_capture' is not a registered property"]
