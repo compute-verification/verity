@@ -1,12 +1,13 @@
-import Proofs.Flock.Claims.KS.ZkPlanHJ
+import Proofs.Flock.Claims.KS.ZkDrawJ
 import Proofs.Flock.Claims.KS.ZkAccJ
 
 /-!
 # The deployed `--zk` decoders at the masked statement
 
-`ZkLiveAccAtJ`'s decoders (`hdec`) at the deployed statement, from `ZkPlanJ` and `ZkPlanHJ`: where the statement parses
-in scope and `Deploy.V` sets it up at a draw, the old `--zk` openings and decoder, at public or hidden outputs, are
-right at C-Flock ZK's padded tables (`zkTabs`) on the outcomes `verify --zk` accepts at `wrD`.
+`ZkLiveAccAtJ`'s decoders (`hdec`) at the deployed statement, from `ZkPlanJ`, `ZkPlanHJ` and `ZkDrawJ`: where the
+statement parses in scope and `Deploy.V` sets it up at a draw, the old `--zk` openings and decoder, at public or hidden
+outputs, are right at C-Flock ZK's padded tables (`zkTabs`) on the outcomes `verify --zk` accepts at the setup at that
+draw at `wrS`.
 
 * `draw_some_of_checks`, `next_acc_draw`, `acc_draw`: the checks refuse a session without a draw (`drawLaw zk none`),
   so wherever some run accepts, the statement carries a draw.
@@ -102,7 +103,7 @@ theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
 /-- **The deployed `--zk` decoders are right at `zkTabs` at a masked statement in scope**: where the statement parses
 in scope, `Deploy.V` sets it up at the draw `d` and at least one table, at every layout and link layout at the
 session's link points, the openings `opnD` and decoder `decD` are right at `zkTabs` on the outcomes `verify --zk`
-accepts at `wrD` of the draw `d` (`DecodesTable`, `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`): at public
+accepts at the setup at `d` at `wrS` (`DecodesTable`, `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`): at public
 outputs `decodesTable_zkTabs` under `TagsOkZJ`, at hidden outputs `decodesTableH_zkTabs` under `TagsOkZHJ`, the
 circuit file being table 0's circuit under `HmOut.parse` (`setupHidden_spec'`, `parseH_tagsAt`) and every table
 passing the shape check (`setup_shapeOk`). -/
@@ -113,12 +114,11 @@ theorem decodesTable_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d) {Reg : Type} (R : Reg)
+    {d : Lean.Json} (hd : ins.read.draw = some d)
     (i : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) :
     DecodesTable (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
       (fun _ o => o.accepted = true)
-      (fun o => ZkExec.AcceptsZK ins.read.I (Claims.Bridge.Custody.wrD ins.read.I (fun _ : Finset (Fin 0) => d)
-        (fun _ _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) ∅ R o))
+      (fun o => Composed.AcceptsAt ins.read.I d (Claims.Bridge.Custody.wrS ins.read.I d o))
       (opnD sts (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
       (decD (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay))) (fun _ _ => true) (fun _ _ _ => [])
       (fun rs j => Exec.capOfRoot rs[j.val]!)
@@ -133,12 +133,12 @@ theorem decodesTable_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
   rw [hd] at hsA
   obtain ⟨ht, hrr, hl⟩ := tags_of_inScope hs hin hset
   cases hh : ins.read.I.tags.hiddenOutputs
-  · exact decodesTable_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA h0 L hz hk hlay R
+  · exact decodesTable_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA h0 L hz hk hlay
   · have hshape := Claims.Bridge.Custody.setup_shapeOk (setupOf_some hset).2 hzk
     obtain ⟨-, hstJ⟩ := setupAt_tableJH hh hsA
     have hp := (Hidden.setupHidden_spec' (hstJ 0 h0)).parse
     have hc : HmOut.parse (ZkExec.zkTags ins.read.I) ins.read.I.circuitFile ins.read.I.tables = .ok sts[0].c :=
       (ZkHidden.parseH_tagsAt ((ZkExec.zkTags_typed _).trans ht) _ _ _ _).symm.trans hp
-    exact decodesTableH_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay R
+    exact decodesTableH_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay
 
 end FlockDeploy.KS

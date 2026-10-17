@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.Bridge.Custody
 The old `--zk` theorems run their decoders on a plan of `J` tables (`Composed.planZJ`): at a draw, table `j` is the
 table `verify --zk` sets up at table `j`'s inputs and draw (`DrawSetupZJ.table`), and a reference setup's refused table
 where it sets none up. `ZkLiveJ` reads C-Flock ZK's padded tables of the deployed setup (`zkTabs`). Where `verify --zk`
-sets its session up, the two are one list, so the old decoders are right at `zkTabs`:
+sets its session up, the two are one list, so the old decoders are right at `zkTabs` (`ZkDrawJ`):
 
 * `setupAt`, `setupAt_tableJ`: `Exec.setupOf` at a draw value rather than a record's (`setupOf_eq_setupAt`), since
   `Deploy.V`'s checks pin a record's draw to the statement's only up to key order; `Composed.setupOf_tableJ` there.
@@ -21,9 +21,6 @@ sets its session up, the two are one list, so the old decoders are right at `zkT
   (`setupTables_points`).
 * `opnD`, `decD`, `opnAtZJ_eq_opnD`: the deployed `--zk` openings and decoder at the session's statements and tables,
   which the old ones at the plan are where `verify --zk` sets the session up.
-* `decodesTable_zkTabs`: so at the empty draw the deployed `--zk` decoders `opnD` and `decD` are right at `zkTabs`, on
-  the outcomes `verify --zk` accepts at `wrD` (`DecodesTable`, `ZkLiveAtJ`'s `hdec` at the verdict `accepted`), from
-  `Custody.decodesOnZKJ_wrD` at the law of that one draw, with table 0's setup as the reference.
 -/
 
 namespace FlockDeploy.KS
@@ -193,34 +190,5 @@ theorem opnAtZJ_eq_opnD {I : Exec.Inputs} {n mPts : ℕ} {Reg : Type}
   unfold Composed.opnAtZJ opnD
   rw [(setupAt_tableJ hh hs).2 j.val hj, Array.getElem?_eq_getElem hj]
   rfl
-
-/-- **The deployed `--zk` decoders are right at `zkTabs`**: where `verify --zk` sets its session up at the empty draw
-`dj ∅`, on untyped inputs under `TagsOkZJ`, at every layout and link layout at the session's link points, the
-openings `opnD` and decoder `decD` at `tabsJ` of `zkTabs` are right on the outcomes `verify --zk` accepts at `wrD`:
-they are the old ones at the plan (`opnAtZJ_eq_opnD`), which is `tabsJ` of `zkTabs` (`planZJ_eq_tabsJ`), and those are
-right there (`Custody.decodesOnZKJ_wrD` at the law of that one draw, `drawOkZKJ_empty`, table 0's setup as the
-reference). -/
-theorem decodesTable_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : Composed.TagsOkZJ I) {n : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
-    (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts))
-    (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {Reg : Type} (R : Reg) (i : Fin (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length) :
-    DecodesTable (outJ ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (fun _ o => o.accepted = true)
-      (fun o => ZkExec.AcceptsZK I
-        (Claims.Bridge.Custody.wrD I dj (fun _ _ => (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length) ∅ R o))
-      (opnD sts (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (decD (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
-      (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
-      (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
-  have hok := drawOkZKJ_empty hT.1 dj hs
-  obtain ⟨y₀, -, -, -⟩ := setupZJ_of_setupAt hT.1 ht dj hs hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
-  have h := Claims.Bridge.Custody.decodesOnZKJ_wrD (Reg := Reg) I ht dj y₀ { Ω := Unit, draw := fun _ => ∅ } hT
-    (fun _ => hok) () R
-  have hp := planZJ_eq_tabsJ hT.1 ht dj y₀ hs hok h0 L hz hk hlay R
-  revert i
-  rw [← hp, ← opnAtZJ_eq_opnD (planZJ dj y₀) dj hT.1 hs (by rw [hp, tabsJ_length])]
-  exact h
 
 end FlockDeploy.KS
