@@ -88,10 +88,45 @@ def test_bit_planes_make_every_word() -> None:
 
 
 def test_every_timed_kernel_is_pinned_and_folds_every_word() -> None:
-    """expect.json pins each kernel count.py prices, and each pinned loop holds the duo fold of each of its words."""
+    """expect.json pins each kernel count.py prices, and each pinned loop holds the duo fold of each word it folds."""
     count = _load("qstar_count", POUW / "qstar" / "count.py")
     pins = json.loads((POUW / "qstar" / "expect.json").read_text())
     assert set(pins) == set(count.ARMS)
     for name, hist in pins.items():
-        words = count.ARMS[name][0]
-        assert all(hist.get(op, 0) >= n * words for op, n in count.FOLD.items()), name
+        folded = count.ARMS[name][2]
+        assert all(hist.get(op, 0) >= n * folded for op, n in count.FOLD.items()), name
+
+
+def _popc(x: np.ndarray) -> np.ndarray:
+    return np.vectorize(lambda v: bin(int(v)).count("1"))(x).astype(np.int64)
+
+
+def test_design_a_words_and_harley_seal_product() -> None:
+    """k_bb: a design-A word is T + popc(R_ℓ & C_ℓ); k_bx_hs: Harley-Seal's carry-save over eight segments, in the
+    kernel's order (CSA(one, x0, x1) a pair, CSA(two, t2, h) every second, CSA(four, t4, h4) every fourth), gives
+    O = 8·Σ popc(e8) + 4 popc(four) + 2 popc(two) + popc(one) = R Rcᵀ."""
+    g = np.random.default_rng(7)
+    m, n, k = 8, 4, 512
+    R = g.integers(0, 2, size=(m, k), dtype=np.int8)
+    Rc = g.integers(0, 2, size=(n, k), dtype=np.int8)
+    T = ref.transcript(R, Rc)
+    Rw, Cw = _rw(R).astype(np.uint64), _rw(Rc).astype(np.uint64)
+    x = Rw[:, :, None] & Cw[:, None, :]                                              # [ℓ][i][j]
+    assert np.array_equal(np.cumsum(_popc(x), axis=0), T)
+    maj = lambda a, b, c: (a & b) | (a & c) | (b & c)                               # noqa: E731
+    one = two = four = t2 = t4 = np.zeros((m, n), dtype=np.uint64)
+    tot = np.zeros((m, n), dtype=np.int64)
+    for g8 in range(0, k // SEG, 8):
+        for q in range(4):
+            x0, x1 = x[g8 + 2 * q], x[g8 + 2 * q + 1]
+            h, one = maj(one, x0, x1), one ^ x0 ^ x1
+            if q % 2 == 0:
+                t2 = h
+                continue
+            h4, two = maj(two, t2, h), two ^ t2 ^ h
+            if q == 1:
+                t4 = h4
+                continue
+            e8, four = maj(four, t4, h4), four ^ t4 ^ h4
+            tot += _popc(e8)
+    assert np.array_equal(8 * tot + 4 * _popc(four) + 2 * _popc(two) + _popc(one), T[-1])
