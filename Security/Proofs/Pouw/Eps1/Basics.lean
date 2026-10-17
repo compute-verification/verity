@@ -1,10 +1,10 @@
 import Models.Pouw.Guarantees.Eps1
 
 /-!
-# M3's basic lemmas for Dither's lower bounds (stubs)
+# M3's basic lemmas for Dither's lower bounds
 
 Runs exist and are unique, a block's outside slots, the zero instance's fiber and the information count (QSTAR's
-Theorem B), each a `sorry` until a prover takes it (gap list E1–E5: note:20261017T0801Z-draft-lean-stmt).
+Theorem B; gap list E1–E5: note:20261017T0801Z-draft-lean-stmt).
 -/
 
 namespace Pouw.SecurityProofs.Eps1
@@ -103,11 +103,41 @@ theorem fiber_needs_seven {n : ℕ} (U U' : Cols n) (j : Fin n) (hU : ColsValid 
   intro p
   simpa using h fun q => decide (q = p)
 
+/-- An injection of `Fin 128` into `±1..±64`: `i ↦ i + 1` below 64, `i ↦ 63 − i` from 64. -/
+def enc (i : Fin 128) : ℤ := if i.val < 64 then (i.val : ℤ) + 1 else 63 - (i.val : ℤ)
+
+theorem enc_valid (i : Fin 128) : 1 ≤ |enc i| ∧ |enc i| ≤ 64 := by
+  have hi := i.isLt
+  unfold enc
+  split_ifs with h
+  · rw [abs_of_pos (by omega)]; omega
+  · rw [abs_of_neg (by omega)]; omega
+
+theorem enc_injective : Function.Injective enc := by
+  intro i i' h
+  have hi := i.isLt
+  have hi' := i'.isLt
+  unfold enc at h
+  apply Fin.ext
+  split_ifs at h <;> omega
+
 /-- The information count: six words can't tell apart the `128^32 = 2^224` columns with entries in `±1..±64`; any
 map from such columns to `k` words that is injective on them has `k ≥ 7` (`k ≥ 8` for the `2^256` int8 segments). -/
 theorem words_needed (k : ℕ) (f : (Fin 32 → ℤ) → Fin k → Word)
     (hf : ∀ u u', (∀ p, 1 ≤ |u p| ∧ |u p| ≤ 64) → (∀ p, 1 ≤ |u' p| ∧ |u' p| ≤ 64) → f u = f u' → u = u') :
     7 ≤ k := by
-  sorry
+  let g : (Fin 32 → Fin 128) → Fin k → Fin (2 ^ 32) := fun a i => (f (fun p => enc (a p)) i).toFin
+  have hg : Function.Injective g := by
+    intro a a' h
+    have h1 : f (fun p => enc (a p)) = f (fun p => enc (a' p)) :=
+      funext fun i => BitVec.eq_of_toFin_eq (congrFun h i)
+    have h2 := hf _ _ (fun p => enc_valid (a p)) (fun p => enc_valid (a' p)) h1
+    exact funext fun p => enc_injective (congrFun h2 p)
+  have hcard := Fintype.card_le_of_injective g hg
+  simp only [Fintype.card_fun, Fintype.card_fin] at hcard
+  by_contra hk
+  have h6 : (2 ^ 32) ^ k ≤ (2 ^ 32) ^ 6 := Nat.pow_le_pow_right (by norm_num) (by omega)
+  have hlt : ((2 : ℕ) ^ 32) ^ 6 < 128 ^ 32 := by norm_num
+  exact absurd (hcard.trans h6) (not_le.mpr hlt)
 
 end Pouw.SecurityProofs.Eps1
