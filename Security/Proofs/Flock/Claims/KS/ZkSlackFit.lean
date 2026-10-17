@@ -29,7 +29,6 @@ variable {K : ℕ} (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) 
 theorem card_IZW (L : ℕ) : Fintype.card (IZW L) = 2 * L + 5 := by
   show Fintype.card (((Fin 2 × Fin L) ⊕ (Fin 2 ⊕ Fin 2)) ⊕ Unit) = _
   simp only [Fintype.card_sum, Fintype.card_prod, Fintype.card_fin, Fintype.card_unit]
-  ring
 
 /-- **Table `j`'s slack weights total at most its weight times `|IZW|·8ε`**, its forks before the last round, at
 chances at most `ε ≤ 1/2` before the last round and at most `1` there (Cauchy–Schwarz, `sum_slackW_le`). -/
@@ -163,8 +162,8 @@ theorem zk_slackFitW {K n : ℕ} (st : ℕ → Stmt) (hm : ∀ j < n, 25 ≤ (st
   have hJ : ∑ t, Claims.Flock.joinCW n sch Np rd t ≤ 2 ^ 41 * Claims.Flock.roomW n sch Np := by
     refine Claims.Flock.joinCW_le_room n sch Np rd (fun j hjn => ⟨(hnum j hjn).2.1, ?_⟩) (by norm_num)
     obtain ⟨-, -, h1, h0⟩ := hnum j hjn
-    have h1' : (1 : ℝ) ≤ cOf (sch j) 1 := by
-      unfold cOf
+    have h1' : (1 : ℝ) ≤ Claims.Flock.cOf (sch j) 1 := by
+      unfold Claims.Flock.cOf
       exact_mod_cast h1
     have h0' : (2 : ℝ) + 2 ^ (lvOf (sch j) 0).logLen * (2 * (lvOf (sch j) 0).queries) ≤ 2 ^ 40 := by
       exact_mod_cast h0
