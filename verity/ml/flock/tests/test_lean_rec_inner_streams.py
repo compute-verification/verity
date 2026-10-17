@@ -719,8 +719,8 @@ def test_candidate_3s_session_needs_the_inner_transcript_and_rs_registration(tmp
     statement at candidate 3's inner shape there, with that statement's files, which pass check 5's sparse range
     (`RecCoins.checkAtC3`) and whose circuit's META is its header's (`RecSetup.checkMeta`), refuses it at setup without
     the inner transcript (`RecSetup.checks`), and refuses its inputs (exit 2) with the transcript and no circuit
-    registration (`RecSetup.commits`). `verify` reads its inputs as `statement` does (shown on an empty outer circuit:
-    it refuses a plain-leaves one at its inputs, and sets up no empty one as far as the V* checks)."""
+    registration (`RecSetup.commits`). `verify` reads its inputs as `statement` does (shown on an empty outer circuit,
+    which it sets up no further than the V* checks)."""
     _fixture(PLAIN)
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
