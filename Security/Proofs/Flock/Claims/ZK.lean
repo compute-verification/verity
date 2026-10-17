@@ -21,8 +21,12 @@ import Proofs.Flock.Claims.ZK.Reference
 import Proofs.Flock.Claims.ZK.CoinLayer
 import Proofs.Flock.Claims.ZK.Session
 import Proofs.Flock.Claims.ZK.Tape
+import Proofs.Flock.Claims.ZK.Capacity
 import Proofs.Flock.Claims.ZK.Worker
+import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
+import Proofs.Flock.Claims.ZK.Blind
+import Proofs.Flock.Claims.ZK.Release
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 
@@ -112,10 +116,21 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
+* `Capacity`: the tape asked for on a class `A` of statements only (`RefSession.TapeOKOn`, `RefSession.HonestMsgsOn`),
+  as a tape of bounded size can meet it where `A` bounds the tables, at the record whose parser refuses the rest
+  (`deployOn`): `Flock.zk_zkD_ref_on`, `Claims.Flock.ZK` at `RefSession.zkD` at `Flock.zk_zkD_ref`'s `ε_zk` on `A`
+  and `1` outside it (`zkmalR_on`). `RefSession.tapeOKOn_of_tape`: `TapeOKOn A` from the tape read with fibers of one
+  size at each statement in `A`, each table's randomness being read from it so (`fibersEq_tabRand`). With it,
+  **`Flock.zk_deployZk_ref_on`** (and `_gap`) at `zkDeployed`, the tape asked for only as the tables' tape read with
+  fibers of one size on `A`, where `Flock.zk_deployZk_ref`'s `TapeOK` fails at every unbounded table count.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
-  (`swView_outer`).
+  (`swView_outer`). It is the honest prover at the worker's values rectified, which pass the inner constraint at every
+  pad, on a tape moved by a bijection (`swView_sameDist_rect`, `rect_innerHolds`), and Lemma B at such row-satisfying
+  values is `table_shvzk`'s (`vals_shvzk`); each also with real hm96 leaves (`worker_shvzk_hm96`, `vals_shvzk_hm96`).
+* `Switched`: the switched prover at the session's `J` tables: Lemma B at the workers' values there (`zkViewAtJ_sw`),
+  and `SHVZK` against the honest prover's simulator where the prover goes on (`Proto.TabModel.shvzk_sw`).
 * `Server`: the ZK server (`ZkServer`) that releases untrusted workers' values in four kinds (`fixed`, `own`,
   `recomputed`, `masked`), masks added after its checks, on a public schedule. For every worker it releases the
   reference prover's run cut at some round, but with probability the masked checks' errors (`ZkServer.split`), from
@@ -125,6 +140,18 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`stream_leak`). At the worker's own values the split is exact and the checks' errors drop out
   (`ZkServer.split_own`, `ZkServer.zk_server_own`), and a pad-blind worker (`ZkServer.BWorker`) is handed neither the
   server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`).
+* `Blind`: the switched prover at the reference session (`RefSession.swP`, at values `RefSession.SwVals` indexed by what
+  a pad-blind worker sees), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
+  **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZKAt` at the same `ε_zk`, `γ` and simulator as `Flock.zkAt_deployZk_ref`
+  for any values whose round encoding is causal (`RefSession.SwCausal`), `Flock.zkAt_deployZk_ref` its case at the
+  tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server at
+  every pad-blind worker within `D.V.k x + 2` of the guessing simulator, with no term for the masked checks, and at a
+  statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`), at the deployed coin layer with the
+  tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
+* `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled `Flock.Firewall.Frame.round`
+  (`LeanRelease.refMsg_toSrv`, by definition). Its `Ref` is D8 (a)'s `FirewallComputes` plus the item-stream refinement
+  `LeanRelease.ItemsRefine` (`LeanRelease.ref`), so **`Flock.zk_server_lean`** is `Flock.zk_server_ref` at it with
+  those two in place of `hRef`.
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
