@@ -1,8 +1,8 @@
 /* Cooperative dependent squaring chain mod p = 2^W - C across T pinned threads (one per core).
- * The P2 store's internal/efficient-crypto/candidates/p2-coop-cores/coop.c, with threads pinned through $COOP_CPUS.
+ * P2's cooperative-core benchmark, with threads pinned through $COOP_CPUS.
  *
- * Kernel: the campaign's ifma_ps2 (AVX-512 IFMA, radix 2^52, product scanning, squaring symmetry; see
- * ../alt-primitives/p2-latency/bench.c), with its 40 output-block pairs split among T threads by work (the squaring
+ * Kernel: P2's ifma_ps2 (AVX-512 IFMA, radix 2^52, product scanning, squaring symmetry, from its single-core latency
+ * benchmark), with its 40 output-block pairs split among T threads by work (the squaring
  * triangle). Per squaring:
  *   1. thread t computes the column sums S of its output blocks from its private copy of the input (no remote reads);
  *   2. one all-to-all flag barrier (each thread publishes its step number on its own cache line, then spins on the
