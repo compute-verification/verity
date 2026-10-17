@@ -60,12 +60,19 @@ import Proofs.Flock.SamplingBoundary
   (`SamplingDeploy.universalIs_deploy`).
 * `hComplete : Complete H D`: of the record's reference prover (`D.P`) at its error (`D.δc H`); it waits on that
   prover (ruling 4).
-* `hZK : ZK H D Pz S εzk γzk`: the masked sessions' zero knowledge with the leaf layer's simulator, its binding term
-  `γzk` times `Fork`'s collisions among the honest prover's calls in two real runs on one nonce (#2201); no branch
-  proves it yet, so `Pz`, `S`, `εzk` and `γzk` are any.
+* `hZK : ZK H (D.mask Nz Ωz tapeOf S) εzk γzk`: the zero knowledge of the record's reference prover on the masked
+  tapes `tapeOf (ν, r)`, with the leaf layer's simulator `S`, its binding term `γzk` times `Fork`'s collisions among
+  the honest prover's calls in two real runs on one nonce (#2201); `Sampling.ZK` reduces it to a committed-coin
+  protocol's models (`SamplingDeploy.zk_deploy_of_models_gap`).
 -/
 
 namespace Claims.Sampling
+
+/-- **`D` masked**: the record with its reference prover's tape read off a nonce and the rest (`tapeOf`), and the
+simulator `S`. -/
+def Deploy.mask {Coin Col T : Type} (D : Deploy Coin Col T) (Nonce Rest : Type) [Fintype Nonce] [Nonempty Nonce]
+    [Fintype Rest] [Nonempty Rest] (tapeOf : Nonce × Rest → D.Tape) (S : SimLeak) : ZkDeploy Coin Col T :=
+  { toDeploy := D, Nonce := Nonce, Rest := Rest, tapeOf := tapeOf, S := S }
 
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at a deployment whose sessions are Flock's masked verifier**, at every hash: the readable
@@ -85,10 +92,10 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (hprog : ProgramScope D) (hchecks : ChecksScope H D)
     (hopen : OpenCallsLe H D) (huniv : UniversalIs D)
     (hComplete : Complete H D)
-    {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (Pz : Wit → Prover (Nz × Ωz)) (S : SimLeak)
-    (εzk γzk : Msg → ℝ) (hZK : ZK H D Pz S εzk γzk) :
+    {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (tapeOf : Nz × Ωz → D.Tape) (S : SimLeak)
+    (εzk γzk : Msg → ℝ) (hZK : ZK H (D.mask Nz Ωz tapeOf S) εzk γzk) :
     ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ KS H D ∧ KSCount H D ∧ Bits H D ∧
-      Efficient H D FlockDeploy.zkStepPoly ∧ Complete H D ∧ ZK H D Pz S εzk γzk := by
+      Efficient H D FlockDeploy.zkStepPoly ∧ Complete H D ∧ ZK H (D.mask Nz Ωz tapeOf S) εzk γzk := by
   have hbind : Binding D := Binding_of_hm96 D own at_ row salt π layer hcommit hrow
   have hscope : ScopeMatches D := scopeMatches_of D hslots hprog
   have hrefuse : Refuses H D := refuses_of H D hscope hchecks
