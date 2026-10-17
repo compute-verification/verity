@@ -26,8 +26,9 @@
 //   fattn gate DIR S H REP SEED   poisoned buffers. Unfused: h_l7qs a KV head at a time (S stored), hsref, apv.cu's four
 //                                 producers and apv_l7qs. Fused: hm_l7qs (causal; and over all tiles), hsm, lred, uedit,
 //                                 vedit, vsum, apv_fu. Bitwise: hm's receipts against h_l7qs's on every tile it runs, P_prob
-//                                 on every byte apv reads, s_q, z_q, apv_fu's f and receipts against apv_l7qs's; a
-//                                 no-write control; sampled query columns' X, W^, S, P_prob, s_q, z_q to DIR for fattn_ref.py
+//                                 on every byte apv reads, s_q, z_q, apv_fu's f and receipts against apv_l7qs's (and again
+//                                 with vfold for vedit and vsum, from vfold's outputs poisoned); a no-write control; sampled
+//                                 query columns' X, W^, S, P_prob, s_q, z_q to DIR for fattn_ref.py
 //   fattn bench REPS S H REP      hot items interleaved across FA_ARMS, one JSON line
 //   fattn one ARM S H REP         three warm-up calls, then one between cudaProfilerStart and Stop (for ncu)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a fattn.cu -lcuda -lcublasLt -lnvidia-ml
@@ -394,6 +395,8 @@ static void fsm(FA& F) {
 static void flr(FA& F) { lred<<<(F.H * F.s + 255) / 256, 256, 0, F.V.st>>>(F.L, F.E0, F.V.sp, F.V.sz, F.H * F.s); }
 static void fqks(FA& F) { fhm(F, false, F.R); fsm(F); flr(F); }
 static void fpv(FA& F, const Sig& sg) { ued(F.V, sg); ved(F.V, sg); vsm(F.V); aprun(F.V, apv_fu, F.V.R3); }
+// pv with apv.cu's vfold (X, DG, Sq and X(0) in one pass over V) for vedit and vsum
+static void fpv_vf(FA& F, const Sig& sg) { ued(F.V, sg); vfd(F.V, sg); aprun(F.V, apv_fu, F.V.R3); }
 // the unfused QK^T: h_l7qs a KV head at a time, O (= S^T) to S
 static void fhqk(FA& F, uint32_t* R) {
   const size_t nk = (size_t)F.tpk * MLW::NCT * 8, sk = (size_t)F.s * F.rep * F.s;
@@ -409,7 +412,8 @@ static void fsref(FA& F) {
 }
 // an arm: hquant (with hwedit<true>: the QK^T operands), hm (causal), hm_full (every tile), hsm (with L's memset),
 // lred, qks (hm, hsm, lred: QK^T and the softmax, S never stored), pv (uedit, vedit, vsum, apv_fu), attn (the operands,
-// qks and pv under one key), fu (apv_fu alone), hqk (the unfused h_l7qs, S stored)
+// qks and pv under one key), pv_vf and attn_vf (pv's and attn's with vfold for vedit and vsum), fu (apv_fu alone), hqk
+// (the unfused h_l7qs, S stored)
 static std::function<void(FA&)> farm(const std::string& a) {
   if (a == "hquant") return [](FA& F) { fq(F, sigma(F.seed, F.inst++)); };
   if (a == "hm") return [](FA& F) { fhm(F, false, F.R); };
@@ -418,10 +422,15 @@ static std::function<void(FA&)> farm(const std::string& a) {
   if (a == "lred") return [](FA& F) { flr(F); };
   if (a == "qks") return [](FA& F) { fqks(F); };
   if (a == "pv") return [](FA& F) { fpv(F, sigma(F.seed, F.inst++)); };
+  if (a == "pv_vf") return [](FA& F) { fpv_vf(F, sigma(F.seed, F.inst++)); };
   if (a == "fu") return [](FA& F) { aprun(F.V, apv_fu, F.V.R3); };
   if (a == "attn") return [](FA& F) {
     const Sig sg = sigma(F.seed, F.inst++);
     fq(F, sg); fqks(F); fpv(F, sg);
+  };
+  if (a == "attn_vf") return [](FA& F) {
+    const Sig sg = sigma(F.seed, F.inst++);
+    fq(F, sg); fqks(F); fpv_vf(F, sg);
   };
   if (a == "hqk") return [](FA& F) {
     if (!F.S) { fprintf(stderr, "hqk needs FA_UNF=1\n"); exit(2); }
@@ -493,7 +502,17 @@ static int fagate(const std::string& dir, int s, int H, int rep, uint32_t seed) 
   CK(cudaGetLastError());
   const unsigned long long r_bad = rbad(F.R, F.tabc, F.ntc), p_bad = pbad(), sp_bad = apbad(V, V.sp, spr, qr),
                            sz_bad = apbad(V, V.sz, szr, qr), f_bad = apbad(V, V.F, V.Fr, fw), pr_bad = apbad(V, V.R3, Rr, rw);
-  const bool ok = full_r == 0 && r_bad == 0 && p_bad == 0 && sp_bad == 0 && sz_bad == 0 && f_bad == 0 && pr_bad == 0;
+  // pv_vf from vfold's outputs and its own poisoned: f and receipts against the reference's
+  const size_t vb = (size_t)V.kvh * 128 * s, dgb = (size_t)V.kvh * V.nJ * 128 * 128, sqb = (size_t)V.kvh * V.nJ * 128 * 4,
+               x0b = (size_t)V.kvh * 128 * 4;
+  for (auto [p, b] : {std::pair<void*, size_t>{V.Xt, vb}, {V.DG, dgb}, {V.Sq, sqb}, {V.X0, x0b}, {V.F, fw * 4}, {V.R3, rw * 4}})
+    CK(cudaMemsetAsync(p, 0xA5, b, V.st));
+  fpv_vf(F, sg);
+  CK(cudaStreamSynchronize(V.st));
+  CK(cudaGetLastError());
+  const unsigned long long vf_f_bad = apbad(V, V.F, V.Fr, fw), vf_r_bad = apbad(V, V.R3, Rr, rw);
+  const bool ok = full_r == 0 && r_bad == 0 && p_bad == 0 && sp_bad == 0 && sz_bad == 0 && f_bad == 0 && pr_bad == 0 && vf_f_bad == 0 &&
+                  vf_r_bad == 0;
   // sampled query columns for fattn_ref.py: KV heads 0 and kvh - 1, X whole, and each sampled query's W^ row, S column
   // (h_l7qs's), P_prob row, s_q and z_q (the fused path's, equal to the reference's when ok), e(0) and m
   std::vector<int> ks = {0};
@@ -527,15 +546,16 @@ static int fagate(const std::string& dir, int s, int H, int rep, uint32_t seed) 
   FILE* fp = fopen((dir + "/meta.json").c_str(), "w");
   fprintf(fp, "{\"s\": %d, \"H\": %d, \"rep\": %d, \"seed\": %u, \"A\": %u, \"ntiles_causal\": %d, \"ntiles_full\": %d, "
               "\"cols\": [%s], \"lut\": [%s], \"device\": {\"hm_full_r_bad\": %llu, \"hm_r_bad\": %llu, \"p_bad\": %llu, "
-              "\"sp_bad\": %llu, \"sz_bad\": %llu, \"f_bad\": %llu, \"pv_r_bad\": %llu}, \"control\": [%llu, %llu, %llu, %llu, "
-              "%llu, %llu], \"device_ok\": %s, \"control_rejected\": %s}\n",
-          s, H, rep, seed, F.A, F.ntc, F.ntf, cj.c_str(), lj.c_str(), full_r, r_bad, p_bad, sp_bad, sz_bad, f_bad, pr_bad, c_r, c_p,
-          c_sp, c_sz, c_f, c_pr, ok ? "true" : "false", control_rejected ? "true" : "false");
+              "\"sp_bad\": %llu, \"sz_bad\": %llu, \"f_bad\": %llu, \"pv_r_bad\": %llu, \"pv_vf_f_bad\": %llu, \"pv_vf_r_bad\": %llu}, "
+              "\"control\": [%llu, %llu, %llu, %llu, %llu, %llu], \"device_ok\": %s, \"control_rejected\": %s}\n",
+          s, H, rep, seed, F.A, F.ntc, F.ntf, cj.c_str(), lj.c_str(), full_r, r_bad, p_bad, sp_bad, sz_bad, f_bad, pr_bad, vf_f_bad, vf_r_bad,
+          c_r, c_p, c_sp, c_sz, c_f, c_pr, ok ? "true" : "false", control_rejected ? "true" : "false");
   fclose(fp);
   printf("{\"gate\": \"%s\", \"s\": %d, \"H\": %d, \"rep\": %d, \"device_ok\": %s, \"control_rejected\": %s, \"hm_full_r_bad\": %llu, "
-         "\"hm_r_bad\": %llu, \"p_bad\": %llu, \"sp_bad\": %llu, \"sz_bad\": %llu, \"f_bad\": %llu, \"pv_r_bad\": %llu}\n",
+         "\"hm_r_bad\": %llu, \"p_bad\": %llu, \"sp_bad\": %llu, \"sz_bad\": %llu, \"f_bad\": %llu, \"pv_r_bad\": %llu, "
+         "\"pv_vf_f_bad\": %llu, \"pv_vf_r_bad\": %llu}\n",
          dir.c_str(), s, H, rep, ok ? "true" : "false", control_rejected ? "true" : "false", full_r, r_bad, p_bad, sp_bad, sz_bad, f_bad,
-         pr_bad);
+         pr_bad, vf_f_bad, vf_r_bad);
   for (void* p : {(void*)Pr, (void*)spr, (void*)szr, (void*)Rr}) CK(cudaFree(p));
   fafree(F);
   return ok && control_rejected ? 0 : 1;
