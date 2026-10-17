@@ -13,12 +13,13 @@ namespace Flock.Guarantees
 
 /-- **The recursion's claims are stated**: the tuple of the compiled verifier's claims (`KS`, `Bits`, `Efficient`,
 `Complete`, `ScopeMatches`, `ZK`, `Nontrivial`), the private variant's (`KSPriv`, `ZKPriv`), the claims at Flock as the
-inner protocol (`KSFlock`, `BitsFlock`) and the inner protocol's own `KS` that the proof reads, equal to itself. -/
+inner protocol (`KSFlock`, `BitsFlock`) and the inner protocol's KS against provers that may abort (`Inner.KSAbort`),
+which the proof reads, equal to itself. -/
 def RecursionClaimsStated : Prop :=
   let claims := (@Claims.Recursion.KS, @Claims.Recursion.Bits, @Claims.Recursion.Efficient,
     @Claims.Recursion.Complete, @Claims.Recursion.ScopeMatches, @Claims.Recursion.ZK, @Claims.Recursion.Nontrivial,
     @Claims.Recursion.KSPriv, @Claims.Recursion.ZKPriv, @Claims.Recursion.KSFlock, @Claims.Recursion.BitsFlock,
-    @Claims.Recursion.Inner.KS)
+    @Claims.Recursion.Inner.KSAbort)
   claims = claims
 
 end Flock.Guarantees
