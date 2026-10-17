@@ -168,6 +168,110 @@ theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
           exact_mod_cast (Partition.sum_card_gates P).symm]
         ring
 
+/-- Weights are incompressible when each weight is a novel input gate and every weight and thread value is at least
+`b` bits wide: a subcircuit reads every weight it uses, and those reads are disjoint from its thread reads. -/
+theorem weightsIncompressible_of_inputs {c : Declaration} (T : Threading c) (Γ : ℕ) (S b : ℝ)
+    (hW : ∀ g ∈ T.W, c.D.isInput g = true ∧ g ∉ c.θ ∧ b ≤ c.D.w g)
+    (hthread : ∀ g t, T.thread g = some t → b ≤ c.D.w g) :
+    Assumptions.WeightsIncompressible c T Γ S b := by
+  classical
+  intro R hR
+  set V := univ.biUnion fun t => T.threadReads R t
+  have hU : T.weightsUsed R ⊆ c.D.into R \ c.θ := by
+    intro g hg
+    obtain ⟨m, hm, rfl⟩ := mem_image.1 hg
+    have hmM := (mem_inter.1 hm).1
+    obtain ⟨hin, hθ, _⟩ := hW _ (T.weight_W m hmM)
+    refine mem_sdiff.2 ⟨?_, hθ⟩
+    simp only [Circuit.into, mem_filter, mem_univ, true_and]
+    refine ⟨fun h => ?_, m, (mem_inter.1 hm).2, T.weight_reads m hmM⟩
+    have := (mem_filter.1 (hR.1 h)).2
+    rw [hin] at this
+    cases this
+  have hV : V ⊆ c.D.into R \ c.θ := biUnion_subset.2 fun t _ => filter_subset _ _
+  have hUV : Disjoint (T.weightsUsed R) V := disjoint_left.2 fun g hg hgV => by
+    obtain ⟨m, hm, rfl⟩ := mem_image.1 hg
+    obtain ⟨t, _, ht⟩ := mem_biUnion.1 hgV
+    have := (mem_filter.1 ht).2
+    rw [T.thread_W _ (T.weight_W m (mem_inter.1 hm).1)] at this
+    cases this
+  have hdisj : ∀ t ∈ (univ : Finset (Fin T.m)), ∀ s ∈ (univ : Finset (Fin T.m)), t ≠ s →
+      Disjoint (T.threadReads R t) (T.threadReads R s) := fun t _ s _ hts =>
+    disjoint_left.2 fun g ht hs => hts (Option.some_injective _
+      ((mem_filter.1 ht).2.symm.trans (mem_filter.1 hs).2))
+  have hle : ∑ g ∈ T.weightsUsed R ∪ V, (c.D.w g : ℝ) ≤ novelReads c R := by
+    unfold novelReads Circuit.width
+    push_cast
+    exact sum_le_sum_of_subset_of_nonneg (union_subset hU hV) fun _ _ _ => Nat.cast_nonneg _
+  rw [sum_union hUV, sum_biUnion hdisj] at hle
+  refine le_trans ?_ hle
+  refine add_le_add ?_ ?_
+  · rw [mul_comm, ← nsmul_eq_mul]
+    exact card_nsmul_le_sum _ _ _ fun g hg => by
+      obtain ⟨m, hm, rfl⟩ := mem_image.1 hg
+      exact (hW _ (T.weight_W m (mem_inter.1 hm).1)).2.2
+  · push_cast
+    rw [mul_sum]
+    refine sum_le_sum fun t _ => ?_
+    rw [mul_comm, ← nsmul_eq_mul]
+    exact card_nsmul_le_sum _ _ _ fun g hg => hthread g t (mem_filter.1 hg).2
+
+/-- A subcircuit that holds a value of thread `t` reads a novel value of thread `t`, when every computed value of a
+thread reads a value of the same thread and no thread value is baseline. -/
+theorem threadReads_nonempty {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) (hR : R ⊆ c.D.computed)
+    (hθ : ∀ g t, T.thread g = some t → g ∉ c.θ)
+    (hclosed : ∀ h t, c.D.isInput h = false → T.thread h = some t → ∃ g ∈ c.D.reads h, T.thread g = some t)
+    (t : Fin T.m) : ∀ a, a ∈ R → T.thread a = some t → (T.threadReads R t).Nonempty := by
+  intro a
+  induction a using WellFoundedLT.induction with
+  | _ a ih =>
+    intro haR hat
+    have hcomp : c.D.isInput a = false := (mem_filter.1 (hR haR)).2
+    obtain ⟨g, hg, hgt⟩ := hclosed a t hcomp hat
+    by_cases hgR : g ∈ R
+    · exact ih g (c.D.reads_lt a g hg) hgR hgt
+    · refine ⟨g, mem_filter.2 ⟨mem_sdiff.2 ⟨?_, hθ g t hgt⟩, hgt⟩⟩
+      simp only [Circuit.into, mem_filter, mem_univ, true_and]
+      exact ⟨hgR, a, haR, hg⟩
+
+/-- **`(1, 0)`-threaded from thread closure** (the draft's weakest case): when every computed value of a thread reads a
+value of the same thread and no thread value is baseline, a subcircuit does none of a thread's counted multiplications
+without reading a novel value of that thread. -/
+theorem threaded_one_zero {c : Declaration} (T : Threading c) (Γ : ℕ) (S : ℝ)
+    (hθ : ∀ g t, T.thread g = some t → g ∉ c.θ)
+    (hclosed : ∀ h t, c.D.isInput h = false → T.thread h = some t → ∃ g ∈ c.D.reads h, T.thread g = some t) :
+    T.Threaded Γ S 1 0 := by
+  intro R hR t hlt
+  rw [Nat.lt_one_iff, card_eq_zero] at hlt
+  rw [hlt, card_empty, mul_zero, Nat.le_zero, card_eq_zero]
+  refine eq_empty_of_forall_notMem fun m hm => ?_
+  rw [Threading.threadMults, mem_filter, Threading.mults, mem_inter] at hm
+  obtain ⟨⟨hmM, hmR⟩, hmt⟩ := hm
+  have ha := T.act_reads m hmM
+  by_cases haR : T.act m ∈ R
+  · obtain ⟨g, hg⟩ := threadReads_nonempty T R hR.1 hθ hclosed t _ haR hmt
+    rw [hlt] at hg
+    exact notMem_empty g hg
+  · have : T.act m ∈ T.threadReads R t := by
+      refine mem_filter.2 ⟨mem_sdiff.2 ⟨?_, hθ _ t hmt⟩, hmt⟩
+      simp only [Circuit.into, mem_filter, mem_univ, true_and]
+      exact ⟨haR, m, hmR, ha⟩
+    rw [hlt] at this
+    exact notMem_empty _ this
+
+/-- **Theorem 1 from structure alone**: when weights are novel input gates, threads are closed and no thread value is
+baseline, with every weight and thread value at least `b` bits wide, every small subcircuit computes at most
+`c · S / (4b)` counted multiplications per `b` bits it reads, with no named assumption: an NCI floor of `2b² / (cS)`. -/
+theorem threaded_reads_of_structure {c : Declaration} (T : Threading c) (Γ : ℕ) (S b : ℝ) (hb : 0 < b)
+    (hW : ∀ g ∈ T.W, c.D.isInput g = true ∧ g ∉ c.θ ∧ b ≤ c.D.w g)
+    (hthread : ∀ g t, T.thread g = some t → b ≤ c.D.w g)
+    (hθ : ∀ g t, T.thread g = some t → g ∉ c.θ)
+    (hclosed : ∀ h t, c.D.isInput h = false → T.thread h = some t → ∃ g ∈ c.D.reads h, T.thread g = some t)
+    (R : Finset (Fin c.D.N)) (hR : Small c Γ S R) :
+    b * (T.mults R).card ≤ novelReads c R * T.bound S b 1 0 :=
+  threaded_reads c T Γ S b 1 0 hb one_pos (threaded_one_zero T Γ S hθ hclosed)
+    (weightsIncompressible_of_inputs T Γ S b hW hthread) R hR
+
 /-- **Training is slowed** (the thread draft, "Putting the two together"). -/
 theorem ThreadedTraining : Guarantees.ThreadedTraining := by
   intro Γ α b κ c d T dd e hα hb hdd hc hd hT hW hκ
