@@ -376,9 +376,10 @@ def _cuda_available() -> bool:
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
         target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None,
-        engine_args: dict | None = None) -> dict:
+        engine_args: dict | None = None, device_name: str | None = None) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
-    the row's engine arguments the meta config takes (`workload_engine_args`)."""
+    the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
+    reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
     t_start = time.time()
@@ -432,7 +433,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
         res["sampling"] = sampling
         if res_target_source == "declared":   # the declared target decides the platform, not the host's NVML (a GPU-free Build host has none)
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
-            print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp)}", file=sys.stderr)
+            print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp, device_name)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                    tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args)
     except _Refused:
@@ -773,11 +774,12 @@ def main(a: Options) -> int:
         from verity_vllm.program.frontend.target_profile import parse_target_arg
         from verity_vllm.program.frontend.targets import parse_launch_context
         from verity_vllm.pipeline.tp.emit_ranks import parse_ranks
+        from verity_vllm.engine.profiles.devices import device_name
         emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
                   tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_max_seqlen_q), emit=emit,
-                  engine_args=workload_engine_args(a.workload, a.tp))
+                  engine_args=workload_engine_args(a.workload, a.tp), device_name=device_name(a.workload))
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)
