@@ -584,7 +584,7 @@ kept as an early tripwire).
 | the frame skeleton: domain, every label, each item's op, kind and length, every round's coin count | constant | a function of the statement's shape; the firewall refuses any other label or item |
 | statement digest (`bind_statement`) | constant | the digest of the statement the firewall loaded |
 | witness cap: `Commit`'s root, `bind_statement`'s cap, Ligerito level 0's `bytes cap` | recomputed | the level-0 recheck (§10.2): `commit_zk` of the host witness under the session's level-0 salts and hiding |
-| pads label and root | the firewall's own | the masking challenger inserts them |
+| pads label and root | the firewall's own | the Lean frame inserts them after the zerocheck's label |
 | masked algebraic values: `round1_ab'`, `round1_c'`, `G_j`, `final_a'`, `final_b'`, `q_j`, `z_partial'` | masked | the wire carries `v + h` with `h` uniform and host-only, so it is uniform whatever `v` is. `v` enters the view only through §4's rows, which the self-check holds before anything that depends on them leaves (§5); a `v` that breaks a row stops the session |
 | `final_c'` | the firewall's own | the inner proof sends it, from the host |
 | `s_hat_v` of the masked claims (ab, c) | recomputed | `Σ_x eq(p_w, x) z[128x + v]` over the host witness (§6); the claim points are coins |
@@ -674,6 +674,16 @@ each item's op, kind and length, the coin counts). At the end the returned proof
 zerocheck and lincheck vector's length), the replay of the values the firewall passed must give the proof's exposed values, and
 the zerocheck and lincheck that leave are rebuilt from the passed values (`zk_veil::from_exposed`), as the opening that leaves
 is the shadow's: nothing of the device's returned proof leaves.
+
+Every round that leaves is computed in Lean. Each rep runs one `flock-firewall frame` process (`Flock.Firewall.Frame` in the
+Lean verifier, `firewall::LeanFrame`; `FC_FIREWALL_LEAN` names the binary, by default the Lean verifier's build in the
+checkout, and the firewall refuses to start a rep without it). It takes each round the firewall passed, the device's frames
+with their values unmasked, and returns the round that leaves: the pads' label and root after the zerocheck's label, each
+value absorbed in a masked phase as `v + h_i` under the next pad of `Layout::absorbed`'s order, everything else as framed,
+and no domain frame. The masking challenger still runs as the speed reference. Its inner challenger (`firewall::Gate`) frames
+what it would send, holds that to the Lean round byte for byte, refuses on any difference, and hands the stream only the
+Lean round. At the rep's end the Lean frame must have closed every masked phase with every pad of the layout used. The
+`final_c'`, inner proof, recheck and shadow opening are still Rust's (`FirewallComputes`).
 
 In a session of several tables each table has a firewall of its own in turn: its salt context, recheck, skeleton and shadow,
 one table's ending before the next table's begins. A later table's level-0 root leaves in table 0's `Commit`, before any
