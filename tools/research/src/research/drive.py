@@ -388,6 +388,8 @@ class Driver:
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
         self.repo, self.dry_run, self._seen, self._prs = q.workdir, False, {}, None
         self._drive: dict | None = None
+        self._locks: set[int] | None = None
+        self._lock: int | None = None
         q.warming = self.warming
 
     # -- what the store says of a commit
@@ -728,7 +730,12 @@ class Driver:
         head's pre-warm, one recorded check of that head (`prewarm`), hasn't ended.  Its passes then reach the trains it joins,
         which run warm, and no warm PR waits hours on it above it (16 Oct: #2158 and #2199, each at the bottom of `next`, made
         every train above them cold, until a lander held them by hand)."""
-        if self._drive is None or "circuit-check" in self.defer:      # deferred, a cold circuit-check holds no landing up
+        if self._drive is None:
+            return None
+        if (lock := self._lock_turn()) is not None and p.number in self._locks and p.number != lock:
+            return (f"waiting: a PR that changes a Lean lock (`lean-audit.json`) joins `{self.q.branch}` one at a time, and #{lock} "
+                    f"goes first; rebase and `check.py --update` after it lands")
+        if "circuit-check" in self.defer:                              # deferred, a cold circuit-check holds no landing up
             return None
         pw, key = self._drive.setdefault("prewarm", {}), f"{p.number}@{p.head}"
         if (rec := pw.get(key)) is None:
@@ -740,6 +747,21 @@ class Driver:
         ids = rec.get("ids")
         return (f"pre-warming its circuit-check off `{self.q.branch}`: " + (f"{' '.join(ids)} of {p.head[:12]}" if ids else
                 "its check of the head launches when a check slot frees") + "; it joins once that check ends")
+
+    def _lock_turn(self) -> int | None:
+        """The one lock-changing PR (its change touches a `lean-audit.json`) that may be on `next` now: the lowest one already on
+        it, else the lowest-numbered ready one (17 Oct: #2239, #2304, #2309, #2321 and #2305 in one train each regenerated lock
+        records against their own base, and the train's audit matched none of them)."""
+        if self._locks is None:
+            locks = set()
+            for p in self.q.github.open_prs():
+                r = _git(self.repo, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{p.number}", check=False)
+                if r.returncode == 0 and any(f.endswith("lean-audit.json") for f in r.stdout.split()) and self.q.ready(p.number, p.head):
+                    locks.add(p.number)
+            self._locks = locks
+            on = [m.pr for m in self.q.chain() if m.pr in locks]
+            self._lock = on[0] if on else min(locks, default=None)
+        return self._lock
 
     def prewarm(self, drive: dict, running: int) -> int:
         """Launch and follow each pre-warm `warming` asked for (one `train.sh` check of the PR's head, in a check slot, while fewer
@@ -783,7 +805,7 @@ class Driver:
 
     def tick(self, dry_run: bool = False) -> str:
         q = self.q
-        self.dry_run, self._seen, self._prs = dry_run, {}, None
+        self.dry_run, self._seen, self._prs, self._locks = dry_run, {}, None, None
         q._clone()
         q.fetch()
         if q.store is not None and q.store.remote is not None:
