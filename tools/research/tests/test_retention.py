@@ -504,7 +504,7 @@ def test_keep_refuses_a_bad_owner_and_a_bad_expiry_and_report_prints_a_table(tmp
     assert research_main(["keep", str(d), "--owner", "pouw", "--expires", "never", "--priority", "low", "--root", str(tmp_path)]) == 2
     assert "lane handle" in capsys.readouterr().err
     assert research_main(["keep", str(d), "--owner", "@pouw", "--expires", "soon", "--priority", "low", "--root", str(tmp_path)]) == 2
-    assert "give never, a date" in capsys.readouterr().err and not (d / R.SIDECAR).exists()
+    assert "give never, now, a date" in capsys.readouterr().err and not (d / R.SIDECAR).exists()
     assert research_main(["keep", str(d), "--owner", "@pouw", "--expires", "7d", "--priority", "low", "--root", str(tmp_path)]) == 0
     assert R.load(d)["expires"] == "2026-10-08T19:30:00Z"
     data(tmp_path, "cache/uv")
