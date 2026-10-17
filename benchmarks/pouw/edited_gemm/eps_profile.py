@@ -1,8 +1,8 @@
-"""run.sh EG_SET=eps1's (or eps1lag's) profile against the machine model: per arm and shape, ncu's executed SASS
-instructions a MMA by census class, the bound max_r sum_k n_k u_kr (SMSP-cycles a MMA, the model's time for that mix)
-with its binding row, the measured cycles a MMA (the hot bench's, and ncu's one call), eps_sched = 1 - bound /
-measured, issue, tensor and every pipe's utilization and the stall reasons; the fold-cost sweep's table; and the
-profiles as TOML for `machine-model eps`.
+"""run.sh EG_SET=eps1's (or eps1lag's, eps1sleep's, eps1wave's) profile against the machine model: per arm and shape
+(each shape's m, n, k from its gate's meta), ncu's executed SASS instructions a MMA by census class, the bound
+max_r sum_k n_k u_kr (SMSP-cycles a MMA, the model's time for that mix) with its binding row, the measured cycles a
+MMA (the hot bench's, and ncu's one call), eps_sched = 1 - bound / measured, issue, tensor and every pipe's utilization
+and the stall reasons; the fold-cost sweep's table; and the profiles as TOML for `machine-model eps`.
 
     python3 eps_profile.py OUT_DIR --mm MACHINE_MODEL_DIR [--epoch VF3l-16] [--json PATH] [--toml PATH] [--toml-arms A,B]
 
@@ -241,6 +241,19 @@ def bench(o: Path) -> dict[tuple[int, int, int], dict]:
     return out
 
 
+def run_shapes(o: Path, names: set[str]) -> dict[str, tuple[int, int, int]]:
+    """Each profiled shape's (m, n, k) by its name in run.sh, from the gate's meta (gate_NAME_meta.json), else SHAPES."""
+    out = {}
+    for name in ["o"] + sorted(names - {"o"}):
+        meta = o / f"gate_{name}_meta.json"
+        if meta.exists():
+            g = json.loads(meta.read_text())
+            out[name] = (g["m"], g["n"], g["k"])
+        elif name in SHAPES:
+            out[name] = SHAPES[name]
+    return out
+
+
 def f(x, d=3):
     return "" if x is None or x != x else f"{x:.{d}f}"
 
@@ -268,8 +281,9 @@ def main() -> int:
         if r:
             res[name] = r
     hot = bench(a.out)
+    shapes = run_shapes(a.out, {n.split("-", 1)[0] for n in res})
     print(f"# EPS1 PROFILE: the edited GEMM against the machine model ({a.out.name}, epoch {epoch})\n")
-    for sh, shape in SHAPES.items():
+    for sh, shape in shapes.items():
         arms = hot.get(shape, {})
         pl, ep = arms.get("plain", {}).get("ms"), arms.get("e_plain", {}).get("ms")
         print(f"## {sh} = {shape[0]} x {shape[1]} x {shape[2]}\n")
@@ -333,7 +347,7 @@ def main() -> int:
                  "# WAIT: the mbarrier retry loop (YIELD or NANOSLEEP, TRYWAIT, BRA), NOROW-priced in bound, left out of "
                  "work_bound; "
                  "measured: the hot median at its clock", f'run_dir = "{a.out.parent.name}"', ""]
-        for sh, shape in SHAPES.items():
+        for sh, shape in shapes.items():
             for arm in a.toml_arms.split(","):
                 r = res.get(f"{sh}-{arm}")
                 if not r:
