@@ -123,6 +123,8 @@ import Proofs.Flock.Claims.ZK.Compose
   where one has an honest pair (`not_forall_samplingZK`).
 * `Compose`: sequential composition. Two protocols in turn, the second at a statement the first's history selects
   (`Seq`), are `ZKmalR` under the simulator that runs the first's, then the second's at the unit its transcript selects
-  (**`zkmalR_seq`**): `ε` and `γ` add up, the hybrid that changes the second keeping the first real and giving `V*` its
-  messages as tape, and the composed tape (`forkTape`) guesses which session's `Fork` to charge (`Seq.fork_ge`).
+  (**`zkmalR_seqU`**, with one coin type for the second at every unit, so units need not be finitely many;
+  **`zkmalR_seq`** for finitely many): `ε` and `γ` add up, the hybrid that changes the second keeping the first real
+  and giving `V*` its messages as tape, and the composed tape (`forkTape`) guesses which session's `Fork` to charge
+  (`Seq.fork_ge`).
 -/

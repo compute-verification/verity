@@ -5,10 +5,12 @@ import Proofs.Flock.Claims.ZK.Rewind
 # Sequential composition of `ZKmalR`
 
 Two protocols run in turn: `A` at the statement `x`, then `B` at a statement `Seq.xB x u` that a selection `u`, read
-from `A`'s history, picks among finitely many. `zkmalR_seq` proves the composed protocol `ZKmalR` from `A`'s and `B`'s
+from `A`'s history, picks. `zkmalR_seqU` proves the composed protocol `ZKmalR` from `A`'s and from `B`'s at each unit
+(`ZKmalAt`), with one coin type for `B`'s simulator at every unit, so the units need not be finitely many
 (Goldreich–Oren's sequential composition, with the hybrids in Wee's order): the hybrid that changes `B` keeps `A` real,
 so `B`'s `Fork` is charged against a verifier whose tape is `A`'s real run, and the one that changes `A` runs `B`'s
-simulator after it, a function of `A`'s transcript and fresh coins.
+simulator after it, a function of `A`'s transcript and fresh coins. `zkmalR_seq` is its corollary for finitely many
+units and `B` one `ZKmalR` protocol, whose simulator draws coins for every unit.
 
 The composed tape is `forkTape a`: a guess `j < a + 1`, both nonces, and two rests for `A`, of which `A` reads the
 second when `j < a` and the first when `j = a`. `Fork` then shares `A`'s run at `j = a`, so its collision is `B`'s at
@@ -105,18 +107,14 @@ theorem runStar_comap {Ω Ω' Θ : Type} (H : Msg → Msg) (P : Prover Ω) (f : 
 /-! ## Two protocols in turn -/
 
 /-- **Two protocols in turn**: `A` for `kA x` rounds at `x`, then `B` at the statement `xB x u` with witness
-`wB w ωA x u`, where `u`, one of finitely many, is read from `A`'s history (`sel`), and `B`'s witness may read `A`'s
-tape `ωA` (the salts of what `A` committed, which `B` opens). -/
+`wB w ωA x u`, where the unit `u` is read from `A`'s history (`sel`), and `B`'s witness may read `A`'s tape `ωA` (the
+salts of what `A` committed, which `B` opens). -/
 structure Seq (WA WB TA : Type) where
   kA : Msg → ℕ
   U : Msg → Type
-  [finU : ∀ x, Fintype (U x)]
-  [decU : ∀ x, DecidableEq (U x)]
   sel : (x : Msg) → List (Msg × Msg) → U x
   xB : (x : Msg) → U x → Msg
   wB : WA → TA → (x : Msg) → U x → WB
-
-attribute [instance] Seq.finU Seq.decU
 
 /-- The composed prover: `A`'s on its tape for `A`'s rounds, then `B`'s on its own, after `A`'s history. -/
 def Seq.prover {WA WB ΩA ΩB : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB) (w : WA) :
@@ -144,24 +142,36 @@ theorem spUnder_eval {α : Type} (H : Msg → Msg) (ask : List Msg → Out) (pre
   | .hash q k => by simp only [spUnder, SP.eval, spUnder_eval H ask pre (k (H q))]
   | .ask as k => by simp only [spUnder, SP.eval, spUnder_eval H ask pre (k (ask (pre ++ as)))]
 
-/-- **The composed simulator**: `A`'s, then, where its transcript goes on, `B`'s at the unit that transcript selects,
-asking `V*` after `A`'s messages. Its coins are `A`'s and `B`'s at every unit. -/
-def Seq.sim {WA WB TA : Type} (Q : Seq WA WB TA) (SA SB : Simulator) : Simulator where
-  C x := SA.C x × ((u : Q.U x) → SB.C (Q.xB x u))
+/-- A simulator program's transcript against `V*` at `θ`. -/
+def spOut {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (p : SP (List (Msg × Out))) :
+    List (Msg × Out) :=
+  (p.eval H fun as => ((Vs.next x as θ).eval H).1).1
+
+/-- **The composed simulator**: `A`'s, then, where its transcript goes on, `B`'s program at the unit that transcript
+selects (`progB`), asking `V*` after `A`'s messages. `B`'s coins are one type `CB x` for every unit. -/
+def Seq.simU {WA WB TA : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type) [∀ x, Fintype (CB x)]
+    [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out))) : Simulator where
+  C x := SA.C x × CB x
   prog x c := spBind (SA.prog x c.1) fun τA =>
     if goesOn (Q.kA x) τA then
-      spBind (spUnder (τA.map Prod.fst) (SB.prog (Q.xB x (Q.sel x (histOf τA))) (c.2 (Q.sel x (histOf τA)))))
-        fun τB => .ret (τA ++ τB)
+      spBind (spUnder (τA.map Prod.fst) (progB x (Q.sel x (histOf τA)) c.2)) fun τB => .ret (τA ++ τB)
     else .ret τA
 
-theorem Seq.sim_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA SB : Simulator) (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ)
-    (x : Msg) (kB : Msg → ℕ) (c : (Q.sim SA SB).C x) :
-    (Q.sim SA SB).out H Vs θ x c =
+/-- **The composed simulator at `B`'s simulator**, where the units are finitely many: `B`'s coins are `SB`'s at every
+unit. -/
+def Seq.sim {WA WB TA : Type} (Q : Seq WA WB TA) [∀ x, Fintype (Q.U x)] [∀ x, DecidableEq (Q.U x)]
+    (SA SB : Simulator) : Simulator :=
+  Q.simU SA (fun x => (u : Q.U x) → SB.C (Q.xB x u)) fun x u c => SB.prog (Q.xB x u) (c u)
+
+theorem Seq.simU_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type)
+    [∀ x, Fintype (CB x)] [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out)))
+    (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB : Msg → ℕ) (c : (Q.simU SA CB progB).C x) :
+    (Q.simU SA CB progB).out H Vs θ x c =
       cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x c.1)
-        (SB.out H (Vs.after x kB) (θ, (SA.out H (Vs.head Q.kA) θ x c.1).map Prod.fst)
+        (spOut H (Vs.after x kB) (θ, (SA.out H (Vs.head Q.kA) θ x c.1).map Prod.fst)
           (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))))
-          (c.2 (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))))) := by
-  simp only [Simulator.out, Seq.sim, spBind_eval, cont, VStar.head, VStar.after]
+          (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))) c.2)) := by
+  simp only [Simulator.out, Seq.simU, spBind_eval, cont, VStar.head, VStar.after, spOut]
   by_cases hg : goesOn (Q.kA x) (SP.eval H (fun as => ((Vs.next x as θ).eval H).1) (SA.prog x c.1)).1 = true
   · simp only [hg, ite_true, spBind_eval, spUnder_eval, SP.eval]
   · simp only [hg, ite_false, Bool.false_eq_true, SP.eval]
@@ -485,15 +495,104 @@ theorem abs_sub_le_hybrid {TA TB CA CB : Type} [Fintype TA] [Fintype TB] [Fintyp
     exact (Ex_abs_sub_le (b := fun _ => d) hA).trans (Ex_const d).le
   exact (abs_sub_le _ _ _).trans (add_le_add h1 h2)
 
+/-- **`ZKmalR` at one statement `x`**, at a simulator given there by its coins `C` and its program `prog`. -/
+def ZKmalAt {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (k : ℕ)
+    (P : W → Prover (N × Ω)) (R : W → Prop) (x : Msg) (C : Type) [Fintype C] (prog : C → SP (List (Msg × Out)))
+    (ε γ : ℝ) : Prop :=
+  ∀ w, R w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k → ∀ Ev : List (Msg × Out) → Prop,
+    |Pr (fun ω : N × Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : C => Ev (spOut H Vs θ x (prog c)))| ≤
+      ε + γ * (Fork H (P w) Vs θ x).Pr H
+
+theorem zkmalR_iff_at {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
+    (k : Msg → ℕ) (P : W → Prover (N × Ω)) (R : Rel W) (S : Simulator) (εzk γ : Msg → ℝ) :
+    ZKmalR H k P R S εzk γ ↔ ∀ x, ZKmalAt H (k x) P (R x) x (S.C x) (S.prog x) (εzk x) (γ x) :=
+  Iff.rfl
+
 /-- **Sequential composition of `ZKmalR`.** `A` then `B` at the unit `A`'s history selects is `ZKmalR` with the
-simulator that runs `SA`, then `SB` at that unit with fresh coins: `ε` adds up, with `B`'s at its worst unit (`eB`),
-and so does `γ` (`γ_A ≤ a·g`, `γ_B ≤ g` at every unit), to `(a + 1)·g` against the composed `Fork`. The composed
-tape is `forkTape a`. `B`'s hybrid keeps `A` real and gives `V*` `A`'s messages as its tape (`Vs.after`): `B`'s
-`ZKmalR` is against every tape, chosen after `H`, at the witness `A`'s tape gives, where `B`'s relation holds
-(`RelOn`). `A`'s runs `SB` after `A`'s transcript, a function of that transcript and coins independent of `A`'s. -/
+simulator that runs `SA`, then `B`'s program at that unit on coins of their own (`simU`): `ε` adds up, with `B`'s at
+every unit at most `eB`, and so does `γ` (`γ_A ≤ a·g`, `γ_B ≤ g` at every unit), to `(a + 1)·g` against the composed
+`Fork`. The composed tape is `forkTape a`. `B`'s hybrid keeps `A` real and gives `V*` `A`'s messages as its tape
+(`Vs.after`): `B`'s zero knowledge is against every tape, chosen after `H`, at the witness `A`'s tape gives, where
+`B`'s relation holds (`RelOn`). `A`'s runs `B`'s program after `A`'s transcript, a function of that transcript and
+coins independent of `A`'s. The units need not be finitely many. -/
+theorem zkmalR_seqU {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
+    [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
+    (Q : Seq WA WB (NA × ΩA)) (H : Msg → Msg) (nB : Msg → ℕ)
+    (PA : WA → Prover (NA × ΩA)) (PB : WB → Prover (NB × ΩB)) (RA : Rel WA) (RB : Rel WB) (SA : Simulator)
+    (CB : Msg → Type) [∀ x, Fintype (CB x)] [∀ x, Nonempty (CB x)]
+    (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out))) (εA γA eB g : Msg → ℝ) (a : ℕ)
+    (hA : ZKmalR H Q.kA PA RA SA εA γA)
+    (hB : ∀ x u, ZKmalAt H (nB x) PB (RB (Q.xB x u)) (Q.xB x u) (CB x) (progB x u) (eB x) (g x))
+    (hR : Q.RelOn H PA RA RB) (he0 : ∀ x, 0 ≤ eB x) (hγA : ∀ x, γA x ≤ a * g x) (hg : ∀ x, 0 ≤ g x) :
+    ZKmalR H (fun x => Q.kA x + nB x) (fun w => (Q.prover PA PB w).comap (forkTape a)) RA (Q.simU SA CB progB)
+      (fun x => εA x + eB x) (fun x => (a + 1) * g x) := by
+  classical
+  intro x w hw Θ Vs θ hV Ev
+  have hreal : Pr (fun ω => Ev (runStar H ((Q.prover PA PB w).comap (forkTape a)) Vs x ω θ).msgs) =
+      Pr (fun s : (NA × ΩA) × (NB × ΩB) => Ev (cont (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x s.1 θ).msgs
+        (runStar H (PB (Q.wB w s.1 x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x s.1 θ).msgs))))
+          (Vs.after x fun _ => nB x) (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x s.1 θ).msgs))) s.2
+          (θ, (runStar H (PA w) (Vs.head Q.kA) x s.1 θ).msgs.map Prod.fst)).msgs)) := by
+    simp only [runStar_comap]
+    refine (Pr_forkTape a fun t => Ev (runStar H (Q.prover PA PB w) Vs x t θ).msgs).trans (Pr_congr fun t => ?_)
+    obtain ⟨ωA, ωB⟩ := t
+    rw [Q.msgs_eq PA PB w H Vs θ x (fun _ => nB x) nB (fun _ => rfl) hV ωA ωB]
+  have hsim : Pr (fun c : (Q.simU SA CB progB).C x => Ev ((Q.simU SA CB progB).out H Vs θ x c)) =
+      Pr (fun s : SA.C x × CB x => Ev (cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x s.1)
+        (spOut H (Vs.after x fun _ => nB x) (θ, (SA.out H (Vs.head Q.kA) θ x s.1).map Prod.fst)
+          (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x s.1))))
+          (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x s.1))) s.2)))) := by
+    refine Pr_congr fun c => ?_
+    rw [Q.simU_out SA CB progB H Vs θ x (fun _ => nB x) c]
+  rw [hreal, hsim]
+  have hF := Q.fork_ge PA PB w H Vs θ x (fun _ => nB x) nB (fun _ => rfl) hV a
+  refine (abs_sub_le_hybrid (TA := NA × ΩA) (TB := NB × ΩB) (CA := SA.C x)
+    (CB := CB x)
+    (fun ωA ωB => Ev (cont (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs
+      (runStar H (PB (Q.wB w ωA x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))
+        (Vs.after x fun _ => nB x) (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))) ωB
+        (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)).msgs))
+    (fun ωA cB => Ev (cont (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs
+      (spOut H (Vs.after x fun _ => nB x) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)
+        (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)))
+        (progB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)) cB))))
+    (fun cA cB => Ev (cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x cA)
+      (spOut H (Vs.after x fun _ => nB x) (θ, (SA.out H (Vs.head Q.kA) θ x cA).map Prod.fst)
+        (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x cA))))
+        (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x cA))) cB))))
+    (fun ωA => eB x + (if goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs then
+        (Fork H (PB (Q.wB w ωA x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))
+          (Vs.after x fun _ => nB x) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)
+          (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)))).Pr H else 0) * g x)
+    (εA x + γA x * (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H) ?_ ?_).trans ?_
+  · -- `B`'s hybrid, at `A`'s real run
+    intro ωA
+    by_cases hgo : goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs = true
+    · simp only [cont, hgo, ite_true]
+      refine (hB x _ _ (hR x w hw Θ Vs θ ωA hgo) (Θ × List Msg)
+        (Vs.after x fun _ => nB x) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst) rfl
+        (fun τ => Ev ((runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs ++ τ))).trans (le_of_eq ?_)
+      ring
+    · simp only [cont, hgo, ite_false, Bool.false_eq_true, Pr_const, sub_self, abs_zero, zero_mul, add_zero]
+      exact he0 x
+  · -- `A`'s hybrid, with `B`'s program after it
+    intro cB
+    exact hA x w hw Θ (Vs.head Q.kA) θ rfl fun τ => Ev (cont (Q.kA x) τ
+      (spOut H (Vs.after x fun _ => nB x) (θ, τ.map Prod.fst) (Q.xB x (Q.sel x (histOf τ)))
+        (progB x (Q.sel x (histOf τ)) cB)))
+  · rw [Ex_const_add, Ex_mul_const]
+    have hFA := Finder.pr_nonneg H (Fork H (PA w) (Vs.head Q.kA) θ x)
+    have h1 : γA x * (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H ≤ a * g x * (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H :=
+      mul_le_mul_of_nonneg_right (hγA x) hFA
+    have h2 := mul_le_mul_of_nonneg_left hF (hg x)
+    nlinarith
+
+
+/-- **Sequential composition at `B`'s simulator**, where the units are finitely many: `zkmalR_seqU` at `Seq.sim`,
+whose coins for `B` are `SB`'s at every unit, from `B`'s `ZKmalR` at every unit's statement. -/
 theorem zkmalR_seq {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fintype ΩA] [Nonempty ΩA]
     [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (Q : Seq WA WB (NA × ΩA)) (H : Msg → Msg) (kB nB : Msg → ℕ)
+    (Q : Seq WA WB (NA × ΩA)) [∀ x, Fintype (Q.U x)] [∀ x, DecidableEq (Q.U x)] (H : Msg → Msg) (kB nB : Msg → ℕ)
     (PA : WA → Prover (NA × ΩA)) (PB : WB → Prover (NB × ΩB)) (RA : Rel WA) (RB : Rel WB) (SA SB : Simulator)
     (εA γA εB γB eB g : Msg → ℝ) (a : ℕ)
     (hA : ZKmalR H Q.kA PA RA SA εA γA) (hB : ZKmalR H kB PB RB SB εB γB)
@@ -502,71 +601,11 @@ theorem zkmalR_seq {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fint
     (hγ : ∀ x u, γB (Q.xB x u) ≤ g x) (hγA : ∀ x, γA x ≤ a * g x) (hg : ∀ x, 0 ≤ g x) :
     ZKmalR H (fun x => Q.kA x + nB x) (fun w => (Q.prover PA PB w).comap (forkTape a)) RA (Q.sim SA SB)
       (fun x => εA x + eB x) (fun x => (a + 1) * g x) := by
-  classical
-  intro x w hw Θ Vs θ hV Ev
-  have hreal : Pr (fun ω => Ev (runStar H ((Q.prover PA PB w).comap (forkTape a)) Vs x ω θ).msgs) =
-      Pr (fun s : (NA × ΩA) × (NB × ΩB) => Ev (cont (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x s.1 θ).msgs
-        (runStar H (PB (Q.wB w s.1 x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x s.1 θ).msgs))))
-          (Vs.after x kB) (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x s.1 θ).msgs))) s.2
-          (θ, (runStar H (PA w) (Vs.head Q.kA) x s.1 θ).msgs.map Prod.fst)).msgs)) := by
-    simp only [runStar_comap]
-    refine (Pr_forkTape a fun t => Ev (runStar H (Q.prover PA PB w) Vs x t θ).msgs).trans (Pr_congr fun t => ?_)
-    obtain ⟨ωA, ωB⟩ := t
-    rw [Q.msgs_eq PA PB w H Vs θ x kB nB (hk x) hV ωA ωB]
-  have hsim : Pr (fun c : (Q.sim SA SB).C x => Ev ((Q.sim SA SB).out H Vs θ x c)) =
-      Pr (fun s : SA.C x × ((u : Q.U x) → SB.C (Q.xB x u)) => Ev (cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x s.1)
-        (SB.out H (Vs.after x kB) (θ, (SA.out H (Vs.head Q.kA) θ x s.1).map Prod.fst)
-          (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x s.1))))
-          (s.2 (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x s.1))))))) := by
-    refine Pr_congr fun c => ?_
-    rw [Q.sim_out SA SB H Vs θ x kB c]
-  rw [hreal, hsim]
-  have hF := Q.fork_ge PA PB w H Vs θ x kB nB (hk x) hV a
-  refine (abs_sub_le_hybrid (TA := NA × ΩA) (TB := NB × ΩB) (CA := SA.C x)
-    (CB := (u : Q.U x) → SB.C (Q.xB x u))
-    (fun ωA ωB => Ev (cont (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs
-      (runStar H (PB (Q.wB w ωA x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))
-        (Vs.after x kB) (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))) ωB
-        (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)).msgs))
-    (fun ωA cB => Ev (cont (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs
-      (SB.out H (Vs.after x kB) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)
-        (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)))
-        (cB (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))))
-    (fun cA cB => Ev (cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x cA)
-      (SB.out H (Vs.after x kB) (θ, (SA.out H (Vs.head Q.kA) θ x cA).map Prod.fst)
-        (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x cA))))
-        (cB (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x cA)))))))
-    (fun ωA => eB x + (if goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs then
-        (Fork H (PB (Q.wB w ωA x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))))
-          (Vs.after x kB) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)
-          (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs)))).Pr H else 0) * g x)
-    (εA x + γA x * (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H) ?_ ?_).trans ?_
-  · -- `B`'s hybrid, at `A`'s real run
-    intro ωA
-    by_cases hgo : goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs = true
-    · simp only [cont, hgo, ite_true]
-      rw [Pr_pi_at (β := fun u => SB.C (Q.xB x u))
-        (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))
-        (fun c => Ev ((runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs ++
-          SB.out H (Vs.after x kB) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst)
-            (Q.xB x (Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs))) c))]
-      refine (hB _ _ (hR x w hw Θ Vs θ ωA hgo) (Θ × List Msg)
-        (Vs.after x kB) (θ, (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs.map Prod.fst) rfl
-        (fun τ => Ev ((runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs ++ τ))).trans ?_
-      refine add_le_add (hε x _) ?_
-      rw [mul_comm]
-      exact mul_le_mul_of_nonneg_left (hγ x _) (Finder.pr_nonneg _ _)
-    · simp only [cont, hgo, ite_false, Bool.false_eq_true, Pr_const, sub_self, abs_zero, zero_mul, add_zero]
-      exact he0 x
-  · -- `A`'s hybrid, with `SB` after it
-    intro cB
-    exact hA x w hw Θ (Vs.head Q.kA) θ rfl fun τ => Ev (cont (Q.kA x) τ
-      (SB.out H (Vs.after x kB) (θ, τ.map Prod.fst) (Q.xB x (Q.sel x (histOf τ))) (cB (Q.sel x (histOf τ)))))
-  · rw [Ex_const_add, Ex_mul_const]
-    have hFA := Finder.pr_nonneg H (Fork H (PA w) (Vs.head Q.kA) θ x)
-    have h1 : γA x * (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H ≤ a * g x * (Fork H (PA w) (Vs.head Q.kA) θ x).Pr H :=
-      mul_le_mul_of_nonneg_right (hγA x) hFA
-    have h2 := mul_le_mul_of_nonneg_left hF (hg x)
-    nlinarith
+  refine zkmalR_seqU Q H nB PA PB RA RB SA (fun x => (u : Q.U x) → SB.C (Q.xB x u))
+    (fun x u c => SB.prog (Q.xB x u) (c u)) εA γA eB g a hA (fun x u w' hw' Θ Vs θ hVk Ev => ?_) hR he0 hγA hg
+  have h := hB (Q.xB x u) w' hw' Θ Vs θ (hVk.trans (hk x u).symm) Ev
+  rw [Pr_pi_at (β := fun u' => SB.C (Q.xB x u')) u
+    (fun c => Ev (spOut H Vs θ (Q.xB x u) (SB.prog (Q.xB x u) c)))]
+  exact h.trans (add_le_add (hε x u) (mul_le_mul_of_nonneg_right (hγ x u) (Finder.pr_nonneg _ _)))
 
 end Claims.ZKMal
