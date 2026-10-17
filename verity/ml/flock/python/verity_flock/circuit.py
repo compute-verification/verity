@@ -793,7 +793,7 @@ def write_public_inputs(text: str, words: dict, n: int, path) -> None:
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
-          public_words: dict | None = None, identifier: dict | None = None) -> dict:
+          public_words: dict | None = None, identifier: dict | None = None, digests: tuple[str, str] | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set's name, the range, each block's unit indices, the composite
     circuit's sha512, the frame-v3-sha512 statement; never the set's content digest, an unsalted hash of its values), then, for
     the prover only, every instance's rows (its input rows, then its output rows: ports in order, u16 LE) and every row's salt
@@ -826,7 +826,10 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
     ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object C-Flock does not read, on which canonical JSON
     is RFC 8785 (``verity.ml.circuits.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
-    (``--identifier F``)."""
+    (``--identifier F``).
+
+    ``digests``: ``text``'s (:func:`digest`, :func:`class_digest`), from a caller that writes many statements of one circuit
+    (`class_statement.UnitStager`); else computed here."""
     from verity.ml.circuits.codec import jcs_domain_error
 
     if identifier is not None:
@@ -887,10 +890,11 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     indices = list(range(lo, hi)) if indices is None else [int(u) for u in indices]
     if len(indices) != n or any(a >= b for a, b in zip(indices, indices[1:])) or min(indices, default=0) < 0:
         raise ValueError("unit indices: one global index per instance, ascending")
+    pin, cls = digests or (digest(text), class_digest(text))
     units = {"vus_per_block": G, "units_per_vu": meta.get("units_per_vu", 1), "indices": indices,
-             "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [class_digest(text)] * n}
+             "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [cls] * n}
     head = {"format": INST_FORMAT, "statement": meta.get("statement", STATEMENT), "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
-            "range": [lo, hi], "instances": n, "circuit_sha512": digest(text), "units": units, "frame_v3": fv, "rows": True}
+            "range": [lo, hi], "instances": n, "circuit_sha512": pin, "units": units, "frame_v3": fv, "rows": True}
     if pins:
         head["public_inputs"] = pins
     if identifier is not None:

@@ -1,0 +1,11 @@
+row,status,runs,description
+issue,measured,r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49,"1 warp instruction a SMSP-cycle in any mix; best scalar issue 4.000 a SM-clock. FFMA alone issues at this ceiling, so it has no pipe row"
+M,measured,r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49,"tensor pipe: rho_T 256.05 slots/SM/clk (UTCIMMA_M128_N256); mma.sync shares it: every point beside the honest form lies inside t + s <= 1 (syncU_k32 (0.929, 0.008), syncU_k16 (0.929, 0.008), mmaU_sync_k32 (0.929, 0.014), syncmma_k32 (0.759, 0.190), syncmma_k16 (0.759, 0.190))"
+A,measured,r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49,"ALU pipe: LOP3, SHF, LEA.HI (and IADD3) 1.9997 /SM/clk, one pipe (each 1/2 in pairs)"
+I,measured,r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49,IMAD 1.9997 /SM/clk
+SHFL,measured,r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49,SHFL.BFLY 0.9998 /SM/clk
+TL,measured,r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49,TMEM read port: every tcgen05.ld shape alone; best 244.52 words/SM/clk (LDTM_32X32B_X128)
+TM100_0,joint,r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49,"UTCIMMA_M128_N256 19.912 + LDTM_32X32B_X32 16.539 SMSP-cycles (DC's MMA-beside-load points, 2% noise margin; tight at ld alone and mmaU_ld8)"
+JI100_0,joint,r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49,"UTCIMMA_M128_N256 1.088 + every other warp instruction 0.980 SMSP-cycles (DC's lanes beside the tensor, 2% noise margin; tight at scalar issue and tclaneU_mix); other tensor forms carry the scalar coefficient, a lower bound on their issue cost"
+JPA100_0,joint,r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49,"UTCIMMA_M128_N256 10.967 + ALU 1.960 SMSP-cycles (DC's lop3 lanes beside the tensor, exact and block-timed, 2% noise margin; tight at ALU alone and tclane_lop3_r128)"
+JPA100_1,joint,r20261017-062812-a7a7 r20261017-063727-4f9a r20261017-063734-4b49,"UTCIMMA_M128_N256 501.669 + ALU 0.682 SMSP-cycles (DC's lop3 lanes beside the tensor, exact and block-timed, 2% noise margin; tight at tclane_lop3_r128 and tensor alone)"
