@@ -253,6 +253,23 @@ def test_the_switch_environment_is_set_or_cleared(tmp_path, monkeypatch) -> None
     assert not set(X.SWITCH_ENV) & set(env) and all(k not in os.environ for k in X.SWITCH_ENV)
 
 
+def test_the_cublas_version_is_read_from_the_library_torch_mapped(tmp_path, monkeypatch) -> None:
+    """A node can carry a system libcublas.so.13 that the linker's search finds while torch runs its wheel's libcublas.so.12."""
+    torch_lib = "/venv/site-packages/nvidia/cublas/lib/libcublas.so.12"
+    maps = tmp_path / "maps"
+    maps.write_text(f"7f00-7f01 r-xp 00000000 08:01 1 /venv/site-packages/nvidia/cublas/lib/libcublasLt.so.12\n"
+                    f"7f02-7f03 r-xp 00000000 08:01 2 {torch_lib}\n7f04-7f05 r--p 00001000 08:01 2 {torch_lib}\n"
+                    f"7f06-7f07 rw-p 00000000 00:00 0\n")
+    assert X.loaded_cublas(str(maps)) == [torch_lib] and X.loaded_cublas(str(tmp_path / "absent")) == []
+    opened: list[str] = []
+    monkeypatch.setattr(X.ctypes.util, "find_library", lambda name: "/usr/local/cuda/lib/libcublas.so.13")
+    monkeypatch.setattr(X, "_load_library", lambda p: opened.append(p))
+    assert X.cublas_version(str(maps)) is None and opened == [torch_lib]
+    opened.clear()
+    X.cublas_version(str(tmp_path / "absent"))
+    assert opened[0] == "/usr/local/cuda/lib/libcublas.so.13"
+
+
 def test_the_programs_bind_at_every_models_shapes() -> None:
     """GLM-5.3: the gate, the dotprod at BS 128 at each FMA, split-K at 6 and 8, two linears and two absorbs; DeepSeek-V4-Pro: the
     gate, the dotprod at BS 128 and 256 at each FMA, split-K at 6, 7 and 8, two linears and three compressor GEMMs."""
