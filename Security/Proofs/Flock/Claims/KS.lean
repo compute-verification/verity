@@ -233,7 +233,8 @@ masked reader's entries, and an accepted masked table's level-0 openings verify 
 results has its level-0 openings verifying at `width₀` below `2^d`, with positions and witness lanes its reps'
 `zkRepColsOf` entries (`FlockSoundness.Discharge.ZkExec.zk_table_opens₀Z`), and so does every accepted output of an
 outcome `verify --zk` accepts at the setup at the draw (`FlockSoundness.Discharge.Composed.OpensEntries`,
-`FlockSoundness.Discharge.Composed.runsAtZCJ_live_entries`). There, where the deployed masked reader looks up no column
+`FlockSoundness.Discharge.Composed.runsAtZCJ_live_entries`,
+`FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_entries`). There, where the deployed masked reader looks up no column
 of table `j` off `C`, table `j`'s accepted output opens no position off `C` on a witness lane without a self-clash
 (`ZkDecodeW`: `FlockSoundness.Discharge.Composed.ZkTxNoOff`, `FlockSoundness.Discharge.Composed.not_offW_of_entries`,
-`FlockSoundness.Discharge.Composed.runsAtZCJ_live_offW`). -/
+`FlockSoundness.Discharge.Composed.runsAtZCJ_live_offW`, `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live_offW`). -/

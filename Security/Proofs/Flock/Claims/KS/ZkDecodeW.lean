@@ -15,8 +15,9 @@ it self-clashes:
 * `not_offW_of_entries`: an output whose level-0 openings are those entries at its own cap (`OpensEntries`) opens no
   position off `C` on a witness lane without a self-clash, in a transcript with `ZkTxNoOff`
   (`Claims.Flock.exists_ne_of_zk_entries`).
-* `runsAtZCJ_live_offW`: `runsAtZCJ_live_entries` at that verdict at table `j₀`, on the outcomes `verify --zk` accepts
-  at the setup at the draw whose transcript has `ZkTxNoOff` at table `j₀`.
+* `runsAtZCJ_live_offW`, `runsAtZCJH_live_offW`: `runsAtZCJ_live_entries` and `runsAtZCJH_live_entries` at that
+  verdict at table `j₀`, on the outcomes `verify --zk` accepts at the setup at the draw whose transcript has
+  `ZkTxNoOff` at table `j₀`, at public and hidden outputs.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -81,3 +82,37 @@ theorem runsAtZCJ_live_offW (I : Inputs) (ht : I.tags.typed = false) (dj : Finse
   exact not_offW_of_entries hN C rfl he hno
 
 end FlockSoundness.Discharge.Composed
+
+namespace FlockSoundness.Discharge.ZkHidden
+
+open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec Composed
+open FlockSoundness.Discharge.Tables (LiveOutJ)
+
+local notation "𝔽" => FlockLevel3.GF128
+local notation "𝕂" => FlockLevel3.GF256
+
+variable {n mPts : ℕ} {Reg : Type}
+
+/-- **`runsAtZCJH_live` with no witness-lane opening off `C` at table `j₀` unless it self-clashes**, under hidden
+outputs: `runsAtZCJ_live_offW` from `runsAtZCJH_live_entries`. -/
+theorem runsAtZCJH_live_offW (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
+    (L : Law n) (hT : TagsOkZHJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
+    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) (j₀ : ℕ) {N : ℕ} (C : Fin N → List 𝔽) :
+    RunsOnZCJW (K := 𝕂) execArith hs512 (planZHJ dj y₀) (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
+      (fun S R o => AcceptsAt I (dj S) (wr S R o) ∧ ZkTxNoOff I (dj S) j₀ C (wr S R o))
+      (fun S R o j out => out.accepted = true ∧ (j.val = j₀ → N = 2 ^ (lvOf ((planZHJ dj y₀ S R).get j).sch 0).logLen →
+        ¬ (OffW₀Z hs512 ((planZHJ dj y₀ S R).get j) (capOfRoot o.rootB[j.val]!) (Claims.Flock.oracleOf C) out ∧
+          ¬ SelfClashZ hs512 ((planZHJ dj y₀ S R).get j) out))) := by
+  intro ω R o ho j
+  obtain ⟨hacc, hno⟩ := ho
+  obtain ⟨pend, h₀, h₁, hok, he⟩ := runsAtZCJH_live_entries I ht hc dj y₀ wr L hT hRec hDraw ω R o hacc j
+  refine ⟨pend, h₀, h₁, hok, fun hj hN => ?_⟩
+  subst hj
+  exact not_offW_of_entries hN C rfl he hno
+
+end FlockSoundness.Discharge.ZkHidden

@@ -14,8 +14,9 @@ statement's draw instead, so no draw in the record is read:
 * `RunsOnZCJV`, `decodes_of_runsOnZCJV`: `RunsOnZCJ` and `decodesOnZKJ_of_runsOnZCJ` at any verdict on the live
   outcomes; `RunsOnZCJW` is `RunsOnZCJV` at any verdict on the outputs.
 * `runsAtZCJ_live`, `runsAtZCJH_live`: `runsZCJ_live` and `runsZCJH_liveI` at `AcceptsAt`, public and hidden outputs.
-* `OpensEntries`, `runsAtZCJ_live_entries`: at public outputs, each accepted output's level-0 openings verify at its
-  cap and are, on the witness lanes, the masked reader's entries (`zk_table_opens₀Z`).
+* `OpensEntries`, `runsAtZCJ_live_entries`, `runsAtZCJH_live_entries`: at public and hidden outputs, each accepted
+  output's level-0 openings verify at its cap and are, on the witness lanes, the masked reader's entries
+  (`zk_table_opens₀Z`).
 * `setupAt_of_setup`, `recordsLiveAtS_of_checks`: `Deploy.V`'s setup is the setup at the statement's draw, and where
   its checks pass the last message records the run's live outcome there (`recordsLiveAt_of_checks` without `hdraw`).
 * `wrS`, `not_acceptsAt_nil`, `recordsLiveAtS_wrS`: the record writer at a draw, which records the live session.
@@ -312,18 +313,21 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`runsZCJH_liveI` at the setup at each draw**: `RunsOnZCJV` at `AcceptsAt` of the law's draw under hidden
-outputs, where `wr` records the live session at the setup at that draw (`RecordsLiveAtS`). -/
-theorem runsAtZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+/-- **`runsZCJH_liveI` at the setup at each draw, with the entries**: `RunsOnZCJV` at `AcceptsAt` of the law's draw
+under hidden outputs, where `wr` records the live session at the setup at that draw (`RecordsLiveAtS`), with each
+accepted output's level-0 openings the masked reader's entries (`OpensEntries`, `zk_table_opens₀Z`). -/
+theorem runsAtZCJH_live_entries (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (L : Law n) (hT : TagsOkZHJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
-    RunsOnZCJV (K := 𝕂) execArith hs512 (planZHJ dj y₀) (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
+    RunsOnZCJW (K := 𝕂) execArith hs512 (planZHJ dj y₀) (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
-      (fun S R o => AcceptsAt I (dj S) (wr S R o)) := by
+      (fun S R o => AcceptsAt I (dj S) (wr S R o))
+      (fun S R o j out => out.accepted = true ∧
+        OpensEntries I (dj S) (wr S R o) j.val ((planZHJ dj y₀ S R).get j) (capOfRoot o.rootB[j.val]!) out) := by
   intro ω R o hacc j
   obtain ⟨hh, hrr, hl⟩ := hT
   obtain ⟨hprf, hrec⟩ := hRec _ R o hacc
@@ -440,7 +444,32 @@ theorem runsAtZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circ
     exact hrr₁
   · dsimp only
     rw [hTy, hopn, ← hroot]
-    exact outZC_of_accZ hacc'
+    have hok := outZC_of_accZ hacc'
+    obtain ⟨hver, hent⟩ := zk_table_opens₀Z (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts
+      spec (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ cap _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀
+      zp₁ hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ hok
+    have hN : (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts).length = 2 * sts[j.val].regions.size := by
+      rw [DecodeZL.extraClaims_length, ← hyst]
+      show 2 * (regionsOf y.x.st).length = _
+      simp [regionsOf]
+    refine ⟨hok, spec, sts, sess, y.sch, y.tPad, s₀, s₁, hj, hs, hdecS, by rw [← hyst]; exact y.hz, hf₀, hf₁, hver,
+      hent.trans ?_⟩
+    rw [hN, hyst]
+
+/-- **`runsZCJH_liveI` at the setup at each draw**: `RunsOnZCJV` at `AcceptsAt` of the law's draw under hidden
+outputs, where `wr` records the live session at the setup at that draw (`RecordsLiveAtS`; `runsAtZCJH_live_entries`). -/
+theorem runsAtZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
+    (L : Law n) (hT : TagsOkZHJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
+    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
+    RunsOnZCJV (K := 𝕂) execArith hs512 (planZHJ dj y₀) (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
+      (fun S R o => AcceptsAt I (dj S) (wr S R o)) :=
+  RunsOnZCJW.runsOnZCJV execArith hs512 _ _ _ _ _ _ _ (runsAtZCJH_live_entries I ht hc dj y₀ wr L hT hRec hDraw)
+    fun _ _ _ _ _ h => h.1
 
 end FlockSoundness.Discharge.ZkHidden
 
