@@ -27,10 +27,10 @@ eps = 0.0
 source = "DATASHEET: at the node's 2,100 MHz lock every program (honest at 519 W, tensor-only, zero operands, fold-only, FFMA) runs 2,099.5-2,100.0 MHz by clock64 over %globaltimer (note:20261017T0332Z-draft-eps1-datasheet, r20261017-033131-4e67)"
 
 [luck]
-delta = 9.094947017729282e-13
+delta = 4.547473508864641e-13
 p = 0.75
-checks = 121180
-source = "note:20261016T0005Z-draft-luck-loss-round4 §2 (one week, γ_zk = 0.01, {±1})"
+checks = 48000
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
 
 [baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
 name = "dp4a"

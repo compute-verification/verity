@@ -19,9 +19,10 @@ each term a fraction of honest time.
   design's `[operands]`, else the profile's), or at honest's own (`honest`). The LP's duals are the certificate π*, at
   which ε_machine splits exactly into ε_cert (1 − π*·n(H)/B(H)) and ε_route. With the scalar routes closed it is
   ε_machine's floor, which no q* lowers; the threshold is the least q* at which ε_machine reaches it.
-- **The credit** is honest's kernel (`H`, the master inequality) or the floor program ♭ (`floor`, SPEC §0.7a's
-  Corollary D3): the same LP restricted to honest's routes with the tensor route at φ_del and no overhead. Under ♭,
-  ε_sched, ε_clock and honest's overhead above ♭ leave ε for γ, as the factor T_H/B_♭.
+- **The credit** is honest's kernel (`H`, the master inequality), its model bound B(H)/f_max (`model`, PROFILE's
+  reading: ε_sched and ε_clock leave ε for γ), or the floor program ♭ (`floor`, SPEC §0.7a's Corollary D3): the same LP
+  restricted to honest's routes with the tensor route at φ_del and no overhead. Under ♭, ε_sched, ε_clock and honest's
+  overhead above ♭ leave ε for γ, as the factor T_H/B_♭.
 - **ε_luck** is Theorem S inside the same LP: an accepted cheater writes (1 − d̄) of the words and folds them all, d̄ =
   ln(1/δ)/((1 − p)·S) over S spot checks (note:20261016T0005Z-draft-luck-loss-round4), and ε_luck is what that saves
   it, d̄·w*/B(H) at π*. The terms add up to the LP exactly.
@@ -51,7 +52,7 @@ UNI = "UNI"
 MMA = "MMA"
 ROUTES = ("tensor", "lanes", "baseline", "uniform")
 OPERANDS = ("free", "floor", "honest")
-CREDITS = ("H", "floor")
+CREDITS = ("H", "model", "floor")
 
 
 @dataclass(frozen=True)
@@ -104,11 +105,13 @@ class Part:
 @dataclass(frozen=True)
 class Filler:
     """Verified proof-of-work filler: `per_word` lane instructions a committed word (or "saturate": enough to fill the
-    uniform datapath for honest's time), in the class mix `mix` on lanes, run by honest on `route`."""
+    uniform datapath for honest's time), in the class mix `mix` on lanes, run by honest on `route`; a deficient block
+    of it passes its check with probability ≤ `p` (SPEC §5: 0.854 for both fillers, any K)."""
     per_word: float | str = 0.0
     mix: dict[str, float] | None = None
     route: str = "lanes"         # lanes or uniform
     source: str = ""
+    p: float = 0.854
 
 
 UPFILL = Filler(per_word="saturate", mix={"ALU": 1.0, "IMAD": 1.0}, route="uniform",
@@ -200,7 +203,7 @@ def design(name: str, data: Path = DATA) -> Design:
     ops = t.get("operands", {"floor": h.floor, "source": h.floor_source})
     f = t.get("filler", {})
     filler = Filler(per_word=f.get("per_word", 0.0), mix=f.get("mix"), route=f.get("route", "lanes"),
-                    source=f.get("source", ""))
+                    source=f.get("source", ""), p=f.get("p", Filler.p))
     if filler.route not in ("lanes", "uniform") or (filler.per_word and not filler.mix):
         raise SystemExit(f"{name}: the filler runs on lanes or uniform, with its class mix on lanes")
     return Design(name=t["name"], summary=t["summary"], honest=t["honest"], L=t["L"], work=t.get("work", 1.0),
@@ -264,6 +267,7 @@ class Mix:
     n: dict[str, float]               # warp (or uniform) instructions a word by class
     binding: tuple[str, ...]
     pi: dict[str, float]              # the certificate: each row's dual weight, summing to 1
+    short: dict[str, float]           # the share of words, and of each filler, left undone (Theorem S's deficit)
 
     def price(self, pi: Machine, n: dict[str, float]) -> float:
         """π·n: the certificate's price of n, in SMSP-cycles."""
@@ -273,13 +277,15 @@ class Mix:
 
 def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: float | None, baseline: bool,
             fillers: tuple[tuple[Filler, float], ...] = (), cheat: bool = False,
-            tensor_mma: dict[str, float] | None = None, deficit: float = 0.0) -> Mix:
+            tensor_mma: dict[str, float] | None = None, budget: float = 0.0) -> Mix:
     """The fastest mix over Π: min T over [T, w_tensor, w_lanes, w_baseline, w_uniform, s_k (k in pi.cuda), a fold
-    alone on lanes, a fold alone on the uniform datapath, then each filler on lanes and on the uniform datapath]. The
-    routes write 1 − `deficit` of the words and every word is folded, the rest alone. Each filler (Filler, lane
-    instructions a word) runs once, on its own route unless `cheat`. The tensor route pays `tensor_mma` a MMA (default
-    honest's). q None closes the lane route, q_uniform None the uniform route (and the fold alone there), and
-    `baseline` opens the design's baseline program."""
+    alone on lanes, a fold alone on the uniform datapath, each filler on lanes and on the uniform datapath, the words'
+    shortfall, each filler's shortfall]. The routes write every word but the shortfall, and every word is folded, the
+    rest alone. Each filler (Filler, lane instructions a word) runs once but for its shortfall, on its own route unless
+    `cheat`. Theorem S bounds the shortfalls together: (1 − p)·words' + Σ (1 − p_f)·filler f's ≤ `budget`
+    (ln(1/δ)/S; 0 leaves none). The tensor route pays `tensor_mma` a MMA (default honest's). q None closes the lane
+    route, q_uniform None the uniform route (and the fold alone there), and `baseline` opens the design's baseline
+    program."""
     tensor: dict[str, float] = {}
     _add(tensor, h.base() if tensor_mma is None else tensor_mma, d.L / (h.depth * h.words))
     _add(tensor, d.fold, 1 / LANES)
@@ -289,10 +295,13 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     _add(base, d.fold, 1 / LANES)
     fl = [{k: pw * v / sum(f.mix.values()) / LANES for k, v in f.mix.items()} for f, pw in fillers]
     S = list(pi.cuda)
-    nv = 7 + len(S) + 2 * len(fillers)
+    nf = len(fillers)
+    nv = 8 + len(S) + 3 * nf
     iT, it, il, ib, iu, i_xv, i_xu = 0, 1, 2, 3, 4, 5 + len(S), 6 + len(S)
-    fv = [7 + len(S) + 2 * j for j in range(len(fillers))]
-    fu = [8 + len(S) + 2 * j for j in range(len(fillers))]
+    fv = [7 + len(S) + 2 * j for j in range(nf)]
+    fu = [8 + len(S) + 2 * j for j in range(nf)]
+    i_dw = 7 + len(S) + 2 * nf
+    df = [i_dw + 1 + j for j in range(nf)]
 
     def col(k: str) -> list[float]:
         a = [0.0] * nv
@@ -326,15 +335,24 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
             A_ub.append(a)
             b_ub.append(0.0)
             rows.append(row)
-    eq = [[0.0] * nv for _ in range(3 + len(fillers))]
-    eq[0][it] = eq[0][il] = eq[0][ib] = eq[0][iu] = 1.0   # 1 − d̄ of the words written
-    eq[1][i_xv] = eq[1][i_xu] = 1.0                       # the rest folded alone
+    a = [0.0] * nv
+    a[i_dw] = 1 - d.p
+    for j, (f, _) in enumerate(fillers):
+        a[df[j]] = 1 - f.p
+    A_ub.append(a)                                        # Theorem S's budget, after the facets
+    b_ub.append(budget)
+    eq = [[0.0] * nv for _ in range(3 + nf)]
+    eq[0][it] = eq[0][il] = eq[0][ib] = eq[0][iu] = eq[0][i_dw] = 1.0   # every word written but the shortfall
+    eq[1][i_xv] = eq[1][i_xu] = 1.0                       # the shortfall folded alone
+    eq[1][i_dw] = -1.0
     for i in range(len(S)):
         eq[2][5 + i] = 1.0
     eq[2][il] = -(q or 0.0) / LANES                       # a word on lanes: q lane instructions in any CUDA mix
-    for j in range(len(fillers)):
-        eq[3 + j][fv[j]] = eq[3 + j][fu[j]] = 1.0         # each filler done once
+    for j in range(nf):
+        eq[3 + j][fv[j]] = eq[3 + j][fu[j]] = eq[3 + j][df[j]] = 1.0   # each filler done once but its shortfall
     bounds = [(0, None)] * nv
+    for i in (i_dw, *df):
+        bounds[i] = (0, 1)
     if q is None:
         bounds[il] = (0, 0)
     if not baseline or not d.baseline:
@@ -346,8 +364,7 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
             bounds[fu[j] if f.route == "lanes" else fv[j]] = (0, 0)
     obj = [0.0] * nv
     obj[iT] = 1.0
-    s = linprog(obj, A_ub=A_ub, b_ub=b_ub, A_eq=eq, b_eq=[1.0 - deficit, deficit, 0.0] + [1.0] * len(fillers), bounds=bounds,
-                method="highs")
+    s = linprog(obj, A_ub=A_ub, b_ub=b_ub, A_eq=eq, b_eq=[1.0, 0.0, 0.0] + [1.0] * nf, bounds=bounds, method="highs")
     if s.status:
         raise SystemExit(f"{d.name}: the LP failed ({s.message})")
     x = [float(v) for v in s.x]
@@ -355,13 +372,21 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     n = {k: v for k, v in n.items() if v > 1e-12}
     lam = {r: -float(m) for r, m in zip(rows, s.ineqlin.marginals) if -m > 1e-9}
     return Mix(T=x[iT], words={"tensor": x[it], "lanes": x[il], "baseline": x[ib], "uniform": x[iu]},
-               filler_uniform=tuple(x[i] for i in fu), n=n, binding=binding(pi.load(n), x[iT]), pi=lam)
+               filler_uniform=tuple(x[i] for i in fu), n=n, binding=binding(pi.load(n), x[iT]), pi=lam,
+               short={"words": x[i_dw], **{f"filler {j + 1}": x[df[j]] for j in range(nf)}})
+
+
+def budget(d: Design) -> float:
+    """Theorem S with each block at its own p: Pr[accept ∧ Σ_w (1 − p_w)·d_w ≥ B] ≤ e^{−B}, so at acceptance δ an
+    accepted cheater's deficient blocks, each weighted by 1 − p, are at most ln(1/δ)/S of the S checked ones. This is
+    CALC's reading of the theorem's proof (a window passes w.p. ≤ 1 − (1 − p_w)·d_w ≤ e^{−(1 − p_w)·d_w}), which states
+    one p; with one p it is the theorem."""
+    return math.log(1 / d.delta) / d.checks
 
 
 def deficit(d: Design) -> float:
-    """Theorem S: Pr[accept ∧ deficiency ≥ D] ≤ e^{−(1−p)D}, so at acceptance δ an accepted cheater skips at most
-    d̄ = ln(1/δ)/((1 − p)·S) of the words."""
-    return math.log(1 / d.delta) / ((1 - d.p) * d.checks)
+    """d̄ = ln(1/δ)/((1 − p)·S): the words an accepted cheater skips when it skips words alone."""
+    return budget(d) / (1 - d.p)
 
 
 @dataclass(frozen=True)
@@ -384,7 +409,7 @@ class Setup:
         qu = q_uniform if q_uniform is not None else (d.q_uniform if d.q_uniform is not None else q)
         return fastest(d, self.honest, self.machine, q=q if lanes else None, q_uniform=qu if uniform else None,
                        baseline=True, fillers=self.fillers, cheat=True,
-                       tensor_mma=self.honest.tensor(self.operands, d.floor), deficit=deficit(d) if luck else 0.0)
+                       tensor_mma=self.honest.tensor(self.operands, d.floor), budget=budget(d) if luck else 0.0)
 
     def machine_eps(self, q: float, **routes) -> float:
         return max(0.0, 1 - self.cheat(q, **routes).T / self.baseline.T)
@@ -395,9 +420,9 @@ class Setup:
 
 
 def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", credit: str = "H") -> Setup:
-    """`credit` H compares the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a): the tensor
-    route at the noise's φ_del, the fold, the fillers on their own routes and the baseline program, with no overhead.
-    A saturating filler fills the uniform pipe's slack in the credited program's time."""
+    """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a):
+    the tensor route at the noise's φ_del, the fold, the fillers on their own routes and the baseline program, with no
+    overhead. A saturating filler fills the uniform pipe's slack in the credited program's time."""
     h = honest(d.honest, data)
     if d.L % h.depth:
         raise SystemExit(f"{d.name}: L = {d.L} is not a multiple of the MMA's depth {h.depth}")
@@ -472,9 +497,10 @@ class Eps:
 
 def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = "free", credit: str = "H",
         lanes: bool | None = None, uniform: bool | None = None, q_uniform: float | None = None) -> Eps:
-    """Under the floor credit ε_sched and ε_clock leave ε (honest's time above ♭ is in γ, `credit_ratio`)."""
+    """Under the model and floor credits ε_sched and ε_clock leave ε (honest's time above the credit is in γ,
+    `credit_ratio`)."""
     s = setup(d, pi, data, operands, credit)
-    hs = s if credit == "H" else setup(d, pi, data, "free")
+    hs = s if credit != "floor" else setup(d, pi, data, "free")
     h, base = s.honest, s.baseline
     routes = {"lanes": lanes, "uniform": uniform, "q_uniform": q_uniform}
     c, lucky = s.cheat(q, **routes), s.cheat(q, luck=True, **routes)

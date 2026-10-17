@@ -184,7 +184,7 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
                      "words": e.baseline.words, "program": d.baseline_name},
         "cheat": {"cycles_per_mma": e.cheat.T * per_mma, "binding": e.cheat.binding, "words": e.cheat.words,
                   "filler_uniform": e.cheat.filler_uniform, "pi": e.cheat.pi},
-        "lucky_cycles_per_mma": e.lucky.T * per_mma, "deficit": e.deficit,
+        "lucky_cycles_per_mma": e.lucky.T * per_mma, "deficit": e.deficit, "lucky_short": e.lucky.short,
         "measured_cycles_per_mma": e.T_honest_measured * per_mma if e.T_honest_measured else None,
         "terms": e.terms(), "cert": e.cert, "route": e.route, "floor": e.floor,
         "machine_as_built": e.machine_as_built, "total": e.total(), "total_certified": e.total(sched=False),
@@ -202,7 +202,8 @@ def _eps_table(args, pi: E.Machine) -> int:
     names = args.designs or E.designs(args.data)
     sweep = [float(x) for x in args.fold_sweep.split(",")] if args.fold_sweep else [None]
     qs = (2, 4, 8, 16)
-    cred = {"H": "honest's kernel (H)", "floor": "the floor program ♭ (SPEC §0.7a)"}[args.credit]
+    cred = {"H": "honest's kernel (H)", "model": "honest's model bound B(H)",
+            "floor": "the floor program ♭ (SPEC §0.7a)"}[args.credit]
     print(f"Π {pi.vector}, operands {args.operands}, credit {cred}: T/MMA the credited time and its binding rows, "
           f"H/cred honest's time over it; ε_machine at q* = {', '.join(map(str, qs))} and its floor (the scalar routes "
           f"closed); ε_luck; ε at q* = 2 and 8 (ε_sched in it where measured); q*₀ the least q* at which ε_machine "
@@ -250,7 +251,8 @@ def _eps(args) -> int:
     floor = ", ".join(f"{k} {v:g}" for k, v in d.floor.items())
     ops = {"free": "free (SPEC's conservative default)", "honest": "at honest's",
            "floor": f"at the noise's floor φ_del, {floor} a MMA ({d.floor_source})"}
-    built = {"H": "honest as built", "floor": f"the floor program ♭ (the tensor route at φ_del = {floor} a MMA)"}
+    built = {"H": "honest as built", "model": "honest as built",
+             "floor": f"the floor program ♭ (the tensor route at φ_del = {floor} a MMA)"}
     print(f"{d.name}: {d.summary}")
     print(f"  Π: {pi.vector}'s {len(pi.rows)} rows; honest {h.name} ({h.status}): {h.mma}, {h.words} words a MMA; "
           f"L {d.L}; fold {d.fold_name} {d.fold_cost():g} a word ({', '.join(f'{k} {v:g}' for k, v in d.fold.items())});"
@@ -261,22 +263,25 @@ def _eps(args) -> int:
           f"{_mix(e.baseline, per_mma)}")
     print(f"  honest: {e.T_honest * per_mma:.3f} SMSP-cycles a MMA ({e.T_honest_source}"
           + (f", {h.measured_source}" if e.T_honest_source != "model" else "") + f"); γ {e.gamma:.3f}"
-          + (f"; honest over ♭ {e.credit_ratio:.3f}, in γ" if args.credit == "floor" else ""))
+          + (f"; honest over the credit {e.credit_ratio:.3f}, in γ" if args.credit != "H" else ""))
     print(f"  cheater's operand delivery: {ops[args.operands]}")
     print(f"  cheater at q* = {args.q:g}: {_mix(e.cheat, per_mma)}")
     print(f"  certificate π*: {_pi(e.cheat)}")
     t = e.terms()
     print(f"  ε_sched    {_pct(t['sched'])}" + (
         "" if t["sched"] is not None else " (0: credited at the floor program, moving it into γ)"
-        if args.credit == "floor" else " (0: honest certified at the model bound, moving it into γ)"))
+        if args.credit == "floor" else " (0: honest credited at the model bound, moving it into γ)"))
     for k, parts in (("skip", d.skip), ("mand", d.mand)):
         print(f"  ε_{k:9s}{_pct(t[k])}")
         for name, p in parts.items():
             print(f"      {name} {_pct(p.eps)}: {p.source}")
     print(f"  ε_machine  {_pct(t['machine'])} = ε_cert(π*) {_pct(e.cert)} + ε_route(π*) {_pct(e.route)}; floor "
           f"{_pct(e.floor)} (the scalar routes closed); against honest as built {_pct(e.machine_as_built)}")
-    print(f"  ε_luck     {_pct(t['luck'])}: d̄ {100 * e.deficit:.4f}% of the words unwritten (δ {d.delta:.3g}, p {d.p}, "
-          f"S {d.checks:g}: {d.luck_source})")
+    short = ", ".join(f"{k} {100 * v:.4f}%" for k, v in e.lucky.short.items())
+    print(f"  ε_luck     {_pct(t['luck'])}: the lucky cheater leaves undone {short} (words alone: d̄ "
+          f"{100 * e.deficit:.4f}%; δ {d.delta:.3g}, p {d.p} a word"
+          + "".join(f", {f.p} filler {j + 1}" for j, (f, _) in enumerate(e.fillers)) + f", S {d.checks:g}: "
+          f"{d.luck_source})")
     print(f"  ε_clock    {_pct(t['clock'])}: " + (d.clock.source if args.credit == "H" else "credited at f_max, in γ"))
     print(f"  ε          {_pct(e.total())} (first order {_pct(sum(v or 0.0 for v in t.values()))})")
     print(f"  q* threshold (ε_machine = its floor): {_thr(rec['threshold'])}; lanes alone "
@@ -315,7 +320,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--operands", choices=E.OPERANDS, default="free",
                    help="the cheater's operand delivery on the tensor route (default %(default)s)")
     e.add_argument("--credit", choices=E.CREDITS, default="H",
-                   help="what ε is a fraction of: honest's kernel (H, default) or the floor program ♭ (SPEC §0.7a)")
+                   help="what ε is a fraction of: honest's kernel (H, default), its model bound B(H) (model) or the "
+                        "floor program ♭ (floor, SPEC §0.7a)")
     e.add_argument("--fold-cost", type=float, help="scale the design's fold to R lane instructions a word")
     e.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
     e.add_argument("--json", action="store_true")

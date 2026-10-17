@@ -46,6 +46,9 @@ def test_the_measured_profile():
     assert e.sched == pytest.approx(1 - 22.4334 / 26.1221, abs=1e-5)
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.sched))
     assert e.floor == pytest.approx((22.4334 - JI - 12) / 22.4334, abs=1e-5)   # honest's overhead, under H's credit
+    m = E.eps(E.design("dither-duo"), PI, 8, credit="model")   # PROFILE's B(H)/f_max: ε_sched leaves ε for γ
+    assert m.sched is None and m.machine_eps == e.machine_eps and m.total() < e.total()
+    assert m.credit_ratio == pytest.approx(1 / (1 - e.sched), rel=1e-9)
     xin = E.eps(E.design("dither-xin"), PI, 8)
     assert xin.sched is None and xin.T_honest_source == "model"   # another fold: unmeasured
     up = E.eps(E.design("dither-duo").with_upfill(), PI, 8)
@@ -188,13 +191,27 @@ def test_the_certificate_and_the_terms_add_up():
 
 def test_luck_and_the_total():
     """Theorem S inside the LP: the cheater skips d̄ of the words, saving their MMA and operands and not their fold."""
-    assert E.deficit(DUO) == pytest.approx(40 * math.log(2) / (0.25 * 121180))
+    assert E.deficit(DUO) == pytest.approx(41 * math.log(2) / (0.25 * 48000))
     e = E.eps(DUO, PI, 8, operands="honest", lanes=False, uniform=False)
     assert e.cheat.binding == ("JI3e_0",)
     assert e.luck == pytest.approx(E.deficit(DUO) * (JI + 0.375) / (JI + 12.375), rel=1e-6)
     e = E.eps(DUO, PI, 8)
     assert e.sched is None and e.mand == 0 and e.clock == 0 and e.skip == 0.0063
     assert e.total() == pytest.approx(e.skip + e.machine_eps + e.luck)
+
+
+def test_luck_spends_one_budget_on_words_and_filler():
+    """Theorem S's budget ln(1/δ)/S weights each deficient block by 1 − p (¾ a word, 0.854 a filler block): a lane
+    filler is cheaper to skip than a word, so the lucky cheater leaves filler undone and saves more than d̄ of words."""
+    d = E.design("dither-two-sided-fill").with_upfill()
+    assert all(f.p == 0.854 for f in d.filler)
+    e = E.eps(d, PI, 8, operands="floor", credit="floor")
+    s = e.lucky.short
+    assert s["filler 1"] > 0 and (1 - d.p) * s["words"] + sum(
+        (1 - f.p) * s[f"filler {j + 1}"] for j, f in enumerate(d.filler)) == pytest.approx(E.budget(d), rel=1e-6)
+    words_only = E.eps(replace(d, filler=tuple(replace(f, p=0.0) for f in d.filler)), PI, 8, operands="floor",
+                       credit="floor")
+    assert e.luck > words_only.luck and words_only.lucky.short["filler 1"] == 0
 
 
 def test_designs_read_what_exists():
@@ -220,7 +237,7 @@ def test_cli(capsys):
     assert main(["eps", "dither-two-sided", "--upfill", "--operands", "floor", "--credit", "floor", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["credit"] == "floor" and d["terms"]["machine"] == 0 and d["terms"]["sched"] is None
-    assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["total"] < 0.0011
+    assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["total"] < 0.002
     assert main(["eps", "dither-two-sided", "--upfill", "--q", "4", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-two-sided+up" and d["operands"] == "free"

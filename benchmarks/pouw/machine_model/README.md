@@ -88,12 +88,13 @@ baseline, whose words belong to the baseline and not to ε, and the cheater is e
 delivery is free by default (SPEC's conservative choice), `--operands floor` prices it at the noise's floor φ_del (the
 design's `[operands]`: 1/39 a MMA where B̃ stays resident at the zero instance, 0.20 where both operands are fresh, SPEC
 §3.4) and `--operands honest` at honest's. The LP's duals are the certificate π*, at which ε_machine is ε_cert + ε_route.
-ε_luck is the same LP with d̄ of the words unwritten but still folded (Theorem S), so the terms add up to its time
-exactly. ε_sched needs a measured profile (`[measured]`) and is otherwise 0, honest certified at the model's bound.
-`--credit floor` reads ε as a fraction of the floor program ♭ instead of honest's kernel (SPEC §0.7a, Corollary D3): the
-tensor route at φ_del, the fold, the fillers and the baseline, with no overhead. ε_sched, ε_clock and honest's overhead
-above ♭ then leave ε for γ (honest over ♭ is printed beside it); which reading a guarantee certifies is the
-coordinator's call. γ is honest's time a useful MMA over the plain GEMM's model time: measured when the design runs the
+ε_luck is the same LP with Theorem S's budget ln(1/δ)/S spent on unwritten words (still folded) and undone filler, each
+deficient block weighted by 1 − p (¾ a word, 0.854 a filler block; SPEC §5), so the terms add up to its time exactly.
+ε_sched needs a measured profile (`[measured]`) and is otherwise 0, honest certified at the model's bound.
+`--credit model` reads ε as a fraction of honest's model bound B(H) (PROFILE's reading: ε_sched and ε_clock leave ε),
+and `--credit floor` as a fraction of the floor program ♭ (SPEC §0.7a, Corollary D3): the tensor route at φ_del, the
+fold, the fillers and the baseline, with no overhead. Honest's time above the credit then leaves ε for γ (printed beside
+it); which reading a guarantee certifies is the coordinator's call. γ is honest's time a useful MMA over the plain GEMM's model time: measured when the design runs the
 profile's kernel (scaled by the model's cost of any filler it adds), the model's otherwise.
 `--upfill` adds verified filler that keeps the uniform datapath busy for the credited program's time, which the cheater
 must then run on lanes or leave in place, and `--fill X` adds X lane instructions a word of verified filler on lanes,
