@@ -15,6 +15,14 @@ uv run machine-model census VF3n-16 --kind ATOMS64
 uv run machine-model attacks VF3n-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
+uv run machine-model eps                  # Dither's ε budget at q* = 8: every term, the LP's mixes, the ε(q*) curve
+uv run machine-model eps dither-two-sided --upfill --q 2.2 --json
+uv run machine-model eps --table --upfill # every design, without and with filler on the uniform datapath
+uv run machine-model eps --table --upfill --operands floor   # the cheater's operands at the noise's floor φ_del
+uv run machine-model eps --table --upfill --credit floor     # ε a fraction of the floor program ♭, not honest's kernel
+uv run machine-model eps --table --upfill --credit floor --q 2.16 --lookups   # with QSTAR's table route against L2
+uv run machine-model eps --table dither-duo --fold-sweep 1,1.5,2,2.5,3
+uv run machine-model eps --table --upfill --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
 ~~~
 
 | Path | What |
@@ -29,6 +37,10 @@ uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a
 | `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, what is under its floor, and a claim's kinds priced a word beside their measured cost |
 | `verity_machine_model/adopt.py` | Merging a measured census into `data/` at the last epoch, each (kind, row) at the faster of its two lines |
 | `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
+| `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA: `e-l7qs` is PROFILE's measured kernel, `dither-duo-l32` the provisional one the tests' hand arithmetic reads |
+| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (QSTAR's, provisional until a DATASHEET row) |
+| `data/designs/NAME.toml` | A protocol's parameters: its honest profile, L, its noise's operand-delivery floor φ_del, the fold and filler (lane instructions a word by class), plain (unfolded) MMAs beside its work, ε_skip's and ε_mand's parts with sources, ε_clock, Theorem S's δ, p and checks, and honest's baseline program (dp4a) |
+| `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
 
 An *epoch* is a state of the census and the attacks, named after the vector that introduced it. A census line or an attack
 holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector re-solves on
@@ -65,6 +77,49 @@ it on the UR fan-out alone (UNI 2 and UNI64 1 MACs a lane-word); the candidates 
 `VF3l-16-copy16-fan32`, `VF3l-16-copy32-fan16` and `VF3l-16-copy32` credit the routes they name, each at or below its
 measured cost. They wait for XOR-in. Theorem O's every-run floor reads only (π₃₂) and the load half: a UR word is one
 value, so the lanes it serves past the first are copies, credited only by copy luck.
+
+## ε in the tensor–scalar model
+
+`eps` reports two layers that are never mixed (Daniel, 17 Oct 06:29Z). The protocol with 100% checking, every word and
+operand verified, has the core ε, 1 − ε_core = (1 − ε_skip − ε_mand − ε_machine)(1 − ε_sched)(1 − ε_clock)
+(`--checking full`, the default). The sampling compiler adds ε_sample = ε_luck + ε_adapt, a function of the proof unit,
+its budget and its selection rule, 0 at 100% sampling, on its own line and in its own columns (`--checking sampled`).
+Each term is a fraction of honest time. Π is the current vector's rows at its epoch, read as the price LP reads them (SMSP-cycles a warp
+instruction a row). ε_machine is one LP, SPEC's §0.8 (note:20261017T0324Z-draft-eps1-spec): a program writes every
+committed word on one of four routes, folds every word and does the filler, and its time is its largest row. The routes
+are the tensor pipe (`L/32` MMAs for 128 words, with their operand delivery), CUDA lanes at q* lane instructions a word
+in any mix of the CUDA classes, the design's baseline program (dp4a: 8 IDP4A and its loads a word) and the uniform
+datapath (q* uniform instructions a word, the fold there too). Honest is the tensor route at the profile's cost plus the
+baseline, whose words belong to the baseline and not to ε, and the cheater is every route at q*. The cheater's operand
+delivery is free by default (SPEC's conservative choice), `--operands floor` prices it at the noise's floor φ_del (the
+design's `[operands]`: 1/39 a MMA where B̃ stays resident at the zero instance, 0.20 where both operands are fresh, SPEC
+§3.4) and `--operands honest` at honest's. The LP's duals are the certificate π*, at which ε_machine is ε_cert + ε_route.
+ε_luck is the same LP with Theorem S's budget ln(1/δ)/S spent on unwritten words (still folded) and undone filler, each
+deficient block weighted by 1 − p (¾ a word, 0.854 a filler block; SPEC §5), so the terms add up to its time exactly.
+ε_sched needs a measured profile (`[measured]`) and is otherwise 0, honest certified at the model's bound.
+`--credit model` reads ε as a fraction of honest's model bound B(H) (PROFILE's reading: ε_sched and ε_clock leave ε),
+and `--credit floor` as a fraction of the floor program ♭ (SPEC §0.7a, Corollary D3): the tensor route at φ_del, the
+fold, the fillers and the baseline, with no overhead. Honest's time above the credit then leaves ε for γ (printed beside
+it); which reading a guarantee certifies is the coordinator's call. γ is honest's time a useful MMA over the plain
+GEMM's model time: measured when the design runs the profile's kernel, otherwise the measured kernel's time plus the
+model's difference between the design and that kernel (PREDICT's arms: within −0.7% to +8.4% of measured on lane
+work), and the model's alone without a measured profile.
+`--upfill` adds verified filler that keeps the uniform datapath busy for the credited program's time, which the cheater
+must then run on lanes or leave in place, and `--fill X` adds X lane instructions a word of verified filler on lanes,
+which dilutes what the cheater saves on operands at the cost of γ (`dither-two-sided-fill` is two-sided dither with
+4.5). `--lookups` opens a fifth route for the cheater, the table route (`data/table.toml`, QSTAR's register-indexed
+lookups): q_T lane instructions a word from the lanes' class pool plus 8 B of L2 reads, against an L2 facet at the
+card's bandwidth, honest's own L2 traffic uncharged (`--lookup-q`, `--l2` override the file). ε_machine's floor is its
+value with the lane and uniform routes closed (the table route, priced by its bytes, stays as set), which no q* lowers,
+and the threshold is the least q* at which ε_machine reaches it. `--uni-issue C` charges each uniform instruction C
+times an ALU instruction's cost on the issue rows too (`issue` and the joint `JI…_0` row), which the census has left out
+since VF3 and PREDICT's u16s_l7qs measured at 0.92 (r20261017-045133-67bf). The uniform route then closes without UPFILL, and UPFILL costs honest issue
+time while the cheater does its checked work on lanes, 32 values a warp instruction. ε_adapt is the proof unit's, SPEC's
+Theorem D under the one-σ order (`data/adapt.toml`): today's segment spot check ≈ 21%, whole dot products +0.35%, and 0
+for whole-dot-product proofs that recompute their operands one stage back or for per-stage coins. `--checking sampled`
+charges today's by default and `--adapt UNIT` another; the Python `eps()` charges none unless given one. The table
+route's defaults (`data/table.toml`) are SCALAR-ROUTE as restated: 1.22 slots and 3.5 B of L2 a word, `--lookup-bytes 6`
+for single-field tables.
 
 ## Adopt a probe's census
 

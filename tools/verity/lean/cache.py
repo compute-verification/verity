@@ -406,7 +406,12 @@ def fetched_deps(d: Path) -> bool:
     """Whether a package's non-path dependencies are in place (`lake` would otherwise clone them first)."""
     m = d / "lake-manifest.json"
     deps = [p for p in json.loads(m.read_text()).get("packages", []) if p.get("type") != "path"] if m.is_file() else []
-    return not deps or all((d / ".lake" / "packages" / p["name"]).is_dir() for p in deps)
+    return not deps or all((d / ".lake" / "packages" / unescape(p["name"])).is_dir() for p in deps)
+
+
+def unescape(name: str) -> str:
+    """A manifest's package name as Lake names its directory: `«doc-gen4»` (a name Lean must escape) is `doc-gen4`."""
+    return name[1:-1] if name.startswith("«") and name.endswith("»") else name
 
 
 def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=print, env=os.environ, plat: str | None = None,

@@ -1,0 +1,42 @@
+# Dither as built: one-sided dither, duo receipts on every committed word at L = 32 (decisions 36, 45, 51, 57-65).
+name = "dither-duo"
+summary = "Dither as built: duo receipts (3 a word) at L = 32, the linears' peel"
+honest = "e-l7qs"
+L = 32
+work = 1.0
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDSM_X4 = 0.025641 }
+source = "SPEC §3.4: at the zero instance B̃ = ΠUᵀ repeats every 32 rows, so only A's fragment is delivered: >= 1/b with 4ab + 4a + 2b <= 240, least 1/39 at (a, b) = (1, 39) (note:20261017T0324Z-draft-eps1-spec)"
+
+[fold]
+name = "duo"
+ALU = 2
+IMAD = 1
+
+[skip.peel]
+eps = 0.0063
+source = "the linears' peel L/k, MAC-weighted over Llama-3.1-8B's linears (k = 4096 and 14336): 0.63% (note:20261017T0310Z-report-eps1-program §3, note:20261017T0031Z-draft-eps-budget); the linears only: SKIP's whole model as recorded is 25.5% prefill and 90.9% decode by time (QKᵀ's strip, the clean lm_head, softmax, forming, the deferred decode; note:20261017T0340Z-draft-skip)"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD)"
+
+[clock]
+eps = 0.1391
+source = "SPEC's P1 (note:20261017T0324Z-draft-eps1-spec, 04:47Z): the prover sets its own clocks, so f_max is the hardware's 2,430 MHz against honest at the node's 2,092 lock, 1 − 2092/2430, unless a trusted device attests the lock; at the lock every program runs 2,099.5-2,100.0 MHz (DATASHEET, r20261017-033131-4e67), and the default-clock gap is unmeasured"
+
+[luck]              # Theorem S: ln(1/δ)/((1 − p)·S)
+delta = 4.547473508864641e-13   # 2^-41: δ_bind + δ_ZK take half of 2^-40
+p = 0.75                        # every alphabet, repaired: a deficient word passes its check w.p. ≤ 3/4
+checks = 48000                  # one week of 12.6 s rounds (decision 15), one check a round
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 8, LDS128 = 0.5 }   # lane instructions a word: 8 IDP4A at k = 32, operands for an 8x8 tile a lane
+source = "dp4a at 8 IDP4A a word (note:20261017T0310Z-report-eps1-program §3); its loads: 2(a + b)/(ab) LDS.128 a word at a = b = 8"
+
+[routes]
+lanes = true
+uniform = true
