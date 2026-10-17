@@ -28,6 +28,7 @@ from .term import FP32_SIGNIFICAND_WIDTH, Term
 __all__ = [
     "BLACKWELL_SM120_S8_M16N8K32",
     "BLACKWELL_SM120_S8_M16N8K32_WRAP",
+    "BLACKWELL_SM120_U8S8_M16N8K32",
     "IntegerMma",
     "S32_MAX",
     "S32_MIN",
@@ -133,4 +134,17 @@ BLACKWELL_SM120_S8_M16N8K32_WRAP = IntegerMma(
     k_per_instruction=32,
     satfinite=False,
     validated="the form without .satfinite on the device: " + _PRO6000_IMMA_PROBE + "; out-of-range sums wrap modulo 2^32",
+)
+
+#: ``mma.sync.aligned.m16n8k32.row.col.s32.u8.s8.s32`` (SASS ``IMMA.16832.U8.S8``): A u8, B s8, no ``.satfinite``, so D wraps
+#: modulo 2^32.  The edited GEMM's dithered side runs this form; `ops.prims.BlackwellU8S8ImmaDot32_v1` registers it.
+BLACKWELL_SM120_U8S8_M16N8K32 = IntegerMma(
+    name="blackwell_sm120_u8s8_m16n8k32",
+    arch="sm_120",
+    dtype="u8",
+    b_dtype="s8",
+    operand_bits=8,
+    k_per_instruction=32,
+    satfinite=False,
+    validated="the u8.s8 form without .satfinite on the device: " + _PRO6000_IMMA_PROBE + "; out-of-range sums wrap modulo 2^32",
 )

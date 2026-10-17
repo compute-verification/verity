@@ -17,8 +17,11 @@ equal to `_v1` on every finite input.  A registered id denotes one function, so 
 `tc_dot_total_e4m3` on `models.BLACKWELL_SM120_E4M3_M16N8K32`, and `BlackwellE5m2QmmaDot32_v1` the same with E5M2 operands
 (`tc_dot_total_e5m2`); `BlackwellNvf4OmmaDot64_v1` its NVFP4 step
 (`models.BLACKWELL_SM120_NVF4`), with the two casts NVFP4 quantization uses, `F32ToE2m1Sat_v1` and `E4m3ToF32_v1`, and
-`BlackwellMxf4OmmaDot64_v1` its MXFP4 step (`models.BLACKWELL_SM120_MXF4`).  `HopperE4m3MmaV2Dot32_v1` is the k32 step of an e4m3
-`tl.dot` that Triton 3.7.1 lowers to MMAv2 on sm_90 (`total_fp8.HOPPER_E4M3_MMAV2_K32` in `total_fp8.MMAV2_E4M3_K_ORDER`).
+`BlackwellMxf4OmmaDot64_v1` its MXFP4 step (`models.BLACKWELL_SM120_MXF4`).  `BlackwellS8ImmaDot32_v1` is its exact s8 integer
+step (`silicon.integer.BLACKWELL_SM120_S8_M16N8K32`: 32 exact products summed with an s32 accumulator, clamped once to s32),
+and `BlackwellU8S8ImmaDot32_v1` its one sibling, u8 by s8 without `.satfinite` (`silicon.integer.BLACKWELL_SM120_U8S8_M16N8K32`,
+wrapping modulo 2^32), from the same probe run.
+`HopperE4m3MmaV2Dot32_v1` is the k32 step of an e4m3 `tl.dot` that Triton 3.7.1 lowers to MMAv2 on sm_90 (`total_fp8.HOPPER_E4M3_MMAV2_K32` in `total_fp8.MMAV2_E4M3_K_ORDER`).
 """
 from __future__ import annotations
 
@@ -28,6 +31,7 @@ from verity.ml.circuits.types import Array, Value
 from verity.ml.circuits.silicon import cast
 from verity.ml.circuits.silicon import models as _tc_models
 from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, BLACKWELL_SM120_U8S8_M16N8K32
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_E5M2_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4
 from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
@@ -41,12 +45,16 @@ A32_E5M2 = Array(32, E5M2)       # the same type as A32_8: an encoding type carr
 A64_4 = Array(64, E2M1)
 A4_8 = Array(4, E4M3)            # four UE4M3 block-scale bytes (the E4M3 encoding with the sign bit clear)
 A2_8 = Array(2, Value(8))        # two UE8M0 block-scale bytes
+S32 = Value(32)                  # an s32 accumulator word, two's complement
+A32_S8 = Array(32, Value(8))     # 32 s8 codes, two's complement
+A32_U8 = Array(32, Value(8))     # 32 u8 codes: the same type as A32_S8, read unsigned
 #: `cvt.rn.satfinite.e2m1x2.f32`'s code for a NaN input (E2M1 has none): +6, measured on the RTX PRO 6000 for every NaN element
 #: of `cvt_fp16_to_fp4` (whose FMUL hands it the canonical +NaN; the sign of a NaN input is not observable there, and dropped)
 E2M1_NAN_CODE = 0x7
 
-__all__ = ["A16", "A2_8", "A32_8", "A32_E5M2", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "E5M2", "F32", "AmpereBF16TcDot16", "Bf16ToF32",
-           "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64", "E4m3ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE2m1Sat", "F32ToE4m3Sat", "HopperBF16WgmmaDot16",
+__all__ = ["A16", "A2_8", "A32_8", "A32_E5M2", "A32_S8", "A32_U8", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "E5M2", "F32", "S32",
+           "AmpereBF16TcDot16", "Bf16ToF32", "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64",
+           "BlackwellNvf4OmmaDot64", "BlackwellS8ImmaDot32", "BlackwellU8S8ImmaDot32", "E4m3ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE2m1Sat", "F32ToE4m3Sat", "HopperBF16WgmmaDot16",
            "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "const"]
 
 
@@ -155,6 +163,27 @@ def BlackwellE5m2QmmaDot32(acc: int, *ab: int) -> int:
     adder, floor -133) with E5M2 products; total on every encoding: a NaN operand, or an infinity times a zero, is a NaN; an
     infinite product joins the group like an infinite accumulator (NaN when both signs meet); NaN -> 0x7FFFFFFF, zero +0."""
     return tc_dot_total_e5m2(BLACKWELL_SM120_E5M2_M16N8K32, acc, list(ab[:32]), list(ab[32:64]))
+
+
+@primitive("BlackwellS8ImmaDot32", 1, [("acc", S32), ("a", A32_S8), ("b", A32_S8)], S32,
+           conformance="exact-model-tested; RTX PRO 6000 Blackwell Server Edition (cc 12.0) IMMA.16832.S8.S8.SAT: run "
+                       "r20261015-084000-06d8, 10,243,968 words, 0 mismatches, the clamp tiles admitting only a clamp at D (trust "
+                       "dossier art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474, PINNED)")
+def BlackwellS8ImmaDot32(acc: int, *ab: int) -> int:
+    """One accumulator coordinate of `mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32` on sm_120a (SASS
+    `IMMA.16832.S8.S8.SAT`): `acc` (s32) plus the 32 exact products of s8 codes, summed exactly and clamped once to s32;
+    `silicon.integer.BLACKWELL_SM120_S8_M16N8K32`."""
+    return BLACKWELL_SM120_S8_M16N8K32.step(acc, ab[:32], ab[32:64])
+
+
+@primitive("BlackwellU8S8ImmaDot32", 1, [("acc", S32), ("a", A32_U8), ("b", A32_S8)], S32,
+           conformance="exact-model-tested; RTX PRO 6000 Blackwell Server Edition (cc 12.0) IMMA.16832.U8.S8: run "
+                       "r20261015-084000-06d8, 10,243,968 words, 0 mismatches, out-of-range sums wrapping modulo 2^32")
+def BlackwellU8S8ImmaDot32(acc: int, *ab: int) -> int:
+    """One accumulator coordinate of `mma.sync.aligned.m16n8k32.row.col.s32.u8.s8.s32` on sm_120a (SASS `IMMA.16832.U8.S8`):
+    `acc` (s32) plus the 32 exact products of a u8 code by an s8 code, summed exactly and reduced modulo 2^32 (no
+    `.satfinite`); `silicon.integer.BLACKWELL_SM120_U8S8_M16N8K32`."""
+    return BLACKWELL_SM120_U8S8_M16N8K32.step(acc, ab[:32], ab[32:64])
 
 
 @primitive("BlackwellNvf4OmmaDot64", 1, [("acc", F32), ("a", A64_4), ("b", A64_4), ("sa", A4_8), ("sb", A4_8)], F32,
