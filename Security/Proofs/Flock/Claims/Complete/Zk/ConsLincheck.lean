@@ -6,7 +6,8 @@ import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 
 The masked completeness is the plain one transferred through the pads, phase by phase, in three steps:
 
-1. **masks**: the masked prover's proof is the plain prover's with each sent value plus its pad (`zcZ_masks`, `lcZ_masks`);
+1. **masks**: the masked prover's proof is the plain prover's with each sent value plus its pad (`zcZ_masks`,
+   `lcZ_masks`);
 2. **masked evaluation**: the replay's affine form on a masked proof, at the pads, is the plain replay's value on the
    plain proof (`ZerocheckMasked.final_eval`; here `lcRunning_eval`, `lcFinal_eval`), at any coins, for any plain proof;
 3. **plain algebra**: the plain replay's two sides agree on the plain prover's proof (`Zc.fold_final`; here
@@ -107,8 +108,8 @@ theorem lcRunning_eval (lay : Zk.PadLayout) (h : Array F128) (lc lc' : LincheckP
       simp only [of_add, of_mul]
       ring
 
-/-- **`lincheck final` evaluates to its two plain sides**: the plain verifier's round fold from `α·final_a + final_b + β`
-and `⟨comb, z_partial⟩`, on the clear values, at any coins. -/
+/-- **`lincheck final` evaluates to its two plain sides**: the plain verifier's round fold from
+`α·final_a + final_b + β` and `⟨comb, z_partial⟩`, on the clear values, at any coins. -/
 theorem lcFinal_eval (lay : Zk.PadLayout) (h : Array F128) (lc lc' : LincheckProof) (n : ℕ) (hn : n ≤ lay.nLc)
     (hm : LcMasks lay h lc lc' n) (fA fB fA' fB' alpha beta : F128) (hA : fA' = fA + h[lay.fa]!)
     (hB : fB' = fB + h[lay.fb]!) (ts combv : Array F128) (hc : combv.size = 64) :
@@ -128,9 +129,9 @@ theorem lcFinal_eval (lay : Zk.PadLayout) (h : Array F128) (lc lc' : LincheckPro
 
 /-! ## At the masked prover -/
 
-/-- **`lincheck final` vanishes at the masked prover's pads**, at any pads and every coin where the circuit fold returns,
-for a trace of a witness of a statement the circuit fold realizes (`Lc.lcAlgebra_of`'s hypotheses, verbatim): the
-replay's folded circuit `comb` returns, and the row on the masked zerocheck's `final_a`, `final_b` and the masked
+/-- **`lincheck final` vanishes at the masked prover's pads**, at any pads and every coin where the circuit fold
+returns, for a trace of a witness of a statement the circuit fold realizes (`Lc.lcAlgebra_of`'s hypotheses, verbatim):
+the replay's folded circuit `comb` returns, and the row on the masked zerocheck's `final_a`, `final_b` and the masked
 lincheck proof evaluates to `0`. -/
 theorem lcFinal_zero (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
     (hfd : ∀ (α β : F128) (lw ρ ts v : Array F128), c.fold α lw ρ = .ok v → ∃ w, c.folded α β lw ρ ts = .ok w)
@@ -146,7 +147,8 @@ theorem lcFinal_zero (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes 
         ((Zc.out m zcs tr).rho.extract 0 (c.kLog - 6)) (pushes cs.τ (c.kLog - 6)) = .ok comb ∧
       evalL (Lincheck.lcFinal lay (ZcZ.proof lay h m zcs tr).finalA (ZcZ.proof lay h m zcs tr).finalB (cs.ca 0)
         (cs.cb 0) (LcZ.proof lay h c m tr (Zc.out m zcs tr) full cs).rounds
-        (LcZ.proof lay h c m tr (Zc.out m zcs tr) full cs).zPartial (pushes cs.τ (c.kLog - 6)) (c.kLog - 6) comb) h = 0 := by
+        (LcZ.proof lay h c m tr (Zc.out m zcs tr) full cs).zPartial (pushes cs.τ (c.kLog - 6)) (c.kLog - 6) comb) h =
+          0 := by
   obtain ⟨comb, hcomb, hsz, halg⟩ := Lc.lcAlgebra_of S c hc hfd m hm w hpin tr hz ha hb zcs cs full hfold
   refine ⟨comb, hcomb, ?_⟩
   rw [lcFinal_eval lay h _ _ (c.kLog - 6) hn (lcZ_masks lay h c m tr (Zc.out m zcs tr) full cs)

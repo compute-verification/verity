@@ -85,6 +85,7 @@ and the verifier's inner check passing on it, on rounds carrying its sends, at a
 (`verifyInnerWith_of`); `ConsZerocheck`, `ConsLincheck` and `ConsRingSwitch` the replay's message-dependent rows
 vanishing at the pads, from the plain algebra moved by the masks (`zcZ_masks`, `lcZ_masks`), and `ConsReplay` the five
 together on `Zk.replay`'s output wherever the plain checks pass at its coins (`replay_rows_zero`), and `ConsCoins`
-those coins the prover's on rounds carrying its sends (`replay_coins`, `replay_rows_zero_agrees`); `MaskRank` the
-mask slot's span and the rank bound the prover's refusal needs (`RankFull`, `DeployedRankBound`); `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved,
+those coins the prover's on rounds carrying its sends, with the rows as `ConsHold` (`replay_coins`,
+`replay_consHold_agrees`); `MaskRank` the mask slot's span and the rank bound the prover's refusal needs (`RankFull`,
+`DeployedRankBound`); `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved,
 and `complete_zk_relation` at the deployed relation. -/
