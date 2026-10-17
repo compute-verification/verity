@@ -1,6 +1,5 @@
 import Proofs.Flock.Claims.Recursion.VStarParts
-import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Flock.Claims.Recursion.Registered
+import Proofs.Flock.Claims.Recursion.DeployReg
 import Proofs.Flock.VBridge.OpeningUnit
 import Proofs.Flock.VBridge.Sparse.Laid
 import Proofs.Flock.VBridge.Sparse.Unit
@@ -37,25 +36,24 @@ lemma. Which template each part uses:
 * **Links** (`Claims.Recursion.VStar`): what is not the circuit's semantics, per kind of part, at one compiled
   statement, V* statement, coins and the part's witness: `LevelAt` (either level kind, M's `OpenLinks` body),
   `ResReadsAt` (an algebra part at either flag, M's `ResReads` body), `OpeningReadsAt`, `SparseCopyAt`; `PartKindAt` is
-  their disjunction and `PartsLinks s` asks it wherever part `s`'s outer relation holds with true recorded calls and its
-  coins are shown. `partChecks_of_partsLinks` gives `PartChecks s` at any shape; `partChecks_holo` at every part of the
-  holo shape. M's dense links are instances (`partsLinks_of_reads`, `partsLinks_of_open`).
-* **Card f93bbff1's fallback**: `PartsLinksOr`, `PartChecksOr`, `RegTiesOr` and `PartOpensOr` are the strict forms or a
-  setup tie at `xO` (`SetupColl`, `Registered.lean`, which `Br` finds at the run), with `partChecksOr_of_links` and
-  `partOpensOr_of_rows`. At a record whose setup evaluates nothing there is no setup tie (`not_setupColl`), so the Or
-  forms give the strict ones (`partsLinks_of_or`, `partChecks_of_or`).
+  their disjunction. `PartsLinks s` asks it wherever part `s`'s outer relation holds with true recorded calls and its
+  coins are shown; `PartsLinksOr s` allows `PartChecks`' fallback instead, a collision among the part's recorded calls
+  (`findColl`) or a tie with the setup's out-of-oracle evaluations at `xO` (`SetupColl`, which `Br` finds: card
+  f93bbff1). `partChecks_of_partsLinks` and `partChecks_of_partsLinksOr` give `PartChecks s` at any shape;
+  `partChecks_holo` at every part of the holo shape. M's dense links are instances (`partsLinks_of_reads`,
+  `partsLinks_of_open`).
 * **`PartLogs`** (`partLogs_of_shown_nil`, `partLogs_holo`): the algebra, opening and sparse parts' checks log no call,
   so `logs s = []` wherever their coins are shown (`LogsNil`); a level's check logs the climb's calls, which its
   recorded calls must hold (`ClimbLogs`).
 * **`PartOpens`** (`partOpens_of_rows`): the part opens, through recorded calls, the row commitments its circuit
-  computes (`RowsOpen`), and those are the commit strings the V* statement shows (`RegTies`, the registration, which
-  rests on SHA-512 over the setup's out-of-oracle evaluations: card f93bbff1's finder).
-* **At the holo shape** (`vstarAccepts_holo_of_links`, `vstarAccepts_holo_of_linksOr`; the bundles
-  `vstarParts_holo_of_links` and `vstarPartsStaging_holo_of_links`, what `codeFacts_of_parts` and `KS_of_parts` read),
-  and at `deployRec` (`vstarAccepts_holo_deployRec`, `vstarPartsStaging_holo_deployRec`, from `PartsLinksOr`), where
-  `deployRec` at `⟨L.msgs, L.calls⟩` reads through `L`
-  (`readsThrough_deployRec`), the outer record `deployZkRec relation` parses at `parseOf relation readOfO` by
-  definition, and the setup keeps `Deploy.setup`'s default `[]` (`setup_deployRec`).
+  computes (`RowsOpen`), and those are the commit strings the V* statement shows, or a collision the finders charge
+  (`RegTiesOr`; `RegTies` without the fallback). The setup recomputes its tree over the registered rows out of the
+  oracle, which is where `SetupColl` comes in.
+* **At the holo shape**: `vstarAccepts_holo_of_links` (`VStarAcceptsR`), and the bundles `vstarParts_holo_of_links` and
+  `vstarPartsStaging_holo_of_links`, what `codeFacts_of_parts`, `ksA_deployed_parts` and `KS_of_parts` read. At
+  `deployRec` over the outer record `deployZkRec relation` (`vstarAccepts_holo_deployRec`, `vstarParts_holo_deployRec`,
+  `vstarPartsStaging_holo_deployRec`), the outer record parses at `parseOf relation readOfO` by definition, and
+  `deployRec` at the layout's readers reads through them (`RecDeploy.readsThrough_deployRec`).
 -/
 
 namespace Flock.Readable
@@ -328,26 +326,18 @@ def PartsLinks (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) → ∀ c : ℕ → Coin, shows s x xO c →
       PartKindAt decode L chk x s xO c w
 
-/-- **Part `s`'s links, or a setup tie** (`PartsLinks` with card f93bbff1's fallback): at each accepted witness with
-true recorded calls, either some kind of part's links hold at every coins `xO` shows for part `s`, or the setup's
-out-of-oracle evaluations at `xO` collide among themselves or with a call the part records (`SetupColl`, which `Br`
-finds at the run: `setupColl_lift`). The registration ties (`v`, the zero output rows, the levels' `coef`, `dirs` and
-top) are where a link can fail without a recorded collision. -/
+/-- **Part `s`'s links, or a collision the finders charge** (`PartsLinks` with `PartChecks`' fallback): at each
+accepted witness with true recorded calls, either some kind of part's links hold at every coins `xO` shows for part
+`s`, or two of the part's recorded calls collide (`findColl`), or one of them ties with an evaluation the setup makes at
+`xO` outside the oracle (`SetupColl`, which `Br` finds at the run: card f93bbff1). The registration ties (`v`, the zero
+output rows, the levels' `coef`, `dirs` and top) are where a link can fail off a recorded collision. -/
 def PartsLinksOr (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T)
     (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
-      (∀ c : ℕ → Coin, shows s x xO c → PartKindAt decode L chk x s xO c w) ∨ SetupColl H D xO (L.calls x s w)
-
-/-- **`PartChecks` with card f93bbff1's fallback**: `PartChecks`' conclusion, or a setup tie at `xO` (`SetupColl`). -/
-def PartChecksOr (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
-    (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
-    Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
-    ((∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
-      (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) → chk s x c ms) ∨
-      (findColl (L.calls x s w)).isSome) ∨ SetupColl H D xO (L.calls x s w)
+      (∀ c : ℕ → Coin, shows s x xO c → PartKindAt decode L chk x s xO c w) ∨ (findColl (L.calls x s w)).isSome ∨
+        SetupColl H D xO (L.calls x s w)
 
 /-! ## `PartChecks` from the links -/
 
@@ -393,27 +383,20 @@ theorem partChecks_of_partsLinks {H : Msg → Msg} {D : Deploy Coin} {DO : Flock
   rw [hDO] at hck
   exact Or.inl fun c hc ms hms => chk_of_kindAt hck (hK c hc) hms
 
-/-- **`PartChecks` with card f93bbff1's fallback, from the links or a setup tie** (`PartsLinksOr`): off a setup tie
-the links give the inner check (`chk_of_kindAt`). -/
-theorem partChecksOr_of_links {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
+/-- **`PartChecks` at any part, from its links or a collision the finders charge** (`PartsLinksOr`): off the
+collision the links give the inner check (`chk_of_kindAt`), and the collision is `PartChecks`' own fallback. -/
+theorem partChecks_of_partsLinksOr {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
     {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (hR : PartsLinksOr H D DO decode L shape shows chk s) : PartChecksOr H D DO L shape shows chk s := by
+    (hR : PartsLinksOr H D DO decode L shape shows chk s) : PartChecks H D DO L shape shows chk s := by
   intro x st hst hf xO w hck htrue
   rcases hR x st hst hf xO w hck htrue with hK | hK
   · rw [hDO] at hck
-    exact Or.inl (Or.inl fun c hc ms hms => chk_of_kindAt hck (hK c hc) hms)
+    exact Or.inl fun c hc ms hms => chk_of_kindAt hck (hK c hc) hms
   · exact Or.inr hK
 
-/-- `PartChecks` is `PartChecksOr` without its fallback. -/
-theorem partChecksOr_of_partChecks {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
-    {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
-    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} (h : PartChecks H D DO L shape shows chk s) :
-    PartChecksOr H D DO L shape shows chk s := fun x st hst hf xO w hck htrue =>
-  Or.inl (h x st hst hf xO w hck htrue)
-
-/-- Part links are part links or a setup tie. -/
+/-- Part links are part links or a collision. -/
 theorem partsLinksOr_of_links {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T}
     {decode : Msg → Option Flock.Readable.Read} {L : Layout} {shape : Form → Prop}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ}
@@ -452,22 +435,13 @@ theorem partsLinks_of_open {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deplo
   obtain ⟨p, hx, ht, hpi, t, htl, LANES, Ht, hrec, hp, o, g, u, ho, hg, hu, hlink⟩ := hR x st hst hf xO c hc
   exact Or.inl ⟨p, hx, ht, hpi, t, htl, LANES, Ht, hrec, Or.inl hp, o, g, u, ho, hg, hu, hlink w⟩
 
-/-- **`PartChecks` at every part of the holo shape**: `partChecks_of_partsLinks` at `Form.Holo`. -/
+/-- **`PartChecks` at every part of the holo shape**: `partChecks_of_partsLinksOr` at `Form.Holo`. -/
 theorem partChecks_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (hR : ∀ s, PartsLinks H D DO decode L Form.Holo shows chk s) : ∀ s, PartChecks H D DO L Form.Holo shows chk s :=
-  fun s => partChecks_of_partsLinks hDO (hR s)
-
-/-- **`PartChecksOr` at every part of the holo shape**: `partChecksOr_of_links` at `Form.Holo`. -/
-theorem partChecksOr_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
-    {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
-    {decode : Msg → Option Flock.Readable.Read}
-    (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (hR : ∀ s, PartsLinksOr H D DO decode L Form.Holo shows chk s) :
-    ∀ s, PartChecksOr H D DO L Form.Holo shows chk s :=
-  fun s => partChecksOr_of_links hDO (hR s)
+    (hR : ∀ s, PartsLinksOr H D DO decode L Form.Holo shows chk s) : ∀ s, PartChecks H D DO L Form.Holo shows chk s :=
+  fun s => partChecks_of_partsLinksOr hDO (hR s)
 
 /-! ## `PartLogs` -/
 
@@ -509,11 +483,11 @@ theorem partLogs_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coi
 /-! ## `PartOpens` -/
 
 /-- **`PartOpens` at a part that holds no message**: no round's message is held, so there is nothing to open. -/
-theorem partOpens_of_none {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout} {shape : Form → Prop}
-    {opening : Opening} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
+theorem partOpens_of_none {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
+    {shape : Form → Prop} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     (h : ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ i, L.msgAt x s i = none) :
-    PartOpens D DO L shape opening cmt s := by
-  intro x st hst hf xO w _ i _ m hm
+    PartOpens H D DO L shape opening cmt s := by
+  intro x st hst hf xO w _ _ i _ m hm
   simp [Layout.held, h x st hst hf i] at hm
 
 /-- **Part `s` opens, through calls it records, the row commitments its circuit computes** (a code fact about part
@@ -529,125 +503,75 @@ def RowsOpen (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shap
 /-- **The registration: part `s`'s row commitments are the commit strings its V\* statement shows** (a code fact about
 the setup's registered reads, `RecIns.setup`): wherever the outer relation holds at a V* statement `xO` of a compiled
 statement of the shape, at each round whose message the part holds, the `b ‖ c` its rows compute is the round's commit
-string `xO` shows (`cmt x i xO`, the registered `rec-c<i>`). The setup's tree over the registered rows is recomputed
-out of the oracle, so this binds by SHA-512's collision resistance over those evaluations (card f93bbff1). -/
+string `xO` shows (`cmt x i xO`, the registered `rec-c<i>`). -/
 def RegTies (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
     (bc : Msg → ℕ → Flock.Wit → ℕ → Msg) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → ∀ i < L.rounds x, (L.msgAt x s i).isSome → bc x s w i = cmt x i xO
 
-/-- **`PartOpens` from the row commitments and the registration**: the part opens its rows' `b ‖ c` (`RowsOpen`), which
-is the round's commit string its V* statement shows (`RegTies`). -/
-theorem partOpens_of_rows {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout} {shape : Form → Prop}
-    {opening : Opening} {bc : Msg → ℕ → Flock.Wit → ℕ → Msg} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
-    (hR : RowsOpen D DO L shape opening bc s) (hT : RegTies D DO L shape bc cmt s) :
-    PartOpens D DO L shape opening cmt s := by
-  intro x st hst hf xO w hck i hi m hm
-  have hs : (L.msgAt x s i).isSome := by
-    cases h : L.msgAt x s i with
-    | none => simp [Layout.held, h] at hm
-    | some _ => rfl
-  rw [← hT x st hst hf xO w hck i hi hs]
-  exact hR x st hst hf xO w hck i hi m hm
-
-/-- **The registration, or a setup tie** (`RegTies` with card f93bbff1's fallback): at each accepted witness with true
-recorded calls, either part `s`'s row commitments are the commit strings `xO` shows, or the setup's out-of-oracle
-evaluations at `xO` collide among themselves or with a call the part records (`SetupColl`). -/
+/-- **The registration, or a collision the finders charge** (`RegTies` with `PartOpens`' fallback): at each accepted
+witness with true recorded calls, part `s`'s row commitments are the commit strings `xO` shows, or two of the part's
+recorded calls collide (`findColl`), or one of them ties with an evaluation the setup makes at `xO` outside the oracle
+(`SetupColl`). The setup recomputes its tree over the registered rows out of the oracle, so this is where the
+registration rests on SHA-512's collision resistance over those evaluations (card f93bbff1). -/
 def RegTiesOr (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
     (bc : Msg → ℕ → Flock.Wit → ℕ → Msg) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
-      (∀ i < L.rounds x, (L.msgAt x s i).isSome → bc x s w i = cmt x i xO) ∨ SetupColl H D xO (L.calls x s w)
-
-/-- **`PartOpens` with card f93bbff1's fallback**: at each accepted witness with true recorded calls, `PartOpens`'
-conclusion, or a setup tie at `xO` (`SetupColl`). -/
-def PartOpensOr (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
-    (opening : Opening) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
-    Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
-      (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ∃ cs, cs ⊆ L.calls x s w ∧ opening.opens (cmt x i xO) m cs) ∨
+      (∀ i < L.rounds x, (L.msgAt x s i).isSome → bc x s w i = cmt x i xO) ∨ (findColl (L.calls x s w)).isSome ∨
         SetupColl H D xO (L.calls x s w)
 
-/-- **`PartOpensOr` from the row commitments and the registration or a setup tie** (`partOpens_of_rows` off the tie). -/
-theorem partOpensOr_of_rows {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
-    {shape : Form → Prop} {opening : Opening} {bc : Msg → ℕ → Flock.Wit → ℕ → Msg} {cmt : Msg → ℕ → Msg → Msg}
-    {s : ℕ} (hR : RowsOpen D DO L shape opening bc s) (hT : RegTiesOr H D DO L shape bc cmt s) :
-    PartOpensOr H D DO L shape opening cmt s := by
-  intro x st hst hf xO w hck htrue
-  refine (hT x st hst hf xO w hck htrue).imp (fun hT' i hi m hm => ?_) id
-  have hs : (L.msgAt x s i).isSome := by
-    cases h : L.msgAt x s i with
-    | none => simp [Layout.held, h] at hm
-    | some _ => rfl
-  rw [← hT' i hi hs]
-  exact hR x st hst hf xO w hck i hi m hm
-
-/-- The registration is the registration or a setup tie. -/
+/-- The registration is the registration or a collision. -/
 theorem regTiesOr_of_regTies {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
     {shape : Form → Prop} {bc : Msg → ℕ → Flock.Wit → ℕ → Msg} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     (h : RegTies D DO L shape bc cmt s) : RegTiesOr H D DO L shape bc cmt s :=
   fun x st hst hf xO w hck _ => Or.inl (h x st hst hf xO w hck)
 
-/-! ## A record whose setup evaluates nothing -/
+/-- **`PartOpens` from the row commitments and the registration**: off a collision the part opens its rows' `b ‖ c`
+(`RowsOpen`), which is the round's commit string its V* statement shows (`RegTiesOr`); the collision is `PartOpens`'
+own fallback. -/
+theorem partOpens_of_rows {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
+    {shape : Form → Prop} {opening : Opening} {bc : Msg → ℕ → Flock.Wit → ℕ → Msg} {cmt : Msg → ℕ → Msg → Msg}
+    {s : ℕ} (hR : RowsOpen D DO L shape opening bc s) (hT : RegTiesOr H D DO L shape bc cmt s) :
+    PartOpens H D DO L shape opening cmt s := by
+  intro x st hst hf xO w hck htrue i hi m hm
+  rcases hT x st hst hf xO w hck htrue with hT' | hT'
+  · have hs : (L.msgAt x s i).isSome := by
+      cases h : L.msgAt x s i with
+      | none => simp [Layout.held, h] at hm
+      | some _ => rfl
+    rw [← hT' i hi hs]
+    exact Or.inl (hR x st hst hf xO w hck i hi m hm)
+  · exact Or.inr hT'
 
-/-- **No setup tie at a record whose setup evaluates nothing**: `Br` searches no setup evaluation
-(`setupCalls_eq_nil`), so it finds nothing. -/
-theorem not_setupColl {H : Msg → Msg} {D : Deploy Coin} (h : ∀ xO, D.setup xO = []) (xO : Msg)
-    (cs : List (Msg × Msg)) : ¬ SetupColl H D xO cs := by
-  simp [SetupColl, setupCalls_eq_nil H D h, findCollIn]
+/-! ## `VStarAcceptsR` and V*'s parts at the holo shape -/
 
-/-- At a record whose setup evaluates nothing, part links or a setup tie are part links. -/
-theorem partsLinks_of_or {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T}
-    {decode : Msg → Option Flock.Readable.Read} {L : Layout} {shape : Form → Prop}
-    {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ}
-    (hno : ∀ xO, D.setup xO = []) (h : PartsLinksOr H D DO decode L shape shows chk s) :
-    PartsLinks H D DO decode L shape shows chk s := fun x st hst hf xO w hck htrue =>
-  (h x st hst hf xO w hck htrue).resolve_right (not_setupColl hno xO _)
-
-/-- At a record whose setup evaluates nothing, `PartChecksOr` is `PartChecks`. -/
-theorem partChecks_of_or {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
-    {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
-    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} (hno : ∀ xO, D.setup xO = [])
-    (h : PartChecksOr H D DO L shape shows chk s) : PartChecks H D DO L shape shows chk s :=
-  fun x st hst hf xO w hck htrue => (h x st hst hf xO w hck htrue).resolve_right (not_setupColl hno xO _)
-
-/-! ## `VStarAccepts` at the holo shape -/
-
-/-- **`VStarAccepts` at the holo shape from the parts' links**: `vstarAccepts_holo` with every part's `PartChecks` from
-its links (`partChecks_holo`) and its `PartOpens` from its rows and the registration (`partOpens_of_rows`). -/
+/-- **`VStarAcceptsR` at the holo shape from the parts' links**: `vstarAccepts_holo` with every part's `PartChecks`
+from its links or a collision (`partChecks_holo`) and its `PartOpens` from its rows and the registration or a
+collision (`partOpens_of_rows`). -/
 theorem vstarAccepts_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {IV : Verifier Coin} {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg}
     {decode : Msg → Option Flock.Readable.Read} {bc : Msg → ℕ → Flock.Wit → ℕ → Msg}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (hR : ReadsThrough H D IV L.msgs L.calls) (hC : ∀ s, PartsLinks H D DO decode L Form.Holo shows chk s)
-    (hRows : ∀ s, RowsOpen D DO L Form.Holo opening bc s) (hT : ∀ s, RegTies D DO L Form.Holo bc cmt s)
-    (hS : Staged H D I L Form.Holo shows cmt) (hD : Decomp H D IV Form.Holo chk) : VStarAccepts H D I DO Form.Holo :=
-  vstarAccepts_holo hR (partChecks_holo hDO hC) (fun s => partOpens_of_rows (hRows s) (hT s)) hS hD
-
-/-- **`VStarAccepts` at the holo shape from the parts' links or a setup tie, at a record whose setup evaluates
-nothing**: there `Br` finds no setup tie (`not_setupColl`), so the links stand (`partsLinks_of_or`). -/
-theorem vstarAccepts_holo_of_linksOr [Inhabited Coin] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
-    {DO : Flock.Deploy Coin Col T} {IV : Verifier Coin} {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
-    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg}
-    {decode : Msg → Option Flock.Readable.Read} {bc : Msg → ℕ → Flock.Wit → ℕ → Msg}
-    (hno : ∀ xO, D.setup xO = []) (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (hR : ReadsThrough H D IV L.msgs L.calls) (hC : ∀ s, PartsLinksOr H D DO decode L Form.Holo shows chk s)
-    (hRows : ∀ s, RowsOpen D DO L Form.Holo opening bc s) (hT : ∀ s, RegTies D DO L Form.Holo bc cmt s)
-    (hS : Staged H D I L Form.Holo shows cmt) (hD : Decomp H D IV Form.Holo chk) : VStarAccepts H D I DO Form.Holo :=
-  vstarAccepts_holo_of_links hDO hR (fun s => partsLinks_of_or hno (hC s)) hRows hT hS hD
+    (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D)
+    (hC : ∀ s, PartsLinksOr H D DO decode L Form.Holo shows chk s)
+    (hRows : ∀ s, RowsOpen D DO L Form.Holo opening bc s) (hT : ∀ s, RegTiesOr H D DO L Form.Holo bc cmt s)
+    (hS : Staged H D I L Form.Holo shows cmt) (hD : Decomp H D IV Form.Holo chk) :
+    VStarAcceptsR H D I DO Form.Holo :=
+  vstarAccepts_holo hR hVL (partChecks_holo hDO hC) (fun s => partOpens_of_rows (hRows s) (hT s)) hS hD
 
 /-- **V\*'s parts at the holo shape, from the parts' links** (`VStarParts` at `Form.Holo`, what `codeFacts_of_parts`
-reads there): every part's `PartChecks` from its links (`partChecks_holo`), its `PartOpens` from its rows and the
-registration (`partOpens_of_rows`), and its `PartLogs` nil where its coins are shown or a level's climb
-(`partLogs_holo`). -/
+and `ksA_deployed_parts` read there): every part's `PartChecks` from its links (`partChecks_holo`), its `PartOpens`
+from its rows and the registration (`partOpens_of_rows`), and its `PartLogs` nil where its coins are shown or a level's
+climb (`partLogs_holo`). -/
 theorem vstarParts_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {L : Layout} {opening : Opening} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {cmt : Msg → ℕ → Msg → Msg}
     {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {decode : Msg → Option Flock.Readable.Read}
     {bc : Msg → ℕ → Flock.Wit → ℕ → Msg} (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (hC : ∀ s, PartsLinks H D DO decode L Form.Holo shows chk s) (hRows : ∀ s, RowsOpen D DO L Form.Holo opening bc s)
-    (hT : ∀ s, RegTies D DO L Form.Holo bc cmt s)
+    (hC : ∀ s, PartsLinksOr H D DO decode L Form.Holo shows chk s)
+    (hRows : ∀ s, RowsOpen D DO L Form.Holo opening bc s) (hT : ∀ s, RegTiesOr H D DO L Form.Holo bc cmt s)
     (hLg : ∀ s, LogsNil D Form.Holo shows logs s ∨ ClimbLogs H D DO L Form.Holo shows logs s)
     (hS : Staged H D I L Form.Holo shows cmt) (hD : Decomp H D I.V Form.Holo chk)
     (hLD : LogDecomp H D I.V Form.Holo logs) (hH : Held D I L Form.Holo) : VStarParts H D I DO L opening Form.Holo :=
@@ -663,8 +587,8 @@ theorem vstarPartsStaging_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : 
     {cmt : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
     {decode : Msg → Option Flock.Readable.Read} {bc : Msg → ℕ → Flock.Wit → ℕ → Msg}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (hC : ∀ s, PartsLinks H D DO decode L Form.Holo shows chk s) (hRows : ∀ s, RowsOpen D DO L Form.Holo opening bc s)
-    (hT : ∀ s, RegTies D DO L Form.Holo bc cmt s)
+    (hC : ∀ s, PartsLinksOr H D DO decode L Form.Holo shows chk s)
+    (hRows : ∀ s, RowsOpen D DO L Form.Holo opening bc s) (hT : ∀ s, RegTiesOr H D DO L Form.Holo bc cmt s)
     (hLg : ∀ s, LogsNil D Form.Holo shows logs s ∨ ClimbLogs H D DO L Form.Holo shows logs s)
     (hV : VstarShows D I L Form.Holo decC shows cmt) (hD : Decomp H D I.V Form.Holo chk)
     (hLD : LogDecomp H D I.V Form.Holo logs) (hH : Held D I L Form.Holo) :
@@ -676,56 +600,65 @@ end Facts
 
 /-! ## At `deployRec` -/
 
-/-- **`deployRec` at the layout's readers reads through them**: its inner view is `IV`'s run of `b.rd.msgs` at the
-statement's inner part (`xI_deployRec`), and its calls are `b.rd.calls`' (`Deploy.lean`), by definition. -/
-theorem readsThrough_deployRec (H : Msg → Msg) (IV : Verifier FlockDeploy.Coin) (ivScope : Msg → Bool)
-    (b : RecDeploy.Brings) {L : Layout} (hm : b.rd.msgs = L.msgs) (hc : b.rd.calls = L.calls) :
-    ReadsThrough H (RecDeploy.deployRec IV ivScope b) IV L.msgs L.calls := by
-  refine ⟨fun x r ws => ?_, fun x ws => ?_⟩
-  · show RecDeploy.innerView H IV b.rd x r ws = _
-    unfold RecDeploy.innerView
-    rw [hm]
-    rfl
-  · show (ws.mapIdx fun s w => b.rd.calls x s w).flatten = _
-    rw [hc]
+section Deployed
 
-/-- `deployRec`'s setup evaluates nothing outside the oracle: it keeps `Deploy.setup`'s default. -/
-theorem setup_deployRec (IV : Verifier FlockDeploy.Coin) (ivScope : Msg → Bool) (b : RecDeploy.Brings) :
-    ∀ xO, (RecDeploy.deployRec IV ivScope b).setup xO = [] := fun _ => rfl
+variable {W : Type} (H : Msg → Msg) (I : Inner FlockDeploy.Coin W) (ivScope : Msg → Bool) (b : RecDeploy.Brings)
 
-/-- **`VStarAccepts` at the holo shape at `deployRec`**, over the outer record `deployZkRec relation`: the readers are
-the layout's (`readsThrough_deployRec`), the outer record parses at `parseOf relation readOfO` by definition, `Br`
-finds no setup tie (`setup_deployRec`), and the rest is `vstarAccepts_holo_of_linksOr`: the parts' links or a setup
-tie, rows and registration, the staging and the decomposition. -/
-theorem vstarAccepts_holo_deployRec {W : Type} (H : Msg → Msg) (I : Inner FlockDeploy.Coin W)
-    (ivScope : Msg → Bool) (b : RecDeploy.Brings) {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → FlockDeploy.Coin) → Prop}
-    {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg}
-    {bc : Msg → ℕ → Flock.Wit → ℕ → Msg} (hm : b.rd.msgs = L.msgs) (hc : b.rd.calls = L.calls)
+/-- **`VStarAcceptsR` at the holo shape at `deployRec`**, over the outer record `deployZkRec relation`: where
+`deployRec` brings the layout's readers it reads through them (`RecDeploy.readsThrough_deployRec`), its V* statements
+number `nS` (`RecDeploy.vstarLen_deployRec`), the outer record parses at `parseOf relation readOfO` by definition, and
+the rest is
+`vstarAccepts_holo_of_links`: the parts' links, rows and registration, each or a collision the finders charge (`Be`'s
+among recorded calls, `Br`'s with the setup `b.setup` lists), the staging and the decomposition. -/
+theorem vstarAccepts_holo_deployRec {L : Layout} (hb : b.rd = RecDeploy.readersOf L)
+    {shows : ℕ → Msg → Msg → (ℕ → FlockDeploy.Coin) → Prop} {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop}
+    {opening : Opening} {cmt : Msg → ℕ → Msg → Msg} {bc : Msg → ℕ → Flock.Wit → ℕ → Msg}
     (hC : ∀ s, PartsLinksOr H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
       RecDeploy.readOfO L Form.Holo shows chk s)
     (hRows : ∀ s, RowsOpen (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       Form.Holo opening bc s)
-    (hT : ∀ s, RegTies (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
+    (hT : ∀ s, RegTiesOr H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       Form.Holo bc cmt s)
     (hS : Staged H (RecDeploy.deployRec I.V ivScope b) I L Form.Holo shows cmt)
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk) :
-    VStarAccepts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) Form.Holo :=
-  vstarAccepts_holo_of_linksOr (setup_deployRec I.V ivScope b) rfl (readsThrough_deployRec H I.V ivScope b hm hc) hC
-    hRows hT hS hD
+    VStarAcceptsR H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) Form.Holo :=
+  vstarAccepts_holo_of_links rfl (RecDeploy.readsThrough_deployRec H I.V ivScope b L hb)
+    (RecDeploy.vstarLen_deployRec I.V ivScope b) hC hRows hT hS hD
 
-/-- **V\*'s parts at the holo shape at `deployRec`** (`KS_of_parts`' holo premise there), over the outer record
-`deployZkRec relation`: `vstarPartsStaging_holo_of_links` with the outer record's parser by definition and the links
-from the links or a setup tie, which `deployRec`'s empty setup rules out (`setup_deployRec`). -/
-theorem vstarPartsStaging_holo_deployRec {W : Type} (H : Msg → Msg) (I : Inner FlockDeploy.Coin W)
-    (ivScope : Msg → Bool) (b : RecDeploy.Brings) {L : Layout} {opening : Opening}
-    {decC : Msg → Msg → FlockDeploy.Coin} {shows : ℕ → Msg → Msg → (ℕ → FlockDeploy.Coin) → Prop}
-    {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop} {cmt : Msg → ℕ → Msg → Msg}
-    {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)} {bc : Msg → ℕ → Flock.Wit → ℕ → Msg}
+/-- **V\*'s parts at the holo shape at `deployRec`** (`ksA_deployed_parts`' holo premise, at `relO := relation`):
+`vstarParts_holo_of_links` with the outer record `deployZkRec relation`'s parser by definition. -/
+theorem vstarParts_holo_deployRec {L : Layout} {opening : Opening}
+    {shows : ℕ → Msg → Msg → (ℕ → FlockDeploy.Coin) → Prop} {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop}
+    {cmt : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)}
+    {bc : Msg → ℕ → Flock.Wit → ℕ → Msg}
     (hC : ∀ s, PartsLinksOr H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
       RecDeploy.readOfO L Form.Holo shows chk s)
     (hRows : ∀ s, RowsOpen (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       Form.Holo opening bc s)
-    (hT : ∀ s, RegTies (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
+    (hT : ∀ s, RegTiesOr H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
+      Form.Holo bc cmt s)
+    (hLg : ∀ s, LogsNil (RecDeploy.deployRec I.V ivScope b) Form.Holo shows logs s ∨
+      ClimbLogs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L Form.Holo
+        shows logs s)
+    (hS : Staged H (RecDeploy.deployRec I.V ivScope b) I L Form.Holo shows cmt)
+    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk)
+    (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs)
+    (hH : Held (RecDeploy.deployRec I.V ivScope b) I L Form.Holo) :
+    VStarParts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
+      Form.Holo :=
+  vstarParts_holo_of_links rfl hC hRows hT hLg hS hD hLD hH
+
+/-- **V\*'s parts at the holo shape at `deployRec`, with the staging off the run** (`KS_of_parts`' holo premise
+there): `vstarPartsStaging_holo_of_links` with the outer record `deployZkRec relation`'s parser by definition. -/
+theorem vstarPartsStaging_holo_deployRec {L : Layout} {opening : Opening} {decC : Msg → Msg → FlockDeploy.Coin}
+    {shows : ℕ → Msg → Msg → (ℕ → FlockDeploy.Coin) → Prop} {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop}
+    {cmt : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)}
+    {bc : Msg → ℕ → Flock.Wit → ℕ → Msg}
+    (hC : ∀ s, PartsLinksOr H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation)
+      RecDeploy.readOfO L Form.Holo shows chk s)
+    (hRows : ∀ s, RowsOpen (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
+      Form.Holo opening bc s)
+    (hT : ∀ s, RegTiesOr H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       Form.Holo bc cmt s)
     (hLg : ∀ s, LogsNil (RecDeploy.deployRec I.V ivScope b) Form.Holo shows logs s ∨
       ClimbLogs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L Form.Holo
@@ -736,7 +669,8 @@ theorem vstarPartsStaging_holo_deployRec {W : Type} (H : Msg → Msg) (I : Inner
     (hH : Held (RecDeploy.deployRec I.V ivScope b) I L Form.Holo) :
     VStarPartsStaging (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) H L
       opening decC Form.Holo :=
-  vstarPartsStaging_holo_of_links rfl (fun s => partsLinks_of_or (setup_deployRec I.V ivScope b) (hC s)) hRows hT hLg
-    hV hD hLD hH
+  vstarPartsStaging_holo_of_links rfl hC hRows hT hLg hV hD hLD hH
+
+end Deployed
 
 end Claims.Recursion.VStar
