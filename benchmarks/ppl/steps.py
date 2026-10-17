@@ -350,8 +350,10 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
     dithered, K rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-top - 1, top), b
     a fresh bit (for K, one for every query head), so the served operand is within [-top - 1, top]). P: after the
     softmax, one scale per query row, or per (row, block of `p_block` keys), `p_sink` putting key 0 in a block of its
-    own, rounded to [0, p_top] or dithered onto it (its bits drawn only where key <= query, so a dithered P serves no
-    future key), each block's product read and scaled on its own. V: one scale per (KV head, channel)
+    own, rounded to [0, p_top], or (`dither`) rounded to [0, p_top - 1] plus a fresh bit where key <= query (so a
+    dithered P serves no future key), the bits' mean, half the causal sum of V, taken off the product in the epilogue:
+    P is non-negative and mostly under one step, so a bit's +1/2 would not average out over the keys. Each block's
+    product read and scaled on its own. V: one scale per (KV head, channel)
     (`v_scale = "head"`: per KV head), rounded or dithered. Products exact in FP32 chunks."""
     rep = mm.extra["rep"]
     if mm.kind == "qk":
@@ -386,13 +388,16 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
     num = None
     for a, b in zip(edges, edges[1:]):
         blk = pr[..., a:b]
+        top = p_top - 1 if p == "dither" else p_top
+        sb = blk.amax(-1, keepdim=True).clamp(min=1e-30) / top
+        pi = torch.round(blk / sb).clamp(0, top)
         if p == "dither":
-            pi, sb = floor_quant(blk, -1, p_top)
-            pi = pi + mm.coins(pi.shape) * mm.extra["causal"][:, a:b]
-        else:
-            sb = blk.amax(-1, keepdim=True).clamp(min=1e-30) / p_top
-            pi = torch.round(blk / sb).clamp(0, p_top)
-        part = sb.double() * nxt(mm.integer(pi, vi[..., a:b, :], keys=(a, b), v_full=vi))
+            causal = mm.extra["causal"][:, a:b]
+            pi = pi + mm.coins(pi.shape) * causal
+        prod = nxt(mm.integer(pi, vi[..., a:b, :], keys=(a, b), v_full=vi))
+        if p == "dither":
+            prod = prod - 0.5 * (causal.double() @ vi[..., a:b, :].double())
+        part = sb.double() * prod
         num = part if num is None else num + part
     return (num * sv.double()).float()
 
