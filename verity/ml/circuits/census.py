@@ -78,7 +78,9 @@ from .types import Array, Record, Tuple as TupleT, Type, Value
 SCHEMA = "verity/census/v1"
 
 #: products an instance of each tensor-core step family performs (its k): the word primitives, and the Boolean Definitions that
-#: compute them (`ml.circuits.ops.boolean.gemm`)
+#: compute them (`ml.circuits.ops.boolean.gemm`, `ml.circuits.ops.boolean.s8`).  The s8 IMMA steps are one family in two arms,
+#: s8 x s8 clamped to s32 and u8 x s8 wrapping, 32 products each; the s8 matmul Definitions over them name the arm in a static and
+#: count by their `FAMILY_COUNTS` rule
 PRODUCTS: dict[str, int] = {
     "AmpereBF16TcDot16_v1": 16, "AmpereBF16TcDot16_v2": 16, "HopperBF16WgmmaDot16_v1": 16, "HopperTf32WgmmaDot8_v1": 8,
     "HopperE4m3QgmmaDot32_v1": 32, "HopperE4m3MmaV2Dot32_v1": 32, "BlackwellE4m3QmmaDot32_v1": 32,
@@ -86,7 +88,8 @@ PRODUCTS: dict[str, int] = {
     "PouwDot16U8S8_v1": 16, "NcpDot16I7_v1": 16,
     "AmpereBF16TcDot16_v3": 16, "HopperBF16WgmmaDot16_v2": 16, "HopperE4m3QgmmaDot32_v2": 32, "HopperE4m3MmaV2Dot32_v2": 32,
     "BlackwellE4m3QmmaDot32_v2": 32, "BlackwellE5m2QmmaDot32_v2": 32, "BlackwellNvf4OmmaDot64_v2": 64,
-    "BlackwellMxf4OmmaDot64_v2": 64, "BlackwellS8ImmaDot32_v1": 32,
+    "BlackwellMxf4OmmaDot64_v2": 64,
+    "BlackwellS8ImmaDot32_v1": 32, "BlackwellU8S8ImmaDot32_v1": 32, "BlackwellS8ImmaDot32_v2": 32, "BlackwellU8S8ImmaDot32_v2": 32,
 }
 
 COUNTERS = ("served_macs", "tail_atoms", "receipt_folds")
