@@ -12,6 +12,10 @@ summary (`summary_part`, as `verity_vllm.records.publish` passes it), since a la
 row's config (`row`: its file without the requests, the file's sha256 and the κ profile) and, once published, `evidence`: the art: ids
 of the Programs per rank, the manifest, the Match and Commit records and the conformance captures (`verity_vllm.records`).
 
+`stages` is each stage's last verdict in the row dir's `stages.txt`.  The Build's own (`build.stage`) is its status and the in-stage
+manifest's exit code; a Build whose Programs passed while that manifest alone failed is superseded by the manifest of record
+(`evidence.manifest`, `build.stage.superseded_by`), and passes only so.
+
 Outcome PASS: the Build passed, the word check passed (a config run) or the Match passed (a row of record), the Commit verdict passed
 (`check.verdict.commit_verdict`, which includes the replay) and the replay evaluated k units, all equal.  Anything else is FAIL with the
 first reason; a failure is a finding of the sweep, not a stop.
@@ -20,15 +24,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import WORKLOADS, RowConfig, RowId
+from verity_vllm.pipeline.research_outputs import verdicts
 
 SCHEMA = "verity-vllm/config-record/v1"
 NAME = "config_record.json"
 #: The evidence store's kind of a published record (`verity_vllm.records`).
 KIND = "vllm-config-record/v1"
+MANIFEST_RC = re.compile(r"\bmanifest_rc=(-?\d+)\b")
 
 
 def _json(p: Path) -> Any:
@@ -115,6 +122,24 @@ def summary_part(sm: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
               "per_rank": {r: {k: v.get(k) for k in ("result", "grade")} for r, v in sorted((sr.get("per_rank") or {}).items(), key=lambda kv: int(kv[0]))
                            if isinstance(v, dict)} or None}
     return commit, replay
+
+
+def stages_part(d: Path) -> dict[str, dict[str, str]]:
+    """Each stage's last verdict in the row dir's `stages.txt`: stage -> {status, line}."""
+    return {s: {"status": st, "line": rest[:240]} for s, (st, rest) in verdicts(d / "stages.txt").items()}
+
+
+def build_stage(stage: dict[str, str] | None, programs_ok: bool, manifest: str | None) -> dict[str, Any] | None:
+    """The Build stage's verdict: its status, the in-stage manifest's exit code (`manifest_rc`, a TP Build's; None when the Programs
+    failed before it ran) and, when the Programs passed and that manifest alone failed, `superseded_by`: the manifest of record
+    (`manifest`).  None when the row dir has no Build verdict."""
+    if stage is None:
+        return None
+    m = MANIFEST_RC.search(stage["line"])
+    out: dict[str, Any] = {"status": stage["status"], "manifest_rc": int(m.group(1)) if m else None}
+    if out["status"] != "PASS" and programs_ok and out["manifest_rc"] not in (None, 0) and manifest:
+        out["superseded_by"] = manifest
+    return out
 
 
 def build_part(d: Path) -> dict[str, Any]:
@@ -240,13 +265,15 @@ def timing_part(d: Path) -> dict[str, Any]:
 
 
 def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str, Any] | None = None,
-           stages: dict[str, Any] | None = None, summary: dict[str, Any] | None = None,
-           evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+           summary: dict[str, Any] | None = None, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
     """The config record of the run in row dir `d` (a TP row's per rank and in total); with `summary`, a Commit of record's
     (`summary_part`: the row dir's own `commit/` is then not read), and `evidence`, the art: ids the record cites."""
     d = Path(d)
     world = int(config_of(row).get("tp") or 1)
     build, word, match = (tp_build_part(d, world) if world > 1 else build_part(d)), word_check_part(d), match_part(d, world)
+    stages, programs_ok = stages_part(d), build["ok"]
+    stage = build["stage"] = build_stage(stages.get("build"), programs_ok, (evidence or {}).get("manifest"))
+    build["ok"] = programs_ok and (stage is None or stage["status"] == "PASS" or "superseded_by" in stage)
     if summary is not None:
         (commit, replay), engine, timing = summary_part(summary), None, {}
     else:
@@ -255,11 +282,13 @@ def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str
     gate = ("match", match["ok"]) if match is not None else ("word check", word.get("ok"))
     checks = (("build", build["ok"]), gate, ("commit", commit.get("ok")), ("replay", replay.get("ok")))
     why = next((f"{name} {'FAIL' if ok is False else 'not run'}" for name, ok in checks if ok is not True), None)
+    if why == "build FAIL" and programs_ok and stage and stage["manifest_rc"] not in (None, 0):
+        why = f"build FAIL: the in-stage manifest exited {stage['manifest_rc']} and no manifest of record supersedes it (evidence.manifest)"
     if why == "commit FAIL" and commit.get("reason"):
         why = f"commit FAIL: {commit['reason']}"
     return {"schema": SCHEMA, "config": config_of(row), "row": row_part(row, (match or {}).get("profile")), "tree": tree, "device": device,
             "outcome": "PASS" if why is None else "FAIL", "why": why, "build": build, "word_check": word, "match": match, "commit": commit,
-            "replay": replay, "engine": engine, "timing": timing, "stages": stages or {}, "evidence": evidence or {}}
+            "replay": replay, "engine": engine, "timing": timing, "stages": stages, "evidence": evidence or {}}
 
 
 def write(d: str | Path, row: str, **kw: Any) -> dict[str, Any]:
