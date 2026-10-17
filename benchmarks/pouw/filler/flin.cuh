@@ -1240,11 +1240,13 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
 // other SMs and the last beside round 1's pump (FSTEP_PUMP=W:NC:S, default 8:4:2048) on FILL_SMS SMs, whose window share and
 // receipts are reported with the rest. FILL_SMS -1 (co): the pump on every SM at the lowest stream priority and the flin
 // arms on the whole GPU at the highest, so with FW = AFW = 0 the last arm is the step beside a co-resident pump (a
-// FLIN_FIT build with a 1-block pump, PF_CTAS=1). A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
+// FLIN_FIT build with a 1-block pump, PF_CTAS=1). FSTEP_KIND=0|1 runs only the linears and lm_head, or only attention, in
+// every arm. A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
 // step at B. The filler warps' MACs are their step counts over the last rep's launches (each step's tiles are the next
 // `per` ids, fused_layout); the last linear's output is checked on every row when down runs through flin, and so is
 // lm_head's when it does.
 static int g_lt_mask = 0;
+static int g_fstep_kind = 2;  // FSTEP_KIND: fstep's linears and lm_head only (0), its attention only (1), or both (2)
 static std::vector<int> fstep_seq() {
   std::vector<int> s;
   for (int i = 0; i < Flin::LAUNCHES; i++)
@@ -1257,6 +1259,7 @@ static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vecto
   int k = 0;
   auto lin = [&](int i) {
     const int j = i % 4;
+    if (g_fstep_kind == 1) return;
     if (g_lt_mask >> j & 1) {
       lt_run(p[j], d.X, d.W[i / 4][j], d.D, d.st);
       return;
@@ -1266,10 +1269,12 @@ static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vecto
   };
   for (int l = 0; l < LAYERS; l++) {
     lin(4 * l);
-    enqueue_fatt(d, a, B, L, l, wrapped);
+    if (g_fstep_kind != 0) enqueue_fatt(d, a, B, L, l, wrapped);
     for (int j = 1; j < 4; j++) lin(4 * l + j);
   }
-  if (lm)
+  if (g_fstep_kind == 1)
+    ;
+  else if (lm)
     flin_lm(d, f, seq[0] % 4);
   else if (B <= 256 && p[4].algo_id != -2)
     lt_run(p[4], d.X, d.Wlm, d.D, d.st);
@@ -1277,6 +1282,8 @@ static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vecto
 }
 static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int fill_sms, int reps) {
   if (g_lt_mask & ~15) { fprintf(stderr, "FLIN_LT: bits 1 qkv, 2 o, 4 gate_up, 8 down\n"); exit(1); }
+  if (const char* e = getenv("FSTEP_KIND")) g_fstep_kind = atoi(e);
+  if (g_fstep_kind < 0 || g_fstep_kind > 2) { fprintf(stderr, "FSTEP_KIND: 0 linears, 1 attention, 2 both\n"); exit(1); }
   const std::vector<int> seq = fstep_seq();
   const std::vector<Lt> p = lin_plans(d, B);
   Flin f;
@@ -1325,7 +1332,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
     }
   }
   CK(cudaStreamSynchronize(ss));
-  auto base = [&] { enqueue_step(d, p, 2, B, L, &wrapped); };
+  auto base = [&] { enqueue_step(d, p, g_fstep_kind, B, L, &wrapped); };
   auto fused = [&](int fw, const Fatt& at) { f.FW = fw; enqueue_fstep(d, f, at, p, B, L, &wrapped); };
   double amhz = 0, awatt = 0, alone = 0;
   if (fs) alone = dfill_alone(d, pf, fs, 20, &amhz, &awatt);
@@ -1356,7 +1363,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
                   ta = fill_tally(r, fused_launches(r, nullptr, {}, &a, LAYERS, last), 16, 0xA57E + B * 8 + L);
   // the last flin launch is down's of the last layer unless FLIN_LT keeps down on cuBLASLt, whose output lm_head overwrites;
   // lm_head's through flin is checked too
-  const int out_rows = g_lt_mask & 8 ? 0 : B, N = LN[3], K = LK[3];
+  const int out_rows = g_lt_mask & 8 || g_fstep_kind == 1 ? 0 : B, N = LN[3], K = LK[3];
   unsigned long long out_bad = 0;
   if (out_rows) {
     ref_rows<<<(unsigned)(((size_t)B * N + 255) / 256), 256, 0, d.st>>>(d.X, d.W[LAYERS - 1][3], g_ref, B, 1, N, K);
@@ -1365,7 +1372,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
     CK(cudaMemcpyAsync(&out_bad, g_cnt, sizeof out_bad, cudaMemcpyDeviceToHost, d.st));
   }
   unsigned long long lm_bad = 0;
-  if (f.lm) {
+  if (f.lm && g_fstep_kind != 1) {
     ref_rows<<<(unsigned)(((size_t)B * VOCAB + 255) / 256), 256, 0, d.st>>>(d.X, d.Wlm, g_ref, B, 1, VOCAB, HID);
     CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, d.st));
     count_neq_rows<<<(unsigned)(((size_t)B * VOCAB + 255) / 256), 256, 0, d.st>>>(f.Dlm, g_ref, B, 1, VOCAB, g_cnt);
@@ -1375,7 +1382,8 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   CK(cudaGetLastError());
   double lin_macs = 0;
   for (int j = 0; j < 4; j++) lin_macs += (double)LAYERS * B * LN[j] * LK[j];
-  const double step_macs = lin_macs + (double)B * VOCAB * HID + 2.0 * LAYERS * B * HQ * HD * (double)L;
+  const double step_macs = (g_fstep_kind != 1 ? lin_macs + (double)B * VOCAB * HID : 0.0) +
+                           (g_fstep_kind != 0 ? 2.0 * LAYERS * B * HQ * HD * (double)L : 0.0);
   const Rep mb = median(vb), m0 = median(v0), mf = median(vf), mb2 = median(vb2);
   const double bms = (mb.ms + mb2.ms) / 2, cap = 1024.0 * d.sms * mf.mhz * 1e6;
   const double lin_share = t.macs / (mf.ms * 1e-3) / cap, att_share = ta.macs / (mf.ms * 1e-3) / cap;
@@ -1388,7 +1396,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
          co ? "co" : "split", lo, hi, smem_sm, flin_smem(f.M), (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1],
          pw, pnc, ps, fs ? pf.tiles : 0, fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
-  printf("\"M\": %d, ", f.M);
+  printf("\"M\": %d, \"kind\": %d, ", f.M, g_fstep_kind);
   printf("\"APS\": %d, \"ALZ\": %d, \"LM\": %d, \"lm_mismatches\": %llu, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.lazy,
          (int)f.lm, lm_bad, a.pg[0], a.pg[1]);
   printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, \"ANC\": %d, "

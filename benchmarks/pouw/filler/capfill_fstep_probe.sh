@@ -4,18 +4,21 @@
 # and lm_head too (FLIN_LM=1), attention dcap's (it already fits, capfill_fit_probe.sh). Gates: fgate (every fitted
 # tile bit for bit, every row) and dgate on the fit build. Then flin alone at each fitted M, and fstep co (FILL_SMS -1,
 # FW = AFW = 0: the step beside the pump at the lowest priority) at each decode point, against the cuBLASLt step alone on
-# the whole GPU; the control is the same co step with flin's default tiles. Clocks are read, never set.
+# the whole GPU; the control is the same co step with flin's default tiles. Each co run may take only the linears or only
+# attention (FSTEP_KIND), flin without PDL, and another pump shape. Clocks are read, never set.
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/pouw/filler
 export B; B=$(mktemp -d /tmp/capfillf.XXXXXX); trap 'rm -rf "$B"' EXIT
-export CP_POINTS=${CP_POINTS:-"1:2048 32:2048 128:2048 256:2048"} CP_CTL=${CP_CTL:-"32:2048"}
-export CP_PUMP=${CP_PUMP:-"8:2:256"} CP_PAD=${CP_PAD:-4} CP_FGATE=${CP_FGATE:-1}
+# CP_RUNS: BUILD,B,L,FSTEP_KIND,FLIN_PDL,W:NC:S a co step each (default: the fit build at each decode point, then the
+# control at B 32, both whole steps beside the pump at 8:2:256)
+export CP_RUNS=${CP_RUNS:-"fit,1,2048,2,1,8:2:256 fit,32,2048,2,1,8:2:256 fit,128,2048,2,1,8:2:256 fit,256,2048,2,1,8:2:256 c1,32,2048,2,1,8:2:256"}
+export CP_PAD=${CP_PAD:-4} CP_FGATE=${CP_FGATE:-1} CP_FLIN=${CP_FLIN:-1}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
-for v in CP_POINTS CP_CTL CP_PUMP CP_PAD CP_FGATE; do echo "$v=${!v}"; done > "$O/params.txt"
+for v in CP_RUNS CP_PAD CP_FGATE CP_FLIN; do echo "$v=${!v}"; done > "$O/params.txt"
 
 declare -A FLAGS=([fit]="-DPF_CTAS=1 -DPF_MINB=2 -DFLIN_FIT" [c1]="-DPF_CTAS=1 -DPF_MINB=2")
 pids=()
@@ -42,16 +45,18 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
   if [ "$CP_FGATE" = 1 ]; then
     "$B/dcap_fit" fgate > "$O/fgate-fit.jsonl" 2>> "$O/errors.txt"; echo "fgate fit rc $?" >> "$O/rc.txt"
   fi
-  for m in 32 64 128; do
-    "$B/dcap_fit" flin "$m" 0 2 0 >> "$O/flin-fit.jsonl" 2>> "$O/errors.txt"; echo "flin fit $m rc $?" >> "$O/rc.txt"
+  if [ "$CP_FLIN" = 1 ]; then
+    for m in 32 64 128; do
+      "$B/dcap_fit" flin "$m" 0 2 0 >> "$O/flin-fit.jsonl" 2>> "$O/errors.txt"; echo "flin fit $m rc $?" >> "$O/rc.txt"
+    done
+  fi
+  for run in $CP_RUNS; do
+    IFS=, read -r b bb l kind pdl pump <<< "$run"
+    FSTEP_KIND=$kind FLIN_PDL=$pdl FSTEP_PUMP=$pump DFILL_PAD_KB=$CP_PAD FLIN_LM=1 "$B/dcap_$b" fstep "$bb" "$l" 0 2 0 0 -1 \
+      2>> "$O/errors.txt" | sed "s/^{\"mode\": \"fstep\"/{\"mode\": \"fstep\", \"build\": \"$b\", \"pad_kb\": $CP_PAD/" \
+      >> "$O/fstep.jsonl"
+    echo "fstep co $run rc ${PIPESTATUS[0]}" >> "$O/rc.txt"
   done
-  run_co() {  # build B L
-    FSTEP_PUMP=$CP_PUMP DFILL_PAD_KB=$CP_PAD FLIN_LM=1 "$B/dcap_$1" fstep "$2" "$3" 0 2 0 0 -1 2>> "$O/errors.txt" \
-      | sed "s/^{\"mode\": \"fstep\"/{\"mode\": \"fstep\", \"build\": \"$1\", \"pad_kb\": $CP_PAD/" >> "$O/fstep.jsonl"
-    echo "fstep co $1 $2 $3 rc ${PIPESTATUS[0]}" >> "$O/rc.txt"
-  }
-  for pt in $CP_POINTS; do IFS=: read -r bb l <<< "$pt"; run_co fit "$bb" "$l"; done
-  for pt in $CP_CTL; do IFS=: read -r bb l <<< "$pt"; run_co c1 "$bb" "$l"; done
 '
 r=$?
 echo "lease rc $r" >> "$O/rc.txt"

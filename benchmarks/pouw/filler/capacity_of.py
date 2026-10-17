@@ -121,6 +121,7 @@ def fstep_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
 
         top = at(F_MAX_MHZ)
         rows.append({"B": r["B"], "L": r["L"], "place": r.get("place", "split"), "build": r.get("build"), "M": r["M"],
+                     "kind": r.get("kind", 2), "pdl": r.get("pdl", 1), "pump_nc": r["pump"].get("NC"),
                      "pad_kb": r.get("pad_kb"), "fill_sms": r["fill_sms"], "slowdown": r["slowdown"],
                      "co_cost": r["fused_ms"] / r["fused0_ms"], "fused0_vs_base": r["fused0_vs_base"],
                      "pump_share": r["pump"]["share"], "pump_alone": r["pump"]["alone_share"], "mhz": r["mhz"],
@@ -151,7 +152,9 @@ def main(argv=None) -> int:
             print(json.dumps({"vector": pi.vector, "f_max_mhz": F_MAX_MHZ, "fold": a.fold, "rows": rows}, indent=1))
             return 0
         for r in rows:
-            print(f"  B {r['B']:3d} L {r['L']:5d} {r['place']:5s} {r['build'] or '':4s} M {r['M']:3d}  slowdown "
+            part = ("linears", "attention", "step")[r["kind"]]
+            print(f"  B {r['B']:3d} L {r['L']:5d} {r['place']:5s} {r['build'] or '':4s} M {r['M']:3d} {part:9s} pdl "
+                  f"{r['pdl']} pump NC {r['pump_nc']}  slowdown "
                   f"{r['slowdown']:.3f} (flin alone {r['fused0_vs_base']:.3f}, pump's cost {r['co_cost']:.3f})  pump "
                   f"{r['pump_share']:.3f} (alone {r['pump_alone']:.3f})  σ {r['sigma']:.3f} at f_max "
                   f"({r['sigma_run_clock']:.3f} at {r['mhz']:.0f} MHz)  bind {','.join(r['binding'])}  bad {r['rec_bad']} "
