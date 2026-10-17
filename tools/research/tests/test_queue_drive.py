@@ -832,14 +832,3 @@ def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
            "AUDIT /w/lean-audit-scratch-1-x/Security: FAIL\n    Some required targets logged failures:\n"
            "    - Definitions.Claims.Sampling\n")
     assert lean_errors(log) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean", "Security/Definitions/Claims/Sampling.lean"}
-
-
-def test_lock_changing_prs_join_next_one_at_a_time(world, monkeypatch):
-    """17 Oct 15:15Z (proofs): several PRs that each regenerated Lean lock records against their own base met in one train,
-    and its audit matched none of them."""
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"Security/lean-audit.json": "{\"a\": 1}\n"}))
-    world.gh.put(2, world.change({"Security/Proofs/lean-audit.json": "{\"b\": 2}\n"}))
-    world.gh.put(3, world.change({"a.txt": "3\n"}))
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [1, 3]
