@@ -93,7 +93,8 @@ theorem mem_allSlots (l : Slots.Layout) (v i : ℕ) :
   · rintro ⟨hv, hi⟩
     exact ⟨(l.rus[v], v), Array.mem_zipIdx_iff_getElem?.2 (Array.getElem?_eq_getElem hv), i, hi, rfl, rfl⟩
 
-theorem slotPartition_rus (l : Slots.Layout) : (slotPartition l).rus = l.rus.toList.map fun r => r.pus.toList := by
+theorem slotPartition_rus (l : Slots.Layout) :
+    (slotPartition l).rus = l.rus.toList.map fun r => r.pus.toList.map puGates := by
   simp [slotPartition, Partition.rus, Slots.Layout.rus, List.map_flatten, Function.comp_def]
 
 theorem slotPartition_sizes (l : Slots.Layout) : (slotPartition l).sizes = l.rus.toList.map fun r => r.pus.size := by

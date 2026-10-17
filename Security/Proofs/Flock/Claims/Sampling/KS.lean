@@ -321,7 +321,7 @@ values `ι`, some proof unit `ab` of its replay unit, at index `i`, is not corre
 theorem faulty_choice {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {P : Partition} {w : Wit} {v : ℕ}
     (hv : v ∈ faulty H Cm s P w) (ι : ℕ → Bool) :
     ∃ rv, P.rus[v]? = some rv ∧ ∃ i : Fin (P.sizes.getD v 0), ∃ ab, rv[i.val]? = some ab ∧
-      ¬ s.prog.Correct (RU.ref s.prog rv (w.val H Cm s) ι) ab.1 ab.2 := by
+      ¬ s.prog.Correct (RU.ref s.prog rv (w.val H Cm s) ι) ab := by
   classical
   unfold faulty at hv
   obtain ⟨hlt, hf⟩ := mem_filter.1 hv
@@ -395,12 +395,12 @@ def SessionOpens (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → See
     D.parse x = some s → D.partition s.prog s.query = some Pt → InScope Pt s →
     (run H P D.V x ω r).out = .acc → (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
     D.session x u (run H P D.V x ω r).seen = some (xS, vS) → Flock.check D.flock.parse xS wF = true →
-    ∃ rv a b, Pt.rus[u.1]? = some rv ∧ rv[u.2]? = some (a, b) ∧
+    ∃ rv pu, Pt.rus[u.1]? = some rv ∧ rv[u.2]? = some pu ∧
       ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
         (∀ q ∈ D.reveal s u (run H P D.V x ω r).seen wF, D.commit.Opens H q.1 q.2 = true →
           (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
           (q.1 = iroots x (run H P D.V x ω r).seen u.1 → ι q.2.pos = q.2.val)) →
-        s.prog.Correct (RU.ref s.prog rv val ι) a b
+        s.prog.Correct (RU.ref s.prog rv val ι) pu
 
 end Hyps
 
@@ -498,7 +498,7 @@ theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero 
   · exact Or.inl hshort2
   have hch : ∀ v : faulty H D.commit s Pt w, ∃ rv, Pt.rus[v.1]? = some rv ∧
       ∃ i : Fin (Pt.sizes.getD v.1 0), ∃ ab, rv[i.val]? = some ab ∧
-        ¬ s.prog.Correct (RU.ref s.prog rv (w.val H D.commit s) (ιOf fd (iroots x (run' r).seen v.1))) ab.1 ab.2 :=
+        ¬ s.prog.Correct (RU.ref s.prog rv (w.val H D.commit s) (ιOf fd (iroots x (run' r).seen v.1))) ab :=
     fun v => faulty_choice v.2 _
   choose rv hrv f ab hab hnc using hch
   refine Or.inr ⟨f, mem_univ _, accList_length_eq hshort2, fun l d hl v hgood => ?_⟩
@@ -517,7 +517,7 @@ theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero 
     obtain ⟨xS, vS⟩ := xv
     rw [hsess] at hwF'
     have hchk := firstWait_some H run' _ _ _ _ _ wF hwF'
-    obtain ⟨rv', a, b, hrv', hab', hcor⟩ :=
+    obtain ⟨rv', pu, hrv', hab', hcor⟩ :=
       hopens x s Pt Ω P ω (forkOn (D.stage2 x) r d) (v.1, (f v).1) xS vS wF hs hPt hin hacc' ⟨p, hp⟩ hsess hchk
     have hcorr := hcor (w.val H D.commit s) (ιOf fd (iroots x (run' r).seen v.1)) fun q hq hok => by
       have hqf : q ∈ fd := mem_found H D decode x s run' c hjZ hl hp

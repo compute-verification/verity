@@ -10,9 +10,9 @@ clause of it, each a named Prop over the statements the verifier evaluates:
 
 * `RefusesUnordered`: the program is topologically ordered.
 * `RefusesOverlap`: no gate is in two proof units.
-* `RefusesUncovered`: the proof units' gates are exactly the program's.
+* `RefusesUncovered`: the proof units' gates are the program's, and every gate but a constant is among them.
 * `RefusesEmpty`: every proof unit has a gate.
-* `RefusesWide`: every proof unit commits at most 16 values (`committed`, the claims' `Prog.Boundary`).
+* `RefusesWide`: every proof unit commits at most 16 values (the claims' `committed`, on its own gates).
 
 On the verifier's own partitions (`DrawSlots`), whose replay units are one proof unit each (`slotPartition_single`), the
 five give `ProgramScope` (`programScope_of_refusals`), and so `ScopeMatches` (`scopeMatches_of_refusals`) and, with
@@ -28,32 +28,24 @@ open Properties.SampledProofs Properties.SampledProofs.SecurityProofs
 
 variable {Coin Col T : Type}
 
-/-- The values proof unit `u` of `C` commits: its gates that `C.Boundary` commits. -/
-def committed (C : Prog) (u : ℕ × ℕ) : ℕ := ((unitGates u).filter fun g => C.Boundary u.1 u.2 g).length
+/-- The proof units' gates are `C`'s, and every gate of `C` but a constant is among them. -/
+def Partition.Covers (P : Partition) (C : Prog) : Prop :=
+  (∀ g ∈ P.gates, g < C.gates.length) ∧ ∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → g ∈ P.gates
 
-/-- **A cut of `C` into proof units**: no gate in two of `P`'s proof units, their gates exactly `C`'s, each with a gate,
-and each committing at most 16 values. -/
+/-- **A cut of `C` into proof units**: no gate in two of `P`'s proof units, which cover `C` but its constants, each with
+a gate, and each committing at most 16 values. -/
 def Partition.Cuts (P : Partition) (C : Prog) : Prop :=
-  (P.rus.flatten.flatMap unitGates).Nodup ∧ (∀ g, g ∈ P.rus.flatten.flatMap unitGates ↔ g < C.gates.length) ∧
-    (∀ u ∈ P.rus.flatten, u.1 < u.2) ∧ ∀ u ∈ P.rus.flatten, committed C u ≤ 16
+  P.gates.Nodup ∧ P.Covers C ∧ (∀ u ∈ P.rus.flatten, u ≠ []) ∧ ∀ u ∈ P.rus.flatten, committed C u ≤ 16
 
 /-- A partition of `C` cuts it into proof units. -/
-theorem Partition.Partitions.cuts {P : Partition} {C : Prog} (h : P.Partitions C) : P.Cuts C := by
-  obtain ⟨hp, hc, hw⟩ := h
-  refine ⟨hp.nodup_iff.2 List.nodup_range, fun g => by rw [hp.mem_iff, List.mem_range], fun u hu => ?_, fun u hu => ?_⟩
-  · obtain ⟨r, hr, hu⟩ := List.mem_flatten.1 hu
-    exact (hc r hr).2.1 u hu
-  · obtain ⟨r, hr, hu⟩ := List.mem_flatten.1 hu
-    exact hw r hr u hu
+theorem Partition.Partitions.cuts {P : Partition} {C : Prog} (h : P.Partitions C) : P.Cuts C :=
+  ⟨h.1, ⟨h.2.1, h.2.2.1⟩, h.2.2.2.2.1, h.2.2.2.2.2⟩
 
 /-- **A partition whose replay units are one proof unit each partitions `C` exactly when it cuts it.** -/
 theorem partitions_iff_cuts (P : Partition) (C : Prog) (h1 : ∀ r ∈ P.rus, r.length = 1) :
-    P.Partitions C ↔ P.Cuts C := by
-  refine ⟨Partition.Partitions.cuts, fun ⟨hnd, hmem, hlt, hw⟩ => ⟨?_, fun r hr => ?_, fun r hr u hu => ?_⟩⟩
-  · exact (List.perm_ext_iff_of_nodup hnd List.nodup_range).2 fun g => by rw [hmem, List.mem_range]
-  · obtain ⟨u, rfl⟩ := List.length_eq_one_iff.1 (h1 r hr)
-    exact ⟨List.cons_ne_nil _ _, fun u' hu' => hlt u' (List.mem_flatten.2 ⟨[u], hr, hu'⟩), fun i h => by simp at h⟩
-  · exact hw u (List.mem_flatten.2 ⟨r, hr, hu⟩)
+    P.Partitions C ↔ P.Cuts C :=
+  ⟨Partition.Partitions.cuts, fun ⟨hnd, ⟨hin, hcov⟩, hne, hw⟩ =>
+    ⟨hnd, hin, hcov, fun r hr h => by simpa [h] using h1 r hr, hne, hw⟩⟩
 
 theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} :
     ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ R l₁ l₂ → ∀ b ∈ l₂, ∃ a ∈ l₁, R a b
@@ -104,16 +96,17 @@ def Evaluated (D : Deploy Coin Col T) (Q : Prog → Partition → Prop) : Prop :
 def RefusesUnordered (D : Deploy Coin Col T) : Prop := Evaluated D fun C _ => C.Topological
 
 /-- **The verifier refuses overlapping proof units**: no gate is in two proof units of a partition it evaluates. -/
-def RefusesOverlap (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => (P.rus.flatten.flatMap unitGates).Nodup
+def RefusesOverlap (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => P.gates.Nodup
 
-/-- **The verifier refuses a partition that leaves a gate out**: the proof units' gates are exactly the program's. -/
-def RefusesUncovered (D : Deploy Coin Col T) : Prop :=
-  Evaluated D fun C P => ∀ g, g ∈ P.rus.flatten.flatMap unitGates ↔ g < C.gates.length
+/-- **The verifier refuses a partition that leaves a gate out**: the proof units' gates are the program's, and every
+gate but a constant is among them (a constant, public, may be left out). -/
+def RefusesUncovered (D : Deploy Coin Col T) : Prop := Evaluated D fun C P => P.Covers C
 
 /-- **The verifier refuses an empty proof unit**: every proof unit of a partition it evaluates has a gate. -/
-def RefusesEmpty (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => ∀ u ∈ P.rus.flatten, u.1 < u.2
+def RefusesEmpty (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => ∀ u ∈ P.rus.flatten, u ≠ []
 
-/-- **The verifier refuses a proof unit of more than 16 committed values** (`committed`, `Prog.Boundary`). -/
+/-- **The verifier refuses a proof unit of more than 16 committed values** (`committed`, `Prog.Boundary` on the unit's
+own gates). -/
 def RefusesWide (D : Deploy Coin Col T) : Prop := Evaluated D fun C P => ∀ u ∈ P.rus.flatten, committed C u ≤ 16
 
 /-- **The program part from the five refusals**: on the verifier's own partitions (`DrawSlots`) and where the scope check
