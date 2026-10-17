@@ -15,7 +15,7 @@ the rank's claim, not proved (the profile makes no claim that they are, `pipelin
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
-      python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] \\
+      python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] [--jobs N] \\
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
 
 * **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: `registration.json` (core's
@@ -24,7 +24,8 @@ the rank's claim, not proved (the profile makes no claim that they are, `pipelin
 * **The verifier's own copies.** A deferred Commit: `--bundle` and `--row-dir` are its record and its Build's Programs of record, and
   the verifier derives its window from them alone (`deferred_rows.window_of_record`). A TP Commit: `--tp-commit` is its record (its
   `--out`: `runs.jsonl`, `versions.json`), `--build-root` holds each rank's Programs of record in `rank<r>/`, and `--workload` is the
-  workload file the record served; the verifier derives rank r's window from them alone (`tp.serving_rows.window_of_record`). Either
+  workload file the record served; the verifier derives rank r's window from them alone (`tp.serving_rows.window_of_record`), and
+  `--jobs N` audits up to N ranks at once, each in its own process. Either
   window is the population program and partition over the served Programs, the law and the run of record. The verifier composes
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
@@ -42,10 +43,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import multiprocessing
 import os
 import shutil
 import sys
 import time
+from collections.abc import Iterator
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable
 
@@ -256,30 +260,53 @@ def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     return ok
 
 
+def tp_rank(a: argparse.Namespace, sets: dict, out: Path, world: int, r: int) -> dict:
+    """Rank ``r``'s window of record (``tp.serving_rows.window_of_record``) audited under ``out/rank<r>``, on its own ports; -> its
+    row of the summary."""
+    t0 = time.time()
+    mine, held = SRT.window_of_record(a.tp_commit, r, a.partition, a.build_root, a.workload)
+    window_s = round(time.time() - t0, 2)
+    windows = Path(a.windows)
+    more: dict[str, dict] = {}
+    theirs = windows / f"rank{(r + 1) % world}" / "registration.json"
+    if world > 1 and theirs.exists():
+        v = SRT.source(json.loads(theirs.read_text()).get("window"), mine, held)
+        more["registration-of-another-rank (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
+    s, ok = audit(a, sets, out / f"rank{r}", mine, windows / f"rank{r}", lambda w: SRT.source(w, mine, held),
+                  a.port + RANK_PORTS * r, {"rank": r, "tp": held["tp"], "verifier_window_s": window_s}, more)
+    return {"ok": ok, "seconds": round(time.time() - t0, 1),
+            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
+                                     "audit", "draw", "draw_counts", "negatives", "verifier_window_s")}}
+
+
+def tp_rank_job(a: argparse.Namespace, out: Path, world: int, r: int) -> dict:
+    return tp_rank(a, template_sets(Path(a.template_sets)), out, world, r)
+
+
+def tp_ranks(a: argparse.Namespace, sets: dict, out: Path, world: int, ranks: list[int]) -> Iterator[tuple[int, dict]]:
+    """`tp_rank` of each of ``ranks``, in up to ``a.jobs`` spawned processes (a rank's window holds a Program that does not pickle, so
+    a process does the whole rank); -> (rank, row) as each finishes."""
+    if a.jobs <= 1 or len(ranks) <= 1:
+        for r in ranks:
+            yield r, tp_rank(a, sets, out, world, r)
+        return
+    with ProcessPoolExecutor(min(a.jobs, len(ranks)), mp_context=multiprocessing.get_context("spawn")) as ex:
+        jobs = {ex.submit(tp_rank_job, a, out, world, r): r for r in ranks}
+        for f in as_completed(jobs):
+            yield jobs[f], f.result()
+
+
 def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     """Every rank's window of the TP Commit ``--tp-commit`` (or the ranks ``--ranks``), each audited on its own under ``out/rank<r>``,
     and ``out/summary.json`` over them; a rank's audit also refuses another rank's registration as its own."""
     rec = SRT.record(a.tp_commit)
     world = int(rec["world"])
     ranks = [int(x) for x in a.ranks.split(",")] if a.ranks else list(range(world))
-    windows = Path(a.windows)
     summary: dict = {"tp_run_root": rec["tp_run_root"], "world": world, "roots": rec["roots"], "ranks": {}}
     ok_all = True
-    for r in ranks:
-        t0 = time.time()
-        mine, held = SRT.window_of_record(a.tp_commit, r, a.partition, a.build_root, a.workload)
-        more: dict[str, dict] = {}
-        theirs = windows / f"rank{(r + 1) % world}" / "registration.json"
-        if world > 1 and theirs.exists():
-            v = SRT.source(json.loads(theirs.read_text()).get("window"), mine, held)
-            more["registration-of-another-rank (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
-        s, ok = audit(a, sets, out / f"rank{r}", mine, windows / f"rank{r}", lambda w, mine=mine, held=held: SRT.source(w, mine, held),
-                      a.port + RANK_PORTS * r, {"rank": r, "tp": held["tp"], "verifier_window_s": round(time.time() - t0, 2)}, more)
-        summary["ranks"][str(r)] = {"ok": ok, "seconds": round(time.time() - t0, 1),
-                                    **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused",
-                                                             "checks_before_draw", "audit", "draw", "draw_counts", "negatives",
-                                                             "verifier_window_s")}}
-        ok_all = ok_all and ok
+    for r, row in tp_ranks(a, sets, out, world, ranks):
+        summary["ranks"][str(r)] = row
+        ok_all = ok_all and row["ok"]
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     summary["accepted"] = ok_all and sorted(summary["ranks"]) == sorted(str(r) for r in ranks)
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
@@ -299,6 +326,7 @@ def main() -> int:
     ap.add_argument("--workload", help="with --tp-commit: the workload file the Commit served")
     ap.add_argument("--windows", help="with --tp-commit: serving's windows, rank<r>/ each (the --serving-rows request's dir)")
     ap.add_argument("--ranks", default=None, help="with --tp-commit: the ranks to audit, comma-separated (default every rank)")
+    ap.add_argument("--jobs", type=int, default=1, help="with --tp-commit: audit up to this many ranks at once, each in its own process")
     ap.add_argument("--partition", required=True, help="the verifier's partition file: {templates, law, scope?}")
     ap.add_argument("--template-sets", required=True, help="one input set per member template, for the lowering")
     ap.add_argument("--m0-pythonpath", required=True)
