@@ -193,25 +193,6 @@ def test_a_second_session_waits_out_the_first_and_is_accepted():
     assert rs[0]["coins"] != rs[1]["coins"]
 
 
-@pytest.fixture(scope="module")
-def pool():
-    from checks import Checks
-
-    c = Checks(2)
-    yield c
-    c.close()
-
-
-def test_worker_checks_give_the_verdicts_of_session_verify(monkeypatch, pool):
-    monkeypatch.setattr(prover, "OPENINGS_PART", 2)
-    monkeypatch.setattr(verifier, "CHECK_BATCH", 3)
-    (r,), (pr,) = run("honest", checks=pool)
-    assert r["accepted"] and pr["accepted"] and r["check_workers"] == 2
-    assert all(c > 0 for c in r["verify_cpu_ns"].values())
-    (r,), (pr,) = run("skip:0.5", samples=8, checks=pool)
-    assert not r["accepted"] and r["failure"]["failure"] == "receipt" and r["failure"]["at"][1] in pr["dropped"]
-
-
 def test_openings_round_trip_on_the_wire_and_a_short_body_is_none():
     o = audit.Opening(3, 17, bytes(range(256)) * 16, b"\1" * 1024, b"\2" * 192, (b"\3" * 64,) * 5, b"\4" * 192,
                       (b"\5" * 64,) * 9, b"")

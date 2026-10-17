@@ -1,0 +1,39 @@
+# Dither-C's QK^T (cohalf: k = 128, r = 64, Q and K 7-bit) a MMA as measured: h_l7qs, e_l7qs's mainloop over the four
+# k32 steps with cohalf's tail stage (O = T_last - U Y on 2 MMAs, absorbed), 8192 x 8192 x 128. Counts are the kernel's
+# executed mix (ncu; 6 MMAs a 4 useful, 5 committed words a cell); WAIT is left out (0.1575 a MMA). At k = 128 the tile's
+# output store binds, not the issue rows: eps_sched 0.78 here and 0.88 for plain int8 (cuBLASLt), so honest's time is
+# 1.284x plain's (e_l7qs 1.300x) though its issue bound a useful MMA is 2.29x plain's.
+name = "h-l7qs"
+status = "measured"
+source = "BC-KERNEL's h_l7qs (benchmarks/pouw/edited_gemm/cgemm.cu) at 8192 x 8192 x 128, `eps_profile.py OUT --toml`, census VF3n-16's classes (r20261017-072237-c27b; bit-exact against checked_strip's honest_words at r = 64, cgemm_ref.py)"
+L = 32
+
+[mma]
+kind = "IMMA.16832.S32.S8.S8"   # mma.sync m16n8k32 s8: 16 SMSP-cycles on the tensor pipe
+words = 128                     # 16 x 8 s32 accumulators
+depth = 32                      # k
+
+[per_mma]       # warp instructions a MMA by class, everything the kernel issues (the fold included)
+MMA = 1
+ALU = 11.4229
+IMAD = 4.5082
+NOROW = 1.6797
+UNI = 0.5827
+LDSM_X4 = 0.5
+SEL = 0.1151
+IMADW = 0.1042
+UTMA16K = 0.0052
+VIMNMX = 0.0012
+
+[measured]
+cycles_per_mma = 114.5887       # the hot median at its clock; ncu 97.5014; work bound 24.6895 on JI3n_0 (eps_sched 0.783)
+source = "h_l7qs at 8192 x 8192 x 128 (r20261017-072237-c27b): hot 0.2299 ms against e_l7qs's 0.2328 and plain's 0.1791"
+
+[operands]      # the least operand delivery a program pays a MMA when the design names none (`--operands floor`)
+floor = { LDSM_X4 = 0.2 }
+source = "SPEC §3.4: an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
+
+[fold]          # the fold inside per_mma, lane instructions a committed word (12 warp instructions a MMA at L = 32)
+name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)
+ALU = 2
+IMAD = 1
