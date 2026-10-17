@@ -345,20 +345,19 @@ def _bounds(pts: list[tuple[str, dict]], am: float, ao: float) -> dict[str, floa
 
 def refit(outs: list[Path], sched: float = SCHED, search: list[Path] = ()) -> dict:
     """The joint rows from every program of the runs in `outs` and VF3e's (the module docstring). With `search` runs
-    (M1c, VF3o-16), their programs join the fit and each row's schedule margin is measured instead of SCHED: how much
-    the search's fastest schedule lowered any searched kind's coefficient below M1's, so a search as wide again finding
-    as much again stays covered."""
+    (M1c, VF3o-16), their programs join the fit and each row's schedule margin is measured instead of SCHED: the most
+    any searched program loads the row fitted to `outs` alone, over 1 - NOISE (the time ratio by which the search's
+    fastest schedule beat what that row allows), so a search as wide again finding as much again stays covered."""
     pts = _points(outs)
     found = [x for s in search for x in search_points(s)[0]]
-    searched = {KIND[f] for f, _ in found}
     rows, margins = {}, {}
     for r, (am, ao) in JI3E.items():
         m1 = _bounds(pts, am, ao)
         kinds = _bounds(pts + found, am, ao)
         name = r.replace("JI3e", "JI3o" if search else "JI3n")
         if search:
-            mm1, mall = min(am, *m1.values()), min(am, *kinds.values())
-            margins[name] = max([mm1 / mall] + [m1[k] / kinds[k] for k in searched if k in m1])
+            margins[name] = max([1.0] + [(m1.get(KIND[f], am) + ao * p["ops_per_mma"]) / p["cycles_per_mma"] / (1 - NOISE)
+                                         for f, p in found])
         s = margins.get(name, sched)
         rows[name] = {"MMA": min(am, *kinds.values()) / s, "other": ao / s, **{k: v / s for k, v in sorted(kinds.items())}}
     out = {"programs": len(pts) + len(found), "noise": NOISE, "sched": margins or sched, "rows": rows}

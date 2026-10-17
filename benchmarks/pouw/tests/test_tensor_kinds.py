@@ -172,14 +172,17 @@ def test_a_faster_schedule_joins_the_refit_and_measures_the_margin(tmp_path: Pat
     assert fails == [] and [round(p["cycles_per_mma"], 9) for _, p in pts] == [17.5, 17.0]
     assert all(abs(p["ops_per_mma"] - 8.75) < 1e-12 for _, p in pts) and [p["control"] for _, p in pts] == [True, False]
 
+    # the margin is the time ratio the faster schedule beat M1's row by, 17.4 / 17.0 at the same counts, on every row
     a, b = TK.JI3E["JI3e_1"]
     fit = TK.refit([m1], search=[srch])
-    m = (0.98 * 17.4 - b * 8.75) / (0.98 * 17.0 - b * 8.75)
-    assert abs(fit["sched"]["JI3o_1"] - m) < 1e-12
-    assert abs(fit["rows"]["JI3o_1"]["MMA"] - (0.98 * 17.0 - b * 8.75) / m) < 1e-9
-    assert abs(fit["rows"]["JI3o_1"]["other"] - b / m) < 1e-12
-    # on JI3e_0 the margin is IMMA16816's own move (8.302 to 7.910), larger than the class's (VF3e's 8.115 to 7.910)
-    m0 = (0.98 * 17.4 - 8.75) / (0.98 * 17.0 - 8.75)
-    assert abs(fit["sched"]["JI3o_0"] - m0) < 1e-12 and abs(fit["rows"]["JI3o_0"]["MMA"] - (0.98 * 17.0 - 8.75) / m0) < 1e-9
+    assert all(abs(fit["sched"][f"JI3o_{i}"] - 17.4 / 17.0) < 1e-12 for i in range(3))
+    assert abs(fit["rows"]["JI3o_1"]["MMA"] - (0.98 * 17.0 - b * 8.75) / (17.4 / 17.0)) < 1e-9
+    assert abs(fit["rows"]["JI3o_1"]["other"] - b / (17.4 / 17.0)) < 1e-12
+    assert abs(fit["rows"]["JI3o_0"]["MMA"] - (0.98 * 17.0 - 8.75) / (17.4 / 17.0)) < 1e-9
+    # a search that finds nothing faster than M1's row allows leaves the 2% noise margin alone
+    slow = json.loads((srch / "search-ImmaS8k16_R64.jsonl").read_text().splitlines()[1])
+    (srch / "search-ImmaS8k16_R64.jsonl").write_text(
+        json.dumps({**slow, "cyc_med": 16000 * 17.9}) + "\n" + json.dumps({"done": True, "num_sms": 188}) + "\n")
+    assert TK.refit([m1], search=[srch])["sched"] == {f"JI3o_{i}": 1.0 for i in range(3)}
     assert TK.main(["tensor_kinds.py", "search", str(srch)]) == 0
     assert json.loads((srch / "search.json").read_text())["gate_failures"] == []
