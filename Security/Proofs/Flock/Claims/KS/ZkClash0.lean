@@ -295,8 +295,9 @@ level-0 openings are the reps' `zkRepRowsOf` rows at `wrS`'s transcript, which r
 files (`recordsLiveAtS_wrS`), so they are the run's rows (`rawRows_zk`), and two of them at one position that differ
 collide in the run's log (`zk_rowClash_tiedJ`). -/
 theorem zkViewClashQ₀ (x : Claims.Msg) : ZkViewClashQ x Clash₀Z := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C _ r hacc s' spec' sts' link c₁ mids f hact
-    ⟨a, ⟨hV, pend, hpl, rfl⟩, hcl⟩
+  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C _ r hacc s' spec' sts' link c₁ mids f hact hret
+  obtain ⟨a, ⟨hV, pend, hpl, ha⟩, hcl⟩ := hret
+  subst a
   have e := (act_decide hact).symm.trans hset
   simp only [Option.some.injEq, Prod.mk.injEq] at e
   obtain ⟨e₁, e₂, e₃⟩ := e
@@ -364,6 +365,8 @@ theorem zkViewClashQ₀ (x : Claims.Msg) : ZkViewClashQ x Clash₀Z := by
   exact Or.inr (zk_rowClash_tiedJ hacc hu' hv'' hne)
 
 end Clash
+
+open Flock
 
 /-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
 the masked simulator's fork bounds and the view's clashes past level 0 and at the pads at the statements some run
