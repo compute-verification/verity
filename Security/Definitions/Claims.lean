@@ -17,9 +17,12 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
 * The scope is a hypothesis of completeness, in readable form (`Flock.InScope`), never part of `R`; `ScopeMatches`
   states that it is the verifier's own scope check. KS needs no scope: the verifier refuses what is out of scope.
 * (16 Oct) Zero knowledge is against a malicious verifier of the protocol's rounds, with a black-box simulator
-  (`ZKmalR`), and its bound adds the probability that the simulator's own SHA-512 calls hold a collision (`simLog`):
-  the coin commitment binds only computationally. The form first frozen, `ZKmal`, held only at `ε_zk ≥ 1`. The
-  simulator's cost is its expected calls over its coins (`SimCost`).
+  (`ZKmalR`), and its bound adds `γ` times the probability that the honest prover's SHA-512 calls in two real runs on
+  one nonce hold a collision (`Fork`): the coin commitment binds only computationally. The form first frozen, `ZKmal`,
+  held only at `ε_zk ≥ 1`; the next charged the simulator's own calls, which a simulator that hashes a collision makes
+  `1`, so it held at `ε_zk = 0`. The simulator's cost is its expected calls over its coins (`SimCost`). Flock's rounds
+  are the masked verifier's `D.V.k` plus the `Hello` that commits every coin (`Flock.ZK`), since `D.V` models the coins
+  in the clear.
 * Efficiency is the structural cost claims (`ExtractRunsLe`, `ExtractRunsExpLe`, `ERepCost`: reruns of the prover;
   `RP.eval` also counts SHA-512 calls) and a separate stated complexity claim for the decoder's pure computation
   (`DecoderComplexity`).
@@ -384,12 +387,6 @@ def SP.eval {α : Type} (H : Msg → Msg) (ask : List Msg → Out) : SP α → �
   | .hash q k => let e := SP.eval H ask (k (H q)); (e.1, e.2 + 1)
   | .ask as k => let e := SP.eval H ask (k (ask as)); (e.1, e.2 + 1)
 
-/-- The `H` calls of a simulator program, in order, against `H` and the verifier `ask`. -/
-def spLog {α : Type} (H : Msg → Msg) (ask : List Msg → Out) : SP α → List (Msg × Msg)
-  | .ret _ => []
-  | .hash q k => (q, H q) :: spLog H ask (k (H q))
-  | .ask as k => spLog H ask (k (ask as))
-
 /-- A simulator: its coins and its program, which outputs a transcript. -/
 structure Simulator where
   C : Msg → Type
@@ -404,21 +401,29 @@ def Simulator.out {Θ : Type} (H : Msg → Msg) (S : Simulator) (Vs : VStar Θ) 
     List (Msg × Out) :=
   ((S.prog x c).eval H fun as => ((Vs.next x as θ).eval H).1).1
 
-/-- The simulator's `H` calls against `V*` at `θ`. -/
-def simLog {Θ : Type} (H : Msg → Msg) (S : Simulator) (Vs : VStar Θ) (θ : Θ) (x : Msg) (c : S.C x) :
-    List (Msg × Msg) :=
-  spLog H (fun as => ((Vs.next x as θ).eval H).1) (S.prog x c)
+/-- **`Fork`**, the real game's collision finder: the honest prover, whose tape is a nonce `N` and the rest `Ω`, run
+twice against `V*` at `θ` on one nonce and two fresh rests; it outputs the first collision among the prover's SHA-512
+calls in the two runs. Its cost is both runs' calls, both parties'. -/
+def Fork {N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (P : Prover (N × Ω))
+    (Vs : VStar Θ) (θ : Θ) (x : Msg) : Finder where
+  S := N × Ω × Ω
+  out s := findColl ((runStar H P Vs x (s.1, s.2.1) θ).pLog ++ (runStar H P Vs x (s.1, s.2.2) θ).pLog)
+  cost s :=
+    let t₁ := runStar H P Vs x (s.1, s.2.1) θ
+    let t₂ := runStar H P Vs x (s.1, s.2.2) θ
+    t₁.pLog.length + t₁.vLog.length + t₂.pLog.length + t₂.vLog.length
 
-/-- `ZK(k, P, R, S, ε_zk)` against a malicious verifier: for `(x, w) ∈ R`, every verifier `V*` of the protocol's `k(x)`
-rounds and tape `θ`, the transcript of `P(w)` against `V*` is within `ε_zk(x)` of `S`'s on every event, plus the
-probability that `S`'s SHA-512 calls hold a collision. The simulator is not told `V*`'s rounds, so the real run lasts
-the protocol's; a `V*` holding a collision could open a committed coin two ways, and the collision term charges that
-to the simulator's own calls. -/
-def ZKmalR {Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover Ω) (R : Rel W) (S : Simulator)
-    (εzk : Msg → ℝ) : Prop :=
+/-- `ZK(k, P, R, S, ε_zk, γ)` against a malicious verifier: for `(x, w) ∈ R`, every verifier `V*` of the protocol's
+`k(x)` rounds and tape `θ`, the transcript of `P(w)` against `V*` is within `ε_zk(x)` of `S`'s on every event, plus
+`γ(x)` times the probability that `Fork` finds a collision among the honest prover's SHA-512 calls in two runs against
+`V*` on one nonce. The simulator is not told `V*`'s rounds, so the real run lasts the protocol's. The coin commitment
+binds only computationally: a `V*` that opens a committed coin two ways makes the honest prover's checks of the two
+openings collide. The term reads only the real game, never the simulator's calls. -/
+def ZKmalR {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (k : Msg → ℕ)
+    (P : W → Prover (N × Ω)) (R : Rel W) (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
   ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (Ev : List (Msg × Out) → Prop),
-    |Pr (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
-      ≤ εzk x + Pr (fun c : S.C x => findColl (simLog H S Vs θ x c) ≠ none)
+    |Pr (fun ω : N × Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
+      ≤ εzk x + γ x * (Fork H (P w) Vs θ x).Pr H
 
 /-- **The simulator's cost, expected**: over its coins, the simulator makes at most `bound(x)` calls (hash and ask) in
 expectation, against every verifier. -/
@@ -656,10 +661,12 @@ def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → 
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
 
 /-- **Flock: zero knowledge** of the masked verifier's honest prover, against every malicious verifier of the deployed
-verifier's rounds `D.V.k`: `Hello`, answered by the commitment to every coin, then the rounds that open them. -/
-def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (S : Simulator)
-    (εzk : Msg → ℝ) : Prop :=
-  D.zk = true ∧ ZKmalR H D.V.k P (R D.parse) S εzk
+interaction's `D.V.k + 1` rounds: the extra round is the `Hello`, at which the masked verifier sends its commitment to
+every coin, and then come `D.V`'s rounds, which open the coins. `D.V` models the coins in the clear; the commitment's
+hiding is the live-coins assumption of `trustedBase`. The prover's tape is the nonce its `Hello` sends and the rest. -/
+def ZK {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (D : Deploy Coin Col T)
+    (P : Wit → Prover (N × Ω)) (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
+  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) P (R D.parse) S εzk γ
 
 /-- **Flock: bits**, `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ) − 1`, at every decoder that meets the spec, the one decoder
 of every table. -/

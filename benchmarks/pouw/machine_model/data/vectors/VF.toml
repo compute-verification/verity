@@ -1,0 +1,29 @@
+# VF: V-H plus JI2, MOV on the issue row (rs-machine-model §12).
+name = "VF"
+epoch = "VF"
+summary = "V-H plus JI2, MOV on the issue row (rs-machine-model §12)."
+note = "note:20261016T0218Z-draft-rs-w-prime-r2"
+rows = [
+    "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
+    "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "JI2_0",
+    "JI2_1", "JI2_2", "JI2_3", "JI2_4", "JI2_5", "JI2_6",
+]
+# [kind, MACs]: the kind's price is at least that many tensor MACs
+credits = [
+    ["IMAD", 32], ["IMAD", 128], ["HFMA2", 64], ["FFMA", 32], ["ALU", 8], ["XU", 29],
+    ["NOROW", 32], ["ALU", 91], ["ALU", 112], ["ALU", 240], ["SHFL", 496], ["ALU", 512],
+    ["HFMA2", 512], ["FFMA", 512], ["NOROW", 512], ["FFMA", 1024.0], ["VIMNMX", 1024.0], ["HFMA2", 1024.0],
+    ["IMAD", 1024.0], ["ALU", 1024.0], ["F2FS", 1024.0], ["XU", 1024.0], ["SHFL", 1024.0], ["NOROW", 1024.0],
+    ["RED32", 1024.0], ["TMAred512", 4096.0], ["SEL", 32], ["SEL", 512], ["SEL", 1024],
+]
+
+[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+tau = 0.2447
+uf_low = 1.0938
+margin = 1.935
+
+[legacy]  # the legacy chain's values in full, which a re-solve matches to 1e-12
+tau = 0.24469352315618764
+infl = 0.09375
+margin = 1.9345238095238095
+attacks = 255

@@ -9,6 +9,7 @@
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
+                                                 # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc
   research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
   research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group, recorded as a manual
@@ -179,6 +180,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or, with --on, on the machine), recorded as "
                                                                                  "the attempt's params.env (values of secret-named keys redacted)")
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
+    ap.add_argument("--wait", action="store_true",
+                    help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused). Without it, run "
+                         "returns once the machine has started the run, so a loop of launches doesn't serialize them")
+    ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
                          "and reserve them for the run; else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
@@ -1023,8 +1028,38 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     if launch.get("first_record") == "disk-hold":
         print(f"research: {ns.on} holds it for disk before its runner starts (research disk-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
+    if getattr(ns, "wait", False):
+        return wait_remote(run_id, run_dir, every_s=ns.wait_every)
     print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
     return 0
+
+
+#: the states `summarize` gives a remote run that will not change again
+ENDED = (*R.TERMINAL, "refused", "launcher-exited", "runner-gone")
+
+
+def wait_remote(run_id: str, run_dir: Path, *, every_s: float, fetch=None, sleep=None) -> int:
+    """`research run --on ... --wait`: fetch the run's records every `every_s` seconds until it has ended, and return its rc (1 when
+    it ended without one, 3 when the machine refused it). An unreachable machine is waited out, as `research fetch` would be."""
+    import time
+
+    fetch, sleep = fetch or remote.fetch, sleep or time.sleep
+    while True:
+        rec = fetch(run_dir)
+        s = R.summarize(run_dir)
+        if s["state"] in ENDED:
+            if s["state"] == "refused":
+                rc = 3
+            elif s["state"] == "done":
+                rc = s["rc"] if isinstance(s["rc"], int) else 0
+            else:
+                rc = s["rc"] if isinstance(s["rc"], int) and s["rc"] != 0 else 1
+            why = f": {s['why']}" if s.get("why") else ""
+            print(f"research: run {run_id} {s['state']} (rc {s['rc']}){why}", file=sys.stderr)
+            return rc
+        if (rec or {}).get("last_fetch_error"):
+            print(f"research: run {run_id}: machine unreachable (rc {rec['last_fetch_error'].get('rc')}); still waiting", file=sys.stderr)
+        sleep(every_s)
 
 
 def _run_dir(root: Path, ref: str, on: str | None, *, unique: bool = False) -> Path:
