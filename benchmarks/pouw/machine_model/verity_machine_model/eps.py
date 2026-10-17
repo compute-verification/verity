@@ -1,8 +1,11 @@
-"""ε for a PoUW design in the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2), every term from data:
+"""ε for a PoUW design in the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2), every term from data,
+in two layers that are never mixed (Daniel, 17 Oct 06:29Z). The protocol with 100% checking, every word and operand
+verified, has the core ε
 
-    1 − ε = (1 − ε_skip − ε_mand − ε_machine − ε_luck − ε_adapt) · (1 − ε_sched) · (1 − ε_clock)
+    1 − ε_core = (1 − ε_skip − ε_mand − ε_machine) · (1 − ε_sched) · (1 − ε_clock)
 
-each term a fraction of honest time.
+and the sampling compiler adds ε_sample = ε_luck + ε_adapt, a function of the proof unit, its budget and its selection
+rule, 0 at 100% sampling. Each term is a fraction of honest time.
 
 - **Π** is a named vector's rows at its epoch, as the price LP reads them: row r holds Σ_k c_kr·n_k SMSP-cycles for n_k warp
   instructions of class k, and a program takes at least its largest row.
@@ -244,18 +247,20 @@ class Table:
         return self.l2 / (self.sms * 4 * self.mhz * 1e6)
 
 
-def table(data: Path = DATA, q: float | None = None, l2: float | None = None) -> Table:
+def table(data: Path = DATA, q: float | None = None, l2: float | None = None, nbytes: float | None = None) -> Table:
     t = tomllib.loads((data / "table.toml").read_text())
-    return Table(q=t["q"] if q is None else q, bytes=t["bytes"], l2=t["l2"] if l2 is None else l2, sms=t["sms"],
-                 mhz=t["mhz"], source=t["source"])
+    return Table(q=t["q"] if q is None else q, bytes=t["bytes"] if nbytes is None else nbytes,
+                 l2=t["l2"] if l2 is None else l2, sms=t["sms"], mhz=t["mhz"], source=t["source"])
 
 
 @dataclass(frozen=True)
 class Adapt:
-    """ε_adapt for a proof unit (`data/adapt.toml`): what steering in unproved regions gains under the one-σ order."""
+    """ε_adapt for a proof unit (`data/adapt.toml`): what steering in unproved regions gains under the one-σ order,
+    with the unit's selection rule."""
     name: str
     eps: float
     source: str
+    selection: str = ""
 
 
 def adapt(name: str = "", data: Path = DATA) -> Adapt:
@@ -263,7 +268,7 @@ def adapt(name: str = "", data: Path = DATA) -> Adapt:
     name = name or t["default"]
     if name not in t or not isinstance(t[name], dict):
         raise SystemExit(f"no proof unit {name!r} in adapt.toml: one of {', '.join(adapts(data))}")
-    return Adapt(name=name, eps=t[name]["eps"], source=t[name]["source"])
+    return Adapt(name=name, eps=t[name]["eps"], source=t[name]["source"], selection=t[name].get("selection", ""))
 
 
 def adapts(data: Path = DATA) -> list[str]:
@@ -571,7 +576,19 @@ class Eps:
         r = self.T_honest / self.baseline.T
         return r if self.credit == "H" else r / (1 - self.design.clock.eps)
 
+    def core(self, sched: bool = True) -> float:
+        """ε with 100% checking, every word and operand verified (Daniel, 17 Oct 06:29Z): ε_skip, ε_mand, ε_machine and
+        the credit terms, with ε_luck = ε_adapt = 0."""
+        s = (self.sched or 0.0) if sched else 0.0
+        return 1 - (1 - self.skip - self.mand - self.machine_eps) * (1 - s) * (1 - self.clock)
+
+    def sample(self) -> float:
+        """ε_sample = ε_luck + ε_adapt, the sampling compiler's: the proof unit's, its budget's and its selection rule's,
+        0 at 100% sampling. It is reported beside `core`, never inside it."""
+        return self.luck + (self.adapt.eps if self.adapt else 0.0)
+
     def total(self, sched: bool = True) -> float:
+        """The compiled protocol's ε, core and sample in one product; for the record, never for comparing designs."""
         s = (self.sched or 0.0) if sched else 0.0
         a = self.adapt.eps if self.adapt else 0.0
         return 1 - (1 - self.skip - self.mand - self.machine_eps - self.luck - a) * (1 - s) * (1 - self.clock)

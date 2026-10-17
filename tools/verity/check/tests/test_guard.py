@@ -116,6 +116,31 @@ def test_markdown_inside_the_inputs_is_outside_them_unless_the_suite_lists_markd
     assert (r.status, r.outside) == want, r.log.read_text()
 
 
+@pytest.mark.parametrize("declared", ["nothing", "the directory", "its files"])
+def test_a_nested_suites_files_are_outside_the_inputs_unless_declared(tmp_path, monkeypatch, declared):
+    """`pkg/sub` is a suite of its own, which `pkg`'s key leaves out (`suites.dropped`): a test of `pkg` that reads one of its
+    files, in its own process or a child's, fails `pkg` until `pkg` declares the directory or the files."""
+    S, _ = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (tmp_path / "pkg" / "sub").mkdir()
+    (tmp_path / "pkg" / "sub" / "pyproject.toml").write_text('[project]\nname = "sub"\n\n[tool.pytest.ini_options]\n')
+    for f in ("data.txt", "other.txt"):
+        (tmp_path / "pkg" / "sub" / f).write_text("the nested suite's\n")
+    (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
+        "import subprocess, sys\nfrom pathlib import Path\nSUB = Path(__file__).resolve().parents[1] / 'sub'\n\n"
+        "def test_itself():\n    (SUB / 'data.txt').read_text()\n\n"
+        "def test_child():\n    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', str(SUB / 'other.txt')],"
+        " check=True)\n")
+    suite = S.Suite("pkg", "pkg", (), (), nested=("pkg/sub",))
+    inputs = {"nothing": [], "the directory": ["pkg/sub"], "its files": ["pkg/sub/data.txt", "pkg/sub/other.txt"]}[declared]
+    r = S.run(suite, ["pkg", *inputs], [], tmp_path / "logs")
+    assert r.counts["passed"] == 2, r.log.read_text()
+    if declared == "nothing":
+        assert (r.status, r.outside) == ("failed", {"pkg/sub/data.txt": "pkg/tests/test_reads.py"}), r.log.read_text()
+        assert r.child_outside == {"pkg/tests/test_reads.py": ["pkg/sub/other.txt"]}
+    else:
+        assert (r.status, r.outside, r.child_outside) == ("passed", {}, {}), r.log.read_text()
+
+
 @pytest.mark.parametrize("workers", [1, 2])
 def test_every_test_starts_without_the_machines_markers_caches_and_slot(tmp_path, monkeypatch, workers):
     """Host-dependent tests failed five full checks in 16 h, each fixed one test at a time: cpu-1's /etc/vy/runs-via-slot, node 1's

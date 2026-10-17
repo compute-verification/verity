@@ -2,17 +2,17 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3l-16) re-solves here to the τ, τ at 600 W, U/F_low and
+checks every attack against it. Each named vector (VF … VF3n-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
 price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3l-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3l-16, the vector of record by decision 62)
-uv run machine-model census VF3l-16 --kind ATOMS64
-uv run machine-model attacks VF3l-16 -n 3 # the cheapest attacks of every design
+uv run machine-model solve VF3n-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current` (VF3n-16, the vector of record since 17 Oct; VF3l-16 by decision 62 before it)
+uv run machine-model census VF3n-16 --kind ATOMS64
+uv run machine-model attacks VF3n-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 uv run machine-model eps                  # Dither's ε budget at q* = 8: every term, the LP's mixes, the ε(q*) curve
@@ -80,8 +80,11 @@ value, so the lanes it serves past the first are copies, credited only by copy l
 
 ## ε in the tensor–scalar model
 
-`eps` computes 1 − ε = (1 − ε_skip − ε_mand − ε_machine − ε_luck − ε_adapt)(1 − ε_sched)(1 − ε_clock), each term a fraction of
-honest time. Π is the current vector's rows at its epoch, read as the price LP reads them (SMSP-cycles a warp
+`eps` reports two layers that are never mixed (Daniel, 17 Oct 06:29Z). The protocol with 100% checking, every word and
+operand verified, has the core ε, 1 − ε_core = (1 − ε_skip − ε_mand − ε_machine)(1 − ε_sched)(1 − ε_clock)
+(`--checking full`, the default). The sampling compiler adds ε_sample = ε_luck + ε_adapt, a function of the proof unit,
+its budget and its selection rule, 0 at 100% sampling, on its own line and in its own columns (`--checking sampled`).
+Each term is a fraction of honest time. Π is the current vector's rows at its epoch, read as the price LP reads them (SMSP-cycles a warp
 instruction a row). ε_machine is one LP, SPEC's §0.8 (note:20261017T0324Z-draft-eps1-spec): a program writes every
 committed word on one of four routes, folds every word and does the filler, and its time is its largest row. The routes
 are the tensor pipe (`L/32` MMAs for 128 words, with their operand delivery), CUDA lanes at q* lane instructions a word
@@ -114,8 +117,10 @@ times an ALU instruction's cost on the issue rows too (`issue` and the joint `JI
 since VF3 and PREDICT's u16s_l7qs measured at 0.92 (r20261017-045133-67bf). The uniform route then closes without UPFILL, and UPFILL costs honest issue
 time while the cheater does its checked work on lanes, 32 values a warp instruction. ε_adapt is the proof unit's, SPEC's
 Theorem D under the one-σ order (`data/adapt.toml`): today's segment spot check ≈ 21%, whole dot products +0.35%, and 0
-for whole-dot-product proofs that recompute their operands one stage back or for per-stage coins. `eps` charges today's
-by default and `--adapt UNIT` another; the Python `eps()` charges none unless given one.
+for whole-dot-product proofs that recompute their operands one stage back or for per-stage coins. `--checking sampled`
+charges today's by default and `--adapt UNIT` another; the Python `eps()` charges none unless given one. The table
+route's defaults (`data/table.toml`) are SCALAR-ROUTE as restated: 1.22 slots and 3.5 B of L2 a word, `--lookup-bytes 6`
+for single-field tables.
 
 ## Adopt a probe's census
 
@@ -126,6 +131,15 @@ u must be a lower bound on what every program pays on it, so a line slower than 
 sound. A faster line closes the old one at the epoch before, adds its own from `EPOCH` and adds its runs to the row's in
 `rows.csv`; a slower one changes nothing. A probe case the census has no row for (VF3k-16's peer-CTA DSMEM atomic) is a new row and, if it is
 slower than its opcode's other cases, its own kind (`ATOME32P`): a line for the old kind there would overstate it.
+
+A joint row a re-measurement finds violated (a measured point past 1) is unsound whatever the faster rule says: it closes
+at the epoch before, and the new frontier's rows replace it. `opcode_probe/eps1.py facets --prior data/rows.csv --emit
+EPOCH` prints them, the upper hull of the new points and the old rows' vertices with the 2% margin. VF3m-16 closed R2-R4,
+KIMAD, KHFMA2 and KSHFL that way for EIMAD, EHFMA2 and ESHFL, and replaced the ASSUMED SHFL by its measured 8 SMSP-cycles.
+VF3n-16 closed the joint issue rows JI3e_0..2 for JI3n_0..2 (note:20261017T0321Z-draft-eps1-tensor): IMMA m16n8k16 and
+TF32 m16n8k4 beside IADD3 load JI3e_1 past 1. Each JI3n row is JI3e's refit over every native mma.sync form's programs and
+VF3e's at the 2% margin, then divided by 1.07 for the 6.9% one program's time varied between builds; MMA takes every form's
+least, and each form is its own kind on them (`IMMA16816`, `HMMA1684T`, …, with its `copy16` line).
 
 ## Where the data came from
 

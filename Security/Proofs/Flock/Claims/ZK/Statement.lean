@@ -3,40 +3,37 @@ import Proofs.Flock.Claims.Prob
 /-!
 # Zero knowledge against a malicious verifier: what the proofs add to the spec's `ZKmalR`
 
-The claim is the spec's `Claims.ZKmalR` (the real run lasts the protocol's `k(x)` rounds, and the bound adds the
-probability that the simulator's own SHA-512 calls, `simLog`, hold a collision), and Flock's is `Claims.Flock.ZK`, at the
-masked verifier's rounds `D.V.k` plus the `Hello` that commits every coin. This module adds:
+The claim is the spec's `Claims.ZKmalR` (the real run lasts the protocol's `k(x)` rounds, and the bound adds `γ` times
+the probability that `Fork`, two real runs of the honest prover on one nonce, finds a collision among the prover's
+SHA-512 calls), and Flock's is `Claims.Flock.ZK`, at the masked verifier's rounds `D.V.k` plus the `Hello` that commits
+every coin. This module adds:
 
-* **ZK bits** (`ZKmalR.bits`): under `StrictBirthday` at the finder `Bzk` (the simulator, with every call `V*` makes in
-  the answers it is asked) the collision term is at most `q²/2^513`.
+* **ZK bits** (`ZKmalR.bits`): under `StrictBirthday` at `Fork` the collision term is at most `γ·q²/2^513`.
 * **The worst-case cost** (`SimCostLe`), beside the spec's expected `SimCost`, which it implies (`SimCostLe.simCost`).
+* What `findColl` finds (`findColl_ne_none_iff`, `findColl_collision`).
 -/
 
 namespace Claims.ZKMal
 
 open Claims
 
-/-- The calls of a simulator program, its own and those of the verifier `vnext` in every answer it is asked. -/
-def spCostV {α : Type} (H : Msg → Msg) (vnext : List Msg → OC Out) : SP α → ℕ
-  | .ret _ => 0
-  | .hash q k => spCostV H vnext (k (H q)) + 1
-  | .ask as k => spCostV H vnext (k ((vnext as).eval H).1) + 1 + ((vnext as).eval H).2.length
-
-/-- **`Bzk`**: the simulator run against `V*`, outputting the first collision among its SHA-512 calls; its cost is its
-calls and every call `V*` makes in the answers it is asked. -/
-def Bzk {Θ : Type} (H : Msg → Msg) (S : Simulator) (Vs : VStar Θ) (θ : Θ) (x : Msg) : Finder where
-  S := S.C x
-  out c := findColl (simLog H S Vs θ x c)
-  cost c := spCostV H (fun as => Vs.next x as θ) (S.prog x c)
-
-/-- **ZK bits, proposed**: `ZKmalR` with its collision term bounded by the strict birthday bound at `Bzk`, for every
-verifier whose run with the simulator makes at most `q` SHA-512 calls. -/
-def ZKmalBits {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover Ω) (R : Rel W) (S : Simulator)
-    (εzk : Msg → ℝ) : Prop :=
+/-- **ZK bits, proposed**: `ZKmalR` with its collision term bounded by the strict birthday bound at `Fork`, for every
+verifier whose two runs with the honest prover make at most `q` SHA-512 calls. -/
+def ZKmalBits {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (k : Msg → ℕ)
+    (P : W → Prover (N × Ω)) (R : Rel W) (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
   ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ q : ℝ,
-    (∀ c, ((Bzk H S Vs θ x).cost c : ℝ) ≤ q) → StrictBirthday H (Bzk H S Vs θ x) → ∀ (Ev : List (Msg × Out) → Prop),
-    |Pr (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
-      ≤ εzk x + q ^ 2 / 2 ^ (513 : ℝ)
+    (∀ s, ((Fork H (P w) Vs θ x).cost s : ℝ) ≤ q) → StrictBirthday H (Fork H (P w) Vs θ x) →
+    ∀ (Ev : List (Msg × Out) → Prop),
+    |Pr (fun ω : N × Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
+      ≤ εzk x + γ x * (q ^ 2 / 2 ^ (513 : ℝ))
+
+/-- **`ZKmalR` gives ZK bits** at a nonnegative `γ`: the collision term is `Fork`'s success, which the strict birthday
+bound caps. -/
+theorem ZKmalR.bits {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg} {k : Msg → ℕ}
+    {P : W → Prover (N × Ω)} {R : Rel W} {S : Simulator} {εzk γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x)
+    (h : ZKmalR H k P R S εzk γ) : ZKmalBits H k P R S εzk γ := by
+  intro x w hR Θ Vs θ hk q hq hSB Ev
+  exact (h x w hR Θ Vs θ hk Ev).trans (add_le_add le_rfl (mul_le_mul_of_nonneg_left (hSB q hq) (hγ x)))
 
 /-- **The simulator's cost, worst case**: at most `bound(x)` calls (hash and ask) on every coin, against every
 verifier. -/
@@ -107,38 +104,5 @@ theorem findColl_collision (H : Msg → Msg) : ∀ l : List (Msg × Msg), (∀ p
       | none =>
           rw [hf] at h
           exact findColl_collision H l (fun p hp => hl p (List.mem_cons_of_mem _ hp)) u v h
-
-theorem spLog_calls {α : Type} (H : Msg → Msg) (ask : List Msg → Out) :
-    ∀ (p : SP α) (e : Msg × Msg), e ∈ spLog H ask p → e.2 = H e.1
-  | .ret _, _, he => by simp [spLog] at he
-  | .hash q k, e, he => by
-      simp only [spLog, List.mem_cons] at he
-      rcases he with rfl | he
-      · rfl
-      · exact spLog_calls H ask (k (H q)) e he
-  | .ask as k, e, he => spLog_calls H ask (k (ask as)) e he
-
-theorem spLog_length_le {α : Type} (H : Msg → Msg) (vnext : List Msg → OC Out) :
-    ∀ p : SP α, (spLog H (fun as => ((vnext as).eval H).1) p).length ≤ spCostV H vnext p
-  | .ret _ => by simp [spLog, spCostV]
-  | .hash q k => by
-      have := spLog_length_le H vnext (k (H q))
-      simp only [spLog, spCostV, List.length_cons]
-      omega
-  | .ask as k => by
-      have := spLog_length_le H vnext (k ((vnext as).eval H).1)
-      simp only [spLog, spCostV]
-      omega
-
-/-- **`ZKmalR` gives ZK bits**: the collision term is `Bzk`'s success, which the strict birthday bound caps. -/
-theorem ZKmalR.bits {W Ω : Type} [Fintype Ω] {H : Msg → Msg} {k : Msg → ℕ} {P : W → Prover Ω} {R : Rel W}
-    {S : Simulator} {εzk : Msg → ℝ} (h : ZKmalR H k P R S εzk) : ZKmalBits H k P R S εzk := by
-  intro x w hR Θ Vs θ hk q hq hSB Ev
-  refine (h x w hR Θ Vs θ hk Ev).trans (add_le_add le_rfl ?_)
-  refine le_trans ?_ (hSB q hq)
-  unfold Finder.Pr
-  refine Pr_mono fun c hc => ?_
-  obtain ⟨⟨u, v⟩, huv⟩ := Option.ne_none_iff_exists'.mp hc
-  exact ⟨u, v, huv, findColl_collision H _ (spLog_calls H _ _) u v huv⟩
 
 end Claims.ZKMal
