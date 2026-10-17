@@ -39,6 +39,7 @@ import Proofs.Flock.Claims.Complete.Zk.InnerGo
 import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
 import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
+import Proofs.Flock.Claims.Complete.Zk.ConsReplay
 import Proofs.Flock.Claims.Complete.Zk.MaskRank
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
@@ -80,5 +81,8 @@ sacrifice coin, so the batched constraint `innerP` checks holds at every coin on
 climbing from its leaf to the root (`innerCommitP_tree`, `inner_column_opens`); `InnerGo` the masked prover's inner
 proof in closed form at the replies' coins, where the batched constraint holds on the pads and `β ≠ 0` (`innerP_go`),
 and the verifier's inner check passing on it, on rounds carrying its sends, at a rep's pads whose constraints vanish
-(`verifyInnerWith_of`); `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved,
+(`verifyInnerWith_of`); `ConsZerocheck`, `ConsLincheck` and `ConsRingSwitch` the replay's message-dependent rows
+vanishing at the pads, from the plain algebra moved by the masks (`zcZ_masks`, `lcZ_masks`), and `ConsReplay` the five
+together on `Zk.replay`'s output wherever the plain checks pass at its coins (`replay_rows_zero`); `MaskRank` the
+mask slot's span and the rank bound the prover's refusal needs (`RankFull`, `DeployedRankBound`); `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved,
 and `complete_zk_relation` at the deployed relation. -/
