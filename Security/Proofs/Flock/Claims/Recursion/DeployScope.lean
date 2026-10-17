@@ -18,9 +18,9 @@ statement the prover staged. This file proves those refusals from the shipped co
   draw passes `RecScope.fullDrawOk`, hence is `Draw.Full` (`RecScope.fullDrawOk_iff`).
 
 `decide_scope` is the two at one session decision; `decide_inScope` puts them in `RecScope`'s statement:
-`InScope` of what the verifier reads with the decided records (`RecScope.inScope_iff`). `acc_parse` is the run: an
-accepted run's last round is the last session's decision (`next_acc`), so `parse` reads the statement and it is in
-`InScope`.
+`InScope` of what the verifier reads with the decided records (`RecScope.inScope_iff`). `acc_parse` is the last step
+of an accepted run: the last session's decision (`next_acc`), so `parse` reads the statement and it is in `InScope`.
+`DeployScopeRuns` puts the refusals on every session of an accepted run.
 -/
 
 namespace RecDeploy
