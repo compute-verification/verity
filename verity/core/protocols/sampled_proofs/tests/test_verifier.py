@@ -14,7 +14,8 @@ import verity_difftest
 from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _spec, _stream
 from verity.ml.circuits.codec import canonical_json
 from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, verifier as V
+from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as D, hello as H, partition as P, registration as R,
+                                                            verifier as V)
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
 
 
@@ -165,6 +166,25 @@ def test_an_outcome_whose_verdicts_disagree_is_refused(monkeypatch):
     assert e.value.verdict.codes == (V.DISAGREE,) and e.value.verdict.verifiers["python"] == {"ok": True, "codes": []}
     monkeypatch.undo()
     assert stream.outcome(draw, _lean(), {"statement": "stub"}).accepted
+
+
+def test_the_runs_hello_is_checked_by_both(monkeypatch):
+    """The run's Hello on its record: one tree over the selection stream and each slot's, its key unused by earlier runs.
+    A reused tree is refused `fresh` by both, and a Lean that answers otherwise makes the two disagree."""
+    nonce, key, root = "ab" * 32, "cd" * 255 + "0e", "ef" * 64
+    spec = {"block": 3, "rounds_log": 2, "scheme": H.SCHEME, "streams": H.run_streams(["selection"], 2, ["session"])}
+    own = {"profile": "fast100", "coins": {**spec, "nonce": ""}}
+    received = canonical_json({**own, "coins": {**spec, "nonce": nonce}}).decode()
+    tree = {"key": key, "nonce": nonce, "root": root, "spec": spec}
+    run = (own, received, tree)
+    v = V.hello(*run, [], ["selection"], 2, ["session"])
+    assert v.ok and v.verifiers["lean"] == v.verifiers["python"] == {"ok": True, "codes": []}
+    assert spec["streams"] == ["selection", "slot/0/session", "slot/1/session"]
+    v = V.hello(*run, [key], ["selection"], 2, ["session"])
+    assert v.codes == ("fresh",) and v.verifiers["lean"] == {"ok": False, "codes": ["fresh"]}
+    assert V.hello(*run, [], ["selection"], 3, ["session"]).codes == ("streams",)
+    _lean_answering(monkeypatch, "hello", lambda got: {**got, "ok": True, "codes": []})
+    assert V.hello(*run, [key], ["selection"], 2, ["session"]).codes == (V.DISAGREE,)
 
 
 def test_lean_that_cannot_run_fails_closed(monkeypatch):
