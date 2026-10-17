@@ -16,7 +16,7 @@ The rate is the gate's count: a loop that `expect` says holds N instructions of 
 `iters` times by `warps` warps of each of the blocks (one an SM), over the block's cycles; the median block, then the
 median rep.
 
-  python probe.py build [--out DIR] [SOURCE...]                    # probes/*.cu -> DIR/STEM, sm_120a SASS only
+  python probe.py build [--out DIR] [--arch SM] [SOURCE...]        # probes/*.cu -> DIR/STEM, SM's SASS only (sm_120a)
   python probe.py gate BINARY... [--json OUT]                      # CPU only; exit 8 when a verdict isn't the declared one
   python probe.py run BINARY... --out DIR [--reps N] [--scale X] [--since EPOCH] [--run-id ID]   # one GPU
 """
@@ -35,7 +35,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 EXIT_FAIL = 8
-NVCC_FLAGS = ("-std=c++20", "-O3", "-gencode", "arch=compute_120a,code=sm_120a", "-ldl")
+NVCC_FLAGS = ("-std=c++20", "-O3", "-ldl")
+#: the one SASS target a binary carries; the datacenter probes (`../dc/`) build for sm_90a and sm_100a
+ARCHES = ("sm_120a", "sm_90a", "sm_100a")
 
 
 def _load(name: str, path: Path):
@@ -63,12 +65,13 @@ def nvcc() -> str:
     raise SystemExit("probe: no nvcc (set NVCC or CUDA_HOME)")
 
 
-def build(out: Path, sources: list[Path]) -> list[Path]:
+def build(out: Path, sources: list[Path], arch: str = "sm_120a") -> list[Path]:
     out.mkdir(parents=True, exist_ok=True)
+    gencode = f"arch=compute_{arch.removeprefix('sm_')},code={arch}"
     built = []
     for src in sources:
         dst = out / src.stem
-        subprocess.run([nvcc(), *NVCC_FLAGS, "-o", str(dst), str(src)], check=True)
+        subprocess.run([nvcc(), *NVCC_FLAGS, "-gencode", gencode, "-o", str(dst), str(src)], check=True)
         built.append(dst)
     return built
 
@@ -208,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--out", type=Path, default=Path("build"))
+    b.add_argument("--arch", choices=ARCHES, default="sm_120a")
     b.add_argument("sources", nargs="*", type=Path)
     g = sub.add_parser("gate")
     g.add_argument("binaries", nargs="+", type=Path)
@@ -222,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
 
     if a.cmd == "build":
-        for out in build(a.out, a.sources or sorted((HERE / "probes").glob("*.cu"))):
+        for out in build(a.out, a.sources or sorted((HERE / "probes").glob("*.cu")), a.arch):
             print(out)
         return 0
 

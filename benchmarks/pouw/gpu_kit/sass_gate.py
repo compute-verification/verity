@@ -63,7 +63,8 @@ CLOCK = re.compile(r"\bSR_CLOCKLO\b")
 SHARED = frozenset({"LDS", "STS", "LDSM", "STSM", "ATOMS"})
 #: instructions whose effect outlives the kernel or the iteration: their execution is the sink
 WRITES = frozenset({"ST", "STG", "STS", "STSM", "RED", "REDG", "ATOM", "ATOMG", "ATOMS", "SUST", "SURED"})
-WRITE_PREFIX = ("UBLK", "UTMASTG", "UTMARED", "REDAS")
+#: and sm_100's tcgen05.mma (UTC*MMA), which writes tensor memory: its result leaves only through tcgen05.ld (LDTM)
+WRITE_PREFIX = ("UBLK", "UTMASTG", "UTMARED", "REDAS", "UTCIMMA", "UTCQMMA", "UTCHMMA", "UTCOMMA")
 #: a store after the timed region whose value can carry the loop's results out of the kernel
 STORES = frozenset({"ST", "STG", "RED", "REDG", "ATOM", "ATOMG"})
 _MANGLED = re.compile(r"_Z(\d+)")
