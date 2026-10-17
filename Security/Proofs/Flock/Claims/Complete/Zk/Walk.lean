@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Complete.Zk.Json.Files
+import Proofs.Flock.Claims.Complete.Walk
 
 /-!
 # The masked session's reps, by index
@@ -54,17 +55,6 @@ theorem forIn_array_idx {α β : Type} (xs : Array α) (f : α → β → PS (Fo
   have := forIn_list_idx f inv xs.toList (fun k a b l r l' ha => hs k a b l r l' (by simpa using ha))
     xs.toList 0 (by simp) b l b' l' h0 e
   simpa using this
-
-theorem Recs.bytes {resp : ℕ → Claims.Msg} :
-    ∀ {i : ℕ} {rs : List Round} {bs : List Claims.Msg}, Recs resp i rs bs → ∀ r ∈ rs, ∃ c, r.bytes = some c
-  | _, [], [], _, _, hr => by simp at hr
-  | _, _ :: _, _ :: _, h, r, hr => by
-    rcases List.mem_cons.1 hr with rfl | hr
-    · obtain ⟨c, hc, -⟩ := h.1
-      exact ⟨c, hc⟩
-    · exact Recs.bytes h.2 r hr
-  | _, [], _ :: _, h, _, _ => h.elim
-  | _, _ :: _, [], h, _, _ => h.elim
 
 theorem push_getElem!_lt {α : Type} [Inhabited α] (xs : Array α) (x : α) {j : ℕ} (hj : j < xs.size) :
     (xs.push x)[j]! = xs[j]! := by
