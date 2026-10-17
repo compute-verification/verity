@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.Witnesses.Recursion
 import Proofs.Flock.Claims.Witnesses.RecursionMeets
 import Proofs.Flock.Claims.Witnesses.Stated
 import Proofs.Flock.Claims.Witnesses.Meets
+import Proofs.Flock.Claims.Witnesses.ReadyProbe
 
 /-!
 # Refutation witnesses
@@ -18,5 +19,6 @@ The lock's `claims` section (`Security/lean-audit.json`) lists, per claim, its `
 guarantees: `Stated` states the shared, Flock and sampling claims' failures over the spec (`Claims.<Claim>_fails`), and
 `Meets` their checkable antecedents at Flock's deployed records (`deployPlain`, `deployZk`). The ZK-recursion
 compiler's claims carry `Claims.Witness.Recursion.<Claim>_fails` and `<Claim>_meets`, their checkable antecedents met at
-the deployed record (`RecursionMeets`).
+the deployed record (`RecursionMeets`). `ReadyProbe` shows where a deployed record's claim says nothing: the masked
+record's `Complete` at a statement of other than one table.
 -/
