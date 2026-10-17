@@ -13,9 +13,10 @@ rebuilds itself and `HmRow.parse` checks (`ParseFacts`), so each part's `PartChe
 (`VStarParts.lean`'s method: `laidRows_of_satisfies`, then the unit's laid-out theorem) and links that are not the
 circuit's. The parts share three units:
 
-* **rec-open** (`climbAt_of_satisfies`): the table's Ligerito levels (`.recOpen`, `rec-open/l<L>-h<H>`, `RecOpen.params`),
-  as at the dense shape, and R's levels (`.recOpenStacked`, the same net under `rec-open-stacked/l<L>-h<H>`,
-  `RecOpen.stackedParams`, `RecOpen.check_ok_stacked`: `climbStacked_of_satisfies`). `laid_unit`.
+* **rec-open** (`climbAt_of_satisfies`): the table's Ligerito levels (`.recOpen`, `rec-open/l<L>-h<H>`,
+  `RecOpen.params`), as at the dense shape, and R's levels (`.recOpenStacked`, the same net under
+  `rec-open-stacked/l<L>-h<H>`, `RecOpen.stackedParams`, `RecOpen.check_ok_stacked`: `climbStacked_of_satisfies`).
+  `laid_unit`.
 * **rec-residuals** (`resCols_of_check`): the rep's algebra (`.inner`, `rec-residuals/m-k-c-p`, `RecResiduals.part`), as
   at the dense shape, and R's opening parts (`.opening`, `rec-opening/m-c-p`, the residuals net at `RecOpening.part`,
   `check_opening`: `openingCols_of_satisfies`). `laid_part`.
@@ -28,13 +29,14 @@ The rest:
 * **The checks the parser made** (`parseFacts_of_tablesOf`, `parseFacts_of_check`): every table of an untyped parsed
   statement is a circuit `HmRow.parse` returned, so `RecOpen.check`, `RecResiduals.check`, `RecSparse.check` and
   `RecOpening.check` accepted it. The links here carry only the unit's name; the check is the parser's.
-* **A part's links at one statement** (`ClimbAt`, `ResAt`, `SparseAt`; together `PartAt`): at a V* statement `xO` of `x`,
-  a table whose unit is named for one of the units above, one of its copies, the input tie (the copy's input columns
-  hold the unit's inputs) and the output tie (the unit's outputs there give a goal at the witness and the messages).
-  `PartLinksTo s` is `PartAt` wherever the V* statement shows the coins `c`, its goal at `c` or `PartChecks`' fallback
-  (`PartColl`: two of the part's recorded calls collide, or one ties with an evaluation the setup makes, `SetupColl`),
-  so a part may be of a different kind at different compiled statements. `PartLinks s` has the goal the inner check `chk s`; `LogLinks s` has the goal that the calls the inner
-  check makes (`logs s`) are among the part's recorded calls, which at a rec-open part are the climb's.
+* **A part's links at one statement** (`ClimbAt`, `ResAt`, `SparseAt`; together `PartAt`): at a V* statement `xO` of
+  `x`, a table whose unit is named for one of the units above, one of its copies, the input tie (the copy's input
+  columns hold the unit's inputs) and the output tie (the unit's outputs there give a goal at the witness and the
+  messages). `PartLinksTo s` is `PartAt` wherever the V* statement shows the coins `c`, its goal at `c` or
+  `PartChecks`' fallback (`PartColl`: two of the part's recorded calls collide, or one ties with an evaluation the setup
+  makes, `SetupColl`), so a part may be of a different kind at different compiled statements. `PartLinks s` has the
+  goal the inner check `chk s`; `LogLinks s` has the goal that the calls the inner check makes (`logs s`) are among the
+  part's recorded calls, which at a rec-open part are the climb's.
 * **The input tie off the columns** (`climbAt_of_reads`, `resAt_of_reads`, `sparseAt_of_reads`): a copy's input
   columns hold the values they read (`openIns_reads`: the row, siblings, running sums, coefficients and position;
   `inCols_readElems`; `sparseIn_reads` where no types are stacked, `T_LOG = 0` as in scope), so the input tie is left
@@ -42,11 +44,14 @@ The rest:
 * **`PartChecks` and `PartLogs` at every part** (`goal_of_links`; `partChecks_of_links`, `partLogs_of_links`):
   `PartLinks s` gives `PartChecks s` and `LogLinks s` gives `PartLogs s`, the goal off the fallback.
   M's dense-shape links, whose output ties give the inner check outright, give `PartLinks` (`partLinks_of_resLinks`,
-  `partLinks_of_openLinks`). A part whose inner check makes no call has `PartLogs` outright (`partLogs_of_nil`).
-* **`VStarAcceptsR` at the sparse shape** (`vstarAccepts_sparse_of_links`): `vstarAccepts_sparse` with every part's
-  `PartChecks` from its links; `vstarParts_sparse_of_links` and `vstarPartsStaging_sparse_of_links` are `VStarParts`
-  and `VStarPartsStaging` so. `PartOpens` stays a premise: what opens a held message is the V* statement's row
-  commitment (`b ‖ c`, the `sha512x3`/`hm96` slots) or a level's climb to a registered root, not a unit copy's outputs.
+  `partLinks_of_openLinks`) and `LogLinks` (`logLinks_of_openLogLinks`). A part whose inner check makes no call has
+  `PartLogs` outright (`partLogs_of_nil`; with the log links, `SparseLogs`, `partLogs_sparse`).
+* **`PartOpens`** is no unit copy's: a held message opens through the V* statement's hm96 row and the setup's
+  registered climbs, at any shape (`partOpens_of_climbs`, from `HeldOpens` and `RegClimbs`).
+* **`VStarAcceptsR` and `VStarParts` at the sparse shape** (`vstarAccepts_sparse_of_links`, `vstarParts_sparse`):
+  `vstarAccepts_sparse` with every part's `PartChecks` from its links, and `VStarParts` with its `PartLogs` from
+  `SparseLogs` and its `PartOpens` through registered climbs; `vstarParts_sparse_of_links` and
+  `vstarPartsStaging_sparse_of_links` take `PartOpens` and `PartLogs` as they are.
 -/
 
 namespace Flock.Readable
@@ -530,14 +535,26 @@ theorem partLinks_of_openLinks {H : Msg → Msg} {D : Deploy Coin} {decode : Msg
     let ⟨msch, r, a, cf, rest, idx, ss, hmsch, hin, hout⟩ := hlink w ms hms
     ⟨msch, r, a, cf, rest, idx, ss, hmsch, hin, fun h => Or.inl (hout h)⟩⟩
 
+/-- **A rec-open part's links for its calls are its log links at every V\* statement** (`OpenLogLinks` gives
+`LogLinks`). -/
+theorem logLinks_of_openLogLinks {H : Msg → Msg} {D : Deploy Coin} {decode : Msg → Option Flock.Readable.Read}
+    {L : Layout} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
+    {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {s : ℕ}
+    (h : OpenLogLinks D decode L shape shows logs s) : LogLinks H D decode L shape shows logs s := by
+  intro x st hst hf xO c hc
+  obtain ⟨p, hx, ht, hpi, t, htl, LANES, Ht, -, hp, o, g, u, ho, hg, hu, hlink⟩ := h x st hst hf xO c hc
+  exact Or.inl ⟨p, hx, ht, hpi, t, htl, LANES, Ht, Or.inl hp, o, g, u, ho, hg, hu, fun w ms hms =>
+    let ⟨msch, r, a, cf, rest, idx, ss, hmsch, hin, hout⟩ := hlink w ms hms
+    ⟨msch, r, a, cf, rest, idx, ss, hmsch, hin, fun h => Or.inl (hout h)⟩⟩
+
 /-- **A residuals part's links, read off the copy's columns**: `ResAt` with the input tie's elements those the named
 copy's columns hold (`rowsRead`, `vRead`; `inCols_readElems`). What is left of the input tie sits in the output tie's
 premise. -/
 theorem resAt_of_reads {decode : Msg → Option Flock.Readable.Read} {L : Layout} {s : ℕ} {x xO : Msg}
     {G : Flock.Wit → List Msg → Prop} {p : Flock.Readable.Parsed} (hx : Flock.Readable.parseBytes decode xO = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
-    {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} (hpart : Flock.Readable.ResPart p.sts[t].c S ns nv) {o g u : ℕ}
-    (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv)
+    {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} (hpart : Flock.Readable.ResPart p.sts[t].c S ns nv)
+    {o g u : ℕ} (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv)
     (hout : ∀ (w : Flock.Wit) (ms : List Msg), (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
       PartCols S (Flock.Readable.rowsRead ns nv (Flock.Readable.copyOf p t htl w o g u))
         (Flock.Readable.vRead ns nv (Flock.Readable.copyOf p t htl w o g u))
@@ -581,8 +598,9 @@ theorem climbAt_of_reads {decode : Msg → Option Flock.Readable.Read} {L : Layo
 scope): `SparseAt` with the input tie's elements those the named copy's columns hold (`sparseW`, `sparseV`;
 `sparseIn_reads`). What is left of the input tie sits in the output tie's premise. -/
 theorem sparseAt_of_reads {decode : Msg → Option Flock.Readable.Read} {L : Layout} {s : ℕ} {x xO : Msg}
-    {G : Flock.Wit → List Msg → Prop} {p : Flock.Readable.Parsed} (hx : Flock.Readable.parseBytes decode xO = some p) (ht : p.tags.typed = false)
-    (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size) {sh : _root_.Flock.RecSparse.Shape}
+    {G : Flock.Wit → List Msg → Prop} {p : Flock.Readable.Parsed} (hx : Flock.Readable.parseBytes decode xO = some p)
+    (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
+    {sh : _root_.Flock.RecSparse.Shape}
     (hp : _root_.Flock.RecSparse.params p.sts[t].c.unit.name = some sh) (hst : sh.stacked = false) {o g u : ℕ}
     (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv)
     (hout : ∀ (w : Flock.Wit) (ms : List Msg), (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
@@ -643,6 +661,39 @@ theorem vstarParts_sparse_of_links {H : Msg → Msg} {D : Deploy Coin} {I : Inne
     (hD : Decomp H D I.V Form.Sparse chk) (hLD : LogDecomp H D I.V Form.Sparse logs) (hH : Held D I L Form.Sparse) :
     VStarParts H D I DO L opening Form.Sparse :=
   ⟨shows, chk, cmt, logs, fun s => partChecks_of_links hDO (hC s), hO, hL, hS, hD, hLD, hH⟩
+
+omit [Inhabited Coin] in
+/-- **Part `s`'s calls at the sparse shape**: its log links (`LogLinks`, a rec-open part's climb), or an inner check
+that makes no SHA-512 call (an algebra, opening or sparse-phase part). -/
+def SparseLogs (H : Msg → Msg) (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout)
+    (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg))
+    (s : ℕ) : Prop :=
+  LogLinks H D decode L Form.Sparse shows logs s ∨ ∀ x c ms, logs s x c ms = []
+
+omit [Inhabited Coin] in
+/-- **`PartLogs` at a sparse part** (`partLogs_of_links`, `partLogs_of_nil`). -/
+theorem partLogs_sparse {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : Layout}
+    {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
+    {s : ℕ} {decode : Msg → Option Flock.Readable.Read}
+    (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
+    (h : SparseLogs H D decode L shows logs s) : PartLogs H D DO L Form.Sparse shows logs s :=
+  h.elim (partLogs_of_links hDO) partLogs_of_nil
+
+/-- **V\*'s parts at the sparse shape**: every part's links (`PartLinks`) and calls (`SparseLogs`), each part opening
+what it holds through registered climbs (`HeldOpens`, `RegClimbs`; `partOpens_of_climbs`), with the staging, the inner
+verifier's checks and calls, and the held rounds (`Staged`, `Decomp`, `LogDecomp`, `Held`). -/
+theorem vstarParts_sparse {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    {L : Layout} {opening : Opening} {decode : Msg → Option Flock.Readable.Read}
+    {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
+    {cmt dig : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
+    (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
+    (hC : ∀ s, PartLinks H D decode L Form.Sparse shows chk s) (hL : ∀ s, SparseLogs H D decode L shows logs s)
+    (hO : ∀ s, HeldOpens D DO L Form.Sparse opening dig s) (hRC : ∀ s, RegClimbs H D DO L Form.Sparse cmt dig s)
+    (hS : Staged H D I L Form.Sparse shows cmt) (hD : Decomp H D I.V Form.Sparse chk)
+    (hLD : LogDecomp H D I.V Form.Sparse logs) (hH : Held D I L Form.Sparse) :
+    VStarParts H D I DO L opening Form.Sparse :=
+  vstarParts_sparse_of_links hDO hC (fun s => partOpens_of_climbs (hO s) (hRC s))
+    (fun s => partLogs_sparse hDO (hL s)) hS hD hLD hH
 
 end Sparse
 
