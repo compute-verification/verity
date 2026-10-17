@@ -1,25 +1,64 @@
 import Models.Accounting.Guarantees.TS
 
 /-!
-# The tensor–scalar model's price lemmas (stubs)
+# The tensor–scalar model's price lemmas
 
 The certificate's price against the bound, the stars' signs, (RD) in price form and the identity of Theorem D(a)
-(EPS1-SPEC §1.1, §2.2), each a `sorry` until a prover takes it (gap list G1–G6: note:20261017T0801Z-draft-lean-stmt).
+(EPS1-SPEC §1.1, §2.2): gap list G1–G6 of note:20261017T0801Z-draft-lean-stmt.
 -/
 
 namespace Accounting.SecurityProofs.TS
 
 open Accounting.TS Accounting.Assumptions.TS Accounting.Guarantees.TS Pouw.RelativeSecurity
 
+-- The frozen statements take every section `Fintype` binder, whether or not their proofs use it.
+set_option linter.unusedSectionVars false
+
 section Lemmas
 
 variable {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
   [Fintype X]
 
+private theorem vecMin_nonneg (Z : Model K R T L U F X) (ha : ∀ r k, 0 ≤ Z.G.a r k) (r : R) :
+    0 ≤ Z.vecMin r :=
+  Real.iInf_nonneg fun k => ha r k
+
+private theorem vecMin_le (Z : Model K R T L U F X) (r : R) {k : K} (hk : k ∈ Z.vec) :
+    Z.vecMin r ≤ Z.G.a r k :=
+  ciInf_le (Set.finite_range fun k : Z.vec => Z.G.a r k).bddBelow ⟨k, hk⟩
+
+private theorem price_add (G : Machine K R) (lam : R → ℝ) (f g : K → ℝ) :
+    G.price lam (fun k => f k + g k) = G.price lam f + G.price lam g := by
+  simp only [Machine.price, Machine.load, mul_add, Finset.sum_add_distrib]
+
+private theorem price_sum {ι : Type} (G : Machine K R) (lam : R → ℝ) (s : Finset ι) (f : ι → K → ℝ) :
+    G.price lam (fun k => ∑ i ∈ s, f i k) = ∑ i ∈ s, G.price lam (f i) := by
+  induction s using Finset.cons_induction with
+  | empty => simp [Machine.price, Machine.load]
+  | cons a s ha ih => simp only [Finset.sum_cons]; rw [price_add, ih]
+
+private theorem price_mono (G : Machine K R) (lam : R → ℝ) {f g : K → ℝ} (ha : ∀ r k, 0 ≤ G.a r k)
+    (hlam : ∀ r, 0 ≤ lam r) (hfg : ∀ k, f k ≤ g k) : G.price lam f ≤ G.price lam g :=
+  Finset.sum_le_sum fun r _ => mul_le_mul_of_nonneg_left
+    (Finset.sum_le_sum fun k _ => mul_le_mul_of_nonneg_left (hfg k) (ha r k)) (hlam r)
+
+/-- `Σ_i c_i (π·d_i) = Σ_r λ_r Σ_i c_i d_{i,r}`. -/
+private theorem sum_demandPrice {ι : Type} [Fintype ι] (lam : R → ℝ) (c : ι → ℝ) (d : ι → R → ℝ) :
+    ∑ i, c i * demandPrice lam (d i) = ∑ r, lam r * ∑ i, c i * d i r := by
+  simp only [demandPrice, Finset.mul_sum]
+  rw [Finset.sum_comm]
+  exact Finset.sum_congr rfl fun _ _ => Finset.sum_congr rfl fun _ _ => by ring
+
 /-- Step 1 of Theorem D(a): a certificate's price is at most the bound, `π·n ≤ B(n)`. -/
 theorem price_le_bound [Nonempty R] (G : Machine K R) (lam : R → ℝ) (n : K → ℝ) (h : IsCert lam) :
     G.price lam n ≤ G.bound n := by
-  sorry
+  obtain ⟨hlam, hsum⟩ := h
+  have hle : ∀ r, G.load n r ≤ G.bound n := fun r =>
+    le_ciSup (Set.finite_range fun r => G.load n r).bddAbove r
+  calc G.price lam n = ∑ r, lam r * G.load n r := rfl
+    _ ≤ ∑ r, lam r * G.bound n :=
+        Finset.sum_le_sum fun r _ => mul_le_mul_of_nonneg_left (hle r) (hlam r)
+    _ = G.bound n := by rw [← Finset.sum_mul, hsum, one_mul]
 
 /-- The demands, `w*`, `φ*` and `χ*` are `≥ 0` on a well-formed model at a certificate. -/
 theorem stars_nonneg [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K) (lam : R → ℝ)
