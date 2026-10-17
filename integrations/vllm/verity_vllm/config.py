@@ -79,7 +79,7 @@ def environ_snapshot() -> Any:
 # ---------------------------------------------------------------------------------------------------------------- what runs
 
 #: Row-id dtype token -> the checkpoint weight format the row serves.
-DTYPES: dict[str, str] = {"bf16": "bfloat16", "fp8": "float8_e4m3fn"}
+DTYPES: dict[str, str] = {"bf16": "bfloat16", "fp8": "float8_e4m3fn", "int8": "int8"}
 
 #: Row-id target token -> the device class's compute capability.  Extend by name; an unknown token is a refusal, not a guess.
 TARGETS: dict[str, tuple[int, int]] = {
