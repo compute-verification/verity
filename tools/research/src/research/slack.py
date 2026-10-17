@@ -1707,6 +1707,19 @@ def cmd_watch(ns: argparse.Namespace, reg: dict) -> int:
 
 # --- traffic: the monitor ---------------------------------------------------------------------------------------------------
 
+def issue_taken(ident: str, cache: dict[str, bool]) -> bool:
+    """Whether the Linear issue `ident` has left Backlog (accepted, started, done or canceled): an ask taken up on Linear.
+    False when Linear can't say, so a doubtful ask still shows."""
+    if ident not in cache:
+        from . import linear  # noqa: PLC0415
+        try:
+            st = linear.Linear().gql("query($id: String!) { issue(id: $id) { state { type } } }", {"id": ident})["issue"]["state"]
+            cache[ident] = st["type"] != "backlog"
+        except (linear.LinearError, OSError, KeyError, TypeError, ValueError):
+            cache[ident] = False
+    return cache[ident]
+
+
 def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     """Doorbells per inbox (the most in any one hour), pauses, `@name`s nobody owns (dropped), and asks with no 👀 or reply
     after --stale-h hours, over the last --hours."""
@@ -1729,6 +1742,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     dropped, stale, groups = [], [], {h.get("usergroup") for h in reg["handles"]}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
+    taken: dict[str, bool] = {}                                      # Linear issue -> left Backlog
     for m in posts:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
@@ -1744,7 +1758,8 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
-            stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
+            if not ((link := LINEAR_LINK_RE.search(m.get("text") or "")) and issue_taken(link[1], taken)):   # taken up on Linear
+                stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
     if ns.json:
         print(json.dumps({"inboxes": rows, "dropped": dropped, "unanswered": stale}, indent=2))
         return 0
