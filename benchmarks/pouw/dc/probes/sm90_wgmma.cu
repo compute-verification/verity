@@ -139,18 +139,18 @@ DC_DEV void wg_spec(const OpArgs& a) {
 }
 
 // wg_spec exact on both sides: the two wgmma warpgroups fixed, each SMSP's lane warp running only while they do
-// (OP_UNTIL), so neither rate counts time at the barrier.
-template <int X, int R>
+// (OP_UNTIL), so neither rate counts time at the barrier. F: the wgmma form (a deeper kind's coupling).
+template <int X, int R, class F = F_s8_n256>
 DC_DEV void wg_until(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
-  const Tiles t = fill_tiles<0>(sm, a.mode);
+  const Tiles t = fill_tiles<F::TYPE>(sm, a.mode);
   const bool mma_role = threadIdx.x < 256;
-  int d[128] = {};
+  typename F::Acc d[F::NA] = {};
   Lane l(threadIdx.x);
   OP_BEGIN_STOP
   if (mma_role) {
     OP_LOOP(it) {
-      group4<F_s8_n256>(d, t);
+      group4<F>(d, t);
       wgmma_wait<1>();
     }
     wgmma_wait<0>();
@@ -340,6 +340,11 @@ OP_KERNEL(wgU_lif, 384) { wg_until<L_LIF, 64>(a); }
 OP_KERNEL(wgU_li_r512, 384) { wg_until<L_LI, 512>(a); }
 OP_KERNEL(wgU_mix_r512, 384) { wg_until<L_MIX, 512>(a); }
 OP_KERNEL(wgU_lop3_r256, 384) { wg_until<L_LOP3, 256>(a); }
+OP_KERNEL(wgU_lif_r256, 384) { wg_until<L_LIF, 256>(a); }
+OP_KERNEL(wgU_lif_r512, 384) { wg_until<L_LIF, 512>(a); }
+OP_KERNEL(wgUb1_lif_r256, 384) { wg_until<L_LIF, 256, F_b1_n256>(a); }
+OP_KERNEL(wgUb1_lif_r512, 384) { wg_until<L_LIF, 512, F_b1_n256>(a); }
+OP_KERNEL(wgUe4_lif_r512, 384) { wg_until<L_LIF, 512, F_e4m3_n256>(a); }
 OP_KERNEL(wgU_sync_k16, 384) { wg_sync_until<16>(a); }
 OP_KERNEL(wgU_sync_k32, 384) { wg_sync_until<32>(a); }
 OP_KERNEL(imma_s8_k32, 512) { imma_alone<32>(a); }
@@ -411,7 +416,15 @@ static const OpProbe PROBES[] = {
     P_UNTIL(wgU_lop3_r256, "LOP3.LUT=256"),
     P_UNTIL(wgU_sync_k16, "IMMA.16816.S8.S8=8"),
     P_UNTIL(wgU_sync_k32, "IMMA.16832.S8.S8=8"),
+    P_UNTIL(wgU_lif_r256, "LOP3.LUT=112,IMAD=112,FFMA=32"),
+    P_UNTIL(wgU_lif_r512, "LOP3.LUT=224,IMAD=224,FFMA=64"),
 #undef P_UNTIL
+#define P_UNTILF(NAME, WPAT, LPAT) \
+  {.name = #NAME, .kernel = (const void*)NAME, .tpb = 384, .expect = WPAT ";" LPAT, .warps = "8;4", .iters = 4096, .until = 2}
+    P_UNTILF(wgUb1_lif_r256, "BGMMA.64x256x256.AND.POPC*=4", "LOP3.LUT=112,IMAD=112,FFMA=32"),
+    P_UNTILF(wgUb1_lif_r512, "BGMMA.64x256x256.AND.POPC*=4", "LOP3.LUT=224,IMAD=224,FFMA=64"),
+    P_UNTILF(wgUe4_lif_r512, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "LOP3.LUT=224,IMAD=224,FFMA=64"),
+#undef P_UNTILF
 #undef WGI
     {.name = "imma_s8_k32", .kernel = (const void*)imma_s8_k32, .tpb = 512, .expect = "IMMA.16832.S8.S8=8", .iters = 4096},
     {.name = "imma_s8_k16", .kernel = (const void*)imma_s8_k16, .tpb = 512, .expect = "IMMA.16816.S8.S8=8", .iters = 4096},
