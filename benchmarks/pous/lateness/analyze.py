@@ -8,7 +8,8 @@ each late answer at each τ attributed to one cause:
   challenger-cpu      the challenger lost its CPU during the challenge (the harness)
   responder-cpu       the responder lost its CPU since the previous challenge arrived, and the time outside the
                       responder dominates (the challenge waited in its socket)
-  gpu-pcie            the device copy's time (request arrival to copy complete, launch included) is the largest part
+  device              the device leg (request arrival to the copy or kernel complete: launch, GPU scheduling and PCIe)
+                      is the largest part; the condition says which of those it is
   responder-host      the responder's time outside the copy is the largest part
   network             the time outside the responder (both kernels, the wire or loopback, both NIC paths) is the largest
 Also `model`: the two-machine p(τ) as the on-node responder's server time (the condition's local cell) convolved with the
@@ -45,7 +46,7 @@ def cause(r: np.ndarray) -> np.ndarray:
     host = r["server"].astype(np.int64) - dev
     net = r["elapsed"].astype(np.int64) - r["server"].astype(np.int64)
     largest = np.argmax(np.stack([dev, host, net]), axis=0)
-    out = np.array(["gpu-pcie", "responder-host", "network"], dtype=object)[largest]
+    out = np.array(["device", "responder-host", "network"], dtype=object)[largest]
     out[resp & (largest == 2)] = "responder-cpu"
     out[chal] = "challenger-cpu"
     out[lost] = "lost"
