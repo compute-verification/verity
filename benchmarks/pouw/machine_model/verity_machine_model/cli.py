@@ -11,7 +11,7 @@
     machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) into data/ at EPOCH,
                                               the last epoch: each (kind, row) keeps the faster of its old and new line
     machine-model eps [DESIGN] [--q Q] [--q-uniform QU] [--operands O] [--credit C] [--fold-cost R] [--fill X]
-                      [--upfill] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]] [--uni-issue C]
+                      [--upfill] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B] [--index-bits B]] [--uni-issue C]
                       [--checking full|sampled [--adapt UNIT]] [--vector V] [--json]
                                               a design's ε budget (data/designs, default dither-duo) at q* = Q (default
                                               8): every term with its source, ε_machine's LP (the credited and the
@@ -176,6 +176,7 @@ def _design(args, name: str) -> E.Design:
     d = d.with_fold_cost(args.fold_cost) if args.fold_cost is not None else d
     d = d.with_fill(args.fill) if args.fill else d
     d = d.with_upfill() if args.upfill else d
+    d = d.with_index_bits(args.index_bits) if args.index_bits else d
     return d if args.q_uniform is None else replace(d, name=f"{d.name}@qu{args.q_uniform:g}", q_uniform=args.q_uniform)
 
 
@@ -196,7 +197,7 @@ def _adapt(args) -> E.Adapt | None:
 def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, credit: str = "H",
                 table: E.Table | None = None, adapt: E.Adapt | None = None, checking: str = "full") -> dict:
     e = E.eps(d, pi, q, data, operands=operands, credit=credit, table=table, adapt=adapt)
-    sampled = checking == "sampled"
+    sampled, dt = checking == "sampled", d.table(table)
     s = E.setup(d, pi, data, operands, credit, table)
     per_mma = e.honest.words * e.honest.depth / d.L
     return {
@@ -222,8 +223,9 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
         "sources": {"skip": {k: p.source for k, p in d.skip.items()}, "mand": {k: p.source for k, p in d.mand.items()},
                     "clock": d.clock.source, "luck": d.luck_source, "baseline": d.baseline_source,
                     "operands": d.floor_source if operands == "floor" else operands},
-        "lookups": None if table is None else {"q": table.q, "bytes": table.bytes, "l2": table.l2,
-                                               "bytes_per_smsp_cycle": table.per_cycle(), "source": table.source},
+        "index_bits": d.index_bits,
+        "lookups": None if dt is None else {"q": dt.q, "bytes": dt.bytes, "l2": dt.l2,
+                                            "bytes_per_smsp_cycle": dt.per_cycle(), "source": dt.source},
         "adapt": None if adapt is None else {"unit": adapt.name, "eps": adapt.eps, "source": adapt.source,
                                              "selection": adapt.selection},
         "curve": [[x, s.machine_eps(x)] for x in E.QS],
@@ -263,6 +265,7 @@ def _eps_table(args, pi: E.Machine) -> int:
             d = E.design(n, args.data)
             d = d.with_fold_cost(r) if r is not None else d
             d = d.with_fill(args.fill) if args.fill else d
+            d = d.with_index_bits(args.index_bits) if args.index_bits else d
             rows += [d, d.with_upfill()] if args.upfill else [d]
     for d in rows:
         es = {q: E.eps(d, pi, q, args.data, operands=args.operands, credit=args.credit, table=tb, adapt=ad)
@@ -323,8 +326,9 @@ def _eps(args) -> int:
           + (f"; honest over the credit at f_max {e.credit_ratio:.3f}, in γ" if args.credit != "H" else ""))
     print(f"  cheater's operand delivery: {ops[args.operands]}")
     if tb is not None:
-        print(f"  table route: {tb.q:g} lane instructions and {tb.bytes:g} B of L2 a word, L2 {tb.l2 / 1e12:g} TB/s = "
-              f"{tb.per_cycle():.3f} B a SMSP-cycle ({tb.source})")
+        dt = d.table(tb)
+        print(f"  table route: {dt.q:g} lane instructions and {dt.bytes:g} B of L2 a word ({d.index_bits}-bit entries "
+              f"on the indexed operand), L2 {dt.l2 / 1e12:g} TB/s = {dt.per_cycle():.3f} B a SMSP-cycle ({dt.source})")
     print(f"  cheater at q* = {args.q:g}: {_mix(e.cheat, per_mma)}")
     print(f"  certificate π*: {_pi(e.cheat)}")
     t = e.terms()
@@ -410,6 +414,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="with --checking sampled: the proof unit (data/adapt.toml; default: its default, today's)")
     e.add_argument("--lookup-bytes", type=float, metavar="B",
                    help="with --lookups: L2 bytes a table word (default: the file's)")
+    e.add_argument("--index-bits", type=int, metavar="B",
+                   help="B-bit noise entries on the operand the table route indexes, which costs B times the 1-bit "
+                        "route's lane instructions and bytes (default: the design's [table] bits, else 1)")
     args = p.parse_args(argv)
     if args.cmd is None:
         print(__doc__)

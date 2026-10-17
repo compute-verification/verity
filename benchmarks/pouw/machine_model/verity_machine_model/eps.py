@@ -160,6 +160,7 @@ class Design:
     lanes: bool = True
     uniform: bool = True
     q_uniform: float | None = None   # uniform instructions a word on the uniform datapath; None: q*
+    index_bits: int = 1              # bits a noise entry on the operand a table route indexes (`[table] bits`)
 
     def fold_cost(self) -> float:
         return sum(self.fold.values())
@@ -180,6 +181,16 @@ class Design:
     def with_fill(self, x: float) -> Design:
         """The design with x lane instructions a word of verified filler on lanes (`lane_fill`)."""
         return replace(self, name=f"{self.name}+fill{x:g}", filler=(*self.filler, lane_fill(x)))
+
+    def with_index_bits(self, b: int) -> Design:
+        """The design with b-bit noise entries on the operand the table route indexes, the other operand as it is."""
+        return replace(self, name=f"{self.name}@b{b}", index_bits=b)
+
+    def table(self, t: Table | None) -> Table | None:
+        """The table route against this design: b-bit entries on the indexed operand cost b times the 1-bit route's
+        lane instructions and bytes a word (QSTAR's b-bit count: ≥ 1.25·b and 8·b B, SPEC §4.2a)."""
+        b = self.index_bits
+        return t if t is None or b == 1 else replace(t, q=t.q * b, bytes=t.bytes * b)
 
 
 def _parts(t: dict) -> dict[str, Part]:
@@ -224,7 +235,8 @@ def design(name: str, data: Path = DATA) -> Design:
                   baseline=dict(base.get("program", {})), baseline_name=base.get("name", ""),
                   baseline_source=base.get("source", ""), floor=dict(ops.get("floor", {})),
                   floor_source=ops.get("source", ""), plain=t.get("plain", 0.0), lanes=routes.get("lanes", True),
-                  uniform=routes.get("uniform", True), q_uniform=routes.get("q_uniform"))
+                  uniform=routes.get("uniform", True), q_uniform=routes.get("q_uniform"),
+                  index_bits=t.get("table", {}).get("bits", 1))
 
 
 def profiles(data: Path = DATA) -> list[str]:
@@ -515,7 +527,8 @@ def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", cre
     """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a):
     the tensor route at the noise's φ_del, the fold, the fillers on their own routes and the baseline program, with no
     overhead. A saturating filler fills the uniform pipe's slack in the credited program's time. `table` opens the
-    cheater's table route."""
+    cheater's table route, priced for the design's `index_bits`."""
+    table = d.table(table)
     h = honest(d.honest, data)
     if d.L % h.depth:
         raise SystemExit(f"{d.name}: L = {d.L} is not a multiple of the MMA's depth {h.depth}")
