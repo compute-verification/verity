@@ -160,6 +160,24 @@ def cmd_lean_verdict(a) -> int:
     return 0
 
 
+def cmd_profile_phases(a) -> int:
+    """``verify.sh PROFILE=1``'s result: the perf samples of one session by phase and kernel (``profile``)."""
+    from . import profile as PF
+
+    out = Path(a.stdout).read_text() if a.stdout and Path(a.stdout).exists() else ""
+    verdicts = [json.loads(ln[len("VERDICT "):]) for ln in out.splitlines() if ln.startswith("VERDICT ")]
+    err = Path(a.stderr).read_text()
+    summary = PF.summarize(PF.samples(PF.read_script(Path(a.script))))
+    doc = PF.result(summary, Path(a.time).read_text().strip().splitlines()[-1], err, bundle=a.bundle, prove_run=a.prove_run,
+                    verdicts=[{k: v.get(k) for k in ("accepted", "why")} for v in verdicts])
+    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+    (Path(a.out).parent / "out").mkdir(exist_ok=True)
+    (Path(a.out).parent / "out" / "profile.json").write_text(json.dumps(summary | {"times": PF.times(err)}, indent=1))
+    Path(a.out).write_text(json.dumps(doc, sort_keys=True))
+    print(json.dumps({k: summary[k] for k in ("samples", "phase", "kernel")}))
+    return 0 if doc["validation"]["status"] == "passed" else 1
+
+
 def _timed(lean: list[dict], warm: int) -> list[dict]:
     """The timed sessions' verdicts: sessions are numbered in the order served (l0000-PID, ...), warm ones first."""
     order = sorted(lean, key=lambda v: v.get("session") or "")
@@ -199,7 +217,8 @@ def cmd_point_result(a) -> int:
                    gpu_peak_mib=max(mem) if mem else None, lean=timed if lean else None,
                    evidence=[p for p in ("out/results.jsonl", "out/lean.jsonl", "out/index.jsonl") if (d / Path(p).name).exists()],
                    **extra)
-    if lean and len(timed) < len(lean) and not all(RS.lean_passed(v) for v in lean):
+    warm = [v for v in lean if v not in timed]
+    if warm and not all(RS.lean_passed(v) for v in warm) and doc["validation"]["status"] == "passed":
         doc["validation"] = {**doc["validation"], "status": "failed",
                              "detail": "a warm session was rejected by the Lean verifier: " +
                                        "; ".join(f"{v['session']}: {v.get('why')}" for v in lean if not RS.lean_passed(v))[:800]}
@@ -468,9 +487,13 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("point-result"); p.add_argument("--workload", required=True); p.add_argument("--B", type=int, required=True)
     p.add_argument("--dir", required=True); p.add_argument("--lean", default=None); p.add_argument("--prove-run", default=None)
     p.add_argument("--bundle", default=None); p.add_argument("--out", required=True)
+    p = sub.add_parser("profile-phases"); p.add_argument("--script", required=True); p.add_argument("--time", required=True)
+    p.add_argument("--stderr", required=True); p.add_argument("--stdout", default=None); p.add_argument("--out", required=True)
+    p.add_argument("--bundle", default=None); p.add_argument("--prove-run", default=None)
     a = ap.parse_args(argv)
     return {"plan": cmd_plan, "check": cmd_check, "run": cmd_run, "verify": cmd_verify, "compare": cmd_compare, "table": cmd_table,
             "baseline": cmd_baseline,
             "instances": cmd_instances, "workloads": cmd_workloads, "zk": cmd_zk, "defs": cmd_defs,
             "check-instances": cmd_check_instances, "partition": cmd_partition, "staged": cmd_staged, "probe": cmd_probe, "lean-verdict": cmd_lean_verdict,
-            "point-result": cmd_point_result, "put-bundle": cmd_put_bundle, "fetch-bundle": cmd_fetch_bundle}[a.cmd](a)
+            "point-result": cmd_point_result, "put-bundle": cmd_put_bundle, "fetch-bundle": cmd_fetch_bundle,
+            "profile-phases": cmd_profile_phases}[a.cmd](a)
