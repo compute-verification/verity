@@ -236,6 +236,8 @@ def test_pgemm_summary_gamma_split_binding():
     assert row["plain_words_sm_clk"]["cublaslt_f8"] == pytest.approx(words / (0.125e-3 * 148 * 1.965e9))
     row64 = next(r for r in s["bench"] if r["L"] == 64)
     assert row64["routes"]["k4s"]["words_sm_clk"] == pytest.approx(k4s["words_sm_clk"] / 2)
+    timed = an.pgemm_summary([], [_pg_bench() | {"k4s_L32_fw1_full_mhz": 1500.0}], {})["bench"][0]["routes"]["k4s"]
+    assert timed["mhz"] == 1500.0 and timed["words_sm_clk"] == pytest.approx(words / (1.6e-3 * 148 * 1.5e9))
 
 
 def test_pgemm_main_exit(tmp_path, capsys):
@@ -243,7 +245,7 @@ def test_pgemm_main_exit(tmp_path, capsys):
     (tmp_path / "gate.jsonl").write_text(json.dumps(_pg_gate("k4s_L32_fw2_full")) + "\n")
     assert an.pgemm_main([str(tmp_path), "--json", str(tmp_path / "s.json")]) == 0
     out = capsys.readouterr().out
-    assert "gates exact (C, receipts, control rejected): 1 of 1" in out and "| 4096x4096x4096 | 32 | k4s | 1 |" in out
+    assert "gates exact (C, receipts, control rejected): 1 of 1" in out and "| 4096x4096x4096 | 32 | k4s | 1 | 1.6000 | - |" in out
     assert json.loads((tmp_path / "s.json").read_text())["bench"][0]["routes"]["k4s"]["binding"] == "fold"
     (tmp_path / "gate.jsonl").write_text(json.dumps(_pg_gate("k4s_L32_fw2_full", ok=False)) + "\n")
     assert an.pgemm_main([str(tmp_path)]) == 4

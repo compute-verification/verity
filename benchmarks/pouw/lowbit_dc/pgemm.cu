@@ -39,8 +39,9 @@
 //   pgemm gate M N K SEED DIST       DIST uniform or edge (limb extremes): every route, L and FW of record (FULL), and
 //                                    EXT on C, against the host reference, poisoned with 0xA5, with the no-write control
 //                                    (must be rejected); plain PF8 / PI8 on C; one JSON line each; exit 4 unless all hold
-//   pgemm bench REPS M N K           every arm interleaved (cuBLASLt int8 and FP8 with -DPG_CUBLASLT), median ms, one
-//                                    JSON line
+//   pgemm bench REPS M N K           every arm interleaved (cuBLASLt int8 and FP8 with -DPG_CUBLASLT), median ms, and
+//                                    each pgemm arm's SM clock under its own load (clock64 over globaltimer in every
+//                                    CTA), one JSON line
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a pgemm.cu [-DPG_CUBLASLT -lcublasLt]
 #include <cuda_runtime.h>
 
@@ -197,8 +198,15 @@ DC_DEV void fold_all(DuoSt (&ch)[NCH], uint32_t (&t)[BNR], const uint32_t* v) {
 template <int R, int M, int L, int FW>
 __global__ void __launch_bounds__(64 + 128 * FW, 1)
     pg100(const uint8_t* A, const uint8_t* B, int m, int n, int k, uint32_t seed, int32_t* C, uint32_t* Rc,
-          int write, const uint32_t* magic) {
+          int write, const uint32_t* magic, uint64_t* clk) {
 #if defined(__CUDA_ARCH_FEAT_SM100_ALL)
+  __shared__ uint64_t clk0[2];  // in shared memory: registers held across the kernel cost the k4 routes spills
+  if (clk && threadIdx.x == 0) {
+    uint64_t g0;
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(g0));
+    clk0[0] = clock64();
+    clk0[1] = g0;
+  }
   constexpr int P = planes_of(R), NB = nbuf_of(R), S = stages_of(R), J = KS / 32, BNR = N / FW;
   constexpr uint32_t TCOLS = NB * N < 32 ? 32 : NB * N;
   static_assert(BNR % 32 == 0 && (L == 32 || L == 64) && KS % L == 0, "shape");
@@ -405,6 +413,13 @@ __global__ void __launch_bounds__(64 + 128 * FW, 1)
   __syncthreads();
   tc_after_sync();
   if (w == 0) tmem_dealloc(tmem, TCOLS);
+  if (clk && threadIdx.x == 0) {
+    uint64_t g1;
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(g1));
+    const size_t cta = (size_t)blockIdx.y * gridDim.x + blockIdx.x;
+    clk[2 * cta] = clock64() - clk0[0];
+    clk[2 * cta + 1] = g1 - clk0[1];
+  }
 #endif
 }
 
@@ -520,6 +535,7 @@ static std::string arm_name(const Arm& a) {
 }
 
 static uint32_t* g_magic = nullptr;  // 32 words of 1.5 2^23 (c0's source)
+static uint64_t* g_clk = nullptr;    // when set, each CTA writes its SM clocks and globaltimer ns (the SM clock under load)
 template <int R, int M, int L, int FW>
 static void launch_t(dim3 grid, const uint8_t* A, const uint8_t* B, int m, int n, int k, uint32_t seed, int32_t* C,
                      uint32_t* Rc, int write, cudaStream_t st) {
@@ -534,7 +550,7 @@ static void launch_t(dim3 grid, const uint8_t* A, const uint8_t* B, int m, int n
     CK(cudaMalloc(&g_magic, 128));
     CK(cudaMemcpy(g_magic, mg.data(), 128, cudaMemcpyHostToDevice));
   }
-  pg100<R, M, L, FW><<<grid, 64 + 128 * FW, smem, st>>>(A, B, m, n, k, seed, C, Rc, write, g_magic);
+  pg100<R, M, L, FW><<<grid, 64 + 128 * FW, smem, st>>>(A, B, m, n, k, seed, C, Rc, write, g_magic, g_clk);
 }
 template <int R, int M, int L>
 static bool launch_fw(const Arm& a, dim3 g, const uint8_t* A, const uint8_t* B, int m, int n, int k, uint32_t s,
@@ -801,6 +817,27 @@ static int run_bench(int reps, int m, int n, int k) {
       CK(cudaEventElapsedTime(&t, e0, e1));
       ms[i].push_back(t);
     }
+  // Each arm's SM clock under its own load: one more launch (after a warm one) with every CTA's clock64 and
+  // globaltimer deltas, summed over CTAs.
+  const size_t ctas = (size_t)(n / N) * (m / BM);
+  std::vector<uint64_t> ck(2 * ctas);
+  std::vector<double> mhz(runs.size(), 0.0);
+  CK(cudaMalloc(&g_clk, ck.size() * 8));
+  uint64_t* clk_buf = g_clk;
+  for (size_t i = 0; i < runs.size(); i++) {
+    if (runs[i].kind != 0) continue;
+    g_clk = nullptr;
+    go(runs[i]);
+    g_clk = clk_buf;
+    go(runs[i]);
+    CK(cudaDeviceSynchronize());
+    CK(cudaMemcpy(ck.data(), clk_buf, ck.size() * 8, cudaMemcpyDeviceToHost));
+    double c = 0, ns = 0;
+    for (size_t q = 0; q < ctas; q++) c += (double)ck[2 * q], ns += (double)ck[2 * q + 1];
+    mhz[i] = ns > 0 ? 1e3 * c / ns : 0.0;
+  }
+  g_clk = nullptr;
+  CK(cudaFree(clk_buf));
   int sms = 0, khz = 0;
   CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
   CK(cudaDeviceGetAttribute(&khz, cudaDevAttrClockRate, 0));
@@ -810,6 +847,7 @@ static int run_bench(int reps, int m, int n, int k) {
   for (size_t i = 0; i < runs.size(); i++) {
     std::sort(ms[i].begin(), ms[i].end());
     printf(", \"%s_ms\": %.6f", runs[i].name.c_str(), ms[i][ms[i].size() / 2]);
+    if (mhz[i] > 0) printf(", \"%s_mhz\": %.1f", runs[i].name.c_str(), mhz[i]);
   }
   printf("}\n");
   return 0;
