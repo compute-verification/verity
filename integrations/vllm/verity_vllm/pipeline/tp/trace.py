@@ -5,17 +5,18 @@ summary's timing (a profiler slows what it observes).  Each tool profiles a cont
   (`tp2_profiler_start` / `tp2_profiler_stop`): DIR/torch.<arm>/census.rank<r>.json, with the gzipped Kineto trace of the
   `--trace-ranks`;
 * ``pyspy``: `py-spy record` of every thread, idle ones included, of each `--trace-ranks` process, sampled from outside it
-  (`--trace-pyspy`, the py-spy binary, under ``sudo -n``: a rank is not a descendant of the driver's children):
-  DIR/pyspy.<arm>/rank<r>.speedscope.json.
+  (`--trace-pyspy`, the py-spy binary, under ``sudo -n``: a rank is not a descendant of the driver's children) for a fixed
+  ``pyspy_s`` seconds from just before the run: DIR/pyspy.<arm>/rank<r>.speedscope.json.  Not stopped by a signal: sudo relays none
+  sent from its command's own process group, and a `record` without `--duration` started this way never sampled
+  (r20261017-184628-7c46).
 
 The instrumented run is finalized for its roots only (`tp2_commit_finalize(checks=False)`) and reset; every run's walls go to
-DIR/traced.jsonl."""
+DIR/traced.jsonl.  ``release``: the GPUs go back after the last run (`lease.stop`), the Commit's last device work."""
 from __future__ import annotations
 
 import gc
 import json
 import os
-import signal
 import subprocess
 from pathlib import Path
 from typing import Any, Callable
@@ -45,16 +46,14 @@ def _torch(llm: Any, d: Path, ranks: list[int], timeout: float) -> Callable[[], 
     return lambda: llm.collective_rpc("tp2_profiler_stop", timeout=timeout, kwargs={"out_dir": str(d), "keep_trace": True, "keep_ranks": ranks})
 
 
-def _pyspy(exe: str, pids: dict[int, int], d: Path, ranks: list[int], rate: int) -> Callable[[], Any]:
+def _pyspy(exe: str, pids: dict[int, int], d: Path, ranks: list[int], rate: int, seconds: int) -> Callable[[], Any]:
     logs = {r: open(d / f"rank{r}.pyspy.log", "w") for r in ranks}
-    procs = {r: subprocess.Popen(["sudo", "-n", exe, "record", "--pid", str(pids[r]), "--rate", str(rate), "--nonblocking",
-                                  "--threads", "--idle", "--format", "speedscope", "--output", str(d / f"rank{r}.speedscope.json")],
-                                 stdout=subprocess.DEVNULL, stderr=logs[r])
+    procs = {r: subprocess.Popen(["sudo", "-n", exe, "record", "--pid", str(pids[r]), "--rate", str(rate), "--duration", str(seconds),
+                                  "--nonblocking", "--threads", "--idle", "--format", "speedscope", "--output", str(d / f"rank{r}.speedscope.json")],
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=logs[r])
              for r in ranks}
 
     def stop() -> dict[int, int]:
-        for p in procs.values():
-            p.send_signal(signal.SIGINT)
         rcs = {r: p.wait() for r, p in procs.items()}
         for f in logs.values():
             f.close()
@@ -63,7 +62,7 @@ def _pyspy(exe: str, pids: dict[int, int], d: Path, ranks: list[int], rate: int)
 
 
 def run(llm: Any, run_once: Callable[[], dict[str, Any]], d0: Path, tools: list[str], ranks: list[int], timeout: float, *,
-        pyspy: str | None = None, rate: int = 500) -> list[dict[str, Any]]:
+        pyspy: str | None = None, pyspy_s: int = 120, rate: int = 500, release: bool = False) -> list[dict[str, Any]]:
     d0.mkdir(parents=True, exist_ok=True)
     pids = {int(p["rank"]): int(p["pid"]) for p in llm.collective_rpc(rank_pid, timeout=timeout)}
     rows = []
@@ -74,7 +73,7 @@ def run(llm: Any, run_once: Callable[[], dict[str, Any]], d0: Path, tools: list[
             gc.collect()
             if arm != "control":
                 llm.collective_rpc("tp2_commit_install", timeout=timeout)
-            stop = _torch(llm, d, ranks, timeout) if tool == "torch" else _pyspy(str(pyspy), pids, d, ranks, rate)
+            stop = _torch(llm, d, ranks, timeout) if tool == "torch" else _pyspy(str(pyspy), pids, d, ranks, rate, pyspy_s)
             r = run_once()
             row = {"tool": tool, "arm": arm, "wall_s": r["wall_s"], "step_wall_s": r["step_wall_s"], "step_tokens_out": r["step_tokens_out"],
                    "pids": pids, "profiler": stop()}
@@ -86,6 +85,8 @@ def run(llm: Any, run_once: Callable[[], dict[str, Any]], d0: Path, tools: list[
             with (d0 / "traced.jsonl").open("a") as f:
                 f.write(json.dumps(row, default=str) + "\n")
             print(f"[tp2commit] traced {tool} {arm}: {r['wall_s']:.3f}s steps {len(r['step_wall_s'])} -> {d}", flush=True)
+    if release:
+        TPL.stop(llm, timeout, "work.trace")
     return rows
 
 

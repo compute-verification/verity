@@ -4,7 +4,6 @@ run installed, profiled, finalized for its roots only and reset -- and the per-r
 from __future__ import annotations
 
 import json
-import signal
 from types import SimpleNamespace
 
 import pytest
@@ -76,29 +75,35 @@ def test_torch_profiles_a_control_and_an_instrumented_run_that_is_finalized_for_
     assert (tmp_path / "trace" / "torch.control").is_dir() and (tmp_path / "trace" / "torch.instrumented").is_dir()
 
 
-def test_pyspy_samples_the_traced_ranks_from_outside_and_stops_on_sigint(tmp_path, monkeypatch):
+def test_pyspy_samples_the_traced_ranks_from_outside_for_a_fixed_time_and_is_waited_for(tmp_path, monkeypatch):
     started = []
 
     class _Proc:
-        def __init__(self, argv, stdout=None, stderr=None):
-            self.argv, self.signals = argv, []
+        def __init__(self, argv, stdin=None, stdout=None, stderr=None):
+            self.argv, self.stdin, self.waited = argv, stdin, False
             started.append(self)
 
-        def send_signal(self, s):
-            self.signals.append(s)
-
         def wait(self):
+            self.waited = True
             return 0
 
     monkeypatch.setattr(TRACE.subprocess, "Popen", _Proc)
     llm = _LLM([_Rank(0), _Rank(1)])
-    rows = TRACE.run(llm, _once([[0.5], [0.6]]), tmp_path, ["pyspy"], [1], 60.0, pyspy="/opt/py-spy")
+    rows = TRACE.run(llm, _once([[0.5], [0.6]]), tmp_path, ["pyspy"], [1], 60.0, pyspy="/opt/py-spy", pyspy_s=25)
     assert [r["profiler"] for r in rows] == [{1: 0}, {1: 0}] and len(started) == 2
     for p, arm in zip(started, ("control", "instrumented")):
         assert p.argv[:4] == ["sudo", "-n", "/opt/py-spy", "record"] and p.argv[p.argv.index("--pid") + 1] == str(rows[0]["pids"][1])
+        assert p.argv[p.argv.index("--duration") + 1] == "25" and p.stdin == TRACE.subprocess.DEVNULL and p.waited
         assert {"--idle", "--threads", "--nonblocking"} <= set(p.argv) and p.argv[-1] == str(tmp_path / f"pyspy.{arm}" / "rank1.speedscope.json")
-        assert p.signals == [signal.SIGINT]
     assert all(("start",) not in x.seen for x in llm.ranks)
+
+
+@pytest.mark.parametrize("release", [False, True])
+def test_the_gpus_go_back_after_the_last_traced_run_only_when_asked(tmp_path, monkeypatch, release):
+    stops = []
+    monkeypatch.setattr(TRACE.TPL, "stop", lambda llm, timeout, after: stops.append(after))
+    TRACE.run(_LLM([_Rank(0)]), _once([[0.5], [0.6]]), tmp_path, ["torch"], [0], 60.0, release=release)
+    assert stops == (["work.trace"] if release else [])
 
 
 def test_commit_timing_projects_steps_spans_ring_and_source_counters():

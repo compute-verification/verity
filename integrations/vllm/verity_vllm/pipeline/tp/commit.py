@@ -445,8 +445,7 @@ def main(args: Options) -> int:
                 row["tokens_equal_ref"] = r["tokens"] == tokens_ref
                 if arm != "control":
                     t_f = time.perf_counter()
-                    fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}",
-                                       last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check and not args.trace_dir,
+                    fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}", last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check and not args.trace_dir,
                                        defer={"out": str(out), "pair": pair} if args.replay_deferred else None)
                     t_ready = time.perf_counter() - t_f
                     if args.replay_deferred:
@@ -701,9 +700,8 @@ def main(args: Options) -> int:
         gc.collect()
         with PH.TL.span("work.trace", tools=args.trace_tools):
             TRACE.run(llm, lambda: run_workload(eng, reqs, sampling), Path(args.trace_dir), trace_tools, [int(x) for x in args.trace_ranks.split(",")],
-                      args.rpc_timeout, pyspy=args.trace_pyspy)
-        if not args.value_check:
-            TPL.stop(llm, args.rpc_timeout, "work.trace")
+                      args.rpc_timeout, pyspy=args.trace_pyspy, pyspy_s=int(1.5 * max((r["wall_s"] for r in rows), default=80)) + 10,
+                      release=not args.value_check)
     vcheck = None
     if args.value_check and not stopped:
         # [R15 TP-04 C2] one extra instrumented run per rank (untimed): committed bytes vs hook-time reference clones + re-execution
