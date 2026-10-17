@@ -1008,6 +1008,18 @@ class NativeCollectCommitter(NativeHostCommitter):
             fn(nid, t)
         self._py_committed += 1
 
+    def slot_plan(self, names: list[str], slots: list[Any], kinds: list[int]) -> int:
+        """Register a replayed graph's slots once (kind 0: the whole slot, 1: its first n rows, 2: its first pad rows); the handle's
+        `stage_slot_plan(handle, n, pad)` acquires them in this order in one native call, the same bytes and plan entries as `_acquire`
+        of each view.  A handle holds its slots until `clear_slot_plans`."""
+        return int(self._nc.add_slot_plan([self._intern(nm) for nm in names], list(slots), [int(k) for k in kinds]))
+
+    def stage_slot_plan(self, handle: int, n: int, pad: int) -> int:
+        return int(self._nc.stage_slot_plan(int(handle), int(n), int(pad)))
+
+    def clear_slot_plans(self) -> None:
+        self._nc.clear_slot_plans()
+
     # ------------------------------------------------------------------ step boundaries (serving thread)
 
     def _record_step_rows(self, job: _StepJob) -> None:

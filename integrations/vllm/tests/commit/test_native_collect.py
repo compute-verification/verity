@@ -98,6 +98,57 @@ def test_gather_writes_the_reference_layout_at_every_alignment_and_grid(mod, bpd
         assert torch.equal(arena[off:off + nb], _as_bytes(t)), f"tensor {k} (src offset {t.data_ptr() % 16}, dst offset {off % 16}, {nb} B)"
 
 
+@pytest.mark.parametrize("gather", [False, True])
+def test_slot_plan_stages_what_one_acquisition_per_view_stages(mod, gather):
+    """`stage_slot_plan` (a replayed graph's slots in one call: whole, first n rows, first pad rows, a row count past the slot clamped
+    as `slot[:n]` is) writes the bytes and plan entries, and counts the expected tensors, of one acquisition per view in the same order,
+    on plan misses and hits alike; it refuses an unknown handle and an unknown kind."""
+    g = torch.Generator(device="cuda").manual_seed(11)
+    rows_max = 64
+
+    def rnd(*shape, dtype):
+        return torch.randint(-100, 100, shape, generator=g, device="cuda").to(dtype)
+
+    slots = [rnd(rows_max, 96, dtype=torch.bfloat16), rnd(rows_max, 33, dtype=torch.int8), rnd(rows_max, dtype=torch.int64),
+             rnd(5, 7, dtype=torch.float32), rnd(rows_max, 3, 5, dtype=torch.float16), rnd(1, dtype=torch.int32), rnd(16, 8, dtype=torch.float32)]
+    kinds = [1, 1, 2, 0, 1, 0, 1]
+    one, batch = mod.Collector(), mod.Collector()
+    for c in (one, batch):
+        if gather:
+            c.enable_gather(256)
+        c.use_gather = gather
+    h = batch.add_slot_plan(list(range(len(slots))), slots, kinds)
+    a_one = torch.full((1 << 20,), 0xAB, dtype=torch.uint8, device="cuda")
+    a_batch = a_one.clone()
+    for n, pad in ((37, 40), (37, 40), (12, 16)):
+        views = [s if k == 0 else s[:n] if k == 1 else s[:pad] for s, k in zip(slots, kinds)]
+        one.begin_step(1, a_one.data_ptr(), a_one.numel(), True)
+        for i, v in enumerate(views):
+            one.note_expected(1)
+            (one.stage if gather else one.collect)(i, v)
+        if gather:
+            one.flush()
+        r_one = one.end_step()
+        batch.begin_step(1, a_batch.data_ptr(), a_batch.numel(), True)
+        assert batch.stage_slot_plan(h, n, pad) == len(slots)
+        if gather:
+            batch.flush()
+        r_batch = batch.end_step()
+        torch.cuda.synchronize()
+        ref, total = _reference_layout(views)
+        assert r_batch == r_one and r_one[:2] == (total, len(views))
+        assert torch.equal(a_batch, a_one)
+        for v, (off, _gap, nb) in zip(views, ref):
+            assert torch.equal(a_batch[off:off + nb], _as_bytes(v))
+        assert batch.export_plan(1) == one.export_plan(1)
+    st_one, st_batch = one.stats(), batch.stats()
+    assert st_batch["expected"] == st_one["expected"] == 3 * len(slots) and st_batch["committed"] == 3 * len(slots)
+    with pytest.raises(RuntimeError, match="unknown handle"):
+        batch.stage_slot_plan(h + 1, 1, 1)
+    with pytest.raises(RuntimeError, match="kind must be"):
+        batch.add_slot_plan([0], [slots[0]], [3])
+
+
 def test_plan_hit_reuses_offsets_and_detects_shape_change(mod):
     c = mod.Collector()
     arena = torch.zeros(1 << 16, dtype=torch.uint8, device="cuda")

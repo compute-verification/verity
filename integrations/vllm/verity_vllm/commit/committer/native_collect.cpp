@@ -745,6 +745,34 @@ struct Collector {
   bool use_gather = false;                 // HookFwd / Fa2Wrap route through stage() (gather) or collect() (one memcpy per tensor)
   std::vector<std::string> errors;         // hook-body exceptions (never propagated into the model's forward; drained by the committer)
   inline int64_t put(int64_t name_id, const at::Tensor& t) { const int64_t r = use_gather ? stage(name_id, t) : collect(name_id, t); ++tot_committed; return r; }
+
+  // A replayed CUDA graph's slots (the persistent buffers its captured copies write), registered once: `stage_slot_plan` then puts them
+  // in this order in one call, each whole (kind 0), its first n rows (1) or its first pad rows (2) -- per slot the same expected count,
+  // put and plan entry as one Python acquisition of that view, without a Python frame and a slice per slot
+  struct SlotPlan { std::vector<int64_t> ids; std::vector<at::Tensor> slots; std::vector<int64_t> kinds; };
+  std::vector<SlotPlan> slot_plans;
+  int64_t add_slot_plan(std::vector<int64_t> ids, std::vector<at::Tensor> slots, std::vector<int64_t> kinds) {
+    if (ids.size() != slots.size() || kinds.size() != slots.size()) throw std::runtime_error("add_slot_plan: one name id and one kind per slot");
+    for (size_t i = 0; i < slots.size(); ++i) {
+      if (kinds[i] < 0 || kinds[i] > 2) throw std::runtime_error("add_slot_plan: kind must be 0 (whole), 1 (first n rows) or 2 (first pad rows)");
+      if (kinds[i] != 0 && slots[i].dim() == 0) throw std::runtime_error("add_slot_plan: a row-sliced slot needs a leading dimension");
+    }
+    slot_plans.push_back(SlotPlan{std::move(ids), std::move(slots), std::move(kinds)});
+    return static_cast<int64_t>(slot_plans.size()) - 1;
+  }
+  int64_t stage_slot_plan(int64_t handle, int64_t n, int64_t pad) {
+    if (handle < 0 || handle >= static_cast<int64_t>(slot_plans.size())) throw std::runtime_error("stage_slot_plan: unknown handle " + std::to_string(handle));
+    const SlotPlan& p = slot_plans[static_cast<size_t>(handle)];
+    for (size_t i = 0; i < p.slots.size(); ++i) {
+      const at::Tensor& s = p.slots[i];
+      note_expected(1);
+      if (p.kinds[i] == 0) put(p.ids[i], s);
+      else put(p.ids[i], s.narrow(0, 0, std::max<int64_t>(0, std::min<int64_t>(p.kinds[i] == 1 ? n : pad, s.size(0)))));   // as slot[:rows]
+    }
+    return static_cast<int64_t>(p.slots.size());
+  }
+  void clear_slot_plans() { slot_plans.clear(); }
+
   py::list drain_errors() {
     py::list out;
     for (auto& e : errors) out.append(e);
@@ -1598,6 +1626,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("enable_gather", &Collector::enable_gather, py::arg("capacity") = 65536)
       .def("stage", &Collector::stage, py::arg("name_id"), py::arg("tensor"))
       .def("flush", &Collector::flush)
+      .def("add_slot_plan", &Collector::add_slot_plan, py::arg("name_ids"), py::arg("slots"), py::arg("kinds"))
+      .def("stage_slot_plan", &Collector::stage_slot_plan, py::arg("handle"), py::arg("n"), py::arg("pad"))
+      .def("clear_slot_plans", &Collector::clear_slot_plans)
       .def_readwrite("blocks_per_desc", &Collector::blocks_per_desc)
       .def_readwrite("check_sizes", &Collector::check_sizes)
       .def_readwrite("fault_skip_copy_at", &Collector::fault_skip_copy_at)
