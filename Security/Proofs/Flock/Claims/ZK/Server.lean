@@ -32,9 +32,10 @@ filled with the commit strings of fixed digests under its own salts, kinds `fixe
 * `zk_server`: zero knowledge carries over from `ZKmalR` of the reference prover with a guessing loss: the released,
   scheduled transcript is within a factor `k + 1` of `leaky`'s, the simulator that guesses the stop round, plus
   `(k + 1)·(ε_zk + γ·Fork)` and `∑ ε`. `Flock.zk_server_ref` is it at `refP` and `Flock.zk_deployZk_ref`.
-* The stop's leak: `Pr_choice_le`, an observation at a stop pattern the worker chooses is within the number of
-  patterns of the worst fixed one; `stream_leak`, on a stream of `m` sessions with at most `b` stops each among `r`
-  forms, that number is at most `∑_{i ≤ b} C(m, i)·r^i` (`card_pattern_le`).
+* The stop's leak: `Pr_choice_le`, an event at a stop pattern the worker chooses is within the sum over the patterns
+  of the event at each fixed one; `stream_leak`, on a stream of `m` sessions of which at most `b` stop, each in one of
+  `r` forms, there are at most `∑_{i ≤ b} C(m, i)·r^i` patterns (`card_pattern_le`), so at most that many times the
+  worst fixed one's probability.
 -/
 
 namespace Claims.ZKServer
