@@ -3,9 +3,11 @@ What `verify` and `statement` check of V*'s statements at setup, beside their ow
 verifier holds it (`commits`, from the files `--rec-inner-transcript` and `--rec-inner-registration` and the inner
 circuit's META), candidate 3's check 5 inputs (`c3`), candidate 3's checks before the session's own setup
 (`checkInner`), and the V* checks both run on every statement (`checks`). Both call sites call these, so a statement
-about them is one about what either accepts.
+about them is one about what either accepts. `verify` also refuses, last in each verdict, a recursive session without
+the verifier's inner shape, and a V* session whose draw is not every unit of its population (`fullDraw`).
 -/
 import Flock.RecCoins
+import Flock.Witness
 
 namespace Flock
 namespace RecSetup
@@ -87,6 +89,26 @@ def checks (inner : Option RecVStar.Inner) (commits : Option RecVStar.InnerCommi
       "--rec-inner-session), which its V* list and rows are checked against")
   sts.forM (RecVStar.checkStmt inner tags tables · circuitB partition program registered part bindings rows)
   if let (some i, some cs) := (inner, commits) then RecVStar.checkCovers i cs
+
+/-- The refusal of a recursive session without the verifier's own inner shape. -/
+def noInner : String :=
+  "refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) without the verifier's own inner shape " ++
+    "(--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no " ++
+    "session without it"
+
+/-- **A V* session draws every unit of its population**: under the verifier's inner shape (`inner`), the session's
+record (`record`, whose draw is `draw`) must hold the `subset` draw of every unit of the draw's population with no
+closure (`Witness.fullDraw`, the draw `RecordCustody` reads, `fullDraw_ok`). The draw's population is the registered
+population's (`HmRow.drawn` refuses another at setup), and `checkStmt` pins the circuit, so the part's numbers (its
+rounds, table error, `N₀` and weight) are the ones its circuit and population fix, never a smaller draw's. A recursive
+session (`rec`: the verifier holds `--rec-part`, `--rec-bindings` or `--rec-rows`) without an inner shape is refused
+(`noInner`), since the V* checks and this refusal run under that shape. Without a draw (which `ProvedScope.drawLaw`
+refuses), or outside a recursive session without an inner shape, it passes. -/
+def fullDraw (inner : Option RecVStar.Inner) (rec : Bool) (draw : Option Json) (record : String) : V Unit := do
+  if rec && inner.isNone then throw noInner
+  let (some _, some d) := (inner, draw) | return
+  (Witness.fullDraw (← Draw.UnitDraw.ofJson d).population record).mapError
+    (s!"refused: {·}: a V* session draws every unit of its population, the only draw the recursion's proof covers")
 
 end RecSetup
 end Flock

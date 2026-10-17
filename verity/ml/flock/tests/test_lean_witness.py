@@ -330,7 +330,7 @@ def f1(f1_gate, f1_inner, once):
             str(d / "rows.json"), *sess)
     ex = cf.ThreadPoolExecutor(len(jobs))
     yield _Runs({k: ex.submit(_kept, once, "witness-f1-" + (k if k == "cheat" else k[0].replace("/", "-")), fn)
-                 for k, fn in jobs.items()}, **{"cheat-file": d / "pub-2.bin"})
+                 for k, fn in jobs.items()}, **{"cheat-file": d / "pub-2.bin", "inputs": d})
     ex.shutdown(wait=False)
 
 
@@ -376,6 +376,32 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
     w = f1[part, STATEMENT]
     for check in ("accepts_zkr", "accepts_zkv"):
         assert w[check]["ok"], (check, w[check].get("why"))
+
+
+def test_f1_verify_accepts_the_smallest_level(built, f1_gate, f1, once):  # noqa: F811
+    """`flock-verify verify --zk`, the verifier of record, accepts level 3 (`rec-open/l16-h4`, 106 units) with the
+    verifier's own V* inputs and the inner statement and session its coefficients are checked against, as
+    `85-rec-reprice.sh`'s STEP=lean runs it: past every refusal the verdict runs last (the form's, a draw-less session's,
+    and a V* session's short of every unit, `RecSetup.fullDraw`), and not as a private circuit's. The checks above are
+    the model's predicates; this is the shipped verdict, so a refusal added to it that an honest V* session meets fails
+    here and nowhere else. About two minutes, beside the gate's witness runs."""
+    g, d, part = f1_gate, f1["inputs"], "L3"
+    v, st = g / "v" / part, g / "stage"
+    names = [nm for nm, _ in F1_STATEMENTS]
+
+    def run():
+        p = keyed.run([str(LEAN / ".lake" / "build" / "bin" / "flock-verify"), "verify", "--zk", "--statement", STATEMENT,
+                       "--circuit", str(v / "circuit.txt"), "--public", str(v / "pub.bin"), "--partition",
+                       str(v / "partition.json"), "--program", str(v / "program.json"), "--registered",
+                       str(v / "registered.json"), "--rec-inner", str(d / "inner.json"), "--rec-part",
+                       str(names.index(_unit(g, part))), "--rec-bindings", str(d / "bindings-L3.json"), "--rec-rows",
+                       str(d / "rows.json"), "--rec-inner-circuit", str(st / "circuit.txt"), "--rec-inner-public",
+                       str(st / "pub-2.bin"), "--rec-inner-partition", str(st / "partition.json"), "--rec-inner-session",
+                       str(g / "inner" / "s1" / "session"), "--session", str(g / "v-sess" / part)])
+        return {"rc": p.returncode, "verdicts": [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]}
+
+    r = _kept(once, "verify-f1-L3", run)
+    assert r["rc"] == 0 and [(x["accepted"], x["why"], x["private_circuit"]) for x in r["verdicts"]] == [(True, "", False)], r
 
 
 def test_f1_the_sessions_fail_the_public_output_checks(f1):

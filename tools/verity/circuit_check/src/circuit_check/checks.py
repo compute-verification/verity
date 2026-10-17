@@ -24,9 +24,9 @@
                      warning, ``partition/unchecked``)
     lowering pins    a lowering's AND/XOR/NOT counts against its pin (a piece's, a Boolean Definition's whole lowering's,
                      a template unit's, in the sidecar of the module that defines it or its file in ``pins/``, `sidecars`; a Boolean
-                     Definition's lowering has at most its own And gates), a template unit's circuit digest against its C-Flock
-                     module's `PINS`, and the Boolean export's gate lists checked against the unit circuit
-                     (`verity_flock.boolean_export`)
+                     Definition's lowering has at most its own And gates, besides its builder's commits), a template unit's
+                     circuit digest against its C-Flock module's `PINS`, and the Boolean export's gate lists checked against the
+                     unit circuit (`verity_flock.boolean_export`)
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering
@@ -493,9 +493,10 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         from verity.ml.circuits.evaluation.bits import compile as compile_bits
 
         own = rec["definition_ands"] = compile_bits(t).counts["and"]
-        if counts["ands"] > own:
-            F.fail("lowering", "ands-added", t.id, f"[c-flock]: {counts['ands']} ANDs for the Definition's {own} And gates",
-                   via="c-flock:ir_lower", ands=counts["ands"], definition_ands=own)
+        commits = rec["commits"] = sum(1 for v in C.live() if C.kind[v] == "and" and not C.data[v][1].s)
+        if counts["ands"] - commits > own:
+            F.fail("lowering", "ands-added", t.id, f"[c-flock]: {counts['ands'] - commits} ANDs (and {commits} commits) for the "
+                   f"Definition's {own} And gates", via="c-flock:ir_lower", ands=counts["ands"], commits=commits, definition_ands=own)
         rec["pin"] = _counts_against_pin("definitions", t.id, {"and": counts["ands"]}, pins, F, t.id)
     return rec
 

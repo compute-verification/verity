@@ -109,6 +109,13 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-17 (12:32–12:43 AM PDT, in memory accounting's stacking campaign): the prover controls the audited circuit's
+  inputs as well as the circuit (precommitted, its architecture secret) and knows every coin as soon as it is issued, so
+  no defense may assume the circuit can't learn a coin: the prover passes it in, disguised as a prompt. Verifier coins
+  stay public even where secrecy would stop an attack; hiding codec keys from the circuit was withdrawn on this. The
+  one exception is the weights: they may take a private encoding from a trusted third party, salted after the
+  commitment with secrets the prover never sees. That is one deployment variant, not the default
+  (note:20261017T1038Z-report-stacking-campaign).
 - 2026-10-16 (11:51 AM PDT): no PR waits on Daniel: "If you think they're ready, they're ready. Merge them. Or maybe
   ask CI what it thinks." A PR's owner lane marks it ready once it's final and its checks pass, with
   `research queue ready N --on auto --by LANE` (CI's quick tier first) or `--mark`, and drive lands it. Nobody else
