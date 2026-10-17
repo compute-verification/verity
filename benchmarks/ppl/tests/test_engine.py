@@ -109,10 +109,10 @@ def test_dithered_weights_pass_every_gate(llama, ids, calib):
 
 
 def test_a_noised_head_passes_every_gate(llama, ids, calib):
-    r = evaluate(llama, ids[:4], ["adopted-bd-lm", "adopted-bd", "co", "ncp", "cb"], calib=calib)
+    r = evaluate(llama, ids[:4], ["adopted-bd-lm", "adopted-bd", "co", "ncp", "cb", "co32c"], calib=calib)
     assert passed(r), r["gates"]
     bf = ppl(r["nll"]["bf16/s0"])
-    for a in ("adopted-bd-lm", "co", "ncp", "cb"):
+    for a in ("adopted-bd-lm", "co", "ncp", "cb", "co32c"):
         assert abs(ppl(r["nll"][f"{a}/s0"]) / bf - 1) < 0.05, a
     assert not np.array_equal(r["nll"]["adopted-bd-lm/s0"], r["nll"]["adopted-bd/s0"])
 

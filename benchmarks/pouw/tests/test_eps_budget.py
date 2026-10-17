@@ -51,12 +51,15 @@ def test_co_at_rank_32_and_ncp_miss_it_on_q_k():
     assert 4 < E.summary("llama-3.1-70b", 2048, "prefill", "C").gamma < 5
 
 
-def test_the_hybrid_takes_ncp_on_the_linears_and_co_on_q_k():
-    assert E.products("CB", "linears", 4096) == E.products("C", "linears", 4096)
-    assert E.products("CB", "QKᵀ", 128) == E.products("B", "QKᵀ", 128)
+@pytest.mark.parametrize("design", ["CB", "Bc"])
+def test_the_hybrids_meet_the_target_everywhere(design):
+    lin = {"CB": "C", "Bc": "co32c"}[design]
+    assert E.products(design, "linears", 4096) == E.products(lin, "linears", 4096)
+    assert E.products(design, "QKᵀ", 128) == E.products("B", "QKᵀ", 128)
     for m, c, ph in CELLS:
-        s = E.summary(m, c, ph, "CB")
+        s = E.summary(m, c, ph, design)
         assert s.eps_mac < 3e-3 and s.eps_time < 3e-3 and s.gamma < 10, (m, c, ph)
+    assert E.products("Bc", "linears", 4096) == (4096, 3 * 32, 0)       # every digit limb is a committed word
 
 
 def test_decode_hides_the_edit_under_dram_and_the_zero_weight_gap_is_reported():

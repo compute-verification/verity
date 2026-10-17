@@ -219,13 +219,17 @@ SKIP_DESIGNS = {
     "B": "CO-Dither at r = k/2 with a 7-bit served side: U on the peeled side, bits on both, the served output a "
          "checked word, one limb; P V as in A",
     "B32": "CO-Dither at r = 32 with an 8-bit served side: the strip's second int8 limb unforced, r/(k + r)",
+    "Bc": "CHECKED-STRIP's CO-Dither: co32c on the linears and lm_head (r = 32, the residue sums' base-128 digits "
+          "committed, so every limb is checked; 7-bit weights, 8-bit activations), B (cohalf) on Q Kᵀ, P V as in A",
     "C": "NCP-INT on k32 IMMA: three noised copies cancelling in one depth-3k product, the exact output the last "
          "checked word, so at the zero instance the last segment (L of 3k) is known",
     "CB": "NCP-INT on the linears and lm_head, CO-Dither at r = d/2 (7-bit) on Q Kᵀ, P V as in A: wide noise on every "
           "product",
 }
 #: hybrids: (design for the linears and lm_head, design for attention)
-HYBRIDS = {"CB": ("C", "B")}
+HYBRIDS = {"CB": ("C", "B"), "Bc": ("co32c", "B")}
+#: co32c's digit limbs: the residue sums of an 8-bit served side over k / 32 terms take up to 3 base-128 digits
+CO32C_DIGITS = 3
 #: Every SKIP design but `record` derives each stage's operand by C1′ from the previous stage's served output (the
 #: epilogue and quantizer are checked) and serves decode edited, with coins drawn per round once the weights and the
 #: round's inputs are committed (no deferred pass, no per-stage round trip).
@@ -250,6 +254,8 @@ def products(design: str, comp: str, k: int) -> tuple[float, float, float]:
         return k, k // 2, 0
     if design == "B32":
         return k, 2 * L, L
+    if design == "co32c":
+        return k, CO32C_DIGITS * L, 0
     if design == "C":
         return 3 * k, 0, L
     raise ValueError(design)
