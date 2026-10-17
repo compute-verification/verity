@@ -22,8 +22,9 @@
                                               honest's; ε is a fraction of honest's kernel (--credit H, default) or of
                                               the floor program ♭ (--credit floor); --fill adds X lane instructions a
                                               word of verified filler on lanes, --upfill filler keeping the uniform
-                                              datapath busy (not adopted: decision 73); --lookups opens the table route (data/table.toml: lane
-                                              instructions and L2 bytes a word against an L2 facet; --lookup-q,
+                                              datapath busy (not adopted: decision 73); --lookups opens the table route
+                                              (data/table.toml: lane instructions and L2 bytes a word against an L2 facet;
+                                              --lookup-q,
                                               --lookup-bytes, --l2); --uni-issue C also charges a uniform instruction
                                               C times an ALU's cost on the issue rows; --checking full (default) is the
                                               protocol with every word and operand verified, the core ε alone, and
