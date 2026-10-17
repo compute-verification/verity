@@ -114,9 +114,7 @@ def test_every_row_of_record_resolves_and_pins_every_ranks_programs() -> None:
     assert doc["rows"], "no row of record"
     for row, e in doc["rows"].items():
         role, repo, rev, world = epoch.resolve(row)
-        assert e["tier"] in N.TIERS, row
-        if not e["programs"]:
-            continue
+        assert e["tier"] in N.TIERS and e["pinned_from"], row
         assert sorted(e["programs"], key=int) == [str(r) for r in range(world)], row
         for r, p in e["programs"].items():
             digests = [p["step"], *p["requests"].values()] + ([p["workload"]] if world > 1 or "__b1__" not in row else [])
