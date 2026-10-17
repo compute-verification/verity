@@ -245,7 +245,8 @@ theorem EOs_eval_acc {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhab
     (decO : List (ℕ × Col) → List T) (x : Msg) (s : ℕ) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r : Fin (D.V.k x) → Coin) (c : (EOs D I DO decO s).C x) (hacc : (run H P D.V x ω r).out = .acc) :
     ((EOs D I DO decO s).eval H P x ω r c).1 =
-      ((firstWait (D.nums x s).k DO.cols (Flock.assemble DO.parse decO DO.read (sessStmt H D I P x ω s r))
+      ((firstWait (D.nums x s).k (fun v => [DO.cols v])
+        (Flock.assemble DO.parse DO.table decO DO.read (sessStmt H D I P x ω s r))
         (Flock.check DO.parse (sessStmt H D I P x ω s r))
         ((List.finRange (D.nums x s).waits).map fun i => (List.finRange (D.nums x s).cap).map fun j =>
           fork (offO H D I DO P x ω s r) r (c i j))).eval H
@@ -258,7 +259,8 @@ theorem flockE_eval_acc {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
     (H : Msg → Msg) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Q : Prover Unit) (y : Msg)
     (σ₀ : Fin (DO.V.k y) → Coin) (ρ : (Flock.E DO decO).C y) (hacc : (run H Q DO.V y () σ₀).out = .acc) :
     ((Flock.E DO decO).eval H Q y () σ₀ ρ).1 =
-      ((firstWait (DO.k y) DO.cols (Flock.assemble DO.parse decO DO.read y) (Flock.check DO.parse y)
+      ((firstWait (DO.k y) (fun v => [DO.cols v]) (Flock.assemble DO.parse DO.table decO DO.read y)
+        (Flock.check DO.parse y)
         ((List.finRange (DO.waits y)).map fun i => (List.finRange (DO.cap y)).map (ρ i))).eval H
         (run H Q DO.V y ())).1 := by
   simp only [Extractor.eval, Flock.E, ERep, RP.eval, Trace.seen, hacc, ↓reduceIte]
@@ -482,7 +484,7 @@ theorem findColl_isSome_of_sub (H : Msg → Msg) {l l' : List (Msg × Msg)} (hl'
   have hm : ∀ w ∈ l.map Prod.fst, w ∈ l'.map Prod.fst := fun w hw => by
     obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hw
     exact List.mem_map.2 ⟨p, hsub p hp, rfl⟩
-  exact findColl_isSome H l' hl' u v (hm u hu) (hm v hv) hc
+  exact findColl_isSome_mem H l' hl' u v (hm u hu) (hm v hv) hc
 
 theorem sum_range_shift_le (f : ℕ → ℝ) (hf : ∀ j, 0 ≤ f j) {o m k : ℕ} (h : o + m ≤ k) :
     ∑ j ∈ Finset.range m, f (o + j) ≤ ∑ j ∈ Finset.range k, f j := by

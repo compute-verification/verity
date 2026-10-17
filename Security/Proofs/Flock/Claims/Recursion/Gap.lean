@@ -55,7 +55,8 @@ noncomputable def gDO : Flock.Deploy Bool ℕ Unit where
   V := gVO
   parse := fun _ => some gs₀
   scopeCheck := fun _ => false
-  cols := fun _ => []
+  table := fun _ _ => some gs₀
+  cols := fun _ _ => []
   enc := fun _ _ => 0
   len := fun _ => 0
   θ := fun _ => 0
@@ -286,10 +287,15 @@ theorem gDO_E_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
   have hm : () ∈ decode [] := hdec [] () (by simp [gDO])
   obtain ⟨a, l, hdl⟩ := List.exists_cons_of_ne_nil (List.ne_nil_of_mem hm)
   refine firstWait_const_some H _ _ _ _ _ (⟨[]⟩ : Flock.Wit) (fun vs => ?_) ?_ rs rss
-  · have hf : vs.flatMap (fun _ => ([] : List (ℕ × ℕ))) = [] := List.flatMap_eq_nil_iff.2 fun _ _ => rfl
-    simp only [Flock.assemble, gDO]
-    rw [hf, hdl]
-    rfl
+  · have hf : ((vs.flatMap fun v => [gDO.cols v]).flatMap fun o => o 0) = [] :=
+      List.flatMap_eq_nil_iff.2 fun o ho => by
+        obtain ⟨v, -, hv⟩ := List.mem_flatMap.1 ho
+        rw [List.mem_singleton.1 hv]
+        rfl
+    have h1 : gs₀.tables = 1 := rfl
+    simp only [Flock.assemble, show gDO.parse x = some gs₀ from rfl, h1, List.range_one, List.mapM_cons,
+      List.mapM_nil, show gDO.table x 0 = some gs₀ from rfl, Option.bind_some, hf, hdl]
+    simp [gDO, gRelS]
   · simp [Flock.check, gDO, gRelS]
 
 theorem gFlockKS (H : Msg → Msg) : Flock.KS H gDO := by

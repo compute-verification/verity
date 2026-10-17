@@ -102,7 +102,7 @@ theorem findColl_two_openings (H : Msg → Msg) {l l' : List (Msg × Msg)} (hl :
     (hl' : ∀ e ∈ l', H e.1 = e.2) {q q' a : Msg} (hq : (q, a) ∈ l) (hq' : (q', a) ∈ l') (hne : q ≠ q') :
     ∃ u v, findColl (l ++ l') = some (u, v) ∧ Collision H u v := by
   have hall : ∀ e ∈ l ++ l', H e.1 = e.2 := fun e he => (List.mem_append.1 he).elim (hl e) (hl' e)
-  have hs := findColl_isSome H (l ++ l') hall q q' (List.mem_map.2 ⟨(q, a), List.mem_append_left _ hq, rfl⟩)
+  have hs := findColl_isSome_mem H (l ++ l') hall q q' (List.mem_map.2 ⟨(q, a), List.mem_append_left _ hq, rfl⟩)
     (List.mem_map.2 ⟨(q', a), List.mem_append_right _ hq', rfl⟩) ⟨hne, (hl _ hq).trans (hl' _ hq').symm⟩
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hs
   exact ⟨u, v, huv, findColl_spec H _ hall u v huv⟩

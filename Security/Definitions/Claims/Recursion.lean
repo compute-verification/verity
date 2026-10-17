@@ -173,9 +173,9 @@ noncomputable def Inner.ofFlock (D : Flock.Deploy Coin Col T) (decode : List (�
   V := D.V
   R := Flock.R D.parse
   Scope := Flock.Scope D
-  Op := ℕ × Col
-  opens := D.cols
-  assemble := Flock.assemble D.parse decode D.read
+  Op := ℕ → List (ℕ × Col)
+  opens := fun v => [D.cols v]
+  assemble := Flock.assemble D.parse D.table decode D.read
   check := Flock.check D.parse
   waits := D.waits
   k := D.k
@@ -308,8 +308,8 @@ noncomputable def EO (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coi
       let xs := D.vstar x (v₀.msgs.take (I.V.k (xI D x)))
       collect ((List.finRange (D.nS x)).map fun (s : Fin (D.nS x)) =>
         serve (viewing (D.session x s))
-          (firstWait (D.nums x s).k DO.cols (Flock.assemble DO.parse decO DO.read (xs.getD s []))
-            (Flock.check DO.parse (xs.getD s []))
+          (firstWait (D.nums x s).k (fun v => [DO.cols v])
+            (Flock.assemble DO.parse DO.table decO DO.read (xs.getD s [])) (Flock.check DO.parse (xs.getD s []))
             ((List.finRange (D.nums x s).waits).map fun i => (List.finRange (D.nums x s).cap).map fun j =>
               fork (I.V.k (xI D x) + ((xs.take s).map DO.V.k).sum) r₀ (c s i j))))
     else .ret none
@@ -453,13 +453,14 @@ def ScopeMatches (D : Deploy Coin) (I : Inner Coin W) : Prop := Claims.ScopeMatc
 rounds (`ZKmalR` at `D.V.k`), at `Sim` over the outer `--zk` Flock's simulators: wherever hm96 leaves hide up to `δ₁`
 (`Hm96Hiding` at the pinned key's salt mask `My` and salt hash `cy`), within `Σ_s ε_O(x, s) + 2·k_I(x_I)·δ₁`, with
 `ε_O(x, s)` outer session `s`'s simulation error and `2δ₁` for each of the inner session's `k_I(x_I)` commit strings,
-which `Sim` commits to zero. -/
-def ZK {Ω Y B Cy : Type} [Fintype Ω] [Fintype Y] [Fintype B] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
-    (DO : Flock.Deploy Coin Col T) (P : W → Prover Ω) (SO : Msg → ℕ → OSim) (My : Y → B) (cy : Y → Cy)
-    (εO : Msg → ℕ → ℝ) : Prop :=
+which `Sim` commits to zero. Its binding term is `γzk` times `Fork`'s collision probability among the honest prover's
+calls in two real runs on one nonce. -/
+def ZK {N Ω Y B Cy : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] [Fintype Y] [Fintype B]
+    (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (P : W → Prover (N × Ω))
+    (SO : Msg → ℕ → OSim) (My : Y → B) (cy : Y → Cy) (εO : Msg → ℕ → ℝ) (γzk : Msg → ℝ) : Prop :=
   DO.zk = true ∧ ∀ δ₁ : ℝ≥0, Hm96Hiding My cy δ₁ →
-    ZKmalR H D.V.k P (R D I) (Sim D I SO) fun x =>
-      ∑ s : Fin (D.nS x), εO x s + 2 * I.V.k (xI D x) * (δ₁ : ℝ)
+    ZKmalR H D.V.k P (R D I) (Sim D I SO)
+      (fun x => ∑ s : Fin (D.nS x), εO x s + 2 * I.V.k (xI D x) * (δ₁ : ℝ)) γzk
 
 /-- **The recursion: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the compiled
 verifier accepts. -/
@@ -473,11 +474,12 @@ def KSPriv [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO
       κ D I x + Real.sqrt (γ D I x * PrB H D.V P x) + Real.sqrt (γe D I x * PrBe H D I DO decO P x)
 
 /-- **The private variant: zero knowledge**, at a simulator that commits to a fixed circuit of the class, against every
-malicious verifier of the compiled verifier's rounds: wherever hm96 leaves hide up to `δ₁`, within `ε_zk(δ₁, x)`. -/
-def ZKPriv {Ω Y B Cy : Type} [Fintype Ω] [Fintype Y] [Fintype B] (H : Msg → Msg) (D : Deploy Coin)
-    (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (P : W → Prover Ω) (S : Simulator) (My : Y → B) (cy : Y → Cy)
-    (εzk : ℝ≥0 → Msg → ℝ) : Prop :=
-  DO.zk = true ∧ ∀ δ₁ : ℝ≥0, Hm96Hiding My cy δ₁ → ZKmalR H D.V.k P (RPriv D I) S (εzk δ₁)
+malicious verifier of the compiled verifier's rounds: wherever hm96 leaves hide up to `δ₁`, within `ε_zk(δ₁, x)` and
+`γzk` times `Fork`'s collision probability. -/
+def ZKPriv {N Ω Y B Cy : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] [Fintype Y] [Fintype B]
+    (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (P : W → Prover (N × Ω))
+    (S : Simulator) (My : Y → B) (cy : Y → Cy) (εzk : ℝ≥0 → Msg → ℝ) (γzk : Msg → ℝ) : Prop :=
+  DO.zk = true ∧ ∀ δ₁ : ℝ≥0, Hm96Hiding My cy δ₁ → ZKmalR H D.V.k P (RPriv D I) S (εzk δ₁) γzk
 
 end Recursion
 

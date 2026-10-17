@@ -1,5 +1,5 @@
 import Proofs.Flock.Claims.Recursion.Compose
-import Proofs.Flock.Claims.Aggregate
+import Proofs.Flock.Claims.KS.Fork
 
 /-!
 # The composed extractor's failure, rerun by rerun
@@ -11,7 +11,7 @@ at most `(1 + m·k)` times as often as `E₂` fails (`OuterFails`), plus the inn
 every draw it reruns at (`ServedGood`, `PrBadGood`): `servedERep_bad_le_good`. On that event every view the inner stage
 sees is the one `dec` reads off a successful outer extraction.
 
-* `Ex_sum`, `Pr_exists_le` (the union bound), `Ex_pi_coord` and `Pr_pi_coord` (one coordinate of a dependent product
+* `Pr_exists_le` (the union bound), `Ex_pi_coord` and `Pr_pi_coord` (one coordinate of a dependent product
   of coins), `Pr_equiv` (coins regrouped): the averages the recursion's proof uses.
 * `sqrt_add_lin_any`: `sqrt_add_lin` at any `C`, since `√` of a negative is `0`.
 -/
@@ -19,11 +19,6 @@ sees is the one `dec` reads off a successful outer extraction.
 namespace Claims
 
 /-! ## Averages -/
-
-theorem Ex_sum {ι α : Type} [Fintype α] (s : Finset ι) (f : ι → α → ℝ) :
-    Ex (fun a => ∑ i ∈ s, f i a) = ∑ i ∈ s, Ex (f i) := by
-  unfold Ex
-  rw [Finset.sum_comm, Finset.sum_div]
 
 /-- **The union bound**: `Pr[∃ i, p i] ≤ Σ_i Pr[p i]`. -/
 theorem Pr_exists_le {ι α : Type} [Fintype ι] [Fintype α] (p : ι → α → Prop) :

@@ -63,8 +63,8 @@ noncomputable def EOs (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Co
     if v₀.out = .acc then
       let xs := D.vstar x (v₀.msgs.take (I.V.k (xI D x)))
       (serve (viewing (D.session x s))
-          (firstWait (D.nums x s).k DO.cols (Flock.assemble DO.parse decO DO.read (xs.getD s []))
-            (Flock.check DO.parse (xs.getD s []))
+          (firstWait (D.nums x s).k (fun v => [DO.cols v])
+            (Flock.assemble DO.parse DO.table decO DO.read (xs.getD s [])) (Flock.check DO.parse (xs.getD s []))
             ((List.finRange (D.nums x s).waits).map fun i => (List.finRange (D.nums x s).cap).map fun j =>
               fork (I.V.k (xI D x) + ((xs.take s).map DO.V.k).sum) r₀ (c i j)))).bind
         fun o => .ret (o.map fun w => (xs.getD s [], w))
