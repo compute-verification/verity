@@ -445,21 +445,32 @@ def test_devices_follow_the_layout():
 
 def test_sm89_the_fold_binds_honest():
     """The L40S (EPS1 ADA): at L = 16 duo's two ALU-pipe instructions a word hold the floor program on row A, 8 a MMA at
-    ALU's measured rate, above IMMA.16816's issue, so no route saves time at any q* and the core ε is ε_skip. At L = 32
-    IMMA.16832's joint facets with ALU bind, and lane words on other pipes save time until q* reaches dp4a's 8.5."""
+    ALU's measured rate, above IMMA.16816's issue, so no lane route saves time at any q*. The uniform route does: UNI
+    runs on UP at 2.0 a SM-clock (uniform.cu, every form) and costs issue and JI89 its measured cost beside honest16, so
+    a cheater writes words there in JI89's slack, less of them as q* grows, and ε_machine never reaches its floor. At
+    L = 32, with IMMA.16832's ALU and FFMA facets refitted to FACET-BREAK's schedule (EPS1 ADA r3, opcode_probe/sm89/
+    ji.py), JI89 binds the floor program and the cheater alike: lane words save time only below JI89's q*0 (IMMA.16832's
+    coefficient over a thread's 4 words, 1.9), and UNI's JI89 cost leaves the uniform route nothing."""
     pi = E.machine("", SM89)
-    assert E.UNI not in pi.c and pi.vector == "ADA-89"   # no uniform-datapath line: the uniform route is closed
+    assert pi.vector == "ADA-89" and set(pi.c[E.UNI]) == {"UP", "issue", "JI89"}
+    assert pi.c[E.UNI]["UP"] == pytest.approx(4 / (2.0 * 1.02), rel=1e-3)   # UNI's rate + 2%
+    assert pi.c[E.UNI]["JI89"] < pi.c[E.UNI]["issue"] < pi.c["ALU"]["issue"]
     alu = 4 / (1.9985 * 1.02)                            # an ALU instruction's SMSP-cycles on A, its rate + 2%
     d16 = E.design("dither-1s-l16", SM89)
     s16 = E.setup(d16, pi, SM89, "floor", "floor")
     assert s16.as_built.T * 128 == pytest.approx(8 * alu, rel=1e-9) and "A" in s16.as_built.binding
+    assert all(s16.machine_eps(q, uniform=False) == 0 for q in (2, 8, 16)) and E.threshold(s16, uniform=False) == 0
+    m = [s16.machine_eps(q) for q in (2, 8, 16)]
+    assert 1e-3 > m[0] > m[1] > m[2] > 0 and E.threshold(s16) is None
+    assert {"JI89", "A"} <= set(s16.cheat(8).binding) and s16.cheat(8).words["lanes"] == 0
     e = E.eps(d16, pi, 2.0, SM89, operands="floor", credit="floor")
-    assert e.machine_eps == 0 and E.threshold(s16) == 0 and e.core() == pytest.approx(e.skip, abs=1e-12)
+    assert e.machine_eps == pytest.approx(m[0]) and e.core() > e.skip
     assert e.T_honest * 128 == pytest.approx(19.069) and e.T_honest_source == "measured"
     assert e.gamma_clock == pytest.approx(e.gamma * 2520 / 1680, rel=1e-6)
     s32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor")
-    assert E.threshold(s32) == pytest.approx(8.5, abs=1e-5)   # dp4a: 8 IDP4A and 0.5 LDS.128 a word
-    assert s32.machine_eps(8.5) == pytest.approx(0, abs=1e-9) and 0 < s32.machine_eps(8) < s32.machine_eps(2)
+    assert "JI89" in s32.as_built.binding and 1.8 < E.threshold(s32) < 2
+    assert all(s32.machine_eps(q) == pytest.approx(0, abs=1e-9) for q in (2, 8, 16)) and s32.machine_eps(1.5) > 0
+    assert all(s32.machine_eps(q) == pytest.approx(s32.machine_eps(q, uniform=False), abs=1e-12) for q in (1.5, 2, 8))
     t = E.table(SM89)
     assert t.l2 is None and t.per_cycle() is None and t.mhz == 2520 and t.sms == 142
     open32 = E.setup(E.design("dither-1s-l32", SM89), pi, SM89, "floor", "floor", table=t)
