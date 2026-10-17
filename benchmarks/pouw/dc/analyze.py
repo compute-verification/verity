@@ -1,6 +1,7 @@
 """Reads a DC run's probe rows (opcode_probe's rows.jsonl and gate.json) and states TENSOR's M3 / M4 quantities.
 
   python3 analyze.py sm90|sm100 DIR [--json OUT]
+  python3 analyze.py agree DIR_A DIR_B      # a repeat: every rate both measured within 2%; exit 1 otherwise
 
 DIR holds every rows.jsonl and gate.json of one family's run (run.sh writes probes/ and scalar/ under $OUT). A rate in
 rows.jsonl is warp instructions a SM a clock; this turns it into slots (32-bit destination cells, note:20261017T0321Z-
@@ -195,7 +196,23 @@ def analyze(family: str, d: Path) -> dict:
     return out
 
 
+def agree(a: Path, b: Path, margin: float = MARGIN) -> dict:
+    """Every rate both runs measured (probe, loop:pattern), as b / a; agree when each is within margin of 1."""
+    ra, rb = load(a)[0], load(b)[0]
+    ratios = {f"{p}/{k}": rb[p]["rates"][k] / v for p in sorted(ra.keys() & rb.keys())
+              for k, v in ra[p]["rates"].items() if v and rb[p]["rates"].get(k)}
+    worst = max(ratios.items(), key=lambda kv: abs(kv[1] - 1), default=(None, 1.0))
+    off = {k: r for k, r in ratios.items() if abs(r - 1) > margin}
+    return {"a": str(a), "b": str(b), "rates": len(ratios), "worst": worst[0], "worst_ratio": worst[1],
+            "outside": off, "agree": not off and bool(ratios)}
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["agree"]:
+        out = agree(Path(argv[1]), Path(argv[2]))
+        print(json.dumps(out, indent=1))
+        return 0 if out["agree"] else 1
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("family", choices=("sm90", "sm100"))
     p.add_argument("dir", type=Path)
