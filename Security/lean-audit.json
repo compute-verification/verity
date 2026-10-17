@@ -4823,6 +4823,15 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Accounting.SecurityProofs.RequirementHeld": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RequirementDense": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RequirementMoved": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -5419,7 +5428,10 @@
    "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
    "Pouw.Guarantees.Eps1.WordLocalZero": "unstated: Theorem B of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.WordLocalZero is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
    "Pouw.Guarantees.Eps1.WordLocalGeneral": "unstated: Theorem B of EPS1-QSTAR at a general int8 instance; its theorem Pouw.SecurityProofs.Eps1.WordLocalGeneral is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
-   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt)."
+   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
+   "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
