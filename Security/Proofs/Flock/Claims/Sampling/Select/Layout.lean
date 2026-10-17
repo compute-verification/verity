@@ -266,7 +266,12 @@ theorem partition_evaluate_tiles (d : Program) (query : Lean.Json)
       · rename_i ts _
         cases hts : ts with
         | error e => rw [hts] at h; exact absurd h (by rw [bind_error]; simp)
-        | ok ts' => rw [hts, bind_ok] at h; exact evaluate_tiles d.desc ts' rs h
+        | ok ts' =>
+          rw [hts, bind_ok] at h
+          obtain ⟨rs', hrs, h⟩ := bind_eq_ok.1 h
+          obtain ⟨_, -, h⟩ := bind_eq_ok.1 h
+          obtain rfl := (Except.ok.inj h).symm
+          exact evaluate_tiles d.desc ts' _ hrs
       · obtain ⟨cs, _, h⟩ := bind_eq_ok.1 h
         obtain rfl := (Except.ok.inj h).symm
         exact callRanges_tiles cs
