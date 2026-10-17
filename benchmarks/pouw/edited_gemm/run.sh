@@ -12,7 +12,7 @@
 # duo's absorb lag and tie spacing there, EG_SET=eps1sleep consumers that sleep on a stage's mbarrier, EG_SET=eps1wave
 # the best of them at all four linears at m = 2048 and at a shape whose tiles fill whole waves, EG_SET=eps1pred the machine
 # model's predictions against kernels with extra scalar work and duo's counts across k, EG_SET=eps1uni the uniform
-# filler's stand-ins. The small gate's seed has
+# filler's stand-ins, EG_SET=eps1fill the four linears at 6016 tokens (whole waves) against 6144. The small gate's seed has
 # a key that key_ok_r9 rejects. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
@@ -64,6 +64,8 @@ case "${EG_SET:-all}" in
   eps1wave) O_SHAPE="2048 6016 4096" LAYERS="q2k:2048:6144:4096 o2k:2048:4096:4096 gu2k:2048:28672:4096 dn2k:2048:4096:14336" ;;
   eps1uni) O_SHAPE="8192 8192 8192" LAYERS="gu2k:2048:28672:4096" ;;
   eps1pred) O_SHAPE="8192 8192 8192" LAYERS="gu2k:2048:28672:4096 k1k:2048:4096:1024 k2k:2048:4096:2048 k8k:2048:4096:8192 q8k:2048:6144:8192" ;;
+  eps1fill) O_SHAPE="4096 6016 4096"
+    LAYERS="o48:4096:6144:4096 q47:6144:6016:4096 q48:6144:6144:4096 g47:28672:6016:4096 g48:28672:6144:4096 d47:4096:6016:14336 d48:4096:6144:14336" ;;
 esac
 gzip -c "$BIN/egemm.sass" > "$O/egemm.sass.gz"
 export W="$BIN/gates"
@@ -177,6 +179,15 @@ if [ "${EG_SET:-all}" = eps1uni ]; then
   arms="plain,e_l7qs,u16_l7qs,u8s_l7qs,u16s_l7qs,u16t_l7qs" il=""
   cold="" larms=$arms lil="" ncu="" stall=""
   NCU_ONE=${arms//,/ }
+fi
+# EG_SET=eps1fill: the wave tail removed by the token count. 128 x 128 tiles over 188 = 4 x 47 SMs fill whole waves only
+# when 47 divides the tiles, which for every Llama-3.1-8B linear means tokens a multiple of 47 x 128 = 6016; tokens are
+# the n side (the kernel's m is a multiple of 1024), so o = o_proj at 6016 tokens (1504 tiles, 8 waves), q/g/d qkv,
+# gate_up and down, each at 6016 (47) and 6144 (48: 8.17, 12.26, 57.19, 8.17 waves); ncu's sections on H at every shape
+if [ "${EG_SET:-all}" = eps1fill ]; then
+  arms="plain,e_plains,e_l7qs" il=""
+  cold="" larms=$arms lil="" ncu="" stall=""
+  NCU_ONE="e_l7qs"
 fi
 export EG_ARMS=${EG_ARMS:-$arms} IL=${IL:-$il} IL_COLD=${IL_COLD:-$cold}
 export LAYER_ARMS=${LAYER_ARMS:-$larms} LAYER_IL=${LAYER_IL:-$lil}
