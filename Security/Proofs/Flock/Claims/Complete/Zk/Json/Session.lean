@@ -132,7 +132,7 @@ claims evaluate at those points; and its sends are the link of that `root_B` and
 rounds in order, each from index `1` on (`Recs`). -/
 def SessionFactsZk (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (st : Setup)
     (hz : String) (ct : CoinTree.Spec) (r : String × Array ByteArray) (bodies : Array Claims.Msg) : Prop :=
-  ∃ rb streams, r.1 = (recordObjZk spec h hz ct #[rb] (ptsOf spec (coinOf (resp 0))) streams r.2).compress ∧
+  ∃ rb streams, r.1 = printJ (recordObjZk spec h hz ct #[rb] (ptsOf spec (coinOf (resp 0))) streams r.2) ∧
     0 < rb.size ∧ rb.size < 2 ^ 64 ∧ streams.size = spec.repStreams.size ∧ (∀ rs ∈ streams, RoundsOk rs) ∧
     (∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
     ∃ bs, bodies.toList = linkBody [rb] [ByteArray.empty] :: bs ∧ Recs resp 1 (streams.toList.flatMap Array.toList) bs
