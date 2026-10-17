@@ -26,7 +26,6 @@
   "Properties.Proofs.NetworkRecords",
   "Properties.SampledProofs",
   "Properties.Proofs.SampledProofs",
-  "Properties.SampledProofs.Draw",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Proofs.Pous.TimedAudit",
