@@ -26,7 +26,7 @@ import pytest
 from verity_vllm.commit import serving_rows as CS
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import serving_rows as SRT
-from verity_vllm.pipeline.tp.commit import TP_ROOT_TAG, tp_run_root
+from verity_vllm.pipeline.tp.run_root import TP_ROOT_TAG, tp_run_root
 
 from tests.pipeline import served_ranks
 

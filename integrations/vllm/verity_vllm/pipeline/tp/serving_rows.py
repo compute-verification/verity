@@ -108,7 +108,7 @@ def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
     whose windows `commit` wrote (``runs.jsonl``, which each Commit into the same ``--out`` appends to: the last such row, the run
     ``versions.json`` is of), refused unless the TP run root combines exactly those roots; the root tag, each rank's Programs of
     record and the workload (``versions.json``)."""
-    from verity_vllm.pipeline.tp.commit import TP_ROOT_TAG, tp_run_root
+    from verity_vllm.pipeline.tp.run_root import TP_ROOT_TAG, tp_run_root
 
     d = Path(commit_dir)
     rows = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines() if x.strip()]
