@@ -1,0 +1,62 @@
+"""FOLD-R's kernel by commuting (theory/fold_root_kernel.c) agrees with the referee's brute force, reproduces the referee's
+counterexamples, and KJ19's scaled last clause is the one that rejects every bad n = 8 key pair."""
+from __future__ import annotations
+
+import random
+import sys
+from pathlib import Path
+
+import pytest
+
+THEORY = Path(__file__).resolve().parents[1] / "theory"
+sys.path.insert(0, str(THEORY))
+sys.path.insert(0, str(THEORY.parent / "receipts"))
+
+import fold_root_check as fr
+import fold_root_sweep as sw
+import receipt_folds as rf
+
+
+def test_root_kernel_matches_brute_force(tmp_path):
+    """At width 6 the commuting meet in the middle finds every K_R (R <= 3) that fold_kernel.c's 2^24 brute force finds."""
+    exe, brute = fr.build(tmp_path), fr.build(tmp_path, "fold_kernel.c")
+    word, keys = (0x1E, 0x37, 0x39, 0x2B), [(37, 21), (5, 43), (19, 27), (61, 13)]
+    summ, root = fr.root_kernels(exe, 6, 2, 4, 3, [k + word for k in keys])
+    ref = fr.brute_kernels(brute, 6, 2, 4, 3, word, keys)
+    assert not any(row[5] for row in summ.values())
+    assert not fr.agree(root, ref, keys, 3, set())
+    assert len(ref[(37, 21, 1)]) == 15 and summ[(37, 21) + word][:3] == [16, 16, 16]
+
+
+def test_referee_counterexamples(tmp_path):
+    """(97, 179) and (83, 225) at n = 8 and (321, 411) at n = 10 break K_R = K_1 = P/X/N as the referee found, and each
+    has a key ≡ ±1 mod 2^r1."""
+    exe = fr.build(tmp_path)
+    s8, _ = fr.root_kernels(exe, 8, 3, 5, 6, [(97, 179, 255, 48, 87, 75), (83, 225, 144, 166, 44, 160)])
+    assert s8[(97, 179, 255, 48, 87, 75)] == [64] * 6 + [0, 48, 0]
+    assert s8[(83, 225, 144, 166, 44, 160)] == [16, 32, 16, 64, 16, 32, 1, 0, 0]
+    s10, _ = fr.root_kernels(exe, 10, 4, 6, 2, [(321, 411, 827, 208, 250, 366)])
+    assert s10[(321, 411, 827, 208, 250, 366)][0] == 32
+    assert not any(sw.kj_last(a, r) and sw.kj_last(b, r) for a, b, r in [(97, 179, 3), (83, 225, 3), (321, 411, 4)])
+
+
+def test_scaled_kj_is_kj19_at_32_bits():
+    """The width-n rule read at n = 32, r2 = 19 is receipt_folds.kj19, and it implies a ≢ ±1 mod 2^13."""
+    rng = random.Random(7)
+    keys = [rng.randrange(1 << 32) | 1 for _ in range(4000)]
+    keys += [(s + (1 << e)) & 0xFFFFFFFF | 1 for e in range(12, 31) for s in (1, -1, 3, -3)]
+    assert all(sw.kj_scaled(a, 32, 19) == rf.kj19(a) for a in keys)
+    assert all(sw.kj_last(a, 13) for a in keys if rf.kj19(a))
+
+
+@pytest.mark.slow
+def test_n8_bad_pairs_fail_kj_last(tmp_path):
+    """Over 1,024 random n = 8 key pairs, a random word each, every pair where K_R = K_1 = P/X/N fails for some R <= 6 has
+    a key ≡ ±1 mod 8; the pairs that clause admits all hold."""
+    rng = random.Random(20261017)
+    odd = range(1, 256, 2)
+    jobs = [(rng.choice(odd), rng.choice(odd), *(rng.randrange(256) for _ in range(4))) for _ in range(1024)]
+    summ, _ = fr.root_kernels(fr.build(tmp_path), 8, 3, 5, 6, jobs)
+    bad = [j for j, row in summ.items() if not fr.good(row, 6)]
+    assert bad and len(summ) == len(set(jobs))
+    assert not any(sw.kj_last(a, 3) and sw.kj_last(b, 3) for a, b, *_ in bad)

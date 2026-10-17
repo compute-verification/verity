@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""FOLD-R: the same-word R-fold's whole all-state kernel K_R by commuting, and K_R = K_1 = P/X/N under the scaled KJ19.
+
+`fold_root_kernel.c` finds K_R from the fact that F_{w'}^R = F_w^R forces F_{w'} to commute with F_w^R, a meet in the
+middle with 2^(2n) half-round maps a side (REFEREE's `fold_kernel.c` enumerates all 2^(4n) words). This checks:
+  (1) at n = 6 it finds exactly what fold_kernel.c finds, at every (key, R), over every odd key pair (--quick: a sample)
+      and two words, apart from the near-±1 keys where Φ^R is so structured that the join is cut (it says so);
+  (2) it reproduces REFEREE's three counterexamples (note:20261017T0642Z-draft-referee, F1(b));
+  (3) `fold_root_sweep.kj_scaled` read at n = 32 with r2 = 19 is receipt_folds.kj19, the 32-bit rule of record, and
+      `kj_last` is egemm_depthr_check.key_ok_r11_32's KJ19 clause;
+  (4) at n = 8 over every odd key pair (--quick: a sample), one random word each, every pair where K_R = K_1 = P/X/N fails
+      for some R <= 6 has a key ≡ ±1 mod 2^r1, which KJ19's last clause rejects; so at n = 8 that clause alone, with no
+      pair clause, admits 4,096 pairs and K_R = K_1 = P/X/N holds at every one.
+Mutations: a brute-force comparison against a different word is caught; a kernel that drops P1's doubling is caught.
+
+  uv run python benchmarks/pouw/theory/fold_root_check.py [--quick] [--mutations] [--verdict PATH]
+"""
+from __future__ import annotations
+
+import collections
+import os
+import random
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import fold_root_sweep as sw
+from exact_kit.checks import Checks
+
+THREADS = str(min(8, len(os.sched_getaffinity(0))))
+
+
+def build(tmp: Path, src: str = "fold_root_kernel.c", edit: tuple[str, str] | None = None) -> Path:
+    """Compile src into tmp; edit = (old, new) compiles a copy with that one line replaced."""
+    path, exe = HERE / src, tmp / Path(src).stem
+    if edit:
+        text = path.read_text()
+        assert text.count(edit[0]) == 1, edit[0]
+        path, exe = tmp / f"mut_{src}", tmp / f"mut_{exe.name}"
+        path.write_text(text.replace(*edit))
+    subprocess.run(["gcc", "-O2", "-fopenmp", "-o", str(exe), str(path)], check=True)
+    return exe
+
+
+def root_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, jobs) -> tuple[dict, dict]:
+    """({(a0, a1, w): [|K_1|, .., pxn, g3bad, degenerate]}, {(a0, a1, R): set of w' != w in K_R}) for jobs (a0, a1, *w)."""
+    inp = "".join(" ".join(map(str, j)) + "\n" for j in jobs)
+    out = subprocess.run([str(exe), "-a", str(n), str(r1), str(r2), str(rmax)], input=inp, capture_output=True, text=True,
+                         check=True, env=dict(os.environ, OMP_NUM_THREADS=THREADS)).stdout
+    summ, elems = {}, collections.defaultdict(set)
+    for p in map(str.split, out.splitlines()):
+        if p[0] == "S":
+            summ[tuple(map(int, p[1:7]))] = list(map(int, p[7:]))
+        elif p[0] == "K":
+            elems[(int(p[1]), int(p[2]), int(p[3]))].add(tuple(map(int, p[4:8])))
+    return summ, elems
+
+
+def brute_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, word, keys) -> dict:
+    """fold_kernel.c's {(a0, a1, R): set of w' != w in K_R}."""
+    out = subprocess.run([str(exe), str(n), str(r1), str(r2), str(rmax), *map(str, word)],
+                         input="".join(f"{a} {b}\n" for a, b in keys), capture_output=True, text=True, check=True,
+                         env=dict(os.environ, OMP_NUM_THREADS=THREADS)).stdout
+    elems = collections.defaultdict(set)
+    for p in map(str.split, out.splitlines()):
+        if p[0] == "K":
+            elems[(int(p[1]), int(p[2]), int(p[3]))].add(tuple(map(int, p[4:8])))
+    return elems
+
+
+def agree(root, brute, keys, rmax, degenerate) -> list:
+    return [(a, b, r) for a, b in keys if (a, b) not in degenerate for r in range(1, rmax + 1)
+            if root[(a, b, r)] != brute[(a, b, r)]]
+
+
+def good(row, rmax) -> bool:
+    ks, pxn, g3bad, degen = row[:rmax], row[rmax], row[rmax + 1], row[rmax + 2]
+    return bool(pxn and all(k == ks[0] for k in ks) and g3bad == 0 and degen == 0)
+
+
+def main() -> int:
+    checks = Checks()
+    quick = "--quick" in checks.args
+    rng = random.Random(20261017)
+    sys.path.insert(0, str(HERE.parents[0] / "receipts"))
+    sys.path.insert(0, str(HERE.parents[0] / "edited_gemm"))
+    import egemm_depthr_check as fold_ref
+    import receipt_folds as rf
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        exe, brute = build(tmp), build(tmp, "fold_kernel.c")
+
+        # (1) n = 6 against the brute force
+        n, r1, r2, rmax = 6, 2, 4, 5
+        odd = list(range(1, 1 << n, 2))
+        keys = [(a, b) for a in odd for b in odd]
+        if quick:
+            keys = rng.sample(keys, 96)
+        for word in [(0x1E, 0x37, 0x39, 0x2B), (32, 45, 3, 59)]:
+            summ, root = root_kernels(exe, n, r1, r2, rmax, [k + word for k in keys])
+            ref = brute_kernels(brute, n, r1, r2, rmax, word, keys)
+            degen = {(a, b) for (a, b, *_), row in summ.items() if row[rmax + 2]}
+            bad = agree(root, ref, keys, rmax, degen)
+            checks.check(f"n6 word {word}: K_R by commuting == fold_kernel.c's brute force at every (key, R), R = 1..{rmax}",
+                         not bad, f"{len(keys)} keys, {sum(len(ref[(a, b, r)]) for a, b in keys if (a, b) not in degen for r in range(1, rmax + 1))} "
+                         f"elements; {len(degen)} keys cut short; mismatches {bad[:3]}")
+            checks.check(f"n6 word {word}: every key where the join is cut has a key ≡ ±1 mod 2^r1 (KJ19's last clause)",
+                         all(not (sw.kj_last(a, r1) and sw.kj_last(b, r1)) for a, b in degen), f"{sorted(degen)[:6]}")
+            if checks.mutations:
+                other = tuple((x + 1) & 63 for x in word)
+                ref2 = brute_kernels(brute, n, r1, r2, rmax, other, keys[:24])
+                checks.mutation(f"n6 word {word}: compared against the brute force at another word",
+                                agree(root, ref2, keys[:24], rmax, degen))
+
+        # (2) REFEREE's counterexamples
+        s8, _ = root_kernels(exe, 8, 3, 5, 6, [(97, 179, 255, 48, 87, 75), (83, 225, 144, 166, 44, 160)])
+        big, even = s8[(97, 179, 255, 48, 87, 75)], s8[(83, 225, 144, 166, 44, 160)]
+        checks.check("n8 (97, 179), word (255, 48, 87, 75): |K_R| = 64 at every R <= 6, 48 elements break (G3), K_1 isn't P/X/N",
+                     big[:6] == [64] * 6 and big[6] == 0 and big[7] == 48, str(big))
+        checks.check("n8 (83, 225), word (144, 166, 44, 160): K_1 = P/X/N (16), |K_2| = 32, |K_4| = 64, |K_6| = 32, odd R adds none",
+                     even[:6] == [16, 32, 16, 64, 16, 32] and even[6] == 1 and even[7] == 0, str(even))
+        s10, _ = root_kernels(exe, 10, 4, 6, 3, [(321, 411, 827, 208, 250, 366)])
+        checks.check("n10 (321, 411), word (827, 208, 250, 366): |K_1| = 32", s10[(321, 411, 827, 208, 250, 366)][0] == 32,
+                     str(s10[(321, 411, 827, 208, 250, 366)]))
+        checks.check("each of the three pairs has a key ≡ ±1 mod 2^r1, so KJ19's last clause rejects it",
+                     not any(sw.kj_last(a, r) and sw.kj_last(b, r) for a, b, r in [(97, 179, 3), (83, 225, 3), (321, 411, 4)]))
+        if checks.mutations:
+            mexe = build(tmp, edit=("for (int p = 0; p < 4; p++)", "for (int p = 0; p < 2; p++)"))
+            m8, _ = root_kernels(mexe, 8, 3, 5, 6, [(83, 225, 144, 166, 44, 160)])
+            checks.mutation("a kernel that drops P1's doubling of each match", m8[(83, 225, 144, 166, 44, 160)][:6] != even[:6],
+                            str(m8[(83, 225, 144, 166, 44, 160)][:6]))
+
+        # (3) the scaling at 32 bits
+        sample = [rng.randrange(1 << 32) | 1 for _ in range(20000)]
+        sample += [(s + (k << e)) & 0xFFFFFFFF for e in range(12, 31) for k in range(1, 9) for s in (1, -1, 3, -3)]
+        sample = [a | 1 for a in sample]
+        checks.check("kj_scaled at n = 32, r2 = 19 is receipt_folds.kj19 (the 32-bit KJ19 of record)",
+                     all(sw.kj_scaled(a, 32, 19) == rf.kj19(a) for a in sample),
+                     f"{len(sample)} odd keys, {sum(not rf.kj19(a) for a in sample)} rejected")
+        checks.check("kj_last at r1 = 13 is egemm_depthr_check.key_ok_r11_32's KJ19 clause (a ≢ ±1 mod 2^13)",
+                     all(sw.kj_last(a, 13) == ((a & 0x1FFF) not in (1, 0x1FFF)) for a in sample))
+        checks.check("kj19 implies kj_last at 32 bits", all(sw.kj_last(a, 13) for a in sample if rf.kj19(a)))
+        checks.check("FOLD's reduced near-inverse clause has no 32-bit counterpart in key_ok_r11: a pair with "
+                     "a0 a1 ≡ 1 mod 2^27 passes key_ok_r11 at both keys",
+                     any(rf.key_ok_r11(a) and rf.key_ok_r11(pow(a, -1, 1 << 32)) for a in sample[:2000]))
+
+        # (4) n = 8, every odd key pair, one random word each
+        n, (r1, r2), rmax = 8, sw.ROT[8], 6
+        odd = list(range(1, 1 << n, 2))
+        keys = [(a, b) for a in odd for b in odd]
+        if quick:
+            keys = rng.sample(keys, 2048) + [(97, 179), (83, 225)]
+        jobs = [k + tuple(rng.randrange(1 << n) for _ in range(4)) for k in keys]
+        summ, _ = root_kernels(exe, n, r1, r2, rmax, jobs)
+        badk = [j for j, row in summ.items() if not good(row, rmax)]
+        admitted = [j for j in summ if sw.kj_last(j[0], r1) and sw.kj_last(j[1], r1)]
+        checks.check(f"n8, {len(keys)} key pairs, a random word each: K_R = K_1 = P/X/N fails somewhere (the search sees it)",
+                     len(badk) > 0, f"{len(badk)} pairs")
+        checks.check(f"n8: every pair where K_R = K_1 = P/X/N fails for some R <= {rmax} has a key ≡ ±1 mod 2^{r1}",
+                     all(not (sw.kj_last(a, r1) and sw.kj_last(b, r1)) for a, b, *_ in badk),
+                     f"{len(admitted)} pairs pass KJ19's last clause at both keys, "
+                     f"{sum(not good(summ[j], rmax) for j in admitted)} of them fail; "
+                     f"{sum(sw.near_inverse(a, b, n) for a, b, *_ in admitted)} of the admitted are near-inverse pairs")
+    return checks.finish()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
