@@ -53,9 +53,9 @@ awk '/Function :/{f=$3} /[[:space:]](LDL|STL)[.[:space:]]/{n[f]++} END{for (f in
   > "$O/sass_local_mem_ops.txt" 2>&1
 gzip -c "$BIN/apv.sass" > "$O/apv.sass.gz"
 # name:s:H:rep. d256: two tiles a head (qt 0 and 1); m512, m1k: KV heads shared; l8: Llama-3.1-8B (32 query heads, 8 KV
-# heads) at 2,048 tokens; l8x4k at 4,096 (bench only)
-export APV_GATES=${APV_GATES:-"d256:256:2:1 m512:512:2:2 m1k:1024:4:2 l8:2048:32:4"}
-export APV_BENCH=${APV_BENCH:-"l8:2048:32:4 l8x4k:4096:32:4"}
+# heads) at 2,048 tokens; a16k: one head at 16,384 (Ycum's third digit Y2); l8x4k, l8x8k at 4,096 and 8,192 (bench only)
+export APV_GATES=${APV_GATES:-"d256:256:2:1 m512:512:2:2 m1k:1024:4:2 l8:2048:32:4 a16k:16384:1:1"}
+export APV_BENCH=${APV_BENCH:-"l8:2048:32:4 l8x4k:4096:32:4 l8x8k:8192:32:4"}
 # s:KV heads, Llama-3.1-8B's 8 KV heads at 2K, 8K and 32K tokens
 export VP_SHAPES=${VP_SHAPES:-"2048:8 8192:8 32768:8"}
 export W="$BIN/gates"
