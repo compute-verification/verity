@@ -5409,7 +5409,10 @@
    "Accounting.SecurityProofs.TS.RoutesOffD2": "lemma: Corollary D2 of EPS1-SPEC, B(M) >= B0/(1 + sum kappa_u s_u) from its two hypotheses on the run's loads.",
    "Accounting.SecurityProofs.TS.TensorSlotCount": "frozen (no-function): T1 of EPS1-TENSOR over any tensor run's slot writes, injective by freshness (a hypothesis), not a Lean function.",
    "Accounting.SecurityProofs.TS.TensorSlotTight": "lemma: T1's tightness criterion (epsilon_tensor = 0 iff L = d_H and rho_H = rho_T), arithmetic.",
-   "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function."
+   "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
+   "Pouw.Guarantees.Eps1.WordLocalZero": "unstated: Theorem B of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.WordLocalZero is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
+   "Pouw.Guarantees.Eps1.WordLocalGeneral": "unstated: Theorem B of EPS1-QSTAR at a general int8 instance; its theorem Pouw.SecurityProofs.Eps1.WordLocalGeneral is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
+   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt)."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
