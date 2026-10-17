@@ -10,11 +10,11 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   `SHA-512("verity/partition/v1\\0" || canon(object))`, which the roots registered with it bind.
 * **Units** are core's evaluation (`partition_object.evaluate`) of a query of valid form (`partition_object.validate`):
   `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries,
-  `Q_word` v1 at `X = 16` (the served query) and `Q_call` v1 at `X <= 16` are the ones applied here, so that every unit
-  commits at most `UNIT_BITS` bits, the literal limit: `Q_word`'s width rule lets a unit of one value commit up to `W`
-  bits, a template query has no width rule, and `Q_call`'s counts computing gates only, so a program with a wider unit
-  (its Definition's activation's committed bits, constants and Input gates counted) is refused, as is one with a template
-  of no gate. `ranges`, `units` and `strata` read their units in canonical order (node order,
+  `Q_word` v1 at `X = 16` (the served query) and `Q_call` v1 at `X <= 16` are the ones applied here, so that a `Q_word`
+  or `Q_call` unit commits at most `UNIT_BITS` bits, the literal limit: `Q_word`'s width rule lets a unit of one value
+  commit up to `W` bits and `Q_call`'s counts computing gates only, so a program with a wider unit (for `Q_call`, its
+  Definition's activation's committed bits, constants and Input gates counted) is refused, as is one with a template of
+  no gate. A template query has no width rule. `ranges`, `units` and `strata` read their units in canonical order (node order,
   then member, for a template query; Call order, then the Call's own, for `Q_word` and `Q_call`), and `unit_gates` gives
   each unit's root gates.
 * **Programs**: `population_program` (instances of one template) and `mixed_population_program` (of several).
@@ -135,18 +135,13 @@ def _committed_bits(fn: Any, units: Sequence[tuple[int, int]]) -> list[int]:
 
 
 def _check_units(program: Program, part: PO.TemplatePartition | PO.CallPartition) -> None:
-    """Refuses a template of no gate, and a template instance or `Q_call` unit that commits more than `UNIT_BITS` bits
-    (`_committed_bits`, constants counted, which `Q_call`'s width rule leaves out), each Definition once, as activations of
-    one Definition commit alike."""
+    """Refuses a template of no gate, and a `Q_call` unit that commits more than `UNIT_BITS` bits (`_committed_bits`,
+    constants counted, which `Q_call`'s width rule leaves out), each Definition once, as activations of one Definition
+    commit alike."""
     if isinstance(part, PO.TemplatePartition):
-        templates = {t: program.root.body.nodes[k].fn for k, t, _first, n in part.ranges if n}
-        for t, fn in templates.items():
-            if fn.gates == 0:
+        for k, t, _first, n in part.ranges:
+            if n and program.root.body.nodes[k].fn.gates == 0:
                 raise QueryRefused(f"template {t} has no gate", {"template": t})
-            (bits,) = _committed_bits(fn, [(0, fn.gates)])
-            if bits > UNIT_BITS:
-                raise QueryRefused(f"an instance of {t} commits {bits} bits, more than {UNIT_BITS}",
-                                   {"template": t, "bits": bits})
         return
     for cut in {cut.fn.id: cut for _k, cut in part.calls}.values():
         fn = cut.fn
