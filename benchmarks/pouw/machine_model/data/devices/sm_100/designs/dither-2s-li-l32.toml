@@ -23,7 +23,6 @@ source = "tcgen05.mma reads both operands from shared memory by descriptor (TMA 
 name = "li"          # LOP3 (^ d0 ^ k0) on one word, IMAD (·a0 + d1) on the next
 ALU = 0.5
 IMAD = 0.5
-LDTM_32X32B_X128 = 0.0078125   # one tcgen05.ld.32x32b.x128 brings a lane 128 words
 
 [skip.pv-strip]
 eps = 0.00131

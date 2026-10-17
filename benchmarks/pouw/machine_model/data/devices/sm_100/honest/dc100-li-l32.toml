@@ -30,8 +30,7 @@ source = "DC-DESIGN, tcliU_x128 (r20261017-085236-51a6, r20261017-104307-644b: L
 floor = { LDTM_32X32B_X128 = 8 }
 source = "tcgen05.mma reads both operands from shared memory by descriptor (TMA fills it), so delivery costs no warp instruction a MMA; the accumulator's 32768 words leave TMEM by 8 tcgen05.ld.32x32b.x128 a MMA at L = 32 (4096 words each), which every tensor-route word pays to be folded on lanes"
 
-[fold]          # lane instructions a committed word: LI, and on sm_100 the load that brings the word to a lane
+[fold]          # lane instructions a committed word; the x128 loads are the tensor route's, as [operands] says
 name = "li"
 ALU = 0.5
 IMAD = 0.5
-LDTM_32X32B_X128 = 0.0078125
