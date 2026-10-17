@@ -6,13 +6,16 @@ load-time weight processing whose words they bind as derived Inputs (`kernels.de
 
 One GPU process writes `<out>/deepgemm_sm90_capture.json`, the property record `deepgemm_sm90_capture` (`properties.record`), and
 prints one line per case and then `DEEPGEMM-SM90 GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
-nothing else runs when it fails (exit 3).  vLLM runs with DeepGEMM on (`VLLM_USE_DEEP_GEMM=1`, `VLLM_USE_DEEP_GEMM_E8M0=1`,
-`VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=1`: the defaults on Hopper) and not batch invariant, so M < 32 takes FlashInfer's branch;
-`--batch-invariant` sends every M to DeepGEMM's (flashinfer.py:309-310).  A served GLM-5.3 engine runs these defaults too (its
-capture map's `VLLM_USE_DEEP_GEMM`: unset), so GLM-5.3's dense linears are this kernel at its shapes (`GLM53_LINEARS`).  A phase that
-raises records its error and fails the verdict without stopping the others.
+nothing else runs when it fails (exit 3).  vLLM runs at its defaults, as a served engine does: `engine.env.served_defaults` clears
+every switch the process inherited before vLLM is imported, so DeepGEMM is on with its ue8m0 scales, FlashInfer's branch is on and
+the run is not batch invariant, and M < 32 takes FlashInfer's branch; `--batch-invariant` (not what vLLM serves) sets
+`VLLM_BATCH_INVARIANT=1`, which sends every M to DeepGEMM's (flashinfer.py:309-310).  A served GLM-5.3 engine runs these defaults
+too, so GLM-5.3's dense linears are this kernel at its shapes (`GLM53_LINEARS`).  A phase that raises records its error and fails
+the verdict without stopping the others.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
+  served     vLLM reads the switches back (`served`): `VLLM_USE_DEEP_GEMM`, `VLLM_USE_DEEP_GEMM_E8M0`, `is_deep_gemm_e8m0_used()`,
+             `VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER`, and `VLLM_BATCH_INVARIANT` exactly as asked.
   selection  `init_fp8_linear_kernel` with Fp8LinearMethod's keys for 128x128 blocks (fp8.py:276-287) under a model config (DeepGEMM's
              `can_implement` reads one, deep_gemm.py:69-76) selects FlashInferFp8DeepGEMMDynamicBlockScaledKernel at every shape,
              `is_deep_gemm_e8m0_used()` holds, and `compute_fp8_einsum_recipe()` is ((1, 128, 128), False).
@@ -28,6 +31,17 @@ raises records its error and fails the verdict without stopping the others.
   weights    every 128x128 block of every processed weight against the twin of its processing: DeepSeek-V4's bytes unchanged and
              scales `upcast_e8m0`, GLM-5.3's `requant_weight_ue8m0` (a block whose `amax / 448` is in `requant_band` is the GPU's
              division and log2's to decide: counted, not claimed).
+  probe      operands that decide how the GEMM applies its scales (`PROBES`, `probe_operands`), on GLM-5.3's shared-expert
+             down_proj (K = 256, N = 6144), each through the selected kernel's processing (which must keep their bytes and scales)
+             and `apply_weights`, twice, compared as a linear and against every competing model of the composition in `ALTERNATIVES`,
+             each of which must differ from the kernel on some word.  `ftz` (M 16, FlashInfer's branch, built with -use_fast_math:
+             whether its FMUL and FFMA flush): rows whose scale s = sx * 2^-22 is subnormal over columns where `temp * s` is normal,
+             rows whose `temp * s` is an f32 subnormal, and cancelling rows and columns, so FTZ at the FMUL, the FFMA, both or the
+             cvt, FMUL + FADD and either scale first each leave different words.  `fma` (M 32, DeepGEMM's branch): DeepGEMM's scales
+             are powers of two (ue8m0 sx >= 2^-42, ws >= 2^-22), so `temp * s` is exact and every accumulator a multiple of 2^-95,
+             never subnormal: FFMA and FMUL + FADD part only where `temp * s` overflows and the sum does not, and `FMA_EDGES` puts
+             rows on that edge (FFMA's word 0x7F28 where FMUL + FADD's is +inf) under scale pairs that also tell FMUL(sx, ws) from
+             applying sx or ws to `temp` first.  `--batch-invariant` skips `ftz` (FlashInfer's branch is never taken).
   einsum     DeepSeek-V4's `wo_a` at TP8 (H = 2 groups, K = 4096, N = 1024) through the model's own `deep_gemm_fp8_o_proj`
              (o_proj.py:28-73) with `fused_inv_rope_fp8_quant` and `fp8_einsum` tapped, twice, at M in `EINSUM_M`: every output word
              against `ScaledMmFp8BlockGrouped_v1{2,4096,1024,128}` over the einsum's own operands (twin
@@ -47,7 +61,8 @@ flag it non-finite, and the GPU's words there must be non-finite), and row 4's t
 eps (1e-10) keeps both finite.
 
 GO needs 0 mismatches and 0 unresolved words (a word the twin flags non-finite whose GPU word is finite), every reference equal, every
-resolved weight block equal, deterministic reruns, the expected branch with the expected operands at every M, and the JIT kernels.
+resolved weight block equal, deterministic reruns, the expected branch with the expected operands at every M, the served read-back,
+every probe with each of its competing models refuted, and the JIT kernels.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/deepgemm_sm90_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--batch-invariant] [--only PHASES]
@@ -73,9 +88,11 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as B
+from verity_vllm.engine.env import served_defaults
+from verity_vllm.program.kernels import derived_rows as R
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/deepgemm-sm90-capture/v1"
+SCHEMA = "verity-vllm/deepgemm-sm90-capture/v2"
 RECORD = "deepgemm_sm90_capture.json"
 GROUP = 128
 KERNEL = "FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
@@ -108,7 +125,35 @@ E8M0_LO, E8M0_HI = 112, 124
 BAND_SCALES = (0x3A800000, 0x3B000001, 0x3B000003, 0x3B7FFFFF, 0x3C000010)
 #: the weight-block rows per weights comparison job
 JOB_BLOCK_ROWS = 8
-PHASES = ("mufu", "linear", "einsum")
+PHASES = ("mufu", "linear", "einsum", "probe")
+#: the linear the probes run on: GLM-5.3's shared expert's down_proj at TP8 (K = 256: two K blocks)
+PROBE_LINEAR = GLM53_LINEARS[-1]
+#: the scale composition's competing models, each `(step(temp, sx, ws, acc) -> acc, flush the accumulator before the bf16 cvt)`
+#: against the Definition's `FFMA(temp, FMUL(sx, ws), acc)` (`R.scaled_mm_fp8_block_row`)
+ALTERNATIVES = {
+    "ftz": (lambda t, sx, ws, acc: R.fma_ftz(t, R.mul_ftz(sx, ws), acc), False),
+    "ftz_fmul": (lambda t, sx, ws, acc: R.fma_rn(t, R.mul_ftz(sx, ws), acc), False),
+    "ftz_ffma": (lambda t, sx, ws, acc: R.fma_ftz(t, R.mul_rn(sx, ws), acc), False),
+    "ftz_cvt": (lambda t, sx, ws, acc: R.fma_rn(t, R.mul_rn(sx, ws), acc), True),
+    "fmul_fadd": (lambda t, sx, ws, acc: R.add_rn(R.mul_rn(t, R.mul_rn(sx, ws)), acc), False),
+    "temp_sx_first": (lambda t, sx, ws, acc: R.fma_rn(R.mul_rn(t, sx), ws, acc), False),
+    "temp_ws_first": (lambda t, sx, ws, acc: R.fma_rn(R.mul_rn(t, ws), sx, acc), False),
+}
+#: probe -> (the branch it runs, its M, the models of `ALTERNATIVES` its words must refute).  `ftz` on FlashInfer's branch (built
+#: with -use_fast_math, so FMUL and FFMA may flush): subnormal scales and products.  `fma` on DeepGEMM's: its scales are powers of
+#: two, so no subnormal is reachable and `temp * s` is exact unless it overflows, which is where FFMA and FMUL + FADD part.
+PROBES = {"ftz": ("flashinfer", 16, tuple(ALTERNATIVES)), "fma": ("deepgemm", 32, ("fmul_fadd", "temp_sx_first", "temp_ws_first"))}
+PROBE_SEEDS = {"ftz": 11, "fma": 12}
+#: the `ftz` probe's subnormal-scale groups, (e, a): every lane bf16(a * 2^e), so FlashInfer's sx is about a/448 * 2^e and
+#: s = sx * 2^-22 is subnormal (at a = 448 exactly 2^(e-22)); a != 448 leaves sx a full mantissa, so s rounds
+FTZ_S_SUB = ((-105, 448.0), (-104, 300.0), (-106, 360.0), (-108, 448.0), (-110, 270.0), (-112, 414.0))
+#: the `fma` probe's weight-scale exponents (j0, j1) per weight block row, cycled: the K blocks' weights are -384 and +384 under
+#: 2^j0 and 2^j1, and a row with x groups 448 * 2^k0 and 448 * 2^k1 at k0 + j0 = 103, k1 + j1 = 104 makes acc = -1.3125 * 2^127
+#: after the first block and `temp * s` = 1.3125 * 2^128 in the second: FFMA's sum is finite, FMUL overflows to +inf
+FMA_EDGES = ((0, 0), (103, 104), (50, 52), (-10, -8), (20, 30), (-14, -14))
+#: the f32 word 2^-22: the `ftz` probe's raw weight scales, which `requant_weight_ue8m0` keeps (each block's amax <= 416 * 2^-22
+#: clamps to 1e-4)
+FTZ_WS = 0x34800000
 JIT = re.compile(r"&(\w+)<(.*?)>\);", re.S)
 GEMM_IMPL = "sm90_fp8_gemm_1d2d_impl"
 #: the one layout kernel sm_90's path may JIT: an f32 1x128 activation scale made MN-major and TMA-aligned (layout.hpp:40-42)
@@ -120,14 +165,30 @@ def cdiv(a: int, b: int) -> int:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- env
-def environment(batch_invariant: bool, work: Path) -> dict[str, str]:
-    """DeepGEMM on with its ue8m0 scales and FlashInfer's M < 32 branch (vllm/envs.py defaults on Hopper, set explicitly), set before
-    vLLM is imported; DeepGEMM's JIT cache in the scratch directory (vLLM keeps a set `DG_JIT_CACHE_DIR`, deep_gemm.py:266-270)."""
-    env = {"VLLM_USE_DEEP_GEMM": "1", "VLLM_USE_DEEP_GEMM_E8M0": "1", "VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER": "1",
-           "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_BATCH_INVARIANT": "1" if batch_invariant else "0",
-           "TRITON_CACHE_DIR": str(work / "triton_cache"), "DG_JIT_CACHE_DIR": str(work / "deep_gemm")}
+def environment(batch_invariant: bool, work: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """vLLM's defaults (`served_defaults`, before vLLM is imported: DeepGEMM on with its ue8m0 scales and FlashInfer's M < 32 branch),
+    `VLLM_BATCH_INVARIANT=1` only under `--batch-invariant`, and DeepGEMM's JIT cache in the scratch directory (vLLM keeps a set
+    `DG_JIT_CACHE_DIR`, deep_gemm.py:266-270): (the env set, the switches cleared)."""
+    cleared = served_defaults()
+    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache"), "DG_JIT_CACHE_DIR": str(work / "deep_gemm")}
+    if batch_invariant:
+        env["VLLM_BATCH_INVARIANT"] = "1"
     os.environ.update(env)
-    return env
+    return env, cleared
+
+
+def served(batch_invariant: bool) -> dict[str, Any]:
+    """The switches as vLLM read them: DeepGEMM on, its ue8m0 scales on and in use, FlashInfer's branch on, and batch invariance
+    exactly as asked (off unless `--batch-invariant`)."""
+    import vllm.envs as envs
+    from vllm.utils.deep_gemm import is_deep_gemm_e8m0_used
+
+    rec = {k: bool(getattr(envs, k)) for k in ("VLLM_USE_DEEP_GEMM", "VLLM_USE_DEEP_GEMM_E8M0", "VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER",
+                                               "VLLM_BATCH_INVARIANT")}
+    rec["deep_gemm_e8m0"] = bool(is_deep_gemm_e8m0_used())
+    rec["ok"] = (rec["VLLM_USE_DEEP_GEMM"] and rec["VLLM_USE_DEEP_GEMM_E8M0"] and rec["VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER"]
+                 and rec["deep_gemm_e8m0"] and rec["VLLM_BATCH_INVARIANT"] == batch_invariant)
+    return rec
 
 
 @contextlib.contextmanager
@@ -185,6 +246,110 @@ def _raw_scales(ws) -> np.ndarray:
     import torch
 
     return B._u8(ws) if ws.dtype == torch.float8_e8m0fnu else B._u32(ws)
+
+
+def _bf16(v) -> np.ndarray:
+    """f32 values -> bf16 words by truncation (exact on every value the probes plant)."""
+    return (np.asarray(v, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
+
+def _signed_codes(rng: np.random.Generator, n: int) -> np.ndarray:
+    """e4m3 codes of magnitude at most 0x7D (416), random signs: a block of them under the scale 2^-22 keeps its bytes through
+    `requant_weight_ue8m0`."""
+    return (rng.integers(0, 0x7E, n).astype(np.uint8) | (rng.integers(0, 2, n).astype(np.uint8) << 7)).astype(np.uint8)
+
+
+def _ftz_weights(rng: np.random.Generator, N: int, K: int) -> tuple[np.ndarray, np.ndarray]:
+    """Weight block rows cycling six kinds over the two K blocks (g the block that is nonzero): big g (codes 0x78..0x7D, 256..416),
+    small g (codes 0x01..0x03, the smallest subnormals, over a zero lane 0), mixed (random codes in both), negated (random codes, the
+    second block the first's negation); every raw scale 2^-22."""
+    w = np.zeros((N, K), dtype=np.uint8)
+    for n in range(N):
+        kind, lo = (n // GROUP) % 6, 0
+        if kind in (0, 2):
+            lo = 0 if kind == 0 else GROUP
+            w[n, lo:lo + GROUP] = 0x78 + n % 6
+        elif kind in (1, 3):
+            lo = GROUP if kind == 1 else 0
+            w[n, lo:lo + GROUP] = 0x01 + n % 3
+            w[n, lo] = 0
+        elif kind == 4:
+            w[n] = _signed_codes(rng, K)
+        else:
+            w[n, :GROUP] = _signed_codes(rng, GROUP)
+            w[n, GROUP:] = w[n, :GROUP] ^ 0x80
+    return w, np.full((cdiv(N, GROUP), K // GROUP), FTZ_WS, dtype=np.uint32)
+
+
+def _group(kind: str, rng: np.random.Generator, e: int = 0, a: float = 448.0) -> np.ndarray:
+    """One 128-group of bf16 words: `s_sub` every lane a * 2^e; `out_sub` lane 0 448 * 2^e and the rest 2^e (codes 448 and 1.0);
+    `random` randn * 2^U(-3, 3)."""
+    if kind == "s_sub":
+        return _bf16(np.full(GROUP, a * 2.0 ** e))
+    if kind == "out_sub":
+        v = np.full(GROUP, 2.0 ** e)
+        v[0] = 448.0 * 2.0 ** e
+        return _bf16(v)
+    return _bf16(rng.standard_normal(GROUP) * 2.0 ** rng.uniform(-3, 3))
+
+
+def _ftz_rows(rng: np.random.Generator) -> np.ndarray:
+    """16 rows of two groups: `FTZ_S_SUB`'s six (s subnormal: on a big column `temp * s` is normal, so an FTZ FMUL or FFMA leaves
+    0 where IEEE leaves a word), `out_sub` at e = -104, -103, -102 (s normal; on a small column `temp * s` is an f32 subnormal, which
+    an FTZ FFMA flushes), two rows mixing the two, a deeper `s_sub` (e = -120), two random rows, and two random rows whose groups are
+    equal (on a negated column the second block cancels the first: FFMA leaves the first product's rounding error, FMUL + FADD 0)."""
+    g = lambda kind, e=0, a=448.0: _group(kind, rng, e, a)
+    rows = [np.concatenate([g("s_sub", e, a)] * 2) for e, a in FTZ_S_SUB]
+    rows += [np.concatenate([g("out_sub", e)] * 2) for e in (-104, -103, -102)]
+    rows += [np.concatenate([g("s_sub", -108, 300.0), g("out_sub", -103)]), np.concatenate([g("out_sub", -104), g("s_sub", -120, 360.0)])]
+    rows += [np.concatenate([g("s_sub", -120, 414.0)] * 2)]
+    rows += [np.concatenate([g("random"), g("random")]) for _ in range(2)]
+    rows += [np.concatenate([r, r]) for r in (g("random") for _ in range(2))]
+    return np.stack(rows)
+
+
+def _fma_weights(N: int, K: int) -> tuple[np.ndarray, np.ndarray]:
+    """Block row nb at `FMA_EDGES[nb % 6]` = (j0, j1): the first K block's codes 0xFC (-384) under the raw scale 2^j0, the second's
+    0x7C (+384) under 2^j1 (amax / 448 = 0.857 * 2^j, so `requant_weight_ue8m0` keeps the bytes and the scales)."""
+    w = np.zeros((N, K), dtype=np.uint8)
+    w[:, :GROUP], w[:, GROUP:] = 0xFC, 0x7C
+    ws = np.array([[np.float32(2.0 ** j).view(np.uint32) for j in FMA_EDGES[nb % len(FMA_EDGES)]] for nb in range(cdiv(N, GROUP))],
+                  dtype=np.uint32)
+    return w, ws
+
+
+def _fma_rows(rng: np.random.Generator) -> np.ndarray:
+    """32 rows of two groups, every lane 448 * 2^k (the ue8m0 quant's codes 448, its scales 2^k): per `FMA_EDGES` entry the edge
+    (k0, k1) = (103 - j0, 104 - j1), (k0 - 1, k1) (FFMA's sum 1.96875 * 2^127, still finite), (k0, k1 - 1) (the blocks cancel) and
+    (k0 + 1, k1) (the first block overflows); then eight random rows."""
+    rows = []
+    for j0, j1 in FMA_EDGES:
+        k0, k1 = 103 - j0, 104 - j1
+        rows += [np.concatenate([_bf16(np.full(GROUP, 448.0 * 2.0 ** a)), _bf16(np.full(GROUP, 448.0 * 2.0 ** b))])
+                 for a, b in ((k0, k1), (k0 - 1, k1), (k0, k1 - 1), (k0 + 1, k1))]
+    rows += [np.concatenate([_group("random", rng), _group("random", rng)]) for _ in range(8)]
+    return np.stack(rows)
+
+
+def probe_operands(probe: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """A probe's operands, the same on every machine: (w [N, K] e4m3 bytes, raw ws [N/128, K/128] f32 words, which its processing
+    keeps, x [M, K] bf16 words)."""
+    _, K, N = PROBE_LINEAR
+    rng = np.random.default_rng(PROBE_SEEDS[probe])
+    if probe == "ftz":
+        w, ws = _ftz_weights(rng, N, K)
+        return w, ws, _ftz_rows(rng)
+    w, ws = _fma_weights(N, K)
+    return w, ws, _fma_rows(rng)
+
+
+def probe_columns(probe: str | None, r: int) -> set[int]:
+    """The columns of row r the reference also evaluates on a probe: one of each `ftz` weight kind; the `fma` row's edge column."""
+    if probe == "ftz":
+        return {GROUP * kind for kind in range(6)}
+    if probe == "fma" and r < 4 * len(FMA_EDGES):
+        return {GROUP * (r // 4)}
+    return set()
 
 
 def _kernel(K: int, N: int):
@@ -347,29 +512,68 @@ def linear_launches(work: Path, model: str, name: str, K: int, N: int, Ms: tuple
     launches, jobs = [wrec], [{"phase": "weights", "model": model, "case": name, "K": K, "N": N, "fmt": fmt, "paths": weights,
                                "block_rows": [b0, b1]} for b0, b1 in _block_chunks(cdiv(N, GROUP))]
     for M in Ms:
-        x = _activation(gen, M, K)
-        with Taps(*LINEAR_TAPS) as tp:
-            out1 = kernel.apply_weights(layer, x).clone()
-            n1 = len(tp.calls)
-            out2 = kernel.apply_weights(layer, x).clone()
-        torch.cuda.synchronize()
-        calls1, calls2 = tp.calls[:n1], tp.calls[n1:]
-        branch, expected = branch_of(calls1), "deepgemm" if batch_invariant or M >= 32 else "flashinfer"
-        launch = {"phase": "linear", "model": model, "case": name, "K": K, "N": N, "M": M, "kernel": type(kernel).__name__,
-                  "branch": branch, "branch_expected": expected, "branch_ok": branch == expected and branch_of(calls2) == branch,
-                  "deterministic": _equal(out1, out2), "out_dtype": str(out1.dtype)}
-        launch["operands_ok"] = launch["branch_ok"] and branch_operands_ok(calls1, branch, x, layer, out1) and out1.dtype == torch.bfloat16
+        launch, ljobs = _launch("linear", model, name, kernel, layer, _activation(gen, M, K), d, weights, batch_invariant)
         launches.append(launch)
-        arrays = {"x": B._u16(x), "out": B._u16(out1)}
-        if branch == "deepgemm":
-            q, s = calls1[0]["out"]
-            arrays |= {"q": B._u8(q), "s": B._u32(s)}
-        job = {"phase": "linear", "model": model, "case": name, "K": K, "N": N, "M": M, "branch": branch,
-               "paths": {**B._save(d / f"M{M}", **arrays), "w": weights["w"], "ws": weights["ws"]}}
-        jobs += row_jobs(job, N * K // 32)
+        jobs += ljobs
     del w, ws, layer
     torch.cuda.empty_cache()
     return launches, jobs
+
+
+def _launch(phase: str, model: str, name: str, kernel, layer, x, d: Path, weights: dict[str, str], batch_invariant: bool,
+            **extra) -> tuple[dict, list[dict]]:
+    """`apply_weights` at x's M, twice, with the branches tapped: (the launch record, its row jobs); ``extra`` goes in both."""
+    import torch
+
+    M, K = x.shape
+    N = layer.weight.shape[0]
+    with Taps(*LINEAR_TAPS) as tp:
+        out1 = kernel.apply_weights(layer, x).clone()
+        n1 = len(tp.calls)
+        out2 = kernel.apply_weights(layer, x).clone()
+    torch.cuda.synchronize()
+    calls1, calls2 = tp.calls[:n1], tp.calls[n1:]
+    branch, expected = branch_of(calls1), "deepgemm" if batch_invariant or M >= 32 else "flashinfer"
+    launch = {"phase": phase, "model": model, "case": name, "K": K, "N": N, "M": M, "kernel": type(kernel).__name__,
+              "branch": branch, "branch_expected": expected, "branch_ok": branch == expected and branch_of(calls2) == branch,
+              "deterministic": _equal(out1, out2), "out_dtype": str(out1.dtype), **extra}
+    launch["operands_ok"] = launch["branch_ok"] and branch_operands_ok(calls1, branch, x, layer, out1) and out1.dtype == torch.bfloat16
+    arrays = {"x": B._u16(x), "out": B._u16(out1)}
+    if branch == "deepgemm":
+        q, s = calls1[0]["out"]
+        arrays |= {"q": B._u8(q), "s": B._u32(s)}
+    job = {"phase": phase, "model": model, "case": name, "K": K, "N": N, "M": M, "branch": branch, **extra,
+           "paths": {**B._save(d / f"M{M}", **arrays), "w": weights["w"], "ws": weights["ws"]}}
+    return launch, row_jobs(job, N * K // 32)
+
+
+def probe_launches(work: Path, probe: str, batch_invariant: bool) -> tuple[list[dict], list[dict]]:
+    """One probe on the GPU (`PROBES`): `probe_operands`' weights through the selected kernel's processing, which must keep their
+    bytes and scales, then its rows through `apply_weights`, twice, on the probe's branch."""
+    import torch
+
+    name, K, N = PROBE_LINEAR
+    w0, ws0, x0 = probe_operands(probe)
+    kernel = _kernel(K, N)
+    w = torch.from_numpy(w0).cuda().view(torch.float8_e4m3fn)
+    ws = torch.from_numpy(ws0.view(np.float32)).cuda()
+    layer = _layer(w, ws)
+    kernel.process_weights_after_loading(layer)
+    pw, pws = layer.weight, layer.weight_scale_inv
+    d = work / f"probe_{probe}"
+    weights = B._save(d, w=B._u8(pw), ws=B._u32(pws), raw_w=w0, raw_ws=ws0)
+    kept = (list(pw.shape) == [N, K] and list(pws.shape) == list(ws0.shape) and pws.dtype == torch.float32
+            and np.array_equal(B._u8(pw), w0) and np.array_equal(B._u32(pws), ws0))
+    wrec = {"phase": "weights", "model": "glm53", "case": f"probe_{probe}", "K": K, "N": N, "fmt": "f32", "band_planted": [],
+            "w_shape": list(pw.shape), "ws_shape": list(pws.shape), "ws_dtype": str(pws.dtype), "operands_ok": kept, "deterministic": True}
+    jobs = [{"phase": "weights", "model": "glm53", "case": f"probe_{probe}", "K": K, "N": N, "fmt": "f32", "paths": weights,
+             "block_rows": [b0, b1]} for b0, b1 in _block_chunks(cdiv(N, GROUP))]
+    x = torch.from_numpy(x0.view(np.int16)).cuda().view(torch.bfloat16)
+    launch, ljobs = _launch("probe", "glm53", probe, kernel, layer, x, d, weights, batch_invariant, probe=probe)
+    launch["operands_ok"] = launch["operands_ok"] and kept and launch["branch"] == PROBES[probe][0]
+    del w, ws, layer
+    torch.cuda.empty_cache()
+    return [wrec, launch], jobs + ljobs
 
 
 def _block_chunks(nb: int) -> list[tuple[int, int]]:
@@ -417,18 +621,51 @@ def _reference_coords(rec: dict[str, Any], K: int, xq, sx, w, ws, want, nf, got,
             rec["twin_mismatch"] += y != (int(want[n]),)
 
 
+def block_temps(xq: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """Every column's per-K-block tensor-core sums of one row, as `R.scaled_mm_fp8_block_row` forms them: (K/128, N) f32 words, each
+    four `tc_dot32_e4m3` steps from +0."""
+    xq, w = np.asarray(xq, dtype=np.uint8), np.asarray(w, dtype=np.uint8)
+    N, K = w.shape
+    temps = np.zeros((K // GROUP, N), dtype=np.uint32)
+    for kb in range(K // GROUP):
+        for st in range(GROUP // 32):
+            lo = kb * GROUP + 32 * st
+            temps[kb] = R.tc_dot32_e4m3(temps[kb], np.broadcast_to(xq[lo:lo + 32], (N, 32)), w[:, lo:lo + 32])[0]
+    return temps
+
+
+def combined_row(temps: np.ndarray, sx: np.ndarray, ws: np.ndarray, step, flush_out: bool) -> np.ndarray:
+    """One row's bf16 words with the K blocks' sums combined by ``step(temp, sx, ws, acc)`` from +0 in ascending order, the
+    accumulator flushed before the RNE cvt when ``flush_out`` (`ALTERNATIVES`' form)."""
+    N = temps.shape[1]
+    rows, acc = np.arange(N) // GROUP, np.zeros(N, dtype=np.uint32)
+    with np.errstate(all="ignore"):
+        for kb in range(temps.shape[0]):
+            acc = step(temps[kb], np.full(N, np.asarray(sx, dtype=np.uint32)[kb], dtype=np.uint32), np.asarray(ws, dtype=np.uint32)[rows, kb],
+                       acc)
+        return R.f2fp_bf16(R.ftz(acc) if flush_out else acc)
+
+
+def differ(a: np.ndarray, b: np.ndarray) -> int:
+    """bf16 words where two rows differ, both non-finite not counted (a model claims no NaN payload)."""
+    a, b = np.asarray(a, dtype=np.uint16), np.asarray(b, dtype=np.uint16)
+    nonfinite = lambda v: (v & 0x7F80) == 0x7F80
+    return int(((a != b) & ~(nonfinite(a) & nonfinite(b))).sum())
+
+
 def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
-    """Rows [r0, r1) of one linear launch: DeepGEMM's branch, the quant twin against the kernel's (q, s) and the GEMM twin over them;
-    FlashInfer's, the linear's twin; the references on the sampled rows."""
+    """Rows [r0, r1) of one linear or probe launch: DeepGEMM's branch, the quant twin against the kernel's (q, s) and the GEMM twin
+    over them; FlashInfer's, the linear's twin; the references on the sampled rows; on a probe, each of its competing models'
+    words against the kernel's (`refuted`: the words where they differ)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
     from verity_vllm.program.kernels import deepgemm_twins as T
-    from verity_vllm.program.kernels import derived_rows as R
     from verity_vllm.program.registry import deepgemm as DG
 
     a = B._load(job["paths"])
-    K, N, deep = job["K"], job["N"], job["branch"] == "deepgemm"
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
+    K, N, deep, probe = job["K"], job["N"], job["branch"] == "deepgemm", job.get("probe")
+    models = PROBES[probe][2] if probe else ()
+    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {m: 0 for m in models}}
     r0, r1 = job["rows"]
     for r in range(r0, r1):
         x = np.asarray(a["x"][r])
@@ -445,12 +682,16 @@ def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
         want, nf = R.scaled_mm_fp8_block_row(xq, sx, a["w"], a["ws"], G=GROUP)
         got = np.asarray(a["out"][r])
         _tally(rec, want, nf, got, {"row": r})
+        if models:
+            temps = block_temps(xq, a["w"])
+            for m in models:
+                rec["refuted"][m] += differ(combined_row(temps, sx, a["ws"], *ALTERNATIVES[m]), got)
         if r in job["reference_rows"]:
-            _reference_coords(rec, K, xq, sx, a["w"], a["ws"], want, nf, got, {0, N - 1, (r * 7919) % N})
+            _reference_coords(rec, K, xq, sx, a["w"], a["ws"], want, nf, got, {0, N - 1, (r * 7919) % N} | probe_columns(probe, r))
             fn = bind(DG.Fp8GroupQuantUe8m0, K=K, G=GROUP) if deep else bind(DG.FlashInferFp8Quant1x128, K=K)
             rec["reference_quant_rows"] += 1
             rec["twin_mismatch"] += list(evaluate(fn, x.tolist())) != q.tolist() + s.tolist()
-    return {"phase": "linear", "model": job["model"], "case": job["case"], "M": job["M"], "rows": job["rows"], **rec}
+    return {"phase": job["phase"], "model": job["model"], "case": job["case"], "M": job["M"], "rows": job["rows"], **rec}
 
 
 def compare_weights(job: dict[str, Any]) -> dict[str, Any]:
@@ -565,7 +806,7 @@ def compare_einsum(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     try:
-        return {"linear": compare_linear, "weights": compare_weights, "einsum": compare_einsum}[job["phase"]](job)
+        return {"linear": compare_linear, "probe": compare_linear, "weights": compare_weights, "einsum": compare_einsum}[job["phase"]](job)
     except Exception as e:  # noqa: BLE001
         return {"phase": job["phase"], "model": job["model"], "case": job["case"], "M": job.get("M"), "error": B._error(e)}
 
@@ -644,36 +885,52 @@ def _case_ok(key: str, c: dict[str, Any], errors: list[str]) -> bool:
         good = _weights_ok(t)
     else:
         good = _words_ok(t) and (phase == "einsum" or t["reference_quant_rows"] > 0) and (c["branch"] != "deepgemm" or t["quant_rows"] > 0)
+    if phase == "probe":
+        probe = key.split("/")[2]
+        good = good and c["branch"] == PROBES[probe][0] and all(c["refuted"].get(m, 0) > 0 for m in PROBES[probe][2])
     return c["launches_ok"] and good and not errors
 
 
 def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Each case's own verdict (a linear or the einsum at one M, or one weight's processing): its launch's checks and its words,
-    so a NO-GO names what failed."""
+    """Each case's own verdict (a linear, a probe or the einsum at one M, or one weight's processing): its launch's checks, its words
+    and a probe's refutations, so a NO-GO names what failed."""
     out: dict[str, dict[str, Any]] = {}
     for x in doc["launches"]:
-        c = out.setdefault(_case(x), {"launches_ok": True, "branch": x.get("branch"), "totals": {k: 0 for k in TOTALS}})
+        c = out.setdefault(_case(x), {"launches_ok": True, "branch": x.get("branch"), "totals": {k: 0 for k in TOTALS}, "refuted": {}})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)
     for e in doc["errors"]:
-        if e.split("/")[0] in ("linear", "einsum", "weights") and e not in out:
-            out[e] = {"launches_ok": False, "branch": None, "totals": {k: 0 for k in TOTALS}}
+        if e.split("/")[0] in ("linear", "probe", "einsum", "weights") and e not in out:
+            out[e] = {"launches_ok": False, "branch": None, "totals": {k: 0 for k in TOTALS}, "refuted": {}}
     for r in doc.get("comparisons", []):
         c = out.get(_case(r))
         if c is not None:
             for k in TOTALS:
                 c["totals"][k] += r[k]
+            for m, v in r.get("refuted", {}).items():
+                c["refuted"][m] = c["refuted"].get(m, 0) + v
     for key, c in out.items():
         errors = [e for e in doc["errors"] if e in (key, f"compare/{key}")]
         c["ok"] = _case_ok(key, c, errors)
     return out
 
 
+def probes(batch_invariant: bool) -> tuple[str, ...]:
+    """The probes a run makes: `ftz` needs FlashInfer's branch, which batch invariance never takes."""
+    return ("fma",) if batch_invariant else tuple(PROBES)
+
+
+def probe_cases(batch_invariant: bool) -> set[str]:
+    return {f"probe/glm53/{p}/M{PROBES[p][1]}" for p in probes(batch_invariant)}
+
+
 def _verdict(doc: dict[str, Any]) -> bool:
     launches, t = doc["launches"], doc["totals"]
-    return (doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("ok") is True and doc["mufu"].get("rcp_ok") is True
-            and doc["jit"].get("ok") is True and doc["jit"].get("gemm_types") == ["GemmType::Batched", "GemmType::Normal"]
-            and doc["bind"].get("ok") is True and {x["phase"] for x in launches} == {"linear", "weights", "einsum"}
+    return (doc["gate"]["ok"] and not doc["errors"] and doc["served"].get("ok") is True and doc["selection"].get("ok") is True
+            and doc["mufu"].get("rcp_ok") is True and doc["jit"].get("ok") is True
+            and doc["jit"].get("gemm_types") == ["GemmType::Batched", "GemmType::Normal"]
+            and doc["bind"].get("ok") is True and {x["phase"] for x in launches} == {"linear", "weights", "einsum", "probe"}
             and {x["branch"] for x in launches if x["phase"] == "linear"} == ({"deepgemm"} if doc["batch_invariant"] else {"deepgemm", "flashinfer"})
+            and probe_cases(doc["batch_invariant"]) <= set(doc["cases"])
             and all(_launch_ok(x) for x in launches) and _words_ok(t) and _weights_ok(t) and t["quant_rows"] > 0
             and t["reference_quant_rows"] > 0 and bool(doc["cases"]) and all(c["ok"] for c in doc["cases"].values()))
 
@@ -684,7 +941,7 @@ def _print_case(key: str, c: dict[str, Any]) -> None:
           f"words={t['words']} !={t['mismatch']} unresolved={t['unresolved']} nonfinite={t['nonfinite_words']} quant={t['quant_rows']}"
           f"!={t['quant_mismatch']} ref={t['reference_coords']}+{t['reference_quant_rows']} twin!={t['twin_mismatch']} "
           f"nf_ref={t['nonfinite_reference']}!={t['nonfinite_mismatch']} blocks={t['weight_blocks']}!={t['weight_mismatch']} "
-          f"band={t['band_blocks']}~{t['band_agree']}", flush=True)
+          f"band={t['band_blocks']}~{t['band_agree']}" + (f" refuted={json.dumps(c['refuted'])}" if c["refuted"] else ""), flush=True)
 
 
 def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: int, workers: int, quick: bool, batch_invariant: bool,
@@ -693,12 +950,12 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=scratch)
     work = Path(tmp.name)
-    env = environment(batch_invariant, work)
+    env, cleared = environment(batch_invariant, work)
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": quick, "batch_invariant": batch_invariant,
-                           "phases": sorted(only), "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms),
-                           "errors": {}}
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "env_cleared": cleared, "quick": quick,
+                           "batch_invariant": batch_invariant, "phases": sorted(only), "environment": G._environment(),
+                           "gate": C.gate(min_driver, want_cc, want_sms), "errors": {}}
     print(f"[deepgemm-sm90] gate {json.dumps(doc['gate'])}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
@@ -715,6 +972,12 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
         except Exception as e:  # noqa: BLE001
             doc["errors"]["mufu"] = B._error(e)
     print(f"[deepgemm-sm90] mufu rcp_ok={doc['mufu'].get('rcp_ok')}", flush=True)
+    try:
+        doc["served"] = served(batch_invariant)
+    except Exception as e:  # noqa: BLE001
+        doc["errors"]["served"] = B._error(e)
+        doc["served"] = {"ok": False}
+    print(f"[deepgemm-sm90] served {json.dumps(doc['served'])} cleared={sorted(cleared)}", flush=True)
     cfg = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     doc["selection"], doc["launches"], jobs = {}, [], []
     with set_current_vllm_config(cfg):
@@ -737,6 +1000,20 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
                 except Exception as e:  # noqa: BLE001
                     doc["errors"][f"linear/{model}/{name}"] = B._error(e)
                     print(f"[deepgemm-sm90] linear {model}/{name} ERROR {doc['errors'][f'linear/{model}/{name}'][:400]}", flush=True)
+        if "probe" in only:
+            for probe in probes(batch_invariant):
+                key = f"probe/glm53/{probe}/M{PROBES[probe][1]}"
+                try:
+                    with model_config(cfg, MODELS["glm53"][2]):
+                        launches, pjobs = probe_launches(work, probe, batch_invariant)
+                    doc["launches"] += launches
+                    jobs += pjobs
+                    x = launches[-1]
+                    print(f"[deepgemm-sm90] probe {probe} M={x['M']} branch={x['branch']} det={x['deterministic']} "
+                          f"operands={x['operands_ok']} weights_kept={launches[0]['operands_ok']}", flush=True)
+                except Exception as e:  # noqa: BLE001
+                    doc["errors"][key] = B._error(e)
+                    print(f"[deepgemm-sm90] probe {probe} ERROR {doc['errors'][key][:400]}", flush=True)
         if "einsum" in only:
             try:
                 with model_config(cfg, MODELS["dsv4"][2]):
@@ -766,9 +1043,11 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
                 doc["errors"][f"compare/{key}"] = res["error"]
                 continue
             agg = results.setdefault(key, {"phase": res["phase"], "model": res["model"], "case": res["case"], "M": res.get("M"),
-                                           **{k: 0 for k in TOTALS}, "first_mismatch": None})
+                                           **{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}})
             for k in TOTALS:
                 agg[k] += res[k]
+            for m, v in res.get("refuted", {}).items():
+                agg["refuted"][m] = agg["refuted"].get(m, 0) + v
             agg["first_mismatch"] = agg["first_mismatch"] or res["first_mismatch"]
     doc["comparisons"] = list(results.values())
     doc["totals"] = {k: sum(r[k] for r in doc["comparisons"]) for k in TOTALS}
@@ -778,7 +1057,9 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     doc = seal_record(doc, _verdict(doc))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
+    refuted = {k: c["refuted"] for k, c in doc["cases"].items() if k.startswith("probe/")}
     print(f"DEEPGEMM-SM90 {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} totals={json.dumps(doc['totals'])} "
+          f"refuted={json.dumps(refuted)} served={doc['served'].get('ok')} "
           f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}", flush=True)
     return doc
 
@@ -792,8 +1073,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--want-sms", type=int, default=132)
     ap.add_argument("--workers", type=int, default=C.cpu_workers())
     ap.add_argument("--quick", action="store_true", help=f"linear M in {QUICK_LINEAR_M}, einsum M in {QUICK_EINSUM_M}: a first signal")
-    ap.add_argument("--batch-invariant", action="store_true", help="VLLM_BATCH_INVARIANT=1: every M takes DeepGEMM's branch")
-    ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)} (a GO needs all three)")
+    ap.add_argument("--batch-invariant", action="store_true",
+                    help="VLLM_BATCH_INVARIANT=1 (not what vLLM serves): every M takes DeepGEMM's branch, and the ftz probe is skipped")
+    ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)} (a GO needs all four)")
     a = ap.parse_args(argv)
     doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick, a.batch_invariant, set(a.only.split(",")))
     return 0 if doc["ok"] else 1

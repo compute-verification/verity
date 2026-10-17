@@ -46,13 +46,16 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "MoeExpertFp8BlockGemm(W)_v3 at the launch's statics with that step as DOT, the activation SiluMul_v2, the activation's "
              "quant Fp8GroupQuantUe8m0_v1 and moe_sum MoeSum_v1; on planted operands the decode tiles' words refute each competing "
              "model of HopperE4m3MmaV2Dot32_v1 and moe_sum's each competing sum."),
-    Property("deepgemm_sm90_capture", "verity-vllm/deepgemm-sm90-capture/v1",
-             "On the capture's Hopper GPU, vLLM selects FlashInferFp8DeepGEMMDynamicBlockScaledKernel for DeepSeek-V4-Pro's and "
-             "GLM-5.3's FP8 linears, M < 32 takes FlashInfer's branch and M >= 32 DeepGEMM's, DeepGEMM JIT-builds only the 1d2d "
-             "sm_90 GEMM (Normal and Batched, bf16, identity epilogue), and at the models' TP8 shapes every output word equals "
-             "FlashInferFp8Linear_v1, DeepGemmFp8Linear_v1 or, for DeepSeek-V4's wo_a einsum, ScaledMmFp8BlockGrouped_v1, every "
-             "DeepGEMM activation quant Fp8GroupQuantUe8m0_v1, and every processed weight block outside requant_band its twin's, "
-             "bit for bit."),
+    Property("deepgemm_sm90_capture", "verity-vllm/deepgemm-sm90-capture/v2",
+             "On the capture's Hopper GPU at vLLM's defaults (read back), vLLM selects FlashInferFp8DeepGEMMDynamicBlockScaledKernel "
+             "for DeepSeek-V4-Pro's and GLM-5.3's FP8 linears, M < 32 takes FlashInfer's branch and M >= 32 DeepGEMM's, DeepGEMM "
+             "JIT-builds only the 1d2d sm_90 GEMM (Normal and Batched, bf16, identity epilogue), and at the models' TP8 shapes every "
+             "output word equals FlashInferFp8Linear_v1, DeepGemmFp8Linear_v1 or, for DeepSeek-V4's wo_a einsum, "
+             "ScaledMmFp8BlockGrouped_v1, every DeepGEMM activation quant Fp8GroupQuantUe8m0_v1, and every processed weight block "
+             "outside requant_band its twin's, bit for bit; so do FlashInfer's words on a probe with subnormal scales and products, "
+             "where FTZ at the scale's FMUL, the FFMA, both or the cvt, FMUL + FADD, and either scale applied to the block sum first "
+             "each differ from the kernel's, and DeepGEMM's on a probe at the f32 overflow edge, where FMUL + FADD and either scale "
+             "first each differ."),
     Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v3",
              "On the capture's 8 Hopper GPUs at the record's served setting (served.setting: vLLM's defaults, or its custom "
              "all-reduce off), each set of rank processes holding that setting's communicators, GLM-5.3's fused_allreduce_rms_norm "

@@ -15,6 +15,7 @@ import torch
 from tests.properties import deepgemm_sm90_capture_gpu as X
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
+from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.program.kernels import deepgemm_twins as T
 from verity_vllm.program.kernels import derived_rows as R
 from verity_vllm.program.registry import fp8 as F
@@ -153,6 +154,134 @@ def test_a_finite_word_on_a_nonfinite_lane_is_unresolved_and_a_wrong_nan_is_a_mi
 
     (res,) = [X.compare(j) for j in _linear_jobs(tmp_path / "b", "flashinfer", edit=payload)]
     assert (res["unresolved"], res["mismatch"], res["nonfinite_mismatch"]) == (0, 0, 1)
+
+
+# --- probes ----------------------------------------------------------------------------------------------------------------------
+
+def _probe_jobs(tmp_path, probe: str, model: str | None = None) -> list[dict]:
+    """One probe's launch on `probe_operands`, its words the Definition's (a non-finite word on a reference row's sampled column the
+    reference's, as the GPU's must be) or, with ``model``, that competing model's; DeepGEMM's branch with its quant's (q, s)."""
+    branch, M, _ = X.PROBES[probe]
+    _, K_, N_ = X.PROBE_LINEAR
+    w, ws, x = X.probe_operands(probe)
+    arrays = {"x": x, "w": w, "ws": ws}
+    if branch == "deepgemm":
+        q, s = T.ue8m0_group_quant_rows(x)
+        arrays |= {"q": q, "s": s}
+    else:
+        q, s = T.flashinfer_quant_1x128_rows(x)
+    coord = bind(F.ScaledMmFp8BlockCoordinate, K=K_, G=GQ)
+    out = np.empty((M, N_), dtype=np.uint16)
+    for r in range(M):
+        if model:
+            out[r] = X.combined_row(X.block_temps(q[r], w), s[r], ws, *X.ALTERNATIVES[model])
+            continue
+        out[r], nf = R.scaled_mm_fp8_block_row(q[r], s[r], w, ws, G=GQ)
+        if r in X.reference_rows(M):
+            for n in {0, N_ - 1, (r * 7919) % N_} | X.probe_columns(probe, r):
+                if nf[n]:
+                    out[r, n] = evaluate(coord, q[r].tolist(), s[r].tolist(), w[n].tolist(), ws[n // GQ].tolist())[0]
+    job = {"phase": "probe", "model": "glm53", "case": probe, "K": K_, "N": N_, "M": M, "branch": branch, "probe": probe,
+           "paths": X.B._save(tmp_path / f"{probe}_{model}", out=out, **arrays)}
+    return X.row_jobs(job, N_ * K_ // 32)
+
+
+def _probe_weight_jobs(tmp_path, probe: str) -> list[dict]:
+    """The probe's weight processing as the kernel's: its bytes and scales kept."""
+    _, K_, N_ = X.PROBE_LINEAR
+    w, ws, _ = X.probe_operands(probe)
+    paths = X.B._save(tmp_path / f"{probe}_weights", w=w, ws=ws, raw_w=w, raw_ws=ws)
+    return [{"phase": "weights", "model": "glm53", "case": f"probe_{probe}", "K": K_, "N": N_, "fmt": "f32", "paths": paths,
+             "block_rows": [b0, b1]} for b0, b1 in X._block_chunks(X.cdiv(N_, GQ))]
+
+
+@pytest.mark.parametrize("probe", list(X.PROBES))
+def test_a_probes_operands_survive_the_requant_and_its_m_takes_its_branch(probe: str) -> None:
+    branch, M, models = X.PROBES[probe]
+    _, K_, N_ = X.PROBE_LINEAR
+    w, ws, x = X.probe_operands(probe)
+    pw, pws, unresolved = T.requant_weight_ue8m0(w, ws)
+    assert np.array_equal(pw, w) and np.array_equal(pws, ws) and not unresolved.any()
+    assert x.shape == (M, K_) and w.shape == (N_, K_) and (branch == "deepgemm") == (M >= 32) and set(models) <= set(X.ALTERNATIVES)
+    assert all(np.array_equal(a, b) for a, b in zip(X.probe_operands(probe), (w, ws, x)))
+    assert X.PROBE_LINEAR == ("shared_experts.down_proj", 256, 6144)
+
+
+def test_the_combined_row_at_the_definitions_step_is_the_twin() -> None:
+    w, ws, x = X.probe_operands("ftz")
+    for r in (0, 6, 14, 15):
+        q, s = T.flashinfer_quant_1x128_row(x[r])
+        want, _ = R.scaled_mm_fp8_block_row(q, s, w, ws, G=GQ)
+        got = X.combined_row(X.block_temps(q, w), s, ws, lambda t, sx, b, acc: R.fma_rn(t, R.mul_rn(sx, b), acc), False)
+        assert np.array_equal(got, want), r
+
+
+def test_the_ftz_probe_puts_its_subnormals_where_they_decide() -> None:
+    """Rows 0..5: s = sx * 2^-22 is subnormal, and on a big column (0, block 0 nonzero) the IEEE word is normal where an FTZ FMUL
+    leaves 0.  Rows 6..8: s is normal, and on a small column (128 or 384: one block of codes 3 or 1) the accumulator is an f32
+    subnormal, a bf16 subnormal word where an FTZ FFMA or cvt leaves 0 and an FTZ FMUL does not.  Rows 14, 15 (equal groups): on a
+    negated column (640) FFMA leaves the first product's rounding error where FMUL + FADD leaves 0."""
+    w, ws, x = X.probe_operands("ftz")
+    q, s = T.flashinfer_quant_1x128_rows(x)
+    subnormal = lambda u: (int(u) & 0x7F800000) == 0 and (int(u) & 0x7FFFFF) != 0
+    word = lambda r, n, m=None: int((R.scaled_mm_fp8_block_row(q[r], s[r], w, ws, G=GQ)[0] if m is None
+                                     else X.combined_row(X.block_temps(q[r], w), s[r], ws, *X.ALTERNATIVES[m]))[n])
+    for r in range(6):
+        assert all(subnormal(v) for v in R.mul_rn(s[r], np.full(2, X.FTZ_WS, dtype=np.uint32))), r
+        assert 0x0080 <= word(r, 0) < 0x7F80 and word(r, 0, "ftz_fmul") == word(r, 0, "ftz") == 0, r
+    for r in range(6, 9):
+        assert not any(subnormal(v) for v in R.mul_rn(s[r], np.full(2, X.FTZ_WS, dtype=np.uint32))), r
+        n = next(n for n in (GQ, 3 * GQ) if 0 < word(r, n) & 0x7FFF < 0x0080)
+        assert word(r, n, "ftz_ffma") == word(r, n, "ftz_cvt") == 0 and word(r, n, "ftz_fmul") == word(r, n), r
+    for r in (14, 15):
+        assert np.array_equal(x[r, :GQ], x[r, GQ:]) and word(r, 640) & 0x7FFF and word(r, 640, "fmul_fadd") == 0, r
+
+
+def test_the_fma_edge_is_finite_under_ffma_and_infinite_under_fmul_fadd() -> None:
+    """Each `FMA_EDGES` entry's edge row on its own column: FFMA's -1.3125 * 2^127 + 1.3125 * 2^128 is 0x7F28, one binade lower
+    0x7F7C (1.96875 * 2^127); FMUL + FADD overflows to +inf on both."""
+    w, ws, x = X.probe_operands("fma")
+    q, s = T.ue8m0_group_quant_rows(x)
+    for c, (j0, j1) in enumerate(X.FMA_EDGES):
+        r, n = 4 * c, GQ * c
+        assert (q[r] == 0x7E).all() and list(s[r]) == [np.float32(2.0 ** (103 - j0)).view(np.uint32), np.float32(2.0 ** (104 - j1)).view(np.uint32)]
+        for row, finite in ((r, 0x7F28), (r + 1, 0x7F7C)):
+            want, nf = R.scaled_mm_fp8_block_row(q[row], s[row], w, ws, G=GQ)
+            alt = X.combined_row(X.block_temps(q[row], w), s[row], ws, *X.ALTERNATIVES["fmul_fadd"])
+            assert (int(want[n]), bool(nf[n]), int(alt[n])) == (finite, False, 0x7F80), (c, row)
+
+
+def test_no_ftz_model_differs_on_deepgemms_probe() -> None:
+    """DeepGEMM's scales are powers of two and every accumulator a multiple of 2^-95: the FTZ models are its Definition there."""
+    w, ws, x = X.probe_operands("fma")
+    q, s = T.ue8m0_group_quant_rows(x)
+    for r in range(len(x)):
+        want, _ = R.scaled_mm_fp8_block_row(q[r], s[r], w, ws, G=GQ)
+        temps = X.block_temps(q[r], w)
+        assert all(X.differ(X.combined_row(temps, s[r], ws, *X.ALTERNATIVES[m]), want) == 0
+                   for m in ("ftz", "ftz_fmul", "ftz_ffma", "ftz_cvt")), r
+
+
+@pytest.mark.parametrize("probe", list(X.PROBES))
+def test_a_probe_on_the_definitions_words_refutes_each_of_its_models(tmp_path, probe: str) -> None:
+    """The probe's GO without a GPU: every word the Definition's, every reference equal, and each competing model it names differing
+    from the kernel's words somewhere (the counts the H200 run must reproduce if its words are the Definition's)."""
+    branch, M, models = X.PROBES[probe]
+    res = [X.compare(j) for j in _probe_jobs(tmp_path, probe)]
+    t = _total(res)
+    refuted = {m: sum(r["refuted"][m] for r in res) for m in models}
+    assert t["words"] == M * X.PROBE_LINEAR[2] and t["mismatch"] == t["unresolved"] == t["twin_mismatch"] == t["nonfinite_mismatch"] == 0
+    assert t["reference_quant_rows"] == len(X.reference_rows(M)) and t["quant_rows"] == (M if branch == "deepgemm" else 0)
+    assert all(v > 0 for v in refuted.values()), refuted
+    assert all(r["phase"] == "probe" for r in res)
+
+
+@pytest.mark.parametrize("probe,model", [("ftz", "ftz"), ("ftz", "ftz_fmul"), ("ftz", "fmul_fadd"), ("fma", "fmul_fadd"),
+                                         ("fma", "temp_ws_first")])
+def test_a_kernel_that_computes_a_competing_model_is_found(tmp_path, probe: str, model: str) -> None:
+    res = [X.compare(j) for j in _probe_jobs(tmp_path, probe, model)]
+    t = _total(res)
+    assert t["mismatch"] > 0 and sum(r["refuted"][model] for r in res) == 0
 
 
 # --- weights ---------------------------------------------------------------------------------------------------------------------
@@ -405,11 +534,14 @@ BLOCKS = _zero(weight_blocks=4)
 
 
 def _doc(batch_invariant: bool = False) -> dict:
+    """A GO record: launches and comparisons 0..4 DeepSeek-V4's wq_b and wo_a, 5 and 6 the `fma` probe's weights and launch, and
+    without batch invariance 7 and 8 the `ftz` probe's."""
     lin = {"phase": "linear", "model": "dsv4", "case": "wq_b", "deterministic": True, "operands_ok": True, "branch_ok": True}
     branches = ("deepgemm", "deepgemm") if batch_invariant else ("flashinfer", "deepgemm")
-    weights = lambda case: {"phase": "weights", "model": "dsv4", "case": case, "deterministic": True, "operands_ok": True}
-    doc = {"schema": X.SCHEMA, "batch_invariant": batch_invariant, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True},
-           "mufu": {"rcp_ok": True}, "jit": {"ok": True, "gemm_types": ["GemmType::Batched", "GemmType::Normal"]}, "bind": {"ok": True},
+    weights = lambda case, model="dsv4": {"phase": "weights", "model": model, "case": case, "deterministic": True, "operands_ok": True}
+    doc = {"schema": X.SCHEMA, "batch_invariant": batch_invariant, "gate": {"ok": True}, "errors": {}, "served": {"ok": True},
+           "selection": {"ok": True}, "mufu": {"rcp_ok": True}, "jit": {"ok": True, "gemm_types": ["GemmType::Batched", "GemmType::Normal"]},
+           "bind": {"ok": True},
            "launches": [weights("wq_b"), {**lin, "M": 1, "branch": branches[0]}, {**lin, "M": 32, "branch": branches[1]}, weights("wo_a"),
                         {"phase": "einsum", "model": "dsv4", "case": "wo_a", "M": 1, "deterministic": True, "operands_ok": True}],
            "comparisons": [{"phase": "weights", "model": "dsv4", "case": "wq_b", **BLOCKS},
@@ -418,6 +550,14 @@ def _doc(batch_invariant: bool = False) -> dict:
                            {"phase": "linear", "model": "dsv4", "case": "wq_b", "M": 32, **WORDS, "quant_rows": 2},
                            {"phase": "weights", "model": "dsv4", "case": "wo_a", **BLOCKS},
                            {"phase": "einsum", "model": "dsv4", "case": "wo_a", "M": 1, **WORDS, "reference_quant_rows": 0}]}
+    for probe in sorted(X.probes(batch_invariant)):
+        branch, M, models = X.PROBES[probe]
+        doc["launches"] += [weights(f"probe_{probe}", "glm53"),
+                            {"phase": "probe", "model": "glm53", "case": probe, "M": M, "branch": branch, "probe": probe,
+                             "deterministic": True, "operands_ok": True, "branch_ok": True}]
+        doc["comparisons"] += [{"phase": "weights", "model": "glm53", "case": f"probe_{probe}", **BLOCKS},
+                               {"phase": "probe", "model": "glm53", "case": probe, "M": M, **WORDS,
+                                **({"quant_rows": 2} if branch == "deepgemm" else {}), "refuted": {m: 5 for m in models}}]
     doc["totals"] = {k: sum(r[k] for r in doc["comparisons"]) for k in X.TOTALS}
     doc["cases"] = X.cases(doc)
     return doc
@@ -431,7 +571,10 @@ def _doc(batch_invariant: bool = False) -> dict:
     (("totals", "twin_mismatch"), 1), (("totals", "nonfinite_mismatch"), 1), (("totals", "weight_blocks"), 0),
     (("totals", "weight_mismatch"), 1), (("launches", 0, "operands_ok"), False), (("launches", 1, "branch"), "deepgemm"),
     (("launches", 2, "branch_ok"), False), (("launches", 2, "operands_ok"), None), (("launches", 4, "deterministic"), False),
-    (("comparisons", 2, "mismatch"), 1), (("batch_invariant",), True)])
+    (("comparisons", 2, "mismatch"), 1), (("batch_invariant",), True), (("served", "ok"), False), (("served", "ok"), None),
+    (("launches", 5, "operands_ok"), False), (("launches", 6, "operands_ok"), False), (("launches", 8, "branch"), "deepgemm"),
+    (("comparisons", 6, "refuted", "temp_ws_first"), 0), (("comparisons", 8, "refuted", "ftz_cvt"), 0),
+    (("comparisons", 6, "quant_rows"), 0), (("comparisons", 8, "reference_coords"), 0)])
 def test_the_verdict_needs_every_check(path: tuple, value) -> None:
     assert X._verdict(_doc()) and X._verdict(_doc(batch_invariant=True))
     doc = copy.deepcopy(_doc())
@@ -443,40 +586,53 @@ def test_the_verdict_needs_every_check(path: tuple, value) -> None:
     assert not X._verdict(doc)
 
 
-def test_a_run_without_every_phase_is_not_a_go() -> None:
-    for phase in ("einsum", "weights", "linear"):
-        doc = _doc()
-        doc["launches"] = [x for x in doc["launches"] if x["phase"] != phase]
-        doc["comparisons"] = [r for r in doc["comparisons"] if r["phase"] != phase]
-        doc["totals"] = {k: sum(r[k] for r in doc["comparisons"]) for k in X.TOTALS}
-        doc["cases"] = X.cases(doc)
-        assert not X._verdict(doc), phase
+def _without(doc: dict, drop) -> dict:
+    doc["launches"] = [x for x in doc["launches"] if not drop(x)]
+    doc["comparisons"] = [r for r in doc["comparisons"] if not drop(r)]
+    doc["totals"] = {k: sum(r[k] for r in doc["comparisons"]) for k in X.TOTALS}
+    doc["cases"] = X.cases(doc)
+    return doc
+
+
+def test_a_run_without_every_phase_or_probe_is_not_a_go() -> None:
+    for phase in ("einsum", "weights", "linear", "probe"):
+        assert not X._verdict(_without(_doc(), lambda x: x["phase"] == phase)), phase
+    ftz = lambda x: x["case"] in ("ftz", "probe_ftz")
+    assert not X._verdict(_without(_doc(), ftz))
+    assert X._verdict(_without(_doc(batch_invariant=True), ftz))
+    assert not X._verdict(_without(_doc(batch_invariant=True), lambda x: x["case"] in ("fma", "probe_fma")))
+
+
+PROBE_CASES = {"weights/glm53/probe_fma": True, "probe/glm53/fma/M32": True, "weights/glm53/probe_ftz": True, "probe/glm53/ftz/M16": True}
 
 
 def test_each_case_has_its_own_verdict() -> None:
     doc = _doc()
     assert {k: c["ok"] for k, c in doc["cases"].items()} == {"weights/dsv4/wq_b": True, "linear/dsv4/wq_b/M1": True,
                                                              "linear/dsv4/wq_b/M32": True, "weights/dsv4/wo_a": True,
-                                                             "einsum/dsv4/wo_a/M1": True}
+                                                             "einsum/dsv4/wo_a/M1": True, **PROBE_CASES}
+    assert doc["cases"]["probe/glm53/ftz/M16"]["refuted"] == {m: 5 for m in X.ALTERNATIVES}
     doc["launches"].insert(2, {**doc["launches"][1], "M": 16})
     doc["comparisons"].append({**doc["comparisons"][1], "M": 16})
     doc["errors"] = {"compare/linear/dsv4/wq_b/M1": "boom", "linear/glm53/q_a_proj": "boom"}
     doc["comparisons"][3]["weight_mismatch"] = 1
     doc["comparisons"][2]["quant_rows"] = 0                                     # DeepGEMM's branch with no quant row compared
+    doc["comparisons"][8]["refuted"]["ftz_ffma"] = 0                            # a competing model the ftz probe's words meet
     got = {k: c["ok"] for k, c in X.cases(doc).items()}
     assert got == {"weights/dsv4/wq_b": True, "linear/dsv4/wq_b/M1": False, "linear/dsv4/wq_b/M16": True, "linear/dsv4/wq_b/M32": False,
-                   "weights/dsv4/wo_a": False, "einsum/dsv4/wo_a/M1": True, "linear/glm53/q_a_proj": False}
+                   "weights/dsv4/wo_a": False, "einsum/dsv4/wo_a/M1": True, "linear/glm53/q_a_proj": False,
+                   **PROBE_CASES, "probe/glm53/ftz/M16": False}
 
 
 # --- main ------------------------------------------------------------------------------------------------------------------------
 
-ENV = ("VLLM_USE_DEEP_GEMM", "VLLM_USE_DEEP_GEMM_E8M0", "VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER", "VLLM_ENABLE_V1_MULTIPROCESSING",
-       "VLLM_BATCH_INVARIANT", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR")
+RUN_ENV = ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR")
 
 
 def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False) -> dict:
-    """vLLM's config module and every GPU piece stood in for: the launches are the jobs above, the JIT scan and MUFU probe
-    canned; returns what the stubs saw."""
+    """vLLM's config module and every GPU piece stood in for: the launches are the jobs above (the probes on a down_proj of N = 768,
+    one weight block row of each kind), the JIT scan, MUFU probe and served read-back canned, and every served-default switch
+    inherited as "0"; returns what the stubs saw."""
     import contextlib
 
     vc = types.ModuleType("vllm.config")
@@ -484,13 +640,18 @@ def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False
     vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
-    for k in ENV:
+    for k in SERVED_DEFAULTS:
+        monkeypatch.setenv(k, "0")
+    for k in RUN_ENV:
         monkeypatch.setenv(k, "")
-    seen: dict = {"mufu": [], "jit": [], "linear": []}
+    seen: dict = {"mufu": [], "jit": [], "linear": [], "served": [], "probe": []}
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": gate_ok, "torch_capability": "9.0"})
     monkeypatch.setattr(X.C, "mufu", lambda work, arch: (seen["mufu"].append(arch), copy.deepcopy(MUFU))[1])
     monkeypatch.setattr(X.G, "_environment", lambda: {})
+    monkeypatch.setattr(X, "served", lambda bi: (seen["served"].append({k: X.os.environ.get(k) for k in SERVED_DEFAULTS}),
+                                                 {"VLLM_BATCH_INVARIANT": bi, "ok": True})[1])
     monkeypatch.setattr(X, "selection", lambda cfg: {"ok": True})
+    monkeypatch.setattr(X, "PROBE_LINEAR", ("shared_experts.down_proj", 256, 768))
     monkeypatch.setattr(X, "model_config", lambda cfg, model_type: contextlib.nullcontext())
     monkeypatch.setattr(X, "linear_cases", lambda: [("dsv4", "small", K, N)])
     canned = X.jit(_jit_cache(tmp_path / "jit", GOOD))
@@ -514,8 +675,17 @@ def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False
         jobs = [{**j, "model": "dsv4", "case": "wo_a"} for j in _weights_jobs(tmp_path / "we", "e8m0")[0]] + _einsum_jobs(tmp_path / "e")
         return launches, jobs
 
+    def probe(work, name, batch_invariant):
+        seen["probe"].append((name, batch_invariant))
+        branch, M, _ = X.PROBES[name]
+        launches = [{"phase": "weights", "model": "glm53", "case": f"probe_{name}", "deterministic": True, "operands_ok": True},
+                    {"phase": "probe", "model": "glm53", "case": name, "M": M, "branch": branch, "branch_ok": True, "probe": name,
+                     "deterministic": True, "operands_ok": True}]
+        return launches, _probe_weight_jobs(tmp_path / "pw", name) + _probe_jobs(tmp_path / "p", name)
+
     monkeypatch.setattr(X, "linear_launches", linear)
     monkeypatch.setattr(X, "einsum_launches", einsum)
+    monkeypatch.setattr(X, "probe_launches", probe)
     return seen
 
 
@@ -532,12 +702,29 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert doc["digest"] == digest_of(doc) and doc["ok"] is True and not doc["errors"]
     assert {k: c["ok"] for k, c in doc["cases"].items()} == {"weights/dsv4/small": True, "linear/dsv4/small/M1": True,
                                                              "linear/dsv4/small/M32": True, "weights/dsv4/wo_a": True,
-                                                             "einsum/dsv4/wo_a/M5": True}
-    assert doc["env"]["VLLM_USE_DEEP_GEMM"] == "1" and doc["env"]["VLLM_BATCH_INVARIANT"] == "0"
+                                                             "einsum/dsv4/wo_a/M5": True, **PROBE_CASES}
+    assert sorted(doc["env"]) == sorted(RUN_ENV) and doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS}
+    assert seen["served"] == [{k: None for k in SERVED_DEFAULTS}] and doc["served"]["ok"] is True
+    assert seen["probe"] == [("ftz", False), ("fma", False)]
+    assert all(v > 0 for c in ("probe/glm53/ftz/M16", "probe/glm53/fma/M32") for v in doc["cases"][c]["refuted"].values())
+    assert set(doc["cases"]["probe/glm53/ftz/M16"]["refuted"]) == set(X.ALTERNATIVES)
     assert seen["mufu"] == ["sm_90"] and seen["jit"] == [doc["env"]["DG_JIT_CACHE_DIR"]] and seen["linear"][0][4] == X.QUICK_LINEAR_M
-    assert doc["totals"]["quant_rows"] == 32 and doc["totals"]["weight_blocks"] == 12 and doc["bind"]["ok"]
+    assert doc["totals"]["quant_rows"] == 32 + 32 and doc["totals"]["weight_blocks"] == 12 + 2 * 12 and doc["bind"]["ok"]
     printed = capsys.readouterr().out
     assert "DEEPGEMM-SM90 GO" in printed and "no-go cases=[]" in printed and "case linear/dsv4/small/M32" in printed
+    assert "served=True" in printed and '"probe/glm53/fma/M32": {"fmul_fadd": ' in printed
+
+
+def test_main_under_batch_invariance_skips_the_ftz_probe(tmp_path, monkeypatch) -> None:
+    import json
+
+    seen = _stub_gpu(tmp_path, monkeypatch)
+    out = tmp_path / "out"
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--quick", "--batch-invariant",
+                   "--only", "linear,probe,einsum"]) == 1                    # no MUFU table read: not a GO
+    doc = json.loads((out / X.RECORD).read_text())
+    assert seen["probe"] == [("fma", True)] and doc["env"]["VLLM_BATCH_INVARIANT"] == "1"
+    assert [k for k in doc["cases"] if k.startswith("probe/")] == ["probe/glm53/fma/M32"] and all(c["ok"] for c in doc["cases"].values())
 
 
 def test_main_names_the_case_a_flipped_word_fails(tmp_path, monkeypatch, capsys) -> None:
