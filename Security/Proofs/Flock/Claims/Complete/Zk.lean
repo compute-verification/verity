@@ -1,0 +1,70 @@
+import Proofs.Flock.Claims.Complete.Zk.Tape
+import Proofs.Flock.Claims.Complete.Zk.Piop
+import Proofs.Flock.Claims.Complete.Zk.Ligerito
+import Proofs.Flock.Claims.Complete.Zk.Inner
+import Proofs.Flock.Claims.Complete.Zk.Session
+import Proofs.Flock.Claims.Complete.Zk.Honest
+import Proofs.Flock.Claims.Complete.Zk.Run
+import Proofs.Flock.Claims.Complete.Zk.Sim
+import Proofs.Flock.Claims.Complete.Zk.Coins
+import Proofs.Flock.Claims.Complete.Zk.Verdict
+import Proofs.Flock.Claims.Complete.Zk.Skeleton
+import Proofs.Flock.Claims.Complete.Zk.Discharge
+import Proofs.Flock.Claims.Complete.Zk.Link
+import Proofs.Flock.Claims.Complete.Zk.Json.QSort
+import Proofs.Flock.Claims.Complete.Zk.Json.Record
+import Proofs.Flock.Claims.Complete.Zk.Json.Decode
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Proofs.Flock.Claims.Complete.Zk.Json.Goals
+import Proofs.Flock.Claims.Complete.Zk.Json.Files
+import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+import Proofs.Flock.Claims.Complete.Zk.Count
+import Proofs.Flock.Claims.Complete.Zk.ProverOk
+import Proofs.Flock.Claims.Complete.Zk.RepRounds
+import Proofs.Flock.Claims.Complete.Zk.Lanes
+import Proofs.Flock.Claims.Complete.Zk.Consumed
+import Proofs.Flock.Claims.Complete.Zk.Transfer
+import Proofs.Flock.Claims.Complete.Zk.Walk
+import Proofs.Flock.Claims.Complete.Zk.Replay
+import Proofs.Flock.Claims.Complete.Zk.PiopGo
+import Proofs.Flock.Claims.Complete.Zk.ReplayPos
+import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.Complete.Zk.Extras
+import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
+import Proofs.Flock.Claims.Complete.Zk.LaneAgree
+import Proofs.Flock.Claims.Complete.Zk.Complete
+
+/-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
+the masked tape `TapeZk` and pads `padsOf` of `Tape`, the masked zerocheck and lincheck of `Piop`, level 0's masked
+Ligerito of `Ligerito`, the pads' commitment and inner proof of `Inner`, the session of `Session`), its run against
+`V true` (`Run`: `run_acc_of_zk`), that run as a pure session (`Sim`: `honestRunZk_eq`), `δcZk H` with the composition
+into `Claims.Flock.Complete` (`Coins`: `pr_badZk_le`, `complete_zk_of`), and the masked verdict accepting when each of
+its checks passes (`Verdict`: `zk_verifyRepWith_ok`, `zk_verifyWith_ok`). The skeleton (`Skeleton`:
+`complete_zk_of_goals`) composes them from one named goal per check (`GoalsZk`), proving the keyed coin tree from
+`readyZk` (`coinTree_goal`); `Discharge` proves those that follow
+from the scope and the session's shape (`tablesZk_goal`, `schedulesZk_goal`, `proofCountZk_goal`), and `Link` the first
+send (`linkFirstZk_goal`). `Json.Record` is the masked record's JSON (`recordJson_eqZk`) and the masked decoder's hello
+and coin-tree checks passing on it (`checkHello_ok`, `checkRecord_ok`, with `Json.QSort`'s `qsort_coinTree`), after
+which it decodes as the plain record of `specZ` (`decodeWith_specZ`); `Json.Decode` reads it back: decoded, live, and
+its draw (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `Json.Session` is what the one-table
+masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`); `Json.Goals` proves
+the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`);
+`Json.Files` the proof files' goals, given `RepShapedZk` (`RunZk.rep`, `repDecodesZk_goal`, `repParamsZk_goal`,
+`padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal`, the record's length from `readyZk`); `Json.Runs` the
+session running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Count` the sends fitting the rounds (`sendCountZk_goal`);
+`ProverOk` `ProverOkZk` from `Out64` and its rep half `RepRoundsZk` (`proverOkZk`), and `RepRounds` that half
+(`repRoundsZk_goal`); `Lanes` level 0's lane phase from the masked Ligerito returning (`laneConstraints_goal`);
+`Consumed` every recorded round consumed where the rep's steps return (`consumedZk_goal`); `Transfer` a replay
+returning on any rounds that carry the prover's, whatever the hashes (`replayWith_xfer`); `Walk` the session rep by
+rep, each stream and proof file the rounds and proof of the rep that made it (`sessionPZk_walk`, `RunZk.walk`);
+`Replay` the masked replay passing, since the prover ran it on rounds its stream carries (`replay_goal`); `PiopGo` the
+masked prover's zerocheck and lincheck in closed form (`zerocheckPZk_go`, `lincheckPZk_go`); `ReplayPos` where a
+masked replay that returns stops and the coins its claims read (`replayWith_ret`); `RingSwitch` the ring switch
+passing on the replay's claims, given the extra claims' algebra `RsExtrasZk` (`ringSwitchZk_goal`); `Extras` that
+algebra at the deployed relation, from `RelS` (`CaseZk.model`, `rsExtrasZk`); `LigeritoPos` what a masked Ligerito
+that returns gives, by coin position: its record and where it stops (`zkLigeritoWith_pos`, `RunZk.lg_pos`), and
+`LigeritoProverPos` what the masked prover records, by send position (`ligeritoPZk_pos`); `LaneAgree` the two records
+giving the same lane constraints where the rounds' coins are the sends' replies and the two Ligeritos start together
+(`lanes_agree`); `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved, and
+`complete_zk_relation` at the deployed relation. -/
