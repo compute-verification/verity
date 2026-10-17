@@ -29,11 +29,12 @@ each term a fraction of honest time.
   ln(1/δ)/((1 − p)·S) over S spot checks (note:20261016T0005Z-draft-luck-loss-round4), and ε_luck is what that saves
   it, d̄·w*/B(H) at π*. The terms add up to the LP exactly.
 - **ε_sched** is honest's measured time above its model time (`[measured]` in data/honest/), when the design runs the
-  profile's fold at its L (with its fillers, the measured time scaled by their model cost). Unmeasured, it is 0: honest
-  is certified at the model's bound, which moves it into γ.
+  profile's fold at its L (with its fillers, the measured time plus their model cost). Unmeasured, it is 0: honest is
+  certified at the model's bound, which moves it into γ.
 - **γ** is honest's time a useful MMA (`work` folded MMAs and `plain` unfolded ones) over the plain GEMM's model time.
-  Honest's time is measured when the design runs the profile's kernel, scaled by the model's cost of the design's
-  fillers when it adds some, and its fastest program's model time otherwise.
+  Honest's time is measured when the design runs the profile's kernel; otherwise, when the profile is measured, the
+  measured time plus the model's difference between the design and the profile's kernel, and else its fastest
+  program's model time.
 - **ε_skip**, **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
 
 A warp instruction does 32 lane instructions; a uniform instruction does one. Every count is per committed word.
@@ -518,8 +519,8 @@ class Eps:
     lucky: Mix                       # the cheater writing 1 − d̄ of them: ε_luck
     fillers: tuple[tuple[Filler, float], ...]
     T_honest_measured: float | None  # measured SMSP-cycles a committed word
-    T_honest: float                  # honest's SMSP-cycles a committed word: measured, else the measured profile's time plus
-                                     # the model's difference to it, else its fastest program's model
+    T_honest: float                  # honest's SMSP-cycles a committed word: measured, else the measured profile's
+                                     # plus the model's difference to it, else its fastest program's model
     T_honest_source: str
     gamma: float                     # honest's time a useful MMA (`work` of them, `plain` plain) over the plain GEMM's
     sched: float | None

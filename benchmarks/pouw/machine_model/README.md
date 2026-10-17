@@ -97,8 +97,10 @@ deficient block weighted by 1 − p (¾ a word, 0.854 a filler block; SPEC §5),
 `--credit model` reads ε as a fraction of honest's model bound B(H) (PROFILE's reading: ε_sched and ε_clock leave ε),
 and `--credit floor` as a fraction of the floor program ♭ (SPEC §0.7a, Corollary D3): the tensor route at φ_del, the
 fold, the fillers and the baseline, with no overhead. Honest's time above the credit then leaves ε for γ (printed beside
-it); which reading a guarantee certifies is the coordinator's call. γ is honest's time a useful MMA over the plain GEMM's model time: measured when the design runs the
-profile's kernel (scaled by the model's cost of any filler it adds), the model's otherwise.
+it); which reading a guarantee certifies is the coordinator's call. γ is honest's time a useful MMA over the plain
+GEMM's model time: measured when the design runs the profile's kernel, otherwise the measured kernel's time plus the
+model's difference between the design and that kernel (PREDICT's arms: within −0.7% to +8.4% of measured on lane
+work), and the model's alone without a measured profile.
 `--upfill` adds verified filler that keeps the uniform datapath busy for the credited program's time, which the cheater
 must then run on lanes or leave in place, and `--fill X` adds X lane instructions a word of verified filler on lanes,
 which dilutes what the cheater saves on operands at the cost of γ (`dither-two-sided-fill` is two-sided dither with
