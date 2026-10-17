@@ -410,8 +410,8 @@ theorem completeJO (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
-    (hCJ : RepChecksJ H rel) : Claims.Flock.Complete H (deployZk rel) :=
-  completeJR H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ hRJ (openJ_of S h64 hSJ hRJ hCJ)
+    (hCJ : RepChecksJ H rel) (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk rel) :=
+  completeJR H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ hRJ (openJ_of S h64 hSJ hRJ hCJ) hMR
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables, from premises stated per table at every good case, one table's as several's: the statement's
@@ -420,9 +420,10 @@ ring switch, the masked Ligerito and the inner proof (`RepChecksAt`). -/
 theorem completeAll (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : ∀ c : Case H rel, StmtAt c)
     (hPR : ∀ c : Case H rel, ProverRunsAt c) (hR : ∀ c : Case H rel, RepShapedAt c)
-    (hC : ∀ o : Run H rel, RepChecksAt H rel o) : Claims.Flock.Complete H (deployZk rel) :=
+    (hC : ∀ o : Run H rel, RepChecksAt H rel o) (hMR : MaskRank.MaskRankBound) :
+    Claims.Flock.Complete H (deployZk rel) :=
   complete_of_at H rel h64 (fun c => c.sessionRuns S (hS c) (hPR c))
     (fun o => recordAt_of S h64 o (hS o.toCase) (filesAt S h64 o (hS o.toCase) (hR o.toCase)))
-    (fun o => openAt_of S h64 o (hS o.toCase) (hR o.toCase) (hC o))
+    (fun o => openAt_of S h64 o (hS o.toCase) (hR o.toCase) (hC o)) hMR
 
 end FlockComplete.ZkTables

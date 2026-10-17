@@ -49,10 +49,11 @@ table `j / 2`'s rep `j % 2`'s (`RepFileJ`). -/
 theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
     {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Json.parse spec.hello = .ok own)
     {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (trs : Array Trace) (tape : TapeZk)
-    (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+    (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v →
+      ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
-        lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
+        lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
     (hst : ∀ a ∈ spec.repStreams, a.1 < tabs.size) {r : String × Array ByteArray} {bodies : Array Claims.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs words trs tape).go #[] =
       (.ok r, bodies)) :
@@ -143,8 +144,8 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
     obtain ⟨rfl, rfl⟩ := e
     have hex' : tabs[k / 2]!.extra (ptsOf spec (coinOf (resp 0))) = .ok extras := by simpa [ptsOf] using hex
     have hok := Ret.go (hR tabs[k / 2]! (by rw [getElem!_pos tabs _ hi]; exact Array.getElem_mem hi) _
-      (hv _ hi) _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
-    obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
+      (hv _ hi) _ _ _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
+    obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
     dsimp only at h₁ h₂ h₄
     have hsz : l.size = 1 + (ss.toList.flatMap Array.toList).length := by
       rw [← Array.length_toList, hl, Recs.length_eq hrec]
@@ -343,7 +344,7 @@ theorem completeJR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
-    (hOp : OpenJ H rel) : Claims.Flock.Complete H (deployZk rel) :=
-  completeJ H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (filesJ S h64 hSJ hRJ) hOp
+    (hOp : OpenJ H rel) (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk rel) :=
+  completeJ H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (filesJ S h64 hSJ hRJ) hOp hMR
 
 end FlockComplete.ZkTables

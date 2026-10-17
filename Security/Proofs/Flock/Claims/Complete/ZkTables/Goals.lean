@@ -305,7 +305,7 @@ theorem completeJ (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Rea
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hFJ : FilesJ H rel)
-    (hOp : OpenJ H rel) : Claims.Flock.Complete H (deployZk rel) :=
-  complete H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (recordJ_of S h64 hSJ hFJ) hOp
+    (hOp : OpenJ H rel) (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk rel) :=
+  complete H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (recordJ_of S h64 hSJ hFJ) hOp hMR
 
 end FlockComplete.ZkTables

@@ -37,10 +37,11 @@ theorem sessionPZk_factsJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
     (hC : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 g extra lanePad
         salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64)
-    (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+    (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v →
+      ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
-        lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
+        lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
     (hst : ∀ a ∈ spec.repStreams, a.1 < tabs.size)
     {r : String × Array ByteArray} {bodies : Array Claims.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs words trs tape).go #[] =
@@ -102,8 +103,8 @@ theorem sessionPZk_factsJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
     obtain ⟨⟨pf, tr'⟩, l₂, e2, e⟩ := go_bind_ok e3
     have hex' : tabs[i]!.extra (ptsOf spec (coinOf (resp 0))) = .ok extras := by simpa [ptsOf] using hex
     have hok := Ret.go (hR tabs[i]! (by rw [getElem!_pos tabs i hi]; exact Array.getElem_mem hi) _ (hv i hi)
-      _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
-    obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
+      _ _ _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
+    obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
     simp only [go_pure, Prod.mk.injEq, Except.ok.injEq] at e
     obtain ⟨rfl, rfl⟩ := e
     have hsz : l.size = 1 + (ss.toList.flatMap Array.toList).length := by

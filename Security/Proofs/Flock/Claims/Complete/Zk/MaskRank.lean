@@ -302,6 +302,11 @@ theorem claimPoints_size (m kLog : ℕ) (coin : ℕ → ℕ → F128) : (claimPo
 /-- Each table's mask slot's words, the session's rank checks read. -/
 def masksOf (sts : Array Flock.Stmt) : Array (List ℕ) := sts.map maskWordsOf
 
+theorem masksOf_getElem! {sts : Array Flock.Stmt} {i : ℕ} (hi : i < sts.size) :
+    (masksOf sts)[i]! = maskWordsOf sts[i]! := by
+  rw [getElem!_pos (masksOf sts) i (by simpa [masksOf] using hi), getElem!_pos sts i hi]
+  simp [masksOf]
+
 /-! ## At the verifier's coins -/
 
 open FlockDeploy (Coin setupOf Ins)

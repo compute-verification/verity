@@ -51,10 +51,11 @@ def ProverOkJ : Prop :=
     (∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (v.1.levels.getD 0 default)
         v.2 g extra lanePad salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64) ∧
-    ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+    ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v →
+      ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       (Setup.ofCircuit st).extra (ptsOf c.spec (coinOf (c.resp 0))) = .ok extras →
       Ret ((repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) v.1 v.2 rep dom tr tb cm₀
-        extras pads ic extra lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
+        extras pads ic extra lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
 
 variable {H rel}
 
