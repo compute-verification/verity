@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.KS.ZkPlanHJ
+import Proofs.Flock.Claims.KS.ZkEntries
 
 /-!
 # The deployed `--zk` decoders at the statement's draw
@@ -11,8 +12,10 @@ statement's draw instead, so no draw in the record is read:
 
 * `AcceptsAt`, `RecordsLiveAtS`: `AcceptsZK` and `RecordsLiveAt` at the setup at a given draw (`setupAt`).
 * `RunsOnZCJV`, `decodes_of_runsOnZCJV`: `RunsOnZCJ` and `decodesOnZKJ_of_runsOnZCJ` at any verdict on the live
-  outcomes.
+  outcomes; `RunsOnZCJW` is `RunsOnZCJV` at any verdict on the outputs.
 * `runsAtZCJ_live`, `runsAtZCJH_live`: `runsZCJ_live` and `runsZCJH_liveI` at `AcceptsAt`, public and hidden outputs.
+* `OpensEntries`, `runsAtZCJ_live_entries`: at public outputs, each accepted output's level-0 openings verify at its
+  cap and are, on the witness lanes, the masked reader's entries (`zk_table_opens₀Z`).
 * `setupAt_of_setup`, `recordsLiveAtS_of_checks`: `Deploy.V`'s setup is the setup at the statement's draw, and where
   its checks pass the last message records the run's live outcome there (`recordsLiveAt_of_checks` without `hdraw`).
 * `wrS`, `not_acceptsAt_nil`, `recordsLiveAtS_wrS`: the record writer at a draw, which records the live session.
@@ -92,18 +95,66 @@ theorem decodes_of_runsOnZCJV (h : RunsOnZCJV A Hs planZ opn dec fin capOf L acc
   exact ⟨pend, PlaysCoin.playsT_of_repRunAt (repZCAt_spineAt A Hs _ o.pts 0 hl₀) h₀,
     PlaysCoin.playsT_of_repRunAt (repZCAt_spineAt A Hs _ o.pts 1 hl₁) h₁, hacc⟩
 
+/-- **`RunsOnZCJV` at an output verdict `ok`** of the live outcome, the table and the output, for `accepted`. -/
+def RunsOnZCJW (ok : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Fin (planZ S R).length →
+    OutZC 𝔽 D Sl → Prop) : Prop :=
+  ∀ ω R (o : LiveOutJ (planZ (L.draw ω) R).length mPts), acc (L.draw ω) R o →
+    ∀ j, ∃ pend : PendZ 𝔽 D Sl × PendZ 𝔽 D Sl,
+      PlaysCoin.RepRun (repZCAt A Hs ((planZ (L.draw ω) R).get j) o.pts 0)
+        (repShapeZ 𝔽 K D ((planZ (L.draw ω) R).get j)
+          (extraClaims ((planZ (L.draw ω) R).get j).S ((planZ (L.draw ω) R).get j).ptLocal mPts o.pts).length)
+        (dec (L.draw ω) R j) (o.reps j 0) (fin (L.draw ω) R j 0 o.proofs) pend.1 ∧
+      PlaysCoin.RepRun (repZCAt A Hs ((planZ (L.draw ω) R).get j) o.pts 1)
+        (repShapeZ 𝔽 K D ((planZ (L.draw ω) R).get j)
+          (extraClaims ((planZ (L.draw ω) R).get j).S ((planZ (L.draw ω) R).get j).ptLocal mPts o.pts).length)
+        (dec (L.draw ω) R j) (o.reps j 1) (fin (L.draw ω) R j 1 o.proofs) pend.2 ∧
+      ok (L.draw ω) R o j (outZC Hs ((planZ (L.draw ω) R).get j) (capOf (L.draw ω) R o.rootB j) pend
+        (opn (L.draw ω) R o.proofs j))
+
+omit [Fintype K] [Inhabited D] [Inhabited Sl] in
+theorem RunsOnZCJW.runsOnZCJV {ok : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts →
+      Fin (planZ S R).length → OutZC 𝔽 D Sl → Prop}
+    (h : RunsOnZCJW A Hs planZ opn dec fin capOf L acc ok)
+    (hok : ∀ S R o j out, ok S R o j out → out.accepted = true) : RunsOnZCJV A Hs planZ opn dec fin capOf L acc := by
+  intro ω R o ho j
+  obtain ⟨pend, h₀, h₁, hk⟩ := h ω R o ho j
+  exact ⟨pend, h₀, h₁, hok _ _ _ _ _ hk⟩
+
 end Runs
 
-/-- **`runsZCJ_live` at the setup at each draw**: `RunsOnZCJV` at `AcceptsAt` of the law's draw, where `wr` records the
-live session at the setup at that draw (`RecordsLiveAtS`), so the record's own draw is never read. -/
-theorem runsAtZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
+/-- **An output's level-0 openings are the masked reader's entries at table `j`**: the setup at the draw `d` has a
+table `j`, whose schedule is `Zk.schedule`'s, the record decodes to a session with table `j`'s two rep streams, and the
+output's level-0 openings verify against `cap` at `width₀` below level 0's `2^d` and are, on the witness lanes, the
+reps' `zkRepColsOf` entries at `2·|regions|` extra claims on the streams' rounds and table `j`'s proof files. -/
+def OpensEntries (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : TabZK 𝔽 mPts) (cap : Cap Dig)
+    (out : OutZC 𝔽 Dig (List UInt8)) : Prop :=
+  ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
+    (s₀ s₁ : StreamRec) (h : j < sts.size),
+    FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
+    Zk.schedule sts[j].m = .ok (sch, tPad) ∧
+    sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+    sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
+    (∀ x ∈ opens₀Z T.sch out, VerifiedZ H512 enc512 leaf512 cap (width₀ T) (pathLen (lvOf T.sch 0)) x ∧
+      x.1 < 2 ^ (sch.levels.getD 0 default).d) ∧
+    (opens₀Z T.sch out).map (fun x => (x.1, x.2.1.take (2 ^ T.sch.k0))) =
+      Claims.Flock.zkRepColsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₀.rounds
+          t.proofs[2 * j]! ++
+        Claims.Flock.zkRepColsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₁.rounds
+          t.proofs[2 * j + 1]!
+
+/-- **`runsZCJ_live` at the setup at each draw, with the entries**: `RunsOnZCJV` at `AcceptsAt` of the law's draw,
+where `wr` records the live session at the setup at that draw (`RecordsLiveAtS`), so the record's own draw is never
+read, with each accepted output's level-0 openings the masked reader's entries (`OpensEntries`, `zk_table_opens₀Z`). -/
+theorem runsAtZCJ_live_entries (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (L : Law n) (hT : TagsOkZJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
     (hDraw : ∀ ω, DrawOkZKJ I dj mPts (L.draw ω)) :
-    RunsOnZCJV (K := 𝕂) execArith hs512 (planZJ dj y₀) (opnAtZJ (planZJ dj y₀) I dj) (decAtZJ (planZJ dj y₀))
+    RunsOnZCJW (K := 𝕂) execArith hs512 (planZJ dj y₀) (opnAtZJ (planZJ dj y₀) I dj) (decAtZJ (planZJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
-      (fun S R o => AcceptsAt I (dj S) (wr S R o)) := by
+      (fun S R o => AcceptsAt I (dj S) (wr S R o))
+      (fun S R o j out => out.accepted = true ∧
+        OpensEntries I (dj S) (wr S R o) j.val ((planZJ dj y₀ S R).get j) (capOfRoot o.rootB[j.val]!) out) := by
   intro ω R o hacc j
   obtain ⟨hh, hrr, hl⟩ := hT
   obtain ⟨hprf, hrec⟩ := hRec _ R o hacc
@@ -220,7 +271,31 @@ theorem runsAtZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (F
     exact hrr₁
   · dsimp only
     rw [hTy, hopn, ← hroot]
-    exact outZC_of_accZ hacc'
+    have hok := outZC_of_accZ hacc'
+    obtain ⟨hver, hent⟩ := zk_table_opens₀Z (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts
+      spec (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ c _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
+      hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ hok
+    have hN : (Model.extraClaims y.table.S y.table.ptLocal mPts o.pts).length = 2 * sts[j.val].regions.size := by
+      rw [DecodeZL.extraClaims_length, ← hyst]
+      show 2 * (regionsOf y.x.st).length = _
+      simp [regionsOf]
+    refine ⟨hok, spec, sts, sess, y.sch, y.tPad, s₀, s₁, hj, hs, hdecS, by rw [← hyst]; exact y.hz, hf₀, hf₁, hver,
+      hent.trans ?_⟩
+    rw [hN, hyst]
+
+/-- **`runsZCJ_live` at the setup at each draw**: `RunsOnZCJV` at `AcceptsAt` of the law's draw, where `wr` records the
+live session at the setup at that draw (`RecordsLiveAtS`), so the record's own draw is never read
+(`runsAtZCJ_live_entries`). -/
+theorem runsAtZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
+    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
+    (L : Law n) (hT : TagsOkZJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
+    (hDraw : ∀ ω, DrawOkZKJ I dj mPts (L.draw ω)) :
+    RunsOnZCJV (K := 𝕂) execArith hs512 (planZJ dj y₀) (opnAtZJ (planZJ dj y₀) I dj) (decAtZJ (planZJ dj y₀))
+      (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
+      (fun S R o => AcceptsAt I (dj S) (wr S R o)) :=
+  RunsOnZCJW.runsOnZCJV execArith hs512 _ _ _ _ _ _ _ (runsAtZCJ_live_entries I _ht dj y₀ wr L hT hRec hDraw)
+    fun _ _ _ _ _ h => h.1
 
 end FlockSoundness.Discharge.Composed
 
