@@ -1,6 +1,7 @@
 // Side units beside the honest kernel (EPS1's eps_side, note:20261017T0310Z-report-eps1-program): the words a cycle a unit
 // that works off the SM's vector pipes (L2 reductions and atomics, cp.async, TMA bulk copies and reductions, DSMEM,
-// texture point fetch and bilinear filtering; redblk: REDG.32 and a 1 KB bulk reduce a warp in one trip, both L2 paths) adds
+// texture point fetch and bilinear filtering over 32 MB, and tld1c/texc over a window the texture cache holds; redblk:
+// REDG.32 and a 1 KB bulk reduce a warp in one trip, both L2 paths) adds
 // beside a saturated int8 IMMA kernel that folds every output word with duo (receipt_folds.cuh, the served fold), and
 // whether the MMAs keep their rate. Joint points, rows.jsonl only.
 //   honest        16 warps: 8 IMMA an iteration, then rf_duo_step on each accumulator's 4 words (side warps idle)
@@ -18,7 +19,7 @@ typedef unsigned long long u64;
 
 enum {
   S_RED32, S_RED64, S_REDV4, S_REDV4H, S_ATOMG32, S_LDGSTS, S_BLKRED512, S_BLKRED4K, S_BLKCP4K, S_DSM_ST4, S_DSM_RED,
-  S_TLD1, S_TEXBIL, S_REDBLK
+  S_TLD1, S_TEXBIL, S_REDBLK, S_TLD1C, S_TEXC
 };
 
 __host__ __device__ constexpr bool bulk(int s) { return s == S_BLKRED512 || s == S_BLKRED4K || s == S_BLKCP4K; }
@@ -104,6 +105,15 @@ struct Side {
     if constexpr (S == S_TEXBIL) {
       // off-texel coordinates, so every fetch blends 4 texels with nonzero weights
       const float x = (float)((gtid + seq * 37u) & 1023u) + 0.25f, y = (float)((gtid >> 10) + seq) + 0.75f;
+      const float4 f = tex2D<float4>(tex2, x, y);
+      acc ^= __float_as_uint(f.x) ^ __float_as_uint(f.y) ^ __float_as_uint(f.z) ^ __float_as_uint(f.w);
+    }
+    // the same two fetches inside a 32 KB (TLD) or 20 KB (TEX) window every block shares, so they hit the texture cache
+    if constexpr (S == S_TLD1C)
+      acc ^= tex1Dfetch<unsigned>(tex1, (int)(((sw * R + q) * 32u + lane + (trip & 7u) * 1024u) & 8191u));
+    if constexpr (S == S_TEXC) {
+      const float x = (float)((((sw * R + q) * 8u + (lane & 7u)) + (trip & 7u) * 32u) & 255u) + 0.25f,
+                  y = (float)(lane >> 3) + 0.75f;
       const float4 f = tex2D<float4>(tex2, x, y);
       acc ^= __float_as_uint(f.x) ^ __float_as_uint(f.y) ^ __float_as_uint(f.z) ^ __float_as_uint(f.w);
     }
@@ -212,6 +222,8 @@ SIDE(dsm_red, S_DSM_RED, CL2)
 SIDE(tld1, S_TLD1, NOCL)
 SIDE(texbil, S_TEXBIL, NOCL)
 SIDE(redblk, S_REDBLK, NOCL)
+SIDE(tld1c, S_TLD1C, NOCL)
+SIDE(texc, S_TEXC, NOCL)
 
 #define IMMA "IMMA.16832.S8.S8"
 #define HTPB ((HW + SW) * 32)
@@ -245,6 +257,8 @@ static const OpProbe PROBES[] = {
     P_SIDE(tld1, "TLD*", 8, 32, 1, 1024, 4),
     P_SIDE(texbil, "TEX*", 8, 128, 1, 512, 4),
     P_SIDE_X(redblk, "REDG*", 8, 32, 1, 1024, 4, ",UBLKRED*=1"),
+    P_SIDE(tld1c, "TLD*", 8, 32, 1, 1024, 4),
+    P_SIDE(texc, "TEX*", 8, 128, 1, 512, 4),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
