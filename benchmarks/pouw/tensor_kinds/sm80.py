@@ -427,19 +427,22 @@ def render(s: dict) -> str:
 
 
 #: the scalar census kinds (sm_120's names where one exists) -> (row, the lanes whose per-op rate prices it)
-SCALAR = {"ALU": ("A", ["iadd3", "lop3"]), "FFMA": ("FMA", ["ffma"]), "IMAD": ("FMA", ["imad", "dp4a"]),
-          "IDP4A": ("FMA", ["dp4a", "imad"]), "XU": ("XU", ["popc"]), "SHFL": ("SHFL", ["shfl"]),
+SCALAR = {"ALU": ("A", ["iadd3", "lop3"]), "FFMA": ("I", ["ffma"]), "IMAD": ("I", ["imad", "dp4a"]),
+          "IDP4A": ("I", ["dp4a", "imad"]), "XU": ("XU", ["popc"]), "SHFL": ("SHFL", ["shfl"]),
           "LDS32": ("LDSi", ["lds"]), "LDS128": ("R6r", ["lds128"]), "LDSM_X1": ("LDSM_X1", ["ldsm1"]),
           "LDSM_X2": ("LDSM_X2", ["ldsm2"]), "LDSM_X4": ("LDSM_X4", ["ldsm4"])}
-#: kinds with no pipe row, priced on the joint issue row only: every instruction a profile counts that no row above
-#: holds (branches, barriers, cp.async's LDGSTS, the uniform datapath, stores, special registers)
+#: kinds with no pipe row, priced on the issue rows only: every instruction a profile counts that no row above holds
+#: (branches, barriers, cp.async's LDGSTS, the uniform datapath, stores, special registers)
 ISSUE_ONLY = ["NOROW"]
 ROWS = {
+    "issue": "1 warp instruction a SMSP-cycle, every kind (the best scalar issue: IADD3+FFMA alternating, {iadd3+ffma} a "
+             "SMSP-cycle)",
     "M": "tensor pipe: each MMA kind alone, 4 / its least SMSP-cycles a MMA warp instructions/SM/clk + 2% (best of 2, 4 "
          "and 8 warps a SMSP and of 8, 32 and 64 MMAs a loop iteration, 8 accumulators a warp; the loop's 3 instructions "
          "included)",
     "A": "ALU pipe: IADD3 and LOP3 + 2% (IADD3+LOP3 issue {iadd3+lop3} a SMSP-cycle: one pipe)",
-    "FMA": "FMA pipe: FFMA, IMAD and IDP.4A + 2% (IMAD+FFMA {imad+ffma}, IDP.4A+FFMA {dp4a+ffma} a SMSP-cycle: one pipe)",
+    "I": "IMAD pipe: IMAD, FFMA and IDP.4A + 2% (IMAD+FFMA {imad+ffma}, IDP.4A+FFMA {dp4a+ffma} a SMSP-cycle: one pipe "
+         "on sm_80)",
     "XU": "XU: POPC + 2%",
     "SHFL": "SHFL.BFLY + 2%",
     "LDSi": "LDS.32 + 2% (one warp a SM-cycle: 128 B/SM/clk)",
@@ -456,8 +459,9 @@ ROWS = {
 
 def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
     """sm_80's census (machine_model/data/devices/sm_80/'s rows.csv and census.csv: one epoch, no since or until) from
-    analyzed runs: each MMA kind's least alone cycles as a rate, each scalar class's fastest rate, both at the 2% noise
-    margin, and each kind's least joint coefficient; a run whose lane gate failed gives no joint coefficient. The joint
+    analyzed runs: every kind at one warp instruction a SMSP-cycle on `issue`, each MMA kind's least alone cycles as a
+    rate, each scalar class's fastest rate, both at the 2% noise margin, and each kind's least joint coefficient; a run
+    whose lane gate failed gives no joint coefficient and doesn't stand for the issue row. The joint
     row takes decision 76's margin: `ext` are the runs of the search's latest extension, and the row is divided by 1 + m,
     m the most they moved a kind's least below the other runs'. Past the noise the search hasn't converged, and the census
     refuses."""
@@ -467,6 +471,7 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
     rate: dict[str, tuple[float, set]] = {}
     pairs: dict[str, float] = {}
     ext_runs: set[str] = set()
+    issue_runs: set[str] = set()
 
     def keep(d, k, v, run, better):
         if v is None:
@@ -485,6 +490,8 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
         if latest:
             ext_runs.add(run)
         lane_ok = not any(f.startswith("opalone") for f in fails)
+        if lane_ok and "iadd3+ffma" in s["lanes"]:
+            issue_runs.add(run)
         for st, f in s["forms"].items():
             kind = FORMS[st][1]
             keep(alone, kind, f["alone_smsp_cycles_per_mma"], run, lt)
@@ -501,6 +508,10 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
     lines, cites = [], defaultdict(set)
     fmt = {k: f"{v:.3f}" for k, v in pairs.items()}
     fmt.update({k: f"{rate[c][0] / 4:.3f}" for c, (_, lns) in SCALAR.items() for k in lns[:1] if c in rate})
+    if issue_runs:
+        for kind in sorted(alone) + list(SCALAR) + ISSUE_ONLY:
+            lines.append(f"{kind},issue,,,1,,,,{' '.join(sorted(issue_runs))}")
+        cites["issue"] |= issue_runs
     for kind, (v, runs) in sorted(alone.items()):
         lines.append(f"{kind},M,{4 / v:.6g},{NOISE},,,,,{' '.join(sorted(runs))}")
         cites["M"] |= runs

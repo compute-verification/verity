@@ -151,11 +151,15 @@ def test_the_coefficient_q0_and_census(tmp_path: Path):
     ext = _run(tmp_path / "b", 0.973, a_mix=5.1, run_id="r20261017-081119-98b5")
     rows_csv, census_csv = SM.census([out], [ext])
     rows = {d["row"]: d for d in csv.DictReader(io.StringIO(rows_csv))}
-    assert set(rows) == {"M", "A", "JIM"} and rows["JIM"]["status"] == "joint" and rows["M"]["status"] == "measured"
+    assert set(rows) == {"issue", "M", "A", "JIM"} and rows["JIM"]["status"] == "joint"
+    assert rows["M"]["status"] == rows["issue"]["status"] == "measured"
     assert "0.973 a SMSP-cycle alone" in rows["JIM"]["description"] and "/ 1.0049 " in rows["JIM"]["description"]
+    assert "IADD3+FFMA alternating, 0.973 a SMSP-cycle" in rows["issue"]["description"]
     lines = {(d["kind"], d["row"]): d for d in csv.DictReader(io.StringIO(census_csv))}
     assert set(lines) == ({("IMMA16832", "M"), ("ALU", "A"), ("IMMA16832", "JIM")}
-                          | {(k, "JIM") for k in [*SM.SCALAR, *SM.ISSUE_ONLY]})
+                          | {(k, r) for k in ["IMMA16832", *SM.SCALAR, *SM.ISSUE_ONLY] for r in ("JIM", "issue")})
+    assert all(lines[k, "issue"]["cycles"] == "1" for k in ["IMMA16832", *SM.SCALAR, *SM.ISSUE_ONLY])
+    assert lines["ALU", "issue"]["runs"] == "r20261017-072600-1397 r20261017-081119-98b5"
     scale = 0.98 / (5.125 / 5.1)
     assert abs(float(lines["IMMA16832", "JIM"]["cycles"]) - 5.1 * scale) < 1e-5
     assert abs(float(lines["FFMA", "JIM"]["cycles"]) - scale) < 1e-5
@@ -182,4 +186,4 @@ def test_a_lane_below_issue_withholds_every_joint_line(tmp_path: Path):
     fails = json.loads((out / "sm80.json").read_text())["gate_failures"]
     assert fails == ["opalone: the IADD3+FFMA lane issues 0.671 a SMSP-cycle alone, below 0.9"]
     _, census_csv = SM.census([out])
-    assert "JIM" not in census_csv and "IMMA16832,M," in census_csv
+    assert "JIM" not in census_csv and ",issue," not in census_csv and "IMMA16832,M," in census_csv
