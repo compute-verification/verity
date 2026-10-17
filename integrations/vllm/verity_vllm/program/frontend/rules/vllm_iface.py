@@ -20,6 +20,9 @@ Schemas (from vllm/csrc/torch_bindings.cpp, `d9105ea80`):
 and of `_moe_C` (vllm/csrc/moe/torch_bindings.cpp; the call `_custom_ops.grouped_topk` makes):
     grouped_topk(Tensor scores, int n_group, int topk_group, int topk, bool renormalize, float routed_scaling_factor, Tensor bias,
                  int scoring_func) -> (Tensor, Tensor)
+    topk_softplus_sqrt(Tensor! topk_weights, Tensor! topk_indices, Tensor! token_expert_indices, Tensor gating_output, bool renormalize,
+                       float routed_scaling_factor, Tensor? bias, Tensor? input_ids, Tensor? tid2eid, Tensor? is_padding,
+                       Tensor? bias_vl=None, int image_sentinel_lo=0) -> ()
 and vLLM V1's model-level attention entry point (vllm/attention/layer.py):
     unified_attention(Tensor query, Tensor key, Tensor value, str layer_name) -> Tensor
 """
@@ -66,6 +69,11 @@ _define_once("grouped_topk(Tensor scores, int n_group, int topk_group, int topk,
              "Tensor bias, int scoring_func=0) -> (Tensor, Tensor)", "grouped_topk",
              lambda scores, n_group, topk_group, topk, renormalize, routed_scaling_factor, bias, scoring_func=0:
                  (scores.new_empty((scores.shape[0], topk), dtype=torch.float32), scores.new_empty((scores.shape[0], topk), dtype=torch.int32)))
+_define_once("topk_softplus_sqrt(Tensor(a!) topk_weights, Tensor(b!) topk_indices, Tensor(c!) token_expert_indices, Tensor gating_output, "
+             "bool renormalize, float routed_scaling_factor, Tensor? bias, Tensor? input_ids, Tensor? tid2eid, Tensor? is_padding, "
+             "Tensor? bias_vl=None, int image_sentinel_lo=0) -> ()", "topk_softplus_sqrt",
+             lambda topk_weights, topk_indices, token_expert_indices, gating_output, renormalize, routed_scaling_factor, bias, input_ids,
+             tid2eid, is_padding, bias_vl=None, image_sentinel_lo=0: None)
 _define_once("unified_attention(Tensor query, Tensor key, Tensor value, str layer_name) -> Tensor", "unified_attention",
              lambda query, key, value, layer_name: torch.empty_like(query))
 # The implicit-cache counterpart of `_C_cache_ops.reshape_and_cache_flash(key, value, key_cache, value_cache, slot_mapping, ...)`:

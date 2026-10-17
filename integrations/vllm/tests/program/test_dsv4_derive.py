@@ -25,6 +25,8 @@
   grouped DeepGEMM twin (`kernels.deepgemm_twins`), and another expression or recipe refuses by name;
 * `SiluAndMulWithClampRule`: the shared expert's clamped SwiGLU derives per row word for word the twin the capture holds to the
   served kernel (`dsv4_moe_capture_gpu.clamp_twin`), and SwiGLU-OAI's alpha and beta or a limit that is no bf16 value refuses by name;
+* `TopkSoftplusSqrtHashRule`: a hash layer's router derives per token word for word the capture's twin over the table's ids
+  (`dsv4_moe_capture_gpu.hash_twin`), and the kernel's scored path or another normalisation refuses by name;
 * `vllm_meta.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
   leaves them."""
 from __future__ import annotations
@@ -62,7 +64,7 @@ from verity_vllm.program.kernels.serve3_reference import materialize
 from verity_vllm.program.registry import hopper
 from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
-from tests.properties.dsv4_moe_capture_gpu import clamp_twin
+from tests.properties.dsv4_moe_capture_gpu import clamp_twin, hash_twin
 
 
 class _Overlapped(nn.Module):
@@ -408,7 +410,7 @@ def _tensor(words: np.ndarray) -> torch.Tensor:
 
 
 def _words(t: torch.Tensor) -> list[int]:
-    width = {torch.bfloat16: (torch.int16, np.uint16), torch.float32: (torch.int32, np.uint32),
+    width = {torch.bfloat16: (torch.int16, np.uint16), torch.float32: (torch.int32, np.uint32), torch.int32: (torch.int32, np.uint32),
              torch.float8_e4m3fn: (torch.uint8, np.uint8)}[t.dtype]
     return t.contiguous().view(width[0]).numpy().reshape(-1).astype(width[1]).tolist()
 
@@ -883,6 +885,50 @@ def test_the_clamped_swiglu_derives_per_row_word_for_word_the_twin(served):
 ])
 def test_a_clamped_swiglu_beyond_the_definition_refuses_by_name(over, refusal, served):
     rep = _derive_mhc(_ClampedSwiGlu(**over), (torch.empty(3, 48, dtype=torch.bfloat16, device="meta"),))
+    assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
+
+class _HashRouter(nn.Module):
+    """`fused_topk_bias` on a hash layer: `ops.topk_hash_softplus_sqrt` over the gate's f32 logits, the tokens and `gate.tid2eid`."""
+
+    def __init__(self, table: np.ndarray, scored: bool = False, renormalize: bool = True) -> None:
+        super().__init__()
+        self.tid2eid = nn.Parameter(torch.from_numpy(table.astype(np.int32)), requires_grad=False)
+        self.bias = nn.Parameter(torch.zeros(16), requires_grad=False)
+        self.scored, self.renormalize = scored, renormalize
+
+    def forward(self, logits, input_ids):
+        M = logits.shape[0]
+        w, ids, tei = torch.empty(M, 6), torch.empty(M, 6, dtype=torch.int32), torch.empty(M, 6, dtype=torch.int32)
+        table, bias = (None, self.bias) if self.scored else (self.tid2eid, None)
+        iface.topk_softplus_sqrt(w, ids, tei, logits, self.renormalize, 2.5, bias, input_ids, table, None)
+        return w, ids
+
+
+def _hash_inputs(rng) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    table = np.stack([rng.permutation(16)[:6] for _ in range(10)])
+    return table, _f32(rng, 3, 16, sd=4.0), np.array([7, 2, 9], np.int32)
+
+
+def test_a_hash_layers_router_derives_per_token_word_for_word_the_twin_over_the_tables_ids(served):
+    table, x, toks = _hash_inputs(np.random.default_rng(3))
+    model, inputs = _HashRouter(table), (_tensor(x), torch.from_numpy(toks))
+    rep = _derive_mhc(model, inputs)
+    assert rep.program is not None, rep.unsupported
+    (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "TopkSoftplusSqrtHash[vllm-moe]_v1"]
+    assert app["emitted"] == "(GatherI32x10_v1 x6 + MoeRouterHash_v1{E=16,SCALE=2.5}) x3"
+    assert rep.provenance["weight_roles"]["tid2eid"]["role"] == "router.tid2eid"
+    ids = table[toks]
+    assert _run(rep, model, inputs) == hash_twin(x, ids, 2.5).reshape(-1).tolist() + ids.reshape(-1).tolist()
+
+
+@pytest.mark.parametrize("over, refusal", [
+    ({"scored": True}, "topk_softplus_sqrt without a hash table (the CUDA scored router)"),
+    ({"renormalize": False}, "renormalize=False (MoeRouterHash_v1 renormalises)"),
+])
+def test_a_router_beyond_the_hash_definition_refuses_by_name(over, refusal, served):
+    table, x, toks = _hash_inputs(np.random.default_rng(3))
+    rep = _derive_mhc(_HashRouter(table, **over), (_tensor(x), torch.from_numpy(toks)))
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
 
 class _Fp8Linear(nn.Module):

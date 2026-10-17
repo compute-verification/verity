@@ -17,6 +17,7 @@ from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm
 from verity_vllm.program.registry import dsv4_indexer as _dsv4_indexer, dsv4_qnorm_insert as _dsv4_qnorm
 from verity_vllm.program.registry import dsv4_compressor as _dsv4_compressor, dsv4_moe as _dsv4_moe
+from verity_vllm.program.registry.dsv4_decode_indices import gather_i32
 from verity_vllm.program.registry import flashmla as _flashmla, flashmla_prefill as _flashmla_prefill
 from verity_vllm.program.registry import deepgemm as _deepgemm
 from verity_vllm.program.registry import boolean_rope as _rope
@@ -492,7 +493,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsv4_inv_rope_quant_head": lambda CHUNKS, QG, ROPE:
                ir_bind(_dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=CHUNKS, QG=QG, ROPE=ROPE),
            # vLLM's clamped SwiGLU (registry.dsv4_moe). `rules/vllm_bindings/elementwise.py` asks for it.
-           "silu_mul_clamp": lambda I, LIMIT: ir_bind(_dsv4_moe.SiluMulClamp, I=I, LIMIT=LIMIT)},
+           "silu_mul_clamp": lambda I, LIMIT: ir_bind(_dsv4_moe.SiluMulClamp, I=I, LIMIT=LIMIT),
+           # [DSV4] the sqrtsoftplus routers (registry.dsv4_moe) and the hash table's lookup. `rules/vllm_moe_router.py` asks for them.
+           "gather_i32": lambda V: gather_i32(V),
+           "moe_router_hash": lambda E, SCALE: ir_bind(_dsv4_moe.MoeRouterHash, E=E, SCALE=SCALE)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -608,7 +612,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsv4_inv_rope_quant_head": "Dsv4InvRopeQuantHead_v1{CHUNKS,QG,ROPE}: fused_inv_rope_fp8_quant's one head, its rotary suffix "
                                        "inverse-rotated and each group of QG quantised to e4m3 with an f32 scale",
            "silu_mul_clamp": "SiluMulClamp_v1{I,LIMIT}: _C.silu_and_mul_with_clamp(alpha 1, beta 0) on one row -- gate fminf'd to LIMIT, "
-                             "up clamped to [-LIMIT, LIMIT], then SiluMulBf16_v2 per element"})
+                             "up clamped to [-LIMIT, LIMIT], then SiluMulBf16_v2 per element",
+           "gather_i32": "GatherI32x{V}_v1: column[token] of V i32 words, -1 for a token outside [0, V)",
+           "moe_router_hash": "MoeRouterHash_v1{E,SCALE}: dsv4HashTopkSoftplusSqrt's weights for one token from its f32 logits and six "
+                              "table ids -- Dsv4HashWeight_v1 of each id's logit, renormalised and scaled by SCALE"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

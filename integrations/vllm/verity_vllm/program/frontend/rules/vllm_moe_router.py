@@ -7,18 +7,28 @@
 
 DeepSeek-V3's and GLM's `noaux_tc` routing reaches it through `GroupedTopKRouter` -> `fused_grouped_topk` (vLLM d9105ea80): the
 bias is the layer's `e_score_correction_bias` Parameter, and the scale the routed scaling factor, applied inside the kernel where the
-model leaves `apply_routed_scale_to_output` False."""
+model leaves `apply_routed_scale_to_output` False.
+
+DeepSeek-V4's sqrtsoftplus routers (numerics: `verity_vllm.program.registry.dsv4_moe`), through `FusedTopKBiasRouter` ->
+`fused_topk_bias`:
+
+    _moe_C.topk_softplus_sqrt(w!, ids!, tei!, logits [M, E] f32, True, scale, None, input_ids [M] i32, tid2eid [V, 6] i32, None)
+        -> per token row the six ids `tid2eid[input_ids[t]]` (`GatherI32x{V}` per slot) and their weights `MoeRouterHash{E,SCALE}`"""
 
 from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
+from verity.ml.circuits.refs import Coll, array_of, strided_view
+from verity.ml.circuits.types import Array
+from verity_vllm.program.frontend.derive import Alloc
+from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, _moe_C_op, _not_owned
+from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, DeadOutput, _moe_C_op, _not_owned
+from verity_vllm.program.registry.dsv4_moe import TOPK as DSV4_TOPK
 from verity_vllm.program.registry.moe import router_kernel
+from verity_vllm.program.registry.prims import I32
 
 
 class GroupedTopkRule(OpRule):
@@ -81,6 +91,72 @@ class GroupedTopkRule(OpRule):
         ctx.record(self, node, {"E": E, "TOPK": TOPK, "SCALE": float(scale), "KERNEL": kernel, "rows": M}, emitted=f"{fn.id} x{M}")
 
 
-VLLM_MOE_ROUTER_RULES = [GroupedTopkRule()]
+def _value(ctx, t, dtype) -> bool:
+    return isinstance(t, torch.fx.Node) and isinstance(ctx.val(t), Coll) and ctx.dtype_of(t) == dtype
 
-__all__ = ["GroupedTopkRule", "VLLM_MOE_ROUTER_RULES"]
+
+class TopkSoftplusSqrtHashRule(InPlaceRule):
+    """`_moe_C.topk_softplus_sqrt(w!, ids!, tei!, logits[M,E] f32, True, scale, None, input_ids[M] i32, tid2eid[V,6] i32, None)`, the
+    hash layers' router (`ops.topk_hash_softplus_sqrt`): per token row the six ids `tid2eid[input_ids[t]]` (`GatherI32x{V}` per slot)
+    and their weights `MoeRouterHash{E,SCALE}`; `w` and `ids` are rebound, `tei` is dead.  The kernel's scored path (a bias, no
+    table) has no Definition: vLLM routes such a layer through `dsv4_topk` where it can, and its Program is that kernel's."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("TopkSoftplusSqrtHash[vllm-moe]", 1, "in-place-binding",
+                    applies_to="_moe_C.topk_softplus_sqrt(Tensor! w, Tensor! ids, Tensor! tei, logits, renormalize, routed_scaling_factor, "
+                               "bias, input_ids, tid2eid, is_padding, bias_vl=None, image_sentinel_lo=0)",
+                    preconditions=("logits is an f32 value [M, E]; input_ids an i32 value [M]; tid2eid an i32 value [V, 6]",
+                                   "renormalize True; routed_scaling_factor a static number; no bias, padding mask or vision bias",
+                                   "w is an allocation [M, 6] f32; ids and tei [M, 6] i32"),
+                    evidence_domain="structural; numerics: GatherI32x{V}_v1 and MoeRouterHash_v1 (registry.dsv4_moe: dsv4HashTopkSoftplusSqrt)")
+
+    def targets(self):
+        return targets_for("topk_softplus_sqrt") | _moe_C_op("topk_softplus_sqrt")
+
+    def applies(self, node, ctx):
+        if (r := _not_owned(INDEXED_READ)):
+            return r
+        a = call_args(node)
+        if a["tid2eid"] is None:
+            return ("numerics_unregistered: topk_softplus_sqrt without a hash table (the CUDA scored router); MoeRouterSqrtSoftplus_v1 "
+                    "is dsv4_topk's Triton kernel, which fused_topk_bias takes where can_use_dsv4_topk holds")
+        if a["bias"] is not None or a["is_padding"] is not None or a["bias_vl"] is not None or a["image_sentinel_lo"]:
+            return "numerics_unregistered: a bias, padding mask or vision bias is set (MoeRouterHash_v1 is a text token's table route)"
+        if a["renormalize"] is not True:
+            return f"numerics_unregistered: renormalize={a['renormalize']!r} (MoeRouterHash_v1 renormalises)"
+        scale = a["routed_scaling_factor"]
+        if not isinstance(scale, (int, float)) or isinstance(scale, bool):
+            return f"routed_scaling_factor {scale!r} is not a static number"
+        if not (ctx.vocab.has("gather_i32") and ctx.vocab.has("moe_router_hash")):
+            return "numerics_unregistered: the vocabulary has no gather_i32 / moe_router_hash (GatherI32x{V}_v1, MoeRouterHash_v1)"
+        logits, toks, table = a["gating_output"], a["input_ids"], a["tid2eid"]
+        if not (_value(ctx, logits, torch.float32) and _value(ctx, toks, torch.int32) and _value(ctx, table, torch.int32)):
+            return "logits, input_ids and tid2eid are not f32, i32 and i32 value collections"
+        ls, vs = shape(ctx, logits), shape(ctx, table)
+        if len(ls) != 2 or shape(ctx, toks) != ls[:1] or len(vs) != 2 or vs[1] != DSV4_TOPK:
+            return f"logits {ls}, input_ids {shape(ctx, toks)}, tid2eid {vs} (need [M, E], [M], [V, {DSV4_TOPK}])"
+        for nm, dt in (("topk_weights", torch.float32), ("topk_indices", torch.int32), ("token_expert_indices", torch.int32)):
+            t = a[nm]
+            if not (isinstance(ctx.val(t), (Alloc, Coll)) and ctx.dtype_of(t) == dt and shape(ctx, t) == (ls[0], DSV4_TOPK)):
+                return f"{nm} is not an allocation {dt} [{ls[0]}, {DSV4_TOPK}]"
+        return True
+
+    def emit(self, node, ctx):
+        a = call_args(node)
+        logits, toks, table = (ctx.coll(a[k]) for k in ("gating_output", "input_ids", "tid2eid"))
+        (M, E), V, SCALE = shape(ctx, a["gating_output"]), shape(ctx, a["tid2eid"])[0], float(a["routed_scaling_factor"])
+        gather, route = ctx.kind("gather_i32", node, V=V), ctx.kind("moe_router_hash", node, E=E, SCALE=SCALE)
+        cols = [Coll(Array(V, I32), strided_view(table, k, V, V * DSV4_TOPK, DSV4_TOPK, V)) for k in range(DSV4_TOPK)]
+        name = ctx.hint_name(node)
+        ids = [array_of([ctx.call(gather, toks[t], c, node=node, rule=self, name=f"{name}/ids[{t},{k}]") for k, c in enumerate(cols)])
+               for t in range(M)]
+        w = [ctx.call(route, logits[t], ids[t], node=node, rule=self, name=f"{name}[{t}]") for t in range(M)]
+        ctx.rebind(a["topk_weights"], array_of(w), self, what="topk_weights")
+        ctx.rebind(a["topk_indices"], array_of(ids), self, what="topk_ids")
+        ctx.rebind(a["token_expert_indices"], DeadOutput("token_expert_indices"), self, what="token_expert_indices")
+        ctx.bind_weight_role(a["tid2eid"], self, "router.tid2eid", V=V)
+        ctx.record(self, node, {"E": E, "V": V, "SCALE": SCALE, "rows": M}, emitted=f"({gather.id} x{DSV4_TOPK} + {route.id}) x{M}")
+
+
+VLLM_MOE_ROUTER_RULES = [GroupedTopkRule(), TopkSoftplusSqrtHashRule()]
+
+__all__ = ["GroupedTopkRule", "TopkSoftplusSqrtHashRule", "VLLM_MOE_ROUTER_RULES"]
