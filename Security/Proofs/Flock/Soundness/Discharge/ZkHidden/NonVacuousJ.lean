@@ -34,11 +34,11 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 variable {n mPts : ℕ}
 
 /-- **Every hidden-output table of a session `verify --zk` accepts is set up.** On untyped tags with hidden outputs,
-whose circuit file `HmOut.parse` accepts under the `--zk` tags as `c`, a circuit whose unit returns the outputs, at a
-session `verify --zk` accepts whose record carries the draw `dj S`, at which `DrawOkZKHJ` holds at `mPts` link points:
-table `j` has a `DrawSetupZHJ` at its inputs, its draw's units of `S` and its draw. -/
-theorem setupZHJ_of_acceptsZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
-    {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
+whose circuit file `HmOut.parse` accepts under the `--zk` tags as `c`, at a session `verify --zk` accepts whose record
+carries the draw `dj S`, at which `DrawOkZKHJ` holds at `mPts` link points: table `j` has a `DrawSetupZHJ` at its
+inputs, its draw's units of `S` and its draw, wherever the outputs are returned. -/
+theorem setupZHJ_of_acceptsZKI (I : Inputs) (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
+    {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t)
     (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKHJ I dj mPts S) (j : Fin (nTab I)) :
     Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) := by
@@ -56,11 +56,20 @@ theorem setupZHJ_of_acceptsZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) (h
     (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
   obtain ⟨_, -, hdr⟩ := setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
-  obtain ⟨x, hx⟩ := drawSetupH_of_setupHidden (I := inputsJ I j.val) (S := partS I (dj S) S j) (mPts := mPts)
-    ht' hcJ ho hst hf hD ((hok j).1 D hD) ((hok j).2 _ hst)
+  obtain ⟨x, hx⟩ := drawSetupH_of_setupHiddenI (I := inputsJ I j.val) (S := partS I (dj S) S j) (mPts := mPts)
+    ht' hcJ hst hf hD ((hok j).1 D hD) ((hok j).2 _ hst)
   obtain ⟨y, -, -, -⟩ := drawSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
     (sch := schs[j.val].1) (tPad := schs[j.val].2) (by rw [hx]; exact hz')
   exact ⟨y⟩
+
+set_option linter.unusedVariables false in
+/-- `setupZHJ_of_acceptsZKI` where the unit returns the outputs. -/
+theorem setupZHJ_of_acceptsZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
+    {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
+    (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t)
+    (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKHJ I dj mPts S) (j : Fin (nTab I)) :
+    Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :=
+  setupZHJ_of_acceptsZKI I hh ht hc dj h hd hok j
 
 /-- **The hidden-output `J`-table draw hypotheses hold together at an accepted session.** On untyped inputs under
 `TagsOkZHJ`'s tags, whose circuit file `HmOut.parse` accepts as `c` (`hU`, `hscope`: its unit returns the outputs):

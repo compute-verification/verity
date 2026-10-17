@@ -134,16 +134,16 @@ theorem unitRowsFlat (ht : tags.typed = false)
       rangesEntry st (slotEntryB st) r.val j.val + deltaEntry (HmRow.delta st.c st.pin).2 r.val j.val
     rw [hdb, Hidden.deltaEntry_append_out hout]
 
-/-! ## The rows `scopeOkH` covers -/
+/-! ## The rows `scopeOkI` covers -/
 
-/-- **`scopeOkH`'s rows are covered**: on a circuit `HmOut.parse` accepts (`HmRow.parse`, then `HmOut.checkRows`), all
+/-- **`scopeOkI`'s rows are covered**: on a circuit `HmOut.parse` accepts (`HmRow.parse`, then `HmOut.checkRows`), all
 `sha512/row/v1` rows (whole blocks, `ParseFacts.portWords`; one output row per output port, `Hidden.out_rows_v1`), or
 each row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port. -/
-theorem rowsFit_of_scope {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
-    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ()) (h : Layout.scopeOkH c = true) :
+theorem rowsFit_of_scopeI {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ()) (h : Layout.scopeOkI c = true) :
     Hidden.Any.RowsFitS c := by
   have P := parse_facts hp
-  rcases Layout.scopeOkH_rows h with h1 | ⟨h2, hr, ho⟩
+  rcases Layout.scopeOkI_rows h with h1 | ⟨h2, hr, ho⟩
   · have hv : ∀ p ∈ c.ports.toList, p.v2 = false := fun p hm => (h1 p hm).1
     obtain ⟨hu, hrep, hj⟩ := Hidden.out_rows_v1 hp hc hv
     refine Hidden.Any.RowsFit.rowsFitS ⟨⟨fun p hm => ?_, hrep, fun j hj' => (hj j hj').1⟩, fun p hm => ?_⟩
@@ -169,5 +169,11 @@ theorem rowsFit_of_scope {tags : Tags} {cf : ByteArray} {tables : List (String �
         exact Or.inl ⟨hs, hb, h1', h2'⟩
       · obtain ⟨hs, hb, hn, hf⟩ := Layout.segRow_spec hs
         exact Or.inr ⟨hs, hb, hn, hf⟩
+
+/-- **`scopeOkH`'s rows are covered** (`rowsFit_of_scopeI`). -/
+theorem rowsFit_of_scope {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ()) (h : Layout.scopeOkH c = true) :
+    Hidden.Any.RowsFitS c :=
+  rowsFit_of_scopeI hp hc (Layout.scopeOkH_iff.1 h).2
 
 end FlockSoundness.Discharge.HiddenExec

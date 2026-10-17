@@ -39,6 +39,12 @@ theorem rowsFit_of_scopeH {tags : Tags} {cf : ByteArray} {tables : List (String 
     Hidden.Any.RowsFitS c :=
   rowsFit_of_scope (parse_untyped ht hc).1 (parse_untyped ht hc).2 hscope
 
+/-- `rowsFit_of_scopeH` at `scopeOkI`. -/
+theorem rowsFit_of_scopeIH {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (ht : tags.typed = false) (hc : HmOut.parse tags cf tables = .ok c) (hscope : Layout.scopeOkI c = true) :
+    Hidden.Any.RowsFitS c :=
+  rowsFit_of_scopeI (parse_untyped ht hc).1 (parse_untyped ht hc).2 hscope
+
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
   (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
