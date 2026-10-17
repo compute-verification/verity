@@ -852,6 +852,24 @@
    "assumptions": [],
    "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
   },
+  "Accounting.SecurityProofs.HMu.CoinPointMass": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.HMu.CoinPointMassHalf": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.HMu.LemmaB": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.HMu.PersistentOneWord": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.HorizonSampling": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.HorizonSampling : Accounting.Guarantees.HorizonSampling"],
@@ -4984,6 +5002,22 @@
    "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel": {
     "function": "Pouw.Receipt.duoQuad",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.HMu.CoinPointMass": {
+    "function": "Accounting.HMu.coinSum",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.HMu.CoinPointMassHalf": {
+    "function": "Accounting.HMu.coinSum",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins": {
+    "function": "Accounting.HMu.CoinRound.lucky",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin": {
+    "function": "Accounting.HMu.CoinRound.lucky",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -5471,7 +5505,9 @@
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
    "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
-   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier."
+   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
+   "Accounting.SecurityProofs.HMu.LemmaB": "lemma: Lemma B of the receipt-aggregate binding note (decisions 22 and 48), receipt luck at most Z*mu times the deficiency under (H-mu+) taken as a hypothesis (SkipRound.HMuPlus, a definition, not a named assumption); ReceiptLuckOfCoins and ReceiptLuckOfCoin are what it is for.",
+   "Accounting.SecurityProofs.HMu.PersistentOneWord": "lemma: Lemma B' for a persistent pattern with one word before the checkpoint, a fold's checkpoint state injective in the skipped value from the step's injectivity in state and word and the pattern's positions, taken as hypotheses; it gives SkipRound.Inj with Z = 1."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
