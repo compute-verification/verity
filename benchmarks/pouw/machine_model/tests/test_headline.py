@@ -14,14 +14,14 @@ from verity_machine_model.model import DATA, device
 PINS = {
     "sheet": {
         "sm_120": (0.004207, 0.001506, 0.000139, 0.005852, 2.2831, "half", None),
-        "sm_90": (0.006428, 0.0, 0.000037, 0.006465, 1.7698, "half", 0.006850),
+        "sm_90": (0.006427, 0.0, 0.000037, 0.006464, 1.7701, "half", 0.006850),
         "sm_100": (0.004063, 0.000631, 0.000026, 0.004720, 4.1719, "half", None),
         "sm_89": (0.001463, 0.006652, 0.000336, 0.008451, 2.9795, "half", None),
         "sm_80": (0.001463, 0.0, 0.0, 0.001463, 5.9347, "half", None),
     },
     "measured": {
         "sm_120": (0.003628, 0.001251, 0.000517, 0.005396, 2.1357, "issue", None),
-        "sm_90": (0.004661, 0.000757, 0.000730, 0.006148, 1.7171, "issue", 0.011618),
+        "sm_90": (0.004660, 0.000517, 0.000971, 0.006147, 1.7174, "issue", 0.011618),
         "sm_100": (0.004687, 0.004308, 0.000001, 0.008996, 4.0704, "half", None),
         "sm_89": (0.001470, 0.001126, 0.000468, 0.003065, 3.0144, "issue", None),
         "sm_80": (0.001470, 0.0, 0.0, 0.001470, 4.2263, "half", None),
@@ -54,9 +54,10 @@ def test_conditions_name_the_floor_the_fillers_credit_and_the_p1_reading():
     assert m["sm_120"].conditions[0] == t["floor"]["issue"] and "Theorem C, unproved in Lean" in t["floor"]["issue"]
     assert m["sm_100"].conditions[0] == t["floor"]["half"] and m["sm_100"].threshold <= 0.5
     h = m["sm_90"]
-    assert h.fillers == ("0.07 FFMA a word credited at p = 0 (Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit)",)
+    assert h.fillers == ("0.0703125 FFMA+IMAD a word credited at p = 0 "
+                         "(Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit)",)
     assert "at p = 1 (dither-2s-licpw-redux-p1-l32): ε 1.162%" in h.conditions
-    assert any("FFMA filler check pending" in c for c in h.conditions)
+    assert any("ffill_ref.receipt" in c and "has not run" in c for c in h.conditions)
     s = {x.family: x for x in H.rows("sheet")}
     assert all(x.floor == "half" for x in s.values()) and any(c.startswith("A2u") for c in s["sm_89"].conditions)
 

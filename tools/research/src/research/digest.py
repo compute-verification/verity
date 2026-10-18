@@ -6,11 +6,16 @@ regular sync. It shows:
 - what landed on `main`, and how many landed in the last 6 h;
 - the queue's length by state, over every lane;
 - the lane's PRs whose queue state or head changed;
-- new or changed notes under lanes/LANE;
+- new or changed notes under lanes/LANE, each with the first 3 non-empty lines under its '## Result so far';
 - a TRIGGER line for each watched PR that landed or changed its queue state (not merely its head), with the step the
-  lane wrote for that moment.
+  lane wrote for that moment;
+- Health: this VM's memory, load, disk (/, the notes, the workspace) and OOM kills; /workspace's branch (a WARNING
+  when it's on one: the shell hook and the inbox run from that checkout), dirt and lag behind origin/main; each
+  --roster worker's branch age and pending inbox deliveries (a WARNING past 30 min); the lane's open PRs that aren't in
+  the queue at all; the largest .lake directories of finished worktrees (tip pushed, over 6 h old; listed, never
+  deleted); and the live runs launched from this VM. A failing check prints its error in its place.
 
-  research digest --as LANE                          the digest
+  research digest --as LANE [--roster FILE]          the digest; FILE has TSV lines agent_id, label, branch ('#' comments)
   research digest --as LANE --watch N 'TODO'         print TODO as a TRIGGER when #N lands or its queue state changes
   research digest --as LANE --unwatch N
   research digest --as LANE --thread NAME TS [--channel KEY]   watch a thread (default channel agent-coordination)
@@ -27,6 +32,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -41,6 +47,17 @@ FIRST_LOOKBACK_S = 3600
 RATE_WINDOW_H = 6
 CHANNEL = "agent-coordination"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+)")
+RESULT_HEADING = "## result so far"
+RESULT_LINES = 3
+#: The checkout the shell hook and the inbox run from.
+WORKSPACE = Path("/workspace")
+#: An inbox delivery pending longer than this is flagged: its agent has run no shell command since.
+INBOX_STALE_S = 30 * 60
+#: A worktree whose branch tip is on origin and older than this is a finished worker's.
+FINISHED_H = 6
+LAKES_SHOWN = 5
+LIVE = ("running", "waiting")
+INBOX_LINE = re.compile(r"^pending\s+(\S+)\s+(\d+) bytes(?:\s+since (\S+))?\s*$")
 
 
 @dataclass
@@ -52,6 +69,14 @@ class Sources:
     queue: Callable[[], list[dict]]                   # `research queue status --json`
     pr_state: Callable[[int], str]                    # OPEN, MERGED, CLOSED, or "" when unknown
     notes: Callable[[str | None], tuple[str, list[str]]]      # last notes tip -> (tip, changed paths under lanes/LANE)
+    note_text: Callable[[str, str], str | None]       # notes tip, path -> the file at that tip, None when it has none
+    vm: Callable[[], dict]                            # {mem_total, mem_available, load, cpus, disks, oom, oom_error}
+    workspace: Callable[[], dict]                     # /workspace: {branch (None detached), head, dirty, behind}
+    branch_age: Callable[[str], str | None]           # branch -> "%cr %h" of origin's tip after a fetch, None when absent
+    inbox: Callable[[], list[dict] | None]            # pending deliveries [{agent, bytes, since}], None without inbox.py
+    lane_prs: Callable[[], list[dict]]                # the lane's open PRs [{number, title, baseRefName, isDraft}]
+    lakes: Callable[[], list[dict]]                   # .lake dirs of finished worktrees [{path, bytes, branch, age_h}]
+    runs: Callable[[], list[dict]]                    # `research status --all --json`'s runs
     now: Callable[[], float]
 
 
@@ -87,6 +112,50 @@ def plain(text: str | None, n: int = 420) -> str:
 def why(row: dict) -> str:
     w = row.get("why") or ""
     return "unmarked" if w.startswith("not marked ready at") else w
+
+
+def gib(n: float) -> str:
+    return f"{n / 2**30:.1f} GiB" if n >= 2**30 else f"{n / 2**20:.0f} MiB"
+
+
+def ago(seconds: float) -> str:
+    return f"{int(seconds // 60)} min" if seconds < 7200 else f"{seconds / 3600:.1f} h"
+
+
+def result_so_far(text: str | None, n: int = RESULT_LINES) -> list[str]:
+    """The first `n` non-empty lines under a note's '## Result so far' heading, up to the next heading of its level."""
+    lines = (text or "").splitlines()
+    start = next((i + 1 for i, x in enumerate(lines) if x.strip().lower().startswith(RESULT_HEADING)), None)
+    out: list[str] = []
+    for x in lines[start:] if start is not None else []:
+        if re.match(r"#{1,2}\s", x) or len(out) == n:
+            break
+        if x.strip():
+            out.append(x.strip())
+    return out
+
+
+def parse_roster(text: str, source: str = "roster") -> list[tuple[str, str, str]]:
+    """A roster's workers, (agent_id, label, branch) from TSV lines; blank lines and '#' lines are skipped."""
+    out = []
+    for i, line in enumerate(text.splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = [x.strip() for x in line.strip().split("\t")]
+        if len(parts) != 3 or not all(parts):
+            raise ValueError(f"{source}:{i}: want agent_id<TAB>label<TAB>branch, got {line!r}")
+        out.append((parts[0], parts[1], parts[2]))
+    return out
+
+
+def parse_inbox(text: str) -> list[dict]:
+    """The pending deliveries `inbox.py list` prints; `since` is None from an inbox.py older than its stamp."""
+    out = []
+    for line in text.splitlines():
+        if m := INBOX_LINE.match(line):
+            since = datetime.strptime(m[3], "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc).timestamp() if m[3] else None
+            out.append({"agent": m[1], "bytes": int(m[2]), "since": since})
+    return out
 
 
 def _doorbells(s: dict, src: Sources, out: list[str]) -> set[str]:
@@ -139,7 +208,7 @@ def _summary(src: Sources, rows: list[dict], out: list[str]) -> None:
                f"{n} landed in the last {RATE_WINDOW_H} h")
 
 
-def _queue(lane: str, s: dict, src: Sources, landed: set[int], out: list[str]) -> None:
+def _queue(lane: str, s: dict, src: Sources, landed: set[int], out: list[str]) -> list[dict]:
     listed = src.queue()
     _summary(src, listed, out)
     rows = {str(r["pr"]): r for r in listed}
@@ -177,19 +246,135 @@ def _queue(lane: str, s: dict, src: Sources, landed: set[int], out: list[str]) -
             s["watch_seen"][k] = cur
     if triggers:
         out += ["## Watch", *triggers]
+    return listed
 
 
 def _notes(s: dict, src: Sources, out: list[str]) -> None:
     tip, files = src.notes(s.get("notes"))
+    lines = []
+    for x in files:
+        lines.append(f"- {Path(x).name}")
+        if x.endswith(".md"):
+            lines += [f"    {plain(y, 200)}" for y in result_so_far(src.note_text(tip, x))]
     if files:
-        out.append(f"## Notes changed ({len(files)})")
-        out += [f"- {Path(x).name}" for x in files]
+        out += [f"## Notes changed ({len(files)})", *lines]
     s["notes"] = tip
 
 
-def digest(lane: str, s: dict, src: Sources) -> tuple[list[str], list[str]]:
+def _vm(v: dict) -> list[str]:
+    groups: dict[object, list[dict]] = {}
+    absent = []
+    for d in v["disks"]:
+        if "dev" in d:
+            groups.setdefault(d["dev"], []).append(d)
+        else:
+            absent.append(f"{d['label']} {d['path']} absent")
+    disks = [f"{', '.join(d['label'] for d in g)} {g[0]['pct']}% used, {gib(g[0]['free'])} free" for g in groups.values()]
+    oom = f"OOM kills {v['oom']}" if v.get("oom") is not None else f"OOM kills unreadable ({v.get('oom_error') or 'no dmesg'})"
+    return [f"- VM: memory {gib(v['mem_total'] - v['mem_available'])} used, {gib(v['mem_available'])} available; load "
+            f"{' '.join(f'{x:.2f}' for x in v['load'])} on {v['cpus']} CPUs; disk {'; '.join(disks + absent)}; {oom}"]
+
+
+def _workspace(w: dict) -> list[str]:
+    where = f"on branch {w['branch']}" if w["branch"] else f"detached at {w['head']}"
+    dirt = f"dirty ({w['dirty']} paths)" if w["dirty"] else "clean"
+    line = f"{WORKSPACE} {where}, {dirt}, {w['behind']} behind origin/main"
+    return [f"- WARNING {line}: the shell hook and the inbox run from this checkout" if w["branch"] else f"- {line}"]
+
+
+def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: list[dict] | None,
+            out: list[str]) -> list[str]:
+    """The Health section, appended to `out`; returns the failed checks' errors. Each check fails alone, in its place."""
+    lines: list[str] = []
+    errors: list[str] = []
+    now = src.now()
+
+    def failed(name: str, e: Exception) -> str:
+        errors.append(f"health {name}: {e}")
+        return f"{name}: FAILED: {plain(str(e), 300)}"
+
+    def check(name: str, f: Callable[[], list[str]]) -> None:
+        try:
+            lines.extend(f())
+        except Exception as e:  # one check down must not hide the others
+            lines.append(f"- {failed(name, e)}")
+
+    check("VM", lambda: _vm(src.vm()))
+    check(str(WORKSPACE), lambda: _workspace(src.workspace()))
+
+    pending: dict[str, dict] | None = None
+    try:
+        got = src.inbox()
+        if got is None:
+            lines.append(f"- inbox: no tools/agent-guard/inbox.py in {WORKSPACE}")
+        else:
+            pending = {d["agent"]: d for d in got}
+    except Exception as e:
+        lines.append(f"- {failed('inbox', e)}")
+
+    def inbox(agent: str) -> tuple[str, bool]:
+        if pending is None:
+            return "inbox unread", False
+        d = pending.get(agent)
+        if d is None:
+            return "nothing pending in the inbox", False
+        if d["since"] is None:
+            return f"inbox: {d['bytes']} bytes pending since an unknown time", False
+        stale = now - d["since"] > INBOX_STALE_S
+        return (f"inbox: {d['bytes']} bytes pending since {hhmm(d['since'])} ({ago(now - d['since'])})"
+                f"{f', over {INBOX_STALE_S // 60} min' if stale else ''}"), stale
+
+    for agent, label, branch in roster:
+        try:
+            age = src.branch_age(branch)
+            b = f"{branch} {age}" if age else f"no branch {branch} on origin"
+        except Exception as e:
+            b = failed(f"branch {branch}", e)
+        text, stale = inbox(agent)
+        lines.append(f"- {'WARNING ' if stale else ''}worker {label} {agent}: {b}; {text}")
+    for agent in sorted(set(pending or {}) - {a for a, _, _ in roster}):
+        text, stale = inbox(agent)
+        lines.append(f"- {'WARNING ' if stale else ''}{agent} (not in the roster): {text}")
+
+    def prs() -> list[str]:
+        if rows is None:
+            raise RuntimeError("the queue is unread (see Errors)")
+        listed = {int(r["pr"]) for r in rows}
+        mine = src.lane_prs()
+        missing = sorted((p for p in mine if int(p["number"]) not in listed), key=lambda p: int(p["number"]))
+        if not missing:
+            return [f"- PRs: all {len(mine)} of the lane's open PRs are in the queue"]
+        return [f"- WARNING #{p['number']} is not in the queue (base {p.get('baseRefName') or '?'}"
+                f"{', draft' if p.get('isDraft') else ''}): {plain(p.get('title'), 120)}" for p in missing]
+
+    def lakes() -> list[str]:
+        got = sorted(src.lakes(), key=lambda d: -d["bytes"])[:LAKES_SHOWN]
+        if not got:
+            return [f"- .lake: none in finished worktrees (tip on origin, over {FINISHED_H} h old)"]
+        return [f"- .lake of finished worktrees, the largest {len(got)} (listed, not deleted):",
+                *[f"    {gib(d['bytes'])} {d['path']} ({d['branch']}, tip {d['age_h']:.0f} h old)" for d in got]]
+
+    def runs() -> list[str]:
+        live = [r for r in src.runs() if r.get("state") in LIVE]
+        if not live:
+            return ["- runs: none live from this VM"]
+        out = []
+        for r in live:
+            cmd = r.get("command") or "?"
+            out.append(f"- run {r['id']} {r['state']} on {(r.get('remote') or {}).get('machine') or 'local'}: "
+                       f"{plain(cmd if isinstance(cmd, str) else ' '.join(map(str, cmd)), 80)}")
+        return out
+
+    check("PRs", prs)
+    check(".lake", lakes)
+    check("runs", runs)
+    out += ["## Health", *lines]
+    return errors
+
+
+def digest(lane: str, s: dict, src: Sources, roster: list[tuple[str, str, str]] | None = None) -> tuple[list[str], list[str]]:
     """The digest's lines and the sources' errors; `s` advances past everything shown. A failing source is reported and
-    leaves its cursor where it was, so its news shows next time."""
+    leaves its cursor where it was, so its news shows next time; a failing health check is reported in its place."""
     out = [f"# research digest @{lane} {datetime.fromtimestamp(src.now(), timezone.utc):%d %H:%MZ}"]
     errors: list[str] = []
 
@@ -203,11 +388,12 @@ def digest(lane: str, s: dict, src: Sources) -> tuple[list[str], list[str]]:
     shown = guard("doorbells", lambda: _doorbells(s, src, out), set())
     guard("threads", lambda: _threads(lane, s, src, shown, out))
     landed = guard("landings", lambda: _landings(s, src, out), set())
-    guard("queue", lambda: _queue(lane, s, src, landed, out))
+    rows = guard("queue", lambda: _queue(lane, s, src, landed, out))
     guard("notes", lambda: _notes(s, src, out))
+    health = _health(lane, src, roster or [], rows, out)
     if errors:
         out += ["## Errors", *[f"- {plain(e, 300)}" for e in errors]]
-    return out, errors
+    return out, errors + health
 
 
 def _research(*args: str, cwd: Path) -> str:
@@ -258,6 +444,92 @@ def real_sources(lane: str, repo: Path, notes_root: Path) -> Sources:
         subprocess.run(["git", "-C", str(notes_root), "merge", "-q", "--ff-only", "origin/main"], capture_output=True)
         return tip, files
 
+    def note_text(tip: str, path: str) -> str | None:
+        r = subprocess.run(["git", "-C", str(notes_root), "show", f"{tip}:{path}"], capture_output=True, text=True)
+        if r.returncode == 0:
+            return r.stdout
+        if "does not exist" in r.stderr or "exists on disk, but not in" in r.stderr:
+            return None
+        raise RuntimeError(f"`git show {tip[:8]}:{path}` exited {r.returncode}: {r.stderr.strip()[-300:]}")
+
+    def vm() -> dict:
+        mem = {k: int(v.split()[0]) * 1024 for k, _, v in
+               (line.partition(":") for line in Path("/proc/meminfo").read_text().splitlines()) if v.strip()}
+        disks = []
+        for label, p in (("/", Path("/")), ("notes", notes_root), ("workspace", WORKSPACE)):
+            if p.exists():
+                u = shutil.disk_usage(p)
+                disks.append({"label": label, "path": str(p), "dev": p.stat().st_dev, "pct": round(100 * u.used / (u.used + u.free)),
+                              "free": u.free})
+            else:
+                disks.append({"label": label, "path": str(p)})
+        try:
+            r = subprocess.run(["dmesg", "-T"], capture_output=True, text=True)
+            oom = r.stdout.count("Out of memory: Killed process") if r.returncode == 0 else None
+            oom_error = "" if r.returncode == 0 else f"dmesg: {r.stderr.strip()[-200:] or f'exit {r.returncode}'}; it may need root"
+        except FileNotFoundError:
+            oom, oom_error = None, "no dmesg on this machine"
+        return {"mem_total": mem["MemTotal"], "mem_available": mem["MemAvailable"], "load": os.getloadavg(),
+                "cpus": os.cpu_count(), "disks": disks, "oom": oom, "oom_error": oom_error}
+
+    def workspace() -> dict:
+        if not (WORKSPACE / ".git").exists():
+            raise RuntimeError(f"{WORKSPACE} is not a git checkout")
+        r = subprocess.run(["git", "-C", str(WORKSPACE), "symbolic-ref", "-q", "--short", "HEAD"], capture_output=True, text=True)
+        _git(WORKSPACE, "fetch", "-q", "origin", "main")
+        return {"branch": r.stdout.strip() or None, "head": _git(WORKSPACE, "rev-parse", "--short", "HEAD").strip(),
+                "dirty": len(_git(WORKSPACE, "status", "--porcelain").splitlines()),
+                "behind": int(_git(WORKSPACE, "rev-list", "--count", "HEAD..origin/main"))}
+
+    def branch_age(branch: str) -> str | None:
+        r = subprocess.run(["git", "-C", str(repo), "fetch", "-q", "origin", branch], capture_output=True, text=True)
+        if r.returncode:
+            if "couldn't find remote ref" in r.stderr:
+                return None
+            raise RuntimeError(f"`git fetch origin {branch}` exited {r.returncode}: {r.stderr.strip()[-300:]}")
+        return _git(repo, "log", "-1", "--format=%cr %h", f"origin/{branch}").strip()
+
+    def inbox() -> list[dict] | None:
+        tool = WORKSPACE / "tools/agent-guard/inbox.py"
+        if not tool.is_file():
+            return None
+        r = subprocess.run([sys.executable, str(tool), "list"], capture_output=True, text=True)
+        if r.returncode:
+            raise RuntimeError(f"`inbox.py list` exited {r.returncode}: {r.stderr.strip()[-300:]}")
+        return parse_inbox(r.stdout)
+
+    def lane_prs() -> list[dict]:
+        from .queue import LANE_RE
+
+        r = subprocess.run(["gh", "pr", "list", "--state", "open", "--search", f'"Lane {lane}" in:body', "--limit", "200",
+                            "--json", "number,title,body,baseRefName,isDraft"], cwd=repo, capture_output=True, text=True)
+        if r.returncode:
+            raise RuntimeError(f"`gh pr list` exited {r.returncode}: {r.stderr.strip()[-300:]}")
+        return [p for p in json.loads(r.stdout) if any(m[1] == lane for m in LANE_RE.finditer(p.get("body") or ""))]
+
+    def lakes() -> list[dict]:
+        now, found = time.time(), []
+        for block in _git(repo, "worktree", "list", "--porcelain").strip().split("\n\n")[1:]:   # [0]: the main checkout
+            kv = dict(x.split(" ", 1) for x in block.splitlines() if " " in x)
+            wt, head, ref = Path(kv.get("worktree", "/nonexistent")), kv.get("HEAD", ""), kv.get("branch", "")
+            if not (head and ref.startswith("refs/heads/") and wt.is_dir()):
+                continue
+            branch = ref.removeprefix("refs/heads/")
+            pushed = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", head, f"refs/remotes/origin/{branch}"],
+                                    capture_output=True).returncode == 0
+            age_h = (now - int(_git(repo, "log", "-1", "--format=%ct", head))) / 3600
+            if not pushed or age_h < FINISHED_H:
+                continue
+            for lakefile in _git(wt, "ls-files", "--", "*lakefile.lean", "*lakefile.toml").splitlines():
+                if (lake := wt / Path(lakefile).parent / ".lake").is_dir():
+                    found.append({"path": str(lake), "branch": branch, "age_h": age_h})
+        if found:
+            du = subprocess.run(["du", "-sk", *[d["path"] for d in found]], capture_output=True, text=True).stdout
+            sizes = {p: int(k) * 1024 for k, p in (x.split("\t", 1) for x in du.splitlines() if "\t" in x)}
+            for d in found:
+                d["bytes"] = sizes.get(d["path"], 0)
+        return found
+
     return Sources(
         doorbells=lambda since: json.loads(_research("msg", "read", "--as", lane, "--since", since, "--json", cwd=repo) or "[]"),
         thread=lambda ch, ts, since: json.loads(
@@ -267,6 +539,14 @@ def real_sources(lane: str, repo: Path, notes_root: Path) -> Sources:
         queue=lambda: json.loads(_research("queue", "status", "--json", cwd=repo)),
         pr_state=pr_state,
         notes=notes,
+        note_text=note_text,
+        vm=vm,
+        workspace=workspace,
+        branch_age=branch_age,
+        inbox=inbox,
+        lane_prs=lane_prs,
+        lakes=lakes,
+        runs=lambda: json.loads(_research("status", "--all", "--json", cwd=repo))["runs"],
         now=time.time,
     )
 
@@ -279,6 +559,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--as", dest="lane", required=True, help="the lane's handle (the queue's owner, the notes' lanes/LANE)")
     ap.add_argument("--state", help="the state file (default $RESEARCH_DIGEST_STATE, else ~/.research/digest/LANE.json)")
     ap.add_argument("--repo", default=".", help="a clone of the repository whose `main` and queue to read (default .)")
+    ap.add_argument("--roster", metavar="FILE", help="the workers Health shows: TSV lines agent_id, label, branch ('#' comments)")
     ap.add_argument("--watch", nargs=2, metavar=("PR", "TODO"))
     ap.add_argument("--unwatch", metavar="PR")
     ap.add_argument("--thread", nargs=2, metavar=("NAME", "TS"))
@@ -302,7 +583,11 @@ def main(argv: list[str] | None = None) -> int:
         save(path, s)
         print(json.dumps({"watch": s["watch"], "threads": s["threads"]}, indent=1, sort_keys=True))
         return 0
-    out, errors = digest(lane, s, real_sources(lane, Path(ns.repo).resolve(), default_root()))
+    try:
+        roster = parse_roster(Path(ns.roster).read_text(), ns.roster) if ns.roster else []
+    except (OSError, ValueError) as e:
+        ap.error(f"--roster: {e}")
+    out, errors = digest(lane, s, real_sources(lane, Path(ns.repo).resolve(), default_root()), roster)
     save(path, s)
     print("\n".join(out))
     return 1 if errors else 0

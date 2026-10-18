@@ -296,6 +296,10 @@ def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypat
         raise remote.Refused("placement reached")
 
     monkeypatch.setattr(remote, "queue_placement", place)
+    from research import cli as C
+    cwds = []
+    real = C._run_queued
+    monkeypatch.setattr(C, "_run_queued", lambda ns, opts, cmd: (cwds.append(remote.flag_value(opts, "--cwd")), real(ns, opts, cmd))[1])
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
@@ -306,6 +310,7 @@ def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypat
     assert [(s["project"], s["kind"], s["node"], s["cpus"], s["mem-gb"], s["max-s"]) for s in specs] == [
         ("verity", "agent-test", "vy-nebius-2", None, None, None), ("verity", "agent-test", "vy-nebius-2", 8, 32, 7200)]
     assert sources[0].resolve() == repo.resolve() and {s["preempt"] for s in specs} == {"requeue"}, "a guest on node 2 is preemptible"
+    assert cwds == ["source", "source"], "--on auto runs in the shipped tree unless --cwd says otherwise (INF-65)"
     assert "queued onto vy-nebius-2 as agent-test" in capsys.readouterr().err
     assert main([*runs, "--queue", "--", "true"]) == 2 and "takes no --queue or --pool" in capsys.readouterr().err
     monkeypatch.chdir(tmp_path)

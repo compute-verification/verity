@@ -16,20 +16,21 @@ import Models.Accounting.Guarantees.Gates
 # The circuit model's window and lower bounds, proved
 
 `ProvenWindow` by induction over the gates (each value lies in its derived interval: `Iv.add`, `Iv.scale` and
-`Iv.mul` are sound, and a gather's value is a column word or 0, in the hull `Iv.join` gives), and `ClampOrWrap` from
-it (in the window a clamp and a wrap are both the identity); `Fooling` by induction over the gates (every free gate is
-2-adically triangular in its window) and a count of the
-charged gates' joint values; `SquaringCarry` from it at `j = 1` on the sparse family, whose squares have no carries
-between bytes; `SquaringCarryNibbles` from it at `j = 4` on the nibble family, whose squares first differ two bytes
-above their first differing nibble (`a² − a'² = (a − a')(a + a')`); `UnitsFooling` by the same induction, the
-trace being each dynamic run input's and budgeted gate's value and each dynamic index's two classes, `min(v, 2^b − 1)`
-at the most index bits `b` its gathers read and `v mod 2^b'` at the most `b'` its table reads read, which the fresh
-index bits of each kind pay for; `SquaringUnits` from it on the nibble family; `EncodeBudget` and
-`EncodeCost` from `EncodeChainHardness` by summing the census's units over the
-windows and classes; `RhoPairs` from Fermat's little theorem (`s² = x · x^((p−1)/2) = ±x`). `DeclaredWindow` by
-`ProvenWindow`'s induction, each gate's declared bound earned from the earlier gates' intervals; `Int8LinearWindow`
-and `LutPvWindow` from `dotChain_ok`, which proves any s8 dot chain over declared operands whose `32·S` products fit
-s32.
+`Iv.mul` are sound, and a gather's value is a column word or its fill, in the hull `Iv.join` gives), and `ClampOrWrap`
+from it (in the window a clamp and a wrap are both the identity); `Fooling` by induction over the gates (every free
+gate is 2-adically triangular in its window) and a count of the charged gates' joint values; `SquaringCarry` from it
+at `j = 1` on the sparse family, whose squares have no carries between bytes; `SquaringCarryNibbles` from it at
+`j = 4` on the nibble family, whose squares first differ two bytes above their first differing nibble
+(`a² − a'² = (a − a')(a + a')`); `UnitsFooling` by the same induction, the trace being each dynamic run input's and
+budgeted gate's value and each dynamic index's two classes, `idxCls b v` (`min(v, 2^b − 1)`, and `2^b − 1` for a
+negative `v`, which reads the fill as an index past the column does) at the most index bits `b` its gathers read and
+`v mod 2^b'` at the most `b'` its table reads read, which the fresh index bits of each kind pay for; `SquaringUnits`
+from it on the nibble family; `EncodeBudget` and `EncodeCost` from `EncodeChainHardness` by summing the census's
+units, and each window's run-input bound, over the windows and classes; `RhoPairs` from Fermat's little theorem
+(`s² = x · x^((p−1)/2) = ±x`). `DeclaredWindow` by `ProvenWindow`'s induction, each gate's declared bound earned from
+the earlier gates' intervals; `Int8LinearWindow` and `LutPvWindow` from `dotChain_ok`, which proves any s8 dot chain
+over declared operands whose `32·S` products fit s32. `Bf16ToF32Affine` by the registry's entry and, on a 16-bit
+word, the mask's identity and `(u + 2^15) mod 2^16 · 2^16 = (u · 2^16 + 2^31) mod 2^32`.
 -/
 
 namespace Accounting.SecurityProofs.Gates
@@ -146,7 +147,7 @@ lemma value_congr {m : ℤ} (g : Gate ι) (x x' : ι → ℤ) (vs vs' : List ℤ
     | cons j u =>
       simp only [List.map_cons, List.headD_cons, List.tail_cons, ← List.map_take, ← List.map_drop]
       exact (hv j).add (sum_zipWith_congr _ _ hv _ _)
-  | gather _ => rw [hop] at hc; simp [Op.charged] at hc
+  | gather _ _ => rw [hop] at hc; simp [Op.charged] at hc
   | budgeted cls f => rw [hop] at hc; simp [Op.charged] at hc
 
 /-- Two inputs on which `C` is in its window, that agree mod `m` in every registered and coin input, and on which
@@ -264,7 +265,7 @@ lemma derive_holds (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ
     | cons j u =>
       simp only [List.map_cons, List.headD_cons, List.tail_cons, ← List.map_take, ← List.map_drop]
       exact holds_mul_sum _ _ hinv _ _ _ _ (hinv j)
-  | gather low =>
+  | gather low d =>
     simp only [Op.raw]
     generalize g.args = u
     cases u with
@@ -272,10 +273,10 @@ lemma derive_holds (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ
     | cons j u =>
       simp only [List.map_cons, List.headD_cons, List.tail_cons]
       refine holds_foldl_join _ _ _ ?_
-      generalize Op.gatherAt low (vs.getD j 0) = k
+      generalize Op.gatherAt low _ (vs.getD j 0) = k
       rcases Nat.lt_or_ge k u.length with hk | hk
       · refine .inr ⟨_, List.mem_map.mpr ⟨_, List.getElem_mem hk, rfl⟩, ?_⟩
-        rw [List.getD_eq_getElem (u.map fun c => vs.getD c 0) 0 (by simpa using hk), List.getElem_map]
+        rw [List.getD_eq_getElem (u.map fun c => vs.getD c 0) d (by simpa using hk), List.getElem_map]
         exact hinv _
       · exact .inl (by rw [List.getD_eq_default _ _ (by simpa using hk)]; exact ⟨le_rfl, le_rfl⟩)
   | input b i => rw [hop] at hd; exact hd.elim
@@ -830,8 +831,8 @@ lemma units_of_budget_none (C : Dag ι) (i : ℕ) (g : Gate ι) (hg : C[i]? = so
   simp only [units, hg]
   split <;> simp_all [Op.budget]
 
-/-- A gather's outcomes at its index, its column's `V` words and the `0` outside it, fit its index bits. -/
-lemma indexBits_outcomes (g : Gate ι) (hg : g.op = .gather none) : g.args.length ≤ 2 ^ g.indexBits := by
+/-- A gather's outcomes at its index, its column's `V` words and the fill outside it, fit its index bits. -/
+lemma indexBits_outcomes (g : Gate ι) (d : ℤ) (hg : g.op = .gather none d) : g.args.length ≤ 2 ^ g.indexBits := by
   unfold Gate.indexBits
   rw [hg]
   exact Nat.le_pow_clog (by norm_num) _
@@ -865,14 +866,12 @@ theorem EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget := by
     simp only [Census.budgeted, Caps.total, h5]
     push_cast
     linarith
-  have hr : runBits W ≤ 8 * caps.runBytes * A.windows := by
-    rw [runBits, ← sum_countAt W A.win A.windows _ hwin]
-    calc _ ≤ ∑ v ∈ Finset.range A.windows, 8 * caps.runBytes :=
-          Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2.2
-      _ = 8 * caps.runBytes * A.windows := by simp [mul_comm]
+  have hr : runBits W ≤ 8 * ∑ v ∈ Finset.range A.windows, caps.runBytes v := by
+    rw [runBits, ← sum_countAt W A.win A.windows _ hwin, Finset.mul_sum]
+    exact Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2.2
   have h' : ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤ (budgeted W : ℚ) * (F.n - 1 : ℕ) + (runBits W * E : ℕ) := by
     exact_mod_cast h
-  have hr' : ((runBits W * E : ℕ) : ℚ) ≤ (8 * caps.runBytes * A.windows * E : ℕ) := by
+  have hr' : ((runBits W * E : ℕ) : ℚ) ≤ (8 * (∑ v ∈ Finset.range A.windows, caps.runBytes v) * E : ℕ) := by
     exact_mod_cast Nat.mul_le_mul_right E hr
   exact h'.trans (add_le_add (mul_le_mul_of_nonneg_right hb (Nat.cast_nonneg _)) hr')
 
@@ -916,7 +915,7 @@ def isBudg (g : Gate ι) : Bool :=
 /-- The fresh index bits a gather of kind `k` at `i` pays when its index depends on a run or coin input. -/
 def freshAt (C : Dag ι) (k : Bool) (i : ℕ) (g : Gate ι) : ℕ :=
   match g.op, g.args with
-  | .gather low, j :: _ => if low.isSome = k ∧ dynAt C j = true then g.indexBits - maxIdx (C.take i) k j else 0
+  | .gather low _, j :: _ => if low.isSome = k ∧ dynAt C j = true then g.indexBits - maxIdx (C.take i) k j else 0
   | _, _ => 0
 
 lemma dynamic_eq (C : Dag ι) : dynamic C = C.foldl (fun ds g => ds ++ [dynStep ds g]) [] := rfl
@@ -1001,26 +1000,30 @@ lemma value_eq_of_operands (g : Gate ι) (x x' : ι → ℤ) (vs vs' : List ℤ)
   | input b i => exact absurd hg (hop b i)
   | _ => rfl
 
-/-- A gather's word, from columns that agree mod `m`, at indices of one class among the column's words and the `0`
-outside it. -/
+/-- A gather's word, from columns that agree mod `m`, at positions of one class among the column's words and the fill
+`d` past it. -/
 lemma getD_map_congr {m : ℤ} (col : List ℕ) (vs vs' : List ℤ) (hv : ∀ j, vs.getD j 0 ≡ vs'.getD j 0 [ZMOD m])
-    (K k k' : ℕ) (hK : col.length ≤ K) (hk : min k K = min k' K) :
-    (col.map fun c => vs.getD c 0).getD k 0 ≡ (col.map fun c => vs'.getD c 0).getD k' 0 [ZMOD m] := by
+    (d : ℤ) (k k' : ℕ) (hk : min k col.length = min k' col.length) :
+    (col.map fun c => vs.getD c 0).getD k d ≡ (col.map fun c => vs'.getD c 0).getD k' d [ZMOD m] := by
   rcases Nat.lt_or_ge k col.length with h | h
-  · have hkk : k' = k := by
-      rcases Nat.lt_or_ge k' K with h' | h'
-      · rw [min_eq_left (by omega), min_eq_left (by omega)] at hk; omega
-      · rw [min_eq_left (by omega), min_eq_right h'] at hk; omega
+  · have hkk : k' = k := by omega
     subst hkk
     rw [List.getD_eq_getElem _ _ (by simpa using h), List.getD_eq_getElem _ _ (by simpa using h)]
     simp only [List.getElem_map]
     exact hv _
-  · have hk' : col.length ≤ k' := by
-      by_contra h'
-      rw [min_eq_left (show k' ≤ K by omega)] at hk
-      have : col.length ≤ min k K := le_min h hK
-      omega
+  · have hk' : col.length ≤ k' := by omega
     rw [List.getD_eq_default _ _ (by simpa using h), List.getD_eq_default _ _ (by simpa using hk')]
+
+/-- A gather's index class: `min(v, 2^b − 1)`, and `2^b − 1` for a negative `v`, which reads the fill as an index
+past the column does. -/
+def idxCls (b : ℕ) (v : ℤ) : ℕ := if v < 0 then 2 ^ b - 1 else min v.toNat (2 ^ b - 1)
+
+/-- In a column of `L ≤ 2^b − 1` words, a gather's position is fixed, up to every position past the column, by its
+index's class. -/
+lemma min_gatherAt (b L : ℕ) (hL : L ≤ 2 ^ b - 1) (z : ℤ) :
+    min (Op.gatherAt none L z) L = min (idxCls b z) L := by
+  simp only [Op.gatherAt, idxCls]
+  split_ifs <;> omega
 
 lemma le_foldl_max (l : List ℕ) : ∀ b : ℕ, b ≤ l.foldl max b ∧ ∀ a ∈ l, a ≤ l.foldl max b := by
   induction l with
@@ -1031,22 +1034,22 @@ lemma le_foldl_max (l : List ℕ) : ∀ b : ℕ, b ≤ l.foldl max b ∧ ∀ a �
     obtain ⟨h1, h2⟩ := ih (max b y)
     exact ⟨le_trans (le_max_left _ _) h1, le_trans (le_max_right _ _) h1, h2⟩
 
-lemma indexBits_le_maxIdx (C : Dag ι) (n : ℕ) (h : n < C.length) (low : Option ℕ) (j : ℕ) (col : List ℕ)
-    (hop : C[n].op = .gather low) (hargs : C[n].args = j :: col) : C[n].indexBits ≤ maxIdx C low.isSome j :=
+lemma indexBits_le_maxIdx (C : Dag ι) (n : ℕ) (h : n < C.length) (low : Option ℕ) (d : ℤ) (j : ℕ) (col : List ℕ)
+    (hop : C[n].op = .gather low d) (hargs : C[n].args = j :: col) : C[n].indexBits ≤ maxIdx C low.isSome j :=
   (le_foldl_max _ 0).2 _ (List.mem_map.mpr ⟨C[n], List.mem_filter.mpr ⟨List.getElem_mem h,
     by simp [hop, hargs, Op.gatherKind]⟩, rfl⟩)
 
 /-- Two inputs on which `C` is in its window, that agree in every registered input and mod `m` in every coin input,
 on which each run input and each budgeted gate but a gather that depends on a run or coin input takes one value, and
-each gate that does takes one class `min(v, 2^b − 1)` at the most index bits `b` a gather of it reads at its index,
-and one class `v mod 2^b'` at the most `b'` a table read of it reads: every gate's values agree mod `m`, and those of
-the gates that depend on no run or coin input agree. -/
+each gate that does takes one class `idxCls b v` at the most index bits `b` a gather of it reads at its index, and
+one class `v mod 2^b'` at the most `b'` a table read of it reads: every gate's values agree mod `m`, and those of the
+gates that depend on no run or coin input agree. -/
 lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWindow C x) (hw' : InWindow C x')
     (hreg : ∀ i, (∃ g ∈ C, g.op = .input .registered i) → x i = x' i)
     (hcoin : ∀ i, (∃ g ∈ C, g.op = .input .coin i) → x i ≡ x' i [ZMOD m])
     (htr : ∀ i (h : i < C.length), traced C[i] = true → dynAt C i = true → val C x i = val C x' i)
     (hidx : ∀ i, i < C.length → dynAt C i = true →
-      min (val C x i).toNat (2 ^ maxIdx C false i - 1) = min (val C x' i).toNat (2 ^ maxIdx C false i - 1) ∧
+      idxCls (maxIdx C false i) (val C x i) = idxCls (maxIdx C false i) (val C x' i) ∧
         val C x i % 2 ^ maxIdx C true i = val C x' i % 2 ^ maxIdx C true i) :
     ∀ n, n ≤ C.length → ∀ o, (values (C.take n) x).getD o 0 ≡ (values (C.take n) x').getD o 0 [ZMOD m] ∧
       ((o < n → dynAt C o = false) → (values (C.take n) x).getD o 0 = (values (C.take n) x').getD o 0) := by
@@ -1116,7 +1119,7 @@ lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWind
             rw [← hval, ← hval']
             exact htr o hn' (by simp [traced, hop]) hd
           · exact .inl (value_eq_of_operands _ x x' _ _ hni (hargs hni (by simpa using hd)))
-        | gather low =>
+        | gather low d =>
           have hni : ∀ b i, C[o].op ≠ .input b i := by intro b i; rw [hop]; simp
           by_cases hd : dynAt C o = true
           · right
@@ -1127,8 +1130,8 @@ lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWind
             cases hga : C[o].args with
             | nil => simp [Op.raw, Int.ModEq.refl]
             | cons j col =>
-              simp only [Op.raw, List.map_cons, List.headD_cons, List.tail_cons]
-              have hbits := indexBits_le_maxIdx C o hn' low j col hop hga
+              simp only [Op.raw, List.map_cons, List.headD_cons, List.tail_cons, List.length_map]
+              have hbits := indexBits_le_maxIdx C o hn' low d j col hop hga
               have hjv : (j < C.length ∧ dynAt C j = true ∧ (values (C.take o) x).getD j 0 = val C x j ∧
                   (values (C.take o) x').getD j 0 = val C x' j) ∨
                   (values (C.take o) x).getD j 0 = (values (C.take o) x').getD j 0 := by
@@ -1140,19 +1143,18 @@ lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWind
               cases low with
               | none =>
                 have hK : col.length ≤ 2 ^ maxIdx C false j - 1 := by
-                  have h1 := indexBits_outcomes C[o] hop
+                  have h1 := indexBits_outcomes C[o] d hop
                   have h2 := Nat.pow_le_pow_right (by norm_num : 0 < 2) hbits
                   rw [hga, List.length_cons] at h1
                   simp only [Option.isSome_none] at h2
                   omega
-                refine getD_map_congr col _ _ hv _ _ _ hK ?_
+                refine getD_map_congr col _ _ hv d _ _ ?_
+                rw [min_gatherAt _ _ hK, min_gatherAt _ _ hK]
                 rcases hjv with ⟨hjL, hjd, h1, h2⟩ | h
-                · simp only [Op.gatherAt]
-                  rw [h1, h2]
-                  exact (hidx j hjL hjd).1
+                · rw [h1, h2, (hidx j hjL hjd).1]
                 · rw [h]
               | some nb =>
-                refine getD_map_congr col _ _ hv col.length _ _ le_rfl ?_
+                refine getD_map_congr col _ _ hv d _ _ ?_
                 congr 1
                 simp only [Op.gatherAt]
                 rcases hjv with ⟨hjL, hjd, h1, h2⟩ | h
@@ -1186,7 +1188,7 @@ lemma units_ge (C : Dag ι) (i : ℕ) (h : i < C.length) :
     simp only [isBudg, freshAt, hop, Bool.true_and, add_zero]
     have := hd (by intro b k; rw [hop]; simp)
     split_ifs <;> simp_all
-  | gather low =>
+  | gather low _ =>
     cases hargs : C[i].args with
     | nil => simp [isBudg, freshAt, hop, hargs]
     | cons j col =>
@@ -1228,7 +1230,7 @@ lemma sum_freshAt (C : Dag ι) (k : Bool) : ∀ n, n ≤ C.length →
     congr 1
     unfold freshAt
     cases hop : C[n].op with
-    | gather low =>
+    | gather low _ =>
       cases hargs : C[n].args with
       | nil => simp [Op.gatherKind]
       | cons j0 col =>
@@ -1250,7 +1252,7 @@ theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
   classical
   let T : κ → Fin C.length → ℤ × ℕ × ℤ := fun s i =>
     (if (traced C[i.1] && dynAt C i.1) = true then val C (x s) i.1 else 0,
-      if dynAt C i.1 = true then min (val C (x s) i.1).toNat (2 ^ maxIdx C false i.1 - 1) else 0,
+      if dynAt C i.1 = true then idxCls (maxIdx C false i.1) (val C (x s) i.1) else 0,
       if dynAt C i.1 = true then val C (x s) i.1 % 2 ^ maxIdx C true i.1 else 0)
   let A : Fin C.length → Finset ℤ := fun i =>
     if (traced C[i.1] && dynAt C i.1) = true then Finset.Icc C[i.1].lo C[i.1].hi else {0}
@@ -1274,8 +1276,9 @@ theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
       split_ifs
       · rw [Finset.mem_range]
         have : 0 < 2 ^ maxIdx C false i.1 := by positivity
+        unfold idxCls
         generalize 2 ^ maxIdx C false i.1 = P at *
-        omega
+        split_ifs <;> omega
       · simp
     · simp only [T, D]
       split_ifs
@@ -1503,7 +1506,7 @@ theorem encodeWord_codecRows :
 
 Each rule's interval holds its primitive's value: `fmaxf` and `fminf` by the operands' signs (`fmaxf_bounds`,
 `fminf_bounds`), the truncation by its monotonicity below `128.0` (`rzByteNat_mono`), the clamps and the dither by
-arithmetic, and the LUT by a gather's value being a column word or 0 (`getD_hull0`). -/
+arithmetic, and the LUT by a gather's value being a column word or its fill, 0 (`getD_hull0`). -/
 
 /-- `fmaxf` with a non-negative operand is at least it and at most `+inf`, and with two is their larger. -/
 lemma fmaxf_bounds {x y : ℤ} (hx : S32 x) (hy : S32 y) :
@@ -1596,7 +1599,18 @@ lemma getD_hull0 (T : List ℤ) (i : ℕ) : (hull0 T).Mem (T.getD i 0) := by
 
 theorem LutSoftmaxRange : Accounting.Guarantees.Gates.LutSoftmaxRange := by
   intro T d
-  simpa [lutSoftmax, Op.raw] using getD_hull0 T _
+  exact getD_hull0 T _
+
+/-! ## `Bf16ToF32`, free-affine -/
+
+theorem Bf16ToF32Affine : Accounting.Guarantees.Gates.Bf16ToF32Affine := by
+  refine ⟨by decide, fun ⟨u, hu⟩ => ?_⟩
+  have hmask : u &&& 0xFFFF = u := by
+    rw [show (0xFFFF : ℕ) = 2 ^ 16 - 1 by norm_num, Nat.and_two_pow_sub_one_eq_mod, Nat.mod_eq_of_lt hu]
+  simp only [Verity.Prims.bf16ToF32, hmask, Nat.shiftLeft_eq, bf16ToF32Op, Op.raw, signed, List.zipWith_cons_cons,
+    List.zipWith_nil_right, List.sum_cons, List.sum_nil]
+  push_cast
+  omega
 
 /-! ## The rows the Python checks agree on
 
@@ -2493,7 +2507,7 @@ theorem LutPvWindow : Accounting.Guarantees.Gates.LutPvWindow := by
   have hgath : ∀ i (h : i < pre.length), 257 + 2 * n ≤ i → i < 257 + 3 * n →
       pre[i].lo = 0 ∧ pre[i].hi = 127 ∧ (pre[i].derive (intervals pre)).Within 0 127 := by
     intro i h h1 h2
-    have hg : pre[i] = plainGate (.gather (some 8)) ((i - n) :: List.range 256) 0 127 "Exp2Lut127_v1" := by
+    have hg : pre[i] = plainGate (.gather (some 8) 0) ((i - n) :: List.range 256) 0 127 "Exp2Lut127_v1" := by
       rw [hget]; unfold pvGate; split_ifs <;> first | omega | rfl
     rw [hg]
     refine ⟨rfl, rfl, ?_⟩
