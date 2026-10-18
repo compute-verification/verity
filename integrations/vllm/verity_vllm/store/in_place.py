@@ -6,7 +6,8 @@ the binder registered them, with no copy of the store (`benchmarks/remote_sessio
 hello         the payload tree on the GPU from the tensors' bytes (`rs_payload_leaves`, block j's salt
               `device.store_salt(key, PAYLOAD_LABEL, j)`), its levels kept on the host for the openings
 registration  every registered block encoded in place by kv.cu under the seed's key (`KvDevice.encode_in_place`),
-              checked against `codec.encode` at each region's first block and the store's last
+              checked against `codec.encode` at each region's first block and the store's last, and its encode under
+              an append's bound offset on a scratch block (`_gate_bound`), so an append's encode is the device's alone
 append        the step's completed blocks at their slots (`InPlace.append`), committed by their digests under the
               device's salts; once the coin is back, their slots' bytes (still the payloads appended, or the session
               fails) are encoded in place under b_j(c_a) and the memory map records their writes (deferred residency)
@@ -28,6 +29,7 @@ must outlast its windows.
 from __future__ import annotations
 
 import bisect
+import json
 import os
 import time
 from collections.abc import Callable, Sequence
@@ -94,7 +96,8 @@ class InPlaceBackend(StoreBackend):
 
     def __init__(self, store: Store, engine: Callable[[int], None], backings: Sequence[Any], *, session_lib: str,
                  kv_lib: str, codec: rcodec.Codec = rcodec.DEFAULT, moved: Callable[[], list[str]] = list,
-                 path: Any = None, randbytes: Callable[[int], bytes] = os.urandom, kept_from: int = 6) -> None:
+                 path: Any = None, randbytes: Callable[[int], bytes] = os.urandom, kept_from: int = 6,
+                 calibration_passes: int = 256, calibration_warm: int = 16, warmup_ms: float = 500.0) -> None:
         import torch
 
         super().__init__(store, engine, randbytes=randbytes, path=path, device=KvDevice(kv_lib, codec))
@@ -102,6 +105,7 @@ class InPlaceBackend(StoreBackend):
         self.dev = session_module("device", config.REMOTE_SESSION)
         ipm = session_module("inplace", config.REMOTE_SESSION)
         self.torch, self.codec, self.moved = torch, codec, moved
+        self.calibration_passes, self.calibration_warm, self.warmup_ms = calibration_passes, calibration_warm, warmup_ms
         self.lib = self.dev.Lib(str(session_lib), torch)
         self.key = randbytes(32)
         lay = store.layout()
@@ -242,9 +246,24 @@ class InPlaceBackend(StoreBackend):
         for j, m, e in zip(sample.tolist(), before, after):
             if e.tobytes() != rcodec.encode(m.tobytes(), j, registration.key):
                 raise RuntimeError(f"kv.cu's block {j}, encoded in place, is not codec.encode's")
-        self.gates["device_encode"] = {"registered": N, "appends": 0, "blocks_checked": len(sample), "in_place": True}
+        self._gate_bound(registration.key)
+        self.gates["device_encode"] = {"registered": N, "appends": 0, "blocks_checked": len(sample) + 1,
+                                       "in_place": True, "bound": "a scratch block at registration"}
         self.audit = Appends(registration)
         return {"encode_bytes_per_s": N * BLOCK / secs}
+
+    def _gate_bound(self, key: rcodec.Key) -> None:
+        """kv.cu's encode under an append's bound offset, in place, against `codec.encode`'s, on a scratch block at
+        the store's first appended index: the appends' encodes are then the device's alone, off the session's
+        critical path."""
+        f, j, coin = self.codec.field, self.blocks, self.randbytes(rcodec.COIN_BYTES)
+        words = np.frombuffer(self.randbytes(BLOCK), np.uint8).reshape(-1, f.word_bytes).copy()
+        words[:, -1] &= 0x7F
+        m = words.tobytes()
+        data = self.torch.frombuffer(bytearray(m), dtype=self.torch.uint8).to(self.cuda)
+        self.device.encode_in_place(data, j, [rcodec.binding(rcodec.digest(m), j, key, coin)])
+        if data.cpu().numpy().tobytes() != rcodec.encode(m, j, key, bound=True, coin=coin):
+            raise RuntimeError(f"kv.cu's block {j}, encoded in place under a bound offset, is not codec.encode's")
 
     # --- serving ----------------------------------------------------------------------------------------------------
 
@@ -271,26 +290,19 @@ class InPlaceBackend(StoreBackend):
         slots = np.array(self.app_slots[first - N:first - N + a.count], np.int64)
         with phases.time("encode.check"):
             data = self._gather(slots)
-            held = data.cpu().numpy()
-            for u, m in enumerate(payloads):
-                if held[u].tobytes() != m:
-                    raise RuntimeError(f"slot {slots[u]} no longer holds block {first + u}'s payload when its append's "
-                                       "coin arrives: rewritten before its encode")
+            want = self.torch.frombuffer(bytearray(b"".join(payloads)), dtype=self.torch.uint8).to(self.cuda)
+            if bad := self.torch.nonzero((data != want.view(-1, BLOCK)).any(dim=1)).flatten().tolist():
+                raise RuntimeError(f"slot {slots[bad[0]]} no longer holds block {first + bad[0]}'s payload when its "
+                                   "append's coin arrives: rewritten before its encode")
         with phases.time("encode.bind"):
             offsets = [rcodec.binding(d, first + u, k, coin) for u, d in enumerate(a.digests)]
         with phases.time("encode.device"):
             self.device.encode_in_place(data.reshape(-1), first, offsets)
-        with phases.time("encode.gate"):
-            if data[0].cpu().numpy().tobytes() != rcodec.encode(payloads[0], first, k, bound=True, coin=coin):
-                raise RuntimeError(f"kv.cu's block {first}, encoded in place under its append's coin, is not "
-                                   "codec.encode's")
-        with phases.time("encode.device"):
             self._scatter(slots, data)
             self.torch.cuda.synchronize()
         self.audit.coins[first] = coin
         self.stats["encoded_appends"] += 1
         self.gates["device_encode"]["appends"] += 1
-        self.gates["device_encode"]["blocks_checked"] += 1
         if self.trace is not None:
             self.trace.encoded(first)
 
@@ -315,6 +327,65 @@ class InPlaceBackend(StoreBackend):
         coin = self.audit.coins.get(self.audit.of(j).first)
         m = block if coin is None else rcodec.decode(block, j, self.registration.key, digest, coin)
         return m is not None and rcodec.digest(m) == digest
+
+    # --- calibration ------------------------------------------------------------------------------------------------
+
+    def _whole_passes(self, n: int | None = None, ns: int | None = None) -> tuple[list[int], list[int]]:
+        """Passes over the whole registered store, each seeded from the root before as a session chains them, until
+        ``n`` of them or ``ns`` have run: each root's time and each root's gap, the host's time from the root to where
+        a session sends it (the plan's change against the last sent, and the message)."""
+        prover, plan, challenge = session_module("prover"), rb.Plan.whole(self.blocks), self.randbytes(32)
+        prev, at, gaps, t0 = bytes(64), [], [], time.perf_counter_ns()
+        while (n is not None and len(at) < n) or (ns is not None and time.perf_counter_ns() - t0 < ns):
+            root, _ = self.ip.run_pass(rb.seed(challenge, len(at), prev), plan)
+            self.torch.cuda.synchronize()
+            at.append(time.perf_counter_ns())
+            msg = {"type": "root", "t": 0, "i": len(at), "root": root.hex(), "step": len(at),
+                   "change": [[list(r) for r in side] for side in prover.plan_change(plan, plan)]}
+            json.dumps(msg)
+            gaps.append(time.perf_counter_ns() - at[-1])
+            prev = root
+        return at, gaps
+
+    def warmup(self, ns: int) -> dict:
+        """Untimed passes before the session's first window (`ProverSide`'s warm-up), so its first passes don't pay the
+        device's ramp."""
+        at, _ = self._whole_passes(ns=ns)
+        return {"passes": len(at), "ms": (at[-1] - at[0]) / 1e6 if at else 0.0}
+
+    def calibrate(self) -> dict:
+        """`device.Device.calibrate`'s report from this store read in place, before the session: the bare read of every
+        registered block where it is (`rs_mapped_read`, the best of 6 after the first), then ``calibration_passes``
+        passes over the whole store chained as a session's (the first ``calibration_warm`` untimed): each root's
+        interval from the one before (the allowance's pass) and each root's gap to its send, at the percentiles the
+        verifier's allowance reads (`device.percentiles`).  An engine step in lockstep, the appends' round trips and
+        their encodes are not in it: the session's record times them (`phases_ms`)."""
+        torch, N = self.torch, self.blocks
+        addrs, _ = self.ip.map(rb.Plan.whole(N))
+        xr = torch.zeros(1, dtype=torch.int64, device=self.cuda)
+        ctas = 16 * torch.cuda.get_device_properties(self.cuda).multi_processor_count
+        reads = []
+        for _ in range(7):
+            torch.cuda.synchronize()
+            t0 = time.perf_counter_ns()
+            self.lib.call("rs_mapped_read", addrs.data_ptr(), N, xr.data_ptr(), ctas)
+            torch.cuda.synchronize()
+            reads.append(time.perf_counter_ns() - t0)
+        del addrs
+        read_ms = min(reads[1:]) / 1e6
+        self._whole_passes(n=self.calibration_warm)
+        at, gaps = self._whole_passes(n=self.calibration_passes)
+        intervals, gaps = sorted(b - a for a, b in zip(at, at[1:])), sorted(gaps[1:])
+        pct = self.dev.percentiles
+        bps = N * BLOCK / (read_ms / 1e3)
+        return {"pass_ns_max": intervals[-1], "pass_ns_median": intervals[len(intervals) // 2],
+                "pass_ns": pct(intervals), "gap_ns_max": gaps[-1], "gap_ns_median": gaps[len(gaps) // 2],
+                "gap_ns": pct(gaps), "passes": len(intervals), "warm_passes": self.calibration_warm,
+                "read_ms": read_ms, "read_bytes_per_s": bps,
+                "read_tiers": {"hbm": {"bytes": N * BLOCK, "ms": read_ms, "bytes_per_s": bps}},
+                "tau": intervals[len(intervals) // 2] / 1e6 / read_ms,
+                "max_over_median": intervals[-1] / intervals[len(intervals) // 2],
+                "in_place": True, "device": torch.cuda.get_device_name(self.cuda)}
 
     # --- passes and openings ----------------------------------------------------------------------------------------
 

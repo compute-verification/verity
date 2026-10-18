@@ -139,7 +139,21 @@ def test_the_payload_tree_is_the_drivers_and_the_store_is_encoded_where_it_is():
     b.encode(reg)
     held = b._gather(np.arange(N)).cpu().numpy()
     assert [rcodec.decode(held[j].tobytes(), j, reg.key) for j in range(N)] == payloads
-    assert b.gates["device_encode"]["blocks_checked"] == 4
+    assert b.gates["device_encode"]["blocks_checked"] == 5
+
+
+def test_calibration_reports_the_passes_in_place_and_the_bare_read_as_the_verifiers_allowance_reads_them():
+    s, caches = gpu_store()
+    b = backend(s, caches, calibration_passes=64, calibration_warm=4)
+    N = b.blocks
+    b.payload_root(b"n")
+    b.encode(audit.register(bytes(32), b"n", N, bytes(64), nonce=bytes(32)))
+    cal = b.calibrate()
+    assert cal["passes"] == 63 and cal["warm_passes"] == 4
+    assert 0 < cal["pass_ns"]["p50"] <= cal["pass_ns"]["p999"] <= cal["pass_ns_max"] == cal["pass_ns"]["max"]
+    assert 0 < cal["gap_ns"]["p50"] <= cal["gap_ns_max"] and cal["read_tiers"]["hbm"]["bytes"] == N * BLOCK
+    assert cal["read_bytes_per_s"] > 0 and b.pass_ns == [] and b.phases.closed == []
+    assert b.warmup(10 ** 6)["passes"] >= 1
 
 
 def test_an_honest_in_place_session_is_accepted_reading_rewritten_blocks_from_their_copies():

@@ -142,6 +142,7 @@ class Serving:
             lambda first, slots, digests, payloads: self._events.append(("append", first, slots, digests, payloads)))
         self.step, self.steps, self.first = -1, 0, None
         self.live = np.ones(registration.blocks, bool)
+        self._plan: rb.Plan | None = None
         self.appends: list[audit.Append] = []
         self.released: list[int] = []
         self.appended: list[int] = []
@@ -197,6 +198,7 @@ class Serving:
                 self.live = np.concatenate([self.live, np.zeros(change.first + change.count - len(self.live), bool)])
             self.live[gone] = False
             self.live[change.first:change.first + change.count] = True
+            self._plan = None
         self._events.clear()
 
     def encoded(self, first: int) -> None:
@@ -218,10 +220,14 @@ class Serving:
                 "encodes": [[m, w, a.first, a.count] for m, w, a in zip(self.made, landed, self.appends)]}
 
     def plan(self) -> rb.Plan:
-        with self.backend.phases.time("plan"):
-            edge = np.diff(np.concatenate([[False], self.live, [False]]).astype(np.int8))
-            starts, ends = np.flatnonzero(edge == 1), np.flatnonzero(edge == -1)
-            return rb.Plan.from_array(np.stack([starts, ends - starts], axis=1).astype(np.int64), self.map.extent)
+        """Every live block, kept until a closed line changes them or an append extends the store."""
+        if self._plan is None or self._plan.blocks != self.map.extent:
+            with self.backend.phases.time("plan"):
+                edge = np.flatnonzero(self.live[1:] != self.live[:-1]) + 1
+                cuts = np.concatenate([[0] if self.live[0] else [], edge, [len(self.live)] if self.live[-1] else []])
+                runs = np.stack([cuts[0::2], cuts[1::2] - cuts[0::2]], axis=1).astype(np.int64)
+                self._plan = rb.Plan.from_array(runs, self.map.extent)
+        return self._plan
 
 
 class StoreBackend:
@@ -657,7 +663,8 @@ class CommitSession:
     def _session(self) -> None:
         backend, error, result, agree = self.backend, None, {}, {}
         try:
-            (result,) = prove(backend, self.verifier, self.plan, node=self.node.encode(), codec=self.codec, log=self.log)
+            (result,) = prove(backend, self.verifier, self.plan, node=self.node.encode(), codec=self.codec, log=self.log,
+                              warmup_ns=round(getattr(backend, "warmup_ms", 0.0) * 1e6))
             agree = agreement(backend)
         except Exception as e:  # noqa: BLE001  -- recorded: a session that fails is rejected, and the Commit's verdict still written
             error = f"{type(e).__name__}: {e}"
