@@ -747,15 +747,16 @@ def _bind_captured(c: T.Captured, M: int):
 
 
 def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
-    """Every `tp_allreduce.CAPTURED` entry is, at each M it covers, the route vLLM's dispatch takes at its setting (the fused path to
+    """Every H200 `tp_allreduce.CAPTURED` entry is, at each M it covers, the route vLLM's dispatch takes at its setting (the fused path to
     FlashInfer's budget, the custom all-reduce 2-stage throughout), cites exactly the GO runs at that setting, and its Definition
     binds at its first and last M with what they read (GLM-5.3's tree on every owner, IEEE adds, FMA in both shots); `covered`
     names it there and nowhere past it."""
     assert X.tree_str(T.GLM53_H200_TREE) == "((((((0,(1,2)),3),5),6),4),7)"
     assert T.CAPTURE_RUNS == ("r20261013-085842-2147", "r20261013-091723-e383", "r20261013-115512-5ff3")
     runs = {"custom-off": T.CAPTURE_RUNS[:2], "defaults": T.CAPTURE_RUNS[2:], "switch": T.CAPTURE_RUNS}
-    for c in T.CAPTURED:
-        assert c.N in (X.HIDDEN, X.DSV4_HIDDEN) and c.runs == runs[c.setting] and c.setting in T.SETTINGS
+    assert [c.definition for c in T.CAPTURED if c.setting not in T.SETTINGS] == ["AllReduceNcclTree_v1"]
+    for c in (c for c in T.CAPTURED if c.setting in T.SETTINGS):
+        assert c.N in (X.HIDDEN, X.DSV4_HIDDEN) and c.runs == runs[c.setting] and (c.world, c.device, c.transport) == (X.WORLD, None, None)
         for M in range(c.lo, c.hi + 1):
             if c.route == "fused":
                 assert X.expected_path(M) == X.FUSED, (c, M)
@@ -791,7 +792,7 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
     """The capture map's `tp-allreduce` and `fused-allreduce-rmsnorm` Programs may be "exists", and their Definitions' conformance
     more than not-yet-established, only when `CAPTURED` covers every call GLM-5.3's served engine makes at the workload's setting
     (`workload_setting`) up to the 2048 tokens a step batches: the fused path to FlashInfer's budget and each all-reduce on the route
-    `expected_comm` names, NCCL's never.  Every `CAPTURED` Definition is one its Program lists, and both notes cite `CAPTURED`."""
+    `expected_comm` names, NCCL's never.  Every H200 `CAPTURED` Definition is one its Program lists, and both notes cite `CAPTURED`."""
     from verity.ml.circuits.defs import REGISTRY as DEFS
     from verity_vllm.program.frontend.conformance import status_of
 
@@ -809,7 +810,7 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
             assert all(status_of(DEFS.defs[d].conformance) == "not-yet-established" for d in p["definitions"]), pid
         else:
             assert all(status_of(DEFS.defs[d].conformance) == "exact-model-tested" for d in p["definitions"]), pid
-    for c in T.CAPTURED:
+    for c in (c for c in T.CAPTURED if c.setting in T.SETTINGS):
         assert c.definition in cmap["programs"]["fused-allreduce-rmsnorm" if c.route == "fused" else "tp-allreduce"]["definitions"]
 
 

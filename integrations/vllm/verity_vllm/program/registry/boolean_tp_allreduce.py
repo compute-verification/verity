@@ -11,6 +11,10 @@ bits (bf16 = Array<16, Value<1>>).
                                                (col: Array<WORLD, BF16>) -> BF16          word view: AllReduceMultimemCoordinate_v1
     AllReduceMultimem_v2{WORLD,SIZE,TREES,FTZ} (parts: Array<WORLD, Array<SIZE, BF16>>) -> Array<SIZE, BF16>
                                                                                           word view: AllReduceMultimem_v1
+    AllReduceNcclTreeCoordinate_v2{WORLD,CHAIN}
+                                               (col: Array<WORLD, BF16>) -> BF16          word view: AllReduceNcclTreeCoordinate_v1
+    AllReduceNcclTree_v2{WORLD,SIZE,CHAIN}     (parts: Array<WORLD, Array<SIZE, BF16>>) -> Array<SIZE, BF16>
+                                                                                          word view: AllReduceNcclTree_v1
 
 Each coordinate is traced for its statics (`elementwise.specialized`) through `verity.ml.circuits.silicon.fp`, so a payload's 16
 constant-zero low bits fold into its adds. The MNNVL sum is written as what each FADD.FTZ does to the words it can meet:
@@ -24,7 +28,8 @@ constant-zero low bits fold into its adds. The MNNVL sum is written as what each
 
 The adds make the GPU's NaN (`F32AddFtz_v2`'s 0x7FFFFFFF) and F2FP ends every NaN in 0x7FFF; ``+0 + x`` keeping a NaN's payload
 changes no output. The custom all-reduce's IEEE adds are `F32Add_v2`'s, as are the multimem tree's; its FTZ adds read a payload
-with a subnormal flushed to its signed zero and an add's FTZ result unflushed. The rows are the word bodies on bits.
+with a subnormal flushed to its signed zero and an add's FTZ result unflushed. NCCL's tree adds are `Bf16AddF2fp_v2`'s builder
+(`elementwise.bf16_add_f2fp`), each sum rounded to bf16 before the next add reads it. The rows are the word bodies on bits.
 """
 from __future__ import annotations
 
@@ -40,7 +45,8 @@ from verity.ml.circuits.types import Array
 from verity_vllm.program.registry import tp_allreduce as TA
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
-           "AllReduceMultimemCoordinate", "custom_sum", "mnnvl_sum", "multimem_sum"]
+           "AllReduceMultimemCoordinate", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate", "custom_sum", "mnnvl_sum",
+           "multimem_sum", "nccl_tree_sum"]
 
 BF16 = Array(16, BL.BIT)
 
@@ -174,3 +180,33 @@ def _multimem(B, S, parts):
 AllReduceMultimem = EW.on_bits(
     "AllReduceMultimem", 2, ("WORLD", "SIZE", "TREES", "FTZ"),
     lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)), _multimem, TA.AllReduceMultimem)
+
+
+def nccl_tree_sum(S):
+    """`AllReduceNcclTreeCoordinate_v1{WORLD,CHAIN}`'s builder."""
+    chain = TA.nccl_chain(S.CHAIN, TA.ranks(S.WORLD))
+
+    def build(C, *col):
+        acc = list(col[chain[-1]])
+        for r in reversed(chain[:-1]):
+            acc = EW.bf16_add_f2fp(C, col[r], acc)
+        return acc
+    return build
+
+
+AllReduceNcclTreeCoordinate = EW.specialized(
+    "AllReduceNcclTreeCoordinate", 2, ["WORLD", "CHAIN"], nccl_tree_sum, _col,
+    doc="NCCL's tree all-reduce of one element on bits: AllReduceNcclTreeCoordinate_v1, the leaf's word and then each rank up "
+        "CHAIN added to it, one bf16 rounding per add (NaN 0x7FFF)",
+    word=lambda b: bind(TA.AllReduceNcclTreeCoordinate, WORLD=b["WORLD"], CHAIN=b["CHAIN"]))
+
+
+def _nccl_tree(B, S, parts):
+    """`AllReduceNcclTree_v1`'s body on bits: one `AllReduceNcclTreeCoordinate_v2` per element."""
+    world = TA.ranks(S.WORLD)
+    return B.batch(bind(AllReduceNcclTreeCoordinate, WORLD=world, CHAIN=TA.nccl_chain(S.CHAIN, world)), parts, axes=(1,))
+
+
+AllReduceNcclTree = EW.on_bits(
+    "AllReduceNcclTree", 2, ("WORLD", "SIZE", "CHAIN"),
+    lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)), _nccl_tree, TA.AllReduceNcclTree)

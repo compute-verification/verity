@@ -1,13 +1,15 @@
-"""numpy models of GLM-5.3's TP8 all-reduces on sm_90, the arithmetic `tp_allreduce` states, over many tokens at once:
+"""numpy models of the all-reduces `tp_allreduce` states, over many tokens at once: GLM-5.3's TP8 ones on sm_90 and NCCL's tree:
 
 * `mnnvl_rows`: FlashInfer's MNNVL all-reduce (one- or two-shot) of (WORLD, ..., N) bf16 words;
 * `mnnvl_norm_rows`: its fused residual add + RMSNorm, (WORLD, M, N) partials with (M, N) residuals and an N weight;
 * `custom_rows`: vLLM's custom all-reduce (1- or 2-stage) of (WORLD, SIZE) bf16 words;
-* `multimem_rows`: torch's multimem all-reduce of (WORLD, SIZE) bf16 words at an owner's tree each.
+* `multimem_rows`: torch's multimem all-reduce of (WORLD, SIZE) bf16 words at an owner's tree each;
+* `nccl_tree_rows`: NCCL's intra-node tree all-reduce of (WORLD, ...) bf16 words down a chain, `hadd_bf16` per add.
 
 Written from the kernels (FlashInfer 0.6.18 `trtllm_mnnvl_allreduce.cuh`, vLLM d9105ea80 `csrc/custom_all_reduce.cuh`, torch 2.13
-`CUDASymmetricMemoryOps.cu`), not from the Definitions, so that a test comparing the two compares two statements of the kernels.
-NaN payloads never reach an output: every output is F2FP's bf16.
+`CUDASymmetricMemoryOps.cu`, NCCL 2.29.7 `all_reduce.h` and `reduce_kernel.h`), not from the Definitions, so that a test comparing
+the two compares two statements of the kernels. NaN payloads never reach an output: every output is F2FP's bf16 or ``__hadd2``'s,
+whose NaN is 0x7FFF.
 """
 from __future__ import annotations
 
@@ -121,3 +123,33 @@ def multimem_rows(parts: np.ndarray, trees, ftz: bool) -> np.ndarray:
     for lo, hi, owner in T.multimem_owners(W, size):
         out[lo:hi] = DR.f2fp_bf16(tree_sum(parts[:, lo:hi], trees[owner], ftz))
     return out
+
+
+def _bf16_value(x: np.ndarray) -> np.ndarray:
+    return (np.asarray(x, np.uint16).astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+
+
+def hadd_bf16(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """``__hadd2`` on bf16 words: the sum rounded once to bf16, nearest-even, subnormals kept, past the largest finite word
+    infinity, every NaN 0x7FFF. The f64 sum of two bf16 values rounds to the same bf16 as the exact one (53 >= 2 * 8 + 2), and
+    scaling by a power of two is exact, so ``rint`` at bf16's spacing near the sum is the one rounding."""
+    s = _bf16_value(a) + _bf16_value(b)
+    with np.errstate(all="ignore"):
+        finite = np.isfinite(s) & (s != 0)
+        _m, e = np.frexp(np.where(finite, s, 1.0))
+        q = np.ldexp(1.0, np.maximum(e - 1, -126) - 7)
+        r = np.where(finite, np.rint(s / q) * q, s)
+        r = np.where(np.abs(r) >= 2.0 ** 128, np.copysign(np.inf, r), r)
+    out = (r.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    return np.where(np.isnan(s), np.uint16(0x7FFF), out)
+
+
+def nccl_tree_rows(parts: np.ndarray, chain) -> np.ndarray:
+    """NCCL's tree all-reduce of (WORLD, ...) bf16 words down `chain` (root first): the leaf's words, then each rank up the chain
+    adds its own input to what its child sent (`runTreeSplit`'s ``directRecvReduceDirectSend``, the root's
+    ``directRecvReduceCopyDirectSend``), `FuncSum<__nv_bfloat16>` being ``__hadd2``."""
+    parts = np.asarray(parts, np.uint16)
+    acc = parts[chain[-1]]
+    for r in reversed(tuple(chain)[:-1]):
+        acc = hadd_bf16(parts[r], acc)
+    return acc
