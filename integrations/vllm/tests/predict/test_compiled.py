@@ -3,8 +3,10 @@ model's config.json (`engine/profiles/hf_configs/`), its served pin (`verity_vll
 
 The pinned digests are the served Builds of record on vy-glm53-s1 (one H200: cc 9.0, 132 SMs) over SCHEDULE (prompts of 100, 37, 9 and
 300 tokens capped at 14, 9, 8 and 6, arriving at steps 0, 0, 3 and 6): Llama-3.2-1B r20261018-062949-a32b, Qwen3-8B
-r20261018-062957-da83, Qwen3-30B-A3B r20261018-084657-c7f6, each Matched and Committed at that Build.  A library change that moves a
-Definition moves the traced digest too: trace the Build again (`served-match`), write its pin (`predict compiled-pin`) and pin both.
+r20261018-062957-da83, Qwen3-30B-A3B r20261018-084657-c7f6, each Matched and Committed at that Build.  The served Commit with the
+predicted Build as Build of record passes for each: r20261018-105743-72a0, r20261018-115551-2b64 and r20261018-124350-5c89.  A library
+change that moves a Definition moves the traced digest too: trace the Build again (`served-match`), write its pin (`predict
+compiled-pin`) and pin both.
 """
 
 from __future__ import annotations
