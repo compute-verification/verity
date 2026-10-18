@@ -1940,7 +1940,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
         if root.get("reply_count") and key not in replies:
             replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
         found = [{"at": float(m["ts"]), "how": "slack-reply", "by": lane} for m in replies.get(key, [])
-                 if m.get("ts") != root["ts"] and by_handle(m, lane) and t0 < float(m["ts"]) <= now]
+                 if m.get("ts") != root["ts"] and poster(m, reg) == lane and t0 < float(m["ts"]) <= now]
         asker = poster(root, reg)
         if link := LINEAR_LINK_RE.search(root.get("text") or ""):
             if (link[1], asker) not in issues:

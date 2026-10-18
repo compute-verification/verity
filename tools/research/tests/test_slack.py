@@ -1674,6 +1674,7 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     now = T0 + 86400
     slack_ask = ask_at(fake, circuits, 0, "infra", "@circuits can the cut take 2^20 rows?")
     reply_at(fake, slack_ask, 60, "proofs", "not mine, but probably")                       # another lane's reply
+    fake.add(COORD, text="yes", username="circuits", bot_id="BOTHERAPP", thread_ts=slack_ask["ts"], ts=f"{T0 + 120:.6f}")  # not ours
     reply_at(fake, slack_ask, 600, "circuits", "yes, from PR 12")                           # 10 min
     linked = "@proofs the opening's soundness error?\nLinear: <https://linear.app/x/issue/PRF-1|PRF-1>"
     linear_ask = ask_at(fake, proofs, 100, "infra", linked)
