@@ -113,7 +113,7 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 | `linear.int8(act, act_top, weight, weight_top, group, gptq, density, dither_bits)` | quantize | activations per token, rounded or dithered (`density` < 1: dithered on a coin-chosen fraction of every k64 word's positions, rounded elsewhere); weights per row or per `group` inputs, capped at `weight_top`, rounded, GPTQ or dithered (`weight = "dither"`: fresh bits a call, density 1); `dither_bits` = b: coins R on {0, …, 2^b − 1}, served floor(x / s) − (2^(b−1) − 1) + R on s = absmax / (top − 2^(b−1)), the bit's mean given x | D4-PPL, D4-70B, LOWBIT-DESIGN, EPS-BUDGET, PPL-DITHER-SIZE |
 | `attention.rotate()` | real | Q R, K R, V R and the output R⁻¹ | D4-ATTN |
 | `attention.center_keys()` | real | kc | D4-ATTN |
-| `attention.int8(q, q_top, k, k_top, k_scale, k_sink, p, p_top, p_block, p_sink, v, v_top, v_scale, qk_bits, softmax, lut_res, lut_size, lut_sink)` | quantize | one limb; Q, K, P and V rounded or dithered within their tops (P's bits only where key <= query); P per row or per key block, `p_sink`; `qk_bits` widens Q's and K's coins as `linear.int8`'s `dither_bits` does (V and P keep their bit); `k_scale`: K per token, or one scale per (layer, KV head) from the window's keys (`head`) or the calibration windows' (`calib`), `k_sink` key 0 on its own; `softmax = "lut"`: fattn.cu's integer softmax (below) | D4-ATTN, EPS-BUDGET, PPL-DITHER-SIZE, PPL-LUT |
+| `attention.int8(q, q_top, k, k_top, k_scale, k_sink, p, p_top, p_block, p_sink, v, v_top, v_scale, qk_bits, softmax, lut_res, lut_size, lut_sink, lut_round, lut_norm)` | quantize | one limb; Q, K, P and V rounded or dithered within their tops (P's bits only where key <= query); P per row or per key block, `p_sink`; `qk_bits` widens Q's and K's coins as `linear.int8`'s `dither_bits` does (V and P keep their bit); `k_scale`: K per token, or one scale per (layer, KV head) from the window's keys (`head`) or the calibration windows' (`calib`), `k_sink` key 0 on its own; `softmax = "lut"`: fattn.cu's integer softmax (below) | D4-ATTN, EPS-BUDGET, PPL-DITHER-SIZE, PPL-LUT |
 | `attention.peel(operand, width, offset)` | integer | low-rank noise on Q or P, peeled exactly | D4-ATTN |
 | `linear.grid(grid, act, weight, block, scales, density)` | quantize | both operands on a low-bit grid (`fp4c`, `fp4`, `int5`), per token and per row, each rounded, dithered or `sr`; `block = 16` adds NVFP4's integer block scales over k (`scales`: `odd`, the UE4M3 odd integers 1–15, or `int`); `density` < 1 coins only a coin-chosen fraction of every k64 word's positions | D4-LOWBIT, LOWBIT-DESIGN |
 | `linear.peel(alphabet, width, top)` | integer | the int8 design's weight-side coin: W + U served, U low-rank (period 32 in k, {0,1} or ±1..±width), peeled exactly and gated on the check window, with \|W + U\| ≤ top | LOWBIT-DESIGN |
@@ -163,7 +163,9 @@ PPL-LUT's arms (note:20261017T2111Z-draft-ppl-lut) measure the integer softmax o
 - P = e at keys 1..pos, and key 0 as z_q V₀, with s_q = f32(1)/f32(L), z_q = f32(e₀)/f32(L) and L = Σ e.
 
 `lut_sink` takes key 0 out of the max. Its weight above the max over keys 1..pos, at u = −t, is H[u mod `lut_res`] ·
-2^(u div `lut_res`) with H[r] = rint(127 · 2^(r/`lut_res`)).
+2^(u div `lut_res`) with H[r] = rint(127 · 2^(r/`lut_res`)). `lut_round` takes t to nearest, ⌊((m − S) A + 2³¹) / 2³²⌋.
+`lut_norm` = b sums L over a table 2^b finer, rint(127 · 2^b · 2^(−t/`lut_res`)) (key 0 above the max: its weight
+times 2^b), with s_q = f32(2^b)/f32(L) and P = e as before, so keys whose e rounds to 0 still count in L.
 
 The arms:
 - `vllm-int8` is vLLM's plain step as VLLM-18 serves it: int8 everywhere, rounded, unrotated, lm_head bf16, float
@@ -171,9 +173,10 @@ The arms:
 - `vllm-int8-khead` changes only the K scale, to one per (layer, KV head).
 - `-khead-sink` is `-lut-sink`'s float twin: the same K scales, float softmax, and key 0 in a P block of its own
   (`p_sink`).
-- `-lut` is the kernel's form; `-lut-sinkm` takes key 0 out of the max; `-lut-sink` also gives key 0's K its own scale.
-- `-lut32` is 2^(−t/32) with 512 entries; `-lut-cal` calibrates the K scale; `-lut-sink-cal` and `-lut32-sink`
-  combine them.
+- `-lut` is the kernel's form; `-lut-sinkm` takes key 0 out of the max; `-lut-sink` also gives key 0's K its own scale;
+  `-lut-sink-rnd` also rounds t; `-lut-sink-norm` sums L over a table 2⁷ finer.
+- `-lut32` is 2^(−t/32) with 512 entries; `-lut-cal` calibrates the K scale; `-lut-sink-cal`, `-lut-sink-norm-cal`
+  and `-lut32-sink` combine them.
 - `co32c-u16-cohalf-*` are the same on H1's numerics.
 `frontier_plot.py` draws perplexity against core ε (`machine-model eps --checking full`) under each reading of the table
 route, and writes the table.
