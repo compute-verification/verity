@@ -98,7 +98,7 @@ def _params(check: dict) -> dict:
     template, tile = next(iter(CC.TILES.items()))
     return {"check": {"entries": 4, "scheme": CC.SCHEME, "template": template, "tile_work": tile.tile_work, **check},
             "context": "served-zk/run-1/ab", "delta": "1/100", "eps": "1/10", "grid_bits": 2, "query": tile.query,
-            "range": [1, 64]}
+            "range": [1, 64], "shape": [{"m": 16, "n": 1, "tile0": 0}]}
 
 
 def test_the_check_item_names_the_windows_coin_mode():
@@ -115,4 +115,4 @@ def test_a_seeded_window_is_as_it_was():
     assert (Co.SCHEME, Co.LABELS) == ("verity/pouw/epoch-coins/v1", ("salt", "draw"))
     seeded = Co.Challenger(7, entropy("s"))
     assert Co.coin_reason(seeded.commitment, seeded.open("draw", b"t"), "draw", b"t") is None
-    assert "coins" not in CC.expected_items(CC.params(_params({})), 0, Wd.Work.at(0, 2), 1, None)["check"]
+    assert "coins" not in CC.expected_items(CC.params(_params({})), 0, Wd.Work.at(0, 17), 1, None)["check"]

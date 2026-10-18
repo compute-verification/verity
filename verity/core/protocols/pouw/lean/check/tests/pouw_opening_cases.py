@@ -51,18 +51,19 @@ def honest(rng: random.Random) -> dict:
     rec["window"]["context"] = context
     dom = CC.window_domain(CC.params(params), rec)
     seg, v2 = (s for _, s in CC.OPENED)
-    entries, sides, lo = [], [], rng.randrange(1 << 20)
-    for kind in ("call", "filler"):
-        n_a, n_b = rng.randint(1, 3), rng.randint(1, 4)
-        bcs = {"a": [rng.randbytes(CC.BC_BYTES) for _ in range(n_a)], "b": [rng.randbytes(CC.BC_BYTES) for _ in range(n_b)]}
+    shape = [{"m": 16, "n": rng.randint(1, 4), "tile0": rng.randrange(1 << 20)}]
+    params.update(shape=shape, range=[1, Wd.shape_tiles(Wd.shape_of(shape)) + rng.randrange(5)])
+    entries, sides = [], []
+    for pub in Wd.shape_entries(Wd.shape_of(shape), n)[:2]:
+        bcs = {"a": [rng.randbytes(CC.BC_BYTES) for _ in range(pub.n_a)],
+               "b": [rng.randbytes(CC.BC_BYTES) for _ in range(pub.n_b)]}
         trees = {s: _side(Wd.side_domain(dom.domain_id, s), schema, bcs[s]) for s, schema in CC.OPENED}
         zero = bytes(64)
-        call = kind == "call"
-        entries.append(Wd.Entry(kind, lo, lo + n_a * n_b, n_a, n_b, trees["a"][0], trees["b"][0],
+        call = pub.kind == "call"
+        entries.append(Wd.Entry(pub.kind, pub.lo, pub.hi, pub.n_a, pub.n_b, trees["a"][0], trees["b"][0],
                                 rng.randbytes(64) if call else zero, rng.randbytes(64) if call else zero,
-                                rng.randrange(1 << 20) if call else 0, 1 if call else 0, 16 if call else 0))
+                                pub.tile0, pub.cols, pub.m))
         sides.append((bcs, trees))
-        lo += n_a * n_b
     entries += [Wd.Entry("none")] * (n - len(entries))
     salts = [rng.randbytes(CC.SALT_BYTES) for _ in entries]
     levels = tree_levels(dom, [Wd.entry_leaf(dom, e, Wd.entry_bc(x, s)) for e, (x, s) in enumerate(zip(entries, salts))])
@@ -72,7 +73,7 @@ def honest(rng: random.Random) -> dict:
     e = rng.randrange(2)
     entry = entries[e]
     unit = rng.randrange(entry.lo, entry.hi)
-    i, j = Wd.tile_in(entry, unit)
+    _, i, j = Wd.tile_at(Wd.shape_of(shape), unit)
     bcs, trees = sides[e]
     op = {"unit": unit, "entry": e, "entry_value": entry.to_json(), "entry_salt": salts[e].hex(),
           "window_path": [lv[(e >> k) ^ 1].hex() for k, lv in enumerate(levels[:-1])]}
@@ -235,16 +236,17 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 def _reopen(case: dict, rng: random.Random, name: str) -> None:
-    """Point the opening at a unit its entry doesn't hold (`out-of-range`, or any unit of an empty entry, `kind-none`), or
-    at a row past the side tree (`past-side`: an entry whose range claims more tiles than its sides hold), the entry and
-    its window path re-committed so only that rule refuses."""
+    """Point the opening at a unit past the shape's N tiles (`out-of-range`), at a unit through an empty entry
+    (`kind-none`), or at a row past the side tree (`past-side`: an entry whose range claims more tiles than the shape
+    gives it), the entry and its window path re-committed so only that rule refuses."""
     entry = case["entry"]
     if name == "past-side":
-        entry = Wd.Entry(entry.kind, entry.lo, entry.lo + (1 << 13) * entry.n_b + 1, entry.n_a, entry.n_b, entry.root_a,
-                         entry.root_b, entry.root_h3, entry.record, entry.tile0, entry.cols, entry.m)
-        unit = entry.hi - 1
+        entry = Wd.Entry(entry.kind, entry.lo, entry.hi + 1, entry.n_a, entry.n_b, entry.root_a, entry.root_b,
+                         entry.root_h3, entry.record, entry.tile0, entry.cols, entry.m)
+        unit = entry.lo
     else:
-        unit = entry.hi + rng.randrange(3) if entry.kind != "none" else rng.randrange(1 << 20)
+        n = Wd.shape_tiles(Wd.shape_of(case["params"]["shape"]))
+        unit = n + rng.randrange(3) if entry.kind != "none" else rng.randrange(n)
     op, dom = case["opening"], case["dom"]
     e = op["entry"]
     leaves = list(case["levels"][0])

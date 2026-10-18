@@ -2,8 +2,9 @@
 judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
-  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P]   the verifier's own parameters of the window
-  python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
+  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P] [--calls N | --call I ...]
+                                                                              the verifier's own parameters of the window
+  python served_commit.py commit PASS_DIR PARAMS OUT                          the committer: the window, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
   python served_commit.py challenger PARAMS LOG [--lean F --epoch E --state S] the challenger: one JSON request a line on stdin
@@ -14,24 +15,29 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
 
-- **The window** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), picked from ``os.urandom`` unless
-  ``--call`` names them.  Each call's A rows (the pass's retained activations, BF16 widened to FP32) and its weight's B rows
-  are formed on the CPU as `pearl_c` forms them under the pass's epoch (`PearlC.noise`, forming v1, the peel factors), and
-  become the statement's fp8-pi rows: fp8-p rows (A′_i ‖ P_A,i of role X, ``hm96-sha512/row-seg/v1``; B̃_j ‖ P_B,j of
-  role W, ``hm96-sha512/row/v2``; `leaves.words_fp8_p`), each followed by its place in the call, I or J, as a u32 in one
-  128-bit word (`pouw.window.side_row`, `leaves.words_fp8_pi`), which the tile unit reads.  A row whose forming the scheme refuses is no tile's.
-- **The tiles** are each call's kept rows' products, then filler tiles up to the padded count: the window's N_real real
-  tiles register the grid level of `pouw.window.bucket`, credited g_ℓ <= N_real tiles and padded to N = g_(ℓ+1).  A filler
-  tile is a tile of the same template on zero rows (both sides), committed like any row, so its proof has the shape of
-  every other tile's.  Unit t is `pouw.window.tile_at` of the advice: the population is
-  `population_program(Pc8TileSide{K,1,1,sm120}, N)` under `Q_template_instance`.
+- **The window** is the parameters' calls: SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), which ``params``
+  picks from ``os.urandom`` unless ``--call`` names them, and whose public shape (`pouw.window.Call`: each call's batch
+  slots m, weight rows n and first tile in the pass) is the parameters' ``shape``.  Each call's m A slots (the pass's
+  retained activations, BF16 widened to FP32, for its real rows, and a zero row for each slot past them) and its weight's
+  n B rows are formed on the CPU as `pearl_c` forms them under the pass's epoch (`PearlC.noise`, forming v1, the peel
+  factors), and become the statement's fp8-pi rows: fp8-p rows (A′_i ‖ P_A,i of role X, ``hm96-sha512/row-seg/v1``;
+  B̃_j ‖ P_B,j of role W, ``hm96-sha512/row/v2``; `leaves.words_fp8_p`), each followed by its place in the call, I or J,
+  its forming's ok and its admit, in one 128-bit word (`pouw.window.side_row`, `leaves.words_fp8_pi`).  A real row and
+  a weight row are admitted, and one the forming refuses stays in place with ok 0; an empty slot is the canonical empty
+  row, zero words, ok 0 and not admitted.
+- **The tiles** are the shape's: each call's m·n products of its slots and weight rows, then one filler tile, N in all
+  (`pouw.window.shape_tiles`), whatever the batch's real tokens.  The window is credited the masked sum over its calls'
+  tiles of s = admit ∧ ok on both rows, rounded down to its grid level (`pouw.window.credit`); a masked tile and the
+  filler (a tile of the same template on canonical empty rows) are drawn and proved as any tile is, and never credited.
+  Unit t is
+  `pouw.window.tile_at` of the shape: the population is `population_program(Pc8TileSide{K,1,1,sm120}, N)` under
+  `Q_template_instance`.
 - **The commitment** is C-Flock's: each row's b ‖ c is hm96-sha512 over its row digest under a fresh 192-byte salt.  Each
-  side of each entry (a call, or the filler) is one frame-v3-sha512 tree of its kept rows only, in order, padded to 2^D
-  leaves under the window's side domain (`pouw.window.side_domain` of the window root's domain, one-stage's served domain
-  of the window's program, partition and context: one per window and side).  Each entry is one fixed-width entry row
-  (`pouw.window.Entry`: kind, tile range, each side's row count and root, the root of the pass's -h3 tile commitment
-  (`root_h3_of`), the call's first tile in the pass, ⌈n/64⌉ and m, and the SHA-512 of the call's record, which holds
-  the kept rows' places in the call), an
+  side of each entry (a call, or the filler) is one frame-v3-sha512 tree of every row of its side, in place, padded to
+  2^D leaves under the window's side domain (`pouw.window.side_domain` of the window root's domain, one-stage's served
+  domain of the window's program, partition and context: one per window and side).  Each entry is one fixed-width entry
+  row (`pouw.window.Entry`: kind, tile range, each side's row count and root, the root of the pass's -h3 tile commitment
+  (`root_h3_of`), the call's first tile in the pass, ⌈n/64⌉ and m, and the SHA-512 of the call's record), an
   ``hm96-sha512/row/v2`` row in the **window root** (port ``entries``), padded with
   empty entries to the public bound P (L2).  W, every weight the pass's k = n = K calls read, is
   committed by weight row (BF16, ``hm96-sha512/row/v2``) in **W's root**, beside it; the tiles read the formed B̃ rows of
@@ -75,7 +81,6 @@ import argparse
 import hashlib
 import itertools
 import json
-import math
 import os
 import subprocess
 import sys
@@ -158,12 +163,24 @@ def population(k: int, n: int):
     return prog, q, PT.partition(prog, q)
 
 
+def window_shape(params: dict) -> tuple[Wd.Call, ...]:
+    """The window's public shape, its calls (`pouw.window.Call`), from the parameters."""
+    return Wd.shape_of(params["shape"])
+
+
+def tiles_of(params: dict) -> int:
+    """N, the shape's tile count."""
+    return Wd.shape_tiles(window_shape(params))
+
+
 def work_at(params: dict, ell: int) -> Wd.Work:
-    w = Wd.Work.at(ell, params["grid_bits"])
+    """The work at level `ell` of the shape's N tiles: its credit from the range's low end to N − 1, and N at most its high
+    end."""
+    n, bits = tiles_of(params), params["grid_bits"]
     lo, hi = params["range"]
-    if not (lo <= w.credited and w.n <= hi):
-        raise ValueError(f"level {ell} ({w.credited} credited, {w.n} tiles) is outside the window's range {lo}..{hi}")
-    return w
+    if not (n <= hi and ell <= Wd.level(Wd.floor_point(n - 1, bits), bits) and lo <= Wd.point(ell, bits)):
+        raise ValueError(f"level {ell} is outside the window's credit range {lo}..{n - 1} (its {n} tiles, at most {hi})")
+    return Wd.Work.at(ell, n, bits)
 
 
 def check_item(params: dict) -> dict:
@@ -175,14 +192,14 @@ def items_of(params: dict, ell: int, root_w: str | None) -> dict:
     w = work_at(params, ell)
     return {"work": w.to_json(tile_work(params)), "check": check_item(params),
             "sampling": Wd.sampling(Fraction(params["eps"]), Fraction(params["delta"]), w, tile_work(params), params["grid_bits"]),
-            "root_W": root_w}
+            "shape": Wd.shape_json(window_shape(params)), "root_W": root_w}
 
 
 #: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
 LAYOUT = (
-    ("population", "structure", "N, the padded tile count g_(ℓ+1): the draw's range, a function of the registered level"),
-    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, root_W), each "
-                         "the verifier's own recomputation at the registered level (`public_problem`)"),
+    ("population", "structure", "N, the shape's tile count: the draw's range, a function of the public shape"),
+    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, shape, root_W), "
+                         "each the verifier's own recomputation at the registered level (`public_problem`)"),
     (f"leaves:{PORT}", "structure", "P, the public bound on a window's entries"),
     (f"domain:{PORT}", "structure", "the entries' served domain: the window's program, partition and context"),
     ("leaves:W", "structure", "|W|, the deployment's weight rows at k = n = K"),
@@ -212,20 +229,21 @@ def _frame(tag: str, fields: dict, count: int) -> CommitmentDomain:
     return CommitmentDomain(identity_digest_sha512(tag, fields), OWNER, RangeIndexedDomain(0, count), hash="sha512")
 
 
-def _served(params: dict, ell: int, port: str, schema: str, count: int) -> CommitmentDomain:
-    """One-stage's served domain (`registration.served_domain`) of the window's program and partition at level `ell`."""
-    _, _, part = population(params["k"], work_at(params, ell).n)
+def _served(params: dict, port: str, schema: str, count: int) -> CommitmentDomain:
+    """One-stage's served domain (`registration.served_domain`) of the window's program and partition, over the shape's N
+    tiles."""
+    _, _, part = population(params["k"], tiles_of(params))
     return _frame(R.SERVED_DOMAIN, {"program": part["program"], "partition": PT.digest(part), "port": port, "schema": schema,
                                     "leaves": int(count), "run": params["context"]}, count)
 
 
-def window_domain(params: dict, ell: int) -> CommitmentDomain:
-    return _served(params, ell, PORT, ENTRY_SCHEMA, params["entries"])
+def window_domain(params: dict) -> CommitmentDomain:
+    return _served(params, PORT, ENTRY_SCHEMA, params["entries"])
 
 
-def side_domain(params: dict, ell: int, side: str) -> tuple[CommitmentDomain, str]:
-    """The domain of the window's side-`side` trees at level `ell` and their rows' schema."""
-    return Wd.side_domain(window_domain(params, ell).domain_id, side), L.ROW_SCHEMA["fp8-pi", SIDES[side]]
+def side_domain(params: dict, side: str) -> tuple[CommitmentDomain, str]:
+    """The domain of the window's side-`side` trees and their rows' schema."""
+    return Wd.side_domain(window_domain(params).domain_id, side), L.ROW_SCHEMA["fp8-pi", SIDES[side]]
 
 
 def weights_domain(params: dict) -> CommitmentDomain:
@@ -233,9 +251,9 @@ def weights_domain(params: dict) -> CommitmentDomain:
                              "leaves": params["w_rows"], "deployment": params["deployment"]}, params["w_rows"])
 
 
-def ports(params: dict, ell: int) -> dict:
+def ports(params: dict) -> dict:
     """The verifier's own ports: the window root over P entries, and W's root over |W| rows."""
-    return {PORT: {"leaves": params["entries"], "domain": window_domain(params, ell).domain_id.hex()},
+    return {PORT: {"leaves": params["entries"], "domain": window_domain(params).domain_id.hex()},
             "W": {"leaves": params["w_rows"], "domain": weights_domain(params).domain_id.hex()}}
 
 
@@ -253,7 +271,7 @@ def public_problem(params: dict, rec: Any) -> Verdict:
     """PoUW's rule inside the window item, which the service's rule declares as one item: the window is
     ``{"kind": "served", "context", "public"}`` under the verifier's own context, its public items are exactly
     `pouw.window.REGISTERED`, each the verifier's own at the registered level (root_W the registered W root), and N is the
-    level's padded count."""
+    shape's tile count."""
     c = _Collect()
     window = rec.get("window") if isinstance(rec, Mapping) else None
     if not isinstance(window, Mapping) or set(window) != {"kind", "context", "public"}:
@@ -278,7 +296,7 @@ def public_problem(params: dict, rec: Any) -> Verdict:
     if wrong:
         c.fail("public-value", wrong)
     if rec.get("population") != w.n:
-        c.fail("population", {"registered": rec.get("population"), "level": w.n})
+        c.fail("population", {"registered": rec.get("population"), "shape": w.n})
     return c.verdict()
 
 
@@ -293,9 +311,10 @@ def f32_rows(data, k: int, idx) -> list[bytes]:
 
 
 def _form(scheme: C.PearlC, ctx: Context, noise: C.Noise, k: int, side: str, rows: list[bytes], idx: list[int]
-          ) -> list[list[int]]:
-    """The fp8-p words of rows `idx` (FP32 bytes `rows`) on one side, as `PearlC.encode` forms them (A's E lines from its
-    rows' own seeds under a row-seeded hashing); raises `P.Reject`."""
+          ) -> list[tuple[list[int], int]]:
+    """(fp8-p words, ok) of rows `idx` (FP32 bytes `rows`) on one side, as `PearlC.encode` forms them (A's E lines from its
+    rows' own seeds under a row-seeded hashing): ok is the forming's admission (`Pc8RowA`/`Pc8RowB`'s ``ok``: the noise
+    floor and a live row), and a refused row keeps its words; raises `P.Reject`."""
     seed_e = noise.seed_a if side == "a" else noise.seed_b
     rows_e = ([C.sample_line(x, 0, 0, 0) for x in scheme.row_seeds(ctx, rows, idx)]
               if side == "a" and scheme.hashing in C.ROW_SEEDED else None)
@@ -303,13 +322,15 @@ def _form(scheme: C.PearlC, ctx: Context, noise: C.Noise, k: int, side: str, row
     peel = C.peel_factors_a if side == "a" else C.peel_factors_b
     p = peel(f.codes, C.scaled_noise(f, e), noise.seed_b, k, scheme.line_norm, scheme.device)
     ok = [P.f32_of_bits(r) * P.f32_of_bits(a) >= P.SIGMA_MIN and C.live_row(x) for r, a, x in zip(f.rho, f.alpha, f.x)]
-    return [L.words_fp8_p(c, q) if good else None for c, q, good in zip(f.codes, p, ok)]
+    return [(L.words_fp8_p(c, q), int(good)) for c, q, good in zip(f.codes, p, ok)]
 
 
 def form(scheme: C.PearlC, ctx: Context, noise: C.Noise, k: int, side: str, rows: list[bytes], idx: list[int]
-         ) -> list[list[int] | None]:
-    """Each row's fp8-p words, or None for a row the scheme refuses (alone, so one refusal leaves its batch's others)."""
-    out: list[list[int] | None] = []
+         ) -> list[tuple[list[int], int]]:
+    """Each row's (fp8-p words, ok), in place: a row the forming raises on (alone, so one refusal leaves its batch's
+    others) is the zero operand row with ok 0."""
+    zero = [0] * L.ROW_WORDS["fp8-p"](k)
+    out: list[tuple[list[int], int]] = []
     for at in range(0, len(idx), CHUNK):
         r, i = rows[at:at + CHUNK], idx[at:at + CHUNK]
         try:
@@ -319,7 +340,7 @@ def form(scheme: C.PearlC, ctx: Context, noise: C.Noise, k: int, side: str, rows
                 try:
                     out += _form(scheme, ctx, noise, k, side, [one], [j])
                 except P.Reject:
-                    out.append(None)
+                    out.append((zero, 0))
     return out
 
 
@@ -365,61 +386,52 @@ def commit_weights(params: dict, rows, salts: list[bytes] | None = None) -> tupl
     return tree_levels(dom, leaves)[-1][0].hex(), used
 
 
-def filler_shape(fill: int) -> tuple[int, int]:
-    """The filler's zero rows (A, B): about the square root of its tiles each, within the side trees' depths, so its tiles
-    cover `fill`."""
-    cap_a, cap_b = 1 << Wd.DEPTHS["a"], 1 << Wd.DEPTHS["b"]
-    b = min(cap_b, max(1, math.isqrt(fill - 1) + 1, -(-fill // cap_a)))
-    if -(-fill // b) > cap_a:
-        raise ValueError(f"{fill} filler tiles are more than one entry's 2^{Wd.DEPTHS['a']} x 2^{Wd.DEPTHS['b']}")
-    return -(-fill // b), b
-
-
 def commit_window(params: dict, calls: list[dict], root_w: str, root_h3: bytes, salts: dict | None = None
                   ) -> tuple[dict, dict, dict]:
-    """The window's commitment from its calls (each `{"record", "words": {"a", "b"}}`, the record holding the call's
-    ``shape`` [m, k, n] and its first tile in the pass ``tile0``, a side's words None where the scheme refused the row) of
-    the pass whose -h3 tile commitment's root is `root_h3`: (``commitment.json``, ``advice.json``, the prover's rows).  Each
-    side tree holds the kept rows only, each with its place in the call (`Wd.side_row`); the call's record
-    (`advice["records"]`, its SHA-512 in the entry) gains those places (``keep``), and the entry its tile0, cols and m.
-    `salts` replays the salts of an earlier commit's prover file (`load`)."""
-    k = params["k"]
-    zero = Wd.side_row([0] * L.ROW_WORDS["fp8-p"](k), 0)
-    keeps = [{s: [i for i, w in enumerate(c["words"][s]) if w is not None] for s in SIDES} for c in calls]
-    real = sum(len(kp["a"]) * len(kp["b"]) for kp in keeps)
-    work = Wd.bucket(real, params["grid_bits"])
+    """The window's commitment from its calls, the shape's in order (each `{"record", "words": {"a", "b"}}`, the record
+    holding the call's ``shape`` [m, k, n] and its first tile in the pass ``tile0``, each side's (fp8-p words, ok, admit)
+    per row: A's m slots, each a real row's `form` admitted or the canonical empty row, B's n weight rows, admitted) of the
+    pass whose -h3 tile commitment's root is `root_h3`: (``commitment.json``, ``advice.json``, the prover's rows).  Every
+    slot and every weight row is its side tree's leaf at its place in the call, with that place, its ok and its admit
+    (`Wd.side_row`); the filler is one canonical empty row each side; the entries' public fields are the shape's
+    (`Wd.shape_entries`).  The window is credited the masked sum of ok·admit products over its tiles (`Wd.selected`,
+    `Wd.credit`).  `salts` replays the salts of an earlier commit's prover file (`load`)."""
+    k, sh, bound = params["k"], window_shape(params), params["entries"]
+    if len(calls) != len(sh):
+        raise ValueError(f"{len(calls)} calls, not the shape's {len(sh)}")
+    for c, (call, x) in enumerate(zip(sh, calls)):
+        m, _, n = x["record"]["shape"]
+        if (m, n, x["record"]["tile0"], len(x["words"]["a"]), len(x["words"]["b"])) != (call.m, call.n, call.tile0, call.m, call.n):
+            raise ValueError(f"call {c}: its record and rows are not the shape's {call.to_json()}")
+    zero = Wd.side_row([0] * L.ROW_WORDS["fp8-p"](k), 0, 0, 0)
+    sides = [{s: [Wd.side_row(w, i, ok, ad) for i, (w, ok, ad) in enumerate(x["words"][s])] for s in SIDES} for x in calls]
+    sides.append({"a": [zero], "b": [zero]})
+    fields = [{s: [list(Wd.side_field(r)) for r in ws[s]] for s in SIDES} for ws in sides]
+    real = sum(Wd.selected(f)["a"] * Wd.selected(f)["b"] for f in fields[:-1])
+    if real < 1:
+        raise ValueError("the window credits no tile: no call has an admitted slot and weight row that both passed their "
+                         "forming")
+    work = Wd.credit(real, Wd.shape_tiles(sh), params["grid_bits"])
     ell = work.level
     work_at(params, ell)
-    if len(calls) + 1 > params["entries"]:
-        raise ValueError(f"{len(calls)} calls and the filler are more entries than the bound {params['entries']}")
-    fa, fb = filler_shape(work.n - real)
-    sides = [{s: [Wd.side_row(c["words"][s][i], i) for i in kp[s]] for s in SIDES} for c, kp in zip(calls, keeps)]
-    sides.append({"a": [zero] * fa, "b": [zero] * fb})
-    records = [{**c["record"], "keep": kp} for c, kp in zip(calls, keeps)] + [None]
-    entries, priv, at = [], {}, 0
-    for e, (ws, kind) in enumerate(zip(sides, ["call"] * len(calls) + ["filler"])):
-        if any(not 1 <= len(ws[s]) <= 1 << Wd.DEPTHS[s] for s in SIDES):
-            raise ValueError(f"entry {e}: its sides keep {len(ws['a'])} and {len(ws['b'])} rows, not 1 to 2^D_A and 2^D_B")
-        size = len(ws["a"]) * len(ws["b"]) if kind == "call" else work.n - real
+    records = [x["record"] for x in calls] + [None] * (bound - len(calls))
+    public_entries = Wd.shape_entries(sh, bound)
+    entries, priv = [], {}
+    for e, (pub, ws) in enumerate(zip(public_entries, sides)):
         priv[e], roots = {}, {}
         for s in SIDES:
-            dom, schema = side_domain(params, ell, s)
+            dom, schema = side_domain(params, s)
             root, priv[e][s] = commit_side(dom, schema, s, ws[s], salts[e][s] if salts else _salts(len(ws[s])))
             roots[s] = bytes.fromhex(root)
-        call = kind == "call"
-        place = {"tile0": records[e]["tile0"], "cols": -(-records[e]["shape"][2] // Wd.TILE), "m": records[e]["shape"][0]} \
-            if call else {}
-        entries.append(Wd.Entry(kind, at, at + size, len(ws["a"]), len(ws["b"]), roots["a"], roots["b"],
-                                root_h3 if call else bytes(64), Wd.record_digest(records[e]) if call else bytes(64), **place))
-        at += size
-    entries += [Wd.Entry("none")] * (params["entries"] - len(entries))
-    records += [None] * (params["entries"] - len(records))
-    indices = [{s: [Wd.side_index(r) for r in ws[s]] for s in SIDES} for ws in sides]
-    problem = Wd.window_problem([x.row() for x in entries], work, params["entries"], root_h3, params["grid_bits"],
-                                records, indices)
+        call = pub.kind == "call"
+        entries.append(Wd.Entry(pub.kind, pub.lo, pub.hi, pub.n_a, pub.n_b, roots["a"], roots["b"],
+                                root_h3 if call else bytes(64), Wd.record_digest(records[e]) if call else bytes(64),
+                                pub.tile0, pub.cols, pub.m))
+    entries += public_entries[len(entries):]
+    problem = Wd.window_problem([x.row() for x in entries], work, bound, root_h3, sh, fields, params["grid_bits"], records)
     if problem:
         raise ValueError(f"the window statement fails on the committer's own advice: {problem}")
-    dom = window_domain(params, ell)
+    dom = window_domain(params)
     esalts = salts["entries"] if salts else _salts(len(entries))
     levels = tree_levels(dom, [entry_leaf(dom, e, entry_bc(x, s)) for e, (x, s) in enumerate(zip(entries, esalts))])
     roots = [{"port": PORT, "root": levels[-1][0].hex(), "leaves": params["entries"], "domain": dom.domain_id.hex()},
@@ -461,12 +473,12 @@ def load(p: Path) -> dict:
 
 def opening(advice: dict, priv: dict, params: dict, unit: int) -> dict:
     """The prover's opening of unit `unit`: its entry with its salt and path to the window root, and each side's row with
-    its path to the entry's side root."""
-    e, i, j = Wd.tile_at(entries_of(advice), unit)
+    its path to the entry's side root, the entry and rows the shape puts the unit at (`Wd.tile_at`)."""
+    e, i, j = Wd.tile_at(window_shape(params), unit)
     out = {"unit": unit, "entry": e, "entry_value": advice["entries"][e], "entry_salt": advice["entry_salts"][e],
            "window_path": advice["window_path"][e]}
     for side, idx in (("a", i), ("b", j)):
-        dom, schema = side_domain(params, advice["level"], side)
+        dom, schema = side_domain(params, side)
         levels = Wd.side_levels(dom, side_leaves(dom, schema, priv[e][side]["bcs"]))
         out[side] = {"index": idx, "path": [x.hex() for x in Wd.side_path(dom, levels, idx)]}
     return out
@@ -490,7 +502,7 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
         pre: str | None = str(e)
     else:
         roots = {r["port"]: r for r in rec["roots"]}
-        pre = None if roots.get(PORT, {}).get("domain") == window_domain(params, ell).domain_id.hex() else \
+        pre = None if roots.get(PORT, {}).get("domain") == window_domain(params).domain_id.hex() else \
             "the registered window domain is not the window's served domain"
     x = {"params": core_params(params), "commitment": OR.hexed(rec), "units": list(draw.get("units", ())) if drawn else None,
          "unit": unit, "pub": pub.hex(), "opening": op}
@@ -764,7 +776,7 @@ class Challenger:
                 and (stream, ell) not in self._salted):
             st.salt_released(self.openings["salt"].coin, self.salt_released_at)
             self._salted.add((stream, ell))
-        own = ports(self.params, ell)
+        own = ports(self.params)
         st.ready()
         self.r1_r6(name, st, rec, own)
         reg = st.register(rec, own)
@@ -942,14 +954,40 @@ def _weights(man: dict, calls: list[dict]) -> list[int]:
     return sorted({int(u["weight"]) for u in calls})
 
 
+def pass_tiles(man: dict) -> dict[int, int]:
+    """Each call's first tile in its pass: the pass's 64 x 64 tiles in workload order (`audit.tile_refs`)."""
+    tile0, at = {}, 0
+    for u in man["matmuls"]:
+        tile0[u["index"]] = at
+        at += -(-u["m"] // Wd.TILE) * -(-u["n"] // Wd.TILE)
+    return tile0
+
+
 def cmd_params(a) -> int:
-    """The verifier's own parameters, from the served request it audits: its run and manifest name the window, and the
-    model's k = n = K weights give |W|."""
+    """The verifier's own parameters, from the served request it audits: its run and manifest name the window, the
+    model's k = n = K weights give |W|, and the window's calls, picked from ``os.urandom`` unless ``--call`` names them,
+    give its public shape (each call's batch slots m, weight rows n and first tile in the pass, in pass order)."""
     _, man, sha, calls = _pass(Path(a.pass_dir))
     rows = sum(next(u["n"] for u in calls if int(u["weight"]) == w) for w in _weights(man, calls))
+    by = {u["index"]: u for u in calls}
+    if a.call:
+        if not set(a.call) <= set(by):
+            raise SystemExit(f"calls {sorted(set(a.call) - set(by))} are not the pass's calls of k = n = {K}")
+        chosen, draw = [by[i] for i in a.call], {"given": a.call}
+    else:
+        source = os.urandom(32)
+        order = sorted(calls, key=lambda u: hashlib.sha256(source + u["index"].to_bytes(8, "little")).digest())
+        chosen, draw = order[:a.calls], {"source": source.hex(), "among": [x["index"] for x in calls]}
+    tile0 = pass_tiles(man)
+    chosen = sorted(chosen, key=lambda u: tile0[u["index"]])
+    shape = [{"m": u["m"], "n": u["n"], "tile0": tile0[u["index"]]} for u in chosen]
+    why = Wd.shape_problem(Wd.shape_of(shape), a.entries)
+    if why:
+        raise SystemExit(f"the calls {[u['index'] for u in chosen]} are not a window's shape: {why}")
     deployment = f"served-zk/{man.get('run')}"
     params = {"context": f"{deployment}/{sha}", "deployment": deployment, "k": K, "eps": a.eps, "delta": a.delta,
-              "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows}
+              "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows,
+              "calls": [u["index"] for u in chosen], "shape": shape, "call_draw": draw}
     Path(a.out).write_text(json.dumps(params, sort_keys=True))
     print(json.dumps(params), flush=True)
     return 0
@@ -963,35 +1001,30 @@ def cmd_commit(a) -> int:
     scheme = PD.scheme_of(man["scheme"])
     if tuple(scheme.tile) != (Wd.TILE, Wd.TILE):
         raise SystemExit(f"{man['scheme']}: its tiles are {scheme.tile}, not the window's 64 x 64 pass tiles")
-    source = os.urandom(32)
-    if a.call:
-        chosen = [next(x for x in calls if x["index"] == i) for i in a.call]
-    else:
-        order = sorted(calls, key=lambda u: hashlib.sha256(source + u["index"].to_bytes(8, "little")).digest())
-        chosen = sorted(order[:a.calls], key=lambda u: u["index"])
-    tile0, at = {}, 0
-    for u in man["matmuls"]:
-        tile0[u["index"]] = at
-        at += -(-u["m"] // Wd.TILE) * -(-u["n"] // Wd.TILE)
-    chosen = sorted(chosen, key=lambda u: tile0[u["index"]])
+    by, tile0 = {u["index"]: u for u in calls}, pass_tiles(man)
+    if not set(params["calls"]) <= set(by) or [Wd.Call(by[i]["m"], by[i]["n"], tile0[i]) for i in params["calls"]] != list(window_shape(params)):
+        raise SystemExit(f"the parameters' calls {params['calls']} are not this pass's calls of their shape")
     undo = FT.install(scheme)
     window = []
     try:
-        for u in chosen:
+        for u in (by[i] for i in params["calls"]):
             w = man["weights"][str(u["weight"])]
-            k, n, real = u["k"], u["n"], u["real_rows"]
-            ctx = Context(bytes.fromhex(man["salt"]), Matmul(u["index"], Shape(u["m"], k, n), u["weight"]),
+            k, m, n, real = u["k"], u["m"], u["n"], u["real_rows"]
+            ctx = Context(bytes.fromhex(man["salt"]), Matmul(u["index"], Shape(m, k, n), u["weight"]),
                           bytes.fromhex(u["root_a"]), bytes.fromhex(w["root"]))
             noise = scheme.noise(ctx)
             a_data = (pass_dir / u["rows"]["path"]).read_bytes()
             b_data = np.memmap(pass_dir / w["rows"]["path"], dtype=np.uint8, mode="r")
-            words = {"a": form(scheme, ctx, noise, k, "a", f32_rows(a_data, k, range(real)), list(range(real))),
-                     "b": form(scheme, ctx, noise, k, "b", f32_rows(b_data, k, range(n)), list(range(n)))}
-            record = {"matmul": u["index"], "shape": [u["m"], k, n], "tile0": tile0[u["index"]], "weight": u["weight"],
-                      "real_rows": real,
+            empty = ([0] * L.ROW_WORDS["fp8-p"](k), 0, 0)
+            words = {"a": [(w, ok, 1) for w, ok in form(scheme, ctx, noise, k, "a", f32_rows(a_data, k, range(real)),
+                                                         list(range(real)))] + [empty] * (m - real),
+                     "b": [(w, ok, 1) for w, ok in form(scheme, ctx, noise, k, "b", f32_rows(b_data, k, range(n)),
+                                                         list(range(n)))]}
+            record = {"matmul": u["index"], "shape": [m, k, n], "tile0": tile0[u["index"]], "weight": u["weight"],
                       "served": {"root_a": u["root_a"], "weight_root": w["root"]}}
             window.append({"record": record, "words": words})
-            print(json.dumps({"call": u["index"], "excluded": {s: sum(x is None for x in v) for s, v in words.items()}}), flush=True)
+            print(json.dumps({"call": u["index"], "empty": m - real,
+                              "refused": {s: sum(a - ok for _, ok, a in v) for s, v in words.items()}}), flush=True)
     finally:
         undo()
 
@@ -1005,15 +1038,14 @@ def cmd_commit(a) -> int:
     public, advice, priv = commit_window(params, window, root_w, root_h3_of(man))
     advice["provenance"] = {"run": man.get("run"), "manifest_sha512": sha, "scheme": man["scheme"],
                             "transcript_root": man.get("transcript_root"), "commitment": man.get("commitment"),
-                            "records_root": man.get("records_root"),
-                            "call_draw": {"source": source.hex(), "among": [x["index"] for x in calls]} if not a.call else {"given": a.call}}
+                            "records_root": man.get("records_root"), "call_draw": params.get("call_draw")}
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "commitment.json").write_text(json.dumps(public, sort_keys=True))
     (out / "advice.json").write_text(json.dumps(advice, sort_keys=True))
     save(out / "prover.npz", priv)
-    print(json.dumps({"calls": [c["record"]["matmul"] for c in window], "real": advice["real"], "work": public["items"]["work"],
-                      "law": public["items"]["sampling"]["law"], "filler": advice["entries"][len(window)]["hi"] - advice["real"],
+    print(json.dumps({"calls": [c["record"]["matmul"] for c in window], "real": advice["real"], "tiles": tiles_of(params),
+                      "work": public["items"]["work"], "law": public["items"]["sampling"]["law"],
                       "roots": {r["port"]: r["root"][:16] for r in public["roots"]}}), flush=True)
     return 0
 
@@ -1265,11 +1297,11 @@ def main(argv=None) -> int:
     p.add_argument("--eps", default=EPS)
     p.add_argument("--delta", default=DELTA)
     p.add_argument("--entries", type=int, default=ENTRIES)
+    p.add_argument("--calls", type=int, default=2)
+    p.add_argument("--call", type=int, action="append")
     p = sub.add_parser("commit")
     for x in ("pass_dir", "params", "out"):
         p.add_argument(x)
-    p.add_argument("--calls", type=int, default=2)
-    p.add_argument("--call", type=int, action="append")
     p = sub.add_parser("register")
     for x in ("commit_dir", "params", "out"):
         p.add_argument(x)

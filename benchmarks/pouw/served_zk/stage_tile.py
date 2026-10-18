@@ -1,8 +1,9 @@
 """stage_tile.py COMMIT_DIR PARAMS UNIT OUT: unit UNIT of a served window as one C-Flock --zk unit, on the committer's rows.
 
 The unit is `Pc8TileSide{K=4096,TM=1,TN=1,DEV=sm120}`: A row i (fp8-pi, role X, row-seg) and B row j (fp8-pi, role W, v2)
-of the window's entry the unit falls in (`pouw.window.tile_at` of ``advice.json``: a call's kept rows, or the filler's
-zero rows), each a side row with its index field (`pouw.window.side_row`), under the salts `served_commit.py commit`
+of the window's entry the unit falls in (`pouw.window.tile_at` of the parameters' public shape: a call's slot and weight
+row, at their places, or the filler's zero rows), each a side row with its index field, its place and its forming's ok
+(`pouw.window.side_row`), under the salts `served_commit.py commit`
 committed them with, so the proof's committed rows have the b ‖ c the entry's leaves hold; the tile digest is its output
 row.  `class_statement.stage_unit` writes circuit.txt, inst.bin and pub.bin under OUT; this writes pin.txt, stage.json
 and opening.json (the prover's: the entry, its salt and path to the window root, and each row's frame-v3 path to the
@@ -53,7 +54,10 @@ def main() -> None:
     advice = json.loads((src / "advice.json").read_text())
     priv = SC.load(src / "prover.npz")
     k = params["k"]
-    e, i, j = Wd.tile_at(SC.entries_of(advice), unit)
+    if "shape" not in params:
+        raise SystemExit(f"{sys.argv[2]}: no shape: the parameters of a window committed before the static window "
+                         f"(core_check.WINDOW_FORM)")
+    e, i, j = Wd.tile_at(SC.window_shape(params), unit)
     side = {"a": priv[e]["a"], "b": priv[e]["b"]}
     bits = 16 * L.ROW_WORDS["fp8-pi"](k)
     if any(16 * side[s]["words"].shape[1] != bits for s in side):

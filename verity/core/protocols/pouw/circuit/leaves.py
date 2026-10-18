@@ -25,8 +25,8 @@ id, the word count and the role, and each tree holds exactly one (schema id, wor
                                   P's 64 BF16 words
     fp8-pi (pouw/row-fp8-pi/v1)   an fp8-p row, then its index field: the row's      k/2 + 72           X (A′_i ‖ P_A,i ‖ I)
                                   place in its call as a u32 (two words, low first)                     or W (B̃_j ‖ P_B,j ‖ J)
-                                  and six zero words (a window's side row,
-                                  `window.side_row`)
+                                  its ok and admit words, then four zero words (a
+                                  window's side row, `window.side_row`)
     ok (pouw/row-ok/v1)           the row's admission bit, bit 0 of one word whose   1                  X (A_i) or W (B_j)
                                   bits 1-15 are zero
     tile (pouw/tile-h0/v1)        the 32-byte tile digest (`PearlTileDigest`), two   16                 X
@@ -143,7 +143,8 @@ DIGEST = Array(8, U32)
 #: an ok row's one word, as its row unit returns it: the admission bit at bit 0, bits 1-15 zero
 OK = Value(16)
 P_WORDS = 64
-#: an fp8-pi row's index field, as the window's tile unit reads it: eight words, the u32 index low word first, then zeros
+#: an fp8-pi row's index field, as the window's tile unit reads it: eight words, the u32 index low word first, the row's ok
+#: and admit words, then zeros
 INDEX_WORDS = 8
 INDEX = Array(INDEX_WORDS, Value(16))
 #: a cap-chunks row's chunk digests: a tile row of at most 64 columns (pc8's tile)
@@ -254,14 +255,16 @@ def words_fp8_p(codes: Sequence[int], p: Sequence[int]) -> list[int]:
     return [(codes[2 * w] & 0xFF) | (codes[2 * w + 1] & 0xFF) << 8 for w in range(len(codes) // 2)] + words_bf16(p)
 
 
-def words_index(index: int) -> list[int]:
+def words_index(index: int, ok: int = 0, admit: int = 0) -> list[int]:
     if not (isinstance(index, int) and not isinstance(index, bool) and 0 <= index < 1 << 32):
         raise ValueError(f"a row's index is a u32, not {index!r}")
-    return [index & 0xFFFF, index >> 16] + [0] * (INDEX_WORDS - 2)
+    if ok not in (0, 1) or admit not in (0, 1):
+        raise ValueError("a row's ok and admit are bits")
+    return [index & 0xFFFF, index >> 16, ok, admit] + [0] * (INDEX_WORDS - 4)
 
 
-def words_fp8_pi(codes: Sequence[int], p: Sequence[int], index: int) -> list[int]:
-    return words_fp8_p(codes, p) + words_index(index)
+def words_fp8_pi(codes: Sequence[int], p: Sequence[int], index: int, ok: int = 0, admit: int = 0) -> list[int]:
+    return words_fp8_p(codes, p) + words_index(index, ok, admit)
 
 
 def words_ok(ok: int) -> list[int]:

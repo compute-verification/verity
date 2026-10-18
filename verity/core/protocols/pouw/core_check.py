@@ -8,9 +8,10 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 
 * **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
   the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio
-  strings, the grid's bits, the declared range of tile counts, the
-  window's context and the check query's SHA-512 (one-stage's `query_digest` of the tile template's instance query).  The
-  template is one the verifier pins (`TILES`, Lean's `PouwCheck.tiles`), with that template's tile work and query.
+  strings, the grid's bits, the declared range of tile counts, the window's context, the check query's SHA-512
+  (one-stage's `query_digest` of the tile template's instance query) and the window's shape (`window.shape_of`, its
+  calls; `window.shape_problem` within the entry bound, its N within the range).  The template is one the verifier pins
+  (`TILES`, Lean's `PouwCheck.tiles`), with that template's tile work and query.
 * **Commitment**: the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window
   ``{"kind": "served", "context", "public"}`` holding exactly `window.REGISTERED`.  Its digest is the record's own,
   `registration.digest`, the one the service's receipt, draw and outcome cite.
@@ -19,13 +20,16 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
   and on acceptance the integrity profile and the public outputs ``{"draw": d}``, `d` the verifier's draw as one-stage's
   `draw.py` writes it (any of its laws; PoUW's rule then holds it to subset:K′).
 * **The check** accepts when the registration is PoUW's (`window.REGISTERED`, each item the verifier's own at the
-  registered level, N = point(level + 1) in the declared range, the law subset:K′ with K′ = `window.k_prime`, the check's
-  query and scheme), the service accepted this registration, and its profile and draw are of the registered partition's N
-  units drawn subset:K′ at the window's δ.  It publishes exactly `window.PUBLIC` and the service's profile.  The service's
-  reject is a reject and its undecided (the verifier of record hasn't run) is undecided.
+  registered level, N the shape's tile count, the level's credited tiles from the range's low end to N − 1, the law
+  subset:K′ with K′ = `window.k_prime`, the check's query and scheme), the service accepted this registration, and its
+  profile and draw are of the registered partition's N units drawn subset:K′ at the window's δ.  It publishes exactly
+  `window.PUBLIC` and the service's profile.  The service's reject is a reject and its undecided (the verifier of record
+  hasn't run) is undecided.  Parameters with no ``shape``, and a registration with no ``shape`` item, are the superseded
+  window's, whose tiles and N followed its real tiles: each is refused as ``window-form`` (refuse and label).
 
 `opening` is the rule on one unit's opening beside it (`served_commit.check`'s, which calls it): the tile proof's public
-file opens the unit's rows under the registered window root, through its entry and the entry's side trees.
+file opens the unit's rows under the registered window root, through the entry and the rows the shape puts the unit at
+(`window.tile_at`).
 
 `pass_epoch` is the rule on the pass a window is received from (`served_commit.Challenger.pass_epoch`, which calls it):
 its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.
@@ -63,7 +67,13 @@ ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 FORMATS = ("verity/registration/v1", "verity/registration/v2")
 LEVEL = "unit"
-PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "query", "range")
+PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "query", "range", "shape")
+#: the refusals of the superseded window, whose tiles and N followed its real tiles (decision 129: refuse and label): its
+#: parameters, and its registration, have no shape
+WINDOW_FORM_PARAMS = ("window-form: the parameters have no shape: they are the superseded window's, whose tiles and N "
+                      "followed its real tiles")
+WINDOW_FORM = ("window-form: the registration has no shape item: it is the superseded window, whose tiles and N followed "
+               "its real tiles, not the static window of its shape")
 CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 VERDICTS = ("accept", "reject", "undecided")
@@ -175,6 +185,8 @@ def _str(x: Any) -> bool:
 
 def params(j: Any) -> dict:
     """The verifier's own parameters of the window."""
+    if isinstance(j, dict) and sorted(j) == [k for k in PARAMS_KEYS if k != "shape"]:
+        raise Refused(WINDOW_FORM_PARAMS)
     if not isinstance(j, dict) or sorted(j) != list(PARAMS_KEYS):
         raise Refused(f"keys are not {', '.join(PARAMS_KEYS)}")
     c = j["check"]
@@ -214,7 +226,16 @@ def params(j: Any) -> dict:
         raise Refused("check.tile_work is not its pinned template's tile work")
     if j["query"] != t.query:
         raise Refused("query is not its pinned template's query digest")
-    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg)}
+    try:
+        shape = Wd.shape_of(j["shape"])
+    except ValueError:
+        raise Refused("shape is not a non-empty list of calls {m, n, tile0} of natural numbers") from None
+    why = Wd.shape_problem(shape, c["entries"])
+    if why:
+        raise Refused(f"shape: {why}")
+    if Wd.shape_tiles(shape) > rg[1]:
+        raise Refused(f"shape: its {Wd.shape_tiles(shape)} tiles are more than the range's {rg[1]}")
+    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg), "shape": shape}
 
 
 def _root(r: Any) -> dict | None:
@@ -467,7 +488,7 @@ def check_item(p: dict) -> dict:
 def expected_items(p: dict, ell: int, w: Wd.Work, k: int, root_w: Any) -> dict:
     """The registered items as the verifier computes them at level `ell` (`served_commit.items_of`)."""
     tw = p["check"]["tile_work"]
-    return {"check": check_item(p), "root_W": root_w, "work": w.to_json(tw),
+    return {"check": check_item(p), "root_W": root_w, "work": w.to_json(tw), "shape": Wd.shape_json(p["shape"]),
             "sampling": {"delta": str(p["delta"]), "eps": str(p["eps"]), "grid_bits": p["grid_bits"],
                          "law": {"k": k, "law": "subset"}}}
 
@@ -475,19 +496,22 @@ def expected_items(p: dict, ell: int, w: Wd.Work, k: int, root_w: Any) -> dict:
 def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
     rec = c["record"]
     win, items = rec["window"], rec["window"]["public"]
-    bits, (lo, hi) = p["grid_bits"], p["range"]
+    bits, lo = p["grid_bits"], p["range"][0]
     if win["kind"] != "served" or win["context"] != p["context"]:
         return (f"window: registered kind {win['kind']} in context {win['context']}, the verifier's served in "
                 f"{p['context']}"), None
+    if "shape" not in items:
+        return WINDOW_FORM, None
     if sorted(items) != sorted(Wd.REGISTERED):
         return f"public-items: registered {', '.join(sorted(items))}, declared {', '.join(sorted(Wd.REGISTERED))}", None
     work = items["work"]
     ell = work.get("level") if isinstance(work, dict) else None
     if not _nat(ell):
         return "level: the registration names no work level", None
-    if ell + 1 > Wd.level(Wd.floor_point(hi, bits), bits) or Wd.point(ell, bits) < lo:
-        return f"level: level {ell} is outside the window's range {lo}..{hi}", None
-    w = Wd.Work.at(ell, bits)
+    n = Wd.shape_tiles(p["shape"])
+    if ell > Wd.level(Wd.floor_point(n - 1, bits), bits) or Wd.point(ell, bits) < lo:
+        return f"level: level {ell} is outside the window's credit range {lo}..{n - 1}", None
+    w = Wd.Work.at(ell, n, bits)
     tw = p["check"]["tile_work"]
     k = Wd.k_prime(p["eps"], p["delta"], w.credited * tw, w.n, tw)
     root_w = next((r["root"] for r in rec["roots"] if r["port"] == "W"), None)
@@ -496,7 +520,7 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
     if wrong:
         return f"public-value: {', '.join(wrong)}", None
     if rec["population"] != w.n:
-        return f"population: registered {rec['population']}, the level's {w.n}", None
+        return f"population: registered {rec['population']}, the shape's {w.n}", None
     law = {"k": k, "law": "subset"}
     if _canon(rec["law"]) != _canon(law):
         return f"law: registered {_canon(rec['law'])}, the window's {_canon(law)}", None
@@ -625,9 +649,12 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
     if not (0 <= e < dom.count and verify_path(dom, root, e, Wd.entry_leaf(dom, e, Wd.entry_bc(entry, salt)), sibs)):
         return f"entry {e} is not the registered window's entry"
     try:
-        at = dict(zip(("a", "b"), Wd.tile_in(entry, unit)))
+        want, i, j = Wd.tile_at(p["shape"], unit)
     except ValueError as x:
-        return f"entry {e}: {x}"
+        return f"unit {unit}: {x}"
+    if e != want or Wd.public_fields(entry) != Wd.public_fields(Wd.shape_entries(p["shape"], dom.count)[want]):
+        return f"entry {e}: it is not the shape's entry {want}, which unit {unit} is in"
+    at = {"a": i, "b": j}
     head, nl, body = pub.partition(b"\n")
     try:
         h = json.loads(head.decode(), parse_constant=_no_constant) if nl else None
@@ -1022,6 +1049,7 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
+__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "WINDOW_FORM", "WINDOW_FORM_PARAMS",
+           "answer", "answer_of", "canonical",
            "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
            "opening", "params", "pass_epoch", "ratio", "registered", "rounds", "unit_draw", "verify_path", "window_domain"]

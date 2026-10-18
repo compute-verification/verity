@@ -1,50 +1,62 @@
-"""PoUW's audit window as the proof service sees it: what the window makes public, the grid its tile count is padded to,
-the size of the uniform draw, and the window's advice (its per-call entries and the map from a drawn index to a tile),
-with the window statement's reference (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`,
-PoUW; the joint note's L2, L3 and L4).
+"""PoUW's audit window as the proof service sees it: what the window makes public, the grid its credit is rounded to, the
+size of the uniform draw, and the window's advice (its per-call entries over a public shape, and the map from a drawn
+index to a tile), with the window statement's reference
+(`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, PoUW; the joint note's L2, L3 and L4).
 
-**Public items** (`PUBLIC`), exactly the draft's list.  The service refuses a registration that makes anything else public;
-the window's own root and W's root are salted roots, which the rule allows.
+**The window is static** (Daniel, 18 Oct; `note:compute-accounting/20261018T2115Z-draft-static-window`): its structure is
+a function of public parameters only, the window's **shape** (`Call`: each audited call's batch slots m, weight rows n and
+first tile in its pass).  Every slot's row and every weight row is committed in place, so the tile count N, every entry's
+range and rows, the side trees and `tile_at` follow from the shape and from no value.  What the values decide is a
+selection, two annotation words in each side row: ``ok``, its forming's verdict (`Pc8RowA`/`Pc8RowB`'s ``ok``: 1 means the
+noise floor ρ·α >= 1 holds), and ``admit``, whether it holds admitted work (a slot's request; every weight row).  Tile
+(i, j) is credited iff s = admit_i ∧ ok_i ∧ admit_j ∧ ok_j, and the window credits the masked sum of s over its tiles,
+rounded down to the grid.  A row that is not admitted is the canonical empty row, zero words and ok 0 (the emptiness
+check), so an empty slot's ok can't be set, and an admitted zero row has ok 0.
+
+**Public items** (`PUBLIC`), exactly the draft's list and the shape.  The service refuses a registration that makes
+anything else public; the window's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
     verdict    output       outcome    every drawn tile proved and opened, or not
-    work       output       window     the credited work, as the tile count N padded to a grid level (`bucket`)
+    work       output       window     the credited tiles, the masked sum rounded down to a grid level, of the N tiles
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the law subset:K′ they fix with the work level (`k_prime`)
+    shape      structure    parameter  the window's calls (slots, weight rows, first pass tile): N and every tile's place
     drawn      coins        outcome    the verifier's own draw, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
 **The grid** (`GRID_BITS` = s): the positive integers with at most s + 1 significant bits, so consecutive points above
-2^(s+1) differ by a factor of at most 1 + 2^-s (9/8 at s = 3).  A window with N_real real tiles registers one level ℓ, the
-largest point g_ℓ <= N_real: it is credited g_ℓ tiles' work and pads its tiles to N = g_(ℓ+1) > N_real with filler tiles,
-at least one.  So N is `pad(N_real + 1)`, the least grid point at or above the real tiles and the one filler a window
-always has: the private partition's unit-count bucket n_b (`note:circuits/20261006T0615Z-draft-private-partitions`,
-G6) on the same grid, one bucket and not two.  Both outputs are fixed by ℓ, so the window's influenceable public output is one grid level, and over a
-declared range [lo, hi] it takes `levels(lo, hi)` = q values: log2 q bits in the draft's leakage bound.  The honest cost is
-under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <= 1 + 2^-s in K′.
+2^(s+1) differ by a factor of at most 1 + 2^-s (9/8 at s = 3).  A window whose masked sum is N_real credited tiles
+registers one level ℓ, the largest point g_ℓ <= N_real, and is credited g_ℓ tiles' work out of its N (`credit`).  So the
+window's influenceable public output is one grid level, and over a declared range [lo, hi] it takes `levels(lo, hi)` = q
+values: log2 q bits in the draft's leakage bound.  The honest cost is under 1 − 2^-s of the credit (at most 11% at
+s = 3); the padding (empty slots, refused rows, the filler) costs the factor N / g_ℓ in K′ and no credit.
 
 **The draw** (L3): uniform subset:K′ over the N equal tiles, K′ the smallest K with (1 − ε·W/(N·w_max))^K <= δ, W the
 credited work and w_max the most work a tile does (`k_prime`).  A wrong set holding a share ε of W has at least ε·W/w_max
-tiles, so a draw of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
+tiles, so a draw of K′ without replacement misses it with probability at most δ.
 
-**The advice** (L2): one entry per committed call, then one filler entry, then empty entries up to the public bound P, each
-an `Entry` row committed in one window root registered before the draw.  A call's sides are dense: each side tree holds only
-the rows its tiles keep (a row the scheme refused is no tile's), in order, so its tiles are the products of A's rows and
-B's, row-major, and index u of its range is (u div n_b, u mod n_b); each side row carries its place in the call (I, J), and
-the call's record, which the entry binds by SHA-512, lists them (``keep``).  A call's entry also holds the root of its
-pass's -h3 tile tree, where each drawn tile's served leaf is read, and the call's place in that pass (tile0, cols, m), so a
-unit computes the leaf and its word in it from the rows it reads (`tile_read`).  The filler entry holds zero rows on both
-sides and the range [N_real, N).  `tile_at` maps a drawn index to its entry and rows, and `window_problem` is the window
-statement (L4) in Python over the entry rows: the rows are entry rows, the ranges tile [0, N) in order, each call's range
-is its tiles, the filler covers the rest, every call's -h3 root is the pass's, the calls' pass tiles are ordered and
-disjoint, and the registered level is `bucket` of the real tiles; given the records and the side rows' indices it also
-holds those to the entries.  It is not proved yet: no Program states it.
+**The advice** (L2): one entry per call of the shape, then one filler entry, then empty entries up to the public bound P,
+each an `Entry` row committed in one window root registered before the draw.  Call c's entry has n_a = m_c (every slot)
+and n_b = n_c (every weight row), its range the m_c·n_c tiles after the calls before it; side A's leaf i is slot i's row,
+side B's leaf j weight row j, so index u of its range is (u div n_b, u mod n_b).  Each side row carries its place in the
+call (I, J), its ok word and its admit word (`side_row`).  A call's entry also holds the root of its pass's -h3 tile
+tree, where each drawn tile's served leaf is read, and the call's place in that pass (tile0, cols, m), so a unit computes
+the leaf and its word in it from the rows it reads (`tile_read`); and the SHA-512 of the call's record.  The filler entry
+holds one canonical empty row on each side and the last index N − 1.  `tile_at` maps a drawn index to its entry and rows
+from the shape alone, and `window_problem` is the window statement (L4) in Python over the entry rows and the side rows'
+fields (`side_field`): the entries are the shape's, every call's -h3 root is the pass's, each side row's index is its
+leaf, every row not admitted is the canonical empty row, the filler's are not admitted, and the registered level is
+`credit` of the masked sum; given the records it also holds them to the entries.  It is not proved yet: no Program
+states it, and the annotation words are the committer's, since the units that form them (the row units, the request
+queue's admission, the tally) are not drawn: a row with both words set wrongly is credited until a draw weighted by the
+credit each annotation gates proves them.
 
 **The layout for gates** (`note:proofs/20261006T1940Z-draft-units-to-inner-layout`, §2) is specified in PoUW's PROTOCOL.md,
-"The served audit window": the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
-leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`,
-`side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
-`public_inputs`); `tests/vectors/window.json` pins them.
+"The served audit window": the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the side trees of 2^D leaves
+(`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`, `side_path`), and
+the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`, `public_inputs`);
+`tests/vectors/window.json` pins them.
 
 **Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
@@ -82,17 +94,19 @@ GRID_BITS = 3
 #: (item, kind, source, reason): the window's public items, in the service's `Public` form
 PUBLIC = (
     ("verdict", "output", "outcome", "what the credit rests on: every drawn tile was proved and opened, or not"),
-    ("work", "output", "window", "the credited work, as the tile count padded to a grid level: the draw ranges over its N "
-                                 "tiles and the auditor credits its work; one level, so at most log2 q bits"),
+    ("work", "output", "window", "the credited work, the masked sum of credited tiles rounded down to a grid level, of the "
+                                 "shape's N tiles the draw ranges over; one level, so at most log2 q bits"),
     ("check", "structure", "parameter", "the check's identity: the tile template, its work per tile and the commitment "
                                         "scheme fix the auditor's verifier"),
     ("sampling", "structure", "parameter", "ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee "
                                            "is stated in them"),
+    ("shape", "structure", "parameter", "the window's calls, each its batch slots, weight rows and first tile in the pass: "
+                                        "they fix N, every entry's range and rows, and the tile each index is"),
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
 #: the items a registration carries; the verdict and the draw come after it
-REGISTERED = ("work", "check", "sampling", "root_W")
+REGISTERED = ("work", "check", "sampling", "shape", "root_W")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
 COINS = "coins"
@@ -163,22 +177,25 @@ def levels(lo: int, hi: int, bits: int = GRID_BITS) -> int:
 
 @dataclass(frozen=True)
 class Work:
-    """A window's work level: it is credited `credited` tiles, point(level), and pads to `n` tiles, point(level + 1)."""
+    """A window's work level: of its `n` tiles (the shape's, `shape_tiles`) it is credited `credited`, point(level)."""
     level: int
     credited: int
     n: int
 
     @classmethod
-    def at(cls, ell: int, bits: int = GRID_BITS) -> "Work":
-        return cls(ell, point(ell, bits), point(ell + 1, bits))
+    def at(cls, ell: int, n: int, bits: int = GRID_BITS) -> "Work":
+        return cls(ell, point(ell, bits), n)
 
     def to_json(self, tile_work: int) -> dict[str, int]:
         return {"level": self.level, "n": self.n, "credited_tiles": self.credited, "credited": self.credited * tile_work}
 
 
-def bucket(real: int, bits: int = GRID_BITS) -> Work:
-    """The level of a window of `real` real tiles: credited floor_point(real), padded to the next point."""
-    return Work.at(level(floor_point(real, bits), bits), bits)
+def credit(real: int, n: int, bits: int = GRID_BITS) -> Work:
+    """The work of a window of `n` tiles whose masked sum is `real` credited tiles, 1 <= real < n (its filler is never
+    credited): its level is floor_point(real)'s."""
+    if not (_positive(real) and _int(n) and real < n):
+        raise ValueError(f"a window of {n!r} tiles credits 1 to {n!r} − 1 of them, not {real!r}")
+    return Work.at(level(floor_point(real, bits), bits), n, bits)
 
 
 # ---- the draw -----------------------------------------------------------------------------------------------------------
@@ -250,8 +267,7 @@ def sampling(eps: Fraction, delta: Fraction, work: Work, tile_work: int, bits: i
 
 #: a tile index's bits: the declared range's tile counts are at most 2^40
 T_BITS = 40
-#: the side trees' public depths: A holds a call's kept activation rows (at most the served batch's 8,192 tokens), B its
-#: kept weight rows
+#: the side trees' public depths: A holds a call's batch slots (at most the served batch's 8,192 tokens), B its weight rows
 DEPTHS = {"a": 13, "b": 17}
 #: the window root's port, and the schema its entry rows are committed under
 PORT = "entries"
@@ -383,23 +399,17 @@ def layout_problem(entry: Entry) -> str | None:
 
 
 def record_problem(entry: Entry, record: Mapping[str, Any]) -> str | None:
-    """Why a call's record is not its entry's, or None: the entry binds its SHA-512; its ``shape`` [m, k, n] and ``tile0``
-    give the entry's m, cols = ⌈n/64⌉ and tile0; and its ``keep``, each side's places in the call of the rows its side tree
-    holds, is n_a strictly increasing indices of [0, m) and n_b of [0, n)."""
+    """Why a call's record is not its entry's, or None: the entry binds its SHA-512, and its ``shape`` [m, k, n] and
+    ``tile0`` give the entry's m, cols = ⌈n/64⌉ and tile0."""
     try:
         if record_digest(record) != entry.record:
             return "its record is not the one the entry binds"
         m, _k, n = record["shape"]
-        tile0, keep = record["tile0"], record["keep"]
+        tile0 = record["tile0"]
         if (entry.tile0, entry.cols, entry.m) != (tile0, -(-n // TILE), m):
             return f"its tile0, cols and m are not its record's {tile0}, ⌈{n}/64⌉ and {m}"
-        for side, count, top in (("a", entry.n_a, m), ("b", entry.n_b, n)):
-            rows = list(keep[side])
-            if len(rows) != count or any(not isinstance(i, int) or isinstance(i, bool) for i in rows) \
-                    or rows != sorted(set(rows)) or (rows and not 0 <= rows[0] <= rows[-1] < top):
-                return f"its record's side-{side} keep is not {count} increasing indices of [0, {top})"
     except (KeyError, TypeError, ValueError):
-        return "its record has no shape [m, k, n], tile0 and keep {a, b}"
+        return "its record has no shape [m, k, n] and tile0"
     return None
 
 
@@ -424,25 +434,37 @@ SIDE_DOMAIN = "verity/pouw/window/side-domain/v1"
 #: the frame's owner, as C-Flock's statement domains have it
 OWNER = -1
 #: a side row's index field: the row's place in its call (I < 2^13 for A, J < 2^17 for B) as a u32, two u16 words low
-#: first, then six zero words, so the field is one 128-bit word after the row's operand words
+#: first, then its ok word and its admit word, then four zero words, so the field is one 128-bit word after the row's
+#: operand words
 SIDE_INDEX_WORDS = 8
 
 
-def side_row(words: Sequence[int], index: int) -> list[int]:
-    """A side tree's row: the operand row's u16 words (fp8-p: k/2 code words, then P's 64), then its index field."""
+def _bit(x: Any) -> bool:
+    return _int(x) and x in (0, 1)
+
+
+def side_row(words: Sequence[int], index: int, ok: int, admit: int) -> list[int]:
+    """A side tree's row: the operand row's u16 words (fp8-p: k/2 code words, then P's 64), then its index field, which
+    holds its place in the call, `ok`, its forming's verdict (1 formed with the noise floor, 0 refused or a zero row), and
+    `admit`, whether the row holds admitted work (a slot's request from the batch's queue; every weight row; 0 for an
+    empty slot and the filler)."""
     if len(words) % SIDE_INDEX_WORDS:
         raise ValueError(f"a side row's operand words are whole 128-bit words, not {len(words)} u16 words")
-    if not (isinstance(index, int) and not isinstance(index, bool) and 0 <= index < 1 << 32):
+    if not (_int(index) and 0 <= index < 1 << 32):
         raise ValueError(f"a side row's index is a u32, not {index!r}")
-    return [int(w) for w in words] + [index & 0xFFFF, index >> 16] + [0] * (SIDE_INDEX_WORDS - 2)
+    if not (_bit(ok) and _bit(admit)):
+        raise ValueError(f"a side row's ok and admit are 0 or 1, not {ok!r} and {admit!r}")
+    return [int(w) for w in words] + [index & 0xFFFF, index >> 16, ok, admit] + [0] * (SIDE_INDEX_WORDS - 4)
 
 
-def side_index(row: Sequence[int]) -> int:
-    """The index a side row holds; raises ValueError unless its index field is a u32 and zeros."""
+def side_field(row: Sequence[int]) -> tuple[int, int, int, int]:
+    """(index, ok, admit, blank) of a side row, blank 1 when its operand words are all zero; raises ValueError unless its
+    index field is a u32 index, two bits and zeros."""
     field = [int(w) for w in row[-SIDE_INDEX_WORDS:]]
-    if len(row) <= SIDE_INDEX_WORDS or any(field[2:]) or any(not 0 <= w < 1 << 16 for w in field[:2]):
-        raise ValueError("the row's last 128-bit word is not a u32 index and zeros")
-    return field[0] | field[1] << 16
+    if len(row) <= SIDE_INDEX_WORDS or any(field[4:]) or field[2] not in (0, 1) or field[3] not in (0, 1) \
+            or any(not 0 <= w < 1 << 16 for w in field[:2]):
+        raise ValueError("the row's last 128-bit word is not a u32 index, an ok bit, an admit bit and zeros")
+    return field[0] | field[1] << 16, field[2], field[3], int(not any(int(w) for w in row[:-SIDE_INDEX_WORDS]))
 
 
 def side_domain(window_domain: bytes, side: str) -> CommitmentDomain:
@@ -498,25 +520,97 @@ def side_path(dom: CommitmentDomain, levels: Sequence[Sequence[bytes]], index: i
     return out
 
 
-# ---- the advice and the window statement --------------------------------------------------------------------------------
+# ---- the shape, the advice and the window statement ----------------------------------------------------------------------
 
-def tiles(entry: Entry) -> int:
-    return entry.n_a * entry.n_b if entry.kind != "none" else 0
+@dataclass(frozen=True)
+class Call:
+    """One call of a window's shape: its batch slots `m` (side A's rows, every slot whether it holds a token or not), its
+    weight rows `n` (side B's) and its first tile `tile0` in its pass."""
+    m: int
+    n: int
+    tile0: int
+
+    def to_json(self) -> dict[str, int]:
+        return {"m": self.m, "n": self.n, "tile0": self.tile0}
 
 
-def tile_in(entry: Entry, t: int) -> tuple[int, int]:
-    """(A row, B row) of index t in its entry's range: the side trees' rows' products, row-major."""
-    if entry.kind == "none" or not entry.lo <= t < entry.hi or entry.n_b < 1:
-        raise ValueError(f"index {t} is not in the entry's range")
-    return divmod(t - entry.lo, entry.n_b)
+def shape_of(x: Any) -> tuple[Call, ...]:
+    """The shape a JSON value holds, a non-empty list of calls ``{m, n, tile0}`` of natural numbers; raises ValueError for
+    any other value."""
+    bad = ValueError("a window's shape is a non-empty list of calls {m, n, tile0} of natural numbers")
+    if not isinstance(x, (list, tuple)) or not x:
+        raise bad
+    out = []
+    for c in x:
+        if not isinstance(c, Mapping) or set(c) != {"m", "n", "tile0"} \
+                or not all(_int(c[k]) and c[k] >= 0 for k in ("m", "n", "tile0")):
+            raise bad
+        out.append(Call(c["m"], c["n"], c["tile0"]))
+    return tuple(out)
 
 
-def tile_at(entries: Sequence[Entry], t: int) -> tuple[int, int, int]:
-    """(entry, A row, B row) of drawn index t."""
-    for e, entry in enumerate(entries):
-        if entry.kind != "none" and entry.lo <= t < entry.hi:
-            return (e, *tile_in(entry, t))
-    raise ValueError(f"index {t} is in no entry's range")
+def shape_json(shape: Sequence[Call]) -> list[dict[str, int]]:
+    return [c.to_json() for c in shape]
+
+
+def shape_tiles(shape: Sequence[Call]) -> int:
+    """N: the calls' m·n tiles each, and the filler's one."""
+    return sum(c.m * c.n for c in shape) + 1
+
+
+def shape_problem(shape: Sequence[Call], bound: int) -> str | None:
+    """Why `shape` is not the shape of a window of `bound` entries, or None: 1 to bound − 1 calls (the filler is one more
+    entry); each call's m whole 16s from 16 to 2^D_A and its n 1 to 2^D_B; the calls' pass tiles in order and disjoint,
+    within 2^40; and its N below 2^40, so every range is of 40-bit indices."""
+    if not 1 <= len(shape) <= bound - 1:
+        return f"{len(shape)} calls, not 1 to the bound {bound} less the filler"
+    in_pass = 0
+    for c, call in enumerate(shape):
+        if not (ROW_STEP <= call.m <= 1 << DEPTHS["a"] and call.m % ROW_STEP == 0):
+            return f"call {c}: its m {call.m} is not a multiple of {ROW_STEP} from {ROW_STEP} to 2^{DEPTHS['a']}"
+        if not 1 <= call.n <= 1 << DEPTHS["b"]:
+            return f"call {c}: its n {call.n} is not 1 to 2^{DEPTHS['b']}"
+        if call.tile0 < in_pass:
+            return f"call {c}: its pass tiles start at {call.tile0}, before the last call's end {in_pass}"
+        in_pass = call.tile0 + -(-call.m // TILE) * -(-call.n // TILE)
+        if in_pass > 1 << T_BITS:
+            return f"call {c}: its pass tiles end at {in_pass}, beyond 2^{T_BITS}"
+    if shape_tiles(shape) >= 1 << T_BITS:
+        return f"its {shape_tiles(shape)} tiles are not of {T_BITS}-bit indices"
+    return None
+
+
+def shape_entries(shape: Sequence[Call], bound: int) -> list[Entry]:
+    """The entries' public fields, each a function of the shape (their roots and records zero): call c's range is the
+    m_c·n_c tiles after the calls before it, its sides m_c and n_c rows, its pass place (tile0, ⌈n/64⌉, m); the filler's
+    range the last index N − 1, one row each side; then empty entries up to `bound`."""
+    out, at = [], 0
+    for c in shape:
+        out.append(Entry("call", at, at + c.m * c.n, c.m, c.n, tile0=c.tile0, cols=-(-c.n // TILE), m=c.m))
+        at += c.m * c.n
+    out.append(Entry("filler", at, at + 1, 1, 1))
+    return out + [Entry("none")] * (bound - len(out))
+
+
+def public_fields(entry: Entry) -> tuple[str, int, int, int, int, int, int, int]:
+    """An entry's fields that the shape fixes: kind, range, side rows, tile0, cols and m."""
+    return entry.kind, entry.lo, entry.hi, entry.n_a, entry.n_b, entry.tile0, entry.cols, entry.m
+
+
+def tile_at(shape: Sequence[Call], t: int) -> tuple[int, int, int]:
+    """(entry, A row, B row) of drawn index t, from the shape alone: in call c's range, t − lo_c = i·n_c + j, slot i and
+    weight row j; N − 1 is the filler's (C, 0, 0)."""
+    if not _int(t) or t < 0:
+        raise ValueError(f"index {t!r} is not one of the window's tiles")
+    at = 0
+    for c, call in enumerate(shape):
+        if t < at + call.m * call.n:
+            i, j = divmod(t - at, call.n)
+            return c, i, j
+        at += call.m * call.n
+    if t == at:
+        return len(shape), 0, 0
+    raise ValueError(f"index {t} is not one of the window's {at + 1} tiles")
 
 
 def tile_read(entry: Entry, i: int, j: int) -> tuple[int, int]:
@@ -529,23 +623,50 @@ def tile_read(entry: Entry, i: int, j: int) -> tuple[int, int]:
     return entry.tile0 + (i // TILE) * entry.cols + j // TILE, i % TILE | (j % TILE) << 6 | (rows // ROW_STEP - 1) << 12
 
 
-def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes, bits: int = GRID_BITS,
-                   records: Sequence[Mapping[str, Any] | None] | None = None,
-                   indices: Sequence[Mapping[str, Sequence[int]] | None] | None = None) -> str | None:
-    """The window statement (L4) on the committed entry rows, or None: `bound` rows, each an entry row of the layout
-    (`Entry.from_row`, `layout_problem`); the calls, then one filler, then empty entries; the ranges tile [0, work.n) in
-    order; a call's range is its tiles; the filler's holds the rest, within its rows; every call's -h3 root is `root_h3`,
-    the pass's published tile commitment; the calls' pass tiles are in order and disjoint; and the level is `bucket` of
-    the calls' tiles.  Credited tiles are only the calls'.
+def _fields(fields: Any, count: int) -> list[Sequence[Mapping[str, Sequence[Sequence[int]]]]]:
+    """`fields` as `window_problem` reads it: per entry up to the filler, each side's [index, ok, admit, blank] per row
+    (`side_field`), integers."""
+    bad = ValueError("the side rows' fields are, per call and then the filler, each side's [index, ok, admit, blank] per "
+                     "row")
+    if not isinstance(fields, (list, tuple)) or len(fields) != count:
+        raise bad
+    for f in fields:
+        if not isinstance(f, Mapping) or any(not isinstance(f.get(s), (list, tuple)) for s in DEPTHS):
+            raise bad
+        for s in DEPTHS:
+            if any(not isinstance(p, (list, tuple)) or len(p) != 4 or not all(_int(x) for x in p) for p in f[s]):
+                raise bad
+    return list(fields)
 
-    The gates read the entry rows only.  Given the calls' `records` (per entry, None past the calls) it also holds each to
-    its entry (`record_problem`), and given each entry's side rows' `indices` (`side_index`, per side) it holds a call's to
-    its record's keep and the filler's to zero: so i -> I and j -> J are injective, and no two window tiles read one
-    word."""
+
+def selected(fields: Mapping[str, Sequence[Sequence[int]]]) -> dict[str, int]:
+    """Each side's selected rows, Σ ok·admit over its rows' fields: a tile is credited iff both its rows are selected."""
+    return {s: sum(p[1] * p[2] for p in fields[s]) for s in DEPTHS}
+
+
+def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes, shape: Sequence[Call],
+                   fields: Sequence[Mapping[str, Sequence[Sequence[int]]]], bits: int = GRID_BITS,
+                   records: Sequence[Mapping[str, Any] | None] | None = None) -> str | None:
+    """The window statement (L4) on the committed entry rows and the side rows' index fields, or None: `bound` rows, each
+    an entry row of the layout (`Entry.from_row`, `layout_problem`) whose public fields are the shape's (`shape_entries`);
+    every call's -h3 root is `root_h3`, the pass's published tile commitment; in `fields` (per call and then the filler,
+    each side's (index, ok, admit, blank) per row, `side_field`) each row's index is its leaf, its ok, admit and blank
+    are bits, the filler's rows are not admitted, and a row that is not admitted is the canonical empty row (blank, ok
+    0: the emptiness check, so an empty slot's ok can't be set); and the registered work is `credit` of the masked sum,
+    Σ over the calls of (Σ ok_A·admit_A)·(Σ ok_B·admit_B) (`selected`): tile (i, j) is credited iff s = admit_i ∧ ok_i
+    ∧ admit_j ∧ ok_j, so an empty slot, a refused row and the filler are never credited.
+
+    Given the calls' `records` (per entry, None past the calls) it also holds each to its entry (`record_problem`).  Raises
+    ValueError for a shape that is not one (`shape_problem`), a root not 64 bytes, or fields not of their form."""
     if len(root_h3) != _DIGEST:
         raise ValueError("the pass's -h3 tile root is 64 bytes")
+    why = shape_problem(shape, bound)
+    if why:
+        raise ValueError(f"the shape is not a window's: {why}")
+    fields = _fields(fields, len(shape) + 1)
     if len(rows) != bound:
         return f"{len(rows)} entries, not the bound {bound}"
+    want = shape_entries(shape, bound)
     entries = []
     for e, row in enumerate(rows):
         try:
@@ -555,48 +676,39 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes
         why = layout_problem(entry)
         if why:
             return f"entry {e}: not the layout: {why}"
-        entries.append(entry)
-    kinds = [x.kind for x in entries]
-    calls = kinds.index("filler") if "filler" in kinds else -1
-    if calls < 1 or kinds[:calls] != ["call"] * calls or kinds[calls + 1:] != ["none"] * (bound - calls - 1):
-        return "the entries are the calls, then one filler, then empty entries"
-    at = in_pass = 0
-    for e, entry in enumerate(entries[:calls + 1]):
-        if entry.lo != at or entry.hi <= at:
-            return f"entry {e}: its range does not start where the last ended, or is empty"
-        size = entry.hi - entry.lo
-        if entry.kind == "call" and size != tiles(entry):
-            return f"entry {e}: its range is {size} tiles, not its {tiles(entry)} tiles"
+        if public_fields(entry) != public_fields(want[e]):
+            return f"entry {e}: its kind, range, rows, tile0, cols and m are not the shape's"
         if entry.kind == "call" and entry.root_h3 != root_h3:
             return f"entry {e}: its -h3 root is not the pass's tile commitment"
-        if entry.kind == "call" and entry.tile0 < in_pass:
-            return f"entry {e}: its pass tiles start at {entry.tile0}, before the last call's end {in_pass}"
-        if entry.kind == "filler" and size > tiles(entry):
-            return f"entry {e}: the filler's range is {size} tiles, beyond its {tiles(entry)}"
-        at = entry.hi
-        in_pass = entry.tile0 + pass_tiles(entry) if entry.kind == "call" else in_pass
-    real = entries[calls].lo
-    if at != work.n:
-        return f"the ranges end at {at}, not the padded count {work.n}"
-    if bucket(real, bits) != work:
-        return f"{real} real tiles are level {bucket(real, bits).level}, not the registered level {work.level}"
+        entries.append(entry)
+    real = 0
+    for e, entry in enumerate(entries[:len(shape) + 1]):
+        for side, count in (("a", entry.n_a), ("b", entry.n_b)):
+            got = fields[e][side]
+            if [p[0] for p in got] != list(range(count)):
+                return f"entry {e}: its side-{side} rows' indices are not their leaves 0 to {count - 1}"
+            if any(x not in (0, 1) for p in got for x in p[1:]):
+                return f"entry {e}: a side-{side} row's ok, admit or blank is not 0 or 1"
+            if entry.kind == "filler" and any(p[2] for p in got):
+                return f"entry {e}: the filler's side-{side} row is admitted"
+            for i, p in enumerate(got):
+                if not p[2] and (p[1] or not p[3]):
+                    return f"entry {e}: side-{side} row {i} is not admitted and not the canonical empty row"
+        sel = selected(fields[e])
+        real += sel["a"] * sel["b"] if entry.kind == "call" else 0
+    n = shape_tiles(shape)
+    if real < 1:
+        return "no tile is credited: no call has an admitted slot and weight row that both passed their forming"
+    got_work = credit(real, n, bits)
+    if got_work != work:
+        return f"{real} credited tiles of {n} are level {got_work.level}, not the registered level {work.level} of {work.n}"
     if records is not None:
-        if len(records) != bound or any(r is not None for r in records[calls:]):
+        if len(records) != bound or any(r is not None for r in records[len(shape):]):
             return f"{len(records)} records, not one per call and None past the calls"
-        for e in range(calls):
+        for e in range(len(shape)):
             why = record_problem(entries[e], records[e])
             if why:
                 return f"entry {e}: {why}"
-    if indices is not None:
-        if records is None:
-            raise ValueError("the side rows' indices are held to the calls' records, so give both")
-        for e, entry in enumerate(entries[:calls + 1]):
-            got = indices[e] if e < len(indices) else None
-            for side, count in (("a", entry.n_a), ("b", entry.n_b)):
-                want = list(records[e]["keep"][side]) if entry.kind == "call" else [0] * count
-                if got is None or [int(i) for i in got[side]] != want:
-                    return f"entry {e}: its side-{side} rows' indices are not " + \
-                        ("its record's keep" if entry.kind == "call" else "zero")
     return None
 
 
@@ -716,10 +828,11 @@ def round_key(commitment: Ch.LiveCommitment, coin: bytes, r: int, root: bytes) -
     return derive(coin, ROUND_NOISE_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "root": root, "round": r})
 
 
-__all__ = ["COINS", "DEPTHS", "DRAW", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "LIVE_SCHEME", "MODES", "M_MAX", "PORT",
-           "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "T_BITS",
-           "Work", "bucket", "entry_bc", "entry_digest", "entry_leaf", "floor_point", "instance_ts", "k_prime",
+__all__ = ["COINS", "Call", "DEPTHS", "DRAW", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "LIVE_SCHEME", "MODES", "M_MAX",
+           "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT",
+           "T_BITS", "Work", "credit", "entry_bc", "entry_digest", "entry_leaf", "floor_point", "instance_ts", "k_prime",
            "layout_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families", "mode", "on_grid",
-           "pad_node", "pass_tiles", "point", "public_inputs", "record_digest", "record_problem", "round_key",
-           "rounds_reason", "sampling", "session_cap", "sessions", "side_domain", "side_index", "side_levels", "side_path",
-           "side_row", "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]
+           "pad_node", "pass_tiles", "point", "public_fields", "public_inputs", "record_digest", "record_problem",
+           "round_key", "rounds_reason", "sampling", "selected", "session_cap", "sessions", "shape_entries", "shape_json",
+           "shape_of", "shape_problem", "shape_tiles", "side_domain", "side_field", "side_levels", "side_path", "side_row",
+           "tile_at", "tile_read", "window_problem"]

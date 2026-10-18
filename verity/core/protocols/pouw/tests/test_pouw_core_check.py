@@ -55,7 +55,10 @@ EXPECT = {
     "params-template-unpinned": "params: check.template is not a tile template the verifier pins",
     "params-query-other": "params: query is not its pinned template's query digest", "params-range-low": "level:",
     "params-coins": "params: check.coins is not live or seeded", "record-coins": "public-value: check",
-    "params-range-high": "level:", "record-format": "commitment: format", "record-program": "commitment: program",
+    "params-range-high": "params: shape: its", "params-window-form": "params: window-form: the parameters have no shape",
+    "params-shape": "params: shape is not a non-empty list", "params-shape-m": "params: shape: call 0: its m 24",
+    "params-shape-pass": "params: shape: call 0: its pass tiles end at", "record-window-form": "window-form: the registration has no shape item",
+    "record-shape": "public-value: shape", "record-format": "commitment: format", "record-program": "commitment: program",
     "record-partition": "commitment: partition", "record-population-type": "commitment: population",
     "record-law-missing": "commitment: law is missing", "record-roots": "commitment: roots",
     "record-window-keys": "commitment: window", "record-window-public": "commitment: window", "record-kind": "window:",
@@ -159,7 +162,8 @@ def test_an_accepted_window_publishes_exactly_pouw_public():
         assert {k: a["public"][k] for k in Wd.REGISTERED} == rec["window"]["public"]
         assert a["profile"] == ans["profile"] and a["commitment"] == ans["commitment"]
         k = rec["window"]["public"]["sampling"]["law"]["k"]
-        w = Wd.Work.at(rec["window"]["public"]["work"]["level"], case["params"]["grid_bits"])
+        w = Wd.Work.at(rec["window"]["public"]["work"]["level"], Wd.shape_tiles(Wd.shape_of(case["params"]["shape"])),
+                       case["params"]["grid_bits"])
         tw = case["params"]["check"]["tile_work"]
         assert k == Wd.k_prime(Fraction(case["params"]["eps"]), Fraction(case["params"]["delta"]), w.credited * tw, w.n, tw)
         assert rec["population"] == w.n == a["profile"]["levels"][0]["size"]
@@ -212,7 +216,7 @@ OPENING_EXPECT = {
                             "side-path-type", "side-path-digest", "side-missing", "side-index-type", "side-index-bool")},
     **{n: "…" + _WINDOW_ENTRY for n in ("window-path-short", "entry-other", "entry-negative-index", "entry-past",
                                         "forged-entry")},
-    "out-of-range": "…is not in the entry's range", "kind-none": "…is not in the entry's range",
+    "out-of-range": "…tiles", "kind-none": "…is in", "past-side": "…is in",
     **{n: _HEADER for n in ("no-newline", "header-not-json", "header-nan", "header-list", "header-utf8")},
     **{n: _COUNT for n in ("instances-missing", "instances-bool", "instances-float", "instances-string")},
     "instances-two": "…instances, not one tile",
@@ -222,7 +226,7 @@ OPENING_EXPECT = {
                           "schemas-prefixed")},
     "schemas-unsorted": None, "body-short": "the proof's body holds no A row and B row",
     "a-index": "side a: the opening is of row", "b-index": "side b: the opening is of row",
-    **{n: "side a: the proof's committed row is not" for n in ("a-row", "a-path-short", "rows-swapped", "past-side")},
+    **{n: "side a: the proof's committed row is not" for n in ("a-row", "a-path-short", "rows-swapped")},
     **{n: "side b: the proof's committed row is not" for n in ("b-row", "b-path")},
     "params-bad": CC.Refused, "commitment-bad": CC.Refused,
 }
