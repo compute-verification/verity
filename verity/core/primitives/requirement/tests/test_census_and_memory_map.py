@@ -329,15 +329,14 @@ def test_the_memory_map(r1, requests, server):
     _one_block_each(out, session, uncredited)
 
 
-@pytest.mark.xfail(strict=True, reason="memory_map.record frees a block whose last read is the step that completes it in "
-                   "the next record, so the map holds it a step with every row dead; such a block holds no value the audit "
-                   "can credit at any step, and is in no record under 21:52Z")
+@pytest.mark.xfail(strict=True, reason="memory_map.record writes a block whose last read is the step that completes it and "
+                   "frees it in the next record, so the map holds it a step with every row dead; a block no step reads "
+                   "while it is resident is in no record (memory-map/v1's ruling of 18 Oct, 02:3xZ)")
 def test_a_block_its_last_read_completes_is_in_no_record(requests, server):
     """A request ending on a page boundary while another runs on: r1 (a prefill of 4 and 4 decode steps) from step 0 completes
     its second page at its last step, 4, which also reads it last. Its rows were live only while the page was incomplete,
-    so no step can credit the block: under 21:52Z it is written and freed in step 4's record, which memory-map/v1's order
-    (frees, then writes) can't express, so the block is in no record. The builder frees it in step 5's record instead,
-    and the map holds a block with every row dead at step 5."""
+    so no step reads the block while it is resident, and by the ruling it is in no record. The builder writes it in step
+    4's record and frees it in step 5's, and the map holds a block with every row dead at step 5."""
     value, session = map_case({"r0": requests["r0"], "r1": requests["r1_page"]}, {"r0": 0, "r1": 0})
     out = _lean(value, server)
     assert out is not None
