@@ -5176,6 +5176,18 @@
    "assumptions": [],
    "type_hash": "e57381cb5ec70754de5727e83fd659312830ca151e3abe1da5c28e8c03580b3b"
   },
+  "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel : Pouw.Guarantees.Receipt.DuoCheckpointNoKernel"],
+   "assumptions": [],
+   "type_hash": "0632053bc4fbe2bdd9a935727bf28ab947d7195e02db9ef154896d18a3521064"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoLongRunKernel": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.DuoLongRunKernel : Pouw.Guarantees.Receipt.DuoLongRunKernel"],
+   "assumptions": [],
+   "type_hash": "df345e2612752aa9ec8b5e914373440a3144dee1268a1312a57876723def0d9a"
+  },
   "Pouw.SecurityProofs.Receipt.DuoPairNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoPairNoKernel : Pouw.Guarantees.Receipt.DuoPairNoKernel"],
@@ -5211,6 +5223,12 @@
    "signature": ["Pouw.SecurityProofs.Receipt.DuoTripleNoKernel : Pouw.Guarantees.Receipt.DuoTripleNoKernel"],
    "assumptions": [],
    "type_hash": "0c0d8a780d11a162b4729dd77a42d529113998e23b817bdcbb746f124180edfc"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoWindowNoKernel": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.DuoWindowNoKernel : Pouw.Guarantees.Receipt.DuoWindowNoKernel"],
+   "assumptions": [],
+   "type_hash": "93faa990547c1dc823b2b8551a040b6622ea00fcd55e5f64dc543eef72afd79e"
   },
   "Pouw.SecurityProofs.Receipt.DuoWordInjective": {
    "owner": "@compute-accounting",
@@ -5545,6 +5563,18 @@
    },
    "Pouw.SecurityProofs.Receipt.DuoWordProjNoKernel": {
     "function": "Pouw.Receipt.duoWordSpread",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoWindowNoKernel": {
+    "function": "Pouw.Receipt.duoQuadWith",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel": {
+    "function": "Pouw.Receipt.duoCheckpoints",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoLongRunKernel": {
+    "function": "Pouw.Receipt.duoRun",
     "outcome": "none"
    }
   },
@@ -12918,14 +12948,30 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"]
   },
   "Definitions.Pouw.Receipt.Duo": {
-   "digest": "0c159b55748c2d7ce08e4e110ad96f247ed95d082158173c153390e9dc9cfa86",
+   "digest": "d6877dfa7ab227ee351cd59699d0a9d8cd2c4c38afbad65b8b534cc9053b76b9",
    "definitions": {
+    "Pouw.Receipt.DuoQuadKeys": "5380488a8fd7baa4845dff6fe6deacb4dbed92d6658be7c1a8a8b3ce6736239e",
+    "Pouw.Receipt.DuoQuadKeys.a₁": "254c072e80dd3e0bf4a0607b536a50bca27b0b29f3f24fb6b46a0d3b292d70a3",
+    "Pouw.Receipt.DuoQuadKeys.a₂": "6eb29f92969c646341aa15b2fa1670c1d74652181f47bdf6d53c0ee960d70e75",
+    "Pouw.Receipt.DuoQuadKeys.a₃": "399b40d0017d4e4f4fe43cd98401de15f5410f5d4fd345867947552e5d977a01",
+    "Pouw.Receipt.DuoQuadKeys.a₄": "2f418c08cb5178fce85c02c2fcb271316a735b6be45c21ec1e3ffd48017d0f62",
+    "Pouw.Receipt.DuoQuadKeys.k₁": "3f1cd713c58424c66c9d08970f727017d386e65b254447c214372b626b3e4a20",
+    "Pouw.Receipt.DuoQuadKeys.k₂": "81c1e71c964058e28a1107b84826c3e22bd462c2e5bb985237ae6d0bdcc7f3b8",
+    "Pouw.Receipt.DuoQuadKeys.k₃": "d53f67cd826fa73afa0bc17106d19dd4eff245ed04aef859fe8303fcf6fcce34",
+    "Pouw.Receipt.DuoQuadKeys.k₄": "ddc6cec13ec2f1b0cc27ac5db1c564176cf68787d1c4b7b636a413236306f86a",
+    "Pouw.Receipt.DuoQuadKeys.r₁": "aa2d97f44f2129410501d793cf232df22abb4e1232f08d3243c620bc12237510",
+    "Pouw.Receipt.DuoQuadKeys.r₂": "7922c43a383e9708b83fb0864924bc939a5fd1c9fd3af4f0b623bca88bf14bea",
+    "Pouw.Receipt.DuoQuadKeys.r₃": "bdf421f54ee9770a5e7d505465df0232f9a89843a36846283d945bb79e562b3e",
+    "Pouw.Receipt.DuoQuadKeys.r₄": "76f35252554174f5a7c1bad39b4ecc7ca097c486f752f86626afffe348efb353",
+    "Pouw.Receipt.DuoQuadKeysOk": "b172778b92fb89f9d2b5c109f4e18c111cda38722f5392fb32a17d533bc31e46",
     "Pouw.Receipt.OddKey": "523b501cdd837c78c17f35c23ebc1871830ca45008bbe284975ab20da8d90023",
     "Pouw.Receipt.OddKeyNotNegOne": "31c9ceda208246918d98a8986269a78312a849526081fe826eb2e33adbbc474a",
     "Pouw.Receipt.Rotation": "1a42f4c4fa2892469afcbf903e53118564c22737be56c18fb19661c7d9b655c8",
     "Pouw.Receipt.ShortRotation": "5766ac1e4ce0f1fccec0a23583c926017aab0c241fe51842556f0bc8bdac8911",
+    "Pouw.Receipt.duoCheckpoints": "0f8694106f8f3b243be92e8d77c432c5a790e3628ae1c1a4bb038c9f3368abf6",
     "Pouw.Receipt.duoPair": "0db527ce0a70fb58bcba2efcb9e95bbb12578ea3956093f5343d250dd5d2d032",
     "Pouw.Receipt.duoQuad": "c8cf798e7e63e762cba5c917dcc71dd724ebe4dde1b897d6458f5f780a9a7531",
+    "Pouw.Receipt.duoQuadWith": "52ba75ff97f5d913d8630ba8e7af1e2a3c1c66f83f2fe008cd1ca21e4ce5125a",
     "Pouw.Receipt.duoReceipt": "e54b5ee6146d4b7f45d2c42d3d5ff8aed4bd7bd00e590e3866cc897ffbd3a1ae",
     "Pouw.Receipt.duoRun": "8618a1b49c703cf3480ffe3cac63c3101855ba4299ee5a5e2c7118b784ce523a",
     "Pouw.Receipt.duoTriple": "5a2d96e7a402f773e07fc5d56b4396833148f6a078936f450481a819405448db",
@@ -12943,12 +12989,15 @@
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
+    "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel",
+    "Pouw.SecurityProofs.Receipt.DuoLongRunKernel",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
+    "Pouw.SecurityProofs.Receipt.DuoWindowNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoWordProjNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
@@ -19831,14 +19880,17 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Models.Pouw.Guarantees.Receipt": {
-   "digest": "d3f529c9b4bc91a3af2f4df5548eeaa92c889660c6c2fb5dc798f1ab30833238",
+   "digest": "7acfa71ad220cd7f4ba8157239211c794d63c136f3e33872423e1de73bf2bab5",
    "definitions": {
+    "Pouw.Guarantees.Receipt.DuoCheckpointNoKernel": "b5b6672f049f845a232bc54e68f32566d77d40b9f6e2110d038b9a60578ff390",
+    "Pouw.Guarantees.Receipt.DuoLongRunKernel": "3abfe6c2d5b475b734b6ffde0dc0a5c06a23a551f0eba92cf798912930a4c8c1",
     "Pouw.Guarantees.Receipt.DuoPairNoKernel": "1039a7b3dddf68dfa9e864f897ef57aa49bf17ba7765af07a1332595eef247f9",
     "Pouw.Guarantees.Receipt.DuoQuadNoKernel": "298232eb24c7be9f9f65959660fca3aa8d57d2373f9da1fb34470020a5f872f9",
     "Pouw.Guarantees.Receipt.DuoReceiptNotInjective": "23987edb81eb08f5f48eca3c178776648ed20318a52ad7e6204b8f483e47df87",
     "Pouw.Guarantees.Receipt.DuoRunWordInjective": "c62e3619993c5ddafb8f07e364d2733dc3f57bd60891bb3006e06a6d32a3ae60",
     "Pouw.Guarantees.Receipt.DuoStepBijective": "5fe72ace79835deaebb0f01d6407fb313ad1f57c2a53375318c667f42c27c828",
     "Pouw.Guarantees.Receipt.DuoTripleNoKernel": "e2f1ae4ae008bc102256d3583daf1493f02dd198e27cb904c16905596c78593d",
+    "Pouw.Guarantees.Receipt.DuoWindowNoKernel": "f2293de8958863a710744eecf259c6610be7e0256805bc7f6690b353888d2d86",
     "Pouw.Guarantees.Receipt.DuoWordInjective": "8f4f6573010e26ca624a4fb35b780ab09ff86f3e6b7b5c12867efd287dd3688d",
     "Pouw.Guarantees.Receipt.DuoWordProjNoKernel": "3f76b2cfff750a0195bc6bc92416551ae9e21675b128f85636e8d66b926b7ebd",
     "Pouw.Guarantees.Receipt.Fx1PairNoKernel": "50855c03638c9f1a41b751d04cf419943d70f30b5f9e6634ac87ffae1342cc3a",
@@ -19852,12 +19904,15 @@
     "Pouw.Guarantees.Receipt.LiHalfBijective": "625e51a154a4bfa4958f5919c5f6cf9dc3a43f7a8fa295539f6c09765079e0d2"
    },
    "guarantees": [
+    "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel",
+    "Pouw.SecurityProofs.Receipt.DuoLongRunKernel",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
+    "Pouw.SecurityProofs.Receipt.DuoWindowNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoWordProjNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
