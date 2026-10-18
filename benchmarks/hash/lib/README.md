@@ -77,13 +77,15 @@ from), `vc_plan_build`, `cudaMalloc` the tables and `vc_tables_launch`, then `vc
 - Forms (`vc_commit_rows_launch`): `SPLIT` runs the salt phase, the data phase, then the tree; `FUSED` one kernel a leaf, then
   the tree; `FOLD` the salt phase (which also zeroes the climb's counters in `scratch`) then one data kernel that folds the tree
   too: each block hashes its 256 leaves' subtree in shared memory, and of two sibling blocks the one that finishes second climbs
-  on (sharaw's `sr_data` scheme), so a commit is two launches; `SPEC` one kernel after a memset of the counters (sharaw's
-  `v4`): each block pairs a row thread with a salt thread a leaf, the salt threads writing M_key y, c and the frame leaf's
-  first block to shared memory while the row threads hash the rows, then each warp folds its 32 leaves and climbs. `AUTO`
-  takes the small-commit form up to 40,000 rows (`SPEC` on sm_90, `FOLD` elsewhere) and `SPLIT` above: the small forms save
-  the tree's launches, a fixed cost, while their blocks idle through their subtree's barriers, a cost per row (B200 crosses
-  over near 44,000 rows). Every form writes the same bytes. The salt phase reads no operand, so a committer may also call `vc_salts_launch` early on a side
-  stream and `vc_leaves_rows_launch` when the rows exist, then `vc_tree_launch`.
+  on (sharaw's `sr_data` scheme; its nodes by length, or on sm_100 through sharaw's compact body), so a commit is two
+  launches; `SPEC` one kernel after a memset of the counters (sharaw's `v4`): each block pairs a row thread with a salt
+  thread a leaf, the salt threads writing M_key y, c and the frame leaf's first block to shared memory while the row threads
+  hash the rows, then each warp folds its 32 leaves and climbs. `AUTO` picks by device and rows, from the measurements
+  below: up to 40,000 rows `SPEC` on sm_90 and `FOLD` elsewhere, then `SPEC` on sm_120 up to 200,000 rows, else `SPLIT`.
+  The one- and two-launch forms save the tree's launches, a fixed cost, while their blocks idle through their subtree's
+  barriers, a cost per row. It was tuned on 4 KiB rows; a committer with other rows can name its form. Every form writes
+  the same bytes. The salt phase reads no operand, so a committer may also call `vc_salts_launch` early on a side stream
+  and `vc_leaves_rows_launch` when the rows exist, then `vc_tree_launch`.
 - Pass `bc` to keep every leaf's b || c (128 bytes a leaf) when the step will be opened; pass NULL otherwise.
 
 ### Openings
@@ -107,7 +109,7 @@ parameters; the head of `vc.cu` names what came from where:
   cursor/commit-speed-21f3): the leaf and node parameter blocks, the frame leaf, pad and node templates, the PRF salt, the
   nibble-table mask, the fused leaf kernel and the level kernels;
 - hash's sharaw.cu (`4369ae62:benchmarks/hash/sharaw/sharaw.cu`, on cursor/verity-hash-15ad): the byte-table mask, the salt /
-  data split with commit_gpu's tree schedule, the data kernel that folds its subtree and climbs (`FOLD`) with the compact
+  data split with commit_gpu's tree schedule, the data kernel that folds its subtree and climbs (`FOLD`) and its compact
   node body, and the one-launch commit whose blocks pair row and salt threads (`SPEC`) with the rolled shared-memory mask;
 - `benchmarks/pouw/pearl_c_sm120/hash_fast.cuh`: row-seg's segments a thread from their header's state, then a fold a unit.
 
@@ -119,14 +121,19 @@ format is here.
 - `vc.h`, `vc.cu`: the library. `build.sh OUT` builds `OUT/libvc.so` (`ARCHS="90 100 120"`: sm_90a, sm_100a, sm_120a).
 - `vclib.py`: the binding, the spec builders and `parse_openings`; `Cuda`, a minimal libcudart wrapper for the tests.
 - `conformance.py`: every entry point against the references on fixed vectors and random cases, one JSON line a case and a
-  summary line; ragged leaf counts, every salt source, every form (wide trees too), chunked launches, graph capture and replay, and openings
-  checked with `verify_opening` and `verify_multiproof`. `--quick` runs fewer cases.
+  summary line; ragged leaf counts, every salt source, every form (wide trees too), chunked launches, graph capture and
+  replay, and openings checked with `verify_opening` and `verify_multiproof`. Every output and scratch buffer is 0xA5 before
+  each checked call (a repeated call or a graph replay included) and compared byte for byte, 64 guard bytes past each buffer
+  must stay 0xA5, given salts come from the reference's salt source, and controls the same checks must reject run beside
+  the cases: no call, the leaves of half the rows, leaves over salt records nobody wrote, opening records nobody wrote.
+  `--quick` runs fewer cases.
 - `gpu.sh`: a node job. Outside the lease, the library for all three architectures; under one lease, the conformance; with
   `BENCH=1`, then `bench/bench.sh`.
 - `bench/`: the performance gate. `rows.cu` is sharaw's harness (fetched at its pinned commit, its `main` renamed) with a loader
   for native_rows' pinned launchers on StepHasher's level schedule and libvc's arms added: every arm's levels compared with
   commit_gpu's on the device, then commit_gpu, native_rows, sharaw's forms and
-  libvc's interleaved rep by rep with each rep's SM clock, at 142 MB (34,737 rows) and 1 GiB (262,144 rows) steps of 4 KiB rows.
+  libvc's interleaved rep by rep with each rep's SM clock, at 142 MB (34,737 rows), 65,536, 131,072 and 1 GiB (262,144
+  rows) steps of 4 KiB rows.
   `pearl.cu` does the same for -h3's row digests and tile leaves against hash_fast and hash_h3 at Llama-3.1-8B's decode shapes
   (m 32 and 128). `bench.sh` builds both and runs them under one lease.
 - `tests/`: the CPU suite (header and binding agree, specs refused as the C side refuses them, the RFC 8439 vector, the opening
