@@ -581,7 +581,7 @@ __global__ void __launch_bounds__(256, 2)
 // compute, for the same leaves and at the same time, y, M_key y, c and the frame leaf's first block (or the pad) into
 // shared memory, so none of it is on the rows' path and no launch runs before the data. Then the row warps finish their
 // leaves and fold and climb to the root. R = cnt = min(width, TPB / 2).
-template <int TPB>
+template <int TPB, bool UF = true>
 __global__ void __launch_bounds__(TPB, 512 / TPB)
     sr_leaf4(const uint8_t* __restrict__ rows, const uint4* __restrict__ Tn, u64 n, u64 width, int depth, u64* levels, u32* ctr,
              u64* __restrict__ bc) {
@@ -631,7 +631,7 @@ __global__ void __launch_bounds__(TPB, 512 / TPB)
     cpy8(o, s + 16);
   }
   st8(levels + 8 * pos, o);
-  fold_climb<true>(o, pos, 0, width, depth, levels, ctr, cnt);
+  fold_climb<UF>(o, pos, 0, width, depth, levels, ctr, cnt);
 }
 
 struct Mine {
@@ -684,10 +684,11 @@ struct Mine {
     CK(cudaMalloc(&Tn, tn.size()));
     CK(cudaMemcpy(Tn, tn.data(), tn.size(), cudaMemcpyHostToDevice));
   }
-  template <int TPB>
+  // UF = false: the fold and climb (one thread's latency, not the GPU's throughput) with commit_gpu's inlined node
+  template <int TPB, bool UF = true>
   void v4(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
     const u32 cnt = (u32)std::min<u64>(width, TPB / 2);
-    sr_leaf4<TPB><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
+    sr_leaf4<TPB, UF><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
   }
   // commit_gpu's tree schedule over these levels (Committer::nodes, its large path): a level a launch while a level is wider
   // than 512 nodes, then node_kernel
@@ -886,6 +887,7 @@ static int check(int argc, char** argv) {
       case 9: me.v4<128>(d, 0, bc); break;
       case 10: me.v4<64>(d, 0, bc); break;
       case 11: me.v3s_cg(d, 0, 1, nullptr, nullptr, bc); break;
+      case 13: me.v4<128, false>(d, 0, bc); break;
       case 12: {
         static cudaStream_t s2;
         static cudaEvent_t e2[2];
@@ -971,8 +973,6 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   V2("v3_salt_s2", 0, false, 2, true);
   V2("v3_par_s2", 2, false, 2, true);
   V2("v3s_s2", 3, false, 2, true);
-  V2("v3s_s1", 3, false, 1, true);
-  V2("v3s_fold", 3, true, 0, true);
   cudaStream_t st2;
   {
     int lo, hi;
@@ -985,7 +985,8 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   arms.push_back({"v3s_cg", true, [&](cudaStream_t s) { me.v3s_cg(src, s); }, comps});
   arms.push_back({"v3s_cg_ov", true, [&](cudaStream_t s) { me.v3s_cg(src, s, 2, st2, ovev); }, comps});
   arms.push_back({"v4_64", true, [&](cudaStream_t s) { me.v4<128>(src, s); }, comps});
-  arms.push_back({"v4_32", true, [&](cudaStream_t s) { me.v4<64>(src, s); }, comps});
+  arms.push_back({"v4i_64", true, [&](cudaStream_t s) { me.v4<128, false>(src, s); }, comps});
+  arms.push_back({"v4i_128", true, [&](cudaStream_t s) { me.v4<256, false>(src, s); }, comps});
   arms.push_back({"v4_128", true, [&](cudaStream_t s) { me.v4<256>(src, s); }, comps});
 #undef V2
   u64* io;
