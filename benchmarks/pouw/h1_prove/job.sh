@@ -32,15 +32,25 @@ SERVE_GB=$(( MEM_GB * ${H1_SERVE_PCT:-42} / 100 )) PROVE_GB=$(( MEM_GB * ${H1_PR
 SW=$W/stage WK=$W/work
 mkdir -p "$OUT/lean"
 
-setup
+build_layer_venv() { local D=$1; rm -rf "$D" && uv venv -q --python 3.12 "$D" && uv pip install -q --python "$D/bin/python" numpy==2.5.3 tokenizers==0.22.1; }
+# the stager needs only the venv: it builds the circuit while setup builds flock-circuit and flock-verify
+[ -n "${HZ_PYTHON:-}" ] || HZ_PYTHON=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
+PY=$HZ_PYTHON TIME="$HZ_PYTHON $J/timed.py"
 log "h1-prove: K=$K cols=${COLS:-all} draw=$DRAW tokens=$TOKENS layer=$LAYER controls: $CONTROLS"
-$TIME "$OUT/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $H/stage.py $K $SW" > "$OUT/stage.out" 2> "$OUT/stage.err" &
-STAGER=$!
+# detached (not a job of this shell), so setup's `wait` doesn't wait for it; run.py and the loop below watch its pid
+( $TIME "$OUT/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $H/stage.py $K $SW" > "$OUT/stage.out" 2> "$OUT/stage.err" &
+  echo $! > "$W/stager.pid" )
+STAGER=$(cat "$W/stager.pid")
+setup
 
-LPY=$PY
-"$PY" -c "import tokenizers" 2>/dev/null || { [ -x /workspace/pouw/mvp-e2e/venv312/bin/python ] && LPY=/workspace/pouw/mvp-e2e/venv312/bin/python; }
-"$LPY" "$H/layer.py" "$HUB" "$W/L1.npz" --tokens "$TOKENS" --layer "$LAYER" > "$OUT/layer1.json" 2> "$OUT/layer1.err" \
-  && "$LPY" "$H/layer.py" "$HUB" "$W/L2.npz" --tokens "$TOKENS" --layer "$LAYER" --seed-tokens "$("$PY" -c 'import os; print(os.urandom(16).hex())')" \
+LPY=$(cached venv-layer numpy2.5.3-tokenizers0.22.1 build_layer_venv)/bin/python
+[ -x "$LPY" ] || LPY=$PY
+MODEL=$HUB FETCH=()
+if ! ls -d "$HUB"/models--*/snapshots/*/ 2>/dev/null | grep -q "Llama-3.1-8B"; then
+  MODEL=${HZ_CACHE}/unsloth-Llama-3.1-8B FETCH=(--fetch unsloth/Llama-3.1-8B)   # a node without the checkpoint: layer L's shard
+fi
+"$LPY" "$H/layer.py" "$MODEL" "$W/L1.npz" --tokens "$TOKENS" --layer "$LAYER" "${FETCH[@]}" > "$OUT/layer1.json" 2> "$OUT/layer1.err" \
+  && "$LPY" "$H/layer.py" "$MODEL" "$W/L2.npz" --tokens "$TOKENS" --layer "$LAYER" --seed-tokens "$("$PY" -c 'import os; print(os.urandom(16).hex())')" \
     > "$OUT/layer2.json" 2> "$OUT/layer2.err" || { log "layer.py FAILED: $(tail -2 "$OUT"/layer*.err)"; kill $STAGER; exit 1; }
 log "window: $(cut -c1-400 "$OUT/layer1.json")"
 args=(--work "$WK" --stage "$SW" --lean "$LEAN" --layer "$W/L1.npz" --layer2 "$W/L2.npz" --draw "$DRAW" --stager-pid "$STAGER"
@@ -50,7 +60,7 @@ args=(--work "$WK" --stage "$SW" --lean "$LEAN" --layer "$W/L1.npz" --layer2 "$W
 "$PY" "$H/run.py" prepare "${args[@]}" 2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 touch "$SW/requests/END"
-wait $STAGER
+while kill -0 "$STAGER" 2>/dev/null; do sleep 2; done
 cp "$SW/circuit.json" "$OUT/" 2>/dev/null
 grep -E '^(BUILT|STAGED|FAILED)' "$OUT/stage.out" | cut -c1-600 | tee -a "$OUT/job.log"
 cp "$WK/record.json" "$WK/plan.json" "$OUT/" 2>/dev/null
