@@ -219,7 +219,7 @@ template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE> DEV void cw_body(
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
     int tm, tn;
     ml.place_step(pl, t == (int)blockIdx.x ? t : (int)gridDim.x);
-    L::place_tile(pl, tm, tn);
+    L::place_tile(pl, tiles_m, tm, tn);
     const uint32_t tile_id = tm * tiles_n + tn;
     St ch[8];
 #pragma unroll
