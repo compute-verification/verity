@@ -564,8 +564,8 @@ def test_a_direct_f32_output_mm_binds_the_captured_f32out_route(served):
     want = PROFILE_B1_EAGER_V3.kind("cublas_splitk_gemm_f32out", K=7168, N=1024, SPLIT_K=5, DOT=hopper.HopperBF16WgmmaDot16).id
     assert [n.fn.id for n in rep.program.fn.body.nodes] == [want] * 4
     assert rep.provenance["weight_roles"]["weight"]["role"] == "linear.weight"
-    rep = _derive_mhc(_F32Out(), (torch.empty(8, 7168, dtype=torch.bfloat16, device="meta"),))
-    assert "no captured vLLM-default cuBLAS f32out route for M=8, K=7168, N=1024" in rep.unsupported.hint
+    rep = _derive_mhc(_F32Out(), (torch.empty(2049, 7168, dtype=torch.bfloat16, device="meta"),))
+    assert "no captured vLLM-default cuBLAS f32out route for M=2049, K=7168, N=1024" in rep.unsupported.hint
     rep = _derive_mhc(_F32Out(2048), (torch.empty(256, 7168, dtype=torch.bfloat16, device="meta"),))
     assert rep.program is not None, rep.unsupported
     want = PROFILE_B1_EAGER_V3.kind("cublas_gemm_f32out", K=7168, N=2048, DOT=hopper.HopperBF16WgmmaDot16).id
