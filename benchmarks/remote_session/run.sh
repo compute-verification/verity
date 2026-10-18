@@ -38,8 +38,8 @@
 #
 # ROLE=verifier is the audit's verifier as a service, on a machine the prover doesn't control (AGENTS.md's
 # auditor-trusted devices), never on PEER. It keeps the registrations in REGISTRY (default
-# /workspace/remote-session/registry.json on its own machine, across its runs: a node with a live registration there is
-# refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
+# ~/.local/state/remote-session/registry.json on its own machine, across its runs: a node with a live registration there
+# is refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
 # the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as they
 # are. A registration left live by a run that ended early refuses the node until CLOSE=NODE_HEX closes it (the same
 # ROLE=verifier run, which closes it in REGISTRY and exits).
@@ -64,8 +64,8 @@ VERIFY=(--port "$PORT" --out "$O" --windows "$WINDOWS" --window-ms "$WINDOW_MS" 
   --jitter-ms "$JITTER_MS" --sessions "$SESSIONS" ${QUANTILE:+--quantile "$QUANTILE"}
   ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"})
 if [ "$ROLE" = verifier ]; then
-  REGISTRY=${REGISTRY:-/workspace/remote-session/registry.json}
-  mkdir -p "$(dirname "$REGISTRY")"
+  REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
+  mkdir -p "$(dirname "$REGISTRY")" || exit 3
   if [ -n "${CLOSE:-}" ]; then
     "$PY" $RS/verifier.py --registry "$REGISTRY" --close "$CLOSE" > "$O/verifier.log" 2>&1; W=$?
     cat "$O/verifier.log"
