@@ -474,9 +474,6 @@ class Capture:
             self.errors.append({"where": "after_sample", "step": st.step, "error": repr(e)[:400]})
         st.wall_s = time.perf_counter() - st.t_wall0
         if st.step in self.cfg.snapshot_steps and self.cfg.mode == "record":
-            t0 = time.perf_counter()
-            torch.cuda.synchronize()
-            self.timing["sync_s"] += time.perf_counter() - t0
             self._flush_snapshots(st)
         # the step is complete; it is written out at the next step start (or at close)
         self._cur = None
@@ -675,8 +672,7 @@ class Capture:
         if view.alloc in self.root_allocs:
             return
         full = self.cfg.snapshot_max_bytes
-        if cap is None:
-            cap = full
+        cap = full if cap is None else cap
         off, nbytes = spanned_bytes(t)
         why = DEVICE_BACKED if device_backed(t) else None
         if why is None and nbytes > cap:
@@ -703,7 +699,7 @@ class Capture:
             return
         src = storage_bytes_view(t, off, nbytes)
         if self._snap_pending and not self._arena.fits(nbytes):
-            self._drain_snapshots()
+            self._flush_snapshots(self._cur)
         host = self._arena.take(nbytes)
         host.copy_(src, non_blocking=True)
         entry = {"event": eid, "path": path, "view": view.to_json(), "dtype": view.dtype, "shape": list(view.shape),
@@ -740,17 +736,11 @@ class Capture:
             self._kv_blocks_in_step = []
         return self._kv_blocks_in_step
 
-    def _drain_snapshots(self) -> None:
-        """The arena is full mid-step: wait for its copies and write them, so the rest of the step reuses it.  A fresh pinned
-        buffer per copy would stay in torch's host allocator to the step's end: a GLM-5.3 TP8 rank pinned 117 GB at a 256-token
-        prefill, and the eight ranks beside a fold were killed for memory."""
+    def _flush_snapshots(self, st: _Step) -> None:
+        """Wait for the step's copies and write them out: at a snapshot step's end, and whenever they fill the pinned arena mid-step."""
         t0 = time.perf_counter()
         torch.cuda.synchronize()
-        self.timing["sync_s"] += time.perf_counter() - t0
-        self._flush_snapshots(self._cur)
-
-    def _flush_snapshots(self, st: _Step) -> None:
-        t0 = time.perf_counter()
+        self.timing["sync_s"] += (t1 := time.perf_counter()) - t0
         d = Path(self.cfg.snapshot_dir) / "values" / str(st.step)
         d.mkdir(parents=True, exist_ok=True)
         for item in self._snap_pending:
@@ -773,7 +763,7 @@ class Capture:
             self._snap_index.append(entry)
         self._snap_pending = []
         self._arena.reset()
-        self.timing["snapshot_s"] += time.perf_counter() - t0
+        self.timing["snapshot_s"] += time.perf_counter() - t1
 
     def _write_snapshot_index(self) -> None:
         p = Path(self.cfg.snapshot_dir) / "snapshots.json"
