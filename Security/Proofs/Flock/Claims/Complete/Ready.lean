@@ -12,7 +12,8 @@ import Proofs.Flock.Claims.Complete.ZkTables.Honest
   after `r_skip`), elements `0` to `m − 14`, at its index among the verifier's coins (`repStart`: the link's coin, then
   the earlier reps' recorded rounds, `spec.repStreams` order). At `r = 1` the verifier's `(1 + r)⁻¹` is `0⁻¹ = 0`. The
   masked verifier adds each rep's inner `β` (`betaSlotsZk`, refused at `0`) and level 0's pair coins (`rhoSlotsZk`,
-  refused when dependent), counted twice (`εZk`).
+  refused when dependent), counted twice, and each table's rank checks (`rankSlotsZk`: the prover refuses coins where
+  the mask slot's weights at its claim points are rank-deficient), counted `4·m` times (`εZk`).
 * **`δc H x = 1` exactly where `ready H x` fails**, which is on the statements that:
   * set up no plain session (`setupOf false x = none`), which the verifier refuses at every run;
   * set up a session that draws no unit: `checks` ends in `drawLaw zk none`, which refuses;
@@ -34,7 +35,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Honest
   bits at `i·2^m + a`, `tracesOf`, the relation's only at one table): `ZkTables.ready` at the masked session's run of
   `honestPZk` (`RecordFitsZkAt`), at one table.
 * `CompleteWith H D P δc`: `Claims.Flock.Complete`'s statement at `D` with a prover and an error of one's own, which
-  the masked proofs state `honestPZk`'s completeness at `δcZk` in, and `ZkTables.honestP`'s at `ZkTables.δc`, which is
+  the masked proofs state `honestPZk`'s completeness at `δcZk` in, and `ZkTables.honestPR`'s at `ZkTables.δc` is
   `Claims.Flock.Complete H (deployZk rel)`.
 -/
 
@@ -136,9 +137,19 @@ def betaSlotsZk (x : Claims.Msg) : List ℕ :=
       | .error _ => []
   | none => []
 
-/-- `εZk`: the outer coins, the `β`s and twice the pairs, over `2^128`. -/
+/-- **The mask slots' rank checks**: table `i`'s statement, its rep `0`'s first coin and its rep `1`'s. -/
+def rankSlotsZk (x : Claims.Msg) : List (Flock.Stmt × ℕ × ℕ) :=
+  match setupOf true x with
+  | some (_, spec, sts) => (List.range sts.size).flatMap fun i =>
+      match Zk.schedule sts[i]!.m with
+      | .ok _ => [(sts[i]!, repStartZk spec sts (2 * i), repStartZk spec sts (2 * i + 1))]
+      | .error _ => []
+  | none => []
+
+/-- `εZk`: the outer coins, the `β`s, twice the pairs and `4·m` per table's rank checks, over `2^128`. -/
 noncomputable def εZk (x : Claims.Msg) : ℝ :=
-  ((outerSlotsZk x).length + (betaSlotsZk x).length + 2 * (rhoSlotsZk x).length) / 2 ^ 128
+  ((outerSlotsZk x).length + (betaSlotsZk x).length + 2 * (rhoSlotsZk x).length +
+    (((rankSlotsZk x).map fun s => 4 * s.1.m).sum : ℕ)) / 2 ^ 128
 
 /-- **The honest masked record fits its length word** at the masked session `spec`, `sts` of `x`: at every witness,
 tape and coins, a record the honest masked session returns, run against `H` with each send answered by its coin
@@ -146,7 +157,7 @@ tape and coins, a record the honest masked session returns, run against `H` with
 def RecordFitsZkAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) :
     Prop :=
   ∀ (w : Claims.Flock.Wit) (ω : TapeZk) (r : Fin ((V true).k x) → Coin) (record : String) (proofs : Array ByteArray),
-    ((sessionPZk asks Hashes.pi spec (tabsOf sts) (tracesOf sts w) ω).run.sim H
+    ((sessionPZk asks Hashes.pi spec (tabsOf sts) (MaskRank.masksOf sts) (tracesOf sts w) ω).run.sim H
       (fun j => (Claims.coinSeq r j).bytes) 0).2 = .ok (record, proofs) →
       record.toUTF8.size < 2 ^ 64
 
@@ -197,7 +208,7 @@ answered by its coin (`PI.sim`), is under `2^64` bytes. -/
 def RecordFitsAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) :
     Prop :=
   ∀ (w : Claims.Flock.Wit) (ω : TapeZk) (r : Fin ((V true).k x) → Coin) (record : String) (proofs : Array ByteArray),
-    ((sessionPZk asks Hashes.pi spec (tabsOf sts) (traces sts w) ω).run.sim H
+    ((sessionPZk asks Hashes.pi spec (tabsOf sts) (MaskRank.masksOf sts) (traces sts w) ω).run.sim H
       (fun j => (Claims.coinSeq r j).bytes) 0).2 = .ok (record, proofs) →
       record.toUTF8.size < 2 ^ 64
 

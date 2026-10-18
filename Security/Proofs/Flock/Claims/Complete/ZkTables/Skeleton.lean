@@ -337,7 +337,7 @@ theorem Case.ready_parts (c : Case H rel) :
 /-- **The printed honest masked record is under `2^64` bytes**, from `ready` (`RecordFitsAt`). -/
 theorem Run.recordFits (o : Run H rel) : o.record.toUTF8.size < 2 ^ 64 := by
   obtain ⟨bs, h1, -⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)
-    (traces o.sts o.w) o.ω #[]
+    (MaskRank.masksOf o.sts) (traces o.sts o.w) o.ω #[]
   have hran := o.ran
   unfold sessionS at hran
   rw [hran] at h1
@@ -462,10 +462,10 @@ theorem Run.acc (g : Goals H rel) (o : Run H rel) :
 end Proved
 
 /-- **Masked completeness from the goals, at any number of tables**: Flock's masked verifier is complete for `honestP`
-with error `δc H`, given each goal. -/
+with error `δc H`, given each goal and the mask slots' rank bound. -/
 theorem complete_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (g : Goals H rel) : Claims.Flock.Complete H (deployZk rel) := by
-  refine complete_of H rel fun x w hsc hr hready ω r hgood => ?_
+    (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) (g : Goals H rel) : Claims.Flock.Complete H (deployZk rel) := by
+  refine complete_of H rel hMR hMF fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf true x = some (s, spec, sts) := by
     unfold ZkTables.ready at hready
     split at hready
