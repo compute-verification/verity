@@ -456,4 +456,3 @@ Open items:
   would share their paths' upper levels, about n + DL node hashes instead of n·DL. Descriptor reads are 61% of the
   simulator's largest window. N2's frames root is the record's largest part in the lab: 33 compressions a 4,096-byte
   frame, fill included, plus the tree's nodes. It is N2's tree, so the unit can't skip the fill.
->>>>>>> origin/cursor/n3-zk-061a
