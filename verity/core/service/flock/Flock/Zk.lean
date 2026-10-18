@@ -24,6 +24,9 @@ def TAU_TAG : ByteArray := "verity/flock-zk/tau/v1".toUTF8.push 0
 /-- The claim points a table's rank check covers (ab and c, for both reps), and the mask words beyond `128 ·` that. -/
 def RANK_POINTS : Nat := 4
 def RANK_SLACK : Nat := 64
+/-- The least mask slot `--zk` takes, `2^13` bits per block (the deployed circuits' `mask_log` is 14): the bound on the
+honest prover's rank check refusing a coin, its completeness loss, covers no smaller slot. -/
+def SLOT_LOG_MIN : Nat := 13
 
 /-- Level 0's query count `q_0` (live PROTOCOL.md §7, upstream's `zk_queries0`): 277, 242, 229 at `m = 25, 26, 27`, else the
 least `q_0 ≥ 218` (fast100's) with `q_0 log2(1/(√ρ' + 1/50)) ≥ 100`, `ρ' = (L + 2 q_0) / 2L`, `L = 2^{m − 7 − k_0}` (219 at
@@ -343,12 +346,15 @@ def maskFree (st : Stmt) (r : Range) : Bool :=
     (List.range (st.c.kLog - 7)).any fun i => !reg.free.contains (i + 7) &&
       (((reg.mask >>> (i + 7)) % 2 == 1 && (reg.fixed >>> (i + 7)) % 2 == 1) != (lo + j).testBit i)
 
-/-- A statement `--zk` can prove (upstream's `zk_shape_ok`): level 0's query count, and mask words enough for the prover's rank
-check (live PROTOCOL.md §6) to be reachable. Checked when the statement is set up, as upstream does before `Hello`. And,
-which upstream does not check, Δ and the regions avoid the mask slot (`maskFree`, D12). -/
+/-- A statement `--zk` can prove (upstream's `zk_shape_ok`): level 0's query count, a mask slot of at least
+`2^SLOT_LOG_MIN` bits, and mask words enough for the prover's rank check (live PROTOCOL.md §6) to be reachable. Checked
+when the statement is set up, as upstream does before `Hello`. And, which upstream does not check, Δ and the regions
+avoid the mask slot (`maskFree`, D12). -/
 def shapeOk (st : Stmt) : V Unit := do
   let _ ← queries0 st.m
   let some r := st.c.ranges.find? (·.kind == Kind.mask) | throw "zk: the circuit has no mask slot"
+  if r.slotLog < SLOT_LOG_MIN then
+    throw s!"slot_log = {r.slotLog}: --zk needs a mask slot of slot_log >= {SLOT_LOG_MIN}"
   let words := 2 ^ st.nbl * 2 ^ (r.slotLog - 7)
   if words < 128 * RANK_POINTS + RANK_SLACK then
     throw s!"{words} mask words: the rank check needs {128 * RANK_POINTS} for its {RANK_POINTS} claim points, and {RANK_SLACK} more"

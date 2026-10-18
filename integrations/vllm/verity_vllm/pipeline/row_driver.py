@@ -26,7 +26,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, TARGETS, RunEnv, row_execution, row_target
+from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_target
 from verity_vllm.pipeline import gpu_lease as GL
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
@@ -163,6 +163,10 @@ class Row:
     def path(self, rel: str) -> str:
         """``rel`` under the tree (the stages' cwd)."""
         return os.path.join(self.tree, rel)
+
+    def config(self) -> RowConfig:
+        """The row's config, its file in the tree that runs."""
+        return RowConfig.load(self.path(self.wl))
 
     def bi_eager(self) -> bool:
         """The row's execution is ``bi-eager``, the only one the template gives JIT caches: its workload's ``execution`` (or
