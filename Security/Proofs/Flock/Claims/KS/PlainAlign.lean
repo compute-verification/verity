@@ -14,6 +14,9 @@ comparison is the alignment alone, since the session's leaves record the cap of 
 * `sessFork_le`: so at that entry the session's fork event at the slot (`advRSL`'s) is `ForkEvL`'s;
 * `SlotRSL`, `advRSL_le_forkC`: where the strategy reaches the slot's node after `j` coins (`Lock.SlotAt` at
   `advRSL`'s lockstep), `advRSL` is at most the fork after `j` coins of `ForkEvL`;
+* `opRL_of_nul`, `not_conflictAt_nul`, `opens_of_outN_bind`, `opens_of_outN_sessAfterL`, `slotAt_answerWith_nul`,
+  `slotRSL_answerWith_nul`: a dead branch, which answers the openings with `nulOp`, reaches only empty rows, so two of
+  its runs never conflict and it meets `Lock.SlotAt` by `nul` at any number of coins (`Lock.forkE_answerWith`);
 * `PlainSlotAlign`, `plainForkAlign_of_slot`, `plain_KS_of_slot`: so `PlainForkAlign`, and KS at the deployed plain
   verifier's trimmed record, hold where the simulated strategy reaches each plain fork slot after `plainJ r ℓ` coins.
 -/
@@ -127,6 +130,107 @@ theorem advRSL_le_forkC {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [I
   Lock.forkE_le_forkC _ _ (fun _ _ => ind_nonneg _ _)
     (fun t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂ =>
       sessFork_le A Hc E Lf S _ default cap₀ r ℓ t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂) h
+
+/-- **Empty rows open only the empty row**: where every opening of an output has an empty row, every position its
+rep-`r` level-`ℓ` openings open at a cap opens to the empty row. -/
+theorem opRL_of_nul {D Sl : Type} (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule) (r ℓ : ℕ) (cap : Model.Cap D)
+    {out : Model.OutCL 𝔽 D Sl} (ho : ∀ r ℓ i, (out.opens r ℓ i).1 = []) (p : Fin (2 ^ (lvOf sch ℓ).logLen))
+    {v : Fin (2 ^ (lvOf sch ℓ).lanes) → 𝔽} (hv : opRL Hc E Lf sch r ℓ cap out p = some v) :
+    v = rowFin (lvOf sch ℓ).lanes [] := by
+  unfold opRL opOfL at hv
+  obtain ⟨x, hx, rfl⟩ := Option.map_eq_some_iff.1 hv
+  obtain ⟨hmem, -⟩ := List.mem_filter.1 (List.mem_of_mem_head? hx)
+  unfold slotOpensL at hmem
+  split at hmem
+  · simp at hmem
+  · obtain ⟨pj, -, rfl⟩ := List.mem_map.1 hmem
+    simp only [ho]
+
+/-- **Two runs with empty rows never conflict** at a position of a cap. -/
+theorem not_conflictAt_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D)
+    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule) (r ℓ : ℕ)
+    (cap : Model.Cap D) {b b' : List (Model.OutCL 𝔽 D Sl)}
+    (hb : ∀ r ℓ i, ((b.getD 0 dfltOutL).opens r ℓ i).1 = [])
+    (hb' : ∀ r ℓ i, ((b'.getD 0 dfltOutL).opens r ℓ i).1 = []) (p : Fin (2 ^ (lvOf sch ℓ).logLen)) :
+    ¬ Rewinding.ConflictAt (fun outs : List (Model.OutCL 𝔽 D Sl) =>
+      opRL Hc E Lf sch r ℓ cap (outs.getD 0 dfltOutL)) (b, b') p := by
+  rintro ⟨h₁, h₂, hne⟩
+  obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 h₁
+  obtain ⟨v', hv'⟩ := Option.isSome_iff_exists.1 h₂
+  exact hne (by
+    rw [hv, hv', opRL_of_nul Hc E Lf sch r ℓ cap hb p hv, opRL_of_nul Hc E Lf sch r ℓ cap hb' p hv'])
+
+/-- **Openings answered with `nulOp` are empty**: an outcome of a game ending in an openings message, reached with
+that message `nulOp`, has empty rows. -/
+theorem opens_of_outN_bind {D Sl P : Type} [Inhabited Sl]
+    (mk : P → Model.Opens 𝔽 D × Model.Salts Sl → Model.OutCL 𝔽 D Sl) (hmk : ∀ p os, (mk p os).opens = os.1)
+    {h : Game P} {o : Model.OutCL 𝔽 D Sl}
+    (ho : Claims.Bridge.OutN (nulOp (D := D) (Sl := Sl))
+      (h.bind fun p => Game.send (Model.Opens 𝔽 D × Model.Salts Sl) fun os => Game.ret (mk p os)) o)
+    (r ℓ i : ℕ) : (o.opens r ℓ i).1 = [] := by
+  obtain ⟨p, -, hk⟩ := Claims.Bridge.OutN.of_bind ho
+  cases hk with
+  | send m hm hr =>
+    cases hr
+    rw [hmk, hm rfl]
+    rfl
+
+theorem outN_batch_one {Op A : Type} {nul : Op} {g : Game A} {outs : List A} (d : A)
+    (h : Claims.Bridge.OutN nul (batch [g]) outs) : Claims.Bridge.OutN nul g (outs.getD 0 d) := by
+  cases Claims.Bridge.OutN.of_batch h with
+  | cons hg hr => cases hr; exact hg
+
+/-- **The session after `Commit`, answered with `nulOp`, reaches only empty rows.** -/
+theorem opens_of_outN_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
+    [Inhabited Sl] (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+    (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) {outs : List (Model.OutCL 𝔽 D Sl)}
+    (h : Claims.Bridge.OutN (nulOp (D := D) (Sl := Sl)) (sessAfterL A Hc E Lf S sch hm ptLocal mPts [] [] cap₀) outs)
+    (r ℓ i : ℕ) : ((outs.getD 0 dfltOutL).opens r ℓ i).1 = [] := by
+  unfold sessAfterL at h
+  cases h with
+  | coin pts h =>
+    exact opens_of_outN_bind (P := Model.PendL 𝔽 D × Model.PendL 𝔽 D) (fun pend os => ⟨_, cap₀, pend, os.1, os.2⟩)
+      (fun _ _ => rfl) (outN_batch_one dfltOutL h) r ℓ i
+
+theorem allInh_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
+    (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
+    (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) :
+    AllInh (sessAfterL A Hc E Lf S sch hm ptLocal mPts [] [] cap₀) := by
+  unfold sessAfterL
+  exact .coin fun _ => AllInh.map _ (AllInh.interleave
+    (AllInh.bind (fun _ => .send ⟨nulOp (D := D) (Sl := Sl)⟩ fun _ => .ret _)
+      (AllInh.interleave (Model.allInh_repC A 0 S sch hm _) (Model.allInh_repC A 1 S sch hm _))) (.ret []))
+
+/-- **A dead branch meets `SlotAt` by `nul`**: below any lockstep whose compiled game reaches, with the openings
+`nulOp`, only outcomes with empty rows, `answerWith nulOp` forks to `0` at the conflict event of any cap's openings,
+whatever the chooser and the number of coins. -/
+theorem slotAt_answerWith_nul {D Sl T I α : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D)
+    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule)
+    (plur : Lock.Chooser T (Model.Cap D) (List (Model.OutCL 𝔽 D Sl))) (slot r ℓ j : ℕ)
+    {get : I → ℕ → Option (T × Model.Cap D)} {R : I → α → List (Model.OutCL 𝔽 D Sl) → Prop} {i : I} {g : Game α}
+    {g' : Game (List (Model.OutCL 𝔽 D Sl))} (L : Lock T (Model.Cap D) get R i g g') (hg : AllInh g')
+    (hN : ∀ b, Claims.Bridge.OutN (nulOp (D := D) (Sl := Sl)) g' b →
+      ∀ r ℓ i, ((b.getD 0 dfltOutL).opens r ℓ i).1 = []) (σ : Strategy g') :
+    Lock.SlotAt plur slot (fun d b b' => ind (fun x : List (Model.OutCL 𝔽 D Sl) × List (Model.OutCL 𝔽 D Sl) =>
+      ∃ p, Rewinding.ConflictAt (fun outs : List (Model.OutCL 𝔽 D Sl) =>
+        opRL Hc E Lf sch r ℓ d (outs.getD 0 dfltOutL)) x p) (b, b'))
+      j L (Claims.Bridge.answerWith (nulOp (D := D) (Sl := Sl)) g' σ) :=
+  .nul (Lock.forkE_answerWith plur slot _ L hg (fun d b b' hb hb' =>
+    ite_eq_right fun ⟨p, hp⟩ => not_conflictAt_nul Hc E Lf sch r ℓ d (hN b hb) (hN b' hb') p hp) σ)
+
+/-- **A strategy after `Commit` answering the openings with `nulOp` meets `SlotRSL`** at every rep, level and number
+of coins. -/
+theorem slotRSL_answerWith_nul {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
+    (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
+    (S : Model.Statement) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) (r ℓ j : ℕ)
+    (σ : Strategy (sessAfterL A Hc E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts [] [] cap₀)) :
+    SlotRSL A Hc E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts cap₀ r ℓ j
+      (Claims.Bridge.answerWith (nulOp (D := D) (Sl := Sl)) _ σ) :=
+  slotAt_answerWith_nul Hc E Lf _ _ _ r (ℓ + 1) j _ (allInh_sessAfterL A Hc E Lf S _ hm ptLocal mPts cap₀)
+    (fun _ hb => opens_of_outN_sessAfterL A Hc E Lf S _ hm ptLocal mPts cap₀ hb) σ
 
 /-- **The simulated strategy reaches the plain fork slot after `plainJ r ℓ` coins**, at tape `u`: `SlotRSL` at rep
 `r`'s level-`ℓ + 1` table node against `plainSimAt`. -/

@@ -315,5 +315,7 @@ outcomes its leaves relate (`ForkAlign`: `FlockSoundness.Game.Lock.SlotAt`,
 they open a position at it, so the simulated fork's alignment is the coin count alone, and KS at the deployed plain
 verifier's trimmed record holds where the simulated strategy reaches each plain fork slot after `plainJ r ℓ` coins
 (`PlainAlign`: `FlockDeploy.KS.capAtL_of_sessRelL`, `FlockDeploy.KS.advRSL_le_forkC`,
-`FlockDeploy.KS.PlainSlotAlign`, `FlockDeploy.KS.plain_KS_of_slot`).
+`FlockDeploy.KS.PlainSlotAlign`, `FlockDeploy.KS.plain_KS_of_slot`). A dead branch answers the openings with
+`nulOp`, so two of its runs open only the empty row, never conflict, and fork to nothing at any chooser
+(`FlockSoundness.Game.Lock.forkE_answerWith`, `FlockDeploy.KS.slotAt_answerWith_nul`).
 -/
