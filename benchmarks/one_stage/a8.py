@@ -14,14 +14,17 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   layers' events (activations, copied right after each call) and ``ckpt/``, the checkpoint of record's tensors of those
   layers. The log is folded into the request Program's root Calls (`observe.fold`, the integration's derived profile). A
   Call's operand is the snapshot of its view taken before the Call ran, else (an operand produced outside the slice's
-  events) the producing Call's output snapshot; a weight field is composed for rank 0 of 8 from the checkpoint by
+  events) the producing Call's output (its allocation's last snapshot before another Call writes it, as a reader without
+  a snapshot of its own read it); a weight field is composed for rank 0 of 8 from the checkpoint by
   `check.weights_of_record.compose` and the Build's load-time ue8m0 rewrite (`check.fp8_ue8m0`, roles from ``--roles``), the
   composition whose per-field digests the Commit's weights pin held equal to the served parameters; the rotary table is the
   capture's ``cos_sin_cache.npy``. A Call reading another rank's values (``peers``) has none here and is not staged.
 * **Units.** The Call is evaluated gate by gate (`circuits.evaluate`) on those operands and held to the capture's output
-  snapshot (the twin); its first ``--per-kind`` unit calls (the kind's unit, `a8_kinds.chain`) give each unit's arguments
-  and returns. Each is packed into the unit's rows (`a8_kinds.rows_of`) and staged by C-Flock's `UnitStager` bound to the
-  partition, whose IR reference check and the transcript's returns must agree.
+  snapshot (the twin; for a kernel whose write lands after its own event's snapshot, the first later one before another
+  writer that holds it, `call_twin`); its first ``--per-kind`` unit calls (the kind's unit, `a8_kinds.chain`) give each
+  unit's arguments and returns. Each is packed into the unit's rows (`a8_kinds.rows_of`, an output row per output port,
+  `a8_kinds.out_rows`) and staged by C-Flock's `UnitStager` bound to the partition, whose IR reference check and the
+  transcript's returns must agree.
 * **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one registration before the
   draw; the verifier's Lean stratified draw over its own program and partition; each member serves its share
   (``serve --zk --draw-file``) and Lean ``verify --zk --partition --program`` holds each session; the audit record and
