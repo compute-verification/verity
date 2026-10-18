@@ -85,6 +85,14 @@ def _write_instances_file(path: str, head: dict, rows) -> None:
         _write_instances(f, head, rows)
 
 
+def write_instances(out: str, program, digest: str, corr_digest: str | None, supplied: dict) -> None:
+    """A derive dir's `instances.json.gz`: the Program's instance sequence (`_instance_rows`) under its digests."""
+    _write_instances_file(os.path.join(out, "instances.json.gz"),
+                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest,
+                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
+                          _instance_rows(program))
+
+
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers, this driver,
 #: the Triton interception, the vLLM bindings + vocabulary + derive core, and the applicability contract itself.
 _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/vllm_meta.py",
@@ -636,10 +644,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["mutation_effects"] = rep.provenance["mutation_effects"]
     res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
     json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
-    _write_instances_file(os.path.join(out, "instances.json.gz"),
-                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest,
-                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
-                          _instance_rows(program))
+    write_instances(out, program, digest, corr_digest, supplied)
     # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
     art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
                                  applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)
