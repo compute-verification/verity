@@ -57,7 +57,7 @@ export their paths, say), are part of the resolved spec and so of every point's 
    and step timings (`engine.arrivals.run_requests_arrivals` with `request_timing` and `step_timing`). An experimental
    arm's `begin_run` runs before the clock starts and its `end_run` inside the timed window, so work an arm finishes at
    the end of a run (the Commit's hashing backlog) is in its time; the arm's `Target` names the run's phase (`gate`,
-   `warmup` or `measure`) and point.
+   `warmup` or `measure`), its point and the prompt and output tokens it serves.
 
 ## Metrics
 

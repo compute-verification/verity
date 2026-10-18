@@ -73,6 +73,39 @@ def test_a_measured_run_without_a_root_fails_the_point():
         _run(arm, target, "measure")
 
 
+def test_host_memory_reads_the_tightest_limit_on_the_cgroup_path_and_its_anonymous_bytes(tmp_path):
+    from verity_bench.vllm.commit_arm import host_memory
+
+    root = tmp_path / "cgroup"
+    job, engine = root / "app.slice" / "job.scope", root / "app.slice" / "job.scope" / "engine"
+    engine.mkdir(parents=True)
+    (root / "app.slice" / "memory.max").write_text(f"{128 << 30}\n")
+    (root / "app.slice" / "memory.stat").write_text("anon 1\nfile 2\n")
+    (job / "memory.max").write_text(f"{64 << 30}\n")
+    (job / "memory.stat").write_text(f"anon {20 << 30}\nfile {30 << 30}\n")
+    (engine / "memory.max").write_text("max\n")
+    self_cgroup = tmp_path / "self"
+    self_cgroup.write_text("0::/app.slice/job.scope/engine\n")
+    assert host_memory(root, self_cgroup) == (64 << 30, 20 << 30)
+    self_cgroup.write_text("1:name=systemd:/x\n")
+    assert host_memory(root, self_cgroup) is None
+
+
+def test_a_run_whose_levels_cannot_fit_the_jobs_memory_is_refused_by_name(monkeypatch):
+    import verity_bench.vllm.commit_arm as commit_arm
+
+    arm, target = _arm(FakeCommitter())
+    arm.per_token_bytes = 3_450_000
+    monkeypatch.setattr(commit_arm, "host_memory", lambda: (64 << 30, 20 << 30))
+    target.tokens = 18_432
+    _run(arm, target, "gate")
+    target.tokens = 66_560
+    with pytest.raises(RuntimeError, match=r"refused before the run: 66560 tokens .* 53\.5 GiB of Merkle levels"):
+        _run(arm, target, "gate")
+    monkeypatch.setattr(commit_arm, "host_memory", lambda: None)
+    _run(arm, target, "gate")
+
+
 def test_collector_errors_and_missing_tensors_fail_the_gate_and_a_measured_run():
     arm, target = _arm(FakeCommitter(errors=["windowed staging: plan mismatch"]))
     _run(arm, target, "gate")

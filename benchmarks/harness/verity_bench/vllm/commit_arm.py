@@ -12,6 +12,10 @@ GPU tree, fast copy) over a ring of 8 x 256 MiB device windows, with bounded lea
   manifest, and the FA2 hidden-stream tap is not attached;
 * nothing raw is retained (``retain none``: values open by replay); the Merkle levels go to pinned host memory.
 
+The levels are a quarter of the committed bytes (a 32-byte node per 256-byte leaf, and the tree above the leaves doubles
+that), held for the whole run, so a run whose levels can't fit the job's host memory (its cgroup's ``memory.max``) is refused
+before it starts, by name, rather than killed partway through.
+
 The weights' registration is once per engine and outside steady state, so it isn't run. Each harness run is one Commit:
 ``begin_run`` resets and installs the committer before the clock starts, and ``end_run`` finalizes inside the timed window, so
 a run's time includes the hashing backlog. The gate and warm-up runs are learn-only passes: a step whose plan is new and whose
@@ -23,11 +27,36 @@ gate runs: no collector error, every expected tensor committed.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 #: the row Commit's staging (`config.CommitConfig`): 256 MiB windows, 8 slots; learning bounded, nothing raw retained
 ENV = {"VERITY_WINDOW_MB": "256", "VERITY_WINDOW_SLOTS": "8", "VERITY_STAGING_BOUNDED": "1", "VERITY_RETAIN": "none"}
 LEARN_ONLY = ("gate", "warmup")
+#: committed bytes per byte of Merkle levels kept on host
+LEVELS_DIVISOR = 4
+CGROUP_ROOT = Path("/sys/fs/cgroup")
+
+
+def host_memory(root: Path = CGROUP_ROOT, self_cgroup: Path = Path("/proc/self/cgroup")) -> tuple[int, int] | None:
+    """The tightest ``memory.max`` on this process's cgroup v2 path and that cgroup's anonymous memory (page cache, which
+    the checkpoint's load leaves behind, is reclaimable); None without one."""
+    try:
+        rel = next(line.split("::", 1)[1].strip() for line in self_cgroup.read_text().splitlines() if line.startswith("0::"))
+    except (OSError, StopIteration):
+        return None
+    best, path = None, root / rel.lstrip("/")
+    while True:
+        try:
+            limit = (path / "memory.max").read_text().strip()
+            if limit != "max" and (best is None or int(limit) < best[0]):
+                stat = dict(line.split() for line in (path / "memory.stat").read_text().splitlines())
+                best = (int(limit), int(stat["anon"]))
+        except (OSError, ValueError, KeyError):
+            pass
+        if path == root or root not in path.parents:
+            return best
+        path = path.parent
 
 
 class CommitArm:
@@ -39,6 +68,7 @@ class CommitArm:
         self.id = id
         self.committer: Any = None
         self.windows: dict[str, Any] = {}
+        self.per_token_bytes = 0
         self.runs: list[dict[str, Any]] = []
 
     def install(self, target: Any) -> CommitArm:
@@ -58,9 +88,25 @@ class CommitArm:
         sizing = com.size_arena({"batch": int(vc.scheduler_config.max_num_seqs), "max_prompt": tokens, "max_new": 1,
                                  "max_num_batched_tokens": tokens, "max_model_len": int(vc.model_config.max_model_len)})
         self.windows = com.enable_windows(sizing)
+        self.per_token_bytes = int(sizing.get("per_token_bytes") or 0)
         self.committer = com
 
+    def admit(self, tokens: int) -> None:
+        """Refuse a run whose host-kept levels can't fit the job's memory."""
+        mem = host_memory()
+        if mem is None or not self.per_token_bytes:
+            return
+        limit, used = mem
+        need = tokens * self.per_token_bytes // LEVELS_DIVISOR
+        if need > limit - used:
+            raise RuntimeError(
+                f"commit arm: refused before the run: {tokens} tokens at {self.per_token_bytes} committed bytes per token keep "
+                f"{need / 2**30:.1f} GiB of Merkle levels on host (retain none keeps a quarter of what it commits), and the job has "
+                f"{(limit - used) / 2**30:.1f} GiB of its {limit / 2**30:.0f} GiB free: run this point in a job with more host "
+                f"memory, or with a Commit that keeps no levels on host")
+
     def begin_run(self, target: Any) -> None:
+        self.admit(target.tokens)
         com = self.committer
         com.reset()
         com.learn_only = target.phase in LEARN_ONLY
@@ -101,6 +147,7 @@ class CommitArm:
         failed = [r for r in self.runs if r["errors"]]
         return {"passed": bool(self.runs) and not failed, "runs": [{k: r[k] for k in ("run", "run_root", "steps",
                 "committed_bytes", "learned_only_steps", "errors")} for r in self.runs], "windows": self.windows,
+                "per_token_bytes": self.per_token_bytes,
                 "committer": self.committer.name if self.committer is not None else None}
 
     def close(self) -> None:

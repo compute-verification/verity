@@ -636,6 +636,7 @@ class _VllmEngine:
             torch.cuda.synchronize()
             torch.cuda.reset_peak_memory_stats()
         self.target.phase, self.target.point = phase, point.id
+        self.target.tokens = sum(len(r.prompt_token_ids) + r.max_tokens for r in requests)
         if self.obj is not None:
             _callback(self.obj, "begin_run", self.target, None)
         start = time.perf_counter()
