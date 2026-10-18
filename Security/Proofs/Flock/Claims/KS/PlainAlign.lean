@@ -260,7 +260,7 @@ theorem plainAlignQ_of_slot {spec : SessionSpec} {st : Stmt} {L : Layout st} {m 
 
 /-- **The simulated strategy reaches each plain fork slot after `plainJ r ℓ` coins**: `PlainForkAlign` with
 `PlainSlotQ` for `PlainAlignQ`, at every plain statement in scope, its one table's `fast100` schedule and the plain
-decoders where the outputs are public and where they are hidden. -/
+decoders where the outputs are public and where they are hidden under hm96 leaves. -/
 def PlainSlotAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -274,23 +274,25 @@ def PlainSlotAlign (x : Claims.Msg) : Prop :=
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdecAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
         (plainJ (tables_head_one h) hsch r ℓ).val u) ∧
-    (∀ hh : ins.read.I.tags.hiddenOutputs = true, ∀ C r ℓ u,
+    (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"), ∀ C r ℓ u,
       PlainSlotQ L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-        (plain_hdecHAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
+        (plain_hdecHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
         (plainJ (tables_head_one h) hsch r ℓ).val u)
 
 theorem plainForkAlign_of_slot {x : Claims.Msg} (h : PlainSlotAlign x) : PlainForkAlign x :=
   fun s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω =>
     ⟨fun hh C r ℓ u => plainAlignQ_of_slot
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).1 hh C r ℓ u),
-      fun hh C r ℓ u => plainAlignQ_of_slot
-        ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).2 hh C r ℓ u)⟩
+      fun hh hl C r ℓ u => plainAlignQ_of_slot
+        ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).2 hh hl C r ℓ u)⟩
 
 /-- **The deployed plain verifier: KS, from the simulated strategy's slot alignment**, at SHA-512 at the trimmed record
-at the deployed relation: `plain_KS_of_forkAlign` at `plainForkAlign_of_slot`. -/
-theorem plain_KS_of_slot (h : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSlotAlign x) :
+at the deployed relation: `plain_KS_of_forkAlign` at `plainForkAlign_of_slot`, with the live sessions' bound where
+hidden outputs sit under plain leaves (`PlainLeafLive`). -/
+theorem plain_KS_of_slot (h : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSlotAlign x)
+    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
     Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_forkAlign fun x hno => plainForkAlign_of_slot (h x hno)
+  plain_KS_of_forkAlign (fun x hno => plainForkAlign_of_slot (h x hno)) hleaf
 
 end FlockDeploy.KS

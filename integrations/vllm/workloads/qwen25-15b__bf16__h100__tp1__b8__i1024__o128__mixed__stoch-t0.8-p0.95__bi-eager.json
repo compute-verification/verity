@@ -1,8 +1,15 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen2.5-1.5B",
  "case": "B1",
- "tokenizer_revision": "8faed761d4",
+ "engine": {
+  "revision": "8faed761d45a263340a0528343f099c05c9a4323",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 3395,
+   "max_model_len": 1152
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -42,10 +49,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 128,
- "engine_args_required": {
-  "max_num_batched_tokens": 3395,
-  "max_model_len": 1152
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 c0382117ea329cdf (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   9,

@@ -12,6 +12,8 @@ stratified law draws an independent uniform `k s`-subset inside each stratum (`L
   it. The uniform `k`-subset is the case of one stratum.
 * `stratified_escape_floor`: **a floor catches its whole stratum**. With `1 ≤ k s`, a set containing stratum `s` never
   escapes.
+* `stratified_draw_full`, `stratified_full_miss`: **the full draw**. With every `k s` its stratum's size, the draw is every
+  unit and `miss K = 0` for `K ≥ 1` (`Law.miss_eq_zero_of_draw_univ`).
 * The one-stage profile theorems hold for every law, so they instantiate here. `audit_whole_stratum` (oracle layer) and
   `extraction_audit_whole_stratum` (compiled layer): an audit accepts while a whole floored stratum is wrong with
   probability at most the per-unit terms.
@@ -99,6 +101,22 @@ theorem stratified_escape_floor (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk :
     rw [filter_eq_inter_stratum, inter_eq_right.2 hB]
   rw [hc, Nat.sub_self, Nat.choose_eq_zero_of_lt (by omega)]
   simp
+
+/-- **The full stratified draw is every unit**: where each `k s` is its stratum's size, stratum `s`'s one `k s`-subset is
+the stratum itself, and the strata cover the units. -/
+theorem stratified_draw_full (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+    (hfull : ∀ s, k s = (stratum σ s).card) (ω : (stratified σ k hk).Ω) : (stratified σ k hk).draw ω = univ := by
+  have hs : ∀ s, (ω s).1 = stratum σ s := fun s => by
+    obtain ⟨hsub, hcard⟩ := Finset.mem_powersetCard.1 (ω s).2
+    exact Finset.eq_of_subset_of_card_le hsub (by rw [hcard, hfull s])
+  refine Finset.eq_univ_of_forall fun u => ?_
+  exact Finset.mem_biUnion.2 ⟨σ u, mem_univ _, by rw [hs]; exact mem_stratum.2 rfl⟩
+
+/-- **The full stratified draw has no sampling term**: `miss K = 0` for `K ≥ 1`, so the count curve
+`δ(K) = miss K + ε` of a headline at this law is its `ε` alone. -/
+theorem stratified_full_miss (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+    (hfull : ∀ s, k s = (stratum σ s).card) {K : ℕ} (hK : 1 ≤ K) : (stratified σ k hk).miss K = 0 :=
+  miss_eq_zero_of_draw_univ _ (stratified_draw_full σ k hk hfull) hK
 
 end Law
 

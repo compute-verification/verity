@@ -12,8 +12,10 @@ draw, which needs nothing of the record's draw: an accepting run gives `plainVer
 * `plain_first_of_simD`: the plain mixture's first bound from a simulation (`PlainSim`), by `Pr_le_liveMix`.
 * `PlainSimWrPAtD`, `PlainSimWD`: a simulator of each prover at `plainVerdictAt`, at `plain_hdecAt` and
   `plain_hdecHAt`.
+* `PlainLeafLive`: the live sessions' bound where hidden outputs sit under plain leaves, which `plain_hdecHAt` does
+  not cover.
 * `plain_tableBoundθAt_of_simD`, `plain_tableBoundθAt_simD`, `plain_KS_of_simD`: the table bound and KS at the
-  deployed plain verifier's trimmed record from `PlainSimWD` alone.
+  deployed plain verifier's trimmed record from `PlainSimWD` and `PlainLeafLive`.
 -/
 
 namespace FlockDeploy.KS
@@ -195,7 +197,7 @@ theorem plain_tableBoundθAt_of_simD {x : Claims.Msg} {ins : Ins} {spec : Sessio
 
 /-- **A simulator at a plain statement, at the verdict at the draw**: `PlainSimWrPAtD` at the statements in scope that
 set up at a draw, at their one table's `fast100` schedule, with the decoders `plain_hdecAt` where the outputs are
-public and `plain_hdecHAt` where they are hidden. -/
+public and `plain_hdecHAt` where they are hidden under hm96 leaves. -/
 def PlainSimWD (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -208,16 +210,31 @@ def PlainSimWD (x : Claims.Msg) : Prop :=
       PlainSimWrPAtD h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdecAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
-    (∀ hh : ins.read.I.tags.hiddenOutputs = true,
+    (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"),
       PlainSimWrPAtD h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-        (plain_hdecHAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay))
+        (plain_hdecHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay))
+
+/-- **The live sessions' bound where hidden outputs sit under plain leaves**: `PlainLiveAccAt` at the statements in
+scope that set up with hidden outputs under a leaf other than hm96's, at their one table's `fast100` schedule. The
+deployed decoders are proved right for hidden outputs only under hm96 leaves (`plain_setupHidden`), so this is
+`PlainLiveW`'s third clause, which no simulator here gives. -/
+def PlainLeafLive (x : Claims.Msg) : Prop :=
+  ∀ (s : Claims.Flock.Stmt) (_ : parse false Readable.relation x = some s) (_ : Claims.Flock.InScope false s)
+    (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf false x = some (ins, spec, sts)) (st : Stmt)
+    (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
+    (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
+    (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
+    (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts),
+    ins.read.I.tags.hiddenOutputs = true → ins.read.I.tags.merkleLeaf ≠ "hm96-sha512/v1" →
+      PlainLiveAccAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay
 
 /-- **A simulator at the verdict at the draw gives the plain table bound at a statement some run accepts**: such a
 statement is in scope with one table (`acc_inScope`, `plain_one`), whose model statement no table off it is committed
-to (`plain_not_committed`), so `plain_tableBoundθAt_of_simD` at `PlainSimWD`, with no premise on the record's draw. -/
+to (`plain_not_committed`), so `plain_tableBoundθAt_of_simD` at `PlainSimWD`, with no premise on the record's draw,
+and `plain_tableBoundθAt_of_live` at `PlainLeafLive` where hidden outputs sit under plain leaves. -/
 theorem plain_tableBoundθAt_simD {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x)
-    (hs : PlainSimWD x) :
+    (hs : PlainSimWD x) (hleaf : PlainLeafLive x) :
     Claims.Flock.TableBoundθAt sha512 (deployPlain Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs', hin⟩ := acc_inScope Readable.relation hno
   obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_draw hno
@@ -239,15 +256,21 @@ theorem plain_tableBoundθAt_simD {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc 
   obtain ⟨hw, hhid⟩ := hs s hs' hin ins spec sts hset _ ht d hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay
   cases hh : ins.read.I.tags.hiddenOutputs
   · exact plain_tableBoundθAt_of_simD hset hd hnc (hw hh)
-  · exact plain_tableBoundθAt_of_simD hset hd hnc (hhid hh)
+  · by_cases hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"
+    · exact plain_tableBoundθAt_of_simD hset hd hnc (hhid hh hl)
+    · exact plain_tableBoundθAt_of_live Readable.relation (wide false) ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13 PT_LOCAL
+        hlay hnc (plainLiveAt_of_acc
+          (hleaf s hs' hin ins spec sts hset _ ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay hh hl))
 
 /-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, at the statements
-some run accepts from a simulator of each prover at the verdict at the draw (`PlainSimWD`). It asks nothing of the
-record's draw, so a prover whose record carries the draw in another tree (`drawEq_ne`) is covered. -/
-theorem plain_KS_of_simD (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimWD x) :
+some run accepts from a simulator of each prover at the verdict at the draw (`PlainSimWD`) and, where hidden outputs
+sit under plain leaves, the live sessions' bound (`PlainLeafLive`). It asks nothing of the record's draw, so a prover
+whose record carries the draw in another tree (`drawEq_ne`) is covered. -/
+theorem plain_KS_of_simD (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimWD x)
+    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
     Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
   plain_KS_trim Readable.relation (plain_tableBoundθ_of_acc Readable.relation (wide false)
-    fun x _ _ _ _ hno _ _ _ => plain_tableBoundθAt_simD hno (hs x hno))
+    fun x _ _ _ _ hno _ _ _ => plain_tableBoundθAt_simD hno (hs x hno) (hleaf x hno))
 
 end Chain
 

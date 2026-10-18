@@ -280,8 +280,9 @@ def PlainForkQ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {sp
 
 /-- **The simulated fork is aligned with the plain fork round**: at every plain statement in scope and its one table's
 `fast100` schedule, at the plain decoders where the outputs are public (`plainOpn`, `plain_hdecAt`) and where they are
-hidden (`plainOpnH`, `plain_hdecHAt`), at each tape the fork at rep `r`'s level-`ℓ + 1` table node against the
-simulated strategy after `Commit` is at most the fork after `plainJ r ℓ` coins of `ForkEvL` (`PlainAlignQ`). -/
+hidden under hm96 leaves (`plainOpnH`, `plain_hdecHAt`), at each tape the fork at rep `r`'s level-`ℓ + 1` table node
+against the simulated strategy after `Commit` is at most the fork after `plainJ r ℓ` coins of `ForkEvL`
+(`PlainAlignQ`). -/
 def PlainForkAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -295,15 +296,16 @@ def PlainForkAlign (x : Claims.Msg) : Prop :=
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdecAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
         (plainJ (tables_head_one h) hsch r ℓ).val u) ∧
-    (∀ hh : ins.read.I.tags.hiddenOutputs = true, ∀ C r ℓ u,
+    (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"), ∀ C r ℓ u,
       PlainAlignQ L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-        (plain_hdecHAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
+        (plain_hdecHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
         (plainJ (tables_head_one h) hsch r ℓ).val u)
 
 /-- **The live fork event's collision**: at every plain statement in scope and its one table's `fast100` schedule, at
-the plain decoders' openings where the outputs are public (`plainOpn`) and where they are hidden (`plainOpnH`), the
-live fork event at the concrete simulator gives `P`'s two accepting runs a collision (`PlainForkQ`). -/
+the plain decoders' openings where the outputs are public (`plainOpn`) and where they are hidden under hm96 leaves
+(`plainOpnH`), the live fork event at the concrete simulator gives `P`'s two accepting runs a collision
+(`PlainForkQ`). -/
 def PlainForkClash (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -316,7 +318,7 @@ def PlainForkClash (x : Claims.Msg) : Prop :=
       PlainForkQ P x ω st (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) (plain_mPts hs hin hset).1
         ins.read.I d (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) ∧
-    (ins.read.I.tags.hiddenOutputs = true →
+    (ins.read.I.tags.hiddenOutputs = true → ins.read.I.tags.merkleLeaf = "hm96-sha512/v1" →
       PlainForkQ P x ω st (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) (plain_mPts hs hin hset).1
         ins.read.I d (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -386,14 +388,15 @@ theorem plainSimForkLe_of {x : Claims.Msg} (ha : PlainForkAlign x) (hc : PlainFo
   have hc' := hc s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω
   exact ⟨fun hh C _ r ℓ => plainAdv_le_of (tables_head_one h) hL L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _ _ _ _ P ω
       C r ℓ (ha'.1 hh C r ℓ) fun _ _ _ hq => pairEv_of_forkQ (hab C) (hc'.1 hh) hq,
-    fun hh C _ r ℓ => plainAdv_le_of (tables_head_one h) hL L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _ _ _ _ P ω
-      C r ℓ (ha'.2 hh C r ℓ) fun _ _ _ hq => pairEv_of_forkQ (hab C) (hc'.2 hh) hq⟩
+    fun hh hl C _ r ℓ => plainAdv_le_of (tables_head_one h) hL L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _ _ _ _ P ω
+      C r ℓ (ha'.2 hh hl C r ℓ) fun _ _ _ hq => pairEv_of_forkQ (hab C) (hc'.2 hh hl) hq⟩
 
 /-- **The deployed plain verifier: KS, from the simulated fork's alignment and the live fork's clash**, at SHA-512 at
 the trimmed record at the deployed relation: `plain_KS_of_fork` at `plainSimForkLe_of`. -/
 theorem plain_KS_of_align (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainForkAlign x)
-    (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainForkClash x) :
+    (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainForkClash x)
+    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
     Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_fork fun x hno => plainSimForkLe_of (ha x hno) (hc x hno)
+  plain_KS_of_fork (fun x hno => plainSimForkLe_of (ha x hno) (hc x hno)) hleaf
 
 end FlockDeploy.KS

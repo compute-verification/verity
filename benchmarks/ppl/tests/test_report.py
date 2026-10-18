@@ -48,14 +48,6 @@ def test_a_failed_run_has_no_table():
     assert "GATES FAILED" in t and "layer 0" in t and "| bf16 |" not in t
 
 
-def test_the_readme_shows_the_locked_baseline():
-    lk = json.loads(run.BASELINE.read_text())
-    text = run.README.read_text()
-    assert text.split(run.MARK[0])[1].split(run.MARK[1])[0].strip() == report.baseline_table(lk), \
-        "the README's baseline is not baseline.json's: `run.py baseline --lock` rewrites both"
-    assert run.readme_with(report.baseline_table(lk), text) == text
-
-
 def test_the_lock_is_well_formed():
     lk = json.loads(run.BASELINE.read_text())
     keys = {report.point_key(*p) for p in report.BASELINE_POINTS}

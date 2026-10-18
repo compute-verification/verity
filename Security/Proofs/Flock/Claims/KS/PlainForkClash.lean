@@ -212,13 +212,14 @@ theorem plainForkClash (x : Claims.Msg) : PlainForkClash x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω
   exact ⟨fun hh => plainForkQ_of hs hin hset h hd _ _ _
       (plain_laterEntriesAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω,
-    fun hh => plainForkQ_of hs hin hset h hd _ _ _
-      (plain_laterEntriesHAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω⟩
+    fun hh hl => plainForkQ_of hs hin hset h hd _ _ _
+      (plain_laterEntriesHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω⟩
 
 /-- **The deployed plain verifier: KS, from the simulated fork's alignment**, at SHA-512 at the trimmed record at the
 deployed relation: `plain_KS_of_align` at `plainForkClash`. -/
-theorem plain_KS_of_forkAlign (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainForkAlign x) :
+theorem plain_KS_of_forkAlign (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainForkAlign x)
+    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
     Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_align ha fun x _ => plainForkClash x
+  plain_KS_of_align ha (fun x _ => plainForkClash x) hleaf
 
 end FlockDeploy.KS

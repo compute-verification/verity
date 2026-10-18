@@ -9,8 +9,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenDec
 
 * `decodesTable_wrP_scH`: `decodesTable_wrP_sc` at the hidden tables, from `accepts_repsH` and `tableAtH_of_acceptsI`;
   `accepts_opens₀L` holds at hidden outputs too.
-* `plain_setupHidden`: a plain statement in scope with hidden outputs sets its one table up at its draw under
-  setupHidden, with the tags `HiddenDec.TagsOkH` asks.
+* `plain_setupHidden`: a plain statement in scope with hidden outputs and `hm96-sha512/v1` leaves sets its one table up
+  at its draw under setupHidden, with the tags `HiddenDec.TagsOkH` asks.
 
 None of them reads which net returns the outputs: `InScope`'s general instance form (hidden outputs and `wiresAcyclic`)
 may have tail stages, which the verifier evaluates and the table's statement (`stmtOf` of setupHidden's) carries, and
@@ -72,7 +72,7 @@ theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inpu
   obtain ⟨hd, hprf, hrec⟩ := recordsLive_wrP1 (Reg := Reg) (mPts := mPts) I dj S R (oneOf o) hacc
   obtain ⟨hSD, hmPts⟩ := hS
   obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsI ht hc hh hc1 dj x₀ hacc hd hSD hmPts
-  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsH hh hrr hl hc1 hacc
+  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsH hh hrr (Or.inl hl) hc1 hacc
   rw [hd] at hst
   obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
   obtain ⟨hroot, hpts, hstreams⟩ := hrec spec #[st] sess hsu hdec
@@ -81,10 +81,11 @@ theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inpu
   have hm : 13 ≤ st.m := by have := exec_fast100_ge hf; omega
   have hms : st.merkle = MerkleScheme.hm96Sha512 := setupHidden_hm96 hl hst
   obtain ⟨pend, hreps, hv⟩ := hk hwf hr hm
+  rw [hl, leafOfId_hm96] at hv
   have hn : ∀ (q : ℕ) (pts : Fin 2 → Fin q → 𝔽),
       (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL q pts).length = 2 * st.regions.size := by
     intro q pts
-    rw [extraClaims_length]
+    rw [DecodeZL.extraClaims_length]
     simp [stmtOf, regionsOf]
   obtain ⟨s₀, p₀, -, hs₀, hp₀, hpl₀, -⟩ := hreps 0
   obtain ⟨s₁, p₁, -, hs₁, hp₁, hpl₁, -⟩ := hreps 1
@@ -138,7 +139,7 @@ theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inpu
     dsimp only
     congr 1
     unfold nX
-    rw [extraClaims_length, hS']
+    rw [DecodeZL.extraClaims_length, hS']
     simp [stmtOf, regionsOf]
   have e₀ : (oneOf o).rootB = rootB₀[0]! := hr₀
   rw [hopn, e₀, hsch]
@@ -156,13 +157,15 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A plain statement in scope with hidden outputs sets up its one table at its draw**: `plain_setupH` with
-setupHidden for setupH and `HmOut.parse` for `HmRow.parse`, in the general instance form (any input groups, any tail
-stages the verifier evaluates, whichever net returns the outputs). -/
+/-- **A plain statement in scope with hidden outputs and `hm96-sha512/v1` leaves sets up its one table at its draw**:
+`plain_setupH` with setupHidden for setupH and `HmOut.parse` for `HmRow.parse`, in the general instance form (any input
+groups, any tail stages the verifier evaluates, whichever net returns the outputs). The scope also admits plain SHA-512
+leaves here, which `TagsOkH` does not. -/
 theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
-    (hh : ins.read.I.tags.hiddenOutputs = true) {d : Json} (hd : ins.read.draw = some d) :
+    (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}
+    (hd : ins.read.draw = some d) :
     ins.read.I.tags.typed = false ∧ HmOut.parse ins.read.I.tags ins.read.I.circuitFile ins.read.I.tables = .ok st.c ∧
       HiddenDec.TagsOkH ins.read.I ∧
       Stmt.setupHidden ins.read.I.tags ins.read.I.circuitFile ins.read.I.publicFile ins.read.I.coins
@@ -175,9 +178,9 @@ theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
   have hzk : ins.read.zk = false := readOf_zk (x := x) (by unfold readOf; rw [(setupOf_some hset).1]; rfl)
   have htags : ins.read.tags = ins.read.I.tags := by simp [Readable.Read.tags, hzk]
   have hform : (Readable.toReadable Readable.relation p).form = ins.read.form := by rw [← hpr]; rfl
-  obtain ⟨-, -, -, -, -, ht, hrr, hl, hc1, hpi, -⟩ := hin
-  rw [hform] at ht hrr hl hc1 hpi
-  simp only [Readable.Read.form, htags] at ht hrr hl hc1 hpi
+  obtain ⟨-, -, -, -, -, ht, hrr, -, hc1, hpi, -⟩ := hin
+  rw [hform] at ht hrr hc1 hpi
+  simp only [Readable.Read.form, htags] at ht hrr hc1 hpi
   simp only [Bool.not_eq_true] at ht
   simp only [Bool.false_eq_true, ↓reduceIte] at hc1
   have hpi' : ins.read.publicInputs = none := Option.not_isSome_iff_eq_none.1 hpi
@@ -227,12 +230,13 @@ theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ
   exact hS'.symm
 
 open Classical Discharge.Tables Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
-/-- **The deployed plain decoders are right at `plainTab` at hidden outputs**: `plain_hdec` with `decodesTable_wrP_scH`
-and the hidden openings `HiddenDec.opnAtH`. -/
+/-- **The deployed plain decoders are right at `plainTab` at hidden outputs and `hm96-sha512/v1` leaves**: `plain_hdec`
+with `decodesTable_wrP_scH` and the hidden openings `HiddenDec.opnAtH`. -/
 theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
-    (hh : ins.read.I.tags.hiddenOutputs = true) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
+    (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}
+    (hd : ins.read.draw = some d) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -252,7 +256,7 @@ theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
       (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
       (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
       j := by
-  obtain ⟨ht, hc, hT, hst, rfl, h22, h35⟩ := plain_setupHidden hs hin hset h hh hd
+  obtain ⟨ht, hc, hT, hst, rfl, h22, h35⟩ := plain_setupHidden hs hin hset h hh hl hd
   obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
     have e := Refine.fast100_schedOf st.m
     rw [hsch] at e

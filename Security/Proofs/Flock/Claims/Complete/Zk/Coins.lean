@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.Zk.Run
 import Proofs.Flock.Claims.Complete.Coins
+import Proofs.Flock.Claims.Complete.Runs
 
 /-!
 # δcZk: where the honest masked prover can fail
@@ -21,7 +22,8 @@ fail.
 
 `εZk` is their count, each pair coin twice, over `2^128`; `pr_badZk_le` is the union bound. `δcZk H` is `εZk` on the
 statements the masked verifier can accept against `H` at one table (`readyZk H`, as `ready H`: the setup against `H`
-is the one at SHA-512, which at `sha512` asks no more, `readyZk_sha512`), and `1` elsewhere. The slots read the
+is the one at SHA-512, which at `sha512` asks no more, `readyZk_sha512`; the table's regions fit; the honest masked
+record fits its length word, `RecordFitsZkAt`), and `1` elsewhere. The slots read the
 statement's `m`, `k_log`, regions and points, as Deploy's `repRounds true`, and the `--zk` schedule's `k_0` and levels;
 rep `q` is table `q / 2`'s rep `q % 2`, its first coin after the link's and every earlier rep's rounds (`repStartZk`).
 -/
@@ -179,23 +181,38 @@ def BadZk (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop :=
 noncomputable def εZk (x : Claims.Msg) : ℝ :=
   ((outerSlotsZk x).length + (betaSlotsZk x).length + 2 * (rhoSlotsZk x).length) / 2 ^ 128
 
+/-- **The honest masked record fits its length word** at the masked session `spec`, `sts` of `x`: at every witness,
+tape and coins, a record the honest masked session returns, run against `H` with each send answered by its coin
+(`PI.sim`), is under `2^64` bytes. -/
+def RecordFitsZkAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) :
+    Prop :=
+  ∀ (w : Claims.Flock.Wit) (ω : TapeZk) (r : Fin ((V true).k x) → Coin) (record : String) (proofs : Array ByteArray),
+    ((sessionPZk asks Hashes.pi spec (tabsOf sts) (tracesOf sts w) ω).run.sim H
+      (fun j => (Claims.coinSeq r j).bytes) 0).2 = .ok (record, proofs) →
+      record.toUTF8.size < 2 ^ 64
+
 open Classical in
-/-- **The statements the masked verifier can accept** against `H`, at one table: it sets up the session at one table,
-its setup against `H` is the one at SHA-512, the session draws a unit, the statement is under `2^56` bytes (`ready H`'s
-reasons), and its `Hello` names the keyed coin tree (the masked verifier refuses any other session). The `--zk` scope
-admits several tables, whose masked record is per table; `δcZk H` is `1` there until it is. -/
+/-- **The statements the masked verifier can accept** against `H`: as `ready H`, of the masked session, at one table,
+with a `Hello` that names the keyed coin tree. It sets up the session at one table, the session draws a unit, the
+statement is under `2^64` bytes, the table's regions fit (`RegionsFit`), its setup against `H` is the one at SHA-512,
+its `Hello` names the keyed coin tree (the masked verifier refuses any other session), and the honest masked record
+fits (`RecordFitsZkAt`). The `--zk` scope admits several tables, whose masked record is per table; `δcZk H` is `1`
+there until it is. -/
 noncomputable def readyZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
   match setupOf true x with
-  | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
-      decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) && spec.coinTree.isSome
+  | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
+      decide (∀ st ∈ sts, JsonRT.RegionsFit st) &&
+      decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) && spec.coinTree.isSome &&
+      decide (RecordFitsZkAt H x spec sts)
   | none => false
 
-/-- **At SHA-512, `readyZk` asks only for one table, a drawn session, the statement's length and the coin tree**
-(`ready_sha512`). -/
+open Classical in
+/-- **At SHA-512, `readyZk` asks no setup agreement** (`ready_sha512`). -/
 theorem readyZk_sha512 (x : Claims.Msg) :
     readyZk sha512 x = match setupOf true x with
-      | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
-          spec.coinTree.isSome
+      | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
+          decide (∀ st ∈ sts, JsonRT.RegionsFit st) && spec.coinTree.isSome &&
+          decide (RecordFitsZkAt sha512 x spec sts)
       | none => false := by
   unfold readyZk
   split

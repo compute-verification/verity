@@ -246,7 +246,9 @@ theorem queryLevel0_mc {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level
 
 set_option maxHeartbeats 4000000 in
 /-- **The hiding Ligerito's run records requests that passed** (`zk_ligerito_plays` with its requests): at the
-proof's caps, every request the run records is one whose Merkle check the executable passed (`ReqOKZ`). -/
+proof's caps, every request the run records is one whose Merkle check the executable passed (`ReqOKZ`), and the first
+is level 0's, at the positions of the coins of round `k + k0 + 8` of the transcript, where `k` is the round Ligerito
+starts at. -/
 theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (t t' : Flock.Transcript)
     (rec : Zk.L0Rec) (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -257,7 +259,10 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
         Plays fOf (ZkLink.ligeritoPadZC (D := Dig) execArith P (schedOf sch) zl.tPad c₀ r Tm b)
           (ligMsgsZ p capDig sch zl.tPad zl.msgs) (consumed t.rounds t.k t'.k) out ∧
         out.2.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig p.recursiveCaps[j]!) ∧
-        ∀ req ∈ out.2.reqs, ReqOKZ ms sch cap p req := by
+        (∀ req ∈ out.2.reqs, ReqOKZ ms sch cap p req) ∧
+        ∃ (R : Req) (rest : List Req), out.2.reqs = R :: rest ∧ R.level = 0 ∧
+          R.positions =
+            (Flock.positions (sch.levels.getD 0 default) (t.rounds[t.k + 2 + sch.k0 + 6]!).coins).toList := by
   obtain ⟨hn7, h2, hl0, hc0, hl4, hcols, hext⟩ := hdim
   have hc01 := hcols 0 (by omega)
   have hn3 : 3 ≤ sch.n := by omega
@@ -379,25 +384,26 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
         (levelOf (sch.levels.getD 1 default) :: (sch.levels.toList.map levelOf).drop 2) stM)
         (recMsgs p capDig sch.ext (sch.levels.size - 1) 0 (sch.k0 + 4) 3) (consumed t₁₇.rounds t₁₇.k t₁₈.k) pend ∧
       pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig p.recursiveCaps[j]!) ∧
-      ∀ req ∈ pend.reqs, ReqOKZ ms sch cap p req := by
-    intro r b ini stM hlev1 hcaps1 hreqs1
+      (∀ req ∈ pend.reqs, ReqOKZ ms sch cap p req) ∧ ∃ rest, pend.reqs = stM.reqs ++ rest := by
+    intro r b ini stM₀ hlev1 hcaps1 hreqs1
     have hLC := loop_compose _ (sch.levels.size - 1)
       (fun i stM => Model.recursiveRoundsC execArith r (sch.m - 7) b ini sch.ext
         ((sch.levels.toList.map levelOf).drop (i + 1)) stM)
       (fun i v _ tE stM => RoundsWF tE.rounds ∧ v.1 = (sch.levels.getD (i + 1) default).cols + 4 ∧
         v.2.1 = p.recursiveCaps[i]! ∧ stM.level = i + 1 ∧
         stM.caps = (List.range (i + 1)).map (fun j => capDig p.recursiveCaps[j]!) ∧
-        ∀ req ∈ stM.reqs, ReqOKZ ms sch cap p req)
+        (∀ req ∈ stM.reqs, ReqOKZ ms sch cap p req) ∧ ∃ rest, stM.reqs = stM₀.reqs ++ rest)
       (fun i _ => recMsgs p capDig sch.ext (sch.levels.size - 1 - i) i (sch.k0 + 4 + 7 * i) (3 + 2 * i))
       (fun _ _ _ pend => pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig p.recursiveCaps[j]!) ∧
-        ∀ req ∈ pend.reqs, ReqOKZ ms sch cap p req) ?hstep ?hlast (sch.levels.size - 1) 0 _ _ _ out st₁₈ t₁₈ stM
-      (by omega) (by omega)
-      ⟨by rw [er₁₇]; exact hwf, by show sch.n - sch.k0 + 1 = _; omega, rfl, hlev1, by rw [hcaps1]; rfl, hreqs1⟩
+        (∀ req ∈ pend.reqs, ReqOKZ ms sch cap p req) ∧ ∃ rest, pend.reqs = stM₀.reqs ++ rest) ?hstep ?hlast
+      (sch.levels.size - 1) 0 _ _ _ out st₁₈ t₁₈ stM₀ (by omega) (by omega)
+      ⟨by rw [er₁₇]; exact hwf, by show sch.n - sch.k0 + 1 = _; omega, rfl, hlev1, by rw [hcaps1]; rfl, hreqs1,
+        [], (List.append_nil _).symm⟩
       hloop
     case hstep =>
       clear * - hn7 h2 hl0 hc0 hl4 hcols hext hlv hα1
       intro i v stE tE bv stE' tE' stM hi hrel hb
-      obtain ⟨hwfE, hsplit, hprev, hlevM, hcapsM, hreqsM⟩ := hrel
+      obtain ⟨hwfE, hsplit, hprev, hlevM, hcapsM, hreqsM, hheadM⟩ := hrel
       have hc1 := hcols (i + 1) (by omega)
       have hl1 := hl4 (i + 1) (by omega) (by omega)
       have hl2 := hl4 (i + 1 + 1) (by omega) (by omega)
@@ -475,7 +481,11 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
             show stM.caps ++ [capDig p.recursiveCaps[i + 1]!] = _
             rw [hcapsM, List.range_succ (n := i + 1), List.map_append]
             rfl,
-          ?reqs⟩, er₈, by omega, ?tape, ?plays⟩
+          ?reqs, ?head⟩, er₈, by omega, ?tape, ?plays⟩
+      case head =>
+        obtain ⟨rest, hrest⟩ := hheadM
+        simp only [qbOut, hrest, List.append_assoc]
+        exact ⟨_, rfl⟩
       case reqs =>
         intro req hreq
         simp only [qbOut, List.mem_append, List.mem_singleton] at hreq
@@ -515,7 +525,7 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
     case hlast =>
       clear * - hn7 h2 hl0 hc0 hl4 hcols hext hlv hα1
       intro i v stE tE bv stE' tE' stM hi hrel hb
-      obtain ⟨hwfE, hsplit, hprev, hlevM, hcapsM, hreqsM⟩ := hrel
+      obtain ⟨hwfE, hsplit, hprev, hlevM, hcapsM, hreqsM, hheadM⟩ := hrel
       have hl1 := hl4 (i + 1) (by omega) (by omega)
       try dsimp only at hb
       rw [ite_eq_right (show ¬ v.1 < 4 by omega)] at hb
@@ -592,7 +602,7 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
         rw [hdrop, show sch.levels.size - 1 - i = 1 by omega, hcs]
         simp only [recMsgs]
         exact hmain, by
-        refine ⟨?_, fun req hreq => ?_⟩
+        refine ⟨?_, fun req hreq => ?_, ?_⟩
         · show stM.caps = _
           rw [hcapsM, hi]
         · simp only [qbOut, List.mem_append, List.mem_singleton] at hreq
@@ -601,7 +611,10 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
           · exact reqOKZ_succ (ℓ := sch.levels.size - 1) (hlevM.trans hi) (by omega) (by omega) hlvR rs
               (by rw [hrsl, hl1]) (tE.rounds[tE.k + 4]!).coins
               (by unfold capAt; rw [ite_eq_right (by omega), hprev, show sch.levels.size - 1 - 1 = i by omega])
-              (by unfold openAt; rw [ite_eq_right (by omega), ite_eq_right (lt_irrefl _)]) hmcE⟩
+              (by unfold openAt; rw [ite_eq_right (by omega), ite_eq_right (lt_irrefl _)]) hmcE
+        · obtain ⟨rest, hrest⟩ := hheadM
+          simp only [qbOut, hrest, List.append_assoc]
+          exact ⟨_, rfl⟩⟩
     obtain ⟨pend, hr, hk, hpl, hfinal⟩ := hLC
     refine ⟨pend, hr, hk, ?_, hfinal⟩
     simp only [Nat.zero_add, Nat.sub_zero, Nat.mul_zero, Nat.add_zero] at hpl
@@ -672,7 +685,11 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
       (vecOf (levelOf (sch.levels.getD 0 default)).queries (t.rounds[t.k + 2 + sch.k0 + 6]!).coins),
       (levelOf (sch.levels.getD 0 default)).lanes, pathLen (levelOf (sch.levels.getD 0 default))⟩
     (Q := fun pend => pend.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig p.recursiveCaps[j]!) ∧
-      ∀ req ∈ pend.reqs, ReqOKZ ms sch cap p req)
+      (∀ req ∈ pend.reqs, ReqOKZ ms sch cap p req) ∧
+      ∃ rest, pend.reqs = ⟨0, Model.positions execArith (levelOf (sch.levels.getD 0 default)).queries
+        (levelOf (sch.levels.getD 0 default)).logLen
+        (vecOf (levelOf (sch.levels.getD 0 default)).queries (t.rounds[t.k + 2 + sch.k0 + 6]!).coins),
+        (levelOf (sch.levels.getD 0 default)).lanes, pathLen (levelOf (sch.levels.getD 0 default))⟩ :: rest)
     (fun s q => twoOodC_any _ 0 s q
       (t.rounds[t.k + 2 + sch.k0 + 2]!).coins (t.rounds[t.k + 2 + sch.k0 + 3]!).coins
       (t.rounds[t.k + 2 + sch.k0 + 4]!).coins (t.rounds[t.k + 2 + sch.k0 + 5]!).coins
@@ -693,22 +710,24 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
         hlv0.q_ne_one (hα1 0 (by omega)) p.messages[sch.k0 + 3]!
       exact ⟨st', hpl, by rw [hst', hreqs, hlev]; rfl⟩)
     (fun ini st hreqs hlev hcaps => by
-      obtain ⟨pend, _, _, hpl, hQ⟩ := hL r b ini st hlev hcaps (by
+      obtain ⟨pend, _, _, hpl, hc, hq, rest, hrest⟩ := hL r b ini st hlev hcaps (by
         rw [hreqs]
         intro req hreq
         rw [List.mem_singleton] at hreq
         subst hreq
         exact reqOKZ_zero rfl hlv0 _ _ hmc0')
-      exact ⟨pend, hpl, hQ⟩)
+      exact ⟨pend, hpl, hc, hq, rest, by rw [hrest, hreqs]; rfl⟩)
   rw [hcs]
   simp only [ligMsgsZ, List.append_assoc, List.cons_append, List.nil_append] at hmain ⊢
-  obtain ⟨out, hpl, hcaps, hreqs⟩ := hmain
-  exact ⟨out, hpl, hcaps, hreqs⟩
+  obtain ⟨out, hpl, hcaps, hreqs, rest, hrest⟩ := hmain
+  exact ⟨out, hpl, hcaps, hreqs, _, rest, hrest, rfl, Refine.positions_eq _ hlv0 _⟩
 
 /-! ## The rep, with its requests -/
 
 /-- **`repProg`'s run records requests that passed** (`zk_rep_plays` with its requests): the run of the compiled rep
-that `zk_rep_plays` builds has the proof's caps, and every request it records passed the executable's Merkle check. -/
+that `zk_rep_plays` builds has the proof's caps, every request it records passed the executable's Merkle check, and
+the first is level 0's, at the positions of the coins of the stream's round after the masked replay's `m + (kLog − 6)`
+rounds, the ring switch's `claims + 1` and Ligerito's `k0 + 8`. -/
 theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
@@ -723,7 +742,10 @@ theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
       Plays fOf (ZkLink.repZCAt execArith Hs T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
         (rounds.toList.map (·.coins)) pend ∧
       pend.lig.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig zp.proof.ligerito.recursiveCaps[j]!) ∧
-      ∀ req ∈ pend.lig.reqs, ReqOKZ st.merkle sch zp.proof.cap zp.proof.ligerito req := by
+      (∀ req ∈ pend.lig.reqs, ReqOKZ st.merkle sch zp.proof.cap zp.proof.ligerito req) ∧
+      ∃ (R : Req) (rest : List Req), pend.lig.reqs = R :: rest ∧ R.level = 0 ∧
+        R.positions = (Flock.positions (sch.levels.getD 0 default)
+          (rounds[(st.m + (st.kLog - 6)) + (2 + extras.size + 1) + (sch.k0 + 8)]!).coins).toList := by
   obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ hsch
   have hTm : T.S.m = st.m := hseam.hm
   have h7 : 7 ≤ T.S.m := by omega
@@ -780,7 +802,10 @@ theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
         Plays fOf (ZkLink.ligeritoPadZC (D := Dig) execArith P T.sch T.t T.c₀ r.val Tm b)
           (ligMsgsZ zp.proof.ligerito capDig sch tPad zp.level0) (consumed t₂.rounds t₂.k t₃.k) out ∧
         (out.2.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig zp.proof.ligerito.recursiveCaps[j]!) ∧
-          ∀ req ∈ out.2.reqs, ReqOKZ st.merkle sch zp.proof.cap zp.proof.ligerito req) := by
+          (∀ req ∈ out.2.reqs, ReqOKZ st.merkle sch zp.proof.cap zp.proof.ligerito req) ∧
+          ∃ (R : Req) (rest : List Req), out.2.reqs = R :: rest ∧ R.level = 0 ∧
+            R.positions = (Flock.positions (sch.levels.getD 0 default)
+              (t₂.rounds[t₂.k + 2 + sch.k0 + 6]!).coins).toList) := by
     intro e P he Tm b
     subst he
     rw [hseam.hsch, hseam.ht]
@@ -798,7 +823,10 @@ theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
         (consumed (Flock.Transcript.init rounds dom).rounds k₁ t₁.k ++
           (consumed t₁.rounds t₁.k t₂.k ++ consumed t₂.rounds t₂.k t₃.k))) o ∧
       (o.2.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig zp.proof.ligerito.recursiveCaps[j]!) ∧
-        ∀ req ∈ o.2.reqs, ReqOKZ st.merkle sch zp.proof.cap zp.proof.ligerito req) := by
+        (∀ req ∈ o.2.reqs, ReqOKZ st.merkle sch zp.proof.cap zp.proof.ligerito req) ∧
+        ∃ (R : Req) (rest : List Req), o.2.reqs = R :: rest ∧ R.level = 0 ∧
+          R.positions = (Flock.positions (sch.levels.getD 0 default)
+            (t₂.rounds[t₂.k + 2 + sch.k0 + 6]!).coins).toList) := by
     unfold ZkLink.repMaskedZC
     refine pq_map ?_
     refine pq_bind hpz ?_ rfl rfl
@@ -831,9 +859,19 @@ theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
   unfold ZkLink.repZCAt ZkLink.repZC
   rw [hseam.hq]
   refine exQ_recv (toDig zp.inner.root) ?_
+  have hmv := ringSwitch_moves _ _ _ (by rw [size_two_append]; omega) h₂
+  rw [size_two_append] at hmv
+  have hi : t₂.k + 2 + sch.k0 + 6 = (st.m + (st.kLog - 6)) + (2 + extras.size + 1) + (sch.k0 + 8) := by
+    have h0 : (Flock.Transcript.init rounds dom).k = 0 := rfl
+    rw [hmv.2, hk₁, h0, hTm, hseam.hk]
+    omega
+  have hrt : t₂.rounds = rounds := by rw [hr₂, hr₁]; rfl
   refine pq_bindQ hM (fun o ho => ?_) hmsgs hcoins
   obtain ⟨v, hv⟩ := hIP Hs T.dom T.np T.nP T.pos o.1 T.tr (toDig zp.inner.root)
-  exact ⟨⟨o.2, v⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm, ho⟩
+  obtain ⟨hc, hq, R, rest, hR, hl, hp⟩ := ho
+  refine ⟨⟨o.2, v⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm, hc, hq, R, rest,
+    hR, hl, ?_⟩
+  rw [hp, hi, hrt]
 
 /-! ## `ZkRepAccepts`'s openings -/
 
@@ -861,7 +899,7 @@ theorem zk_opens_ok {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 �
     ZkLink.OpensOKZ H512 enc512 leaf512 (ZkLink.width₀ T) cap₀ r.val pend.lig os.rows os.salts := by
   obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
   obtain ⟨-, h2, hl0, -⟩ := hdim
-  obtain ⟨pend', hp', hcaps, hreqs⟩ :=
+  obtain ⟨pend', hp', hcaps, hreqs, -⟩ :=
     zk_rep_reqs hs512 T pts r st sch tPad extras zp rounds dom tr hsch hseam hlen hext hwf hrun hk
   obtain rfl := plays_det hp hp'
   rw [hms] at hreqs

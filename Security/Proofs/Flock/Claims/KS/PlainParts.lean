@@ -78,9 +78,9 @@ def PlainClashQ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {s
     PlainRawClashL P x ω (plainΦ x spec st (u, r'))
 
 /-- **The live self-clash's clash**: at every plain statement in scope and its one table's `fast100` schedule, at the
-plain decoders' openings where the outputs are public (`plainOpn`) and where they are hidden (`plainOpnH`), a live
-self-clash at the concrete simulator's outcome where `P`'s run accepts gives that run a raw clash (`PlainClashQ` at
-`SelfClashL`). -/
+plain decoders' openings where the outputs are public (`plainOpn`) and where they are hidden under hm96 leaves
+(`plainOpnH`), a live self-clash at the concrete simulator's outcome where `P`'s run accepts gives that run a raw
+clash (`PlainClashQ` at `SelfClashL`). -/
 def PlainSimClashAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -94,7 +94,7 @@ def PlainSimClashAt (x : Claims.Msg) : Prop :=
       PlainClashQ P x ω st (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) (plain_mPts hs hin hset).1
         ins.read.I d (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)) ∧
-    (ins.read.I.tags.hiddenOutputs = true →
+    (ins.read.I.tags.hiddenOutputs = true → ins.read.I.tags.merkleLeaf = "hm96-sha512/v1" →
       PlainClashQ P x ω st (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) (plain_mPts hs hin hset).1
         ins.read.I d (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩))
@@ -131,7 +131,8 @@ noncomputable def plainAdv {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k
 
 /-- **The simulated fork bounds the strategies' fork advantage**: at every plain statement in scope and its one
 table's `fast100` schedule, at the plain decoders where the outputs are public (`plainOpn`, `plain_hdecAt`) and where
-they are hidden (`plainOpnH`, `plain_hdecHAt`), the concrete simulator's fork advantage at each plain fork round
+they are hidden under hm96 leaves (`plainOpnH`, `plain_hdecHAt`), the concrete simulator's fork advantage at each
+plain fork round
 (`plainAdv`) is at most its simulated fork there, at the live fork `forkN` (`Flock.simForkPr` at `plainΦ x`). -/
 def PlainSimForkLe (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
@@ -150,11 +151,11 @@ def PlainSimForkLe (x : Claims.Msg) : Prop :=
             ℓ ≤
           Claims.Flock.simForkPr sha512 (V false) P x (plainΦ x spec st) (fun t => Claims.Flock.FnFork.forkN t) ω
             (plainJ (tables_head_one h) hsch r ℓ).val) ∧
-    (∀ hh : ins.read.I.tags.hiddenOutputs = true, ∀ C : Fin (wordLen false x) → List 𝔽,
-      (∀ p, wide false x (C p)) → ∀ r ℓ,
+    (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"),
+      ∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) → ∀ r ℓ,
         plainAdv L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x
             (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-            (plain_hdecHAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r
+            (plain_hdecHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r
             ℓ ≤
           Claims.Flock.simForkPr sha512 (V false) P x (plainΦ x spec st) (fun t => Claims.Flock.FnFork.forkN t) ω
             (plainJ (tables_head_one h) hsch r ℓ).val)
@@ -214,16 +215,18 @@ theorem plainSimWD_of_parts {x : Claims.Msg} (hc : PlainSimClashAt x) (hf : Plai
     ⟨fun hh => plainSimWrPAtD_of_parts hs hin hset h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _
         (fun Ω _ _ P ω => (hc s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).1 hh)
         (fun Ω _ _ P ω => (hf s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).1 hh),
-      fun hh => plainSimWrPAtD_of_parts hs hin hset h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _
-        (fun Ω _ _ P ω => (hc s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).2 hh)
-        (fun Ω _ _ P ω => (hf s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).2 hh)⟩
+      fun hh hl => plainSimWrPAtD_of_parts hs hin hset h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _
+        (fun Ω _ _ P ω => (hc s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).2 hh hl)
+        (fun Ω _ _ P ω =>
+          (hf s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).2 hh hl)⟩
 
 /-- **The deployed plain verifier: KS, from the concrete simulator's clash and fork bound**, at SHA-512 at the
 trimmed record at the deployed relation: `plain_KS_of_simD` at `plainSimWD_of_parts`, at the statements some run
 accepts. -/
 theorem plain_KS_of_parts (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimClashAt x)
-    (hf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimForkLe x) :
+    (hf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimForkLe x)
+    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
     Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_simD fun x hno => plainSimWD_of_parts (hc x hno) (hf x hno)
+  plain_KS_of_simD (fun x hno => plainSimWD_of_parts (hc x hno) (hf x hno)) hleaf
 
 end FlockDeploy.KS

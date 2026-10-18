@@ -10,6 +10,15 @@ negatives.
 - `a5.sh`: run A5's entry point on a CPU machine. A5 is a deferred Commit's window, a stand-in linked to its vllm-v1 run root
   and replay bundle: the CPU RoPE d64 Commit fixture, its window from `verity-vllm serving-rows`, and M0 and Lean built from the
   run's tree.
+- `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
+  decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
+  staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
+  share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
+- `a7.sh`: run A7's entry point, on the same builds. A7 is the requirement's plan and memory-map units
+  (`verity.ml.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
+  law, their witness rows bound to canonical commitments, then wired to the remote bandwidth audit's ledger as its
+  requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its draw leaves
+  unproved can carry and its δ the draw's.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

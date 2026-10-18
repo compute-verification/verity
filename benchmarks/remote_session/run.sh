@@ -36,9 +36,47 @@
 #   research run --on vy-nebius-2 ... --env ROLE=prover --env PORT=7791 --env PLAN=honest,skip:0.0625 \
 #     -- taskset -c 48-95 bash benchmarks/remote_session/run.sh
 #
+# ROLE=verifier is the audit's verifier as a service, on a machine the prover doesn't control (AGENTS.md's
+# auditor-trusted devices), never on PEER. It keeps the registrations in REGISTRY (default
+# ~/.local/state/remote-session/registry.json on its own machine, across its runs: a node with a live registration there
+# is refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
+# the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as they
+# are. A registration left live by a run that ended early refuses the node until CLOSE=NODE_HEX closes it (the same
+# ROLE=verifier run, which closes it in REGISTRY and exits).
+#
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
+# LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it.
+#
+# SERVE makes the prover vLLM serving under the audit, on one leased GPU in vLLM's venv (VLLM_PY, default
+# /workspace/jobs/venv312/bin/python, its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path,
+# against ROLE=verifier with SESSIONS=1 (one session a store). SERVE=tiny runs `serve.py --connect` (the vLLM tests'
+# tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
+# the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
+# tunnel; its Commit refuses --remote-verifier until it puts the store binder on its engine. Milestone 3's thin slice,
+# int8 Llama-3.1-8B:
+#
+#   research run --on vy-nebius-1 --phase cpu ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7797 \
+#     --env SESSIONS=1 --env WINDOWS=7 --env WINDOW_MS=100 --env LIFETIME=4 -- bash benchmarks/remote_session/run.sh
+#   research run --on vy-nebius-2 --preemptible --gpus 1 ... --env ROLE=prover --env PORT=7797 --env SERVE=row \
+#     --env ROW=<the int8 Llama-3.1-8B row> -- bash benchmarks/remote_session/run.sh
+#
+# SERVE=node serves the whole node: a vLLM engine a leased GPU (`engine.py`), and the prover (`node.py`) registers
+# their weights arenas as the store, where they are served, the engines decoding each weight as they use it
+# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
+# node's host DRAM (its MemTotal) in the memory line. The north-star run, the verifier on vy-nebius-1:
+#
+#   research run --queue --on vy-nebius-1 --phase cpu --cpus 16 ... --env ROLE=verifier --env PEER=vy-nebius-2 \
+#     --env PORT=7799 --env SESSIONS=2 --env WINDOWS=7 --env WINDOW_MS=60000 --env SAMPLES=33273 --env QUANTILE=max \
+#     --env JITTER_MS=50 --env VERIFIER_ARGS='--host-bytes 1843153879040' -- bash benchmarks/remote_session/run.sh
+#   research run --queue --on vy-nebius-2 --gpus 8 --preemptible --mem-gb 200 --max-min 60 --timeout 5h ... \
+#     --env ROLE=prover --env PORT=7799 --env SERVE=node --env PLAN=honest,skip:0.0625 --env ENGINE_CPUS=0-23 \
+#     --env PROVER_CPUS=24-47 --env ENGINE_ARGS='--step-hz 2 --align-steps' \
+#     --env NODE_ARGS='--decode-s 60 --warm-openings 33273' -- bash benchmarks/remote_session/run.sh
+#
+# Queue the prover first: its lease waits for all 8 GPUs (--timeout covers that wait, --max-min the lease), and once it
+# holds them it waits for the verifier's tunnel; start the verifier then.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -53,22 +91,35 @@ export VERIFIER_CPUS=${VERIFIER_CPUS:-88-95} PROVER_CPUS=${PROVER_CPUS:-48-87} P
 export SESSIONS=${SESSIONS:-$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))} ROLE=${ROLE:-both}
 VERIFY=(--port "$PORT" --out "$O" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES"
   --jitter-ms "$JITTER_MS" --sessions "$SESSIONS" ${QUANTILE:+--quantile "$QUANTILE"}
-  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"})
+  ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"})
 if [ "$ROLE" = verifier ]; then
+  REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
+  mkdir -p "$(dirname "$REGISTRY")" || exit 3
+  if [ -n "${CLOSE:-}" ]; then
+    "$PY" $RS/verifier.py --registry "$REGISTRY" --close "$CLOSE" > "$O/verifier.log" 2>&1; W=$?
+    cat "$O/verifier.log"
+    cp "$REGISTRY" "$O/registry.json"
+    exit $W
+  fi
   read -ra TO <<< "$(grep "^${PEER:?} " /etc/vy/peers | cut -d' ' -f2-)"
   [ ${#TO[@]} -gt 0 ] || { echo "no peer $PEER in /etc/vy/peers"; exit 3; }
+  printf '{"verifier": "%s", "listen": "127.0.0.1:%s", "peer": "%s", "remote_verifier": "127.0.0.1:%s"}\n' \
+    "$(hostname)" "$PORT" "$PEER" "$PORT" | tee "$O/address.json"
   # A tty makes the session interactive, so ssh and sshd set TCP_NODELAY (under -N roots were held ~30 ms every few
   # seconds, enough to make a boundary pass's root late); and with keystroke-timing obfuscation off, since it sends an
   # interactive session's packets on a 20 ms clock (tunnel_rtt.py measures each).
   ssh -tt -o ObscureKeystrokeTiming=no -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
-  "$PY" $RS/verifier.py --host 127.0.0.1 "${VERIFY[@]}" > "$O/verifier.log" 2>&1 & V=$!
+  # shellcheck disable=SC2086
+  "$PY" $RS/verifier.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" ${VERIFIER_ARGS:-} \
+    > "$O/verifier.log" 2>&1 & V=$!
   while kill -0 $V 2> /dev/null; do
     kill -0 $T 2> /dev/null || { echo "the tunnel to $PEER ended"; cat "$O/tunnel.log"; kill $V; break; }
     wait -n $V $T
   done
   wait $V; W=$?
   kill $T 2> /dev/null
+  cp "$REGISTRY" "$O/registry.json"
   tail -20 "$O/verifier.log"
   exit $W
 fi
@@ -85,6 +136,26 @@ fi
 LEASE=(gpu-lease "${GPUS:-1}" --wait ${GPU:+--on "$GPU"} ${TIMED:+--timed} --max-min "${MAXMIN:-30}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] || [ -n "${CPU:-}" ] && LEASE=()
 export CPU=${CPU:-} CODEC=${CODEC:-p512/k2}
+if [ -n "${SERVE:-}" ]; then
+  VPY=${VLLM_PY:-/workspace/jobs/venv312/bin/python}
+  export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=${HF_HOME:-/workspace/hf} PATH=$(dirname "$VPY"):$PATH
+  export PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
+  case $SERVE in
+    tiny) RUN=("$VPY" $RS/serve.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" --codec "$CODEC") ;;
+    row)
+      VV=$(dirname "$VPY")/verity-vllm
+      read -r CK REPO REV _ < <("$VV" epoch resolve "${ROW:?}")
+      # shellcheck disable=SC2086
+      RUN=(env "REMOTE_VERIFIER=127.0.0.1:$PORT" "$VV" row run "$ROW" "${CK:?}" "$REPO" "$REV" ${ROW_ARGS:-}) ;;
+    node)
+      export VPY
+      RUN=(bash $RS/node.sh) ;;
+    *) echo "SERVE is tiny, row or node, not $SERVE"; exit 3 ;;
+  esac
+  "${LEASE[@]}" "${RUN[@]}" > "$O/prover.log" 2>&1; P=$?
+  tail -20 "$O/prover.log"
+  exit $P
+fi
 # shellcheck disable=SC2016
 "${LEASE[@]}" bash -c '
   if [ -n "$CPU" ]; then

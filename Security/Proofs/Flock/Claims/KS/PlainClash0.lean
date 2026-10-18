@@ -353,12 +353,13 @@ theorem plain_clash₀At {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse fa
   · exact hp
   · exact hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs**:
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
 `clash₀_wrPDH` at the statement's draw `d` and no drawn unit, as `plain_hdecHAt` is `decodesTable_wrPD_scH` there. -/
 theorem plain_clash₀HAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
-    (hh : ins.read.I.tags.hiddenOutputs = true) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
+    (hh : ins.read.I.tags.hiddenOutputs = true)
+    (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ (L.model (regionsOf st)).m)
     (hlay : (L.model (regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (o : LiveOutJ 1 spec.mPts)
@@ -369,7 +370,7 @@ theorem plain_clash₀HAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
     (hcl : Clash₀L ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
       (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
     EntriesClash ins.read.I d (wrPD ins.read.I d o) := by
-  obtain ⟨ht, hc, hT, hst, rfl, -, -⟩ := plain_setupHidden hs hin hset h hh hd
+  obtain ⟨ht, hc, hT, hst, rfl, -, -⟩ := plain_setupHidden hs hin hset h hh hl hd
   obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
     have e := fast100_schedOf st.m
     rw [hsch] at e
@@ -530,7 +531,7 @@ theorem plainClashQ_or {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω :
 
 /-- **The live self-clash's clash past level 0**: `PlainSimClashAt` at `LaterClashL` in place of `SelfClashL`, at
 every plain statement in scope, its one table's `fast100` schedule and the plain decoders' openings, public and
-hidden. -/
+hidden under hm96 leaves. -/
 def PlainSimLaterClashAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -543,7 +544,7 @@ def PlainSimLaterClashAt (x : Claims.Msg) : Prop :=
       PlainClashQ P x ω st (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) (plain_mPts hs hin hset).1
         ins.read.I d (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (LaterClashL ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)) ∧
-    (ins.read.I.tags.hiddenOutputs = true →
+    (ins.read.I.tags.hiddenOutputs = true → ins.read.I.tags.merkleLeaf = "hm96-sha512/v1" →
       PlainClashQ P x ω st (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) (plain_mPts hs hin hset).1
         ins.read.I d (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (LaterClashL ⟨m, k0, l₀ :: l₁ :: rest, ext⟩))
@@ -552,19 +553,20 @@ def PlainSimLaterClashAt (x : Claims.Msg) : Prop :=
 `plainClashQ₀` at `plain_clash₀At` and `plain_clash₀HAt` gives the first. -/
 theorem plainSimClashAt_of_later {x : Claims.Msg} (hl : PlainSimLaterClashAt x) : PlainSimClashAt x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω _ _ P ω
-  refine ⟨fun hh => ?_, fun hh => ?_⟩
+  refine ⟨fun hh => ?_, fun hh hleaf => ?_⟩
   · exact plainClashQ_or _ (plainClashQ₀ hs hin hset h hd _ _ _
       (plain_clash₀At hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω)
       ((hl s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).1 hh) fun _ hq => hq
   · exact plainClashQ_or _ (plainClashQ₀ hs hin hset h hd _ _ _
-      (plain_clash₀HAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω)
-      ((hl s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).2 hh) fun _ hq => hq
+      (plain_clash₀HAt hs hin hset h hh hleaf hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω)
+      ((hl s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).2 hh hleaf) fun _ hq => hq
 
 /-- **The deployed plain verifier: KS, from the concrete simulator's clash past level 0 and fork bound**, at SHA-512
 at the trimmed record at the deployed relation: `plain_KS_of_parts` at `plainSimClashAt_of_later`. -/
 theorem plain_KS_of_later (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimLaterClashAt x)
-    (hf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimForkLe x) :
+    (hf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimForkLe x)
+    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
     Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_parts (fun x hno => plainSimClashAt_of_later (hc x hno)) hf
+  plain_KS_of_parts (fun x hno => plainSimClashAt_of_later (hc x hno)) hf hleaf
 
 end FlockDeploy.KS
