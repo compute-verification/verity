@@ -9,9 +9,9 @@ data phase separate or fused) is priced from this lane's measurements at step sc
 - leaves: B over the separate data phase's leaf rate at L (gate_up, M 4096, `gs`'s second part);
 - salts: B / L leaves at the salt phase's per-leaf cost at 1M leaves (`chacha` run: PRF y, or ChaCha20 y);
 - tree: the a-ary tree's time at 1M leaves, scaled by B / L / 2^20;
-- fusion: the GEMM outputs' share of the leaves (54% of the per-Call bytes) scaled by what the fused arm adds over the
-  GEMM alone, over the separate leaves' time (`fuse diag`, gate_up, 2 KiB), or by 1 - the pipe probe's overlap for the
-  ceiling row.
+- fusion: the GEMM outputs' share of the leaves (54% of the per-Call bytes) scaled by what a fused arm adds over a GEMM
+  alone, over the separate leaves' time (`fuse diag`, gate_up, 2 KiB): over this lane's GEMM (the hiding), over
+  cuBLASLt's (what serving would see), or by 1 - the pipe probe's overlap for the ceiling row.
 
 Step time = stock serving + hashing on the critical path (circuits' records show no overlap at B32: the GPU is busy).
 Stock serving and the step's bytes are H200 records: 57 ms and 13.49 GB a prefill step (r20261018-031955-d2b3, via
@@ -131,9 +131,16 @@ def table(g: dict[str, dict]) -> str:
             lev.append((f"bytes: per Call -> {u}", r0, hash_ms(d, unit=u), runs))
         if "diag" in d:
             dg = d["diag"]
-            for arms, what in ((("p4", "p8"), "a persistent hash kernel beside the GEMM"), (("f4", "f8"), "hash warps in the GEMM's CTA")):
-                a = min(arms, key=lambda k: dg[k])
-                lev.append((f"fusion: {what} (measured, {a})", r0, hash_ms(d, rho=(dg[a] - dg["g"]) / dg["sep"]), dg["run"]))
+            fused = ("g_par_sep", "p4", "p8", "f4", "f8") if "g_par_sep" in dg else ("p4", "p8", "f4", "f8")
+            a = min(fused, key=lambda k: dg[k])
+            ratio = dg["g"] / dg["lt"] if "lt" in dg else float("nan")
+            lev.append((f"fusion: hiding under this lane's GEMM ({a}; that GEMM is {ratio:.2f}x cuBLASLt's)", r0,
+                        hash_ms(d, rho=(dg[a] - dg["g"]) / dg["sep"]), dg["run"]))
+            if "lt" in dg:
+                lev.append((f"fusion: best fused arm ({a}) against cuBLASLt then the separate pass", r0,
+                            hash_ms(d, rho=(dg[a] - dg["lt"]) / dg["sep"]), dg["run"]))
+                lev.append(("fusion: the separate pass at once with cuBLASLt's GEMM (two streams)", r0,
+                            hash_ms(d, rho=(dg["lt_par_sep"] - dg["lt"]) / dg["sep"]), dg["run"]))
         elif "fuse" in d:
             f = d["fuse"]
             lev.append((f"fusion: leaves in the GEMM's CTA (measured, {f['arm']})", r0, hash_ms(d, rho=f["rho"]), f["run"]))
