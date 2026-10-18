@@ -255,8 +255,8 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
     return {
         "design": d.name, "summary": d.summary, "registry": _registry(d), "vector": pi.vector, "honest": e.honest.name,
         "honest_status": e.honest.status, "operands": operands, "credit": credit, "L": d.L, "fold": d.fold_name,
-        "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source}
-                                                for f, pw in e.fillers], "q": q,
+        "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source,
+                                                 "p": f.p, "luck": f.luck} for f, pw in e.fillers], "q": q,
         "operand_floor": d.floor, "gamma": e.gamma, "gamma_clock": e.gamma_clock,
         "honest_cycles_per_mma": e.T_honest * per_mma,
         "honest_time": e.T_honest_source, "credit_ratio": e.credit_ratio,
