@@ -55,4 +55,4 @@ def test_fold_super(tmp_path):
     doc = json.loads(verdict.read_text(encoding="utf-8"))
     assert doc["ok"]
     assert doc["counts"]["mutations"] == doc["counts"]["mutations_caught"] >= 4
-    assert doc["counts"]["checks"] == doc["counts"]["checks_ok"] >= 24
+    assert doc["counts"]["checks"] == doc["counts"]["checks_ok"] >= 30
