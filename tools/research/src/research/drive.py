@@ -14,8 +14,12 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
 
 What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns: a failed
 check, a conflict, a check that ran and passed but lacks a step the gate needs, a launch that registered no run.  A failed
-check whose failing tests' files and the files their failures name (a traceback's frames, a lint's offender) only one
-PR of the train changes (`implicated`) ejects that PR itself (`research queue eject`, by `ci`); otherwise `@ci` ejects the PR that broke it.  The next sync rebuilds `next` without it.
+train's cause is found by bisection over the checked prefixes of `next` (`Driver.failed`): it is among the members above the
+highest lower prefix whose check passed, or the base.  One member there is ejected (`research queue eject`, by `ci`); of
+several, those whose change touches a file the failure names (a traceback's frames, a lint's offender: `implicated`) are
+ejected at once, and otherwise drive checks the prefix halfway between and acts again when that check ends.  Overlap with
+what failed's declared inputs only informs: no ejection rests on it.  A kill that names nothing, or a failure with no report,
+goes to `@ci`, who ejects the PR that broke it.  The next sync rebuilds `next` without it.
 
 `--shadow` drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
@@ -63,6 +67,8 @@ BRANCH_SWEEP_S = 86400
 KILLED = "it was killed (a signal or 128+N) and names no file: a machine's fault"
 #: what it says of one whose files, and the declared inputs of what failed, no PR's change touches: a machine's fault too
 UNTOUCHED = "no PR's change touches what failed or its declared inputs: a machine's fault"
+#: what it says when no report of the failed check reached drive
+NO_REPORT = "no failed suite's report reached drive"
 #: Lean's own inputs, for a Lean step that failed with no file named
 LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json", "lean-audit.json")
 #: states `research status` reports for a run that may still publish an attempt
@@ -711,34 +717,35 @@ class Driver:
             self._prs = {p.number: p for p in self.q.github.open_prs()}
         return self.q.handle(self._prs[pr]) if pr in self._prs else None
 
-    def culprit(self, members: list[Member], v: Verdict) -> tuple[Member | None, list[Member], str]:
-        """The one member of a failed train whose own change (its merge commit against the one below) touches a file the
-        failure points at (`implicated`), else None; with the members that touch one, and what the failure points at.  A
-        failure that names no file and was a kill (`killed`) says `KILLED`."""
+    def culprit(self, members: list[Member], v: Verdict) -> tuple[list[Member], str]:
+        """The members of a failed train whose own change (its merge commit against the one below) touches a file the failure
+        points at (`implicated`), and what it points at.  With none, what the failure says: `KILLED` for a kill that names no
+        file, `NO_REPORT`, `UNTOUCHED` when no change touches the declared inputs of what failed either (`by_inputs`), else
+        that overlap, which only informs (18 Oct 01:55Z: ejecting on it took #2348 and nine others with the culprit)."""
         found: set[str] = set()
         dirs = self.evidence(self.repo, v.attempt.split())
         for d in dirs:
             if (paths := implicated(d)) is None:
                 if killed(d, v.why):
-                    return None, [], KILLED
+                    return [], KILLED
                 continue
             found |= paths
         own = {x.commit: changed(self.repo, f"{x.commit}^1", x.commit) for x in members}
         hits = [(x, t) for x in members if (t := touches(own[x.commit], found))] if found else []
         if hits:
-            what = ", ".join(sorted({f for _, t in hits for f in t}))
-            return (hits[0][0] if len(hits) == 1 else None), [x for x, _ in hits], what
+            return [x for x, _ in hits], ", ".join(sorted({f for _, t in hits for f in t}))
         if not dirs:
-            return None, [], "no failed suite's report reached drive"
+            return [], NO_REPORT
         back, what = self.by_inputs(members, own, dirs)
         if back:
-            return (back[0] if len(back) == 1 else None), back, what
-        return None, [], UNTOUCHED
+            return [], f"{what}, which {' '.join(f'#{x.pr}' for x in back)} change{'s' if len(back) == 1 else ''}"
+        return [], UNTOUCHED
 
     def by_inputs(self, members: list[Member], own: dict[str, set[str]], dirs: list[Path]) -> tuple[list[Member], str]:
         """The members whose change touches the declared inputs of what failed, when the failure's own files touch none
         (16 Oct: #2164's suite failed in tests/, and the cause was its benchmarks/pouw/pyproject.toml): a failed suite's
-        directory and `[tool.verity.tests] inputs`, a Lean step's Lean sources, circuit-check's (`queue.forces_cold`)."""
+        directory and `[tool.verity.tests] inputs`, a Lean step's Lean sources, circuit-check's (`queue.forces_cold`).  It says
+        whether a PR may be the cause, so the failure is bisected rather than resent, and names no PR to eject."""
         from .queue import forces_cold
 
         tip, rules = members[-1].commit, []
@@ -781,30 +788,60 @@ class Driver:
         return {p for p in out if not p.startswith("..")}
 
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
-        """Act on a failed train with no lander (16 Oct, Daniel through top): eject every member whose change touches what the
-        failure points at, so the next sync rebuilds the train without them; when the failure was a kill that points at nothing,
-        a machine's fault, check the same train again once, on ``on``'s machines; else tell `CI` and the owners."""
+        """Act on a failed train with no lander (16 Oct, Daniel through top) by bisection over the checked prefixes of `next`:
+        its cause is among the members above the highest lower prefix whose check passed, or the base.
+        - One member there is the cause: it is ejected.
+        - Of several, those whose change touches a file the failure names (`culprit`) are ejected at once; else drive checks
+          the prefix halfway between (`bisect`) and acts again when that check ends: log2 of their count checks at most.
+        - A kill that points at nothing, or a failure nothing in the train reaches, a machine's fault, is checked again once,
+          on ``on``'s machines (`resend`); a kill again, or a failure with no report, is told to `CI`.
+        A member a lower running check covers is left to that check (18 Oct 01:55Z: ejecting it cancelled that train, and were
+        it the cause, that check fails too), and a lower failed check acts first (10:30Z)."""
         key, prs = f"failed:{m.commit}", " ".join(f"#{x.pr}" for x in members)
         if key in drive["told"]:
             return
+        main = _out(self.repo, "rev-parse", "origin/main")
+        lower = {k: self.verdict(x.commit, main, drive).state for k, x in enumerate(members[:-1]) if x.commit in drive["launched"]}
+        if "failed" in lower.values():
+            return
+        passed = max((k for k, s in lower.items() if s == "passed"), default=-1)
+        floor = max((k + 1 for k, s in lower.items() if s in ("running", "passed")), default=0)
+        if (rec := drive.get("bisect", {}).get(m.commit)) and any(
+                s == "running" and members[k].commit == rec["check"] for k, s in lower.items()):
+            self.q.log(f"research queue drive: bisecting {m.commit[:12]}: waiting on the check of {rec['check'][:12]}")
+            return
         head = f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}"
-        _, hit, what = self.culprit(members, v)
+        hit, what = self.culprit(members, v)
         if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}):
             self.resend(drive, m, prs, v)
             return
-        # a member a lower train's running or passed check covers is left to that check: ejecting it would cancel that train,
-        # and were it the cause, that check fails too
-        main = _out(self.repo, "rev-parse", "origin/main")
-        floor = max((k + 1 for k, x in enumerate(members[:-1]) if x.commit in drive["launched"]
-                     and self.verdict(x.commit, main, drive).state in ("running", "passed")), default=0)
+        above = members[passed + 1:]
+        known = what not in (KILLED, NO_REPORT)
+        if known and len(above) == 1:
+            low = f"{members[passed].commit[:12]}, whose check passed" if passed >= 0 else f"`main` {main[:12]}"
+            on = "it failed again on its resend, naming no file a change touches" if what == UNTOUCHED else f"the failure is in {what}"
+            self._eject(drive, key, head, m, prs, v, above, f"it is the only PR above {low}; {on}")
+            return
+        hit = [x for x in hit if members.index(x) > passed]
         if hit and all(members.index(x) < floor for x in hit):
             self.q.log(f"research queue drive: {m.commit[:12]} failed on {what}, which only members the check of "
                        f"{members[floor - 1].commit[:12]} covers change: waiting on that check")
             return
-        hit = [x for x in hit if members.index(x) >= floor]
-        ejected, why = [], what
-        for x in hit:
-            reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which #{x.pr} changes"
+        if hit := [x for x in hit if members.index(x) >= floor]:
+            self._eject(drive, key, head, m, prs, v, hit, f"{'its' if len(hit) == 1 else 'their'} change touches {what}")
+            return
+        if known:
+            self.bisect(drive, m, members, passed, lower, what)
+            return
+        why = f"it failed again on its resend ({what})" if what == KILLED else what
+        self.refuse(drive, key, f"{head}. Not ejected: {why}. Eject the PR that broke it (`research queue eject N --reason ...`); "
+                                "the next sync rebuilds without it")
+
+    def _eject(self, drive: dict, key: str, head: str, m: Member, prs: str, v: Verdict, xs: list[Member], because: str) -> None:
+        """Eject ``xs`` from ``m``'s failed train, and tell `CI` and their owners why (``because``)."""
+        ejected, why = [], because
+        for x in xs:
+            reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: #{x.pr}: {because}"
             if self.q.shadow or self.dry_run:
                 self.q.log(f"research queue drive: would eject #{x.pr}: {reason}")
                 continue
@@ -812,17 +849,64 @@ class Driver:
                 self.q.eject(x.pr, reason, "ci")
                 ejected.append(x)
             except QueueError as e:
-                why = f"{what}; ejecting #{x.pr} failed: {e}"
+                why = f"{because}; ejecting #{x.pr} failed: {e}"
         if ejected:
-            names = " ".join(f"#{x.pr}" for x in ejected)
-            self.refuse(drive, key, f"{head}. Ejected {names}: {'its' if len(ejected) == 1 else 'their'} change touches {what}; "
-                                    f"the next sync rebuilds without {'it' if len(ejected) == 1 else 'them'}. Fix and re-mark",
-                        *(self._handle(x.pr) for x in ejected))
+            names, one = " ".join(f"#{x.pr}" for x in ejected), len(ejected) == 1
+            self.refuse(drive, key, f"{head}. Ejected {names}: {because}; the next sync rebuilds without "
+                                    f"{'it' if one else 'them'}. Fix and re-mark", *(self._handle(x.pr) for x in ejected))
             return
-        if what in (KILLED, UNTOUCHED):
-            why = f"it failed again on its resend ({what})"
         self.refuse(drive, key, f"{head}. Not ejected: {why}. Eject the PR that broke it (`research queue eject N --reason ...`); "
-                                "the next sync rebuilds without it", *(self._handle(x.pr) for x in hit))
+                                "the next sync rebuilds without it", *(self._handle(x.pr) for x in xs))
+
+    def bisect(self, drive: dict, m: Member, members: list[Member], passed: int, lower: dict[int, str], what: str) -> None:
+        """Halve the members of ``m``'s failed train its cause is among, those above ``passed`` (the highest lower prefix whose
+        check passed, -1 for the base): check the prefix halfway up (`drive["bisect"]` records it), unless a check of a prefix
+        between them already runs, which halves them too.  Once it ends, `failed` acts again, on it if it failed, else on
+        ``m`` with it passed (or landed)."""
+        q, main = self.q, _out(self.repo, "rev-parse", "origin/main")
+        among = " ".join(f"#{x.pr}" for x in members[passed + 1:])
+        if run := [members[k] for k, s in sorted(lower.items()) if s == "running" and k > passed]:
+            q.log(f"research queue drive: {m.commit[:12]} failed on {what}; its cause is among {among}, and the running check "
+                  f"of {run[-1].commit[:12]} (through #{run[-1].pr}) halves them: waiting on it")
+            return
+        mid = members[passed + (len(members) - 1 - passed) // 2]
+        if q.shadow or self.dry_run:
+            q.log(f"research queue drive: would bisect {m.commit[:12]} ({among}) at {mid.commit[:12]} (through #{mid.pr})")
+            return
+        if (running := self._running(drive, main)) >= self.max_running:
+            q.log(f"research queue drive: bisecting {m.commit[:12]} ({among}) waits: {running} checks running")
+            return
+        ids, tail = self._launch(drive, mid, main)
+        if not ids:
+            self.refuse(drive, f"launch:{mid.commit}", f"train.sh {mid.commit[:12]} {self.on} registered no run (bisecting "
+                                                       f"{m.commit[:12]}): {tail}")
+            return
+        drive.setdefault("bisect", {})[m.commit] = {"check": mid.commit, "among": [x.pr for x in members[passed + 1:]],
+                                                    "ids": ids, "at": self.now()}
+        q.log(f"research queue drive: bisecting {m.commit[:12]}: it failed on {what} and its cause is among {among}, whose "
+              f"changes name none of it: checking {mid.commit[:12]} (through #{mid.pr}) as {' '.join(ids)}")
+
+    def _running(self, drive: dict, main: str) -> int:
+        """The checks counted against `max_running`: drive's launches still running, and its pre-warms."""
+        warm = sum(1 for r in drive.get("prewarm", {}).values() if not r.get("done") and r.get("ids")
+                   and any(st in ACTIVE for st, *_ in self._states(r["ids"]).values()))
+        return warm + sum(self.verdict(c, main, drive).state == "running" for c in drive["launched"])
+
+    def _launch(self, drive: dict, m: Member, main: str) -> tuple[list[str], str]:
+        """Check ``m``'s commit (`train.sh`), with the suites its change reaches beside it when pytest is deferred, and record
+        the launch: (the check's run ids, train.sh's output's tail)."""
+        agreement = needs_agreement(self.repo, main, m.commit)
+        ids, tail = self.launch(self.repo, m.commit, self.on, agreement)
+        if not ids:
+            return ids, tail
+        drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": agreement}
+        if "pytest" in self.defer:
+            touched, out = self.launch_touched(self.repo, m.commit, self.on, main)
+            drive["launched"][m.commit]["touched"] = touched
+            if not touched:
+                self.q.log(f"research queue drive: {m.commit[:12]}'s touched-suites run registered no run ({out[-200:]}); its "
+                           "deferred pytest still runs after landing")
+        return ids, tail
 
     def resend(self, drive: dict, m: Member, prs: str, v: Verdict) -> None:
         """Check ``m``'s train again on ``on``'s machines, once: its failure was a kill and names no file, so no PR is at fault.
@@ -968,6 +1052,7 @@ class Driver:
                     q.log(f"research queue drive: cancelled {' '.join(live)}: {c[:12]} is no longer on `{q.branch}`")
         drive["launched"] = {c: v for c, v in drive["launched"].items() if c in on_chain}
         drive["resent"] = {c: v for c, v in drive.get("resent", {}).items() if c in on_chain}
+        drive["bisect"] = {c: v for c, v in drive.get("bisect", {}).items() if c in on_chain}
         what = [f"landed #{landed.pr}"] if landed else []
         main = _out(self.repo, "rev-parse", "origin/main")
         running = sum(self.verdict(c, main, drive).state == "running" for c in drive["launched"])
@@ -995,18 +1080,11 @@ class Driver:
                 what.append(f"would check {m.commit[:12]}")
                 running += 1
                 continue
-            ids, tail = self.launch(self.repo, m.commit, self.on, agreement)
+            ids, tail = self._launch(drive, m, main)
             if not ids:
                 self.refuse(drive, f"launch:{m.commit}", f"train.sh {m.commit[:12]} {self.on} registered no run: {tail}")
                 what.append("launch failed")
                 break
-            drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": agreement}
-            if "pytest" in self.defer:
-                touched, tail = self.launch_touched(self.repo, m.commit, self.on, main)
-                drive["launched"][m.commit]["touched"] = touched
-                if not touched:
-                    q.log(f"research queue drive: {m.commit[:12]}'s touched-suites run registered no run ({tail[-200:]}); its "
-                          "deferred pytest still runs after landing")
             q.log(f"research queue drive: checking {m.commit[:12]} ({prs}): {' '.join(ids)}" + (" with agreement" if agreement else "")
                   + (f", touched suites {' '.join(drive['launched'][m.commit].get('touched') or [])}" if "pytest" in self.defer else ""))
             what.append(f"launched {' '.join(ids)}")
