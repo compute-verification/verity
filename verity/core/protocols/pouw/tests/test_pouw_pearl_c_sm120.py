@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import dataclasses
 import random
+import sys
 from fractions import Fraction
+from pathlib import Path
 
 import pytest
 
@@ -27,6 +29,10 @@ from verity.core.protocols.pouw.schemes import pearl_c_u as U
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES, H100, SM120, SM120_UNPROMOTED, Device, Prices
+
+# the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
+import clear_work as CW  # noqa: E402
 
 SM120_ATOM = BLACKWELL_SM120_E4M3_M16N8K32
 
@@ -123,7 +129,8 @@ def test_sm120_instance_is_the_pin_on_its_record():
 
 
 def test_sm120_lifecycle_and_work_audit():
-    from verity.core.protocols.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
+    from verity.core.protocols.pouw.audit import Epoch, Workload
+    from clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=SM120), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
@@ -133,8 +140,8 @@ def test_sm120_lifecycle_and_work_audit():
     tr = prover.prove(epoch, {3: rows_a})
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), E.challenger()).accepted
     splits = {9: W.Split(k)}
-    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits)
-    res = W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 3)
+    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits)
+    res = CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 3)
     assert res.audit.accepted and res.audit.profile.scheme == "pearl-c-sm120-v1"
 
 
@@ -143,7 +150,8 @@ def test_the_cap_is_the_records(monkeypatch):
     at either record's prices, and Pearl-C4's own 1/400.  The certificate names it, and the credit, the tile rule and V-EX's
     remedy all read it: a tile whose debit lies between the two caps fails on sm120, passes on the same record at 1/400,
     and `volunteer` gives rows up for it on sm120 alone."""
-    from verity.core.protocols.pouw.audit import Epoch, Prover, Workload
+    from verity.core.protocols.pouw.audit import Epoch, Workload
+    from clear_audit import Prover
     from verity.core.protocols.pouw.schemes import pearl_c4
 
     s, h = get("pearl-c-sm120-v1"), get("pearl-c-h100-v1")
@@ -164,21 +172,21 @@ def test_the_cap_is_the_records(monkeypatch):
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     tr = prover.prove(epoch, {3: rows_a})
     splits = {9: W.Split(k)}
-    records = W.declare(sm, epoch, {3: rows_a}, {9: rows_b}, splits)
-    assert records == W.declare(at400, epoch, {3: rows_a}, {9: rows_b}, splits)
-    cells = 32 * 16 * W.cell_credit(sm, records[0])
-    assert W.work(sm, records)[1] == Fraction(999, 1000) * cells and W.work(at400, records)[1] == Fraction(399, 400) * cells
+    records = CW.declare(sm, epoch, {3: rows_a}, {9: rows_b}, splits)
+    assert records == CW.declare(at400, epoch, {3: rows_a}, {9: rows_b}, splits)
+    cells = 32 * 16 * CW.cell_credit(sm, records[0])
+    assert CW.work(sm, records)[1] == Fraction(999, 1000) * cells and CW.work(at400, records)[1] == Fraction(399, 400) * cells
 
-    tile_credit = 16 * 16 * W.cell_credit(sm, records[0])
+    tile_credit = 16 * 16 * CW.cell_credit(sm, records[0])
     atoms = int(Fraction(1, 1000) * tile_credit / D.atom_units(SM120)) + 1
     assert Fraction(1, 1000) * tile_credit < atoms * D.atom_units(SM120) <= Fraction(1, 400) * tile_credit
     monkeypatch.setattr(D, "chain_debit", lambda a, b, device=None: (atoms, 0))
-    assert W.tile_cap(sm, records[0], [[0] * k] * 16, [[0] * k] * 16) == (atoms * 34, Fraction(1, 1000) * tile_credit)
-    out = W.audit(sm, epoch, prover, tr, splits, records, E.challenger(), 2)
+    assert CW.tile_cap(sm, records[0], [[0] * k] * 16, [[0] * k] * 16) == (atoms * 34, Fraction(1, 1000) * tile_credit)
+    out = CW.audit(sm, epoch, prover, tr, splits, records, E.challenger(), 2)
     assert not out.audit.accepted and all("exceeds the cap" in v.reason for v in out.audit.verdicts if not v.ok)
-    assert W.audit(at400, epoch, prover, tr, splits, records, E.challenger(), 2).audit.accepted
-    assert W.volunteer(sm, epoch, tr, records, {3: rows_a}, {9: rows_b}) != ({}, {})
-    assert W.volunteer(at400, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
+    assert CW.audit(at400, epoch, prover, tr, splits, records, E.challenger(), 2).audit.accepted
+    assert CW.volunteer(sm, epoch, tr, records, {3: rows_a}, {9: rows_b}) != ({}, {})
+    assert CW.volunteer(at400, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
 
 
 def test_debit_replays_the_devices_atom():
