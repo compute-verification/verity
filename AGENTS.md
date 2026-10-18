@@ -19,16 +19,18 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`), the
       remote bandwidth audit over a node's registered store (`remote_bandwidth`) and the network certifier
       (`certifier`), each a Python
-      verifier with the code that runs it. A protocol's Lean code is its `lean/`. NCI is Lean only
-      (`verity/core/protocols/network/nci/`).
+      verifier with the code that runs it, until its Lean is its verifier of record (Design rules). A protocol's Lean
+      code is its `lean/`. NCI is Lean only (`verity/core/protocols/network/nci/`).
     - `claims`: the ids of security claims.
-    - The Lean ports in `primitives`, `devices`, `service` and `protocols`. A port is held to the Python it replaces by
-      `difftest` (`verity_difftest`, with its Lake package `verity_difftest`).
+    - The Lean in `primitives`, `devices`, `service` and `protocols`. `difftest` (`verity_difftest`, with its Lake
+      package `verity_difftest`) holds the Python that mirrors each one to the Lean.
     - `service/flock/`: C-Flock's executable verifier of record (no dependencies).
-  - `verity/ml/` (`verity.ml`): Python and CUDA. These units are on the soundness path, because core's verifiers read
-    them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.circuits.targets`, `ml.kernels`,
+  - `verity/ml/` (`verity.ml`): Python and CUDA: the provers, and Python that mirrors the Lean for the prover's speed.
+    Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
+    reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.circuits.targets`, `ml.kernels`,
     `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
-    `ALLOWED` lets core reach). The rest, C-Flock's prover and the private circuits, can't affect soundness.
+    `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover and the private circuits, can't affect
+    soundness.
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
@@ -75,9 +77,10 @@ Code reaches the Nebius nodes only through `research deploy install` from a push
 
 Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 
-- `verity.core` may import the units of `verity.ml` that `ALLOWED` lists for it, which puts them on the soundness path
-  (`SOUNDNESS_PATH`). `verity.ml` never imports `verity.core`, apart from the files `ML_IMPORTS_CORE` names (C-Flock's
-  tests and V*'s builders, and hm96's test of its claims).
+- A verifier imports no `verity.ml` code (Design rules). Until its protocol's verifier of record is Lean, a Python
+  verifier in `verity.core` keeps the edges into `verity.ml` it had on 18 Oct (`CORE_ML_EDGES`) and gains none, and
+  what they reach (`SOUNDNESS_PATH`) only shrinks. `verity.ml` never imports `verity.core`, apart from the files
+  `ML_IMPORTS_CORE` names (C-Flock's tests and V*'s builders, and hm96's test of its claims).
 - Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
 - Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
   `core.claims` import no other unit.
@@ -144,6 +147,10 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
   (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,
   and later from a separate physical calibration.
+- **Lean is the definition and the verifier of record** (Daniel, 18 Oct). Python in `verity.ml` mirrors it, for the
+  prover's speed, and difftest holds that Python to the Lean. A verifier imports no `verity.ml` code. Each protocol still
+  switches by the 8 Oct procedure (the friction skill): until it does, its Python verifier and the ml units it reads stay
+  on `SOUNDNESS_PATH`, which only shrinks, and no core → ml import edge is added (`tests/test_boundaries.py`).
 - **Soundness is one theorem** (see Lean below).
 
 ## Tests
