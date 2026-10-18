@@ -31,11 +31,10 @@ over (FINISHED, EXPIRED, or WAITING_FOR_BACKGROUND_WORK, where coordinators most
 nothing has run for `WAKE_S` since its last activity (its timer didn't fire), or when a doorbell for its handle rang after that
 and `DOORBELL_S` has passed with nothing run (its subscription didn't). Its last activity is the later of the run's `updatedAt`
 (read each sweep) and its last stream event: whether a wake starts a new run or resumes a background-waiting one, it moves. The
-doorbells come from `doorbells.json` beside `--log`
-(`{"t", "inboxes": {handle: {"agent", "last"}}}`, each inbox's latest doorbell as a Slack ts), which infra's relay writes, since
-only it reads Slack; one older than `BELLS_STALE_S` is not read. The watch records it at most once per agent an hour, and with
-`--wake` starts a run that says so (a 409 agent_busy isn't counted: a run of its own just started). `--wake` stays off until a red
-team has attacked the rule.
+doorbells come from `doorbells.json` beside `--log` (`{"t", "inboxes": {handle: {"agent", "last"}}}`, each inbox's latest
+doorbell as a Slack ts), which infra's relay writes, since only it reads Slack; one older than `BELLS_STALE_S` is not read. The
+watch records it at most once per agent an hour, and with `--wake` starts a run that says so (a 409 agent_busy isn't counted: a
+run of its own just started). `--wake` stays off until a red team has attacked the rule.
 
 Each finding is a line of JSON in `--log`; each sweep overwrites `status.json` beside it (its time, the agents read, the runs it
 follows, the coordinators it knows and whether the doorbells are fresh), so a reader can tell a quiet watch from a dead one. The
