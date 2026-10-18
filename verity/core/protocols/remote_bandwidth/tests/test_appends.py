@@ -1,0 +1,518 @@
+"""Blocks written after the codec seed, the KV pages of a serving node: appended mid-session under their bound keys,
+read by plans sent as changes, released, opened with the digests their keys come from, and credited only on the
+property's verdict."""
+
+from __future__ import annotations
+
+import copy
+import dataclasses
+import functools
+import hashlib
+
+import pytest
+
+from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
+from verity.core.protocols.remote_bandwidth.audit import Params, Session
+from verity.core.protocols.remote_bandwidth.receipts import Plan
+
+N = 8
+NODE = b"node-under-test"
+SOURCE = b"the verifier's secret"
+P512 = codec.Codec(codec.P512, 2, False)
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 0
+
+    def __call__(self) -> int:
+        return self.now
+
+
+class Entropy:
+    """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
+
+    def __init__(self, label: bytes) -> None:
+        self.label, self.count = label, 0
+
+    def __call__(self, n: int) -> bytes:
+        out = b""
+        while len(out) < n:
+            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
+            self.count += 1
+        return out[:n]
+
+
+def payload(label: bytes) -> bytes:
+    """64-byte pieces with their top byte cleared, so every word is below p."""
+    return b"".join(hashlib.sha512(label + b"/%d" % u).digest()[:63] + b"\0" for u in range(codec.BLOCK_BYTES // 64))
+
+
+def salts(label: bytes, n: int) -> list[bytes]:
+    entropy = Entropy(label)
+    return [entropy(receipts.SALT_BYTES) for _ in range(n)]
+
+
+@functools.cache
+def registered() -> audit.Store:
+    payloads = [payload(b"weights %d" % j) for j in range(N)]
+    ys = salts(b"payload salts", N)
+    root = audit.payload_tree(NODE, payloads, ys).commitment.root
+    return audit.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
+
+
+def store() -> audit.Store:
+    """A store of N registered blocks under p512/k2 with no appends yet, its own to append to."""
+    out = copy.copy(registered())
+    out.blocks, out.appends, out.pending = list(out.blocks), [], {}
+    return out
+
+
+def pages(first: int, count: int) -> list[bytes]:
+    return [payload(b"kv page %d" % j) for j in range(first, first + count)]
+
+
+class Run:
+    """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
+    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
+    under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
+    before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration."""
+
+    def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
+                 samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None) -> None:
+        reg = store.registration
+        self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
+                        window_ns=10, codec=reg.codec, lifetime=lifetime)
+        self.clock = Clock()
+        if registry is None:
+            self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
+                             not_before_ns=0, clock=self.clock)
+        else:
+            self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
+        self.store = store
+        self.prover = audit.Prover(prover_store or store, None, self.s.commitment, entropy=Entropy(b"receipt salts"))
+        self.challenges = [self.s.start()]
+        self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
+        self.head: bytes | None = None
+        self.passes: dict[tuple[int, int], audit.Pass] = {}
+        self.coins: dict[int, bytes] = {}
+
+    def commit(self, root: bytes, count: int) -> int:
+        """An append's root sent (`Session.append`): the index the verifier assigns, its coin kept and, if the store
+        awaits that append's coin, its blocks encoded under it."""
+        first, coin = self.s.append(root, count)
+        self.coins[first] = coin
+        self.head = audit.append_head(self.head, first, count, root)
+        if first in self.store.pending:
+            self.store.encode(first, coin)
+        return first
+
+    def append(self, count: int) -> audit.Append:
+        a = self.store.append(pages(self.store.extent, count), salts(b"page salts %d" % self.store.extent, count))
+        assert self.commit(a.root, a.count) == a.first
+        return a
+
+    def run(self, plan: Plan | None = None, change: tuple | None = None, sent=None, step: int | None = None
+            ) -> audit.Verdict | None:
+        """One pass, its plan sent whole (None: the registered store) or as its `change` (added, removed), covering
+        `step` (None: the step after the last pass's)."""
+        if change is not None:
+            plan = self.plan.changed(*change, self.store.extent)
+        ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan, head=self.head)
+        self.passes[self.t, self.i], self.previous, self.plan = ps, ps.root, ps.plan
+        self.i += 1
+        self.step = self.step + 1 if step is None else step
+        if sent is not None:
+            return self.s.receive(self.t, self.i - 1, ps.root, sent, step=self.step)
+        if change is not None:
+            return self.s.receive(self.t, self.i - 1, ps.root, change=change, step=self.step)
+        return self.s.receive(self.t, self.i - 1, ps.root, None if plan is None else plan.runs, step=self.step)
+
+    def boundary(self) -> None:
+        self.clock.now += self.p.window_ns
+        coin = self.s.boundary()
+        if coin is not None:
+            self.challenges.append(coin)
+        self.t, self.i = self.t + 1, 0
+
+    def finish(self, open_=None) -> list[audit.Verdict]:
+        self.clock.now = self.s.deadline(len(self.s.windows) - 1) + 1
+        out = []
+        for t in range(self.p.windows):
+            draws = self.s.close(t)
+            out.append(self.s.verify(t, [(open_ or self.prover.open)(self.passes[t, i], q) for i, q in draws]))
+            if not out[-1].accepted:
+                break
+        return out
+
+
+def honest_session() -> Run:
+    """Window 0: a pass over the registered store; 4 pages appended (8 … 11) and read; one of them and a registered
+    block released and dropped from the plan.  Window 1: 2 more pages (12, 13) read with the rest, then a pass sent
+    whole."""
+    r = Run(store())
+    assert r.run() is None
+    r.append(4)
+    assert r.run(change=(((N, 4),), ())) is None
+    assert r.s.release(((2, 1),)) is None and r.s.release(((9, 1),)) is None
+    assert r.run(change=((), ((2, 1), (9, 1)))) is None
+    r.boundary()
+    r.append(2)
+    assert r.run(change=(((12, 2),), ())) is None
+    assert r.run(Plan(((0, 2), (3, 6), (10, 4)), r.store.extent)) is None
+    r.boundary()
+    return r
+
+
+@pytest.fixture(scope="module")
+def honest() -> tuple[Run, list[audit.Verdict]]:
+    r = honest_session()
+    return r, r.finish()
+
+
+def test_an_honest_session_over_appended_and_released_pages_is_accepted(honest) -> None:
+    """Every receipt is drawn, the appended pages' among them, each opened with its payload's digest and its path to
+    its append's root, and every window is accepted.  The record counts each pass's post-seed reads, the blocks
+    appended and those released."""
+    r, verdicts = honest
+    assert verdicts == [audit.Verdict(0, True), audit.Verdict(1, True)]
+    assert [p.plan.runs for p in r.passes.values()] == [((0, 8),), ((0, 12),), ((0, 2), (3, 6), (10, 2)),
+                                                        ((0, 2), (3, 6), (10, 4)), ((0, 2), (3, 6), (10, 4))]
+    rec = r.s.record()
+    assert [w.lengths for w in rec.windows] == [(8, 12, 10), (12, 12)]
+    assert [w.post_seed for w in rec.windows] == [(0, 4, 3), (5, 5)]
+    assert (rec.appended, rec.released) == (6, 2)
+    pub = rec.public()
+    assert (pub["appended"], pub["released"], pub["post_seed"], pub["receipts"]) == (6, 2, [7, 10], [30, 24])
+    ps = r.passes[0, 1]
+    o, registered = r.prover.open(ps, 9), r.prover.open(ps, 3)
+    assert ps.plan.block(9) == 9 and o.digest == codec.digest(pages(9, 1)[0]) and len(o.digest) == 64
+    assert registered.digest == b""
+    assert o.size == registered.size + 64 + 64 * (len(o.payload_path) - len(registered.payload_path))
+    k = r.store.registration.key
+    assert r.store.blocks[9] == codec.encode(pages(9, 1)[0], 9, k, bound=True, coin=r.coins[8])
+    assert r.store.blocks[9] != codec.encode(pages(9, 1)[0], 9, k, bound=True)
+
+
+def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(honest) -> None:
+    """Without a verdict (None), the session's 17 post-seed receipts are certified but not credited: μ_timing counts
+    only the registered blocks' 37.  On a verdict that holds, all 54 are credited, and μ_carrier charges each pass the
+    least of the verdict's carrier bytes and its post-seed bytes.  A verdict that fails is refused."""
+
+    @dataclasses.dataclass(frozen=True)
+    class Verdict:
+        holds: bool
+        carrier: float
+
+        def carrier_bytes(self, read_bytes: int) -> float:
+            return self.carrier
+
+    rec = honest[0].s.record()
+    capacity = 4096 * 10**9 / 10
+    common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    whole = capacity * rec.span_ns / 1e9
+    none = audit.ledger(rec, **common)
+    assert none.timing == pytest.approx(1 - 37 * 4096 / whole) and none.carrier == 0
+    assert set(none.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "carrier" in audit.LEDGER_SOURCES
+    held = audit.ledger(rec, **common, credit_post_seed=Verdict(True, 3 * 4096))
+    assert held.timing == pytest.approx(1 - 54 * 4096 / whole)
+    assert held.carrier == pytest.approx((0 + 3 + 3 + 3 + 3) * 4096 / whole)
+    assert held.sample == none.sample and held.counting == none.counting
+    whole_0 = capacity * rec.windows[0].span_ns / 1e9
+    assert held.windows[0].carrier == pytest.approx(6 * 4096 / whole_0)
+    assert none.windows[0].timing - held.windows[0].timing == pytest.approx(7 * 4096 / whole_0)
+    assert held.gamma == pytest.approx(none.gamma - 17 * 4096 / whole + 12 * 4096 / whole)
+    with pytest.raises(ValueError, match="fails"):
+        audit.ledger(rec, **common, credit_post_seed=Verdict(False, 0.0))
+    with pytest.raises(ValueError, match="finite nonnegative"):
+        audit.ledger(rec, **common, credit_post_seed=Verdict(True, float("inf")))
+
+
+@dataclasses.dataclass(frozen=True)
+class Link:
+    """A requirement link that holds or not, at `density_bits`, reading `reads[step]` bits at a step (plenty
+    otherwise), its memory-map unit's verdict `maps` on the appends it is asked about, each kept in `asked`."""
+    holds: bool
+    density_bits: int
+    reads: dict
+    maps: object = True
+    asked: list = dataclasses.field(default_factory=list)
+
+    def read_bits(self, step: int):
+        return self.reads.get(step, 10**9)
+
+    def mapped(self, appends: bytes | None):
+        self.asked.append(appends)
+        return self.maps
+
+
+def test_on_a_requirement_link_a_pass_is_credited_at_most_the_circuit_s_reads_at_its_step(honest) -> None:
+    """The honest session's passes are steps 0 … 4, with (8, 8, 7) and (7, 7) registered receipts credited.  A link
+    at whole blocks (D = 32,768 bits) and ample reads changes nothing but `linked`.  At D = 8,192 bits each credited
+    receipt counts a quarter block, and step 1's reads, 20,000 bits, cap its pass below its 8 receipts' 65,536.  A link
+    that doesn't hold, a density outside 1 … 32,768 bits, reads that aren't a count, or a record whose passes name no
+    step are refused."""
+    rec = honest[0].s.record()
+    assert [w.steps for w in rec.windows] == [(0, 1, 2), (3, 4)]
+    capacity = 4096 * 10**9 / 10
+    common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    whole = capacity * rec.span_ns / 1e9
+    store_ = audit.ledger(rec, **common)
+    full = audit.ledger(rec, **common, requirement=Link(True, 8 * 4096, {}))
+    assert full.timing == store_.timing and full.linked and not store_.linked
+    assert full.to_json()["linked"] is True and store_.to_json()["linked"] is False
+    quarter = audit.ledger(rec, **common, requirement=Link(True, 8192, {1: 20_000}))
+    w0 = 8 * 8192 + 20_000 + 7 * 8192
+    assert quarter.timing == pytest.approx(1 - (w0 + 14 * 8192) / 8 / whole)
+    assert quarter.windows[0].timing == pytest.approx(1 - w0 / 8 / (capacity * rec.windows[0].span_ns / 1e9))
+    assert quarter.sample == store_.sample and quarter.counting == store_.counting
+    for link, match in ((Link(False, 8192, {}), "don't hold"), (Link(True, 0, {}), "density"),
+                        (Link(True, 8 * 4096 + 1, {}), "density"), (Link(True, True, {}), "density"),
+                        (Link(True, 8192, {2: -1}), "nonnegative integer"),
+                        (Link(True, 8192, {2: 1.5}), "nonnegative integer")):
+        with pytest.raises(ValueError, match=match):
+            audit.ledger(rec, **common, requirement=link)
+    bare = synthetic((10, 12), ())
+    with pytest.raises(ValueError, match="name none"):
+        audit.ledger(bare, **dict(common, rebuild=audit.Rebuild(bare.codec, 0.0)), requirement=Link(True, 8192, {}))
+
+
+def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_record_s_appends(honest) -> None:
+    """The red team's KB-2: frees, re-keys and append order chosen after the seed cost no encode, so the advice they
+    give is zero only if W's memory map fixes them, which the memory-map unit proves.  The record carries the chain
+    over the session's appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked
+    about exactly that chain, and a link whose unit doesn't make those appends is refused."""
+    r, _ = honest
+    rec = r.s.record()
+    assert r.head is not None and rec.appends == r.head and rec.public()["appends"] == r.head.hex()
+    common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    link = Link(True, 8 * 4096, {})
+    assert audit.ledger(rec, **common, requirement=link).linked and link.asked == [r.head]
+    for maps in (False, None, 1):
+        with pytest.raises(ValueError, match="memory-map unit"):
+            audit.ledger(rec, **common, requirement=Link(True, 8 * 4096, {}, maps))
+    none = Link(True, 8 * 4096, {})
+    audit.ledger(dataclasses.replace(rec, appends=None), **common, requirement=none)
+    assert none.asked == [None]
+
+
+def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = ()) -> audit.Record:
+    w = audit.WindowRecord(0, lengths, 0, 10**9, 10**9, IntegrityProfile(
+        ("receipt",), (sum(lengths),), {"receipt": Subset(1)}, 1e-6, drawn={"receipt": 1}), post, steps)
+    return audit.Record(bytes(64), bytes(64), 10, 4096, (w,))
+
+
+def test_a_window_record_s_steps_are_each_pass_s_strictly_increasing() -> None:
+    assert synthetic((10, 12), (), (3, 8)).windows[0].to_json()["steps"] == [3, 8]
+    assert synthetic((10, 12), ()).windows[0].steps == ()
+    for bad in ((3,), (3, 3), (8, 3), (-1, 3), (3, True), (3, audit.STEP_LIMIT)):
+        with pytest.raises(ValueError, match="steps"):
+            synthetic((10, 12), (), bad)
+
+
+def test_a_window_record_s_post_seed_reads_are_each_pass_s_at_most_its_length() -> None:
+    assert synthetic((10, 12), ()).windows[0].post_seed == (0, 0)
+    assert synthetic((10, 12), (0, 2)).windows[0].credited(False) == (10, 10)
+    assert synthetic((10, 12), (0, 2)).windows[0].credited(True) == (10, 12)
+    for bad in ((0,), (11, 0), (-1, 0), (0, 1.0)):
+        with pytest.raises(ValueError, match="post-seed"):
+            synthetic((10, 12), bad)
+
+
+class Dropped:
+    """A prover's memory with the appended pages dropped: what it holds of them is zeros."""
+
+    def __init__(self, blocks: list[bytes]) -> None:
+        self.blocks = blocks
+
+    def __getitem__(self, j: int) -> bytes:
+        return self.blocks[j] if j < N else bytes(codec.BLOCK_BYTES)
+
+
+@pytest.mark.parametrize("opens", ["what-it-holds", "re-encoded"])
+def test_a_prover_that_drops_appended_pages_is_rejected(opens) -> None:
+    """The prover commits its appends, lists the pages in its plans and then keeps only the registered blocks, its
+    receipts of the pages made from what it holds.  Opened as held, a page doesn't decode under the digest committed
+    for it (`codec`); re-encoded from its payload for the opening, it no longer gives the committed receipt
+    (`receipt`)."""
+    honest_store = store()
+    cheat = copy.copy(honest_store)
+    cheat.blocks = Dropped(honest_store.blocks)
+    r = Run(honest_store, cheat, windows=1)
+    r.append(3)
+    assert r.run(change=(((N, 3),), ())) is None
+    r.boundary()
+
+    def reencoded(ps, q):
+        return dataclasses.replace(r.prover.open(ps, q), block=honest_store.blocks[ps.plan.block(q)])
+
+    verdict = r.finish(None if opens == "what-it-holds" else reencoded)[0]
+    assert not verdict.accepted and verdict.failure == ("codec" if opens == "what-it-holds" else "receipt")
+    assert r.passes[0, 0].plan.block(verdict.at[1]) >= N
+
+
+@pytest.mark.parametrize("appended, digest, failure", [
+    (True, b"", "malformed"), (True, codec.digest(payload(b"kv page 99")), "codec"),
+    (False, codec.digest(payload(b"kv page 9")), "malformed")], ids=["no-digest", "another-digest", "registered"])
+def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure) -> None:
+    """An appended block's opening without its digest is malformed, and with another payload's digest it doesn't
+    decode.  A registered block's opening with a digest is malformed."""
+    r = honest_session()
+    r.clock.now = r.s.deadline(1) + 1
+    draws = r.s.close(0)
+    n = next(n for n, (i, q) in enumerate(draws) if (r.passes[0, i].plan.block(q) >= N) == appended)
+    opened = [r.prover.open(r.passes[0, i], q) for i, q in draws]
+    opened[n] = dataclasses.replace(opened[n], digest=digest)
+    assert r.s.verify(0, opened) == audit.Verdict(0, False, failure, draws[n])
+
+
+def test_an_append_s_leaves_bind_the_indices_the_verifier_assigns() -> None:
+    """A prover that commits its append's tree one index past the one the verifier assigns, and opens its pages with
+    that tree's paths (the same shape), fails the payload path."""
+    st = store()
+    r = Run(st, windows=1)
+    ys = salts(b"page salts", 2)
+    a = st.append(pages(N, 2), ys)
+    shifted = audit.append_tree(st.registration.digest, N + 1, a.digests, ys)
+    assert r.commit(shifted.commitment.root, 2) == N
+    assert len(shifted.open(N + 1).path) == len(a.tree.open(N).path)
+    assert r.run(change=(((N, 2),), ())) is None
+    r.boundary()
+
+    def opens(ps, q):
+        o, j = r.prover.open(ps, q), ps.plan.block(q)
+        return o if j < N else dataclasses.replace(o, payload_path=shifted.open(j + 1).path)
+
+    assert r.finish(opens)[0] == audit.Verdict(0, False, "payload-path", (0, N))
+
+
+def test_a_plan_holding_a_block_not_appended_or_released_is_refused() -> None:
+    """A plan is over the store's blocks so far: one holding a block before the append that commits it, or after its
+    release, is refused (`plan`), whole or as a change."""
+    r = Run(store())
+    assert r.s.receive(0, 0, bytes(64), ((0, N + 1),), step=0).failure == "plan"
+
+    r = Run(store())
+    r.append(2)
+    assert r.s.release(((N, 1),)) is None
+    assert r.run(Plan(((0, N + 2),), r.store.extent)).failure == "plan"
+
+    r = Run(store())
+    r.append(2)
+    assert r.run(change=(((N, 2),), ())) is None
+    assert r.s.release(((N + 1, 1),)) is None
+    assert r.s.receive(0, 1, bytes(64), change=((), ()), step=1).failure == "plan"
+
+    r = Run(store())
+    assert r.s.receive(0, 0, bytes(64), ((0, N),), change=((), ()), step=0).failure == "plan"
+
+
+def two_windows_under_a_lifetime_of_two() -> Run:
+    """L = 2.  Pages 8 and 9 appended before window 0's first root, which they join, and read; page 10 appended after
+    window 0's roots but before window 1's first, which it joins, and read."""
+    r = Run(store(), windows=4, lifetime=2)
+    r.append(2)
+    assert r.run(change=(((N, 2),), ())) is None
+    r.boundary()
+    r.append(1)
+    assert r.run(change=(((N + 2, 1),), ())) is None
+    r.boundary()
+    return r
+
+
+def test_an_appended_block_leaves_every_plan_within_the_lifetime_unless_re_keyed() -> None:
+    """Window 2's plan may not hold pages 8 and 9, which joined window 0 (`lifetime`).  Re-keyed instead (released,
+    and their payloads appended again at 11 and 12, under fresh bound keys) they are read in windows 2 and 3, and page
+    10, which joined window 1, in window 2 but not 3: every receipt opens and the session is accepted, its record
+    naming L."""
+    r = two_windows_under_a_lifetime_of_two()
+    v = r.run(change=((), ()))
+    assert v is not None and v.failure == "lifetime" and v.window == 2
+
+    r = two_windows_under_a_lifetime_of_two()
+    a = r.store.append(pages(N, 2), salts(b"re-keyed", 2))
+    assert r.commit(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
+    assert r.run(change=(((N + 3, 2),), ((N, 2),))) is None
+    r.boundary()
+    v = copy.deepcopy(r).run(change=((), ()))
+    assert v is not None and v.failure == "lifetime" and v.window == 3
+    assert r.s.release(((N + 2, 1),)) is None
+    assert r.run(change=((), ((N + 2, 1),))) is None
+    r.boundary()
+    assert r.store.blocks[N + 3] != r.store.blocks[N] and r.store.committed(N + 3)[2] == codec.digest(pages(N, 1)[0])
+    assert [v.accepted for v in r.finish()] == [True] * 4
+    rec = r.s.record()
+    assert [w.post_seed for w in rec.windows] == [(2,), (3,), (3,), (2,)]
+    assert rec.lifetime == 2 and rec.public()["lifetime"] == 2
+    for bad in (0, -1, True, 1.0):
+        with pytest.raises(ValueError, match="lifetime"):
+            Params(blocks=N, deadline_ns=1, windows=1, lifetime=bad)
+
+
+def test_a_malformed_append_or_release_rejects_the_session() -> None:
+    for bad in ((bytes(63), 1), (bytes(64), 0), (bytes(64), "1"), (bytes(64), P512.max_blocks)):
+        assert Run(store()).s.append(*bad).failure == "append"
+    r = Run(store())
+    assert r.s.release(((0, 1),)) is None
+    assert r.s.release(((0, 2),)).failure == "release"
+    for bad in (((N, 1),), ((0, 1), (1, 1)), ((3, 0),), "x"):
+        assert Run(store()).s.release(bad).failure == "release"
+    r = Run(store())
+    assert r.s.release(((N, 1),)).failure == "release"
+    with pytest.raises(audit.SessionError, match="ended"):
+        r.s.append(bytes(64), 1)
+
+
+def test_a_store_appends_at_fresh_indices_under_bound_keys() -> None:
+    """An append commits its blocks' digests and leaves them unencoded until its coin arrives (`Store.encode`), which
+    encodes them once: a second coin for it, or a coin for no pending append, is refused, and a malformed coin
+    leaves it pending."""
+    st = store()
+    a = st.append(pages(N, 2), salts(b"a", 2))
+    b = st.append(pages(N + 2, 1), salts(b"b", 1))
+    assert (a.first, a.count, b.first, b.count, st.extent) == (N, 2, N + 2, 1, N + 3)
+    assert st.blocks[N:] == [None] * 3 and set(st.pending) == {N, N + 2}
+    ca, cb = (hashlib.sha512(label).digest()[:codec.COIN_BYTES] for label in (b"coin a", b"coin b"))
+    with pytest.raises(ValueError, match="32 bytes"):
+        st.encode(N, ca[:31])
+    assert set(st.pending) == {N, N + 2}
+    st.encode(N, ca)
+    st.encode(N + 2, cb)
+    for first in (N, N + 1, N + 2):
+        with pytest.raises(ValueError, match="awaits its coin"):
+            st.encode(first, ca)
+    k = st.registration.key
+    for j, coin in ((N, ca), (N + 1, ca), (N + 2, cb)):
+        salt, path, d = st.committed(j)
+        assert d == codec.digest(pages(j, 1)[0]) and codec.decode(st.blocks[j], j, k, d, coin) == pages(j, 1)[0]
+        assert codec.decode(st.blocks[j], j, k, d) is None
+    assert st.committed(N + 2)[1] == () and st.committed(0)[2] == b""
+    assert a.tree.open(N + 1).value == receipts.hidden(pages(N + 1, 1)[0], a.salts[1])
+    with pytest.raises(ValueError, match="salt per payload"):
+        st.append(pages(0, 2), salts(b"c", 1))
+    with pytest.raises(ValueError, match="one or more"):
+        audit.append_tree(st.registration.digest, N, [], [])
+    with pytest.raises(ValueError, match="64 bytes each"):
+        audit.append_tree(st.registration.digest, N, [bytes(63)], salts(b"d", 1))
+    with pytest.raises(ValueError, match="registration's digest"):
+        audit.append_domain(bytes(32), N, 1)
+
+
+def test_a_plan_s_change_is_the_next_plan_in_store_order() -> None:
+    p = Plan(((5, 3), (0, 2)), 10)
+    assert p.changed((), (), 10).runs == ((0, 2), (5, 3))
+    assert p.changed(((2, 3),), (), 12).runs == ((0, 8),)
+    assert p.changed(((10, 2), (8, 1)), ((6, 1), (0, 1)), 12).runs == ((1, 1), (5, 1), (7, 2), (10, 2))
+    assert p.changed((), ((5, 3),), 10).runs == ((0, 2),)
+    assert p.changed(((8, 2),), (), 10).digest == Plan(((0, 2), (5, 5)), 10).digest
+    for added, removed, blocks, match in ((((3, 1),), (), 9, "only grows"),
+                                          ((), ((2, 1),), 10, "does not hold"),
+                                          ((), ((4, 2),), 10, "does not hold"),
+                                          ((), ((7, 2),), 10, "does not hold"),
+                                          (((6, 1),), (), 10, "holds"),
+                                          (((2, 2), (3, 1)), (), 10, "disjoint"),
+                                          (((9, 2),), (), 10, "inside the store"),
+                                          ((), ((0, 2), (5, 3)), 10, "1 to")):
+        with pytest.raises(ValueError, match=match):
+            p.changed(added, removed, blocks)

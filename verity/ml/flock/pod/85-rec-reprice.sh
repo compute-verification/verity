@@ -627,7 +627,7 @@ oprove)
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
   # CONTROLS=DIR (a statement's directory under data/$TAG/v, e.g. L6): on that statement, one firewalled session per
   # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the firewall must refuse by name
-  # before the tampered message leaves
+  # without the tampered message leaving, the session stopping at its Finish (live PROTOCOL.md §10.1)
   if [ -n "${CONTROLS:-}" ]; then
     C=$V/$CONTROLS
     for w in root witness label opening algebra algebra-proof shape; do

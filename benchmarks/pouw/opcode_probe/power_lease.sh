@@ -21,11 +21,11 @@ phase() {
 }
 
 phase locked
-if nvidia-smi -i "$UUID" -rgc >"$OUT/rgc.txt" 2>&1; then
-  trap 'nvidia-smi -i "$UUID" -lgc "$LOCK,$LOCK" >>"$OUT/relock.txt" 2>&1' EXIT
+if sudo -n nvidia-smi -i "$UUID" -rgc >"$OUT/rgc.txt" 2>&1; then
+  trap 'sudo -n nvidia-smi -i "$UUID" -lgc "$LOCK,$LOCK" >>"$OUT/relock.txt" 2>&1' EXIT
   nvidia-smi -i "$UUID" -q -d CLOCK,POWER,PERFORMANCE >"$OUT/nvsmi-default.txt" 2>&1
   phase default
-  nvidia-smi -i "$UUID" -lgc "$LOCK,$LOCK" >>"$OUT/relock.txt" 2>&1
+  sudo -n nvidia-smi -i "$UUID" -lgc "$LOCK,$LOCK" >>"$OUT/relock.txt" 2>&1
   trap - EXIT
 else
   echo "nvidia-smi -rgc refused: the default-clock phase didn't run" >&2
