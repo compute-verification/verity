@@ -459,7 +459,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
-        from verity_vllm.program.frontend import vllm_meta as vm
+        from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
         from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
         from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
@@ -499,13 +499,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             from verity_vllm.engine import sparse_mla
             sparse_mla.arm()   # FA3's sparse-MLA split pin, armed as a serving process arms it before vLLM builds the model
             model = vm.instantiate_meta(cfg)
-            # [R15 fp8] loader parity: a checkpoint that ships a redundant `lm_head.weight` under `tie_word_embeddings` is untied by
-            # vLLM for loading and RE-TIED after it iff the two tensors are equal (Qwen3-4B-Instruct-2507-FP8); the same decision from the
-            # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `vm.retie_lm_head_as_the_loader_does`)
-            res["lm_head_tying"] = vm.retie_lm_head_as_the_loader_does(model, cfg)
-            res["mla_absorbed_weights"] = vm.mla_absorbed_weights_as_the_loader_does(model, cfg)
-            res["fp8_block_weights"] = vm.fp8_block_weights_as_the_loader_does(model)
-            res["post_load_tensors"] = vm.post_load_tensors_as_the_loader_does(model)
+            res.update(loader_parity.as_the_loader_does(model, cfg))   # the Parameters the served model has once its weights are loaded
             if tp > 1:
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)

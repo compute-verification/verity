@@ -2,7 +2,7 @@
 
 * `export_compat.cuda_streams_inert`: the aux streams and events DeepSeek-V4 makes in `__init__` (no driver on a GPU-free Build
   host) are inert, and a forward that overlaps on them exports its functions in the order the engine launches them;
-* `vllm_meta.post_load_tensors_as_the_loader_does`: a tensor the model-level post-load hook makes (`hc_attn_fn_broadcast`) is a
+* `loader_parity.post_load_tensors_as_the_loader_does`: a tensor the model-level post-load hook makes (`hc_attn_fn_broadcast`) is a
   Parameter under its served name;
 * `export_compat.registered_op_bodies_as_ops`: the decoder layer calls the Python bodies of vLLM's mHC ops, which export as the ops;
 * `export_compat.mhc_pre_broadcast_leaf`: layer 0's broadcast pre, which vLLM does not register, exports as the leaf op;
@@ -34,7 +34,7 @@
 * `rules/vllm_marlin_moe.py`: the Marlin MoE's align derives as `moe_align_block_size` with each expert's pairs in key order, and
   its two expert GEMMs per pair word for word the twin (`kernels.marlin_moe_rows.launch`) at the config the capture gives, and
   a batch, block or shape the capture does not give, or a launch that also routes other requests' tokens, refuses by name;
-* `vllm_meta.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
+* `loader_parity.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
   leaves them."""
 from __future__ import annotations
 
@@ -65,8 +65,8 @@ from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.export_ops import CollectiveBus, TPStub
-from verity_vllm.program.frontend.vllm_meta import (ScheduledWithPeers, fp8_block_weights_as_the_loader_does,
-                                                    post_load_tensors_as_the_loader_does, with_peers)
+from verity_vllm.program.frontend.loader_parity import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
+from verity_vllm.program.frontend.vllm_meta import ScheduledWithPeers, with_peers
 from verity_vllm.program.kernels import deepgemm_twins as DT
 from verity_vllm.program.kernels import dsv4_compressor_twin as DC
 from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as TQ

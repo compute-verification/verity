@@ -168,7 +168,7 @@ def swap_label(label: str, sw: dict | None, step: int | None) -> str:
 
 def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
     """The tensors the loader's post-load hook keeps as plain attributes (DeepSeek-V4's `hc_attn_fn_broadcast`), registered as Parameters
-    under the same names, as the rank's Build registers them (`vllm_meta.post_load_tensors_as_the_loader_does`): the weights the rank
+    under the same names, as the rank's Build registers them (`loader_parity.post_load_tensors_as_the_loader_does`): the weights the rank
     registers, pins and replays, and the Match capture's roots, are its `named_parameters`.  The forward reads the same tensor."""
     import torch
     mods = dict(model.named_modules())
