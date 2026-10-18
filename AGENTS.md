@@ -153,7 +153,7 @@ messaging and the notes, one named test file or `-k` selection of under about a 
 file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
 remotely through `research run --on auto [--wait] -- CMD`, on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
 60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots: every suite (`suites.py`),
-`verity check` and `check.py`, circuit-check, any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
+`verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
 and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
 `AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
 
