@@ -135,8 +135,8 @@ def test_the_census_and_kv_rows_are_computed_once_per_program(tmp_path):
     assert PMM.of_build(d, digest) == rows
     with pytest.raises(FileNotFoundError):
         PMM.of_build(d, "f" * 128)
-    # what the Build's result.json records: no wall-clock value, so a relabeled Build's equals its full derive's
-    assert PMM.cache(d, program, digest) == {"census": census["digest"], "kv_rows": True}
+    got = PMM.cache(d, program, digest)
+    assert got == {"census": census["digest"], "kv_rows": True}, "a Build's result.json holds what its Program determines, no timings"
 
 
 def test_a_descriptor_of_another_program_is_refused_beside_the_map(tmp_path):

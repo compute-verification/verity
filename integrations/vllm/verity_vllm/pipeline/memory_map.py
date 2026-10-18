@@ -82,13 +82,11 @@ def _put(path: Path, doc: Mapping[str, Any]) -> None:
 def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
     """Write Build dir ``d``'s `CENSUS` and `KV_ROWS` for its request Program ``program`` (``digest``), the census read back when
     one beside it already names the Program; a Program with no KV a memory map lays out gets the reason in place of its rows."""
-    d, t0 = Path(d), time.perf_counter()
+    d = Path(d)
     c = _read(d / CENSUS, digest)
     if c is None:
         c = MM.census_of(program, digest)
         _put(d / CENSUS, c)
-        print(f"[census] request Program {digest[:16]}: {len(c['values']['producer'])} values in {time.perf_counter() - t0:.2f} s",
-              flush=True)
     doc: dict[str, Any] = {"schema": KV_ROWS_SCHEMA, "program": digest, "census": c["digest"]}
     try:
         doc.update(MM.rows_doc(MM.rows(program, c)))
