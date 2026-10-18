@@ -30,7 +30,9 @@ ways (note:proofs/20261018T1604Z-report-redteam-2474, side finding). `ServiceSou
 round's break is at most a constant plus a weight times the probability that the analysis's finder for that adversary
 (`Finders`) finds a collision, and `ecr/sha-512` (`Claims.ExpectedCR`) enters only the floors' bound, at that
 adversary's finders, `⊤` where they fail it, capped at 1 a value of its coins (`Claims.ecrBound`, `finderTerm`,
-`breakBound`, all in `Definitions`, so other areas read the same break term). The constant forms stay, superseded,
+`breakBound`, all in `Definitions`, so other areas read the same break term). The bound reads each finder at a budget
+of SHA-512 calls computed from the adversary's time, `c · time M + d` at stated constants per path, never at the
+finder's declared cost, so no choice of finder lowers it. The constant forms stay, superseded,
 because the floors of `Models.Pouw.Guarantees.RelativeSecurity` are proved from them; the floors per prover are stated
 beside them and not yet proved (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).
 -/
@@ -73,28 +75,46 @@ at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]`, its zero-knowl
 the linear term of `Claims.KSLin` for extraction-based finders, a constant that reads no prover (C-Flock's link has
 `1/(eM) + k/(eR_w)` there, at weight `Q_s/(1 − ρ)`, `zk_linkSoundC`) plus the prover's own finder at its weight.
 
+`Bind w` and `ZK w` are the run map's (`run Ω' M r`, the analysis's): events of `M`'s transcript at the live coins,
+for its coins `r`. `fb` and `fz` are the analysis's reductions from those events to collisions of `sha`, built from
+`M` at `r`, one a round. Binding is at the circuit's cuts, before each round's coin, which live coins allow: a round's
+coin is released after the roots it reads, and the fork finder forks there. Under seeded coins nothing is bound before
+a round's seed, so the Fiat–Shamir statements bind at the draw instead, at a fixed oracle.
+
 A square-root term folds into this form by AM–GM: `√(γ x) ≤ δ' + γ x/(4δ')` for every `δ' > 0`. So `Claims.KS`'s
 `κ + √(γ · PrB)` instantiates the zero-knowledge conjunct at `δz = κ + δ'`, `βz = γ/(4δ')`, `fz` its `B`; a machine
-whose `x` is about 1 still pays about `γ/(4δ')`, and an honest prover's term stays `R γ E[cost]/(4δ' 2^256)`.
+whose `x` is about 1 still pays about `γ/(4δ')`.
 
-The binding finder's instance is the fork, not a single run. `Bind w` is the run's opening departing from the error
-table the play fixes from the commitment, a function of `(M, r)` that one run of `M` doesn't compute, so a finder that
-plays one run and reads the collision off it takes the table as advice its cost (`T`, one run's SHA-512 calls)
-doesn't count. The fork finder plays `M` twice from its commitment on fresh draws (cost about `2T`), and a fork bound
-`Pr[Bind w]² ≤ |L|² Pr[fork]` (the form of `Accounting.Guarantees.TS.BindingOfFork`, there at `|L| = 1`, over a
-drawn layer `L`) gives, by AM–GM, `δb = δ'` and `βb = |L|²/(4δ')`. The other honest instance counts the table: its
-cost is about the draws times `T`.
+The finders and their costs, path by path:
+- **Binding: the fork, not a single run.** `Bind w` is the run's opening departing from the error table the play fixes
+  from the commitment, a function of `(M, r)` that one run of `M` doesn't compute, so a finder that plays one run and
+  reads the collision off it takes the table as advice its cost (`T`, one run's SHA-512 calls) doesn't count. The fork
+  finder plays `M` twice from its commitment on fresh draws, and a fork bound `Pr[Bind w]² ≤ |L|² Pr[fork]` (the form
+  of `Accounting.Guarantees.TS.BindingOfFork`, there at `|L| = 1`, over a drawn layer `L`) gives, by AM–GM, `δb = δ'`
+  and `βb = |L|²/(4δ')`. Its cost is two runs of `M` and the verifier's checks of both openings: `cb` is twice the
+  SHA-512 calls one unit of `Mc`'s time can buy, `db` twice the verifier's calls. The other honest instance counts
+  the table: its cost is about the draws times `T`.
+- **Zero knowledge: extraction first.** The openings a zero-knowledge break equivocates are witness, inside C-Flock's
+  proofs, so the finder must extract them before it can compare: its cost is the knowledge extractor's, C-Flock's link
+  finders' `2t'(1 + k)` calls at `t'` one run's (`linkBoundZC`), not `2T`. So `cz` is about `2(1 + k)` times the
+  calls one unit of `Mc`'s time can buy, and `dz` counts the extractor's own calls. Where both the link finder and `Claims.KS`'s
+  `B` are needed, `fz` runs both and outputs the first collision either finds, at their costs summed.
 
-It assumes nothing of SHA-512. `ecr/sha-512` enters only the floors' bound, adversary by adversary (`breakBound`): a
-finder that meets `Claims.ExpectedCR` gives its expected calls over `2^256`, any other `⊤` (`Claims.ecrBound`), and the
-floors cap each value of the adversary's coins at 1 before averaging. A finder counts every SHA-512 call it makes
-(`Claims.Finder.cost`), so it is an algorithm built from `M` and its bound grows with its cost.
+It assumes nothing of SHA-512. `ecr/sha-512` enters only the floors' bound, adversary by adversary (`breakBound`), at a
+budget computed from the adversary: a finder that meets `Claims.ExpectedCR` within `cb · time M + db` SHA-512 calls in
+expectation (binding) or `cz · time M + dz` (zero knowledge) gives the budget over `2^256`, any other `⊤`
+(`Claims.ecrBound`), and the floors cap each value of the adversary's coins at 1 before averaging. A finder's cost is a
+declared field (`Claims.Finder.cost`), so the bound never reads it as a number. That closes the trivial instance: a
+finder that outputs a fixed collision on a share `Pr[Bind w]` of its coins and declares `2^256` calls on them meets
+`ExpectedCR` and makes this premise a tautology, but it exceeds the budget wherever `Pr[Bind w]` is above the budget
+over `2^256`, where the floors then give 1. Below that, it gives the floors the budget's number, as the fork does.
 
 A machine that hard-codes a collision is why. It passes every round while the play's game rejects, so by the third
 conjunct its rounds' break bounds sum to about 1, and with `R (δb + δz)` small its finders carry that mass: they find
-the collision. Finders that rerun it are cheap and fail `ecr/sha-512`, so the floors give it 1; finders that meet
-`ecr/sha-512` make about `2^256/βb` calls in expectation, so the floors give it about 1. Every other adversary keeps
-the bound of its own finders, where `ServiceSoundStaged` held for none of them below `δb` near 1.
+the collision. Finders that rerun it are cheap and fail `ecr/sha-512`; finders that meet `ecr/sha-512` make about
+`2^256/βb` calls in expectation, past any budget at a feasible time. Either way the floors give it 1. Every other
+adversary keeps `R (βb (cb · time M + db) + βz (cz · time M + dz)) / 2^256` on top of the constants, where
+`ServiceSoundStaged` held for none of them below `δb` near 1.
 
 `δz` is per prover too, because the zero-knowledge break can be hard-coded as well: where `ZK` reads an accepted proof
 whose opening fails its relation, it is C-Flock's soundness, and C-Flock's knowledge bound has a collision term of the
@@ -220,12 +240,17 @@ per draw; S5, live coins on `trusted-nebius-host`; `OvPlay`, which is E3). For e
 first and every value `r` of its own coins, every run the verifier accepts is accepted by the play's game or breaks
 binding or zero knowledge in some round (N1, X-RO commitments; F1 and F2, C-Flock's binding and zero knowledge), round
 `w`'s binding break at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]` and its zero-knowledge break
-`δz + βz · Pr[fz Ω' M r w …]`. Everything `ServiceSoundStagedPerProver` says of its form holds here: it assumes nothing
-of SHA-512, a square-root term folds in by AM–GM, the binding finder's honest instance is the fork (`δb = δ'`,
-`βb = |L|²/(4δ')`, cost about `2T`), `ecr/sha-512` enters the floors' bound at each adversary's finders
-(`breakBound`), a machine that hard-codes a collision gets about 1 there, and `δz` is per prover because C-Flock's
-soundness has a collision term of the prover's, while hm96's hiding is statistical (`βz = 0` for an analysis whose
-`ZK` is only hiding). -/
+`δz + βz · Pr[fz Ω' M r w …]`. Everything `ServiceSoundStagedPerProver` says of its form holds here:
+- it assumes nothing of SHA-512;
+- `Bind w` and `ZK w` are the run map's, and `fb`, `fz` the analysis's reductions built from `M` at `r`;
+- a square-root term folds in by AM–GM;
+- the binding finder's honest instance is the fork (`δb = δ'`, `βb = |L|²/(4δ')`, two runs of `M`), and the
+  zero-knowledge finder extracts first (C-Flock's link finders, about `2(1 + k)` runs);
+- `ecr/sha-512` enters the floors' bound at each adversary's finders (`breakBound`), at budgets `cb · time M + db` and
+  `cz · time M + dz` computed from the adversary, never at a finder's declared cost;
+- a machine that hard-codes a collision gets 1 there;
+- `δz` is per prover because C-Flock's soundness has a collision term of the prover's, while hm96's hiding is
+  statistical (`βz = 0` for an analysis whose `ZK` is only hiding). -/
 def ServiceSoundOverlapPerProver (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
     (e : S.Seed ≃ Paths (OSpot St n L np B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (δb βb δz βz : ℝ) : Prop :=

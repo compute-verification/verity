@@ -12,7 +12,8 @@ follow them into the spec:
   and deficiency) and a round's stages (`StageGame`);
 * the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`;
   adversary by adversary, `ServiceFloorPerProver`, at an adversary's error `breakBound`, read through the analysis's
-  collision finders, `Finders` and `finderTerm`, and `ecr/sha-512`'s `Claims.ecrBound`);
+  collision finders, `Finders` and `finderTerm`, and `ecr/sha-512`'s `Claims.ecrBound` at budgets computed from the
+  adversary's time);
 * Theorem K's runs (`BitAff`, `bitInd`, `Slp`, `SlpG`), the re-encoded design's prefix words (`DBits`, `dPrefix`,
   `wRe`, `DCells`), affine products (`AffProd`), degree-2 errors (`CubeQuad`, `pairDiff`) and the spot check's
   deficiency (`spotDef`);
@@ -192,27 +193,39 @@ value `r` of its own coins and each round `w`, the finder the analysis builds fr
 into a collision of the commitments' hash (`Claims.Finder`: its coins, its output, and its SHA-512 calls on each coin).
 Its cost counts everything it computes, the runs of `M` it plays and whatever else it reads off them, such as the error
 table the analysis fixes from a commitment. Like `RunMap`, it is the analysis's; a service premise per prover takes one
-for the binding breaks and one for the zero-knowledge breaks. -/
+for the binding breaks and one for the zero-knowledge breaks. The cost is declared, so the bounds never read it as a
+number: they read a budget computed from `M`'s time (`breakBound`), and a finder whose expected cost exceeds it gives
+no bound. -/
 abbrev Finders (Mc : Machine) (S : Service) (R : ℕ) : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → Fin R → Claims.Finder
 
-/-- **An adversary's finder term at one value of its coins**: the `ecr/sha-512` bounds of its finders for every
-round (`Claims.ecrBound` at the hash `sha`), summed; `⊤` when one of them fails the assumption. -/
+/-- **An adversary's finder term at one value of its coins, at the budget `q`**: the `ecr/sha-512` bounds of its
+finders for every round (`Claims.ecrBound` at the hash `sha` and the budget), summed: `R · q / 2^256` where every
+finder meets the assumption within `q` calls in expectation, `⊤` otherwise. -/
 noncomputable def finderTerm {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
-    (fd : Finders Mc S R) (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) (r : Ω) : ENNReal :=
-  ∑ w, Claims.ecrBound sha (fd Ω M r w)
+    (fd : Finders Mc S R) (q : ℝ) (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) (r : Ω) :
+    ENNReal :=
+  ∑ w, Claims.ecrBound sha (fd Ω M r w) q
 
 /-- **An adversary's error in the floors per prover**: at each value `r` of its coins, the luck term `ε`, the
 constants `δb` and `δz` of each of the `R` rounds' binding and zero-knowledge breaks, and its binding and
 zero-knowledge finder terms at `r` (`finderTerm`) at the weights `βb` and `βz`, capped at 1, a probability; then
 averaged over `r`. The cap keeps one value of the coins whose finder fails `ecr/sha-512` (a prover that merely tries
-its coins as a collision) from sending the whole bound to `⊤`: that value adds its share of the coins, `1/|Ω|`. -/
+its coins as a collision) from sending the whole bound to `⊤`: that value adds its share of the coins, `1/|Ω|`.
+
+Each path's finders are read at a budget computed from the adversary: `cb · time M + db` SHA-512 calls for the
+binding finders and `cz · time M + dz` for the zero-knowledge ones, at constants the analysis states (its finders'
+reruns of `M` per unit of `M`'s time, and the calls they make besides). `M`'s time is the machine's worst case
+(`Machine.time`), which `M` can't set low, and the finders' declared costs only have to fit under the budgets. Where
+every finder fits and meets `ecr/sha-512`, the error is
+`ε + R (δb + δz) + R (βb (cb · time M + db) + βz (cz · time M + dz)) / 2^256`, capped at 1. -/
 noncomputable def breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
-    (fb fz : Finders Mc S R) (ε δb βb δz βz : ℝ) (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) :
-    ENNReal :=
+    (fb fz : Finders Mc S R) (cb db cz dz : ℝ) (ε δb βb δz βz : ℝ) (Ω : Type) [Fintype Ω]
+    (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) : ENNReal :=
   ∑ r : Ω, (Fintype.card Ω : ENNReal)⁻¹ *
-    min 1 (ENNReal.ofReal (ε + R * (δb + δz)) + ENNReal.ofReal βb * finderTerm sha fb Ω M r +
-      ENNReal.ofReal βz * finderTerm sha fz Ω M r)
+    min 1 (ENNReal.ofReal (ε + R * (δb + δz)) +
+      ENNReal.ofReal βb * finderTerm sha fb (cb * Mc.time M + db) Ω M r +
+      ENNReal.ofReal βz * finderTerm sha fz (cz * Mc.time M + dz) Ω M r)
 
 end Service
 
