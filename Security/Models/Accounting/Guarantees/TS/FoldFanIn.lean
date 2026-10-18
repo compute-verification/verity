@@ -14,9 +14,11 @@ reading at most `f` sources, each `def G : Prop` proved as `Accounting.SecurityP
 * `DuoFoldFanIn`, `Fx1FoldFanIn`: the same for duo's and fx1's runs (`c = 2`), with odd multipliers.
 
 `f` counts every value a node's value depends on: its registers, predicates and carry-ins, and for a guarded
-instruction its guard and the old destination it keeps when the guard is false. Three registers give `f = 3`, ½ a
-node a word. A guarded three-register instruction gives `f = 5`, ¼ a word, and a guarded IADD3.X (three registers and
-two carry-ins) `f = 7`, ⅙ a word.
+instruction its guard and everything it writes, which it keeps when the guard is false (its destination, carry-outs and
+predicate destinations). Three registers give `f = 3`, ½ a node a word. A guarded three-register instruction gives
+`f = 5`, ¼ a word; a guarded IADD3.X (three registers, two carry-ins, the guard, the destination and two carry-outs),
+on every device, `f = 9`, ⅛ a word; and sm_120's widest lane form, a guarded IMNMX.U64 (three pairs, two predicate
+operands, the guard and two predicate destinations), `f = 11`, ⅒ a word (`Accounting.Assumptions.TS.FanIn`).
 
 No count of this kind gives more than `1/(f − 1)` a word. A tree of `f`-input XORs sees `N` words with
 `⌈(N − 1)/(f − 1)⌉` nodes. A duo run is a dataflow of two 3-source nodes a word, since `y′` and `z′` are each a

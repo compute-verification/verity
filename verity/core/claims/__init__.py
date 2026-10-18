@@ -273,10 +273,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
           "certificate π", "FILL-OPT", "conjectured"),
     Entry("accounting-ts-fan-in", "assumption",
-          "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, by its register operands as "
-          "SASS gives them on sm_80, sm_89, sm_90, sm_100 and sm_120 (LOP3, IADD3, IMAD, IDP.4A, FFMA: 2 a lane, 64 a "
-          "warp instruction), memory a node each access reads (a load 1 a lane; STS.128 and STSM.x4 5 a lane, 160 a "
-          "warp instruction)", "TS fan-in", "measured"),
+          "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, for every SASS form on sm_80, "
+          "sm_89, sm_90, sm_100 and sm_120, counted by dependence: every register, uniform-register and predicate "
+          "word it reads, its guard, a constant-bank operand, the memory node, and every word and predicate it writes, "
+          "which a guarded instruction keeps (a lane: ALU 8, a guarded IADD3.X; VIMNMX 10, IMNMX.U64; NOROW 9, P2R; a "
+          "shared load or store 7, a shared atomic 15, a global atomic 18, a texture 20; a warp instruction: SHFL 191, "
+          "IMMA.16832 480)", "TS fan-in", "measured"),
     Entry("accounting-ts-luck", "assumption",
           "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
           "most p", "TS luck at p", "proven"),
