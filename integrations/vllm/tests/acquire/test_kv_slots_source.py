@@ -1,8 +1,9 @@
 """The KV-slots source (`acquire.sources.kv_slots_source`) on CPU tensors with a recording committer and a stand-in forward
 context: it hooks the modules the engine bound a KV cache to (the outermost of a name), commits a copy of each layer's slot mapping
 as `<layer>/slot_mapping` only during a committed step, one copy per distinct tensor of the step, names a layer the context gives
-no slots, and stops at `uninstall`.  In GLM-5.3's tree its layers are the MLA layers, not DSA's indexer caches.  A TP rank attaches
-it through its taps (`taps.for_ranks`) under tp-commit `--memory-map`."""
+no slots (its own error, never the committer's, so never the Commit's verdict), and stops at `uninstall`.  In GLM-5.3's tree its
+layers are the MLA layers, not DSA's indexer caches.  A TP rank attaches it through its taps (`taps.for_ranks`) under tp-commit
+`--memory-map`."""
 from __future__ import annotations
 
 import sys
@@ -75,10 +76,25 @@ def test_the_source_commits_each_layers_slots_during_a_step(context):
     assert a is b and a.dtype == torch.int64 and a.tolist() == [17, 18, 40] and a.data_ptr() != slots.data_ptr()
     context.slot_mapping = {"model.layers.0.attn": slots}
     m.layers[1].attn(x)
-    assert len(com.acquired) == 2 and com.errors == ["kv slots: model.layers.1.attn ran in step 4 with no slot mapping in the forward context (dict)"]
+    assert len(com.acquired) == 2 and src.errors == ["kv slots: model.layers.1.attn ran in step 4 with no slot mapping in the forward context (dict)"]
     src.uninstall()
     m.layers[0].attn(x)
     assert len(com.acquired) == 2 and src.stats == {"layers": 2, "tensors": 2, "bytes": 48, "errors": 1}
+    assert com.errors == [], "the source's errors are its own: the Commit's verdict reads the committer's (collector_errors)"
+
+
+def test_a_failed_read_is_the_sources_error_and_never_reaches_the_forward_or_the_committer(monkeypatch):
+    def unset():
+        raise AssertionError("Forward context is not set.")
+
+    monkeypatch.setitem(sys.modules, "vllm.forward_context", types.SimpleNamespace(get_forward_context=unset))
+    m, com = _model(), Recorder()
+    src = S.attach(com, m)
+    src.install()
+    com._cur = types.SimpleNamespace(step=2)
+    m.layers[0].attn(torch.zeros(3))
+    assert com.acquired == [] and com.errors == [] and src.stats["errors"] == 1
+    assert src.errors == ["kv slots: model.layers.0.attn in step 2: AssertionError('Forward context is not set.')"]
 
 
 def test_a_model_without_a_kv_cache_is_refused():
