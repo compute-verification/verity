@@ -1,14 +1,20 @@
 # Network simulation
 
-The device graph, and a mock datacenter of Linux network namespaces that runs the real network certifier.
+The device graph, and a mock datacenter of Linux network namespaces that runs the real network certifier. Both read the
+accounting layer's declarations, `datacenter.Datacenter` (`benchmarks/datacenter`).
 
-- `graph.py`: the device graph, a Python mirror of the Lean physical model
-  (`Security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Security/Definitions/Accounting/Device.lean`'s
-  `Device`), its leaf-spine generator, its validation (every capacity a named assumption, every block's boundary link
-  certified), and its two exports, the netns plan and Shadow's GML. `python graph.py --blocks 2 --netns` prints a plan.
-- `mockdc.py`: the netns plan stood up on one host, the certifier's proxy on each block's uplink, and the audit.
-- `tests/`: the graph's tests (`uv run tools/verity/check/suites.py network_sim`). The mock datacenter is a script, not a
-  test: it runs in real time.
+- `graph.py`: declarations and exports. `rtx_node` is the measured node (8 GPUs on two sockets, each GPU on a PCIe root
+  port of its own, one NIC on socket 1) as one block, with memory accounting's capacities as named assumptions; a
+  capacity not measured yet is `math.inf`, the bound that claims nothing. `leaf_spine` puts such nodes behind a
+  leaf-spine fabric, each through its block's certifier, with one host outside every block. The exports read any
+  `Datacenter` that validates: the netns plan `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2
+  --netns` prints a plan.
+- `records.py`: the certifier's published records as `datacenter.observe.Record`s (link, window, counts, digest,
+  certifier), the records an honest run declares, and their audit, with `datacenter.claims`' claims and reasons.
+- `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each block's uplink, and both
+  audits.
+- `tests/`: the graph's tests, and the records adapter's on an injected clock
+  (`uv run tools/verity/check/suites.py network_sim`). The mock datacenter is a script, not a test: it runs in real time.
 
 ## The mock datacenter
 
@@ -20,9 +26,13 @@ accepts, and an iptables rule in the certifier's namespace drops whatever the bl
 2 ms ± 0.5 ms per hop at 400 Gbit/s by default. Nothing in the root namespace changes: each veth is created inside its
 namespaces, and deleting the namespaces deletes them.
 
+That layout is `graph.leaf_spine(4, leaves=2, spines=1)`'s. Any other declaration works whose blocks each have one
+boundary link, to a certifier, and which has a device of kind `outside`: `--declaration FILE.py:NAME` names a
+`Datacenter`, or a function returning one.
+
 It needs Linux with iproute2, iptables, setpriv and passwordless sudo, and a Python with numpy. Run it on
-vy-nebius-cpu-2 (its system `python3` has numpy), not on an agent VM. Every command takes the same `--blocks`,
-`--leaves` and `--spines`, and `run` refuses a lab that is up in another shape.
+vy-nebius-cpu-2 (its system `python3` has numpy), not on an agent VM. Every command takes the same `--declaration`, or
+`--blocks`, `--leaves` and `--spines`, and `run` refuses a lab that is up in another shape.
 
 ~~~sh
 python3 benchmarks/network_sim/mockdc.py up       # create the namespaces, then `status`
@@ -45,22 +55,26 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source -- \
 proxy (`verity.core.protocols.certifier.active.Proxy`, unmodified), and on the outside host the peer, whose connection
 crosses the fabric. Each block's server plays one strategy: `honest`; `bits`, whose write times carry a random bit per
 session; `late`, which holds a session in window 0 past every sync; or `extra`, which writes one event at a position the
-Program doesn't have. The audit is `audit.Audit`'s `check_link` and `check_ingress_link` on each block's raw and
-committed records, and each block's wire is compared with the honest block's. `DIR/summary.json` has the verdicts and the
-timing, and `DIR/b0/` a block's records, logs and audit.
+Program doesn't have. Each block is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and
+`check_ingress_link` on its raw and committed records. The datacenter record check is `records.audit` on its records as
+`datacenter.observe.Record`s against the ones an honest run of the Program publishes: each link-window needs one, with
+the declared counts and digest, and each carried window leaves log2 of the sync set's size bits of timing advice. Each
+block's wire is also compared with the honest block's. `DIR/summary.json` has the verdicts and the timing, and `DIR/b0/`
+a block's records (`records.json` as `Record`s), logs and audit.
 
-Run `r20261018-065536-38c4`, on vy-nebius-cpu-2 at a load of about 240:
+Run `r20261018-071731-392a`, on vy-nebius-cpu-2 at a load of about 50:
 
-| Block | Strategy | Audit | Wire against the honest block's |
-|---|---|---|---|
-| b0 | honest | accepted | |
-| b1 | bits | accepted | identical |
-| b2 | late | refused: `responses` window 0, `status:coverage-never-established` | differs in window 0 |
-| b3 | extra | refused: `responses` window 2, `mismatch` | differs in window 2 |
+| Block | Strategy | Certifier audit | Datacenter record check | Wire against the honest block's |
+|---|---|---|---|---|
+| b0 | honest | accepted | 6 windows carried, 24 bits of advice | |
+| b1 | bits | accepted | 6 windows carried, 24 bits of advice | identical |
+| b2 | late | refused: `responses` window 0, `status:coverage-never-established` | refused: `b2.nic0`–`b2.cert` window 0, occupancy | differs in window 0 |
+| b3 | extra | refused: `responses` window 2, `mismatch` | refused: `b3.nic0`–`b3.cert` window 2, occupancy | differs in window 2 |
 
 `bits` is the covert channel the certifier closes: it is accepted because its wire is the honest one, byte for byte. The
-latest tick was 4.2 ms late against the proxy's 25 ms slack. Each bucket reached the peer about 5.5 ms after its tick
-from the blocks on `na-leaf0`, and about 10 ms after it from those behind the spine.
+latest tick was 4.3 ms late against the proxy's 25 ms slack. Each bucket reached the peer about 5.5 ms after its tick
+from the blocks on `na-leaf0`, and about 10 ms after it from those behind the spine. The first run, before the
+declarations (`r20261018-065536-38c4`, at a load of about 240), gave the same certifier verdicts.
 
 ## Limits
 
@@ -68,3 +82,5 @@ from the blocks on `na-leaf0`, and about 10 ms after it from those behind the sp
   need their clocks synchronized to within the slack.
 - `mockdc.py` has its own server, proxy and peer coroutines because `active_replay`'s bind `127.0.0.1`. A host parameter
   there would let it reuse them.
+- `records.audit` repeats `datacenter.claims.audit`'s record loop rather than calling it, because `claims.audit` derives
+  the expected digests from a placed circuit's crossings, and the lab's traffic is a replay Program.
