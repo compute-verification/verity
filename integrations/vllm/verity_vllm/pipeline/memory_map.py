@@ -118,6 +118,15 @@ def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
     return {"census": c["digest"], "kv_rows": "refused" not in doc}
 
 
+def cache_at_build(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
+    """`cache` as the Build calls it (`pipeline.build`): a failure named in its result, never raised, since the census serves the
+    Commit's opt-in memory map and decides no Build."""
+    try:
+        return cache(d, program, digest)
+    except Exception as e:  # noqa: BLE001
+        return {"error": repr(e)[:300]}
+
+
 def of_build(d: str | Path, digest: str) -> MM.Rows:
     """The KV rows of Build dir ``d``'s request Program ``digest``: its `KV_ROWS` when they name the Program, else computed from its
     descriptor (refused unless that is Program ``digest``) and cached beside it (`cache`), once per Program digest."""

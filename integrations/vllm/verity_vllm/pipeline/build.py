@@ -633,10 +633,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
                           _instance_rows(program))
     if res.get("wrapper") == "request":
         from verity_vllm.pipeline import memory_map as MMP
-        try:
-            res["census"] = MMP.cache(out, program, digest)
-        except Exception as e:  # noqa: BLE001 -- the census serves the Commit's opt-in memory map; it decides no Build
-            res["census"] = {"error": repr(e)[:300]}
+        res["census"] = MMP.cache_at_build(out, program, digest)
     # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
     art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
                                  applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)

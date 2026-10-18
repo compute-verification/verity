@@ -158,6 +158,7 @@ def test_the_census_and_kv_rows_are_computed_once_per_program(tmp_path):
         PMM.of_build(d, "f" * 128)
     got = PMM.cache(d, program, digest)
     assert got == {"census": census["digest"], "kv_rows": True}, "a Build's result.json holds what its Program determines, no timings"
+    assert "FileNotFoundError" in PMM.cache_at_build(tmp_path / "gone", program, digest)["error"], "a census failure decides no Build"
 
 
 def test_a_descriptor_of_another_program_is_refused_beside_the_map(tmp_path):
