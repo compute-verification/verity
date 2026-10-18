@@ -8,7 +8,8 @@ dir; nothing here runs a stage.  A TP row's record has the same parts, each with
 workload digests, run roots, openings and replays, the global manifest, the combined run root and the replay summed over the ranks.
 
 A row of record (Build, Match, Commit) keeps the same record, with the Match (`match`) and the Commit read from that Commit's own
-summary (`summary_part`, as `verity_vllm.records.publish` passes it), since a later run rewrites the row dir's.  Every record states the
+summary (`summary_part`, as `verity_vllm.records.publish` passes it), since a later run rewrites the row dir's; a single-GPU Commit's
+summary decides nothing, so its Commit is its decision document, the row dir's `verdict.json` (`tp1_commit_part`).  Every record states the
 row's config (`row`: its file without the requests, the file's sha256 and the κ profile) and, once published, `evidence`: the art: ids
 of the Programs per rank, the manifest, the Match and Commit records and the conformance captures (`verity_vllm.records`).
 
@@ -206,6 +207,15 @@ def commit_part(d: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     return commit, replay_of(c.get("sampled_replay") or {})
 
 
+def tp1_commit_part(d: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(commit, replay) of a single-GPU Commit of record: its decision document (`verdict.json`, vllm-verdict/v1, over every pair and
+    the replay) decides it and names the manifest it committed against; its last instrumented run (`commit_part`) the rest."""
+    commit, replay = commit_part(d)
+    v = _json(d / "verdict.json") or {}
+    commit.update(ok=v.get("outcome") == "PASS", outcome=v.get("outcome"), manifest={"manifest_digest": v.get("manifest_digest")})
+    return commit, replay
+
+
 def replay_of(sr: dict[str, Any]) -> dict[str, Any]:
     """One sampled replay's result (`check.replay.driver.sampled_replay`), with the units that differed."""
     smp = sr.get("sample") or {}
@@ -306,7 +316,7 @@ def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str
     stage = build["stage"] = build_stage(stages.get("build"), programs_ok, (evidence or {}).get("manifest"))
     build["ok"] = programs_ok and (stage is None or stage["status"] == "PASS" or "superseded_by" in stage)
     if summary is not None:
-        (commit, replay), engine, timing = summary_part(summary), None, {}
+        (commit, replay), engine, timing = summary_part(summary) if world > 1 else tp1_commit_part(d), None, {}
     else:
         commit, replay = tp_commit_part(d, world) if world > 1 else commit_part(d)
         engine, timing = engine_part(d), timing_part(d)

@@ -387,14 +387,17 @@ def test_a_config_run_that_failed_says_why_first(tmp_path, kw, why):
         assert rec["replay"]["differed"][0]["family"] == "Gemm_v1" and rec["replay"]["by_family"] == {"Gemm_v1": 2}
 
 
-@pytest.mark.parametrize("verdict, why", [("PASS", None), ("FAIL", "match FAIL")])
-def test_a_single_gpu_rows_match_is_its_global_matchs_verdict(tmp_path, verdict, why):
-    """GM-01 writes ``verdict`` (`check.match.global_match`); the record read an ``ok`` it never writes, so the first single-GPU row
-    chain to reach its publish (r20261018-000059-6968) was refused as "match FAIL" over a passing Match."""
+@pytest.mark.parametrize("gm, outcome, why", [("PASS", "PASS", None), ("FAIL", "PASS", "match FAIL"), ("PASS", "FAIL", "commit FAIL")])
+def test_a_single_gpu_row_of_record_is_its_global_matchs_verdict_and_its_commits_decision_document(tmp_path, gm, outcome, why):
+    """GM-01 writes ``verdict`` (`check.match.global_match`), never the ``ok`` the record read, and a single-GPU Commit's summary
+    decides nothing (its decision document is the row dir's verdict.json): the first single-GPU row chain to reach its publish
+    (r20261018-000059-6968) was refused as "match FAIL", then "commit FAIL", over a passing Match and Commit."""
     d = _row_dir(tmp_path)
-    (d / "global_match.json").write_text(json.dumps({"schema": "cb-a/global-match/v1", "verdict": verdict, "failed_checks": []}))
-    rec = CR.record(d, ROW)
-    assert (rec["match"]["ok"], rec["why"]) == (verdict == "PASS", why)
+    (d / "global_match.json").write_text(json.dumps({"schema": "cb-a/global-match/v1", "verdict": gm, "failed_checks": []}))
+    (d / "verdict.json").write_text(json.dumps({"schema": "vllm-verdict/v1", "outcome": outcome, "manifest_digest": "mm"}))
+    rec = CR.record(d, ROW, summary={"versions": {"served": SERVED}})
+    assert (rec["outcome"], rec["why"]) == ("PASS" if why is None else "FAIL", why)
+    assert rec["commit"]["manifest"] == {"manifest_digest": "mm"} and rec["commit"]["run_root"] == "rr"
 
 
 def test_a_config_run_with_no_commit_is_not_pass(tmp_path):
