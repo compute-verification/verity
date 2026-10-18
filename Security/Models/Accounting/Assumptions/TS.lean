@@ -26,16 +26,26 @@ Which form each takes:
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
   `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
   `benchmarks/pouw/theory/fold_opt.py`, #2240) is a mechanical fact; the multi-round residual, that no program folds
-  below the menu's price across rounds, is what stays assumed. `FanIn`, the ISA's operand counts, gives both at the
-  fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`, `FillOptOfFanIn`): for a fold or filler presented as
-  a straight-line dataflow over the words it absorbs, priced at least the menu's routes of `a_k/m_k` a word.
+  below the menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read
+  (every form, guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`,
+  `FillOptOfFanIn`): for a fold or filler presented as a straight-line dataflow over the words it absorbs, priced at
+  least the menu's routes of `a_k/m_k` a word.
 * (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round.
 * (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
   `δ_bind` and proof soundness `δ_ZK`, with Lemma E1(c) (every adaptive word lies below a committed value wrong for its
   own derivation). E1(c) is proved on paper; it sits inside this premise until the adaptive model is in Lean.
+  `Accounting.Guarantees.TS.ProofsSoundOfPinned` derives it from a window's proofs (`Accounting.TS.ProofLayer`):
+  binding at `δ_bind` (at `√δ_fork` from its fork form, `Accounting.Guarantees.TS.BindingOfFork`), proof soundness at
+  `δ_ZK`, the Definitions' pinning, and `RightFixed`.
+* `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
+  proof service's.
 * `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
+
+`LinSteer` is false (`Accounting.Guarantees.TS.LinSteerSegments`: a segmented consumer satisfies it only when its
+noise-active segments carry equal counts), and no guarantee rests on it; `Accounting.Guarantees.TS.SegmentSteer` is the
+bound that holds.
 -/
 
 namespace Accounting.Assumptions.TS
@@ -93,21 +103,39 @@ def FoldOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
 def FillOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muX) * Z.chiStar lam ≤ Z.G.price lam A.nfill
 
-/-- `accounting-ts-fan-in` (ISA; register operands read from SASS on sm_80, sm_89, sm_90, sm_100 and sm_120). **An
-instruction merges at most `m` components**: the nodes a straight-line dataflow issues as instruction `j` (its lanes,
-or the one node of a warp-wide instruction) merge at most `m_{cls j}` components into one, `Σ (sources − 1)`. A lane
-of LOP3, IADD3, IMAD, IDP.4A or FFMA reads three 32-bit registers (2 a lane, 64 a warp instruction); counted by
-dependence its predicate and 64-bit operands count too (IADD3.X: three registers and two carry-ins, 4 a lane;
-IMAD.WIDE: 3); a warp-wide instruction counts its whole operand set (SHFL 63; IMMA.16832: ten registers a thread, 319).
-Memory is a node each access reads: a load merges its address and that node (1 a lane), a store or atomic its address,
-its value registers and that node (STS.32 and ATOMS 2 a lane; STS.128 and STSM.x4 5 a lane, 160 a warp instruction),
-so the classes that merge most per instruction are the wide stores. -/
+/-- `accounting-ts-fan-in` (ISA; every form nvdisasm decodes on sm_80, sm_89, sm_90, sm_100 and sm_120, counted by
+dependence). **An instruction merges at most `m` components**: the nodes a straight-line dataflow issues as instruction
+`j` (its lanes, or the one node of a warp-wide or uniform instruction) merge at most `m_{cls j}` components into one,
+`Σ (sources − 1)`. A node's sources are every value it depends on: each register or uniform-register word it reads (a
+pair is two), each predicate it reads (an operand, a carry-in, its guard), a constant bank (`c[..][..]`, and
+`cx[UR][..]`'s uniform register besides), the memory node of each access, and, since any instruction can carry a guard
+and keeps what it writes when the guard is false, every word and predicate it writes (its destination, carry-outs and
+predicate destinations). `cls` is the census's class: an MMA form's family and shape; a texture, surface, TMA, bulk or
+tensor-memory access's unit and width; else the opcode's (`loads.class_of`), a memory access the census doesn't name in
+its space's class, and every other form in NOROW. Each class at its widest form, a lane, on sm_100 and sm_120: ALU 8
+(IADD3.X: three registers, two carry-ins, the guard, the kept destination and two kept carry-outs), IMAD 6, IMAD.WIDE 8,
+IADD.64 8, LEA 6, FFMA 4 (sm_100's FFMA2 8), HFMA2, IDP.4A and F2FS 4, VIMNMX 6 (sm_120's IMNMX.U64 10: three pairs,
+two predicate operands, two kept predicate destinations and the guard), SEL 4 (sm_120's SEL.64 7), XU 4 (BAR.RED.POPC,
+the barrier a node), DFMA and DADD 8, DMUL 6, a constant load 5 (LDC.64 from `cx[UR][R]`), NOROW 9 (P2R: two
+registers, P0–P6 and the kept destination). sm_80, sm_89 and sm_90 read a `cx[UR][imm]` operand where the others read a
+register, one source more: ALU 9, IMAD 7, IMAD.WIDE 9, LEA 7, FFMA, HFMA2, IDP.4A, F2FS, SEL and VIMNMX 5 (sm_90's
+VIMNMX.U32 7), NOROW 10 (P2R). Memory, a lane: a shared load or store 7 (LDS.128, STS.128), a global load 15
+(LDG.E.ENL2.256 with its descriptor, address pair, predicate operand and predicate destination), a global or generic
+store 13 (STG.E.ENL2.256), a shared atomic 15 (ATOMS.CAS.128), a global or generic atomic 18 (ATOMG.E.CAS.128), a
+reduction 9 (REDG.E.ADD.F32x4), LDGSTS 9, LDSM and STSM 7, a texture or surface access 20. A warp-wide instruction
+counts its lanes together: SHFL 191; UNI's R2UR 96 and VOTEU 65; an MMA form its A, B and C words, the kept
+D, a guard a lane and its UP operand, with a block-scaled form's two scale registers a lane and uniform register and a
+sparse form's metadata register a lane (IMMA.16832 480, QMMA.SF.16832 545); sm_100's tensor-memory load or store its
+registers on 32 lanes, which it keeps under one uniform guard, with the guard, address and node (LDTM.32x32b.x128
+4098). A uniform one counts once: UNI64's UIADD3.64.X 12, a TMA or bulk copy 15. -/
 def FanIn {ι W J : Type} [DecidableEq J] (D : Dataflow ι W) (ins : Fin D.n → J) (cls : J → K) (m : K → ℝ) :
     Prop :=
   ∀ j, (D.issued ins j : ℝ) ≤ m (cls j)
 
-/-- `accounting-ts-luck` ([P+R] per noise; ¾ in Lean for affine operands). **(L) at `p`, with freshness (F1)–(F2)**:
-the ideal game is one bet a round, a deficient round passing with probability at most `p` given the past. -/
+/-- `accounting-ts-luck` ([P+R] per noise; ¾ in Lean for affine operands; 0.854 in Lean for the pfill filler's cells
+(`Accounting.Guarantees.FillerLuck.FillerLuckAt`), 0 for a filler's pinned receipts (`PinnedFillLuckAt`)). **(L) at
+`p`, with freshness (F1)–(F2)**: the ideal game is one bet a round, a deficient round passing with probability at most
+`p` given the past. -/
 def LuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p : ℝ) (g : RoundGame Ω S) : Prop := RoundGame.LuckAt p g
 
 /-- `accounting-ts-proofs-sound` (binding H-μ⁺, proof soundness, the protocol's order, Lemma E1(c)). **The proofs are
@@ -119,9 +147,19 @@ def ProofsSound {Ω : Type} [Fintype Ω] {S : ℕ} (P : Play Ω S K T L U) (Nw �
   ∃ E : Paths Ω S → Prop, prob E ≤ S * (δbind + nπ * δzk) ∧
     ∀ x, P.accepts x → ¬ E x → P.game.accepts x ∧ (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
-/-- `accounting-ts-lin-steer` (assumed; SAMPLING). **LIN-STEER**: zeroing a fraction `φ = |Z|/|act|` of the row's
-noise-active coordinates saves at most `φ` of the consumer's work. -/
+/-- `accounting-ts-lin-steer` (SAMPLING; false, `Accounting.Guarantees.TS.LinSteerSegments` and `LinSteerFalse`).
+**LIN-STEER**: zeroing a fraction `φ = |Z|/|act|` of the row's noise-active coordinates saves at most `φ` of the consumer's work. -/
 def LinSteer {m : ℕ} (c : Consumer m) : Prop :=
   ∀ Z ⊆ c.act, c.cost ∅ - c.cost Z ≤ (Z.card : ℝ) / c.act.card * c.cost ∅
+
+/-- `accounting-ts-right-fixed` (Lemma E1(c), proved on paper; the rounds' equal shares). **With every committed value
+right, what isn't fixed is in the shares**: on every accepted path whose committed values (each round's, read before its
+σ, `ProofLayer.committed`) are right for their derivations, the run's owned right fixed words per unit are at least
+`(1 − Σ_w d_w / S)·N_w`. An adaptive word lies below a committed value wrong for its own derivation (E1(c)), so with none
+wrong every word that isn't fixed is in its round's share, and the rounds carry equal shares of the window's words.
+`ProofsSound` held this inside it; it stays an assumption until the adaptive model is in Lean. -/
+def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V)
+    (Nw : ℝ) : Prop :=
+  ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
 end Accounting.Assumptions.TS

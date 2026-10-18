@@ -27,8 +27,10 @@ import functools
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,6 +76,10 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests")
 #: what a verdict says when it passed with `--defer`'s steps still running
 DEFERRED = "every step but the deferred ones passed"
+#: where a touched-suites run (`train.sh COMMIT MACHINE --against BASE`, the quick tier's job) writes its report and logs
+TOUCHED_REPORT, TOUCHED_LOGS = "out/suites.json", "out/logs"
+#: a Lake package's lock, which a train's Lean check may regenerate (`merge.LOCK`)
+LOCK = "lean-audit.json"
 #: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
 SIGTERM_RC = 143
 #: pre-warms running at once: each is a whole check in a slot, and a train waits behind every one (18 Oct 00:43Z: four took the
@@ -129,10 +135,12 @@ def authed(auth: tuple[str, ...]):
                 os.environ[k] = v
 
 
-def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = ()) -> tuple[list[str], str]:
+def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
+                 against: str | None = None) -> tuple[list[str], str]:
     """`train.sh COMMIT MACHINE [--agreement]` from the queue's clone: (the run ids it printed, its output's tail).  Git never
     prompts (12 Oct: train.sh's fetch in the queue's clone, which has no credential helper, waited on a password at the tty)."""
-    argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else [])]
+    argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
+            *(["--against", against] if against else [])]
     r = subprocess.run(argv, cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL,
                        env={**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"})
     m = RUN_RE.search(r.stdout)
@@ -234,7 +242,7 @@ def _docs(run_dir: Path, *names: str) -> list[dict]:
 def failed_suites(run_dir: Path) -> list[dict]:
     """Each failed suite's record: from `suites.json` and `suites-lean.json` once the check ended, else from what it has written
     of its failures so far (`PROGRESS`)."""
-    done = [s for s in _docs(run_dir, "suites.json", "suites-lean.json") if s.get("status") == "failed"]
+    done = [s for s in _docs(run_dir, "suites.json", "suites-lean.json", TOUCHED_REPORT) if s.get("status") == "failed"]
     return done or _docs(run_dir, *PROGRESS[1:])
 
 
@@ -251,9 +259,9 @@ def evidence(repo: Path, ids: list[str]) -> list[Path]:
     """The local run dirs of ``ids`` with their steps, suite reports and failed suites' logs fetched (`research status --also`)."""
     dirs = []
     for rid in ids:
-        if (d := _fetch(repo, rid, [*PROGRESS, "suites.json", "suites-lean.json"])) is None:
+        if (d := _fetch(repo, rid, [*PROGRESS, "suites.json", "suites-lean.json", TOUCHED_REPORT])) is None:
             continue
-        logs = [f"suites/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log")]
+        logs = [f"{where}/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log") for where in ("suites", TOUCHED_LOGS)]
         logs += [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in ("pytest", "lean-suites")]
         if logs:
             _fetch(repo, rid, logs)
@@ -361,7 +369,8 @@ def implicated(run_dir: Path) -> set[str] | None:
         log = ""
         if s.get("log"):
             with contextlib.suppress(OSError):
-                log = (run_dir / "suites" / Path(s["log"]).name).read_text(errors="replace")
+                log = next((f.read_text(errors="replace") for where in ("suites", TOUCHED_LOGS)
+                            if (f := run_dir / where / Path(s["log"]).name).is_file()), "")
         if not tests and (errors := ERROR_RE.findall(log)):     # 17 Oct: a collection error (#2299's test of a vector only
             tests = errors                                       # #2286 adds) named no file, and 8 PRs were ejected by inputs
         if not tests:
@@ -389,14 +398,21 @@ class Driver:
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs,
-                 evidence: Callable[[Path, list[str]], list[Path]] = evidence, defer: frozenset[str] = frozenset()):
+                 evidence: Callable[[Path, list[str]], list[Path]] = evidence, defer: frozenset[str] = frozenset(),
+                 regenerate_locks: bool = False):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
+        #: commit the locks a train's Lean check regenerated onto it as it lands (CI-64: Daniel through top, 18 Oct)
+        self.regenerate_locks = regenerate_locks
         #: steps a train lands without (Daniel through top, 17 Oct, CI-30's interim): they run on after the landing, and one
         #: that fails reverts it.  The Lean check's steps are never deferred.
         defer = {x for x in defer if not x.startswith("lean")}
         self.defer = frozenset(defer | ({"flock-rust-tests"} if "circuit-check" in defer else set()))  # it runs after it
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
+        #: with pytest deferred, the suites a train's change reaches run before it lands (CI-57: #2271 and #2382 each reverted
+        #: landings a 2-minute run of one suite would have caught): `train.sh COMMIT MACHINE --against BASE`
+        self.launch_touched: Callable[[Path, str, str, str], tuple[list[str], str]] = (
+            lambda repo, commit, machine, base: train_launch(repo, commit, machine, False, auth=q.auth, against=base))
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
         self.repo, self.dry_run, self._seen, self._prs = q.workdir, False, {}, None
         self._drive: dict | None = None
@@ -448,6 +464,8 @@ class Driver:
                                                               f"the full picture) and has already failed: {early}")
         if any(st in ACTIVE for st, *_ in states.values()):
             if self.defer and (rid := self._passed_but_deferred(launch["ids"])):
+                if (held := self._touched(launch)) is not None:
+                    return held
                 return Verdict("passed", rid, f"{DEFERRED} ({', '.join(sorted(self.defer))} run on after landing)")
             return Verdict("running", " ".join(launch["ids"]))
         if all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
@@ -458,6 +476,21 @@ class Driver:
         return Verdict("failed", " ".join(launch["ids"]),
                        f"{' '.join(launch['ids'])} ended ({', '.join(f'{s} rc={rc}' for s, rc, *_ in states.values())}) "
                        f"and no attempt reached the store in {PUBLISH_GRACE_S // 60} min")
+
+    def _touched(self, launch: dict) -> Verdict | None:
+        """What a train's touched-suites run (`launch["touched"]`) says before a deferred landing: running, or failed (its suites'
+        reports name what failed, as a check's do); None once it passed, or when it never ran (the deferred pytest still runs)."""
+        if not (ids := launch.get("touched")):
+            return None
+        states = self._states(ids)
+        if any(st in ACTIVE for st, *_ in states.values()):
+            return Verdict("running", " ".join(ids), "its touched suites are running")
+        if all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
+            return None
+        if any(rc == 0 for _, rc, *_ in states.values()):
+            return None
+        return Verdict("failed", " ".join(ids), f"its touched suites failed ({' '.join(ids)}: "
+                                                f"{', '.join(f'rc={rc}' for _, rc, *_ in states.values())})")
 
     def _passed_but_deferred(self, ids: list[str]) -> str | None:
         """The running check among ``ids`` whose every step but the deferred ones has passed (or was skipped), none failed."""
@@ -579,39 +612,82 @@ class Driver:
                 q.log(f"research queue drive: would land {prs} ({m.commit[:12]}, check {v.attempt})"
                       + (f" onto the moved `main` {main[:12]}" if moved else "") + (" [shadow]" if q.shadow else ""))
                 return m
-            _git(self.repo, "checkout", "-q", "-B", "main", "refs/remotes/origin/main")
-            if moved:
-                gained = _out(self.repo, "log", "--first-parent", "--format=%s", f"{base}..{main}").splitlines()
-                body = (f"Merge {m.commit[:12]} ({' + '.join(x.head[:8] for x in members)})\n\n{prs}\n\n"
-                        f"Checked: {v.attempt} (full check of {m.commit[:12]} = main {base[:12]} + "
-                        f"{' + '.join(f'#{x.pr}@{x.head[:9]}' for x in members)}: passed)\n"
-                        f"Skipped-check: main {base[:12]}..{main[:12]} ({'; '.join(gained)}) shares no files with {prs}\n")
-                r = _git(self.repo, "merge", "--no-ff", "--no-edit", "-m", body, m.commit, check=False, env=IDENTITY)
-            else:
-                r = _git(self.repo, "merge", "-q", "--ff-only", m.commit, check=False)
-            if r.returncode:
-                _git(self.repo, "merge", "--abort", check=False)
-                _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
-                self.refuse(drive, f"land:{m.commit}", f"{prs} passed ({v.attempt}) but doesn't merge onto `main` {main[:12]}: "
-                                                        f"{(r.stderr or r.stdout).strip()[-200:]}")
-                return None
-            p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", "main:refs/heads/main", ok=None)
-            if p.returncode:
-                _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
-                q.log(f"research queue drive: pushing `main` was refused ({p.stderr.strip()[-200:]}); the next tick tries again")
-                return None
-            tip = _out(self.repo, "rev-parse", "HEAD")
-            q.log(f"research queue drive: landed {prs} on `main` at {tip[:12]} (check {v.attempt})")
-            if v.why.startswith(DEFERRED):
-                drive.setdefault("deferred", {})[tip] = {"ids": v.attempt.split(), "base": main, "prs": prs}
-            from .merge import _sweep_after, caught_up
-
-            with authed(q.auth):
-                caught_up(self.repo, "origin", "check", since=main, log=q.log,
-                          runs={x.commit: v.attempt for x in members} | {tip: v.attempt})
-                _sweep_after(self.repo, "main", "origin")
-            return m
+            scratch = Path(tempfile.mkdtemp(prefix="drive-locks-"))
+            try:
+                return self._land(drive, m, members, prs, v, base, main, moved, scratch)
+            finally:
+                shutil.rmtree(scratch, ignore_errors=True)
         return None
+
+    def _locks(self, v: Verdict, scratch: Path) -> tuple[str, dict[str, Path]]:
+        """(the check that regenerated them, {package: its regenerated lock fetched under ``scratch``}) of a passed train, when
+        drive commits regenerated locks; ("", {}) otherwise."""
+        if not self.regenerate_locks:
+            return "", {}
+        from .merge import regenerated_records
+
+        for rid in v.attempt.split():
+            try:
+                recs = regenerated_records(self.q.store, rid, scratch / rid)
+            except Exception as e:  # noqa: BLE001  (the train still lands; its locks stay as its PRs left them)
+                self.q.log(f"research queue drive: {rid}'s regenerated locks couldn't be read ({type(e).__name__}: {e})")
+                continue
+            if recs:
+                return rid, {pkg: path for pkg, (_, path) in recs.items() if path is not None}
+        return "", {}
+
+    def _land(self, drive: dict, m: Member, members: list[Member], prs: str, v: Verdict, base: str, main: str,
+              moved: list[str], scratch: Path) -> Member | None:
+        """Land ``m``'s train (`land`), with the locks its check regenerated committed on top (`regenerate_locks`)."""
+        q = self.q
+        rid, locks = self._locks(v, scratch)
+        if locks and moved:
+            q.log(f"research queue drive: {prs} passed ({v.attempt}) by regenerating {', '.join(sorted(locks))}'s locks on "
+                  f"{base[:12]}, but `main` moved to {main[:12]}: the next sync rebuilds `{q.branch}` for a new check")
+            return None
+        _git(self.repo, "checkout", "-q", "-B", "main", "refs/remotes/origin/main")
+        if moved:
+            gained = _out(self.repo, "log", "--first-parent", "--format=%s", f"{base}..{main}").splitlines()
+            body = (f"Merge {m.commit[:12]} ({' + '.join(x.head[:8] for x in members)})\n\n{prs}\n\n"
+                    f"Checked: {v.attempt} (full check of {m.commit[:12]} = main {base[:12]} + "
+                    f"{' + '.join(f'#{x.pr}@{x.head[:9]}' for x in members)}: passed)\n"
+                    f"Skipped-check: main {base[:12]}..{main[:12]} ({'; '.join(gained)}) shares no files with {prs}\n")
+            r = _git(self.repo, "merge", "--no-ff", "--no-edit", "-m", body, m.commit, check=False, env=IDENTITY)
+        else:
+            r = _git(self.repo, "merge", "-q", "--ff-only", m.commit, check=False)
+        if r.returncode:
+            _git(self.repo, "merge", "--abort", check=False)
+            _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
+            self.refuse(drive, f"land:{m.commit}", f"{prs} passed ({v.attempt}) but doesn't merge onto `main` {main[:12]}: "
+                                                    f"{(r.stderr or r.stdout).strip()[-200:]}")
+            return None
+        if locks:
+            files = []
+            for pkg, src in sorted(locks.items()):
+                dst = f"{pkg}/{LOCK}" if pkg not in ("", ".") else LOCK
+                shutil.copyfile(src, self.repo / dst)
+                files.append(dst)
+            _git(self.repo, "add", "--", *files)
+            _git(self.repo, "commit", "-q", "-m", f"Lock records regenerated for {prs}\n\nChecked: {rid} (the Lean check of "
+                                                  f"{m.commit[:12]}, passed by regenerating them)\nRegenerated: {', '.join(files)}\n",
+                 env=IDENTITY)
+        p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", "main:refs/heads/main", ok=None)
+        if p.returncode:
+            _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
+            q.log(f"research queue drive: pushing `main` was refused ({p.stderr.strip()[-200:]}); the next tick tries again")
+            return None
+        tip = _out(self.repo, "rev-parse", "HEAD")
+        q.log(f"research queue drive: landed {prs} on `main` at {tip[:12]} (check {v.attempt})"
+              + (f", with the locks it regenerated for {', '.join(sorted(locks))}" if locks else ""))
+        if v.why.startswith(DEFERRED):
+            drive.setdefault("deferred", {})[tip] = {"ids": v.attempt.split(), "base": main, "prs": prs}
+        from .merge import _sweep_after, caught_up
+
+        with authed(q.auth):
+            caught_up(self.repo, "origin", "check", since=main, log=q.log,
+                      runs={x.commit: v.attempt for x in members} | {tip: v.attempt})
+            _sweep_after(self.repo, "main", "origin")
+        return m
 
     # -- refusals
 
@@ -673,7 +749,10 @@ class Driver:
             for st in failed_steps(d):
                 step = st.get("step") or ""
                 if step.startswith("lean") and step != "lean-suites":
-                    rules.append(("Lean sources", lambda f: f.endswith(LEAN_INPUTS)))
+                    if pkgs := self._failed_packages(d, st, tip):
+                        rules.append((f"Lean package {', '.join(sorted(pkgs))}", lambda f, pkgs=pkgs: under(f, sorted(pkgs))))
+                    else:
+                        rules.append(("Lean sources", lambda f: f.endswith(LEAN_INPUTS)))
                 elif step == "circuit-check":
                     rules.append(("circuit-check's inputs", lambda f: forces_cold([f])))
         out, why = [], set()
@@ -682,6 +761,24 @@ class Driver:
                 out.append(x)
                 why |= t
         return out, ", ".join(sorted(why))
+
+    def _failed_packages(self, run_dir: Path, step: dict, tip: str) -> set[str]:
+        """The Lake packages a failed Lean step's log reports `FAIL` for, with each package its manifest requires by path, at
+        ``tip``; empty when the log names none (18 Oct: a stale record in verity/core/primitives/requirement, #2386's, failed two
+        trains, and the fallback on every Lean source ejected #2341, #2370 and #2371 with it)."""
+        try:
+            log = (run_dir / Path(step.get("log") or "").name).read_text(errors="replace") if step.get("log") else ""
+        except OSError:
+            return set()
+        out = set()
+        for pkg in set(LEAN_AUDIT_RE.findall(log)):
+            out.add(pkg)
+            r = _git(self.repo, "show", f"{tip}:{pkg}/lake-manifest.json", check=False)
+            with contextlib.suppress(ValueError, AttributeError):
+                for dep in json.loads(r.stdout).get("packages", []) if not r.returncode else []:
+                    if dep.get("type") == "path":
+                        out.add(os.path.normpath(os.path.join(pkg, dep.get("dir", ""))))
+        return {p for p in out if not p.startswith("..")}
 
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
         """Act on a failed train with no lander (16 Oct, Daniel through top): eject every member whose change touches what the
@@ -695,6 +792,16 @@ class Driver:
         if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}):
             self.resend(drive, m, prs, v)
             return
+        # a member a lower train's running or passed check covers is left to that check: ejecting it would cancel that train,
+        # and were it the cause, that check fails too
+        main = _out(self.repo, "rev-parse", "origin/main")
+        floor = max((k + 1 for k, x in enumerate(members[:-1]) if x.commit in drive["launched"]
+                     and self.verdict(x.commit, main, drive).state in ("running", "passed")), default=0)
+        if hit and all(members.index(x) < floor for x in hit):
+            self.q.log(f"research queue drive: {m.commit[:12]} failed on {what}, which only members the check of "
+                       f"{members[floor - 1].commit[:12]} covers change: waiting on that check")
+            return
+        hit = [x for x in hit if members.index(x) >= floor]
         ejected, why = [], what
         for x in hit:
             reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which #{x.pr} changes"
@@ -833,7 +940,10 @@ class Driver:
             checked.append(i)
             v = self.verdict(m.commit, main, drive)
             if v.state == "failed":
-                self.failed(drive, m, chain[: i + 1], v)
+                # a train above a failed one holds its failure, and runs again once `next` is rebuilt (18 Oct 10:30Z: acting
+                # on 5c00b3 too ejected #2478 and #2486 beside c93469's #2484)
+                if not failed_at:
+                    self.failed(drive, m, chain[: i + 1], v)
                 failed_at.add(i)
             elif v.state == "running":
                 q.hold = i + 1
@@ -850,7 +960,7 @@ class Driver:
         following = {rid for rec in drive.get("deferred", {}).values() for rid in rec["ids"]}
         for c, v in drive["launched"].items():
             if c not in on_chain and not dry_run and not set(v["ids"]) & following:
-                live = [rid for rid, (st, *_) in self._states(v["ids"]).items()
+                live = [rid for rid, (st, *_) in self._states([*v["ids"], *(v.get("touched") or [])]).items()
                         if st in ACTIVE and st != "unknown"]
                 if live:                                   # a failed one too: drive acted on its failure, and its slot is a
                                                            # train's (17 Oct 14:41Z: two held slots 40 min with 32 PRs queued)
@@ -891,7 +1001,14 @@ class Driver:
                 what.append("launch failed")
                 break
             drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": agreement}
-            q.log(f"research queue drive: checking {m.commit[:12]} ({prs}): {' '.join(ids)}" + (" with agreement" if agreement else ""))
+            if "pytest" in self.defer:
+                touched, tail = self.launch_touched(self.repo, m.commit, self.on, main)
+                drive["launched"][m.commit]["touched"] = touched
+                if not touched:
+                    q.log(f"research queue drive: {m.commit[:12]}'s touched-suites run registered no run ({tail[-200:]}); its "
+                          "deferred pytest still runs after landing")
+            q.log(f"research queue drive: checking {m.commit[:12]} ({prs}): {' '.join(ids)}" + (" with agreement" if agreement else "")
+                  + (f", touched suites {' '.join(drive['launched'][m.commit].get('touched') or [])}" if "pytest" in self.defer else ""))
             what.append(f"launched {' '.join(ids)}")
             running += 1
         if not dry_run:

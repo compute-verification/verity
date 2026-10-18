@@ -38,6 +38,7 @@ class Model:
     x_min: float
     epochs: tuple[str, ...]
     current: str = ""                   # the vector `solve` re-solves by default
+    uniform_forms: tuple[str, ...] | None = None   # the lane classes with a uniform-datapath form; None: every one
 
 
 @dataclass(frozen=True)
@@ -122,7 +123,8 @@ def model(data: Path = DATA) -> Model:
                  honest_real_600w=c.get("honest_real_600w", math.nan), cuda=tuple(t["cuda"]),
                  honest=dict(t.get("honest", {})), adopted=t.get("adopted", ""), rho=lp.get("rho", math.nan),
                  tie=lp.get("tie", math.nan), x_min=lp.get("x_min", math.nan), epochs=tuple(t["epochs"]),
-                 current=t["current"])
+                 current=t["current"],
+                 uniform_forms=tuple(t["uniform_forms"]) if "uniform_forms" in t else None)
 
 
 def device(name: str = DEVICE) -> Path:
@@ -169,6 +171,13 @@ def run_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
     return {k: tuple(v) for k, v in tomllib.loads(p.read_text()).items()} if p.is_file() else {}
 
 
+def kind_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
+    """`data/census/kinds.toml`: the kind lists a row prices at one value (the joint issue rows' vector classes), each
+    written as one census line of kind `@NAME`, which stands for a line of each kind it lists."""
+    p = data / "census" / "kinds.toml"
+    return {k: tuple(v) for k, v in tomllib.loads(p.read_text()).items()} if p.is_file() else {}
+
+
 def census_lines(m: Model, data: Path = DATA) -> list[dict[str, str]]:
     """Every census line as written, the files in epoch order."""
     out: list[dict[str, str]] = []
@@ -179,10 +188,11 @@ def census_lines(m: Model, data: Path = DATA) -> list[dict[str, str]]:
 
 
 def entries(m: Model, data: Path = DATA) -> list[Entry]:
-    named = run_lists(data)
+    named, kinds = run_lists(data), kind_lists(data)
     cites = lambda s: tuple(x for c in _runs(s) for x in (named[c[1:]] if c.startswith("@") else (c,)))
-    return [Entry(d["kind"], d["row"], u_of(m.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"]), d["since"],
-                  d["until"], cites(d["runs"])) for d in census_lines(m, data)]
+    return [Entry(k, d["row"], u_of(m.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"]), d["since"],
+                  d["until"], cites(d["runs"])) for d in census_lines(m, data)
+            for k in (kinds[d["kind"][1:]] if d["kind"].startswith("@") else (d["kind"],))]
 
 
 def holds(m: Model, since: str, until: str, epoch: str) -> bool:

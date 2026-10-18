@@ -10,8 +10,10 @@ all-reduce + residual add + RMSNorm, which writes the new residual into `hidden_
 On every call this binds the rank's partial `hidden_states` as `<norm>/part_rank<r>` (the partial source's name for a collective
 input, attributed to the norm the call passes) and, under the gather-mode committer, copies it before the call runs.  When `norm`
 did not run (the fused path) it binds the returns as `<norm>/0` and `<norm>/1`, the names the module hook gives them on the
-other path, so a step binds the same names whichever path it took, and copies them at once.  The path of each call is recorded
-per step, in call order (`F` fused, `N` all-reduce then the norm module).
+other path, so a step binds the same names whichever path it took, and copies them at once.  On the other path the all-reduce's
+output, the norm's input, is bound as `<norm>/all_reduce` from the norm's pre-hook and copied before the norm's in-place add
+overwrites it.  The path of each call is recorded per step, in call order (`F` fused, `N` all-reduce then the norm module), and the
+norms in the order the first step called them (`order`: each call's residual is the previous call's `<norm>/1`).
 
 The sites are the norms the first step passes: which norms a model hands over depends on the layer (DeepSeek-V3.2's layer 0
 normalizes the embedding directly) and cannot be read before a forward runs.  When the model's classes call the function and
@@ -26,6 +28,7 @@ FAR_MODULE = "vllm.models.common.ops.fused_allreduce_rms_norm"
 FAR_NAME = "fused_allreduce_rms_norm"
 NO_CALL_SITE = "<fused_allreduce_rms_norm: no call seen>"
 FUSED, UNFUSED = "F", "N"
+REDUCED_MEMBER = "all_reduce"
 PATH_STEPS_KEPT = 256
 
 
@@ -59,12 +62,14 @@ class AllReduceNorm:
                            and type(mods.get(n.rpartition(".")[0])).__module__ in users]
         self._bytes_per_token = sum(int(mods[n].weight.numel()) * int(mods[n].weight.element_size()) for n in self.candidates)
         self.first: list[str] | None = None
+        self.order: list[str] | None = None
         self._calls: list[tuple[str, str]] = []
         self._step: int | None = None
         self.paths: list[tuple[int, str]] = []
         self._ran = False
+        self._inside: tuple[str, Any] | None = None
         self._hooked: dict[int, Any] = {}
-        self.stats: dict[str, int] = {"calls": 0, FUSED: 0, UNFUSED: 0, "returns_bound": 0, "unattributed": 0}
+        self.stats: dict[str, int] = {"calls": 0, FUSED: 0, UNFUSED: 0, "returns_bound": 0, "reduced_bound": 0, "unattributed": 0}
 
     # -- expected population ------------------------------------------------------------------------------------------------
     def site_names(self) -> list[str]:
@@ -74,11 +79,11 @@ class AllReduceNorm:
         return first or [NO_CALL_SITE]
 
     def extra_step_bytes(self) -> tuple[int, int]:
-        """(bytes per token, tensors per step) of the partials, over the candidate sites; the fused path's returns replace the
-        norm module's outputs, which the module table already counts."""
+        """(bytes per token, tensors per step) of the partials and the other path's all-reduce outputs, over the candidate sites; the
+        fused path's returns replace the norm module's outputs, which the module table already counts."""
         if not self.used or self.src.world <= 1:
             return 0, 0
-        return self._bytes_per_token, len(self.candidates)
+        return 2 * self._bytes_per_token, 2 * len(self.candidates)
 
     # -- install / steps ------------------------------------------------------------------------------------------------------
     def uninstall(self) -> None:
@@ -90,6 +95,7 @@ class AllReduceNorm:
         if self._calls:
             if self.first is None:
                 self.first = sorted({n for n, _p in self._calls})
+                self.order = [n for n, _p in self._calls]
             if len(self.paths) < PATH_STEPS_KEPT:
                 self.paths.append((int(self._step or 0), "".join(p for _n, p in self._calls)))
         self._calls = []
@@ -97,6 +103,15 @@ class AllReduceNorm:
 
     def _mark(self, mod: Any, args: Any) -> None:
         self._ran = True
+        if self._inside is None or not args or not hasattr(args[0], "device"):
+            return
+        name, job = self._inside
+        if self.names.get(id(mod)) != name:
+            return
+        c = self.src.c
+        c._acquire(f"{name}/{REDUCED_MEMBER}", args[0], job)
+        self.stats["reduced_bound"] += 1
+        _flush(c)                                        # the norm adds the residual into its input in place
 
     def wrap(self, orig):
         me = self
@@ -122,8 +137,11 @@ class AllReduceNorm:
             finally:
                 me.src.cur = prev
             _flush(c)                                    # the fused path writes the new residual into hidden_states
-            me._ran = False
-            out = orig(hidden_states, residual, norm, *a, **k)
+            me._ran, me._inside = False, (name, job)
+            try:
+                out = orig(hidden_states, residual, norm, *a, **k)
+            finally:
+                me._inside = None
             path = UNFUSED if me._ran else FUSED
             if path == FUSED:
                 me._bind_returns(name, out, job)
@@ -149,8 +167,10 @@ class AllReduceNorm:
     def record(self) -> dict[str, Any]:
         return {"targets": [m.__name__ for m, _a in self.targets], "model_calls_it": self.used, "sites": self.site_names(),
                 "candidates": len(self.candidates), "stats": dict(self.stats), "paths_by_step": self.paths[:64],
+                "order": list(self.order or [])[:4] + (["..."] if len(self.order or []) > 4 else []),
                 "rule": (f"one <norm>/part_rank<r> per site per step, copied before the call; on the fused path ({FUSED}) the returns as "
-                         f"<norm>/0, <norm>/1; on the other ({UNFUSED}) the norm module runs and its hook binds them")}
+                         f"<norm>/0, <norm>/1; on the other ({UNFUSED}) the all-reduce output as <norm>/{REDUCED_MEMBER}, copied before "
+                         "the norm module runs, and the module's hook binds its returns")}
 
 
-__all__ = ["AllReduceNorm", "targets", "FAR_MODULE", "FAR_NAME", "NO_CALL_SITE", "FUSED", "UNFUSED"]
+__all__ = ["AllReduceNorm", "targets", "FAR_MODULE", "FAR_NAME", "NO_CALL_SITE", "FUSED", "UNFUSED", "REDUCED_MEMBER"]

@@ -11,6 +11,8 @@ one into the other, at each step, once the store and the plan are `W`'s block fo
 
 * `RequirementHeld`: a device holding resident blocks `H` holds all of `W`'s live bits but at most a block's `B` bits for
   each resident block outside `H`.
+* `RequirementHeldLive`: the same, a missing resident block costing the live bits it holds rather than `B`: `W`'s live
+  bits are those in `H` plus those of the resident blocks outside `H`.
 * `RequirementDense`: when each resident block holds at least `D` of `W`'s live bits, the resident blocks number at most
   `liveBits / D`, so missing a fraction `ε` of them misses at most a fraction `ε·B/D` of `W`'s live bits.
 * `RequirementMoved`: a pass that moved the planned blocks `M` moved all of the bits `W` reads at that step but at most a
@@ -40,6 +42,26 @@ def RequirementHeld : Prop :=
   ∀ {G : Type} [DecidableEq G] (W : Wiring G) (e : Execution G) (ℓ : Layout G) (s : Store) (B t : ℕ)
     (H : Finset ℕ), StoreMatches W e ℓ s B t →
     liveBits W e t ≤ bitsAt W ℓ (live W e t) H + (s.resident t \ H).card * B
+
+/-- **Held blocks hold `W`'s live bits, a missing block costing the live bits it holds.** If the store is `W`'s when step
+`t` begins, a device holding the resident blocks `H` holds every bit `W` keeps live but those of the resident blocks it
+doesn't hold:
+
+  `liveBits t = bitsAt (live t) H + Σ_{j ∈ resident t \ H} liveIn t j`.
+
+**The reading.** An audit that credits each block it verified by `W`'s live bits in it (`liveIn`) credits exactly what
+the device held of `W`'s live bits, and a missing block costs only what it holds: a partly filled block (a request's
+last KV block) costs its live bits, not a block's `B`, so no density `D` (`RequirementDense`) is needed. As
+`RequirementHeld`, it needs every live block resident.
+
+Proof: `Accounting.SecurityProofs.RequirementHeldLive`: the live values split by whether their block is in `H`, and those
+outside `H` by their block, each a resident block outside `H`.
+
+Frozen (no-function): a counting identity over a wiring, its execution and a store, about no function of the code. -/
+def RequirementHeldLive : Prop :=
+  ∀ {G : Type} [DecidableEq G] (W : Wiring G) (e : Execution G) (ℓ : Layout G) (s : Store) (B t : ℕ)
+    (H : Finset ℕ), StoreMatches W e ℓ s B t →
+    liveBits W e t = bitsAt W ℓ (live W e t) H + ∑ j ∈ s.resident t \ H, liveIn W e ℓ t j
 
 /-- **A dense store's blocks are `W`'s bits.** If the store is `W`'s when step `t` begins and each resident block holds at
 least `D` of `W`'s live bits, the resident blocks hold `D` live bits apiece:

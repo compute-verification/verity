@@ -1,3 +1,4 @@
+import Proofs.Pouw.AttnNoise
 import Proofs.Pouw.Barrier
 import Proofs.Pouw.Barrier.Proofs
 import Proofs.Pouw.BudgetAbort

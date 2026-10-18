@@ -63,8 +63,9 @@ theorem rsAtG_computes : (rsAtG ht hc hgen dj x₀ hpub hU (Reg := Reg)).Compute
 /-- **The headline at the executable over hidden-output sessions, at the general form.** Against any live prover `τ`,
 flock-verify accepts with at least `K` wrong units of the template instance's program `instProg c n`, at the simulated
 prover's committed values, with probability at most `miss(K) + ε_ks + δ_link`. Its circuit condition is `scopeGenH`;
-`hdec` is `decodesOn_execHI`'s, from the tags, the challenger's record and its draws. -/
-theorem flock_headline_exec_hidden_gen (hT : TagsOkH I)
+`hdec` is `decodesOn_execHI`'s, from the tags, the challenger's record and its draws, at the model's leaf of the tags'
+leaf scheme (`leafOfId`: `hm96-sha512/v1` or plain SHA-512 leaves). -/
+theorem flock_headline_exec_hidden_gen (hT : TagsOkHL I)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
@@ -76,19 +77,19 @@ theorem flock_headline_exec_hidden_gen (hT : TagsOkH I)
     (hdraw : ∀ ω, DrawOkH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     {qF qS : ℝ} :
-    let σ := simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
+    let σ := simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
       (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
       (decodesOn_execHI ht hc dj x₀ _ wr hT hwr hdraw) τ
-    LinkCRL ((instProg c n).partition (outsOfI c n)) H512 enc512 leaf512 (planAtH dj x₀) (tabAtH dj x₀)
+    LinkCRL ((instProg c n).partition (outsOfI c n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀) (tabAtH dj x₀)
       ((rsAtG ht hc hgen dj x₀ hpub hU (Reg := Reg)).binding (rsAtG_computes ht hc hgen dj x₀ hpub hU))
       (reg σ) (cont σ) k Rw M t' →
-    (∀ ω j, TableCRL execArith H512 enc512 leaf512
+    (∀ ω j, TableCRL execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
-      (batchStratL H512 enc512 leaf512 (planAtH dj x₀) (cont σ ω)) qF qS) →
+      (batchStratL H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAccepts I o ∧
         K ≤ (((instProg c n).partition (outsOfI c n)).wrong
           (Xpub {instOneG (c := c) (n := n)} {instZeroG (c := c) (n := n)}
-            (XplurL ((instProg c n).partition (outsOfI c n)) H512 enc512 leaf512 (planAtH dj x₀)
+            (XplurL ((instProg c n).partition (outsOfI c n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtG ht hc hgen dj x₀ hpub hU (Reg := Reg)).binding
                 (rsAtG_computes ht hc hgen dj x₀ hpub hU))
               (reg σ) (cont σ) k Rw))).card)
