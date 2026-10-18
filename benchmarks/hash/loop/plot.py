@@ -1,6 +1,7 @@
 """The hash loop's plot: iteration (x) against each measure (y), one line per (GPU, arm), read from the evidence store
 (`research data select --label campaign=hash-loop --kind bench-result/v1`: each run's result, its measures per arm in its
-measurements, its iteration and GPU in its labels). Several results at one (iteration, GPU) are averaged; each is also drawn as a dot.
+measurements, its iteration and GPU in its labels). Results whose gates passed are plotted (a failed run stays in the JSON); several at one (iteration, GPU) are averaged, each also drawn
+as a dot.
 
     python3 benchmarks/hash/loop/plot.py [--out DIR] [--measures a,b,...] [--table] [--no-refresh]
 
@@ -57,6 +58,8 @@ def load(refresh: bool = True) -> list[dict]:
 def series(results: list[dict], measure: str) -> dict[tuple[str, str], list[tuple[int, float, list[float]]]]:
     acc: dict[tuple[str, str, int], list[float]] = defaultdict(list)
     for r in results:
+        if not r["valid"]:
+            continue
         for (arm, name), v in r["measures"].items():
             if name == measure:
                 acc[(r["hardware"], arm, r["row"])].append(float(v))
@@ -71,7 +74,8 @@ def table(results: list[dict]) -> str:
              "|---|---|---|---|---:|---:|---:|---:|---|---|"]
     by: dict[tuple[int, str], list[dict]] = defaultdict(list)
     for r in results:
-        by[(r["row"], r["hardware"])].append(r)
+        if r["valid"]:
+            by[(r["row"], r["hardware"])].append(r)
     for (row, hw), rs in sorted(by.items()):
         for arm in [*ARMS[1:], *sorted({a for x in rs for a, _ in x["measures"]} - set(ARMS))]:
             vals = [[x["measures"].get((arm, k)) for x in rs] for k in (*HEADLINE, "prefill_hash_gpu_ms", "decode_hash_gpu_ms")]
