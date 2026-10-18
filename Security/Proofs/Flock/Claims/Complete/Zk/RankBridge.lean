@@ -4,9 +4,10 @@ import Proofs.Flock.Claims.KS.Range
 /-!
 # The rank bound at the verifier's coins
 
-`MaskRankBound` (each table's rank checks refuse at most `4·m·2^-128` of the verifier's coins) from the open
+`MaskRankBound` (each table's rank checks refuse at most `4·m·2^-128` of the verifier's coins) from
 `DeployedRankBound` (four points of ten coordinates, the `c` claims' first six pinned, rank-deficient at most `2^-122`
-of the time) and, for a slot under `2^13` bits, the open `SmallSlotBound` (`maskRankBound_of`).
+of the time; proved in `Zk.RankDeployed`) and, for a slot under `2^13` bits, the open `SmallSlotBound`
+(`maskRankBound_of`).
 
 At a table with `s = slot_log − 7 ≥ 6` and `K = k_log − 7`, the slot's words `b·2^K + pos0·2^s + j` (`b < 2^nbl`,
 `j < 2^s`) hold every pattern on ten coordinates (`pos`: the slot's low `min s 10`, then the block index's), so the

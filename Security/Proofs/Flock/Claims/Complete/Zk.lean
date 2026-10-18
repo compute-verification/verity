@@ -46,6 +46,7 @@ import Proofs.Flock.Claims.Complete.Zk.Layout
 import Proofs.Flock.Claims.Complete.Zk.RankBridge
 import Proofs.Flock.Claims.Complete.Zk.RankDual
 import Proofs.Flock.Claims.Complete.Zk.RankPrimal
+import Proofs.Flock.Claims.Complete.Zk.RankDeployed
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
@@ -94,9 +95,11 @@ those coins the prover's on rounds carrying its sends, with the rows as `ConsHol
 `replay_consHold_agrees`); `MaskRank` the mask slot's span, the prover's rank check over the slot's words
 (`RankFull`, `maskRankOk`, `maskRankOk_iff`), a rep's claim points from its coins (`claimPoints`, `claimsAt`), the
 slot's size (`maskWords_ge`: an in-scope masked table has at least `1024` words), and the rank bound the prover's
-refusal needs (`DeployedRankBound`, open; at the verifier's coins `MaskRankBound`, a premise of `complete_zk`); `Layout`
+refusal needs (`DeployedRankBound`; at the verifier's coins `MaskRankBound`, a premise of `complete_zk`); `Layout`
 the layout every table of a masked session in scope has (`layoutOk_of_scope`); `RankBridge` `MaskRankBound` from
 `DeployedRankBound` and the small slots' `SmallSlotBound`, open (`maskRankBound_of`); `RankDual` the bound's dual
 side, the deficient coins summed over the killing functionals' supports (`card_deficient_le`); `RankPrimal` its primal
-side, the spans' sizes step by step (`sum_env_le`, `chain`); `Complete` assembles them into `complete_zk`, from
-those premises and the goals not yet proved, and `complete_zk_relation` at the deployed relation. -/
+side, the spans' sizes step by step (`sum_env_le`, `chain`); `RankDeployed` `DeployedRankBound` from the two
+(`deployedRankBound`), so `MaskRankBound` from `SmallSlotBound` alone (`maskRankBound_of_small`); `Complete`
+assembles them into `complete_zk`, from those premises and the goals not yet proved, and `complete_zk_relation` at
+the deployed relation. -/
