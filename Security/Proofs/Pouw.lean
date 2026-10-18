@@ -145,6 +145,7 @@ import Proofs.Pouw.PearlC.PeelExists4
 import Proofs.Pouw.PearlC.TileCheckWords
 import Proofs.Pouw.Prob
 import Proofs.Pouw.QTree
+import Proofs.Pouw.Receipt
 import Proofs.Pouw.Reduction
 import Proofs.Pouw.RelativeSecurity
 import Proofs.Pouw.RelativeSecurityGuarantees
@@ -165,5 +166,5 @@ import Proofs.Pouw.Witness
 
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Models.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
-`Game`, `NCP`, `PearlC`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
+`Game`, `NCP`, `PearlC`, `Receipt`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
 -/

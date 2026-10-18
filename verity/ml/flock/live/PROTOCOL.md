@@ -584,8 +584,8 @@ kept as an early tripwire).
 | the frame skeleton: domain, every label, each item's op, kind and length, every round's coin count | constant | a function of the statement's shape; the firewall refuses any other label or item |
 | statement digest (`bind_statement`) | constant | the digest of the statement the firewall loaded |
 | witness cap: `Commit`'s root, `bind_statement`'s cap, Ligerito level 0's `bytes cap` | recomputed | the level-0 recheck (§10.2): `commit_zk` of the host witness under the session's level-0 salts and hiding |
-| pads label and root | the firewall's own | the masking challenger inserts them |
-| masked algebraic values: `round1_ab'`, `round1_c'`, `G_j`, `final_a'`, `final_b'`, `q_j`, `z_partial'` | masked | the wire carries `v + h` with `h` uniform and host-only, so it is uniform whatever `v` is. `v` enters the view only through §4's rows, which the self-check holds before anything that depends on them leaves (§5); a `v` that breaks a row stops the session |
+| pads label and root | the firewall's own | the Lean frame inserts them after the zerocheck's label |
+| masked algebraic values: `round1_ab'`, `round1_c'`, `G_j`, `final_a'`, `final_b'`, `q_j`, `z_partial'` | masked | the wire carries `v + h` with `h` uniform and host-only, so it is uniform whatever `v` is. `v` enters the view only through §4's rows, which the firewall evaluates on the pads at the rep's end; a `v` that breaks a row stops the session at its `Finish` |
 | `final_c'` | the firewall's own | the inner proof sends it, from the host |
 | `s_hat_v` of the masked claims (ab, c) | recomputed | `Σ_x eq(p_w, x) z[128x + v]` over the host witness (§6); the claim points are coins |
 | `s_hat_v` of the region claims | recomputed | `Stmt::region_s_hat_v`, from public data |
@@ -604,9 +604,30 @@ folds the lincheck's comb for its own relation check, as the verifier does. It d
 lincheck, the bulk of the device's arithmetic. What it recomputes is a CPU Ligerito: the commitment over the whole
 witness, and the opening's basis fold `w^r`, which `T'`, `ybar` and levels 1+ all read.
 
-**What a refusal costs.** A refusal stops the session, which the auditor sees, at a message the device can move: §10.5 bounds
-what that reveals over the whole recursive session. A firewall that refuses is evidence against its rack. Timing (when a
-message leaves) is not in this rule; the network certifier covers it.
+**A refusal stops the session at its `Finish`, never before.** When a check fails mid-session (a round off the skeleton or
+off the shadow's, the device's level-0 root, the end check on the returned proof, a row that fails on the pads), the
+firewall keeps the reason and keeps releasing the statement's schedule in the device's place, and nothing of the refused
+item leaves:
+- in the algebraic phase, the skeleton's next round with every value `0`, which leaves masked as its pads alone
+  (`Flock.Firewall.Frame` zeroes every algebraic value of a stopped rep, whatever round it is given);
+- in the opening, the shadow's round, the firewall's own computation (an honest device's round);
+- at `Commit`, the recheck's root;
+- for the returned proof, the firewall's own (the passed values and the shadow's opening, as on any rep), and the inner
+  proof speaks on schedule without its self-check (§5), as M1's simulator's does.
+
+A device that sends more rounds than the statement has gets coins back and nothing leaves; one that returns early has the
+rest of the schedule released by the firewall itself. Then the session's `Finish` goes without its proofs, and the auditor
+sees the stop there. What leaves before `Finish` has the form and the distribution of an honest session's, wherever the
+check failed: under pads `h + v` a stopped rep releases byte for byte what the honest rep with values `v` releases under `h`
+(`tests/test_firewall_frame.py`). So the stop reveals one bit a session (stop at `Finish` or not), and `log₂ Σ_{i≤b}
+C(m, i)` bits over `m` sessions with at most `b` stopped (the claims' `ZkServer.zk_deferred` and
+`stream_leak_deferred`). A firewall that refuses is evidence against its rack.
+
+What the deferral costs: a bad worker is caught only at its session's `Finish`, one session's latency later than at its
+first bad message, and the rest of a doomed session's device and firewall work is spent for nothing (the firewall's share
+is the shadow opening and the inner proof, which it runs on every session anyway). Still open: a device that stops (an
+error, a panic) or never reaches its `Commit` stops the session where it does. Timing (when a message leaves) is not in this
+rule; the network certifier covers it.
 
 ### 10.2 The level-0 recheck
 
@@ -614,7 +635,8 @@ Before the session's `Commit` the firewall recomputes the level-0 commitment its
 host witness (`FC_HOST_WITNESS=1`: the firewall assembles the witness on the host and uploads it whole, so the witness the
 recheck commits is its own; the assembly is counted in the session's prove time, as the device's witness kernel is
 without it), under `hm96::begin` with the session's level-0 salts (`LeafSalts::level0`), with the `Level0Zk` the host
-drew. It refuses `FIREWALL-REFUSED: level-0 root` when the device's root differs, before anything leaves. It keeps the tree, so
+drew. When the device's root differs, the recheck's root leaves in the `Commit` and the session stops at its `Finish`
+(`FIREWALL-REFUSED: level-0 root`, §10.1). It keeps the tree, so
 the proof's level-0 rows and paths are checked against it at the end. Its cost is reported per statement as `FIREWALL` lines
 (`t.firewall_recheck` wall seconds, `cpu.firewall_recheck` the process's CPU seconds over it), beside the device's
 `t.encoding_commitment`.
@@ -664,7 +686,8 @@ JSON. The two agree whenever the schedule's `Hello` holds only integers, as `sch
 ### 10.4 The prototype (`FC_FIREWALL=1`)
 
 `flock-circuit prove --zk` with `FC_FIREWALL=1` runs the firewall (`firewall.rs`, and `Firewall` in `flock-circuit.rs`) on the GPU path and
-the CPU path alike, for a statement of one table; it refuses to start without `FC_HOST_WITNESS=1`. It is stricter than
+the CPU path alike, for a statement of one table on the device and of one or several (`--session-tables`) on the CPU; it
+refuses to start without `FC_HOST_WITNESS=1`. It is stricter than
 §10.1 in one place: the shadow recomputes the whole opening, level 0's lane rounds included, in lock step with the device.
 Each of the device's opening frames must equal the shadow's byte for byte (`firewall_opening_rounds` counts the rounds
 compared), and the opening that leaves is the shadow's. The lincheck's folded comb is the firewall's (`zk_finish` folds it),
@@ -674,20 +697,43 @@ zerocheck and lincheck vector's length), the replay of the values the firewall p
 the zerocheck and lincheck that leave are rebuilt from the passed values (`zk_veil::from_exposed`), as the opening that leaves
 is the shadow's: nothing of the device's returned proof leaves.
 
-`FC_FIREWALL_TAMPER` makes the device dishonest in one named way. Each is refused by name, before the tampered message leaves
-or, for a masked value (which leaves as `v + h`, uniform whatever `v` is), before the inner proof does:
+Every round that leaves is computed in Lean. Each rep runs one `flock-firewall frame` process (`Flock.Firewall.Frame` in the
+Lean verifier, `firewall::LeanFrame`; `FC_FIREWALL_LEAN` names the binary, by default the Lean verifier's build in the
+checkout, and the firewall refuses to start a rep without it). It takes each round the firewall passed, the device's frames
+with their values unmasked, and returns the round that leaves: the pads' label and root after the zerocheck's label, each
+value absorbed in a masked phase as `v + h_i` under the next pad of `Layout::absorbed`'s order, everything else as framed,
+and no domain frame. A round the firewall's check refused goes to it as the scheduled round, marked `fail`
+(`round N LEN fail`; the skeleton's round with zero values, `Checker::scheduled`, or the shadow's), and a round it refuses
+itself releases nothing: either stops the rep, whose every later algebraic value leaves as its pad alone and whose `finish`
+is `stop`. The masking challenger still runs as the speed reference. Its inner challenger (`firewall::Gate`) frames
+what it would send, holds that to the Lean round byte for byte, refuses on any difference, and hands the stream only the
+Lean round. At the rep's end the Lean frame must have closed every masked phase with every pad of the layout used. The
+`final_c'`, inner proof, recheck and shadow opening are still Rust's (`FirewallComputes`).
 
-| `FC_FIREWALL_TAMPER` | the device | refusal |
+In a session of several tables each table has a firewall of its own in turn: its salt context, recheck, skeleton and shadow,
+one table's ending before the next table's begins. A later table's level-0 root leaves in table 0's `Commit`, before any
+stream opens, and the host computes it from the host witness under the table's level-0 hiding and salts (`level0_root`, the
+recheck's own computation), so no root the device computed is in that `Commit`. Before anything of a later table is sent,
+its recheck must give the root that `Commit` carried (`FIREWALL-REFUSED: circuit-01's level-0 root: the session's Commit
+carried … where the recheck has …`), and the table's device root is then held to it like table 0's.
+
+`FC_FIREWALL_TAMPER` makes the device dishonest in one named way. Each is refused by name, and none stops the session
+before its `Finish` (§10.1): the tampered message never leaves (a masked value leaves as `v + h`, uniform whatever `v` is),
+every stream runs its schedule, and `Finish` goes without proofs, the session's verdict not accepted and its
+`prover_stopped` the refusal. `later-NAME` is `NAME` on every table of a several-table session but the first, and is refused
+the same way at the second table:
+
+| `FC_FIREWALL_TAMPER` | the device | refusal, at `Finish` |
 |---|---|---|
 | `root` | flips a bit of its level-0 root | `FIREWALL-REFUSED: level-0 root: the device committed … where the recheck has …` |
 | `witness` | proves a witness one bit off the host's | `FIREWALL-REFUSED: level-0 root: …` |
 | `label` | flips a label byte in the algebraic phase | `FIREWALL-REFUSED: algebraic phase, round 0, frame 1: label …` |
 | `opening` | flips an observed value in the opening's first round | `FIREWALL-REFUSED: opening round 0, frame …: the device's observe … differs from the firewall's in its payload` |
-| `algebra` | flips a masked value, in its frame and its proof alike | `PROVER-STOPPED: the batched constraint fails (⟨c, h⟩ ≠ t)`: `zk_finish`'s self-check (§5) |
+| `algebra` | flips a masked value, in its frame and its proof alike | `FIREWALL-REFUSED: circuit: the constraints … fail on a rep's pads` |
 | `algebra-proof` | flips a masked value in its returned proof only | `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
 | `shape` | appends a value to its returned proof's `round1_ab`, past the ones the firewall compares | `FIREWALL-REFUSED: the proof's shape (…) is [65, 64, …] where the statement's is [64, 64, …]` |
 
-With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only), each gated session also writes what the firewall let out as a
+With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only, a statement of one table: several are refused), each gated session also writes what the firewall let out as a
 `verity/firewall-transcript/v0` transcript, `DIR/session-<k>.json`, for the firewall's contract (`flock-firewall contract`):
 `firewall_transcript.rs` reads the wire after the coin tree's check and the firewall's candidates, and changes nothing the firewall
 sends. Where the firewall refuses, the transcript holds the refused candidate's items (from `firewall.gate.from`) up to the
@@ -760,8 +806,9 @@ refuses every V* statement of that recursive session before anything reaches the
 answered `FIREWALL-REFUSED: recursive session …`, its `Finish` with a verdict that does not accept, and the record shows
 `refused`, which is not a failure (the challenger sees nothing of it). So no outer proof of a stopped recursive session is
 served or released. An outer session stops when the worker cuts it, when the worker sends `Finish` before all of the
-session's proofs (the send check refused: `flock-circuit` then sends `Finish` at once, and the relay forwards `Finish` only
-after the session's 2 proofs, `--proofs`), when serve's verdict rejects it, or on any fault of the relay's. In all but the
+session's proofs (the send check refused: `flock-circuit` then sends `Finish` without its proofs, after every round of the
+schedule, §10.1, and the relay forwards `Finish` only after the session's 2 proofs, `--proofs`), when serve's verdict
+rejects it, or on any fault of the relay's. In all but the
 verdict the relay cuts the challenger's connection without forwarding `Finish`, and the worker gets the relay's own verdict.
 A refused or stopped session's worker is answered after the session has left the slot, so a worker that keeps talking
 holds up no other session.
@@ -824,12 +871,14 @@ neither stopped nor released its last statement, on a stream that had not stoppe
 outer session of the stream and every open, and `rec_live` closes the next connection before anything is served. A
 recursive session the worker abandons, asking for no statement after some release, ends where it stands for the
 challenger (its next proof never comes, `late`), but the firewall records no stop until a request comes, so its own count
-misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (P1's `Stream(budget=...)`,
-`verity/core/protocols/sampled_proofs/service.py` on `cursor/proof-service-95d4`, bound into the stream's digest),
-and the two must agree in three places: the same b, the same stream (one firewall stream a challenger stream), and one
-recursive session a registration, so that each firewall failure is one `reject` or `late` there. A stop shows the
-challenger a cut or a missing proof, which is `late` or `reject`; a session the firewall refuses after its stop sends
-nothing, and is no further failure on either side.
+misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (`Stream(budget=...)`,
+`verity/core/protocols/sampled_proofs/service.py`, bound into the stream's digest), and the two must agree in three
+places: the same b, the same stream (one firewall stream a challenger stream), and one recursive session a proof session
+of the challenger's: one registration's, or the consecutive registrations one `Stream.session` covers (at most the stream's
+`rounds`, at most 4). So each firewall failure is a `reject` or `late` there for each round the session
+covers: the challenger's count is never below the firewall's, and it holds at most `budget` minus its failures
+registrations open, so neither ends past b. A stop shows the challenger a cut or a missing proof, which is `late` or
+`reject`; a session the firewall refuses after its stop sends nothing, and is no further failure on either side.
 
 **Proofs leave at public times.** `rec_live --parts L0,...,alg --release-windows-ms w0,...,w7` gives each recursive
 session a release schedule, recorded at its open: `start_ms`, the time its connection was accepted, and one public window
@@ -872,13 +921,15 @@ the interleaving across streams is fixed too. That is at most
 
 `log₂ Σ_{i≤b} C(n, i) + Σ_j log₂ q_j` bits,
 
-with q_j the number of forms failure j can take. A failure is not one symbol today: the challenger sees where its session
-was cut, inner or outer, so `q_j ≤ 1 + Σ_p (M_p + 1) = 2336` at K = 4096, the first row's 11.19 bits, and the bound that
-holds is `log₂ Σ_{i≤b} C(n, i) + 11.19 b` bits (for n = 1000 and b = 4: 35.3 + 44.8 = 80.0 bits). It can't be made one
-symbol by the firewall alone. An outer session is interactive: the challenger answers each message with its coins, so
-every message before the cut has reached it, and so has where the cut fell. Ending every failed recursive session at one
-fixed point would need the session's messages to leave together, after the firewall has checked all of them: a
-non-interactive outer session, which changes the soundness argument (Daniel's call). Not counted in the bound: timing
+with q_j the number of forms failure j can take. A refusal of the outer send check is one symbol: it stops its session at
+the session's `Finish`, after every round of the schedule (§10.1), so a stream whose failures are all the firewall's reveals
+`log₂ Σ_{i≤b} C(n, i)` bits (35.3 at n = 1000, b = 4), and each session one bit. Any other failure is not one symbol today:
+the challenger sees where its session was cut, inner or outer (a cut, crash or hang of the worker's, the inner phase's
+refusals, a missed time), so `q_j ≤ 1 + Σ_p (M_p + 1) = 2336` at K = 4096, the first row's 11.19 bits, and the bound that
+holds for those is `log₂ Σ_{i≤b} C(n, i) + 11.19 b` bits (for n = 1000 and b = 4: 35.3 + 44.8 = 80.0 bits). An outer
+session is interactive: the challenger answers each message with its coins, so every message before a cut has reached it,
+and so has where the cut fell; the firewall takes the cut's place out only for the stops it makes itself, by releasing
+the schedule in their place. Not counted in the bound: timing
 inside a session. The release time fixes when each outer session's proofs and `Finish` leave, not the pace of its rounds
 before them, which reach `serve` as the prover makes them, nor when a stop's cut comes (a missed time's comes when the late
 session is ready). Holding every cut until its statement's release time is the firewall's to do and would take the cut's

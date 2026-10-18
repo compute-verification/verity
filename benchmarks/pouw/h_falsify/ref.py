@@ -11,7 +11,7 @@ generic int8 Ã and B̃; this module takes any (Ã, B̃).
 Route (a)'s identity: with P_ℓ[i, r] = Σ_{l ≤ ℓ} R[i, 32 l + r], the prefix column sums of R by residue,
 T_ℓ = P_ℓ Uᵀ, because at B* = 0 every segment shares U. `transcript_via_prefix` computes it that way.
 
-The receipt binds every word: a duo chain per (i, j) absorbs T_0[i, j], ..., T_{L-1}[i, j] in order with segment ℓ's
+The receipt absorbs every word: a duo chain per (i, j) absorbs T_0[i, j], ..., T_{L-1}[i, j] in order with segment ℓ's
 public keys, from a start derived from the chain's index, and the receipt is the m × n chains' `duo_final` words. The step
 is `receipts/receipt_folds.py`'s `duo_word` (the CUDA arms use `receipt_folds.cuh`'s `rf_duo_word`).
 """

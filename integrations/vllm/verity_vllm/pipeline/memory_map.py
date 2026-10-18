@@ -1,22 +1,27 @@
 """The Commit's memory map (opt-in, ``commit --memory-map REQUEST_JSON``): memory-map/v1 of the run's KV, written in the
 in-process C2 replay once the vllm-v1 roots are final.  Its blocks, their steps and store indices come from each request's
-Program of record (`commit.memory_map.rows`, over the Build's ``descriptor.json.gz``) and the engine's page layout; each d_j
-from the committed K and V words of the block's rows, read as the serving rows read a Program's slices (`serving_rows._operand`:
-the ProgramIndex's members, the binding map's committed words).
+Program of record (`commit.memory_map.rows`: the KV rows the Build wrote beside its ``descriptor.json.gz``, over the census it
+wrote there, `cache`; a Build without them has them computed once and cached, `of_build`) at the pages the engine wrote: each
+request's slots as the Commit committed them (`<layer>/slot_mapping`, `acquire.sources.kv_slots_source`, which the flag
+attaches), in the page layout of the engine's cache tensors.  Each d_j is from the committed K and V words of the block's rows,
+read as the serving rows read a Program's slices (`serving_rows._operand`: the ProgramIndex's members, the binding map's
+committed words).  A request whose slots weren't committed is refused by name: no page is assumed.
 
 The request (``REQUEST_JSON``)::
 
     {"path": <the map's file>, "registration": <hex of the remote audit's Registration.digest>,
-     "block_size"?: 16, "pages"?: <the pool's pages>, "firsts"?: [<layer l's region's first block>], "blocks"?: <N>,
-     "tables"?: {<request>: [<page>, ...]}}
+     "firsts"?: [<layer l's region's first block>], "blocks"?: <N>}
 
-``layout`` beside the map (``<path>.json``) is what the map's structure took and what it holds, in counts; the map itself is
-the prover's witness (d_j hashes the served values) and is never published.  A failure is written beside the map
-(``<path>.error.txt``) and changes no verdict.
+``layout`` beside the map (``<path>.json``) is what the map's structure took (the engine's page, each request's pages) and
+what it holds, in counts, with how many of its blocks the engine's caches still hold as the map's last write left them; the
+map itself is the prover's witness (d_j hashes the served values) and is never published.  A failure is written beside the
+map (``<path>.error.txt``) and changes no verdict.
 """
 from __future__ import annotations
 
+import gzip
 import json
+import re
 import time
 import traceback
 from collections.abc import Callable, Mapping
@@ -25,7 +30,9 @@ from typing import Any
 
 import numpy as np
 
+from verity.core.protocols.remote_bandwidth import codec
 from verity.core.protocols.remote_bandwidth.memory_map import dumps
+from verity_vllm.acquire.sources.kv_slots_source import MEMBER
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import memory_map as MM
@@ -33,9 +40,10 @@ from verity_vllm.pipeline.serving_rows import _operand
 
 
 def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]], bmap: dict[str, Any], committed: Callable,
-                 manifest: Any, arrivals: Mapping[str, int]) -> dict[str, Any] | None:
+                 manifest: Any, arrivals: Mapping[str, int], caches: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """Write the run's memory map as ``request`` asks, from the requests' loaded Programs of record (`c2_replay.programs_of_record`)
-    at their engine arrival steps; None without a request.  A failure is written beside the map and returned, never raised."""
+    at their engine arrival steps and the KV-slots source's `caches`; None without a request.  A failure is written beside the
+    map and returned, never raised."""
     if not request:
         return None
     req = json.loads(Path(request).read_text())
@@ -43,43 +51,151 @@ def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]]
     out.parent.mkdir(parents=True, exist_ok=True)
     try:
         return write(out, req, loaded=loaded, store=CommittedStore.of_record(bmap, committed, manifest if isinstance(manifest, dict) else None),
-                     arrivals=arrivals)
+                     arrivals=arrivals, caches=caches)
     except Exception as e:  # noqa: BLE001
         out.with_name(out.name + ".error.txt").write_text(traceback.format_exc())
         print(f"[memory-map] FAILED (no verdict changes): {e!r}"[:400], flush=True)
         return {"error": repr(e)}
 
 
-def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str, Any]], store: Any, arrivals: Mapping[str, int]) -> dict[str, Any]:
-    """The map of ``req`` into ``out`` and its layout beside it, each request's K and V words read from ``store`` (a `CommittedStore`)."""
+#: beside a request Build's ``descriptor.json.gz``: its Program's census (`MM.census_of`) and KV rows (`MM.rows_doc`), each naming
+#: the Program by digest
+CENSUS, KV_ROWS = "census.json.gz", "kv_rows.json.gz"
+KV_ROWS_SCHEMA = "verity-vllm/kv-rows/v1"
+
+
+def _read(path: Path, digest: str) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    with gzip.open(path, "rt") as f:
+        doc = json.load(f)
+    return doc if doc.get("program") == digest else None
+
+
+def _put(path: Path, doc: Mapping[str, Any]) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    with gzip.open(tmp, "wt", compresslevel=6) as f:
+        json.dump(doc, f, separators=(",", ":"))
+    tmp.replace(path)
+
+
+def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
+    """Write Build dir ``d``'s `CENSUS` and `KV_ROWS` for its request Program ``program`` (``digest``), the census read back when
+    one beside it already names the Program; a Program with no KV a memory map lays out gets the reason in place of its rows."""
+    d, t0 = Path(d), time.perf_counter()
+    c = _read(d / CENSUS, digest)
+    if c is None:
+        c = MM.census_of(program, digest)
+        _put(d / CENSUS, c)
+    doc: dict[str, Any] = {"schema": KV_ROWS_SCHEMA, "program": digest, "census": c["digest"]}
+    try:
+        doc.update(MM.rows_doc(MM.rows(program, c)))
+    except ValueError as e:
+        doc["refused"] = str(e)
+    _put(d / KV_ROWS, doc)
+    return {"census": c["digest"], "kv_rows": "refused" not in doc, "seconds": round(time.perf_counter() - t0, 2)}
+
+
+def of_build(d: str | Path, digest: str) -> MM.Rows:
+    """The KV rows of Build dir ``d``'s request Program ``digest``: its `KV_ROWS` when they name the Program, else computed from its
+    descriptor (refused unless that is Program ``digest``) and cached beside it (`cache`), once per Program digest."""
     from verity_vllm.program.boolean import load_program
 
+    d = Path(d)
+    doc = _read(d / KV_ROWS, digest)
+    if doc is None:
+        program, got = load_program(d / "descriptor.json.gz")
+        if got != digest:
+            raise ValueError(f"{d}: descriptor.json.gz is Program {got[:16]}, its instance rows {str(digest)[:16]}")
+        cache(d, program, digest)
+        doc = _read(d / KV_ROWS, digest)
+    if "refused" in doc:
+        raise ValueError(f"{d}: {doc['refused']}")
+    return MM.rows_of(doc)
+
+
+def _layer(name: str) -> int:
+    m = re.search(r"\.(\d+)(\.|$)", name)
+    if m is None:
+        raise ValueError(f"KV layer {name!r} names no layer index")
+    return int(m.group(1))
+
+
+def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str, Any]], store: Any, arrivals: Mapping[str, int],
+          caches: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The map of ``req`` into ``out`` and its layout beside it: each request's slots and K and V words read from ``store`` (a
+    `CommittedStore`), its pages laid out as ``caches`` (KV layer name -> the engine's cache tensor) lay them out."""
+    if not caches:
+        raise ValueError("no engine KV cache to lay pages out by: the Commit attached no KV-slots source (commit --memory-map attaches it)")
     t0 = time.perf_counter()
     by_dir: dict[str, tuple[MM.Rows, ProgramIndex, str]] = {}
     rows, index = {}, {}
     for rid, lp in loaded.items():
-        d = str(lp["dir"])
+        d, digest = str(lp["dir"]), str(lp["instances"].get("digest"))
         if d not in by_dir:
-            program, digest = load_program(Path(d) / "descriptor.json.gz")
-            if digest != lp["instances"].get("digest"):
-                raise ValueError(f"{d}: descriptor.json.gz is Program {digest[:16]}, its instance rows {str(lp['instances'].get('digest'))[:16]}")
-            by_dir[d] = (MM.rows(program), ProgramIndex(lp["instances"], program_dir=d), digest)
+            by_dir[d] = (of_build(d, digest), ProgramIndex(lp["instances"], program_dir=d), digest)
         rows[rid], index[rid], _ = by_dir[d]
     t_ir = time.perf_counter()
 
-    def payload(rid: str, row: MM.Row) -> bytes:
-        words = _operand(index[rid], store, None, rid, int(arrivals[rid]), row.group)
-        return np.ascontiguousarray(words, dtype=f"<u{rows[rid].word_bytes}").tobytes()
+    layers = sorted(caches, key=_layer)
+    if {len(rs.layers) for rs in rows.values()} != {len(layers)}:
+        raise ValueError(f"the engine has {len(layers)} KV layers, the Programs {sorted({len(rs.layers) for rs in rows.values()})}")
+    pages = {MM.page_of(t.shape, t.stride(), t.element_size(), next(iter(rows.values()))) for t in caches.values()}
+    if len(pages) != 1:
+        raise ValueError(f"the engine's KV layers lay their pages out differently: {sorted(pages, key=repr)}")
+    (page,) = pages
 
-    layout = MM.Layout(**{k: (tuple(req[k]) if k == "firsts" else int(req[k])) for k in ("block_size", "pages", "firsts", "blocks") if req.get(k) is not None})
-    head, steps = MM.record(rows, {r: int(arrivals[r]) for r in rows}, payload, bytes.fromhex(req["registration"]), layout, req.get("tables"))
+    def slots(rid: str, step: int) -> np.ndarray:
+        got = []
+        for name in layers:
+            es = store.entries(rid, step, name, MEMBER)[0]
+            if not es:
+                raise ValueError(f"no committed `{name}/{MEMBER}` of request {rid} at step {step}: memory-map/v1 takes each block's page "
+                                 "from the slots the Commit committed and assumes none")
+            w, why = store.words(rid, step, name, MEMBER, *map(int, es[0]["identity"]["element_range"]))
+            if w is None:
+                raise ValueError(why)
+            got.append(w.view(np.int64))
+        if any(not np.array_equal(g, got[0]) for g in got[1:]):
+            raise ValueError(f"request {rid}'s KV layers wrote step {step}'s rows to different slots: memory-map/v1 lays out one table a request")
+        return got[0]
+
+    tables = MM.tables(rows, arrivals, slots, page.block_size)
+    kv = {r: MM.packed(rs) for r, rs in rows.items()} if page.form == "packed" else rows
+
+    def payload(rid: str, row: MM.Row) -> bytes:
+        w = np.ascontiguousarray(_operand(index[rid], store, None, rid, int(arrivals[rid]), row.group), dtype=f"<u{rows[rid].word_bytes}")
+        return np.ascontiguousarray(w.reshape(2, -1, page.head_words).transpose(1, 0, 2) if page.form == "packed" else w).tobytes()
+
+    layout = MM.Layout(page.block_size, page.pages, tuple(req["firsts"]) if req.get("firsts") is not None else None,
+                       int(req["blocks"]) if req.get("blocks") is not None else None)
+    head, steps = MM.record(kv, {r: int(arrivals[r]) for r in rows}, payload, bytes.fromhex(req["registration"]), layout, tables)
     out.write_text(dumps(head, steps))
-    doc = {"schema": "verity-vllm/memory-map-layout/v1", "map": out.name, "blocks": head.blocks, "block_size": layout.block_size,
+    t_d = time.perf_counter()
+    engine = MM.engine_agrees(kv, layout, tables, steps, _engine_blocks([caches[n] for n in layers], tables))
+    doc = {"schema": "verity-vllm/memory-map-layout/v1", "map": out.name, "blocks": head.blocks,
+           "page": {"form": page.form, "pages": page.pages, "block_size": page.block_size, "head_words": page.head_words},
            "requests": {r: {"arrive": int(arrivals[r]), "steps": rs.steps, "positions": rs.positions, "layers": len(rs.layers),
-                            "row_bytes": rs.row_bytes, "program_digest": by_dir[str(loaded[r]["dir"])][2]} for r, rs in rows.items()},
-           "steps": len(steps), "written": sum(len(s.written) for s in steps), "freed": sum(len(s.freed) for s in steps),
-           "seconds": {"ir_s": round(t_ir - t0, 3), "digests_s": round(time.perf_counter() - t_ir, 3)}}
+                            "row_bytes": rs.row_bytes, "pages": tables[r], "program_digest": by_dir[str(loaded[r]["dir"])][2]}
+                        for r, rs in rows.items()},
+           "steps": len(steps), "written": sum(len(s.written) for s in steps), "freed": sum(len(s.freed) for s in steps), "engine": engine,
+           "seconds": {"rows_s": round(t_ir - t0, 3), "digests_s": round(t_d - t_ir, 3), "engine_s": round(time.perf_counter() - t_d, 3)}}
     out.with_name(out.name + ".json").write_text(json.dumps(doc, indent=1) + "\n")
     print(f"[memory-map] {doc['written']} blocks written and {doc['freed']} freed over {doc['steps']} steps beside {head.blocks} "
-          f"registered: {out} ({doc['seconds']})", flush=True)
+          f"registered, {page.form} pages of {page.block_size} slots; the engine holds {engine['equal']} of {engine['compared']} "
+          f"as last written: {out} ({doc['seconds']})", flush=True)
     return doc
+
+
+def _engine_blocks(caches: list[Any], tables: Mapping[str, list[int]]) -> Callable[[int, int, int], bytes]:
+    """`block(layer, page, c)` over the engine's cache tensors, layer by layer: the c-th 4 KiB of the page's bytes, each page
+    `stride(0)` elements from the last (copied off the device once, the session's pages only)."""
+    import torch
+
+    held = sorted({p for t in tables.values() for p in t})
+    bytes_of = []
+    for t in caches:
+        s0 = int(t.stride(0))
+        pg = t.as_strided((int(t.shape[0]), s0), (s0, 1))[torch.tensor(held, device=t.device)]
+        bytes_of.append(dict(zip(held, pg.contiguous().view(torch.uint8).cpu().numpy())))
+    return lambda layer, p, c: bytes_of[layer][p][c * codec.BLOCK_BYTES:(c + 1) * codec.BLOCK_BYTES].tobytes()
