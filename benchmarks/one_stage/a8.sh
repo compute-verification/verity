@@ -8,6 +8,7 @@
 # env: A8_MEM_GB (what job.sh's stages may take, within the slot's)  A8_BLOCKS  A8_PLAN  A8_SAMPLES  A8_POINTS (a8.py's
 #      --blocks, --plan, --samples, --points; points 1,4,16 by default)  A8_ARMS (fw,nofw by default; fw builds the
 #      firewall's Lean frame beside flock-verify)  A8_COLD  A8_CACHE (the build cache, kept across runs where writable)
+#      A8_NO_AUDIT=1 (a8.py's --no-audit: the honest statement staged and the cost points only)
 # Kept in $OUT/a8: a8's records and logs, the public files and everything the verifier received; never a prover's file
 # (inst-*) nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail
@@ -29,7 +30,7 @@ fi
 log "a8: blocks ${A8_BLOCKS:-default}, plan ${A8_PLAN:-default}, samples ${A8_SAMPLES:-default}, points ${A8_POINTS:-1,4,16}, arms $ARMS"
 "$PY" benchmarks/one_stage/a8.py --bin "$BIN" --lean "$LEAN" --out "$W/a8" ${A8_BLOCKS:+--blocks "$A8_BLOCKS"} \
   ${A8_PLAN:+--plan "$A8_PLAN"} ${A8_SAMPLES:+--samples "$A8_SAMPLES"} --points "${A8_POINTS:-1,4,16}" --arms "$ARMS" \
-  --cold "${A8_COLD:-1}" 2>&1 | tee -a "$OUT/a8.log" | cut -c1-4000
+  --cold "${A8_COLD:-1}" ${A8_NO_AUDIT:+--no-audit} 2>&1 | tee -a "$OUT/a8.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/a8"
 (cd "$W/a8" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/a8/")
