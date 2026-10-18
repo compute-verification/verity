@@ -77,10 +77,10 @@ def test_the_record(reqs):
     page = {p: sorted(_slot(layer, p, plane) for layer in range(2) for plane in range(2)) for p in range(6)}
     assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [
         (0, [], page[1]),               # r0's prefill fills its first page
-        (1, [], page[3]),               # and r1's its first
-        (2, page[3], []),               # r1's last step, 2, reads it last: freed in that step's record
-        (4, [], page[2]),               # r0's position 7 completes its second page; its third (position 8) stays dirty
-        (5, sorted(page[1] + page[2]), []),  # r0's last step reads both last
+        (1, page[2], page[3]),          # r1's fills its first; r0's position 4 reaches its second page's filler
+        (2, sorted(page[3] + page[4]), []),  # r1's last step, 2, reads its first last and its position 4 reaches its second
+        (4, [], page[2]),               # r0's position 7 completes its second page
+        (5, sorted(page[1] + page[2] + page[5]), []),  # r0's last step reads both last; position 8 leaves its third dirty
     ]
     assert [w.index for s in steps for w in s.written] == list(range(24, 36))
     want = codec.digest(b"".join(_payload("r0", x) for x in reqs["r0"].layers[1][1][4:8]))
@@ -90,8 +90,9 @@ def test_the_record(reqs):
     for s in got[:-1]:
         rp.apply(s)
     assert rp.extent == 36 and rp.holds(_slot(0, 3, 0)) is None and rp.holds(_slot(0, 2, 0)) == 32
+    assert rp.holds(_slot(0, 5, 0)) == _slot(0, 5, 0) and rp.holds(_slot(0, 4, 0)) is None
     rp.apply(got[-1])
-    assert rp.holds(_slot(0, 2, 0)) is None and rp.holds(_slot(0, 1, 0)) is None
+    assert rp.holds(_slot(0, 2, 0)) is None and rp.holds(_slot(0, 1, 0)) is None and rp.holds(_slot(0, 5, 0)) is None
 
 
 def test_a_complete_block_is_held_while_its_rows_are_live(reqs):
@@ -141,8 +142,10 @@ def test_a_packed_page_holds_k_and_v_in_one_plane(reqs):
     assert (len(kv["r0"].layers[0]), kv["r0"].row_bytes) == (1, 2048)
     assert kv["r0"].layers[1][0][4] == MM.Row(reqs["r0"].layers[1][0][4].group + reqs["r0"].layers[1][1][4].group, 1, 5)
     head, steps = MM.record(kv, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
-    # a block is two slots of K and V: r0's second page completes its first half at step 2 (positions 4, 5), its second at 4
-    assert head.blocks == 24 and [(s.step, len(s.freed), len(s.written)) for s in steps] == [(0, 0, 4), (1, 0, 4), (2, 4, 2), (4, 0, 2), (5, 8, 0)]
+    # a block is two slots of K and V: r0's second page reaches its first half at step 1 and completes it at 2 (positions 4,
+    # 5), its second at 3 and 4; r1's position 4 and r0's 8 each reach a half they leave dirty, at steps 2 and 5
+    assert head.blocks == 24 and [(s.step, len(s.freed), len(s.written)) for s in steps] == [
+        (0, 0, 4), (1, 2, 4), (2, 4 + 2, 2), (3, 2, 0), (4, 0, 2), (5, 8 + 2, 0)]
     want = codec.digest(b"".join(_payload("r0", x) for x in kv["r0"].layers[0][0][0:2]))
     assert steps[0].written[0].slot == 2 * 1 + 0 and steps[0].written[0].digest == want
 
@@ -155,7 +158,18 @@ def test_the_engine_holds_the_maps_blocks(reqs):
     assert MM.engine_agrees(reqs, LAYOUT, TABLES, steps, bad) == {"compared": 12, "equal": 11}
 
 
+def test_a_page_reused_after_its_request_frees_its_filler_once(reqs):
+    head, steps = MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, {"r0": [1, 2, 5], "r1": [3, 5]})
+    rp = Replay(head)
+    for s in steps:
+        rp.apply(s)
+    # r1's position 4 reaches page 5's filler at step 2; r0's position 8 reaches it again at 5, freed already
+    assert [s.step for s in steps if _slot(0, 5, 0) in s.freed] == [2]
+
+
 def test_refusals(reqs):
+    with pytest.raises(ValueError, match="while a request's rows in it are read to step"):
+        MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, {"r0": [1, 2, 5], "r1": [2, 4]})
     with pytest.raises(ValueError, match="don't hold its 9 positions"):
         MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, {"r0": [1, 2], "r1": [3, 4]})
     with pytest.raises(ValueError, match="payload gave"):

@@ -18,7 +18,9 @@ written   a block whose rows are all born, at the step of the last; a block with
           stays dirty)
 freed     a written block in the record of its rows' last read's step (a step's record, its frees then its writes, takes
           effect after the step's reads: remote_bandwidth's convention, #2378); a block whose last read is the step that
-          completes it is freed the step after, and one past the session's last step is in no step
+          completes it is freed the step after, and one past the session's last step is in no step.  And a slot's
+          registered block (a KV page's filler) at the step a write first reaches it without completing it: its bytes are
+          no longer that block's, and the block being written is uncredited until it is complete (the `Store`'s dirty)
 j         N plus every block written before it, a step's blocks by slot
 d_j       `codec.digest` of the block's payload: its rows' served words in slot order, each word little-endian
 step      the engine's: request r's step s is `arrive[r] + s`
@@ -281,12 +283,16 @@ def _pool(requests: Mapping[str, Rows], layout: Layout, tables: Mapping[str, Seq
 def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Callable[[str, Row], bytes], registration: bytes,
            layout: Layout, tables: Mapping[str, Sequence[int]]) -> tuple[Header, list[Step]]:
     """The session's memory map beside the registered store `registration` digests: each request's rows from its arrival step,
-    a row's served bytes `payload(request, row)`, its pages `tables[request]` (`tables`)."""
+    a row's served bytes `payload(request, row)`, its pages `tables[request]` (`tables`).  A slot written while another
+    request's rows in it are still read is refused."""
     pool = _pool(requests, layout, tables)
     ids, lo, hi, sb, pages, bs = pool.ids, pool.lo, pool.hi, pool.row_bytes, pool.pages, layout.block_size
     end = max(arrive[r] + rs.steps for r, rs in requests.items())
     freed: dict[int, list[int]] = {}
     written: dict[int, list[tuple[int, bytes]]] = {}
+    #: each slot's blocks: the step a write first reaches it, the step completing it (None: it stays dirty), its rows' last
+    #: read's step and its digest
+    uses: dict[int, list[tuple[int, int | None, int, bytes]]] = {}
     for r, rs in requests.items():
         if len(tables[r]) * bs < rs.positions or any(not NULL_PAGE < p < pages for p in tables[r]):
             raise ValueError(f"request {r}'s pages {list(tables[r])[:8]} don't hold its {rs.positions} positions in pages 1 to {pages - 1}")
@@ -294,19 +300,32 @@ def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Cal
             for c in range(ids.shape[1]):
                 plane, i = divmod(c, pool.per_plane)
                 p0, p1 = q * bs + int(lo[c]), q * bs + int(hi[c])
-                if p1 > rs.positions:
+                if p0 >= rs.positions:
                     continue
                 off = i * codec.BLOCK_BYTES - int(lo[c]) * sb
                 for layer, kv in enumerate(rs.layers):
                     got = kv[plane][p0:p1]
+                    reach, last = arrive[r] + min(x.born for x in got), arrive[r] + max(x.last for x in got)
+                    if p1 > rs.positions:
+                        uses.setdefault(pool.slot(layer, page, c), []).append((reach, None, last, b""))
+                        continue
                     data = b"".join(payload(r, x) for x in got)
                     if len(data) != len(got) * sb:
                         raise ValueError(f"request {r}'s rows are {sb} bytes, and its payload gave {len(data)} for {len(got)}")
-                    slot = pool.slot(layer, page, c)
-                    w = arrive[r] + max(x.born for x in got)
-                    written.setdefault(w, []).append((slot, codec.digest(data[off:off + codec.BLOCK_BYTES])))
-                    if (f := max(arrive[r] + max(x.last for x in got), w + 1)) < end:
-                        freed.setdefault(f, []).append(slot)
+                    uses.setdefault(pool.slot(layer, page, c), []).append(
+                        (reach, arrive[r] + max(x.born for x in got), last, codec.digest(data[off:off + codec.BLOCK_BYTES])))
+    for slot, us in uses.items():
+        held = -1
+        for n, (reach, w, last, d) in enumerate(sorted(us, key=lambda u: u[0])):
+            if reach <= held:
+                raise ValueError(f"slot {slot} is written at step {reach} while a request's rows in it are read to step {held}")
+            if n == 0 and (w is None or reach < w):
+                freed.setdefault(reach, []).append(slot)
+            held = last
+            if w is not None:
+                written.setdefault(w, []).append((slot, d))
+                if (f := max(last, w + 1)) < end:
+                    freed.setdefault(f, []).append(slot)
     steps, j = [], layout.blocks if layout.blocks is not None else len(pool.firsts) * pool.region
     head = Header(registration, j)
     for s in sorted(set(freed) | set(written)):
