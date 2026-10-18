@@ -387,6 +387,16 @@ def test_a_config_run_that_failed_says_why_first(tmp_path, kw, why):
         assert rec["replay"]["differed"][0]["family"] == "Gemm_v1" and rec["replay"]["by_family"] == {"Gemm_v1": 2}
 
 
+@pytest.mark.parametrize("verdict, why", [("PASS", None), ("FAIL", "match FAIL")])
+def test_a_single_gpu_rows_match_is_its_global_matchs_verdict(tmp_path, verdict, why):
+    """GM-01 writes ``verdict`` (`check.match.global_match`); the record read an ``ok`` it never writes, so the first single-GPU row
+    chain to reach its publish (r20261018-000059-6968) was refused as "match FAIL" over a passing Match."""
+    d = _row_dir(tmp_path)
+    (d / "global_match.json").write_text(json.dumps({"schema": "cb-a/global-match/v1", "verdict": verdict, "failed_checks": []}))
+    rec = CR.record(d, ROW)
+    assert (rec["match"]["ok"], rec["why"]) == (verdict == "PASS", why)
+
+
 def test_a_config_run_with_no_commit_is_not_pass(tmp_path):
     d = _row_dir(tmp_path)
     (d / "commit" / "runs.jsonl").unlink()

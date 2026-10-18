@@ -108,7 +108,8 @@ def row_part(row: str, profile: str | None = None) -> dict[str, Any] | None:
 
 def match_part(d: Path, world: int) -> dict[str, Any] | None:
     """The Match's verdict: a TP row's fold Match (`match/fold_match/tp2_fold_match.json`: per-rank fold, compare and GM-01, the
-    cross-rank leg, the profile it folded with), a single-GPU row's global Match (`global_match.json`).  None when no Match ran."""
+    cross-rank leg, the profile it folded with), a single-GPU row's global Match (`global_match.json`, GM-01's ``verdict``).  None when
+    no Match ran."""
     if world > 1:
         fm = _json(d / "match" / "fold_match" / "tp2_fold_match.json")
         if not fm:
@@ -116,7 +117,7 @@ def match_part(d: Path, world: int) -> dict[str, Any] | None:
         return {"ok": fm.get("pass") is True, "schema": fm.get("schema"), "profile": fm.get("profile"), "world": fm.get("world"),
                 "legs": fm.get("legs"), "problems": (fm.get("problems") or [])[:16]}
     gm = _json(d / "global_match.json")
-    return {"ok": gm.get("ok") is True, "schema": gm.get("schema")} if isinstance(gm, dict) else None
+    return {"ok": gm.get("verdict") == "PASS", "schema": gm.get("schema")} if isinstance(gm, dict) else None
 
 
 SUMMARY_GATES = ("weights_pin", "boundary_linkage", "cross_rank_collectives", "fold_match_binding", "query_population", "oracle_compare",
