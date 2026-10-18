@@ -410,8 +410,8 @@ class Driver:
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
         #: commit the locks a train's Lean check regenerated onto it as it lands (CI-64: Daniel through top, 18 Oct)
         self.regenerate_locks = regenerate_locks
-        #: steps a train lands without (Daniel through top, 17 Oct, CI-30's interim): they run on after the landing, and one
-        #: that fails reverts it.  The Lean check's steps are never deferred.
+        #: steps a train lands without (Daniel through top, 17 Oct; CI-30): the post-landing run checks them on `main`
+        #: (`postland`), and one that fails reverts the PR it implicates.  The Lean check's steps are never deferred.
         defer = {x for x in defer if not x.startswith("lean")}
         self.defer = frozenset(defer | ({"flock-rust-tests"} if "circuit-check" in defer else set()))  # it runs after it
         #: the post-landing run of the deferred steps on `main`'s tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`; an
@@ -478,7 +478,7 @@ class Driver:
             if self.defer and (rid := self._passed_but_deferred(launch["ids"])):
                 if (held := self._touched(launch)) is not None:
                     return held
-                return Verdict("passed", rid, f"{DEFERRED} ({', '.join(sorted(self.defer))} run on after landing)")
+                return Verdict("passed", rid, f"{DEFERRED} ({', '.join(sorted(self.defer))} run on `main` after landing)")
             return Verdict("running", " ".join(launch["ids"]))
         if all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
             return Verdict("none", why="every twin exited without starting, or was stopped")
