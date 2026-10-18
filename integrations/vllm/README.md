@@ -31,6 +31,7 @@ verity_vllm/
   config.py target_family.py             run-definition locations; the target-family preflight
   ops/                pod operations     pod_bootstrap.sh pod_gate.sh pod_*_tap.sh canary.sh *_negatives.sh known_roots.json
 tests/<subpackage>/   mirrors the package; tests/regression = the R19 reference harness (opt in with VERITY_REGRESSION=1)
+tools/                scripts run by path: popread.py (which units' cross-unit reads a committed value steers), migrate/ (registry splits)
 workloads/ manifests/ fixtures/ data/ docs/    records of the qualification table; never rewritten by the tool
 ~~~
 
