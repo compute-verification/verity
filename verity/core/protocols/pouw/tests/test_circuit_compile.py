@@ -678,10 +678,14 @@ def test_qk_grind():
 def test_decode_grind_counts_every_query_head_pair():
     """At decode (Llama-3.1-8B: 8 KV heads of 4 query heads each, a head's query on its request's keys), one call's grind
     term counts every (query head, request) pair, its Q row, not the (KV head, request) components its K rows join: at 16
-    keys a batch of 12 is over 0.1% (0.1002%) and 13 under it (0.0925%), where 13 requests are 104 components."""
+    keys a batch of 12 is over 0.1% (0.1002%) and 13 under it (0.0925%), where 13 requests are 104 components. Over few keys
+    a KV head's K rows, read by all its query heads, bind instead: 70B's batch of 7 (8 query heads a KV head) is under 0.1%
+    over 32 keys but not over 16, where GRIND's per-pair table, which assumes the Q rows bind, would pass it."""
     _refused("cover", Program(bind(DECODE, C=8 * 12, G=4, N=16)), ATTN_TILE)
     c = C.compile(Program(bind(DECODE, C=8 * 13, G=4, N=16)), ATTN_TILE)
     assert 9.2e-4 < c.grind[0]["DotBf16_v2"] <= GR.FLAG and len(c.units) == 8 * 13
+    _refused("cover", Program(bind(DECODE, C=8 * 7, G=8, N=16)), ATTN_TILE)
+    assert C.compile(Program(bind(DECODE, C=8 * 7, G=8, N=32)), ATTN_TILE).grind[0]["DotBf16_v2"] <= GR.FLAG
 
 
 @compiles

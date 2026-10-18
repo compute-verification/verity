@@ -1326,7 +1326,9 @@ T = 2^128 and δ = 2^-40. Over 0.1% (`grind.FLAG`) the pass refuses the group (`
 of decision 36, not a seed's. One rule covers both regimes:
 
 - at decode the Q rows bind, so it counts every (query head, request) pair, whatever KV heads they share: one call is 8B's
-  decode at batch ≥ 13 for QKᵀ and ≥ 25 for P·V (70B: 7 and 13);
+  decode at batch ≥ 13 for QKᵀ and ≥ 25 for P·V (70B: 7 and 13), from a context of 64 keys. Over fewer keys a KV head's K
+  rows (k bits) or V columns (L bits), each read by its query heads, bind instead, and the check asks for a larger batch
+  (70B's QKᵀ over 16 keys: 12);
 - at prefill a KV head's K rows and V columns, read by all its query heads, bind, so it counts (KV head, request)
   components, far fewer the longer the prompt: a 16-token causal prompt needs 166 for QKᵀ (GRIND's table says 171, counting
   every Q row's readers as the prompt's L keys).
