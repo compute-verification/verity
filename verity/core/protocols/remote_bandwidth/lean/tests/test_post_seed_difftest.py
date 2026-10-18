@@ -15,7 +15,6 @@ holds what it returns to the record (binding 4)."""
 
 from __future__ import annotations
 
-import dataclasses
 import functools
 import hashlib
 import importlib.util
@@ -637,24 +636,10 @@ def test_the_verifier_refuses_what_the_lean_refuses(record) -> None:
     assert _post_seed(record, six, six_ends, paced=True).windows[-1].stop == 6
 
 
-COMMON = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0)
-
-
-def test_the_ledger_refuses_a_verdict_judged_at_another_reading(record) -> None:
-    """Binding 4: a verdict whose windows or L aren't the record's reading credits nothing."""
-    v = _post_seed(record, *S.int8_program(S=5))
-    common = {**COMMON, "rebuild": audit.Rebuild(appends().P512, 0.0)}
-    more = (dataclasses.replace(v.windows[0], reads=v.windows[0].reads + 4096), *v.windows[1:])
-    for other in (dataclasses.replace(v, windows=more), dataclasses.replace(v, lifetime=v.lifetime + 1)):
-        with pytest.raises(ValueError, match="binding 4"):
-            audit.ledger(record, **common, credit_post_seed=other)
-    with pytest.raises(ValueError, match="fails"):
-        audit.ledger(record, **common, credit_post_seed=dataclasses.replace(v, refused=("mapped",)))
-
-
 @pytest.mark.xfail(strict=True, raises=NotImplementedError, reason=audit.OPEN_CARRIER)
 def test_the_ledger_credits_the_verifier_s_verdict(record) -> None:
-    """The honest verdict, judged at the record's own reading, credits the post-seed receipts once the carriers' bytes
-    read L in its units."""
+    """The honest verdict passes binding 4 (`tests/test_post_seed.py` has the ledger's refusals) and credits the
+    post-seed receipts once the carriers' bytes read L in its units."""
     v = _post_seed(record, *S.int8_program(S=5))
-    audit.ledger(record, **COMMON, rebuild=audit.Rebuild(appends().P512, 0.0), credit_post_seed=v)
+    audit.ledger(record, capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0,
+                 rebuild=audit.Rebuild(appends().P512, 0.0), credit_post_seed=v)

@@ -1513,10 +1513,15 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     `error_horizon`."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
-    if type(credit_post_seed) is PostSeed and ((credit_post_seed.windows, credit_post_seed.lifetime)
-                                               != property_reading(record, credit_post_seed.census_steps)):
-        raise ValueError("a verdict judged at other windows or another lifetime cap than this record's credits nothing "
-                         "after the seed (binding 4)")
+    if type(credit_post_seed) is PostSeed:
+        try:
+            reading = property_reading(record, credit_post_seed.census_steps)
+        except ValueError as e:
+            raise ValueError(f"a verdict over a census this record can't be read in credits nothing after the seed "
+                             f"(binding 4): {e}") from None
+        if (credit_post_seed.windows, credit_post_seed.lifetime) != reading:
+            raise ValueError("a verdict judged at other windows or another lifetime cap than this record's credits "
+                             "nothing after the seed (binding 4)")
     density, epsilon, link_delta = 8 * record.block_bytes, 0.0, 0.0
     if requirement is not None:
         if requirement.holds is not True:
