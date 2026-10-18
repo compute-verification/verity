@@ -178,7 +178,6 @@ def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
     assert wl.shared == (1, 2) and wl.program.input_gates == 2 + 3 + 2 + 4
     am = wl.address_map()
     assert am["shared"] == {"group": "weights", "root_nodes": [0, 2], "gates": [0, 5], "n_batches": 2}
-    assert wl.theta == ("shared.weights[0]", "shared.weights[1]") and wl.descriptor["annotations"]["theta"] == [0, 1]
     assert [i["owner"] for i in am["inputs"]] == ["shared", "shared", "a", "b"]
     assert am["requests"][0]["inputs"][2]["gates"] == am["requests"][1]["inputs"][2]["gates"] == [2, 5]
 
@@ -205,7 +204,6 @@ def test_registered_values_are_shared_once_and_registered_at_the_root():
     """A registered_values component's `values` are the program's (bound once, at registration), not the request's: the workload
     Program holds them once as `shared.values`, a registered root parameter, beside `shared.weights` bound per run."""
     from verity.ml.circuits.constants import REGISTRATION, RUN, inputs
-    from verity.ml.circuits.ports import facts
     ca, cb = _registered_component(2), _registered_component(5)
     assert ca.bindings == (RUN, REGISTRATION, RUN)
     wl = W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca), W.WorkloadRequest("b", 1, 5, 1, 0, cb)], lag=0)
@@ -214,8 +212,6 @@ def test_registered_values_are_shared_once_and_registered_at_the_root():
     names = [n for n, _ in wl.fn.signature()[0]]
     assert dict(zip(names, wl.program.bindings)) == {"shared.values": REGISTRATION, "shared.weights": RUN, names[2]: RUN, names[3]: RUN}
     assert len(inputs(wl.program.circuit)[REGISTRATION]) == 2 and len(inputs(wl.program.circuit)[RUN]) == 4 + 2 + 5
-    F = facts(wl.program.root)
-    assert wl.theta == ("shared.weights",) and [set(F.node(k).one.origin) for k in range(4)] == [{"registered"}, {"theta"}, {"input"}, {"input"}]
     assert wl.artifact()["shared"]["registered"] == ["shared.values"]
     # the components agree on what they register, or the workload is not one program
     with pytest.raises(ValueError, match="register different groups"):
@@ -226,7 +222,6 @@ def test_registered_values_are_shared_once_and_registered_at_the_root():
 def test_a_workload_without_registered_values_keeps_its_digest():
     wl = _wl([(3, 2), (5, 0)])
     assert wl.registered == () and "registered" not in wl.artifact()["shared"]
-    assert wl.descriptor["annotations"]["theta"] == [0]   # the weights, marked outside the digest
     assert wl.digest == "6e2b20e9356a27b5b3db628205d9b97f617a400cfa95c96fa7d9aff92b145de92892833688405e5e8ee4fa29cd4400395250238cc9764234376882bcb6904655"
 
 

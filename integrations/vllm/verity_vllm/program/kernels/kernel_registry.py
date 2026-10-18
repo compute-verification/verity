@@ -19,6 +19,7 @@ pairs (`registered`).
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
@@ -27,11 +28,28 @@ import numpy as np
 from verity.ml.circuits.evaluation import Kernel, register_kernel
 from verity.ml.circuits.evaluation.reference import key_of, statics_of
 
-__all__ = ["Declined", "Registered", "covers", "instance", "register", "registered"]
+__all__ = ["Declined", "Registered", "covers", "instance", "prim_static", "register", "registered"]
 
 
 class Declined(Exception):
     """The kernel does not claim this instance (outside the domain it reproduces exactly); the message says why."""
+
+
+_DOT_STATIC_FN = re.compile(r'^\{"fn":"([A-Za-z0-9_]+)"\}$')
+
+
+def prim_static(statics: dict[str, Any], key: str, family: str) -> str:
+    """[R17 dense, ruling R17-3] A function-valued static (`DOT` of `Gemm_v2{K,N,DOT}` / `Attention_v2{..., DOT, INV}`, `INV` of the latter)
+    -> the registered primitive id.  The spec text renders it as `DOT={"fn":"HopperBF16WgmmaDot16_v1"}` (verity.ml.circuits.codec._spec_id); a bare
+    `<Name>_v<k>` id is accepted too.  Anything else is unresolved BY NAME: the evaluator never guesses the architecture from the target."""
+    v = statics.get(key, "")
+    raw = str(getattr(v, "id", v) or "")
+    m = _DOT_STATIC_FN.match(raw)
+    if m:
+        return m.group(1)
+    if re.match(r"^[A-Za-z0-9]+_v\d+$", raw):
+        return raw
+    raise Declined(f"{family} {key} static {raw!r} does not name a registered primitive")
 
 
 def _claims_all(statics: dict) -> str | None:

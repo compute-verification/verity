@@ -31,7 +31,6 @@ from typing import Callable, Any
 
 from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
                    SpecializedDefinition, bind)
-from . import ports as P
 from .program import input_id, input_prim, is_input
 from .refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, refs_from_json
 from .types import type_from_json
@@ -232,24 +231,19 @@ def _encode_body(b: Body, schema: str = SCHEMA_V0, tables: _Tables | None = None
 
 def _encode_definition(fn: FunctionDefinition, schema: str = SCHEMA_V0, tables: _Tables | None = None) -> dict:
     if isinstance(fn, PrimitiveDefinition):
-        d = {
+        return {
             "form": "primitive",
             "id": fn.id,
             "params": [[name, t.to_json()] for name, t in fn.params],
             "ret": fn.ret.to_json(),
         }
-    else:
-        assert isinstance(fn, SpecializedDefinition)
-        d = {
-            "form": "composite",
-            "id": fn.base_id,
-            "bindings": {k: _static_json(fn.bindings[k]) for k in fn.defn.statics},
-            "body": _encode_body(fn.body, schema, tables),
-        }
-    ports = P.declared(fn)
-    if ports is not None:  # only a Definition that declares ports carries the key (PROTOCOL.md §12)
-        d["ports"] = ports
-    return d
+    assert isinstance(fn, SpecializedDefinition)
+    return {
+        "form": "composite",
+        "id": fn.base_id,
+        "bindings": {k: _static_json(fn.bindings[k]) for k in fn.defn.statics},
+        "body": _encode_body(fn.body, schema, tables),
+    }
 
 
 def definition_entry(fn: FunctionDefinition) -> dict:
@@ -538,8 +532,6 @@ class DecodedProgram:
         from .layout import Circuit
         self.circuit = Circuit(root)
         self.annotations = dict(desc.get("annotations", {}))
-        theta = self.annotations.get("theta", ())
-        root.theta = tuple(theta) if isinstance(theta, list) else theta  # type: ignore[attr-defined]  # `ports.facts` checks it
         self.program_fn_id = desc["program_fn"]
         self.program_fn_functions = program_fn_functions  # the definitions `program_fn`'s record references
 
@@ -692,8 +684,6 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
             p = _lookup_primitive(registry, d["id"])
             if [[n, t.to_json()] for n, t in p.params] != d["params"] or p.ret.to_json() != d["ret"]:
                 raise ValueError(f"primitive {fid} signature differs from the registry")
-            if d.get("ports") != P.declared(p):
-                raise ValueError(f"primitive {fid} ports differ from the registry")
             built[fid] = p
             return p
         name, _, ver = d["id"].rpartition("_v")
@@ -743,20 +733,13 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
                 raise ValueError(f"definition {fid!r} node {k}: {e}") from e
             _build_node(B, fid, k, nd, fn, args, arg_type(nd["out"]))
         try:
-            ret = Coll(ret_type, _decode_refs(b["ret"], nodes, schema, leaves))
+            sp.set_body(B.finish(Coll(ret_type, _decode_refs(b["ret"], nodes, schema, leaves))))
         except (TypeError, ValueError) as e:
             raise ValueError(f"definition {fid!r} ret: {e}") from e
-        try:
-            sp.set_body(B.finish(ret))
-        except TypeError as e:
-            raise ValueError(f"definition {fid!r}: {e}") from e
-        sp.set_port_types(P.PortTypes.from_json(fid, d["ports"], params, ret_type, outs if fid == desc["root"] else None)
-                          if "ports" in d else None)
         return sp
 
     root = get(desc["root"])
     if not isinstance(root, SpecializedDefinition) or root.body.params:
         raise ValueError(f"root {desc['root']!r}: the root is a composite without parameters")
     pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in ddefs)
-    P.check(root)
     return DecodedProgram(root, built, desc, pfn_fns)

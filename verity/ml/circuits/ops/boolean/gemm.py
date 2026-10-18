@@ -34,7 +34,7 @@ them. The s8 step is `integer.step_s8_bits` (Baugh-Wooley arrays, one carry-save
 int-to-float cast `fp.s32_to_f32`, and `ScaledMmS8Coordinate_v2` the accumulator, the cast, two `F32Mul_v4` and `F2fpBf16_v2`.
 Each names its word
 Definition (`trace.word_of`; ``DOT'`` is `DOT`'s); the tests check that the two agree, on random and special words and on the
-hardware captures.
+hardware captures. Each composite refuses at `bind` the K its word Definition refuses (its `refuse`).
 """
 from __future__ import annotations
 
@@ -138,32 +138,30 @@ def _steps(B, S, x, w, k: int = 16):
     return acc
 
 
-@composite("DotBf16", 3, ["K", "DOT"], lambda S: ((("x", Array(G.checked_k(S, 16), BF16)), ("w", Array(S.K, BF16))), F32),
-           conformance="exact-model-tested")
+@composite("DotBf16", 3, ["K", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.K, BF16))), F32),
+           conformance="exact-model-tested", refuse=G.DotBf16.refuse)
 def DotBf16(B, S, x, w):
     """The f32 accumulator after K/16 `DOT` steps in ascending k from the zero accumulator, on bits."""
     return _steps(B, S, x, w)
 
 
-@composite("GemmCoordinate", 3, ["K", "DOT"],
-           lambda S: ((("x", Array(G.checked_k(S, 16), BF16)), ("wrow", Array(S.K, BF16))), BF16),
-           conformance="exact-model-tested")
+@composite("GemmCoordinate", 3, ["K", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("wrow", Array(S.K, BF16))), BF16),
+           conformance="exact-model-tested", refuse=G.GemmCoordinate.refuse)
 def GemmCoordinate(B, S, x, wrow):
     """One output word of `x @ W^T` on bits: K/16 `DOT` steps in ascending k from the zero accumulator, then `F2fpBf16_v2`."""
     return B.call(F2fpBf16, _steps(B, S, x, wrow))
 
 
 @composite("Gemm", 3, ["K", "N", "DOT"],
-           lambda S: ((("x", Array(G.checked_k(S, 16), BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
-           conformance="exact-model-tested")
+           lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
+           conformance="exact-model-tested", refuse=G.Gemm.refuse)
 def Gemm(B, S, x, w):
     """`x[K] @ W[N,K]^T -> [N]` on bits, no epilogue: `GemmCoordinate_v3` over W's rows."""
     return B.batch(bind(GemmCoordinate, K=S.K, DOT=S.DOT), x, w, axes=(None, 0))
 
 
-@composite("GemmCoordinateE4m3", 2, ["K", "DOT"],
-           lambda S: ((("x", Array(G.checked_k(S, 32), E4M3)), ("wrow", Array(S.K, E4M3))), BF16),
-           conformance="exact-model-tested")
+@composite("GemmCoordinateE4m3", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, E4M3)), ("wrow", Array(S.K, E4M3))), BF16),
+           conformance="exact-model-tested", refuse=G.GemmCoordinateE4m3.refuse)
 def GemmCoordinateE4m3(B, S, x, wrow):
     """One output word of an E4M3 `x @ W^T` on bits: K/32 `DOT` steps in ascending k from the zero accumulator, then
     `F2fpBf16_v2`."""
@@ -178,9 +176,9 @@ def _block_scaled_coordinate(B, S, x, wrow, sx, sw, ns: int):
 
 
 @composite("GemmCoordinateNvf4", 2, ["K", "DOT"],
-           lambda S: ((("x", Array(G.checked_k(S, 64), E2M1)), ("wrow", Array(S.K, E2M1)), ("sx", Array(S.K // 16, SCALE)),
+           lambda S: ((("x", Array(S.K, E2M1)), ("wrow", Array(S.K, E2M1)), ("sx", Array(S.K // 16, SCALE)),
                        ("sw", Array(S.K // 16, SCALE))), BF16),
-           conformance="exact-model-tested")
+           conformance="exact-model-tested", refuse=G.GemmCoordinateNvf4.refuse)
 def GemmCoordinateNvf4(B, S, x, wrow, sx, sw):
     """One output word of an NVFP4 `x @ W^T` on bits (one UE4M3 scale byte per 16 codes): K/64 `DOT` steps in ascending k
     from the zero accumulator, then `F2fpBf16_v2`."""
@@ -188,9 +186,9 @@ def GemmCoordinateNvf4(B, S, x, wrow, sx, sw):
 
 
 @composite("GemmCoordinateMxf4", 2, ["K", "DOT"],
-           lambda S: ((("x", Array(G.checked_k(S, 64), E2M1)), ("wrow", Array(S.K, E2M1)), ("sx", Array(S.K // 32, SCALE)),
+           lambda S: ((("x", Array(S.K, E2M1)), ("wrow", Array(S.K, E2M1)), ("sx", Array(S.K // 32, SCALE)),
                        ("sw", Array(S.K // 32, SCALE))), BF16),
-           conformance="exact-model-tested")
+           conformance="exact-model-tested", refuse=G.GemmCoordinateMxf4.refuse)
 def GemmCoordinateMxf4(B, S, x, wrow, sx, sw):
     """One output word of an MXFP4 `x @ W^T` on bits (one UE8M0 scale byte per 32 codes): K/64 `DOT` steps in ascending k
     from the zero accumulator, then `F2fpBf16_v2`."""
@@ -198,7 +196,7 @@ def GemmCoordinateMxf4(B, S, x, wrow, sx, sw):
 
 
 @composite("GemmAccumulatorS8", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, E4M3)), ("wrow", Array(S.K, E4M3))), F32),
-           conformance="exact-model-tested")
+           conformance="exact-model-tested", refuse=G.GemmAccumulatorS8.refuse)
 def GemmAccumulatorS8(B, S, x, wrow):
     """The s32 accumulator of an s8 `x @ W^T` coordinate on bits: K/32 `DOT` steps in ascending k from the zero accumulator."""
     return _steps(B, S, x, wrow, 32)
@@ -206,7 +204,7 @@ def GemmAccumulatorS8(B, S, x, wrow):
 
 @composite("ScaledMmS8Coordinate", 2, ["K", "DOT"],
            lambda S: ((("x", Array(S.K, E4M3)), ("sx", F32), ("wrow", Array(S.K, E4M3)), ("sw", F32)), BF16),
-           conformance=G.ScaledMmS8Coordinate.conformance)
+           conformance=G.ScaledMmS8Coordinate.conformance, refuse=G.ScaledMmS8Coordinate.refuse)
 def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
     """One output word of a W8A8 linear on bits: `F2fpBf16_v2((S32ToF32Rn_v2(acc) * sx) * sw)` with `F32Mul_v4`."""
     acc = B.call(S32ToF32Rn, B.call(bind(GemmAccumulatorS8, K=S.K, DOT=S.DOT), x, wrow))

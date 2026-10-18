@@ -181,18 +181,18 @@ def _call(rnd, ks, fold, out, nl=None):
         rc = [rnd.getrandbits(32) for _ in range(SG.RW)]
         rc[n * slot:n * slot + n] = words
         return [x, xsel, b, w, wsel, c, u, z, y + zz, rc, _onehot(SG.RW // n, slot)], n * slot + n - 1
-    warp = rnd.randrange(16)
+    warp, parts = rnd.randrange(16), 1 if fold == "li" else 2
     lanes = [lane(32 * warp + ln) for ln in range(nl)]
-    st = [SG.init(seed, tile, 32 * warp + ln, 0, 1)[0] for ln in range(nl)]
+    st = [[v for half in SG.init(seed, tile, 32 * warp + ln, 0, 1)[:parts] for v in half] for ln in range(nl)]
     sets = [SG.lane_words(x, w, *L) for L in lanes]
-    states, rc = [list(v) for v in st], [0] * SG.RW
+    states, rc = [list(v) for v in st], [0] * (SG.RW * -(-parts * (ks + m) // SG.RW))
     for s in range(ks + m):
         for ln in range(nl):
-            states[ln] = SG.absorb("li", states[ln], sets[ln][s])
-            for v in states[ln]:
-                rc[s] ^= v
+            states[ln] = SG.absorb(fold, states[ln], sets[ln][s])
+            for i, v in enumerate(states[ln]):
+                rc[parts * s + i // SG.NCH] ^= v
     cols = [list(col) for col in zip(*lanes)]
-    return [x, cols[0], cols[1], w, cols[2], cols[3], cols[4], cols[5], st, rc], ks + m - 1
+    return [x, cols[0], cols[1], w, cols[2], cols[3], cols[4], cols[5], st, rc], parts * (ks + m) - 1
 
 
 #: the sidecar's shapes: (Definition, word view, instance)
@@ -207,6 +207,10 @@ CASES = {
                        lambda r: _call(r, 2, "fx1", "state"), lambda a: SG.call_check(*a, fold="fx1", out="state")),
     "warp-li": (lambda: bind(SG.PouwWarpCheck, KS=2, NL=2), lambda r: _call(r, 2, "li", "cp", nl=2),
                 lambda a: SG.warp_check(*a)),
+    "warp2-duo": (lambda: bind(SG.PouwWarpCheckV2, KS=2, NL=2, FOLD="duo"), lambda r: _call(r, 2, "duo", "cp", nl=2),
+                  lambda a: SG.warp_check(*a, fold="duo")),
+    "warp2-fx1": (lambda: bind(SG.PouwWarpCheckV2, KS=2, NL=2, FOLD="fx1"), lambda r: _call(r, 2, "fx1", "cp", nl=2),
+                  lambda a: SG.warp_check(*a, fold="fx1")),
 }
 
 
@@ -241,10 +245,46 @@ def test_checks_on_bits_are_their_word_views(case):
     assert (word(bad), _on_bits(d, bad)) == (0, 0)
 
 
+@pytest.mark.parametrize("fold", ["duo", "fx1"])
+def test_warp_check_v2_reads_both_words_of_every_set(fold):
+    """`PouwWarpCheck_v2`'s word view over 4 lanes at KS = 4: 1 on the honest checkpoints, 0 with one bit of a set's y word
+    or of its z word changed."""
+    args, last = _call(random.Random(fold), 4, fold, "cp", nl=4)
+    assert SG.warp_check(*args, fold=fold) == 1
+    for at in (2, 3, last):
+        assert SG.warp_check(*_tamper(args, at), fold=fold) == 0, at
+
+
+def test_a_warp_receipt_past_a_leaf_takes_the_next():
+    """At K = 8192 (KS = 256, m = 3) li's 259 checkpoint words fit one receipt leaf and duo's and fx1's 518 take two: the
+    port is 1024 words, and the word view reads the second leaf's checkpoints and nothing after them."""
+    assert [dict(bind(SG.PouwWarpCheckV2, KS=256, NL=1, FOLD=f).signature()[0])["rc"].n for f in ("li", "duo", "fx1")] \
+        == [SG.RW, 2 * SG.RW, 2 * SG.RW]
+    args, last = _call(random.Random("k8192"), 256, "duo", "cp", nl=1)
+    assert (last, len(args[9]), SG.warp_check(*args, fold="duo")) == (517, 2 * SG.RW, 1)
+    assert [SG.warp_check(*_tamper(args, at), fold="duo") for at in (SG.RW, last, last + 1)] == [0, 0, 1]
+
+
+def test_the_served_receipt_is_not_injective_at_a_state():
+    """#2438's `DuoReceiptNotInjective` on this module's duo keys (word 0's): from one state two words give one served
+    receipt y ^ rotl(z, 16) and two full states, which only a checkpoint of the whole state (`PouwWarpCheck_v2`) tells
+    apart."""
+    y, z = 0x247A23F6, 0xC48C9971
+
+    def step(d):
+        u = y ^ d ^ SG.KK[0]
+        y1 = (u * SG.KA[0] + z) & M32
+        return y1, (SG.rotl(u, SG.ROT[0]) + y1) & M32
+
+    (y1, z1), (y2, z2) = step(0x1632C), step(0x2237A)
+    assert y1 ^ SG.rotl(z1, 16) == y2 ^ SG.rotl(z2, 16) == 0x26D90889
+    assert (y1, z1) != (y2, z2)
+
+
 def test_call_words_take_no_witness():
     """Every port of the new checks is committed, the coin's or the draw's: none carries a prefix word."""
     committed, coin, draw = {"a", "b", "x", "w", "rc"}, {"u", "f", "c", "z", "st"}, {"asel", "bsel", "xsel", "wsel", "rsel"}
     for d in (bind(SG.PouwSegCheckV3, KS=2, S=1, FOLD="duo"), bind(SG.PouwCallCheck, KS=2, FOLD="fx1", OUT="state"),
-              bind(SG.PouwWarpCheck, KS=2, NL=1)):
+              bind(SG.PouwWarpCheck, KS=2, NL=1), bind(SG.PouwWarpCheckV2, KS=2, NL=1, FOLD="duo")):
         names = {n for n, _ in d.signature()[0]}
         assert names <= committed | coin | draw, (d.id, names - committed - coin - draw)

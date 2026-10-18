@@ -1,6 +1,6 @@
 """`PouwCallCheck_v1`'s word view (`segment.call_check`) is cgemm.cu's served H1 receipt: on a random 128 x 128 tile it
 accepts the receipts `cgemm_ref` derives (`checked_strip.co32c_words`, then `derive.tile_receipts` over T_1 .. T_last, O',
-D_1 .. D_(m-1); for fx1, over those words times `FX1`), thread by thread from the thread's leaves, coin and draw, and
+D_1 .. D_(m-1); for fx1, over those words times `fx1_key`), thread by thread from the thread's leaves, coin and draw, and
 refuses each with one bit changed."""
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def test_call_check_accepts_cgemm_refs_receipts(ks, fold):
             wm, wn, g, qq = warp // 4, warp % 4, lane >> 2, lane & 3
             for e in range(32):
                 cc = SG.col_slot(e)
-                K[32 * wm + g + 8 * SG.row_slot(e), 32 * wn + 2 * qq + 8 * (cc >> 1) + (cc & 1)] = SG.FX1[e]
+                K[32 * wm + g + 8 * SG.row_slot(e), 32 * wn + 2 * qq + 8 * (cc >> 1) + (cc & 1)] = SG.fx1_key(e)
         words = [((w.astype(np.uint64) * K) & 0xFFFFFFFF).astype(np.uint32) for w in words]
     seed, tile = 0x5EED0001 + ks, 3
     want = derive.tile_receipts(seed, words, tile)

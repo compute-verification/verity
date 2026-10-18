@@ -1,7 +1,7 @@
 """The pod registry every machine can update: one file per machine under `machines.d/` (cloud migration step g).
 
     research pods register NAME --pod-id ID --project P [--root DIR] [--python PY] [--guard N|true] [--replace] [--any-name]
-    research pods register NAME --host ADDR --project P [--port N] [--user U] [--rate USD_PER_HOUR] [--root DIR] [--replace]
+    research pods register NAME --host ADDR --project P [--port N] [--user U] [--rate USD_PER_HOUR] [--root DIR] [--nebius-instance-id ID] [--replace]
     research pods unregister NAME
     research pods registry [--json]                          # every machine `research run --on` accepts, and where it comes from
     research pods registry import [--apply] [--all]          # seed machines.d from machines.toml (running pods only unless --all)
@@ -49,7 +49,8 @@ REGISTRY_ENV = "RESEARCH_MACHINES_D"
 FAMILIES_FILE = "_families.toml"
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 POD_ID_RE = re.compile(r"[a-z0-9]{8,32}")
-KNOWN_KEYS = ("provider", "pod_id", "host", "port", "user", "rate_usd_per_hour", "project", "projects", "root", "python", "guard", "ramlock")
+KNOWN_KEYS = ("provider", "pod_id", "host", "port", "user", "rate_usd_per_hour", "project", "projects", "root", "python", "guard", "ramlock",
+              "nebius_instance_id")
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}")
 OFF = ("", "none", "off", "0")
 
@@ -294,13 +295,14 @@ def _probe_ssh(entry: dict[str, Any]) -> str | None:
 def register_ssh(name: str, host: str, project: str, *, port: int | None = None, user: str | None = None, rate: float | None = None,
                  root: str | None = None, python: str | None = None, replace: bool = False, machines_toml: Path | None = None,
                  environ: dict | None = None, probe: Callable[[dict], str | None] = _probe_ssh,
-                 now: dt.datetime | None = None) -> tuple[Path, str]:
-    """`register` for a `provider = "ssh"` machine: refused unless `hostname` answers over ssh with the research key."""
+                 now: dt.datetime | None = None, nebius_instance_id: str | None = None) -> tuple[Path, str]:
+    """`register` for a `provider = "ssh"` machine: refused unless `hostname` answers over ssh with the research key. A Nebius VM's
+    `nebius_instance_id` lets `research run --on` start it when it is stopped (remote.wake)."""
     from .. import remote
 
     mt = machines_toml or remote.machines_path()
     entry: dict[str, Any] = {"provider": "ssh", "host": host, "port": port, "user": user, "rate_usd_per_hour": rate, "project": project,
-                             "root": root, "python": python}
+                             "root": root, "python": python, "nebius_instance_id": nebius_instance_id}
     entry = {k: v for k, v in entry.items() if v is not None}
     if why := validate(name, entry):
         raise remote.Refused(f"register {name}: {why}")
@@ -380,6 +382,8 @@ def main(argv: list[str]) -> int:
     rg.add_argument("--port", type=int, default=None, help="--host: ssh port (default 22)")
     rg.add_argument("--user", default=None, help="--host: ssh user (default root)")
     rg.add_argument("--rate", type=float, default=None, metavar="USD_PER_HOUR", help="--host: the machine's hourly rate, for the attempts' cost")
+    rg.add_argument("--nebius-instance-id", default=None, metavar="ID",
+                    help="--host: the Nebius VM behind it, so `research run --on` starts it when it is stopped")
     rg.add_argument("--project", required=True)
     rg.add_argument("--root", default=None, help="the machine's research root (default /workspace/research)")
     rg.add_argument("--python", default=None, help="default python3")
@@ -398,7 +402,7 @@ def main(argv: list[str]) -> int:
     try:
         if ns.cmd == "register" and ns.host:
             p, what = register_ssh(ns.name, ns.host, ns.project, port=ns.port, user=ns.user, rate=ns.rate, root=ns.root, python=ns.python,
-                                   replace=ns.replace)
+                                   replace=ns.replace, nebius_instance_id=ns.nebius_instance_id)
             print(f"{what.upper()} {ns.name} -> host {ns.host} ({p})")
             written = [p] if what != "unchanged" else []
         elif ns.cmd == "register":

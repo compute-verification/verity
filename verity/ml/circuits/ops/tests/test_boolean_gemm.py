@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -81,16 +82,37 @@ def test_pinned_counts_and_digests(target) -> None:
     assert D.gates == prog.gates and codec.program_digest(codec.encode_program(D)) == digest
 
 
-@pytest.mark.parametrize("coord, binding, k", [
-    (BG.DotBf16, BG.GEMM_HOPPER, 16), (BG.GemmCoordinate, BG.GEMM_AMPERE, 16), (BG.Gemm, {"N": 2, **BG.GEMM_AMPERE}, 16),
-    (BG.GemmCoordinateE4m3, BG.GEMM_HOPPER_E4M3, 32), (BG.GemmCoordinateNvf4, BG.GEMM_SM120_NVF4, 64),
-    (BG.GemmCoordinateMxf4, BG.GEMM_SM120_MXF4, 64)], ids=lambda v: getattr(v, "name", None))
-def test_a_k_its_step_does_not_divide_is_refused_before_any_body(coord, binding, k) -> None:
-    """As for the word coordinates (`gemm.checked_k`): the pinned bindings above, each at a K its step divides, keep their
-    counts and digests."""
-    for K in (k // 2, k + k // 2):
-        with pytest.raises(ValueError, match=f"K is a multiple of the DOT step {k}, not {K}"):
-            bind(coord, K=K, **binding).signature()
+#: each Boolean GEMM composite, its step width k and the rest of a binding
+FAMILIES = [(BG.DotBf16, 16, BG.GEMM_AMPERE), (BG.GemmCoordinate, 16, BG.GEMM_HOPPER), (BG.Gemm, 16, {"N": 3, **BG.GEMM_AMPERE}),
+            (BG.GemmCoordinateE4m3, 32, BG.GEMM_HOPPER_E4M3_MMAV2), (BG.GemmCoordinateNvf4, 64, BG.GEMM_SM120_NVF4),
+            (BG.GemmCoordinateMxf4, 64, BG.GEMM_SM120_MXF4), (BG.GemmAccumulatorS8, 32, BG.GEMM_SM120_S8),
+            (BG.ScaledMmS8Coordinate, 32, BG.GEMM_SM120_S8)]
+
+
+@pytest.mark.parametrize("defn,k,rest", FAMILIES, ids=[d.name for d, *_ in FAMILIES])
+def test_each_composite_refuses_the_k_its_word_definition_refuses(defn, k, rest) -> None:
+    """A K that isn't a multiple of the step, and for the s8 composites K = 2^17 (`test_gemm`, `test_integer_mma`)."""
+    for K in (k + 1, 3 * k // 2):
+        with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K={K} is not a multiple of the "
+                                                       f"{k}-wide step")):
+            bind(defn, K=K, **rest)
+    if defn in (BG.GemmAccumulatorS8, BG.ScaledMmS8Coordinate):
+        with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K=131072 is at or past 131072")):
+            bind(defn, K=1 << 17, **rest)
+
+
+#: the s8 composites at K = 2^17 - 32, the largest they admit: (gates, standalone program digest), recorded before `bind`
+#: refused any K
+S8_EDGE = {
+    bind(BG.GemmAccumulatorS8, K=131040, **BG.GEMM_SM120_S8): (61445476, "3f1ca8e5174475e107d370b1453f5f970b773b60c3d7c5d835f0a80ddcd9bdeb23aaafb84b157926776d691496dac53d937eb3dd05ab181ebcf7fb87720cc79a"),
+    bind(BG.ScaledMmS8Coordinate, K=131040, **BG.GEMM_SM120_S8): (61460798, "6d2bf4fa1d2368702ed758d0bbee1127e95f86411826a6bc0874f65df276edae6877cd907addc57949c86b8dc7bd47ca65e20fab1d2a36dbda11fb9b793729e4"),
+}
+
+
+@pytest.mark.parametrize("spec", S8_EDGE, ids=[s.id for s in S8_EDGE])
+def test_the_s8_composites_bind_their_largest_k_to_its_recorded_digest(spec) -> None:
+    prog, _ = standalone_call(spec)
+    assert (spec.gates, codec.program_digest(codec.encode_program(prog))) == S8_EDGE[spec]
 
 
 @pytest.mark.parametrize("d", [BG.F2fpBf16, BG.AmpereBF16TcDot16, BG.HopperBF16WgmmaDot16, BG.HopperE4m3QgmmaDot32,

@@ -15,16 +15,20 @@
 * **Replace.** Each tile is one unit of the scheme, its dot kind's (`Scheme.unit(dot, tile)`: per kind a factory, which
   carries that kind's noise form; `Scheme.plug` sets one), self-contained (decision 106): ``(a: its A rows, b: its B rows,
   salt, position, roots) -> {z: its cells' exact products, receipt}``. The unit derives its seed in its own proof from the
-  salt, its position and its seed group's roots (`seeds.PouwSeed`, decision 105), and its noise from the seed; nothing else
-  reads the salt. The salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree);
+  salt, its position and its seed group's roots (`seeds.PouwSeed`, decision 105, or `seeds.PouwUnitSeeds` for a unit whose
+  receipt folds take keys: seed_j and σ_R, decision 121), and its noise from the seed; nothing else reads the salt. The salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree);
   `pouw.positions` and `pouw.roots` are inputs bound before the draw, unit u reading position slot u (`Compiled.positions`)
-  and its seed group's (root(A), root(B)). A seed group is the calls committed together (`groups`; by default a site): one
-  commitment fixes the noise of every unit it covers, so the units a group covers are the grinding premium's divisor
-  (decision 112), at least the scheme's `cover`. The receipt is a sink (`Out(sink=True)`) only the Program's
+  and its seed group's (root(A), root(B)). A seed group is the calls committed together (`groups`; by default a site, one
+  call: a batched call over a layer's heads and the batch is one site, decision 122): one commitment fixes the noise of
+  every unit it covers, so the units a group covers are the grinding premium's divisor (decision 112), at least the
+  scheme's `cover`, and its (head, request) pairs of each attention kind at least the scheme's `pair_cover` (decision 122).
+  A group never spans calls run one after another. The receipt is a sink (`Out(sink=True)`) only the Program's
   outputs read, and z feeds the Call's consumers in place of the Call's output, so served values don't change. The units sit
   at the root, one batch per site and tile shape, ahead of the node that read the Call's output; that node's Definition F
   becomes `PouwRest_v1{FN=F}`, F without its dots, reading their z (`pouw.z`). A rest of no gate is inlined.
-* **Check** (`CompileError` with the rule's code): every seed group covers at least the scheme's `cover` units (``cover``);
+* **Check** (`CompileError` with the rule's code): every seed group covers at least the scheme's `cover` units and, per
+  kind, its `pair_cover` (head, request) pairs (``cover``: below it, decode at a small batch, the group's noise is decision
+  36's live per-round coin, not a seed's); no seed group holds two calls one of which reads the other's output (``span``);
   no registered Call or matmul step is left outside a unit (``uncovered``);
   the salt reaches only the seed, through the units' salt port (``salt-flow``); each unit's seed reads the unit's own position
   and roots parameters whole, and at the root each unit batch reads its own slots of `pouw.positions` and its site's of
@@ -40,7 +44,7 @@ from __future__ import annotations
 
 import bisect
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
@@ -188,26 +192,38 @@ class Tile:
 
 
 ANY = "*"
+#: the fewest (head, request) pairs one seed group's QKᵀ, and its P·V, may cover: GRIND's decode grind term under 0.1% at
+#: T = 2^128 (decision 122). QKᵀ is `DotBf16`'s; P·V's kind is the one ATTN-NOISE plugs (`Scheme.plug(..., pairs=PV_PAIRS)`).
+QK_PAIRS = 385
+PV_PAIRS = 791
+PAIR_COVER = {f"DotBf16_v{v}": QK_PAIRS for v in (1, 2, 3)}
 
 
 @dataclass(frozen=True)
 class Scheme:
     """A PoUW scheme as the pass takes it: its tile size (r, c), a scheme parameter; per kind of dot (a family's id, or `ANY`
     for every kind without its own), the factory of one tile's unit, which carries that kind's noise form (decision 109:
-    attention's QKᵀ and P·V are kinds like any other, and `plug` sets a kind's form); and `cover`, the fewest units one seed
+    attention's QKᵀ and P·V are kinds like any other, and `plug` sets a kind's form); `cover`, the fewest units one seed
     group may cover (decision 112: the grinding premium is a constant number of units per seed group, so GRIND/BUDGET sets
-    the least coverage).
+    the least coverage); and `pair_cover`, per kind the fewest (head, request) pairs one seed group's dots of that kind may
+    cover (decision 122: `PAIR_COVER`, QKᵀ's 385). A pair is a connected component of the group's dots of the kind, rows
+    joined through the dots they share: one (head, request) at decode, its query and its keys. Query heads that read one
+    KV head's keys (GQA) share those rows, so they are one pair: for a GQA model the count is below GRIND's per query head,
+    and the cover refuses more.
 
     A unit, ``units[kind](dot, tile)``, is ``(a: Array(tile.r, dot.a), b: Array(tile.c, dot.b), salt, position, roots:
     Array(2, digest)) -> Record(z: Array(len(tile.pairs), dot.z), receipt: R)``, the digest and position types
-    `seeds.types(dot.boolean)`'s. It calls `seeds.PouwSeed` once on its salt, position and roots (`seeds.seed_call`), derives
-    its noise from the seed (`seeds.noise_blocks`), holds the noised arm, the receipt fold and the spot check, and returns its
-    cells' exact products as z. A factory may raise `CompileError` ("scheme") for a dot or tile it doesn't take."""
+    `seeds.types(dot.boolean)`'s. It calls one seed once on its salt, position and roots: `seeds.PouwSeed`
+    (`seeds.seed_call`), or `seeds.PouwUnitSeeds` (`seeds.unit_seeds_call`) where its receipt folds take keys, which come
+    from σ_R, never from seed_j (decision 121). It derives its noise from seed_j (`seeds.noise_blocks`), holds the noised
+    arm, the receipt fold and the spot check, and returns its cells' exact products as z. A factory may raise
+    `CompileError` ("scheme") for a dot or tile it doesn't take."""
 
     name: str
     tile: tuple[int, int]
     units: Mapping[str, Callable[[Dot, Tile], Any]]
     cover: int = 1
+    pair_cover: Mapping[str, int] = field(default_factory=lambda: dict(PAIR_COVER))
 
     def unit(self, dot: Dot, tile: Tile) -> Any:
         f = self.units.get(dot.family, self.units.get(ANY))
@@ -216,9 +232,11 @@ class Scheme:
                                          f"it covers {', '.join(sorted(self.units))}")
         return f(dot, tile)
 
-    def plug(self, kind: str, unit: Callable[[Dot, Tile], Any], name: str) -> "Scheme":
-        """This scheme with `unit` as kind's factory (its noise form), under its own name (register it)."""
-        return Scheme(name, self.tile, {**self.units, kind: unit}, self.cover)
+    def plug(self, kind: str, unit: Callable[[Dot, Tile], Any], name: str, pairs: int | None = None) -> "Scheme":
+        """This scheme with `unit` as kind's factory (its noise form), under its own name (register it); `pairs`, the kind's
+        pair cover (`PV_PAIRS` for P·V), if it has one."""
+        cover = {**self.pair_cover, **({kind: pairs} if pairs is not None else {})}
+        return Scheme(name, self.tile, {**self.units, kind: unit}, self.cover, cover)
 
 
 #: the schemes the pass compiles to, by name (protocol structure, keyed by silicon target in the registration). Separate from
@@ -247,8 +265,9 @@ def register(scheme: Scheme) -> Scheme:
     r, c = scheme.tile
     if min(r, c) < 1:
         raise ValueError(f"{scheme.name}: a tile is at least 1 × 1, not {r} × {c}")
-    if scheme.cover < 1 or not scheme.units:
-        raise ValueError(f"{scheme.name}: a seed group covers at least one unit, and a scheme has a unit for some kind")
+    if scheme.cover < 1 or not scheme.units or min(scheme.pair_cover.values(), default=1) < 1:
+        raise ValueError(f"{scheme.name}: a seed group covers at least one unit and one pair of each kind, and a scheme has "
+                         f"a unit for some kind")
     SCHEMES[scheme.name] = scheme
     return scheme
 
@@ -761,7 +780,8 @@ def _compiled_body(B: Any, S: Any, *args: Coll) -> Coll:
 
 
 def _compiled_ports(S: Any) -> Any:
-    return _ports.Ports(params={SALT: _ports.In(kind="coin")}, ret={"receipts": _ports.Out(sink=True)})
+    positions = {POSITIONS: _ports.In(kind="position")} if "position" in _ports.KINDS else {}
+    return _ports.Ports(params={SALT: _ports.In(kind="coin"), **positions}, ret={"receipts": _ports.Out(sink=True)})
 
 
 PouwCompiled = _composite(
@@ -867,6 +887,53 @@ def _group_of(plan: _Plan, groups: Callable[[Site], Any] | Sequence[Any] | None)
     return tuple(index.setdefault(k, len(index)) for k in keys)
 
 
+def _site_pairs(sp: _SitePlan) -> int:
+    """The site's (head, request) pairs: the connected components of its dots, its A rows and B rows joined by the dots."""
+    na = len(sp.a_rows)
+    parent = list(range(na + len(sp.b_rows)))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for i, j in sp.pairs:
+        parent[find(i)] = find(na + j)
+    return len({find(x) for x in range(len(parent))})
+
+
+def _pair_cover(plan: _Plan, group_of: Sequence[int]) -> tuple[dict[str, int], ...]:
+    out: list[dict[str, int]] = [{} for _ in range(max(group_of) + 1)]
+    for sp, g in zip(plan.sites, group_of):
+        out[g][sp.dot.family] = out[g].get(sp.dot.family, 0) + _site_pairs(sp)
+    return tuple(out)
+
+
+def _span(served: Any, plan: _Plan, group_of: Sequence[int]) -> tuple[int, int, int] | None:
+    """A seed group holding the sites of two nodes one of which reads the other's output, through any nodes between (layer
+    ℓ + 1's operands are layer ℓ's): (group, the earlier node, the later), or None."""
+    nodes: dict[int, set[int]] = {}
+    for sp, g in zip(plan.sites, group_of):
+        nodes.setdefault(g, set()).add(sp.node)
+    if all(len(ns) < 2 for ns in nodes.values()):
+        return None
+    above: list[int] = []
+    for nd in served.body.nodes:
+        a = 0
+        for x in nd.args:
+            for s, i, _lo, _hi in runs(x.refs):
+                if s == "n":
+                    a |= above[i] | 1 << i
+        above.append(a)
+    for g, ns in nodes.items():
+        for n in sorted(ns):
+            for m in sorted(ns):
+                if above[n] >> m & 1:
+                    return g, m, n
+    return None
+
+
 @dataclass(frozen=True, eq=False)
 class Compiled:
     program: Program
@@ -899,6 +966,11 @@ class Compiled:
         for u in self.units:
             n[self.group_of[u.site]] += 1
         return tuple(n)
+
+    @cached_property
+    def pair_cover(self) -> tuple[dict[str, int], ...]:
+        """Per seed group, the (head, request) pairs its dots of each kind cover (decision 122's coverage, `Scheme.pair_cover`)."""
+        return _pair_cover(self.plan, self.group_of)
 
     @cached_property
     def units(self) -> tuple[Unit, ...]:
@@ -1073,7 +1145,7 @@ def _check_unit(U: Any, boolean: bool) -> None:
     at = [k for k, nd in enumerate(body.nodes) if SD.is_seed(nd.fn)]
     if len(at) != 1 or body.nodes[at[0]].form != "call":
         raise CompileError("seed", f"{U.id} calls the seed {len(at)} times at its top level: a unit derives its noise from one "
-                                   f"call of `seeds.PouwSeed`")
+                                   f"call of `seeds.PouwSeed`, or of `seeds.PouwUnitSeeds` for its noise and its fold keys")
     ks = at[0]
     D, P = SD.types(boolean)
     args = body.nodes[ks].args
@@ -1181,8 +1253,8 @@ def _check(c: Compiled) -> None:
 def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Sequence[Any] | None = None) -> Compiled:
     """`program` with every registered matmul's dots in `scheme`'s tile units (the module docstring), checked. `groups` names
     the calls committed together, each group one seed group (one slot of `pouw.roots`): a key per site, or a function of the
-    `Site` to its key; None is a group per site."""
-    least = _scheme(scheme).cover
+    `Site` to its key; None is a group per site, one call."""
+    sch = _scheme(scheme)
     why = _reads_coin(program)
     if why is not None:
         raise CompileError("coin-read", f"the served Program reads a coin ({why}); the salt enters only through compile")
@@ -1194,13 +1266,29 @@ def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Seque
     served = _served_fn(program.fn)
     plan = _plan(served, scheme)
     group_of = _group_of(plan, groups)
+    span = _span(served, plan, group_of)
+    if span is not None:
+        g, m, n = span
+        raise CompileError("span", f"seed group {g} holds the calls of node {m} and of node {n}, which reads node {m}'s output: "
+                                   f"a seed binds its calls' operand roots, so one seed can't span calls run one after "
+                                   f"another, such as a step's layers")
     cover = [0] * (max(group_of) + 1)
     for sp, g in zip(plan.sites, group_of):
         cover[g] += len(sp.units)
-    if min(cover) < least:
+    if min(cover) < sch.cover:
         g = cover.index(min(cover))
         raise CompileError("cover", f"seed group {g} (sites {[s for s, k in enumerate(group_of) if k == g]}) covers "
-                                    f"{cover[g]} units, fewer than {scheme}'s {least}: commit more calls together (`groups`)")
+                                    f"{cover[g]} units, fewer than {scheme}'s {sch.cover}: commit more calls together "
+                                    f"(`groups`)")
+    for g, by in enumerate(_pair_cover(plan, group_of)):
+        for kind, n in by.items():
+            least = sch.pair_cover.get(kind)
+            if least is not None and n < least:
+                raise CompileError("cover", f"seed group {g} (sites {[s for s, k in enumerate(group_of) if k == g]}) covers "
+                                            f"{n} (head, request) pairs of {kind}, fewer than {scheme}'s {least} (decision "
+                                            f"122): commit the call's heads and requests together, and below the cover "
+                                            f"(decode at a small batch) the group's noise is a live per-round coin's "
+                                            f"(decision 36), not a seed's")
     fn = bind(PouwCompiled, SERVED=served, SCHEME=scheme, GROUPS=group_of)
     try:
         compiled = Program(fn, registered=registered)
@@ -1221,6 +1309,6 @@ def rebuild(served: Program, scheme: str, descriptor: dict,
     return c
 
 
-__all__ = ["ANY", "BUILTIN", "CompileError", "Compiled", "Dot", "GateCheck", "MATMULS", "Matmul", "POSITIONS", "PouwCall", "PouwCompiled",
-           "PouwRest", "ROOTS", "SALT", "SCHEMES", "STEP", "Scheme", "Site", "Tile", "Unit", "Z", "compile", "rebuild",
-           "register", "seed"]
+__all__ = ["ANY", "BUILTIN", "CompileError", "Compiled", "Dot", "GateCheck", "MATMULS", "Matmul", "PAIR_COVER", "POSITIONS",
+           "PV_PAIRS", "PouwCall", "PouwCompiled", "PouwRest", "QK_PAIRS", "ROOTS", "SALT", "SCHEMES", "STEP", "Scheme", "Site",
+           "Tile", "Unit", "Z", "compile", "rebuild", "register", "seed"]

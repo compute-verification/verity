@@ -68,6 +68,12 @@
                     (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N, and writes the run's reservation there;
                     else MemoryNotAvailable (refused.json).  --mem-wait S polls up to S seconds instead.  The runner removes the
                     reservation at exit; job.json run.remote.mem records the reading it was admitted on (research.mem).
+    GPUs            on a machine whose GPUs gpu-lease hands out (GPU_LEASE_HOST_FILE), a run sees no GPU (CUDA_VISIBLE_DEVICES='')
+                    unless it declares `--gpus N`: its workload then runs under `gpu-lease N --wait`, which queues it first come first
+                    served for N of them (the wait counts against --timeout) and names them in CUDA_VISIBLE_DEVICES.  A workload that
+                    calls gpu-lease itself gets the GPUs it leases either way.  On a machine whose GPUs are Kueue's (DIRECT_GPUS_FILE
+                    `none`) a direct run sees none, and `--gpus` without --queue is refused, as on a machine without gpu-lease.
+                    job.json run.remote.gpus and the launch's answer (`gpus`) say which.
     preflight       a `--tool` whose declaration in the shipped tree names a preflight (`Tool.preflight`: a Python script there and its
                     args) has it run by launch-request, in the tree, before anything else is admitted: exit 0 admits the run, anything
                     else refuses it (PreflightFailed, refused.json; nothing started, no attempt, so never a verdict), with the script's
@@ -150,6 +156,7 @@ RUNNER_FAILED_LINES = 5                       # launcher.log lines in a RunnerFa
 GUARD_IDLE_MIN_DEFAULT = 90
 GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
 DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
+GPU_LEASE_HOST_FILE = "/etc/vy/gpu-lease-host"  # present: gpu-lease hands out every GPU here (vm_setup.sh writes it on a GPU VM)
 DIRECT_CPUS_FILE = "/etc/vy/direct-cpus"      # the CPUs a direct run starts on (a cpu list, e.g. 0-95): the rest are pinned benchmarks'.
                                               # A command may still pin itself elsewhere (taskset -c 128-159 ...); absent: no default
 RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only through a check slot (pods/nebius/slot_only.py); cpu-1's
@@ -304,6 +311,45 @@ def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int =
 
     base = runpod.ssh_command(host, port, user=user)
     return [*base[:-1], "-o", "BatchMode=yes", "-o", f"ConnectTimeout={connect_timeout}", base[-1]]
+
+
+def sender(environ: dict[str, str] | None = None) -> str | None:
+    """Who sends a run, recorded in its request (`submitted_by`), where the node's alerts read it (INF-50): the sending agent's own
+    Cursor conversation (`CURSOR_CONVERSATION_ID`, which every agent's shell carries, a worker its own rather than its
+    coordinator's), else $RESEARCH_AGENT_URL."""
+    env = os.environ if environ is None else environ
+    if cid := env.get("CURSOR_CONVERSATION_ID", "").strip():
+        return f"https://cursor.com/agents/{cid}"
+    return env.get("RESEARCH_AGENT_URL") or None
+
+
+WAKE_WAIT_S, WAKE_POLL_S = 900.0, 15.0
+
+
+def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, sleep=time.sleep, clock=time.monotonic) -> str | None:
+    """Start a stopped Nebius VM before a run and wait for its ssh (INF-58: the H200s stop after 2 h idle, disks kept): a machine
+    whose registry entry names its `nebius_instance_id` and whose ssh doesn't answer is started through the Nebius API, then waited
+    for up to WAKE_WAIT_S. Returns what it did, None when the machine answered at once or names no instance."""
+    iid = machine.get("nebius_instance_id")
+    if not iid or ssh_run(ssh, ["true"], timeout=30).returncode == 0:
+        return None
+    if nebius is None:
+        from .pods.nebius.fleet import nb as nebius
+    try:
+        state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
+        if state in ("STOPPED", "STOPPING"):
+            nebius("compute", "instance", "start", "--id", iid, "--async")
+    except (RuntimeError, OSError, ValueError) as e:
+        raise Refused(f"{machine['name']} doesn't answer on ssh and couldn't be started through the Nebius API ({e}); with no Nebius "
+                      f"credentials here, ask @infra to start {iid}") from None
+    print(f"research: {machine['name']} was {state}; started it through the Nebius API, waiting up to {WAKE_WAIT_S / 60:g} min "
+          f"for its ssh (disks kept)", file=sys.stderr)
+    end = clock() + WAKE_WAIT_S
+    while clock() < end:
+        sleep(WAKE_POLL_S)
+        if ssh_run(ssh, ["true"], timeout=30).returncode == 0:
+            return f"started from {state}"
+    raise Refused(f"{machine['name']} ({iid}) was started from {state} but its ssh didn't answer in {WAKE_WAIT_S / 60:g} min")
 
 
 def ssh_run(ssh: list[str], remote_argv: list[str], *, stdin: bytes | None = None, timeout: float = 120) -> subprocess.CompletedProcess:
@@ -503,6 +549,17 @@ def knows_job_user(pkg: Path | None) -> bool:
         return True
     try:
         return (Path(pkg) / "jobuser.py").is_file() and '"job_user"' in (Path(pkg) / "remote.py").read_text()
+    except OSError:
+        return False
+
+
+def knows_gpus(pkg: Path | None) -> bool:
+    """Whether the research package that will run on the machine takes a direct run's `--gpus N` through gpu-lease (one that
+    predates it would run the workload with every GPU visible and no lease)."""
+    if pkg is None:
+        return True
+    try:
+        return "def gpu_lease_wrap" in (Path(pkg) / "remote.py").read_text()
     except OSError:
         return False
 
@@ -1347,13 +1404,14 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv += ["--custody-dir", str(request_path.parent / CUSTODY_DIR)]
     if req.get("job_user"):
         argv += ["--job-user", req["job_user"]]
-    argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *req["command"]]
+    argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *gpu_lease_wrap(req), *req["command"]]
     if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
         argv = [*req[QUEUE_WRAP], *argv]
     if (req.get("queue") or {}).get("disk_gb"):    # held here, ahead of the allocation, while the disk would pass 80% (research.disk)
         argv = [req.get("python") or sys.executable, "-m", "research", "disk-hold", "--gb", str(req["queue"]["disk_gb"]),
                 "--path", str(runs_root), "--ack", str(request_path.parent / LAUNCH_ACK), "--", *argv]
-    started = {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": True, **({"preflight": preflight} if preflight else {})}
+    started = {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": True, **({"preflight": preflight} if preflight else {}),
+               **({"gpus": remote["gpus"]} if remote.get("gpus") else {})}
     try:
         try:
             proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
@@ -1504,11 +1562,31 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
+    gpus = req.get("gpus")
     if _kueue_owns_every_gpu():
         # a direct run must not open CUDA beside the queue's pods, whatever its --env says: GPU work goes through Kueue
+        if gpus and not req.get(QUEUE_WRAP):
+            raise Refused(f"--gpus {gpus}: every GPU here is Kueue's ({DIRECT_GPUS_FILE}); GPU work goes through `research run --queue --gpus N`")
         env["CUDA_VISIBLE_DEVICES"] = ""
         remote["gpus"] = f"none: {DIRECT_GPUS_FILE} says every GPU is Kueue's (CUDA_VISIBLE_DEVICES='')"
+    elif _lease_owns_every_gpu() and not req.get(QUEUE_WRAP):
+        # whatever its --env says: a job that opened CUDA outside the lease took GPUs the lease then handed to others (INF-55)
+        env["CUDA_VISIBLE_DEVICES"] = ""
+        remote["gpus"] = (f"{gpus} through `gpu-lease {gpus} --wait` (CUDA_VISIBLE_DEVICES names them)" if gpus else
+                          f"none: gpu-lease hands out every GPU here ({GPU_LEASE_HOST_FILE}), so CUDA_VISIBLE_DEVICES=''; declare "
+                          f"--gpus N to wait for N of them, or call gpu-lease in the workload")
+    elif gpus and not req.get(QUEUE_WRAP):
+        raise Refused(f"--gpus {gpus}: this machine's GPUs aren't handed out by gpu-lease (no {GPU_LEASE_HOST_FILE}); drop --gpus")
     return env
+
+
+def gpu_lease_wrap(req: dict[str, Any]) -> list[str]:
+    """The workload's prefix for a direct run's `--gpus N` on a gpu-lease machine (`_runner_env` refused it anywhere else): it waits
+    first come first served for N GPUs, capped at the run's --mem-gb (uncapped without one, as a run is without --gpus)."""
+    gpus = req.get("gpus")
+    if not gpus or req.get(QUEUE_WRAP):
+        return []
+    return ["gpu-lease", str(int(gpus)), "--wait", "--mem-gb", str(int(req.get("mem_gb") or 0)), "--"]
 
 
 def direct_cpus() -> set[int]:
@@ -1544,6 +1622,10 @@ def _kueue_owns_every_gpu() -> bool:
         return Path(os.environ.get("GPU_LEASE_ALLOWED_FILE") or DIRECT_GPUS_FILE).read_text().strip() == "none"
     except OSError:
         return False
+
+
+def _lease_owns_every_gpu() -> bool:
+    return Path(os.environ.get("GPU_LEASE_HOST_FILE") or GPU_LEASE_HOST_FILE).exists()
 
 
 # ---- the control side --------------------------------------------------------------------------------------------------------------------
@@ -1615,8 +1697,10 @@ def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
 def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, command: list[str], harness_args: list[str],
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
-           preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None) -> dict[str, Any]:
+           preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
+           gpus: int | None = None) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
+    `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
     is held until the runner, custody included, exits.  `job_user` (--job-user): the machine runs the workload as that user
@@ -1648,6 +1732,8 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         user = tgt.get("user", "root")
         ssh = ssh_argv(tgt["host"], tgt["port"], user=user)
         rec.update(pod_id=m.get("pod_id"), host=tgt["host"], port=tgt["port"], user=user, root=m["root"], phase="shipping")
+        if woke := wake(m, ssh):
+            rec["woke"] = woke
         write_json_atomic(local_dir / "remote.json", rec)
         tool_pkg = source_tool_package(source)      # --source <tree> with tools/research: the tree's own package runs the run
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
@@ -1662,6 +1748,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if job_user and not knows_job_user(tool_pkg):
             raise Refused(f"--job-user: the research package in {source} predates it, so the machine would run the workload as its "
                           f"own user.  Commit a tree that has it")
+        if gpus and not knows_gpus(tool_pkg):
+            raise Refused(f"--gpus: the research package in {source} predates it, so the machine would run the workload outside the "
+                          f"GPU lease.  Rebase onto a main that has it, or wrap the command in `gpu-lease {gpus} --wait --`")
         cwd_clone = clone.sub(flag_value(harness_args, "--cwd")) is not None
         if cwd_clone and not knows_clone(tool_pkg):
             raise Refused(f"--cwd clone: the research package in {source} predates it (no research/clone.py), so the machine would look "
@@ -1694,9 +1783,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
-                   **({"submitted_by": by} if (by := os.environ.get("RESEARCH_AGENT_URL")) else {}),
+                   **({"submitted_by": by} if (by := sender()) else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    **({"job_user": job_user} if job_user else {}),
+                   **({"gpus": gpus} if gpus else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
@@ -1748,6 +1838,8 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                       f"state {g.get('state')}", file=sys.stderr)
             else:
                 print(f"research: NO guard on {machine_name}: {g.get('reason')}", file=sys.stderr)
+        if out.get("gpus"):
+            print(f"research: GPUs on {machine_name}: {out['gpus']}", file=sys.stderr)
         if not out.get("refused"):
             rec["lease"] = lz = out.get("lease")
             print(f"research: {lease_line(lz, request['lease_extend_s'], machine_name)}", file=sys.stderr)
