@@ -65,6 +65,7 @@ struct RowK {
   u64 mid_P[8];                      // row/v2: after P(l)
   u64 kw_xpad[80];                   // row/v2: the all-padding last block (lb % 128 == 0)
   u64 kw_segpad[80];                 // row-seg: a whole segment's padding block
+  u64 kw_fold[80];                   // row-seg rows of an even s: the fold's all-padding last block
   u64 mid_Q[2][8];                   // row-seg: after Q, per shape (tiles: full tiles, the last row block's)
   u32 scheme, lb, xpad;
   u32 s[2];                          // segments a unit, per shape
@@ -758,8 +759,10 @@ template <bool SH> DEV void ld_dig(const u64* p, u64* d, int n) {
     ld_w(p, d, n);
   }
 }
-// a unit's digest over its s segment digests (words; SH, in shared memory) from the Q state, into out (byte order)
-template <bool SH> DEV void seg_fold(const u64* qst, const u64* dig, u32 s, uint8_t* out) {
+// a unit's digest over its s segment digests (words; SH, in shared memory) from the Q state, into out (byte order); an even
+// s's all-padding last block through kw_pad, its schedule from the host, when given. k_rows_seg passes it: on sm_120 its fold
+// compressing that block of constants came out wrong for some rows (37cc862b6's probe, r20261018-232746-4eed).
+template <bool SH> DEV void seg_fold(const u64* qst, const u64* dig, u32 s, uint8_t* out, const u64* kw_pad) {
   u64 st[8], w[16];
   cpy8(st, qst);
   const int pairs = (int)(s / 2);
@@ -775,6 +778,8 @@ template <bool SH> DEV void seg_fold(const u64* qst, const u64* dig, u32 s, uint
     w[8] = 0x8000000000000000ull;
     w[15] = 8ull * (128 + 64ull * s);
     sha::compress(st, w);
+  } else if (kw_pad) {
+    sha::compress_kw(st, kw_pad);
   } else {
 #pragma unroll
     for (int t = 0; t < 16; ++t) w[t] = 0;
@@ -796,7 +801,8 @@ __global__ void __launch_bounds__(128) k_rows_seg(const __grid_constant__ RowK R
     if (r0 + q < n) seg_hash(R, tab, 0, j, rows + (r0 + q) * stride + (u64)SEG * j, sdig + 8 * t);
   }
   __syncthreads();
-  if (threadIdx.x < g && r0 + threadIdx.x < n) seg_fold<true>(R.mid_Q[0], sdig + 8ull * s * threadIdx.x, s, out + 64 * (r0 + threadIdx.x));
+  if (threadIdx.x < g && r0 + threadIdx.x < n)
+    seg_fold<true>(R.mid_Q[0], sdig + 8ull * s * threadIdx.x, s, out + 64 * (r0 + threadIdx.x), R.kw_fold);
 }
 constexpr u32 ROWS_SEG_MAX_S = 768;   // k_rows_seg's 64 s bytes of shared memory within the default 48 KiB
 
@@ -808,7 +814,7 @@ __global__ void __launch_bounds__(32) k_folds(const __grid_constant__ RowK R, co
   const bool head = u < n0;
   const u32 s = head ? R.s[0] : R.s[1];
   const u64 off = head ? u * R.s[0] : n0 * R.s[0] + (u - n0) * R.s[1];
-  seg_fold<false>(R.mid_Q[head ? 0 : 1], dig + 8 * off, s, out + 64 * u);
+  seg_fold<false>(R.mid_Q[head ? 0 : 1], dig + 8 * off, s, out + 64 * u, nullptr);
 }
 
 // Pearl-C's row seeds: H_seed-A(salt || digest || root_B || u64le(unit << 32 | row)), the first 32 bytes
@@ -1421,6 +1427,7 @@ int vc_plan_build(const vc_spec* sp, void* out) {
       p->tab.s[0] = (u32)s;
       p->tab.last_bits[0] = (u32)(sp->row_bits - 8ull * SEG * (s - 1));
       midstate(sp->row_prefix, r.mid_Q[0]);
+      if (s % 2 == 0) pad_schedule(128 + 64 * s, r.kw_fold);
     }
   } else if (sp->row_scheme == VC_ROW_TILE) {
     if (!sp->row_prefix || sp->tile_rows % 2 || sp->tile_cols % 64 || !sp->tile_cols) { delete p; return -1; }
