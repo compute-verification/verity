@@ -188,6 +188,7 @@
         "benchmarks/host_tier/",
         "benchmarks/host_tiles/",
         "benchmarks/kv_filler/",
+        "benchmarks/kv_lifetime/",
         "benchmarks/link_pricing/",
         "benchmarks/overhead_frontier/",
         "benchmarks/pous/",
