@@ -156,8 +156,8 @@ class Format:
         bc = self.bc(self.row_digest(row), self.prf(pos))
         return bc, self.frame_leaf(pos, self.hleaf(bc))
 
-    def params(self) -> bytes:
-        """The arm's HP struct (hm96.cu): every field a u64 (a BLAKE3 word in its low half), then its T table."""
+    def params(self) -> tuple[bytes, bytes]:
+        """The arm's HP struct (hm96.cu: every field a u64, a BLAKE3 word in its low half) and its T table."""
         p, w = self.p, self.p.words
         nb_bytes = lambda v: len(uint(v))  # noqa: E731
         out = [*p.iv()]
@@ -177,7 +177,7 @@ class Format:
             for k in range(4):
                 out += tpl(make(k)) if k else [0] * MAXW
         assert nb_bytes(0) == 1 and len(out) == 8 + 32 + 24 + 8 * LEVELS + 16 + 3 * 4 * MAXW
-        return struct.pack(f"<{len(out)}Q", *out) + self.tbytes
+        return struct.pack(f"<{len(out)}Q", *out), self.tbytes
 
 
 def domain(n: int) -> CommitmentDomain:
@@ -227,6 +227,10 @@ def check_arm(f: Format, raw_levels: bytes, raw_bc: bytes, full: bool, rng: rand
     dig = lambda d, i: p.digest_of(raw_levels[nbw * (off[d] + i):nbw * (off[d] + i + 1)])  # noqa: E731
     bcat = lambda i: p.digest_of(raw_bc[2 * nbw * i:2 * nbw * i + nbw]) + p.digest_of(raw_bc[2 * nbw * i + nbw:2 * nbw * (i + 1)])  # noqa: E731
     bad: list[str] = []
+
+    def check_bc(pos: int, bc: bytes) -> None:
+        got = bcat(pos)
+        bad.extend(f"{half} {pos}" for half, sl in (("b", slice(0, p.nb)), ("c", slice(p.nb, None))) if got[sl] != bc[sl])
     verity = p.name == "sha512"
     if full:
         leaves, held = [], 0
@@ -236,8 +240,7 @@ def check_arm(f: Format, raw_levels: bytes, raw_bc: bytes, full: bool, rng: rand
             if verity:
                 hold_to_verity(f, pos, row, bc, leaf)
                 held += 1
-            if bcat(pos) != bc:
-                bad.append(f"bc {pos}")
+            check_bc(pos, bc)
             leaves.append(leaf)
         levels = [leaves + [f.pad(r) for r in range(n, width)]]
         for d in range(depth):
@@ -250,7 +253,8 @@ def check_arm(f: Format, raw_levels: bytes, raw_bc: bytes, full: bool, rng: rand
                 if dig(d, i) != want:
                     bad.append(f"level {d} node {i}")
         return {"ok": not bad, "full": True, "leaves_checked": n, "nodes_checked": off[-1], "held_to_verity": held,
-                "bad": bad[:8], "root": levels[depth][0].hex()}
+                "bad_count": len(bad), "bad": bad[:8],
+                "root": levels[depth][0].hex()}
     picks = sorted({0, 1, 255, 256, n // 2, n - 2, n - 1, *(q for q in (65535, 65536, 131072, n - 3) if q < n),
                     *rng.sample(range(n), 24)})
     held = 0
@@ -260,8 +264,7 @@ def check_arm(f: Format, raw_levels: bytes, raw_bc: bytes, full: bool, rng: rand
         if verity:
             hold_to_verity(f, pos, row, bc, leaf)
             held += 1
-        if bcat(pos) != bc:
-            bad.append(f"bc {pos}")
+        check_bc(pos, bc)
         if dig(0, pos) != leaf:
             bad.append(f"leaf {pos}")
     pads = sorted({n, width - 1, *rng.sample(range(n, width), min(16, width - n))}) if width > n else []
@@ -276,14 +279,15 @@ def check_arm(f: Format, raw_levels: bytes, raw_bc: bytes, full: bool, rng: rand
             if dig(d, i) != f.node(d - 1, i, dig(d - 1, 2 * i), dig(d - 1, 2 * i + 1)):
                 bad.append(f"level {d} node {i}")
     return {"ok": not bad, "full": False, "leaves_checked": len(picks), "pads_checked": len(pads), "nodes_checked": nodes,
-            "held_to_verity": held, "bad": bad[:8], "root": dig(depth, 0).hex()}
+            "held_to_verity": held, "bad_count": len(bad), "bad": bad[:8], "root": dig(depth, 0).hex()}
 
 
 def main(argv: list[str]) -> int:
     if len(argv) == 5 and argv[1] == "params":
         n = int(argv[4])
+        (hp0, t0), (hp1, t1) = Format(Prim("sha512"), n).params(), Format(Prim(argv[3]), n).params()
         with open(argv[2], "wb") as fh:
-            fh.write(b"HMP1" + Format(Prim("sha512"), n).params() + Format(Prim(argv[3]), n).params())
+            fh.write(b"HMP1" + hp0 + hp1 + t0 + t1)
         return 0
     if len(argv) == 3 and argv[1] == "check":
         d = argv[2]

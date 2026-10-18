@@ -529,7 +529,13 @@ static Params load_params(const std::string& path) {
     fprintf(stderr, "%s: not an HMP1 file for %s\n", path.c_str(), CAND_NAME.c_str());
     exit(2);
   }
-  CK(cudaMemcpyToSymbol(HPC, p.raw.data() + 4, 2 * sizeof(HP)));
+  HP hp[2];
+  memcpy(hp, p.raw.data() + 4, sizeof hp);
+  if (hp[0].iv[0] != 0x6a09e667f3bcc908ull || (Cand::WB == 4 && hp[1].iv[0] >> 32)) {
+    fprintf(stderr, "%s: the arms' constants are not where HMP1 puts them\n", path.c_str());
+    exit(2);
+  }
+  CK(cudaMemcpyToSymbol(HPC, hp, sizeof hp));
   p.t0 = p.raw.data() + 4 + 2 * sizeof(HP);
   p.t1 = p.t0 + 256 * kb0;
   return p;
