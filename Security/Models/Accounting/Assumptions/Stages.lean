@@ -8,7 +8,8 @@ model's, a `Prop` over `Accounting.TS.StageWindow`, taken as a hypothesis, never
 
 * `StageLuck`: (L) at `p` per unit at its stage's coin, the per-stage form of (I7) `LuckAt`. Under one σ the same
   statement is false for a steered consumer (it is cheap and passes with probability 1), which is why one σ needs a
-  closure and LIN-STEER; with each stage's coin released after its operands are committed there is no such unit.
+  closure and a steering bound (`Accounting.Guarantees.TS.SegmentSteer`, `SteerUnion`); with each stage's coin released
+  after its operands are committed there is no such unit.
 -/
 
 namespace Accounting.Assumptions.TS
