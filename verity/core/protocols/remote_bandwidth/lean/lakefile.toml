@@ -1,8 +1,9 @@
 # The remote bandwidth audit's verifier as executable Lean (`verity/remote-bandwidth/v0`): a window's receipt checks
 # (`RemoteAudit.verifyWindow`) and the session's bookkeeping (`RemoteAudit.Session`), held to `audit.py` by the difftest
-# (`remote-audit-difftest`). Code: Lean core and the packages below, no Mathlib and nothing of Security.
+# (`remote-audit-difftest`), and the post-seed verdict (`RemoteAudit.PostSeed`, property/v1 on the writers' Program), which
+# `audit.post_seed` runs (`remote-audit-verdict`). Code: Lean core and the packages below, no Mathlib and nothing of Security.
 name = "remote_audit"
-defaultTargets = ["RemoteAudit", "remote-audit-difftest"]
+defaultTargets = ["RemoteAudit", "remote-audit-difftest", "remote-audit-verdict"]
 
 [leanOptions]
 autoImplicit = false
@@ -26,3 +27,7 @@ name = "RemoteAudit"
 [[lean_exe]]
 name = "remote-audit-difftest"
 root = "RemoteAudit.DifftestMain"
+
+[[lean_exe]]
+name = "remote-audit-verdict"
+root = "RemoteAudit.VerdictMain"
