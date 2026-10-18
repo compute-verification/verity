@@ -6,7 +6,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   (registered), and output (i, j) is `ScaledMmS8Coordinate_v2` on row i and weight row j, the served linear's
   ``RN_bf16(RN32(RN32(f32(Y) * s_a) * s_w))`` on its exact s32 Y. The coordinates are one batch over the (row, column) grid,
   so each rest commits one BF16 (the width rule). Rows and weight rows are padded to whole tiles (`TILE`, a warp's
-  32 × 32, the tile the H1 kernel computes): pad row p reads one constant zero bit of its own for every entry, so it is a
+  32 × 32, the tile the H1 kernel computes): pad row p reads constant zero bits of its own, contiguous, so it is a
   distinct row of the site, and its outputs are not served. Decode's one row, a partial last block and a column count off
   the tile all become full grids, which the H1 tile takes; a pad row is zero, so the units' z there is zero.
 * **Groups.** A call is one site and one seed group (decision 122: a batched call over a step's batch is one site): its
@@ -92,15 +92,16 @@ def _body(B: Any, S: Any, x: Coll, sx: Coll, w: Coll, sw: Coll) -> Coll:
     mp, np_ = padded(S.M, S.N)
     L, F = x.type.elem.leaves, sx.type.elem.leaves
     pads = mp - S.M + np_ - S.N
-    zero = B.batch(BL.constant(0), axes=(), n=pads).refs if pads else None
+    zero = B.batch(BL.constant(0), axes=(), n=pads * (L + F)).refs if pads else None
 
-    def pad(p: int, count: int) -> Refs:
-        return Strided(zero.space, zero.idx, zero.base + p, 1, 0, 0, count)
+    def pad(p: int, scale: bool) -> Refs:
+        # contiguous leaves of its own, not one leaf repeated: compile keys a row by its runs, one per repeat
+        return zero.slice(p * (L + F) + (L if scale else 0), p * (L + F) + (L + F if scale else L))
 
-    rows = [x.refs.slice(i * L, (i + 1) * L) for i in range(S.M)] + [pad(p, L) for p in range(mp - S.M)]
-    scales = [sx.refs.slice(i * F, (i + 1) * F) for i in range(S.M)] + [pad(p, F) for p in range(mp - S.M)]
-    wrows = concat([w.refs, *(pad(mp - S.M + p, L) for p in range(np_ - S.N))])
-    wscales = concat([sw.refs, *(pad(mp - S.M + p, F) for p in range(np_ - S.N))])
+    rows = [x.refs.slice(i * L, (i + 1) * L) for i in range(S.M)] + [pad(p, False) for p in range(mp - S.M)]
+    scales = [sx.refs.slice(i * F, (i + 1) * F) for i in range(S.M)] + [pad(p, True) for p in range(mp - S.M)]
+    wrows = concat([w.refs, *(pad(mp - S.M + p, False) for p in range(np_ - S.N))])
+    wscales = concat([sw.refs, *(pad(mp - S.M + p, True) for p in range(np_ - S.N))])
     cells = mp * np_
     grid = [Coll(Array(cells, x.type.elem), concat([_repeat(r, np_) for r in rows])),
             Coll(Array(cells, sx.type.elem), concat([_repeat(s, np_) for s in scales])),
