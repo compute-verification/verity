@@ -31,8 +31,8 @@ The POLICY (`Policy`, explicit, listed in the header as `query.policy`):
   of the partial's producer (`Population`); the row's rank manifests merge by `compose.merge_ranks` (rows keep their rank's digest,
   `tp_peer_binding` binds every output to each peer's partial).
 
-UNRETURNED: a Call whose Values no Call reads, the Program does not return and the policy does not require (DeepSeek-V4's indexer
-projections on its short path) computes nothing anything depends on.  It is not required, the word check skips it like a literal, and
+UNRETURNED: a Call whose Values no Call reads, the Program does not return and the policy does not require (a sparse-attention
+indexer's projections on its short path) computes nothing anything depends on.  It is not required, the word check skips it like a literal, and
 the manifest lists each of its outputs under `unreturned`, spelt as a required one would be, so the omission is auditable.
 
 The identity ENCODINGS, each one constant the manifest and the committing tap share: a collective's rank-local operand as
@@ -412,7 +412,7 @@ class Population:
     @functools.cached_property
     def contested(self) -> frozenset[int]:
         """The Calls spelt at their fx node though they are spelt at their module otherwise: two fx nodes of one module produce a member
-        of the same name at one step (DeepSeek-V4's compressor kv_score Gemm and wo_a einsum, both `out` of the attention module; a
+        of the same name at one step (a KV compressor's kv_score Gemm and the wo_a einsum, both `out` of the attention module; a
         layer's two mHC post-pres).  Two producers never share an identity, and the binder tells them apart by Definition and port, in
         Program order.  The UNRETURNED Calls count, so an omission is never spelt as a required Value."""
         keyed: list[tuple[int, tuple[int, str, str]]] = []
