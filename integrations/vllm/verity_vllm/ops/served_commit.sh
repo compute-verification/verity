@@ -17,7 +17,10 @@
 #        PROGRAM_DIGEST: the Build's program digest of record (the Match's match.json build.program_digest; the treatment refuses a
 #        BUILD that carries another)
 #        env: PY (its directory has `verity-vllm`), PAIRS (2), MAX_NUM_SEQS (8), GPU_UTIL (0.3), KV_GIB (4: the KV cache, kv_cache_memory_bytes), COMMIT_TIMEOUT (2400),
-#             FAULT (VERITY_FAULT for the treatment), EXTRA_COMMIT_ARGS
+#             FAULT (VERITY_FAULT for the treatment), EXTRA_COMMIT_ARGS,
+#             AUTOTUNE (the Match's Inductor dir: its autotune winners, `*/*.best_config`, seed each process's fresh Inductor dir at their
+#             paths, as a served process restarted on its own cache reads them; without it each process times its own, and a winner other
+#             than the Build of record's is another Program, which `compiled verify` refuses)
 set -uo pipefail
 CASE=$1; WL=$(realpath "$2"); BUILD=$(realpath "$3"); PDIG=$4; CKPT=$5; D=$(realpath -m "$6")
 PY=${PY:-/workspace/venv-cu129/bin/python}
@@ -40,6 +43,9 @@ run_arm() {
   local arm=$1 taps=$2 od=$3 rc
   local -a extra=(); [ "$arm" = instrumented ] && extra=("${TRT[@]}")
   rm -rf "$od"
+  if [ -n "${AUTOTUNE:-}" ]; then
+    mkdir -p "$od/inductor" && (cd "$AUTOTUNE" && find . -mindepth 2 -maxdepth 2 -name '*.best_config' -exec cp --parents {} "$od/inductor/" \;) || return 1
+  fi
   ( echo "\$ verity-vllm commit ${COMMON[*]} --only-arm $arm --compiled-taps $taps ${extra[*]} --out $od"
     VERITY_FAULT=$([ "$arm" = instrumented ] && echo "${FAULT:-}") TORCHINDUCTOR_CACHE_DIR="$od/inductor" VLLM_CACHE_ROOT="$od/vllm_cache" \
     VERITY_INDUCTOR_DIR_PER_PROCESS=1 VLLM_DISABLE_COMPILE_CACHE=1 TORCHINDUCTOR_FX_GRAPH_CACHE=0 TORCHINDUCTOR_AUTOGRAD_CACHE=0 \
@@ -50,7 +56,7 @@ run_arm() {
 log "control process (pairs $PAIRS)"
 run_arm control off "$D/commit_control"; rcc=$?
 log "control rc=$rcc"
-log "treatment process (served taps, Build of record ${PDIG:0:16}${FAULT:+, VERITY_FAULT=$FAULT})"
+log "treatment process (served taps, Build of record ${PDIG:0:16}${FAULT:+, VERITY_FAULT=$FAULT}${AUTOTUNE:+, autotune winners of $AUTOTUNE})"
 run_arm instrumented served "$D/commit_treatment"; rct=$?
 log "treatment rc=$rct"
 verity-vllm compiled-merge --control "$D/commit_control" --treatment "$D/commit_treatment" --out "$D/commit" > "$D/commit_merge.log" 2>&1; rcm=$?
