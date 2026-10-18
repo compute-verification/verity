@@ -665,7 +665,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
             roots.append({"port": f"{m['name']}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
         publics[m["name"]] = a0.sha512_file(m["dir"] / f"pub-{m['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
-    window = {"kind": "check 3", "of": "the remote session's drawn receipts (a7.py, check3_audit)",
+    window = {"kind": "stand-in", "of": "check 3 of the remote session's drawn receipts (a7.py, check3_audit), on the stand-in's store",
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "a7_check3.links: every witness row by its b || c"}
     rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
@@ -679,6 +679,8 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
                "members": [{"name": m["name"], "n": m["n"], "ands": m["ands"], "unit_nnz": m["unit_nnz"], "k_log": m["meta"]["k_log"],
                             "pin": m["pin"], "oks": sum(m["oks"]), "stage_s": m["seconds"]} for m in members],
                "population": n_all, "checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
+    if not all(v["ok"] for v in checks.values()):
+        summary["checks"] = checks
 
     verdicts, proved, n_inst, statement, sessions, served, session_roots = {}, [], 0, {}, [], [], {}
     lean_draw = {"units": []}
@@ -1019,6 +1021,11 @@ def main() -> int:
     check3 = check3_audit(a, out / "check3", rs, c3, a.port + len(members))
     summary["check3"] = {x: check3[x] for x in ("draws", "members", "failures", "accepted", "audit", "verdicts")}
     print("A7 check 3 " + json.dumps(summary["check3"], default=str)[:3000], flush=True)
+    if not check3["accepted"]:
+        summary["check3"]["checks"] = check3.get("checks")
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        print("A7 " + json.dumps({"refused_by_check3": check3["session_verdicts"], "checks": check3.get("checks")}, default=str)[:4000])
+        return 1
     br = bridge(rs, members[0], members[1], req.steps)
     session_ok = rs.accepted
     map_m = members[1]
