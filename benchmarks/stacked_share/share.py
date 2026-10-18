@@ -248,6 +248,24 @@ def lever_models(doc: Mapping[str, Any]) -> dict[str, dict]:
     return out
 
 
+def primitives(doc: Mapping[str, Any], mix: Mapping[str, Any], requests: Sequence[Mapping[str, int]]) -> dict[str, Fraction]:
+    """A token row's units as built over the trace by ``primitive|class``, largest first: a token row's own (the spec's extra
+    under ``(TP all-reduce)``), a sampled row's times X / T, and each attention coefficient times its quantity a token."""
+    pr = doc["levers"]["primitives"]
+    t = exact(mix, requests)
+    x = dict(zip(COEFFICIENTS, (t["T"], t["Q"], t["K"], t["n"], t["n0"])))
+    out: Counter = Counter()
+    for k, v in pr["token"].items():
+        out[k] += F(v)
+    for k, v in ((doc.get("extra") or {}).get("token") or {}).items():
+        out[f"(TP all-reduce)|{k}"] += F(v)
+    for k, v in pr["sample"].items():
+        out[k] += F(v) * t["X"] / t["T"]
+    for k, co in pr["attention"].items():
+        out[k] += int(doc["attention"]["calls"]) * sum((F(co[c]) * x[c] for c in COEFFICIENTS), Fraction(0)) / t["T"]
+    return {k: v for k, v in sorted(out.items(), key=lambda kv: -kv[1]) if v}
+
+
 def table(models: Mapping[str, tuple[Mapping[str, Any], Mapping[str, Any], Sequence[Mapping[str, int]]]], gpus: int,
           width: float = WIDTH) -> dict:
     out: dict[str, Any] = {"E_word": E_WORD, "lifetimes_s": LIFETIMES, "R_in": list(R_INS), "gpus": gpus, "width_s": width,
@@ -269,11 +287,20 @@ def table(models: Mapping[str, tuple[Mapping[str, Any], Mapping[str, Any], Seque
                 rows[lever].update({"trace": r["trace"], "busy_s": r["busy_s"], "tokens_per_s_engine": r["tokens_per_s"],
                                     "tokens_per_s_engine_peak": r["tokens_per_s_peak"],
                                     "tokens_per_s_node": r["tokens_per_s"] * engines})
-        out["models"][name] = {"engines": engines, "M_dyn": M, "pool_engine": pool(mix), "kv_blocks": mix["kv_blocks"],
+        prims = primitives(doc, mix, requests) if "primitives" in doc["levers"] else {}
+        if prims and sum(prims.values()) != share_total(doc, mix, requests):
+            raise AssertionError(f"{name}: the primitives' units a token don't sum to the document's")
+        out["models"][name] = {"primitives_per_token": prims, "engines": engines, "M_dyn": M, "pool_engine": pool(mix), "kv_blocks": mix["kv_blocks"],
                                "kv_bytes_per_token": mix["kv_bytes_per_token"], "tp": mix["args"]["tp"],
                                "program": doc["program"], "levers": rows,
                                "input_term": {lt: {str(R_in): R_in * L / M for R_in in R_INS} for lt, L in LIFETIMES.items()}}
     return out
+
+
+def share_total(doc: Mapping[str, Any], mix: Mapping[str, Any], requests: Sequence[Mapping[str, int]]) -> Fraction:
+    """The units a token row as built over the trace, exactly."""
+    t = exact(mix, requests)
+    return total(step_units(model_units(doc), **{k: t[k] for k in MODEL})) / t["T"]
 
 
 def markdown(t: Mapping[str, Any]) -> str:
@@ -293,6 +320,12 @@ def markdown(t: Mapping[str, Any]) -> str:
             dom = max(r["share"], key=r["share"].get)
             lines.append(f"| {name} | {lever} | {r['units_per_token']:.3g} | {r['R_cap_node']['peak']:.3g} | "
                          f"{dom} {r['share'][dom]:.0%} | {_pct(r['f']['1 h']['best found'][str(R_INS[0])]['peak'])} |")
+    lines += ["", "| model | primitive (class) | units/token, as built | share |", "|---|---|---|---|"]
+    for name, m in t["models"].items():
+        whole = sum(m["primitives_per_token"].values())
+        for k, v in list(m["primitives_per_token"].items())[:8]:
+            p, c = k.split("|")
+            lines.append(f"| {name} | {p} ({c}) | {v:.3g} | {v / whole:.0%} |")
     return "\n".join(lines)
 
 

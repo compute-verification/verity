@@ -178,7 +178,10 @@ DOC = {"program": {"function": "toy"}, "tokens": 4, "samples": 2, "token": {"rou
        "levers": {"attention_per_key": {"Int8StaticQuant_v1": {"roundings": 2}, "Int8ColumnQuant_v1": {"roundings": 1},
                                         "Int8LutAttentionRow_v1": {"roundings": 2}},
                   "linear": {"q": {"by_family": {"Int8RowScale_v1": {"roundings": 1}}}},
-                  "lm_head_int8": {"units": {"roundings": 4}}}}
+                  "lm_head_int8": {"units": {"roundings": 4}},
+                  "primitives": {"token": {"A|roundings": 10, "B|provisional:roundings": 2},
+                                 "sample": {"C|compare_select": 3, "G|products": 10},
+                                 "attention": {"D|roundings": {"r0": 1, "b_q": 2, "b_kv": 5, "w0": 7, "w_start": -1}}}}}
 
 
 def test_rates_f_and_the_levers():
@@ -200,3 +203,5 @@ def test_rates_f_and_the_levers():
     toy = tab["models"]["toy"]
     assert toy["engines"] == 2 and toy["M_dyn"] == 2 * share.pool(mix())
     assert list(toy["levers"]) == list(lv) and "| toy | 10 min |" in share.markdown(tab)
+    prims = share.primitives(DOC, mix(), REQUESTS)  # table() holds their sum to the document's
+    assert list(prims)[0] == "D|roundings" and prims["G|products"] == Fraction(50, 8) and toy["primitives_per_token"] == prims
