@@ -13,7 +13,8 @@ edge, a block's edge and random), and for each k of `--ks`:
 - `append_multi`: both layers' appends in one launch (more rows than tokens) equal the layer-by-layer appends;
 - `gather`: whole blocks decoded (encoded) or copied (plain) equal the plain cache's blocks.
 
-Then `bound`, the bound key (`bound_gate`): token-layers written after the codec seed, each under its slot's offset.
+Then `bound`, the bound key (`bound_gate`): token-layers written after the codec seed, each under its slot's offset,
+the pinned ones in both forms (without the append coin and with it).
 
 Writes `paged-gate.json` and `paged-gate.log` under `--out`; exits nonzero if any gate fails."""
 from __future__ import annotations
@@ -53,7 +54,8 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log) -> dict:
     """The bound key on every path, in two parts.
 
     - `pinned` (a library at the remote audit's codec, `codec.DEFAULT`): `vectors.json`'s `codec.bound` blocks
-      (the remote audit's payloads j = 0 and 20 under their bound keys), each appended as one token's K and V at the
+      (the remote audit's payloads j = 0 and 20 under their bound keys) and its `codec.coin` blocks (the same payloads
+      appended under the append coin's form b_j(c_a), PROTOCOL.md §3), each appended as one token's K and V at the
       slot and layer whose store-order block is j (store base 0) under b_j, and at another slot with the index
       difference folded into its offset (b_j + tau W (j − there)): the token-layer's words equal the pinned block (its
       SHA-512 and first word) both times, so a page encodes at its store index whatever slot holds it.
@@ -76,32 +78,36 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log) -> dict:
         cache = torch.zeros(BLOCKS, G, BS, 2 * D, dtype=torch.bfloat16, device="cuda")
         lay = P.layout(cache, G, WB)
         pins = []
-        for v in pinned["bound"]:
-            j = v["j"]
-            pay = RV.payload(j)
-            d = RC.digest(pay)
-            b = RC.binding(d, j, key)
-            kr = torch.frombuffer(bytearray(pay[:2048]), dtype=torch.bfloat16).view(1, G * D).cuda()
-            vr = torch.frombuffer(bytearray(pay[2048:]), dtype=torch.bfloat16).view(1, G * D).cuda()
-            there = (nslots - 1 - j // LAYERS) * LAYERS + j % LAYERS
-            for slot, layer, off in ((j // LAYERS, j % LAYERS, b),
-                                     (there // LAYERS, there % LAYERS, (b + key.tau * W * (j - there)) % f.p)):
-                bj = P.offsets(torch, [off if s == slot else 0 for s in range(nslots)], f)
-                P.append(lib, torch, cache, lay, 0, LAYERS, layer, 1, rc.rounds, kr, vr,
-                         torch.tensor([slot], dtype=torch.int64, device="cuda"), bj=bj)
-                torch.cuda.synchronize()
-                bo, so = divmod(slot, BS)
-                got = torch.cat((cache[bo, :, so, :D].reshape(-1), cache[bo, :, so, D:].reshape(-1))).view(
-                    torch.uint8).cpu().numpy().tobytes()
-                pins.append({"j": j, "slot": slot, "layer": layer, "folded": slot * LAYERS + layer != j,
-                             "digest": d.hex() == v["digest"], "b": format(b, "x") == v["b"],
-                             "word_0": got[:WB].hex() == v["word_0"],
-                             "block_sha512": hashlib.sha512(got).hexdigest() == v["block_sha512"]})
-        pins_ok = all(p["digest"] and p["b"] and p["word_0"] and p["block_sha512"] for p in pins)
-        out["pinned"] = {"codec": rc.name, "blocks": pins, "ok": pins_ok}
+        for form, vectors, coin in (("bound", pinned["bound"], None),
+                                    ("coin", pinned["coin"]["bound"], bytes.fromhex(pinned["coin"]["c_a"]))):
+            for v in vectors:
+                j = v["j"]
+                pay = RV.payload(j)
+                d = RC.digest(pay)
+                b = RC.binding(d, j, key, coin)
+                kr = torch.frombuffer(bytearray(pay[:2048]), dtype=torch.bfloat16).view(1, G * D).cuda()
+                vr = torch.frombuffer(bytearray(pay[2048:]), dtype=torch.bfloat16).view(1, G * D).cuda()
+                there = (nslots - 1 - j // LAYERS) * LAYERS + j % LAYERS
+                for slot, layer, off in ((j // LAYERS, j % LAYERS, b),
+                                         (there // LAYERS, there % LAYERS, (b + key.tau * W * (j - there)) % f.p)):
+                    bj = P.offsets(torch, [off if s == slot else 0 for s in range(nslots)], f)
+                    P.append(lib, torch, cache, lay, 0, LAYERS, layer, 1, rc.rounds, kr, vr,
+                             torch.tensor([slot], dtype=torch.int64, device="cuda"), bj=bj)
+                    torch.cuda.synchronize()
+                    bo, so = divmod(slot, BS)
+                    got = torch.cat((cache[bo, :, so, :D].reshape(-1), cache[bo, :, so, D:].reshape(-1))).view(
+                        torch.uint8).cpu().numpy().tobytes()
+                    pins.append({"form": form, "j": j, "slot": slot, "layer": layer,
+                                 "folded": slot * LAYERS + layer != j, "digest": d.hex() == v["digest"],
+                                 "b": format(b, "x") == v["b"], "word_0": got[:WB].hex() == v["word_0"],
+                                 "block_sha512": hashlib.sha512(got).hexdigest() == v["block_sha512"]})
+        forms = {form: all(p["digest"] and p["b"] and p["word_0"] and p["block_sha512"]
+                           for p in pins if p["form"] == form) for form in ("bound", "coin")}
+        pins_ok = all(forms.values())
+        out["pinned"] = {"codec": rc.name, "forms": forms, "blocks": pins, "ok": pins_ok}
         out["ok"] &= pins_ok
         log(f"bound pinned {rc.name}: {'ok' if pins_ok else 'FAIL ' + str(pins)} ({len(pins)} appends against "
-            "vectors.json's codec.bound, at the block's own slot and folded at another)")
+            "vectors.json's codec.bound and codec.coin, at the block's own slot and folded at another)")
         k, dev_key = rc.rounds, dev
     else:
         out["pinned"] = {"skipped": f"the library is {f.name}{'/masked' if lib.mask else ''}, not {rc.name}"}

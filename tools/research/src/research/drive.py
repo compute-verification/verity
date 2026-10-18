@@ -76,6 +76,9 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-
 DEFERRED = "every step but the deferred ones passed"
 #: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
 SIGTERM_RC = 143
+#: pre-warms running at once: each is a whole check in a slot, and a train waits behind every one (18 Oct 00:43Z: four took the
+#: room drive counts, and no train started)
+PREWARM_MAX = 1
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
 CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
 RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
@@ -692,6 +695,16 @@ class Driver:
         if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}):
             self.resend(drive, m, prs, v)
             return
+        # a member a lower train's running or passed check covers is left to that check: ejecting it would cancel that train,
+        # and were it the cause, that check fails too
+        main = _out(self.repo, "rev-parse", "origin/main")
+        floor = max((k + 1 for k, x in enumerate(members[:-1]) if x.commit in drive["launched"]
+                     and self.verdict(x.commit, main, drive).state in ("running", "passed")), default=0)
+        if hit and all(members.index(x) < floor for x in hit):
+            self.q.log(f"research queue drive: {m.commit[:12]} failed on {what}, which only members the check of "
+                       f"{members[floor - 1].commit[:12]} covers change: waiting on that check")
+            return
+        hit = [x for x in hit if members.index(x) >= floor]
         ejected, why = [], what
         for x in hit:
             reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which #{x.pr} changes"
@@ -752,7 +765,7 @@ class Driver:
 
     def prewarm(self, drive: dict, running: int) -> int:
         """Launch and follow each pre-warm `warming` asked for (one `train.sh` check of the PR's head, in a check slot, while fewer
-        than `max_running` checks run) and mark it done once it ends, passed or not: the train's check is the gate.  Returns
+        than `max_running` checks run, and `PREWARM_MAX` at a time) and mark it done once it ends, passed or not: the train's check is the gate.  Returns
         how many run now, for the running count."""
         q = self.q
         heads = {f"{p.number}@{p.head}" for p in q.github.open_prs()}
@@ -776,7 +789,7 @@ class Driver:
                     q.log(f"research queue drive: #{rec['pr']}'s pre-warm {' '.join(rec['ids'])} ended; it joins `{q.branch}`")
                     continue
                 rec.pop("ids")
-            if running + active >= self.max_running or self.dry_run or q.shadow:
+            if running + active >= self.max_running or active >= PREWARM_MAX or self.dry_run or q.shadow:
                 continue
             ids, tail = self.launch(self.repo, rec["head"], self.on, False)
             if not ids:

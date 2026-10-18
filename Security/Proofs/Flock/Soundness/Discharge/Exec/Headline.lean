@@ -119,17 +119,18 @@ theorem _root_.FlockSoundness.Prog.flock_headline_exec
   exact exec_le_of_refines hRef _ hH
 
 /-- **Draft: the headline at the executable, for the salted session.** For `hm96Rows` statements the audit flock-verify
-refines is the one with `batchedSessionL H512 enc512 leaf512 plan`. A bound `B` on its acceptance with at least `K`
+refines is the one with `batchedSessionL H512 enc512 Lp plan`, `Lp` the model's leaf of the statement's leaf scheme. A bound `B` on its acceptance with at least `K`
 wrong units of `σ`'s committed values (`hB`, the headline restated over `Merkle.Leaf`, which is open) carries to
 flock-verify's acceptance in the live audit, plus the refinement's event. -/
-theorem flock_headline_exec_L {L : Law n} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
+theorem flock_headline_exec_L {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
+    {L : Law n} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (I : Inputs) (live : Finset (Fin n) → Reg → Game Transcript) (τ : Strategy (auditLive L Reg live))
-    (σ : Strategy (audit L Reg (batchedSessionL H512 enc512 leaf512 plan)))
+    (σ : Strategy (audit L Reg (batchedSessionL H512 enc512 Lp plan)))
     {bad : Reg × Finset (Fin n) × Transcript → Prop}
     (hRef : ExecRefines (auditLive L Reg live) τ (LiveAccepts I) bad
-      (audit L Reg (batchedSessionL H512 enc512 leaf512 plan)) σ)
+      (audit L Reg (batchedSessionL H512 enc512 Lp plan)) σ)
     (Q : Prop) {B : ℝ≥0∞}
-    (hB : prob (fun o => o.1 = true ∧ Q) (audit L Reg (batchedSessionL H512 enc512 leaf512 plan)) σ ≤ B) :
+    (hB : prob (fun o => o.1 = true ∧ Q) (audit L Reg (batchedSessionL H512 enc512 Lp plan)) σ ≤ B) :
     prob (fun o => LiveAccepts I o ∧ Q) (auditLive L Reg live) τ ≤ B + prob bad (auditLive L Reg live) τ :=
   exec_le_of_refines hRef Q hB
 
