@@ -36,6 +36,18 @@ held one while every later one was cancelled on arrival, network-accounting's be
 to cancel a CREATING run. A goal run (`run-goal-...`) can't be read or streamed on its own (400), so it is never followed; an
 agent whose latest run the API won't read is recorded once as unreadable.
 
+A coordinator holds a handle of `--registry` (the Slack registry): the holder of the handle's open inbox in `--routes` (the notes'
+`routes.d`, which a handover moves first; on 18 Oct the registry still named vllm's predecessor), else the first agent id in the
+handle's `holder`. It runs a 15-minute duty timer, and its inbox thread rings it for each doorbell. One whose latest run's turn is
+over (FINISHED, EXPIRED, or WAITING_FOR_BACKGROUND_WORK, where coordinators mostly sit between wakes) is **ready to wake** when
+nothing has run for `WAKE_S` since its last activity (its timer didn't fire), or when a doorbell for its handle rang after that
+and `DOORBELL_S` has passed with nothing run (its subscription didn't). Its last activity is the later of the run's `updatedAt`
+(read each sweep) and its last stream event: whether a wake starts a new run or resumes a background-waiting one, it moves. The
+doorbells come from `doorbells.json` beside `--log` (`{"t", "inboxes": {handle: {"agent", "last"}}}`, each inbox's latest
+doorbell as a Slack ts), which infra's relay writes, since only it reads Slack; one older than `BELLS_STALE_S` is not read. The
+watch records it at most once per agent an hour, and with `--wake` starts a run that says so (a 409 agent_busy isn't counted: a
+run of its own just started). `--wake` stays off until a red team has attacked the rule.
+
 Each finding is a line of JSON in `--log`; each sweep ends by replacing `status.json` beside it atomically, in the schema
 `verity/agent-watch-status/v1` (`snapshot`: its time `t`, `poll_s`, and per agent read its id, the run the watch judges,
 statuses, watch state, since and restart count, in categories only), so a reader can tell a quiet watch from a dead one; a
@@ -43,6 +55,7 @@ sweep that fails leaves the last one. `state.json` beside it keeps what must out
 deploy): when it last cancelled, restarted or woke each agent, the restart counts, the continue runs still to start and the runs
 already recorded. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack credential, so
 infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
+`--once --dry-run` runs one sweep that follows no stream and sends no POST (each is printed).
 """
 from __future__ import annotations
 
@@ -52,6 +65,7 @@ import calendar
 import fcntl
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -86,12 +100,21 @@ CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothi
 AFTER = {"tool_done": "a finished tool call", "turn_ended": "the end of your turn"}
 AFTER_ERROR = ("continue: your last run ended in ERROR (the agent watch restarted you). Read your inbox and carry on from where "
                "you stopped.")
+WAKE_S = 30 * 60            # twice a coordinator's 15-minute duty timer
+DOORBELL_S = 10 * 60
+BELLS_STALE_S = 30 * 60
+# a run whose turn is over; coordinators mostly sit in background work between wakes (12 of 14 at 19:38Z, 18 Oct). CANCELLED is a
+# person's stop or the watch's own; ERROR is `restart`'s
+IDLE_DONE = {"FINISHED", "EXPIRED", "WAITING_FOR_BACKGROUND_WORK"}
+AGENT_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+WAKE = ("wake: your duty timer seems not to have fired ({why}; the agent watch started this run). Run your duties, read your "
+        "doorbell (`research msg read --as {handle}`), and set your timer and subscriptions again.")
 SCHEMA = "verity/agent-watch-status/v1"
 AGENT_STATUSES = ("ACTIVE", "IDLE", "ARCHIVED", "unknown")
 RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED", "ERROR", "CANCELLED", "EXPIRED", "unreadable",
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
-                "crashed", "erroring", "unreadable")
+                "crashed", "erroring", "unreadable", "ready_to_wake")
 
 
 def iso(t: float) -> str:
@@ -104,6 +127,42 @@ def epoch(s: str | None) -> float | None:
         return calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%dT%H:%M:%S"))
     except (ValueError, TypeError):
         return None
+
+
+def read_json(p: Path | None) -> dict:
+    try:
+        d = json.loads(p.read_text()) if p else {}
+    except (OSError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def holders(registry: Path | None, routes: Path | None) -> dict[str, str]:
+    """agent id -> handle, for each registry handle: its open inbox's holder (`routes/<handle>.json`, which a handover moves
+    first), else the first agent id in its `holder` (later ones are lanes that post as it)."""
+    out = {}
+    for h in read_json(registry).get("handles") or []:
+        r = read_json(routes / f"{h.get('handle')}.json") if routes else {}
+        m = AGENT_RE.fullmatch(str(r.get("holder") or "")) if not r.get("closed") else None
+        if m := m or AGENT_RE.search(str(h.get("holder", ""))):
+            out[m[0]] = h["handle"]
+    return out
+
+
+def doorbells(path: Path, t: float) -> tuple[dict[str, float], str]:
+    """handle -> its latest doorbell (a Slack ts), from the relay's file, and whether that was fresh, stale or missing."""
+    d = read_json(path)
+    if not d:
+        return {}, "missing"
+    if t - (epoch(d.get("t")) or 0) >= BELLS_STALE_S:
+        return {}, "stale"
+    out = {}
+    for handle, i in (d.get("inboxes") or {}).items():
+        try:
+            out[str(handle)] = float(i["last"])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out, "fresh"
 
 
 def started(x: dict) -> bool:
@@ -209,8 +268,12 @@ def lock(path: Path) -> IO | None:
 
 
 class Watch:
-    def __init__(self, api, log: Path, clock: Callable[[], float] = time.time):
-        self.api, self.log, self.clock = api, log, clock
+    def __init__(self, api, log: Path, clock: Callable[[], float] = time.time, registry: Path | None = None,
+                 routes: Path | None = None, wake: bool = False):
+        self.api, self.log, self.clock, self.wake = api, log, clock, wake
+        self.registry, self.routes = registry, routes
+        self.woken: dict[str, float] = {}           # agent -> when the watch last recorded it ready to wake
+        self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
         self.runs: dict[str, Run] = {}
         self.states: dict[str, tuple[str, str, str]] = {}   # agent -> (run, its last finding's kind, since), for status.json
         self.status_of: dict[str, tuple[str, str]] = {}     # agent -> (run, its status when the watch last read it)
@@ -225,7 +288,7 @@ class Watch:
         self.left: set[str] = set(s.get("left", []))              # agents past MAX_RESTARTS, recorded once
         self.pending: dict[str, dict] = s.get("pending", {})      # agent -> a continue run the API refused, tried again
         self.done: dict[str, float] = s.get("done", {})           # runs judged once (ERROR, stuck, unreadable) -> when
-        self.final: dict[str, str] = {}                           # run -> its terminal status, never read again
+        self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again
 
     def save(self) -> None:
         cutoff = self.clock() - 2 * 86400
@@ -280,6 +343,38 @@ class Watch:
                 self.record("crashed", r, status="ERROR", action=f"restart failed: HTTP {e.code}")
         except (urllib.error.URLError, OSError, ValueError) as e:
             self.record("crashed", r, status="ERROR", action=f"restart failed: {type(e).__name__}: {e}")
+
+    @staticmethod
+    def ready(status: str | None, last: float | None, bell: float | None, t: float) -> str | None:
+        """Why a coordinator whose latest run is in `status`, last active at `last`, is ready to wake. Only a doorbell after
+        `last` counts: one rung during the turn may have been read in it, and the timer rule catches one that wasn't."""
+        if status not in IDLE_DONE or last is None:
+            return None
+        if bell is not None and bell > last and t - bell >= DOORBELL_S:
+            return f"a doorbell rang at {iso(bell)} and nothing has run since"
+        if t - last >= WAKE_S:
+            return f"nothing has run for {int((t - last) // 60)} min since its latest run went {status} at {iso(last)}"
+        return None
+
+    def wake_up(self, a: dict, handle: str, run: str, why: str, t: float) -> None:
+        """Record a coordinator ready to wake, and with `wake` start a run on it; at most once per agent an hour."""
+        if t - self.woken.get(a["id"], -RECANCEL_S) < RECANCEL_S:
+            return
+        self.woken[a["id"]], new, action = t, None, "recorded (--wake is off)"
+        if self.wake:
+            try:
+                new = ((self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": WAKE.format(why=why, handle=handle)}})
+                        or {}).get("run") or {}).get("id")
+                action = "started a run"
+            except urllib.error.HTTPError as e:
+                if e.code == 409:                   # agent_busy: a run of its own has just started; nothing missed
+                    self.woken.pop(a["id"], None)
+                    return
+                action = f"wake failed: HTTP {e.code}"
+            except (urllib.error.URLError, OSError, ValueError) as e:
+                action = f"wake failed: {type(e).__name__}: {e}"
+        self.record("ready_to_wake", Run(a["id"], run, a.get("name") or ""), handle=handle, reason=why, action=action,
+                    **({"new_run": new} if new else {}))
 
     def on_event(self, run_id: str, event: str, data: dict) -> None:
         with self.lock:
@@ -407,7 +502,7 @@ class Watch:
     def read(self, a: dict, run: str) -> dict | None:
         """The run's record (a terminal one is read once); None, and recorded once, when the API won't read it."""
         if run in self.final:
-            return {"id": run, "status": self.final[run]}
+            return self.final[run]
         try:
             info = {"id": run, **self.api.get(f"/v1/agents/{a['id']}/runs/{run}")}
         except urllib.error.HTTPError as e:         # a goal run's id (run-goal-...) isn't one the runs endpoint takes
@@ -415,15 +510,15 @@ class Watch:
                 self.record("unreadable", Run(a["id"], run, a.get("name") or ""), status=f"HTTP {e.code}")
             return None
         if info.get("status") in TERMINAL:
-            self.final[run] = info["status"]
+            self.final[run] = info
         return info
 
     def sweep(self, start_stream: Callable[[Run], None]) -> None:
         """One pass: find each live agent's current run and follow it, record runs stuck in CREATING, restart an ERROR one,
         start refused continue runs, then judge every followed run."""
         t = self.clock()
-        live = {}
-        for a in self.api.agents():
+        live, agents = {}, list(self.api.agents())
+        for a in agents:
             recent = t - (epoch(a.get("updatedAt")) or 0) < IDLE_RECENT_S
             if a.get("latestRunId") and (a.get("status") == "ACTIVE" or (a.get("status") == "IDLE" and recent)):
                 live[a["id"]] = a
@@ -472,6 +567,22 @@ class Watch:
             elif last and last.get("status") == "ERROR":
                 self.restart(a, latest, t)
         self.retry(current, t)
+        coords, (bells, fresh) = holders(self.registry, self.routes), doorbells(self.log.with_name("doorbells.json"), t)
+        if fresh != self.doorbells and (coords or self.doorbells):
+            print(f"{iso(t)} doorbells.json: {fresh}; {len(coords)} coordinators", file=sys.stderr, flush=True)
+        self.doorbells = fresh
+        for a in agents:
+            run, handle = a.get("latestRunId"), coords.get(a["id"])
+            if not handle or not run or a.get("status") == "ARCHIVED":
+                continue
+            if not (info := self.read(a, run)):
+                continue
+            with self.lock:
+                r = self.runs.get(run)
+                heard = r.last_t if r and r.last_kind != "start" else None
+            last = max((x for x in (epoch(info.get("updatedAt") or info.get("createdAt")), heard) if x is not None), default=None)
+            if why := self.ready(info.get("status"), last, bells.get(handle), t):
+                self.wake_up(a, handle, run, why, t)
         for run, (a, x) in current.items():
             with self.lock:
                 r = self.runs.get(run)
@@ -582,6 +693,11 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     lp = sub.add_parser("loop")
     lp.add_argument("--log", type=Path, default=Path("/data/agent-watch/events.jsonl"))
+    lp.add_argument("--registry", type=Path, default=None, help="the Slack registry (registry.json): the handles")
+    lp.add_argument("--routes", type=Path, default=None, help="the notes' routes.d: who holds each handle's inbox")
+    lp.add_argument("--wake", action="store_true", help="start a run on a coordinator ready to wake (default: record it only)")
+    lp.add_argument("--once", action="store_true", help="one sweep, following no stream")
+    lp.add_argument("--dry-run", action="store_true", help="send no POST; print each instead")
     ns = ap.parse_args(argv)
     key = os.environ.get("CURSOR_API_KEY")
     if not key:
@@ -591,7 +707,16 @@ def main(argv: list[str] | None = None) -> int:
     if held is None:
         print(f"{iso(time.time())} another watch holds {ns.log.with_name('watch.lock')}", file=sys.stderr, flush=True)
         return 0
-    watch = Watch(Api(key), ns.log)
+    api = Api(key)
+    if ns.dry_run:
+        def post(path: str, body: dict | None = None) -> dict:
+            print(f"dry-run: POST {path} {json.dumps(body)}", file=sys.stderr, flush=True)
+            return {"run": {"id": "dry-run"}}
+        api.post = post
+    watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, wake=ns.wake)
+    if ns.once:
+        watch.sweep(lambda r: None)
+        return 0
     while True:
         try:
             watch.sweep(lambda r: follow(watch, r))
