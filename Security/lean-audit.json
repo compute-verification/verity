@@ -1036,6 +1036,32 @@
    "assumptions": [],
    "type_hash": "0a39e7949bbfaf219bed8ea794cb61c9d969c72aec4d51d6451736b6201ad9e3"
   },
+  "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise : Accounting.Guarantees.CoinFlow.CoinsThroughNoise"
+   ],
+   "assumptions": [],
+   "type_hash": "242784ae038abec79a92a83524a14e097297d292d0bf88cd5ba6ba9ad302551f"
+  },
+  "Accounting.SecurityProofs.CoinFlow.OneReader": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.CoinFlow.OneReader : Accounting.Guarantees.CoinFlow.OneReader"],
+   "assumptions": [],
+   "type_hash": "beb14de87a11cc43a997c57c356978087413cf22ec9574620ba9f4c4ccb31c79"
+  },
+  "Accounting.SecurityProofs.CoinFlow.PointMass": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.CoinFlow.PointMass : Accounting.Guarantees.CoinFlow.PointMass"],
+   "assumptions": [],
+   "type_hash": "0745b1724b48ccb354df4bccaf890e88858f92d4ae4bedc5948830d074651b9e"
+  },
+  "Accounting.SecurityProofs.CoinFlow.ViewIndependent": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.CoinFlow.ViewIndependent : Accounting.Guarantees.CoinFlow.ViewIndependent"],
+   "assumptions": [],
+   "type_hash": "7e074a4228ed1d423f1413782d673f6a9e28262668db83fc36e2646a7ae9e909"
+  },
   "Accounting.SecurityProofs.Colocation": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Colocation : Accounting.Guarantees.Colocation"],
@@ -6729,6 +6755,22 @@
    "Accounting.SecurityProofs.TS.LiLowBit": {
     "function": "Pouw.Receipt.liChain",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.CoinFlow.ViewIndependent": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.CoinFlow.OneReader": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.CoinFlow.PointMass": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -7598,6 +7640,37 @@
    },
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
+  "Definitions.Accounting.CoinFlow": {
+   "digest": "d92058d46cc0cbd1aab092b6fc14252a58e7426340341c403c62f2e94ee9ad66",
+   "definitions": {
+    "Accounting.CoinFlow.Program": "4681b9ef2d5bb5ed9f7a8248b1d51b8358d81e324c63f85f793ae1f5ff9ad34b",
+    "Accounting.CoinFlow.Program.CoinFlowRule": "d9d025fa956f933c362a83c181e2dac5ea3a72ea4d23bbbe319fae0374a8e30a",
+    "Accounting.CoinFlow.Program.Desc": "1a2e96c393b733ce878dc57aa1871589f041a0f8fd81b97ccb4d45e1526559ed",
+    "Accounting.CoinFlow.Program.OneUse": "9627220bf10b73ca5e463bd500711eb2fb0f37d0e9cd21ffeb9025a0b32ed108",
+    "Accounting.CoinFlow.Program.SinkConfined": "ca71ce2ddeea4da132d5a9514d768f764b3d07404e779a5ba3db5871dff42d26",
+    "Accounting.CoinFlow.Program.Topological": "a2c1e3bb6d3f8b333509d02288704e1d44cb4f7967bc317f955482e977631e0a",
+    "Accounting.CoinFlow.Program.View": "b0182cdaa18dd7a1ae21024e91e01e4766d44a64e22d947cee1dd2d7177638e1",
+    "Accounting.CoinFlow.Program.admits": "7f1c2326538d67bfdbb3cc62d019527f9a71e37f5b869d34377f3378131763a0",
+    "Accounting.CoinFlow.Program.coins": "a6f042fe78d33dd0e9e84f5eb92cc0171b3fdbd2d5eb2b3317b20bd57610fedc",
+    "Accounting.CoinFlow.Program.eval": "2775759411bd914fe04150b2c2612cd9ec0baa338f9729501cc3913cea56647c",
+    "Accounting.CoinFlow.Program.fold": "241c37c883c86293fecd9da9141bac9d7b442fafb7b0de441823dc1e94fa5066",
+    "Accounting.CoinFlow.Program.instDecidableCoinFlowRule": "7b23d297063f2616084d702b27ec95621265e236b33c183b825403b859c1b773",
+    "Accounting.CoinFlow.Program.instDecidableOneUse": "e89971d0418c00f0ac987172d5e3f24551564b14f500ed7d5f11766743ed92ce",
+    "Accounting.CoinFlow.Program.instDecidableSinkConfined": "89c6b5749cdb09c529d6faee2eb121a57abeed69d17bdbe7a3be614d642b8419",
+    "Accounting.CoinFlow.Program.instDecidableTopological": "6f3fdb3671ac78effaa76c3c5c14c4ef34c1f717153a17ad42703d2d8e5895e0",
+    "Accounting.CoinFlow.Program.noise": "8e9c216f50c8333899b7be7fa66f28a3610307bcb3bd95031114f29cc0eaae52",
+    "Accounting.CoinFlow.Program.noiseCoins": "2fb184b19832590284924a5decbba2ae6c79949fbc692335bba60a81320ce58f",
+    "Accounting.CoinFlow.Program.op": "aacd9ef2e6f27d1ddef23f9ddd7ffcadbe26fcc79c5810d62beb81a99d603d3d",
+    "Accounting.CoinFlow.Program.reads": "05d5f2584705737f08b2a85201da53cb1f1a207fbf0e085d3f1f65129e8946b4",
+    "Accounting.CoinFlow.Program.view": "f299b57bd927515e8ae6e1fc5370f4bb8e948649e2386bdfe8d451ad9ef72c1a"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise",
+    "Accounting.SecurityProofs.CoinFlow.OneReader",
+    "Accounting.SecurityProofs.CoinFlow.PointMass",
+    "Accounting.SecurityProofs.CoinFlow.ViewIndependent"
+   ]
+  },
   "Definitions.Accounting.Confidence": {
    "digest": "8f0f17fed4f0fe12353bd5c626eef6260396dd53fa330f78c0fd405bc0b8e70f",
    "definitions": {
@@ -8105,6 +8178,7 @@
     "Accounting.HMu.persist": "d25d873c34651c851b94e9e79a1e17865fcdba8cd0aea86da832ab0037f776ad"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.CoinFlow.PointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
     "Accounting.SecurityProofs.HMu.LemmaB",
@@ -14685,6 +14759,7 @@
     "Pouw.RelativeSecurity.wRe": "8111c43d37e7e41182d2ee61f0d6d86d9c6f2991686898fc9e1ea46a14ebac70"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.CoinFlow.PointMass",
     "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerCellLuck",
@@ -19954,6 +20029,21 @@
     "Accounting.Guarantees.DerivedStateResidual": "27a116f68a0c157ba7f8a93b057528b5dec47381f1d9b76135656eeb2a5db4b7"
    },
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
+  },
+  "Models.Accounting.Guarantees.CoinFlow": {
+   "digest": "99f4e4094d2d88de5479696cc17615501e7d25714d20fa45af58fa1a647b7421",
+   "definitions": {
+    "Accounting.Guarantees.CoinFlow.CoinsThroughNoise": "2beeecb07dcf0c75733ed413e3cd16e02026ecc2c65e691ccd447b24413121a1",
+    "Accounting.Guarantees.CoinFlow.OneReader": "a5bd869be9c1a01d1840edb0e829355663b08092622b3e6d85e221be562e79b7",
+    "Accounting.Guarantees.CoinFlow.PointMass": "6b45123e0d73c6d05f279fd9cc554141d074d0532c708758bd0db30fa4a56900",
+    "Accounting.Guarantees.CoinFlow.ViewIndependent": "72be5c3ed1a5ef22a2d5d5a1c1564c89cd27978727b2d19bbf6eccd4f39e23cb"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise",
+    "Accounting.SecurityProofs.CoinFlow.OneReader",
+    "Accounting.SecurityProofs.CoinFlow.PointMass",
+    "Accounting.SecurityProofs.CoinFlow.ViewIndependent"
+   ]
   },
   "Models.Accounting.Guarantees.Confidence": {
    "digest": "efce790a6464ea41d877ef6d1bf1c6db1c02c97c43a096e52b0936b6c9b035dc",
