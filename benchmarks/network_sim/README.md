@@ -95,6 +95,11 @@ its own. Once a block's run is over, `run` makes the verifier's "reveal" call to
 ingress window and in egress. The salt takes one of the ingress side's frames in each window's first bucket, so a
 request enqueued in that bucket can go out a bucket later.
 
+Run `r20261018-092640-66bf` (`run --salt`), on vy-nebius-cpu-2 at a load of about 35, gave the table's verdicts on
+every block, under both audits. On every block, each ingress window held one salt frame and egress none, no egress
+frame held a salt or its commitment, the certifier's audit accepted each window's commitment against the revealed
+salt, and the block's server received every salt. The latest tick was 4.3 ms late against the 25 ms slack.
+
 ## Limits
 
 - All the processes share one host's monotonic clock, so one origin times every proxy. Blocks on separate hosts would
