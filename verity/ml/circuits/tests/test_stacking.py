@@ -387,7 +387,7 @@ LEAN_REGISTRY = Path(__file__).resolve().parents[4] / "Security/Definitions/Acco
 NOT_IN_LEAN = {"F32MulWide_v1", "F32Rint_v1", "F32ToS8Rzi_v1", "F64Mul_v1", "F64ToU32RniSat_v1", "LutIndex_v1", "S32ToF32Rn_v1",
                "S8ToF32_v1"}
 #: the ids a ruling classes otherwise than Lean's registry still does: (here, Lean)
-RULED = {"Bf16ToF32_v1": ("affine", "roundings")}
+RULED: dict[str, tuple[str, str]] = {}
 
 
 def lean_class_of() -> tuple[dict[str, str], dict[str, str]]:
