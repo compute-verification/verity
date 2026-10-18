@@ -223,13 +223,15 @@ def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
     """The weights record of the model class on meta, as `derive._weights_of` lists it: the distinct parameters in module order
     (the tied `lm_head.weight` is the embedding's leaf), then the distinct buffers (the embedding's 0-d bf16 `normalizer` where the
     family scales it, the one shared rotary `cos_sin_cache` [max_pos, rot] bf16, each attention layer's four f32 scalar scales).  The
-    field names are informational: the descriptor carries types only.  Under `world` ranks each is one rank's shard (`rank_shape`)."""
+    field names are informational (the descriptor carries types only) and, as every decoder's (`predict.dsa`, `predict.dsv4`), the
+    vLLM model's own (`model.layers.0.…`, `lm_head.weight`), never the prefix of the module a trace wraps it in.  Under `world`
+    ranks each is one rank's shard (`rank_shape`)."""
     bf = lambda *s: _arr(s, 16)  # noqa: E731
     V = C.V // world
     C = rank_shape(C, world)
-    out: list[tuple[str, Type]] = [("model.model.embed_tokens.weight", bf(V, C.H))]
+    out: list[tuple[str, Type]] = [("model.embed_tokens.weight", bf(V, C.H))]
     for L in range(C.NL):
-        p = f"model.model.layers.{L}."
+        p = f"model.layers.{L}."
         out.append((p + "self_attn.qkv_proj.weight", bf(C.QKV, C.H)))
         if C.qkv_bias:
             out.append((p + "self_attn.qkv_proj.bias", bf(C.QKV)))
@@ -246,14 +248,14 @@ def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
         out += [(p + "input_layernorm.weight", bf(C.H)), (p + "post_attention_layernorm.weight", bf(C.H))]
         if C.extra_norms:
             out += [(p + "pre_feedforward_layernorm.weight", bf(C.H)), (p + "post_feedforward_layernorm.weight", bf(C.H))]
-    out.append(("model.model.norm.weight", bf(C.H)))
+    out.append(("model.norm.weight", bf(C.H)))
     if not C.tie:
-        out.append(("model.lm_head.weight", bf(V, C.H)))
+        out.append(("lm_head.weight", bf(V, C.H)))
     if C.embed_scale:
-        out.append(("model.model.normalizer", bf(1)))
-    out.append(("model.model.layers.0.self_attn.rotary_emb.cos_sin_cache", bf(C.max_pos, C.rot)))
+        out.append(("model.normalizer", bf(1)))
+    out.append(("model.layers.0.self_attn.rotary_emb.cos_sin_cache", bf(C.max_pos, C.rot)))
     for L in range(C.NL):
-        out += [(f"model.model.layers.{L}.self_attn.attn.{s}", Value(32)) for s in ("_k_scale", "_v_scale", "_q_scale", "_prob_scale")]
+        out += [(f"model.layers.{L}.self_attn.attn.{s}", Value(32)) for s in ("_k_scale", "_v_scale", "_q_scale", "_prob_scale")]
     return out
 
 
