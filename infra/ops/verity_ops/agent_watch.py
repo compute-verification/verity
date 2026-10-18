@@ -28,7 +28,7 @@ Each finding is a line of JSON in `--log`; each sweep ends by replacing `status.
 `verity/agent-watch-status/v1` (`snapshot`: its time `t`, `poll_s`, and per agent read its id, latest run, statuses, watch state,
 since and restart count, in categories only), so a reader can tell a quiet watch from a dead one; a sweep that fails leaves
 the last one. The control pod holds no Slack credential, so infra's relay reads
-that file over ssh and rings the agent's coordinator. Cancelling and restarting don't wait for it.
+the findings over ssh and rings the agent's coordinator. Cancelling and restarting don't wait for it.
 """
 from __future__ import annotations
 
