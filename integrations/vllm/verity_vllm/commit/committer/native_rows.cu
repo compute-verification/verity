@@ -179,10 +179,12 @@ DEV void node(const NodeK& N, int level, u64 index, const u64* L, const u64* R, 
 
 // SHA-512 of a 128-byte first block (its chaining value cv) and lb row bytes at p (16-byte aligned; the loads may run up to 15
 // bytes past the row, inside its stride).
-DEV void hash_after_block(const u64* cv, const uint8_t* p, u32 lb, u64* x) {
-  cpy8(x, cv);
-  const u32 nblk = (lb + 17 + 127) / 128;
-  for (u32 b = 0; b < nblk; ++b) {
+DEV u32 row_blocks(u32 lb) { return (lb + 17 + 127) / 128; }
+
+// hash_after_block's compressions b0 .. b1 - 1 (b1 <= row_blocks(lb)) on the chaining value x.
+DEV void hash_row_blocks(u64* x, const uint8_t* p, u32 lb, u32 b0, u32 b1) {
+  const u32 nblk = row_blocks(lb);
+  for (u32 b = b0; b < b1; ++b) {
     u64 W[16];
 #pragma unroll
     for (int c = 0; c < 8; ++c) {
@@ -206,6 +208,11 @@ DEV void hash_after_block(const u64* cv, const uint8_t* p, u32 lb, u64* x) {
     if (b == nblk - 1) W[15] = (u64)(128 + lb) * 8;
     sha::compress(x, W);
   }
+}
+
+DEV void hash_after_block(const u64* cv, const uint8_t* p, u32 lb, u64* x) {
+  cpy8(x, cv);
+  hash_row_blocks(x, p, lb, 0, row_blocks(lb));
 }
 
 DEV void salt_prf(const LeafK& K, u64 pos, u64* Y) {
@@ -520,14 +527,25 @@ __global__ void __launch_bounds__(THREADS, 2)
 }
 
 // The split form's second kernel: the nd data positions' leaves from their rows and rows_leaf_salt_kernel's scratch.  H_ONLY: h alone, to hs.
+// One launch runs the row hash's compressions b0 .. b1 - 1: a launch that ends before the row's last keeps the chaining value in the
+// position's own 64 bytes of its output (hs, else out), which the launch that finishes the row overwrites; so each block lasts a
+// fraction of a row and frees its SM sooner for a kernel that needs every SM (the serving stream's cooperative GEMMs).
 template <bool H_ONLY>
 __global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
     rows_leaf_data_kernel(const __grid_constant__ LeafK K, const uint8_t* __restrict__ rows, u64 stride, const uint8_t* __restrict__ sf, u64 first,
-                     u64 nd, uint8_t* __restrict__ out, uint8_t* __restrict__ bc, uint8_t* __restrict__ hs) {
+                     u64 nd, uint8_t* __restrict__ out, uint8_t* __restrict__ bc, uint8_t* __restrict__ hs, u32 b0, u32 b1) {
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= nd) return;
   u64 x[8], B[16], h[8], f[8];
-  hash_after_block(K.mid_P, rows + i * stride, K.lb, x);
+  u64* xs = reinterpret_cast<u64*>((H_ONLY ? hs : out) + 64 * i);
+  const u32 nblk = row_blocks(K.lb), end = b1 < nblk ? b1 : nblk;
+  if (b0 == 0) cpy8(x, K.mid_P);
+  else ld_raw(xs, x, 8);
+  hash_row_blocks(x, rows + i * stride, K.lb, b0, end);
+  if (end < nblk) {
+    st_raw(xs, x, 8);
+    return;
+  }
   const u64* s = reinterpret_cast<const u64*>(sf + 192 * i);
   ld_raw(s, B, 16);
 #pragma unroll
@@ -749,6 +767,18 @@ extern "C" int verity_rows_leaves_form() {
   return major == 12 ? 1 : 2;
 }
 
+// Compressions a launch of the split form's data kernel runs: a row's nblk in VERITY_ROWS_PHASES launches (default 4; 1 is one launch a
+// row, as is a call with no output to keep the chaining value in).
+static u32 rows_phase_blocks(u32 nblk, const uint8_t* keep) {
+  static const u32 phases = [] {
+    const char* e = getenv("VERITY_ROWS_PHASES");
+    const long v = e && *e ? strtol(e, nullptr, 10) : 4;
+    return static_cast<u32>(v < 1 ? 1 : v > 64 ? 64 : v);
+  }();
+  if (!keep || phases <= 1 || nblk <= 1) return nblk ? nblk : 1;
+  return (nblk + phases - 1) / phases;
+}
+
 // The leaves (or, H_ONLY, the h of the data positions alone) in the device's form, in launches of at most max_blocks blocks.
 template <bool H_ONLY>
 static int rows_forms(const Params* p, const uint8_t* rows, u64 stride, u64 n_rows, const uint8_t* salts, const uint8_t* tn, u64 first, u64 m,
@@ -774,9 +804,12 @@ static int rows_forms(const Params* p, const uint8_t* rows, u64 stride, u64 n_ro
     } else {
       rows_leaf_salt_kernel<H_ONLY><<<blocks, THREADS, T8_BYTES, st>>>(p->leaf, salts_c, tn, first + c, mc, dc, out_c, scratch + 192 * c);
       if (const cudaError_t rc = cudaGetLastError()) return static_cast<int>(rc);
-      if (dc)
+      const u32 nblk = (p->leaf.lb + 17 + 127) / 128, per = rows_phase_blocks(nblk, H_ONLY ? hs_c : out_c);
+      for (u32 b0 = 0; dc && b0 < nblk; b0 += per) {
         rows_leaf_data_kernel<H_ONLY><<<static_cast<unsigned>((dc + THREADS - 1) / THREADS), THREADS, 0, st>>>(p->leaf, rows_c, stride, scratch + 192 * c,
-                                                                                                           first + c, dc, out_c, bc_c, hs_c);
+                                                                                                           first + c, dc, out_c, bc_c, hs_c, b0, b0 + per);
+        if (const cudaError_t rc = cudaGetLastError()) return static_cast<int>(rc);
+      }
     }
     if (const cudaError_t rc = cudaGetLastError()) return static_cast<int>(rc);
   }
