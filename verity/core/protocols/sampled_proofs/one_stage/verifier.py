@@ -198,7 +198,7 @@ def _decide(got: Mapping[str, Any], py: Verdict, whole: bool) -> Verdict:
 def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
             ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None, anchors: Sequence[Any],
             log: Iterable[Mapping[str, Any]], partition: Mapping[str, Any] | None, work_table: Mapping[str, Any] | None,
-            registered: Mapping[str, int] | None) -> dict[str, Any]:
+            registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -207,18 +207,22 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
          "work_table": None if work_table is None else dict(work_table)}
     if registered is not None:
         p["parameters"] = [[name, t.to_json()] for name, t in program.fn.signature()[0]]
+    if supplied:
+        p["supplied"] = {v: [[dict(s) for s in row] for row in rows] for v, rows in supplied.items()}
     return p
 
 
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
-          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None) -> Verdict:
+          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
+          supplied: Mapping[str, Any] | None = None) -> Verdict:
     """`registration.check` (R1-R7) by the verifier of record."""
     log = list(log)
-    py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered)
+    py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
+                 supplied)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
-                                                  work_table, registered), "record": dict(rec)})
+                                                  work_table, registered, supplied), "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
     return _decide(got, py, whole=False)
@@ -291,7 +295,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         outputs: Sequence[str], statement: Mapping[str, Any], delta: float, proved_units: Sequence[int] | None = None,
         instances: int | None = None, served: Sequence[int] | None = None,
         session_roots: Mapping[str, str] | None = None, *, interior_values: Iterable[tuple[str, bool]] = (),
-        interior: Mapping[str, Any] | None = None) -> Verdict:
+        interior: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "interior", "symbol", "public", "audit"}`, each audit record
     without its `verifiers`, `interior` null or the interiors' `{"receipt", "audit"}`): on `check`'s copies,
@@ -307,7 +311,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
                           interior["anchors"], interior["log"], None, None, None),
         "record": dict(interior["record"]), "received": interior["received"]}
     got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                                         registered),
+                                         registered, supplied),
                        "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
                        "interior_values": [{"name": n, "registered": r} for n, r in interior_values],
                        "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),

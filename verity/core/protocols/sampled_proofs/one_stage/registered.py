@@ -22,9 +22,21 @@ that reads row `r` commits it with the registration's salt, so its `b || c` is t
 registered root and each instance's position against its own read map (`reads_file`, the Lean verifier's `--registered`,
 all from its own program but the root); a statement that commits a registered row under fresh salts has no path and is
 refused.
+
+A *supplied value* is a registered value the verifier fills itself, from what it holds before the draw: each row is the
+bytes of its sources in order, each source a root the record names (`{"port": P}`, the `roots` entry of port P;
+`{"value": V}`, the `registered` entry of value V, never a supplied value's) or bytes of its own (`{"bytes": hex}`: its
+coin, its positions). A row's bytes are read as the parameter's leaves of `w` bits (`bytes_leaves`: each big-endian 32-bit
+half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32 bits or 512 of one). Its rows are
+committed as any registered value's, under public salts (`supplied_salts`, row i's from the program's digest, the value's
+name and i alone), so its root is a function of the record and the verifier's bytes: R7 recomputes it
+(`supplied_root`) and refuses a record whose entry names another (`R7-supplied`). PoUW's seed inputs are such values: a
+unit's seed then reads the roots its operands are committed under, which the prover can't choose.
 """
 from __future__ import annotations
 
+import hashlib
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -50,7 +62,11 @@ OWNER = -2
 ENTRY_KEYS = ("value", "root", "leaves", "words", "domain")
 #: the entry key a value of another width than `WORD_BITS` adds
 WIDTH_KEY = "word_bits"
+SUPPLIED_SALT = "verity/one-stage/supplied-salt/v0"
+#: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes
+SOURCES = ("port", "value", "bytes")
 _INST = hm96.SHA512
+_HEX = re.compile(r"[0-9a-f]+")
 
 
 def _width(word_bits: int) -> int:
@@ -265,6 +281,97 @@ def registered_entries(program: Program, values: Mapping[str, int]) -> dict[str,
     return out
 
 
+def supplied_salts(program: str, value: str, n: int) -> list[bytes]:
+    """Row i's public salt of a supplied value: SHAKE256 of `SUPPLIED_SALT`, the program's SHA-512 hex, the value's name and
+    i (u32 little-endian), NUL between them, 192 bytes. They hide nothing the record doesn't show: the reads need only the
+    commitment's binding."""
+    head = SUPPLIED_SALT.encode() + b"\0" + program.encode() + b"\0" + value.encode() + b"\0"
+    return [hashlib.shake_256(head + i.to_bytes(4, "little")).digest(_INST.salt_bytes) for i in range(n)]
+
+
+def sources(supplied: Any) -> dict[str, list[list[tuple[str, str]]]]:
+    """The verifier's supplied values, `{value: [[source, ...], ...]}` (a row a list of sources, each `{"port": P}`,
+    `{"value": V}` or `{"bytes": hex}` naming a string), as `{value: [[(kind, name), ...], ...]}`; ValueError on any other
+    form, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if not isinstance(supplied, Mapping):
+        raise ValueError(f"supplied values are an object of rows, not {supplied!r}")
+    out: dict[str, list[list[tuple[str, str]]]] = {}
+    for v, rows in supplied.items():
+        if not (isinstance(v, str) and isinstance(rows, (list, tuple)) and all(isinstance(r, (list, tuple)) for r in rows)):
+            raise ValueError(f"supplied value {v!r}: its rows are not lists of sources")
+        out[v] = []
+        for r in rows:
+            if not all(isinstance(s, Mapping) and len(s) == 1 and set(s) <= set(SOURCES) and isinstance(*s.values(), str)
+                       for s in r):
+                raise ValueError(f"supplied value {v!r}: a source is not one of {SOURCES} naming a string: {r!r}")
+            out[v].append([next(iter(s.items())) for s in r])
+    return out
+
+
+def bytes_leaves(data: bytes, bits: int) -> list[int]:
+    """`data` as leaves of `bits` bits: each big-endian 32-bit half, its `32 / bits` leaves least significant first (a
+    digest is 16 leaves of 32 bits, or 512 of one, as PoUW's `seeds.leaves` reads it)."""
+    if not (0 < bits <= 32 and 32 % bits == 0):
+        raise ValueError(f"leaves of {bits} bits hold no whole 32-bit halves")
+    if len(data) % 4:
+        raise ValueError(f"{len(data)} bytes are no whole 32-bit halves")
+    mask = (1 << bits) - 1
+    return [(h >> (bits * j)) & mask for i in range(0, len(data), 4) for h in (int.from_bytes(data[i:i + 4], "big"),)
+            for j in range(32 // bits)]
+
+
+def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence[str]) -> bytes:
+    """A source's bytes: the root the record names for it (its last entry, as R3 and R7 read a name twice), or the
+    verifier's own; ValueError where there is none."""
+    text: Any = name
+    if kind != "bytes":
+        field, key = ("roots", "port") if kind == "port" else ("registered", "value")
+        if kind == "value" and name in supplied:
+            raise ValueError(f"supplied value {value!r} reads supplied value {name!r}'s root")
+        es = rec.get(field) if isinstance(rec, Mapping) else None
+        found = [e for e in (es if isinstance(es, list) else ()) if isinstance(e, Mapping) and e.get(key) == name]
+        if not found:
+            raise ValueError(f"supplied value {value!r}: the record names no {key} {name!r}")
+        text = found[-1].get("root")
+    if not (isinstance(text, str) and _HEX.fullmatch(text) and len(text) % 2 == 0):
+        raise ValueError(f"supplied value {value!r}: {kind} {name!r} is not lowercase hex bytes")
+    return bytes.fromhex(text)
+
+
+def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
+                  supplied: Sequence[str] = ()) -> list[list[int]]:
+    """The rows the verifier fills a supplied value with, from `rec` and its own bytes: each row its sources' bytes, read
+    as the parameter's leaves (`bytes_leaves` at its leaf width). `supplied`: every supplied value's name, whose roots no
+    row reads. ValueError where a source names nothing the record holds, or the leaves are not one width dividing 32."""
+    t = dict(program.fn.signature()[0]).get(value)
+    w = None if t is None else t.homogeneous_width()
+    if w is None:
+        raise ValueError(f"{value!r} is not a parameter of the program whose leaves are one width")
+    return [bytes_leaves(b"".join(_source_bytes(rec, value, k, n, supplied) for k, n in row), w) for row in rows]
+
+
+def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
+                  want: Mapping[str, Any], supplied: Sequence[str] = ()) -> str:
+    """The root R7 holds a supplied value's entry to: its rows (`supplied_rows`), as many as the verifier's own entry's
+    `leaves` (`registered_entries`), each of its `words` leaves, committed under `supplied_salts` at its `word_bits`."""
+    got = supplied_rows(program, value, rows, rec, supplied)
+    if len(got) != want["leaves"] or any(len(r) != want["words"] for r in got):
+        raise ValueError(f"supplied value {value!r}: rows of {[len(r) for r in got]} leaves, not {want['leaves']} of "
+                         f"{want['words']}")
+    prog = P.program_digest(program)
+    return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), want["word_bits"]).root.hex()
+
+
+def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
+                   supplied: Sequence[str] = ()) -> Registered:
+    """The prover's side of a supplied value: the rows the verifier fills from `rec` (a record without this value's own
+    entry will do: no row reads it) under the public salts, whose `entry()` the record registers and whose `statement`
+    opens a unit's reads like any registered value's."""
+    got = supplied_rows(program, value, rows, rec, supplied)
+    prog = P.program_digest(program)
+    return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), width(program, value))
+
+
 def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],
                ports: Mapping[str, str] | None = None) -> dict[str, Any]:
     """The Lean verifier's `--registered` file, from the verifier's own program and query: per registered port, the value
@@ -283,6 +390,7 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     return {"format": READS, "ports": out}
 
 
-__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "WIDTHS", "WIDTH_KEY",
-           "WORD_BITS", "domain", "leaf", "parameter_gates", "reads", "reads_file", "registered_entries", "row_digest",
-           "row_words", "shape", "table", "verify_read", "width", "width_entry"]
+__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SOURCES", "SUPPLIED_SALT",
+           "WIDTHS", "WIDTH_KEY", "WORD_BITS", "bytes_leaves", "domain", "leaf", "parameter_gates", "reads", "reads_file",
+           "registered_entries", "row_digest", "row_words", "shape", "sources", "supplied_root", "supplied_rows",
+           "supplied_salts", "supplied_value", "table", "verify_read", "width", "width_entry"]
