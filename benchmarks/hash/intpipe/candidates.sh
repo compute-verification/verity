@@ -8,13 +8,23 @@
 #   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source --env GPU_LEASE_WHO=hash-intpipe \
 #     -- bash benchmarks/hash/intpipe/candidates.sh
 # LEASE_ARGS (default "--max-min 14"; on vy-nebius-2 "--preemptible --max-min 20"), REPS (15), N (65536,262144: 256 MiB
-# and 1 GiB), CHECK_N (1024), FETCH (128: the bytes of each leaf stream the loader reads at a time); FETCHES="128 256"
-# runs the whole script once a value, one after another, into $OUT/f<FETCH>.
+# and 1 GiB), CHECK_N (1024), FETCH (128: the bytes of each leaf stream the loader reads at a time), ASYNC (0; 1: the
+# loader's cp.async double buffer), WARPS (4: warps a leaf CTA). VARIANTS="FETCH:ASYNC:WARPS ..." runs the whole script
+# once a variant, one after another, into $OUT/f<FETCH>-a<ASYNC>-w<WARPS>; FETCHES="128 256" is VARIANTS="128:0:4 256:0:4"
+# into $OUT/f<FETCH>.
 set -uo pipefail
 if [ -n "${FETCHES:-}" ]; then
   for F in $FETCHES; do
     mkdir -p "$OUT/f$F"
-    OUT=$OUT/f$F FETCH=$F FETCHES='' bash "$0"
+    OUT=$OUT/f$F FETCH=$F FETCHES='' VARIANTS='' bash "$0"
+  done
+  exit 0
+fi
+if [ -n "${VARIANTS:-}" ]; then
+  for v in $VARIANTS; do
+    IFS=: read -r F A WS <<< "$v"
+    mkdir -p "$OUT/f$F-a$A-w$WS"
+    OUT=$OUT/f$F-a$A-w$WS FETCH=$F ASYNC=$A WARPS=$WS VARIANTS='' bash "$0"
   done
   exit 0
 fi
@@ -34,7 +44,7 @@ FORMS=${FORMS:-1 0}
 for c in $CANDS; do
   IFS=: read -r name kind r _ <<< "$c"
   for f in $FORMS; do
-    ( nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v -DCAND_KIND="$kind" -DCAND_R="$r" -DSHA_ROLL="$f" -DFETCH="${FETCH:-128}" \
+    ( nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v -DCAND_KIND="$kind" -DCAND_R="$r" -DSHA_ROLL="$f" -DFETCH="${FETCH:-128}" -DLOADER_ASYNC="${ASYNC:-0}" -DLEAF_WARPS="${WARPS:-4}" \
         -o "$W/cand-$name-r$f" $I/candidates.cu -lnvidia-ml > "$O/build-$name-r$f.log" 2>&1
       echo "build $name r$f rc $?" >> "$O/rc.txt" ) &
   done

@@ -60,7 +60,10 @@ static const int CAND_LEAF_COMPS = 64, CAND_NODE_COMPS = 1;
 #endif
 using Base = ip::Sha512<0>;
 using u64 = uint64_t;
-constexpr int CHAIN = 256, RATE_THREADS = 256, LEAF_THREADS = 128, NODE_THREADS = 128, TOP = 256;
+#ifndef LEAF_WARPS
+#define LEAF_WARPS 4
+#endif
+constexpr int CHAIN = 256, RATE_THREADS = 256, LEAF_THREADS = 32 * LEAF_WARPS, NODE_THREADS = 128, TOP = 256;
 
 #define CK(x)                                                                                    \
   do {                                                                                           \
@@ -95,6 +98,7 @@ __device__ __forceinline__ void leaf_body(const uint8_t* src, typename H::W* out
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   const Loader<H> ld{src + (t - lane) * H::STRIDE, smem + warp * (Loader<H>::SMEM / 16), lane};
+  ld.start();
   H::leaf(ld, t, out);
 }
 template <class H>
@@ -134,6 +138,16 @@ __global__ void fill(uint8_t* p, size_t n, uint32_t seed) {
     x ^= x >> 15; x *= 0x2C1B3C6Du; x ^= x >> 12; x *= 0x297A2D39u; x ^= x >> 15;
     p[i] = (uint8_t)x;
   }
+}
+
+// The card's own read ceiling for the leaf mode's bytes: every byte once, a warp's loads contiguous (grid-stride uint4).
+__global__ void memread(const uint4* __restrict__ p, size_t n16, uint4* out) {
+  uint4 a = make_uint4(0, 0, 0, 0);
+  for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < n16; i += (size_t)gridDim.x * blockDim.x) {
+    const uint4 v = __ldg(p + i);
+    a.x ^= v.x; a.y ^= v.y; a.z ^= v.z; a.w ^= v.w;
+  }
+  out[(size_t)blockIdx.x * blockDim.x + threadIdx.x] = a;
 }
 
 template <class H>
@@ -200,10 +214,10 @@ static int rate_blocks() {
 static void meta(FILE* f, const cudaDeviceProp& prop) {
   fprintf(f, "\"candidate\": \"%s\", \"cand_kind\": %d, \"cand_r\": %d, \"sha_roll\": %d, \"gpu\": \"%s\", \"sms\": %d, "
           "\"cc\": %d, \"block_bytes\": %d, \"word_bytes\": %d, \"leaf_comps\": %d, \"node_comps\": %d, \"base_leaf_comps\": 33, "
-          "\"base_node_comps\": 2, \"threads_per_leaf\": %d, \"fetch\": %d, \"chain\": %d, \"rate_threads\": %d, \"rate_blocks\": %d",
+          "\"base_node_comps\": 2, \"threads_per_leaf\": %d, \"fetch\": %d, \"loader_async\": %d, \"leaf_warps\": %d, \"chain\": %d, \"rate_threads\": %d, \"rate_blocks\": %d",
           CAND_NAME.c_str(), CAND_KIND, CAND_KIND == 1 ? CAND_R : CAND_KIND == 2 ? 64 : CAND_KIND == 5 ? 0 : CAND_KIND >= 3 ? 7 : 80, SHA_ROLL, prop.name,
           prop.multiProcessorCount, prop.major * 10 + prop.minor, Cand::BLOCK, (int)sizeof(Cand::W), CAND_LEAF_COMPS,
-          CAND_NODE_COMPS, Cand::TPL, FETCH, CHAIN, RATE_THREADS, prop.multiProcessorCount * 8);
+          CAND_NODE_COMPS, Cand::TPL, FETCH, LOADER_ASYNC, LEAF_WARPS, CHAIN, RATE_THREADS, prop.multiProcessorCount * 8);
 }
 
 static int dump(const std::string& dir, const std::string& operand, u64 n) {
@@ -315,6 +329,19 @@ static int bench(int reps, const std::vector<u64>& sizes) {
              bc / std::get<0>(b) * 1e-6, bytes / std::get<0>(b) * 1e-6, bytes / std::get<1>(b) * 1e-6, std::get<2>(b));
     }
     CK(cudaFree(tb.lv)); CK(cudaFree(tc.lv));
+    const int mb = prop.multiProcessorCount * 8;
+    uint4* mo;
+    CK(cudaMalloc(&mo, (size_t)mb * 256 * sizeof(uint4)));
+    auto mr = [&]() { memread<<<mb, 256>>>(reinterpret_cast<const uint4*>(src), n * ip::LEAF / 16, mo); };
+    for (int w = 0; w < 2; ++w) timed(mr);
+    for (int r = 0; r < reps; ++r) {
+      const auto m = timed(mr);
+      printf("{");
+      meta(stdout, prop);
+      printf(", \"mode\": \"memread\", \"rep\": %d, \"leaves\": %llu, \"ms\": %.5f, \"gb_per_s\": %.3f, \"mhz\": %.0f}\n", r,
+             (unsigned long long)n, m.first, bytes / m.first * 1e-6, m.second);
+    }
+    CK(cudaFree(mo));
   }
   fflush(stdout);
   return 0;

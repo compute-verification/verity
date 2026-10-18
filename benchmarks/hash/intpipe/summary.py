@@ -93,6 +93,10 @@ def hashes(out: str) -> None:
             by.setdefault((r["candidate"], r["sha_roll"], r["mode"], r.get("leaves", 0)), []).append(r)
     for (cand, roll, mode, _), rs in sorted(by.items()):
         m = rs[0]
+        if mode == "memread":
+            print(json.dumps({"candidate": cand, "sha_roll": roll, "mode": mode, "gpu": m["gpu"], "leaves": m["leaves"],
+                              "reps": len(rs), "gb_per_s": med([r["gb_per_s"] for r in rs]), "mhz": med([r["mhz"] for r in rs])}))
+            continue
         mhz = med([r["mhz"] for r in rs])
         ands = ands_per_compression(m["cand_kind"], m["cand_r"])
         rec = {"candidate": cand, "sha_roll": roll, "mode": mode, "gpu": m["gpu"], "sms": m["sms"], "reps": len(rs),
@@ -125,6 +129,8 @@ def hashes(out: str) -> None:
             rec["base_leaf_gb_per_s"] = med([r["base_leaf_gb_per_s"] for r in rs])
             rec["threads_per_leaf"] = m["threads_per_leaf"]
             rec["fetch"] = m.get("fetch", 128)
+            rec["loader_async"] = m.get("loader_async", 0)
+            rec["leaf_warps"] = m.get("leaf_warps", 4)
             rec["ands_per_byte"] = (m["leaf_comps"] * n + m["node_comps"] * (n - 1)) * ands / (4096 * n)
         print(json.dumps(rec))
 

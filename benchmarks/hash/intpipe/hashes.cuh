@@ -25,28 +25,63 @@ __device__ __forceinline__ u32 bswap32(u32 x) { return __byte_perm(x, 0, 0x0123)
 // `block(b, q)` loads the 32 streams' next FETCH bytes cooperatively (each load instruction covers whole 128-byte lines)
 // into this warp's shared rows (padded by one uint4, so the per-thread reads hit distinct banks); then it gives the
 // thread block b of its row. Every lane calls it with the same b, in order.
+// LOADER_ASYNC=1: two buffers, the next fetch's bytes copied by cp.async while the warp hashes the current one (start()
+// issues the first), so a warp keeps a fetch in flight instead of waiting on each.
 #ifndef FETCH
 #define FETCH 128
+#endif
+#ifndef LOADER_ASYNC
+#define LOADER_ASYNC 0
 #endif
 template <int BLOCK, int STRIDE>
 struct WarpLoader {
   static_assert(FETCH % BLOCK == 0 && STRIDE % FETCH == 0, "FETCH: a multiple of the block, dividing the stream");
-  static constexpr int G = FETCH / BLOCK, BQ = BLOCK / 16, Q = FETCH / 16, ROW = Q + 1;
-  static constexpr int SMEM = 32 * ROW * 16;   // bytes a warp
+  static constexpr int G = FETCH / BLOCK, BQ = BLOCK / 16, Q = FETCH / 16, ROW = Q + 1, NF = STRIDE / FETCH;
+  static constexpr int BUF = 32 * ROW;                     // uint4 a buffer
+  static constexpr int SMEM = (LOADER_ASYNC ? 2 : 1) * BUF * 16;   // bytes a warp
   const uint8_t* base;
   uint4* sm;
   int lane;
+  __device__ __forceinline__ const uint4* src(int f, int k, int& dst) const {
+    const int i = k * 32 + lane, s = i / Q, o = i % Q;
+    dst = s * ROW + o;
+    return reinterpret_cast<const uint4*>(base + (size_t)s * STRIDE + (size_t)f * FETCH) + o;
+  }
+  __device__ __forceinline__ void issue(int f) const {
+    const unsigned buf = (unsigned)__cvta_generic_to_shared(sm + (f & 1) * BUF);
+#pragma unroll
+    for (int k = 0; k < Q; ++k) {
+      int d;
+      const uint4* g = src(f, k, d);
+      asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(buf + 16u * d), "l"(g));
+    }
+    asm volatile("cp.async.commit_group;");
+  }
+  __device__ __forceinline__ void start() const {
+    if constexpr (LOADER_ASYNC) issue(0);
+  }
   __device__ __forceinline__ void block(int b, uint4* q) const {
+    const int f = b / G;
     if (b % G == 0) {
       __syncwarp();
+      if constexpr (LOADER_ASYNC) {
+        if (f + 1 < NF) {
+          issue(f + 1);
+          asm volatile("cp.async.wait_group 1;");
+        } else {
+          asm volatile("cp.async.wait_group 0;");
+        }
+      } else {
 #pragma unroll
-      for (int k = 0; k < Q; ++k) {
-        const int i = k * 32 + lane, s = i / Q, o = i % Q;
-        sm[s * ROW + o] = __ldg(reinterpret_cast<const uint4*>(base + (size_t)s * STRIDE + (size_t)(b / G) * FETCH) + o);
+        for (int k = 0; k < Q; ++k) {
+          int d;
+          const uint4* g = src(f, k, d);
+          sm[d] = __ldg(g);
+        }
       }
       __syncwarp();
     }
-    const int off = lane * ROW + (b % G) * BQ;
+    const int off = (LOADER_ASYNC ? (f & 1) * BUF : 0) + lane * ROW + (b % G) * BQ;
 #pragma unroll
     for (int k = 0; k < BQ; ++k) q[k] = sm[off + k];
   }
