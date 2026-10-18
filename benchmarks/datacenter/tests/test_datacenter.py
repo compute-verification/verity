@@ -62,19 +62,26 @@ def test_a_traced_circuit_evaluates_as_python_does():
     assert c.work == 2 * 6 * 16 * 16 + 16 + 5 * 16
 
 
-def test_a_circuit_of_another_formats_primitives_counts_work_in_its_unit():
-    """An adapted circuit (verity's word Definitions, say) brings each primitive's semantics and its work in the format's
-    unit, and the profile and the account credit that unit at the devices' declared rates in it."""
+def test_work_counts_by_kind_is_credited_at_its_weight_and_takes_time_at_its_rate():
+    """Compute's review 2: PoUW credits W_ref, multiply-adds weighted by kind (sm_120's cohalf QKᵀ at 1.25), and a
+    device's rate depends on the operand format. So an adapted circuit's gates bring their semantics, their work and its
+    kind; the profile carries per-kind counts, the audit credits them at their weights, and the account adds up the time
+    each kind takes at the block's declared rate for it."""
     from datacenter.logical import Circuit, Gate
     c = Circuit([Gate("input", (), 16, input=Input(16)), Gate("input", (), 16, input=Input(16, "registered")),
-                 Gate("Bf16Mul", (0, 1), 16, fn=lambda a, b: a * b + 1, size=1)], (2,), {0: "x", 1: "w"}, unit="op")
-    assert c.evaluate({"x": 3, "w": 4})[2] == 13 and c.work == 1
+                 Gate("Fp8Matmul", (0, 1), 16, fn=lambda a, b: a * b + 1, size=4000),
+                 Gate("QkCohalf", (2, 1), 16, fn=lambda a, b: a ^ b, size=1000, unit="mac:qk")],
+                (3,), {0: "x", 1: "w"}, unit="mac:fp8", weights={"mac:qk": 1.25})
+    assert c.evaluate({"x": 3, "w": 4})[3] == 13 ^ 4 and c.work == 4000 + 1.25 * 1000
     dc = datacenter()
-    dc.blocks[0] = Block("a", [replace(dc.blocks[0].devices[0], rate={"op": Assumption("a.gpu.ops", 10, "op/s")})])
+    rates = {"mac:fp8": Assumption("a.gpu.fp8", 1e6, "MAC/s"), "mac:qk": Assumption("a.gpu.qk", 5e5, "MAC/s")}
+    dc.blocks[0] = Block("a", [replace(dc.blocks[0].devices[0], rate=rates)])
     p = place(c, dc, "a.gpu", deliver="world", x="world")
     profile = p.public(Plan(EPOCH))
+    assert profile.work == {"a": {"mac:fp8": 4000, "mac:qk": 1000}, "b": {}}
     a = account(audit(run(p, {"x": 3, "w": 4}, Plan(EPOCH)), profile), profile).blocks[0]
-    assert profile.unit == "op" and a.credited == 1 and a.capacity == 10 * 16e-3
+    assert a.credited == 5250 and a.busy == pytest.approx((4000 / 1e6 + 1000 / 5e5) / 16e-3)
+    assert {"a.gpu.fp8", "a.gpu.qk"} <= set(a.assumptions)
 
 
 def test_a_boundary_link_without_a_certifier_breaks_coverage():
@@ -112,7 +119,7 @@ def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(
 def test_the_profile_is_what_audit_and_account_read_of_the_placement(setup):
     c, dc, p = setup
     profile = p.public(Plan(EPOCH))
-    assert profile.work == {"a": c.work, "b": 0}
+    assert profile.work == {"a": {"gate": c.work}, "b": {}} and profile.credit("a") == c.work
     assert profile.occupancy[Port("a.cert", "egress")] == {7: 1}     # the output, one frame, at the world's read tick
     assert list(profile.windows) == [0, 1, 2, 3]
 

@@ -1,20 +1,23 @@
-"""Timed audits bind bits to a device: the honest holder answers a challenge in time, a store kept in host DRAM or on
-another node answers late, a deadline too loose to tell the tiers apart locates the store to no single device, and a
-bandwidth audit's reads count as local only beyond what the block's boundary could have carried in."""
+"""Timed audits bind bits to a device. The honest holder answers a challenge in time, and a store kept in host DRAM or on
+another node answers late. A deadline too loose to tell the tiers apart locates the store to no single device, and so
+does a small sample, which a deadline can locate only by latency. Labels the prover could rebuild in time locate
+nowhere. A read window's bits count as local only beyond what every path into the registered device could carry."""
 from __future__ import annotations
 
 import pytest
 
 from datacenter import (Assumption, Block, Cadence, Challenge, Datacenter, Deviation, Device, Held, Input, Interval, Link,
-                        Plan, Read, Reads, Refused, Store, account, audit, place, run, trace)
+                        Plan, Read, ReadWindow, Refused, Store, account, audit, place, run, trace)
 
 GB = 8e9
 US = Assumption("hop", 1e-6, "s", "measured")
 KV = Store("kv", 1 * GB, "a.gpu")            # 1 GB of KV pages, registered on a.gpu
+PCIE, NET = 64e9 * 8, 400e9
 
 
 def node(n: str) -> Block:
-    gpu = Device(f"{n}.gpu", "gpu", memory=Assumption(f"{n}.gpu.hbm", 96 * GB, "bits"),
+    gpu = Device(f"{n}.gpu", "gpu", rate={"squaring": Assumption("rtx-pro-6000/squarings-p1024", 1.499e10, "1/s")},
+                 memory=Assumption(f"{n}.gpu.hbm", 96 * GB, "bits"),
                  bandwidth=Assumption(f"{n}.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
     dram = Device(f"{n}.dram", "dram", memory=Assumption(f"{n}.dram.size", 512 * GB, "bits"),
                   bandwidth=Assumption(f"{n}.dram.bw", 200e9 * 8, "bit/s"))
@@ -22,8 +25,8 @@ def node(n: str) -> Block:
 
 
 def datacenter() -> Datacenter:
-    net = Assumption("uplink", 400e9, "bit/s", "declared")
-    pcie = Assumption("pcie5x16", 64e9 * 8, "bit/s")
+    net = Assumption("uplink", NET, "bit/s", "declared")
+    pcie = Assumption("pcie5x16", PCIE, "bit/s")
     fabric = [Device("a.cert", "certifier"), Device("b.cert", "certifier"), Device("leaf", "switch"),
               Device("challenger", "challenger"), Device("world", "outside")]
     links = [Link("a.gpu", "a.dram", pcie, kind="pcie"), Link("b.gpu", "b.dram", pcie, kind="pcie"),
@@ -33,9 +36,9 @@ def datacenter() -> Datacenter:
     return Datacenter("dc0", [node("a"), node("b")], fabric, links, Cadence(buckets=4, tick=tick))
 
 
-def setup(plan: Plan):
+def setup(plan: Plan, stores=(KV,)):
     c = trace(lambda x: x ^ 1, x=Input(8))
-    p = place(c, datacenter(), "a.gpu", deliver="world", stores=(KV,), x="world")
+    p = place(c, datacenter(), "a.gpu", deliver="world", stores=stores, x="world")
     return p, plan, p.public(plan)
 
 
@@ -64,13 +67,33 @@ def test_a_deadline_too_loose_locates_the_store_to_no_single_device():
     assert acc.sound and "a.gpu" in acc.located["kv"] and "a.dram" in acc.located["kv"]
 
 
-def test_certified_reads_are_local_only_beyond_what_the_boundary_could_carry_in():
-    """The bandwidth audits: 4 Gbit read from the KV store within 1 ms. The block's 400 Gbit/s boundary could have
-    carried in 0.4 Gbit of it in that time, so at least 3.6 Gbit were read on the block."""
-    p, plan, profile = setup(Plan(Interval(0, 16), reads=[Reads("kv", 0.5 * GB, Interval(0, 10))]))
-    acc = account(audit(run(p, {"x": 3}, plan), profile), profile)
-    a = acc.blocks[0]
-    assert acc.sound and a.reads == 0.5 * GB and a.reads_local_at_least == pytest.approx(0.5 * GB - 400e9 * 1e-3)
-    late = audit(run(p, {"x": 3}, plan, Deviation(moved={"kv": "b.gpu"})), profile)
-    assert not any(isinstance(c, Read) for c in late)
-    assert [c.why for c in late if isinstance(c, Refused)] == ["the reads finished after the window"]
+def test_a_small_sample_locates_by_latency_and_labels_rebuilt_in_time_locate_nowhere():
+    """PoUS answers s sampled blocks, not the store. One 4 KiB block within a 100 µs tick is answered as fast from host
+    DRAM or the next node as from HBM: only latency could tell them apart, and the tick is coarser than the path. And
+    labels the prover can rebuild from their seed within the deadline locate nowhere, whatever answered (μ_rebuild's
+    twin: 10 squarings a bit on a 1.5·10^10/s squarer rebuilds a block in 22 µs)."""
+    block = 4096 * 8
+    p, plan, profile = setup(Plan(Interval(0, 1000), challenges=[Challenge("kv", 0, 1, sample=block)]))
+    assert {"a.gpu", "a.dram", "b.gpu"} <= set(account(audit(run(p, {"x": 3}, plan), profile), profile).located["kv"])
+    for regen, located in ((0.0, True), (1000.0, True), (10.0, False)):
+        labels = Store("labels", 1 * GB, "a.gpu", "labels", regen)
+        p, plan, profile = setup(Plan(Interval(0, 1000), challenges=[Challenge("labels", 0, 1, sample=block)]), (labels,))
+        assert bool(account(audit(run(p, {"x": 3}, plan), profile), profile).located["labels"]) == located, regen
+
+
+def test_a_read_windows_bits_are_its_output_and_local_beyond_every_path_into_the_device():
+    """The bandwidth audits: the prover reads the KV store from tick 0 to the boundary at 10 (1 ms); its roots are due
+    by 12. HBM reads all 8 Gbit in that time. Every path into a.gpu (its 400 Gbit/s uplink and host DRAM's 512 Gbit/s
+    PCIe link) could have carried 0.912 Gbit of it, so at least 7.088 Gbit were read on the GPU. A store kept in host
+    DRAM or on the next node reads at most its path's rate, and certifies nothing local."""
+    p, plan, profile = setup(Plan(Interval(0, 16), reads=[ReadWindow("kv", start=0, boundary=10, deadline=12)]))
+    claims = audit(run(p, {"x": 3}, plan), profile)
+    assert Read("kv", 1 * GB, Interval(0, 10)) in claims
+    a = account(claims, profile).blocks[0]
+    assert a.reads == 1 * GB and a.reads_local_at_least == pytest.approx(1 * GB - (NET + PCIE) * 1e-3)
+    for elsewhere, rate in (("a.dram", PCIE), ("b.gpu", NET)):
+        moved = account(audit(run(p, {"x": 3}, plan, Deviation(moved={"kv": elsewhere})), profile), profile).blocks[0]
+        assert moved.reads == pytest.approx(rate * 1e-3) and moved.reads_local_at_least == 0
+    late = Plan(Interval(0, 16), reads=[ReadWindow("kv", start=0, boundary=10, deadline=10)])
+    assert [c.why for c in audit(run(p, {"x": 3}, late), p.public(late)) if isinstance(c, Refused)] == [
+        "the roots arrived after the deadline"]

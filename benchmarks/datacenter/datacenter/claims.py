@@ -11,8 +11,10 @@ trusted clock:
   freedom was `bits` of timing advice.
 - `Entered(input, bits)`: an input's bits entered the computation (registered and trusted inputs don't count).
 - `Scheduled(bits)`: the occupancy profile was one of several registered ones: advice, once.
-- `Held(store, bits)`: the system held a registered store throughout `during` (PoUS; a wipe's labels too).
-- `Read(store, bits)`: the system read so many bits of a registered store within `during` (the bandwidth audits).
+- `Held(store, bits)`: the system held `bits` of a registered store on average over `during` (`bits` × the length in
+  bit-ticks: PoUS's S_cert·T; a wipe's labels too).
+- `Read(store, bits)`: the system read so many bits of a registered store within `during`: a read window's output,
+  certified by its receipts (the bandwidth audits).
 - `Refused(on, why)`: something didn't check, and `on` says what: a port's window, a store, a part, an input.
 
 A record must exist for every certifier port and every window of the epoch: a missing one is refused, never silence.
@@ -27,7 +29,7 @@ from typing import Literal
 
 from .binding import Profile, traffic
 from .logical import commit, digest as content_digest
-from .memory import Challenge, Reads, Wipe
+from .memory import Challenge, ReadWindow, Wipe
 from .observe import Record, Trace, digest
 from .physical import Cadence, Port
 from .time import Interval
@@ -129,7 +131,7 @@ def audit(trace: Trace, profile: Profile) -> list[Claim]:
     if commit(c, reference, trace.salt)[0] != trace.commitment:
         out += [Refused(On("part", b), "the committed values are not the circuit's evaluation") for b in profile.work]
     else:
-        out += [Computed(b, w, plan.epoch) for b, w in profile.work.items() if w]
+        out += [Computed(b, profile.credit(b), plan.epoch) for b in profile.work if profile.credit(b)]
     for v in c.inputs:
         spec = c.gates[v.id].input
         if spec.source == "registered" and spec.digest is not None and content_digest(trace.inputs[v.name], v.bits) != spec.digest:
@@ -164,7 +166,7 @@ def audit(trace: Trace, profile: Profile) -> list[Claim]:
                                    f"answered after {a.arrived - q.at} ticks, past its deadline of {q.deadline}"))
             else:
                 out.append(Held(q.store, s.bits, during, q.challenger))
-        elif isinstance(q, Reads):
-            out.append(Read(q.store, q.bits, q.during, q.challenger) if a.correct and a.arrived <= q.during.end
-                       else Refused(On("store", q.store, q.during), "the reads finished after the window"))
+        elif isinstance(q, ReadWindow):
+            out.append(Read(q.store, a.bits, q.during, q.challenger) if a.correct and a.arrived <= q.deadline
+                       else Refused(On("store", q.store, q.during), "the roots arrived after the deadline"))
     return out

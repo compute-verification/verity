@@ -68,7 +68,8 @@ class Value:
 @dataclass(frozen=True)
 class Gate:
     """One gate, producing one value of `bits` bits. A word operation of `BASIS`, or a primitive of a circuit format
-    outside it (verity's word Definitions, say): then `fn` is its semantics and `size` its work in the circuit's unit."""
+    outside it (verity's word Definitions, say): then `fn` is its semantics and `size` its work. The work counts in
+    `unit` (a kind of work: Boolean gates, multiply-adds at a precision), the circuit's unit when None."""
 
     op: str
     operands: tuple[int, ...]
@@ -77,6 +78,7 @@ class Gate:
     input: Input | None = None
     fn: Callable[..., int] | None = field(default=None, compare=False)
     size: int | None = None
+    unit: str | None = None
 
     @property
     def work(self) -> int:
@@ -91,14 +93,19 @@ def digest(value: int, bits: int) -> bytes:
 
 @dataclass
 class Circuit:
-    """Gates in topological order: gate i produces value i. `outputs` are the values the circuit delivers, and `unit` is
-    what its gates' work counts: Boolean gates (`"gate"`) for a traced circuit, a format's own (a word primitive, a
-    tensor-core multiply-add) for one adapted from it."""
+    """Gates in topological order: gate i produces value i. `outputs` are the values the circuit delivers. `unit` is
+    what its gates' work counts unless a gate says otherwise: Boolean gates (`"gate"`) for a traced circuit, a format's
+    own (a word operation, a multiply-add at a precision) for one adapted from it. `weights` is what an audit credits
+    for one unit of each kind (PoUW's W_ref, a public constant of its scheme), 1 for a kind it doesn't list."""
 
     gates: list[Gate] = field(default_factory=list)
     outputs: tuple[int, ...] = ()
     names: dict[int, str] = field(default_factory=dict)
     unit: str = "gate"
+    weights: dict[str, float] = field(default_factory=dict)
+
+    def unit_of(self, g: Gate) -> str:
+        return g.unit or self.unit
 
     def value(self, i: int) -> Value:
         g = self.gates[i]
@@ -116,9 +123,10 @@ class Circuit:
         return [self.value(i) for i, g in enumerate(self.gates) if g.op == "input"]
 
     @property
-    def work(self) -> int:
-        """The circuit's work in its unit: for a traced circuit, its size as a Boolean circuit."""
-        return sum(g.work for g in self.gates)
+    def work(self) -> float:
+        """What an audit credits for the whole circuit: each gate's work at its kind's weight. For a traced circuit, its
+        size as a Boolean circuit."""
+        return sum(self.weights.get(self.unit_of(g), 1.0) * g.work for g in self.gates)
 
     def evaluate(self, inputs: dict[str, int]) -> dict[int, int]:
         """Every value of the circuit on `inputs` (by input name): the reference semantics."""
@@ -143,7 +151,7 @@ class Circuit:
 
     def __repr__(self) -> str:
         lines = [f"circuit ({len(self.gates)} word gates, "
-                 + (f"{self.work} Boolean gates)" if self.unit == "gate" else f"{self.work} {self.unit})")]
+                 + (f"{self.work:g} Boolean gates)" if self.unit == "gate" else f"{self.work:g} {self.unit})")]
         for i, g in enumerate(self.gates):
             rhs = (f"input {g.input.source}" if g.op == "input" else f"const {g.const:#x}" if g.op == "const"
                    else f"{g.op} " + ", ".join(repr(self.value(j)) for j in g.operands))

@@ -51,34 +51,41 @@ class Placement:
 
     def public(self, plan: Plan) -> Profile:
         """The placement's public properties for the epoch `plan` audits."""
-        work: dict[str, float] = {b.name: 0.0 for b in self.datacenter.blocks}
+        c = self.circuit
+        work: dict[str, dict[str, float]] = {b.name: {} for b in self.datacenter.blocks}
         forced: dict[str, float] = {b.name: 0.0 for b in self.datacenter.blocks}
-        trusted = {i for i, g in enumerate(self.circuit.gates) if g.op == "input" and g.input.source == "trusted"}
+        trusted = {i for i, g in enumerate(c.gates) if g.op == "input" and g.input.source == "trusted"}
         consumed: set[tuple[int, str]] = set()
-        for i, g in enumerate(self.circuit.gates):
+        for i, g in enumerate(c.gates):
             if (b := self.block(i)) is not None:
-                work[b] += g.work
+                if g.work:
+                    work[b][c.unit_of(g)] = work[b].get(c.unit_of(g), 0.0) + g.work
                 consumed.update((j, b) for j in trusted.intersection(g.operands))
         for j, b in consumed:
-            forced[b] += self.circuit.gates[j].bits
+            forced[b] += c.gates[j].bits
         stores = {s.name: s for s in self.stores}
         stores.update({w.store.name: w.store for w in plan.wipes})
-        return Profile(self.datacenter, plan, occupancy(self), work, forced, stores, self.circuit.unit)
+        return Profile(self.datacenter, plan, occupancy(self), work, forced, stores, dict(c.weights))
 
 
 @dataclass(frozen=True)
 class Profile:
     """A placement's public properties, with the declaration and the verifier's plan they are read against: the frames
-    each certifier port shows in each bucket (`occupancy`), the work each block is to be credited with (`work`, in the
-    circuit's `unit`), the trusted data each block consumes (`forced`, in bits), and the registered stores."""
+    each certifier port shows in each bucket (`occupancy`), the work each block is to be credited with, by kind
+    (`work`; per-kind counts, as PoUW's census gives them), what one unit of each kind is credited (`weights`, W_ref),
+    the trusted data each block consumes (`forced`, in bits), and the registered stores."""
 
     datacenter: Datacenter
     plan: Plan
     occupancy: dict[Port, dict[int, int]]
-    work: dict[str, float]
+    work: dict[str, dict[str, float]]
     forced: dict[str, float]
     stores: dict[str, Store]
-    unit: str = "gate"
+    weights: dict[str, float] = field(default_factory=dict)
+
+    def credit(self, block: str) -> float:
+        """The work `block` is to be credited with: each kind's units at its weight."""
+        return sum(self.weights.get(k, 1.0) * n for k, n in self.work[block].items())
 
     @property
     def windows(self) -> range:
