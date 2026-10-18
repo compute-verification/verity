@@ -21,16 +21,22 @@ declare -A ENVS=(
   [vy-dc-b200]="WORK=/workspace/cp VERITY_BENCH_VENV=/workspace/cp/venv312 NATIVE_COLLECT_BUILD=/workspace/cp/nc_build HF_HOME=/workspace/hf"
   [vy-nebius-2]="WORK=/workspace VERITY_BENCH_VENV=/workspace/jobs/venv312 NATIVE_COLLECT_BUILD=/workspace/cp/nc_build HF_HOME=/workspace/hf"
 )
-declare -A LEASES=([vy-dc-h200]="--max-min 75" [vy-dc-b200]="--max-min 75" [vy-nebius-2]="--max-min 75 --mem-gb 64 --preemptible")
+# the dc VMs are ours alone: job.sh takes the GPU with gpu-lease; node 2 is shared, so the queue places the job, a preemptible
+# guest, inside its own lease (memory there is reserved by the check slots, which refuse a plain --on --mem-gb)
+declare -A LAUNCH=(
+  [vy-dc-h200]="--mem-gb 64"
+  [vy-dc-b200]="--mem-gb 64"
+  [vy-nebius-2]="--queue --gpus 1 --gpu-model rtx-pro-6000 --cpus 16 --mem-gb 64 --max-min 75 --preemptible"
+)
 LOGS=$(mktemp -d)
 for m in ${MACHINES:-vy-dc-h200 vy-dc-b200 vy-nebius-2}; do
   envs=()
   for kv in ${ENVS[$m]}; do envs+=(--env "$kv"); done
   [ -n "${ARMS:-}" ] && envs+=(--env "ARMS=$ARMS")
   [ -n "${REPS:-}" ] && envs+=(--env "REPS=$REPS")
-  research run --on "$m" --project verity --campaign hash-loop --source . --cwd source --timeout 7200 --mem-gb 64 --wait \
-    "${envs[@]}" --env "LEASE=${LEASES[$m]}" --env "ROW=$N" --env "HYP=$HYP" -- bash benchmarks/hash/loop/job.sh \
-    > "$LOGS/$m.log" 2>&1 &
+  read -r -a launch <<< "${LAUNCH[$m]}"
+  research run --on "$m" --project verity --campaign hash-loop --source . --cwd source --timeout 7200 --wait "${launch[@]}" \
+    "${envs[@]}" --env "ROW=$N" --env "HYP=$HYP" -- bash benchmarks/hash/loop/job.sh > "$LOGS/$m.log" 2>&1 &
 done
 wait
 runs=()
