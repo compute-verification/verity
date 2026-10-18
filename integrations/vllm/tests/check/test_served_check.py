@@ -14,7 +14,6 @@ from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import served_check as SC
-from verity_vllm.program.kernels import inductor_rows as TW
 from verity_vllm.program.kernels.rows import token_select_first_max
 from verity_vllm.program.registry import b1, cublas_bf16
 from verity_vllm.program.registry import fa3_check_inf as F3
@@ -153,8 +152,9 @@ def _serve(build: dict, W: dict) -> tuple[list[SC.Step], dict[str, list[int]]]:
             kc, vc = np.concatenate(kh), np.concatenate(vh)
             for i, d in enumerate(req["attention"]):
                 S = d["statics"]
-                o, _nf = TW.fa3_attention_rows(q[a + i].reshape(NH, D), kc[:S["T"]], vc[:S["T"]], NS=SC.SPLITS[d["base"]](S),
-                                               BN=S["BN"], masked_from=S["MASKED_FROM"], dot_prim=S["DOT"], inv_prim=S["INV"])
+                twin, ns = SC.ATTENTION[d["base"]]
+                o, _nf = twin(q[a + i].reshape(NH, D), kc[:S["T"]], vc[:S["T"]], NS=ns(S), BN=S["BN"], masked_from=S["MASKED_FROM"],
+                              dot_prim=S["DOT"], inv_prim=S["INV"])
                 out[a + i] = o.reshape(-1)
         vals[ATT] = out
         run(POST)
