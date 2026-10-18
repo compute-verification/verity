@@ -530,11 +530,11 @@
    },
    "Claims.Recursion.Inner.KS": {
     "fails": "Claims.Witness.Recursion.Inner.KS_fails",
-    "meets": ["Claims.Witness.Recursion.Inner.KS_meets"]
+    "meets": ["Claims.Witness.Recursion.Inner.KS_meets", "Claims.Witness.Recursion.Inner.KS_meets_trim"]
    },
    "Claims.Recursion.Inner.KSAbort": {
     "fails": "Claims.Witness.Recursion.Inner.KSAbort_fails",
-    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets"]
+    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets", "Claims.Witness.Recursion.Inner.KSAbort_meets_trim"]
    },
    "Claims.Recursion.KS": {
     "fails": "Claims.Witness.Recursion.KS_fails",
@@ -542,7 +542,7 @@
    },
    "Claims.Recursion.KSFlock": {
     "fails": "Claims.Witness.Recursion.KSFlock_fails",
-    "meets": ["Claims.Witness.Recursion.KSFlock_meets"]
+    "meets": ["Claims.Witness.Recursion.KSFlock_meets", "Claims.Witness.Recursion.KSFlock_meets_trim"]
    },
    "Claims.Recursion.KSPriv": {
     "fails": "Claims.Witness.Recursion.KSPriv_fails",

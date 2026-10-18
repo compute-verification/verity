@@ -21,8 +21,8 @@ What the recursion's claims read of the compiled verifier, at `deployRec IV ivSc
   opening only at the rounds the inner verifier's run plays, and its calls recorded only off a collision.
 * **The recursion's KS over the deployed plain inner record** (`ksA_deployed`): `KS_of_flockKS_coll` at `deployRec`
   over Flock's plain verifier, every code fact of the compiled verifier proved or reduced as above, `Inner.KSAbort`
-  from `plain_KSAbort` (the table bound and `Extendθ`), `PublicCoin` from `coinsShown_V`, and Flock's KS at the outer
-  record (`deployZkRec`).
+  from `plain_KSAbort` (the table bound, padded back to the trimmed record), `PublicCoin` from `coinsShown_V`, and
+  Flock's KS at the outer record (`deployZkRec`).
 -/
 
 namespace RecDeploy
