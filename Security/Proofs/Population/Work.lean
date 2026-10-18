@@ -1,5 +1,6 @@
 import Proofs.Population.Determinacy
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.BigOperators.Ring.Finset
 
 /-!
 # Skippable work: what the wrong units' cones and luck bound
@@ -16,6 +17,8 @@ as `A = −b` zeroes a product), it was copied from a unit computing the same th
 * `skipped_work_le_of_luck`: if the lucky work is at most a `p = num/den` share of the skipped work plus a slack, the
   skipped work `W` satisfies `(den − num) · W ≤ den · (m F + slack)`, that is `W ≤ (m F + slack) / (1 − p)`:
   compute-accounting's `F m / (1 − p) + slack`.
+* `skipped_work_le_wt`, `skipped_work_le_wt_of_luck`: the same with every cone at most `F` times its root's weight, so
+  the bound reads the wrong units' weight, which weighted sampling bounds: `W ≤ (F · wt(B) + slack) / (1 − p)`.
 * `twin_copy`, **why luck needs distinct units**: two units computing the same function of the same input: the run
   that computes one and copies it has no wrong unit, and every hardness premise must count the copy as luck. The
   premise holds only when no two credited units share (function, inputs, coin), which is the compile pass's job
@@ -96,6 +99,41 @@ theorem skipped_work_le_of_luck [Fintype U] [DecidableEq U] (h : P.Checked) {V :
   have h1 := P.skipped_work_le h f a hh hc hσ hl wt F hF
   have h2 : (P.wrong f σ).card * F ≤ m * F := Nat.mul_le_mul_right _ hm
   have h3 : den * ∑ u ∈ univ \ K, wt u ≤ den * (m * F) + den * ∑ u ∈ L, wt u := by
+    rw [← Nat.mul_add]
+    exact Nat.mul_le_mul_left _ (h1.trans (Nat.add_le_add_right h2 _))
+  rw [Nat.sub_mul, Nat.mul_add]
+  omega
+
+/-- **The skipped work, with every cone at most `F` times its root's weight**: at most `F · wt(wrong)` plus the lucky
+work. -/
+theorem skipped_work_le_wt [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
+    {honest σ : S → V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
+    (hσ : ∀ s ∈ P.input, σ s = a s) {K L : Finset U} (hl : P.SkipsLucky f honest σ K L) (wt : U → ℕ) (F : ℕ)
+    (hF : ∀ u, ∑ v ∈ P.down {u}, wt v ≤ F * wt u) :
+    ∑ u ∈ univ \ K, wt u ≤ F * ∑ u ∈ P.wrong f σ, wt u + ∑ u ∈ L, wt u := by
+  calc ∑ u ∈ univ \ K, wt u ≤ ∑ u ∈ P.down (P.wrong f σ) ∪ L, wt u :=
+        sum_le_sum_of_subset (P.skipped_sub h f a hh hc hσ hl)
+    _ ≤ ∑ u ∈ P.down (P.wrong f σ), wt u + ∑ u ∈ L, wt u := sum_union_le _ _ _
+    _ ≤ F * ∑ u ∈ P.wrong f σ, wt u + ∑ u ∈ L, wt u := by
+        refine Nat.add_le_add_right ?_ _
+        calc ∑ u ∈ P.down (P.wrong f σ), wt u
+            ≤ ∑ u ∈ (P.wrong f σ).biUnion fun u => P.down {u}, wt u :=
+              sum_le_sum_of_subset (P.down_subset_biUnion _)
+          _ ≤ ∑ u ∈ P.wrong f σ, ∑ v ∈ P.down {u}, wt v := sum_biUnion_le _ _ _
+          _ ≤ ∑ u ∈ P.wrong f σ, F * wt u := sum_le_sum fun u _ => hF u
+          _ = F * ∑ u ∈ P.wrong f σ, wt u := (mul_sum _ _ _).symm
+
+/-- **The skipped work under weighted sampling and a luck rate** `p = num/den`: if sampling bounds the wrong units'
+weight by `M`, then `(den − num) · W ≤ den · (F M + slack)`, that is `W ≤ (F · wt(B) + slack) / (1 − p)`. -/
+theorem skipped_work_le_wt_of_luck [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
+    {honest σ : S → V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
+    (hσ : ∀ s ∈ P.input, σ s = a s) {K L : Finset U} (hl : P.SkipsLucky f honest σ K L) (wt : U → ℕ) (F : ℕ)
+    (hF : ∀ u, ∑ v ∈ P.down {u}, wt v ≤ F * wt u) (M : ℕ) (hM : ∑ u ∈ P.wrong f σ, wt u ≤ M)
+    (num den slack : ℕ) (hluck : den * ∑ u ∈ L, wt u ≤ num * ∑ u ∈ univ \ K, wt u + den * slack) :
+    (den - num) * ∑ u ∈ univ \ K, wt u ≤ den * (F * M + slack) := by
+  have h1 := P.skipped_work_le_wt h f a hh hc hσ hl wt F hF
+  have h2 : F * ∑ u ∈ P.wrong f σ, wt u ≤ F * M := Nat.mul_le_mul_left _ hM
+  have h3 : den * ∑ u ∈ univ \ K, wt u ≤ den * (F * M) + den * ∑ u ∈ L, wt u := by
     rw [← Nat.mul_add]
     exact Nat.mul_le_mul_left _ (h1.trans (Nat.add_le_add_right h2 _))
   rw [Nat.sub_mul, Nat.mul_add]
