@@ -291,6 +291,33 @@ theorem ksRV_prBe {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg →
   · exact ksRV_be_pr H IV I DO decO P x hk
   · rfl
 
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+/-- `ksRV`'s setup makes no evaluation. -/
+theorem ksRV_setupCalls (H : Msg → Msg) (IV : Verifier Coin) (xs : List Msg) :
+    setupCalls H (ksRV Coin IV) xs = [] := by
+  simp only [setupCalls, List.flatMap_eq_nil_iff, List.map_eq_nil_iff]
+  exact fun _ _ => rfl
+
+omit [DecidableEq Col] in
+/-- `Br` finds nothing at `ksRV`: its setup makes no evaluation. -/
+theorem ksRV_br_pr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (IV : Verifier Coin)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) (hk : 0 < (ksRV Coin IV).V.k x) : (Br H (ksRV Coin IV) I DO decO P x hk).Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro ?_]
+  · exact Pr_false
+  · rintro ⟨u, v, h, -⟩
+    simp only [Br, ksRV_setupCalls, List.append_nil, findCollIn, reduceCtorEq] at h
+
+omit [DecidableEq Col] in
+theorem ksRV_prBr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (IV : Verifier Coin)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) : PrBr H (ksRV Coin IV) I DO decO P x = 0 := by
+  unfold PrBr
+  split_ifs with hk
+  · exact ksRV_br_pr H IV I DO decO P x hk
+  · rfl
+
 omit [DecidableEq Col] in
 theorem ksRV_prBad {W : Type} (H : Msg → Msg) (IV : Verifier Coin) (R : Rel W)
     (E : Extractor Coin W (ksRV Coin IV).V) (x : Msg) (hR : ∀ w, ¬ R x w) :
@@ -622,7 +649,7 @@ theorem KSBound_fails (H : Msg → Msg) : ¬ KSBound H (ksRAt Coin) (ksB Coin) (
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
     Unit silentP
   try beta_reduce at h1
-  rw [ksRAt_record, ksRV_prBad H _ _ _ [] (ksRV_noR _ _ []), ksRV_prB, ksRV_prBe, ksRV_κ] at h1
+  rw [ksRAt_record, ksRV_prBad H _ _ _ [] (ksRV_noR _ _ []), ksRV_prB, ksRV_prBe, ksRV_prBr, ksRV_κ] at h1
   have := Flock.ksD_κ (Coin := Coin) []
   simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
   change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
@@ -635,7 +662,7 @@ theorem KSPrivBound_fails (H : Msg → Msg) : ¬ KSPrivBound H (ksRAt Coin) (ksB
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
     Unit silentP
   try beta_reduce at h1
-  rw [ksRAt_record, ksRV_prBad H _ _ _ [] (ksRV_noRPriv _ _ []), ksRV_prB, ksRV_prBe, ksRV_κ] at h1
+  rw [ksRAt_record, ksRV_prBad H _ _ _ [] (ksRV_noRPriv _ _ []), ksRV_prB, ksRV_prBe, ksRV_prBr, ksRV_κ] at h1
   have := Flock.ksD_κ (Coin := Coin) []
   simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
   change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
