@@ -5,7 +5,7 @@
 #
 #   research run --on vy-nebius-2 --project verity --campaign hash --source . --cwd source --env GPU_LEASE_WHO=hash-structure \
 #     -- bash benchmarks/hash/structure/diag.sh
-# REPS (default 11); LEASE_MIN (default 10); LEASE_ARGS (extra gpu-lease flags)
+# RUNS ("M N K R|..."; default the prefill GEMMs); REPS (default 11); LEASE_MIN (default 10); LEASE_ARGS (extra gpu-lease flags)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda/bin:/usr/local/cuda-13.0/bin:$PATH
@@ -23,7 +23,7 @@ for k in _Z11gemm_kernelILi0EEv3Geo _Z11gemm_kernelILi4EEv3Geo _Z11gemm_kernelIL
   echo "$k IMMA $(grep -c IMMA "$W/sass.txt") NOP $(grep -c ' NOP ' "$W/sass.txt") lines $(wc -l < "$W/sass.txt")" >> "$O/sass-gemm.txt"
 done
 params() { $PY $CG/reference.py params "$W/p-$1-$2-$3.bin" $(( ($1 + $3 - 1) / $3 * (2 * $2 / 32) )) $((256 * $3)) --ks-seed 7; }
-export CHECKS="200 384 128 64|4096 4096 4096 64|32 512 256 32" RUNS="4096 24576 4096 64|4096 4096 4096 64|4096 6144 4096 64|4096 4096 12288 64|4096 24576 4096 32"
+export CHECKS="200 384 128 64|4096 4096 4096 64|32 512 256 32" RUNS=${RUNS:-"4096 24576 4096 64|4096 4096 4096 64|4096 6144 4096 64|4096 4096 12288 64|4096 24576 4096 32"}
 IFS='|'; for c in $CHECKS $RUNS; do IFS=' '; set -- $c; [ -e "$W/p-$1-$2-$4.bin" ] || params "$1" "$2" "$4"; done; IFS=' '
 export REPS=${REPS:-11}
 # shellcheck disable=SC2016
