@@ -2706,7 +2706,8 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
 
 def test_gpu_adopt_holds_the_lease_of_a_gpu_used_outside_it_until_the_process_exits(monkeypatch, tmp_path):
     """INF-55: on a GPU VM a process whose GPU no lease of its ancestors covers gets that GPU's lease in its run's name (so gpu-lease
-    hands it to nobody else) until it exits; a GPU another lease holds is a collision; each is logged once."""
+    hands it to nobody else) until it exits; a GPU another lease holds is a collision, unless that lease names the process's own run
+    (a holder that handed its locks over a socket); each is logged once."""
     spec = importlib.util.spec_from_file_location("gpu_adopt_under_test", NEBIUS / "gpu_adopt.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
@@ -2723,12 +2724,20 @@ def test_gpu_adopt_holds_the_lease_of_a_gpu_used_outside_it_until_the_process_ex
         fcntl.flock(fd, fcntl.LOCK_EX)
         (leases / f"{i}.owner").write_text(f"pid={owner} run=r-x who=t uuid=GPU-{i} since=2026-10-18T00:00:00Z cmd=x\n")
         held.append(fd)
-    block = [sys.executable, "-c", "import sys; sys.stdin.read()"]            # lives until killed
-    leased, stray, other = (subprocess.Popen(block + extra, stdin=subprocess.PIPE)
-                            for extra in ([], ["research", "run", "--id", "r20261018-000000-abcd"], []))
+    block = [sys.executable, "-c", "import sys; print(flush=True); sys.stdin.read()"]       # lives until killed
+    fd = os.open(leases / "3.lock", os.O_WRONLY | os.O_CREAT, 0o666)          # GPU 3 leased by pid 1 in run r20261018-000000-beef
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    (leases / "3.owner").write_text("pid=1 run=r20261018-000000-beef who=t uuid=GPU-3 since=2026-10-18T00:00:00Z cmd=x\n")
+    held.append(fd)
+    leased, stray, other, handed = (subprocess.Popen(block + extra, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                                    for extra in ([], ["research", "run", "--id", "r20261018-000000-abcd"], [],
+                                                  ["research", "run", "--id", "r20261018-000000-beef"]))
+    for p in (leased, stray, other, handed):
+        p.stdout.readline()                                  # it has exec'd: /proc/PID/cmdline is its own, not empty
     try:
-        monkeypatch.setattr(m, "compute_apps", lambda: [(leased.pid, "GPU-a"), (stray.pid, "GPU-b"), (other.pid, "GPU-c")])
-        monkeypatch.setattr(m, "gpu_index", lambda: {"GPU-a": 0, "GPU-b": 1, "GPU-c": 2})
+        monkeypatch.setattr(m, "compute_apps", lambda: [(leased.pid, "GPU-a"), (stray.pid, "GPU-b"), (other.pid, "GPU-c"),
+                                                        (handed.pid, "GPU-d")])
+        monkeypatch.setattr(m, "gpu_index", lambda: {"GPU-a": 0, "GPU-b": 1, "GPU-c": 2, "GPU-d": 3})
         a = m.Adopter()
         monkeypatch.setattr(m, "SPLIT", tmp_path / "direct-gpus")
         (tmp_path / "direct-gpus").write_text("none\n")
@@ -2747,7 +2756,7 @@ def test_gpu_adopt_holds_the_lease_of_a_gpu_used_outside_it_until_the_process_ex
         monkeypatch.setattr(m, "compute_apps", lambda: [(leased.pid, "GPU-a")])
         assert a.check(1_800_000_060.0) == [] and m.lease_owner(1) is None
     finally:
-        for p in (leased, stray, other):
+        for p in (leased, stray, other, handed):
             p.kill()
             p.wait()
         for fd in held:
