@@ -179,8 +179,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
   `weight_binding_plan`.
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per unit, commitment, serve-time
-  `Commitment`s, replay) and an `Objective` (harm per unit at δ), `frontier` is the certified Pareto frontier of total
-  cost against harm. `for_budget` and `for_target` query it, `weigh` weights block kinds, `overlaps` prices repeated
+  `Commitment`s, replay) and an `Objective` (harm per unit at δ, or the envelope of `Policy`s), `frontier` is the
+  certified Pareto frontier of total cost against harm. `for_budget` and `for_target` query it, `weigh` weights block kinds, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `Certificate`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP within the width rule;

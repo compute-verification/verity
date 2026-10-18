@@ -26,6 +26,15 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   linears forced to each grain, per window, ε and commitment regime), the sensitivity (each cost group scaled, each
   input at its low and high) and the hints (`plan.json`), and prints the tables.
 
+- `opt5.py`: the least serve-time and proving total that keeps each policy (skippable work, control, integrity; the IOP
+  note's tier 2, note:proofs/20261018T2305Z-draft-iop-core-objects) within a share ε of its total, the draw weighted by
+  the envelope of their public costs (`optimize.Policy`). Its variables are the cut, the replay block's tokens, the
+  always-proved set, clustered draws (k units a drawn replay block, in closed form) and the serve-time options (Pearl-C
+  reading down's and o_proj's A from the Commit's BF16 rows, hash's tap format), each priced. Per model it writes each
+  plan with the policy that binds, every policy's level at it, the optimum per PoUW scheme, and TS1's two-stage table
+  with every value committed (`opt5-MODEL.json`, `.md`).
+
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
+uv run python benchmarks/sampling_plan/opt5.py --out DIR --label main
 ```
