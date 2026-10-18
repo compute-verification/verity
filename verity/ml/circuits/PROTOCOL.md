@@ -598,9 +598,10 @@ as declared, so a composite over exact steps declares the intervals its operands
   reaches only the coin port of a noise primitive or a receipt fold, never any other node, directly or through a return.
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
   of origin `coin` that a noise primitive reads is read more than once, by it or by anything else; or a leaf a noise
-  primitive returns is read more than once, the Program's outputs counting as one read. So each coin bit feeds one noise of
-  one instance, no receipt key shares a noise bit's coin, and no noise has two copies or is shared across rows, matmuls,
-  batch members or scan steps. A coin only receipt folds read may key any number of them. With coin flow this gives the
+  primitive returns is read more than once, the Program's outputs counting as one read. A primitive returns one value, so
+  a noise instance has at most one reader. So each coin bit feeds one noise of one instance, no receipt key shares a noise
+  bit's coin, and no noise has two copies or is shared across rows, matmuls, batch members or scan steps. A coin only
+  receipt folds read may key any number of them. With coin flow this gives the
   view independence of `Accounting.Guarantees.CoinFlow` (`Security/`): every value outside a noise's forward cone is a
   function of the coins it does not read.
 - **`E_PORT_DECL`**: the `ports` are malformed or not canonical, or a transfer gives no interval of its return's width.
