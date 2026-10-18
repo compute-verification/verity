@@ -98,10 +98,8 @@ def run(p: Placement, inputs: dict[str, int], plan: Plan, deviation: Deviation |
         content.setdefault((port, b // g.window), []).append((1 << 31, n))
     per = g.bucket * g.window
     windows = range(plan.epoch.start // per, -(-plan.epoch.end // per))
-    last = max((b // g.window for row in counts.values() for b in row), default=0)
     records = [Record(port, w, tuple(row.get(w * g.window + t, 0) for t in range(g.window)), digest(content.get((port, w), [])))
-               for port, row in counts.items() for w in range(min(windows.start, 0), max(windows.stop, last + 1))
-               if (port, w) not in dev.down]
+               for port, row in counts.items() for w in windows if (port, w) not in dev.down]
     stores = {s.name: s for s in p.stores}
     answers = []
     ticks = lambda seconds: math.ceil(seconds / float(g.tick) - 1e-9)  # noqa: E731

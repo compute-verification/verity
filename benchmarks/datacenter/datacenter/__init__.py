@@ -12,7 +12,7 @@ interprets those claims in light of the declared hardware, named assumptions and
 """
 from .account import FLEET_CLOSED, Account, BlockAccount, Credit, Ledger, account, credits, double_credit
 from .binding import Crossing, Placement, Profile, crossings, occupancy, place, route, traffic
-from .claims import Carried, Computed, Entered, Held, On, Read, Refused, Scheduled, audit
+from .claims import Carried, Computed, Entered, Held, On, Read, Refused, Scheduled, audit, check_records
 from .logical import Circuit, Commitment, Input, Value, commit, digest, trace
 from .memory import Challenge, Reads, Store, Wipe, answer_time, serve_time
 from .observe import Answer, Deviation, Record, Trace, run
@@ -24,6 +24,6 @@ __all__ = [
     "FLEET_CLOSED", "Account", "Answer", "Assumption", "Block", "BlockAccount", "Carried", "Challenge", "Circuit",
     "Commitment", "Computed", "Credit", "Crossing", "Datacenter", "Deviation", "Device", "Entered", "Fleet", "Grid", "Held",
     "Input", "Interval", "Ledger", "Link", "On", "Placement", "Plan", "Port", "Profile", "Read", "Reads", "Record",
-    "Refused", "Scheduled", "Store", "Trace", "Value", "Wipe", "account", "answer_time", "audit", "commit", "credits",
+    "Refused", "Scheduled", "Store", "Trace", "Value", "Wipe", "account", "answer_time", "audit", "check_records", "commit", "credits",
     "crossings", "digest", "double_credit", "occupancy", "place", "route", "run", "serve_time", "trace", "traffic",
 ]
