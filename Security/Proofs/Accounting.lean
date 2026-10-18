@@ -1,5 +1,6 @@
 import Proofs.Accounting.Memory
 import Proofs.Accounting.Device
+import Proofs.Accounting.Gates
 import Proofs.Accounting.FillerLuck
 import Proofs.Accounting.Headline
 import Proofs.Accounting.Bandwidth

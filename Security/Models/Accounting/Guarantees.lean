@@ -7,6 +7,7 @@ import Models.Accounting.Guarantees.BoundSketch
 import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Capacity
 import Models.Accounting.Guarantees.Confidence
+import Models.Accounting.Guarantees.Gates
 import Models.Accounting.Guarantees.FillerLuck
 import Models.Accounting.Guarantees.Headline
 import Models.Accounting.Guarantees.Joint
@@ -30,6 +31,7 @@ import Models.Accounting.Guarantees.Tag
 import Models.Accounting.Guarantees.TS
 import Models.Accounting.Guarantees.Sheet
 import Models.Accounting.Guarantees.TS.Receipt
+import Models.Accounting.Guarantees.TS.FoldFanIn
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
 audit's guarantees as a joint run's compute and bandwidth guarantees, the filler's per-check luck, a state-bounded
