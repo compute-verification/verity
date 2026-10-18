@@ -69,6 +69,7 @@ import Proofs.Flock.Claims.KS.ForkSim
 import Proofs.Flock.Claims.KS.PlainFork
 import Proofs.Flock.Claims.KS.PlainForkClash
 import Proofs.Flock.Claims.KS.ForkAlign
+import Proofs.Flock.Claims.KS.SlotDist
 import Proofs.Flock.Claims.KS.PlainAlign
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
