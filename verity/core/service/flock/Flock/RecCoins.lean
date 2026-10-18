@@ -648,6 +648,65 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Sou
   | _, some (m, k, cl, j) => checkResiduals inn st.c st.pub own m k cl j
   | none, none => pure ()
 
+/-- A circuit-table level `l`'s `out` port in the reads file: level `l`'s tops `rec-top-L<l>` (`rec_outer.TopValue`),
+instance `i` (rep `i / q`'s opening `i % q`, `checkOpen`'s order) reading node `first + pos >>> H` of them, `pos` the
+opening's query position and `H` its siblings below the cap: `first` is 0 for rep 0, and for rep 1 0 at level 0 (both
+reps' one `root_B`) and above it the node count of rep 0's top, `top0` (`RecVStar.topRow`'s rows,
+`TopValue.position`). -/
+def checkLevelTopReads (unit : String) (own : Array Registered.Port) (l q H top0 : Nat) (pos0 pos1 : Array Nat) :
+    V Unit := do
+  let some reg := own.find? (·.name == "out")
+    | throw s!"rec-coins: {unit}: the verifier's registered reads hold no port out: level {l}'s tops would be the prover's"
+  if reg.value != s!"rec-top-L{l}" then
+    throw s!"rec-coins: {unit}: port out reads {reg.value}, not level {l}'s tops rec-top-L{l}"
+  let first := if l == 0 then 0 else top0
+  let want := (Array.range (2 * q)).map fun i =>
+    some (if i < q then pos0[i]! >>> H else first + (pos1[i - q]! >>> H))
+  if reg.reads != want then
+    throw (s!"rec-coins: {unit}: rec-top-L{l}: the reads file does not read rep r's opening j at node pos[j] >>> {H} " ++
+      s!"of its rep's top, rep 1's after rep 0's {first} rows")
+
+/-- **A circuit-table level's openings climb to the coin server's tops**: at a `rec-open/l<LANES>-h<H>` statement, the
+level `l` of the inner schedule `checkOpen` finds, its `out` reads `rec-top-L<l>` at each opening's node above its `H`
+siblings at its rep's coins (`checkLevelTopReads`), rep 1's rows after rep 0's level-`l` top as the coin server recorded
+it (`lk`). -/
+def checkOpenTops (inn : Inner) (c : Circuit) (own : Array Registered.Port) (lk : RecVStar.InnerLink) (LANES H : Nat) :
+    V Unit := do
+  let unit := c.unit.name
+  let (sh, extras) ← inn.algebra
+  let lv := sh.sched.levels
+  let [l] := (List.range lv.size).filter fun l => 2 ^ lv[l]!.lanes == LANES && lv[l]!.d - lv[l]!.cap == H
+    | throw s!"rec-coins: {unit}: no one level of the inner schedule (m {sh.m}) has {LANES} lanes and {H} siblings below its cap"
+  let q := lv[l]!.q
+  let pos ← #[0, 1].mapM fun (r : Nat) => do
+    let rep ← inn.rep sh extras r
+    match rep.info.lg.conss[l]? with
+    | some cs => if cs.pos.size == q then pure cs.pos else
+        throw s!"rec-coins: {unit}: rep {r}: the verifier's coins give no {q} queries at level {l}"
+    | none => throw s!"rec-coins: {unit}: rep {r}: the verifier's coins give no {q} queries at level {l}"
+  let top0 := ((lk.tops[0]?.bind (·[l - 1]?)).map (·.2.size)).getD 0
+  checkLevelTopReads unit own l q H top0 pos[0]! pos[1]!
+
+/-- **Check 5's link points and its levels' tops are the coin server's**: a `rec-open/…`, `rec-residuals/…` or
+`rec-sparse/…` statement, whose check 5 takes the extra claims at the inner session's record's link points, is refused
+unless the verifier holds the inner transcript (`link`, `RecVStar.innerLink`, which holds those points to the ones the
+coin server drew); and at a circuit-table level its `out` reads the tops the coin server recorded (`checkOpenTops`). Any
+other unit passes. -/
+def checkLink (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Source)
+    (link : Option RecVStar.InnerLink) : V Unit := do
+  let unit := st.c.unit.name
+  let o := RecOpen.params unit
+  if o.isNone && (RecResiduals.params unit).isNone && (RecSparse.params unit).isNone then return
+  let some lk := link
+    | throw (s!"rec-coins: {unit}: the verifier holds no inner transcript (--rec-inner-transcript with " ++
+        "--rec-inner-session): check 5's link points and the tops its levels climb to would be the prover's")
+  let some (LANES, H) := o | return
+  let some own := own
+    | throw s!"rec-coins: {unit}: the verifier holds no registered reads (--registered): its tops would be the prover's"
+  let some f := files
+    | throw s!"rec-coins: {unit}: the verifier holds no inner session (--rec-inner-circuit, --rec-inner-public, --rec-inner-partition, --rec-inner-session), so no coins to place its openings' tops at"
+  checkOpenTops (← f.load unit) st.c own lk LANES H
+
 /-- The value after `k` in `args`. -/
 def argOf (args : List String) (k : String) : Option String :=
   match args.dropWhile (· != k) with
