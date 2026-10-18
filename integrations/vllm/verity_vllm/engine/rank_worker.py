@@ -169,7 +169,7 @@ def swap_label(label: str, sw: dict | None, step: int | None) -> str:
 def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
     """The tensors the loader's post-load hook keeps as plain attributes (DeepSeek-V4's `hc_attn_fn_broadcast`), registered as Parameters
     under the same names, as the rank's Build registers them (`vllm_meta.post_load_tensors_as_the_loader_does`): the weights the rank
-    registers, pins and replays are its `named_parameters`.  The forward reads the same tensor."""
+    registers, pins and replays, and the Match capture's roots, are its `named_parameters`.  The forward reads the same tensor."""
     import torch
     mods = dict(model.named_modules())
     for n in names:
@@ -217,7 +217,8 @@ class TP2CaptureWorkerExtension:
     def tp2_install(self, *, out_dir: str, workload: dict, case: str, cp: dict, engine_kwargs: dict, env_flags: dict,
                     snapshot_steps: list[int], snapshot_max_bytes: int, adapter_revision: str, wheel_sha256: str | None,
                     vllm_commit: str | None, reenter: bool = True, triton: bool = True, module_hooks: bool = True,
-                    weights_verified: bool = False, argv: list[str] | None = None, target: Any = None) -> dict[str, Any]:
+                    weights_verified: bool = False, argv: list[str] | None = None, target: Any = None,
+                    post_load_tensors: dict[str, list[str]] | None = None) -> dict[str, Any]:
         import torch
 
         from verity_vllm.engine import vllm_adapter as va
@@ -230,6 +231,7 @@ class TP2CaptureWorkerExtension:
         rank_dir.mkdir(parents=True, exist_ok=True)
         runner = self.model_runner
         model = runner.get_model()
+        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
         engine = va.Engine(llm=_LLMShim(self), runner=runner, model=model, cp=dict(cp), kwargs=dict(engine_kwargs),
                            env_flags=dict(env_flags), build_s=0.0, case=case, target=target)
         header = va.make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
@@ -269,7 +271,7 @@ class TP2CaptureWorkerExtension:
         log(f"observer installed: {len(cap.roots)} roots, profile_id={header.profile_id} (adapter {pid_adapter}), log={log_path}, "
             f"snapshots={sorted(snapshot_steps)[:4]}{'...' if len(snapshot_steps) > 4 else ''}, cos_sin={cs}")
         return _jsonable({"rank": rank, "world_size": world, "pid": os.getpid(), "roots": len(cap.roots), "profile_id": header.profile_id,
-                          "profile_id_adapter": pid_adapter, "log": str(log_path), "rank_dir": str(rank_dir),
+                          "profile_id_adapter": pid_adapter, "log": str(log_path), "rank_dir": str(rank_dir), "post_load_tensors": post_load,
                           "reenter_impls": header.notes.get("reenter_impls"), "cos_sin": str(cs) if cs else None,
                           "root_names_head": [r.name for r in cap.roots[:6]], "root_shapes_head": [list(r.view.shape) for r in cap.roots[:6]]})
 
