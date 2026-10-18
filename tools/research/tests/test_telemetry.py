@@ -1108,3 +1108,30 @@ def test_a_namespace_with_a_portion_from_another_tree_is_a_mismatch(tmp_path):
     assert mixed["resolved_path"] == str((ours / "src" / "nsprobe").resolve()) and mixed["repo_root"] is None
     [m] = sid.check({"nsprobe": mixed}, str(ours))
     assert "namespace portion(s) outside the requested tree" in m["why"] and str((other / "src" / "nsprobe").resolve()) in m["why"]
+
+
+def test_a_cancel_also_signals_the_runs_workers_that_left_its_group_but_never_the_runner(tmp_path, monkeypatch):
+    """INF-48/INF-53: circuit_check's pool (17 Oct 11:21Z, cpu-2) and vLLM's TP workers (vy-glm53-eu2) setsid out of the workload's
+    group and outlived `research cancel`; they still carry the run's RESEARCH_RUN_DIR."""
+    from research.telemetry import cancel
+    d = _attempt(tmp_path, rc=None, sig=None, samples=[], pid=100)
+    want = str(d.resolve())
+    procs = {100: {"pid": 100, "comm": "bash", "ppid": 50, "pgrp": 100, "starttime_ticks": 1, "state": "S"},
+             50: {"pid": 50, "comm": "python3", "ppid": 1, "pgrp": 50, "starttime_ticks": 1, "state": "S"},     # the runner
+             300: {"pid": 300, "comm": "python3", "ppid": 100, "pgrp": 300, "starttime_ticks": 2, "state": "S"},  # setsid worker
+             400: {"pid": 400, "comm": "python3", "ppid": 1, "pgrp": 400, "starttime_ticks": 3, "state": "S"}}   # another run's
+    env = {100: want, 50: want, 300: want, 400: "/elsewhere"}
+    monkeypatch.setattr(cancel, "stat_fields", lambda pid: procs.get(pid))
+    monkeypatch.setattr(cancel, "run_dir_of", lambda pid: env.get(pid))
+    monkeypatch.setattr(cancel, "pgid_members", lambda pgid: [{"pid": 100, "comm": "bash", "starttime_ticks": 1}])
+    monkeypatch.setattr(cancel.os, "listdir", lambda p: [str(k) for k in procs])
+    killed = []
+    monkeypatch.setattr(cancel.os, "killpg", lambda g, s: killed.append(("pg", g)))
+    monkeypatch.setattr(cancel.os, "kill", lambda p, s: killed.append(("pid", p)))
+    a = argparse.Namespace(actor="manual", attempt_dir=str(d), fallback=None, target_pid=None, target_pgid=100, target_pod=None,
+                           expect_starttime=None, expect_comm=None, expect_run_dir=str(d), expect_nonempty=False, reason="r", signal=15,
+                           project=None, job=None, attempt=None, controller=None, deliver=True, confirm_exit_s=0.0)
+    assert cancel.cancel(a) == 0
+    assert killed == [("pg", 100), ("pid", 300)], "the group, then its setsid worker; never the runner (50) or another run (400)"
+    result = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines()][-1]
+    assert result["strays_total"] == 1 and result["strays"][0]["pid"] == 300 and result["strays_signalled"] == 1

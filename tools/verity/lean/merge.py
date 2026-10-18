@@ -2,7 +2,8 @@
 
     python tools/verity/lean/merge.py BASE OURS THEIRS [PATH]   what git runs (`%O %A %B %P`): the merge is written to OURS
     python tools/verity/lean/merge.py --lean BASE OURS THEIRS [PATH]   the same for a `.lean` file (`lean-imports`)
-    python tools/verity/lean/merge.py --install [REPO]         register both drivers in the repository's git config, once per clone
+    python tools/verity/lean/merge.py --lakefile BASE OURS THEIRS [PATH]   the same for a `lakefile.toml` (`lakefile-lists`)
+    python tools/verity/lean/merge.py --install [REPO]         register the drivers in the repository's git config, once per clone
     python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions
 
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
@@ -22,7 +23,10 @@ The layer rules (`layers`), which two branches that each widen a layer for a gua
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). The roots (`roots`), which two branches that each add a
 module to build both change, merge as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
 `.gitattributes`), git's own merge runs and only a conflict all of whose sides are `import` lines is merged, as a list: two branches
-that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's.
+that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. For a `lakefile.toml`
+(`--lakefile`, `lakefile-lists`), a conflict all of whose sides are `[[require]]` blocks merges as a set of blocks, and one all
+of whose sides are a string array's items (`roots`) merges as a list, wrapped as ours wraps it: two branches that each require a
+package or add a root to `Security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's.
 """
 from __future__ import annotations
 
@@ -30,7 +34,9 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import subprocess
+import tomllib
 import sys
 from pathlib import Path
 
@@ -43,6 +49,13 @@ _spec.loader.exec_module(A)
 NAME = "lean-audit"
 #: the `.lean` files' driver (`--lean`)
 LEAN = "lean-imports"
+#: the lakefiles' driver (`--lakefile`)
+LAKEFILE = "lakefile-lists"
+#: a lakefile's `[[require]]` block line, and a line of a string array's items (`roots = ["A", "B",`, `"C"]`)
+REQUIRE_LINE = re.compile(r'\s*(\[\[require\]\]|(name|path|git|rev|scope|version|subDir)\s*=\s*\S.*)\s*$')
+ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
+#: where a merged string array wraps
+WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
 SORTED = {"assumptions", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
@@ -214,10 +227,84 @@ def _imports(lines: list[str]) -> bool:
     return all(s.startswith("import ") or not s.strip() for s in lines)
 
 
-def lean(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
+def _blocks(lines: list[str]) -> list[str] | None:
+    """A conflict side's `[[require]]` blocks (each its lines, blank ones dropped), or None when it holds anything else."""
+    body = [s for s in lines if s.strip()]
+    if not all(REQUIRE_LINE.match(s) for s in body) or (body and not body[0].strip().startswith("[[require]]")):
+        return None
+    out: list[str] = []
+    for s in body:
+        if s.strip().startswith("[[require]]"):
+            out.append("")
+        out[-1] += s if s.endswith("\n") else s + "\n"
+    return out
+
+
+def _requires(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
+    """A conflict all of whose sides are `[[require]]` blocks: ours' blocks with theirs' new ones, less what either removed."""
+    x, y, z = _blocks(o), _blocks(a), _blocks(b)
+    if x is None or y is None or z is None:
+        return None
+    filled = [i for i, s in enumerate(a) if s.strip()]
+    lead, trail = (a[:filled[0]], a[filled[-1] + 1:]) if filled else (a, [])
+    merged = [k for k in y if k in z or k not in x] + [k for k in z if k not in y and k not in x]
+    return lead + "\n".join(merged).splitlines(keepends=True) + trail
+
+
+def _array(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
+    """A conflict all of whose sides are a string array's items (`roots`): ours' items with theirs' new ones, less what
+    either removed, wrapped at `WIDTH` with ours' opening, indent and close."""
+    sides = [[s for s in side if s.strip()] for side in (o, a, b)]
+    if not sides[1] or not all(ITEM_LINE.match(s) for side in sides for s in side):
+        return None
+    opening = lambda side: (m.group(1) if side and (m := ITEM_LINE.match(side[0])) and m.group(1) else None)
+    closes = lambda side: bool(side) and side[-1].rstrip().endswith("]")
+    if sides[2] and (opening(sides[2]) != opening(sides[1]) or closes(sides[2]) != closes(sides[1])):
+        return None
+    head = opening(sides[1])
+    lead = re.match(r"\s*", sides[1][0]).group(0)
+    indent = re.match(r"\s*", sides[1][1]).group(0) if len(sides[1]) > 1 else (lead + "  " if head else lead)
+    names = [re.findall(r'"([^"]*)"', "".join(side)) for side in sides]
+    merged = items(*names)
+    if not merged:
+        return None
+    pieces = [f'"{n}"' + ("]" if i == len(merged) - 1 and closes(sides[1]) else ",") for i, n in enumerate(merged)]
+    out, line = [], lead + head if head else lead
+    start = line
+    for piece in pieces:
+        if line == start:
+            line += piece
+        elif len(line) + 1 + len(piece) <= WIDTH:
+            line += " " + piece
+        else:
+            out.append(line + "\n")
+            line = indent + piece
+    return out + [line + "\n"]
+
+
+def lakefile(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
+    """(the merged text, the number of conflicts left) of a `lakefile.toml`: git's own merge, then each conflict whose sides are
+    only `[[require]]` blocks merged as a set of blocks, and each whose sides are only a string array's items (`roots`) merged
+    as a list (`items`), so two branches that each require a package or add a root merge.  Any other conflict (a comment, a
+    value) is left as git writes it, and so is a result that is not TOML."""
+    text, left = lean(base, ours, theirs, (_requires, _array))
+    if not left:
+        try:
+            tomllib.loads(text)
+        except tomllib.TOMLDecodeError:
+            return lean(base, ours, theirs, ())[0], 1
+    return text, left
+
+
+def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int]:
     """(the merged text, the number of conflicts left) of a `.lean` file: git's own merge (`git merge-file`), then each conflict
     whose three sides are only `import` lines merged as lists of imports (`items`), so two branches that each add a module to
-    an import list merge.  Any other conflict is left as git writes it."""
+    an import list merge.  Any other conflict is left as git writes it.  ``resolvers`` (each `(base, ours, theirs)` lines to
+    the merged lines, or None) replace the imports rule."""
+    if resolvers is None:
+        resolvers = (lambda o, a, b: [s for s in items([s for s in o if s.strip()], [s for s in a if s.strip()],
+                                                       [s for s in b if s.strip()])]
+                     if _imports(a) and _imports(o) and _imports(b) else None,)
     p = subprocess.run(["git", "merge-file", "-p", "--diff3", "-L", "ours", "-L", "base", "-L", "theirs", str(ours), str(base),
                         str(theirs)], capture_output=True, text=True)
     if p.returncode < 0 or p.returncode > 127:
@@ -232,8 +319,9 @@ def lean(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
         sep = next(i for i in range(mid, len(lines)) if lines[i].rstrip("\n") == "=======")
         end = next(i for i in range(sep, len(lines)) if lines[i].startswith(">>>>>>> theirs"))
         a, o, b = lines[n + 1:mid], lines[mid + 1:sep], lines[sep + 1:end]
-        if _imports(a) and _imports(o) and _imports(b):
-            out += [s for s in items([s for s in o if s.strip()], [s for s in a if s.strip()], [s for s in b if s.strip()])]
+        merged = next((m for r in resolvers if (m := r(o, a, b)) is not None), None)
+        if merged is not None:
+            out += merged
         else:
             out += lines[n:end + 1]
             left += 1
@@ -253,7 +341,8 @@ def install(repo: Path) -> None:
                               check=True).stdout.strip())
     driver = f"python3 {Path(os.path.relpath(HERE / 'merge.py', top)).as_posix()} %O %A %B %P"
     for name, what, argv in ((NAME, "lean-audit.json: each side's guarantees, reads and dependencies", driver),
-                             (LEAN, ".lean: each side's imports", driver.replace(" %O", " --lean %O"))):
+                             (LEAN, ".lean: each side's imports", driver.replace(" %O", " --lean %O")),
+                             (LAKEFILE, "lakefile.toml: each side's requires and roots", driver.replace(" %O", " --lakefile %O"))):
         for k, v in (("name", f"{what} (tools/verity/lean/merge.py)"), ("driver", argv)):
             subprocess.run(["git", "config", f"merge.{name}.{k}", v], cwd=repo, check=True)
         print(f"merge.py: merge.{name}.driver = {argv} (in {top})")
@@ -276,6 +365,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--install", nargs="?", const=Path.cwd(), type=Path, metavar="REPO", help="register the driver in REPO")
     ap.add_argument("--normalize", action="store_true", help="recompute the `reads` digests of each record named")
     ap.add_argument("--lean", action="store_true", help="BASE OURS THEIRS [PATH] are a `.lean` file's: merge its import lists")
+    ap.add_argument("--lakefile", action="store_true", help="BASE OURS THEIRS [PATH] are a `lakefile.toml`'s: merge its "
+                    "`[[require]]` blocks and string arrays")
     a = ap.parse_args(argv)
     if a.install is not None:
         install(a.install)
@@ -288,11 +379,12 @@ def main(argv: list[str]) -> int:
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")
     base, ours, theirs = a.files[:3]
     path = a.files[3] if len(a.files) == 4 else ours
-    if a.lean:
-        text, left = lean(base, ours, theirs)
+    if a.lean or a.lakefile:
+        text, left = lakefile(base, ours, theirs) if a.lakefile else lean(base, ours, theirs)
         ours.write_text(text)
         if left:
-            print(f"merge.py: {path}: {left} conflict(s) beyond import lists", file=sys.stderr)
+            what = "requires and string arrays" if a.lakefile else "import lists"
+            print(f"merge.py: {path}: {left} conflict(s) beyond {what}", file=sys.stderr)
         return 1 if left else 0
     try:
         merged, why = merge(load(base), load(ours), load(theirs))
