@@ -59,10 +59,12 @@ theorem op₀Z_some {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ} {H :
     {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D H} {T : TabZK 𝔽 mPts} {cap : Model.Cap D}
     {out : OutZC 𝔽 D Sl} {p v} (h : op₀Z H E Lf T cap out p = some v) :
     ∃ y ∈ opens₀Z T.sch out, y.1 = p.val ∧ v = fun lane => y.2.1.getD lane.val 0 := by
+  classical
   unfold op₀Z at h
   obtain ⟨y, hy, rfl⟩ := Option.map_eq_some_iff.1 h
-  obtain ⟨hm, hd⟩ := List.mem_filter.1 (List.mem_of_mem_head? hy)
-  exact ⟨y, hm, (@of_decide_eq_true _ _ hd).1, rfl⟩
+  have hm := List.mem_of_mem_head? hy
+  rw [List.mem_filter, decide_eq_true_eq] at hm
+  exact ⟨y, hm.1, hm.2.1, rfl⟩
 
 /-- **The live fork after `j` coins is the deployed runs' fork at round `j`**: two runs at coins sharing their first
 `j` (`Claims.forkCoins`). -/
