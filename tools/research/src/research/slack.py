@@ -1759,7 +1759,14 @@ def cmd_inbox(ns: argparse.Namespace, reg: dict) -> int:
     if not r:
         raise SlackError(f"@{name} has no inbox; open one with `research msg names open --as {name}`")
     if ns.verb == "close":
-        r = {**r, "closed": _now_stamp(), "forward_to": (ns.forward_to or "").lstrip("@") or None}
+        fwd = (ns.forward_to or "").lstrip("@") or None
+        if fwd == name:
+            raise SlackError(f"--forward-to @{name}: a name can't forward to itself, and its doorbells would ring a closed inbox; "
+                             "forward to the handle that takes its work over, or close it with no --forward-to")
+        if fwd and not any(h["handle"] == fwd for h in reg["handles"]) and not routes.get_route(fwd):
+            raise SlackError(f"--forward-to @{fwd}: neither a registry handle nor a name with an inbox, so its doorbells would "
+                             "ring no one; check the name (`research msg names list`) and forward to a handle or a name listed there")
+        r = {**r, "closed": _now_stamp(), "forward_to": fwd}
         if not ns.dry_run:
             print(publish_route(routes.root, r, f"routes.d: close @{name}" + (f" -> @{r['forward_to']}" if r["forward_to"] else "")))
         print(f"@{name} closed" + (f"; its doorbells ring @{r['forward_to']}" if r["forward_to"] else ""))

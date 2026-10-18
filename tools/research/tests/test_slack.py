@@ -1578,8 +1578,24 @@ def test_inbox_open_posts_the_root_publishes_the_route_and_guards_it(fake, regis
     r = json.loads((clone / slack.ROUTES_DIR / "circuits.json").read_text())
     assert (r["holder"], r["inbox_ts"], r["succeeds"], r["remit"]) == ("bc-22222222", root["ts"], "bc-11111111", "the vLLM epoch run")
     assert sum(m["text"].startswith("Inbox for") for m in fake.messages[COORD]) == 1
-    assert run(capsys, "names", "close", "--as", "circuits", "--forward-to", "@circuits")[0] == 0
-    assert json.loads((clone / slack.ROUTES_DIR / "circuits.json").read_text())["forward_to"] == "circuits"
+    rc, _, err = run(capsys, "names", "close", "--as", "circuits", "--forward-to", "@circuits")
+    assert rc == 2 and "--forward-to @circuits: a name can't forward to itself" in err
+    assert json.loads((clone / slack.ROUTES_DIR / "circuits.json").read_text())["closed"] is None
+    assert run(capsys, "names", "close", "--as", "circuits", "--forward-to", "@proofs")[0] == 0       # a handle, not open yet
+    assert json.loads((clone / slack.ROUTES_DIR / "circuits.json").read_text())["forward_to"] == "proofs"
+
+
+def test_names_close_refuses_a_forward_to_a_name_with_no_route_and_no_handle(fake, registry, routes_dirs, tmp_path, capsys,
+                                                                            monkeypatch):
+    clone = notes_clone(tmp_path)
+    monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
+    add_route(clone / slack.ROUTES_DIR, "old-lane", "1.0")
+    inbox(fake, routes_dirs, "lean")
+    rc, _, err = run(capsys, "names", "close", "--as", "lean", "--forward-to", "@nobody")
+    assert rc == 2 and "--forward-to @nobody: neither a registry handle nor a name with an inbox" in err
+    assert "`research msg names list`" in err and json.loads((clone / slack.ROUTES_DIR / "lean.json").read_text())["closed"] is None
+    assert run(capsys, "names", "close", "--as", "lean", "--forward-to", "@old-lane")[0] == 0       # a name with an inbox
+    assert json.loads((clone / slack.ROUTES_DIR / "lean.json").read_text())["forward_to"] == "old-lane"
 
 
 def test_inbox_read_shows_unread_doorbells_urgent_first_and_marks_them_read(fake, registry, routes_dirs, capsys):
