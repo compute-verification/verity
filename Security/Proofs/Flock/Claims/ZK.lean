@@ -26,6 +26,7 @@ import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.Release
+import Proofs.Flock.Claims.ZK.Os
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 
@@ -157,6 +158,10 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   Its `RefD` is D8 (a)'s `FirewallComputes` plus the item-stream refinement `LeanRelease.ItemsRefine` (`Reports`,
   `LiveRefine` at the worker's passed rounds, `FillRefine` at the scheduled rounds; `LeanRelease.refD`), so
   **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at it, at any worker: one bit a session.
+* `Os`: the server's tape as the operating system's bytes (`OsTape`: the frames' draws and the tap's reads, one for one),
+  and A3's step to a uniform tape beside independent randomness (`Pr_os_prod`). `ZkDeferredOs`, `ZkServerBlindOs` and
+  `ZkServerLeanOs` state the three theorems at those bytes under A3, the bound unchanged; they are statements, not yet
+  proved here.
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
