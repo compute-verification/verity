@@ -1,6 +1,7 @@
 import Models.Accounting.Guarantees.TS.Receipt
 import Proofs.Accounting.TS.Rounds
 import Proofs.Accounting.TS.ReceiptLi
+import Proofs.Accounting.TS.ReceiptDuoCP
 import Proofs.Pouw.Receipt.Fx1
 
 /-!
@@ -13,8 +14,9 @@ The bridge (`luck_of_receipt`), round by round: with `A = Pr[right ∧ d > 0]`, 
 
 Lemma B in case (a) (`receiptLuck_caseA`): in each unit the run's words are the honest ones with one replaced, so equal
 final states from the pinned start give the replaced word right (`duoRun_update_injective`, and for fx1
-`fx1Run_update_injective`); for li units, equal checkpoints segment by segment give each segment's word right
-(`LiLemmas.right_of_same`). The event `same ∧ ¬right` is empty.
+`fx1Run_update_injective`); for li, duo and fx1 checkpoint units, equal checkpoints segment by segment give each
+segment's word right (`LiLemmas.right_of_same`, `DuoCPLemmas.right_of_same`, `DuoCPLemmas.fx1_right_of_same`). The
+event `same ∧ ¬right` is empty.
 
 The keyed rounds (`operandLuck_wrongWords`): a share positive only where a deficient word is wrong makes
 `right ∧ d > 0` empty, the operand luck at 0.
@@ -80,10 +82,13 @@ theorem receiptLuck_caseA {Ω : Type} [Fintype Ω] :
     obtain ⟨hA, hAN⟩ := h
     refine And.intro ?_ fun ω => receiptLuck_caseA (next ω) (hAN ω)
     have hsr : ∀ ω, same ω → right ω := by
-      rcases hA with ⟨U, w, L, D, hD⟩ | ⟨U, w, L, D, hD⟩ | ⟨U, w, S, W, C, H, D, hD⟩
+      rcases hA with ⟨U, w, L, D, hD⟩ | ⟨U, w, L, D, hD⟩ | ⟨U, w, S, W, C, H, D, hD⟩ | ⟨U, w, S, W, C, H, D, hD⟩ |
+        ⟨U, w, S, W, C, H, D, hD⟩
       · exact fun ω h => (hD ω).1.mpr (DuoUnits.right_of_same D ω ((hD ω).2.mp h))
       · exact fun ω h => (hD ω).1.mpr (Fx1Units.right_of_same D ω ((hD ω).2.mp h))
       · exact fun ω h => (hD ω).1.mpr (LiLemmas.right_of_same D ω ((hD ω).2.mp h))
+      · exact fun ω h => (hD ω).1.mpr (DuoCPLemmas.right_of_same D ω ((hD ω).2.mp h))
+      · exact fun ω h => (hD ω).1.mpr (DuoCPLemmas.fx1_right_of_same D ω ((hD ω).2.mp h))
     rw [zero_mul]
     exact (prob_mono (q := fun _ => False) fun ω h => h.2.1 (hsr ω h.1)).trans Rounds.prob_false.le
 
@@ -152,6 +157,12 @@ theorem LiSegmentsBind : Accounting.Guarantees.TS.LiSegmentsBind :=
 
 theorem LiWindowUnbound : Accounting.Guarantees.TS.LiWindowUnbound :=
   fun n D ω => LiLemmas.windowUnbound n D ω
+
+theorem DuoSegmentsBind : Accounting.Guarantees.TS.DuoSegmentsBind :=
+  fun D ω => DuoCPLemmas.right_of_same D ω
+
+theorem Fx1SegmentsBind : Accounting.Guarantees.TS.Fx1SegmentsBind :=
+  fun D ω => DuoCPLemmas.fx1_right_of_same D ω
 
 theorem LuckCaseAKeyed : Accounting.Guarantees.TS.LuckCaseAKeyed :=
   fun G hpin hA hw => LuckCaseA G 0 hpin hA (operandLuck_wrongWords G hw)
