@@ -595,8 +595,8 @@ impl LeanFrame {
 
     /// The round that leaves for the round `content` (which squeezes `n` coins), or the Lean frame's refusal, after which the
     /// rep is stopped. `fail`: `content` is the statement's scheduled round in place of a device round that failed the
-    /// firewall's check, and the rep stops before it. A round the frame's rank check stops (`stop WHY`) panics with its
-    /// reason, before anything of it leaves.
+    /// firewall's check, and the rep stops before it. A round the frame's refusals stop (`stop WHY`: the rank check) panics
+    /// with its reason, before anything of it leaves.
     pub fn round(&mut self, content: &[u8], n: usize, fail: bool) -> Result<Vec<u8>, String> {
         use std::io::{Read, Write};
         write!(self.stdin, "round {n} {}{}\n", content.len(), if fail { " fail" } else { "" })
@@ -613,7 +613,7 @@ impl LeanFrame {
     }
 
     /// The coins the stream answered the round last released: `Ok(Some(why))` when the frame's refusals stop the rep on them
-    /// (a zerocheck outer coin `r_j = 1`).
+    /// (a zerocheck outer coin `r_j = 1`, level 0's `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`).
     pub fn coins(&mut self, coins: &[F128]) -> Result<Option<String>, String> {
         use std::io::Write;
         write!(self.stdin, "coins {}\n", coins.len()).and_then(|_| self.stdin.write_all(&f128_wire(coins))).and_then(|_| self.stdin.flush())
@@ -625,7 +625,8 @@ impl LeanFrame {
         Self::parse(&line).map(|_| None)
     }
 
-    /// Whether the rep ended with every masked phase closed and every pad of the layout used, and if so whether it is stopped.
+    /// Whether the rep ended with every masked phase closed, every pad of the layout used and the inner proof's rounds
+    /// released, and if so whether it is stopped.
     pub fn finish(&mut self) -> Result<bool, String> {
         use std::io::{BufRead, Write};
         writeln!(self.stdin, "finish").and_then(|_| self.stdin.flush()).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
@@ -650,8 +651,8 @@ impl Drop for LeanFrame {
 /// The masking challenger's inner challenger under the firewall. While a round's `release` is set (the Lean frame's round for
 /// the device round the firewall passed), it frames what the masking challenger hands it, as the device's challenger frames,
 /// and at the round's squeeze holds that (the speed reference) to the release byte for byte, then hands the release, and
-/// only the release, to the stream. With no release set it passes every call through: unfirewalled reps, and the rep's
-/// inner phase, which is the firewall's own.
+/// only the release, to the stream. With no release set it passes every call through: unfirewalled reps. A firewalled rep's
+/// inner proof, the firewall's own, leaves through the Lean frame too (`flock-circuit`'s `zk_finish`).
 pub struct Gate<C: Challenger> {
     pub inner: C,
     pub release: Option<Vec<u8>>,
