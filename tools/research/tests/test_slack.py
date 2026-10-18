@@ -1771,7 +1771,8 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}", "--json")
     rep = json.loads(out)
     by = {(a["lane"], a["ts"]): a for a in rep["asks"]}
-    assert by["circuits", renamed["ts"]]["minutes"] == 3.0
+    assert (by["circuits", renamed["ts"]]["minutes"], by["circuits", renamed["ts"]]["answer_by"]) == (3.0, "old-circuits")
+    assert [by["proofs", x["ts"]]["answer_by"] for x in (linear_ask, filed_started)] == [None, "proofs"]   # the app moved it
     assert rc == 0 and len(rep["asks"]) == 10 and sorted(fake_linear.asked) == ["PRF-1", "PRF-2", "PRF-3", "PRF-404"]
     assert (by["circuits", slack_ask["ts"]]["first"], by["circuits", slack_ask["ts"]]["minutes"]) == ("slack-reply", 10.0)
     assert (by["proofs", linear_ask["ts"]]["first"], by["proofs", linear_ask["ts"]]["minutes"]) == ("linear-state", 5.0)

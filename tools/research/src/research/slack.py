@@ -1996,11 +1996,12 @@ def _iso_epoch(stamp: str) -> float:
 
 def issue_answer(lin: Any, ident: str, asker: str | None) -> dict | None:
     """When the Linear issue `ident` was first taken up: its first move out of Backlog (by anyone: every write is the
-    Verity Asks app's), or the first comment by someone other than `asker`; {at, how, by}, or None when neither happened.
+    Verity Asks app's, so `by` is None), or the first comment by someone other than `asker`; {at, how, by}, or None when
+    neither happened.
     An issue filed straight into another state shows that as a move out of Backlog at its creation, which is no answer."""
     i = lin.gql(LINEAR_ANSWER_Q, {"id": ident})["issue"]
     born = _iso_epoch(i["createdAt"])
-    out = [{"at": _iso_epoch(h["createdAt"]), "how": "linear-state", "by": (h.get("toState") or {}).get("type")}
+    out = [{"at": _iso_epoch(h["createdAt"]), "how": "linear-state", "by": None}
            for h in i["history"]["nodes"]
            if (h.get("fromState") or {}).get("type") == "backlog" and (h.get("toState") or {}).get("type") not in (None, "backlog")
            and _iso_epoch(h["createdAt"]) > born]
@@ -2017,8 +2018,9 @@ def nearest_rank(xs: list[float], q: float) -> float | None:
 def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, now: float, stale_s: float,
                 linear_client: Callable[[], Any] | None = None) -> dict:
     """Each ask posted in (since, now] that rang a lane's inbox, and how long the lane took to first answer it: the earliest of
-    a reply in the ask's thread under a name of the lane's inbox (its own, or one it was renamed from), and (an ask linked to a Linear issue) the issue's first move out of
-    Backlog or first comment by anyone but the asker (`issue_answer`).  An ask with no timed answer that carries 👀, ✅ or ❌
+    a reply in the ask's thread under a name of the lane's inbox (its own, or one it was renamed from), and (an ask linked
+    to a Linear issue) the issue's first move out of Backlog or first comment by anyone but the asker (`issue_answer`), with
+    who gave it (`answer_by`).  An ask with no timed answer that carries 👀, ✅ or ❌
     and rang only this lane counts as answered but untimed: Slack keeps no time for a reaction, and every handle reacts as
     one bot.  Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear or untimed), the nearest-rank
     median and p90 of the timed answers in minutes, the unanswered, and those unanswered for longer than `stale_s`."""
@@ -2054,7 +2056,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
         key = (a["channel"], root["ts"])
         if root.get("reply_count") and key not in replies:
             replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
-        found = [{"at": float(m["ts"]), "how": "slack-reply", "by": lane} for m in replies.get(key, [])
+        found = [{"at": float(m["ts"]), "how": "slack-reply", "by": poster(m, reg)} for m in replies.get(key, [])
                  if m.get("ts") != root["ts"] and poster(m, reg) in a["names"] and t0 < float(m["ts"]) <= now]
         asker = poster(root, reg)
         if link := LINEAR_LINK_RE.search(root.get("text") or ""):
@@ -2071,7 +2073,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
         first = min(found, key=lambda x: x["at"], default=None)
         untimed = first is None and rang[key] == 1 and any(x.get("name") in ANSWER_REACTIONS for x in root.get("reactions", []))
         out.append({"lane": lane, "ts": root["ts"], "by": asker, "linear": link[1] if link else None,
-                    "first": first["how"] if first else "reaction" if untimed else None,
+                    "first": first["how"] if first else "reaction" if untimed else None, "answer_by": first["by"] if first else None,
                     "minutes": round(max(first["at"] - t0, 0) / 60, 1) if first else None,
                     "age_minutes": round((now - t0) / 60, 1)})
     lanes = []
