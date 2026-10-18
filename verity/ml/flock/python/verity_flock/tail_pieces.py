@@ -1,9 +1,10 @@
 """Circuits for the primitives a template's units leave outside: attention's softmax (MUFU.EX2, FA2's inverse sum, and the FTZ
 f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.circuits.ops.boolean.softmax`; PTX max / min, the E4M3 cast, the E4M3 widening
 and the E2M1 cast from `verity.ml.circuits.ops.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
-numerator scaling), the sampler lane's compare, selects, bit AND and integer add, and the int8 row's LUT softmax (its index
-and its 256-entry table, read one-hot in the circuit). Each is its IR primitive bit for bit (``ir_lower.PIECES``; the piece
-test and circuit-check compare them).
+numerator scaling), the sampler lane's compare, selects, bit AND and integer add, and the int8 row's LUT softmax (its index,
+its 256-entry table, read one-hot in the circuit, and its 32-bit subtract), its quantizer (rint and the saturating s8 cast),
+its s8 widening, and its float64 A (the exact f32 product widened, RN64 multiplies, and the rounded, saturated u32). Each is
+its IR primitive bit for bit (``ir_lower.PIECES``; the piece test and circuit-check compare them).
 
 A MUFU operation is a table lookup inside exponent and special-case logic (the C++ models ``fa2_model.cpp`` and
 ``rms_triton_model.cpp``, and ``live/src/ir_tail.rs``): the piece computes the table index, reads the pinned table
@@ -565,6 +566,148 @@ def lut_index(C, d, a):
     return [C.AND(keep, NOT(C.AND(below, NOT(b)))) for b in p[32:40]]
 
 
+# --- the int8 row's quantizer, its widening and its float64 A (`int8_exact`) ---------------------------------------------------
+
+def _thermometer(C, bits):
+    """``[value > j]`` for j < 2^len(bits), the unsigned value of ``bits`` (LSB first)."""
+    t = [ZERO]
+    for b in bits:
+        t = [OR(C, b, x) for x in t] + [C.AND(b, x) for x in t]
+    return t
+
+
+def _xor_all(bits):
+    acc = ZERO
+    for b in bits:
+        acc = acc ^ b
+    return acc
+
+
+def f32_rint(C, x):
+    """``F32Rint_v1`` (numpy's rint): x to the nearest integer, ties to even, as f32.  From 2^23 on, x is itself (a NaN quieted);
+    below 1 it is a signed 0, or ±1 when 0.5 < |x|; between, its d = 150 - e fractional mantissa bits (a thermometer on d) are
+    cleared and 2^d is added to the encoding when they round up, a significand that overflows carrying into the exponent."""
+    s, e, m = x[31], list(x[23:31]), list(x[:23])
+    sig = m + [ONE]
+    T = _thermometer(C, add(C, [NOT(b) for b in e[:5]], const_bits(23, 5), width=5))
+    hot = [T[j] ^ T[j + 1] for j in range(23)]                    # hot[j]: j = d - 1 (T is a thermometer, so the XOR is the AND)
+    guard = _xor_all(C.AND(hot[j], sig[j]) for j in range(23))
+    lsb = _xor_all(C.AND(hot[j - 1], sig[j]) for j in range(1, 24))
+    Z = [sig[0]]
+    for b in sig[1:22]:
+        Z.append(OR(C, Z[-1], b))
+    sticky = _xor_all(C.AND(hot[j + 1], Z[j]) for j in range(22))
+    up = C.AND(guard, OR(C, sticky, lsb))
+    cleared = [C.AND(NOT(T[j]), m[j]) for j in range(23)] + e
+    mid = add(C, cleared, [ZERO] + [C.AND(up, hot[j - 1]) for j in range(1, 24)], width=31) + [s]
+    m_nz = OR(C, Z[21], m[22])
+    up126 = C.AND(_eq_const(C, e, 126), m_nz)
+    low = [ZERO] * 23 + [up126] * 7 + [ZERO, s]
+    nan = C.AND(_eq_const(C, e, 0xFF), m_nz)
+    big = list(x[:22]) + [OR(C, x[22], nan)] + list(x[23:])
+    return mux(C, NOT(_ult_const(C, e, 150)), big, mux(C, _ult_const(C, e, 127), low, mid))
+
+
+def f32_to_s8_rzi(C, x):
+    """``F32ToS8Rzi_v1`` (`cvt.rzi.sat.s8.f32`): x truncated toward zero, saturated to [-128, 127], as an s8 code; 0 for a NaN.
+    For 1 <= |x| < 128 (e in 127..133) the integer part is the hidden bit and the top 6 mantissa bits shifted right by 133 - e."""
+    s, e, m = x[31], list(x[23:31]), list(x[:23])
+    zero = OR(C, _ult_const(C, e, 127), _is_nan(C, x))
+    sat = NOT(_ult_const(C, e, 134))
+    n = gf2.shr(C, m[17:] + [ONE], sub(C, const_bits(133, 8), e, 8)[0][:3])
+    v = mux(C, sat, [NOT(s)] * 7 + [s], fp.neg_if(C, n + [ZERO], s))
+    return [C.AND(NOT(zero), b) for b in v]
+
+
+def s8_to_f32(C, c):
+    """``S8ToF32_v1``: the s8 code c as f32, exact: |c| (at most 128) normalized with the exponent of its top bit, 2^7."""
+    return fp.round_f32(C, c[7], const_bits(134, 9), 0, fp.neg_if(C, list(c), c[7]), ZERO, underflow=False)
+
+
+def _unpack64(C, w):
+    """An f64 word's (sign, 53-bit significand, effective exponent field (1 for zero and subnormals), nan, inf, zero)."""
+    m, e, s = list(w[:52]), list(w[52:63]), w[63]
+    e_nz, e_max, m_nz = or_reduce(C, e), and_reduce(C, e), or_reduce(C, m)
+    nan = C.AND(e_max, m_nz)
+    return s, m + [e_nz], [e[0] ^ NOT(e_nz)] + e[1:], nan, e_max ^ nan, NOT(OR(C, e_nz, m_nz))
+
+
+def _round64(C, sign, E_b, off: int, M, zero_sign, underflow: bool = True):
+    """`fp.round_f32` for f64: the f64 word nearest (ties to even) to ``(-1)^sign M 2^(E - 1023 - (len(M) - 1))``, ``E = E_b - off``
+    the exponent field M's top bit as the hidden bit would have; subnormals kept, overflow to infinity, M = 0 the zero of sign
+    ``zero_sign``.  ``underflow=False`` promises E >= 1."""
+    P = fp.ceil_pow2(max(len(M), 64))
+    Mp = [ZERO] * (P - len(M)) + list(M)
+    az, lz = gf2.lzc(C, Mp)
+    EW = len(E_b)
+    diff, borrow = sub(C, E_b, const_bits((off + 1) % (1 << EW), EW), EW)          # E - 1, borrow iff E < 1
+    sh_l = fp.min_u(C, diff, lz, EW)[:len(lz)]
+    if underflow:
+        sh_l = [C.AND(NOT(borrow), b) for b in sh_l]
+        y, st = fp.shr_sticky(C, fp.shl(C, Mp, sh_l), [C.AND(borrow, b) for b in fp.neg_if(C, diff, ONE)])
+        X = [C.AND(NOT(borrow), b) for b in sub(C, diff, sh_l, EW)[0]]
+    else:
+        y, st = fp.shl(C, Mp, sh_l), ZERO
+        X = sub(C, diff, sh_l, EW)[0]
+    sig, guard = y[P - 53:], y[P - 54]
+    rnd = C.AND(guard, OR(C, OR(C, or_reduce(C, y[:P - 54]), st), sig[0]))
+    ex = add(C, X, [sig[52]], width=EW)
+    ovf = NOT(_ult_const(C, ex, 0x7FF))
+    word = add(C, sig[:52] + ex[:11], [rnd], width=63)
+    word = [C.AND(NOT(ovf), b) for b in word[:52]] + [OR(C, ovf, b) for b in word[52:]]
+    return [C.AND(NOT(az), b) for b in word] + [mux(C, az, [zero_sign], [sign])[0]]
+
+
+def _x86_specials64(C, word, a, b, a_nan, b_nan, invalid, inf, inf_sign):
+    """An x86-64 float64 multiply's special results (the reference's Python floats): a quieted when a is a NaN, else b quieted
+    when b is, else the default NaN 0xFFF8000000000000 of an invalid operation, else the infinity of sign ``inf_sign`` when an
+    operand is infinite.  ``a``, ``b``: the operands as f64 words.  An invalid operation has an infinite operand, so it rides the
+    infinity's select."""
+    word = mux(C, inf, [ZERO] * 51 + [invalid] + [ONE] * 11 + [OR(C, invalid, inf_sign)], word)
+    src = mux(C, a_nan, list(a), list(b))
+    return mux(C, OR(C, a_nan, b_nan), src[:51] + [ONE] + src[52:], word)
+
+
+def f64_mul(C, a, b):
+    """``F64Mul_v1`` (`mul.rn.f64`): RN64(a b), subnormals kept, NaNs as x86-64's (:func:`_x86_specials64`)."""
+    sa, ga, ea, na, ia, za = _unpack64(C, a)
+    sb, gb, eb, nb, ib, zb = _unpack64(C, b)
+    s = sa ^ sb
+    r = _round64(C, s, add(C, ea, eb, width=13), 1022, gf2.multiply(C, fp.trim_low(ga)[0], fp.trim_low(gb)[0]), s)
+    return _x86_specials64(C, r, a, b, na, nb, OR(C, C.AND(ia, zb), C.AND(za, ib)), OR(C, ia, ib), s)
+
+
+def f32_mul_wide(C, a, b):
+    """``F32MulWide_v1``: the f64 product of two f32 values, exact (48 significand bits, an exponent always in f64's normal range):
+    the product normalized, never rounded; a NaN operand widened (its payload under f64's top mantissa bits) then quieted."""
+    A, B = fp.unpack(C, a), fp.unpack(C, b)
+    s = A.s ^ B.s
+    E_b = add(C, add(C, A.e_eff, B.e_eff, width=12), const_bits(770, 12), width=12)
+    r = _round64(C, s, E_b, 0, gf2.multiply(C, fp.trim_low(A.sig)[0], fp.trim_low(B.sig)[0]), s, underflow=False)
+    invalid = OR(C, C.AND(A.inf, B.zero), C.AND(A.zero, B.inf))
+    return _x86_specials64(C, r, _nan_f32_as_f64(a), _nan_f32_as_f64(b), A.nan, B.nan, invalid, OR(C, A.inf, B.inf), s)
+
+
+def _nan_f32_as_f64(w):
+    """An f32 NaN as ``cvtss2sd`` widens it, before quieting: its sign, f64's all-ones exponent, its mantissa as f64's top 23 bits."""
+    return [ZERO] * 29 + list(w[:23]) + [ONE] * 11 + [w[31]]
+
+
+def f64_to_u32_rni_sat(C, x):
+    """``F64ToU32RniSat_v1``: ``min(rint(x), 2^32 - 1)`` (ties to even) as an unsigned word; 0 for a NaN or x <= 0.  For 0.5 <= x
+    < 2^32 (e in 1022..1054) the significand's bits from 20 shift right by 1054 - e, leaving the guard bit and the 32-bit integer
+    part; the bits below are the sticky.  The rounding's carry out of 32 bits, x >= 2^32 and +inf saturate."""
+    s, e, m = x[63], list(x[52:63]), list(x[:52])
+    sig = m + [ONE]
+    q, st = fp.shr_sticky(C, sig[20:], sub(C, const_bits(1054, 11), e, 11)[0][:6])
+    n = q[1:33]
+    up = C.AND(q[0], OR(C, OR(C, or_reduce(C, sig[:20]), st), n[0]))
+    r = add(C, n, [up], width=32, carry_out=True)
+    sat = OR(C, NOT(_ult_const(C, e, 1055)), r[32])
+    zero = OR(C, OR(C, s, _ult_const(C, e, 1022)), C.AND(and_reduce(C, e), or_reduce(C, m)))
+    return [C.AND(NOT(zero), OR(C, sat, b)) for b in r[:32]]
+
+
 def topp_numkeep(C, nd, q):
     """``TopPNumkeep_v1``: ``min(max(nd - qi, 1), nd)`` on u32 counts, qi the f32 q truncated to a u32 (0 unless q is finite and
     > 0, all ones from 2^32 on); 0 when nd is 0."""
@@ -650,6 +793,13 @@ PIECES = {
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
     "Exp2Lut127_v1": exp2_lut127,
     "LutIndex_v1": lut_index,
+    "I32Sub_v1": lambda C, a, b: sub(C, a, b, 32)[0],
+    "F32Rint_v1": f32_rint,
+    "F32ToS8Rzi_v1": f32_to_s8_rzi,
+    "S8ToF32_v1": s8_to_f32,
+    "F32MulWide_v1": f32_mul_wide,
+    "F64Mul_v1": f64_mul,
+    "F64ToU32RniSat_v1": f64_to_u32_rni_sat,
 }
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32}
