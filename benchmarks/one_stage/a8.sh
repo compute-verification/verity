@@ -5,9 +5,10 @@
 #   research run --on auto --cpus 32 --mem-gb 256 --max-min 240 --source . --cwd clone --send FILE ... \
 #     --env A8_MODE=kinds|audit --env A8_MEM_GB=256 -- bash benchmarks/one_stage/a8.sh
 # kinds: a8_kinds.py on each sent descriptor (inputs/*.json.gz), JSON in $OUT/kinds-<name>.json.
-# audit: a8.py on the sent value slices (inputs/a8-values*.tar), its records in $OUT/a8.
-# env: A8_MODE  A8_MEM_GB (the job's --mem-gb)  A8_JOBS (a8_kinds' --jobs)  A8_CHILD_GB (its --mem-gb)  A8_K (a8.py's --k)
-#      A8_CACHE (the build cache, kept on the node)  A8_ARGS (more a8.py arguments)
+# audit: a8.py on the sent value slices and checkpoint subset (inputs/a8-values*.tar, inputs/a8-ckpt*.tar, both from
+#   a8_slice.py), the probe's table (inputs/kinds*.json) and the load-time roles (inputs/derive-report.json); records in $OUT/a8.
+# env: A8_MODE  A8_MEM_GB (the job's --mem-gb)  A8_JOBS (a8_kinds' --jobs)  A8_CHILD_GB (its --mem-gb)  A8_ONLY (its --only)
+#      A8_K (a8.py's --k)  A8_CACHE (the build cache, kept on the node)  A8_ARGS (more a8.py arguments)
 # Kept in $OUT/a8: a8's records and logs, the public files and the sessions; never a prover's file (inst-*), a circuit (its
 # pin is kept) or a session's archive.
 set -uo pipefail
@@ -30,7 +31,7 @@ kinds)
     n=$(basename "$d" .json.gz)
     log "a8 kinds: $n"
     "$PY" benchmarks/one_stage/a8_kinds.py --descriptor "$d" --out "$OUT/kinds-$n.json" --jobs "${A8_JOBS:-12}" \
-      --mem-gb "${A8_CHILD_GB:-160}" 2>&1 | tee -a "$OUT/kinds-$n.log" | cut -c1-2000 || rc=1
+      --mem-gb "${A8_CHILD_GB:-160}" ${A8_ONLY:+--only "$A8_ONLY"} 2>&1 | tee -a "$OUT/kinds-$n.log" | cut -c1-2000 || rc=1
   done
   wait
   log "a8 kinds: done, builds $(cat "$W/flock.dir" "$W/lean.dir" 2>/dev/null | tr '\n' ' ')"
@@ -41,10 +42,11 @@ audit)
   (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
   V=$W/values && mkdir -p "$V"
-  for t in "$IN"/a8-values*.tar; do tar -xf "$t" -C "$V"; done
+  for t in "$IN"/a8-values*.tar "$IN"/a8-ckpt*.tar; do tar -xf "$t" -C "$V"; done
   log "a8: values $(du -sh "$V" | cut -f1), k ${A8_K:-default}"
   # shellcheck disable=SC2086
-  "$PY" benchmarks/one_stage/a8.py --bin "$BIN" --lean "$LEAN" --values "$V" --out "$W/a8" ${A8_K:+--k "$A8_K"} ${A8_ARGS:-} \
+  "$PY" benchmarks/one_stage/a8.py --bin "$BIN" --lean "$LEAN" --values "$V" --kinds "$(ls "$IN"/kinds*.json | head -1)" \
+    --roles "$IN/derive-report.json" --out "$W/a8" ${A8_K:+--k "$A8_K"} ${A8_ARGS:-} \
     2>&1 | tee -a "$OUT/a8.log" | cut -c1-4000
   rc=${PIPESTATUS[0]}
   mkdir -p "$OUT/a8"
