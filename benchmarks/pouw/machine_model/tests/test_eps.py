@@ -135,7 +135,7 @@ def test_lane_filler_dilutes_the_operand_floor():
     two = provisional("dither-2s")
     fill = provisional("dither-2s-fill")
     f = fill.filler[0]
-    assert (f.per_word, f.mix, f.route) == (4.5, E.lane_fill(4.5).mix, "lanes")
+    assert (f.per_word, f.mix, f.route, f.p) == (4.5, E.lane_fill(4.5).mix, "lanes", E.lane_fill(4.5).p)
     assert two.with_fill(4.5).filler == (E.lane_fill(4.5),)
     e0, e = E.eps(two, PIU, 8), E.eps(fill, PIU, 8)
     assert e.as_built.T * 128 == pytest.approx(JI + 12.375 + 4 * 4.5, rel=1e-12)
@@ -267,17 +267,26 @@ def test_core_and_sample_are_two_layers():
 
 
 def test_luck_spends_one_budget_on_words_and_filler():
-    """Theorem S's budget ln(1/δ)/S weights each deficient block by 1 − p (¾ a word, 0.854 a filler block): a lane
-    filler is cheaper to skip than a word, so the lucky cheater leaves filler undone and saves more than d̄ of words."""
+    """Theorem S's budget ln(1/δ)/S weights each deficient block by 1 − p: ¾ a word, and 0 a lane filler block, whose
+    receipt the check recomputes (PinnedFillBlocksDeficit), so the lucky cheater skips words alone. At pfill's 0.854 a
+    filler block is cheaper to skip than a word and the cheater leaves filler undone; with no luck credit (p = 1) it
+    leaves the whole filler undone, even with every block checked."""
     d = E.design("dither-2s-fill")
-    assert all(f.p == 0.854 for f in d.filler)
+    assert [(f.p, f.luck.split(":")[0]) for f in d.filler] == [(0.0, E.PINNED.split(" ")[0])]
     e = E.eps(d, PIU, 8, operands="floor", credit="floor")
-    s = e.lucky.short
-    assert s["filler 1"] > 0 and (1 - d.p) * s["words"] + sum(
-        (1 - f.p) * s[f"filler {j + 1}"] for j, f in enumerate(d.filler)) == pytest.approx(E.budget(d), rel=1e-6)
-    words_only = E.eps(replace(d, filler=tuple(replace(f, p=0.0) for f in d.filler)), PI, 8, operands="floor",
-                       credit="floor")
-    assert e.luck > words_only.luck and words_only.lucky.short["filler 1"] == 0
+    assert e.lucky.short["filler 1"] == 0
+    assert (1 - d.p) * e.lucky.short["words"] == pytest.approx(E.budget(d), rel=1e-6)
+
+    def at(p: float, operands: str = "floor") -> E.Eps:
+        return E.eps(replace(d, filler=tuple(replace(f, p=p) for f in d.filler)), PIU, 8, operands=operands,
+                     credit="floor")
+
+    s = at(0.854).lucky.short
+    assert s["filler 1"] > 0 and (1 - d.p) * s["words"] + (1 - 0.854) * s["filler 1"] == pytest.approx(
+        E.budget(d), rel=1e-6)
+    assert at(0.854).luck > e.luck
+    assert at(1.0).lucky.short["filler 1"] == pytest.approx(1)
+    assert at(1.0, "free").core() > at(0.0, "free").core() > at(0.0).core()
 
 
 def test_the_table_route_is_bound_by_L2():
@@ -351,6 +360,13 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
                    '[filler]\nper_word = 4\nmix = { ALU = 1 }\nroute = "uniform"\n')
     with pytest.raises(SystemExit, match="decision 73"):
         E.design("x", data)
+    head = 'base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[filler]\nper_word = 4\nmix = { ALU = 1 }\n'
+    for luck in ("", "p = 0.854\n", "p = 1.5\nluck = \"x\"\n"):
+        bad.write_text(head + luck)
+        with pytest.raises(SystemExit, match="theorem that proves it"):
+            E.design("x", data)
+    bad.write_text(head + "p = 1.0\n")
+    assert [(f.p, f.luck) for f in E.design("x", data).filler] == [(1.0, "")]
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[coins]\nbits = 2\nsource = "x"\n')
     assert E.design("x", data).index_bits == 2 and two.index_bits == 1
     bad.write_text(bad.read_text() + "[table]\nbits = 1\n")
@@ -528,7 +544,7 @@ def test_dc_li_binds_honest_on_the_lane_facet():
             assert s.machine_eps(0.5) == pytest.approx(0, abs=1e-9), dev
             e = E.eps(ds, pi, 0.5, d, operands="floor", credit="floor")
             assert e.T_honest * h.words == pytest.approx(t, rel=1e-4) and e.core() == pytest.approx(e.skip), dev
-    assert [f.mix for f in E.design("dither-2s-li-l32", DEVICES / "sm_90").filler] == [{"FFMA": 1}]
+    assert [(f.mix, f.p) for f in E.design("dither-2s-li-l32", DEVICES / "sm_90").filler] == [({"FFMA": 1}, 0.0)]
     assert E.honest("dc100-li-l32", DEVICES / "sm_100").base() == {"UTCIMMA_M128_N256": 1, "LDTM_32X32B_X128": 8}
 
 
