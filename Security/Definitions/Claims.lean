@@ -14,7 +14,7 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
 * `B` is extraction-free (`B`); its assumption is the strict birthday bound (`StrictBirthday`). Extraction-based finders
   have a separate linear expected-time assumption (`ExpectedCR`) and their own term (`KSLin`); Flock needs only `KS`.
   `ExpectedCR` is the weaker of the two at a fixed cost, so a bound that reads one record for every break reads it
-  (`ecrBound`, PoUW's service premises per prover).
+  (`ecrBound`, at a cost budget the reader computes from the adversary: PoUW's service premises per prover).
 * `t` counts both parties' SHA-512 calls, so the hash side's constant is `255.5` (`lamOf`).
 * The scope is a hypothesis of completeness, in readable form (`Flock.InScope`), never part of `R`; `ScopeMatches`
   states that it is the verifier's own scope check. KS needs no scope: the verifier refuses what is out of scope.
@@ -292,19 +292,25 @@ probability at most its expected SHA-512 calls over `2^256`. Read for finders wh
 (extraction-based and rewinding ones, which have no worst-case `q`: `KSLin`, C-Flock's link) and, where one record
 should serve every break, for the others too. It is the weaker claim there: at a fixed cost `q ≤ 2^257`,
 `StrictBirthday`'s `q²/2^513` is at most `q/2^256`. PoUW's service premises per prover read it at their binding and
-zero-knowledge finders through `ecrBound`. -/
+zero-knowledge finders through `ecrBound`, at a budget computed from the adversary's time. -/
 def ExpectedCR (H : Msg → Msg) (F : Finder) : Prop :=
   F.Pr H ≤ Ex (fun s => (F.cost s : ℝ)) / 2 ^ (256 : ℝ)
 
 open Classical in
-/-- **`ecr/sha-512` at one finder as a number, or no bound**: the finder's expected SHA-512 calls over `2^256` where
-it meets `ExpectedCR`, and `⊤` where it doesn't, as C-Flock's link bound reads its collision assumption (`⊤` at a
-prover whose link finders fail it). The assumption is a predicate on one finder, since some finder outputs a collision
-after no calls, so it is asked of this finder only. `ENNReal.ofReal (F.Pr H) ≤ ecrBound H F` holds by definition, so
-a bound stated through `ecrBound` takes no hypothesis on `H`. The one break term the protocols' per-prover bounds
-share. -/
-noncomputable def ecrBound (H : Msg → Msg) (F : Finder) : ENNReal :=
-  if ExpectedCR H F then ENNReal.ofReal (Ex (fun s => (F.cost s : ℝ)) / 2 ^ (256 : ℝ)) else ⊤
+/-- **`ecr/sha-512` at one finder as a number, at a cost budget, or no bound**: `q / 2^256` where the finder meets
+`ExpectedCR` and its expected SHA-512 calls are at most the budget `q`, and `⊤` otherwise, as C-Flock's link bound reads
+its collision assumption (`⊤` at a prover whose link finders fail it, the number read at the session's calls `t'`).
+The assumption is a predicate on one finder, since some finder outputs a collision after no calls, so it is asked of
+this finder only.
+
+The reader computes `q` from the adversary the finder is built from, never from the finder: PoUW's bounds per prover
+read `c · time M + d` at stated `c`, `d`. So the number is the budget's, which no choice of finder lowers. A finder's
+cost is a declared field (`Finder.cost`): one that declares more calls than it makes, so as to meet `ExpectedCR` while
+it outputs a collision on some coins, has `Pr` about the break's own probability, exceeds the budget once that is
+above `q / 2^256`, and gets `⊤`. `ENNReal.ofReal (F.Pr H) ≤ ecrBound H F q` holds by definition, so a bound stated
+through `ecrBound` takes no hypothesis on `H`. The one break term the protocols' per-prover bounds share. -/
+noncomputable def ecrBound (H : Msg → Msg) (F : Finder) (q : ℝ) : ENNReal :=
+  if ExpectedCR H F ∧ Ex (fun s => (F.cost s : ℝ)) ≤ q then ENNReal.ofReal (q / 2 ^ (256 : ℝ)) else ⊤
 
 /-- The first collision among the `(input, output)` pairs `l`: two different inputs with one output. -/
 def findColl : List (Msg × Msg) → Option (Msg × Msg)

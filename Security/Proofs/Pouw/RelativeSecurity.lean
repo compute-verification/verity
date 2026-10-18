@@ -984,7 +984,8 @@ SHA-512 commitments the floor holds only at 1, so the chain from it says nothing
 collision opens a committed leaf two ways (note:proofs/20261018T1604Z-report-redteam-2474, side finding). The forms
 here read each adversary's own bound in `ℝ≥0∞`, `⊤` where there is none: its floor (`AdvFloorPerProver`, the service's
 `ServiceFloorPerProver`, at the floors' `breakBound`, read through the adversary's collision finders and
-`Claims.ecrBound`) and the acceptance its security asks about (`SecureInfPerProver`, `RelativelySecurePerProver`).
+`Claims.ecrBound` at budgets computed from its time) and the acceptance its security asks about
+(`SecureInfPerProver`, `RelativelySecurePerProver`).
 Route (a) carries over at the threshold `κ(M) + δ'` for one `δ' > 0` (`secureInfPerProver_of_floor`): a hard-coded
 collision's `κ` is about 1 or `⊤`, so security asks nothing of it, and every other adversary is asked about its own
 bound.
@@ -7533,7 +7534,8 @@ theorem serviceFloor_θ (kd : K120 → Kind) (S : Service) {F κ : ℝ}
 
 /-- **B's floor per adversary carries to B_θ at `4/5` of it** (`serviceFloor_θ` adversary by adversary, which it
 supersedes): a B_θ adversary's bound is its B shadow's (`Alg.projθ`), so the floors per prover's `breakBound` reads the
-shadow's collision finders. -/
+shadow's collision finders, at budgets computed from the shadow's B time: its gates priced in B, which no choice of
+finder sets. -/
 theorem serviceFloorPerProver_θ (kd : K120 → Kind) (S : Service) {F : ℝ}
     {κ : ∀ (Ω : Type) [Fintype Ω], (machine kd (.ofNat price120)).Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal}
     (h : ServiceFloorPerProver (machine kd (.ofNat price120)) S F κ) :
@@ -7627,10 +7629,11 @@ theorem relativelySecure_edited120θ_of_floor (kd : K120 → Kind) (G : MatGates
 /-- **Route (c) on sm_120 in B_θ, on the int8 grid, from any B floor per adversary** (proposed, a claim change; CMP-33;
 `relativelySecure_edited120θ_of_floor` adversary by adversary, which it supersedes): B's service floor per adversary
 `F_B ≤ n³` u, at each adversary's own `κf` (a named hypothesis, `ServiceFloorPerProver`; the floors per prover of
-`Models.Pouw.Guarantees.RelativeSecurity` give it at `κf = breakBound sha fb fz 2^{−40} δb βb δz βz`, stated and not yet
-proved), carries to `0.8 F_B` u in B_θ (`serviceFloorPerProver_θ`), and the edited protocol is relatively secure per
-adversary with `relativelySecure_edited120θ_of_floor`'s `ε`, `γ` and `N`, at each B_θ adversary's threshold
-`κf(M.projθ) + δ'`: its B shadow's bound, read through the shadow's collision finders, plus one `δ' > 0`. -/
+`Models.Pouw.Guarantees.RelativeSecurity` give it at `κf = breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz`,
+stated and not yet proved, `relativelySecurePerProver_edited120θ_at_breakBound`), carries to `0.8 F_B` u in B_θ
+(`serviceFloorPerProver_θ`), and the edited protocol is relatively secure per adversary with
+`relativelySecure_edited120θ_of_floor`'s `ε`, `γ` and `N`, at each B_θ adversary's threshold `κf(M.projθ) + δ'`: its B
+shadow's bound, read through the shadow's collision finders, plus one `δ' > 0`. -/
 theorem relativelySecurePerProver_edited120θ_of_floor (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1)
     (I : Int8Gates120 kd) {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n)
     (h17 : n ≤ 2 ^ 17) (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
@@ -7667,6 +7670,43 @@ theorem relativelySecurePerProver_edited120θ_of_floor (kd : K120 → Kind) (G :
     (by positivity) (by rw [gridMatMachine120θ_κG, gridMatMachine120θ_κadd]; nlinarith [sq_nonneg (n : ℝ)])
     (by rw [gridMatMachine120θ_κG]; exact hN)
   rwa [gridMatMachine120θ_κG, gridMatMachine120θ_κadd] at h
+
+/-- **Route (c) on sm_120 in B_θ at the floors' error per prover** (proposed, a claim change; CMP-33):
+`relativelySecurePerProver_edited120θ_of_floor` at `κf = breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz`, the
+error the floors per prover of `Models.Pouw.Guarantees.RelativeSecurity` conclude (stated, not yet proved). Each B_θ
+adversary's threshold is its B shadow's error plus `δ'`: the shadow's finders read through `ecr/sha-512` at budgets of
+`cb · time + db` and `cz · time + dz` SHA-512 calls, `time` the shadow's B time, which the adversary's gates fix and no
+choice of finder lowers. -/
+theorem relativelySecurePerProver_edited120θ_at_breakBound (kd : K120 → Kind)
+    (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd) {n : ℕ} {s : ℤ} (S : GridService n (127 - s))
+    (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17) (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
+    (prove : (gridMatMachine120θ kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
+      (S.Com × S.Ans)) {δ' η : ℝ}
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
+      ((gridMatMachine120θ kd G I).eval prove ((σ, y), C)).1 =
+        ((gridMatMachine120θ kd G I).eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, InGrid (127 - s) x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).1
+        ω.1 ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).2 = true)
+    {FB : ℝ} {R : ℕ} (sha : Claims.Msg → Claims.Msg) (fb fz : Finders (machine kd (.ofNat price120)) S.toService R)
+    (cb db cz dz δb βb δz βz : ℝ)
+    (hfloorB : ServiceFloorPerProver (machine kd (.ofNat price120)) S.toService FB
+      (breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)) (hδ' : 0 < δ')
+    (hFB : 0 < FB) (hFBn : FB ≤ (n : ℝ) ^ 3) :
+    RelativelySecurePerProver
+      ((gridMatMachine120θ kd G I).edited S.toService E ((gridMatMachine120θ kd G I).mulG n n n) prove
+        (InGrid (127 - s)))
+      ((4 / 5 * (n : ℝ) ^ 3 + 2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen +
+        (gridMatMachine120θ kd G I).time prove) / (4 / 5 * FB) - 1)
+      (fun Ω _ M => breakBound sha fb fz cb db cz dz ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz Ω (Alg.projθ (kd := kd) M) +
+        ENNReal.ofReal δ')
+      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
+        (4 / 5 * (n : ℝ) ^ 3)) η 0 (4 / 5 * (n : ℝ) ^ 3) :=
+  relativelySecurePerProver_edited120θ_of_floor kd G I S hn h32 h17 E hE prove hcom hacc hfloorB hδ' hFB hFBn
 
 /-- **Route (c) in B_θ at Conjecture A's floor** (`c = 1`, `F_B = n³` u, open): `ε = γ`. -/
 theorem relativelySecure_edited120θ (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
@@ -7772,8 +7812,8 @@ Superseded per adversary (CMP-33). Every theorem of the `certifiedFraction120θ`
 `δz` for every adversary through its `RoundsHyp*`, so over SHA-512 commitments it holds only at a bound about 1: an
 adversary that hard-codes a collision breaks binding in every round. Its form per adversary is
 `serviceFloorPerProver_θ` at the floors per prover of `Models.Pouw.Guarantees.RelativeSecurity` (the same floor, each
-adversary's error its `breakBound`, read at its B shadow), which are stated and not yet proved; their reader is
-`relativelySecurePerProver_edited120θ_of_floor`.
+adversary's error its `breakBound`, read at its B shadow, its finders at budgets computed from the shadow's B time),
+which are stated and not yet proved; their reader is `relativelySecurePerProver_edited120θ_at_breakBound`.
 -/
 
 /-- **The certified fraction** (the headline): from B's floor of Theorem E's form, every adversary in B_θ that commits
