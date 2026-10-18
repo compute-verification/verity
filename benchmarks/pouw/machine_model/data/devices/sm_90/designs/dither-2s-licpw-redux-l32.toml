@@ -36,7 +36,7 @@ route = "lanes"
 source = "LI-ALT: LI-CP's checkpoint adds ALU work, so 0.05 FFMA a word no longer holds decision 76's 2% margin at the floor (core 0.723% under it); 0.07 does (0.08 holds 3%), at the DC r8 margin audit's method; FILL-OPT is its named assumption"
 
 [skip.served]
-eps = 0.004489
+eps = 0.00572
 source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 6.311 SMSP-cycles a 4096-MAC MMA on DC-90 (LI-CP and 0.07 FFMA); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.498%: its tail 0.231%, the sums DG, S and X(0) 0.225%, the served epilogue 0.0425%. With P·V's served output checked it is 0.446% (8B) / 0.174% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 10)"
 
 [mand.fold]
