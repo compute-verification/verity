@@ -336,7 +336,8 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
     """A variant states what it changes: the rest comes from its base and data/designs.toml, but never its name, title,
     summary or aliases, which would collide."""
     two, fill = E.design("dither-2s"), E.design("dither-2s-fill")
-    assert fill.base == "dither-2s" and fill.skip == two.skip and fill.floor == two.floor and fill.ppl == two.ppl
+    assert fill.base == "dither-2s" and fill.noise == two.noise and fill.floor == two.floor and fill.ppl == two.ppl
+    assert E.design("co-dither-l16").sums == E.design("dither-c-peel").sums == "vfold" != E.design("dither-c").sums
     assert fill.aliases == ("dither-two-sided-fill",) and fill.title != two.title and fill.filler and not two.filler
     assert E.design("dither-2s-pv").ppl == "adopted-bd-lm-pv" and E.design("dither-c-peel").noise["pv"] == "peel"
     assert E.design("A") == two and E.design("dither-duo").name == "dither-1s" and E.aliases()["Bc"] == "dither-c-peel"
@@ -356,8 +357,8 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[noise]\nlinears = "ncp"\n')
     with pytest.raises(SystemExit, match=r"\[noise\] names a leaf"):
         E.design("x", data)
-    bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\nsums = "vfold"\n')
-    assert E.design("x", data).sums == "vfold" and two.sums == "vsum"
+    bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\nsums = "vsum"\n')
+    assert E.design("x", data).sums == "vsum" and two.sums == "vfold"
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\nsums = "vscan"\n')
     with pytest.raises(SystemExit, match="not a peel sums kernel"):
         E.design("x", data)
@@ -665,3 +666,42 @@ def test_cli_names_the_forms(capsys):
                  "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["honest_form"] == "IMMA16832" and d["cheat"]["forms"] == {"IMMA16832": pytest.approx(0.7194, abs=1e-4)}
+
+
+RPI = E.machine("VF3r-16")   # FACET-BREAK r4 (#2286), the fx numbers below were read on it
+
+
+@pytest.mark.parametrize("x, row, q0", [(1.0, "JI3s_0", 1.1261), (0.5, "JI3s_2", 1.3760)])
+def test_mandatory_lane_work_closes_the_lane_route(x, row, q0):
+    """One IMAD a word in front of duo (SAT-120's fx1) puts honest's floor program on JI3s_0, where a lane word costs
+    more than the IMMA16832 share it replaces from q* = 1.13, under the generic table route's 1.22 slots, so ε_machine
+    is 0 at every q* from there, by lanes or lookups. Half of it leaves honest on JI3s_2 (q*₀ 1.38)."""
+    d = E.design("dither-c-peel")
+    f = d.with_fill(x, {"IMAD": 1.0})
+    s = E.setup(f, RPI, operands="floor", credit="floor")
+    t = E.setup(f, RPI, operands="floor", credit="floor", table=E.table())
+    assert E.setup(d, RPI, operands="floor", credit="floor").machine_eps(2) > 0.04
+    assert s.baseline.binding == (row,) and E.threshold(s) == pytest.approx(q0, abs=1e-4)
+    zero = [s.machine_eps(q) + t.machine_eps(q) < 1e-12 for q in (1.22, 2, 3.47, 4)]
+    assert zero == [x == 1.0] * 4 and (t.floor() < 1e-12) == (x == 1.0)
+
+
+def test_a_filler_mix():
+    """The filler's class mix decides honest's row: one LOP3 a word binds row A (ALU at half rate), one IMAD JI3s_0, and
+    two IMADs row I."""
+    assert E.lane_fill(1.0, {"IMAD": 1.0}).mix == {"IMAD": 1.0} and E.lane_fill(1.0).mix == {"ALU": 1.0, "IMAD": 1.0}
+    d = E.design("dither-c-peel")
+    bind = lambda x, mix: E.setup(d.with_fill(x, mix), RPI, operands="floor", credit="floor").baseline.binding
+    assert bind(1.0, {"ALU": 1.0}) == ("A",) and bind(1.0, {"IMAD": 1.0}) == ("JI3s_0",)
+    assert bind(2.0, {"IMAD": 1.0}) == ("I",) and bind(2.0, {"IMAD": 2.0, "ALU": 1.0}) == ("JI3s_0",)
+
+
+def test_cli_fill_mix(capsys):
+    assert main(["eps", "--vector", "VF3r-16", "dither-c-peel", "--credit", "floor", "--operands", "floor", "--q",
+                 "1.22", "--fill", "1", "--fill-mix", "IMAD=1", "--lookups", "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["terms"]["machine"] == 0 and d["fillers"][0]["mix"] == {"IMAD": 1.0}
+    assert d["baseline"]["binding"] == ["JI3s_0"] and d["honest_form"] == "IMMA16832"
+    for bad in (["--fill-mix", "IMAD=1"], ["--fill", "1", "--fill-mix", "IMAD"], ["--fill", "1", "--fill-mix", "IMAD=0"]):
+        with pytest.raises(SystemExit, match="--fill-mix"):
+            main(["eps", "--vector", "VF3r-16", *bad])

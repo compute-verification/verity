@@ -198,11 +198,15 @@ class Filler:
     luck: str = ""               # the theorem that proves p < 1
 
 
-def lane_fill(x: float) -> Filler:
-    """x lane instructions a word of verified filler on lanes, LOP3 and IMAD alternating (FILL-OPT), its receipts
-    recomputed by the check (p = 0, `PINNED`)."""
-    return Filler(per_word=x, mix={"ALU": 1.0, "IMAD": 1.0}, route="lanes",
-                  source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)",
+def lane_fill(x: float, mix: dict[str, float] | None = None) -> Filler:
+    """x lane instructions a word of verified filler on lanes, LOP3 and IMAD alternating (FILL-OPT), or in `mix`, its
+    receipts recomputed by the check (p = 0, `PINNED`)."""
+    if mix is None:
+        return Filler(per_word=x, mix={"ALU": 1.0, "IMAD": 1.0}, route="lanes",
+                      source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)",
+                      p=0.0, luck=PINNED)
+    return Filler(per_word=x, mix=dict(mix), route="lanes",
+                  source=f"a lane chain in the mix {', '.join(f'{k} {v:g}' for k, v in mix.items())} (candidate)",
                   p=0.0, luck=PINNED)
 
 
@@ -254,9 +258,9 @@ class Design:
         return replace(self, name=f"{self.name}@r{r:g}", fold={k: v * s for k, v in self.fold.items()},
                        fold_name=f"{self.fold_name}×{s:.3g}")
 
-    def with_fill(self, x: float) -> Design:
+    def with_fill(self, x: float, mix: dict[str, float] | None = None) -> Design:
         """The design with x lane instructions a word of verified filler on lanes (`lane_fill`)."""
-        return replace(self, name=f"{self.name}+fill{x:g}", filler=(*self.filler, lane_fill(x)))
+        return replace(self, name=f"{self.name}+fill{x:g}", filler=(*self.filler, lane_fill(x, mix)))
 
     def with_index_bits(self, b: int) -> Design:
         """The design with b-bit noise entries on the operand the table route indexes, the other operand as it is."""

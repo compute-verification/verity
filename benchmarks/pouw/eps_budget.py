@@ -424,21 +424,13 @@ class Prices:
     tail_checked: float
 
 
-def priced(d: Design, data: Path = DATA) -> Design:
-    """The design whose ♭ and L price `d`'s ε_skip: its nearest base while the base has the same noise and an L at
-    least d's. Such a variant adds machine work (dither-2s-fill's filler) or halves L (co-dither-l16), so its base's
-    ε_skip is the larger: ♭ only grows with the variant's work, and a strip's share doesn't grow as L halves."""
-    while d.base and (b := design(d.base, data)).noise == d.noise and b.L >= d.L:
-        d = b
-    return d
-
-
 @functools.lru_cache(maxsize=None)
 def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
-    """`name`'s prices on `data`'s device at `vector` (its current vector by default), as `priced` names. ♭ is
-    `machine-model eps --credit floor --operands floor`'s credited program, a committed word's time × 4096 / L: the
-    tensor route at the noise's φ_del, the fold, the fillers and the baseline program, with no overhead (SPEC §0.7a)."""
-    d = priced(design(name, data), data)
+    """`name`'s prices on `data`'s device at `vector` (its current vector by default). ♭ is the design's own (decision
+    90: a variant's too, its verified filler included), `machine-model eps --credit floor --operands floor`'s credited
+    program, a committed word's time × 4096 / L: the tensor route at the noise's φ_del, the fold, the fillers and the
+    baseline program, with no overhead (SPEC §0.7a)."""
+    d = design(name, data)
     pi = machine(vector, data)
     imma = next(k for k in IMMA16832 if k in pi.c)
     tile = 128 * 2 * (32 + 1)
@@ -469,7 +461,7 @@ def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path =
     longer), an upper bound on ε_skip there."""
     s, r = MODELS[name], rates
     p = prices(d.name, data, vector)
-    L_ = priced(d, data).L
+    L_ = d.L
     keys = (ctx + 1) / 2 if phase == "prefill" else ctx
     lm_head = s.vocab / s.layers / (ctx if phase == "prefill" else 1)
     outs = {"linears": sum(n for _, _, n in s.linears), "lm_head": lm_head, "QKᵀ": s.heads * keys, "P·V": s.heads * s.d}

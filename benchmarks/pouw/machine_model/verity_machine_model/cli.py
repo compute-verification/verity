@@ -13,8 +13,9 @@
     machine-model designs [--json]            the design registry (data/designs): each design's name, its aliases, the
                                               noise on each product, fold, filler, proof unit, coins and perplexity arm
     machine-model eps [DESIGN] [--device sm_NN] [--q Q] [--q-uniform QU] [--operands O] [--credit C]
-                      [--fold-cost R] [--fill X] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]
-                      [--index-bits B]] [--uni-issue C] [--checking full|sampled [--adapt UNIT]] [--vector V] [--json]
+                      [--fold-cost R] [--fill X [--fill-mix K=V,...]] [--lookups [--lookup-q QT] [--lookup-bytes B]
+                      [--l2 B] [--index-bits B]] [--uni-issue C] [--checking full|sampled [--adapt UNIT]] [--vector V]
+                      [--json]
                                               a design's ε budget (a name or alias in data/designs, default
                                               dither-1s) at q* = Q (default 8): every term with its source,
                                               ε_machine's LP (the credited and the cheater's mix, binding rows and
@@ -23,8 +24,8 @@
                                               unless given; the cheater's operand delivery is free (default), at the
                                               noise's floor, or honest's; ε is a fraction of honest's kernel (--credit
                                               H, default) or of the floor program ♭ (--credit floor); --fill adds X
-                                              lane instructions a word of verified filler on lanes; --lookups opens
-                                              the table route (data/table.toml: lane instructions and L2 bytes a word
+                                              lane instructions a word of verified filler on lanes (LOP3 and IMAD
+                                              alike, or --fill-mix's class weights); --lookups opens the table route (data/table.toml: lane instructions and L2 bytes a word
                                               against an L2 facet; --lookup-q, --lookup-bytes, --l2; --index-bits B
                                               for B-bit noise entries on the operand it indexes); --uni-issue C also
                                               charges a uniform instruction C times an ALU's cost on the issue rows
@@ -33,8 +34,8 @@
                                               core ε alone, and --checking sampled adds ε_sample = ε_luck + ε_adapt
                                               on its own line, for the design's proof unit (data/adapt.toml) or
                                               --adapt UNIT's
-    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--operands O] [--credit C]
-                      [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
+    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X [--fill-mix K=V,...]] [--operands O]
+                      [--credit C] [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
                                               one line a design (every design by default; with --fold-sweep, each at
                                               each fold cost), in two column groups: the core (γ and γ_f, γ with the
                                               clock gap f_max/f_H, the credited time, ε_skip, ε_sched, ε_machine at
@@ -201,13 +202,27 @@ def _pi(m: E.Mix) -> str:
 def _design(args, name: str) -> E.Design:
     d = E.design(name, args.data)
     d = d.with_fold_cost(args.fold_cost) if args.fold_cost is not None else d
-    d = d.with_fill(args.fill) if args.fill else d
+    d = d.with_fill(args.fill, _fill_mix(args)) if args.fill else d
     d = d.with_index_bits(args.index_bits) if args.index_bits else d
     return d if args.q_uniform is None else replace(d, name=f"{d.name}@qu{args.q_uniform:g}", q_uniform=args.q_uniform)
 
 
 def _l2(tb: E.Table) -> str:
     return "L2 unbounded: unmeasured on this device" if tb.l2 is None else f"L2 {tb.l2 / 1e12:g} TB/s"
+
+
+def _fill_mix(args) -> dict[str, float] | None:
+    if args.fill_mix is None:
+        return None
+    if not args.fill:
+        raise SystemExit("eps: --fill-mix is the --fill filler's mix: add --fill")
+    try:
+        mix = {k.strip(): float(v) for k, v in (kv.split("=") for kv in args.fill_mix.split(","))}
+    except ValueError:
+        raise SystemExit(f"eps: --fill-mix {args.fill_mix!r}: write CLASS=WEIGHT,... (ALU=1,IMAD=1)") from None
+    if not mix or any(v < 0 for v in mix.values()) or not sum(mix.values()):
+        raise SystemExit(f"eps: --fill-mix {args.fill_mix!r}: weights ≥ 0, not all 0")
+    return mix
 
 
 def _lookups(args) -> E.Table | None:
@@ -323,7 +338,7 @@ def _eps_table(args, pi: E.Machine) -> int:
         for r in sweep:
             d = E.design(n, args.data)
             d = d.with_fold_cost(r) if r is not None else d
-            d = d.with_fill(args.fill) if args.fill else d
+            d = d.with_fill(args.fill, _fill_mix(args)) if args.fill else d
             rows.append(d.with_index_bits(args.index_bits) if args.index_bits else d)
     for d in rows:
         ad = _adapt(args, d)
@@ -354,6 +369,7 @@ def _eps(args) -> int:
         print(f"eps: {pi.vector}'s census charges a uniform instruction on the issue rows already; --uni-issue "
               f"{args.uni_issue:g} changes nothing", file=sys.stderr)
     pi = pi if args.uni_issue is None else E.uniform_on_issue(pi, args.uni_issue)
+    _fill_mix(args)
     if args.table:
         return _eps_table(args, pi)
     if len(args.designs) > 1:
@@ -540,6 +556,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--table", action="store_true")
     e.add_argument("--fold-sweep", help="with --table: each design at each of these fold costs")
     e.add_argument("--fill", type=float, help="add X lane instructions a word of verified filler on lanes")
+    e.add_argument("--fill-mix", metavar="K=V,...",
+                   help="with --fill: the filler's class mix on lanes (default ALU=1,IMAD=1, LOP3 and IMAD alternating)")
     e.add_argument("--lookups", action="store_true",
                    help="open the cheater's table route: words from register-indexed L2 lookups (data/table.toml)")
     e.add_argument("--lookup-q", type=float, help="with --lookups: lane instructions a table word (default: the file's)")
