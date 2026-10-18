@@ -235,46 +235,72 @@ def admit(queued: list[float], running: list[float], jobs: int, budget: float) -
     return picked
 
 
+class Zygote:
+    """`parallel`'s one worker process (`_zygote`), started by forkserver (never a fork of this possibly multi-threaded process:
+    under pytest-xdist that deadlocked): it runs ``initializer(*initargs)`` from the moment it is made, beside whatever this
+    process does before `parallel` hands it the first item.  Its state comes from its arguments alone, so it is the same whenever
+    it starts.  `drop` ends one that no item will reach, without waiting for its initializer."""
+
+    def __init__(self, fn: Callable, initializer: Callable | None = None, initargs: tuple = ()) -> None:
+        import multiprocessing as mp
+
+        ctx = mp.get_context("forkserver")
+        self.conn, there = ctx.Pipe()
+        self.process = ctx.Process(target=_zygote, args=(there, fn, initializer, initargs), daemon=True)
+        self.process.start()
+        there.close()
+
+    def close(self) -> None:
+        """Tell it to end (its running children are killed) and wait for it."""
+        try:
+            self.conn.send(None)
+        except OSError:
+            pass
+        self.conn.close()
+        self.process.join()
+
+    def drop(self) -> None:
+        """End it now: it has no children yet, and its initializer's work is no one's."""
+        self.process.terminate()
+        self.process.join()
+        self.conn.close()
+
+
 def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None = None, initargs: tuple = (), *,
-             weight: Callable[[Any], float] | None = None, budget: float | None = None):
+             weight: Callable[[Any], float] | None = None, budget: float | None = None, zygote: Zygote | None = None):
     """``(item, fn(item), peak_gb, start_gb)`` for each item, yielded as each finishes, each item run alone in a process of its
-    own: up to ``jobs`` at once, forked from one zygote process that ran ``initializer(*initargs)`` (started by forkserver, never
-    a fork of this possibly multi-threaded process: under pytest-xdist that deadlocked).  ``peak_gb`` is that process's peak RSS
+    own: up to ``jobs`` at once, forked from one `Zygote` that ran ``initializer(*initargs)`` (``zygote``, one started earlier
+    with this ``fn``, which `parallel` then ends, else one it starts now).  ``peak_gb`` is that process's peak RSS
     (``ru_maxrss``, GiB): the item's own, plus ``start_gb``, the RSS it was forked with, which it shares with the zygote (what
     ``initializer`` built).  An item whose process died (the OOM killer) yields a `Killed` for ``fn(item)``, with the peak it
     reached; the others run on.  With ``weight`` and ``budget`` an item starts only while the weights of the items running and its
     own add up to at most ``budget`` (an item heavier than ``budget`` runs alone), taken in the order given, the first that fits."""
-    import multiprocessing as mp
-
     weigh = weight or (lambda _: 0.0)
     limit = float("inf") if budget is None else budget
-    ctx = mp.get_context("forkserver")
-    here, there = ctx.Pipe()
-    zygote = ctx.Process(target=_zygote, args=(there, fn, initializer, initargs), daemon=True)
-    zygote.start()
-    there.close()
+    zygote = zygote or Zygote(fn, initializer, initargs)
+    here = zygote.conn
     queue = list(enumerate(items))
     running: dict[int, tuple[Any, float]] = {}
     try:
         while queue or running:
             for k in admit([weigh(x) for _, x in queue], [w for _, w in running.values()], jobs, limit):
                 t, x = queue[k]
-                here.send((t, x))
+                try:
+                    here.send((t, x))
+                except OSError:
+                    zygote.process.join()
+                    raise RuntimeError(f"circuit-check's zygote died (exit {zygote.process.exitcode}) before it was "
+                                       f"sent {x}") from None
                 running[t] = (x, weigh(x))
             queue = [q for q in queue if q[0] not in running]
             try:
                 t, value, peak, start = here.recv()
             except EOFError:
-                raise RuntimeError(f"circuit-check's zygote died (exit {zygote.exitcode}) while running "
+                raise RuntimeError(f"circuit-check's zygote died (exit {zygote.process.exitcode}) while running "
                                    f"{[x for x, _ in running.values()]}") from None
             yield running.pop(t)[0], value, peak, start
     finally:
-        try:
-            here.send(None)
-        except OSError:
-            pass
-        here.close()
-        zygote.join()
+        zygote.close()
 
 
 def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
@@ -282,6 +308,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     """Every target's checks, in target order.  Isolated (``isolate``; by default when ``jobs`` > 1), each target is checked in a
     process of its own, up to ``jobs`` at once (`parallel`): forked from one process that built the task list itself with its own
     memo, so a target's check never reuses what another's computed: the results are the same as checking them here, in turn.
+    That process (`Zygote`) starts as soon as the task list's own entry is missed and builds its list beside this process's build,
+    keys and lookups (`--all`'s took 40-47 min, and the zygote's after them another 32-41, in the 17-18 Oct train checks); when
+    every target is then reused, it is dropped unused.
 
     With ``cache`` each target's result is reused while everything its check read or resolved is unchanged
     (`circuit_check.cache`): what was read and run from the start of its check, the builds of the Definitions it reached, its
@@ -321,72 +350,77 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                 rep["peaks"] = []
                 rep["cache"] = {"hits": len(got), "stored": 0, "untraced": [], "errors": [], "changed": [], "task_list": hit[1]}
                 return rep
-    tasks = _tasks(specs, opts, everything, as_call)
-    out: list[dict | None] = [None] * len(tasks)
-    keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks] \
-        if tracing else []
-    if listed is not None and not CC.untraced():
-        reads = CC.task_list_reads([*TG.REACHED.values(), *(r for t in tasks for r in _info(t).get("roots", ()))])
-        CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
-    stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
+    isolated = jobs > 1 if isolate is None else isolate
+    zygote = Zygote(_work, _init, (specs, opts, everything, as_call, tracing)) if isolated else None
+    try:
+        tasks = _tasks(specs, opts, everything, as_call)
+        out: list[dict | None] = [None] * len(tasks)
+        keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks] \
+            if tracing else []
+        if listed is not None and not CC.untraced():
+            reads = CC.task_list_reads([*TG.REACHED.values(), *(r for t in tasks for r in _info(t).get("roots", ()))])
+            CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
+        stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
 
-    def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
-        out[i] = r
-        if progress is not None:
-            with progress.open("a") as f:
-                f.write(json.dumps({"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "rss_start_gb": r.get("rss_start_gb"), "seconds": r.get("seconds"),
-                                    "failures": len(r["failures"]), **({"killed": True} if r.get("killed") else {})}) + "\n")
-        if tracing and got is not None:
-            if _errored(r):
-                stats["errors"].append(r["target"])
-            elif untraced:
-                stats["untraced"].append({"target": r["target"], "because": untraced[:3]})
-            elif CC.store(cache, keys[i], REPO, got, r, worker) is None:
-                stats["changed"].append(r["target"])
-            else:
-                stats["stored"] += 1
-        if log:
-            across = (r.get("partition") or {}).get("recomputed_across")
-            qc = (r.get("partition") or {}).get("q_call") or {}
-            call = (f" q_call={qc['units']}u/{qc['committed_bits']}b" if "units" in qc else
-                    f" q_call=refused:{qc['inapplicable'].get('why')}" if "inapplicable" in qc else "")
-            log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
-                f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({r['seconds']:.1f}s)")
+        def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
+            out[i] = r
+            if progress is not None:
+                with progress.open("a") as f:
+                    f.write(json.dumps({"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "rss_start_gb": r.get("rss_start_gb"), "seconds": r.get("seconds"),
+                                        "failures": len(r["failures"]), **({"killed": True} if r.get("killed") else {})}) + "\n")
+            if tracing and got is not None:
+                if _errored(r):
+                    stats["errors"].append(r["target"])
+                elif untraced:
+                    stats["untraced"].append({"target": r["target"], "because": untraced[:3]})
+                elif CC.store(cache, keys[i], REPO, got, r, worker) is None:
+                    stats["changed"].append(r["target"])
+                else:
+                    stats["stored"] += 1
+            if log:
+                across = (r.get("partition") or {}).get("recomputed_across")
+                qc = (r.get("partition") or {}).get("q_call") or {}
+                call = (f" q_call={qc['units']}u/{qc['committed_bits']}b" if "units" in qc else
+                        f" q_call=refused:{qc['inapplicable'].get('why')}" if "inapplicable" in qc else "")
+                log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
+                    f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({r['seconds']:.1f}s)")
 
-    todo = list(range(len(tasks)))
-    if tracing:
-        todo = []
-        for i, k in enumerate(keys):
-            if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
-                out[i] = {**hit[0], "cache": {"hit": hit[1]}}
-                stats["hits"] += 1
-            else:
-                todo.append(i)
-    if (jobs > 1 if isolate is None else isolate) and todo:
-        init = (specs, opts, everything, as_call, tracing)
-        budget = budget_gb(mem_gb)
-        peaks = heavy()
-        order = sorted(todo, key=lambda i: -peaks.get(tasks[i][1], 0))
-        if log:
-            for i in order:
-                if peaks.get(tasks[i][1], 0) > budget:
-                    log(f"warn {tasks[i][1]} peaked at {peaks[tasks[i][1]]} GiB, over the {budget:.1f} GiB budget: it runs alone")
-        for i, got_, peak, start in parallel(_work, order, jobs, _init, init, weight=lambda i: peaks.get(tasks[i][1], HEAVY_GB),
-                                             budget=budget):
-            if isinstance(got_, Killed):
-                r = {"failures": [{"check": "circuit-check", "code": "killed", "definition": tasks[i][1],
-                                   "name": f"circuit-check/killed {tasks[i][1]}: its process died ({got_['how']}: the OOM "
-                                           f"killer?) at a peak of {peak} GiB"}],
-                     "warnings": [], "kind": tasks[i][0], "target": tasks[i][1], "seconds": 0.0, "peak_gb": peak, "killed": True}
-                done(i, r)
-            else:
-                _, r, got, untraced, worker = got_
-                r.update(peak_gb=peak, rss_start_gb=start)
-                done(i, r, got, untraced, worker)
-    else:
-        for i in todo:
-            r, got = _checked(tasks[i]) if tracing else (_one(*tasks[i][:3]), None)
-            done(i, r, *(_observe(r, got) if tracing else (None, None, None)))
+        todo = list(range(len(tasks)))
+        if tracing:
+            todo = []
+            for i, k in enumerate(keys):
+                if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
+                    out[i] = {**hit[0], "cache": {"hit": hit[1]}}
+                    stats["hits"] += 1
+                else:
+                    todo.append(i)
+        if isolated and todo:
+            budget = budget_gb(mem_gb)
+            peaks = heavy()
+            order = sorted(todo, key=lambda i: -peaks.get(tasks[i][1], 0))
+            if log:
+                for i in order:
+                    if peaks.get(tasks[i][1], 0) > budget:
+                        log(f"warn {tasks[i][1]} peaked at {peaks[tasks[i][1]]} GiB, over the {budget:.1f} GiB budget: it runs alone")
+            for i, got_, peak, start in parallel(_work, order, jobs, weight=lambda i: peaks.get(tasks[i][1], HEAVY_GB),
+                                                 budget=budget, zygote=zygote):
+                if isinstance(got_, Killed):
+                    r = {"failures": [{"check": "circuit-check", "code": "killed", "definition": tasks[i][1],
+                                       "name": f"circuit-check/killed {tasks[i][1]}: its process died ({got_['how']}: the OOM "
+                                               f"killer?) at a peak of {peak} GiB"}],
+                         "warnings": [], "kind": tasks[i][0], "target": tasks[i][1], "seconds": 0.0, "peak_gb": peak, "killed": True}
+                    done(i, r)
+                else:
+                    _, r, got, untraced, worker = got_
+                    r.update(peak_gb=peak, rss_start_gb=start)
+                    done(i, r, got, untraced, worker)
+        else:
+            for i in todo:
+                r, got = _checked(tasks[i]) if tracing else (_one(*tasks[i][:3]), None)
+                done(i, r, *(_observe(r, got) if tracing else (None, None, None)))
+    finally:
+        if zygote is not None:
+            zygote.drop()
     rep = CK.report([r for r in out if r is not None], opts)
     ran = [r for r in rep["targets"] if r.get("peak_gb") is not None and "cache" not in r]
     rep["peaks"] = [{"target": r["target"], "peak_gb": r["peak_gb"], "rss_start_gb": r.get("rss_start_gb"), **({"killed": True} if r.get("killed") else {})}
