@@ -30,13 +30,17 @@
     },
     "ask-daniel": {
       "id": "C0C5UCA0S0Z",
-      "purpose": "Everything that needs Daniel: one question per card (blocking or default); only Daniel (U0BEN96ES8Y) decides.",
+      "purpose": "Everything that needs Daniel: one question per card (blocking or default), each linking its page in the Asks for Daniel Notion database; only Daniel (U0BEN96ES8Y) decides.",
       "subscribers": [
         "infra"
       ],
       "aliases": [
         "approvals"
-      ]
+      ],
+      "pages": {
+        "database": "https://app.notion.com/p/914ab9399fe44f79ae19ff05db87e1fa",
+        "data_source": "9c204dab-e175-407f-b18d-bc3b3bddec61"
+      }
     }
   },
   "handles": [

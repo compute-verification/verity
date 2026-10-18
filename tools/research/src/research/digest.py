@@ -3,10 +3,11 @@ regular sync. It shows:
 
 - the lane's doorbells, marked read;
 - other handles' new replies in the threads the lane watches;
-- what landed on `main`, and how many landed in the last 6 h;
+- what landed on `main` and what drive reverted there, and how many landed in the last 6 h;
 - the queue's length by state, over every lane;
 - the lane's PRs whose queue state or head changed;
-- new or changed notes under lanes/LANE, each with the first 3 non-empty lines under its '## Result so far';
+- new or changed notes under lanes/LANE, each with the first 3 non-empty lines under its first 'Result so far' heading
+  (level 2 to 4), up to the next heading;
 - a TRIGGER line for each watched PR that landed or changed its queue state (not merely its head), with the step the
   lane wrote for that moment;
 - Health: this VM's memory, load, disk (/, the notes, the workspace) and OOM kills; /workspace's branch (a WARNING
@@ -47,7 +48,10 @@ FIRST_LOOKBACK_S = 3600
 RATE_WINDOW_H = 6
 CHANNEL = "agent-coordination"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+)")
-RESULT_HEADING = "## result so far"
+#: Drive's `git revert -m 1` of a breaking landing.
+REVERT_SUBJECT = re.compile(r'^Revert "Queue: #(\d+)')
+RESULT_HEADING = re.compile(r"#{2,4}\s+result so far", re.IGNORECASE)
+HEADING = re.compile(r"#{1,6}\s")
 RESULT_LINES = 3
 #: The checkout the shell hook and the inbox run from.
 WORKSPACE = Path("/workspace")
@@ -123,12 +127,12 @@ def ago(seconds: float) -> str:
 
 
 def result_so_far(text: str | None, n: int = RESULT_LINES) -> list[str]:
-    """The first `n` non-empty lines under a note's '## Result so far' heading, up to the next heading of its level."""
+    """The first `n` non-empty lines under a note's first 'Result so far' heading of level 2 to 4, up to the next heading."""
     lines = (text or "").splitlines()
-    start = next((i + 1 for i, x in enumerate(lines) if x.strip().lower().startswith(RESULT_HEADING)), None)
+    start = next((i + 1 for i, x in enumerate(lines) if RESULT_HEADING.match(x.strip())), None)
     out: list[str] = []
     for x in lines[start:] if start is not None else []:
-        if re.match(r"#{1,2}\s", x) or len(out) == n:
+        if HEADING.match(x) or len(out) == n:
             break
         if x.strip():
             out.append(x.strip())
@@ -189,13 +193,24 @@ def _threads(lane: str, s: dict, src: Sources, shown: set[str], out: list[str]) 
 
 
 def _landings(s: dict, src: Sources, out: list[str]) -> set[int]:
+    """The PRs whose landing is on `main` at the new tip: in subject order, so a PR reverted and then relanded counts."""
     tip, subjects = src.landings(s.get("main"))
     queued = [x for x in subjects if QUEUE_SUBJECT.match(x)]
+    reverted = [x for x in subjects if REVERT_SUBJECT.match(x)]
     if queued:
         out.append(f"## Landed on main ({len(queued)})")
         out += [f"- {plain(x, 140)}" for x in queued]
+    if reverted:
+        out.append(f"## Reverted on main ({len(reverted)})")
+        out += [f"- {plain(x, 140)}" for x in reverted]
     s["main"] = tip
-    return {int(QUEUE_SUBJECT.match(x)[1]) for x in queued}
+    landed: set[int] = set()
+    for x in subjects:
+        if m := QUEUE_SUBJECT.match(x):
+            landed.add(int(m[1]))
+        elif m := REVERT_SUBJECT.match(x):
+            landed.discard(int(m[1]))
+    return landed
 
 
 def _summary(src: Sources, rows: list[dict], out: list[str]) -> None:
