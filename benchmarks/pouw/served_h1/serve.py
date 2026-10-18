@@ -477,7 +477,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         committed = CM.s8_rows(slots.numpy(), scales)
         useful = sum(int(np.frombuffer(bytes(x[-4:]), "<f4")[0] != 0) for x in committed)
         if c["linear"] not in b_roots:
-            b_rows = weight.cpu().numpy()
+            b_rows = weight.cpu().numpy().copy()
             rebuilt = PH.weight_root(c["linear"], b_rows)
             b_rows[rng.randrange(c["n"]), rng.randrange(c["k"])] ^= 1
             b_roots[c["linear"]] = (rebuilt, PH.weight_root(c["linear"], b_rows))
