@@ -41,6 +41,7 @@ WINDOWS=${WINDOWS:-4614,6433,10078}
 BATCH=${BATCH:-2,4,8}
 SIZES=$WINDOWS
 for k in ${BATCH//,/ }; do for w in ${WINDOWS//,/ }; do SIZES="$SIZES,$((k * w))"; done; done
+SIZES=$(echo "${SIZES//,/ }" | tr " " "\n" | awk '!seen[$0]++' | paste -sd,)
 export WINDOWS SIZES REPS=${REPS:-15} CHECK_N=${CHECK_N:-700}
 echo "windows $WINDOWS sizes $SIZES" >> "$O/arch.txt"
 
