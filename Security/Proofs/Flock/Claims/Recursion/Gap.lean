@@ -80,7 +80,7 @@ def gVerdict (h : Msg) (as : List Msg) (cs : List Bool) : Out :=
 def gV : Verifier Bool := ⟨fun _ => 2, fun _ as cs => .query [] fun h => .ret (gVerdict h as cs)⟩
 
 /-- The recursion's statement: the empty inner statement, no circuit commitment. -/
-def gStmt : Stmt := ⟨[], (0, 0, 0), none, ⟨0, 0, 0, 0, false, none, none, false⟩⟩
+def gStmt : Stmt := ⟨[], none, none, ⟨0, 0, 0, 0, false, none, none, false⟩, []⟩
 
 /-- The compiled verifier's deployment: one outer session, its view the run's second round. -/
 noncomputable def gD (H : Msg → Msg) : Deploy Bool where
@@ -88,7 +88,8 @@ noncomputable def gD (H : Msg → Msg) : Deploy Bool where
   parse := fun _ => some gStmt
   scopeCheck := fun _ => false
   kS := fun _ => 0
-  stage := fun _ _ => .ret []
+  nC := fun _ => 0
+  stage := fun _ _ _ => .ret []
   vstar := fun _ _ => [[]]
   nS := fun _ => 1
   session := fun _ _ v => ⟨v.msgs.drop 1, v.out⟩
@@ -100,6 +101,7 @@ noncomputable def gD (H : Msg → Msg) : Deploy Bool where
   mask := fun _ _ => 0
   Tape := Unit
   P := fun _ => ⟨fun _ _ _ => .ret []⟩
+  δc := fun _ _ => 1
 
 /-! ## The compiled verifier's runs -/
 

@@ -19,7 +19,8 @@
 // Modes:
 //   cwgemm gate DIR M N K SEED    cgemm.cu's gate into DIR (c_l7qs and its peers, the dumps cgemm_ref.py reads), then
 //                                 under the same key: cplane's P_B against cwedit's, cw's O against cuBLASLt's X W^T and
-//                                 its receipts against c_l7qs's, a no-write control; three tiles' O, receipts, plane and UB
+//                                 its receipts against c_l7qs's, the overlap orders (cpar:c_l7qs, cwpar:cw_l7qs and
+//                                 cpar:c_fx1) against the serial kernels', a no-write control; three tiles' O, receipts, plane and UB
 //                                 to DIR (cw_meta.json) for cwgemm_ref.py
 //   cwgemm bench REPS M N K       hot items interleaved across CW_ARMS (cgemm.cu's and egemm.cu's arms too), one JSON line
 //   cwgemm one ARM M N K          three warm-up calls, then one between cudaProfilerStart and Stop (for ncu)
@@ -218,7 +219,7 @@ template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE> DEV void cw_body(
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
     int tm, tn;
     ml.place_step(pl, t == (int)blockIdx.x ? t : (int)gridDim.x);
-    L::place_tile(pl, tm, tn);
+    L::place_tile(pl, tiles_m, tm, tn);
     const uint32_t tile_id = tm * tiles_n + tn;
     St ch[8];
 #pragma unroll
@@ -369,31 +370,37 @@ static int wgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   phat<false><<<4096, 256, 0, P.st>>>(C.Wp, C.PB, C.Wh, (size_t)n, k);
   ltg_run(C.ref, P.st);
   cgemm_run(C, cpick(C, ckern("c_l7qs")), C.Y, C.R2);
+  uint32_t* Rf;
+  CK(cudaMalloc(&Rf, P.nr * 4));
+  cgemm_run(C, cpick(C, ckern("c_fx1")), C.Y, Rf);
   cpl(W, s);
   CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
   wrun(W, wkern("cw_l7qs"), C.Y, C.R);
   CK(cudaStreamSynchronize(P.st));
   CK(cudaGetLastError());
   const unsigned long long y = ecmp(P, C.Y, C.Yr, P.ny), r = ecmp(P, C.R, C.R2, P.nr), pb = ecmp(P, W.PB, C.PB, (size_t)n * 32);
-  // the overlap arms' order under the gate's key, from poisoned operands: cwedit (cplane) beside cquant, then c_l7qs (cw_l7qs)
-  unsigned long long par[2][2];
-  for (int i = 0; i < 2; i++) {
+  // the overlap arms' order under the gate's key, from poisoned operands: cwedit (cplane) beside cquant, then c_l7qs (cw_l7qs;
+  // c_fx1, its receipts against the serial c_fx1's)
+  unsigned long long par[3][2];
+  for (int i = 0; i < 3; i++) {
     for (auto [p, b] : {std::pair<void*, size_t>{C.X, (size_t)m * k}, {C.PA, (size_t)m * 128}, {C.Wp, wb}, {C.PB, (size_t)n * 128},
                         {W.plane, wb / 8}, {W.UB, (size_t)n * 32}, {W.PB, (size_t)n * 128}, {C.Y, P.ny * 4}, {C.R, P.nr * 4}})
       CK(cudaMemsetAsync(p, 0xA5, b, P.st));
-    if (i == 0) {
-      beside(W, [&] { cw(C, s); }, [&] { cq(C, s); });
-      cgemm_run(C, cpick(C, ckern("c_l7qs")), C.Y, C.R);
-    } else {
+    if (i == 1) {
       beside(W, [&] { cpl(W, s); }, [&] { cq(C, s); });
       wrun(W, wkern("cw_l7qs"), C.Y, C.R);
+    } else {
+      beside(W, [&] { cw(C, s); }, [&] { cq(C, s); });
+      cgemm_run(C, cpick(C, ckern(i == 0 ? "c_l7qs" : "c_fx1")), C.Y, C.R);
     }
     CK(cudaStreamSynchronize(P.st));
     CK(cudaGetLastError());
     par[i][0] = ecmp(P, C.Y, C.Yr, P.ny);
-    par[i][1] = ecmp(P, C.R, C.R2, P.nr);
+    par[i][1] = ecmp(P, C.R, i == 2 ? Rf : C.R2, P.nr);
   }
-  const bool ok = y == 0 && r == 0 && pb == 0 && par[0][0] == 0 && par[0][1] == 0 && par[1][0] == 0 && par[1][1] == 0;
+  CK(cudaFree(Rf));
+  bool ok = y == 0 && r == 0 && pb == 0;
+  for (auto& pr : par) ok &= pr[0] == 0 && pr[1] == 0;
   const int tiles_m = m / 128, tiles_n = n / 128, KT = k / 128;
   const int tl[3][2] = {{0, 0}, {tiles_m / 2, tiles_n / 2}, {tiles_m - 1, tiles_n - 1}};
   std::string tj;
@@ -412,11 +419,12 @@ static int wgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
   const unsigned long long cy = ecmp(P, C.Y, C.Yr, P.ny), cr = ecmp(P, C.R, C.R2, P.nr);
   const bool control_rejected = cy > 0 && cr > 0;
-  char res[768];
+  char res[896];
   snprintf(res, sizeof res,
            "\"cw_l7qs\": {\"y_bad\": %llu, \"r_bad\": %llu}, \"pb_bad\": %llu, \"cpar:c_l7qs\": {\"y_bad\": %llu, \"r_bad\": %llu}, "
-           "\"cwpar:cw_l7qs\": {\"y_bad\": %llu, \"r_bad\": %llu}, \"control\": {\"y_bad\": %llu, \"r_bad\": %llu}",
-           y, r, pb, par[0][0], par[0][1], par[1][0], par[1][1], cy, cr);
+           "\"cwpar:cw_l7qs\": {\"y_bad\": %llu, \"r_bad\": %llu}, \"cpar:c_fx1\": {\"y_bad\": %llu, \"r_bad\": %llu}, "
+           "\"control\": {\"y_bad\": %llu, \"r_bad\": %llu}",
+           y, r, pb, par[0][0], par[0][1], par[1][0], par[1][1], par[2][0], par[2][1], cy, cr);
   FILE* fp = fopen((dir + "/cw_meta.json").c_str(), "w");
   fprintf(fp, "{\"kernel\": \"cw_l7qs\", \"reference\": \"c_l7qs\", \"tiles\": [%s], \"device\": {%s}, \"device_ok\": %s, "
               "\"control_rejected\": %s}\n",

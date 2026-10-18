@@ -777,6 +777,164 @@ def test_a_head_with_the_tree_of_a_head_marked_ready_is_marked_without_running_t
     assert "STALE" in capsys.readouterr().err
 
 
+def _invariant(marker: str, up: int) -> str:
+    """A stand-in invariant test that fails while the tree, ``up`` directories above it, holds ``marker``."""
+    return (f"from pathlib import Path\n\n\ndef test_{marker.lower()}_absent():\n"
+            f"    assert not (Path(__file__).resolve().parents[{up}] / '{marker}').exists()\n")
+
+
+#: what the preflight runs on the merged tree, as stand-ins (each invariant test fails while its marker is in the tree,
+#: `pins.py --stale` while STALE.txt is), but `suites.py`, the real one: the suites collected are those its own `touched` picks
+PREFLIGHT_FILES = {
+    "pyproject.toml": '[tool.uv.workspace]\nmembers = ["pkg"]\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+    "pkg/pyproject.toml": '[project]\nname = "pkg"\nversion = "0"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+    "pkg/rows.json": '{"r7": 1}\n',
+    "pkg/tests/test_pkg.py": "def test_pkg():\n    pass\n",
+    "tests/test_module_strings.py": _invariant("BROKEN_MODULE_STRING", 1),
+    "tests/test_pins.py": _invariant("BROKEN_PIN", 1),
+    "tests/test_doc_paths.py": _invariant("BROKEN_DOC_PATH", 1),
+    "tools/research/tests/test_pythonpath.py": _invariant("BROKEN_REAL_ROOTS", 3),
+    "tools/verity/check/suites.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "suites.py").read_text(),
+    "tools/verity/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
+                                   "    print('pkg/pins.json is stale (pkg/Main.lean): run `python3 regen.py`', file=sys.stderr)\n"
+                                   "    sys.exit(1)\n"),
+}
+#: `uv sync --locked` as the preflight runs it, refusing while LOCK_STALE.txt is in the tree
+FAKE_SYNC = (sys.executable, "-c", "import sys; from pathlib import Path; s = Path('LOCK_STALE.txt').exists(); s and print("
+             "'error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.', file=sys.stderr); sys.exit(2 * s)")
+
+
+def _preflight(world: World, free=lambda: 1.0):
+    from research.queue import Preflight
+
+    return Preflight(world.dev, str(world.origin), world.store, sync=FAKE_SYNC, python=sys.executable, root=world.tmp / "pre",
+                     log=world.logs.append, free=free)
+
+
+def _preflight_main(world: World, extra: dict[str, str] | None = None) -> str:
+    """`main` with what the preflight runs, and with #1 on `next`, refitting away the row `pkg/rows.json` had."""
+    world.with_store_remote()
+    _move_main(world, {**PREFLIGHT_FILES, **(extra or {})})
+    world.gh.put(1, h1 := world.change({"pkg/rows.json": '{"r8": 1}\n'}))
+    assert [m.pr for m in world.queue().sync()[0]] == [1]
+    return h1
+
+
+def _no_worktree_left(world: World) -> bool:
+    pre = world.tmp / "pre"
+    return not (pre.exists() and any(pre.iterdir())) and len(_git(world.dev, "worktree", "list").splitlines()) == 1
+
+
+def test_the_preflight_marks_a_head_that_merges_onto_next_cleanly_and_a_failure_next_has_too_refuses_nothing(world, capsys):
+    """The merged tree is checked in a temporary worktree that is removed, and a check `next` already fails (a doc path broken
+    there, a fixture this machine never fetched) isn't the PR's."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    h1 = _preflight_main(world, {"BROKEN_DOC_PATH": ""})
+    world.gh.put(2, h2 := world.change({"pkg/tests/test_more.py": "def test_more():\n    pass\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight" in s)
+    assert f"#2 at {h2[:12]} merged onto `next` at" in said and "nothing refused" in said and "collected 2 suite(s)" in said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True
+    assert _no_worktree_left(world)
+    world.logs.clear()                                         # #1, already on `next`, merges onto what's below its merge there
+    assert ready(world.gh, world.store, 1, "lane-1", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert f"merged onto `next` below its merge of #1 at {h1[:8]}" in next(s for s in world.logs if "preflight" in s)
+
+
+def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(world, capsys):
+    """ci, 18 Oct: four torch-importing collections reach about 8 GB of a marker's 16 GB VM. Under a quarter of memory free,
+    the preflight collects nothing, says so, and still marks; the train's check collects."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    world.gh.put(2, h2 := world.change({"pkg/tests/test_more.py": "def test_more():\n    pass\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, free=lambda: 0.1)) == 0
+    said = next(s for s in world.logs if "preflight" in s)
+    assert "no suite collected: 10% of memory available, under 25%" in said and "collected 0 suite(s)" in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
+def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_and_the_pr_that_touched_them(world, capsys):
+    """14 Oct #2040 and 17 Oct #2411 each left `next` for a conflict with a PR already on it, found only by drive's sync."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    world.gh.put(2, h2 := world.change({"pkg/rows.json": '{"r9": 1}\n'}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
+    err = capsys.readouterr().err
+    assert "it conflicts with `next` at" in err and "in pkg/rows.json (touched by #1)" in err and "never merge `next`" in err
+    assert "`--no-preflight` skips the preflight" in err
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=None) == 0         # --no-preflight: the lander's
+
+
+#: what the head writes -> what the refusal says: each of 17 Oct's train breakers, which the merged tree shows at mark time
+PREFLIGHT_REFUSALS = {
+    "stale pin": ({"STALE.txt": "x\n"}, "`pins.py --stale` on the merged tree: pkg/pins.json is stale (pkg/Main.lean)"),
+    "module string": ({"BROKEN_MODULE_STRING": ""}, "the invariant tests in . fail on the merged tree: FAILED "
+                      "tests/test_module_strings.py::test_broken_module_string_absent"),
+    "pythonpath": ({"BROKEN_REAL_ROOTS": ""}, "the invariant tests in tools/research fail on the merged tree: FAILED "
+                   "tests/test_pythonpath.py::test_broken_real_roots_absent"),
+    # #2213's test read a vector row that #2210, queued before it, refits away: a KeyError at import on the merged tree only
+    "collection error": ({"pkg/tests/test_rows.py": "import json\nfrom pathlib import Path\n"
+                          "ROW = json.loads((Path(__file__).parents[1] / 'rows.json').read_text())['r7']\n"},
+                         "`pytest --collect-only` in pkg fails on the merged tree: ERROR tests/test_rows.py - KeyError: 'r7'"),
+    "stale lock": ({"LOCK_STALE.txt": ""}, "`uv sync --locked` on the merged tree: error: The lockfile at `uv.lock` needs to be "
+                   "updated"),
+}
+
+
+@pytest.mark.parametrize("case", list(PREFLIGHT_REFUSALS))
+def test_the_preflight_refuses_a_head_whose_merge_onto_next_breaks_an_invariant_and_names_the_fix(world, capsys, case):
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    files, says = PREFLIGHT_REFUSALS[case]
+    _preflight_main(world)
+    world.gh.put(2, h2 := world.change(files), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
+    err = capsys.readouterr().err
+    assert f"#2 is not marked ready at {h2[:12]}: the preflight of its head merged onto `next` at" in err
+    assert says in err, err
+    assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [next(ln for ln in err.splitlines() if says in ln)]
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+
+
+def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_and_names_it(world, capsys):
+    """17 Oct: drive held #2382 because it contained #2008, never marked, and #2333 because it contained the withdrawn #2331."""
+    from research.queue import MarkOnly, ready
+
+    world.with_store_remote()
+    world.gh.put(5, parent := world.change({"x.txt": "x\n"}), ready=False)
+    world.gh.put(4, world.change({"y.txt": "y\n"}, base=parent), ready=False)
+    pre = _preflight(world)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
+    err = capsys.readouterr().err
+    assert (f"it contains #5's head {parent[:8]}, which isn't marked ready at {parent[:8]}, so drive holds this PR behind it: "
+            f"close #5 if this PR carries its change, or mark #5 ready so it lands first") in err
+    assert "merged onto `main` at" in err                                                    # no `next` yet
+    world.gh.put(5, parent, labels=("hold",), ready=False)
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), preflight=pre) == 0
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
+    assert "which is held (`hold` label)" in capsys.readouterr().err
+    world.gh.put(5, parent, ready=False)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #5 admitted: drive lands it first
+
+
+def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
+    from research import queue as Q
+
+    seen = []
+    monkeypatch.setattr(Q, "ready", lambda *a, preflight=None, **kw: seen.append(preflight) or 0)
+    monkeypatch.chdir(world.dev)
+    base = ["queue", "ready", "3", "--mark", "--by", "lane-3", "--remote", str(world.origin), "--repo", "o/r"]
+    assert research_main(base) == 0 and research_main([*base, "--no-preflight"]) == 0
+    assert isinstance(seen[0], Q.Preflight) and seen[1] is None
+    with pytest.raises(SystemExit) as e:
+        research_main(["queue", "status", "--no-preflight"])
+    assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err
+
+
 #: a `suites.py` that says what it was asked and what it found, and fails one test when FAKE_FAIL names it
 FAKE_SUITES = """\
 # it knows "--changed"
