@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
 from verity_vllm.pipeline import replay_bundle as RB
 
 DEFERRED = "replay_deferred.json"
@@ -404,8 +405,8 @@ def oracle_compare_component(rows: list[dict], versions: dict, man_doc: dict | N
                           "(b) TP partials / MoE received outputs vs the recorder's stored collectives per (step, k) [tp_partials]; per rank"),
             "attribution": {"complete": all(a.get("ok") is not None and int(a.get("steps_checked") or 0) > 0 for a in atts.values()) and len(atts) > 0, "result": att_ok,
                             "per_rank": {r_: a.get("ok") for r_, a in atts.items()}, "rows_checked_per_rank": {r_: a.get("rows_checked") for r_, a in atts.items()}},
-            "tp_partials": ({"result": mo_ok, "per_rank": {r_: {k2: m.get(k2) for k2 in ("verdict", "steps_compared", "tensors", "equal", "mismatch_n", "missing_n", "not_in_oracle_n", "by_member", "why", "error")}
-                                                          for r_, m in mos.items()}} if mo_ran else {"result": None, "reference": "not run (--no-match-oracle or no stored capture steps)"}),
+            "tp_partials": ({"result": mo_ok, "per_rank": {r_: {k2: m.get(k2) for k2 in TPS_SUMMARY_KEYS} for r_, m in mos.items()}}
+                            if mo_ran else {"result": None, "reference": "not run (--no-match-oracle or no stored capture steps)"}),
             "identities": {"families_covered": covered, "families_not_covered": [f for f in fam if f not in covered] if fam else ["instance_outputs", "fa2_hidden_m1_stream", "input_token_ids", "weights"],
                            "covered_n": sum(int(fam.get(f) or 0) for f in covered) if fam else None, "total_n": sum(int(v or 0) for v in fam.values()) if fam else None},
             "why": (None if (att_ok and (mo_ok or not mo_ran)) else "; ".join([f"rank {r_}: attribution {a.get('why')}" for r_, a in atts.items() if not a.get("ok")]

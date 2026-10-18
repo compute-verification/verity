@@ -244,6 +244,7 @@ def main(args: Options) -> int:
     from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.partition import require_partition
     from verity_vllm import protocol_options as PO
+    from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS, condition_on_witnesses
     if args.world is not None:
         args.tp = int(args.world)
     if args.replay_deferred and (not args.required_manifest or args.no_sampled_replay):
@@ -475,11 +476,14 @@ def main(args: Options) -> int:
                         bundles_of[pair] = {int(f["rank"]): (f.get("sampled_replay") or {}).pop("bundle", None) for f in fin}
             if arm != "control":
                 if match_capture_dir is not None:
-                    print("[tp2commit] match oracle (tp partials vs capture): " + "; ".join(
-                        f"rank {f['rank']} {(f.get('match_oracle') or {}).get('verdict')} steps {(f.get('match_oracle') or {}).get('steps_compared')} tensors {(f.get('match_oracle') or {}).get('tensors')} "
-                        f"equal {(f.get('match_oracle') or {}).get('equal')} mismatch {(f.get('match_oracle') or {}).get('mismatch_n')} missing {(f.get('match_oracle') or {}).get('missing_n')} "
-                        f"not_in_oracle {(f.get('match_oracle') or {}).get('not_in_oracle_n')} {(f.get('match_oracle') or {}).get('by_member')} {(f.get('match_oracle') or {}).get('error') or ''}"
-                        for f in sorted(fin, key=lambda f: f["rank"])), flush=True)
+                    differs = condition_on_witnesses({int(f["rank"]): f.get("match_oracle") for f in fin})
+                    print(f"[tp2commit] match oracle (tp partials vs capture), {len(differs)} differing MoE align witness(es)"
+                          + (f", first rank {differs[0]['rank']} step {differs[0]['step']} k {differs[0]['k']} {differs[0]['module']}" if differs else "") + ": " + "; ".join(
+                        f"rank {f['rank']} {mo.get('verdict')} steps {mo.get('steps_compared')} tensors {mo.get('tensors')} compared {mo.get('compared')} "
+                        f"equal {mo.get('equal')} exempt {mo.get('exempt')} mismatch {mo.get('mismatch_n')} missing {mo.get('missing_n')} "
+                        f"not_in_oracle {mo.get('not_in_oracle_n')} witnesses equal {(mo.get('witnesses') or {}).get('equal')} unpaired {(mo.get('witnesses') or {}).get('unpaired_n')} "
+                        f"{mo.get('by_member')} {mo.get('error') or ''}"
+                        for f in sorted(fin, key=lambda f: f["rank"]) for mo in [f.get("match_oracle") or {}]), flush=True)
                 if replay_cfg is not None:
                     for f in sorted(fin, key=lambda f: f["rank"]):
                         srr = ((f.get("sampled_replay") or {}).get("sampled_replay") or {})
@@ -567,10 +571,7 @@ def main(args: Options) -> int:
                         mo = f.get("match_oracle")
                         cblock["match_oracle"] = mo
                         if match_capture_dir is not None and (mo is None or mo.get("verdict") != "PASS"):
-                            why_ = (f"match oracle (tp partials vs tp2_match capture): {(mo or {}).get('why') or (mo or {}).get('error') or 'not run'}"
-                                    if not mo or not mo.get("tensors") else
-                                    f"match oracle: {mo.get('mismatch_n')} mismatching / {mo.get('missing_n')} missing in commit / {mo.get('not_in_oracle_n')} committed not in oracle "
-                                    f"of {mo.get('tensors')} tensors (first: {(mo.get('mismatches') or mo.get('missing_in_commit') or mo.get('committed_not_in_oracle') or [None])[0]})")
+                            why_ = f"match oracle (tp partials vs tp2_match capture): {(mo or {}).get('why') or (mo or {}).get('error') or 'not run'}"
                             ok, why = False, (f"{why}; also: {why_}" if not ok and why else why_)
                         ok, why = C2.c2_and_pin_gates(cblock, f, ok, why, rank=rk, replay_on=replay_cfg is not None, required=args.required_manifest is not None,
                                                    bundle=RB.path(out, pair, rank=rk).name)
@@ -873,7 +874,7 @@ def main(args: Options) -> int:
                                                                "per_rank": {r_: {k2: (c.get("attribution") or {}).get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "why")}
                                                                             for r_, c in C2.last_per_rank(rows).items()}}),
             # [coord M-0481 form (B), TP family] committed TP partials / MoE received outputs vs the Match capture's stored collectives, per rank
-            "match_oracle": (None if match_capture_dir is None else {r_: {k2: (c.get("match_oracle") or {}).get(k2) for k2 in ("verdict", "steps_compared", "tensors", "equal", "mismatch_n", "missing_n", "not_in_oracle_n", "by_member", "why", "error")}
+            "match_oracle": (None if match_capture_dir is None else {r_: {k2: (c.get("match_oracle") or {}).get(k2) for k2 in TPS_SUMMARY_KEYS}
                                                                      for r_, c in C2.last_per_rank(rows).items()}),
             "oracle_compare": C2.oracle_compare_component(rows, versions, man_doc),
             # [TP-08 / MAN-06 form (A) per rank] the C2 of record, folded over ranks and pairs (full records in finalize_pair<k>.json)
