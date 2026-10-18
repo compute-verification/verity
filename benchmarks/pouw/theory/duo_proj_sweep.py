@@ -17,7 +17,8 @@ many had a kernel element, the kappas seen and up to one kernel element an assig
 - ``curve``: the served schedule with start states on the curve (y, pi(y)) instead of every (y, z).
 - ``full``: the rows above over the full state (``-F``) under xor: runs whose states differ by one constant on every
   start state, which is what wrong words in two chains need to cancel in a checkpoint that XORs every chain's y and
-  every chain's z. ``full-big`` is served n = 10, L = 4 (a 32 GiB table).
+  every chain's z, in three parts that can run side by side (``full-served``, ``full-generic``, ``full-sample``).
+  ``full-big`` is served n = 10, L = 4 (a 32 GiB table).
 
     python duo_proj_sweep.py --set quick            # seconds: the tests' rows
     python duo_proj_sweep.py --set pod --out DIR    # the pod rows (see the note)
@@ -136,18 +137,21 @@ def plan(name: str) -> list[dict]:
         return served(6, 6, ("xor",), Lmin=6)
     if name == "full-quick":
         return generic(4, 2, ("xor",), full=True) + served(6, 2, ("xor",), full=True)
-    if name == "full":
-        x = ("xor",)
-        jobs = served(6, 4, x, full=True) + served(8, 4, x, full=True) + served(10, 3, x, full=True)
-        jobs += served(12, 3, x, full=True) + served(16, 2, x, full=True)
-        jobs += served_any_keys(6, 3, x, full=True) + served_any_keys(8, 2, x, full=True)
+    x = ("xor",)
+    if name == "full-served":
+        return (served(6, 4, x, full=True) + served(8, 4, x, full=True) + served(10, 3, x, full=True)
+                + served(16, 2, x, full=True) + served(12, 3, x, full=True))
+    if name == "full-generic":
+        jobs = served_any_keys(6, 3, x, full=True) + served_any_keys(8, 2, x, full=True)
         jobs += generic(4, 1, x, full=True) + generic(4, 2, x, full=True) + generic(4, 3, x, full=True)
         jobs += generic(4, 4, x, full=True) + generic(5, 2, x, full=True) + generic(5, 3, x, full=True)
         jobs += generic(6, 1, x, full=True) + generic(6, 2, x, full=True)
-        jobs += sample(6, 4, 300, 21, x, full=True) + sample(8, 4, 60, 22, x, full=True)
-        jobs += sample(10, 3, 100, 23, x, full=True) + sample(12, 3, 30, 24, x, full=True)
-        jobs += sample(16, 2, 20, 25, x, full=True)
-        return jobs
+        return jobs + sample(6, 4, 300, 21, x, full=True) + sample(16, 2, 20, 25, x, full=True)
+    if name == "full-sample":
+        return (sample(8, 4, 24, 22, x, full=True) + sample(10, 3, 60, 23, x, full=True)
+                + sample(12, 3, 8, 24, x, full=True))
+    if name == "full":
+        return plan("full-served") + plan("full-generic") + plan("full-sample")
     if name == "full-big":
         return served(10, 4, ("xor",), Lmin=4, full=True)
     raise SystemExit(f"unknown set {name}")
