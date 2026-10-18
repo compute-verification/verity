@@ -13,7 +13,7 @@ One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw
             here; otherwise `--compile-from <out>/pouw-h1-calls.json` does it on a CPU node from the record, with each call's
             positions against its shape's compiled units, and writes `<out>/pouw_h1_compile.json`.
   z         the last retained calls' exact Y (`engine.int8_exact.int_mm` on the GPU) against the s8 product on the host, and
-            a unit's z (`Call.z`) against its cells.
+            with `--compile`, a unit's z (`Call.z`) against its cells.
   hook      a listener (`H1Run.listen`) gets every call with the served tensors on the GPU: A int8 [m, k] and s_a f32 [m]
             (the Commit's ``Int8RowQuant_v1`` /0 and /1), the layer's own int8 weight and scales; what it returns is in the
             manifest; steps begin at linear 0, and every step's calls run over the same layers in order.
@@ -118,12 +118,12 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
             call = h1.calls[index]
             w = PH.numpy_of(layers[call.layer].weight).astype(np.int64)
             exact = xq.astype(np.int64) @ w.T
-            z0 = call.z(y, 0)
-            u = call.compiled().units[0]
-            full = np.zeros(PH.padded(call.rows, call.n), np.int64)
-            full[:call.m, :call.n] = exact
-            zs.append({"index": index, "shape": [call.m, call.k, call.n], "y_exact": bool(np.array_equal(y, exact)),
-                       "unit0_z": bool(np.array_equal(z0, [full[u.rows[i], u.cols[j]] for i, j in u.tile.pairs]))})
+            zs.append({"index": index, "shape": [call.m, call.k, call.n], "y_exact": bool(np.array_equal(y, exact))})
+            if a.compile:
+                u = call.compiled().units[0]
+                full = np.zeros(PH.padded(call.rows, call.n), np.int64)
+                full[:call.m, :call.n] = exact
+                zs[-1]["unit0_z"] = bool(np.array_equal(call.z(y, 0), [full[u.rows[i], u.cols[j]] for i, j in u.tile.pairs]))
         doc["z"] = zs
 
         doc["shapes"] = [list(x) for x in h1.shapes()]
@@ -139,7 +139,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     doc["commitment"] = comp.installed[0].commitment()
     doc["ok"] = bool(doc["served"]["same_tokens"] and not doc["hook"]["bad"] and doc["hook"]["bound"] and doc["calls"]["static"]
                      and doc["hook"]["steps_in_layer_order"] and doc["hook"]["leaves"]
-                     and doc["calls"]["count"] > 0 and zs and all(z["y_exact"] and z["unit0_z"] for z in zs)
+                     and doc["calls"]["count"] > 0 and zs and all(z["y_exact"] and z.get("unit0_z", True) for z in zs)
                      and doc["compile_ok"] is not False and doc["engine"]["enforce_eager"] is not False)
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     print(f"POUW-H1-GPU {'OK' if doc['ok'] else 'FAIL'} calls={doc['calls']['count']} units={doc['calls']['units']} "
