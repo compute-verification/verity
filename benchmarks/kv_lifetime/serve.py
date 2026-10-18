@@ -31,6 +31,7 @@ import heapq
 import json
 import os
 import random
+import signal
 import statistics
 import sys
 import time
@@ -203,6 +204,8 @@ def main() -> int:
 
     sched.kv_cache_manager.allocate_slots = allocate_slots
 
+    stop = [False]  # a SIGTERM (a preemption) ends the current phase early and writes what was recorded
+    signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
     rng = random.Random(a.seed)
     order = list(range(len(convs)))
     rng.shuffle(order)
@@ -267,7 +270,7 @@ def main() -> int:
 
         while True:
             now = clock()
-            if now >= p_start + seconds:
+            if now >= p_start + seconds or stop[0]:
                 break
             while arrivals and arrivals[0][0] <= now:
                 _, _, kind, payload = heapq.heappop(arrivals)
@@ -320,7 +323,7 @@ def main() -> int:
         ph_steps = [s for s in steps if s[0] >= p_start and s[1] <= p_end]
         q = lambda xs, f: sorted(xs)[int(f * (len(xs) - 1))] if xs else None  # noqa: E731
         busy = sum(s[1] - s[0] for s in ph_steps)
-        ph = {"rate": rate, "seconds": seconds, "t0": p_start, "t1": p_end, "requests_done": done_n,
+        ph = {"rate": rate, "seconds": seconds, "t0": p_start, "t1": p_end, "stopped": stop[0], "requests_done": done_n,
               "aborted": len(unfinished), "input_tokens_per_s": in_tok / (p_end - p_start),
               "output_tokens_per_s": out_tok / (p_end - p_start),
               "token_rows_per_s": sum(s[2] for s in ph_steps) / (p_end - p_start),
@@ -339,6 +342,9 @@ def main() -> int:
             f"{ph['running_mean']:.1f} waiting {ph['waiting_mean']:.1f}, used blocks {ph['used_blocks_mean']:.0f} of "
             f"{res['kv_blocks']}, idle {idle:.1f} s")
         (a.out / "serve.json").write_text(json.dumps(res, indent=1) + "\n")
+        if stop[0]:
+            log("SIGTERM: stopped in this phase")
+            break
     ev = rec.arrays()
     st = np.asarray(steps, dtype=np.float64).reshape(-1, len(lifetimes.STEP_FIELDS))
     np.savez_compressed(a.out / "events.npz", **ev, steps=st, t_end=np.float64(clock()))
