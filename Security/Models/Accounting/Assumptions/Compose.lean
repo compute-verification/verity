@@ -10,10 +10,15 @@ sampled (I8)'s (`RightFixedDrawn`), each a `Prop` taken as a hypothesis, never a
 live coins the statement has no random-oracle premise, and its Fiat–Shamir form reads proofs' `FiatShamirFloor`, stated
 in the random-oracle model (decision 112).
 
+The logical layer's (decision 113; `CircuitWork`):
+
 * `HMu`: (H-μ), per template, the one computational claim (decision 110). It replaces round 1's `TemplateNoise`, which
   restricted the cheater's play and was false at the deployed degree-2 template (RT-COMPOSE B2).
 * `RightFoldedDrawn`: Lemma E1(c) for the fold, `RightFixedDrawn`'s companion (B1: the fold carried in (I8)'s
   conjunct).
+
+The physical layer's (`CreditOfWork`):
+
 * `FoldOptFolded`: FOLD-OPT per word folded (B1). `FoldOpt` is it at `N_w` words, which a sampled cheater that skips
   whole units falsifies.
 -/
@@ -33,9 +38,9 @@ it).
 What the template's coins give is proved, and `Scheme.LuckProved` holds the luck to at least it: `¾` for degree-2 cube
 operands within the receipt's binding (`Accounting.Guarantees.TS.LuckCaseACube`, `OperandLuckCube`, #2447's
 `DuoWindowNoKernel`), `Z·C(b, ⌊b/2⌋)/2^b` for `b` fresh bits at fibre `Z` (`Accounting.Guarantees.HMu.CoinPointMass`,
-`ReceiptLuckOfCoins`) and `0` for a pinned value (LUCK-FILLER's `PinnedFillLuckAt`). Those are stated for the
-template's own coins under full checking; that a skipping cheater's view, which holds the public seed (decisions 101
-and 105) and every word it did compute, leaves them so is the claim. It fails if computing one word pins the coin of
+`ReceiptLuckOfCoins`) and `0` for a pinned value (`Accounting.Guarantees.FillerLuck.PinnedFillLuckAt`). Those are
+stated for the template's own coins under full checking; that a skipping cheater's view, which holds the public seed
+(decisions 101 and 105) and every word it did compute, leaves them so is the claim. It fails if computing one word pins the coin of
 another a skipped word bets on (a dither bit shared across a row segment's columns, `HMu`'s notes). -/
 def HMu {ι K C : Type} [Fintype C] {Np M : ℕ} (Sc : Scheme K) (Cd : Declared ι) (W : SplitStages C (Fin Np) M) :
     Prop :=

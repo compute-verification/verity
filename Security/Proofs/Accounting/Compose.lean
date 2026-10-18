@@ -16,13 +16,16 @@ file doesn't land until none is a `sorry`:
    most `(1 − ρ·(wrong share))^K`, which factors over the stages; `SplitRate` per stage at its share `≤ w_max`, its
    luck in expectation from `LuckAt` (`E[L_F] ≤ p·E[W_F]`, `E[L_0] ≤ p0·E[W_0]`), then backward induction over the
    stages, as `Accounting.SecurityProofs.TS.StageBudget`.
-5. `CircuitCredit`: off the (I8) event `∃ i, Moved ∨ Unsound` (at most `δ_bind + δ_ks`), `ProofsSoundOfDrawn`'s
+5. `CircuitWork`: off the (I8) event `∃ i, Moved ∨ Unsound` (at most `δ_bind + δ_ks`), `ProofsSoundOfDrawn`'s
    reduction gives the share game's pass, `RightFixedDrawn` the fixed words and `RightFoldedDrawn` the folded ones;
-   `ServiceBudget` on `serviceGame` at `aOf`, `bOf` (the same coins and pass) and `budget_tail` at `t = ln(1/δ_s)`
-   bound `a·F + b·W₀ ≥ Λ·ln(1/δ_s)` by `δ_s`; `floor_of_price`'s identity with FOLD-OPT at the folded words
-   (`FoldOptFolded`) prices the deficit at `a·F + b·W₀`, as `SheetDIdealFloor` reduces (I1)–(I5) to A1–A7; and
-   `T_cred > 0` clears the division.
-6. `CircuitCreditFS`: `Pouw.Guarantees.FiatShamir.FiatShamirFloor` at `m` (proofs', open: to be
+   `ServiceBudget` on `serviceGame` at `a`, `b` (the same coins and pass) and `budget_tail` at `t = ln(1/δ_s)` bound
+   `a·d_F + b·d₀ ≥ Λ·ln(1/δ_s)` by `δ_s`; `WorkAt` holds at the run's shares `d_F`, `d₀`.
+6. `CreditOfWork`: `SheetDIdealFloor`'s reduction of (I1)–(I5) to A1–A7 on the one run, then `floor_of_price`'s
+   identity with FOLD-OPT at the folded words (`FoldOptFolded`), which prices the deficit at `a·d_F + b·d₀ < r`, and
+   `T_cred > 0` (`Model.Wf`) to clear the division.
+7. `CircuitCredit`: step 5 at `a = aOf`, `b = bOf` (`≥ 0` by `stars_nonneg` and `Model.Wf`), and step 6 on each run
+   off its event.
+8. `CircuitCreditFS`: `Pouw.Guarantees.FiatShamir.FiatShamirFloor` at `m` (proofs', open: to be
    `Pouw.SecurityProofs.FiatShamir.FiatShamirFloor`), then `μ^m ≤ μ^{h·w}` (`μ ≤ 1`, `h·w ≤ m`) and
    `ServiceFloorFS`'s monotonicity in its bound.
 -/
@@ -39,6 +42,12 @@ theorem SplitRateMerged : Accounting.Guarantees.Compose.SplitRateMerged := by
   sorry
 
 theorem ServiceBudget : Accounting.Guarantees.Compose.ServiceBudget := by
+  sorry
+
+theorem CircuitWork : Accounting.Guarantees.Compose.CircuitWork := by
+  sorry
+
+theorem CreditOfWork : Accounting.Guarantees.Compose.CreditOfWork := by
   sorry
 
 theorem CircuitCredit : Accounting.Guarantees.Compose.CircuitCredit := by

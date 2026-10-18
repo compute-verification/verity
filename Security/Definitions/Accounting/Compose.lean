@@ -7,10 +7,17 @@ import Definitions.Pouw.Window
 
 The vocabulary of `Models.Accounting.Guarantees.Compose`
 (note:compute-accounting/20261018T0618Z-draft-theorem-compose-r2), restated after RT-COMPOSE
-(note:compute-accounting/20261018T0501Z-draft-rt-compose) under decisions 107 and 109–112. The compile pass `C → C′`
+(note:compute-accounting/20261018T0501Z-draft-rt-compose) under decisions 107 and 109–113. The compile pass `C → C′`
 replaces each credited unit of a declared circuit by its kind's template, with its noise drawn after its operands are
 committed, one seed a Definition call site (decisions 101 and 102). The service then draws one uniform subset of the
 window's grid-padded tiles and proves each drawn tile with the generation of its own noise.
+
+Decision 113 splits it in two layers. The logical layer, from `Declared` to `WorkAt`, is the circuit, its units, the
+templates' proved luck, the service's draw and what an accepted window establishes about the run's committed words; it
+reads no machine model. The physical layer, from `creditOf` to `certOf`, is the tensor–scalar model on a data sheet,
+which prices those words as time on a declared device.
+
+The logical layer:
 
 * `Declared`: the circuit as the IR gives it, a `Accounting.Gates.Dag` (memory accounting's form, with its wiring), and
   each gate's Definition call site; a call site is a subcircuit, the stage its seed is released at. `Declared.Wf`: every
@@ -30,12 +37,6 @@ window's grid-padded tiles and proves each drawn tile with the generation of its
 * `Declared.unitAt`, `tileWeight`, `tileStage`, `tileLuck`, `tileLuck0`: the service's `Np` grid-padded tiles
   (`verity/core/protocols/pouw/window.py`): the circuit's units first, then fillers of weight `0`, which the work
   excludes. A unit of weight `0` has luck `1`, so no premise asks anything of it.
-* `creditOf`, `epsFlat`, `epsMu`, `aOf`, `bOf`, `epsOf`: `T_cred = B(♭)/f_max`, NOTATION's `ε_♭` and `ε_μ` at the
-  circuit's floor, the time a folded and a whole share of `1` cost (`κ`, and `κ + (1 − μ_f)·N_w·φ*/B_♭`), and
-  `ε = ε_♭ + ε_μ + Λ·ln(1/δ_s)`.
-* `Fits`, `Scope`: the model is the circuit's on the data sheet; the parameters' ranges.
-* `Certificate`, `Certificate.Holds`, `certOf`: decision 111's interface, which an attribution layer consumes: work of
-  each kind in the window `[t0, t1]`, its credit, `ε`, `δ` and `γ_♭ = T(H)/T_cred` (W1: `♭` reported, not pinned).
 * `Mode`, `SplitStages`, `modeAt`, `rightAt`, `SplitStages.LuckAt`, `share`, `stageShare`: a window's stages under
   per-call-site coins, with B1's split: a unit is paid, folded (its product skipped and its committed words folded, so
   a drawn one passes when its receipt is lucky) or whole (product and fold skipped, so a drawn one passes only when its
@@ -45,6 +46,18 @@ window's grid-padded tiles and proves each drawn tile with the generation of its
   `Ξ` (W4: `DrawnLayer.SoundAt` needs them). Its share is `a·(folded work) + b·(whole work)`, and it passes when every
   drawn tile is right.
 * `SplitRate`: the per-stage condition from which a rate `Λ` bounds the window's saving per unit of detection.
+* `Scope`, `WorkAt`: the logical parameters' ranges, and the logical layer's conclusion on an accepted run: all but a
+  share `d` of the committed words fixed right and all but `d₀ ≤ d` folded, with `a·(d − d₀) + b·d₀ < r`.
+
+The physical layer:
+
+* `creditOf`, `epsFlat`, `epsMu`, `aOf`, `bOf`, `epsOf`: `T_cred = B(♭)/f_max`, NOTATION's `ε_♭` and `ε_μ` at the
+  circuit's floor, the time a folded and a whole share of `1` cost (`κ`, and `κ + (1 − μ_f)·N_w·φ*/B_♭`), and
+  `ε = ε_♭ + ε_μ + r` at the logical layer's bound `r`.
+* `Fits`, `ModelScope`: the model is the circuit's on the data sheet; the model's ranges.
+* `Certificate`, `Certificate.Holds`, `certOf`: decision 111's interface, which the physical layer's ledger consumes:
+  work of each kind in the window `[t0, t1]`, its credit, `ε`, `δ` and `γ_♭ = T(H)/T_cred` (W1: `♭` reported, not
+  pinned).
 -/
 
 namespace Accounting.Compose
@@ -123,11 +136,11 @@ def Declared.stageOf {ι : Type} (Cd : Declared ι) (v : Fin Cd.N) : ℕ := Cd.c
 
 /-- **The form of a template's proved luck**, at a skip pattern's word span:
 * `cube bind`: `¾` while the span is within the receipt's binding `bind` (`Accounting.Guarantees.TS.LuckCaseACube`,
-  `OperandLuckCube`, for degree-2 cube operands; `Pouw.Guarantees.Receipt.DuoWindowNoKernel` binds four words), and `1`
-  past it (`DuoLongRunKernel`: no receipt binds every length);
+  `OperandLuckCube`, for degree-2 cube operands; #2447's `Pouw.Guarantees.Receipt.DuoWindowNoKernel` binds four
+  words), and `1` past it (#2447's `DuoLongRunKernel`: no receipt binds every length);
 * `coins b Z`: `Z(span)·C(b, ⌊b/2⌋)/2^b` for `b` fresh bits at the fibre `Z(span)` the receipt has at that span
   (`Accounting.Guarantees.HMu.CoinPointMass`, `ReceiptLuckOfCoins`);
-* `pinned`: `0`, a value the proof pins (LUCK-FILLER's `PinnedFillLuckAt`);
+* `pinned`: `0`, a value the proof pins (`Accounting.Guarantees.FillerLuck.PinnedFillLuckAt`, not yet on main);
 * `unproved`: `1`. -/
 inductive LuckForm
   | cube (bind : ℕ)
@@ -201,84 +214,6 @@ noncomputable def tileLuck {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np 
 /-- A tile's luck when whole: its kind's `luck0` when it carries work, and `1` otherwise. -/
 noncomputable def tileLuck0 {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (t : Fin Np) : ℝ :=
   (Cd.unitAt t).elim 1 fun v => if 0 < weightOf Sc Cd v then Sc.luck0 (Cd.kindOf v) else 1
-
-/-! ## The credit, `ε` and the certificate -/
-
-section Credit
-
-variable {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
-  [Fintype X]
-
-/-- **The credit**: `T_cred = B(♭)/f_max`, the circuit's floor on the model's machine (decision 100). -/
-noncomputable def creditOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) : ℝ := Z.credit (floorOf Sc Cd)
-
-/-- `ε_♭ = ε_skip + ε_cert + ε_route` at the circuit's floor. -/
-noncomputable def epsFlat (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
-  Z.epsSkip (floorOf Sc Cd) lam + Z.epsCert (floorOf Sc Cd) lam + Z.epsRoute (floorOf Sc Cd) lam
-
-/-- `ε_μ = ε_mand` at the circuit's floor. -/
-noncomputable def epsMu (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
-  Z.epsMand (floorOf Sc Cd) lam
-
-/-- **A folded share's time**, per unit of share: `κ(π) = N_w·w*(π)/B_♭`, the words it skips. -/
-noncomputable def aOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
-  Z.kappa (floorOf Sc Cd) lam
-
-/-- **A whole share's time**, per unit of share: `κ(π) + (1 − μ_f)·N_w·φ*(π)/B_♭`, its words and its fold. -/
-noncomputable def bOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
-  aOf Sc Cd Z lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam / Z.bnd (floorOf Sc Cd)
-
-/-- **The circuit's `ε`**: `ε_♭ + ε_μ + Λ·ln(1/δ_s)`, where `Λ` bounds the window's time saved per unit of detection
-(`ServiceBudget`). -/
-noncomputable def epsOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) (Λ δs : ℝ) : ℝ :=
-  epsFlat Sc Cd Z lam + epsMu Sc Cd Z lam + Λ * Real.log (1 / δs)
-
-/-- **The model is the circuit's on sheet `Sh`**: its machine is the sheet's, and its committed words are the units'
-(`N_w = wordsOf`). -/
-def Fits {P : Type} [DecidableEq P] (Sc : Scheme K) (Cd : Declared ι) (Sh : Sheet K P)
-    (Z : Model K (SheetRow P) T L U F X) : Prop :=
-  Z.G = Sh.machine ∧ Z.Nw = (wordsOf Sc Cd : ℝ)
-
-/-- **The parameters' ranges**: the circuit's call sites well formed, `π` a certificate, the model well formed at the
-circuit's floor, `δ_s > 0`, every kind's luck at least its template's proved value, and SCALAR-ROUTE's floors at the ½
-the data sheet gives (`q, q_T ≤ ½`, `b_T ≤ 0`). -/
-def Scope (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) (δs : ℝ) : Prop :=
-  Cd.Wf ∧ IsCert lam ∧ Z.Wf (floorOf Sc Cd) ∧ 0 < δs ∧ Sc.LuckProved ∧ Z.q ≤ 1 / 2 ∧ Z.qT ≤ 1 / 2 ∧ Z.bT ≤ 0
-
-end Credit
-
-/-- **A credit certificate** (decision 111's interface): the prover system did work `units k` of each kind `k` in the
-window `[t0, t1]`, worth `credit` seconds on the declared machine, short by at most `eps` of it except with
-probability `delta`; `gamma` is honest's time over the credit, `γ_♭ = T(H)/T_cred`, which says what the floor `♭` is
-against the honest kernel (W1). An attribution layer reads it, and the window's times are its labels: what device
-time the work took, and whose, is that layer's. -/
-structure Certificate where
-  t0 : ℝ
-  t1 : ℝ
-  units : Kind → ℕ
-  credit : ℝ
-  eps : ℝ
-  delta : ℝ
-  gamma : ℝ
-
-/-- **The certificate holds for a play**: its accepted runs take less than `(1 − eps)·credit` with probability at
-most `delta`. -/
-def Certificate.Holds {Ω : Type} [Fintype Ω] {S : ℕ} {K T L U : Type} (c : Certificate) (P : Play Ω S K T L U) :
-    Prop :=
-  prob (fun x => P.accepts x ∧ (P.run x).run.time < (1 - c.eps) * c.credit) ≤ c.delta
-
-/-- **The circuit's certificate**: its units per kind, `T_cred`, `ε` at `Λ` and `δ_s`, the given `δ`, and `γ_♭` against
-honest kernel `H`. -/
-noncomputable def certOf {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
-    [Fintype F] [Fintype X] (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (H : Honest K)
-    (lam : R → ℝ) (Λ δs δ t0 t1 : ℝ) : Certificate where
-  t0 := t0
-  t1 := t1
-  units := kindCount Cd
-  credit := creditOf Sc Cd Z
-  eps := epsOf Sc Cd Z lam Λ δs
-  delta := δ
-  gamma := Z.gammaFloor H (floorOf Sc Cd)
 
 /-! ## The window: stages with B1's split, and the service's draw -/
 
@@ -354,5 +289,95 @@ def SplitRate (K : ℕ) (ρ p p0 a b wmax Λ : ℝ) : Prop :=
   ∃ ν ν0 : ℝ, 0 ≤ ν ∧ 0 ≤ ν0 ∧ ∀ WF W0 LF L0 : ℝ, 0 ≤ LF → LF ≤ WF → 0 ≤ L0 → L0 ≤ W0 → WF + W0 ≤ wmax →
     Real.exp ((a * WF + b * W0) / Λ) * (1 - ρ * ((WF - LF) + (W0 - L0))) ^ K ≤
       1 + ν * (LF - p * WF) + ν0 * (L0 - p0 * W0)
+
+/-! ## The logical layer's conclusion -/
+
+/-- **The logical parameters' ranges**: the circuit's call sites well formed, `δ_s > 0`, and every kind's luck at least
+its template's proved value. -/
+def Scope {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (δs : ℝ) : Prop := Cd.Wf ∧ 0 < δs ∧ Sc.LuckProved
+
+/-- **What an accepted window establishes about its run** (decision 113's logical layer): of its `N_w` committed words,
+all but a share `d_F + d₀` are fixed right (`fixed`) and all but `d₀` are folded (`folded`), the skipped share split
+into the folded units' `d_F` and the whole units' `d₀` (B1), with `a·d_F + b·d₀ < r`. At `a = b = 1` it says the
+units right are more than a share `1 − r` of the work. -/
+def WorkAt (Nw a b r fixed folded : ℝ) : Prop :=
+  ∃ dF d0 : ℝ, 0 ≤ dF ∧ 0 ≤ d0 ∧ (1 - (dF + d0)) * Nw ≤ fixed ∧ (1 - d0) * Nw ≤ folded ∧ a * dF + b * d0 < r
+
+/-! ## The physical layer: the tensor–scalar model on a data sheet -/
+
+section Credit
+
+variable {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
+  [Fintype X]
+
+/-- **The credit**: `T_cred = B(♭)/f_max`, the circuit's floor on the model's machine (decision 100). -/
+noncomputable def creditOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) : ℝ := Z.credit (floorOf Sc Cd)
+
+/-- `ε_♭ = ε_skip + ε_cert + ε_route` at the circuit's floor. -/
+noncomputable def epsFlat (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
+  Z.epsSkip (floorOf Sc Cd) lam + Z.epsCert (floorOf Sc Cd) lam + Z.epsRoute (floorOf Sc Cd) lam
+
+/-- `ε_μ = ε_mand` at the circuit's floor. -/
+noncomputable def epsMu (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
+  Z.epsMand (floorOf Sc Cd) lam
+
+/-- **A folded share's time**, per unit of share: `κ(π) = N_w·w*(π)/B_♭`, the words it skips. -/
+noncomputable def aOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
+  Z.kappa (floorOf Sc Cd) lam
+
+/-- **A whole share's time**, per unit of share: `κ(π) + (1 − μ_f)·N_w·φ*(π)/B_♭`, its words and its fold. -/
+noncomputable def bOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
+  aOf Sc Cd Z lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam / Z.bnd (floorOf Sc Cd)
+
+/-- **The circuit's `ε`** at the logical layer's bound `r`: `ε_♭ + ε_μ + r`. For a window, `r = Λ·ln(1/δ_s)`, where
+`Λ` bounds its time saved per unit of detection (`ServiceBudget`). -/
+noncomputable def epsOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) (r : ℝ) : ℝ :=
+  epsFlat Sc Cd Z lam + epsMu Sc Cd Z lam + r
+
+/-- **The model is the circuit's on sheet `Sh`**: its machine is the sheet's, and its committed words are the units'
+(`N_w = wordsOf`). -/
+def Fits {P : Type} [DecidableEq P] (Sc : Scheme K) (Cd : Declared ι) (Sh : Sheet K P)
+    (Z : Model K (SheetRow P) T L U F X) : Prop :=
+  Z.G = Sh.machine ∧ Z.Nw = (wordsOf Sc Cd : ℝ)
+
+/-- **The model's ranges**: `π` a certificate, the model well formed at the circuit's floor, and SCALAR-ROUTE's floors
+at the ½ the data sheet gives (`q, q_T ≤ ½`, `b_T ≤ 0`). -/
+def ModelScope (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : Prop :=
+  IsCert lam ∧ Z.Wf (floorOf Sc Cd) ∧ Z.q ≤ 1 / 2 ∧ Z.qT ≤ 1 / 2 ∧ Z.bT ≤ 0
+
+end Credit
+
+/-- **A credit certificate** (decision 111's interface, at the physical layer under decision 113): the prover system
+did work `units k` of each kind `k` in the window `[t0, t1]`, worth `credit` seconds on the declared machine, short by
+at most `eps` of it except with probability `delta`; `gamma` is honest's time over the credit, `γ_♭ = T(H)/T_cred`,
+which says what the floor `♭` is against the honest kernel (W1). The physical layer's ledger reads it, and the window's
+times are its labels: what device time the work took, and whose, is the ledger's. -/
+structure Certificate where
+  t0 : ℝ
+  t1 : ℝ
+  units : Kind → ℕ
+  credit : ℝ
+  eps : ℝ
+  delta : ℝ
+  gamma : ℝ
+
+/-- **The certificate holds for a play**: its accepted runs take less than `(1 − eps)·credit` with probability at
+most `delta`. -/
+def Certificate.Holds {Ω : Type} [Fintype Ω] {S : ℕ} {K T L U : Type} (c : Certificate) (P : Play Ω S K T L U) :
+    Prop :=
+  prob (fun x => P.accepts x ∧ (P.run x).run.time < (1 - c.eps) * c.credit) ≤ c.delta
+
+/-- **The circuit's certificate**: its units per kind, `T_cred`, `ε` at `r = Λ·ln(1/δ_s)`, the given `δ`, and `γ_♭`
+against honest kernel `H`. -/
+noncomputable def certOf {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
+    [Fintype F] [Fintype X] (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (H : Honest K)
+    (lam : R → ℝ) (Λ δs δ t0 t1 : ℝ) : Certificate where
+  t0 := t0
+  t1 := t1
+  units := kindCount Cd
+  credit := creditOf Sc Cd Z
+  eps := epsOf Sc Cd Z lam (Λ * Real.log (1 / δs))
+  delta := δ
+  gamma := Z.gammaFloor H (floorOf Sc Cd)
 
 end Accounting.Compose
