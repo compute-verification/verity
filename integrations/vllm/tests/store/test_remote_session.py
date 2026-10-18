@@ -15,6 +15,7 @@ import os
 import queue
 import random
 import threading
+from collections.abc import Callable
 
 import numpy as np
 import pytest
@@ -346,9 +347,10 @@ class Stats:
         return {}
 
 
-def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2):
+def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Callable[[], None] | None = None):
     """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 2 windows,
-    the run ``run_steps`` steps of the scripted engine, each through the session's `Lockstep`."""
+    the run ``run_steps`` steps of the scripted engine, each through the session's `Lockstep`, after ``setup()``, the
+    run's work between `begin` and its first step."""
     clock = PassClock()
     monkeypatch.setattr(remote, "StoreBackend", lambda *a, **kw: TickingBackend(clock, *a, **kw))
     lsock = wire.listen("127.0.0.1", 0)
@@ -371,6 +373,8 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2):
     th = threading.Thread(target=verify, daemon=True)
     th.start()
     lock = cs.begin()
+    if setup is not None:
+        setup()
     step, steps = engine(cs.store), []
     for k in range(run_steps):
         lock.step(lambda: steps.append(k) or step(k))
@@ -394,6 +398,18 @@ def test_the_commits_session_runs_in_lockstep_with_its_run_and_its_map_stops_wit
     assert last <= max(st.step for st in lines) <= run["audited"] - 1 and cs.store.memory_map is None
     assert mm["deferral"]["waiting"] == mm["unrecorded"]
     assert json.loads((tmp_path / "remote_session.json").read_text())["run"] == run
+
+
+def test_the_commits_session_arms_its_first_window_once_its_run_is_at_its_first_step(tmp_path, monkeypatch):
+    """The run's work between `begin` and its first step is in no window: the session is registered by then, and arms
+    its first window (the verifier's first coin follows `armed`) only once the run steps."""
+    sent, at_setup = [], []
+    send = wire.Conn.send
+    monkeypatch.setattr(wire.Conn, "send", lambda self, head, *a, **kw: sent.append(head["type"]) or send(self, head, *a, **kw))
+    rec, r, _, _ = lockstep(tmp_path, monkeypatch, 40, windows=3, setup=lambda: at_setup.extend(sent))
+    assert r["accepted"] and rec["accepted"]
+    assert "ready" in at_setup and "armed" not in at_setup and "coin" not in at_setup
+    assert sent.index("armed") < sent.index("coin") < sent.index("root")
 
 
 def test_a_run_that_ends_before_its_session_fails_the_session(tmp_path, monkeypatch):

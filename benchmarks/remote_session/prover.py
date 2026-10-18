@@ -697,6 +697,9 @@ class ProverSide:
         self.dropped, self.opened = dropped, []
         if self.defer_openings:
             self.open_enabled.clear()
+        # A serving trace whose steps are another run's waits for that run here, so the first window's clock starts
+        # at its first step and not at its setup.
+        getattr(trace, "ready", lambda: None)()
         self.conn.send({"type": "armed", "k": k})
         head, _, _ = self.expect("coin")
         t = 0

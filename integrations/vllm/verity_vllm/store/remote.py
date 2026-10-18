@@ -157,6 +157,11 @@ class Serving:
     def rekeyed(self) -> int:
         return self.map.rekeyed
 
+    def ready(self) -> None:
+        """Before the session arms its first window: an engine in lockstep with a run waits until the run is at its
+        first step (`Lockstep.arrived`)."""
+        getattr(self.backend.engine, "arrived", lambda: None)()
+
     def advance(self, window: int) -> int:
         """The engine's next step s, run against the store up to its pass (in ``window``, the store's open one), its
         completed blocks appended once it has returned (`MemoryMap.complete`): each append made as the audit's, and
@@ -504,13 +509,16 @@ class Lockstep:
     """A run's engine steps as a session's: the session's backend, on the session's thread, asks for its next engine
     step (``lockstep(s)``, the backend's ``engine``) and waits; the run, on its own thread, takes each ask in `step`,
     runs its engine step and hands back.  So the session's steps are the run's first steps, one a pass, and one thread
-    at a time touches the store.  Once the session has ended (`close`), the run's later steps are unaudited
-    (``unaudited``); a run that ends while the session still asks for steps fails the session (`finish`)."""
+    at a time touches the store.  The session arms its first window only once the run is at its first step
+    (`arrived`), so the window's clock starts at the run's step and not at the run's setup before it.  Once the session
+    has ended (`close`), the run's later steps are unaudited (``unaudited``); a run that ends while the session still
+    asks for steps fails the session (`finish`)."""
 
     def __init__(self) -> None:
         self._asks: queue.Queue = queue.Queue()
         self._done: queue.Queue = queue.Queue()
         self._ask: int | None = None
+        self._begun, self._arrived = threading.Event(), threading.Event()
         self.ended = False
         self.audited = self.unaudited = 0
 
@@ -520,7 +528,18 @@ class Lockstep:
         if why is not None:
             raise RuntimeError(why)
 
+    def arrived(self) -> None:
+        """The session's, registered and about to arm its first window: let the run begin (`begun`) and wait until it
+        is at its first step, or done."""
+        self._begun.set()
+        self._arrived.wait()
+
+    def begun(self) -> None:
+        """Wait until the session waits for the run's first step (`arrived`), or has ended."""
+        self._begun.wait()
+
     def close(self) -> None:
+        self._begun.set()
         self._asks.put(None)
 
     def ready(self) -> bool:
@@ -532,6 +551,7 @@ class Lockstep:
 
     def step(self, run: Callable[[], Any]) -> Any:
         """The run's next engine step ``run()``: the session's, if it asks for one."""
+        self._arrived.set()
         if not self.ready():
             self.unaudited += 1
             return run()
@@ -547,6 +567,7 @@ class Lockstep:
 
     def finish(self) -> None:
         """The run is done: a session that asks for another step fails."""
+        self._arrived.set()
         if self.ready():
             self._ask = None
             self._done.put(f"the run ended after {self.audited} steps, before the session's last pass")
@@ -563,8 +584,8 @@ class CommitSession:
                  scheduler, registering weight tensors up to ``weight_blocks`` blocks and the KV pool
     check        after the build: the engine core in this process, scheduling synchronous, the KV cache bf16, the pool
                  registered
-    begin        before the Commit's first instrumented run: the session on its own thread, registered and its first
-                 window's coin in before the run's first step.  Its backend is ``backend_of(session, path)``'s (the
+    begin        before the Commit's first instrumented run: the session on its own thread, registered before the run
+                 goes on, and its first window armed once the run is at its first step (`Lockstep.arrived`).  Its backend is ``backend_of(session, path)``'s (the
                  store read where the engine holds it, `in_place.InPlaceBackend.for_commit`, kv.cu at ``kv_lib``
                  encoding it in place) or, without one, a host mirror encoded by kv.cu at ``kv_lib`` (`KvDevice`) or
                  on the CPU
@@ -667,7 +688,7 @@ class CommitSession:
             self.backend = StoreBackend(self.store, self.lockstep, path=path, device=device)
         self._thread = threading.Thread(target=self._session, name="remote-session", daemon=True)
         self._thread.start()
-        self.lockstep.ready()
+        self.lockstep.begun()
         return self.lockstep
 
     def _session(self) -> None:
