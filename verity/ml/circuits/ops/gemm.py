@@ -26,7 +26,8 @@ word does not depend on the order the k steps run in:
                                       `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` unit)
 
 Each refuses a K its step doesn't divide (`checked_k`): its body is K/k whole steps, and a remainder's products would
-drop without a word.
+drop without a word. The s8 forms also refuse K >= 2^17 (`checked_s8_k`): their step clamps at D, and below that bound no
+partial sum leaves s32, so the clamp never acts and the word is the exact sum in any k order.
 
 Provenance: veritor `verity.ir/registry/b1.py` `DotBf16V2` / `GemmCoordinateV2` / `GemmV2` and the binding records
 `GEMM_AMPERE` (b1.py) / `GEMM_HOPPER` (hopper.py).  The `_v1` forms, which named the Ampere step in their bodies, were not
@@ -44,7 +45,7 @@ from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 
 __all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8", "Gemm",
            "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "ScaledMmS8",
-           "ScaledMmS8Coordinate", "checked_k"]
+           "ScaledMmS8Coordinate", "checked_k", "checked_s8_k"]
 
 _SCALE = Value(8)
 
@@ -56,6 +57,19 @@ def checked_k(S, step: int) -> int:
     if isinstance(K, bool) or not isinstance(K, int) or K % step:
         raise ValueError(f"K is a multiple of the DOT step {step}, not {K!r}: the coordinate runs K/{step} whole steps, so a "
                          f"remainder's products would drop silently. Pad K to a multiple of {step} with zero products")
+    return K
+
+
+def checked_s8_k(S) -> int:
+    """`checked_k(S, 32)` for an s8 coordinate, and ValueError for K >= 2^17. Each s8 x s8 product lies in [-2^14 + 2^7, 2^14],
+    so below 2^17 no partial sum leaves s32 and the clamp at D (`.satfinite`) never acts: the word is the exact sum in any
+    k order. Every s8 step with a Definition clamps (`BlackwellS8ImmaDot32`); the wrapping form
+    (`integer.BLACKWELL_SM120_S8_M16N8K32_WRAP`) has none, so the bound holds for every `DOT` these forms bind."""
+    K = checked_k(S, 32)
+    if K >= 1 << 17:
+        raise ValueError(f"K is below 2^17 under the clamping s8 step {S.DOT.id}, not {K}: from 2^17 products a partial sum can "
+                         f"pass 2^31 - 1, the step clamps it at D, and the word then depends on the k order. Split K into "
+                         f"pieces below 2^17 and sum their accumulators in a wider word")
     return K
 
 
@@ -124,7 +138,7 @@ def GemmCoordinateMxf4(B, S, x, wrow, sx, sw):
     return _block_scaled_coordinate(B, S, x, wrow, sx, sw, 2)
 
 
-@composite("GemmAccumulatorS8", 1, ["K", "DOT"], lambda S: ((("x", Array(S.K, S8)), ("wrow", Array(S.K, S8))), S32),
+@composite("GemmAccumulatorS8", 1, ["K", "DOT"], lambda S: ((("x", Array(checked_s8_k(S), S8)), ("wrow", Array(S.K, S8))), S32),
            conformance="exact-model-tested")
 def GemmAccumulatorS8(B, S, x, wrow):
     """The s32 accumulator of an s8 `x @ W^T` coordinate: K/32 `DOT` steps in ascending k from a zero accumulator."""
@@ -135,7 +149,7 @@ def GemmAccumulatorS8(B, S, x, wrow):
 
 
 @composite("ScaledMmS8Coordinate", 1, ["K", "DOT"],
-           lambda S: ((("x", Array(S.K, S8)), ("sx", F32), ("wrow", Array(S.K, S8)), ("sw", F32)), BF16),
+           lambda S: ((("x", Array(checked_s8_k(S), S8)), ("sx", F32), ("wrow", Array(S.K, S8)), ("sw", F32)), BF16),
            conformance="model-untested: the epilogue is benchmarks/ppl/steps.py's int8_linear, the int8 step vLLM's "
                        "int8 profile serves through torch._int_mm: Y.float() * s_a[:, None] * s_w[None, :] (two f32 "
                        "multiplies, the token's scale first), then the bf16 cast; the sum is exact for K < 2^17 whatever "
@@ -149,7 +163,7 @@ def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
 
 
 @composite("ScaledMmS8", 1, ["K", "N", "DOT"],
-           lambda S: ((("x", Array(S.K, S8)), ("sx", F32), ("w", Array(S.N, Array(S.K, S8))), ("sw", Array(S.N, F32))),
+           lambda S: ((("x", Array(checked_s8_k(S), S8)), ("sx", F32), ("w", Array(S.N, Array(S.K, S8))), ("sw", Array(S.N, F32))),
                       Array(S.N, BF16)),
            conformance=ScaledMmS8Coordinate.conformance)
 def ScaledMmS8(B, S, x, sx, w, sw):
