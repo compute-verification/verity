@@ -259,9 +259,11 @@ Its derivation index, \(2^{32} - 4\), is not the pre-coin form's \(2^{32} - 3\),
 the other's. The pre-coin form is `kv.py`'s `encode_token_layer(..., bound=True)` for \(j = \text{slot} \cdot
 \text{LAYERS} + \text{layer}\), byte for byte, and the tests pin it (`kv_vectors.json`'s "bound", and `vectors.json`'s
 `codec.bound`); no session decodes an appended block under it. The coin form is pinned by `vectors.json`'s
-`codec.coin`, blocks 0 and 20 under a fixed coin. Both forms enter the words only as the offset \(b_j\), so a device
-kernel that takes \(b_j\) as a per-block input (`paged.cu`'s offsets, #2351) encodes the coin form unchanged; `kv.cu`,
-`kv_twin.py` and vLLM's encoded store take the seed's key only (§8).
+`codec.coin`, blocks 0 and 20 under a fixed coin. `kv.cu` and `paged.cu` take the bound key as a per-block offset
+added to the tweak, \(b_j + \tau W (j - j')\) for a block written at another block's indices \(j'\) (`kv_encode_bound`,
+`paged.cu`'s offset table; gated against both pre-coin pins by `kv_bench.py` and `paged_gate.py`). Both forms enter the
+words only as that offset, so they encode the coin form unchanged, given \(b_j(c_a)\) in place of \(b_j\); `kv_twin.py`
+and vLLM's encoded store take the seed's key only (§8).
 
 Three properties of registration matter:
 
