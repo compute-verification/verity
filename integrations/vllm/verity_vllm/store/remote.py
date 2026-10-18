@@ -21,8 +21,8 @@ pass          before each pass `Serving.advance` runs the engine's next step s a
               reference of kv.cu's and paged.cu's per-block offset, or `DeviceEncoded.encode`, which hands b_j to
               kv.cu) and tells the map the encode has landed: deferred residency (remote_bandwidth's ``PROTOCOL.md``
               §4) records the blocks' writes in the line open then, the step before the first whose pass reads them
-              encoded, so a block step s completed joins the plans a step or more late (the driver keeps two passes in
-              flight, so its coin is back after step s + 1 has run: resident from s + 2) and is read as plaintext,
+              encoded, so a block step s completed joins the plans a step or more late (one pass in flight, so its
+              coin is back before step s + 1 runs: resident from s + 1) and is read as plaintext,
               uncredited, until then; then the pass reads every live block in store order; its
               ticket carries the step (`step_of`), which the root's message names, and the head of the appends so
               far, which its seed chains (`audit.chained`: unchanged in a session without appends)
@@ -132,7 +132,8 @@ class Serving:
     memory map's appends as the audit's (`appends`, each an `audit.Append`, and `appended`, their indices), made as
     each step's blocks complete, its closed lines' releases (`released`), and `plan`, every block the record holds
     live, registered and written: an appended block joins it once its write is recorded, after its encode has landed
-    (deferred residency; `encoded`)."""
+    (deferred residency; `encoded`).  A step that runs past a boundary ``moves`` its pass into the next window
+    (`ProverSide`), so the map re-keys a window ahead (`MemoryMap.ahead`)."""
 
     def __init__(self, backend: StoreBackend, registration: audit.Registration, lifetime: int) -> None:
         self.backend, self.store, self.lifetime = backend, backend.store, lifetime
@@ -140,6 +141,8 @@ class Serving:
         self.map = self.store.record_memory_map(
             backend.path, registration.digest, lifetime, lambda change: self._events.append(("line", change)),
             lambda first, slots, digests, payloads: self._events.append(("append", first, slots, digests, payloads)))
+        self.moves = True
+        self.map.ahead = 1
         self.step, self.steps, self.first = -1, 0, None
         self.live = np.ones(registration.blocks, bool)
         self._plan: rb.Plan | None = None

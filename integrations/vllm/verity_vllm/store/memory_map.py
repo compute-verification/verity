@@ -118,7 +118,9 @@ class MemoryMap:
     memory-map/v1 before it is written.  ``on_append(first, slots, digests, payloads)`` gets each append as it is made (the
     remote session's, `verity_vllm.store.remote`, which sends it and calls `encoded` once the device has encoded it
     under its coin); without it, each append's encode lands at once, as when the coin is back before the next step's
-    reads.  ``on_line(change)``, if given, gets each line's `Change` as it closes."""
+    reads.  ``on_line(change)``, if given, gets each line's `Change` as it closes.  ``ahead`` is how many windows past the
+    open one the pass after a line may fall in (1 for a serving session whose step can run past a boundary, its pass then
+    the next window's first): a line re-keys for that window, so no block it leaves is stale there."""
 
     def __init__(self, store: Any, header: Header, path: str | Path | None = None, lifetime: int = audit.LIFETIME,
                  on_line: Callable[[Change], None] | None = None,
@@ -127,6 +129,7 @@ class MemoryMap:
             raise ValueError("the lifetime cap is a positive number of windows")
         self.store, self.header, self.path = store, header, None if path is None else Path(path)
         self.lifetime, self.replay = lifetime, Replay(header)
+        self.ahead = 0
         self.last = -1
         self.joined: dict[int, int] = {}
         self.rekeyed = 0
@@ -245,7 +248,7 @@ class MemoryMap:
         self.complete()
         s, freed, _, _ = self._open
         self._open = None
-        w = self.window()
+        w = self.window() + self.ahead
         rekey = sorted({x for x, a in self.joined.items() if a <= w - self.lifetime} - freed)
         if rekey:
             freed.update(rekey)

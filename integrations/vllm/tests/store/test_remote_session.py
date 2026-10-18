@@ -218,11 +218,11 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     lines = list(lines)
     assert head.registration.hex() == pub["registration"] and head.blocks == 18
     # page 0's first request, written at steps 0 and 1 and read at 2, is freed before step 3's write.  Its K0 V0
-    # (blocks 1, 3), resident from step 2, are freed at step 2, the step whose forward read them last; its K1 V1 (2, 4),
-    # completed at step 1, are appended, and their encode lands while step 2 runs, after the free: their write is
-    # recorded at step 2 all the same (their indices are the session's), and their free a step later
+    # (blocks 1, 3), written at step 0, and its K1 V1 (2, 4), completed at step 1, appended and encoded before step 2
+    # runs (one pass in flight), so written at step 1, are all freed at step 2, the step whose forward read them last
     by = {x.step: x for x in lines}
-    assert {1, 3} <= set(by[2].freed) and {2, 4} <= {w.slot for w in by[2].written} and {2, 4} <= set(by[3].freed)
+    assert {1, 3} <= {w.slot for w in by[0].written} and {2, 4} <= {w.slot for w in by[1].written}
+    assert {1, 2, 3, 4} <= set(by[2].freed)
     # page 3, written over steps 0 and 1 and never freed, is written again whole in one step (re-keyed) once two
     # windows old, its old indices freed in the line before; its first writes were split, so every line that writes all
     # four of its blocks is a re-key
@@ -236,11 +236,10 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
 
 def test_a_completed_block_is_uncredited_until_its_encode_lands_and_resident_from_the_step_after():
     """Deferred residency end to end: each step's completed blocks go out as one append once the step has run, and
-    their coin comes back while the next step runs (the driver keeps two passes in flight), when the device encodes
-    them.  The map writes them at the step whose line is open then, so the passes up to it, the one after the
-    completing step among them, hold none of them (serving reads them as plaintext, uncredited), and the pass after it
-    holds them all, encoded under their own coin; most land the step after their append, one more at a window's
-    boundary, where a pass is discarded."""
+    their coin comes back before the next step runs (one pass in flight), when the device encodes them.  The map
+    writes them at the step whose line is open then, the completing step's, so the passes up to it hold none of them
+    (serving reads them as plaintext, uncredited), and the pass after it holds them all, encoded under their own
+    coin."""
     r, p, s, backend = run("serve")
     assert r["accepted"] and p["accepted"]
     trace, plans = backend.trace, dict(backend.plans)
@@ -248,10 +247,10 @@ def test_a_completed_block_is_uncredited_until_its_encode_lands_and_resident_fro
     _, lines = memory_map.parse(s.memory_map.text().splitlines())
     wrote = {w.index: x.step for x in lines for w in x.written}
     late = trace.deferral()["steps_late"]
-    assert set(late) <= {1, 2} and late[1] > late.get(2, 0) and sum(late.values()) == len(trace.landed) > 4
+    assert set(late) == {0} and sum(late.values()) == len(trace.landed) > 4
     for a, made, landed in zip(trace.appends, trace.made, trace.landed):
         idx = set(range(a.first, a.first + a.count))
-        assert landed > made and {wrote[j] for j in idx} == {landed}
+        assert landed == made and {wrote[j] for j in idx} == {landed}
         assert not any(idx & set(plan) for st, plan in plans.items() if st <= landed)
         assert landed + 1 not in plans or idx <= set(plans[landed + 1])
         assert all(backend.audit.blocks[j] is not None for j in idx)
@@ -389,7 +388,11 @@ def test_the_commits_session_runs_in_lockstep_with_its_run_and_its_map_stops_wit
     assert mm["first_step"] == 0 and mm["steps"] == run["audited"] and mm["agrees"] and mm["rekeyed"] > 0
     assert 0 < run["audited"] < 40 and run["audited"] + run["unaudited"] == 40
     head, lines = memory_map.parse((tmp_path / "memory_map.jsonl").read_text().splitlines(keepends=True))
-    assert max(st.step for st in lines) == run["audited"] - 1 and cs.store.memory_map is None
+    # the last audited step may run past the close: its pass is dropped and its append never encoded, so its line,
+    # with nothing freed or written, is not written
+    last = max(x for w in r["record"]["profile"]["windows"] for x in w["steps"])
+    assert last <= max(st.step for st in lines) <= run["audited"] - 1 and cs.store.memory_map is None
+    assert mm["deferral"]["waiting"] == mm["unrecorded"]
     assert json.loads((tmp_path / "remote_session.json").read_text())["run"] == run
 
 
