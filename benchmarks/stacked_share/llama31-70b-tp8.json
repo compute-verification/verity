@@ -1,0 +1,26 @@
+{
+ "label": "Llama-3.1-70B TP8, modeled from the 8B Program's callees at one rank's statics",
+ "layers": [32, 80],
+ "ranks": 8,
+ "once": ["TokenSelect_v1"],
+ "statics": {
+  "Int8ScaledMm_v1{K=4096,N=6144}": {"K": 8192, "N": 1280},
+  "Int8ScaledMm_v1{K=4096,N=4096}": {"K": 1024, "N": 8192},
+  "Int8ScaledMm_v1{K=4096,N=28672}": {"K": 8192, "N": 7168},
+  "Int8ScaledMm_v1{K=14336,N=4096}": {"K": 3584, "N": 8192},
+  "Int8Linear_v1{K=4096,N=6144}": {"K": 8192, "N": 1280},
+  "Int8Linear_v1{K=4096,N=4096}": {"K": 1024, "N": 8192},
+  "Int8Linear_v1{K=4096,N=28672}": {"K": 8192, "N": 7168},
+  "Int8Linear_v1{K=14336,N=4096}": {"K": 3584, "N": 8192},
+  "RMSNormFusedCuda_v2": {"N": 8192},
+  "RMSNormTriton_v1": {"N": 8192},
+  "RoPE_v1{NHEADS=32,D=128}": {"NHEADS": 8},
+  "RoPE_v1{NHEADS=8,D=128}": {"NHEADS": 1},
+  "SiluMul_v2": {"I": 3584},
+  "Embedding_v1": {"V": 16032, "H": 8192},
+  "Gemm_v2": {"K": 8192, "N": 16032}
+ },
+ "attention": {"H": 8, "G": 1},
+ "extra": {"token": {"roundings": 9232384},
+           "why": "the TP all-reduces a token row: 2 a layer and the vocab-parallel embedding's, 161 x 8192 elements, 7 adds an element"}
+}
