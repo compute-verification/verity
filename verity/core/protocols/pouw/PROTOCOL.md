@@ -1352,8 +1352,7 @@ is one site, so one seed covers the call, not one head.
 GRIND (decision 122) sets the attention kinds' cover in (head, request) pairs (`Scheme.pair_cover`, `Compiled.pair_cover`):
 385 for QKᵀ (`QK_PAIRS`, on `DotBf16_v1 .. v3`) and 791 for P·V (`PV_PAIRS`, for the kind ATTN-NOISE plugs), which hold
 the decode grind term under 0.1% at T = 2^128. At one seed a call that is 8B's decode at batch ≥ 13 for QKᵀ and ≥ 25 for
-P·V. Below it the pass refuses the seed group (`cover`): its noise is the live per-round coin of decision 36, not a seed's
-("Live epochs").
+P·V. Below it the pass refuses the seed group (`cover`): its noise is the live per-round coin of decision 36, not a seed's.
 A pair is a connected component of the group's dots of the kind, its rows joined through the dots they share: at decode
 one (head, request), a query and its keys. Query heads that read one KV head's keys (GQA) are one pair by this count, so
 for a GQA model it refuses more than GRIND's per-query-head table does (8B: batch ≥ 49 for QKᵀ). A bf16 linear on
