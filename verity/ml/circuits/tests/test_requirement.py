@@ -218,6 +218,23 @@ def test_an_execution_that_does_not_follow_its_wiring_is_refused(run):
             R.Requirement.of(bad)
 
 
+def test_a_placement_credits_the_gates_the_execution_computes(run):
+    """The run's input, the token, is an input gate wherever it is placed: all on one device over the whole run, the
+    credits at each value's width are the computed gates', 576 bits, not 608 with the token's. The wiring is topological,
+    as `RequirementHelp` needs. A placement that leaves a value without a device, or a gate without a tick at its step,
+    is refused, not read as device 0 or tick 0."""
+    program, _, schedule, req = run
+    ex = R.execution(program, schedule, _inputs())
+    assert ex.topological() and ex.inputs == {0} and ex.computed == ex.ran - ex.registered - {0}
+    one, price, T = R.Placement({v: 0 for v in ex.ran}, {0: list(range(req.steps + 1))}), dict(ex.width), req.steps
+    assert one.region(ex, {0}, 0, T) == one.step_region(ex, {0}, 0, T) == ex.computed
+    assert one.credits(ex, price, {0}, (), 0, T) == 576 and one.ingress(ex, {0}, 0, T) == 0
+    for bad in (R.Placement({v: 0 for v in ex.ran - {0}}, one.ticks), R.Placement(one.leaf, {0: [0]})):
+        assert not bad.places(ex)
+        with pytest.raises(ValueError, match="doesn't place"):
+            bad.credits(ex, price, {0}, (), 0, T)
+
+
 def _starts(program: Program, ends: list[int]) -> list[int]:
     """A census's step ends (root nodes) as `Schedule.by_calls`'s starts (Calls)."""
     return [0] + [e - sum(1 for nd in program.root.body.nodes if is_input(nd.fn)) for e in ends[:-1]]

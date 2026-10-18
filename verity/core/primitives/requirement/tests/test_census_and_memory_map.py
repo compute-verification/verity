@@ -85,7 +85,8 @@ def census_execution(c: dict, schedule: R.Schedule, upper: bool) -> R.Execution:
         width[g], step[g] = 0, s
         ops[g] = tuple(sorted(reads.get(k, set()) | selects.get(k, set())))
         uses[g] = frozenset(reads.get(k, set()) | (selects.get(k, set()) if upper else set()))
-    return R.Execution(width, registered, step, ops, uses, {})
+    inputs = frozenset(x for x, j in enumerate(vals["producer"]) if j < I and x not in registered and x in step)
+    return R.Execution(width, registered, step, ops, uses, {}, inputs=inputs)
 
 
 def census_case(c: dict, schedule: R.Schedule, block_bits: int, upper: bool) -> dict:
