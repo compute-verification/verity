@@ -155,7 +155,9 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   frame's own configuration from its draws on the server's tape (`LeanRelease.cfg`, `Cfg.ofDraws`: `cfg_pads`,
   `cfg_root`). Its coin stops are the frame's, all four of them (a zerocheck outer coin `1`, a mask slot short of full
   rank, level 0's `ρ` dependent, the inner proof's `β = 0`: `answer_rho_dependent`, `answer_beta_zero`), and where the
-  frame refuses the coins the release is the stop (`LeanRelease.release_of_refusesCoins`). Any other stop comes at its
+  frame refuses the coins the release is the stop (`LeanRelease.release_of_refusesCoins`). Its pass decision is the
+  frame's too (`Flock.Firewall.Frame.check`: `LeanRelease.pass`, `check_release`), the device round against the
+  scheduled round in its place; Rust's own checks only fail a round more (`LeanRelease.cross`). Any other stop comes at its
   `Finish`, with its scheduled rounds in a failed device's place
   (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`).
   Its `RefD` is D8 (a)'s `FirewallComputes` plus the item-stream refinement `LeanRelease.ItemsRefine` (`Reports`,
