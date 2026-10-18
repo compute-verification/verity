@@ -1149,6 +1149,26 @@
     "grade": "measured-small",
     "bears_on": "A data-efficiency gain at a large compute cost: per-FLOP m_A well below 1 at tiny scale.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "sarkar-2025-eggroll/9",
+    "claim": "A critical noise scaling makes the ES update linearize to the first-order derivative.",
+    "quote": "showing there exists a critical noise scaling $\\sigma_{d}=o(d^{-1/2})$ under which the update provably linearises and converges to the first-order derivative for a broad class of (possibly discontinuous) objectives.",
+    "location": "Introduction",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "A bias result only: it says nothing about the variance or population needed, so the cost law linear in d stands.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "sarkar-2025-eggroll/10",
+    "claim": "Fixed low-rank perturbations, rank 1 included, converge to the true ES gradient as dimension grows.",
+    "quote": "prove that even fixed low-rank updates (including rank-1) converge to the true ES gradient as dimension grows, despite heavier-tailed perturbations.",
+    "location": "Introduction",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Low-rank perturbations are unbiased in the limit; their variance still grows with dimension.",
+    "from_review": "strategy-gradient-free"
    }
   ]
  },
