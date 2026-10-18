@@ -643,9 +643,10 @@ theorem vstarPartsStaging_sparse_of_links {H : Msg → Msg} {D : Deploy Coin} {I
     (hC : ∀ s, PartLinks H D decode L Form.Sparse shows chk s)
     (hO : ∀ s, PartOpens H D DO L Form.Sparse shows opening cmt s)
     (hL : ∀ s, PartLogs H D DO L Form.Sparse shows logs s) (hV : VstarShows D I L Form.Sparse decC shows cmt)
-    (hD : Decomp H D I.V Form.Sparse chk) (hLD : LogDecomp H D I.V Form.Sparse logs) (hH : Held D I L Form.Sparse) :
+    (hD : Decomp H D I.V Form.Sparse chk) {pub : Msg → List (Msg × Msg)}
+    (hLD : LogDecompPub H D I.V Form.Sparse logs pub) (hPR : PubReg H D Form.Sparse pub) (hH : Held D I L Form.Sparse) :
     VStarPartsStaging D I DO H L opening decC Form.Sparse :=
-  ⟨shows, chk, cmt, logs, fun s => partChecks_of_links hDO (hC s), hO, hL, hV, hD, hLD, hH⟩
+  ⟨shows, chk, cmt, logs, pub, fun s => partChecks_of_links hDO (hC s), hO, hL, hV, hD, hLD, hPR, hH⟩
 
 /-- **V\*'s parts at the sparse shape, from the parts' links**: `VStarParts` at `Form.Sparse` with every part's
 `PartChecks` from its links. -/
@@ -658,9 +659,10 @@ theorem vstarParts_sparse_of_links {H : Msg → Msg} {D : Deploy Coin} {I : Inne
     (hC : ∀ s, PartLinks H D decode L Form.Sparse shows chk s)
     (hO : ∀ s, PartOpens H D DO L Form.Sparse shows opening cmt s)
     (hL : ∀ s, PartLogs H D DO L Form.Sparse shows logs s) (hS : Staged H D I L Form.Sparse shows cmt)
-    (hD : Decomp H D I.V Form.Sparse chk) (hLD : LogDecomp H D I.V Form.Sparse logs) (hH : Held D I L Form.Sparse) :
+    (hD : Decomp H D I.V Form.Sparse chk) {pub : Msg → List (Msg × Msg)}
+    (hLD : LogDecompPub H D I.V Form.Sparse logs pub) (hPR : PubReg H D Form.Sparse pub) (hH : Held D I L Form.Sparse) :
     VStarParts H D I DO L opening Form.Sparse :=
-  ⟨shows, chk, cmt, logs, fun s => partChecks_of_links hDO (hC s), hO, hL, hS, hD, hLD, hH⟩
+  ⟨shows, chk, cmt, logs, pub, fun s => partChecks_of_links hDO (hC s), hO, hL, hS, hD, hLD, hPR, hH⟩
 
 omit [Inhabited Coin] in
 /-- **Part `s`'s calls at the sparse shape**: its log links (`LogLinks`, a rec-open part's climb), or an inner check
@@ -681,7 +683,8 @@ theorem partLogs_sparse {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy C
 
 /-- **V\*'s parts at the sparse shape**: every part's links (`PartLinks`) and calls (`SparseLogs`), each part opening
 what it holds through registered climbs (`HeldOpens`, `RegClimbs`; `partOpens_of_climbs`), with the staging, the inner
-verifier's checks and calls, and the held rounds (`Staged`, `Decomp`, `LogDecomp`, `Held`). -/
+verifier's checks and calls, apart from public calls the V* setup evaluates, and the held rounds (`Staged`, `Decomp`,
+`LogDecompPub`, `PubReg`, `Held`). -/
 theorem vstarParts_sparse {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {L : Layout} {opening : Opening} {decode : Msg → Option Flock.Readable.Read}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
@@ -690,11 +693,11 @@ theorem vstarParts_sparse {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     (hC : ∀ s, PartLinks H D decode L Form.Sparse shows chk s) (hL : ∀ s, SparseLogs H D decode L shows logs s)
     (hO : ∀ s, HeldOpens D DO L Form.Sparse shows opening dig s)
     (hRC : ∀ s, RegClimbs H D DO L Form.Sparse shows cmt dig s)
-    (hS : Staged H D I L Form.Sparse shows cmt) (hD : Decomp H D I.V Form.Sparse chk)
-    (hLD : LogDecomp H D I.V Form.Sparse logs) (hH : Held D I L Form.Sparse) :
+    (hS : Staged H D I L Form.Sparse shows cmt) (hD : Decomp H D I.V Form.Sparse chk) {pub : Msg → List (Msg × Msg)}
+    (hLD : LogDecompPub H D I.V Form.Sparse logs pub) (hPR : PubReg H D Form.Sparse pub) (hH : Held D I L Form.Sparse) :
     VStarParts H D I DO L opening Form.Sparse :=
   vstarParts_sparse_of_links hDO hC (fun s => partOpens_of_climbs (hO s) (hRC s))
-    (fun s => partLogs_sparse hDO (hL s)) hS hD hLD hH
+    (fun s => partLogs_sparse hDO (hL s)) hS hD hLD hPR hH
 
 end Sparse
 

@@ -52,8 +52,8 @@ theorem vstarAccepts_sparse_deployZkRec {H : Msg → Msg} {IV : Verifier FlockDe
   vstarAccepts_sparse_deployRec hb rfl hC hO hS hD
 
 /-- **V\*'s parts at the sparse shape, at the compiled verifier and its outer record** `deployZkRec relation`: the
-parts' links and calls, their openings through registered climbs, the staging, the decompositions and the held rounds
-give `VStarParts` at `Form.Sparse` (`vstarParts_sparse`, the parser by definition), which is
+parts' links and calls, their openings through registered climbs, the staging, the decompositions (the inner verifier's
+calls the parts' or public ones the V* setup evaluates) and the held rounds give `VStarParts` at `Form.Sparse` (`vstarParts_sparse`, the parser by definition), which is
 `RecDeploy.ksA_deployed_parts`' sparse premise at `relO := relation`. -/
 theorem vstarParts_sparse_deployZkRec {H : Msg → Msg} {IV : Verifier FlockDeploy.Coin} {ivScope : Msg → Bool}
     {b : RecDeploy.Brings} {I : Inner FlockDeploy.Coin W} {L : Layout} {opening : Opening}
@@ -68,10 +68,11 @@ theorem vstarParts_sparse_deployZkRec {H : Msg → Msg} {IV : Verifier FlockDepl
       Form.Sparse shows cmt dig s)
     (hS : Staged H (RecDeploy.deployRec IV ivScope b) I L Form.Sparse shows cmt)
     (hD : Decomp H (RecDeploy.deployRec IV ivScope b) I.V Form.Sparse chk)
-    (hLD : LogDecomp H (RecDeploy.deployRec IV ivScope b) I.V Form.Sparse logs)
+    {pub : Msg → List (Msg × Msg)} (hLD : LogDecompPub H (RecDeploy.deployRec IV ivScope b) I.V Form.Sparse logs pub)
+    (hPR : PubReg H (RecDeploy.deployRec IV ivScope b) Form.Sparse pub)
     (hH : Held (RecDeploy.deployRec IV ivScope b) I L Form.Sparse) :
     VStarParts H (RecDeploy.deployRec IV ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
       Form.Sparse :=
-  vstarParts_sparse rfl hC hL hO hRC hS hD hLD hH
+  vstarParts_sparse rfl hC hL hO hRC hS hD hLD hPR hH
 
 end Claims.Recursion.VStar

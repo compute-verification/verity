@@ -137,7 +137,7 @@ theorem callsLogCollR {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.I
     rw [run_replay_seen, coins_getD r (show I.V.k (xIOf x) ≤ I.V.k (xIOf x) + kS x by omega)]
     rfl
   rw [hrun]
-  exact hL x _ _ ws hl hc ho (hT x _ _ ws hl hc ho)
+  exact (hL x _ _ ws hl hc ho (hT x _ _ ws hl hc ho)).imp_left fun h e he => Or.inl (h e he)
 
 /-- **`VStar.CallsOpenPlayed` at `deployRec`** from the readers' facts: the inner view is the inner verifier's run of
 the readers' messages, which plays at most the inner rounds (`run_length_le`). -/
