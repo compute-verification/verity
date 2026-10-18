@@ -27,7 +27,7 @@ from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import call_args, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_sequences_of
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _positions, _rows, _static_float, _table, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity_vllm.program.kernels.flashmla_twin import num_sm_parts, request_splits, sched_meta
@@ -162,6 +162,26 @@ def _stack(rows: list[Coll], n: int, w: int) -> Coll:
     return Coll(Array(len(rows), Array(n, Value(w))), concat([r.refs for r in rows]))
 
 
+def _launch_decodes(node, mp, layer: str, p: int, own: tuple[int, int], window: int, ratio: int) -> tuple[list[tuple[int, int]], int]:
+    """The (window, compressed) lengths of every decode of the launch the decode at position p runs in, in the launch's order, and
+    its index among them.  A decode at position q of a sequence from position 0 reads min(q + 1, window) window rows and
+    (q + 1) / ratio compressed rows; without a declared batch the decode is alone."""
+    seqs = launch_sequences_of(node)
+    if seqs is None:
+        return [own], 0
+    decodes = [q for rows, q in seqs if rows == 1]
+    if decodes.count(p) != 1:
+        refuse("numerics_unregistered", node, mp, f"{layer!r}: the declared launch batch holds {decodes.count(p)} decodes at position "
+                                                  f"{p}, not one: FlashMLA splits a decode by its index among the launch's decodes, "
+                                                  f"which only its position names")
+    lens = [(min(q + 1, window), (q + 1) // ratio if ratio > 1 else 0) for q in decodes]
+    i = decodes.index(p)
+    if lens[i] != own:
+        refuse("shape", node, mp, f"{layer!r}: the decode at position {p} reads {own} (window, compressed) rows, not the {lens[i]} of a "
+                                  f"sequence from position 0, as the launch's other decodes are")
+    return lens, i
+
+
 class Dsv4SparseAttnRule(StateRule):
     """`vllm_iface.dsv4_sparse_attn` (`forward_mqa`): the layer's window rows (the insert's NoPE, scale and RoPE by position), its
     compressor's state rows and its compressed rows are implicit cache state keyed by `layer_name`, made explicit as histories.  A
@@ -176,8 +196,10 @@ class Dsv4SparseAttnRule(StateRule):
       rows the history holds by then, in order (the indexer's short path selects every compressed row in order,
       `_fill_short_context_topk_indices`; ratio 128's rows are `_build_c128a_topk_metadata_kernel`'s, the same).
     * A call of one token is a decode (the metadata builders' decode threshold 1): `FlashMlaDecode_v1` over its window rows padded
-      to a multiple of BN, then its compressed rows padded likewise (`get_cur_req_info`'s kernel order), at the splits of FlashMLA's
-      planner for the one request (`flashmla_twin.sched_meta` at the padded heads' `num_sm_parts`).
+      to a multiple of BN, then its compressed rows padded likewise (`get_cur_req_info`'s kernel order), at the splits FlashMLA's
+      planner gives it among the launch's decodes (`flashmla_twin.sched_meta` over each decode's lengths in the declared batch's
+      order, `launch_sequences_of`, at the padded heads' `num_sm_parts`; alone without a declared batch).  The decode is the
+      launch's one at its position, and two at one position are refused.
     * A call of more is a prefill: each row it reads gathered once (`FlashMlaGatherRow_v1`, the one chunk's workspace), and token p
       `FlashMlaPrefill_v1` over its compressed rows, then its window rows (`combine_topk_swa_indices`' order), padded to its NP
       pairs of BN-row blocks.
@@ -307,9 +329,11 @@ class Dsv4SparseAttnRule(StateRule):
             rows = win + win[:1] * (NW - swa) + comp + comp[:1] * (NX - nc)
             idx = [i32(0)] * swa + [i32(-1)] * (NW - swa) + [i32(0)] * nc + [i32(-1)] * (NX - nc)
             # the lengths given, extra_topk only says whether the layer has an extra cache
-            metas, ns = sched_meta([swa], [nc] if ratio > 1 else None, topk=window, extra_topk=int(ratio > 1),
-                                   parts=num_sm_parts(NHP, 1, int(active_target_profile().num_sms)), block_size_n=BN)
-            SPLITS = request_splits(metas, ns, 0, (NW + NX) // BN)
+            lens, req = _launch_decodes(node, mp, layer, p, (swa, nc), window, ratio)
+            metas, ns = sched_meta([w for w, _ in lens], [x for _, x in lens] if ratio > 1 else None, topk=window,
+                                   extra_topk=int(ratio > 1), parts=num_sm_parts(NHP, 1, int(active_target_profile().num_sms)),
+                                   block_size_n=BN)
+            SPLITS = request_splits(metas, ns, req, (NW + NX) // BN)
             fn = ctx.kind("flashmla_decode", node, NH=NH, SPLITS=SPLITS, NW=NW, DN=DN, DR=DR, QT=QT, BN=BN, DOT=DOT, SCALE=scale)
             lens = [i32(swa)] + ([i32(nc)] if NX else [])
             outs = [ctx.call(fn, q[0][:NH], _stack([r[0] for r in rows], DN, 8), _stack([r[1] for r in rows], DN // QT, 8),

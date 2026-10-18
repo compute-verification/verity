@@ -140,6 +140,15 @@ def launch_tokens_of(node, own: int) -> int:
     return _launch_of(node, lambda step, sampled: T.launch_tokens(own, step, active_launch_context(), sampled=sampled))
 
 
+def launch_sequences_of(node) -> list[tuple[int, int]] | None:
+    """The sequences of the launch a node runs in, (rows, start) in the declared batch's order (`targets.launch_sequences` at the
+    node's `launch_region` tag), for a kernel choice that reads each sequence; None without a declared batch."""
+    if not launch_batch_declared():
+        return None
+    from verity_vllm.program.frontend import targets as T
+    return _launch_of(node, lambda step, _sampled: T.launch_sequences(step, active_launch_context()))
+
+
 def launch_keys_of(node, own: list[int]) -> list[int]:
     """Every query row's key count in the launch whose rows of key counts `own` a node computes (`targets.launch_keys`); `own`
     without a declared batch.  A batch that does not hold `own` is refused."""

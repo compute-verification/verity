@@ -17,8 +17,8 @@ and the Match would show it.
 
 Without batch invariance (the row's `engine.target.batch_invariant` false, B >= 2) every token-count-dependent kernel choice reads the whole
 launch, so the context is the BATCH form: per request step s, every sequence engine step a_r + s schedules as [rows_q, start_q], start_q
-the position of its first query row (0 for its prefill, L_q + e - a_q - 1 on a decode step); `frontend.targets.parse_launch_context`
-reads it as {"batch": [...]}.
+the position of its first query row (0 for its prefill, L_q + e - a_q - 1 on a decode step), in admission order (a decode's index
+among the launch's decodes, which FlashMLA's planner reads); `frontend.targets.parse_launch_context` reads it as {"batch": [...]}.
 
     verity-vllm launch-context <workload.json> [<LP> <T>]      -> the shape's JSON (or 'conflict'); no shape: all shapes
 """
@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm.config import option
+from verity_vllm.engine.arrivals import admission_order
 
 
 def rows_at(req: dict[str, Any], e: int) -> int:
@@ -57,8 +58,11 @@ def request_launch_context(reqs: list[dict[str, Any]], r: dict[str, Any]) -> lis
 
 
 def request_launch_batch(reqs: list[dict[str, Any]], r: dict[str, Any]) -> list[list[list[int]]]:
-    """Per request step s of r: every sequence engine step arrive_step(r) + s schedules, as [rows, start], in request order."""
+    """Per request step s of r: every sequence engine step arrive_step(r) + s schedules, as [rows, start], in admission order
+    (`arrivals.admission_order`).  Without preemption the scheduler keeps its running requests in that order, and vLLM's model
+    runner keeps it for the decodes it puts first (`sort_batch_req_ids`), so a decode's index in the launch is its index here."""
     a, c = int(r["arrive_step"]), int(r["max_tokens"])
+    reqs = admission_order(reqs)
     return [[[rows_at(q, e), start_at(q, e)] for q in reqs if rows_at(q, e)] for e in range(a, a + c)]
 
 

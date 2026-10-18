@@ -89,6 +89,13 @@ def test_batch_dispatch_is_a_multi_request_row_without_batch_invariance():
     assert LC.shape_contexts(_wl(reqs[:1], batch_invariant=False)) == {(64, 2): [64, 1, 1]}
 
 
+def test_the_batch_lists_a_step_in_admission_order():
+    """The order the scheduler keeps its running requests in and vLLM's runner its decodes (`vllm_dsv4._launch_decodes` reads a
+    decode's index there): by arrival, ties in the workload's order, whatever order the workload lists them in."""
+    reqs = LC._requests(_wl([(20, 4, 2), (10, 4, 0), (30, 4, 2)], batch_invariant=False))
+    assert LC.request_launch_batch(reqs, reqs[0])[0] == [[1, 11], [20, 0], [30, 0]]
+
+
 def test_glm53_b8_every_request_sits_in_its_declared_batch():
     w = json.load(open(GLM_B8))
     assert LC.batch_dispatch(w)

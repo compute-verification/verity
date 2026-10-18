@@ -408,8 +408,9 @@ def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> 
     return int(v), "declared launch context"
 
 
-def _launch_step(step: int, launch: dict[str, Any] | None) -> list[tuple[int, int]] | None:
-    """The sequences the declared batch schedules at a request step, or None without a declared batch (a batch of one)."""
+def launch_sequences(step: int, launch: dict[str, Any] | None) -> list[tuple[int, int]] | None:
+    """The sequences the declared batch schedules at a request step, (rows, start) in its order, or None without a declared batch (a
+    batch of one)."""
     if launch and launch.get("conflict"):
         raise LaunchContextConflict("the launch context of this request shape is not one value ('conflict'): requests of the same (LP, T) are "
                                     "co-scheduled with different batches; give each request its own shape")
@@ -427,7 +428,7 @@ def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sa
     sequence's query rows), or, for the rows after the logits selection (`sampled`), its sequence count (one logits row per scheduled
     sequence: without chunked prefill every one samples).  Without a declared batch, `own_rows` (a batch of one).  A count below
     `own_rows` is refused: the launch contains the request."""
-    own, seqs = int(own_rows), _launch_step(step, launch)
+    own, seqs = int(own_rows), launch_sequences(step, launch)
     if seqs is None:
         return own
     n = len(seqs) if sampled else sum(r for r, _ in seqs)
@@ -439,7 +440,7 @@ def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sa
 
 def launch_keys(step: int, launch: dict[str, Any] | None) -> list[int] | None:
     """Every query row's key count in the declared batch's step (a row at position p sees p + 1 keys), or None without a declared batch."""
-    seqs = _launch_step(step, launch)
+    seqs = launch_sequences(step, launch)
     return None if seqs is None else [p + i + 1 for n, p in seqs for i in range(n)]
 
 
@@ -630,4 +631,4 @@ __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "tar
            "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_spec", "rmsnorm_value_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
-           "LaunchContextConflict", "LaunchContextInvalid", "parse_launch_context", "launch_seqlen_q", "launch_tokens", "launch_keys"]
+           "LaunchContextConflict", "LaunchContextInvalid", "parse_launch_context", "launch_seqlen_q", "launch_sequences", "launch_tokens", "launch_keys"]

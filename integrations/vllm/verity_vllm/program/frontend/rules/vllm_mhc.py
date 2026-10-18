@@ -13,7 +13,9 @@
     hc_head_fused_kernel_tilelang(streams [T, HC, H], fn, scale, base, rms_eps, hc_eps) -> [T, H], per token `hc_head{HC,H,TH,EPS,HC_EPS}`
 
 The split counts are the dispatch's own, whatever `n_splits` / `tile_n` the call passes: the FMA path's 4 (8 below 8 tokens at
-H <= 4096), DeepGEMM's `compute_num_split(64, K, cdiv(T, 64))` on the target's SMs (`kernels.mhc_twin.tf32_num_split`).  The
+H <= 4096), DeepGEMM's `compute_num_split(64, K, cdiv(T, 64))` on the target's SMs (`kernels.mhc_twin.tf32_num_split`).  T, there
+and in the FMA path's 16-token bound, is the launch's token count (`launch_tokens_of`), the request's own rows only for a batch of
+one; the kernels' words are per token.  The
 threads are the kernels' at the hidden size (`MHC_GEOMETRY`).  EPS is `rms_eps` = `norm_eps` and HC_EPS `hc_pre_eps` =
 `hc_sinkhorn_eps`; the post multiplier is 2.0 (`s + s` in the Definitions); the pre without a fused norm is not modelled.
 """
@@ -25,7 +27,7 @@ import torch
 from verity.ml.circuits.refs import array_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import call_args, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _rows, _static_float, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity_vllm.program.frontend.torch_frontend import _tensor_type
@@ -103,7 +105,7 @@ def _outputs(outs: list, T: int, HC: int, H: int, layer: int, mixes: int) -> lis
 
 class MhcPreBroadcastRule(OpRule):
     """`vllm_iface.mhc_pre_broadcast_tilelang` (layer 0's pre) per token: `MhcPreBroadcast_v1` of the embedding over
-    fn_broadcast, NS DeepGEMM's split count at T tokens over H, and `MhcResidualBroadcast_v1` for the streams."""
+    fn_broadcast, NS DeepGEMM's split count at the launch's tokens over H, and `MhcResidualBroadcast_v1` for the streams."""
     modes = frozenset({"profile"})
     info = RuleInfo("MhcPreBroadcast[vllm-dsv4]", 1, "op-binding", applies_to="vllm_iface.mhc_pre_broadcast_tilelang",
                     preconditions=("residual [T, H] bf16; fn [OUT, HC*H], fn_broadcast [OUT, H], hc_scale [3], hc_base [OUT] f32, "
@@ -132,7 +134,7 @@ class MhcPreBroadcastRule(OpRule):
         S = _pre_statics(ctx, a, HC, H)
         if isinstance(S, str):
             return S
-        return a, T, {**S, "NS": tf32_num_split(T, H, active_target_profile().num_sms)}
+        return a, T, {**S, "NS": tf32_num_split(launch_tokens_of(node, T), H, active_target_profile().num_sms)}
 
     def applies(self, node, ctx):
         if (r := _missing(ctx, ["mhc_pre_broadcast", "mhc_residual_broadcast"], ROLE_KERNELS)):
@@ -160,7 +162,7 @@ class MhcPreBroadcastRule(OpRule):
 
 class MhcFusedPostPreRule(OpRule):
     """`vllm_iface.mhc_fused_post_pre_tilelang` per token: `MhcFusedPostPre_v1{NS=4 (8 below 8 tokens at H <= 4096),TH}` at most
-    16 tokens, `MhcPostPreTf32_v1{NS=DeepGEMM's split count at T tokens over HC*H}` above."""
+    16 tokens in the launch, `MhcPostPreTf32_v1{NS=DeepGEMM's split count at its tokens over HC*H}` above."""
     modes = frozenset({"profile"})
     info = RuleInfo("MhcFusedPostPre[vllm-dsv4]", 1, "op-binding", applies_to="vllm_iface.mhc_fused_post_pre_tilelang",
                     preconditions=("x [T, H], residual [T, HC, H] bf16; post_layer_mix [T, HC, 1] or [T, HC], comb_res_mix [T, HC, HC] f32",
@@ -178,16 +180,17 @@ class MhcFusedPostPreRule(OpRule):
         if s is None or len(s) != 3:
             return "residual is not [T, HC, H]"
         T, HC, H = s
+        M = launch_tokens_of(node, T)
         for r in (_value(ctx, a["residual"], BF16, (T, HC, H), "residual"), _mixes(ctx, a, T, HC, H),
-                  _value(ctx, a["fn"], F32, (HC * (2 + HC), HC * H), "fn"), T > SMALL_FMA_TOKENS and _hopper()):
+                  _value(ctx, a["fn"], F32, (HC * (2 + HC), HC * H), "fn"), M > SMALL_FMA_TOKENS and _hopper()):
             if r:
                 return r
         S = _pre_statics(ctx, a, HC, H)
         if isinstance(S, str):
             return S
-        if T <= SMALL_FMA_TOKENS:
-            return a, T, "mhc_fused_post_pre", {**S, "NS": 8 if T < 8 and H <= 4096 else 4, "TH": MHC_GEOMETRY[H]["TH"]}
-        return a, T, "mhc_post_pre_tf32", {**S, "NS": tf32_num_split(T, HC * H, active_target_profile().num_sms)}
+        if M <= SMALL_FMA_TOKENS:
+            return a, T, "mhc_fused_post_pre", {**S, "NS": 8 if M < 8 and H <= 4096 else 4, "TH": MHC_GEOMETRY[H]["TH"]}
+        return a, T, "mhc_post_pre_tf32", {**S, "NS": tf32_num_split(M, HC * H, active_target_profile().num_sms)}
 
     def applies(self, node, ctx):
         S = self._statics(node, ctx)
