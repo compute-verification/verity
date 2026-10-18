@@ -175,8 +175,8 @@ The arms:
   (`p_sink`).
 - `-lut` is the kernel's form; `-lut-sinkm` takes key 0 out of the max; `-lut-sink` also gives key 0's K its own scale;
   `-lut-sink-rnd` also rounds t; `-lut-sink-norm` sums L over a table 2⁷ finer.
-- `-lut32` is 2^(−t/32) with 512 entries; `-lut-cal` calibrates the K scale; `-lut-sink-cal` and `-lut32-sink`
-  combine them.
+- `-lut32` is 2^(−t/32) with 512 entries; `-lut-cal` calibrates the K scale; `-lut-sink-cal`, `-lut-sink-norm-cal`
+  and `-lut32-sink` combine them.
 - `co32c-u16-cohalf-*` are the same on H1's numerics.
 `frontier_plot.py` draws perplexity against core ε (`machine-model eps --checking full`) under each reading of the table
 route, and writes the table.
