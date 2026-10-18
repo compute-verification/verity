@@ -78,7 +78,10 @@ def test_the_match_of_record_is_the_default_and_the_caller_can_choose_the_audit(
     assert (o.match.match_impl, o.match.match_pipeline) == ("record", "standalone")
     assert _opts(tmp_path, "--match-impl", "record").match.match_impl == "record"
     with pytest.raises(SystemExit):
-        _opts(tmp_path, "--match-phase", "gpu")
+        _opts(tmp_path, "--match-phase", "fold")
+    with pytest.raises(Stop) as e:
+        _row(tmp_path, "--match-phase", "gpu").match()
+    assert e.value.rc == 12
 
 
 def test_machine_paths_are_defaults_that_the_environment_and_flags_override(tmp_path):
@@ -798,6 +801,79 @@ def _engines_custom_all_reduce_off(t, monkeypatch) -> tuple[object, object]:
     def parsed(cmd: list[str]) -> object:
         return parse_engine_args([cmd[i + 1] for i, a in enumerate(cmd) if a == "--engine-arg"])["disable_custom_all_reduce"]
     return parsed(seen[0]), parsed(t.commit_cmd([]))
+
+
+def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_after(tmp_path, monkeypatch):
+    """`--match-phase gpu` runs the capture and control with no Build and stops the row; `cpu` runs the check over the legs they recorded."""
+    gpu, cpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu"), _tp_row(tmp_path, GLM53, "--match-phase", "cpu")
+    os.makedirs(gpu.M)
+    monkeypatch.setattr(R, "derived_ok", lambda p: True)
+    with pytest.raises(Stop) as e:
+        cpu.match()
+    assert e.value.rc == 11 and "gpu_legs.json" in open(f"{cpu.d}/stages.txt").read()
+    ran: list[str] = []
+    monkeypatch.setattr(R, "derived_ok", lambda p: False)
+    monkeypatch.setattr(gpu, "run_gpu", lambda stage, to, log, cmd, **kw: ran.append(stage) or 0)
+    monkeypatch.setattr(gpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
+    with pytest.raises(Stop) as e:
+        gpu.match()
+    assert e.value.rc == 0 and ran == ["match.capture", "match.control"]
+    assert json.loads(Path(gpu.M, "gpu_legs.json").read_text()) == {"capture_rc": 0, "control_rc": 0}
+    assert open(f"{gpu.d}/stages.txt").read().splitlines()[-1].startswith("match-gpu PASS")
+    ran.clear()
+    monkeypatch.setattr(R, "derived_ok", lambda p: True)
+    monkeypatch.setattr(R, "tp_passed", lambda p: True)
+
+    monkeypatch.setattr(cpu, "run_gpu", lambda *a, **kw: pytest.fail("a GPU leg in the cpu phase"))
+    monkeypatch.setattr(cpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
+    cpu.match()
+    last = open(f"{cpu.d}/stages.txt").read().splitlines()[-1].split()
+    assert ran == ["match.check"] and last[:2] == ["match", "PASS"] and last[3] == "rc=0/0/0/-1"
+
+
+@pytest.mark.parametrize("argv, leg", [((), 7200), (("--fold-timeout", "100"), 100)])
+def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path, monkeypatch, argv, leg):
+    """tp-fold-match's ``--timeout`` bounds each subprocess, and a rank runs three in turn before the cross-rank leg: one leg's limit
+    on the whole would stop a fold that fits its own (a GLM-5.3 B8 rank folds for ~100 min of the default 120)."""
+    t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
+    t.fold_profile = "derived_GLM53_tp8"
+    os.makedirs(t.M)
+    Path(t.M, "gpu_legs.json").write_text(json.dumps({"capture_rc": 0, "control_rc": 0}))
+    monkeypatch.setattr(R, "derived_ok", lambda p: True)
+    monkeypatch.setattr(R, "tp_passed", lambda p: True)
+    seen: dict[str, tuple[int, list[str]]] = {}
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.setdefault(stage, (to, cmd)) and 0)
+    t.match()
+    to, cmd = seen["match.fold_match"]
+    assert int(cmd[cmd.index("--timeout") + 1]) == leg and to == 4 * leg
+
+
+def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_path, monkeypatch):
+    """Every child of either row (a TP row's per-rank folds under tp-fold-match among them) stores instances.jsonl in `--instances-form`,
+    progressions by default, not the fold library's run-by-run default (a transposed weight's operand is ~1e6 runs per instance)."""
+    def precheck_reached(*a, **kw):
+        raise Stop(99)
+    for argv, form in (((), "progressions"), (("--instances-form", "runs"), "runs")):
+        single, tp = _row(tmp_path, *argv), _tp_row(tmp_path, GLM53, *argv)
+        monkeypatch.setattr(single, "release_line", precheck_reached)
+        monkeypatch.setattr(tp, "hidden_build", precheck_reached)
+        for r in (single, tp):
+            with pytest.raises(Stop):
+                r.prepare()
+            assert r.child_env["VERITY_INSTANCES_FORM"] == form
+
+
+def test_a_row_declaring_prefix_caching_is_refused_before_any_stage(tmp_path, monkeypatch):
+    """Every stage's engine runs with prefix caching off, so a row whose file declares it is refused at its precheck, by either row."""
+    prefix = "glm53__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager"
+    single, tp = _row(tmp_path, row=prefix), _tp_row(tmp_path, prefix)
+    monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
+    for r in (single, tp):
+        monkeypatch.setattr(r, "release_line", lambda *a: pytest.fail("a stage after the precheck"))
+        with pytest.raises(Stop) as e:
+            r.prepare()
+        last = open(f"{r.d}/stages.txt").read().splitlines()[-1].split(" ", 3)
+        assert e.value.rc == 3 and last[:2] == ["precheck", "FAIL"] and "enable_prefix_caching" in last[3]
 
 
 @pytest.mark.parametrize("row, off", [

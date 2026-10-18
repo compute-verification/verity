@@ -19,13 +19,13 @@ def weight_field_name(name: str) -> str:
 
 def as_progression(t: tuple) -> tuple:
     """A record-form canonical tuple as a one-run progression `head + (base, zero delta, 1)`, with the head/base split the
-    uniform mappings use: N / N-PAD -> base (s, jj, lo, hi); XREQ -> head (XREQ, kind), base (idx, lo, hi); W / SUPPLIED -> head
-    (W | SUPPLIED, name), base (lo, hi); W? / MUX-UNFOLD-FAILED -> base (idx | j, lo, hi); TOK / SEED / SPLITS -> base (lo, hi); a raw
-    run -> base (idx, lo, hi)."""
+    uniform mappings use: N / N-PAD -> base (s, jj, lo, hi); XREQ -> head (XREQ, kind), base (idx, lo, hi); W / SUPPLIED / WIT -> head
+    (W | SUPPLIED | WIT, name), base (lo, hi); W? / MUX-UNFOLD-FAILED -> base (idx | j, lo, hi); TOK / SEED / SPLITS -> base (lo, hi);
+    a raw run -> base (idx, lo, hi)."""
     k = t[0]
     if k in ("N", "N-PAD"):
         base = t[1:5]
-    elif k in ("W", "SUPPLIED"):
+    elif k in ("W", "SUPPLIED", "WIT"):
         base = t[2:4]
     elif k in ("TOK", "SEED", "SPLITS"):
         base = t[1:3]

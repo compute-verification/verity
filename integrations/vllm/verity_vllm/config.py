@@ -408,6 +408,13 @@ class BuildConfig:
     build_programs_only: str = option("--build-programs-only", env="BUILD_PROGRAMS_ONLY", default="0",
                                       help="TP: 1 = the Build ends at the rank Programs and GP-01: no required-value manifest, no call-boundary "
                                            "check (the Commit builds the manifest it runs over); `verity-vllm neutrality`'s heavy tier")
+    build_construction: str = option("--build-construction", env="BUILD_CONSTRUCTION", default="record", choices=("record", "trace"),
+                                     help="TP: record = the row's construction of record, the AOT Build for a switched row (its `aot` in "
+                                          "manifests/records.json, verity_vllm.predict.aot) and the trace for any other; trace = the trace "
+                                          "(`verity-vllm neutrality`'s heavy tier)")
+    aot_trace: str | None = option("--aot-trace", env="AOT_TRACE", default=None,
+                                   help="TP, a switched row: the dir holding its `aot.trace` Build (build/rank<r>/build_*), e.g. a job's "
+                                        "--send of it; default fetched from the store into <row dir>/aot_trace")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -417,8 +424,9 @@ class MatchConfig:
     match_impl: str = option("--match-impl", env="MATCH_IMPL", default="fast", help="global match checker: fast or record (the audit)")
     match_pipeline: str = option("--match-pipeline", env="MATCH_PIPELINE", default="shared",
                                  help="shared = one batch decomposition inside the global match")
-    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "cpu"),
-                              help="cpu = resume the CPU half over the capture already on disk")
+    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "gpu", "cpu"),
+                              help="cpu = resume the CPU half over the capture already on disk; gpu (TP) = the capture and control alone, "
+                                   "which need no Build, then the row stops")
     snapshot_steps: str | None = option("--snapshot-steps", env="MATCH_SNAP_STEPS", default=None,
                                         help="0,1 | all; default 0,1 greedy, all stochastic or when form (B) must be complete")
     snapshot_max_bytes: str | None = option("--snapshot-max-bytes", env="MATCH_SNAP_MAX_BYTES", default=None,
@@ -433,7 +441,8 @@ class MatchConfig:
     compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
                                          help="seconds per comparator (default scales with B and the envelope)")
     fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for the per-rank fold Match (default 7200)")
+                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 7200); "
+                                           "tp-fold-match as a whole gets four legs' worth, the cross-rank leg included")
     fold_profile: str | None = option("--fold-profile", env="FOLD_PROFILE", env_empty=True, default=None,
                                       help="TP: rank profile module (default derived_<ROLE>_tp<W>; empty = collective-level Match only)")
 

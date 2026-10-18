@@ -204,6 +204,21 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         raise _Unresolved(why)
                     words.append(w)
                     inputs_rec.append({"kind": "committed", "identity": [rid, arrive + step, SAMPLER_OP, pname, [0, 1]]})
+                elif pname == RM.SCHEDULE_PARAM:
+                    # [DSV4] the witness keys of a MoeAlignRanks_v1 row are its OWN committed rank (`format.SCHEDULE_PARAM`): the row then
+                    # reproduces that rank exactly when it ranks each expert's pairs
+                    own = pi.member_of_port(int(r["i"])).get("0") if fam in RM.SCHEDULE_READERS else None
+                    width = next((int(m[1]) for m in d["members"] if m[0] == own), None)
+                    if width is None or width != hi - lo:
+                        raise _Unresolved(f"{pname} slice [{lo}, {hi}) read by {fam}: only a {sorted(RM.SCHEDULE_READERS)} row's own "
+                                          f"committed rank (port 0, one key per pair) binds it")
+                    at = d["row"] * width
+                    w, why = store.words(rid, arrive + d["step"], d["op_path"], own, at, at + width)
+                    if w is None:
+                        raise _Unresolved(why)
+                    words.append(w)
+                    inputs_rec.append({"kind": "witness", "param": pname, "range": [lo, hi],
+                                       "identity": [rid, arrive + d["step"], d["op_path"], own, [at, at + width]]})
                 else:                                                             # the declared prompt: committed input_token_ids of the arrival step
                     eop = pi.embed_op_path()
                     if eop is None:

@@ -75,7 +75,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
     "pouw-serve": ("verity_vllm.pipeline.pouw_serve", "a workload served under pouw:ncp-v2, its calls replayed honest and tampered"),
-    "predict": ("verity_vllm.predict.cli", "ahead-of-time Program prediction from φ, scored against the traced Builds"),
+    "predict": ("verity_vllm.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
     "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
     "serving-view": ("verity_vllm.pipeline.serving_view", "a served row's Programs as vLLM serves them (engine steps, requests, model runner, ranks)"),
@@ -85,8 +85,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
     "protected": ("verity_vllm.properties.protected", "protected-path diff check"),
     "quarantine-lint": ("verity_vllm.properties.quarantine_lint", "quarantine registry lint"),
-    "records": ("verity_vllm.records", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch), and a "
-                            "checkpoint's staging (staged)"),
+    "records": ("verity_vllm.records", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
+                            "switch), and a checkpoint's staging (staged)"),
     "rejudge": ("verity_vllm.pipeline.tp.rejudge", "recompute a finished TP Commit's GPU-free gates from its saved outputs"),
     "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
     "router-tap-build": ("verity_vllm.acquire.router_tap_src.build_ext", "build or check the router-softmax tap's CUDA op"),

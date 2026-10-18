@@ -480,7 +480,8 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 
 def test_every_call_the_suite_checks_is_partitioned():
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
-    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap) and `Options.partition_max_leaves`."""
+    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
+    smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`."""
     from verity.ml.circuits.evaluation.reference import signature_of
 
     calls = TG.call_families()

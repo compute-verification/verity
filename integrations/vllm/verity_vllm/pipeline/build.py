@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.program.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
@@ -82,6 +83,21 @@ INSTANCES_GZ_LEVEL = 6
 def _write_instances_file(path: str, head: dict, rows) -> None:
     with gzip.open(path, "wt", compresslevel=INSTANCES_GZ_LEVEL) as f:
         _write_instances(f, head, rows)
+
+
+def write_instances(out: str, program, digest: str, corr_digest: str | None, supplied: dict, *, names: dict[int, str | None] | None = None,
+                    params: list[list[str]] | None = None) -> None:
+    """A derive dir's `instances.json.gz`: the Program's instance sequence (`_instance_rows`) under its digests.  `names` (by Call)
+    and `params` stand in for the Program's own Call names and parameters, which no digest covers (`predict.aot.emit`: as its
+    trace named them)."""
+    rows = _instance_rows(program)
+    if names is not None:
+        rows = ({**r, "name": names.get(r["i"])} for r in rows)
+    if params is None and hasattr(program.fn.body, "params"):
+        params = [[n, str(t)] for n, t in program.fn.body.params]
+    _write_instances_file(os.path.join(out, "instances.json.gz"),
+                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest, "params": params, **supplied},
+                          rows)
 
 
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers, this driver,
@@ -361,7 +377,8 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
         # [R15 hopper HOP-03] a request Program built under a declared launch context is reusable only for a batch that co-schedules it the same
         # way (FA3's tile reads the launch's max_seqlen_q).  Key present ONLY when a context was declared: B1 / undeclared identities are unchanged.
         cond["launch_context"] = {"max_seqlen_q_by_step": {str(k): v for k, v in sorted((launch.get("max_seqlen_q_by_step") or {}).items())},
-                                  "conflict": bool(launch.get("conflict"))}
+                                  "conflict": bool(launch.get("conflict")),
+                                  **({"batch_by_step": {str(k): [list(q) for q in v] for k, v in sorted(launch["batch_by_step"].items())}} if launch.get("batch_by_step") else {})}
     return cond
 
 
@@ -375,10 +392,10 @@ def _cuda_available() -> bool:
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
         target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None,
-        engine_args: dict | None = None, device_name: str | None = None) -> dict:
+        engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
     the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
-    reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`)."""
+    reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
     t_start = time.time()
@@ -424,9 +441,11 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                              "missing": ["TopPMask (F-dense-02)", "wrapper authoring of the stochastic select (Bet A)",
                                                          "eager resolver patterns for _temperature_kernel / stochastic _gumbel_sample_kernel"]}}
             raise _Refused()
-        # [R15 stoch] the stochastic policy's Definition coverage and launch geometry (S), refused with the reason when not a static
-        geo_refusal = sampler_geometry(sampling, target, LP=LP if wrapper == "request" else None, T=T if wrapper == "request" else None)
-        if geo_refusal is not None:
+        # the request's launch batch where the row's kernels read it; [R15 stoch] the stochastic policy's Definition coverage and launch
+        # geometry (S), refused with the reason when not a static
+        geo_refusal = ((wrapper == "request" and batch_dispatch and LC.missing_batch(launch, LP, T))
+                       or sampler_geometry(sampling, target, LP=LP if wrapper == "request" else None, T=T if wrapper == "request" else None))
+        if geo_refusal:
             res["unsupported"] = geo_refusal
             raise _Refused()
         res["sampling"] = sampling
@@ -500,6 +519,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `vm.retie_lm_head_as_the_loader_does`)
             res["lm_head_tying"] = vm.retie_lm_head_as_the_loader_does(model, cfg)
             res["mla_absorbed_weights"] = vm.mla_absorbed_weights_as_the_loader_does(model, cfg)
+            res["fp8_block_weights"] = vm.fp8_block_weights_as_the_loader_does(model)
+            res["post_load_tensors"] = vm.post_load_tensors_as_the_loader_does(model)
             if tp > 1:
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
@@ -541,6 +562,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 probe = vm.probe_collectives(mod, inputs, cfg, ntok, bus, profile=target)
                 res["tp"]["collectives"] = {"n": len(probe), "by_kind": _count([p["kind"] for p in probe]),
                                             "by_shape": _count([f'{p["kind"]}{tuple(p["shape"])}' for p in probe]), "record": probe}
+                if bus.schedule_record:      # the align calls' keys, the `schedule` input before the peers (`CollectiveBus.schedule_key`)
+                    res["tp"]["schedule"] = {"calls": len(bus.schedule_record), "pairs": sum(r["pairs"] for r in bus.schedule_record),
+                                             "record": list(bus.schedule_record)}
                 mod, inputs = vm.with_peers(mod, inputs, bus)
             applied_export: dict = {}
             ep = vm.export_module(mod, inputs, cfg, ntok, intercept_triton=intercept, launch_log=log, profile=target, applied_out=applied_export)
@@ -627,10 +651,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["mutation_effects"] = rep.provenance["mutation_effects"]
     res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
     json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
-    _write_instances_file(os.path.join(out, "instances.json.gz"),
-                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest,
-                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
-                          _instance_rows(program))
+    write_instances(out, program, digest, corr_digest, supplied)
     # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
     art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
                                  applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)
@@ -758,12 +779,13 @@ class Options:
     emit_ranks: str | None = option("--emit-ranks", default=None,
                                     help="other ranks (comma list) whose files are written from this rank's derivation (pipeline.tp.emit_ranks)")
     emit_root: str | None = option("--emit-root", default=None, help="with --emit-ranks: rank r's files go to <root>/rank<r>/<name of --out>")
-    launch_max_seqlen_q: str | None = option("--launch-max-seqlen-q", default=None,
-                                             help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's "
-                                             "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt "
-                                             "has N rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: "
-                                             "refused under FA3, whose tile reads it; recorded and inert under FA2).  Omitted = own rows (a batch of one).  "
-                                             "row_pod.sh derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
+    launch_context: str | None = option("--launch-context", default=None,
+                                        help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's "
+                                        "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt has N "
+                                        "rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: refused under FA3, "
+                                        "whose tile reads it; inert under FA2); without batch invariance the batch itself, '{\"batch\": [[[rows, start], ...] per step]}', "
+                                        "which every token-count-dependent kernel choice reads (required then).  Omitted = own rows (a batch of one).  The row derives it "
+                                        "from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
 
 
 def main(a: Options) -> int:
@@ -777,8 +799,8 @@ def main(a: Options) -> int:
         emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
-                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_max_seqlen_q), emit=emit,
-                  engine_args=workload_engine_args(a.workload, a.tp), device_name=device_name(a.workload))
+                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_context), emit=emit,
+                  engine_args=workload_engine_args(a.workload, a.tp), device_name=device_name(a.workload), batch_dispatch=LC.batch_dispatch_of(a.workload))
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)

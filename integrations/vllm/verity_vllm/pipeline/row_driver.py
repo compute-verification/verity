@@ -169,6 +169,14 @@ class Row:
         """The row's config, its file in the tree that runs."""
         return RowConfig.load(self.path(self.wl))
 
+    def refuse_unserved_engine(self) -> None:
+        """Refuse a row whose file declares prefix caching: every stage's engine runs with it off and GP-01 does not model a request
+        reading another's KV blocks (`global_program.MODELLED_ENGINE`), so the row's record would name a serve it never ran."""
+        if self.config().engine.args.get("enable_prefix_caching") is True:
+            self.verdict("precheck", "FAIL", "engine.args.enable_prefix_caching is true: the stages serve with prefix caching off and GP-01 "
+                                             "does not model it (global_program.MODELLED_ENGINE), so the record would name a serve it never ran")
+            raise Stop(3)
+
     def execution(self) -> str | None:
         """The row's execution label: its workload's ``execution`` (or ``sweep.execution``), else its id's last token; None without
         a workload file."""
@@ -363,6 +371,22 @@ class Row:
         with open(f"{self.d}/row.log", "a") as f:
             f.write(line + "\n")
         return rc, line
+
+    def launch_args(self, lp: int, t: int) -> list[str] | None:
+        """A B >= 2 request Program is built under its launch context (``launch-context``); None = the context did not
+        read, which FAILS that shape's Build (it is not "no context")."""
+        if self.B <= 1:
+            return []
+        err = f"{self.d}/launch_context_LP{lp}_T{t}.err"
+        with open(err, "w") as f:
+            r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t)), stdout=subprocess.PIPE, stderr=f, text=True,
+                               cwd=self.tree, env=self.child_env)
+        if r.returncode != 0:
+            self.log(f"Build FAIL shape LP{lp} T{t}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
+            return None
+        os.remove(err)
+        lc = r.stdout.rstrip("\n")
+        return ["--launch-context", *lc.split("\n")] if lc else []
 
     def call_boundaries(self, to: int | str, cmd: list[str] | None = None) -> None:
         """After a PASS Build: the row stops (exit 21, no Match, no Commit) unless every `call_boundaries` identity of its manifest has

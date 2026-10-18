@@ -7,7 +7,8 @@ What this module DECIDES (structure + correspondence, no by-name table):
   module reads (F-r19-int-20) is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
   that reads no Value, `module_body.literal_calls`) is the descriptor's: never a boundary Value, never protocol-required.
 * WHERE a Value lives: the producing Call's recorded owning module (correspondence), mapped to the implementation's path; a
-  collective SITE's at its enclosing module, invocation k (`collective_sites`).
+  collective SITE's at its enclosing module, invocation k (`collective_sites`); at `<module>/<fx node>` when another fx node of the
+  module produces a member of the same name at the step (`Population.contested`): two producers never share an identity.
 * WHAT the member is called, structurally (`member_name`): the port name when the Definition returns a tuple (`<hint>.<port>` when
   the Build recorded a hint, which names the Call); else the recorded return-slot hint; else `out`.  How a runtime tensor carries
   it (vLLM's return slots, a tap's label) is the binding's (`verity_vllm.query.manifest.bind`), never a spelling here.
@@ -22,12 +23,17 @@ The POLICY (`Policy`, explicit, listed in the header as `query.policy`):
   recorded as a module's return slot (`<module>/<node>/<slot>[row]`), (c) TENSOR-RETURN: the acquisition binds the TENSORS a module
   returns, and a tensor is one fx node's output -- every row the Program unrolled it into, every port of its tuple; once any Value of
   a node's output at a step leaves its body, every Value of that node's output is required (the final norm's rows the logits never
-  read, the residual slot of the final fused norm nobody consumes).  UNRETURNED: neither (b) nor (c) is a Call the correspondence
-  lowers to no runtime tensor (its fx node does not return it; `Correspondence.tensorless`) whose Values no Call reads and the
-  Program does not return: the DSA indexer's MQA logits and top-k while every key is selected.  Switch (b)+(c) off
-  (`return_slots=False`) to see the pure-dataflow population;
-* TP-04, a RANK Program only (result.json `tp.world` >= 2): every collective's output and its rank-local partial (`Population`); the
-  row's rank manifests merge by `compose.merge_ranks` (rows keep their rank's digest, `tp_peer_binding` binds every output to each peer's partial).
+  read, the residual slot of the final fused norm nobody consumes).  Neither (b) nor (c) is a Call the correspondence lowers to no
+  runtime tensor (its fx node does not return it; `Correspondence.tensorless`) whose Values no Call reads and the Program does not
+  return: the DSA indexer's MQA logits and top-k while every key is selected.  Switch (b)+(c) off (`return_slots=False`) to see the
+  pure-dataflow population;
+* TP-04, a RANK Program only (result.json `tp.world` >= 2): every collective's output and its rank-local partial, with every other port
+  of the partial's producer (`Population`); the row's rank manifests merge by `compose.merge_ranks` (rows keep their rank's digest,
+  `tp_peer_binding` binds every output to each peer's partial).
+
+UNRETURNED: a Call whose Values no Call reads, the Program does not return and the policy does not require (DeepSeek-V4's indexer
+projections on its short path) computes nothing anything depends on.  It is not required, the word check skips it like a literal, and
+the manifest lists each of its outputs under `unreturned`, spelt as a required one would be, so the omission is auditable.
 
 The identity ENCODINGS, each one constant the manifest and the committing tap share: a collective's rank-local operand as
 `part_rank<r>` / `shard_rank<r>` beside its output; a collective SITE at (enclosing module, k) and a norm's collective under the norm
@@ -222,7 +228,8 @@ class Population:
     A RANK Program (`tp` = {"world": W >= 2, "rank": r}, result.json's) adds the TP-04 policy: every collective's output is
     protocol-required, and so is its rank-local PARTIAL -- the one Value of this rank the collective reads (its other operands are
     `peers_<k>` Program inputs read by collectives only: the peer ranks' partials, received).  A partial produced in the collective's own
-    module body is that producer's required Value, spelt `part_rank<r>` / `shard_rank<r>`; a collective whose operand another body produced
+    module body is that producer's required Value, spelt `part_rank<r>` / `shard_rank<r>`, and so is every other port of the producer
+    (the committer binds the Call's outputs together); a collective whose operand another body produced
     (a collective site reading a slice of it) names the partial itself, beside its output.
 
     `query` is the query of record (`Q_WORD_ID`: the boundary is every Call's) or `Q_MODULE_BODY_ID` (A/B only: module bodies).  Under
@@ -254,6 +261,11 @@ class Population:
                 for port in p.port_table:
                     self.record_fields[ValueRef(p.id, port.name)] = port.name
         prescribed = frozenset(self.record_fields) | frozenset(self.supplied)
+        #: a rank Program's WITNESS input (`format.SCHEDULE_PARAM`): its readers' keys, which the replay binds to each reader's own
+        #: committed rank -- never token ids, and no identity of the manifest names it
+        self.witness: frozenset[ValueRef] = frozenset(ValueRef(p.id, port.name) for p in P.params if p.name == fmt.SCHEDULE_PARAM
+                                                      for port in p.port_table)
+        self.witness_readers: list[int] = [c.id for c in P.calls if any(r in self.witness for r in param_reads(c))] if self.witness else []
         self.world, self.rank = int((tp or {}).get("world") or 1), int((tp or {}).get("rank") or 0)
         self.collectives: dict[int, str] = {}              # collective Call -> "all_reduce" | "all_gather"
         self.operand: dict[int, ValueRef] = {}             # collective Call -> its rank-local operand
@@ -263,6 +275,11 @@ class Population:
         self.norm_site: dict[int, str] = {}                # a carried collective that is a norm's -> the norm module (`<norm site>`)
         self.peer_inputs: frozenset[ValueRef] = frozenset()
         self.tp_faults: list[str] = []
+        for cid in self.witness_readers:
+            if P.call(cid).family not in fmt.SCHEDULE_READERS:
+                self.tp_faults.append(f"{P.call(cid).family} under {corr.implementation_path(corr.module_of(cid))} reads the "
+                                      f"`{fmt.SCHEDULE_PARAM}` witness (only {sorted(fmt.SCHEDULE_READERS)} may: the replay binds a reader's "
+                                      f"keys to its own committed rank)")
         if self.world > 1:
             self._rank_partials()
         self.literals = literals = literal_calls(P)
@@ -274,13 +291,12 @@ class Population:
             self.Q = Q_module_body_v1(P, corr)
             self.B = B = B_module
         step_of = self.step_of
-        #: UNRETURNED: Calls the correspondence lowers to no runtime tensor whose Values no Call reads and the Program does not return
-        #: (the DSA indexer's MQA logits and top-k while every key is selected): neither return slot nor returned tensor, so not required
-        self.unreturned: frozenset[int] = frozenset()
-        if corr.tensorless - literals:
-            word_B = B if query == Q_WORD_ID else boundary_without_literals(P, partition_by(lambda c: c.id), literals)
-            self.unreturned = frozenset(cid for cid in corr.tensorless - literals
-                                        if not any(ValueRef(cid, p.name) in word_B.values for p in P.call(cid).port_table))
+        #: UNRETURNED: Calls whose Values no Call reads, the Program does not return and no policy below requires: nothing depends on
+        #: them, so the word check skips them and the manifest lists their outputs (`unreturned_rows`).  A Call lowered to no runtime tensor
+        #: (the DSA indexer's MQA logits and top-k while every key is selected) is neither return slot nor returned tensor either.
+        word_B = B if query == Q_WORD_ID else boundary_without_literals(P, partition_by(lambda c: c.id), literals)
+        dead = [c.id for c in P.calls if c.id not in literals and not any(ValueRef(c.id, p.name) in word_B.values for p in c.port_table)]
+        self.unreturned: frozenset[int] = frozenset(dead) & corr.tensorless
         protocol: set[ValueRef] = set()
         if return_slots:
             # TENSOR-RETURN: the acquisition binds the TENSORS a module returns, and a tensor is one fx node's output -- every row the
@@ -301,7 +317,10 @@ class Population:
                 n = corr.name(c.id)
                 if n.hint or (step_of(c.id), n.module, n.node) in returned_nodes:      # RETURN-SLOT (recorded) / TENSOR-RETURN (structural)
                     protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
-        protocol.update(self.partial_of)                                        # TP-04: the rank-local partials
+        # TP-04: the rank-local partials, each with every other port of its producer (a row-parallel linear that reduces in its own body
+        # returns its quantised input and scales beside the partial: `DeepGemmFp8Linear_v1`)
+        protocol.update(ValueRef(v.call, p.name) for v in self.partial_of for p in P.call(v.call).port_table)
+        self.unreturned = frozenset(cid for cid in dead if not any(ValueRef(cid, p.name) in protocol for p in P.call(cid).port_table))
         self.policy = Policy(prescribed_inputs=prescribed, protocol_required=frozenset(protocol))
         self.required = RequiredValues(B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
         inside = [v for v in B.values if v.call >= 0 and v not in B_module.values and v not in self.policy.protocol_required]
@@ -378,9 +397,10 @@ class Population:
 
     def program_path(self, cid: int) -> str:
         """The Program module path the required Values of Call `cid` are spelt under: its site path for a collective SITE, `<module>/<fx
-        node>` for a Call whose required Values are all Call boundaries inside its module body, else its owning module.
-        `collective_sites` aliases a site path to its (enclosing module, k)."""
-        if cid in self.interior_calls:
+        node>` for a Call whose required Values are all Call boundaries inside its module body or whose member another fx node of its
+        module produces at its step (`contested`), else its owning module.  `collective_sites` aliases a site path to its (enclosing
+        module, k)."""
+        if cid in self.interior_calls or cid in self.contested:
             return f"{self.corr.module_of(cid)}/{self.corr.name(cid).node}"
         return self.norm_site.get(cid) or self.site.get(cid) or self.corr.module_of(cid)
 
@@ -388,6 +408,25 @@ class Population:
     def interior_calls(self) -> frozenset[int]:
         """The Calls all of whose required Values are `interior`."""
         return frozenset({v.call for v in self.interior} - {v.call for v in self.required.values if v.call >= 0 and v not in self.interior})
+
+    @functools.cached_property
+    def contested(self) -> frozenset[int]:
+        """The Calls spelt at their fx node though they are spelt at their module otherwise: two fx nodes of one module produce a member
+        of the same name at one step (DeepSeek-V4's compressor kv_score Gemm and wo_a einsum, both `out` of the attention module; a
+        layer's two mHC post-pres).  Two producers never share an identity, and the binder tells them apart by Definition and port, in
+        Program order.  The UNRETURNED Calls count, so an omission is never spelt as a required Value."""
+        keyed: list[tuple[int, tuple[int, str, str]]] = []
+        for cid in self.producers():
+            if cid in self.interior_calls or cid in self.site or cid in self.norm_site:
+                continue
+            keyed += [(cid, (self.step_of(cid), self.corr.module_of(cid), cm.member)) for cm in self.members_of(cid)]
+        for cid in self.unreturned:
+            c = self.P.call(cid)
+            keyed += [(cid, (self.step_of(cid), self.corr.module_of(cid), member_name(c, p, self.corr.name(cid)))) for p in c.port_table]
+        nodes: dict[tuple[int, str, str], set[str]] = defaultdict(set)
+        for cid, key in keyed:
+            nodes[key].add(self.corr.name(cid).node)
+        return frozenset(cid for cid, key in keyed if len(nodes[key]) > 1)
 
     def member(self, v: ValueRef) -> CallMember:
         """The manifest member of the required Value `v` of a (non-sampling) Call."""
@@ -466,7 +505,9 @@ def query_header(profile: str, hidden_family: str | None, *, return_slots: bool,
     word = query == Q_WORD_ID
     text = (Q_WORD_TEXT if word else Q_MODULE_BODY_TEXT) + f"; policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs" + \
         (" + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the module body boundary)"
-         ", neither of which is a Call lowered to no runtime tensor whose Values nothing reads" if return_slots else "") + f"; hidden = {hidden_family or 'none'}; profile = {profile}"
+         ", neither of which is a Call lowered to no runtime tensor whose Values nothing reads" if return_slots else "") + \
+        "; unreturned = the Calls whose Values nothing reads, the Program does not return and the policy does not require, listed by identity" + \
+        f"; hidden = {hidden_family or 'none'}; profile = {profile}"
     return {"query_id": query, "query_id_digest": hashlib.sha256(text.encode()).hexdigest(), "query_text": text,
             **({"partition": dict(partition)} if word and partition else {}),
             "engine": "q-word" if word else "v2-query", "boundary": "call" if word else "module-body", "profile": profile,
@@ -476,8 +517,29 @@ def query_header(profile: str, hidden_family: str | None, *, return_slots: bool,
             "policy": {"prescribed_inputs": "every field of the Program's record-typed parameters",
                        "protocol_required": ["sampling-event outputs"] +
                        (["recorded return slots (RETURN-SLOT)", "returned tensors: all rows / ports of an fx node's output once one crosses (TENSOR-RETURN)",
-                         "neither: a Call lowered to no runtime tensor whose Values no Call reads and the Program does not return (UNRETURNED)"]
-                        if return_slots else [])}}
+                         "neither: a Call lowered to no runtime tensor whose Values no Call reads and the Program does not return"]
+                        if return_slots else []),
+                       "unreturned": "a Call whose Values no Call reads, the Program does not return and no policy requires: not required, "
+                                     "skipped by the word check, each output listed under `unreturned` (UNRETURNED)"}}
+
+
+def unreturned_rows(pop: Population, aliases: Mapping[str, tuple[str, int]], identity) -> list[dict[str, Any]]:
+    """The UNRETURNED Calls' outputs, one row per (step, module, member) as a required one would be spelt (`identity`: the manifest's
+    row maker): what the word check skips."""
+    P, corr, impl = pop.P, pop.corr, pop.corr.implementation_path
+    dead: dict[tuple[int, str, str], dict[str, Any]] = {}
+    for cid in sorted(pop.unreturned):
+        c = P.call(cid)
+        for k, port in enumerate(c.port_table):
+            g = dead.setdefault((pop.step_of(cid), pop.program_path(cid), member_name(c, port, corr.name(cid))),
+                                {"rows": 0, "width": port.elems, "dtype": _dtype(port.width), "spec": c.family, "port": port.name, "position": [cid, k]})
+            g["rows"] += 1
+    out = []
+    for (step, mod, member), g in dead.items():
+        canon, k = aliases.get(mod, (mod, 0))
+        out.append(identity("instance_outputs", step, k, impl(canon), member, 0, g["rows"] * g["width"], **g,
+                            **({"program_op_path": impl(mod)} if canon != mod else {})))
+    return out
 
 
 def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any], *, request_id: str | int | None = None,
@@ -513,13 +575,16 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     identities: list[dict[str, Any]] = []
     fam_counts: Counter = Counter()
     unmodelled: Counter = Counter()
-    def add(family: str, step: int | str, invocation: int, op_path: str, member: str, lo: int, hi: int | None, **extra):
+    def identity(family: str, step: int | str, invocation: int, op_path: str, member: str, lo: int, hi: int | None, **extra) -> dict[str, Any]:
         row = {"family": family, "program_digest": pdig, "request_id": request_id, "step": step, "invocation": invocation,
                "op_path": op_path, "output_member": member, "element_range": [lo, hi], "rank": rank}
         if step != "*":
             row["engine_step"] = arrive + int(step)
         row.update(extra)
-        identities.append(row)
+        return row
+
+    def add(family: str, *args, **extra):
+        identities.append(identity(family, *args, **extra))
         fam_counts[family] += 1
 
     # --- weights: every prescribed record field --------------------------------------------------------------------------------------
@@ -572,10 +637,12 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
         else:
             add(g["manifest_family"], step, 0, impl(mod), member, 0, g["rows"] * g["width"], **extras)
 
+    unreturned = unreturned_rows(pop, aliases, identity)
+
     # --- the token ids a module body consumes: prompt input or a sampling event's output -------------------------------------------
     ids_rows: Counter = Counter()
     event_set = frozenset(events)
-    non_ids = pop.peer_inputs                                   # a rank Program's received peer partials are not token ids
+    non_ids = pop.peer_inputs | pop.witness                     # a rank Program's received peer partials and its witness are not token ids
     for c in P.calls:
         m = corr.module_of(c.id)
         if not m or c.family in SAMPLING_EVENTS:            # a selector's runtime inputs are the sampler's (above), wherever it sits (TP: `inner`)
@@ -633,8 +700,12 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     q = query_header(profile, hidden_family, return_slots=return_slots, query=query, partition=partition_of(program_digest) if program_digest and query == Q_WORD_ID else None, call_boundaries=bool(fam_counts.get("call_boundaries")))
     if prog_world > 1:
         q["required_families"].append("tp_rank_partials")
-        q["policy"]["protocol_required"].append(f"TP-04 (world {prog_world}): every collective output and its rank-local partial")
+        q["policy"]["protocol_required"].append(f"TP-04 (world {prog_world}): every collective output and its rank-local partial, with every "
+                                                "port of the partial's producer")
         q["tp"] = {"world": prog_world, "collectives": len(pop.collectives), "peer_inputs": len(pop.peer_inputs)}
+        if pop.witness:
+            q["tp"]["witness_inputs"] = {fmt.SCHEDULE_PARAM: {"readers": len(pop.witness_readers),
+                                                              "binding": "each reader's own committed rank (port 0)"}}
     if moe_layers:
         q["required_families"].append("moe_block_stream")
         q["moe_layers"] = sorted(moe_layers)
@@ -653,7 +724,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
            "steps": list(range(len(events))), "engine_steps": [arrive + s for s in range(len(events))], "requests": [request_id],
            "populations": {"identities": len(identities), "by_family": dict(fam_counts), "steps": len(events),
                            "attention_layers": len(attn_bodies), "units": len(B.units), "boundary_values": len(B.values),
-                           "required_values": len(req.values), "literal_calls": len(literals)},
+                           "required_values": len(req.values), "literal_calls": len(literals), "unreturned_calls": len(pop.unreturned)},
            "complete": not unmodelled, "unmodelled": dict(unmodelled),
-           "manifest_digest": fmt.manifest_digest(identities), "identities": identities}
+           "manifest_digest": fmt.manifest_digest(identities), "identities": identities, **fmt.unreturned_block(unreturned)}
     return BridgeResult(man, req, pop.unreturned)

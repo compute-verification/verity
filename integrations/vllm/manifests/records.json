@@ -1,6 +1,6 @@
 {
  "schema": "verity-vllm/records-index/v1",
- "about": "Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.",
+ "about": "Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.  A switched row's `aot` names the comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.predict.aot`), its pins the predicted Programs, and its rebuild the trace.",
  "rows": {
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
    "record": "art:440154ed238eaabac0adbbc673560ae4f94aaa8abbed066d3436e1a2d5af807e",
@@ -68,6 +68,137 @@
       "build_request_LP256_T31": "85e8013e61f5449acddcfa1d648b16547ee8efdef5c15292b7bb554a27f6cd1a060449ba62646ac29ec7a8d07b778611b19c38a9b159e9ef5cda6f020934b1d8"
      }
     }
+   },
+   "aot": {
+    "comparison": "r20261018-000914-54dc",
+    "trace": "art:5c0cdf4e86811b0e60c42b9056d88b46b3b348c4e2bfee74618d5994e9547f28"
+   }
+  },
+  "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager": {
+   "record": null,
+   "tier": "heavy",
+   "pinned_from": {
+    "build": "art:15a79f7ea649996a7cdd8d686da1dac87a84fb700d0777e98d75186a7e315a67",
+    "run": "r20261018-050210-cbab"
+   },
+   "manifest_digest": null,
+   "programs": {
+    "0": {
+     "step": "6a8ea56b8f7c3f2a4c557d20dd45b86b9eda749f653f4559ee21327ca3bed830254af606c6aee98b123ccc4cb6172fb2283a96be63867331687fa0f5100e4bd2",
+     "workload": "da302a7afc9de2aa53751ea17b845068b6c4a0b9542f725929bf5a24038186ce1b20759656a9a662d879d060980df89bd387f96b65b6220909b0d5c4094e3ef2",
+     "requests": {
+      "build_request_LP101_T26": "8b67e54d140d4612badbaa03325351cd6ee590098f30b778ec354c97c29e9c30641132cb85acd943a1f578654432441a1fc91c982de3b3d6bac50bbb4f69756e",
+      "build_request_LP11_T12": "f22d03019ee5c9324134c394b8628cf3bda5fa89d3e9e04b3fe56faf92e856bc5e05eb057ed2adb327e513dc39fa5c93597bfec0011deab079629e3c974c5bcd",
+      "build_request_LP11_T31": "ade47550dcb4db82ec1d47a9a516fbb767d3a90ec9ea5e1d8be31a3d89e3a9af07147c141e4945de5adc522841502d926dde0382b55ea5da700f29f43073f425",
+      "build_request_LP187_T6": "13ce54cf320ba713b7e96b07ba381800a395a88be41d4db6cda452090fd2e6c7142ec3741985b21622ebf0ea06233323635391d676796ce986d844a59463dc7c",
+      "build_request_LP231_T1": "5fc655df445330d7c2dd45b479ce921be7902ebf49a9c8f1dca9e31d9be1e13eae6f90d3b6f2b7ef0d210cd6aebced43c855642d507e58c415bfde970367fc17",
+      "build_request_LP256_T5": "7b23c034d4c01ebb4f492d15212f1906cd75680ed189d5808a5f6fe5ee162e4548c36da2558181a1c4214fff86b033172756bfb13e1f645cd1f9d47604e8dd99",
+      "build_request_LP33_T28": "6b92a06ff28fdd520a0ba7fc1590dfd83f6ef0c15a201069f75a74dbce5bc19d98aa72768d461deef4a674261badb0321d6993f4bce635da9219955686b21025",
+      "build_request_LP65_T22": "73d35f81fa527f6f44a91a7be2a56ae4b09bf26de06a17c65c70438c56eac714e849863267bfea3a263d5d3105b545a8c1357c891f34aa80ed3f1e99fd03f0dc"
+     }
+    },
+    "1": {
+     "step": "0f2c780b5b139b4b7b3513400ff2b1ad34db03765a743849b6ed5ad8f4f0e177efa2fbae45394b025f9e86a1747f01fe02aea0330f4045fecd2fe7e989bb97f3",
+     "workload": "e4c41e3409abae2f718eda523654e5fce9fb075c000da9a7cc93ff74a76e0c3ef6d479b684a0148fd1d884c33cc107103a47c090e3e881046875501f4e13a9ae",
+     "requests": {
+      "build_request_LP101_T26": "41b051243bd78087f353268d555567a658833830687562a593913b14c0c5e5e037cede8954f6f776f9b875803b2da20d839309411ee55dda6eef13072df05aba",
+      "build_request_LP11_T12": "2be216b90c3eca99889045d76d4391efbb33aba17421b7d0aa7912b213cf33db1bbaf2f673af07a6775a6b00610db63cfda0c27bb8b4caf650873e773369112e",
+      "build_request_LP11_T31": "f9827d0294c03cde1362ea2cb3e11b89db2a591e4f0ded23de6c7e254cba7c0e5b966c74c777ddc3de8eb6f2530ca4df41d15c267be2a78ed2807cb3c22ab976",
+      "build_request_LP187_T6": "442ed846d7ed7c2d603f8953bd55b367b616a3f5d729fd2ffafa58aad1199ff20aafe1425f5a928aa7a7cb3040efcff2bdc299fc1a1d8c399fbbbfee456b76c9",
+      "build_request_LP231_T1": "087fbb1459917a35a931e8530a8e6c1cfc3519f84bb82862552efbce9c055a041af343992ccc4511b4d3bd1a962d86319ef2e2326fee799523421593c60e5d34",
+      "build_request_LP256_T5": "b87d0f207284a435800fdc89f6840b62e81a9e55a62ff787e3845dfd60490233d2376fc3320e0b2e9c3fdcd3ff743341519fdee541e57fce4253ea8acafc4ac4",
+      "build_request_LP33_T28": "b4faf8a66c0585300cd88f1b23d255f748c41915b8ea00c8e0803095d63e95b071dcd8010bd9d8788df053b98a0d55defd56893b074d5af92798d574132b5269",
+      "build_request_LP65_T22": "bf05e65b58bfdb83a0f68b7647b0a165709c218735f7e3e9246acd55fba0a8d47c2e0556ec11ab4cf8dd0626c87c4006ac754d71243553d75ad814f0bc7012d9"
+     }
+    },
+    "2": {
+     "step": "5d0f3290baf0f0208553c2fbbccfbce8764b781cad12489c3a469f40a5803d6ecc2a1e445620c6db340dc9190021d6f079ec3f86db35105f57fdf1cbda576907",
+     "workload": "b9dc4bdd964aa9ba6a6058585c1dab03cbd13182d06f2a1ffc8096d31c0df51eef6d49c3a74d666a2bc9af29928ca8bdc9c6ecc4569145a05fbed03d74a3e7c8",
+     "requests": {
+      "build_request_LP101_T26": "0cb756be8afa50abcdd48c443192ef9cb3e551e74f4fb2c55cbeb64f4481a777d2a5e36af41bc343b8e9bc8714c553dd5129b2ff25a2ab7b1d6a78b1aafd5f8c",
+      "build_request_LP11_T12": "377aa5bcb416559046ef698837f653e235fbea2fa0593ee2ee62718cfc61ec69fb946bd7aa91863290b1859f1e5565cec15c9d90bc49af20bf0bbf346fb68252",
+      "build_request_LP11_T31": "68f2f19ab3a682527156fbe9006744f47edc59e8e2688f2ec167d2925207146b878a3f93b7a133b7e48e1a31f9ddafad89befa29fb6af44e67d649dbe4926a8f",
+      "build_request_LP187_T6": "9534c6afe4a193c0151894f3ceb6465333a6070e79f1abc7f5c39921f8811743420b430eacc904fedb7d47c3ff75f89b458f9589fca98bafc2c7bc442e940341",
+      "build_request_LP231_T1": "2777125c5cc6bcafd77804e32809c9d825211801b1275cd0fa31db5985f925ae37c332d061f923927f40bcaa269fcdf087109fe5a6d76d3f380d66997979d646",
+      "build_request_LP256_T5": "17b169f5d14cd4dbbad9d589ca3424b4df687b2b093e07367760be1f286f884d182afea897daaf4c554fc51b0876faebd09b121315edb5711810bf72f33f326c",
+      "build_request_LP33_T28": "11d0cf4f14cdf6f827f6b5774e4de31e0ec6c7cb30ecd2e71699bb90a44dbe22901945585edfdc1eddfe10a3bb89162cd89d6e2b1ce0773f4a633c3673b64e2f",
+      "build_request_LP65_T22": "a1be9f79b0b8d06ed1d872043b0ec7d31ddd503befddc6f54b0811b8c3b06cc0b5b31484664fb3ee0a7ad6c7d8805576501f79d8074fd7419529a2d1ffc63fb0"
+     }
+    },
+    "3": {
+     "step": "951ee246cdfd5e85f5960c2828f21d7c642e450af3dacc0f7ca3ca0a31d4aa105d5cca91f9825d47eaab67869fe165fb916e5f1a2513ac328a697f08b370a4b9",
+     "workload": "ecfadc77b1faeef709acc2daff741f66f9ac60e552d9bef670d15c5aaa45b0cbd6622a3e20625e860a2b50ed0c9eb9b17b25eb2f266098e97b26c4577b2e9cb6",
+     "requests": {
+      "build_request_LP101_T26": "4617c23f3b305656acb6dddb56c1b5958c64055f4f469eaff62f83e9d3ab36b34ea934bd4fbaf5089c46a4ea81024e2be8dc008b5085bf630f921671f3cd7437",
+      "build_request_LP11_T12": "78e9fc103844cdb3ab784d6cb5adc793cb03625b39b8aef9b082cb89f615c45704c1b6e57e8f8789e399f3be53aed949e42504f6776cdac43fdccad4fcc24404",
+      "build_request_LP11_T31": "157050d5756f6c8d86099c8fe562247e312aab5bc47ca91ebe83b3beadc4f9d2be82b3aa2d94a76a8702a3d1d1589f855afe1d4a8b954ef306e8dffcbcfe3ec9",
+      "build_request_LP187_T6": "93e0a179704c74537e63683f5a5a8a07fd11034e289aae80ef703f3c5b2ca1e6f3973e3588d2cc4bf3f51614fba4d5261d774d0cf882f00a68ee5652f3c0d712",
+      "build_request_LP231_T1": "81ac93074d83d2cd20c054c3877418e1e32ad2642945a614ee8ef7cc66549f95abf1befd9e77a9cb4f605200ba45107f8dec1067a67f31e83693a797ee612182",
+      "build_request_LP256_T5": "f9fb47908e9128cd246fa111705308ce1defa752792d414913c433ff1e87a45c233414770a6293c0b7863701a1c91d6050c7e475ce435d4d3e9efcc7e57888bf",
+      "build_request_LP33_T28": "5e0a29a1fc1017c426f0151fd68f41d3deab2036398ff673d4e6b1845c2183f8c120d1682fae088c990625949c0d0b54e57ab53afdcddc8ca45db960cc27694b",
+      "build_request_LP65_T22": "2c9f8e70e5b9fb47d9933672123bfb3aa290717abc1bc4cd2716125e5d0d333002ee5294fa5f247eeb33a96d9dc9d5e719fdf7da8186523bf9333a8ae4cb1700"
+     }
+    },
+    "4": {
+     "step": "5ce1ce9e88d65139495a5ea39dd347a5edb0831a395d72eefe54fe3a60331cb189a9a02ec51ab5cbefb5ee870ee877a77f3a27d5506821bf5f64d4739ffcc806",
+     "workload": "9b921020a489f01c1f87a81de68d0ef06fde631da33353d6697878c5f99b78417680e9fa7a6a808362f5a9e1ceb7d0ba6df5f5d72cc25fe107b9911bac869cef",
+     "requests": {
+      "build_request_LP101_T26": "06a98cbd7ac3df2df71290f9a75515e910dc527080d01c7c3192510659d8b16fcb39fbf25c272c2959a4d2810cd15bb78721043543874969d51079b96efbb1be",
+      "build_request_LP11_T12": "89ffde44aa99e5664c164a76f20da752248142a98473348bad2fe37175dd8e9921e44ec88a0c787fa555a910a2edc717d0cbd133a3c0430c32e545829042fa4a",
+      "build_request_LP11_T31": "73b61c3397e1450aa085033fbadca9c47f8cc9cda5be1ad85e7142704cab5c047aef7d2b3eafa4d27a84cd42f19fcd618112ea5fa919bb9176e1075648478b0f",
+      "build_request_LP187_T6": "31f58d72998595d9ca739e3be52729b7c14ab7b2de496c2f2e3f6fdf485f41cc958bbb662ef96587a1f70415b32986bdbb9faa7ee5d8f9815fcb73f8b19247c1",
+      "build_request_LP231_T1": "d70dfe47799462f48ce02ac0eccc1cbb4f387bb90e151e24a1ae50afc36eede52510150a811cf14aa29b906d40496311addb1754913d4118b940cad95cf83995",
+      "build_request_LP256_T5": "bf33982f30bbfe224617b86bf5597ab148a332ed6f20a0349b58fddb930a7a691984179f9a14bbbc8754aed6f9f994bf1876b2b816d333ee0c5b0626b32b1f40",
+      "build_request_LP33_T28": "adb36be83dc3588b68c9cbc10d5991b46e3feddde33b326140e10ef2bb50408f14a9a16c4e4ff916769ede2f245a8df9cb35cc7b86b1116a2f94a4e28676f874",
+      "build_request_LP65_T22": "0a13a60ec00316bd1ede25a6d55dea164c2c34832e0dce5a34e5b8f9f9bc05209147a5b705fb341811a674f388ea94a7371eb05d08a294bc41ffef6134d5b8f9"
+     }
+    },
+    "5": {
+     "step": "7cc00d5623dc0ecd2b808d3e1bc6f6c954e4da2fa48457ab6f1a9937de297d7c1c2a7af72bd59789d12720087c7e24886fe1dbc7325eeb2ce5bbbe7a5cee12ef",
+     "workload": "1561af560eebfdbaab833c320d5a67b23345b32f925ad19f8d2a7fa53af16813ff7fd7fb1ac22fd6df4e8fb3cc1e2e7d13a634b0fce16367ea9ecc232918e99f",
+     "requests": {
+      "build_request_LP101_T26": "63190957caa22b4342a98ca3c88d67064f9c6cab0775a2f86ccfc5ba793ac28e532c01ef92e8ed9bedf50694fe005e6209ef30f799338183ab174e5ba254ea84",
+      "build_request_LP11_T12": "36670361b3db2d00a2bb8bd7c34c569cd80fddd92b746acf0f0397b2c4297e27a5768c0002ffd68684862bebb27c86916666b3713eceb47f7087ddf9d5901c86",
+      "build_request_LP11_T31": "61f2b70a6d5442459fdbc8994f808bfba2fc5fdb55597554905e40c2f09b954eab136cc29b7d87b9ed5db1acf5e00be1a3be5f6737ed3b035cced9ec44c78164",
+      "build_request_LP187_T6": "0e71ea4db845e9fb54e5df2b2ab5785597510d6362dc7577ec6f46b0984c4ce657298233b8fe964d52bc91497ee1c0262e2083e32ee003cef04d6ea17ff8a2c8",
+      "build_request_LP231_T1": "1c68bee95625152d37faaa1c0de15564132c9fa2e2261f404e2959d2e0dafb3f6b679301946029cf824189b5ca089a9fa09556b2120ee1ed40088c8cf08dc663",
+      "build_request_LP256_T5": "5790107b04e78ec3ed3491cfd0930c0b58a14b96494999877f882108f65e3bf4181c5dafe978055f1b8afca79ebac59572765677da6ff4cc692c94b0e0b3a4aa",
+      "build_request_LP33_T28": "d83bfd909202719bf2eb2b918fd723b907ccbe50e1d2b922218f26ec918dbd66a8ff167f4b117255b2e62289c9cb94fce6a15f6027f0ccbabe06b911923b77a1",
+      "build_request_LP65_T22": "56dffae2624208d1f1f7bf9f1e30c4b7146bc0820733e5acc194c7cf1c89cdd7b898776da1dab5412fe7c821a96595ff20d9ddb011e39ae0f3d433c5516a71b3"
+     }
+    },
+    "6": {
+     "step": "939b4dbbfd5f3dfef56d111d589368afbca309bbd7eaa4390c56241557e2eb0e5e2a19b0bf49532b86cb7ec5e8db783d6478b6fde3befbe7a1d85a5507eb9f9d",
+     "workload": "c520ca2d7d2e38782613a6a8555800b6d0b787868fb090f0a263909ad7c917ea693414862485e7544bd90096a0d9395b39a05fb0588bf7e3e4028da63fe82d1e",
+     "requests": {
+      "build_request_LP101_T26": "09bb13caf82e75ea66a5bed5b2aac98e9b8d36acafa76c5fb1854db6cc65a857af47fd355c4ad5840eeabce5a24ed59e4a65ed8bc69f6945318b230fd960a273",
+      "build_request_LP11_T12": "57adcb0ea30f3e47a237f742e58eb2346054e19a03ad519fa5dcc3ed1e314d106905d7daca22cb85e907d8470e6cfdc4d1a9ecac8b186806e21fc11eea1cf13f",
+      "build_request_LP11_T31": "b45b1bb0185318876d5db2bf3ffdb835f4e059138fe41b0bf5d4a0bdc024f53be5d89f2ef127206b1124e5d574344c81dec53bfce989a3522a0743b6150f5c30",
+      "build_request_LP187_T6": "e2e3a42723b9b1b481ff064ca23f3266e2a4a31b080a01147804bf34d6fedc1a97424bb0fb98cc8aae94863624642a0c4043a3fd5609660ba88c693819e8a812",
+      "build_request_LP231_T1": "560edc54207a1193b58670ee1bc9605d2a4503d6819dc921c64ed828dbcdffab5e566fe3508200d368d6c3af6e1e92f27f54ce41ec656f887989e92f00bb1a58",
+      "build_request_LP256_T5": "4c00bb72dba4544076dee21667b52f97ecdba96a02c24d0c32d506984cdabc37c3429ab815f83633254a87a449d2968b7bd8a73d4620fb472c776e21973aa2f7",
+      "build_request_LP33_T28": "b0beffcded51f95f4e151c2749e77aa6ed8f3a40bafdc02129dbf462228b7ded6232c2a4f1576759ff43af8cafb53c6dfc1d3b454cc940ac2d44fbdbc9ffe465",
+      "build_request_LP65_T22": "b82c0d4fc21b1ab0cd677b42a4937ca7b2bbf036468364d16785e5918b6639686fafa388f82a3b5ef2b0c54e5d37f294a519fc28140eeebfafc27e96754bf07d"
+     }
+    },
+    "7": {
+     "step": "ff2f802574704ba97cf2886c959482a1944ff8ea2e85d595fa080ceac59f9d36277d9c4d052afdaf8abaab794dd2b5bd7c384b0b7a8280f74785ede3f4440b77",
+     "workload": "2a346b59f1da1ab4f2866c1733f20c7c0660e05b3ec5f64d52e89472a08acbd00ac8948bd8fe73823090b3c06052398dcd3b1f12c16f53d1bb65b0250c4a2d56",
+     "requests": {
+      "build_request_LP101_T26": "41b45b50b8b010d41d16d20cff659bf4952a8a7cd3e6ba0ae99bf45d67616ffdf8a1a821240f555432d521cc80f51b7f0cbe4cbf5bc73c138fffdc13f285c54d",
+      "build_request_LP11_T12": "ec7a156d95f15249cecb2a1c50ee0351ed5f1e8d2d3ba0981e7497ad11f0165492688347903ad2614eef9ecef5218727d2c520fc6f576490fba1c8c41611fe38",
+      "build_request_LP11_T31": "b38346e0cc5c754ad4acb18fce91a6e9ba8d47c5aa412062556ecba0bfdf67ad4f4110e97f5026c2ed4fde64462811e78c9ac9292654fdd7a1a571c302533f06",
+      "build_request_LP187_T6": "85d41165fdda3dc2a4ddab3f9433652ffb7b9dfd4270756db614be981e3269e9868d75763704ef8369343ab4a31880a0879739d23bcc722d797b341252a61134",
+      "build_request_LP231_T1": "4777e583c9d6d1ed9abd6a42d6b8f764c1def8372e5c6fcf83a200e5b7e88103404e153d18a09e75f6b0b9b8926d9478f8f24f7bbd7baf273f93445848950968",
+      "build_request_LP256_T5": "11dd79f4d984c7be32d38e33011948696d2c54d2491b1dd6652c2ec05af3db2addadd48f3ae52069ecdbf3ba9914383ea0b179e093ad927bf181c887f1301920",
+      "build_request_LP33_T28": "f88b61153462f05b45fc39f51b91fb6629b1e1c3fc303db6cf1a6ddcae070664d7483e106ca112563f0d6d796a544e63114c3323d6ff5350c7746bcfe8bcb365",
+      "build_request_LP65_T22": "881a91809a893f5133c7ea46a74de1a5beb62804f256cfd5de964d9620bbd22131484f5d6decc86459b3b6b07a600d123195ab58c4d56135968415b340a28420"
+     }
+    }
+   },
+   "aot": {
+    "comparison": "r20261018-050210-cbab",
+    "trace": "art:15a79f7ea649996a7cdd8d686da1dac87a84fb700d0777e98d75186a7e315a67"
    }
   },
   "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager": {

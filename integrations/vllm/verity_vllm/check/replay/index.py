@@ -211,9 +211,10 @@ class ProgramIndex:
 
     def ids_params(self) -> set[int]:
         """The Program parameter(s) carrying the declared prompt ids: every parameter that is not the registered `weights` record, not a
-        sampler input (`seed`, `splits`) and not a supplied input (`values`, `run_<i>`) -- the same reading `_gather_inputs` resolves a
-        `['p', a, k, k+1]` slice by (the committed `input_token_ids` row k of the arrival step)."""
-        return {a for a, n in enumerate(self.pnames) if n not in ("weights", SEED_PARAM, RM.SPLITS_PARAM) and a not in self.supplied}
+        sampler input (`seed`, `splits`), not the `schedule` witness and not a supplied input (`values`, `run_<i>`) -- the same reading
+        `_gather_inputs` resolves a `['p', a, k, k+1]` slice by (the committed `input_token_ids` row k of the arrival step)."""
+        return {a for a, n in enumerate(self.pnames)
+                if n not in ("weights", SEED_PARAM, RM.SPLITS_PARAM, RM.SCHEDULE_PARAM) and a not in self.supplied}
 
     def embed_op_path(self) -> str | None:
         """The op_path of the Program's Embedding rows (the `input_token_ids` identity lives under it as member `in`): the first row whose
