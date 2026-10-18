@@ -16,6 +16,9 @@ read:
   the deployed `--zk` record (`decOK`, `FlockDeploy.listWithin_zk`), the spec those claims quantify the outer decoder
   over (`Efficient` is stated at one decoder, this one);
 * `KSFlock_meets`, `BitsFlock_meets`: so do the inner radius decoder at the deployed plain record and the outer one;
+* `KSBound_meets`, `KSPrivBound_meets`: the outer radius decoder meets the spec at the deployed `--zk` record. The tree
+  has no deployed bound record (`Claims.Recursion.Bound`: its element-level Flock has no code counterpart yet), so the
+  inner decoder's antecedent waits for one;
 * `Inner.KS_meets`, `Inner.KSAbort_meets`: the inner radius decoder meets the spec at the deployed plain record, the
   inner protocol `Inner.ofFlock` reads there;
 * `ZK_meets`, `ZKPriv_meets`: the deployed outer record is masked;
@@ -108,6 +111,17 @@ theorem BitsFlock_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     decOK (FlockDeploy.deployPlain rel) Claims.GS.plainDecodeRD ∧
       decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD :=
   ⟨FlockDeploy.listWithin_plain rel, FlockDeploy.listWithin_zk rel⟩
+
+/-- `KSBound`'s antecedent at the deployment: the outer radius decoder meets the spec at the deployed `--zk` record. -/
+theorem KSBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
+    decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD :=
+  FlockDeploy.listWithin_zk rel
+
+/-- `KSPrivBound`'s antecedent at the deployment: the outer radius decoder meets the spec at the deployed `--zk`
+record. -/
+theorem KSPrivBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
+    decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD :=
+  FlockDeploy.listWithin_zk rel
 
 /-- `Inner.KS`'s antecedent at the deployment: the inner radius decoder meets the spec at the deployed plain record. -/
 theorem Inner.KS_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :

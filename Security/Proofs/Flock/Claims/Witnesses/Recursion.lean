@@ -10,7 +10,9 @@ Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy r
 * `ksR`: the compiled verifier accepts after one round, nothing parses (so no statement has a witness, in either
   variant), there is no V* session, and the outer witnesses record no call. So `Pr[acc ∧ ¬R] = 1`, `B` and `Be` find
   nothing, and at an inner error of `1/8` (`accI`) the bound is `κ = 1/8`, with `λ = 1`. `KS_fails`, `KSPriv_fails`,
-  `Bits_fails`; over Flock (`Flock.ksD` inside, `κ_I < 1/4`), `KSFlock_fails` and `BitsFlock_fails`.
+  `Bits_fails`; over Flock (`Flock.ksD` inside, `κ_I < 1/4`), `KSFlock_fails` and `BitsFlock_fails`; at the
+  representation V* binds (`ksB`, `Flock.ksD` element-level, whose bound record has `Flock.ksD`'s `κ`),
+  `KSBound_fails` and `KSPrivBound_fails`.
   `ScopeMatches_fails`: its scope is empty and its check takes everything.
 * `compR`: the compiled verifier rejects after one round, and every statement parses as `recStmt`, in scope, under an
   inner protocol whose relation and scope hold everywhere. `Complete_fails`: its reference prover fails at its
@@ -130,6 +132,20 @@ def zvR (Coin : Type) (circ : Option Msg) : Recursion.Deploy Coin :=
 carries: `Sim`'s inner round. -/
 def zeroP (Coin : Type) : Prover ((Fin 1 → Fin 1 → UInt8) × Unit) :=
   ⟨fun _ _ ω => (zvR Coin none).zeroCommit (ω.1 0)⟩
+
+/-- The toy bound record of `KSBound` and `KSPrivBound`: `Flock.ksD` element-level, no commit string at any round, a
+last message that reads as nothing (`final`), and weight `0`. -/
+noncomputable def ksB (Coin : Type) : Bound Coin Unit Unit where
+  DE := Flock.ksD Coin
+  ans _ := []
+  join _ := []
+  nAt _ _ := 0
+  saltLen := 0
+  saltPrefix := []
+  mask _ _ := 0
+  rowIn r := r
+  final _ := none
+  weight _ := 0
 
 theorem recStmt_inScope : Recursion.InScope recStmt :=
   ⟨rfl, le_rfl, by decide, le_rfl, rfl, Or.inl ⟨rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
@@ -528,6 +544,30 @@ theorem KSFlock_fails (H : Msg → Msg) : ¬ KSFlock H (ksR Coin) (Flock.ksD Coi
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
     Unit silentP
   rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
+  have := Flock.ksD_κ (Coin := Coin) []
+  simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
+  change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
+  linarith
+
+/-- **The recursion's `KS` at the representation V\* binds fails** at `ksR`, `ksB` inside and `Flock.ksD` outside: the
+bound record's `κ` is `Flock.ksD`'s. -/
+theorem KSBound_fails (H : Msg → Msg) : ¬ KSBound H (ksR Coin) (ksB Coin) (Flock.ksD Coin) := by
+  intro h
+  have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
+    Unit silentP
+  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
+  have := Flock.ksD_κ (Coin := Coin) []
+  simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
+  change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
+  linarith
+
+/-- **The recursion's private `KS` at the representation V\* binds fails** at `ksR`, `ksB` inside and `Flock.ksD`
+outside. -/
+theorem KSPrivBound_fails (H : Msg → Msg) : ¬ KSPrivBound H (ksR Coin) (ksB Coin) (Flock.ksD Coin) := by
+  intro h
+  have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
+    Unit silentP
+  rw [ksR_prBad H _ _ [] (ksR_noRPriv _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
   have := Flock.ksD_κ (Coin := Coin) []
   simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
   change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
