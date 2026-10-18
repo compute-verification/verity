@@ -3,6 +3,8 @@ whose passes can't be reused, with dependencies kept warm.
 
     python tools/verity/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
                                                       (only those packages: a shard's share, `check.py --shard`)
+                                                      [--regenerate] (a train's check: record differences pass, and
+                                                      audit.json's `regenerated` names the records the train commits)
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/verity/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
@@ -891,9 +893,12 @@ def transient(rep: dict) -> bool:
 
 
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
-           log, urls: dict[str, str] | None = None, comps: dict | None = None) -> tuple[list[str], list[str]]:
+           log, urls: dict[str, str] | None = None, comps: dict | None = None,
+           regenerate: bool = False) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
-    Returns (the failed, the audited)."""
+    ``regenerate`` (`check.py --regenerate`, a train's check) passes a package whose every failure is a record difference;
+    such a pass is never stored, since its lock changes when the train commits the record.  Returns (the failed, the
+    audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
@@ -924,7 +929,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             *([] if fresh else ["--replay-cache", str(cache.parent / "lean-replay"),
                                                 "--artifacts", str(artifacts.store)]),
-                            "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
+                            *(["--regenerate"] if regenerate else []), "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["check.py"]}
         failed = [os.path.relpath(f, work) if f.startswith(str(work)) else f for f in doc.get("failed", [])]
@@ -932,7 +937,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             p = os.path.relpath(rep["package"], work)
             rep["package"] = p
             reports[p] = rep
-            if not rep["failures"] and r.returncode in (0, 1) and p in keys and not fresh:
+            if not rep["failures"] and not rep.get("settled") and r.returncode in (0, 1) and p in keys and not fresh:
                 cache.mkdir(parents=True, exist_ok=True)
                 tmp = cache / f".{keys[p]}.tmp"
                 tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep,
@@ -971,7 +976,7 @@ def select(pkgs: list[str], only: list[str] | None) -> list[str]:
 
 
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
-        export: Path | None = None, only: list[str] | None = None) -> int:
+        export: Path | None = None, only: list[str] | None = None, regenerate: bool = False) -> int:
     files = COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
@@ -996,7 +1001,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     for attempt in range(len(RETRIES) + 1):
         if not todo:
             break
-        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps)
+        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps, regenerate)
         failed = [f for f in failed if f not in audited] + now
         retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
         if not retry or attempt == len(RETRIES):
@@ -1005,8 +1010,12 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         time.sleep(RETRIES[attempt])
         todo = retry
     failed += [p for p in pkgs if p not in reports and p not in failed]
+    regenerated = {p: reports[p]["regenerated"] for p in pkgs if reports.get(p, {}).get("settled")}
+    for p, f in regenerated.items():
+        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which the train commits over {p}/lean-audit.json")
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
-                                                "packages": [reports[p] for p in pkgs if p in reports]}, indent=1) + "\n")
+                                                "packages": [reports[p] for p in pkgs if p in reports],
+                                                "regenerated": regenerated}, indent=1) + "\n")
     log(f"lean-audit: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}: {len(cached)} of {len(pkgs)} packages reused")
     if export is not None:
         ok = {p: k for p in pkgs if p in reports and not reports[p].get("failures") and (k := deps_key(ROOT / p))}
@@ -1159,9 +1168,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
     ap.add_argument("--package", action="append", metavar="PKG", help="audit only this package (repeatable): a shard's share")
+    ap.add_argument("--regenerate", action="store_true", help="a train's check: `check.py --regenerate`, so a package whose "
+                    "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
+                    "cache key, and such a pass is never stored")
     a = ap.parse_args(argv)
     urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
-    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export, only=a.package)
+    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export, only=a.package,
+               regenerate=a.regenerate)
 
 
 if __name__ == "__main__":
