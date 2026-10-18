@@ -146,6 +146,10 @@ template <bool H1> DEV void hm_body(const FaArgs& a) {
     if constexpr (H1) htail_h1<L>(ml, acc, ch);
     else htail<L>(ml, acc, ch);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
+    // any-s (s a multiple of 256, not only a power of 2): a query column's position is col mod s, and the column's rep
+    // block is 128-aligned, so pos = (tn mod tiles per block) 128 + the column's offset in the tile, reusing the causal
+    // tile test's one modulo (no per-column & (s - 1), which only holds for a power-of-2 s)
+    const int tnm = tn % (a.s / 128), posb = tnm * 128 + wn * 32 + 2 * q;
     int* mc = a.M + (size_t)kvh * a.rep * a.s + col0;
     // a tile strictly below the diagonal needs no key <= pos test (EDGE: the tiles that do)
     auto colmax = [&](auto edge_t) {
@@ -154,7 +158,7 @@ template <bool H1> DEV void hm_body(const FaArgs& a) {
       for (int ni = 0; ni < NI; ni++)
 #pragma unroll
         for (int c = 0; c < 2; c++) {
-          const int pos = (col0 + 8 * ni + c) & (a.s - 1);
+          const int pos = posb + 8 * ni + c;
           int mx = INT_MIN;
 #pragma unroll
           for (int mi = 0; mi < MI; mi++)
@@ -167,7 +171,7 @@ template <bool H1> DEV void hm_body(const FaArgs& a) {
           if (g == 0 && mx != INT_MIN) atomicMax(mc + 8 * ni + c, mx);
         }
     };
-    if (tm >= tn % (a.s / 128)) colmax(std::true_type{});
+    if (tm >= tnm) colmax(std::true_type{});
     else colmax(std::false_type{});
     uint4* r = reinterpret_cast<uint4*>(a.R) + (((size_t)kvh * tpk + tile_id) * L::NCT + ctid) * 2;
     r[0] = make_uint4(finish<DUO>(ch, 0), finish<DUO>(ch, 1), finish<DUO>(ch, 2), finish<DUO>(ch, 3));
@@ -199,6 +203,7 @@ __global__ void __launch_bounds__(MLW::NT, 1) hsm(const __grid_constant__ FaArgs
     const int4 te = __ldg(a.tab + t);
     const int tm = te.x, tn = te.y, kvh = te.z;
     const int qr0 = tn * 128 + wm * 32 + g, k0 = tm * 128 + wn * 32 + 2 * q;
+    const int tnm = tn % (a.s / 128), posb = tnm * 128 + wm * 32 + g;   // any-s: query row position is col mod s, division-free
     const size_t qb = (size_t)kvh * a.rep * a.s;
     int m[MI][2];
 #pragma unroll
@@ -214,7 +219,7 @@ __global__ void __launch_bounds__(MLW::NT, 1) hsm(const __grid_constant__ FaArgs
       for (int mi = 0; mi < MI; mi++)
 #pragma unroll
         for (int h = 0; h < 2; h++) {
-          const int qr = qr0 + 16 * mi + 8 * h, pos = qr & (a.s - 1);
+          const int qr = qr0 + 16 * mi + 8 * h, pos = posb + 16 * mi + 8 * h;
           int sum = 0;
           uint32_t pw[NI];
 #pragma unroll
@@ -243,7 +248,7 @@ __global__ void __launch_bounds__(MLW::NT, 1) hsm(const __grid_constant__ FaArgs
           if (q == 0) atomicAdd(a.L + qb + qr, sum);
         }
     };
-    if (tm == 0 || tm >= tn % (a.s / 128)) epi(std::true_type{});
+    if (tm == 0 || tm >= tnm) epi(std::true_type{});
     else epi(std::false_type{});
   }
 }
@@ -262,9 +267,10 @@ __global__ void lred(const int* __restrict__ L, const int* __restrict__ E0, floa
 
 __global__ void hsref(const int* __restrict__ S, int8_t* __restrict__ P, float* __restrict__ sp, float* __restrict__ sz, int s, int rep,
                       int kvh, uint32_t A) {
-  const int col = blockIdx.x * blockDim.x + threadIdx.x;
-  if (col >= rep * s) return;
-  const int pos = col & (s - 1);
+  // any-s: launch (s / 128, rep) so pos is division-free (blockIdx.y the rep block, blockIdx.x the 128-wide query tile)
+  const int pos = blockIdx.x * blockDim.x + threadIdx.x;
+  if (pos >= s) return;
+  const int col = blockIdx.y * s + pos;
   const size_t N = (size_t)rep * s, qrow = (size_t)kvh * rep * s + col;
   int m = INT_MIN;
   for (int key = 0; key <= pos; key++) m = max(m, S[(size_t)key * N + col]);
@@ -293,10 +299,12 @@ __global__ void rtcmp(const uint32_t* R, const uint32_t* R2, const int4* tab, in
   if (c) atomicAdd(bad, c);
 }
 // P_prob's bytes apv reads: row (h, pos), keys below 128 (pos / 128 + 1)
-__global__ void pcmp(const int8_t* P, const int8_t* P2, int s, size_t rows, unsigned long long* bad) {
+__global__ void pcmp(const int8_t* P, const int8_t* P2, int s, int H, unsigned long long* bad) {
   unsigned long long c = 0;
-  for (size_t r = blockIdx.x; r < rows; r += gridDim.x) {
-    const int pos = (int)(r & (size_t)(s - 1)), nk = (pos | 127) + 1;
+  const size_t hb = (size_t)blockIdx.y * s;   // any-s: blockIdx.y the query head, blockIdx.x the position (so pos is division-free)
+  for (int pos = blockIdx.x; pos < s; pos += gridDim.x) {
+    const size_t r = hb + pos;
+    const int nk = (pos | 127) + 1;
     for (int k = threadIdx.x; k < nk; k += blockDim.x) c += P[r * s + k] != P2[r * s + k];
   }
   if (c) atomicAdd(bad, c);
@@ -326,7 +334,7 @@ static void fa_lut_host(uint8_t* lut) {
   for (int t = 0; t < FA_LUT; t++) lut[t] = (uint8_t)lrint(127.0 * exp2(-t / 16.0));
 }
 static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool unf) {
-  if (s % 1024 && unf) { fprintf(stderr, "s %d: the unfused h_l7qs needs s %% 1024 == 0 (EL's raster groups)\n", s); exit(2); }
+  if (s % 128 && unf) { fprintf(stderr, "s %d: the unfused h_l7qs needs s %% 128 == 0 (EL's raster; any-s: the last group is ragged)\n", s); exit(2); }
   apsetup(F.V, s, H, rep, seed, gate);
   F.s = s; F.H = H; F.rep = rep; F.kvh = H / rep; F.seed = seed; F.A = fa_A();
   const char* num = getenv("CG_NUMERICS");
@@ -431,7 +439,7 @@ static void fhqk(FA& F, uint32_t* R) {
 static void fsref(FA& F) {
   const size_t sk = (size_t)F.s * F.rep * F.s;
   for (int k = 0; k < F.kvh; k++)
-    hsref<<<(F.rep * F.s + 127) / 128, 128, 0, F.V.st>>>(F.S + k * sk, F.V.P, F.V.sp, F.V.sz, F.s, F.rep, k, F.A);
+    hsref<<<dim3(F.s / 128, F.rep), 128, 0, F.V.st>>>(F.S + k * sk, F.V.P, F.V.sp, F.V.sz, F.s, F.rep, k, F.A);
 }
 // an arm: hquant (with hwedit<true>: the QK^T operands), hm (causal), hm_full (every tile), hsm (with L's memset),
 // lred, qks (hm, hsm, lred: QK^T and the softmax, S never stored), pv (uedit, vedit, vsum, apv_fu), attn (the operands,
@@ -505,7 +513,7 @@ static int fagate(const std::string& dir, int s, int H, int rep, uint32_t seed) 
   };
   auto pbad = [&]() {
     CK(cudaMemsetAsync(V.bad, 0, 8, V.st));
-    pcmp<<<1024, 256, 0, V.st>>>(V.P, Pr, s, qr, V.bad);
+    pcmp<<<dim3(std::min(1024, s), H), 256, 0, V.st>>>(V.P, Pr, s, H, V.bad);
     unsigned long long h;
     CK(cudaMemcpyAsync(&h, V.bad, 8, cudaMemcpyDeviceToHost, V.st));
     CK(cudaStreamSynchronize(V.st));
