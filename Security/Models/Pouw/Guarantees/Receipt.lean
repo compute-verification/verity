@@ -25,8 +25,7 @@ What is proved about duo's words (`Definitions/Pouw/Receipt/Duo.lean`), at every
 `a₃ ≡ ±1 (mod 2^(n+1−r₁))`, flipping the top bit of all four words leaves every final state unchanged. pfill's `key_ok`
 rejects `a ≡ −1 (mod 32)` and its rotations are 5 to 29, and no served word's multiplier is `≡ −1` modulo two to the
 previous word's rotation, so both deployed schedules meet it at `n = 32`. Runs of five or more words have no
-all-state statement here (`DuoRunWordInjective` fixes all words but one), nor does the served receipt
-`y ⊕ rotl(z, 16)`, which commits less than the whole state.
+all-state statement here (`DuoRunWordInjective` fixes all words but one).
 
 fx1 (`Definitions/Pouw/Receipt/Fx1.lean`) is duo on the word times an odd multiplier `m`, a bijection of the words, so
 each duo statement holds for fx1 with every IMAD multiplier odd (`Fx1WordInjective`, `Fx1PairNoKernel`,
@@ -44,6 +43,24 @@ odd multipliers alone:
 With every absorbed word recomputed from committed operands and a pinned start, these make a checkpoint taken every
 segment catch every skipped value that lands on one word of the segment, with no key rule. One receipt word a window is
 not covered: a persistent skip's copies all differ first at the same bit, and an even number of them can cancel there.
+
+The served receipt `y ⊕ rotl(z, 16)` commits less than the whole state, and a thread commits the XOR of its 8 chains'
+receipts, so two runs whose receipts differ by one XOR constant on every start state cancel in two chains of a parity
+group. `duoWordSpread` (the receipt's XOR between two start states) is equal for two words exactly then:
+
+* `DuoWordProjNoKernel`: one word's served receipt has no such kernel, for every odd multiplier, rotation
+  `0 < r < n` and receipt rotation `0 < h < n`.
+
+That is the half of binding a constant kernel would break. The other half fails: at a state, the receipt keeps only `n`
+of the state's `2n` bits, so two words can reach one receipt.
+
+* `DuoReceiptNotInjective`: at width 32 with the served word 0's keys, one start state and two words give one receipt.
+
+So a receipt a thread a window is not a full-state commitment, and a chain that absorbed a wrong word can match the honest
+receipt; the checkpoint a segment of the chains' full states (`Accounting.Guarantees.TS.DuoSegmentsBind`) can't.
+
+Three words' receipts can have one: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and `a₃ ≡ ±1 (mod 2^(n−r₁))`,
+flipping the top bit of all three words moves the receipt by one constant (`benchmarks/pouw/theory/duo_proj.c`).
 -/
 
 namespace Pouw.Guarantees.Receipt
@@ -163,5 +180,19 @@ def LiCheckpointLowBit : Prop :=
     (liCheckpoint (before ++ (pre ++ (k, a.1, (d.1, d.2 ^^^ x.1)) :: post.map LiOddHalfStep.val, y) :: after) ^^^
         liCheckpoint (before ++ (pre ++ (k, a.1, d) :: post.map LiOddHalfStep.val, y) :: after)).setWidth (v + 1) =
       BitVec.twoPow (v + 1) v
+
+/-- **One duo word's served receipt binds it up to no XOR constant.** For every width, XOR key, odd multiplier,
+rotation `0 < r < n` and receipt rotation `0 < h < n`, two words whose receipts `y ⊕ rotl(z, h)` differ by one XOR
+constant on every start state (equal `duoWordSpread`s) are equal. -/
+def DuoWordProjNoKernel : Prop :=
+  ∀ (n : ℕ) (k : BitVec n) (a : OddKey n) (r h : Rotation n), Function.Injective (duoWordSpread k a.1 r.1 h.1)
+
+/-- **The served receipt is not injective in a word at a state.** At width 32, with the XOR key `0x6d403793`, multiplier
+`0x9e43d96b` and rotation 6 of the served word 0 (`fgemm.cu`'s `key_xor(0, 0)`, `key_mul(0, 0)`, `rot_of(DUO, 0, 0)`) and
+receipt rotation 16, from the state `(0x247a23f6, 0xc48c9971)` the words `0x1632c` and `0x2237a` give the receipt
+`0x26d90889`. -/
+def DuoReceiptNotInjective : Prop :=
+  ¬ Function.Injective (fun d : BitVec 32 =>
+    duoReceipt 16 (duoWord (0x6d403793#32) (0x9e43d96b#32) 6 (0x247a23f6#32, 0xc48c9971#32) d))
 
 end Pouw.Guarantees.Receipt
