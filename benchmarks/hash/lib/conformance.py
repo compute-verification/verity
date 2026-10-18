@@ -259,7 +259,8 @@ def same_levels(got: list[list[bytes]], want) -> tuple[bool, str | None]:
     return True, None
 
 
-FORMS = ((vclib.FORM_SPLIT, "split"), (vclib.FORM_FUSED, "fused"), (vclib.FORM_FOLD, "fold"), (vclib.FORM_AUTO, "auto"))
+FORMS = ((vclib.FORM_SPLIT, "split"), (vclib.FORM_FUSED, "fused"), (vclib.FORM_FOLD, "fold"), (vclib.FORM_SPEC, "spec"),
+         (vclib.FORM_AUTO, "auto"))
 
 
 def case_hm96_rows(d: Dev, rng: random.Random, quick: bool) -> None:
@@ -304,9 +305,9 @@ def case_hm96_rows(d: Dev, rng: random.Random, quick: bool) -> None:
 
 
 def case_fold_wide(d: Dev, rng: random.Random, quick: bool) -> None:
-    """The commit over trees of many CTAs (the fold's climb over up to 10 levels above its 256-leaf subtrees, siblings racing;
-    node indices of 3 bytes at width 2^18; AUTO on both sides of its switch), short rows to keep the reference cheap, from levels
-    and scratch full of 0xFF, twice in a row."""
+    """The commit over trees of many CTAs (FOLD's climb over up to 10 levels above its 256-leaf subtrees and SPEC's over 13
+    above its warps' 32, siblings racing; node indices of 3 bytes at width 2^18; AUTO on both sides of its switch), short rows
+    to keep the reference cheap, from levels and scratch full of 0xFF, twice in a row."""
     n_bits, schema = 1024, "hm96-sha512/row/v2"
     for n in ((5000, 70000) if quick else (20000, 32768, 140000)):
         dom = domain(rng, n)
@@ -319,7 +320,8 @@ def case_fold_wide(d: Dev, rng: random.Random, quick: bool) -> None:
         st = stride_of(n_bits // 8)
         rp = d.up(packed(rows, st))
         width, size = d.lib.tree_width(n), d.lib.tree_bytes(n)
-        for form, fname in ((vclib.FORM_FOLD, "fold"), (vclib.FORM_SPLIT, "split"), (vclib.FORM_AUTO, "auto")):
+        for form, fname in ((vclib.FORM_FOLD, "fold"), (vclib.FORM_SPEC, "spec"), (vclib.FORM_SPLIT, "split"),
+                            (vclib.FORM_AUTO, "auto")):
             lv, sc = d.buf(size, 0xFF), d.buf(d.lib.commit_scratch_bytes(n), 0xFF)
             ok_all, where = True, None
             for _ in range(2):

@@ -144,10 +144,11 @@ int rows_bench(int argc, char** argv) {
   Nr nat;
   const bool have_nat = so && *so && nat.load(so);
   if (have_nat) nat.init(p, n, me.Tn);
-  Vc vs, vf, vo, vg;
+  Vc vs, vf, vo, vp, vg;
   vs.init(p, n);
   vf.init(p, n);
   vo.init(p, n);
+  vp.init(p, n);
   vg.init(p, n);
   vg.capture(src, VC_FORM_AUTO, st);
   const u64 width = cm.width;
@@ -173,6 +174,7 @@ int rows_bench(int argc, char** argv) {
   add("libvc_split", [&](cudaStream_t s) { vs.run(src, VC_FORM_SPLIT, s); }, {(const u64*)vs.levels, true});
   add("libvc_fused", [&](cudaStream_t s) { vf.run(src, VC_FORM_FUSED, s); }, {(const u64*)vf.levels, true});
   add("libvc_fold", [&](cudaStream_t s) { vo.run(src, VC_FORM_FOLD, s); }, {(const u64*)vo.levels, true});
+  add("libvc_spec", [&](cudaStream_t s) { vp.run(src, VC_FORM_SPEC, s); }, {(const u64*)vp.levels, true});
   add("libvc_auto", [&](cudaStream_t s) { vo.run(src, VC_FORM_AUTO, s); }, {(const u64*)vo.levels, true});
   add("libvc_auto_graph", [&](cudaStream_t s) { CK(cudaGraphLaunch(vg.graph, s)); }, {(const u64*)vg.levels, true});
   u64* io;

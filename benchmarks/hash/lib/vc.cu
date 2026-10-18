@@ -486,6 +486,40 @@ DEV void mask8(const uint4* T8, const u64* Y, u32* m) {
     for (int w = 0; w < 16; ++w) m[w] ^= __funnelshift_r(A[w], A[w + 1], s);
   }
 }
+// mask_nib from the nibble table in shared memory, its loop over r rolled as mask8's (sharaw's mask_roll).
+DEV void mask_nib_s(const uint8_t* T, const u64* Y, u32* m) {
+#pragma unroll
+  for (int w = 0; w < 16; ++w) m[w] = 0;
+#pragma unroll 1
+  for (int r = 0; r < 16; ++r) {
+    u32 A[20];
+#pragma unroll
+    for (int i = 0; i < 20; ++i) A[i] = 0;
+    const int sh = 56 - 8 * (r & 7);
+#pragma unroll
+    for (int q = 0; q < 12; ++q) {
+      const u32 v = (u32)((r < 8 ? Y[2 * q] : Y[2 * q + 1]) >> sh) & 0xFFu;
+      const uint4* lo = reinterpret_cast<const uint4*>(T + 256 * q + 16 * (v & 15u));
+      const uint4* hi = reinterpret_cast<const uint4*>(T + 4096 + 256 * q + 16 * (v >> 4));
+#pragma unroll
+      for (int i = 0; i < 5; ++i) {
+        const uint4 u = lo[16 * i], w = hi[16 * i];
+        A[4 * i] ^= u.x ^ w.x; A[4 * i + 1] ^= u.y ^ w.y; A[4 * i + 2] ^= u.z ^ w.z; A[4 * i + 3] ^= u.w ^ w.w;
+      }
+    }
+    if (r & 4) {
+#pragma unroll
+      for (int k = 0; k < 19; ++k) A[k] = A[k + 1];
+    }
+    if (r & 8) {
+#pragma unroll
+      for (int k = 0; k < 18; ++k) A[k] = A[k + 2];
+    }
+    const u32 s = 8 * (r & 3);
+#pragma unroll
+    for (int w = 0; w < 16; ++w) m[w] ^= __funnelshift_r(A[w], A[w + 1], s);
+  }
+}
 DEV void mask_words(const u32* m, u64* my) {
 #pragma unroll
   for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
@@ -839,9 +873,116 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
   }
 }
 u64 fold_ctrs(u64 width) { return width > THREADS ? width / THREADS - 1 : 0; }
-// AUTO's FOLD up to this many rows, SPLIT above. FOLD saves SPLIT's tree launches, a fixed cost, but its CTAs idle through
-// their subtree's barriers, a cost a row: B200 crosses over near 44,000 rows (FOLD 5% faster at 34,737, SPLIT 8% at 65,536).
-constexpr u64 FOLD_MAX_ROWS = 40000;
+
+// The whole commit in one launch (sharaw's sr_leaf4, v4): a CTA of 2 cnt threads for cnt = min(width, SPEC_R) leaves. Threads
+// below cnt hash the rows; the others compute, for the same leaves at the same time, the salt record (M_key y from the nibble
+// table in shared memory, c, the frame leaf's first block; or the pad) into shared memory. Then the row threads finish their
+// leaves, fold their warp's 32 through shuffles, and lane 0 climbs while its warp is the second of two siblings to finish.
+// ctr: a count a node above level log2(min(cnt, 32)), zeroed before the launch.
+constexpr int SPEC_R = 128;
+template <int SX>
+__global__ void __launch_bounds__(2 * SPEC_R, 2)
+    k_leaf_spec(const __grid_constant__ LeafK K, const __grid_constant__ NodeK N, const uint8_t* __restrict__ tab,
+                const uint8_t* __restrict__ salts, const uint8_t* __restrict__ rows, u64 stride, u64 n, u64 width, int depth,
+                uint8_t* levels, uint8_t* __restrict__ bc, u32* ctr) {
+  __shared__ uint4 T[512];
+  __shared__ u64 SF[SPEC_R * 24];
+  const u32 cnt = blockDim.x / 2, t = threadIdx.x;
+  for (u32 i = t; i < 512; i += blockDim.x) T[i] = reinterpret_cast<const uint4*>(tab)[i];
+  __syncthreads();
+  const bool rower = t < cnt;
+  const u32 j = rower ? t : t - cnt;
+  const u64 pos = (u64)blockIdx.x * cnt + j;
+  u64 x[8];
+  if (rower) {
+    if (pos < n) hash_tail(K.mid_P, 128, rows + pos * stride, K.lb, x, K.xpad ? K.kw_xpad : nullptr);
+  } else {
+    u64* s = SF + 24 * j;
+    if (pos < n) {
+      u64 Y[24], my[8], c[8], f[8];
+      u32 mk[16];
+      salt_of(K, salts, pos, pos, Y);
+      mask_nib_s(reinterpret_cast<const uint8_t*>(T), Y, mk);
+      salt_digest(K, Y, c);
+      mask_words(mk, my);
+      frame_first(K, pos, f);
+      cpy8(s, my);
+      cpy8(s + 8, c);
+      cpy8(s + 16, f);
+    } else {
+      u64 o[8];
+      pad(K, pos, o);
+      cpy8(s + 16, o);
+    }
+  }
+  __syncthreads();
+  if (!rower) return;
+  const u64* s = SF + 24 * j;
+  u64 o[8];
+  cpy8(o, s + 16);
+  if (pos < n) {
+    u64 my[8], c[8];
+    cpy8(my, s);
+    cpy8(c, s + 8);
+    finish_leaf<SX>(K, pos, x, my, c, o, bc ? bc + 128 * pos : nullptr, nullptr);
+  }
+  st_be(levels + 64 * pos, o, 8);
+  const u32 lane = t & 31, wsz = cnt < 32 ? cnt : 32;
+  const unsigned mask = wsz == 32 ? 0xFFFFFFFFu : (1u << wsz) - 1;
+  int L = 0;
+  while ((1u << L) < wsz) ++L;
+  u64 off = 0;   // level l's first node in levels
+  for (int l = 1; l <= L; ++l) {
+    off += width >> (l - 1);
+    u64 p[8];
+#pragma unroll
+    for (int k = 0; k < 8; ++k) p[k] = __shfl_xor_sync(mask, o[k], 1 << (l - 1));
+    if ((lane & ((1u << l) - 1)) == 0) {
+      u64 r[8];
+      node(N, l - 1, pos >> l, o, p, r);
+      cpy8(o, r);
+      st_be(levels + 64 * (off + (pos >> l)), o, 8);
+    }
+  }
+  if (lane != 0 || L >= depth) return;
+  u64 idx = pos >> L;
+  const u64 nL = width >> L;
+  for (int l = L; l < depth; ++l) {
+    const u64 p = idx >> 1;
+    u32* c = ctr + (nL - (width >> l)) + p;
+    __threadfence();
+    if (atomicAdd(c, 1u) == 0) return;   // the sibling's subtree isn't done: its warp climbs on
+    __threadfence();
+    u64 sib[8], a[8], b[8], r[8];
+    ld_be_cg(levels + 64 * (off + (idx ^ 1)), sib, 8);
+    const bool right = idx & 1;
+#pragma unroll
+    for (int k = 0; k < 8; ++k) { a[k] = right ? sib[k] : o[k]; b[k] = right ? o[k] : sib[k]; }
+    node(N, l, p, a, b, r);
+    off += width >> l;
+    st_be(levels + 64 * (off + p), r, 8);
+    cpy8(o, r);
+    idx = p;
+  }
+}
+u64 spec_ctrs(u64 width) { return width > 32 ? width / 32 - 1 : 0; }
+
+// AUTO's form for a small commit on the current device: SPEC on sm_90 (H200 at 34,737 rows: sharaw's v4 0.80 ms, FOLD 1.00),
+// FOLD elsewhere (B200: FOLD 0.55 ms, v4 0.72). The compute capability is read once a device; reading it enqueues nothing.
+int small_form() {
+  static int major[64];
+  int dev = 0;
+  if (cudaGetDevice(&dev) != cudaSuccess || dev < 0 || dev >= 64) return VC_FORM_FOLD;
+  if (!major[dev]) {
+    int m = 0;
+    major[dev] = cudaDeviceGetAttribute(&m, cudaDevAttrComputeCapabilityMajor, dev) == cudaSuccess && m ? m : -1;
+  }
+  return major[dev] == 9 ? VC_FORM_SPEC : VC_FORM_FOLD;
+}
+// AUTO's one- or two-launch form (small_form) up to this many rows, SPLIT above. Those save SPLIT's tree launches, a fixed
+// cost, but idle through their subtree's barriers, a cost a row: B200 crosses over near 44,000 rows (FOLD 5% faster at 34,737,
+// SPLIT 8% at 65,536), and H200 by 65,536 too.
+constexpr u64 SMALL_MAX_ROWS = 40000;
 
 // Both phases a thread (native_rows' rows_leaf_kernel): the mask from the nibble table through L1.
 template <int SX, bool ROWS>
@@ -1451,16 +1592,30 @@ int vc_tree_arity_launch(const void* plan, uint8_t* levels, uint64_t n_leaves, i
   return 0;
 }
 
-uint64_t vc_commit_scratch_bytes(uint64_t n) { return REC * n + (4 * fold_ctrs(vc_tree_width(n)) + 15) / 16 * 16; }
+uint64_t vc_commit_scratch_bytes(uint64_t n) { return REC * n + (4 * spec_ctrs(vc_tree_width(n)) + 15) / 16 * 16; }
 
 int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* rows, uint64_t stride, const uint8_t* salts,
                           uint64_t n, uint8_t* levels, uint8_t* bc, void* scratch, int form, cudaStream_t st) {
   const Plan* p = plan_of(plan);
   if (!p || !p->has_hm96 || p->row.scheme != VC_ROW_V2 || n > (1ull << 32)) return -1;
-  if (form < VC_FORM_AUTO || form > VC_FORM_FOLD) return -1;
+  if (form < VC_FORM_AUTO || form > VC_FORM_SPEC) return -1;
   if (!n) return vc_tree_launch(plan, levels, 0, st);
   const u64 width = vc_tree_width(n);
-  if (form == VC_FORM_AUTO) form = n <= FOLD_MAX_ROWS ? VC_FORM_FOLD : VC_FORM_SPLIT;
+  if (form == VC_FORM_AUTO) form = n <= SMALL_MAX_ROWS ? small_form() : VC_FORM_SPLIT;
+  if (form == VC_FORM_SPEC) {
+    if (!tables || !scratch) return -1;
+    const auto t = static_cast<const uint8_t*>(tables);
+    u32* ctr = reinterpret_cast<u32*>(static_cast<uint8_t*>(scratch) + REC * n);
+    if (const u64 nc = spec_ctrs(width))
+      if (const cudaError_t e = cudaMemsetAsync(ctr, 0, 4 * nc, st)) return static_cast<int>(e);
+    const u32 cnt = (u32)(width < SPEC_R ? width : SPEC_R);
+    const int depth = depth_of(n);
+    if (p->leaf.sx)
+      k_leaf_spec<4><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(p->leaf, p->node, t, salts, rows, stride, n, width, depth, levels, bc, ctr);
+    else
+      k_leaf_spec<0><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(p->leaf, p->node, t, salts, rows, stride, n, width, depth, levels, bc, ctr);
+    return rc();
+  }
   if (form == VC_FORM_FOLD) {
     if (!tables || !scratch) return -1;
     const auto t = static_cast<const uint8_t*>(tables);
