@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from math import ceil, exp, lgamma, log
+from math import ceil, exp, lgamma, log, log1p
 
 from verity.ml.circuits.cut import fits
 from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
@@ -203,10 +203,17 @@ class Plan:
 
 
 def _miss(n: int, m: int, k: int) -> float:
-    """C(n - m, k) / C(n, k): a uniform k-subset of n misses m given units."""
+    """C(n - m, k) / C(n, k): a uniform k-subset of n misses m given units.  Past 2^25 units `lgamma`'s differences lose
+    their digits, so it is the product prod_{i < t} (1 - s / (n - i)) over t = min(m, k), s = max(m, k), by its midpoint;
+    either is within about 1e-7 relative there."""
     if k > n - m:
         return 0.0
-    return exp(lgamma(n - m + 1) - lgamma(n - m - k + 1) - lgamma(n + 1) + lgamma(n - k + 1))
+    if m == 0 or k == 0:
+        return 1.0
+    if n <= 1 << 25:
+        return exp(lgamma(n - m + 1) - lgamma(n - m - k + 1) - lgamma(n + 1) + lgamma(n - k + 1))
+    t, s = min(m, k), max(m, k)
+    return exp(t * log1p(-s / (n - (t - 1) / 2)))
 
 
 def touched(n: int, c: int, k: int) -> float:

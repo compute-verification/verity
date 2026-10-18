@@ -6,14 +6,14 @@ from __future__ import annotations
 
 import random
 from itertools import combinations, product
-from math import ceil, log, ulp
+from math import ceil, exp, fsum, log, log1p, ulp
 
 import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, CostModel, Objective, ReplayDomain, TemplateCost,
-                                                           certify, density_bound, for_budget, for_target, frontier,
+                                                           _miss, certify, density_bound, for_budget, for_target, frontier,
                                                            needs_benchmark, perturb, replay_cost, row_ands,
                                                            sensitivity, template_cost, touched, work_law)
 
@@ -278,3 +278,11 @@ def test_sensitivity_and_benchmarks_flag_what_moves_the_plan():
     assert needs_benchmark(_noised(), _noised_costs(0.25), objective, 260.0, grid=61) == ["DotC"]
     assert needs_benchmark(_noised(), _noised_costs(0.01), objective, 260.0, grid=61) == []
     assert needs_benchmark(_noised(), _noised_costs(0.25), objective, 2000.0, grid=61) == []
+
+
+def test_miss_holds_its_digits_on_huge_populations():
+    """A week of served units is about 10^16: the miss probability against the product it denotes, summed exactly."""
+    for n in (2 ** 25 - 3, 2 ** 25 + 3, 10 ** 12, 10 ** 16):
+        for m, k in ((1, 1), (4096, 27_713), (10 ** 6, 100), (64, 10 ** 6)):
+            t, s = min(m, k), max(m, k)
+            assert _miss(n, m, k) == pytest.approx(exp(fsum(log1p(-s / (n - i)) for i in range(t))), rel=1e-6)
