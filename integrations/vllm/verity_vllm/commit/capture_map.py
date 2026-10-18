@@ -8,6 +8,8 @@ whose position + 1 is a multiple of a ratio) writes no row on a step where the c
 name, and on every other step commits exactly the count's rows under it.  From the step's committed positions `empty_names`
 recomputes those names and `rows_differ` the names whose committed rows are not the count, for the committer's identity check and
 for `bind_names`, which holds one step's committed names to the map.  `counts` totals the taps by Program status and by binder.
+A Program's `captures` names the conformance properties (`properties.record.REGISTRY`) whose captures establish it on the map's
+target; `captures` inverts them and `of_checkpoint` finds a checkpoint's map, which the circuit database reads (`verity_vllm.records`).
 Holding a map against a module inventory is `verity_vllm.check.capture_map`.
 """
 from __future__ import annotations
@@ -19,8 +21,10 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.commit.identity import format_id, value_id
+from verity_vllm.config import MANIFESTS
 
 SCHEMA = "verity-vllm/capture-map/v0"
+MAPS = MANIFESTS / "capture-maps"
 #: a tap's Program today: registered and conformance-tested; being built (on a named branch); a registered family whose kernel
 #: variant is not yet pinned; a value only moved (checked by word equality against the taps it copies); none (bound by the Commit,
 #: reported as an unverified unit)
@@ -44,6 +48,22 @@ def load(path: Path | str) -> dict[str, Any]:
     if cmap.get("schema") != SCHEMA:
         raise MapError(f"{path}: schema {cmap.get('schema')!r}, expected {SCHEMA}")
     return cmap
+
+
+def of_checkpoint(repo: str, world: int, maps: Path | None = None) -> dict[str, Any] | None:
+    """The map under `maps` (default `MAPS`) whose pinned checkpoint is `repo` and whose target runs `world` ranks; None when none is."""
+    return next((m for m in (load(p) for p in sorted((maps or MAPS).glob("*.json")))
+                 if ((m.get("pins") or {}).get("checkpoint") or {}).get("repo") == repo
+                 and m["target"]["tensor_parallel_size"] == world), None)
+
+
+def captures(cmap: dict[str, Any]) -> dict[str, list[str]]:
+    """Each conformance property the map's Programs name (`programs[*].captures`) -> the Programs whose captures it is."""
+    out: dict[str, list[str]] = {}
+    for pid, p in cmap["programs"].items():
+        for prop in p.get("captures") or ():
+            out.setdefault(prop, []).append(pid)
+    return dict(sorted(out.items()))
 
 
 def evaluate(expr: str, env: dict[str, int]) -> int | bool:

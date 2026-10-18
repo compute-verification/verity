@@ -6,6 +6,10 @@ counts them as structural scaffolding.
    non-strict export `.data` yields an untracked FakeTensor that export then tries to lift as a constant
    ("We found a fake tensor in the exported program constant's list"). For fake tensors the shim returns `detach()`
    — the same value, recorded as `aten.detach` of the parameter placeholder.
+2. The declared target applied (`apply_target_profile`).  3. vLLM's MoE dispatcher ops traced through (`moe_ops_traced`).
+4. DeepSeek sparse attention's three kernels as leaf ops (`dsa_ops_leaf`).  5. The MoE gate's cuteDSL GEMM as a leaf op
+   (`moe_gate_leaf`).  6. The default Hopper block-FP8 linear's dynamic custom op as a leaf
+   (`default_fp8_linear_leaf`).
 """
 
 from __future__ import annotations
@@ -43,6 +47,7 @@ def tensor_data_as_detach():
 
 _TUNED_TABLE_MODULES = ("vllm.model_executor.determinism.batch_invariant_configs", "vllm.model_executor.determinism.batch_invariant")
 _NUM_CU_MODULES = ("vllm.utils.platform_utils", "vllm.model_executor.determinism.batch_invariant")
+_FLASHINFER_FP8_MODULE = "vllm.model_executor.kernels.linear.scaled_mm.flashinfer"
 
 
 def _reset_tuned_table_cache(into: hooks.Hooks) -> None:
@@ -87,6 +92,12 @@ def apply_target_profile(profile):
                 continue
             if hasattr(m, "num_compute_units"):
                 h.patch(m, "num_compute_units", lambda device_id=None, _n=profile.num_sms: _n)
+        if (major, minor) == (9, 0):
+            # The standard Hopper vLLM environment carries FlashInfer.  A GPU-free Build cannot load its CUDA extension, so its
+            # availability probe would otherwise choose plain DeepGEMM while the served target selects the earlier dynamic
+            # FlashInfer/DeepGEMM kernel.  Answer the declared target's installed capability, as we do for its cc and SM count.
+            flashinfer_fp8 = importlib.import_module(_FLASHINFER_FP8_MODULE)
+            h.patch(flashinfer_fp8, "is_flashinfer_fp8_blockscale_gemm_supported", lambda: True)
         yield
 
 
@@ -126,7 +137,7 @@ class _AnswerCudaFinder:
         return spec
 
 
-def select_cuda_platform(world: int = 1) -> str:
+def select_cuda_platform(world: int = 1, device_name: str | None = None) -> str:
     """A declared target is a CUDA device: vLLM's platform resolution answers `vllm.platforms.cuda.CudaPlatform` (the qualname its CUDA
     plugin returns on a GPU host) instead of probing NVML for it.  On a GPU-free Build host NVML is absent and that probe resolves a
     non-CUDA platform.  `import vllm` itself resolves `current_platform` (`torch_utils.PIN_MEMORY`), so before vLLM is imported the answer
@@ -134,8 +145,10 @@ def select_cuda_platform(world: int = 1) -> str:
     NVML-backed class when NVML answers, the torch-backed one when it does not), and `apply_target_profile` answers the target's
     capability on either.  The target is `world` such devices: the platform's `device_count()` answers `world`, not the host's visible
     count, so `ParallelConfig`'s "world size larger than the available GPUs" check passes on a GPU-free host and the executor backend
-    resolves to `mp`, as on a host with the `world` GPUs the Commit runs on.  Build path only: serving resolves its platform and counts
-    its devices as before.  Raises when `current_platform` already resolved to a non-CUDA platform."""
+    resolves to `mp`, as on a host with the `world` GPUs the Commit runs on.  On a host with no visible device the platform's
+    `get_device_name()` answers `device_name` (the row's class's, `engine.profiles.devices`), the key vLLM's tuned fused-MoE configs
+    are read by, so the Build reads the config file the class's GPU does; a GPU host answers its own.  Build path only: serving resolves
+    its platform and counts its devices as before.  Raises when `current_platform` already resolved to a non-CUDA platform."""
     # vLLM freezes export knobs at import (`VLLM_USE_LAYERNAME` -> `torch_utils._USE_LAYERNAME`): pin them before importing vLLM here
     engine_env.pin(engine_env.EXPORT)
     loaded = sys.modules.get("vllm.platforms")
@@ -147,6 +160,8 @@ def select_cuda_platform(world: int = 1) -> str:
     if not current_platform.is_cuda():
         raise RuntimeError(f"vLLM resolved {type(current_platform).__qualname__} before the declared CUDA target could select its platform")
     hooks.patch(type(current_platform), "device_count", classmethod(lambda cls, _n=int(world): _n))
+    if device_name is not None and not torch.cuda.is_available():
+        hooks.patch(type(current_platform), "get_device_name", classmethod(lambda cls, device_id=0, _n=device_name: _n))
     return type(current_platform).__qualname__
 
 
@@ -277,6 +292,7 @@ def moe_ops_traced(model=None):
             qm = getattr(m, "quant_method", None)
             if qm is not None and hasattr(qm, "_init_moe_kernel") and getattr(qm, "moe_kernel", None) is None and hasattr(m, "w13_weight"):
                 qm._init_moe_kernel(m)
+            _expert_weight_scales_through_owner(m, qm, h)
             fe = getattr(m, "_forward_entry", None)
             if fe is None or not hasattr(m, "_forward_impl"):
                 continue
@@ -299,6 +315,41 @@ def moe_ops_traced(model=None):
         h.patch(_ws, "_manager", _ExportWorkspaceManager())
     with h:
         yield
+
+
+def _expert_weight_scales_through_owner(layer, quant_method, h) -> None:
+    """Make a plain MoE-kernel object read its registered expert-scale Parameters through their owning module during export.
+
+    vLLM's FP8 ``_init_moe_kernel`` copies the ``RoutedExperts.w13_weight_scale_inv`` / ``w2_weight_scale_inv`` objects into
+    ``moe_kernel.fused_experts.quant_config._w1.scale`` / ``_w2.scale``; the experts' ``w1_scale`` / ``w2_scale`` are read-only
+    properties over those descriptors.  Neither object is an ``nn.Module``.  Torch export swaps Parameters on modules for graph values
+    while tracing, so the stale descriptor references otherwise become lifted tensor constants.  Refresh them immediately before
+    ``fused_experts.apply`` from the owning module, exactly as ``_router_bias_through_owner`` does for the router's correction bias.
+    Identity is checked before patching: a backend-owned derived scale is not silently relabelled as a Parameter."""
+    kernel = getattr(quant_method, "moe_kernel", None)
+    experts = getattr(kernel, "fused_experts", None)
+    apply = getattr(experts, "apply", None)
+    if experts is None or not callable(apply):
+        return
+    owners = {id(p): (mod, name) for mod in layer.modules() for name, p in mod._parameters.items() if p is not None}
+    bindings = []
+    quant_config = getattr(experts, "quant_config", None)
+    for attr, descriptor_name in (("w1_scale", "_w1"), ("w2_scale", "_w2")):
+        scale = getattr(experts, attr, None)
+        descriptor = getattr(quant_config, descriptor_name, None)
+        if descriptor is not None and getattr(descriptor, "scale", None) is scale and id(scale) in owners:
+            bindings.append((descriptor, *owners[id(scale)]))
+    if not bindings:
+        return
+
+    def apply_with_owned_scales(*args, _apply=apply, _bindings=tuple(bindings), **kwargs):
+        for descriptor, owner, name in _bindings:
+            descriptor.scale = getattr(owner, name)
+        return _apply(*args, **kwargs)
+
+    for descriptor, _owner, _name in bindings:
+        h.patch(descriptor, "scale", descriptor.scale)
+    h.patch(experts, "apply", apply_with_owned_scales)
 
 
 def _router_bias_through_owner(model, h) -> None:
@@ -342,15 +393,206 @@ class _ExportWorkspaceManager:
         return self._locked
 
 
+def _dsa_layers(model) -> list:
+    return [m for m in (model.modules() if model is not None else ())
+            if hasattr(m, "_sparse_indexer_and_attn") and hasattr(m, "fused_qkv_a_proj")]
+
+
 @contextmanager
-def export_compat(profile=None, model=None):
-    """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
-    dispatcher ops traced through their bodies (`moe_ops_traced`; `model` = the instantiated module, for the per-layer entry)."""
-    if profile is None:
-        from verity_vllm.program.frontend.target_profile import TargetProfile
-        profile = TargetProfile.default()
-    with tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model):
+def dsa_ops_leaf(model=None):
+    """4. DeepSeek sparse attention (`DeepseekV32Attention.forward`, GLM-5.3, DeepSeek-V3.2) as three leaf ops.  Its two Triton kernels
+    run outside the MLA attention op and write the MLA and indexer caches through the forward context's slot mapping, which the meta
+    export has no cache for (`fused_norm_rope` asserts `slot_mapping is not None`); its attention reads those caches back through the
+    same context.  The kernels are patched in the module the layers' `forward` is defined in, the globals it reads them from.  See
+    `dsa_leaves`.  A model without a sparse attention layer is unchanged."""
+    sites = {sys.modules[type(m).forward.__module__] for m in _dsa_layers(model)}
+    if len(sites) > 1:
+        raise NotImplementedError(f"dsa_ops_leaf: sparse attention layers whose forward reads its kernels from {len(sites)} modules")
+    if not sites:
+        yield
+        return
+    with dsa_leaves(sites.pop(), model):
         yield
 
 
-__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "read_back_applied", "host_facts"]
+@contextmanager
+def dsa_leaves(site, model=None):
+    """For the duration, ``site`` (the module `DeepseekV32Attention.forward` reads its kernels from) calls `vllm_iface.dsa_norm_rope`
+    for `fused_norm_rope` and `vllm_iface.dsa_q` for `fused_q`, and every module of ``model`` with a `_sparse_indexer_and_attn` gets
+    one that calls `vllm_iface.dsa_indexer_attn` and then the absorbed value projection its body ends with, `bmm(attn, W_UV)` into
+    `output`.  The cache rows the kernels write are the first op's outputs (`kv_c_out`, `k_pe_out`, the index K and its scale) and
+    the third op's operands, so each layer's cache is the derive's state (`rules/vllm_dsa.py`).  What the shim does not model is
+    refused at export: prefill context parallelism, decode context parallelism, an fp8 query or KV cache, a caller-supplied `q_c_out`
+    or `index_k_out`.  `W_UK_T` and `W_UV` are Parameters the engine registers after loading; a meta model gets them from
+    `vllm_meta.mla_absorbed_weights_as_the_loader_does`."""
+    from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the ops)
+    iface = torch.ops.vllm_iface
+    pending: dict[int, tuple] = {}
+    h = hooks.Hooks()
+
+    def fused_norm_rope(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, k_cs, index_k, index_k_w, index_k_b, index_k_eps, index_cs,
+                        topk_indices_buffer, slot_mapping=None, indexer_k_cache=None, mla_kv_cache=None, mla_kv_cache_dtype="auto",
+                        mla_k_scale=None, has_indexer=True, index_rope_interleave=False, q_c_out=None, kv_c_out=None, k_pe_out=None,
+                        index_k_out=None):
+        if q_c_out is not None or index_k_out is not None or kv_c_out is None or k_pe_out is None:
+            raise NotImplementedError("dsa_leaves: fused_norm_rope with q_c_out / index_k_out, or without kv_c_out / k_pe_out")
+        if mla_kv_cache_dtype not in ("auto", "bfloat16"):
+            raise NotImplementedError(f"dsa_leaves: MLA KV cache dtype {mla_kv_cache_dtype!r} (only a bf16 cache is modelled)")
+        ix = (index_k, index_k_w, index_k_b, index_cs) if has_indexer else (None, None, None, None)
+        q, ik, iks = iface.dsa_norm_rope(positions, q_c, q_w, float(q_eps), kv_c, kv_w, float(kv_eps), k_pe, k_cs, ix[0], ix[1], ix[2],
+                                         float(index_k_eps), ix[3], bool(index_rope_interleave), kv_c_out, k_pe_out)
+        pending[id(kv_c_out)] = (ik, iks) if has_indexer else (None, None)
+        return q
+
+    def fused_q(positions, q_pe, q_pe_cs, index_q, index_q_cs, ql_nope, q_scale, index_weights, softmax_scale, head_scale,
+                has_indexer=True, index_rope_interleave=False, quantize_mqa=True):
+        if quantize_mqa:
+            raise NotImplementedError("dsa_leaves: fused_q with quantize_mqa (an fp8 MQA query)")
+        ix = (index_q, index_q_cs, index_weights) if has_indexer else (None, None, None)
+        q_pe_out, iq, iw = iface.dsa_q(positions, q_pe, q_pe_cs, ix[0], ix[1], ix[2], float(softmax_scale), float(head_scale),
+                                       bool(index_rope_interleave))
+        return iq, iw, q_pe_out
+
+    def indexer_and_attn(layer):
+        def run(positions, q_c, q_nope, q_pe, index_q_fp8, index_k, index_weights_out, kv_c, k_pe, ql_nope, mqa_q, output):
+            if layer.use_pcp or layer.impl.dcp_world_size > 1 or layer._fp8_query or layer._fp8_kv_needs_view:
+                raise NotImplementedError(f"dsa_leaves: {layer.layer_name} under context parallelism or an fp8 KV cache")
+            ik, iks = pending.pop(id(kv_c))
+            has = ik is not None
+            a = iface.dsa_indexer_attn(positions, ql_nope, mqa_q, kv_c, k_pe, index_q_fp8 if has else None, index_weights_out if has else None,
+                                       ik, iks, layer.layer_name, int(layer.topk_indices_buffer.shape[-1]), float(layer.scale))
+            n, nh, lat, v = output.shape[0], layer.num_heads, layer.kv_lora_rank, layer.v_head_dim
+            y = torch.bmm(a.view(n, nh, lat).transpose(0, 1), layer.W_UV)
+            output.copy_(y.transpose(0, 1).reshape(n, nh * v))
+        return run
+
+    h.patch(site, "fused_norm_rope", fused_norm_rope)
+    h.patch(site, "fused_q", fused_q)
+    for m in _dsa_layers(model):
+        h.patch(m, "_sparse_indexer_and_attn", indexer_and_attn(m))
+    with h:
+        yield
+
+
+_FUSED_AR_NORM_MODULE = "vllm.models.common.ops.fused_allreduce_rms_norm"
+_FUSED_AR_NORM_NAME = "fused_allreduce_rms_norm"
+
+
+@contextmanager
+def fused_allreduce_rms_norm_leaf(model=None):
+    """Author the leaf that meta execution otherwise misses when the served call takes FlashInfer's fused TP8 path.
+
+    `_can_use_flashinfer` rejects every meta tensor because it checks ``is_cuda``.  The other dispatch facts are static:
+    world 8, bf16 ``[M,6144]`` with M <= 42, and FlashInfer all-reduce enabled.  The construction's ``TPStub`` carries
+    those workload settings and authors the rank-ordered peer operands through its ``CollectiveBus``.  Calls outside that
+    path keep vLLM's original fallback (ordinary all-reduce followed by the norm).
+    """
+    home = sys.modules.get(_FUSED_AR_NORM_MODULE)
+    original = getattr(home, _FUSED_AR_NORM_NAME, None) if home is not None else None
+    if original is None or model is None:
+        yield
+        return
+    users = [sys.modules[n] for n in sorted({type(m).__module__ for m in model.modules()})
+             if n in sys.modules and n != _FUSED_AR_NORM_MODULE]
+    users = [m for m in users if getattr(m, _FUSED_AR_NORM_NAME, None) is original]
+    if not users:
+        yield
+        return
+
+    def shim(hidden_states, residual, norm, *args, **kwargs):
+        try:
+            from vllm.distributed.parallel_state import get_tp_group
+            group = get_tp_group()
+            bus = getattr(group, "bus", None)
+            shape = tuple(hidden_states.shape)
+            fused = (bus is not None and int(getattr(group, "world_size", 1)) == 8
+                     and bool(bus.settings.get("flashinfer")) and hidden_states.dtype == torch.bfloat16
+                     and len(shape) == 2 and shape[1] == 6144 and shape[0] <= 42
+                     and tuple(residual.shape) == shape and tuple(norm.weight.shape) == (6144,))
+            if fused:
+                return bus.fused_allreduce_rms_norm(hidden_states, residual, norm.weight, float(norm.variance_epsilon))
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            pass
+        return original(hidden_states, residual, norm, *args, **kwargs)
+
+    with hooks.Hooks() as h:
+        h.patch(home, _FUSED_AR_NORM_NAME, shim)
+        for module in users:
+            h.patch(module, _FUSED_AR_NORM_NAME, shim)
+        yield
+
+
+_LL_BF16_SITE = "vllm.model_executor.kernels.linear.cute_dsl.ll_bf16"
+
+
+@contextmanager
+def moe_gate_leaf(model=None, site=None):
+    """5. `GateLinear.forward`'s tier 1 (router/gate_linear.py:181-187, M <= 16 on sm_90+ wherever CUTLASS DSL imports) calls
+    `ll_bf16_gemm`, a CUTLASS DSL kernel that checks its operands are on a CUDA device and leaves no dispatcher op behind.  When a
+    module of ``model`` would take that tier (`allow_ll_bf16_gemm`), for the duration ``site``'s (default vLLM's `cute_dsl.ll_bf16`,
+    which `forward` imports it from at every call) is `vllm_iface.ll_bf16_gemm(x, w)`, so the tier the declared target takes is the
+    node the rules bind; any output dtype but f32 refuses at export.  A model without such a gate is unchanged."""
+    if not any(getattr(m, "allow_ll_bf16_gemm", False) for m in (model.modules() if model is not None else ())):
+        yield
+        return
+    if site is None:
+        import importlib
+        site = importlib.import_module(_LL_BF16_SITE)
+    from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the op)
+
+    def ll_bf16_gemm(hidden_states, router_weight, output_dtype=torch.float32):
+        if output_dtype != torch.float32:
+            raise NotImplementedError(f"moe_gate_leaf: ll_bf16_gemm with output dtype {output_dtype} (only f32 is modelled)")
+        return torch.ops.vllm_iface.ll_bf16_gemm(hidden_states, router_weight)
+
+    with hooks.patched(site, "ll_bf16_gemm", ll_bf16_gemm):
+        yield
+
+
+@contextmanager
+def default_fp8_linear_leaf(model=None, kernel_class=None):
+    """6. Keep vLLM's default Hopper block-FP8 linear as its served custom op.
+
+    The pinned kernel's ``apply_block_scaled_mm`` calls
+    ``vllm.dynamic_flashinfer_deepgemm_blockscale_gemm``.  Its runtime body
+    contains ``torch.cond`` and, under non-strict meta export, is traced
+    through to the M-specific branch.  That exposes mutating implementation
+    details (notably ``per_token_group_fp8_quant(use_ue8m0=True)``) instead of
+    the custom-op boundary the served engine dispatches.  During export,
+    replace that kernel class's ``apply_block_scaled_mm`` with the equivalent
+    ``vllm_iface`` leaf.  Another selected kernel is unchanged.
+    """
+    if model is None:
+        yield
+        return
+    if kernel_class is None:
+        from vllm.model_executor.kernels.linear.scaled_mm.flashinfer import (
+            FlashInferFp8DeepGEMMDynamicBlockScaledKernel as kernel_class,
+        )
+    from verity_vllm.program.frontend.rules.vllm_iface import iface
+
+    def apply_block_scaled_mm(self, A, B, As, Bs):
+        return iface.dynamic_flashinfer_deepgemm_blockscale_gemm(
+            A, B, Bs, int(self.weight_group_shape.col), bool(self.fallback.use_deep_gemm_e8m0)
+        )
+
+    with hooks.patched(kernel_class, "apply_block_scaled_mm", apply_block_scaled_mm):
+        yield
+
+
+@contextmanager
+def export_compat(profile=None, model=None):
+    """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
+    dispatcher ops traced through their bodies (`moe_ops_traced`) + DeepSeek sparse attention's kernels, the MoE gate's cuteDSL GEMM
+    and the default Hopper FP8 linear as leaf ops (`dsa_ops_leaf`, `moe_gate_leaf`, `default_fp8_linear_leaf`);
+    `model` = the instantiated module, for the per-layer entries."""
+    if profile is None:
+        from verity_vllm.program.frontend.target_profile import TargetProfile
+        profile = TargetProfile.default()
+    with (tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model), dsa_ops_leaf(model),
+          fused_allreduce_rms_norm_leaf(model), moe_gate_leaf(model), default_fp8_linear_leaf(model)):
+        yield
+
+
+__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "dsa_ops_leaf", "dsa_leaves",
+           "fused_allreduce_rms_norm_leaf", "moe_gate_leaf", "default_fp8_linear_leaf", "read_back_applied", "host_facts"]

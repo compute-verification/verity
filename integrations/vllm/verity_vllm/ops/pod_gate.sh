@@ -24,9 +24,9 @@ for ROW in "${ROWLIST[@]}"; do
   O=$OUT/$ROW; S=$SCRATCH/$ROW; mkdir -p "$O" "$S"
   read -r B MODEL REV MML <<< "$($PY - "$WL" <<'EOF'
 import json, sys
-w = json.load(open(sys.argv[1])); s = w["sweep"]
-mml = (w.get("engine_args_required") or {}).get("max_model_len") or (int(s["max_input"]) + int(s["max_output"]))
-print(s["batch"], w["model"], w["tokenizer_revision"], mml)
+w = json.load(open(sys.argv[1])); s = w["sweep"]; e = w["engine"]
+mml = e["args"].get("max_model_len") or (int(s["max_input"]) + int(s["max_output"]))
+print(s["batch"], w["model"], e["revision"], mml)
 EOF
 )"
   echo "[pod_gate] $ROW: B=$B model=$MODEL@${REV:0:10} max_model_len=$MML"

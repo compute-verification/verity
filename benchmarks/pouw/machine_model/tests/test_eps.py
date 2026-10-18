@@ -554,6 +554,62 @@ def test_dc_li_binds_honest_on_the_lane_facet():
     assert E.honest("dc100-li-l32", DEVICES / "sm_100").base() == {"UTCIMMA_M128_N256": 1, "LDTM_32X32B_X128": 8}
 
 
+HEADLINE_Q = 1.22   # decision 89's reading: output counting's q* over the served workload (CALC r10, #2325)
+HEADLINE = [("sm_80", "dither-2s-l16"), ("sm_89", "dither-2s-l16"),   # A100, L40S
+            ("sm_90", "dither-2s-li-l32"), ("sm_100", "dither-2s-li-fill-l32")]   # H200, B200
+
+
+def _worst_core_under_margin(data, pi, d, m):
+    """Core ε with every near measured facet (one the cheater loads to within 5% at the headline q*) moved m in the
+    cheater's favour at once: decision 76's margin on the rows the headline reads. The axiomatic issue slot (every warp
+    instruction = 1, decision 73) is not a measured row, and the exact operand floor is an architectural count, so both
+    are left alone; a facet's measured lane coefficient is the small one it shares (not the tensor-pipe MMA value)."""
+    def core(p):
+        return E.eps(d, p, HEADLINE_Q, data, operands="free", credit="floor").core()
+
+    c = E.setup(d, pi, data, "free", "floor").cheat(HEADLINE_Q)
+    load = pi.load(c.n)
+    near = [r for r in pi.rows if r != "issue" and c.T and load[r] / c.T >= 0.95]
+    cc = {k: dict(v) for k, v in pi.c.items()}
+    for r in near:
+        small = min(pi.c[k][r] for k in pi.c if r in pi.c[k])
+        hit = [k for k in pi.c if r in pi.c[k] and abs(pi.c[k][r] - small) < 1e-9]
+        scaled = lambda f: replace(pi, c={k: ({**v, r: v[r] * f} if k in hit else v) for k, v in cc.items()})
+        f = (1 - m) if core(scaled(1 - m)) >= core(scaled(1 + m)) else (1 + m)
+        for k in hit:
+            cc[k][r] *= f
+    return core(replace(pi, c=cc))
+
+
+def test_dc_the_headline_holds_decision_76s_margin():
+    """EPS1 DC's margin audit (note:20261017T0452Z-draft-eps1-dc Round 8): every device family's headline core ε stays
+    under 1% when each measured facet the headline reads moves 2% in the cheater's favour (decision 76), at the
+    decision-89 reading (operands free, q* = 1.22). The A100 and L40S are far from binding; the B200 is bound by its
+    exact operand floor and the issue axiom, not a measured row, so the margin leaves it at 0.927%. The H200 is the one
+    thin family: its 0.02 FFMA filler puts honest on JI90_0 by only the ALU pipe's 1.5% issue slack, so a 2% rise in
+    JPA90_0 (ALU lanes beside the tensor) moves honest's binding off JI90_0 and opens the lane route, taking core to
+    0.91% (it crosses 1% only past a 2.3% margin). A 0.05 FFMA filler a word restores the full margin (core back to its
+    0.498% floor) at γ 1.589, the cheapest add-on; its ε_skip at the larger ♭ is CALC's to re-price."""
+    worst = {}
+    for dev, name in HEADLINE:
+        data = device(dev)
+        pi = E.machine("", data)
+        d = E.design(name, data)
+        base = E.eps(d, pi, HEADLINE_Q, data, operands="free", credit="floor").core()
+        worst[dev] = (base, _worst_core_under_margin(data, pi, d, 0.02))
+        assert worst[dev][1] < 0.01, f"{dev} {name}: {worst[dev][1]*100:.3f}% over 1% under decision 76's margin"
+    assert worst["sm_80"] == pytest.approx((0.00147, 0.00147), abs=5e-5)
+    assert worst["sm_89"][0] == pytest.approx(0.00260, abs=5e-5) and worst["sm_89"][1] < 0.0030
+    assert worst["sm_100"][0] == pytest.approx(0.00927, abs=5e-5) and worst["sm_100"][1] == pytest.approx(0.00927, abs=5e-5)
+    # the H200 is thin at its 0.02 filler; 0.05 FFMA a word restores the margin to the floor
+    sm90 = device("sm_90")
+    p90 = E.machine("", sm90)
+    thin = E.design("dither-2s-li-l32", sm90)
+    assert worst["sm_90"][0] == pytest.approx(0.00498, abs=5e-5) and 0.0085 < worst["sm_90"][1] < 0.0095
+    wide = replace(thin, filler=(E.lane_fill(0.05, {"FFMA": 1.0}),))
+    assert _worst_core_under_margin(sm90, p90, wide, 0.02) == pytest.approx(0.00498, abs=5e-5)
+
+
 def test_cli_device(capsys):
     assert main(["eps", "--device", "sm89", "--table", "--credit", "floor", "--operands", "floor"]) == 0
     lines = capsys.readouterr().out.splitlines()
