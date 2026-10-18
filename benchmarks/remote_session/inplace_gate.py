@@ -20,7 +20,8 @@ check is against the driver's reference over each block as the binder reads it (
 Timing is at Llama-3.1-8B's weights as vLLM holds them in bf16 (the embedding; per layer qkv, o, gate_up, down and two
 norms; the final norm and lm_head: 195 tensors, 16.06 GB), and then with a KV pool beside them (`--pages` pages a layer,
 FlashAttention's layout): the read alone through the map, the receipts alone and the whole pass (map, constants and
-signs, receipts and the tree behind them), beside the pass with its tree hashed after its receipts (`unfused_pass`)
+signs, receipts and the tree behind them; at the weights also the constants alone and the fused kernels alone,
+`InPlace.fused`), beside the pass with its tree hashed after its receipts (`unfused_pass`)
 and the read and receipts of the contiguous kernels over a copy of the weights in store order. The in-place root is
 checked equal to the unfused pass's and to the contiguous one's over the copy, and sampled receipts to the
 reference's. Writes OUT/inplace.json.
@@ -307,11 +308,12 @@ def timing(torch, lib: Lib, rng, reps: int, pages: int, log) -> dict:
 
     t["pass_inplace"] = timed(torch, whole, reps)
     t["pass_inplace_wall"] = sorted(walls)[len(walls) // 2]
-    two = InPlace(torch, lib, regions, key, ctas=2 * sms)
-    t["pass_inplace_2_per_sm"] = timed(torch, lambda: roots.update(two=two.run_pass(seed, plan)[0]), reps)
+    t["set_pass"] = timed(torch, lambda: ip.set_pass(seed, plan), reps)
+    pk = ip.set_pass(seed, plan)
+    t["pass_kernels"] = timed(torch, lambda: roots.update(kernels=ip.fused(addrs, js, pk, N)[2]), reps)
     plain = ip.tree(ys2, 0, leaves, width)
     out["root_equal_contiguous"] = roots["fused"] == digests(plain[-1:].cpu())[0]
-    out["root_equal_unfused"] = roots["fused"] == roots["unfused"] == roots["two"]
+    out["root_equal_unfused"] = roots["fused"] == roots["unfused"] == digests(roots.pop("kernels")[-1:].cpu())[0]
     r = rb.receipter(rb.SKETCH_SHA512, seed, ROWS)
     host = ys.cpu()
     sample = sorted(map(int, rng.integers(0, N, 64)))

@@ -223,19 +223,24 @@ class InPlace:
 
     def run_pass(self, seed: bytes, plan: rb.Plan) -> tuple[bytes, Pass]:
         """One pass under `seed` over `plan`: its root and what its openings need (`Pass`)."""
-        torch, n = self.torch, plan.length
+        addrs, js = self.map(plan)
+        H, h0, kept = self.fused(addrs, js, self.set_pass(seed, plan), plan.length)
+        root = digests(kept[-1:].cpu())[0]
+        return root, Pass(seed, plan, H, h0, kept)
+
+    def fused(self, addrs, js, pk, n: int):
+        """The receipts and tree of n positions mapped (`map`) under the pass constants and signs set (`set_pass`),
+        the tree hashed behind the receipts (`rs_mapped_pass`): its H, h0 and its levels h0 … H on the device."""
+        torch = self.torch
         H = (rb.leaves(n) - 1).bit_length()
         h0 = min(self.kept_from, H)
         top = 1 << (H - h0)
-        addrs, js = self.map(plan)
-        pk = self.set_pass(seed, plan)
         ys = torch.empty((n, 8), dtype=torch.int64, device=self.device)
         kept = torch.empty((2 * top - 1, 8), dtype=torch.int64, device=self.device)
         ctr = torch.empty(2 + -(-n // READY_BLOCKS) + top, dtype=torch.int32, device=self.device)
         self.lib.call("rs_mapped_pass", addrs.data_ptr(), js.data_ptr(), n, pk.data_ptr(), ctr.data_ptr(), len(ctr),
                       ys.data_ptr(), kept.data_ptr(), h0, self.ctas, self.side.cuda_stream)
-        root = digests(kept[-1:].cpu())[0]
-        return root, Pass(seed, plan, H, h0, kept)
+        return H, h0, kept
 
     def open(self, handle: Pass, positions: Sequence[int]) -> list[tuple[bytes, bytes, bytes, tuple[bytes, ...]]]:
         """Each position's (block as the store holds it now, its leaf's receipts, the leaf's salt, the leaf's path):
