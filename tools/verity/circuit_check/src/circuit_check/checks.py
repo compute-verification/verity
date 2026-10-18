@@ -724,16 +724,16 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     """Every check on one Definition (a primitive, a bound composite) or `ScalarReference`: its entry, with its failures and
     warnings.  ``memo`` shares the word query's unit rules and the entries across calls; ``lower_whole=False`` leaves the
     Boolean lowering to a template's units; ``as_call`` says whether the partition invariant applies (default: its family is a
-    Call of a served Program, `circuit_check.targets.call_families`).  A Boolean Definition held as a Call is judged by `Q_word` v2
+    Call of a served Program, `circuit_check.targets.is_call`).  A Boolean Definition held as a Call is judged by `Q_word` v2
     (`partition`), a word Definition by v1."""
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
     t = resolve(fn)
     done = memo.setdefault("entries", {})
     if as_call is None:
-        from .targets import call_families, family
+        from .targets import family, is_call
 
-        as_call = family(t) in call_families()
+        as_call = is_call(family(t))
     if (t.id, lower_whole, as_call) in done:
         return done[(t.id, lower_whole, as_call)]
     F = Findings()

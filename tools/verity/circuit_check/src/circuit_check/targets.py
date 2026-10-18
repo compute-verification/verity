@@ -431,23 +431,93 @@ def _vocabulary_roots() -> list[Any]:
 
 
 _CALLS: set[str] = set()
+#: what `is_call` decides by without the catalog, each built once: ``words`` (`word_call_families`), ``candidates``
+#: (`boolean_call_candidates` of them) and ``certified`` (`certified_boolean_calls` of them)
+_SHORT: dict[str, set[str]] = {}
 
 
-def call_families() -> set[str]:
-    """The Definition families a served Program calls, where the partition invariant applies: the replay's row families
-    (`verity_vllm.program.kernels.rows.ROWS`), every frontend vocabulary kind, every template's Definition, and the Boolean
-    version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other Definition's
-    gates are partitioned inside the Call that contains them."""
-    if not _CALLS:
+def word_call_families() -> set[str]:
+    """The word Call families of a served Program: the replay's row families (`verity_vllm.program.kernels.rows.ROWS`), every
+    frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog."""
+    if "words" not in _SHORT:
         load_registries()
         from verity_vllm.program.kernels import rows
 
-        _CALLS.update(rows.ROWS)
-        _CALLS.update(family(fn) for _label, fn in _vocabulary_bindings() if not isinstance(fn, str))
+        words = set(rows.ROWS)
+        words.update(family(fn) for _label, fn in _vocabulary_bindings() if not isinstance(fn, str))
         for _label, sub, sts in templates():
-            _CALLS.update(family(sub.definition(**st)) for st in sts)
-        _CALLS.update(boolean_call_families(set(_CALLS)))
+            words.update(family(sub.definition(**st)) for st in sts)
+        _SHORT["words"] = words
+    return _SHORT["words"]
+
+
+def call_families() -> set[str]:
+    """The Definition families a served Program calls, where the partition invariant applies: the word Call families
+    (`word_call_families`: the replay's row families, every frontend vocabulary kind, every template's Definition), and the
+    Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other
+    Definition's gates are partitioned inside the Call that contains them.  It builds the whole catalog; `is_call` asks whether
+    one family is among them, mostly without."""
+    if not _CALLS:
+        words = word_call_families()
+        _CALLS.update(words | boolean_call_families(set(words)))
     return _CALLS
+
+
+def is_call(fam: str) -> bool:
+    """Whether family ``fam`` is in `call_families`, decided without the catalog where its answer doesn't need it: a word Call
+    family is; a family outside `boolean_call_candidates` is not; one `certified_boolean_calls` names is; any other (a Boolean
+    version of a word Call family that no vocabulary or template binding certifies) is looked up in `call_families`."""
+    if _CALLS:
+        return fam in _CALLS
+    words = word_call_families()
+    if fam in words:
+        return True
+    if "candidates" not in _SHORT:
+        _SHORT["candidates"] = boolean_call_candidates(words)
+    if fam not in _SHORT["candidates"]:
+        return False
+    if "certified" not in _SHORT:
+        _SHORT["certified"] = certified_boolean_calls(words)
+    return fam in _SHORT["certified"] or fam in call_families()
+
+
+def boolean_call_candidates(word_calls: set[str]) -> set[str]:
+    """A superset of `boolean_call_families` of ``word_calls``, from the Boolean table's links alone (no catalog): each family
+    `boolean_version` could return for a Definition of a family in ``word_calls``, by its two lookups, a registered Boolean
+    Definition whose ``word`` is a Definition of such a family, or whose ``word`` is a function of its bindings and whose name is
+    such a family's name.  Each candidate it returns is one of those Definitions, bound."""
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity_vllm.program.boolean import _load
+
+    exact, by_name, _errors = _load()
+    names = {m[1] for f in word_calls if (m := re.fullmatch(r"(.+)_v(\d+)", f))}
+    out = {f"{d.name}_v{d.version}" for ds in exact.values() for d in ds
+           if family(bind(d.word) if isinstance(d.word, CompositeDefinition) else d.word) in word_calls}
+    out.update(f"{d.name}_v{d.version}" for name, ds in by_name.items() if name in names for d in ds)
+    return out
+
+
+def certified_boolean_calls(word_calls: set[str]) -> set[str]:
+    """Families of `boolean_call_families` of ``word_calls`` that the vocabulary and template bindings show without the catalog:
+    the Boolean version's family of each binding of a word Call family that is no reference and not Boolean, with at most
+    `MAX_GATES` gates.  Each such binding is a catalog root `select` keeps, so the suite holds it whatever else the catalog
+    reaches."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
+
+    roots = [fn for _label, fn in _vocabulary_bindings() if not isinstance(fn, str)]
+    roots += [sub.definition(**st) for _label, sub, sts in templates() for st in sts]
+    out: set[str] = set()
+    for fn in roots:
+        if not isinstance(fn, (PrimitiveDefinition, SpecializedDefinition)) or family(fn) not in word_calls \
+                or fn.gates > MAX_GATES or BL.is_boolean(fn):
+            continue
+        try:
+            out.add(family(boolean_version(fn)))
+        except NoBooleanVersion:
+            continue
+    return out
 
 
 def boolean_call_families(word_calls: set[str]) -> set[str]:
@@ -569,6 +639,7 @@ def suite() -> dict[str, Any]:
 
 
 __all__ = ["MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
-           "binding_files", "boolean_call_families", "call_families", "catalog", "definition", "family", "instance_statics",
-           "kind_of", "load_registries", "reachable", "root_functions", "select", "subcircuit", "suite", "table_probe",
-           "template_params", "templates"]
+           "binding_files", "boolean_call_candidates", "boolean_call_families", "call_families", "catalog",
+           "certified_boolean_calls", "definition", "family", "instance_statics", "is_call", "kind_of", "load_registries",
+           "reachable", "root_functions", "select", "subcircuit", "suite", "table_probe", "template_params", "templates",
+           "word_call_families"]

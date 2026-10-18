@@ -121,12 +121,26 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     return tasks
 
 
+def _calls(specs: list[str]) -> None:
+    """Whether each Definition target is a Call (`targets.is_call`), resolved once in the process the targets' processes fork
+    from, so one that needs the catalog builds it there once rather than in each.  A target that doesn't resolve is left to its
+    own check."""
+    from verity.ml.circuits.evaluation.reference import resolve
+
+    for s in specs:
+        if TG.kind_of(s) == "definition":
+            try:
+                TG.is_call(TG.family(resolve(TG.definition(s))))
+            except Exception:  # noqa: BLE001  (its check raises it again, by name)
+                continue
+
+
 def _init(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, tracing: bool) -> None:
     if tracing:
         CC.trace(REPO)
     _TASKS[:] = _tasks(specs, opts, everything, as_call)
     if as_call is None:
-        TG.call_families()            # what a Definition's check would otherwise build in each target's process (every template)
+        _calls(specs)
 
 
 def _rss_gb() -> float | None:
