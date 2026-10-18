@@ -180,6 +180,7 @@ def _mutations():
     yield "tokens differ", b(), False
     c = b(); c["extra"]["committed_tensors"] = 571; yield "reference integrity", c, True
     c = b(); c["extra"]["errors_n"] = 2; yield "collector errors", c, True
+    c = b(); c["extra"]["collector_failure"] = "worker failed on windowed step 0: transient host budget"; yield "collector failure", c, True
     c = b(); c["openings"] = {"n": 60, "verified": 60}; yield "openings < min", c, True
     c = b(); c["openings"] = {"n": 64, "verified": 63}; yield "an opening failed", c, True
     c = b(); c["binding"]["context"] = {"ok": False, "why": "root differs"}; yield "binding context", c, True
