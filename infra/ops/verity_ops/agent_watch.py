@@ -4,26 +4,29 @@
 
 An agent hears Slack, Linear and timer events only between runs, and a run can hang after a tool call returns: proofs from
 05:29 to 15:33Z and circuits from 09:49Z on 18 Oct, three coordinators at once about 15:26Z on 15 Oct. Until now only Daniel
-pressing Stop freed one. Every `POLL_S` the watch lists the team's agents (`GET /v1/agents`) and follows each RUNNING run's event
-stream (`GET /v1/agents/{id}/runs/{run}/stream`, server-sent events). Events carry no time, so it times them as they arrive, and
-a heartbeat counts as nothing. A run is
+pressing Stop freed one. Every `POLL_S` the watch lists the team's agents (`GET /v1/agents`; ACTIVE ones, and IDLE ones changed
+in the last `IDLE_RECENT_S`, since an ERROR leaves an agent IDLE) and follows the event stream (`GET .../runs/{run}/stream`,
+server-sent events) of each latest run that is RUNNING or WAITING_FOR_BACKGROUND_WORK. A held agent can read as either (proofs
+and circuits read as the second, top 18:07Z). Events carry no time, so it times them as they arrive, and a heartbeat counts as
+nothing. A run is
 
-- **held** when its last event is a finished tool call and nothing has followed for `HELD_S`. The watch cancels it
-  (`POST .../runs/{run}/cancel`) and starts a new run on the agent (`POST /v1/agents/{id}/runs`) that says from when it was held
-  and to read its inbox. It does so at most once per agent every `RECANCEL_S`, so a run that hangs again is left for a person;
+- **held** when its last event is a finished tool call and nothing has followed for `HELD_S` (RUNNING) or `HELD_BG_S`
+  (WAITING_FOR_BACKGROUND_WORK, longer because cancelling it may take its local background workers with it). The watch cancels
+  it (`POST .../runs/{run}/cancel`) and starts a new run on the agent (`POST /v1/agents/{id}/runs`) that says from when it was
+  held and to read its inbox. It does so at most once per agent every `RECANCEL_S`, so a run that hangs again is left for a person;
 - **in a long call** when a tool call has been running for `LONG_CALL_S` (recorded, never cancelled: a build or a wait may be
   legitimate);
-- **crashed** when the run ended in ERROR (recorded).
+- **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once an hour and `MAX_RESTARTS`
+  times in a row (vllm's runs errored within a minute, run after run, on 18 Oct), then records it as **erroring**, for a person.
 
-Only RUNNING is followed. A latest run left in CREATING for 10 min, or in WAITING_FOR_BACKGROUND_WORK (an agent waiting on its
-background workers, where a long benchmark legitimately keeps it) for 2 h, by the API's own `updatedAt`, is recorded once as
-**stuck** and never cancelled: on 18 Oct circuits' sat so from 09:49Z while every newer run was cancelled on arrival, and neither
-cancelling nor a new run moved it. An agent whose latest run the runs endpoint won't read (a goal run's `run-goal-...` id gets 400)
-is recorded once as unreadable and skipped.
+A latest run left in CREATING for 10 min, or in WAITING_FOR_BACKGROUND_WORK for 2 h with nothing held, by the API's own
+`updatedAt`, is recorded once as **stuck**: on 18 Oct circuits' new runs sat in CREATING while every later one was cancelled on
+arrival, and the API refuses to cancel a CREATING run. An agent whose latest run the runs endpoint won't read (a goal run's
+`run-goal-...` id gets 400) is recorded once as unreadable and skipped.
 
-Each finding is a line of JSON in `--log`; each sweep overwrites `status.json` beside it (its time, the ACTIVE agents, the runs it
-follows), so a reader can tell a quiet watch from a dead one. The control pod holds no Slack credential, so infra's relay reads that file over ssh and
-rings the agent's coordinator. Cancelling and restarting don't wait for it.
+Each finding is a line of JSON in `--log`; each sweep overwrites `status.json` beside it (its time, the agents read, the runs it
+follows), so a reader can tell a quiet watch from a dead one. The control pod holds no Slack credential, so infra's relay reads
+that file over ssh and rings the agent's coordinator. Cancelling and restarting don't wait for it.
 """
 from __future__ import annotations
 
@@ -45,14 +48,20 @@ from typing import Callable, Iterator
 API = "https://api.cursor.com"
 POLL_S = 60
 HELD_S = 15 * 60
+HELD_BG_S = 60 * 60         # held while WAITING_FOR_BACKGROUND_WORK: cancelling it may take its local background workers with it
 LONG_CALL_S = 45 * 60
 RECANCEL_S = 3600
+MAX_RESTARTS = 3            # ERROR runs in a row the watch restarts before leaving the agent for a person
+IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
+FOLLOW = {"RUNNING": HELD_S, "WAITING_FOR_BACKGROUND_WORK": HELD_BG_S}
 TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
 # a latest run left this long in a non-terminal state that isn't RUNNING (18 Oct: circuits' runs sat in CREATING from 09:49Z and
 # in WAITING_FOR_BACKGROUND_WORK from 09:49Z, and every later run was cancelled on arrival); recorded, never cancelled
 STUCK = {"CREATING": 10 * 60, "WAITING_FOR_BACKGROUND_WORK": 2 * 3600}
 CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothing for {mins} min after a finished tool call, and "
             "cancelled it). Read your inbox and carry on from where you stopped.")
+AFTER_ERROR = ("continue: your last run ended in ERROR (the agent watch restarted you). Read your inbox and carry on from where "
+               "you stopped.")
 
 
 def iso(t: float) -> str:
@@ -144,6 +153,7 @@ class Run:
     calls: dict[str, float] = field(default_factory=dict)   # open tool calls: callId -> started
     told: set[str] = field(default_factory=set)
     ended: str | None = None
+    held_s: float = HELD_S
 
 
 class Watch:
@@ -152,7 +162,29 @@ class Watch:
         self.runs: dict[str, Run] = {}
         self.freed: dict[str, float] = {}           # agent -> when the watch last cancelled one of its runs
         self.crashed: set[str] = set()              # runs recorded as crashed
+        self.errors: dict[str, int] = {}            # agent -> ERROR runs in a row the watch restarted
+        self.left: set[str] = set()                 # agents past MAX_RESTARTS, recorded once
         self.lock = threading.Lock()
+
+    def restart(self, a: dict, run: str, t: float) -> None:
+        """A new run on an agent whose latest run ended in ERROR, at most once an hour and `MAX_RESTARTS` times in a row."""
+        r = Run(a["id"], run, a.get("name") or "")
+        n = self.errors.get(a["id"], 0)
+        if n >= MAX_RESTARTS:
+            if a["id"] not in self.left:
+                self.left.add(a["id"])
+                self.record("erroring", r, status="ERROR", restarts=n, action="none: left for a person")
+            return
+        if t - self.freed.get(a["id"], -RECANCEL_S) < RECANCEL_S:
+            self.crashed.discard(run)              # judged again once the hour is up
+            return
+        self.freed[a["id"]], self.errors[a["id"]] = t, n + 1
+        try:
+            new = self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": AFTER_ERROR}})
+            self.record("crashed", r, status="ERROR", action=f"restarted ({n + 1} of {MAX_RESTARTS})",
+                        new_run=((new or {}).get("run") or {}).get("id"))
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            self.record("crashed", r, status="ERROR", action=f"restart failed: {type(e).__name__}: {e}")
 
     def record(self, kind: str, r: Run, **detail) -> None:
         rec = {"t": iso(self.clock()), "kind": kind, "agent": r.agent, "name": r.name, "run": r.run, **detail}
@@ -187,7 +219,7 @@ class Watch:
             return "crashed" if r.ended == "ERROR" else "ended"
         if r.calls and t - min(r.calls.values()) >= LONG_CALL_S:
             return "long_call"
-        if not r.calls and r.last_kind == "tool_done" and t - r.last_t >= HELD_S:
+        if not r.calls and r.last_kind == "tool_done" and t - r.last_t >= r.held_s:
             return "held"
         return None
 
@@ -209,12 +241,14 @@ class Watch:
         r.ended = "CANCELLED"
 
     def sweep(self, start_stream: Callable[[Run], None]) -> None:
-        """One pass: follow every RUNNING run not yet followed, then judge every followed run."""
+        """One pass: follow every RUNNING or background-waiting run not yet followed, restart an ERROR one, then judge every
+        followed run."""
         t = self.clock()
         live = {}
         for a in self.api.agents():
             run = a.get("latestRunId")
-            if run and a.get("status") == "ACTIVE":
+            recent = t - (epoch(a.get("updatedAt")) or 0) < IDLE_RECENT_S
+            if run and (a.get("status") == "ACTIVE" or (a.get("status") == "IDLE" and recent)):
                 live[run] = a
         for run, a in live.items():
             with self.lock:
@@ -229,20 +263,24 @@ class Watch:
                     self.record("unreadable", Run(a["id"], run, a.get("name") or ""), status=f"HTTP {e.code}")
                 continue
             status = info.get("status")
-            if status == "RUNNING":
-                r = Run(a["id"], run, a.get("name") or "", last_t=t)
-                with self.lock:
-                    self.runs[run] = r
-                start_stream(r)
-            elif status in STUCK and run not in self.crashed:
+            if status in STUCK and run not in self.crashed:
                 since = epoch(info.get("updatedAt") or info.get("createdAt"))
                 if since is not None and t - since >= STUCK[status]:
                     self.crashed.add(run)
                     self.record("stuck", Run(a["id"], run, a.get("name") or ""), status=status, since=iso(since),
                                 minutes=int((t - since) // 60))
-            elif info.get("status") == "ERROR" and run not in self.crashed:
+            if status in FOLLOW:
+                self.errors.pop(a["id"], None)
+                self.left.discard(a["id"])
+                r = Run(a["id"], run, a.get("name") or "", last_t=t, held_s=FOLLOW[status])
+                with self.lock:
+                    self.runs[run] = r
+                start_stream(r)
+            elif status == "FINISHED":
+                self.errors.pop(a["id"], None)
+            elif status == "ERROR" and run not in self.crashed:
                 self.crashed.add(run)
-                self.record("crashed", Run(a["id"], run, a.get("name") or ""), status="ERROR")
+                self.restart(a, run, t)
         with self.lock:
             runs = list(self.runs.values())
         status = self.log.with_name("status.json")

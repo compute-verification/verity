@@ -28,7 +28,8 @@ HOLDERS = {a: h["handle"] for h in REG.get("handles") or []
 SAY = {"held": "was held after a finished tool call since {since} ({minutes} min); the watch {action}",
        "held_again": "was held again since {since} ({minutes} min), within an hour of the last restart: left for a person",
        "long_call": "has had a tool call running since {since} (45+ min); not cancelled",
-       "crashed": "ended in ERROR",
+       "crashed": "ended in ERROR; the watch {action}",
+       "erroring": "ended in ERROR again after {restarts} restarts in a row: left for a person (relaunch it, or report it to Cursor)",
        "stuck": "has a run in {status} since {since} ({minutes} min) and starts no other; not cancelled (the API refuses it)"}
 
 
@@ -38,7 +39,8 @@ def log(msg: str) -> None:
 
 def text(rec: dict) -> str:
     who = f"@{HOLDERS[rec['agent']]}'s coordinator" if rec.get("agent") in HOLDERS else (rec.get("name") or "an agent")
-    line = SAY.get(rec.get("kind"), "{kind}").format(**{"since": "?", "minutes": "?", "action": "?", **rec})
+    line = SAY.get(rec.get("kind"), "{kind}").format(**{"since": "?", "minutes": "?", "action": "recorded it", "restarts": "?",
+                                                         **rec})
     return (f"*Agent watch:* {who} (<https://cursor.com/agents/{rec.get('agent')}|{rec.get('agent')}>, run {rec.get('run')}) {line}."
             + (f" New run {rec['new_run']}." if rec.get("new_run") else ""))
 

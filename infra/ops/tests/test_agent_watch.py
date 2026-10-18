@@ -126,16 +126,44 @@ def test_a_run_stuck_in_creating_or_background_work_is_recorded_once_never_cance
     w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
     w.sweep(started.append)
     w.sweep(started.append)
-    assert started == [] and api.posts == []
+    assert [r.run for r in started] == ["run-b"] and api.posts == [], "a background wait is followed, a CREATING run isn't"
     assert [(r["kind"], r["agent"], r["status"], r["minutes"]) for r in records(tmp_path)] == [
         ("stuck", "bc-c", "CREATING", 500)], "background work 1 h 50 min and CREATING 5 min are not yet stuck"
 
 
-def test_a_crashed_run_is_recorded_once(tmp_path):
+def test_a_background_wait_is_held_only_after_an_hour(tmp_path):
+    """top, 18:07Z: a held agent can read WAITING_FOR_BACKGROUND_WORK. Cancelling one may take its local workers, so it waits 1 h."""
+    api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
+    assert [(r.run, r.held_s) for r in started] == [("run-1", W.HELD_BG_S)]
+    w.on_event("run-1", "tool_call", {"callId": "c1", "status": "completed"})
+    clock.t += W.HELD_S
+    w.sweep(started.append)
+    assert api.posts == []
+    clock.t += W.HELD_BG_S - W.HELD_S
+    w.sweep(started.append)
+    assert [p for p, _ in api.posts] == ["/v1/agents/bc-a/runs/run-1/cancel", "/v1/agents/bc-a/runs"]
+
+
+def test_an_error_run_is_restarted_once_an_hour_and_three_times_in_a_row_at_most(tmp_path):
+    """vllm, 18 Oct: run after run ended in ERROR within a minute."""
     api, clock, w, started = setup(tmp_path, status="ERROR")
     w.sweep(started.append)
-    assert started == [] and api.posts == []
-    assert [r["kind"] for r in records(tmp_path)] == ["crashed"]
+    assert started == [] and [p for p, _ in api.posts] == ["/v1/agents/bc-a/runs"], "restarted once, not twice in the hour"
+    assert "ended in ERROR" in api.posts[0][1]["prompt"]["text"]
+    for n in (2, 3, 4):
+        clock.t += W.RECANCEL_S
+        api._agents[0]["latestRunId"] = f"run-e{n}"
+        api._runs[f"run-e{n}"] = {"status": "ERROR"}
+        w.sweep(started.append)
+        w.sweep(started.append)
+    assert len(api.posts) == 3
+    assert [(r["kind"], r.get("action", "")[:9]) for r in records(tmp_path)] == [
+        ("crashed", "restarted"), ("crashed", "restarted"), ("crashed", "restarted"), ("erroring", "none: lef")]
+    api._agents[0].update({"status": "IDLE", "updatedAt": "1970-01-01T00:00:00Z", "latestRunId": "run-e5"})
+    api._runs["run-e5"] = {"status": "ERROR"}
+    clock.t += W.RECANCEL_S
+    w.sweep(started.append)
+    assert len(api.posts) == 3, "an IDLE agent not changed in 6 h isn't read"
 
 
 def test_the_stream_parses_server_sent_events_until_done(monkeypatch):
