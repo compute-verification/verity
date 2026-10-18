@@ -91,11 +91,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The verifier of record.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
   (`check`), `matches_public`, the challenger's draw (`select`), `check_draw`, `check_proved`, the whole audit record
-  (`audit_record`), and the service's public-items rule (`check_public`) and hold on an outcome's verdicts
-  (`check_verdicts`). Its one line
+  (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
+  (`check_verdicts`) and stream rules (`stream`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
-  `benchmarks/one_stage` call it. The two are held to each other by
+  `benchmarks/one_stage` call it. The Python is held to the Lean by
   `verity/core/service/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
   selection rule on (`SampledProofs/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
@@ -110,8 +110,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
-  `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
-  draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is two-stage sampling and the
+  `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it. `two_stage` is two-stage sampling and the
   verifier's randomness, and
   `verity.core.protocols.sampled_proofs.plan` holds verification plans over IR Programs. `optimize`, `candidates` and
   `costfit` plan a sampling design (note:proofs/20261018T0335Z-draft-sampling-optimizer-design, `benchmarks/sampling_plan`).
@@ -459,13 +458,14 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   alike (`check_verdicts`: `pending`, `sessions`, `public`, by the verifier of record).
 - **The failure budget.** At its `budget`-th `reject` or `late` a stream stops, and it refuses registrations from then on.
   It holds at most `budget` minus its failures open.
-- **The log's history.** A registration's checks don't read the whole log. As the log grows, a stream keeps where each
-  window was logged and each registered value's first registration, and it counts its failures as they come. Each check
-  gets the log's last record (R6's `previous`), the records whose window may equal the registration's (R6's window),
-  and those first registrations (R7's held roots) (`Stream._earlier`). On these both verifiers of record give the whole
-  log's verdict, and the work doesn't grow with the stream's length. The exceptions are windows that aren't plain JSON:
-  a record whose window holds a float or a tuple is read by every check, and one whose own window does gets the whole
-  log.
+- **The stream's rules** (budget, open rounds, salt, deadlines, once-only steps) are decided op by op by the verifier
+  of record (`verifier.stream`: `SampledProofs/Stream.lean` against `service._step`) on the counts and the entries the
+  op reads. The stream's state is the record's outputs, and a disagreement stops it.
+- **The log's history.** A registration's checks don't read the whole log. A stream keeps where each window was logged
+  and each registered value's first registration. Each check gets the log's last record (R6's `previous`), the records
+  whose window may equal the registration's (R6's window), and those first registrations (R7's held roots)
+  (`Stream._earlier`), on which both verifiers give the whole log's verdict, at a cost that doesn't grow with the
+  stream. A window holding a float or a tuple is read by every check, and one whose own window does gets the whole log.
 - **The records.** The stream's digest is the SHA-512 of `{"format": "verity/proof-service/stream/v0", "spec": <the
   Spec's digest>, "budget", "delta", "challenger"}`. An outcome's record is `{"format":
   "verity/proof-service/outcome/v0", "stream", "order", "registration", "receipt", "draw", "sessions", "symbol",
@@ -478,20 +478,15 @@ and a check with no proof deadline. After R1 to R7, `register` refuses a law who
 `bernoulli` at `0 < p < 1`); a work draw's closure varies too and is not refused (a planned design).
 Pinned by `tests/test_service.py`.
 What a registration reads of the log, and that its verdicts are the whole log's, is pinned by
-`tests/test_service_history.py`, and sessions by `tests/test_service_sessions.py`.
+`tests/test_service_history.py`, sessions by `tests/test_service_sessions.py`, and the stream's rules by the difftest's
+`stream` piece.
 
 PoUW's example runs on a two-stage `Stream` in `tests/test_service_two_stage.py`, following the architecture note
 (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, §4.1): a uniform `subset:K′` over `N`
 equal tiles, whose boundaries are A's rows, the tile digests and the per-call records, and whose interiors are A′, the
 ok rows, `rowk`'s carries and the cap rows. A `work:K` first stage runs as well, with the challenger's closure, and an
 accepted audit's profile is `two_stage.TwoStageLaw.profile` of `Stage(law)` over the RUs. Pinned by
-`tests/test_service_two_stage.py` (`test_the_pouw_example_runs_the_four_steps_and_one_record_binds_them`,
-`test_each_step_waits_for_the_one_before`, `test_the_interiors_are_the_proved_replay_units_held_to_the_rule`,
-`test_a_work_first_stage_draws_with_the_challengers_closure`, `test_a_wrong_interior_or_boundary_rejects_the_audit_once`,
-`test_the_stream_stops_at_its_budgeth_failure`, `test_no_retries_nothing_redraws_and_an_outcome_is_final`,
-`test_a_late_proof_or_missing_interiors_are_late`,
-`test_a_draw_of_no_rus_has_no_interiors_and_its_proof_goes_to_the_boundary`,
-`test_what_a_two_stage_spec_and_stream_refuse`, `test_the_draw_is_the_challengers_own_randomness`).
+`tests/test_service_two_stage.py`.
 
 ### Two-stage sampling
 

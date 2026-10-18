@@ -71,13 +71,14 @@ It holds at most `budget` minus its failures open registrations (and at most `ro
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import math
 import os
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping, NoReturn, Sequence
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import SpecializedDefinition
@@ -586,6 +587,321 @@ class _Entry:
     session: Session | None = None
 
 
+def _reading(x: Any) -> float | None:
+    return None if x is None else float(x)
+
+
+def _nat(x: Any) -> bool:
+    return type(x) is int and x >= 0
+
+
+def _float(x: Any, k: str) -> float:
+    """A reading as the verifier of record reads it: a JSON number, as the double nearest it."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        raise ValueError(f"{k} is a reading of the clock")
+    try:
+        return float(x)
+    except OverflowError:
+        raise ValueError(f"{k} is a reading of the clock") from None
+
+
+def _token(x: Any, k: str) -> str:
+    if not isinstance(x, str):
+        raise ValueError(f"{k} is a token")
+    return x
+
+
+def _order(r: Registration) -> int | None:
+    return r.order if _nat(r.order) else None
+
+
+def _registration_token(r: Registration) -> str:
+    """The token `_Control` and `SampledProofs.Stream` know a registration by: equal exactly when the registrations are."""
+    return _sha512({"record": dict(r.record), "receipt": dict(r.receipt), "digest": r.digest, "order": r.order,
+                    "salted_at": r.salted_at, "received_at": r.received_at})
+
+
+def _draw_token(d: Draw) -> str:
+    return _sha512({"registration": _registration_token(d.registration), "law": dict(d.law), "draw": dict(d.draw)})
+
+
+def _covered(d: Draw) -> list[Any]:
+    return [_order(d.registration), _registration_token(d.registration), _draw_token(d)]
+
+
+def _session_digests(sessions: Any) -> list[str | None] | None:
+    if not isinstance(sessions, Sequence) or isinstance(sessions, str):
+        return None
+    return [s if isinstance(s, str) else None for s in sessions]
+
+
+class _Stop(Exception):
+    def __init__(self, decision: dict[str, Any]) -> None:
+        self.decision = decision
+
+
+def _no(code: str, detail: Any = None) -> NoReturn:
+    raise _Stop({"refused": [code], "detail": detail})
+
+
+def _need(op: Mapping[str, Any], k: str) -> Any:
+    if k not in op:
+        raise _Stop({"unchecked": k})
+    return op[k]
+
+
+#: The ops of a stream's rules, each `_Control`'s method of that name.
+_OPS = ("ready", "salt", "salt_released", "register", "select", "interiors", "session", "deliver", "deliver_session",
+        "outcome")
+#: What the stream's rules hold of an empty stream.
+_EMPTY = {"size": 0, "opened": [], "failures": 0, "salted_at": None, "ended": None, "entries": []}
+
+
+class _Control:
+    """A stream's own rules, the reference for the verifier of record's (`SampledProofs.Stream`, whose docstring has the
+    state and the ops): the failure budget, the registrations open at once, the epoch's salt and registration deadline,
+    and each registration's once-only orders (drawn, interiors, session, delivered, final) and proof deadline, on what
+    they hold of the stream that one op reads (`_step`). A refusal's or a pending outcome's `detail` is the stream's
+    own, which the Lean doesn't write. `ValueError` is an op or a state the Lean doesn't read."""
+
+    def __init__(self, params: Mapping[str, Any], state: Mapping[str, Any]) -> None:
+        self.params = params
+        self.deadline = float(params["proof_deadline"])
+        rd = params["registration_deadline"]
+        self.registration_deadline = None if rd is None else float(rd)
+        self.s = copy.deepcopy(dict(state))
+        self.at = {e["order"]: e for e in self.s.pop("entries")}
+
+    def state(self) -> dict[str, Any]:
+        return {**self.s, "entries": list(self.at.values())}
+
+    def _ended(self) -> dict[str, Any]:
+        return {**self.s["ended"], "registration_deadline": self.params["registration_deadline"]}
+
+    def _ready(self, op: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        s, budget = self.s, self.params["budget"]
+        if s["failures"] >= budget:
+            _no("stopped", {"failures": s["failures"], "budget": budget})
+        if s["ended"] is not None:
+            _no("epoch-ended", self._ended())
+        if len(s["opened"]) >= min(self.params["rounds"], budget - s["failures"]):
+            _no("open", {"order": s["opened"][-1]})
+        return {"ok": None}
+
+    def _unsalted(self) -> None:
+        if self.s["salted_at"] is not None:
+            _no("salted", {"salted_at": self.s["salted_at"]})
+        if self.s["ended"] is not None:
+            _no("epoch-ended", self._ended())
+
+    def _salt(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        self._unsalted()
+        at = _need(op, "at")
+        _float(at, "at")
+        self.s["salted_at"] = at
+        return {"ok": None}
+
+    def _salt_released(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        self._unsalted()
+        released = _need(op, "released_at")
+        r = _float(released, "released_at")
+        now = _float(_need(op, "now"), "now")
+        if r > now:
+            _no("released-later", {"released_at": released, "now": now})
+        self.s["salted_at"] = released
+        return {"ok": None}
+
+    def _held(self, order: int) -> dict[str, Any]:
+        if order not in self.at:
+            raise ValueError(f"the state holds no entry {order}")
+        return self.at[order]
+
+    def _entry(self, order: Any, registration: str) -> dict[str, Any]:
+        if not (_nat(order) and order < self.s["size"]):
+            _no("unknown", {"order": order})
+        e = self._held(order)
+        if e["registration"] != registration:
+            _no("unknown", {"order": order})
+        return e
+
+    def _entry_of(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        return self._entry(op.get("order"), _token(op.get("registration"), "registration"))
+
+    def _drawn(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        e = self._entry_of(op)
+        if e["draw"] != _token(op.get("draw"), "draw"):
+            _no("not-drawn", {"order": op["order"]})
+        return e
+
+    @staticmethod
+    def _codes(op: Mapping[str, Any], k: str) -> list[str] | None:
+        cs = _need(op, k)
+        if cs is not None and not (isinstance(cs, list) and all(isinstance(c, str) for c in cs)):
+            raise ValueError(f"{k} are null or codes")
+        return cs
+
+    def _checks(self, op: Mapping[str, Any]) -> None:
+        if (cs := self._codes(op, "checks")) is not None:
+            raise _Stop({"refused": list(cs)})
+
+    def _register(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        self._ready()
+        d = self.registration_deadline
+        if d is not None:
+            received = _need(op, "received_at")
+            t, at = _float(received, "received_at"), self.s["salted_at"]
+            if at is None or not t - float(at) <= d:
+                self.s["ended"] = {"received_at": received, "salted_at": at}
+                return {"refused": ["late-registration"], "detail": self._ended()}
+        self._checks(op)
+        registration = _token(_need(op, "registration"), "registration")
+        order = self.s["size"]
+        self.at[order] = {"order": order, "registration": registration, "draw": None, "proved": 0, "drawn_at": None,
+                          "interior": False, "delivered": False, "session": None, "final": False}
+        self.s["size"] = order + 1
+        self.s["opened"].append(order)
+        return {"ok": order}
+
+    def _select(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        e = self._entry_of(op)
+        if e["draw"] is not None:
+            _no("drawn", {"order": op["order"]})
+        self._checks(op)
+        draw = _token(_need(op, "draw"), "draw")
+        if not _nat(proved := _need(op, "proved")):
+            raise ValueError("proved is a count")
+        at = _need(op, "at")
+        _float(at, "at")
+        e.update(draw=draw, proved=proved, drawn_at=at)
+        return {"ok": None}
+
+    def _interiors(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        if not self.params["two_stage"]:
+            _no("rule", "interiors are registered under a two-stage selection rule")
+        e = self._drawn(op)
+        for code, held in (("final", e["final"]), ("delivered", e["delivered"]), ("interior-registered", e["interior"])):
+            if held:
+                _no(code, {"order": op["order"]})
+        if not e["proved"]:
+            _no("interior-empty", "a draw of no RUs has no interiors")
+        self._checks(op)
+        e["interior"] = True
+        return {"ok": None}
+
+    @staticmethod
+    def _draws(op: Mapping[str, Any]) -> list[list[Any]]:
+        ds = op.get("draws")
+        if not isinstance(ds, list):
+            raise ValueError("draws are a list")
+        if not all(isinstance(d, list) and len(d) == 3 and isinstance(d[1], str) and isinstance(d[2], str) for d in ds):
+            raise ValueError("a covered draw is [order, registration, draw]")
+        return [[d[0] if _nat(d[0]) else None, d[1], d[2]] for d in ds]
+
+    def _open_entry(self, e: Mapping[str, Any], order: Any) -> None:
+        if e["final"]:
+            _no("final", {"order": order})
+        if e["delivered"]:
+            _no("delivered", {"order": order})
+        if e["session"] is not None:
+            _no("covered", {"order": order, "rounds": [d[0] for d in e["session"]]})
+
+    def _session(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        if self.params["two_stage"]:
+            _no("rule", "a two-stage stream delivers each draw's proof itself, after its interiors")
+        draws = self._draws(op)
+        if not 1 <= len(draws) <= self.params["rounds"]:
+            _no("rounds", {"rounds": len(draws), "most": self.params["rounds"]})
+        for order, registration, draw in draws:
+            e = self._entry(order, registration)
+            if e["draw"] != draw:
+                _no("not-drawn", {"order": order})
+            self._open_entry(e, order)
+        orders = [d[0] for d in draws]
+        if orders != list(range(orders[0], orders[0] + len(orders))):
+            _no("order", {"rounds": orders})
+        for o in orders:
+            self.at[o]["session"] = [list(d) for d in draws]
+        return {"ok": orders}
+
+    @staticmethod
+    def _sessions(op: Mapping[str, Any]) -> None:
+        ss = op.get("sessions")
+        if not (isinstance(ss, list) and ss and all(isinstance(s, str) and _DIGEST.match(s) for s in ss)):
+            _no("sessions", "one or more session records' SHA-512")
+
+    def _late(self, e: Mapping[str, Any], now: float) -> bool:
+        s = e["session"]
+        first = self._held(s[0][0]) if s and _nat(s[0][0]) else e
+        if first["drawn_at"] is None:
+            raise ValueError("a drawn entry has its draw's reading")
+        return now - float(first["drawn_at"]) > self.deadline
+
+    def _finish(self, e: dict[str, Any], symbol: str) -> str:
+        e["final"] = True
+        self.s["failures"] += int(symbol != ACCEPT)
+        if e["order"] in self.s["opened"]:
+            self.s["opened"].remove(e["order"])
+        return symbol
+
+    def _deliver(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        e = self._drawn(op)
+        self._open_entry(e, op["order"])
+        self._sessions(op)
+        late = self._late(e, _float(_need(op, "now"), "now"))
+        if not late and self.params["two_stage"] and not e["interior"] and e["proved"]:
+            _no("interior", "the interiors are registered before any proof")
+        e["delivered"] = True
+        return {"ok": self._finish(e, LATE) if late else None}
+
+    def _deliver_session(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        stream = _token(op.get("stream"), "stream")
+        draws = self._draws(op)
+        if stream != self.params["stream"] or not draws:
+            _no("not-session", {"stream": stream})
+        entries = []
+        for order, registration, _ in draws:
+            e = self._entry(order, registration)
+            if e["session"] != draws:
+                _no("not-session", {"order": order})
+            if e["final"]:
+                _no("final", {"order": order})
+            if e["delivered"]:
+                _no("delivered", {"order": order})
+            entries.append(e)
+        self._sessions(op)
+        late = self._late(entries[0], _float(_need(op, "now"), "now"))
+        for e in entries:
+            e["delivered"] = True
+        return {"ok": [self._finish(e, LATE) for e in entries] if late else None}
+
+    def _outcome(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        e = self._drawn(op)
+        if e["final"]:
+            _no("final", {"order": op["order"]})
+        if not e["delivered"]:
+            if self._late(e, _float(_need(op, "now"), "now")):
+                return {"ok": self._finish(e, LATE)}
+            raise _Stop({"pending": True, "detail": "no proof delivered"})
+        if (cs := self._codes(op, "verdicts")) is not None:
+            raise _Stop({"pending": True} if cs == ["pending"] else {"refused": list(cs)})
+        if not isinstance(accepted := _need(op, "accepted"), bool):
+            raise ValueError("accepted is a boolean")
+        return {"ok": self._finish(e, ACCEPT if accepted else REJECT)}
+
+
+def _step(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """`op`'s decision on `state` by the stream's rules (`_Control`), and what they hold after it: `state` itself where
+    the op ends early, as the verifier of record's `Stream.run` gives them."""
+    name = op.get("op") if isinstance(op, Mapping) else None
+    if name not in _OPS:
+        raise ValueError("an op is one of " + ", ".join(_OPS))
+    c = _Control(params, state)
+    try:
+        return getattr(c, "_" + name)(op), c.state()
+    except _Stop as s:
+        return s.decision, dict(state)
+
+
 class Stream:
     """One protocol's stream for one `Spec`, held by the challenger.
 
@@ -602,9 +918,16 @@ class Stream:
     deadline of that release, or the epoch ends (`ended`) at the first that isn't. `epoch_log` holds the challenger's
     clock readings.
 
+    The stream's own rules (the budget, the open registrations, the salt and both deadlines, and each registration's
+    once-only orders) decide each op by their verifier of record (`verifier.stream`: the Lean's `SampledProofs.Stream`
+    against `_Control`), the clock's readings as floats, on what they hold of the stream that the op reads (`_slice`: its
+    counts and the entries it names). What they hold is the verifier of record's state after each op, from the empty
+    stream, so an op is decided on a state of a bounded size whatever the stream's length. Where the two disagree the
+    stream stops: that op and every one after it is refused (`disagree`).
+
     As its log grows, a stream keeps what one-stage's R6 and R7 read of it: where each window was logged, and each
-    registered value's first registration. It also counts its failures as they come. So a registration's checks read
-    the same few records whatever the stream's history (`_earlier`), with the verdicts the whole log gives.
+    registered value's first registration. So a registration's checks read the same few records whatever the stream's
+    history (`_earlier`), with the verdicts the whole log gives.
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition, *, budget: int, delta: float, challenger: str,
@@ -638,21 +961,24 @@ class Stream:
         self._coins, self._clock, self._sampler = coins, clock, sampler
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {})})
+        self._params = {"budget": budget, "rounds": rounds, "two_stage": isinstance(spec.selection, TwoStage),
+                        "registration_deadline": _reading(spec.check.registration_deadline),
+                        "proof_deadline": float(spec.check.proof_deadline), "stream": self.digest}
+        self._rules: dict[str, Any] = {k: v for k, v in _EMPTY.items() if k != "entries"}
+        self._rule_entries: list[dict[str, Any]] = []
+        self._broken: Verdict | None = None
         self._entries: list[_Entry] = []
-        self._open: dict[int, None] = {}
         self._log: list[dict[str, Any]] = []
         self._windows: dict[bytes, list[int]] = {}
         self._irregular: list[int] = []
         self._first: dict[Any, int] = {}
         self._records: list[dict[str, Any]] = []
-        self._failures = 0
         self._epoch_log: list[dict[str, Any]] = []
         self._salted_at: float | None = None
-        self._ended: dict[str, Any] | None = None
 
     @property
     def failures(self) -> int:
-        return self._failures
+        return self._rules["failures"]
 
     @property
     def stopped(self) -> bool:
@@ -661,7 +987,7 @@ class Stream:
     @property
     def ended(self) -> bool:
         """The epoch ended: a registration was late (`late-registration`), and the stream receives none from then on."""
-        return self._ended is not None
+        return self._rules["ended"] is not None
 
     @property
     def epoch_log(self) -> tuple[dict[str, Any], ...]:
@@ -687,22 +1013,72 @@ class Stream:
         """The outcomes' records, in order; `Outcome.record` is each one's SHA-512."""
         return tuple(self._records)
 
+    def _decide(self, op: dict[str, Any], fill: Mapping[str, Callable[[], Any]] | None = None) -> dict[str, Any]:
+        """`op`'s decision of record by the stream's rules (`verifier.stream`), filling in what it asks for first: while
+        it is `unchecked`, `fill[field]()` reads the clock or runs the checks, and the op is asked again. The state of
+        record after it is what the stream's rules hold from then on; a disagreement stops the stream."""
+        if self._broken is not None:
+            raise Refused(self._broken)
+        while True:
+            state = self._slice(op)
+            d, after, v = V.stream(self._params, state, op, *_step(self._params, state, op))
+            if not v.ok:
+                self._broken = v
+                raise Refused(v)
+            field = d.get("unchecked")
+            if field is None:
+                break
+            if field in op or field not in (fill or {}):
+                raise RuntimeError(f"the stream's rules ask for {field!r}, which this op has or can't give")
+            op[field] = fill[field]()
+        self._merge(after)
+        return d
+
+    def _slice(self, op: Mapping[str, Any]) -> dict[str, Any]:
+        """What the stream's rules hold that `op` reads: the counts, and the entries it names, with the first round of a
+        session that covers one."""
+        entries = self._rule_entries
+        named = [op.get("order")] if "order" in op else [d[0] for d in op.get("draws") or ()]
+        at: set[int] = set()
+        for o in named:
+            if _nat(o) and o < len(entries):
+                at.add(o)
+                s = entries[o]["session"]
+                if s and _nat(s[0][0]):
+                    at.add(s[0][0])
+        return {**self._rules, "entries": [entries[o] for o in sorted(at)]}
+
+    def _merge(self, after: Mapping[str, Any]) -> None:
+        entries = self._rule_entries
+        for e in after["entries"]:
+            if not (_nat(e["order"]) and e["order"] <= len(entries)):
+                raise RuntimeError(f"the stream's rules hold an entry the stream doesn't: {e['order']!r}")
+            if e["order"] == len(entries):
+                entries.append(e)
+            else:
+                entries[e["order"]] = e
+        self._rules = {k: v for k, v in after.items() if k != "entries"}
+        if self._rules["size"] != len(entries):
+            raise RuntimeError("the stream's rules count registrations the stream doesn't hold")
+
+    @staticmethod
+    def _held(d: Mapping[str, Any], checks: Verdict | None = None) -> Mapping[str, Any]:
+        """`d` when it decides the op, else raises: `Refused` with the checks' own verdict when it is theirs, `Pending`."""
+        if "refused" in d:
+            if checks is not None and not checks.ok and list(checks.codes) == d["refused"]:
+                raise Refused(checks)
+            code = d["refused"][0]
+            raise Refused(Verdict(False, tuple(d["refused"]), {code: d.get("detail")}))
+        if "pending" in d:
+            raise Pending(checks.detail["pending"] if checks is not None and checks.codes == ("pending",) else
+                          d.get("detail"))
+        return d
+
     def ready(self) -> None:
         """Raises `Refused` when the stream receives no registration now: it has stopped, its epoch ended
         (`epoch-ended`, with the late registration's readings), or it holds as many registrations without a final
         outcome as it may (`open`): `rounds`, and never more than `budget` minus its failures."""
-        if self.stopped:
-            raise _refuse("stopped", {"failures": self.failures, "budget": self.budget})
-        if self._ended is not None:
-            raise _refuse("epoch-ended", dict(self._ended))
-        if len(self._open) >= min(self.rounds, self.budget - self.failures):
-            raise _refuse("open", {"order": next(reversed(self._open))})
-
-    def _unsalted(self) -> None:
-        if self._salted_at is not None:
-            raise _refuse("salted", {"salted_at": self._salted_at})
-        if self._ended is not None:
-            raise _refuse("epoch-ended", dict(self._ended))
+        self._held(self._decide({"op": "ready"}))
 
     def salt(self, n: int = 64) -> bytes:
         """The epoch's salt coin: `n` bytes of the challenger's own coins (`OwnRandomness`, in order with the draws'
@@ -711,11 +1087,16 @@ class Stream:
         `salt_released`: nothing redraws it) or `epoch-ended` (the epoch ended before any salt)."""
         if not (type(n) is int and n >= 1):
             raise ValueError(f"a salt is a positive number of bytes, not {n!r}")
-        self._unsalted()
-        salt = OwnRandomness(self._coins).read(n)
-        self._salted_at = self._clock()
-        self._epoch_log.append({"event": "salt", "salt": salt.hex(), "salted_at": self._salted_at})
-        return salt
+        got: dict[str, Any] = {}
+
+        def at() -> float:
+            got["salt"] = OwnRandomness(self._coins).read(n)
+            got["salted_at"] = self._clock()
+            return float(got["salted_at"])
+        self._held(self._decide({"op": "salt"}, {"at": at}))
+        self._salted_at = got["salted_at"]
+        self._epoch_log.append({"event": "salt", "salt": got["salt"].hex(), "salted_at": self._salted_at})
+        return got["salt"]
 
     def salt_released(self, salt: bytes, released_at: float) -> None:
         """The epoch's salt when it was released elsewhere (PoUW's epoch coin, shared by one stream per level):
@@ -729,10 +1110,8 @@ class Stream:
             raise ValueError(f"a released salt is non-empty bytes, not {salt!r}")
         if not (isinstance(released_at, (int, float)) and not isinstance(released_at, bool) and math.isfinite(released_at)):
             raise ValueError(f"a salt's release is a finite reading of the clock, not {released_at!r}")
-        self._unsalted()
-        now = self._clock()
-        if released_at > now:
-            raise _refuse("released-later", {"released_at": released_at, "now": now})
+        self._held(self._decide({"op": "salt_released", "released_at": float(released_at)},
+                                {"now": lambda: float(self._clock())}))
         self._salted_at = released_at
         self._epoch_log.append({"event": "salt", "salt": salt.hex(), "salted_at": released_at, "external": True})
 
@@ -752,41 +1131,49 @@ class Stream:
         `Refused`: when the stream has stopped or its epoch ended (`epoch-ended`), while it holds as many registrations
         without a final outcome as it may (`open`, `ready`), when it is late, when either check fails, or, after both,
         when the law draws a count that varies (`shapes`, `count_varies`)."""
-        self.ready()
-        d = self.spec.check.registration_deadline
-        received_at = None
-        if d is not None:
-            received_at = self._clock()
-            if self._salted_at is None or not received_at - self._salted_at <= d:
-                self._ended = {"salted_at": self._salted_at, "received_at": received_at, "registration_deadline": d}
-                self._epoch_log.append({"event": "late-registration", "salted_at": self._salted_at,
-                                        "received_at": received_at})
-                raise _refuse("late-registration", dict(self._ended))
-        v = self._public(record, interior=False)
-        if not v.ok:
-            raise Refused(v)
-        n = record.get("population")
-        if not (type(n) is int and n >= 1):
-            raise _refuse("population", n)
-        program = P.population_program(self.unit, n)
-        law = selection_law(self.spec.selection, n)
-        earlier = self._earlier(record)
-        v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
-                    work_table, registered)
-        if not v.ok:
-            raise Refused(v)
-        if count_varies(law):
-            raise _refuse("shapes", {"law": law})
+        deadline = self.spec.check.registration_deadline
+        op: dict[str, Any] = {"op": "register"}
+        got: dict[str, Any] = {}
+
+        def received() -> float:
+            got["received_at"] = self._clock()
+            return float(got["received_at"])
+
+        def checks() -> list[str] | None:
+            v = self._public(record, interior=False)
+            n = record.get("population")
+            if v.ok and not (type(n) is int and n >= 1):
+                v = _refuse("population", n).verdict
+            if v.ok:
+                program, law, earlier = P.population_program(self.unit, n), selection_law(self.spec.selection, n), \
+                    self._earlier(record)
+                v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
+                            work_table, registered)
+                if v.ok and count_varies(law):
+                    v = _refuse("shapes", {"law": law}).verdict
+                got.update(program=program, law=law, earlier=earlier)
+            got["checks"] = v
+            if not v.ok:
+                return list(v.codes)
+            salted_at = None if deadline is None else self._salted_at
+            got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"))
+            op["registration"] = _registration_token(got["registration"])
+            return None
+        d = self._decide(op, {"received_at": received, "checks": checks})
+        if d.get("refused") == ["late-registration"]:
+            self._epoch_log.append({"event": "late-registration", "salted_at": self._salted_at,
+                                    "received_at": got["received_at"]})
+        self._held(d, got.get("checks"))
+        reg, earlier = got["registration"], got["earlier"]
         if earlier is self._log:
             earlier = self._log[:]
-        salted_at = None if d is None else self._salted_at
-        reg = self._log_record(record, len(self._entries), salted_at, received_at)
+        self._append(reg)
+        program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.spec.check.query, law, work_table), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered)))
-        self._open[reg.order] = None
-        if d is not None:
+        if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
-                                    "salted_at": salted_at, "received_at": received_at})
+                                    "salted_at": reg.salted_at, "received_at": reg.received_at})
         return reg
 
     def _values(self, *, interior: bool) -> tuple[Value, ...]:
@@ -801,12 +1188,14 @@ class Stream:
         return V.check_public(check_public(self.spec, record, values), record, SCHEME, self.spec.check.query,
                               [(v.name, v.registered) for v in values], [p.item for p in self.spec.public])
 
-    def _log_record(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
-                    received_at: float | None = None) -> Registration:
-        reg = Registration(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))), R.digest(record),
-                           order, salted_at, received_at)
+    def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
+                      received_at: float | None = None) -> Registration:
+        return Registration(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))), R.digest(record),
+                            order, salted_at, received_at)
+
+    def _append(self, reg: Registration) -> None:
         at = len(self._log)
-        self._log.append(logged := dict(record))
+        self._log.append(logged := dict(reg.record))
         key = _window_key(logged.get("window"))
         if key is None:
             self._irregular.append(at)
@@ -814,7 +1203,6 @@ class Stream:
             self._windows.setdefault(key, []).append(at)
         for e in logged.get("registered") or ():
             self._first.setdefault(e["value"], at)
-        return reg
 
     def _earlier(self, record: Mapping[str, Any]) -> list[dict[str, Any]]:
         """The records of the log that one-stage's R6 and R7 read for `record`, in log order: the last (R6's `previous`),
@@ -830,12 +1218,6 @@ class Stream:
             at.add(len(self._log) - 1)
         return [self._log[i] for i in sorted(at)]
 
-    def _entry(self, registration: Registration) -> _Entry:
-        o = registration.order
-        if not (type(o) is int and 0 <= o < len(self._entries)) or self._entries[o].registration != registration:
-            raise _refuse("unknown", {"order": o})
-        return self._entries[o]
-
     def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
         the selection rule's law (`select_draw`; `All` draws every unit and reads no coins). `closure` is the challenger's closure map
@@ -845,27 +1227,39 @@ class Stream:
         draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before (nothing redraws), a
         closure map on another law or outside [0, N) (before any coin is read), the two verifiers drawing differently
         (`disagree`), and a draw that isn't well formed under the law (`draw.check_draw`, by `verifier.check_draw`)."""
-        e = self._entry(registration)
-        if e.draw is not None:
-            raise _refuse("drawn", {"order": registration.order})
-        read = bytearray()
+        op: dict[str, Any] = {"op": "select", "order": _order(registration),
+                              "registration": _registration_token(registration)}
+        got: dict[str, Any] = {}
 
-        def coins(n: int) -> bytes:
-            b = self._coins(n)
-            read.extend(b)
-            return b
-        obj = select_draw(self.spec.selection, e.law, registration.record["population"], coins, closure=closure,
-                          sampler=self._sampler)
-        if self._sampler is None:
-            obj, v = V.select(obj, bytes(read), self.spec.selection.to_json(), e.program, self.spec.check.query,
-                              e.work_table, closure)
-            if not v.ok:
-                raise Refused(v)
-        v = V.check_draw(obj, registration.record, e.law)
-        if not v.ok:
-            raise Refused(v)
-        e.draw, e.drawn_at = Draw(registration, e.law, obj), self._clock()
-        e.read, e.closure = (None if self._sampler is not None else bytes(read)), closure
+        def checks() -> list[str] | None:
+            e = self._entries[registration.order]
+            read = bytearray()
+
+            def coins(n: int) -> bytes:
+                b = self._coins(n)
+                read.extend(b)
+                return b
+            try:
+                obj = select_draw(self.spec.selection, e.law, registration.record["population"], coins, closure=closure,
+                                  sampler=self._sampler)
+                if self._sampler is None:
+                    obj, v = V.select(obj, bytes(read), self.spec.selection.to_json(), e.program, self.spec.check.query,
+                                      e.work_table, closure)
+                    if not v.ok:
+                        raise Refused(v)
+                v = V.check_draw(obj, registration.record, e.law)
+                if not v.ok:
+                    raise Refused(v)
+            except Refused as r:
+                got["checks"] = r.verdict
+                return list(r.verdict.codes)
+            draw = Draw(registration, e.law, obj)
+            got.update(draw=draw, drawn_at=self._clock(), read=None if self._sampler is not None else bytes(read))
+            op.update(draw=_draw_token(draw), proved=len(draw.proved), at=float(got["drawn_at"]))
+            return None
+        self._held(self._decide(op, {"checks": checks}), got.get("checks"))
+        e = self._entries[registration.order]
+        e.draw, e.drawn_at, e.read, e.closure = got["draw"], got["drawn_at"], got["read"], closure
         return e.draw
 
     def register_interiors(self, draw: Draw, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *,
@@ -879,35 +1273,31 @@ class Stream:
         after the boundary registration, and receipted. Raises `Refused`: `rule` (not a two-stage
         stream), `not-drawn`, `final`, `delivered`, `interior-registered` (a second time), `interior-empty` (no RU was
         drawn), `interior-population` (not the proved RUs), or either check's codes."""
-        if not isinstance(self.spec.selection, TwoStage):
-            raise _refuse("rule", "interiors are registered under a two-stage selection rule")
-        e = self._entry(draw.registration)
-        order = draw.registration.order
-        if e.draw != draw:
-            raise _refuse("not-drawn", {"order": order})
-        if e.outcome is not None:
-            raise _refuse("final", {"order": order})
-        if e.sessions is not None:
-            raise _refuse("delivered", {"order": order})
-        if e.interior is not None:
-            raise _refuse("interior-registered", {"order": order})
-        n = len(draw.proved)
-        if not n:
-            raise _refuse("interior-empty", "a draw of no RUs has no interiors")
-        v = self._public(record, interior=True)
-        if not v.ok:
-            raise Refused(v)
-        if not (type(record.get("population")) is int and record["population"] == n):
-            raise _refuse("interior-population", {"registered": record.get("population"), "proved": n})
-        law = {"law": "subset", "k": n}
-        program, earlier = P.population_program(self.unit, n), self._earlier(record)
-        v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier)
-        if not v.ok:
-            raise Refused(v)
+        op: dict[str, Any] = {"op": "interiors", "order": _order(draw.registration),
+                              "registration": _registration_token(draw.registration), "draw": _draw_token(draw)}
+        got: dict[str, Any] = {}
+
+        def checks() -> list[str] | None:
+            n = len(draw.proved)
+            v = self._public(record, interior=True)
+            if v.ok and not (type(record.get("population")) is int and record["population"] == n):
+                v = _refuse("interior-population", {"registered": record.get("population"), "proved": n}).verdict
+            if v.ok:
+                law = {"law": "subset", "k": n}
+                program, earlier = P.population_program(self.unit, n), self._earlier(record)
+                v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier)
+                got.update(law=law, program=program, earlier=earlier, n=n)
+            got["checks"] = v
+            return None if v.ok else list(v.codes)
+        self._held(self._decide(op, {"checks": checks}), got.get("checks"))
+        order, n, earlier = draw.registration.order, got["n"], got["earlier"]
         if earlier is self._log:
             earlier = self._log[:]
-        e.interior, e.interior_draw = self._log_record(record, order), {**law, "population": n, "units": list(range(n))}
-        e.interior_copies = (program, ports, leaf_layer, anchors, earlier)
+        e = self._entries[order]
+        e.interior = self._registration(record, order)
+        self._append(e.interior)
+        e.interior_draw = {**got["law"], "population": n, "units": list(range(n))}
+        e.interior_copies = (got["program"], ports, leaf_layer, anchors, earlier)
         return e.interior
 
     def session(self, draws: Sequence[Draw]) -> Session:
@@ -917,59 +1307,23 @@ class Stream:
         `Refused`, changing nothing: `rule` (a two-stage stream), `rounds` (no draw, or more than `rounds`), `unknown`,
         `not-drawn` (a covered registration not drawn yet, or another draw), `final`, `delivered`, `covered` (a draw
         another session covers: nothing reopens it) or `order` (not consecutive registrations in order)."""
-        if isinstance(self.spec.selection, TwoStage):
-            raise _refuse("rule", "a two-stage stream delivers each draw's proof itself, after its interiors")
         draws = tuple(draws)
-        if not 1 <= len(draws) <= self.rounds:
-            raise _refuse("rounds", {"rounds": len(draws), "most": self.rounds})
-        for d in draws:
-            e = self._entry(d.registration)
-            order = d.registration.order
-            if e.draw != d:
-                raise _refuse("not-drawn", {"order": order})
-            if e.outcome is not None:
-                raise _refuse("final", {"order": order})
-            if e.sessions is not None:
-                raise _refuse("delivered", {"order": order})
-            if e.session is not None:
-                raise _refuse("covered", {"order": order, "rounds": e.session.orders})
+        self._held(self._decide({"op": "session", "draws": [_covered(d) for d in draws]}))
         s = Session(self.digest, draws)
-        if s.orders != list(range(s.orders[0], s.orders[0] + len(draws))):
-            raise _refuse("order", {"rounds": s.orders})
         for d in draws:
             self._entries[d.registration.order].session = s
         return s
 
-    def _late(self, e: _Entry) -> bool:
-        first = e if e.session is None else self._entries[e.session.orders[0]]
-        assert first.drawn_at is not None and self.spec.check.proof_deadline is not None
-        return self._clock() - first.drawn_at > self.spec.check.proof_deadline
-
-    @staticmethod
-    def _digests_ok(sessions: Any) -> None:
-        if not (isinstance(sessions, Sequence) and not isinstance(sessions, str) and sessions
-                and all(isinstance(s, str) and _DIGEST.match(s) for s in sessions)):
-            raise _refuse("sessions", "one or more session records' SHA-512")
-
     def _deliver_session(self, session: Session, sessions: Sequence[str]) -> tuple[Outcome, ...] | None:
-        if session.stream != self.digest or not session.draws:
-            raise _refuse("not-session", {"stream": session.stream})
-        entries = []
-        for d in session.draws:
-            e = self._entry(d.registration)
-            order = d.registration.order
-            if e.session != session:
-                raise _refuse("not-session", {"order": order})
-            if e.outcome is not None:
-                raise _refuse("final", {"order": order})
-            if e.sessions is not None:
-                raise _refuse("delivered", {"order": order})
-            entries.append(e)
-        self._digests_ok(sessions)
-        late = self._late(entries[0])
+        draws = tuple(session.draws) if isinstance(session.draws, Sequence) else ()
+        d = self._held(self._decide({"op": "deliver_session",
+                                     "stream": session.stream if isinstance(session.stream, str) else "",
+                                     "draws": [_covered(x) for x in draws], "sessions": _session_digests(sessions)},
+                                    {"now": lambda: float(self._clock())}))
+        entries = [self._entries[x.registration.order] for x in draws]
         for e in entries:
             e.sessions = list(sessions)
-        return tuple(self._finish(e, LATE, None, {}) for e in entries) if late else None
+        return tuple(self._finish(e, LATE, None, {}) for e in entries) if d["ok"] is not None else None
 
     def deliver(self, draw: Draw | Session, sessions: Sequence[str]) -> Outcome | tuple[Outcome, ...] | None:
         """The firewall delivers the draw's proof, once: `sessions` are its session records' SHA-512, which the outcome
@@ -981,21 +1335,12 @@ class Stream:
         didn't open."""
         if isinstance(draw, Session):
             return self._deliver_session(draw, sessions)
-        e = self._entry(draw.registration)
-        if e.draw != draw:
-            raise _refuse("not-drawn", {"order": draw.registration.order})
-        if e.outcome is not None:
-            raise _refuse("final", {"order": draw.registration.order})
-        if e.sessions is not None:
-            raise _refuse("delivered", {"order": draw.registration.order})
-        if e.session is not None:
-            raise _refuse("covered", {"order": draw.registration.order, "rounds": e.session.orders})
-        self._digests_ok(sessions)
-        late = self._late(e)
-        if not late and isinstance(self.spec.selection, TwoStage) and e.interior is None and draw.proved:
-            raise _refuse("interior", "the interiors are registered before any proof")
+        d = self._held(self._decide({"op": "deliver", "order": _order(draw.registration),
+                                     "registration": _registration_token(draw.registration), "draw": _draw_token(draw),
+                                     "sessions": _session_digests(sessions)}, {"now": lambda: float(self._clock())}))
+        e = self._entries[draw.registration.order]
         e.sessions = list(sessions)
-        return self._finish(e, LATE, None, {}) if late else None
+        return self._finish(e, LATE, None, {}) if d["ok"] == LATE else None
 
     def outcome(self, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 proved_units: Sequence[int] | None = None, instances: int | None = None, served: Sequence[int] | None = None,
@@ -1015,21 +1360,35 @@ class Stream:
         registration on): where they differ the outcome is a reject, its audit record failing `run`. Raises `Refused` for
         a second outcome, a verdict of record about other sessions, or public outputs the verdicts of record don't report
         alike."""
-        e = self._entry(draw.registration)
-        if e.draw != draw:
-            raise _refuse("not-drawn", {"order": draw.registration.order})
-        if e.outcome is not None:
-            raise _refuse("final", {"order": draw.registration.order})
-        if e.sessions is None:
-            if self._late(e):
-                return self._finish(e, LATE, None, {})
-            raise Pending("no proof delivered")
+        op: dict[str, Any] = {"op": "outcome", "order": _order(draw.registration),
+                              "registration": _registration_token(draw.registration), "draw": _draw_token(draw)}
+        got: dict[str, Any] = {}
+
+        def held() -> list[str] | None:
+            e = self._entries[draw.registration.order]
+            assert e.sessions is not None
+            outputs = self.spec.check.public_outputs
+            v = V.check_verdicts(check_verdicts(verdicts, e.sessions, outputs), verdicts, e.sessions, outputs)
+            got["verdicts"] = v
+            if not v.ok:
+                return list(v.codes)
+            got.update(zip(("audit", "public", "interior"), self._audit(e, draw, verdicts, statement, proved_units,
+                                                                       instances, served, session_roots)))
+            op["accepted"] = got["audit"]["accepted"] and (got["interior"] is None or got["interior"]["accepted"])
+            return None
+        d = self._held(self._decide(op, {"now": lambda: float(self._clock()), "verdicts": held}), got.get("verdicts"))
+        e = self._entries[draw.registration.order]
+        if d["ok"] == LATE:
+            return self._finish(e, LATE, None, {})
+        return self._finish(e, d["ok"], got["audit"], got["public"] if d["ok"] == ACCEPT else {}, got["interior"])
+
+    def _audit(self, e: _Entry, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any],
+               proved_units: Sequence[int] | None, instances: int | None, served: Sequence[int] | None,
+               session_roots: Mapping[str, str] | None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
+        """`outcome`'s audit records, once the verdicts hold: the draw's (failing `run` where the whole run isn't the
+        verifier of record's), the public outputs, and the interiors' or None."""
+        assert e.sessions is not None
         outputs = self.spec.check.public_outputs
-        v = V.check_verdicts(check_verdicts(verdicts, e.sessions, outputs), verdicts, e.sessions, outputs)
-        if v.codes == ("pending",):
-            raise Pending(v.detail["pending"])
-        if not v.ok:
-            raise Refused(v)
         of_record = sorted(k for k in verdicts if verdicts[k].get("of_record"))
         public = dict(verdicts[of_record[0]]["public"]) if outputs else {}
         asked = (proved_units, instances)
@@ -1075,10 +1434,9 @@ class Stream:
                       interior_values=[(x.name, x.registered) for x in self._values(interior=True)] if staged else (),
                       interior=interior)
             if not v.ok:
-                accepted = False
                 rec = {**rec, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                        "checks": {**rec["checks"], "run": {"ok": False, "codes": list(v.codes), "detail": v.detail}}}
-        return self._finish(e, ACCEPT if accepted else REJECT, rec, public if accepted else {}, inner_rec)
+        return rec, public, inner_rec
 
     def _finish(self, e: _Entry, symbol: str, audit: Mapping[str, Any] | None, public: Mapping[str, Any],
                 interior: Mapping[str, Any] | None = None) -> Outcome:
@@ -1103,8 +1461,6 @@ class Stream:
             terms=Terms(None if exhaustive else self.delta),
             public=dict(public),
             record=_sha512(body))
-        self._failures += not accepted
-        self._open.pop(reg.order, None)
         self._records.append(body)
         return e.outcome
 
