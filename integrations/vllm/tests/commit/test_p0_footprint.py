@@ -232,10 +232,14 @@ def test_tree_window_equals_whole_tree(n_leaves: int, j: int):
     upper, root, _ = H.tree(tops_t, side.cuda_stream, True, torch.empty(0, dtype=torch.uint8))
     levels = list(views[:n_levels - 1]) + list(upper)
     assert root == ref_root
-    # retain_levels=False: the same window tops on the device, with no host copy and no host sync
-    dev_tops = [H.tree_window_top(leaves[k * per_win:(k + 1) * per_win].clone(), n_levels, side.cuda_stream) for k in range(len(tops))]
-    assert torch.equal(torch.cat(dev_tops), tops_t)
-    assert H.tree(torch.cat(dev_tops), side.cuda_stream, False, torch.empty(0, dtype=torch.uint8))[1] == ref_root
+    # retain_levels=False: the same window tops on the device, with no host copy and no host sync -- ordered on `side` only (the worker
+    # reads them there), so the windows' leaves outlive those kernels and the tops are read on that stream
+    wins = [leaves[k * per_win:(k + 1) * per_win].clone() for k in range(len(tops))]
+    side.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(side):
+        dev_tops = torch.cat([H.tree_window_top(w, n_levels, side.cuda_stream) for w in wins])
+        assert torch.equal(dev_tops, tops_t)
+        assert H.tree(dev_tops, side.cuda_stream, False, torch.empty(0, dtype=torch.uint8))[1] == ref_root
     assert len(levels) == len(ref_levels)
     for L, (a, b) in enumerate(zip(levels, ref_levels)):
         assert a.shape == b.shape, L
