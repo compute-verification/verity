@@ -1,7 +1,7 @@
 """The served Build's reading of vLLM's fused-MoE op (`acquire.served`, `acquire.served_moe`): a wrapper line `moe_forward(x, x, None,
 None, layer, 0)`, or with a router-logits slot of x's shape that the op never reads, parses into one opaque call; `served_moe.expand` turns it into the Calls the op runs, the eager MoE block's Call
 boundaries, with the planes the serving process commits from inside the op, and refuses a block of any other form; each expert
-GEMM's Definition follows the launch config the process recorded at the step's rows."""
+GEMM is Hopper's k16 chain at every step whose rows the process launched the kernel at."""
 from __future__ import annotations
 
 import copy
@@ -102,7 +102,7 @@ X, OUT = "c01.add_rms_norm/buf3", "c01.moe_forward/buf4"
 FACTS = {"gate": {"weight": "model.layers.0.mlp.gate.weight", "shape": [E, H]},
          "w13": {"weight": f"{LAYER}.w13_weight", "shape": [E, 2 * I, H]}, "w2": {"weight": f"{LAYER}.w2_weight", "shape": [E, H, I]},
          "E": E, "top_k": TOPK, "renormalize": True, "VPT": VPT, **SM.REQUIRED}
-#: MMA v2 (BLOCK_SIZE_M 16) and wgmma (64, 64, 4 warps) launch configs
+#: launch configs Triton lowers to MMA v2 (BLOCK_SIZE_M 16) and to wgmma (64, 64, 4 warps)
 SMALL = {"BLOCK_SIZE_K": 64, "BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 32, "GROUP_SIZE_M": 1, "num_stages": 3, "num_warps": 4}
 WIDE = {"BLOCK_SIZE_K": 32, "BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "GROUP_SIZE_M": 1, "num_stages": 3, "num_warps": 4}
 RECORD = {"layers": {LAYER: FACTS}, "pieces": {"1": LAYER}, "cc": [9, 0],
@@ -155,23 +155,14 @@ def test_a_program_without_the_op_is_unchanged() -> None:
     assert SM.expand(w, {"layers": {}}) == (w, None)
 
 
-def test_the_expert_gemms_definition_follows_the_launch_config() -> None:
+def test_the_expert_gemms_are_hoppers_k16_chain_at_every_launched_config() -> None:
     plan = SM.expand(_wired(), RECORD)[1]
     small, wide = plan(8), plan(256)
-    assert set(small) == set(wide) == {UP, DOWN}
-    assert (small[UP]["base"], small[UP]["statics"]) == (M.MoeExpertGemm.id, {"E": E, "K": H, "N": 2 * I})
-    assert (small[DOWN]["base"], small[DOWN]["statics"]) == (M.MoeExpertGemmW.id, {"E": E, "K": I, "N": H})
-    assert (wide[UP]["base"], wide[UP]["statics"]) == (M.MoeExpertGemmV2.id, {"E": E, "K": H, "N": 2 * I, "DOT": HopperBF16WgmmaDot16.id})
-    assert wide[DOWN] == small[DOWN]
+    assert small == wide and set(small) == {UP, DOWN}
+    assert (small[UP]["base"], small[UP]["statics"]) == (M.MoeExpertGemmV2.id, {"E": E, "K": H, "N": 2 * I, "DOT": HopperBF16WgmmaDot16.id})
+    assert (small[DOWN]["base"], small[DOWN]["statics"]) == (M.MoeExpertGemmWV2.id, {"E": E, "K": I, "N": H, "DOT": HopperBF16WgmmaDot16.id})
     with pytest.raises(Unmodelled, match="no fused_moe_kernel launch at 16 rows"):
         plan(16)
-
-
-@pytest.mark.parametrize("config,want", [(WIDE, True), ({**WIDE, "num_warps": 8}, True), ({**WIDE, "num_warps": 2}, False),
-                                         (SMALL, False), ({**WIDE, "BLOCK_SIZE_M": 32}, False), ({**WIDE, "BLOCK_SIZE_N": 4}, False),
-                                         ({k: v for k, v in WIDE.items() if k != "num_warps"}, True)])
-def test_the_dot_is_wgmma_by_tritons_mma_v3_test(config: dict, want: bool) -> None:
-    assert SM.wgmma(config) is want
 
 
 def test_step_plans_carry_the_expert_gemms_only_with_moe() -> None:
@@ -182,7 +173,7 @@ def test_step_plans_carry_the_expert_gemms_only_with_moe() -> None:
     plan = SM.expand(_wired(), {**RECORD, "configs": {"4": {"False": WIDE, "True": WIDE}, "1": {"False": SMALL, "True": SMALL}}})[1]
     moe, _ = SV.step_plans(sched, 2, [(H, H)], (H, 64), (2, 1, 64), {}, moe=plan, **kw)
     assert [p["gemm_m"] for p in moe] == [4, 1]
-    assert [p["moe"][UP]["base"] for p in moe] == [M.MoeExpertGemmV2.id, M.MoeExpertGemm.id]
+    assert [p["moe"][UP]["base"] for p in moe] == [M.MoeExpertGemmV2.id, M.MoeExpertGemmV2.id]
 
 
 def _flag(k: str, v):

@@ -1,7 +1,8 @@
 """check.replay.served_check on a served Program with a fused-MoE block (`acquire.served_moe.expand` of the op): the committed values
 are what the eager per-row references compute (`rows.moe_router`, `rows.moe_expert_gemm` pair by pair with the step's Definition,
-`act_rows.silu_mul_expf`, `rows.moe_sum`), over three engine steps whose launch configs bind both expert-GEMM steps (MMA v2's
-and wgmma's), and the check's vectorised twins pass them; each single perturbation, and the other step's Definition, fails by name."""
+`act_rows.silu_mul_expf`, `rows.moe_sum`), over three engine steps whose launch configs (lowered to MMA v2 and to wgmma) all bind
+Hopper's expert-GEMM step, and the check's vectorised twins pass them; each single perturbation, and the Ampere step's Definition,
+fails by name."""
 from __future__ import annotations
 
 import copy
@@ -137,19 +138,17 @@ def _failed(rep) -> set[tuple[int, str]]:
     return {(f["step"], f["value"]) for f in rep["failures"]}
 
 
-def test_the_launch_configs_bind_both_expert_gemm_steps(served):
+def test_every_launch_config_binds_hoppers_expert_gemm_step(served):
     plans = served[0]["steps_plan"]
     assert [(p["gemm_m"], p["mode"]) for p in plans] == [(4, "PIECEWISE"), (41, "NONE"), (2, "FULL")]
-    assert [(p["moe"][UPK]["base"], p["moe"][DOWNK]["base"]) for p in plans] == [
-        (M.MoeExpertGemm.id, M.MoeExpertGemmW.id), (M.MoeExpertGemmV2.id, M.MoeExpertGemmWV2.id), (M.MoeExpertGemmV2.id, M.MoeExpertGemmW.id)]
+    assert [(p["moe"][UPK]["base"], p["moe"][DOWNK]["base"]) for p in plans] == [(M.MoeExpertGemmV2.id, M.MoeExpertGemmWV2.id)] * 3
 
 
 def test_the_served_moe_values_pass(served):
     rep = _check(served)
     assert rep["ok"], rep["failures"]
     assert rep["steps_checked"] == [0, 1, 2]
-    kinds = {M.MoeRouterTopKNorm.id, M.MoeExpertGemm.id, M.MoeExpertGemmW.id, M.MoeExpertGemmV2.id, M.MoeExpertGemmWV2.id,
-             act.SiluMul.id, M.MoeSum.id, b1.GemmV2.id}
+    kinds = {M.MoeRouterTopKNorm.id, M.MoeExpertGemmV2.id, M.MoeExpertGemmWV2.id, act.SiluMul.id, M.MoeSum.id, b1.GemmV2.id}
     assert kinds <= set(rep["tally"])
     assert all(ok == n for ok, n in rep["tally"].values())
     s1 = rep["steps"]["1"]
@@ -183,7 +182,7 @@ def test_an_expert_id_outside_the_experts_fails_the_launches(served):
 
 
 def _steps_apart(served) -> tuple[dict, list[SC.Step], dict]:
-    """Weights on which MMA v2's k16 step and wgmma's round every pair's first `up` word apart (random rows rarely do): every
+    """Weights on which Ampere's k16 step and Hopper's round every pair's first `up` word apart (random rows rarely do): every
     hidden-state row 1 + 2^-8 in the first group of eight, four 2^-25 in the second, against each expert's first w13 row of ones
     there (the two-group 25-bit adder drops the 2^-25s, the one-group 26-bit adder carries them past the bf16 tie)."""
     build, W, _steps, _prompts = served
@@ -202,7 +201,7 @@ def test_the_expert_gemm_is_the_plans_step(served):
     assert SC.check(build, steps, W.__getitem__, seed=None, rows=8, prompts=prompts)["ok"]
     other = copy.deepcopy(build)
     plan = other["steps_plan"][1]
-    plan["moe"][UPK] = SM.expert_definition(E, H, 2 * I, False, SMALL)
+    plan["moe"][UPK] = SV.bound(M.MoeExpertGemm, E=E, K=H, N=2 * I)
     rep = SC.check(other, steps, W.__getitem__, seed=None, rows=8, prompts=prompts)
     assert (1, UP) in _failed(rep) and rep["steps"]["1"][UP]["definition"] == plan["moe"][UPK]["definition"]
     assert rep["steps"]["1"][UP]["bad"] == rep["steps"]["1"][UP]["pairs"]

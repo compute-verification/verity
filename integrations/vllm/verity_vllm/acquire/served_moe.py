@@ -11,11 +11,12 @@ the serving process commits from inside the op (`ServedCompiledSource._install_m
   * the w2 launch with the routed weight, `MoeExpertGemmW` -> `down` (TOPK x H);
   * `moe_sum` over the slots (`MoeSum_v1`) -> the op's return, the wrapper's own value.
 
-The expert GEMMs' Definition is the step's: the launch config vLLM picks at M rows (`try_get_optimal_moe_config`, recorded per M by
-the source) decides how Triton lowers the kernel's `tl.dot` (a (BLOCK_SIZE_M, BLOCK_SIZE_N) accumulator, the bf16 path's `acc +=
-tl.dot(a, b)` one carried k16 chain) on cc 9.0, `AccelerateMatmul`'s MMA v3 test: wgmma when num_warps is a multiple of 4,
-BLOCK_SIZE_M of 64 and BLOCK_SIZE_N of 8 (`_v2{DOT=HopperBF16WgmmaDot16}`), else MMA v2, the Ampere k16 step (`_v1`, the eager
-Program's binding on cc 9.0).  Another compute capability is refused.
+The expert GEMMs are the bf16 path's `acc += tl.dot(a, b)`, one carried k16 chain, and on cc 9.0 every k16 step is Hopper's
+(`_v2{DOT=HopperBF16WgmmaDot16}`) whichever config vLLM launched at M rows (`try_get_optimal_moe_config`, recorded per M by the
+source, which must have launched the kernel at M): Triton lowers the dot to wgmma or to MMA v2's `mma.sync m16n8k16`, and on an H100
+the latter's HMMA.16816 is `silicon.HOPPER_BF16_M16N8K16`, the wgmma k16 step's parameters, not the Ampere step (`_v1`, which the
+eager Program binds on cc 9.0 with no correspondence run; r20261018-062333-f1a7 matched it on 27 of 1,344 rows).  Another compute
+capability is refused.
 
 The op takes its layer as an opaque argument: the serving process records the layer each piece's op ran (`moe_pieces`), and that
 layer's facts (`served_match.moe_facts`) give its shapes and confirm it is the block expanded here.  Anything else (a fused or absent
@@ -45,28 +46,19 @@ def plan_key(E: int, K: int, N: int, routed: bool) -> str:
     return f"{E},{K},{N},{int(routed)}"
 
 
-def wgmma(config: dict[str, Any]) -> bool:
-    """Triton's MMA v3 test on cc 9.0 for fused_moe_kernel's dot under `config` (num_warps defaults to 4)."""
-    return int(config.get("num_warps", 4)) % 4 == 0 and int(config["BLOCK_SIZE_M"]) % 64 == 0 and int(config["BLOCK_SIZE_N"]) % 8 == 0
-
-
-def expert_definition(E: int, K: int, N: int, routed: bool, config: dict[str, Any]) -> dict[str, Any]:
-    if wgmma(config):
-        return bound(M.MoeExpertGemmWV2 if routed else M.MoeExpertGemmV2, E=E, K=K, N=N, DOT=HopperBF16WgmmaDot16)
-    return bound(M.MoeExpertGemmW if routed else M.MoeExpertGemm, E=E, K=K, N=N)
+def expert_definition(E: int, K: int, N: int, routed: bool) -> dict[str, Any]:
+    return bound(M.MoeExpertGemmWV2 if routed else M.MoeExpertGemmV2, E=E, K=K, N=N, DOT=HopperBF16WgmmaDot16)
 
 
 def expert_plans(keys: set[str], configs: dict[str, dict[str, dict[str, Any]]]) -> Callable[[int], dict[str, Any]]:
-    """M -> each expert GEMM's Definition at M rows by its `plan_key` (`expert_definition` of the config the process launched it
-    with at M)."""
+    """M -> each expert GEMM's Definition at M rows by its `plan_key`, where the process launched fused_moe_kernel at M."""
     def plan(m: int) -> dict[str, Any]:
         out = {}
         for key in sorted(keys):
             E, K, N, r = map(int, key.split(","))
-            cfg = (configs.get(str(m)) or {}).get(str(bool(r)))
-            if cfg is None:
-                raise Unmodelled(f"no fused_moe_kernel launch at {m} rows (MUL_ROUTED_WEIGHT {bool(r)}) was recorded: its config is unknown")
-            out[key] = expert_definition(E, K, N, bool(r), cfg)
+            if (configs.get(str(m)) or {}).get(str(bool(r))) is None:
+                raise Unmodelled(f"no fused_moe_kernel launch at {m} rows (MUL_ROUTED_WEIGHT {bool(r)}) was recorded")
+            out[key] = expert_definition(E, K, N, bool(r))
         return out
     return plan
 
