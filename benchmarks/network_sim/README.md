@@ -3,11 +3,12 @@
 The device graph, and a mock datacenter of Linux network namespaces that runs the real network certifier. Both read the
 accounting layer's declarations, `datacenter.Datacenter`, which `datacenter.examples` (`benchmarks/datacenter`) declares:
 `rtx_node` is the measured node (8 GPUs on two sockets, each GPU on a PCIe root port of its own, one NIC on socket 1) as
-one block, and `leaf_spine` puts such nodes behind a leaf-spine fabric, each through its block's certifier, with hosts
-outside every block.
+one block, `leaf_spine` puts such nodes behind a leaf-spine fabric, each through its block's certifier, with hosts
+outside every block, and `two_sites` joins two leaf-spines by a WAN between a certifier on each.
 
-- `graph.py`: the exports, which read any `Datacenter` that validates: the netns plan `mockdc.py` stands up, and
-  Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan.
+- `graph.py`: the exports, which read any `Datacenter` that validates, a fleet's merged one included: the netns plan
+  `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan, and
+  `--fleet` `two_sites(2)`'s.
 - `records.py`: the certifier's published records as `datacenter.observe.Record`s (port, window, counts, digest), the
   records an honest run declares by port and window, and the certifiers' parameters as the declaration's `Cadence`;
   `datacenter.check_records` audits them.
@@ -29,22 +30,24 @@ outside every block.
 Every namespace is named `na-*`. Each block (`na-b0`, standing in for a node of 8 GPUs) has one interface, to its
 certifier's namespace (`na-b0-cert`), whose other interface goes to a leaf switch. By default there are four blocks, two
 leaves joined by a spine (`na-spine0`), and one host outside every block (`na-ext0`, on `na-leaf0`). Only the switches
-forward IP. A certifier forwards nothing: a block reaches the fabric only through the connections the proxy makes and
-accepts, and an iptables rule in the certifier's namespace drops whatever the block opens. Each fabric link has netem,
-2 ms ± 0.5 ms per hop at 400 Gbit/s by default. Nothing in the root namespace changes: each veth is created inside its
-namespaces, and deleting the namespaces deletes them.
+forward IP, and a certifier that watches no block, such as one at an end of a WAN (`graph.routers`). A block's
+certifier forwards nothing: a block reaches the fabric only through the connections the proxy makes and accepts, and an
+iptables rule in the certifier's namespace drops whatever the block opens. Each fabric link has netem, 2 ms ± 0.5 ms per
+hop at 400 Gbit/s by default. Nothing in the root namespace changes: each veth is created inside its namespaces, and
+deleting the namespaces deletes them.
 
 That layout is `datacenter.examples.leaf_spine(4, leaves=2, spines=1)`'s. Any other declaration works whose blocks each have one
 boundary link, to a certifier, and which has a device of kind `outside`: `--declaration FILE.py:NAME` names a
-`Datacenter`, or a function returning one.
+`Datacenter` or a `Fleet`, or a function returning one. A fleet is validated (`Fleet.validate`) and stood up merged
+(`Fleet.merged`). `--fleet` is `two_sites` (below).
 
 It needs Linux with iproute2, iptables, setpriv and passwordless sudo, and a Python with numpy. Run it on
 vy-nebius-cpu-2 (its system `python3` has numpy), not on an agent VM. Every command takes the same `--declaration`, or
-`--blocks`, `--leaves` and `--spines`, and `run` refuses a lab that is up in another shape.
+`--fleet`, `--blocks`, `--leaves` and `--spines`, and `run` refuses a lab that is up in another shape.
 
 ~~~sh
 python3 benchmarks/network_sim/mockdc.py up       # create the namespaces, then `status`
-python3 benchmarks/network_sim/mockdc.py status   # list them, and check what reaches what
+python3 benchmarks/network_sim/mockdc.py status   # list them, and check what reaches what, with each round trip
 python3 benchmarks/network_sim/mockdc.py run --out DIR [--salt] [--block b1=late ...]
 python3 benchmarks/network_sim/mockdc.py down     # stop their processes, and delete every na-* namespace and veth
 ~~~
@@ -150,6 +153,12 @@ back up in its default shape (`mockdc.py down`, then `up`), which `workload/lab_
 - `datacenter.Cadence` holds one cadence for both directions. The lab's egress and ingress agree on frame size, bucket
   and window, which `records.cadence` checks, but not on the frames per bucket (2 out, 1 in), which `Cadence` doesn't
   hold.
+- `active_replay`'s Program has one outside peer per link, so a fleet's traffic between sites is a block and the
+  outside host, across the WAN. A Program in which a block on one site talks to a block on the other would need the
+  far block, behind its own certifier, as a link's peer.
+- The WAN's certifiers publish no records: `Datacenter.port` gives a port only where a hop crosses a block's boundary,
+  and a link between two certifiers crosses none. Records of what crosses the WAN would need a port for a link between
+  datacenters, which the model doesn't have.
 
 ## Serving a workload on the lab
 
