@@ -1043,11 +1043,12 @@ namespace Accounting.Requirement
 variable {V : Type} [DecidableEq V] (W : Wiring V) (e : Execution V) (ℓ : Layout V)
 
 /-- Over a window of at most `k` steps at each of which the store is `W`'s with at most `N` resident blocks and the plan
-is `W`'s reads of at most `N` blocks, `W` holds and reads at most `k·N·B` bits. -/
+is `W`'s reads of at most `N` blocks, the live bits the audit credits and the bits read from complete blocks total at
+most `k·N·B` each. -/
 theorem cap_of_matches (s : Store) (plan : ℕ → Finset ℕ) (B N k : ℕ) (win : Window) (hwin : win.len ≤ k)
     (hm : ∀ t ∈ win.ticks, StoreMatches W e ℓ s B t ∧ (s.resident t).card ≤ N ∧
       PlanMatches W e ℓ (plan t) B t ∧ (plan t).card ≤ N) :
-    held W e win ≤ k * N * B ∧ read W e win ≤ k * N * B := by
+    ∑ t ∈ win.ticks, creditedBits W e ℓ t ≤ k * N * B ∧ ∑ t ∈ win.ticks, creditedReadBits W e ℓ t ≤ k * N * B := by
   have hsum : ∑ _t ∈ win.ticks, N * B ≤ k * N * B := by
     rw [Finset.sum_const, Window.ticks, Nat.card_Ico, smul_eq_mul, Nat.add_sub_cancel_left, mul_assoc]
     exact Nat.mul_le_mul_right _ hwin
