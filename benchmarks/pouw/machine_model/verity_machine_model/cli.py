@@ -13,8 +13,9 @@
     machine-model designs [--json]            the design registry (data/designs): each design's name, its aliases, the
                                               noise on each product, fold, filler, proof unit, coins and perplexity arm
     machine-model eps [DESIGN] [--device sm_NN] [--q Q] [--q-uniform QU] [--operands O] [--credit C]
-                      [--fold-cost R] [--fill X] [--lookups [--lookup-q QT] [--lookup-bytes B] [--l2 B]
-                      [--index-bits B]] [--uni-issue C] [--checking full|sampled [--adapt UNIT]] [--vector V] [--json]
+                      [--fold-cost R] [--fill X [--fill-mix K=V,...]] [--lookups [--lookup-q QT] [--lookup-bytes B]
+                      [--l2 B] [--index-bits B]] [--uni-issue C] [--checking full|sampled [--adapt UNIT]] [--vector V]
+                      [--json]
                                               a design's ε budget (a name or alias in data/designs, default
                                               dither-1s) at q* = Q (default 8): every term with its source,
                                               ε_machine's LP (the credited and the cheater's mix, binding rows and
@@ -23,8 +24,8 @@
                                               unless given; the cheater's operand delivery is free (default), at the
                                               noise's floor, or honest's; ε is a fraction of honest's kernel (--credit
                                               H, default) or of the floor program ♭ (--credit floor); --fill adds X
-                                              lane instructions a word of verified filler on lanes; --lookups opens
-                                              the table route (data/table.toml: lane instructions and L2 bytes a word
+                                              lane instructions a word of verified filler on lanes (LOP3 and IMAD
+                                              alike, or --fill-mix's class weights); --lookups opens the table route (data/table.toml: lane instructions and L2 bytes a word
                                               against an L2 facet; --lookup-q, --lookup-bytes, --l2; --index-bits B
                                               for B-bit noise entries on the operand it indexes); --uni-issue C also
                                               charges a uniform instruction C times an ALU's cost on the issue rows
@@ -33,14 +34,26 @@
                                               core ε alone, and --checking sampled adds ε_sample = ε_luck + ε_adapt
                                               on its own line, for the design's proof unit (data/adapt.toml) or
                                               --adapt UNIT's
-    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X] [--operands O] [--credit C]
-                      [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
+    machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X [--fill-mix K=V,...]] [--operands O]
+                      [--credit C] [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
                                               one line a design (every design by default; with --fold-sweep, each at
                                               each fold cost), in two column groups: the core (γ and γ_f, γ with the
                                               clock gap f_max/f_H, the credited time, ε_skip, ε_sched, ε_machine at
                                               q* = 2, 4, 8, 16 and its floor, the core ε at q* = 2, 8 and Q, and the
                                               thresholds), then with --checking sampled the sample (ε_luck, ε_adapt
                                               and ε_sample at Q)
+    machine-model redteam [DESIGN ...] [--device sm_NN] [--q Q] [--operands O] [--credit C]
+                                              the red-team audit (redteam.py): each design's binding and near-binding
+                                              facets, the decision-76 move in the cheater's favour at which the core
+                                              first rises (per row), and, where Π prices no uniform datapath, the ε a
+                                              sibling-rate uniform route would open (default q* = 1.22, credit floor)
+    machine-model margin [DESIGN ...] [--device sm_NN] [--m M] [--least [--mix FFMA]] [--q Q] [--operands O] [--credit C]
+                                              decision 76's margin (redteam.margin_audit): each design's core as built,
+                                              its worst core with every near measured facet's lane coefficient moved M
+                                              in the cheater's favour at once (default 2%), the single facet that drives
+                                              it, and each near facet's own move; with --least, the cheapest filler a
+                                              word (in --mix, default the design's) that brings the worst back to the
+                                              floor (default q* = 1.22, credit floor)
     machine-model capacity GROUP [GROUP ...] [--vector V] [--json]
                                               the certified share σ of a window's capacity (capacity.py): each GROUP
                                               is [WEIGHT/]TERM+TERM..., its share of the cell's SMSP-time (default 1)
@@ -175,6 +188,8 @@ def _thr(t: float | None) -> str:
 
 def _mix(m: E.Mix, per_mma: float) -> str:
     w = ", ".join(f"{r} {100 * max(m.words[r], 0.0) + 0.0:.1f}%" for r in E.ROUTES if r != "table" or m.words[r])
+    if m.forms:
+        w += "; tensor on " + ", ".join(f"{k} {100 * x:.1f}%" for k, x in sorted(m.forms.items(), key=lambda t: -t[1]))
     up = "".join(f"; filler {j + 1} on UP {100 * max(x, 0.0) + 0.0:.0f}%" for j, x in enumerate(m.filler_uniform))
     return (f"{m.T * per_mma:.3f} SMSP-cycles a MMA ({w}{up}), "
             f"binding {', '.join(m.binding)}")
@@ -187,13 +202,27 @@ def _pi(m: E.Mix) -> str:
 def _design(args, name: str) -> E.Design:
     d = E.design(name, args.data)
     d = d.with_fold_cost(args.fold_cost) if args.fold_cost is not None else d
-    d = d.with_fill(args.fill) if args.fill else d
+    d = d.with_fill(args.fill, _fill_mix(args)) if args.fill else d
     d = d.with_index_bits(args.index_bits) if args.index_bits else d
     return d if args.q_uniform is None else replace(d, name=f"{d.name}@qu{args.q_uniform:g}", q_uniform=args.q_uniform)
 
 
 def _l2(tb: E.Table) -> str:
     return "L2 unbounded: unmeasured on this device" if tb.l2 is None else f"L2 {tb.l2 / 1e12:g} TB/s"
+
+
+def _fill_mix(args) -> dict[str, float] | None:
+    if args.fill_mix is None:
+        return None
+    if not args.fill:
+        raise SystemExit("eps: --fill-mix is the --fill filler's mix: add --fill")
+    try:
+        mix = {k.strip(): float(v) for k, v in (kv.split("=") for kv in args.fill_mix.split(","))}
+    except ValueError:
+        raise SystemExit(f"eps: --fill-mix {args.fill_mix!r}: write CLASS=WEIGHT,... (ALU=1,IMAD=1)") from None
+    if not mix or any(v < 0 for v in mix.values()) or not sum(mix.values()):
+        raise SystemExit(f"eps: --fill-mix {args.fill_mix!r}: weights ≥ 0, not all 0")
+    return mix
 
 
 def _lookups(args) -> E.Table | None:
@@ -212,7 +241,7 @@ def _adapt(args, d: E.Design) -> E.Adapt | None:
 
 def _registry(d: E.Design) -> dict:
     return {"name": d.name, "title": d.title, "aliases": list(d.aliases), "base": d.base or None,
-            "summary": d.summary, "noise": d.noise, "fold": {"name": d.fold_name, **d.fold},
+            "summary": d.summary, "noise": d.noise, "sums": d.sums, "fold": {"name": d.fold_name, **d.fold},
             "filler": [{"per_word": f.per_word, "mix": f.mix, "route": f.route} for f in d.filler], "L": d.L,
             "unit": d.unit, "coins": {"bits": d.coin_bits, "source": d.coins_source}, "ppl": d.ppl or None}
 
@@ -243,8 +272,8 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
     return {
         "design": d.name, "summary": d.summary, "registry": _registry(d), "vector": pi.vector, "honest": e.honest.name,
         "honest_status": e.honest.status, "operands": operands, "credit": credit, "L": d.L, "fold": d.fold_name,
-        "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source}
-                                                for f, pw in e.fillers], "q": q,
+        "fold_cost": d.fold_cost(), "fillers": [{"per_word": pw, "route": f.route, "mix": f.mix, "source": f.source,
+                                                 "p": f.p, "luck": f.luck} for f, pw in e.fillers], "q": q,
         "operand_floor": d.floor, "gamma": e.gamma, "gamma_clock": e.gamma_clock,
         "honest_cycles_per_mma": e.T_honest * per_mma,
         "honest_time": e.T_honest_source, "credit_ratio": e.credit_ratio,
@@ -252,7 +281,8 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
         "baseline": {"cycles_per_mma": e.baseline.T * per_mma, "binding": e.baseline.binding,
                      "words": e.baseline.words, "program": d.baseline_name},
         "cheat": {"cycles_per_mma": e.cheat.T * per_mma, "binding": e.cheat.binding, "words": e.cheat.words,
-                  "filler_uniform": e.cheat.filler_uniform, "pi": e.cheat.pi},
+                  "forms": e.cheat.forms, "filler_uniform": e.cheat.filler_uniform, "pi": e.cheat.pi},
+        "honest_form": e.honest.form,
         "lucky_cycles_per_mma": e.lucky.T * per_mma, "deficit": e.deficit, "lucky_short": e.lucky.short,
         "measured_cycles_per_mma": e.T_honest_measured * per_mma if e.T_honest_measured else None,
         "checking": checking, "terms": e.terms(), "cert": e.cert, "route": e.route, "floor": e.floor,
@@ -308,7 +338,7 @@ def _eps_table(args, pi: E.Machine) -> int:
         for r in sweep:
             d = E.design(n, args.data)
             d = d.with_fold_cost(r) if r is not None else d
-            d = d.with_fill(args.fill) if args.fill else d
+            d = d.with_fill(args.fill, _fill_mix(args)) if args.fill else d
             rows.append(d.with_index_bits(args.index_bits) if args.index_bits else d)
     for d in rows:
         ad = _adapt(args, d)
@@ -339,6 +369,7 @@ def _eps(args) -> int:
         print(f"eps: {pi.vector}'s census charges a uniform instruction on the issue rows already; --uni-issue "
               f"{args.uni_issue:g} changes nothing", file=sys.stderr)
     pi = pi if args.uni_issue is None else E.uniform_on_issue(pi, args.uni_issue)
+    _fill_mix(args)
     if args.table:
         return _eps_table(args, pi)
     if len(args.designs) > 1:
@@ -363,7 +394,9 @@ def _eps(args) -> int:
     print(f"  {d.title}" + (f" (also {', '.join(d.aliases)})" if d.aliases else "") + ": noise "
           + ", ".join(f"{k} {v}" for k, v in d.noise.items()) + f"; proof unit {d.unit}; {d.coin_bits}-bit coins; "
           + (f"perplexity arm {d.ppl}" if d.ppl else "no perplexity arm on main"))
-    print(f"  Π: {pi.vector}'s {len(pi.rows)} rows; honest {h.name} ({h.status}): {h.mma}, {h.words} words a MMA; "
+    print(f"  Π: {pi.vector}'s {len(pi.rows)} rows; honest {h.name} ({h.status}): {h.mma} ({h.form}), {h.words} words a "
+          f"MMA; the cheater's tensor route on any of {max(1, sum(f.kind in pi.c for f in E.forms(args.data)))} MMA "
+          "forms; "
           f"L {d.L}; fold {d.fold_name} {d.fold_cost():g} a word ({', '.join(f'{k} {v:g}' for k, v in d.fold.items())});"
           f" filler {filler}")
     print(f"  {built[args.credit]}: {_mix(e.as_built, per_mma)}")
@@ -442,6 +475,48 @@ def _capacity(args) -> int:
     return 0
 
 
+def _redteam(args) -> int:
+    from verity_machine_model import redteam as RT
+
+    names = args.designs or E.designs(args.data)
+    for name in names:
+        a = RT.audit(name, args.data, q=args.q, operands=args.operands, credit=args.credit)
+        print(f"{a.design} on {a.device}: core {_pct(a.core)}  ε_machine {_pct(a.machine_eps)}  floor {_pct(a.floor)}  "
+              f"γ {a.gamma:.3f}  binds {', '.join(a.binding)}" + ("" if a.uniform_route else "  [Π has no uniform route]"))
+        for r in a.near:
+            if r.ceiling:
+                how = "the issue ceiling, silicon cannot beat it"
+            elif r.flip_pct is None:
+                how = "no flip ≤ 10%"
+            else:
+                how = f"flips at {r.flip_pct}% → {_pct(r.core_at_flip)} (at 2%: {_pct(r.core_at_2pct)})"
+            print(f"    {r.name:12s} load {r.load:.3f}  dual {r.dual:.3f}: {how}")
+        if not a.uniform_route:
+            base, opened, binding = RT.uniform_gap(name, args.data, q=args.q, operands=args.operands, credit=args.credit)
+            print(f"    uniform-datapath gap: core {_pct(base)} → {_pct(opened)} with a sibling-rate uniform route "
+                  f"(binds {', '.join(binding) or 'none'})")
+    return 0
+
+
+def _margin(args) -> int:
+    from verity_machine_model import redteam as RT
+
+    mix = {c: 1.0 for c in args.mix.split(",")} if args.mix else None
+    for name in args.designs or E.designs(args.data):
+        mg = RT.margin_audit(name, args.data, m=args.m, q=args.q, operands=args.operands, credit=args.credit)
+        drive = f"driven by {mg.driver}" if mg.driver else "no near facet drives it"
+        print(f"{mg.design} on {mg.device}: core {_pct(mg.base)}  worst at {mg.m*100:g}% {_pct(mg.worst)}  ({drive})")
+        for r, s in mg.rows:
+            print(f"    {r:12s} alone → {_pct(s)}")
+        if args.least:
+            lf = RT.least_filler(name, args.data, mix=mix, m=args.m, q=args.q, operands=args.operands,
+                                 credit=args.credit)
+            how = (f"{lf.per_word:g} a word (worst {_pct(lf.core)}, γ {lf.gamma:.3f})" if lf.per_word is not None
+                   else f"none ≤ cap holds it (worst {_pct(lf.core)})")
+            print(f"    least {'+'.join(lf.mix)} filler that holds {mg.m*100:g}%: {how}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="machine-model", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -481,6 +556,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--table", action="store_true")
     e.add_argument("--fold-sweep", help="with --table: each design at each of these fold costs")
     e.add_argument("--fill", type=float, help="add X lane instructions a word of verified filler on lanes")
+    e.add_argument("--fill-mix", metavar="K=V,...",
+                   help="with --fill: the filler's class mix on lanes (default ALU=1,IMAD=1, LOP3 and IMAD alternating)")
     e.add_argument("--lookups", action="store_true",
                    help="open the cheater's table route: words from register-indexed L2 lookups (data/table.toml)")
     e.add_argument("--lookup-q", type=float, help="with --lookups: lane instructions a table word (default: the file's)")
@@ -502,6 +579,26 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("groups", nargs="+", metavar="GROUP")
     k.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
     k.add_argument("--json", action="store_true")
+    rt = sub.add_parser("redteam")
+    rt.add_argument("designs", nargs="*", help="the designs to audit (default: every design in the data directory)")
+    rt.add_argument("--device", default=argparse.SUPPRESS, help=dev)
+    rt.add_argument("--q", type=float, default=1.22, help="q*, lane instructions a fresh word (default %(default)s)")
+    rt.add_argument("--operands", choices=E.OPERANDS, default="free",
+                    help="the cheater's operand delivery on the tensor route (default %(default)s)")
+    rt.add_argument("--credit", choices=E.CREDITS, default="floor",
+                    help="what ε is a fraction of (default %(default)s: the floor program ♭)")
+    mg = sub.add_parser("margin")
+    mg.add_argument("designs", nargs="*", help="the designs to audit (default: every design in the data directory)")
+    mg.add_argument("--device", default=argparse.SUPPRESS, help=dev)
+    mg.add_argument("--m", type=float, default=0.02, help="the margin each near facet moves in the cheater's favour "
+                    "(default %(default)s: decision 76's 2%%)")
+    mg.add_argument("--least", action="store_true", help="also find the cheapest filler a word that holds the margin")
+    mg.add_argument("--mix", help="with --least: the filler's class mix, comma-separated (default: the design's)")
+    mg.add_argument("--q", type=float, default=1.22, help="q*, lane instructions a fresh word (default %(default)s)")
+    mg.add_argument("--operands", choices=E.OPERANDS, default="free",
+                    help="the cheater's operand delivery on the tensor route (default %(default)s)")
+    mg.add_argument("--credit", choices=E.CREDITS, default="floor",
+                    help="what ε is a fraction of (default %(default)s: the floor program ♭)")
     args = p.parse_args(argv)
     if args.device is not None:
         if args.data != DATA:
@@ -511,7 +608,8 @@ def main(argv: list[str] | None = None) -> int:
         print(__doc__)
         return 0
     return {"list": _list, "solve": _solve, "census": _census, "attacks": _attacks, "adopt": _adopt,
-            "designs": _designs, "eps": _eps, "capacity": _capacity}[args.cmd](args)
+            "designs": _designs, "eps": _eps, "capacity": _capacity, "redteam": _redteam,
+            "margin": _margin}[args.cmd](args)
 
 
 if __name__ == "__main__":

@@ -15,4 +15,7 @@ def _core_roots() -> list[Any]:
         P.BlackwellMxf4OmmaDot64,
         P.F32ToE2m1Sat,
         P.E4m3ToF32,
+        P.BlackwellS8ImmaDot32,
+        P.BlackwellU8S8ImmaDot32,
+        P.S32ToF32Rn,
     ]

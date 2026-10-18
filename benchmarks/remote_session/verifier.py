@@ -9,17 +9,28 @@ One connection serves one registration and then `--sessions` sessions over it, e
    calibration (pass times, the gap, its measured read rate);
 2. the round trip, measured by pings;
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
-   and gaps and of the measured round trip (`--quantile`), and `--jitter-ms`; the coin commitment sent first, then
-   σ_0, a boundary message every window, each root fed to `Session.receive` stamped with the time its last byte was
-   read, each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
+   and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
+   (`--lifetime`, windows, sent with the session so the prover re-keys in time); the coin commitment sent first, then
+   σ_0, a boundary message every window, each append answered with its coin (`Verifier.append`), each root fed to
+   `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, its
+   plan as a change when it carries one, and the step its pass covers: `Verifier.root`), each window closed
+   (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
    verdict as `Session.verify`'s) or by `Session.verify` on a thread of the verifier's, so a window's checks run while
    the next window's passes arrive; once every window is accepted the record (`Session.record`) and its γ terms
    (`audit.ledger`).
 
+A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
+hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
+registration after its last session, counting each session (a failed one by its failure); one left live by a
+process that ended early stays live, refusing the node, until `--close NODE` closes it with its sessions as they stood,
+the one in flight unended.
+
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
+                       [--registry REGISTRY.json]
+    python verifier.py --registry REGISTRY.json --close NODE_HEX
 """
 from __future__ import annotations
 
@@ -38,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, coins, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
 
 import wire  # noqa: E402
 from checks import Checks  # noqa: E402
@@ -101,9 +112,11 @@ class RealClock:
 
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
-                 jitter_ns: int, clock=None, log=print, checks=None) -> None:
-        self.conn, self.source, self.W, self.T = conn, source, windows, window_ns
+                 jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
+                 registry: audit.Registry | None = None) -> None:
+        self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.checks = checks
+        self.registry = audit.Registry() if registry is None else registry
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
         self.clock = clock or RealClock()
         self.log = log
@@ -143,14 +156,21 @@ class Verifier:
                 return head, body, stamp
             if head["type"] == "lost":
                 raise wire.Closed(head["why"])
-            if head["type"] not in ("root", "openings", "closed", "verdict"):
+            if head["type"] not in ("root", "append", "openings", "closed", "verdict"):
                 self.log(f"verifier: skipped a {head['type']} while waiting for {kind}")
 
     def register(self) -> tuple[audit.Registration, dict]:
+        """The hello's registration, drawn through the registry: refused, with `bye` and the reason, for a node with a
+        live registration (`audit.RegistryError`, raised)."""
         hello, _, _ = self.expect("hello")
-        self.registration = audit.register(self.source, bytes.fromhex(hello["node"]), hello["blocks"],
-                                           bytes.fromhex(hello["payload_root"]), wire.codec_named(hello["codec"]),
-                                           hello["receipt"], rows=hello.get("rows"))
+        try:
+            self.registration = self.registry.register(self.source, bytes.fromhex(hello["node"]), hello["blocks"],
+                                                       bytes.fromhex(hello["payload_root"]),
+                                                       wire.codec_named(hello["codec"]), hello["receipt"],
+                                                       rows=hello.get("rows"))
+        except audit.RegistryError as e:
+            self.conn.send({"type": "bye", "why": f"refused: {e}"})
+            raise
         self.registered_ns = self.clock.now()
         self.conn.send({"type": "registration", "registration": wire.registration_json(self.registration)})
         ready, _, _ = self.expect("ready")
@@ -182,11 +202,11 @@ class Verifier:
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None) -> dict:
         W, reg = self.W, self.registration
         params = audit.Params(reg.blocks, allowance_ns, W, self.samples, self.delta, window_ns=self.T, codec=reg.codec,
-                              receipt=reg.receipt, rows=reg.rows)
+                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime)
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
-        challenger = coins.Challenger(reg.digest, k, params.coins)
-        session = audit.Session(params, reg, None, challenger, clock=self._now, not_before_ns=not_before_ns)
-        self.conn.send({"type": "session", "k": k, "windows": W, "commitment": session.commitment.to_json()})
+        session = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k)
+        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
+                        "commitment": session.commitment.to_json()})
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -245,9 +265,12 @@ class Verifier:
                 t, i = head["t"], head["i"]
                 self._stamp = stamp
                 try:
-                    v = session.receive(t, i, bytes.fromhex(head["root"]))
+                    v = self.root(session, head)
                 except audit.SessionError:
                     failure = failed()
+                    break
+                except (TypeError, ValueError, KeyError):
+                    failure = {"t": t, "failure": "malformed", "at": None}
                     break
                 finally:
                     self._stamp = None
@@ -258,6 +281,19 @@ class Verifier:
                 while drawn < t and failure is None:
                     close(drawn)
                     drawn += 1
+            elif kind == "append":
+                try:
+                    got = self.append(session, head)
+                except audit.SessionError:
+                    failure = failed()
+                    break
+                except (TypeError, ValueError, KeyError):
+                    failure = {"t": session.filling, "failure": "malformed", "at": None}
+                    break
+                if isinstance(got, audit.Verdict):
+                    failure = {"t": got.window, "failure": got.failure, "at": got.at}
+                    break
+                self.conn.send(got)
             elif kind == "openings" and self.checks is not None:
                 c = checking.get(t := head["t"])
                 if c is None:
@@ -312,6 +348,10 @@ class Verifier:
             if head["type"] == "verdict":
                 verdicts[head["t"]] = head
         accepted = failure is None and len(verdicts) == W and all(v["accepted"] for v in verdicts.values())
+        if failure is not None and session.outcome is None:
+            t = failure["t"]
+            session._fail(t if type(t) is int and 0 <= t < len(session.windows) else len(session.windows),
+                          str(failure["failure"]))
         self.conn.send({"type": "end", "k": k, "accepted": accepted, "failure": failure})
         while True:
             head, _, _ = self.expect("ended")
@@ -320,6 +360,7 @@ class Verifier:
         out = {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": self.samples, "delta": self.delta, "window_ns": self.T, "windows": W,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
+               "appended": session.extent - reg.blocks, "released": session.released,
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
                "verify_latency_ns": {t: v.get("checked_ns") for t, v in sorted(verdicts.items())},
                "check_workers": self.checks.workers if self.checks else 0,
@@ -337,6 +378,33 @@ class Verifier:
             out["end_ns"] = record.end_ns
             out["ledger"] = self.ledgers(record, arrivals)
         return out
+
+    @staticmethod
+    def append(session: audit.Session, head: dict) -> dict | audit.Verdict:
+        """An append's message to the session (`Session.append`), `{"type": "append", "root": hex, "count": n}`: the
+        reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, drawn now, or the
+        rejection."""
+        got = session.append(bytes.fromhex(head["root"]), head["count"])
+        if isinstance(got, audit.Verdict):
+            return got
+        first, coin = got
+        return {"type": "appended", "first": first, "coin": coin.hex()}
+
+    @staticmethod
+    def root(session: audit.Session, head: dict) -> audit.Verdict | None:
+        """A root's message to the session in the order the prover sends it: the blocks it releases
+        (`Session.release`), then the root with its plan, a change from the last plan if it carries one and the
+        registered store otherwise, and its step (`Session.receive`).  The first rejection, if any.  Appends come as
+        messages of their own (`append`), each answered with its coin: a root's message carrying any is malformed."""
+        if "appends" in head:
+            raise ValueError("an append is a message of its own, answered with its coin")
+        if head.get("released") and (v := session.release([tuple(r) for r in head["released"]])) is not None:
+            return v
+        change = head.get("change")
+        if change is not None:
+            added, removed = change
+            change = ([tuple(r) for r in added], [tuple(r) for r in removed])
+        return session.receive(head["t"], head["i"], bytes.fromhex(head["root"]), change=change, step=head.get("step"))
 
     def ledgers(self, record: audit.Record, arrivals: list[list[int]] = ()) -> dict:
         """γ against the node's R at spec and measured (`timing.SPEC_BYTES_PER_S`, `timing.READ_BYTES_PER_S`: every
@@ -361,7 +429,9 @@ class Verifier:
                           "chip_bytes": timing.CHIP_BYTES, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
-                          "reads_bytes": record.receipts * record.block_bytes}}
+                          "reads_bytes": record.receipts * record.block_bytes,
+                          "post_seed_receipts": sum(sum(w.post_seed) for w in record.windows),
+                          "post_seed_credited": False}}
         tiers = cal.get("read_tiers")
         spacings = sorted(b - a for arr in arrivals for a, b in zip(arr, arr[1:]))
         parts = None
@@ -389,23 +459,55 @@ class Verifier:
         return out
 
 
+def load_registry(path: Path | None) -> audit.Registry:
+    """The registrations kept at `path`, none if it is None or holds none yet."""
+    if path is None or not path.exists():
+        return audit.Registry()
+    return audit.Registry.from_json(json.loads(path.read_text()))
+
+
+def save_registry(path: Path | None, registry: audit.Registry) -> None:
+    if path is not None:
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(registry.to_json(), indent=1))
+        tmp.replace(path)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7781)
-    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--out", type=Path, help="required unless --close")
     ap.add_argument("--windows", type=int, default=7)
     ap.add_argument("--window-ms", type=float, default=1000.0)
     ap.add_argument("--samples", type=int, default=2773)
     ap.add_argument("--delta-log2", type=float, default=-40.0)
     ap.add_argument("--jitter-ms", type=float, default=2.0)
     ap.add_argument("--sessions", type=int, default=1)
+    ap.add_argument("--lifetime", type=int, default=audit.LIFETIME,
+                    help="L: windows an appended block may stay in plans after the window it joined")
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--check-workers", type=int, default=len(os.sched_getaffinity(0)) - 1,
                     help="processes checking openings (0: one thread of the verifier's own)")
     ap.add_argument("--quantile", default="p999", choices=("p50", "p99", "p999", "max"),
                     help="the calibration's pass and gap and the round trip the allowance takes")
+    ap.add_argument("--registry", type=Path,
+                    help="the verifier's registrations, kept across its processes (`audit.Registry`): a node with a "
+                         "live registration there is refused (default: this process's own)")
+    ap.add_argument("--close", metavar="NODE_HEX",
+                    help="close the node's live registration in --registry, its sessions counted as they stood, "
+                         "and exit")
     a = ap.parse_args()
+    registry = load_registry(a.registry)
+    if a.close is not None:
+        if a.registry is None:
+            ap.error("--close needs --registry")
+        closed = registry.close(bytes.fromhex(a.close))
+        save_registry(a.registry, registry)
+        print(f"verifier: closed {json.dumps(closed.to_json())}", flush=True)
+        return 0
+    if a.out is None:
+        ap.error("--out is required")
     a.out.mkdir(parents=True, exist_ok=True)
     sys.setswitchinterval(2e-4)
     w0 = time.monotonic_ns()
@@ -416,9 +518,20 @@ def main() -> int:
     conn = wire.Conn(sock)
     v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
-                 log=lambda m: print(m, flush=True), checks=checks)
+                 log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry)
     c0 = time.process_time_ns()
-    reg, cal = v.register()
+    try:
+        reg, cal = v.register()
+    except audit.RegistryError as e:
+        print(f"verifier: refused the registration: {e}", flush=True)
+        save_registry(a.registry, registry)
+        (a.out / "verifier.json").write_text(json.dumps(
+            {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "refused": str(e),
+             "registry": registry.to_json()}, indent=1))
+        if checks:
+            checks.close(wait=True)
+        return 3
+    save_registry(a.registry, registry)
     print(f"verifier: registered {reg.blocks} blocks, digest {reg.digest.hex()[:16]}, calibration {json.dumps(cal)}",
           flush=True)
     rtt = v.ping(a.pings)
@@ -430,17 +543,27 @@ def main() -> int:
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
              "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
-             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals()}, indent=1))
+             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": registry.to_json()},
+            indent=1))
+        save_registry(a.registry, registry)
 
     record()
-    for k in range(a.sessions):
-        r = v.session(k, allowance, not_before)
-        results.append(r)
-        not_before = r.get("end_ns", v.clock.now())
-        lg = r.get("ledger", {}).get("spec", {})
-        print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
-              f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')}", flush=True)
-        record()
+    try:
+        for k in range(a.sessions):
+            r = v.session(k, allowance, not_before)
+            results.append(r)
+            not_before = r.get("end_ns", v.clock.now())
+            lg, pub = r.get("ledger", {}).get("spec", {}), r.get("record", {}).get("public", {})
+            print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
+                  f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')} "
+                  f"appended={r['appended']} released={r['released']} post_seed={pub.get('post_seed')}",
+                  flush=True)
+            record()
+    finally:
+        save_registry(a.registry, registry)
+    closed = registry.close(reg.node)
+    print(f"verifier: closed the registration: {json.dumps(closed.to_json())}", flush=True)
+    record()
     conn.send({"type": "bye"})
     if checks:
         checks.close(wait=True)

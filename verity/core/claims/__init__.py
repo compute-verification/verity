@@ -266,12 +266,42 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-nosum", "assumption",
           "NOSUM: on the stated device no unit outside the route menu heads a fresh committed word", "NOSUM",
           "measured"),
+    # The data-sheet axioms A1–A7 (Security/Models/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
+    # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
+    Entry("accounting-sheet-clock", "assumption",
+          "A1 CLOCK: the SM clock never exceeds the data sheet's maximum boost clock", "A1 clock (data sheet)",
+          "measured"),
+    Entry("accounting-sheet-dispatch", "assumption",
+          "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
+          "instructions included (A2u, which no vendor document states)", "A2 dispatch (whitepapers)", "measured"),
+    Entry("accounting-sheet-tensor", "assumption",
+          "A3 TENSOR: the tensor cores do at most the data sheet's dense MACs per SM clock for each operand type",
+          "A3 tensor (data sheet)", "measured"),
+    Entry("accounting-sheet-pipe", "assumption",
+          "A4 PIPE: the instruction classes Nsight Compute puts on one pipe share that pipe's CUDA Programming Guide "
+          "throughput", "A4 pipe (Programming Guide)", "measured"),
+    Entry("accounting-sheet-smem", "assumption",
+          "A5 SMEM: shared memory serves one request per SM clock, its distinct banks together (32 banks × 4 B = 128 "
+          "B), loads and stores together, so each shared-memory instruction holds one request whatever its width",
+          "A5 shared memory (Programming Guide)", "measured"),
+    Entry("accounting-sheet-words", "assumption",
+          "A6 WORDS: an instruction writes at most its destination registers' 32-bit words (its PTX fragment; two a "
+          "lane for a lane instruction)", "A6 words (PTX ISA)", "measured"),
+    Entry("accounting-sheet-semantics", "assumption",
+          "A7 SEMANTICS: each instruction computes the function its ISA defines and writes nothing else, so no unit "
+          "outside the route menu heads a fresh committed word and a side unit's words cost its per-word vector",
+          "A7 semantics (PTX ISA)", "measured"),
     Entry("accounting-ts-fold-opt", "assumption",
           "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π), for every "
           "certificate π", "FOLD-OPT", "conjectured"),
     Entry("accounting-ts-fill-opt", "assumption",
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
           "certificate π", "FILL-OPT", "conjectured"),
+    Entry("accounting-ts-fan-in", "assumption",
+          "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, by its register operands as "
+          "SASS gives them on sm_80, sm_89, sm_90, sm_100 and sm_120 (LOP3, IADD3, IMAD, IDP.4A, FFMA: 2 a lane, 64 a "
+          "warp instruction), memory a node each access reads (a load 1 a lane; STS.128 and STSM.x4 5 a lane, 160 a "
+          "warp instruction)", "TS fan-in", "measured"),
     Entry("accounting-ts-luck", "assumption",
           "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
           "most p", "TS luck at p", "proven"),
@@ -282,6 +312,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER: zeroing a fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
           "LIN-STEER", "conjectured"),
+    Entry("accounting-ts-right-fixed", "assumption",
+          "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
+          "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
 )}
 
 

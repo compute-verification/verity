@@ -8,7 +8,7 @@ The masked session's record is the plain one's with the keyed coin tree's S2: it
 the honest prover's nonce (`64` zeros) in `coins` (`helloJ`), and it carries the `coin_tree` of a zero key, nonce and
 root and the statement's spec (`coinTreeJ`). So it is `recordList` at the spec whose `Hello` is the prover's and which
 names no coin tree (`specZ`), with `coin_tree` added (`recordObjZk`): `recordJson` through `Hashes.ofSha512 h` returns
-its `compress` (`recordJson_eqZk`).
+its `printJ` (`recordJson_eqZk`).
 
 * **R7 with the prover's nonce** (`checkHello_ok`): the prover's `Hello` reads back with its nonce, which is `64`
   lowercase hex digits, and is the verifier's `Hello` with that nonce put in.
@@ -57,14 +57,14 @@ theorem helloOf_some {spec : SessionSpec} {ct : CoinTree.Spec} (hct : spec.coinT
   rw [hc]
   rfl
 
-/-- **The masked session's record JSON is `recordObjZk`'s `compress`**, the verifier's `Hello` parsing and its
+/-- **The masked session's record JSON is `printJ` of `recordObjZk`**, the verifier's `Hello` parsing and its
 prover's version printing. -/
 theorem recordJson_eqZk (h : ByteArray → ByteArray) {spec : SessionSpec} {ct : CoinTree.Spec}
     (hct : spec.coinTree = some ct) {own : Json} (hown : Json.parse spec.hello = .ok own) {hz : String}
     (hc : canon (helloJ own) = .ok hz) (rootB : Array ByteArray) (points : Array (Array F128))
     (streams : Array (Array Round)) (proofs : Array ByteArray) :
     recordJson (Hashes.ofSha512 h : Hashes PS) spec rootB points streams proofs =
-      pure (recordObjZk spec h hz ct rootB points streams proofs).compress := by
+      pure (printJ (recordObjZk spec h hz ct rootB points streams proofs)) := by
   unfold recordJson roundJ
   have hl : (monadLift (helloOf spec) : PS _) = pure (hz, [("coin_tree", coinTreeJ ct)]) := by
     rw [helloOf_some hct hown hc]
@@ -158,8 +158,8 @@ theorem same_obj_wf {m : Std.TreeMap.Raw String Json compare} {j : Json} (h : Sa
 
 /-- **R7 with the prover's nonce**: the prover's `Hello`, the verifier's own with `64` zeros put in `coins.nonce`,
 passes, its nonce those zeros. -/
-theorem checkHello_ok (S : JsonSpec) {m kvs : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hkv : kvs.WF)
-    (hco : m.get? "coins" = some (.obj kvs)) (hg : Good (helloJ (.obj m))) {hz : String}
+theorem checkHello_ok (S : Claims.JsonSpec printJ Flock.canon) {m kvs : Std.TreeMap.Raw String Json compare}
+    (hm : m.WF) (hkv : kvs.WF) (hco : m.get? "coins" = some (.obj kvs)) (hg : Good (helloJ (.obj m))) {hz : String}
     (hc : canon (helloJ (.obj m)) = .ok hz) : CoinTree.checkHello (.obj m) hz = .ok (zeros 64) := by
   obtain ⟨j, hp, hs⟩ := S.parse_canon _ _ hg hc
   have hcoins : (helloJ (.obj m)).getObjVal? "coins" =
@@ -183,8 +183,8 @@ theorem checkHello_ok (S : JsonSpec) {m kvs : Std.TreeMap.Raw String Json compar
 
 /-- **The record's `coin_tree`** passes: its keys are `key, nonce, root, spec`, its nonce `Hello`'s, its key and root
 hex of their lengths with bit 2047 clear, and its spec the statement's. -/
-theorem checkRecord_ok (S : JsonSpec) (ct : CoinTree.Spec) {cj : Json} (hs : Same (coinTreeJ ct) cj) :
-    ∃ key, CoinTree.checkRecord ct (zeros 64) cj = .ok key := by
+theorem checkRecord_ok (S : Claims.JsonSpec printJ Flock.canon) (ct : CoinTree.Spec) {cj : Json}
+    (hs : Same (coinTreeJ ct) cj) : ∃ key, CoinTree.checkRecord ct (zeros 64) cj = .ok key := by
   have hd := coinTreeJ_list_distinct ct
   have gC : ∀ {k v}, (k, v) ∈ [("key", Json.str (zeros 512)), ("nonce", Json.str (zeros 64)),
       ("root", Json.str (zeros 128)), ("spec", ct.toJson)] → (coinTreeJ ct).getObjVal? k = .ok v :=

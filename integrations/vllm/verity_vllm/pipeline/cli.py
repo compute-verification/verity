@@ -52,6 +52,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "fold-compare": ("verity_vllm.check.fold_compare", "folded observation log vs evidence"),
     "fp8-checkpoint": ("verity_vllm.engine.fp8_checkpoint", "make or re-make a block-FP8 checkpoint from a BF16 pin"),
     "gate": ("verity_vllm.acquire.gate", "CPU acquisition gate of one row"),
+    "int8-checkpoint": ("verity_vllm.engine.int8_checkpoint", "make or re-make an int8 checkpoint (exact-int8 linears) from a BF16 pin"),
     "gemm-correspondence": ("verity_vllm.program.kernels.gemm_target_correspondence", "a target's bf16 linear vs its registered GEMM Definition"),
     "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),

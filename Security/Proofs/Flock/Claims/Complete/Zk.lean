@@ -21,13 +21,35 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 import Proofs.Flock.Claims.Complete.Zk.Count
 import Proofs.Flock.Claims.Complete.Zk.ProverOk
 import Proofs.Flock.Claims.Complete.Zk.RepRounds
+import Proofs.Flock.Claims.Complete.Zk.Lanes
+import Proofs.Flock.Claims.Complete.Zk.Consumed
+import Proofs.Flock.Claims.Complete.Zk.Transfer
+import Proofs.Flock.Claims.Complete.Zk.Walk
+import Proofs.Flock.Claims.Complete.Zk.Replay
+import Proofs.Flock.Claims.Complete.Zk.PiopGo
+import Proofs.Flock.Claims.Complete.Zk.ReplayPos
+import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.Complete.Zk.Extras
+import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
+import Proofs.Flock.Claims.Complete.Zk.LaneAgree
+import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+import Proofs.Flock.Claims.Complete.Zk.InnerGo
+import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
+import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
+import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
+import Proofs.Flock.Claims.Complete.Zk.ConsReplay
+import Proofs.Flock.Claims.Complete.Zk.ConsCoins
+import Proofs.Flock.Claims.Complete.Zk.MaskRank
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
-/-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
+/-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
+the masked record's prover `ZkTables.honestP`): the honest masked prover (`Honest`: `honestPZk`, on
 the masked tape `TapeZk` and pads `padsOf` of `Tape`, the masked zerocheck and lincheck of `Piop`, level 0's masked
 Ligerito of `Ligerito`, the pads' commitment and inner proof of `Inner`, the session of `Session`), its run against
 `V true` (`Run`: `run_acc_of_zk`), that run as a pure session (`Sim`: `honestRunZk_eq`), `δcZk H` with the composition
-into `Claims.Flock.Complete` (`Coins`: `pr_badZk_le`, `complete_zk_of`), and the masked verdict accepting when each of
+into `Claims.Flock.Complete`'s statement at `honestPZk` (`CompleteWith`; `Coins`: `pr_badZk_le`, `complete_zk_of`), and the masked verdict accepting when each of
 its checks passes (`Verdict`: `zk_verifyRepWith_ok`, `zk_verifyWith_ok`). The skeleton (`Skeleton`:
 `complete_zk_of_goals`) composes them from one named goal per check (`GoalsZk`), proving the keyed coin tree from
 `readyZk` (`coinTree_goal`); `Discharge` proves those that follow
@@ -37,9 +59,35 @@ and coin-tree checks passing on it (`checkHello_ok`, `checkRecord_ok`, with `Jso
 which it decodes as the plain record of `specZ` (`decodeWith_specZ`); `Json.Decode` reads it back: decoded, live, and
 its draw (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `Json.Session` is what the one-table
 masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`); `Json.Goals` proves
-the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`);
+the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`), and
+`Json.Stmt` `StmtOkZk` from the case's setup (`stmtOkZk`, with `Same.good` and `good_subset`);
 `Json.Files` the proof files' goals, given `RepShapedZk` (`RunZk.rep`, `repDecodesZk_goal`, `repParamsZk_goal`,
-`padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal` given `RecordFitsZk`); `Json.Runs` the session
-running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Count` the sends fitting the rounds (`sendCountZk_goal`);
+`padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal`, the record's length from `readyZk`); `Json.Runs` the
+session running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Count` the sends fitting the rounds (`sendCountZk_goal`);
 `ProverOk` `ProverOkZk` from `Out64` and its rep half `RepRoundsZk` (`proverOkZk`), and `RepRounds` that half
-(`repRoundsZk_goal`); `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved. -/
+(`repRoundsZk_goal`); `Lanes` level 0's lane phase from the masked Ligerito returning (`laneConstraints_goal`);
+`Consumed` every recorded round consumed where the rep's steps return (`consumedZk_goal`); `Transfer` a replay
+returning on any rounds that carry the prover's, whatever the hashes (`replayWith_xfer`); `Walk` the session rep by
+rep, each stream and proof file the rounds and proof of the rep that made it (`sessionPZk_walk`, `RunZk.walk`);
+`Replay` the masked replay passing, since the prover ran it on rounds its stream carries (`replay_goal`); `PiopGo` the
+masked prover's zerocheck and lincheck in closed form (`zerocheckPZk_go`, `lincheckPZk_go`); `ReplayPos` where a
+masked replay that returns stops and the coins its claims read (`replayWith_ret`); `RingSwitch` the ring switch
+passing on the replay's claims, given the extra claims' algebra `RsExtrasZk` (`ringSwitchZk_goal`); `Extras` that
+algebra at the deployed relation, from `RelS` (`CaseZk.model`, `rsExtrasZk`); `LigeritoPos` what a masked Ligerito
+that returns gives, by coin position: its record and where it stops (`zkLigeritoWith_pos`, `RunZk.lg_pos`), and
+`LigeritoProverPos` what the masked prover records, by send position (`ligeritoPZk_pos`); `LaneAgree` the two records
+giving the same lane constraints where the rounds' coins are the sends' replies and the two Ligeritos start together
+(`lanes_agree`); `PadAlgebra` the honest pads' algebra: at a rep's pads the triple's constraints vanish at every
+sacrifice coin, so the batched constraint `innerP` checks holds at every coin once the rep's own constraints vanish
+(`triple_holds`, `innerP_batched`), and the verifier's batched and column checks hold on the honest `Y`
+(`innerY_batched`, `innerY_column`); `InnerMerkle` the pads' commitment opening at every column, each column's siblings
+climbing from its leaf to the root (`innerCommitP_tree`, `inner_column_opens`); `InnerGo` the masked prover's inner
+proof in closed form at the replies' coins, where the batched constraint holds on the pads and `β ≠ 0` (`innerP_go`),
+and the verifier's inner check passing on it, on rounds carrying its sends, at a rep's pads whose constraints vanish
+(`verifyInnerWith_of`); `ConsZerocheck`, `ConsLincheck` and `ConsRingSwitch` the replay's message-dependent rows
+vanishing at the pads, from the plain algebra moved by the masks (`zcZ_masks`, `lcZ_masks`), and `ConsReplay` the five
+together on `Zk.replay`'s output wherever the plain checks pass at its coins (`replay_rows_zero`), and `ConsCoins`
+those coins the prover's on rounds carrying its sends, with the rows as `ConsHold` (`replay_coins`,
+`replay_consHold_agrees`); `MaskRank` the mask slot's span and the rank bound the prover's refusal needs (`RankFull`,
+`DeployedRankBound`); `Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved,
+and `complete_zk_relation` at the deployed relation. -/

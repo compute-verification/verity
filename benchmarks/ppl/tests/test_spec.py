@@ -32,6 +32,11 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     for n in (8, 16, 32, 64):
         want[f"co32c-u{n}"] = ("all", "int8-all", True)
     want["co32c-u16-cohalf"] = ("all", "int8-all", True)
+    for v in ("", "-khead", "-khead-sink", "-lut", "-lut-sinkm", "-lut-sink", "-lut-sink-rnd", "-lut-sink-norm",
+              "-lut-sink-norm-cal", "-lut32", "-lut-cal", "-lut-sink-cal", "-lut32-sink"):
+        want[f"vllm-int8{v}"] = ("all", "int8-all", False)
+        if v:
+            want[f"co32c-u16-cohalf{v}"] = ("all", "int8-all", True)
     for g in ("fp4c", "fp4", "int5"):
         for m in ("dither", "round"):
             want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
@@ -43,6 +48,12 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
                  + tuple(f"{g}-q{d}" for g in ("nvfp4", "int5", "fp8-peel-w15") for d in (2, 4, 8))):
         want[name] = ("all", "int8-all", True)
     want["nvfp4-round"] = want["nvfp4c-round"] = want["nvfp4-int-round"] = ("all", "int8-all", True)
+    formats = ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4")
+    for name in ("pc-int8", *formats, *(f"{f}-lin" for f in formats), "pc-c3-fp8",
+                 "pc-c3-fp4", *(f"pc-c1-{r}" for r in steps.ROUTES),
+                 *(f"pc-c2-{g}-{s}" for g in ("int5", "e4m3i", "mx8", "nvfp4", "mxfp4") for s in ("2s", "1s")),
+                 "pc-c2-e4m3i-t-2s", "pc-c2-nvfp4x2-2s", "pc-c2-nvfp4x2-1s", "pc-c2-mxfp4x2-2s", "pc-c3-fp4x2"):
+        want[name] = ("all", "int8-all", True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
