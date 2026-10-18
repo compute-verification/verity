@@ -815,7 +815,11 @@ class Driver:
         if key in drive["told"]:
             return
         main = _out(self.repo, "rev-parse", "origin/main")
-        lower = {k: self.verdict(x.commit, main, drive).state for k, x in enumerate(members[:-1]) if x.commit in drive["launched"]}
+        fails = self._signature(v)
+        # a lower check that passed with its deferred steps still running clears nobody of a failure in one of them
+        lower = {k: "running" if u.state == "passed" and u.why.startswith(DEFERRED) and self._in_deferred(fails) else u.state
+                 for k, x in enumerate(members[:-1]) if x.commit in drive["launched"]
+                 for u in [self.verdict(x.commit, main, drive)]}
         if "failed" in lower.values():
             return
         passed = max((k for k, s in lower.items() if s == "passed"), default=-1)
@@ -826,7 +830,6 @@ class Driver:
             return
         head = f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}"
         hit, what = self.culprit(members, v)
-        fails = self._signature(v)
         again = self._again(drive, m, fails)
         if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}) and not (what == UNTOUCHED and again):
             self.resend(drive, m, prs, v)
@@ -838,7 +841,7 @@ class Driver:
                 self.resend(drive, m, prs, v, f"bisection alone names #{above[0].pr}, on this one run's word: it runs again "
                                                "before anyone is ejected")
                 return
-            if passed < 0 and above[0] not in hit and self._main_red(drive, key, head, m, main):
+            if passed < 0 and above[0] not in hit and self._main_red(drive, key, head, m, main, fails):
                 return
             low = f"{members[passed].commit[:12]}, whose check passed" if passed >= 0 else f"`main` {main[:12]}"
             on = "it failed again on its resend, naming no file a change touches" if what == UNTOUCHED else f"the failure is in {what}"
@@ -920,15 +923,18 @@ class Driver:
         q.log(f"research queue drive: bisecting {m.commit[:12]}: it failed on {what} and its cause is among {among}, whose "
               f"changes name none of it: checking {mid.commit[:12]} (through #{mid.pr}) as {' '.join(ids)}")
 
-    def _main_red(self, drive: dict, key: str, head: str, m: Member, main: str) -> bool:
+    def _main_red(self, drive: dict, key: str, head: str, m: Member, main: str, fails: list[str]) -> bool:
         """Whether ``m``'s ejection on bisection alone, the lowest member's with no lower prefix passed, waits on a check of
         `main` itself or is refused by it: bisection narrows a failure `main` shares to the lowest member, which is innocent
         (18 Oct 17:00Z: a revert left benchmarks/stacked_share red on `main`, and every train failed that suite).  `main` is
-        checked once (`drive["base"]`), unless a check of it passed; failed, `CI` hears `main` is red and nobody is ejected."""
+        checked once (`drive["base"]`), unless a check of it passed; failed, `CI` hears `main` is red and nobody is ejected.
+        A `main` landed with `--defer` whose deferred steps still run is that check, for a failure in one of them."""
         q = self.q
         if main in drive.get("deferred", {}):
-            q.log(f"research queue drive: {m.commit[:12]} failed with no lower prefix passed: waiting on the deferred steps of "
-                  f"`main` {main[:12]}'s own landing before ejecting #{m.pr}")
+            if not self._in_deferred(fails):
+                return False
+            q.log(f"research queue drive: {m.commit[:12]} failed in a deferred step with no lower prefix passed: waiting on the "
+                  f"deferred steps of `main` {main[:12]}'s own landing before ejecting #{m.pr}")
             return True
         v = self.verdict(main, main, drive)
         if v.state == "passed":
@@ -967,6 +973,11 @@ class Driver:
             out |= {f"suite {s.get('name') or s.get('suite')}" for s in failed_suites(d)}
             out |= {f"step {st.get('step')}" for st in failed_steps(d) if st.get("step") not in ("pytest", "lean-suites")}
         return sorted(out)
+
+    def _in_deferred(self, fails: list[str]) -> bool:
+        """Whether a failure (`_signature`) is in a step `--defer` lets a check pass without; one naming nothing may be."""
+        return not fails or any(f in {f"step {s}" for s in self.defer} or (f.startswith("suite ") and "pytest" in self.defer)
+                                for f in fails)
 
     def _again(self, drive: dict, m: Member, fails: list[str]) -> bool:
         """Whether ``m``'s failure was seen twice, so a flake can't eject on bisection alone: ``m`` was resent and failed again,
@@ -1156,6 +1167,11 @@ class Driver:
         main = _out(self.repo, "rev-parse", "origin/main")
         running = sum(self.verdict(c, main, drive).state == "running" for c in [*drive["launched"], *drive["base"]])
         running += self.prewarm(drive, running)
+        # a landing below a failed member shifts the trains' indices off it, and a check above it holds the failure drive is
+        # still settling (one told to `CI` is a person's to settle)
+        settling = {chain[i].commit for i in failed_at if f"failed:{chain[i].commit}" not in drive["told"]} | {
+            c for c in drive["resent"] if self.verdict(c, main, drive).state != "passed"}
+        stop = next((k for k, x in enumerate(members) if x.commit in settling), len(members))
         for i in self.trains(len(members), self._cold(members)):
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
             v = self.verdict(m.commit, main, drive)
@@ -1169,6 +1185,10 @@ class Driver:
             if v.state == "running":
                 what.append(f"{m.commit[:12]} ({prs}): {v.attempt} running")
                 continue
+            if i > stop:
+                what.append(f"{m.commit[:12]} waits: {members[stop].commit[:12]} (#{members[stop].pr}) below it failed, and "
+                            "its failure is settled first")
+                break
             if running >= self.max_running:
                 what.append(f"{m.commit[:12]} waits: {running} checks of `{q.branch}` running")
                 break

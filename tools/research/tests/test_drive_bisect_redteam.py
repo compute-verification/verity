@@ -307,11 +307,46 @@ def test_a_midpoint_that_passed_but_deferred_clears_nobody_of_a_failure_in_a_def
     for _ in range(2):
         h.tick()
     assert _main(world) == members[0].commit                                     # #1 landed, its circuit-check running on
+    (again,) = h.d.q.load_state()["drive"]["launched"][tip]["ids"]
+    assert again != tip_rid                                                      # the tip runs again on bisection alone
+    h.run_state[again] = ("running", None, None, "step circuit-check")
+    ev[again] = cc
+    for _ in range(2):
+        h.tick()
+    assert not h.posts and not _ejected(h)                                       # #1's own circuit-check hasn't ended
+    assert any("waiting on the deferred steps of `main`" in x for x in world.logs)
     h.run_state[mid_rid] = ("done", 1, None)
     ev[mid_rid] = cc
     h.tick()
     assert any("reverted on `main`" in p for p in h.posts), h.posts
     assert not any("Ejected" in p for p in h.posts) and not _ejected(h), h.posts
+
+
+def test_a_failure_in_a_step_not_deferred_does_not_wait_on_a_deferred_landing_below_it(world, monkeypatch, tmp_path):
+    """The other side: #1 landed with circuit-check deferred, and the tip failed a suite twice; #1's check passed that suite."""
+    h = Harness(world, monkeypatch)
+    h.d.defer, h.d.train_size = frozenset({"circuit-check", "flock-rust-tests"}), 2
+    for n in (1, 2):
+        world.gh.put(n, world.change({f"pkg/f{n}.py": f"{n}\n"}))
+    h.tick()
+    members, tip = h.q.chain(), _tip(world)
+    suite = _failed_run(tmp_path, *FAILURE)
+    ev: dict[str, object] = {}
+    h.d.evidence = lambda repo, ids: [ev.get(i, suite) for i in ids]
+    _record(world, monkeypatch, tip, False)
+    h.tick()
+    (mid_rid,) = h.d.q.load_state()["drive"]["bisect"][tip]["ids"]
+    others = tmp_path / mid_rid
+    others.mkdir()
+    (others / "steps.jsonl").write_text("".join(json.dumps({"step": x, "status": "passed"}) + "\n" for x in CHECK_STEPS
+                                                if x not in h.d.defer))
+    ev[mid_rid] = others
+    for _ in range(2):
+        h.tick()
+    assert _main(world) == members[0].commit and _main(world) in h.d.q.load_state()["drive"]["deferred"]
+    _record(world, monkeypatch, tip, False)
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0], h.posts
 
 
 def test_a_resend_with_pytest_deferred_runs_the_suites_its_change_touches_too(world, monkeypatch, tmp_path):
@@ -355,8 +390,9 @@ def test_a_resend_of_a_check_still_running_after_it_failed_cancels_that_run(worl
 # -- 8. `--first`
 
 def test_first_while_a_bisect_check_runs_keeps_that_check_and_bisection_still_ejects_only_the_cause(world, monkeypatch, tmp_path):
-    """`--first` below the failed train re-stacks it above the running bisect check.  Once that check lands, the failed train's
-    commit is no longer a train's index, and no check of a commit above it may start: it holds the same failure."""
+    """`--first` below the failed train re-stacks it above the running bisect check, and the re-stacked trains are checked
+    again (#9 may be the fix).  Once that check lands, [#1 #2 #9 #3]'s failed commit is no longer a train's index, and no check
+    of a commit above it may start while its failure is settled: it holds the same failure."""
     h = Harness(world, monkeypatch)
     h.d.train_size, h.d.max_running = 4, 2
     for n in (1, 2, 3, 4):
@@ -372,10 +408,11 @@ def test_first_while_a_bisect_check_runs_keeps_that_check_and_bisection_still_ej
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1, 2, 9, 3, 4] and h.q.chain()[1].commit == members[1].commit
     assert mid_rid not in h.cancelled
+    h.q.first = ()
     above = _tip(world)
     _run(h, world, monkeypatch, lambda c: not _has(world, c, "pkg/f3.py"), until=lambda: bool(h.posts), seen=1)
     assert len(h.posts) == 1 and "Ejected #3" in h.posts[0] and set(_ejected(h)) == {"3"}, h.posts
-    assert above not in [c for c, *_ in h.launched]                              # #3's failed train holds it
+    assert above not in [c for c, *_ in h.launched]                              # [#1 #2 #9 #3]'s failure holds it
 
 
 def test_no_train_above_a_failed_member_is_checked_while_its_failure_is_settled(world, monkeypatch, tmp_path):
