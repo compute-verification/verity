@@ -2681,6 +2681,17 @@
    "assumptions": [],
    "type_hash": "186029323a95571ffc1885099305b7bedfb3432f1068675d2dd416e9bd0a90a6"
   },
+  "Claims.ZKmalRx_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.ZKmalRx_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg)",
+    "  (εzk γ : Claims.Msg → Real) (x : Claims.Msg) (hε : Real.instLT.lt (εzk x) 1) :",
+    "  Exists fun P =>",
+    "    Exists fun S => Not (Claims.ZKmalRx (fun x => N) (fun x => Ω) H (fun x => 1) P (fun x x_1 => True) S εzk γ)"
+   ],
+   "assumptions": [],
+   "type_hash": "795a1501a9407a0386e6ef5f40629d3ccf38bdfd7d1b98ee6b279260cc983b26"
+  },
   "Flock.SecurityProofs.ClaimsStated": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated"],
@@ -6001,17 +6012,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Claims.ZKmalRx_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.ZKmalRx_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg)",
-    "  (εzk γ : Claims.Msg → Real) (x : Claims.Msg) (hε : Real.instLT.lt (εzk x) 1) :",
-    "  Exists fun P =>",
-    "    Exists fun S => Not (Claims.ZKmalRx (fun x => N) (fun x => Ω) H (fun x => 1) P (fun x x_1 => True) S εzk γ)"
-   ],
-   "assumptions": [],
-   "type_hash": "795a1501a9407a0386e6ef5f40629d3ccf38bdfd7d1b98ee6b279260cc983b26"
   }
  },
  "shape": {
@@ -8516,10 +8516,10 @@
     "Claims.Witness.Recursion.ZK_fails",
     "Claims.Witness.Recursion.ZK_meets",
     "Claims.ZKmalR_fails",
+    "Claims.ZKmalRx_fails",
     "Flock.SecurityProofs.ClaimsStated",
     "Flock.SecurityProofs.RecursionClaimsStated",
-    "Flock.SecurityProofs.SamplingClaimsStated",
-    "Claims.ZKmalRx_fails"
+    "Flock.SecurityProofs.SamplingClaimsStated"
    ]
   },
   "Definitions.Claims.Hm96": {
@@ -8533,6 +8533,20 @@
     "Claims.Witness.Recursion.ZK_fails",
     "Flock.SecurityProofs.ClaimsStated",
     "Flock.SecurityProofs.RecursionClaimsStated"
+   ]
+  },
+  "Definitions.Claims.IndexedTapes": {
+   "digest": "5d16c5412f781cbe813dd8f194a2502df72564dbb5509e06cae87f2e62ce7767",
+   "definitions": {
+    "Claims.ZKmalRx": "6f92524188cb8a3c463b832d63e0b50f302d1257302a1305396544388e01dcdb"
+   },
+   "guarantees": [
+    "Claims.Sampling.ZK_fails",
+    "Claims.Witness.Recursion.ZKPriv_fails",
+    "Claims.Witness.Recursion.ZK_fails",
+    "Claims.ZKmalRx_fails",
+    "Flock.SecurityProofs.RecursionClaimsStated",
+    "Flock.SecurityProofs.SamplingClaimsStated"
    ]
   },
   "Definitions.Claims.Json": {
@@ -8564,7 +8578,7 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "7b0c057e312d2b2526c0b5f9f2d678b37db77d1894adc8ba109b5920a3f97963",
+   "digest": "7d19084193efdf4817c2b5ba985cf54df186febd18d22f9d98a2b781e19f3615",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
@@ -8743,7 +8757,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "bc047f4e57047499600b03d627d42d3db140ce2853d5bcc8f3be1c1c36fe8080",
+   "digest": "a4d99073c79ebad537987066300cf1f6d451a6cc8f41378bd448116b7dba0d02",
    "definitions": {
     "Claims.Sampling.BGate": "63a981e57403ae475c097446b58799e6bbc6ebb87e4a1ff8911d63f602542833",
     "Claims.Sampling.BGate.and": "5e97bb022ac07b984f8303744fbc545e8aa6f37c7e6ec025083230906f800909",
@@ -28194,20 +28208,6 @@
     "VStar.rowLine": "ab93587c702fbaa39c07489ba4bea6c2afc786fd4db8544e4db97136c0f577c1"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
-  },
-  "Definitions.Claims.IndexedTapes": {
-   "digest": "5d16c5412f781cbe813dd8f194a2502df72564dbb5509e06cae87f2e62ce7767",
-   "definitions": {
-    "Claims.ZKmalRx": "6f92524188cb8a3c463b832d63e0b50f302d1257302a1305396544388e01dcdb"
-   },
-   "guarantees": [
-    "Claims.Sampling.ZK_fails",
-    "Claims.Witness.Recursion.ZKPriv_fails",
-    "Claims.Witness.Recursion.ZK_fails",
-    "Claims.ZKmalRx_fails",
-    "Flock.SecurityProofs.RecursionClaimsStated",
-    "Flock.SecurityProofs.SamplingClaimsStated"
-   ]
   }
  },
  "dependencies": {
