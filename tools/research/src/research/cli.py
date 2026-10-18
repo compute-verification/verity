@@ -79,9 +79,11 @@
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
   research msg send|close|read|names|traffic|ask-daniel|... [--dry-run]
                                                  # messages between agents, on Slack (research/slack.py; skill using-slack)
-  research digest --as LANE [--watch N TODO | --unwatch N | --thread NAME TS [--channel KEY] | --show]
+  research digest --as LANE [--roster FILE] [--watch N TODO | --unwatch N | --thread NAME TS [--channel KEY] | --show]
                                                  # a coordinator's sync on one screen: doorbells, watched threads, landings, the
-                                                 # lane's queue changes, its notes, and TRIGGERs for watched PRs (research/digest.py)
+                                                 # lane's queue changes, its notes with their results so far, TRIGGERs for watched
+                                                 # PRs, and Health: the VM, /workspace, the roster's workers and inboxes, PRs off the
+                                                 # queue, finished worktrees' .lake, live runs (research/digest.py)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
