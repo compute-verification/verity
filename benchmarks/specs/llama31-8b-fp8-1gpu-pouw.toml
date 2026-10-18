@@ -1,8 +1,13 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-pouw"
-# Pearl-C on sm_120, PoUW's served FP8 scheme (`pouw_pearl_c_device.SCHEMES`); its adapter refuses compiled execution.
-arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3"]
+# PoUW is Pearl-C on sm_120 (pearl-c-sm120-v1-h3) at every linear of the BF16 checkpoint, which Pearl-C quantizes to FP8
+# itself. The protocol-option arm `pouw:pearl-c-sm120-v1-h3` is refused here: the harness hands it no pouw settings
+# (device, kernel, coins), its install refuses FP8-quantized layers, and its tokens can't match stock FP8's. Its tokens
+# being Pearl-C's own, the arm has no control and runs its own gate (bench_arm's docstring). PoUW refuses compiled
+# execution, so every arm runs eager.
+arms = ["stock-fp8", "pouw-pearl-c"]
+arm_modules = ["benchmarks.pouw.pearl_c_vllm.bench_arm:PEARL_C"]
 sweep = "quick"
 reps = 3
 eager = true
