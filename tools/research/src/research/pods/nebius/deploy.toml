@@ -9,7 +9,8 @@
 # [[tree]]: every file of the directory `src` at the commit, installed under `path`. A file of it not installed leaves drift
 # clean, unless the tree has `required = true`: what runs from it needs all of it.
 # The drop-ins infra writes (`*vy*`) and every `systemctl set-property` (system.control) are managed, so one made by hand is a stray.
-# A node's `quiet`: a shell test on it; install restarts nothing there unless it succeeds.
+# A node's `quiet`: a shell test on it; install restarts nothing there unless it succeeds. Its `staged`: why the machine doesn't
+# exist yet; `drift` reads it only when named with --on, and `install` takes it as any other node.
 
 [nodes.vy-nebius-1]
 record = "/workspace/research/deploy/record.jsonl"
