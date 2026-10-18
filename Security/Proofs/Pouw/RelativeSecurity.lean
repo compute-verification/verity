@@ -877,7 +877,10 @@ theorem tuse_le (P : Protocol Mc Inst Out) {η : ℝ} {Ω' : Type} [Fintype Ω']
   csInf_le ⟨0, fun _ ⟨_, _, M'', _, ht⟩ => ht ▸ Mc.time_nonneg M''⟩ ⟨Ω', inferInstance, M', h, rfl⟩
 
 /-- **Security, RS-DEF's frozen form** (§1.5): every adversary that commits first and is accepted with probability at
-least `δ` has `(1 + ε) time M + α ≥ T_use(η)`. -/
+least `δ` has `(1 + ε) time M + α ≥ T_use(η)`.
+
+**Superseded by `SecureInfPerProver`** (proposed, a claim change; CMP-33): one `δ` for every adversary is reached only
+through a floor with one `κ` for every adversary, which a service on SHA-512 commitments meets only at 1. -/
 def SecureInf (P : Protocol Mc Inst Out) (ε δ η α : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
     δ ≤ acceptance P M → Tuse P η ≤ (1 + ε) * Mc.time M + α
@@ -888,7 +891,8 @@ theorem secureInf_of_secure (P : Protocol Mc Inst Out) {ε δ η α : ℝ} (h : 
   exact (tuse_le P hu).trans ht
 
 /-- **The per-run core** (RS-DEF v2 §1.6, the proof target): for every adversary that commits first, the runs that
-are accepted and whose charge `max(|M|, cost)` is below `(T_use(η) − α)/(1 + ε)` have probability at most `κ`. -/
+are accepted and whose charge `max(|M|, cost)` is below `(T_use(η) − α)/(1 + ε)` have probability at most `κ`.
+Superseded, with `AdvFloor`, by the floor per adversary (`AdvFloorPerProver`, `secureInfPerProver_of_floor`). -/
 def Core (P : Protocol Mc Inst Out) (ε κ η α : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
     prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧
@@ -930,7 +934,11 @@ theorem rate_of_core (P : Protocol Mc Inst Out) {ε κ η α : ℝ} (h : Core P 
 
 /-- **The adversary floor** (a named hypothesis, the lane's floor results with Theorem F's luck term in `κ`): for every
 adversary that commits first, the runs that are accepted and whose charge `max(|M|, cost)` is below `F` have
-probability at most `κ` (RS-DEF v2's Lemma R premise). -/
+probability at most `κ` (RS-DEF v2's Lemma R premise).
+
+**Superseded by `AdvFloorPerProver`** (CMP-33): over a service on SHA-512 commitments it holds only at `κ = 1`, since an
+adversary that hard-codes a collision opens a committed leaf two ways (note:proofs/20261018T1604Z-report-redteam-2474,
+side finding). -/
 def AdvFloor (P : Protocol Mc Inst Out) (F κ : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
     prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.charge M ω < F) ≤ κ
@@ -952,19 +960,95 @@ theorem core_of_floor (P : Protocol Mc Inst Out) {κ η F U : ℝ} (hF : 0 < F) 
 def Efficient (P : Protocol Mc Inst Out) (γ N α : ℝ) : Prop :=
   Mc.time P.solve ≤ (1 + γ) * N + α
 
-/-- **Relative security** with parameters `ε, δ, γ, η, α` against the reference time `N` (RS-DEF's frozen form). -/
+/-- **Relative security** with parameters `ε, δ, γ, η, α` against the reference time `N` (RS-DEF's frozen form).
+
+**Superseded by `RelativelySecurePerProver`** (proposed, a claim change; CMP-33), for `SecureInf`'s reason. -/
 def RelativelySecure (P : Protocol Mc Inst Out) (ε δ γ η α N : ℝ) : Prop :=
   Complete P η ∧ SecureInf P ε δ η α ∧ Efficient P γ N α
 
 /-- **Relative security from the adversary floor** (RS-DEF's route (a), end to end in the frozen definition): if Solve
 is complete, costs at least the floor `F > 0` and is efficient, and every adversary's accepted runs below `F` have
-probability at most `κ < δ`, the protocol is relatively secure with `ε = time(Solve) / F − 1` and `α = 0`. -/
+probability at most `κ < δ`, the protocol is relatively secure with `ε = time(Solve) / F − 1` and `α = 0`.
+Superseded by `relativelySecurePerProver_of_advFloor` (CMP-33). -/
 theorem relativelySecure_of_advFloor (P : Protocol Mc Inst Out) {κ δ γ η F N : ℝ} (hc : Complete P η) (hF : 0 < F)
     (hFS : F ≤ Mc.time P.solve) (hfloor : AdvFloor P F κ) (hκδ : κ < δ) (heff : Efficient P γ N 0) :
     RelativelySecure P (Mc.time P.solve / F - 1) δ γ η 0 N := by
   refine ⟨hc, secureInf_of_core P (core_of_floor P hF hFS hfloor hc le_rfl) hκδ ?_, heff⟩
   rw [add_sub_cancel]
   exact div_pos (hF.trans_le hFS) hF
+
+/-! ### Relative security per adversary (proposed, a claim change; CMP-33)
+
+`AdvFloor`, `Core`, `SecureInf` and `RelativelySecure` read one `κ` or `δ` for every adversary. Over a service on
+SHA-512 commitments the floor holds only at 1, so the chain from it says nothing below 1: an adversary that hard-codes a
+collision opens a committed leaf two ways (note:proofs/20261018T1604Z-report-redteam-2474, side finding). The forms
+here read each adversary's own bound in `ℝ≥0∞`, `⊤` where there is none: its floor (`AdvFloorPerProver`, the service's
+`ServiceFloorPerProver`, at the floors' `breakBound`, read through the adversary's collision finders and
+`Claims.ecrBound`) and the acceptance its security asks about (`SecureInfPerProver`, `RelativelySecurePerProver`).
+Route (a) carries over at the threshold `κ(M) + δ'` for one `δ' > 0` (`secureInfPerProver_of_floor`): a hard-coded
+collision's `κ` is about 1 or `⊤`, so security asks nothing of it, and every other adversary is asked about its own
+bound.
+-/
+
+/-- **The adversary floor, adversary by adversary**: every adversary `M` that commits first has its accepted runs
+charged (`max(|M|, cost)`) below `F` with probability at most `κ Ω M`, a bound of its own, `⊤` where there is none.
+`AdvFloor` is the case of one `κ` for every adversary. -/
+def AdvFloorPerProver (P : Protocol Mc Inst Out) (F : ℝ)
+    (κ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (P.Seed × Ω) P.Proof → ENNReal) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+    ENNReal.ofReal (prob fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.charge M ω < F) ≤ κ Ω M
+
+/-- **Security, RS-DEF's frozen form, adversary by adversary** (proposed): every adversary `M` that commits first and
+is accepted with probability at least its own threshold `δ Ω M` has `(1 + ε) time M + α ≥ T_use(η)`. A threshold above
+1 asks nothing of `M`. `SecureInf` is the case of one threshold `δ` for every adversary. -/
+def SecureInfPerProver (P : Protocol Mc Inst Out) (ε : ℝ)
+    (δ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (P.Seed × Ω) P.Proof → ENNReal) (η α : ℝ) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+    δ Ω M ≤ ENNReal.ofReal (acceptance P M) → Tuse P η ≤ (1 + ε) * Mc.time M + α
+
+/-- **Relative security, adversary by adversary** (proposed), with parameters `ε, γ, η, α` against the reference time
+`N` and each adversary's threshold `δ Ω M`: `RelativelySecure` with `SecureInfPerProver` in place of `SecureInf`. -/
+def RelativelySecurePerProver (P : Protocol Mc Inst Out) (ε : ℝ)
+    (δ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (P.Seed × Ω) P.Proof → ENNReal) (γ η α N : ℝ) : Prop :=
+  Complete P η ∧ SecureInfPerProver P ε δ η α ∧ Efficient P γ N α
+
+/-- **Security per adversary from the floor per adversary** (Lemma R and `secureInf_of_core`, adversary by
+adversary): under the floor `F > 0` per adversary, with a useful prover at most `U ≥ F`, security holds at
+`1 + ε = U / F`, `α = 0`, and each adversary's threshold `κ(M) + δ'` for one `δ' > 0`: an adversary accepted that
+often has a run charged at least `F`, so its time is at least `F ≥ T_use · F / U`. -/
+theorem secureInfPerProver_of_floor (P : Protocol Mc Inst Out) {η F U δ' : ℝ}
+    {κ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (P.Seed × Ω) P.Proof → ENNReal} (hF : 0 < F) (hFU : F ≤ U)
+    (hfloor : AdvFloorPerProver P F κ) {Ω₀ : Type} [Fintype Ω₀] {M₀ : Mc.Alg (P.Seed × Inst × Ω₀) (P.Proof × Out)}
+    (hM₀ : Useful P M₀ η) (hU : Mc.time M₀ ≤ U) (hδ' : 0 < δ') :
+    SecureInfPerProver P (U / F - 1) (fun Ω _ M => κ Ω M + ENNReal.ofReal δ') η 0 := by
+  intro Ω _ M hc hM
+  rw [add_sub_cancel, add_zero]
+  by_contra hlt
+  replace hlt := not_le.mp hlt
+  have hU0 : 0 < U := hF.trans_le hFU
+  have htime : Mc.time M < F := by
+    by_contra hge
+    replace hge := not_lt.mp hge
+    have : U ≤ U / F * Mc.time M :=
+      calc U = U / F * F := (div_mul_cancel₀ U hF.ne').symm
+        _ ≤ U / F * Mc.time M := mul_le_mul_of_nonneg_left hge (div_nonneg hU0.le hF.le)
+    linarith [(tuse_le P hM₀).trans hU]
+  have hacc : ENNReal.ofReal (acceptance P M) ≤ κ Ω M := by
+    unfold acceptance
+    exact (ENNReal.ofReal_le_ofReal (prob_mono fun ω hω => ⟨hω, (Mc.charge_le_time M ω).trans_lt htime⟩)).trans
+      (hfloor Ω M hc)
+  have hκ : κ Ω M ≠ ⊤ := ne_top_of_le_ne_top ENNReal.ofReal_ne_top (le_self_add.trans hM)
+  exact (ENNReal.lt_add_right hκ (ENNReal.ofReal_pos.mpr hδ').ne').not_ge (hM.trans hacc)
+
+/-- **Relative security per adversary from the floor per adversary** (route (a) per adversary, as
+`relativelySecure_of_advFloor`): if Solve is complete, costs at least the floor `F > 0` and is efficient, and every
+adversary's accepted runs below `F` have probability at most its own `κ`, the protocol is relatively secure per
+adversary with `ε = time(Solve) / F − 1`, `α = 0` and thresholds `κ(M) + δ'`. -/
+theorem relativelySecurePerProver_of_advFloor (P : Protocol Mc Inst Out) {γ η F N δ' : ℝ}
+    {κ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (P.Seed × Ω) P.Proof → ENNReal} (hc : Complete P η) (hF : 0 < F)
+    (hFS : F ≤ Mc.time P.solve) (hfloor : AdvFloorPerProver P F κ) (hδ' : 0 < δ') (heff : Efficient P γ N 0) :
+    RelativelySecurePerProver P (Mc.time P.solve / F - 1) (fun Ω _ M => κ Ω M + ENNReal.ofReal δ') γ η 0 N :=
+  ⟨hc, secureInfPerProver_of_floor P hF hFS hfloor hc le_rfl hδ', heff⟩
 
 /-- The matmul problem on instances that embed into pairs of `n × n` matrices over `R` (for example RS-DEF's useful
 grid `G_use` as a subtype): `x` is answered by `C = A · B` for `(A, B) = emb x`. -/
@@ -2507,6 +2591,38 @@ theorem relativelySecure_of_editFloor (S : Service) {n : ℕ} (E : Mc.Edit S.See
     rw [add_mul, one_mul, div_mul_cancel₀ _ hN.ne', add_zero]
     linarith
 
+/-- **Relative security of edited instances per adversary** (route (c) per adversary, as
+`relativelySecure_of_editFloor`, which it supersedes): the service's floor per adversary (`ServiceFloorPerProver`, the
+edit floor read adversary by adversary) gives relative security per adversary at thresholds `κf(M) + δ'`, with
+`relativelySecure_of_editFloor`'s `ε`, `γ` and `N`. -/
+theorem relativelySecurePerProver_of_editFloor (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
+    (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
+    (use : Mat R n n × Mat R n n → Prop) {κm δ' η F : ℝ}
+    {κf : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal}
+    (hm : ∀ σ x, use x → Mc.eval m (E.edit σ x) = E.product σ x) (hmt : Mc.time m ≤ κm * (n : ℝ) ^ 3)
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
+      (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat R n n × Mat R n n, use x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify (Mc.eval prove ((ω.1, x, ω.2), Mc.eval m (E.edit ω.1 x))).1 ω.1
+        (Mc.eval prove ((ω.1, x, ω.2), Mc.eval m (E.edit ω.1 x))).2 = true)
+    (hfloor : ServiceFloorPerProver Mc.toMachine S F κf) (hδ' : 0 < δ') (hF : 0 < F)
+    (hFU : F ≤ κm * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove)
+    (hN : 0 < κm * (n : ℝ) ^ 3) :
+    RelativelySecurePerProver (Mc.edited S E m prove use)
+      ((κm * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / F - 1)
+      (fun Ω _ M => κf Ω M + ENNReal.ofReal δ')
+      ((2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / (κm * (n : ℝ) ^ 3)) η 0
+      (κm * (n : ℝ) ^ 3) := by
+  have hc := Mc.edited_complete S E m prove use hm hcom hacc
+  have hU : Mc.time (Mc.honestEdit E m prove) ≤
+      κm * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove := by
+    linarith [Mc.time_honestEdit_le E m prove]
+  refine ⟨hc, secureInfPerProver_of_floor (Mc.edited S E m prove use) (κ := κf) hF hFU hfloor hc hU hδ', ?_⟩
+  change Mc.time (Mc.honestEdit E m prove) ≤ _
+  rw [add_mul, one_mul, div_mul_cancel₀ _ hN.ne', add_zero]
+  linarith
+
 /-- The worst-case product computes the edited product on every instance. -/
 theorem eval_mul_edit {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (σ : Seed) (x : Mat R n n × Mat R n n) :
     Mc.eval (Mc.mul n n n) (E.edit σ x) = E.product σ x :=
@@ -2575,6 +2691,30 @@ theorem relativelySecure_of_editFloor_grid (S : Service) {n : ℕ} (E : Mc.Edit 
   Mc.relativelySecure_of_editFloor S E _ prove use
     (fun σ x hx => Mc.eval_mulG n n n _ hshape (hgrid σ x hx).1 (hgrid σ x hx).2)
     ((Mc.time_mulG_le n n n hshape).trans_eq (by ring)) hcom hacc hfloor hκδ hF hFU hN
+
+/-- **Route (c) on the grid per adversary** (as `relativelySecure_of_editFloor_grid`, which it supersedes): the
+service's floor per adversary gives relative security per adversary at thresholds `κf(M) + δ'`. -/
+theorem relativelySecurePerProver_of_editFloor_grid (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
+    (use : Mat R n n × Mat R n n → Prop) {δ' η F : ℝ}
+    {κf : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal} (hshape : Mc.shape n n n)
+    (hgrid : ∀ σ x, use x → Mc.OnGrid (E.edit σ x))
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
+      (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat R n n × Mat R n n, use x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify (Mc.eval prove ((ω.1, x, ω.2), Mc.eval (Mc.mulG n n n) (E.edit ω.1 x))).1 ω.1
+        (Mc.eval prove ((ω.1, x, ω.2), Mc.eval (Mc.mulG n n n) (E.edit ω.1 x))).2 = true)
+    (hfloor : ServiceFloorPerProver Mc.toMachine S F κf) (hδ' : 0 < δ') (hF : 0 < F)
+    (hFU : F ≤ Mc.κG * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove)
+    (hN : 0 < Mc.κG * (n : ℝ) ^ 3) :
+    RelativelySecurePerProver (Mc.edited S E (Mc.mulG n n n) prove use)
+      ((Mc.κG * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / F - 1)
+      (fun Ω _ M => κf Ω M + ENNReal.ofReal δ')
+      ((2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / (Mc.κG * (n : ℝ) ^ 3)) η 0
+      (Mc.κG * (n : ℝ) ^ 3) :=
+  Mc.relativelySecurePerProver_of_editFloor S E _ prove use
+    (fun σ x hx => Mc.eval_mulG n n n _ hshape (hgrid σ x hx).1 (hgrid σ x hx).2)
+    ((Mc.time_mulG_le n n n hshape).trans_eq (by ring)) hcom hacc hfloor hδ' hF hFU hN
 
 end GridMatMachine
 
@@ -7381,11 +7521,25 @@ def Alg.projθ {kd : K120 → Kind} {I O : Type} (f : Alg (kdθ kd) I O) : Alg k
     exact ⟨c.projθ, by rw [Circ.eval_projθ, hc], by rw [Circ.gates_projθ, hc']⟩⟩
 
 /-- **B's floor carries to B_θ at `1 − θ = 4/5` of it**: an adversary's B shadow computes the same messages, and B_θ
-prices it at least `4/5` of its B time (`timeB_le_priceθ`). -/
+prices it at least `4/5` of its B time (`timeB_le_priceθ`). Superseded by `serviceFloorPerProver_θ` (CMP-33). -/
 theorem serviceFloor_θ (kd : K120 → Kind) (S : Service) {F κ : ℝ}
     (h : ServiceFloor (machine kd (.ofNat price120)) S F κ) : ServiceFloor (machine (kdθ kd) priceθ) S (4 / 5 * F) κ := by
   intro Ω _ M hc
   refine (prob_mono fun ω hω => ⟨hω.1, ?_⟩).trans (h Ω M.projθ hc)
+  have h1 := timeB_le_priceθ M.1.2
+  have h2 : priceθ.t M.1.2 < 4 / 5 * F := (max_lt_iff.mp hω.2).1
+  have h3 : (timeB price120 (progOf (M.1.2.map Instr120.kind)) : ℝ) < F := by linarith
+  exact max_lt h3 h3
+
+/-- **B's floor per adversary carries to B_θ at `4/5` of it** (`serviceFloor_θ` adversary by adversary, which it
+supersedes): a B_θ adversary's bound is its B shadow's (`Alg.projθ`), so the floors per prover's `breakBound` reads the
+shadow's collision finders. -/
+theorem serviceFloorPerProver_θ (kd : K120 → Kind) (S : Service) {F : ℝ}
+    {κ : ∀ (Ω : Type) [Fintype Ω], (machine kd (.ofNat price120)).Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal}
+    (h : ServiceFloorPerProver (machine kd (.ofNat price120)) S F κ) :
+    ServiceFloorPerProver (machine (kdθ kd) priceθ) S (4 / 5 * F) (fun Ω _ M => κ Ω M.projθ) := by
+  intro Ω _ M hc
+  refine (ENNReal.ofReal_le_ofReal (prob_mono fun ω hω => ⟨hω.1, ?_⟩)).trans (h Ω M.projθ hc)
   have h1 := timeB_le_priceθ M.1.2
   have h2 : priceθ.t M.1.2 < 4 / 5 * F := (max_lt_iff.mp hω.2).1
   have h3 : (timeB price120 (progOf (M.1.2.map Instr120.kind)) : ℝ) < F := by linarith
@@ -7437,7 +7591,9 @@ hypothesis, `ServiceFloor`) carries to `0.8 F_B` u in B_θ (`serviceFloor_θ`), 
 `G_use = [−(127 − s), 127 − s]` and noise bounded by `s` (so the edits stay int8, `edit_int8`) the edited protocol served
 by the int8 tile GEMM is relatively secure against `N = 0.8 n³` u with `ε = U / (0.8 F_B) − 1`,
 `U = 0.8 n³ + 1.6 n² + time gen + time prove` (no commitment cost credited), and
-`γ = (1.6 n² + time gen + time prove) / (0.8 n³)`. -/
+`γ = (1.6 n² + time gen + time prove) / (0.8 n³)`. Superseded by `relativelySecurePerProver_edited120θ_of_floor`
+(CMP-33): its `κf` is one bound for every adversary, so over SHA-512 commitments `hfloorB` holds only at `κf` about
+1. -/
 theorem relativelySecure_edited120θ_of_floor (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
     {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
     (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
@@ -7464,6 +7620,50 @@ theorem relativelySecure_edited120θ_of_floor (kd : K120 → Kind) (G : MatGates
   have hp := (gridMatMachine120θ kd G I).time_nonneg prove
   have h := (gridMatMachine120θ kd G I).relativelySecure_of_editFloor_grid S.toService E prove (InGrid (127 - s))
     (tile120_square h32 h17) (fun σ _ hx => edit_int8 hE σ hx) hcom hacc (serviceFloor_θ kd S.toService hfloorB) hκδ
+    (by positivity) (by rw [gridMatMachine120θ_κG, gridMatMachine120θ_κadd]; nlinarith [sq_nonneg (n : ℝ)])
+    (by rw [gridMatMachine120θ_κG]; exact hN)
+  rwa [gridMatMachine120θ_κG, gridMatMachine120θ_κadd] at h
+
+/-- **Route (c) on sm_120 in B_θ, on the int8 grid, from any B floor per adversary** (proposed, a claim change; CMP-33;
+`relativelySecure_edited120θ_of_floor` adversary by adversary, which it supersedes): B's service floor per adversary
+`F_B ≤ n³` u, at each adversary's own `κf` (a named hypothesis, `ServiceFloorPerProver`; the floors per prover of
+`Models.Pouw.Guarantees.RelativeSecurity` give it at `κf = breakBound sha fb fz 2^{−40} δb βb δz βz`, stated and not yet
+proved), carries to `0.8 F_B` u in B_θ (`serviceFloorPerProver_θ`), and the edited protocol is relatively secure per
+adversary with `relativelySecure_edited120θ_of_floor`'s `ε`, `γ` and `N`, at each B_θ adversary's threshold
+`κf(M.projθ) + δ'`: its B shadow's bound, read through the shadow's collision finders, plus one `δ' > 0`. -/
+theorem relativelySecurePerProver_edited120θ_of_floor (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1)
+    (I : Int8Gates120 kd) {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n)
+    (h17 : n ≤ 2 ^ 17) (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
+    (prove : (gridMatMachine120θ kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
+      (S.Com × S.Ans)) {δ' η : ℝ}
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
+      ((gridMatMachine120θ kd G I).eval prove ((σ, y), C)).1 =
+        ((gridMatMachine120θ kd G I).eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, InGrid (127 - s) x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).1
+        ω.1 ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).2 = true)
+    {FB : ℝ}
+    {κf : ∀ (Ω : Type) [Fintype Ω], (machine kd (.ofNat price120)).Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal}
+    (hfloorB : ServiceFloorPerProver (machine kd (.ofNat price120)) S.toService FB κf) (hδ' : 0 < δ')
+    (hFB : 0 < FB) (hFBn : FB ≤ (n : ℝ) ^ 3) :
+    RelativelySecurePerProver
+      ((gridMatMachine120θ kd G I).edited S.toService E ((gridMatMachine120θ kd G I).mulG n n n) prove
+        (InGrid (127 - s)))
+      ((4 / 5 * (n : ℝ) ^ 3 + 2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen +
+        (gridMatMachine120θ kd G I).time prove) / (4 / 5 * FB) - 1)
+      (fun Ω _ M => κf Ω (Alg.projθ (kd := kd) M) + ENNReal.ofReal δ')
+      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
+        (4 / 5 * (n : ℝ) ^ 3)) η 0 (4 / 5 * (n : ℝ) ^ 3) := by
+  have hN : (0 : ℝ) < 4 / 5 * (n : ℝ) ^ 3 := mul_pos (by norm_num) (pow_pos (Nat.cast_pos.mpr hn) 3)
+  have hg := (gridMatMachine120θ kd G I).time_nonneg E.gen
+  have hp := (gridMatMachine120θ kd G I).time_nonneg prove
+  have h := (gridMatMachine120θ kd G I).relativelySecurePerProver_of_editFloor_grid S.toService E prove
+    (InGrid (127 - s)) (tile120_square h32 h17) (fun σ _ hx => edit_int8 hE σ hx) hcom hacc
+    (serviceFloorPerProver_θ kd S.toService hfloorB) hδ'
     (by positivity) (by rw [gridMatMachine120θ_κG, gridMatMachine120θ_κadd]; nlinarith [sq_nonneg (n : ℝ)])
     (by rw [gridMatMachine120θ_κG]; exact hN)
   rwa [gridMatMachine120θ_κG, gridMatMachine120θ_κadd] at h
@@ -7565,6 +7765,16 @@ theorem relativelySecure_edited120θ_half (kd : K120 → Kind) (G : MatGates kd 
   have h := relativelySecure_edited120θ_rat kd G I S hn h32 h17 E hE prove hcom hacc (1 / 2) 2 (phiE f m NB)
     (by norm_num) (by norm_num) (by unfold phiE; linarith) hsl hslφ (by rw [hq]; exact hfloorB) hκδ
   rwa [hq] at h
+
+/-! ### The certified fraction
+
+Superseded per adversary (CMP-33). Every theorem of the `certifiedFraction120θ` family reads one `κf`, or one `δb` and
+`δz` for every adversary through its `RoundsHyp*`, so over SHA-512 commitments it holds only at a bound about 1: an
+adversary that hard-codes a collision breaks binding in every round. Its form per adversary is
+`serviceFloorPerProver_θ` at the floors per prover of `Models.Pouw.Guarantees.RelativeSecurity` (the same floor, each
+adversary's error its `breakBound`, read at its B shadow), which are stated and not yet proved; their reader is
+`relativelySecurePerProver_edited120θ_of_floor`.
+-/
 
 /-- **The certified fraction** (the headline): from B's floor of Theorem E's form, every adversary in B_θ that commits
 first has its accepted runs charged (`max(|M|, cost)`, the program included) below `(c φ / m_max) N − 0.8 (c / m_max) sl`

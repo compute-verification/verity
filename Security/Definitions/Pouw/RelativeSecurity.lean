@@ -206,7 +206,7 @@ noncomputable def finderTerm {Mc : Machine} {S : Service} {R : ℕ} (sha : Claim
 constants `δb` and `δz` of each of the `R` rounds' binding and zero-knowledge breaks, and its binding and
 zero-knowledge finder terms at `r` (`finderTerm`) at the weights `βb` and `βz`, capped at 1, a probability; then
 averaged over `r`. The cap keeps one value of the coins whose finder fails `ecr/sha-512` (a prover that merely tries
-its coins as a collision) from sending the whole bound to 1: that value adds its share of the coins, `1/|Ω|`. -/
+its coins as a collision) from sending the whole bound to `⊤`: that value adds its share of the coins, `1/|Ω|`. -/
 noncomputable def breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
     (fb fz : Finders Mc S R) (ε δb βb δz βz : ℝ) (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) :
     ENNReal :=
