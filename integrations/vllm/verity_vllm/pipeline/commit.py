@@ -959,6 +959,8 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
         why.append(f"VERITY_FAULT={os.environ['VERITY_FAULT']!r} (deliberate fault: negative test)")
     if os.environ.get("VERITY_SWITCH"):
         why.append("VERITY_SWITCH (interpreter switch interval is process-wide)")
+    if args.remote_verifier:
+        why.append("--remote-verifier (the store binder goes on the engine at its build)")
     return why
 
 
@@ -1027,7 +1029,11 @@ class Options:
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
-    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier, which the Commit proves its store to while serving (verity_vllm.store.remote.serve); refused until the Commit puts the store binder on its engine")
+    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and once the runs are done the Commit proves its store to it while serving the workload (verity_vllm.store.remote.CommitSession); a rejected session fails the Commit")
+    remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
+    remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override)")
+    remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
+    remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
     call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
@@ -1043,9 +1049,11 @@ class Options:
 
 def main(args: Options, argv: list[str] | None = None) -> None:
     global TL
+    _rs = None
     if args.remote_verifier:
         from verity_vllm.store import remote
-        raise SystemExit(remote.unwired(args.remote_verifier))
+        _rs = remote.CommitSession(args.remote_verifier, plan=args.remote_plan, kv_pages=args.remote_kv_pages, weight_blocks=args.remote_weight_blocks,
+                                   kv_lib=args.remote_kv_lib, out=args.out, node=f"verity-vllm/commit/{args.label or 'commit'}")
     if os.environ.get("VERITY_HOT_SUBMIT") == "1" and _HOT is None:
         # [R16 sys] route this invocation through the pod's hot Commit worker (verity_vllm/pipeline/hot.py) -- lets an unchanged harness
         # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
@@ -1160,6 +1168,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     os.environ.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
+    engine_args = _rs.engine_args(engine_args) if _rs is not None else engine_args
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
     # R10: `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
@@ -1205,6 +1214,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] HOT: engine reused (job {_HOT['jobs']} of this worker; saves the {eng.build_s:.1f}s build; engine age "
               f"{time.time() - _HOT.get('t_built', time.time()):.0f}s; {eng.cp['repo']} max_num_seqs {eng.kwargs.get('max_num_seqs')})", flush=True)
     else:
+        _rs is not None and _rs.install()
         TL.start("engine.build", case=_ekw["case"], max_num_seqs=args.max_num_seqs, execution=_ekw["execution"])
         eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
                               target=_ekw["target"], execution=_ekw["execution"])     # [R15 EXEC-02 M-0078] the row's execution decides enforce_eager (header: versions.json)
@@ -1226,6 +1236,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     print(f"[delta] engine attention: vllm_flash_attn_version={fa_version}; required classes {','.join(required_classes)}", flush=True)
     print(f"[delta] engine {'REUSED (hot; originally built' if _live is not None else 'built'} in {eng.build_s:.1f}s{')' if _live is not None else ''} "
           f"(case {eng.case}, {eng.cp['repo']}), env {eng.env_flags}", flush=True)
+    if _rs is not None:
+        print(f"[delta] remote session: the store binder on the engine, {_rs.check(eng.llm, eng.runner)}", flush=True)
     versions = va.versions_doc(eng)
     flip_weight_rec: dict | None = None                    # --flip-weight NEGATIVE TEST record (set once, before register_weights)
     versions["git_head"] = git_head()
@@ -2357,6 +2369,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               + (f" ({_delta.get('why')})" if not _delta.get("ok") else ""), flush=True)
     for c in coms.values():
         c.close()
+    _rs_rec = None if _rs is None else _rs.serve(eng.llm.llm_engine, [(r["request_id"], list(r["prompt_token_ids"]), va.sampling_params(r, wl["sampling"]))
+                                                                       for r in wl["requests"]], args.max_num_seqs)
     TL.start("closure.summary")
     if args.only_arm:
         # [R15 compiled] one arm per process: the paired summary (delta, CI) is produced by compiled_commit.sh from both runs.jsonl files
@@ -2466,6 +2480,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                   f"admission_of_record {(_a.get('admission_of_record') or {}).get('governing') if isinstance(_a.get('admission_of_record'), dict) else _a.get('admission_of_record')})", flush=True)
     PO.into_verdict(protocols, verdict, out, _ekw["target"], program_digest=args.program_digest, manifest=required_manifest)
     RB.seal_all(out, deferred, rows, verdict, pending, tl=TL)
+    if _rs_rec is not None:
+        verdict["remote_session"] = {k: _rs_rec[k] for k in ("verifier", "plan", "accepted", "error", "encode", "memory_map")}
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1) + "\n")
     AP.calibrate_commit(out, row=str(getattr(args, "row_id", None) or Path(args.out).name))  # the planner's measured vs predicted, per plan
     TL.end("closure.summary", commit_pass=verdict["commit_pass"], runs=verdict["runs_instrumented"])
@@ -2475,6 +2491,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         sys.exit(3)
     print(f"[delta] COMMIT PENDING: {len(pending)}/{verdict['runs_instrumented']} instrumented runs pass every check of this process; their C2 replay runs from {[b['path'] for b in verdict['replay_deferred']['bundles']]}" if pending else
           f"[delta] COMMIT PASS (fail-closed X-03): {verdict['runs_instrumented']} instrumented runs, manifest == bound, 0 errors, openings verified, tokens equal", flush=True)
+    if _rs_rec is not None:
+        print(f"[delta] REMOTE SESSION {'ACCEPTED' if _rs_rec['accepted'] else 'REJECTED'} ({_rs_rec['plan']} at {_rs_rec['verifier']}; "
+              f"map agrees {(_rs_rec['memory_map'] or {}).get('agrees')}): {out / 'remote_session.json'}", flush=True)
+        if not _rs_rec["accepted"]:
+            sys.exit(3)
 
 
 def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: dict, decl: dict | None) -> dict:
