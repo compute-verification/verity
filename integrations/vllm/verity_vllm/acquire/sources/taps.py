@@ -5,7 +5,9 @@ the manifest names them: the blockwise FP8 GEMM's scale products (`scale_product
 for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank workers of a TP Commit: `pipeline.tp.commit` hands
 `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  Each rank also
-attaches the route source (`route_source`) when a capture map describes its model, and every rank must have.  The single-rank
+attaches the route source (`route_source`) when a capture map describes its model, and every rank must have; beside it the attention
+source (`attention_source`), which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap, and, when the rank's
+rows name `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`).  The single-rank
 `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the manifest names `call_boundaries` identities;
 `attached` names what it attaches for a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`).  Both
 `attach` and every rank's `attach_rank` arm a derived-S Program's prescribed split count (`prescribe_idle_splits`), taps or none."""
@@ -17,8 +19,8 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import (call_boundary_source, norm_scale_source, route_source, router_softmax_source, scale_products_source,
-                                         vocab_range_source)
+from verity_vllm.acquire.sources import (attention_source, call_boundary_source, linear_quant_source, norm_scale_source, route_source,
+                                         router_softmax_source, scale_products_source, vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
 from verity_vllm.program.registry.topp_geometry import splits_for_v1
@@ -91,12 +93,16 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     """The `short_name`s of the sources a row's Commit attaches through `attach` for its manifest of record, constructing none: each tap
     whose family the manifest names (the row passes a tap's option exactly then, `pipeline.row_records.applicable_taps`, and rebuilds a
     manifest of other tap policies) and, on one rank, the call-boundary source when the manifest names call boundaries no other source
-    claims and the scale-products source when it names scale products (a TP Commit attaches neither)."""
+    claims and the scale-products source when it names scale products (a TP Commit attaches neither); on several ranks, the attention
+    source when a capture map that binds through it describes the manifest's model at its ranks (`route_source.manifest_map`: every rank
+    attaches it, `attach_rank`)."""
     fams = {r.get("family") for r in (manifest or {}).get("identities") or []}
     one = int((manifest or {}).get("ranks") or 1) == 1
+    cmap = None if one else route_source.manifest_map(manifest)
     return [*(cls.short_name for _f, _key, _mod, fam, cls in SOURCES if fam in fams),
             *([call_boundary_source.CallBoundarySource.short_name] if one and call_boundary_source.manifest_sites(manifest) else []),
-            *([scale_products_source.ScaleProductsSource.short_name] if one and SP.manifest_sites(manifest) else [])]
+            *([scale_products_source.ScaleProductsSource.short_name] if one and SP.manifest_sites(manifest) else []),
+            *([attention_source.AttentionSource.short_name] if cmap is not None and attention_source.binds(cmap) else [])]
 
 
 def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **given: Any) -> dict[str, Any]:
@@ -115,11 +121,17 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **gi
         except (SystemExit, ValueError, RuntimeError) as e:
             out[key] = {"error": repr(e)[:200]}
     try:
-        rsrc = route_source.attach(com, model, rank)
+        rsrc = route_source.attach(com, model, rank, mine["identities"])
         if rsrc is not None:
             out["route_source"] = {"stats": dict(rsrc.stats)}
     except (ValueError, RuntimeError, AttributeError) as e:
         out["route_source"] = {"error": repr(e)[:200]}
+    try:
+        lq = linear_quant_source.attach(com, model, mine)
+        if lq is not None:
+            out["linear_quant_source"] = {"sites": len(lq.sites)}
+    except (ValueError, RuntimeError, AttributeError) as e:
+        out["linear_quant_source"] = {"error": repr(e)[:200]}
     return out
 
 
@@ -133,7 +145,11 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
                           explicit_classes: bool) -> tuple[str, ...]:
     """The TP driver's side, once every rank made its committer: every tap that is on attached on every rank (else SystemExit, fail
     closed), its family added to the required classes unless they were given, and each rank's state recorded in `versions`; the route
-    source, when any rank's model has a capture map, attached on every rank (else SystemExit)."""
+    source, when any rank's model has a capture map, attached on every rank (else SystemExit); the attention hidden class every rank
+    reports (`hidden_source.require_hidden_on_every_rank`)."""
+    from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
+
+    required_classes = require_hidden_on_every_rank(made, required_classes, versions, explicit_classes=explicit_classes)
     routes = {int(m["rank"]): (m.get("tap_sources") or {}).get("route_source") for m in made}
     if any(routes.values()):
         bad = sorted(r for r, v in routes.items() if not v or v.get("error"))

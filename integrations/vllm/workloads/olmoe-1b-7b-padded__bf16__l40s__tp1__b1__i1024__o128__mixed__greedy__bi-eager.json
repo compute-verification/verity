@@ -1,8 +1,18 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "allenai/OLMoE-1B-7B-0924",
  "case": "OLMOE",
- "tokenizer_revision": "6d84c48581ece794365f2b8e9cfb043c68ade9c5",
+ "engine": {
+  "revision": "6d84c48581ece794365f2b8e9cfb043c68ade9c5",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 2048,
+   "max_model_len": 1152
+  },
+  "target": {
+   "moe_construction": "padded"
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,10 +38,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 128,
- "engine_args_required": {
-  "max_num_batched_tokens": 2048,
-  "max_model_len": 1152
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 a094266ac6c4982e (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   1024
@@ -1073,17 +1079,17 @@
     627,
     1580
    ],
-   "prompt_text": "These are scientific commentaries; but the commentaries of the whalemen themselves sometimes consist in hard words and harder knocks\u2014the Coke-upon-Littleton of the fist. True, among the more upright and honorable whalemen allowances are always made for peculiar cases, where it would be an outrageous moral injustice for one party to claim possession of a whale previously chased or killed by another party. But others are by no means so scrupulous. There are two royal fish so styled by the English law writers\u2014the whale and the sturgeon; both royal property under certain limitations, and nominally supplying the tenth branch of the crown\u2019s ordinary revenue. I know not that any other author has hinted of the matter; but by inference it seems to me that the sturgeon must be divided in the same way as the whale, the King receiving the highly dense and elastic head peculiar to that fish, which, symbolically regarded, may possibly be humorously grounded upon some presumed congeniality. And thus there seems a reason in all things, even in law. Now this ambergris is a very curious substance, and so important as an article of commerce, that in 1791 a certain Nantucket-born Captain Coffin was examined at the bar of the English House of Commons on that subject. For at that time, and indeed until a comparatively late day, the precise origin of ambergris remained, like amber itself, a problem to the learned. Though the word ambergris is but the French compound for grey amber, yet the two substances are quite distinct. For amber, though at times found on the sea-coast, is also dug up in some far inland soils, whereas ambergris is never found except upon the sea. Besides, amber is a hard, transparent, brittle, odorless substance, used for mouth-pieces to pipes, for beads and ornaments; but ambergris is soft, waxy, and so highly fragrant and spicy, that it is largely used in perfumery, in pastiles, precious candles, hair-powders, and pomatum. The Turks use it in cooking, and also carry it to Mecca, for the same purpose that frankincense is carried to St. Peter\u2019s in Rome. Some wine merchants drop a few grains into claret, to flavor it. But had Stubb really abandoned the poor little negro to his fate? No; he did not mean to, at least. Because there were two boats in his wake, and he supposed, no doubt, that they would of course come up to Pip very quickly, and pick him up; though, indeed, such considerations towards oarsmen jeopardized through their own timidity, is not always manifested by the hunters in all similar instances; and such instances not unfrequently occur; almost invariably in the fishery, a coward, so called, is marked with the same ruthless detestation peculiar to military navies and armies. Look at the sailor, called the mincer, who now comes along, and assisted by two allies, heavily backs the grandissimus, as the mariners call it, and with bowed shoulders, staggers off with it as if he were a grenadier carrying a dead comrade from the field. Extending it upon the forecastle deck, he now proceeds cylindrically to remove its dark pelt, as an African hunter the pelt of a boa. This done he turns the pelt inside out, like a pantaloon leg; gives it a good stretching, so as almost to double its diameter; and at last hangs it, well spread, in the rigging, to dry. Ere long, it is taken down; when removing some three feet of it, towards the pointed extremity, and then cutting two slits for arm-holes at the other end, he lengthwise slips himself bodily into it. The mincer now stands before you invested in the full canonicals of his calling. Immemorial to all his order, this investiture alone will adequately protect him, while employed in the peculiar functions of his office. See with what entire freedom the whaleman takes his handful of lamps\u2014often but old bottles and vials, though\u2014to the copper cooler at the try-works, and replenishes them there, as mugs of ale at a vat. He burns, too, the purest of oil, in its unmanufactured, and, therefore, unvitiated state; a fluid unknown to solar, lunar, or astral contrivances ashore. It is sweet as early grass butter in April. He goes and hunts for his oil, so as to be sure of its freshness and genuineness, even as the traveller on the prairie hunts up his own supper of game. \u201cNo fairy fingers can have pressed the gold, but devil\u2019s claws must have left their mouldings there since",
+   "prompt_text": "These are scientific commentaries; but the commentaries of the whalemen themselves sometimes consist in hard words and harder knocks—the Coke-upon-Littleton of the fist. True, among the more upright and honorable whalemen allowances are always made for peculiar cases, where it would be an outrageous moral injustice for one party to claim possession of a whale previously chased or killed by another party. But others are by no means so scrupulous. There are two royal fish so styled by the English law writers—the whale and the sturgeon; both royal property under certain limitations, and nominally supplying the tenth branch of the crown’s ordinary revenue. I know not that any other author has hinted of the matter; but by inference it seems to me that the sturgeon must be divided in the same way as the whale, the King receiving the highly dense and elastic head peculiar to that fish, which, symbolically regarded, may possibly be humorously grounded upon some presumed congeniality. And thus there seems a reason in all things, even in law. Now this ambergris is a very curious substance, and so important as an article of commerce, that in 1791 a certain Nantucket-born Captain Coffin was examined at the bar of the English House of Commons on that subject. For at that time, and indeed until a comparatively late day, the precise origin of ambergris remained, like amber itself, a problem to the learned. Though the word ambergris is but the French compound for grey amber, yet the two substances are quite distinct. For amber, though at times found on the sea-coast, is also dug up in some far inland soils, whereas ambergris is never found except upon the sea. Besides, amber is a hard, transparent, brittle, odorless substance, used for mouth-pieces to pipes, for beads and ornaments; but ambergris is soft, waxy, and so highly fragrant and spicy, that it is largely used in perfumery, in pastiles, precious candles, hair-powders, and pomatum. The Turks use it in cooking, and also carry it to Mecca, for the same purpose that frankincense is carried to St. Peter’s in Rome. Some wine merchants drop a few grains into claret, to flavor it. But had Stubb really abandoned the poor little negro to his fate? No; he did not mean to, at least. Because there were two boats in his wake, and he supposed, no doubt, that they would of course come up to Pip very quickly, and pick him up; though, indeed, such considerations towards oarsmen jeopardized through their own timidity, is not always manifested by the hunters in all similar instances; and such instances not unfrequently occur; almost invariably in the fishery, a coward, so called, is marked with the same ruthless detestation peculiar to military navies and armies. Look at the sailor, called the mincer, who now comes along, and assisted by two allies, heavily backs the grandissimus, as the mariners call it, and with bowed shoulders, staggers off with it as if he were a grenadier carrying a dead comrade from the field. Extending it upon the forecastle deck, he now proceeds cylindrically to remove its dark pelt, as an African hunter the pelt of a boa. This done he turns the pelt inside out, like a pantaloon leg; gives it a good stretching, so as almost to double its diameter; and at last hangs it, well spread, in the rigging, to dry. Ere long, it is taken down; when removing some three feet of it, towards the pointed extremity, and then cutting two slits for arm-holes at the other end, he lengthwise slips himself bodily into it. The mincer now stands before you invested in the full canonicals of his calling. Immemorial to all his order, this investiture alone will adequately protect him, while employed in the peculiar functions of his office. See with what entire freedom the whaleman takes his handful of lamps—often but old bottles and vials, though—to the copper cooler at the try-works, and replenishes them there, as mugs of ale at a vat. He burns, too, the purest of oil, in its unmanufactured, and, therefore, unvitiated state; a fluid unknown to solar, lunar, or astral contrivances ashore. It is sweet as early grass butter in April. He goes and hunts for his oil, so as to be sure of its freshness and genuineness, even as the traveller on the prairie hunts up his own supper of game. “No fairy fingers can have pressed the gold, but devil’s claws must have left their mouldings there since",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b664",
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b665",
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b666",
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b667",
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b668",
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b669",
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b670"
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶64",
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶65",
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶66",
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶67",
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶68",
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶69",
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶70"
     ]
    }
   }
@@ -1130,8 +1136,5 @@
   "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]",
   "lengths_only": false
  },
- "note": "R12 sweep olmoe-1b-7b__bf16__l40s__tp1__b1__i1024__o128__mixed__greedy__bi-eager: B=1 I<=1024 O<=128 greedy arrivals=none; prompt lens [1024], caps [128], arrive steps [0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched. | [moe R17-42 route A (3)] target.moe_construction=padded: the SAME workload (requests, sampling, lengths, engine args) with the fixed-slot MoE construction declared -- padded table candidate #6; the record is construction-agnostic",
- "target": {
-  "moe_construction": "padded"
- }
+ "note": "R12 sweep olmoe-1b-7b__bf16__l40s__tp1__b1__i1024__o128__mixed__greedy__bi-eager: B=1 I<=1024 O<=128 greedy arrivals=none; prompt lens [1024], caps [128], arrive steps [0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched. | [moe R17-42 route A (3)] target.moe_construction=padded: the SAME workload (requests, sampling, lengths, engine args) with the fixed-slot MoE construction declared -- padded table candidate #6; the record is construction-agnostic"
 }
