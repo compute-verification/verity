@@ -1,12 +1,14 @@
 """`protocol_options.pouw_h1`: each served int8_exact linear call is a Program on bits that `pouw.circuit.compile` takes to
 H1 tile units, every unit a full 32 x 32 grid at decode's one row, a partial block and an off-tile column count; a call is one
-seed group, the calls take consecutive positions, and the `pouw` option serves the arm's own y beside sampled proofs.
+seed group, the calls sit at positions fixed by the public parameters (T rows, S steps), and the `pouw` option serves the
+arm's own y beside sampled proofs.
 
 The first compile builds the H1 tile unit (its seeds' and noise blocks' SHA-512 in gates), about 40 s once per process;
 every later shape reuses it."""
 from __future__ import annotations
 
 import hashlib
+import json
 
 import numpy as np
 import pytest
@@ -108,31 +110,74 @@ def test_the_served_outputs_are_the_real_cells():
 def _tap(rng, m, n):
     a = torch.from_numpy(rng.integers(-127, 128, (m, K), dtype=np.int8))
     w = torch.from_numpy(rng.integers(-127, 128, (n, K), dtype=np.int8))
-    return a, torch.ones(m), w, torch.ones(n, 1)
+    return a, torch.rand(m) + 0.5, w, torch.ones(n, 1)
 
 
-def test_calls_take_consecutive_positions_and_count_steps_at_linear_0():
-    """Calls take consecutive positions; a step begins at linear 0; given each call's (root(A), root(B)), its units' seeds are
-    distinct from every other call's."""
+def _run(steps=3, rows=32):
+    return PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], rows, steps)
+
+
+def test_calls_sit_at_public_positions_and_empty_steps_close_the_window():
+    """Call (s, w) is at s U + off(w) whatever its served rows; the steps past the last served one are empty calls, so the
+    window is every (step, linear) in order; given each call's (root(A), root(B)), every unit's seed is its own."""
     rng = np.random.default_rng(3)
-    run = PH.H1Run("t", SALT, {0: "q", 1: "o"})
-    calls = [run.record(w, *_tap(rng, m, n)) for w, (_k, n, m) in zip((0, 1, 0), SHAPES)]
-    assert [(c.base, c.step, c.layer, c.module) for c in calls] == [(0, 0, 0, "q"), (1, 0, 1, "o"), (2, 1, 0, "q")]
-    assert run.next_base == 6 and run.commits["units"] == 6 and run.commits["steps"] == 2
-    roots = [(bytes([c.index + 1]) * 64, bytes([c.layer + 9]) * 64) for c in calls]
-    seeds = [s for c, r in zip(calls, roots) for s in c.compiled().seeds(SALT, [r], c.base)]
-    assert len(seeds) == len(set(seeds)) == 6
-    salt, positions, leaves = calls[2].inputs(SALT, roots[2])
-    assert salt == SD.leaves(SALT, True) and len(positions) == 4 * SD.POS_BITS.leaves
-    assert leaves == SD.leaves(roots[2][0] + roots[2][1], True)
-    assert set(run.check()) == {"1x64x32", "5x64x32", "33x64x40"}
+    run = _run()
+    assert (run.offs, run.u_step) == ([0, 1], 3) and run.commits["units"] == 9
+    served = [run.record(w, *_tap(rng, m, n)) for w, n, m in ((0, 32, 1), (1, 40, 5), (0, 32, 32), (1, 40, 3))]
+    run.close()
+    assert [(c.step, c.layer, c.base, c.m, c.rows) for c in run.calls] == [
+        (0, 0, 0, 1, 32), (0, 1, 1, 5, 32), (1, 0, 3, 32, 32), (1, 1, 4, 3, 32), (2, 0, 6, 0, 32), (2, 1, 7, 0, 32)]
+    assert served == run.calls[:4] and run.static() and run.details["steps_served"] == 2 and run.details["last_step_complete"]
+    roots = [(bytes([c.index + 1]) * 64, bytes([c.layer + 9]) * 64) for c in run.calls]
+    seeds = [s for c, r in zip(run.calls, roots) for s in c.compiled().seeds(SALT, [r], c.base)]
+    assert len(seeds) == len(set(seeds)) == 9
+    salt, positions, leaves = run.calls[3].inputs(SALT, roots[3])
+    assert salt == SD.leaves(SALT, True) and len(positions) == 2 * SD.POS_BITS.leaves
+    assert leaves == SD.leaves(roots[3][0] + roots[3][1], True)
+    assert set(run.check()) == {"32x64x32", "32x64x40"}
+
+
+def test_a_call_past_the_window_or_its_rows_is_refused_and_the_window_is_not_static():
+    rng = np.random.default_rng(6)
+    run = _run(steps=1)
+    assert run.record(0, *_tap(rng, 33, 32)) is None
+    assert run.record(1, *_tap(rng, 2, 40)) is not None
+    assert run.record(0, *_tap(rng, 1, 32)) is None
+    run.close()
+    assert run.refused == [{"step": 0, "linear": 0, "m": 33}, {"step": 1, "linear": 0, "m": 1}] and not run.static()
+    out_of_order = _run(steps=1)
+    out_of_order.record(1, *_tap(rng, 1, 40))
+    out_of_order.close()
+    assert not out_of_order.order_ok and not out_of_order.static()
+
+
+def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
+    rng = np.random.default_rng(7)
+    run = _run(steps=2)
+    run.record(0, *_tap(rng, 3, 32))
+    run.record(1, *_tap(rng, 2, 40))
+    run.close()
+    c = run.credit()
+    assert c["credited"] == {"rows": 5, "macs": (3 * 32 + 2 * 40) * K}
+    assert c["padded"]["rows"] == 4 * 32 - 5 and c["padded"]["macs"] == (2 * 32 * 32 + 2 * 32 * 64) * K - c["credited"]["macs"]
+    assert c["units"] == 6 == run.commits["units"]
+
+
+def test_slots_put_the_served_rows_first_then_empty_rows_under_scale_0():
+    a, s_a, _w, _ws = _tap(np.random.default_rng(8), 3, 32)
+    t, sc = PH.slots(a, s_a, 32)
+    assert t.dtype == torch.int8 and t.shape == (32, K) and torch.equal(t[:3], a) and not t[3:].any()
+    assert torch.equal(sc[:3], s_a) and not sc[3:].any()
+    with pytest.raises(ValueError, match="past the call's 32 slots"):
+        PH.slots(*_tap(np.random.default_rng(8), 33, 32)[:2], 32)
 
 
 def test_listeners_get_the_served_tensors_and_bind_the_calls_roots():
-    """A listener gets each call with the very tensors the arm served (A row i is AROW leaf i of the call's (step, layer)
-    table), and what it returns is in the manifest and the calls root; `bind_all` reads the roots back."""
+    """A listener gets each call with the very tensors the arm served (slot i is AROW leaf i of the call's (step, layer)
+    table), the empty steps' calls with no rows, and what it returns is in the manifest and the calls root; `bind_all`
+    reads the roots back."""
     rng = np.random.default_rng(4)
-    run = PH.H1Run("t", SALT, {0: "q"})
+    run = _run(steps=2)
     seen = []
 
     def listener(call, a, s_a, weight, weight_scale):
@@ -140,12 +185,14 @@ def test_listeners_get_the_served_tensors_and_bind_the_calls_roots():
         return {"root_a": bytes([call.index]).hex() * 64, "root_b": "ab" * 64} if call.index else None
 
     run.listen(listener)
-    taps = [_tap(rng, m, n) for _k, n, m in SHAPES[:2]]
-    calls = [run.record(0, *t) for t in taps]
-    assert [s[0] for s in seen] == calls and all(s[1] is t[0] and s[3] is t[2] for s, t in zip(seen, taps))
+    taps = [_tap(rng, 5, 32), _tap(rng, 1, 40)]
+    calls = [run.record(w, *t) for w, t in enumerate(taps)]
+    run.close()
+    assert [s[0] for s in seen] == run.calls and all(s[1] is t[0] and s[3] is t[2] for s, t in zip(seen, taps))
+    assert [tuple(s[1].shape) for s in seen[2:]] == [(0, K), (0, K)] and seen[2][3] is taps[0][2]
     manifest = run.manifest()
     assert "bound" not in manifest[0] and manifest[1]["bound"]["root_b"] == "ab" * 64
-    assert manifest[1]["leaves"] == [0, 5] and manifest[1]["step"] == 1
+    assert (manifest[0]["served"], manifest[0]["rows"], manifest[0]["leaves"]) == (5, 32, [0, 32])
     assert PH.bind_all(calls, run.bound) == [None, (b"\x01" * 64, b"\xab" * 64)]
     before = run.calls_root()
     run.bound[1] = {**run.bound[1], "root_b": "cd" * 64}
@@ -165,7 +212,7 @@ def test_z_is_the_exact_product_on_each_units_cells():
     xq = rng.integers(-127, 128, (33, K), dtype=np.int8)
     w = rng.integers(-127, 128, (40, K), dtype=np.int8)
     y = xq.astype(np.int64) @ w.astype(np.int64).T
-    call = PH.Call(0, 0, 0, "q", 33, K, 40, 0)
+    call = PH.Call(0, 0, 0, "q", 33, K, 40, 0, 64)
     full = np.zeros((64, 64), np.int64)
     full[:33, :40] = y
     for n, u in enumerate(call.compiled().units):
@@ -175,45 +222,56 @@ def test_z_is_the_exact_product_on_each_units_cells():
         assert not z[pad].any()
 
 
+H1 = {"coins": None, "rows": 64, "steps": 3}
+
+
+def _settings(**kw):
+    return {"pouw": {**H1, "coins": Challenger(0), **kw}}
+
+
 def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
     assert PH.SCHEME in pouw.schemes() and PH.SCHEME in pouw.EXECUTED and pouw.executes(PH.SCHEME) == ()
     assert pouw.executes("ncp-v2") == pouw.EXECUTES
-    commit = PO.Context(stage="commit", enabled=(_entry(), "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": Challenger(0)}})
+    commit = PO.Context(stage="commit", enabled=(_entry(), "sampled-proofs:vllm-v1"), settings=_settings())
     assert PO.refusals(commit) == ()
-    eager = PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": {"coins": Challenger(0)}}, enforce_eager=False)
+    eager = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(), enforce_eager=False)
     assert any("graph-capturable" in r for r in PO.refusals(eager))
+    bare = PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": {"coins": Challenger(0)}})
+    assert any("'rows' (T" in r for r in PO.refusals(bare))
+    with pytest.raises(ValueError, match="positive multiple of 32"):
+        pouw.Settings.of({"rows": 40})
 
 
 def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
     """Installed on int8_exact layers, each apply serves the arm's own y bit for bit and the option's observe records the call
-    (its layer, shape, step and positions) with its exact Y retained; the record compiles at every served shape."""
+    at its public position, its exact Y retained; closing the window adds the empty step, and the record compiles at T."""
     model = Model(Linear(32, 1), Linear(40, 2))
-    ctx = PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": {"coins": Challenger(0), "transcript_dir": str(tmp_path),
-                                                                              "retain_steps": 2}})
+    ctx = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(transcript_dir=str(tmp_path), retain_steps=2))
     comp = PO.install(model, ctx)
     try:
         g = torch.Generator().manual_seed(9)
-        for m, layer in ((1, model.layers[0]), (5, model.layers[1]), (33, model.layers[0])):
+        for m, layer in ((1, model.layers[0]), (5, model.layers[1]), (33, model.layers[0]), (2, model.layers[1])):
             x = (torch.randn(m, K, generator=g) * 3).bfloat16()
             y = layer.quant_method.apply(layer, x)
             assert torch.equal(y.view(torch.int16), E.plain_linear(x, layer.weight, layer.weight_scale).view(torch.int16))
         run = pouw.h1_run(_entry())
-        assert [(c.layer, c.m, c.n, c.base) for c in run.calls] == [(0, 1, 32, 0), (1, 5, 40, 1), (0, 33, 32, 3)]
-        assert [layer.quant_method.calls for layer in model.layers] == [2, 1]
-        assert [c.step for c in run.calls] == [0, 0, 1]
+        assert [(c.step, c.layer, c.m, c.base) for c in run.calls] == [(0, 0, 1, 0), (0, 1, 5, 2), (1, 0, 33, 6), (1, 1, 2, 8)]
+        assert [layer.quant_method.calls for layer in model.layers] == [2, 2]
         index, xq, _sa, z = run.retained[-1]
-        assert index == 2 and len(run.retained) == 2
-        assert np.array_equal(z, xq.astype(np.int64) @ model.layers[0].weight.numpy().astype(np.int64).T)
-        assert set(run.check()) == {"1x64x32", "5x64x40", "33x64x32"}
+        assert index == 3 and len(run.retained) == 2
+        assert np.array_equal(z, xq.astype(np.int64) @ model.layers[1].weight.numpy().astype(np.int64).T)
+        assert set(run.check()) == {"64x64x32", "64x64x40"}
     finally:
         comp.close()
     assert hooks.live(_entry()) == ()
-    assert (tmp_path / PH.CALLS_FILE).exists() and comp.installed[0].commitment()["calls"] == 3
+    commitment = comp.installed[0].commitment()
+    assert commitment["calls"] == 6 and commitment["units"] == 18 and commitment["static"]
+    assert [c["base"] for c in json.loads((tmp_path / PH.CALLS_FILE).read_text())["calls"]] == [0, 2, 6, 8, 12, 14]
 
 
 def test_a_layer_off_the_int8_arm_is_refused_at_install():
     layer = Linear(32, 1)
     layer.quant_method = type("Other", (), {"apply": lambda self, layer, x, bias=None: x})()
     with pytest.raises(ValueError, match="not the int8_exact plain arm"):
-        PO.install(Model(layer), PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": {"coins": Challenger(0)}}))
+        PO.install(Model(layer), PO.Context(stage="serve", enabled=(_entry(),), settings=_settings()))
     assert hooks.live(_entry()) == ()

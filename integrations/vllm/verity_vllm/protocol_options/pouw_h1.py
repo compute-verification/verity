@@ -1,29 +1,33 @@
 """PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.core.protocols.pouw.circuit.h1tile`) on the eager int8_exact row: each
 served int8 linear call as its own Program on bits, which `verity.core.protocols.pouw.circuit.compile` takes to H1 tile units.
 
-* **The Program** (`program(k, n, m)`): one call's linear. Its A is what the Commit taps as the call's `Int8RowQuant_v1`
-  (``/0``, the s8 rows x [m, k]; ``/1``, their f32 scales), its B the layer's int8 weight rows and their f32 scales
-  (registered), and output (i, j) is `ScaledMmS8Coordinate_v2` on row i and weight row j, the served linear's
-  ``RN_bf16(RN32(RN32(f32(Y) * s_a) * s_w))`` on its exact s32 Y. The coordinates are one batch over the (row, column) grid,
-  so each rest commits one BF16 (the width rule). Rows and weight rows are padded to whole tiles (`TILE`, a warp's
-  32 × 32, the tile the H1 kernel computes): pad row p reads constant zero bits of its own, contiguous, so it is a
-  distinct row of the site, and its outputs are not served. Decode's one row, a partial last block and a column count off
-  the tile all become full grids, which the H1 tile takes; a pad row is zero, so the units' z there is zero.
+* **The Program** (`program(k, n, m)`): one call's linear. Its A is the call's A table (x [m, k] s8 rows, sx [m] f32 scales:
+  the served rows as the Commit taps `Int8RowQuant_v1` /0 and /1, then empty rows), its B the layer's int8 weight rows and
+  their f32 scales (registered), and output (i, j) is `ScaledMmS8Coordinate_v2` on row i and weight row j, the served
+  linear's ``RN_bf16(RN32(RN32(f32(Y) * s_a) * s_w))`` on its exact s32 Y. The coordinates are one batch over the (row,
+  column) grid, so each rest commits one BF16 (the width rule). Rows and weight rows off a whole tile (`TILE`, a warp's
+  32 × 32, the tile the H1 kernel computes) are padded: pad row p reads constant zero bits of its own, contiguous, so it is a
+  distinct row of the site, and its outputs are not served.
+* **The static layout** (`H1Run`, Daniel's static-circuit rule): every call has the same T rows (``rows``, vLLM's
+  ``max_num_batched_tokens``, a multiple of 32), so its Program is `program(k, n, T)` whatever the step served. The step's m
+  served rows fill slots 0 .. m - 1 and every other slot is an empty row, zero bytes under scale 0 (`slots`). The window is S
+  steps (``steps``) of one call per linear: call (s, w) is at positions s·U + off(w) + u (`layout`: U is a step's units,
+  off(w) the units of the linears before w), and steps past the last served one are all empty. Nothing about a call's rows or
+  positions comes from its tokens, batch or EOS. Credit is the served rows only; the padded work is shown beside it.
 * **Groups.** A call is one site and one seed group (decision 122: a batched call over a step's batch is one site): its
   (root(A), root(B)) seeds its units. Calls are never grouped together, since a later call reads an earlier one's output.
 * **Units** are in compile's order, the order the manifest lists them in: the call, then its row block, then its column
-  block, row-major. Unit u of a call is at position ``base + u``.
-* **The hook** (`H1Run`). The arm hands every served call to `engine.int8_vllm.Int8PlainLinearMethod.observe` after both ops,
-  and the option records it there as a `Call`: its engine step (counted at linear 0), its layer (the linear's ordinal), its
-  shape and its range of `pouw.positions`, after the previous call's, so no (salt, position) repeats under the epoch's salt.
-  Then each listener (`H1Run.listen`) gets the call with the served tensors, on the device: A (the s8 rows, as the Commit
-  taps ``Int8RowQuant_v1/0``), s_a (``/1``), the int8 weight and its scales. A's row i is leaf i of the Commit's row table of
-  (step, layer) (circuits' AROW), so a tile's real rows are 32 consecutive leaves, and pad rows are no leaves. What a
-  listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
-  `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
-  which compute accounting commits. This module commits neither.
+  block, row-major.
+* **The hook.** The arm hands every served call to `engine.int8_vllm.Int8PlainLinearMethod.observe` after both ops, and the
+  option records it there as a `Call`: its engine step (counted at linear 0), its layer (the linear's ordinal), its served
+  rows and its position. Then each listener (`H1Run.listen`) gets the call with the served tensors, on the device: A (the s8
+  rows, as the Commit taps ``Int8RowQuant_v1/0``), s_a (``/1``), the int8 weight and its scales; `H1Run.close` hands it the
+  empty steps' calls too, with no rows. A's slot i is leaf i of the Commit's row table of (step, layer) (circuits' AROW), so
+  a tile's rows are 32 consecutive leaves. What a listener returns (its roots and receipt root, as hex) is recorded with
+  the call (``bound``). `Call.inputs` is `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the
+  table's, and root(B) is the weight's, which compute accounting commits. This module commits neither.
 * **z** is the call's exact s32 Y (`engine.int8_exact.int_mm`, the product the served `scaled_mm` dequantizes): each unit's z
-  is Y's cells of its tile, zero on pad rows and columns (`Call.z`). The run keeps the last ``retain`` calls' Y.
+  is Y's cells of its tile, zero on empty slots and pad columns (`Call.z`). The run keeps the last ``retain`` calls' Y.
 * **Salt.** `pouw.salt` is a SHA-512 digest and the epoch's salt (`audit.Epoch.start`, from the challenger's salt coin, opened
   after the weights' root, `weight_root`) is 32 bytes, so the Program's salt is the epoch's under `SALT_TAG`
   (`program_salt`) until the challenger opens a 64-byte one.
@@ -53,7 +57,7 @@ SCHEME = H.SCHEME
 TILE = (32, 32)
 #: the bits of one s8 entry and of one bf16 output
 I8_BITS, BF16_BITS = 8, 16
-RECORD = "verity-vllm/pouw-h1-calls/v1"
+RECORD = "verity-vllm/pouw-h1-calls/v2"
 CALLS_FILE = "pouw-h1-calls.json"
 SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
 
@@ -152,10 +156,33 @@ def weight_root(w: int, rows: np.ndarray) -> bytes:
     return commit_rows(weight_binding(w), -2, [r.tobytes() for r in rows], hash="sha512").commitment.root
 
 
+def layout(shapes: Sequence[tuple[int, int]], rows: int) -> tuple[list[int], int]:
+    """off(w) of each linear (its (n, k), in order) and U, one step's units: linear w's call is its `units` at `rows`."""
+    if rows % TILE[0] or rows <= 0:
+        raise ValueError(f"T = {rows} rows is not a positive multiple of {TILE[0]}")
+    offs, at = [], 0
+    for n, k in shapes:
+        offs.append(at)
+        at += units(k, n, rows)
+    return offs, at
+
+
+def slots(a: Any, s_a: Any, rows: int) -> tuple[Any, Any]:
+    """The call's A table of `rows` slots, on a's device: its m served rows and scales first, then empty rows, zero bytes
+    under scale 0 (a served row's scale is never 0)."""
+    m = int(a.shape[0])
+    if m > rows:
+        raise ValueError(f"{m} rows past the call's {rows} slots")
+    out, sc = a.new_zeros((rows, int(a.shape[1]))), s_a.reshape(-1).new_zeros(rows)
+    out[:m], sc[:m] = a, s_a.reshape(-1)
+    return out, sc
+
+
 @dataclass(frozen=True)
 class Call:
-    """One served int8 linear call: its index in the install, its engine step, its layer (the linear's ordinal) and module, its
-    shape and its first position. Its A rows are leaves 0 .. m - 1 of the Commit's row table of (step, layer)."""
+    """One (step, linear) call of the window: its index, its engine step, its layer (the linear's ordinal) and module, its
+    served rows m (0 for a step past the last served one), its `rows` slots (T), k, n and its first position. Its A table is
+    the Commit's row table of (step, layer): leaf i is slot i, served for i < m and empty after."""
 
     index: int
     step: int
@@ -165,13 +192,14 @@ class Call:
     k: int
     n: int
     base: int
+    rows: int
 
     @property
     def units(self) -> int:
-        return units(self.k, self.n, self.m)
+        return units(self.k, self.n, self.rows)
 
     def compiled(self) -> C.Compiled:
-        return compiled(self.k, self.n, self.m)
+        return compiled(self.k, self.n, self.rows)
 
     def inputs(self, salt: bytes, roots: tuple[bytes, bytes]) -> list[list[int]]:
         """`pouw.salt`, `pouw.positions` and `pouw.roots`' leaves for this call, its seed group's (root(A), root(B)) given
@@ -179,19 +207,20 @@ class Call:
         return self.compiled().inputs(salt, [roots], self.base)
 
     def z(self, y: np.ndarray, unit: int) -> np.ndarray:
-        """Unit `unit`'s z, in its cells' order, from the call's exact s32 Y [m, n] (pad cells zero)."""
+        """Unit `unit`'s z, in its cells' order, from the call's exact s32 Y [m, n] (empty slots and pad columns zero)."""
         u = self.compiled().units[unit]
-        full = np.zeros(padded(self.m, self.n), dtype=np.int32)
+        full = np.zeros(padded(self.rows, self.n), dtype=np.int32)
         full[:self.m, :self.n] = y
         return np.array([full[u.rows[i], u.cols[j]] for i, j in u.tile.pairs], dtype=np.int32)
 
     def summary(self) -> dict[str, Any]:
-        return {"index": self.index, "step": self.step, "layer": self.layer, "module": self.module, "shape": [self.m, self.k, self.n],
-                "padded": list(padded(self.m, self.n)), "base": self.base, "units": self.units, "leaves": [0, self.m]}
+        return {"index": self.index, "step": self.step, "layer": self.layer, "module": self.module, "served": self.m,
+                "rows": self.rows, "k": self.k, "n": self.n, "base": self.base, "units": self.units, "leaves": [0, self.rows]}
 
 
-#: ``listener(call, a, s_a, weight, weight_scale)``: the served tensors on the device, which it must not change; it returns
-#: None or what it bound for the call, as JSON (its roots and receipt root, hex)
+#: ``listener(call, a, s_a, weight, weight_scale)``: the served tensors on the device, which it must not change (a [m, k]
+#: and s_a [m], m = 0 for an empty step; `slots` makes the call's T-slot table); it returns None or what it bound for the
+#: call, as JSON (its roots and receipt root, hex)
 Listener = Callable[[Call, Any, Any, Any, Any], Mapping[str, Any] | None]
 
 
@@ -200,21 +229,30 @@ def numpy_of(t: Any) -> np.ndarray:
 
 
 class H1Run:
-    """One install's H1 workload on the int8_exact row: every served linear call recorded as a `Call`, its positions a range
-    after the previous call's, then handed to each listener (`listen`). ``retain`` keeps the last calls' A, s_a and exact Y on
-    the host (0: none). Without ``commit`` (a Match capture) nothing is recorded."""
+    """One install's H1 window on the int8_exact row, in the static form: its calls, rows and positions are a function of the
+    public parameters alone, never of a step's tokens, batch or EOS. ``shapes`` are the linears' (n, k) in order, ``rows``
+    (T) every call's slots and ``steps`` (S) the window's engine steps. Call (s, w) is at s·U + off(w) (`layout`); served
+    calls are recorded as they come (`record`), and `close` adds the steps past the last served one, all empty. A call past
+    step S or with more than T rows is refused: recorded in ``refused``, never positioned, and `static` is then False.
+    ``retain`` keeps the last calls' A, s_a and exact Y on the host (0: none). Without ``commit`` (a Match capture) nothing
+    is recorded."""
 
-    def __init__(self, entry: str, salt: bytes, modules: Mapping[int, str], retain: int = 0, transcript_dir: str | None = None,
-                 commit: bool = True) -> None:
+    def __init__(self, entry: str, salt: bytes, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]], rows: int,
+                 steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True) -> None:
         self.entry, self.salt, self.modules, self.commit = entry, salt, dict(modules), commit
+        self.shapes_, self.rows, self.steps = [tuple(map(int, s)) for s in shapes], int(rows), int(steps)
+        self.offs, self.u_step = layout(self.shapes_, self.rows)
         self.calls: list[Call] = []
         self.listeners: list[Listener] = []
         self.bound: dict[int, Mapping[str, Any]] = {}
+        self.refused: list[dict[str, int]] = []
         self.retained: deque[tuple[int, np.ndarray, np.ndarray, np.ndarray]] = deque(maxlen=retain or None)
         self.retain, self.transcript_dir = retain, transcript_dir
-        self.step, self.next_base = -1, 0
-        self.commits: dict[str, Any] = {"scheme": SCHEME, "tile": list(TILE), "calls": 0, "units": 0, "steps": 0}
-        self.details: dict[str, Any] = {"scheme": SCHEME, "calls": 0, "padded_rows": 0, "shapes": {},
+        self.step, self.last, self.order_ok, self.closed = -1, None, True, False
+        self._weights: dict[int, tuple[Any, Any]] = {}
+        self.commits: dict[str, Any] = {"scheme": SCHEME, "tile": list(TILE), "rows": self.rows, "steps": self.steps,
+                                        "u_step": self.u_step, "units": self.steps * self.u_step, "calls": 0}
+        self.details: dict[str, Any] = {"scheme": SCHEME, "calls": 0, "refused": self.refused,
                                         "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1) and lm_head",
                                         "z": "engine.int8_exact.int_mm: the exact s32 Y, beside the served scaled_mm"}
 
@@ -222,41 +260,85 @@ class H1Run:
         """Hand every later call to `fn` (`Listener`)."""
         self.listeners.append(fn)
 
-    def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any) -> Call:
-        """Layer `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales."""
-        if w == 0:
-            self.step += 1
-        m, k = (int(d) for d in a.shape)
-        n = int(weight.shape[0])
-        call = Call(len(self.calls), max(self.step, 0), w, self.modules.get(w, str(w)), m, k, n, self.next_base)
+    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any) -> Call:
+        n, k = self.shapes_[w]
+        call = Call(len(self.calls), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
+                    s * self.u_step + self.offs[w], self.rows)
         self.calls.append(call)
-        self.next_base += call.units
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
                 self.bound[call.index] = {**self.bound.get(call.index, {}), **out}
+        self.details["calls"] = self.commits["calls"] = len(self.calls)
+        return call
+
+    def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any) -> Call | None:
+        """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales."""
+        if self.closed:
+            raise RuntimeError(f"{self.entry}: a call after the window closed")
+        if w == 0:
+            self.step += 1
+        elif self.last is None or w != self.last + 1:
+            self.order_ok = False
+        self.last = w
+        self._weights[w] = (weight, weight_scale)
+        m, k = (int(d) for d in a.shape)
+        if not 0 <= self.step < self.steps or m > self.rows or (int(weight.shape[0]), k) != self.shapes_[w]:
+            self.refused.append({"step": self.step, "linear": w, "m": m})
+            return None
+        call = self._call(self.step, w, a, s_a, weight, weight_scale)
         if self.retain:
             from verity_vllm.engine.int8_exact import int_mm
             self.retained.append((call.index, numpy_of(a), numpy_of(s_a), numpy_of(int_mm(a, weight))))
-        shape = f"{m}x{k}x{n}"
-        self.details["shapes"][shape] = self.details["shapes"].get(shape, 0) + 1
-        self.details.update(calls=len(self.calls), padded_rows=self.details["padded_rows"] + padded(m, n)[0] - m)
-        self.commits.update(calls=len(self.calls), units=self.next_base, steps=self.step + 1)
         return call
 
+    def close(self) -> None:
+        """The steps past the last served one, each linear's call empty (m = 0), handed to the listeners like the rest."""
+        if self.closed:
+            return
+        self.closed = True
+        if not self.commit:
+            return
+        self.details["steps_served"] = self.step + 1
+        self.details["last_step_complete"] = self.last in (None, len(self.shapes_) - 1)
+        for s in range(self.step + 1, self.steps):
+            for w, (n, k) in enumerate(self.shapes_):
+                weight, scale = self._weights.get(w, (None, None))
+                a = weight.new_zeros((0, k)) if weight is not None else None
+                self._call(s, w, a, scale.reshape(-1).new_zeros(0) if scale is not None else None, weight, scale)
+        self.details["static"] = self.static()
+        self.details["credit"] = self.credit()
+
+    def static(self) -> bool:
+        """Every (step, linear) call of the window, in order, at its public position, and nothing refused."""
+        want = [(s, w, s * self.u_step + self.offs[w], units(k, n, self.rows))
+                for s in range(self.steps) for w, (n, k) in enumerate(self.shapes_)]
+        return self.order_ok and not self.refused and [(c.step, c.layer, c.base, c.units) for c in self.calls] == want
+
+    def credit(self) -> dict[str, Any]:
+        """Credited: the served rows' MACs only. The padded work (empty slots and pad columns) is shown beside it, not
+        credited (Daniel, 18 Oct)."""
+        served = sum(c.m * c.n * c.k for c in self.calls)
+        computed = sum(padded(c.rows, c.n)[0] * padded(c.rows, c.n)[1] * c.k for c in self.calls)
+        return {"rule": "credit the served rows only; padded work is shown, not credited",
+                "credited": {"rows": sum(c.m for c in self.calls), "macs": served},
+                "padded": {"rows": sum(c.rows - c.m for c in self.calls), "macs": computed - served},
+                "units": sum(c.units for c in self.calls),
+                "served_frac_of_macs": round(served / computed, 6) if computed else 0.0}
+
     def shapes(self) -> list[tuple[int, int, int]]:
-        return sorted({(c.k, c.n, c.m) for c in self.calls})
+        return sorted({(c.k, c.n, c.rows) for c in self.calls})
 
     def check(self) -> dict[str, Any]:
-        """Compile every served shape to `SCHEME` and hold each call's units to its compiled Program's: per shape (m, k, n) its
+        """Compile every call shape to `SCHEME` and hold each call's units to its compiled Program's: per shape (T, k, n) its
         Program digest, units, seed groups and tile shapes."""
         out = {}
-        for k, n, m in self.shapes():
-            c = compiled(k, n, m)
-            if len(c.units) != units(k, n, m) or c.groups != ((0,),):
-                raise C.CompileError("position", f"{k} x {n} at m = {m}: {len(c.units)} units in {len(c.groups)} groups, not "
-                                                 f"{units(k, n, m)} in one")
-            out[f"{m}x{k}x{n}"] = {"digest": c.digest, "units": len(c.units), "groups": [list(g) for g in c.groups],
+        for k, n, t in self.shapes():
+            c = compiled(k, n, t)
+            if len(c.units) != units(k, n, t) or c.groups != ((0,),):
+                raise C.CompileError("position", f"{k} x {n} at T = {t}: {len(c.units)} units in {len(c.groups)} groups, not "
+                                                 f"{units(k, n, t)} in one")
+            out[f"{t}x{k}x{n}"] = {"digest": c.digest, "units": len(c.units), "groups": [list(g) for g in c.groups],
                                    "cover": list(c.cover), "tiles": sorted({f"{u.tile.r}x{u.tile.c}" for u in c.units})}
         return out
 
@@ -266,18 +348,24 @@ class H1Run:
 
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound)."""
-        h = hashlib.sha512(b"verity/pouw/h1/calls/v1\0" + self.salt)
+        h = hashlib.sha512(b"verity/pouw/h1/calls/v2\0" + self.salt)
         for row in self.manifest():
             h.update(json.dumps(row, sort_keys=True).encode() + b"\n")
         return h.digest()
 
     def finish(self) -> None:
-        self.commits["calls_root"] = self.calls_root().hex()
+        self.close()
+        if not self.commit:
+            return
+        self.commits.update(calls_root=self.calls_root().hex(), static=self.details["static"])
         if self.transcript_dir:
             d = Path(self.transcript_dir)
             d.mkdir(parents=True, exist_ok=True)
             (d / CALLS_FILE).write_text(json.dumps({"schema": RECORD, "entry": self.entry, "commitment": self.commits,
-                                                    "calls": self.manifest()}) + "\n")
+                                                    "public": {"rows": self.rows, "steps": self.steps,
+                                                               "shapes": [list(s) for s in self.shapes_]},
+                                                    "details": {k: v for k, v in self.details.items() if k != "refused"},
+                                                    "refused": self.refused, "calls": self.manifest()}) + "\n")
 
 
 def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
@@ -318,5 +406,5 @@ def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> l
 
 
 __all__ = ["CALLS_FILE", "Call", "H1Run", "Listener", "RECORD", "SALT_TAG", "SCHEME", "TILE", "VllmInt8LinearH1", "bind_all",
-           "check_tiles", "compiled", "coordinate", "layers", "numpy_of", "observer", "padded", "program", "program_salt", "units",
-           "weight_root"]
+           "check_tiles", "compiled", "coordinate", "layers", "layout", "numpy_of", "observer", "padded", "program", "program_salt",
+           "slots", "units", "weight_root"]

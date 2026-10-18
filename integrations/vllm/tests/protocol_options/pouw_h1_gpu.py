@@ -4,8 +4,10 @@ int8_exact row with PoUW's H1 + fx1 (``pouw:eps1-sm120-h1fx1``, `protocol_option
 One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw-h1-calls.json`):
 
   served    `PROMPTS` greedy, batched (a decode batch of len(PROMPTS)) and the first alone (decode at one row), before the
-            option is installed and with it: the token ids are the same, since the arm serves its own y.
-  calls     every served linear call the option recorded, per shape (m, k, n), with consecutive position ranges.
+            option is installed and with it: the token ids are the same, since the arm serves its own y. The engine's
+            ``max_num_batched_tokens`` is T (``--rows``), with chunked prefill, so no step puts more rows in a linear.
+  calls     the static window (`H1Run`, T rows a call, S = ``--steps``): every (step, linear) call in order at s·U + off(w),
+            the served ones recorded and the rest empty, nothing refused; the credit (served rows) beside the padding.
   compile   every served shape compiled to `eps1-sm120-h1fx1` (`H1Run.check`): its Program digest, units, one seed group and
             only full 32 x 32 grid tiles. A shape takes minutes on the host (about 0.13 s a unit), so only `--compile` does it
             here; otherwise `--compile-from <out>/pouw-h1-calls.json` does it on a CPU node from the record, with each call's
@@ -58,7 +60,10 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         entry, how = pin(a)
         doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "source": how}
         eng = build_engine(scratch_checkpoints(a.checkpoints, entry, Path(scratch)), case=a.role, target=target,
-                           max_num_seqs=len(PROMPTS))
+                           max_num_seqs=len(PROMPTS), engine_args={"max_num_batched_tokens": a.rows,
+                                                                   "enable_chunked_prefill": True, "enable_prefix_caching": False})
+    steps_public = a.steps or 2 * (a.max_tokens + 2)
+    doc["public"] = {"slots": len(PROMPTS), "rows": a.rows, "steps": steps_public, "max_tokens": a.max_tokens}
     doc["engine"] = {"int8_exact": int8_exact_of(eng.model), "enforce_eager": eng.kwargs.get("enforce_eager")}
     print(f"[h1] engine {json.dumps(doc['engine'], default=str)}", flush=True)
 
@@ -68,7 +73,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     plain = serve()
     entry_name = f"pouw:{PH.SCHEME}"
     ctx = PO.Context(stage="serve", enabled=(entry_name,), settings={"pouw": {"coins": Challenger(0), "retain_steps": a.retain,
-                                                                              "transcript_dir": str(outdir)}})
+                                                                              "transcript_dir": str(outdir), "rows": a.rows,
+                                                                              "steps": steps_public}})
     t0 = time.monotonic()
     comp = PO.install(eng.model, ctx)
     doc["install_s"] = round(time.monotonic() - t0, 1)
@@ -90,6 +96,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         with_h1 = serve()
         doc["serve_s"] = round(time.monotonic() - t0, 1)
         doc["served"] = {"same_tokens": with_h1 == plain, "requests": len(plain), "tokens": sum(map(len, plain))}
+        h1.close()
 
         steps: dict[int, list[int]] = {}
         for c in h1.calls:
@@ -97,11 +104,13 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         manifest = h1.manifest()
         doc["hook"] = {"bad": seen[:20], "bound": all(r.get("bound") == {"listener": "pouw_h1_gpu"} for r in manifest),
                        "steps": len(steps), "steps_in_layer_order": all(v == list(range(len(layers))) for v in steps.values()),
-                       "leaves": all(r["leaves"] == [0, r["shape"][0]] for r in manifest)}
+                       "leaves": all(r["leaves"] == [0, a.rows] for r in manifest)}
         print(f"[h1] hook {json.dumps(doc['hook'])}", flush=True)
-        bases = [c.base for c in h1.calls]
-        doc["calls"] = {"count": len(h1.calls), "units": h1.next_base, "consecutive": bases == [0, *np.cumsum([c.units for c in h1.calls])[:-1].tolist()],
-                        "shapes": h1.details["shapes"], "padded_rows": h1.details["padded_rows"]}
+        doc["calls"] = {"count": len(h1.calls), "units": sum(c.units for c in h1.calls), "u_step": h1.u_step,
+                        "static": h1.static(), "refused": h1.refused[:20], "steps_served": h1.details["steps_served"],
+                        "last_step_complete": h1.details["last_step_complete"],
+                        "served_rows_per_step": [max((c.m for c in h1.calls if c.step == s), default=0) for s in range(h1.steps)],
+                        "credit": h1.credit()}
         print(f"[h1] calls {json.dumps(doc['calls'])}", flush=True)
 
         zs = []
@@ -111,7 +120,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
             exact = xq.astype(np.int64) @ w.T
             z0 = call.z(y, 0)
             u = call.compiled().units[0]
-            full = np.zeros(PH.padded(call.m, call.n), np.int64)
+            full = np.zeros(PH.padded(call.rows, call.n), np.int64)
             full[:call.m, :call.n] = exact
             zs.append({"index": index, "shape": [call.m, call.k, call.n], "y_exact": bool(np.array_equal(y, exact)),
                        "unit0_z": bool(np.array_equal(z0, [full[u.rows[i], u.cols[j]] for i, j in u.tile.pairs]))})
@@ -128,9 +137,9 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     finally:
         comp.close()
     doc["commitment"] = comp.installed[0].commitment()
-    doc["ok"] = bool(doc["served"]["same_tokens"] and not doc["hook"]["bad"] and doc["hook"]["bound"]
+    doc["ok"] = bool(doc["served"]["same_tokens"] and not doc["hook"]["bad"] and doc["hook"]["bound"] and doc["calls"]["static"]
                      and doc["hook"]["steps_in_layer_order"] and doc["hook"]["leaves"]
-                     and doc["calls"]["consecutive"] and doc["calls"]["count"] > 0 and zs and all(z["y_exact"] and z["unit0_z"] for z in zs)
+                     and doc["calls"]["count"] > 0 and zs and all(z["y_exact"] and z["unit0_z"] for z in zs)
                      and doc["compile_ok"] is not False and doc["engine"]["enforce_eager"] is not False)
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     print(f"POUW-H1-GPU {'OK' if doc['ok'] else 'FAIL'} calls={doc['calls']['count']} units={doc['calls']['units']} "
@@ -147,29 +156,34 @@ def _check(h1: Any) -> tuple[dict[str, Any], bool]:
 
 
 def compile_from(calls_file: str, out: str) -> dict[str, Any]:
-    """The record's calls compiled on the host: every shape by `H1Run.check`, and each call's base the previous call's plus
-    its shape's compiled units."""
+    """The record's calls compiled on the host: every shape by `H1Run.check`, the window static, and each call (s, w) at
+    s·U + off(w) counted in its shapes' compiled units."""
     from verity_vllm.protocol_options import pouw_h1 as PH
 
     rec = json.loads(Path(calls_file).read_text())
-    h1 = PH.H1Run(rec["entry"], b"", {})
-    h1.calls = [PH.Call(c["index"], c["step"], c["layer"], c["module"], *c["shape"], c["base"]) for c in rec["calls"]]
+    pub = rec["public"]
+    h1 = PH.H1Run(rec["entry"], b"", {}, pub["shapes"], pub["rows"], pub["steps"])
+    h1.calls = [PH.Call(c["index"], c["step"], c["layer"], c["module"], c["served"], c["k"], c["n"], c["base"], c["rows"])
+                for c in rec["calls"]]
+    h1.refused[:] = rec["refused"]
     doc: dict[str, Any] = {"schema": SCHEMA + "/compile", "argv": sys.argv, "calls_file": calls_file, "record": rec["schema"],
-                           "commitment": rec["commitment"], "calls": len(h1.calls), "shapes": [list(x) for x in h1.shapes()]}
+                           "commitment": rec["commitment"], "public": pub, "calls": len(h1.calls),
+                           "shapes": [list(x) for x in h1.shapes()], "static": h1.static()}
     t0 = time.monotonic()
     doc["compile"], doc["compile_ok"] = _check(h1)
     doc["compile_s"] = round(time.monotonic() - t0, 1)
-    pos, bad = 0, []
-    for c in h1.calls:
-        if c.base != pos:
-            bad.append(c.index)
-        pos = c.base + len(c.compiled().units) if doc["compile_ok"] else pos + c.units
-    doc["positions"] = {"consecutive": not bad, "bad": bad[:20], "units": pos, "committed_units": rec["commitment"].get("units")}
-    doc["ok"] = bool(doc["compile_ok"] and not bad and pos == rec["commitment"].get("units"))
+    bad, total = [], 0
+    if doc["compile_ok"]:
+        sizes = [len(PH.compiled(k, n, pub["rows"]).units) for n, k in pub["shapes"]]
+        offs = [sum(sizes[:w]) for w in range(len(sizes))]
+        bad = [c.index for c in h1.calls if c.base != c.step * sum(sizes) + offs[c.layer]]
+        total = pub["steps"] * sum(sizes)
+    doc["positions"] = {"public": not bad, "bad": bad[:20], "units": total, "committed_units": rec["commitment"].get("units")}
+    doc["ok"] = bool(doc["compile_ok"] and doc["static"] and not bad and total == rec["commitment"].get("units"))
     Path(out).mkdir(parents=True, exist_ok=True)
     (Path(out) / "pouw_h1_compile.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    print(f"POUW-H1-COMPILE {'OK' if doc['ok'] else 'FAIL'} calls={doc['calls']} shapes={len(doc['shapes'])} units={pos} "
-          f"in {doc['compile_s']} s", flush=True)
+    print(f"POUW-H1-COMPILE {'OK' if doc['ok'] else 'FAIL'} calls={doc['calls']} shapes={len(doc['shapes'])} units={total} "
+          f"static={doc['static']} in {doc['compile_s']} s", flush=True)
     return doc
 
 
@@ -185,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--by", help="resolved_by of the pin entry, if one is made")
     ap.add_argument("--max-tokens", type=int, default=8)
     ap.add_argument("--retain", type=int, default=4, help="the last calls whose operands and exact Y are kept and checked")
+    ap.add_argument("--rows", type=int, default=64, help="T, the public rows a call: vLLM's max_num_batched_tokens")
+    ap.add_argument("--steps", type=int, default=0, help="S, the public steps of the window (default 2 (max tokens + 2): the "
+                                                         "batch and the one alone)")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
     a = ap.parse_args(argv)

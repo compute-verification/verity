@@ -85,7 +85,8 @@ UNQUANTIZED = ("bfloat16", "float16", "float32")
 QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_point", "weight_packed")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward")
+KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
+        "rows", "steps")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -144,6 +145,10 @@ class Settings:
     #: served window under the same salt starts at the verifier's `anchors.SaltWindows.next_forward`, so no call index
     #: repeats across the salt's windows (a repeat would reuse a noise key, and `SaltWindows.open` refuses it)
     start_forward: int = 0
+    #: H1's static layout (`pouw_h1.H1Run`): T, the rows of every call (vLLM's ``max_num_batched_tokens``, a multiple of 32),
+    #: and S, the steps of the install's window, public parameters that fix every call's rows and positions
+    rows: int | None = None
+    steps: int | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -180,7 +185,12 @@ class Settings:
         start = raw.get("start_forward", 0)
         if not isinstance(start, int) or isinstance(start, bool) or start < 0:
             raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")
-        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start)
+        rows, steps = raw.get("rows"), raw.get("steps")
+        if rows is not None and (not isinstance(rows, int) or isinstance(rows, bool) or rows < 32 or rows % 32):
+            raise ValueError("pouw setting 'rows' is a positive multiple of 32 (H1's T: vLLM's max_num_batched_tokens)")
+        if steps is not None and (not isinstance(steps, int) or isinstance(steps, bool) or steps < 1):
+            raise ValueError("pouw setting 'steps' is a positive integer (H1's S: the window's engine steps)")
+        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, rows, steps)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -205,6 +215,11 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
                 out.append(str(e))
         elif settings.schedule != "serial":
             out.append(f"{scheme}: the pouw setting 'schedule' is Pearl-C's; this executor runs serially")
+        if scheme == PH.SCHEME and (settings.rows is None or settings.steps is None):
+            out.append(f"{scheme}: the static layout's public parameters are the pouw settings 'rows' (T, vLLM's "
+                       "max_num_batched_tokens) and 'steps' (S, the window's engine steps)")
+        elif scheme != PH.SCHEME and (settings.rows is not None or settings.steps is not None):
+            out.append(f"{scheme}: the pouw settings 'rows' and 'steps' are H1's ({PH.SCHEME})")
         if settings.start_forward and scheme not in pouw_circuit.SCHEMES:
             out.append(f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
                        f"({', '.join(pouw_circuit.SCHEMES)}); this executor counts its own from 0")
@@ -687,8 +702,8 @@ def h1_run(entry: str) -> PH.H1Run | None:
 
 def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     """H1 on the int8_exact arm: the epoch's salt from the challenger's salt coin after the weights' root, as every scheme's,
-    and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners (`pouw_h1.observer`).
-    The served values are the arm's, untouched."""
+    and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners (`pouw_h1.observer`),
+    in the static layout of the settings' ``rows`` and ``steps``. The served values are the arm's, untouched."""
     layers = PH.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -696,7 +711,10 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
                               ((int(w), s) for w, s in committed["shapes"].items())))
     commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
     salt = Epoch.start(declared, roots, commitment, opening).salt
+    if settings.rows is None or settings.steps is None:
+        raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     run = PH.H1Run(entry, PH.program_salt(salt), {w: f"linear {w}" for w in roots} | _named(target.model, layers),
+                   [tuple(int(d) for d in m.weight.shape) for m in layers], settings.rows, settings.steps,
                    retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
                    commit=target.context.stage != "capture")
     run.commits.update(weights_root=weights_root(roots).hex(), coins=commitment.to_json(), salt_opening=opening.to_json())
