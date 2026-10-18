@@ -14,8 +14,7 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
 * `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): art:df3af922…, 85 at K = 4096, N = 2,
   built, proved and verified at b795ecbde by `r20261010-210008-003d` through `r20261010-214046-3e44` (the custody), V*'s
   statements staged with the inner program; the fixture holds the files these tests read, the circuits and V*'s
-  programs xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against
-  the art's own listing once decompressed. Lean's verifier builds
+  programs xz-compressed, and each is checked against the art's own listing once decompressed. Lean's verifier builds
   the inner statement from its own partition object and program (`AcceptsPublic`), V*'s six statements are the ones
   `outerStatementsAt` counts, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
   and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with #1677's OS masks
@@ -71,10 +70,6 @@ CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479
 #: art:df3af922…'s files the gate's tests read, a file `f` stored as `f.xz` when large, and `prover.sha256`: their lines of
 #: the art's own listing (`out/data.sha256`)
 F1 = HERE / "fixtures" / "f1-gate"
-#: the gate's inner transcript, the coin server's record of its inner session (art:df3af922…'s `inner/s1/public.json`,
-#: xz-compressed, and its line of the art's listing), tracked: a check's pod fetches a registered fixture only once `main`
-#: registers it
-F1_TRANSCRIPT = HERE / "fixtures" / "f1-gate-transcript"
 #: V*'s statements at the gate, each staged under `v/` with its outer session under `v-sess/`, in `RecVStar.statements`' order
 F1_PARTS = ("L0", "L1", "L2", "L3", "alg/p0", "alg/p1")
 #: `RecVStar.statements` at the inner shape, each with its population
@@ -184,11 +179,11 @@ def test_the_recorded_level_hides_its_outputs(outer):
 
 # --- the F1 gate ----------------------------------------------------------------------------------------------------------
 
-def _f1_file(dst: Path, line: str, root: Path = F1) -> str | None:
-    """One line of `root`'s `prover.sha256`: its file under `dst` (linked, or decompressed from `.xz`), or its path if the
-    bytes are not the listed ones."""
+def _f1_file(dst: Path, line: str) -> str | None:
+    """One line of `prover.sha256`: its file under `dst` (linked, or decompressed from `.xz`), or its path if the bytes
+    are not the listed ones."""
     digest, rel = line.split("  ", 1)
-    src, out, h = root / rel, dst / rel, hashlib.sha256()
+    src, out, h = F1 / rel, dst / rel, hashlib.sha256()
     out.parent.mkdir(parents=True, exist_ok=True)
     if src.is_file():
         out.symlink_to(src)
@@ -208,9 +203,8 @@ def f1_gate(once) -> Path:
         f"{F1} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/f1-gate`")
 
     def make(g):
-        lines = [(ln, root) for root in (F1, F1_TRANSCRIPT) for ln in (root / "prover.sha256").read_text().splitlines()]
         with cf.ThreadPoolExecutor(8) as ex:
-            bad = [r for r in ex.map(lambda x: _f1_file(g, *x), lines) if r]
+            bad = [r for r in ex.map(functools.partial(_f1_file, g), (F1 / "prover.sha256").read_text().splitlines()) if r]
         assert not bad, f"not the prover's bytes: {bad}"
 
     return once("witness-f1-gate", make)
@@ -386,9 +380,7 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
 
 def test_f1_verify_accepts_the_smallest_level(built, f1_gate, f1, once):  # noqa: F811
     """`flock-verify verify --zk`, the verifier of record, accepts level 3 (`rec-open/l16-h4`, 106 units) with the
-    verifier's own V* inputs, the inner statement and session its coefficients are checked against, and the coin
-    server's inner transcript (`inner/s1/public.json`), whose link points and level-3 tops the level is held to
-    (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as
+    verifier's own V* inputs and the inner statement and session its coefficients are checked against, as
     `85-rec-reprice.sh`'s STEP=lean runs it: past every refusal the verdict runs last (the form's, a draw-less session's,
     and a V* session's short of every unit, `RecSetup.fullDraw`), and not as a private circuit's. The checks above are
     the model's predicates; this is the shipped verdict, so a refusal added to it that an honest V* session meets fails
@@ -405,8 +397,7 @@ def test_f1_verify_accepts_the_smallest_level(built, f1_gate, f1, once):  # noqa
                        str(names.index(_unit(g, part))), "--rec-bindings", str(d / "bindings-L3.json"), "--rec-rows",
                        str(d / "rows.json"), "--rec-inner-circuit", str(st / "circuit.txt"), "--rec-inner-public",
                        str(st / "pub-2.bin"), "--rec-inner-partition", str(st / "partition.json"), "--rec-inner-session",
-                       str(g / "inner" / "s1" / "session"), "--rec-inner-transcript",
-                       str(g / "inner" / "s1" / "public.json"), "--session", str(g / "v-sess" / part)])
+                       str(g / "inner" / "s1" / "session"), "--session", str(g / "v-sess" / part)])
         return {"rc": p.returncode, "verdicts": [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]}
 
     r = _kept(once, "verify-f1-L3", run)

@@ -209,11 +209,6 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
-- 2026-10-17 (6:08 PM PDT, card cd4d2836): under composition each masked session has its own Hello round, so the
-  recursion's masked record runs V.k + nS rounds (`kM`).
-- 2026-10-17 (6:08 PM PDT, card cd4d2836): ZK claims let the simulator's and prover's finite tape type depend on the
-  statement (`ZKmalRx`, `Security/Definitions/Claims/IndexedTapes.lean`): standard, and composition is proved
-  (`zkmalRx_iter`).
 - 2026-10-08 (5:59 PM PDT): a named conjecture can be a premise, in a section of the list of its own, and a claim that
   rests on one is listed as conditional, apart from the rest. Sort first: a statement that models how a specific device
   computes, such as `TTOutPearlC` (falsified by what the hardware does, and dependent on G), is an assumption about the

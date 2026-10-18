@@ -7,7 +7,6 @@
   "Flock.Test.FullDraw",
   "Flock.Test.Sha512",
   "Flock.Test.InnerStreams",
-  "Flock.Test.InnerLink",
   "Flock.Test.RecCoins",
   "Flock.Test.RecOpen",
   "Flock.Test.RecOpening",

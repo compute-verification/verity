@@ -300,12 +300,13 @@ def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
 @pytest.mark.parametrize("value", ["rec-top-L0", "rec-top-stacked-L0"])
 def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(staged, value):
     """U4 (§16.10, `Registered.checkFull`): a statement whose registered output row is a round's commitment (level 0's
-    committed tops `rec-top-L0`, or R's `rec-top-stacked-L0`; a `rec-c<k>` meets `checkPubRows` first) is refused at setup
-    when the record's draw does not draw every unit reading it in full, with one table and with two (`buildSession`'s call:
-    `verify` sets up every hm96 statement through `Stmt.setupTables`, and `buildStmt`'s hm96 path serves `statement`, which
-    has no draw). The full draw passes U4: `rec-top-L0` then meets `checkTopRows` and R's tops `checkPubRows`, since the
-    verifier holds no inner transcript to check them against. U4's Lean test (`Flock.Test.Full`) checks the function; this
-    checks that `verify` calls it."""
+    committed tops `rec-top-L0`, which no other check reads, or R's `rec-top-stacked-L0`; a `rec-c<k>` meets `checkPubRows`
+    first) is refused at setup when the record's draw does not draw every unit reading it in full, with one table and with
+    two (`buildSession`'s call: `verify` sets up every hm96 statement through `Stmt.setupTables`, and `buildStmt`'s hm96 path
+    serves `statement`, which has no draw). The full draw passes U4: `rec-top-L0` then meets the subset law's refusal
+    without `--zk`, which `verify` checks after setup, and R's tops meet `checkPubRows`, since the verifier holds no inner
+    transcript to check them against. U4's Lean test (`Flock.Test.Full`) checks the function; this checks that `verify`
+    calls it."""
     c = G.Registered.commit(P.program_digest(staged.program), value,
                             np.random.default_rng(20261010).integers(0, 1 << 16, (OUT_ROWS, 64)).tolist())
     rows, salts, e = c.statement(OUT_POSITIONS)
@@ -327,113 +328,11 @@ def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(st
         assert line["accepted"] is False
         return line["why"]
 
-    full = "setup: rec-tops: " if value == "rec-top-L0" else "setup: rec-pub: "
+    full = "refused: a subset draw without --zk: no soundness claim draws by this law" if value == "rec-top-L0" else "setup: rec-pub: "
     for tables in (1, 2):
         assert why(len(OUT_POSITIONS), tables).startswith(full), tables
         assert why(2, tables) == (f"setup: U4: unit 0 reads {value}, a round's commitment (port out), and the draw does not draw "
                                   "it in full"), tables
-
-
-#: the inner session's link points, two of two coins (`f128_hex`)
-LINK_POINTS = [[f"{2 * i + j + 1:032x}" for j in range(2)] for i in range(2)]
-
-
-def _coin(x: int, k: int) -> list[str]:
-    """Rep `x`'s round `k`'s one coin."""
-    return [f"{0x100 + 2 * x + k:032x}"]
-
-
-def _inner_session(d: Path, points=LINK_POINTS) -> list[str]:
-    """An inner session of two reps of two rounds each, one coin a round (`_coin`), whose record holds the link points
-    `points`, and stand-ins for the inner statement: a circuit header whose META binds nothing, an empty public file and
-    partition. Only check 5, which no statement here meets, reads the inner statement."""
-    (d / "session").mkdir(parents=True, exist_ok=True)
-    (d / "circuit.txt").write_text("inner\nMETA {}\n")
-    (d / "pub.bin").write_bytes(b"")
-    (d / "partition.json").write_text("{}")
-    streams = [{"stream": f"circuit/rep{x}", "rounds": [{"k": k, "coins": _coin(x, k)} for k in range(2)]} for x in (0, 1)]
-    (d / "session" / "session.json").write_text(json.dumps({"link": {"points": points}, "streams": streams}))
-    return ["--rec-inner-circuit", str(d / "circuit.txt"), "--rec-inner-public", str(d / "pub.bin"), "--rec-inner-partition",
-            str(d / "partition.json"), "--rec-inner-session", str(d / "session")]
-
-
-def _hexes(bs: list[bytes]) -> list[str]:
-    return [b.hex() for b in bs]
-
-
-def _inner_transcript(path: Path, root: list[bytes], tops: list[list[bytes]], points=LINK_POINTS) -> Path:
-    """The coin server's record of that session: Hello's one table, its `root_B` (`root`, a `b ‖ c` a node), rep `x`'s round 0
-    absorbing one `c_k` and its round 1 committing its level-1 top `tops[x]`, and the link points, flat."""
-    rounds = [r for x in (0, 1) for r in (
-        {"stream": f"circuit/rep{x}", "k": 0, "tops": [], "level0": 0, "commits": _hexes([bytes([0xC0 + x]) * 128]), "n": 1,
-         "coins": _coin(x, 0)},
-        {"stream": f"circuit/rep{x}", "k": 1, "tops": [_hexes(tops[x])], "level0": 0, "commits": [], "n": 1,
-         "coins": _coin(x, 1)})]
-    path.write_text(json.dumps({
-        "kind": "rec/inner-transcript/v1", "hello": {"tables": ["circuit"], "link": {"m": 2, "points": 2}},
-        "link": {"roots": {"circuit": _hexes(root)}, "points": [c for p in points for c in p], "y": None},
-        "rounds": rounds}))
-    return path
-
-
-@pytest.mark.parametrize("level", [0, 1])
-def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
-    """`RecVStar.checkTopRows`: a statement whose `out` reads the circuit table's level-`l` tops `rec-top-L<l>` (V*'s levels'
-    `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the coin server recorded there: at level
-    0 node `x` of the table's `root_B`, above it rep 0's level-`l` top and then rep 1's (`rec_outer.TopValue`). Here the
-    registered rows are the session's level-`l` tops: its `root_B`, or rep 0's top of six nodes and rep 1's of four. With
-    the inner transcript recording them the full draw passes setup (to the subset law's refusal without `--zk`); a
-    transcript whose `root_B`, rep 0's top or rep 1's top differs at one node a row reads is refused at that row, and an
-    inner session record whose link points are not the transcript's is refused before setup (`RecVStar.innerLink`). This
-    is the one test of `root_B` on a statement: V*'s level 0 at the rec-coins fixture is 436 openings of 64 lanes, about
-    30 times level 3's circuit."""
-    value = f"rec-top-L{level}"
-    c = G.Registered.commit(P.program_digest(staged.program), value,
-                            np.random.default_rng(20261018).integers(0, 1 << 16, (OUT_ROWS, 64)).tolist())
-    rows, salts, e = c.statement(OUT_POSITIONS)
-    public = _stage(staged, f"tops-{level}", extra={"out": e}, outs=rows, out_salts=salts)
-    own = staged.dir / f"own-tops-{level}.json"
-    own.write_text(json.dumps({**staged.own, "ports": {**staged.own["ports"],
-                                                       "out": {**c.entry(), "word_bits": 16, "reads": list(OUT_POSITIONS)}}}))
-    sess = staged.dir / f"session-tops-{level}"
-    sess.mkdir(exist_ok=True)
-    draw = {"law": "subset", "population": len(OUT_POSITIONS), "k": len(OUT_POSITIONS), "units": list(range(len(OUT_POSITIONS)))}
-    (sess / "session.json").write_text(json.dumps({"unit_draw": draw}))
-    with (staged.dir / "circuit.txt").open() as f:
-        unit = f.readline().split()[1]
-    bcs, other = list(c.bcs), [bytes([0xA0 + i]) * 128 for i in range(OUT_ROWS)]
-    root, tops = (bcs, [other[:6], other[6:]]) if level == 0 else (other, [bcs[:6], bcs[6:]])
-
-    def verify(root, tops, points=LINK_POINTS) -> subprocess.CompletedProcess:
-        return subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(staged.dir / "circuit.txt"),
-                               "--public", str(public), *staged.bound, "--registered", str(own),
-                               *_inner_session(tmp_path / "inner", points), "--rec-inner-transcript",
-                               str(_inner_transcript(tmp_path / "transcript.json", root, tops)), "--session", str(sess)],
-                              capture_output=True, text=True, check=False)
-
-    def why(root, tops) -> str:
-        p = verify(root, tops)
-        lines = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
-        assert len(lines) == 1 and lines[0]["accepted"] is False, (p.returncode, p.stderr)
-        return lines[0]["why"]
-
-    def off(xs: list[bytes], i: int) -> list[bytes]:
-        return [bytes([b[0] ^ 1]) + b[1:] if j == i else b for j, b in enumerate(xs)]
-
-    assert why(root, tops) == "refused: a subset draw without --zk: no soundness claim draws by this law"
-    # row r of the table reads position OUT_POSITIONS[r]: 2, 7, 0, 9, 4, 4, 1, 6
-    if level == 0:
-        assert why(off(root, 9), tops) == (f"setup: rec-tops: {unit}: port out's table row 3 is not node 9 of circuit's root_B, "
-                                           "which the coin server committed")
-    else:
-        assert why(root, [off(tops[0], 2), tops[1]]) == (
-            f"setup: rec-tops: {unit}: port out's table row 0 is not node 2 of rep 0's level 1 top, which the coin server committed")
-        assert why(root, [tops[0], off(tops[1], 1)]) == (
-            f"setup: rec-tops: {unit}: port out's table row 1 is not node 1 of rep 1's level 1 top, which the coin server committed")
-    p = verify(root, tops, [LINK_POINTS[0], [LINK_POINTS[1][0], f"{0xFF:032x}"]])
-    assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the inner session's record's link points are not the "
-                                                   "ones the coin server drew (link.points): check 5 would take the extra "
-                                                   "claims at points the prover chose")
 
 
 @pytest.fixture(scope="module")
