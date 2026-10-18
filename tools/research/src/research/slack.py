@@ -1374,7 +1374,7 @@ def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> s
     """The ask filed as an issue in its owner's Linear team (`linear` in the registry), which holds the whole brief; what
     Slack carries is then its first line and the issue's link (COMM-15).  The body as it was when the owner has no team
     or Linear fails, so the ask still goes out on Slack in full."""
-    if not (getattr(ns, "linear", False) or ASKS_ON_LINEAR) or ns.dry_run or not owner.get("linear"):
+    if not ASKS_ON_LINEAR or ns.dry_run or not owner.get("linear"):
         return body
     from . import linear  # noqa: PLC0415
 
