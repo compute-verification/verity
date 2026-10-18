@@ -591,12 +591,13 @@ class _VllmEngine:
                 return got
         return {} if self.llm.protocols is None else self.llm.protocols.info()
 
-    def _run(self, point: SweepPoint, measured: bool) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
+    def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
         from vllm import SamplingParams
 
         from verity_vllm.engine.arrivals import run_requests_arrivals
 
+        measured = phase == "measure"
         requests = self._requests(point)
         sampling = SAMPLING[point.sampling]
         params = lambda r: SamplingParams(max_tokens=r.max_tokens, ignore_eos=True,  # noqa: E731
@@ -610,6 +611,7 @@ class _VllmEngine:
         if measured:
             torch.cuda.synchronize()
             torch.cuda.reset_peak_memory_stats()
+        self.target.phase, self.target.point = phase, point.id
         _callback(self.obj, "begin_run", self.target, None)
         start = time.perf_counter()
         finished, timing = run_requests_arrivals(
@@ -652,7 +654,7 @@ class _VllmEngine:
         }
 
     def gate(self, point: SweepPoint) -> Mapping[str, tuple[int, ...]]:
-        return self._run(point, False)[0]
+        return self._run(point, "gate")[0]
 
     def custom_gate(self) -> Mapping[str, Any]:
         if self.obj is None:
@@ -665,10 +667,10 @@ class _VllmEngine:
         return dict(got)
 
     def warmup(self, point: SweepPoint) -> None:
-        self._run(point, False)
+        self._run(point, "warmup")
 
     def measure(self, point: SweepPoint) -> Mapping[str, Any]:
-        return self._run(point, True)[1]
+        return self._run(point, "measure")[1]
 
     def close(self) -> None:
         try:

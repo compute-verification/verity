@@ -51,7 +51,9 @@ graph engine replays decode-only CUDA graphs at `capture_sizes`.
    and step timings (`engine.arrivals.run_requests_arrivals` with `request_timing` and `step_timing`).
 4. **An arm's run is its own.** Around every run (gate, warm-up or timed), the runner calls an experimental arm's
    `begin_run(target)` before the clock starts and `end_run(target)` before it stops, so the work an arm finishes at the end
-   of a run (a commitment's last roots) is in the run's time. `extras(target)`, read after a timed run, reports that run.
+   of a run (a commitment's last roots) is in the run's time. `target.phase` (`gate`, `warmup` or `measure`) and
+   `target.point` (the sweep point's id) name the run `begin_run` opens. `extras(target)`, read after a timed run, reports
+   that run.
 
 ## Metrics
 

@@ -19,12 +19,19 @@ Two arms differ in what the Commit keeps for openings: ``served-commit`` copies 
 opening reads, and what `linkage` checks); ``served-commit-noretain`` keeps only the authentication state, so its values
 open by replay and its runs are checked by the collector's errors alone.
 
+Under bounded staging (``VERITY_STAGING_BOUNDED=1``: a step whose plan is new copies at most ``VERITY_LEARN_HOST_BUDGET_MB`` to
+host to re-hash) the harness's gate and warm-up runs are learn-only passes: a new-plan step over that budget is discarded, which
+leaves the run without a root. The custom gate accepts such a run only as a declared warm-up, named by its phase and sweep point in
+the verdict's ``warmups``; a measured run without a root fails it.
+
 Env: ``VERITY_WINDOW_MB`` (default 256) and ``VERITY_WINDOW_SLOTS`` (default 8), the collector's device window ring.
 """
 from __future__ import annotations
 
 import os
 from typing import Any
+
+WARMUPS = ("gate", "warmup")
 
 
 class ServedCommitArm:
@@ -40,6 +47,7 @@ class ServedCommitArm:
         self.committer: Any = None
         self.windows: dict[str, Any] = {}
         self.pending: Any = None
+        self.run_name, self.learn_only = "", False
         self.runs: list[dict[str, Any]] = []
 
     def install(self, target: Any) -> ServedCommitArm:
@@ -70,6 +78,8 @@ class ServedCommitArm:
     def begin_run(self, target: Any) -> None:
         self._check()
         self.committer.reset()
+        self.run_name = f"{target.phase}:{target.point}"
+        self.learn_only = self.committer.learn_only = bool(self.committer.bounded) and target.phase in WARMUPS
         self.source.begin_run()
         self.committer.install()
 
@@ -79,16 +89,24 @@ class ServedCommitArm:
 
     def _check(self) -> None:
         """The finished run's record: its commitment, the collector's errors and, with values retained, its linkage."""
-        from verity_vllm.acquire.sources.served_compiled_source import linkage
-
         rc, self.pending = self.pending, None
         if rc is None:
             return
         com, stats = self.committer, self.source.stats
-        link = linkage(com) if self.retain == "host" else None
+        link = None
+        if self.retain == "host":
+            from verity_vllm.acquire.sources.served_compiled_source import linkage
+
+            link = linkage(com)
         errors = list((rc.extra or {}).get("errors") or []) + list(self.source.errors)
+        learned = len(((rc.extra or {}).get("bounded_staging") or {}).get("learned_only_steps") or ())
+        rootless = not rc.run_root or learned > 0
+        if rootless and not self.learn_only:
+            errors.append(f"run {self.run_name} has no root ({learned} learned-only steps) and is not a declared warm-up")
         self.runs.append({
+            "run": self.run_name,
             "run_root": bytes(rc.run_root).hex(),
+            "learned_only_steps": learned,
             "steps": len(com._layouts),
             "committed_bytes": sum(m.nbytes for metas in com._layouts.values() for m in metas),
             "replayed_steps": stats["replayed_steps"],
@@ -96,13 +114,14 @@ class ServedCommitArm:
             "drain_s": stats["drain_s"],
             "errors": errors[:5],
             "linkage": link,
+            "warmup": rootless and self.learn_only,
             "passed": not errors and (link is None or link["passed"]),
         })
 
     def extras(self, target: Any) -> dict[str, Any]:
         self._check()
         run = self.runs[-1]
-        out = {k: run[k] for k in ("steps", "committed_bytes", "replayed_steps", "eager_steps", "drain_s")}
+        out = {k: run[k] for k in ("steps", "committed_bytes", "replayed_steps", "eager_steps", "drain_s", "learned_only_steps")}
         out["errors"] = len(run["errors"])
         if run["linkage"] is not None:
             out["linkage_checked"] = run["linkage"]["checked"]
@@ -112,8 +131,9 @@ class ServedCommitArm:
     def gate(self, target: Any) -> dict[str, Any]:
         self._check()
         failed = [r for r in self.runs if not r["passed"]]
+        warmups = [{k: r[k] for k in ("run", "learned_only_steps")} for r in self.runs if r["warmup"]]
         return {"passed": bool(self.runs) and not failed, "retain": self.retain, "runs": len(self.runs),
-                "failed": failed[:3], "windows": self.windows, "source": self.source.summary()}
+                "failed": failed[:3], "warmups": warmups, "windows": self.windows, "source": self.source.summary()}
 
     def close(self) -> None:
         if self.committer is not None:

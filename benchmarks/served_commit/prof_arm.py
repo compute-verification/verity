@@ -108,7 +108,7 @@ class RootsArm(ProfArm):
         w = dict((rc.extra or {}).get("windows") or {})
         st = dict(self.committer._nc.stats()) if hasattr(self.committer._nc, "stats") else {}
         lay = self.committer._layouts
-        rec = {"arm": self.id, "run": len(self.runs), "run_root": bytes(rc.run_root).hex(), "steps": len(lay),
+        rec = {"arm": self.id, "run": len(self.runs), "name": self.run_name, "run_root": bytes(rc.run_root).hex(), "steps": len(lay),
                "learned_only_steps": len(bs.get("learned_only_steps") or ()), "plan_mismatches": bs.get("plan_mismatches"),
                "bounded": bs.get("enabled"), "reupload_bytes": w.get("reupload_bytes"),
                "plans": {k: st.get(k) for k in ("plans", "plan_entries", "plans_dropped", "learn_steps")},
