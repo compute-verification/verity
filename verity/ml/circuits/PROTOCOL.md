@@ -537,7 +537,7 @@ what they are without this section.
 ~~~text
 "ports": {"params": [[i, lo, hi, <in>], ...], "ret": [[lo, hi, <out>], ...], "inputs": [[k, lo, hi, <in>], ...],
           "transfer": true}
-<in>  = {"bound": [a, b], "kind": "coin" | "static", "receipt": true, "word": <name>}
+<in>  = {"bound": [a, b], "kind": "coin" | "static" | "position", "receipt": true, "word": <name>}
 <out> = {"interval": [a, b], "sink": true, "word": <name>}
 ~~~
 
@@ -566,7 +566,8 @@ a word type (or none). The origins are:
 - `static`, for the output of a primitive without parameters (a constant);
 - `input` and `registered`, for an input node's leaf by its binding time;
 - `coin`, for an input leaf whose port is `"kind": "coin"`;
-- `theta`, in place of `input` or `registered`, for a leaf of an input node the Program marks as the model's weights.
+- `theta`, in place of `input` or `registered`, for a leaf of an input node the Program marks as the model's weights;
+- `position`, for an input leaf whose port is `"kind": "position"` (a unit's position).
 
 `Program(fn, theta=names)` names the parameters that are the model's weights, and the annotation `theta` lists the root's
 input nodes they lower to, ascending. It is outside both digests, so it binds nothing: a consumer that treats a leaf
@@ -602,10 +603,11 @@ as declared, so a composite over exact steps declares the intervals its operands
 - **`E_PORT_SINK`**: a primitive node reads a sink at a port without `receipt`, or a composite other than the root returns a
   sink at a leaf it does not declare `"sink": true`. A sink reaches only receipt ports and the Program's outputs.
 - **`E_PORT_KIND`**: a `"kind": "coin"` port reads a leaf whose origin is not exactly `coin`; a `"kind": "static"` port reads
-  one whose origin is not exactly `static`; an input node's port is `"kind": "static"`; a registered input node's is
-  `"kind": "coin"`; or a theta input node's is `"kind": "coin"` (where the marking is read: `Program` and `ports.facts`). So a
-  noise derivation whose ports are coins and statics reads live verifier coins, passed through
-  untouched, and constants only. (A one-Call harness that evaluates a Definition on arbitrary operands, `ports.harness`,
+  one whose origin is not exactly `static`; a `"kind": "position"` port reads one whose origin is not exactly `position`; an
+  input node's port is `"kind": "static"`; a registered input node's is `"kind": "coin"`; or a theta input node's is
+  `"kind": "coin"` (where the marking is read: `Program` and `ports.facts`). So a noise derivation whose ports are coins and
+  statics reads live verifier coins, passed through untouched, and constants only, and no unit computes its position. (A
+  one-Call harness that evaluates a Definition on arbitrary operands, `ports.harness`,
   builds a static port's operand from an input, and is never decoded.)
 - **`E_PORT_WORD`**: a port with `word` `t` reads a leaf whose word type is not `t` when that leaf has one or its origin
   includes `gate`; a composite's declared `word` is not the word type its body returns there; or a composite other than the
@@ -617,8 +619,15 @@ as declared, so a composite over exact steps declares the intervals its operands
   read at another width is the Builder's refusal (`E_REINTERPRET`, §4.4).
 - **`E_COIN_FLOW`** (coin flow): a primitive node reads a leaf of origin `coin` at a port that is not `"kind": "coin"`, or a
   Definition, the root included, returns one. A primitive with a coin port is a *noise primitive* when its return is not all
-  sinks (it derives noise, or adds it to an operand it takes) and a *receipt fold* when it is (the coin is its key). So a coin
-  reaches only the coin port of a noise primitive or a receipt fold, never any other node, directly or through a return.
+  sinks (it derives noise, or adds it to an operand it takes) and a *receipt fold* when it is (the coin is its key). A
+  Definition, primitive or composite, with a coin port and a `"kind": "position"` port and no sink in its return is a
+  *seed*: it derives a unit's seed from the coin and the unit's position, and inside a seed's body its coin port's leaves
+  have origin `gate` (no rule follows the coin into it). So a coin reaches only the coin port of a noise primitive, a
+  receipt fold or a seed, never any other node, directly or through a return. Also refused (seeds): in the flattened
+  Program, a Definition that calls a seed returns, at a leaf it does not declare `"sink": true`, the seed's output or any
+  value computed from it, through any primitive or call (the unit's noise); the root's outputs count as its returns. So a
+  seed and its noise reach only the receipt of the unit that derives them, never its z, and inside the unit they may be
+  read any number of times.
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
   of origin `coin` that a noise primitive reads is read more than once, by it or by anything else; or a leaf a noise
   primitive returns is read more than once, the Program's outputs counting as one read. A primitive returns one value, so
@@ -626,7 +635,10 @@ as declared, so a composite over exact steps declares the intervals its operands
   bit's coin, and no noise has two copies or is shared across rows, matmuls, batch members or scan steps. A coin only
   receipt folds read may key any number of them. With coin flow this gives the
   view independence of `Accounting.Guarantees.CoinFlow` (`Security/`): every value outside a noise's forward cone is a
-  function of the coins it does not read.
+  function of the coins it does not read. Also refused (seeds): an input leaf of origin `coin` that a seed reads is read by
+  a receipt fold too; or an input leaf of origin `position` is read by more than one seed. Any number of seeds may read one
+  coin, each at positions of its own, so each (coin, position) seeds one unit; that distinct position leaves hold distinct
+  values is the verifier's, which binds them.
 - **`E_PORT_DECL`**: the `ports` are malformed or not canonical, or a transfer gives no interval of its return's width.
 
 `ports.facts(root)` gives every leaf's fact to the census and the stacking property. A Program in which no Definition declares
@@ -635,5 +647,6 @@ ports is refused by none of the rules, and nothing is computed for it (`ports.ch
 Vectors: `verity/ml/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; an input's bound
 narrower than its type refused, and narrowed by a range check instead; a chain of exact steps declaring its words' intervals
 and a limb split's bound on them; an explicit limb split with its carries; a word read at
-another width (`E_REINTERPRET`), built and in a tampered descriptor; the coin rules through calls, batches and scans;
+another width (`E_REINTERPRET`), built and in a tampered descriptor; the coin rules through calls, batches and scans; seeds
+batched over positions, with their noise confined to the unit's receipt;
 tampered descriptors; the canonical form; and a pinned digest of one typed descriptor.
