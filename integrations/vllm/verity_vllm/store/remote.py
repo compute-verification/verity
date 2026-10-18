@@ -27,9 +27,10 @@ openings      as the driver's reference: the block, its receipt leaf, and its pa
 ``engine(s)`` runs engine step s against the store as the binder does (`verity_vllm.store.binder`): a request's pages
 freed after the step before (a finished request's) or in this step's schedule (a preempted one's), allocs, then
 `kv_append` (or `kv_write_reference`, which writes the KV first) and `end_step` once the step's KV is in place.  A
-CPU test passes a scripted engine; with vLLM, `serve` passes ``LLMEngine.step`` and the binder on the engine, with
-``passes=False``, numbers the steps.  The Commit's session is `CommitSession`: the binder on its engine from the build,
-the session on that engine once its runs are done, its store's encode on the GPU by kv.cu (`KvDevice`).
+CPU test passes a scripted engine; with vLLM, the binder on the engine, with ``passes=False``, numbers the steps.  The
+Commit's session is `CommitSession`: the binder on its engine from the build, the session in lockstep with the
+Commit's instrumented run (`Lockstep`: each pass's engine step is the run's next step, so the memory map's steps are
+the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice`).
 
 `benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` (and ``verifier.py``, for a
 local verifier) from the source tree (`config.REMOTE_SESSION`).
@@ -39,8 +40,10 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import queue
 import socket
 import sys
+import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import ModuleType
@@ -48,6 +51,7 @@ from typing import Any
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, memory_map, receipts as rb
 from verity_vllm import config
+from verity_vllm.store import memory_map as store_map
 from verity_vllm.store.registry import Store
 
 
@@ -87,7 +91,7 @@ class Serving:
         self._lines: list[tuple[Any, list[bytes]]] = []
         self.map = self.store.record_memory_map(backend.path, registration.digest, lifetime,
                                                 lambda change, payloads: self._lines.append((change, payloads)))
-        self.step, self.steps = -1, 0
+        self.step, self.steps, self.first = -1, 0, None
         self.live = set(range(registration.blocks))
         self.appends: list[audit.Append] = []
         self.released: list[int] = []
@@ -109,6 +113,8 @@ class Serving:
         if self.map.last < s or (self.steps and self.map.last != s):
             raise RuntimeError(f"the engine's step after {self.step} opens one memory-map line (kv_append({s}))")
         s = self.map.last
+        if not self.steps:
+            self.first = s
         for change, payloads in self._lines:
             if change.count:
                 a = self.backend.append(payloads, [self.backend.randbytes(rb.SALT_BYTES) for _ in payloads])
@@ -339,48 +345,83 @@ def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: by
     """The prover's side of a remote session against the verifier at ``verifier`` (``HOST:PORT``): register the
     store, then run each session of ``plan`` (`ProverSide`'s modes: ``serve``, or ``servedrop:K``, which withholds the
     first K blocks appended) as the verifier starts it.  Returns each session's result; raises `Refused` with the
-    verifier's reason if it refuses the registration."""
+    verifier's reason if it refuses the registration.  A prover that fails drops the connection, so the verifier sees
+    the session end there."""
     host, port = address(verifier)
     prover, wire = session_module("prover"), session_module("wire")
-    p = prover.ProverSide(wire.connect(host, port), backend, node, prover.parse_plan(plan), log=log, **kw)
+    conn = wire.connect(host, port)
     try:
-        p.register(codec=codec)
-    except wire.Closed as e:
-        if str(e).startswith("refused"):
-            raise Refused(verifier, str(e)) from None
+        p = prover.ProverSide(conn, backend, node, prover.parse_plan(plan), log=log, **kw)
+        try:
+            p.register(codec=codec)
+        except wire.Closed as e:
+            if str(e).startswith("refused"):
+                raise Refused(verifier, str(e)) from None
+            raise
+        out = []
+        for mode, fraction in p.plan:
+            head, _, _ = p.expect("session")
+            out.append(p.session(head, mode, fraction))
+        return out
+    except BaseException:
+        try:
+            conn.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        conn.sock.close()
         raise
-    out = []
-    for mode, fraction in p.plan:
-        head, _, _ = p.expect("session")
-        out.append(p.session(head, mode, fraction))
-    return out
 
 
-def serve(verifier: str, store: Store, step: Callable[[], Any], **kw: Any) -> list[dict]:
-    """The Commit's hook (``--remote-verifier HOST:PORT``): `prove` over ``store``, with ``binder.Binder(store,
-    passes=False)`` on the engine (the session runs the passes and windows), each pass after one engine step
-    ``step()`` (``LLMEngine.step``), which the binder numbers and records."""
-    return prove(StoreBackend(store, lambda s: step()), verifier, **kw)
+class Lockstep:
+    """A run's engine steps as a session's: the session's backend, on the session's thread, asks for its next engine
+    step (``lockstep(s)``, the backend's ``engine``) and waits; the run, on its own thread, takes each ask in `step`,
+    runs its engine step and hands back.  So the session's steps are the run's first steps, one a pass, and one thread
+    at a time touches the store.  Once the session has ended (`close`), the run's later steps are unaudited
+    (``unaudited``); a run that ends while the session still asks for steps fails the session (`finish`)."""
 
-
-class Workload:
-    """A session's engine steps over a workload's requests: before each step, the next requests (in turn, each id
-    suffixed with its count) while fewer than ``concurrent`` are in flight, so every step schedules; then
-    ``engine.step()`` (`LLMEngine`)."""
-
-    def __init__(self, engine: Any, requests: Sequence[tuple[str, list[int], Any]], concurrent: int = 1) -> None:
-        if not requests:
-            raise ValueError("a session serves at least one request")
-        self.engine, self.requests, self.concurrent = engine, list(requests), max(1, int(concurrent))
-        self.added = self.finished = self.steps = 0
+    def __init__(self) -> None:
+        self._asks: queue.Queue = queue.Queue()
+        self._done: queue.Queue = queue.Queue()
+        self._ask: int | None = None
+        self.ended = False
+        self.audited = self.unaudited = 0
 
     def __call__(self, s: int) -> None:
-        while self.engine.get_num_unfinished_requests() < self.concurrent:
-            rid, ids, params = self.requests[self.added % len(self.requests)]
-            self.engine.add_request(f"{rid}@remote{self.added}", {"prompt_token_ids": list(ids)}, params)
-            self.added += 1
-        self.finished += sum(1 for o in self.engine.step() if o.finished)
-        self.steps += 1
+        self._asks.put(s)
+        why = self._done.get()
+        if why is not None:
+            raise RuntimeError(why)
+
+    def close(self) -> None:
+        self._asks.put(None)
+
+    def ready(self) -> bool:
+        """Wait until the session asks for a step (True) or has ended (False)."""
+        if not self.ended and self._ask is None:
+            self._ask = self._asks.get()
+            self.ended = self._ask is None
+        return not self.ended
+
+    def step(self, run: Callable[[], Any]) -> Any:
+        """The run's next engine step ``run()``: the session's, if it asks for one."""
+        if not self.ready():
+            self.unaudited += 1
+            return run()
+        self._ask = None
+        try:
+            out = run()
+        except BaseException as e:
+            self._done.put(f"the run's engine step raised {type(e).__name__}: {e}")
+            raise
+        self.audited += 1
+        self._done.put(None)
+        return out
+
+    def finish(self) -> None:
+        """The run is done: a session that asks for another step fails."""
+        if self.ready():
+            self._ask = None
+            self._done.put(f"the run ended after {self.audited} steps, before the session's last pass")
 
 
 class CommitSession:
@@ -389,18 +430,25 @@ class CommitSession:
     ~~~text
     engine_args  before the build: one GPU, synchronous scheduling, no prefix caching, bf16 KV (refusing anything else),
                  the KV pool at ``kv_pages`` pages
+    target       before the build: the row's target declares synchronous scheduling (its Program's LAG 0)
     install      before the build: ``binder.Binder(store, passes=False)`` on vLLM's model runner, block pool and
                  scheduler, registering weight tensors up to ``weight_blocks`` blocks and the KV pool
     check        after the build: the engine core in this process, scheduling synchronous, the KV cache bf16, the pool
                  registered
-    serve        once the Commit's runs are done: the workload's requests on its engine a step a pass (`Workload`), the
-                 memory map recorded against the registration's digest beside the Commit (``out``), the store encoded by
-                 kv.cu at ``kv_lib`` (`KvDevice`) or, without it, on the CPU; its record, ``remote_session.json``, with
-                 the map's agreement with the store (`agreement`)
+    begin        before the Commit's first instrumented run: the session on its own thread, registered and its first
+                 window's coin in before the run's first step; the store encoded by kv.cu at ``kv_lib`` (`KvDevice`) or,
+                 without it, on the CPU
+    (the run)    each of its engine steps through the returned `Lockstep`: a pass's step while the session lasts, so the
+                 memory map, recorded against the registration's digest beside the Commit (``out``), is of the run's
+                 steps from its first, and its KV payloads the run's K and V; the steps after the session unaudited
+    end          after the run: the session done (failed if it still asked for a step), its record
+                 ``remote_session.json`` with the map's agreement with the store (`agreement`), taken before the run
+                 went on, and the map stopped there (`store.memory_map.end`)
     ~~~
 
-    A store serves one session, so ``plan`` is one mode: ``serve``, or ``servedrop:K``, the negative that withholds the
-    first K blocks appended."""
+    A store serves one session, so ``plan`` is one mode (``serve``, or ``servedrop:K``, the negative that withholds the
+    first K blocks appended) and the session audits one run: with more than one pair, the later instrumented runs are
+    committed and unaudited.  The control arm is never audited."""
 
     def __init__(self, verifier: str, *, plan: str = "serve", kv_pages: int = 32, weight_blocks: int | None = None,
                  kv_lib: str | None = None, out: str | Path | None = None, node: str | None = None,
@@ -417,6 +465,10 @@ class CommitSession:
         self.verifier, self.plan, self.kv_pages, self.weight_blocks = verifier, plan, int(kv_pages), weight_blocks
         self.kv_lib, self.out, self.node, self.codec, self.log = kv_lib, None if out is None else Path(out), node, codec, log
         self.store, self.binder = Store(), None
+        self.lockstep: Lockstep | None = None
+        self.backend: StoreBackend | None = None
+        self.record: dict[str, Any] | None = None
+        self._thread: threading.Thread | None = None
 
     def engine_args(self, engine_args: dict[str, Any]) -> dict[str, Any]:
         why = []
@@ -432,6 +484,14 @@ class CommitSession:
             raise SystemExit("--remote-verifier refuses " + "; ".join(why))
         return {**engine_args, "async_scheduling": False, "enable_prefix_caching": False,
                 "num_gpu_blocks_override": self.kv_pages}
+
+    def target(self, target: Any) -> None:
+        """Before the build: the row's target declares synchronous scheduling, so its Program is the one the engine
+        runs (a target that leaves it unset is specialized for the scheduler vLLM resolves, async, LAG 1)."""
+        got = getattr(target, "async_scheduling", None)
+        if got is not False:
+            raise SystemExit(f"--remote-verifier: the row's target declares async_scheduling {got!r}, and the session's "
+                             "engine schedules synchronously: declare \"async_scheduling\": false in the workload's target")
 
     def install(self) -> None:
         from verity_vllm.store.binder import Binder
@@ -457,25 +517,50 @@ class CommitSession:
             raise SystemExit("--remote-verifier: the engine is not one the session serves: " + "; ".join(why))
         return self.binder.stats()
 
-    def serve(self, engine: Any, requests: Sequence[tuple[str, list[int], Any]], concurrent: int = 1) -> dict[str, Any]:
-        workload = Workload(engine, requests, concurrent)
+    def begin(self) -> Lockstep:
+        if self.lockstep is not None:
+            raise RuntimeError("a store serves one session: the Commit's session audits one run")
+        self.lockstep = Lockstep()
         path = None if self.out is None else self.out / "memory_map.jsonl"
         device = None if self.kv_lib is None else KvDevice(self.kv_lib, self.codec)
-        backend = StoreBackend(self.store, workload, path=path, device=device)
-        error, result = None, {}
+        self.backend = StoreBackend(self.store, self.lockstep, path=path, device=device)
+        self._thread = threading.Thread(target=self._session, name="remote-session", daemon=True)
+        self._thread.start()
+        self.lockstep.ready()
+        return self.lockstep
+
+    def _session(self) -> None:
+        backend, error, result, agree = self.backend, None, {}, {}
         try:
             (result,) = prove(backend, self.verifier, self.plan, node=self.node.encode(), codec=self.codec, log=self.log)
+            agree = agreement(backend)
         except Exception as e:  # noqa: BLE001  -- recorded: a session that fails is rejected, and the Commit's verdict still written
             error = f"{type(e).__name__}: {e}"
-        rec = {"schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan,
-               "accepted": error is None and bool(result.get("accepted")), "error": error, "prover": result,
-               "store": self.binder.stats(), "layout": backend.layout(), "kv_pages": self.kv_pages,
-               "weight_blocks": self.weight_blocks, "encode": "kv.cu" if device is not None else "cpu",
-               "gates": backend.gates, "workload": {"steps": workload.steps, "requests": workload.added,
-                                                     "finished": workload.finished},
-               "memory_map": None if backend.trace is None else {
-                   "path": None if path is None else str(path), "registration": backend.registration.digest.hex(),
-                   "steps": backend.trace.steps, "rekeyed": backend.trace.rekeyed, **(agreement(backend) if error is None else {})}}
+        try:
+            trace = backend.trace
+            self.record = {
+                "schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan,
+                "accepted": error is None and bool(result.get("accepted")), "error": error, "prover": result,
+                "store": self.binder.stats() if self.binder is not None else None, "layout": backend.layout(),
+                "kv_pages": self.kv_pages, "weight_blocks": self.weight_blocks,
+                "encode": "kv.cu" if backend.device is not None else "cpu", "gates": backend.gates,
+                "memory_map": None if trace is None else {
+                    "path": None if backend.path is None else str(backend.path),
+                    "registration": backend.registration.digest.hex(), "first_step": trace.first, "steps": trace.steps,
+                    "rekeyed": trace.rekeyed, **agree}}
+            store_map.end(self.store)
+        finally:
+            self.lockstep.close()
+
+    def end(self) -> dict[str, Any]:
+        self.lockstep.finish()
+        self._thread.join()
+        rec = self.record if self.record is not None else {
+            "schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan, "accepted": False,
+            "error": "the session's record was not written (its thread raised)", "memory_map": None, "encode": None}
+        lock = self.lockstep
+        rec["run"] = {"steps": lock.audited + lock.unaudited, "audited": lock.audited, "unaudited": lock.unaudited}
+        self.record = rec
         if self.out is not None:
             (self.out / "remote_session.json").write_text(json.dumps(rec, indent=1, default=str) + "\n")
         return rec

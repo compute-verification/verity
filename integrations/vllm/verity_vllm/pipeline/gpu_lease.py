@@ -215,8 +215,7 @@ def kept_reason(args: Any, coms: list[Any], eng: Any, environ: MutableMapping[st
     shutdown frees it)."""
     core = getattr(getattr(getattr(eng, "llm", None), "llm_engine", None), "engine_core", None)
     gpus = [d for d in environ.get("CUDA_VISIBLE_DEVICES", "").split(",") if d]
-    return ("the remote bandwidth session serves on the engine after the last run (--remote-verifier)" if getattr(args, "remote_verifier", None) else
-            "the C2 replay runs in this process, on the engine's weights (no --replay-deferred)" if not getattr(args, "replay_deferred", False) else
+    return ("the C2 replay runs in this process, on the engine's weights (no --replay-deferred)" if not getattr(args, "replay_deferred", False) else
             "the replay bundle reads the model's buffers at the C2 site (--replay-bundle-overlap 0)" if not getattr(args, "replay_bundle_overlap", 1) else
             "the replay bundle is written at the C2 site or the C2 replay runs in this process (replay_bundle.start began no write: a slim "
             "bundle, a live-only replay, a retention other than host, or a store over the cap)" if not bundle else

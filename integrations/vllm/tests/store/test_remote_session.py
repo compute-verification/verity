@@ -9,6 +9,7 @@ registration of a node the verifier holds live is refused with its reason.  The 
 passes, a tick each (`PassClock`)."""
 from __future__ import annotations
 
+import json
 import os
 import queue
 import random
@@ -280,6 +281,10 @@ def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest
                      ({"async_scheduling": True}, "async"), ({"enable_prefix_caching": True}, "prefix caching")]:
         with pytest.raises(SystemExit, match=why):
             cs.engine_args(bad)
+    cs.target(type("T", (), {"async_scheduling": False})())
+    for t in (None, type("T", (), {"async_scheduling": None})()):
+        with pytest.raises(SystemExit, match="declare \"async_scheduling\": false"):
+            cs.target(t)
     for kw, err in [({"plan": "serve,serve"}, "one mode"), ({"kv_pages": 0}, "a page"), ({"plan": "nope"}, "a session's mode"),
                     ({"node": "n" * 65}, "node id")]:
         with pytest.raises(Exception, match=err):
@@ -287,23 +292,82 @@ def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest
     assert 1 <= len(cs.node.encode()) <= audit.NODE_BYTES
 
 
-def test_a_commits_session_that_fails_is_recorded_rejected_with_its_error(monkeypatch, tmp_path):
-    """The Commit writes its verdict whatever the session does: a session that raises is rejected, its error recorded."""
+class Stats:
+    def stats(self) -> dict:
+        return {}
+
+
+def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2):
+    """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 1 window,
+    the run ``run_steps`` steps of the scripted engine, each through the session's `Lockstep`."""
+    clock = PassClock()
+    monkeypatch.setattr(remote, "StoreBackend", lambda *a, **kw: TickingBackend(clock, *a, **kw))
+    lsock = wire.listen("127.0.0.1", 0)
+    cs = remote.CommitSession(f"127.0.0.1:{lsock.getsockname()[1]}", out=tmp_path, codec=P512, log=lambda m: None)
+    cs.store, cs.binder = store(), Stats()
+    seen: list = []
+
+    def verify() -> None:
+        sock, _ = lsock.accept()
+        lsock.close()
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=windows, window_ns=5,
+                              samples=4096, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, lifetime=1)
+        v.register()
+        try:
+            seen.append(v.session(0, v.allowance(v.ping(4)), None))
+        except Exception as e:  # noqa: BLE001  -- a prover that stops mid-session drops the connection
+            seen.append(e)
+        sock.close()
+
+    th = threading.Thread(target=verify, daemon=True)
+    th.start()
+    lock = cs.begin()
+    step, steps = engine(cs.store), []
+    for k in range(run_steps):
+        lock.step(lambda: steps.append(k) or step(k))
+    rec = cs.end()
+    th.join()
+    return rec, seen[0], cs, steps
+
+
+def test_the_commits_session_runs_in_lockstep_with_its_run_and_its_map_stops_with_it(tmp_path, monkeypatch):
+    """Each pass's engine step is the run's next step: the session's steps are the run's first steps, from its first,
+    and the run's steps after the session are unaudited and in no map line."""
+    rec, r, cs, steps = lockstep(tmp_path, monkeypatch, 40)
+    assert r["accepted"] and rec["accepted"] and rec["error"] is None and steps == list(range(40))
+    mm, run = rec["memory_map"], rec["run"]
+    assert mm["first_step"] == 0 and mm["steps"] == run["audited"] and mm["agrees"] and mm["rekeyed"] > 0
+    assert 0 < run["audited"] < 40 and run["audited"] + run["unaudited"] == 40
+    head, lines = memory_map.parse((tmp_path / "memory_map.jsonl").read_text().splitlines(keepends=True))
+    assert max(st.step for st in lines) == run["audited"] - 1 and cs.store.memory_map is None
+    assert json.loads((tmp_path / "remote_session.json").read_text())["run"] == run
+
+
+def test_a_run_that_ends_before_its_session_fails_the_session(tmp_path, monkeypatch):
+    rec, r, _, steps = lockstep(tmp_path, monkeypatch, 3)
+    assert not rec["accepted"] and "the run ended after 3 steps" in rec["error"] and steps == [0, 1, 2]
+    assert rec["run"] == {"steps": 3, "audited": 3, "unaudited": 0}
+    assert isinstance(r, Exception) or not r["accepted"]
+
+
+def test_a_commits_session_that_fails_is_recorded_rejected_and_its_run_goes_on_unaudited(monkeypatch, tmp_path):
+    """The Commit writes its verdict whatever the session does: a session that raises is rejected, its error recorded,
+    and the run's steps run unaudited."""
     def fails(backend, *a, **kw):
         raise ConnectionRefusedError("no verifier")
 
     monkeypatch.setattr(remote, "prove", fails)
     cs = remote.CommitSession("127.0.0.1:7781", out=tmp_path)
-    cs.store = store()
-    cs.binder = type("B", (), {"stats": lambda self: {}})()
-
-    class Engine:
-        def get_num_unfinished_requests(self):
-            return 1
-
-    rec = cs.serve(Engine(), [("r", [1, 2], None)])
+    cs.store, cs.binder = store(), Stats()
+    lock, steps = cs.begin(), []
+    for k in range(4):
+        lock.step(lambda: steps.append(k))
+    rec = cs.end()
     assert rec["accepted"] is False and rec["error"] == "ConnectionRefusedError: no verifier" and rec["memory_map"] is None
+    assert steps == [0, 1, 2, 3] and rec["run"] == {"steps": 4, "audited": 0, "unaudited": 4}
     assert (tmp_path / "remote_session.json").exists()
+    with pytest.raises(RuntimeError, match="one session"):
+        cs.begin()
 
 
 def test_a_store_session_whose_prover_seeds_without_the_appends_head_is_rejected():
@@ -353,15 +417,7 @@ def test_a_store_session_whose_prover_withholds_an_appended_block_is_rejected():
     assert r["failure"]["failure"] == "receipt" and p["failure_on_dropped"] is True and p["dropped"] == [18]
 
 
-def test_the_hook_takes_a_verifier_address_and_one_session_a_store(monkeypatch):
-    """`serve`, the Commit's hook, proves the store with one engine step a pass; the session is one a store."""
-    seen, steps = [], []
-    monkeypatch.setattr(remote, "prove", lambda backend, verifier, **kw: seen.append((backend, verifier, kw)) or [])
-    s = store()
-    remote.serve("10.0.0.7:7781", s, lambda: steps.append(1), plan="serve")
-    (backend, verifier, kw), = seen
-    backend.engine(0)
-    assert backend.store is s and verifier == "10.0.0.7:7781" and kw == {"plan": "serve"} and steps == [1]
+def test_a_verifier_address_is_host_port_and_a_store_serves_one_session():
     assert remote.address("10.0.0.7:7781") == ("10.0.0.7", 7781)
     for bad in ("7781", "host:", ":7781", "host:0", "host:65536", "host:x"):
         with pytest.raises(ValueError, match="HOST:PORT"):

@@ -77,6 +77,13 @@ def record(store: Any, path: str | Path | None = None, registration: bytes | Non
     return store.memory_map
 
 
+def end(store: Any) -> None:
+    """Close ``store``'s map's open line and stop recording: its session is over, and the steps after it are none of its."""
+    if store.memory_map is not None:
+        store.memory_map.flush()
+        store.memory_map = None
+
+
 class MemoryMap:
     """memory-map/v1 of ``store``'s KV pool beside ``header``'s store, its lines in ``path`` (appended as each closes)
     or, without one, kept (`text`).  ``replay`` is the map as the audit replays it, which refuses a line that breaks
