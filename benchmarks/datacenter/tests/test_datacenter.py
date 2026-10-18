@@ -115,6 +115,18 @@ def test_a_frame_that_is_not_a_committed_crossing_is_refused_even_at_the_declare
     assert refused and "not a committed crossing" in refused[0].why
 
 
+def test_work_a_helper_could_ship_in_is_bounded_by_the_certified_ingress(setup):
+    """Compute's scenario 1: a helper off the block computes the products and ships them in. What the claims credit to
+    the block, less its certified ingress times the circuit's intensity, must have run on the block itself."""
+    c, dc, p = setup
+    claims = audit(run(p, INPUTS, window=4), occupancy(p, 32, 1))
+    narrow = account(claims, p, Clock(1e-9), Interval(0, 16))       # 16 ns: almost nothing can come in
+    wide = account(claims, p, Clock(1e-3), Interval(0, 16))         # 16 ms at 100 Mbit/s: plenty can
+    a_narrow, a_wide = narrow.blocks[0], wide.blocks[0]
+    assert a_narrow.credited == a_wide.credited > 0
+    assert a_narrow.local_at_least > 0.9 * a_narrow.credited and a_wide.local_at_least == 0
+
+
 def test_credit_from_two_audits_on_one_device_must_fit_every_interval():
     rate = {"gpu0": 10.0}
     fits = [Credit("gpu0", Interval(0, 10), 60), Credit("gpu0", Interval(5, 15), 40)]

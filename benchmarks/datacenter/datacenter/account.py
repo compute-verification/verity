@@ -7,7 +7,8 @@ datacenter (named assumptions) and an epoch on the trusted clock, and concludes,
 - `capacity`: what the block's devices could do in the epoch, by their declared rates;
 - `headroom`: the difference, the work the audit doesn't account for;
 - `outsourceable`: an upper bound on work done off the block and shipped in, its certified ingress times the
-  circuit's arithmetic intensity (work per bit);
+  circuit's arithmetic intensity (work per bit), and so `local_at_least`, the credited work less that: what must have
+  run on the block itself;
 - `state`: the bits of state that could survive the epoch, its devices' memory unless a verified wipe ran, then their
   residual.
 
@@ -41,6 +42,12 @@ class BlockAccount:
     def headroom(self) -> float:
         return max(self.capacity - self.credited, 0.0)
 
+    @property
+    def local_at_least(self) -> float:
+        """Work that must have been done on the block itself: what the claims credit, less what a helper off the block
+        could have computed and shipped in through its certified ingress."""
+        return max(self.credited - self.outsourceable, 0.0)
+
 
 @dataclass
 class Account:
@@ -62,10 +69,11 @@ class Account:
         return not self.refused
 
     def __repr__(self) -> str:
-        lines = [f"{'block':10} {'credited':>12} {'capacity':>12} {'headroom':>12} {'outsourceable':>14} {'state (bits)':>14}"]
+        lines = [f"{'block':10} {'credited':>10} {'local ≥':>10} {'capacity':>10} {'headroom':>10} {'outsourceable':>14} "
+                 f"{'state (bits)':>13}"]
         for b in self.blocks:
-            lines.append(f"{b.block:10} {b.credited:12.3g} {b.capacity:12.3g} {b.headroom:12.3g} {b.outsourceable:14.3g} "
-                         f"{b.state:14.3g}")
+            lines.append(f"{b.block:10} {b.credited:10.3g} {b.local_at_least:10.3g} {b.capacity:10.3g} {b.headroom:10.3g} "
+                         f"{b.outsourceable:14.3g} {b.state:13.3g}")
         lines.append(f"covert budget: {self.covert_bits:g} bits = {self.timing_bits:g} timing advice + "
                      f"{sum(self.input_bits.values())} inputs ({', '.join(f'{k}: {v}' for k, v in self.input_bits.items()) or 'none'}) + "
                      f"{sum(self.offramp_bits.values())} off-ramp ({', '.join(f'{k}: {v}' for k, v in self.offramp_bits.items()) or 'none'})")
