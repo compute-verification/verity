@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Witnesses.Flock
 import Proofs.Flock.Claims.ZK.Rewind
 import Definitions.Claims.Recursion
+import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Refutation witnesses: the ZK-recursion compiler's claims
@@ -133,11 +134,11 @@ def zeroP (Coin : Type) : Prover ((Fin 1 → Fin 1 → UInt8) × Unit) :=
 
 /-- The masked toy record of `ZK`: `zkR` with one nonce, one rest, the tape `()` and the outer simulators `SO`. -/
 def zkZR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.ZkDeploy Coin :=
-  { zkR Coin with Nonce := Unit, Rest := Unit, tapeOf := fun _ => (), SO := SO }
+  { zkR Coin with Nonce := fun _ => Unit, Rest := fun _ => Unit, tapeOf := fun _ _ => (), SO := SO }
 
 /-- `zkPR` masked as `zkZR` is. -/
 def zkZPR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.ZkDeploy Coin :=
-  { zkPR Coin with Nonce := Unit, Rest := Unit, tapeOf := fun _ => (), SO := SO }
+  { zkPR Coin with Nonce := fun _ => Unit, Rest := fun _ => Unit, tapeOf := fun _ _ => (), SO := SO }
 
 /-- `zvR` at the circuit commitment `circ`, whose reference prover is `zeroP`, masked with the nonce `zeroP` reads, one
 rest and the outer simulators `SO`. -/
@@ -146,9 +147,9 @@ def zvZR (Coin : Type) (circ : Option Msg) (SO : ℕ → Msg → ℕ → OSim) :
     Tape := (Fin 1 → Fin 1 → UInt8) × Unit
     tapeNonempty := inferInstance
     P := fun _ => zeroP Coin
-    Nonce := Fin 1 → Fin 1 → UInt8
-    Rest := Unit
-    tapeOf := fun ω => ω
+    Nonce := fun _ => Fin 1 → Fin 1 → UInt8
+    Rest := fun _ => Unit
+    tapeOf := fun _ ω => ω
     SO := SO }
 
 theorem recStmt_inScope : Recursion.InScope recStmt :=
@@ -621,7 +622,8 @@ theorem ZK_fails (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
     ¬ Recursion.ZK H (zkZR Coin SO) (zeroI Coin) (zkO Coin) := fun h =>
   ZKMal.not_zkmalR_of_out (N := Unit) (Ω := Unit) H _ _ [] _ _ _ [] ⟨[]⟩ ⟨recStmt, rfl, rfl, trivial⟩ Nat.one_pos
     (by rw [zk_εzk _ rfl rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
-    (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
+    ((ZKMal.zkmalRx_const_of H _ (zkZR Coin SO).prover [] (fun _ _ => rfl) _ _ _ _).1
+      (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _)))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The recursion's private `ZK` fails** at a masked outer Flock, at `zkZPR`, whose reference prover is quiet, at
@@ -632,7 +634,8 @@ theorem ZKPriv_fails (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
     ⟨{ recStmt with circ := some [] }, rfl, rfl, trivial⟩
     Nat.one_pos
     (by rw [zk_εzk _ rfl rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
-    (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
+    ((ZKMal.zkmalRx_const_of H _ (zkZPR Coin SO).prover [] (fun _ _ => rfl) _ _ _ _).1
+      (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _)))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The recursion's `ZK` holds at a record whose own reference prover ignores its witness**: at `zvZR`, where every
@@ -640,14 +643,16 @@ witness is in the relation, at a masked outer Flock, every record's outer simula
 (`zkmalR_zeroP`). -/
 theorem ZK_zeroRecord (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
     Recursion.ZK H (zvZR Coin none SO) (accI Coin) (zkO Coin) :=
-  ⟨rfl, fun t _ δ₁ _ => zkmalR_zeroP (Coin := Coin) none _ H (SO t) t δ₁⟩
+  ⟨rfl, fun t _ δ₁ _ => (ZKMal.zkmalRx_const_of H _ (zvZR Coin none SO).prover [] (fun _ _ => rfl) _ _ _ _).2
+    (zkmalR_zeroP (Coin := Coin) none _ H (SO t) t δ₁)⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The recursion's private `ZK` holds at a record whose own reference prover ignores its witness**, as `ZK` does
 (`zkmalR_zeroP`). -/
 theorem ZKPriv_zeroRecord (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
     ZKPriv H (zvZR Coin (some []) SO) (accI Coin) (zkO Coin) :=
-  ⟨rfl, fun t _ δ₁ _ => zkmalR_zeroP (Coin := Coin) (some []) _ H (SO t) t δ₁⟩
+  ⟨rfl, fun t _ δ₁ _ => (ZKMal.zkmalRx_const_of H _ (zvZR Coin (some []) SO).prover [] (fun _ _ => rfl) _ _ _ _).2
+    (zkmalR_zeroP (Coin := Coin) (some []) _ H (SO t) t δ₁)⟩
 
 /-- **The inner protocol's `KS` fails** at `noI`, which accepts and whose relation is empty. -/
 theorem Inner.KS_fails (H : Msg → Msg) : ¬ (noI Coin).KS H :=

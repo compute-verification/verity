@@ -332,7 +332,7 @@ def ZKBoundM (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) : Prop :=
   ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
     Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
-      Claims.ZKMal.ZKmalRx (fun x => ((T₀ x).iter 0 NB ΩB (nS x)).N) (fun x => ((T₀ x).iter 0 NB ΩB (nS x)).Ω) H
+      Claims.ZKmalRx (fun x => ((T₀ x).iter 0 NB ΩB (nS x)).N) (fun x => ((T₀ x).iter 0 NB ΩB (nS x)).Ω) H
         (kM IV b) (fun w x => (refPM IV b (pre x) wit PS w).comap (Layout.flatten (T₀ x) 0 NB ΩB (nS x)))
         (Claims.Recursion.R (deployRec IV ivScope b) I) (Claims.Recursion.Sim (deployRec IV ivScope b) I (SO t))
         (Claims.Recursion.εzk (deployRec IV ivScope b) I t δ₁) (Claims.Recursion.γzk (deployRec IV ivScope b) t)

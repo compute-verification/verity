@@ -73,11 +73,11 @@ import Proofs.Flock.SamplingBoundary
 
 namespace Claims.Sampling
 
-/-- **`D` masked**: the record with its reference prover's tape read off a nonce and the rest (`tapeOf`), and the
-simulator `S`. -/
+/-- **`D` masked**: the record with its reference prover's tape read off a nonce and the rest (`tapeOf`), the same at
+every statement, and the simulator `S`. -/
 def Deploy.mask {Coin Col T : Type} (D : Deploy Coin Col T) (Nonce Rest : Type) [Fintype Nonce] [Nonempty Nonce]
     [Fintype Rest] [Nonempty Rest] (tapeOf : Nonce × Rest → D.Tape) (S : SimLeak) : ZkDeploy Coin Col T :=
-  { toDeploy := D, Nonce := Nonce, Rest := Rest, tapeOf := tapeOf, S := S }
+  { toDeploy := D, Nonce := fun _ => Nonce, Rest := fun _ => Rest, tapeOf := fun _ => tapeOf, S := S }
 
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at a deployment whose sessions are Flock's masked verifier**, at every hash: the readable

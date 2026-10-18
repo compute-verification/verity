@@ -1,4 +1,4 @@
-import Definitions.Claims
+import Definitions.Claims.IndexedTapes
 
 /-!
 # Claims: the ZK-recursion compiler (a draft, for Daniel's read before it freezes)
@@ -426,25 +426,26 @@ def Deploy.zeroCommits {Coin : Type} (D : Deploy Coin) : List (Fin D.saltLen →
   | [] => .ret []
   | y :: ys => spBind (spOf (D.zeroCommit y)) fun c => spBind (D.zeroCommits ys) fun cs => .ret (c :: cs)
 
-/-- **The masked record**: a deployment with its reference prover's tape drawn as a finite nonce and rest (`tapeOf`),
-and the outer `--zk` Flock's simulators at each attempt budget, at the recursion's statement and each V* session's index
-(`SO`), which `Sim` runs. -/
+/-- **The masked record**: a deployment with its reference prover's tape at each statement drawn as a finite nonce and
+rest of that statement's (`tapeOf x`), since each V* session runs on a tape of its own, and the outer `--zk` Flock's
+simulators at each attempt budget, at the recursion's statement and each V* session's index (`SO`), which `Sim`
+runs. -/
 structure ZkDeploy (Coin : Type) extends Deploy Coin where
-  Nonce : Type
-  Rest : Type
-  [nonceFin : Fintype Nonce]
-  [nonceNe : Nonempty Nonce]
-  [restFin : Fintype Rest]
-  [restNe : Nonempty Rest]
-  tapeOf : Nonce × Rest → Tape
+  Nonce : Msg → Type
+  Rest : Msg → Type
+  [nonceFin : ∀ x, Fintype (Nonce x)]
+  [nonceNe : ∀ x, Nonempty (Nonce x)]
+  [restFin : ∀ x, Fintype (Rest x)]
+  [restNe : ∀ x, Nonempty (Rest x)]
+  tapeOf : (x : Msg) → Nonce x × Rest x → Tape
   SO : ℕ → Msg → ℕ → OSim
 
 attribute [instance] ZkDeploy.nonceFin ZkDeploy.nonceNe ZkDeploy.restFin ZkDeploy.restNe
 
-/-- **The masked record's reference prover**: `Deploy.P`, the prover `Complete` reads, on the tape its nonce and rest
-draw. -/
-def ZkDeploy.prover {Coin : Type} (D : ZkDeploy Coin) (w : Flock.Wit) : Prover (D.Nonce × D.Rest) :=
-  ⟨fun x hist ω => (D.P w).next x hist (D.tapeOf ω)⟩
+/-- **The masked record's reference prover** at the statement `x`: `Deploy.P`, the prover `Complete` reads, on the
+tape `x`'s nonce and rest draw. -/
+def ZkDeploy.prover {Coin : Type} (D : ZkDeploy Coin) (w : Flock.Wit) (x : Msg) : Prover (D.Nonce x × D.Rest x) :=
+  ⟨fun x' hist ω => (D.P w).next x' hist (D.tapeOf x ω)⟩
 
 section Recursion
 
@@ -692,15 +693,16 @@ compiled verifier's scope check takes it. -/
 def ScopeMatches (D : Deploy Coin) (I : Inner Coin W) : Prop := Claims.ScopeMatches (Scope D I) D.scopeCheck
 
 /-- **The recursion: zero knowledge** of the masked record's reference prover (`ZkDeploy.prover`: `Deploy.P`, which
-`Complete` reads, on the tape its nonce and rest draw) against every malicious verifier of the compiled verifier's
-rounds (`ZKmalR` at `D.V.k`), at `Sim` over the record's outer `--zk` Flock simulators at each attempt budget `t ≥ 1`
-(`D.SO t`): wherever hm96 leaves hide up to `δ₁` at the deployed key (`Hm96Hiding` at its salt mask `D.mask` and salt
-hash `D.saltHash H`), within `εzk` (each V* session's proved `--zk` simulation error, and `2δ₁` per commit string of the
-inner session and the staging messages) plus `γzk` times the probability that `Fork` finds a collision among the
-prover's SHA-512 calls in two real runs against `V*`. -/
+`Complete` reads, on the tape each statement's nonce and rest draw) against every malicious verifier of the compiled
+verifier's rounds (`ZKmalRx` at `D.V.k`), at `Sim` over the record's outer `--zk` Flock simulators at each attempt
+budget `t ≥ 1` (`D.SO t`): wherever hm96 leaves hide up to `δ₁` at the deployed key (`Hm96Hiding` at its salt mask
+`D.mask` and salt hash `D.saltHash H`), within `εzk` (each V* session's proved `--zk` simulation error, and `2δ₁` per
+commit string of the inner session and the staging messages) plus `γzk` times the probability that `Fork` finds a
+collision among the prover's SHA-512 calls in two real runs against `V*`. -/
 def ZK (H : Msg → Msg) (D : ZkDeploy Coin) (I : Inner Coin Flock.Wit) (DO : Flock.Deploy Coin Col T) : Prop :=
   DO.zk = true ∧ ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, Hm96Hiding D.mask (D.saltHash H) δ₁ →
-    ZKmalR H D.V.k D.prover (R D.toDeploy I) (Sim D.toDeploy I (D.SO t)) (εzk D.toDeploy I t δ₁) (γzk D.toDeploy t)
+    ZKmalRx D.Nonce D.Rest H D.V.k D.prover (R D.toDeploy I) (Sim D.toDeploy I (D.SO t)) (εzk D.toDeploy I t δ₁)
+      (γzk D.toDeploy t)
 
 /-- **The recursion: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the compiled
 verifier accepts. -/
@@ -718,8 +720,8 @@ def KSPriv [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO
 commits to the zero digest at every inner round and in every staging message, so it needs no circuit of the class. -/
 def ZKPriv (H : Msg → Msg) (D : ZkDeploy Coin) (I : Inner Coin Flock.Wit) (DO : Flock.Deploy Coin Col T) : Prop :=
   DO.zk = true ∧ ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, Hm96Hiding D.mask (D.saltHash H) δ₁ →
-    ZKmalR H D.V.k D.prover (RPriv D.toDeploy I) (Sim D.toDeploy I (D.SO t)) (εzk D.toDeploy I t δ₁)
-      (γzk D.toDeploy t)
+    ZKmalRx D.Nonce D.Rest H D.V.k D.prover (RPriv D.toDeploy I) (Sim D.toDeploy I (D.SO t))
+      (εzk D.toDeploy I t δ₁) (γzk D.toDeploy t)
 
 end Recursion
 
