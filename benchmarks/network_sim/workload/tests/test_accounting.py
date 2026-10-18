@@ -8,13 +8,14 @@ from workload import accounting as A  # noqa: E402
 from workload.block import Context  # noqa: E402
 
 SPEC = {"d": 2, "layers": 3, "requests": 2}
-GRID = D.Grid(frame_bits=32, bucket=1, window=4, syncs=128, tick=D.Assumption("tick", 1e-3, "s", "declared"))
+CADENCE = D.Cadence(frame_bits=32, bucket_ticks=1, buckets=4, jitter_classes=128,
+                    tick=D.Assumption("tick", 1e-3, "s", "declared"))
 
 
 def adapted(**config):
     ctx = Context({"spec": SPEC, "blocks": 3, "devices": 2, "frame_bytes": 16, "seed": 1, **config})
     c = A.circuit(ctx.model)
-    dc = A.datacenter(ctx.hw, GRID, c.unit)
+    dc = A.datacenter(ctx.hw, CADENCE, c.unit)
     return ctx, c, A.placement(c, ctx.hw, ctx.placement, dc)
 
 

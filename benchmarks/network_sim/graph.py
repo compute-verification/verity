@@ -37,7 +37,7 @@ DATACENTER = str(Path(__file__).resolve().parents[1] / "datacenter")
 if DATACENTER not in sys.path:
     sys.path.insert(0, DATACENTER)
 
-from datacenter import Assumption, Block, Datacenter, Device, Grid, Link  # noqa: E402
+from datacenter import Assumption, Block, Cadence, Datacenter, Device, Link  # noqa: E402
 
 NETNS_PREFIX = "na-"
 INF = math.inf
@@ -84,12 +84,12 @@ def rtx_node(name: str = "node") -> Datacenter:
 
 def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: int = 1, uplink_gbps: int = 400,
                spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
-               grid: Grid | None = None) -> Datacenter:
+               cadence: Cadence | None = None) -> Datacenter:
     """`blocks` nodes (`rtx_node`, named b0, b1, …) behind a leaf-spine fabric: each node's NIC to its certifier
     (`bI.cert`), the certifier to a leaf switch (round-robin over `leaves`), every leaf to every spine, and `outside`
     hosts outside every block (`extC`, kind `outside`) on the leaves too. With one leaf, `spines` may be 0. Latencies
-    are one way, in seconds: `uplink_latency` from a NIC to its certifier, `fabric_latency` a fabric hop. `grid` is the
-    certifiers' (`datacenter.Grid`'s default when None)."""
+    are one way, in seconds: `uplink_latency` from a NIC to its certifier, `fabric_latency` a fabric hop. `cadence` is
+    the certifiers' (`datacenter.Cadence`'s default when None)."""
     if blocks < 1 or leaves < 1 or (leaves > 1 and spines < 1):
         raise ValueError("at least one block and one leaf, and spines to join more than one leaf")
     up = Assumption("fabric/uplink", uplink_gbps * 1_000_000_000, "bit/s", "declared")
@@ -110,7 +110,7 @@ def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: int = 
     links += [Link(sw.name, sp.name, trunk, hop, "ethernet") for sp in tops for sw in switches]
     hosts = [Device(f"ext{c}", "outside") for c in range(outside)]
     links += [Link(x.name, switches[c % leaves].name, up, hop, "ethernet") for c, x in enumerate(hosts)]
-    return Datacenter(f"leaf-spine-{blocks}", nodes, switches + certs + tops + hosts, links, grid or Grid())
+    return Datacenter(f"leaf-spine-{blocks}", nodes, switches + certs + tops + hosts, links, cadence or Cadence())
 
 
 def check(dc: Datacenter) -> Datacenter:

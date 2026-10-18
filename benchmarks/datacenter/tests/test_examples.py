@@ -7,7 +7,7 @@ from collections import Counter
 
 import pytest
 
-from datacenter import Grid, Port, route
+from datacenter import Cadence, Port, route
 from datacenter.examples import GB, leaf_spine, rack, rtx_node, with_dpu
 
 
@@ -57,7 +57,7 @@ def test_leaf_spine_puts_each_node_behind_its_certifier():
     assert dc.port("b0.nic0", "b0.cert") == Port("b0.cert", "egress") and dc.port("b0.cert", "b0.nic0").direction == "ingress"
     assert {(e.latency.name, e.latency.value) for e in dc.links if e.latency} == {
         ("fabric/uplink-latency", 1e-6), ("fabric/hop-latency", 2e-6)}
-    assert dc.grid == Grid() and leaf_spine(1, grid=Grid(window=60)).grid.window == 60
+    assert dc.cadence == Cadence() and leaf_spine(1, cadence=Cadence(buckets=60)).cadence.buckets == 60
     wide = leaf_spine(4, leaves=2, spines=3, outside=("ext0", "ext1"))
     assert wide.validate() == []
     trunks = sorted((e.a, e.b) for e in wide.links if e.b.startswith("spine"))
@@ -77,5 +77,6 @@ def test_the_rack_is_nodes_with_dpus_on_one_leaf_with_a_challenger_and_the_world
     assert [(e.a, e.b) for e in dc.boundary] == [("n0.dpu", "n0.cert"), ("n1.dpu", "n1.cert")]
     world = dc.link("world", "leaf0")
     assert world.kind == "wan" and world.delay == 1e-3 and dc.link("challenger", "leaf0").delay == 1e-6
-    assert (dc.grid.frame_bits, dc.grid.bucket, dc.grid.window, dc.grid.tick.value) == (32, 1, 4, 1e-4)
+    c = dc.cadence
+    assert (c.frame_bits, c.bucket_ticks, c.buckets, c.jitter_classes, c.tick.value) == (32, 1, 4, 128, 1e-4)
     assert [b.name for b in rack(nodes=1, dpus=False).blocks] == ["n0"] and "n0.dpu" not in rack(1, False).devices

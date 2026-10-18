@@ -74,7 +74,7 @@ class Link:
 @dataclass(frozen=True)
 class Port:
     """One direction of a certifier: what leaves its block (`egress`) or enters it (`ingress`). The certifier keeps one
-    grid per port and signs one record per port and window."""
+    grid per port (`NetTiming.Grid`) and signs one record per port and window."""
 
     certifier: str
     direction: Literal["egress", "ingress"]
@@ -84,16 +84,21 @@ class Port:
 
 
 @dataclass(frozen=True)
-class Grid:
-    """The certifiers' fixed parameters (W1) and the trusted clock: frames of `frame_bits`, buckets of `bucket` ticks,
-    records per `window` buckets, a public set of `syncs` clock-sync values a window may choose from, and `tick`, the
-    real duration of one tick."""
+class Cadence:
+    """The certifiers' fixed parameters (W1) and the trusted clock. Frames are `frame_bits` long (Lean's B), a bucket is
+    `bucket_ticks` ticks (`Hardware.bucket` maps a tick to its bucket), and a record covers a window of `buckets`
+    buckets (T: a window's `NetTiming.Grid` is T buckets of slots). Each window picks one of `jitter_classes` public
+    clock-sync values (the real certifier's sync set, Lean's jitter classes), and `tick` is one tick's real duration."""
 
     frame_bits: int = 32
-    bucket: int = 1
-    window: int = 8
-    syncs: int = 128
+    bucket_ticks: int = 1
+    buckets: int = 8
+    jitter_classes: int = 128
     tick: Assumption = Assumption("tick", 1e-3, "s", "declared")
+
+    @property
+    def window_ticks(self) -> int:
+        return self.bucket_ticks * self.buckets
 
     def seconds(self, ticks: float) -> float:
         return ticks * float(self.tick)
@@ -117,13 +122,13 @@ class Block:
 @dataclass
 class Datacenter:
     """Blocks, the fabric devices between them (switches, certifiers, the challenger, the outside world), the links,
-    and the certifiers' grid."""
+    and the certifiers' cadence."""
 
     name: str
     blocks: list[Block]
     fabric: list[Device] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
-    grid: Grid = field(default_factory=Grid)
+    cadence: Cadence = field(default_factory=Cadence)
 
     @property
     def devices(self) -> dict[str, Device]:
@@ -190,7 +195,7 @@ class Datacenter:
 
     def assumptions(self) -> list[Assumption]:
         """Every named premise the declaration makes, once each."""
-        out: dict[str, Assumption] = {self.grid.tick.name: self.grid.tick}
+        out: dict[str, Assumption] = {self.cadence.tick.name: self.cadence.tick}
         for d in self.devices.values():
             for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip, d.residual]:
                 if a is not None:
@@ -207,7 +212,7 @@ class Datacenter:
         r = lambda s: s if s in keep else f"{prefix}.{s}"  # noqa: E731
         return Datacenter(prefix, [Block(r(b.name), [replace(d, name=r(d.name)) for d in b.devices]) for b in self.blocks],
                           [replace(d, name=r(d.name)) for d in self.fabric],
-                          [replace(l, a=r(l.a), b=r(l.b)) for l in self.links], self.grid)
+                          [replace(l, a=r(l.a), b=r(l.b)) for l in self.links], self.cadence)
 
 
 @dataclass
@@ -229,7 +234,7 @@ class Fleet:
                     fabric.append(d)
         return Datacenter("+".join(dc.name for dc in self.datacenters), [b for dc in self.datacenters for b in dc.blocks],
                           fabric, [l for dc in self.datacenters for l in dc.links] + list(self.links),
-                          self.datacenters[0].grid)
+                          self.datacenters[0].cadence)
 
     def validate(self) -> list[str]:
         problems = [f"{dc.name}: {p}" for dc in self.datacenters for p in dc.validate()]

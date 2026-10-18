@@ -83,7 +83,7 @@ def run(p: Placement, inputs: dict[str, int], plan: Plan, deviation: Deviation |
     """Execute placement `p` on `inputs` through the epoch of `plan`, answering its challenges, read demands and
     wipes from wherever the bits really are."""
     dev, dc = deviation or Deviation(), p.datacenter
-    g = dc.grid
+    g = dc.cadence
     values = p.circuit.evaluate(inputs)
     commitment, salt = commit(p.circuit, values)
     counts: dict[Port, dict[int, int]] = {port: {} for port in dc.ports}
@@ -92,13 +92,13 @@ def run(p: Placement, inputs: dict[str, int], plan: Plan, deviation: Deviation |
         for b, vs in row.items():
             b2 = dev.hold.get((port, b), b)
             counts[port][b2] = counts[port].get(b2, 0) + frames(vs, g.frame_bits)
-            content.setdefault((port, b2 // g.window), []).extend((v.id, values[v.id]) for v in vs)
+            content.setdefault((port, b2 // g.buckets), []).extend((v.id, values[v.id]) for v in vs)
     for (port, b), n in dev.extra.items():
         counts[port][b] = counts[port].get(b, 0) + n
-        content.setdefault((port, b // g.window), []).append((1 << 31, n))
-    per = g.bucket * g.window
+        content.setdefault((port, b // g.buckets), []).append((1 << 31, n))
+    per = g.window_ticks
     windows = range(plan.epoch.start // per, -(-plan.epoch.end // per))
-    records = [Record(port, w, tuple(row.get(w * g.window + t, 0) for t in range(g.window)), digest(content.get((port, w), [])))
+    records = [Record(port, w, tuple(row.get(w * g.buckets + t, 0) for t in range(g.buckets)), digest(content.get((port, w), [])))
                for port, row in counts.items() for w in windows if (port, w) not in dev.down]
     stores = {s.name: s for s in p.stores}
     answers = []

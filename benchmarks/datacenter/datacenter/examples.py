@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import math
 
-from .physical import Assumption, Block, Datacenter, Device, Grid, Link
+from .physical import Assumption, Block, Cadence, Datacenter, Device, Link
 
 GB = 8e9
 INF = math.inf
@@ -87,19 +87,19 @@ def with_dpu(node: Datacenter) -> Datacenter:
                  residual=Assumption(f"{n}.bmc.unwiped", (0.25 * 1 + 0.5 * 0.256 + 0.064) * GB, "bits", "measured"))
     links = [Link(f"{n}.nic0", dpu.name, Assumption("dpu_link", 400e9, "bit/s"), US, "pcie"),
              Link(dpu.name, bmc.name, Assumption("bmc_link", 1e9, "bit/s"), US)]
-    return Datacenter(node.name, [Block(n, [*block.devices, dpu, bmc])], list(node.fabric), node.links + links, node.grid)
+    return Datacenter(node.name, [Block(n, [*block.devices, dpu, bmc])], list(node.fabric), node.links + links, node.cadence)
 
 
 def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[str, ...] = ("ext0",),
                challengers: tuple[str, ...] = (), dpus: bool = False, prefix: str = "b", name: str | None = None,
                uplink_gbps: int = 400, spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
-               outside_latency: float | None = None, grid: Grid | None = None) -> Datacenter:
+               outside_latency: float | None = None, cadence: Cadence | None = None) -> Datacenter:
     """`blocks` nodes (`rtx_node`, named `{prefix}0`, `{prefix}1`, …, each `with_dpu` when `dpus`) behind a leaf-spine
     fabric: each node's way out (its NIC, or its DPU) to its own certifier (`{prefix}I.cert`), the certifier to a leaf
     switch (round-robin over `leaves`), every leaf to every spine, and the hosts `outside` every block (kind `outside`)
     and the `challengers` on the leaves too. With one leaf, `spines` may be 0. Latencies are one way, in seconds:
     `uplink_latency` from a node to its certifier, `fabric_latency` a fabric hop, and an outside host's link a WAN of
-    `outside_latency` when it is given, else a fabric hop. `grid` is the certifiers' (`Grid`'s default when None)."""
+    `outside_latency` when it is given, else a fabric hop. `cadence` is the certifiers' (`Cadence`'s default when None)."""
     if blocks < 1 or leaves < 1 or (leaves > 1 and spines < 1):
         raise ValueError("at least one block and one leaf, and spines to join more than one leaf")
     up = Assumption("fabric/uplink", uplink_gbps * 1_000_000_000, "bit/s", "declared")
@@ -126,14 +126,14 @@ def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[
     checkers = [Device(x, "challenger") for x in challengers]
     links += [Link(x.name, switches[c % leaves].name, up, hop, "ethernet") for c, x in enumerate(checkers)]
     return Datacenter(name or f"leaf-spine-{blocks}", nodes, switches + certs + tops + hosts + checkers, links,
-                      grid or Grid())
+                      cadence or Cadence())
 
 
-def rack(nodes: int = 2, dpus: bool = True, grid: Grid | None = None) -> Datacenter:
+def rack(nodes: int = 2, dpus: bool = True, cadence: Cadence | None = None) -> Datacenter:
     """The demo's rack: `nodes` nodes (`n0`, `n1`, …), each with a DPU when `dpus`, behind their own certifiers on one
     leaf, with a challenger on it and the outside world (`world`) 1 ms away over a WAN, every other hop 1 µs. Its
     certifiers frame 32 bits, a bucket a tick of 0.1 ms, a record every 4 buckets."""
     return leaf_spine(nodes, prefix="n", name="rack", outside=("world",), challengers=("challenger",), dpus=dpus,
                       fabric_latency=1e-6, outside_latency=1e-3,
-                      grid=grid or Grid(frame_bits=32, bucket=1, window=4, syncs=128,
-                                        tick=Assumption("tick", 1e-4, "s", "declared")))
+                      cadence=cadence or Cadence(frame_bits=32, bucket_ticks=1, buckets=4, jitter_classes=128,
+                                                 tick=Assumption("tick", 1e-4, "s", "declared")))

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from datacenter import (Assumption, Block, Challenge, Datacenter, Deviation, Device, Grid, Held, Input, Interval, Link,
+from datacenter import (Assumption, Block, Cadence, Challenge, Datacenter, Deviation, Device, Held, Input, Interval, Link,
                         Plan, Read, Reads, Refused, Store, account, audit, place, run, trace)
 
 GB = 8e9
@@ -30,7 +30,7 @@ def datacenter() -> Datacenter:
              Link("a.gpu", "a.cert", net, US), Link("a.cert", "leaf", net, US), Link("b.gpu", "b.cert", net, US),
              Link("b.cert", "leaf", net, US), Link("challenger", "leaf", net, US), Link("world", "leaf", net, US)]
     tick = Assumption("tick", 1e-4, "s", "declared")                # 100 µs ticks
-    return Datacenter("dc0", [node("a"), node("b")], fabric, links, Grid(window=4, tick=tick))
+    return Datacenter("dc0", [node("a"), node("b")], fabric, links, Cadence(buckets=4, tick=tick))
 
 
 def setup(plan: Plan):

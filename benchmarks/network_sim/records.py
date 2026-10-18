@@ -5,8 +5,8 @@ Each certifier record (`verity.core.protocols.certifier.grid.Record`: one link-w
 window, the real frames in each bucket (the grid's occupancy) and a SHA-512 digest of the status and the real frames in
 order. `published` reads a block's from a lab run's directory. `declared` gives the ones the Program says an honest run
 publishes, by port and window: egress, the reference shaper on the Program's frames at the declared syncs; ingress, the
-certifier's bucketer on the plan's requests, each at its arrival bucket. `grid` is the certifiers' parameters as a
-`datacenter.Grid`. `datacenter.check_records(published, declared, grid)` is the audit.
+certifier's bucketer on the plan's requests, each at its arrival bucket. `cadence` is the certifiers' parameters as a
+`datacenter.Cadence`. `datacenter.check_records(published, declared, cadence)` is the audit.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ for _p in (str(HERE), str(HERE.parent / "network_traces")):
 
 import active_replay as ar  # noqa: E402
 import graph  # noqa: E402, F401  (puts `datacenter` on the path)
-from datacenter import Datacenter, Grid, Port, Record  # noqa: E402
+from datacenter import Cadence, Datacenter, Port, Record  # noqa: E402
 from verity.core.protocols.certifier import grid as cgrid  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync, run_shaper  # noqa: E402
 
@@ -47,14 +47,15 @@ def to_record(r: cgrid.Record, port: Port) -> Record:
     return Record(port, r.window, cgrid.occupancy(r.grid), digest(r))
 
 
-def grid(setup: ar.Setup) -> Grid:
-    """The certifiers' parameters as the declaration's grid, on a trusted clock of 1 ms ticks. Egress and ingress must
-    agree on the frame size, the bucket and the window; their allocations may differ, and `Grid` doesn't hold one."""
+def cadence(setup: ar.Setup) -> Cadence:
+    """The certifiers' parameters as the declaration's cadence, on a trusted clock of 1 ms ticks. Egress and ingress
+    must agree on the frame size, the bucket and the window; their allocations may differ, and `Cadence` doesn't hold
+    one."""
     e, i = setup.egress_params, setup.ingress_params
     if (e.frame_bytes, e.bucket_ms, e.buckets) != (i.frame_bytes, i.bucket_ms, i.buckets):
-        raise ValueError(f"egress {e} and ingress {i} differ in frame size, bucket or window: one Grid can't hold both")
-    return Grid(frame_bits=8 * e.frame_bytes, bucket=e.bucket_ms // TICK_MS, window=e.buckets,
-                syncs=len(setup.sync_set.deltas) * len(setup.sync_set.rhos))
+        raise ValueError(f"egress {e} and ingress {i} differ in frame size, bucket or window: one Cadence can't hold both")
+    return Cadence(frame_bits=8 * e.frame_bytes, bucket_ticks=e.bucket_ms // TICK_MS, buckets=e.buckets,
+                   jitter_classes=len(setup.sync_set.deltas) * len(setup.sync_set.rhos))
 
 
 def uplink(dc: Datacenter, block: str) -> tuple[str, str]:
