@@ -657,6 +657,32 @@ def test_a_package_pinning_arklib_is_refused_below_the_memory_floor(tmp_path):
     assert A.memory_refusal([heavy], 16, env={"VERITY_LEAN_MEM_FLOOR_GIB": "0"}) is None
 
 
+def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds(tmp_path):
+    """Two queued Security builds were OOM-killed in 64 and 16 GB scopes on 18 Oct, with a `lean` per CPU: Lake runs as many
+    at once as `LEAN_NUM_THREADS`, so a package that pins Mathlib or ArkLib builds with at most one per `BUILD_GIB_PER_JOB`.
+    The scope's limit is read where `/proc/self/cgroup` says the process is, and the smallest of it and its parents' holds."""
+    proc, cg = tmp_path / "proc", tmp_path / "cg"
+    (proc / "self").mkdir(parents=True)
+    (proc / "meminfo").write_text(f"MemTotal: {512 * 2**20} kB\nSwapTotal: 0 kB\n")
+    (proc / "self" / "cgroup").write_text("0::/user.slice/cluster-r1.scope\n")
+    (cg / "user.slice" / "cluster-r1.scope").mkdir(parents=True)
+    (cg / "memory.max").write_text("max\n")
+    assert A.memory_gib(proc, cg) == 512
+    (cg / "user.slice" / "cluster-r1.scope" / "memory.max").write_text(f"{64 * 2**30}\n")
+    assert A.memory_gib(proc, cg) == 64
+    (cg / "user.slice" / "memory.max").write_text(f"{32 * 2**30}\n")
+    assert A.memory_gib(proc, cg) == 32, "a parent's smaller limit holds"
+    heavy, light = tmp_path / "heavy", tmp_path / "light"
+    for p, deps in ((heavy, ["mathlib"]), (light, ["batteries"])):
+        p.mkdir()
+        (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
+    env = {}
+    assert A.build_threads(heavy, env, have_gib=64) == min(A.cores(), 64 // A.BUILD_GIB_PER_JOB)
+    assert A.build_threads(heavy, env, have_gib=4) == 1
+    assert A.build_threads(light, env, have_gib=4) is None
+    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "3"}, have_gib=4) is None, "an explicit setting wins"
+
+
 PLUGGED = '''name = "Dep"
 defaultTargets = ["Dep"]
 
