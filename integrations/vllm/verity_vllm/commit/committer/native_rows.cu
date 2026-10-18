@@ -443,26 +443,38 @@ extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, co
 }
 
 // The m positions first .. first + m - 1 (rows_leaf_kernel) on `st`.  rows and stride 16-byte aligned, stride >= the row's bytes
-// rounded up to 16; first + m <= 2^32.
+// rounded up to 16; first + m <= 2^32.  max_blocks > 0: in launches of at most max_blocks blocks one after another, each the same
+// kernel over the next positions, so the hashing holds at most that many blocks' SM slots and leaves the rest to other streams.
 extern "C" int verity_rows_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
                                          const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
-                                         uint8_t* hs, cudaStream_t st) {
-  if (!m) return 0;
+                                         uint8_t* hs, uint64_t max_blocks, cudaStream_t st) {
   const Params* p = static_cast<const Params*>(params);
-  const u64 blocks = (m + THREADS - 1) / THREADS;
-  rows_leaf_kernel<<<static_cast<unsigned>(blocks), THREADS, 0, st>>>(p->leaf, rows, stride, n_rows, salts, tn, first, m, n_total, out, bc, hs);
-  return static_cast<int>(cudaGetLastError());
+  const u64 chunk = max_blocks ? max_blocks * THREADS : m;
+  for (u64 c = 0; c < m; c += chunk) {
+    const u64 mc = m - c < chunk ? m - c : chunk;
+    rows_leaf_kernel<<<static_cast<unsigned>((mc + THREADS - 1) / THREADS), THREADS, 0, st>>>(
+        p->leaf, c < n_rows ? rows + c * stride : rows, stride, c < n_rows ? n_rows - c : 0, salts && c < n_rows ? salts + 192 * c : salts, tn,
+        first + c, mc, n_total, out + 64 * c, bc ? bc + 128 * c : bc, hs ? hs + 64 * c : hs);
+    if (const cudaError_t rc = cudaGetLastError()) return static_cast<int>(rc);
+  }
+  return 0;
 }
 
-// n_out parents of level `level` + 1 from 2 n_out children of level `level`, the first parent at index first_index.
+// n_out parents of level `level` + 1 from 2 n_out children of level `level`, the first parent at index first_index; max_blocks as
+// verity_rows_leaves_launch's.
 extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_out, int level, uint64_t first_index,
-                                        cudaStream_t st) {
+                                        uint64_t max_blocks, cudaStream_t st) {
   if (!n_out) return 0;
   if (level < 0 || level + 1 >= LEVELS) return static_cast<int>(cudaErrorInvalidValue);
   const Params* p = static_cast<const Params*>(params);
-  const u64 blocks = (n_out + THREADS - 1) / THREADS;
-  rows_level_kernel<<<static_cast<unsigned>(blocks), THREADS, 0, st>>>(p->node, in, out, n_out, level, first_index);
-  return static_cast<int>(cudaGetLastError());
+  const u64 chunk = max_blocks ? max_blocks * THREADS : n_out;
+  for (u64 c = 0; c < n_out; c += chunk) {
+    const u64 nc = n_out - c < chunk ? n_out - c : chunk;
+    rows_level_kernel<<<static_cast<unsigned>((nc + THREADS - 1) / THREADS), THREADS, 0, st>>>(p->node, in + 128 * c, out + 64 * c, nc, level,
+                                                                                               first_index + c);
+    if (const cudaError_t rc = cudaGetLastError()) return static_cast<int>(rc);
+  }
+  return 0;
 }
 
 // n_levels (at most 10: a block's slice is 2^n_levels nodes) levels above n_in nodes (a nonzero multiple of 2^n_levels) of level

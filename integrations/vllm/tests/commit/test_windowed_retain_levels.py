@@ -31,7 +31,7 @@ LAYERS, H, BN, VOCAB = 3, 1000, 16, 1003
 WINDOW_MB = str(8 / 1024)                                       # 8 KiB = 32 chunks: j = 5
 ENV = ("VERITY_RETAIN", "VERITY_WINDOW_MB", "VERITY_WINDOW_SLOTS", "VERITY_STAGING_BOUNDED", "VERITY_LEARN_HOST_BUDGET_MB",
        "VERITY_RETAIN_EXCLUDE", "VERITY_FAULT", "VERITY_FOOTPRINT", "VERITY_HI_PRIO", "VERITY_CONSUMER_DELAY_MS", "VERITY_SKIP",
-       "VERITY_INLINE_D2H", "VERITY_ABL")
+       "VERITY_INLINE_D2H", "VERITY_ABL", "VERITY_ROWS_CAP_BLOCKS", "VERITY_ROWS_CAP_FREE")
 
 
 class _Runner:
@@ -156,6 +156,20 @@ def test_learning_and_hit_runs_commit_the_one_block_roots(monkeypatch, reference
         assert [s.root for s in hit.steps] == reference
         assert hit.run_root == learn.run_root
         assert bool(com._gpu_levels) is retain_levels
+    finally:
+        com.close()
+
+
+@pytest.mark.parametrize("fast", [True, False], ids=["native-end", "python-end"])
+def test_the_step_end_paths_commit_the_same_roots_and_row_order(monkeypatch, reference, fast):
+    """The serving thread's step end in one native call with the row order expanded by the worker, or as before: the same roots and
+    the same `step_rows`."""
+    com = committer(monkeypatch)
+    com.native_end = com.rows_off_thread = fast
+    try:
+        rc = run(com, SCHED)
+        assert [s.root for s in rc.steps] == reference
+        assert list(com.step_rows.values()) == [[("r0", 0, 1), ("r1", 1, 2)]] * len(SCHED)
     finally:
         com.close()
 

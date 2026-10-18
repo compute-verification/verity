@@ -16,7 +16,9 @@ Three execution paths give the committer the same sequence of (name, bytes):
     the tensor into a static slot (one per (piece, sub, index, name), as many rows as the largest capture size), and the capture
     records the slots its (mode, padded size) writes.  The graph replays the copies every step.  Slots are allocated in the
     uncaptured warm-up pass vLLM runs before each capture, outside the graph pool; vLLM's memory-profiling captures are discarded
-    with their slots.
+    with their slots.  With `batch_copies` (the default) a captured hook records its copy and the wrapper's flush lines issue the
+    recorded copies together, a multi-tensor copy per flush (one per word width) instead of one graph node per tensor; the flushes sit wherever
+    a recorded buffer's bytes could next change (`install_codegen_hooks`), so each copy reads what the immediate copy would.
   * a replayed step: nothing Python runs for captured work.  Live work inside the step (attention between PIECEWISE pieces, piece 0's
     inputs at its wrapper) copies into its slot the same way.  When the forward is complete (the logits) the step's slots are
     acquired in canonical order: `slot[:n]` for token-row tensors (n = the step's tokens; rows n.. are CUDA-graph padding, never a
@@ -43,11 +45,13 @@ import torch
 from verity_vllm.engine import hooks
 
 PREFIX = "verity|"
+FLUSH = "verity_flush"
 GRAPH_MODES = ("FULL", "PIECEWISE")
 #: The combined CUDA scheduler's per-node codegen entry points (`Scheduler._codegen` dispatches each node to one of them; extern
 #: nodes go to `Scheduler.codegen_extern_call`).  The hooks are emitted after the call, for `scheduler.current_node`.
 CODEGEN_METHODS = ("codegen_node", "codegen_template", "codegen_combo_kernel", "codegen_nested_reduction", "codegen_mix_order_reduction")
 INPUT_NAMES = (("input_ids", "ids"), ("positions", "positions"))
+WORDS = ((8, torch.int64), (4, torch.int32), (2, torch.int16), (1, torch.uint8))
 
 
 def _capturing(val: torch.Tensor) -> bool:
@@ -99,19 +103,61 @@ def hookable_outputs(node: Any, wrapper: Any, graph: Any) -> tuple[list[str], di
     return keep, skipped
 
 
-def install_codegen_hooks(hook: Any, into: hooks.Hooks) -> dict[str, Any]:
+def storage_roots(node: Any) -> set[str]:
+    """The names of `node`'s buffer and of every buffer whose storage it aliases (a NonOwningLayout view, an aliasing extern output)."""
+    from torch._inductor.virtualized import V
+
+    out: set[str] = set()
+    todo = [node]
+    while todo:
+        n = todo.pop()
+        name = n.get_name()
+        if name in out:
+            continue
+        out.add(name)
+        try:
+            aliases = n.get_inputs_that_alias_output()
+        except (AttributeError, NotImplementedError):
+            aliases = ()
+        todo.extend(b for b in map(V.graph.try_get_buffer, aliases) if b is not None)
+    return out
+
+
+def _writes_elsewhere(node: Any) -> bool:
+    """Whether a scheduler node writes a buffer other than its own outputs (a mutation)."""
+    own = set(node.get_buffer_names())
+    return any(dep.name not in own for dep in node.read_writes.writes) or any(buf.get_mutations() for buf in node.get_outputs())
+
+
+def install_codegen_hooks(hook: Any, into: hooks.Hooks, batch: bool = False) -> dict[str, Any]:
     """Patch Inductor so every generated wrapper calls `hook(name, tensor)` on each materialized buffer right after the node that
-    writes it.  Must run before the engine compiles; returns the live codegen counters."""
+    writes it.  Must run before the engine compiles; returns the live codegen counters.
+
+    `batch`: the wrapper also calls `hook(FLUSH, None)` where a hooked buffer's bytes could next change -- before a node that writes a
+    buffer other than its own outputs, before a kernel that reuses a hooked buffer in place, and at the wrapper's end -- and a hooked
+    buffer's storage is never handed to a later allocation (its free is kept out of Inductor's reuse planning), so a hook may record
+    its copy and issue it at the next flush.  Kernels and their in-place decisions are unchanged; only allocation lines differ."""
     from torch._functorch import config as fcfg
     from torch._inductor import config as icfg
     from torch._inductor import hooks as ih
     from torch._inductor import scheduler as isched
+    from torch._inductor.codegen import wrapper as iw
     from torch._inductor.codegen.cuda_combined_scheduling import CUDACombinedScheduling
     from torch._inductor.virtualized import V
 
     into.patch(icfg, "fx_graph_cache", False)
     into.patch(fcfg, "enable_autograd_cache", False)
-    stats: dict[str, Any] = {"nodes": 0, "hooks": 0, "skipped": {}}
+    batch = batch and not icfg.memory_planning                         # the static planner reuses by type, not through `plan`
+    stats: dict[str, Any] = {"nodes": 0, "hooks": 0, "skipped": {}, "batch": batch, "flushes": 0, "kept": 0}
+
+    class KeptFree(iw.FreeIfNotReusedLine):
+        def plan(self, state: Any) -> Any:  # noqa: ARG002
+            return iw.NullLine(self.wrapper) if self.node.get_name() in V.graph.removed_buffers else self
+
+    def flush(wrapper: Any) -> None:
+        wrapper.writeline(f"run_intermediate_hooks({FLUSH!r}, None)")
+        wrapper.__dict__["_verity_pending"] = set()
+        stats["flushes"] += 1
 
     def emit() -> None:
         sched, wrapper = V.graph.scheduler, V.graph.wrapper_code
@@ -130,18 +176,49 @@ def install_codegen_hooks(hook: Any, into: hooks.Hooks) -> dict[str, Any]:
         for name in names:
             wrapper.writeline(f"run_intermediate_hooks({PREFIX + op + '|' + name!r}, {name})")
             stats["hooks"] += 1
+            if batch:
+                roots = storage_roots(V.graph.get_buffer(name))
+                wrapper.__dict__.setdefault("_verity_pending", set()).update(roots)
+                wrapper.__dict__.setdefault("_verity_roots", set()).update(roots)
 
-    def after(orig: Any) -> Any:
+    def around(orig: Any) -> Any:
         def run(self: Any, *a: Any, **kw: Any) -> Any:
+            wrapper, node = V.graph.wrapper_code, getattr(V.graph.scheduler, "current_node", None)
+            if batch and node is not None and wrapper.__dict__.get("_verity_pending") and _writes_elsewhere(node):
+                flush(wrapper)
             out = orig(self, *a, **kw)
             emit()
             return out
         return run
 
+    def inplace_reuse(orig: Any) -> Any:
+        def run(self_w: Any, input_buffer: Any, output_buffer: Any) -> Any:
+            if self_w.__dict__.get("_verity_pending", set()) & storage_roots(input_buffer):
+                flush(self_w)
+            return orig(self_w, input_buffer, output_buffer)
+        return run
+
+    def ir_passes(orig: Any) -> Any:
+        def run(self_w: Any, *a: Any, **kw: Any) -> Any:
+            roots = self_w.__dict__.get("_verity_roots", set())
+            for line in self_w.lines if roots else ():
+                if type(line) is iw.FreeIfNotReusedLine and not line.comm_buffer and storage_roots(line.node) & roots:
+                    line.__class__ = KeptFree
+                    stats["kept"] += 1
+            out = orig(self_w, *a, **kw)
+            if getattr(self_w, "supports_intermediate_hooks", False):
+                self_w.lines.append(f"run_intermediate_hooks({FLUSH!r}, None)")
+                stats["flushes"] += 1
+            return out
+        return run
+
     for name in CODEGEN_METHODS:
         if hasattr(CUDACombinedScheduling, name):
-            into.wrap(CUDACombinedScheduling, name, after)
-    into.wrap(isched.Scheduler, "codegen_extern_call", after)
+            into.wrap(CUDACombinedScheduling, name, around)
+    into.wrap(isched.Scheduler, "codegen_extern_call", around)
+    if batch:
+        into.wrap(iw.PythonWrapperCodegen, "codegen_inplace_reuse", inplace_reuse)
+        into.wrap(iw.PythonWrapperCodegen, "run_wrapper_ir_passes", ir_passes)
     if hook not in ih.INTERMEDIATE_HOOKS:
         into.append(ih.INTERMEDIATE_HOOKS, hook)
     return stats
@@ -150,8 +227,10 @@ def install_codegen_hooks(hook: Any, into: hooks.Hooks) -> dict[str, Any]:
 class ServedCompiledSource:
     short_name = "served_compiled"
 
-    def __init__(self, fault: str | None = None, into: hooks.Hooks | None = None) -> None:
+    def __init__(self, fault: str | None = None, into: hooks.Hooks | None = None, batch_copies: bool = True) -> None:
         self.fault = fault
+        self.batch_copies = batch_copies                                # captured copies issued at the wrapper's flushes, as one copy each
+        self.pending: list[tuple[torch.Tensor, torch.Tensor]] = []
         self.omit = fault.split(":", 1)[1] if fault and fault.startswith("compiled_omit:") else None
         self.c: Any = None
         self._hooks = into if into is not None else hooks.Hooks()
@@ -177,7 +256,7 @@ class ServedCompiledSource:
         self.errors: list[str] = []
         self.stats: dict[str, Any] = {}
         self.stats_reset_step_counters()
-        self.stats.update(capture_copies=0, slot_bytes=0, slot_resets=0, profiling_captures=0)
+        self.stats.update(capture_copies=0, slot_bytes=0, slot_resets=0, profiling_captures=0, capture_flushes=0, strided_copies=0)
 
     # ------------------------------------------------------------------ installation (before the engine compiles and captures)
 
@@ -190,7 +269,7 @@ class ServedCompiledSource:
         from vllm.v1.worker.gpu import model_runner as mr
 
         src, into = self, self._hooks
-        self.codegen = install_codegen_hooks(self._hook, into)
+        self.codegen = install_codegen_hooks(self._hook, into, batch=self.batch_copies)
 
         def pb_call(orig):
             def call(self_pb, *args):
@@ -228,6 +307,7 @@ class ServedCompiledSource:
                             return fn(cg_mode)
                         finally:
                             src.capturing = None
+                            src._end_capture(key)
                     return forward_fn
                 try:
                     return orig(self_m, create, *a, **kw)
@@ -320,13 +400,18 @@ class ServedCompiledSource:
             self._drop_slots()
             self.max_rows = rows
 
+    def _end_capture(self, key: tuple[str, int]) -> None:
+        if self.pending:
+            self.errors.append(f"capture {key[0]}:{key[1]}: {len(self.pending)} captured copies never flushed")
+            self.pending = []
+
     def _end_profiling_capture(self) -> None:
         self._drop_slots()
         self.max_rows = 0
         self.stats["profiling_captures"] += 1
 
     def _drop_slots(self) -> None:
-        self.slots, self.plans, self.static = {}, {}, set()
+        self.slots, self.plans, self.static, self.pending = {}, {}, set(), []
         self.stats["slot_bytes"] = 0
         if self.native_plans and self.c is not None:
             self.c.clear_slot_plans()
@@ -345,6 +430,10 @@ class ServedCompiledSource:
         return getattr(self.c, "_cur", None) if self.c is not None else None
 
     def _hook(self, name: str, val: Any) -> None:
+        if name == FLUSH:
+            if self.pending:
+                self._flush()
+            return
         if name.startswith(PREFIX) and isinstance(val, torch.Tensor):
             _, op, buf = name.split("|", 2)
             self._tap(0, f"c{self.piece:02d}.{op}/{buf}", val)
@@ -359,7 +448,7 @@ class ServedCompiledSource:
             if self.capturing is None:
                 self.errors.append(f"{name}: captured outside a CudaGraphManager capture")
                 return
-            self.plans[self.capturing].append(self._stage(order, name, val, self.capturing[1]))
+            self.plans[self.capturing].append(self._stage(order, name, val, self.capturing[1], defer=bool(self.codegen.get("batch"))))
             self.stats["capture_copies"] += 1
             return
         if self.capturing is not None:
@@ -380,7 +469,7 @@ class ServedCompiledSource:
         if getattr(self.c, "gather", False):
             self.c._nc.flush()
 
-    def _stage(self, order: tuple, name: str, val: torch.Tensor, n_pad: int) -> tuple:
+    def _stage(self, order: tuple, name: str, val: torch.Tensor, n_pad: int, defer: bool = False) -> tuple:
         rows = val.dim() > 0 and int(val.shape[0]) == n_pad and n_pad <= self.max_rows
         if not rows:
             self.static.add((order, name))
@@ -393,8 +482,31 @@ class ServedCompiledSource:
             slot = torch.empty(shape, dtype=val.dtype, device=val.device)
             self.slots[key] = slot
             self.stats["slot_bytes"] += slot.numel() * slot.element_size()
-        (slot[: val.shape[0]] if rows else slot).copy_(val)
+        dst = slot[: val.shape[0]] if rows else slot
+        if defer:
+            self.pending.append((dst, val))                             # holds `val`, so its storage outlives the wrapper's `del`
+        else:
+            dst.copy_(val)
         return order, name, slot, rows
+
+    def _flush(self) -> None:
+        """Issue the recorded captured copies: the dense ones as one multi-tensor copy per word width (the widest that divides a copy's
+        length and both its addresses), the strided ones one by one."""
+        groups: dict[torch.dtype, tuple[list, list]] = {}
+        for d, v in self.pending:
+            if not (d.is_contiguous() and v.is_contiguous()):
+                d.copy_(v)
+                self.stats["strided_copies"] += 1
+                continue
+            nb = v.numel() * v.element_size()
+            word = next(dt for w, dt in WORDS if nb % w == 0 and d.data_ptr() % w == 0 and v.data_ptr() % w == 0)
+            dst, src = groups.setdefault(word, ([], []))
+            dst.append(d.reshape(-1).view(word))
+            src.append(v.reshape(-1).view(word))
+        for dst, src in groups.values():
+            torch._foreach_copy_(dst, src)
+        self.stats["capture_flushes"] += 1
+        self.pending = []
 
     def _acquire(self, name: str, val: torch.Tensor, job: Any) -> None:
         if self.omit and self.omit in name:

@@ -110,7 +110,14 @@ class RootsArm(ProfArm):
         w = dict((rc.extra or {}).get("windows") or {})
         st = dict(self.committer._nc.stats()) if hasattr(self.committer._nc, "stats") else {}
         lay = self.committer._layouts
+        com, src = self.committer, self.source
         rec = {"arm": self.id, "committer": self.committer.name, "run": len(self.runs), "name": self.run_name,
+               "toggles": {"batch_copies": bool(src.codegen.get("batch")), "slot_fast": bool(com._nc.slot_fast), "native_end": com.native_end,
+                           "rows_off_thread": com.rows_off_thread, "native_drain": src.native_drain},
+               "ring": {k: self.windows.get(k) for k in ("window_bytes", "slots")},
+               "source": {k: src.stats.get(k) for k in ("replayed_steps", "eager_steps", "drain_s", "capture_copies", "capture_flushes", "strided_copies")},
+               "codegen": {k: src.codegen.get(k) for k in ("hooks", "flushes", "kept")},
+               "spans_s": {k: round(v, 6) for k, v in com.spans.total.items()}, "spans_calls": dict(com.spans.calls),
                "run_root": bytes(rc.run_root).hex(), "steps": len(lay),
                "learned_only_steps": len(bs.get("learned_only_steps") or ()), "plan_mismatches": bs.get("plan_mismatches"),
                "bounded": bs.get("enabled"), "reupload_bytes": w.get("reupload_bytes"),
@@ -175,17 +182,153 @@ class SwitchArm(RootsArm):
 
 
 class NativeDrainArm(RootsArm):
-    """The prof arm whose compiled source drains a replayed step's slots through the committer's slot plans (one native call)."""
+    """The prof arm whose compiled source drains a replayed step's slots through the committer's slot plans (one native call).
+    ``host_fast`` False puts the committer's step back as it was before its host-cost changes (slots staged as views, the step end in
+    several calls, the row order expanded on the serving thread); ``batch_copies`` False, the source's captured copies one by one.
+    ``window`` (MiB, slots) sizes the staging ring in place of the collector's default (256 MiB x 8)."""
+
+    host_fast = True
+    window: tuple[int, int] | None = None
 
     def ready(self, target: Any) -> None:
-        super().ready(target)
+        import os
+
+        if self.window is None:
+            super().ready(target)
+        else:
+            os.environ["VERITY_WINDOW_MB"], os.environ["VERITY_WINDOW_SLOTS"] = map(str, self.window)
+            try:
+                super().ready(target)
+            finally:
+                del os.environ["VERITY_WINDOW_MB"], os.environ["VERITY_WINDOW_SLOTS"]
         self.source.native_drain = True
+        com = self.committer
+        com._nc.slot_fast = com.native_end = com.rows_off_thread = self.host_fast
+
+
+class NativeDrainBaseArm(NativeDrainArm):
+    batch_copies = host_fast = False
+
+
+class NativeDrainBatchArm(NativeDrainArm):
+    host_fast = False
 
 
 class RowsArm(NativeDrainArm):
     """The nativedrain arm committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
 
     commit_scheme = "rows-sha512"
+
+
+class RowsBaseArm(RowsArm):
+    batch_copies = host_fast = False
+
+
+class RowsBatchArm(RowsArm):
+    host_fast = False
+
+
+class NativeDrainRing8Arm(NativeDrainArm):
+    window = (256, 32)
+
+
+class RowsRing8Arm(RowsArm):
+    window = (256, 32)
+
+
+class RowsW64Arm(RowsArm):
+    window = (64, 32)
+
+
+class RowsCapArm(RowsArm):
+    """The rows arm hashing each window in launches of at most PROF_ROWS_CAP (default 32) blocks while two ring slots are free (the
+    committer's VERITY_ROWS_CAP_BLOCKS policy): the same bytes, with the other SMs left to serving."""
+
+    def ready(self, target: Any) -> None:
+        import os
+
+        super().ready(target)
+        self.committer.rows_cap_blocks = int(os.environ.get("PROF_ROWS_CAP", "32"))
+
+
+class RowsRing8CapArm(RowsCapArm):
+    window = (256, 32)
+
+
+class Rows4kArm(RowsArm):
+    """The rows arm at 4 KiB rows: one leaf per 4 KiB of a step's stream (the window's chunks 4 KiB), each the hm96 leaf over its
+    row's SHA-512 as at 256 B. Set for the life of the arm's engine process (one process per arm). Measurement only: no scheme pins
+    4 KiB rows, and the domain still names 256-byte rows, so its roots are no scheme's."""
+
+    row_bytes = 4096
+
+    def ready(self, target: Any) -> None:
+        from verity_vllm.commit import step_rows
+        from verity_vllm.commit.committer import host_retention, native_collect, native_host
+
+        step_rows.ROW_BYTES = native_host.GPU_CHUNK_BYTES = native_collect.GPU_CHUNK_BYTES = host_retention.GPU_CHUNK_BYTES = self.row_bytes
+        super().ready(target)
+
+
+def _layer_source(**kw: Any) -> Any:
+    """A served compiled source acquiring only what a per-layer unit commits: per compiled piece its first convert_element_type (the
+    fused add-norm's residual, one hidden vector per token: the layer-folded unit's) and the embedding's first output, the keys and
+    values each attention layer is given (post-RoPE K, and V), the token inputs and the logits. Measurement only: not the step's
+    values, so not a Commit of the step."""
+    from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
+
+    class LayerSource(ServedCompiledSource):
+        def __init__(self, **kw: Any) -> None:
+            super().__init__(**kw)
+            self.firsts: set[str] = set()
+
+        def _enter_piece(self, backend: Any, args: tuple) -> None:
+            self.firsts = set()
+            super()._enter_piece(backend, args)
+
+        def _tap(self, sub: int, name: str, val: torch.Tensor) -> None:
+            op = name.split(".", 1)[1].split("/", 1)[0]
+            if op in ("convert_element_type", "embedding"):
+                if op in self.firsts:
+                    return
+                self.firsts.add(op)
+            elif op not in ("input", "kv"):
+                return
+            super()._tap(sub, name, val)
+
+        def _attention_forward(self, orig: Any, layer: str) -> Any:
+            src = self
+
+            def forward(*a: Any, **kw: Any) -> Any:
+                for part, i in (("k", 2), ("v", 3)):
+                    t = a[i] if len(a) > i else kw.get("key" if part == "k" else "value")
+                    if isinstance(t, torch.Tensor):
+                        src._tap(1, f"c{src.piece:02d}.kv/{layer}.{part}", t)
+                return orig(*a, **kw)
+            return forward
+
+    return LayerSource(**kw)
+
+
+class RowsLayerArm(RowsArm):
+    """The rows arm acquiring only the per-layer unit's values (`_layer_source`)."""
+
+    def install(self, target: Any) -> RowsLayerArm:
+        self.source = _layer_source(into=target.hooks, batch_copies=self.batch_copies)
+        self.source.install_hooks()
+        return self
+
+
+class RowsLayer4kArm(RowsLayerArm, Rows4kArm):
+    """The per-layer rows arm at 4 KiB rows."""
+
+
+class Rows4kCapArm(RowsCapArm, Rows4kArm):
+    """The capped rows arm at 4 KiB rows."""
+
+
+class RowsLayerCapArm(RowsCapArm, RowsLayerArm):
+    """The capped per-layer rows arm."""
 
 
 class HiPrioArm(NativeDrainArm):
@@ -269,7 +412,21 @@ class NoMemoArm(NativeDrainArm):
 SERVED_COMMIT_PROF = RootsArm("served-commit-prof", retain="none")
 SERVED_COMMIT_SWITCH = SwitchArm("served-commit-switch", retain="none")
 SERVED_COMMIT_NATIVEDRAIN = NativeDrainArm("served-commit-nativedrain", retain="none")
+SERVED_COMMIT_NATIVEDRAIN_BASE = NativeDrainBaseArm("served-commit-nativedrain-base", retain="none")
+SERVED_COMMIT_NATIVEDRAIN_BATCH = NativeDrainBatchArm("served-commit-nativedrain-batch", retain="none")
 SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")
+SERVED_COMMIT_ROWS_BASE = RowsBaseArm("served-commit-rows-base", retain="none")
+SERVED_COMMIT_ROWS_BATCH = RowsBatchArm("served-commit-rows-batch", retain="none")
+SERVED_COMMIT_NATIVEDRAIN_RING8 = NativeDrainRing8Arm("served-commit-nativedrain-ring8", retain="none")
+SERVED_COMMIT_ROWS_RING8 = RowsRing8Arm("served-commit-rows-ring8", retain="none")
+SERVED_COMMIT_ROWS_W64 = RowsW64Arm("served-commit-rows-w64", retain="none")
+SERVED_COMMIT_ROWS_CAP = RowsCapArm("served-commit-rows-cap", retain="none")
+SERVED_COMMIT_ROWS_RING8_CAP = RowsRing8CapArm("served-commit-rows-ring8-cap", retain="none")
+SERVED_COMMIT_ROWS_4K = Rows4kArm("served-commit-rows-4k", retain="none")
+SERVED_COMMIT_ROWS_LAYER = RowsLayerArm("served-commit-rows-layer", retain="none")
+SERVED_COMMIT_ROWS_LAYER_4K = RowsLayer4kArm("served-commit-rows-layer-4k", retain="none")
+SERVED_COMMIT_ROWS_4K_CAP = Rows4kCapArm("served-commit-rows-4k-cap", retain="none")
+SERVED_COMMIT_ROWS_LAYER_CAP = RowsLayerCapArm("served-commit-rows-layer-cap", retain="none")
 SERVED_COMMIT_HIPRIO = HiPrioArm("served-commit-hiprio", retain="none")
 SERVED_COMMIT_ROWS_HIPRIO = RowsHiPrioArm("served-commit-rows-hiprio", retain="none")
 SERVED_COMMIT_FPROF = FinalizeProfArm("served-commit-fprof", retain="none")

@@ -49,9 +49,9 @@ extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, co
                                  const uint8_t* leaf_prefix, const char* schema, int schema_len, uint32_t lb, void* out);
 extern "C" int verity_rows_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
                                          const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
-                                         uint8_t* hs, cudaStream_t st);
+                                         uint8_t* hs, uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_out, int level, uint64_t first_index,
-                                        cudaStream_t st);
+                                        uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
                                          int n_levels, cudaStream_t st);
 
@@ -64,7 +64,8 @@ inline double now_s() {
   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-// A level of more than kWideLevel nodes is built by one launch of a thread a parent (verity_tree_level_launch, verity_rows_level_launch);
+// A level of more than kWideLevel nodes is built by one launch of a thread a parent (verity_tree_level_launch, verity_rows_level_launch;
+// rows-sha512 capped: launches of at most RowStep::max_blocks blocks);
 // the narrower ones kFusedLevels at a time, one launch each (verity_tree_levels_launch, verity_rows_levels_launch: a block folds its own
 // aligned slice of 2^kFusedLevels nodes).  A block's threads idle as its slice narrows, which on a wide level costs more than the
 // launches saved (a 2^22-leaf tree a third slower on H200 folded from its leaves), while below kWideLevel a level's launch is its cost.
@@ -117,9 +118,10 @@ std::vector<at::Tensor> tree_levels_above(const at::Tensor& base, int64_t n_up, 
 }
 
 // rows-sha512: the n_up levels above `base` (uint8 [n, 64], n a nonzero multiple of 2^n_up, of level `level`, the first node at index
-// `first_index`) on `side`, lowest first; each launch's levels are views of one tensor.
+// `first_index`) on `side`, lowest first; each launch's levels are views of one tensor.  A wide level in launches of at most max_blocks
+// blocks when max_blocks > 0 (the narrow ones are at most kWideLevel >> kFusedLevels blocks a launch).
 std::vector<at::Tensor> rows_levels_above(const void* params, const at::Tensor& base, int64_t level, int64_t first_index, int64_t n_up,
-                                          cudaStream_t side) {
+                                          cudaStream_t side, int64_t max_blocks = 0) {
   std::vector<at::Tensor> up;
   at::Tensor cur = base;
   while (n_up > 0) {
@@ -127,7 +129,8 @@ std::vector<at::Tensor> rows_levels_above(const void* params, const at::Tensor& 
       const int64_t n_out = cur.size(0) / 2;
       at::Tensor out = at::empty({n_out, 64}, base.options());
       int lrc = verity_rows_level_launch(params, reinterpret_cast<const uint8_t*>(cur.data_ptr()), reinterpret_cast<uint8_t*>(out.data_ptr()),
-                                         static_cast<uint64_t>(n_out), static_cast<int>(level), static_cast<uint64_t>(first_index >> 1), side);
+                                         static_cast<uint64_t>(n_out), static_cast<int>(level), static_cast<uint64_t>(first_index >> 1),
+                                         static_cast<uint64_t>(max_blocks), side);
       if (lrc != 0) throw std::runtime_error(std::string("rows_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
       up.push_back(out);
       cur = out;
@@ -455,6 +458,12 @@ struct Collector {
     const Plan* p = plans.find(key);
     return p ? p->version : -1;
   }
+  // the ring's free slots now (the worker's: under win_mu with the GIL held, as release_slot)
+  int64_t free_slots() {
+    std::lock_guard<std::mutex> g(win_mu);
+    return static_cast<int64_t>(win_free.size());
+  }
+
   py::dict window_stats() const {
     py::dict d;
     d["windowed"] = windowed; d["slots"] = static_cast<int64_t>(win_ptrs.size()); d["window_bytes"] = win_bytes;
@@ -649,6 +658,16 @@ struct Collector {
     return py::make_tuple(byte_cursor, static_cast<int64_t>(cursor), changed, plan->version);
   }
 
+  // The serving thread's step end in one call: flush (gather), end_step, the dead-watchdog's progress, the hook errors (native hooks) and
+  // the step stats the committer records -> (used_bytes, n_entries, changed, version, bytes, issue_s, window_waits, window_wait_s, errors)
+  py::tuple end_step_full(bool do_flush, bool drain) {
+    if (do_flush) flush();
+    py::tuple r = end_step();
+    if (win_dead) progress();
+    py::list errs = drain && !errors.empty() ? drain_errors() : py::list();
+    return py::make_tuple(r[0], r[1], r[2], r[3], step_bytes, step_issue_s, step_win_waits, step_win_wait_s, errs);
+  }
+
   // Snapshot of the plan for `key`: list of (name_id, dtype, sizes, nbytes, off, gap) -- called by the serving thread only when `changed`.
   py::list export_plan(int64_t key) {
     py::list out;
@@ -769,16 +788,29 @@ struct Collector {
     if (!t.is_cuda()) return -1;
     const int64_t nb = static_cast<int64_t>(t.nbytes());
     if (nb == 0) return -1;
-    const int32_t dt = static_cast<int32_t>(t.scalar_type());
+    int64_t off;
+    if (t.is_contiguous()) {
+      off = stage_bytes(name_id, reinterpret_cast<const char*>(t.data_ptr()), nb, static_cast<int32_t>(t.scalar_type()), t.sizes(), nb, nb);
+    } else {
+      int64_t rows, width_b, pitch_b;
+      if (!pitched_2d(t, rows, width_b, pitch_b)) throw std::runtime_error("native_collect.stage: layout is not 2-D pitched");
+      off = stage_bytes(name_id, reinterpret_cast<const char*>(t.data_ptr()), nb, static_cast<int32_t>(t.scalar_type()), t.sizes(), width_b, pitch_b);
+      ++step_strided;
+    }
+    held.push_back(t);                  // keep the storage alive until the flush has been ENQUEUED (stream order then protects the read)
+    return off;
+  }
+
+  // stage()'s plan logic and descriptors for `nb` bytes at `src` (contiguous when width_b == pitch_b == nb), whose owner keeps them alive
+  int64_t stage_bytes(int64_t name_id, const char* src, int64_t nb, int32_t dt, c10::IntArrayRef sizes, int64_t width_b, int64_t pitch_b) {
     int64_t off, gap;
     if (!learning) {
       if (cursor < plan->entries.size()) {
         const Entry& e = plan->entries[cursor];
         bool hit = (e.name_id == name_id && e.nbytes == nb && e.dtype == dt);
         if (hit && check_sizes) {
-          auto sz = t.sizes();
-          hit = (static_cast<size_t>(sz.size()) == e.sizes.size());
-          for (size_t i = 0; hit && i < e.sizes.size(); ++i) hit = (sz[i] == e.sizes[i]);
+          hit = (sizes.size() == e.sizes.size());
+          for (size_t i = 0; hit && i < e.sizes.size(); ++i) hit = (sizes[i] == e.sizes[i]);
         }
         if (hit) { off = e.off; gap = e.gap; goto record; }
       }
@@ -795,22 +827,13 @@ struct Collector {
     {
       Entry e;
       e.name_id = name_id; e.nbytes = nb; e.off = off; e.gap = gap; e.dtype = dt;
-      auto sz = t.sizes();
-      e.sizes.assign(sz.begin(), sz.end());
+      e.sizes.assign(sizes.begin(), sizes.end());
       plan->entries.push_back(std::move(e));
       changed = true;
     }
   record:
     if (gap > 0) { push_desc(nullptr, off - gap, gap, gap, gap); ++step_memsets; }
-    if (t.is_contiguous()) {
-      push_desc(reinterpret_cast<const char*>(t.data_ptr()), off, nb, nb, nb);
-    } else {
-      int64_t rows, width_b, pitch_b;
-      if (!pitched_2d(t, rows, width_b, pitch_b)) throw std::runtime_error("native_collect.stage: layout is not 2-D pitched");
-      push_desc(reinterpret_cast<const char*>(t.data_ptr()), off, nb, width_b, pitch_b);
-      ++step_strided;
-    }
-    held.push_back(t);                  // keep the storage alive until the flush has been ENQUEUED (stream order then protects the read)
+    push_desc(src, off, nb, width_b, pitch_b);
     ++step_copies; step_bytes += nb; ++tot_staged;
     byte_cursor = off + nb;
     ++cursor;
@@ -851,25 +874,52 @@ struct Collector {
   // A replayed CUDA graph's slots (the persistent buffers its captured copies write), registered once: `stage_slot_plan` then puts them
   // in this order in one call, each whole (kind 0), its first n rows (1) or its first pad rows (2) -- per slot the same expected count,
   // put and plan entry as one Python acquisition of that view, without a Python frame and a slice per slot
-  struct SlotPlan { std::vector<int64_t> ids; std::vector<at::Tensor> slots; std::vector<int64_t> kinds; };
+  // A contiguous CUDA slot under gather (`slot_fast`) is staged from its pointer, bytes per row and sizes, read once here: the same plan
+  // entry and descriptors as staging the view, without a tensor per slot per step (the plan holds the slot, so nothing is `held`).
+  struct SlotPlan {
+    std::vector<int64_t> ids; std::vector<at::Tensor> slots; std::vector<int64_t> kinds;
+    std::vector<char> fast; std::vector<const char*> ptrs; std::vector<int64_t> row_bytes; std::vector<int32_t> dtypes;
+    std::vector<std::vector<int64_t>> sizes;
+  };
   std::vector<SlotPlan> slot_plans;
+  bool slot_fast = true;
   int64_t add_slot_plan(std::vector<int64_t> ids, std::vector<at::Tensor> slots, std::vector<int64_t> kinds) {
     if (ids.size() != slots.size() || kinds.size() != slots.size()) throw std::runtime_error("add_slot_plan: one name id and one kind per slot");
+    SlotPlan p;
     for (size_t i = 0; i < slots.size(); ++i) {
+      const at::Tensor& s = slots[i];
       if (kinds[i] < 0 || kinds[i] > 2) throw std::runtime_error("add_slot_plan: kind must be 0 (whole), 1 (first n rows) or 2 (first pad rows)");
-      if (kinds[i] != 0 && slots[i].dim() == 0) throw std::runtime_error("add_slot_plan: a row-sliced slot needs a leading dimension");
+      if (kinds[i] != 0 && s.dim() == 0) throw std::runtime_error("add_slot_plan: a row-sliced slot needs a leading dimension");
+      const bool fast = s.is_cuda() && s.is_contiguous();
+      p.fast.push_back(fast);
+      p.ptrs.push_back(fast ? reinterpret_cast<const char*>(s.data_ptr()) : nullptr);
+      p.row_bytes.push_back(fast && s.dim() > 0 && s.size(0) > 0 ? static_cast<int64_t>(s.nbytes()) / s.size(0) : 0);
+      p.dtypes.push_back(static_cast<int32_t>(s.scalar_type()));
+      p.sizes.emplace_back(s.sizes().begin(), s.sizes().end());
     }
-    slot_plans.push_back(SlotPlan{std::move(ids), std::move(slots), std::move(kinds)});
+    p.ids = std::move(ids); p.slots = std::move(slots); p.kinds = std::move(kinds);
+    slot_plans.push_back(std::move(p));
     return static_cast<int64_t>(slot_plans.size()) - 1;
   }
   int64_t stage_slot_plan(int64_t handle, int64_t n, int64_t pad) {
     if (handle < 0 || handle >= static_cast<int64_t>(slot_plans.size())) throw std::runtime_error("stage_slot_plan: unknown handle " + std::to_string(handle));
-    const SlotPlan& p = slot_plans[static_cast<size_t>(handle)];
+    SlotPlan& p = slot_plans[static_cast<size_t>(handle)];
+    const bool fast = slot_fast && use_gather && active;
     for (size_t i = 0; i < p.slots.size(); ++i) {
       const at::Tensor& s = p.slots[i];
       note_expected(1);
-      if (p.kinds[i] == 0) put(p.ids[i], s);
-      else put(p.ids[i], s.narrow(0, 0, std::max<int64_t>(0, std::min<int64_t>(p.kinds[i] == 1 ? n : pad, s.size(0)))));   // as slot[:rows]
+      const int64_t rows = p.kinds[i] == 0 ? 0 : std::max<int64_t>(0, std::min<int64_t>(p.kinds[i] == 1 ? n : pad, s.size(0)));
+      if (fast && p.fast[i]) {
+        std::vector<int64_t>& sz = p.sizes[i];
+        int64_t nb = static_cast<int64_t>(s.nbytes());
+        if (p.kinds[i] != 0) { sz[0] = rows; nb = rows * p.row_bytes[i]; }
+        if (nb > 0) stage_bytes(p.ids[i], p.ptrs[i], nb, p.dtypes[i], sz, nb, nb);
+        ++tot_committed;
+      } else if (p.kinds[i] == 0) {
+        put(p.ids[i], s);
+      } else {
+        put(p.ids[i], s.narrow(0, 0, rows));                                      // as slot[:rows]
+      }
     }
     return static_cast<int64_t>(p.slots.size());
   }
@@ -1435,6 +1485,7 @@ struct Fa3Wrap {
 struct RowStep {
   std::vector<uint8_t> params;
   int64_t row_bytes = 0;
+  int64_t max_blocks = 0;                        // > 0: leaves and wide levels in launches of at most this many blocks (the same bytes)
   RowStep(const py::bytes& domain_id, const py::bytes& ks, const py::bytes& row_prefix, const py::bytes& salt_prefix, const py::bytes& leaf_prefix,
           const std::string& schema, int64_t row_bytes_)
       : row_bytes(row_bytes_) {
@@ -1715,7 +1766,8 @@ struct StepHasher {
                                           static_cast<uint64_t>(n_rows), salts.defined() ? reinterpret_cast<const uint8_t*>(salts.data_ptr()) : nullptr,
                                           reinterpret_cast<const uint8_t*>(tn.data_ptr()), static_cast<uint64_t>(first), static_cast<uint64_t>(m),
                                           static_cast<uint64_t>(n_total), reinterpret_cast<uint8_t*>(leaves.data_ptr()),
-                                          want_bc ? reinterpret_cast<uint8_t*>(bc.data_ptr()) : nullptr, want_h ? reinterpret_cast<uint8_t*>(hs.data_ptr()) : nullptr, st);
+                                          want_bc ? reinterpret_cast<uint8_t*>(bc.data_ptr()) : nullptr, want_h ? reinterpret_cast<uint8_t*>(hs.data_ptr()) : nullptr,
+                                          static_cast<uint64_t>(rs.max_blocks), st);
       if (lrc != 0) throw std::runtime_error(std::string("rows_leaves: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
     }
     return py::make_tuple(leaves, bc, hs);
@@ -1737,7 +1789,7 @@ struct StepHasher {
     c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, leaves.device().index());
     c10::cuda::CUDAStreamGuard g(cs);
     std::vector<at::Tensor> levels{leaves};
-    for (auto& lv : rows_levels_above(rs.params.data(), leaves, 0, first, n_levels - 1, side)) levels.push_back(lv);
+    for (auto& lv : rows_levels_above(rs.params.data(), leaves, 0, first, n_levels - 1, side, rs.max_blocks)) levels.push_back(lv);
     if (!host_dsts.empty()) {
       for (int64_t L = 0; L < n_levels; ++L) {
         const at::Tensor& h = host_dsts[static_cast<size_t>(L)];
@@ -1773,7 +1825,7 @@ struct StepHasher {
       c10::cuda::CUDAStreamGuard g(cs);
       cudaEventRecord(ev1, side);
       levels.push_back(nodes);
-      for (auto& lv : rows_levels_above(rs.params.data(), nodes, level0, 0, levels_to_root(n0), side)) levels.push_back(lv);
+      for (auto& lv : rows_levels_above(rs.params.data(), nodes, level0, 0, levels_to_root(n0), side, rs.max_blocks)) levels.push_back(lv);
       cudaEventRecord(ev2, side);
       cudaError_t rc = cudaMemcpyAsync(root64_host, levels.back().data_ptr(), 64, cudaMemcpyDeviceToHost, side);
       if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(root): ") + cudaGetErrorString(rc));
@@ -1830,7 +1882,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   py::class_<RowStep>(m, "RowStep")
       .def(py::init<const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const std::string&, int64_t>(), py::arg("domain_id"),
            py::arg("ks"), py::arg("row_prefix"), py::arg("salt_prefix"), py::arg("leaf_prefix"), py::arg("schema"), py::arg("row_bytes"))
-      .def_readonly("row_bytes", &RowStep::row_bytes);
+      .def_readonly("row_bytes", &RowStep::row_bytes)
+      .def_readwrite("max_blocks", &RowStep::max_blocks);
   py::class_<Collector>(m, "Collector")
       .def(py::init<>())
       .def("begin_step", &Collector::begin_step, py::arg("plan_key"), py::arg("arena_ptr"), py::arg("arena_bytes"), py::arg("use_plan") = true, py::arg("step_id") = -1)
@@ -1842,6 +1895,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("step_windows", &Collector::step_windows, py::arg("step_id"))
       .def("finish_step", &Collector::finish_step, py::arg("step_id"))
       .def("window_stats", &Collector::window_stats)
+      .def("free_slots", &Collector::free_slots)
       .def("plan_used", &Collector::plan_used, py::arg("plan_key"))
       .def("plan_version", &Collector::plan_version, py::arg("plan_key"))
       .def_readwrite("win_wait_timeout_s", &Collector::win_wait_timeout_s)
@@ -1855,6 +1909,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("wait_slot_reused", &Collector::wait_slot_reused, py::arg("slot"), py::arg("gen"), py::arg("timeout_s"), py::arg("stream_ptr"))
       .def("collect", &Collector::collect, py::arg("name_id"), py::arg("tensor"))
       .def("end_step", &Collector::end_step)
+      .def("end_step_full", &Collector::end_step_full, py::arg("flush"), py::arg("drain"))
       .def("export_plan", &Collector::export_plan)
       .def("step_stats", &Collector::step_stats)
       .def("note_expected", &Collector::note_expected, py::arg("n") = 1)
@@ -1872,6 +1927,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readwrite("check_sizes", &Collector::check_sizes)
       .def_readwrite("fault_skip_copy_at", &Collector::fault_skip_copy_at)
       .def_readwrite("use_gather", &Collector::use_gather)
+      .def_readwrite("slot_fast", &Collector::slot_fast)
       .def_readwrite("auto_blocks", &Collector::auto_blocks)
       .def_readwrite("auto_bytes_per_block", &Collector::auto_bytes_per_block)
       .def("drain_errors", &Collector::drain_errors)
