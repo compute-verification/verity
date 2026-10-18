@@ -22,6 +22,7 @@ FLAGS=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxa
   2> "$OUT/ptxas_pearl_c_sm120.txt"
 "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$SCR/pd.cubin" "$HERE/pd.cu" 2> "$OUT/ptxas_pd.txt"
 (cd "$SCR" && sha256sum ./*.cubin) > "$OUT/cubins.sha256"
+"$CUDA/bin/cuobjdump" -sass -fun pd_probe "$SCR/pd.cubin" > "$OUT/pd_probe.sass"
 grep -E "pd_(commit|tree|tiles|probe)|spill|stack" "$OUT/ptxas_pd.txt" | head -40 || true
 
 g++ -O2 -std=c++20 -pthread -shared -fPIC -Wno-unknown-pragmas -o "$SCR/pd_host.so" "$HERE/pd_host.cpp"

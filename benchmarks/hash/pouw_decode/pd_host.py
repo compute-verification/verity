@@ -12,8 +12,8 @@ import refs
 import run as R
 
 POISON = 0xA5
-PD_TMPL, PD_TSTRIDE = 256, 384
-#: pd_fold's variant in the timed schedules: 1 rounds-only (the schedules precomputed by the folding warp), 0 rs_fold's
+#: pd_fold's variant in the timed schedules: 1 rounds-only (the schedules precomputed by the folding warp), 0 rs_fold's,
+#: 2 and 3 those with pd_round
 VARIANT = int(os.environ.get("PD_FOLD", "1"))
 COMMIT = ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a")
 #: what a call's hashing writes, and what the check also compares downstream of it (the call's products)
@@ -31,13 +31,12 @@ def setup(pd) -> None:
 
 class PdCall:
     """One call's pd launches on `pipe`'s buffers (Pipeline.b: x, A's tree, seeds, keys, C~, U and the leaves) and `keys`
-    (dom_a, the unit block, the salt key, the hm96 constants); scratch its own, the counter zero."""
+    (dom_a, the unit block, the salt key, the hm96 constants); scratch its own: pd_commit's counter, zero."""
 
     def __init__(self, pd, pipe: R.Pipeline, keys: dict[str, int]):
         self.pd, self.p, self.keys = pd, pipe, keys
         self.m, self.k, self.n, self.s = pipe.m_real, pipe.k, pipe.n, pipe.k // 256
-        self.width = R.pow2(self.m)
-        self.scratch = pd.alloc(PD_TMPL + PD_TSTRIDE * max(self.width - 1, 1))
+        self.scratch = pd.alloc(16)
         self.block = 32 * (R.cdiv(self.s, 32) + 2)
 
     def _p(self) -> tuple:
@@ -53,7 +52,7 @@ class PdCall:
 
     def tree(self) -> list:
         b, kk = self.p.b, self.keys
-        return [lambda: self.pd.launch("pd_tree", 1, 128, p=(0, 0, b["tree_a"], 0, 0, kk["unit"], 0, 0, 0, self.scratch, b["seed_a"],
+        return [lambda: self.pd.launch("pd_tree", 1, 128, p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0, b["seed_a"],
                                                             b["line_a"]), i=(self.m,))]
 
     def tiles(self, variant: int = VARIANT) -> list:
@@ -74,8 +73,8 @@ def _poison(dev, pipe, names) -> None:
 
 
 def check(sh, python: bool = True) -> dict:
-    """pd's call on each ring set against Pearl-C's on the same set, in pd's three forms (rounds-only fold, rs_fold, and the
-    split rows + tree), every hashing output poisoned before each; then the Python references on set 0."""
+    """pd's call on each ring set against Pearl-C's on the same set, in each of pd_fold's variants and the split rows + tree,
+    every hashing output poisoned before each; then the Python references on set 0."""
     dev, failed, compared, controls = sh.dev, [], 0, {}
     hashing = sh.call_names(True)
     rest = [x for x in hashing if x not in COMMIT and x != "hash_leaf"]
@@ -96,7 +95,9 @@ def check(sh, python: bool = True) -> dict:
         inputs["xa"] = hashlib.sha256(dev.read(pipe.b["xa"], sh.mp * 4 * sh.k)).hexdigest()
         forms = {"rounds_only": pdc.commit(1) + sh.ref(j, rest) + pdc.tiles(1),
                  "rs_fold": pdc.commit(0) + sh.ref(j, rest) + pdc.tiles(0),
-                 "split": pdc.rows(1) + pdc.tree() + sh.ref(j, rest) + pdc.tiles(1)}
+                 "pd_rounds": pdc.commit(2) + sh.ref(j, rest) + pdc.tiles(2),
+                 "pd_compress": pdc.commit(3) + sh.ref(j, rest) + pdc.tiles(3),
+                 "split": pdc.rows(VARIANT) + pdc.tree() + sh.ref(j, rest) + pdc.tiles(VARIANT)}
         for form, fns in forms.items():
             _poison(dev, pipe, OUTPUTS)
             for f in fns:

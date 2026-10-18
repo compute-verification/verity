@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """bench.py --trace's graphs read back from nsys (`nsys export --type sqlite`, --cuda-graph-trace=node): each cuGraphLaunch
-matched in order to bench.trace.jsonl's `trace_order`, its kernels by correlation id, each kernel labelled with the call step
+matched in order to bench.trace.jsonl's launches (`graph_check`'s, skipped, then `trace_order`'s), its kernels by correlation
+id, each kernel labelled with the call step
 that launched it (the graph's nodes in id order against the capture log `graph_kernels`, checked kernel by kernel; a graph
 whose nodes don't match keeps bare kernel names, and says so), and per schedule and shape, per call (CHAIN calls a graph):
 the span, the kernels' busy time, and per launch its count, duration, the idle time before it (nothing running), the share of
@@ -99,13 +100,17 @@ def main() -> int:
     d = sys.argv[1]
     recs, launches, kern = load(d)
     shapes = {(r["shape"], r["m16"]): r for r in recs if r["kind"] == "shape"}
-    order = [(r["shape"], r["m16"], key) for r in recs if r["kind"] == "trace_order" for key in r["launches"]]
+    # every graph launch in order: graph_check's (one per graph it names, before the traced ones), then trace_order's
+    order = [(r["shape"], r["m16"], key, r["kind"] == "graph_check") for r in recs if r["kind"] in ("graph_check", "trace_order")
+             for key in (r["failed"] if r["kind"] == "graph_check" else r["launches"])]
     if len(order) != len(launches):
-        print(f"{len(launches)} cuGraphLaunch calls traced, {len(order)} in trace_order", file=sys.stderr)
+        print(f"{len(launches)} cuGraphLaunch calls traced, {len(order)} in graph_check and trace_order", file=sys.stderr)
         return 1
     runs: dict[tuple, list] = {}
     unlabeled = []
-    for (shape, m16, key), (_, corr) in zip(order, launches):
+    for (shape, m16, key, checking), (_, corr) in zip(order, launches):
+        if checking:
+            continue
         sh, ks = shapes[(shape, m16)], kern.get(corr, [])
         if not label(ks, sh["graph_kernels"][key]):
             unlabeled.append(f"{shape}/m{m16}/{key}")

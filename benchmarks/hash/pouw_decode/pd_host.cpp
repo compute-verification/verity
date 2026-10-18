@@ -35,6 +35,14 @@ static unsigned atomicAdd(unsigned* p, unsigned v) { return std::atomic_ref<unsi
 static uint32_t __funnelshift_l(uint32_t lo, uint32_t hi, uint32_t s) {
   return (uint32_t)(((((uint64_t)hi << 32) | lo) << (s & 31)) >> 32);
 }
+static uint64_t g_lanes[1024];
+static uint64_t __shfl_xor_sync(unsigned, uint64_t v, int o) {   // every lane of the warp calls it, as on the device
+  g_lanes[threadIdx.x] = v;
+  __syncwarp();
+  const uint64_t x = g_lanes[threadIdx.x ^ o];
+  __syncwarp();
+  return x;
+}
 static int __clz(int x) { return x ? __builtin_clz((unsigned)x) : 32; }
 static int __clzll(long long x) { return x ? __builtin_clzll((unsigned long long)x) : 64; }
 struct uint4 { uint32_t x, y, z, w; };
@@ -50,7 +58,7 @@ const Kernel KERNELS[] = {
     {"s512_folds", s512_folds},   {"hm_leaves", hm_leaves},   {"s512_frame_leaves", s512_frame_leaves},
     {"s512_pads", s512_pads},     {"s512_nodes", s512_nodes}, {"s512_tree_small", s512_tree_small},
     {"s512_seeds", s512_seeds},   {"s512_tile_segs", s512_tile_segs}, {"s512_tile_leaves", s512_tile_leaves},
-    {"s512_rows", s512_rows}};
+    {"s512_rows", s512_rows},     {"pd_probe", pd_probe}};
 }  // namespace
 
 extern "C" int pd_run(const char* name, int grid, int block, const Args* a) {

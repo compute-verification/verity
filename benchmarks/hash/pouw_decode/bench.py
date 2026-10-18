@@ -206,7 +206,7 @@ def depths(m16: int, k: int) -> dict[str, list[tuple[str, int]]]:
             "tree_a": [("s512_tree_small", 3 * levels)],
             "seed_a": [("s512_seeds", 5)], "seeds_a": [("s512_seeds", 5)], "lines_ea": [("lines", 2)],
             "hash_leaf": [("s512_tile_segs", 9), ("s512_folds", r // 4 + 1)],
-            "pd": [("pd_commit", rows + 2 * levels + 3), ("pd_commit/rows", rows), ("pd_tree", 2 * levels + 3),
+            "pd": [("pd_commit", rows + 2 * levels + 3), ("pd_commit/rows", rows), ("pd_tree", 2 * levels + 4),
                    ("pd_tiles", 9 + r // 4 + 1)]}
 
 
@@ -371,18 +371,27 @@ def run_shape(dev, pd, lanes, nv, out, name, m16, n, k, reps, trace):
         dev.free(p_)
 
 
+PROBE = {0: "rs_compress", 1: "rs_rounds", 2: "pd_compress", 3: "pd_rounds", 4: "two rs_compress chains"}
+
+
 def probe(pd, nv, out) -> None:
-    """One warp's cycles per chained compression (pd_probe), rs_compress (variant 0) and rounds over a precomputed schedule
-    (variant 1): each run twice, the second kept."""
-    buf = pd.alloc(72)
-    for variant in (0, 1):
-        for n in (16, 256):
+    """One warp's cycles per chained compression (pd_probe) in each form (PROBE), each run twice and the second kept, and
+    whether the forms' final states agree (pd_compress's with rs_compress's, pd_rounds' with rs_rounds', the two-chain
+    form's first chain with rs_compress's)."""
+    buf = pd.alloc(17 * 8)
+    for n in (16, 256):
+        st = {}
+        for v, form in PROBE.items():
             for _ in range(2):
-                pd.launch("pd_probe", 1, 32, p=(buf,), i=(n, variant))
+                pd.launch("pd_probe", 1, 32, p=(buf,), i=(n, v))
                 pd.sync()
-            cycles = int.from_bytes(pd.read(buf, 8), "little")
-            emit(out, {"kind": "probe", "variant": variant, "compressions": n, "cycles": cycles,
+            raw = pd.read(buf, 17 * 8)
+            st[v] = raw[8:72]
+            cycles = int.from_bytes(raw[:8], "little")
+            emit(out, {"kind": "probe", "variant": v, "form": form, "compressions": n, "cycles": cycles,
                        "cycles_per_compression": round(cycles / n, 1), "clk": nv.read()})
+        emit(out, {"kind": "probe_states", "compressions": n, "pd_compress": st[2] == st[0], "pd_rounds": st[3] == st[1],
+                   "two_chains": st[4] == st[0]})
     pd.free(buf)
 
 
