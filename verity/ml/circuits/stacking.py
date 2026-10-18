@@ -445,18 +445,26 @@ RANGES: dict[str, Callable[..., Range]] = {"F32Fmaxf_v1": _fmaxf, "F32Fminf_v1":
                                            "Exp2Lut127_v1": lambda _t: EXP2_LUT127}
 
 
-def _colls(refs: Refs) -> set[tuple[str, int]]:
+def _colls(refs: Refs, cache: dict | None = None) -> frozenset[tuple[str, int]]:
+    """The collections `refs` reads, as (space, index). `cache` keeps each refs it answers for beside its answer, so an id
+    it holds is never reused."""
+    if cache is not None and (hit := cache.get(id(refs))) is not None:
+        return hit[1]
     if isinstance(refs, (Affine, Strided)):
-        return {(refs.space, refs.idx)} if refs.count else set()
-    if isinstance(refs, Concat):
-        return set().union(*(_colls(p) for p in refs.parts))
-    if isinstance(refs, Explicit):
-        return {(s, i) for s, i, _leaf in refs.items}
-    return {(s, i) for s, i, _leaf in refs}
+        out = frozenset({(refs.space, refs.idx)}) if refs.count else frozenset()
+    elif isinstance(refs, Concat):
+        out = frozenset().union(*(_colls(p) for p in refs.parts))
+    elif isinstance(refs, Explicit):
+        out = frozenset((s, i) for s, i, _leaf in refs.items)
+    else:
+        out = frozenset((s, i) for s, i, _leaf in refs)
+    if cache is not None:
+        cache[id(refs)] = (refs, out)
+    return out
 
 
-def _dyn(refs: Refs, params: Sequence[bool], nodes: Sequence[bool]) -> bool:
-    return any(params[i] if s == "p" else nodes[i] for s, i in _colls(refs))
+def _dyn(refs: Refs, params: Sequence[bool], nodes: Sequence[bool], cache: dict | None = None) -> bool:
+    return any(params[i] if s == "p" else nodes[i] for s, i in _colls(refs, cache))
 
 
 def _seg_union(segs: Segs, lo: int = 0, hi: int | None = None) -> Range:
@@ -467,15 +475,26 @@ def _seg_union(segs: Segs, lo: int = 0, hi: int | None = None) -> Range:
     return out
 
 
-def _read(refs: Refs, params: Sequence[Range], segs: Sequence[Segs]) -> Range:
+def _intervals(refs: Refs, cache: dict | None = None) -> tuple[tuple[str, int, tuple[tuple[int, int], ...]], ...]:
+    """The leaf intervals `refs` reads, by collection and normalized (none for a parameter, which is read whole); `cache`
+    as `_colls`'s."""
+    if cache is not None and (hit := cache.get(id(refs))) is not None:
+        return hit[1]
     ivs: dict[tuple[str, int], list] = {}
     ref_intervals(refs, ivs)
+    out = tuple((s, i, () if s == "p" else tuple(norm(iv))) for (s, i), iv in ivs.items())
+    if cache is not None:
+        cache[id(refs)] = (refs, out)
+    return out
+
+
+def _read(refs: Refs, params: Sequence[Range], segs: Sequence[Segs], cache: dict | None = None) -> Range:
     out: Range = _EMPTY
-    for (s, i), iv in ivs.items():
+    for s, i, ivs in _intervals(refs, cache):
         if s == "p":
             out = _union(out, params[i])
             continue
-        for lo, hi in norm(iv):
+        for lo, hi in ivs:
             out = _union(out, _seg_union(segs[i], lo, hi))
     return out
 
@@ -581,6 +600,8 @@ class _Pass:
         self.sites: dict[tuple[str, int], tuple[Range, Range]] = {}
         self.widths: dict[int, frozenset[int | None]] = {}
         self.shapes: dict[str, tuple[str | None, int]] = {}  # each primitive's class and operand bits
+        self.colls: dict[int, tuple[Refs, frozenset[tuple[str, int]]]] = {}
+        self.ivs: dict[int, tuple[Refs, tuple]] = {}
 
     def prim(self, fn: PrimitiveDefinition, dyn: Sequence[bool], rng: Sequence[Range], where: tuple[str, int]) -> tuple[Range, Tally]:
         t = Tally()
@@ -639,7 +660,7 @@ class _Pass:
             ret = _read_segs(fn.body.ret, rng, segs)
             if (pt := ports.port_types(fn)) is not None and pt.ret:
                 ret = _declared_segs(ret, pt.ret)
-            hit = self.memo[key] = (ret, _dyn(fn.body.ret, dyn, dyns), out)
+            hit = self.memo[key] = (ret, _dyn(fn.body.ret, dyn, dyns, self.colls), out)
         return hit
 
     def walk(self, body: Body, pdyn: Sequence[bool], prng: Sequence[Range], def_id: str, segs: list[Segs],
@@ -656,7 +677,7 @@ class _Pass:
 
         def note(refs: Refs, bits: int, kind: str, t: Tally) -> None:
             key = (kind, _key(refs))
-            if any(s == "p" for s, _i in _colls(refs)):
+            if any(s == "p" for s, _i in _colls(refs, self.colls)):
                 up[key] = (refs, max(bits, up.get(key, (refs, 0))[1]), kind)
             elif bits > fresh.get(key, 0):
                 t.units["gathers"] += bits - fresh.get(key, 0)
@@ -669,8 +690,8 @@ class _Pass:
                 segs.append(((0, nd.out.leaves, None),))
                 dyns.append(when == RUN)
                 continue
-            ad = [_dyn(a.refs, pdyn, dyns) for a in nd.args]
-            ar = [_read(a.refs, prng, segs) for a in nd.args]
+            ad = [_dyn(a.refs, pdyn, dyns, self.colls) for a in nd.args]
+            ar = [_read(a.refs, prng, segs, self.ivs) for a in nd.args]
             if nd.form == "scan":
                 s, od, t = self.scan(nd, ad, ar, def_id, k)
             else:

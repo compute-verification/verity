@@ -119,8 +119,9 @@ class PrimitiveDefinition(FunctionDefinition):
 @dataclass(eq=False)
 class CompositeDefinition(FunctionDefinition):
     """`signature(S)` -> (params, ret); `body(B, S, *args)` -> Coll of type ret. `S` is a namespace over the
-    statics (attribute access). Statics with default `None` must be bound before use. `ports`: its port types
-    (`ports.Ports`, PROTOCOL.md §12), or a function of `S` giving them; None when it declares none."""
+    statics (attribute access). Statics with default `None` must be bound before use. `refuse(bindings)`, given the
+    statics bound so far, says why `bind` refuses them (a binding the body does not cover), or returns None. `ports`: its
+    port types (`ports.Ports`, PROTOCOL.md §12), or a function of `S` giving them; None when it declares none."""
 
     name: str
     version: int
@@ -130,6 +131,7 @@ class CompositeDefinition(FunctionDefinition):
     doc: str = ""
     conformance: str = "not-yet-established"
     register: bool = True
+    refuse: Callable[[dict], str | None] | None = field(default=None, repr=False)
     ports: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
@@ -218,7 +220,8 @@ def _consistent_statics(a, b) -> bool:
 
 
 def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) -> "SpecializedDefinition":
-    """Explicit binding record. Partial binds compose; all statics must be bound before the body is built.
+    """Explicit binding record. Partial binds compose; all statics must be bound before the body is built. A record
+    the composite's `refuse` names a reason for is refused (`ValueError`) before it is cached.
 
     Specializations are shared through a per-definition cache keyed by the binding record. Function-valued
     statics are keyed by id, so a cache hit whose function references are *different* definitions under the
@@ -235,6 +238,9 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
     key = tuple((k, _static_key(merged[k])) for k in F.statics if k in merged)
     sp = F._cache.get(key)
     if sp is None:
+        why = F.refuse(merged) if F.refuse is not None else None
+        if why:
+            raise ValueError(f"{F.id} refuses this binding: {why}")
         sp = SpecializedDefinition(F, merged, key)
         F._cache[key] = sp
     elif not _consistent_statics(sp.bindings, merged):
@@ -560,12 +566,13 @@ def primitive(name: str, version: int, params: Sequence[tuple[str, Type]], ret: 
 
 
 def composite(name: str, version: int, statics: Sequence[str], signature, doc: str = "",
-              conformance: str = "not-yet-established", ports: Any = None):
+              conformance: str = "not-yet-established", refuse: Callable[[dict], str | None] | None = None,
+              ports: Any = None):
     """Decorator: register a composite; the decorated function is the body builder `(B, S, *args) -> Coll`."""
 
     def deco(fn: Callable[..., Coll]) -> CompositeDefinition:
         return CompositeDefinition(name, version, tuple(statics), signature, fn, doc=doc or (fn.__doc__ or ""),
-                            conformance=conformance, ports=ports)
+                            conformance=conformance, refuse=refuse, ports=ports)
 
     return deco
 

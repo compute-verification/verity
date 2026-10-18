@@ -1015,7 +1015,9 @@ static void vpfree(VP& P) {
     CK(cudaFree(p));
   CK(cudaStreamDestroy(P.st));
 }
-static void vp_ved(VP& P, const Sig& s) { vedit<<<dim3(P.s / 128, P.rows / 32), 256, 0, P.st>>>(P.Vt, P.Xt, P.rows, P.s, s); }
+static void vp_ved(VP& P, const Sig& s) {
+  vedit<<<dim3(P.s / 128, (P.rows + 4 * VE_G - 1) / (4 * VE_G)), 256, 0, P.st>>>(P.Vt, P.Xt, P.rows, P.s, s);
+}
 static void vp_vsm(VP& P) { vsum<<<dim3(32, P.kvh), 128, 0, P.st>>>(P.Xt, P.DG, P.Sq, P.X0, P.s); }
 template <bool SUMS> static void vp_vf(VP& P, const Sig& s) { vfl<SUMS>(P.Vt, P.Xt, P.DG, P.Sq, P.X0, P.kvh, P.s, s, P.st); }
 // an arm: vedit, vsum (r2's), vpair (vedit then vsum), vfold or vfold_x
