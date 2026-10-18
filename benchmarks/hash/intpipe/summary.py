@@ -3,6 +3,8 @@
     python3 summary.py sha512 OUT     sha512_baseline.sh's run: per build, the raw rate and the 4 KiB row-seg leaves
     python3 summary.py hashes OUT     candidates.sh's run: per candidate, against full SHA-512 in the same rounds
     python3 summary.py table RUN...   fetched candidates.sh runs' directories (research fetch RUN --all): the hash x GPU table
+    python3 summary.py hm96 OUT       hm96.sh's run: per candidate and size, GB/s (salts precomputed; the whole step)
+    python3 summary.py hm96table RUN...   fetched hm96.sh runs: GB/s per primitive and GPU, and the GPU x candidate speedups
 
 The ceiling: SMs x 4 sub-partitions x the median SM clock x 32 lanes / the warp cycles a block (sass_count.py's bound:
 2 cycles an ALU or FMA instruction, 1 an issue).
@@ -178,8 +180,77 @@ def table(args: list[str]) -> None:
                   f"| {r.get('instructions_per_byte', float('nan')):.1f} | {runs} |")
 
 
+def hm96(out: str) -> None:
+    """hm96.sh's run: per candidate and size, the medians of the candidate's and base SHA-512's GB/s (data phase alone,
+    and the whole step) and of the per-rep ratios."""
+    by: dict[tuple[str, int], list[dict]] = {}
+    for r in lines(os.path.join(out, "bench.jsonl")):
+        if r.get("mode") == "hm96":
+            by.setdefault((r["candidate"], r["leaves"]), []).append(r)
+    for (cand, n), rs in sorted(by.items()):
+        m = rs[0]
+        rec = {"candidate": cand, "gpu": m["gpu"], "sms": m["sms"], "leaves": n, "bytes": m["bytes"], "reps": len(rs),
+               "fetch": m["fetch"], "loader_async": m["loader_async"], "seg_warps": m["seg_warps"]}
+        for k in ("pre_gb_per_s", "step_gb_per_s", "salt_ms", "mhz"):
+            rec[k] = med([r[k] for r in rs])
+            rec["base_" + k] = med([r["base_" + k] for r in rs])
+        rec["pre_ratio"] = med([r["pre_gb_per_s"] / r["base_pre_gb_per_s"] for r in rs])
+        rec["step_ratio"] = med([r["step_gb_per_s"] / r["base_step_gb_per_s"] for r in rs])
+        print(json.dumps(rec))
+
+
+HM96_ORDER = ["sha512", "sha512r32", "sha512r24", "blake3k"]
+
+
+def short(g: str) -> str:
+    return g.replace("NVIDIA ", "").replace(" Blackwell Server Edition", "")
+
+
+def hm96table(args: list[str]) -> None:
+    """Fetched hm96.sh runs' directories: GB/s per candidate and GPU, then the speedup table (GPU x candidate)."""
+    rec: dict[tuple[str, str, int], tuple[dict, str]] = {}
+    for d in args:
+        run = os.path.basename(os.path.normpath(d))
+        for root, _, files in os.walk(d):
+            if "summary.jsonl" in files:
+                for r in lines(os.path.join(root, "summary.jsonl")):
+                    rec[(r["candidate"], r["gpu"], r["leaves"])] = (r, run)
+    gpus = sorted({g for _, g, _ in rec}, key=lambda g: ("RTX" not in g, g))
+    sizes = sorted({n for _, _, n in rec})
+    lab = {n: f"{n * 4096 / 1e6:.0f} MB" if n * 4096 < 2**30 else "1 GiB" for n in sizes}
+    hdr = " | ".join(f"{m} {lab[n]}" for m in ("pre", "step") for n in sizes)
+    print(f"| primitive | GPU | GB/s {hdr} | x SHA-512 {hdr} | MHz | run |")
+    print("|---|---|" + "---|" * (2 * 2 * len(sizes) + 2))
+    for c in HM96_ORDER:
+        for g in gpus:
+            rs = [rec.get((c, g, n), ({}, ""))[0] for n in sizes]
+            if not any(rs):
+                continue
+            gb = " | ".join(f"{r.get(m + '_gb_per_s', float('nan')):.0f}" for m in ("pre", "step") for r in rs)
+            x = " | ".join(f"{r.get(m + '_ratio', float('nan')):.2f}" for m in ("pre", "step") for r in rs)
+            runs = " ".join(sorted({rec.get((c, g, n), ({}, ""))[1] for n in sizes} - {""}))
+            print(f"| {c} | {short(g)} | {gb} | {x} | {med([r['mhz'] for r in rs if r]):.0f} | {runs} |")
+    for g in gpus:
+        rs = [rec.get(("sha512", g, n), ({}, ""))[0] for n in sizes]
+        if any(rs):
+            gb = " | ".join(f"{r.get('base_' + m + '_gb_per_s', float('nan')):.0f}" for m in ("pre", "step") for r in rs)
+            print(f"| base sha512 (in the sha512 binary) | {short(g)} | {gb} | " + " | ".join(["1.00"] * 2 * len(sizes))
+                  + f" | {med([r['base_mhz'] for r in rs if r]):.0f} | |")
+    print()
+    cands = [c for c in HM96_ORDER if c != "sha512"]
+    print("| GPU | step | " + " | ".join(f"{c} pre / step" for c in cands) + " |")
+    print("|---|---|" + "---|" * len(cands))
+    for g in gpus:
+        for n in sizes:
+            cells = []
+            for c in cands:
+                r = rec.get((c, g, n), ({}, ""))[0]
+                cells.append(f"{r['pre_ratio']:.2f} / {r['step_ratio']:.2f}" if r else "—")
+            print(f"| {short(g)} | {lab[n]} | " + " | ".join(cells) + " |")
+
+
 if __name__ == "__main__":
-    if sys.argv[1] == "table":
-        table(sys.argv[2:])
+    if sys.argv[1] in ("table", "hm96table"):
+        {"table": table, "hm96table": hm96table}[sys.argv[1]](sys.argv[2:])
     else:
-        {"sha512": sha512, "hashes": hashes}[sys.argv[1]](sys.argv[2])
+        {"sha512": sha512, "hashes": hashes, "hm96": hm96}[sys.argv[1]](sys.argv[2])
