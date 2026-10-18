@@ -1,5 +1,5 @@
-"""`engine.int8_ops`: each int8 linear is one named op and each request's int8 attention two (its KV quantization and its rows), with
-the values of the plain torch they wrap."""
+"""`engine.int8_ops`: each int8 linear is two named ops (its quantizer and its product) and each request's int8 attention two (its KV
+quantization and its rows), with the values of the plain torch they wrap."""
 from __future__ import annotations
 
 import torch
@@ -32,7 +32,8 @@ def test_the_linear_op_is_the_plain_linear_and_its_values():
     wq, ws = E.quantize_rows(x)
     assert torch.equal(xq, wq) and torch.equal(sa, ws)
     assert torch.equal(y.view(torch.int16), E.plain_linear(x, w, sw).view(torch.int16))
-    torch.library.opcheck(OPS.linear, (x, w, sw))
+    torch.library.opcheck(OPS.row_quant, (x,))
+    torch.library.opcheck(OPS.scaled_mm, (xq, sa, w, sw))
 
 
 def test_the_attention_ops_are_the_window():
@@ -59,4 +60,4 @@ def test_a_capture_sees_one_op_per_call():
     x, w, sw = _linear_args(m=3)
     with _Ops() as mode:
         OPS.linear(x, w, sw)
-    assert mode.seen == ["verity_int8.linear.default"]
+    assert mode.seen == ["verity_int8.row_quant.default", "verity_int8.scaled_mm.default"]

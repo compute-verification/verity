@@ -1,5 +1,5 @@
-"""The exact-int8 linear and attention exported under the pinned `b1-eager-v3` profile (`vllm_bindings.int8`): `verity_int8::linear`
-binds to `Int8RowQuant_v1{K}` then `ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}` per token row, and an int8 attention layer's call
+"""The exact-int8 linear and attention exported under the pinned `b1-eager-v3` profile (`vllm_bindings.int8`): `verity_int8::row_quant`
+binds to `Int8RowQuant_v1{K}` and `verity_int8::scaled_mm` to `ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}` per token row, and an int8 attention layer's call
 to `Int8KvQuant_v1{S,D}` per KV head then `Int8LutAttentionRow_v1{D,pos+1,SCALE}` per (row, head), the Definitions the Match fold
 resolves the same launches to (`observe/fold/patterns/int8.py`); the Programs' words are the torch ops' bit for bit; forms the ops
 do not compute are refused by name."""
@@ -10,7 +10,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-import verity_vllm.engine.int8_ops  # noqa: F401  (defines torch.ops.verity_int8)
+from verity_vllm.engine import int8_ops
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
 from verity_vllm.program.kernels.serve3_reference import materialize
@@ -26,7 +26,7 @@ class Linear(nn.Module):
         self.weight_scale = nn.Parameter(sw, requires_grad=False)
 
     def forward(self, x):
-        return torch.ops.verity_int8.linear(x, self.weight, self.weight_scale)
+        return int8_ops.linear(x, self.weight, self.weight_scale)
 
 
 @pytest.fixture(autouse=True)
@@ -63,7 +63,7 @@ def test_int8_linear_binds_int8_linear_per_row_and_evaluates_to_the_op(sw_shape)
     x = (torch.randn(M, K) * 2).to(BF)
     rep = _derive(m, x)
     assert rep.unsupported is None, f"refused: {rep.unsupported}"
-    assert _emitted(rep) == [f"Int8RowQuant_v1{{K={K}}} x{M} + ScaledMmS8_v1{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}} x{M}"], _emitted(rep)
+    assert _emitted(rep) == [f"Int8RowQuant_v1{{K={K}}} x{M}", f"ScaledMmS8_v1{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}} x{M}"], _emitted(rep)
     roles = rep.provenance["weight_roles"]
     assert roles["weight"]["role"] == "int8_w" and roles["weight_scale"]["role"] == "int8_ws"
     params = dict(m.named_parameters())

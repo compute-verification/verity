@@ -133,6 +133,7 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("GemmBias_v2", "out", "0", _LINEAR_WHY + " (the biased linear as one Call)", condition="own_parameter"),
     Residual("ScaledMmFp8Block_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
     Residual("ScaledMmFp8BlockSharedScale_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
+    Residual("ScaledMmS8_v1", "out", "0", _LINEAR_WHY + " (the exact-int8 linear's product)", condition="own_parameter"),
     Residual("NcpLinearRow_v1", "out", "0", _LINEAR_WHY + " (the `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
     Residual("NcpLinearRowBias_v1", "out", "0", _LINEAR_WHY + " (the fused-bias `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
     Residual("<all_reduce>", "out", "0", _LINEAR_WHY + " (the row-parallel linear returns the all-reduced tensor as slot 0: an all-reduce of any "

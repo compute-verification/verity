@@ -1,4 +1,5 @@
-"""The exact-int8 profile's two calls (`TargetProfile.int8_exact`, `engine.int8_ops`): the int8 linear and the int8 attention."""
+"""The exact-int8 profile's calls (`TargetProfile.int8_exact`, `engine.int8_ops`): the int8 linear's quantizer and product, and the int8
+attention."""
 
 from __future__ import annotations
 
@@ -27,33 +28,75 @@ def _int8_op(name: str) -> set:
         return set()
 
 
-class Int8LinearRule(OpRule):
-    """`verity_int8::linear(x bf16 [M, K], w int8 [N, K], s_w f32 [N, 1] or [N]) -> (xq, s_a, y)` -> per token row
-    `int8_row_quant{K}` (Int8RowQuant_v1) then `int8_scaled_mm{K,N}` (ScaledMmS8_v1, ScaledMmS8Coordinate_v1 per output): two Calls,
-    so the query of record cuts one coordinate of the product instead of its whole fan-in; all three results are values (`xq` s8 [M, K], `s_a` f32 [M],
-    `y` bf16 [M, N])."""
+class Int8RowQuantRule(OpRule):
+    """`verity_int8::row_quant(x bf16 [M, K]) -> (xq s8 [M, K], s_a f32 [M])` -> per token row `int8_row_quant{K}` (Int8RowQuant_v1).
+    Its results are read by the linear's product (`Int8ScaledMmRule`), the next node of the same body: values the two exchange, no
+    return slot of the linear."""
     modes = frozenset({"profile"})
-    info = RuleInfo("Int8Linear[vllm]", 1, "op-binding",
-                    applies_to="verity_int8::linear(Tensor x, Tensor w, Tensor s_w) -> (Tensor, Tensor, Tensor)",
-                    preconditions=("x is a bf16 value [M, K]", "w is an int8 parameter [N, K]", "s_w is a float32 parameter [N, 1] or [N]"),
-                    evidence_domain="structural; numerics: Int8RowQuant_v1 + ScaledMmS8_v1 = Int8Linear_v1 (engine.int8_exact's plain linear, bit-equal on the RTX PRO 6000 "
-                                    "to its CPU run)")
+    info = RuleInfo("Int8RowQuant[vllm]", 1, "op-binding",
+                    applies_to="verity_int8::row_quant(Tensor x) -> (Tensor, Tensor)",
+                    preconditions=("x is a bf16 value [M, K], K a multiple of 32",),
+                    evidence_domain="structural; numerics: Int8RowQuant_v1 (engine.int8_exact.quantize_rows, bit-equal on the RTX PRO 6000 to its CPU run)")
 
     def targets(self):
-        return _int8_op("linear")
+        return _int8_op("row_quant")
 
     def applies(self, node, ctx):
-        if len(node.args) != 3:
+        if len(node.args) != 1:
             return "unexpected operator arity"
-        x, w, sw = node.args
+        (x,) = node.args
         r = _row_value(ctx, x, "x")
         if r:
             return r
         if isinstance(ctx.val(x), Alloc):
             return "x is an unwritten allocation"
-        xs, ws, ss = shape(ctx, x), shape(ctx, w), shape(ctx, sw)
+        xs = shape(ctx, x)
+        if len(xs) != 2:
+            return f"shape: x {xs} is not [M, K]"
+        if xs[1] % 32:
+            return f"shape: K={xs[1]}; ScaledMmS8Coordinate_v1 takes K a multiple of 32 (its IMMA k step)"
+        return True
+
+    def emit(self, node, ctx):
+        (x,) = node.args
+        rows, lead = rows_of(ctx.coll(x))
+        K = shape(ctx, x)[1]
+        fq = ctx.kind("int8_row_quant", node, K=K)
+        hint = ctx.hint_name(node)
+        qs = [ctx.call(fq, r, node=node, rule=self, name=f"{hint}[{i}]") for i, r in enumerate(rows)]
+        ctx.define(node, (from_rows([q[0] for q in qs], lead), array_of([q[1] for q in qs])))
+        ctx.record(self, node, {"K": K, "rows": len(rows)}, emitted=f"{fq.id} x{len(rows)}")
+
+
+class Int8ScaledMmRule(OpRule):
+    """`verity_int8::scaled_mm(xq s8 [M, K], s_a f32 [M], w int8 [N, K], s_w f32 [N, 1] or [N]) -> y bf16 [M, N]` -> per token row
+    `int8_scaled_mm{K,N}` (ScaledMmS8_v1, ScaledMmS8Coordinate_v1 per output), so the query of record cuts one coordinate of the
+    product instead of its whole fan-in."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("Int8ScaledMm[vllm]", 1, "op-binding",
+                    applies_to="verity_int8::scaled_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w) -> Tensor",
+                    preconditions=("xq is an int8 value [M, K], s_a a float32 value [M]", "w is an int8 parameter [N, K]",
+                                   "s_w is a float32 parameter [N, 1] or [N]"),
+                    evidence_domain="structural; numerics: Int8RowQuant_v1 + ScaledMmS8_v1 = Int8Linear_v1 (engine.int8_exact's plain linear, bit-equal on the RTX PRO 6000 "
+                                    "to its CPU run)")
+
+    def targets(self):
+        return _int8_op("scaled_mm")
+
+    def applies(self, node, ctx):
+        if len(node.args) != 4:
+            return "unexpected operator arity"
+        xq, sa, w, sw = node.args
+        r = _row_value(ctx, xq, "xq", torch.int8) or _row_value(ctx, sa, "s_a", torch.float32)
+        if r:
+            return r
+        if isinstance(ctx.val(xq), Alloc) or isinstance(ctx.val(sa), Alloc):
+            return "xq / s_a is an unwritten allocation"
+        xs, as_, ws, ss = shape(ctx, xq), shape(ctx, sa), shape(ctx, w), shape(ctx, sw)
         if len(xs) != 2 or ws is None or len(ws) != 2 or ws[1] != xs[1]:
-            return f"shape: x {xs} vs w {ws}"
+            return f"shape: xq {xs} vs w {ws}"
+        if as_ != (xs[0],):
+            return f"shape: s_a {as_} vs M={xs[0]}"
         if ss not in ((ws[0], 1), (ws[0],)):
             return f"shape: s_w {ss} vs N={ws[0]}"
         if xs[1] % 32:
@@ -65,18 +108,18 @@ class Int8LinearRule(OpRule):
         return True
 
     def emit(self, node, ctx):
-        x, w, sw = node.args
+        xq, sa, w, sw = node.args
         N, K = shape(ctx, w)
-        rows, lead = rows_of(ctx.coll(x))
+        rows, lead = rows_of(ctx.coll(xq))
+        scales = ctx.coll(sa).reshape(Array(len(rows), Value(32)))
         wc, sc = ctx.coll(w), ctx.coll(sw).reshape(Array(N, Value(32)))
-        fq, fm = ctx.kind("int8_row_quant", node, K=K), ctx.kind("int8_scaled_mm", node, K=K, N=N)
+        fm = ctx.kind("int8_scaled_mm", node, K=K, N=N)
         hint = ctx.hint_name(node)
-        qs = [ctx.call(fq, r, node=node, rule=self, name=f"{hint}/quant[{i}]") for i, r in enumerate(rows)]
-        ys = [ctx.call(fm, q[0], q[1], wc, sc, node=node, rule=self, name=f"{hint}[{i}]") for i, q in enumerate(qs)]
-        ctx.define(node, (from_rows([q[0] for q in qs], lead), array_of([q[1] for q in qs]), from_rows(ys, lead)))
+        ys = [ctx.call(fm, r, scales[i], wc, sc, node=node, rule=self, name=f"{hint}[{i}]") for i, r in enumerate(rows)]
+        ctx.define(node, from_rows(ys, lead))
         ctx.bind_weight_role(w, self, "int8_w", K=K, N=N)
         ctx.bind_weight_role(sw, self, "int8_ws", N=N)
-        ctx.record(self, node, {"K": K, "N": N, "rows": len(rows)}, emitted=f"{fq.id} x{len(rows)} + {fm.id} x{len(rows)}")
+        ctx.record(self, node, {"K": K, "N": N, "rows": len(rows)}, emitted=f"{fm.id} x{len(rows)}")
 
 
 class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
@@ -153,4 +196,4 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
                    emitted=f"{fkv.id} x{h.KVH} + Int8LutAttentionRow_v1{{S={h.P0 + 1}..{S}}} x{h.T * h.NH} + Const32 x{h.KVH + h.T * h.NH}")
 
 
-__all__ = ["Int8LinearRule", "Int8UnifiedAttentionRule", "INT8_ATTENTION_IMPL"]
+__all__ = ["Int8RowQuantRule", "Int8ScaledMmRule", "Int8UnifiedAttentionRule", "INT8_ATTENTION_IMPL"]

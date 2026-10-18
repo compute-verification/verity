@@ -9,7 +9,7 @@ import pytest
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import profile_for_case
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
-from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8Linear
+from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8RowQuant, Int8ScaledMm
 from verity_vllm.observe.fold.resolver import Compute, Const, GatherMany, PerRow, Shared, StepContext, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
 from verity_vllm.program import model as analytic
@@ -39,9 +39,9 @@ def test_shipped_int8_config_is_the_manifest_bytes():
 def test_the_int8_role_derives_a_profile_with_the_int8_patterns_first():
     p = profile_for_case(ROLE)
     assert p.config["INT8_EXACT"] == 127 and not p.config.get("FP8_BLOCK")
-    assert [type(x).__name__ for x in p.patterns][:2] == ["Int8Linear", "Int8AttentionScope"]
+    assert [type(x).__name__ for x in p.patterns][:3] == ["Int8RowQuant", "Int8ScaledMm", "Int8AttentionScope"]
     assert "AttentionScope" in [type(x).__name__ for x in p.patterns]
-    assert "Int8Linear" not in [type(x).__name__ for x in profile_for_case("LLAMA31_8B").patterns]
+    assert "Int8ScaledMm" not in [type(x).__name__ for x in profile_for_case("LLAMA31_8B").patterns]
 
 
 def test_weights_record_carries_s8_weights_and_row_scales_and_the_map_names_them():
@@ -62,7 +62,8 @@ def test_weights_record_carries_s8_weights_and_row_scales_and_the_map_names_them
 
 M, K, N = 5, 64, 16
 A_X, A_XQ, A_SA, A_Y, A_W, A_WS = 500, 501, 502, 503, 2, 3
-LIN_SCHEMA = "verity_int8::linear(Tensor x, Tensor w, Tensor s_w) -> (Tensor, Tensor, Tensor)"
+QUANT_SCHEMA = "verity_int8::row_quant(Tensor x) -> (Tensor, Tensor)"
+MM_SCHEMA = "verity_int8::scaled_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w) -> Tensor"
 KV_SCHEMA = ("verity_int8::kv_quant(Tensor key_cache, Tensor value_cache, Tensor blocks, SymInt s, Tensor k_scales) "
              "-> (Tensor, Tensor, Tensor, Tensor)")
 ROWS_SCHEMA = "verity_int8::window_rows(Tensor q, Tensor kq, Tensor vq, Tensor sv, Tensor v0, Tensor k_scales, float scale) -> Tensor"
@@ -101,31 +102,41 @@ def _lin_roots():
             Root(view(A_WS, (N, 1), "float32"), "weight", "model.layers.0.self_attn.qkv_proj.weight_scale")]
 
 
-def _lin(w_dtype="int8", sw_shape=(N, 1)):
-    args = [view(A_X, (M, K), "bfloat16"), view(A_W, (N, K), w_dtype), view(A_WS, sw_shape, "float32")]
-    outs = (view(A_XQ, (M, K), "int8"), view(A_SA, (M,), "float32"), view(A_Y, (M, N), "bfloat16"))
-    return _tree([DispatchEnter(1, None, 0, "forward", "verity_int8.linear.default", LIN_SCHEMA, args, {}, 7, "model.layers.0.self_attn.qkv_proj"),
+QKV = "model.layers.0.self_attn.qkv_proj"
+
+
+def _quant(x_dtype="bfloat16"):
+    outs = (view(A_XQ, (M, K), "int8"), view(A_SA, (M,), "float32"))
+    return _tree([DispatchEnter(1, None, 0, "forward", "verity_int8.row_quant.default", QUANT_SCHEMA, [view(A_X, (M, K), x_dtype)], {}, 7, QKV),
                   DispatchExit(1, outs)])
 
 
+def _mm(w_dtype="int8", sw_shape=(N, 1)):
+    args = [view(A_XQ, (M, K), "int8"), view(A_SA, (M,), "float32"), view(A_W, (N, K), w_dtype), view(A_WS, sw_shape, "float32")]
+    return _tree([DispatchEnter(1, None, 0, "forward", "verity_int8.scaled_mm.default", MM_SCHEMA, args, {}, 7, QKV),
+                  DispatchExit(1, view(A_Y, (M, N), "bfloat16"))])
+
+
 def test_int8_linear_resolves_to_the_quantizer_then_the_product_with_both_weights_named():
-    r = Int8Linear().match(_lin(), _ctx([("r0", i) for i in range(M)], {"r0": M}, {"r0": [0]}, roots=_lin_roots()))
-    assert isinstance(r, Compute), r
-    assert spec_label(r.spec) == f"Int8RowQuant_v1{{K={K}}}" and r.rows == M and r.consumed
-    assert [type(o) for o in r.operands] == [PerRow] and [type(o) for o in r.outputs] == [PerRow, PerRow]
-    (mm,) = r.also
-    assert spec_label(mm.spec) == f"ScaledMmS8_v1{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}}" and mm.rows == M and mm.consumed == ()
-    assert mm.operands[:2] == r.outputs and [type(o) for o in mm.operands[2:]] == [Shared, Shared] and [type(o) for o in mm.outputs] == [PerRow]
-    assert mm.roots == (None, None, "model.layers.0.self_attn.qkv_proj.weight", "model.layers.0.self_attn.qkv_proj.weight_scale")
+    ctx = _ctx([("r0", i) for i in range(M)], {"r0": M}, {"r0": [0]}, roots=_lin_roots())
+    q, mm = Int8RowQuant().match(_quant(), ctx), Int8ScaledMm().match(_mm(), ctx)
+    assert isinstance(q, Compute) and isinstance(mm, Compute), (q, mm)
+    assert spec_label(q.spec) == f"Int8RowQuant_v1{{K={K}}}" and q.rows == M and q.consumed and q.hint == f"{QKV}/quant"
+    assert [type(o) for o in q.operands] == [PerRow] and [type(o) for o in q.outputs] == [PerRow, PerRow]
+    assert spec_label(mm.spec) == f"ScaledMmS8_v1{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}}" and mm.rows == M and mm.consumed
+    assert mm.operands[:2] == q.outputs and [type(o) for o in mm.operands[2:]] == [Shared, Shared] and [type(o) for o in mm.outputs] == [PerRow]
+    assert mm.roots == (None, None, f"{QKV}.weight", f"{QKV}.weight_scale")
 
 
 def test_int8_linear_refuses_other_dtypes_and_non_parameter_weights():
     ctx = _ctx([("r0", i) for i in range(M)], {"r0": M}, {"r0": [0]}, roots=_lin_roots())
-    assert "Int8Linear_v1 is" in Int8Linear().match(_lin(w_dtype="uint8"), ctx).reason
-    r = Int8Linear().match(_lin(), _ctx([("r0", i) for i in range(M)], {"r0": M}, {"r0": [0]}))
+    assert "Int8RowQuant_v1 is" in Int8RowQuant().match(_quant("float16"), ctx).reason
+    assert "ScaledMmS8_v1 is" in Int8ScaledMm().match(_mm(w_dtype="uint8"), ctx).reason
+    r = Int8ScaledMm().match(_mm(), _ctx([("r0", i) for i in range(M)], {"r0": M}, {"r0": [0]}))
     assert isinstance(r, Unsupported) and "weight Roots" in r.reason
-    assert Int8Linear().match(_tree([DispatchEnter(1, None, 0, "forward", "aten.linear.default", "aten::linear(Tensor input, Tensor weight, "
-                                                  "Tensor? bias=None) -> Tensor", [], {}, 7, None), DispatchExit(1, None)]), ctx) is None
+    other = _tree([DispatchEnter(1, None, 0, "forward", "aten.linear.default", "aten::linear(Tensor input, Tensor weight, "
+                                 "Tensor? bias=None) -> Tensor", [], {}, 7, None), DispatchExit(1, None)])
+    assert Int8RowQuant().match(other, ctx) is None and Int8ScaledMm().match(other, ctx) is None
 
 
 H, G, D, BS, NB = 4, 2, 32, 16, 8

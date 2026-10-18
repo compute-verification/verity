@@ -234,8 +234,8 @@ def make_patterns(C: dict[str, Any]) -> list:
     if C.get("INT8_EXACT"):
         # the exact-int8 profile's named ops (engine.int8_ops), each one registered Definition (registry.int8_exact); the attention
         # scope first, so a layer on the int8 backend never reaches the FA2 scope
-        from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8Linear
-        fp8 = [Int8Linear(), Int8AttentionScope()]
+        from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8RowQuant, Int8ScaledMm
+        fp8 = [Int8RowQuant(), Int8ScaledMm(), Int8AttentionScope()]
     return [
         *fp8,
         GemmLaunch(GEMM_CONSTEXPRS, num_warps=GEMM_NUM_WARPS, num_stages=GEMM_NUM_STAGES, num_sms=GEMM_NUM_SMS),

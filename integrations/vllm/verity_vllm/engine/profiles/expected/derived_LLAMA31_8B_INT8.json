@@ -83,8 +83,12 @@
  },
  "patterns": [
   {
-   "__type__": "Int8Linear",
-   "name": "int8.linear"
+   "__type__": "Int8RowQuant",
+   "name": "int8.row_quant"
+  },
+  {
+   "__type__": "Int8ScaledMm",
+   "name": "int8.scaled_mm"
   },
   {
    "__type__": "Int8AttentionScope",

@@ -1,9 +1,10 @@
 """Eager Match patterns of the exact-int8 profile (`TargetProfile.int8_exact`): its named ops (`engine.int8_ops`), each bound to
 registered Definitions (`program.registry.int8_exact`, `ml.circuits.ops.gemm`), whatever kernels the op launches inside:
 
-    verity_int8::linear(x[M,K] bf16, w[N,K] int8, s_w[N,1] f32) -> (xq[M,K] s8, s_a[M] f32, y[M,N] bf16)
-        -> Compute(Int8RowQuant_v1{K}, rows=M, (PerRow(x),), (PerRow(xq), PerRow(s_a))), then
-           Compute(ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}, rows=M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(s_w)), (PerRow(y),))
+    verity_int8::row_quant(x[M,K] bf16) -> (xq[M,K] s8, s_a[M] f32)
+        -> Compute(Int8RowQuant_v1{K}, rows=M, (PerRow(x),), (PerRow(xq), PerRow(s_a)))
+    verity_int8::scaled_mm(xq[M,K] s8, s_a[M] f32, w[N,K] int8, s_w[N,1] f32) -> y[M,N] bf16
+        -> Compute(ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}, rows=M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(s_w)), (PerRow(y),))
     vllm.unified_attention_with_output(query, ..., output!, layer) ⊃ per request verity_int8::kv_quant(key_cache, value_cache, blocks, s,
             k_scales) -> (kq, vq, sv, v0), then verity_int8::window_rows(q, kq, vq, sv, v0, k_scales, scale), copied into output
         -> per KV head g Compute(Int8KvQuant_v1{s,D}, rows=1, (GatherMany(K slots 0..s-1 of head g), GatherMany(V slots), Const32),
@@ -48,46 +49,70 @@ def header_k_scales(ctx: StepContext) -> dict | None:
 
 
 @dataclass
-class Int8Linear:
-    """`verity_int8::linear`: the plain int8 linear on a bf16 `[M, K]` activation, its three results materialised; `w` and `s_w`
-    must be checkpoint parameters (weight Roots)."""
+class Int8RowQuant:
+    """`verity_int8::row_quant`: the int8 linear's per-row quantizer on a bf16 `[M, K]` activation, both results materialised."""
 
-    name: str = "int8.linear"
+    name: str = "int8.row_quant"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
-        if not _is_op(node, "linear"):
+        if not _is_op(node, "row_quant"):
             return None
         from verity_vllm.program.registry import int8_exact
-        a = bound_args(node)
-        x, w, sw = a.get("x"), a.get("w"), a.get("s_w")
+        x = bound_args(node).get("x")
         outs = list(node.outs or ())
-        if not all(isinstance(v, ViewDesc) for v in (x, w, sw)) or len(outs) != 3 or not all(isinstance(v, ViewDesc) for v in outs):
-            return unsupported(node, "verity_int8::linear arguments / results not bound as expected", args=list(a), outs=len(outs))
-        xq, s_a, y = outs
+        if not isinstance(x, ViewDesc) or len(outs) != 2 or not all(isinstance(v, ViewDesc) for v in outs):
+            return unsupported(node, "verity_int8::row_quant argument / results not bound as expected", outs=len(outs))
+        xq, s_a = outs
         if x.rank != 2 or not is_row_major(x):
             return unsupported(node, "x is not a row-major [M, K] view", x=repr(x))
         M, K = x.shape
+        if xq.shape != (M, K) or s_a.shape != (M,) or not is_row_major(xq):
+            return unsupported(node, "results are not row-major xq [M, K], s_a [M]", xq=repr(xq), s_a=repr(s_a))
+        if K % 32:
+            return unsupported(node, "ScaledMmS8Coordinate_v1 takes K a multiple of 32 (its IMMA k step)", K=K)
+        if not (x.dtype == "bfloat16" and xq.dtype == "int8" and s_a.dtype == "float32"):
+            return unsupported(node, "Int8RowQuant_v1 is bf16 -> (int8, f32)", dtypes=[x.dtype, xq.dtype, s_a.dtype])
+        return Compute(bind(int8_exact.Int8RowQuant, K=K), M, (PerRow(x),), (PerRow(xq), PerRow(s_a)), tuple(sorted(node.ids())),
+                       hint=hint_of(node, "quant"), kernels=("elementwise_kernel", "reduce_kernel"),
+                       attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+
+
+@dataclass
+class Int8ScaledMm:
+    """`verity_int8::scaled_mm`: the int8 linear's product of its quantizer's results; `w` and `s_w` must be checkpoint parameters
+    (weight Roots)."""
+
+    name: str = "int8.scaled_mm"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if not _is_op(node, "scaled_mm"):
+            return None
+        from verity_vllm.program.registry import int8_exact
+        a = bound_args(node)
+        xq, s_a, w, sw = a.get("xq"), a.get("s_a"), a.get("w"), a.get("s_w")
+        outs = list(node.outs or ()) if isinstance(node.outs, (list, tuple)) else [node.outs]
+        if not all(isinstance(v, ViewDesc) for v in (xq, s_a, w, sw)) or len(outs) != 1 or not isinstance(outs[0], ViewDesc):
+            return unsupported(node, "verity_int8::scaled_mm arguments / result not bound as expected", args=list(a), outs=len(outs))
+        (y,) = outs
+        if xq.rank != 2 or not is_row_major(xq):
+            return unsupported(node, "xq is not a row-major [M, K] view", xq=repr(xq))
+        M, K = xq.shape
         N = y.shape[1] if y.rank == 2 else None
-        if N is None or y.shape != (M, N) or xq.shape != (M, K) or s_a.shape != (M,) or not all(is_row_major(v) for v in (xq, y)):
-            return unsupported(node, "results are not row-major xq [M, K], s_a [M], y [M, N]", xq=repr(xq), s_a=repr(s_a), y=repr(y))
+        if N is None or y.shape != (M, N) or s_a.shape != (M,) or not is_row_major(y):
+            return unsupported(node, "s_a / y are not [M] / row-major [M, N]", s_a=repr(s_a), y=repr(y))
         if w.shape != (N, K) or not is_row_major(w) or sw.shape not in ((N, 1), (N,)):
             return unsupported(node, "w / s_w are not [N, K] / [N, 1] views", w=repr(w), s_w=repr(sw), N=N, K=K)
         if K % 32:
             return unsupported(node, "ScaledMmS8Coordinate_v1 takes K a multiple of 32 (its IMMA k step)", K=K)
-        if not (x.dtype == y.dtype == "bfloat16" and w.dtype == xq.dtype == "int8" and sw.dtype == s_a.dtype == "float32"):
-            return unsupported(node, "Int8Linear_v1 is bf16 x (int8, f32) -> (int8, f32, bf16)",
-                               dtypes=[x.dtype, w.dtype, sw.dtype, xq.dtype, s_a.dtype, y.dtype])
+        if not (y.dtype == "bfloat16" and w.dtype == xq.dtype == "int8" and sw.dtype == s_a.dtype == "float32"):
+            return unsupported(node, "ScaledMmS8_v1 is (int8, f32) x (int8, f32) -> bf16", dtypes=[xq.dtype, s_a.dtype, w.dtype, sw.dtype, y.dtype])
         wroots, sroots = ctx.roots_of(w), ctx.roots_of(sw)
         if not any(r.role == "weight" for r in wroots) or not any(r.role == "weight" for r in sroots):
             return unsupported(node, "w / s_w are not checkpoint parameters (weight Roots)", w=repr(w), s_w=repr(sw))
         wname, sname = wroots[0].name, sroots[0].name
-        hint, attr = hint_of(node, wname), attribution_for(ctx, M, node.phase)
-        quant = Compute(bind(int8_exact.Int8RowQuant, K=K), M, (PerRow(x),), (PerRow(xq), PerRow(s_a)), tuple(sorted(node.ids())),
-                        hint=f"{hint}/quant", kernels=("elementwise_kernel", "reduce_kernel"), attribution=attr, pattern=self.name)
-        mm = Compute(int8_exact.scaled_mm(K, N), M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(sw)), (PerRow(y),), (),
-                     hint=hint, kernels=("_int_mm", "elementwise_kernel"), attribution=attr, pattern=self.name,
-                     roots=(None, None, wname, sname))
-        return _group_compute(quant, also=(mm,))
+        return Compute(int8_exact.scaled_mm(K, N), M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(sw)), (PerRow(y),), tuple(sorted(node.ids())),
+                       hint=hint_of(node, wname), kernels=("_int_mm", "elementwise_kernel"), attribution=attribution_for(ctx, M, node.phase),
+                       pattern=self.name, roots=(None, None, wname, sname))
 
 
 def _sub(v: ViewDesc, offset: int, shape: tuple[int, ...], strides: tuple[int, ...]) -> ViewDesc:
@@ -226,4 +251,4 @@ def _src_of(copy: TreeNode) -> ViewDesc | None:
     return a[1] if len(a) > 1 and isinstance(a[1], ViewDesc) else None
 
 
-__all__ = ["Int8Linear", "Int8AttentionScope", "header_k_scales"]
+__all__ = ["Int8RowQuant", "Int8ScaledMm", "Int8AttentionScope", "header_k_scales"]

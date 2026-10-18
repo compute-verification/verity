@@ -1,9 +1,15 @@
-"""The exact-int8 profile's calls as named torch ops, so that a capture sees each int8 linear as one node and each request's int8
-attention as two, its KV quantization and its rows (`observe.fold.patterns.int8`):
+"""The exact-int8 profile's calls as named torch ops, so that a capture sees each int8 linear as two nodes, its quantizer and its
+product, and each request's int8 attention as two, its KV quantization and its rows (`observe.fold.patterns.int8`):
 
-    verity_int8::linear(Tensor x, Tensor w, Tensor s_w) -> (Tensor xq, Tensor s_a, Tensor y)
-        x bf16 [M, K], w int8 [N, K], s_w f32 [N, 1] (or [N]): `engine.int8_exact`'s plain linear, all three values it computes
-        (`registry.int8_exact.Int8Linear_v1{K,N}` per row)
+    verity_int8::row_quant(Tensor x) -> (Tensor xq, Tensor s_a)
+        x bf16 [M, K]: `engine.int8_exact.quantize_rows`, xq int8 [M, K] and s_a f32 [M] (`registry.int8_exact.Int8RowQuant_v1{K}`
+        per row)
+    verity_int8::scaled_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w) -> Tensor y
+        w int8 [N, K], s_w f32 [N, 1] (or [N]): the plain linear's product of row_quant's results, y bf16 [M, N]
+        (`registry.int8_exact.ScaledMmS8_v1{K,N}` per row)
+
+The quantizer's results are a separate node's, read only by the product inside the linear's body, so a Program cuts them as
+values the linear's two Calls exchange (`call_boundaries`), never as a second return of the linear.  `linear` runs the two.
     verity_int8::kv_quant(Tensor key_cache, Tensor value_cache, Tensor blocks, int s, Tensor k_scales)
             -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
         one request's first s tokens in the paged caches [num_blocks, block_size, G, d] under its block-table row `blocks`, with the
@@ -25,16 +31,30 @@ from verity_vllm.engine import int8_exact as E
 LIBRARY = "verity_int8"
 
 
-@torch.library.custom_op(f"{LIBRARY}::linear", mutates_args=())
+@torch.library.custom_op(f"{LIBRARY}::row_quant", mutates_args=())
+def row_quant(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    return E.quantize_rows(x)
+
+
+@row_quant.register_fake
+def _row_quant_fake(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    return x.new_empty(x.shape, dtype=torch.int8), x.new_empty(x.shape[0], dtype=torch.float32)
+
+
+@torch.library.custom_op(f"{LIBRARY}::scaled_mm", mutates_args=())
+def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
+    return E.dequantize(E.int_mm(xq, w), s_a, s_w)
+
+
+@scaled_mm.register_fake
+def _scaled_mm_fake(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
+    return xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16)
+
+
 def linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    xq, s_a = E.quantize_rows(x)
-    return xq, s_a, E.dequantize(E.int_mm(xq, w), s_a, s_w)
-
-
-@linear.register_fake
-def _linear_fake(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    m = x.shape[0]
-    return x.new_empty(x.shape, dtype=torch.int8), x.new_empty(m, dtype=torch.float32), x.new_empty((m, w.shape[0]), dtype=torch.bfloat16)
+    """The plain linear as its two ops: (xq, s_a, y)."""
+    xq, s_a = row_quant(x)
+    return xq, s_a, scaled_mm(xq, s_a, w, s_w)
 
 
 @torch.library.custom_op(f"{LIBRARY}::kv_quant", mutates_args=())

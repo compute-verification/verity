@@ -8,7 +8,7 @@ weight is int8 [N, K] with a float32 `weight_scale` [N, 1].
 
 Every linear layer (`LinearBase`) gets an `Int8PlainLinearMethod` with its own prefix; nothing else is quantized (the embedding
 and `lm_head` are vocabulary embeddings, attention keeps its KV cache unquantized).  The method computes
-`engine.int8_exact.plain_linear` as one ``verity_int8::linear`` call (`engine.int8_ops`) and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  Loading
+`engine.int8_exact.plain_linear` as a ``verity_int8::row_quant`` then a ``verity_int8::scaled_mm`` call (`engine.int8_ops.linear`) and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  Loading
 refuses a weight outside [-127, 127] and a scale that is not finite and positive; a layer refuses tensor parallelism (a row-parallel
 shard would take each row's activation scale over its own K slice, not the row's), a bias, K or N not a multiple of 8, K > MAX_K, and
 activations that are not bf16.
