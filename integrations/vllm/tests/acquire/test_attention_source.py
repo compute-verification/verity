@@ -348,6 +348,37 @@ def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_re
     assert mixed["identity"]["element_range"] == [0, WIDTH] != boundary(2, 0, 4)["element_range"], "bound, and short of the 4 rows it must hold"
 
 
+def test_a_step_batching_requests_at_different_steps_of_their_own_holds_and_maps_each_requests_call_boundary():
+    """[GLM-5.3 B8 mixed arrivals] Each request's Program numbers its fx nodes over its own steps, so engine step 9 spells r0's sparse
+    MLA (its step 9, 1 row) `dsa_indexer_attn_<9 * L>` and r1's (its step 0, 3 rows) `dsa_indexer_attn`: the step's one attn tensor
+    holds both, and the binding map writes each request's rows under its own spelling."""
+    rows = (boundary(9, 0, 1), {**boundary(0, 0, 3), "request_id": "r1", "engine_step": 9})
+    src = object.__new__(AS.AttentionSource)
+    src.c, src.stats, src.boundaries = types.SimpleNamespace(errors=[]), {"call_boundaries_held": 0}, {}
+    for r in rows:
+        src.boundaries.setdefault((9, *AS.call_tap(r)), []).append(r)
+    job = types.SimpleNamespace(step=9)
+    src._hold_boundary(AS.ATTN_MQA, 0, torch.zeros(4, G.NHL, G.KVL, dtype=torch.bfloat16), job)
+    assert (src.c.errors, src.stats["call_boundaries_held"]) == ([], 2)
+    src._hold_boundary(AS.ATTN_MQA, 0, torch.zeros(3, G.NHL, G.KVL, dtype=torch.bfloat16), job)
+    assert len(src.c.errors) == 1, "short of the 4 rows the two requests state"
+    src.boundaries[(9, AS.ATTN_MQA, 0)].append({**rows[0], "op_path": rows[1]["op_path"]})
+    src._hold_boundary(AS.ATTN_MQA, 0, torch.zeros(5, G.NHL, G.KVL, dtype=torch.bfloat16), job)
+    assert len(src.c.errors) == 2, "two boundaries of one request at one layer and step"
+
+    name = "model.layers.0.self_attn/attn"
+    m = TensorMeta(0, name, "bfloat16", (4, G.NHL, G.KVL), 4 * WIDTH * 2, GPU_CHUNK_BYTES, 0, 1)
+    m.stream_off = 0
+    steps = [types.SimpleNamespace(root=bytes([k]) * 32) for k in range(10)]
+    binder = Binder(rows, rank=3, ports={"attn": AS.TAP_PORTS[AS.ATTN_MQA]})
+    bmap = B.build_binding_map({9: [m]}, steps, b"\0" * 32, PD, rank=3, request_rows={9: [("r0", 0, 1), ("r1", 1, 4)]}, binder=binder)
+    got = sorted((e["identity"]["request_id"], e["identity"]["op_path"], e["identity"]["element_range"], e["element_offset"]) for e in bmap["entries"])
+    assert got == [("r0", rows[0]["op_path"], [0, WIDTH], 0), ("r1", rows[1]["op_path"], [0, 3 * WIDTH], WIDTH)]
+    pop = [B.identity(PD, r["request_id"], r["engine_step"], 0, r["op_path"], "out", *r["element_range"], 3) for r in rows]
+    cov = B.coverage_check(pop, bmap)
+    assert (cov["expected_n"], cov["bound_n"], cov["ambiguous_n"], cov["missing"]) == (2, 2, 0, [])
+
+
 def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step():
     """[GLM-5.3] ql_nope is bmm(q_nope^T, W_UK_T).transpose(0, 1): [M, NH, L] over strides no 2-D pitch describes, which the native
     committer refuses ("layout is not 2-D pitched"); the source stages its contiguous copy, the same values in row-major order."""

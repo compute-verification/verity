@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.query.manifest.bind import Binder, Port, source_ports
+from verity_vllm.query.manifest.bind import Binder, Port, coverage_check, source_ports
 
 LIN, ATT = "model.layers.0.mlp.down_proj", "model.layers.0.self_attn"
 QUANT = {"x_q": Port(frozenset({"DeepGemmFp8Linear_v1"}), "0"), "x_s": Port(frozenset({"DeepGemmFp8Linear_v1"}), "1")}
@@ -51,6 +51,34 @@ def test_a_call_boundary_port_binds_the_one_row_of_its_module_body_its_definitio
     assert b.bind(0, [f"{ATT}/attn_mqa", f"{ATT}/out"]) == [(f"{ATT}/dsa_indexer_attn_3", "out", 0, "port"), (ATT, "out", 0, "label")]
     two = Binder(rows + [row(f"{ATT}/dsa_indexer_attn_9", "out", spec="SparseMla_v1{T=1}", family="call_boundaries")], ports={"attn_mqa": sparse})
     assert two.bind(0, [f"{ATT}/attn_mqa"]) == [(ATT, "attn_mqa", 0, "unbound")], "two sparse MLA rows for one tensor: neither"
+
+
+def test_a_call_boundary_each_request_spells_by_its_own_fx_node_binds_every_requests_row_under_its_own_spelling():
+    """[GLM-5.3 B8 mixed arrivals] A request's Program numbers its fx nodes over its own steps: at engine step 9, r0 at its step 9
+    spells the W_UK_T absorb `bmm_1404` and r1, r2 at their step 0 `bmm`.  The step's one tensor binds every request's row, `spellings`
+    names each request's own, and requests with different counts bind none."""
+    absorb = {"q_nope_absorb": Port(frozenset({"BatchedGemm_v1"}), "out", call_boundary=True)}
+
+    def cb(fx: str, rid: str, cid: int) -> dict:
+        n = 1 if rid == "r0" else 11
+        return row(f"{ATT}/{fx}", "out", spec="BatchedGemm_v1{B=8}", family="call_boundaries", request_id=rid, cid=cid, engine_step=9,
+                   element_range=[0, 4096 * n])
+
+    rows = [cb("bmm_1404", "r0", 9), cb("bmm", "r1", 1), cb("bmm", "r2", 1)]
+    b = Binder(rows, ports=absorb)
+    r0, r1 = (f"{ATT}/bmm_1404", "out", 0), (f"{ATT}/bmm", "out", 0)
+    assert b.bind(9, [f"{ATT}/q_nope_absorb"]) == [(*r0, "port")]
+    assert b.spellings(9, r0) == b.spellings(9, r1) == {"r0": r0, "r1": r1, "r2": r1}
+    assert b.spellings(9, (ATT, "out", 0)) == {}, "no call-boundary port declares it"
+    cov = coverage_check({"manifest_digest": "d", "identities": rows}, {9: [{"name": f"{ATT}/q_nope_absorb", "numel": 4096 * 23}]}, ports=absorb)
+    assert (cov["ok"], cov["missing_n"], cov["committed_unmatched_n"]) == (True, 0, 0)
+
+    two = Binder(rows + [cb("bmm_1405", "r0", 10), cb("bmm_1", "r1", 2), cb("bmm_1", "r2", 2)], ports=absorb)
+    assert two.bind(9, [f"{ATT}/q_nope_absorb"] * 2) == [(*r0, "port"), (f"{ATT}/bmm_1405", "out", 0, "port")], "occurrence k: each request's k-th"
+    assert two.spellings(9, (f"{ATT}/bmm_1", "out", 0)) == {"r0": (f"{ATT}/bmm_1405", "out", 0), "r1": (f"{ATT}/bmm_1", "out", 0),
+                                                            "r2": (f"{ATT}/bmm_1", "out", 0)}
+    odd = Binder(rows + [cb("bmm_1405", "r0", 10)], ports=absorb)
+    assert odd.bind(9, [f"{ATT}/q_nope_absorb"]) == [(ATT, "q_nope_absorb", 0, "unbound")], "r0 has two, r1 and r2 one: none"
 
 
 def test_a_label_binds_the_member_it_equals_at_its_occurrence():
