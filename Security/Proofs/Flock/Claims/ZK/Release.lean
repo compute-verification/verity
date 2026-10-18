@@ -28,7 +28,8 @@ at the draws on the server's tape (`LeanRelease.draws`):
   the scheduled round in its place, and the device round passes where it equals the scheduled round byte for byte
   outside the algebraic phase's masked values and the frame takes it. A round that passes leaves as the frame's release
   of it, and one that fails as the frame's release of the scheduled round, as a stopped rep's
-  (`LeanRelease.check_release`). Rust's own checks run first and can only fail a round more (`LeanRelease.cross`).
+  (`LeanRelease.check_release`). Rust's own checks run first and can only fail a round more (`LeanRelease.cross`). The
+  inner proof's rounds, which the firewall sends alone, are `check`'s against themselves (`check_self`).
 
 `LeanRelease.toSrv` is it as a `ZkServer` with one masked slot per round: the worker's value is its device round, the mask
 is the frame's release, and the check is Rust's checks, the frame's pass decision and the frame's own refusals.
@@ -167,7 +168,7 @@ a round it passes leaves as the frame's release of it, and one it fails as the f
 a stopped rep's. -/
 
 section PassDecision
-open _root_.Flock.Firewall.Frame (check standIn passes)
+open _root_.Flock.Firewall.Frame (check standIn passes firstDiff roundFree)
 
 /-- The frame's `check` passes the device round only through `Frame.round`: its release and state are `round`'s on it. -/
 theorem check_none {c : Cfg} {s : Masker} {v r : ByteArray} {n : Nat} {out : ByteArray} {s' : Masker}
@@ -226,6 +227,39 @@ theorem check_some {c : Cfg} {s : Masker} {v r : ByteArray} {n : Nat} {out : Byt
     | error e => simp only [hr] at h; cases h
     | ok x => simp only [hr] at h; cases h; rfl
 
+/-- A round checked against itself passes wherever the frame takes it: the inner proof's rounds, which the firewall sends
+alone (`round N LEN`), are `check`'s with the round in its own place. -/
+theorem check_self {c : Cfg} {s : Masker} {v : ByteArray} {n : Nat} {out : ByteArray} {s' : Masker}
+    (hs : s.stopped = false) (h : _root_.Flock.Firewall.Frame.round c s v n = .ok (out, s')) :
+    check c s v v n = .ok (out, s', none) := by
+  have hr : ∃ fr, roundFree c s v n = .ok (out, s', fr) := by
+    unfold _root_.Flock.Firewall.Frame.round at h
+    cases hf : roundFree c s v n with
+    | error e => rw [hf] at h; cases h
+    | ok x =>
+      obtain ⟨o, s'', fr⟩ := x
+      rw [hf] at h
+      cases h
+      exact ⟨fr, rfl⟩
+  obtain ⟨fr, hfr⟩ := hr
+  have hp : passes c s v v n = .ok none := by
+    unfold passes
+    rw [hfr]
+    simp only [firstDiff, bne_self_eq_false, Bool.and_false]
+    have hn : (if (v == v) = true then (none : Option Nat) else List.find? (fun _ => false) (List.range v.size)) = none := by
+      split
+      · rfl
+      · exact List.find?_eq_none.mpr fun _ _ => Bool.false_ne_true
+    simp only [hn, Option.map_none]
+    rfl
+  unfold check
+  simp only [hs, Bool.false_eq_true, ↓reduceIte]
+  rw [hp]
+  show (match _root_.Flock.Firewall.Frame.round c s v n with
+    | .ok (out, s') => (Except.ok (out, s', none) : Except String _)
+    | .error e => if e.startsWith _root_.Flock.Firewall.Frame.STOP then throw e else standIn c s v n e) = _
+  rw [h]
+
 end PassDecision
 
 /-- **The deployed release**, for witnesses `W` on the server's tape `R`: at statement `x`, after the history `h`, round
@@ -255,7 +289,8 @@ structure LeanRelease (W R : Type) where
   fail a round more: any decision at all -/
   cross : Msg → ℕ → W → R → List (Msg × Msg) → Msg → Bool
   /-- the device round the firewall sends in the device's place once a round failed: the skeleton's round with zero
-  values in the algebraic phase, the shadow's round in the opening, given the values the firewall fixes by its own
+  values in the algebraic phase, the shadow's round in the opening, and at the inner proof's rounds, which the firewall
+  sends alone, the firewall's own round itself (`check_self`), given the values the firewall fixes by its own
   computation, by name -/
   scheduled : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg
   /-- round `j`'s coin count -/
