@@ -4,7 +4,10 @@ quantities (T, X, Q, K, n, n0) summed over 1 s windows, each step's spread over 
 gives its units a window (`frontier.py`), and the token rows a second of the steps with at least `PREFILL_ROWS` rows
 (the rate a recompute from fresh inputs re-prefills at). Writes analysis.json beside the inputs.
 
-    python analyze.py OUT_DIR [--warmup S] [--phases I,J] [--delays 0,10,30]
+    python analyze.py OUT_DIR [--warmup S] [--phases I,J] [--delays 0,10,30] [--time-scale S --json PATH]
+
+`--time-scale S` stretches the run's clock by S, for a slower model on the same schedule (70B TP8 from an 8B run:
+with `frontier.py --kv-scale`); the warm-up is on the stretched clock.
 """
 from __future__ import annotations
 
@@ -49,14 +52,25 @@ def main() -> int:
     ap.add_argument("--phases", type=lambda s: [int(x) for x in s.split(",")], default=None)
     ap.add_argument("--delays", type=lambda s: [float(x) for x in s.split(",")], default=[0.0, 10.0, 30.0],
                     help="append delays (s) to compute the frontier at")
+    ap.add_argument("--time-scale", type=float, default=1.0,
+                    help="stretch every time by this factor (a slower model on the run's schedule)")
+    ap.add_argument("--json", type=Path, default=None, help="where to write (default OUT_DIR/analysis.json)")
     a = ap.parse_args()
     serve = json.loads((a.out / "serve.json").read_text())
     z = np.load(a.out / "events.npz")
     ev = {k: z[k] for k in ("t", "kind", "block", "origin") if k in z.files}
     steps = lifetimes.steps_arrays(z["steps"])
+    s = a.time_scale
+    if s != 1.0:
+        for k in ("t", "origin"):
+            if k in ev:
+                ev[k] = ev[k] * s
+        steps["t0"], steps["t1"] = steps["t0"] * s, steps["t1"] * s
+        for ph in serve["phases"]:
+            ph["t0"], ph["t1"] = ph["t0"] * s, ph["t1"] * s
     pool = serve["pool_bytes"]
     res = {"format": "verity-kv-lifetime/analysis/v0", "serve": {k: v for k, v in serve.items() if k != "phases"},
-           "stocks_pool_share": list(STOCKS), "phases": []}
+           "stocks_pool_share": list(STOCKS), "time_scale": s, "phases": []}
     for pi, ph in enumerate(serve["phases"]):
         if a.phases is not None and pi not in a.phases:
             continue
@@ -80,7 +94,7 @@ def main() -> int:
               f"{pool / 1e9:.1f}, held life p50 {r['held_life_s']['quantiles_byte_weighted']['0.5']:.1f} s p90 "
               f"{r['held_life_s']['quantiles_byte_weighted']['0.9']:.1f} s, stock older than 60 s "
               f"{r['stock_age_tail']['60']:.3f}, written {r['written_bytes_per_s'] / 1e9:.2f} GB/s", flush=True)
-    (a.out / "analysis.json").write_text(json.dumps(res) + "\n")
+    (a.json or a.out / "analysis.json").write_text(json.dumps(res) + "\n")
     return 0
 
 

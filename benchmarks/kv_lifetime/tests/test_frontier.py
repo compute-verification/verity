@@ -39,3 +39,10 @@ def test_the_table_charges_a_longer_life_a_larger_stock():
     # under the origin clock a re-key is a recompute: the re-prefill's time on top of the encode's
     o = F.table({**phase, "frontier_origin": grid}, 1e12, 1e11, 1e4, 1e9, "origin", 3e9)
     assert o[0]["rekey_gpu_share"] == pytest.approx(rows[0]["rekey_gpu_share"] * (1 + 1 / 3))
+    # a model with 2.5x the KV a token over 8 GPUs, on the run's schedule: held and the stock's reach scale, each
+    # GPU encodes an eighth
+    m = F.table(phase, 1e12, 1e11, 1e4, 1e9, kv_scale=2.5, gpus=8, law_pool=6e11)
+    assert m[0]["held_GB"] == pytest.approx(2.5 * 40.0)
+    assert m[0]["f_live[conjectured]"] == pytest.approx(rows[0]["f_live[conjectured]"] / 2.5)
+    assert m[0]["append_gpu_share"] == pytest.approx(rows[0]["append_gpu_share"] * 2.5 / 8)
+    assert m[0]["law[conjectured]"] == pytest.approx(1 - rows[0]["stock_GB[conjectured]"] * 1e9 / 6e11)
