@@ -7,20 +7,18 @@ Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`be
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
 
-* `classes`: the 122 instruction classes of the DS-120 census, in the order `Fin 122`
-  indexes them.
-* `ds120`, `sheet`: the RTX PRO 6000's data sheet (DS-120): f_max 2430 MHz (SPEC's P1); each tensor class's dense
-  MACs a warp instruction (`m·n·k`, a 2:4 sparse form's dense equivalent) and its operand type's dense MACs an SM clock;
-  the Nsight Compute pipe of IMAD, LOP3, XU and SHFL with its Programming Guide width; 128 B for every
-  shared-memory class. Its machine reproduces every DS-120 coefficient.
+* `classes`: the 122 instruction classes of the DS-120 census, in the order `Fin 122` indexes them.
+* `ds120`, `sheet`: the RTX PRO 6000's data sheet (DS-120): f_max 2430 MHz (SPEC's P1); each tensor class's dense MACs a
+  warp instruction (`m·n·k`, a 2:4 sparse form's dense equivalent) and its operand type's dense MACs an SM clock; the
+  Nsight Compute pipes IMAD, LOP, XU and SHFL with their Programming Guide widths; 128 B for every shared-memory class.
+  Its machine reproduces every DS-120 coefficient.
 * `h1fx1`, `model`: H1 + fx1 (`dither-c-peel-fx1`) as a TS model on the sheet's machine: writer kinds the census's MMA
-  forms (ω = m·n), the generic MMA (128) and the uniform `UNI` (1) and `UNI64` (2); the vector classes CUDA's lane
+  classes (ω = m·n), the generic MMA (128) and the uniform `UNI` (1) and `UNI64` (2); the vector classes CUDA's lane
   classes; fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word);
   A6's floors `q = q_T = ½`, `b_T = 0`; 128 committed words a unit of honest work (an IMMA.16832 at L = 32).
-* `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler,
-  and ε_skip's skippable work at its issue price, 0.420701% of ♭'s bound (`eps_budget.design_skip`
-  on DS-120).
-* `piStar`: π*, the facet the machine model's LP certificate sits on at q* = ½.
+* `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler, and
+  ε_skip's skippable work at NOROW's price, 0.420701% of ♭'s bound (`eps_budget.design_skip` on DS-120).
+* `piStar`: π*, the facet (DS_issue) the machine model's LP certificate sits on at q* = ½.
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
 
@@ -130,10 +128,10 @@ noncomputable def model : Model (Fin 122) (SheetRow Pipe) (Fin 17) Unit Empty (F
 /-- ♭'s word production a unit: the MMA and the operand floor. -/
 def flatWords : Sparse := [(27, 1, 1), (61, 25641, 1000000)]
 
-/-- ♭'s fold a unit: fx1 on lanes for 128 words. -/
+/-- ♭'s fold a unit: the lane fold for 128 words. -/
 def flatFold : Sparse := [(0, 8, 1), (24, 8, 1)]
 
-/-- ♭'s skippable work a unit, at its issue price (NOROW). -/
+/-- ♭'s skippable work a unit, at NOROW's price. -/
 def flatSkip : Sparse := [(65, 14325412520309335111003, 199158597757329117000000)]
 
 /-- The floor program ♭, labelled. -/
