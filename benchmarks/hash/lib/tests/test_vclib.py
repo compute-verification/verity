@@ -143,6 +143,21 @@ def test_a_changed_record_fails_them():
     assert bad["bc"] == 3 and bad["verify_opening"] == 3 and bad["verify_multiproof"] is True
 
 
+def test_unwritten_or_reordered_records_fail_them():
+    n = 37
+    dom, tree, ys, bcs = _served(n)
+    positions = cf.opened_positions(random.Random(7), n)
+    size = vclib.OPEN_HEAD + 64 * 6
+
+    def judge(raw):
+        return cf.check_openings(dom, tree.commitment, SCHEMA_HM96_SHA512_ROW, vclib.parse_openings(raw, n, len(positions)), n,
+                                 tree._levels[0], lambda p: ys[p], lambda p: bcs[p], lambda r: hm96.SHA512.tree_leaf(cf.KEY, r.bc),
+                                 asked=positions)
+    assert judge(_records(tree, ys, bcs, positions, n)) == {}
+    assert judge(bytes([cf.POISON]) * (size * len(positions)))
+    assert judge(_records(tree, ys, bcs, positions[1:2] + positions[:1] + positions[2:], n))["positions"] is True
+
+
 def test_parse_openings_refuses_a_buffer_of_another_size():
     with pytest.raises(ValueError):
         vclib.parse_openings(bytes(vclib.OPEN_HEAD), 2, 1)

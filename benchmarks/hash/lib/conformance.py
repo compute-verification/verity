@@ -9,6 +9,12 @@ hashlib (SHA-512 and its compression), ``rowleaf`` (sha512/row/v2, sha512/row-se
 their ChaCha20 salts), ``pearl_c`` (row digests, row seeds, tile leaves), commit_gpu's ``reference.prf_salt`` (the PRF salt
 source) and verity_vllm's ``serving_rows.salts`` (RFC 8439 salts; the audit identity below when it doesn't import). Openings
 are checked by ``merkle.verify_opening`` and ``multiproof.verify_multiproof``, and against ``MerkleTree.open`` and ``multiproof``.
+
+Every output and scratch buffer (salt records, b || c, h, leaves, every tree level and the root, opening records) is 0xA5
+before each call whose output is checked, a repeated call or graph replay included, and every byte of it is compared with the
+reference. Each buffer has 64 guard bytes of 0xA5 past its end, checked after each case. Given salts are the reference salt
+source's, never a constant. Controls the same checks must reject: no call; the leaves of half the rows; leaves over salt
+records nobody wrote; opening records nobody wrote.
 """
 from __future__ import annotations
 
@@ -40,6 +46,7 @@ from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, row_b
 KEY = hm96.SHA512.default_key
 SALT = hm96.SHA512.salt_bytes
 LIMITS = VerificationLimits()
+POISON, GUARD = 0xA5, 64
 
 
 def _load(name: str, path: Path):
@@ -73,19 +80,26 @@ class Dev:
         self.cuda = vclib.Cuda()
         self.lib = vclib.Lib(lib_path)
         self.s = self.cuda.stream()
-        self.held: list[int] = []
+        self.held: dict[int, int] = {}   # each buffer's bytes, before its guard
 
     def up(self, data: bytes) -> int:
-        p = self.cuda.malloc(len(data) + 64)
+        p = self.buf(len(data))
         self.cuda.h2d(p, data, self.s)
-        self.held.append(p)
         return p
 
-    def buf(self, n: int, fill: int = 0xA5) -> int:
-        p = self.cuda.malloc(n + 64)
-        self.cuda.memset(p, fill, n + 64, self.s)
-        self.held.append(p)
+    def buf(self, n: int) -> int:
+        p = self.cuda.malloc(n + GUARD)
+        self.cuda.memset(p, POISON, n + GUARD, self.s)
+        self.held[p] = n
         return p
+
+    def poison(self, *ps: int) -> None:
+        for p in ps:
+            self.cuda.memset(p, POISON, self.held[p], self.s)
+
+    def guards_intact(self) -> bool:
+        self.cuda.sync(self.s)
+        return all(self.cuda.d2h(p + n, GUARD, self.s) == bytes([POISON]) * GUARD for p, n in self.held.items())
 
     def down(self, p: int, n: int) -> bytes:
         self.cuda.sync(self.s)
@@ -282,32 +296,52 @@ def case_hm96_rows(d: Dev, rng: random.Random, quick: bool) -> None:
             st = stride_of(n_bits // 8)
             rp = d.up(packed(rows, st))
             sp = d.up(b"".join(ys)) if src[0] == "given" else None
-            width = d.lib.tree_width(n)
-            for form, fname in FORMS:
-                lv = d.buf(d.lib.tree_bytes(n))
-                scratch, bc = d.buf(d.lib.commit_scratch_bytes(n)), d.buf(128 * n)
-                for _ in range(2):   # twice: the second call must not depend on the first's leftovers
-                    d.lib.commit_rows_launch(plan.ptr, tab, rp, st, sp, n, lv, bc, scratch, form, d.s)
-                ok, where = same_levels(levels_of(d.down(lv, d.lib.tree_bytes(n)), width), want)
+            width, size = d.lib.tree_width(n), d.lib.tree_bytes(n)
+
+            def judged(lv: int, bc: int) -> tuple[bool, str | None, int | None]:
+                ok, where = same_levels(levels_of(d.down(lv, size), width), want)
                 got_bc = chunks(d.down(bc, 128 * n), 128)
-                report("hm96/row-v2/commit", ok and got_bc == want_bc, salt=src[0], salt_ref=ref, n=n, form=fname, where=where,
-                       bc_diff=first_diff(got_bc, want_bc))
+                return ok and got_bc == want_bc, where, first_diff(got_bc, want_bc)
+            for form, fname in FORMS:
+                lv, scratch, bc = d.buf(size), d.buf(d.lib.commit_scratch_bytes(n)), d.buf(128 * n)
+                for call in range(2):   # each from poison, scratch included: neither call may pass on the other's writes
+                    d.poison(lv, bc, scratch)
+                    d.lib.commit_rows_launch(plan.ptr, tab, rp, st, sp, n, lv, bc, scratch, form, d.s)
+                    ok, where, bc_diff = judged(lv, bc)
+                    report("hm96/row-v2/commit", ok, salt=src[0], salt_ref=ref, n=n, form=fname, call=call, where=where, bc_diff=bc_diff)
             # the phases one by one, with b || c and h
-            lv, scratch = d.buf(d.lib.tree_bytes(n)), d.buf(d.lib.salt_scratch_bytes(width))
+            lv, scratch = d.buf(size), d.buf(d.lib.salt_scratch_bytes(width))
             bc, hs = d.buf(128 * n), d.buf(64 * n)
             d.lib.salts_launch(plan.ptr, tab, sp, 0, width, n, scratch, lv, d.s)
             d.lib.leaves_rows_launch(plan.ptr, rp, st, 0, n, n, scratch, lv, bc, hs, d.s)
             d.lib.tree_launch(plan.ptr, lv, n, d.s)
-            ok, where = same_levels(levels_of(d.down(lv, d.lib.tree_bytes(n)), width), want)
-            got_bc, got_h = chunks(d.down(bc, 128 * n), 128), chunks(d.down(hs, 64 * n), 64)
-            report("hm96/row-v2/phases", ok and got_bc == want_bc and got_h == want_h, salt=src[0], n=n, where=where,
-                   bc_diff=first_diff(got_bc, want_bc), h_diff=first_diff(got_h, want_h))
+            ok, where, bc_diff = judged(lv, bc)
+            got_h = chunks(d.down(hs, 64 * n), 64)
+            report("hm96/row-v2/phases", ok and got_h == want_h, salt=src[0], n=n, where=where, bc_diff=bc_diff,
+                   h_diff=first_diff(got_h, want_h))
+            if n < 2:
+                continue
+            # controls the same judgment must reject: no call, the leaves of half the rows, leaves over unwritten salt records
+            d.poison(lv, scratch, bc, hs)
+            no_call = judged(lv, bc)[0]
+            d.lib.salts_launch(plan.ptr, tab, sp, 0, width, n, scratch, lv, d.s)
+            d.lib.leaves_rows_launch(plan.ptr, rp, st, 0, n // 2, n, scratch, lv, bc, hs, d.s)
+            d.lib.tree_launch(plan.ptr, lv, n, d.s)
+            half = judged(lv, bc)[0]
+            d.poison(lv, scratch, bc, hs)
+            d.lib.leaves_rows_launch(plan.ptr, rp, st, 0, n, n, scratch, lv, bc, hs, d.s)
+            d.lib.tree_launch(plan.ptr, lv, n, d.s)
+            no_salt = judged(lv, bc)[0]
+            no_salt_bc = chunks(d.down(bc, 128 * n), 128) == want_bc
+            report("hm96/row-v2/controls-rejected", not (no_call or half or no_salt or no_salt_bc), salt=src[0], n=n,
+                   accepted=[k for k, v in (("no call", no_call), ("half the rows", half), ("no salt write", no_salt),
+                                            ("no salt write, b||c", no_salt_bc)) if v] or None)
 
 
 def case_fold_wide(d: Dev, rng: random.Random, quick: bool) -> None:
     """The commit over trees of many CTAs (FOLD's climb over up to 10 levels above its 256-leaf subtrees and SPEC's over 13
     above its warps' 32, siblings racing; node indices of 3 bytes at width 2^18; AUTO on both sides of its switch), short rows
-    to keep the reference cheap, from levels and scratch full of 0xFF, twice in a row."""
+    to keep the reference cheap, twice in a row, levels and scratch (the climb's counters included) poisoned before each."""
     n_bits, schema = 1024, "hm96-sha512/row/v2"
     for n in ((5000, 70000) if quick else (20000, 32768, 140000)):
         dom = domain(rng, n)
@@ -322,9 +356,10 @@ def case_fold_wide(d: Dev, rng: random.Random, quick: bool) -> None:
         width, size = d.lib.tree_width(n), d.lib.tree_bytes(n)
         for form, fname in ((vclib.FORM_FOLD, "fold"), (vclib.FORM_SPEC, "spec"), (vclib.FORM_SPLIT, "split"),
                             (vclib.FORM_AUTO, "auto")):
-            lv, sc = d.buf(size, 0xFF), d.buf(d.lib.commit_scratch_bytes(n), 0xFF)
+            lv, sc = d.buf(size), d.buf(d.lib.commit_scratch_bytes(n))
             ok_all, where = True, None
             for _ in range(2):
+                d.poison(lv, sc)
                 d.lib.commit_rows_launch(plan.ptr, tab, rp, st, None, n, lv, None, sc, form, d.s)
                 ok, w = same_levels(levels_of(d.down(lv, size), width), want)
                 ok_all, where = ok_all and ok, where or w
@@ -500,6 +535,7 @@ def case_pearl(d: Dev, rng: random.Random, quick: bool) -> None:
         for _ in range(2):
             rows = f32_rows(rng, n, k)
             d.cuda.h2d(rp, b"".join(rows), d.s)
+            d.poison(x, rs, lv, sc)
             d.cuda.replay(graph, d.s)
             want = audit.commit_rows(binding, unit, rows, hash=audit.HM96, salt_key=key, nonce=unit)._levels
             ok_all &= same_levels(levels_of(d.down(lv, d.lib.tree_bytes(n)), width), want)[0]
@@ -536,6 +572,7 @@ def case_graph(d: Dev, rng: random.Random, quick: bool) -> None:
         for _ in range(2):
             rows = rows_of(rng, n, n_bits)
             d.cuda.h2d(rp, b"".join(rows), d.s)
+            d.poison(lv, sc)
             d.cuda.replay(graph, d.s)
             want = tree_levels(dom, [hm_leaf(dom, i, schema, sha512_row_v2_digest(r, n_bits), y)[0] for i, (r, y) in enumerate(zip(rows, ys))])
             ok_all &= same_levels(levels_of(d.down(lv, d.lib.tree_bytes(n)), width), want)[0]
@@ -545,24 +582,29 @@ def case_graph(d: Dev, rng: random.Random, quick: bool) -> None:
 # --- openings --------------------------------------------------------------------------------------------------------
 
 
-def open_records(d: Dev, plan: vclib.Plan, tab, x, bc, sp, lv: int, n: int, positions: list[int], graph: bool = False) -> list[vclib.Opening]:
+def open_records(d: Dev, plan: vclib.Plan, tab, x, bc, sp, lv: int, n: int, positions: list[int], graph: bool = False,
+                 call: bool = True) -> list[vclib.Opening]:
+    """The records vc_open_launch writes into a poisoned buffer; with call=False, the no-write control's."""
     m, size = len(positions), d.lib.open_bytes(n)
     pp, out = d.up(struct.pack(f"<{m}I", *positions)), d.buf(size * m)
 
     def launch(s: int) -> None:
         d.lib.open_launch(plan.ptr, tab, x, bc, sp, lv, n, pp, m, out, s)
-    if graph:
+    if call and graph:
         d.cuda.replay(d.cuda.capture(d.s, launch), d.s)
-    else:
+    elif call:
         launch(d.s)
     return vclib.parse_openings(d.down(out, size * m), n, m)
 
 
 def check_openings(dom: CommitmentDomain, commitment, schema: str, recs: list[vclib.Opening], n: int, want_leaves, want_salt, want_bc,
-                   value_of) -> dict:
-    """Each record against the reference; verify_opening on it, and on it with a sibling or the value changed; the paths
-    gathered into a multiproof verify_multiproof accepts. What failed, by check (the first position each)."""
+                   value_of, asked: list[int] | None = None) -> dict:
+    """Each record against the reference (and its position against the one ``asked``); verify_opening on it, and on it with a
+    sibling or the value changed; the paths gathered into a multiproof verify_multiproof accepts. What failed, by check (the
+    first position each)."""
     bad: dict = {}
+    if asked is not None and [r.position for r in recs] != asked:
+        bad["positions"] = True
     paths, leaves = {}, {}
     for r in recs:
         p = r.position
@@ -620,13 +662,16 @@ def case_open(d: Dev, rng: random.Random, quick: bool) -> None:
             d.lib.commit_rows_launch(plan.ptr, tab, d.up(b"".join(rows)), 2 * n_words, sp, n, lv, bc, d.buf(d.lib.commit_scratch_bytes(n)),
                                      vclib.FORM_AUTO, d.s)
             ok_tree, where = same_levels(levels_of(d.down(lv, d.lib.tree_bytes(n)), d.lib.tree_width(n)), tree._levels)
+            def judge(recs):
+                return check_openings(dom, tree.commitment, schema, recs, n, tree._levels[0], lambda p: ys[p], lambda p: bcs[p],
+                                      lambda r: hm96.SHA512.tree_leaf(KEY, r.bc), asked=positions)
             recs = open_records(d, plan, tab, None, bc, sp, lv, n, positions, graph=src[0] != "given")
-            bad = check_openings(dom, tree.commitment, schema, recs, n, tree._levels[0], lambda p: ys[p], lambda p: bcs[p],
-                                 lambda r: hm96.SHA512.tree_leaf(KEY, r.bc))
+            bad, control = judge(recs), judge(open_records(d, plan, tab, None, bc, sp, lv, n, positions, call=False))
             inside = [r for r in recs if r.offset is not None]
             same_mp = multiproof(tree, [r.position for r in inside]) == multiproof_from_paths(n, {r.position: r.path for r in inside})
-            report("open/served-rows", ok_tree and not bad and same_mp, salt=src[0], salt_ref=ref, n=n, opened=len(positions),
-                   graph=src[0] != "given", where=where, bad=bad or None, multiproof_is_reference=same_mp)
+            report("open/served-rows", ok_tree and not bad and same_mp and bool(control), salt=src[0], salt_ref=ref, n=n,
+                   opened=len(positions), graph=src[0] != "given", where=where, bad=bad or None, multiproof_is_reference=same_mp,
+                   control_rejected=bool(control))
     for k, n in ((256, 5), (1024, 40 if quick else 300)):
         binding, unit, key = rng.randbytes(64), rng.randrange(1 << 20), rng.randbytes(32)
         rows = f32_rows(rng, n, k)
@@ -638,13 +683,18 @@ def case_open(d: Dev, rng: random.Random, quick: bool) -> None:
         d.lib.salts_launch(plan.ptr, tab, None, 0, width, n, sc, lv, d.s)
         d.lib.leaves_x_launch(plan.ptr, x, 0, n, n, sc, lv, None, None, d.s)
         d.lib.tree_launch(plan.ptr, lv, n, d.s)
-        recs = open_records(d, plan, tab, x, None, None, lv, n, opened_positions(rng, n))
-        ys = {r.position: audit.hm96_salt(key, unit, r.position) for r in recs if r.offset is not None}
-        bad = check_openings(tree.domain, tree.commitment, audit.ROW_SCHEMA, recs, n, tree._levels[0], lambda p: ys[p],
-                             lambda p: hm96.SHA512.commit_string(KEY, sha512_row_seg_digest(rows[p], 32 * k), ys[p]),
-                             lambda r: rows[r.position] + r.salt)
+        positions = opened_positions(rng, n)
+        ys = {p: audit.hm96_salt(key, unit, p) for p in positions if p < n}
+
+        def judge(recs):
+            return check_openings(tree.domain, tree.commitment, audit.ROW_SCHEMA, recs, n, tree._levels[0], lambda p: ys[p],
+                                  lambda p: hm96.SHA512.commit_string(KEY, sha512_row_seg_digest(rows[p], 32 * k), ys[p]),
+                                  lambda r: rows[r.position] + r.salt, asked=positions)
+        recs = open_records(d, plan, tab, x, None, None, lv, n, positions)
+        bad, control = judge(recs), judge(open_records(d, plan, tab, x, None, None, lv, n, positions, call=False))
         same = all(tree.open(r.position) == MerkleOpening(r.position, rows[r.position] + r.salt, r.path) for r in recs if r.offset is not None)
-        report("open/A-tree", not bad and same, k=k, n=n, bad=bad or None, same_as_tree_open=same)
+        report("open/A-tree", not bad and same and bool(control), k=k, n=n, bad=bad or None, same_as_tree_open=same,
+               control_rejected=bool(control))
     for n in (1, 70):
         schema = "hm96-sha512/row/v2"
         dom = domain(rng, n)
@@ -655,9 +705,14 @@ def case_open(d: Dev, rng: random.Random, quick: bool) -> None:
         lv = d.buf(d.lib.tree_bytes(n))
         d.lib.frame_leaves_launch(plan.ptr, d.up(b"".join(vals)), 0, width, n, lv, d.s)
         d.lib.tree_launch(plan.ptr, lv, n, d.s)
-        recs = open_records(d, plan, None, None, None, None, lv, n, opened_positions(rng, n))
-        bad = check_openings(dom, tree.commitment, schema, recs, n, tree._levels[0], None, None, lambda r: vals[r.position])
-        report("open/frame", not bad, n=n, bad=bad or None)
+        positions = opened_positions(rng, n)
+
+        def judge(recs):
+            return check_openings(dom, tree.commitment, schema, recs, n, tree._levels[0], None, None, lambda r: vals[r.position],
+                                  asked=positions)
+        bad = judge(open_records(d, plan, None, None, None, None, lv, n, positions))
+        control = judge(open_records(d, plan, None, None, None, None, lv, n, positions, call=False))
+        report("open/frame", not bad and bool(control), n=n, bad=bad or None, control_rejected=bool(control))
 
 
 CASES = [case_sha512, case_compress, case_rows, case_frame, case_arity, case_hm96_x, case_hm96_rows, case_fold_wide, case_pearl, case_graph,
@@ -677,6 +732,7 @@ def main() -> int:
         rng = random.Random(case.__name__)
         try:
             case(d, rng, a.quick)
+            report("guards", d.guards_intact(), after=case.__name__, buffers=len(d.held))
         except Exception as e:  # noqa: BLE001 - a case that raises is a failed case, and the rest still run
             report(case.__name__, False, error=f"{type(e).__name__}: {e}")
         d.release()
