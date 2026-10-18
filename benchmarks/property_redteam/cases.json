@@ -1,0 +1,291 @@
+[
+  {
+    "id": "carry-idiv",
+    "kind": "attack",
+    "verdict": "budget",
+    "charge": {
+      "roundings": 2
+    },
+    "allow": null,
+    "computes": "a carry: (t mod 256, t div 256) of a run word, by I32Rem and I32Div",
+    "rule": "integer floors and mods are budgeted, one unit an output (19:15Z)",
+    "needs": [],
+    "size": {}
+  },
+  {
+    "id": "carry-cmp",
+    "kind": "attack",
+    "verdict": "budget",
+    "charge": {
+      "compare_select": 12
+    },
+    "allow": null,
+    "computes": "a carry from comparisons: t mod 256 and t div 256 for t < 4096, by 4 rounds of U32Ge and two SelectI32",
+    "rule": "compares and selects are budgeted, one unit an output (19:15Z)",
+    "needs": [],
+    "size": {}
+  },
+  {
+    "id": "imma-clamp-bare",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "compare_select": 2
+    },
+    "allow": null,
+    "computes": "[r < 1000] for r < 2^18 from two .satfinite IMMA steps whose incoming accumulator is r + S32_MAX - 2^18",
+    "rule": "a bare IMMA outside the s8 family is refused (19:15Z); a runtime T_0 with no derived interval makes the clamp a comparison",
+    "needs": [],
+    "size": {}
+  },
+  {
+    "id": "imma-wrap-bare",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "roundings": 1
+    },
+    "allow": null,
+    "computes": "a word whose s32 sign is [r >= 1000], from one u8 x s8 IMMA step without .satfinite at T_0 = r + 2^31 - 2^18",
+    "rule": "a bare IMMA outside the s8 family is refused (19:15Z); a runtime T_0 with no derived interval makes the wrap a comparison",
+    "needs": [],
+    "size": {}
+  },
+  {
+    "id": "imma-bound-bare",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "compare_select": 33
+    },
+    "allow": null,
+    "computes": "a K = 132,096 chain over run s8 inputs that clamps at S32_MAX from step 4,096 on (33 steps), under a declared operand bound of +-127 the inputs exceed at -128",
+    "rule": "a bare IMMA outside the s8 family is refused (19:15Z); operand ranges come from the producer, never from a declaration (19:15Z)",
+    "needs": [],
+    "size": {}
+  },
+  {
+    "id": "pun-s32-as-e4m3",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": null,
+    "allow": null,
+    "computes": "a computed s32 word's leaf read where an 8-bit E4M3 code is typed",
+    "rule": "an implicit reinterpretation of a runtime word is refused (19:10Z); one type per committed word",
+    "needs": [],
+    "size": {}
+  },
+  {
+    "id": "noise-runtime",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "roundings": 1
+    },
+    "allow": null,
+    "computes": "six bits of a run word at a run-chosen byte offset, by PouwNoiseByte over a value that is not the coin",
+    "rule": "the noise derivation's inputs are the coin and statics only (19:15Z); else PouwNoiseByte is budgeted",
+    "needs": [],
+    "size": {}
+  },
+  {
+    "id": "fold-reused",
+    "kind": "attack",
+    "verdict": "budget",
+    "charge": {
+      "any": 4
+    },
+    "allow": null,
+    "computes": "the receipt fold's mixer, y' = (y ^ d0 ^ k0) * a0 + d1 mod 2^32, its output added into a second output",
+    "rule": "the receipt fold's output is a sink (19:15Z); the fold is unregistered, so its four gates are budgeted",
+    "needs": [],
+    "size": {}
+  },
+  {
+    "id": "gather-table",
+    "kind": "attack",
+    "verdict": "budget",
+    "charge": {
+      "gathers": 7
+    },
+    "allow": null,
+    "computes": "any function of a 7-bit run index, (i^2 + 7i) mod 251, by GatherF32x128",
+    "rule": "gathers are budgeted by fresh runtime index bits (19:15Z)",
+    "needs": [],
+    "size": {}
+  },
+  {
+    "id": "fam-bound-dither",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "compare_select": 33
+    },
+    "allow": null,
+    "computes": "S8Dot{K = 132,096, A = B = (-127, 127)} binds (its no_wrap holds for the declared bounds) and clamps at S32_MAX on run inputs at -128",
+    "rule": "operand ranges come from the producing Definition, never declared (19:15Z)",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "fam-acc-clamp",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "compare_select": 2
+    },
+    "allow": null,
+    "computes": "[r < 1000] from two S8Dot{T0 = input, C = (0, 2^18)} instances whose accumulator is r + S32_MAX - 2^18",
+    "rule": "T_0's interval is derived from its producer, not declared (19:15Z)",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "fam-acc-wrap",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "roundings": 1
+    },
+    "allow": null,
+    "computes": "a word whose s32 sign is [r >= 1000], from S8Dot{T0 = input, C = (0, 2^18), DOT = u8 x s8} at T_0 = r + 2^31 - 2^18",
+    "rule": "T_0's interval is derived from its producer, not declared (19:15Z)",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "fam-splitk",
+    "kind": "attack",
+    "verdict": "budget",
+    "charge": {
+      "roundings": 1
+    },
+    "allow": null,
+    "computes": "two S8Dot{K = 131,040} halves over run s8 inputs, each within s32, whose I32Add combine wraps",
+    "rule": "a split-K combine is inside the interval analysis; one that may wrap is not free-affine (19:15Z)",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "limb-split",
+    "kind": "attack",
+    "verdict": "budget",
+    "charge": {
+      "roundings": 2
+    },
+    "allow": null,
+    "computes": "a runtime S8Dot word as three s8 limbs by LimbSplit_v1{bytes, N = 3}",
+    "rule": "a LimbSplit of a runtime word is budgeted, a carry a limb beyond the first (19:10Z)",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "limb-split-bare",
+    "kind": "attack",
+    "verdict": "budget",
+    "charge": {
+      "roundings": 2
+    },
+    "allow": null,
+    "computes": "the same three limbs from S32LowByte and S32ByteCarry called outside LimbSplit_v1",
+    "rule": "every registered primitive outside the free set is budgeted, one unit an output (19:15Z)",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "fam-limb-y",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": {
+      "roundings": 2
+    },
+    "allow": null,
+    "computes": "LimbSplit_v1{bytes, N = 2, Y = (-32640, 32639)} on a word in [-520192, 524288]: its last limb truncates a second carry",
+    "rule": "a split's Y is its producer's interval (19:10Z), not declared",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "pun-s32-as-s8",
+    "kind": "attack",
+    "verdict": "refuse",
+    "charge": null,
+    "allow": null,
+    "computes": "a runtime S8Dot word read back as the s8 operand codes of a second S8Dot, without a split",
+    "rule": "an implicit reinterpretation (an s32 word read back as s8 limbs) is refused (19:10Z)",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "linear-28672",
+    "kind": "honest",
+    "verdict": "pass",
+    "charge": null,
+    "allow": {},
+    "computes": "one int8 linear coordinate at K = 28,672 (s8 by s8, from T_0 = 0)",
+    "rule": "free-family: the window is proven from the operands' type range",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "qk-128",
+    "kind": "honest",
+    "verdict": "pass",
+    "charge": null,
+    "allow": {},
+    "computes": "one query against 131,072 keys at head dimension 128",
+    "rule": "free-family",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "pv-131072",
+    "kind": "honest",
+    "verdict": "pass",
+    "charge": null,
+    "allow": {
+      "any": 393216
+    },
+    "computes": "P\u00b7V at 131,072 keys: P in [0, 127] from its producer against V in [-128, 127], 128 channels",
+    "rule": "free-family only with P's interval derived from PQUANT (with P in [-128, 127] the window ends at 131,071)",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  },
+  {
+    "id": "pv-131072-splitk",
+    "kind": "honest",
+    "verdict": "pass",
+    "charge": null,
+    "allow": {
+      "any": 393216
+    },
+    "computes": "P\u00b7V at 131,072 keys split at 65,536, the halves added by I32Add",
+    "rule": "free-family halves; the combine is free-affine, its interval within s32",
+    "needs": [
+      "verity.ml.circuits.ops.s8"
+    ],
+    "size": {}
+  }
+]
