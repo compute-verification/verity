@@ -90,6 +90,35 @@ def test_decode_cover_is_the_least_seed_group_under_a_tenth_of_a_percent():
         assert G.h1_attention(shape, "decode", 1, 32768, 128, g - 1)[kind] > G.FLAG
 
 
+def eps_shared(regime, ctx, pairs, gq, kind):
+    rows, units = G._h1_rows(regime, ctx, 128, pairs, gq)[kind]
+    return G.visible_premium(rows, 128) / units
+
+
+def test_gqa_moves_decodes_cover_not_at_all_and_divides_a_prefill_calls_floor_by_the_kv_heads():
+    cov = G.decode_cover(128)["visible"]
+    for shape in G.EB.MODELS.values():
+        gq = shape.heads // shape.kv
+        for kind, g in cov.items():
+            assert eps_shared("decode", 32768, g, gq, kind) <= G.FLAG < eps_shared("decode", 32768, g - 1, gq, kind)
+        for L in G.PREFILL:
+            f = G.h1_h_form(shape, "prefill", L, L, 128, "call")
+            assert f["qk"] == pytest.approx(2.625 / ((L + 1) * shape.kv))
+            assert f["pv"] == pytest.approx(1.3125 / (L * shape.kv))
+
+
+def test_prefill_cover_counts_kv_head_pairs_the_same_for_every_model():
+    assert G.prefill_cover(128, 2048) == {"qk": 2, "pv": 1}
+    for ctx in G.PREFILL_COVER_CTX:
+        c = G.prefill_cover(128, ctx)
+        assert c == G.prefill_cover(128, ctx, "llama-3.1-70b")
+        for model, shape in G.EB.MODELS.items():
+            gq = shape.heads // shape.kv
+            for kind, n in c.items():
+                assert eps_shared("prefill", ctx, n * gq, gq, kind) <= G.FLAG
+                assert n == 1 or eps_shared("prefill", ctx, (n - 1) * gq, gq, kind) > G.FLAG
+
+
 def test_sites_are_eps_budgets_shapes():
     for shape in G.EB.MODELS.values():
         ss = G.sites(shape, "decode", 1, 2048)

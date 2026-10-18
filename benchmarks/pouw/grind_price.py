@@ -37,7 +37,10 @@ so the cheater picks the matched rows: each of N rows of b bits read by u units 
 and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`). ATTN-NOISE's own form,
 log₂(T/δ)/(h·N) with h the least row's noise bits over the units reading it, leaves out which rows the cheater picks:
 it sits 0.5–8% below at decode and 10–21% below at prefill's QKᵀ, where the bound is smallest. Both are tabled, with
-the (head, request) pairs a decode seed must cover.
+the (query head, request) pairs a decode seed must cover. A seed over several query heads draws a KV head's K rows' and
+V columns' noise once, read by its heads/kv query heads (GQA). At decode the query's rows bind, so that moves nothing and
+a decode seed's cover counts every (query head, request) pair; at prefill K's rows bind, so a call's floor divides by the
+KV heads, not the query heads, and a prefill seed's cover counts (KV head, request) pairs.
 
 The table shapes are `eps_budget.MODELS`; ε_sample, ε_luck and σ_w are `budget.today` per family. A seed group is a
 site (one matmul of a layer at one step, every head and the step's whole batch), `compile`'s default. Assumed for every
@@ -207,23 +210,30 @@ def visible_premium(rows: list[tuple[float, int, float]], t_bits: int) -> float:
     return obj((lo + hi) / 2)
 
 
+def _h1_rows(regime: str, L: int, d: int, pairs: float, gq: int) -> dict:
+    """H1's rows for `pairs` (query head, request) pairs under one seed, a KV head's K rows and V columns read by gq."""
+    if regime == "prefill":
+        qk = ([(L / gq, H1_NOISE["k"], gq * L), (L, H1_NOISE["q"], L)], L * (L + 1) / 2)
+        pv = ([(d / gq, L, gq * L), (L, H1_NOISE["p"], d)], L * d)
+    else:
+        qk = ([(L / gq, H1_NOISE["k"], gq), (1, H1_NOISE["q"], L)], L)
+        pv = ([(d / gq, L, gq), (1, H1_NOISE["p"], d)], d)
+    return {kind: ([(nr * pairs, b, u) for nr, b, u in rows], units * pairs) for kind, (rows, units) in
+            (("qk", qk), ("pv", pv))}
+
+
 def h1_rows(shape: EB.Shape, regime: str, n: int, ctx: int, group: str | int = "head") -> dict:
     """Per kind, H1's operand rows under one seed, (count, noise bits, units reading one), and the units it covers: one
     seed a head and request (`head`, as deployed), one a call (`call`: the layer's heads and the step's whole batch),
     one over every layer's call of the kind in a step (`step`, which no seed binding the call's roots allows: see
-    `decode_lever`), or an int g: g (head, request) pairs of one layer under one seed."""
-    L, d = ctx, shape.d
+    `decode_lever`), or an int g: g (query head, request) pairs of one layer under one seed, each reading its own K
+    rows. A call's or a step's seed draws a KV head's K rows and V columns once, read by its shape.heads/shape.kv query
+    heads."""
+    if isinstance(group, int):
+        return _h1_rows(regime, ctx, shape.d, group, 1)
     seqs = 1 if regime == "prefill" else n
-    if regime == "prefill":
-        qk = ([(L, H1_NOISE["k"], L), (L, H1_NOISE["q"], L)], L * (L + 1) / 2)
-        pv = ([(d, L, L), (L, H1_NOISE["p"], d)], L * d)
-    else:
-        qk = ([(L, H1_NOISE["k"], 1), (1, H1_NOISE["q"], L)], L)
-        pv = ([(d, L, 1), (1, H1_NOISE["p"], d)], d)
-    mult = group if isinstance(group, int) else {
-        "head": 1, "call": shape.heads * seqs, "step": shape.heads * seqs * shape.layers}[group]
-    return {kind: ([(nr * mult, b, u) for nr, b, u in rows], units * mult) for kind, (rows, units) in
-            (("qk", qk), ("pv", pv))}
+    pairs = {"head": 1, "call": shape.heads * seqs, "step": shape.heads * seqs * shape.layers}[group]
+    return _h1_rows(regime, ctx, shape.d, pairs, 1 if group == "head" else shape.heads // shape.kv)
 
 
 def h1_attention(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
@@ -244,9 +254,9 @@ def h1_h_form(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
 
 
 def decode_cover(t_bits: int, ctx: int = 2048, gmax: int = 1 << 16) -> dict[str, dict[str, int]]:
-    """The least (head, request) pairs of one layer under one decode seed that bring H1's QKᵀ and P·V under 0.1%, in
-    ATTN-NOISE's h form and with the rows picked after the seed. It is the same for every model: a pair's rows don't
-    depend on the head count."""
+    """The least (query head, request) pairs of one layer under one decode seed that bring H1's QKᵀ and P·V under 0.1%,
+    in ATTN-NOISE's h form and with the rows picked after the seed. It is the same for every model: a pair's rows don't
+    depend on the head count, and the query's rows bind, so query heads sharing a KV head's rows don't change it."""
     shape = EB.MODELS["llama-3.1-8b"]
     out = {}
     for name, f in (("h_form", h1_h_form), ("visible", h1_attention)):
@@ -257,6 +267,26 @@ def decode_cover(t_bits: int, ctx: int = 2048, gmax: int = 1 << 16) -> dict[str,
                 mid = (lo + hi) // 2
                 lo, hi = (lo, mid) if f(shape, "decode", 1, ctx, t_bits, mid)[kind] <= FLAG * (1 + 1e-12) else (mid + 1, hi)
             out[name][kind] = lo
+    return out
+
+
+PREFILL_COVER_CTX = (16, 128, 2048, 32768)
+
+
+def prefill_cover(t_bits: int, ctx: int, model: str = "llama-3.1-8b", gmax: int = 1 << 16) -> dict[str, int]:
+    """The least (KV head, request) pairs of one layer under one prefill seed of ctx tokens that bring H1's QKᵀ and P·V
+    under 0.1%, the rows picked after the seed. K's rows and V's columns, which a KV head's query heads share, bind
+    there, so it is the same for every model."""
+    shape = EB.MODELS[model]
+    gq = shape.heads // shape.kv
+    out = {}
+    for kind in ("qk", "pv"):
+        lo, hi = 1, gmax
+        while lo < hi:
+            mid = (lo + hi) // 2
+            rows, units = _h1_rows("prefill", ctx, shape.d, mid * gq, gq)[kind]
+            lo, hi = (lo, mid) if visible_premium(rows, t_bits) / units <= FLAG * (1 + 1e-12) else (mid + 1, hi)
+        out[kind] = lo
     return out
 
 
@@ -348,7 +378,8 @@ def table() -> dict:
                            "call_h_form": h1_h_form(shape, regime, n, ctx, t, "call")})
     excess = {fam: (PROVED[0] - KAPPA_LIVE) / 4 * pt.eps_luck for fam, pt in fams.items()}
     return {"rows": rows, "proved": {"rows": proved, "kappa_excess": excess}, "sensitivity": sens,
-            "h1_attention": h1, "template": templ, "levers": levers(), "decode_levers": decode_levers()}
+            "h1_attention": h1, "template": templ, "levers": levers(), "decode_levers": decode_levers(),
+            "prefill_cover": {t: {ctx: prefill_cover(t, ctx) for ctx in PREFILL_COVER_CTX} for t in T_BITS}}
 
 
 def levers() -> dict:
@@ -413,7 +444,8 @@ def render(t: dict) -> str:
     lines += ["", "## Deployed H1 attention's floor (ATTN-NOISE §5's h), visible matched rows", "",
               ("Each cell is the rows the cheater picks after the seed (`visible_premium`), then ATTN-NOISE's h form "
                "log₂(T/δ)/(h·N) (QKᵀ: h = d/L at prefill, 448/L at decode; P·V: h = 1 at prefill, 1.75 at decode), which "
-               "leaves the pick out."), "",
+               "leaves the pick out. A call's seed draws a KV head's K rows and V columns once, read by its heads/kv "
+               "query heads (GQA), so its prefill h is those over heads/kv; at decode the query's rows bind."), "",
               "| model | regime | T | QKᵀ, a seed a head | P·V, a seed a head | QKᵀ, a seed a call | P·V, a seed a call |",
               "|---|---|---|---|---|---|---|"]
     for a in t["h1_attention"]:
@@ -441,10 +473,11 @@ def render(t: dict) -> str:
                      f"{m['template_pv']} | {m['h1_call_qk']} / {m['h1_call_h_form_qk']} | "
                      f"{m['h1_call_pv']} / {m['h1_call_h_form_pv']} | {_cell(s['qk'])} / {_cell(s['pv'])} |")
     heads = {m: s.heads for m, s in EB.MODELS.items()}
-    lines += ["", ("Minimum seed coverage for decode attention under H1's floor: the (head, request) pairs of one layer "
-                   "a seed must cover for 0.1%, the same for every model, and the batch that is for one seed a call "
-                   "(the layer's heads × the batch) or one seed a (layer, head) over the batch (rows picked after the "
-                   "seed / h form):"), "",
+    lines += ["", ("Minimum seed coverage for decode attention under H1's floor: the (query head, request) pairs of one "
+                   "layer a seed must cover for 0.1%, the same for every model and whether or not query heads share a "
+                   "KV head's rows (the query's rows bind), and the batch that is for one seed a call (the layer's "
+                   "heads × the batch) or one seed a (layer, head) over the batch (rows picked after the seed / h "
+                   "form):"), "",
               "| T | kind | pairs a seed | " + " | ".join(f"batch, a call, {m} ({h} heads)" for m, h in heads.items())
               + " | batch, a (layer, head) |", "|---|---|---|" + "---|" * len(heads) + "---|"]
     for tb, cov in d["cover"].items():
@@ -452,6 +485,13 @@ def render(t: dict) -> str:
             v, f = cov["visible"][kind], cov["h_form"][kind]
             per = " | ".join(f"{math.ceil(v / h)} / {math.ceil(f / h)}" for h in heads.values())
             lines.append(f"| 2^{tb} | {name} | {v} / {f} | {per} | {v} / {f} |")
+    lines += ["", ("Minimum seed coverage for prefill attention under H1's floor: the (KV head, request) pairs of one "
+                   "layer a prefill seed must cover for 0.1% (K's rows and V's columns, shared by a KV head's query "
+                   "heads, bind), the same for every model:"), "",
+              "| T | " + " | ".join(f"{c} tokens: QKᵀ / P·V" for c in PREFILL_COVER_CTX) + " |",
+              "|---|" + "---|" * len(PREFILL_COVER_CTX)]
+    for tb, by in t["prefill_cover"].items():
+        lines.append(f"| 2^{tb} | " + " | ".join(f"{c['qk']} / {c['pv']}" for c in by.values()) + " |")
     lines += ["", "## The template: y* = rθ (nats a product × rows)", "", "| c, κ | y* (one-bit dither) | y* (keyed word) |",
               "|---|---|---|"]
     for k, v in t["template"].items():
