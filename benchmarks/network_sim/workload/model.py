@@ -176,9 +176,15 @@ class Model:
             raise AssertionError(f"{len(calls)} root Calls, the schedule has {len(order)}")
         self.calls = [CallInfo(r, layer, g, c.lo, c.hi) for (r, layer, g), c in zip(order, calls)]
 
+    def step(self, c: CallInfo) -> int:
+        """The engine step of a Call: request r's layer l at 1 + r + l."""
+        return 1 + c.request + c.layer
+
     @property
     def n(self) -> int:
         return self.circuit.size
+
+    value_bits = 1
 
     @cached_property
     def gates(self) -> list[Gate]:
@@ -234,6 +240,15 @@ class Model:
             put(2 + 2 * layer, [v & ((1 << spec.bias_bits) - 1) for v in b], spec.bias_bits)
         return t
 
+    def inputs(self, seed: int) -> dict[int, int]:
+        return self.bind_inputs(requests(self.spec, seed), weights(self.spec, seed))
+
+    def constants(self) -> dict[int, int]:
+        return self.evaluate({}, [g for g, k in enumerate(self.kind) if k == "constant"])
+
+    def reference(self, seed: int) -> list[list[int]]:
+        return reference(self.spec, requests(self.spec, seed), weights(self.spec, seed))
+
     def evaluate(self, transcript: dict[int, int], gates: list[int] | None = None) -> dict[int, int]:
         """Evaluate `gates` (default: every gate) in order into `transcript`, with verity's evaluator."""
         sel = self.gates if gates is None else [self.gates[g] for g in gates]
@@ -268,3 +283,16 @@ def reference(spec: Spec, x: list[list[int]], ws: list[tuple[list[list[int]], li
                  for j in range(spec.d)]
         out.append(h)
     return out
+
+
+WORKLOADS = ("mlp", "served")
+
+
+def build(workload: str, spec: dict) -> Model:
+    """The workload's model from its spec's JSON: the MLP (`Model`), or verity_vllm's serving Program (`served.Served`)."""
+    if workload == "mlp":
+        return Model(Spec(**spec))
+    if workload == "served":
+        from . import served
+        return served.load(served.Config(**spec))
+    raise ValueError(f"a workload is one of {WORKLOADS}, not {workload!r}")
