@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One arm of tp_decode.py (stock against the arm in one TP engine, eager) from the shipped tree, the research run's cwd:
-#   research run --on vy-glm53-eu --gpus 8 --mem-gb 400 --timeout 60m --project verity -- env ARM=rows bash benchmarks/served_commit/tp_decode.sh
+#   research run --on vy-glm53-eu --cwd source --gpus 8 --mem-gb 400 --timeout 75m --project verity -- env ARM=rows bash benchmarks/served_commit/tp_decode.sh
+# (a tree whose research package predates `--gpus`: drop it and put `gpu-lease 8 --wait --mem-gb 400 --` before `env`)
 # ARM: rows | rows-4k | rows-layer | rows-layer-4k.  BATCHES (default 1,8,32), PAIRS (default 3), ROW (default GLM-5.3's TP8 eager B1
 # row, whose request every batch rotates), CASE (default GLM53), TP (default 8), VENV (default /workspace/cp/venv312).  The engine:
 # gpu_memory_utilization GPU_UTIL (0.92), max_model_len MAX_MODEL_LEN (288), max_num_batched_tokens MAX_BATCHED (2048, the row's).
