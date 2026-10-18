@@ -23,7 +23,14 @@ ballot's float order is this key order (±0 never share a bin), so the kernel se
   - more than TOPK keys in the threshold bin (its tie buffer keeps the first TOPK by atomics), or
   - a NaN or an infinity in the threshold bin (the ballot's float comparison is no order there);
 where it does not, the relation refuses the served order: a visible failure, never a wrong acceptance.  `persistent_topk` (more
-than 64 rows) and the prefill's `top_k_per_row_prefill` key by `convert_to_uint32_v2` too, but their tie placement is unread.
+than 64 rows) places ties the same way (run r20261018-233053-2502, below); the prefill's `top_k_per_row_prefill` keys by
+`convert_to_uint32_v2` too, but its tie placement is unread.  `top_k_per_row_decode`, which vLLM does not call on sm_90, places
+ties otherwise: the relation refuses its order on rows with ties at the boundary.
+
+On an H200 (sm_90, run r20261018-233053-2502) on synthetic rows of 2049..16384 keys, `cooperative_topk` at 1, 8 and 64 rows a
+call and `persistent_topk` emit orders the relation accepts on every random, bf16-rounded, ballot-tie and signed-zero row, and
+orders it refuses on only the exceptions above (65, 100 and 1000 equal keys straddling the boundary, and a row of 3000 equal
+keys); two identical calls gave different orders on every row.
 
 Registered functions (`_v1`; their Boolean versions in `boolean_dsa_topk` are the definitions, these the accelerators tests hold
 equal to them):
@@ -41,8 +48,9 @@ from verity_vllm.program.registry.prims import BF16, BIT, F32, I32
 
 M32 = 0xFFFFFFFF
 
-_CONF = ("model-untested: the tie rule read from vLLM d9105ea80 topk_histogram_4096.cuh:69-84, 380-548 (cooperative_topk's rows "
-         "of 2049..16384 keys); a captured decode past TOPK keys is its hardware check")
+_CONF = ("model-tested on synthetic rows: the tie rule read from vLLM d9105ea80 topk_histogram_4096.cuh:69-84, 380-548 "
+         "(cooperative_topk's rows of 2049..16384 keys) and held on an H200 by cooperative_topk's and persistent_topk's orders, run "
+         "r20261018-233053-2502; a captured served decode past TOPK keys is its hardware check")
 _ORDERS: dict[tuple[int, int], PrimitiveDefinition] = {}
 
 
