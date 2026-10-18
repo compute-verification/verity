@@ -208,8 +208,8 @@ landing is automated, and ci owns that: from a ready mark to `main` moving, no a
 refuses, and the lander handles what it refuses.
 
 Daniel moved one class of part out (11 Oct, 8:53 PM PDT): a part whose cold run takes more than about 10 minutes may run
-right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once.
-A reused verdict stays in the gate, and the Lean check always runs before landing. Citations and tables read only commits
+right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once
+(narrowed 18 Oct: a failure no landing touches reverts nothing; the friction skill has the ruling). A reused verdict stays in the gate, and the Lean check always runs before landing. Citations and tables read only commits
 whose trailing parts passed. Deferred steps run in one post-landing run on `main`'s tip at a time. A failure there reverts
 the one PR it implicates, else every landing since the last verified tip; one that no landing since touches reverts nothing
 and goes to ci.

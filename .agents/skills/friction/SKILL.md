@@ -109,6 +109,9 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-18 (2:50 PM PDT, approving ci's lane decision): a post-landing failure that no landing since the last verified
+  `main` touches (its files or the suite's declared inputs) reverts nothing and goes to ci, since `main` was red before
+  them. This narrows 11 Oct's "a failure there reverts the landing at once".
 - 2026-10-17 (8:20 PM PDT, in proofs' chat; compute accounting's card ba874f45): PoUW's per-matmul noise seeds may be
   derived by Fiat–Shamir, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)) from the epoch's
   live salt: "I'm happy to do Fiat-Shamir for this for now because it's going to happen at such a high-frequency that
@@ -228,8 +231,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   run right after its train lands instead of before, on every landing that changed its inputs, and a failure there
   reverts the landing at once; a reused verdict stays in the gate, and the Lean check always runs before landing.
   `main` then passes every part except those in the post-landing tier, and citations and tables read only commits
-  whose trailing parts passed. ci and infra build it; until they do, the whole `check` stays before landing. This
-  replaces 7 Oct's "not into teaching `research merge` to land on part of a check" for those parts.
+  whose trailing parts passed. This replaces 7 Oct's "not into teaching `research merge` to land on part of a check" for those parts.
 - 2026-10-11 (about 7 PM PDT, relayed by top): check time comes down by a lot, and everyone may do whatever it takes.
   A change to how `check` runs (a suite's declared inputs, Lean reuse per module or declaration, circuit-check's task
   list, scheduling, sharding, more slots or machines under a budget line, splitting or cutting a slow test) lands on its
