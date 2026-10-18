@@ -280,9 +280,30 @@ def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest
                      ({"async_scheduling": True}, "async"), ({"enable_prefix_caching": True}, "prefix caching")]:
         with pytest.raises(SystemExit, match=why):
             cs.engine_args(bad)
-    for kw, err in [({"plan": "serve,serve"}, "one mode"), ({"kv_pages": 0}, "a page"), ({"plan": "nope"}, "a session's mode")]:
+    for kw, err in [({"plan": "serve,serve"}, "one mode"), ({"kv_pages": 0}, "a page"), ({"plan": "nope"}, "a session's mode"),
+                    ({"node": "n" * 65}, "node id")]:
         with pytest.raises(Exception, match=err):
             remote.CommitSession("127.0.0.1:7781", **kw)
+    assert 1 <= len(cs.node.encode()) <= audit.NODE_BYTES
+
+
+def test_a_commits_session_that_fails_is_recorded_rejected_with_its_error(monkeypatch, tmp_path):
+    """The Commit writes its verdict whatever the session does: a session that raises is rejected, its error recorded."""
+    def fails(backend, *a, **kw):
+        raise ConnectionRefusedError("no verifier")
+
+    monkeypatch.setattr(remote, "prove", fails)
+    cs = remote.CommitSession("127.0.0.1:7781", out=tmp_path)
+    cs.store = store()
+    cs.binder = type("B", (), {"stats": lambda self: {}})()
+
+    class Engine:
+        def get_num_unfinished_requests(self):
+            return 1
+
+    rec = cs.serve(Engine(), [("r", [1, 2], None)])
+    assert rec["accepted"] is False and rec["error"] == "ConnectionRefusedError: no verifier" and rec["memory_map"] is None
+    assert (tmp_path / "remote_session.json").exists()
 
 
 def test_a_store_session_whose_prover_seeds_without_the_appends_head_is_rejected():

@@ -1053,7 +1053,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if args.remote_verifier:
         from verity_vllm.store import remote
         _rs = remote.CommitSession(args.remote_verifier, plan=args.remote_plan, kv_pages=args.remote_kv_pages, weight_blocks=args.remote_weight_blocks,
-                                   kv_lib=args.remote_kv_lib, out=args.out, node=f"verity-vllm/commit/{args.label or 'commit'}")
+                                   kv_lib=args.remote_kv_lib, out=args.out)
     if os.environ.get("VERITY_HOT_SUBMIT") == "1" and _HOT is None:
         # [R16 sys] route this invocation through the pod's hot Commit worker (verity_vllm/pipeline/hot.py) -- lets an unchanged harness
         # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE

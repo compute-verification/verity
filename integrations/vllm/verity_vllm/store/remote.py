@@ -39,6 +39,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import socket
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -402,9 +403,12 @@ class CommitSession:
     first K blocks appended."""
 
     def __init__(self, verifier: str, *, plan: str = "serve", kv_pages: int = 32, weight_blocks: int | None = None,
-                 kv_lib: str | None = None, out: str | Path | None = None, node: str = "verity-vllm/commit",
+                 kv_lib: str | None = None, out: str | Path | None = None, node: str | None = None,
                  codec: rcodec.Codec = rcodec.DEFAULT, log: Callable[[str], None] = print) -> None:
         address(verifier)
+        node = f"verity-vllm/{socket.gethostname()}" if node is None else node
+        if not 1 <= len(node.encode()) <= audit.NODE_BYTES:
+            raise ValueError(f"the session's node id {node!r} is not 1 to {audit.NODE_BYTES} bytes")
         if "," in plan:
             raise ValueError("a store serves one session: --remote-plan is one mode")
         session_module("prover").parse_plan(plan)
@@ -461,8 +465,8 @@ class CommitSession:
         error, result = None, {}
         try:
             (result,) = prove(backend, self.verifier, self.plan, node=self.node.encode(), codec=self.codec, log=self.log)
-        except Refused as e:
-            error = str(e)
+        except Exception as e:  # noqa: BLE001  -- recorded: a session that fails is rejected, and the Commit's verdict still written
+            error = f"{type(e).__name__}: {e}"
         rec = {"schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan,
                "accepted": error is None and bool(result.get("accepted")), "error": error, "prover": result,
                "store": self.binder.stats(), "layout": backend.layout(), "kv_pages": self.kv_pages,
@@ -471,7 +475,7 @@ class CommitSession:
                                                      "finished": workload.finished},
                "memory_map": None if backend.trace is None else {
                    "path": None if path is None else str(path), "registration": backend.registration.digest.hex(),
-                   "steps": backend.trace.steps, "rekeyed": backend.trace.rekeyed, **agreement(backend)}}
+                   "steps": backend.trace.steps, "rekeyed": backend.trace.rekeyed, **(agreement(backend) if error is None else {})}}
         if self.out is not None:
             (self.out / "remote_session.json").write_text(json.dumps(rec, indent=1, default=str) + "\n")
         return rec
