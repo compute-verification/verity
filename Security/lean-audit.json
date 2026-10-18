@@ -1375,6 +1375,18 @@
    "assumptions": [],
    "type_hash": "90fe6e61a65a4879930d007079bb0249c36ca5a97b34093cd2c9e094b86f26ee"
   },
+  "Accounting.SecurityProofs.RequirementUncredited": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementUncredited : Accounting.Guarantees.RequirementUncredited"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Accounting.SecurityProofs.RequirementUnplanned": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementUnplanned : Accounting.Guarantees.RequirementUnplanned"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
@@ -5462,13 +5474,15 @@
    "Pouw.Guarantees.Eps1.WordLocalZero": "unstated: Theorem B of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.WordLocalZero is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
    "Pouw.Guarantees.Eps1.WordLocalGeneral": "unstated: Theorem B of EPS1-QSTAR at a general int8 instance; its theorem Pouw.SecurityProofs.Eps1.WordLocalGeneral is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
    "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
-   "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementHeldLive": "frozen (no-function): A counting identity over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), W's live bits are those in the held blocks plus the live bits of each resident block not held; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's credited live bits (those in complete blocks) but B per resident block not held; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementHeldLive": "frozen (no-function): A counting identity over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), W's credited live bits (those in complete blocks) are those in the held blocks plus the live bits of each resident block not held; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most creditedBits / D; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the complete blocks W reads at the step (PlanMatches), moved blocks carry all of the bits W reads from complete blocks but B per planned block not moved; about no function of the code.",
    "Accounting.SecurityProofs.RequirementCredits": "frozen (no-function): An identity over a declared circuit's wiring, its placed execution and PoUW's vocabulary (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean): on the placed execution's actual run, PouwWork.credits is the work of W's region outside the marking; about no function of the code.",
    "Accounting.SecurityProofs.RequirementHelp": "frozen (no-function): An identity over a declared circuit's wiring, its placed execution and PoUW's vocabulary (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean): for a topological wiring the execution follows, PouwWork.help on its actual run is W's ingress into the node and the verifier's leaves; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementSteps": "frozen (no-function): An identity over a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean): when every device of X paces its engine steps and begins the window's first and last steps at its ends, W's region over the ticks is its gates at those engine steps; about no function of the code."
+   "Accounting.SecurityProofs.RequirementSteps": "frozen (no-function): An identity over a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean): when every device of X paces its engine steps and begins the window's first and last steps at its ends, W's region over the ticks is its gates at those engine steps; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementUncredited": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches) and the live values in incomplete blocks lie in one block per group (OneBlockEach), W's live bits exceed its credited live bits by at most B per group holding one; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most B per group holding one; about no function of the code."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

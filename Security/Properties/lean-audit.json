@@ -1252,6 +1252,30 @@
    "assumptions": [],
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09"
   },
+  "Properties.Requirement.credited": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.credited : Properties.Requirement.Credited"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.creditedBits": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.creditedBits : Properties.Requirement.CreditedBits"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.creditedReadBits": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.creditedReadBits : Properties.Requirement.CreditedReadBits"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Properties.Requirement.creditedReads": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.creditedReads : Properties.Requirement.CreditedReads"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Properties.Requirement.credits": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.credits : Properties.Requirement.Credits"],
@@ -1269,6 +1293,12 @@
    "signature": ["Properties.Requirement.held : Properties.Requirement.Held"],
    "assumptions": [],
    "type_hash": "3d7c2fbd60187988784f07c165f16e3d0f5a06edcc2581a7a629f9757e8fb12c"
+  },
+  "Properties.Requirement.incomplete": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.incomplete : Properties.Requirement.Incomplete"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Properties.Requirement.ingress": {
    "owner": "@memory-accounting",
@@ -2155,6 +2185,26 @@
    },
    "Properties.Requirement.credits": {
     "function": "CircuitRequirement.Instance.credits",
+    "outcome": "none"
+   },
+   "Properties.Requirement.incomplete": {
+    "function": "CircuitRequirement.Instance.incomplete",
+    "outcome": "none"
+   },
+   "Properties.Requirement.credited": {
+    "function": "CircuitRequirement.Instance.credited",
+    "outcome": "none"
+   },
+   "Properties.Requirement.creditedReads": {
+    "function": "CircuitRequirement.Instance.creditedReads",
+    "outcome": "none"
+   },
+   "Properties.Requirement.creditedBits": {
+    "function": "CircuitRequirement.Instance.creditedBits",
+    "outcome": "none"
+   },
+   "Properties.Requirement.creditedReadBits": {
+    "function": "CircuitRequirement.Instance.creditedReadBits",
     "outcome": "none"
    }
   },
