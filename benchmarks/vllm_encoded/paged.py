@@ -3,7 +3,12 @@ attention, the append of a step's new tokens and the gather of whole pages.
 
 A layer's cache is vLLM's tensor ([blocks][KV heads][slots][K ‖ V] bf16, or the inner three in any order); `Layout`
 reads its physical strides. Codec indices use the registered store instead: after `store_base`, physical slot u and
-layer l are the `store-order/v0` token-layer block u · layers + l."""
+layer l are the `store-order/v0` token-layer block u · layers + l.
+
+An encoded cache may hold plaintext slots (deferred residency, remote_bandwidth's PROTOCOL.md §4): a token-layer the
+remote audit appends is written as it is until its append coin arrives, then encoded in place. Its layer's flags, a
+uint8 a physical slot on the device (nonzero: plaintext), go to `attn` and `gather` as `plain`, which read such a slot as
+it is and give it no receipt; `append` and `table` set them, `encode` encodes the listed plaintext slots and clears them."""
 from __future__ import annotations
 
 import ctypes
@@ -30,10 +35,11 @@ class PagedLib(KB.Lib):
         so = self.so
         so.pg_shape.argtypes = [v]
         so.pg_attn.argtypes = [v, i, v, z, ctypes.c_float, v, z, i, v, v, v, v, i, i, i, i, i, u, i, i, i, i, i,
-                               v, v, z, z, v, v, v, v, v]
+                               v, v, z, z, v, v, v, v, v, v]
         so.pg_append_multi.argtypes = [v, i, i, i, i, i, i, i, i, v]
-        so.pg_append.argtypes = [v, v, z, z, v, i, v, i, i, i, i, u, i, i, i, i, v, v]
-        so.pg_gather.argtypes = [v, v, i, i, i, i, i, i, v, u, i, i, i, i, v, v, v, v, v]
+        so.pg_append.argtypes = [v, v, z, z, v, i, v, i, i, i, i, u, i, i, i, i, v, v, v]
+        so.pg_encode.argtypes = [v, i, i, i, i, i, i, i, v]
+        so.pg_gather.argtypes = [v, v, i, i, i, i, i, i, v, u, i, i, i, i, v, v, v, v, v, v]
         so.pg_receipts_sparse.argtypes = [v, v, v, v, u, i, i, u, v]
         so.pg_rc_gate_pass.argtypes = [v, v, v]
         so.kv_rc_pass.argtypes = [v, v, v]
@@ -100,12 +106,13 @@ def offsets(torch, values: list[int], f: K.Field):
 
 def attn(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
          q, out, part, lens, bt, batch: int, splits: int, nrows: int | None = None, qrow=None, ck=None, cv=None,
-         receipts=None, bj=None) -> None:
+         receipts=None, bj=None, plain=None) -> None:
     """Decode attention of batch sequences (lens [≥ batch] int32, bt [≥ batch][bstride] int32) over one layer: q and out
     are [rows][heads · head_dim] bf16 (any row stride), sequence i's at row qrow[i] (or i); rows batch … nrows − 1
     zeroed (nrows default q's rows); part holds batch · splits · MW partials. ck, cv ([rows][KV heads · head_dim] bf16,
     any row stride): each sequence's last token's K and V at its row, in place of its pages'. bj (`offsets`, one a
-    physical slot): the layer's bound offsets, an encoded cache's token-layers decoded under them."""
+    physical slot): the layer's bound offsets, an encoded cache's token-layers decoded under them. plain (uint8, one a
+    physical slot): the layer's flags, a flagged slot read as it is and given no receipt."""
     nrows = q.shape[0] if nrows is None else nrows
     if (ck is None) != (cv is None):
         raise ValueError("ck and cv go together")
@@ -119,25 +126,47 @@ def attn(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int,
              0 if ck is None else ck.data_ptr(), 0 if cv is None else cv.data_ptr(),
              0 if ck is None else ck.stride(0), 0 if cv is None else cv.stride(0),
              0 if rc_sk is None else rc_sk.data_ptr(), 0 if used is None else used.data_ptr(),
-             0 if epoch is None else epoch.data_ptr(), _ptr(bj), stream(torch))
+             0 if epoch is None else epoch.data_ptr(), _ptr(bj), _ptr(plain), stream(torch))
 
 
 def append(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
-           key, val, slots, bj=None) -> None:
+           key, val, slots, bj=None, plain=None) -> None:
     """Tokens key[i], val[i] ([tokens][KV heads · head_dim] bf16, any row stride) at slot slots[i] (int64; < 0 skipped),
-    encoded under their slots' bound offsets bj (`offsets`, one a physical slot; None: the seed's key)."""
+    encoded under their slots' bound offsets bj (`offsets`, one a physical slot; None: the seed's key). plain (uint8,
+    one a physical slot): each appended slot's flag set to `not encoded`."""
     lib.call("pg_append", key.data_ptr(), val.data_ptr(), key.stride(0), val.stride(0), slots.data_ptr(),
              slots.shape[0], cache.data_ptr(), lay.bs, lay.sb, lay.sh, lay.ss, store_base, layers, layer, encoded, k,
-             _ptr(bj), stream(torch))
+             _ptr(bj), _ptr(plain), stream(torch))
+
+
+def _optional(rest, n: int) -> list:
+    return [_ptr(t) for t in (list(rest) + [None] * n)[:n]]
 
 
 def table(torch, entries):
     """pg_append_multi's host table: (key, value, slots, rows, cache, store base, layer count, layer index[, bound
-    offsets]) each, the offsets as `append`'s bj (absent or None: the seed's key)."""
+    offsets[, flags]]) each, the offsets as `append`'s bj (absent or None: the seed's key), the flags as its plain."""
     rows = [[key.data_ptr(), val.data_ptr(), key.stride(0), val.stride(0), slots.data_ptr(), n, cache.data_ptr(),
-             store_base, layers, layer, _ptr(bj[0] if bj else None)]
-            for key, val, slots, n, cache, store_base, layers, layer, *bj in entries]
+             store_base, layers, layer, *_optional(rest, 2)]
+            for key, val, slots, n, cache, store_base, layers, layer, *rest in entries]
     return torch.tensor(rows, dtype=torch.int64).reshape(-1)
+
+
+def encode_table(torch, entries):
+    """pg_encode's host table: (slots, rows, cache, store base, layer count, layer index[, bound offsets[, flags]]) each,
+    slots int64 (distinct; < 0 skipped), the offsets b_j(c_a) as `append`'s bj, the flags as its plain (absent or None:
+    every listed slot encoded)."""
+    rows = [[slots.data_ptr(), n, cache.data_ptr(), store_base, layers, layer, *_optional(rest, 2)]
+            for slots, n, cache, store_base, layers, layer, *rest in entries]
+    return torch.tensor(rows, dtype=torch.int64).reshape(-1)
+
+
+def encode(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, k: int, s=None) -> None:
+    """Deferred residency's encode on stream s (default current), once the append's coin has arrived: every layer's
+    listed slots of tab (a device int64 tensor of `encode_table`'s) encoded in place under their offsets, a slot whose
+    flag is clear left as it is, then every listed slot's flag cleared. Nothing may read those layers meanwhile."""
+    lib.call("pg_encode", tab.data_ptr(), layers, rows, lay.bs, lay.sb, lay.sh, lay.ss, k,
+             stream(torch) if s is None else s)
 
 
 def append_multi(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, encoded: int, k: int, s=None) -> None:
@@ -147,13 +176,14 @@ def append_multi(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout,
 
 
 def gather(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
-           blocks, out, receipts=None, bj=None) -> None:
-    """Blocks blocks[b] (int32) of the layer into out's block b, decoded (encoded, under bj as `attn` takes it) or
-    copied."""
+           blocks, out, receipts=None, bj=None, plain=None) -> None:
+    """Blocks blocks[b] (int32) of the layer into out's block b, decoded (encoded, under bj and plain as `attn` takes
+    them) or copied."""
     rc_sk, used, epoch = receipts or (None, None, None)
     lib.call("pg_gather", cache.data_ptr(), blocks.data_ptr(), blocks.shape[0], lay.sb, lay.bs, lay.sb, lay.sh, lay.ss,
              out.data_ptr(), store_base, layers, layer, encoded, k, 0 if rc_sk is None else rc_sk.data_ptr(),
-             0 if used is None else used.data_ptr(), 0 if epoch is None else epoch.data_ptr(), _ptr(bj), stream(torch))
+             0 if used is None else used.data_ptr(), 0 if epoch is None else epoch.data_ptr(), _ptr(bj), _ptr(plain),
+             stream(torch))
 
 
 def receipts_sparse(lib: PagedLib, torch, rc_sk, tags, used, epoch, slots: int, layers: int, layer: int,

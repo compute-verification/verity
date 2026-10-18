@@ -16,8 +16,10 @@ set (note:20261017T1859Z-report-property-redteam), 210 ids: the 194 of `verity/m
   dot mod `2^32`, so in the window the exact sum; `I32Add_v1` and `I32Sub_v1` (`affine`), proven not to wrap; the
   constants (`const`). An exact integer multiply by a constant is an affine gate only where it is proven in window
   (`I32Mul_v1` by a constant, translated so); an FP multiply by a constant rounds, and is a rounding.
-* **gathers** (`gather`, an `Op.gather` and never any other function): the kernel-level gathers and table reads, by
-  family, counted in fresh index bits (`units`).
+* **gathers** (`gather`, an `Op.gather` and never any other function), counted in fresh index bits (`units`): the
+  kernel-level gathers by family (`Gather{Bf16,F32,I32,E4m3,E2m1,E8m0}x{V}`), at their index, `⌈log₂ (V + 1)⌉` bits,
+  and the table reads (`TableRead{n}x{w}`, `tableReadBits`), at their index's low `n` bits, `n` bits: property/v1's
+  `range` and `low` kinds. Its `lifted` kind (`LGatherRow`) is not listed, so refused.
 * **budgeted**, in units: `compareSelect` (comparisons, selections, min, max and clamps, `F32Sat_v1` and `S32ClampS8`
   among them, the 1-bit logic ops `And2`, `Xor2`, `BitAnd`, `BitOr`, `BitXor`, `BitNot`, `Not`, the salt-dead tests
   and PIN's `PouwSel32_v1` and `PouwWinOk_v1`); `fold` (the receipt fold's step, `PouwDuoAbsorb_v1`); and `rounding`,
@@ -47,8 +49,9 @@ inductive Class
   | affine
   /-- an s8-family step: `Op.mma a b k satfinite` -/
   | family (a b : Int8Fmt) (k : ℕ) (satfinite : Bool)
-  /-- a gather: `Op.gather`, its column's word at its index, never any other function -/
-  | gather
+  /-- a gather: `Op.gather low`, its column's word at its index (or a table read's at its index's low bits), never any
+  other function -/
+  | gather (low : Option ℕ)
   | budgeted (cls : Budget)
   deriving DecidableEq, Repr
 
@@ -269,15 +272,25 @@ def registry : List (String × Class) := [
 def families : List (String × Class) := [
   ("Input", .input .run),
   ("RegisteredInput", .input .registered),
-  ("GatherBf16x", .gather),
-  ("GatherF32x", .gather),
-  ("TableRead", .gather),
+  ("GatherBf16x", .gather none),
+  ("GatherF32x", .gather none),
+  ("GatherI32x", .gather none),
+  ("GatherE4m3x", .gather none),
+  ("GatherE2m1x", .gather none),
+  ("GatherE8m0x", .gather none),
   ("BitAtx", .budgeted .rounding),
   ("TopPMaskWordx", .budgeted .compareSelect)]
 
-/-- A primitive id's class: the registry's entry, else its family's, else none (refused). -/
+/-- A table read's index bits, the `n ≥ 1` of `TableRead{n}x{w}_v1`: it reads its table at its index's low `n` bits. -/
+def tableReadBits (id : String) : Option ℕ :=
+  if id.startsWith "TableRead" then
+    (((id.drop 9).takeWhile Char.isDigit).toString.toNat?).filter (0 < ·)
+  else none
+
+/-- A primitive id's class: the registry's entry, else a table read's, else its family's, else none (refused). -/
 def classOf (id : String) : Option Class :=
-  (registry.lookup id).orElse fun _ => (families.find? fun e => id.startsWith e.1).map Prod.snd
+  (registry.lookup id).orElse fun _ => ((tableReadBits id).map fun n => .gather (some n)).orElse fun _ =>
+    (families.find? fun e => id.startsWith e.1).map Prod.snd
 
 /-- The class of a gate's operation. -/
 def Op.cls {ι : Type} : Op ι → Class
@@ -285,7 +298,7 @@ def Op.cls {ι : Type} : Op ι → Class
   | .const _ => .const
   | .affine .. => .affine
   | .mma a b k sat => .family a b k sat
-  | .gather => .gather
+  | .gather low => .gather low
   | .budgeted cls _ => .budgeted cls
 
 /-- **Every gate is its primitive's** (what the census checks, refusing the circuit otherwise): its primitive is

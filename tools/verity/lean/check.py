@@ -148,6 +148,7 @@ import tempfile
 import textwrap
 import threading
 import time
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -248,22 +249,53 @@ ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd sour
 
 
 def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
-    """The memory this process may use, swap included: the machine's, bounded by its cgroup's limits."""
+    """The memory this process may use, swap included: the machine's, bounded by the limits of its cgroup and every cgroup
+    above it (`/proc/self/cgroup`: a queued run's limit is on its own scope, below the hierarchy's root)."""
     info = {}
     for line in (proc / "meminfo").read_text().splitlines():
         k, _, v = line.partition(":")
         info[k] = int(v.split()[0]) * 1024 if v.split() else 0
+    try:
+        own = next((ln.split("::", 1)[1].strip() for ln in (proc / "self" / "cgroup").read_text().splitlines()
+                    if ln.startswith("0::")), "/")
+    except OSError:
+        own = "/"
+    parts = [q for q in own.split("/") if q]
+    dirs = [cgroup.joinpath(*parts[:i]) for i in range(len(parts), -1, -1)]
 
     def limit(name: str) -> int | None:
-        try:
-            v = (cgroup / name).read_text().strip()
-            return None if v == "max" else int(v)
-        except (OSError, ValueError):
-            return None
+        got = []
+        for d in dirs:
+            try:
+                v = (d / name).read_text().strip()
+                if v != "max":
+                    got.append(int(v))
+            except (OSError, ValueError):
+                continue
+        return min(got) if got else None
     ram, swap = info.get("MemTotal", 0), info.get("SwapTotal", 0)
     ram = ram if (m := limit("memory.max")) is None else min(ram, m)
     swap = swap if (s := limit("memory.swap.max")) is None else min(swap, s)
     return (ram + swap) / 2**30
+
+
+#: about what one `lean` of a Mathlib or ArkLib build peaks at: Lake runs as many at once as `LEAN_NUM_THREADS`, so a build
+#: of such a package runs no more than its memory holds (two queued Security builds were OOM-killed at 64 and 16 GB, 18 Oct)
+BUILD_GIB_PER_JOB = 8
+
+
+def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
+    """The `LEAN_NUM_THREADS` a build of ``pkg`` runs with, when its memory bounds it: ``pkg`` pins Mathlib or ArkLib and
+    `LEAN_NUM_THREADS` is unset; else None (`lake_env`'s value)."""
+    m = pkg / "lake-manifest.json"
+    try:
+        names = {d.get("name") for d in json.loads(m.read_text()).get("packages", [])} if m.is_file() else set()
+    except (OSError, ValueError):
+        names = set()
+    if "LEAN_NUM_THREADS" in env or not names & {"mathlib", "Arklib"}:
+        return None
+    gib = memory_gib() if have_gib is None else have_gib
+    return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
 
 
 def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
@@ -285,6 +317,25 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
 
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
+
+
+def plugin_targets(pkg: Path) -> list[str]:
+    """The compiler plugins the package's fetched dependencies load (`plugins` of a `[[lean_lib]]` in their `lakefile.toml`),
+    as targets `@dep/Lib:facet`.  Lake links one twice when two of a package's libraries load it, one under the module system
+    and one not (ArkLib's `ArkLib` and `ArkLibTest` with `ArkLibLintPlugin:shared`), and the two links race on one file, so the
+    build links each alone first, after which both find it up to date (INF-62)."""
+    out: list[str] = []
+    for f in sorted((pkg / ".lake" / "packages").glob("*/lakefile.toml")):
+        try:
+            doc = tomllib.loads(f.read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        name = str(doc.get("name", f.parent.name)).strip("«»")
+        for lib in doc.get("lean_lib", []) if isinstance(doc.get("lean_lib"), list) else []:
+            for t in lib.get("plugins", []) if isinstance(lib, dict) else []:
+                if isinstance(t, str) and (target := t if t.startswith("@") else f"@{name}/{t}") not in out:
+                    out.append(target)
+    return out
 
 
 def lake_env() -> dict[str, str]:
@@ -2185,9 +2236,16 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     t, _peak.bytes = time.monotonic(), 0
     if build:
         rep["sandbox"] = sandboxed()
+        jobs = [] if (n := build_threads(pkg)) is None else ["env", f"LEAN_NUM_THREADS={n}"]
+        if n is not None:
+            rep["build_threads"] = n
         for step, argv in (("setup", None),
-                           ("build", in_sandbox(pkg, ["lake", "build"])),
-                           ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+                           ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts]) if (ts := plugin_targets(pkg))
+                                                      else [])),
+                           ("build", in_sandbox(pkg, [*jobs, "lake", "build"])),
+                           ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+            if callable(argv) and not (argv := argv()):
+                continue
             with contextlib.nullcontext() if argv is None else writing(pkg, log):
                 s = time.monotonic()
                 rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
