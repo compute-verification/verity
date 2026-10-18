@@ -1031,6 +1031,9 @@ def test_of_several_failed_trains_drive_acts_on_the_lowest_only(world, monkeypat
     ids = {c: v["ids"] for c, v in h.d.q.load_state()["drive"]["launched"].items()}
     h.d.evidence = lambda repo, rids: lower if rids == ids[low] else upper
     h.tick()
+    assert not h.posts and h.launched[-1][0] == low                      # bisection alone names #1: its check runs again
+    _check(world, monkeypatch, low, ("false",))
+    h.tick()
     assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0], h.posts
     assert [m.pr for m in h.q.chain()] == [2]
 

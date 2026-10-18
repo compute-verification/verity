@@ -819,12 +819,18 @@ class Driver:
             return
         head = f"{m.commit[:12]} on `{self.q.branch}` ({prs}) failed its check: {v.why}"
         hit, what = self.culprit(members, v)
-        if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}):
+        fails = self._signature(v)
+        again = self._again(drive, m, fails)
+        if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}) and not (what == UNTOUCHED and again):
             self.resend(drive, m, prs, v)
             return
         above = members[passed + 1:]
         known = what not in (KILLED, NO_REPORT)
         if known and len(above) == 1:
+            if above[0] not in hit and not again:
+                self.resend(drive, m, prs, v, f"bisection alone names #{above[0].pr}, on this one run's word: it runs again "
+                                               "before anyone is ejected")
+                return
             low = f"{members[passed].commit[:12]}, whose check passed" if passed >= 0 else f"`main` {main[:12]}"
             on = "it failed again on its resend, naming no file a change touches" if what == UNTOUCHED else f"the failure is in {what}"
             self._eject(drive, key, head, m, prs, v, above, f"it is the only PR above {low}; {on}")
@@ -838,7 +844,7 @@ class Driver:
             self._eject(drive, key, head, m, prs, v, hit, f"{'its' if len(hit) == 1 else 'their'} change touches {what}")
             return
         if known:
-            self.bisect(drive, m, members, passed, lower, what)
+            self.bisect(drive, m, members, passed, lower, what, fails)
             return
         why = f"it failed again on its resend ({what})" if what == KILLED else what
         self.refuse(drive, key, f"{head}. Not ejected: {why}. Eject the PR that broke it (`research queue eject N --reason ...`); "
@@ -865,11 +871,12 @@ class Driver:
         self.refuse(drive, key, f"{head}. Not ejected: {why}. Eject the PR that broke it (`research queue eject N --reason ...`); "
                                 "the next sync rebuilds without it", *(self._handle(x.pr) for x in xs))
 
-    def bisect(self, drive: dict, m: Member, members: list[Member], passed: int, lower: dict[int, str], what: str) -> None:
+    def bisect(self, drive: dict, m: Member, members: list[Member], passed: int, lower: dict[int, str], what: str,
+               fails: list[str]) -> None:
         """Halve the members of ``m``'s failed train its cause is among, those above ``passed`` (the highest lower prefix whose
-        check passed, -1 for the base): check the prefix halfway up (`drive["bisect"]` records it), unless a check of a prefix
-        between them already runs, which halves them too.  Once it ends, `failed` acts again, on it if it failed, else on
-        ``m`` with it passed (or landed)."""
+        check passed, -1 for the base): check the prefix halfway up (`drive["bisect"]` records it, with what ``m`` failed on:
+        ``fails``), unless a check of a prefix between them already runs, which halves them too.  Once it ends, `failed` acts
+        again, on it if it failed, else on ``m`` with it passed (or landed)."""
         q, main = self.q, _out(self.repo, "rev-parse", "origin/main")
         among = " ".join(f"#{x.pr}" for x in members[passed + 1:])
         if run := [members[k] for k, s in sorted(lower.items()) if s == "running" and k > passed]:
@@ -889,9 +896,23 @@ class Driver:
                                                        f"{m.commit[:12]}): {tail}")
             return
         drive.setdefault("bisect", {})[m.commit] = {"check": mid.commit, "among": [x.pr for x in members[passed + 1:]],
-                                                    "ids": ids, "at": self.now()}
+                                                    "ids": ids, "at": self.now(), "fails": fails}
         q.log(f"research queue drive: bisecting {m.commit[:12]}: it failed on {what} and its cause is among {among}, whose "
               f"changes name none of it: checking {mid.commit[:12]} (through #{mid.pr}) as {' '.join(ids)}")
+
+    def _signature(self, v: Verdict) -> list[str]:
+        """What a failed check failed: its failed suites, and its failed steps other than the suites' own (pytest, lean-suites)."""
+        out: set[str] = set()
+        for d in self._evidence(v):
+            out |= {f"suite {s.get('name') or s.get('suite')}" for s in failed_suites(d)}
+            out |= {f"step {st.get('step')}" for st in failed_steps(d) if st.get("step") not in ("pytest", "lean-suites")}
+        return sorted(out)
+
+    def _again(self, drive: dict, m: Member, fails: list[str]) -> bool:
+        """Whether ``m``'s failure was seen twice, so a flake can't eject on bisection alone: ``m`` was resent and failed again,
+        or ``m`` is a bisect check that failed on something its failed train failed on too (``fails``: `_signature`)."""
+        return m.commit in drive.get("resent", {}) or any(
+            r.get("check") == m.commit and set(r.get("fails", ())) & set(fails) for r in drive.get("bisect", {}).values())
 
     def _running(self, drive: dict, main: str) -> int:
         """The checks counted against `max_running`: drive's launches still running, and its pre-warms."""

@@ -26,7 +26,7 @@ def _bisect(h: Harness) -> dict:
 def test_the_one_member_above_the_highest_passed_prefix_is_ejected(world, monkeypatch, tmp_path, lands):
     """18 Oct 01:55Z: 2671bd's test_dc failure fell back on the suite's inputs and ejected 13 PRs, #2348 among them from the
     train below it, whose check was 11 steps in and was cancelled.  The failure names neither change here: drive waits on the
-    lower check, and once it passed (landed or not), the one PR above it is the cause."""
+    lower check, and once it passed (landed or not), the one PR above it is the cause, once its one failure is seen again."""
     h = Harness(world, monkeypatch)
     h.d.train_size, h.d.max_running = 1, 2
     if not lands:
@@ -44,11 +44,16 @@ def test_the_one_member_above_the_highest_passed_prefix_is_ejected(world, monkey
     assert any("halves them: waiting on it" in x for x in world.logs)
     _check(world, monkeypatch, low)
     h.tick()
+    assert not h.posts and h.launched[-1][0] == tip and tip_run not in h.cancelled  # one run's word: the tip runs again
+    (again,) = h.d.q.load_state()["drive"]["launched"][tip]["ids"]
+    _check(world, monkeypatch, tip, ("false",))
+    h.tick()
     assert len(h.posts) == 1 and "Ejected #2: it is the only PR above " in h.posts[0], h.posts
     assert (f"`main` {low[:12]}" if lands else f"{low[:12]}, whose check passed") in h.posts[0]
     assert (_git(world.origin, "rev-parse", "main") == low) == lands
     h.tick()
-    assert [m.pr for m in h.q.chain()] == ([] if lands else [1]) and h.cancelled == [tip_run]      # the failed tip's own, off next
+    assert [m.pr for m in h.q.chain()] == ([] if lands else [1])
+    assert again in h.cancelled and tip_run not in h.cancelled                     # the failed tip's own, off next
 
 
 def _suite_inputs(tmp_path):
@@ -83,14 +88,21 @@ def test_a_failure_only_input_overlap_reaches_launches_a_midpoint_check_instead_
     assert len(h.launched) == 2 and not h.posts                                    # one bisect check at a time
     _check(world, monkeypatch, members[0].commit, CHECKED if cause == 2 else ("false",))
     h.tick()
+    if cause == 2:                                                                 # #1 passed and landed: the tip runs again
+        assert not h.posts and h.launched[-1][0] == tip
+        _check(world, monkeypatch, tip, ("false",))
+        h.tick()
+    n = 3 if cause == 2 else 2
     assert len(h.posts) == 1 and f"Ejected #{cause}: it is the only PR above `main`" in h.posts[0], h.posts
-    assert [c for c, *_ in h.launched[2:]] == [m.commit for m in h.q.chain()]        # then only the rebuilt train's check
+    assert [c for c, *_ in h.launched[n:]] == [m.commit for m in h.q.chain()]        # then only the rebuilt train's check
 
 
 @pytest.mark.parametrize("cause", [1, 2, 3, 4])
-def test_bisection_finds_the_cause_of_a_four_member_train_in_two_checks(world, monkeypatch, tmp_path, cause):
+def test_bisection_finds_the_cause_of_a_four_member_train_in_two_checks_and_one_more_to_confirm_it(world, monkeypatch, tmp_path,
+                                                                                                    cause):
     """Each check passes when its prefix is below the cause; every PR changes a file under the failed suite, none the failing
-    test, so nothing but the checks' verdicts says which PR it is."""
+    test, so nothing but the checks' verdicts says which PR it is.  When no bisect check failed, the tip's one failure is seen
+    again before #4 is ejected."""
     h = Harness(world, monkeypatch)
     h.d.train_size, h.d.max_running = 4, 2
     for n in (1, 2, 3, 4):
@@ -109,7 +121,7 @@ def test_bisection_finds_the_cause_of_a_four_member_train_in_two_checks(world, m
         if h.posts:
             break
     assert len(h.posts) == 1 and f"Ejected #{cause}: it is the only PR above `main`" in h.posts[0], h.posts
-    assert seen == 3                                                         # the train's check and two bisect checks
+    assert seen == (4 if cause == 4 else 3)                                  # the train's check, two bisect checks, the tip's again
     assert _git(world.origin, "rev-parse", "main") == (members[cause - 2].commit if cause > 1 else base)
     h.tick()
     assert [m.pr for m in h.q.chain()] == [n for n in (1, 2, 3, 4) if n > cause]
