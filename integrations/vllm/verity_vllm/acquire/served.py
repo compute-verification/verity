@@ -60,11 +60,12 @@ from verity_vllm.program.registry import inductor as IR
 from verity_vllm.program.registry.hopper import Fa3InvSum
 from verity_vllm.query.manifest.bind import split_name
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
+from verity_vllm.query.manifest.format import SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
+from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
 
 KIND = "verity/served-required-manifest/v1"
 FAMILY = "served_kernel_values"
 DOT = HopperBF16WgmmaDot16
-IDS, POSITIONS, LOGITS, SAMPLED = "c00.input/ids", "c00.input/positions", "logits_processor", "runner.sampler/sampled_token_ids"
 #: vllm-flash-attn's `_DEFAULT_MAX_NUM_SPLITS_FOR_CUDA_GRAPH`: the static split count of a step a full graph may hold
 SPLIT_CAP = 32
 

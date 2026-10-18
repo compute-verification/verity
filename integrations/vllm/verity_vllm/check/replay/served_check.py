@@ -28,7 +28,6 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity_vllm.acquire import served as SV
 from verity_vllm.commit import challenge as CH
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import inductor_rows as TW
@@ -37,6 +36,8 @@ from verity_vllm.program.registry import b1, cublas_bf16
 from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import inductor as IR
+from verity_vllm.query.manifest.format import SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
+from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
 
 #: the rows of a request a GEMM or an attention op is evaluated on: all of a request's rows up to this many, else its first, its
 #: last and evenly spread ones
@@ -101,15 +102,14 @@ class ServedCheck:
     """The check over one run's steps, in engine-step order (each attention op's cache is the committed k and v of every step
     before)."""
 
-    def __init__(self, build: dict[str, Any], weight: Callable[[str], np.ndarray], *, rows: int = ROWS,
-                 prompts: Mapping[str, list[int]] | None = None, log: Callable[[str], None] | None = None,
-                 seed: int | None = None) -> None:
+    def __init__(self, build: dict[str, Any], weight: Callable[[str], np.ndarray], *, seed: int | None, rows: int = ROWS,
+                 prompts: Mapping[str, list[int]] | None = None, log: Callable[[str], None] | None = None) -> None:
         self.build, self.weight, self.k, self.prompts, self.log = build, weight, rows, prompts or {}, log
         self.seed, self.rng = seed, (None if seed is None else CH.generator(seed))
         self.picks: dict[int, dict[str, list[int]]] = {}
         self.program = build["program"]
         self.plans = {p["step"]: p for p in build["steps_plan"]}
-        self.names = set(self.program["values"]) | {SV.LOGITS, SV.SAMPLED}
+        self.names = set(self.program["values"]) | {LOGITS, SAMPLED}
         self.width = {n: v["width"] for n, v in self.program["values"].items()}
         self.cache: dict[tuple[str, int], tuple[list[np.ndarray], list[np.ndarray]]] = {}
         self.sampled: dict[str, int] = {}
@@ -137,7 +137,7 @@ class ServedCheck:
         bad_shape = []
         for name in sorted(self.names & names):
             a = np.asarray(st.values[name])
-            rows = len(st.rows) if name in (SV.LOGITS, SV.SAMPLED) else n
+            rows = len(st.rows) if name in (LOGITS, SAMPLED) else n
             V[name] = a.reshape(rows, -1) if a.size else a.reshape(rows, 0)
             if name in self.width and V[name].shape[1] != self.width[name]:
                 bad_shape.append(f"{name} {list(a.shape)}")
@@ -209,12 +209,12 @@ class ServedCheck:
     def _inputs(self, out: dict[str, Any], V: dict[str, np.ndarray], spans, req) -> None:
         """Positions are each request's token positions; a request's first step reads its prompt (when the check has the
         prompts), and a decode row's id is the id its request sampled at its previous step."""
-        if SV.POSITIONS in V:
-            pos = V[SV.POSITIONS][:, 0]
+        if POSITIONS in V:
+            pos = V[POSITIONS][:, 0]
             want = np.concatenate([np.arange(req[r]["klen"] - (hi - lo), req[r]["klen"]) for r, lo, hi in spans])
-            self._note(out, SV.POSITIONS, _verdict(want, pos))
-        if SV.IDS in V:
-            ids = V[SV.IDS][:, 0].astype(np.int64)
+            self._note(out, POSITIONS, _verdict(want, pos))
+        if IDS in V:
+            ids = V[IDS][:, 0].astype(np.int64)
             want, rows, why = [], [], []
             for r, lo, hi in spans:
                 if r in self.sampled:
@@ -229,7 +229,7 @@ class ServedCheck:
                     want += [int(t) for t in self.prompts[r]]
                     rows += list(range(lo, hi))
             v = _verdict(np.array(want, np.int64), ids[rows], rows=len(rows))
-            self._note(out, SV.IDS, {**v, "ok": v["ok"] and not why, **({"why": why[:4]} if why else {})})
+            self._note(out, IDS, {**v, "ok": v["ok"] and not why, **({"why": why[:4]} if why else {})})
 
     def _attention(self, out: dict[str, Any], a: dict[str, Any], V: dict[str, np.ndarray], spans, req,
                    local: Mapping[str, np.ndarray]) -> None:
@@ -272,22 +272,22 @@ class ServedCheck:
     def _logits(self, out: dict[str, Any], plan: dict[str, Any], V: dict[str, np.ndarray], spans) -> None:
         lg, sm = self.program["logits"], self.program["sampled"]
         last = np.array([hi - 1 for _r, _lo, hi in spans])
-        if SV.LOGITS in V:
+        if LOGITS in V:
             d = plan["logits"]
             try:
                 x, w = self._operand(lg["x"], V, last), self._operand(lg["w"], V, last)
-                self._note(out, SV.LOGITS, _verdict(GEMMS[d["base"]](d["statics"], x, w), V[SV.LOGITS], definition=d["definition"]),
+                self._note(out, LOGITS, _verdict(GEMMS[d["base"]](d["statics"], x, w), V[LOGITS], definition=d["definition"]),
                            d["base"])
             except (_Unresolved, KeyError, TypeError) as e:
-                self._note(out, SV.LOGITS, {"ok": False, "why": f"{type(e).__name__}: {e}"}, "logits")
-        if SV.SAMPLED in V and SV.LOGITS in V and sm["base"] == b1.TokenSelect.id:
-            want = np.array([token_select_first_max(row) for row in V[SV.LOGITS]], np.int64)
-            got = V[SV.SAMPLED][:, 0].astype(np.int64)
-            self._note(out, SV.SAMPLED, _verdict(want, got, definition=sm["definition"]), sm["base"])
+                self._note(out, LOGITS, {"ok": False, "why": f"{type(e).__name__}: {e}"}, "logits")
+        if SAMPLED in V and LOGITS in V and sm["base"] == b1.TokenSelect.id:
+            want = np.array([token_select_first_max(row) for row in V[LOGITS]], np.int64)
+            got = V[SAMPLED][:, 0].astype(np.int64)
+            self._note(out, SAMPLED, _verdict(want, got, definition=sm["definition"]), sm["base"])
             for (r, _lo, _hi), s in zip(spans, got):
                 self.sampled[r] = int(s)
-        elif SV.SAMPLED in V:
-            self._note(out, SV.SAMPLED, {"ok": False, "why": f"no twin of {sm['definition']}"}, "sampled")
+        elif SAMPLED in V:
+            self._note(out, SAMPLED, {"ok": False, "why": f"no twin of {sm['definition']}"}, "sampled")
 
     # ------------------------------------------------------------------------------------------------------------- the run
     def report(self) -> dict[str, Any]:
@@ -300,9 +300,8 @@ class ServedCheck:
                 "steps": {str(s): v for s, v in sorted(self.steps.items())}}
 
 
-def check(build: dict[str, Any], steps: Iterable[Step], weight: Callable[[str], np.ndarray], *, rows: int = ROWS,
-          prompts: Mapping[str, list[int]] | None = None, log: Callable[[str], None] | None = None,
-          seed: int | None = None) -> dict[str, Any]:
+def check(build: dict[str, Any], steps: Iterable[Step], weight: Callable[[str], np.ndarray], *, seed: int | None, rows: int = ROWS,
+          prompts: Mapping[str, list[int]] | None = None, log: Callable[[str], None] | None = None) -> dict[str, Any]:
     """The check over every step of the run, given in engine-step order."""
     c = ServedCheck(build, weight, rows=rows, prompts=prompts, log=log, seed=seed)
     for st in steps:

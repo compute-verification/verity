@@ -49,6 +49,11 @@ TP_PARTIAL_MEMBER = "part_rank{rank}"
 
 TP_SHARD_MEMBER = "shard_rank{rank}"
 
+#: A served Build's step boundary (`acquire.served`, `served_compiled_source`, `served_check`): piece 0's token inputs, the logits and the
+#: sampled ids.
+SERVED_IDS, SERVED_POSITIONS = "c00.input/ids", "c00.input/positions"
+SERVED_LOGITS, SERVED_SAMPLED = "logits_processor", "runner.sampler/sampled_token_ids"
+
 _ROW_RE = re.compile(r"\[(\d+)\]$")
 
 

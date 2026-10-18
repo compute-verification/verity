@@ -170,7 +170,7 @@ def served():
 
 def _check(served, steps=None, build=None, weight=None):
     b, W, st, prompts = served
-    return SC.check(build or b, st if steps is None else steps, weight or W.__getitem__, rows=8, prompts=prompts)
+    return SC.check(build or b, st if steps is None else steps, weight or W.__getitem__, seed=None, rows=8, prompts=prompts)
 
 
 def _with(steps, step: int, name: str, f) -> list[SC.Step]:
@@ -322,7 +322,7 @@ def test_a_seed_draws_the_sampled_rows(served):
 
 
 def test_steps_are_checked_in_order(served):
-    c = SC.ServedCheck(served[0], served[1].__getitem__)
+    c = SC.ServedCheck(served[0], served[1].__getitem__, seed=None)
     c.step(served[2][1])
     with pytest.raises(ValueError, match="checked in order"):
         c.step(served[2][0])
