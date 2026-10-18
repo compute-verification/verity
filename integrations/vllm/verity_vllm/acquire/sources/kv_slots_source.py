@@ -11,6 +11,8 @@ MLA's, and the sparse MLA layer's `fused_norm_rope`, which writes the indexer ca
 one per distinct tensor of the step.  `caches` keeps each layer's cache tensor: its shape and strides are the page layout
 the map's blocks follow, and its bytes what the map's digests are checked against.  `own_names` are the names it commits: no
 module's output, so no module the identity check counts and no value the Match record holds (`oracle_compare`'s ``own``).
+A layer it can't read slots for is its own error (`errors`), never the committer's, which the Commit's verdict reads
+(`runtime_match/collector_errors`): the map refuses that request by name (no committed slots) and the Commit stands.
 """
 from __future__ import annotations
 
@@ -45,6 +47,7 @@ class KvSlotsSource:
         self._handles: list[Any] = []
         self._copies: dict[int, Any] = {}
         self.stats: dict[str, Any] = {"layers": len(self.layers), "tensors": 0, "bytes": 0, "errors": 0}
+        self.errors: list[str] = []
         self.active = False
 
     def install(self) -> None:
@@ -67,7 +70,9 @@ class KvSlotsSource:
 
     def error(self, msg: str) -> None:
         self.stats["errors"] += 1
-        self.c.errors.append(msg[:300])
+        if len(self.errors) < 8:
+            self.errors.append(msg[:300])
+            print(f"[delta] {msg[:300]}", flush=True)
 
     def _pre(self, name: str) -> Any:
         me = self
@@ -76,15 +81,19 @@ class KvSlotsSource:
             job = me.c._cur
             if job is None:
                 return
-            sm = me._context().slot_mapping
-            s = sm.get(name) if isinstance(sm, dict) else None
-            if s is None:
-                me.error(f"kv slots: {name} ran in step {job.step} with no slot mapping in the forward context ({type(sm).__name__})")
-                return
             t0 = time.perf_counter()
-            v = me._copies.get(id(s))
-            if v is None:
-                v = me._copies[id(s)] = s.to(me.torch.int64, copy=True)
+            try:
+                sm = me._context().slot_mapping
+                s = sm.get(name) if isinstance(sm, dict) else None
+                if s is None:
+                    me.error(f"kv slots: {name} ran in step {job.step} with no slot mapping in the forward context ({type(sm).__name__})")
+                    return
+                v = me._copies.get(id(s))
+                if v is None:
+                    v = me._copies[id(s)] = s.to(me.torch.int64, copy=True)
+            except Exception as e:  # the source's own read, before the committer counts an acquisition (X-03)
+                me.error(f"kv slots: {name} in step {job.step}: {e!r}")
+                return
             me.c._acquire(f"{name}/{MEMBER}", v, job)
             me.stats["tensors"] += 1
             me.stats["bytes"] += int(v.numel()) * 8
