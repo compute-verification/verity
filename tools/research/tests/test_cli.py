@@ -305,7 +305,7 @@ def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypat
     assert main([*runs, "--cpus", "8", "--mem-gb", "32", "--timeout", "2h", "--", "pytest"]) == 3
     assert [(s["project"], s["kind"], s["node"], s["cpus"], s["mem-gb"], s["max-s"]) for s in specs] == [
         ("verity", "agent-test", "vy-nebius-2", None, None, None), ("verity", "agent-test", "vy-nebius-2", 8, 32, 7200)]
-    assert sources[0].resolve() == repo.resolve()
+    assert sources[0].resolve() == repo.resolve() and {s["preempt"] for s in specs} == {"requeue"}, "a guest on node 2 is preemptible"
     assert "queued onto vy-nebius-2 as agent-test" in capsys.readouterr().err
     assert main([*runs, "--queue", "--", "true"]) == 2 and "takes no --queue or --pool" in capsys.readouterr().err
     monkeypatch.chdir(tmp_path)
