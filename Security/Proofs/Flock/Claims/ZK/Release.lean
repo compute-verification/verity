@@ -16,9 +16,11 @@ at the draws on the server's tape (`LeanRelease.draws`):
   the pads or the root. Only that state comes from the transport (`LeanRelease.prog`): where the rep's stream is, a
   function of the statement and the history, never of the tape;
 * each round's release (`LeanRelease.release`) is the frame's step: it takes the coins the stream answered the round
-  before (`Masker.answer`, which stops at a zerocheck outer coin `1`), then the device round (`Frame.round`, which masks
-  every absorbed value under the next pad, inserts the pads' label and root, and stops at a mask slot short of full
-  rank). The stops the coins decide are the frame's, from the coins alone;
+  before (`Masker.answer`, which stops at a zerocheck outer coin `1`, at level 0's `ρ_0, ρ_1` dependent over F128 and
+  at the inner proof's `β = 0`: `answer_rho_dependent`, `answer_beta_zero`), then the device round (`Frame.round`,
+  which masks every absorbed value under the next pad, inserts the pads' label and root, and stops at a mask slot short
+  of full rank). Every stop the coins decide is the frame's, from the coins alone, and where the frame refuses the
+  coins the release is the stop whatever the round (`LeanRelease.release_of_refusesCoins`);
 * a value carries whether it is the firewall's stand-in (`Val := Msg × Bool`), and the frame of a stopped rep releases the
   algebraic phase's values as their pads alone (`Masker.stopped`). The firewall's scheduled round is a stand-in. The
   worker's values are not, and the check refuses a worker value that says it is.
@@ -36,14 +38,17 @@ From that round on, below the last round, the release is the frame's release of 
 and at the last round it is the stop (`LeanRelease.nextD_of_fail`), as the fixed firewall does.
 
 The device round and the scheduled round read, by name, the values the firewall fixes by its own computation, as its
-transcript reports them (`computedOf`): its level-0 recheck, its opening, `final_c'` and the inner proof. Four Props give
+transcript reports them (`computedOf`): its level-0 recheck, its opening, `final_c'` and the inner proof. Five Props give
 `ZkServer.RefD` at the deferred release (`LeanRelease.refD`):
 * `FirewallComputes` (D8 (a), still a named assumption): each reported value is the specified one;
 * `Reports`: the transcript reports every specified value;
-* `LeanRelease.LiveRefine`: on every history whose rounds all passed, the frame's release of the worker's round is the
-  prover's message;
-* `LeanRelease.FillRefine`: on every history below the last round on which a round failed, the frame's release of the
-  firewall's scheduled round, with the specified values, is the prover's message.
+* `LeanRelease.LiveRefine`: on every history whose rounds all passed and whose last coins the frame takes, the frame's
+  release of the worker's round is the prover's message;
+* `LeanRelease.FillRefine`: on every history below the last round on which a round failed and whose last coins the
+  frame takes, the frame's release of the firewall's scheduled round, with the specified values, is the prover's
+  message;
+* `LeanRelease.StopRefine`: on every history whose last coins the frame refuses, the prover's message is the stop. It
+  reads no worker value and nothing the firewall computes.
 
 So `Flock.zk_server_blind`'s bound holds at the deployed release, at any worker: one bit a session
 (`Flock.zk_server_lean`).
@@ -102,6 +107,53 @@ theorem computedOf_eq {spec : String → Option ByteArray} {t : _root_.Flock.Fir
     rw [hs] at this
     rw [hv', this]
 
+/-! ## The frame's coin stops
+
+The frame decides the two coin stops the prover's own checks once decided, from the coins alone (`Masker.answer`): the
+inner proof's `β = 0`, and level 0's `ρ_0, ρ_1` dependent over F128 (`Flock.Zk.rhoIndependent`). Each is a stop, and any
+other value of them is taken. -/
+
+section CoinStops
+open _root_.Flock.Firewall.Frame (INNER_BETA RHO_COINS STOP innerCoins rhoCoins)
+
+/-- At the inner proof's `β` round, the coin `β = 0` is a stop. -/
+theorem answer_beta_zero (c : Cfg) (s : Masker) (b : _root_.Flock.F128) (hn : s.owed = some 1)
+    (hi : s.inner = some INNER_BETA) (hb : b.isZero = true) :
+    s.answer c #[b] = .error s!"{STOP}degenerate coin β = 0" := by
+  unfold _root_.Flock.Firewall.Frame.Masker.answer
+  simp [hn, hi, innerCoins, hb, INNER_BETA]
+  rfl
+
+/-- At the inner proof's `β` round, any other coin is taken. -/
+theorem answer_beta_ne (c : Cfg) (s : Masker) (b : _root_.Flock.F128) (hn : s.owed = some 1)
+    (hi : s.inner = some INNER_BETA) (hb : b.isZero = false) :
+    s.answer c #[b] = .ok { s with owed := none, inner := some (INNER_BETA + 1) } := by
+  unfold _root_.Flock.Firewall.Frame.Masker.answer
+  simp [hn, hi, innerCoins, hb, INNER_BETA]
+  rfl
+
+/-- After level 0's last masked value and `ρ_0`'s words `r0, r1`, `ρ_1`'s words `a, b` dependent with them over F128
+are a stop. -/
+theorem answer_rho_dependent (c : Cfg) (s : Masker) (r0 r1 a b : _root_.Flock.F128) (hn : s.owed = some 2)
+    (hi : s.inner = none) (hl : s.l0 = true) (hp : s.pos = c.order.size) (hr : s.rho = #[r0, r1])
+    (hd : _root_.Flock.Zk.rhoIndependent (⟨r0, r1⟩, ⟨a, b⟩) = false) :
+    s.answer c #[a, b] = .error s!"{STOP}degenerate coins: rho_0, rho_1 dependent over F128" := by
+  unfold _root_.Flock.Firewall.Frame.Masker.answer
+  simp [hn, hi, hl, hp, rhoCoins, hr, RHO_COINS, hd]
+  rfl
+
+/-- After level 0's last masked value and `ρ_0`'s words `r0, r1`, `ρ_1`'s words `a, b` independent of them are
+taken. -/
+theorem answer_rho_independent (c : Cfg) (s : Masker) (r0 r1 a b : _root_.Flock.F128) (hn : s.owed = some 2)
+    (hi : s.inner = none) (hl : s.l0 = true) (hp : s.pos = c.order.size) (hr : s.rho = #[r0, r1])
+    (hd : _root_.Flock.Zk.rhoIndependent (⟨r0, r1⟩, ⟨a, b⟩) = true) :
+    s.answer c #[a, b] = .ok { s with owed := none, rho := #[r0, r1, a, b] } := by
+  unfold _root_.Flock.Firewall.Frame.Masker.answer
+  simp [hn, hi, hl, hp, rhoCoins, hr, RHO_COINS, hd]
+  rfl
+
+end CoinStops
+
 /-- **The deployed release**, for witnesses `W` on the server's tape `R`: at statement `x`, after the history `h`, round
 `h.length` leaves as its rep's Lean frame's release of the device round, at the rep's draws on the tape. -/
 structure LeanRelease (W R : Type) where
@@ -157,16 +209,20 @@ theorem cfg_root {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List
     (L.cfg x ρ h).root = padsRoot (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length)) :=
   rfl
 
+/-- **The frame takes the stream's coins** for the last round of `h`, at the round's rep's configuration
+(`Masker.answer`): the rep's state after them, or the frame's refusal of them. -/
+def answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Except String Masker :=
+  match h.getLast? with
+  | some (_, cs) => (L.prog x h).answer (L.cfg x ρ h) (L.coinsOf cs)
+  | none => pure (L.prog x h)
+
 /-- **The frame's step** after `h` on the device round `v`, of a stopped rep (`st`) or not: at the rep's configuration,
-it takes the stream's coins for the last round (`Masker.answer`), then the round (`Frame.round`). -/
+it takes the stream's coins for the last round (`answered`), then the round (`Frame.round`), in the order
+`flock-firewall frame` takes them (`coins`, then `round`, whose `fail` stops the rep). -/
 def step {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool) (v : Msg) :
     Except String (ByteArray × Masker) := do
-  let c := L.cfg x ρ h
-  let m : Masker := { L.prog x h with stopped := st }
-  let m ← match h.getLast? with
-    | some (_, cs) => m.answer c (L.coinsOf cs)
-    | none => pure m
-  _root_.Flock.Firewall.Frame.round c m ⟨v.toArray⟩ (L.coins x h.length)
+  let m ← L.answered x ρ h
+  _root_.Flock.Firewall.Frame.round (L.cfg x ρ h) { m with stopped := st } ⟨v.toArray⟩ (L.coins x h.length)
 
 /-- **The Lean frame's release** after `h` of the device round `v`, of a stopped rep (`st`) or not: the bytes the frame's
 step returns, or `stop` where it refuses. -/
@@ -174,6 +230,25 @@ def release {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg
   match L.step x ρ h st v with
   | .ok (out, _) => out.data.toList
   | .error _ => L.stop
+
+/-- **Whether the frame refuses the stream's coins** for the last round of `h` (`Masker.answer`): a zerocheck outer coin
+`1`, level 0's `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`, or coins for no round or of another count. -/
+def refusesCoins {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Bool :=
+  match L.answered x ρ h with
+  | .ok _ => false
+  | .error _ => true
+
+/-- **Where the frame refuses the coins, the release is the stop**, whatever the round and whether the rep is stopped:
+the coin stops are the frame's, from the coins alone. -/
+theorem release_of_refusesCoins {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
+    (v : Msg) (hr : L.refusesCoins x ρ h = true) : L.release x ρ h st v = L.stop := by
+  unfold refusesCoins at hr
+  cases ha : L.answered x ρ h with
+  | ok m => rw [ha] at hr; cases hr
+  | error e =>
+    unfold release step
+    rw [ha]
+    rfl
 
 /-- Whether the Lean frame takes the device round `v` after `h`. -/
 def takes {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (v : Msg) : Bool :=
@@ -274,27 +349,39 @@ theorem nextD_of_fail {W R : Type} (L : LeanRelease W R)
   simp only [Bool.false_eq_true, or_false]
   rfl
 
-/-- **The rounds the worker passed**: after every history on which every round so far passed, the Lean frame's release
-of the worker's round is `P`'s message. -/
+/-- **The rounds the worker passed**: after every history on which every round so far passed and whose last coins the
+frame takes, the Lean frame's release of the worker's round is `P`'s message. -/
 def LiveRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (wk : L.toSrv.Worker)
     (x : Msg) (w : W) : Prop :=
-  ∀ ρ κ h v, L.toSrv.live wk x w ρ κ h = true → wk x w ρ h 0 = some (v, false) →
+  ∀ ρ κ h v, L.toSrv.live wk x w ρ κ h = true → L.refusesCoins x ρ h = false → wk x w ρ h 0 = some (v, false) →
     (((P w).next x h ρ).eval H).1 = L.release x ρ h false v
 
-/-- **The stand-in rounds**: after every history below the last round `n x - 1` on which a round failed, the Lean frame's
-release of the firewall's scheduled round, with the values `spec`, as a stopped rep's, is `P`'s message. -/
+/-- **The stand-in rounds**: after every history below the last round `n x - 1` on which a round failed and whose last
+coins the frame takes, the Lean frame's release of the firewall's scheduled round, with the values `spec`, as a stopped
+rep's, is `P`'s message. -/
 def FillRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (n : Msg → ℕ)
     (wk : L.toSrv.Worker) (x : Msg) (w : W) (spec : String → Option ByteArray) : Prop :=
-  ∀ ρ κ h, h.length + 1 < n x → L.toSrv.live wk x w ρ κ h = false →
+  ∀ ρ κ h, h.length + 1 < n x → L.toSrv.live wk x w ρ κ h = false → L.refusesCoins x ρ h = false →
     (((P w).next x h ρ).eval H).1 = L.release x ρ h true (L.scheduled x w ρ h spec)
+
+/-- **The coin stops**: after every history whose last coins the frame refuses (`refusesCoins`), at a round the
+deferred release releases, `P`'s message is the stop. It reads no worker value and nothing the firewall computes: the
+frame's release there is the stop whatever the round (`release_of_refusesCoins`), and the frame decides it from the
+coins alone. -/
+def StopRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (n : Msg → ℕ)
+    (wk : L.toSrv.Worker) (x : Msg) (w : W) : Prop :=
+  ∀ ρ κ h, (h.length + 1 < n x ∨ L.toSrv.live wk x w ρ κ h = true) → L.refusesCoins x ρ h = true →
+    (((P w).next x h ρ).eval H).1 = L.stop
 
 /-- **The item-stream refinement** at `(x, w)`, the worker `wk`, the last round `n` and the specified values `spec`: after
 every history the firewall's transcript reports every value `spec` fixes, and wherever the deferred release releases a
-frame it is `P`'s message, at the worker's rounds while they pass (`LiveRefine`) and at the firewall's scheduled rounds
-after one failed (`FillRefine`). -/
+frame it is `P`'s message: where the frame takes the stream's last coins, at the worker's rounds while they pass
+(`LiveRefine`) and at the firewall's scheduled rounds after one failed (`FillRefine`), and where it refuses them, the
+stop (`StopRefine`). -/
 def ItemsRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (n : Msg → ℕ)
     (wk : L.toSrv.Worker) (x : Msg) (w : W) (spec : String → Option ByteArray) : Prop :=
-  (∀ ρ h, Reports spec (L.computed x w ρ h)) ∧ L.LiveRefine H P wk x w ∧ L.FillRefine H P n wk x w spec
+  (∀ ρ h, Reports spec (L.computed x w ρ h)) ∧ L.LiveRefine H P wk x w ∧ L.FillRefine H P n wk x w spec ∧
+    L.StopRefine H P n wk x w
 
 /-- **`hRef` at the deferred Lean release**: D8 (a) on every transcript the firewall keeps, and the item-stream
 refinement, give `ZkServer.RefD` at the stand-in `fillOf`. -/
@@ -309,15 +396,24 @@ theorem refD {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Pro
       simp only [ZkServer.wkD, hl, ↓reduceIte, hv]
       rfl
     rw [L.frameD_toSrv L.fillOf wk x w ρ κ h hu]
-    exact hI.2.1 ρ κ h v hl hv
+    cases hs : L.refusesCoins x ρ h with
+    | true =>
+      rw [L.release_of_refusesCoins x ρ h _ _ hs]
+      exact hI.2.2.2 ρ κ h hcond hs
+    | false => exact hI.2.1 ρ κ h v hl hs hv
   | false =>
     have hlt : h.length + 1 < n x := hcond.resolve_right (by rw [hl]; exact Bool.false_ne_true)
     have hu : L.toSrv.wkD L.fillOf wk κ x w ρ h 0 = some (L.fillOf x h.length 0 w ρ h) := by
       simp only [ZkServer.wkD, hl, Bool.false_eq_true, ↓reduceIte]
     rw [L.frameD_toSrv L.fillOf wk x w ρ κ h hu]
-    show _ = L.release x ρ h true (L.scheduled x w ρ h (computedOf (L.computed x w ρ h)))
-    rw [computedOf_eq (hc ρ h) (hI.1 ρ h)]
-    exact hI.2.2 ρ κ h hlt hl
+    cases hs : L.refusesCoins x ρ h with
+    | true =>
+      rw [L.release_of_refusesCoins x ρ h _ _ hs]
+      exact hI.2.2.2 ρ κ h hcond hs
+    | false =>
+      show _ = L.release x ρ h true (L.scheduled x w ρ h (computedOf (L.computed x w ρ h)))
+      rw [computedOf_eq (hc ρ h) (hI.1 ρ h)]
+      exact hI.2.2.1 ρ κ h hlt hl hs
 
 end LeanRelease
 
@@ -333,7 +429,8 @@ failure is a failed round, `LeanRelease.nextD_of_fail`), at any worker `wk` and 
 causal, releases, on every event, at most twice the probability at the simulator that guesses whether the session stops
 (`leaky1`, at `Flock.zk_server_ref`'s simulator, `refP`'s), plus `ε_zk + γ·Fork`, with no term for the firewall's checks.
 It holds under `Claims.Hm96Hiding`, the session's six Props, D8 (a) on the firewall's transcripts (`FirewallComputes`)
-and the item-stream refinement at `swP vs` (`LeanRelease.ItemsRefine`: `Reports`, `LiveRefine` and `FillRefine`). The
+and the item-stream refinement at `swP vs` (`LeanRelease.ItemsRefine`: `Reports`, `LiveRefine`, `FillRefine` and
+`StopRefine`). The
 stop leaks one bit a session; over a stream of `m` sessions with at most `b` stops, `log₂ ∑_{i ≤ b} C(m, i)` bits
 (`stream_leak_deferred`). -/
 theorem Flock.zk_server_lean (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
