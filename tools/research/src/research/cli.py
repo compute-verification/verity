@@ -299,6 +299,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2
+        if ns.mem_gb is not None:
+            # the slot's mem= admits and reserves the run; a launch-time reservation too was held through the wait for a slot,
+            # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB)
+            print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} is dropped; the slot's own mem= admits and reserves the run",
+                  file=sys.stderr)
+            ns.mem_gb = None
         if cwd is None:
             harness_opts = [*harness_opts, "--cwd", "source"]
     if ns.queue:
