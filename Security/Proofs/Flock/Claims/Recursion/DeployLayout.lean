@@ -17,8 +17,9 @@ statement (`layoutOf`), from the message-round ports V* registers (`RecVStar.own
   (`rowHidden`: block `r / g`, VU `r % g`, the unit input leaf that reads each row word, at `Readable.copyCol`'s
   index), in the part's circuit as the setup parses it (`partCircuit`). Ports under `rec-opening-c<k>` (R's stream)
   or `rec-claim` hold no round of the plain verifier's rep streams.
-* **Calls.** None (`shaAt = []`): the SHA-512 evaluations a part computes hash its bits after constant prefixes (a
-  row's `sha512/row/v1` prefix, the salt prefix), which a list of hidden values cannot express.
+* **Calls.** None (`shaAt = []`). A part's SHA-512 evaluations hash its bits after constant prefixes (a row's
+  `sha512/row/v1` prefix, the salt prefix), which `Layout.shaAt` states; their hidden values in the part's circuit are
+  not read off the statement yet.
 
 `Brings.atPorts` brings the readers at `layoutOf`. `deployRec` at it reads through them (`readsThrough_atPorts`, by its
 definition), its V* statements number `nS` (`vstarLen_atPorts`), and every call a part records is a true evaluation
