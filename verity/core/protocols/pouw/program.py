@@ -13,9 +13,11 @@ round-3 findings (`note:compute-accounting/20261018T2310Z-finding-padded-credit-
   before the noise of the operand it gates (`late-selection`).
 - **The formings** are rowk's pieces at the template's depth (`rowk.PORTS8`, cut every `rowk.ROW_K`): each piece reads
   only its raw row, anchors and its row's earlier pieces' outputs, and the tail writes the formed row a tile reads
-  (`unclosed-forming`, `operand-after-certificate`).  An anchor is a public input region the verifier recomputes under
-  its rule's id (`rowk.DERIVATIONS8`).  Under h3, E_A is no anchor, since its seed hashes the row's unsalted digest, so
-  the A head derives it in its body (`Pc8RowAHeadSeeded`; `anchored-ea`).
+  (`unclosed-forming`, `operand-after-certificate`).  Each tile operand is gated by a certificate of the raw row its
+  forming reads, computed from that row or registered with it (`uncertified-operand`, `uncomputed-certificate`).  An
+  anchor is a public input region the verifier recomputes under its rule's id (`rowk.DERIVATIONS8`), read only by
+  formings (`unpinned-anchor`).  Under h3, E_A is no anchor, since its seed hashes the row's unsalted digest, so the A
+  head derives it in its body (`Pc8RowAHeadSeeded`; `anchored-ea`).
 - **The tiles** read the formed rows, A's from the window's side tree and B's from the epoch's B̃ tree, whose domain
   binds the salt and root_W (`stale-b-rows`).  A tile's credit is gated by ok_A, admit_A and ok_B, which the tally reads
   through `one`.  The filler's rows and gates are constant zeros, never committed rows (`filler`).
@@ -27,7 +29,8 @@ round-3 findings (`note:compute-accounting/20261018T2310Z-finding-padded-credit-
   two, a running sum in three (real < 2^40), then the level.  No unit of the window takes advice (`advice`), and a
   tally unit reads only gates, registered sums and earlier tally units' limbs (`tally-reads`).
 
-`DEFINITIONS` names every Definition a layout may use, by id, and `TO_BUILD` the ones not on main yet.  The window on
+`CONDITIONS` names the round-4 condition (`Accounting.TS.SelectLayer`) each refusal checks.  `DEFINITIONS` names every
+Definition a layout may use, by id, and `TO_BUILD` the ones not on main yet.  The window on
 main is `current`: its tile is `Pc8TileSide` over side rows no proved unit writes, with ok and admit in the side row,
 after the noise, and `problems` refuses it.
 """
@@ -66,13 +69,25 @@ DEFINITIONS = ({d.name: "form" for d in _PIECES.values()} | {SEEDED_HEAD: "form"
 IN_BODY = frozenset({SEEDED_HEAD})
 #: the Definitions this layout names that main doesn't have yet
 TO_BUILD = (SEEDED_HEAD, OK_UNIT, ADMIT_UNIT) + TALLY
+#: each refusal of `problems` and the condition of `Accounting.TS.SelectLayer` (PADCREDIT round 4) it checks
+CONDITIONS = {
+    "hashing": "the scheme's hashings", "draw": "DrawnLayer.draw (value-free)", "plan": "DrawnLayer.draw (value-free)",
+    "unknown-definition": "forms (the forming table)", "advice": "TallyNoAdvice", "missing-proved": "AlwaysProved, TallyIn",
+    "unpinned-anchor": "AnchorsPinned", "unproved-noise": "NoiseProved", "anchored-ea": "AnchorsPinned, noiseSelf",
+    "unclosed-forming": "FormingClosed", "tally-reads": "TallyReads", "fan-out": "SelFan (dw)",
+    "filler": "TallyComputes", "stale-b-rows": "EpochFormedRight", "uncertified-operand": "CertifiedOperands",
+    "operand-after-certificate": "CertifiedOperands", "uncomputed-certificate": "CertifiedOperands",
+    "unsourced-gate": "SelectionsProved", "untallied-gate": "GatesTallied", "unnoised-unit": "NoiseProved",
+    "late-selection": "NoLateSelection",
+}
 
 
 @dataclass(frozen=True)
 class Pos:
     """A committed position: its commit phase, its writer (a unit's name; None for a raw row, a registered value or a
     constant), whether the registration holds it, its constant value (the filler's), the tree it sits in, the raw row a
-    gate certifies, and the registered gates a registered sum covers."""
+    gate certifies, the registered gates a registered sum covers, and the registration record it belongs to (a weight
+    row B_j and its ok_B,j share one)."""
     phase: str
     writer: str | None = None
     registered: bool = False
@@ -80,6 +95,7 @@ class Pos:
     tree: str = ""
     certifies: str | None = None
     sums: tuple[str, ...] = ()
+    record: str | None = None
 
 
 @dataclass(frozen=True)
@@ -167,8 +183,8 @@ def layout(shape: Sequence[Wd.Call], k: int, row_k: int = rowk.ROW_K, hashing: s
         sb = f"sb{c}"
         for j in range(call.n):
             b = f"b{c}.{j}"
-            pos[f"{b}.x"] = Pos("registration", registered=True, tree="W")
-            pos[f"{b}.ok"] = Pos("registration", registered=True, tree="W", certifies=f"{b}.x")
+            pos[f"{b}.x"] = Pos("registration", registered=True, tree="W", record=b)
+            pos[f"{b}.ok"] = Pos("registration", registered=True, tree="W", certifies=f"{b}.x", record=b)
             _row(pos, units, "b", b, k, row_k, hashing, b_plan, call.m + 1)
         pos[sb] = Pos("registration", registered=True, tree="W", sums=tuple(f"b{c}.{j}.ok" for j in range(call.n)))
         gates_a = []
@@ -312,6 +328,8 @@ def problems(lay: Layout) -> list[str]:
     if lay.draw != "uniform":
         bad("draw", f"the tiles' draw is {lay.draw!r}, not uniform over the N tiles")
     readers = _readers(lay)
+    gate_pos = {g for u in lay.units.values() if u.kind == "tile" for g, _ in u.gates}
+    raw_rows = {q.certifies for q in lay.positions.values() if q.certifies is not None}
     for name, u in lay.units.items():
         if DEFINITIONS.get(u.definition) != u.kind:
             bad("unknown-definition", f"{name}: {u.definition} is no {u.kind} Definition of the table")
@@ -321,15 +339,24 @@ def problems(lay: Layout) -> list[str]:
         want = {"tile": ("drawn",), "form": B_PLANS}.get(u.kind, ("proved",))
         if u.plan not in want:
             bad("missing-proved" if u.kind != "tile" else "plan", f"{name} ({u.definition}) is {u.plan}, not {' or '.join(want)}")
+        if u.anchors and u.kind != "form":
+            bad("unpinned-anchor", f"{name}: a {u.kind} unit reads anchors {[r for r, _ in u.anchors]}; only a forming, "
+                                   "always proved or weighted, does")
         for r, rule in u.anchors:
             if rule not in _DERIVATION:
                 bad("unproved-noise", f"{name}: region {r} names no anchor rule ({rule})")
             elif lay.hashing == "h3" and rule == _rule("ea"):
                 bad("anchored-ea", f"{name}: under h3 E_A's seed hashes the row's unsalted digest, so it is no anchor")
+        if u.kind == "form":
+            stray = [p for p in u.reads if p not in raw_rows and not _is(lay, p, "form")]
+            if stray:
+                bad("unclosed-forming", f"{name} reads {stray}, neither a certified raw row, an anchor nor a forming's "
+                                        "output")
         if u.kind == "tally":
             for p in u.reads:
                 q = lay.positions.get(p)
-                if not (q is not None and (q.registered and (q.sums or q.certifies)) or _is(lay, p, "ok", "admit", "tally")):
+                if not (p in gate_pos or _is(lay, p, "tally")
+                        or (q is not None and q.writer is None and q.registered and q.sums)):
                     bad("tally-reads", f"{name} reads {p}, neither a gate, a registered sum nor a tally limb")
     for name, cone in _cones(lay, readers).items():
         if lay.units[name].fan_out != cone:
@@ -348,6 +375,11 @@ def problems(lay: Layout) -> list[str]:
                     bad("filler", f"the filler's operand {operand} is not the constant zero row")
             elif x == 1 and (q is None or q.tree != EPOCH_B):
                 bad("stale-b-rows", f"{name}: its B operand {operand} is not in the epoch's B̃ tree")
+        if not filler:
+            for operand in u.floor:
+                if not any(op == operand and (lay.positions.get(g) or Pos("")).certifies is not None
+                           for g, op in u.gates):
+                    bad("uncertified-operand", f"{name}: no gate certifies the row its operand {operand} forms")
         for g, operand in u.gates:
             q = lay.positions.get(g)
             if filler:
@@ -367,6 +399,12 @@ def problems(lay: Layout) -> list[str]:
                 bad("operand-after-certificate", f"{name}: its operand {operand} is written by no forming")
                 continue
             if q.certifies is not None:
+                row = lay.positions.get(q.certifies)
+                computed = (q.writer in lay.units and q.certifies in lay.units[q.writer].reads) or (
+                    q.record is not None and row is not None and row.record == q.record)
+                if not computed:
+                    bad("uncomputed-certificate", f"{name}: gate {g} is computed from neither the row it certifies "
+                                                  f"({q.certifies}) nor its registration record")
                 if q.certifies not in outside:
                     bad("operand-after-certificate", f"{name}: no forming of {operand} reads {q.certifies}, the row "
                                                      f"{g} certifies")
@@ -376,7 +414,7 @@ def problems(lay: Layout) -> list[str]:
                                             "anchor nor a forming's output")
             noise = _noise_phase(lay, chain)
             if noise == len(PHASES):
-                bad("unnoised", f"{name}: the forming of {operand} reads no noise of its row")
+                bad("unnoised-unit", f"{name}: the forming of {operand} reads no noise of its row")
             elif _AT[q.phase] >= noise:
                 bad("late-selection", f"{name}: gate {g} is cut at {q.phase}, not before its operand's noise "
                                       f"({PHASES[noise]})")

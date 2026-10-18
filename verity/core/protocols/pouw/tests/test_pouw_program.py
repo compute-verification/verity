@@ -70,12 +70,23 @@ def test_mains_window_is_refused():
     ("stale-b-rows", lambda l: _pos(l, "b0.2.p", tree="window-b")),
     ("unknown-definition", lambda l: _unit(l, "t0.0.0", definition="Pc8TileCheap")),
     ("unproved-noise", lambda l: _unit(l, "b0.0/head", anchors=(("e", "verity/pouw/anchor/pearl-c/eb/v0"),))),
-    ("unnoised", lambda l: _unit(l, "b1.1/head", anchors=())),
+    ("unnoised-unit", lambda l: _unit(l, "b1.1/head", anchors=())),
     ("draw", lambda l: replace(l, draw="by-ok")),
+    ("unpinned-anchor", lambda l: _unit(l, "t0.1.1", anchors=(("g", Pg.rowk.DERIVATIONS8["g"].rule),))),
+    ("uncertified-operand", lambda l: _unit(l, "t1.3.0", gates=l.units["t1.3.0"].gates[1:])),
+    ("uncomputed-certificate", lambda l: _unit(l, "a0.5/ok", reads=())),
+    ("uncomputed-certificate", lambda l: _pos(l, "b0.1.ok", record="b0.2")),
+    ("unclosed-forming", lambda l: _unit(l, "b0.0/form0", reads=l.units["b0.0/form0"].reads + ("a0.0.ok",))),
 ])
 def test_each_refusal(kind, change):
     lay = change(Pg.layout(SHAPE, K))
     assert kind in _kinds(lay)
+    assert kind in Pg.CONDITIONS
+
+
+def test_every_refusal_names_its_round_4_condition():
+    kinds = _kinds(Pg.current(SHAPE, K))
+    assert kinds and kinds <= set(Pg.CONDITIONS)
 
 
 def test_a_forming_that_reads_a_stray_value_is_refused():
