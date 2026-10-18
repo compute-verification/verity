@@ -38,6 +38,7 @@ from typing import Any
 from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
 from verity_vllm.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
+from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 
 
 def repo_modules_loaded() -> dict[str, Any]:

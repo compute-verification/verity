@@ -136,8 +136,8 @@ def main(args: Options) -> None:
     kw.update(parse_engine_args(args.engine_arg))
     observer = not (args.no_observer or args.census)
     with_extension = observer or args.census
-    if with_extension:
-        kw["worker_extension_cls"] = EXTENSION
+    if ext := TT.extension(target, EXTENSION if with_extension else None):
+        kw["worker_extension_cls"] = ext
     mode = "control" if args.no_observer else ("census" if args.census else "capture")
     print(f"[tp2] mode={mode} tp={args.tp} case={case} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
     t0 = time.perf_counter()

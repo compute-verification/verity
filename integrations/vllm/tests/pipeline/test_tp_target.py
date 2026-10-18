@@ -129,6 +129,27 @@ def test_a_rank_that_does_not_realise_the_declared_target_fails_closed_before_an
     assert llm.methods()[-1] == "rank_mismatches" and "tp2_install" not in llm.methods() and "tp2_commit_make" not in llm.methods()
 
 
+@pytest.mark.parametrize("extra, extension", [(("--no-observer",), "verity_vllm.engine.int8_ranks.Int8Ranks"),
+                                              ((), "verity_vllm.engine.rank_worker.TP2CaptureWorkerExtension")], ids=["control", "capture"])
+def test_an_int8_targets_ranks_register_its_parts_through_their_extension(tmp_path, stand_ins, monkeypatch, extra, extension):
+    """The driver registers the int8 parts and exports them (``VERITY_INT8_PARTS``); every engine it builds names an extension whose
+    import registers them in each rank, a Match control's included."""
+    import verity_vllm.engine as pkg
+    from verity_vllm.engine import int8_ranks as IR
+    seen: list[str] = []
+    for part, mod in (("linears", "int8_vllm"), ("attention", "int8_attention_vllm")):
+        stand_in = ModuleType(f"verity_vllm.engine.{mod}")
+        stand_in.register = lambda part=part: seen.append(part)
+        monkeypatch.setitem(sys.modules, stand_in.__name__, stand_in)
+        monkeypatch.setattr(pkg, mod, stand_in, raising=False)
+    monkeypatch.delenv(IR.ENV, raising=False)
+    llm = _LLM()
+    int8 = TargetProfile(compute_capability=(12, 0), num_sms=188, int8_exact="all")
+    _capture(tmp_path, llm, int8, stand_ins, *extra)
+    assert seen == ["linears", "attention"] and os.environ[IR.ENV] == "attention,linears"
+    assert llm.kw["worker_extension_cls"] == extension and llm.kw["quantization"] == "verity_int8"
+
+
 def _commit(tmp_path: Path, llm: _LLM, target, stand_ins) -> Path:
     from verity_vllm.pipeline.tp import commit as TPCM
     guarded = stand_ins(llm, target)
