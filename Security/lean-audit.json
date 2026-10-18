@@ -5616,7 +5616,13 @@
    "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
    "Accounting.SecurityProofs.Gates.ProvenWindow": "frozen (no-function): The soundness of the gate model's interval analysis (Accounting.Gates.Proven) over every circuit and input, not a property of a Lean function: property/v1's interval analysis has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function.",
-   "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port."
+   "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port.",
+   "Accounting.Guarantees.Gates.FmaxfRange": "unstated: property/v1's interval rule for F32Fmaxf holds fmaxf's value on operands in their ranges; its theorem Accounting.SecurityProofs.Gates.FmaxfRange is not proved yet.",
+   "Accounting.Guarantees.Gates.FminfRange": "unstated: property/v1's interval rule for F32Fminf holds fminf's value on operands in their ranges; its theorem Accounting.SecurityProofs.Gates.FminfRange is not proved yet.",
+   "Accounting.Guarantees.Gates.RzByteRange": "unstated: property/v1's interval rule for F32ToU32RzByte holds the truncation's low byte on an operand in its range; its theorem Accounting.SecurityProofs.Gates.RzByteRange is not proved yet.",
+   "Accounting.Guarantees.Gates.QuantRange": "unstated: a clamped quantizer's value lies in its clamp's interval whatever the rounding; its theorem Accounting.SecurityProofs.Gates.QuantRange is not proved yet.",
+   "Accounting.Guarantees.Gates.DitherRange": "unstated: a b-bit dither of a clamped floor lies in [lo − m, lo + w + m + 1]; its theorem Accounting.SecurityProofs.Gates.DitherRange is not proved yet.",
+   "Accounting.Guarantees.Gates.LutSoftmaxRange": "unstated: the LUT softmax's element lies in the hull of its table and 0; its theorem Accounting.SecurityProofs.Gates.LutSoftmaxRange is not proved yet."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
