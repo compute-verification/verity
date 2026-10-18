@@ -36,7 +36,8 @@ Two caveats bound what the statements say (RT-HEADLINE, note:20261018T1057Z-draf
     `ε ≈ 0.232%` instead of `0.147%` on sm_80. On sm_120's measured vector the folded branch still binds
     (`κ ≈ 0.218`), so `0.591%` stands;
   * an unfolded round at the whole-unit guess bound `2^-64` (RT-COMPOSE r2's R2-B3,
-    note:20261018T1200Z-draft-rt-compose-r2): sm_120 stays at `0.599%` and `0.591%`, and sm_80 is about `0.148%`.
+    note:20261018T1200Z-draft-rt-compose-r2; proposed, and not granted by ASK-9, card 8b00536a, which reads the guess
+    bound at B′'s `½`): sm_120 stays at `0.599%` and `0.591%`, and sm_80 is about `0.148%`.
 * `ProofLayer.Pins` is false for today's Definitions (`PouwSegCheck_v2`) until PIN (#2417) lands: until then no proof
   layer of today's Definitions meets that hypothesis, and each statement is conditional on PIN.
 

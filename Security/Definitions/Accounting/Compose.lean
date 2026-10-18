@@ -59,7 +59,8 @@ The logical layer:
   template's noise proves at the worst operands (decision 109: `0` where its noise proves none), whether it is
   credited, its skip pattern's span, the form of its template's proved operand luck, the three lucks a live window is
   held to: (H-μ)'s point mass `μ`, the receipt's B′ luck `r_B` and the whole-unit guess bound, and the rates its
-  seeded gains are proved at: its template's folded one (GRIND) and its whole skip's (the guess bound's); no credited
+  seeded gains are proved at: its template's folded one (GRIND) and its whole skip's (from a whole-tile luck a seed
+  query, which no ruling grants); no credited
   kind reading two activations (H1 + fx1's attention) under seeded coins. A folded unit's luck is `μ + (1 − μ)·r_B` (`7/8` at `μ = ¾`, `r_B = ½`,
   `Accounting.Guarantees.TS.LuckOfReceipt`).
 * `creditedWords`, `wordsOf`, `floorOf`, `kindCount`: the circuit's credited words, `N_w` (W3: from the IR, not a
@@ -406,15 +407,17 @@ checkpoint (W6), the form of the operand luck its template proves, and the three
 * `mu`: (H-μ)'s point mass at a folded unit's deficient words (#2482's `OperandHMu`, `¾` in the headlines);
 * `rB`: the receipt's luck when they are not all right (#2482's `ReceiptLuckAt`, HMU's B′, card 8b00536a, `½`);
 * `guess`: a unit skipped whole keeps its honest checked value only by a guess of its fold state
-  (`Assumptions.Compose.GuessLuckAt`, a condition at this value; `2^-64` for a 64-bit state is proposed on card
-  8b00536a, not decided);
+  (`Assumptions.Compose.GuessLuckAt`, a condition at this value: `½`, B′'s, for the live line under ASK-9, card
+  8b00536a, decided at 20:23Z, where `2^-64` for a 64-bit state was proposed and isn't granted);
 * `seedRate`: the rate `θ_k`, per committed word of the circuit, at which a seed group of kind `k`'s template gain at
   `κ = 4` has moment at most `1` over its seed (GRIND's `Accounting.Guarantees.TS.TemplateMoment`: `1/(256·r)` per
   product, times a word's products), and `0` where none is proved, which charges a group its whole weight;
 * `wholeRate`: the rate `θ₀_k`, per committed word, at which a seed group of kind `k`'s whole-skip gain at `κ₀` has
   moment at most `1` over its seed. From the guess bound it is `x₀/w_k`, `x₀` the largest per-tile rate with
   `guess·e^{x₀} + (1 − guess)·e^{−κ₀·x₀} ≤ 1` (`44.34` nats a tile at `2^-64`, `κ₀ = 0.092`; a premium of about `2.8`
-  tiles a seed group at `T_q = 2^128`, whatever `K` is), and `0` where none is proved. It is not `seedRate`: at the
+  tiles a seed group at `T_q = 2^128`, whatever `K` is; at `guess = ½` it needs `κ₀ > 1` and is below `ln 2`, about
+  `177` tiles a seed group), and `0` where none is proved. No ruling grants a whole-tile luck per seed query, so a
+  value here is a condition the seeded statements' numbers are labelled by. It is not `seedRate`: at the
   folded rate a tile's whole-skip moment is `guess·e^{K/8}` (`e^{467}` at `K = 4096`, past `1` from `K = 355`), so
   `seedRate` may stand here only under `Assumptions.Compose.WholeEntropyAt` at `K/8` nats a tile (RT-COMPOSE r6's fix
   (b)). The statements don't check the value: a rate above what the luck supports makes `SeedLuckAt` false, and
@@ -848,8 +851,8 @@ noncomputable def premiumOf {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np
 /-- **The seeded logical layer's bound**
 `r = max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + a·Π_F + b·Π_0 + min(a, b)·D₀`, `Π_F` the premium at the folded rates
 (`seedTheta`) and `Π_0` at the whole ones (`wholeTheta`). Per round, GRIND's premise (`Assumptions.Compose.SeedLuckAt`)
-at the template's `κ = 4` (`TemplateMoment`'s point) for folded tiles and at `κ₀` (the guess bound's) for whole ones
-gives, except with probability `δ_g + δ_b` each and the oracle's `ε_id` once (`SeedExtractedAt`), lucky folded share
+at the template's `κ = 4` (`TemplateMoment`'s point) for folded tiles and at `κ₀` (a whole-tile luck a seed query,
+which no ruling grants, so the bound's value is conditional on it) for whole ones gives, except with probability `δ_g + δ_b` each and the oracle's `ε_id` once (`SeedExtractedAt`), lucky folded share
 `L_F < 4·U_F + π_F` and lucky whole share `L_0 < κ₀·U_0 + π_0`, `U` the share whose checked values aren't honest. An
 accepted draw of `K_d` tiles then has `ρ·K_d·(U_F + U_0) < ln(1/δ_s)` except with probability `δ_s`, so
 `a·(L_F + U_F) + b·(L_0 + U_0)` is below `r`, with `D₀` (`zeroCone`) as in `rOf`. No `SplitRate` is read: the live

@@ -21,7 +21,7 @@ and its own:
   `½` (`Accounting.Guarantees.TS.LuckOfReceipt`), as the headlines' `p`. Compose states no H-μ of its own (round 2's
   `HMu` is gone): it takes the headlines' definition, so the premise is one Lean statement, counted once;
 * `GuessLuckAt`: the whole-unit guess bound, per tile at its stage whole, a condition at whatever bound a kind's
-  `Scheme.guess` names;
+  `Scheme.guess` names: the live line reads it at B′'s `½` (ASK-9, card 8b00536a), and `2^-64` isn't granted;
 * the fixed-words claim, #2466's `Accounting.Assumptions.TS.UnitFixed` (Lemma E1(c) per unit with its fold clause),
   at the run's modes (`Accounting.Compose.tileMode`; `jointMode` in the seeded statements, on the IR-cut layer
   `Declared.atIR`) and the tiles' words. Its good units are the ones the run paid for, so a receipt-lucky skipped tile
@@ -42,7 +42,8 @@ operands and skips after querying later rounds' seeds):
 * `SeedLuckAt`: per round, round `r`'s gain at exchange rate `κ` is at most the gain of the query its proofs' seed
   answers, whose moment over that one answer, every other answer of the window fixed, is at most `1` at the seed
   group's rate, off a binding event of probability `δ_b`: at `κ = 4` and the folded rate for folded tiles (GRIND's
-  `TemplateMoment` point), and at `κ₀` and the whole rate for whole ones (the guess bound's);
+  `TemplateMoment` point), and at `κ₀` and the whole rate for whole ones, read off a whole-tile luck a query that no
+  ruling grants, so the seeded statements' numbers are conditional on it;
 * `WholeEntropyAt` (optional, read only by `Guarantees.Compose.WholeLuckOfEntropy`): a tile skipped whole keeps its
   checked values with probability at most `e^{−h}` per seed query, jointly over the round's whole tiles, given the
   cheater's view. At `h = 64·ln 2` it gives `SeedLuckAt`'s whole half at the guess bound's rate; at `K/8` nats, the
@@ -63,8 +64,9 @@ keeps its honest checked values only by guessing them**: in the ideal game split
 whatever the past, a deficient round passes with probability at most `p0` (`Accounting.TS.RoundGame.LuckAt` of its
 game). Taken per tile at its stage whole (`tileGame … .whole`, whose check is `same`): a tile whose product and fold
 are both skipped keeps its checked values, the fold state its proof pins, with probability at most `p0`. It is a
-condition at the `p0` it is given: `2^-64` for a 64-bit fold state is the proposed value (card 8b00536a, not yet
-decided), and nothing here takes it as a fact. It replaces round 2's `luck0 = 0`, which a guess falsifies
+condition at the `p0` it is given, and nothing here takes it as a fact. ASK-9 (card 8b00536a, decided 20:23Z) reads it
+at B′'s `½` for the live line until a red team attacks a smaller value: `2^-64` for a 64-bit fold state was proposed
+and isn't granted. It replaces round 2's `luck0 = 0`, which a guess falsifies
 (RT-COMPOSE r2's R2-B3). It fails if the cheater's view pins the fold state without the fold: a state that a computed
 word, or a coin read before the skip, determines. -/
 def GuessLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) : Prop :=
@@ -150,7 +152,10 @@ the whole rate (`wholeTheta`, from `Scheme.wholeRate`), not the folded one: at t
 is `guess·e^{K/8}` (`e^{467}` at `K = 4096`), past `1` for `K ≥ 355` at `guess = 2^-64` (RT-COMPOSE r6). At the
 guess bound's rate, `x₀ = 44.34` nats a tile at `2^-64` and `κ₀ = 0.092`, it follows from `WholeEntropyAt` at
 `h = 64·ln 2` a tile (`Guarantees.Compose.WholeLuckOfEntropy`); at the folded rate it would need `WholeEntropyAt` at
-`K/8` nats a tile (to within `e^{−κ₀·K/8}`; RT-COMPOSE r6's fix (b), not taken).
+`K/8` nats a tile (to within `e^{−κ₀·K/8}`; RT-COMPOSE r6's fix (b), not taken). Neither is granted: ASK-9 decides
+`½` for the live line only. Read per query, `½` (`WholeEntropyAt` at `h = ln 2`) has moment
+`½e^{x₀} + ½e^{−κ₀x₀} ≤ 1` only for `κ₀ > 1`, and then `x₀ < ln 2` a tile, about 177 tiles a seed group at
+`T_q = 2^128`, which leaves the seeded pair's small-batch decode line above 50%.
 
 It is taken at `κ = 4`, not at the live luck `p = 7/8`: from `p = 7/8` alone no `θ > 0` has moment at most `1` at
 `κ = 4`, which needs `κ > p/(1 − p) = 7` (RT-COMPOSE r4). So the seeded statements read a stronger luck than the live
