@@ -25,7 +25,7 @@ SHIPPED = sorted(p.name[: -len(".config.json")] for p in dg.HF_CONFIG_DIR.glob("
 TP2_ROLES = ("B1", "LLAMA32_1B", "QWEN3_30B_A3B")
 ROLES = [(r, 1) for r in SHIPPED] + [(r, 2) for r in TP2_ROLES]
 #: shipped configs the constructor refuses, by the reason it states
-REFUSED = {"QWEN15_AWQ": "awq", "DSV4_PRO": "no κ profile constructor"}
+REFUSED = {"QWEN15_AWQ": "awq"}
 
 
 # ------------------------------------------------------------------------------------------------------------------- shipped configs
