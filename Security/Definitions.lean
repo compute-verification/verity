@@ -9,5 +9,6 @@ import Definitions.Accounting
 import Definitions.Claims
 import Definitions.Claims.Recursion
 import Definitions.Claims.Sampling
+import Definitions.Claims.Recursion
 
 /-! The trusted vocabulary: each component's definitions. -/
