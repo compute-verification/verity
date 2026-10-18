@@ -24,7 +24,6 @@ from verity.ml.circuits.boolean import is_boolean
 from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.types import Array, Type, Value
 
-from .accelerate import accelerator, evaluate_accelerated
 from .bits import evaluate_bits
 from .reference import ScalarReference, Target, evaluate, key_of, refuse_registered_tables, resolve, signature_of, statics_of
 
@@ -77,7 +76,7 @@ def kernels(target: Target | str) -> dict[str, Kernel]:
 
 
 def _pick(target: Target, kernel: str) -> Kernel | None:
-    if kernel in ("reference", "gates"):
+    if kernel == "reference":
         return None
     ks = _KERNELS.get(key_of(target), {})
     if kernel == "auto":
@@ -159,11 +158,10 @@ def _store(out: np.ndarray, i: int, leaves: tuple[int, ...]) -> None:
 
 def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.ndarray:
     """Evaluate ``target`` on ``N`` inputs: one array per parameter with a leading batch axis, the output likewise.
-    ``kernel="auto"`` uses the ``numpy`` kernel when one is registered, else a Boolean composite's admitted word accelerator
-    (`accelerate.accelerator`), else evaluates a Boolean composite bit-sliced (`bits.evaluate_bits`); ``"gates"`` evaluates
-    the gates (a Boolean composite bit-sliced, anything else by the reference), ``"reference"`` forces the plain-integer
-    reference gate by gate, any other name selects that kernel.  Inputs a kernel declines are computed by the reference,
-    whose exceptions (inputs outside the function's domain) propagate.  A `RegisteredTable` input is refused by name."""
+    ``kernel="auto"`` uses the ``numpy`` kernel when one is registered, ``"reference"`` forces the plain-integer
+    reference, any other name selects that kernel; with ``"auto"`` a Boolean composite without a kernel is evaluated
+    bit-sliced (`bits.evaluate_bits`).  Inputs a kernel declines are computed by the reference, whose exceptions (inputs
+    outside the function's domain) propagate.  A `RegisteredTable` input is refused by name."""
     t = resolve(target)
     refuse_registered_tables(t.id, inputs, "evaluate_batch")
     params, ret = signature_of(t)
@@ -178,10 +176,7 @@ def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.nda
     out = np.zeros((n, *type_shape(ret)), dtype=type_dtype(ret))
     todo = np.ones(n, dtype=bool)
     k = _pick(t, kernel)
-    if k is None and kernel in ("auto", "gates") and n and isinstance(t, SpecializedDefinition) and is_boolean(t):
-        word = accelerator(t) if kernel == "auto" else None
-        if word is not None:
-            return evaluate_accelerated(t, word, *arrays).astype(out.dtype, copy=False)
+    if k is None and kernel == "auto" and n and isinstance(t, SpecializedDefinition) and is_boolean(t):
         return evaluate_bits(t, *arrays).astype(out.dtype, copy=False)
     if k is not None and n:
         res = k.fn(*arrays, **statics_of(t))
@@ -190,7 +185,7 @@ def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.nda
             out[...] = np.asarray(vals).reshape(out.shape)
             todo = np.zeros(n, dtype=bool) if declined is None else np.asarray(declined, dtype=bool).reshape(n)
     for i, args in _reference_rows(t, params, arrays, np.flatnonzero(todo)):
-        _store(out, i, evaluate(t, *args, gates=kernel in ("reference", "gates")))
+        _store(out, i, evaluate(t, *args))
     return out
 
 
@@ -239,8 +234,7 @@ class SelfCheck:
 
 def self_check(target: Target, *, kernel: str = "numpy", n: int = 1024, seed: int = 0,
                inputs: Sequence[Any] | None = None) -> SelfCheck:
-    """Compare kernel ``kernel`` of ``target`` with the reference on its gates (`evaluate` with ``gates=True``, never an
-    accelerator) on ``n`` seeded inputs (the kernel's own sampler if it
+    """Compare kernel ``kernel`` of ``target`` with the reference on ``n`` seeded inputs (the kernel's own sampler if it
     registered one, else `sample_uniform`) or on ``inputs``.  An accepted input must equal the reference bit for bit;
     an input the reference rejects (raises on) must be declined."""
     t = resolve(target)
@@ -264,7 +258,7 @@ def self_check(target: Target, *, kernel: str = "numpy", n: int = 1024, seed: in
     outside = 0
     for i, args in _reference_rows(t, params, arrays, np.arange(n)):
         try:
-            ref = evaluate(t, *args, gates=True)
+            ref = evaluate(t, *args)
         except Exception as e:  # the reference's own domain check: the kernel must have declined
             outside += 1
             if not declined[i]:

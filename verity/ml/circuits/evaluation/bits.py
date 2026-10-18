@@ -12,9 +12,8 @@ one body's wires at a time, not the flattened circuit's.
                                       bit first
     peak_bytes(target, n)             a bound on the bytes `evaluate_bits` holds at once for n instances, its inputs aside
 
-These always evaluate the gates: `evaluate_batch` routes a Boolean composite here when no kernel is registered for it and it
-has no admitted word accelerator (`accelerate`), or with ``kernel="gates"``; the reference stays the oracle, and the tests
-compare the two.
+`evaluate_batch` routes a Boolean composite here when no kernel is registered for it; the reference stays the oracle, and the
+tests compare the two.
 """
 from __future__ import annotations
 
@@ -28,7 +27,6 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.types import Type
 
-from .accelerate import to_bits, to_words
 from .reference import refuse_registered_tables
 
 __all__ = ["Compiled", "compile", "evaluate_bits", "evaluate_words", "peak_bytes"]
@@ -317,11 +315,25 @@ def peak_bytes(target: Any, n: int = 1) -> int:
 
 
 def _to_bits(words: np.ndarray, widths: list[int]) -> np.ndarray:
-    return to_bits(np.asarray(words), widths)
+    n = words.shape[0]
+    out = np.empty((n, sum(widths)), dtype=np.uint8)
+    k = 0
+    for e, w in enumerate(widths):
+        col = words[:, e].astype(np.uint64)
+        for j in range(w):
+            out[:, k + j] = (col >> np.uint64(j)) & np.uint64(1)
+        k += w
+    return out
 
 
 def _to_words(bits: np.ndarray, widths: list[int]) -> np.ndarray:
-    return to_words(bits, widths)
+    out = np.zeros((bits.shape[0], len(widths)), dtype=np.uint64)
+    k = 0
+    for e, w in enumerate(widths):
+        for j in range(w):
+            out[:, e] |= bits[:, k + j].astype(np.uint64) << np.uint64(j)
+        k += w
+    return out
 
 
 def evaluate_words(target: Any, *inputs: Any) -> np.ndarray:

@@ -269,43 +269,6 @@ def test_the_gemm_agrees_with_gemm_v2(target) -> None:
     _agree(target, [xs.reshape(2000, 3, 32)[:, 0], ws.reshape(2000, 3, 32)])
 
 
-def test_gemm_is_evaluated_through_its_admitted_gemm_v2_with_the_same_committed_values() -> None:
-    """`Gemm_v3` admits `Gemm_v2` as its accelerator (`evaluation.accelerate`); `GemmCoordinate_v3` admits none. On a Program of
-    two chained Gemm Calls, as network-accounting's datacenter demo builds its model, `evaluate_circuit` through the accelerator
-    and on every gate (``gates=True``) give the same committed values: each root Call's returns and the Program's outputs.
-    `evaluate_batch` and `evaluate` agree with their gate paths likewise."""
-    from verity.ml.circuits.defs import CompositeDefinition
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.types import Array
-
-    first, second = (bind(BG.Gemm, K=16, N=n, **BG.GEMM_AMPERE) for n in (16, 1))
-    assert E.accelerator(first).id == "Gemm_v2{K=16,N=16,DOT=AmpereBF16TcDot16_v2}" and E.accelerator(AMPERE_K64) is None
-    vec, mat = Array(16, BG.BF16), Array(16, Array(16, BG.BF16))
-    fn = CompositeDefinition("BooleanGemmTwoStage", 1, (),
-                             lambda S: ((("x", vec), ("w1", mat), ("w2", Array(1, vec))), Array(1, BG.BF16)),
-                             lambda B, S, x, w1, w2: B.call(second, B.call(first, x, w1, name="h"), w2, name="y"), register=False)
-    prog = Program(fn, registered=("w1", "w2"))
-    c = prog.circuit
-    rng = np.random.default_rng(24)
-    ins: dict[int, int] = {}
-    for pi in range(3):
-        refs = prog.input_coll(pi).refs
-        words = (rng.standard_normal(refs.count // 16).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
-        ins.update((r[2], int(b)) for r, b in zip(refs, BS._to_bits(words.reshape(1, -1), [16] * (refs.count // 16))[0]))
-    fast, slow = E.evaluate_circuit(c, dict(ins)), E.evaluate_circuit(c, dict(ins), gates=True)
-    committed = [g for call in c.root_calls() if not call.is_primitive for g in call.returns] + list(c.root_outputs())
-    assert len(committed) == 16 * 16 + 16 + 16 and [fast[g] for g in committed] == [slow[g] for g in committed]
-    assert len(fast) < c.size // 50 and all(slow[g] == v for g, v in fast.items())
-
-    params, _ = E.batch.signature_of(TR.word_of(bind(BG.GemmCoordinate, K=16, DOT=BG.AmpereBF16TcDot16)))
-    xs, ws = K.sample_tc(np.random.default_rng(25), 300, params)
-    xb = BS._to_bits(xs.reshape(300, -1)[:, :16], [16] * 16).reshape(300, 16, 16)
-    wb = BS._to_bits(ws.reshape(300, -1)[:, :16], [16] * 16).reshape(300, 1, 16, 16)
-    assert np.array_equal(E.evaluate_batch(second, xb, wb), E.evaluate_batch(second, xb, wb, kernel="gates"))
-    args = (xb[0].reshape(-1).tolist(), wb[0].reshape(-1).tolist())
-    assert E.evaluate(second, *args) == E.evaluate(second, *args, gates=True)
-
-
 def test_the_bit_sliced_evaluator_is_the_ir_oracle_here() -> None:
     params, _ = E.batch.signature_of(P.AmpereBF16TcDot16)
     acc, a, b = K.sample_tc(np.random.default_rng(14), 6, params)

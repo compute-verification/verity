@@ -34,9 +34,7 @@ them. The s8 step is `integer.step_s8_bits` (Baugh-Wooley arrays, one carry-save
 int-to-float cast `fp.s32_to_f32`, and `ScaledMmS8Coordinate_v2` the accumulator, the cast, two `F32Mul_v4` and `F2fpBf16_v2`.
 Each names its word
 Definition (`trace.word_of`; ``DOT'`` is `DOT`'s); the tests check that the two agree, on random and special words and on the
-hardware captures. Each composite refuses at `bind` the K its word Definition refuses (its `refuse`). `Gemm_v3` admits
-`Gemm_v2` as its accelerator (`verity.ml.circuits.evaluation.accelerate`): evaluation runs it through the word GEMM unless asked
-for its gates.
+hardware captures. Each composite refuses at `bind` the K its word Definition refuses (its `refuse`).
 """
 from __future__ import annotations
 
@@ -52,7 +50,6 @@ from verity.ml.circuits.silicon import fp, fp4
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, step_s8_bits
 from verity.ml.circuits.silicon.total_fp8 import MMAV2_E4M3_K_ORDER
 from verity.ml.circuits.boolean.trace import definition, word_of
-from verity.ml.circuits.evaluation.accelerate import admit
 
 __all__ = ["AmpereBF16TcDot16", "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64",
            "BlackwellS8ImmaDot32", "DotBf16", "F2fpBf16",
@@ -217,7 +214,6 @@ def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
 DotBf16.word = lambda b: bind(G.DotBf16, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinate.word = lambda b: bind(G.GemmCoordinate, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 Gemm.word = lambda b: bind(G.Gemm, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
-admit(Gemm)
 GemmCoordinateE4m3.word = lambda b: bind(G.GemmCoordinateE4m3, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinateNvf4.word = lambda b: bind(G.GemmCoordinateNvf4, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinateMxf4.word = lambda b: bind(G.GemmCoordinateMxf4, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]

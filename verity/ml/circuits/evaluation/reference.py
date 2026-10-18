@@ -2,8 +2,7 @@
 
 `evaluate_region` / `evaluate_call` are the gate-by-gate oracle of `verity.ml.circuits.evaluate`, re-exported unchanged (the code
 moves here once no importer of the old path is left).  `evaluate(target, *args)` runs a target on one input of plain
-ints: a primitive through its evaluator, a composite specialization through the oracle on a one-call Program, and a Boolean
-Definition with an admitted word accelerator through it (`accelerate`) unless ``gates=True``.
+ints: a primitive through its evaluator, a composite specialization through the oracle on a one-call Program.
 
 A target is an IR Definition (`PrimitiveDefinition`, a static-free `CompositeDefinition`, a complete
 `SpecializedDefinition`) or a `ScalarReference`: a silicon function that no core Definition wraps yet (the FP8 and NVFP4
@@ -266,24 +265,15 @@ def _evaluate_with_tables(t: Any, args: Sequence[Any]) -> tuple[int, ...]:
     return tuple(tr[g] for g in call.returns)
 
 
-def evaluate(target: Target, *args: Any, gates: bool = False) -> tuple[int, ...]:
+def evaluate(target: Target, *args: Any) -> tuple[int, ...]:
     """``target`` on one input of plain ints (one int per ``Value`` parameter, a flat int sequence per aggregate
     parameter, in leaf order); returns the output leaves.  Raises whatever the reference raises outside its domain.
-
-    A Boolean Definition with an admitted word accelerator (`accelerate.accelerator`) is evaluated through it; ``gates=True``
-    evaluates its gates instead, as every other composite is.
 
     An aggregate parameter that holds a registered table may take a `RegisteredTable` instead of its words: a primitive then
     reads it through its ``evaluate_lazy``, a composite's gates through the transcript, and the result is the same."""
     t = resolve(target)
     if any(isinstance(a, RegisteredTable) for a in args):
         return _evaluate_with_tables(t, args)
-    if not gates and isinstance(t, SpecializedDefinition):
-        from .accelerate import accelerator, evaluate_one
-
-        word = accelerator(t)
-        if word is not None:
-            return evaluate_one(t, word, args)
     if isinstance(t, ScalarReference):
         params, _ = signature_of(t)
         r = t.fn(*(a if isinstance(pt, Value) else list(a) for a, pt in zip(args, params)), **t.bindings)
