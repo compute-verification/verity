@@ -1,0 +1,429 @@
+"""The requirement's two proof units (I4): the plan unit, which holds a pass's plan to the blocks the declared circuit reads at
+the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the blocks a step writes to the
+circuit's values and their frees to those values' last reads (`StoreMatches`' L2 and L4, and L1 for written blocks). Both are
+Boolean Definitions, one instance per step, each returning one ok word: bit 0 the clause's verdict, bits 1-15 zero in gates.
+
+    PlanMatch_v1{P, NR, V, G, TB, RPB}
+        (count: U16, regmask: Array<NR / 16, U16>, kvmask: Array<V / 16, U16>, gmask: U16, lam: Array<2 V, U16>,
+         plan: Array<P, U16>, tok: Array<G, U16>) -> U16
+    MemoryMapStep_v1{K, C, V, M, N, SLOTS}
+        (t: U16, first: U16, count: U16, present: U16, pos: Array<K, U16>, last: Array<K, U16>, lam: Array<2 V, U16>,
+         phi: Array<2 M, U16>, val: Array<K, Array<VW / 16, U16>>, pay: Array<C, Array<2048, U16>>) -> U16
+        U16 = Array<16, Value<1>>, a word's bits LSB first; VW = 32,768 / SLOTS
+
+**The store.** Blocks are `requirement.BLOCK_BITS` (4,096 bytes), named by store index: the registered ones below N, then the
+written ones from N in the order the memory map wrote them (memory-map/v1's fresh indices). A written block holds SLOTS values
+of VW bits, value s at bits [s VW, (s + 1) VW) of its payload (bit t of a byte string is bit t & 7 of byte t >> 3), the bits
+of an empty slot zero. A written value is named by its position in the run's written values (born step, then the circuit's
+value order): the layout row ``lam`` holds, for position i, its store index (word 2 i) and its slot (word 2 i + 1). The map
+row ``phi`` holds, for written block b = j - N, the step that wrote it (word 2 b) and the step that freed it (word 2 b + 1): a
+free at step f takes effect after f's reads, as `Store.resident` and memory-map/v1 read it.
+
+**What is public** is the declared circuit's requirement (the census's schedule: each value's birth, its last read, which
+values each step reads; `requirement.Requirement`), the registered store's layout (which registered block holds which
+registered value), each step's count of written blocks and so its first fresh index, and each pass's plan length. Each
+instance's public row (``count``, ``regmask``, ``kvmask``, ``gmask`` of the plan unit; ``t``, ``first``, ``count``,
+``present``, ``pos``, ``last`` of the memory-map unit) is that data, which the verifier holds the committed row to by its
+opening. The layout, the map, the payloads, the plans and the circuit's values are witness: committed rows, read only inside
+the proof, each bound to its one commitment by its commit string (`b || c`).
+
+**PlanMatch**, at step t: the blocks t reads are the registered ones its structural reads hold (``regmask``, bit j block j
+for j < NR), the block of each gathered table row (``gmask``'s bit g for each of the G gathers: the table's row ``tok[g]``,
+a value of the circuit, at block TB + tok[g] / RPB, RPB rows a block, the table's blocks TB ... NR - 1), and the block of each
+written value t reads (``kvmask``'s bit i for position i: block ``lam[2 i]``). The plan is ``plan[0 .. count)``, strictly
+increasing, zero after; the unit's ok is that it is exactly that set: `PlanMatches`' ``plan = readBlocks t``, with every
+receipted block one the circuit reads at t (a gather's unselected rows and a paused request's pages are in no plan) and every
+block it reads planned. ``count`` is at most P, and a gathered row is one of the table's.
+
+**MemoryMapStep**, at step t: the step wrote blocks ``first .. first + count`` (at most C). Each value it produced that a
+later step reads is present (``present``'s bit k, its position ``pos[k]`` and its last read ``last[k]``) and its committed
+value is ``val[k]``. Its ok is that, for every present k: ``lam`` puts it in a block the step wrote, in a slot below SLOTS,
+no two in one slot, and that block's payload ``pay[j - first]`` carries ``val[k]`` there (L4, Carries); and, for each block
+the step wrote: ``phi`` records it written at t (each write at its values' production step), it holds at least one value (so
+a planned block carries at least VW bits: D = VW), its empty slots are zero, and ``phi`` frees it at the last read of its
+values, the greatest ``last[k]`` among them: an earlier free drops a value still to be read (L2), a later one keeps a block
+no step reads (L1). ``first`` is at least N, and ``first - N + count`` at most M.
+
+**Cost.** PlanMatch: one 16-bit comparison of each plan entry with each block t may read, P (NR + G + V) of them, about
+P (NR + G + V) 16 ANDs. MemoryMapStep: each present value against each slot of each written block, K C SLOTS VW ANDs, and the
+empty slots' C SLOTS VW, then `lam` and `phi` read by one-hot selection. A statement adds each row's hm96 commitment.
+
+`plan_match` and `memory_map` are the references, over plain ints; `plan_rows` and `memory_map_rows` name each instance's
+rows (C-Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments from a `requirement.Requirement`, its
+`Layout` and `Store` (`layout_words` and `map_words` the shared rows), and `row_words` an instance's rows from them.
+"""
+from __future__ import annotations
+
+from functools import lru_cache
+from types import SimpleNamespace
+from typing import Sequence
+
+from . import boolean as BL
+from .boolean import trace as TR
+from .boolean.forms import ONE, ZERO, OR, add, and_reduce, const_bits, mux, or_reduce, sub
+from .defs import CompositeDefinition
+from .requirement import BLOCK_BITS, Layout, Requirement, Store
+from .types import Array
+
+__all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "U16", "layout_words", "map_inputs", "map_words", "memory_map",
+           "memory_map_rows", "plan_inputs", "plan_match", "plan_rows", "row_words", "value_bits"]
+
+U16 = Array(16, BL.BIT)
+#: a block's payload in u16 words
+BLOCK_WORDS = BLOCK_BITS // 16
+#: a step or a store index, and the free of a block no step frees
+WORD = 1 << 16
+
+
+def value_bits(SLOTS: int) -> int:
+    return BLOCK_BITS // SLOTS
+
+
+def _pos_int(name: str, v) -> int:
+    if isinstance(v, bool) or not isinstance(v, int) or v < 1:
+        raise ValueError(f"{name} is an int >= 1, not {v!r}")
+    return v
+
+
+def _check_plan(S) -> None:
+    for k in ("P", "NR", "V", "G", "RPB"):
+        _pos_int(k, getattr(S, k))
+    if S.NR % 16 or S.V % 16:
+        raise ValueError(f"NR and V are whole u16 words of mask bits, not {S.NR} and {S.V}")
+    if S.G > 16 or S.P >= WORD or S.NR >= WORD or S.V >= WORD:
+        raise ValueError(f"G is at most 16 and P, NR, V below 2^16, not G = {S.G}, P = {S.P}, NR = {S.NR}, V = {S.V}")
+    if S.RPB & (S.RPB - 1):
+        raise ValueError(f"RPB, the table's rows a block, is a power of two, not {S.RPB}")
+    if isinstance(S.TB, bool) or not isinstance(S.TB, int) or not 0 <= S.TB < S.NR:
+        raise ValueError(f"TB, the gathered table's first block, is a registered block below NR = {S.NR}, not {S.TB!r}")
+
+
+def _check_map(S) -> None:
+    for k in ("K", "C", "V", "M", "N", "SLOTS"):
+        _pos_int(k, getattr(S, k))
+    if S.K > 16 or S.SLOTS not in (1, 2, 4, 8) or S.N + S.M > WORD or S.V >= WORD:
+        raise ValueError(f"K is at most 16, SLOTS one of 1, 2, 4, 8, N + M at most 2^16 and V below it, not K = {S.K}, "
+                         f"SLOTS = {S.SLOTS}, N + M = {S.N + S.M}, V = {S.V}")
+
+
+# --- references ----------------------------------------------------------------------------------------------------------
+
+def _bits(words: Sequence[int], n: int) -> list[int]:
+    return [(words[i >> 4] >> (i & 15)) & 1 for i in range(n)]
+
+
+def plan_match(S, count: int, regmask: Sequence[int], kvmask: Sequence[int], gmask: int, lam: Sequence[int],
+               plan: Sequence[int], tok: Sequence[int]) -> int:
+    """`PlanMatch`'s reference: 1 iff ``plan[0 .. count)`` is strictly increasing, zero after, and is exactly the blocks the
+    step reads."""
+    _check_plan(S)
+    if count > S.P:
+        return 0
+    rows = [t >> (S.RPB.bit_length() - 1) for g, t in enumerate(tok) if (gmask >> g) & 1]
+    if any(r >= S.NR - S.TB for r in rows):
+        return 0
+    need = {j for j, b in enumerate(_bits(regmask, S.NR)) if b} | {S.TB + r for r in rows}
+    need |= {lam[2 * i] for i, b in enumerate(_bits(kvmask, S.V)) if b}
+    head, tail = list(plan[:count]), list(plan[count:])
+    return int(all(a < b for a, b in zip(head, head[1:])) and not any(tail) and set(head) == need)
+
+
+def memory_map(S, t: int, first: int, count: int, present: int, pos: Sequence[int], last: Sequence[int],
+               lam: Sequence[int], phi: Sequence[int], val: Sequence[int], pay: Sequence[int]) -> int:
+    """`MemoryMapStep`'s reference over the values and payloads as ints (bit s VW + u of ``pay[c]`` is slot s's bit u): 1 iff
+    every present value is in a slot of a block the step wrote that carries it, and each such block is written at ``t``,
+    holds a value, has its empty slots zero and is freed at its values' last read."""
+    _check_map(S)
+    vw = value_bits(S.SLOTS)
+    if first < S.N or count > S.C or first - S.N + count > S.M:
+        return 0
+    held: dict[int, list[int]] = {c: [] for c in range(count)}
+    slots: set[tuple[int, int]] = set()
+    for k in range(S.K):
+        if not (present >> k) & 1:
+            continue
+        if pos[k] >= S.V:
+            return 0
+        j, s = lam[2 * pos[k]], lam[2 * pos[k] + 1]
+        if not first <= j < first + count or s >= S.SLOTS or (j, s) in slots:
+            return 0
+        slots.add((j, s))
+        if (pay[j - first] >> (s * vw)) % (1 << vw) != val[k]:
+            return 0
+        held[j - first].append(last[k])
+    for c in range(count):
+        b = first - S.N + c
+        if not held[c] or phi[2 * b] != t or phi[2 * b + 1] != max(held[c]):
+            return 0
+        if any((pay[c] >> (s * vw)) % (1 << vw) for s in range(S.SLOTS) if (first + c, s) not in slots):
+            return 0
+    return 1
+
+
+# --- the circuits --------------------------------------------------------------------------------------------------------
+
+def _eq(C, a, b):
+    return and_reduce(C, [(x ^ y).inv() for x, y in zip(a, b, strict=True)])
+
+
+def _eqc(C, a, k: int):
+    return and_reduce(C, [x if (k >> i) & 1 else x.inv() for i, x in enumerate(a)]) if k < 1 << len(a) else ZERO
+
+
+def _lt(C, a, b):
+    return sub(C, a, b, len(a))[1]
+
+
+def _ltc(C, a, k: int):
+    return _lt(C, a, const_bits(k, len(a))) if k < 1 << len(a) else ONE
+
+
+def _imp(C, a, b):
+    """a -> b."""
+    return C.AND(a, b.inv()).inv()
+
+
+def _pick(C, onehot, words):
+    """The word whose one-hot bit is set (zero if none)."""
+    out = [ZERO] * len(words[0])
+    for h, w in zip(onehot, words, strict=True):
+        out = [o ^ C.AND(h, x) for o, x in zip(out, w)]
+    return out
+
+
+def _ok(C, oks) -> list:
+    return [and_reduce(C, oks)] + [ZERO] * 15
+
+
+def _plan_build(C, S, *e):
+    nr, nv = S.NR // 16, S.V // 16
+    count = e[0]
+    regm = [b for w in e[1:1 + nr] for b in w]
+    at = 1 + nr
+    kvm = [b for w in e[at:at + nv] for b in w]
+    at += nv
+    gm = e[at][:S.G]
+    at += 1
+    lam = e[at:at + 2 * S.V]
+    plan = e[at + 2 * S.V:at + 2 * S.V + S.P]
+    tok = e[at + 2 * S.V + S.P:]
+    blk = [lam[2 * i] for i in range(S.V)]
+    oks = [_ltc(C, count, S.P + 1)]
+    valid = [_ltc(C, count, p + 1).inv() for p in range(S.P)]
+    for p in range(S.P - 1):
+        oks.append(_imp(C, valid[p + 1], _lt(C, plan[p], plan[p + 1])))
+    for p in range(S.P):
+        oks.append(_imp(C, valid[p].inv(), or_reduce(C, plan[p]).inv()))
+    r = S.RPB.bit_length() - 1
+    rows = [list(t[r:]) + [ZERO] * r for t in tok]
+    gblk = [add(C, row, const_bits(S.TB, 16), width=16) for row in rows]
+    for g in range(S.G):
+        oks.append(_imp(C, gm[g], _ltc(C, rows[g], S.NR - S.TB)))
+    reg = [[_eqc(C, plan[p], j) for j in range(S.NR)] for p in range(S.P)]
+    gat = [[_eq(C, plan[p], gblk[g]) for g in range(S.G)] for p in range(S.P)]
+    kv = [[_eq(C, plan[p], blk[i]) for i in range(S.V)] for p in range(S.P)]
+    for p in range(S.P):
+        hit = [C.AND(regm[j], reg[p][j]) for j in range(S.NR)] + [C.AND(gm[g], gat[p][g]) for g in range(S.G)]
+        hit += [C.AND(kvm[i], kv[p][i]) for i in range(S.V)]
+        oks.append(_imp(C, valid[p], or_reduce(C, hit)))
+    for j in range(S.NR):
+        oks.append(_imp(C, regm[j], or_reduce(C, [C.AND(valid[p], reg[p][j]) for p in range(S.P)])))
+    for g in range(S.G):
+        oks.append(_imp(C, gm[g], or_reduce(C, [C.AND(valid[p], gat[p][g]) for p in range(S.P)])))
+    for i in range(S.V):
+        oks.append(_imp(C, kvm[i], or_reduce(C, [C.AND(valid[p], kv[p][i]) for p in range(S.P)])))
+    return _ok(C, oks)
+
+
+def _map_build(C, S, *e):
+    vw, vww = value_bits(S.SLOTS), value_bits(S.SLOTS) // 16
+    t, first, count, present = e[:4]
+    pos, last = e[4:4 + S.K], e[4 + S.K:4 + 2 * S.K]
+    at = 4 + 2 * S.K
+    lam, phi = e[at:at + 2 * S.V], e[at + 2 * S.V:at + 2 * S.V + 2 * S.M]
+    at += 2 * S.V + 2 * S.M
+    val = [[b for w in e[at + vww * k:at + vww * (k + 1)] for b in w] for k in range(S.K)]
+    at += vww * S.K
+    pay = [[b for w in e[at + BLOCK_WORDS * c:at + BLOCK_WORDS * (c + 1)] for b in w] for c in range(S.C)]
+    pres = present[:S.K]
+    b0, borrow = sub(C, first, const_bits(S.N, 16), 16)
+    oks = [borrow.inv(), _ltc(C, count, S.C + 1), _ltc(C, add(C, b0, count, width=17), S.M + 1)]
+    cvalid = [_ltc(C, count, c + 1).inv() for c in range(S.C)]
+    firsts = [add(C, first, const_bits(c, 16), width=16) for c in range(S.C)]
+    js, ss, sel, slot = [], [], [], []
+    for k in range(S.K):
+        oh = [_eqc(C, pos[k], i) for i in range(S.V)]
+        oks.append(_imp(C, pres[k], or_reduce(C, oh)))
+        j, s = _pick(C, oh, lam[0::2]), _pick(C, oh, lam[1::2])
+        js.append(j)
+        ss.append(s)
+        sel.append([C.AND(_eq(C, j, firsts[c]), cvalid[c]) for c in range(S.C)])
+        slot.append([_eqc(C, s, u) for u in range(S.SLOTS)])
+        oks.append(_imp(C, pres[k], or_reduce(C, sel[k])))
+        oks.append(_imp(C, pres[k], or_reduce(C, slot[k])))
+    put = [[[C.AND(pres[k], C.AND(sel[k][c], slot[k][u])) for u in range(S.SLOTS)] for c in range(S.C)] for k in range(S.K)]
+    for k in range(S.K):
+        carried = [C.AND(put[k][c][u], _eq(C, pay[c][u * vw:(u + 1) * vw], val[k])) for c in range(S.C) for u in range(S.SLOTS)]
+        oks.append(_imp(C, pres[k], or_reduce(C, carried)))
+        for k2 in range(k + 1, S.K):
+            both = C.AND(C.AND(pres[k], pres[k2]), C.AND(_eq(C, js[k], js[k2]), _eq(C, ss[k], ss[k2])))
+            oks.append(both.inv())
+    for c in range(S.C):
+        oh = [_eqc(C, add(C, b0, const_bits(c, 16), width=16), m) for m in range(S.M)]
+        wrote, freed = _pick(C, oh, phi[0::2]), _pick(C, oh, phi[1::2])
+        holds = [C.AND(pres[k], sel[k][c]) for k in range(S.K)]
+        oks.append(_imp(C, cvalid[c], or_reduce(C, holds)))
+        oks.append(_imp(C, cvalid[c], _eq(C, wrote, t)))
+        m = [ZERO] * 16
+        for k in range(S.K):
+            m = mux(C, C.AND(holds[k], _lt(C, m, last[k])), last[k], m)
+        oks.append(_imp(C, cvalid[c], _eq(C, freed, m)))
+        for u in range(S.SLOTS):
+            empty = C.AND(cvalid[c], or_reduce(C, [put[k][c][u] for k in range(S.K)]).inv())
+            oks.append(_imp(C, empty, or_reduce(C, pay[c][u * vw:(u + 1) * vw]).inv()))
+    return _ok(C, oks)
+
+
+def _plan_signature(S):
+    _check_plan(S)
+    return ((("count", U16), ("regmask", Array(S.NR // 16, U16)), ("kvmask", Array(S.V // 16, U16)), ("gmask", U16),
+             ("lam", Array(2 * S.V, U16)), ("plan", Array(S.P, U16)), ("tok", Array(S.G, U16))), U16)
+
+
+def _map_signature(S):
+    _check_map(S)
+    return ((("t", U16), ("first", U16), ("count", U16), ("present", U16), ("pos", Array(S.K, U16)), ("last", Array(S.K, U16)),
+             ("lam", Array(2 * S.V, U16)), ("phi", Array(2 * S.M, U16)),
+             ("val", Array(S.K, Array(value_bits(S.SLOTS) // 16, U16))), ("pay", Array(S.C, Array(BLOCK_WORDS, U16)))), U16)
+
+
+def _unit(name: str, statics: tuple[str, ...], signature, build, doc: str) -> CompositeDefinition:
+    @lru_cache(maxsize=None)
+    def traced(*key) -> TR.Traced:
+        S = SimpleNamespace(**dict(zip(statics, key)))
+        params, ret = signature(S)
+        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
+
+    def body(B, S, *colls):
+        params, ret = signature(S)
+        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
+
+    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
+    d.traced = traced  # type: ignore[attr-defined]
+    return d
+
+
+PlanMatch = _unit(
+    "PlanMatch", ("P", "NR", "V", "G", "TB", "RPB"), _plan_signature, _plan_build,
+    "1 iff plan[0 .. count) is strictly increasing, zero after, and exactly the blocks the step reads: the registered blocks "
+    "regmask names, block TB + tok[g] / RPB of each gather gmask names, and block lam[2 i] of each written value kvmask names")
+MemoryMapStep = _unit(
+    "MemoryMapStep", ("K", "C", "V", "M", "N", "SLOTS"), _map_signature, _map_build,
+    "1 iff every present value k is in a slot of a block first .. first + count that carries val[k] there, no two in one "
+    "slot, and each such block is written at t, holds a value, has its empty slots zero and is freed at its values' last read")
+
+
+# --- each instance's rows -------------------------------------------------------------------------------------------------
+
+def plan_rows(S) -> list[tuple[str, int, list[str]]]:
+    """PlanMatch's rows: (row, bits, params), the public row first."""
+    return [("pub", 16 * (2 + S.NR // 16 + S.V // 16), ["count", "regmask", "kvmask", "gmask"]), ("lam", 32 * S.V, ["lam"]),
+            ("plan", 16 * S.P, ["plan"])] + [(f"tok{g}", 16, [f"tok[{g}]"]) for g in range(S.G)]
+
+
+def memory_map_rows(S) -> list[tuple[str, int, list[str]]]:
+    """MemoryMapStep's rows: (row, bits, params), the public row first."""
+    return ([("pub", 16 * (4 + 2 * S.K), ["t", "first", "count", "present", "pos", "last"]), ("lam", 32 * S.V, ["lam"]),
+             ("phi", 32 * S.M, ["phi"])] + [(f"val{k}", value_bits(S.SLOTS), [f"val[{k}]"]) for k in range(S.K)]
+            + [(f"pay{c}", BLOCK_BITS, [f"pay[{c}]"]) for c in range(S.C)])
+
+
+# --- a step's arguments from the requirement --------------------------------------------------------------------------------
+
+def _words(x: int, n: int) -> list[int]:
+    return [(x >> (16 * i)) & 0xFFFF for i in range(n)]
+
+
+def _mask(bits, n: int) -> list[int]:
+    out = [0] * (n // 16)
+    for b in bits:
+        out[b >> 4] |= 1 << (b & 15)
+    return out
+
+
+def layout_words(S, req: Requirement, layout: Layout, positions: Sequence[int]) -> list[int]:
+    """The layout row: written value ``positions[i]``'s store index and slot at words 2 i and 2 i + 1, zero past them."""
+    vw, out = value_bits(S.SLOTS), [0] * (2 * S.V)
+    if len(positions) > S.V:
+        raise ValueError(f"{len(positions)} written values, more than V = {S.V}")
+    for i, v in enumerate(positions):
+        if req.width[v] != vw or layout.offset[v] % vw:
+            raise ValueError(f"value {v}: a written value is {vw} bits at a slot's offset, not {req.width[v]} at {layout.offset[v]}")
+        out[2 * i], out[2 * i + 1] = layout.block[v], layout.offset[v] // vw
+    return out
+
+
+def map_words(S, store: Store) -> list[int]:
+    """The map row: written block N + b's write step and free step at words 2 b and 2 b + 1 (`WORD - 1` for a block no
+    step frees), zero past the blocks written."""
+    out = [0] * (2 * S.M)
+    for s, js in store.written.items():
+        for j in js:
+            if not S.N <= j < S.N + S.M:
+                raise ValueError(f"written block {j} is outside N .. N + M = {S.N} .. {S.N + S.M}")
+            out[2 * (j - S.N)], out[2 * (j - S.N) + 1] = s, WORD - 1
+    for s, js in store.freed.items():
+        for j in js:
+            if j >= S.N:
+                out[2 * (j - S.N) + 1] = s
+    return out
+
+
+def plan_inputs(S, req: Requirement, t: int, plan: Sequence[int], registered_block: dict[int, int],
+                gathers: Sequence[int], gathered: frozenset[int], positions: Sequence[int], lam: Sequence[int]) -> dict:
+    """PlanMatch's arguments at step ``t``: ``plan`` the pass's blocks; ``registered_block`` each registered value's block
+    (public); ``gathers`` the table rows t gathers (``tok``, at most G) and ``gathered`` the registered values they are, which
+    the structural reads (``regmask``) leave out; ``positions`` the written values in order; ``lam`` the layout row."""
+    reads = req.reads(t)
+    at = {v: i for i, v in enumerate(positions)}
+    if len(plan) > S.P or len(gathers) > S.G:
+        raise ValueError(f"step {t}: a plan of {len(plan)} and {len(gathers)} gathers, more than P = {S.P} or G = {S.G}")
+    return {"count": len(plan), "regmask": _mask({registered_block[v] for v in reads & (req.registered - gathered)}, S.NR),
+            "kvmask": _mask({at[v] for v in reads - req.registered}, S.V), "gmask": (1 << len(gathers)) - 1, "lam": list(lam),
+            "plan": sorted(plan) + [0] * (S.P - len(plan)), "tok": list(gathers) + [0] * (S.G - len(gathers))}
+
+
+def map_inputs(S, req: Requirement, store: Store, t: int, positions: Sequence[int], lam: Sequence[int],
+               phi: Sequence[int]) -> dict:
+    """MemoryMapStep's arguments at step ``t``: the values t produces that a later step reads, the blocks it wrote and their
+    payloads (``store.payload``), the layout row ``lam`` and the map row ``phi``."""
+    vw = value_bits(S.SLOTS)
+    made = [i for i, v in enumerate(positions) if req.born[v] == t and req.last.get(v, -1) > t]
+    js = sorted(store.written.get(t, ()))
+    first = js[0] if js else S.N + sum(len(b) for s, b in store.written.items() if s < t)
+    if len(made) > S.K or len(js) > S.C or js != list(range(first, first + len(js))):
+        raise ValueError(f"step {t}: {len(made)} values and blocks {js}: at most K = {S.K} values and C = {S.C} consecutive blocks")
+    pad = S.K - len(made)
+    return {"t": t, "first": first, "count": len(js), "present": (1 << len(made)) - 1, "pos": made + [0] * pad,
+            "last": [req.last[positions[i]] for i in made] + [0] * pad, "lam": list(lam), "phi": list(phi),
+            "val": [req.values[positions[i]] % (1 << vw) for i in made] + [0] * pad,
+            "pay": [store.payload.get(j, 0) for j in js] + [0] * (S.C - len(js))}
+
+
+def row_words(S, rows: Sequence[tuple[str, int, list[str]]], args: dict) -> dict[str, list[int]]:
+    """Each row's u16 words from an instance's arguments (`plan_inputs`, `map_inputs`), its params' words in order."""
+    vww = value_bits(S.SLOTS) // 16 if hasattr(S, "SLOTS") else 0
+
+    def words(p: str) -> list[int]:
+        name, _, at = p.partition("[")
+        v = args[name] if not at else args[name][int(at[:-1])]
+        if name == "val":
+            return _words(v, vww)
+        if name == "pay":
+            return _words(v, BLOCK_WORDS)
+        return list(v) if isinstance(v, list) else [v]
+
+    out = {r: [w for p in ps for w in words(p)] for r, _bits, ps in rows}
+    if any(16 * len(out[r]) != bits for r, bits, _ in rows):
+        raise AssertionError("a row's words are not its bits")
+    return out

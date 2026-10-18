@@ -673,7 +673,10 @@ class Driver:
             for st in failed_steps(d):
                 step = st.get("step") or ""
                 if step.startswith("lean") and step != "lean-suites":
-                    rules.append(("Lean sources", lambda f: f.endswith(LEAN_INPUTS)))
+                    if pkgs := self._failed_packages(d, st, tip):
+                        rules.append((f"Lean package {', '.join(sorted(pkgs))}", lambda f, pkgs=pkgs: under(f, sorted(pkgs))))
+                    else:
+                        rules.append(("Lean sources", lambda f: f.endswith(LEAN_INPUTS)))
                 elif step == "circuit-check":
                     rules.append(("circuit-check's inputs", lambda f: forces_cold([f])))
         out, why = [], set()
@@ -682,6 +685,24 @@ class Driver:
                 out.append(x)
                 why |= t
         return out, ", ".join(sorted(why))
+
+    def _failed_packages(self, run_dir: Path, step: dict, tip: str) -> set[str]:
+        """The Lake packages a failed Lean step's log reports `FAIL` for, with each package its manifest requires by path, at
+        ``tip``; empty when the log names none (18 Oct: a stale record in verity/core/primitives/requirement, #2386's, failed two
+        trains, and the fallback on every Lean source ejected #2341, #2370 and #2371 with it)."""
+        try:
+            log = (run_dir / Path(step.get("log") or "").name).read_text(errors="replace") if step.get("log") else ""
+        except OSError:
+            return set()
+        out = set()
+        for pkg in set(LEAN_AUDIT_RE.findall(log)):
+            out.add(pkg)
+            r = _git(self.repo, "show", f"{tip}:{pkg}/lake-manifest.json", check=False)
+            with contextlib.suppress(ValueError, AttributeError):
+                for dep in json.loads(r.stdout).get("packages", []) if not r.returncode else []:
+                    if dep.get("type") == "path":
+                        out.add(os.path.normpath(os.path.join(pkg, dep.get("dir", ""))))
+        return {p for p in out if not p.startswith("..")}
 
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
         """Act on a failed train with no lander (16 Oct, Daniel through top): eject every member whose change touches what the
@@ -695,6 +716,16 @@ class Driver:
         if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}):
             self.resend(drive, m, prs, v)
             return
+        # a member a lower train's running or passed check covers is left to that check: ejecting it would cancel that train,
+        # and were it the cause, that check fails too
+        main = _out(self.repo, "rev-parse", "origin/main")
+        floor = max((k + 1 for k, x in enumerate(members[:-1]) if x.commit in drive["launched"]
+                     and self.verdict(x.commit, main, drive).state in ("running", "passed")), default=0)
+        if hit and all(members.index(x) < floor for x in hit):
+            self.q.log(f"research queue drive: {m.commit[:12]} failed on {what}, which only members the check of "
+                       f"{members[floor - 1].commit[:12]} covers change: waiting on that check")
+            return
+        hit = [x for x in hit if members.index(x) >= floor]
         ejected, why = [], what
         for x in hit:
             reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which #{x.pr} changes"

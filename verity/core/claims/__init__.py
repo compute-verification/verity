@@ -312,6 +312,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER: zeroing a fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
           "LIN-STEER", "conjectured"),
+    Entry("accounting-ts-right-fixed", "assumption",
+          "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
+          "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
 )}
 
 
