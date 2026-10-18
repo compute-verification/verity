@@ -624,7 +624,7 @@ class CommitSession:
                 "store": self.binder.stats() if self.binder is not None else None, "layout": backend.layout(),
                 "kv_pages": self.kv_pages, "weight_blocks": self.weight_blocks,
                 "encode": ("kv.cu in place" if self.backend_of else "kv.cu") if backend.device is not None else "cpu",
-                "gates": backend.gates,
+                "gates": backend.gates, "device": getattr(backend, "session_stats", dict)(),
                 "memory_map": None if trace is None else {
                     "path": None if backend.path is None else str(backend.path),
                     "registration": backend.registration.digest.hex(), "first_step": trace.first, "steps": trace.steps,
