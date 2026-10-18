@@ -378,7 +378,7 @@ theorem zk_inner_rows {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 
   refine exQ_recv (toDig zp.inner.root) ?_
   refine pq_bindQ hM (fun o ho => ?_) hmsgs hcoins
   obtain ⟨v, hv⟩ := hIP hs512 T.dom T.np T.nP T.pos o.1 T.tr (toDig zp.inner.root)
-  exact ⟨⟨o.2, v⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm,
+  exact ⟨⟨o.2, v.1, v.2⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm,
     zk_inner_accepts _ zp.inner _ _ t₃ tr T st sch tPad o.1 rfl hseam htab hcons7 ho (zk_decode_paths hdec) hwf₃ h₅
       v (by rw [hseam.hq]; exact hv)⟩
 

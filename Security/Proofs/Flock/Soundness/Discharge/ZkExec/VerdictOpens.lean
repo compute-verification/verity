@@ -869,7 +869,7 @@ theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
   refine pq_bindQ hM (fun o ho => ?_) hmsgs hcoins
   obtain ⟨v, hv⟩ := hIP Hs T.dom T.np T.nP T.pos o.1 T.tr (toDig zp.inner.root)
   obtain ⟨hc, hq, R, rest, hR, hl, hp⟩ := ho
-  refine ⟨⟨o.2, v⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm, hc, hq, R, rest,
+  refine ⟨⟨o.2, v.1, v.2⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm, hc, hq, R, rest,
     hR, hl, ?_⟩
   rw [hp, hi, hrt]
 
