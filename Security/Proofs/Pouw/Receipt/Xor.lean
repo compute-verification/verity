@@ -88,7 +88,7 @@ theorem carry_twoPow_self {n j : ℕ} (hj : j < n) (x : BitVec n) :
 theorem getLsbD_add_twoPow_self {n j : ℕ} (hj : j < n) (x : BitVec n) :
     (x + BitVec.twoPow n j).getLsbD j = !x.getLsbD j := by
   rw [BitVec.getLsbD_add hj, carry_twoPow_self hj]
-  simp [BitVec.getLsbD_twoPow, hj]
+  simp [hj]
 
 /-- Adding `2^j` carries bit `j` into bit `j + 1`. -/
 theorem getLsbD_add_twoPow_succ {n j : ℕ} (hj : j + 1 < n) (x : BitVec n) :
@@ -100,7 +100,7 @@ theorem getLsbD_add_twoPow_succ {n j : ℕ} (hj : j + 1 < n) (x : BitVec n) :
 theorem getLsbD_sub_twoPow_succ {n j : ℕ} (hj : j + 1 < n) (x : BitVec n) :
     (x - BitVec.twoPow n j).getLsbD (j + 1) = (x.getLsbD (j + 1) ^^ !x.getLsbD j) := by
   obtain ⟨w, rfl⟩ : ∃ w, x = w + BitVec.twoPow n j := ⟨x - BitVec.twoPow n j, (sub_add_cancel _ _).symm⟩
-  rw [show w + BitVec.twoPow n j - BitVec.twoPow n j = w by ring, getLsbD_add_twoPow_succ hj,
+  rw [show w + BitVec.twoPow n j - BitVec.twoPow n j = w by linear_combination, getLsbD_add_twoPow_succ hj,
     getLsbD_add_twoPow_self (by omega)]
   cases w.getLsbD (j + 1) <;> cases w.getLsbD j <;> rfl
 
@@ -113,10 +113,10 @@ theorem getLsbD_xor_of_shift {n j : ℕ} (hj : j + 1 < n) (W W' R R' : BitVec n)
       (X.getLsbD (j + 1) ^^ (X.getLsbD j ^^ Q.getLsbD j)) := by
     intro X Q
     cases hQ : Q.getLsbD j
-    · rw [xor_twoPow_of_false hQ, show Q + BitVec.twoPow n j - Q = BitVec.twoPow n j by ring,
+    · rw [xor_twoPow_of_false hQ, show Q + BitVec.twoPow n j - Q = BitVec.twoPow n j by linear_combination,
         getLsbD_add_twoPow_succ hj, Bool.xor_false]
-    · rw [xor_twoPow_of_true (by omega) hQ, show X + (Q - BitVec.twoPow n j - Q) = X - BitVec.twoPow n j by ring,
-        getLsbD_sub_twoPow_succ hj]
+    · rw [xor_twoPow_of_true (by omega) hQ,
+        show X + (Q - BitVec.twoPow n j - Q) = X - BitVec.twoPow n j by linear_combination, getLsbD_sub_twoPow_succ hj]
       cases X.getLsbD (j + 1) <;> cases X.getLsbD j <;> rfl
   have hb := congrArg (fun v => v.getLsbD (j + 1)) h
   simp only [BitVec.getLsbD_xor] at hb ⊢
@@ -132,7 +132,7 @@ theorem xor_eq_zero_or_top_of_const {n : ℕ} (hn : 0 < n) {a : BitVec n} (ha : 
       ((((u ^^^ c) * a + z) ^^^ e₂ ^^^ k₂).getLsbD (n - 1) ^^ β)) :
     c = 0 ∨ c = BitVec.twoPow n (n - 1) := by
   have htop : (BitVec.twoPow n (n - 1)).getLsbD (n - 1) = true := by
-    simp [BitVec.getLsbD_twoPow, show n - 1 < n by omega]
+    simp [show n - 1 < n by omega]
   cases β
   · exact xor_eq_zero_or_top hn ha c d₂ e₂ k₂ (fun u z => by rw [M u z, Bool.xor_false])
   · refine xor_eq_zero_or_top hn ha c d₂ (e₂ ^^^ BitVec.twoPow n (n - 1)) k₂ (fun u z => ?_)
@@ -216,7 +216,7 @@ theorem duoPairXor_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁
       dsimp only at ey ez
       have hY : (u ^^^ BitVec.twoPow n (n - 1)) * a + z = (u * a + z) + BitVec.twoPow n (n - 1) := by
         rw [← add_top hn u, add_mul, top_mul_odd hn ha]
-        ring
+        linear_combination
       rw [hY] at ey ez
       rw [eq_xor_of_xor_eq ey] at ez
       exact eq_xor_of_xor_eq ez
@@ -227,8 +227,8 @@ theorem duoPairXor_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁
       obtain ⟨u, hu⟩ := rotateLeft_surjective (n := n) r (W - (Y ^^^ d₂ ^^^ k₂) * b - Y)
       simp only at hu
       have e := E1 u (Y - u * a)
-      rw [show u * a + (Y - u * a) = Y by ring, hu,
-        show (Y ^^^ d₂ ^^^ k₂) * b + (W - (Y ^^^ d₂ ^^^ k₂) * b - Y + Y) = W by ring] at e
+      rw [show u * a + (Y - u * a) = Y by linear_combination, hu,
+        show (Y ^^^ d₂ ^^^ k₂) * b + (W - (Y ^^^ d₂ ^^^ k₂) * b - Y + Y) = W by linear_combination] at e
       exact e
     have hv' : ∀ Y : BitVec n, ((Y + BitVec.twoPow n (n - 1)) ^^^ e₂ ^^^ k₂).rotateLeft q =
         (Y ^^^ d₂ ^^^ k₂).rotateLeft q ^^^
