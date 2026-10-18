@@ -135,6 +135,8 @@ def once() -> None:
             rec = {"kind": "garbled", "agent": "?", "run": "?"}
         if rec.get("kind") == "unreadable" and not rec.get("since"):   # a goal run's id, often brief: posted if it lasts
             pass
+        elif rec.get("kind") == "ready_to_wake" and "409" in str(rec.get("action", "")):
+            pass    # Cursor refuses a run on an agent waiting on background work; an hourly post of that changes nothing
         elif DRY:
             log(f"would post: {text(rec)}" + (f" and ring @{to}" if (to := rung(rec)) else ""))
         else:

@@ -152,3 +152,12 @@ def test_a_worker_with_no_handle_is_posted_in_the_channel_only(relay):
     relay.once()
     assert relay.posts == ["*Agent watch:* worker H1 (<https://cursor.com/agents/bc-x|bc-x>) of lane hash went idle at "
                            "2026-10-18T20:06:00Z; if it didn't report back, resume it with Task."] and rings(relay) == []
+
+
+def test_a_wake_cursor_refuses_with_409_posts_nothing(relay):
+    """Cursor answers 409 for an agent waiting on background work, every hour the watch tries; the post would say nothing new."""
+    relay.log_text["text"] = "\n".join([
+        line("run-w", "ready_to_wake", handle="vllm", reason="nothing has run for 40 min", action="refused: HTTP 409 (busy)"),
+        line("run-v", "ready_to_wake", handle="vllm", reason="nothing has run for 40 min", action="started run-z")]) + "\n"
+    relay.once()
+    assert len(relay.posts) == 1 and "run-v" in relay.posts[0] and relay.OFFSET.read_text() == "2"
