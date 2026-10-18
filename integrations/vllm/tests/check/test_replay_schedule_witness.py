@@ -25,7 +25,7 @@ class _Index:
         args = [[["n", 0, 0, P]], [["p", 1, *sched]], [["n", 10 + p, 0, 1] for p in range(P)]]
         self.by_i = {RANK_I: {"i": RANK_I, "spec": f"{family}{{E={E},P={P},BM={BM}}}", "args": args},
                      **{10 + p: {"i": 10 + p, "spec": f"Const32[0x{p:08x}]_v1"} for p in range(P)}}
-        self.pnames, self.supplied = PNAMES, {}
+        self.pnames, self.supplied, self.kv_prefix = PNAMES, {}, None
         self._d = {"family": family, "statics": STATICS, "step": 0, "op_path": ALIGN, "row": ROW,
                    "members": [("rank.0", P, "i32"), ("rank.1", P, "i32")]}
         self._router = {"family": "Router_v1", "statics": {}, "step": 0, "op_path": ROUTER, "row": ROW, "members": [("out", P, "i32")]}
