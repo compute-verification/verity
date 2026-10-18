@@ -21,9 +21,15 @@ A program's trace is a `DynPopulation`. Three facts decide what the population t
   isolation: `vm` is address-closed and honestly oblivious (`vm_honestlyOblivious`), so the
   classical notion holds, and still one wrong one-bit unit copies `N` secret words that no honest run reads
   (`vm_leak`, `vm_honest_up`). Its padding is `vmStatic` (`vm_pad`), whose wiring shows the secrets upstream.
-* `wrong_freeze`, `wrong_freeze_of_off_downAt`, **addressing proved, data sampled** (the hybrid): when the slots the
-  read sets depend on hold their honest values, which holds when none is written inside the wrong units' cone, the run
-  is an assignment of the honest run's own frozen dataflow, with the same wrong units.
+* `leak_of_moved_read`, **the converse**: if two assignments that differ only on one unit's writes give a step
+  different read sets, one of them an input slot `t` the other doesn't read, then for some unit functions (`leaker`)
+  every honest run's egress is the same whatever `t` holds, and with that one unit wrong the egress copies `t`.
+  `vm_moved_read` is the pointer machine meeting its hypotheses.
+* `wrong_freeze`, `wrong_freeze_of_off_downAt`, `wrong_freeze_of_off_padDown`, **addressing proved, data sampled**
+  (the hybrid): when the slots the read sets depend on hold their honest values, which holds when none is written
+  inside the wrong units' cone (in the honest run, or in the public padding), the run is an assignment of the honest
+  run's own frozen dataflow, with the same wrong units. `wrong_padOver_of_mem`: a run that a full check confines to a
+  set `C` is an assignment of the padding over `C`.
 -/
 
 namespace Population
@@ -70,6 +76,11 @@ theorem wrong_padOver [Fintype U] [Fintype S] [Inhabited V] {C : Set (S → V)} 
   ext u
   simp only [Dataflow.wrong, DynPopulation.wrong, mem_filter, mem_univ, true_and]
   exact not_congr (D.padOver_correct_iff (hσ u))
+
+/-- **A run the checks confine to `C` is an assignment of the padding over `C`**, with the program's wrong units. -/
+theorem wrong_padOver_of_mem [Fintype U] [Fintype S] [Inhabited V] {C : Set (S → V)} {σ : S → V} (hσ : σ ∈ C) :
+    (D.padOver C).wrong (D.padFns C) σ = D.wrong σ :=
+  D.wrong_padOver fun u => D.reads_subset_padOver hσ u
 
 /-- **The static superset covers every assignment**: the padded static circuit's wrong units are the program's. -/
 theorem wrong_pad [Fintype U] [Fintype S] [Inhabited V] (σ : S → V) :
@@ -161,6 +172,17 @@ theorem skipped_mem_downAt [Fintype U] (hac : D.AddressClosed) {step : U → ℕ
       obtain ⟨v, hv, hvw⟩ := hwd
       exact ⟨v, hv, hvw.tail ⟨r, hw, hr⟩⟩
 
+/-- **The honest run's cone lies inside the padded one**: an honest read is a padded read. -/
+theorem downAt_subset_pad_down [Fintype U] [Fintype S] (σ : S → V) (B : Finset U) :
+    D.downAt σ B ⊆ ((D.padOver Set.univ).down B : Set U) := by
+  rintro v ⟨u, hu, huv⟩
+  refine Finset.mem_coe.2 (((D.padOver Set.univ).mem_down).2 ⟨u, hu, ?_⟩)
+  induction huv with
+  | refl => exact .refl
+  | tail _ hbc ih =>
+    obtain ⟨s, hs, hsr⟩ := hbc
+    exact ih.tail ⟨s, hs, D.reads_subset_padOver (Set.mem_univ σ) _ hsr⟩
+
 /-- **Addressing honest, data sampled**: if the read sets depend only on the slots `P` and those hold their honest
 values, the run is an assignment of the honest run's frozen dataflow `padOver {h}`, with the program's wrong units. -/
 theorem wrong_freeze [Fintype U] [Fintype S] [Inhabited V] {P : Finset S} (hP : D.AddressedBy P) {h σ : S → V}
@@ -179,6 +201,111 @@ theorem wrong_freeze_of_off_downAt [Fintype U] [Fintype S] [Inhabited V] (hsa : 
   rcases hoff p hp with hpi | ⟨v, hv, hpv⟩
   · exact hin p hpi
   · exact D.eq_honest_off_downAt hac ht hh hin v hv p hpv
+
+/-- **The hybrid, stated over the public padding**: if every slot the read sets depend on is an input or written
+outside the padded cone of the corruptible units `Bc`, then every run whose wrong units lie in `Bc` is an assignment
+of the honest run's frozen dataflow, which is checked, with the program's wrong units. -/
+theorem wrong_freeze_of_off_padDown [Fintype U] [Fintype S] [Inhabited V] (hsa : D.SingleAssignment)
+    (hac : D.AddressClosed) {step : U → ℕ} (ht : D.TimeOrdered step) {P : Finset S} (hP : D.AddressedBy P)
+    {Bc : Finset U} (hoff : ∀ p ∈ P, p ∈ D.input ∨ ∃ v, v ∉ (D.padOver Set.univ).down Bc ∧ p ∈ D.writes v)
+    {h σ : S → V} (hh : ∀ u, D.Correct h u) (hin : ∀ s ∈ D.input, σ s = h s) (hσ : D.wrong σ ⊆ Bc) :
+    (D.padOver {h}).Checked ∧ (D.padOver {h}).wrong (D.padFns {h}) σ = D.wrong σ := by
+  refine D.wrong_freeze_of_off_downAt hsa hac ht hP hh hin fun p hp => ?_
+  rcases hoff p hp with hpi | ⟨v, hv, hpv⟩
+  · exact Or.inl hpi
+  · refine Or.inr ⟨v, fun hvd => hv ?_, hpv⟩
+    obtain ⟨u, hu, huv⟩ := hvd
+    exact D.downAt_subset_pad_down h Bc ⟨u, hσ hu, huv⟩
+
+open Classical in
+/-- **The leaker**: `D`'s read sets and writes, every unit writing the constants `c`, except that unit `r` writes the
+value of slot `t` to its slot `o` whenever it reads `t`. -/
+noncomputable def leaker (hac : D.AddressClosed) (c : S → V) (r : U) (o t : S) : DynPopulation U S V where
+  input := D.input
+  writes := D.writes
+  reads := D.reads
+  f v σ s := if v = r ∧ s = o ∧ t ∈ D.reads r σ then σ t else c s
+  reads_only := by
+    intro v σ τ h s _
+    by_cases hv : v = r
+    · subst hv
+      have hrs := hac v σ τ h
+      by_cases ht : t ∈ D.reads v σ
+      · have ht' : t ∈ D.reads v τ := hrs ▸ ht
+        simp [ht, ht', h t ht]
+      · have ht' : t ∉ D.reads v τ := hrs ▸ ht
+        simp [ht, ht']
+    · simp [hv]
+
+/-- **The converse: a read set that a corruptible unit's writes move is not a circuit's.** In a time-ordered,
+single-assignment, address-closed trace addressed by the slots `P`, suppose `σ'` differs from `σ` only on unit `u`'s
+writes and moves unit `r` onto an input slot `t` that it does not read in `σ`, with neither `t` nor `r`'s slot `o`
+among the address slots. Then, for the leaker's functions: every honest run holding `σ`'s inputs off `t` writes the
+same value at `o`, whatever `t` holds; and for every value `x`, some run holding those inputs and `x` at `t`, whose
+only wrong unit is `u`, writes `x` at `o`. One wrong unit, and the egress copies a slot no honest run reads. -/
+theorem leak_of_moved_read [Fintype U] (hsa : D.SingleAssignment) (hac : D.AddressClosed) {step : U → ℕ}
+    (ht : D.TimeOrdered step) {P : Finset S} (hP : D.AddressedBy P) {u r : U} {σ σ' : S → V}
+    (hoff : ∀ s, s ∉ D.writes u → σ' s = σ s) {t o : S} (htin : t ∈ D.input) (ho : o ∈ D.writes r) (htP : t ∉ P)
+    (hoP : o ∉ P) (hmoved : t ∈ D.reads r σ') (hnot : t ∉ D.reads r σ) :
+    (∀ h : S → V, (∀ v, (D.leaker hac σ r o t).Correct h v) → (∀ s ∈ D.input, s ≠ t → h s = σ s) → h o = σ o) ∧
+      ∀ x : V, ∃ g : S → V, (∀ s ∈ D.input, s ≠ t → g s = σ s) ∧ g t = x ∧
+        (D.leaker hac σ r o t).wrong g ⊆ {u} ∧ g o = x := by
+  classical
+  set L := D.leaker hac σ r o t with hL
+  have hot : o ≠ t := fun e => (hsa t).1 htin r (e ▸ ho)
+  have huniq : ∀ v s, s ∈ D.writes v → ∀ w, s ∈ D.writes w → v = w := fun v s hv w hw =>
+    ((hsa s).2 fun hin => (hsa s).1 hin v hv).unique hv hw
+  have hoR : ∀ v, o ∈ D.writes v → v = r := fun v hv => huniq v o hv r ho
+  -- the honest run on secret `x`: `σ` with `x` at `t`
+  have honest : ∀ x : V, ∀ v, L.Correct (Function.update σ t x) v := by
+    intro x v s hs
+    have hst : s ≠ t := fun e => (hsa t).1 htin v (e ▸ hs)
+    have hrd : D.reads r (Function.update σ t x) = D.reads r σ :=
+      (hac r σ _ fun q hq => by
+        have : q ≠ t := fun e => hnot (e ▸ hq)
+        simp [Function.update_of_ne this]).symm
+    show Function.update σ t x s = if v = r ∧ s = o ∧ t ∈ D.reads r (Function.update σ t x) then
+      Function.update σ t x t else σ s
+    rw [hrd, Function.update_of_ne hst]
+    simp [hnot]
+  refine ⟨fun h hh hin => ?_, fun x => ?_⟩
+  · have hcov : L.Covered := fun s hs => ((hsa s).2 hs).exists
+    have heq := L.eq_of_timeOrdered hcov (step := step) ht (B := ∅) (σ := h) (τ := Function.update σ t (h t))
+      (fun s hs => by
+        by_cases hst : s = t
+        · subst hst; simp
+        · rw [Function.update_of_ne hst]; exact hin s hs hst)
+      (fun v hv => by simp [DynPopulation.wrong, hh v] at hv)
+      (fun v hv => by simp [DynPopulation.wrong, honest (h t) v] at hv)
+      (fun v hv => by simp at hv)
+    rw [heq, Function.update_of_ne hot]
+  · let g : S → V := Function.update (Function.update σ' t x) o x
+    have hgP : ∀ q ∈ P, g q = σ' q := fun q hq => by
+      have h1 : q ≠ o := fun e => hoP (e ▸ hq)
+      have h2 : q ≠ t := fun e => htP (e ▸ hq)
+      simp [g, Function.update_of_ne h1, Function.update_of_ne h2]
+    have hrg : D.reads r g = D.reads r σ' := hP r g σ' hgP
+    refine ⟨g, fun s hs hst => ?_, by simp [g, Function.update_of_ne hot.symm], fun v hv => ?_, by simp [g]⟩
+    · have hso : s ≠ o := fun e => (hsa s).1 hs r (e ▸ ho)
+      simp only [g, Function.update_of_ne hso, Function.update_of_ne hst]
+      exact hoff s fun hw => (hsa s).1 hs u hw
+    · simp only [mem_singleton]
+      by_contra hvu
+      simp only [DynPopulation.wrong, mem_filter, mem_univ, true_and] at hv
+      refine hv fun s hs => ?_
+      show g s = if v = r ∧ s = o ∧ t ∈ D.reads r g then g t else σ s
+      have hst : s ≠ t := fun e => (hsa t).1 htin v (e ▸ hs)
+      by_cases hso : s = o
+      · subst hso
+        have hvr : v = r := hoR v hs
+        rw [hrg]
+        simp [hvr, hmoved, g, Function.update_of_ne hot.symm]
+      · have hsu : s ∉ D.writes u := fun hw => hvu (huniq v s hs u hw)
+        have hgs : g s = σ s := by
+          simp only [g, Function.update_of_ne hso, Function.update_of_ne hst]
+          exact hoff s hsu
+        rw [hgs]
+        simp [hso]
 
 end DynPopulation
 
@@ -211,6 +338,30 @@ theorem vm_not_oblivious {N : ℕ} (i : Fin N) : ¬ (vm N).Oblivious := by
   have hmem : Slot.secret i ∈ (vm N).reads (some i) (fun _ => true) := by simp [vm, src]
   rw [this] at hmem
   simp [vm, src] at hmem
+
+theorem vm_addressedBy (N : ℕ) : (vm N).AddressedBy {.ptr} := by
+  intro u σ τ h
+  have hp : σ .ptr = τ .ptr := h .ptr (mem_singleton_self _)
+  cases u with
+  | none => rfl
+  | some i =>
+    show ({.ptr, src (σ .ptr) i} : Finset (Slot N)) = {.ptr, src (τ .ptr) i}
+    rw [hp]
+
+/-- **The converse is not vacuous**: the pointer machine meets its hypotheses, the pointer step moving copy step `i`
+from zero word `i` onto secret word `i`. -/
+theorem vm_moved_read {N : ℕ} (i : Fin N) :
+    (∀ h : Slot N → Bool, (∀ v, ((vm N).leaker (vm_addressClosed N) (fun _ => false) (some i) (.out i)
+        (.secret i)).Correct h v) → (∀ s ∈ (vm N).input, s ≠ .secret i → h s = false) → h (.out i) = false) ∧
+      ∀ x : Bool, ∃ g : Slot N → Bool, (∀ s ∈ (vm N).input, s ≠ .secret i → g s = false) ∧ g (.secret i) = x ∧
+        ((vm N).leaker (vm_addressClosed N) (fun _ => false) (some i) (.out i) (.secret i)).wrong g ⊆ {none} ∧
+        g (.out i) = x :=
+  (vm N).leak_of_moved_read (vm_singleAssignment N) (vm_addressClosed N) (vm_timeOrdered N) (vm_addressedBy N)
+    (u := none) (σ' := Function.update (fun _ => false) .ptr true)
+    (fun s hs => by
+      have : s ≠ .ptr := fun e => hs (by simp [vm, e])
+      simp [Function.update_of_ne this])
+    (by simp [vm]) (by simp [vm]) (by simp) (by simp) (by simp [vm, src]) (by simp [vm, src])
 
 /-- **The pointer machine's padding is its static declaration**: its padded read sets are `vmStatic`'s. -/
 theorem vm_pad (N : ℕ) (u : Option (Fin N)) : ((vm N).padOver Set.univ).reads u = (vmStatic N).reads u := by
