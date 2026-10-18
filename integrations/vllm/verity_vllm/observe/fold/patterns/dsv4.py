@@ -21,7 +21,8 @@ from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args,
 from verity_vllm.observe.fold.patterns.resolutions import attribution_for, unsupported
 from verity_vllm.observe.fold.patterns.rotary import step_positions
 from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
-from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
+from verity_vllm.observe.fold.resolver import (Compute, Const, Gather, Group, PerRow, Pieces, Resolution, Shared, StepContext, Transparent,
+                                               Unsupported)
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
 from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import FP8_QUANT_PINS
@@ -43,6 +44,10 @@ INV_ROPE_KERNEL = "vllm.models.deepseek_v4.common.ops.fused_inv_rope_fp8_quant._
 INV_ROPE_SRC_SHA = "25e6ced0c59d2464bfa83a706c99bfe09d5b00f31e1ab31a600797d0cc8cd5cc"
 #: Dsv4InvRopeQuantHead_v1's clamp and amax floor
 INV_ROPE_FP8_MAX, INV_ROPE_EPS = 448.0, 1e-10
+INDEXER_COMPRESS_KERNEL = ("vllm.models.deepseek_v4.common.ops.fused_compress_quant_cache."
+                           "_fused_kv_compress_norm_rope_insert_indexer_attn")
+INDEXER_COMPRESS_SRC_SHA = "9fa36754ffe4c4483c15a2f9bd19eee999f1473b5dd95aa467e94b615a0babef"
+F32_NEG_INF = 0xFF800000
 
 
 def _module(node: TreeNode) -> str:
@@ -78,6 +83,20 @@ def _slots(node: TreeNode, ctx: StepContext, layer: str, bs: object, sm: ViewDes
         return unsupported(node, "the cache's KV group does not give every token a slot in blocks of the launch's size", layer=layer,
                            block_size=bs, slots=slots[:8])
     return slots
+
+
+def _entry_slots(node: TreeNode, ctx: StepContext, layer: str, req: str, entries, per_block: int | None = None) -> tuple[int, ...] | Unsupported:
+    """The slots of `entries` of request `req` in `layer`'s KV group: entry e at table[e // n] * n + e % n, n the group's block size
+    or, for a compressed cache, `per_block` entries a block."""
+    try:
+        g = kv_group_of(ctx, layer)
+    except GeometryError as e:
+        return unsupported(node, str(e))
+    bt = ((g or {}).get("block_tables") or {}).get(req)
+    n = per_block or int((g or {}).get("block_size") or 0)
+    if bt is None or n <= 0 or any(e < 0 or e // n >= len(bt) for e in entries):
+        return unsupported(node, "the KV group's block table does not hold every entry", layer=layer, request=req, entries=list(entries)[:8])
+    return tuple(int(bt[e // n]) * n + e % n for e in entries)
 
 
 @dataclass
@@ -389,6 +408,94 @@ class SavePartialStates:
 
 
 @dataclass
+class IndexerCompress:
+    """`_fused_kv_compress_norm_rope_insert_indexer_attn[(T,)]`, a ratio-4 layer's indexer compressor -> at each token whose position
+    p ends a window ((p + 1) % 4 == 0) `Dsv4IndexerCompress_v1{D,ROPE,EPS}` of the 8 state rows of positions p - 7 .. p, the norm
+    weight and cos_sin[(p // 4) * 4], into compressed entry p // 4's slot of the indexer's key cache (`registry.dsv4_indexer`): its D
+    bytes, and its f32 scale after the block's byte rows.  State row r reads kv words [(r >= 4) D, +D) of its position's slot and the
+    score STATE_WIDTH words on; a row below position 0 is kv 0 and score -inf, as the kernel's masked loads.  One Compute per key-cache
+    block; a launch with no window end writes nothing.  Only the indexer's long path reads the cache."""
+
+    name = "dsv4.indexer_compress"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if not node.is_triton or node.enter.fn != INDEXER_COMPRESS_KERNEL:
+            return None
+        e = node.enter
+        if e.src_sha != INDEXER_COMPRESS_SRC_SHA or e.num_warps != 1:
+            return unsupported(node, "the kernel's source or warps differ from the pin", src_sha=e.src_sha, num_warps=e.num_warps)
+        a, c = bound_args(node), e.constexprs
+        state, pos_v, sm, w, cs, kc, ksm = (a.get(k) for k in ("state_cache_ptr", "positions_ptr", "slot_mapping_ptr", "rms_norm_weight_ptr",
+                                                                "cos_sin_cache_ptr", "k_cache_ptr", "kv_slot_mapping_ptr"))
+        D, W, R, ROPE, bs, n, eps = (c.get("HEAD_SIZE"), c.get("STATE_WIDTH"), c.get("COMPRESS_RATIO"), c.get("ROPE_HEAD_DIM"), a.get("block_size"),
+                                     a.get("kv_cache_block_size"), as_float(a.get("rms_norm_eps")))
+        rows = tuple(ctx.start.rows)
+        T = len(rows)
+        if not all(isinstance(v, ViewDesc) for v in (state, pos_v, sm, w, cs, kc, ksm)) \
+                or not all(isinstance(x, int) and x > 0 for x in (D, W, R, ROPE, bs, n)) or eps is None:
+            return unsupported(node, "the arguments are not bound as (state cache, positions, slots, norm weight, cos_sin, key cache, key slots) "
+                               "with static sizes")
+        pins = {"TRITON_BLOCK_SIZE": D, "QUANT_BLOCK": D, "TOKEN_STRIDE": D, "STATE_WIDTH": 2 * D, "OVERLAP": True, "FP8_MAX": INV_ROPE_FP8_MAX,
+                "SCALE_DIM": 4, "KV_BLOCK_STRIDE": kc.strides[0] if kc.rank else None}
+        if any(c.get(k) != v for k, v in pins.items()) or 2 * R != I.ROWS or e.grid != [T]:
+            return unsupported(node, f"the launch is not one program per token over {I.ROWS} overlapped state rows of one quant block",
+                               constexprs=c, grid=e.grid, T=T)
+        try:
+            I.check_norm_statics(D, ROPE, eps)
+        except ValueError as err:
+            return unsupported(node, str(err))
+        if not (state.dtype == "float32" and state.rank == 3 and state.shape[1:] == (bs, 2 * W) and state.strides[2] == 1
+                and (a.get("state_cache_stride0"), a.get("state_cache_stride1")) == state.strides[:2]) \
+                or not (kc.dtype == "uint8" and kc.rank == 3 and kc.shape[1:] == (n, D + 4) and kc.strides[1:] == (D + 4, 1)
+                        and (kc.offset + n * D) % 4 == 0 and kc.strides[0] % 4 == 0) \
+                or not (_is(w, (D,), "bfloat16") and cs.dtype == "float32" and cs.rank == 2 and cs.shape[1] == ROPE
+                        and cs.strides == (a.get("cos_sin_stride"), 1)):
+            return unsupported(node, "the state cache, key cache, norm weight or cos_sin are not the kernel's layouts", state=repr(state),
+                               k_cache=repr(kc), w=repr(w), cs=repr(cs))
+        pos = step_positions(node, ctx, pos_v, T)
+        if isinstance(pos, Unsupported):
+            return pos
+        mod = _module(node)
+        if isinstance(slots := _slots(node, ctx, f"{mod}.state_cache", bs, sm, T), Unsupported):
+            return slots
+        ends = [t for t, p in enumerate(pos) if (p + 1) % R == 0]
+        if not ends:
+            return Transparent("noop", tuple(sorted(node.ids())), hint=f"{mod}/compress", kernels=(triton_name(node),), pattern=self.name)
+        if len({rows[t][0] for t in ends}) != 1 or not is_int(ksm) or ksm.numel < T:
+            return unsupported(node, "the window ends are not one request's, or the key slots do not cover the tokens")
+        req, key = rows[ends[0]][0], f"{mod.removesuffix('.compressor')}.k_cache"
+        win = [s for t in ends for s in range(pos[t] - I.ROWS + 1, pos[t] + 1) if s >= 0]
+        if isinstance(src := _entry_slots(node, ctx, f"{mod}.state_cache", req, sorted(set(win))), Unsupported):
+            return src
+        if isinstance(dst := _entry_slots(node, ctx, key, req, [pos[t] // R for t in ends], per_block=n), Unsupported):
+            return dst
+        src = dict(zip(sorted(set(win)), src))
+        wroots, croots = ctx.roots_of(w), ctx.roots_of(cs)
+        if not wroots or not croots:
+            return unsupported(node, "the norm weight or the rotary table is no root of the capture", w=repr(w), cs=repr(cs))
+
+        def row(s: int, k: int, r: int) -> ViewDesc | Const:
+            if s < 0:
+                return Const(32, F32_NEG_INF if k else 0, "score_masked" if k else "kv_masked", shared=True, count=D)
+            q = src[s]
+            return ViewDesc(state.alloc, state.offset + q // bs * state.strides[0] + q % bs * state.strides[1] + k * W + (r >= R) * D, (D,),
+                            (1,), "float32", state.device)
+
+        spec, parts = vocab_kind(ctx, "dsv4_indexer_compress", D=D, ROPE=ROPE, EPS=eps), []
+        for b, lo, hi in block_runs(dst, n):
+            base = kc.offset + b * kc.strides[0]
+            q = ViewDesc(kc.alloc, base, (n, D), (D, 1), "float8_e4m3fn", kc.device)
+            sc = ViewDesc(kc.alloc, (base + n * D) // 4, (n, 1), (1, 1), "float32", kc.device)
+            ps = [pos[t] for t in ends[lo:hi]]
+            kv, score = (Pieces(tuple(tuple(row(p - I.ROWS + 1 + r, k, r) for r in range(I.ROWS)) for p in ps)) for k in (0, 1))
+            idx = tuple(s % n for s in dst[lo:hi])
+            parts.append(Compute(spec, hi - lo, (kv, score, Shared(w), Gather(cs, tuple(p // R * R for p in ps))), (Gather(q, idx), Gather(sc, idx)),
+                                 () if parts else (node.id,), hint=f"{mod}/compress", kernels=(triton_name(node),),
+                                 attribution=tuple(rows[t] for t in ends[lo:hi]), pattern=self.name, roots=(None, None, wroots[0].name, croots[0].name)))
+        return Group(tuple(parts), tuple(sorted(node.ids())), hint=mod, pattern=self.name)
+
+
+@dataclass
 class InvRopeQuant:
     """`vllm.fused_inv_rope_fp8_quant_kernel(o, positions, cos_sin, ...)`, the o-projection's input -> per token and head
     `Dsv4InvRopeQuantHead_v1{CHUNKS,QG,ROPE}` of o[t, h] and cos_sin[positions[t]]: the Build's `Dsv4InvRopeQuantRule`, on cc 9.0
@@ -498,8 +605,8 @@ class Fp8Einsum:
 
 def dsv4_patterns() -> list:
     """The DeepSeek-V4 patterns, ahead of the rank's collectives (`Mhc` records the all-reduces they resolve)."""
-    return [Mhc(), QKvRmsNorm(), QNormRopeKvInsert(), SavePartialStates(), InvRopeQuant(), Fp8Einsum()]
+    return [Mhc(), QKvRmsNorm(), QNormRopeKvInsert(), SavePartialStates(), IndexerCompress(), InvRopeQuant(), Fp8Einsum()]
 
 
-__all__ = ["Fp8Einsum", "InvRopeQuant", "Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "SavePartialStates", "block_runs", "dsv4_patterns",
-           "state_block", "swa_block"]
+__all__ = ["Fp8Einsum", "IndexerCompress", "InvRopeQuant", "Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "SavePartialStates", "block_runs",
+           "dsv4_patterns", "state_block", "swa_block"]
