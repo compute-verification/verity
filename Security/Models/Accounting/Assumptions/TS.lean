@@ -128,11 +128,11 @@ def FanIn {ι W J : Type} [DecidableEq J] (D : Dataflow ι W) (ins : Fin D.n →
 `p` given the past. -/
 def LuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p : ℝ) (g : RoundGame Ω S) : Prop := RoundGame.LuckAt p g
 
-/-- `accounting-ts-operand-h-mu` ((H-μ), decision 110; the headlines' first luck premise). **A cheater's deficient
-words are unpredictable from its view**: in the ideal game split at the receipt, at every round, whatever the past,
-the values of the round's deficient words have point mass at most `μ` given everything the cheater's skip and its
-values for them are functions of (`ReceiptGame.OperandPointMass`, HMU's `SkipRound.PointMass` at word level). The
-headlines take it at `¾`. Lemma B at fibre 1 (`Accounting.Guarantees.HMu.LemmaB`) turns it into the operand luck at
+/-- `accounting-ts-operand-h-mu` ((H-μ), decision 110, the claim Compose's `HMu` states per template; the headlines'
+first luck premise). **A cheater's deficient words are unpredictable from its view**: in the ideal game split at the
+receipt, at every round, whatever the past, the values of the round's deficient words have point mass at most `μ`
+given everything the cheater's skip and its values for them are functions of (`ReceiptGame.OperandPointMass`, HMU's
+`SkipRound.PointMass` at word level). The headlines take it at `¾`. Lemma B at fibre 1 (`Accounting.Guarantees.HMu.LemmaB`) turns it into the operand luck at
 `μ`. Where it holds:
 * the coins give it for a fresh-bit skipped value (`Accounting.Guarantees.HMu.CoinPointMass`: `½` at one bit);
 * for degree-2 operands on cube bits `OperandLuckCube` gives the operand luck at `¾` directly, on affine-operand runs

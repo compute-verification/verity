@@ -29,11 +29,14 @@ route to the operand luck, not a premise here.
 
 Two caveats bound what the statements say (RT-HEADLINE, note:20261018T1057Z-draft-rt-headline):
 
-* `∀ x, FoldOpt` at `μ_f = 0` excludes every run that skips a fold (RT-COMPOSE's B1). Charging fold skippers instead,
-  FOLD-OPT per fold done with the luck split into folded rounds at `7/8` and unfolded ones at `½`, moves the luck term
-  to `0.994·41/48,000 = 0.0849%`: `ε ≈ 0.656%` instead of `0.599%` on sm_120's sheet, a similar shift on its measured
-  vector, and `ε ≈ 0.232%` instead of `0.147%` on sm_80 (hand arithmetic). That fix changes `DIdealFloor` and is a
-  follow-up.
+* `∀ x, FoldOpt` at `μ_f = 0` excludes every run that skips a fold (RT-COMPOSE's B1). The fix is FOLD-OPT per word
+  folded (Compose's `FoldOptFolded`), with an unfolded round's luck charged on its own. It changes `DIdealFloor` and is
+  a follow-up. By hand arithmetic, with Lean's `ln(8/7) ≥ 1/8` and the luck term the larger of the two branches':
+  * an unfolded round at B′'s `½` (RT-HEADLINE §3): `ε ≈ 0.656%` instead of `0.599%` on sm_120's sheet and
+    `ε ≈ 0.232%` instead of `0.147%` on sm_80. On sm_120's measured vector the folded branch still binds
+    (`κ ≈ 0.218`), so `0.591%` stands;
+  * an unfolded round at the whole-unit guess bound `2^-64` (RT-COMPOSE r2's R2-B3,
+    note:20261018T1200Z-draft-rt-compose-r2): sm_120 stays at `0.599%` and `0.591%`, and sm_80 is about `0.148%`.
 * `ProofLayer.Pins` is false for today's Definitions (`PouwSegCheck_v2`) until PIN (#2417) lands: until then no proof
   layer of today's Definitions meets that hypothesis, and each statement is conditional on PIN.
 
@@ -65,7 +68,8 @@ relations pin every committed value (`Pins`, false for today's Definitions until
 (`RightFixed`), then outside an event of probability at most `2^-40` every accepted window's time is at least
 `1 − 599/100000` (`1 − 0.599%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: H1 + fx1 has no
 filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are separate lines. FOLD-OPT's `∀`-run form
-excludes fold skippers, and charging them gives about `0.656%` (the module doc). -/
+excludes fold skippers. Charging them gives about `0.656%` with an unfolded round at `½`, and `0.599%` at the
+whole-unit guess bound (the module doc). -/
 def Sm120SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
     {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ),
@@ -96,8 +100,8 @@ holds (`RightFixed`), then outside an event of probability at most `2^-40` every
 the model has no side unit and no filler, so they hold at any run. On the lane route (I3) at `9/8` is what
 `ClassPSlots` gives (`1 + (32 − w)/130` slots a word, FLOORS, note:20261018T0230Z-draft-floors) once writers create at
 most `w = 15` incidences, a cap nothing proves yet; on the table route it is SCALAR-ROUTE's, outside `ClassPSlots`.
-`ε_sample` and the Fiat–Shamir premium are separate lines. FOLD-OPT's `∀`-run form excludes fold skippers, and
-charging them shifts `ε` as on the sheet (the module doc). -/
+`ε_sample` and the Fiat–Shamir premium are separate lines. FOLD-OPT's `∀`-run form excludes fold skippers. Charging
+them leaves `0.591%`, since the folded branch binds here (the module doc). -/
 def Sm120MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
     {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ),
@@ -126,7 +130,8 @@ filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are se
 
 It is FOLD-OPT restated. `w* = 0` at the ALU facet, so `κ = 0` and `ε_jl = 0`: words cost nothing at the certificate,
 skipping a fold is the only saving, and `FoldOpt` assumes no run does. Its luck and proof-layer premises do nothing,
-and it bounds no cheater that saves anything. Charging fold skippers gives about `0.232%` (the module doc). -/
+and it bounds no cheater that saves anything. Charging fold skippers gives about `0.232%` with an unfolded round at
+`½`, and `0.148%` at the whole-unit guess bound (the module doc). -/
 def Sm80SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm80.checks (Fin 35) (Fin 23) Unit Empty) (G : ReceiptGame Ω Sm80.checks)
     {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm80.checks nπ V) (δbind δzk : ℝ),
