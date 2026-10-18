@@ -110,6 +110,34 @@ def section_10(claims, p):
     return acc
 
 
+# §10b Where are the bits?
+def section_10b():
+    from datacenter import Challenge, Deviation, Store
+    GB = 8e9
+    hbm = Device("a.gpu", "gpu", memory=Assumption("a.gpu.hbm", 96 * GB, "bits"),
+                 bandwidth=Assumption("a.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
+    dram = Device("a.dram", "dram", memory=Assumption("a.dram.size", 512 * GB, "bits"),
+                  bandwidth=Assumption("a.dram.bw", 200e9 * 8, "bit/s"))
+    net = Assumption("uplink", 400e9, "bit/s", "declared")
+    dc = Datacenter("dc1", [Block("a", [hbm, dram])],
+                    [Device("a.cert", "certifier", trusted=True), Device("challenger", "challenger", trusted=True),
+                     Device("leaf", "switch"), Device("world", "outside")],
+                    [Link("a.gpu", "a.dram", Assumption("pcie5x16", 64e9 * 8, "bit/s"), kind="pcie"),
+                     Link("a.gpu", "a.cert", net, 1e-6), Link("a.cert", "leaf", net, 1e-6),
+                     Link("challenger", "leaf", net, 1e-6), Link("world", "leaf", net, 1e-6)])
+    kv = Store("kv", 1 * GB, "a.gpu")
+    c = trace(lambda x: x ^ 1, x=Input(8))
+    p = place(c, dc, {"x": "world", "*": "a.gpu"}, deliver="world", stores=(kv,))
+    clock = Clock(tick=1e-4)
+    for deadline in (8, 300):
+        t = run(p, {"x": 3}, window=4, clock=clock, challenges=[Challenge("kv", at=0, deadline=deadline)])
+        acc = account(audit(t, occupancy(p, 32, 1, window=4)), p, clock, Interval(0, 1000))
+        print(deadline, acc.located)
+    late = run(p, {"x": 3}, window=4, clock=clock, challenges=[Challenge("kv", at=0, deadline=8)],
+               deviation=Deviation(moved={"kv": "a.dram"}))
+    print([x for x in audit(late, occupancy(p, 32, 1, window=4)) if isinstance(x, Refused)])
+
+
 # §11 Telemetry on an off-ramp
 def section_11(c, dc):
     temps = Offramp("telemetry", "b.gpu", "world", bits=64, windows=2)
@@ -160,6 +188,7 @@ def test_the_walkthrough_runs_as_shown(capsys):
     acc = section_10(claims, p)
     assert acc.sound and sum(b.credited for b in acc.blocks) == c.boolean_size
     assert all(b.credited > 0 for b in acc.blocks)        # each stage is credited to the block it ran on
+    section_10b()
     acc11 = section_11(c, dc)
     assert acc11.offramp_bits == {"telemetry": 128}
     section_12()
@@ -179,6 +208,7 @@ if __name__ == "__main__":
     t = section_8(p); print("---")
     claims = section_9(t, profile, p); print("---")
     section_10(claims, p); print("---")
+    section_10b(); print("---")
     section_11(c, dc); print("---")
     section_12(); print("---")
     section_13(dc)
