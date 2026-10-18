@@ -10,8 +10,8 @@ link records bind to each member's router ids at its slots, and `launch[e<e>.<j>
 key gives a schedule the kernel can produce).
 
 The units are planned from the declaration alone: at engine step e the members are the requests scheduled there in admission order
-(`arrivals.admission_order`: by arrival, decodes before the step's prefills, the order vLLM's runner lays the launch out in), and a
-member's slot is the pairs of the members before it.  The plan refuses a launch whose members disagree on it (tokens, experts, moe
+(`admission_order`: by arrival, decodes before the step's prefills, the order vLLM's runner lays the launch out in), and a member's
+slot is the pairs of the members before it.  The plan refuses a launch whose members disagree on it (tokens, experts, moe
 block, top-k), whose members' pairs are not their declared rows, or whose pairs do not fill it: no two requests claim a slot, and the
 counts sum.
 """
@@ -27,12 +27,27 @@ SCHEDULE = "schedule"
 I32 = Value(32)
 
 
+def admission_order(requests: list[dict]) -> list[dict]:
+    """Declared requests in the order the engine admits them (`engine.arrivals`: each right before its `arrive_step`): sorted by
+    `arrive_step`, stable."""
+    return sorted(requests, key=lambda r: int(r.get("arrive_step") or 0))
+
+
+def rows_at(req: dict, e: int) -> int:
+    """The query rows the declared request `req` (`arrive_step`, `prompt_len`, `max_tokens`) has at engine step e: its prompt on its
+    arrival, one row on each later step it decodes, else none."""
+    a, L, c = int(req["arrive_step"]), int(req["prompt_len"]), int(req["max_tokens"])
+    if e == a:
+        return L
+    if a < e <= a + c - 1:
+        return 1
+    return 0
+
+
 def launch_units(requests) -> tuple[dict, ...]:
     """The shared align launches of `requests` (`workload.WorkloadRequest`, manifest order), by engine step e and the j-th linked
     align call of that step: {"e", "j", "E", "BM", "P", "members": ((request, call k, word offset, slot, pairs), ...)}.  See the module
     docstring for the rule and its refusals."""
-    from verity_vllm.engine.arrivals import admission_order
-    from verity_vllm.pipeline.launch_context import rows_at
     decl = [{"i": i, "arrive_step": r.arrive_step, "prompt_len": r.prompt_len, "max_tokens": r.cap} for i, r in enumerate(requests)]
     by_step: dict[int, dict[int, list[dict]]] = {}
     for q in admission_order(decl):
