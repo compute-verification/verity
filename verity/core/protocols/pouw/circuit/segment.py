@@ -81,7 +81,7 @@ segment, every window's keys and receipt leaf (the thread at the same position `
 H1 (cgemm.cu's c_l7qs, `benchmarks/pouw/edited_gemm/cgemm_ref.py`) serves O = (W + c) X^T with X = V + b (b the dither
 bits) on the tile's rows and W' = W + c + U (c the coin bits, U period 32) on its columns, and absorbs one call-wide fold a
 thread: T_0 .. T_(KS-1), then O' = T_last - U A_0 and D_d = U A_d (1 <= d < m) for the digits A_d of X's residue sums
-(`call_words`, m = `n_digits`(KS)). fx1 multiplies word q by `FX1`[q] first. Its receipt is a thread's 8 chain words
+(`call_words`, m = `n_digits`(KS)). fx1 multiplies word q by `fx1_key`(q) first. Its receipt is a thread's 8 chain words
 y_i ^ rotl(z_i, 16), R[(tile 512 + ctid) 8 + i]; case (a) (`Accounting.TS.DuoUnits`, `Fx1Units`) needs every chain's full
 state, R[(tile 512 + ctid) 16 + i], (y_0..7, z_0..7).
 
@@ -188,7 +188,6 @@ __all__ = [
     "win_check",
     "CALL_FOLDS",
     "CALL_OUTS",
-    "FX1",
     "LA",
     "LK",
     "V3FOLDS",
@@ -196,6 +195,7 @@ __all__ = [
     "call_check",
     "call_words",
     "chain_words",
+    "fx1_key",
     "lane_words",
     "li_entries",
     "n_digits",
@@ -665,8 +665,11 @@ def _seg_check_body(B, S, served, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel,
 
 # --- every absorbed word recomputed: PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 ----------------------------------------
 
-#: fx1's multiplier of entry q (egemm.cu's fx_chain<FX1, t, e>: key_mul(1, 32 q), q = 4 t + e)
-FX1 = tuple(mix32(0xA0000000 + 2 * (16 + 32 * q)) | 1 for q in range(32))
+def fx1_key(q: int) -> int:
+    """fx1's multiplier of entry q (egemm.cu's fx_chain<FX1, t, e>: key_mul(1, 32 q), q = 4 t + e)."""
+    return mix32(0xA0000000 + 2 * (16 + 32 * q)) | 1
+
+
 #: li's multiplier and XOR key of chain c's half step h (key_mul(2, 2 c + h), key_xor(2, 2 c + h))
 LA = tuple(tuple(mix32(0xA0000000 + 2 * (32 + 2 * c + h)) | 1 for h in range(2)) for c in range(NCH))
 LK = tuple(tuple(mix32(0xB0000000 + 2 * (32 + 2 * c + h) + 1) for h in range(2)) for c in range(NCH))
@@ -680,7 +683,7 @@ def li_entries(ch: int) -> list[int]:
 
 
 def _fx1_absorb(st: list[int], p) -> list[int]:
-    return _duo_absorb(st, [(v * FX1[q]) & M32 for q, v in enumerate(p)])
+    return _duo_absorb(st, [(v * fx1_key(q)) & M32 for q, v in enumerate(p)])
 
 
 def _li_absorb(st: list[int], p) -> list[int]:
@@ -851,7 +854,7 @@ def PouwXinAbsorb0Word(st: int) -> int:
 @primitive("PouwFx1Absorb", 1, [("st", Value(32 * 2 * NCH)), ("p", Array(32, V32))], Value(32 * 2 * NCH),
            conformance="protocol-defined")
 def PouwFx1AbsorbWord(st: int, *p: int) -> int:
-    """fx1's state (duo's y_0..7, z_0..7) after a thread's 32 words p, word q multiplied by `FX1`[q] before duo's step."""
+    """fx1's state (duo's y_0..7, z_0..7) after a thread's 32 words p, word q multiplied by `fx1_key`(q) before duo's step."""
     return _pack(_fx1_absorb(_words(st, 2 * NCH), p))
 
 
@@ -943,7 +946,7 @@ def _zero_set():
 
 
 def _fx1_absorb_bits(C, st, *p):
-    return _duo_absorb_bits(C, st, *[C.commit(_mul(C, p[q], FX1[q])) for q in range(32)])
+    return _duo_absorb_bits(C, st, *[C.commit(_mul(C, p[q], fx1_key(q))) for q in range(32)])
 
 
 def _li_absorb_bits(C, st, *p):
