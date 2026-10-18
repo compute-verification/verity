@@ -9,7 +9,8 @@
 # probe.py run (probes/: rows.jsonl, gate.json, times.jsonl) with nvidia-smi sampled every 200 ms (env/smi.csv), then
 # uniform.py analyze (uniform.json, uniform.txt). Exit: 0 done, 1 build or gate refused, 2 wrong device or no nvcc.
 # DC_BUILD_ONLY=1 stops after the gate (any machine with CUDA 13.0). UNI_TABLES picks the tables (default "uniform imad";
-# "issue" is the issue-saturated stream, the honest step beside 256 FFMA).
+# "issue" is the issue-saturated stream, the honest step beside 256 FFMA; "async" is the uniform chain beside a saturated
+# async tensor op (wgmma on sm90, tcgen05.mma on sm100): its rows.jsonl carries the K-sweep for an offline slope fit).
 set -uo pipefail
 FAM=${1:?usage: uni.sh sm90|sm100}
 OUT=${OUT:?run under research run}
