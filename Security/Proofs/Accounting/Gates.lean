@@ -16,8 +16,9 @@ import Models.Accounting.Guarantees.Gates
 # The circuit model's window and lower bounds, proved
 
 `ProvenWindow` by induction over the gates (each value lies in its derived interval: `Iv.add`, `Iv.scale` and
-`Iv.mul` are sound, and a gather's value is a column word or 0, in the hull `Iv.join` gives), and `ClampOrWrap` from it (in the window a clamp and a wrap are both the identity); `Fooling` by
-induction over the gates (every free gate is 2-adically triangular in its window) and a count of the
+`Iv.mul` are sound, and a gather's value is a column word or 0, in the hull `Iv.join` gives), and `ClampOrWrap` from
+it (in the window a clamp and a wrap are both the identity); `Fooling` by induction over the gates (every free gate is
+2-adically triangular in its window) and a count of the
 charged gates' joint values; `SquaringCarry` from it at `j = 1` on the sparse family, whose squares have no carries
 between bytes; `EncodeBudget` and `EncodeCost` from `EncodeChainHardness` by summing the census's units over the
 windows and classes; `RhoPairs` from Fermat's little theorem (`s² = x · x^((p−1)/2) = ±x`).
