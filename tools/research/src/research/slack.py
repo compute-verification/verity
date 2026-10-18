@@ -609,7 +609,7 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
     if route and route[1] is not None and not api.dry_run:
         msg = {"text": text, "ts": ts, "thread_ts": thread, "bot_id": route[0].get("bot_id"), "username": handle}
         try:
-            deliver(api, route[0], route[1], ch, msg, link)
+            deliver(api, route[0], route[1], ch, msg)
         except SlackError as e:
             print(f"route: posted, but delivery stopped ({e}); the post itself stands: `research msg deliver --ts {ts}"
                   + (f" --thread {thread}" if thread else "") + "` rings what it missed", file=sys.stderr)
@@ -1098,22 +1098,17 @@ def is_doorbell(m: dict, reg: dict) -> bool:
 
 
 def _from(text: str, author: str) -> bool:
-    if m := DOORBELL_RE.match(text):
-        return m[1] == author or (m[1] == "router" and f": paused @{author} " in text)
-    return text.startswith((f"from {author}:", f"from {author} (", f"from router: paused {author} "))
+    m = DOORBELL_RE.match(text)
+    return bool(m) and (m[1] == author or (m[1] == "router" and f": paused @{author} " in text))
 
 
 def _mentions_thread(text: str, thread: str) -> bool:
-    if m := DOORBELL_RE.match(text):
-        return m[3] == thread
-    return f"thread_ts={thread}" in text or f"/p{thread.replace('.', '')}" in text
+    return bool(m := DOORBELL_RE.match(text)) and m[3] == thread
 
 
-def _rang(text: str, ts: str, link: str) -> bool:
-    """Whether the doorbell `text` is for the post `ts` (at `link`)."""
-    if m := DOORBELL_RE.match(text):
-        return (m[4] or m[3]) == ts
-    return link in text
+def _rang(text: str, ts: str) -> bool:
+    """Whether the doorbell `text` is for the post `ts`."""
+    return bool(m := DOORBELL_RE.match(text)) and (m[4] or m[3]) == ts
 
 
 def pr_branches(nums: set[str], log=None) -> dict[str, str]:
@@ -1152,9 +1147,9 @@ def watch_context(api: Slack, ch: str, msg: dict, root: dict | None, now: float,
     return history, pr_branches(nums, log) if nums else {}
 
 
-def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str, *, urgent: bool = False,
+def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent: bool = False,
             now: float | None = None, log=None) -> list[str]:
-    """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes.  One line per name saying
+    """Deliver the post `msg`: ring the doorbell of each name it wakes.  One line per name saying
     what happened.  Every handle's published route and every name's the post starts with is read first, so a clone not
     pulled since a name opened, reopened, closed or changed holder rings what the published table says (`_newer`)."""
     log = log or sys.stderr
@@ -1190,7 +1185,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
         try:
             rung = api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"], oldest=f"{now - 3600:.6f}")
             rung = [m for m in rung if m.get("ts") != r["inbox_ts"] and is_doorbell(m, reg)]
-            if any(_rang(m.get("text") or "", msg.get("ts") or "", link) for m in rung):
+            if any(_rang(m.get("text") or "", msg.get("ts") or "") for m in rung):
                 continue
             n = sum(_mentions_thread(m.get("text") or "", src) and _from(m.get("text") or "", author) for m in rung)
             if n >= CAP_PER_HOUR:                                        # a loop is one author; a roll call is many, once each
@@ -1630,8 +1625,7 @@ def cmd_deliver(ns: argparse.Namespace, reg: dict) -> int:
     if not msg:
         raise SlackError(f"no message {ns.ts} in the channel")
     msg = {**msg, "thread_ts": msg.get("thread_ts") or ns.thread}
-    link = api.call("chat.getPermalink", channel=ch, message_ts=ns.ts).get("permalink") or "-"
-    deliver(api, reg, routes_of(ns), ch, msg, link)
+    deliver(api, reg, routes_of(ns), ch, msg)
     return 0
 
 
@@ -2122,7 +2116,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         for m in bells:
             hours[int(float(m["ts"]) // 3600)] = hours.get(int(float(m["ts"]) // 3600), 0) + 1
         rows.append({"name": r["name"], "doorbells": len(bells), "peak_per_hour": max(hours.values(), default=0),
-                     "paused": sum((m.get("text") or "").startswith(("from router: paused", "from router, thread")) for m in bells)})
+                     "paused": sum((m.get("text") or "").startswith("from router, thread") for m in bells)})
     posts = api.paged("conversations.history", "messages", channel=ch, oldest=f"{since:.6f}")
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     dropped, stale, groups = [], [], {h.get("usergroup") for h in reg["handles"]}
