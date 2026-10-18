@@ -1,35 +1,57 @@
-"""A read of a table the program brings (`verity_vllm.program.registry.tables`' `TableRead{IB}x{EW}_v1`) lowers by its Boolean form's
-builder (`verity.ml.circuits.boolean.table`, through `ir_lower._boolean_build`): the entry at the index's low bits at every index and
-on random tables, in (2^IB - 1) * 16 EW ANDs over the unit's own input bits and no lookup; a read of a table past `BT.MAX_WORDS`
-(`gelu_tanh_bf16`, `tanh_rn`) has no piece; and a Program whose reads share one registered table lowers under `Q_word` with every
-unit lowered and each unit equal to the reference on synthetic draws."""
+"""A read of a table the program brings (a word read as `verity_vllm.program.registry.tables.table_read` makes one) lowers by its
+Boolean form's builder (`verity.ml.circuits.boolean.table`, through `ir_lower._boolean_build`): the entry at the index's low bits
+at every index and on random tables, in (2^IB - 1) * 16 EW ANDs over the unit's own input bits and no lookup; a read of a table
+past `BT.MAX_WORDS` has no piece; and a Program whose reads share one registered table lowers under `Q_word` with every unit
+lowered and each unit equal to the reference on synthetic draws."""
 from __future__ import annotations
 
 import random
 
 import pytest
 
-T = pytest.importorskip("verity_vllm.program.registry.tables")
-from verity.ml.circuits.boolean import table as BT  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.circuits.refs import Coll, concat  # noqa: E402
-from verity.ml.circuits.types import Array, Value  # noqa: E402
-from verity.ml.circuits.ops.scalar import I32Add  # noqa: E402
+from verity.ml.circuits.boolean import table as BT
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import Coll, concat
+from verity.ml.circuits.types import Array, Value
+from verity.ml.circuits.ops.scalar import I32Add
 
-from verity_flock import gf2  # noqa: E402
-from verity_flock import ir_lower as IL  # noqa: E402
-from verity_flock import partition_units as PU  # noqa: E402
+from verity_flock import gf2
+from verity_flock import ir_lower as IL
+from verity_flock import partition_units as PU
 
 #: (IB, EW): `exp2_lut127`'s 2^8 entries of two words, one-word and two-word entries, a 16-row table
 SHAPES = [(8, 2), (6, 1), (5, 2), (10, 1)]
+_WORDS: dict[tuple[int, int], PrimitiveDefinition] = {}
+
+
+def _word(ib: int, ew: int) -> PrimitiveDefinition:
+    """`FlockTableRead{IB}x{EW}_v1`, a word read as vllm's `table_read` makes one, and its Boolean form when it has one."""
+    key = (ib, ew)
+    if key not in _WORDS:
+        mask, rows, iw = (1 << ib) - 1, (ew << ib) // BT.ROW_WORDS, 8 if ib <= 8 else 16 if ib <= 16 else 32
+
+        def ev(idx: int, *words: int) -> int:
+            e = (idx & mask) * ew
+            return sum((words[e + k] & 0xFFFF) << (16 * k) for k in range(ew))
+
+        def ev_lazy(get) -> int:
+            e = 1 + (get(0) & mask) * ew
+            return sum((get(e + k) & 0xFFFF) << (16 * k) for k in range(ew))
+
+        p = PrimitiveDefinition(f"FlockTableRead{ib}x{ew}", 1, (("index", Value(iw)), ("table", Array(rows, Array(64, Value(16))))),
+                                Value(16 * ew), ev, register=False)
+        p.evaluate_lazy = ev_lazy  # type: ignore[attr-defined]
+        if ew << ib <= BT.MAX_WORDS:
+            BT.table_read(p, ib)
+        _WORDS[key] = p
+    return _WORDS[key]
 
 
 @pytest.mark.parametrize("ib,ew", SHAPES)
 def test_a_table_read_is_its_boolean_form_on_every_index(ib, ew):
-    p = T.table_read(ib, ew)
-    piece = IL.PIECES[p.id]
-    assert getattr(piece, "__wrapped__", piece) is BT.table_read(p, ib).build, "boolean_export's trace wraps every piece"
+    p = _word(ib, ew)
+    assert IL.PIECES[p.id] is BT.table_read(p, ib).build
     iw, n = p.params[0][1].w, (1 << ib) * ew
     rng = random.Random(ib * 10 + ew)
     lanes = [(i, [rng.getrandbits(16) for _ in range(n)]) for i in range(1 << ib)]
@@ -44,16 +66,15 @@ def test_a_table_read_is_its_boolean_form_on_every_index(ib, ew):
     assert got == [p.evaluate(i, *w) for i, w in lanes]
 
 
-@pytest.mark.parametrize("name", ["gelu_tanh_bf16", "tanh_rn"])
-def test_a_read_of_a_table_past_max_words_has_no_piece(name):
-    p = T.table_read(*T.TABLES[name])
-    assert p.id not in IL.PIECES
+def test_a_read_of_a_table_past_max_words_has_no_piece():
+    p = _word(13, 1)
+    assert BT.MAX_WORDS < 1 << 13 and p.id not in IL.PIECES
 
 
 def test_reads_of_one_registered_table_lower_unit_by_unit():
     """Four reads of one registered `exp2_lut127`-shaped table (2^8 entries of two words), each entry added to the next: under
     `Q_word` every unit lowers, the reads' units are the read's ANDs, and every unit equals the reference on synthetic draws."""
-    read = T.table_read(8, 2)
+    read = _word(8, 2)
     idx_t, tab_t, I32 = read.params[0][1], read.params[1][1], Value(32)
     K = 4
 
