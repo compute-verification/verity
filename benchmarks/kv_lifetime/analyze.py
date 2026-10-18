@@ -4,7 +4,7 @@ quantities (T, X, Q, K, n, n0) summed over 1 s windows, each step's spread over 
 gives its units a window (`frontier.py`), and the token rows a second of the steps with at least `PREFILL_ROWS` rows
 (the rate a recompute from fresh inputs re-prefills at). Writes analysis.json beside the inputs.
 
-    python analyze.py OUT_DIR [--warmup S]
+    python analyze.py OUT_DIR [--warmup S] [--phases I,J] [--delays 0,10,30]
 """
 from __future__ import annotations
 
@@ -47,6 +47,8 @@ def main() -> int:
     ap.add_argument("out", type=Path)
     ap.add_argument("--warmup", type=float, default=120.0)
     ap.add_argument("--phases", type=lambda s: [int(x) for x in s.split(",")], default=None)
+    ap.add_argument("--delays", type=lambda s: [float(x) for x in s.split(",")], default=[0.0, 10.0, 30.0],
+                    help="append delays (s) to compute the frontier at")
     a = ap.parse_args()
     serve = json.loads((a.out / "serve.json").read_text())
     z = np.load(a.out / "events.npz")
@@ -63,7 +65,7 @@ def main() -> int:
         sel = (ev["t"] >= t0) & (ev["t"] <= t1)
         sub = {k: v[sel] for k, v in ev.items()}
         r = lifetimes.analyze(sub, steps, t1, serve["block_bytes"], t_start=t0 + warm,
-                              stocks=[s * pool for s in STOCKS])
+                              stocks=[s * pool for s in STOCKS], delays=a.delays)
         busy = (steps["t0"] >= t0 + warm) & (steps["t1"] <= t1)
         r["serve"] = ph
         r["warmup_s"] = warm

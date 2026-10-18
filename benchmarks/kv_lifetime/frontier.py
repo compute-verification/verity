@@ -64,15 +64,16 @@ def share_at(by_stock: dict[str, float], pool: float, C: float) -> float:
 
 
 def table(phase: dict, pool: float, r_cap_engine: float, r_in_engine: float, encode_bps: float,
-          clock: str = "block", recompute_bps: float | None = None) -> list[dict]:
-    """Rows of the frontier under `clock`'s caps; under "origin" a cap is a recompute, re-prefilled at
-    `recompute_bps` (KV bytes a second) and then encoded."""
+          clock: str = "block", recompute_bps: float | None = None, tau: float = 0.0) -> list[dict]:
+    """Rows of the frontier under `clock`'s caps, blocks appended `tau` seconds after their allocation; under
+    "origin" a cap is a recompute, re-prefilled at `recompute_bps` (KV bytes a second) and then encoded."""
     rows = []
     busy_share = phase["busy_s"] / max(1e-12, phase["interval_s"][1] - phase["interval_s"][0])
     key = "frontier" if clock == "block" else "frontier_origin"
+    suffix = f",tau={tau:g}" if tau > 0 else ""
     for T, Ls in GRID:
         for L in Ls:
-            fr = phase[key][f"T={T:g},L={L}"]
+            fr = phase[key][f"T={T:g},L={L}{suffix}"]
             row = {"T": T, "L": L, "life_s": L * T, "held_GB": fr["rekey"]["held_bytes_mean"] / 1e9}
             for e, E in E_WORD.items():
                 C = (128 * r_cap_engine / E + r_in_engine) * L * T
@@ -81,10 +82,14 @@ def table(phase: dict, pool: float, r_cap_engine: float, r_in_engine: float, enc
                 row[f"f_live[{e}]"] = C / max(1.0, fr["rekey"]["held_bytes_mean"])
                 for p in ("rekey", "held", "expire"):
                     row[f"{p}[{e}]"] = share_at(fr[p]["by_stock"], pool, C)
+            append = fr["rekey"]["append_bytes_per_s"] if "append_bytes_per_s" in fr["rekey"] else \
+                phase["written_bytes_per_s"]
+            row["append_gpu_share"] = append / encode_bps
             for p in ("rekey", "held"):
                 row[f"{p}_gpu_share"] = fr[p]["rekey_bytes_per_s"] * (
                     1 / encode_bps + (1 / recompute_bps if clock == "origin" else 0.0))
                 row[f"{p}_step_share"] = row[f"{p}_gpu_share"] / max(1e-12, busy_share)
+                row[f"{p}_total_gpu_share"] = row["append_gpu_share"] + row[f"{p}_gpu_share"]
             row["expire_uncapped"] = fr["expire"]["credited_before_stock"]
             rows.append(row)
     return rows
@@ -103,6 +108,7 @@ def main() -> int:
     ap.add_argument("--encode-Bps", type=float, default=ENCODE_BPS)
     ap.add_argument("--clock", choices=("block", "origin"), default="block",
                     help="caps from each block's append, or from its content's origin (a cap is then a recompute)")
+    ap.add_argument("--tau", type=float, default=0.0, help="the append delay (s), one analyze.py computed")
     ap.add_argument("--json", type=Path, default=None)
     a = ap.parse_args()
     an = json.loads(a.analysis.read_text())
@@ -114,10 +120,10 @@ def main() -> int:
     recompute = (ph.get("prefill_rows_per_s") or 0.0) * an["serve"]["kv_bytes_per_token"]
     if a.clock == "origin" and not (ph.get("frontier_origin") and recompute):
         raise SystemExit(f"{a.analysis} has no origin-clock frontier or prefill rate: rerun serve.py and analyze.py")
-    rows = table(ph, pool, r_engine, a.r_in_node / a.engines, a.encode_Bps, a.clock, recompute or None)
+    rows = table(ph, pool, r_engine, a.r_in_node / a.engines, a.encode_Bps, a.clock, recompute or None, a.tau)
     write = ph["written_bytes_per_s"] / a.encode_Bps
     out = {"analysis": str(a.analysis), "phase": a.phase, "lever": a.lever, "engines": a.engines, "pool_bytes": pool,
-           "clock": a.clock, "recompute_Bps": recompute or None,
+           "clock": a.clock, "tau": a.tau, "recompute_Bps": recompute or None,
            "r_cap_trace_engine": rc, "r_cap_node_used": r_engine * a.engines, "r_in_node": a.r_in_node,
            "encode_Bps": a.encode_Bps, "write_gpu_share": write,
            "delayed": {tau: {"gpu_share": d["append_bytes_per_s"] / a.encode_Bps, "credit_lost": d["credit_lost"]}
@@ -126,13 +132,13 @@ def main() -> int:
           f"{a.engines}), mean {rc['mean_busy']:.3e}; used {r_engine * a.engines:.3e} a node. Pool {pool / 1e9:.1f} GB, "
           f"held {ph['occupancy']['held_bytes_mean'] / 1e9:.1f} GB; encode-on-write {write:.1%} of a GPU")
     print("| T s | L | life s | law (conj / best) | live f (conj) | rekey (conj / best) | held (conj) | expire (conj) "
-          "| rekey GPU | rekey/step |")
-    print("|---|---|---|---|---|---|---|---|---|---|")
+          "| append GPU | rekey GPU | rekey/step |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         print(f"| {r['T']:g} | {r['L']} | {r['life_s']:g} | {r['law[conjectured]']:.1%} / {r['law[best found]']:.1%} "
               f"| {r['f_live[conjectured]']:.2f} | {r['rekey[conjectured]']:.1%} / {r['rekey[best found]']:.1%} "
-              f"| {r['held[conjectured]']:.1%} | {r['expire[conjectured]']:.1%} | {r['rekey_gpu_share']:.2%} "
-              f"| {r['rekey_step_share']:.2%} |")
+              f"| {r['held[conjectured]']:.1%} | {r['expire[conjectured]']:.1%} | {r['append_gpu_share']:.1%} "
+              f"| {r['rekey_gpu_share']:.2%} | {r['rekey_step_share']:.2%} |")
     if a.json:
         a.json.write_text(json.dumps(out, indent=1) + "\n")
     return 0

@@ -158,6 +158,15 @@ def test_the_origin_clock_caps_a_block_from_its_contents_origin():
     assert lt.policy(ep, 10.0, 1, 0.0, "held", "origin")["rekeys"].tolist() == [2]
 
 
+def test_a_delayed_append_credits_a_block_only_from_tau_and_never_a_short_one():
+    t, k, b = events([(0, ALLOC, 0), (3, FREE, 0), (0, ALLOC, 1), (20, FREE, 1)])
+    ep = lt.parse(t, k, b, t_end=30.0)
+    ed = lt.delay(ep, 5.0)
+    assert sorted(ed["a"].tolist()) == [5.0, 5.0]
+    assert list(zip(ed["seg_start"], ed["seg_end"])) == [(5.0, 20.0)]  # block 0 died at 3: never appended
+    assert lt.policy(ed, 10.0, 1, 0.0, "expire")["cut"].tolist() == [10.0]  # appended at 5 in window 0
+
+
 def test_held_releases_a_cached_block_at_its_first_idle_cap():
     t, k, b = events([(0, ALLOC, 0), (5, CACHE, 0), (20, HIT, 0), (30, CACHE, 0), (50, ALLOC, 0), (52, FREE, 0)])
     ep = lt.parse(t, k, b, t_end=60.0)
@@ -203,7 +212,10 @@ def test_analyze_reports_lifetimes_occupancy_and_the_frontier():
     assert r["delayed"]["5.0"]["append_bytes_per_s"] < r["delayed"]["0.0"]["append_bytes_per_s"]
     assert r["frontier_origin"] == {}  # no origins logged: the block clock only
     o = lt.analyze({"t": t, "kind": k, "block": b, "origin": t - 30.0}, steps, 200.0, 2.0, windows=(10.0,),
-                   caps_L=(1,), phases=2, taus=(), stocks=[0.0])
+                   caps_L=(1,), phases=2, taus=(), stocks=[0.0], delays=(0.0, 5.0))
     assert o["frontier"]["T=10,L=1"] == fr
+    late = o["frontier"]["T=10,L=1,tau=5"]["rekey"]
+    assert late["append_bytes_per_s"] < fr["rekey"]["append_bytes_per_s"]  # the 1 and 3 s blocks are never appended
+    assert late["credited_before_stock"] < 1.0
     assert o["frontier_origin"]["T=10,L=1"]["expire"]["credited_before_stock"] == 0.0
     assert o["stock_origin_age_tail"]["20"] == 1.0

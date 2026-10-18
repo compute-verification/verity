@@ -26,7 +26,7 @@ def test_the_credited_share_interpolates_between_stocks_and_is_zero_past_the_gri
 
 def test_the_table_charges_a_longer_life_a_larger_stock():
     grid = {f"T={T:g},L={L}": {p: {"by_stock": {"0.0": 1.0, "1000000000000.0": 0.0}, "rekey_bytes_per_s": 1e6 * L,
-                                   "credited_before_stock": 1.0, "held_bytes_mean": 4e10}
+                                   "append_bytes_per_s": 5e8, "credited_before_stock": 1.0, "held_bytes_mean": 4e10}
                                 for p in ("rekey", "held", "expire")}
             for T, Ls in F.GRID for L in Ls}
     phase = {"frontier": grid, "busy_s": 50.0, "interval_s": [0.0, 100.0]}
@@ -35,6 +35,7 @@ def test_the_table_charges_a_longer_life_a_larger_stock():
     assert by[(60.0, 10)]["stock_GB[conjectured]"] == pytest.approx(10 * by[(60.0, 1)]["stock_GB[conjectured]"])
     assert by[(60.0, 1)]["law[conjectured]"] < by[(60.0, 1)]["law[best found]"]
     assert by[(60.0, 2)]["rekey_step_share"] == pytest.approx(2 * by[(60.0, 2)]["rekey_gpu_share"])
+    assert by[(60.0, 2)]["rekey_total_gpu_share"] == pytest.approx(0.5 + 2e-3)
     # under the origin clock a re-key is a recompute: the re-prefill's time on top of the encode's
     o = F.table({**phase, "frontier_origin": grid}, 1e12, 1e11, 1e4, 1e9, "origin", 3e9)
     assert o[0]["rekey_gpu_share"] == pytest.approx(rows[0]["rekey_gpu_share"] * (1 + 1 / 3))

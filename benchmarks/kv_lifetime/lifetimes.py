@@ -31,9 +31,9 @@ plan: a cached block no request holds is resident but credited nothing.
     held     a block is re-keyed at a cap only if a request holds it then, and released otherwise (later hits
              uncredited)
     expire   no re-key: a block is credited until its first cap and uncredited after
-  each averaged over `phases` window phases. The append of every written block (encode-on-write) is reported
-  beside them, and `delayed` gives the encode bytes and credit lost when a block is appended only once it is `tau`
-  seconds old.
+  each averaged over `phases` window phases, and for each append delay tau (a block appended, and so encoded and
+  credited, only once it is tau seconds old: `delay`), with the append's encode bytes beside the re-keys'. `delayed`
+  gives the encode bytes and credit lost by tau alone.
 - for a carrier stock C (bytes), the per-step credited share max(0, held_s - C) / held_s, time-weighted over steps.
 """
 from __future__ import annotations
@@ -272,6 +272,18 @@ def policy(ep: dict[str, np.ndarray], T: float, L: int, phase: float, name: str,
     return {"rekeys": rekeys, "cut": np.minimum(e, np.maximum(s, release[k]))}
 
 
+def delay(ep: dict[str, np.ndarray], tau: float) -> dict[str, np.ndarray]:
+    """The epochs with each block appended `tau` seconds after its allocation: its held time before then is
+    uncredited, and a block no request holds by then is never appended."""
+    if tau <= 0:
+        return ep
+    a = ep["a"] + tau
+    k = ep["seg_epoch"]
+    s = np.maximum(ep["seg_start"], a[k])
+    keep = s < ep["seg_end"]
+    return {**ep, "a": a, "seg_start": s[keep], "seg_end": ep["seg_end"][keep], "seg_epoch": k[keep]}
+
+
 def step_credit(steps: dict[str, np.ndarray], seg_start: np.ndarray, cut: np.ndarray, held_start: np.ndarray,
                 held_end: np.ndarray, block_bytes: float, stocks: Sequence[float]) -> dict:
     """Each step's held bytes and credited bytes (the credited spans at the step's midpoint), and for each carrier
@@ -291,9 +303,10 @@ def step_credit(steps: dict[str, np.ndarray], seg_start: np.ndarray, cut: np.nda
 def analyze(ev: dict[str, np.ndarray], steps: dict[str, np.ndarray], t_end: float, block_bytes: float, *,
             t_start: float = 0.0, windows: Sequence[float] = (20.0, 60.0), caps_L: Sequence[int] = (1, 2, 3, 5, 10, 60),
             phases: int = 8, taus: Sequence[float] = (0.0, 1.0, 5.0, 10.0, 30.0, 60.0),
-            stocks: Sequence[float] = (), grid_s: float = 1.0) -> dict:
+            stocks: Sequence[float] = (), grid_s: float = 1.0, delays: Sequence[float] = (0.0,)) -> dict:
     """The report for events and steps on one clock, over [t_start, t_end): epochs that start before t_start are
-    dropped from the lifetime distributions, and credited shares are over steps inside the interval."""
+    dropped from the lifetime distributions, and credited shares are over steps inside the interval. The frontier
+    is computed for each append delay in `delays` (`delay`), keyed `T=..,L=..` at 0 and `T=..,L=..,tau=..` past it."""
     ep = parse(ev["t"], ev["kind"], ev["block"], t_end, ev.get("origin"))
     keep = ep["a"] >= t_start
     a, he, re, cens = ep["a"][keep], ep["held_end"][keep], ep["res_end"][keep], ep["censored"][keep]
@@ -328,23 +341,28 @@ def analyze(ev: dict[str, np.ndarray], steps: dict[str, np.ndarray], t_end: floa
     out["occupancy"]["held_bytes_mean"] = float(np.mean(hb)) * block_bytes if hb else 0.0
     out["occupancy"]["held_bytes_p10_p50_p90"] = [float(np.percentile(hb, q)) * block_bytes for q in (10, 50, 90)] if hb else []
     clocks = ("block", "origin") if "origin" in ev else ("block",)
-    for clock, key in zip(clocks, ("frontier", "frontier_origin")):
-        for T in windows:
-            for L in caps_L:
-                row = {}
-                for name in ("rekey", "held", "expire"):
-                    rk, cred = [], []
-                    for ph in range(phases):
-                        p = policy(ep, T, L, T * ph / phases, name, clock)
-                        rk.append(float(p["rekeys"][keep].sum()))
-                        cred.append(step_credit(st, ep["seg_start"], p["cut"], ep["seg_start"], ep["seg_end"],
-                                                block_bytes, stocks))
-                    row[name] = {"rekey_bytes_per_s": float(np.mean(rk)) * block_bytes / span,
-                                 "credited_before_stock": float(np.mean([c["credited_before_stock"] for c in cred])),
-                                 "by_stock": {C: float(np.mean([c["by_stock"][C] for c in cred]))
-                                              for C in cred[0]["by_stock"]},
-                                 "held_bytes_mean": cred[0]["held_bytes_mean"]}
-                out[key][f"T={T:g},L={L}"] = row
+    for tau in delays:
+        ed = delay(ep, tau)
+        append = float(np.sum(keep & (ep["held_end"] > ed["a"]))) * block_bytes / span
+        for clock, key in zip(clocks, ("frontier", "frontier_origin")):
+            for T in windows:
+                for L in caps_L:
+                    row = {}
+                    for name in ("rekey", "held", "expire"):
+                        rk, cred = [], []
+                        for ph in range(phases):
+                            p = policy(ed, T, L, T * ph / phases, name, clock)
+                            rk.append(float(p["rekeys"][keep].sum()))
+                            cred.append(step_credit(st, ed["seg_start"], p["cut"], ep["seg_start"], ep["seg_end"],
+                                                    block_bytes, stocks))
+                        row[name] = {"rekey_bytes_per_s": float(np.mean(rk)) * block_bytes / span,
+                                     "append_bytes_per_s": append,
+                                     "credited_before_stock": float(np.mean([c["credited_before_stock"]
+                                                                             for c in cred])),
+                                     "by_stock": {C: float(np.mean([c["by_stock"][C] for c in cred]))
+                                                  for C in cred[0]["by_stock"]},
+                                     "held_bytes_mean": cred[0]["held_bytes_mean"]}
+                    out[key][f"T={T:g},L={L}" + (f",tau={tau:g}" if tau > 0 else "")] = row
     seg_ep = ep["seg_epoch"]
     for tau in taus:
         appended = (he - a) > tau
