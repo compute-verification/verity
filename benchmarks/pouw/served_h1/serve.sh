@@ -22,4 +22,14 @@ gpu-lease 1 --wait --max-min 28 -- timeout 1650 "$PY" "$ROOT/benchmarks/pouw/ser
   --cubin "$S/noise.cubin" --scratch "$S" --at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --by compute-accounting "$@"
 rc=$?
 echo "served-h1: serve.py exited $rc at $(date -u +%H:%M:%SZ)"
+if [ -f "$S/prover.tar" ]; then
+  if "$PY" -m research data put --kind pouw-h1-prover --file "$S/prover.tar" --preserve > "$OUT/prover-put.txt" 2>&1 \
+     || python3 -m research data put --kind pouw-h1-prover --file "$S/prover.tar" --preserve >> "$OUT/prover-put.txt" 2>&1; then
+    echo "served-h1: prover data put: $(tail -1 "$OUT/prover-put.txt")"
+  else
+    K=/workspace/pouw/served-h1-prover-${RESEARCH_RUN_ID:-$(basename "$D")}.tar
+    mv "$S/prover.tar" "$K" && echo "$K" > "$OUT/prover-kept.txt"
+    echo "served-h1: PROVER_PUT_FAIL, kept at $K"; tail -5 "$OUT/prover-put.txt"
+  fi
+fi
 exit "$rc"

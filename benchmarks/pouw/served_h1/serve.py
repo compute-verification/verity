@@ -18,8 +18,9 @@ them.  Instead:
   The units' count, S·U, is fixed by the public parameters.
 * **Receipts**: `h1tile`'s unit on the GPU (`receipts.call_receipts`), on every unit of every call, empty rows included.
   Seeds come from the salt, the position and the call's (root(A), root(B)).  There is one receipt tree per call.
-* **Credit**: the credited rows are the non-empty ones, a value read from the committed scales (an output of the Program's
-  masks, never a host flag); padding is never credited.
+* **Credit**: static (coordinator, 21:38Z): every unit of the S·U is credited as compute, a count fixed by the public
+  parameters, so no selection decides credit.  H1's dither makes an empty row's unit real work (X = wrap8(0 + b)).  The
+  served rows (the slots whose committed scale is nonzero) are usefulness, reported beside the credit and never part of it.
 * **Not covered**: attention (QKᵀ, P·V) and lm_head.
 
 In order, into OUT (`record.json` throughout, `manifest.json` at the end, the option's `pouw-h1-calls.json`):
@@ -32,11 +33,11 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   serve     the prompts again with the option; inside its `record`, each call's A table and receipts; then the empty steps;
             the token ids must be the reference's
   receipts  one receipt tree per call (one leaf per unit, `commit`)
-  prover    the prover's data (the table key, each call's real rows, scales and receipts) into the store (`research data put`,
-            else OUT/prover), before the gate so a gate failure keeps it
+  prover    the prover's data (the table key, each call's real rows, scales and receipts) as SCRATCH/prover.tar, before the
+            gate so a gate failure keeps it; `serve.sh` puts it in the store once the GPU is released
   gate      drawn units, real and empty, against `h1tile.reference` (receipt) and the served integer product (z); controls: the
             unit at the next position, a flipped receipt bit, root(A) rebuilt (and a tampered row, real or empty), root(B)
-            rebuilt (and a tampered row), the credited rows read back from the committed scales
+            rebuilt (and a tampered row), the served rows read back from the committed scales
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting
@@ -48,8 +49,6 @@ import hashlib
 import json
 import os
 import random
-import shutil
-import subprocess
 import sys
 import tarfile
 import tempfile
@@ -200,7 +199,7 @@ def static_layout(ns: list[int], t: int) -> tuple[list[int], int]:
 
 
 def chunk_of(k: int) -> int:
-    return max(16, (1 << 23) // k)
+    return max(16, (1 << 22) // k)
 
 
 def run(a: argparse.Namespace) -> dict:
@@ -355,15 +354,17 @@ def run(a: argparse.Namespace) -> dict:
     static_ok = ([(c["step"], c["linear"], c["base"], c["units"]) for c in calls]
                  == [(s, w, s * u_step + offs[w], (t_max // 32) * (int(layers[w].weight.shape[0]) // 32))
                      for s in range(s_max) for w in range(len(layers))])
-    credited = {"rows": sum(d["m"] for d in data), "macs": sum(d["m"] * c["n"] * c["k"] for c, d in zip(calls, data)),
-                "slot_rows": len(calls) * t_max}
+    credited = {"units": sum(c["units"] for c in calls), "rows": len(calls) * t_max,
+                "macs": sum(t_max * c["n"] * c["k"] for c in calls)}
+    useful = {"rows": sum(d["m"] for d in data), "macs": sum(d["m"] * c["n"] * c["k"] for c, d in zip(calls, data))}
+    useful["frac_of_credited_macs"] = round(useful["macs"] / max(1, credited["macs"]), 6)
     rec.step("serve", {"steps_served": done, "steps": s_max, "last_step_complete": complete, "order_ok": st["order_ok"],
                        "refused": st["refused"], "calls": len(calls), "units": sum(c["units"] for c in calls),
                        "units_static": s_max * u_step, "static": static_ok, "u_step": u_step, "s": round(serve_s, 1),
                        "empty_steps_s": round(time.perf_counter() - t0, 1), "a_served_vs_recorded": a_check,
                        "receipts_s": round(sum(c["receipts_s"] for c in calls), 1),
                        "real_rows_per_step": [max((d["m"] for c, d in zip(calls, data) if c["step"] == s), default=0)
-                                              for s in range(s_max)], "credited": credited})
+                                              for s in range(s_max)], "credited": credited, "useful": useful})
     equal = [s_["token_ids"] == r["token_ids"] for s_, r in zip(served, reference)]
     rec.step("tokens", {"equal": all(equal), "per_prompt": equal, "served": served, "reference": reference})
 
@@ -405,9 +406,10 @@ def run(a: argparse.Namespace) -> dict:
                                      "-1, ranks 0 .. count - 1",
                            "salts": "SHA-512(SALT_TAG || key || u32be len(label) || label || u64be i || u8 c), c = 0..2, "
                                     "labels a/<s>/<w> and r/<s>/<w>; the key is the prover's"},
-                "credited": {"rows": credited["rows"], "macs": credited["macs"],
-                             "rule": "the slots whose committed scale is nonzero; empty slots and empty steps are never "
-                                     "credited (the circuit's masked sum; the grid rounding is the Program's)"},
+                "credited": {**credited, "rule": "static: every unit of the S U, a count fixed by the public parameters, "
+                                                 "credited as compute; no selection decides credit"},
+                "useful": {**useful, "rule": "the slots whose committed scale is nonzero (a served row's scale is never 0); "
+                                             "reported beside the credit, never part of it"},
                 "calls": calls, "tokens_equal": all(equal)}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
     rec.step("prover", prover(a, out, key, calls, data))
@@ -473,7 +475,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         a_rows[row, rng.randrange(a_rows.shape[1])] ^= 1
         a_tampered = CM.levels(a_dom, [CM.leaf(a_dom, key, a_label, r, bytes(x))[0] for r, x in enumerate(a_rows)])[-1][0]
         committed = CM.s8_rows(slots.numpy(), scales)
-        credited = sum(int(np.frombuffer(bytes(x[-4:]), "<f4")[0] != 0) for x in committed)
+        useful = sum(int(np.frombuffer(bytes(x[-4:]), "<f4")[0] != 0) for x in committed)
         if c["linear"] not in b_roots:
             b_rows = weight.cpu().numpy()
             rebuilt = PH.weight_root(c["linear"], b_rows)
@@ -485,7 +487,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
              "receipt_opens": CM.verify(dom, root_r, u, leaf, sibs),
              "flipped_receipt_refused": not CM.verify(dom, root_r, u, leaf_f, sibs),
              "a_root_rebuilt": a_root == root_a, "tampered_a_row_changes_root": a_tampered != root_a,
-             "tampered_row_was_empty": row >= d["m"], "credited_rows_from_scales": credited == d["m"],
+             "tampered_row_was_empty": row >= d["m"], "served_rows_from_scales": useful == d["m"],
              "b_root_rebuilt": b_roots[c["linear"]][0] == root_b,
              "tampered_b_row_changes_root": b_roots[c["linear"]][1] != root_b}
         r["ok"] = all(v for k_, v in r.items() if isinstance(v, bool) and k_ != "tampered_row_was_empty")
@@ -496,37 +498,26 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
 
 
 def prover(a, out: Path, key: bytes, calls: list[dict], data: list[dict]) -> dict:
-    """The prover's data: the table key, each call's real rows (the rest of its slots are empty), scales and receipts, into the
-    store (or OUT when the store refuses)."""
-    with tempfile.TemporaryDirectory(dir=a.scratch) as td:
+    """The prover's data: the table key, each call's real rows (the rest of its slots are empty), scales and receipts, as
+    SCRATCH/prover.tar for `serve.sh` to put in the store after the lease (OUT/prover with no --scratch)."""
+    dest = Path(a.scratch) if a.scratch else out / "prover"
+    dest.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=dest) as td:
         p = Path(td) / "prover"
         p.mkdir()
         (p / "prover.json").write_text(json.dumps({"key": key.hex(), "calls": [[c["step"], c["linear"], d["m"]]
                                                                               for c, d in zip(calls, data)]}) + "\n")
         for c, d in zip(calls, data):
             np.savez(p / f"s{c['step']:03d}w{c['linear']:03d}.npz", xq=d["xq"], sa=d["sa"], receipts=d["receipts"])
-        tar = Path(td) / "prover.tar"
+        tar = dest / "prover.tar"
         with tarfile.open(tar, "w") as t:
             t.add(p, arcname="prover")
-        size = tar.stat().st_size
-        h = hashlib.sha256()
-        with tar.open("rb") as f:
-            for blk in iter(lambda: f.read(1 << 24), b""):
-                h.update(blk)
-        cli = [shutil.which("research")] if shutil.which("research") else ["python3", "-m", "research"]
-        env = {**os.environ, "PYTHONPATH": f"{HERE.parents[2] / 'tools' / 'research' / 'src'}:{os.environ.get('PYTHONPATH', '')}"}
-        try:
-            r = subprocess.run([*cli, "data", "put", "--kind", "pouw-h1-prover", "--file", str(tar), "--preserve"],
-                               capture_output=True, text=True, env=env)
-            rc, so, se = r.returncode, r.stdout, r.stderr
-        except OSError as e:
-            rc, so, se = -1, "", repr(e)
-        doc = {"bytes": size, "sha256": h.hexdigest(), "cli": cli, "put_rc": rc, "put_out": so[-800:], "put_err": se[-800:]}
-        if rc:
-            (out / "prover").mkdir(exist_ok=True)
-            os.replace(tar, out / "prover" / "prover.tar")
-            doc["in_out"] = "prover/prover.tar"
-        return doc
+    h = hashlib.sha256()
+    with tar.open("rb") as f:
+        for blk in iter(lambda: f.read(1 << 24), b""):
+            h.update(blk)
+    return {"bytes": tar.stat().st_size, "sha256": h.hexdigest(), "tar": str(tar),
+            "put": "serve.sh, after the lease: OUT/prover-put.txt"}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -554,4 +545,13 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        rc = main()
+    except BaseException:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        rc = 2
+    sys.stdout.flush()
+    sys.stderr.flush()
+    # the in-process engine and the spawn pool can keep an exiting interpreter alive past the lease
+    os._exit(rc)
