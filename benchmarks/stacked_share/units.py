@@ -63,7 +63,8 @@ def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None
     (anything with a ``root``: its run inputs are its dynamic values) also ``steps``, the units of each census/v1 step at `ends`
     (default: one step), checked against `stacking.analyze`. A Definition's parameters depend on a run input as `dyn` says
     (default: all) and take the value ranges `rng` (default: any word); gather index bits its parameters carry go under
-    ``(parameters)``, and ``arg_rng`` holds each call's argument ranges."""
+    ``(parameters)``, and ``arg_rng`` holds each call's argument ranges (a scan's: its first iteration's, its carry dependent on
+    a run input when any argument is, as the walk has it)."""
     program = fn if hasattr(fn, "root") else None
     if program is not None:
         body, pdyn, fid = program.root.body, (), program.root.id
@@ -76,7 +77,7 @@ def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None
         if not is_input(nd.fn):
             r = rows.setdefault(nd.fn.id, {"family": family(nd.fn), "statics": dict(getattr(nd.fn, "bindings", {})), "instances": 0,
                                            "units": Counter(), "refused": Counter()})
-            r["instances"] += nd.n if nd.form == "batch" else 1
+            r["instances"] += nd.n if nd.form in ("batch", "scan") else 1
     ends = list(ends) if ends is not None else [len(body.nodes)]
     steps = [Counter() for _ in ends]
     up: dict = {}
@@ -101,7 +102,11 @@ def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None
             if listed != theirs["units"]:
                 raise AssertionError(f"step {s}: the callees' units {listed} are not stacking.analyze's {theirs['units']}")
         out["steps"] = [dict(s) for s in steps]
-    out["arg_dyn"] = {k: [P._dyn(a.refs, pdyn, dyns) for a in nd.args] for k, nd in enumerate(body.nodes) if not is_input(nd.fn)}
+    out["arg_dyn"] = {}
+    for k, nd in enumerate(body.nodes):
+        if not is_input(nd.fn):
+            ad = [P._dyn(a.refs, pdyn, dyns) for a in nd.args]
+            out["arg_dyn"][k] = [any(ad)] + ad[1:] if nd.form == "scan" else ad
     if program is None:
         out["arg_rng"] = {k: [P._read(a.refs, prng, segs) for a in nd.args] for k, nd in enumerate(body.nodes) if not is_input(nd.fn)}
     return out

@@ -12,8 +12,8 @@ import pytest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.ops import fp32, prims, scalar
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array, Value
+from verity.ml.circuits.refs import array_of, tuple_of
+from verity.ml.circuits.types import Array, Tuple as TupleT, Value
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -96,6 +96,14 @@ def test_the_window_fit_is_exact_and_refuses_another_form():
     sq = window(lambda N, S, n: n * n, "TestStackedSquare")
     with pytest.raises(AssertionError, match="the fit misses"):
         U.fit(lambda N, S: U.count(bind(sq, N=N, S=S), [True]), POINTS, CHECKS)
+
+
+def test_a_scan_counts_each_iteration():
+    step = comp("TestStackedScanStep", (("m", S32), ("x", S32)), TupleT((S32, S32)),
+                lambda B, _S, m, x: tuple_of(B.call(scalar.F32Fmaxf, m, x), B.call(fp32.F32Add, m, x)))
+    fn = comp("TestStackedScan", (("m", S32), ("x", Array(5, S32))), S32, lambda B, _S, m, x: B.scan(step, m, xs=[x])[0])
+    assert U.units(fn)["callees"][step.id]["instances"] == 5
+    assert U.by_primitive(fn, [True, True]) == {"F32Fmaxf_v1|compare_select": 5, "F32Add_v1|roundings": 5}
 
 
 # the modeled variant reads the registry's templates: toys registered under names nothing else uses
