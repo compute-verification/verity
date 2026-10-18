@@ -4,6 +4,7 @@ its reason, or has its carries budgeted. The red team's attacks (benchmarks/prop
 are cases here."""
 from __future__ import annotations
 
+import copy
 import json
 import random
 
@@ -14,6 +15,7 @@ from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.ml.circuits.ops import fp32, prims, scalar
+from verity.ml.circuits.ports import In, Leaves, Out, Ports
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, Strided, array_of, concat, tuple_of
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, s32_value, s32_word
@@ -25,9 +27,9 @@ QMMA = prims.BlackwellE4m3QmmaDot32
 FREE = {"roundings": 0, "compare_select": 0, "gathers": 0, "products": 0, "folds": 0}
 
 
-def stand_in(name: str, params, ret=S32) -> PrimitiveDefinition:
+def stand_in(name: str, params, ret=S32, ports=None) -> PrimitiveDefinition:
     """A registry primitive's id with a dummy evaluator, for one this unit can't import (vLLM's, PoUW's): the table keys on ids."""
-    return PrimitiveDefinition(name, 1, tuple(params), ret, lambda *v: 0, register=False)
+    return PrimitiveDefinition(name, 1, tuple(params), ret, lambda *v: 0, register=False, ports=ports)
 
 
 #: the IMMA without .satfinite, which has no registry entry
@@ -47,8 +49,8 @@ SQACC = stand_in("PouwSqAcc", (("acc", Value(576)), ("x", S32)), Value(576))
 U8S8 = stand_in("BlackwellU8S8ImmaDot32", (("acc", S32), ("a", Array(32, S8)), ("b", Array(32, S8))))
 
 
-def comp(name: str, params, ret, body) -> CompositeDefinition:
-    return CompositeDefinition(name, 1, (), lambda _S: (tuple(params), ret), body, register=False)
+def comp(name: str, params, ret, body, ports=None) -> CompositeDefinition:
+    return CompositeDefinition(name, 1, (), lambda _S: (tuple(params), ret), body, register=False, ports=ports)
 
 
 def _step(K: int, mma=IMMA) -> CompositeDefinition:
@@ -63,10 +65,12 @@ def _step(K: int, mma=IMMA) -> CompositeDefinition:
 EPILOGUE = comp("TestEpilogue", (("acc", S32),), S32, lambda B, _S, acc: B.call(fp32.F32Add, B.call(fp32.F32Fma, acc, acc, acc), acc))
 
 
-def int8_program(S: int = 3, K: int = 64, *, mmas=None, acc0="zero", epilogue=False, reread=None) -> tuple[Program, list[int]]:
+def int8_program(S: int = 3, K: int = 64, *, mmas=None, acc0="zero", epilogue=False, reread=None,
+                 ports=None) -> tuple[Program, list[int]]:
     """S steps: step s reads its run input x[s] and the registered w, and starts from step s-1's accumulator (dynamic memory);
     step 0 from zero, or from the run input `c` when acc0 = "input". `epilogue`: each step also outputs `EPILOGUE` of its
-    accumulator. `reread`: (step, earlier step) whose x that step reads again. Returns the Program and its step ends."""
+    accumulator. `reread`: (step, earlier step) whose x that step reads again. `ports`: the program function's. Returns the
+    Program and its step ends."""
     steps = [_step(K, m) for m in (mmas or [IMMA] * S)]
     params = [("x", Array(S, Array(K, S8))), ("w", Array(K, S8))] + ([("c", S32)] if acc0 == "input" else [])
     ends: list[int] = []
@@ -83,7 +87,7 @@ def int8_program(S: int = 3, K: int = 64, *, mmas=None, acc0="zero", epilogue=Fa
             ends.append(len(B.nodes))
         return array_of(outs)
 
-    fn = comp("TestInt8Program", params, Array(S, S32), body)
+    fn = comp("TestInt8Program", params, Array(S, S32), body, ports=ports)
     return Program(fn, registered=("w",)), ends
 
 
@@ -176,6 +180,72 @@ def test_an_accumulator_from_a_run_input_is_refused():
     program, ends = int8_program(acc0="input")
     v = judge(program, ends)
     assert codes(v) == ["s8-window"] and v.reasons[0]["sites"][0]["acc"] == list(P.S32)
+
+
+BOUND = (-(1 << 20), 1 << 20)
+
+
+def test_a_run_inputs_bound_starts_a_proven_chain_through_its_census_fact():
+    """Port types narrow ranges (PROTOCOL.md §12): the accumulator from a run input is proven once its port bounds it away from
+    the s32 edge, and only then; P reads the bound from the census's facts."""
+    program, ends = int8_program(acc0="input", ports=Ports(params={"c": In(bound=BOUND)}))
+    v = judge(program, ends)
+    assert v.ok and v.numbers["family_steps"] == 6, v.reasons
+    edge, edge_ends = int8_program(acc0="input", ports=Ports(params={"c": In(bound=(P.S32[0], 0))}))
+    v = judge(edge, edge_ends)
+    assert codes(v) == ["s8-window"] and v.reasons[0]["sites"][0]["acc"][0] == P.S32[0]
+    cen = copy.deepcopy(census(program, ends))
+    c_node = 2  # the input nodes are x, w and c
+    for v_, j in enumerate(cen["values"]["producer"]):
+        if j == c_node:
+            cen["facts"][cen["values"]["fact"][v_]]["interval"] = None
+    assert P.analyze(program, cen).unproven == {IMMA.id: 6}
+
+
+def _rem(a, b):
+    """A remainder's magnitude is below its divisor's."""
+    if b is None:
+        return None
+    m = max(abs(b[0]), abs(b[1]))
+    return (1 - m, m - 1) if m else None
+
+
+DIV = stand_in("I32Div", (("a", S32), ("b", S32)), ports=Ports(ret=Out(interval=BOUND)))
+REM = stand_in("I32Rem", (("a", S32), ("b", S32)), ports=Ports(transfer=_rem))
+FIRST = comp("TestFirst", (("c", Array(2, S32)),), S32, lambda B, _S, c: c[0], ports=Ports(ret=Out(interval=BOUND)))
+SILENT = comp("TestFirstSilent", (("c", Array(2, S32)),), S32, lambda B, _S, c: c[0])
+C0 = Ports(params={"c": Leaves(((0, 1, In(bound=BOUND)),))})
+
+
+def _from(name: str, start, ports=None) -> P.Analysis:
+    """Two s8 steps from the accumulator `start` makes of the run input c (two s32 words)."""
+    fn = comp(name, (("c", Array(2, S32)), ("x", Array(64, S8)), ("w", Array(64, S8))), S32,
+              lambda B, _S, c, x, w: B.call(_step(64), start(B, c), x, w), ports=ports)
+    program = Program(fn, registered=("w",))
+    return P.analyze(program, census(program, [len(program.root.body.nodes)]))
+
+
+@pytest.mark.parametrize("label,start,ports,proven", [
+    ("declared", lambda B, c: B.call(DIV, c[0], c[1]), None, True),
+    ("undeclared", lambda B, c: B.call(I32DIV, c[0], c[1]), None, False),
+    ("transfer", lambda B, c: B.call(REM, c[0], B.call(prims.const(32, 1000))), None, True),
+    ("transfer-of-any-word", lambda B, c: B.call(REM, c[0], c[1]), None, False),
+    ("input-leaf", lambda B, c: c[0], C0, True),
+    ("composite", lambda B, c: B.call(FIRST, c), C0, True),
+    ("silent-composite", lambda B, c: B.call(SILENT, c), C0, False)])
+def test_a_producers_declared_interval_narrows_its_value(label, start, ports, proven):
+    """A primitive's declared interval, its transfer on its operands' ranges, an input leaf's bound, and a Definition's declared
+    return: P reads a parameter as one range (its leaves' union), so only the declaration keeps c[0]'s bound through a call."""
+    a = _from(f"TestFrom{label.title().replace('-', '')}", start, ports)
+    assert a.unproven == ({} if proven else {IMMA.id: 2}), label
+
+
+def test_port_intervals_read_as_signed_ranges():
+    assert P._port_range([-5, 5], 32) == (-5, 5) and P._port_range([0, 100], 8) == (0, 100)
+    assert P._port_range([0, (1 << 32) - 1], 32) == P.S32  # every encoding: any s32 value
+    assert P._port_range([0, 200], 8) is None  # 128..200 read as signed is -128..-56: no one signed interval
+    assert P._port_range([-1, 200], 8) is None and P._port_range(None, 8) is None  # no interval of a Value<8>; none
+    assert P._meet((0, 10), (5, 20)) == (5, 10) and P._meet(None, (1, 2)) == (1, 2) and P._meet((0, 1), (2, 3)) is None
 
 
 def test_a_wrapping_step_and_fp_mma_smuggling_are_refused():

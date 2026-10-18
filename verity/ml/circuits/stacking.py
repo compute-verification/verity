@@ -42,9 +42,12 @@ isn't charged.
 Ranges. A constant is its value, a proven core step its D, a proven affine map its exact result, a gate `RANGES` lists what its
 rule derives from its operands' ranges (`fmaxf` and `fminf` of a non-negative float, and the low byte of an f32's truncation
 below 128.0, over f32 bit patterns read as s32, which order +0..+inf as the floats), and every other value any word of its width
-(an s8 operand -128..127, an accumulator all of s32): ranges are derived from producers, never declared. So an accumulator from a
-run input, a split-K combine that may wrap, or a chain long enough to clamp is never proven. A `scan`'s carry is iterated to a
-fixpoint, exactly up to 2^16 iterations and then widened to any word.
+(an s8 operand -128..127, an accumulator all of s32). Port types (`ports`, PROTOCOL.md §12) narrow a range, read through
+`ports.reading` as signed: an input lies in its port's bound (its census fact), and a primitive's or Definition's value in the
+interval it declares, or a primitive's in what its transfer gives from its operands' ranges. A range comes from its producer and
+the producer's declaration, never from a reader's bound. So an accumulator from a run input without a bound, a split-K combine that
+may wrap, or a chain long enough to clamp is never proven. A `scan`'s carry is iterated to a fixpoint, exactly up to 2^16
+iterations and then widened to any word.
 
 A word is read at its own width. A reference to a leaf of another width than the reading position's type declares (an s32
 word read back as s8 lanes: a limb split no gate computes) is a ``reinterpretation``, refused wherever it occurs, an argument
@@ -82,6 +85,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
+from . import ports
 from .census import SCHEMA as CENSUS, step_of
 from .codec import canonical_json
 from .defs import Body, CompositeDefinition, PrimitiveDefinition, bind
@@ -293,6 +297,53 @@ def _union(a: Range, b: Range) -> Range:
     return (min(a[0], b[0]), max(a[1], b[1]))
 
 
+def _meet(a: Range, b: Range) -> Range:
+    """Both ranges at once; any word when they share no value (one of them is wrong, and neither is taken)."""
+    if a is None or b is None:
+        return b if a is None else a
+    lo, hi = max(a[0], b[0]), min(a[1], b[1])
+    return (lo, hi) if lo <= hi else None
+
+
+def _port_range(iv: Any, w: int | None) -> Range:
+    """A port interval of a `Value<w>` as a range: its encodings read as signed (`ports.as_reading`, through `ports.reading`);
+    any word when it is none, holds nothing, or is no one signed interval."""
+    return None if iv is None or w is None else ports.as_reading(tuple(iv), w)
+
+
+def _declared(fn: PrimitiveDefinition, rng: Sequence[Range]) -> Range:
+    """What a primitive's ports say of its value: what its transfer gives from its operands' ranges, else its declared interval."""
+    pt = ports.port_types(fn)
+    if pt is None:
+        return None
+    if pt.transfer is None:
+        return next((_port_range(o.interval, w) for _lo, _hi, o, w in pt.ret if o.interval is not None), None)
+    ivs = [None if r is None or r[0] > r[1] else ports.reading(r, _width(t, 0, t.leaves)) for r, (_n, t) in zip(rng, fn.params)]
+    return _port_range(pt.transfer(*ivs), fn.ret.w)
+
+
+def _declared_segs(segs: Segs, runs: Sequence[tuple]) -> Segs:
+    """A Definition's return segments, each narrowed by the interval its ports declare there (`runs`: `PortTypes.ret`)."""
+    cuts = sorted({x for lo, hi, o, _w in runs if o.interval is not None for x in (lo, hi)})
+    out: list[tuple[int, int, Range]] = []
+    for a, b, r in segs:
+        for lo, hi in zip([a] + [x for x in cuts if a < x < b], [x for x in cuts if a < x < b] + [b]):
+            got = next((_port_range(o.interval, w) for p, q, o, w in runs if p <= lo and hi <= q and o.interval is not None), None)
+            out.append((lo, hi, _meet(r, got)))
+    return _merge(out)
+
+
+def _merge(segs: Sequence[tuple[int, int, Range]]) -> Segs:
+    """Adjacent segments of one range as one."""
+    merged: list[tuple[int, int, Range]] = []
+    for a, b, r in segs:
+        if merged and merged[-1][2] == r and merged[-1][1] == a:
+            merged[-1] = (merged[-1][0], b, r)
+        else:
+            merged.append((a, b, r))
+    return tuple(merged)
+
+
 def _signed(w: int, v: int) -> int:
     return v - (1 << w) if v >> (w - 1) else v
 
@@ -422,15 +473,10 @@ def _read_segs(refs: Refs, params: Sequence[Range], segs: Sequence[Segs]) -> Seg
         elif n:
             out.append((pos, pos + n, _read(part, params, segs)))
         pos += n
-    merged: list[tuple[int, int, Range]] = []
-    for a, b, r in out:
-        if merged and merged[-1][2] == r and merged[-1][1] == a:
-            merged[-1] = (merged[-1][0], b, r)
-        else:
-            merged.append((a, b, r))
+    merged = _merge(out)
     if len(merged) > _MAX_SEGS:
-        return ((0, pos, _seg_union(tuple(merged))),)
-    return tuple(merged)
+        return ((0, pos, _seg_union(merged)),)
+    return merged
 
 
 def _key(refs: Refs) -> Any:
@@ -502,7 +548,8 @@ def _reinterpretations(body: Body) -> list[int | None]:
 
 
 class _Pass:
-    def __init__(self) -> None:
+    def __init__(self, inputs: Mapping[int, Segs] | None = None) -> None:
+        self.inputs = inputs or {}  # the root's input nodes' ranges, by node: their bounds
         self.memo: dict[tuple, tuple[Segs, bool, Tally]] = {}
         self.keep: list[Any] = []
         self.sites: dict[tuple[str, int], tuple[Range, Range]] = {}
@@ -552,7 +599,7 @@ class _Pass:
     def call(self, fn: Any, dyn: tuple[bool, ...], rng: tuple[Range, ...], where: tuple[str, int]) -> tuple[Segs, bool, Tally]:
         if isinstance(fn, PrimitiveDefinition):
             r, t = self.prim(fn, dyn, rng, where)
-            return ((0, 1, r),), any(dyn), t
+            return ((0, 1, _meet(r, _declared(fn, rng))),), any(dyn), t
         key = (id(fn), dyn, rng)
         hit = self.memo.get(key)
         if hit is None:
@@ -564,7 +611,10 @@ class _Pass:
             for _k, t in self.walk(fn.body, dyn, rng, fn.id, segs, dyns, up):
                 out.add(t)
             out.index = up
-            hit = self.memo[key] = (_read_segs(fn.body.ret, rng, segs), _dyn(fn.body.ret, dyn, dyns), out)
+            ret = _read_segs(fn.body.ret, rng, segs)
+            if (pt := ports.port_types(fn)) is not None and pt.ret:
+                ret = _declared_segs(ret, pt.ret)
+            hit = self.memo[key] = (ret, _dyn(fn.body.ret, dyn, dyns), out)
         return hit
 
     def walk(self, body: Body, pdyn: Sequence[bool], prng: Sequence[Range], def_id: str, segs: list[Segs],
@@ -591,7 +641,7 @@ class _Pass:
             if is_input(nd.fn):
                 when, w = input_id(nd.fn.id)  # type: ignore[misc]
                 self.shapes.setdefault(nd.fn.id, ("input", 0, w))
-                segs.append(((0, nd.out.leaves, None),))
+                segs.append(self.inputs.get(k) or ((0, nd.out.leaves, None),))
                 dyns.append(when == RUN)
                 continue
             ad = [_dyn(a.refs, pdyn, dyns) for a in nd.args]
@@ -697,7 +747,7 @@ def count(fn: Any, dyn: Sequence[bool], ranges: Sequence[Range] | None = None) -
 
 def analyze(program: Any, census: Mapping) -> Analysis:
     """P's reading of `program` with its census (verity/census/v1 of this Program: its steps, and its root values' producers,
-    bits, readers and selections). A census of another schema or of another root is refused (ValueError)."""
+    bits, readers, selections and facts). A census of another schema or of another root is refused (ValueError)."""
     nodes = program.root.body.nodes
     if census.get("schema") != CENSUS or len(census["nodes"]["callee"]) != len(nodes) or census["inputs"] != sum(
             1 for nd in nodes if is_input(nd.fn)):
@@ -707,7 +757,12 @@ def analyze(program: Any, census: Mapping) -> Analysis:
     step = step_of(census)
     units = [Counter() for _ in range(S)]
     whole = Tally()
-    p = _Pass()
+    vals, facts = census["values"], census["facts"]
+    bounds: dict[int, list[tuple[int, int, Range]]] = {}
+    for j, lo, hi, f in zip(vals["producer"], vals["lo"], vals["hi"], vals["fact"]):
+        if j < census["inputs"]:
+            bounds.setdefault(j, []).append((lo, hi, _port_range(facts[f]["interval"], _width(nodes[j].out, lo, hi))))
+    p = _Pass({j: _merge(sorted(b)) for j, b in bounds.items()})
     for k, t in p.walk(program.root.body, (), (), program.root.id, [], [], {}):
         whole.add(t)
         for cls, n in t.units.items():
@@ -720,7 +775,6 @@ def analyze(program: Any, census: Mapping) -> Analysis:
             pools.setdefault(v, set()).add(step(k))
     first = [0] * S
     longest = 0
-    vals = census["values"]
     for v, (j, bits, reads) in enumerate(zip(vals["producer"], vals["bits"], vals["reads"])):
         touched = {step(k) for k in reads} | pools.get(v, set())
         if j >= I:
