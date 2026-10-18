@@ -3,9 +3,10 @@ of at most 64 tokens, prefill: the rest), every kernel launched while a step ran
 duration, grid and block, stream, and the median start of its first launch relative to the step's first and last model kernel
 (ms; negative: before). Also, per step, the GPU's idle time between the step's model kernels (the gaps a hash could fill without
 sharing SMs). `--gaps` instead groups those idle gaps by the kernels on either side, with the share whose next kernel was launched
-after the gap opened (the host was late) and the runtime calls the launching thread made inside them. Measurement only.
+after the gap opened (the host was late) and the runtime calls the launching thread made inside them. `--kernel NAME` instead
+breaks one kernel's launches down by grid, with the share of their time that overlapped a hash kernel. Measurement only.
 
-    python3 benchmarks/hash/loop/kernels.py OUT/served.nsys-rep [--arm served-commit-rows] [--phase decode] [--top 20] [--gaps]
+    python3 benchmarks/hash/loop/kernels.py OUT/served.nsys-rep [--arm served-commit-rows] [--phase decode] [--top 20] [--gaps | --kernel NAME]
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ def main() -> int:
     ap.add_argument("--phase", choices=("decode", "prefill"), default="decode")
     ap.add_argument("--top", type=int, default=20)
     ap.add_argument("--gaps", action="store_true")
+    ap.add_argument("--kernel", help="one kernel's launches by grid: n a step, mean us, ms a step, and the share of its time beside hash kernels")
     a = ap.parse_args()
     db_path = a.report
     if a.report.suffix != ".sqlite":
@@ -57,6 +59,8 @@ def main() -> int:
     bounds = [s for s, _ in steps] + [r1]
     if a.gaps:
         return gaps(a, steps, bounds, kern, api, strings, nvtx, pid)
+    if a.kernel:
+        return by_grid(a, steps, bounds, kern)
     by: dict[str, list] = defaultdict(lambda: [0, [], set(), set(), [], []])
     idle, nsteps = [], 0
     for i, (s, tok) in enumerate(steps):
@@ -143,6 +147,35 @@ def gaps(a, steps, bounds, kern, api, strings, nvtx, pid) -> int:
                                                               sorted(calls.items(), key=lambda kv: -kv[1])[:10]))
     print("  NVTX ranges over the gaps (ms/step): " + ", ".join(f"{t} {per(v):.3f}" for t, v in
                                                           sorted(ranges.items(), key=lambda kv: -kv[1])[:10]))
+    return 0
+
+
+def by_grid(a, steps, bounds, kern) -> int:
+    grids: dict[tuple, list] = defaultdict(lambda: [0, 0, 0])   # launches, ns, ns beside a hash kernel
+    nsteps = 0
+    for i, (s, tok) in enumerate(steps):
+        if (tok <= 64) != (a.phase == "decode"):
+            continue
+        ks = [k for k in kern if s <= k[3] < bounds[i + 1]]
+        mine = [k for k in ks if k[2] == a.kernel]
+        if not mine:
+            continue
+        nsteps += 1
+        hashes = sorted((k[0], k[1]) for k in ks if NS.cat(k[2]).startswith("hash"))
+        for k in mine:
+            g = grids[k[5]]
+            g[0] += 1
+            g[1] += k[1] - k[0]
+            g[2] += NS.union([(max(h0, k[0]), min(h1, k[1])) for h0, h1 in hashes if h0 < k[1] and h1 > k[0]])
+    if not nsteps:
+        print(f"no {a.phase} steps with {a.kernel}", file=sys.stderr)
+        return 1
+    tot = sum(g[1] for g in grids.values())
+    print(f"{a.arm} {a.phase}: {a.kernel} over {nsteps} steps: {tot / 1e6 / nsteps:.3f} ms a step, "
+          f"{sum(g[2] for g in grids.values()) / max(tot, 1):.0%} of it beside a hash kernel")
+    print(f"  {'grid/block':<20} {'n/step':>7} {'mean us':>8} {'ms/step':>8} {'beside hash':>11}")
+    for (x, y, z, t), (cnt, ns, side) in sorted(grids.items(), key=lambda kv: -kv[1][1])[:a.top]:
+        print(f"  {f'{x}x{y}x{z}/{t}':<20} {cnt / nsteps:>7.1f} {ns / cnt / 1e3:>8.1f} {ns / 1e6 / nsteps:>8.3f} {side / max(ns, 1):>11.0%}")
     return 0
 
 
