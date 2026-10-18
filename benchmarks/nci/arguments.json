@@ -28,7 +28,8 @@
     "p-rates",
     "p-loss-axis",
     "p-partial-sum-lemma",
-    "p-public-templates"
+    "p-public-templates",
+    "p-output-budget"
    ],
    "attacks": [
     "a-value-not-bit",
@@ -224,7 +225,7 @@
    "id": "p-partial-sum-lemma",
    "kind": "theorem",
    "status": "proposed",
-   "statement": "A Hong-Kung / Loomis-Whitney law on the reference circuit (the chain proof's partial-sum charge through Contains): proven ceiling about 3.6e-7 at the 1-year mark. Round 2: about 1,500-3,000 Lean lines; a coded crossing charged soundly gives rho >= 2e4.",
+   "statement": "A Hong-Kung / Loomis-Whitney law on the reference circuit (the chain proof's partial-sum charge through Contains): proven ceiling about 3.6e-7 at the 1-year mark. Round 2: about 1,500-3,000 Lean lines; a coded crossing charged soundly gives rho >= 2e4. The Appendix A draft (Notion, 'A bound on updated-parameter multiplications per task') states the same law per task, at most (x/2)·sqrt(y) products for x operand entries in and y output entries out, and admits compression only as an allowance that weakens the ceiling as its 3/2 power; in bits, compressing both operands by a factor r weakens this law by about r^1.5.",
    "refs": {
     "lean": [
      "Nci.SecurityProofs.UpdatedMatMul",
@@ -248,12 +249,19 @@
    "id": "p-public-templates",
    "kind": "policy-rule",
    "status": "proposed",
-   "statement": "Every multiplication of the declared circuit runs inside a public classical matmul template (a fixed number format and adder tree, over a public range of shapes), and at most a public fraction of its gates lie outside templates. Products are then gates of the declared circuit itself, so the Loomis-Whitney law applies to it directly, with no reference recipe and no Contains: Strassen-style and re-associated recipes become templates over combined operands. What remains is how compressible the operands crossing blocks are (a-boundary-code, a-value-not-bit) and the outside-template cap. A minimum shape must admit attention's head dimension (64-192) and MoE experts' widths (2048 in Kimi-K2).",
+   "statement": "Every multiplication of the declared circuit runs inside a public classical matmul template (a fixed number format and adder tree, over a public range of shapes), and at most a public fraction of its gates lie outside templates. Products are then gates of the declared circuit itself, so the Loomis-Whitney law applies to it directly, with no reference recipe and no Contains: Strassen-style and re-associated recipes become templates over combined operands. What remains is how compressible the operands crossing blocks are (a-boundary-code, a-value-not-bit) and the outside-template cap. A minimum shape must admit attention's head dimension (64-192) and MoE experts' widths (2048 in Kimi-K2). Stated in support form on the declared circuit, the law then needs no incompressibility assumption: it is parameterized by the novel bits each operand entry actually carries (zero for registered weights, so inference is free), and how few bits training can run on is the empirical question. A fixed narrow format also hinders exact Strassen-style restructuring, whose operand sums need wider entries.",
    "refs": {
     "findings": [
      "ballard-2012-graph-expansion/4"
     ]
    }
+  },
+  {
+   "id": "p-output-budget",
+   "kind": "policy-rule",
+   "status": "proposed",
+   "statement": "A per-block cap Y on novel bits emitted for other blocks to read, the Appendix A draft's output budget. It tightens the partial-sum branch of the law by about sqrt(K/Y), but blocks that finish whole positions are not charged on output, so at kimi-k2-1m-raw the gain stops at about 1.6x (read_factor's full-position branch, 4 b_w b_a d / K, against its value now). Inference sessions emit only their responses, so the cap costs inference little.",
+   "refs": {}
   },
   {
    "id": "p-theta-budgets",
