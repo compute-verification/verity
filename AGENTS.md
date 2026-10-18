@@ -1,7 +1,7 @@
 # Verity
 
 Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `README.md` has the architecture and the Glossary, whose terms
+compute, memory and network accounting from those proofs. `DESIGN.md` has the architecture and the Glossary, whose terms
 code, docs and output use. This file states what is true on `main` now: what each directory is, the design rules, and how
 work lands. Each package's contents are in its own README and docstrings. Your checkout, and this file in your prompt, can
 be older than `main` (a cloud VM boots from a snapshot), so when they differ, `git show origin/main:AGENTS.md` wins.
@@ -254,7 +254,7 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
   - an assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name in the
     lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
-- **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
+- **The lock.** A guarantee (DESIGN.md "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.
   - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
     waits on it.
@@ -273,7 +273,7 @@ abstractions or procedures. Enforce deterministic requirements in code, with the
 in prose. Remove obsolete rules and machinery rather than accumulating them.
 
 **A decision rolls out in the change that records it.** When Daniel rules, or a PR retires a term, a path or a procedure,
-that PR rewrites every place that states the old way: `git grep` the old phrase across this file, the README and its
+that PR rewrites every place that states the old way: `git grep` the old phrase across this file, DESIGN.md and its
 Glossary, the skills, READMEs, docstrings and CLI help. When code has to change first, the ruling's relay names the
 owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
 it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
