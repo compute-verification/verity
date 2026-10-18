@@ -28,7 +28,7 @@ import torch.nn as nn
 
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Affine
+from verity.ml.circuits.refs import Affine, runs
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
@@ -695,6 +695,12 @@ def test_the_dense_prefill_locates_a_heads_q_k_v_in_their_parts_up_to_the_span_b
             assert [name[s["input"]] for s in key["spans"]] == ["k_nope", "k_pe"]
         else:
             assert key == {"input": None, "leaves": None, "unlocated": "spans>2"}
+    # the decode step's sparse MQA and logits read the prefill's rows, which their own inputs do not hold: past the budget too they
+    # are not located, as before, and not said to be over it (resolving them run by run would find no spans either)
+    nodes = rep.program.fn.body.nodes
+    late = [(k, j) for k, n in enumerate(nodes) if n.fn.id.startswith(("SparseMla_v1", "DsaMqaLogits_v3")) for j in range(2, len(n.args))]
+    assert late and all(len(runs(nodes[k].args[j].refs)) > emit.MAX_SPANS for k, j in late)
+    assert all(doc["calls"][k]["args"][j] == {"input": None, "leaves": None} for k, j in late)
 
 
 def test_the_served_dense_prefill_binds_attention_v4_at_the_128_x_80_tile():
