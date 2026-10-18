@@ -30,9 +30,11 @@ named `Prop`:
 inner rounds and the record the honest prover staged. A staged statement holds exactly that transcript
 (`transcript_honest`), so the checks pass at the statement's own inputs.
 
-The inner verifier is arbitrary here. At the deployed plain inner verifier the inner statement has plain SHA-512 leaves,
-which `verify` admits without `--zk` on `cursor/flock-plain-leaves-sound-c7a9` (`ProvedScope.leafOk`); before that
-change it refuses them, so `InnerAccepts` never holds there and the theorem says nothing about such a statement.
+The inner verifier is arbitrary here. At the deployed plain inner verifier, at SHA-512, `InnerAccepts` holds only at an
+inner statement that verifier admits (`InnerAdmitted`, `innerAdmitted_of_accepts`). A recursive session's inner statement
+has plain SHA-512 leaves, which `verify` admits without `--zk` on `cursor/flock-plain-leaves-sound-c7a9`
+(`ProvedScope.leafOk`); before that change its scope check refuses them, so `InnerAccepts` never holds there and the
+theorem says nothing about such a statement.
 `InnerAccepts` is a hypothesis about the coins, not a consequence of the relation: at coins in the inner completeness
 error the honest inner proof is refused, and the V\* statements staged there need not have a witness.
 -/
@@ -104,6 +106,23 @@ def LinksHonest (linkOk : RecIns → ByteArray → ByteArray → Array Stmt → 
   ∀ (x : Msg) (w : Claims.Flock.Wit) (ω : Tape b) (cs : List Coin) (v : List (Msg × Msg)), HonestPre H IV b w x ω cs v →
     ∀ s < nS x, ∀ i spec sts, setupO (staged b.st x (asRounds v) s) = some (i, spec, sts) →
       linkOk i (b.tr x (asRounds (v.take (IV.k (xIOf x))))) (b.st.record x (asRounds v)) sts = true
+
+/-! ## The inner statement an honest inner run is accepted at -/
+
+/-- **The deployed plain verifier admits the inner statement**: it sets up, and `verify`'s scope check
+(`ProvedScope.check`) passes on it. At a recursive session's inner statement, whose leaves are plain SHA-512, this is
+what `cursor/flock-plain-leaves-sound-c7a9` provides (`ProvedScope.leafOk` in `statementRules`); before it, the check's
+rules put `hm96-sha512/v1` leaves on every statement (`Readable.check_ok_iff`, `Readable.Rules`). -/
+def InnerAdmitted (x : Msg) : Prop :=
+  ∃ ins spec sts, FlockDeploy.setupOf false (xIOf x) = some (ins, spec, sts) ∧ ins.read.check = .ok ()
+
+/-- **An honest inner run the deployed plain verifier accepts is of a statement it admits** (`acc_check`), at
+SHA-512: `InnerAccepts` there holds only where `InnerAdmitted` does. -/
+theorem innerAdmitted_of_accepts {x : Msg} {cs : List Coin} {v : List (Msg × Msg)}
+    (h : InnerAccepts FlockDeploy.sha512 (FlockDeploy.V false) x cs v) : InnerAdmitted x := by
+  have hacc : ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.V false) (xIOf x) := fun hn => hn _ _ _ _ h
+  obtain ⟨ins, spec, sts, -, -, hs, -, hc⟩ := FlockDeploy.KS.acc_check hacc
+  exact ⟨ins, spec, sts, hs, hc⟩
 
 /-! ## The code's side -/
 
