@@ -3,6 +3,7 @@
     verity-vllm predict build --phi phi.json --wrapper step|request [--LP N --T N | --M N --pos0 N] --out DIR
     verity-vllm predict inventory --rows ROWS_ROOT --out inventory.json.gz
     verity-vllm predict score (--inventory inventory.json.gz | --rows ROWS_ROOT) --hf-home HF --out score.json [--md score.md]
+    verity-vllm predict compiled --role ROLE --device DEVICE --workload WL --out build.json      (`compiled`: the served Build)
 
 None of them writes into a Build row: `score` and `build` refuse an output path inside a rows root they read.
 """
@@ -17,6 +18,7 @@ from dataclasses import dataclass, field
 
 from verity_vllm.config import UsageError, option
 
+from . import compiled as PC
 from . import inventory as INV
 from . import score as S
 
@@ -42,12 +44,14 @@ class InventoryOptions:
     cmd: str = field(default="inventory", init=False)
 
 
-COMMANDS = {"build": BuildOptions, "inventory": InventoryOptions, "score": S.Options}
+COMMANDS = {"build": BuildOptions, "inventory": InventoryOptions, "score": S.Options, **PC.COMMANDS}
 
 
 def main(a) -> int:
     if isinstance(a, S.Options):
         return S.main(a)
+    if isinstance(a, (PC.Options, PC.PinOptions)):
+        return PC.main(a)
     if a.cmd == "inventory":
         S._refuse_inside(a.out, [a.rows])
         inv = INV.inventory(a.rows)
