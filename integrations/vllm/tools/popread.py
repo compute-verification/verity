@@ -16,10 +16,14 @@ two ways, and this tool names both, per Call family:
 no earlier token was an EOS, so their units are programmed (their reads stay public) but their activity is value-keyed.  Under
 a stop rule with ignore_eos no request stops early, and the counts say what an EOS stop would key.
 
+Each report also carries `egress`: E(u) = |O ∩ W(down{u})|, the declared output slots O in unit u's downstream cone, which
+bounds what wrong units can put on the egress (Reach_inf(B) <= sum of E(u) over B <= |B| E_max).  It is a wiring property,
+bounded per unit by its Call's cone, and given in slots and bits (a sampled id's bits are ceil(log2 V), its word's 32).
+
     python tools/popread.py descriptor DESCRIPTOR.json.gz [--units] [--workload-program workload_program.json] --out OUT.json
     python tools/popread.py served BUILD.json [--units] [--ignore-eos] [--lag N] --out OUT.json   (a served-compiled P_served)
     python tools/popread.py plan WORKLOAD.json [...] --planner prefix_plan.py --out OUT.json
-    python tools/popread.py table OUT.json [...] [--md OUT.md]
+    python tools/popread.py table OUT.json [...] [--md OUT.md] [--egress]
 
 `--units` counts Q_word units per Definition (`Units`): from `--rules` (a manifest's unit-rule directory, or an earlier
 `--units-log`) by content digest, else cut on a `LeanGraph` by core's `cut_word` in `--jobs` forked processes, with
@@ -88,6 +92,25 @@ def ref_parts(refs: dict[str, Any], nodes: list[dict[str, Any]]) -> Iterator[tup
                 yield j["strided"][0], j["strided"][1]
         elif "explicit" in j:
             yield from {(s, i) for s, i, _ in j["explicit"]}
+
+
+def ref_runs(refs: dict[str, Any], nodes: list[dict[str, Any]]) -> Iterator[tuple[str, int, int]]:
+    """(space, index, leaves) of each run a reference sequence reads, aliases resolved."""
+    stack = [refs]
+    while stack:
+        j = stack.pop()
+        if "concat" in j:
+            stack.extend(j["concat"])
+        elif "alias" in j:
+            k, a = j["alias"]
+            stack.append(nodes[k]["args"][a]["refs"])
+        elif "affine" in j:
+            yield j["affine"][0], j["affine"][1], j["affine"][3]
+        elif "strided" in j:
+            yield j["strided"][0], j["strided"][1], j["strided"][6]
+        elif "explicit" in j:
+            for s, i, _ in j["explicit"]:
+                yield s, i, 1
 
 
 class Walk:
@@ -501,6 +524,132 @@ def q_word_units(path: str | Path, units: Units | None = None) -> tuple[dict[int
     return out, sum(out.values())
 
 
+def id_bits(fid: str, bindings: dict[str, Any], width: int) -> int:
+    """The bits an egress leaf can carry: a sampled id's ceil(log2 V), else its declared width."""
+    v = bindings.get("V")
+    return (int(v) - 1).bit_length() if base(fid).startswith("TokenSelect") and v else width
+
+
+class Egress:
+    """E(u) over a Program's units, as a histogram over E = (bits, slots, declared bits) weighted by activations, gates and units,
+    with the families at each E and each component's (a request's) share and largest E."""
+
+    def __init__(self) -> None:
+        self.hist: dict[tuple[int, int, int], list[int]] = defaultdict(lambda: [0, 0, 0])
+        self.fams: dict[tuple[int, int, int], dict[str, list[int]]] = defaultdict(lambda: defaultdict(lambda: [0, 0, 0]))
+        self.comps: dict[Any, dict[str, Any]] = {}
+
+    def add(self, e: tuple[int, int, int], family: str, comp: Any, calls: int, gates: int, units: int) -> None:
+        if calls <= 0:
+            return
+        family = "Const[...]" if CONST.match(family) else family
+        for t in (self.hist[e], self.fams[e][family]):
+            t[0], t[1], t[2] = t[0] + calls, t[1] + gates, t[2] + units
+        c = self.comps.setdefault(comp, {"calls": 0, "gates": 0, "units": 0, "E_max": (0, 0, 0)})
+        c["calls"], c["gates"], c["units"], c["E_max"] = c["calls"] + calls, c["gates"] + gates, c["units"] + units, max(c["E_max"], e)
+
+    def report(self, have_units: bool, slots: dict[str, int], comp_slots: dict[Any, int], cone: str) -> dict[str, Any]:
+        w = 2 if have_units else 1
+        keys = sorted(self.hist)
+        total = sum(self.hist[k][w] for k in keys) or 1
+        E = lambda k: {"bits": k[0], "slots": k[1], "declared_bits": k[2]}
+
+        def quantile(p: float) -> dict[str, int]:
+            cum = 0
+            for k in keys:
+                cum += self.hist[k][w]
+                if cum >= p * total:
+                    return E(k)
+            return E(keys[-1] if keys else (0, 0, 0))
+
+        top = keys[-1] if keys else (0, 0, 0)
+        at = sorted(self.fams[top].items(), key=lambda kv: (-kv[1][w], -kv[1][1], kv[0]))
+        zero = self.hist.get((0, 0, 0), [0, 0, 0])
+        comps = sorted(self.comps.items(), key=lambda kv: (-kv[1]["E_max"][0], -kv[1][("calls", "gates", "units")[w]]))
+        live = [(c, v) for c, v in comps if comp_slots.get(c)]
+        return {"weight": "units" if have_units else "gates", "cone": cone, **slots,
+                "E_max": E(top), "median": quantile(0.5), "p99": quantile(0.99),
+                "at_max": {"share": self.hist[top][w] / total if keys else 0.0, "calls": self.hist[top][0] if keys else 0,
+                           "families": [{"family": f, "calls": v[0], "gates": v[1], "units": v[2] if have_units else None,
+                                         "share": v[w] / total} for f, v in at]},
+                "zero": {"share": zero[w] / total, "calls": zero[0], "gates": zero[1], "units": zero[2] if have_units else None},
+                "components": {"with_egress": len(live), "without_egress": len(comps) - len(live),
+                               "without_egress_calls": sum(v["calls"] for c, v in comps if not comp_slots.get(c)),
+                               "per": [{"component": c, "slots": comp_slots[c], "E_max": E(v["E_max"]), "calls": v["calls"],
+                                        "gates": v["gates"], "units": v["units"] if have_units else None,
+                                        "share": v[("calls", "gates", "units")[w]] / total} for c, v in live[:64]]},
+                "hist": [[*k, *self.hist[k]] for k in keys]}
+
+
+def descriptor_egress(desc: dict[str, Any], W: Walk, units: dict[int, int] | None) -> dict[str, Any]:
+    """E per root Call: the declared output leaves (the root's `ret`) written by it or any Call downstream of it, one reverse
+    sweep over the topologically ordered root body.  Components join Calls that read one another, so two share only inputs."""
+    from verity.ml.circuits.types import type_from_json
+    root = W.defs[desc["root"]]
+    nodes = root["body"]["nodes"]
+    n = len(nodes)
+    is_in = [bool(INPUT.match(W.callee(x))) for x in nodes]
+    group: dict[int, int] = {}
+    groups: list[list[int]] = []                                    # per egress node: leaves, bits, declared bits
+    for space, k, count in ref_runs(root["body"]["ret"], nodes):
+        if space != "n" or not count:
+            continue
+        fid = W.callee(nodes[k])
+        widths = type_from_json(desc["types"][nodes[k]["out"]]).leaf_widths()
+        width = max(widths) if len(set(widths)) == 1 else None
+        if width is None:
+            raise ValueError(f"declared output node {k} ({fid[:80]}) has leaves of several widths")
+        if k not in group:
+            group[k] = len(groups)
+            groups.append([0, 0, 0])
+        g = groups[group[k]]
+        g[0], g[1], g[2] = g[0] + count, g[1] + count * id_bits(fid, W.defs[fid].get("bindings") or {}, width), g[2] + count * width
+    acc = [0] * n
+    for k, gi in group.items():
+        acc[k] |= 1 << gi
+    parent = list(range(n))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for k in range(n - 1, -1, -1):
+        if is_in[k]:
+            continue
+        m = acc[k]
+        for a in nodes[k]["args"]:
+            for space, i in ref_parts(a["refs"], nodes):
+                if space != "n" or is_in[i]:
+                    continue
+                acc[i] |= m
+                ri, rk = find(i), find(k)
+                if ri != rk:
+                    parent[ri] = rk
+    memo: dict[int, tuple[int, int, int]] = {}
+
+    def value(m: int) -> tuple[int, int, int]:
+        got = memo.get(m)
+        if got is None:
+            sel = [groups[g] for g in range(len(groups)) if m >> g & 1]
+            got = memo[m] = (sum(g[1] for g in sel), sum(g[0] for g in sel), sum(g[2] for g in sel))
+        return got
+
+    eg = Egress()
+    for k in range(n):
+        if not is_in[k]:
+            fid = W.callee(nodes[k])
+            eg.add(value(acc[k]), base(fid), find(k), 1, W.gates(fid) * members(nodes[k]), (units or {}).get(k, 0))
+    comp_slots: dict[int, int] = defaultdict(int)
+    for k, gi in group.items():
+        comp_slots[find(k)] += groups[gi][0]
+    bits = sorted({(g[1] // g[0], g[2] // g[0]) for g in groups if g[0]})
+    return eg.report(units is not None, {"slots": sum(g[0] for g in groups), "bits": sum(g[1] for g in groups),
+                                         "declared_bits": sum(g[2] for g in groups), "slot_bits": [list(b) for b in bits]},
+                     dict(comp_slots), "Call: a unit's E(u) is at most its Call's, the egress any Call downstream of it writes")
+
+
 def analyze_descriptor(desc: dict[str, Any], *, units: dict[int, int] | None = None, workload_program: dict | None = None,
                        value_bound: dict[str, str] = VALUE_BOUND) -> dict[str, Any]:
     W = Walk(desc)
@@ -550,7 +699,8 @@ def analyze_descriptor(desc: dict[str, Any], *, units: dict[int, int] | None = N
     out = {"schema": SCHEMA, "adapter": "descriptor/v1", "root": desc["root"][:160],
            "inputs": dict(Counter(input_group(x) for x in names)), "value_bound": value_bound,
            "eos": _eos(lag, step is not None, ignore, why),
-           "by_step": [b for _s, b in sorted(by_step.items())]}
+           "by_step": [b for _s, b in sorted(by_step.items())],
+           "egress": descriptor_egress(desc, W, units)}
     return _finish(out, fams, value_bound, units is not None)
 
 
@@ -576,6 +726,39 @@ def _call_spec(c: dict[str, Any], plan: dict[str, Any]) -> tuple[str, dict[str, 
         return c["definition"], c["statics"]
     g = plan["moe"][c["moe"]] if "moe" in c else plan["gemms"][",".join(str(x) for x in c["gemm"])]
     return g["definition"], g["statics"]
+
+
+def served_live(P: dict[str, Any]) -> tuple[set[tuple[str, int]], set[tuple[str, int]]]:
+    """The template's Calls ("c", i) and attention layers ("a", l) whose writes reach an attention's k or v, which a request's later
+    rows read (live at every row), and those that reach k, v or the logits' x (live at the row a request samples)."""
+    writes = {("c", i): tuple(c.get("writes") or ()) for i, c in enumerate(P["calls"])}
+    writes.update({("a", l): (a["name"],) for l, a in enumerate(P.get("attention") or ())})
+    readers: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    for i, c in enumerate(P["calls"]):
+        for r in c["reads"]:
+            if "value" in r:
+                readers[r["value"]].append(("c", i))
+    for l, a in enumerate(P.get("attention") or ()):
+        for s in ("q", "k", "v"):
+            readers[a[s]["value"]].append(("a", l))
+    kv = {a[s]["value"] for a in P.get("attention") or () for s in ("k", "v")}
+
+    def reach(targets: set[str]) -> set[tuple[str, int]]:
+        live: set[tuple[str, int]] = set()
+        grew = True
+        while grew:
+            grew = False
+            for node in reversed(list(writes)):
+                if node not in live and any(w in targets or any(x in live for x in readers[w]) for w in writes[node]):
+                    live.add(node)
+                    grew = True
+        return live
+
+    return reach(kv), reach(kv | {P["logits"]["x"]["value"]})
+
+
+SERVED_CONE = ("row: a unit of request r at step s has E = r's sampled ids at steps >= s if it reaches a k/v value or (at r's sampled "
+               "row) the logits, else 0; a sampled id feeds r's next step's input ids, an edge the engine binds")
 
 
 def analyze_served(build: dict[str, Any], *, units: "Units | bool" = False, ignore_eos: bool = False, lag: int = 0) -> dict[str, Any]:
@@ -636,30 +819,58 @@ def analyze_served(build: dict[str, Any], *, units: "Units | bool" = False, igno
             kind, V = select_kind(prim)
             f["selects"][(kind, V, frozenset(idx))] += apps * c
 
+    live_kv, live_x = served_live(P)
+    steps_of: dict[str, list[int]] = defaultdict(list)
+    for plan in build["steps_plan"]:
+        for r in plan["requests"]:
+            steps_of[r["request_id"]].append(int(plan["step"]))
+    sm = P["sampled"]
+    w_id = defs[sm["definition"]].signature()[1].leaf_widths()[0]
+    b_id = id_bits(sm["definition"], sm["statics"], w_id)
+    eg = Egress()
+
+    def egress(fam: str, spec: str, statics: dict[str, Any], rid: str, s: int, live: int, dead: int) -> None:
+        i, n = info(spec, statics), sum(t >= s for t in steps_of[rid])
+        eg.add((n * b_id, n, n * w_id), fam, rid, live, live * i["gates"], live * i["units"])
+        eg.add((0, 0, 0), fam, rid, dead, dead * i["gates"], dead * i["units"])
+
     for plan in build["steps_plan"]:
         s, tokens = int(plan["step"]), int(plan["tokens"])
         keyed = {r["request_id"]: s - arrive.get(r["request_id"], 0) >= 1 + lag for r in plan["requests"]}
         eos_rows = sum(int(r["tokens"]) for r in plan["requests"] if keyed[r["request_id"]])
         any_keyed = any(keyed.values())
-        for c in P["calls"]:
+        pad = tokens - sum(int(r["tokens"]) for r in plan["requests"])
+        for ci, c in enumerate(P["calls"]):
             spec, statics = _call_spec(c, plan)
             per_row = max(width[c["writes"][0]] // info(spec, statics)["ret"], 1)
             add(base(spec), spec, statics, tokens * per_row, c["reads"], eos_rows * per_row, any_keyed)
+            for r in plan["requests"]:
+                rows = int(r["tokens"])
+                live = rows if ("c", ci) in live_kv else int(("c", ci) in live_x)
+                egress(base(spec), spec, statics, r["request_id"], s, live * per_row, (rows - live) * per_row)
+            egress(base(spec), spec, statics, "padding", s, 0, pad * per_row)
         for r in plan["requests"]:
-            k = keyed[r["request_id"]]
-            for a in r["attention"]:
-                for att in P.get("attention") or ():
+            k, rid, rows = keyed[r["request_id"]], r["request_id"], int(r["tokens"])
+            for row, a in enumerate(r["attention"]):
+                for l, att in enumerate(P.get("attention") or ()):
                     per = max(width[att["q"]["value"]] // info(a["definition"], a["statics"])["ret"], 1)
                     add(base(a["definition"]), a["definition"], a["statics"], per, [att["q"], att["k"], att["v"]], per * k, any_keyed)
-            lg, sm = plan["logits"], P["sampled"]
+                    live = ("a", l) in live_kv or (row == rows - 1 and ("a", l) in live_x)
+                    egress(base(a["definition"]), a["definition"], a["statics"], rid, s, per * live, per * (not live))
+            lg = plan["logits"]
             add(base(lg["definition"]), lg["definition"], lg["statics"], 1, [P["logits"]["x"], P["logits"]["w"]], int(k), any_keyed)
             add(sm["base"], sm["definition"], sm["statics"], 1, [{"value": "logits"}], int(k), any_keyed)
+            egress(base(lg["definition"]), lg["definition"], lg["statics"], rid, s, 1, 0)
+            egress(sm["base"], sm["definition"], sm["statics"], rid, s, 1, 0)
+    n_ids = sum(len(v) for v in steps_of.values())
     out = {"schema": SCHEMA, "adapter": "P_served", "program_digest": build.get("program_digest"),
            "schedule": build.get("workload"), "value_bound": VALUE_BOUND,
            "inputs": {"ids": 1, "positions": 1, "weight": len({r["weight"] for c in P["calls"] for r in c["reads"] if "weight" in r})},
            "plan_inputs": "steps_plan reads the declared schedule only (arrive, prompt_tokens, max_tokens) and the dispatch "
                           "(capture sizes, max_num_seqs, split_cap, sms): no token value",
-           "eos": _eos(lag, True, ignore_eos, None)}
+           "eos": _eos(lag, True, ignore_eos, None),
+           "egress": eg.report(bool(units), {"slots": n_ids, "bits": n_ids * b_id, "declared_bits": n_ids * w_id,
+                                             "slot_bits": [[b_id, w_id]]}, {r: len(v) for r, v in steps_of.items()}, SERVED_CONE)}
     if helper:
         out["units_source"] = helper.summary()
     return _finish(out, fams, VALUE_BOUND, bool(units))
@@ -723,6 +934,35 @@ def render(reports: Iterable[dict[str, Any]]) -> str:
         out.append(f"\nVALUE-DEPENDENT: {_fmt(vd['share_units'])} of units, {_fmt(vd['share_gates'])} of gates. "
                    f"PUBLIC with an in-unit gather (V > 2): {_fmt(sel['share_units'])} of units, {_fmt(sel['share_gates'])} of gates. "
                    + _render_eos(r["eos"], s) + "\n")
+        if e := r.get("egress"):
+            out.append(_render_egress_line(e) + "\n")
+    return "\n".join(out)
+
+
+def _families_at_max(e: dict[str, Any], top: int = 3) -> str:
+    fams = e["at_max"]["families"]
+    names = ", ".join(f["family"] for f in fams[:top]) + (f", +{len(fams) - top}" if len(fams) > top else "")
+    return f"{_fmt(e['at_max']['share'])} in {len(fams)} families ({names})"
+
+
+def _render_egress_line(e: dict[str, Any]) -> str:
+    per = ", ".join(f"{c['component']}: {c['E_max']['bits']}" for c in e["components"]["per"][:8])
+    return (f"Egress: {e['slots']:,} declared slots, {e['bits']:,} bits ({e['declared_bits']:,} as declared words). "
+            f"E_max = {e['E_max']['slots']:,} slots = {e['E_max']['bits']:,} bits; by {e['weight']}, median "
+            f"{e['median']['bits']:,} bits, p99 {e['p99']['bits']:,}; at E_max {_families_at_max(e)}; E = 0: {_fmt(e['zero']['share'])}. "
+            f"{e['components']['with_egress']} component(s) with egress, E_max bits each: {per}.")
+
+
+def render_egress(reports: Iterable[dict[str, Any]]) -> str:
+    out = ["| Program | egress slots (bits/slot) | E_max slots / bits | median / p99 bits | at E_max (share of weight, families) | "
+           "E = 0 | E_max bits per component |", "|---|---:|---:|---:|---|---:|---|"]
+    for r in reports:
+        if not (e := r.get("egress")):
+            continue
+        per = ", ".join(str(c["E_max"]["bits"]) for c in e["components"]["per"][:8])
+        bits = "/".join(str(b) for b, _w in e["slot_bits"])
+        out.append(f"| {r.get('name', '?')} | {e['slots']:,} ({bits}) | {e['E_max']['slots']:,} / {e['E_max']['bits']:,} | "
+                   f"{e['median']['bits']:,} / {e['p99']['bits']:,} | {_families_at_max(e)} | {_fmt(e['zero']['share'])} | {per} |")
     return "\n".join(out)
 
 
@@ -792,6 +1032,7 @@ def main(argv: list[str] | None = None) -> int:
     t = sub.add_parser("table")
     t.add_argument("reports", nargs="+")
     t.add_argument("--md", default=None)
+    t.add_argument("--egress", action="store_true", help="one row per Program: E_max, E's median and p99, families, components")
     a = ap.parse_args(argv)
     helper = Units(a.rules, a.units_log, a.jobs, a.verify_below, a.recut_cached) if a.cmd in ("descriptor", "served") else None
     if a.cmd == "descriptor":
@@ -820,7 +1061,7 @@ def main(argv: list[str] | None = None) -> int:
         for x in a.reports:
             j = json.loads(Path(x).read_text())
             reps.extend(j if isinstance(j, list) else [j])
-        md = render(reps)
+        md = render_egress(reps) if a.egress else render(reps)
         if a.md:
             Path(a.md).write_text(md)
         print(md)
