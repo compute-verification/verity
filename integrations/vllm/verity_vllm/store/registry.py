@@ -10,7 +10,9 @@ a block of a page is *registered* unless a write reached it and has not complete
   re-registers those it completes, under the step that wrote them; the codec encodes the slots as they are written
   (``encode_slots_`` on the device, `kv_write_reference` here);
 - ``kv_free`` returns pages to filler with their bytes as they are: a registered block stays registered, a dirty block
-  (a page freed part-written) stays out of every plan until a later write completes it.
+  (a page freed part-written) stays out of every plan until a later write completes it.  While a memory map records
+  (`record_memory_map`), a freed page's registered blocks are released instead: dirty, so out of every plan until a
+  write completes them again under a new index, as the audit's plans hold only blocks the circuit keeps live.
 
 A pass reads the weights' regions whole, each KV layer region over the blocks attention reads (the live pages'
 blocks that writes completed), and the filler the `filler_plan` policy picks (`idle_blocks` lists the registered
@@ -44,11 +46,13 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
+from verity.core.protocols.remote_bandwidth.audit import LIFETIME
 from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, SALT_BYTES, Plan
 from verity.ml.commitments import merkle_depth
 from verity_vllm.store.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
                                          PassCommitment, Receipt, Registration, RegionInfo, Segment, Source, Stale,
                                          WindowRecord)
+from verity_vllm.store import memory_map as mm
 
 CHALLENGE_BYTES = 32
 SEED_BYTES = 64
@@ -138,13 +142,6 @@ def _node(dom: Any, leaves: int, level: int, index: int, leaf: Callable[[int], b
     return memo[key]
 
 
-def _climb(dom: Any, digest: bytes, c: int, level: int, path: Sequence[bytes]) -> bytes:
-    for k, sibling in enumerate(path, level):
-        at = c >> k
-        digest = dom.node(k, at >> 1, *((digest, sibling) if at % 2 == 0 else (sibling, digest)))
-    return digest
-
-
 @dataclass(frozen=True)
 class TagReceipt:
     """A bandwidth audit `Tag` (``ro-blake3/v1``, ``ro-sha512/v1``) as a receipt that binds only the block."""
@@ -216,7 +213,7 @@ class _Pool:
     hi: np.ndarray
     allocated: np.ndarray
     fill: np.ndarray
-    dirty: np.ndarray            # (pages, per_page): written since registered, not complete
+    dirty: np.ndarray            # (pages, per_page): not registered: written and not complete, or released
     epoch: np.ndarray            # (pages, per_page): the block's registrations since the pool's
     step: np.ndarray             # (pages, per_page): the step that registered it, -1 for filler
     filler: str
@@ -248,6 +245,7 @@ class _Pass:
     positions: int = 0
     starts: list[int] = field(default_factory=list)
     z: Callable[[str, int], bytes | None] | None = None     # the z each receipt is bound to, kept for the openings
+    step: int | None = None
     _plan: Plan | None = None
 
     def plan(self) -> Plan:
@@ -317,11 +315,13 @@ class Store:
         self._last_root: bytes | None = None
         self._passes: list[PassCommitment] = []
         self._window = -1
+        self._pass_step = -1
         self._retained: dict[tuple[int, int], _Pass] = {}
         self._open_pass: _Pass | None = None
         self.filler_plan = filler_plan
         self.chaining = chaining
         self.counters = Counters()
+        self.memory_map: mm.MemoryMap | None = None
 
     # --- registration -----------------------------------------------------------------------------------------------
 
@@ -334,6 +334,8 @@ class Store:
              receipt: Receipt, source: str) -> _Region:
         if name in self._by_name:
             raise ValueError(f"region {name!r} is already registered")
+        if self.memory_map is not None:
+            raise RuntimeError(f"region {name!r} after the memory map's header fixed the store: register regions first")
         if tier not in TIERS or kind not in KINDS:
             raise ValueError(f"tier {tier!r} must be one of {TIERS}, kind {kind!r} one of {KINDS}")
         if block_bytes <= 0 or block_bytes % codec.word_bytes or backing.nbytes % block_bytes:
@@ -431,6 +433,24 @@ class Store:
     def region(self, name: str) -> RegionInfo:
         return self._by_name[name].info
 
+    def payload(self, slot: int) -> bytes:
+        """Store block ``slot``'s payload now: its region codec's decoding of the bytes it holds."""
+        r = self._regions[bisect.bisect_right([x.info.first for x in self._regions], slot) - 1]
+        b, bb = slot - r.info.first, r.info.block_bytes
+        return r.codec.decode(r.backing.read(b * bb, bb), r.info.word_index(b))
+
+    def record_memory_map(self, path: Any = None, registration: bytes | None = None, lifetime: int = LIFETIME,
+                          on_line: Any = None) -> mm.MemoryMap:
+        """Record each step's KV blocks as memory-map/v1 into ``path`` (the prover's own file) or kept, beside
+        ``registration``, the remote audit's `Registration.digest`, which the session's first window chains from, under
+        the session's lifetime cap of ``lifetime`` windows, each closed line to ``on_line`` (`memory_map.record`)."""
+        return mm.record(self, path, registration, lifetime, on_line)
+
+    def end_step(self) -> None:
+        """The step's forward has written its KV (`Scheduler.update_from_output`): a memory map takes its digests."""
+        if self.memory_map is not None:
+            self.memory_map.end_step()
+
     # --- the KV pool's pages ----------------------------------------------------------------------------------------
 
     @property
@@ -456,13 +476,21 @@ class Store:
         if not p.allocated[ix].all():
             raise RuntimeError(f"pages {ix[~p.allocated[ix]][:8].tolist()} are not allocated")
         p.allocated[ix] = False
+        if self.memory_map is not None:
+            live = ~p.dirty[ix]
+            p.dirty[ix] = True
+            self.memory_map.free((ix[:, None] * p.per_page + np.arange(p.per_page))[live])
         self.counters.add("kv_free", time.perf_counter() - t)
 
     def kv_append(self, appends: Sequence[Append], step: int) -> None:
         """The step's KV writes: each block a write reaches turns dirty, and each it completes is registered again
-        (epoch + 1, under ``step``).  One registration record for the step."""
+        (epoch + 1, under ``step``).  One registration record for the step.  A memory map closes the last step's line and
+        opens this one's: its completed blocks written, its reached registered ones freed (`memory_map`)."""
         t = time.perf_counter()
-        p = self.pool
+        p, m = self.pool, self.memory_map
+        if m is not None:
+            m.flush(step)
+        key = reached = np.zeros(0, np.int64)
         if appends:
             n = len(appends)
             pg = np.fromiter((a.page for a in appends), np.int64, n)
@@ -471,6 +499,8 @@ class Store:
             if not p.allocated[pg].all() or (end > p.layout.slots).any() or (first < 0).any():
                 raise RuntimeError("an append outside an allocated page's slots")
             touched = (p.lo[None, :] < end[:, None]) & (p.hi[None, :] > first[:, None])
+            if m is not None:
+                reached = np.unique((pg[:, None] * p.per_page + np.arange(p.per_page))[touched & ~p.dirty[pg]])
             np.maximum.at(p.fill, pg, end)
             p.dirty[pg] |= touched
             done = p.dirty[pg] & (p.hi[None, :] <= p.fill[pg][:, None])
@@ -482,17 +512,21 @@ class Store:
             p.step[kp, kc] = step
             self._log({"event": "kv-append", "step": step, "appends": n, "registered": len(key)},
                       hashlib.sha512(np.stack([pg, first, end]).astype(">i8").tobytes()).digest())
+        if m is not None:
+            m.open(step, np.setdiff1d(reached, key), key)
         self.counters.add("kv_append", time.perf_counter() - t)
 
     def kv_write_reference(self, appends: Sequence[Append], payload: Callable[[int, int, int], bytes],
                            step: int) -> None:
         """The CPU reference of a step's KV write: slot ``s`` of page ``p`` in layer ``l`` takes ``payload(l, p, s)``
-        (its planes in order, ``slot_bytes`` each), encoded on append, then `kv_append`."""
+        (its planes in order, ``slot_bytes`` each), encoded on append, then `kv_append` and `end_step`."""
         p = self.pool
         lay = p.layout
         ps, ks = lay.strides()
         if not lay.slot_major:
             raise NotImplementedError("the reference writes slot-major (NHD) pages")
+        if self.memory_map is not None:
+            self.memory_map.flush(step)
         for rn in p.regions:
             r = self._by_name[rn]
             for a in appends:
@@ -503,6 +537,7 @@ class Store:
                         r.backing.write(off, data[k * lay.slot_bytes:(k + 1) * lay.slot_bytes])
                         self.encode_range(rn, off, lay.slot_bytes)
         self.kv_append(appends, step)
+        self.end_step()
 
     def idle_blocks(self, region: str) -> np.ndarray:
         """A KV layer region's registered blocks that no attention reads: every block of a free page, and the blocks of
@@ -517,6 +552,15 @@ class Store:
     def in_pass(self) -> bool:
         return self._open_pass is not None
 
+    @property
+    def window(self) -> int:
+        """The latest window's number, -1 before the first."""
+        return self._window
+
+    @property
+    def window_open(self) -> bool:
+        return self._challenge is not None
+
     def begin_window(self, challenge: bytes, registration: bytes | None = None) -> None:
         """Open a window under ``challenge`` (32 bytes).  Its first pass chains from the session's last root.  The
         session's first window chains from ``registration``, the verifier's registration digest (the driver's
@@ -527,6 +571,8 @@ class Store:
             raise RuntimeError("a window is already open")
         if len(challenge) != CHALLENGE_BYTES:
             raise ValueError(f"a window's challenge is {CHALLENGE_BYTES} bytes")
+        if self.memory_map is not None and self._last_root is None and registration != self.memory_map.header.registration:
+            raise ValueError("the session's first window chains from the registration digest its memory map names")
         if self._last_root is None:
             self._last_root = self._log_root if registration is None else registration
         elif registration is not None:
@@ -544,18 +590,23 @@ class Store:
         self._challenge = None
         return rec
 
-    def begin_pass(self, live_pages: Sequence[int] | None = ()) -> _Pass:
+    def begin_pass(self, live_pages: Sequence[int] | None = (), step: int | None = None) -> _Pass:
         """Plan pass j: every weights region whole, each KV layer over ``live_pages``' blocks that attention reads
         (None: every allocated page), then the filler plan's.  Outside a window the pass has no seed and commits
-        nothing."""
+        nothing.  ``step`` is the engine step whose reads it covers, above the last pass's; while a memory map records,
+        the step `kv_append` opened last."""
         t = time.perf_counter()
         if self._open_pass is not None:
             raise RuntimeError("a pass is already open")
+        if step is not None and (step <= self._pass_step or (self.memory_map is not None and step != self.memory_map.last)):
+            raise ValueError(f"a pass covers the step kv_append opened last, above the last pass's {self._pass_step}: "
+                             f"not {step}")
+        self._pass_step = self._pass_step if step is None else step
         j = len(self._passes)
         seed = None
         if self._challenge is not None:
             seed = self.chaining(self._challenge, self._last_root, j)
-        ps = _Pass(j, seed, [], [])
+        ps = _Pass(j, seed, [], [], step=step)
         parts = [(r.info.name, 0, r.info.blocks, None, None) for r in self._regions if r.info.kind == "weights"]
         if self._pool is not None and live_pages is None:
             live_pages = np.nonzero(self._pool.allocated)[0]
@@ -571,6 +622,8 @@ class Store:
                 run = len(blk) > 0 and bool((np.diff(blk) == 1).all())
                 r = self._by_name[rn]
                 ep = r.pool.epoch[r.pool.page_of[blk], r.pool.slot_of[blk]] if r.pool is not None else None
+                if r.pool is not None and r.pool.dirty[r.pool.page_of[blk], r.pool.slot_of[blk]].any():
+                    raise ValueError(f"pass {j}'s filler reads {rn} blocks that are dirty or released (`idle_blocks`)")
                 parts.append((rn, int(blk[0]) if run else -1, len(blk), None if run else blk, ep))
         ps.lay_out(parts)
         if seed is not None:
@@ -651,7 +704,7 @@ class Store:
             self.counters.add("end_pass", time.perf_counter() - t)
             return None
         if root is not None:
-            pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, (), root)
+            pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, (), root, ps.step)
         else:
             dom = rb.domain(ps.seed, ps.plan())
             leaf, n = self._leaf(ps, dom, z), dom.count
@@ -659,7 +712,7 @@ class Store:
                       for k, s in enumerate(ps.segments) if aligned(s)}
             root = _node(dom, n, merkle_depth(n), 0, leaf, ps.top)
             seg_roots = tuple(_node(dom, n, *node_of(s), leaf, ps.top) for s in ps.segments)
-            pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, seg_roots, root)
+            pc = PassCommitment(ps.index, ps.seed, tuple(ps.segments), ps.digest, seg_roots, root, ps.step)
         self._passes.append(pc)
         self._last_root = root
         self._retained[(self._window, ps.index)] = ps
@@ -739,35 +792,3 @@ def _page_blocks(layout: PageLayout, block_bytes: int) -> tuple[np.ndarray, np.n
     if len(np.unique(ids)) != ids.size:
         raise ValueError("the layout's pages overlap")
     return ids, np.tile(lo, layout.planes), np.tile(hi, layout.planes)
-
-
-def verify_opening(info: RegionInfo, pc: PassCommitment, plan: Sequence[int], o: Opening, receipt: Receipt,
-                   decode: Callable[[bytes, int], bytes], payload: bytes | None, z: bytes | None = None) -> bool:
-    """The verifier's side of one opening (the reference): the plan's block at the position, its digest, the receipt
-    recomputed from the block, its leaf (under the opened salt) through its segment's node, and the two paths together
-    to the pass's root (the driver's `rb.verify_leaf`), and, with ``payload`` (what the block's registration source
-    names), the block decoding to it."""
-    k = bisect.bisect_right([s.position for s in pc.segments], o.position) - 1
-    seg, c, positions = pc.segments[k], o.position // PER_LEAF, len(plan)
-    if int(plan[o.position]) != o.block or seg.region != o.region or not info.first <= o.block < info.first + info.blocks:
-        return False
-    runs = canonical(runs_of(plan))
-    try:
-        p = plan_of(runs, int((runs[:, 0] + runs[:, 1]).max()))
-    except ValueError:
-        return False
-    if p.digest != pc.plan_digest or sum(s.count for s in pc.segments) != positions:
-        return False
-    if receipt.keyed(pc.seed)(o.block, o.data, z) != o.receipt:
-        return False
-    if len(o.leaf_receipts) != min(PER_LEAF, positions - c * PER_LEAF) or o.leaf_receipts[o.position % PER_LEAF] != o.receipt:
-        return False
-    leaf = b"".join(o.leaf_receipts)
-    dom, (level, _) = rb.domain(pc.seed, p), node_of(seg)
-    if len(o.leaf_path) != level:
-        return False
-    if pc.segment_roots and _climb(dom, leaf_digest(dom, c, leaf, o.salt), c, 0, o.leaf_path) != pc.segment_roots[k]:
-        return False
-    if not rb.verify_leaf(pc.seed, p, pc.root, o.position, leaf, o.salt, o.leaf_path + o.segment_path):
-        return False
-    return payload is None or decode(o.data, info.word_index(o.block - info.first)) == payload
