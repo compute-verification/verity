@@ -851,20 +851,21 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     plan_m, map_m = members
     req_steps = req.steps
 
-    # the plan unit's clause: a wrong block in the plan
+    # the plan unit's clause: a wrong block in the plan. The unit asks for exactly the read blocks; the one-sided
+    # `PlanMatches` allows the extra block as filler
     def plan_case(name: str, pick) -> None:
         for s in range(req_steps):
             extra = pick(s)
             if extra is None:
                 continue
             bad = sorted(set(plans[s]) | {extra})
-            assert not RQ.plan_matches(req, layout, bad, RQ.BLOCK_BITS, s)
+            assert RQ.plan_matches(req, layout, bad, RQ.BLOCK_BITS, s)
             args = dict(plan_m["args"][s], count=len(bad), plan=bad + [0] * (sp.P - len(bad)))
             f = _forged(plan_m, s, args)
             rs = remote_session(req, layout, store, plans, salts, extra={s: [extra]})
             br = v0_bridge(rs.view, canons, sp, sm, req_steps)
             neg[name] = {"refused": f["ok_output"] == 0 and f["satisfied"] and not f["opens_to_1"], "step": s, "block": extra,
-                         "unit": f, "plan_matches": False, "honest_canon_bridge_refuses": not br["ok"]}
+                         "unit": f, "plan_matches": True, "honest_canon_bridge_refuses": not br["ok"]}
             return
         neg[name] = {"refused": False, "why": "no step has such a block"}
 

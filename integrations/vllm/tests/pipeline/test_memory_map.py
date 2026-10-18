@@ -176,7 +176,7 @@ def test_the_census_and_kv_rows_are_computed_once_per_program(tmp_path):
         PMM.of_build(d, "f" * 128)
     got = PMM.cache(d, program, digest)
     assert got == {"census": census["digest"], "kv_rows": True}, "a Build's result.json holds what its Program determines, no timings"
-    assert "FileNotFoundError" in PMM.cache_at_build(tmp_path / "gone", program, digest)["error"], "a census failure decides no Build"
+    assert "FileNotFoundError" in PMM.census_entry(tmp_path / "gone", program, digest)["error"], "a census failure decides no Build"
 
 
 def test_a_requests_cache_dir_leaves_the_build_dir_untouched(tmp_path):

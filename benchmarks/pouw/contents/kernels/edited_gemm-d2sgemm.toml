@@ -1,0 +1,4 @@
+order = 60
+tool = "Dither-2S's linear (decision 79): both operands dithered a call, no peel, the last checked word served, on egemm.cu's mainloop; its Q K^T, Q and K dithered, a head a problem"
+files = "`edited_gemm/d2sgemm.cu`, `d2sgemm_ref.py`, `d2srun.sh`"
+includes = "`edited_gemm/egemm.cu`"

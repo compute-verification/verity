@@ -137,9 +137,9 @@ def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
     return {"census": c["digest"], "kv_rows": "refused" not in doc}
 
 
-def cache_at_build(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
-    """`cache` as the Build calls it (`pipeline.build`): a failure named in its result, never raised, since the census serves the
-    Commit's opt-in memory map and decides no Build."""
+def census_entry(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
+    """`cache`'s result for the Build's `result.json`, or its error in its place: the census serves the Commit's opt-in
+    memory map, so it decides no Build."""
     try:
         return cache(d, program, digest)
     except Exception as e:  # noqa: BLE001

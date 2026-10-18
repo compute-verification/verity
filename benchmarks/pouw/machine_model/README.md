@@ -3,17 +3,25 @@
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
 checks every attack against it. The reading it reports is a design's core ε (`machine-model eps`, "ε in the
-tensor–scalar model" below). Each named vector (VF … VF3q-16) re-solves here to the record it was published with (τ, τ
-at 600 W, U/F_low and margin), at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
-whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
-price a word beside its measured cost.
+tensor–scalar model" below). Each named vector (`machine-model list`) re-solves here to the record it was published with
+(τ, τ at 600 W, U/F_low and margin), at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve`
+says whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy
+route's price a word beside its measured cost.
+
+This file holds no table of the data. `machine-model render` prints every one as Markdown, read from `data/` (or a
+device's directory) alone: the vectors, the epochs and their census, the rows, the floors, the designs with their noise
+legend, the honest kernels, the proof units, the MMA forms, the table route, the attack families and the devices.
+`tests/test_render.py` fails on a table here, so a new vector, design or census row touches only its own data file.
 
 ~~~bash
+uv run machine-model                      # every command's usage, each from its module's docstring in verity_machine_model/commands/
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3q-16        # the vector's record (τ, τ at 600 W, U/F_low, margin), θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3q-16, the vector of record since 17 Oct after VF3n-16, VF3o-16 and VF3p-16; VF3l-16 by decision 62 before them)
-uv run machine-model census VF3q-16 --kind ATOMS64
-uv run machine-model attacks VF3q-16 -n 3 # the cheapest attacks of every design
+uv run machine-model render               # every table of data/ as Markdown
+uv run machine-model render vectors designs   # some of them; --device sm_90 render: a device's
+uv run machine-model solve VECTOR         # the vector's record (τ, τ at 600 W, U/F_low, margin), θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current`, the vector of record
+uv run machine-model census VECTOR --kind ATOMS64
+uv run machine-model attacks VECTOR -n 3  # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 uv run machine-model designs              # the registry: names, aliases, noise per product, fold, unit, coins, arm
@@ -29,31 +37,66 @@ uv run machine-model eps --table --credit floor --lookups --index-bits 2   # 2-b
 uv run machine-model eps --table --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
 uv run machine-model eps --device sm89 --table --credit floor --operands floor   # the L40S: Dither-1S/2S/C at L = 16, 32
 uv run machine-model eps --device sm100 --table --credit floor --operands floor   # the B200 at L = 32 to 256
+uv run machine-model headline             # each family's design of record at the data-sheet and measured readings
 uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
 ~~~
 
-| Path | What |
-|---|---|
-| `data/model.toml` | The constants (R*, the honest kernel's u a MAC, at 600 W too), the LP's ρ, tie and x_min, the honest GEMM, the CUDA kinds, the adopted design and the epochs in order |
-| `data/rows.csv` | One line per row of the machine (a pipe, a port, a ceiling or a joint vertex): its status (`measured`, `ASSUMED`, `provisional`, `joint`), the runs or notes it rests on, and what it is |
-| `data/census/EPOCH.csv` | The census lines from EPOCH, a file for each epoch that brought any: one line per instruction class on a row, its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, its file's epoch; `until`) and its runs |
-| `data/census/runs.toml` | The run lists many census lines share (a refit's every line cites every run its fit read), each cited in a line's `runs` as `@NAME` |
-| `data/vectors/NAME.toml` | A named vector: its epoch, the rows and credits it uses in LP order, its note, and the numbers it was published with |
-| `data/devices/sm_80/` | Ampere (sm_80, the A100-SXM4-80GB at default boost, EPS1 AMPERE) as a device of its own: its `rows.csv` and `census.csv` in the same schema, one epoch (no `since` or `until`), rates at the 2% noise margin and the joint row JIM at decision 76's margin, written by `tensor_kinds/sm80.py census`; no vector reads them yet |
-| `data/attacks/FAMILY.jsonl` | An attack family: one program a line, its design, and the epochs it holds |
-| `data/devices/sm_NN/` | Another device's data ("Devices" below): `sm_89`, the L40S, from EPS1 ADA; `sm_90`, the H200, and `sm_100`, the B200, from EPS1 DC (`dc/census.py` writes their census) |
-| `data/floors.csv` | What the claims read: each root-writing kind at 32 MACs a word ((π₃₂)), each load into registers at 16 (PRICES-32's load half) and each copy route at 16 (π_c ≥ 16, `copy16`: every kind that writes registers, a UR word at the 32 lanes it serves), with the words a warp instruction of it writes |
-| `verity_machine_model/lp.py` | The LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ), as the legacy `rs-price-99.py` `solve` computes it |
-| `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, what is under its floor, and a claim's kinds priced a word beside their measured cost |
-| `verity_machine_model/adopt.py` | Merging a measured census into `data/census/` at the last epoch, each (kind, row) at the faster of its two lines |
-| `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
-| `data/honest/NAME.toml` | An honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA: `e-l7qs` is PROFILE's measured kernel; `c-l7qs` (co32c's linear), `h-l7qs` (cohalf's QK^T) and `pv-l7qs` (P·V) are Dither-C's, measured on `benchmarks/pouw/edited_gemm/`'s bit-exact kernels; `dither-duo-l32` the provisional one the tests' hand arithmetic reads |
-| `data/table.toml` | The cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2 bandwidth it is bound by (the most L2 read in any measured pattern, + 2%) |
-| `data/designs/NAME.toml` | One design of the registry (below): its name, title and aliases, the noise on each product, its honest profile, L, the noise's operand-delivery floor φ_del, the fold and filler (lane instructions a word by class), plain (unfolded) MMAs beside its work, the proof unit, the coins, its perplexity arm, and ε_skip's and ε_mand's parts with sources |
-| `data/designs.toml` | What every design reads unless its file sets it: honest's profile, L, the proof unit, the coins, the fold (duo), ε_clock, Theorem S's δ, p and checks, honest's baseline program (dp4a) and the routes, all sm_120's |
-| `data/adapt.toml` | The proof units ε_adapt prices (SPEC's Theorem D): whole dot products (the designs' unit, decision 72), whole with operands recomputed one stage back, per-stage coins, and the segment spot check it replaced |
-| `verity_machine_model/eps.py` | `eps`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2) and ε_machine's LP |
-| `verity_machine_model/capacity.py` | `capacity`: the certified share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity, hidden(n̄) the useful work any program could still add beside the pooled certified load n̄ (the filler workstream, decision 77; note:20261017T0652Z-draft-filler) |
+The data, each kind of thing a file or a line of its own:
+
+- `data/model.toml`: the constants (R*, the honest kernel's u a MAC, at 600 W too), the LP's ρ, tie and x_min, the honest
+  GEMM, the CUDA kinds, the adopted design, the epochs in order and the `current` vector.
+- `data/rows.csv`: one line per row of the machine (a pipe, a port, a ceiling or a joint vertex): its status
+  (`measured`, `ASSUMED`, `provisional`, `joint`, `datasheet`), the runs or notes it rests on, and what it is.
+- `data/census/EPOCH.csv`: the census lines from EPOCH, a file for each epoch that brought any: one line per instruction
+  class on a row, its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds
+  the row, or a derived u; the epochs it holds (`since`, its file's epoch; `until`) and its runs.
+- `data/census/runs.toml` and `data/census/kinds.toml`: the run lists and kind lists many census lines share (a refit's
+  every line cites every run its fit read), each cited in a line's `runs` or `kind` as `@NAME`.
+- `data/vectors/NAME.toml`: a named vector: its epoch, the rows and credits it uses in LP order, its summary and note,
+  and the numbers it was published with.
+- `data/attacks/FAMILY.jsonl`: an attack family: one program a line, its design, and the epochs it holds.
+- `data/floors.csv`: what the claims read: each root-writing kind at 32 MACs a word ((π₃₂)), each load into registers at
+  16 (PRICES-32's load half) and each copy route at 16 (π_c ≥ 16, `copy16`: every kind that writes registers, a UR word
+  at the 32 lanes it serves), with the words a warp instruction of it writes.
+- `data/honest/NAME.toml`: an honest kernel's instruction profile a MMA (every class it issues, the fold inside it), the
+  least operand delivery any program pays a MMA, and its measured SMSP-cycles a MMA, with its source.
+- `data/designs/NAME.toml`: one design of the registry ("Designs" below): its name, title and aliases, the noise on each
+  product, its honest profile, L, the noise's operand-delivery floor φ_del, the fold and filler (lane instructions a
+  word by class), plain (unfolded) MMAs beside its work, the proof unit, the coins, its perplexity arm, and ε_skip's and
+  ε_mand's parts with sources.
+- `data/designs.toml`: what every design reads unless its file sets it: honest's profile, L, the proof unit, the coins,
+  the fold (duo), ε_clock, Theorem S's δ, p and checks, honest's baseline program (dp4a) and the routes, all sm_120's.
+- `data/adapt.toml`: the proof units ε_adapt prices (SPEC's Theorem D): whole dot products (the designs' unit, decision
+  72), whole with operands recomputed one stage back, per-stage coins, and the segment spot check it replaced.
+- `data/forms.toml`: the MMA forms the cheater's tensor route mixes: each census kind's shape, split, sparsity, why its
+  product is exact, and its SASS.
+- `data/table.toml`: the cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2
+  bandwidth it is bound by (the most L2 read in any measured pattern, + 2%).
+- `data/headline.toml`: the per-family headline's spec: each GPU family's design of record, the vector each reading
+  prices it on, and the conditions no computation shows.
+- `data/devices/sm_NN/`: another device's data ("Devices" below).
+
+The code:
+
+- `verity_machine_model/model.py`: reading `data/` (or a device's directory).
+- `verity_machine_model/lp.py`: the LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ), as the legacy `rs-price-99.py`
+  `solve` computes it.
+- `verity_machine_model/attacks.py`: an attack's X, the cheapest of a design, and the check: every price at or below
+  measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, what is under its floor, and a claim's
+  kinds priced a word beside their measured cost.
+- `verity_machine_model/adopt.py`: merging a measured census into `data/census/` at the last epoch, each (kind, row) at
+  the faster of its two lines.
+- `verity_machine_model/resolve.py`: re-solving a named vector from the data.
+- `verity_machine_model/eps.py`: the ε budget of the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2)
+  and ε_machine's LP.
+- `verity_machine_model/capacity.py`: the certified share σ = 1 − hidden(n̄)/hidden(0) of a window's capacity,
+  hidden(n̄) the useful work any program could still add beside the pooled certified load n̄ (the filler workstream,
+  decision 77; note:20261017T0652Z-draft-filler).
+- `verity_machine_model/redteam.py`: the red-team audit of a headline design against a device's committed census.
+- `verity_machine_model/headline.py`: the per-family headline, every number computed from the design files and vectors.
+- `verity_machine_model/cli.py` and `verity_machine_model/commands/`: the `machine-model` command. `cli.py` only
+  dispatches; each command is a module of `commands/` with its usage as its docstring, `add(sub)` its arguments and
+  `run(args)` its body, so a new command is a new module and touches no other.
 
 An *epoch* is a state of the census and the attacks, named after the vector that introduced it. A census line or an attack
 holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector re-solves on
@@ -160,31 +203,13 @@ perplexity arms used are its `aliases`, and every command takes either. It is re
 varies, if it names one) and of `data/designs.toml`, which holds what every design shares: honest's profile, L, the
 proof unit, the coins, the fold, ε_clock, Theorem S's budget, the baseline and the routes. Each top-level key a file
 sets replaces the inherited one whole, and `name`, `title`, `summary` and `aliases` are never inherited.
-`uv run machine-model designs` prints the registry (`--json` too), and `eps --json` carries a design's entry under
-`registry`.
-
-| Design | Title | Aliases | Noise: linears, lm_head, QKᵀ, P·V | Perplexity arm |
-|---|---|---|---|---|
-| `dither-1s` | Dither-1S | `dither-duo`, `record`, `adopted` | one-sided, clean, one-sided, peel | `adopted` |
-| `dither-2s` | Dither-2S | `dither-two-sided`, `A`, `adopted-bd-lm` | two-sided, two-sided, two-sided, peel | `adopted-bd-lm` |
-| `dither-2s-pv` | Dither-2S, pv P·V | `dither-two-sided-pv`, `Ap` | two-sided, two-sided, two-sided, pv | `adopted-bd-lm-pv` |
-| `dither-2s-fill` | Dither-2S, lane filler | `dither-two-sided-fill` | Dither-2S's, with 4.5 lane instructions a word of verified filler | `adopted-bd-lm` |
-| `dither-c` | Dither-C | `co-dither-pv`, `Bc-pv`, `co32c-pv` | co32c, co32c, cohalf, pv | `co32c-pv` |
-| `dither-c-peel` | Dither-C, peel P·V | `co-dither`, `Bc` | co32c, co32c, cohalf, peel | `co32c` |
-
-The noise leaves are `NOISE` in `eps.py`, and `designs` prints them as a legend:
-
-- `one-sided`: one operand dithered with the low-rank U and the clean product served, the peeled strip unchecked.
-- `two-sided`: both operands dithered with fresh bits and the last checked word served, nothing unchecked.
-- `co32c`: CO-Dither at r = 32, the residue sums' base-128 digits committed.
-- `cohalf`: CO-Dither at r = k/2 with a 7-bit served side.
-- `peel`: P's w64 peel with U, the strip unchecked and free at a one-hot P row.
-- `pv`: P served with a fresh bit and Ycum's digits committed, every product checked.
-- `clean`: served plain and never proved.
+`uv run machine-model designs` prints the registry (`--json` too), `uv run machine-model render designs` prints it as a
+Markdown table with the noise leaves (`NOISE` in `eps.py`) and the peel sums kernels (`SUMS`) as legends, and `eps
+--json` carries a design's entry under `registry`.
 
 Beside its names, a design file has these keys:
 
-- `[noise]`: a leaf for each of `linears`, `lm_head`, `qk` and `pv`.
+- `[noise]`: a leaf of `NOISE` in `eps.py` for each of `linears`, `lm_head`, `qk` and `pv`.
 - `sums`: the kernel that forms a peel's sums, `vsum` (the default) or `vfold` (`SUMS` in `eps.py`).
 - `honest`, `L`, `work` and `plain`.
 - `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes (decision 73). A filler states
@@ -223,21 +248,33 @@ guarantee's real-time reading. τ, the price vectors' real-time factor, and Theo
 before it (decision 23). `solve` still prints τ as a vector's record, but τ is no longer the headline. Every term is a
 fraction of honest time:
 
-| Term | What it is | Set by |
-|---|---|---|
-| ε_skip | Honest work Verify doesn't require: peeled strips, clean products, unchecked limbs, the vector work a checked strip leaves free | The design's `[skip.served]`, SKIP's calculator's number for its noise (`../eps_budget.py`, `design_skip`) |
-| ε_mand | The fold or the filler done in fewer instructions than honest's | `[mand.PART]`: 0 for duo, under FOLD's named assumption |
-| ε_machine = ε_cert + ε_route | The cheater's best mix over Π at q*, from the LP below. ε_cert = 1 − π*·n(H)/B(H) is honest's own slack at the certificate π*; ε_route is what the cheater's routes add | The vector and the design |
-| ε_sched | Honest's measured time above its model time; 0 unmeasured | `[measured]` in `data/honest/NAME.toml` |
-| ε_clock | 1 − f_H/f_max: 0.1391, honest at the node's 2,092 MHz lock against sm_120's 2,430 MHz | `[clock]` |
-| ε_luck | Theorem S (sampling layer): an accepted cheater leaves d̄ = ln(1/δ)/((1 − p)·S) of the words wrong, still folded | `[luck]`: δ = 2⁻⁴¹, p = ¾, S = 48,000 |
-| ε_adapt | Sampling layer: what steering instances in unproved regions gains under one σ a request (SPEC's Theorem D) | The proof unit (`data/adapt.toml`) |
-| Fan | A proof unit's fan-out, the adaptive MACs per MAC that fails for certain. ε_luck + ε_adapt ≤ max(1/(1 − p), 1 + Fan)·(ln(1/δ)/S)·N_w·w*/B(H), so adaptivity is free while Fan ≤ 3 at p = ¾. Whole dot products have Fan 14 at gate/up and 17.9 at 8B's lm_head | The proof unit's `source` |
-| credit | What ε is a fraction of: `H`, honest's kernel; `model`, its model bound B(H)/f_max; `floor`, the floor program ♭'s bound at f_max (adopted, decision 74). Under `floor`, ε_sched, ε_clock and honest's overhead above ♭ go to γ | `--credit` |
-| q* | The fewest lane instructions, past the fold, of a right fresh committed word whose production reads no data-dependent address (SPEC §1.3). Assumed, never measured | `--q`, default 8 |
-| q*_T, b_T | A table word's lane instructions, and the bytes it reads from its memory level (QSTAR's lookups) | `data/table.toml`, `--lookup-q`, `--lookup-bytes` |
-| q*_U | q* on the uniform datapath, in uniform instructions. Out of the core since a uniform instruction takes an issue slot (decision 73) | `--q-uniform` |
-| threshold | The least q* at which ε_machine reaches its floor (the scalar routes closed) | Printed by `eps` |
+- **ε_skip**: honest work Verify doesn't require: peeled strips, clean products, unchecked limbs, the vector work a
+  checked strip leaves free. Set by the design's `[skip.served]`, SKIP's calculator's number for its noise
+  (`../eps_budget.py`, `design_skip`).
+- **ε_mand**: the fold or the filler done in fewer instructions than honest's. Set by `[mand.PART]`: 0 for duo, under
+  FOLD's named assumption.
+- **ε_machine = ε_cert + ε_route**: the cheater's best mix over Π at q*, from the LP below. ε_cert = 1 − π*·n(H)/B(H) is
+  honest's own slack at the certificate π*; ε_route is what the cheater's routes add. Set by the vector and the design.
+- **ε_sched**: honest's measured time above its model time; 0 unmeasured. Set by `[measured]` in
+  `data/honest/NAME.toml`.
+- **ε_clock**: 1 − f_H/f_max: 0.1391, honest at the node's 2,092 MHz lock against sm_120's 2,430 MHz. Set by `[clock]`.
+- **ε_luck**: Theorem S (sampling layer): an accepted cheater leaves d̄ = ln(1/δ)/((1 − p)·S) of the words wrong, still
+  folded. Set by `[luck]`: δ = 2⁻⁴¹, p = ¾, S = 48,000.
+- **ε_adapt**: sampling layer: what steering instances in unproved regions gains under one σ a request (SPEC's Theorem
+  D). Set by the proof unit (`data/adapt.toml`).
+- **Fan**: a proof unit's fan-out, the adaptive MACs per MAC that fails for certain. ε_luck + ε_adapt ≤ max(1/(1 − p),
+  1 + Fan)·(ln(1/δ)/S)·N_w·w*/B(H), so adaptivity is free while Fan ≤ 3 at p = ¾. Whole dot products have Fan 14 at
+  gate/up and 17.9 at 8B's lm_head. Set by the proof unit's `source`.
+- **credit**: what ε is a fraction of: `H`, honest's kernel; `model`, its model bound B(H)/f_max; `floor`, the floor
+  program ♭'s bound at f_max (adopted, decision 74). Under `floor`, ε_sched, ε_clock and honest's overhead above ♭ go
+  to γ. Set by `--credit`.
+- **q***: the fewest lane instructions, past the fold, of a right fresh committed word whose production reads no
+  data-dependent address (SPEC §1.3). Assumed, never measured. Set by `--q`, default 8.
+- **q*_T, b_T**: a table word's lane instructions, and the bytes it reads from its memory level (QSTAR's lookups). Set
+  by `data/table.toml`, `--lookup-q`, `--lookup-bytes`.
+- **q*_U**: q* on the uniform datapath, in uniform instructions. Out of the core since a uniform instruction takes an
+  issue slot (decision 73). Set by `--q-uniform`.
+- **threshold**: the least q* at which ε_machine reaches its floor (the scalar routes closed). Printed by `eps`.
 
 SPEC's SCALAR-ROUTE states q*, q*_T and b_T as one named assumption: a right fresh word costs at least 2.03 issue slots,
 or at least 1.22 slots and 3.5 B of table loads (6.0 B for single-field tables). Duo puts the lane threshold near that
@@ -302,7 +339,9 @@ slower than its opcode's other cases, its own kind (`ATOME32P`): a line for the 
 
 A joint row a re-measurement finds violated (a measured point past 1) is unsound whatever the faster rule says: it closes
 at the epoch before, and the new frontier's rows replace it. `opcode_probe/eps1.py facets --prior data/rows.csv --emit
-EPOCH` prints them, the upper hull of the new points and the old rows' vertices with the 2% margin. VF3m-16 closed R2-R4,
+EPOCH` prints them, the upper hull of the new points and the old rows' vertices with the 2% margin. A vector's own file
+says what it closed and what replaced it (its `summary` and `note`; `machine-model render vectors` lists them all), so a
+new vector adds nothing here. The examples that follow run to VF3q-16. VF3m-16 closed R2-R4,
 KIMAD, KHFMA2 and KSHFL that way for EIMAD, EHFMA2 and ESHFL, and replaced the ASSUMED SHFL by its measured 8 SMSP-cycles.
 VF3n-16 closed the joint issue rows JI3e_0..2 for JI3n_0..2 (note:20261017T0321Z-draft-eps1-tensor): IMMA m16n8k16 and
 TF32 m16n8k4 beside IADD3 load JI3e_1 past 1. Each JI3n row is JI3e's refit over every native mma.sync form's programs and
@@ -344,8 +383,10 @@ a line's runs are the runs its row's description cites, else the runs its vector
 
 `data/` is sm_120's, the RTX PRO 6000 at the node's 2,092 MHz lock, and every command reads it unless `--device` or
 `--data` names another directory. Another device's measurements go in `data/devices/sm_NN/`. That is the standard for
-sm_89 (the L40S, EPS1 ADA), sm_90 (the H200) and sm_100 (the B200, EPS1 DC), and for any later device. The directory
-follows these rules:
+sm_80 (the A100-SXM4-80GB at default boost, EPS1 AMPERE, written by `tensor_kinds/sm80.py census`), sm_89 (the L40S,
+EPS1 ADA), sm_90 (the H200) and sm_100 (the B200, EPS1 DC, whose census `dc/census.py` writes), and for any later device.
+`machine-model render devices` lists each directory a command can price, with its epochs, rows, census lines, vectors,
+designs and honest kernels. The directory follows these rules:
 
 - It holds `rows.csv` and `census.csv` in `data/`'s schema, and its rows follow "Measure a facet". Its probe's
   `census.py` writes them from gated runs.
@@ -354,7 +395,10 @@ follows these rules:
   take the directory.
 - To price a design on the device, it gains the rest of `data/`'s files, and `--device sm_NN` (or `--data DIR`) reads
   it:
-  - `model.toml`: its epoch, its vector and its CUDA lane classes. The constants only `solve` reads stay out.
+  - `model.toml`: its epoch, its vector and its CUDA lane classes, and optionally `uniform_forms`, the lane classes
+    with a uniform-datapath form: a filler whose mix has another class has no uniform route (sm_90's datapath is
+    integer only, so an FFMA filler stays on lanes). Without it every filler may move there. The constants only
+    `solve` reads stay out.
   - `vectors/NAME.toml`: its rows.
   - `honest/`: its honest kernel at each L. `[mma] class` names the MMA's census class (sm_120's is `MMA`).
   - `designs.toml` and `designs/`: each design at each L, read on the device's `designs.toml` (the proof unit and the

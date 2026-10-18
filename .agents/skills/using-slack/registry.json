@@ -189,6 +189,7 @@
         "benchmarks/host_tier/",
         "benchmarks/host_tiles/",
         "benchmarks/kv_filler/",
+        "benchmarks/kv_lifetime/",
         "benchmarks/link_pricing/",
         "benchmarks/overhead_frontier/",
         "benchmarks/pous/",
@@ -358,6 +359,19 @@
       "branch_suffixes": [
         "47e4",
         "6193"
+      ]
+    },
+    {
+      "handle": "hash",
+      "holder": "the hash coordinator (bc-0104b328-7489-5a12-a90e-2a15e14ff08a), a new slice launched from top's charter",
+      "remit": "A fast commitment hash for served inference: tensor-core friendly, binding proved in Lean, to cut vLLM commit time.",
+      "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top)",
+      "usergroup": "S0CAYGG5BDW",
+      "owns": [
+        "benchmarks/hash/"
+      ],
+      "branch_suffixes": [
+        "15ad"
       ]
     }
   ]

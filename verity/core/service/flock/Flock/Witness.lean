@@ -1,6 +1,7 @@
 import Flock.Zk
 import Flock.ProvedScope
 import Flock.RecVStar
+import Flock.RecCoins
 import Flock.Registered
 import Flock.Lookup
 
@@ -16,7 +17,8 @@ reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the mo
   `acceptsStmt` (`AcceptsStmt`: `Stmt.setupTables` at `RecVStar.innerTags`, the coin server's coins and the statement's
   partition object and program returns one table, and `Zk.schedule` accepts its `m`), `acceptsDescription`
   (`AcceptsDescription`, at each of the verifier's own registered reads), and with `--record` the recorded inner
-  session's Σ (its `hello`'s `link.sigma`) against the statement's. `accepts_stmt`'s line also prints the statement's
+  session's Σ (its `hello`'s `link.sigma`) against the statement's, at the record's full draw when it has one
+  (`RecCoins.drawnSpec`, as check 5 decodes it). `accepts_stmt`'s line also prints the statement's
   partition finding, the verifier's own inner shape (`shapeOf`, `innerAt`), the number of V*'s outer statements over it
   (`outerPartsOf`, `outerParts`) and V*'s statements there (`RecVStar.statements`).
 * `session [--statement ID] --circuit F --public F [--partition F] [--program F] [--registered F] [--tables DIR]
@@ -250,7 +252,9 @@ def innerCmd (args : List String) : IO UInt32 := do
     | .ok o => pure o
     | .error e => IO.eprintln s!"registered reads: {e}"; return 2
   let t0 ← IO.monoMsNow
-  let r := innerSetup (← IO.FS.readBinFile cf) (← IO.FS.readBinFile pf) partition program
+  let circuitFile ← IO.FS.readBinFile cf
+  let publicFile ← IO.FS.readBinFile pf
+  let r := innerSetup circuitFile publicFile partition program
   let st := acceptsStmtAt r
   let extra := match r, st with
     | .ok (spec, _), .ok st =>
@@ -266,8 +270,16 @@ def innerCmd (args : List String) : IO UInt32 := do
   let .ok st := st | return 1
   all := (← line "accepts_description" (acceptsDescription st own) [("registered", Lean.toJson own.size)]) && all
   if let some rf := argOf args "--record" then
-    let r := (← readJson rf) >>= recordSigma
-    let ok : V Unit := r >>= fun s => if s == hexOf st.sigma then pure () else throw s!"the record's sigma is {s}"
+    let text ← IO.FS.readFile rf
+    let record ← readJson rf
+    let want : V SessionSpec := do
+      let (spec, _) ← r
+      RecCoins.drawnSpec (fun d => Stmt.setupHidden RecVStar.innerTags circuitFile publicFile Coins.os [] (some d) partition
+        program) spec st text
+    let ok : V Unit := do
+      let s ← record >>= recordSigma
+      let w := hexOf (← want).sigma
+      if s == w then pure () else throw s!"the record's sigma is {s}, not the statement's {w}"
     all := (← line "record_sigma" ok) && all
   return (if all then 0 else 1)
 

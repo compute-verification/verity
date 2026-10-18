@@ -112,16 +112,6 @@ def test_sampler_ids_must_be_exactly_one_and_unknown_modules_fail():
     assert r["violations"][0]["sampler_ids"] == 2 and r["violations"][1]["unknown_modules"] == ["model.layers.7.mlp.gate_up_proj"]
 
 
-def test_shared_module_called_once_per_layer_is_structural_not_a_duplicate():
-    com = _com()
-    com._modules.append(("model.layers.0.self_attn.rotary_emb", LinearBase()))
-    good = _good_step() + ["model.layers.0.self_attn.rotary_emb"] * 2       # one RotaryEmbedding instance, called in both layers
-    for s in range(3):
-        com._layouts[s] = _layout(good)
-    assert com.identity_check()["ok"] is True
-    assert Counter(good)["model.layers.0.self_attn.rotary_emb"] == 2
-
-
 def test_a_sources_own_names_are_no_modules_tensors():
     """The KV slots (`kv_slots_source`, commit --memory-map) are named by the engine's KV layer, which need not be a hooked module: the
     source declares them (`own_names`), and (1) and (4) count module tensors only; undeclared, they read as an unknown module's."""
@@ -136,6 +126,16 @@ def test_a_sources_own_names_are_no_modules_tensors():
 
     com.sources.append(_KvSlots())
     assert com.identity_check()["ok"] is True
+
+
+def test_shared_module_called_once_per_layer_is_structural_not_a_duplicate():
+    com = _com()
+    com._modules.append(("model.layers.0.self_attn.rotary_emb", LinearBase()))
+    good = _good_step() + ["model.layers.0.self_attn.rotary_emb"] * 2       # one RotaryEmbedding instance, called in both layers
+    for s in range(3):
+        com._layouts[s] = _layout(good)
+    assert com.identity_check()["ok"] is True
+    assert Counter(good)["model.layers.0.self_attn.rotary_emb"] == 2
 
 
 def test_offline_core_without_module_set_is_skipped_not_passed():
