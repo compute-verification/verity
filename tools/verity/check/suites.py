@@ -130,6 +130,7 @@ import math
 import os
 import platform
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -1671,11 +1672,42 @@ def failing(out: Path, results: list[Result]) -> None:
     tmp.replace(failing_path(out))
 
 
+def on_agent_vm() -> bool:
+    """Whether this is an agent's VM, where no suite runs (Daniel, 17 Oct: an agent VM does git, editing, reading and messaging;
+    builds, tests and probes run on our nodes): a Cursor agent's (`CURSOR_AGENT`), outside a recorded run, not opted in
+    (`AGENT_GUARD_LOCAL_OK=1`, agent-guard's)."""
+    return (bool(os.environ.get("CURSOR_AGENT")) and not os.environ.get("RESEARCH_RUN_DIR")
+            and os.environ.get("AGENT_GUARD_LOCAL_OK") != "1")
+
+
+#: how an agent VM's suites run instead: an `agent-test` job on a node from this checkout's commit (`research run --on auto`)
+REMOTE = ("research", "run", "--on", "auto", "--wait", "--cpus", "16", "--mem-gb", "64", "--max-min", "180")
+#: what stays here on an agent VM: reading the cache, and output a caller reads from this machine's disk
+LOCAL_ONLY = ("--list", "--explain", "--json", "--logs", "-h", "--help")
+
+
+def remote(argv: list[str]) -> int:
+    """Run this invocation on a node (`REMOTE`), with `--local` there, and return its exit status; refused (2) on a tree with
+    uncommitted changes, since the node checks out the commit."""
+    r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, capture_output=True, text=True)
+    if r.returncode or r.stdout.strip():
+        print("suites: this is an agent VM, so the suites run on a node from this checkout's commit, and the tree has uncommitted "
+              "changes: commit them first, or run a small selection here with `--local`", file=sys.stderr)
+        return 2
+    cmd = ["uv", "run", "-q", *REMOTE, "--", "uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python",
+           "tools/verity/check/suites.py", "--local", *argv]
+    print(f"suites: this is an agent VM, so on a node: {shlex.join(cmd[3:])} (`--local` runs it here)", file=sys.stderr, flush=True)
+    return subprocess.run(cmd, cwd=ROOT).returncode
+
+
 def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
     # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check left a 42 GB one on vy-cpu-2, 11 Oct)
     signal.signal(signal.SIGTERM, signal.default_int_handler)
     argv = sys.argv[1:] if argv is None else argv
+    local, argv = "--local" in argv, [a for a in argv if a != "--local"]
+    if not local and on_agent_vm() and not any(a.split("=", 1)[0] in LOCAL_ONLY for a in argv):
+        return remote(argv)
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
     argv = argv[:argv.index("--")] if "--" in argv else argv
     ap = argparse.ArgumentParser(prog="suites", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

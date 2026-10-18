@@ -25,7 +25,12 @@ uv run tools/verity/check/suites.py flock -- -k tanh -x    # arguments after -- 
 uv run tools/verity/check/suites.py --quick                # without the tests marked slow
 uv run tools/verity/check/suites.py --fresh                # ignore the cache
 uv run tools/verity/check/suites.py --list                 # each suite's inputs, and whether a pass is cached
+uv run tools/verity/check/suites.py research -- -k drive --local   # here, on this machine: one small selection
 ~~~
+
+On an agent VM (a Cursor agent's, outside a recorded run) `suites.py` runs on a node: it sends itself through `research run --on
+auto --wait` from the checkout's commit, so commit first (a tree with uncommitted changes is refused). `--list`, `--explain`,
+`--json` and `--logs` stay local, and `--local` or `AGENT_GUARD_LOCAL_OK=1` runs everything here.
 
 Inside one package, plain pytest works too: `cd verity/ml/flock && uv run pytest -m "not slow" -k tanh`. It doesn't cache and
 doesn't load the read guard.

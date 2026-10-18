@@ -6,7 +6,8 @@ import os
 
 import pytest
 
-CLEARED = ("AWS_", "R2_", "RESEARCH_", "CLOUD_AGENT_")      # the last: or, R2_ cleared, the store reads a VM's shell that lost its secrets
+CLEARED = ("AWS_", "R2_", "RESEARCH_", "CLOUD_AGENT_", "CURSOR_")  # CLOUD_AGENT_: or, R2_ cleared, the store reads a VM's
+#: shell that lost its secrets; CURSOR_: an agent VM's, where suites.py and check.py go remote (`on_agent_vm`)
 SET_BY_CHECK = ("CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION")
 
 

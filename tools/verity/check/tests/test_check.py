@@ -1382,3 +1382,10 @@ def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_pat
     posted = (tmp_path / "posted").read_text()
     assert "registered no run (exit 137)" in posted and "exited 137 before launching a run" in posted, posted
     assert "check: verdicts: gathering" in posted, posted
+
+
+def test_on_an_agent_vm_the_whole_check_is_refused_with_where_it_runs(monkeypatch, capsys):
+    monkeypatch.setenv("CURSOR_AGENT", "1")
+    assert CHECK.main([]) == 2
+    err = capsys.readouterr().err
+    assert "check.py --record --on auto" in err and "suites.py" in err and "--local" in err

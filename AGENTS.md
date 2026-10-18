@@ -93,8 +93,11 @@ requires, `verity check tests|lean|circuits` runs only those parts, and `verity 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 uv run tools/verity/check/suites.py       # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run --extra torch-cpu verity check     # the check a merge requires; --record publishes it as an Attempt
+uv run --extra torch-cpu verity check --record --on auto   # the check a merge requires, in a check slot, as an Attempt
 ~~~
+
+An agent VM runs no build, test or check itself (Daniel, 17 Oct): `suites.py` sends itself to a node from the checkout's commit
+(`research run --on auto`), and `verity check` there needs `--record --on`. `--local` runs one small selection here anyway.
 
 ## Design rules
 

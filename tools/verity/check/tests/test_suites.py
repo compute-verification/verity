@@ -1573,3 +1573,28 @@ def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
     (root / "sys/fs/cgroup/research.slice/job.scope/memory.max").write_text("max\n")
     assert S.cgroup_mem_gb(root) == 700.0
     assert S.cgroup_mem_gb(tmp_path / "nowhere") is None
+
+
+def test_on_an_agent_vm_the_suites_run_on_a_node_from_the_commit(monkeypatch, tmp_path, capsys):
+    """Daniel, 17 Oct: an agent VM does git, editing, reading and messaging; builds and tests run on our nodes (four OOM kills of
+    agent VMs that day). Outside a recorded run, suites.py sends itself through `research run --on auto` with `--local`; a dirty
+    tree is refused (the node checks out the commit); `--local`, a recorded run, the opt-in and the read-only options stay here."""
+    S = _suites(monkeypatch, tmp_path)
+    calls, status = [], {"out": ""}
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout=status["out"], stderr="")
+
+    monkeypatch.setattr(S.subprocess, "run", run)
+    monkeypatch.setenv("CURSOR_AGENT", "1")
+    assert S.on_agent_vm()
+    assert S.main(["research", "--quick"]) == 0
+    assert calls[-1][3:8] == ["research", "run", "--on", "auto", "--wait"] and calls[-1][-3:] == ["--local", "research", "--quick"]
+    status["out"] = " M tools/x.py\n"
+    assert S.main(["research"]) == 2 and "uncommitted changes" in capsys.readouterr().err
+    for k, v in (("RESEARCH_RUN_DIR", "/r"), ("AGENT_GUARD_LOCAL_OK", "1")):
+        monkeypatch.setenv(k, v)
+        assert not S.on_agent_vm(), k
+        monkeypatch.delenv(k)
+    assert {"--list", "--explain", "--json"} <= set(S.LOCAL_ONLY)

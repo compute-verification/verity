@@ -1659,6 +1659,13 @@ def main(argv: list[str]) -> int:
         return 2
     if argv[:1] == ["--combine"] and len(argv) > 1:
         return combine(argv[1:], Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None)
+    if "--local" in argv:
+        argv = [a for a in argv if a != "--local"]
+    elif SUITES.on_agent_vm():
+        print("check: this is an agent VM, where no check runs (Daniel, 17 Oct). The whole check needs a check slot: `uv run python "
+              "tools/verity/check/check.py --record --on auto`; the tests alone run on a node with `uv run tools/verity/check/"
+              "suites.py`; `--local` (or AGENT_GUARD_LOCAL_OK=1) runs it here anyway", file=sys.stderr)
+        return 2
     cache = "--no-cache" not in argv
     keep_going = "--keep-going" in argv
     rest = [a for a in argv if a not in ("--no-cache", "--keep-going")]
