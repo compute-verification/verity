@@ -14,7 +14,8 @@ memory at its start, those on a chip then (at most `S`) and those that came in d
 are consecutive (`sum_passes`), so what came in during them came in over `[t_0, t_P) ⊆ [s₀, e]`, at most `s/E + β` a
 tick by rebuilds and disk reads, none over the links.
 
-The time-held forms (`HeldOverTime`, `HeldOverTimeLinks`) are not proved here.
+The time-held forms are not proved here: `heldOverTime_of_links` reduces `HeldOverTime` to `HeldOverTimeLinks`, at links
+of rate 0, which is all Identity says.
 -/
 
 namespace Accounting.SecurityProofs.Remote
@@ -140,5 +141,17 @@ theorem Held : Accounting.Guarantees.Remote.Held := by
   refine holdsMono (fun ω ha h => ?_) (holdsAnd hk hw)
   obtain ⟨hm, h0, hP⟩ := hc ω ha
   exact held_of ω hE hs hβ hI hsq hd hS hr hm h0 hP h.1 h.2
+
+/-- Identity is the links' ceiling at rate 0. -/
+theorem links_of_identity (hI : Identity T) : Links T 0 := fun ω u v _ => by
+  simp [over, hI]
+
+/-- **The time-held line under Identity is the link-charged one at links of rate 0**: `HeldOverTime` follows from
+`HeldOverTimeLinks`, so the one time-held proof left is `HeldOverTimeLinks`'s. -/
+theorem heldOverTime_of_links (h : Accounting.Guarantees.Remote.HeldOverTimeLinks) :
+    Accounting.Guarantees.Remote.HeldOverTime := by
+  intro Ω _ T K S s E β W δs δc hE hs hβ hW hI hsq hd hS hr hp hcov hk hw
+  simpa only [add_zero] using h Ω T K S s E β 0 W δs δc hE hs hβ le_rfl hW (links_of_identity hI) hsq hd hS hr hp
+    hcov hk hw
 
 end Accounting.SecurityProofs.Remote
