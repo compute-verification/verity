@@ -41,7 +41,13 @@ echo "build rc $?" >> "$O/rc.txt"
 cat "$O/rc.txt"
 [ -x "$W/overlap" ] || { tail -30 "$O/build-gemms.log" "$O/build.log"; exit 1; }
 # shellcheck disable=SC2016,SC2086
-gpu-lease 1 --wait --max-min 10 ${LEASE_ARGS:-} -- bash -c '"$W/overlap" dump "$W/p" "$W/dumps" > "$O/dump.jsonl" 2> "$O/dump.err"; echo "dump rc $?" >> "$O/rc.txt"'
+gpu-lease 1 --wait --max-min 10 ${LEASE_ARGS:-} -- bash -c '
+  "$W/overlap" dump "$W/p" "$W/dumps" > "$O/dump.jsonl" 2> "$O/dump.err"; r=$?
+  echo "dump rc $r" >> "$O/rc.txt"
+  if [ $r != 0 ]; then
+    compute-sanitizer --tool memcheck --show-backtrace device "$W/overlap" dump "$W/p" "$W/dumps-san" > "$O/sanitizer.log" 2>&1
+    echo "sanitizer rc $?" >> "$O/rc.txt"
+  fi'
 python3 benchmarks/pouw/commit_gpu/reference.py verify "$W"/dumps/*-d* > "$O/verify.jsonl" 2> "$O/verify.err"
 v=$?
 echo "verify rc $v" >> "$O/rc.txt"

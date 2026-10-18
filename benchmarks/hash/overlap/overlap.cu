@@ -249,6 +249,10 @@ struct World {
     CK(cudaStreamWaitEvent(B, a, 0)); CK(cudaStreamWaitEvent(A, b, 0));
   }
   static u64 leaves(const std::string& t) { return (u64)M * TENSORS.at(t).first * 2 / LB; }
+  static void sync(const std::string& what) {
+    const cudaError_t e_ = cudaDeviceSynchronize();
+    if (e_ != cudaSuccess) { fprintf(stderr, "CUDA %s after %s\n", cudaGetErrorString(e_), what.c_str()); exit(3); }
+  }
   void init(const std::string& pdir) {
     int lo, hi;
     CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
@@ -262,6 +266,7 @@ struct World {
       if (s.residual) { CK(cudaMalloc(&R[s.name], (size_t)M * s.n * 2)); fill_bf16<<<4096, 256>>>(R[s.name], (size_t)M * s.n, seed++); }
       lt[s.name].init(M, s.n, s.k);
       ext[s.name] = ext_gemms(M, s.n, s.k);
+      sync("operands " + s.name);
     }
     for (int b = 0; b < 2; ++b) {
       CK(cudaMalloc(&out[b], (size_t)M * 2 * I * 2));
@@ -272,9 +277,12 @@ struct World {
         fill_bf16<<<4096, 256>>>(T[b][t], e_, 200 + 10 * b + cd.second);
         const u64 n = leaves(t);
         if (!params.count(t)) params[t] = read_params(pdir + "/p-" + std::to_string(n) + ".bin");
+        sync("tensor " + t);
         hs[b][t] = std::make_unique<Hash>();
         hs[b][t]->init(params[t], n, cd.second);
+        sync("committer " + t);
         hs[b][t]->readahead(A);
+        sync("readahead " + t);
       }
     }
     CK(cudaStreamSynchronize(A));
