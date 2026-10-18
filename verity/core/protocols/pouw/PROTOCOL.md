@@ -1337,7 +1337,12 @@ name not registered.
   tile, for the s8 kinds on bits, under CP-W (decision 104, #2438's `PouwWarpCheck_v2` body). Each lane folds H1's sets over
   X = A + b and W' = B + c + U with fx1 from its keys, and receipt words 2 s and 2 s + 1 are the warp's XOR of y and of z
   after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's, column's
-  and lane's from blocks of its own.
+  and lane's from blocks of its own. Whether a tile is a legal proof unit under the 16-bit output rule, or the warp check
+  must be a unit kind of its own aggregating coordinates, is decision 107's, still open.
+
+The seed and the noise block (`_v1` on words, `_v2` on bits), `PouwU129` and `PouwH1Tile` are registered Definitions, each
+checked by circuit-check at its sidecar's binding (`seeds.circuit-check.py`, `h1tile.circuit-check.py`); `PouwH1Tile` only
+where `circuit/segment.py` is on the tree, at one lane (4 × 8, K = 64).
 
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
 site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.

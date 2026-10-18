@@ -129,8 +129,7 @@ def _coin_salt(S):
 
 def _word_def(name: str, params, body, doc: str, ports=None) -> CompositeDefinition:
     kw = {"ports": ports} if _ports is not None and ports is not None else {}
-    return CompositeDefinition(name, 1, (), lambda S: (params, DIGEST), body, doc=doc, conformance="protocol-defined",
-                               register=False, **kw)
+    return CompositeDefinition(name, 1, (), lambda S: (params, DIGEST), body, doc=doc, conformance="protocol-defined", **kw)
 
 
 _SEED_PARAMS = (("salt", DIGEST), ("position", POS), ("roots", Array(2, DIGEST)))
@@ -175,10 +174,10 @@ def _block_bits(C, *el):
 
 
 PouwSeedBits = definition("PouwSeed", 2, _seed_bits, tuple((n, BL.bit_type(t)) for n, t in _SEED_PARAMS), DIGEST_BITS,
-                          word=bind(PouwSeed), conformance="protocol-defined", register=False,
+                          word=bind(PouwSeed), conformance="protocol-defined",
                           doc="seed_j on bits (two SHA-512 compressions): PouwSeed_v1")
 PouwNoiseBlockBits = definition("PouwNoiseBlock", 2, _block_bits, tuple((n, BL.bit_type(t)) for n, t in _BLOCK_PARAMS),
-                                DIGEST_BITS, word=bind(PouwNoiseBlock), conformance="protocol-defined", register=False,
+                                DIGEST_BITS, word=bind(PouwNoiseBlock), conformance="protocol-defined",
                                 doc="Block t of seed_j's noise stream on bits (one SHA-512 compression): PouwNoiseBlock_v1")
 if _ports is not None:
     PouwSeedBits.ports = _coin_salt

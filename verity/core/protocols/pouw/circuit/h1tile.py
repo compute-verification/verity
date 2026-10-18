@@ -23,7 +23,8 @@ The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, rec
 
 The scheme takes the Boolean s8 kinds (`KINDS`) on whole-lane grid tiles: a full r × c grid with 4 | r and 8 | c, 32 | K
 and KS = K / 32 >= 2; any other dot or tile is `CompileError("scheme")`. `scheme(tile, name)` builds it at another tile;
-`SCHEME` is registered at a warp, 32 × 32, when `segment` (E2E-120) is on the tree. `reference` is the unit on words.
+`SCHEME` is registered at a warp, 32 × 32, and `PouwH1Tile` as a Definition, when `segment` (E2E-120) is on the tree.
+`reference` is the unit on words.
 """
 from __future__ import annotations
 
@@ -139,8 +140,7 @@ def u129(x: int) -> int:
     return (-64 + (x & 0xFF) % 129) & 0xFF
 
 
-PouwU129Word = PrimitiveDefinition("PouwU129", 1, (("x", Value(8)),), Value(8), u129, conformance="protocol-defined",
-                                   register=False)
+PouwU129Word = PrimitiveDefinition("PouwU129", 1, (("x", Value(8)),), Value(8), u129, conformance="protocol-defined")
 
 
 def _u129_bits(C_, x):
@@ -149,7 +149,7 @@ def _u129_bits(C_, x):
 
 
 PouwU129 = definition("PouwU129", 2, _u129_bits, (("x", I8),), I8, word=PouwU129Word, conformance="protocol-defined",
-                      register=False, doc="-64 + x mod 129 on bits (x + 192, or x + 63 where x >= 129): PouwU129_v1")
+                      doc="-64 + x mod 129 on bits (x + 192, or x + 63 where x >= 129): PouwU129_v1")
 
 
 # -- the reference -----------------------------------------------------------------------------------------------------------
@@ -293,7 +293,8 @@ def _unit_ports(S: Any) -> Any:
 
 
 PouwH1Tile = CompositeDefinition(
-    "PouwH1Tile", 1, ("EXACT", "R", "C", "PAIRS"), _signature, _body, conformance="protocol-defined", register=False,
+    "PouwH1Tile", 1, ("EXACT", "R", "C", "PAIRS"), _signature, _body, conformance="protocol-defined",
+    register=SG is not None,
     doc="One r × c tile of H1 + fx1 under CP-W (`circuit.h1tile`): A's R rows and B's C rows, the salt, the unit's position "
         "and its seed group's roots, to {z: EXACT on each cell of PAIRS, receipt: per set the lanes' XOR of y, then of z}.",
     **({"ports": _unit_ports} if _ports is not None else {}))
