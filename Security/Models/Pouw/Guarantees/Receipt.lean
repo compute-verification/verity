@@ -20,6 +20,14 @@ What is proved about duo's words (`Definitions/Pouw/Receipt/Duo.lean`), at every
 * `DuoRunWordInjective`: a run of any length binds each of its words at every start state when the others are
   fixed, for odd multipliers: Lemma B's (Inj) with the full state committed (LEDGER's case (a),
   note:20261017T1723Z-draft-ledger §1.3).
+* `DuoWindowNoKernel`: four words with `DuoQuadNoKernel`'s keys have no all-state kernel anywhere in a run, whatever
+  the words and keys before and after them. So in a run whose every four consecutive positions have those keys, two
+  runs with the same final states on every start state differ, if at all, at two words at least four positions apart.
+* `DuoCheckpointNoKernel`: a run of any length cut into four-word blocks with those keys, with the state after every
+  block committed, has no all-state kernel.
+* `DuoLongRunKernel`: every key schedule has an all-state kernel at every length `L > 2·4ⁿ`, by counting: `2^(nL)`
+  runs, `(4ⁿ)^(4ⁿ)` maps of the states. So no statement binds a whole run's final state at every length, and where
+  the deployed schedules' first kernel lies, between five words and `2·4ⁿ + 1`, is open.
 
 `DuoQuadNoKernel`'s condition on `a₂` is needed: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and
 `a₃ ≡ ±1 (mod 2^(n+1−r₁))`, flipping the top bit of all four words leaves every final state unchanged. pfill's `key_ok`
@@ -30,6 +38,10 @@ all-state statement here (`DuoRunWordInjective` fixes all words but one).
 fx1 (`Definitions/Pouw/Receipt/Fx1.lean`) is duo on the word times an odd multiplier `m`, a bijection of the words, so
 each duo statement holds for fx1 with every IMAD multiplier odd (`Fx1WordInjective`, `Fx1PairNoKernel`,
 `Fx1TripleNoKernel`, `Fx1QuadNoKernel`, `Fx1StepBijective`, `Fx1RunWordInjective`).
+
+Both deployed schedules meet `DuoQuadNoKernel`'s conditions at every position, which `DuoWindowNoKernel` and
+`DuoCheckpointNoKernel` need. Neither covers two runs that differ at words more than three positions apart, and none
+of these statements covers the served receipt `y ⊕ rotl(z, 16)`, which commits less than the whole state.
 
 What is proved about li's half steps and checkpoints (`Definitions/Pouw/Receipt/Li.lean`), at every width `n` and for
 odd multipliers alone:
@@ -110,6 +122,26 @@ def DuoRunWordInjective : Prop :=
   ∀ (n L : ℕ) (k : Fin L → BitVec n) (a : Fin L → OddKey n) (r : Fin L → ℕ) (s : BitVec n × BitVec n)
     (w : Fin L → BitVec n) (i : Fin L),
     Function.Injective (fun x => duoRun k (fun j => (a j).1) r (Function.update w i x) s)
+
+/-- **Four duo words have no all-state kernel anywhere in a run.** For every width, any `p` words and keys before
+and any `t` words and keys after, and four middle words whose keys meet `DuoQuadKeysOk`: two runs of the `p` words,
+four middle words, then the `t` words, whose final states agree on every start state, have the same middle words. -/
+def DuoWindowNoKernel : Prop :=
+  ∀ (n p t : ℕ) (k a : Fin p → BitVec n) (r : Fin p → ℕ) (w : Fin p → BitVec n) (q : DuoQuadKeysOk n)
+    (k' a' : Fin t → BitVec n) (r' : Fin t → ℕ) (w' : Fin t → BitVec n),
+    Function.Injective (fun d s => duoRun k' a' r' w' (duoQuadWith q.1 d (duoRun k a r w s)))
+
+/-- **A duo run checkpointed every four words is bound at every length.** For every width and number of blocks `m`,
+and keys for each block that meet `DuoQuadKeysOk`: two runs of `m` four-word blocks whose checkpoints, the states after
+each block, agree on every start state are equal. -/
+def DuoCheckpointNoKernel : Prop :=
+  ∀ (n m : ℕ) (q : Fin m → DuoQuadKeysOk n), Function.Injective (duoCheckpoints (fun j => (q j).1))
+
+/-- **Every duo run longer than `2·4ⁿ` words has an all-state kernel.** For every width `n + 1`, length
+`2·4ⁿ⁺¹ + 1 + e` and keys: two different runs of that many words leave the same final state on every start state. -/
+def DuoLongRunKernel : Prop :=
+  ∀ (n e : ℕ) (k a : Fin (2 * 4 ^ (n + 1) + 1 + e) → BitVec (n + 1)) (r : Fin (2 * 4 ^ (n + 1) + 1 + e) → ℕ),
+    ∃ w w', w ≠ w' ∧ duoRun k a r w = duoRun k a r w'
 
 /-- **One fx1 word is bound at every state.** For every width, XOR key, odd multiplier, rotation, odd IMAD
 multiplier and start state, the state after one word determines the word. -/

@@ -64,6 +64,18 @@ def test_a_stop_at_finish_for_rows_that_fail_on_the_pads_is_judged_at_the_first_
     assert not OA.judge("honest", t, {"accepted": True, "released": 4, "why": None})[0]
 
 
+def test_a_worker_that_fails_is_judged_at_the_stand_in_for_the_firewalls_refusal():
+    fw = "FIREWALL-REFUSED: the device failed: panicked: the worker panics at its round 2"
+    why = f"the firewall's refusal: {fw}: not a value the public input lets the firewall fix by its own computation"
+    t = transcript([{"fixed": {}}] * 19 + [{"fixed": {"what": f"the firewall's refusal: {fw}", "stand_in": True}}],
+                   refused=fw, at=19, start=19)
+    for mode in ("rc", "rc240", "panic", "silent", "decode"):
+        assert OA.judge(f"cut-{mode}", t, {"accepted": False, "released": 19, "why": why}) == (True, "")
+    assert not OA.judge("cut-panic", t, {"accepted": False, "released": 18, "why": why})[0]
+    assert not OA.judge("cut-tree", t, {"accepted": False, "released": 19, "why": why})[0]
+    assert not OA.judge("honest", t, {"accepted": True, "released": 20, "why": None})[0]
+
+
 def test_an_honest_session_is_accepted_with_nothing_stopped():
     t = transcript([{"finish": {}}])
     assert OA.judge("honest", t, {"accepted": True, "released": 1, "why": None}) == (True, "")

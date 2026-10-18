@@ -367,6 +367,9 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   lead proposed and Daniel approved.
 - **Push your branch after every commit** (never `main`, never `--force`). A push to a PR in a train being checked waits
   for that train to end (Checking and merging). Only drive and the lander move `main`.
+- **Work in a checkout no other agent uses:** your own VM, or your own `git worktree add` (with its own venv) on a shared
+  VM, removed when your task ends. Never check out or switch a branch in a tree another agent uses, and push only to
+  branches you created or were handed.
 - **Landing is drive's.** Push your PR, mark it ready and go back to research; you hear back only if your PR fails. A
   lane works on at most two open PRs; one whose head is on `next` (queued or in a running check) doesn't count until
   its check fails.
