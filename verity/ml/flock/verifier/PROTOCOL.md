@@ -1790,7 +1790,10 @@ expectation):
   `agree.py`'s `passed_every_check` counts the sessions refused last and for nothing else. So, too, under `--zk`, a
   statement whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the
   live server and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it;
-  `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier.
+  `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier. So, too, under `--zk`, a mask slot below
+  `2^13` bits (§16.14, `Zk.SLOT_LOG_MIN`), which the Lean verifier and the live prover's `zk_shape_ok` refuse and the
+  pinned upstream build does not; every deployed circuit has `mask_log = 14`, no vector exercises it, and
+  `test_lean_zk_mask.py` runs it on the Lean verifier.
 - **D13:** a unit net named `rec-open/…` or `rec-open-stacked/…` is the verifier's V* opening net (`Flock.RecOpen`,
   §16.10). Upstream takes the unit's net as the file gives it. The spec refuses such a unit whose name is not
   `rec-open/l<LANES>-h<H>` (or `rec-open-stacked/l<LANES>-h<H>`) at valid parameters, one whose port bits are not the
