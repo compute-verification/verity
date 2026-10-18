@@ -43,10 +43,11 @@ Ranges. A constant is its value, a proven core step its D, a proven affine map i
 rule derives from its operands' ranges (`fmaxf` and `fminf` of a non-negative float, and the low byte of an f32's truncation
 below 128.0, over f32 bit patterns read as s32, which order +0..+inf as the floats), and every other value any word of its width
 (an s8 operand -128..127, an accumulator all of s32). Port types (`ports`, PROTOCOL.md §12) narrow a range, read through
-`ports.reading` as signed: an input lies in its port's bound (its census fact), and a primitive's or Definition's value in the
-interval it declares, or a primitive's in what its transfer gives from its operands' ranges. A range comes from its producer and
-the producer's declaration, never from a reader's bound. So an accumulator from a run input without a bound, a split-K combine that
-may wrap, or a chain long enough to clamp is never proven. A `scan`'s carry is iterated to a fixpoint, exactly up to 2^16
+`ports.reading` as signed: a primitive's or Definition's value lies in the interval it declares, or a primitive's in what its
+transfer gives from its operands' ranges. A range comes from its producer and the producer's declaration, never from a reader's
+bound, and never from an input's declared bound (its census fact): evaluation doesn't enforce it, so no declared ``In(bound)`` is
+taken on trust and a run input spans its width. So an accumulator from a run input, a split-K combine that may wrap, or a chain
+long enough to clamp is never proven. A `scan`'s carry is iterated to a fixpoint, exactly up to 2^16
 iterations and then widened to any word.
 
 A word is read at its own width. A reference to a leaf of another width than the reading position's type declares (an s32
@@ -548,8 +549,7 @@ def _reinterpretations(body: Body) -> list[int | None]:
 
 
 class _Pass:
-    def __init__(self, inputs: Mapping[int, Segs] | None = None) -> None:
-        self.inputs = inputs or {}  # the root's input nodes' ranges, by node: their bounds
+    def __init__(self) -> None:
         self.memo: dict[tuple, tuple[Segs, bool, Tally]] = {}
         self.keep: list[Any] = []
         self.sites: dict[tuple[str, int], tuple[Range, Range]] = {}
@@ -641,7 +641,7 @@ class _Pass:
             if is_input(nd.fn):
                 when, w = input_id(nd.fn.id)  # type: ignore[misc]
                 self.shapes.setdefault(nd.fn.id, ("input", 0, w))
-                segs.append(self.inputs.get(k) or ((0, nd.out.leaves, None),))
+                segs.append(((0, nd.out.leaves, None),))
                 dyns.append(when == RUN)
                 continue
             ad = [_dyn(a.refs, pdyn, dyns) for a in nd.args]
@@ -757,12 +757,8 @@ def analyze(program: Any, census: Mapping) -> Analysis:
     step = step_of(census)
     units = [Counter() for _ in range(S)]
     whole = Tally()
-    vals, facts = census["values"], census["facts"]
-    bounds: dict[int, list[tuple[int, int, Range]]] = {}
-    for j, lo, hi, f in zip(vals["producer"], vals["lo"], vals["hi"], vals["fact"]):
-        if j < census["inputs"]:
-            bounds.setdefault(j, []).append((lo, hi, _port_range(facts[f]["interval"], _width(nodes[j].out, lo, hi))))
-    p = _Pass({j: _merge(sorted(b)) for j, b in bounds.items()})
+    vals = census["values"]
+    p = _Pass()
     for k, t in p.walk(program.root.body, (), (), program.root.id, [], [], {}):
         whole.add(t)
         for cls, n in t.units.items():

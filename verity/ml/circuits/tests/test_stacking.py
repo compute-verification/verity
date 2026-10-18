@@ -4,7 +4,6 @@ its reason, or has its carries budgeted. The red team's attacks (benchmarks/prop
 are cases here."""
 from __future__ import annotations
 
-import copy
 import json
 import random
 
@@ -185,21 +184,12 @@ def test_an_accumulator_from_a_run_input_is_refused():
 BOUND = (-(1 << 20), 1 << 20)
 
 
-def test_a_run_inputs_bound_starts_a_proven_chain_through_its_census_fact():
-    """Port types narrow ranges (PROTOCOL.md §12): the accumulator from a run input is proven once its port bounds it away from
-    the s32 edge, and only then; P reads the bound from the census's facts."""
+def test_a_run_inputs_declared_bound_is_not_taken():
+    """No declared `In(bound)` is taken on trust (18 Oct): evaluation doesn't enforce a run input's bound, so the accumulator
+    from a run input whose port bounds it far from the s32 edge is no more proven than one without."""
     program, ends = int8_program(acc0="input", ports=Ports(params={"c": In(bound=BOUND)}))
     v = judge(program, ends)
-    assert v.ok and v.numbers["family_steps"] == 6, v.reasons
-    edge, edge_ends = int8_program(acc0="input", ports=Ports(params={"c": In(bound=(P.S32[0], 0))}))
-    v = judge(edge, edge_ends)
-    assert codes(v) == ["s8-window"] and v.reasons[0]["sites"][0]["acc"][0] == P.S32[0]
-    cen = copy.deepcopy(census(program, ends))
-    c_node = 2  # the input nodes are x, w and c
-    for v_, j in enumerate(cen["values"]["producer"]):
-        if j == c_node:
-            cen["facts"][cen["values"]["fact"][v_]]["interval"] = None
-    assert P.analyze(program, cen).unproven == {IMMA.id: 6}
+    assert codes(v) == ["s8-window"] and v.reasons[0]["sites"][0]["acc"] == list(P.S32)
 
 
 def _rem(a, b):
@@ -230,12 +220,12 @@ def _from(name: str, start, ports=None) -> P.Analysis:
     ("undeclared", lambda B, c: B.call(I32DIV, c[0], c[1]), None, False),
     ("transfer", lambda B, c: B.call(REM, c[0], B.call(prims.const(32, 1000))), None, True),
     ("transfer-of-any-word", lambda B, c: B.call(REM, c[0], c[1]), None, False),
-    ("input-leaf", lambda B, c: c[0], C0, True),
+    ("input-leaf", lambda B, c: c[0], C0, False),
     ("composite", lambda B, c: B.call(FIRST, c), C0, True),
     ("silent-composite", lambda B, c: B.call(SILENT, c), C0, False)])
 def test_a_producers_declared_interval_narrows_its_value(label, start, ports, proven):
-    """A primitive's declared interval, its transfer on its operands' ranges, an input leaf's bound, and a Definition's declared
-    return: P reads a parameter as one range (its leaves' union), so only the declaration keeps c[0]'s bound through a call."""
+    """A primitive's declared interval, its transfer on its operands' ranges, and a Definition's declared return narrow its
+    value; an input leaf's declared bound doesn't, and a composite that declares nothing gives any word."""
     a = _from(f"TestFrom{label.title().replace('-', '')}", start, ports)
     assert a.unproven == ({} if proven else {IMMA.id: 2}), label
 
