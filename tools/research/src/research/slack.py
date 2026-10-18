@@ -2316,7 +2316,7 @@ def ring_decision(ns: argparse.Namespace, reg: dict, cid: str, out: dict) -> Non
         return
     api, ch = client(ns), r.get("channel") or channel_id(ns, reg, FRONT_DOOR)
     mark = f"card `{cid}` decided"
-    if any(mark in (m.get("text") or "") for m in api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"],
+    if any(is_doorbell(m, reg) and (m.get("text") or "").startswith(f"from ask-daniel, {mark}") for m in api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"],
                                                              oldest=f"{_now().timestamp() - 14 * 86400:.6f}")):
         return
     question, asker, link = "", "", ""
