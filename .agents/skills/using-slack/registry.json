@@ -52,7 +52,6 @@
         "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
-        "benchmarks/judge.py",
         ".cursor/"
       ],
       "branch_suffixes": [
@@ -366,7 +365,10 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py"
+        "tools/research/src/research/merge.py",
+        "tools/research/src/research/drive.py",
+        "tools/research/src/research/mergequeue.py",
+        "tools/research/tests/test_queue_drive.py"
       ],
       "branch_suffixes": [
         "4292",
@@ -466,7 +468,8 @@
       "owns": [
         "benchmarks/harness/",
         "benchmarks/specs/",
-        "infra/cluster/kinds/benchmarks.toml"
+        "infra/cluster/kinds/benchmarks.toml",
+        "benchmarks/judge.py"
       ],
       "branch_suffixes": [
         "47e4",
