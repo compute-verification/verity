@@ -17,7 +17,7 @@
   {
    "id": "c2-one-declaration",
    "rung": 2,
-   "statement": "Within one declaration with theta frozen, a compliant circuit that contains a standard dense pretraining recipe runs it at an efficiency of about 1e-7 to 3e-7 (slowdown 1e6-1e7 at kimi-k2-1m-raw).",
+   "statement": "Within the monitored circuit, with theta registered once, a compliant circuit that contains a standard dense pretraining recipe runs it at an efficiency of about 1e-7 to 3e-7 (slowdown 1e6-1e7 at kimi-k2-1m-raw).",
    "status": "conditional",
    "premises": [
     "p-thread-theorem",
@@ -27,7 +27,8 @@
     "p-construction",
     "p-rates",
     "p-loss-axis",
-    "p-partial-sum-lemma"
+    "p-partial-sum-lemma",
+    "p-public-templates"
    ],
    "attacks": [
     "a-value-not-bit",
@@ -43,7 +44,7 @@
   {
    "id": "c3-policy-throttles-pretraining",
    "rung": 3,
-   "statement": "Under the policy, with one registration phase up front, pretraining a new model is slowed by the one-declaration factor across any number of declarations, and the model it produces can't be served without paying about the same factor again (it was never registered).",
+   "statement": "Under the policy, pretraining a new model is slowed by the one-circuit factor however long the run, and the model it produces can't be served without paying about the same factor again (it was never registered).",
    "status": "conditional",
    "premises": [
     "c2-one-declaration",
@@ -54,7 +55,7 @@
     "a-recommitment",
     "a-committed-corpus"
    ],
-   "next": "Prove the composition lemma; fix the registered set's budgets; decide whether any re-registration channel exists, since every such channel is a recommitment route and must be slow and priced."
+   "next": "Fix the registered set's budgets; decide whether any re-registration channel exists, since every such channel is a recommitment route and must be slow and priced."
   },
   {
    "id": "c4-known-methods",
@@ -223,7 +224,7 @@
    "id": "p-partial-sum-lemma",
    "kind": "theorem",
    "status": "proposed",
-   "statement": "A Hong-Kung / Loomis-Whitney law on the reference circuit (the chain proof's partial-sum charge through Contains): proven ceiling about 3.6e-7 at the 1-year mark. Round 2: per declaration only; about 1,500-3,000 Lean lines; a coded crossing charged soundly gives rho >= 2e4.",
+   "statement": "A Hong-Kung / Loomis-Whitney law on the reference circuit (the chain proof's partial-sum charge through Contains): proven ceiling about 3.6e-7 at the 1-year mark. Round 2: about 1,500-3,000 Lean lines; a coded crossing charged soundly gives rho >= 2e4.",
    "refs": {
     "lean": [
      "Nci.SecurityProofs.UpdatedMatMul",
@@ -240,8 +241,19 @@
    "id": "p-one-registration",
    "kind": "policy-rule",
    "status": "proposed",
-   "statement": "Everything committed is registered once, before monitoring, and reused by every declaration; nothing computed under monitoring ever enters theta. So a value one declaration passes to another is novel, and a run split across declarations is charged like one declaration whose theta is the registered set. A short composition lemma (the union of declarations over one registered theta is a declaration) states this in Lean.",
+   "statement": "The monitored computation is one circuit, built by appending as it streams, over one registration up front: theta is the registered set and every computed value is novel. A run spread over time is part of that circuit, so the one-circuit theorems cover it with no composition step.",
    "refs": {}
+  },
+  {
+   "id": "p-public-templates",
+   "kind": "policy-rule",
+   "status": "proposed",
+   "statement": "Every multiplication of the declared circuit runs inside a public classical matmul template (a fixed number format and adder tree, over a public range of shapes), and at most a public fraction of its gates lie outside templates. Products are then gates of the declared circuit itself, so the Loomis-Whitney law applies to it directly, with no reference recipe and no Contains: Strassen-style and re-associated recipes become templates over combined operands. What remains is how compressible the operands crossing blocks are (a-boundary-code, a-value-not-bit) and the outside-template cap. A minimum shape must admit attention's head dimension (64-192) and MoE experts' widths (2048 in Kimi-K2).",
+   "refs": {
+    "findings": [
+     "ballard-2012-graph-expansion/4"
+    ]
+   }
   },
   {
    "id": "p-theta-budgets",
@@ -411,7 +423,7 @@
   {
    "id": "a-one-recipe",
    "severity": "moderate",
-   "status": "open",
+   "status": "repair-proposed",
    "targets": [
     "c2-one-declaration"
    ],
@@ -423,7 +435,7 @@
    "title": "The bound covers one literal recipe",
    "mechanism": "Contains embeds one recipe gate for gate; equivalent re-wirings (re-association, Strassen, recompute) escape it; recipe choice moves the theorem 2-4x.",
    "effect": "2-25x on the proven line",
-   "repair": "State the guarantee for a class of recipes.",
+   "repair": "p-public-templates",
    "refs": {}
   },
   {
