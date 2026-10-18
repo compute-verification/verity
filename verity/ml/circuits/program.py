@@ -16,7 +16,6 @@ import inspect
 import re
 from typing import Any, Callable
 
-from . import ports
 from .defs import Body, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from .layout import Circuit
 from .refs import Coll, coll_concat
@@ -115,7 +114,6 @@ class Program:
         self.bindings: tuple[str, ...] = tuple(REGISTRATION if n in set(registered) else RUN for n in names)
         self.root = _lower_root(fn, self.bindings)
         _refuse_inner_inputs(self.root)
-        ports.check(self.root)
         self._circuit: Circuit | None = None
         if strict is not None and (held := strict(self.root)):
             raise ValueError(f"program function {fn.id} holds data, which a strict Program refuses: "
@@ -150,7 +148,6 @@ def _lower_root(fn: SpecializedDefinition, bindings: tuple[str, ...] | None = No
     root_def = CompositeDefinition(f"Root[{fn.id}]", 1, (), lambda S: ((), ret), lambda *_: None, register=False)
     root = SpecializedDefinition(root_def, {}, ())
     root.set_body(body)
-    root.set_port_types(ports.root_ports(fn, input_colls, [b == REGISTRATION for b in bindings], [n.out for n in body.nodes]))
     root.program_fn = fn  # type: ignore[attr-defined]
     # Gate indices of the Input gates per parameter, as collections over refs ("g", 0, gate_index). Kept
     # affine (an Input batch is one contiguous interval) so weight tensors stay O(1).

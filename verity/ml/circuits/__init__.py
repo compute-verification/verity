@@ -24,9 +24,8 @@ definitions with total evaluators on encodings, composite definitions whose bodi
 over calls, `call` / `batch` / `scan` / `bind`, the canonical layout (function-body order, one interval per
 call, batch members and scan iterations in structural order, cached gate counts and offsets — gate `i` is
 located by division, never by expansion), root-scoped value references, regions, the query language
-(`/`, `/Name`, `//Name`, `//A/B`, `//A//B`, `//A ! groups(F, k)`), an explicit-expansion evaluator, port types (a
-Definition's declared intervals, sinks, input kinds and word types, which every Program is held to: `ports`), and a JSON
-descriptor codec whose format and canonical bytes (RFC 8785 JCS) are specified in `PROTOCOL.md`.
+(`/`, `/Name`, `//Name`, `//A/B`, `//A//B`, `//A ! groups(F, k)`), an explicit-expansion evaluator, and a
+JSON descriptor codec whose format and canonical bytes (RFC 8785 JCS) are specified in `PROTOCOL.md`.
 """
 
 from .types import Value, Array, Tuple, Record, Type, leaves_of  # noqa: F401
