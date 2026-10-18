@@ -122,6 +122,39 @@
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
   },
+  "Accounting.Remote.Held.Assumptions.Causal": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.ChipCeiling": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.Covers": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.Disks": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.Identity": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.Links": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.LiveCoins": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.Paced": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.Routed": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.SketchBound": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.Remote.Held.Assumptions.SquaringCeiling": {
+   "owner": "@memory-accounting"
+  },
   "Claims.ExpectedCR": {
    "owner": "@proofs",
    "digest": "ccb0737889852a6df27bfbac4afc86597d213f0c77267a6c81a44e5c1dd7479e"
@@ -1789,6 +1822,9 @@
    "signature": ["Accounting.SecurityProofs.Recall.{u_1, u_2} : Accounting.Guarantees.Recall"],
    "assumptions": [],
    "type_hash": "6f9da408630883d8770f358eaddf47063f1b76099677faea7bdb35c5e45d777a"
+  },
+  "Accounting.SecurityProofs.Remote.Held": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.RemoteSessionConservation": {
    "owner": "@memory-accounting",
@@ -7163,6 +7199,9 @@
    "Accounting.Guarantees.Remote.NodeLevel": "unstated: the remote audit's node-level statement under Identity (statement C); proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevel, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.Guarantees.Remote.NodeLevelJoint": "unstated: the node-level statement's counting form under Identity (Mbw at the node); proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelJoint, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.Guarantees.Remote.NodeLevelLinks": "unstated: the node-level statement without Identity, with the links charged; proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelLinks, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
+   "Accounting.Guarantees.Remote.HeldOverTime": "unstated: the remote audit's memory line held over time under Identity, for a paced session (the declared time-held line); its proof, the absent-stretch bound, is open, and it is listed once proved (note:20261018T2035Z-report-held-guarantee)",
+   "Accounting.Guarantees.Remote.HeldOverTimeLinks": "unstated: the remote audit's memory line held over time with the boundary links charged, no Identity (the declared link-charged line); its proof, the absent-stretch bound, is open, and it is listed once proved (note:20261018T2035Z-report-held-guarantee)",
+   "Accounting.SecurityProofs.Remote.Held": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premises SketchBound and LiveCoins are stated on the trace and not yet derived from Accounting.Guarantees.RateAuditSketch and the session's pooled draw (Accounting.Guarantees.HorizonSampling) (note:20261018T2035Z-report-held-guarantee)",
    "Accounting.SecurityProofs.B2": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick (CausalFrom), and takes the challenge ticks read off the run and increasing in it, the location's state, first tick and help fixed by the setup, what reaches it during each window fixed by the help, that window's challenge and its tick, the next tick a function of those and of what the location does, and each challenge's tick taking at most 2^τ values on the runs on time, as hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.B2Audit": "frozen (no-function,world-unlisted): It takes PoUS's sequential audit security (AuditSecureOn) at an arbitrary scheme as a hypothesis, and B2's hypotheses on the strategy (CausalFrom, the challenge ticks read off the run and increasing in it, the setup, ingress and arrival rules (SetupFixed, IngressFixed, ArrivalRule) and the ticks' count, TicksIn), which are not on the premises list; the event it bounds is a strategy's pass with the location's memory bounded, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.B2Determines": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick and takes B2's hypotheses on them, which are not on the premises list, and concludes the existence of PoUS adversaries (lemma M's Determines), not a Lean function's acceptance.",
