@@ -1,19 +1,21 @@
-"""The sampling planner (`optimize`): its statement count and closed-form bound against brute force and core's bound,
-`Achievability`'s rates at zero statement cost, and the frontier under C-Flock's statement-batched cost."""
+"""The sampling planner (`optimize`): its statement count, replay count and closed-form bound against brute force and core's
+bound, `Achievability`'s rates at zero statement cost, the frontier under C-Flock's statement-batched cost, the choice
+between a partition and a covering, serving's commitment, and the sensitivity queries."""
 
 from __future__ import annotations
 
 import random
-from itertools import combinations
+from itertools import combinations, product
 from math import ceil, log, ulp
 
 import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, CostModel, Objective, TemplateCost, certify,
-                                                           density_bound, for_budget, for_target, frontier,
-                                                           template_cost, touched, work_law)
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, CostModel, Objective, ReplayDomain, TemplateCost,
+                                                           certify, density_bound, for_budget, for_target, frontier,
+                                                           needs_benchmark, perturb, replay_cost, row_ands,
+                                                           sensitivity, template_cost, touched, work_law)
 
 SLACK = 1 + 2.0 ** -18
 
@@ -157,3 +159,122 @@ def test_for_budget_takes_the_least_harm_affordable_plan(batched):
     for p in plans:
         got = for_budget(plans, p.cost["total"])
         assert got.cost["total"] <= p.cost["total"] and got.certificate.harm <= p.certificate.harm
+
+
+def test_row_ands_follows_hm96_table():
+    assert [row_ands(n) for n in (4, 256, 4096)] == [174_360, 290_600, 2_034_200]
+
+
+def test_candidates_follow_the_width_rule():
+    Candidate("a", "A", 1, 1, 32)
+    Candidate("a", "A", 1, 1, 16, out_gates=4)
+    for bits, gates in ((32, 2), (17, 2), (33, 1)):
+        with pytest.raises(ValueError, match="width rule"):
+            Candidate("a", "A", 1, 1, bits, out_gates=gates)
+    with pytest.raises(ValueError, match="per_replay"):
+        Candidate("a", "A", 4, 1, 16, replay="layer")
+    with pytest.raises(ValueError, match="per_replay"):
+        Candidate("a", "A", 4, 1, 16, replay="layer", per_replay=5)
+
+
+def test_derived_costs_read_the_features_and_perturb_scales_one_group():
+    c = Candidate("a", "A", 10, 1, 16, ands=1000, rows=(256, 4), commit_bits=64, commit_rows=1.0)
+    costs = CostModel(per_and=1e-6, statement_fixed=2.0, statement_per_and=1e-7, staged_per_and=1e-9,
+                      staged_per_unit=0.01, commit_per_bit=1e-3, commit_per_row=0.5)
+    assert costs.unit(c) == pytest.approx(1e-6 * (1000 + 290_600 + 174_360))
+    assert costs.statement(c) == pytest.approx((2.0 + 1e-4, 1e-6 + 0.01))
+    assert costs.commit(c) == pytest.approx(10 * (0.064 + 0.5))
+    assert perturb(costs, "prove", 2.0).unit(c) == pytest.approx(2 * costs.unit(c))
+    assert perturb(costs, "prove", 2.0).statement(c) == pytest.approx(costs.statement(c))
+    assert perturb(costs, "statement", 3.0).statement(c) == pytest.approx(tuple(3 * a for a in costs.statement(c)))
+    assert perturb(costs, "commit", 0.5).commit(c) == pytest.approx(costs.commit(c) / 2)
+    pinned = perturb(costs, "A", 2.0, [c])
+    assert pinned.unit(c) == pytest.approx(2 * costs.unit(c))
+    assert pinned.statement(c) == pytest.approx(tuple(2 * a for a in costs.statement(c)))
+    other = Candidate("b", "B", 10, 1, 16, ands=1000)
+    assert pinned.unit(other) == pytest.approx(costs.unit(other))
+    with pytest.raises(KeyError, match="nothing to perturb"):
+        perturb(costs, "Z", 2.0, [c])
+    with pytest.raises(KeyError, match="no rates"):
+        CostModel(commit_per_bit=1.0).unit(c)
+
+
+def test_replay_cost_is_the_expected_number_of_replay_units_met():
+    """Three replay units, A holding 2 units of each and B 1: every pair of draws enumerated."""
+    a = Candidate("x", "A", 6, 1, 16, replay="layer", per_replay=2)
+    b = Candidate("y", "B", 3, 1, 16, replay="layer", per_replay=1)
+    costs = CostModel(per_and=1.0, replay={"layer": ReplayDomain(3, 5.0)})
+    for ka, kb in product(range(7), range(4)):
+        draws = list(product(combinations(range(6), ka), combinations(range(3), kb)))
+        met = sum(len({u // 2 for u in da} | set(db)) for da, db in draws) / len(draws)
+        assert replay_cost({"A": ka, "B": kb}, [a, b], costs) == pytest.approx(5.0 * met, abs=1e-12)
+    with pytest.raises(ValueError, match="replay units"):
+        replay_cost({"A": 1}, [a], CostModel(per_and=1.0, replay={"layer": ReplayDomain(2, 1.0)}))
+    with pytest.raises(KeyError, match="no replay domain"):
+        replay_cost({"A": 1}, [a], CostModel(per_and=1.0))
+
+
+def test_inexact_certificate_is_the_density_bound():
+    cands = [Candidate("a", "A", 400, 3, 16, influence=5), Candidate("b", "B", 60, 7, 4)]
+    objective = Objective(2.0 ** -10)
+    sizes = {"A": 40, "B": 6}
+    exact, loose = certify(sizes, cands, objective), certify(sizes, cands, objective, exact=False)
+    assert not loose.exact and loose.leak is None and loose.harm == loose.density == exact.density
+    assert at_most(exact.harm, loose.harm) and at_most(exact.free_compute, loose.free_compute)
+
+
+R, J, W = 32, 64, 100
+
+
+def _noised(influence: int = J * W, commit_bits: int = 0) -> list[Candidate]:
+    """One op of R rows of J dots of work W, cut two ways: a form unit per row (cost 4) that every dot of its row reads, and
+    dots of cost 1 (a partition), or dots of cost 2 that each re-derive the row's form (a covering)."""
+    return [Candidate("dot", "Form", R, 0, 16, cut="form", influence=influence, commit_bits=commit_bits),
+            Candidate("dot", "DotP", R * J, W, 16, cut="form"),
+            Candidate("dot", "DotC", R * J, W, 16, cut="recompute")]
+
+
+def _noised_costs(sigma: float = 0.0, commit_per_bit: float = 0.0) -> CostModel:
+    return CostModel({"Form": TemplateCost(unit=4.0), "DotP": TemplateCost(unit=1.0),
+                      "DotC": TemplateCost(unit=2.0, sigma=sigma)}, commit_per_bit=commit_per_bit)
+
+
+def _crossing(plans) -> tuple[int, int]:
+    """The covering's largest dot draw and the partition's smallest, checking the frontier switches once."""
+    choices = [p.choice["dot"] for p in plans]
+    assert choices == sorted(choices, key=lambda c: c == "form") and set(choices) == {"recompute", "form"}
+    return (max(p.sizes["DotC"] for p in plans if p.choice["dot"] == "recompute"),
+            min(p.sizes["DotP"] for p in plans if p.choice["dot"] == "form"))
+
+
+def test_covering_wins_sparse_and_partition_wins_once_its_form_units_saturate():
+    """Each form unit's influence (its row's work) draws all R of them early; then k dots cost 4R + k as a partition and 2k
+    as a covering at the same harm, so the switch is at k = 4R."""
+    plans = frontier(_noised(), _noised_costs(), Objective(2.0 ** -20), grid=61)
+    rec, form = _crossing(plans)
+    assert rec <= 4 * R <= form
+    assert all(p.sizes["Form"] == R for p in plans if p.choice["dot"] == "form")
+
+
+def test_without_influence_the_form_unit_looks_free():
+    plans = frontier(_noised(influence=0), _noised_costs(), Objective(2.0 ** -20), grid=61)
+    assert _crossing(plans)[1] <= 4
+    assert all(p.sizes["Form"] == 1 for p in plans if p.choice["dot"] == "form")
+
+
+def test_commitment_is_paid_on_every_unit_and_moves_the_switch():
+    """Committing the form costs 4 per row whatever the draw, so the switch moves to k = 8R."""
+    plans = frontier(_noised(commit_bits=400), _noised_costs(commit_per_bit=0.01), Objective(2.0 ** -20), grid=61)
+    rec, form = _crossing(plans)
+    assert rec <= 8 * R <= form
+    assert {p.cost["commit"] for p in plans} == {0.0, 4.0 * R}
+
+
+def test_sensitivity_and_benchmarks_flag_what_moves_the_plan():
+    objective = Objective(2.0 ** -20)
+    base, rows = sensitivity(_noised(), _noised_costs(), objective, 260.0, grid=61)
+    assert base.choice == {"dot": "recompute"} and [r["what"] for r in rows] == ["prove", "prove"]
+    assert {r["factor"]: r["same"] for r in rows} == {0.5: False, 2.0: True}
+    assert needs_benchmark(_noised(), _noised_costs(0.25), objective, 260.0, grid=61) == ["DotC"]
+    assert needs_benchmark(_noised(), _noised_costs(0.01), objective, 260.0, grid=61) == []
+    assert needs_benchmark(_noised(), _noised_costs(0.25), objective, 2000.0, grid=61) == []
