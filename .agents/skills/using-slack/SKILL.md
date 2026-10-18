@@ -187,6 +187,12 @@ the doorbell stays, as `traffic`'s audit trail and the wake that survives a laps
 conversation stays in the Slack thread. `close` moves the issue to done, and `--declined` to canceled, so the team's
 open issues are its open asks. If Linear fails, the whole ask goes out on Slack instead.
 
+An ask lives in one record, and answered is that record's state. `research msg traffic` (the unanswered list) and
+`traffic --latency` (time to first answer) read it first and say which record answered: a linked ask's Linear issue
+(out of Backlog, or a comment from anyone but the asker), a Daniel card's page (its Status no longer Waiting on Daniel,
+read with `$NOTION_API_KEY`). A reply or a 👀, ✅ or ❌ in the thread counts only for an ask with no record, so take a
+linked ask on its issue, not with a Slack reply.
+
 An alert in `#agent-alerts` takes the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 
 **Work items are Linear-first** (Daniel, 14 Oct, top's announcement 1792006806.178789). The full brief — context, the
@@ -228,7 +234,9 @@ An addressed handle, woken by one, does four things:
 
 Everything that needs Daniel is a page in the Asks for Daniel Notion database plus a card in `#ask-daniel` that links it:
 `.agents/skills/asking-daniel/SKILL.md` has the template, `research msg ask-daniel --page`, iterating on his comments and
-recording his decision.
+recording his decision. `research msg ask --to @daniel` is the same command with `ask-daniel --page`'s flags (it names
+any it lacks), so one `ask` verb reaches every target; `ask-daniel` stays the explicit form, and `--link` for a page made
+with the Notion MCP.
 
 ## Norms
 
