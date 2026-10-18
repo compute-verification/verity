@@ -11,6 +11,9 @@ coins the round draws, so a prover that plays the live session keeps the rest of
 * `mergeC`, `Pr_mergeC`: the coins whose coordinate `j` takes its first `n j` entries from `r` and the rest from `u`
   are uniform when `u` and `r` are: swapping those entries between `u` and `r` is an involution (`swapC`); `mergeAt`,
   `Pr_mergeAt`: the same with `r` indexed by another `Fin L`, `L = K`.
+* `fnC`, `Pr_fnC`: the same with the rest of coordinate `j` a uniform function `f j` on the tape read at a key of `r`,
+  such as the live coins a prover has seen by round `j`, so a fork that redraws them reads fresh entries; uniform
+  functions at fixed points are uniform (`Pr_evalAt`); `fnAt`, `Pr_fnAt`: with `r` indexed by `Fin L`.
 * `liveMix_eq`: the average over `u` of the live session's probability of `pL` against `liveStrat` at `(ω, u)` is the
   probability over the tape and the round coins of `pL` at the live outcome.
 * `Pr_le_liveMix`: an event `E` of coins whose law is that of `E ∘ Φ` on the tape and the live session's coins, and
@@ -60,6 +63,50 @@ theorem Pr_mergeAt {K L M : ℕ} {X : Type} [Fintype X] [Nonempty X] (h : L = K)
     Pr (fun p : (Fin K → Fin M → X) × (Fin L → Fin M → X) => E (mergeAt h n p.1 p.2)) = Pr E := by
   subst h
   exact Pr_mergeC n E
+
+/-- **Independent uniform functions at fixed points are uniform**: `Pr_f[G (j ↦ f j (d j))] = Pr[G]`. -/
+theorem Pr_evalAt {K : ℕ} {D Y : Type} [Fintype D] [DecidableEq D] [Fintype Y] [Nonempty Y] (d : Fin K → D)
+    (G : (Fin K → Y) → Prop) : Pr (fun f : Fin K → D → Y => G fun j => f j (d j)) = Pr G := by
+  refine (Pr_equiv ((Equiv.piCongrRight fun j => Equiv.funSplitAt (d j) Y).trans
+    (Equiv.arrowProdEquivProdArrow (Fin K) (fun _ => Y) fun j => {e // e ≠ d j} → Y)) fun q => G q.1).trans ?_
+  rw [Pr_eq_Ex, Ex_prod, Pr_eq_Ex]
+  exact congrArg Ex (funext fun a => Ex_const' (ind G a))
+
+/-- **Coordinate `j`'s first `n j` entries from `r`, the rest from `f j` at `key j r`**: `mergeC` with the rest of each
+coin a function on the tape read at a key of the coins, such as the entries of `r` a prover sees by round `j`. -/
+def fnC {K M : ℕ} {X D : Type} (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D)
+    (f : Fin K → D → Fin M → X) (r : Fin K → Fin M → X) : Fin K → Fin M → X :=
+  mergeC n (fun j => f j (key j r)) r
+
+/-- **Those coins are uniform**: `Pr_{f, r}[E (fnC n key f r)] = Pr[E]` at uniform functions `f`, whatever the keys:
+at each `r` the functions' values at the keys are uniform (`Pr_evalAt`), and the merged coins are (`Pr_mergeC`). -/
+theorem Pr_fnC {K M : ℕ} {X D : Type} [Fintype X] [Nonempty X] [Fintype D] [DecidableEq D] (n : Fin K → ℕ)
+    (key : Fin K → (Fin K → Fin M → X) → D) (E : (Fin K → Fin M → X) → Prop) :
+    Pr (fun p : (Fin K → D → Fin M → X) × (Fin K → Fin M → X) => E (fnC n key p.1 p.2)) = Pr E := by
+  calc Pr (fun p : (Fin K → D → Fin M → X) × (Fin K → Fin M → X) => E (fnC n key p.1 p.2))
+      = Pr (fun q : (Fin K → Fin M → X) × (Fin K → D → Fin M → X) => E (fnC n key q.2 q.1)) :=
+        Pr_equiv (Equiv.prodComm _ _) fun q => E (fnC n key q.2 q.1)
+    _ = Ex fun r => Pr fun f : Fin K → D → Fin M → X => E (fnC n key f r) :=
+        Pr_prod fun r f => E (fnC n key f r)
+    _ = Ex fun r => Pr fun u : Fin K → Fin M → X => E (mergeC n u r) :=
+        congrArg Ex (funext fun r => Pr_evalAt (fun j => key j r) fun u => E (mergeC n u r))
+    _ = Pr (fun q : (Fin K → Fin M → X) × (Fin K → Fin M → X) => E (mergeC n q.2 q.1)) :=
+        (Pr_prod fun r u => E (mergeC n u r)).symm
+    _ = Pr (fun p : (Fin K → Fin M → X) × (Fin K → Fin M → X) => E (mergeC n p.1 p.2)) :=
+        Pr_equiv (Equiv.prodComm _ _) fun p => E (mergeC n p.1 p.2)
+    _ = Pr E := Pr_mergeC n E
+
+/-- `fnC` with the coins `r` indexed by `Fin L`, where `L = K`. -/
+def fnAt {K L M : ℕ} {X D : Type} (h : L = K) (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D)
+    (f : Fin K → D → Fin M → X) (r : Fin L → Fin M → X) : Fin K → Fin M → X :=
+  fnC n key f fun j => r (Fin.cast h.symm j)
+
+/-- **The coins `fnAt` makes are uniform**, with the coins `r` indexed by `Fin L`. -/
+theorem Pr_fnAt {K L M : ℕ} {X D : Type} [Fintype X] [Nonempty X] [Fintype D] [DecidableEq D] (h : L = K)
+    (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D) (E : (Fin K → Fin M → X) → Prop) :
+    Pr (fun p : (Fin K → D → Fin M → X) × (Fin L → Fin M → X) => E (fnAt h n key p.1 p.2)) = Pr E := by
+  subst h
+  exact Pr_fnC n key E
 
 open Classical in
 /-- **A mixture of live strategies is a probability over the tape and the live coins**: the average over `u` of the

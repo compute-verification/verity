@@ -12,6 +12,7 @@ import Proofs.Flock.Claims.Recursion.Inner
 import Proofs.Flock.Claims.Recursion.Abort
 import Proofs.Flock.Claims.Recursion.InnerAbort
 import Proofs.Flock.Claims.Recursion.Gap
+import Proofs.Flock.Claims.Recursion.Registered
 import Proofs.Flock.Claims.Recursion.FlockAbort
 import Proofs.Flock.Claims.Recursion.AbortWait
 import Proofs.Flock.Claims.Recursion.AbortFork
@@ -19,6 +20,7 @@ import Proofs.Flock.Claims.Recursion.FlockKSAbort
 import Proofs.Flock.Claims.Recursion.FlockKSAcc
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Proofs.Flock.Claims.Recursion.FlockKSOnAcc
 import Proofs.Flock.Claims.Recursion.KSStated
 import Proofs.Flock.Claims.Recursion.Scope
 

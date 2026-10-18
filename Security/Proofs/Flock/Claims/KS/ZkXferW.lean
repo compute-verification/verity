@@ -59,7 +59,8 @@ open Classical in
 /-- **The masked live sessions' bound at the deployed decoders, off the table on a witness lane**: `ZkXferJ` with the
 live verdict `AccTxJ` (accepted at the draw at `wrS`, no column of table `j` off `C` read, table `j`'s `root_B` the
 mixture's), the simulated strategies after `Commit` at the deployed decoders right at `OkOffWJ` there
-(`decodesTableW_deploy`), and level 0's fork event at each table (`Claims.Flock.IZW`) bounding their `Adv₀`. -/
+(`decodesTableW_deploy`), and level 0's fork event at each table (`Claims.Flock.IZW`) bounding their `Adv₀`, each
+fork bound with the slack of the fork at its round (`Claims.Flock.forkSlack`), as `ZkSessWJ` reads. -/
 def ZkXferWJ (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -69,7 +70,10 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (d : Lean.Json) (hd : ins.read.draw = some d) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
     ∃ (rd : (j : ℕ) → Claims.Flock.IZW (zkTabs h0 L hz hk hlay j).sch.levels.length → Fin ((V true).k x))
-      (_ : ∀ j, Function.Injective (rd j))
+      (_ : ∀ j, Function.Injective (rd j)) (_ : ∀ j i, (rd j i).val = 0 → i = .inr ()) (δ : ℕ → ℝ)
+      (_ : ∀ t, 0 ≤ δ t)
+      (_ : Claims.Flock.SlackFitW (tables true x).length (fun j => (zkTabs h0 L hz hk hlay j).sch)
+        (fun j => (zkTabs h0 L hz hk hlay j).N) rd δ)
       (ev : (j : ℕ) → Claims.Flock.IZW (zkTabs h0 L hz hk hlay j).sch.levels.length → Ω →
         (Fin ((V true).k x) → Coin) → (Fin ((V true).k x) → Coin) → Prop)
       (ev₁ : ℕ → Ω → (Fin ((V true).k x) → Coin) → Prop)
@@ -98,8 +102,9 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
                 (fun rs j => Exec.capOfRoot rs[j.val]!) N
                 (decodesTableW_deploy hs hin hset h0 L hz hk hlay hd j rootB₀ C) rootB₀
                 (σL u) (hσ u) (finJ (zkTabs h0 L hz hk hlay) hj) (tabsJ_get _ _ _))) / Fintype.card τ ≤
-            Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-              ev j (.inl (.inl (r, ℓ))) ω s.1 s.2) ∧
+            (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+              ev j (.inl (.inl (r, ℓ))) ω s.1 s.2) +
+              Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inl (.inl (r, ℓ)))).val ω) ∧
           (∀ r : Fin 2, (∑ u, advPadsSZ execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _
               (Exec.capOfRoot rootB₀[j]!) r.val
               (simAtJZ execArith ZkExec.hs512 _ (OkOffWJ (tabsJ _ (zkTabs h0 L hz hk hlay)) j rootB₀ C)
@@ -107,8 +112,9 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
                 (fun rs j => Exec.capOfRoot rs[j.val]!) N
                 (decodesTableW_deploy hs hin hset h0 L hz hk hlay hd j rootB₀ C) rootB₀
                 (σL u) (hσ u) (finJ (zkTabs h0 L hz hk hlay) hj) (tabsJ_get _ _ _))) / Fintype.card τ ≤
-            Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-              ev j (.inl (.inr (.inl r))) ω s.1 s.2) ∧
+            (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+              ev j (.inl (.inr (.inl r))) ω s.1 s.2) +
+              Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inl (.inr (.inl r)))).val ω) ∧
           (∀ r : Fin 2, (∑ u, advTauSZ execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _
               (Exec.capOfRoot rootB₀[j]!) r.val
               (simAtJZ execArith ZkExec.hs512 _ (OkOffWJ (tabsJ _ (zkTabs h0 L hz hk hlay)) j rootB₀ C)
@@ -116,16 +122,17 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
                 (fun rs j => Exec.capOfRoot rs[j.val]!) N
                 (decodesTableW_deploy hs hin hset h0 L hz hk hlay hd j rootB₀ C) rootB₀
                 (σL u) (hσ u) (finJ (zkTabs h0 L hz hk hlay) hj) (tabsJ_get _ _ _))) / Fintype.card τ ≤
-            Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-              ev j (.inl (.inr (.inr r))) ω s.1 s.2) ∧
+            (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+              ev j (.inl (.inr (.inr r))) ω s.1 s.2) +
+              Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inl (.inr (.inr r)))).val ω) ∧
           ((∑ u, adv₀SZ execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ (Exec.capOfRoot rootB₀[j]!)
               (simAtJZ execArith ZkExec.hs512 _ (OkOffWJ (tabsJ _ (zkTabs h0 L hz hk hlay)) j rootB₀ C)
                 (AccTxJ ins.read.I d j rootB₀ C) (opnD sts _) dg (decD _) (fun _ _ => true) (fun _ _ _ => [])
                 (fun rs j => Exec.capOfRoot rs[j.val]!) N
                 (decodesTableW_deploy hs hin hset h0 L hz hk hlay hd j rootB₀ C) rootB₀
                 (σL u) (hσ u) (finJ (zkTabs h0 L hz hk hlay) hj) (tabsJ_get _ _ _))) / Fintype.card τ ≤
-            Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-              ev j (.inr ()) ω s.1 s.2) ∧
+            (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+              ev j (.inr ()) ω s.1 s.2) + Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inr ())).val ω) ∧
           (∑ u, (prob (LiveSelfClashZ ZkExec.hs512 (zkTabs h0 L hz hk hlay j)
               (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
               (AccTxJ ins.read.I d j rootB₀ C)
@@ -144,8 +151,9 @@ theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha5
   intro ins spec sts hset h0 L hz hk hlay Ω _ _ P
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
   obtain ⟨d, hd⟩ := acc_draw_of_setup hno hset
-  obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ := hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
-  refine ⟨rd, hrd, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hC => ?_⟩
+  obtain ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ :=
+    hx s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P
+  refine ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hC => ?_⟩
   obtain ⟨dg, N, rootB₀, τ, _, _, σL, hσ, htr, hadv, hP, hTau, h₀, hsc⟩ := hω ω j hj C hC
   have hN := wordLenJ_zkTabs hs hin hset h0 L hz hk hlay hj
   have hg := tabsJ_get (tables true x).length (zkTabs h0 L hz hk hlay) (finJ (zkTabs h0 L hz hk hlay) hj)
