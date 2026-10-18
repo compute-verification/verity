@@ -6,8 +6,9 @@ ideas moved the cost of committing every value of served vLLM. The measurement i
 unmodified: Qwen3-8B, B32, vLLM compiled, 4 prefill steps of 2,560 tokens and 64 decode steps, `stock`, `stock-prof` and the
 commit arms interleaved rep by rep (3 reps) under nsys, each commit arm gated token for token against `stock` first. On the H200
 every arm runs under Qwen3-8B's Build of record (`PIN_BUILD`: r20261018-062957-da83's `out/build.json`, artifact digest 3bd5dcb1,
-seeded into one fresh Inductor dir and checked after); compiled Builds accept only cc 9.0 today, so the B200 and RTX PRO 6000 rows
-are unpinned, and the table says which is which.
+seeded into one fresh Inductor dir and checked after). The RTX PRO 6000 (cc 12.0) runs pinned under circuits' Qwen3-8B Build once
+`iterate.sh`'s `PIN_ART_RTX` names it; the B200 (cc 10.0) is on the compiled Builds' refusal list, so its rows are unpinned, and the
+table says which is which.
 
 One iteration, end to end, from a clean checkout of the loop branch with the iteration committed and pushed:
 

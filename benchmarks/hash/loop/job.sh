@@ -8,7 +8,7 @@
 # CHECK_TESTS (the committer's GPU byte-identity tests and check_b3.py, the BLAKE3 arm against the hash lane's hm96 reference, run in
 # the lease before timing, once in each rows-sha512 leaf form, VERITY_ROWS_FORM=fused and split; a failure is exit 7 and no timing;
 # empty skips them).  The timed arms run the device's own form (native_rows.cu, verity_rows_leaves_form).
-# PIN_BUILD_NAME (iterate.sh sets it on the H200, the one cc compiled Builds accept today): the Build of record sent with the run,
+# PIN_BUILD_NAME (iterate.sh sets it on each GPU it has a Build of record for: the H200, and the RTX PRO 6000 once named): the Build sent with the run,
 # as $RESEARCH_RUN_DIR/inputs/<name>; prof.sh then runs every arm under its compile artifact (PIN_BUILD) and checks the winners after.
 # The loop's arms (arms.py: the BLAKE3 sibling served-commit-rows-blake3, what-if served-commit-rows-whatif-q) run through a copy
 # of circuits' prof.sh with their case lines added; prof.sh itself is circuits' and is not edited.
