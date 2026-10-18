@@ -128,11 +128,13 @@ class Lanes:
 
     def capture(self, body) -> tuple[vp, int, list]:
         """`body` captured from the main stream into an instantiated graph: (exec, node count, the kernels in capture order as
-        [step, kernel]: the call step that launched it (`Shape.ref`), or for pd's module the kernel)."""
+        [step, kernel, lane]: the call step that launched it (`Shape.ref`), or for pd's module the kernel, and the stream it
+        was launched on, `main` the call's critical path)."""
         d, g, ge, n, seq = self.dev, vp(), vp(), sz(), []
+        lane = {self.main.value: "main", self.tile.value: "tile", self.tree.value: "tree"}
         for m in self.mods:
             def logged(name, *a, _m=m, **kw):
-                seq.append([getattr(d, "step", name) if _m is d else name, name])
+                seq.append([getattr(d, "step", name) if _m is d else name, name, lane.get(getattr(d.stream, "value", None), "main")])
                 type(_m).launch(_m, name, *a, **kw)
             m.launch = logged
         self.k = 0
@@ -293,7 +295,9 @@ class Shape:
         if self.pd is not None:
             P_ = self.pdc
             out["pd_serial"] = serial(None, lambda j: P_[j].commit() + self.ref(j, main_rest) + P_[j].tiles())
-            out["pd_serial_rs_fold"] = serial(None, lambda j: P_[j].commit(0) + self.ref(j, main_rest) + P_[j].tiles(0))
+            from pd_host import INT_VARIANT
+            out["pd_serial_int"] = serial(None, lambda j: P_[j].commit(INT_VARIANT) + self.ref(j, main_rest)
+                                          + P_[j].tiles(INT_VARIANT))
             out["pd_deferred"] = deferred(lambda j: P_[j].commit() + self.ref(j, main_rest), lambda j: P_[j].tiles())
 
             def side_tree(j, done):
@@ -371,27 +375,25 @@ def run_shape(dev, pd, lanes, nv, out, name, m16, n, k, reps, trace):
         dev.free(p_)
 
 
-PROBE = {0: "rs_compress", 1: "rs_rounds", 2: "pd_compress", 3: "pd_rounds", 4: "two rs_compress chains"}
+PROBE = {0: "rs_compress", 1: "rs_rounds", 2: "fr_compress", 3: "fr_rounds"}
 
 
 def probe(pd, nv, out) -> None:
     """One warp's cycles per chained compression (pd_probe) in each form (PROBE), each run twice and the second kept, and
-    whether the forms' final states agree (pd_compress's with rs_compress's, pd_rounds' with rs_rounds', the two-chain
-    form's first chain with rs_compress's)."""
-    buf = pd.alloc(17 * 8)
+    whether the FMA-pipe forms' final states equal the integer pipe's."""
+    buf = pd.alloc(9 * 8)
     for n in (16, 256):
         st = {}
         for v, form in PROBE.items():
             for _ in range(2):
                 pd.launch("pd_probe", 1, 32, p=(buf,), i=(n, v))
                 pd.sync()
-            raw = pd.read(buf, 17 * 8)
+            raw = pd.read(buf, 9 * 8)
             st[v] = raw[8:72]
             cycles = int.from_bytes(raw[:8], "little")
             emit(out, {"kind": "probe", "variant": v, "form": form, "compressions": n, "cycles": cycles,
                        "cycles_per_compression": round(cycles / n, 1), "clk": nv.read()})
-        emit(out, {"kind": "probe_states", "compressions": n, "pd_compress": st[2] == st[0], "pd_rounds": st[3] == st[1],
-                   "two_chains": st[4] == st[0]})
+        emit(out, {"kind": "probe_states", "compressions": n, "fr_compress": st[2] == st[0], "fr_rounds": st[3] == st[1]})
     pd.free(buf)
 
 

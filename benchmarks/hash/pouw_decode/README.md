@@ -7,24 +7,30 @@ served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/p
 
 - `pd.cuh` (`pd.cu`): the launches.
   - `pd_commit` makes A's commitment in one launch, one CTA per row. In parallel it hashes the row's segments, its hm96
-    salt, its frame leaf's first block and the tree's node templates. It then folds the row digest, makes the hm96 leaf,
-    the frame leaf, the row seed and the line key. In mode 0 the last CTA to finish also builds the tree's levels, seed_A
-    and line_a.
+    salt (across a warp), its frame leaf's first block and the tree's node templates. It then folds the row digest, makes
+    the hm96 leaf, the frame leaf, the row seed and the line key. In mode 0 the last CTA to finish also builds the tree's
+    levels (kept in shared memory), seed_A and line_a.
   - `pd_tree` is mode 0's tail as a launch of its own, for a side lane.
   - `pd_tiles` makes the tile leaves, one CTA per tile.
-  - `pd_probe` measures one warp's cycles per compression.
+  - `pd_probe` measures one warp's cycles per compression in each form.
+  - A launch's variant (`PD_VARIANTS`) has two bits. Bit 0 is the rounds-only fold: the folding warp's lanes compute
+    every block's schedule first. Bit 1 is the `fr_*` compressions, whose 64-bit adds issue on the FMA pipe instead of
+    the integer pipe, which bounds a lone warp's SHA-512.
 - `pd_host.cpp`: the same source run on the CPU (`pd_run`), with Pearl-C's own hash kernels, for `host_test.py`.
 - `refs.py`: the Python references (`pearl_c.row_digest`, `row_seed`, `unit_seed_a`, `line_key` and `leaf`, and
   `audit.HM96`'s tree).
 - `host_test.py`: pd's launches against Pearl-C's kernels and the Python references on the CPU: pads, odd segment counts,
-  both modes and both folds, every output poisoned first.
+  both modes and every variant, every output poisoned first.
 - `bench.py`: per Llama-3.1-8B linear and decode's m16, on the GPU:
-  - the check: pd against Pearl-C byte for byte, with Python references, a poison control and a stray-write control;
+  - the check: pd in every variant against Pearl-C byte for byte, with Python references, a poison control and a
+    stray-write control;
   - every captured schedule's own bytes (`graph_check`);
   - graphs of 8 calls per schedule, timed interleaved rep by rep with the SM clock;
   - `--trace` for nsys.
 - `pd_host.py`: pd's launches on a `run.Pipeline`'s buffers, and the checks.
-- `trace.py`: the nsys trace per call and launch: duration, idle gap, overlap, grid and depth.
+- `trace.py`: the nsys trace per call and launch: duration, idle gap, overlap, grid, depth and lane.
+- `report.py`: a run's tables: hashing per call before and after, the per-launch critical path, the projected decode
+  step.
 - `run.sh`: all of the above on a node, outputs under `$OUT`.
 
 ~~~bash
@@ -33,7 +39,8 @@ research run --on vy-nebius-2 --project verity --campaign hash-loop --source . -
 ~~~
 
 Schedules (`bench.Shape.schedules`): `ref_serial` is the served call, `ref_nohash` the call without hashing, and
-`ref_deferred` the served launches with the tile leaves on a side lane. `pd_serial` and `pd_serial_rs_fold` are pd's
-call on one stream, with the two folds. `pd_deferred` puts pd's tile leaves on a side lane. `pd_side_tree` also puts A's
-tree and seed_A on a side lane; its bytes are unchanged only when m16 is a multiple of 64. `pd_side_tree_proposal` is
-the same schedule at other m16, where filler rows read line_a, so it is timed but its E_A lines are not served bytes.
+`ref_deferred` the served launches with the tile leaves on a side lane. `pd_serial` is pd's call on one stream, and
+`pd_serial_int` the same with the integer-pipe compressions. `pd_deferred` puts pd's tile leaves on a side lane.
+`pd_side_tree` also puts A's tree and seed_A on a side lane; its bytes are unchanged only when m16 is a multiple of 64.
+`pd_side_tree_proposal` is the same schedule at other m16, where filler rows read line_a, so it is timed but its E_A
+lines are not served bytes.

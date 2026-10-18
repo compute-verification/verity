@@ -23,7 +23,7 @@ import refs  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_kernel_constants  # noqa: E402
 
 RS_MAX_SEGS, POISON, INDEX = 128, 0xA5, 5
-VARIANTS = (0, 1, 2, 3)   # pd_fold's: rs_fold, rs_rounds over precomputed schedules, then both with pd_round
+VARIANTS = (0, 1, 2, 3)   # pd.cuh's PD_VARIANTS: bit 0 the rounds-only fold, bit 1 the fr_* forms
 
 
 class Args(C.Structure):
@@ -102,7 +102,7 @@ def pd_commit(h: Host, x, m16: int, k: int, kb, dom, hm, mode: int, variant: int
     p = (x, b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], unit, dom, sk, hm, scratch, b["seed_a"], b["line_a"])
     h.run("pd_commit", m16, 32 * (-(-s // 32) + 2), p=p, i=(m16, k, mode, variant))
     if mode == 1:
-        h.run("pd_tree", 1, 128, p=(0, 0, b["tree_a"], 0, 0, unit, dom, 0, 0, 0, b["seed_a"], b["line_a"]), i=(m16,))
+        h.run("pd_tree", 1, 128, p=(0, 0, b["tree_a"], 0, 0, unit, dom, 0, 0, 0, b["seed_a"], b["line_a"]), i=(m16, 0, 0, variant))
     if int.from_bytes(scratch[:4].tobytes(), "little"):
         raise RuntimeError("pd_commit left its counter set")
     return {name: v.tobytes()[:len(v) if name not in ("seed_a", "line_a") else 32] for name, v in out.items()}
@@ -158,16 +158,14 @@ def main(argv: list[str]) -> int:
         print(f"tiles {rows_}x{cols}: done, {len(fails)} failures so far", flush=True)
     for n in (1, 3):
         st = {}
-        for v in range(5):
-            out = h.buf(17 * 8, POISON)
+        for v in VARIANTS:
+            out = h.buf(9 * 8, POISON)
             h.run("pd_probe", 1, 32, p=(out,), i=(n, v))
-            st[v] = out.tobytes()
+            st[v] = out.tobytes()[8:72]
         cases += 1
-        for a, b, what in ((0, 2, "pd_compress vs rs_compress"), (1, 3, "pd_rounds vs rs_rounds")):
-            if st[a][8:72] != st[b][8:72]:
+        for a, b, what in ((0, 2, "fr_compress vs rs_compress"), (1, 3, "fr_rounds vs rs_rounds")):
+            if st[a] != st[b] or st[a] == bytes([POISON]) * 64:
                 fails.append(f"probe n={n}: {what}")
-        if st[4][8:72] != st[0][8:72] or st[4][72:136] == st[4][8:72]:
-            fails.append(f"probe n={n}: two chains")
     print(f"probe: done, {len(fails)} failures so far", flush=True)
     for f in fails:
         print("FAIL", f)

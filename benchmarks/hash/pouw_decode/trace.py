@@ -5,7 +5,8 @@ id, each kernel labelled with the call step
 that launched it (the graph's nodes in id order against the capture log `graph_kernels`, checked kernel by kernel; a graph
 whose nodes don't match keeps bare kernel names, and says so), and per schedule and shape, per call (CHAIN calls a graph):
 the span, the kernels' busy time, and per launch its count, duration, the idle time before it (nothing running), the share of
-it overlapped by another kernel, its grid and block, and its depth (bench.depths).
+it overlapped by another kernel, its grid and block, its depth (bench.depths) and its lane (`main` is the call's critical
+path; the side lanes `tile` and `tree` feed nothing later in the call).
 
   python3 trace.py DIR    # DIR/trace.sqlite and DIR/bench.trace.jsonl in; DIR/trace.json out, a table on stdout
 """
@@ -44,8 +45,9 @@ def label(ks: list[dict], seq: list) -> bool:
         pos = {n: i for i, n in enumerate(by_node)}
         ok = all(seq[pos[k["node"]]][1] == k["kernel"] for k in ks)
     for k in ks:
-        step = seq[pos[k["node"]]][0] if ok else k["kernel"]
-        k["label"] = k["kernel"] if step == k["kernel"] else f"{step}:{k['kernel']}"
+        entry = seq[pos[k["node"]]] if ok else [k["kernel"], k["kernel"]]
+        k["label"] = k["kernel"] if entry[0] == k["kernel"] else f"{entry[0]}:{k['kernel']}"
+        k["lane"] = entry[2] if len(entry) > 2 else None
     return ok
 
 
@@ -65,7 +67,8 @@ def summarize(ks: list[dict], depth: dict[str, int]) -> dict:
             if j != i and k2["s"] < e and k2["e"] > s:
                 over = max(over, min(e, k2["e"]) - max(s, k2["s"]))
         p = per.setdefault(k["label"], {"n": 0, "ns": 0, "gap_ns": 0, "overlap_ns": 0, "grid": k["grid"], "block": k["block"],
-                                        "depth": depth.get(k["label"]), "hashing": k["kernel"].startswith(HASHING)})
+                                        "depth": depth.get(k["label"]), "hashing": k["kernel"].startswith(HASHING),
+                                        "lane": k["lane"]})
         p["n"] += 1
         p["ns"] += e - s
         p["gap_ns"] += gap
@@ -75,7 +78,7 @@ def summarize(ks: list[dict], depth: dict[str, int]) -> dict:
             "hashing_us": us(sum(p["ns"] for p in per.values() if p["hashing"])),
             "launches": {name: {"per_call": p["n"] / CHAIN, "us": us(p["ns"]), "gap_us": us(p["gap_ns"]),
                                 "overlapped": round(p["overlap_ns"] / p["ns"], 2) if p["ns"] else 0.0, "grid": p["grid"],
-                                "block": p["block"], "depth": p["depth"], "hashing": p["hashing"]}
+                                "block": p["block"], "depth": p["depth"], "hashing": p["hashing"], "lane": p["lane"]}
                          for name, p in per.items()}}
 
 
@@ -132,7 +135,8 @@ def main() -> int:
             for name, p in s["launches"].items():
                 if p["hashing"]:
                     print(f"      {name:28s} x{p['per_call']:<4g} {p['us']:7.2f} us  gap {p['gap_us']:5.2f}  "
-                          f"overlapped {p['overlapped']:4.2f}  grid {p['grid']:5d} x {p['block']:3d}  depth {p['depth']}")
+                          f"overlapped {p['overlapped']:4.2f}  grid {p['grid']:5d} x {p['block']:3d}  depth {p['depth']}  "
+                          f"lane {p.get('lane')}")
     return 0
 
 
