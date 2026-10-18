@@ -1276,7 +1276,14 @@ class NativeCollectCommitter(NativeHostCommitter):
             return H.tree(lv_all, side.cuda_stream, True, torch.empty(0, dtype=torch.uint8))
         top_span = 1 << (state["n_levels"] - 1)
         n_tops = state["width"] // top_span if rows else -(-state["n_total"] // top_span)
-        if len(state["tops"]) != n_tops:
+        if rows and state.get("leaves"):
+            # the step's leaves, kept on the device by absorb: its window levels in one pass of wide launches, not one subtree a window
+            with torch.inference_mode(), torch.cuda.stream(side):
+                lv = torch.cat(state["leaves"]) if len(state["leaves"]) > 1 else state["leaves"][0]
+                state["tops"] = [H.rows_tree_window(state["rs"], lv, state["n_levels"], 0, side.cuda_stream, [])]
+            del lv
+            state["leaves"] = []
+        if sum(int(t.shape[0]) for t in state["tops"]) != n_tops:
             raise RuntimeError(f"windowed absorb: {len(state['tops'])} window subtrees for {state['n_total']} leaves (expected {n_tops})")
         with torch.inference_mode(), torch.cuda.stream(side):
             tops = torch.cat(state["tops"]) if len(state["tops"]) > 1 else state["tops"][0]
@@ -1339,7 +1346,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             sizes, dig = self._window_levels(n_total, j)
             n_levels = len(sizes)
             if rows:
-                state.update(rs=self._row_step(job.step, n_total, ks), width=sizes[0], absorbed=[])
+                state.update(rs=self._row_step(job.step, n_total, ks), width=sizes[0], absorbed=[], leaves=[])
             if not self.retain_levels:
                 state.update(n_total=n_total, n_levels=n_levels, views=None, tops=[])
                 return
@@ -1363,9 +1370,14 @@ class NativeCollectCommitter(NativeHostCommitter):
             n_k = int(lv_k.shape[0])
             views, n_levels = state["views"], state["n_levels"]
             if rows:
-                dsts = [] if views is None else [views[L][k << (j - L):(k << (j - L)) + (n_k >> L)] for L in range(n_levels)]
-                state["tops"].append(H.rows_tree_window(state["rs"], lv_k, n_levels, k << j, side.cuda_stream, dsts))
                 state["absorbed"].append(k)
+                if views is None:
+                    # no levels kept: the window's leaves (1/64 of its bytes) wait on the device for the step's tree (_window_root); a
+                    # window's own subtree is two launches of a few blocks each, bound by latency and by waiting for SMs
+                    state["leaves"].append(lv_k)
+                    return
+                dsts = [views[L][k << (j - L):(k << (j - L)) + (n_k >> L)] for L in range(n_levels)]
+                state["tops"].append(H.rows_tree_window(state["rs"], lv_k, n_levels, k << j, side.cuda_stream, dsts))
                 return
             if views is None:
                 state["tops"].append(H.tree_window_top(lv_k, n_levels, side.cuda_stream))
