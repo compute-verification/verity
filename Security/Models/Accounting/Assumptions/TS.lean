@@ -41,6 +41,10 @@ Which form each takes:
 * `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
+
+`LinSteer` is false (`Accounting.Guarantees.TS.LinSteerSegments`: a segmented consumer satisfies it only when its
+noise-active segments carry equal counts), and no guarantee rests on it; `Accounting.Guarantees.TS.SegmentSteer` is the
+bound that holds.
 -/
 
 namespace Accounting.Assumptions.TS
@@ -126,8 +130,8 @@ def ProofsSound {Ω : Type} [Fintype Ω] {S : ℕ} (P : Play Ω S K T L U) (Nw �
   ∃ E : Paths Ω S → Prop, prob E ≤ S * (δbind + nπ * δzk) ∧
     ∀ x, P.accepts x → ¬ E x → P.game.accepts x ∧ (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
-/-- `accounting-ts-lin-steer` (assumed; SAMPLING). **LIN-STEER**: zeroing a fraction `φ = |Z|/|act|` of the row's
-noise-active coordinates saves at most `φ` of the consumer's work. -/
+/-- `accounting-ts-lin-steer` (SAMPLING; false, `Accounting.Guarantees.TS.LinSteerSegments` and `LinSteerFalse`).
+**LIN-STEER**: zeroing a fraction `φ = |Z|/|act|` of the row's noise-active coordinates saves at most `φ` of the consumer's work. -/
 def LinSteer {m : ℕ} (c : Consumer m) : Prop :=
   ∀ Z ⊆ c.act, c.cost ∅ - c.cost Z ≤ (Z.card : ℝ) / c.act.card * c.cost ∅
 

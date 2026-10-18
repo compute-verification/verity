@@ -5,9 +5,11 @@ import Definitions.Accounting.Gates.Model
 # Primitives' output intervals: the evaluators, and property/v1's rules for them (trusted)
 
 The evaluators of the budgeted primitives whose value's interval property/v1 derives from its operands' (`RANGES` in
-`verity/ml/circuits/stacking.py`: P's producers), with those rules, and of the quantizers and the LUT softmax, whose
-interval is their own (`benchmarks/ppl/steps.py`). An f32 value is its encoding read as s32, as property/v1 reads it:
-`+0 … +inf` is `[0, 0x7F800000]`, ordered as the floats, and a negative float or `−0` reads below 0.
+`verity/ml/circuits/stacking.py`: P's producers), with those rules, of the quantizers and the LUT softmax, whose
+interval is their own (`benchmarks/ppl/steps.py`), and of the exact-int8 profile's primitives (vLLM's served int8
+linear and LUT attention, `verity_vllm/program/registry/int8_exact.py`). An f32 value is its encoding read as s32, as
+property/v1 reads it: `+0 … +inf` is `[0, 0x7F800000]`, ordered as the floats, and a negative float or `−0` reads below
+0.
 `Guarantees.Gates` states that each interval holds its evaluator's value.
 -/
 
@@ -121,6 +123,44 @@ def dither (lo : ℤ) (w m : ℕ) (v : ℚ) (R : Fin (2 * m + 2)) : ℤ := clamp
 def hull0 (T : List ℤ) : Iv := (T.foldr min 0, T.foldr max 0)
 
 /-- The LUT softmax's element: a floor, a min and an 8-bit gather (the model's `Op.gather`) into the table `T`. -/
-def lutSoftmax (T : List ℤ) (d : ℚ) : ℤ := (Op.gather : Op Unit).raw (fun _ => 0) (min ⌊d⌋ 255 :: T)
+def lutSoftmax (T : List ℤ) (d : ℚ) : ℤ := (Op.gather none : Op Unit).raw (fun _ => 0) (min ⌊d⌋ 255 :: T)
+
+/-! ## The exact-int8 profile's primitives (`verity_vllm/program/registry/int8_exact.py`) -/
+
+/-- The truncation toward zero of the non-negative float whose encoding is `u` (`+inf` past every bound). -/
+def truncNat (u : ℕ) : ℕ :=
+  let e := u / 2 ^ 23
+  let m := u % 2 ^ 23 + 2 ^ 23
+  if e < 127 then 0 else if 150 ≤ e then m * 2 ^ (e - 150) else m / 2 ^ (150 - e)
+
+/-- `F32ToS8Rzi` (`cvt.rzi.sat.s8.f32`), its code read as s8: the float's truncation toward zero, saturated to
+`[−128, 127]`; a NaN gives 0. -/
+def f32ToS8Rzi (a : ℤ) : ℤ :=
+  if f32NaN a then 0
+  else if a < 0 then -min 128 ((truncNat (f32Mag a).toNat : ℕ) : ℤ) else min 127 ((truncNat a.toNat : ℕ) : ℤ)
+
+/-- `127.0` (`C_TOP`). -/
+def f32Top : ℤ := 0x42FE0000
+
+/-- `−127.0` (`C_NEG_TOP`), read as s32. -/
+def f32NegTop : ℤ := 0xC2FE0000 - 2 ^ 32
+
+/-- `Int8QuantElement`'s clamp and cast of the rounded quotient `r = rint(RN32(x/s))`: `F32Fmaxf` against `−127.0`,
+`F32Fminf` against `127.0`, then `F32ToS8Rzi`. -/
+def int8Clamp (r : ℤ) : ℤ := f32ToS8Rzi (f32Fminf (f32Fmaxf r f32NegTop) f32Top)
+
+/-- `LutIndex`: `min(⌊max(d, 0) · a / 2^32⌋, 255)`, `d` read as s32 and `a` unsigned (fattn's `umulhi(m − S, A)`). -/
+def lutIndex (d a : ℤ) : ℤ := min (max d 0 * (a % 2 ^ 32) / 2 ^ 32) 255
+
+/-- `Exp2Lut127`'s table: `LUT[t] = rint(127 · 2^(−t/16))`, `t < 256`. -/
+def exp2Lut127 : List ℤ :=
+  [127, 122, 116, 112, 107, 102, 98, 94, 90, 86, 82, 79, 76, 72, 69, 66, 64, 61, 58, 56, 53, 51, 49, 47, 45, 43,
+    41, 39, 38, 36, 35, 33, 32, 30, 29, 28, 27, 26, 24, 23, 22, 21, 21, 20, 19, 18, 17, 17, 16, 15, 15, 14, 13,
+    13, 12, 12, 11, 11, 10, 10, 9, 9, 9, 8, 8, 8, 7, 7, 7, 6, 6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 3, 3, 3, 3,
+    3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1] ++ List.replicate 128 0
+
+/-- `S32LowByte`: a word's low byte read as s8 (`sext8`). -/
+def s32LowByte (z : ℤ) : ℤ := (z + 128) % 256 - 128
 
 end Accounting.Gates
