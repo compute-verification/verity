@@ -139,7 +139,12 @@
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
   },
   "Nci.Assumptions.PartialSumsSupport": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "digest": "41973b0ef31177304eb9dc9239d86f5262bf110fb041b33fa0aa10771bc2d1fd"
+  },
+  "Nci.Assumptions.WeightsIncompressible": {
+   "owner": "@lean",
+   "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
   },
   "NetTiming.Allocated": {
    "owner": "@network-accounting",
@@ -376,10 +381,6 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
-  },
-  "Nci.Assumptions.WeightsIncompressible": {
-   "owner": "@lean",
-   "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
   }
  },
  "meaning": [
@@ -3455,6 +3456,18 @@
    "assumptions": [],
    "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
+  "Nci.SecurityProofs.ContainedMatMul": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ContainedMatMul : Nci.Guarantees.ContainedMatMul"],
+   "assumptions": [],
+   "type_hash": "b9d4b8b6d2fdf2ba50939440b7537191f8ac4cb348eb67f895331fa42966531e"
+  },
+  "Nci.SecurityProofs.ContainedTraining": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ContainedTraining : Nci.Guarantees.ContainedTraining"],
+   "assumptions": [],
+   "type_hash": "cc57888b57675154812ec32f76c474386b3fc204b01538efbfbb34c10c54c1e7"
+  },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions"],
@@ -3508,16 +3521,6 @@
    "signature": ["Nci.SecurityProofs.ThreadedTraining : Nci.Guarantees.ThreadedTraining"],
    "assumptions": [],
    "type_hash": "94a41bae5d919600ef987d2aa38945b9d18acdc52c8f6dc7e75ebfacf6d1b3e6"
-  },
-  "Nci.SecurityProofs.ContainedMatMul": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedMatMul : Nci.Guarantees.ContainedMatMul"],
-   "assumptions": []
-  },
-  "Nci.SecurityProofs.ContainedTraining": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ContainedTraining : Nci.Guarantees.ContainedTraining"],
-   "assumptions": []
   },
   "Nci.SecurityProofs.Training": {
    "owner": "@lean",
@@ -7448,6 +7451,8 @@
     "Bandwidth.SecurityProofs.B3RO",
     "Bandwidth.SecurityProofs.Mbw",
     "Bandwidth.SecurityProofs.MbwCapacity",
+    "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7475,6 +7480,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.ReadBound",
@@ -7562,6 +7569,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
@@ -7659,6 +7668,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7687,7 +7698,11 @@
     "Nci.support": "1163e4722a9cf138b9ee8bf985be1fc7d16d03c6bd78978790307e3156232cf2",
     "Nci.values": "d449b501efbdba9b0ad5b679d9a383a3382c093923ba315198a1353a1a978ae4"
    },
-   "guarantees": ["Nci.SecurityProofs.IuReads"]
+   "guarantees": [
+    "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.IuReads"
+   ]
   },
   "Definitions.Nci.Threads": {
    "digest": "1ec34c2518d850317e0f2a0a732676948484df147d41489c135f2dbdd2469501",
@@ -17267,14 +17282,17 @@
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
   "Models.Nci.Assumptions": {
-   "digest": "77db2b40d39cc8b6bc5517178d1ef001594f5057e5465c9e134f7555db16b5f3",
+   "digest": "83716c466c58f7f4f5e7659d570bcb6fda1c73d0d559a67e915b389928fd4778",
    "definitions": {
     "Nci.Assumptions.ActivationsIncompressible": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a",
     "Nci.Assumptions.ActivationsSupport": "9657b492f110a0188f677b492aec3e46e5eab5834bdfc613b955da6ee949f8ca",
-    "Nci.Assumptions.PartialSumsIncompressible": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
+    "Nci.Assumptions.PartialSumsIncompressible": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374",
+    "Nci.Assumptions.PartialSumsSupport": "41973b0ef31177304eb9dc9239d86f5262bf110fb041b33fa0aa10771bc2d1fd"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
@@ -17314,6 +17332,14 @@
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul"
    ]
+  },
+  "Models.Nci.Guarantees.Contained": {
+   "digest": "ae9b3d15fc1e2344b6109e1572d1f82f030115e30c595322c42a26baa18ee7bf",
+   "definitions": {
+    "Nci.Guarantees.ContainedMatMul": "df65fc3626a6f4021d0cb77f93195ea4fcf1a643f59a30626e494b5515053583",
+    "Nci.Guarantees.ContainedTraining": "d11a30af07ea918204d1d57e4f22237b0ffbca149c9bff292dab777d562c2a1f"
+   },
+   "guarantees": ["Nci.SecurityProofs.ContainedMatMul", "Nci.SecurityProofs.ContainedTraining"]
   },
   "Models.Nci.Guarantees.Reads": {
    "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
