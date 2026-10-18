@@ -28,6 +28,13 @@ import Proofs.Flock.Claims.Recursion.DeployScopeRuns
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeployPremises
 import Proofs.Flock.Claims.Recursion.DeployZK
+import Proofs.Flock.Claims.Recursion.Seq
+import Proofs.Flock.Claims.Recursion.SeqSim
+import Proofs.Flock.Claims.Recursion.SeqSession
+import Proofs.Flock.Claims.Recursion.SeqPrefix
+import Proofs.Flock.Claims.Recursion.SeqCap
+import Proofs.Flock.Claims.Recursion.SeqKey
+import Proofs.Flock.Claims.Recursion.SeqDeploy
 import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Counted
