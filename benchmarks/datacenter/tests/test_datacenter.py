@@ -21,7 +21,7 @@ from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Assumption
                         Plan, Port, Record, Refused, Store, Wipe, account, audit, check_records, crossings,
                         double_credit, evaluate, names, place, register, run, traffic, values, work)
 from datacenter.binding import hops
-from datacenter.logical import census_of, gate_work, gates
+from datacenter.logical import census_of, committed, gate_work, gates
 from datacenter.models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, two_stage, words
 from datacenter.observe import digest as frames_digest
 
@@ -83,6 +83,7 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
         ("x", 512, (3,), False), ("w1", 16384, (3,), False), ("w2", 16384, (4,), False), ("h", 512, (4,), False),
         ("y", 512, (), True)]
     assert work(PROGRAM) == {3: STAGE, 4: STAGE}
+    assert len(committed(PROGRAM)) == 32 + 2 * 1024 + 2 * 32          # a run commits its census values, not a Call's wires
     doc = census_of(PROGRAM)                                         # the multiply-adds are the census's served MACs
     nodes = doc["nodes"]
     assert {k: doc["classes"][doc["callees"][nodes["callee"][k]]]["served_macs"] * nodes["n"][k] for k in (3, 4)} == {

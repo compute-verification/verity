@@ -23,8 +23,9 @@ registration (`program.bindings`), then its Calls. The accounting layer reads it
   work.
 
 `evaluate` is the reference semantics, gate by gate (`evaluate_region`, so a Program small enough to expand); `register`
-commits the registered inputs before any run, and `commit` gives the hiding commitment every value of a run sits under.
-Both are hm96-sha512 rows in one frame-v3-sha512 tree (`verity.ml.commitments.advice`), bound to the Program's digest.
+commits the registered inputs before any run, and `commit` gives the hiding commitment a run's values sit under: the
+census values, which are what can cross between devices (a Call's own wires are witness of its proof units). Both are
+hm96-sha512 rows in one frame-v3-sha512 tree (`verity.ml.commitments.advice`), bound to the Program's digest.
 """
 from __future__ import annotations
 
@@ -235,14 +236,24 @@ def register(program: Program, inputs: dict[str, int | Sequence[int]], salts: Se
                                               salts))
 
 
+def committed(program: Program) -> list[int]:
+    """The gates a run commits: those of the census values, what the Program's nodes pass each other, each once in value
+    order. A Call's own wires are witness of its proof units, whose commitments are the proof service's."""
+    seen: dict[int, None] = {}
+    for v in values(program):
+        seen.update(dict.fromkeys(gates(program, v)))
+    return list(seen)
+
+
 def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] | None = None) -> advice.Registration:
-    """The hiding commitment to every value of a run, a row per gate: its `root` is public, its rows and salts witness."""
-    c = program.circuit
-    width = max(g.prim.ret.w for g in c.region(0, c.size))
-    return advice.register(_rows([transcript[g] for g in range(c.size)], width),
-                           width, _binding(b"datacenter/values/v1", program), salts)
+    """The hiding commitment to a run's values (`committed`), a row per gate: its `root` is public, its rows and salts
+    witness."""
+    gs, c = committed(program), program.circuit
+    width = max(c.gate(g).prim.ret.w for g in gs)
+    return advice.register(_rows([transcript[g] for g in gs], width), width, _binding(b"datacenter/values/v1", program),
+                           salts)
 
 
 __all__ = ["PRECISION", "REGISTRATION", "RUN", "Registration", "Value", "bind_inputs", "binding", "calls", "census_of",
-           "commit", "evaluate", "gate_work", "gates", "names", "nodes", "parameters", "precision", "register", "values",
+           "commit", "committed", "evaluate", "gate_work", "gates", "names", "nodes", "parameters", "precision", "register", "values",
            "work"]
