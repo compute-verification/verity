@@ -3,7 +3,8 @@
 Four copies, each checked on every vector its rule covers:
 
 * ``native_tree.cu`` -- the production ``verity_native_collect`` extension, through its extern "C" launchers: chunk leaves of a whole
-  step and of a ``ci_base`` window, node/lift levels, trees and paths, the run and weights folds;
+  step and of a ``ci_base`` window, node/lift levels, trees and paths, the run and weights folds; and through ``StepHasher``, whole trees
+  and window subtrees on both sides of the bound under which a tree's narrow top is one launch;
 * ``hidden_gpu_tree.cu`` -- ``hidden_gpu.ext()``: chunk leaves, node/lift levels, trees and paths, the run and weights folds;
 * ``native_leafhash.cu`` -- ``leafhash.ext()``: position leaves (alone and as the tail after a full leaf), tree roots, the weights fold;
 * ``verity_tap.h`` at ``VERITY_TAP=4`` -- the FA2 thread leaf, compiled into a one-thread harness against the pod's FA2 tree.
@@ -131,6 +132,31 @@ def test_native_tree() -> None:
         f = c["fields"]
         window = np.frombuffer(H(c["chunk"]), dtype="<u4").copy()
         assert nt.chunk_leaves(window, f, f["chunk_index"])[0].hex() == c["leaf"]
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 1023, 1024, 1025, 2049, 4097])
+def test_step_hasher_trees_are_fold_levels(n: int) -> None:
+    """``StepHasher.tree``, ``tree_window`` and ``tree_window_top`` (a launch a level above 1024 nodes, the rest in one) give every level of
+    ``scheme.fold_levels``: odd widths, both sides of the bound, and windows of 2048 leaves whose partial last one climbs by lifts."""
+    from verity_vllm.commit.committer import native_collect as NC
+
+    hasher, st = NC.ext().StepHasher(), torch.cuda.current_stream().cuda_stream
+    rng = np.random.default_rng(n)
+    leaves = [rng.bytes(32) for _ in range(n)]
+    want = scheme.fold_levels(leaves)
+    levels, root, _ = hasher.tree(_rows(leaves), st, True, torch.empty(0, dtype=torch.uint8))
+    assert [_digests(t) for t in levels] == want and root == want[-1][0]
+    j = 11
+    n_levels = min(j, len(want) - 1) + 1
+    tops = []
+    for k in range(-(-n // (1 << j))):
+        part = leaves[k << j:(k + 1) << j]
+        dsts = [torch.empty((-(-len(part) // (1 << L)), 8), dtype=torch.int32, pin_memory=True) for L in range(n_levels)]
+        tops.append(hasher.tree_window(_rows(part), n_levels, st, dsts))
+        assert [_digests(d) for d in dsts] == [want[L][(k << j) >> L:][:d.shape[0]] for L, d in enumerate(dsts)], k
+        assert _digests(tops[-1]) == want[n_levels - 1][k:k + 1]
+        assert torch.equal(hasher.tree_window_top(_rows(part), n_levels, st), tops[-1])
+    assert hasher.tree(torch.cat(tops), st, False, torch.empty(0, dtype=torch.uint8))[1] == want[-1][0]
 
 
 def test_hidden_gpu_tree() -> None:

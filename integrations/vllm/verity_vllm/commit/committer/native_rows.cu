@@ -14,7 +14,7 @@
 //   c    = SHA-512(salt_prefix || y);  b = x ^ M_key y;  h = SHA-512(leaf_prefix(key) || b || c)
 //   leaf = SHA-512(frame || "leaf" || domain id || uint(pos) || uint(pos) || "hm96-sha512/row/v2" || h)   (framed parts)
 //   pad  = SHA-512(frame || "pad" || domain id || uint(pos)) for n <= pos < width
-// then node(level, index, left, right) up the tree.
+// then node(level, index, left, right) up the tree: a launch a level while levels are wide, the narrow top in one (rows_levels_kernel).
 #include <cuda_runtime.h>
 
 #include <cstdint>
@@ -312,6 +312,37 @@ __global__ void __launch_bounds__(THREADS) rows_level_kernel(const __grid_consta
   st_be(out + 64 * i, o, 8);
 }
 
+// ld_be with ordinary loads: a level this block wrote before a barrier is not read through the non-coherent path
+DEV void ld_be_written(const uint8_t* p, u64* d, int n) {
+#pragma unroll
+  for (int i = 0; i < n / 2; ++i) {
+    const uint4 v = reinterpret_cast<const uint4*>(p)[i];
+    d[2 * i] = be64(v.x, v.y);
+    d[2 * i + 1] = be64(v.z, v.w);
+  }
+}
+
+// n_levels levels above n_in nodes of level `level` (the first at index base) in ONE block, each level's nodes right after the previous
+// level's in `out`: the narrow top of a tree, where a launch a level costs more than its hashing.  The same node as rows_level_kernel.
+__global__ void __launch_bounds__(THREADS) rows_levels_kernel(const __grid_constant__ NodeK N, const uint8_t* in, uint8_t* out, u64 n_in,
+                                                              int level, u64 base, int n_levels) {
+  for (int k = 0; k < n_levels; ++k) {
+    const u64 n_out = n_in / 2;
+    for (u64 i = threadIdx.x; i < n_out; i += blockDim.x) {
+      u64 L[8], R[8], o[8];
+      ld_be_written(in + 128 * i, L, 8);
+      ld_be_written(in + 128 * i + 64, R, 8);
+      node(N, level + k, (base >> 1) + i, L, R, o);
+      st_be(out + 64 * i, o, 8);
+    }
+    __syncthreads();
+    in = out;
+    out += 64 * n_out;
+    n_in = n_out;
+    base >>= 1;
+  }
+}
+
 // --- host: the step's parameters ---------------------------------------------------------------------------------
 
 const char FRAME[] = "veritor/protocol/merkle/frame/v3";  // + its NUL: 33 bytes
@@ -428,5 +459,16 @@ extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, u
   const Params* p = static_cast<const Params*>(params);
   const u64 blocks = (n_out + THREADS - 1) / THREADS;
   rows_level_kernel<<<static_cast<unsigned>(blocks), THREADS, 0, st>>>(p->node, in, out, n_out, level, first_index);
+  return static_cast<int>(cudaGetLastError());
+}
+
+// n_levels levels above n_in nodes (a nonzero multiple of 2^n_levels) of level `level`, the first at index base, in one launch
+// (rows_levels_kernel); out holds all of them, level after level.
+extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
+                                         int n_levels, cudaStream_t st) {
+  if (n_levels <= 0) return 0;
+  if (level < 0 || level + n_levels >= LEVELS || !n_in || n_in % (1ull << n_levels)) return static_cast<int>(cudaErrorInvalidValue);
+  const Params* p = static_cast<const Params*>(params);
+  rows_levels_kernel<<<1, THREADS, 0, st>>>(p->node, in, out, n_in, level, base, n_levels);
   return static_cast<int>(cudaGetLastError());
 }

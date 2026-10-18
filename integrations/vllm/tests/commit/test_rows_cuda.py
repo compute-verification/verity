@@ -174,6 +174,30 @@ def test_trees_and_windowed_subtrees_are_step_rows_levels(ext, hasher, n):
         assert wroot == want[-1][0], j
 
 
+@pytest.mark.parametrize("n,level0,first", [(2048, 0, 0), (4096, 3, 0), (1536, 0, 4 * 1536)])
+def test_wide_trees_and_windows_cross_the_one_launch_top(ext, hasher, n, level0, first):
+    """Levels of more than 1024 nodes take a launch each and the narrower rest one launch: rows_tree from 2048 nodes (the bound exactly
+    after one level) and from 4096 at level 3, and a window's subtree of 1536 nodes (a multiple of 2^9, not a power of two) at a nonzero
+    first index with its levels to host, all against dom.node."""
+    rng = random.Random(n + level0)
+    dom = R.domain(PD, CTX, GEO, 1 << 20)
+    rs, st = _step(ext, dom, bytes(64), R.row_prefix(BITS), R.ROW_BYTES), _stream()
+    nodes = [rng.randbytes(64) for _ in range(n)]
+    n_up = (n & -n).bit_length() - 1
+    want, cur = [nodes], nodes
+    for L in range(n_up):
+        cur = [dom.node(level0 + L, (first >> (L + 1)) + i, cur[2 * i], cur[2 * i + 1]) for i in range(len(cur) // 2)]
+        want.append(cur)
+    if first:
+        host = [torch.empty(64 * len(w), dtype=torch.uint8) for w in want]
+        top = hasher.rows_tree_window(rs, _dev(b"".join(nodes)).view(n, 64), n_up + 1, first, st, host)
+        assert [_list(h.view(-1, 64)) for h in host] == want and _list(top) == want[-1]
+        assert torch.equal(hasher.rows_tree_window(rs, _dev(b"".join(nodes)).view(n, 64), n_up + 1, first, st, []), top)
+    else:
+        levels, root, _ = hasher.rows_tree(rs, _dev(b"".join(nodes)).view(n, 64), level0, st, levels_host=True)
+        assert [_list(t) for t in levels] == want and root == want[-1][0]
+
+
 def test_refusals(ext, hasher):
     dom = R.domain(PD, CTX, GEO, 4)
     with pytest.raises(RuntimeError, match="64 bytes"):
