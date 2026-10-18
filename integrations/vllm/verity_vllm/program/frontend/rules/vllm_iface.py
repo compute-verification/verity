@@ -76,6 +76,11 @@ _define_once("unified_cache_write(Tensor key, Tensor value, str layer_name, int 
 # layer's cache, row `slot` (the row this step appended) := live ? row : zero (one broadcast zero per step). Model-agnostic
 # (no layer names, no layer count). Stand-in with an explicit schema, like `unified_cache_write`.
 _define_once("unified_cache_pad(Tensor live, Tensor zero, int slot) -> ()", "unified_cache_pad", lambda live, zero, slot: None)
+# A request's cached prefix (vLLM's prefix cache): rows 0..C-1 of every attention layer's key/value cache, which the scheduler serves
+# from blocks an earlier request computed instead of recomputing them.  `prefix` bf16 [L, 2, C, KVH*D] (layer in forward order, key |
+# value, row, leaf): the request wrapper's input, called before its prefill; each layer's history opens with its C rows.  Not a vLLM
+# op: a stand-in with an explicit schema like `unified_cache_pad` (rule `KvPrefix[vllm]`).
+_define_once("kv_prefix(Tensor prefix) -> ()", "kv_prefix", lambda prefix: None)
 # [R15 stoch] The stochastic token select of vLLM d9105ea80's sampler for ONE request with temperature + top-p (no top-k / penalties /
 # logit bias / min_p), as one op the wrapper authors per sampled step: `Sampler.sample` = f32 widening -> `_temperature_kernel` ->
 # `apply_top_k_top_p_triton` (`_apply_topp_split`, `splits` splits) -> `_gumbel_sample_kernel` (Gumbel-max with the stream key

@@ -30,7 +30,7 @@ from verity.ml.circuits.refs import Coll, PartLog, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.common import refuse_cached_prefix, shape
 from verity_vllm.program.frontend.rules.patterns import Consumed
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile, launch_keys_of
 from verity_vllm.program.frontend.rules.vllm_iface import iface
@@ -455,6 +455,7 @@ class DsaIndexerAttnRule(StateRule):
         return True
 
     def emit(self, node, ctx):
+        refuse_cached_prefix(ctx, node, self.rule_id)
         a = _args(node, _ATTN)
         has = a.get("index_q") is not None
         layer, TOPK, scale = a["layer_name"], a["topk"], float(a["scale"])

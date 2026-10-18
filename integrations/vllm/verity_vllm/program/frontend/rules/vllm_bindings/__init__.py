@@ -36,6 +36,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import Bf16Sca
 from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import (CutlassScaledMmFp8BlockRule, DynamicDeepGemmFp8LinearRule,
                                                                  PerTokenGroupFp8QuantRule, SameDtypeCastRule)
 from verity_vllm.program.frontend.rules.vllm_bindings.fused_norm import FusedAddRmsNormBIRule
+from verity_vllm.program.frontend.rules.vllm_bindings.kv_prefix import KvPrefixRule
 from verity_vllm.program.frontend.rules.vllm_bindings.layer_norm import LayerNormAtenRule
 from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (AddScalarRule, AddWidenedRule, MeanDimBIRule, MulF32Rule,
                                                                          NarrowF32ToBf16Rule, RsqrtRule, SquareRule, WidenBf16ToF32Rule)
@@ -50,7 +51,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.views import AllocViewRule
 
 VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), CublasLinearRule(), LlBf16GemmRule(), CublasRouterRule(),
                       KvCacheUpdateRule(), UnifiedAttentionWithOutputRule(), AllocViewRule(), IntIdWidenRule(),
-                      CachePadRule(), CudaRmsNormRule(), CudaFusedAddRmsNormRule(), FusedAddRmsNormBIRule(), ScalarTensorMulRule(),
+                      CachePadRule(), KvPrefixRule(), CudaRmsNormRule(), CudaFusedAddRmsNormRule(), FusedAddRmsNormBIRule(), ScalarTensorMulRule(),
                       GeluTanhAndMulRule(), Bf16ScalarChainRule(),
                       # [R15 dense] the unfused norm chain (forward_native norms as ATen on an f32 copy)
                       WidenBf16ToF32Rule(), NarrowF32ToBf16Rule(), SquareRule(), MeanDimBIRule(), RsqrtRule(), AddScalarRule(), AddWidenedRule(),

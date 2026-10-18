@@ -90,17 +90,12 @@ def _write_instances_file(path: str, head: dict, rows) -> None:
 _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/vllm_meta.py",
                          "verity_vllm/pipeline/build.py", "verity_vllm/program/frontend/triton_capture.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/__init__.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/attention.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/cache_pad.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/collectives.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/elementwise.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/fp8.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/fused_norm.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/observations.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/operands.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/pins.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/attention.py", "verity_vllm/program/frontend/rules/vllm_bindings/cache_pad.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/collectives.py", "verity_vllm/program/frontend/rules/vllm_bindings/elementwise.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/fp8.py", "verity_vllm/program/frontend/rules/vllm_bindings/fused_norm.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/kv_prefix.py", "verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/observations.py", "verity_vllm/program/frontend/rules/vllm_bindings/operands.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/pins.py", "verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/views.py",
                          "verity_vllm/program/frontend/rules/vocab.py", "verity_vllm/program/frontend/rules/triton_iface.py",
                          "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
@@ -377,10 +372,11 @@ def _cuda_available() -> bool:
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
         target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None,
-        engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False) -> dict:
+        engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False, cached: int = 0) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
     the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
-    reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`."""
+    reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
+    `cached`: the request's prefix-cached rows C (`vllm_meta.CachedGreedyRequest`; `prefix_cache.json`, `program.prefix_plan`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
     t_start = time.time()
@@ -395,7 +391,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
     if target.numerics_profile != profile:
         target = target.with_overrides(numerics_profile=profile)  # `--profile` IS the vocabulary field of the target profile (one source)
     res: dict = {"schema": "cb-a/derive_step/v3", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "wrapper": wrapper, "M": M, "pos0": pos0,
-                 "LP": LP, "T": T, "eos": eos, "sampling": sampling, "profile": profile, "target": {"declared": target.to_json(), "declared_source": res_target_source},
+                 "LP": LP, "T": T, "C": cached, "eos": eos, "sampling": sampling, "profile": profile, "target": {"declared": target.to_json(), "declared_source": res_target_source},
                  # [R13 tp] the tensor-parallel structural inputs: world size and WHICH rank this Program describes (rank-local computation,
                  # this rank's weight shards as its committed weight inputs, the other rank's collective partials as peer inputs)
                  "tp": {"world": int(tp), "rank": int(rank)},
@@ -438,7 +434,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp, device_name)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args)
+                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached)
     except _Refused:
         pass
     res = _finish(out, res, t_start)
@@ -456,7 +452,7 @@ class _Refused(Exception):
 
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-               tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None) -> None:
+               tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import vllm_meta as vm
@@ -537,8 +533,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 raise _Refused()
             observe_attention_impls(res["attention_impls_observed"])
             log = TritonLaunchLog()
-            mod, inputs = vm.make_wrapper(wrapper, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos, sampling=sampling)
-            ntok = M if wrapper == "step" else LP
+            mod, inputs = vm.make_wrapper(wrapper, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos, sampling=sampling, C=C)
+            ntok = M if wrapper == "step" else LP - C
             if tp > 1:
                 # [R13 tp] probe: one meta forward records the rank's collectives in call order -> the PEER INPUTS of the Program (the other
                 # rank's partials, ordinary Inputs, bound by tp_links.json to the other rank's committed partials); then the traced wrapper
@@ -604,7 +600,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
-    from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
+    from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES, kv_prefix as KP
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
@@ -630,6 +626,8 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
         res["tp"]["links"] = write_tp_links(out, res, program, rep, tp, rank, model_root=model_root)
     res["mutation_effects"] = rep.provenance["mutation_effects"]
     res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
+    if (pfx := KP.layout_of(rep.provenance)) is not None:   # the cached prefix's input and layer order, for Match
+        res["prefix"] = json.dump(pfx, open(os.path.join(out, "prefix_cache.json"), "w"), indent=1) or pfx
     json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
     _write_instances_file(os.path.join(out, "instances.json.gz"),
                           {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest,
@@ -704,7 +702,7 @@ def _write_manifest(out: str, res: dict) -> None:
          # [X-05] `sampling` is the row's declared policy (manifest / --sampling / default-by-omission), never a literal
          "structural_inputs": {"LP": res.get("LP"), "T": res.get("T"), "M": res.get("M"), "pos0": res.get("pos0"), "eos": res.get("eos"),
                                "sampling": res.get("sampling"), "tp": (res.get("tp") or {}).get("world", 1), "rank": (res.get("tp") or {}).get("rank", 0),
-                               "launch_context": res.get("launch_context")},
+                               "launch_context": res.get("launch_context"), **({"C": res["C"]} if res.get("C") else {})},
          # [R13 tp] world > 1: the rank's collectives (peer-input signature), embedding shard, engine args + env the admitted TP path requires,
          # the sharded parameter shapes and the cross-rank binding summary (full record: result.json `tp`, tp_links.json)
          "tp": ({k: v for k, v in res["tp"].items() if k != "collectives"} | {"collectives": {k: v for k, v in res["tp"].get("collectives", {}).items() if k != "record"}}
@@ -746,6 +744,7 @@ class Options:
     wrapper: str = option("--wrapper", default="step", choices=("step", "request", "padded"))
     LP: int = option("--LP", type=int, default=8)
     T: int = option("--T", type=int, default=4)
+    cached: int = option("--cached", type=int, default=0, help="the request wrapper's prefix-cached prompt rows C (0 < C < LP)")
     eos: int = option("--eos", type=int, default=0)
     model: str | None = option("--model", default=None, help="HF repo id (default: the B0 pin)")
     revision: str | None = option("--revision", default=None)
@@ -783,7 +782,8 @@ def main(a: Options) -> int:
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
                   tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_context), emit=emit,
-                  engine_args=workload_engine_args(a.workload, a.tp), device_name=device_name(a.workload), batch_dispatch=LC.batch_dispatch_of(a.workload))
+                  engine_args=workload_engine_args(a.workload, a.tp), device_name=device_name(a.workload), batch_dispatch=LC.batch_dispatch_of(a.workload),
+                  cached=a.cached)
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)
