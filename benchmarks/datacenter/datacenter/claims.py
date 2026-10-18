@@ -8,6 +8,7 @@ physical layer's job. Its output is a list of claims about the prover *system*, 
 - `Carried`: a boundary link-window carried the committed crossings and nothing else, so its only freedom was timing
   advice, at most `bits`.
 - `Entered`: an input's bits entered the computation.
+- `Emitted`: a declared off-ramp (telemetry) carried bits the circuit doesn't explain.
 - `Erased`: a device's memory was overwritten and checked during an interval.
 - `Refused`: something didn't check, and which window or device it was.
 """
@@ -43,6 +44,16 @@ class Entered:
 
 
 @dataclass(frozen=True)
+class Emitted:
+    """Off-ramp data (telemetry) left on a link in a window: `bits` bits the circuit doesn't explain."""
+
+    stream: str
+    link: tuple[str, str]
+    window: int
+    bits: int
+
+
+@dataclass(frozen=True)
 class Erased:
     device: str
     at: Interval
@@ -54,7 +65,7 @@ class Refused:
     why: str
 
 
-Claim = Computed | Carried | Entered | Erased | Refused
+Claim = Computed | Carried | Entered | Emitted | Erased | Refused
 
 
 def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: int = 1) -> list[Claim]:
@@ -83,6 +94,7 @@ def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: i
             out.append(Refused(f"link {r.link} window {r.window}", "a frame is not a committed crossing"))
         else:
             out.append(Carried(r.link, r.window, math.log2(syncs)))
+            out += [Emitted(s, r.link, r.window, n * trace.frame_bits) for s, n in r.offramp]
     for v in c.inputs:
         spec = c.gates[v.id].input
         if spec.source != "registered":
@@ -94,4 +106,4 @@ def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: i
 
 def declared_profile(trace: Trace) -> dict[tuple[str, str], dict[int, int]]:
     """The honest occupancy profile of `trace`'s placement: what the developer declares before the run."""
-    return occupancy(trace.placement, trace.frame_bits, trace.bucket)
+    return occupancy(trace.placement, trace.frame_bits, trace.bucket, trace.window)

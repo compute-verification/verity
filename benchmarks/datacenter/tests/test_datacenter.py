@@ -29,6 +29,20 @@ def datacenter() -> Datacenter:
     return Datacenter("dc0", [node("a"), node("b")], fabric, links)
 
 
+def site(n: str, world: bool = False) -> Datacenter:
+    """`datacenter()` with every device named `n.<name>`, the outside world only if `world`."""
+    dcx = datacenter()
+    rename = lambda s: f"{n}.{s}"  # noqa: E731
+    blocks = [Block(rename(b.name), [Device(rename(d.name), d.kind, d.rate, d.memory, d.residual) for d in b.devices])
+              for b in dcx.blocks]
+    fabric = [Device(rename(d.name), d.kind, trusted=d.trusted) for d in dcx.fabric if d.kind != "outside"]
+    links = [Link(rename(l.a), rename(l.b), l.capacity) for l in dcx.links if "world" not in (l.a, l.b)]
+    if world:
+        fabric.append(Device("world", "outside"))
+        links.append(Link("world", rename("leaf"), Assumption("isp", 1e9, "bit/s")))
+    return Datacenter(n, blocks, fabric, links)
+
+
 @pytest.fixture
 def setup():
     c = trace(two_layer, x=Input(16), w1=Input(16, source="registered"), w2=Input(16, source="registered"))
@@ -109,10 +123,38 @@ def test_credit_from_two_audits_on_one_device_must_fit_every_interval():
     assert feasible(double, rate) and feasible(double, rate)[0][1] == Interval(0, 10)
 
 
+def test_telemetry_leaves_on_a_declared_offramp_and_is_charged_in_full(setup):
+    from datacenter import Emitted, Offramp
+    c, dc, _ = setup
+    temps = Offramp("telemetry", "b.gpu", "world", bits=64, windows=2)
+    p = place(c, dc, {"*": "a.gpu", "x": "world", "w2": "b.gpu"}, deliver="world", offramps=(temps,))
+    t = run(p, INPUTS, window=4)
+    claims = audit(t, occupancy(p, 32, 1, window=4), syncs=128)
+    assert not [x for x in claims if isinstance(x, Refused)]
+    assert {x.window for x in claims if isinstance(x, Emitted)} == {0, 1}
+    acc = account(claims, p, Clock(1e-3), Interval(0, 16))
+    assert acc.offramp_bits == {"telemetry": 128}
+    undeclared = place(c, dc, {"*": "a.gpu", "x": "world", "w2": "b.gpu"}, deliver="world")
+    refused = [x for x in audit(t, occupancy(undeclared, 32, 1, window=4)) if isinstance(x, Refused)]
+    assert refused, "telemetry the developer didn't declare doesn't fit the declared occupancy"
+
+
+def test_a_circuit_placed_across_a_fleet_crosses_the_inter_datacenter_link():
+    east, west = site("east"), site("west", world=True)
+    fleet = Fleet([east, west], [Link("east.a.cert", "west.a.cert", Assumption("wan", 1e10, "bit/s"), kind="wan")])
+    assert fleet.validate() == []
+    c = trace(two_layer, x=Input(16), w1=Input(16, source="registered"), w2=Input(16, source="registered"))
+    p = place(c, fleet.merged(), {"*": "west.a.gpu", "x": "world", "w2": "east.b.gpu"}, deliver="world")
+    w2 = next(x for x in crossings(p) if x.value.name == "w2")
+    assert any(l.kind == "wan" for l in w2.path)
+    claims = audit(run(p, INPUTS, window=4), occupancy(p, 32, 1, window=4), syncs=128)
+    assert not [x for x in claims if isinstance(x, Refused)]
+
+
 def test_a_fleet_links_datacenters_only_through_certifiers():
-    one, two = datacenter(), datacenter()
-    two.name = "dc1"
-    ok = Fleet([one, two], [Link("a.cert", "b.cert", Assumption("wan", 1e9, "bit/s"), kind="wan")])
+    ok = Fleet([site("east"), site("west")], [Link("east.a.cert", "west.a.cert", Assumption("wan", 1e9, "bit/s"), kind="wan")])
     assert ok.validate() == []
-    bad = Fleet([one, two], [Link("a.gpu", "b.cert", Assumption("wan", 1e9, "bit/s"), kind="wan")])
+    bad = Fleet([site("east"), site("west")], [Link("east.a.gpu", "west.a.cert", Assumption("wan", 1e9, "bit/s"), kind="wan")])
     assert any("not a certifier" in p for p in bad.validate())
+    clash = Fleet([datacenter(), datacenter()])
+    assert any("is in both" in p for p in clash.validate())

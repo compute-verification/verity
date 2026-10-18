@@ -23,7 +23,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from .binding import Placement
-from .claims import Carried, Claim, Computed, Entered, Erased, Refused
+from .claims import Carried, Claim, Computed, Emitted, Entered, Erased, Refused
 from .time import Clock, Interval
 
 
@@ -47,6 +47,12 @@ class Account:
     timing_bits: float
     input_bits: dict[str, int]
     refused: list[Refused]
+    offramp_bits: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def covert_bits(self) -> float:
+        """Every bit the run could have carried beyond the committed computation: timing advice, inputs, off-ramps."""
+        return self.timing_bits + sum(self.input_bits.values()) + sum(self.offramp_bits.values())
 
     @property
     def sound(self) -> bool:
@@ -57,8 +63,9 @@ class Account:
         for b in self.blocks:
             lines.append(f"{b.block:10} {b.credited:12.3g} {b.capacity:12.3g} {b.headroom:12.3g} {b.outsourceable:14.3g} "
                          f"{b.state:14.3g}")
-        lines.append(f"covert budget: {self.timing_bits:g} bits of timing advice, "
-                     f"{sum(self.input_bits.values())} bits of inputs ({', '.join(f'{k}: {v}' for k, v in self.input_bits.items())})")
+        lines.append(f"covert budget: {self.covert_bits:g} bits = {self.timing_bits:g} timing advice + "
+                     f"{sum(self.input_bits.values())} inputs ({', '.join(f'{k}: {v}' for k, v in self.input_bits.items()) or 'none'}) + "
+                     f"{sum(self.offramp_bits.values())} off-ramp ({', '.join(f'{k}: {v}' for k, v in self.offramp_bits.items()) or 'none'})")
         lines += [f"REFUSED {r.what}: {r.why}" for r in self.refused]
         return "\n".join(lines)
 
@@ -86,7 +93,14 @@ def account(claims: list[Claim], p: Placement, clock: Clock, epoch: Interval, op
         blocks.append(BlockAccount(b.name, work[b.name], cap, ingress * intensity, state, names))
     timing = sum(c.bits for c in claims if isinstance(c, Carried))
     inputs = {c.input: c.bits for c in claims if isinstance(c, Entered)}
-    return Account(blocks, timing, inputs, refused)
+    per_window: dict[tuple[str, int], int] = {}
+    for c in claims:
+        if isinstance(c, Emitted):        # a stream crosses several certified links: count each window of it once
+            per_window[c.stream, c.window] = max(per_window.get((c.stream, c.window), 0), c.bits)
+    offramp: dict[str, int] = defaultdict(int)
+    for (stream, _), bits in per_window.items():
+        offramp[stream] += bits
+    return Account(blocks, timing, inputs, refused, dict(offramp))
 
 
 @dataclass(frozen=True)

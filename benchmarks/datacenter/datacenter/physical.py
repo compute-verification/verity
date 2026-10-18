@@ -137,8 +137,22 @@ class Fleet:
     datacenters: list[Datacenter]
     links: list[Link] = field(default_factory=list)
 
+    def merged(self) -> Datacenter:
+        """The fleet as one datacenter: every block, fabric device and link, the inter-datacenter links included, so a
+        circuit can be placed across sites with the same `place`. Device names must be unique across the fleet."""
+        return Datacenter("+".join(dc.name for dc in self.datacenters),
+                          [b for dc in self.datacenters for b in dc.blocks],
+                          [d for dc in self.datacenters for d in dc.fabric],
+                          [l for dc in self.datacenters for l in dc.links] + list(self.links))
+
     def validate(self) -> list[str]:
         problems = [f"{dc.name}: {p}" for dc in self.datacenters for p in dc.validate()]
+        seen: dict[str, str] = {}
+        for dc in self.datacenters:
+            for d in dc.devices:
+                if d in seen:
+                    problems.append(f"device {d!r} is in both {seen[d]} and {dc.name}")
+                seen[d] = dc.name
         for l in self.links:
             for end in (l.a, l.b):
                 owner = next((dc for dc in self.datacenters if end in dc.devices), None)

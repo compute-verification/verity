@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 
-from .binding import Placement, crossings
+from .binding import Placement, crossings, route
 from .logical import Commitment, commit
 from .time import Interval, Wipe
 
@@ -27,6 +27,8 @@ class Record:
     counts: tuple[int, ...]
     digest: bytes
     certifier: str
+    #: frames of declared off-ramp streams in the window, by stream (the certifier reads a frame's stream from its header)
+    offramp: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -90,6 +92,15 @@ def run(p: Placement, inputs: dict[str, int], *, frame_bits: int = 32, bucket: i
             b = dev.hold.get((key, p.tick(x.value) // bucket), p.tick(x.value) // bucket)
             counts[key][b] = counts[key].get(b, 0) + frames
             content.setdefault((key, b // window), []).append((x.value.id, values[x.value.id]))
+    offramp: dict[tuple[tuple[str, str], int], dict[str, int]] = {}
+    for o in p.offramps:
+        frames = -(-o.bits // frame_bits)
+        for w in range(o.windows):
+            for l in route(p.datacenter, o.src, o.dst):
+                key = (l.a, l.b)
+                if key in boundary:
+                    counts[key][w * window] = counts[key].get(w * window, 0) + frames
+                    offramp.setdefault((key, w), {})[o.name] = frames
     for (key, b), n in dev.extra.items():
         counts[key][b] = counts[key].get(b, 0) + n
         content.setdefault((key, b // window), []).append((1 << 31, n))
@@ -99,6 +110,7 @@ def run(p: Placement, inputs: dict[str, int], *, frame_bits: int = 32, bucket: i
         cert = p.datacenter.certifier_of(boundary[key])
         for w in range(horizon):
             cs = tuple(row.get(w * window + t, 0) for t in range(window))
-            records.append(Record(key, w, cs, _digest(content.get((key, w), [])), cert.name if cert else "?"))
+            records.append(Record(key, w, cs, _digest(content.get((key, w), [])), cert.name if cert else "?",
+                                  tuple(sorted(offramp.get((key, w), {}).items()))))
     wipe_records = [WipeRecord(w, w.device not in dev.failed_wipes) for w in (wipes or [])]
     return Trace(p, commitment, values, salt, records, wipe_records, dict(inputs), frame_bits, bucket, window)
