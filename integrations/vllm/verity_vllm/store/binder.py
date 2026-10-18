@@ -11,7 +11,8 @@ BlockPool.touch                     refused: a prefix-cache hit would bring a pa
 Scheduler.schedule                  after: kv_append of the scheduled tokens' slots, then begin_pass over the
                                     allocated pages (a pass still open from an earlier schedule is ended first; a
                                     verifier's message since then ends the window, the next challenge begins one)
-Scheduler.update_from_output        before: end_pass, with the device reader's roots
+Scheduler.update_from_output        before: end_pass, with the device reader's roots, and the store's memory map
+                                    flushed (the step's KV is written by now, so its blocks' digests are taken)
 ~~~
 
 The step's own device work (a codec's ``encode_slots_`` in attention's KV write, a fused GEMM's receipts) is the
@@ -344,6 +345,8 @@ class Binder:
         return lambda name, b: tiles.output(seed, region(name).first + b)
 
     def end(self) -> None:
+        if self.store.memory_map is not None:
+            self.store.memory_map.flush()
         if self.store.in_pass:
             read = self.reader(self._segments) if self.reader else None
             z = self.z(self._seed) if self.tiles is not None and self._seed is not None else None
