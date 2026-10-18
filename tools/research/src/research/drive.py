@@ -584,17 +584,18 @@ class Driver:
         return not _git(self.repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
 
     def landed_since(self, base: str, tip: str) -> list[Member]:
-        """The PRs the queue landed in ``base``..``tip``, oldest first: each merge of a PR onto `next` (its `PR`, `Head` and
-        `Owner` trailers) that `main` reached, but those a revert in that range undid."""
+        """The PRs the queue landed in ``base``..``tip``, oldest first: each merge of a PR onto `next` (`Queue: #N`, with its
+        `PR`, `Head` and `Owner` trailers) that `main` reached, first parent or inside a train merged onto a moved `main`, but
+        those a revert in that range undid.  Nothing else: never a lander's commit."""
         from .queue import TRAILER_RE
 
         out, undone = [], set()
-        for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--reverse", "--format=%H%x00%P%x00%B%x1e",
+        for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--reverse", "--topo-order", "--format=%H%x00%P%x00%B%x1e",
                                                           f"{base}..{tip}").split("\x1e"))):
             commit, parents, body = rec.split("\x00", 2)
             undone |= set(REVERTS_RE.findall(body))
             t = dict(TRAILER_RE.findall(body))
-            if len(parents.split()) > 1 and {"PR", "Head", "Owner"} <= set(t):
+            if len(parents.split()) > 1 and body.startswith("Queue: #") and {"PR", "Head", "Owner"} <= set(t):
                 out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
         return [x for x in out if x.commit not in undone]
 
@@ -636,8 +637,8 @@ class Driver:
         `culprit` says `KILLED`), it runs again once, on `main`'s tip then, and killed again is told to `CI`.  Else the one PR
         landed since `verified` whose change touches what failed (`culprit`) is reverted on `main` (`git revert -m 1` of its
         merge onto `next`), the rest staying; with no single such PR, every landing since `verified` is (Daniel, 11 Oct: a
-        failure there reverts the landing at once), so `main` doesn't stay red.  `CI` and the owners are told, and the next
-        run checks `main`'s new tip."""
+        failure there reverts the landing at once): each of their merges onto `next`, newest first, and no other commit, so
+        `main` doesn't stay red.  `CI` and the owners are told, and the next run checks `main`'s new tip."""
         tip, ids, base = run["tip"], " ".join(run["ids"]), pl["verified"]
         members = self.landed_since(base, tip)
         one, hit, what = (self.culprit(members, Verdict("failed", ids, why)) if members
@@ -672,7 +673,7 @@ class Driver:
             return
         blame = f"the failure is in {what}, which {' '.join(f'#{x.pr}' for x in hit)} change" if hit else what
         owners = [self._owner(x) for x in members]
-        if not (commits := self.landings_since(base, tip)):
+        if not (commits := [x.commit for x in reversed(members)]):
             pl["failed"] = tip
             self.refuse(drive, key, f"{head}. No single PR is implicated ({blame}), and no landing since {base[:12]} is left "
                                     "to revert", *owners)
@@ -683,18 +684,6 @@ class Driver:
             pl["failed"] = tip
             self.refuse(drive, key, f"Every landing since {base[:12]} ({since}) must be reverted by hand: {head}. No single PR "
                                     f"is implicated ({blame}), and the revert didn't apply or push", *owners)
-
-    def landings_since(self, base: str, tip: str) -> list[str]:
-        """The first-parent commits of ``base``..``tip``, newest first (each landing's merge, or its lock commit), but reverts and
-        the commits a revert in that range undid."""
-        undone = set(REVERTS_RE.findall(_out(self.repo, "log", "--format=%B", f"{base}..{tip}")))
-        out = []
-        for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--first-parent", "--format=%H%x00%B%x1e",
-                                                          f"{base}..{tip}").split("\x1e"))):
-            commit, body = rec.split("\x00", 1)
-            if commit not in undone and not REVERTS_RE.search(body):
-                out.append(commit)
-        return out
 
     def start_postland(self, drive: dict) -> None:
         """Launch the one post-landing run, on `main`'s tip, when none runs, a landing awaits it, and that tip is neither verified

@@ -138,6 +138,45 @@ def test_a_post_landing_failure_no_pr_is_implicated_in_reverts_every_landing_sin
     assert h.posted[-1][0] == main and len(h.posted) == 2                                # the next run checks the new tip
 
 
+def test_reverting_every_landing_reverts_only_the_queues_merges_and_a_lander_commit_in_the_range_stays(world, monkeypatch, tmp_path):
+    h = Postland(world, monkeypatch, tmp_path)
+    base = _git(world.origin, "rev-parse", "main")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.land_deferred()
+    moved = world.change({"c.txt": "a lander's pure move\n"})
+    _git(world.dev, "push", "-q", "origin", f"{moved}:refs/heads/main")
+    h.run_state["r-post-0"] = ("done", 75, None)                                       # never ran: it runs on `main`'s tip now
+    h.tick()
+    assert h.posted[-1][0] == moved
+    h.run_state["r-post-1"] = ("done", 1, None)
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    main = _git(world.origin, "rev-parse", "main")
+    assert _git(world.origin, "rev-parse", f"{main}^") == moved                          # one revert, of #1's merge alone
+    assert _git(world.origin, "show", f"{main}:a.txt") == _git(world.origin, "show", f"{base}:a.txt")
+    assert _git(world.origin, "show", f"{main}:c.txt") == "a lander's pure move"
+    assert any("Every landing since" in p and "(#1)" in p for p in h.posts), h.posts
+
+
+def test_reverting_every_landing_reaches_a_train_landed_onto_a_moved_main(world, monkeypatch, tmp_path):
+    """There the first-parent commit is drive's `Merge` onto the moved `main`, and the PR's `Queue: #` merge is its second parent."""
+    h = Postland(world, monkeypatch, tmp_path)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    (rid,) = h.run_state
+    other = world.change({"c.txt": "outside the queue\n"})
+    _git(world.dev, "push", "-q", "origin", f"{other}:refs/heads/main")
+    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x not in DEFER})]
+    assert h.tick().startswith("landed #1")
+    landed = _git(world.origin, "rev-parse", "main")
+    assert _git(world.origin, "rev-parse", f"{landed}^1") == other and h.posted[-1][0] == landed
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    main = _git(world.origin, "rev-parse", "main")
+    assert _tree(world, main) == _tree(world, other) and _git(world.origin, "rev-parse", f"{main}^") == landed
+
+
 def test_a_post_landing_failure_several_prs_are_implicated_in_reverts_every_landing_since_verified(world, monkeypatch, tmp_path):
     h = Postland(world, monkeypatch, tmp_path)
     h.d.train_size = 3
