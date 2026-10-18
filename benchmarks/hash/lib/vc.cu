@@ -5,8 +5,9 @@
 //   * native_rows.cu (circuits, cursor/commit-speed-21f3 934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
 //     hash_after_block, salt_prf, salt_digest, the nibble-table mask, the leaf, the level kernels and the host builder;
 //   * sharaw.cu (hash, cursor/verity-hash-15ad 4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
-//     sr_data without the fold), with commit_gpu's tree schedule (a level a launch while a level is wider than 512 nodes, then
-//     one block for the rest);
+//     sr_data), with commit_gpu's tree schedule (a level a launch while a level is wider than 512 nodes, then one block for
+//     the rest); sr_data's fold and climb (k_leaf_fold) with compress_compact / node_rt; sr_leaf4 (k_leaf_spec) with
+//     mask_roll;
 //   * hash_fast.cuh (benchmarks/pouw/pearl_c_sm120): row-seg's segments a thread from their header's state, then a fold a unit.
 #include <cuda_runtime.h>
 
@@ -233,6 +234,59 @@ DEV void pad_nb(const LeafK& K, u64 rank, u64* out) {
 }
 DEV void pad(const LeafK& K, u64 rank, u64* out) { VC_BY_LEN(rank, pad_nb, K, rank, out) }
 
+// The frame leaf's blocks and the pad with nb = len(uint(pos)) read at run time, one compression body each instead of one a
+// length (k_leaf_spec, whose two kinds of warp run different code at once). For nb <= 4 pos lands in word 15 of the leaf's
+// first block (or_be<121, nb>) and of the pad's (or_be<120, nb>), across words 0 and 1 of the leaf's second (or_be<1 + nb,
+// nb>), and the value in words 4.. or 5.. of it at a shift that is never 0 (or_digest<35 + 2 nb + SX>).
+DEV void frame_first_rt(const LeafK& K, u64 pos, u64* out) {
+  const int nb = min(nbytes(pos), MAX_NB);
+  u64 W[16];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) W[i] = K.fl_tpl[nb - 1][i];
+  W[15] |= pos << (8 * (7 - nb));
+  sha::iv(out);
+  sha::compress_from<15>(out, K.fl_m15, W);
+}
+template <int K0>
+DEV void or_digest_s(u64* W, const u64* d, int S) {
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    W[K0 + i] |= d[i] >> S;
+    W[K0 + i + 1] |= d[i] << (64 - S);
+  }
+}
+template <int SX>
+DEV void frame_second_rt(const LeafK& K, u64 pos, const u64* v, u64* st) {
+  const int nb = min(nbytes(pos), MAX_NB), off = 35 + 2 * nb + SX, sh = 8 * (15 - 2 * nb);
+  u64 W[16];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) W[i] = K.fl_tpl[nb - 1][16 + i];
+  if (sh >= 64) {
+    W[0] |= pos << (sh - 64);
+  } else {
+    W[0] |= pos >> (64 - sh);
+    W[1] |= pos << sh;
+  }
+  if ((off >> 3) == 4) or_digest_s<4>(W, v, 8 * (off & 7));
+  else or_digest_s<5>(W, v, 8 * (off & 7));
+  sha::compress(st, W);
+}
+DEV void pad_rt(const LeafK& K, u64 rank, u64* out) {
+  const int nb = min(nbytes(rank), MAX_NB);
+  u64 W[16];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) W[i] = K.pad_tpl[nb - 1][i];
+  W[15] |= rank << (8 * (8 - nb));
+  sha::iv(out);
+#pragma unroll 1
+  for (int k = 0; k < 2; ++k) {
+    sha::compress(out, W);
+#pragma unroll
+    for (int i = 0; i < 15; ++i) W[i] = 0;
+    W[15] = (120 + nb) * 8;
+  }
+}
+
 template <int NI>
 DEV void node_ni(const NodeK& N, int level, u64 index, const u64* L, const u64* R, u64* out) {
   u64 W[32];
@@ -275,8 +329,9 @@ DEV void compress_compact(u64* st, const u64* m) {
 }
 // node_ni with ni read at run time (sharaw's node_rt): for ni <= 4 the index and both children land in the same words as
 // or_be<2, ni> and or_digest<10 + ni>, <82 + ni> put them, and only the shifts depend on ni, so one compression body serves
-// every length and both blocks.
-DEV void node_c(const NodeK& N, int level, u64 index, const u64* L, const u64* R, u64* out) {
+// every length and both blocks. COMPACT: through compress_compact, else sha::compress.
+template <bool COMPACT>
+DEV void node_rt(const NodeK& N, int level, u64 index, const u64* L, const u64* R, u64* out) {
   const int ni = min(nbytes(index), MAX_NB), S = 8 * (2 + ni);
   u64 W[32];
 #pragma unroll
@@ -295,7 +350,8 @@ DEV void node_c(const NodeK& N, int level, u64 index, const u64* L, const u64* R
     u64 w[16];
 #pragma unroll
     for (int i = 0; i < 16; ++i) w[i] = k ? W[16 + i] : W[i];
-    compress_compact(out, w);
+    if constexpr (COMPACT) compress_compact(out, w);
+    else sha::compress(out, w);
   }
 }
 
@@ -526,7 +582,7 @@ DEV void mask_words(const u32* m, u64* my) {
 }
 
 // h = SHA-512(leaf_prefix || (x ^ M y) || c), then the frame leaf from its first block's state f
-template <int SX>
+template <int SX, bool RT = false>
 DEV void finish_leaf(const LeafK& K, u64 pos, const u64* x, const u64* my, const u64* c, u64* f, uint8_t* bc, uint8_t* hs) {
   u64 B[16], h[8];
 #pragma unroll
@@ -539,7 +595,8 @@ DEV void finish_leaf(const LeafK& K, u64 pos, const u64* x, const u64* my, const
   sha::compress(h, B);
   sha::compress_kw(h, K.kw_leafpad);
   if (hs) st_be(hs, h, 8);
-  frame_second<SX>(K, pos, h, f);
+  if constexpr (RT) frame_second_rt<SX>(K, pos, h, f);
+  else frame_second<SX>(K, pos, h, f);
 }
 
 // --- kernels -------------------------------------------------------------------------------------------------------
@@ -843,7 +900,7 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
     __syncthreads();
     const u32 m = cnt >> l;
     u64 r[8];
-    if (t < m) node_c(N, l - 1, (u64)blockIdx.x * m + t, sm + 16 * t, sm + 16 * t + 8, r);
+    if (t < m) node_rt<true>(N, l - 1, (u64)blockIdx.x * m + t, sm + 16 * t, sm + 16 * t + 8, r);
     __syncthreads();
     if (t < m) {
       cpy8(sm + 8 * t, r);
@@ -865,7 +922,7 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
     const bool right = idx & 1;
 #pragma unroll
     for (int k = 0; k < 8; ++k) { a[k] = right ? sib[k] : cur[k]; b[k] = right ? cur[k] : sib[k]; }
-    node_c(N, l, p, a, b, r);
+    node_rt<true>(N, l, p, a, b, r);
     off += width >> l;
     st_be(levels + 64 * (off + p), r, 8);
     cpy8(cur, r);
@@ -878,6 +935,7 @@ u64 fold_ctrs(u64 width) { return width > THREADS ? width / THREADS - 1 : 0; }
 // below cnt hash the rows; the others compute, for the same leaves at the same time, the salt record (M_key y from the nibble
 // table in shared memory, c, the frame leaf's first block; or the pad) into shared memory. Then the row threads finish their
 // leaves, fold their warp's 32 through shuffles, and lane 0 climbs while its warp is the second of two siblings to finish.
+// The frame, pad and node hashes go through the _rt helpers (one compression body each) to keep the code small.
 // ctr: a count a node above level log2(min(cnt, 32)), zeroed before the launch.
 constexpr int SPEC_R = 128;
 template <int SX>
@@ -905,13 +963,13 @@ __global__ void __launch_bounds__(2 * SPEC_R, 2)
       mask_nib_s(reinterpret_cast<const uint8_t*>(T), Y, mk);
       salt_digest(K, Y, c);
       mask_words(mk, my);
-      frame_first(K, pos, f);
+      frame_first_rt(K, pos, f);
       cpy8(s, my);
       cpy8(s + 8, c);
       cpy8(s + 16, f);
     } else {
       u64 o[8];
-      pad(K, pos, o);
+      pad_rt(K, pos, o);
       cpy8(s + 16, o);
     }
   }
@@ -924,7 +982,7 @@ __global__ void __launch_bounds__(2 * SPEC_R, 2)
     u64 my[8], c[8];
     cpy8(my, s);
     cpy8(c, s + 8);
-    finish_leaf<SX>(K, pos, x, my, c, o, bc ? bc + 128 * pos : nullptr, nullptr);
+    finish_leaf<SX, true>(K, pos, x, my, c, o, bc ? bc + 128 * pos : nullptr, nullptr);
   }
   st_be(levels + 64 * pos, o, 8);
   const u32 lane = t & 31, wsz = cnt < 32 ? cnt : 32;
@@ -939,7 +997,7 @@ __global__ void __launch_bounds__(2 * SPEC_R, 2)
     for (int k = 0; k < 8; ++k) p[k] = __shfl_xor_sync(mask, o[k], 1 << (l - 1));
     if ((lane & ((1u << l) - 1)) == 0) {
       u64 r[8];
-      node(N, l - 1, pos >> l, o, p, r);
+      node_rt<false>(N, l - 1, pos >> l, o, p, r);
       cpy8(o, r);
       st_be(levels + 64 * (off + (pos >> l)), o, 8);
     }
@@ -958,7 +1016,7 @@ __global__ void __launch_bounds__(2 * SPEC_R, 2)
     const bool right = idx & 1;
 #pragma unroll
     for (int k = 0; k < 8; ++k) { a[k] = right ? sib[k] : o[k]; b[k] = right ? o[k] : sib[k]; }
-    node(N, l, p, a, b, r);
+    node_rt<false>(N, l, p, a, b, r);
     off += width >> l;
     st_be(levels + 64 * (off + p), r, 8);
     cpy8(o, r);

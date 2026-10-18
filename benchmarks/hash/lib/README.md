@@ -77,9 +77,12 @@ from), `vc_plan_build`, `cudaMalloc` the tables and `vc_tables_launch`, then `vc
 - Forms (`vc_commit_rows_launch`): `SPLIT` runs the salt phase, the data phase, then the tree; `FUSED` one kernel a leaf, then
   the tree; `FOLD` the salt phase (which also zeroes the climb's counters in `scratch`) then one data kernel that folds the tree
   too: each block hashes its 256 leaves' subtree in shared memory, and of two sibling blocks the one that finishes second climbs
-  on (sharaw's `sr_data` scheme), so a commit is two launches. `AUTO` takes `FOLD` up to 40,000 rows and `SPLIT` above:
-  FOLD saves the tree's launches, a fixed cost, while its blocks idle through their subtree's barriers, a cost per row (B200
-  crosses over near 44,000 rows). Every form writes the same bytes. The salt phase reads no operand, so a committer may also call `vc_salts_launch` early on a side
+  on (sharaw's `sr_data` scheme), so a commit is two launches; `SPEC` one kernel after a memset of the counters (sharaw's
+  `v4`): each block pairs a row thread with a salt thread a leaf, the salt threads writing M_key y, c and the frame leaf's
+  first block to shared memory while the row threads hash the rows, then each warp folds its 32 leaves and climbs. `AUTO`
+  takes the small-commit form up to 40,000 rows (`SPEC` on sm_90, `FOLD` elsewhere) and `SPLIT` above: the small forms save
+  the tree's launches, a fixed cost, while their blocks idle through their subtree's barriers, a cost per row (B200 crosses
+  over near 44,000 rows). Every form writes the same bytes. The salt phase reads no operand, so a committer may also call `vc_salts_launch` early on a side
   stream and `vc_leaves_rows_launch` when the rows exist, then `vc_tree_launch`.
 - Pass `bc` to keep every leaf's b || c (128 bytes a leaf) when the step will be opened; pass NULL otherwise.
 
@@ -104,7 +107,8 @@ parameters; the head of `vc.cu` names what came from where:
   cursor/commit-speed-21f3): the leaf and node parameter blocks, the frame leaf, pad and node templates, the PRF salt, the
   nibble-table mask, the fused leaf kernel and the level kernels;
 - hash's sharaw.cu (`4369ae62:benchmarks/hash/sharaw/sharaw.cu`, on cursor/verity-hash-15ad): the byte-table mask, the salt /
-  data split with commit_gpu's tree schedule, and the data kernel that folds its subtree and climbs (`FOLD`);
+  data split with commit_gpu's tree schedule, the data kernel that folds its subtree and climbs (`FOLD`) with the compact
+  node body, and the one-launch commit whose blocks pair row and salt threads (`SPEC`) with the rolled shared-memory mask;
 - `benchmarks/pouw/pearl_c_sm120/hash_fast.cuh`: row-seg's segments a thread from their header's state, then a fold a unit.
 
 hm96lat.cu (`4369ae62:benchmarks/hash/intpipe/`, on cursor/verity-hash-15ad) was read for its arity levers; only their node
