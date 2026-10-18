@@ -22,7 +22,8 @@
 // fetched cold costs about as much again as the compression); PD_PREFETCH, a segment's 8 lines prefetched into L1 before its
 // first block; PD_PAIR, every serial compression of the critical path paired (`pd_pcmp`): a producer warp computes its
 // message schedule a chunk ahead while the consumer warp runs the rounds (the schedule is a third of a compression's
-// cycles on its thread), the segments' consumers loading each next block during the current one.
+// cycles on its thread), the segments' consumers loading each next block during the current one; PD_MIX1 / PD_MIX2, one or
+// two of each Σ's three rotations on the multiply pipe (rs_round's M) in the rolled, rounds-only and paired forms.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  pd_host.cpp builds this file for the host tests.
@@ -40,8 +41,8 @@ DEV uint8_t pd_e4m3(float f) { return (uint8_t)__nv_cvt_float_to_fp8(f, __NV_SAT
 #define PD_LDCG(p) (*(p))
 #endif
 
-constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16;
-#define PD_VARIANT_LIST(X) X(1) X(3) X(7) X(19) X(23)
+constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_MIX1 = 32, PD_MIX2 = 64;
+#define PD_VARIANT_LIST(X) X(1) X(3) X(19) X(23) X(35) X(51) X(67) X(83)
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
 enum { PD_SEED_A = 0, PD_NOISE_LINE = 1, PD_LINE = 2 };
@@ -122,13 +123,28 @@ DEV void pd_prefetch(const void* p) {   // the 128-byte line at p into L1
 // ---------------------------------------------------------------- the compressions
 // rs_compress (sha512.cuh) is Pearl-C's.  rl_compress is the same function with one 16-round body run five times, the
 // schedule's next 16 words computed in place after each.  rs_rounds / rl_rounds run a block's rounds alone over its 80 round
-// inputs K_i + W_i (rs_sched / rl_sched).
+// inputs K_i + W_i (rs_sched / rl_sched).  A round's 64-bit rotations are two funnel shifts each (SHF), and a lone warp's
+// compression is bound by that pipe (about 4.6 cycles a shift); M moves M of each Σ's three rotations to the multiply pipe
+// (pd_rotr_mul).
+// rotr(x, n), 0 < n < 32, as two IMAD.WIDE.U32 with m = 2^(32 - n) (PD_MUL: in constant memory, so no shift replaces the
+// multiply): hi·m + rot32(lo·m), whose halves are disjoint, so the add never carries
+__constant__ uint32_t PD_MUL[4] = {1u << 14, 1u << 30, 1u << 18, 1u << 25};   // rotr 18, 34 - 32, 14, 39 - 32
+DEV uint64_t pd_rot32(uint64_t x) { return x >> 32 | x << 32; }
+DEV uint64_t pd_rotr_mul(uint64_t x, uint32_t m) {
+  return (uint64_t)(uint32_t)(x >> 32) * m + pd_rot32((uint64_t)(uint32_t)x * m);
+}
+template <int M = 0>
 DEV void rs_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f, uint64_t& g, uint64_t& h,
                   uint64_t kwi) {
-  const uint64_t t1 = h + (rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41)) + ((e & f) ^ (~e & g)) + kwi;
-  const uint64_t t2 = (rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+  const uint64_t r14 = M >= 2 ? pd_rotr_mul(e, PD_MUL[2]) : rs_rotr(e, 14);
+  const uint64_t r18 = M >= 1 ? pd_rotr_mul(e, PD_MUL[0]) : rs_rotr(e, 18);
+  const uint64_t r34 = M >= 1 ? pd_rotr_mul(pd_rot32(a), PD_MUL[1]) : rs_rotr(a, 34);
+  const uint64_t r39 = M >= 2 ? pd_rotr_mul(pd_rot32(a), PD_MUL[3]) : rs_rotr(a, 39);
+  const uint64_t t1 = h + (r14 ^ r18 ^ rs_rotr(e, 41)) + ((e & f) ^ (~e & g)) + kwi;
+  const uint64_t t2 = (rs_rotr(a, 28) ^ r34 ^ r39) + ((a & b) ^ (a & c) ^ (b & c));
   h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
 }
+template <int V> constexpr int pd_mix() { return (V & PD_MIX2) ? 2 : (V & PD_MIX1) ? 1 : 0; }
 DEV void rs_next16(uint64_t* w) {   // W_{t+16} for the ring's 16 words W_t, in place, in order
 #pragma unroll
   for (int i = 0; i < 16; i++) {
@@ -166,63 +182,65 @@ DEV void rl_sched(const uint64_t* m16, uint64_t* kw) {
     rs_next16(w);
   }
 }
-DEV void rs_rounds(uint64_t* st, const uint64_t* kw) {
+template <int M = 0> DEV void rs_rounds(uint64_t* st, const uint64_t* kw) {
   uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
 #pragma unroll
-  for (int i = 0; i < 80; ++i) rs_round(a, b, c, d, e, f, g, h, kw[i]);
+  for (int i = 0; i < 80; ++i) rs_round<M>(a, b, c, d, e, f, g, h, kw[i]);
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-DEV void rl_rounds(uint64_t* st, const uint64_t* kw) {
+template <int M = 0> DEV void rl_rounds(uint64_t* st, const uint64_t* kw) {
   uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
 #pragma unroll 1
   for (int r = 0; r < 80; r += 16) {
 #pragma unroll
-    for (int i = 0; i < 16; i++) rs_round(a, b, c, d, e, f, g, h, kw[r + i]);
+    for (int i = 0; i < 16; i++) rs_round<M>(a, b, c, d, e, f, g, h, kw[r + i]);
   }
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-DEV void rl_compress(uint64_t* st, const uint64_t* m16) {   // the ring in registers: m16 may be shared memory
+template <int M = 0> DEV void rl_compress(uint64_t* st, const uint64_t* m16) {   // the ring in registers: m16 may be shared
   uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7], w[16];
 #pragma unroll
   for (int i = 0; i < 16; i++) w[i] = m16[i];
 #pragma unroll 1
   for (int r = 0;; r += 16) {
 #pragma unroll
-    for (int i = 0; i < 16; i++) rs_round(a, b, c, d, e, f, g, h, RS_K[r + i] + w[i]);
+    for (int i = 0; i < 16; i++) rs_round<M>(a, b, c, d, e, f, g, h, RS_K[r + i] + w[i]);
     if (r == 64) break;
     rs_next16(w);
   }
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-// a variant's forms (R: PD_ROLLED's bit), inlined, or (PD_CALL) one copy a kernel; the called compression takes a copy of
-// the message, so the caller's words stay as they were
-template <int R> DEV void pd_compress_in(uint64_t* st, uint64_t* w) {
-  if constexpr (R != 0) rl_compress(st, w); else rs_compress(st, w);
+// a variant's forms (F = V & PD_FORM: PD_ROLLED's bit and the mix's), inlined, or (PD_CALL) one copy a kernel; the called
+// compression takes a copy of the message, so the caller's words stay as they were.  The mix needs the rolled forms.
+constexpr int PD_FORM = PD_ROLLED | PD_MIX1 | PD_MIX2;
+template <int F> DEV void pd_compress_in(uint64_t* st, uint64_t* w) {
+  if constexpr ((F & PD_ROLLED) != 0) rl_compress<pd_mix<F>()>(st, w); else rs_compress(st, w);
 }
-template <int R> DEV void pd_rounds_in(uint64_t* st, const uint64_t* kw) {
-  if constexpr (R != 0) rl_rounds(st, kw); else rs_rounds(st, kw);
+template <int F> DEV void pd_rounds_in(uint64_t* st, const uint64_t* kw) {
+  if constexpr ((F & PD_ROLLED) != 0) rl_rounds<pd_mix<F>()>(st, kw); else rs_rounds<pd_mix<F>()>(st, kw);
 }
-template <int R> DEV void pd_sched_in(const uint64_t* m16, uint64_t* kw) {
-  if constexpr (R != 0) rl_sched(m16, kw); else rs_sched(m16, kw);
+template <int F> DEV void pd_sched_in(const uint64_t* m16, uint64_t* kw) {
+  if constexpr ((F & PD_ROLLED) != 0) rl_sched(m16, kw); else rs_sched(m16, kw);
 }
-template <int R> __device__ __noinline__ void pd_compress_call(uint64_t* st, const uint64_t* w) {
+template <int F> __device__ __noinline__ void pd_compress_call(uint64_t* st, const uint64_t* w) {
   uint64_t x[16];
 #pragma unroll
   for (int i = 0; i < 16; i++) x[i] = w[i];
-  pd_compress_in<R>(st, x);
+  pd_compress_in<F>(st, x);
 }
-template <int R> __device__ __noinline__ void pd_rounds_call(uint64_t* st, const uint64_t* kw) { pd_rounds_in<R>(st, kw); }
-template <int R> __device__ __noinline__ void pd_sched_call(const uint64_t* m16, uint64_t* kw) { pd_sched_in<R>(m16, kw); }
+template <int F> __device__ __noinline__ void pd_rounds_call(uint64_t* st, const uint64_t* kw) { pd_rounds_in<F>(st, kw); }
+template <int F> __device__ __noinline__ void pd_sched_call(const uint64_t* m16, uint64_t* kw) { pd_sched_in<F>(m16, kw); }
 
 // ---------------------------------------------------------------- paired compressions (PD_PAIR)
-// Pair pi (0 or 1) is a consumer warp and a producer warp sharing PD_PAIR_WORDS of dynamic shared memory: x[t][lane], 80 x 32
-// words (t < 16 the consumer's message, t >= 16 the producer's schedule W_t), then a stop word.  The consumer stores its
-// message and runs the rounds in five chunks of 16 (rolled) while the producer computes the schedule a chunk ahead: barrier
-// 1 + 4 pi the message, 2 + 4 pi to 4 + 4 pi W_16.., W_32.. and W_48..79 ready, 64 threads each.  Pair 0's consumer is warp
-// 0 and pair 1's a later warp (so pi = tid >= 32); every lane of both warps takes part, converged, each lane its own
+// Pair pi (0 or 1) is a consumer warp and a producer warp sharing PD_PAIR_WORDS of dynamic shared memory: x[t][lane], 96 x 32
+// words (t < 80 the round inputs K_t + W_t, the consumer's for t < 16 and the producer's after; 80 + t the message's W_t,
+// t < 16, for the producer), then a stop word.  The consumer stores its message and runs the rounds in five chunks of 16
+// (rolled, each chunk's inputs loaded together) while the producer computes the schedule a chunk ahead: barrier 1 + 5 pi the
+// message, 2 + 5 pi to 5 + 5 pi K_t + W_t for t in 16.., 32.., 48.. and 64..79 ready, 64 threads each.  Pair 0's consumer is
+// warp 0 and pair 1's a later warp (so pi = tid >= 32); every lane of both warps takes part, converged, each lane its own
 // compression.  PD_CONSUMERS: the barrier of the two consumer warps alone.
-constexpr int PD_PAIR_WORDS = 2568;   // 80 x 32 words and the stop word
-constexpr int PD_PAIR_SMEM = 2 * 8 * PD_PAIR_WORDS, PD_CONSUMERS = 9;
+constexpr int PD_PAIR_WORDS = 3080;   // 96 x 32 words and the stop word
+constexpr int PD_PAIR_SMEM = 2 * 8 * PD_PAIR_WORDS, PD_CONSUMERS = 11;
 #ifndef PD_HOST
 DEV uint64_t* pd_dyn() {
   extern __shared__ uint64_t pd_dyn_smem[];
@@ -242,65 +260,72 @@ inline uint64_t* pd_dyn() {
 }
 inline uint32_t pd_dyn_bytes() { return PD_PAIR_SMEM; }
 #endif
-DEV void pd_pcmp_in(uint64_t* st, const uint64_t* w) {
-  const int lane = threadIdx.x & 31, pi = threadIdx.x >= 32, bar = 1 + 4 * pi;
+template <int M> DEV void pd_pcmp_in(uint64_t* st, const uint64_t* w) {
+  const int lane = threadIdx.x & 31, pi = threadIdx.x >= 32, bar = 1 + 5 * pi;
   uint64_t* base = pd_dyn() + PD_PAIR_WORDS * pi;
   uint64_t* x = base + lane;
 #pragma unroll
-  for (int t = 0; t < 16; t++) x[32 * t] = w[t];
-  if (lane == 0) base[80 * 32] = 0;
+  for (int t = 0; t < 16; t++) {
+    x[32 * (80 + t)] = w[t];
+    x[32 * t] = RS_K[t] + w[t];
+  }
+  if (lane == 0) base[96 * 32] = 0;
   pd_bar_arrive(bar, 64);
   uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
 #pragma unroll 1
   for (int q = 0; q < 5; q++) {
-    if (q >= 1 && q <= 3) pd_bar_sync(bar + q, 64);
+    if (q >= 1) pd_bar_sync(bar + q, 64);
+    uint64_t kw[16];
 #pragma unroll
-    for (int i = 0; i < 16; i++) rs_round(a, b, c, d, e, f, g, h, RS_K[16 * q + i] + x[32 * (16 * q + i)]);
+    for (int i = 0; i < 16; i++) kw[i] = x[32 * (16 * q + i)];
+#pragma unroll
+    for (int i = 0; i < 16; i++) rs_round<M>(a, b, c, d, e, f, g, h, kw[i]);
   }
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-__device__ __noinline__ void pd_pcmp_call(uint64_t* st, const uint64_t* w) { pd_pcmp_in(st, w); }
+template <int M> __device__ __noinline__ void pd_pcmp_call(uint64_t* st, const uint64_t* w) { pd_pcmp_in<M>(st, w); }
 // the producer warp of pair pi: each message's schedule, until the consumer's pd_pstop
 DEV void pd_pserve(int pi) {
-  const int lane = threadIdx.x & 31, bar = 1 + 4 * pi;
+  const int lane = threadIdx.x & 31, bar = 1 + 5 * pi;
   uint64_t* base = pd_dyn() + PD_PAIR_WORDS * pi;
   uint64_t* x = base + lane;
   for (;;) {
     pd_bar_sync(bar, 64);
-    if (*reinterpret_cast<volatile uint64_t*>(base + 80 * 32)) return;
+    if (*reinterpret_cast<volatile uint64_t*>(base + 96 * 32)) return;
     uint64_t w[16];
 #pragma unroll
-    for (int t = 0; t < 16; t++) w[t] = x[32 * t];
+    for (int t = 0; t < 16; t++) w[t] = x[32 * (80 + t)];
 #pragma unroll
     for (int q = 1; q < 5; q++) {
       rs_next16(w);
 #pragma unroll
-      for (int i = 0; i < 16; i++) x[32 * (16 * q + i)] = w[i];
-      if (q != 3) pd_bar_arrive(bar + (q < 3 ? q : 3), 64);
+      for (int i = 0; i < 16; i++) x[32 * (16 * q + i)] = RS_K[16 * q + i] + w[i];
+      pd_bar_arrive(bar + q, 64);
     }
   }
 }
 DEV void pd_pstop() {   // the consumer warp: its producer returns
   const int pi = threadIdx.x >= 32;
-  if ((threadIdx.x & 31) == 0) pd_dyn()[PD_PAIR_WORDS * pi + 80 * 32] = 1;
-  pd_bar_arrive(1 + 4 * pi, 64);
+  if ((threadIdx.x & 31) == 0) pd_dyn()[PD_PAIR_WORDS * pi + 96 * 32] = 1;
+  pd_bar_arrive(1 + 5 * pi, 64);
 }
 
 // a variant's compression at a site; P: the site is a pair's consumer (pd_pcmp)
 template <int V, int P = 0> DEV void pd_cmp(uint64_t* st, uint64_t* w) {
+  constexpr int M = pd_mix<V>();
   if constexpr (P != 0) {
-    if constexpr ((V & PD_CALL) != 0) pd_pcmp_call(st, w); else pd_pcmp_in(st, w);
+    if constexpr ((V & PD_CALL) != 0) pd_pcmp_call<M>(st, w); else pd_pcmp_in<M>(st, w);
   } else if constexpr ((V & PD_CALL) != 0) {
-    pd_compress_call<V & PD_ROLLED>(st, w);
+    pd_compress_call<V & PD_FORM>(st, w);
   } else {
-    pd_compress_in<V & PD_ROLLED>(st, w);
+    pd_compress_in<V & PD_FORM>(st, w);
   }
 }
 template <int V> DEV void pd_rnd(uint64_t* st, const uint64_t* kw) {
-  if constexpr ((V & PD_CALL) != 0) pd_rounds_call<V & PD_ROLLED>(st, kw); else pd_rounds_in<V & PD_ROLLED>(st, kw);
+  if constexpr ((V & PD_CALL) != 0) pd_rounds_call<V & PD_FORM>(st, kw); else pd_rounds_in<V & PD_FORM>(st, kw);
 }
 template <int V> DEV void pd_sch(const uint64_t* m16, uint64_t* kw) {
-  if constexpr ((V & PD_CALL) != 0) pd_sched_call<V & PD_ROLLED>(m16, kw); else pd_sched_in<V & PD_ROLLED>(m16, kw);
+  if constexpr ((V & PD_CALL) != 0) pd_sched_call<V & PD_FORM>(m16, kw); else pd_sched_in<V & PD_FORM>(m16, kw);
 }
 DEV void pd_padw(uint64_t* w, uint64_t bytes) {   // rs_pad's block
 #pragma unroll

@@ -18,13 +18,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 SRC = open(os.path.join(HERE, "pd.cuh")).read()
 #: pd.cuh's PD_VARIANT_LIST: the variants built, a launch each (bits PD_ROUNDS 1, PD_ROLLED 2, PD_CALL 4, PD_PREFETCH 8,
-#: PD_PAIR 16)
+#: PD_PAIR 16, PD_MIX1 32, PD_MIX2 64)
 VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SRC).group(1)))
 PD_PAIR = 16
 #: a PD_PAIR launch's dynamic shared memory (pd.cuh's PD_PAIR_SMEM: two pairs of PD_PAIR_WORDS words)
 PAIR_SMEM = 2 * 8 * int(re.search(r"PD_PAIR_WORDS = (\d+)", SRC).group(1))
 #: the variants of the schedules with side lanes (pd_deferred_V, pd_side_tree_V); every variant gets pd_serial_V
-SIDE = tuple(int(x) for x in os.environ.get("PD_SIDE", "3,19,23").split(","))
+SIDE = tuple(int(x) for x in os.environ.get("PD_SIDE", "19,51,83").split(","))
 assert set(SIDE) <= set(VARIANTS), (SIDE, VARIANTS)
 MAX_DYNAMIC_SHARED = 8   # CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES
 
