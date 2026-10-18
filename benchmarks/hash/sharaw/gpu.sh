@@ -53,7 +53,7 @@ gpu-lease 1 --wait --max-min 14 ${LEASE_ARGS:-} -- bash -c '
     [ $c = 0 ] || ok=1
   done
   echo "selftest rc $s; checks ok=$ok" >> "$O/rc.txt"
-  [ $ok = 0 ] || exit 1
+  [ $s = 0 ] || exit 1   # a form that fails the reference is not fatal: bench compares every arm with commit_gpu and drops a differing one
   nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu --format=csv -lms 200 -i "$GPU_LEASE_UUID" > "$O/smi.csv" 2>&1 &
   smi=$!
   for n in $DECODE_N $PREFILL_N; do
