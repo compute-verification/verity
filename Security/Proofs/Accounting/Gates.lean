@@ -775,65 +775,57 @@ theorem encodeWord_codecRows :
 
 /-! ## Primitives' output intervals
 
-Each rule's interval holds its primitive's value: `fmaxf` and `fminf` by the operands' signs (`f32_arith`), the
-truncation by its monotonicity below `128.0` (`rzByteNat_mono`), the clamps and the dither by arithmetic, and the LUT
-by a gather's value being a column word or 0 (`getD_hull0`). -/
+Each rule's interval holds its primitive's value: `fmaxf` and `fminf` by the operands' signs (`fmaxf_bounds`,
+`fminf_bounds`), the truncation by its monotonicity below `128.0` (`rzByteNat_mono`), the clamps and the dither by
+arithmetic, and the LUT by a gather's value being a column word or 0 (`getD_hull0`). -/
 
-/-- Unfolds `fmaxf` and `fminf` once the operands' signs are split, and closes the arithmetic. -/
-macro "f32_arith" x:term:max y:term:max : tactic => `(tactic| (
-  simp only [f32Inf, s32Min, s32Max] at * <;>
-  by_cases hx : $x < 0 <;> by_cases hy : $y < 0 <;>
-    simp only [f32Fmaxf, f32Fminf, f32MaxMin, f32NaN, f32Key, f32Mag, f32NanPtx, f32Inf, s32Min, s32Max, hx, hy,
-      ite_true, ite_false, Bool.and_eq_true, decide_eq_true_eq, Bool.false_eq_true] <;>
-    split_ifs <;> omega))
-
-lemma fmaxf_left {x y : ℤ} (hx0 : 0 ≤ x) (hx1 : x ≤ f32Inf) (hy : S32 y) :
-    x ≤ f32Fmaxf x y ∧ f32Fmaxf x y ≤ f32Inf := by
-  obtain ⟨hy0, hy1⟩ := hy
-  f32_arith x y
-
-lemma fmaxf_right {x y : ℤ} (hx : S32 x) (hy0 : 0 ≤ y) (hy1 : y ≤ f32Inf) :
-    y ≤ f32Fmaxf x y ∧ f32Fmaxf x y ≤ f32Inf := by
+/-- `fmaxf` with a non-negative operand is at least it and at most `+inf`, and with two is their larger. -/
+lemma fmaxf_bounds {x y : ℤ} (hx : S32 x) (hy : S32 y) :
+    (0 ≤ x → x ≤ f32Inf → x ≤ f32Fmaxf x y ∧ f32Fmaxf x y ≤ f32Inf) ∧
+    (0 ≤ y → y ≤ f32Inf → y ≤ f32Fmaxf x y ∧ f32Fmaxf x y ≤ f32Inf) ∧
+    (0 ≤ x → x ≤ f32Inf → 0 ≤ y → y ≤ f32Inf → f32Fmaxf x y = max x y) := by
   obtain ⟨hx0, hx1⟩ := hx
-  f32_arith x y
-
-lemma fmaxf_both {x y : ℤ} (hx0 : 0 ≤ x) (hx1 : x ≤ f32Inf) (hy0 : 0 ≤ y) (hy1 : y ≤ f32Inf) :
-    f32Fmaxf x y = max x y := by
-  f32_arith x y
-
-lemma fminf_left {x y : ℤ} (hx0 : 0 ≤ x) (hx1 : x ≤ f32Inf) (hy : S32 y) :
-    s32Min ≤ f32Fminf x y ∧ f32Fminf x y ≤ x := by
   obtain ⟨hy0, hy1⟩ := hy
-  f32_arith x y
+  simp only [f32Inf, s32Min, s32Max] at *
+  by_cases hx : x < 0 <;> by_cases hy : y < 0 <;>
+    simp only [f32Fmaxf, f32MaxMin, f32NaN, f32Key, f32Mag, f32NanPtx, hx, hy, ite_true, ite_false,
+      Bool.and_eq_true, decide_eq_true_eq] <;>
+    split_ifs <;> omega
 
-lemma fminf_right {x y : ℤ} (hx : S32 x) (hy0 : 0 ≤ y) (hy1 : y ≤ f32Inf) :
-    s32Min ≤ f32Fminf x y ∧ f32Fminf x y ≤ y := by
+/-- `fminf` with a non-negative operand is at most it, and with two is their smaller. -/
+lemma fminf_bounds {x y : ℤ} (hx : S32 x) (hy : S32 y) :
+    (0 ≤ x → x ≤ f32Inf → s32Min ≤ f32Fminf x y ∧ f32Fminf x y ≤ x) ∧
+    (0 ≤ y → y ≤ f32Inf → s32Min ≤ f32Fminf x y ∧ f32Fminf x y ≤ y) ∧
+    (0 ≤ x → x ≤ f32Inf → 0 ≤ y → y ≤ f32Inf → f32Fminf x y = min x y) := by
   obtain ⟨hx0, hx1⟩ := hx
-  f32_arith x y
-
-lemma fminf_both {x y : ℤ} (hx0 : 0 ≤ x) (hx1 : x ≤ f32Inf) (hy0 : 0 ≤ y) (hy1 : y ≤ f32Inf) :
-    f32Fminf x y = min x y := by
-  f32_arith x y
+  obtain ⟨hy0, hy1⟩ := hy
+  simp only [f32Inf, s32Min, s32Max] at *
+  by_cases hx : x < 0 <;> by_cases hy : y < 0 <;>
+    simp only [f32Fminf, f32MaxMin, f32NaN, f32Key, f32Mag, f32NanPtx, hx, hy, ite_true, ite_false,
+      Bool.and_eq_true, decide_eq_true_eq, Bool.false_eq_true] <;>
+    split_ifs <;> omega
 
 theorem FmaxfRange : Accounting.Guarantees.Gates.FmaxfRange := by
   intro a b o h x y hx hy ha hb
+  have hm := fmaxf_bounds hx hy
   rcases a with _ | ⟨al, ah⟩ <;> rcases b with _ | ⟨bl, bh⟩ <;>
     simp only [fmaxfRule, Iv.f32Pos, Bool.and_eq_true, decide_eq_true_eq, Rng.Holds, Iv.Mem] at h ha hb ⊢ <;>
     (try split_ifs at h) <;> cases h <;> dsimp only
   all_goals first
-    | (rw [fmaxf_both (x := x) (y := y) (by omega) (by omega) (by omega) (by omega)]; omega)
-    | (have := fmaxf_left (x := x) (y := y) (by omega) (by omega) hy; constructor <;> omega)
-    | (have := fmaxf_right (x := x) (y := y) hx (by omega) (by omega); constructor <;> omega)
+    | (rw [hm.2.2 (by omega) (by omega) (by omega) (by omega)]; omega)
+    | (have := hm.1 (by omega) (by omega); constructor <;> omega)
+    | (have := hm.2.1 (by omega) (by omega); constructor <;> omega)
 
 theorem FminfRange : Accounting.Guarantees.Gates.FminfRange := by
   intro a b o h x y hx hy ha hb
+  have hm := fminf_bounds hx hy
   rcases a with _ | ⟨al, ah⟩ <;> rcases b with _ | ⟨bl, bh⟩ <;>
     simp only [fminfRule, Iv.f32Pos, Bool.and_eq_true, decide_eq_true_eq, Rng.Holds, Iv.Mem] at h ha hb ⊢ <;>
     (try split_ifs at h) <;> cases h <;> dsimp only
   all_goals first
-    | (rw [fminf_both (x := x) (y := y) (by omega) (by omega) (by omega) (by omega)]; omega)
-    | (have := fminf_left (x := x) (y := y) (by omega) (by omega) hy; constructor <;> omega)
-    | (have := fminf_right (x := x) (y := y) hx (by omega) (by omega); constructor <;> omega)
+    | (rw [hm.2.2 (by omega) (by omega) (by omega) (by omega)]; omega)
+    | (have := hm.1 (by omega) (by omega); constructor <;> omega)
+    | (have := hm.2.1 (by omega) (by omega); constructor <;> omega)
 
 lemma rzByteNat_mono {u v : ℕ} (h : u ≤ v) (hv : v < 0x43000000) : rzByteNat u ≤ rzByteNat v := by
   obtain ⟨eu, heu⟩ : ∃ e, u / 2 ^ 23 = e := ⟨_, rfl⟩

@@ -867,7 +867,10 @@
    "type_hash": "2c4fc16427f8682cead2cb20919547db1fe6e4af5c742460575d8844436ca9ca"
   },
   "Accounting.SecurityProofs.Gates.DitherRange": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.DitherRange : Accounting.Guarantees.Gates.DitherRange"],
+   "assumptions": [],
+   "type_hash": "b6e302fd487fddcb4ac289bc2ebbecfd3f16f8dc01a953c28cad5ebbc0d2a4e1"
   },
   "Accounting.SecurityProofs.Gates.EncodeBudget": {
    "owner": "@memory-accounting",
@@ -882,10 +885,16 @@
    "type_hash": "57558a140ad883d730f093eb49f6b906782a6f957d3f6a649dd2c74cd2837f97"
   },
   "Accounting.SecurityProofs.Gates.FmaxfRange": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.FmaxfRange : Accounting.Guarantees.Gates.FmaxfRange"],
+   "assumptions": [],
+   "type_hash": "3f48cfd9ecc6b49f96553030c6020b24855151125d95f58534a213072a3b4c64"
   },
   "Accounting.SecurityProofs.Gates.FminfRange": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.FminfRange : Accounting.Guarantees.Gates.FminfRange"],
+   "assumptions": [],
+   "type_hash": "db07ecfbb31744ddafcb6f71a61354afc13febdcf467eb2d9f1fd19045cd0a6f"
   },
   "Accounting.SecurityProofs.Gates.Fooling": {
    "owner": "@memory-accounting",
@@ -894,7 +903,10 @@
    "type_hash": "d11e89c1bfbcc555adf41b1d45f9dc704ea0d62c60243fe5b1a5e59a90930097"
   },
   "Accounting.SecurityProofs.Gates.LutSoftmaxRange": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.LutSoftmaxRange : Accounting.Guarantees.Gates.LutSoftmaxRange"],
+   "assumptions": [],
+   "type_hash": "7acd114439882f4a3e1272d587d868773f8144f957fd9605bcc9febfd5c5300b"
   },
   "Accounting.SecurityProofs.Gates.ProvenWindow": {
    "owner": "@memory-accounting",
@@ -903,7 +915,10 @@
    "type_hash": "59fda584e7cbcdc063143484aaf92b346c31dc58334e8e5216c0d469de199bf5"
   },
   "Accounting.SecurityProofs.Gates.QuantRange": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.QuantRange : Accounting.Guarantees.Gates.QuantRange"],
+   "assumptions": [],
+   "type_hash": "dc6bdf5ed6a5f4bbc0dec667e3c9b5291bfb20f49e1e76473a451bc8c704d408"
   },
   "Accounting.SecurityProofs.Gates.RhoPairs": {
    "owner": "@memory-accounting",
@@ -912,7 +927,10 @@
    "type_hash": "e594b11c95d53b3e8c2054596384a7bcf1c12fc0f8ba64b08a0d4ab7f933c48d"
   },
   "Accounting.SecurityProofs.Gates.RzByteRange": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.RzByteRange : Accounting.Guarantees.Gates.RzByteRange"],
+   "assumptions": [],
+   "type_hash": "39e29834033f637f807d75b46eff914239d371c31e798c1f73da9e2ef1ddaf48"
   },
   "Accounting.SecurityProofs.Gates.SquaringCarry": {
    "owner": "@memory-accounting",
@@ -6282,11 +6300,53 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Gates.ClampOrWrap",
+    "Accounting.SecurityProofs.Gates.DitherRange",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
+    "Accounting.SecurityProofs.Gates.FmaxfRange",
+    "Accounting.SecurityProofs.Gates.FminfRange",
     "Accounting.SecurityProofs.Gates.Fooling",
+    "Accounting.SecurityProofs.Gates.LutSoftmaxRange",
     "Accounting.SecurityProofs.Gates.ProvenWindow",
+    "Accounting.SecurityProofs.Gates.QuantRange",
+    "Accounting.SecurityProofs.Gates.RzByteRange",
     "Accounting.SecurityProofs.Gates.SquaringCarry"
+   ]
+  },
+  "Definitions.Accounting.Gates.Ranges": {
+   "digest": "4b784bea9ceefb125b9faccef97f6f66fca8dbe9ad1371673c459ce9b9b6efd2",
+   "definitions": {
+    "Accounting.Gates.Iv.Mem": "1714dd2696742affaad674f4da850964a01b48572519711b31083845d54cb74d",
+    "Accounting.Gates.Iv.f32Pos": "f1a7c6ee59ba35e509ea2b253a7350197c428e7448d7125c6415db064281050e",
+    "Accounting.Gates.Rng": "f2d6db9683d3827a7f98e86135f627f5f2069778742391c71cdbd32fe2a20eb8",
+    "Accounting.Gates.Rng.Holds": "58a0a9c2842115e5d9f0828e1a3b93a170a18c2e6cbb46a9fac21edb46a4b45a",
+    "Accounting.Gates.S32": "c77a04bde094fdc031ed6a23531fafdcf343878488cd047ac234f39c66c29d5a",
+    "Accounting.Gates.clampTo": "b7c9a0a06f74f8861a34ee8ff3d40f10068da64dd2d79df9b7ad12118779a53a",
+    "Accounting.Gates.dither": "38288626ca7e360588d576142117853c3420a2bfd64d7d877a87475dadd17e6c",
+    "Accounting.Gates.f32Fmaxf": "f5b336fd518b7306e46b7db3da589cab43814c1eff32b7e97dc1ca9a9a6a611f",
+    "Accounting.Gates.f32Fminf": "f611215abb2165217a76d5322cc153c89a957fdd756de7773b9d3a58b636db74",
+    "Accounting.Gates.f32Inf": "58f8a217f679eb4966410f06e514c78cc1db4b1bb33cbe14fdaeba54e3d114be",
+    "Accounting.Gates.f32Key": "d5a6879430382d73a3e75fa8ca7aa172d635ca516e2372284f8d5072afe75a64",
+    "Accounting.Gates.f32Mag": "6e606cd7d625a5ddfb7c0d6b4afa7ab65685a311ce2870a8f51fcf8ca73a5a06",
+    "Accounting.Gates.f32MaxMin": "50899e9361d5eb170675a512f899a0dffb396fd5bfb6291c400b869b46b70e8e",
+    "Accounting.Gates.f32NaN": "a96caa4e00d0272f656aeb6c76aaf5b9e74fdaf579eddc57ae2d2797d33e7809",
+    "Accounting.Gates.f32NanPtx": "e741808b3d76a0728eef76c58315a236c9a3730e440bc61100691d524b61bac0",
+    "Accounting.Gates.f32RzByte": "b9cfbd95ef564e37c929159f7a5f47b3b95e6e26d2284c71fefda746e24fe9f9",
+    "Accounting.Gates.fmaxfRule": "c7a50413cd472ad0ec96b499e07aae02fe4c3cce57ed4d5035f3193e7d479e85",
+    "Accounting.Gates.fminfRule": "bca7aa07af1adc2c30b6d7ff11b2e44d3ebf36a199928f5b86500c80603d0b3b",
+    "Accounting.Gates.hull0": "649b78a2737d5ae96cea59f495d7970b2d0741c86acf1c78f3384c4bcb7e3154",
+    "Accounting.Gates.lutSoftmax": "85652e57c0b094e03ca68cdaad88ad8cfce4b0b592e1f8a70e2001b86372ad03",
+    "Accounting.Gates.quantize": "29e44f98e3f50742e2512ed6aaf877fc94668909926c3412e742425694abea41",
+    "Accounting.Gates.rzByteNat": "e096501eaaca268ec682857d2ec2b0063aecd7c333c315c6ed69c0719ca24fd3",
+    "Accounting.Gates.rzByteRule": "d9e80b5387e4f53e153c2c45e8893553038c21abd385945ec3bd7d4f27471332"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Gates.DitherRange",
+    "Accounting.SecurityProofs.Gates.FmaxfRange",
+    "Accounting.SecurityProofs.Gates.FminfRange",
+    "Accounting.SecurityProofs.Gates.LutSoftmaxRange",
+    "Accounting.SecurityProofs.Gates.QuantRange",
+    "Accounting.SecurityProofs.Gates.RzByteRange"
    ]
   },
   "Definitions.Accounting.Joint": {
@@ -17417,23 +17477,35 @@
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
   },
   "Models.Accounting.Guarantees.Gates": {
-   "digest": "58bfe9d59a993bde136eb35ccdbe89fa1b1f24f48f75c0ed498503475f9c05c1",
+   "digest": "32bb3869dfa71001694449d945a326c3f9684742af38cb4b1f3f8c441737c2d2",
    "definitions": {
     "Accounting.Guarantees.Gates.ClampOrWrap": "318ac8e1baab7cf1f890e087111f044112c4815c8348e5c89a0c5551ac132bb6",
+    "Accounting.Guarantees.Gates.DitherRange": "75d5cc47e783cf8a5696461c0ac93515fe0e495b8c5e6aa6cf721be61b9587fb",
     "Accounting.Guarantees.Gates.EncodeBudget": "32d0f14098c55e8f1f37c921e373cc7ba7abec3752910e490a9b18ae392a5dea",
     "Accounting.Guarantees.Gates.EncodeCost": "348fde55f3f64c22da863c0357957e6ce5ad1054823ce02ec3765ddc850dc8a2",
+    "Accounting.Guarantees.Gates.FmaxfRange": "899b6996a5ed29d5e8a3aa7389c3dba21c99cbc460102fb6401b26ebb287eeb6",
+    "Accounting.Guarantees.Gates.FminfRange": "b25f7af4f33bcea2b9bfc4c74e64702caf8d03953a1cbbaeb0f10a711b8f9f56",
     "Accounting.Guarantees.Gates.Fooling": "eedaa48214224046edc4ca0d9bcdbb0674b53e614a2d9223901d102085d6b20d",
+    "Accounting.Guarantees.Gates.LutSoftmaxRange": "03d075982043ee3ed6f191da02106ebd9e5bdd0f4d125c8448cb4bfb92abb4c0",
     "Accounting.Guarantees.Gates.ProvenWindow": "909883c8f0df2ac30aa1422d16c134b2781944f25f65221cff23856ed9d9ad54",
+    "Accounting.Guarantees.Gates.QuantRange": "94bb1a4ebb63f4b7d88fcc922e88fba7226d110bd9acd7b1e9981e3a7fd8510c",
     "Accounting.Guarantees.Gates.RhoPairs": "ad3a678d6605c6b41f91fcba1be9b3080a0ae18f424f88d168346c2c110c4e0a",
+    "Accounting.Guarantees.Gates.RzByteRange": "a9cfce7337d3ba85179a1bd173f1f4acbd0f3c008431e6a9440b5f2e64a621b8",
     "Accounting.Guarantees.Gates.SquaringCarry": "5c28d06eaf7905b44900da1f8165eeb9f9e69641b46faae77f3f69eb08001af3"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Gates.ClampOrWrap",
+    "Accounting.SecurityProofs.Gates.DitherRange",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
+    "Accounting.SecurityProofs.Gates.FmaxfRange",
+    "Accounting.SecurityProofs.Gates.FminfRange",
     "Accounting.SecurityProofs.Gates.Fooling",
+    "Accounting.SecurityProofs.Gates.LutSoftmaxRange",
     "Accounting.SecurityProofs.Gates.ProvenWindow",
+    "Accounting.SecurityProofs.Gates.QuantRange",
     "Accounting.SecurityProofs.Gates.RhoPairs",
+    "Accounting.SecurityProofs.Gates.RzByteRange",
     "Accounting.SecurityProofs.Gates.SquaringCarry"
    ]
   },
