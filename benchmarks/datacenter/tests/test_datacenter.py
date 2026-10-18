@@ -104,7 +104,7 @@ def test_each_deviation_is_refused_for_its_own_reason(setup, deviation, why):
     c, dc, p = setup
     t = run(p, INPUTS, window=4, wipes=[Wipe("b.gpu", Interval(0, 2))], deviation=deviation)
     refused = [x for x in audit(t, occupancy(p, 32, 1), syncs=128) if isinstance(x, Refused)]
-    assert refused and all(why in r.why for r in refused)
+    assert refused and any(why in r.why for r in refused)
 
 
 def test_a_frame_that_is_not_a_committed_crossing_is_refused_even_at_the_declared_occupancy(setup):

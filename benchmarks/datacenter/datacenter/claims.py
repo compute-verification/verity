@@ -126,18 +126,21 @@ def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: i
                 out.append(Refused(f"link {link} window {w}", "no record: the certifier was down or its record was withheld"))
     declared_streams = {s.name: s for s in p.streams}
     for r in trace.records:
+        where = f"link {r.link} window {r.window}"
         declared = tuple(profile.get(r.link, {}).get(r.window * trace.window + t, 0) for t in range(trace.window))
+        problems = []
         if r.counts != declared:
-            out.append(Refused(f"link {r.link} window {r.window}", "occupancy differs from the declared profile"))
-        elif r.digest != _digest(expected.get((r.link, r.window), [])):
-            out.append(Refused(f"link {r.link} window {r.window}", "a frame is not a committed crossing"))
-        else:
-            out.append(Carried(r.link, r.window, math.log2(syncs)))
-            for name, n, ok in r.streams:
-                if not declared_streams[name].registered:
-                    out.append(Emitted(name, r.link, r.window, n * trace.frame_bits))
-                elif not ok:
-                    out.append(Refused(f"stream {name} on {r.link} window {r.window}", "its bytes differ from the registered digest"))
+            problems.append(Refused(where, "occupancy differs from the declared profile"))
+        if r.digest != _digest(expected.get((r.link, r.window), [])):
+            problems.append(Refused(where, "a frame is not a committed crossing"))
+        problems += [Refused(f"stream {name} on {r.link} window {r.window}", "its bytes differ from the registered digest")
+                     for name, _, ok in r.streams if declared_streams[name].registered and not ok]
+        if problems:
+            out += problems
+            continue
+        out.append(Carried(r.link, r.window, math.log2(syncs)))
+        out += [Emitted(name, r.link, r.window, n * trace.frame_bits)
+                for name, n, _ in r.streams if not declared_streams[name].registered]
     for v in c.inputs:
         spec = c.gates[v.id].input
         if spec.source != "registered":
