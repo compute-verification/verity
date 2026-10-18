@@ -1460,9 +1460,9 @@ MONITORS: list[Monitor] = [
             "Read node 2's fill status and the wait files in /run/gpu-lease; while the cluster agent holds agent.lock, it "
             "grants: see its log. A waiter pinned (`on=`) to a busy GPU waits by design.", n2="waiters"),
     Monitor("fill-status-n2", "infra", "warn", "node", fill_status_n2,
-            "Stale: restart node 2's fill runner (tmux `pouw-infra-fill`) after reading why it stopped; until its status is "
-            "fresh, no monitor reads node 2. Unwatched: find the lease holding `timed` (`/run/gpu-lease` on node 2) and the "
-            "window it belongs to; ask its owner to end it, or release it once it is dead."),
+            "Stale: restart node 2's fill runner (research's `systemctl --user restart pouw-infra-fill`) after reading why it "
+            "stopped; until its status is fresh, no monitor reads node 2. Unwatched: find the lease holding `timed` "
+            "(`/run/gpu-lease` on node 2) and the window it belongs to; ask its owner to end it, or release it once it is dead."),
     Monitor("fast-preempt-n1", "infra", "warn", "node", fast_preempt_n1, FAST),
     Monitor("fast-preempt-n2", "infra", "warn", "node", fast_preempt_n2, FAST, n2="preempted"),
     Monitor("units-n1", "infra", "warn", "node", units("n1"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S),
