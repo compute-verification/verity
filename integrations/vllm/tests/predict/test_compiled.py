@@ -5,8 +5,8 @@ The pinned digests are the served Builds of record on vy-glm53-s1 (one H200: cc 
 300 tokens capped at 14, 9, 8 and 6, arriving at steps 0, 0, 3 and 6): Llama-3.2-1B r20261018-062949-a32b, Qwen3-8B
 r20261018-062957-da83, Qwen3-30B-A3B r20261018-084657-c7f6, each Matched and Committed at that Build.  The served Commit with the
 predicted Build as Build of record passes for each: r20261018-105743-72a0, r20261018-115551-2b64 and r20261018-124350-5c89.  On
-vy-nebius-2 (one RTX PRO 6000: cc 12.0, 188 SMs) over the same SCHEDULE: Llama-3.2-1B r20261018-203256-0665, Matched and Committed
-at that Build.  A library change that moves a Definition moves the traced digest too: trace the Build again (`served-match`), write
+vy-nebius-2 (one RTX PRO 6000: cc 12.0, 188 SMs) over the same SCHEDULE: Llama-3.2-1B r20261018-203256-0665 and Qwen3-8B
+r20261018-211943-d337, each Matched and Committed at that Build.  A library change that moves a Definition moves the traced digest too: trace the Build again (`served-match`), write
 its pin (`predict compiled-pin`) and pin both.
 """
 
@@ -36,6 +36,8 @@ SCHEDULE = [{"request_id": f"r{i}", "arrive": a, "prompt_tokens": n, "max_tokens
      "8564ceaa69e105bf", "970c4d99d29792e3"),
     ("LLAMA32_1B", RTX, "c98f0b6b62bf8ea5a06333f828df1c09ebae314bac4c438ca4f84d8206b3595c5f8bf1b7333a62e5f264ee2f8377bd61939ff4f13765bb9eca99e5cd145c47cf",
      "ee8896c9db33aac5", "fba557acf341db86"),
+    ("QWEN3_8B", RTX, "feb1c2906ea08bddd4c38b5fe402b203ac364ef888b1b4b9664b9c2011e3a33c4adc1b965b6049af37de659457d4e0784217f7be61ae420e962a11e3a09ebbc0",
+     "c28dc3bf7e0ef088", "533721fc9d37833a"),
 ])
 def test_the_predicted_served_build_is_the_traced_one(role, device, program, manifest, artifact):
     b = PC.predict(role, device, SCHEDULE, 14)
