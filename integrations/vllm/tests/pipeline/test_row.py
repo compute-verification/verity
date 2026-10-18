@@ -829,13 +829,16 @@ def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path,
     assert int(cmd[cmd.index("--timeout") + 1]) == leg and to == 4 * leg
 
 
-@pytest.mark.parametrize("argv, workers, reuse, shared", [((), "0", [], True), (("--fold-rank-workers", "2", "--match-reuse", "fold"), "2", ["--reuse-fold"], True),
-                                                          (("--match-reuse", "legs", "--match-pipeline", "standalone"), "0", ["--reuse-fold", "--reuse-legs"], False)])
-def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, monkeypatch, argv, workers, reuse, shared):
+@pytest.mark.parametrize("argv, workers, folds, reuse, shared", [
+    ((), "0", "0", [], True),
+    (("--fold-rank-workers", "2", "--match-reuse", "fold"), "2", "0", ["--reuse-fold"], True),
+    (("--fold-rank-workers", "3", "--fold-workers", "8"), "3", "8", [], True),
+    (("--match-reuse", "legs", "--match-pipeline", "standalone"), "0", "0", ["--reuse-fold", "--reuse-legs"], False)])
+def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, monkeypatch, argv, workers, folds, reuse, shared):
     """A GLM-5.3 B8 CPU half whose eight X-09 compares (200+ GB each) ran out of host memory reruns over the folds it persisted
-    (`--match-reuse fold`, and with `legs` the compares and GM-01s it wrote), `--fold-rank-workers` ranks at a time; a capture removes
-    the folds and legs of any earlier one, so none is ever kept.  Under the row's `--match-pipeline shared` (the default) each rank's
-    X-09 is its GM-01's (`--shared-x09`), as a single-GPU row's is."""
+    (`--match-reuse fold`, and with `legs` the compares and GM-01s it wrote), `--fold-rank-workers` ranks at a time, the far lighter
+    folds `--fold-workers` at a time; a capture removes the folds and legs of any earlier one, so none is ever kept.  Under the row's
+    `--match-pipeline shared` (the default) each rank's X-09 is its GM-01's (`--shared-x09`), as a single-GPU row's is."""
     t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
     t.fold_profile = "derived_GLM53_tp8"
     os.makedirs(t.M)
@@ -846,7 +849,8 @@ def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, 
     monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.setdefault(stage, cmd) and 0)
     t.match()
     cmd = seen["match.fold_match"]
-    assert cmd[cmd.index("--rank-workers") + 1] == workers and [a for a in cmd if a.startswith("--reuse-")] == reuse
+    assert cmd[cmd.index("--rank-workers") + 1] == workers and cmd[cmd.index("--fold-workers") + 1] == folds
+    assert [a for a in cmd if a.startswith("--reuse-")] == reuse
     assert ("--shared-x09" in cmd) is shared
     gpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu", *argv)
     os.makedirs(f"{gpu.M}/fold_match/rank0", exist_ok=True)

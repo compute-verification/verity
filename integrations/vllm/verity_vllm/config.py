@@ -437,6 +437,9 @@ class MatchConfig:
     fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
                                     help="TP: ranks whose fold Match legs run at once (0 = every rank; a GLM-5.3 B8 rank's X-09 compare "
                                          "passes 200 GB, so 8 at once overfill a 1.5 TB host)")
+    fold_workers: int = option("--fold-workers", env="FOLD_WORKERS", type=int, default=0,
+                               help="TP: ranks whose fold leg runs at once (0 = as --fold-rank-workers, which then bounds only their compare "
+                                    "and GM-01 legs; a GLM-5.3 B8 I256 rank's fold peaks at 40 GB, its GM-01 with the shared X-09 near 400 GB)")
     match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
                               help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
                                    "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "

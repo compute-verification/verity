@@ -4,7 +4,8 @@ compares a TP1 row (cb_a.compare at B1 / batch_decomp X-09 at B>1, under --share
 the rank's GP-01 workload Program), then the CROSS-RANK leg (`tp.rank_match`) over both folds + the collective recorder rows of the SAME
 engine run + the rank Programs' `tp_links.json`
 + tp2_match's stored-step provenance.  CPU only.  The rank-local legs of the ranks run CONCURRENTLY (one subprocess chain per rank,
---rank-workers, default all): they are independent until the cross-rank leg; the record is assembled in rank order.
+--fold-workers ranks folding and --rank-workers in their compare and GM-01 legs at once, default all): they are independent until the
+cross-rank leg; the record is assembled in rank order.
 
     verity-vllm tp-fold-match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
         --build-rank0 <build_request_r0> --build-rank1 <build_request_r1> [--gprog-rank0 <build_workload_r0/workload_program.json> --gprog-rank1 ...] \\
@@ -23,6 +24,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -203,6 +205,9 @@ class Options:
     world: int = option("--world", type=int, default=2)
     rank_workers: int = option("--rank-workers", type=int, default=0,
                                help="ranks whose fold/compare/GM-01 legs run concurrently (0 = all ranks; each leg is its own subprocess: B8 1024/128 fold 26 GB + GM-01 14 GB per rank)")
+    fold_workers: int = option("--fold-workers", type=int, default=0,
+                               help="ranks whose fold leg runs concurrently (0 = as --rank-workers, which then bounds only the compare and GM-01 legs: "
+                                    "a GLM-5.3 B8 I256 rank's fold peaks at 40 GB, its GM-01 with the shared X-09 near 400 GB)")
     reuse_fold: bool = option("--reuse-fold", action="store_true", default=False,
                               help="keep a rank's persisted fold (fold_summary.json, program.json, instances.jsonl under --out) and run only its compare and GM-01 legs")
     reuse_legs: bool = option("--reuse-legs", action="store_true", default=False,
@@ -211,6 +216,33 @@ class Options:
                               help="B>1: a rank's X-09 is the one its GM-01 computes and writes (global-match --decomp-out, row_pod's MATCH_PIPELINE=shared), "
                                    "not a second batch-decomp process over the same fold under the audit checker's operations (past 800 GB on a "
                                    "GLM-5.3 B8 rank)")
+
+
+def _rank_legs(a: Options, r: int, rd: Path, build: Path, derived: list[str], gprog: str | None, pr: dict[str, Any], problems: list[str]) -> None:
+    """The legs of folded rank `r` after its fold, into its record `pr` and `problems`: the compare (X-09 at B>1) and GM-01."""
+    def gm01(x09: list[str] | None = None) -> dict:
+        g = global_match_rank(a.python, rd, Path(gprog), Path(a.workload), a.within_step, a.timeout, a.reuse_legs, x09)
+        print(f"[tp2foldmatch] rank {r} GM-01: {g['verdict']} failed={g['failed_checks']} concurrency={g['achieved_concurrency']} {g['seconds']}s", flush=True)
+        return g
+
+    shared = a.shared_x09 and bool(derived) and bool(gprog) and bool(a.workload)
+    if shared:     # GM-01 first: its X-09 document is the compare's
+        pr["global_match"] = gm01([str(build), *derived])
+    pr["compare"] = compare_rank(a.python, rd, build, derived, a.within_step, a.timeout, a.reuse_legs, shared)
+    print(f"[tp2foldmatch] rank {r} compare ({pr['compare']['comparator']}): {pr['compare']['verdict']} {pr['compare']['seconds']}s", flush=True)
+    if pr["compare"]["verdict"] != "PASS":
+        problems.append(f"rank {r}: compare {pr['compare']['verdict']}")
+    if not gprog or not a.workload:
+        # [rev F-r17-04] the GM-01 leg is REQUIRED: a row without --gprog-rank<r> + --workload is not a PASS (no skipped leg, R2)
+        problems.append(f"rank {r}: GM-01 leg not run (--gprog-rank{r} / --workload absent): the global Match over the rank's GP-01 workload Program is required")
+    if gprog:
+        if not a.workload:
+            problems.append("--gprog given without --workload")
+        else:
+            if not shared:
+                pr["global_match"] = gm01()
+            if not pr["global_match"]["ok"]:
+                problems.append(f"rank {r}: GM-01 {pr['global_match']['verdict']} {pr['global_match']['failed_checks']}")
 
 
 def main(a: Options) -> int:
@@ -245,8 +277,9 @@ def main(a: Options) -> int:
 
     def run_rank(r: int) -> tuple[dict[str, Any], list[str]]:
         """The rank-local legs of ONE rank (fold -> compare -> GM-01), each a subprocess; returns (per_rank record, named problems).
-        Ranks are independent until the cross-rank leg, so they run concurrently (--rank-workers); the record and the problem list
-        are assembled in rank order afterwards, so the verdict document does not depend on which rank finished first."""
+        Ranks are independent until the cross-rank leg, so they run concurrently (--fold-workers in the fold, --rank-workers in the
+        legs after it); the record and the problem list are assembled in rank order afterwards, so the verdict document does not depend
+        on which rank finished first."""
         log = cap / f"log.rank{r}.jsonl.gz"
         rd = out / f"rank{r}"
         pr: dict[str, Any] = {"log": str(log)}
@@ -259,7 +292,8 @@ def main(a: Options) -> int:
         _link(rd / "capture" / "log.jsonl.gz", log)        # the TP1 Match dir layout the comparators read (<oracle>/capture/log.jsonl.gz, tokens.json)
         if (cap / "tokens.json").exists():
             _link(rd / "capture" / "tokens.json", cap / "tokens.json")
-        pr["fold"] = fold_rank(a.python, log, a.profile, rd, a.timeout, a.reuse_fold)
+        with fold_slots:
+            pr["fold"] = fold_rank(a.python, log, a.profile, rd, a.timeout, a.reuse_fold)
         print(f"[tp2foldmatch] rank {r} fold: ok={pr['fold']['ok']} rc={pr['fold']['rc']} instances={pr['fold']['n_instances']} steps={pr['fold']['n_steps']} "
               f"errors={pr['fold']['errors']} unresolved={pr['fold']['unresolved']} unsupported={pr['fold']['unsupported']} collectives={pr['fold']['collectives']} "
               f"{pr['fold']['collectives_by_kind']} tp={pr['fold']['tp']} {pr['fold']['seconds']}s", flush=True)
@@ -270,34 +304,15 @@ def main(a: Options) -> int:
         tp = pr["fold"].get("tp") or {}
         if int(tp.get("rank", -1)) != r or int(tp.get("world", 0)) != a.world:
             problems.append(f"rank {r}: the log's RunHeader.notes.tp2 states rank {tp.get('rank')} / world {tp.get('world')} (swapped or mislabelled rank)")
-        def gm01(x09: list[str] | None = None) -> dict:
-            g = global_match_rank(a.python, rd, Path(gprog[r]), Path(a.workload), a.within_step, a.timeout, a.reuse_legs, x09)
-            print(f"[tp2foldmatch] rank {r} GM-01: {g['verdict']} failed={g['failed_checks']} concurrency={g['achieved_concurrency']} {g['seconds']}s", flush=True)
-            return g
-
-        shared = a.shared_x09 and bool(derived[r]) and bool(gprog[r]) and bool(a.workload)
-        if shared:     # GM-01 first: its X-09 document is the compare's
-            pr["global_match"] = gm01([str(builds[r]), *derived[r]])
-        pr["compare"] = compare_rank(a.python, rd, builds[r], derived[r], a.within_step, a.timeout, a.reuse_legs, shared)
-        print(f"[tp2foldmatch] rank {r} compare ({pr['compare']['comparator']}): {pr['compare']['verdict']} {pr['compare']['seconds']}s", flush=True)
-        if pr["compare"]["verdict"] != "PASS":
-            problems.append(f"rank {r}: compare {pr['compare']['verdict']}")
-        if not gprog[r] or not a.workload:
-            # [rev F-r17-04] the GM-01 leg is REQUIRED: a row without --gprog-rank<r> + --workload is not a PASS (no skipped leg, R2)
-            problems.append(f"rank {r}: GM-01 leg not run (--gprog-rank{r} / --workload absent): the global Match over the rank's GP-01 workload Program is required")
-        if gprog[r]:
-            if not a.workload:
-                problems.append("--gprog given without --workload")
-            else:
-                if not shared:
-                    pr["global_match"] = gm01()
-                if not pr["global_match"]["ok"]:
-                    problems.append(f"rank {r}: GM-01 {pr['global_match']['verdict']} {pr['global_match']['failed_checks']}")
+        with leg_slots:
+            _rank_legs(a, r, rd, builds[r], derived[r], gprog[r], pr, problems)
         return pr, problems
 
     workers = max(1, min(a.rank_workers or len(ranks), len(ranks)))
-    res["rank_workers"] = workers
-    with ThreadPoolExecutor(max_workers=workers) as ex:
+    folds = max(1, min(a.fold_workers or workers, len(ranks)))
+    fold_slots, leg_slots = threading.BoundedSemaphore(folds), threading.BoundedSemaphore(workers)
+    res["rank_workers"], res["fold_workers"] = workers, folds
+    with ThreadPoolExecutor(max_workers=max(workers, folds)) as ex:
         per_rank = list(ex.map(run_rank, ranks))          # rank order, whatever the completion order
     for r, (pr, problems) in zip(ranks, per_rank):
         res["per_rank"][str(r)] = pr
