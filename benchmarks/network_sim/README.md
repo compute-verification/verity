@@ -220,7 +220,7 @@ The demo stays the size v2 was. At 16 bytes a row read is mostly the hm96 leaf a
 costs what one 256-bit value row did. Rows of B bytes, two per segment, were measured and set aside: they make the demo
 17.1M and the lab's largest window 61.8M, because every segment then opens two rows.
 
-The tests (`workload/tests/test_n3_unit.py`, 47 quick and 3 slow, about 110 s) check the following:
+The tests (`workload/tests/test_n3_unit.py`, 44 quick and 6 slow, about 100 s) check the following:
 
 - `N3Frame` against `assemble` on every descriptor of the demo's, the simulator's and the lab's windows, honest and
   tampered, and on random descriptors; `N3Seg` against `segment`;

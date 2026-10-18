@@ -196,8 +196,11 @@ def test_the_record_commitment_is_n2s_and_its_head_leaf_holds_the_frames_root(de
     assert rc.rows[U.N2.HEADS] == rc.head(0) + root and rc.rows[U.N2.HEADS + 1].endswith(CT.empty(2))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("B, N, T, R", [(16, 1, 1, 1), (16, 3, 2, 2), (24, 5, 3, 3)])
 def test_n3framesroot_is_n2s_frames_root(B, N, T, R):
+    """N2's frames root in gates, on odd levels padded with the empty subtree's root. The first case traces the SHA-512
+    compression, about 8 s, which the demo window's test then reuses in the suite's one process."""
     rng = random.Random(N)
     frames = [rng.randbytes(B) for _ in range(N)]
     x = np.asarray([[b for f in frames for b in bits(f, 8 * B)]], dtype=np.uint8)
