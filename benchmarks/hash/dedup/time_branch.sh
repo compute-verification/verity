@@ -18,10 +18,15 @@ WINDOWS=${WINDOWS:-whole-8192 eager-8192 whole-8192-nsys eager-2560}
 ARMS=${ARMS:-base arm}; BASE_ENV=${BASE_ENV:-}; ARM_ENV=${ARM_ENV:-}
 MEM_GB=${MEM_GB:-128}; LEASE_MIN=${LEASE_MIN:-25}
 : "${GPU_LEASE_WHO:?pass --env GPU_LEASE_WHO=<id>}"
+case " $WINDOWS " in *" eager-2560"*)
+  grep -q -- '--prefill' benchmarks/pouw/pearl_c_vllm/served_profile.sh || {
+    echo "time-branch: this tree's served_profile.sh has no PREFILL (it came with #2549), so eager-2560 would time prefill 8192;"
+    echo "  drop eager-2560* from WINDOWS, or time a tree that has the harness"; exit 12; } ;;
+esac
 HEAD=$(git rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}"); echo "tree $HEAD" | tee "$OUT/tree.txt"
 stamp() { echo "time-branch: $* at $(date -u +%H:%M:%SZ)"; }
 { nproc; uptime; df -h /workspace | tail -1; gpu-lease status; } > "$OUT/node.txt" 2>&1
-S=$(mktemp -d /workspace/pouw/tmp-time-branch.XXXXXX); trap 'rm -rf "$S"' EXIT
+S=$(mktemp -d /workspace/pouw/tmp-time-branch.XXXXXX) || exit 13; trap 'rm -rf "$S"' EXIT
 stamp "ship build"
 CUDA=$CUDA bash benchmarks/pouw/pearl_c_sm120/build.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
   || { stamp "BUILD_FAIL"; tail -20 "$OUT/build.log"; exit 11; }
@@ -84,7 +89,7 @@ for w in sorted(Path(sys.argv[1]).iterdir()):
                 print(f"  {m:14s} {key:22s} median {statistics.median(xs):9.2f} ms  [{min(xs):.2f}, {max(xs):.2f}]  n={len(xs)}")
     p = w / "served-profile.json"
     if p.is_file():
-        d = json.loads(p.read_text())["phases"].get("pearlc", {})
+        d = json.loads(p.read_text()).get("phases", {}).get("pearlc", {})
         for ph in ("prefill", "step"):
             if ph in d:
                 print(f"  profile pearlc {ph}: {json.dumps({k: round(v, 3) for k, v in d[ph].get('hash_split_ms', {}).items()})}")
