@@ -616,7 +616,7 @@ def test_the_verifier_s_call_is_the_lean_s_verdict_on_the_record(server, record,
     monkeypatch.setattr(lean_verdict, "call", lambda fn, v: (sent.append((fn, v)), call(fn, v))[1])
     link = appends().Link(True, 8 * 4096, {})
     v = _post_seed(record, writers, ends, link=link)
-    assert [fn for fn, _v in sent] == ["post_seed"] and link.asked == [record.appends]
+    assert [fn for fn, _v in sent] == ["post_seed"] and link.asked == [record]
     D.replay(POST_SEED, sent[0][1], server)
     windows, L = audit.property_reading(record, 5)
     assert v.holds and v.refused == () and v.program == encoded(writers)[1] and v.census_steps == 5

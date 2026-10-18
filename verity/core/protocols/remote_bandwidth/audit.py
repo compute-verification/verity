@@ -1348,7 +1348,7 @@ def post_seed(record: Record, descriptor: Mapping, ends: Sequence[int], *, audit
     in census steps (`property_reading`, at `paced`), and the bindings, refused by name (`POST_SEED_BINDINGS`):
     ``program``, W's digest is `audited`, the one-stage audit's `program`; ``values``, each memory-map unit's
     ``val{k}`` row (`map_rows[i]`, under its public row `map_public[i]` and `map_statics`' C, K and V) is W's value leaf
-    at ``pos[k]`` of `values`; ``mapped``, `link.mapped(record.appends)`; and ``property``, P(c, R_in, L) at B operand
+    at ``pos[k]`` of `values`; ``mapped``, `link.mapped(record)`; and ``property``, P(c, R_in, L) at B operand
     bits.  The census it judges is W's by construction: the Lean reads W and its ends, never a census.  What the Lean
     refuses (ends that aren't W's steps, a malformed row, steps after an unpaced session's last pass) raises
     ValueError."""
@@ -1357,7 +1357,7 @@ def post_seed(record: Record, descriptor: Mapping, ends: Sequence[int], *, audit
         "map": {k: map_statics[k] for k in ("C", "K", "V")},
         "map_public": [{k: p[k] for k in ("first", "count", "present", "pos")} for p in map_public],
         "map_rows": [{r: v.hex() for r, v in rows.items()} for rows in map_rows],
-        "mapped": link.mapped(record.appends) is True, "c": {k: str(Fraction(v)) for k, v in c.items()},
+        "mapped": link.mapped(record) is True, "c": {k: str(Fraction(v)) for k, v in c.items()},
         "R_in": str(Fraction(R_in)), "B": B, "block_bytes": record.block_bytes, "lifetime": record.lifetime,
         "paced": paced, "windows": [{"steps": list(w.steps), "receipts": w.receipts, "span_ns": w.span_ns}
                                     for w in record.windows]})
