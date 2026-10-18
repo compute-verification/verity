@@ -157,7 +157,7 @@ def hold(gb: float, path: Path, *, hold_pct: float = HOLD_PCT, poll_s: float = P
                 if live_tickets(q, is_alive=is_alive)[:1] != [ticket]:
                     continue
                 now, last = clock(), _last_release(q)
-                if last is not None and now - last < 2 * poll_s * 1e9:
+                if last is not None and 0 <= now - last < 2 * poll_s * 1e9:   # a release "in the future" is a clock step back
                     continue
                 if (pct := after()) > hold_pct:
                     continue

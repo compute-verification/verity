@@ -126,6 +126,15 @@ def test_two_eligible_held_runs_are_not_released_in_one_window(tmp_path):
     assert b.step() == "released"
 
 
+def test_a_clock_stepped_back_does_not_stall_the_queue(tmp_path):
+    node = Node(tmp_path, 7.95)
+    a, b = node.run(101), node.run(102)
+    node.used_tb = 6.0
+    assert a.step() == "released"
+    node.now -= 3600 * S
+    assert b.step() == "released", "a's release reads as an hour ahead: not a window to wait out"
+
+
 def test_the_head_waits_for_its_own_gb_to_fit(tmp_path):
     node = Node(tmp_path, 7.95)
     a = node.run(101, gb=1000)
