@@ -18,17 +18,22 @@ runs the same runner as its pytest step.
 
 ## Run tests
 
+Suites run remotely, never on an agent VM (AGENTS.md "Tests"): prefix the runner with `research run --on auto --wait --`,
+which queues an `agent-test` job (4 CPUs, 16 GiB, 60 min) outside the check slots.
+
 ~~~sh
-uv run tools/verity/check/suites.py                        # every suite whose inputs changed since it last passed on this machine
-uv run tools/verity/check/suites.py flock verity           # these suites (a package name, a directory, or a unique part of one)
-uv run tools/verity/check/suites.py flock -- -k tanh -x    # arguments after -- go to pytest
-uv run tools/verity/check/suites.py --quick                # without the tests marked slow
-uv run tools/verity/check/suites.py --fresh                # ignore the cache
-uv run tools/verity/check/suites.py --list                 # each suite's inputs, and whether a pass is cached
+R="research run --on auto --wait --"
+$R uv run tools/verity/check/suites.py                        # every suite whose inputs changed since it last passed there
+$R uv run tools/verity/check/suites.py flock verity           # these suites (a package name, a directory, or a unique part of one)
+$R uv run tools/verity/check/suites.py flock -- -k tanh -x    # arguments after -- go to pytest
+$R uv run tools/verity/check/suites.py --quick                # without the tests marked slow
+$R uv run tools/verity/check/suites.py --fresh                # ignore the cache
+uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
 
-Inside one package, plain pytest works too: `cd verity/ml/flock && uv run pytest -m "not slow" -k tanh`. It doesn't cache and
-doesn't load the read guard.
+Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
+`cd verity/ml/flock && uv run pytest tests/test_layouts.py -k typed`. It doesn't cache and doesn't load the read guard. The shell
+hook refuses a local pytest that names no file or `-k`; `AGENT_GUARD_LOCAL_OK=1` is the opt-in.
 
 A pass is cached under a hash of the suite's inputs: its directory, the directories of the workspace packages it depends on,
 the paths it declares, the workspace's metadata (every `pyproject.toml` and `uv.lock`), the installed distributions, Python,
