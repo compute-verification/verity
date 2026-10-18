@@ -15,12 +15,18 @@ nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temper
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 nvcc "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 & S=$!
 nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" benchmarks/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+MODEL=${MODEL:-unsloth/Llama-3.1-8B}
+# The cache holds snapshots without refs, which an offline lookup by name doesn't resolve.
+if [ ! -d "$MODEL" ]; then
+  SNAP=$(ls -d "${HF_HOME:-/workspace/hf}/hub/models--${MODEL//\//--}/snapshots/"*/ 2> /dev/null | head -1)
+  [ -n "$SNAP" ] && MODEL=$SNAP
+fi
 PIDS=()
 for g in "${!DEVS[@]}"; do
   # shellcheck disable=SC2086
   env -u PYTORCH_CUDA_ALLOC_CONF CUDA_VISIBLE_DEVICES="${DEVS[$g]}" VLLM_ENABLE_V1_MULTIPROCESSING=0 OMP_NUM_THREADS=4 \
     taskset -c "${ENGINE_CPUS:-0-47}" "$VPY" $RS/engine.py --gpu "$g" --dir "$B" --out "$O" --kv "$B/kv.so" \
-    --model "${MODEL:-unsloth/Llama-3.1-8B}" ${ENGINE_ARGS:-} > "$O/engine.$g.log" 2>&1 &
+    --model "$MODEL" ${ENGINE_ARGS:-} > "$O/engine.$g.log" 2>&1 &
   PIDS+=($!)
   echo $! > "$B/engine.$g.pid"
 done
@@ -38,7 +44,7 @@ fi
 # shellcheck disable=SC2086
 taskset -c "$PROVER_CPUS" "$PY" $RS/node.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
   --engines-dir "$B" --engines "${#DEVS[@]}" --lib "$B/session.so" --kv "$B/kv.so" ${NODE_ARGS:-} \
-  > "$O/prover.log" 2>&1
+  > "$O/node.log" 2>&1
 P=$?
 if [ -n "$V" ]; then
   [ $P = 0 ] || kill $V 2> /dev/null
@@ -50,6 +56,6 @@ for p in "${PIDS[@]}"; do
   for ((k = 0; k < 30; k++)); do kill -0 "$p" 2> /dev/null || break; sleep 1; done
 done
 stop
-tail -30 "$O/prover.log"
+tail -30 "$O/node.log"
 for g in "${!DEVS[@]}"; do tail -3 "$O/engine.$g.log"; done
 exit $P
