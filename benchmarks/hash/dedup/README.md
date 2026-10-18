@@ -24,3 +24,5 @@ directory reads, builds and imports their code (`benchmarks/pouw/pearl_c_sm120`,
   Then the arms are timed interleaved, rep by rep, with the SM clock read each rep.
 - `run.sh`: the node job, which builds the ship off the GPU, then runs Pearl-C's own kernel check and `step.py` in one
   lease.
+- `table.py`: the upper-bound table from a run's `dedup.json`: each arm's median step against today's -h3, and the saving
+  as a share of the step and of -h3's hashing.
