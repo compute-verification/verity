@@ -1,6 +1,7 @@
 //! `firewall/v0`'s release side (PROTOCOL.md §10.5): the decisions of whether an outer session of a recursive session goes
 //! on, and when its proofs leave. `flock-circuit prove --firewall-state DIR --session ID --part NAME` runs each outer session
-//! through [`outer_session`]. `verity_flock.firewall` is the same record in Python: the inner phase's side (`rec_live` opens,
+//! through [`outer_session`], with the Lean decision (`Core.Firewall.decide`, `core-firewall decide`) as its judge: this
+//! module's decision is the reference, and nothing leaves that the Lean decision doesn't send. `verity_flock.firewall` is the same record in Python: the inner phase's side (`rec_live` opens,
 //! finishes and stops recursive sessions) and the test driver. Both write `record.jsonl` alike, byte for byte (Python's
 //! `json.dumps(ev, sort_keys=True)`; `firewall_record_vectors.json` pins it), and take the same two `flock(2)` locks:
 //! `record.lock` around every read-and-append of the record, and `slot.lock`, the outer slot.
@@ -58,6 +59,14 @@ pub struct Admitted {
 
 /// The outer slot, held until dropped.
 pub struct Slot(#[allow(dead_code)] Held);
+
+/// An outer session's slot and admission ([`Record::slot_admit`]), with the record's bytes before and after them.
+pub struct Seated {
+    pub slot: Slot,
+    pub before: Vec<u8>,
+    pub admitted: Result<Admitted, String>,
+    pub after: Vec<u8>,
+}
 
 /// A `flock(2)` lock, held until dropped. Dropping it unlocks it before closing the file, as `verity_flock.firewall` does:
 /// closing alone frees nothing while a child process forked meanwhile shares the open file, until that child execs.
@@ -830,41 +839,7 @@ impl Record {
     /// is its next statement (rule 1). A request for any other statement is the recursive session's stop at the next one
     /// (never opened), then refused. A refusal is recorded (`refused`).
     pub fn admit(&self, session: &str, part: &str) -> io::Result<Result<Admitted, String>> {
-        self.with(&[session], &[], |ev| {
-            let why = match ev.opened(session)? {
-                None => format!("recursive session {session} was never opened"),
-                Some(open) => {
-                    let stream = open["stream"].as_str().unwrap_or_default().to_string();
-                    let spent = match ev.budget(&stream)? {
-                        Some(b) => Some((ev.failures(&stream)?, b)).filter(|&(n, b)| n >= b),
-                        None => None,
-                    };
-                    let next = ev.next(&open)?;
-                    if let Some(s) = ev.stopped(session)? {
-                        format!("recursive session {session} stopped at {}: the firewall serves nothing more of it",
-                                s["part"].as_str().unwrap_or_default())
-                    } else if next.is_none() {
-                        format!("recursive session {session} released all its statements: the firewall serves nothing more of it")
-                    } else if let Some((n, b)) = spent {
-                        format!("stream {stream} stopped at its failure budget ({n} of {b})")
-                    } else if !ev.finished(session)? {
-                        format!("recursive session {session}: its inner session has not finished")
-                    } else {
-                        let j = next.expect("a statement not yet released");
-                        let nxt = parts(&open)[j].to_string();
-                        if nxt != part {
-                            ev.append(json!({"event": "stop", "session": session, "part": nxt,
-                                             "why": format!("never opened: {part} was asked in its place")}))?;
-                            format!("recursive session {session} stopped at {nxt}: {part} is not its next statement")
-                        } else {
-                            return Ok(Ok(Admitted { stream, release_ms: release_ms(&open["release"], j) }));
-                        }
-                    }
-                }
-            };
-            ev.append(json!({"event": "refused", "session": session, "part": part}))?;
-            Ok(Err(why))
-        })
+        self.with(&[session], &[], |ev| admit_in(ev, session, part))
     }
 
     /// The failures on `stream` so far (rule 4).
@@ -876,6 +851,12 @@ impl Record {
     /// calls `waiting`, and blocks until the holder leaves it. Once it holds the slot, a `slot` event whose session has no
     /// outcome after it (its holder died) is recorded as that session's stop, and then `slot` is recorded.
     pub fn slot(&self, session: &str, part: &str, waiting: impl FnOnce()) -> io::Result<Slot> {
+        let held = self.take_slot(session, part, waiting)?;
+        self.with(&[session], &[], |ev| slot_in(ev, session, part))?;
+        Ok(Slot(held))
+    }
+
+    fn take_slot(&self, session: &str, part: &str, waiting: impl FnOnce()) -> io::Result<Held> {
         let f = self.lock_file("slot.lock")?;
         match f.try_lock() {
             Ok(()) => {}
@@ -886,18 +867,75 @@ impl Record {
             }
             Err(TryLockError::Error(e)) => return Err(e),
         }
-        let held = Held(f);
-        self.with(&[session], &[], |ev| {
-            if let Some((seq, s, p)) = ev.orphan() {
-                if ev.stopped(&s)?.is_none() {
-                    ev.append(json!({"event": "stop", "session": s, "part": p,
-                                     "why": format!("the slot's holder ended before its outcome (slot {seq})")}))?;
+        Ok(Held(f))
+    }
+
+    /// [`Record::slot`], then [`Record::admit`] on the same read of the record, under one hold of `record.lock`, with the
+    /// record's bytes once the slot is held and before anything of the session is recorded (`before`), and after its slot
+    /// and admission (`after`): what [`outer_session`] holds the Lean decision to.
+    pub fn slot_admit(&self, session: &str, part: &str, waiting: impl FnOnce()) -> io::Result<Seated> {
+        let held = self.take_slot(session, part, waiting)?;
+        let path = self.state.join("record.jsonl");
+        let bytes = |p: &Path| match std::fs::read(p) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+            r => r,
+        };
+        let (before, admitted, after) = self.with(&[session], &[], |ev| {
+            let before = bytes(&path)?;
+            slot_in(ev, session, part)?;
+            let admitted = admit_in(ev, session, part)?;
+            Ok((before, admitted, bytes(&path)?))
+        })?;
+        Ok(Seated { slot: Slot(held), before, admitted, after })
+    }
+}
+
+/// [`Record::slot`]'s events once the slot is held.
+fn slot_in(ev: &mut View, session: &str, part: &str) -> io::Result<()> {
+    if let Some((seq, s, p)) = ev.orphan() {
+        if ev.stopped(&s)?.is_none() {
+            ev.append(json!({"event": "stop", "session": s, "part": p,
+                             "why": format!("the slot's holder ended before its outcome (slot {seq})")}))?;
+        }
+    }
+    ev.append(json!({"event": "slot", "session": session, "part": part}))
+}
+
+/// [`Record::admit`] on the record as `with` reads it.
+fn admit_in(ev: &mut View, session: &str, part: &str) -> io::Result<Result<Admitted, String>> {
+    let why = match ev.opened(session)? {
+        None => format!("recursive session {session} was never opened"),
+        Some(open) => {
+            let stream = open["stream"].as_str().unwrap_or_default().to_string();
+            let spent = match ev.budget(&stream)? {
+                Some(b) => Some((ev.failures(&stream)?, b)).filter(|&(n, b)| n >= b),
+                None => None,
+            };
+            let next = ev.next(&open)?;
+            if let Some(s) = ev.stopped(session)? {
+                format!("recursive session {session} stopped at {}: the firewall serves nothing more of it",
+                        s["part"].as_str().unwrap_or_default())
+            } else if next.is_none() {
+                format!("recursive session {session} released all its statements: the firewall serves nothing more of it")
+            } else if let Some((n, b)) = spent {
+                format!("stream {stream} stopped at its failure budget ({n} of {b})")
+            } else if !ev.finished(session)? {
+                format!("recursive session {session}: its inner session has not finished")
+            } else {
+                let j = next.expect("a statement not yet released");
+                let nxt = parts(&open)[j].to_string();
+                if nxt != part {
+                    ev.append(json!({"event": "stop", "session": session, "part": nxt,
+                                     "why": format!("never opened: {part} was asked in its place")}))?;
+                    format!("recursive session {session} stopped at {nxt}: {part} is not its next statement")
+                } else {
+                    return Ok(Ok(Admitted { stream, release_ms: release_ms(&open["release"], j) }));
                 }
             }
-            ev.append(json!({"event": "slot", "session": session, "part": part}))
-        })?;
-        Ok(Slot(held))
-    }
+        }
+    };
+    ev.append(json!({"event": "refused", "session": session, "part": part}))?;
+    Ok(Err(why))
 }
 
 /// The last `slot` event, if no outcome of its session at its part (`release`, `stop` or `refused`) follows it.
@@ -1036,46 +1074,153 @@ impl<T> Outcome<T> {
     }
 }
 
+/// The Lean decision an outer session is held to ([`outer_session`]): given the input of `core-firewall decide`
+/// (`Core.Firewall.decideFn`: `{"now_ms", "part", "prove", "ready", "record", "session"}`), its answer
+/// (`{"decision", "record", "release_ms", "why"}`), or why there is none.
+pub type Judge<'a> = dyn Fn(&Value) -> Result<Value, String> + 'a;
+
+/// `exe decide` (`core-firewall`, `Core.Firewall.decideMain`) as a [`Judge`]: one process a decision, the input on its stdin
+/// as one line and the answer on its stdout.
+pub fn lean_judge(exe: &Path) -> impl Fn(&Value) -> Result<Value, String> + '_ {
+    move |input| {
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(exe).arg("decide").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+            .map_err(|e| format!("{} does not start ({e}): `lake build core-firewall` in verity/core/service/firewall, or FC_CORE_FIREWALL",
+                                 exe.display()))?;
+        let mut stdin = child.stdin.take().expect("piped stdin");
+        let wrote = stdin.write_all(format!("{input}\n").as_bytes());
+        drop(stdin);
+        let out = child.wait_with_output().map_err(|e| format!("{}: {e}", exe.display()))?;
+        wrote.map_err(|e| format!("{} decide's input: {e}", exe.display()))?;
+        if !out.status.success() {
+            return Err(format!("{} decide exited with {}", exe.display(), out.status));
+        }
+        serde_json::from_slice(&out.stdout).map_err(|e| format!("{} decide's answer is not JSON: {e}", exe.display()))
+    }
+}
+
+/// What a step outside the firewall (the prover, the send check) returned, as the Lean decision reads it: `"ok"`,
+/// `{"err": why}`, or `{"panic": msg}` for a panic.
+fn step_json(r: &Result<(), (bool, String)>) -> Value {
+    match r {
+        Ok(()) => json!("ok"),
+        Err((false, why)) => json!({"err": why}),
+        Err((true, msg)) => json!({"panic": msg}),
+    }
+}
+
+fn fault_why(msg: &str) -> String {
+    format!("the firewall's fault (a panic: {})", msg.chars().take(200).collect::<String>())
+}
+
+/// `f`, with a panic caught as its message.
+fn caught<R>(f: impl FnOnce() -> R) -> Result<R, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(|e| {
+        e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
+    })
+}
+
+/// The firewall's decision (`decision`, `why`, `release_ms`, and the record after the session's slot and admission) held
+/// to `judge`'s on `input`: `Err` says how they differ, or why the judge gave none.
+fn judged(judge: Option<&Judge>, input: &Value, decision: &str, why: Option<&str>, release_ms: Option<u64>, after: &[u8]) -> Result<(), String> {
+    let Some(judge) = judge else { return Ok(()) };
+    let got = judge(input).map_err(|e| format!("the Lean firewall decided nothing: {e}"))?;
+    let mine = json!({"decision": decision, "why": why, "release_ms": release_ms});
+    let theirs = json!({"decision": got["decision"], "why": got["why"], "release_ms": got["release_ms"]});
+    if theirs != mine {
+        return Err(format!("the Lean firewall decides {theirs}, Rust {mine}"));
+    }
+    if got["record"].as_str().map(str::as_bytes) != Some(after) {
+        return Err("the Lean firewall's record after the slot and the admission is not Rust's".into());
+    }
+    Ok(())
+}
+
 /// One outer session of `session` at `part`, held to the module's rules: take the slot, then admit the session; `prove`
 /// runs it up to the barrier where its proofs would leave (`Err`: it stopped before, and why); `ready` is the send check's
 /// verdict on what it proved (`Err`: refused, and why); then, at its release time if it has one (a missed time is a stop),
 /// `send` sends the proofs and `Finish` and returns whether the challenger's verdict accepts them, and what to report.
 /// Dropping a proved session unsent must cut its connection: every stop the firewall makes reaches the challenger as a cut.
 /// A panic anywhere in `prove`, `ready` or `send` is a stop, never the firewall's end.
+///
+/// With a `judge`, the Lean decision (`Core.Firewall.decide`) is the decision of record: the slot and the admission are one
+/// read of the record ([`Record::slot_admit`]), and once the session is refused, or once `prove` and `ready` returned, the
+/// judge decides on the record as it was before the session; a session it doesn't decide exactly as this one did (refused,
+/// stopped or sent, why, its release time, and the record after the slot and admission) is a stop, or, refused, stays
+/// refused, its why naming the difference. Nothing is sent unless the judge sends it too.
+#[allow(clippy::too_many_arguments)]
 pub fn outer_session<P, T>(rec: &Record, session: &str, part: &str, clock: &dyn Clock, waiting: impl FnOnce(),
                            prove: impl FnOnce() -> Result<P, String>, ready: impl FnOnce(&P) -> Result<(), String>,
-                           send: impl FnOnce(P) -> (bool, T)) -> io::Result<Outcome<T>> {
-    let _slot = rec.slot(session, part, waiting)?;
-    let admitted = match rec.admit(session, part)? {
-        Ok(a) => a,
-        Err(why) => return Ok(Outcome { outcome: "refused", why: Some(why), sent: None }),
+                           send: impl FnOnce(P) -> (bool, T), judge: Option<&Judge>) -> io::Result<Outcome<T>> {
+    let seated = rec.slot_admit(session, part, waiting)?;
+    let _slot = seated.slot;
+    let input = |now: u64, prove: Value, ready: Value| {
+        json!({"now_ms": now, "part": part, "prove": prove, "ready": ready, "record": String::from_utf8_lossy(&seated.before),
+               "session": session})
     };
-    let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<(bool, T), String> {
-        let p = prove()?;
-        ready(&p).map_err(|e| format!("the send check refused: {e}"))?;
-        if let Some(t) = admitted.release_ms {
-            let now = clock.now_ms();
-            if now > t {
-                return Err(format!("missed its release time ({now} ms, after {t} ms)"));
+    let admitted = match seated.admitted {
+        Ok(a) => a,
+        Err(why) => {
+            let why = match judged(judge, &input(clock.now_ms(), json!("ok"), json!("ok")), "refused", Some(&why), None, &seated.after) {
+                Ok(()) => why,
+                Err(d) => format!("{why}; {d}"),
+            };
+            return Ok(Outcome { outcome: "refused", why: Some(why), sent: None });
+        }
+    };
+    let proved = match caught(prove) {
+        Ok(Ok(p)) => Ok(p),
+        Ok(Err(why)) => Err((false, why)),
+        Err(msg) => Err((true, msg)),
+    };
+    let checked = match &proved {
+        Ok(p) => match caught(|| ready(p)) {
+            Ok(r) => r.map_err(|why| (false, why)),
+            Err(msg) => Err((true, msg)),
+        },
+        Err(_) => Ok(()),
+    };
+    let now = clock.now_ms();
+    let decided = match (&proved, &checked) {
+        (Err((false, why)), _) => Err(why.clone()),
+        (Err((true, msg)), _) | (Ok(_), Err((true, msg))) => Err(fault_why(msg)),
+        (Ok(_), Err((false, why))) => Err(format!("the send check refused: {why}")),
+        (Ok(_), Ok(())) => match admitted.release_ms {
+            Some(t) if now > t => Err(format!("missed its release time ({now} ms, after {t} ms)")),
+            t => Ok(t),
+        },
+    };
+    let (decision, why, t) = match &decided {
+        Ok(t) => ("go", None, *t),
+        Err(why) => ("stop", Some(why.as_str()), None),
+    };
+    let ask = input(now, step_json(&proved.as_ref().map(|_| ()).map_err(Clone::clone)), step_json(&checked));
+    let decided = match judged(judge, &ask, decision, why, t, &seated.after) {
+        Ok(()) => decided,
+        Err(d) => Err(match decided {
+            Ok(_) => d,
+            Err(why) => format!("{why}; {d}"),
+        }),
+    };
+    let (why, sent) = match (decided, proved) {
+        (Ok(t), Ok(p)) => {
+            if let Some(t) = t {
+                clock.sleep_until_ms(t);
             }
-            clock.sleep_until_ms(t);
+            match caught(|| send(p)) {
+                Ok((true, v)) => {
+                    rec.release(session, part)?;
+                    return Ok(Outcome { outcome: "release", why: None, sent: Some(v) });
+                }
+                Ok((false, v)) => ("the challenger's verdict rejects it".to_string(), Some(v)),
+                Err(msg) => (fault_why(&msg), None),
+            }
         }
-        Ok(send(p))
-    }));
-    let (outcome, why, sent) = match run {
-        Ok(Ok((true, v))) => {
-            rec.release(session, part)?;
-            return Ok(Outcome { outcome: "release", why: None, sent: Some(v) });
-        }
-        Ok(Ok((false, v))) => ("stop", "the challenger's verdict rejects it".to_string(), Some(v)),
-        Ok(Err(why)) => ("stop", why, None),
-        Err(e) => {
-            let msg = e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
-            ("stop", format!("the firewall's fault (a panic: {})", msg.chars().take(200).collect::<String>()), None)
-        }
+        (Err(why), _) => (why, None),
+        (Ok(_), Err(_)) => unreachable!("a session decided to go proved"),
     };
     rec.stop(session, part, &why)?;
-    Ok(Outcome { outcome, why: Some(why), sent })
+    Ok(Outcome { outcome: "stop", why: Some(why), sent })
 }
 
 /// One op of the shared vectors, run on this record: its result as the vectors write it.
@@ -1179,13 +1324,13 @@ mod tests {
     }
 
     fn honest(rec: &Record, sid: &str, part: &str) -> &'static str {
-        outer_session(rec, sid, part, &fake(0), || {}, || Ok(()), |_| Ok(()), |_| (true, ())).unwrap().outcome
+        outer_session(rec, sid, part, &fake(0), || {}, || Ok(()), |_| Ok(()), |_| (true, ()), None).unwrap().outcome
     }
 
     /// An outer session the firewall must refuse before its prover runs (a prover that ran would be a stop, not a refusal).
     fn refused(rec: &Record, sid: &str, part: &str) -> String {
         let o = outer_session(rec, sid, part, &fake(0), || {}, || -> Result<(), String> { panic!("{part} was proved") }, |_| Ok(()),
-                              |_| (true, ())).unwrap();
+                              |_| (true, ()), None).unwrap();
         assert_eq!(o.outcome, "refused", "{part}: {:?}", o.why);
         o.why.unwrap()
     }
@@ -1201,13 +1346,52 @@ mod tests {
         let rec = scratch("honest");
         let sid = opened(&rec, None, None);
         let c = fake(0);
-        let o = outer_session(&rec, &sid, "L0", &c, || {}, || Ok(()), |_| Ok(()), |_| (true, 7)).unwrap();
+        let o = outer_session(&rec, &sid, "L0", &c, || {}, || Ok(()), |_| Ok(()), |_| (true, 7), None).unwrap();
         assert_eq!((o.outcome, o.sent), ("release", Some(7)));
-        let o = outer_session(&rec, &sid, "L1", &c, || {}, || Ok(()), |_| Err("root 96d8".into()), |_| -> (bool, i32) { panic!("sent") }).unwrap();
+        let o = outer_session(&rec, &sid, "L1", &c, || {}, || Ok(()), |_| Err("root 96d8".into()), |_| -> (bool, i32) { panic!("sent") }, None).unwrap();
         assert_eq!(o.outcome, "stop");
         assert_eq!(o.why.as_deref(), Some("the send check refused: root 96d8"));
         assert_eq!(refused(&rec, &sid, "alg"), format!("recursive session {sid} stopped at L1: the firewall serves nothing more of it"));
         assert_eq!(kinds(&rec), ["open:-", "finish:inner", "slot:L0", "release:L0", "slot:L1", "stop:L1", "slot:alg", "refused:alg"]);
+    }
+
+    /// The judge decides on the record as it was before the session, and a session it decides as Rust did goes as without
+    /// it; one it decides otherwise, or that it can't decide, is a stop with nothing sent, and a refusal stays one.
+    #[test]
+    fn the_judge_decides_on_the_record_before_the_session_and_a_difference_is_a_stop() {
+        let rec = scratch("judge");
+        let sid = opened(&rec, None, None);
+        let path = rec.state.join("record.jsonl");
+        let before = text(&rec);
+        let asked = std::cell::RefCell::new(Vec::new());
+        let agree = |input: &Value| {
+            asked.borrow_mut().push(input.clone());
+            Ok(json!({"decision": "go", "why": null, "release_ms": null, "record": std::fs::read_to_string(&path).unwrap()}))
+        };
+        let o = outer_session(&rec, &sid, "L0", &fake(5), || {}, || Ok(()), |_| Ok(()), |_| (true, ()), Some(&agree)).unwrap();
+        assert_eq!(o.outcome, "release");
+        assert_eq!(asked.borrow()[0], json!({"now_ms": 5, "part": "L0", "prove": "ok", "ready": "ok", "record": before, "session": sid}));
+        let refuse = |_: &Value| Ok(json!({"decision": "stop", "why": "no", "release_ms": null, "record": ""}));
+        let o = outer_session(&rec, &sid, "L1", &fake(0), || {}, || Ok(()), |_| Ok(()), |_| -> (bool, ()) { panic!("sent") },
+                              Some(&refuse)).unwrap();
+        assert_eq!(o.outcome, "stop");
+        assert_eq!(o.why.as_deref(), Some(r#"the Lean firewall decides {"decision":"stop","release_ms":null,"why":"no"}, Rust {"decision":"go","release_ms":null,"why":null}"#));
+        assert_eq!(stop_of(&rec, &sid), ("L1".into(), o.why.unwrap()));
+        let sid = opened(&rec, None, None);
+        let none = |_: &Value| Err("core-firewall does not start".to_string());
+        let o = outer_session(&rec, &sid, "L0", &fake(0), || {}, || Ok(()), |_| Ok(()), |_| -> (bool, ()) { panic!("sent") },
+                              Some(&none)).unwrap();
+        assert_eq!(o.why.as_deref(), Some("the Lean firewall decided nothing: core-firewall does not start"));
+        let other = |_: &Value| Ok(json!({"decision": "refused", "why": "x", "release_ms": null, "record": ""}));
+        let o = outer_session(&rec, &sid, "L1", &fake(0), || {}, || -> Result<(), String> { panic!("proved") }, |_| Ok(()),
+                              |_| -> (bool, ()) { panic!("sent") }, Some(&other)).unwrap();
+        assert_eq!(o.outcome, "refused");
+        assert!(o.why.unwrap().ends_with(r#"the Lean firewall decides {"decision":"refused","release_ms":null,"why":"x"}, Rust {"decision":"refused","release_ms":null,"why":"recursive session r0001 stopped at L0: the firewall serves nothing more of it"}"#));
+        let same = |_: &Value| Ok(json!({"decision": "go", "why": null, "release_ms": null, "record": "not the record"}));
+        let sid = opened(&rec, None, None);
+        let o = outer_session(&rec, &sid, "L0", &fake(0), || {}, || Ok(()), |_| Ok(()), |_| -> (bool, ()) { panic!("sent") },
+                              Some(&same)).unwrap();
+        assert_eq!(o.why.as_deref(), Some("the Lean firewall's record after the slot and the admission is not Rust's"));
     }
 
     /// The Rust release side admits an outer session before its prover connects, so L0 cut
@@ -1217,7 +1401,7 @@ mod tests {
         let rec = scratch("order-cut");
         let sid = opened(&rec, None, None);
         let o = outer_session(&rec, &sid, "L0", &fake(0), || {}, || -> Result<(), String> { Err("the challenger at 127.0.0.1:9: reset".into()) },
-                              |_| Ok(()), |_| (true, ())).unwrap();
+                              |_| Ok(()), |_| (true, ()), None).unwrap();
         assert_eq!(o.outcome, "stop");
         assert_eq!(refused(&rec, &sid, "L1"), format!("recursive session {sid} stopped at L0: the firewall serves nothing more of it"));
         assert_eq!(kinds(&rec), ["open:-", "finish:inner", "slot:L0", "stop:L0", "slot:L1", "refused:L1"]);
@@ -1272,7 +1456,7 @@ mod tests {
             let sid = opened(&rec, None, None);
             let o = outer_session(&rec, &sid, "L0", &fake(0), || {},
                                   || if prove_err { Err("register refused".to_string()) } else { Ok(()) }, |_| Ok(()),
-                                  |_| { assert!(!panics, "the challenger's connection broke"); (verdict, ()) }).unwrap();
+                                  |_| { assert!(!panics, "the challenger's connection broke"); (verdict, ()) }, None).unwrap();
             assert_eq!(o.outcome, "stop", "{name}");
             assert!(rec.admit(&sid, "L1").unwrap().is_err(), "{name}");
             assert_eq!(rec.events().unwrap().iter().filter(|e| e["event"] == "stop").count(), 1, "{name}");
@@ -1286,11 +1470,11 @@ mod tests {
         let sid = opened(&rec, Some(sched), None);
         for (part, now, at) in [("L0", 1200, 1500), ("L1", 1600, 1800)] {
             let c = fake(now);
-            let o = outer_session(&rec, &sid, part, &c, || {}, || Ok(()), |_| Ok(()), |_| (true, ())).unwrap();
+            let o = outer_session(&rec, &sid, part, &c, || {}, || Ok(()), |_| Ok(()), |_| (true, ()), None).unwrap();
             assert_eq!((o.outcome, c.slept.get()), ("release", Some(at)), "{part}");
         }
         let c = fake(2701);
-        let o = outer_session(&rec, &sid, "alg", &c, || {}, || Ok(()), |_| Ok(()), |_| -> (bool, ()) { panic!("sent late") }).unwrap();
+        let o = outer_session(&rec, &sid, "alg", &c, || {}, || Ok(()), |_| Ok(()), |_| -> (bool, ()) { panic!("sent late") }, None).unwrap();
         assert_eq!((o.outcome, o.why.as_deref()), ("stop", Some("missed its release time (2701 ms, after 2700 ms)")));
         assert_eq!(c.slept.get(), None);
         for bad in [json!({"start_ms": 0, "windows_ms": [1, 1, 0]}), json!({"start_ms": 0, "windows_ms": [1, 1]}),
@@ -1328,7 +1512,7 @@ mod tests {
         let state = rec.state.clone();
         let t = std::thread::spawn(move || {
             let rec = Record::new(state).unwrap();
-            outer_session(&rec, &b, "L0", &fake(0), || tx.send(()).unwrap(), || Ok(()), |_| Ok(()), |_| (true, ())).unwrap().outcome
+            outer_session(&rec, &b, "L0", &fake(0), || tx.send(()).unwrap(), || Ok(()), |_| Ok(()), |_| (true, ()), None).unwrap().outcome
         });
         rx.recv().unwrap();
         drop(held); // a's holder ends without an outcome
@@ -1384,7 +1568,7 @@ mod tests {
                 let before = probe();
                 let cut = i % 5 == 4 && j == 1;
                 let o = outer_session(&rec, &sid, p, &fake(0), || {}, || if cut { Err("cut".to_string()) } else { Ok(()) },
-                                      |_| Ok(()), |_| (true, ())).unwrap();
+                                      |_| Ok(()), |_| (true, ()), None).unwrap();
                 assert_eq!(o.outcome, if i % 5 == 4 && j > 0 { if j == 1 { "stop" } else { "refused" } } else { "release" });
                 let after = probe();
                 assert_eq!(after.parsed - before.parsed, std::mem::take(&mut fresh), "round {i}, {p}");
