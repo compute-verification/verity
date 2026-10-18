@@ -28,8 +28,8 @@
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
 #                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
-#                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify refuses (exit 2) until a soundness
-#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
+#                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify checks without --zk
+#                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
 #                a forgery's refused, and the inner statement's units were derived from the program (lean_verdicts.py; the
@@ -627,7 +627,7 @@ oprove)
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
   # CONTROLS=DIR (a statement's directory under data/$TAG/v, e.g. L6): on that statement, one firewalled session per
   # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the firewall must refuse by name
-  # before the tampered message leaves
+  # without the tampered message leaving, the session stopping at its Finish (live PROTOCOL.md §10.1)
   if [ -n "${CONTROLS:-}" ]; then
     C=$V/$CONTROLS
     for w in root witness label opening algebra algebra-proof shape; do

@@ -6,10 +6,10 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
 /-!
 # The deployed plain decoders at `wrP`, at one table
 
-The plain verifier is in scope at one table (`InScope`: `zk ∨ tables ≤ 1`). There the old discharge of the decoder
-(`DecodeZL.decodesOn_exec`) is stated at one table's live outcome (`LiveOut`, `Decodes`), and the transfer the bridge
-takes (`live_le_sessionBLJ`, `LivePlain.Pr_acc_plain_le`) at the outcome of a session of `J` tables (`LiveOutJ`,
-`DecodesTable`). At `J = 1` the two meet:
+The plain verifier is in scope at one table (`InScope`: `tables ≤ if zk then zkTableCap else 1`). There the old
+discharge of the decoder (`DecodeZL.decodesOn_exec`) is stated at one table's live outcome (`LiveOut`, `Decodes`), and
+the transfer the bridge takes (`live_le_sessionBLJ`, `LivePlain.Pr_acc_plain_le`) at the outcome of a session of `J`
+tables (`LiveOutJ`, `DecodesTable`). At `J = 1` the two meet:
 
 * `oneOf`, `jOf`: a one-table session's outcome as one table's, and back. `RecordsLiveAtP` reads an outcome only through
   `oneOf` (`recordsLiveAtP_oneOf`).

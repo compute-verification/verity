@@ -540,6 +540,57 @@ def test_a_partial_reference_is_named():
     assert f["name"].startswith("correspondence/reference-not-total CircuitCheckPartial_v1 raised on")
 
 
+def test_a_declared_interval_the_reference_leaves_is_named():
+    """A primitive's declared return interval is a fact the Build takes (`verity.ml.circuits.ports`): checked on operands within
+    its declared bounds, so a product of two s8 operands holds in [-16256, 16384] and one off by a unit is named."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.ports import In, Out, Ports
+    from verity.ml.circuits.types import Value
+
+    def mul(a, b):
+        return ((a - (1 << 16) if a >> 15 else a) * (b - (1 << 16) if b >> 15 else b)) & 0xFFFFFFFF
+
+    s8 = {"a": In(bound=(-128, 127)), "b": In(bound=(-128, 127))}
+    good = PrimitiveDefinition("CircuitCheckS8Mul", 1, (("a", Value(16)), ("b", Value(16))), Value(32), mul, register=False,
+                               ports=Ports(params=s8, ret=Out(interval=(-16256, 16384))))
+    e = CK.check_definition(good, OPTS, as_call=False)
+    assert e["ports"] == {"vectors": e["correspondence"]["vectors"], "intervals": [[0, 1, [-16256, 16384]]], "outside": 0}
+    assert not e["failures"]
+    bad = PrimitiveDefinition("CircuitCheckS8MulTight", 1, (("a", Value(16)), ("b", Value(16))), Value(32), mul, register=False,
+                              ports=Ports(params=s8, ret=Out(interval=(-16256, 16383))))
+    (f,) = CK.check_definition(bad, OPTS, as_call=False)["failures"]
+    assert f["name"].startswith("ports/interval CircuitCheckS8MulTight_v1") and f["examples"][0]["value"] == 16384
+    assert "ports" not in CK.check_definition(PrimitiveDefinition("CircuitCheckS8MulUntyped", 1, (("a", Value(16)), ("b", Value(16))),
+                                                                  Value(32), mul, register=False), OPTS, as_call=False)
+
+
+def test_a_transfer_the_reference_leaves_is_named():
+    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on drawn operand
+    intervals, so an exact sum of two s8 operands holds in [a0 + b0, a1 + b1] and a transfer one short of it is named."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.ports import Ports, as_reading
+    from verity.ml.circuits.types import Value
+
+    def add(a, b):
+        return (((a ^ 0x80) - 0x80) + ((b ^ 0x80) - 0x80)) & 0xFFFF
+
+    def transfer(short):
+        def f(a, b):
+            a, b = as_reading(a, 8), as_reading(b, 8)
+            return None if a is None or b is None else (a[0] + b[0], a[1] + b[1] - short)
+        return f
+
+    def prim(name, short):
+        return PrimitiveDefinition(name, 1, (("a", Value(8)), ("b", Value(8))), Value(16), add, register=False,
+                                   ports=Ports(transfer=transfer(short)))
+
+    e = CK.check_definition(prim("CircuitCheckS8Add", 0), OPTS, as_call=False)
+    t = e["ports"]["transfer"]
+    assert t["draws"] == CK.TRANSFER_DRAWS and t["intervals"] > 0 and t["outside"] == 0 and not e["failures"]
+    fails = CK.check_definition(prim("CircuitCheckS8AddShort", 1), OPTS, as_call=False)["failures"]
+    assert fails and all(f["name"].startswith("ports/transfer CircuitCheckS8AddShort_v1") for f in fails)
+
+
 def test_a_kernel_wrong_only_on_edge_words_is_caught():
     """A kernel that returns 0 for a NaN operand: uniform random words rarely hold a NaN, the edge vectors always do."""
     from verity.ml.circuits.evaluation import register_kernel
@@ -694,6 +745,35 @@ def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
     (tmp_path / "pkg" / "m.py").write_text("")
     CC._VISIBLE.clear()
     assert CC.store(tmp_path / "cache", k, tmp_path, got, rep, CC.seen(tmp_path, got))    # the same tree: stored
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+
+
+def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
+    """16 Oct, r20261016-231951-72a9: two checks on one node stored the same entry; they shared its temporary file, and the second's
+    rename found it gone (FileNotFoundError), which failed the whole check."""
+    import subprocess
+
+    from circuit_check import cache as CC
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "a.txt").write_text("a")
+    got = {"files": ["a.txt"], "dirs": [], "probes": [], "libs": []}
+    k, rep = {"version": "v", "request": {}}, {"failures": [], "warnings": []}
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+    replace, inner = os.replace, []
+
+    def racing(src, dst):
+        if not inner:                                                   # the other writer stores the same entry in between
+            inner.append(None)
+            inner[0] = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
+        replace(src, dst)
+
+    monkeypatch.setattr(CC.os, "replace", racing)
+    eid = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
+    assert eid and inner == [eid]
+    assert [p.name for p in (tmp_path / "cache").rglob("*") if p.is_file()] == [f"{eid}.json"]
     CC._VISIBLE.clear()
     CC._MEMO.clear()
 

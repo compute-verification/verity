@@ -109,6 +109,10 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-17 (6:18 PM PDT, to memory accounting): no private or trapdoor encoding for KV, such as a trusted device
+  computing Rabin–Williams roots of each appended block, because it costs too much. The weights alone keep that
+  exception. Credited dynamic memory rests on the public codec, and the stacking bound on the named conjecture
+  `EncodeChainHardness`, which he approved as a premise at 6:08 PM PDT, with claims resting on it listed as conditional.
 - 2026-10-17 (12:32–12:43 AM PDT, in memory accounting's stacking campaign): the prover controls the audited circuit's
   inputs as well as the circuit (precommitted, its architecture secret) and knows every coin as soon as it is issued, so
   no defense may assume the circuit can't learn a coin: the prover passes it in, disguised as a prompt. Verifier coins
@@ -353,7 +357,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
   asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
   tip that pins the old one at landing, and their checks are spent for nothing. Since 12 Oct, drive leaves a conflicting
-  PR out of `next` for the lander (11 Oct), and a new head still cancels the checks of the trains above it.
+  PR out of `next` for the lander (11 Oct). Since 17 Oct (top), a new head no longer cancels a running train: it rejoins above
+  once that train ends, at once only if its own train failed.
 - 2026-10-06 (8:07 AM PDT): one hash covers derivations and PRFs: `derive` is SHA-512, P2's key expansion counter-mode
   SHA-512, and SHA-512 truncated to 256 bits counts as SHA-512; Pearl's FP8 scheme keeps BLAKE3 as Pearl's own
   definition.

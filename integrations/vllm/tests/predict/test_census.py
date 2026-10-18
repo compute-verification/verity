@@ -49,7 +49,7 @@ def _views(cfg: dict, wrapper: str, **kw) -> tuple:
 def test_step_census_and_requirement():
     r, c, req, rc = _views(CFG, "step", M=1, pos0=8)
     assert r.digest.startswith("773b545605765fe9")
-    assert c["digest"] == "461f379c3ef8f43fdd226b5f81fc44a159ddc5d7d8f5dfdfb9599b973b849a9b0223d13c5f549ec6691b511209cd65f13213cef9e6f596999c8c13ccbaa3e5ab"
+    assert c["digest"] == "865dde98cfac9c030d192745f7e85af1f9de0d9b004cd4f98192f7f40748f4a8a07f541da4bc7d740c28c186167723d604ad1eba1f89c9e0c35699a5fb59361d"
     gemms = [e for e in c["classes"].values() if e["family"] == "Gemm_v2"]
     assert all(e["served_macs"] == e["statics"]["K"] * e["statics"]["N"] for e in gemms)
     assert sum(e["instances"] * e["served_macs"] for e in gemms) == LINEAR
@@ -69,7 +69,7 @@ def test_request_census_and_requirement():
     step's attention produces and every later step's reads), which the step and the toys in `ml/circuits` cannot show at scale."""
     r, c, req, rc = _views(CFG, "request", LP=256, T=31)
     assert r.digest.startswith("2d98d37bd481d2a0")
-    assert c["digest"] == "1809b72d85282d2d2552e4ba133df8ed4fd0ff1b9f99e291ca34cc9e9475da2ab59259ecd584392e22b26bd9add6bad261a51ab4798ec8d526d351ed80ab0458"
+    assert c["digest"] == "02c476d751944b847146a56fdfd8a7ff51fab312da48c6a4b1ad55539adde514509fe5210c15d5f184cd939be8b1bffdf1c86e715e2784e9c4f9d932f2ff2ecd"
     assert len(c["steps"]["ends"]) == 32 and c["totals"]["classes"] == 761
     base, got = _base(rc), req.to_json()
     # prefill reads rotary rows 0-255 and decode step t row 255 + t; a step holds the rows of its own and later positions,

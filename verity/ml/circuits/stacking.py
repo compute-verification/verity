@@ -11,54 +11,64 @@ The free set is closed. A gate is free only when it is
 - an s8-family core step (``family``, `FAMILY`: `BlackwellS8ImmaDot32_v1`, its u8 x s8 sibling `BlackwellU8S8ImmaDot32_v1`,
   and PoUW's wrapping dots `PouwSegDot_v1` and `PouwDot16U8S8_v1`, ``D = C + sum_k a_k * b_k``) whose window the interval pass
   proves: D's bound lies in s32, from its operands' ranges as their producers give them, so it never clamps or wraps; or
-- an integer affine map with constant coefficients (``affine``: `I32Add_v1`, `I32Sub_v1`, and `I32Mul_v1` with a constant
-  operand) that the interval pass proves never wraps.
+- an integer affine map with constant coefficients (``affine``: `I32Add_v1`, `I32Sub_v1`, `I32Mul_v1` with a constant
+  operand, and the BF16-to-FP32 widening `Bf16ToF32_v1`, its operand's encoding times 2^16 read as signed) that the interval
+  pass proves never wraps (the widening never does).
 
-Every other primitive the table lists is budgeted, one unit per output value (a primitive returns one value), in one of five
-classes: ``roundings`` (FP arithmetic, casts and dots, special functions, integer floors, mods and narrowing, bit operations and
-field extractions, limb steps, and an add or subtract that may wrap), ``compare_select`` (comparisons, selections, min, max, the
-top-p keep mask, the lifting's tag tests), ``gathers`` (a data-dependent read of one of V words, counted in fresh index bits),
-``products`` (`I32Mul_v1` of two runtime values, and the integer dots outside the family) and ``folds`` (the receipt fold's
-step, `PouwDuoAbsorb_v1`). Only gates with an operand that depends on a run input are budgeted: a gate of constants and
-registered words computes the same function before the seed. A primitive the table doesn't list is refused. The table
-(`CLASSES`, and the families `class_of` reads) is Lean's `Accounting.Gates.classOf` id for id where Lean lists the id, except the
-field extractions below, and the red team's closed table (round 2) for the families built on demand that Lean doesn't list yet.
+Every other primitive the table lists is budgeted, one unit per output value (a primitive returns one value), in one of four
+classes: ``roundings`` (FP arithmetic, casts and dots, special functions, integer floors, mods and narrowing, integer products
+reduced mod 2^w (`I32Mul_v1` of two runtime values, the integer dots outside the family), bit operations and field extractions,
+limb steps, and an add or subtract that may wrap), ``compare_select`` (comparisons, selections, min, max, the top-p keep mask,
+the lifting's tag tests), ``gathers`` (a data-dependent read of one of V words, counted in fresh index bits) and ``folds`` (the
+receipt fold's step, `PouwDuoAbsorb_v1`). Only gates with an operand that depends on a run input are budgeted: a gate of
+constants and registered words computes the same function before the seed. A primitive the table doesn't list is refused. The
+table (`CLASSES`, and the families `class_of` reads) is Lean's `Accounting.Gates.classOf` id for id where Lean lists the id,
+except `Bf16ToF32_v1` (affine by the 18 Oct ruling; Lean's registry has it a rounding) and the field extractions below, and the
+red team's closed table (round 2) for the families built on demand that Lean doesn't list yet. The exact-int8 profile's
+primitives (vLLM's `int8_exact`) aren't in Lean's registry yet: its casts, f64 products and `LutIndex_v1` (min(floor(max(d, 0)
+a / 2^32), 255)) are roundings, and `Exp2Lut127_v1` is a gather.
 
 A gather's index bits are those that tell its outcomes apart (`GATHERS`): ceil(log2(V + 1)) for an entry of V or the family's
-out-of-range constant, n for the entry at the index's low n bits, and ceil(log2(V + 3)) for a lifted row of V (or ⊥, an invalid
-index, or out of range). Each distinct index a body reads counts once per kind, so one routing index read by many gathers counts
+out-of-range constant, n for the entry at the index's low n bits (8 for `Exp2Lut127_v1`, an 8-bit index into a constant table of
+256 entries), and ceil(log2(V + 3)) for a lifted row of V (or ⊥, an invalid index, or out of range). Each distinct index a body
+reads counts once per kind, so one routing index read by many gathers counts
 once; a constant index is wiring. A gather whose index and column both depend on a run input pays one ``gathers`` unit more, as
 Lean's `Gates.units` does: it is a V-way select among run-time values, and without that unit a tree of gathers sharing indices
 would compute any function of b index bits for b units. A field extraction (`BitAtx{W}`, `PouwWindowWord_v1`) is a rounding, not a gather: at a
 constant position it still computes. A lift (`Lifted[P]_v1`, `Lifted[P]_v2`, ``P{ORD=k}``) is P's class with a tag test, so a
 free P's lift is budgeted (a constant's a select on the enable, the rest roundings). A lifted gather also scans every operand's
-tag (any invalid row gives INV), so it pays one ``compare_select`` unit beside its index bits, and it isn't exempt from fan-in.
+tag (any invalid row gives INV), so it pays one ``compare_select`` unit beside its index bits, and it isn't exempt from B.
 
-Restricted f w. A budgeted gate other than an unlifted gather reads at most f operand leaves, and every gate's leaves (its
-operands and its value, an input's included) hold at most w bits. A primitive past either limit (an FP or integer dot, a wide
-table read, PoUW's 576-bit squares, a lifted word's tag bit past w) is refused: its decomposition into fan-in-f, width-w gates
-isn't charged.
+Restricted B (Lean's `Gates.Restricted`, its `OperandBits B`). A budgeted gate other than an unlifted gather reads at most B
+operand bits: the widths of its operands' leaves, summed (at least the bits of their declared intervals, which Lean counts). A
+primitive past it (an FP or integer dot, PoUW's 576-bit squares, a lifted gather's rows) is refused: its decomposition into gates
+of B operand bits isn't charged. B is 128 by default (`OPERAND_BITS`), the red team's.
 
 Ranges. A constant is its value, a proven core step its D, a proven affine map its exact result, a gate `RANGES` lists what its
 rule derives from its operands' ranges (`fmaxf` and `fminf` of a non-negative float, and the low byte of an f32's truncation
-below 128.0, over f32 bit patterns read as s32, which order +0..+inf as the floats), and every other value any word of its width
-(an s8 operand -128..127, an accumulator all of s32): ranges are derived from producers, never declared. So an accumulator from a
-run input, a split-K combine that may wrap, or a chain long enough to clamp is never proven. A `scan`'s carry is iterated to a
-fixpoint, exactly up to 2^16 iterations and then widened to any word.
+below 128.0, over f32 bit patterns read as s32, which order +0..+inf as the floats; `Exp2Lut127_v1`'s table's hull with 0, as
+Lean's `hull0`), and every other value any word of its width
+(an s8 operand -128..127, an accumulator all of s32). Port types (`ports`, PROTOCOL.md §12) narrow a range, read through
+`ports.reading` as signed: a primitive's or Definition's value lies in the interval it declares, or a primitive's in what its
+transfer gives from its operands' ranges. A range comes from its producer and the producer's declaration, never from a reader's
+bound, and never from an input's declared bound (its census fact): evaluation doesn't enforce it, so no declared ``In(bound)`` is
+taken on trust and a run input spans its width. So an accumulator from a run input, a split-K combine that may wrap, or a chain
+long enough to clamp is never proven. A `scan`'s carry is iterated to a fixpoint, exactly up to 2^16
+iterations and then widened to any word.
 
 A word is read at its own width. A reference to a leaf of another width than the reading position's type declares (an s32
 word read back as s8 lanes: a limb split no gate computes) is a ``reinterpretation``, refused wherever it occurs, an argument
 or a body's return.
 
-P(c, R_in, L) holds, at fan-in f and width w, when under the audit's windows (`Window`: a range of the census's steps, the
-bytes the audit certified as read in it and its duration):
+P(c, R_in, L) holds, at B operand bits, when under the audit's windows (`Window`: a range of the census's steps, the bytes the
+audit certified as read in it and its duration):
 
 1. ``unlisted``: no gate is refused;
 2. ``reinterpretation``: no word is read at another width (the sites are listed);
-3. ``fan-in``, ``width``: the Program is Restricted f w (the primitives that aren't are listed);
+3. ``operand-bits``: the Program is Restricted B (the primitives that aren't are listed with their operand bits);
 4. ``s8-window``: every core step is proven in its window (the sites that aren't are listed);
 5. ``uncovered``: every step lies in a window;
-6. ``roundings``, ``compare_select``, ``gathers``, ``products``: in each window, each class's units are at most c[class] per
+6. ``roundings``, ``compare_select``, ``gathers``, ``folds``: in each window, each class's units are at most c[class] per
    certified byte read;
 7. ``inputs``: in each window, the run-input bytes the Program first reads there are at most R_in (bytes per second, 100 KB/s
    by default) times its duration;
@@ -82,6 +92,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
+from . import ports
 from .census import SCHEMA as CENSUS, step_of
 from .codec import canonical_json
 from .defs import Body, CompositeDefinition, PrimitiveDefinition, bind
@@ -94,27 +105,28 @@ TAG = "verity/stacking-property"
 VERSION = 1
 SCHEMA = f"{TAG}/v{VERSION}"
 
-BUDGETED = ("roundings", "compare_select", "gathers", "products", "folds")
+BUDGETED = ("roundings", "compare_select", "gathers", "folds")
 REFUSED = ("unlisted", "reinterpretation")
 
 S8 = (-(1 << 7), (1 << 7) - 1)
 U8 = (0, (1 << 8) - 1)
+S16 = (-(1 << 15), (1 << 15) - 1)
 S32 = (-(1 << 31), (1 << 31) - 1)
 #: R_in's default: bytes per second
 R_IN = 100_000
-#: Restricted f w's defaults: the operand leaves a budgeted gate other than a gather reads, and the bits a leaf holds
-FAN_IN = 4
-WIDTH = 32
+#: Restricted B's default: the operand bits a budgeted gate other than an unlifted gather reads
+OPERAND_BITS = 128
 
 #: a constant primitive's id (`PROTOCOL.md` §9)
 CONST_ID = re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$")
-#: the gathers by id: the index operand and the kind of its bits, of the id's n (``range``: ceil(log2(n + 1)), an entry of n or
-#: the out-of-range constant; ``low``: n, the index's low n bits; ``lifted``: ceil(log2(n + 3)), a row of n, ⊥, an invalid index
-#: or out of range)
-GATHERS: tuple[tuple[str, int, str], ...] = (
-    (r"^Gather(?:Bf16|F32|I32|E4m3|E2m1|E8m0)x([1-9][0-9]*)_v1$", 0, "range"),  # (index: i32, column: Array<V, word>)
-    (r"^TableRead([1-9][0-9]*)x[1-9][0-9]*_v1$", 0, "low"),  # (index, table)
-    (r"^LGatherRow[1-9][0-9]*x([1-9][0-9]*)(?:o[0-9a-f]+)?_v1$", 0, "lifted"),  # (idx: Value<33>, rows: Array<N, Value<w+1>>)
+#: the gathers by id: the index operand and the kind of its bits, of n (the id's, or the fixed n given; ``range``:
+#: ceil(log2(n + 1)), an entry of n or the out-of-range constant; ``low``: n, the index's low n bits; ``lifted``:
+#: ceil(log2(n + 3)), a row of n, ⊥, an invalid index or out of range)
+GATHERS: tuple[tuple[str, int, str, int | None], ...] = (
+    (r"^Gather(?:Bf16|F32|I32|E4m3|E2m1|E8m0)x([1-9][0-9]*)_v1$", 0, "range", None),  # (index: i32, column: Array<V, word>)
+    (r"^TableRead([1-9][0-9]*)x[1-9][0-9]*_v1$", 0, "low", None),  # (index, table)
+    (r"^LGatherRow[1-9][0-9]*x([1-9][0-9]*)(?:o[0-9a-f]+)?_v1$", 0, "lifted", None),  # (idx: Value<33>, rows: Array<N, Value<w+1>>)
+    (r"^Exp2Lut127_v1$", 0, "low", 8),  # (t: Value<8>): rint(127 * 2^(-t/16)), a constant table of 256 entries
 )
 _BITS: dict[str, Callable[[int], int]] = {"range": lambda n: n.bit_length(), "low": lambda n: n,
                                           "lifted": lambda n: (n + 2).bit_length()}
@@ -131,7 +143,7 @@ FAMILIES: tuple[tuple[str, str], ...] = (
 )
 #: the lifts of a primitive P, by id: P's class with a tag test
 LIFTS = (r"^Lifted\[(.+)\]_v[12]$", r"^(.+)\{ORD=[0-9]+\}$")
-_GATHERS = tuple((re.compile(p), i, k) for p, i, k in GATHERS)
+_GATHERS = tuple((re.compile(p), i, k, n) for p, i, k, n in GATHERS)
 _FAMILIES = tuple((re.compile(p), c) for p, c in FAMILIES)
 _LIFTS = tuple(re.compile(p) for p in LIFTS)
 _LIFTED = {"const": "compare_select", "affine": "roundings", "family": "roundings"}
@@ -151,8 +163,9 @@ FAMILY: dict[str, Step] = {
     **dict.fromkeys(("BlackwellU8S8ImmaDot32_v1", "BlackwellU8S8ImmaDot32_v2"), Step(32, U8, S8)),
     "PouwDot16U8S8_v1": Step(16, U8, S8),
 }
-#: the primitives the pass tries as affine maps; `I32Mul_v1` is one only with a constant operand
-AFFINE = ("I32Add_v1", "I32Sub_v1", "I32Mul_v1")
+#: the primitives the pass tries as affine maps; `I32Mul_v1` is one only with a constant operand, and `Bf16ToF32_v1` is
+#: its operand times 2^16
+AFFINE = ("I32Add_v1", "I32Sub_v1", "I32Mul_v1", "Bf16ToF32_v1")
 
 
 def _ids(names: str) -> list[str]:
@@ -161,35 +174,36 @@ def _ids(names: str) -> list[str]:
 
 CLASSES: dict[str, str] = {
     **dict.fromkeys(FAMILY, "family"),
-    **dict.fromkeys(("I32Add_v1", "I32Sub_v1"), "affine"),
+    **dict.fromkeys(("I32Add_v1", "I32Sub_v1", "Bf16ToF32_v1"), "affine"),
     **dict.fromkeys(_ids(
-        "AmpereBF16TcDot16_v2 And2_v1 Bf16AddF2fp_v1 Bf16Add_v1 Bf16MulBf16_v1 Bf16MulF32_v1 Bf16ToF32_v1 BitAnd_v1 "
+        "AmpereBF16TcDot16_v2 And2_v1 Bf16AddF2fp_v1 Bf16Add_v1 Bf16MulBf16_v1 Bf16MulF32_v1 BitAnd_v1 "
         "BitNot_v1 BitOr_v1 BitXor_v1 BlackwellE4m3QmmaDot32_v1 BlackwellE5m2QmmaDot32_v1 BlackwellMxf4OmmaDot64_v1 "
         "BlackwellNvf4OmmaDot64_v1 DivFullRcp_v1 DivFullScaleA_v1 DivFullScaleA_v2 E2m1ToBf16_v1 E4m3ToF32_v1 "
         "E8m0DequantBf16_v1 E8m0ShlBf16_v1 E8m0ToBf16_v1 F2fpBf16_v1 F32AddFtz_v1 F32AddFtz_v2 F32Add_v1 F32Add_v2 "
         "F32BitsShl23_v1 F32CeilFtz_v1 F32Div_v1 F32Div_v2 F32ErfRn_v1 F32ExpRn_v1 F32Fabs_v1 F32FmaFtz_v1 F32FmaFtz_v2 "
         "F32FmaRm_v1 F32FmaRm_v2 F32FmaSubFtz_v1 F32FmaSubFtz_v2 F32Fma_v1 F32Fma_v2 F32MulFtz_v1 F32MulFtz_v2 F32Mul_v1 "
-        "F32Mul_v2 F32Neg_v1 F32Sat_v1 F32Sqrt_v1 F32SubFtz_v1 F32SubFtz_v2 F32Sub_v1 F32Sub_v2 F32TanhRn_v1 "
-        "F32ToBf16Rn_v1 F32ToE2m1Sat_v1 F32ToE4m3Sat_v1 F32ToU32RzByte_v1 Fa2InvSum_v1 Fa3InvSum_v1 GeluErfBf16_v1 "
+        "F32MulWide_v1 F32Mul_v2 F32Neg_v1 F32Rint_v1 F32Sat_v1 F32Sqrt_v1 F32SubFtz_v1 F32SubFtz_v2 F32Sub_v1 F32Sub_v2 "
+        "F32TanhRn_v1 F32ToBf16Rn_v1 F32ToE2m1Sat_v1 F32ToE4m3Sat_v1 F32ToS8Rzi_v1 F32ToU32RzByte_v1 F64Mul_v1 "
+        "F64ToU32RniSat_v1 Fa2InvSum_v1 Fa3InvSum_v1 GeluErfBf16_v1 "
         "GeluTanhMulBf16_v1 GumbelNoiseLane_v1 GumbelNoiseLane_v2 GumbelStreamKey_v1 HopperBF16WgmmaDot16_v1 "
-        "HopperE4m3MmaV2Dot32_v1 HopperE4m3QgmmaDot32_v1 HopperTf32WgmmaDot8_v1 I32Div_v1 I32Rem_v1 I32ToF32_v1 "
-        "I64ToI32_v1 MufuEx2Ftz_v1 MufuLg2Mantissa_v1 MufuRcpFtz_v1 MufuSqrtFtz_v1 MufuTanh_v1 NcpRneClampI7_v1 Not_v1 "
+        "HopperE4m3MmaV2Dot32_v1 HopperE4m3QgmmaDot32_v1 HopperTf32WgmmaDot8_v1 I32Div_v1 I32Mul_v1 I32Rem_v1 I32ToF32_v1 "
+        "I64ToI32_v1 LutIndex_v1 MufuEx2Ftz_v1 MufuLg2Mantissa_v1 MufuRcpFtz_v1 MufuSqrtFtz_v1 MufuTanh_v1 NcpDot16I7_v1 "
+        "NcpRneClampI7_v1 Not_v1 "
         "NvLogf_v1 NvLogf_v2 PouwAdd64Hi_v1 PouwAdd64Lo_v1 PouwAdd8_v1 PouwAddSub8_v1 PouwBf16Neg_v1 "
         "PouwBlackwellE4m3Window_v1 PouwCh32_v1 PouwChi32_v1 PouwETilde_v1 PouwF32SqrtRn_v1 PouwFormX3_v1 PouwFormX_v1 "
         "PouwHopperE4m3Window_v1 PouwI32ToF32Rn_v1 PouwMaj32_v1 PouwNegBetaSum16_v1 PouwNoiseByte_v1 PouwPackBE4_v1 "
         "PouwRotl64Hi_v1 PouwRotl64Lo_v1 PouwSha512BigSigma0Hi_v1 PouwSha512BigSigma0Lo_v1 PouwSha512BigSigma1Hi_v1 "
         "PouwSha512BigSigma1Lo_v1 PouwSha512SmallSigma0Hi_v1 PouwSha512SmallSigma0Lo_v1 PouwSha512SmallSigma1Hi_v1 "
-        "PouwSha512SmallSigma1Lo_v1 PouwSqCeil_v1 PouwSub8_v1 PouwWindowWord_v1 PouwXor32_v1 RopeOutAdd_v1 RopeOut_v1 "
-        "RsqrtApprox_v1 S32ByteCarry_v1 S32ByteCarry_v2 S32ClampRest_v1 S32ClampRest_v2 S32ClampS8_v1 S32ClampS8_v2 "
-        "S32LowByte_v1 S32LowByte_v2 S32ToF32Rn_v1 SiluMulBf16_v1 SiluMulBf16_v2 TanhF32Rn_v1 TopPNumkeep_v1 U32And_v1 "
-        "U32Xor_v1 Ue8m0CeilByte_v1 Ue8m0InvScale_v1 Xor2_v1"
+        "PouwSha512SmallSigma1Lo_v1 PouwSqAcc_v1 PouwSqCeil_v1 PouwSub8_v1 PouwWindowWord_v1 PouwXor32_v1 RopeOutAdd_v1 "
+        "RopeOut_v1 RsqrtApprox_v1 S32ByteCarry_v1 S32ByteCarry_v2 S32ClampRest_v1 S32ClampRest_v2 S32ClampS8_v1 "
+        "S32ClampS8_v2 S32LowByte_v1 S32LowByte_v2 S32ToF32Rn_v1 S8ToF32_v1 SiluMulBf16_v1 SiluMulBf16_v2 TanhF32Rn_v1 "
+        "TopPNumkeep_v1 U32And_v1 U32Xor_v1 Ue8m0CeilByte_v1 Ue8m0InvScale_v1 Xor2_v1"
     ), "roundings"),
     **dict.fromkeys(_ids(
         "Bf16GtStrict_v1 F32Eq_v1 F32Fmaxf_v1 F32Fminf_v1 F32Geu_v1 F32GtStrict_v1 F32IsFinite_v1 F32MaxRef_v1 F32Max_v1 "
         "GuardNegInfZero_v1 I32Eq_v1 I32Le_v1 NcpAbsMax_v1 PouwBlackwellE4m3SaltDead_v1 PouwHopperE4m3SaltDead_v1 "
         "PouwSel32_v1 PouwSqGe_v1 PouwWinOk_v1 SelectBf16_v1 SelectBit_v1 SelectF32_v1 SelectI32_v1 U32Ge_v1"
     ), "compare_select"),
-    **dict.fromkeys(_ids("I32Mul_v1 NcpDot16I7_v1 PouwSqAcc_v1"), "products"),
     "PouwDuoAbsorb_v1": "folds",
 }
 
@@ -207,15 +221,15 @@ def gather(fid: str) -> tuple[int, int, str, bool] | None:
     """A gather's index operand, its index bits and their kind (`GATHERS`), and whether it is lifted (`LGatherRow`, or a lift
     of a gather: its tag scan reads every operand); None when `fid` isn't a gather."""
     inner, lifted = _unlift(fid)
-    for pat, i, kind in _GATHERS:
+    for pat, i, kind, n in _GATHERS:
         m = pat.fullmatch(inner)
         if m:
-            return i, _BITS[kind](int(m[1])), kind, lifted or kind == "lifted"
+            return i, _BITS[kind](n if n is not None else int(m[1])), kind, lifted or kind == "lifted"
     return None
 
 
 def _column(fid: str) -> bool:
-    """Whether `fid` is an unlifted gather, whose fan-in is the column its index bits pay for."""
+    """Whether `fid` is an unlifted gather, whose operand bits are the column its index bits pay for."""
     g = gather(fid)
     return g is not None and not g[3]
 
@@ -293,6 +307,53 @@ def _union(a: Range, b: Range) -> Range:
     return (min(a[0], b[0]), max(a[1], b[1]))
 
 
+def _meet(a: Range, b: Range) -> Range:
+    """Both ranges at once; any word when they share no value (one of them is wrong, and neither is taken)."""
+    if a is None or b is None:
+        return b if a is None else a
+    lo, hi = max(a[0], b[0]), min(a[1], b[1])
+    return (lo, hi) if lo <= hi else None
+
+
+def _port_range(iv: Any, w: int | None) -> Range:
+    """A port interval of a `Value<w>` as a range: its encodings read as signed (`ports.as_reading`, through `ports.reading`);
+    any word when it is none, holds nothing, or is no one signed interval."""
+    return None if iv is None or w is None else ports.as_reading(tuple(iv), w)
+
+
+def _declared(fn: PrimitiveDefinition, rng: Sequence[Range]) -> Range:
+    """What a primitive's ports say of its value: what its transfer gives from its operands' ranges, else its declared interval."""
+    pt = ports.port_types(fn)
+    if pt is None:
+        return None
+    if pt.transfer is None:
+        return next((_port_range(o.interval, w) for _lo, _hi, o, w in pt.ret if o.interval is not None), None)
+    ivs = [None if r is None or r[0] > r[1] else ports.reading(r, _width(t, 0, t.leaves)) for r, (_n, t) in zip(rng, fn.params)]
+    return _port_range(pt.transfer(*ivs), fn.ret.w)
+
+
+def _declared_segs(segs: Segs, runs: Sequence[tuple]) -> Segs:
+    """A Definition's return segments, each narrowed by the interval its ports declare there (`runs`: `PortTypes.ret`)."""
+    cuts = sorted({x for lo, hi, o, _w in runs if o.interval is not None for x in (lo, hi)})
+    out: list[tuple[int, int, Range]] = []
+    for a, b, r in segs:
+        for lo, hi in zip([a] + [x for x in cuts if a < x < b], [x for x in cuts if a < x < b] + [b]):
+            got = next((_port_range(o.interval, w) for p, q, o, w in runs if p <= lo and hi <= q and o.interval is not None), None)
+            out.append((lo, hi, _meet(r, got)))
+    return _merge(out)
+
+
+def _merge(segs: Sequence[tuple[int, int, Range]]) -> Segs:
+    """Adjacent segments of one range as one."""
+    merged: list[tuple[int, int, Range]] = []
+    for a, b, r in segs:
+        if merged and merged[-1][2] == r and merged[-1][1] == a:
+            merged[-1] = (merged[-1][0], b, r)
+        else:
+            merged.append((a, b, r))
+    return tuple(merged)
+
+
 def _signed(w: int, v: int) -> int:
     return v - (1 << w) if v >> (w - 1) else v
 
@@ -316,8 +377,13 @@ def _point(r: Range) -> int | None:
     return r[0] if r is not None and r[0] == r[1] else None
 
 
-def _affine(fid: str, a: Range, b: Range) -> tuple[int, int] | None:
-    """An affine map's exact result range over s32 operands, or None when it isn't affine (a product of two non-constants)."""
+def _affine(fid: str, rng: Sequence[Range]) -> tuple[int, int] | None:
+    """An affine map's exact result range over s32 operands (the widening's over an s16 encoding), or None when it isn't
+    affine (a product of two non-constants)."""
+    if fid == "Bf16ToF32_v1":
+        x = _clip(rng[0], S16)
+        return (x[0] << 16, x[1] << 16)
+    a, b = rng[0], rng[1]
     x, y = _clip(a, S32), _clip(b, S32)
     if fid == "I32Add_v1":
         return (x[0] + y[0], x[1] + y[1])
@@ -369,8 +435,12 @@ def _rz_byte(x: Range) -> Range:
     return (_trunc(x[0]) if x[0] >= 0 else 0, _trunc(x[1]) if x[1] >= 0 else 0)
 
 
+#: `Exp2Lut127_v1`'s value: the hull of its table's entries, rint(127 * 2^(-t/16)) for t < 256, and 0
+EXP2_LUT127 = (0, 127)
+
 #: the budgeted gates whose value's range a rule derives from their operands' ranges (`F32_POS`)
-RANGES: dict[str, Callable[..., Range]] = {"F32Fmaxf_v1": _fmaxf, "F32Fminf_v1": _fminf, "F32ToU32RzByte_v1": _rz_byte}
+RANGES: dict[str, Callable[..., Range]] = {"F32Fmaxf_v1": _fmaxf, "F32Fminf_v1": _fminf, "F32ToU32RzByte_v1": _rz_byte,
+                                           "Exp2Lut127_v1": lambda _t: EXP2_LUT127}
 
 
 def _colls(refs: Refs) -> set[tuple[str, int]]:
@@ -422,19 +492,20 @@ def _read_segs(refs: Refs, params: Sequence[Range], segs: Sequence[Segs]) -> Seg
         elif n:
             out.append((pos, pos + n, _read(part, params, segs)))
         pos += n
-    merged: list[tuple[int, int, Range]] = []
-    for a, b, r in out:
-        if merged and merged[-1][2] == r and merged[-1][1] == a:
-            merged[-1] = (merged[-1][0], b, r)
-        else:
-            merged.append((a, b, r))
+    merged = _merge(out)
     if len(merged) > _MAX_SEGS:
-        return ((0, pos, _seg_union(tuple(merged))),)
-    return tuple(merged)
+        return ((0, pos, _seg_union(merged)),)
+    return merged
 
 
 def _key(refs: Refs) -> Any:
     return tuple(refs) if refs.count <= 64 else canonical_json(refs.to_json()).decode()
+
+
+def _bits(t: Type) -> int:
+    """The widths of `t`'s leaves, summed."""
+    w = t.homogeneous_width()
+    return t.leaves * w if w is not None else sum(t.leaf_widths())
 
 
 def _width(t: Type, lo: int, hi: int) -> int | None:
@@ -507,14 +578,13 @@ class _Pass:
         self.keep: list[Any] = []
         self.sites: dict[tuple[str, int], tuple[Range, Range]] = {}
         self.widths: dict[int, frozenset[int | None]] = {}
-        self.shapes: dict[str, tuple[str | None, int, int]] = {}  # each primitive's class, operand leaves and widest leaf
+        self.shapes: dict[str, tuple[str | None, int]] = {}  # each primitive's class and operand bits
 
     def prim(self, fn: PrimitiveDefinition, dyn: Sequence[bool], rng: Sequence[Range], where: tuple[str, int]) -> tuple[Range, Tally]:
         t = Tally()
         cls = class_of(fn.id)
         if fn.id not in self.shapes:
-            types = [ty for _n, ty in fn.params] + [fn.ret]
-            self.shapes[fn.id] = (cls, sum(ty.leaves for ty in types[:-1]), max(max(ty.width_set()) for ty in types))
+            self.shapes[fn.id] = (cls, sum(_bits(ty) for _n, ty in fn.params))
         if cls is None:
             t.refused[("unlisted", fn.id)] += 1
             return None, t
@@ -535,7 +605,7 @@ class _Pass:
             t.unproven[fn.id] += 1
             return (max(s[0], S32[0]), min(s[1], S32[1])), t
         if fn.id in AFFINE:
-            r = _affine(fn.id, rng[0], rng[1])
+            r = _affine(fn.id, rng)
             if r is not None and _within(r, S32):
                 t.affine = 1
                 return r, t
@@ -552,7 +622,7 @@ class _Pass:
     def call(self, fn: Any, dyn: tuple[bool, ...], rng: tuple[Range, ...], where: tuple[str, int]) -> tuple[Segs, bool, Tally]:
         if isinstance(fn, PrimitiveDefinition):
             r, t = self.prim(fn, dyn, rng, where)
-            return ((0, 1, r),), any(dyn), t
+            return ((0, 1, _meet(r, _declared(fn, rng))),), any(dyn), t
         key = (id(fn), dyn, rng)
         hit = self.memo.get(key)
         if hit is None:
@@ -564,7 +634,10 @@ class _Pass:
             for _k, t in self.walk(fn.body, dyn, rng, fn.id, segs, dyns, up):
                 out.add(t)
             out.index = up
-            hit = self.memo[key] = (_read_segs(fn.body.ret, rng, segs), _dyn(fn.body.ret, dyn, dyns), out)
+            ret = _read_segs(fn.body.ret, rng, segs)
+            if (pt := ports.port_types(fn)) is not None and pt.ret:
+                ret = _declared_segs(ret, pt.ret)
+            hit = self.memo[key] = (ret, _dyn(fn.body.ret, dyn, dyns), out)
         return hit
 
     def walk(self, body: Body, pdyn: Sequence[bool], prng: Sequence[Range], def_id: str, segs: list[Segs],
@@ -589,8 +662,8 @@ class _Pass:
 
         for k, nd in enumerate(body.nodes):
             if is_input(nd.fn):
-                when, w = input_id(nd.fn.id)  # type: ignore[misc]
-                self.shapes.setdefault(nd.fn.id, ("input", 0, w))
+                when, _w = input_id(nd.fn.id)  # type: ignore[misc]
+                self.shapes.setdefault(nd.fn.id, ("input", 0))
                 segs.append(((0, nd.out.leaves, None),))
                 dyns.append(when == RUN)
                 continue
@@ -656,7 +729,7 @@ class _Pass:
 @dataclass(frozen=True)
 class Analysis:
     """What P reads of a Program: per step (the census's) its budgeted units by class and the run-input bits it first reads;
-    over the Program its primitives and inputs (``gates``: each one's class, instances, operand leaves and widest leaf), its
+    over the Program its primitives and inputs (``gates``: each one's class, instances and operand bits), its
     refusals (gates by primitive, reinterpretations by the Definition whose body reads at another width), proven core steps
     with their products and proven affine maps, the core steps not proven with their sites, and the longest a dynamic value is
     held."""
@@ -697,7 +770,7 @@ def count(fn: Any, dyn: Sequence[bool], ranges: Sequence[Range] | None = None) -
 
 def analyze(program: Any, census: Mapping) -> Analysis:
     """P's reading of `program` with its census (verity/census/v1 of this Program: its steps, and its root values' producers,
-    bits, readers and selections). A census of another schema or of another root is refused (ValueError)."""
+    bits, readers, selections and facts). A census of another schema or of another root is refused (ValueError)."""
     nodes = program.root.body.nodes
     if census.get("schema") != CENSUS or len(census["nodes"]["callee"]) != len(nodes) or census["inputs"] != sum(
             1 for nd in nodes if is_input(nd.fn)):
@@ -707,6 +780,7 @@ def analyze(program: Any, census: Mapping) -> Analysis:
     step = step_of(census)
     units = [Counter() for _ in range(S)]
     whole = Tally()
+    vals = census["values"]
     p = _Pass()
     for k, t in p.walk(program.root.body, (), (), program.root.id, [], [], {}):
         whole.add(t)
@@ -720,7 +794,6 @@ def analyze(program: Any, census: Mapping) -> Analysis:
             pools.setdefault(v, set()).add(step(k))
     first = [0] * S
     longest = 0
-    vals = census["values"]
     for v, (j, bits, reads) in enumerate(zip(vals["producer"], vals["bits"], vals["reads"])):
         touched = {step(k) for k in reads} | pools.get(v, set())
         if j >= I:
@@ -736,8 +809,8 @@ def analyze(program: Any, census: Mapping) -> Analysis:
     for (code, fid), n in sorted(whole.refused.items()):
         refused.setdefault(code, {})[fid] = n
     sites = tuple({"definition": d, "node": n, "acc": list(c), "sum": list(r)} for (d, n), (c, r) in sorted(p.sites.items()))
-    gates = {g: {"class": cls, "instances": census["classes"][g]["instances"], "fan_in": f, "width": w}
-             for g, (cls, f, w) in sorted(p.shapes.items())}
+    gates = {g: {"class": cls, "instances": census["classes"][g]["instances"], "operand_bits": b}
+             for g, (cls, b) in sorted(p.shapes.items())}
     return Analysis(steps, gates, refused, whole.family, whole.macs, whole.affine, dict(sorted(whole.unproven.items())), sites,
                     longest)
 
@@ -764,21 +837,21 @@ class Verdict:
 
 
 def check(program: Any, census: Mapping, *, c: Mapping[str, Any], windows: Sequence[Window], R_in: Any = R_IN,
-          L: int | None = None, f: int = FAN_IN, w: int = WIDTH) -> Verdict:
-    """P(c, R_in, L) at fan-in f and width w on `program` and its census under the audit's `windows`. c maps each budgeted
-    class to its units per certified byte read, R_in is bytes per second, L is steps (None: left to re-keying). A window
-    outside the census's steps, a c without every budgeted class, or an f or w below 1 is refused (ValueError)."""
+          L: int | None = None, B: int = OPERAND_BITS) -> Verdict:
+    """P(c, R_in, L) at B operand bits on `program` and its census under the audit's `windows`. c maps each budgeted class to
+    its units per certified byte read, R_in is bytes per second, L is steps (None: left to re-keying). A window outside the
+    census's steps, a c without every budgeted class, or a B below 1 is refused (ValueError)."""
     a = analyze(program, census)
-    return judge(a, c=c, windows=windows, R_in=R_in, L=L, f=f, w=w)
+    return judge(a, c=c, windows=windows, R_in=R_in, L=L, B=B)
 
 
 def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in: Any = R_IN, L: int | None = None,
-          f: int = FAN_IN, w: int = WIDTH) -> Verdict:
-    """P(c, R_in, L) at fan-in f and width w on an `Analysis` (as `check`)."""
+          B: int = OPERAND_BITS) -> Verdict:
+    """P(c, R_in, L) at B operand bits on an `Analysis` (as `check`)."""
     if set(c) != set(BUDGETED):
         raise ValueError(f"c gives units per certified byte for exactly {list(BUDGETED)}, not {sorted(c)}")
-    if not all(isinstance(x, int) and not isinstance(x, bool) and x >= 1 for x in (f, w)):
-        raise ValueError(f"f and w are integers >= 1, not {f!r} and {w!r}")
+    if not (isinstance(B, int) and not isinstance(B, bool) and B >= 1):
+        raise ValueError(f"B is an integer >= 1, not {B!r}")
     cq = {k: Fraction(c[k]) for k in BUDGETED}
     R = Fraction(R_in)
     S = len(a.steps)
@@ -788,12 +861,10 @@ def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in:
             raise ValueError(f"a window is a non-empty range of the census's {S} steps with reads >= 0 and seconds > 0, not {win}")
     reasons: list[dict] = [{"code": code, "definitions" if code == "reinterpretation" else "primitives": a.refused[code]}
                            for code in REFUSED if code in a.refused]
-    fan = {g: s["fan_in"] for g, s in a.gates.items() if s["class"] in BUDGETED and s["fan_in"] > f and not _column(g)}
-    if fan:
-        reasons.append({"code": "fan-in", "f": f, "primitives": fan})
-    wide = {g: s["width"] for g, s in a.gates.items() if s["width"] > w}
+    wide = {g: s["operand_bits"] for g, s in a.gates.items()
+            if s["class"] in BUDGETED and s["operand_bits"] > B and not _column(g)}
     if wide:
-        reasons.append({"code": "width", "w": w, "primitives": wide})
+        reasons.append({"code": "operand-bits", "B": B, "primitives": wide})
     if a.unproven:
         reasons.append({"code": "s8-window", "steps": a.unproven, "sites": list(a.sites)})
     covered = set().union(*(set(win.steps) for win in windows)) if windows else set()
@@ -814,11 +885,11 @@ def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in:
     if L is not None and a.max_lifetime > L:
         reasons.append({"code": "lifetime", "max_lifetime": a.max_lifetime, "L": L})
     total = {k: sum(s["units"][k] for s in a.steps) for k in BUDGETED}
-    numbers = {"c": {k: str(v) for k, v in cq.items()}, "R_in": str(R), "L": L, "f": f, "w": w, "windows": rows, "units": total,
+    numbers = {"c": {k: str(v) for k, v in cq.items()}, "R_in": str(R), "L": L, "B": B, "windows": rows, "units": total,
                "family_steps": a.family, "macs": a.macs, "affine": a.affine, "max_lifetime": a.max_lifetime}
     return Verdict(not reasons, tuple(reasons), numbers)
 
 
-__all__ = ["AFFINE", "Analysis", "BUDGETED", "CLASSES", "CONST_ID", "F32_POS", "FAMILIES", "FAMILY", "FAN_IN", "GATHERS", "LIFTS",
-           "RANGES", "REFUSED", "R_IN", "S32", "S8", "SCHEMA", "Step", "TAG", "Tally", "U8", "VERSION", "Verdict", "WIDTH", "Window",
-           "analyze", "check", "class_of", "count", "digest", "gather", "judge", "spec"]
+__all__ = ["AFFINE", "Analysis", "BUDGETED", "CLASSES", "CONST_ID", "EXP2_LUT127", "F32_POS", "FAMILIES", "FAMILY", "GATHERS",
+           "LIFTS", "OPERAND_BITS", "RANGES", "REFUSED", "R_IN", "S16", "S32", "S8", "SCHEMA", "Step", "TAG", "Tally", "U8", "VERSION",
+           "Verdict", "Window", "analyze", "check", "class_of", "count", "digest", "gather", "judge", "spec"]

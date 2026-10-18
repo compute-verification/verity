@@ -20,5 +20,5 @@ def test_every_tensor_core_step_has_its_products():
 
 def test_a_boolean_step_performs_its_word_steps_products():
     pairs = {d.id: word_of(d).id for d in (getattr(BG, n) for n in BG.__all__) if DOT.search(getattr(d, "id", ""))}
-    assert len(pairs) == 8
+    assert len(pairs) == 9
     assert all(PRODUCTS[b] == PRODUCTS[w] for b, w in pairs.items()), pairs
