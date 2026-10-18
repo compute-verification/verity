@@ -44,7 +44,7 @@ runner = Runner(partitions=[])
 
 
 def _piece(src: str = WRAPPER) -> SV._Piece:
-    return SV._Piece(src, None, "moe.py")
+    return SV._Piece(src, None, "moe.py", (9, 0))
 
 
 def test_the_op_is_one_call_on_its_hidden_states() -> None:
