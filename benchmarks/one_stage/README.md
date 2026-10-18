@@ -20,6 +20,10 @@ negatives.
   requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its draw leaves
   unproved can carry and its δ the draw's. The remote session's checks 1-3 and 5 are proved, not opened: each drawn
   receipt goes through the opening unit (`a7_check3.py`, `verity.ml.commitments.gates.block_check`) in a second statement.
+- `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
+  a few thousand blocks with every opening proved by the opening unit under `--zk` and held by Lean, honest and with a
+  tampered block, a scan of everything the verifier received for the drawn blocks' bytes, and the prover's cost per
+  opening. `a8_gpu.sh` takes its cost points on sm_120 (`flock-circuit prove --zk --gpu`), as a GPU host job.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
