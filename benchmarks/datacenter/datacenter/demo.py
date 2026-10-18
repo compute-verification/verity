@@ -26,15 +26,6 @@ def model(x, w1, w2, image, temperature, s0, s1):
     return y, temperature
 
 
-#: Each node's PoUW window as PoUW's census counts it, H1 + fx1's int8 products (an 8192³ linear, which the night's
-#: noised products stand for), and PoUW's proved bound for it on the node's eight RTX PRO 6000s at the data sheet's
-#: rates, in the rack's 0.1 ms ticks: `proved_block_ticks(POUW_WINDOW, sheet(), SHEET_EPS, 1e-4, gpus=8)`
-#: (benchmarks/pouw/proved_ticks.py), to which benchmarks/pouw's test_proved_ticks holds this number, since this
-#: package imports nothing
-POUW_WINDOW = {"mac:linears": 8192 ** 3}
-POUW_TICKS = 1.5603461108407848
-
-
 def night(deviation: Deviation | None = None, image: int = IMAGE, assume=()):
     dc = rack(nodes=2)
     c = trace(model, x=Input(32), w1=Input(32, "registered", digest(3, 32)), w2=Input(32, "registered", digest(5, 32)),
@@ -48,7 +39,7 @@ def night(deviation: Deviation | None = None, image: int = IMAGE, assume=()):
                 wipes=[Wipe("n0.dpu", 195.2 * GB, Interval(0, 2)), Wipe("n0.bmc", 0.88 * GB, Interval(0, 2))],
                 challenges=[Challenge("kv", at=0, deadline=8)],
                 reads=[ReadWindow("kv", start=0, boundary=10, deadline=12)])
-    profile = p.public(plan, ticks={"n0": POUW_TICKS, "n1": POUW_TICKS})
+    profile = p.public(plan)
     t = run(p, INPUTS | {"image": image}, plan, deviation)
     return account(audit(t, profile), profile, assume)
 
