@@ -27,6 +27,7 @@ from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
+from verity_vllm.pipeline.instances_file import INSTANCES_GZ_LEVEL, instance_rows, write_instances, write_instances_file, write_program_instances  # noqa: F401 (INSTANCES_GZ_LEVEL read through here)
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
 
 
@@ -43,45 +44,11 @@ def _spec_histogram(program) -> dict[str, int]:
     return dict(sorted(h.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
-def _instance_rows(program):
-    """The flat body as (spec, argument items) rows — the comparator's unit (compare.py), one at a time.  An argument is stored in the
-    progressions form (instances v2, `compact.file_items_from_refs`, the fold writer's): O(rows) for a scattered Strided where `runs()`
-    is O(leaves) — the GLM-5.3 MLA-absorb transposed-weight read is ~1e6 leaves per operand.  Every reader expands back to the
-    per-leaf run lists, bit-identically (`compact.expanded_file_args` at `program_view.iter_instance_rows` and the raw doc loaders)."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity_vllm.program.compact import file_items_from_refs
-    for k, n in enumerate(program.fn.body.nodes):
-        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [file_items_from_refs(a.refs) for a in n.args]}
+_instance_rows, _write_instances, _write_instances_file = instance_rows, write_instances, write_instances_file
 
 
 def _instance_sequence(program) -> list[dict]:
     return list(_instance_rows(program))
-
-
-def _write_instances(f, head: dict, rows, chunk: int = 4096) -> None:
-    """`json.dump({**head, "rows": list(rows)}, f)`, the same text, written a chunk of rows at a time with `json.dumps` (its C encoder;
-    `json.dump` to a file always runs the Python one) and without the rows list."""
-    f.write(json.dumps(head)[:-1] + (', "rows": [' if head else '"rows": ['))
-    batch, first = [], True
-    for r in rows:
-        batch.append(r)
-        if len(batch) == chunk:
-            f.write(("" if first else ", ") + json.dumps(batch)[1:-1])
-            batch, first = [], False
-    if batch:
-        f.write(("" if first else ", ") + json.dumps(batch)[1:-1])
-    f.write("]}")
-
-
-#: `instances.json.gz`'s gzip level.  Its readers parse its text, and no digest or published output reads its bytes
-#: (`research_outputs.NEVER`).  A long context's text is mostly the attention Calls' key and value runs (B1 4096/512: 8.6 GB), which
-#: level 6 compresses in under a third of level 9's CPU time, 2% larger, and which inflates as fast at either level.
-INSTANCES_GZ_LEVEL = 6
-
-
-def _write_instances_file(path: str, head: dict, rows) -> None:
-    with gzip.open(path, "wt", compresslevel=INSTANCES_GZ_LEVEL) as f:
-        _write_instances(f, head, rows)
 
 
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers, this driver,
@@ -627,10 +594,10 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["mutation_effects"] = rep.provenance["mutation_effects"]
     res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
     json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
-    _write_instances_file(os.path.join(out, "instances.json.gz"),
-                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest,
-                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
-                          _instance_rows(program))
+    write_program_instances(os.path.join(out, "instances.json.gz"),
+                            {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest,
+                             "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
+                            program)
     # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
     art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
                                  applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)

@@ -8,6 +8,7 @@ from __future__ import annotations
 import gzip
 import io
 import json
+import zlib
 
 import pytest
 
@@ -33,6 +34,98 @@ def test_the_instance_file_is_that_text_gzipped(tmp_path, rows):
     _write_instances_file(str(p), HEAD, iter(rows))
     with gzip.open(p, "rt") as f:
         assert f.read() == json.dumps({**HEAD, "rows": rows})
+
+
+@pytest.mark.parametrize("block,threads", [(1 << 24, None), (1, 1), (97, 3), (40_000, 2)])
+def test_the_parallel_gzip_is_one_member_of_the_text(tmp_path, block, threads):
+    """Blocks of any size, compressed on any number of threads, inflate to the text, as one gzip member (a reader that stops at the
+    first member reads it all) whose bytes depend on the text only."""
+    from verity_vllm.pipeline.instances_file import ParallelGzip
+    text = json.dumps({**HEAD, "rows": ROWS})
+    for body in (text, ""):
+        paths = [tmp_path / f"a{block}.gz", tmp_path / f"b{block}.gz"]
+        for p in paths:
+            with ParallelGzip(str(p), block=block, threads=threads) as f:
+                for k in range(0, len(body), 1000):
+                    f.write(body[k:k + 1000])
+        data = paths[0].read_bytes()
+        assert zlib.decompress(data, 31).decode() == gzip.decompress(data).decode() == body
+        assert data == paths[1].read_bytes()
+
+
+def _attention_program(seed: int):
+    """Calls reading cuts of two `PartLog`s (the dense attention's per-head key and value logs), each cut the log so far plus a few
+    parts of every kind (contiguous, broadcast, empty, strided, scattered, explicit, nested), sometimes shorter than a cut before."""
+    import random
+
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.ml.circuits.program import Program
+    from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, broadcast, concat
+    from verity.ml.circuits.types import Array, Value
+    V16, W, N = Value(16), 96, 10
+    rng = random.Random(seed)
+    Neg = PrimitiveDefinition("TINeg16", 1, (("a", V16),), V16, lambda a: -a & 0xFFFF, register=False)
+
+    def comp(name, params, ret, body):
+        return CompositeDefinition(name, 1, (), lambda S: (tuple(params), ret), body, register=False)
+
+    pair = comp("TIPair", [("a", V16)], Array(2, V16), lambda B, S, a: Coll(Array(2, V16), concat([a.refs, B.call(Neg, a).refs])))
+    sums: dict[int, object] = {}
+
+    def summed(n):
+        if n not in sums:
+            sums[n] = comp(f"TISum{n}", [("x", Array(n, V16))], V16, lambda B, S, x: B.call(Neg, x[0]))
+        return sums[n]
+
+    def part(rows, t):
+        k = rng.randrange(9)
+        b = rng.randrange(W - 12)
+        if k == 0:
+            return Affine("p", 0, b, rng.randrange(1, 5))
+        if k == 1:
+            return broadcast("p", 0, b, rng.randrange(1, 4))
+        if k == 2:
+            return Affine("p", 0, b, 0)
+        if k == 3:
+            return Strided("p", 0, b, 2, 3, 1, 4)
+        if k == 4:
+            return Strided("p", 0, b, 3, 4, 2, 6)
+        if k == 5:
+            return Explicit(tuple(("p", 0, rng.randrange(W)) for _ in range(rng.randrange(1, 4))))
+        if k == 6:
+            return Concat([Affine("p", 0, b, 2), rows[rng.randrange(t + 1)].refs])
+        return rows[rng.randrange(t + 1)].refs
+
+    def body(B, S, x):
+        rows = [B.call(pair, x[t]) for t in range(N)]
+        keys, values, outs = PartLog(), PartLog(), []
+        for t in range(N):
+            keys.append(rows[t].refs)
+            keys.append(part(rows, t) if rng.random() < 0.3 else Affine("p", 0, 2 * t, 2))
+            values.append(rows[t].refs if rng.random() < 0.8 else part(rows, t))
+            for log in (keys, values):
+                j = len(log) if rng.random() < 0.85 else rng.randrange(len(log) + 1)
+                refs = log.cut(j, [part(rows, t) for _ in range(rng.choice([0, 0, 1, 2]))])
+                if refs.count:
+                    outs.append(B.call(summed(refs.count), Coll(Array(refs.count, V16), refs)))
+        return outs[-1]
+
+    return Program(comp(f"TIAttention{seed}", [("x", Array(W, V16))], V16, body))
+
+
+@pytest.mark.parametrize("seed", range(12))
+def test_a_programs_rows_written_from_its_logs_are_the_json_dumps_text(tmp_path, seed):
+    """`write_program_instances` writes each log cut as its log's items so far plus its own, and the file's text is the one the
+    row dicts give (`instance_rows` through `json.dumps`), cut by cut, whatever the cut's tail and whether it is shorter."""
+    from verity_vllm.pipeline.instances_file import RowTexts, instance_rows, write_program_instances
+    program = _attention_program(seed)
+    rows = list(instance_rows(program))
+    texts = RowTexts()
+    assert [json.loads(t) for t in texts.rows(program)] == rows and texts.logs
+    head = {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "params": [["x", "Array<96,Value<16>>"]]}
+    p = tmp_path / "instances.json.gz"
+    write_program_instances(str(p), head, program, block=4096, threads=2)
+    assert gzip.decompress(p.read_bytes()).decode() == json.dumps({**head, "rows": rows})
 
 
 def _scattered_program():
