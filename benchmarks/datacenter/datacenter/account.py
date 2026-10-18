@@ -4,13 +4,14 @@
 placement's public properties, the declaration with its named assumptions, the verifier's plan). For each block it
 concludes:
 
-- `credited`: the work the claims prove was spent on the declared circuit there, each kind at its weight (W_ref);
+- `credited`: the work the claims prove was spent on the declared Program there, each kind at its weight (W_ref);
 - `busy` and `headroom`: the share of the epoch that work needs on the block's devices, each kind at their declared
-  rate for it (multiply-adds at a precision, Boolean gates), and the share the audits leave unaccounted;
+  rate for it (multiply-adds at a precision, word operations, Boolean gates), and the share the audits leave
+  unaccounted;
 - `outsourceable` and `local_at_least`: the work a helper off the block could have done for it, and so the credited
   work that must have run on the block. Crossing bytes bound nothing by themselves: a helper holding the registered
   weights needs only small inputs and outputs. Work is pinned to the block only by data it must consume that only the
-  block receives, a trusted device's fresh data (`Input(source="trusted")`), which a helper could get only through the
+  block receives, a trusted device's fresh data (a run input placed on a trusted device), which a helper could get only through the
   block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the named premise `FLEET_CLOSED`. Or,
   under the premise `SALT_CUSTODY`, by a salt the block's own certifier releases only into it: the work that depends
   on it is pinned while `custody`, k, the bits that could carry the salt out before registration (the block's egress
@@ -56,7 +57,8 @@ SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
 
 def facet(kind: str) -> str:
     """The part of a device a kind of work runs on: a kind is `<facet>:<detail>`, so `mac:fp8` and `mac:bf16` share
-    the tensor cores and add up, while kinds on different facets (an ALU filler beside them) run at once."""
+    the tensor cores and add up, as `cuda:op` and `cuda:gate` share the CUDA cores, while kinds on different facets (the
+    CUDA cores' roundings beside the tensor cores' products) run at once."""
     return kind.split(":")[0]
 
 

@@ -25,8 +25,9 @@ def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie
         ("n.gpu0", "n.pcie0"), ("n.pcie0", "n.cpu0"), ("n.cpu0", "n.cpu1"), ("n.pcie1", "n.cpu1"), ("n.nic0", "n.pcie1")]
     assert all(e.latency is None and e.delay == 0.0 for e in dc.links)  # not measured: a delay that claims nothing
     gpu = dc.devices["n.gpu0"]
-    assert set(gpu.rate) == {"mac:bf16", "mac:fp8", "mac:fp4", "cuda", "oracle", "square-1024", "square-512", "gate"}
-    assert gpu.rate["gate"].value == 2.6e13 * 32
+    assert set(gpu.rate) == {"mac:bf16", "mac:fp8", "mac:fp4", "cuda:op", "cuda:gate", "oracle", "square-1024",
+                             "square-512"}
+    assert gpu.rate["cuda:gate"].value == 2.6e13 * 32
 
 
 def test_a_dpu_sits_between_the_nic_and_the_way_out_with_its_bmc_behind_it():
