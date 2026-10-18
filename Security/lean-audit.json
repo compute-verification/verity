@@ -3349,6 +3349,9 @@
    "assumptions": [],
    "type_hash": "30100657bfd33b612c4d1e356209691877a0b4f0d8f46ac06f7398374c5ae88b"
   },
+  "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Audit.Partition.audit_exfiltration": {
    "owner": "@proofs",
    "signature": [
@@ -3387,6 +3390,9 @@
    ],
    "assumptions": [],
    "type_hash": "f4da824071ffa02f8a779554c6ce5347bc1c13ecbd46d891b4221d9409494825"
+  },
+  "FlockSoundness.Audit.Partition.audit_influence": {
+   "owner": "@proofs"
   },
   "FlockSoundness.Audit.Partition.card_admissible_le": {
    "owner": "@proofs",
@@ -6510,6 +6516,9 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Verity.SecurityProofs.ComposeCone": {
+   "owner": "@proofs"
   }
  },
  "shape": {
@@ -6811,6 +6820,8 @@
    "FlockSoundness.Audit.Law.stratified_miss_eq_greedy": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Law.work_escape_le": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Partition.audit_exfiltration": "frozen (obligation,no-function): It takes KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "FlockSoundness.Audit.Partition.audit_influence": "frozen (obligation,no-function): It takes KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "FlockSoundness.Audit.Partition.Refines.twoStage_influence": "frozen (obligation,no-function): It takes the two-stage KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/TwoStage.lean:121, :130), open obligations of the backend, as hypotheses, and it is about the abstract two-stage audit rather than a Lean function.",
    "FlockSoundness.Audit.Partition.card_admissible_le": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Partitioning.SecurityProofs.Achievability": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Partitioning.SecurityProofs.Concentration": "lemma: leaves the list under the 5:11 PM ruling",
@@ -7053,7 +7064,7 @@
    "Verity.Guarantees.AmpereUnitSound": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.AmpereUnitSoundZero": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.Compose": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.ComposeCone": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
+   "Verity.SecurityProofs.ComposeCone": "frozen (no-function): It is stated over an arbitrary partition and transcript, and takes the anchors' inputs (InputsAgree) and that no unit of the cone is wrong as hypotheses, conditions on the run that are not on the premises list, rather than a function's acceptance.",
    "Verity.Guarantees.ContainsImplements": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.CorrectOfOpening": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.HopperStepComplete": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
