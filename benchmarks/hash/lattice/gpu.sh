@@ -6,7 +6,10 @@
 #
 #   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source \
 #     --env GPU_LEASE_WHO=hash-lattice [--env LEASE="--preemptible"] -- bash benchmarks/hash/lattice/gpu.sh
-# CONFIGS: ENC:M_BYTES:N_WORDS[:tree] items; BATCH_MIB (default 1024); REPS (default 10); LEASE_MIN (default 14).
+# CONFIGS: ENC:M_BYTES:N_WORDS[:tree][:fused] items; BATCH_MIB (default 1024); REPS (default 10); LEASE_MIN (default 14).
+# The fused kernel needs L n a multiple of 128; its sweep (2^80 points at n 192 for q32 and 384 for q16):
+#   CONFIGS="q32:4096:256:fused q32:16384:256:fused q16:16384:512:fused q8n:4096:384:fused q8n:16384:384:fused
+#            q32:16384:192:fused q16:16384:384:fused q32:65536:256:fused q8n:65536:384:fused"
 set -uo pipefail
 O=${OUT:?}
 export PATH=/usr/local/cuda/bin:$PATH
@@ -36,8 +39,8 @@ gpu-lease 1 --wait ${LEASE:-} --max-min "${LEASE_MIN:-14}" -- bash -c '
   smi=$!
   [ -x "$W/commit_gpu" ] && "$W/commit_gpu" sha 20 > "$O/commit-gpu-sha-before.jsonl" 2>> "$O/bench.err"
   for c in $CONFIGS; do
-    IFS=: read -r enc m n tree <<< "$c"
-    "$W/sis_bench" "$enc" "$m" "$n" "$BATCH_MIB" "$REPS" "$O/dumps" $tree >> "$O/bench.jsonl" 2>> "$O/bench.err"
+    IFS=: read -r enc m n flags <<< "$c"
+    "$W/sis_bench" "$enc" "$m" "$n" "$BATCH_MIB" "$REPS" "$O/dumps" ${flags//:/ } >> "$O/bench.jsonl" 2>> "$O/bench.err"
     echo "sis $c rc $?" >> "$O/rc.txt"
   done
   [ -x "$W/commit_gpu" ] && "$W/commit_gpu" sha 20 > "$O/commit-gpu-sha-after.jsonl" 2>> "$O/bench.err"

@@ -211,6 +211,140 @@ __global__ void sha_rate(u64* io, int reps) {
   if (st[0] == 0x0123456789abcdefull) io[t] = st[1];
 }
 
+// --- the fused kernel ----------------------------------------------------------------------------------------------
+//
+// One pass: rows of bytes in, digests out. mma.sync m16n8k32 s8 (every arch from sm_80), CTA tile 128 rows x 128 columns of
+// W, 8 warps of 64 x 32, a 64-digit k-step double-buffered through registers. W is A with its rows interleaved (row
+// j L + l is limb l of word j), so a thread's accumulators hold adjacent limbs of one word and the epilogue combines them
+// in registers (and across the lane pair t, t^1 when L = 4). With SPLIT = 2 each byte's two nibbles are split on the way
+// into shared memory. Rows a multiple of 128, L n a multiple of 128, K a multiple of 64.
+namespace fz {
+constexpr int BM = 128, BN = 128, BK = 64, LD = BK + 16;  // LD: a smem row's stride in bytes (padding against conflicts)
+
+__device__ __forceinline__ void ldsm_x4(u32* r, const void* p) {
+  const u32 a = (u32)__cvta_generic_to_shared(p);
+  asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0,%1,%2,%3}, [%4];\n"
+               : "=r"(r[0]), "=r"(r[1]), "=r"(r[2]), "=r"(r[3]) : "r"(a));
+}
+__device__ __forceinline__ void mma(int* c, const u32* a, const u32* b) {
+  asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+               : "+r"(c[0]), "+r"(c[1]), "+r"(c[2]), "+r"(c[3])
+               : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
+}
+__device__ __forceinline__ uint4 nib_lo(uint4 v) {  // bytes 0..7 of 16 -> 16 digits
+  const u32 l0 = v.x & 0x0F0F0F0Fu, h0 = (v.x >> 4) & 0x0F0F0F0Fu, l1 = v.y & 0x0F0F0F0Fu, h1 = (v.y >> 4) & 0x0F0F0F0Fu;
+  return make_uint4(__byte_perm(l0, h0, 0x5140), __byte_perm(l0, h0, 0x7362), __byte_perm(l1, h1, 0x5140),
+                    __byte_perm(l1, h1, 0x7362));
+}
+__device__ __forceinline__ uint4 nib_hi(uint4 v) { return nib_lo(make_uint4(v.z, v.w, 0, 0)); }
+
+template <int L, int SPLIT>
+__global__ void __launch_bounds__(256) sis_fused(const uint8_t* __restrict__ X, const int8_t* __restrict__ W,
+                                                 uint8_t* __restrict__ D, int m, int NW) {
+  __shared__ __align__(16) uint8_t sX[2][BM * LD], sW[2][BN * LD];
+  const int tid = threadIdx.x, lane = tid & 31, warp = tid >> 5, wm = warp >> 2, wn = warp & 3;
+  const int n0 = blockIdx.x * BN;
+  const size_t r0 = (size_t)blockIdx.y * BM;
+  const int K = m * SPLIT, steps = K / BK, xb = BK / SPLIT;  // xb: data bytes a row a step
+  int acc[4][4][4];
+#pragma unroll
+  for (int i = 0; i < 4; ++i)
+#pragma unroll
+    for (int j = 0; j < 4; ++j)
+#pragma unroll
+      for (int c = 0; c < 4; ++c) acc[i][j][c] = 0;
+
+  uint4 rx[2], rw[2];
+  auto load = [&](int s) {
+    const int k0 = s * BK;
+#pragma unroll
+    for (int i = 0; i < 2; ++i) {
+      const int idx = tid + i * 256, row = idx >> 2, ch = idx & 3;
+      rw[i] = *(const uint4*)(W + (size_t)(n0 + row) * K + k0 + ch * 16);
+    }
+    if (SPLIT == 1) {
+#pragma unroll
+      for (int i = 0; i < 2; ++i) {
+        const int idx = tid + i * 256, row = idx >> 2, ch = idx & 3;
+        rx[i] = *(const uint4*)(X + (r0 + row) * m + (size_t)s * xb + ch * 16);
+      }
+    } else {
+      const int row = tid >> 1, ch = tid & 1;
+      rx[0] = *(const uint4*)(X + (r0 + row) * m + (size_t)s * xb + ch * 16);
+    }
+  };
+  auto store = [&](int b) {
+#pragma unroll
+    for (int i = 0; i < 2; ++i) {
+      const int idx = tid + i * 256, row = idx >> 2, ch = idx & 3;
+      *(uint4*)(&sW[b][row * LD + ch * 16]) = rw[i];
+    }
+    if (SPLIT == 1) {
+#pragma unroll
+      for (int i = 0; i < 2; ++i) {
+        const int idx = tid + i * 256, row = idx >> 2, ch = idx & 3;
+        *(uint4*)(&sX[b][row * LD + ch * 16]) = rx[i];
+      }
+    } else {
+      const int row = tid >> 1, ch = tid & 1;
+      *(uint4*)(&sX[b][row * LD + ch * 32]) = nib_lo(rx[0]);
+      *(uint4*)(&sX[b][row * LD + ch * 32 + 16]) = nib_hi(rx[0]);
+    }
+  };
+
+  load(0);
+  store(0);
+  __syncthreads();
+  for (int s = 0; s < steps; ++s) {
+    const int b = s & 1;
+    if (s + 1 < steps) load(s + 1);
+#pragma unroll
+    for (int kk = 0; kk < BK; kk += 32) {
+      u32 af[4][4], bf[2][4];
+      const int mi = lane >> 3, r = lane & 7;
+#pragma unroll
+      for (int i = 0; i < 4; ++i)
+        ldsm_x4(af[i], &sX[b][(wm * 64 + i * 16 + (mi & 1) * 8 + r) * LD + kk + (mi >> 1) * 16]);
+#pragma unroll
+      for (int j = 0; j < 2; ++j)
+        ldsm_x4(bf[j], &sW[b][(wn * 32 + j * 16 + (mi >> 1) * 8 + r) * LD + kk + (mi & 1) * 16]);
+#pragma unroll
+      for (int i = 0; i < 4; ++i)
+#pragma unroll
+        for (int j = 0; j < 4; ++j) mma(acc[i][j], af[i], &bf[j >> 1][(j & 1) * 2]);
+    }
+    if (s + 1 < steps) {
+      store(b ^ 1);
+      __syncthreads();
+    }
+  }
+
+  // epilogue: thread holds C[g][2t], C[g][2t+1], C[g+8][2t], C[g+8][2t+1] of each 16 x 8 tile
+  const int g = lane >> 2, t = lane & 3, n = NW / L;
+#pragma unroll
+  for (int i = 0; i < 4; ++i)
+#pragma unroll
+    for (int j = 0; j < 4; ++j) {
+      const size_t row = r0 + wm * 64 + i * 16 + g;
+      const int col = n0 + wn * 32 + j * 8 + 2 * t;  // a W row: word col / L, limb col % L
+      const int* c = acc[i][j];
+      if (L == 1) {
+        *(uint16_t*)(D + row * n + col) = (uint16_t)((c[0] & 255) | (c[1] & 255) << 8);
+        *(uint16_t*)(D + (row + 8) * n + col) = (uint16_t)((c[2] & 255) | (c[3] & 255) << 8);
+      } else if (L == 2) {
+        ((uint16_t*)D)[row * n + col / 2] = (uint16_t)((u32)c[0] + ((u32)c[1] << 8));
+        ((uint16_t*)D)[(row + 8) * n + col / 2] = (uint16_t)((u32)c[2] + ((u32)c[3] << 8));
+      } else {
+        const int sh = (t & 1) * 16;
+        const u32 pg = ((u32)c[0] << sh) + ((u32)c[1] << (sh + 8)), pg8 = ((u32)c[2] << sh) + ((u32)c[3] << (sh + 8));
+        const u32 fg = pg + __shfl_xor_sync(0xffffffffu, pg, 1), fg8 = pg8 + __shfl_xor_sync(0xffffffffu, pg8, 1);
+        if (!(t & 1)) ((u32*)D)[row * n + col / 4] = fg;
+        else ((u32*)D)[(row + 8) * n + col / 4] = fg8;
+      }
+    }
+}
+}  // namespace fz
+
 // --- cuBLASLt ------------------------------------------------------------------------------------------------------
 
 // Y (M x N, s32, row-major) = X (M x K, int8, row-major) W (N x K, int8, row-major)^T, autotuned over the heuristic's top 8.
@@ -352,7 +486,11 @@ int main(int argc, char** argv) {
   const int m = atoi(argv[2]), n = atoi(argv[3]), reps = atoi(argv[5]);
   const size_t batch = (size_t)atoi(argv[4]) << 20;
   const char* outdir = argv[6];
-  const bool tree = argc > 7 && !strcmp(argv[7], "tree");
+  bool tree = false, fused = false;
+  for (int i = 7; i < argc; ++i) {
+    tree |= !strcmp(argv[i], "tree");
+    fused |= !strcmp(argv[i], "fused");
+  }
   const size_t rows = batch / m;
   const int K = m * e.split;
   char name[96];
@@ -406,11 +544,42 @@ int main(int argc, char** argv) {
   CK(cudaStreamSynchronize(st));
   const int bad_sha = check_sha(X, shaX, rows, m, 16) + (dig_whole ? check_sha(s0.D, shaD, rows, (int)s0.dbytes(), 16) : 0);
 
+  // the fused kernel, held to the cuBLASLt path's digests over the whole batch
+  int8_t* dWi = nullptr;
+  uint8_t* Df = nullptr;
+  long long fused_bad = -1;
+  const int NW = e.L * n;
+  fused = fused && rows % fz::BM == 0 && NW % fz::BN == 0 && K % fz::BK == 0;
+  auto run_fused = [&]() {
+    const dim3 grid(NW / fz::BN, (unsigned)(rows / fz::BM));
+    if (e.L == 4) fz::sis_fused<4, 1><<<grid, 256, 0, st>>>(X, dWi, Df, m, NW);
+    else if (e.L == 2) fz::sis_fused<2, 1><<<grid, 256, 0, st>>>(X, dWi, Df, m, NW);
+    else fz::sis_fused<1, 2><<<grid, 256, 0, st>>>(X, dWi, Df, m, NW);
+  };
+  if (fused) {
+    std::vector<int8_t> Wi(A.size());
+    for (int l = 0; l < e.L; ++l)
+      for (int j = 0; j < n; ++j)
+        memcpy(Wi.data() + ((size_t)j * e.L + l) * K, A.data() + ((size_t)l * n + j) * K, K);
+    CK(cudaMalloc(&dWi, Wi.size()));
+    CK(cudaMemcpy(dWi, Wi.data(), Wi.size(), cudaMemcpyHostToDevice));
+    CK(cudaMalloc(&Df, rows * s0.dbytes()));
+    CK(cudaMemset(Df, 0xA5, rows * s0.dbytes()));
+    run_fused();
+    CK(cudaGetLastError());
+    CK(cudaStreamSynchronize(st));
+    std::vector<uint8_t> a(rows * s0.dbytes()), b(rows * s0.dbytes());
+    CK(cudaMemcpy(a.data(), Df, a.size(), cudaMemcpyDeviceToHost));
+    CK(cudaMemcpy(b.data(), s0.D, b.size(), cudaMemcpyDeviceToHost));
+    fused_bad = 0;
+    for (size_t i = 0; i < a.size(); ++i) fused_bad += a[i] != b[i];
+  }
+
   printf("{\"check\": {\"name\": \"%s\", \"gpu\": \"%s\", \"sm\": %d.%d, \"sis_rows_bad\": %d, \"sha_rows_bad\": %d, "
-         "\"tree_levels\": %zu}}\n",
-         name, prop.name, prop.major, prop.minor, bad, bad_sha, levels.size());
+         "\"tree_levels\": %zu, \"fused_bytes_bad\": %lld}}\n",
+         name, prop.name, prop.major, prop.minor, bad, bad_sha, levels.size(), fused_bad);
   fflush(stdout);
-  if (bad || bad_sha) return 4;
+  if (bad || bad_sha || fused_bad > 0) return 4;
 
   const int rthreads = 256, rblocks = prop.multiProcessorCount * 8, chain = 64;
   u64* io; CK(cudaMalloc(&io, (size_t)rthreads * rblocks * 8));
@@ -425,8 +594,11 @@ int main(int argc, char** argv) {
     mhz.push_back(nv.sm());
   };
   std::vector<double> t_sis, t_gemm, t_tree, t_shaX, t_shaD, t_rate, mz_sis, mz_gemm, mz_tree, mz_shaX, mz_shaD, mz_rate;
+  std::vector<double> t_fused, mz_fused;
   for (int r = 0; r <= reps; ++r) {
-    std::vector<double> a, b, c, d, f, g, a1, b1, c1, d1, f1, g1;
+    std::vector<double> a, b, c, d, f, g, a1, b1, c1, d1, f1, g1, h, h1;
+    if (fused) timed(run_fused, h, h1);
+    if (r && fused) { t_fused.push_back(h[0]); mz_fused.push_back(h1[0]); }
     timed([&] { s0.run(st); }, a, a1);
     timed([&] { CL(s0.g.run(st)); }, b, b1);
     if (!levels.empty()) timed([&] { s0.run(st); for (auto& l : levels) l.run(st); }, c, c1);
@@ -449,16 +621,19 @@ int main(int argc, char** argv) {
          "\"sis_ms\": %.5f, \"sis_gb_s\": %.2f, \"gemm_ms\": %.5f, \"gemm_gb_s\": %.2f, \"gemm_tmac_s\": %.1f, "
          "\"tree_ms\": %.5f, \"tree_levels\": %zu, \"sha_rows_ms\": %.5f, \"sha_rows_gb_s\": %.2f, "
          "\"sha_digests_ms\": %.5f, \"rate_gcomp_s\": %.3f, \"rate_gb_s\": %.2f, \"x_sha_rows\": %.3f, "
-         "\"mhz_sis\": %.0f, \"mhz_sha\": %.0f, \"mhz_rate\": %.0f, ",
+         "\"mhz_sis\": %.0f, \"mhz_sha\": %.0f, \"mhz_rate\": %.0f, \"fused_ms\": %.5f, \"fused_gb_s\": %.2f, "
+         "\"fused_tmac_s\": %.1f, \"mhz_fused\": %.0f, ",
          name, prop.name, e.name.c_str(), m, n, e.L, K, rows, s0.dbytes(), batch, s0.g.algo_index, s0.g.algos,
          median(t_sis), gb / median(t_sis), median(t_gemm), gb / median(t_gemm), macs / median(t_gemm) * 1e-9,
          t_tree.empty() ? 0.0 : median(t_tree), levels.size(), median(t_shaX), gb / median(t_shaX),
          t_shaD.empty() ? 0.0 : median(t_shaD), comps / median(t_rate) * 1e-6, comps * 128 / median(t_rate) * 1e-6,
-         median(t_shaX) / median(t_sis), median(mz_sis), median(mz_shaX), median(mz_rate));
-  printf("\"reps\": {\"sis_ms\": %s, \"gemm_ms\": %s, \"tree_ms\": %s, \"sha_rows_ms\": %s, \"sha_digests_ms\": %s, "
+         median(t_shaX) / median(t_sis), median(mz_sis), median(mz_shaX), median(mz_rate),
+         t_fused.empty() ? 0.0 : median(t_fused), t_fused.empty() ? 0.0 : gb / median(t_fused),
+         t_fused.empty() ? 0.0 : macs / median(t_fused) * 1e-9, t_fused.empty() ? 0.0 : median(mz_fused));
+  printf("\"reps\": {\"fused_ms\": %s, \"mhz_fused\": %s, \"sis_ms\": %s, \"gemm_ms\": %s, \"tree_ms\": %s, \"sha_rows_ms\": %s, \"sha_digests_ms\": %s, "
          "\"rate_ms\": %s, \"mhz_sis\": %s, \"mhz_gemm\": %s, \"mhz_tree\": %s, \"mhz_sha_rows\": %s, \"mhz_sha_digests\": %s, "
          "\"mhz_rate\": %s}}}\n",
-         jlist(t_sis).c_str(), jlist(t_gemm).c_str(), jlist(t_tree).c_str(), jlist(t_shaX).c_str(), jlist(t_shaD).c_str(),
+         jlist(t_fused).c_str(), jlist(mz_fused).c_str(), jlist(t_sis).c_str(), jlist(t_gemm).c_str(), jlist(t_tree).c_str(), jlist(t_shaX).c_str(), jlist(t_shaD).c_str(),
          jlist(t_rate).c_str(), jlist(mz_sis).c_str(), jlist(mz_gemm).c_str(), jlist(mz_tree).c_str(),
          jlist(mz_shaX).c_str(), jlist(mz_shaD).c_str(), jlist(mz_rate).c_str());
   return 0;
