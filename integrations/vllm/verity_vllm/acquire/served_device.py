@@ -38,8 +38,9 @@ from verity_vllm.program.registry import inductor as IR
 from verity_vllm.program.registry.hopper import Fa3InvSum
 from verity_vllm.program.registry.prims import Fa2InvSum
 
-#: the FLASH_ATTN version each step family's served attention Definitions model (vLLM's selection there at its defaults)
-ATTENTION = {"hopper": 3, "blackwell_consumer": 2}
+#: the FLASH_ATTN version each step family's served attention Definitions model: vLLM's selection at its defaults on cc 9.0 and 12.0;
+#: on cc 10.0, whose default is FLASHINFER, the row declares FLASH_ATTN FA2 (`engine.args.attention_config`, with its `engine.reasons`)
+ATTENTION = {"hopper": 3, "blackwell_consumer": 2, "blackwell": 2}
 BACKEND = "FLASH_ATTN"
 
 
@@ -68,7 +69,7 @@ def device_of(cc: Any, sms: int, *, attention: list[dict[str, Any]] | None = Non
     cc = (int(cc[0]), int(cc[1]))
     missing, dot, fam = [], None, None
     try:
-        gt = gemm_target_for(cc)
+        gt = gemm_target_for(cc, batch_invariant=False)
         fam, dot = gt.key, TG.DOTS[gt.dot]
     except UnregisteredGemmTarget:
         missing.append(f"the cuBLAS GEMMs' k16 step (no registered GEMM target at cc {cc[0]}.{cc[1]})")

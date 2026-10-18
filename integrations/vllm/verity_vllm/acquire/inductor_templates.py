@@ -188,7 +188,7 @@ TEMPLATE = {t.name: t for t in TEMPLATES}
 _BLOCK = re.compile(r"^\w+ = async_compile\.triton\('(\w+)', '''(.*?)''', device_str='cuda'\)$", re.M | re.S)
 _JIT = re.compile(r"^@triton\.jit\ndef (\w+)\(", re.M)
 #: the triton_meta a kernel of each compute capability carries; a cc not here has no binding
-FLAGS = {cc: ("'enable_fp_fusion': True", "'disable_ftz': False", f"cc={cc[0]}{cc[1]}") for cc in ((9, 0), (12, 0))}
+FLAGS = {cc: ("'enable_fp_fusion': True", "'disable_ftz': False", f"cc={cc[0]}{cc[1]}") for cc in ((9, 0), (10, 0), (12, 0))}
 
 
 def kernel_sources(wrapper_src: str) -> dict[str, str]:
