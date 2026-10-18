@@ -1796,3 +1796,47 @@ def test_watch_fires_once_per_new_doorbell_and_marks_nothing_read(fake, registry
     assert run(capsys, "watch", "--as", "console", "--polls", "2")[0] == 1                # the same doorbell fires once
     rc, out, _ = run(capsys, "read", "--as", "console")
     assert rc == 0 and "panel?" in out                                                   # still unread for the agent
+
+
+# ---- routing and authorship under attack (the comms red team, 18 Oct) ----------------------------------------------------
+
+def test_a_forward_loop_or_a_chain_past_three_hops_rings_no_closed_inbox(fake, registry, routes_dirs, capsys):
+    """`Routes.resolve` stops after 3 hops and handed back the closed route it stopped on; `deliver` rang that retired
+    inbox, which nobody reads, and said `rang`."""
+    local, names = routes_dirs[0], ["old-a", "old-b", "old-c", "old-d"]
+    boxes = {n: fake.add(COORD, text=f"{slack.INBOX_HEAD}{n}. pointers", username=n, bot_id=BOT)["ts"] for n in names}
+    add_route(local, "old-a", boxes["old-a"], closed="2026-10-01T18:00Z", forward_to="old-b")
+    add_route(local, "old-b", boxes["old-b"], closed="2026-10-01T18:00Z", forward_to="old-a")
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-a", "--text", "where is the tree?")
+    assert rc == 0 and "route @old-a: its forward_to loops or runs past 3 hops (stopped at @old-b)" in err
+    issue = {"identifier": "LEAN-1", "url": "https://linear.app/x/LEAN-1", "team": {"key": "NOPE"}}
+    assert slack.ring_comment(argparse_ns(), json.loads(registry.read_text()), "infra", issue, "@old-a see the comment") == [
+        "@old-a: its forward_to loops or runs past 3 hops (stopped at @old-b): see `research msg names list`; the comment is on LEAN-1"]
+    assert all(bells(fake, b) == [] for b in boxes.values())
+    circuits = inbox(fake, routes_dirs, "circuits")
+    for n, to in zip(names, ["old-b", "old-c", "old-d", "circuits"]):                  # four hops to an open inbox
+        add_route(local, n, boxes[n], closed="2026-10-01T18:00Z", forward_to=to)
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-a", "--text", "and now?")
+    assert rc == 0 and "loops or runs past 3 hops" in err
+    assert bells(fake, circuits) == [] and all(bells(fake, b) == [] for b in boxes.values())
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-b", "--text", "three hops still ring")
+    assert rc == 0 and "route @circuits: rang (for @old-b, finished)" in err and len(bells(fake, circuits)) == 1
+
+
+def test_verify_author_judges_the_message_slack_has_whatever_thread_or_edit_the_event_claims(fake, registry, capsys):
+    root = fake.add(COORD, text="@circuits a question", username="infra", bot_id=BOT)
+    ours = fake.add(COORD, text="ours", username="circuits", bot_id=BOT, thread_ts=root["ts"])
+    theirs = fake.add(COORD, text="not ours", user="USTRANGER", thread_ts=root["ts"])
+    other = fake.add(COORD, text="@lean elsewhere", username="infra", bot_id=BOT)
+
+    def verify(**ev):
+        return run(capsys, "verify-author", "--event", json.dumps({"channel": COORD, **ev}))[0]
+
+    assert verify(ts=ours["ts"], thread_ts=root["ts"]) == 0 and verify(ts=root["ts"], thread_ts=root["ts"]) == 0
+    assert verify(ts=theirs["ts"], thread_ts=root["ts"], username="infra", bot_id=BOT) == 1
+    assert verify(ts=theirs["ts"], thread_ts=theirs["ts"]) == 1                          # a reply claimed as a root
+    assert verify(ts=theirs["ts"], thread_ts=other["ts"]) == 1                           # the wrong thread
+    assert verify(ts=ours["ts"]) == 1                                                    # a reply without its thread fails closed
+    edited = {"subtype": "message_changed", "message": {"ts": theirs["ts"], "thread_ts": root["ts"], "bot_id": BOT, "username": "infra"}}
+    assert verify(**edited) == 1
+    assert verify(**{**edited, "message": {**edited["message"], "ts": ours["ts"]}}) == 0

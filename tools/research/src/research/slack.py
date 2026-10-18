@@ -966,13 +966,28 @@ class Routes:
         return {r["inbox_ts"] for r in self.all().values()}
 
     def resolve(self, name: str) -> tuple[str, dict | None]:
-        """Follow a closed route's `forward_to` (at most 3 hops): the name that gets the doorbell, and its route."""
+        """Follow a closed route's `forward_to` (at most FORWARD_HOPS hops): the name that gets the doorbell, and its route.
+        A route still closed at the end (`unreachable`) is a dead end, a loop or a chain too long: nobody reads its inbox."""
         r = self.get_route(name)
-        for _ in range(3):
+        for _ in range(FORWARD_HOPS):
             if not r or not r.get("closed") or not r.get("forward_to"):
                 break
             name, r = r["forward_to"], self.get_route(r["forward_to"])
         return name, r
+
+
+FORWARD_HOPS = 3
+
+
+def unreachable(name: str, to: str, r: dict | None) -> str | None:
+    """Why `Routes.resolve(name)`'s answer `(to, r)` rings no inbox, or None when `r` is open."""
+    if not r:
+        return "no inbox"
+    if not r.get("closed"):
+        return None
+    if r.get("forward_to"):
+        return f"its forward_to loops or runs past {FORWARD_HOPS} hops (stopped at @{to}): see `research msg names list`"
+    return "finished, with no forward_to: message its coordinator instead"
 
 
 def self_agent_id() -> str | None:
@@ -1079,15 +1094,14 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
         if name not in routes.local or routes.local[name].get("closed"):
             routes.get_route(name, fresh=True)                       # a clone not pulled since the name (re)opened
         to, r = routes.resolve(name)
-        if not r or (r.get("closed") and not r.get("forward_to")):
+        if why := unreachable(name, to, r):
             h = next((h for h in reg["handles"] if h["handle"] == name), None)
             if h and h.get("linear"):
                 lines.append(f"@{name}: no Slack inbox; reach it through its Linear team {h['linear']} (an ask to it files there)")
                 continue
             known = h is not None
             lines.append(f"@{name}: no inbox" + (f"; its holder opens one with `research msg names open --as {name}`" if known else
-                         " -- nobody will see this; check the name (`research msg names list`)") if not r else
-                         f"@{name}: finished, with no forward_to: message its coordinator instead")
+                         " -- nobody will see this; check the name (`research msg names list`)") if not r else f"@{name}: {why}")
             continue
         if to == author:
             continue
@@ -1352,8 +1366,8 @@ def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, te
         to, r = routes.resolve(name)
         if name == author or to == author:
             continue
-        if not r or (r.get("closed") and not r.get("forward_to")):
-            lines.append(f"@{name}: no inbox; the comment is on {issue['identifier']}")
+        if why := unreachable(name, to, r):
+            lines.append(f"@{name}: {why}; the comment is on {issue['identifier']}")
             continue
         api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                  unfurl_media="false", text=f"from {author}, Linear {issue['identifier']} ({issue['url']}): {body}")
