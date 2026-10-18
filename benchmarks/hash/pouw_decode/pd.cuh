@@ -144,7 +144,7 @@ DEV void rs_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& 
   const uint64_t t2 = (rs_rotr(a, 28) ^ r34 ^ r39) + ((a & b) ^ (a & c) ^ (b & c));
   h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
 }
-template <int V> constexpr int pd_mix() { return (V & PD_MIX2) ? 2 : (V & PD_MIX1) ? 1 : 0; }
+template <int V> constexpr int pd_mix = (V & PD_MIX2) ? 2 : (V & PD_MIX1) ? 1 : 0;
 DEV void rs_next16(uint64_t* w) {   // W_{t+16} for the ring's 16 words W_t, in place, in order
 #pragma unroll
   for (int i = 0; i < 16; i++) {
@@ -214,10 +214,10 @@ template <int M = 0> DEV void rl_compress(uint64_t* st, const uint64_t* m16) {  
 // compression takes a copy of the message, so the caller's words stay as they were.  The mix needs the rolled forms.
 constexpr int PD_FORM = PD_ROLLED | PD_MIX1 | PD_MIX2;
 template <int F> DEV void pd_compress_in(uint64_t* st, uint64_t* w) {
-  if constexpr ((F & PD_ROLLED) != 0) rl_compress<pd_mix<F>()>(st, w); else rs_compress(st, w);
+  if constexpr ((F & PD_ROLLED) != 0) rl_compress<pd_mix<F>>(st, w); else rs_compress(st, w);
 }
 template <int F> DEV void pd_rounds_in(uint64_t* st, const uint64_t* kw) {
-  if constexpr ((F & PD_ROLLED) != 0) rl_rounds<pd_mix<F>()>(st, kw); else rs_rounds<pd_mix<F>()>(st, kw);
+  if constexpr ((F & PD_ROLLED) != 0) rl_rounds<pd_mix<F>>(st, kw); else rs_rounds<pd_mix<F>>(st, kw);
 }
 template <int F> DEV void pd_sched_in(const uint64_t* m16, uint64_t* kw) {
   if constexpr ((F & PD_ROLLED) != 0) rl_sched(m16, kw); else rs_sched(m16, kw);
@@ -312,7 +312,7 @@ DEV void pd_pstop() {   // the consumer warp: its producer returns
 
 // a variant's compression at a site; P: the site is a pair's consumer (pd_pcmp)
 template <int V, int P = 0> DEV void pd_cmp(uint64_t* st, uint64_t* w) {
-  constexpr int M = pd_mix<V>();
+  constexpr int M = pd_mix<V>;
   if constexpr (P != 0) {
     if constexpr ((V & PD_CALL) != 0) pd_pcmp_call<M>(st, w); else pd_pcmp_in<M>(st, w);
   } else if constexpr ((V & PD_CALL) != 0) {
