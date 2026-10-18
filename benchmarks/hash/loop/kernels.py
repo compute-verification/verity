@@ -2,13 +2,15 @@
 of at most 64 tokens, prefill: the rest), every kernel launched while a step ran, grouped by name, with its launches a step, mean
 duration, grid and block, stream, and the median start of its first launch relative to the step's first and last model kernel
 (ms; negative: before). Also, per step, the GPU's idle time between the step's model kernels (the gaps a hash could fill without
-sharing SMs). Measurement only.
+sharing SMs). `--gaps` instead groups those idle gaps by the kernels on either side, with the share whose next kernel was launched
+after the gap opened (the host was late) and the runtime calls the launching thread made inside them. Measurement only.
 
-    python3 benchmarks/hash/loop/kernels.py OUT/served.nsys-rep [--arm served-commit-rows] [--phase decode] [--top 20]
+    python3 benchmarks/hash/loop/kernels.py OUT/served.nsys-rep [--arm served-commit-rows] [--phase decode] [--top 20] [--gaps]
 """
 from __future__ import annotations
 
 import argparse
+import bisect
 import sqlite3
 import statistics
 import subprocess
@@ -27,6 +29,7 @@ def main() -> int:
     ap.add_argument("--arm", default="served-commit-rows")
     ap.add_argument("--phase", choices=("decode", "prefill"), default="decode")
     ap.add_argument("--top", type=int, default=20)
+    ap.add_argument("--gaps", action="store_true")
     a = ap.parse_args()
     db_path = a.report
     if a.report.suffix != ".sqlite":
@@ -44,12 +47,16 @@ def main() -> int:
         return 1
     r0, r1, _, gtid = runs[-1]
     pid = gtid >> 24
+    api = q("SELECT start, end, correlationId, nameId FROM CUPTI_ACTIVITY_KIND_RUNTIME WHERE globalTid = ? AND start >= ? AND start <= ? "
+            "ORDER BY start", gtid, r0, r1)
     launch = {c: s for s, c in q("SELECT start, correlationId FROM CUPTI_ACTIVITY_KIND_RUNTIME WHERE globalTid >> 24 = ?", pid)}
     kern = [(s, e, strings.get(n, str(n)), launch.get(c, -1), st, (gx, gy, gz, bx)) for s, e, n, c, st, gx, gy, gz, bx in
             q("SELECT start, end, shortName, correlationId, streamId, gridX, gridY, gridZ, blockX FROM CUPTI_ACTIVITY_KIND_KERNEL "
               "WHERE globalPid >> 24 = ? AND end >= ? AND start <= ?", pid, r0, r1 + 5_000_000_000)]
     steps = sorted((s, int(t.split(":")[1])) for s, e, t, g in nvtx if g >> 24 == pid and r0 <= s <= r1 and t and t.startswith("exec:"))
     bounds = [s for s, _ in steps] + [r1]
+    if a.gaps:
+        return gaps(a, steps, bounds, kern, api, strings, nvtx, pid)
     by: dict[str, list] = defaultdict(lambda: [0, [], set(), set(), [], []])
     idle, nsteps = [], 0
     for i, (s, tok) in enumerate(steps):
@@ -84,6 +91,58 @@ def main() -> int:
         print(f"  {n[:44]:<44} {NS.cat(n):<15} {cnt / nsteps:>6.1f} {statistics.fmean(durs) / 1e3:>8.1f} "
               f"{sum(durs) / 1e6 / nsteps:>7.3f} {g:<18} {','.join(map(str, sorted(sts))):<8} "
               f"{statistics.median(f0):>11.3f} {statistics.median(f1):>10.3f}")
+    return 0
+
+
+def gaps(a, steps, bounds, kern, api, strings, nvtx, pid) -> int:
+    pairs: dict[tuple[str, str], list] = defaultdict(lambda: [0, 0, 0, 0])   # count, ns, ns host-late, count host-late
+    calls: dict[str, int] = defaultdict(int)
+    ranges: dict[str, int] = defaultdict(int)
+    api_starts = [s for s, _, _, _ in api]
+    marks = [(s, e, t) for s, e, t, g in nvtx if g >> 24 == pid and t and not t.startswith(("run:", "exec:"))]
+    total, nsteps = 0, 0
+    for i, (s, tok) in enumerate(steps):
+        if (tok <= 64) != (a.phase == "decode"):
+            continue
+        serve = sorted(k for k in kern if s <= k[3] < bounds[i + 1] and NS.cat(k[2]) == "serve")
+        if not serve:
+            continue
+        nsteps += 1
+        end, prev = serve[0][1], serve[0][2]
+        for k in serve[1:]:
+            if k[0] > end + 2_000:
+                g0, g1 = end, k[0]
+                p = pairs[(prev[:40], k[2][:40])]
+                p[0] += 1
+                p[1] += g1 - g0
+                total += g1 - g0
+                if k[3] > g0:
+                    p[2] += g1 - g0
+                    p[3] += 1
+                j = bisect.bisect_left(api_starts, g0 - 1_000_000)
+                while j < len(api) and api[j][0] < g1:
+                    c0, c1 = max(api[j][0], g0), min(api[j][1], g1)
+                    if c1 > c0:
+                        calls[strings.get(api[j][3], str(api[j][3])).split("_v")[0]] += c1 - c0
+                    j += 1
+                for m0, m1, t in marks:
+                    c0, c1 = max(m0, g0), min(m1, g1)
+                    if c1 > c0:
+                        ranges[t.split(":")[0]] += c1 - c0
+            if k[1] > end:
+                end, prev = k[1], k[2]
+    if not nsteps:
+        print(f"no {a.phase} steps", file=sys.stderr)
+        return 1
+    per = lambda ns: ns / 1e6 / nsteps  # noqa: E731
+    print(f"{a.arm} {a.phase}: {nsteps} steps; GPU idle between model kernels {per(total):.3f} ms a step")
+    print(f"  {'before the gap':<40} {'after the gap':<40} {'n/step':>6} {'ms/step':>7} {'host-late ms':>12} {'host-late n':>11}")
+    for (b, n), (cnt, ns, late, nlate) in sorted(pairs.items(), key=lambda kv: -kv[1][1])[:a.top]:
+        print(f"  {b:<40} {n:<40} {cnt / nsteps:>6.1f} {per(ns):>7.3f} {per(late):>12.3f} {nlate / nsteps:>11.1f}")
+    print("  runtime calls inside the gaps (ms/step): " + ", ".join(f"{c} {per(v):.3f}" for c, v in
+                                                              sorted(calls.items(), key=lambda kv: -kv[1])[:10]))
+    print("  NVTX ranges over the gaps (ms/step): " + ", ".join(f"{t} {per(v):.3f}" for t, v in
+                                                          sorted(ranges.items(), key=lambda kv: -kv[1])[:10]))
     return 0
 
 
