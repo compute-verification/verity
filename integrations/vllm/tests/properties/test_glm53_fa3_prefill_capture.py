@@ -1,7 +1,7 @@
 """The GLM-5.3 FA3 prefill capture without a GPU: the launch check reads the tile, the flags and the combine kernel from FA3's kernel
 names, the cases reach every sampled row and both served classes, a comparison job takes the twin's words as the kernel's and finds a
-flipped one, a non-finite head takes the reference evaluator's words, the verdict leaves the split sequences out, and `main` end to
-end (the GPU run is `tests/properties/glm53_fa3_prefill_capture_gpu.py --out ...` on an H200)."""
+flipped one, a non-finite head takes the reference evaluator's words, the verdict leaves the split sequences out and needs the
+backend's launches to write the served words, and `main` end to end (the GPU run is `tests/properties/glm53_fa3_prefill_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
 import json
@@ -116,9 +116,12 @@ def _rec(mode: str, split: int, **over) -> dict:
             **{k: 1 for k in X.TOTALS}, "mismatch": 0, "twin_mismatch": 0, "binding_mismatch": 0} | over
 
 
+BACKEND = {"mode": "backend", "ok": True, "deterministic": True, "same_as_served": True}
+
+
 def _doc(comparisons) -> dict:
     return {"gate": {"ok": True}, "errors": {}, "selection": {"ok": True}, "mufu": {"ok": True},
-            "launches": [{"ok": True, "deterministic": True}], "classes": X.summary(comparisons)}
+            "launches": [{"mode": "served", "ok": True, "deterministic": True}, BACKEND], "classes": X.summary(comparisons)}
 
 
 def test_the_verdict_leaves_the_split_sequences_out() -> None:
@@ -128,9 +131,11 @@ def test_the_verdict_leaves_the_split_sequences_out() -> None:
     assert not X._verdict(_doc([_rec("pinned", 1), _rec("served", 1, binding_mismatch=1)]))
     assert not X._verdict(_doc([_rec("pinned", 1), _rec("served", 3)]))          # no served sequence ran as one split
     assert not X._verdict(_doc([_rec("pinned", 1, reference=0), _rec("served", 1)]))
-    for key, bad in (("mufu", {"ok": False}), ("selection", {"ok": False}), ("launches", [{"ok": False, "deterministic": True}]),
-                     ("launches", [{"ok": True, "deterministic": False}]), ("errors", {"compare/x": "boom"})):
-        assert not X._verdict(_doc(good) | {key: bad}), key
+    for key, bad in (("mufu", {"ok": False}), ("selection", {"ok": False}), ("launches", [{"ok": False, "deterministic": True}, BACKEND]),
+                     ("launches", [{"ok": True, "deterministic": False}, BACKEND]), ("errors", {"compare/x": "boom"}),
+                     ("launches", [{"mode": "served", "ok": True, "deterministic": True}]),
+                     ("launches", [BACKEND, BACKEND | {"same_as_served": False}])):
+        assert not X._verdict(_doc(good) | {key: bad}), (key, bad)
 
 
 @pytest.mark.slow
@@ -145,7 +150,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, wher
 
     def gpu(work, outdir, quick, only, doc):
         doc["selection"], doc["mufu"] = {"ok": True}, {"ok": True}
-        doc["launches"] += [{"case": n, "ok": True, "deterministic": True} for n in ("a", "b", "c")]
+        doc["launches"] += [{"case": n, "ok": True, "deterministic": True} for n in ("a", "b", "c")] + [BACKEND | {"case": "b"}]
         flip = (lambda q, k, v, out: out.__setitem__((7, 0, 0), out[7, 0, 0] ^ 1))
         return (_launch(work, "a", [83, 3], 3, "pinned", plant=flip if where == "pinned" else None)
                 + _launch(work, "b", [83, 3], 3, "served") + _launch(work, "c", [300], 4, "served", plant=flip if where != "pinned" else None))
