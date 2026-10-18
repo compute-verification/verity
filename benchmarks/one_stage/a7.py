@@ -506,13 +506,8 @@ def bound_row(template: str, r: str, i: int, a: dict, S) -> tuple[str, int] | No
         return None
     if r == "phi":
         return "map", 0
-    if r.startswith("val"):
-        k = int(r[3:])
-        return ("value", a["pos"][k]) if (a["present"] >> k) & 1 else None
-    if r.startswith("pay"):
-        c = int(r[3:])
-        return ("payload", a["first"] - S.N + c) if c < a["count"] else None
-    return None
+    kind, at = RU.map_value_leaves(S, a).get(r, (None, 0))
+    return ("value", at) if kind == "value" else ("payload", at - S.N) if kind == "block" else None
 
 
 def bindings(m: dict, canons: dict, pub_args: list[dict], S) -> dict:

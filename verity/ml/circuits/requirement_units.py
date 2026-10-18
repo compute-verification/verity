@@ -38,6 +38,13 @@ map doesn't write. That is checked on the commitments, outside the circuit, with
 here: it keys the block's encoding, which the opening's decode checks against the same leaf (under zero knowledge, the
 block-decode unit's payload-against-digest check, with ``c_a`` a public input beside the append's root and count).
 
+**The value commitments' layout.** A memory-map instance's row ``val{k}`` (k present) is leaf ``pos[k]`` of the one-stage
+value commitments, which hold the written values in position order, and its row ``pay{c}`` (c below ``count``) is block
+``first + c``'s payload, its append's leaf at that store index. `map_value_leaves` gives both from the public row alone. So
+a unit holding a block's payload (the block-decode unit) reaches the circuit's KV values by ``b || c``: its payload row is
+the map instance's ``pay{c}``, which carries each ``val{k}`` in a slot the private layout names, and each ``val{k}`` is its
+value leaf.
+
 **PlanMatch**, at step t: the blocks t reads are the registered ones its structural reads hold (``regmask``, bit j block j
 for j < NR), the block of each gathered table row (``gmask``'s bit g for each of the G gathers: the table's row ``tok[g]``,
 a value of the circuit, at block TB + tok[g] / RPB, RPB rows a block, the table's blocks TB ... NR - 1), and the block of each
@@ -79,8 +86,9 @@ from .defs import CompositeDefinition
 from .requirement import BLOCK_BITS, Layout, Requirement, Store
 from .types import Array
 
-__all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "U16", "layout_words", "map_inputs", "map_words", "memory_map",
-           "memory_map_rows", "plan_inputs", "plan_match", "plan_rows", "registered_frees", "row_words", "value_bits"]
+__all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "U16", "layout_words", "map_inputs", "map_value_leaves", "map_words",
+           "memory_map", "memory_map_rows", "plan_inputs", "plan_match", "plan_rows", "registered_frees", "row_words",
+           "value_bits"]
 
 U16 = Array(16, BL.BIT)
 #: a block's payload in u16 words
@@ -415,6 +423,19 @@ def registered_frees(req: Requirement, registered_block: dict[int, int]) -> dict
     for v, j in registered_block.items():
         if v in req.last:
             out[j] = max(out.get(j, -1), req.last[v])
+    return out
+
+
+def map_value_leaves(S, pub: dict) -> dict[str, tuple[str, int]]:
+    """Where a MemoryMapStep instance's value and payload rows sit, from its public row alone (``pub``'s ``first``, ``count``,
+    ``present`` and ``pos``, as `map_inputs` gives them): ``val{k}`` of each present k is ``("value", pos[k])``, leaf pos[k] of
+    the one-stage value commitments (the written values in position order), and ``pay{c}`` of each c below ``count`` is
+    ``("block", first + c)``, that store index's payload (its append's leaf)."""
+    if pub["count"] > S.C or pub["present"] >> S.K or any(pub["pos"][k] >= S.V for k in range(S.K) if (pub["present"] >> k) & 1):
+        raise ValueError(f"a public row of at most C = {S.C} blocks and K = {S.K} values below V = {S.V}, not count "
+                         f"{pub['count']}, present {pub['present']:#x}, pos {list(pub['pos'])}")
+    out = {f"val{k}": ("value", pub["pos"][k]) for k in range(S.K) if (pub["present"] >> k) & 1}
+    out.update({f"pay{c}": ("block", pub["first"] + c) for c in range(pub["count"])})
     return out
 
 
