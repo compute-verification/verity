@@ -133,9 +133,15 @@ def rows_of(fn) -> list[tuple[str, str, int, list[str]]] | None:
     return rows
 
 
+def out_rows(n_out: int) -> list[tuple[str, tuple[int]]]:
+    """A V2 output row per output port: with hidden outputs the proved scope admits only output rows of one port each
+    (`ProvedScope.bitRows`), so a run of several is refused at the Lean verifier."""
+    return [(V2, (j,)) for j in range(n_out)]
+
+
 def try_lower(fn) -> dict:
-    """M0's `UnitStager` on fn (rows as `rows_of`, one V2 output row of every output): the composed circuit's size, or why
-    it was refused."""
+    """M0's `UnitStager` on fn (rows as `rows_of`, output rows as `out_rows`): the composed circuit's size, or why it was
+    refused."""
     from verity_flock import class_statement as CS
     from verity_flock import ir_lower as IL
     rows = rows_of(fn)
@@ -145,7 +151,7 @@ def try_lower(fn) -> dict:
     n_out = len(ret.fields) if hasattr(ret, "fields") else 1
     t = time.time()
     try:
-        st = CS.UnitStager(fn, f"a8-probe/{family(fn.id)}", rows, [(V2, tuple(range(n_out)))])
+        st = CS.UnitStager(fn, f"a8-probe/{family(fn.id)}", rows, out_rows(n_out))
     except IL.NoPiece as e:
         return {"outcome": "no-piece", "piece": str(e)[:300], "seconds": round(time.time() - t, 1)}
     except ValueError as e:
