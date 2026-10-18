@@ -16,15 +16,20 @@ import Models.Accounting.Guarantees.Gates
 # The circuit model's window and lower bounds, proved
 
 `ProvenWindow` by induction over the gates (each value lies in its derived interval: `Iv.add`, `Iv.scale` and
-`Iv.mul` are sound), and `ClampOrWrap` from it (in the window a clamp and a wrap are both the identity); `Fooling` by
-induction over the gates (every free gate is 2-adically triangular in its window) and a count of the
+`Iv.mul` are sound, and a gather's value is a column word or 0, in the hull `Iv.join` gives), and `ClampOrWrap` from
+it (in the window a clamp and a wrap are both the identity); `Fooling` by induction over the gates (every free gate is
+2-adically triangular in its window) and a count of the
 charged gates' joint values; `SquaringCarry` from it at `j = 1` on the sparse family, whose squares have no carries
 between bytes; `SquaringCarryNibbles` from it at `j = 4` on the nibble family, whose squares first differ two bytes
 above their first differing nibble (`a² − a'² = (a − a')(a + a')`); `UnitsFooling` by the same induction, the
-trace being each dynamic run input's and budgeted gate's value and each dynamic index's class at its gathers' most
-index bits, which the fresh index bits pay for; `SquaringUnits` from it on the nibble family; `EncodeBudget` and
+trace being each dynamic run input's and budgeted gate's value and each dynamic index's two classes, `min(v, 2^b − 1)`
+at the most index bits `b` its gathers read and `v mod 2^b'` at the most `b'` its table reads read, which the fresh
+index bits of each kind pay for; `SquaringUnits` from it on the nibble family; `EncodeBudget` and
 `EncodeCost` from `EncodeChainHardness` by summing the census's units over the
-windows and classes; `RhoPairs` from Fermat's little theorem (`s² = x · x^((p−1)/2) = ±x`).
+windows and classes; `RhoPairs` from Fermat's little theorem (`s² = x · x^((p−1)/2) = ±x`). `DeclaredWindow` by
+`ProvenWindow`'s induction, each gate's declared bound earned from the earlier gates' intervals; `Int8LinearWindow`
+and `LutPvWindow` from `dotChain_ok`, which proves any s8 dot chain over declared operands whose `32·S` products fit
+s32.
 -/
 
 namespace Accounting.SecurityProofs.Gates
@@ -141,7 +146,7 @@ lemma value_congr {m : ℤ} (g : Gate ι) (x x' : ι → ℤ) (vs vs' : List ℤ
     | cons j u =>
       simp only [List.map_cons, List.headD_cons, List.tail_cons, ← List.map_take, ← List.map_drop]
       exact (hv j).add (sum_zipWith_congr _ _ hv _ _)
-  | gather => rw [hop] at hc; simp [Op.charged] at hc
+  | gather _ => rw [hop] at hc; simp [Op.charged] at hc
   | budgeted cls f => rw [hop] at hc; simp [Op.charged] at hc
 
 /-- Two inputs on which `C` is in its window, that agree mod `m` in every registered and coin input, and on which
@@ -228,6 +233,19 @@ lemma holds_mul_sum (I : ℕ → Iv) (V : ℕ → ℤ) (hIV : ∀ j, Holds (I j)
     have := holds_mul_sum I V hIV u w _ _ (h.add ((hIV i).mul (hIV j)))
     rwa [add_assoc] at this
 
+/-- A hull holds what its start or any of its intervals holds. -/
+lemma holds_foldl_join : ∀ (l : List Iv) (s : Iv) (z : ℤ), (Holds s z ∨ ∃ b ∈ l, Holds b z) →
+    Holds (l.foldl Iv.join s) z
+  | [], s, z, h => by simpa using h
+  | b :: l, s, z, h => by
+    simp only [List.foldl_cons]
+    refine holds_foldl_join l _ z ?_
+    rcases h with h | ⟨b', hb', h⟩
+    · exact .inl ⟨min_le_of_left_le h.1, le_max_of_le_left h.2⟩
+    · rcases List.mem_cons.mp hb' with rfl | hb'
+      · exact .inl ⟨min_le_of_right_le h.1, le_max_of_le_right h.2⟩
+      · exact .inr ⟨b', hb', h⟩
+
 /-- A derived gate's derived interval holds its exact value, given each operand in its derived interval. -/
 lemma derive_holds (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ)
     (hinv : ∀ j, Holds (ivs.getD j (0, 0)) (vs.getD j 0)) (hd : g.op.IsDerived) :
@@ -246,8 +264,21 @@ lemma derive_holds (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ
     | cons j u =>
       simp only [List.map_cons, List.headD_cons, List.tail_cons, ← List.map_take, ← List.map_drop]
       exact holds_mul_sum _ _ hinv _ _ _ _ (hinv j)
+  | gather low =>
+    simp only [Op.raw]
+    generalize g.args = u
+    cases u with
+    | nil => simp
+    | cons j u =>
+      simp only [List.map_cons, List.headD_cons, List.tail_cons]
+      refine holds_foldl_join _ _ _ ?_
+      generalize Op.gatherAt low (vs.getD j 0) = k
+      rcases Nat.lt_or_ge k u.length with hk | hk
+      · refine .inr ⟨_, List.mem_map.mpr ⟨_, List.getElem_mem hk, rfl⟩, ?_⟩
+        rw [List.getD_eq_getElem (u.map fun c => vs.getD c 0) 0 (by simpa using hk), List.getElem_map]
+        exact hinv _
+      · exact .inl (by rw [List.getD_eq_default _ _ (by simpa using hk)]; exact ⟨le_rfl, le_rfl⟩)
   | input b i => rw [hop] at hd; exact hd.elim
-  | gather => rw [hop] at hd; exact hd.elim
   | budgeted cls f => rw [hop] at hd; exact hd.elim
 
 /-- **The window's step**: a gate whose window is proven (`Proven`'s clauses for it) and whose declared interval
@@ -296,7 +327,6 @@ lemma gate_window (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ)
       unfold Gate.derive
       cases hop : g.op with
       | input b i => rfl
-      | gather => rfl
       | budgeted cls f => rfl
       | _ => rw [hop] at hd; exact absurd trivial hd
     rw [this]
@@ -316,9 +346,12 @@ lemma intervals_take_succ (C : Dag ι) (i : ℕ) (h : i < C.length) :
   rw [List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some]
   simp only [intervals, List.foldl_append, List.foldl_cons, List.foldl_nil]
 
-/-- Every value of a proven circuit, on an input on which its declared intervals hold, lies in its derived interval
-(and past the gates, `0` in `(0, 0)`). -/
-lemma window_inv (C : Dag ι) (x : ι → ℤ) (hP : Proven C) (hD : DeclaredHold C x) :
+/-- Every value of a proven circuit lies in its derived interval (and past the gates, `0` in `(0, 0)`), on an input on
+which each gate that isn't derived holds its declared interval whenever the gates before it hold their derived ones. -/
+lemma window_inv' (C : Dag ι) (x : ι → ℤ) (hP : Proven C)
+    (hD : ∀ i (h : i < C.length),
+      (∀ j, Holds ((intervals (C.take i)).getD j (0, 0)) ((values (C.take i) x).getD j 0)) → ¬ C[i].op.IsDerived →
+        C[i].lo ≤ C[i].raw x (values (C.take i) x) ∧ C[i].raw x (values (C.take i) x) ≤ C[i].hi) :
     ∀ n, n ≤ C.length → ∀ j, Holds ((intervals (C.take n)).getD j (0, 0)) ((values (C.take n) x).getD j 0) := by
   intro n
   induction n with
@@ -336,12 +369,18 @@ lemma window_inv (C : Dag ι) (x : ι → ℤ) (hP : Proven C) (hD : DeclaredHol
       rw [List.getD_append_right _ _ _ _ (by rw [hlenI]), List.getD_append_right _ _ _ _ (by rw [hlen]), hlenI, hlen,
         Nat.sub_self, List.getD_cons_zero, List.getD_cons_zero]
       obtain ⟨h1, -, h2⟩ := hP j hn'
-      exact (gate_window C[j] x _ _ (ih (by omega)) h1 h2 (hD j hn')).2
+      exact (gate_window C[j] x _ _ (ih (by omega)) h1 h2 (hD j hn' (ih (by omega)))).2
     · rw [List.getD_append_right _ _ _ _ (by rw [hlenI]; omega), List.getD_append_right _ _ _ _ (by rw [hlen]; omega),
         hlenI, hlen]
       obtain ⟨k, hk⟩ : ∃ k, j - n = k + 1 := ⟨j - n - 1, by omega⟩
       rw [hk]
       simp
+
+/-- Every value of a proven circuit, on an input on which its declared intervals hold, lies in its derived interval
+(and past the gates, `0` in `(0, 0)`). -/
+lemma window_inv (C : Dag ι) (x : ι → ℤ) (hP : Proven C) (hD : DeclaredHold C x) :
+    ∀ n, n ≤ C.length → ∀ j, Holds ((intervals (C.take n)).getD j (0, 0)) ((values (C.take n) x).getD j 0) :=
+  window_inv' C x hP fun i h _ => hD i h
 
 theorem ProvenWindow : Accounting.Guarantees.Gates.ProvenWindow := by
   intro ι C x hP hD i hi
@@ -791,8 +830,11 @@ lemma units_of_budget_none (C : Dag ι) (i : ℕ) (g : Gate ι) (hg : C[i]? = so
   simp only [units, hg]
   split <;> simp_all [Op.budget]
 
-/-- A gather's outcomes, its column's `V` words and the `0` outside it, fit its index bits. -/
-lemma indexBits_outcomes (g : Gate ι) : g.args.length ≤ 2 ^ g.indexBits := Nat.le_pow_clog (by norm_num) _
+/-- A gather's outcomes at its index, its column's `V` words and the `0` outside it, fit its index bits. -/
+lemma indexBits_outcomes (g : Gate ι) (hg : g.op = .gather none) : g.args.length ≤ 2 ^ g.indexBits := by
+  unfold Gate.indexBits
+  rw [hg]
+  exact Nat.le_pow_clog (by norm_num) _
 
 /-- Summing the census's units over the windows and classes: each gate's units are in its window's census, under its
 class. -/
@@ -813,20 +855,26 @@ theorem EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget := by
   intro F k B E εnum εden ι W caps A m x words out H hP hR hci hnd hlt hcw
   have h := H W m x words out hR hci hnd hlt hcw
   obtain ⟨hwin, hcap, -⟩ := hP
-  have hb : budgeted W ≤ caps.total * ∑ v ∈ Finset.range A.windows, A.reads v := by
-    rw [budgeted_eq W A hwin, Finset.mul_sum]
+  have hb : (budgeted W : ℚ) ≤ caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) := by
+    rw [budgeted_eq W A hwin]
+    push_cast
+    rw [Finset.mul_sum]
     apply Finset.sum_le_sum
     intro v hv
     obtain ⟨h1, h2, h3, h4, h5, -⟩ := hcap v (Finset.mem_range.mp hv)
-    simp only [Census.budgeted, Caps.total, add_mul]
-    omega
+    simp only [Census.budgeted, Caps.total, h5]
+    push_cast
+    linarith
   have hr : runBits W ≤ 8 * caps.runBytes * A.windows := by
     rw [runBits, ← sum_countAt W A.win A.windows _ hwin]
     calc _ ≤ ∑ v ∈ Finset.range A.windows, 8 * caps.runBytes :=
           Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2.2
       _ = 8 * caps.runBytes * A.windows := by simp [mul_comm]
-  calc words.length * E * (F.n - 1) ≤ budgeted W * (F.n - 1) + runBits W * E := h
-    _ ≤ _ := add_le_add (Nat.mul_le_mul_right _ hb) (Nat.mul_le_mul_right _ hr)
+  have h' : ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤ (budgeted W : ℚ) * (F.n - 1 : ℕ) + (runBits W * E : ℕ) := by
+    exact_mod_cast h
+  have hr' : ((runBits W * E : ℕ) : ℚ) ≤ (8 * caps.runBytes * A.windows * E : ℕ) := by
+    exact_mod_cast Nat.mul_le_mul_right E hr
+  exact h'.trans (add_le_add (mul_le_mul_of_nonneg_right hb (Nat.cast_nonneg _)) hr')
 
 theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
   intro F k B E εnum εden q H hn
@@ -842,9 +890,9 @@ theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
 /-- Gate `i` depends on a run or coin input. -/
 abbrev dynAt (C : Dag ι) (i : ℕ) : Bool := (dynamic C).getD i false
 
-/-- The most index bits a gather of index `j` in `C` reads. -/
-def maxIdx (C : Dag ι) (j : ℕ) : ℕ :=
-  ((C.filter fun h => h.op.isGather && h.args.head? == some j).map Gate.indexBits).foldl max 0
+/-- The most index bits a gather of index `j` and kind `k` in `C` reads. -/
+def maxIdx (C : Dag ι) (k : Bool) (j : ℕ) : ℕ :=
+  ((C.filter fun h => h.op.gatherKind == some k && h.args.head? == some j).map Gate.indexBits).foldl max 0
 
 /-- `dynamic`'s step at a gate, from the flags of the gates before it. -/
 def dynStep (ds : List Bool) (g : Gate ι) : Bool :=
@@ -865,10 +913,10 @@ def isBudg (g : Gate ι) : Bool :=
   | .budgeted _ _ => true
   | _ => false
 
-/-- The fresh index bits a gather at `i` pays when its index depends on a run or coin input. -/
-def freshAt (C : Dag ι) (i : ℕ) (g : Gate ι) : ℕ :=
+/-- The fresh index bits a gather of kind `k` at `i` pays when its index depends on a run or coin input. -/
+def freshAt (C : Dag ι) (k : Bool) (i : ℕ) (g : Gate ι) : ℕ :=
   match g.op, g.args with
-  | .gather, j :: _ => if dynAt C j then g.indexBits - maxIdx (C.take i) j else 0
+  | .gather low, j :: _ => if low.isSome = k ∧ dynAt C j = true then g.indexBits - maxIdx (C.take i) k j else 0
   | _, _ => 0
 
 lemma dynamic_eq (C : Dag ι) : dynamic C = C.foldl (fun ds g => ds ++ [dynStep ds g]) [] := rfl
@@ -983,21 +1031,23 @@ lemma le_foldl_max (l : List ℕ) : ∀ b : ℕ, b ≤ l.foldl max b ∧ ∀ a �
     obtain ⟨h1, h2⟩ := ih (max b y)
     exact ⟨le_trans (le_max_left _ _) h1, le_trans (le_max_right _ _) h1, h2⟩
 
-lemma indexBits_le_maxIdx (C : Dag ι) (n : ℕ) (h : n < C.length) (j : ℕ) (col : List ℕ) (hop : C[n].op = .gather)
-    (hargs : C[n].args = j :: col) : C[n].indexBits ≤ maxIdx C j :=
+lemma indexBits_le_maxIdx (C : Dag ι) (n : ℕ) (h : n < C.length) (low : Option ℕ) (j : ℕ) (col : List ℕ)
+    (hop : C[n].op = .gather low) (hargs : C[n].args = j :: col) : C[n].indexBits ≤ maxIdx C low.isSome j :=
   (le_foldl_max _ 0).2 _ (List.mem_map.mpr ⟨C[n], List.mem_filter.mpr ⟨List.getElem_mem h,
-    by simp [hop, hargs, Op.isGather]⟩, rfl⟩)
+    by simp [hop, hargs, Op.gatherKind]⟩, rfl⟩)
 
 /-- Two inputs on which `C` is in its window, that agree in every registered input and mod `m` in every coin input,
 on which each run input and each budgeted gate but a gather that depends on a run or coin input takes one value, and
-each gate that does takes one class `min(v, 2^b − 1)` at the most index bits `b` a gather of it reads: every gate's
-values agree mod `m`, and those of the gates that depend on no run or coin input agree. -/
+each gate that does takes one class `min(v, 2^b − 1)` at the most index bits `b` a gather of it reads at its index,
+and one class `v mod 2^b'` at the most `b'` a table read of it reads: every gate's values agree mod `m`, and those of
+the gates that depend on no run or coin input agree. -/
 lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWindow C x) (hw' : InWindow C x')
     (hreg : ∀ i, (∃ g ∈ C, g.op = .input .registered i) → x i = x' i)
     (hcoin : ∀ i, (∃ g ∈ C, g.op = .input .coin i) → x i ≡ x' i [ZMOD m])
     (htr : ∀ i (h : i < C.length), traced C[i] = true → dynAt C i = true → val C x i = val C x' i)
     (hidx : ∀ i, i < C.length → dynAt C i = true →
-      min (val C x i).toNat (2 ^ maxIdx C i - 1) = min (val C x' i).toNat (2 ^ maxIdx C i - 1)) :
+      min (val C x i).toNat (2 ^ maxIdx C false i - 1) = min (val C x' i).toNat (2 ^ maxIdx C false i - 1) ∧
+        val C x i % 2 ^ maxIdx C true i = val C x' i % 2 ^ maxIdx C true i) :
     ∀ n, n ≤ C.length → ∀ o, (values (C.take n) x).getD o 0 ≡ (values (C.take n) x').getD o 0 [ZMOD m] ∧
       ((o < n → dynAt C o = false) → (values (C.take n) x).getD o 0 = (values (C.take n) x').getD o 0) := by
   intro n
@@ -1066,7 +1116,7 @@ lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWind
             rw [← hval, ← hval']
             exact htr o hn' (by simp [traced, hop]) hd
           · exact .inl (value_eq_of_operands _ x x' _ _ hni (hargs hni (by simpa using hd)))
-        | gather =>
+        | gather low =>
           have hni : ∀ b i, C[o].op ≠ .input b i := by intro b i; rw [hop]; simp
           by_cases hd : dynAt C o = true
           · right
@@ -1078,18 +1128,41 @@ lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWind
             | nil => simp [Op.raw, Int.ModEq.refl]
             | cons j col =>
               simp only [Op.raw, List.map_cons, List.headD_cons, List.tail_cons]
-              have hK : col.length ≤ 2 ^ maxIdx C j - 1 := by
-                have h1 := indexBits_outcomes C[o]
-                have h2 := Nat.pow_le_pow_right (by norm_num : 0 < 2) (indexBits_le_maxIdx C o hn' j col hop hga)
-                rw [hga, List.length_cons] at h1
-                omega
-              refine getD_map_congr col _ _ hv _ _ _ hK ?_
-              by_cases hj : j < o ∧ dynAt C j = true
-              · have hjL : j < C.length := by omega
-                rw [getD_values_take C x j hjL o hj.1 hn'.le, getD_values_take C x' j hjL o hj.1 hn'.le,
-                  ← val_eq C x j hjL, ← val_eq C x' j hjL]
-                exact hidx j hjL hj.2
-              · rw [he j fun hjo => by simpa [hjo] using hj]
+              have hbits := indexBits_le_maxIdx C o hn' low j col hop hga
+              have hjv : (j < C.length ∧ dynAt C j = true ∧ (values (C.take o) x).getD j 0 = val C x j ∧
+                  (values (C.take o) x').getD j 0 = val C x' j) ∨
+                  (values (C.take o) x).getD j 0 = (values (C.take o) x').getD j 0 := by
+                by_cases hj : j < o ∧ dynAt C j = true
+                · have hjL : j < C.length := by omega
+                  exact .inl ⟨hjL, hj.2, by rw [getD_values_take C x j hjL o hj.1 hn'.le, val_eq C x j hjL],
+                    by rw [getD_values_take C x' j hjL o hj.1 hn'.le, val_eq C x' j hjL]⟩
+                · exact .inr (he j fun hjo => by simpa [hjo] using hj)
+              cases low with
+              | none =>
+                have hK : col.length ≤ 2 ^ maxIdx C false j - 1 := by
+                  have h1 := indexBits_outcomes C[o] hop
+                  have h2 := Nat.pow_le_pow_right (by norm_num : 0 < 2) hbits
+                  rw [hga, List.length_cons] at h1
+                  simp only [Option.isSome_none] at h2
+                  omega
+                refine getD_map_congr col _ _ hv _ _ _ hK ?_
+                rcases hjv with ⟨hjL, hjd, h1, h2⟩ | h
+                · simp only [Op.gatherAt]
+                  rw [h1, h2]
+                  exact (hidx j hjL hjd).1
+                · rw [h]
+              | some nb =>
+                refine getD_map_congr col _ _ hv col.length _ _ le_rfl ?_
+                congr 1
+                simp only [Op.gatherAt]
+                rcases hjv with ⟨hjL, hjd, h1, h2⟩ | h
+                · have hnb : nb ≤ maxIdx C true j := by
+                    have : C[o].indexBits = nb := by unfold Gate.indexBits; rw [hop]
+                    simpa [this] using hbits
+                  have hdvd : (2 : ℤ) ^ nb ∣ 2 ^ maxIdx C true j := pow_dvd_pow 2 hnb
+                  rw [h1, h2, ← Int.emod_emod_of_dvd (val C x j) hdvd, ← Int.emod_emod_of_dvd (val C x' j) hdvd,
+                    (hidx j hjL hjd).2]
+                · rw [h]
           · exact .inl (value_eq_of_operands _ x x' _ _ hni (hargs hni (by simpa using hd)))
       rcases key with hk | ⟨hd, hk⟩
       · exact ⟨by unfold Int.ModEq; rw [hk], fun _ => hk⟩
@@ -1100,9 +1173,11 @@ lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWind
       rw [hk]
       simp [Int.ModEq.refl]
 
-/-- Each gate's units are at least its unit as a budgeted gate but a gather and its fresh index bits as a gather. -/
+/-- Each gate's units are at least its unit as a budgeted gate but a gather and its fresh index bits as a gather of
+either kind. -/
 lemma units_ge (C : Dag ι) (i : ℕ) (h : i < C.length) :
-    (if (isBudg C[i] && dynAt C i) = true then 1 else 0) + freshAt C i C[i] ≤ units C i := by
+    (if (isBudg C[i] && dynAt C i) = true then 1 else 0) + (freshAt C false i C[i] + freshAt C true i C[i]) ≤
+      units C i := by
   have hg : C[i]? = some C[i] := List.getElem?_eq_getElem h
   have hd := any_dyn C i h
   simp only [units, hg]
@@ -1111,26 +1186,28 @@ lemma units_ge (C : Dag ι) (i : ℕ) (h : i < C.length) :
     simp only [isBudg, freshAt, hop, Bool.true_and, add_zero]
     have := hd (by intro b k; rw [hop]; simp)
     split_ifs <;> simp_all
-  | gather =>
+  | gather low =>
     cases hargs : C[i].args with
     | nil => simp [isBudg, freshAt, hop, hargs]
     | cons j col =>
       simp only [isBudg, freshAt, hop, hargs, maxIdx, dynAt, Bool.false_and, Bool.false_eq_true, ↓reduceIte, zero_add]
-      split_ifs <;> omega
+      cases low <;> simp only [Option.isSome_none, Option.isSome_some, true_and, false_and, Bool.false_eq_true,
+        Bool.true_eq_false, ↓reduceIte, zero_add, add_zero] <;> split_ifs <;> omega
   | _ => simp [isBudg, freshAt, hop]
 
-lemma maxIdx_take_succ (C : Dag ι) (n : ℕ) (h : n < C.length) (j : ℕ) :
-    maxIdx (C.take (n + 1)) j = max (maxIdx (C.take n) j)
-      (if (C[n].op.isGather && C[n].args.head? == some j) = true then C[n].indexBits else 0) := by
+lemma maxIdx_take_succ (C : Dag ι) (n : ℕ) (h : n < C.length) (k : Bool) (j : ℕ) :
+    maxIdx (C.take (n + 1)) k j = max (maxIdx (C.take n) k j)
+      (if (C[n].op.gatherKind == some k && C[n].args.head? == some j) = true then C[n].indexBits else 0) := by
   unfold maxIdx
   rw [List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some, List.filter_append, List.map_append,
     List.foldl_append]
   split_ifs with hp <;> simp [hp]
 
-/-- The fresh index bits telescope: over the gathers of each index, they sum to the most that index's gathers read. -/
-lemma sum_freshAt (C : Dag ι) : ∀ n, n ≤ C.length →
-    ∑ i ∈ Finset.range n, (if h : i < C.length then freshAt C i C[i] else 0) =
-      ∑ j ∈ Finset.range C.length, if dynAt C j = true then maxIdx (C.take n) j else 0 := by
+/-- The fresh index bits telescope: over the gathers of each index and kind, they sum to the most that index's
+gathers of that kind read. -/
+lemma sum_freshAt (C : Dag ι) (k : Bool) : ∀ n, n ≤ C.length →
+    ∑ i ∈ Finset.range n, (if h : i < C.length then freshAt C k i C[i] else 0) =
+      ∑ j ∈ Finset.range C.length, if dynAt C j = true then maxIdx (C.take n) k j else 0 := by
   intro n
   induction n with
   | zero => intro _; simp [maxIdx]
@@ -1139,48 +1216,54 @@ lemma sum_freshAt (C : Dag ι) : ∀ n, n ≤ C.length →
     have hnL : n < C.length := hn
     rw [Finset.sum_range_succ, ih (by omega), dite_eq_left hnL]
     simp only [maxIdx_take_succ C n hnL]
-    have hsplit : ∀ j, (if dynAt C j = true then max (maxIdx (C.take n) j)
-        (if (C[n].op.isGather && C[n].args.head? == some j) = true then C[n].indexBits else 0) else 0) =
-        (if dynAt C j = true then maxIdx (C.take n) j else 0) +
+    have hsplit : ∀ j, (if dynAt C j = true then max (maxIdx (C.take n) k j)
+        (if (C[n].op.gatherKind == some k && C[n].args.head? == some j) = true then C[n].indexBits else 0) else 0) =
+        (if dynAt C j = true then maxIdx (C.take n) k j else 0) +
         (if dynAt C j = true then
-          (if (C[n].op.isGather && C[n].args.head? == some j) = true then
-            C[n].indexBits - maxIdx (C.take n) j else 0) else 0) := by
+          (if (C[n].op.gatherKind == some k && C[n].args.head? == some j) = true then
+            C[n].indexBits - maxIdx (C.take n) k j else 0) else 0) := by
       intro j
       split_ifs <;> omega
     simp only [hsplit, Finset.sum_add_distrib]
     congr 1
     unfold freshAt
     cases hop : C[n].op with
-    | gather =>
+    | gather low =>
       cases hargs : C[n].args with
-      | nil => simp [Op.isGather]
+      | nil => simp [Op.gatherKind]
       | cons j0 col =>
-        simp only [Op.isGather, Bool.true_and, List.head?_cons, Option.some_beq_some, beq_iff_eq]
-        rw [Finset.sum_congr rfl fun j _ => (show (if dynAt C j = true then
-          (if j0 = j then C[n].indexBits - maxIdx (C.take n) j else 0) else 0) =
-          if j0 = j then (if dynAt C j = true then C[n].indexBits - maxIdx (C.take n) j else 0) else 0 by
-            split_ifs <;> rfl), Finset.sum_ite_eq]
-        by_cases hd : dynAt C j0 = true
-        · rw [ite_eq_left (Finset.mem_range.mpr (lt_of_dynAt C j0 hd))]
-        · simp only [hd, Bool.false_eq_true, ↓reduceIte, ite_self]
-    | _ => simp [Op.isGather]
+        simp only [Op.gatherKind, List.head?_cons, Option.some_beq_some, beq_iff_eq, Bool.and_eq_true]
+        by_cases hk : low.isSome = k
+        · simp only [hk, true_and]
+          rw [Finset.sum_congr rfl fun j _ => (show (if dynAt C j = true then
+            (if j0 = j then C[n].indexBits - maxIdx (C.take n) k j else 0) else 0) =
+            if j0 = j then (if dynAt C j = true then C[n].indexBits - maxIdx (C.take n) k j else 0) else 0 by
+              split_ifs <;> rfl), Finset.sum_ite_eq]
+          by_cases hd : dynAt C j0 = true
+          · rw [ite_eq_left (Finset.mem_range.mpr (lt_of_dynAt C j0 hd))]
+          · simp only [hd, Bool.false_eq_true, ↓reduceIte, ite_self]
+        · simp [hk]
+    | _ => simp [Op.gatherKind]
 
 theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
   intro ι κ C F x j w out hw1 hsize hwin hreg hcoin hdist
   classical
-  let T : κ → Fin C.length → ℤ × ℕ := fun s i =>
+  let T : κ → Fin C.length → ℤ × ℕ × ℤ := fun s i =>
     (if (traced C[i.1] && dynAt C i.1) = true then val C (x s) i.1 else 0,
-      if dynAt C i.1 = true then min (val C (x s) i.1).toNat (2 ^ maxIdx C i.1 - 1) else 0)
+      if dynAt C i.1 = true then min (val C (x s) i.1).toNat (2 ^ maxIdx C false i.1 - 1) else 0,
+      if dynAt C i.1 = true then val C (x s) i.1 % 2 ^ maxIdx C true i.1 else 0)
   let A : Fin C.length → Finset ℤ := fun i =>
     if (traced C[i.1] && dynAt C i.1) = true then Finset.Icc C[i.1].lo C[i.1].hi else {0}
   let B : Fin C.length → Finset ℕ := fun i =>
-    if dynAt C i.1 = true then Finset.range (2 ^ maxIdx C i.1) else {0}
-  have hmaps : Set.MapsTo T F (Fintype.piFinset fun i => A i ×ˢ B i) := by
+    if dynAt C i.1 = true then Finset.range (2 ^ maxIdx C false i.1) else {0}
+  let D : Fin C.length → Finset ℤ := fun i =>
+    if dynAt C i.1 = true then Finset.Ico 0 (2 ^ maxIdx C true i.1) else {0}
+  have hmaps : Set.MapsTo T F (Fintype.piFinset fun i => A i ×ˢ (B i ×ˢ D i)) := by
     intro s hs
     simp only [Finset.mem_coe] at hs
     simp only [Finset.mem_coe, Fintype.mem_piFinset, Finset.mem_product]
     intro i
-    constructor
+    refine ⟨?_, ?_, ?_⟩
     · simp only [T, A]
       split_ifs
       · have hok := hwin s hs i.1 i.2
@@ -1190,9 +1273,14 @@ theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
     · simp only [T, B]
       split_ifs
       · rw [Finset.mem_range]
-        have : 0 < 2 ^ maxIdx C i.1 := by positivity
-        generalize 2 ^ maxIdx C i.1 = P at *
+        have : 0 < 2 ^ maxIdx C false i.1 := by positivity
+        generalize 2 ^ maxIdx C false i.1 = P at *
         omega
+      · simp
+    · simp only [T, D]
+      split_ifs
+      · rw [Finset.mem_Ico]
+        exact ⟨Int.emod_nonneg _ (by positivity), Int.emod_lt_of_pos _ (by positivity)⟩
       · simp
   have hinj : Set.InjOn T F := by
     intro s hs s' hs' hT
@@ -1209,9 +1297,11 @@ theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
         simp only [T] at this
         rwa [ite_eq_left hc, ite_eq_left hc] at this)
       (fun i h hd => by
-        have := congrArg Prod.snd (hcomp i h)
-        simp only [T] at this
-        rwa [ite_eq_left hd, ite_eq_left hd] at this)
+        have h2 := congrArg (fun t => t.2.1) (hcomp i h)
+        have h3 := congrArg (fun t => t.2.2) (hcomp i h)
+        simp only [T] at h2 h3
+        rw [ite_eq_left hd, ite_eq_left hd] at h2 h3
+        exact ⟨h2, h3⟩)
       C.length le_rfl o
     rw [List.take_length] at h
     exact h.1
@@ -1238,30 +1328,39 @@ theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
       | _ => simp [traced, hop] at ht
     · simp only [Finset.card_singleton]; exact Nat.one_le_two_pow
     · simp only [Finset.card_singleton]; exact Nat.one_le_two_pow
-  have hB : ∀ i : Fin C.length, (B i).card = 2 ^ (if dynAt C i.1 = true then maxIdx C i.1 else 0) := by
+  have hB : ∀ i : Fin C.length, (B i).card = 2 ^ (if dynAt C i.1 = true then maxIdx C false i.1 else 0) := by
     intro i
     simp only [B]
     split_ifs <;> simp
+  have hD : ∀ i : Fin C.length, (D i).card = 2 ^ (if dynAt C i.1 = true then maxIdx C true i.1 else 0) := by
+    intro i
+    simp only [D]
+    split_ifs
+    · rw [Int.card_Ico, sub_zero, ← Nat.cast_ofNat, ← Nat.cast_pow, Int.toNat_natCast]
+    · simp
   have hunits : ∑ i : Fin C.length, (if (isBudg C[i.1] && dynAt C i.1) = true then 1 else 0) +
-      ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C i.1 else 0) ≤ budgeted C := by
-    have hf := sum_freshAt C C.length le_rfl
-    rw [List.take_length, ← Fin.sum_univ_eq_sum_range, ← Fin.sum_univ_eq_sum_range] at hf
-    simp only [Fin.is_lt, dite_true] at hf
-    rw [← hf, ← Finset.sum_add_distrib, budgeted, ← Fin.sum_univ_eq_sum_range]
+      (∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C false i.1 else 0) +
+        ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C true i.1 else 0)) ≤ budgeted C := by
+    have hf0 := sum_freshAt C false C.length le_rfl
+    have hf1 := sum_freshAt C true C.length le_rfl
+    rw [List.take_length, ← Fin.sum_univ_eq_sum_range, ← Fin.sum_univ_eq_sum_range] at hf0 hf1
+    simp only [Fin.is_lt, dite_true] at hf0 hf1
+    rw [← hf0, ← hf1, ← Finset.sum_add_distrib, ← Finset.sum_add_distrib, budgeted, ← Fin.sum_univ_eq_sum_range]
     exact Finset.sum_le_sum fun i _ => units_ge C i.1 i.2
   have hrun : ∑ i : Fin C.length, C[i.1].inputBits .run = runBits C := by
     rw [runBits, ← Fin.sum_univ_fun_getElem C (Gate.inputBits .run)]
-  calc F.card ≤ (Fintype.piFinset fun i => A i ×ˢ B i).card := Finset.card_le_card_of_injOn T hmaps hinj
-    _ = (∏ i, (A i).card) * ∏ i, (B i).card := by
-      rw [Fintype.card_piFinset, ← Finset.prod_mul_distrib]
+  calc F.card ≤ (Fintype.piFinset fun i => A i ×ˢ (B i ×ˢ D i)).card := Finset.card_le_card_of_injOn T hmaps hinj
+    _ = (∏ i, (A i).card) * ((∏ i, (B i).card) * ∏ i, (D i).card) := by
+      rw [Fintype.card_piFinset, ← Finset.prod_mul_distrib, ← Finset.prod_mul_distrib]
       simp [Finset.card_product]
     _ ≤ (∏ i : Fin C.length,
           2 ^ (C[i.1].inputBits .run + if (isBudg C[i.1] && dynAt C i.1) = true then w else 0)) *
-        ∏ i : Fin C.length, 2 ^ (if dynAt C i.1 = true then maxIdx C i.1 else 0) := by
+        ((∏ i : Fin C.length, 2 ^ (if dynAt C i.1 = true then maxIdx C false i.1 else 0)) *
+          ∏ i : Fin C.length, 2 ^ (if dynAt C i.1 = true then maxIdx C true i.1 else 0)) := by
       apply Nat.mul_le_mul (Finset.prod_le_prod fun i _ => hA i)
-      rw [Finset.prod_congr rfl fun i _ => hB i]
+      rw [Finset.prod_congr rfl fun i _ => hB i, Finset.prod_congr rfl fun i _ => hD i]
     _ ≤ 2 ^ (runBits C + w * budgeted C) := by
-      rw [Finset.prod_pow_eq_pow_sum, Finset.prod_pow_eq_pow_sum, ← pow_add]
+      rw [Finset.prod_pow_eq_pow_sum, Finset.prod_pow_eq_pow_sum, Finset.prod_pow_eq_pow_sum, ← pow_add, ← pow_add]
       apply Nat.pow_le_pow_right (by norm_num)
       rw [Finset.sum_add_distrib, hrun]
       have hw : ∑ i : Fin C.length, (if (isBudg C[i.1] && dynAt C i.1) = true then w else 0) =
@@ -1270,9 +1369,10 @@ theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
         exact Finset.sum_congr rfl fun i _ => by split_ifs <;> simp
       rw [hw]
       generalize ∑ i : Fin C.length, (if (isBudg C[i.1] && dynAt C i.1) = true then 1 else 0) = NB at hunits ⊢
-      generalize ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C i.1 else 0) = MI at hunits ⊢
-      have h1 : MI ≤ w * MI := Nat.le_mul_of_pos_left MI hw1
-      have h2 : w * (NB + MI) ≤ w * budgeted C := Nat.mul_le_mul_left w hunits
+      generalize ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C false i.1 else 0) = M0 at hunits ⊢
+      generalize ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C true i.1 else 0) = M1 at hunits ⊢
+      have h1 : M0 + M1 ≤ w * (M0 + M1) := Nat.le_mul_of_pos_left _ hw1
+      have h2 : w * (NB + (M0 + M1)) ≤ w * budgeted C := Nat.mul_le_mul_left w hunits
       rw [mul_add] at h2
       omega
 
@@ -1847,5 +1947,628 @@ def rzRuleRows : List (Rng × Rng) := [
 
 theorem rzByteRule_rzRuleRows : rzRuleRows.all (fun r => rzByteRule r.1 == r.2) := by
   decide +kernel
+
+/-! ## The exact-int8 profile's primitives -/
+
+theorem F32ToS8RziRange : Accounting.Guarantees.Gates.F32ToS8RziRange := by
+  intro a
+  unfold f32ToS8Rzi
+  split_ifs
+  · exact ⟨by norm_num, by norm_num⟩
+  · have h1 := min_le_left (128 : ℤ) (truncNat (f32Mag a).toNat)
+    have h2 : (0 : ℤ) ≤ min 128 ((truncNat (f32Mag a).toNat : ℕ) : ℤ) := le_min (by norm_num) (Int.natCast_nonneg _)
+    exact ⟨by dsimp only; omega, by dsimp only; omega⟩
+  · have h1 := min_le_left (127 : ℤ) (truncNat a.toNat)
+    have h2 : (0 : ℤ) ≤ min 127 ((truncNat a.toNat : ℕ) : ℤ) := le_min (by norm_num) (Int.natCast_nonneg _)
+    exact ⟨by dsimp only; omega, by dsimp only; omega⟩
+
+/-- A float of magnitude at most `127.0` truncates to at most 127. -/
+lemma truncNat_le (u : ℕ) (hu : u ≤ 0x42FE0000) : truncNat u ≤ 127 := by
+  obtain ⟨e, he⟩ : ∃ e, u / 2 ^ 23 = e := ⟨_, rfl⟩
+  have he' : e ≤ 133 := by omega
+  simp only [truncNat, he]
+  by_cases h0 : e < 127
+  · simp [h0]
+  · interval_cases e <;> simp <;> omega
+
+lemma fmaxf_negTop (r : ℤ) (hr : S32 r) :
+    f32NaN (f32Fmaxf r f32NegTop) = false ∧ S32 (f32Fmaxf r f32NegTop) ∧
+      -0x42FE0000 ≤ f32Key (f32Fmaxf r f32NegTop) := by
+  have hn : f32NaN f32NegTop = false := by decide
+  have hk : f32Key f32NegTop = -0x42FE0000 := by norm_num [f32Key, f32NegTop]
+  have hs : S32 f32NegTop := by norm_num [S32, f32NegTop, s32Min, s32Max]
+  unfold f32Fmaxf f32MaxMin
+  cases hrn : f32NaN r
+  · simp only [hn, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
+    split_ifs with h1 h2
+    · rcases max_choice r f32NegTop with h | h <;> rw [h]
+      · exact ⟨hrn, hr, by omega⟩
+      · exact ⟨hn, hs, by omega⟩
+    · exact ⟨hrn, hr, by omega⟩
+    · exact ⟨hn, hs, by omega⟩
+  · simp only [hn, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
+    exact ⟨by simp, hs, by omega⟩
+
+lemma fminf_top (u : ℤ) (hn : f32NaN u = false) (hu : S32 u) (hk : -0x42FE0000 ≤ f32Key u) :
+    f32NaN (f32Fminf u f32Top) = false ∧ S32 (f32Fminf u f32Top) ∧ -0x42FE0000 ≤ f32Key (f32Fminf u f32Top) ∧
+      f32Key (f32Fminf u f32Top) ≤ 0x42FE0000 := by
+  have tn : f32NaN f32Top = false := by decide
+  have tk : f32Key f32Top = 0x42FE0000 := by norm_num [f32Key, f32Top]
+  have ts : S32 f32Top := by norm_num [S32, f32Top, s32Min, s32Max]
+  unfold f32Fminf f32MaxMin
+  simp only [hn, tn, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
+  split_ifs with h1 h2
+  · rcases min_choice u f32Top with h | h <;> rw [h]
+    · exact ⟨hn, hu, hk, by omega⟩
+    · exact ⟨tn, ts, by omega, by omega⟩
+  · exact ⟨hn, hu, hk, by omega⟩
+  · exact ⟨tn, ts, by omega, by omega⟩
+
+lemma wrapS32_mem (z : ℤ) : Iv.Mem (s32Min, s32Max) (wrapS32 z) := by
+  unfold wrapS32 Iv.Mem s32Min s32Max
+  have h1 := Int.emod_nonneg (z - -2 ^ 31) (by norm_num : (2 : ℤ) ^ 32 ≠ 0)
+  have h2 := Int.emod_lt_of_pos (z - -2 ^ 31) (by norm_num : (0 : ℤ) < 2 ^ 32)
+  constructor <;> dsimp only <;> omega
+
+theorem Int8ClampRange : Accounting.Guarantees.Gates.Int8ClampRange := by
+  intro z
+  have hr : S32 (wrapS32 z) := wrapS32_mem z
+  generalize wrapS32 z = r at hr ⊢
+  obtain ⟨un, us, uk⟩ := fmaxf_negTop r hr
+  obtain ⟨vn, vs, vk1, vk2⟩ := fminf_top _ un us uk
+  unfold int8Clamp f32ToS8Rzi
+  generalize f32Fminf (f32Fmaxf r f32NegTop) f32Top = v at vn vs vk1 vk2 ⊢
+  simp only [vn, Bool.false_eq_true, ↓reduceIte]
+  unfold f32Key at vk1 vk2
+  unfold S32 s32Min at vs
+  split_ifs with hv
+  · simp only [hv, ↓reduceIte] at vk1
+    have hm : f32Mag v = v + 2 ^ 31 := by simp [f32Mag, hv]
+    have := truncNat_le (f32Mag v).toNat (by rw [hm]; omega)
+    have h2 : (0 : ℤ) ≤ min 128 ((truncNat (f32Mag v).toNat : ℕ) : ℤ) := le_min (by norm_num) (Int.natCast_nonneg _)
+    have h3 := min_le_right (128 : ℤ) (truncNat (f32Mag v).toNat)
+    exact ⟨by dsimp only; omega, by dsimp only; omega⟩
+  · simp only [hv, ↓reduceIte] at vk2
+    have := truncNat_le v.toNat (by omega)
+    have h2 : (0 : ℤ) ≤ min 127 ((truncNat v.toNat : ℕ) : ℤ) := le_min (by norm_num) (Int.natCast_nonneg _)
+    have h3 := min_le_left (127 : ℤ) (truncNat v.toNat)
+    exact ⟨by dsimp only; omega, by dsimp only; omega⟩
+
+theorem LutIndexRange : Accounting.Guarantees.Gates.LutIndexRange := by
+  intro d a
+  refine ⟨le_min (Int.ediv_nonneg (mul_nonneg (le_max_right d 0) (Int.emod_nonneg _ (by norm_num))) (by norm_num))
+    (by norm_num), min_le_right _ _⟩
+
+lemma exp2Lut127_mem : ∀ t ∈ exp2Lut127, 0 ≤ t ∧ t ≤ 127 := by
+  decide +kernel
+
+theorem Exp2Lut127Range : Accounting.Guarantees.Gates.Exp2Lut127Range := by
+  refine ⟨by decide +kernel, fun t => ?_⟩
+  rcases Nat.lt_or_ge t exp2Lut127.length with h | h
+  · rw [List.getD_eq_getElem _ _ h]; exact exp2Lut127_mem _ (List.getElem_mem h)
+  · rw [List.getD_eq_default _ _ h]; exact ⟨le_rfl, by norm_num⟩
+
+theorem S32LowByteRange : Accounting.Guarantees.Gates.S32LowByteRange := by
+  refine ⟨fun z => ?_, fun t => ?_⟩ <;> unfold s32LowByte
+  · exact ⟨by dsimp only; omega, by dsimp only; omega⟩
+  · have := t.isLt; omega
+
+/-! ## Declared bounds, earned -/
+
+theorem DeclaredWindow : Accounting.Guarantees.Gates.DeclaredWindow := by
+  intro ι C x hP hD hX
+  have hD' : ∀ i (h : i < C.length),
+      (∀ j, Holds ((intervals (C.take i)).getD j (0, 0)) ((values (C.take i) x).getD j 0)) → ¬ C[i].op.IsDerived →
+        C[i].lo ≤ C[i].raw x (values (C.take i) x) ∧ C[i].raw x (values (C.take i) x) ≤ C[i].hi := by
+    intro i hi hinv hnd
+    obtain ⟨-, hbud⟩ := hD i hi
+    unfold Gate.raw Gate.operands
+    cases hop : C[i].op with
+    | input b s => simp only [Op.raw]; exact hX _ (List.getElem_mem hi) b s hop
+    | budgeted cls f => simp only [Op.raw]; exact hbud cls f hop _ fun j _ => hinv j
+    | _ => rw [hop] at hnd; exact absurd trivial hnd
+  have hw : InWindow C x := fun i hi => by
+    obtain ⟨h1, -, h2⟩ := hP i hi
+    have hinv := window_inv' C x hP hD' i hi.le
+    exact (gate_window C[i] x _ _ hinv h1 h2 (hD' i hi hinv)).1
+  exact ⟨fun i hi _ => ⟨(hw i hi).1, (hw i hi).2.1⟩, hw⟩
+
+lemma getD_intervals_mono (C : Dag ι) (n j : ℕ) (hj : j < n) :
+    ∀ m, n ≤ m → m ≤ C.length → (intervals (C.take m)).getD j (0, 0) = (intervals (C.take n)).getD j (0, 0) := by
+  intro m hnm hm
+  induction m with
+  | zero => omega
+  | succ m ih =>
+    rcases Nat.eq_or_lt_of_le hnm with h | h
+    · rw [h]
+    · rw [intervals_take_succ C m (by omega),
+        List.getD_append _ _ _ _ (by rw [intervals_take_length C m (by omega)]; omega)]
+      exact ih (by omega) (by omega)
+
+lemma getD_intervals_take (C : Dag ι) (n j : ℕ) (hj : j < n) (hn : n ≤ C.length) :
+    (intervals (C.take n)).getD j (0, 0) = (intervals C).getD j (0, 0) := by
+  have := getD_intervals_mono C n j hj C.length hn le_rfl
+  rw [List.take_length] at this
+  exact this.symm
+
+lemma getD_intervals_self (C : Dag ι) (i : ℕ) (hi : i < C.length) :
+    (intervals C).getD i (0, 0) = C[i].derive (intervals (C.take i)) := by
+  rw [← getD_intervals_take C (i + 1) i (by omega) hi, intervals_take_succ C i hi,
+    List.getD_append_right _ _ _ _ (by rw [intervals_take_length C i hi.le]), intervals_take_length C i hi.le,
+    Nat.sub_self, List.getD_cons_zero]
+
+lemma derive_congr (g : Gate ι) (ivs ivs' : List Iv) (h : ∀ j ∈ g.args, ivs.getD j (0, 0) = ivs'.getD j (0, 0)) :
+    g.derive ivs = g.derive ivs' := by
+  simp only [Gate.derive, List.map_congr_left h]
+
+lemma getD_intervals_fix (C : Dag ι) (i : ℕ) (hi : i < C.length) (hT : ∀ j ∈ C[i].args, j < i) :
+    (intervals C).getD i (0, 0) = C[i].derive (intervals C) := by
+  rw [getD_intervals_self C i hi]
+  exact derive_congr _ _ _ fun j hj => getD_intervals_take C i j (hT j hj) hi.le
+
+lemma getD_intervals_decl (C : Dag ι) (i : ℕ) (hi : i < C.length) (h : ¬ C[i].op.IsDerived) :
+    (intervals C).getD i (0, 0) = (C[i].lo, C[i].hi) := by
+  rw [getD_intervals_self C i hi]
+  unfold Gate.derive
+  cases hop : C[i].op with
+  | input b s => rfl
+  | budgeted cls f => rfl
+  | _ => rw [hop] at h; exact absurd trivial h
+
+lemma getD_intervals_const (C : Dag ι) (i : ℕ) (hi : i < C.length) (c : ℤ) (h : C[i].op = .const c) :
+    (intervals C).getD i (0, 0) = (c, c) := by
+  rw [getD_intervals_self C i hi]
+  simp [Gate.derive, h]
+
+lemma foldl_join_within (lo hi : ℤ) : ∀ (l : List Iv) (s : Iv), s.Within lo hi → (∀ b ∈ l, b.Within lo hi) →
+    (l.foldl Iv.join s).Within lo hi
+  | [], s, hs, _ => by simpa using hs
+  | b :: l, s, hs, hl => by
+    simp only [List.foldl_cons]
+    have hb := hl b (by simp)
+    exact foldl_join_within lo hi l _ ⟨le_min hs.1 hb.1, max_le hs.2 hb.2⟩
+      fun b' hb' => hl b' (List.mem_cons_of_mem _ hb')
+
+lemma mul_within {A B Ia Ib : Iv} (hA : A.Within Ia.1 Ia.2) (hA' : A.1 ≤ A.2) (hB : B.Within Ib.1 Ib.2)
+    (hB' : B.1 ≤ B.2) : (Iv.mul A B).Within (Iv.mul Ia Ib).1 (Iv.mul Ia Ib).2 := by
+  have a1 : Holds Ia A.1 := ⟨hA.1, le_trans hA' hA.2⟩
+  have a2 : Holds Ia A.2 := ⟨le_trans hA.1 hA', hA.2⟩
+  have b1 : Holds Ib B.1 := ⟨hB.1, le_trans hB' hB.2⟩
+  have b2 : Holds Ib B.2 := ⟨le_trans hB.1 hB', hB.2⟩
+  have c11 := Holds.mul a1 b1
+  have c12 := Holds.mul a1 b2
+  have c21 := Holds.mul a2 b1
+  have c22 := Holds.mul a2 b2
+  exact ⟨le_min (le_min c11.1 c12.1) (le_min c21.1 c22.1), max_le (max_le c11.2 c12.2) (max_le c21.2 c22.2)⟩
+
+lemma foldl_add_within (p q : ℤ) : ∀ (L : List Iv) (s : Iv) (lo hi : ℤ), s.Within lo hi →
+    (∀ X ∈ L, X.Within p q) → (L.foldl Iv.add s).Within (lo + L.length * p) (hi + L.length * q)
+  | [], s, lo, hi, hs, _ => by simpa using hs
+  | X :: L, s, lo, hi, hs, hL => by
+    simp only [List.foldl_cons, List.length_cons]
+    have hX := hL X (by simp)
+    have := foldl_add_within p q L (Iv.add s X) (lo + p) (hi + q) ⟨add_le_add hs.1 hX.1, add_le_add hs.2 hX.2⟩
+      fun Y hY => hL Y (List.mem_cons_of_mem _ hY)
+    have e1 : lo + p + L.length * p = lo + ((L.length + 1 : ℕ) : ℤ) * p := by push_cast; ring
+    have e2 : hi + q + L.length * q = hi + ((L.length + 1 : ℕ) : ℤ) * q := by push_cast; ring
+    rw [← e1, ← e2]
+    exact this
+
+lemma forall_mem_zipWith {α β γ : Type} (f : α → β → γ) (P : γ → Prop) (A : List α) (B : List β)
+    (h : ∀ u ∈ A, ∀ v ∈ B, P (f u v)) : ∀ X ∈ List.zipWith f A B, P X := by
+  intro X hX
+  obtain ⟨k, hk, rfl⟩ := List.getElem_of_mem hX
+  rw [List.getElem_zipWith]
+  exact h _ (List.getElem_mem _) _ (List.getElem_mem _)
+
+section chain
+
+variable (pre : Dag ι) (fa fb : Int8Fmt) (sat : Bool) (prim : String) (S : ℕ) (a b : ℕ → List ℕ)
+
+lemma dotChain_length : (dotChain pre fa fb sat prim S a b).length = pre.length + 1 + S := by
+  simp [dotChain]; omega
+
+lemma dotChain_pre (i : ℕ) (h : i < pre.length) (h' : i < (dotChain pre fa fb sat prim S a b).length) :
+    (dotChain pre fa fb sat prim S a b)[i] = pre[i] := by
+  simp [dotChain, List.getElem_append_left h]
+
+lemma dotChain_zero (h' : pre.length < (dotChain pre fa fb sat prim S a b).length) :
+    (dotChain pre fa fb sat prim S a b)[pre.length] = plainGate (.const 0) [] 0 0 "" := by
+  simp [dotChain]
+
+lemma dotChain_step (s : ℕ) (h' : pre.length + 1 + s < (dotChain pre fa fb sat prim S a b).length) :
+    (dotChain pre fa fb sat prim S a b)[pre.length + 1 + s] =
+      ⟨.mma fa fb 32 sat, (pre.length + s) :: (a s ++ b s), s32Min, s32Max, 0, prim, .dot (32 * S) (32 * S) [] s,
+        decide (s + 1 = S)⟩ := by
+  simp only [dotChain]
+  rw [List.getElem_append_right (by omega)]
+  have : pre.length + 1 + s - pre.length = s + 1 := by omega
+  simp [this]
+
+lemma dotChain_take : (dotChain pre fa fb sat prim S a b).take pre.length = pre := by
+  simp [dotChain]
+
+end chain
+
+/-- **The chain's window**: a dot chain on gates `pre` that are proven and earn their bounds, with no affine map or
+s8-family step among them, whose operands' derived intervals lie in `Ia` and `Ib` within the steps' formats, and
+whose `32·S` products' sum stays in s32, is proven and earns its bounds. -/
+lemma dotChain_ok (pre : Dag ι) (fa fb : Int8Fmt) (sat : Bool) (prim : String) (S : ℕ) (a b : ℕ → List ℕ)
+    (Ia Ib : Iv) (hT : Topological pre) (hfree : ∀ g ∈ pre, ¬ g.op.IsMma ∧ ∀ c₀ cs, g.op ≠ .affine c₀ cs)
+    (hpre : ∀ i (h : i < pre.length), pre[i].op.IsDerived →
+      (pre[i].derive (intervals pre)).Within pre[i].lo pre[i].hi)
+    (hdecl : ∀ i (h : i < pre.length), (∀ b s, pre[i].op = .input b s → TypeRange pre[i].lo pre[i].hi) ∧
+      ∀ cls f, pre[i].op = .budgeted cls f → ∀ vs : List ℤ,
+        (∀ j ∈ pre[i].args, ((intervals pre).getD j (0, 0)).Mem (vs.getD j 0)) →
+          Iv.Mem (pre[i].lo, pre[i].hi) (f (pre[i].args.map fun j => vs.getD j 0)))
+    (ha : ∀ s < S, (a s).length = 32 ∧ ∀ j ∈ a s, j < pre.length ∧
+      ((intervals pre).getD j (0, 0)).Within Ia.1 Ia.2 ∧
+        ((intervals pre).getD j (0, 0)).1 ≤ ((intervals pre).getD j (0, 0)).2)
+    (hb : ∀ s < S, (b s).length = 32 ∧ ∀ j ∈ b s, j < pre.length ∧
+      ((intervals pre).getD j (0, 0)).Within Ib.1 Ib.2 ∧
+        ((intervals pre).getD j (0, 0)).1 ≤ ((intervals pre).getD j (0, 0)).2)
+    (hfa : Ia.Within fa.lo fa.hi) (hfb : Ib.Within fb.lo fb.hi) (hp : (Iv.mul Ia Ib).1 ≤ 0) (hq : 0 ≤ (Iv.mul Ia Ib).2)
+    (hlo : s32Min ≤ 32 * S * (Iv.mul Ia Ib).1) (hhi : 32 * S * (Iv.mul Ia Ib).2 ≤ s32Max) :
+    Proven (dotChain pre fa fb sat prim S a b) ∧ Declared (dotChain pre fa fb sat prim S a b) := by
+  set C := dotChain pre fa fb sat prim S a b with hC
+  set p := (Iv.mul Ia Ib).1
+  set q := (Iv.mul Ia Ib).2
+  have hlen : C.length = pre.length + 1 + S := dotChain_length ..
+  have hIpre : ∀ j, j < pre.length → (intervals C).getD j (0, 0) = (intervals pre).getD j (0, 0) := by
+    intro j hj
+    rw [← getD_intervals_take C pre.length j hj (by omega), hC, dotChain_take]
+  have hTC : ∀ i (h : i < C.length), ∀ j ∈ C[i].args, j < i := by
+    intro i hi j hj
+    rcases Nat.lt_or_ge i pre.length with h | h
+    · have hg : C[i] = pre[i] := dotChain_pre pre fa fb sat prim S a b i h hi
+      rw [hg] at hj
+      exact hT i h j hj
+    rcases Nat.eq_or_lt_of_le h with rfl | h
+    · have hg : C[pre.length] = _ := dotChain_zero pre fa fb sat prim S a b hi
+      rw [hg] at hj
+      simp [plainGate] at hj
+    obtain ⟨s, rfl⟩ : ∃ s, i = pre.length + 1 + s := ⟨i - (pre.length + 1), by omega⟩
+    have hg : C[pre.length + 1 + s] = _ := dotChain_step pre fa fb sat prim S a b s hi
+    rw [hg] at hj
+    rcases List.mem_cons.mp hj with rfl | hj
+    · omega
+    rcases List.mem_append.mp hj with hj | hj
+    · have := ((ha s (by omega)).2 j hj).1; omega
+    · have := ((hb s (by omega)).2 j hj).1; omega
+  have hItake : ∀ i (h : i < C.length), ∀ j ∈ C[i].args,
+      (intervals (C.take i)).getD j (0, 0) = (intervals C).getD j (0, 0) :=
+    fun i hi j hj => getD_intervals_take C i j (hTC i hi j hj) hi.le
+  have hder : ∀ i (h : i < C.length), C[i].derive (intervals (C.take i)) = C[i].derive (intervals C) :=
+    fun i hi => derive_congr _ _ _ (hItake i hi)
+  have hstep : ∀ s (hs : s < S), ((intervals C).getD (pre.length + 1 + s) (0, 0)) =
+      (List.zipWith Iv.mul (((a s).map fun j => (intervals C).getD j (0, 0)))
+        ((b s).map fun j => (intervals C).getD j (0, 0))).foldl Iv.add
+          ((intervals C).getD (pre.length + s) (0, 0)) := by
+    intro s hs
+    have hi : pre.length + 1 + s < C.length := by omega
+    have hg : C[pre.length + 1 + s] = _ := dotChain_step pre fa fb sat prim S a b s hi
+    rw [getD_intervals_fix C _ hi (hTC _ hi), hg]
+    simp only [Gate.derive, List.map_cons, List.headD_cons, List.tail_cons, List.map_append]
+    rw [List.take_left' (by rw [List.length_map, (ha s hs).1]), List.drop_left' (by rw [List.length_map, (ha s hs).1])]
+  have hmul : ∀ s (hs : s < S), ∀ X ∈ List.zipWith Iv.mul (((a s).map fun j => (intervals C).getD j (0, 0)))
+      ((b s).map fun j => (intervals C).getD j (0, 0)), X.Within p q := by
+    intro s hs
+    refine forall_mem_zipWith _ _ _ _ fun u hu v hv => ?_
+    obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hu
+    obtain ⟨k, hk, rfl⟩ := List.mem_map.mp hv
+    obtain ⟨hj1, hj2, hj3⟩ := (ha s hs).2 j hj
+    obtain ⟨hk1, hk2, hk3⟩ := (hb s hs).2 k hk
+    rw [hIpre j hj1, hIpre k hk1]
+    exact mul_within hj2 hj3 hk2 hk3
+  have hzip : ∀ s (hs : s < S), (List.zipWith Iv.mul (((a s).map fun j => (intervals C).getD j (0, 0)))
+      ((b s).map fun j => (intervals C).getD j (0, 0))).length = 32 := by
+    intro s hs
+    simp [List.length_zipWith, (ha s hs).1, (hb s hs).1]
+  have hacc : ∀ s, s ≤ S → ((intervals C).getD (pre.length + s) (0, 0)).Within (32 * s * p) (32 * s * q) := by
+    intro s
+    induction s with
+    | zero =>
+      intro _
+      have hg : C[pre.length] = _ := dotChain_zero pre fa fb sat prim S a b (by rw [dotChain_length]; omega)
+      rw [Nat.add_zero, getD_intervals_const C _ (by omega) 0 (by rw [hg]; rfl)]
+      simp [Iv.Within]
+    | succ s ih =>
+      intro hs
+      have := foldl_add_within p q _ _ _ _ (ih (by omega)) (hmul s (by omega))
+      rw [hzip s (by omega)] at this
+      rw [show pre.length + (s + 1) = pre.length + 1 + s by omega, hstep s (by omega)]
+      refine ⟨le_trans (le_of_eq (by push_cast; ring)) this.1, le_trans this.2 (le_of_eq (by push_cast; ring))⟩
+  have hbound : ∀ s, s < S → s32Min ≤ 32 * ((s + 1 : ℕ) : ℤ) * p ∧ 32 * ((s + 1 : ℕ) : ℤ) * q ≤ s32Max := by
+    intro s hs
+    have h1 : ((s + 1 : ℕ) : ℤ) ≤ S := by exact_mod_cast hs
+    have h0 : (0 : ℤ) ≤ ((s + 1 : ℕ) : ℤ) := Int.natCast_nonneg _
+    constructor
+    · nlinarith
+    · nlinarith
+  refine ⟨fun i hi => ?_, fun i hi => ?_⟩
+  · rcases Nat.lt_or_ge i pre.length with h | h
+    · have hg : C[i] = pre[i] := dotChain_pre pre fa fb sat prim S a b i h hi
+      refine ⟨fun hd => ?_, fun c₀ cs hop => ?_, fun fa' fb' k sat' hop => ?_⟩
+      · rw [hder i hi]
+        rw [derive_congr C[i] (intervals C) (intervals pre) fun j hj => hIpre j (by
+          have := hTC i hi j hj; omega)]
+        rw [hg] at hd ⊢
+        exact hpre i h hd
+      · rw [hg] at hop; exact absurd hop ((hfree _ (List.getElem_mem h)).2 c₀ cs)
+      · rw [hg] at hop
+        exact absurd (by rw [hop]; trivial) (hfree _ (List.getElem_mem h)).1
+    rcases Nat.eq_or_lt_of_le h with rfl | h
+    · have hg : C[pre.length] = _ := dotChain_zero pre fa fb sat prim S a b hi
+      refine ⟨fun _ => ?_, fun c₀ cs hop => ?_, fun fa' fb' k sat' hop => ?_⟩
+      · rw [hg]; simp [Gate.derive, plainGate, Iv.Within]
+      · rw [hg] at hop; simp [plainGate] at hop
+      · rw [hg] at hop; simp [plainGate] at hop
+    obtain ⟨s, rfl⟩ : ∃ s, i = pre.length + 1 + s := ⟨i - (pre.length + 1), by omega⟩
+    have hs : s < S := by omega
+    have hg : C[pre.length + 1 + s] = _ := dotChain_step pre fa fb sat prim S a b s hi
+    refine ⟨fun _ => ?_, fun c₀ cs hop => ?_, fun fa' fb' k sat' hop => ?_⟩
+    · rw [hder _ hi, ← getD_intervals_fix C _ hi (hTC _ hi), hstep s hs]
+      have := foldl_add_within p q _ _ _ _ (hacc s hs.le) (hmul s hs)
+      rw [hzip s hs] at this
+      rw [hg]
+      obtain ⟨b1, b2⟩ := hbound s hs
+      exact ⟨le_trans b1 (le_trans (le_of_eq (by push_cast; ring)) this.1),
+        le_trans this.2 (le_trans (le_of_eq (by push_cast; ring)) b2)⟩
+    · rw [hg] at hop; simp at hop
+    · rw [hg] at hop
+      simp only [Op.mma.injEq] at hop
+      obtain ⟨rfl, rfl, rfl, rfl⟩ := hop
+      rw [hg]
+      have hla := (ha s hs).1
+      have hlb := (hb s hs).1
+      simp only [List.length_cons, List.length_append, List.tail_cons]
+      refine ⟨by omega, le_rfl, le_rfl, fun j hj => ?_, fun j hj => ?_⟩
+      · rw [List.take_left' hla] at hj
+        have hj' : j ∈ C[pre.length + 1 + s].args := by
+          rw [hg]; exact List.mem_cons_of_mem _ (List.mem_append_left _ hj)
+        rw [hItake _ hi j hj']
+        obtain ⟨hj1, hj2, -⟩ := (ha s hs).2 j hj
+        rw [hIpre j hj1]
+        exact ⟨le_trans hfa.1 hj2.1, le_trans hj2.2 hfa.2⟩
+      · rw [List.drop_left' hla] at hj
+        have hj' : j ∈ C[pre.length + 1 + s].args := by
+          rw [hg]; exact List.mem_cons_of_mem _ (List.mem_append_right _ hj)
+        rw [hItake _ hi j hj']
+        obtain ⟨hj1, hj2, -⟩ := (hb s hs).2 j hj
+        rw [hIpre j hj1]
+        exact ⟨le_trans hfb.1 hj2.1, le_trans hj2.2 hfb.2⟩
+  · rcases Nat.lt_or_ge i pre.length with h | h
+    · have hg : C[i] = pre[i] := dotChain_pre pre fa fb sat prim S a b i h hi
+      obtain ⟨h1, h2⟩ := hdecl i h
+      refine ⟨fun b s hop => ?_, fun cls f hop vs hvs => ?_⟩
+      · rw [hg] at hop ⊢; exact h1 b s hop
+      · have hvs' : ∀ j ∈ pre[i].args, ((intervals pre).getD j (0, 0)).Mem (vs.getD j 0) := by
+          intro j hj
+          have hj' : j ∈ C[i].args := by rw [hg]; exact hj
+          rw [← hIpre j (by have := hTC i hi j hj'; omega), ← hItake i hi j hj']
+          exact hvs j hj'
+        rw [hg] at hop ⊢
+        exact h2 cls f hop vs hvs'
+    rcases Nat.eq_or_lt_of_le h with rfl | h
+    · have hg : C[pre.length] = _ := dotChain_zero pre fa fb sat prim S a b hi
+      refine ⟨fun b s hop => ?_, fun cls f hop => ?_⟩ <;> rw [hg] at hop <;> simp [plainGate] at hop
+    obtain ⟨s, rfl⟩ : ∃ s, i = pre.length + 1 + s := ⟨i - (pre.length + 1), by omega⟩
+    have hg : C[pre.length + 1 + s] = _ := dotChain_step pre fa fb sat prim S a b s hi
+    refine ⟨fun b s hop => ?_, fun cls f hop => ?_⟩ <;> rw [hg] at hop <;> simp at hop
+
+theorem Int8LinearWindow : Accounting.Guarantees.Gates.Int8LinearWindow := by
+  intro S fs fr hS
+  suffices hPD : Proven (int8Linear S fs fr) ∧ Declared (int8Linear S fs fr) from
+    ⟨hPD.1, hPD.2, fun x hx => (DeclaredWindow _ x hPD.1 hPD.2 hx).2⟩
+  set pre := (List.range (4 * (32 * S) + 1)).map (linearGate S fs fr) with hpre
+  have hlen : pre.length = 4 * (32 * S) + 1 := by simp [pre]
+  have hget : ∀ i (h : i < pre.length), pre[i] = linearGate S fs fr i := by intro i h; simp [pre]
+  have hnd : ∀ i (h : i < pre.length), ¬ pre[i].op.IsDerived := by
+    intro i h; rw [hget]; unfold linearGate; split_ifs <;> simp [plainGate, word32, Op.IsDerived]
+  have hI : ∀ i (h : i < pre.length),
+      (intervals pre).getD i (0, 0) = ((linearGate S fs fr i).lo, (linearGate S fs fr i).hi) := by
+    intro i h; rw [getD_intervals_decl pre i h (hnd i h), hget]
+  have hX : ∀ i, 2 * (32 * S) < i → i ≤ 4 * (32 * S) →
+      (linearGate S fs fr i).lo = -128 ∧ (linearGate S fs fr i).hi = 127 := by
+    intro i h1 h2; unfold linearGate; split_ifs <;> first | omega | simp [plainGate]
+  have hS' : (S : ℤ) ≤ 4095 := by exact_mod_cast hS
+  refine dotChain_ok pre .s8 .s8 true _ S _ _ (-128, 127) (-128, 127) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  · intro i h j hj
+    rw [hget] at hj
+    unfold linearGate at hj
+    split_ifs at hj <;> simp [plainGate] at hj <;> omega
+  · intro g hg
+    obtain ⟨i, -, rfl⟩ := List.mem_map.mp hg
+    unfold linearGate
+    split_ifs <;> simp [plainGate, word32, Op.IsMma]
+  · intro i h hd; exact absurd hd (hnd i h)
+  · intro i h
+    rw [hget]
+    unfold linearGate
+    split_ifs
+    · exact ⟨fun _ _ _ => ⟨15, .inl ⟨rfl, rfl⟩⟩, fun _ _ hop => by simp [plainGate] at hop⟩
+    · refine ⟨fun _ _ hop => by simp [plainGate, word32] at hop, fun cls f hop vs _ => ?_⟩
+      simp only [plainGate, word32, Op.budgeted.injEq] at hop
+      obtain ⟨-, rfl⟩ := hop
+      exact wrapS32_mem _
+    · refine ⟨fun _ _ hop => by simp [plainGate, word32] at hop, fun cls f hop vs _ => ?_⟩
+      simp only [plainGate, word32, Op.budgeted.injEq] at hop
+      obtain ⟨-, rfl⟩ := hop
+      exact wrapS32_mem _
+    · refine ⟨fun _ _ hop => by simp [plainGate] at hop, fun cls f hop vs _ => ?_⟩
+      simp only [plainGate, Op.budgeted.injEq] at hop
+      obtain ⟨-, rfl⟩ := hop
+      exact F32ToS8RziRange _
+    · exact ⟨fun _ _ _ => ⟨7, .inl ⟨by simp [plainGate], by simp [plainGate]⟩⟩,
+        fun _ _ hop => by simp [plainGate] at hop⟩
+  · intro s hs
+    refine ⟨by simp, fun j hj => ?_⟩
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.mp hj
+    rw [List.mem_range] at ht
+    have hj1 : 2 * (32 * S) + 1 + 32 * s + t < pre.length := by rw [hlen]; omega
+    refine ⟨hj1, ?_⟩
+    rw [hI _ hj1, (hX _ (by omega) (by omega)).1, (hX _ (by omega) (by omega)).2]
+    exact ⟨⟨le_rfl, le_rfl⟩, by norm_num⟩
+  · intro s hs
+    refine ⟨by simp, fun j hj => ?_⟩
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.mp hj
+    rw [List.mem_range] at ht
+    have hj1 : 3 * (32 * S) + 1 + 32 * s + t < pre.length := by rw [hlen]; omega
+    refine ⟨hj1, ?_⟩
+    rw [hI _ hj1, (hX _ (by omega) (by omega)).1, (hX _ (by omega) (by omega)).2]
+    exact ⟨⟨le_rfl, le_rfl⟩, by norm_num⟩
+  · exact ⟨by simp [Int8Fmt.lo], by simp [Int8Fmt.hi]⟩
+  · exact ⟨by simp [Int8Fmt.lo], by simp [Int8Fmt.hi]⟩
+  · norm_num [Iv.mul]
+  · norm_num [Iv.mul]
+  · norm_num [Iv.mul, s32Min]; omega
+  · norm_num [Iv.mul, s32Max]; omega
+
+lemma pvPre_decl (S n : ℕ) (T : List ℤ) (pre : Dag ℕ) (hlen : pre.length = 257 + 3 * n + 2 * (32 * S))
+    (hget : ∀ i (h : i < pre.length), pre[i] = pvGate S n T i) (htop : Topological pre)
+    (hgath : ∀ i (h : i < pre.length), 257 + 2 * n ≤ i → i < 257 + 3 * n →
+      pre[i].lo = 0 ∧ pre[i].hi = 127 ∧ (pre[i].derive (intervals pre)).Within 0 127)
+    (i : ℕ) (h : i < pre.length) :
+    (∀ b s, pre[i].op = .input b s → TypeRange pre[i].lo pre[i].hi) ∧
+      ∀ cls f, pre[i].op = .budgeted cls f → ∀ vs : List ℤ,
+        (∀ j ∈ pre[i].args, ((intervals pre).getD j (0, 0)).Mem (vs.getD j 0)) →
+          Iv.Mem (pre[i].lo, pre[i].hi) (f (pre[i].args.map fun j => vs.getD j 0)) := by
+  by_cases hl : 257 + 3 * n ≤ i ∧ i < 257 + 3 * n + 32 * S ∧ 1 ≤ i - (257 + 3 * n) ∧ i - (257 + 3 * n) < n
+  · have hg : pre[i] = plainGate (.budgeted .rounding fun v => s32LowByte (v.headD 0)) [i - n] 0 127
+        "S32LowByte_v1" := by
+      rw [hget]; unfold pvGate; split_ifs <;> first | omega | rfl
+    rw [hg]
+    refine ⟨fun _ _ hop => by simp [plainGate] at hop, fun cls f hop vs hvs => ?_⟩
+    simp only [plainGate, Op.budgeted.injEq] at hop
+    obtain ⟨-, rfl⟩ := hop
+    have he : i - n < pre.length := by omega
+    have hm := hvs (i - n) (by simp [plainGate])
+    rw [getD_intervals_fix pre _ he (htop _ he)] at hm
+    have hw := (hgath _ he (by omega) (by omega)).2.2
+    have z0 : 0 ≤ vs.getD (i - n) 0 := le_trans hw.1 hm.1
+    have z1 : vs.getD (i - n) 0 ≤ 127 := le_trans hm.2 hw.2
+    simp only [plainGate, List.map_cons, List.map_nil, List.headD_cons]
+    obtain ⟨t, ht⟩ : ∃ t : ℕ, (t : ℤ) = vs.getD (i - n) 0 := ⟨(vs.getD (i - n) 0).toNat, by omega⟩
+    rw [← ht, S32LowByteRange.2 ⟨t, by omega⟩]
+    rw [← ht] at z0 z1
+    exact ⟨z0, z1⟩
+  rw [hget]
+  generalize hgi : pvGate S n T i = g
+  unfold pvGate at hgi
+  split_ifs at hgi <;> subst hgi
+  · exact ⟨fun _ _ hop => by simp [plainGate] at hop, fun _ _ hop => by simp [plainGate] at hop⟩
+  · exact ⟨fun _ _ _ => ⟨31, .inl ⟨rfl, rfl⟩⟩, fun _ _ hop => by simp [plainGate] at hop⟩
+  · refine ⟨fun _ _ hop => by simp [plainGate] at hop, fun cls f hop vs _ => ?_⟩
+    simp only [plainGate, Op.budgeted.injEq] at hop
+    obtain ⟨-, rfl⟩ := hop
+    exact LutIndexRange _ _
+  · exact ⟨fun _ _ hop => by simp [plainGate] at hop, fun _ _ hop => by simp [plainGate] at hop⟩
+  · omega
+  · exact ⟨fun _ _ hop => by simp [plainGate] at hop, fun _ _ hop => by simp [plainGate] at hop⟩
+  · exact ⟨fun _ _ _ => ⟨7, .inl ⟨by simp [plainGate], by simp [plainGate]⟩⟩, fun _ _ hop => by simp [plainGate] at hop⟩
+  · exact ⟨fun _ _ hop => by simp [plainGate] at hop, fun _ _ hop => by simp [plainGate] at hop⟩
+
+theorem LutPvWindow : Accounting.Guarantees.Gates.LutPvWindow := by
+  intro S n T hS hT
+  suffices hPD : Proven (lutPv S n T) ∧ Declared (lutPv S n T) from
+    ⟨hPD.1, hPD.2, fun x hx => (DeclaredWindow _ x hPD.1 hPD.2 hx).2⟩
+  set pre := (List.range (257 + 3 * n + 2 * (32 * S))).map (pvGate S n T) with hpre
+  have hlen : pre.length = 257 + 3 * n + 2 * (32 * S) := by simp [pre]
+  have hget : ∀ i (h : i < pre.length), pre[i] = pvGate S n T i := by intro i h; simp [pre]
+  have hTg : ∀ t, 0 ≤ T.getD t 0 ∧ T.getD t 0 ≤ 127 := by
+    intro t
+    rcases Nat.lt_or_ge t T.length with h | h
+    · rw [List.getD_eq_getElem _ _ h]; exact hT _ (List.getElem_mem h)
+    · rw [List.getD_eq_default _ _ h]; norm_num
+  have htop : Topological pre := by
+    intro i h j hj
+    rw [hget] at hj
+    unfold pvGate at hj
+    split_ifs at hj <;> simp [plainGate] at hj <;> omega
+  have hIT : ∀ t, t < 256 → (intervals pre).getD t (0, 0) = (T.getD t 0, T.getD t 0) := by
+    intro t ht
+    have h : t < pre.length := by rw [hlen]; omega
+    refine getD_intervals_const pre t h _ ?_
+    rw [hget]; simp [pvGate, ht, plainGate]
+  have hgath : ∀ i (h : i < pre.length), 257 + 2 * n ≤ i → i < 257 + 3 * n →
+      pre[i].lo = 0 ∧ pre[i].hi = 127 ∧ (pre[i].derive (intervals pre)).Within 0 127 := by
+    intro i h h1 h2
+    have hg : pre[i] = plainGate (.gather (some 8)) ((i - n) :: List.range 256) 0 127 "Exp2Lut127_v1" := by
+      rw [hget]; unfold pvGate; split_ifs <;> first | omega | rfl
+    rw [hg]
+    refine ⟨rfl, rfl, ?_⟩
+    simp only [Gate.derive, plainGate, List.map_cons, List.tail_cons]
+    refine foldl_join_within 0 127 _ _ ⟨le_rfl, by norm_num⟩ fun b hb => ?_
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.mp hb
+    rw [List.mem_range] at ht
+    rw [hIT t ht]
+    exact ⟨(hTg t).1, (hTg t).2⟩
+  have hP : ∀ j, j < 32 * S → ((intervals pre).getD (257 + 3 * n + j) (0, 0)).Within 0 127 ∧
+      ((intervals pre).getD (257 + 3 * n + j) (0, 0)).1 ≤ ((intervals pre).getD (257 + 3 * n + j) (0, 0)).2 := by
+    intro j hj
+    have h : 257 + 3 * n + j < pre.length := by rw [hlen]; omega
+    by_cases hc : 1 ≤ j ∧ j < n
+    · have hg : pre[257 + 3 * n + j] = plainGate (.budgeted .rounding fun v => s32LowByte (v.headD 0))
+          [257 + 3 * n + j - n] 0 127 "S32LowByte_v1" := by
+        rw [hget]; unfold pvGate; split_ifs <;> first | omega | rfl
+      rw [getD_intervals_decl pre _ h (by rw [hg]; simp [plainGate, Op.IsDerived]), hg]
+      simp [plainGate, Iv.Within]
+    · have hg : pre[257 + 3 * n + j] = plainGate (.const 0) [] 0 0 "" := by
+        rw [hget]; unfold pvGate; split_ifs <;> first | omega | rfl
+      rw [getD_intervals_const pre _ h 0 (by rw [hg]; rfl)]
+      simp [Iv.Within]
+  have hV : ∀ j, j < 32 * S → ((intervals pre).getD (257 + 3 * n + 32 * S + j) (0, 0)).Within (-128) 127 ∧
+      ((intervals pre).getD (257 + 3 * n + 32 * S + j) (0, 0)).1 ≤
+        ((intervals pre).getD (257 + 3 * n + 32 * S + j) (0, 0)).2 := by
+    intro j hj
+    have h : 257 + 3 * n + 32 * S + j < pre.length := by rw [hlen]; omega
+    by_cases hc : j < n
+    · have hg : pre[257 + 3 * n + 32 * S + j] =
+          plainGate (.input .run (257 + 3 * n + 32 * S + j)) [] (-128) 127 "" := by
+        rw [hget]; unfold pvGate; split_ifs <;> first | omega | rfl
+      rw [getD_intervals_decl pre _ h (by rw [hg]; simp [plainGate, Op.IsDerived]), hg]
+      simp [plainGate, Iv.Within]
+    · have hg : pre[257 + 3 * n + 32 * S + j] = plainGate (.const 0) [] 0 0 "" := by
+        rw [hget]; unfold pvGate; split_ifs <;> first | omega | rfl
+      rw [getD_intervals_const pre _ h 0 (by rw [hg]; rfl)]
+      simp [Iv.Within]
+  have hS' : (S : ℤ) ≤ 4128 := by exact_mod_cast hS
+  refine dotChain_ok pre .s8 .s8 true _ S _ _ (0, 127) (-128, 127) htop ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  · intro g hg
+    obtain ⟨i, -, rfl⟩ := List.mem_map.mp hg
+    unfold pvGate
+    split_ifs <;> simp [plainGate, Op.IsMma]
+  · intro i h hd
+    by_cases hg : 257 + 2 * n ≤ i ∧ i < 257 + 3 * n
+    · obtain ⟨hl, hh, hw⟩ := hgath i h hg.1 hg.2
+      rw [hl, hh]; exact hw
+    rw [hget] at hd ⊢
+    unfold pvGate at hd ⊢
+    split_ifs at hd ⊢ <;>
+      first
+      | omega
+      | (simp [plainGate, Op.IsDerived] at hd; done)
+      | simp [Gate.derive, plainGate, Iv.Within]
+  · exact pvPre_decl S n T pre hlen hget htop hgath
+  · intro s hs
+    refine ⟨by simp, fun j hj => ?_⟩
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.mp hj
+    rw [List.mem_range] at ht
+    have e : 257 + 3 * n + 32 * s + t = 257 + 3 * n + (32 * s + t) := by omega
+    rw [e]
+    exact ⟨by rw [hlen]; omega, hP _ (by omega)⟩
+  · intro s hs
+    refine ⟨by simp, fun j hj => ?_⟩
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.mp hj
+    rw [List.mem_range] at ht
+    have e : 257 + 3 * n + 32 * S + 32 * s + t = 257 + 3 * n + 32 * S + (32 * s + t) := by omega
+    rw [e]
+    exact ⟨by rw [hlen]; omega, hV _ (by omega)⟩
+  · exact ⟨by simp [Int8Fmt.lo], by simp [Int8Fmt.hi]⟩
+  · exact ⟨by simp [Int8Fmt.lo], by simp [Int8Fmt.hi]⟩
+  · norm_num [Iv.mul]
+  · norm_num [Iv.mul]
+  · norm_num [Iv.mul, s32Min]; omega
+  · norm_num [Iv.mul, s32Max]; omega
 
 end Accounting.SecurityProofs.Gates

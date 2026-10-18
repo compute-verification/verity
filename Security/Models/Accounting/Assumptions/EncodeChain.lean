@@ -20,7 +20,8 @@ open Accounting.Gates
 whose registered inputs are fixed before the draw and whose coin inputs are bytes of the draw or fixed
 (`CodecInputs`), and that computes the `q` distinct words `words` (each below `p`) of the masked `k`-round codec over
 `F`, byte for byte less their parity, on more than `ε = εnum/εden` of the uniform draws, its inputs and budgeted gates
-there in their declared intervals, so the whole circuit in its window (`ComputesWords`; claimed for `ε ≥ 2^−64`):
+but gathers there in their declared intervals, so the whole circuit in its window (`ComputesWords`; claimed for
+`ε ≥ 2^−64`):
 
   `q · E · (n − 1) ≤ budgeted C · (n − 1) + runBits C · E`,
 
@@ -51,7 +52,8 @@ open: a test at toy `n` with `B/n` fixed would settle the trend.
 
 **Units, and why a gather over run-time values pays one.** A gate that reads only registered values and constants is
 free (it computes one value on every draw), and a gather pays its fresh index bits, `⌈log₂ (V + 1)⌉` for a column
-of `V` words and the `0` outside it (`Gate.indexBits`): a one-word gather of a run-time index is the comparison
+of `V` words and the `0` outside it, `n` for a table read of its index's low `n` bits (`Gate.indexBits`), each kind
+counted apart as property/v1 counts them: a one-word gather of a run-time index is the comparison
 `[i ≤ 0]`, and were it free, thresholds and affine maps would carry a square's column sums back to bytes and the
 chain would cost nothing. Without the extra unit for a
 gather whose column holds a draw-dependent value, a tree of gathers indexed by the draw's bytes, over constant leaves,

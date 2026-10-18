@@ -1,7 +1,8 @@
 """The verifier's and the prover's processes over a loopback socket, the driver's reference as the prover's backend and
-a clock that advances by one tick per pass: an honest session is accepted and its γ terms computed, a prover that
-dropped blocks is rejected at its openings, a second session waits out the first's deadline, and KV pages appended and
-released mid-session (a memory map's steps) are audited, accepted when held and rejected when dropped."""
+a clock that advances by one tick per pass with both sides settled around each tick, so a session runs one schedule:
+an honest session is accepted and its γ terms computed, a prover that dropped blocks is rejected at its openings, a
+second session waits out the first's deadline, and KV pages appended and released mid-session (a memory map's steps)
+are audited, accepted when held and rejected when dropped."""
 from __future__ import annotations
 
 import os
@@ -28,27 +29,84 @@ import wire  # noqa: E402
 P512 = rcodec.Codec(rcodec.P512, 2, False)
 
 
+VERIFIER, PROVER = 0, 1
+
+
+class Counted(wire.Conn):
+    """One side's end of the loopback, stamping with the pass clock and telling it of each frame it sends and each
+    time it asks for its next: a side asking for its (n + 1)-th frame has handed on its n-th."""
+
+    def __init__(self, sock: socket.socket, clock: PassClock, side: int) -> None:
+        super().__init__(sock, clock=clock.now)
+        self.pass_clock, self.side, self.asked = clock, side, 0
+
+    def send(self, head: dict, body: bytes = b"") -> None:
+        self.pass_clock.sending(self.side, head["type"])
+        super().send(head, body)
+
+    def recv(self):
+        self.pass_clock.reading(self.side, self.asked)
+        self.asked += 1
+        return super().recv()
+
+
 class PassClock:
-    """Time is the prover's passes: one tick as each pass ends. A wait returns the inbox's next message or None once
+    """Time is the prover's passes: one tick as each pass ends, both sides settled around it. A tick waits until the
+    verifier's reader has handed on every frame the prover sent, the verifier is waiting on its clock with an empty
+    inbox (or has ended the session) and the prover's reader has handed on every frame the verifier sent, and again
+    once time has moved, so whatever either side sends in answer reaches the other at the tick it was sent, and a
+    session runs one schedule however its threads are scheduled. A wait returns the inbox's next message or None once
     the clock reaches its end, woken by either; once the prover has said its passes are done, time jumps to the wait's
     end."""
 
     def __init__(self) -> None:
-        self.t, self.done, self.inbox = 0, False, None
+        self.t, self.done, self.inbox, self.parked, self.idle_at, self.ended = 0, False, None, None, None, False
+        self.frames = threading.Condition()
+        self.sent, self.asked = [0, 0], [0, 0]
+
+    def conns(self) -> tuple[Counted, Counted]:
+        a, b = socket.socketpair()
+        return Counted(a, self, VERIFIER), Counted(b, self, PROVER)
 
     def now(self) -> int:
         return self.t
 
+    def sending(self, side: int, kind: str) -> None:
+        with self.frames:
+            self.sent[side] += 1
+        if side == VERIFIER and kind in ("session", "end"):
+            if self.inbox is None:
+                self.ended = kind == "end"
+                return
+            with self.inbox.mutex:
+                self.ended = kind == "end"
+                self.parked.notify_all()
+
+    def reading(self, side: int, n: int) -> None:
+        with self.frames:
+            self.asked[side] = n
+            self.frames.notify_all()
+
     def tick(self) -> None:
-        if self.inbox is None:
-            self.t += 1
-            return
+        self._settle()
         with self.inbox.mutex:
             self.t += 1
             self.inbox.not_empty.notify_all()
+        self._settle()
+
+    def _settle(self) -> None:
+        with self.frames:
+            self.frames.wait_for(lambda: self.inbox is not None and self.asked[VERIFIER] == self.sent[PROVER])
+        with self.inbox.mutex:
+            self.parked.wait_for(lambda: self.ended or (self.idle_at == self.t and not self.inbox._qsize()))
+        with self.frames:
+            self.frames.wait_for(lambda: self.asked[PROVER] == self.sent[VERIFIER])
 
     def wait(self, inbox: queue.Queue, until_ns):
-        self.inbox = inbox
+        if self.inbox is None:
+            with self.frames:
+                self.inbox, self.parked = inbox, threading.Condition(inbox.mutex)
+                self.frames.notify_all()
         with inbox.not_empty:
             while True:
                 if until_ns is not None and self.done:
@@ -56,9 +114,11 @@ class PassClock:
                 if until_ns is not None and self.t >= until_ns:
                     return None
                 if inbox._qsize():
-                    break
+                    return inbox._get()
+                self.idle_at = self.t
+                self.parked.notify_all()
                 inbox.not_empty.wait()
-            return inbox._get()
+                self.idle_at = None
 
     def idle(self) -> None:
         with self.inbox.mutex:
@@ -90,8 +150,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
         registry: audit.Registry | None = None, layout: list | None = None, **kv):
     clock = PassClock()
-    a, b = socket.socketpair()
-    vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
+    vconn, pconn = clock.conns()
     backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
                              layout=layout)
     p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None, **kv)
@@ -131,6 +190,20 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     assert all(w["slack_ns"] >= 0 for w in r["windows_seen"])
 
 
+def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):
+    """Each tick settles both sides, so an honest session's windows are the same at every run: window 0's boundary
+    falls at tick 20, as its 20th pass ends, and each later window starts one tick after its coin, the pass in flight
+    at the boundary discarded, so it holds 19 passes; each root reaches the verifier at the tick its pass ended, and a
+    window's draws go out as the next window's first root arrives."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), (pr,) = run("honest")
+    assert r["accepted"] and pr["passes"] == [20, 19, 19] and pr["discarded"] == 3
+    seen = r["windows_seen"]
+    assert [(w["released_ns"], w["boundary_ns"]) for w in seen] == [(0, 20), (20, 40), (40, 60)]
+    assert [w["arrivals_ns"] for w in seen] == [list(range(1, 21)), list(range(22, 41)), list(range(42, 61))]
+    assert [w["draws_sent_ns"] for w in seen[:2]] == [22, 42]
+
+
 def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(monkeypatch):
     """MEM-24: the capacity is the verifier's, and the prover's calibration can only raise it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -140,6 +213,23 @@ def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(mon
     assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == timing.READ_BYTES_PER_S
     assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == timing.SPEC_BYTES_PER_S
     assert fast["ledger"]["measured"]["capacity_bytes_per_s"] == fast["ledger"]["spec"]["capacity_bytes_per_s"] == 1e20
+
+
+def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypatch):
+    """MEM-26: R is every GPU's HBM and the host's DRAM, S_chip every GPU's chip and the host's caches, and the squaring
+    ceiling the node's, for a store on one GPU too: its calibration's one-GPU read lowers none of them, and its
+    certified bytes are the same at either R."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), _ = run("honest", read_bytes_per_s=timing.GPU_READ_BYTES_PER_S)
+    lg = r["ledger"]
+    node_read = timing.GPUS * timing.GPU_READ_BYTES_PER_S + timing.HOST_READ_BYTES_PER_S
+    node_spec = timing.GPUS * timing.GPU_SPEC_BYTES_PER_S + timing.HOST_SPEC_BYTES_PER_S
+    assert lg["inputs"]["reported_read_bytes_per_s"] == timing.GPU_READ_BYTES_PER_S
+    assert lg["measured"]["capacity_bytes_per_s"] == lg["inputs"]["measured_read_bytes_per_s"] == node_read
+    assert lg["spec"]["capacity_bytes_per_s"] == lg["inputs"]["spec_bytes_per_s"] == node_spec
+    assert lg["inputs"]["chip_bytes"] == timing.GPUS * timing.GPU_CHIP_BYTES + timing.HOST_CHIP_BYTES == 3_045_746_688
+    assert lg["inputs"]["squarings_per_s"] == timing.GPUS * timing.GPU_SQUARINGS_PER_S["p512"]
+    assert lg["spec"]["certified_bytes"] == pytest.approx(lg["measured"]["certified_bytes"], rel=1e-9)
 
 
 def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its_timing_term():

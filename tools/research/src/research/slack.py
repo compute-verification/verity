@@ -1369,7 +1369,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
         if kind == "ask" and not ns.thread and len(to) == 1:
             body = linear_ask(ns, to[0], h["handle"], body)
         text = " ".join([*(tag(t) for t in to), body])
-    ch = channel_id(ns, reg, FRONT_DOOR) if not ns.thread else channel_id(ns, reg)
+    ch = channel_id(ns, reg, FRONT_DOOR) if not (ns.thread or ns.channel) else channel_id(ns, reg)   # --channel: a machine's alert
     quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
     tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if quiet else "") if t)
     _post(client(ns), ch, h["handle"], text, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent, tags=tags)
@@ -1707,14 +1707,16 @@ def cmd_watch(ns: argparse.Namespace, reg: dict) -> int:
 
 # --- traffic: the monitor ---------------------------------------------------------------------------------------------------
 
-def issue_taken(ident: str, cache: dict[str, bool]) -> bool:
-    """Whether the Linear issue `ident` has left Backlog (accepted, started, done or canceled): an ask taken up on Linear.
-    False when Linear can't say, so a doubtful ask still shows."""
+def issue_taken(ident: str, asker: str | None, cache: dict[str, bool]) -> bool:
+    """Whether the Linear issue `ident` was taken up there: it left Backlog (accepted, started, done or canceled), or
+    someone other than `asker` commented on it.  False when Linear can't say, so a doubtful ask still shows."""
     if ident not in cache:
         from . import linear  # noqa: PLC0415
+        q = "query($id: String!) { issue(id: $id) { state { type } comments { nodes { botActor { userDisplayName } user { name } } } } }"
         try:
-            st = linear.Linear().gql("query($id: String!) { issue(id: $id) { state { type } } }", {"id": ident})["issue"]["state"]
-            cache[ident] = st["type"] != "backlog"
+            i = linear.Linear().gql(q, {"id": ident})["issue"]
+            who = [(c.get("botActor") or {}).get("userDisplayName") or (c.get("user") or {}).get("name") for c in i["comments"]["nodes"]]
+            cache[ident] = i["state"]["type"] != "backlog" or any(w and w != asker for w in who)
         except (linear.LinearError, OSError, KeyError, TypeError, ValueError):
             cache[ident] = False
     return cache[ident]
@@ -1758,7 +1760,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
-            if not ((link := LINEAR_LINK_RE.search(m.get("text") or "")) and issue_taken(link[1], taken)):   # taken up on Linear
+            if not ((link := LINEAR_LINK_RE.search(m.get("text") or "")) and issue_taken(link[1], poster(m, reg), taken)):
                 stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
     if ns.json:
         print(json.dumps({"inboxes": rows, "dropped": dropped, "unanswered": stale}, indent=2))
@@ -2000,6 +2002,37 @@ def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: 
     return out
 
 
+def ring_decision(ns: argparse.Namespace, reg: dict, cid: str, out: dict) -> None:
+    """Once a card is decided, ring @top's inbox with its question, outcome and asker, so the decision reaches Daniel's
+    log without a TOP issue filed for it (COMM-34).  Once per card: a ring already in the inbox isn't repeated."""
+    if out.get("status") not in DECIDED or ns.dry_run:
+        return
+    to, r = routes_of(ns).resolve("top")
+    if not r or r.get("closed"):
+        return
+    api, ch = client(ns), r.get("channel") or channel_id(ns, reg, FRONT_DOOR)
+    mark = f"card `{cid}` decided"
+    if any(mark in (m.get("text") or "") for m in api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"],
+                                                             oldest=f"{_now().timestamp() - 14 * 86400:.6f}")):
+        return
+    question, asker, link = "", "", ""
+    if out.get("ts") and (card_ch := out.get("channel") or channel_id_for(reg, ASK_CHANNEL)):
+        try:
+            card = fetch_message(api, card_ch, out["ts"], None) or {}
+            blocks = json.dumps(card.get("blocks") or [])
+            if m := re.search(r'"text": "(?:`[A-Z]+` )?\*(.+?)\*"', blocks):
+                question = m[1]
+            if m := re.search(r"asked by <[^|>]*\|([a-z0-9._-]+)>", blocks):
+                asker = m[1]
+            link = permalink(reg, card_ch, out["ts"])
+        except SlackError:
+            pass
+    text = (f"from ask-daniel, {mark}: `{out.get('choice') or '-'}` ({out.get('source') or '-'}, {out.get('decided_at') or '-'})"
+            + (f" on: {question}" if question else "") + (f"; asked by {asker}" if asker else "") + (f" {link}" if link else ""))
+    api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false", text=text)
+    print(f"route @{to}: rang with the decision", file=sys.stderr)
+
+
 def _show(out: dict, as_json: bool) -> int:
     if as_json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
@@ -2033,7 +2066,9 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
                 print(f"dry-run: POST {ASK_DANIEL}{path}/resolve {json.dumps(body, sort_keys=True)}", file=sys.stderr)
                 return 0
             try:
-                return _show(AskDaniel().call("POST", f"{path}/resolve", body), ns.json)
+                out = AskDaniel().call("POST", f"{path}/resolve", body)
+                ring_decision(ns, reg, str(ns.id), out)
+                return _show(out, ns.json)
             except RouteError as e:
                 if e.status == 404:
                     raise SlackError(no_such_card("resolve", ns.id)) from None
@@ -2044,7 +2079,9 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
         route = AskDaniel()
         polls = math.ceil((DEADLINE_MAX + WAIT_GRACE).total_seconds() / ns.every) if ns.wait else 1
         try:
-            return _show(wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls), ns.json)
+            out = wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls)
+            ring_decision(ns, reg, str(ns.id), out)
+            return _show(out, ns.json)
         except RouteError as e:
             if e.status == 404:
                 raise SlackError(no_such_card("status", ns.id)) from None
@@ -2090,8 +2127,9 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     if not ns.wait:
         return 0
     polls = math.ceil((datetime.fromisoformat(body["deadline"]) - now + WAIT_GRACE).total_seconds() / ns.every)
-    return _show(wait_for(lambda: route.call("GET", f"/{urllib.parse.quote(str(cid), safe='')}"), sleep=_sleep, every=ns.every,
-                          polls=polls), ns.json)
+    out = wait_for(lambda: route.call("GET", f"/{urllib.parse.quote(str(cid), safe='')}"), sleep=_sleep, every=ns.every, polls=polls)
+    ring_decision(ns, reg, str(cid), out)
+    return _show(out, ns.json)
 
 
 def main(argv: list[str], prog: str = "research msg") -> int:
