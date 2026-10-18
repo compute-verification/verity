@@ -18,7 +18,8 @@ another unit reads. Records are v1 and, on the programs with root parameters to 
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries; on
 the programs with a pair of digests to fill (`SUPPLIED_SETUPS`, 32- and 1-bit leaves) the verifier fills it itself from
-the record (`supplied`, `registered.supplied_root`), which the record registers as it fills it.
+the record, the log's positions and its coin bound to the record's window (`supplied`, `registered.supplied_root`), which
+the record registers as it fills it, and it may pin a value's root (`pinned`, R7-held).
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
 stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, and integer
 populations in a draw.
@@ -115,6 +116,8 @@ CALLEE_IDS = [codec.descriptor_id(f) for f in CALLEES]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LEAF = "ee" * 64
 ROOTS = {"out": "cd" * 64, "x": "ab" * 64}
+#: the verifier's coin a window salt binds
+COIN = "c0" * 64
 WINDOW = {"kind": "served", "row": 101, "run": "r-test"}
 EARLIER = {"kind": "served", "row": 100, "run": "r-test"}
 RECEIVED = "2026-10-07T00:00:00Z"
@@ -230,7 +233,11 @@ SUPPLIED_SETUPS = [
         {"S": [[{"port": "x"}, {"value": "W"}], [{"value": "W"}, {"port": "out"}]]}),
     SuppliedSetup(_registered_program("CoreSampledProofsSupplied1", 2, (
         ("S", Array(1, Array(2, Array(512, Value(1))))),), ("S",)),
-        [{"S": 1024}, {"x": 2, "S": 1024}], {"S": [[{"port": "out"}, {"bytes": "5a" * 64}]]})]
+        [{"S": 1024}, {"x": 2, "S": 1024}], {"S": [[{"port": "out"}, {"bytes": "5a" * 64}]]}),
+    SuppliedSetup(_registered_program("CoreSampledProofsSuppliedPW", 3, (
+        ("S", Array(2, Array(2, Array(16, Value(32))))), ("W", Array(6, Value(16)))), ("S", "W")),
+        [{"S": 32, "W": 2}, {"W": 3, "S": 32}],
+        {"S": [[{"window": COIN}] + [{"position": "0"}] * 8, [{"position": "2"}] * 8 + [{"window": COIN}]]})]
 REGISTERED_SETUPS += SUPPLIED_SETUPS
 PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS}
 PROGRAMS_TEMPLATES = [PAIR.id, TRIPLE.id]
@@ -428,7 +435,8 @@ def _log_record(e) -> None:
 def decode_params(j) -> dict:
     v2 = isinstance(j, dict) and j.get("registered") is not None
     keys = PARAM_KEYS | {"parameters"} if v2 else PARAM_KEYS
-    _exactly(j, keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys, "the parameters")
+    keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
+    _exactly(j, keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
     if not desc:
         raise D.Reject("not a program descriptor")
@@ -464,6 +472,13 @@ def decode_params(j) -> dict:
             raise D.Reject("supplied values are registered values: the verifier expects none registered")
         try:
             G.sources(j["supplied"])
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
+    if "pinned" in j:
+        if not isinstance(j["pinned"], dict):
+            raise D.Reject("pinned roots are not an object")
+        try:
+            R._pins(j["pinned"], j["registered"] or {}, G.sources(j.get("supplied", {})))
         except ValueError as e:
             raise D.Reject(str(e)) from None
     delta = ratio(j["delta"])
@@ -503,7 +518,7 @@ def _registered_reads(verdicts: dict) -> None:
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
-                   p["partition"], p["work_table"], p["registered"], p.get("supplied")).codes
+                   p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned")).codes
 
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
@@ -1183,16 +1198,16 @@ def drawn(draw, law: dict, n: int) -> dict:
     return d
 
 
-def _record_of(s: Setup, values, law: dict, window: dict, **kw) -> dict:
+def _record_of(s: Setup, values, law: dict, window: dict, log=(), **kw) -> dict:
     """`R.record` over `ROOTS` registering `values`: `s`'s commitments, and each value the verifier fills itself as it fills
-    it from that record (`registered.supplied_value`)."""
+    it from that record and `log` (`registered.supplied_value`)."""
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     sup = s.supplied(values) if isinstance(s, RegisteredSetup) else {}
     entries = s.entries({v: w for v, w in values.items() if v not in sup}) if values else []
     rec = R.record(s.program, s.query, law, SCHEME, roots, window, registered=entries, **kw)
     if not sup:
         return rec
-    filled = [G.supplied_value(s.program, v, rows, rec, sorted(sup)).entry() for v, rows in G.sources(sup).items()]
+    filled = [G.supplied_value(s.program, v, rows, rec, sorted(sup), list(log)).entry() for v, rows in G.sources(sup).items()]
     return R.record(s.program, s.query, law, SCHEME, roots, window, registered=entries + filled, **kw)
 
 
@@ -1228,7 +1243,7 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
                         EARLIER, leaf_layer=LEAF, partition=part, work_table=table,
                         registered=s.entries(held) if held else ())]
     anchors = draw(st.sampled_from([[], ["weights"]]))
-    rec = _record_of(s, values, law, WINDOW, leaf_layer=LEAF, anchors=anchors,
+    rec = _record_of(s, values, law, WINDOW, log, leaf_layer=LEAF, anchors=anchors,
                      previous=R.digest(log[-1]) if log else None, partition=part, work_table=table)
     assert rec["law"] == mine
     params = {"anchors": anchors, "delta": draw(st.sampled_from(["1/1000", "1/10", "1/2", "999/1000"])), "law": law,
@@ -1238,6 +1253,8 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
         params["parameters"] = s.signature
     if isinstance(s, RegisteredSetup) and s.supplied(values):
         params["supplied"] = s.supplied(values)
+    if values and "W" in values and "W" not in params.get("supplied", {}) and draw(st.booleans()):
+        params["pinned"] = {"W": next(e["root"] for e in rec["registered"] if e["value"] == "W")}
     d = drawn(draw, mine, n)
     proved = DR.proved(d)
     verdicts = {"lean": {"accepted": True, "digest": "aa" * 64, "of_record": True}}
@@ -1482,6 +1499,11 @@ SUPPLIED = [
     _supplied(lambda s, x: {**(s or {}), "S": [[{"bytes": [ROOTS["x"], "AB" * 64, "", "abc", ROOTS["x"] + "\n", ROOTS["out"]][x % 6]},
                                                 {"value": "W"}], [{"value": "W"}, {"port": "out"}]]}),
     _supplied(lambda s, x: {**(s or {}), ["D", "T", "nope", "x", "W"][x % 5]: [[{"port": "x"}]]}),
+    _supplied(lambda s, x: {**(s or {}), "S": [[{"window": [COIN, "C0" * 64, "", "c0c", ROOTS["x"]][x % 5]}]
+                                               + [{"position": ["0", "2", "3", "01", "-1", "", "x", "18446744073709551615"][x // 5 % 8]}] * 8] * 2}),
+    _set("params", "log", lambda a, x: [{**r, "population": ["3", -1, True, None, 2 ** 40, 0][x % 6]} for r in a["params"]["log"]]),
+    _set("params", "pinned", lambda a, x: [{"W": "12" * 64}, {"W": ROOTS["x"]}, {"S": "12" * 64}, {"nope": "12" * 64},
+                                           {"W": "AB" * 64}, {"W": "ab"}, {"W": 1}, ["W"], None, {}][x % 10]),
     _supplied(lambda s, x: {k: rows[:-1] or rows + rows for k, rows in s.items()}),
     _supplied(lambda s, x: {k: [r[:-1] for r in rows] for k, rows in s.items()}),
     _supplied(lambda s, x: {k: [r + r[:1] for r in rows] for k, rows in s.items()}),
@@ -2444,7 +2466,7 @@ def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
     law = {"k": 1, "law": "subset"}
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     earlier = R.record(s.program, s.query, law, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
-    rec = _record_of(s, values, law, WINDOW, leaf_layer=LEAF, previous=R.digest(earlier))
+    rec = _record_of(s, values, law, WINDOW, [earlier], leaf_layer=LEAF, previous=R.digest(earlier))
     params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [earlier], "parameters": s.signature,
               "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
               "scheme": SCHEME, "work_table": None, **({"supplied": s.supplied(values)} if s.supplied(values) else {})}

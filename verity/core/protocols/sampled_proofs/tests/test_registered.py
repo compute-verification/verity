@@ -498,3 +498,93 @@ def test_supplied_values_are_a_v2_verifiers_in_one_form():
     v1 = {k: x for k, x in rec.items() if k != "registered"} | {"format": "verity/registration/v1"}
     with pytest.raises(ValueError, match="none registered"):
         R.check(v1, **{**check, "registered": None})
+
+
+#: the verifier's coin, and each seed group's row of `pouw.roots` filled from the window salt and positions, the bytes
+#: PoUW's `pouw.salt` and `pouw.positions` take
+COIN = "c0" * 64
+MIXED = {"pouw.roots": [[{"window": COIN}] + [{"position": "0"}] * 8, [{"position": "5"}] * 8 + [{"window": COIN}]]}
+#: `window_salt(COIN, SERVED)`, its first 32 bytes
+WINDOW_SALT_0 = "c74eb622438cecc6c7136e9b5a55d22b3b8b1cc9ecdcf7c7e5a0a11cf6f84cab"
+
+
+def _u64(p: int) -> bytes:
+    return p.to_bytes(8, "big")
+
+
+def _mixed_case(base, sup=MIXED, log=(), window=SERVED):
+    """`base` (a `_seeded_case`) as a record after `log` for `window`, its `pouw.roots` filled from `sup` as the verifier
+    fills it, with R7's arguments."""
+    rec, check, w, _ = base
+    rec = {**rec, "window": dict(window), "previous": R.digest(log[-1]) if log else None, "registered": [w.entry()]}
+    roots = G.supplied_value(check["program"], "pouw.roots", G.sources(sup)["pouw.roots"], rec, ["pouw.roots"], list(log))
+    return {**rec, "registered": [w.entry(), roots.entry()]}, {**check, "supplied": sup, "log": list(log)}, roots
+
+
+def test_a_position_follows_the_logs_units():
+    """W-a: a position source is K after every unit of the log's earlier records, as a u64 big-endian, so a unit served
+    again in a later record takes another position and so another seed (the red team's replay, two calls of one A and B
+    at one position under one salt, gets no second receipt); a record that names the positions it would have had first,
+    or a source past its own units, is `R7-supplied`."""
+    assert G.log_base([]) == 0 and G.log_base([{"population": 6}, {"population": 3}]) == 9
+    for bad in ([{"population": -1}], [{"population": True}], [{}], [{"population": 1.0}], ["r"]):
+        with pytest.raises(ValueError):
+            G.log_base(bad)
+    base = _seeded_case()
+    first, check, roots = _mixed_case(base)
+    salt = G.window_salt(bytes.fromhex(COIN), SERVED)
+    assert [list(r) for r in roots.rows] == [G.bytes_leaves(salt + _u64(0) * 8, 32), G.bytes_leaves(_u64(5) * 8 + salt, 32)]
+    assert R.check(first, **check).ok
+    window = {**SERVED, "row": 8}
+    later, check, again = _mixed_case(base, log=[first], window=window)
+    salt = G.window_salt(bytes.fromhex(COIN), window)
+    assert [list(r) for r in again.rows] == [G.bytes_leaves(salt + _u64(6) * 8, 32), G.bytes_leaves(_u64(11) * 8 + salt, 32)]
+    assert R.check(later, **check).ok
+    replay = G.supplied_value(check["program"], "pouw.roots", G.sources(MIXED)["pouw.roots"], later, ["pouw.roots"])
+    assert R.check({**later, "registered": [later["registered"][0], replay.entry()]}, **check).codes == ("R7-supplied",)
+    for k in ("6", "01", "-1", "", "x"):
+        sup = {"pouw.roots": [[{"window": COIN}] + [{"position": k}] * 8] * 2}
+        assert R.check(later, **{**check, "supplied": sup}).codes == ("R7-supplied",), k
+    assert R.check(later, **{**check, "log": [{**first, "population": "6"}]}).codes == ("R6-previous", "R7-supplied")
+
+
+def test_a_window_salt_is_the_coin_bound_to_the_records_window():
+    """W-c: a window source is SHA-512 of `WINDOW_SALT`, the verifier's coin and the record's window as canonical JSON:
+    one salt a window, as R6 takes one record a window, and never the prover's. A record filled under another window or
+    coin is `R7-supplied`, and a window outside the canonical domain fills nothing."""
+    coin = bytes.fromhex(COIN)
+    salt = G.window_salt(coin, SERVED)
+    assert salt == hashlib.sha512(b"verity/one-stage/window-salt/v0\0" + coin + b"\0" + canonical_json(SERVED)).digest()
+    assert salt.hex()[:64] == WINDOW_SALT_0
+    assert len({salt, G.window_salt(coin, {**SERVED, "row": 8}), G.window_salt(b"\1", SERVED)}) == 3
+    for bad in ([], "served", {**SERVED, "row": 1.5}, {**SERVED, "run": "r\u00e9"}, {**SERVED, "row": 2**53}):
+        with pytest.raises(ValueError):
+            G.window_salt(coin, bad)
+    rec, check, _ = _mixed_case(_seeded_case())
+    assert R.check(rec, **check).ok
+    assert R.check({**rec, "window": {**SERVED, "row": 9}}, **check).codes == ("R7-supplied",)
+    other = {"pouw.roots": [[{"window": "c1" * 64} if "window" in s else s for s in r] for r in MIXED["pouw.roots"]]}
+    assert R.check(rec, **{**check, "supplied": other}).codes == ("R7-supplied",)
+    for bad in ({**SERVED, "row": 1.5}, {**SERVED, "run": "r\u00e9"}):
+        assert R.check({**rec, "window": bad}, **check).codes == ("R7-supplied",)
+    for coin in ("", "C0" * 64, "c0c"):
+        sup = {"pouw.roots": [[{"window": coin}, {"window": COIN}]] * 2}
+        assert R.check(rec, **{**check, "supplied": sup}).codes == ("R7-supplied",), coin
+
+
+def test_r7_holds_a_pinned_value_to_its_pin():
+    """W-d: a value the verifier pinned before the record (the weights' root recorded before the salt, which root(B)
+    must be) is held to that root, ahead of the log's; a pin of a value it doesn't expect registered or fills itself, of
+    no 64-byte lowercase root, or with no value registered is refused before the record is read."""
+    rec, check, w, _ = _seeded_case()
+    assert R.check(rec, **check, pinned={"W": w.root.hex()}).ok
+    assert R.check(rec, **check, pinned={"W": "ee" * 64}).codes == ("R7-held",)
+    later = {**rec, "window": {**SERVED, "row": 8}, "previous": R.digest(rec)}
+    assert R.check(later, **check, log=[rec]).ok
+    assert R.check(later, **check, log=[rec], pinned={"W": "ee" * 64}).codes == ("R7-held",)
+    for bad in ({"V": "ee" * 64}, {"pouw.roots": "ee" * 64}, {"W": "EE" * 64}, {"W": "ee"}, {"W": 1}, ["W"]):
+        with pytest.raises(ValueError):
+            R.check(rec, **check, pinned=bad)
+    v1 = {k: x for k, x in rec.items() if k != "registered"} | {"format": "verity/registration/v1"}
+    with pytest.raises(ValueError):
+        R.check(v1, **{**check, "registered": None, "supplied": None}, pinned={})
