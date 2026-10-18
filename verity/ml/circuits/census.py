@@ -21,18 +21,19 @@ steps end after each sampling event (`step_ends`). Inputs belong to no step.
          "gates": <gates per instance>,
          "primitives": {<primitive id>: <gates per instance>},
          "served_macs": <per instance>, "tail_atoms": <per instance>, "receipt_folds": <per instance>,
+         "served_macs_by_precision": {"mac:<precision>": <per instance>},
          "ports": <its descriptor entry's `ports` (`ports.declared`)>}},  # only on a class that declares ports
      "callees": [<descriptor id>],                                # the classes of the root's nodes
      "inputs": <the number of input nodes>,
      "nodes": {"callee": [<index into callees>], "n": [<activations: a batch's members, a scan's iterations, else 1>]},
      "steps": {"ends": [...], "gates": [...], "served_macs": [...], "tail_atoms": [...], "receipt_folds": [...],
-               "select_gates": [...], "select_bits": [...]},
+               "served_macs_by_precision": [{"mac:<precision>": ...}], "select_gates": [...], "select_bits": [...]},
      "values": {"producer": [<root node>], "lo": [...], "hi": [...], "bits": [...], "reads": [[<root node>]], "output": [<bool>],
                 "fact": [<index into facts>]},
      "facts": [{"interval": [a, b] | null, "origin": [<origin>], "sink": <bool>, "word": <word type> | null}],
      "selects": {"call": [<root node>], "gates": [...], "bits": [...], "values": [[<value>]]},
      "totals": {"gates", "computed_gates", "inputs": {"run" | "registration": {"gates", "bits"}}, "values", "value_bits",
-                "classes", "served_macs", "tail_atoms", "receipt_folds", "select_gates", "select_bits"},
+                "classes", "served_macs", "tail_atoms", "receipt_folds", "served_macs_by_precision", "select_gates", "select_bits"},
      "approximate": <bool>,
      "digest": <SHA-512 of the canonical JSON of every other field>}
 
@@ -43,7 +44,9 @@ counters are bottom-up, per instance. An instance of a tensor-core step (a word 
 performs `PRODUCTS[family]` products, and every one counts as a served MAC. A family named in `FAMILY_COUNTS` takes its
 counters from its rule over its statics instead: that is how a matmul family states
 its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the same product) and a fold Definition its receipt folds; the
-class's ancestors add up what the rule says.
+class's ancestors add up what the rule says. `served_macs_by_precision` splits the served MACs by the operand format of the steps
+performing them (`PRECISION[family]`), keyed by the accounting layer's kinds (`mac:bf16`, `mac:int8`, ...), and adds up to
+`served_macs` in every class, step and the totals; a rule's served MACs take the one precision of the steps under it.
 
 **Values.** A value is a run `[lo, hi)` of one root node's output leaves whose readers, candidacy, output status and fact are the
 same throughout. `bits` is the sum of its leaves' widths. `reads` are the Calls with a gate that takes one of its leaves as an operand
@@ -101,6 +104,21 @@ PRODUCTS: dict[str, int] = {
     "BlackwellE4m3QmmaDot32_v2": 32, "BlackwellE5m2QmmaDot32_v2": 32, "BlackwellNvf4OmmaDot64_v2": 64,
     "BlackwellMxf4OmmaDot64_v2": 64,
     "BlackwellS8ImmaDot32_v1": 32, "BlackwellU8S8ImmaDot32_v1": 32, "BlackwellS8ImmaDot32_v2": 32, "BlackwellU8S8ImmaDot32_v2": 32,
+}
+
+#: the operand format of each `PRODUCTS` family's products, as the accounting layer names its multiply-add kinds (`mac:<precision>`):
+#: fp8 is E4M3 and E5M2, fp4 NVFP4 and MXFP4, and int8 the s8 and u8 x s8 IMMA arms, PoUW's u8 x s8 step and NCP's i7 step
+PRECISION: dict[str, str] = {
+    **dict.fromkeys(("AmpereBF16TcDot16_v1", "AmpereBF16TcDot16_v2", "AmpereBF16TcDot16_v3", "HopperBF16WgmmaDot16_v1",
+                     "HopperBF16WgmmaDot16_v2"), "bf16"),
+    "HopperTf32WgmmaDot8_v1": "tf32",
+    **dict.fromkeys(("HopperE4m3QgmmaDot32_v1", "HopperE4m3QgmmaDot32_v2", "HopperE4m3MmaV2Dot32_v1", "HopperE4m3MmaV2Dot32_v2",
+                     "BlackwellE4m3QmmaDot32_v1", "BlackwellE4m3QmmaDot32_v2", "BlackwellE5m2QmmaDot32_v1",
+                     "BlackwellE5m2QmmaDot32_v2"), "fp8"),
+    **dict.fromkeys(("BlackwellNvf4OmmaDot64_v1", "BlackwellNvf4OmmaDot64_v2", "BlackwellMxf4OmmaDot64_v1",
+                     "BlackwellMxf4OmmaDot64_v2"), "fp4"),
+    **dict.fromkeys(("PouwDot16U8S8_v1", "NcpDot16I7_v1", "BlackwellS8ImmaDot32_v1", "BlackwellU8S8ImmaDot32_v1",
+                     "BlackwellS8ImmaDot32_v2", "BlackwellU8S8ImmaDot32_v2"), "int8"),
 }
 
 COUNTERS = ("served_macs", "tail_atoms", "receipt_folds")
@@ -406,6 +424,25 @@ def _rule(fn: Any) -> dict[str, int] | None:
     return got
 
 
+def _step_macs(fam: str) -> Counter:
+    """A tensor-core step's served MACs by precision (none for any other family)."""
+    if fam not in PRODUCTS:
+        return Counter()
+    if fam not in PRECISION:
+        raise ValueError(f"census.PRODUCTS names {fam} with no census.PRECISION: add its operand format")
+    return Counter({f"mac:{PRECISION[fam]}": PRODUCTS[fam]})
+
+
+def _ruled_macs(fn: Any, below: Counter, served: int) -> Counter:
+    """A family rule's `served` MACs by precision: at the one precision of the steps under its class."""
+    if sum(below.values()) == served:
+        return below
+    if served and len(below) != 1:
+        raise ValueError(f"FAMILY_COUNTS[{family(fn)!r}] gives {served} served MACs for {descriptor_id(fn)} over steps at "
+                         f"{sorted(below) or 'no precision'}: a rule's served MACs take the one precision of the steps under it")
+    return Counter({q: served for q in below} if served else {})
+
+
 def _classes(root: Any) -> tuple[dict[str, dict], dict[int, str], dict[int, tuple[int, ...]]]:
     """The classes under `root`: their entries, the descriptor id by `id(fn)`, and each class's counters per instance."""
     fns: dict[int, Any] = {}
@@ -437,25 +474,31 @@ def _classes(root: Any) -> tuple[dict[str, dict], dict[int, str], dict[int, tupl
     ids: dict[int, str] = {}
     prims: dict[int, Counter] = {}
     counts: dict[int, tuple[int, ...]] = {}
+    macs: dict[int, Counter] = {}
     for fn in post:
         i = id(fn)
         if isinstance(fn, PrimitiveDefinition):
             prims[i] = Counter({fn.id: 1})
             counts[i] = (PRODUCTS.get(fn.id, 0), 0, 0)
+            macs[i] = _step_macs(fn.id)
         else:
             p: Counter = Counter()
+            m: Counter = Counter()
             c = [0, 0, 0]
             for k, mult in kids[i].items():
                 for pid, g in prims[k].items():
                     p[pid] += mult * g
+                for q, n in macs[k].items():
+                    m[q] += mult * n
                 for j in range(3):
                     c[j] += mult * counts[k][j]
             if family(fn) in PRODUCTS:
-                c[0] = PRODUCTS[family(fn)]
+                c[0], m = PRODUCTS[family(fn)], _step_macs(family(fn))
             rule = _rule(fn) if fn is not root else None
             if rule:
                 c = [rule.get(name, c[j]) for j, name in enumerate(COUNTERS)]
-            prims[i], counts[i] = p, tuple(c)
+                m = _ruled_macs(fn, m, c[0])
+            prims[i], counts[i], macs[i] = p, tuple(c), m
         if fn is not root:
             ids[i] = descriptor_id(fn)
 
@@ -476,7 +519,7 @@ def _classes(root: Any) -> tuple[dict[str, dict], dict[int, str], dict[int, tupl
         statics = {} if isinstance(fn, PrimitiveDefinition) else {k: _static_json(fn.bindings[k]) for k in fn.defn.statics}
         classes[cid] = {"family": family(fn), "statics": statics, "kind": kind, "binding": binding, "instances": inst[id(fn)],
                         "gates": fn.gates, "primitives": dict(sorted(prims[id(fn)].items())),
-                        **dict(zip(COUNTERS, counts[id(fn)]))}
+                        **dict(zip(COUNTERS, counts[id(fn)])), "served_macs_by_precision": dict(sorted(macs[id(fn)].items()))}
         if (decl := ports.declared(fn)) is not None:
             classes[cid]["ports"] = decl
     return classes, ids, counts
@@ -643,11 +686,22 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
     selects = {"call": ks, "gates": [sel.get(k, (0, 0))[0] for k in ks], "bits": [sel.get(k, (0, 0))[1] for k in ks],
                "values": [pools[k] for k in ks]}
 
-    steps: dict[str, list] = {"ends": ends, "gates": [], **{c: [] for c in COUNTERS}, "select_gates": [], "select_bits": []}
+    by = [classes[ids[id(nd.fn)]]["served_macs_by_precision"] for nd in nodes]
+
+    def by_precision(ks: range) -> dict[str, int]:
+        out: Counter = Counter()
+        for k in ks:
+            for q, n in by[k].items():
+                out[q] += mult[k] * n
+        return dict(sorted(out.items()))
+
+    steps: dict[str, list] = {"ends": ends, "gates": [], **{c: [] for c in COUNTERS}, "served_macs_by_precision": [],
+                              "select_gates": [], "select_bits": []}
     for a, b in zip([I] + ends, ends):
         steps["gates"].append(sum(nodes[k].gates for k in range(a, b)))
         for j, c in enumerate(COUNTERS):
             steps[c].append(sum(mult[k] * counts[id(nodes[k].fn)][j] for k in range(a, b)))
+        steps["served_macs_by_precision"].append(by_precision(range(a, b)))
         steps["select_gates"].append(sum(sel[k][0] for k in range(a, b) if k in sel))
         steps["select_bits"].append(sum(sel[k][1] for k in range(a, b) if k in sel))
 
@@ -659,6 +713,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
     totals = {"gates": root.gates, "computed_gates": root.gates - sum(x["gates"] for x in inputs.values()), "inputs": inputs,
               "value_bits": sum(b for p, b in zip(values["producer"], values["bits"]) if p >= I),
               "values": len(values["producer"]), "classes": len(classes), **dict(zip(COUNTERS, top)),
+              "served_macs_by_precision": by_precision(range(I, len(nodes))),
               "select_gates": sum(g for g, _ in sel.values()), "select_bits": sum(b for _, b in sel.values())}
     return seal({"schema": SCHEMA, "program": digest, "classes": classes, "callees": callees, "inputs": I,
                  "nodes": {"callee": [at[ids[id(nd.fn)]] for nd in nodes], "n": mult}, "steps": steps, "values": values,
@@ -671,4 +726,4 @@ def step_of(doc: dict) -> Callable[[int], int]:
     return lambda k: -1 if k < I else bisect.bisect_right(ends, k)
 
 
-__all__ = ["SCHEMA", "PRODUCTS", "COUNTERS", "FAMILY_COUNTS", "census", "family", "seal", "step_ends", "step_of"]
+__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "COUNTERS", "FAMILY_COUNTS", "census", "family", "seal", "step_ends", "step_of"]

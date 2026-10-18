@@ -178,7 +178,7 @@ def test_the_request_census():
     assert [c["callees"][i] for i in c["nodes"]["callee"][3:7]] == ["TEmbed_v1", "TLayer_v1", "TAttn_v1{T=1}", "TSelect_v1"]
     assert c["classes"]["TLookup16_v1"] == {"family": "TLookup16_v1", "statics": {}, "kind": "primitive", "binding": None,
                                             "instances": 12, "gates": 1, "primitives": {"TLookup16_v1": 1}, "served_macs": 0,
-                                            "tail_atoms": 0, "receipt_folds": 0}
+                                            "tail_atoms": 0, "receipt_folds": 0, "served_macs_by_precision": {}}
     assert c["classes"]["TAttn_v1{T=2}"]["statics"] == {"T": 2} and c["classes"]["TAttn_v1{T=2}"]["gates"] == 8
     assert c["classes"]["RegisteredInput16_v1"]["binding"] == "registration" and c["classes"]["Input32_v1"]["binding"] == "run"
     assert c["totals"]["inputs"] == {"run": {"gates": 1, "bits": 32}, "registration": {"gates": 68, "bits": 1088}}
@@ -191,20 +191,47 @@ def test_the_request_census():
     assert [c["values"]["reads"][i] for i in kv] == [[5, 9, 13], [9, 13], [13]]
 
 
+def _adds_up(c: dict) -> bool:
+    """Every class's, step's and the totals' served MACs by precision add up to its served MACs."""
+    return (all(sum(e["served_macs_by_precision"].values()) == e["served_macs"] for e in c["classes"].values())
+            and [sum(m.values()) for m in c["steps"]["served_macs_by_precision"]] == c["steps"]["served_macs"]
+            and sum(c["totals"]["served_macs_by_precision"].values()) == c["totals"]["served_macs"])
+
+
 def test_served_macs_and_family_rules(monkeypatch):
     P = Program(bind(Gemm, K=32, N=6))
-    assert census(P)["totals"]["served_macs"] == 0
+    assert census(P)["totals"]["served_macs"] == 0 and census(P)["totals"]["served_macs_by_precision"] == {}
     monkeypatch.setitem(CE.PRODUCTS, "TDot16_v1", 16)
+    monkeypatch.setitem(CE.PRECISION, "TDot16_v1", "bf16")
     c = census(P)
     assert c["classes"]['TGemmCoordinate_v1{K=32}']["served_macs"] == 32 and c["totals"]["served_macs"] == 6 * 32
-    assert c["steps"]["served_macs"] == [192]
+    assert c["steps"]["served_macs"] == [192] and c["steps"]["served_macs_by_precision"] == [{"mac:bf16": 192}] and _adds_up(c)
     monkeypatch.setitem(CE.FAMILY_COUNTS, "TGemmCoordinate_v1", lambda S: {"served_macs": S["K"] - 2, "tail_atoms": 1})
     c = census(P)
     assert {k: c["totals"][k] for k in CE.COUNTERS} == {"served_macs": 180, "tail_atoms": 6, "receipt_folds": 0}
     assert c["classes"]['TGemmCoordinate_v1{K=32}']["tail_atoms"] == 1 and c["steps"]["tail_atoms"] == [6]
     assert c["classes"]['TDot_v1{K=32}']["served_macs"] == 32  # under the rule's class, the bottom-up count stays the class's own
+    assert c["totals"]["served_macs_by_precision"] == {"mac:bf16": 180} and _adds_up(c), "a rule's served MACs at its steps' precision"
     monkeypatch.setitem(CE.FAMILY_COUNTS, "TGemmCoordinate_v1", lambda S: {"served": 1})
     with pytest.raises(ValueError, match="non-negative ints"):
+        census(P)
+
+
+def test_served_macs_split_by_precision(monkeypatch):
+    """A class over steps at two precisions carries both; a step with no precision, and a rule's served MACs over steps at two,
+    are refused by name."""
+    P = Program(bind(Gemm, K=32, N=6))
+    monkeypatch.setitem(CE.PRODUCTS, "TDot16_v1", 16)
+    monkeypatch.setitem(CE.PRODUCTS, "TCvt16_v1", 1)
+    monkeypatch.setitem(CE.PRECISION, "TDot16_v1", "bf16")
+    with pytest.raises(ValueError, match="names TCvt16_v1 with no census.PRECISION"):
+        census(P)
+    monkeypatch.setitem(CE.PRECISION, "TCvt16_v1", "fp8")
+    c = census(P)
+    assert c["classes"]['TGemmCoordinate_v1{K=32}']["served_macs_by_precision"] == {"mac:bf16": 32, "mac:fp8": 1}
+    assert c["totals"]["served_macs_by_precision"] == {"mac:bf16": 192, "mac:fp8": 6} and _adds_up(c)
+    monkeypatch.setitem(CE.FAMILY_COUNTS, "TGemmCoordinate_v1", lambda S: {"served_macs": S["K"]})
+    with pytest.raises(ValueError, match=r"over steps at \['mac:bf16', 'mac:fp8'\]: a rule's served MACs take the one precision"):
         census(P)
 
 
