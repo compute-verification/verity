@@ -1621,6 +1621,119 @@ def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registr
     assert rc == 0 and {d["name"] for d in json.loads(out)["dropped"]} == {"subteam^SNOWHERE"}
 
 
+class FakeLinearIssues:
+    """Linear's GraphQL API as `traffic --latency` reads it: an issue's creation, state history and comments, by identifier."""
+
+    def __init__(self, issues: dict[str, dict]):
+        self.issues, self.asked = issues, []
+
+    def __call__(self, url: str, data: bytes, headers: dict) -> dict:
+        ident = json.loads(data)["variables"]["id"]
+        self.asked.append(ident)
+        if ident not in self.issues:
+            return {"errors": [{"message": "Entity not found: Issue"}]}
+        return {"data": {"issue": self.issues[ident]}}
+
+
+def iso(t: float) -> str:
+    return datetime.fromtimestamp(t, timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def issue(created: float, moves=(), comments=()) -> dict:
+    """An issue filed at `created`, moved `(at, from, to)` and commented on `(at, who)`; `who` is a handle (the app's
+    `createAsUser`) or `~name`, a person."""
+    return {"createdAt": iso(created),
+            "history": {"nodes": [{"createdAt": iso(at), "fromState": {"type": a}, "toState": {"type": b}} for at, a, b in moves]
+                        + [{"createdAt": iso(created), "fromState": None, "toState": None}]},
+            "comments": {"nodes": [{"createdAt": iso(at), "user": {"name": who[1:]} if who.startswith("~") else None,
+                                    "botActor": None if who.startswith("~") else {"userDisplayName": who}} for at, who in comments]}}
+
+
+T0 = 1700050000.0
+
+
+def ask_at(fake, box: str, dt: float, author: str, text: str, **kw) -> dict:
+    """A top-level post at T0 + dt seconds, and its doorbell in the inbox `box`, as `send` would ring it."""
+    m = fake.add(COORD, text=text, username=author, bot_id=BOT, ts=f"{T0 + dt:.6f}", **kw)
+    fake.add(COORD, text=slack.doorbell(author, m["ts"], m["ts"], text), username="router", bot_id=BOT, thread_ts=box,
+             ts=f"{T0 + dt + 0.5:.6f}")
+    return m
+
+
+def reply_at(fake, root: dict, dt: float, author: str, text: str) -> dict:
+    root["reply_count"] = root.get("reply_count", 0) + 1
+    return fake.add(COORD, text=text, username=author, bot_id=BOT, thread_ts=root["ts"], ts=f"{float(root['ts']) + dt:.6f}")
+
+
+def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, registry, routes_dirs, capsys, monkeypatch):
+    """An ask's first answer is the earliest of the addressed lane's reply in its thread and its Linear issue leaving Backlog or
+    getting a comment from anyone but the asker; someone else's reply, the asker's own comment, a state the issue was filed
+    in, and anything after --now are no answer."""
+    from research import linear
+    circuits, proofs = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "proofs")
+    now = T0 + 86400
+    slack_ask = ask_at(fake, circuits, 0, "infra", "@circuits can the cut take 2^20 rows?")
+    reply_at(fake, slack_ask, 60, "proofs", "not mine, but probably")                       # another lane's reply
+    reply_at(fake, slack_ask, 600, "circuits", "yes, from PR 12")                           # 10 min
+    linked = "@proofs the opening's soundness error?\nLinear: <https://linear.app/x/issue/PRF-1|PRF-1>"
+    linear_ask = ask_at(fake, proofs, 100, "infra", linked)
+    reply_at(fake, linear_ask, 1200, "proofs", "2^-80, see the issue")                     # 20 min: Linear was first
+    filed_started = ask_at(fake, proofs, 200, "lean", linked.replace("PRF-1", "PRF-2"))   # filed straight into In Progress
+    later = ask_at(fake, proofs, 300, "lean", linked.replace("PRF-1", "PRF-3"))           # answered after --now
+    lost = ask_at(fake, proofs, 400, "lean", linked.replace("PRF-1", "PRF-404"))          # Linear can't read it
+    eyes = ask_at(fake, circuits, 500, "infra", "@circuits a second look at the lowering?", reactions=[{"name": "eyes", "users": ["U0VERITYBOT"], "count": 1}])
+    both = ask_at(fake, circuits, 550, "infra", "@circuits @proofs who owns the cut?", reactions=[{"name": "eyes", "users": ["U0VERITYBOT"], "count": 1}])
+    for box, dt in ((proofs, 551), (circuits, 552)):                                          # `deliver` rang circuits again
+        fake.add(COORD, text=slack.doorbell("infra", both["ts"], both["ts"], both["text"]), username="router", bot_id=BOT,
+                 thread_ts=box, ts=f"{T0 + dt:.6f}")
+    fresh = ask_at(fake, circuits, 86000, "infra", "@circuits one more")                        # unanswered, but not stale
+    ask_at(fake, circuits, 700, "infra", f"{slack.ANNOUNCE} from @infra to @circuits: node 2 reboots")   # announcements aren't asks
+    ask_at(fake, circuits, 800, "infra", "@circuits fyi: the census moved (quiet)")
+    r = reply_at(fake, slack_ask, 900, "infra", "@proofs and 2^21?")                          # a reply's doorbell: no new ask
+    fake.add(COORD, text=slack.doorbell("infra", slack_ask["ts"], r["ts"], r["text"]), username="router", bot_id=BOT,
+             thread_ts=proofs, ts=f"{T0 + 901:.6f}")
+    ask_at(fake, circuits, -10, "infra", "@circuits before the window")
+    t = float(linear_ask["ts"])
+    fake_linear = FakeLinearIssues({
+        "PRF-1": issue(t - 1, moves=[(t + 300, "backlog", "started"), (t + 2000, "started", "completed")],
+                       comments=[(t + 30, "infra"), (t + 600, "~Daniel")]),                  # the asker's comment isn't an answer
+        "PRF-2": issue(t + 99, moves=[(t + 99, "backlog", "started")], comments=[(t + 99 + 1800, "proofs")]),
+        "PRF-3": issue(t + 199, moves=[(now + 60, "backlog", "started")], comments=[(now + 30, "proofs")]),
+    })
+    monkeypatch.setattr(linear, "_http", fake_linear)
+    monkeypatch.setenv("LINEAR_API_KEY", "dummy-key")
+    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}", "--json")
+    rep = json.loads(out)
+    by = {(a["lane"], a["ts"]): a for a in rep["asks"]}
+    assert rc == 0 and len(rep["asks"]) == 9 and sorted(fake_linear.asked) == ["PRF-1", "PRF-2", "PRF-3", "PRF-404"]
+    assert (by["circuits", slack_ask["ts"]]["first"], by["circuits", slack_ask["ts"]]["minutes"]) == ("slack-reply", 10.0)
+    assert (by["proofs", linear_ask["ts"]]["first"], by["proofs", linear_ask["ts"]]["minutes"]) == ("linear-state", 5.0)
+    assert (by["proofs", filed_started["ts"]]["first"], by["proofs", filed_started["ts"]]["minutes"]) == ("linear-comment", 30.0)
+    assert by["proofs", later["ts"]]["first"] is None and by["proofs", lost["ts"]]["first"] is None
+    assert rep["linear_errors"] == ["PRF-404: Linear: Entity not found: Issue"]
+    assert by["circuits", eyes["ts"]]["first"] == "reaction" and by["circuits", eyes["ts"]]["minutes"] is None   # untimed
+    assert by["circuits", both["ts"]]["first"] is None and by["proofs", both["ts"]]["first"] is None   # whose 👀? unknown
+    assert by["circuits", fresh["ts"]]["age_minutes"] == round((now - float(fresh["ts"])) / 60, 1)
+    assert rep["lanes"] == [
+        {"lane": "circuits", "asks": 4, "answered": 2, "slack": 1, "linear": 0, "untimed": 1, "median_min": 10.0,
+         "p90_min": 10.0, "unanswered": 2, "stale": 1},
+        {"lane": "proofs", "asks": 5, "answered": 2, "slack": 0, "linear": 2, "untimed": 0, "median_min": 5.0,
+         "p90_min": 30.0, "unanswered": 3, "stale": 3}]
+    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
+    lines = out.splitlines()
+    assert rc == 0 and lines[0].startswith("ask latency over the last 24 h")
+    assert lines[2].split() == ["@circuits", "4", "2", "1", "0", "1", "10.0", "10.0", "2", "1"]
+    assert lines[3].split() == ["@proofs", "5", "2", "0", "2", "0", "5.0", "30.0", "3", "3"]
+    assert lines[4] == "  linear: 1 issue(s) unread, counted from Slack alone: PRF-404: Linear: Entity not found: Issue"
+
+
+def test_nearest_rank_takes_the_ceiling_rank_and_nothing_of_nothing():
+    assert slack.nearest_rank([], 0.5) is None
+    assert slack.nearest_rank([3.0], 0.9) == 3.0
+    assert [slack.nearest_rank([4.0, 1.0, 3.0, 2.0], q) for q in (0.5, 0.9)] == [2.0, 4.0]
+    assert slack.nearest_rank([float(x) for x in range(1, 11)], 0.9) == 9.0
+
+
 def test_origin_groups_reads_the_registry_as_origin_main_has_it(tmp_path):
     """`origin_groups` fetches, then reads origin/main's registry, so it sees a group the clone's checkout predates; where
     git can't answer it returns empty, keeping traffic's old behavior."""

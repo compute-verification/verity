@@ -14,6 +14,7 @@ Notes are records, never messages.
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds]  # the names you answer to
   research msg traffic [--hours H] [--replay] [--json]             # the monitor: doorbells, pauses, dropped names, unanswered asks
+  research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (Slack or Linear), median and p90 minutes
   research msg watch --as NAME [--every S] [--polls N]             # block until a new doorbell; the hook a wake script runs
   research msg pickup --thread TS                                  # 👀 on an ask you own
   research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent (needs SLACK_BOT_TOKEN)
@@ -1864,12 +1865,135 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
     return out
 
 
+def is_ask(m: dict) -> bool:
+    """Whether a top-level post asks the names it rang: not an announcement, a status line, an inbox's head, quiet or an fyi."""
+    text = m.get("text") or ""
+    return not (is_announcement(m) or is_quiet(text) or text.startswith(INBOX_HEAD) or kind_of(m) in ("fyi", "status"))
+
+
+ANSWER_REACTIONS = ("eyes", "white_check_mark", "x")
+LINEAR_ANSWER_Q = ("query($id: String!) { issue(id: $id) { createdAt history(first: 100) { nodes { createdAt fromState { type } toState { type } } } "
+                   "comments(first: 100) { nodes { createdAt user { name } botActor { userDisplayName } } } } }")
+
+
+def _iso_epoch(stamp: str) -> float:
+    return datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+
+
+def issue_answer(lin: Any, ident: str, asker: str | None) -> dict | None:
+    """When the Linear issue `ident` was first taken up: its first move out of Backlog (by anyone: every write is the
+    Verity Asks app's), or the first comment by someone other than `asker`; {at, how, by}, or None when neither happened.
+    An issue filed straight into another state shows that as a move out of Backlog at its creation, which is no answer."""
+    i = lin.gql(LINEAR_ANSWER_Q, {"id": ident})["issue"]
+    born = _iso_epoch(i["createdAt"])
+    out = [{"at": _iso_epoch(h["createdAt"]), "how": "linear-state", "by": (h.get("toState") or {}).get("type")}
+           for h in i["history"]["nodes"]
+           if (h.get("fromState") or {}).get("type") == "backlog" and (h.get("toState") or {}).get("type") not in (None, "backlog")
+           and _iso_epoch(h["createdAt"]) > born]
+    for c in i["comments"]["nodes"]:
+        who = (c.get("botActor") or {}).get("userDisplayName") or (c.get("user") or {}).get("name")
+        if who and who != asker:
+            out.append({"at": _iso_epoch(c["createdAt"]), "how": "linear-comment", "by": who})
+    return min(out, key=lambda a: a["at"], default=None)
+
+
+def nearest_rank(xs: list[float], q: float) -> float | None:
+    return sorted(xs)[max(math.ceil(q * len(xs)), 1) - 1] if xs else None
+
+
+def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, now: float, stale_s: float,
+                linear_client: Callable[[], Any] | None = None) -> dict:
+    """Each ask posted in (since, now] that rang a lane's inbox, and how long the lane took to first answer it: the earliest of
+    a reply in the ask's thread under the lane's name, and (an ask linked to a Linear issue) the issue's first move out of
+    Backlog or first comment by anyone but the asker (`issue_answer`).  An ask with no timed answer that carries 👀, ✅ or ❌
+    and rang only this lane counts as answered but untimed: Slack keeps no time for a reaction, and every handle reacts as
+    one bot.  Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear or untimed), the nearest-rank
+    median and p90 of the timed answers in minutes, the unanswered, and those unanswered for longer than `stale_s`."""
+    tops: dict[str, dict[str, dict]] = {}                            # channel -> ts -> top-level post
+    replies: dict[tuple[str, str], list[dict]] = {}
+    asks, counted = [], set()
+    for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
+        if not r.get("inbox_ts") or r["inbox_ts"] in counted:
+            continue                                                 # a renamed name forwards into its successor's inbox
+        counted.add(r["inbox_ts"])
+        rch = r.get("channel") or ch
+        if rch not in tops:
+            tops[rch] = {m["ts"]: m for m in api.paged("conversations.history", "messages", channel=rch, oldest=f"{since:.6f}")
+                         if float(m["ts"]) <= now}
+        seen = set()
+        for b in api.paged("conversations.replies", "messages", channel=rch, ts=r["inbox_ts"], oldest=f"{since:.6f}"):
+            d = DOORBELL_RE.match(b.get("text") or "") if b.get("username") == "router" and b.get("ts") != r["inbox_ts"] else None
+            if not d or (d[4] and d[4] != d[3]) or d[3] in seen:
+                continue                                             # a reply's doorbell, or one `deliver` rang again
+            root = tops[rch].get(d[3])
+            if root and is_ask(root) and poster(root, reg) != r["name"]:
+                seen.add(d[3])
+                asks.append({"lane": r["name"], "channel": rch, "root": root})
+    rang: dict[tuple[str, str], int] = {}
+    for a in asks:
+        rang[(a["channel"], a["root"]["ts"])] = rang.get((a["channel"], a["root"]["ts"]), 0) + 1
+    lin, issues, linear_errors = None, {}, []
+    out = []
+    for a in asks:
+        root, lane, t0 = a["root"], a["lane"], float(a["root"]["ts"])
+        key = (a["channel"], root["ts"])
+        if root.get("reply_count") and key not in replies:
+            replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
+        found = [{"at": float(m["ts"]), "how": "slack-reply", "by": lane} for m in replies.get(key, [])
+                 if m.get("ts") != root["ts"] and by_handle(m, lane) and t0 < float(m["ts"]) <= now]
+        asker = poster(root, reg)
+        if link := LINEAR_LINK_RE.search(root.get("text") or ""):
+            if (link[1], asker) not in issues:
+                from . import linear  # noqa: PLC0415
+                try:
+                    lin = lin or (linear_client or linear.Linear)()
+                    issues[(link[1], asker)] = issue_answer(lin, link[1], asker)
+                except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:   # the ask still counts, from Slack
+                    issues[(link[1], asker)] = None
+                    linear_errors.append(f"{link[1]}: {e}")
+            if (ans := issues[(link[1], asker)]) and ans["at"] <= now:
+                found.append(ans)
+        first = min(found, key=lambda x: x["at"], default=None)
+        untimed = first is None and rang[key] == 1 and any(x.get("name") in ANSWER_REACTIONS for x in root.get("reactions", []))
+        out.append({"lane": lane, "ts": root["ts"], "by": asker, "linear": link[1] if link else None,
+                    "first": first["how"] if first else "reaction" if untimed else None,
+                    "minutes": round(max(first["at"] - t0, 0) / 60, 1) if first else None,
+                    "age_minutes": round((now - t0) / 60, 1)})
+    lanes = []
+    for lane in sorted({x["lane"] for x in out}):
+        mine = [x for x in out if x["lane"] == lane]
+        timed = [x["minutes"] for x in mine if x["minutes"] is not None]
+        unanswered = [x for x in mine if not x["first"]]
+        lanes.append({"lane": lane, "asks": len(mine), "answered": len(mine) - len(unanswered),
+                      "slack": sum(x["first"] == "slack-reply" for x in mine),
+                      "linear": sum((x["first"] or "").startswith("linear-") for x in mine),
+                      "untimed": sum(x["first"] == "reaction" for x in mine),
+                      "median_min": nearest_rank(timed, 0.5), "p90_min": nearest_rank(timed, 0.9),
+                      "unanswered": len(unanswered), "stale": sum(x["age_minutes"] * 60 > stale_s for x in unanswered)})
+    return {"since": since, "now": now, "lanes": lanes, "asks": out, "linear_errors": linear_errors}
+
+
+def render_latency(rep: dict, hours: float) -> str:
+    cols = ("asks", "answered", "slack", "linear", "untimed", "median_min", "p90_min", "unanswered", "stale")
+    lines = [f"ask latency over the last {hours:g} h (to {both(rep['now'])}): minutes from an ask to its lane's first answer",
+             f"  {'lane':<26}" + "".join(f"{c:>11}" for c in cols)]
+    for x in rep["lanes"]:
+        lines.append(f"  @{x['lane']:<25}" + "".join(f"{'-' if x[c] is None else x[c]:>11}" for c in cols))
+    if rep["linear_errors"]:
+        lines.append(f"  linear: {len(rep['linear_errors'])} issue(s) unread, counted from Slack alone: {rep['linear_errors'][0]}")
+    return "\n".join(lines)
+
+
 def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     """Doorbells per inbox (the most in any one hour), pauses, `@name`s nobody owns (dropped), and asks with no 👀 or reply
-    after --stale-h hours, over the last --hours."""
+    after --stale-h hours, over the last --hours; with --latency, how fast each lane first answered its asks instead."""
     api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
     now = time.time() if ns.now is None else float(ns.now)
     since = now - ns.hours * 3600
+    if ns.latency:
+        rep = ask_latency(api, reg, routes, ch, since, now, ns.stale_h * 3600)
+        print(json.dumps(rep, indent=2) if ns.json else render_latency(rep, ns.hours))
+        return 0
     rows, counted = [], set()
     for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
         if not r.get("inbox_ts") or r["inbox_ts"] in counted:
@@ -1898,10 +2022,9 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                     fresh = origin_groups(registry_path(ns.registry))   # this checkout's registry may predate the group
                 if gid not in fresh:                                 # a group no handle has: `lead_names` can't route it
                     dropped.append({"name": f"subteam^{gid}", "ts": m["ts"], "by": poster(m, reg)})
-        is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and \
-            not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
-        answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
-        if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
+        ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and is_ask(m)  # older clients tagged an fyi without (quiet)
+        answered = m.get("reply_count") or any(x.get("name") in ANSWER_REACTIONS for x in m.get("reactions", []))
+        if ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
             if not ((link := LINEAR_LINK_RE.search(m.get("text") or "")) and issue_taken(link[1], poster(m, reg), taken)):
                 stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
     replayed = replay(api, reg, routes, ch, since) if ns.replay else None
@@ -2365,7 +2488,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--hours", type=float, default=24)
     p.add_argument("--stale-h", type=float, default=2, help="an ask with no 👀, ✅, ❌ or reply after this many hours is unanswered")
     p.add_argument("--replay", action="store_true", help="also compare each post's doorbells with what route_targets says it rings")
-    p.add_argument("--now", default=None, help=argparse.SUPPRESS)
+    p.add_argument("--latency", action="store_true", help="instead: per lane, its asks, how many it answered (on Slack or Linear), "
+                                                         "and the median and p90 minutes to its first answer")
+    p.add_argument("--now", default=None, metavar="EPOCH", help="the window's end, in seconds since the epoch (default: now)")
     p.add_argument("--json", action="store_true")
     cmd("pickup", "\U0001f440 on an ask or alert you own", thread=True)
     p = cmd("retract", "blank a post your name sent (needs SLACK_BOT_TOKEN: the broker allows no edits)", as_=True)
