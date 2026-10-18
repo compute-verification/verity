@@ -1,8 +1,9 @@
 """Eager Match patterns of the exact-int8 profile (`TargetProfile.int8_exact`): its two named ops (`engine.int8_ops`), each ONE
-registered Definition (`program.registry.int8_exact`), whatever kernels the op launches inside:
+registered Definition per Call (`program.registry.int8_exact`), whatever kernels the op launches inside:
 
     verity_int8::linear(x[M,K] bf16, w[N,K] int8, s_w[N,1] f32) -> (xq[M,K] s8, s_a[M] f32, y[M,N] bf16)
-        -> Compute(Int8Linear_v1{K,N}, rows=M, (PerRow(x), Shared(w), Shared(s_w)), (PerRow(xq), PerRow(s_a), PerRow(y)))
+        -> Compute(Int8RowQuant_v1{K}, rows=M, (PerRow(x),), (PerRow(xq), PerRow(s_a))), then
+           Compute(Int8ScaledMm_v1{K,N}, rows=M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(s_w)), (PerRow(y),))
     vllm.unified_attention_with_output(query, ..., output!, layer) ⊃ one verity_int8::window_attention(q, key_cache, value_cache,
                                                                       blocks, s, k_scales, scale) per request, each copied into output
         -> per request Compute(Int8LutAttentionWindow_v1{N,S,H,G,D,SCALE}, rows=1, (GatherMany(q rows), GatherMany(K slots 0..s-1),
@@ -82,9 +83,13 @@ class Int8Linear:
         if not any(r.role == "weight" for r in wroots) or not any(r.role == "weight" for r in sroots):
             return unsupported(node, "w / s_w are not checkpoint parameters (weight Roots)", w=repr(w), s_w=repr(sw))
         wname, sname = wroots[0].name, sroots[0].name
-        return Compute(bind(int8_exact.Int8Linear, K=K, N=N), M, (PerRow(x), Shared(w), Shared(sw)), (PerRow(xq), PerRow(s_a), PerRow(y)),
-                       tuple(sorted(node.ids())), hint=hint_of(node, wname), kernels=("_int_mm", "elementwise_kernel", "reduce_kernel"),
-                       attribution=attribution_for(ctx, M, node.phase), pattern=self.name, roots=(None, wname, sname))
+        hint, attr = hint_of(node, wname), attribution_for(ctx, M, node.phase)
+        quant = Compute(bind(int8_exact.Int8RowQuant, K=K), M, (PerRow(x),), (PerRow(xq), PerRow(s_a)), tuple(sorted(node.ids())),
+                        hint=f"{hint}/quant", kernels=("elementwise_kernel", "reduce_kernel"), attribution=attr, pattern=self.name)
+        mm = Compute(bind(int8_exact.Int8ScaledMm, K=K, N=N), M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(sw)), (PerRow(y),), (),
+                     hint=hint, kernels=("_int_mm", "elementwise_kernel"), attribution=attr, pattern=self.name,
+                     roots=(None, None, wname, sname))
+        return _group_compute(quant, also=(mm,))
 
 
 @dataclass

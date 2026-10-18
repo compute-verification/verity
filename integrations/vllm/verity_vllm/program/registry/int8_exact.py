@@ -205,15 +205,23 @@ def Int8Dequant(B, S, y, sa, sw):
     return B.call(P.F32ToBf16Rn, B.call(P.F32Mul, B.call(P.F32Mul, B.call(I32ToF32, y), sa), sw))
 
 
+@composite("Int8ScaledDot", 1, ["K"], lambda S: ((("xq", Array(S.K, V8)), ("sa", F32), ("w", Array(S.K, V8)), ("sw", F32)), BF16),
+           conformance=_CONF)
+def Int8ScaledDot(B, S, xq, sa, w, sw):
+    """One output: `S8Matmul_v1{N=1, K}`'s plain arm against one weight row, then `Int8Dequant`."""
+    y = B.call(bind(S8.S8Matmul, **plain_arm(S.K, 1)), xq, w.reshape(Array(1, Array(S.K, V8))))
+    return B.call(Int8Dequant, y[0], sa, sw)
+
+
 def _mm_sig(S):
     return (("xq", Array(S.K, V8)), ("sa", F32), ("w", Array(S.N, Array(S.K, V8))), ("sw", Array(S.N, F32))), Array(S.N, BF16)
 
 
 @composite("Int8ScaledMm", 1, ["K", "N"], _mm_sig, conformance=_CONF)
 def Int8ScaledMm(B, S, xq, sa, w, sw):
-    """One quantized row against the N weight rows: `S8Matmul_v1`'s plain arm, then `Int8Dequant` per output."""
-    y = B.call(bind(S8.S8Matmul, **plain_arm(S.K, S.N)), xq, w)
-    return B.batch(Int8Dequant, y, sa, sw, axes=(0, None, 0))
+    """One quantized row against the N weight rows, `Int8ScaledDot` per output: the N members read only the parameters, so the
+    query of record cuts one member (`verity.ml.circuits.cut.separable`) rather than the whole fan-in."""
+    return B.batch(bind(Int8ScaledDot, K=S.K), xq, sa, w, sw, axes=(None, None, 0, 0))
 
 
 @composite("Int8Linear", 1, ["K", "N"],
@@ -334,5 +342,5 @@ def Int8LutAttentionWindow(B, S, q, k, v, ks):
     return Coll(Array(N, Array(H, Array(D, BF16))), concat([out[(i, h)].refs for i in range(N) for h in range(H)]))
 
 
-INT8_COMPOSITES = [Int8QuantElement, Int8RowScale, Int8StaticQuant, Int8RowQuant, Int8Dequant, Int8ScaledMm, Int8Linear,
+INT8_COMPOSITES = [Int8QuantElement, Int8RowScale, Int8StaticQuant, Int8RowQuant, Int8Dequant, Int8ScaledDot, Int8ScaledMm, Int8Linear,
                    Int8AttnScale, Int8LutSoftmax, Int8AttnOut, Int8LutAttentionRow, Int8ColumnQuant, Int8LutAttentionWindow]

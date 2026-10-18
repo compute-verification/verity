@@ -1,5 +1,5 @@
-"""The exact-int8 linear exported under the pinned `b1-eager-v3` profile: `verity_int8::linear` binds to `Int8Linear_v1{K,N}` per token
-row (`vllm_bindings.int8`), the Definition the Match fold resolves the same launch to (`observe/fold/patterns/int8.py`); the
+"""The exact-int8 linear exported under the pinned `b1-eager-v3` profile: `verity_int8::linear` binds to `Int8RowQuant_v1{K}` then
+`Int8ScaledMm_v1{K,N}` per token row (`vllm_bindings.int8`), the Definition the Match fold resolves the same launch to (`observe/fold/patterns/int8.py`); the
 Program's words are the torch op's (xq, s_a and y, bit for bit); forms the op does not compute are refused by name."""
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ def test_int8_linear_binds_int8_linear_per_row_and_evaluates_to_the_op(sw_shape)
     x = (torch.randn(M, K) * 2).to(BF)
     rep = _derive(m, x)
     assert rep.unsupported is None, f"refused: {rep.unsupported}"
-    assert _emitted(rep) == [f"Int8Linear_v1{{K={K},N={N}}} x{M}"], _emitted(rep)
+    assert _emitted(rep) == [f"Int8RowQuant_v1{{K={K}}} x{M} + Int8ScaledMm_v1{{K={K},N={N}}} x{M}"], _emitted(rep)
     roles = rep.provenance["weight_roles"]
     assert roles["weight"]["role"] == "int8_w" and roles["weight_scale"]["role"] == "int8_ws"
     params = dict(m.named_parameters())

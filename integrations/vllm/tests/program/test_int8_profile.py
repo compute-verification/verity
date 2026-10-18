@@ -107,12 +107,15 @@ def _lin(w_dtype="int8", sw_shape=(N, 1)):
                   DispatchExit(1, outs)])
 
 
-def test_int8_linear_resolves_to_its_definition_with_all_three_results_and_both_weights_named():
+def test_int8_linear_resolves_to_the_quantizer_then_the_product_with_both_weights_named():
     r = Int8Linear().match(_lin(), _ctx([("r0", i) for i in range(M)], {"r0": M}, {"r0": [0]}, roots=_lin_roots()))
     assert isinstance(r, Compute), r
-    assert spec_label(r.spec) == f"Int8Linear_v1{{K={K},N={N}}}" and r.rows == M
-    assert [type(o) for o in r.operands] == [PerRow, Shared, Shared] and [type(o) for o in r.outputs] == [PerRow, PerRow, PerRow]
-    assert r.roots == (None, "model.layers.0.self_attn.qkv_proj.weight", "model.layers.0.self_attn.qkv_proj.weight_scale")
+    assert spec_label(r.spec) == f"Int8RowQuant_v1{{K={K}}}" and r.rows == M and r.consumed
+    assert [type(o) for o in r.operands] == [PerRow] and [type(o) for o in r.outputs] == [PerRow, PerRow]
+    (mm,) = r.also
+    assert spec_label(mm.spec) == f"Int8ScaledMm_v1{{K={K},N={N}}}" and mm.rows == M and mm.consumed == ()
+    assert mm.operands[:2] == r.outputs and [type(o) for o in mm.operands[2:]] == [Shared, Shared] and [type(o) for o in mm.outputs] == [PerRow]
+    assert mm.roots == (None, None, "model.layers.0.self_attn.qkv_proj.weight", "model.layers.0.self_attn.qkv_proj.weight_scale")
 
 
 def test_int8_linear_refuses_other_dtypes_and_non_parameter_weights():

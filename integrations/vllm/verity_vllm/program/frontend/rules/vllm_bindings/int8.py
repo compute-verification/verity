@@ -28,13 +28,15 @@ def _int8_op(name: str) -> set:
 
 
 class Int8LinearRule(OpRule):
-    """`verity_int8::linear(x bf16 [M, K], w int8 [N, K], s_w f32 [N, 1] or [N]) -> (xq, s_a, y)` -> `int8_linear{K,N}`
-    (Int8Linear_v1) per token row; all three results are values (`xq` s8 [M, K], `s_a` f32 [M], `y` bf16 [M, N])."""
+    """`verity_int8::linear(x bf16 [M, K], w int8 [N, K], s_w f32 [N, 1] or [N]) -> (xq, s_a, y)` -> per token row
+    `int8_row_quant{K}` (Int8RowQuant_v1) then `int8_scaled_mm{K,N}` (Int8ScaledMm_v1, separable over N): two Calls, so the query of
+    record cuts a member of the product instead of its whole fan-in; all three results are values (`xq` s8 [M, K], `s_a` f32 [M],
+    `y` bf16 [M, N])."""
     modes = frozenset({"profile"})
     info = RuleInfo("Int8Linear[vllm]", 1, "op-binding",
                     applies_to="verity_int8::linear(Tensor x, Tensor w, Tensor s_w) -> (Tensor, Tensor, Tensor)",
                     preconditions=("x is a bf16 value [M, K]", "w is an int8 parameter [N, K]", "s_w is a float32 parameter [N, 1] or [N]"),
-                    evidence_domain="structural; numerics: Int8Linear_v1 (engine.int8_exact's plain linear, bit-equal on the RTX PRO 6000 "
+                    evidence_domain="structural; numerics: Int8RowQuant_v1 + Int8ScaledMm_v1 = Int8Linear_v1 (engine.int8_exact's plain linear, bit-equal on the RTX PRO 6000 "
                                     "to its CPU run)")
 
     def targets(self):
@@ -67,12 +69,14 @@ class Int8LinearRule(OpRule):
         N, K = shape(ctx, w)
         rows, lead = rows_of(ctx.coll(x))
         wc, sc = ctx.coll(w), ctx.coll(sw).reshape(Array(N, Value(32)))
-        fn = ctx.kind("int8_linear", node, K=K, N=N)
-        outs = [ctx.call(fn, r, wc, sc, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
-        ctx.define(node, (from_rows([o[0] for o in outs], lead), array_of([o[1] for o in outs]), from_rows([o[2] for o in outs], lead)))
+        fq, fm = ctx.kind("int8_row_quant", node, K=K), ctx.kind("int8_scaled_mm", node, K=K, N=N)
+        hint = ctx.hint_name(node)
+        qs = [ctx.call(fq, r, node=node, rule=self, name=f"{hint}/quant[{i}]") for i, r in enumerate(rows)]
+        ys = [ctx.call(fm, q[0], q[1], wc, sc, node=node, rule=self, name=f"{hint}[{i}]") for i, q in enumerate(qs)]
+        ctx.define(node, (from_rows([q[0] for q in qs], lead), array_of([q[1] for q in qs]), from_rows(ys, lead)))
         ctx.bind_weight_role(w, self, "int8_w", K=K, N=N)
         ctx.bind_weight_role(sw, self, "int8_ws", N=N)
-        ctx.record(self, node, {"K": K, "N": N, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"K": K, "N": N, "rows": len(rows)}, emitted=f"{fq.id} x{len(rows)} + {fm.id} x{len(rows)}")
 
 
 class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):

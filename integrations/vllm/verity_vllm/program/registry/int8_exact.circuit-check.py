@@ -6,7 +6,7 @@ from typing import Any, Callable
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """The linear at K = 64 over two output rows; a 3-key window's last two rows, two query heads over one KV head at d = 32;
+    """The linear at K = 64 over two output rows, and its two Calls (the quantizer, the product); a 3-key window's last two rows, two query heads over one KV head at d = 32;
     one row of 33 keys (P V' over two k steps, the second zero-padded); and the primitives no composite here reaches whole."""
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import int8_exact as X
@@ -14,6 +14,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     scale = 32 ** -0.5
     return [
         ("Int8Linear_v1", lambda: bind(X.Int8Linear, K=64, N=2)),
+        ("Int8RowQuant_v1", lambda: bind(X.Int8RowQuant, K=64)),
+        ("Int8ScaledMm_v1", lambda: bind(X.Int8ScaledMm, K=64, N=2)),
         ("Int8LutAttentionWindow_v1", lambda: bind(X.Int8LutAttentionWindow, N=2, S=3, H=2, G=1, D=32, SCALE=scale)),
         ("Int8LutAttentionRow_v1/s33", lambda: bind(X.Int8LutAttentionRow, D=32, S=33, SCALE=scale)),
     ]
