@@ -243,11 +243,12 @@ def verifier_plan(dc: Datacenter, plans: dict) -> Plan:
 
 
 def charge(dc: Datacenter, plan: Plan, claims: list, block: str) -> dict:
-    """The account of one block's claims under the verifier's plan (`datacenter.account`), on a profile that credits no
-    work and registers no store: whether it is sound, and its covert budget, which is the carried windows' timing
-    advice, every refused port-window at its uplink's full capacity, and everything a block out for maintenance
-    holds."""
-    acc = account(claims, Profile(dc, plan, {}, {}, {b.name: 0.0 for b in dc.blocks}, {}))
+    """The account of one block's claims under the verifier's plan for that block (`datacenter.account`, which charges
+    every block its plan has out), on a profile that credits no work and registers no store: whether it is sound, and
+    its covert budget, which is the carried windows' timing advice, every refused port-window at its uplink's full
+    capacity, and everything the block holds if it is out for maintenance."""
+    mine = Plan(plan.epoch, maintenance=[m for m in plan.maintenance if m.block == block])
+    acc = account(claims, Profile(dc, mine, {}, {}, {b.name: 0.0 for b in dc.blocks}, {}))
     return {"sound": acc.sound, "covert_bits": acc.covert_bits, "timing_bits": acc.timing_bits,
             "refused_bits": acc.refused_bits, "serviced_bits": acc.serviced.get(block, 0.0),
             "carried_bits": next(x.carried for x in acc.blocks if x.block == block)}

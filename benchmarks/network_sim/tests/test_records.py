@@ -109,24 +109,28 @@ def test_a_block_down_for_maintenance_is_refused_without_the_plan_and_charged_wh
     records are the ones the verifier's plan with `Maintenance(b0, window 1)` declares, which leave that window out:
     the check carries the four others and the account is sound, charging everything the block's devices hold. Without
     the plan both port-windows of window 1 are refused "no record", each charged at the uplink's full capacity. The
-    certifier's audit has no verdict for window 1."""
+    certifier's audit has no verdict for window 1. An honest block beside it is charged its timing advice only."""
     from datacenter import Carried, Interval, Maintenance, Plan, check_records
 
     report, s = setup
     honest = m.ar.plan_configuration(m.trace()["configurations"][0], s)
-    dc = m.leaf_spine(1, cadence=m.records.cadence(s))
+    dc = m.leaf_spine(2, cadence=m.records.cadence(s))
     plan = m.strategy_plan(honest, s, "maintenance")
     assert plan["strategy"] == "maintenance" and plan["outage"]["window"] == m.OUTAGE_WINDOW == 1
-    verifier = m.verifier_plan(dc, {"b0": plan})
+    verifier = m.verifier_plan(dc, {"b0": plan, "b1": honest})
     assert verifier == Plan(Interval(0, 18000), maintenance=[Maintenance("b0", Interval(6000, 12000))])
     assert m.ar.run_virtual(plan, report, tmp_path / "b0") == {"server": 0, "proxy": 0, "peer": 0}
+    assert m.ar.run_virtual(honest, report, tmp_path / "b1") == {"server": 0, "proxy": 0, "peer": 0}
     published = {(r.port, r.window): r for r in m.records.published(tmp_path / "b0", s, dc, "b0")}
     excused = m.records.declared(plan, s, dc, "b0", verifier=verifier)
     assert published == excused and sorted({w for _, w in excused}) == [0, 2]
     assert all(isinstance(c, Carried) for c in check_records(list(published.values()), excused, dc.cadence))
 
-    summary = m.audit(tmp_path, dc, honest, {"b0": plan}, report, {"b0": "maintenance"})
+    summary = m.audit(tmp_path, dc, honest, {"b0": plan, "b1": honest}, report, {"b0": "maintenance", "b1": "honest"})
     assert summary["plan"] == {"epoch": [0, 18000], "maintenance": [["b0", [6000, 12000]]]}
+    other = summary["blocks"]["b1"]["datacenter"]
+    assert other["accepted"] and "unplanned" not in other
+    assert (other["account"]["covert_bits"], other["account"]["serviced_bits"]) == (24.0, 0.0)
     entry = summary["blocks"]["b0"]
     assert [(link, w, raw) for link, w, raw, _ in entry["verdicts"] if raw] == \
         [("responses", 1, "no-verdict"), ("requests", 1, "no-verdict")]
