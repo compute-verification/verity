@@ -26,6 +26,9 @@ after the run.  Beside sampled proofs the composition asks `verity.core.protocol
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay draws each call's units under
 its window's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
+Under H1 + fx1 (``eps1-sm120-h1fx1``, `pouw_h1`) on the eager int8_exact row nothing is executed in the linear's place
+(`executes`): the arm serves its own y, and each call is recorded as its own Program, compiled to H1 tile units
+(`verity.core.protocols.pouw.circuit.compile`), with its seed group's roots and its positions.
 What is a placeholder is listed in `info` (``placeholder``).
 """
 from __future__ import annotations
@@ -61,6 +64,7 @@ from verity.core.protocols.pouw.schemes import ncp
 
 from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_device as PD
+from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_native as PN
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 from verity_vllm.protocol_options.interface import Context, Option, Target
@@ -72,7 +76,8 @@ EXECUTES = ("LinearBase.quant_method.apply",)
 #: The schemes this adapter's executor computes. ``ncp-v2`` is NCP-INT as a circuit (`verity.core.protocols.pouw.circuit`): each call is its
 #: own `NcpLinear_v1` Program call, reading its weight's `NcpWeight_v1` call (`pouw_circuit`).  Pearl-C on sm_120
 #: (`pouw_pearl_c_device.SCHEMES`) runs on the device only, through GPU 1's kernel pipeline (settings ``kernel``, ``cubin``).
-EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", *PPD.SCHEMES)
+#: H1 + fx1 (`pouw_h1.SCHEME`) runs beside the int8_exact arm, which serves y itself.
+EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", *PPD.SCHEMES, PH.SCHEME)
 #: The weight dtypes the executor reads (it quantizes them itself); any other, an FP8 checkpoint's float8 above all, is refused
 UNQUANTIZED = ("bfloat16", "float16", "float32")
 #: A quantized linear's parameters beside (or instead of) its weight: a layer carrying one is refused whatever its weight's
@@ -106,7 +111,12 @@ _M32 = 0xFFFFFFFF
 
 
 def schemes() -> tuple[str, ...]:
-    return tuple(sorted({*pouw_schemes.SCHEMES, *pouw_circuit.SCHEMES, *PPD.SCHEMES}))
+    return tuple(sorted({*pouw_schemes.SCHEMES, *pouw_circuit.SCHEMES, *PPD.SCHEMES, PH.SCHEME}))
+
+
+def executes(scheme: str) -> tuple[str, ...]:
+    """The sites where `scheme`'s executor replaces the computation: none under H1, whose arm serves its own y."""
+    return () if scheme == PH.SCHEME else EXECUTES
 
 
 @dataclass(frozen=True)
@@ -592,7 +602,12 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
 
 def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """The composition's first phase, with the model untouched and no coin opened: every linear layer's int7 weight rows
-    committed (`verity.core.protocols.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``."""
+    committed (`verity.core.protocols.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``.
+    Under H1, the int8_exact arm's int8 weight rows as they are served (`pouw_h1.weight_root`)."""
+    if scheme == PH.SCHEME:
+        layers = PH.layers(target.model, linear_types())
+        return {"weight_roots": {str(w): PH.weight_root(w, PH.numpy_of(m.weight)).hex() for w, m in enumerate(layers)},
+                "shapes": {str(w): list(m.weight.shape) for w, m in enumerate(layers)}}
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
@@ -637,6 +652,8 @@ def install(scheme: str, target: Target) -> Option:
     if settings.coins is None:
         raise ValueError(f"{entry}: no 'coins' setting: the epoch's salt is its challenger's salt coin, opened after the "
                          "weights' root, and there is no beacon")
+    if scheme == PH.SCHEME:
+        return _install_h1(entry, settings, target)
     s, layers, shapes = _layers(scheme, target)
     committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -658,3 +675,36 @@ def install(scheme: str, target: Target) -> Option:
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish)
+
+
+#: The live H1 runs by entry, for the Commit and its checks before the composition closes.
+_H1_RUNS: dict[str, PH.H1Run] = {}
+
+
+def h1_run(entry: str) -> PH.H1Run | None:
+    return _H1_RUNS.get(entry)
+
+
+def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
+    """H1 on the int8_exact arm: the epoch's salt from the challenger's salt coin after the weights' root, as every scheme's,
+    and each layer's ``apply`` the arm's own with its call recorded (`pouw_h1.served`)."""
+    layers = PH.layers(target.model, linear_types())
+    committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
+    roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
+    declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in
+                              ((int(w), s) for w, s in committed["shapes"].items())))
+    commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
+    salt = Epoch.start(declared, roots, commitment, opening).salt
+    run = PH.H1Run(entry, PH.program_salt(salt), roots, {w: f"linear {w}" for w in roots} | _named(target.model, layers),
+                   retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
+                   commit=target.context.stage != "capture")
+    run.commits.update(weights_root=weights_root(roots).hex(), coins=commitment.to_json(), salt_opening=opening.to_json())
+    _H1_RUNS[entry] = run
+    h = target.hooks(entry)
+    for w, layer in enumerate(layers):
+        h.wrap(layer.quant_method, "apply", lambda orig, w=w: PH.served(run, w, orig))
+    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish)
+
+
+def _named(model: Any, layers: list[Any]) -> dict[int, str]:
+    return {w: name for name, w in _sites(model, layers).items()}
