@@ -329,20 +329,26 @@ unsafe def main (args : List String) : IO UInt32 := do
   let ownConstants := (constants.toArray.filter fun (n, _) => ownSet.contains moduleOf[n]!).map (·.1)
   let names := axiomsIn kenv ownConstants |>.map toString
   let sent := members.fold (fun a _ cs => a + cs.size) 0
-  let closureChecked := (get "--closure").size
-  let closureReused := (get "--closure-reused").size
-  IO.FS.writeFile out <| (Json.mkObj [("replayed", toJson sent), ("skipped", toJson skipped), ("reused", toJson kept),
-    ("second_copies", toJson renamed.size), ("closure_checked", toJson closureChecked),
-    ("closure_reused", toJson closureReused), ("imported", toJson env.header.moduleNames.size),
-    ("axioms", toJson names), ("seconds", Json.mkObj [("load", toJson ((tLoaded - t0) / 1000)),
-      ("plan", toJson ((tPlanned - tLoaded) / 1000)), ("check", toJson ((tChecked - tPlanned) / 1000)),
-      ("axioms", toJson (((← IO.monoMsNow) - tChecked) / 1000))])]).compress
-  let slowest := took.qsort (fun a b => a.1 > b.1) |>.extract 0 3 |>.map fun (ms, d) => s!"{d} {ms / 1000}.{ms % 1000 / 100} s"
+  -- three passes, not `qsort`, which is quadratic on the many declarations that take 0 ms
+  let top := (List.range 3).foldl (init := (#[] : Array (Nat × Name))) fun top _ =>
+    match took.foldl (init := none) fun (best : Option (Nat × Name)) x =>
+        if top.any (·.2 == x.2) then best else match best with
+          | some b => if x.1 > b.1 then some x else best
+          | none => some x with
+    | some b => top.push b
+    | none => top
+  let slowest := top.map fun (ms, d) => s!"{d} {ms / 1000}.{ms % 1000 / 100} s"
   IO.println s!"replay: {sent} constants of {checkedModules.size} modules accepted by the kernel ({renamed.size} of them \
     a theorem another module declares too, checked under a fresh name; {skipped} more are unsafe or partial: compiled code, \
     which the kernel does not check; {kept} more, of {reusedSet.size} modules that passed before, added unchecked; \
     {env.header.moduleNames.size} modules imported unchecked), as {tasks.size} declarations side by side \
-    (slowest: {", ".intercalate slowest.toList}); axioms of the own modules' bodies: {", ".intercalate names.toList}; \
-    seconds: load {(tLoaded - t0) / 1000}, plan {(tPlanned - tLoaded) / 1000}, check {(tChecked - tPlanned) / 1000}, \
-    axioms {((← IO.monoMsNow) - tChecked) / 1000}"
+    (slowest: {", ".intercalate slowest.toList}); axioms of the own modules' bodies: {", ".intercalate names.toList}"
+  let tEnd ← IO.monoMsNow
+  let seconds := [("load", tLoaded - t0), ("plan", tPlanned - tLoaded), ("check", tChecked - tPlanned),
+    ("axioms", tEnd - tChecked)].map fun (k, ms) => (k, toJson (ms / 1000))
+  IO.println s!"replay: seconds {Json.mkObj seconds |>.compress}"
+  IO.FS.writeFile out <| (Json.mkObj [("replayed", toJson sent), ("skipped", toJson skipped), ("reused", toJson kept),
+    ("second_copies", toJson renamed.size), ("closure_checked", toJson (get "--closure").size),
+    ("closure_reused", toJson (get "--closure-reused").size), ("imported", toJson env.header.moduleNames.size),
+    ("axioms", toJson names), ("seconds", Json.mkObj seconds)]).compress
   return 0
