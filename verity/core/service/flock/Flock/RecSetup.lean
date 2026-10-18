@@ -1,11 +1,13 @@
 /-
 What `verify` and `statement` check of V*'s statements at setup, beside their own steps: the inner transcript as the
 verifier holds it (`commits`, from the files `--rec-inner-transcript` and `--rec-inner-registration` and the inner
-circuit's META), candidate 3's check 5 inputs (`c3`), candidate 3's checks before the session's own setup
-(`checkInner`), and the V* checks both run on every statement (`checks`). Both call sites call these, so a statement
-about them is one about what either accepts. `verify` also refuses, last in each verdict, a recursive session without
-the verifier's inner shape, and a V* session whose draw is not every unit of its population (`fullDraw`).
+circuit's META), candidate 3's check 5 inputs (`c3`), the checks on the inner statement before the session's own setup
+(`checkInner`: candidate 3's, and Flock's statement check on the inner statement's files, `innerScope`), and the V*
+checks both run on every statement (`checks`). Both call sites call these, so a statement about them is one about what
+either accepts. `verify` also refuses, last in each verdict, a recursive session without the verifier's inner shape, and
+a V* session whose draw is not every unit of its population (`fullDraw`).
 -/
+import Flock.ProvedScope
 import Flock.RecCoins
 import Flock.Witness
 
@@ -67,13 +69,21 @@ def checkMeta (cf : ByteArray) (bound : V (Option String × Option RecVStar.Stac
   if boundKey (← bound) ≠ boundKey b then
     throw "rec inner circuit: the registration and R's shape its header's META binds are not its circuit's META's"
 
-/-- **Candidate 3's checks before the session's own setup**, on the inner statement's files `src`: check 5's sparse
-range on the inner statement (`RecCoins.checkAtC3`, which refuses a session without the files), and, where the
-verifier's inner shape names a RecSparse shape, that the files' inner circuit's META is the header's it read
-(`checkMeta`). -/
+/-- **Flock's statement check on the inner statement**: its files (`--rec-inner-circuit`, `--rec-inner-public`), as
+Flock's plain verifier reads them at the recursion's inner tags (`RecVStar.innerTags`, one table, no public inputs or
+registered reads), are of a form Flock's soundness proof covers (`ProvedScope.check`). The inner session's draw is not
+asked for: it holds none. -/
+def innerScope (f : RecCoins.Files) : V Unit :=
+  (ProvedScope.check RecVStar.innerTags false f.circuit f.pub [] 1 false false).mapError (s!"rec inner statement: " ++ ·)
+
+/-- **The checks on the inner statement before the session's own setup**, on its files `src`: check 5's sparse range on
+the inner statement (`RecCoins.checkAtC3`, which refuses a session without the files), Flock's statement check on the
+files (`innerScope`), and, where the verifier's inner shape names a RecSparse shape, that the files' inner circuit's META
+is the header's it read (`checkMeta`). -/
 def checkInner (inner : Option RecVStar.Inner) (src : Option RecCoins.Source)
     (bound : V (Option String × Option RecVStar.StackedShape)) : V Unit := do
   RecCoins.checkAtC3 inner src
+  if let some (.files f) := src then innerScope f
   if let (some i, some (.files f)) := (inner, src) then
     if i.sparse.isSome then checkMeta f.circuit bound
 

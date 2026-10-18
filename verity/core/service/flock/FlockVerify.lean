@@ -623,7 +623,9 @@ statement and session its coefficients are checked against (`RecCoins.check`; or
 of what that check reads of them, `--rec-inner-coins`), and a statement reading a `rec-c<k>` the
 coin server's record of the inner session whose `c_k` its rows must be (`--rec-inner-transcript`,
 `RecVStar.checkPubRows`), and one of V*'s parts the verifier's record of V*'s shared rows, which its row ports must be
-(`--rec-rows`, `RecVStar.checkRows`). At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
+(`--rec-rows`, `RecVStar.checkRows`). Where the verifier holds the inner statement's files, its setup first checks they
+are of a form Flock's soundness proof covers at the recursion's inner tags (`RecSetup.innerScope`, `ProvedScope.check`).
+At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
 needs the inner statement's files, on which its setup first checks check 5's sparse refusals (`RecCoins.checkAtC3`), and
 the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`).
 Each DIR holds `session.json`
@@ -799,7 +801,8 @@ verifier's own `--rec-bindings F` (`RecVStar.checkStmt`). With `--rec-inner-tran
 rows at what the inner transcript fixes are the `b ‖ c` the verifier holds (`RecVStar.checkPubRows`, as `verify` sets up).
 Its verifier-registered values are checked against the verifier's coins (`RecCoins.check`) when it holds what that check
 reads: the inner statement and session (`--rec-inner-public` and its three, or `--rec-inner-coins`), or for R's levels and
-opening the inner transcript and the verifier's inner shape alone. At candidate 3's inner shape (`--rec-inner` naming a
+opening the inner transcript and the verifier's inner shape alone. Given the inner statement's files, it first checks they
+are of a form Flock's soundness proof covers (`RecSetup.innerScope`). At candidate 3's inner shape (`--rec-inner` naming a
 RecSparse shape), every statement needs the inner statement's files, whose sparse range is checked first
 (`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
 def statementCmd (args : List String) : IO UInt32 := do
