@@ -141,6 +141,17 @@ def parse_engine_args(items: list[str] | None) -> dict[str, Any]:
 prepare_compiled_process_cache = engine_env.prepare_compiled_process_cache
 
 
+def register_int8_parts(target: Any) -> None:
+    """Register what the target's `int8_exact` serves in vLLM's own registries, in this process, before vLLM resolves its config:
+    the int8 linear method (`quantization`) and the int8 attention backend (the CUSTOM slot)."""
+    if "linears" in getattr(target, "int8_parts", ()):
+        from verity_vllm.engine import int8_vllm
+        int8_vllm.register()
+    if "attention" in getattr(target, "int8_parts", ()):
+        from verity_vllm.engine import int8_attention_vllm
+        int8_attention_vllm.register()
+
+
 def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8, case: str = CASE,
                       engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """[R16 sys] The exact `LLM(**kw)` keyword set `build_engine` would build from these inputs (+ the env flags it applies and the
@@ -156,12 +167,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     env_flags = prof.apply_env()
     if target is not None:
         env_flags = {**env_flags, **target_env}
-    if "linears" in getattr(target, "int8_parts", ()):
-        from verity_vllm.engine import int8_vllm   # vLLM's own registry, in this process, before LLM() resolves `quantization`
-        int8_vllm.register()
-    if "attention" in getattr(target, "int8_parts", ()):
-        from verity_vllm.engine import int8_attention_vllm   # vLLM's CUSTOM attention slot, before LLM() selects the backend
-        int8_attention_vllm.register()
+    register_int8_parts(target)
     cp = prof.checkpoint_for(case, checkpoints)
     if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
         raise RuntimeError(f"execution label {execution!r} is not modelled by the harness (known: {sorted(EXECUTION_ENFORCE_EAGER)}); refusing to build an engine")

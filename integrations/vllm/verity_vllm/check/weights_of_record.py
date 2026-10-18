@@ -126,7 +126,8 @@ def sha256_file(path: str, chunk: int = 1 << 24) -> str:
 
 class CheckpointIndex:
     """Every tensor of every safetensors shard under `ckpt_dir`: name -> (shard, dtype, shape, byte range); shards memory-mapped on demand.
-    With `checkpoints_manifest` (manifests/checkpoints.json) the shard sha256s are verified against the pinned entry by name."""
+    With `checkpoints_manifest` (manifests/checkpoints.json and its siblings, `config.checkpoint_entries`) the shard sha256s are verified
+    against the pinned entry by name."""
 
     def __init__(self, ckpt_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None, revision: str | None = None,
                  verify_shards: bool = True):
@@ -158,8 +159,9 @@ class CheckpointIndex:
     def _verify_shards(self, manifest: str | None, model: str | None, revision: str | None) -> None:
         entry = None
         if manifest and os.path.exists(manifest):
-            ck = json.load(open(manifest))
-            for c in ck.get("checkpoints", []):
+            from verity_vllm.config import checkpoint_entries
+
+            for c in checkpoint_entries(manifest):
                 lp = str(c.get("local_path") or "")
                 if (lp and os.path.realpath(lp) == os.path.realpath(self.dir)) or \
                         (model and c.get("repo") == model and (not revision or str(c.get("revision", "")).startswith(revision[:10]))):
@@ -168,7 +170,8 @@ class CheckpointIndex:
         self.pin["entry"] = None if entry is None else {"repo": entry.get("repo"), "revision": entry.get("revision")}
         for fn in self.shards:
             sha = sha256_file(os.path.join(self.dir, fn))
-            pinned = ((entry or {}).get("files") or {}).get(fn, {}).get("sha256") if entry else None
+            files = (entry or {}).get("files")
+            pinned = ((files.get(fn) or {}).get("sha256") if isinstance(files, dict) else None) or ((entry or {}).get("safetensors_sha256") or {}).get(fn)
             self.pin["shards"][fn] = {"sha256": sha, "pinned_sha256": pinned,
                                       "pinned": (sha == pinned) if pinned else None}
 
