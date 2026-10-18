@@ -20,7 +20,8 @@ element Definitions (`chain_step`): the first step's from the +0 accumulator, it
 later step's; and each of those in two, the gates that read only the x block, once per block, and the rest, once per row.  So no
 row computes a value another computes, nor a step a value its accumulator's constant bits fix.  `BatchedGemm_v2` is the function
 of `mla.MlaBmm_v1` (vLLM's batch-invariant Triton `bmm_kernel` on sm_120), which names no word; `tests/program/test_bf16_gemm.py`
-checks that they agree.  `bf16_gemm_check` holds the numpy models.
+checks that they agree.  `bf16_gemm_check` holds the numpy models, `kernels.batched_gemm_rows` and `kernels.cublas_gemm_rows` the
+sampled replay's row kernels.
 
 The two split-K Definitions model cuBLAS 12.9.1's cc 9.0, 132-SM route: split K into equal 64-element-aligned chunks (the final chunk holds
 the remainder); run each chunk's ascending `HopperBF16WgmmaDot16_v1` chain from +0; store f32 partials; and have the separate
