@@ -892,7 +892,12 @@ class TP2CaptureWorkerExtension:
         # [manbind MAN-06 / coord M-0451 form (A), per rank -- tp TP-08] the C2 OF RECORD on THIS rank's map, Programs and shards
         sampled_replay = None
         if record and st.get("replay"):
-            sampled_replay = self._deferred_replay(rc, defer) if defer else self._tp2_sampled_replay(rc)
+            from verity_vllm.pipeline.tp.rank_replay import host_slot
+
+            with host_slot(st["replay"], int(st["rank"])) as slot:
+                sampled_replay = self._deferred_replay(rc, defer) if defer else self._tp2_sampled_replay(rc)
+            if slot:
+                sampled_replay["host_slot"] = slot
         return _jsonable({"rank": st["rank"], "run_root": rc.run_root.hex(), "binding": binding, "attribution": attribution, "match_oracle": match_oracle,
                           "sampled_replay": sampled_replay, "weights_pin": st.get("weights_pin"),
                           "steps": len(rc.steps), "leaves_per_step": [s.n_leaves for s in rc.steps],

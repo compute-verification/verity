@@ -9,14 +9,18 @@ seed is `seed_of`'s: the driver's targeted seed, else the verifier's challenge w
 
 `in_process` and `defer` take the worker's commit state (`TP2CaptureWorkerExtension._tp2_commit`: rank, world, committer, engine,
 binding map, replay config).  Under ``tp-commit --memory-map`` each first writes the rank's memory map from the live committer
-(`memory_map`), which changes no verdict."""
+(`memory_map`), which changes no verdict.  Under ``tp-commit --replay-ranks-at-once K`` each runs in one of K host slots
+(`host_slot`)."""
 from __future__ import annotations
 
+import fcntl
+import gc
 import json
 import os
 import time
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -217,6 +221,30 @@ def memory_map(st: dict[str, Any], p: Loaded, committed: Any) -> dict[str, Any] 
     except Exception as e:  # noqa: BLE001
         return {"error": repr(e)[:400]}
     return got if "error" in got else {k: got[k] for k in ("map", "tp", "blocks", "page", "steps", "written", "freed", "engine", "seconds")}
+
+
+@contextmanager
+def host_slot(cfg: dict[str, Any], rank: int) -> Iterator[dict[str, Any] | None]:
+    """``tp-commit --replay-ranks-at-once K``: at most K ranks of the host replay at once.  Rank r waits for slot r % K (a lock file in
+    the Commit's out dir) and gives its heap back (`gc`, `malloc_trim`) before the slot passes on, since a rank holds every request
+    Program it loads while it replays (GLM-5.3 TP8 B8: ~140 GB a rank, so eight at once passed the host's 1.5 TB).  Yields the slot's
+    record, or None without K (every rank at once)."""
+    k = int(cfg.get("ranks_at_once") or 0)
+    if k <= 0:
+        yield None
+        return
+    from verity_vllm.check.replay.driver import _malloc_trim
+
+    slot = rank % k
+    with open(Path(cfg["slot_dir"]) / f"replay_slot{slot}.lock", "a") as f:
+        t0 = time.perf_counter()
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield {"slot": slot, "ranks_at_once": k, "waited_s": round(time.perf_counter() - t0, 3)}
+        finally:
+            gc.collect()
+            _malloc_trim()
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def no_map() -> dict[str, Any]:

@@ -197,6 +197,10 @@ class Options:
     replay_max: int = option("--replay-max", type=int, default=2000, help="cap on the stratified sample per rank (never below one VU per stratum)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="targeted seed (default: each rank's run root after commitment, O6)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None)
+    replay_ranks_at_once: int | None = option("--replay-ranks-at-once", type=int, default=None, metavar="K",
+                                              help="at most K ranks run their sampled replay at once, each giving its heap back before the next "
+                                                   "(`pipeline.tp.rank_replay.host_slot`; a rank holds its request Programs while it replays); "
+                                                   "default: every rank at once")
     replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full",),
                                          help="each rank's C2 sampled replay + boundary linkage do not run in its process: every rank of every instrumented run "
                                               "seals a replay bundle (<out>/replay_bundle_p<pair>_rank<r>/, verity_vllm.pipeline.replay_bundle) and the Commit's "
@@ -353,6 +357,9 @@ def main(args: Options) -> int:
                                       "challenge": args.replay_challenge, "rule": "manbind MAN-06 O1-O6 per rank: the rank's Programs of record x the rank's map x the rank's committed members + weight shards"}
         if args.replay_k:
             replay_cfg["k_per_rank"] = versions["sampled_replay"]["k_per_rank"] = TPC.replay_k_per_rank(args.replay_k, world)
+        if args.replay_ranks_at_once:
+            replay_cfg.update(ranks_at_once=int(args.replay_ranks_at_once), slot_dir=str(out))
+            versions["sampled_replay"]["ranks_at_once"] = int(args.replay_ranks_at_once)
     SRT.require(args, replay_cfg)
     if args.memory_map:
         if replay_cfg is None or not Path(args.memory_map).is_file():
