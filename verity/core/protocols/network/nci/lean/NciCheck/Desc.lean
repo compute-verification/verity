@@ -28,13 +28,23 @@ Every gate of a root node reads its operands inside the node, or through the nod
 parameters, and a node names only earlier nodes, `Prog.orderViolation`). So the gates outside an IU that it reads are what
 its nodes' arguments resolve to (§7), restricted to the parameter leaves the callee reads. Two summaries per Definition,
 computed in the decoder's order (callees first) and shared by every activation:
-* `ret`: its return leaves as pieces, each a run `base + t * stride` of the activation's own gates (of one width) or of
-  one parameter's leaves (a pass-through);
-* `used`: per parameter, the leaves some gate of it reads, as intervals.
+* `ret`: its return leaves as segments (`Seg`) of pieces (`Piece`). A piece is `rows` runs `base + r * rowStride +
+  t * stride` of the activation's own gates (of one width) or of one parameter's leaves (a pass-through); a strided part
+  is one piece of rows. A segment is one piece, or `reps` copies of one batch member's return pieces, each `shift` gates
+  after the one before (a batch's whole members, read as a block);
+* `used`: per parameter, the leaves some gate of it reads, as intervals (`ivsOf`: a piece of rows as periodic intervals,
+  those of one period and count merged, so the rows of a transposed read become runs).
 
-A body's references are resolved through its nodes' outputs with the callees' `ret`, and a pass-through back through the
-node's arguments, member by member for a batch or scan node only where the callee's summary isn't one run. Per IU, its
-reads are those pieces with the IU's own nodes and θ's taken out, and its novel reads the width of their union.
+A body's references are resolved through its nodes' outputs with the callees' `ret`: a batch whose members' returns
+make one run maps any piece by one affine map, whole members of any other batch become one segment of copies, and a
+pass-through goes back through the node's arguments. Per IU, its reads are those segments with the IU's own nodes and θ's
+taken out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
+counted as copies times one copy's width.
+
+What is still walked member by member or element by element, so not bounded by the description: a batch member whose
+return has a pass-through, a read with stride other than 1 into a composite's batch output that isn't one run, a strided
+read of a call's or a scan's output, and segments of copies that overlap other reads of the same IU (expanded copy by
+copy). Serve_v1 meets none of them, at word level or on bits.
 
 ## Refusals
 
