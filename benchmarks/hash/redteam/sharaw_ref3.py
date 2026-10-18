@@ -18,6 +18,15 @@ import reference as R  # noqa: E402
 NS = (65537, 70001, 131075)
 
 
+def _rows_for(mode: str, n: int, n_bits: int, stride: int, rng) -> bytes:
+    """reference.py's draw in chunks: one randbytes call overflows past 2^28 bytes (n > 65,535 rows of 4 KiB)."""
+    assert mode == "rows" and n_bits == 8 * stride
+    return b"".join(rng.randbytes(stride * min(8192, n - i)) for i in range(0, n, 8192))
+
+
+R._rows_for = _rows_for
+
+
 def main(argv: list[str]) -> int:
     if len(argv) == 3 and argv[1] == "prepare":
         for i, n in enumerate(NS):
