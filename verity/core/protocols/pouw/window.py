@@ -247,7 +247,7 @@ def k_prime(eps: Fraction, delta: Fraction, credited: int, n: int, w_max: int) -
     p = eps * credited / (n * w_max)
     if p == 1:
         return 1
-    step, target = math.log1p(-float(p)), math.log(float(delta))
+    step, target = math.log1p(-float(p)) if float(p) < 1 else -math.inf, math.log(float(delta))
     guess = target / step if step < 0 else math.inf
     k = n if guess >= n else max(1, math.ceil(guess))
     while k > 1 and miss_at_most(1 - p, k - 1, delta):

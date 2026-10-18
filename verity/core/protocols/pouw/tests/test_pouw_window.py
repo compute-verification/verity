@@ -141,6 +141,9 @@ def test_k_prime_at_the_cap_and_at_2_to_the_60():
         assert 1 <= k <= n and not (k > 1 and Wd.miss_at_most(q, k - 1, delta))
         assert k == n or Wd.miss_at_most(q, k, delta)
     assert Wd.k_prime(eps, delta, 1, 1 << 60, 1) == 1 << 60
+    # p = 2^54/(2^54 + 1) < 1 rounds to 1.0 in binary64: the start is K = 1, not log1p(−1)'s domain error
+    assert Wd.k_prime(Fraction(1), Fraction(1, 10), 1 << 54, (1 << 54) + 1, 1) == 1
+    assert Wd.k_prime(Fraction(1), Fraction(1, 2 ** 60), 1 << 54, (1 << 54) + 1, 1) == 2
 
 
 def _d(n: int) -> bytes:
