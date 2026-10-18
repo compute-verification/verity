@@ -13,9 +13,12 @@ of its findings with the real Pearl-C v1 scheme or with exact draw probabilities
   K′ is sized over the whole draw weight, not over the credited work as `window.k_prime` sizes it.
 * The ok of a row is a function of its FP32 row alone, but it is committed in the side row next to codes that read the
   noise, so it is committed after every tile's noise is fixed, and the noise is a function of the prover's root.
+* Round 2 (c68e413df) registers ok_B before the salt, but the B operand it certifies is formed from the salt, and a
+  zeroed formed B row gives free right tiles down its column.
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import random
 import struct
@@ -139,6 +142,25 @@ def test_the_tally_is_drawn_with_probability_about_one_only_with_draws_sized_ove
     tiles_miss = 1 - eps * Fraction(cr, total)
     assert tally_miss ** over_credit > Fraction(1, 2 ** 7) and tiles_miss ** over_credit > Fraction(1, 2 ** 4)
     assert tally_miss ** over_weight < DELTA and tiles_miss ** over_weight < DELTA
+
+
+def test_a_b_operand_formed_after_the_salt_with_zero_words_gives_free_right_tiles():
+    """Round 2 (c68e413df) on the B side: ok_B is a registration certificate committed before every window's salt, but
+    the B operand a tile reads (B̃_j ‖ P_B,j) is formed from the salt's E_B line (seed_b = H(salt ‖ root_B)), so it is
+    written after the salt by another writer than the certificate's. If that forming writes zero codes and a zero P_B for
+    a row whose registered ok_B is 1, every tile of column j is right at its committed operands and its C̃ and U are +0,
+    with no chain."""
+    s, ctx, noise, ops, _ = _call(live=M)
+    assert C.seed_b(ctx.salt, ctx.root_b) == noise.seed_b
+    assert C.seed_b(hashlib.sha256(b"another salt").digest(), ctx.root_b) != noise.seed_b
+    j = 3
+    codes = [list(r) for r in ops.b.codes]
+    codes[j] = [0] * K
+    pb = [list(r) for r in ops.pb]
+    pb[j] = [0] * len(pb[j])
+    checked = s.checked(ctx, dataclasses.replace(ops, b=dataclasses.replace(ops.b, codes=codes), pb=pb))
+    assert {checked.c[i][j] for i in range(M)} == {0} and {checked.u[i][j] for i in range(M)} == {0}
+    assert any(checked.c[i][0] for i in range(M))
 
 
 def test_ok_is_fixed_by_the_fp32_row_but_committed_after_the_noise():
