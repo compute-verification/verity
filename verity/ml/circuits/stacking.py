@@ -17,14 +17,15 @@ The free set is closed. A gate is free only when it is
 
 Every other primitive the table lists is budgeted, one unit per output value (a primitive returns one value), in one of four
 classes: ``roundings`` (FP arithmetic, casts and dots, special functions, integer floors, mods and narrowing, integer products
-reduced mod 2^w (`I32Mul_v1` of two runtime values, the integer dots outside the family), bit operations and field extractions,
-limb steps, and an add or subtract that may wrap), ``compare_select`` (comparisons, selections, min, max, the top-p keep mask,
-the lifting's tag tests), ``gathers`` (a data-dependent read of one of V words, counted in fresh index bits) and ``folds`` (the
-receipt fold's step, `PouwDuoAbsorb_v1`). Only gates with an operand that depends on a run input are budgeted: a gate of
-constants and registered words computes the same function before the seed. A primitive the table doesn't list is refused. The
-table (`CLASSES`, and the families `class_of` reads) is Lean's `Accounting.Gates.classOf` id for id where Lean lists the id,
-except `Bf16ToF32_v1` (affine by the 18 Oct ruling; Lean's registry has it a rounding) and the field extractions below, and the
-red team's closed table (round 2) for the families built on demand that Lean doesn't list yet. The exact-int8 profile's
+reduced mod 2^w (`I32Mul_v1` of two runtime values, the integer dots outside the family), bit operations on words and field
+extractions, limb steps, and an add or subtract that may wrap), ``compare_select`` (comparisons, selections, min, max and clamps,
+`F32Sat_v1` and `S32ClampS8` among them, the 1-bit logic ops, the top-p keep mask, the lifting's tag tests), ``gathers`` (a
+data-dependent read of one of V words, counted in fresh index bits) and ``folds`` (the receipt fold's step,
+`PouwDuoAbsorb_v1`). Only gates with an operand that depends on a run input are budgeted: a gate of constants and registered
+words computes the same function before the seed. A primitive the table doesn't list is refused. The table (`CLASSES`, and
+the families `class_of` reads) is Lean's `Accounting.Gates.classOf` id for id where Lean lists the id, except `Bf16ToF32_v1`
+(affine by the 18 Oct ruling; Lean's registry has it a rounding), and the red team's closed table (round 2) for the families
+built on demand that Lean doesn't list yet. The exact-int8 profile's
 primitives (vLLM's `int8_exact`) aren't in Lean's registry yet: its casts, f64 products and `LutIndex_v1` (min(floor(max(d, 0)
 a / 2^32), 255)) are roundings, and `Exp2Lut127_v1` is a gather.
 
@@ -133,7 +134,7 @@ _BITS: dict[str, Callable[[int], int]] = {"range": lambda n: n.bit_length(), "lo
 #: the other families built on demand, by id, and their class
 FAMILIES: tuple[tuple[str, str], ...] = (
     (r"^BitAtx[1-9][0-9]*_v1$", "roundings"),  # (word, i): bit i of one runtime word, a field extraction
-    (r"^(?:And|Xor)(?:[2-9]|[1-9][0-9]+)_v1$", "roundings"),  # Boolean logic on n bits, as And2_v1 and Xor2_v1
+    (r"^(?:And|Xor)(?:[2-9]|[1-9][0-9]+)_v1$", "compare_select"),  # Boolean logic on n bits, as And2_v1 and Xor2_v1
     (r"^TopPMaskWordx[1-9][0-9]*_v1$", "compare_select"),  # the top-p keep mask of V lanes
     (r"^L(?:Select[1-9][0-9]*|FixedSelect[1-9][0-9]*x[1-9][0-9]*|IsActive[1-9][0-9]*|IsEOS[1-9][0-9]*|StepLive[1-9][0-9]*"
      r"|Enable|EmitNext\[H=[1-9][0-9]*\])_v1$", "compare_select"),  # the lifting's tag tests and selects
@@ -176,33 +177,34 @@ CLASSES: dict[str, str] = {
     **dict.fromkeys(FAMILY, "family"),
     **dict.fromkeys(("I32Add_v1", "I32Sub_v1", "Bf16ToF32_v1"), "affine"),
     **dict.fromkeys(_ids(
-        "AmpereBF16TcDot16_v2 And2_v1 Bf16AddF2fp_v1 Bf16Add_v1 Bf16MulBf16_v1 Bf16MulF32_v1 BitAnd_v1 "
-        "BitNot_v1 BitOr_v1 BitXor_v1 BlackwellE4m3QmmaDot32_v1 BlackwellE5m2QmmaDot32_v1 BlackwellMxf4OmmaDot64_v1 "
+        "AmpereBF16TcDot16_v2 Bf16AddF2fp_v1 Bf16Add_v1 Bf16MulBf16_v1 Bf16MulF32_v1 "
+        "BlackwellE4m3QmmaDot32_v1 BlackwellE5m2QmmaDot32_v1 BlackwellMxf4OmmaDot64_v1 "
         "BlackwellNvf4OmmaDot64_v1 DivFullRcp_v1 DivFullScaleA_v1 DivFullScaleA_v2 E2m1ToBf16_v1 E4m3ToF32_v1 "
         "E8m0DequantBf16_v1 E8m0ShlBf16_v1 E8m0ToBf16_v1 F2fpBf16_v1 F32AddFtz_v1 F32AddFtz_v2 F32Add_v1 F32Add_v2 "
         "F32BitsShl23_v1 F32CeilFtz_v1 F32Div_v1 F32Div_v2 F32ErfRn_v1 F32ExpRn_v1 F32Fabs_v1 F32FmaFtz_v1 F32FmaFtz_v2 "
         "F32FmaRm_v1 F32FmaRm_v2 F32FmaSubFtz_v1 F32FmaSubFtz_v2 F32Fma_v1 F32Fma_v2 F32MulFtz_v1 F32MulFtz_v2 F32Mul_v1 "
-        "F32MulWide_v1 F32Mul_v2 F32Neg_v1 F32Rint_v1 F32Sat_v1 F32Sqrt_v1 F32SubFtz_v1 F32SubFtz_v2 F32Sub_v1 F32Sub_v2 "
+        "F32MulWide_v1 F32Mul_v2 F32Neg_v1 F32Rint_v1 F32Sqrt_v1 F32SubFtz_v1 F32SubFtz_v2 F32Sub_v1 F32Sub_v2 "
         "F32TanhRn_v1 F32ToBf16Rn_v1 F32ToE2m1Sat_v1 F32ToE4m3Sat_v1 F32ToS8Rzi_v1 F32ToU32RzByte_v1 F64Mul_v1 "
         "F64ToU32RniSat_v1 Fa2InvSum_v1 Fa3InvSum_v1 GeluErfBf16_v1 "
         "GeluTanhMulBf16_v1 GumbelNoiseLane_v1 GumbelNoiseLane_v2 GumbelStreamKey_v1 HopperBF16WgmmaDot16_v1 "
         "HopperE4m3MmaV2Dot32_v1 HopperE4m3QgmmaDot32_v1 HopperTf32WgmmaDot8_v1 I32Div_v1 I32Mul_v1 I32Rem_v1 I32ToF32_v1 "
         "I64ToI32_v1 LutIndex_v1 MufuEx2Ftz_v1 MufuLg2Mantissa_v1 MufuRcpFtz_v1 MufuSqrtFtz_v1 MufuTanh_v1 NcpDot16I7_v1 "
-        "NcpRneClampI7_v1 Not_v1 "
+        "NcpRneClampI7_v1 "
         "NvLogf_v1 NvLogf_v2 PouwAdd64Hi_v1 PouwAdd64Lo_v1 PouwAdd8_v1 PouwAddSub8_v1 PouwBf16Neg_v1 "
         "PouwBlackwellE4m3Window_v1 PouwCh32_v1 PouwChi32_v1 PouwETilde_v1 PouwF32SqrtRn_v1 PouwFormX3_v1 PouwFormX_v1 "
         "PouwHopperE4m3Window_v1 PouwI32ToF32Rn_v1 PouwMaj32_v1 PouwNegBetaSum16_v1 PouwNoiseByte_v1 PouwPackBE4_v1 "
         "PouwRotl64Hi_v1 PouwRotl64Lo_v1 PouwSha512BigSigma0Hi_v1 PouwSha512BigSigma0Lo_v1 PouwSha512BigSigma1Hi_v1 "
         "PouwSha512BigSigma1Lo_v1 PouwSha512SmallSigma0Hi_v1 PouwSha512SmallSigma0Lo_v1 PouwSha512SmallSigma1Hi_v1 "
         "PouwSha512SmallSigma1Lo_v1 PouwSqAcc_v1 PouwSqCeil_v1 PouwSub8_v1 PouwWindowWord_v1 PouwXor32_v1 RopeOutAdd_v1 "
-        "RopeOut_v1 RsqrtApprox_v1 S32ByteCarry_v1 S32ByteCarry_v2 S32ClampRest_v1 S32ClampRest_v2 S32ClampS8_v1 "
-        "S32ClampS8_v2 S32LowByte_v1 S32LowByte_v2 S32ToF32Rn_v1 S8ToF32_v1 SiluMulBf16_v1 SiluMulBf16_v2 TanhF32Rn_v1 "
-        "TopPNumkeep_v1 U32And_v1 U32Xor_v1 Ue8m0CeilByte_v1 Ue8m0InvScale_v1 Xor2_v1"
+        "RopeOut_v1 RsqrtApprox_v1 S32ByteCarry_v1 S32ByteCarry_v2 S32ClampRest_v1 S32ClampRest_v2 "
+        "S32LowByte_v1 S32LowByte_v2 S32ToF32Rn_v1 S8ToF32_v1 SiluMulBf16_v1 SiluMulBf16_v2 TanhF32Rn_v1 "
+        "TopPNumkeep_v1 U32And_v1 U32Xor_v1 Ue8m0CeilByte_v1 Ue8m0InvScale_v1 "
     ), "roundings"),
     **dict.fromkeys(_ids(
         "Bf16GtStrict_v1 F32Eq_v1 F32Fmaxf_v1 F32Fminf_v1 F32Geu_v1 F32GtStrict_v1 F32IsFinite_v1 F32MaxRef_v1 F32Max_v1 "
         "GuardNegInfZero_v1 I32Eq_v1 I32Le_v1 NcpAbsMax_v1 PouwBlackwellE4m3SaltDead_v1 PouwHopperE4m3SaltDead_v1 "
-        "PouwSel32_v1 PouwSqGe_v1 PouwWinOk_v1 SelectBf16_v1 SelectBit_v1 SelectF32_v1 SelectI32_v1 U32Ge_v1"
+        "PouwSel32_v1 PouwSqGe_v1 PouwWinOk_v1 SelectBf16_v1 SelectBit_v1 SelectF32_v1 SelectI32_v1 U32Ge_v1 "
+        "F32Sat_v1 S32ClampS8_v1 S32ClampS8_v2 And2_v1 Xor2_v1 BitAnd_v1 BitOr_v1 BitXor_v1 BitNot_v1 Not_v1"
     ), "compare_select"),
     "PouwDuoAbsorb_v1": "folds",
 }
