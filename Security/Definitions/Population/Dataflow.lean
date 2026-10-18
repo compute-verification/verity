@@ -25,7 +25,8 @@ What a checker can confirm from the dataflow alone (`Checked`):
 
 `Determinate` is the semantic property: for every choice of unit functions, every input has exactly one assignment in
 which every unit is correct. `down B` is the downstream cone of a set of units, `up O` the slots upstream of a set of
-slots. `egress f a X O B` is what the assignments that hold the inputs `a` (off the secret slots `X`) and whose wrong
+slots, and `coneEgress O B` the egress slots inside `B`'s cone (at `B = {u}`, its size is `E(u)`, the egress a wrong
+`u` reaches). `egress f a X O B` is what the assignments that hold the inputs `a` (off the secret slots `X`) and whose wrong
 units lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` wrong units. `amp` is the
 amplification set: the egress values the secrets give once the wrong units and their writes are fixed. `SkipsLucky` is
 work accounting's per-unit premise: a unit the prover skipped is right on honest inputs only by luck.
@@ -101,6 +102,11 @@ def up (O : Finset S) : Set S := {s | ∃ o ∈ O, Relation.ReflTransGen P.Feeds
 open Classical in
 /-- The slots the units of `B` write. -/
 noncomputable def writesOf (B : Finset U) : Finset S := B.biUnion P.writes
+
+open Classical in
+/-- **The egress in `B`'s cone**: the egress slots `O` that a unit downstream of `B` writes. At `B = {u}` its size is
+`E(u)`, the egress a wrong `u` reaches, which the wiring alone determines. -/
+noncomputable def coneEgress [Fintype U] (O : Finset S) (B : Finset U) : Finset S := O ∩ P.writesOf (P.down B)
 
 open Classical in
 /-- **The egress values** at the wrong set `B`: what the assignments that hold the inputs `a` off the secret slots `X`,

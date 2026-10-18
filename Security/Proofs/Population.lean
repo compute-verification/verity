@@ -15,9 +15,10 @@ evaluation. `Necessity`: determinacy for every choice of unit functions holds ex
 at most `(∑_{j ≤ m} C(n, j)) · |V| ^ (m w)` values; the location term and acyclicity are each needed. `Pointer`: a
 time-ordered machine trace keeps the count, but with value-dependent reads one wrong one-bit unit makes the egress
 copy `N` secret words its honest run never reads; declared statically, the checker sees them upstream of the egress.
-`Leakage`: the egress over any set of secrets takes at most `K · α` values, the control count `K` times a bound `α` on
-what the rest of the population amplifies the wrong units' writes into; `α = 1` when no secret is upstream of the
-egress, and fixed arithmetic at fixed indices amplifies one wrong bit into `N` secret bits.
+`Leakage`: beyond the honest egress, the egress takes at most `C(|U|, m) · |V| ^ (m E_max)` values, `E(u)` the egress
+slots in `u`'s downstream cone, read off the wiring; the bound is attained, and a machine's step has `E_max = |E|`.
+Equivalently, control times amplification: at most `K · α` values, `α = 1` when no secret is upstream of the egress, and
+fixed arithmetic at fixed indices amplifies one wrong bit into `N` secret bits.
 `Work`: every skipped unit is downstream of a wrong unit or lucky, so the skipped work is at most `m F` plus the lucky
 work, `F` bounding a unit's downstream cone, or `F · wt(B)` plus the lucky work with each cone at most `F` times its
 root's weight; a copied unit is correct work never done, so luck needs distinct units.
