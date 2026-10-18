@@ -2024,3 +2024,13 @@ def test_send_refuses_a_plain_top_level_post_that_starts_like_an_announcement(re
         assert rc == 2 and "--kind announce" in err, text
     assert run(capsys, "send", "--as", "proofs", "--dry-run", "--thread", "1700000000.000001", "--text", ":mega: @lean reread")[0] == 0
     assert run(capsys, "send", "--as", "proofs", "--dry-run", "--to", "@lean", "--text", ":mega: reread the rules")[0] == 0
+
+
+def test_a_long_quiet_reply_is_quiet_from_its_first_piece(fake, registry, routes_dirs, capsys):
+    """`reply --quiet` appended `(quiet)` to the body, which a long post carries only in its last piece; the first piece,
+    the one delivered, then rang the root's poster."""
+    circuits = inbox(fake, routes_dirs, "circuits")
+    root = fake.add(COORD, text="@infra a long one", username="circuits", bot_id=BOT)
+    body = "\n".join(f"row {i} " + "x" * 90 for i in range(60))
+    assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--quiet", "--text", body)[0] == 0
+    assert len([m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]]) >= 2 and bells(fake, circuits) == []

@@ -1485,8 +1485,8 @@ def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     ch = channel_id(ns, reg)
     body = _body(ns)
     refuse_unrouted(body, reg, h["handle"])
-    body += f" {QUIET}" if ns.quiet else ""
-    _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent)
+    _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent,
+          tags=(QUIET,) if ns.quiet else ())                         # a footer tag rides on the first piece of a long post
     return 0
 
 
