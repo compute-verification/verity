@@ -97,7 +97,7 @@ def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
 
 @pytest.mark.parametrize("deviation, why", [
     (Deviation(extra={(("a.gpu", "a.cert"), 2): 1}), "occupancy differs"),
-    (Deviation(hold={(("a.gpu", "a.cert"), 0): 3}), "occupancy differs"),
+    (Deviation(hold={(("a.gpu", "a.cert"), 7): 9}), "occupancy differs"),
     (Deviation(failed_wipes={"b.gpu"}), "answer was wrong"),
 ])
 def test_each_deviation_is_refused_for_its_own_reason(setup, deviation, why):

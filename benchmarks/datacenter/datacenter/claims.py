@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from .binding import crossings, occupancy
+from .binding import occupancy, traffic
 from .logical import commit
 from .observe import Trace, _digest
 from .time import Interval
@@ -119,17 +119,14 @@ def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: i
     else:
         out.append(Computed(c.boolean_size))
     expected: dict[tuple[tuple[str, str], int], list[tuple[int, int]]] = {}
-    boundary = {(l.a, l.b) for l in p.datacenter.boundary}
-    for x in crossings(p):
-        for l in x.path:
-            if (l.a, l.b) in boundary:
-                w = p.tick(x.value) // trace.bucket // trace.window
-                expected.setdefault(((l.a, l.b), w), []).append((x.value.id, reference[x.value.id]))
+    for hop, row in traffic(p, trace.frame_bits, trace.bucket, trace.window).items():
+        for b, slot in row.items():
+            expected.setdefault((hop, b // trace.window), []).extend((v.id, reference[v.id]) for v in slot.values)
     if profiles > 1:
         out.append(Scheduled(profiles, math.log2(profiles)))
     horizon = max((b for row in profile.values() for b in row), default=0) // trace.window + 1
     have = {(r.link, r.window) for r in trace.records}
-    for link in sorted(boundary):
+    for link in sorted(profile):
         for w in range(horizon):
             if (link, w) not in have:
                 out.append(Refused(f"link {link} window {w}", "no record: the certifier was down or its record was withheld"))

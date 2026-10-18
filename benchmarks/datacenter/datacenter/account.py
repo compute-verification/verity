@@ -93,9 +93,11 @@ class Account:
         for b in self.blocks:
             lines.append(f"{b.block:8} {b.credited:9.3g} {b.local_at_least:9.3g} {b.capacity:9.3g} {b.headroom:9.3g} "
                          f"{b.outsourceable:13.3g} {b.reads:9.3g} {b.state:12.3g}")
-        lines.append(f"covert budget: {self.covert_bits:g} bits = {self.advice_bits:g} profile advice + {self.timing_bits:g} timing advice + "
-                     f"{sum(self.input_bits.values())} inputs ({', '.join(f'{k}: {v}' for k, v in self.input_bits.items()) or 'none'}) + "
-                     f"{sum(self.offramp_bits.values())} off-ramp ({', '.join(f'{k}: {v}' for k, v in self.offramp_bits.items()) or 'none'})")
+        def listed(d: dict[str, int]) -> str:
+            return ", ".join(f"{k}: {v}" for k, v in d.items()) if 0 < len(d) <= 4 else f"{len(d)} of them" if d else "none"
+        lines.append(f"covert budget: {self.covert_bits:g} bits = {self.advice_bits:g} profile advice + {self.timing_bits:g} "
+                     f"timing advice + {sum(self.input_bits.values())} inputs ({listed(self.input_bits)}) + "
+                     f"{sum(self.offramp_bits.values())} off-ramp ({listed(self.offramp_bits)})")
         for s, where in self.located.items():
             lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
                          f"store {s}: held on one of {', '.join(where)} (not located to one device)")

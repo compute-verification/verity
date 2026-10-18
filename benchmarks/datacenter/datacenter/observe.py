@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 import math
 
-from .binding import Placement, crossings, route
+from .binding import Placement, traffic
 from .logical import Commitment, commit
 from .memory import Challenge, ReadAudit, Store, answer_time, label_store, read_time
 from .time import Clock, Interval, Wipe
@@ -23,7 +23,8 @@ from .time import Clock, Interval, Wipe
 
 @dataclass(frozen=True)
 class Record:
-    """A certifier's signed record of one link-window: frames per bucket, and the digest of their content."""
+    """A certifier's signed record of one direction of one link, for one window: frames per bucket, and the digest of
+    their content. `link` is the direction (from, to)."""
 
     link: tuple[str, str]
     window: int
@@ -105,40 +106,30 @@ def run(p: Placement, inputs: dict[str, int], *, frame_bits: int = 32, bucket: i
     dev = deviation or Deviation()
     values = p.circuit.evaluate(inputs)
     commitment, salt = commit([values[i] for i in range(len(values))], [g.bits for g in p.circuit.gates])
-    boundary = {(l.a, l.b): l for l in p.datacenter.boundary}
-    counts: dict[tuple[str, str], dict[int, int]] = {k: {} for k in boundary}
+    links = {frozenset((l.a, l.b)): l for l in p.datacenter.boundary}
+    counts: dict[tuple[str, str], dict[int, int]] = {}
     content: dict[tuple[tuple[str, str], int], list[tuple[int, int]]] = {}
-    for x in crossings(p):
-        frames = -(-x.value.bits // frame_bits)
-        for l in x.path:
-            key = (l.a, l.b)
-            if key not in boundary:
-                continue
-            b = dev.hold.get((key, p.tick(x.value) // bucket), p.tick(x.value) // bucket)
-            counts[key][b] = counts[key].get(b, 0) + frames
-            content.setdefault((key, b // window), []).append((x.value.id, values[x.value.id]))
     streamed: dict[tuple[tuple[str, str], int], dict[str, tuple[int, bool]]] = {}
-    for o in p.streams:
-        frames = -(-o.bits // frame_bits)
-        for w in range(o.windows):
-            for l in route(p.datacenter, o.src, o.dst):
-                key = (l.a, l.b)
-                if key in boundary:
-                    counts[key][w * window] = counts[key].get(w * window, 0) + frames
-                    streamed.setdefault((key, w), {})[o.name] = (frames, o.name not in dev.tampered)
-    for (key, b), n in dev.extra.items():
-        counts[key][b] = counts[key].get(b, 0) + n
-        content.setdefault((key, b // window), []).append((1 << 31, n))
+    for hop, row in traffic(p, frame_bits, bucket, window).items():
+        for b, slot in row.items():
+            moved = dev.hold.get((hop, b), b)
+            counts.setdefault(hop, {})[moved] = counts.get(hop, {}).get(moved, 0) + slot.frames(frame_bits)
+            content.setdefault((hop, moved // window), []).extend((v.id, values[v.id]) for v in slot.values)
+            for name, n in slot.streams.items():
+                streamed.setdefault((hop, moved // window), {})[name] = (n, name not in dev.tampered)
+    for (hop, b), n in dev.extra.items():
+        counts.setdefault(hop, {})[b] = counts.get(hop, {}).get(b, 0) + n
+        content.setdefault((hop, b // window), []).append((1 << 31, n))
     horizon = max((b for row in counts.values() for b in row), default=0) // window + 1
     records = []
-    for key, row in counts.items():
-        cert = p.datacenter.certifier_of(boundary[key])
+    for hop, row in counts.items():
+        cert = p.datacenter.certifier_of(links[frozenset(hop)])
         for w in range(horizon):
-            if (key, w) in dev.down:
+            if (hop, w) in dev.down:
                 continue
             cs = tuple(row.get(w * window + t, 0) for t in range(window))
-            records.append(Record(key, w, cs, _digest(content.get((key, w), [])), cert.name if cert else "?",
-                                  tuple(sorted((n, f, ok) for n, (f, ok) in streamed.get((key, w), {}).items()))))
+            records.append(Record(hop, w, cs, _digest(content.get((hop, w), [])), cert.name if cert else "?",
+                                  tuple(sorted((n, f, ok) for n, (f, ok) in streamed.get((hop, w), {}).items()))))
     stores = {s.name: s for s in p.stores}
     answers = []
     for ch in challenges or []:
