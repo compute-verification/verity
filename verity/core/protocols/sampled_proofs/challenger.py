@@ -17,10 +17,15 @@ and never twice: a retry never redraws.  There is no beacon and no Fiat–Shamir
 a client derives what it draws from the opened coin (`verity.ml.randomness.derive`).  The coins are live and the verifier
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
+Timing is a trust assumption, not a check.  `after` binds an opening to the root the verifier recorded, but can't show
+the coin was released after it: that rests on the challenger releasing coin i only once it has received root i.  The
+challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
+`trusted-nebius-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
+
 `live_reason` is the verifier's check of one opening and `order_reason` of a family's openings against the roots it
 recorded, in order: coin i opened after root i, each once, none before its root is recorded, and every recorded root's
 coin opened.  `LiveRecord` is the verifier's side of one family: it records a root and only then asks for that root's
-coin.
+coin, and logs both on its clock.
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
 its round coins, round r's opened after round r's root.  The module reads only the standard library and
@@ -32,6 +37,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -254,21 +260,35 @@ class LiveChallenger:
 
 class LiveRecord:
     """The verifier's record of one family of an epoch's coins, in order: `record(root)` records the family's next root and
-    only then asks the challenger for its coin, after that root; `reason` is `order_reason` over the record."""
+    only then asks the challenger for its coin, after that root; `reason` is `order_reason` over the record.  `clock` is
+    the record's clock in seconds, and `log` the release order on it."""
 
-    def __init__(self, challenger: LiveChallenger, label: str) -> None:
+    def __init__(self, challenger: LiveChallenger, label: str, clock: Callable[[], float] = time.monotonic) -> None:
         if challenger.commitment.family(label) is None:
             raise CoinError(f"the epoch's coins have no {label} family")
-        self.challenger, self.label = challenger, label
+        self.challenger, self.label, self._clock = challenger, label, clock
         self.roots: list[bytes] = []
         self.openings: list[LiveOpening] = []
+        self._log: list[dict[str, Any]] = []
+
+    @property
+    def log(self) -> tuple[dict[str, Any], ...]:
+        """The release order with the record's time, two events a coin: root i's receipt, `{"event": "root", "label",
+        "index", "root": <hex>, "received_at"}`, then coin i's release after it, `{"event": "release", "label", "index",
+        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-nebius-host`'s."""
+        return tuple(self._log)
 
     def record(self, root: bytes) -> LiveOpening:
         if len(self.roots) == self.challenger.commitment.family(self.label):
             raise CoinError(f"every {self.label} coin of the epoch is open")
+        i = len(self.roots)
         self.roots.append(bytes(root))
-        opening = self.challenger.open(self.label, len(self.roots) - 1, root)
+        self._log.append({"event": "root", "label": self.label, "index": i, "root": bytes(root).hex(),
+                          "received_at": self._clock()})
+        opening = self.challenger.open(self.label, i, root)
         self.openings.append(opening)
+        self._log.append({"event": "release", "label": self.label, "index": i, "after": opening.after.hex(),
+                          "released_at": self._clock()})
         return opening
 
     def reason(self) -> str | None:

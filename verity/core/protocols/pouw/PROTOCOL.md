@@ -126,6 +126,12 @@ roots the verifier recorded, in order: coin i opened after root i, none twice ("
 root is recorded, and every recorded root's coin opened. `LiveRecord` is the verifier's side: it records a root and only
 then asks the challenger for that root's coin.
 
+Timing is a trust assumption, not a check. `after` binds an opening to the root the verifier recorded, but can't show the
+coin was released after it: that rests on the challenger releasing coin i only once it has received root i. The
+challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
+`trusted-nebius-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
+(`received_at`) and then coin i's release after it (`released_at`).
+
 **Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
 coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin
 (`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
