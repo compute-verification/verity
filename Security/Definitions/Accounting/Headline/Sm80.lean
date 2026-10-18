@@ -41,7 +41,7 @@ inductive Pipe
   | shfl
   deriving DecidableEq
 
-instance : Fintype Pipe where
+instance instFintypePipe : Fintype Pipe where
   elems := {Pipe.alu, Pipe.fma, Pipe.xu, Pipe.shfl}
   complete x := by cases x <;> simp
 

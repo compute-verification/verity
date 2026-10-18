@@ -91,7 +91,7 @@ FAMILIES = (SM120, SM80)
 DEVICE, DESIGN, FMAX = SM120.device, SM120.design, SM120.fmax
 UNIFORM, SKIP, EPS = SM120.uniform, SM120.skip, SM120.eps
 VECTOR = "VF3r-16"                 # the measured reading's vector
-Q_M = Fraction(9, 8)               # its scalar floors: q*₀ is 1.120 (operands free), FLOORS's lane floor ≥ 9/8 at w ≤ 15
+Q_M = Fraction(9, 8)               # scalar floors: q*₀ 1.120 (operands free), ClassPSlots' lane floor ≥ 9/8 at w ≤ 15
 EPS_M = Fraction(27, 5000)         # the measured reading: 0.540%
 OFF_MENU = ("MMA", "UNI64")        # census lines no writer kind is: the forms' fallback line, and UNI64 (on UP alone)
 STAR = {"DS_issue": "issue", "DS_tensor": "tensor", "DS_smem": "smem"}
@@ -425,7 +425,7 @@ inductive Pipe
 {pipe_ctors}
   deriving DecidableEq
 
-instance : Fintype Pipe where
+instance instFintypePipe : Fintype Pipe where
   elems := {{{", ".join(f"Pipe.{p}" for p in lane)}}}
   complete x := by cases x <;> simp
 

@@ -56,7 +56,9 @@ on every run, the rounds' luck is at most `¾`, the play is the proofs' (`Of`), 
 `δ_bind` a round, every proof is sound up to `δ_ZK` (`SoundAt`), the relations pin every committed value (`Pins`) and
 E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted window's time is at
 least `1 − 27/5000` (`1 − 0.540%`) of the credit `T_cred = B_♭/f_max`. (I5) `SideUnits` and FILL-OPT are not
-hypotheses: the model has no side unit and no filler, so they hold at any run. -/
+hypotheses: the model has no side unit and no filler, so they hold at any run. On the lane route (I3) at `9/8` is what
+`ClassPSlots` gives (`1 + (32 − w)/130` slots a word, FLOORS, note:20261018T0230Z-draft-floors) once writers create at
+most `w = 15` incidences, a cap nothing proves yet; on the table route it is SCALAR-ROUTE's, outside `ClassPSlots`. -/
 def Sm120MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty) {V : Type} {nπ : ℕ}
     (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ),
