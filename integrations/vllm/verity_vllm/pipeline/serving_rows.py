@@ -16,15 +16,16 @@ through an opened reader, registered weights for weight slices), committed in M0
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | "stratified:K" | {...},
 "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?: {<descriptor id>:
-cap}, "row_tables"?: true, "partition_digest"?}``.  The members are its templates in order, each instance count read off the Build's Programs; the
-population program over them (``commit.serving_rows.population_program``: ``TemplatePopulations`` for several templates, or for one
-when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a ``partition_digest`` in
-the file that is not that program's partition is refused, as is any other query (a word partition, ``Q_word``, never: with the
-stratified law it is refused by name, its strata being templates).  ``partition.json`` beside the window is the derived file,
-digest and members included.  ``scope.op_path_prefix`` restricts the population to one module (``model.layers.0.``),
-``scope.steps`` (``[lo, hi)``) to those steps of each request.  A ``ScaledMmS8Coordinate`` template's units are split into
-consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, ``chunk_cap``, as ``benchmarks/one_stage/a6.py``
-computes it; ``chunk_caps`` writes the entry), each chunk a member with its public file of global unit indices.
+cap}, "row_tables"?: true, "partition_digest"?}``.  The members are its templates in order, each instance count read off the Build's
+Programs; the population program over them (``commit.serving_rows.population_program``: ``TemplatePopulations`` for several
+templates, or for one when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a
+``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
+``Q_word``, never: with the stratified law it is refused by name, its strata being templates).  ``partition.json`` beside the window
+is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
+(``model.layers.0.``), ``scope.steps`` (``[lo, hi)``) to those steps of each request.  A ``ScaledMmS8Coordinate`` template's units
+are split into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, ``chunk_cap``, as
+``benchmarks/one_stage/a6.py`` computes it; ``chunk_caps`` writes the entry), each chunk a member with its public file of global
+unit indices; ``row_tables`` puts them in the row-table layout (``with_row_tables``).
 
 A Program row holds instances of a template when the template is its own Definition (its spec is the descriptor id), or when its
 Definition is cut into them (``CUT``: its body batches the template, read off the bound Definition, so a template id that is not what
@@ -443,7 +444,7 @@ def _read_s8(ms: Sequence[CS.Member], rows: list[Row], store: Any, weights: Call
     reads its ``x`` table, the distinct token rows its units read, and refs: unit ``i`` reads ``x`` row ``ref`` and its own ``w``
     row."""
     K = int(rows[0][3]["statics"]["K"])
-    xs, ws, ys, entries, wcache, xrows = [], [], [], [], {}, []
+    ws, ys, entries, wcache, xrows = [], [], [], {}, []
     lo = ms[0].base
     for rid, pi, r, d in rows:
         arrive, N = int((arrivals or {}).get(rid, 0)), int(d["statics"]["N"])
