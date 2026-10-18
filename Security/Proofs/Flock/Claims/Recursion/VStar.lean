@@ -12,9 +12,9 @@ the inner verifier.
 * **The deployed readers** (`Layout.msgs`, `Layout.calls`): the outer witnesses are V*'s parts' hidden values, one
   witness per part, in order. V*'s circuits are fixed by the compiled statement (its inner shape and the verifier's
   bindings), so the statement fixes where each part holds what the readers read (`Layout`): inner round `i`'s message
-  as part `s` holds it (`Layout.held`), and each SHA-512 evaluation part `s` computes. The inner view's messages are
-  each round's message off the first part that holds it (`Layout.msgs`); the recorded calls are each part's
-  evaluations (`Layout.calls`). These have the types of `deployRec`'s `Readers` fields (`Recursion/Deploy.lean`), so
+  as part `s` holds it (`Layout.held`), and each SHA-512 evaluation part `s` computes, a constant prefix then hidden
+  values. The inner view's messages are each round's message off the first part that holds it (`Layout.msgs`); the
+  recorded calls are each part's evaluations (`Layout.calls`). These have the types of `deployRec`'s `Readers` fields (`Recursion/Deploy.lean`), so
   `deployRec` at `⟨L.msgs, L.calls⟩` reads through them (`ReadsThrough`) by its definition.
 * **The named facts**, at an inner check `chk s` per part, read at the coins a V* statement shows (`shows`) on a list
   of inner messages:
@@ -56,9 +56,11 @@ the inner verifier.
 * **The inner verifier's calls, off a collision.** `CallsRecord`'s first half asks that every call the inner view's run
   makes be recorded. Where two parts hold different messages at a round, the run's calls on the readers' message
   aren't the other part's, so V*'s parts give it only off a collision (`CallsLogColl`, `callsLogColl_of_parts`, from
-  the inner verifier's calls split among the parts' checks, `LogDecomp`, and each part recording its check's calls,
-  `PartLogs`). It serves its consumer as the first half does (`PrBAbort_le_reg`): a collision among the recorded
-  calls, or a registered tie, at either draw is one `Be` or `Br` finds.
+  the inner verifier's calls split among the parts' checks and calls on public data, `LogDecompPub`, each part
+  recording its check's calls, `PartLogs`, and the public ones among the setup's evaluations at the run's V*
+  statements, `PubReg`). So `CallsLogColl` admits the setup's evaluations beside the recorded calls. It serves its
+  consumer as the first half does (`PrBAbort_le_reg`): a collision among the recorded calls and the setup's
+  evaluations, or a registered tie, at either draw is one `Be` or `Br` finds (`coll_or_reg_split`).
 * `codeFacts_of_parts`: all of it at once. With `ReadsThrough`, `PartCallsTrue` at every part and V*'s parts at each
   shape (`VStarParts`: the part facts above at one layout and opening), the readers give `InnerViewRun`, `CallsNil`,
   `CallsTrue`, `CallsOpenPlayed`, `CallsLogColl` and `InnerAcceptsR`.
@@ -91,12 +93,13 @@ def readAt (w : Flock.Wit) (ps : List ℕ) : Msg := bytesOf (ps.map fun p => w.h
 
 /-- **Where V\*'s parts hold what the readers read**, fixed by the compiled statement `x`: the inner rounds' count
 (`rounds x`), the hidden values at which part `s` holds inner round `i`'s message, its bits in order (`msgAt x s i`,
-`none` where the part holds none), and those of each SHA-512 evaluation part `s` computes, its input's bits and its
-output's (`shaAt x s`). -/
+`none` where the part holds none), and each SHA-512 evaluation part `s` computes (`shaAt x s`): the constant bytes
+its input starts with (a domain prefix the circuit fixes, such as a row's or the salt's), then the hidden values of the
+rest of its input's bits, and those of its output's. -/
 structure Layout where
   rounds : Msg → ℕ
   msgAt : Msg → ℕ → ℕ → Option (List ℕ)
-  shaAt : Msg → ℕ → List (List ℕ × List ℕ)
+  shaAt : Msg → ℕ → List (Msg × List ℕ × List ℕ)
 
 /-- Inner round `i`'s message as part `s` holds it, off its witness `w`. -/
 def Layout.held (L : Layout) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ) : Option Msg := (L.msgAt x s i).map (readAt w)
@@ -109,10 +112,10 @@ def Layout.msg (L : Layout) (x : Msg) (ws : List Flock.Wit) (i : ℕ) : Msg :=
 holds it. -/
 def Layout.msgs (L : Layout) (x : Msg) (ws : List Flock.Wit) : List Msg := (List.range (L.rounds x)).map (L.msg x ws)
 
-/-- **The deployed readers' calls**: part `s`'s SHA-512 evaluations off its witness `w`, each its input and its output
-read at their hidden values. -/
+/-- **The deployed readers' calls**: part `s`'s SHA-512 evaluations off its witness `w`, each its input (its constant
+prefix, then the bytes at its hidden values) and its output read at their hidden values. -/
 def Layout.calls (L : Layout) (x : Msg) (s : ℕ) (w : Flock.Wit) : List (Msg × Msg) :=
-  (L.shaAt x s).map fun p => (readAt w p.1, readAt w p.2)
+  (L.shaAt x s).map fun p => (p.1 ++ readAt w p.2.1, readAt w p.2.2)
 
 /-- A message one part holds is the readers' message at that round, when every part that holds the round holds the
 same message. -/
@@ -921,6 +924,40 @@ theorem collOrReg_of_callsColl {H : Msg → Msg} {D : Deploy Coin} {x : Msg} {ws
       (Option.isSome_iff_exists.2 ⟨(u, v), huv⟩))
   · exact Or.inr (Or.inr h)
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **A collision among recorded calls and setup evaluations is what the fork charges**: where each call of `l` is one
+the two runs' witnesses record or one the setup makes at either run's V* statements, a collision in `l` is between two
+recorded calls, `Be`'s (`findColl_of_coll`), or involves a setup evaluation, a registered tie (`findCollIn_isSome`). -/
+theorem coll_or_reg_split {H : Msg → Msg} {D : Deploy Coin} {c₁ c₂ : List (Msg × Msg)} {xs₁ xs₂ : List Msg}
+    {l : List (Msg × Msg)} (htrue : ∀ e ∈ c₁ ++ c₂, H e.1 = e.2)
+    (hsub : ∀ e ∈ l, e ∈ c₁ ++ c₂ ∨ e ∈ setupCalls H D xs₁ ++ setupCalls H D xs₂) (h : (findColl l).isSome) :
+    (∃ u v, findColl (c₁ ++ c₂) = some (u, v) ∧ Collision H u v) ∨
+      ∃ u v, findCollIn (c₁ ++ c₂) (setupCalls H D xs₁ ++ setupCalls H D xs₂) = some (u, v) ∧ Collision H u v := by
+  have hS : ∀ p ∈ setupCalls H D xs₁ ++ setupCalls H D xs₂, H p.1 = p.2 := fun p hp =>
+    (List.mem_append.1 hp).elim (setupCalls_true H D xs₁ p) (setupCalls_true H D xs₂ p)
+  have hl : ∀ p ∈ l, H p.1 = p.2 := fun p hp => (hsub p hp).elim (htrue p) (hS p)
+  have hall : ∀ q ∈ (setupCalls H D xs₁ ++ setupCalls H D xs₂) ++ (c₁ ++ c₂), H q.1 = q.2 := fun q hq =>
+    (List.mem_append.1 hq).elim (hS q) (htrue q)
+  have hreg : (findCollIn (c₁ ++ c₂) (setupCalls H D xs₁ ++ setupCalls H D xs₂)).isSome = true →
+      ∃ u v, findCollIn (c₁ ++ c₂) (setupCalls H D xs₁ ++ setupCalls H D xs₂) = some (u, v) ∧ Collision H u v :=
+    fun h => by
+      obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 h
+      exact ⟨u, v, huv, findCollIn_spec H _ _ hall u v huv⟩
+  obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 h
+  have hc := findColl_spec H l hl u v huv
+  obtain ⟨hu, hv⟩ := findColl_mem l u v huv
+  obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hu
+  obtain ⟨p', hp', rfl⟩ := List.mem_map.1 hv
+  have h2 : p'.2 = p.2 := by rw [← hl p' hp', ← hl p hp]; exact hc.2.symm
+  rcases hsub p hp with hpc | hps
+  · rcases hsub p' hp' with hpc' | hps'
+    · exact Or.inl (findColl_of_coll H htrue (List.mem_map_of_mem hpc) (List.mem_map_of_mem hpc') hc)
+    · exact Or.inr (hreg (findCollIn_isSome hps' (List.mem_append_right _ hpc) hc.1 h2.symm))
+  · refine Or.inr (hreg (findCollIn_isSome hps ?_ (Ne.symm hc.1) h2))
+    rcases hsub p' hp' with hpc' | hps'
+    · exact List.mem_append_right _ hpc'
+    · exact List.mem_append_left _ hps'
+
 /-- **Binding at a fork, at the played rounds**: two inner views that differ at round `j` first differ at some round
 `i ≤ j`. Both play round `i` (`run_replay_plays`: each is the inner verifier's run of its own messages, `InnerViewRun`,
 and the two agree on their messages before `i` and on their coins before `j`), so both open their message `i` to the
@@ -1004,12 +1041,14 @@ theorem sum_opensDiffer_le_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner
 /-! ## The inner verifier's calls, off a collision -/
 
 /-- **`CallsRecord`'s first half off a collision the finders charge** (a code fact): wherever `E_O` gives witnesses on
-an accepted run, the inner verifier's calls in the inner view's run are among the calls the witnesses record; or two
-recorded calls collide, or a registered tie at the run's V* statements (`CallsColl`). -/
+an accepted run, each of the inner verifier's calls in the inner view's run is among the calls the witnesses record or
+among the evaluations the setup makes at the run's V* statements (`setupCalls`, which `Br` reads); or two recorded
+calls collide, or a registered tie at the run's V* statements (`CallsColl`). -/
 def CallsLogColl (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
-    (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws) ∨ CallsColl H D x (runVstar H D I P x ω r) ws
+    (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws ∨ e ∈ setupCalls H D (runVstar H D I P x ω r)) ∨
+      CallsColl H D x (runVstar H D I P x ω r) ws
 
 /-- **The inner verifier's calls are its parts'** (a code fact about the inner verifier `IV` at the shape): at a
 compiled statement of the shape, each SHA-512 call `IV` makes on the inner messages `ms` at the coins `c` is one that
@@ -1018,6 +1057,32 @@ def LogDecomp (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : 
     (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     ∀ e ∈ (run H (replay ms) IV (xI D x) () fun i => c i.val).vLog, ∃ s < D.nS x, e ∈ logs s x c ms
+
+/-- **The inner verifier's calls are its parts' or public** (a code fact about the inner verifier `IV` at the shape):
+at a compiled statement of the shape, each SHA-512 call `IV` makes on the inner messages `ms` at the coins `c` is one
+that some part's inner check makes there, or one of the calls `pub x` on the statement's public data. -/
+def LogDecompPub (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : Form → Prop)
+    (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)) (pub : Msg → List (Msg × Msg)) : Prop :=
+  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+    ∀ e ∈ (run H (replay ms) IV (xI D x) () fun i => c i.val).vLog, (∃ s < D.nS x, e ∈ logs s x c ms) ∨ e ∈ pub x
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- `LogDecomp` is `LogDecompPub` with no public calls. -/
+theorem logDecompPub_of_logDecomp {H : Msg → Msg} {D : Deploy Coin} {IV : Verifier Coin} {shape : Form → Prop}
+    {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} (h : LogDecomp H D IV shape logs) :
+    LogDecompPub H D IV shape logs fun _ => [] :=
+  fun x st hst hf c ms e he => Or.inl (h x st hst hf c ms e he)
+
+/-- **The public calls are registered** (a code fact about the setup at the shape): at a compiled statement of the
+shape, each call in `pub x` is an evaluation the setup makes at the V* statements the staging gives at any rounds
+(`setupCalls`), which `Br` reads. -/
+def PubReg (H : Msg → Msg) (D : Deploy Coin) (shape : Form → Prop) (pub : Msg → List (Msg × Msg)) : Prop :=
+  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out), ∀ e ∈ pub x,
+    e ∈ setupCalls H D (D.vstar x ps)
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem pubReg_nil (H : Msg → Msg) (D : Deploy Coin) (shape : Form → Prop) : PubReg H D shape fun _ => [] :=
+  fun _ _ _ _ _ _ he => by simp at he
 
 /-- **V\* part `s` records its inner check's calls** (a code fact about V*'s part `s` and the layout): wherever the
 part's outer relation holds at a V* statement `xO` of a compiled statement `x` of the shape, and its recorded calls
@@ -1035,17 +1100,20 @@ def PartLogs (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) 
 
 /-- **The inner verifier's calls at one shape, from V*'s parts, off a collision the finders charge**: off one, every
 part holds the readers' messages (`agree_or_coll`); the inner view's run is `I.V`'s run of them (`run_replay_self`),
-each of whose calls some part's inner check makes (`LogDecomp`), which that part records (`PartLogs`). -/
+each of whose calls some part's inner check makes, which that part records (`PartLogs`), or is a public call
+(`LogDecompPub`), which the setup makes at the run's V* statements (`PubReg`). -/
 theorem logColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {L : Layout} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
-    {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {opening : Opening} {cmt : Msg → ℕ → Msg → Msg}
-    (hR : ReadsThrough H D I.V L.msgs L.calls) (hVL : VstarLen D) (hL : ∀ s, PartLogs H D DO L shape shows logs s)
-    (hO : ∀ s, PartOpens H D DO L shape opening cmt s) (hS : Staged H D I L shape shows cmt)
-    (hLD : LogDecomp H D I.V shape logs) {decO : List (ℕ × Col) → List T} {x : Msg} {Ω : Type} {P : Prover Ω}
+    {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {pub : Msg → List (Msg × Msg)} {opening : Opening}
+    {cmt : Msg → ℕ → Msg → Msg} (hR : ReadsThrough H D I.V L.msgs L.calls) (hVL : VstarLen D)
+    (hL : ∀ s, PartLogs H D DO L shape shows logs s) (hO : ∀ s, PartOpens H D DO L shape opening cmt s)
+    (hS : Staged H D I L shape shows cmt) (hLD : LogDecompPub H D I.V shape logs pub) (hPR : PubReg H D shape pub)
+    {decO : List (ℕ × Col) → List T} {x : Msg} {Ω : Type} {P : Prover Ω}
     {ω : Ω} {r : Fin (D.V.k x) → Coin} {c : (EO D I DO decO).C x} {ws : List Flock.Wit}
     (hg : EOGives H D I DO decO P x ω r c ws) (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : Stmt}
     (hst : D.parse x = some st) (hf : shape st.form) :
-    (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws) ∨ CallsColl H D x (runVstar H D I P x ω r) ws := by
+    (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws ∨ e ∈ setupCalls H D (runVstar H D I P x ω r)) ∨
+      CallsColl H D x (runVstar H D I P x ω r) ws := by
   have ho := eoGives_outerHolds hg
   rcases agree_or_coll hR hVL hO hS hst hf hg.1 ho htrue with hag | hcoll
   · obtain ⟨hlen, hchk⟩ := ho
@@ -1062,7 +1130,10 @@ theorem logColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
       exact Or.inr (callsColl_of_part hR hs (hxs s hs) htrue h)
     refine Or.inl fun e he => ?_
     rw [hrun] at he
-    obtain ⟨s, hs, hes⟩ := hLD x st hst hf (coinSeq r) (L.msgs x ws) e he
+    rcases hLD x st hst hf (coinSeq r) (L.msgs x ws) e he with ⟨s, hs, hes⟩ | hpub
+    swap
+    · exact Or.inr (hPR x st hst hf _ e hpub)
+    left
     have hs' : s < ws.length := hlen ▸ hs
     rw [hR.2 x ws]
     rcases hL s x st hst hf _ ws[s] (hchk s hs')
@@ -1078,23 +1149,27 @@ theorem logColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
 theorem callsLogColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {L : Layout} {opening : Opening} {showsD showsH showsS : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {logsD logsH logsS : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
+    {pubD pubH pubS : Msg → List (Msg × Msg)}
     {cmtD cmtH cmtS : Msg → ℕ → Msg → Msg} (hRef : Refuses H D) (hT : CallsTrue H D I DO)
     (hR : ReadsThrough H D I.V L.msgs L.calls) (hVL : VstarLen D)
     (hLD : ∀ s, PartLogs H D DO L Form.Dense showsD logsD s)
     (hOD : ∀ s, PartOpens H D DO L Form.Dense opening cmtD s)
-    (hSD : Staged H D I L Form.Dense showsD cmtD) (hDD : LogDecomp H D I.V Form.Dense logsD)
+    (hSD : Staged H D I L Form.Dense showsD cmtD) (hDD : LogDecompPub H D I.V Form.Dense logsD pubD)
+    (hPD : PubReg H D Form.Dense pubD)
     (hLH : ∀ s, PartLogs H D DO L Form.Holo showsH logsH s) (hOH : ∀ s, PartOpens H D DO L Form.Holo opening cmtH s)
-    (hSH : Staged H D I L Form.Holo showsH cmtH) (hDH : LogDecomp H D I.V Form.Holo logsH)
+    (hSH : Staged H D I L Form.Holo showsH cmtH) (hDH : LogDecompPub H D I.V Form.Holo logsH pubH)
+    (hPH : PubReg H D Form.Holo pubH)
     (hLS : ∀ s, PartLogs H D DO L Form.Sparse showsS logsS s)
     (hOS : ∀ s, PartOpens H D DO L Form.Sparse opening cmtS s) (hSS : Staged H D I L Form.Sparse showsS cmtS)
-    (hDS : LogDecomp H D I.V Form.Sparse logsS) : CallsLogColl H D I DO := by
+    (hDS : LogDecompPub H D I.V Form.Sparse logsS pubS) (hPS : PubReg H D Form.Sparse pubS) :
+    CallsLogColl H D I DO := by
   intro decO x Ω P ω r c ws hg
   obtain ⟨st, hst, -⟩ := hRef x Ω P ω r hg.1
   have ht := hT decO x Ω P ω r c ws hg
   rcases Form.shape_cases st.form with hf | hf | hf
-  · exact logColl_of_parts hR hVL hLD hOD hSD hDD hg ht hst hf
-  · exact logColl_of_parts hR hVL hLH hOH hSH hDH hg ht hst hf
-  · exact logColl_of_parts hR hVL hLS hOS hSS hDS hg ht hst hf
+  · exact logColl_of_parts hR hVL hLD hOD hSD hDD hPD hg ht hst hf
+  · exact logColl_of_parts hR hVL hLH hOH hSH hDH hPH hg ht hst hf
+  · exact logColl_of_parts hR hVL hLS hOS hSS hDS hPS hg ht hst hf
 
 /-- The calls `Be` reads at a draw are true evaluations: `E_O`'s witnesses' where it gives them (`CallsTrue`), none's
 where it gives up (`CallsNil`). -/
@@ -1106,13 +1181,14 @@ theorem calls_true_of {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO
   · exact hN0 x
   · exact hT decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)
 
-/-- `P_I`'s aborting run records only calls that `E_O`'s witnesses there record, or the finders charge a collision at
-that draw (`innerF_vLog_sub` off one). -/
+/-- `P_I`'s aborting run records only calls that `E_O`'s witnesses there record or the setup makes at that draw's V*
+statements, or the finders charge a collision at that draw (`innerF_vLog_sub` off one). -/
 theorem innerF_vLog_sub_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} {decC : Msg → Msg → Coin}
     (hL : CallsLogColl H D I DO) (hpc : PublicCoin H I decC) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
-    (∀ e ∈ (innerF H D I DO decO P x decC ω d).vLog, e ∈ D.calls x ((eoOut H D I DO decO P x ω d).getD [])) ∨
+    (∀ e ∈ (innerF H D I DO decO P x decC ω d).vLog, e ∈ D.calls x ((eoOut H D I DO decO P x ω d).getD []) ∨
+      e ∈ setupCalls H D (runVstar H D I P x ω d.1)) ∨
       CallsColl H D x (runVstar H D I P x ω d.1) ((eoOut H D I DO decO P x ω d).getD []) := by
   by_cases hk : keepD H D I DO decO P x ω d = true
   · have hk' : (eoOut H D I DO decO P x ω d).isSome = true ∧ Agrees H D I DO decO P x ω d := by
@@ -1147,13 +1223,18 @@ theorem PrBAbort_le_reg {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {
     have htrue : ∀ p ∈ D.calls x ((eoOut H D I DO decO P x ω (extend ρ a.1, a.2)).getD []) ++
         D.calls x ((eoOut H D I DO decO P x ω (extend (forkCoins j ρ ρ') a'.1, a'.2)).getD []), H p.1 = p.2 :=
       fun p hp => (List.mem_append.1 hp).elim (calls_true_of hT hN0 ω _ p) (calls_true_of hT hN0 ω _ p)
-    refine coll_or_reg htrue ?_
     rcases innerF_vLog_sub_coll (decC := decC) hL hpc ω (extendDraw (ρ, a)) with h1 | hc1
     · rcases innerF_vLog_sub_coll (decC := decC) hL hpc ω (extendDraw (forkCoins j ρ ρ', a')) with h2 | hc2
-      · exact Or.inl (findColl_isSome_of_sub H htrue (fun p hp => (List.mem_append.1 hp).elim
-          (fun hp => List.mem_append_left _ (h1 p hp)) fun hp => List.mem_append_right _ (h2 p hp)) h)
-      · exact collOrReg_of_callsColl htrue (Or.inr hc2)
-    · exact collOrReg_of_callsColl htrue (Or.inl hc1)
+      · refine coll_or_reg_split htrue (fun p hp => ?_) h
+        rcases List.mem_append.1 hp with hp | hp
+        · rcases h1 p hp with h | h
+          · exact Or.inl (List.mem_append_left _ h)
+          · exact Or.inr (List.mem_append_left _ h)
+        · rcases h2 p hp with h | h
+          · exact Or.inl (List.mem_append_right _ h)
+          · exact Or.inr (List.mem_append_right _ h)
+      · exact coll_or_reg htrue (collOrReg_of_callsColl htrue (Or.inr hc2))
+    · exact coll_or_reg htrue (collOrReg_of_callsColl htrue (Or.inl hc1))
   have hle : PrBAbort H I.V (innerP H D I DO decO P x decC) (xI D x) (keepA H D I DO decO P x) ≤
       ∑ j : Fin (I.V.k (xI D x)), Pr (forkReg H D I DO decO P x j) := by
     unfold PrBAbort
@@ -1228,17 +1309,19 @@ theorem staged_of_vstarShows {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
 /-! ## The code facts about the readers and V*, together -/
 
 /-- **V\*'s parts at one shape** (the code facts about V*'s parts, the staged V* statements and the inner verifier at
-the shape, at one layout and one opening): some inner check and calls per part, and the coins and commit strings the
-V* statements show, at which every part checks its inner check, opens what it holds and records its check's calls
-(`PartChecks`, `PartOpens`, `PartLogs`), the staged V* statements show the run (`Staged`), the parts' checks are the
-inner verifier and its calls are theirs (`Decomp`, `LogDecomp`), and some part holds each inner round (`Held`). -/
+the shape, at one layout and one opening): some inner check and calls per part, some public calls, and the coins and
+commit strings the V* statements show, at which every part checks its inner check, opens what it holds and records its
+check's calls (`PartChecks`, `PartOpens`, `PartLogs`), the staged V* statements show the run (`Staged`), the parts'
+checks are the inner verifier and its calls are theirs or the public ones (`Decomp`, `LogDecompPub`), which the setup
+makes (`PubReg`), and some part holds each inner round (`Held`). -/
 def VStarParts (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (L : Layout)
     (opening : Opening) (shape : Form → Prop) : Prop :=
   ∃ (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop)
-    (cmt : Msg → ℕ → Msg → Msg) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)),
+    (cmt : Msg → ℕ → Msg → Msg) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg))
+    (pub : Msg → List (Msg × Msg)),
     (∀ s, PartChecks H D DO L shape shows chk s) ∧ (∀ s, PartOpens H D DO L shape opening cmt s) ∧
       (∀ s, PartLogs H D DO L shape shows logs s) ∧ Staged H D I L shape shows cmt ∧ Decomp H D I.V shape chk ∧
-      LogDecomp H D I.V shape logs ∧ Held D I L shape
+      LogDecompPub H D I.V shape logs pub ∧ PubReg H D shape pub ∧ Held D I L shape
 
 /-- **The code facts the recursion's KS reads about the readers and V\*, from V*'s parts**: wherever the compiled
 verifier reads through the deployed readers at the inner verifier (`ReadsThrough`, which `deployRec` at
@@ -1254,13 +1337,13 @@ theorem codeFacts_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     (hH : VStarParts H D I DO L opening Form.Holo) (hS : VStarParts H D I DO L opening Form.Sparse) :
     InnerViewRun H D I DO ∧ CallsNil H D ∧ CallsTrue H D I DO ∧ CallsOpenPlayed H D I DO opening ∧
       CallsLogColl H D I DO ∧ InnerAcceptsR H D I DO := by
-  obtain ⟨showsD, chkD, cmtD, logsD, hCD, hOD, hLD, hSD, hDD, hLDD, hHD⟩ := hD
-  obtain ⟨showsH, chkH, cmtH, logsH, hCH, hOH, hLH, hSH, hDH, hLDH, hHH⟩ := hH
-  obtain ⟨showsS, chkS, cmtS, logsS, hCS, hOS, hLS, hSS, hDS, hLDS, hHS⟩ := hS
+  obtain ⟨showsD, chkD, cmtD, logsD, pubD, hCD, hOD, hLD, hSD, hDD, hLDD, hPD, hHD⟩ := hD
+  obtain ⟨showsH, chkH, cmtH, logsH, pubH, hCH, hOH, hLH, hSH, hDH, hLDH, hPH, hHH⟩ := hH
+  obtain ⟨showsS, chkS, cmtS, logsS, pubS, hCS, hOS, hLS, hSS, hDS, hLDS, hPS, hHS⟩ := hS
   have hTr : CallsTrue H D I DO := callsTrue_of_parts hRef hR hT
   exact ⟨innerViewRun_of_readsThrough hR, callsNil_of_readsThrough hR, hTr,
     callsOpenPlayed_of_parts hRef hTr hR hVL hHD hOD hSD hHH hOH hSH hHS hOS hSS,
-    callsLogColl_of_parts hRef hTr hR hVL hLD hOD hSD hLDD hLH hOH hSH hLDH hLS hOS hSS hLDS,
+    callsLogColl_of_parts hRef hTr hR hVL hLD hOD hSD hLDD hPD hLH hOH hSH hLDH hPH hLS hOS hSS hLDS hPS,
     innerAcceptsR_of_parts hRef hTr hR hVL hCD hOD hSD hDD hCH hOH hSH hDH hCS hOS hSS hDS⟩
 
 /-- **V\*'s parts at one shape, with the staging off the run**: `VStarParts` with the staging's fact about `D.vstar`
@@ -1268,10 +1351,11 @@ alone (`VstarShows`, at the coins `decC` reads) in place of `Staged`. -/
 def VStarPartsStaging (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (H : Msg → Msg) (L : Layout)
     (opening : Opening) (decC : Msg → Msg → Coin) (shape : Form → Prop) : Prop :=
   ∃ (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop)
-    (cmt : Msg → ℕ → Msg → Msg) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)),
+    (cmt : Msg → ℕ → Msg → Msg) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg))
+    (pub : Msg → List (Msg × Msg)),
     (∀ s, PartChecks H D DO L shape shows chk s) ∧ (∀ s, PartOpens H D DO L shape opening cmt s) ∧
       (∀ s, PartLogs H D DO L shape shows logs s) ∧ VstarShows D I L shape decC shows cmt ∧
-        Decomp H D I.V shape chk ∧ LogDecomp H D I.V shape logs ∧ Held D I L shape
+        Decomp H D I.V shape chk ∧ LogDecompPub H D I.V shape logs pub ∧ PubReg H D shape pub ∧ Held D I L shape
 
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **`VStarParts` from the staging off the run** (`staged_of_vstarShows`). -/
@@ -1279,8 +1363,8 @@ theorem vstarParts_of_staging {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     {L : Layout} {opening : Opening} {decC : Msg → Msg → Coin} {shape : Form → Prop} (hP : RunPairs H D I decC)
     (hL : ∀ x, L.rounds x ≤ I.V.k (xI D x) + D.kS x) (h : VStarPartsStaging D I DO H L opening decC shape) :
     VStarParts H D I DO L opening shape := by
-  obtain ⟨shows, chk, cmt, logs, hC, hO, hLg, hV, hD, hLD, hH⟩ := h
-  exact ⟨shows, chk, cmt, logs, hC, hO, hLg, staged_of_vstarShows hP hV hL, hD, hLD, hH⟩
+  obtain ⟨shows, chk, cmt, logs, pub, hC, hO, hLg, hV, hD, hLD, hPR, hH⟩ := h
+  exact ⟨shows, chk, cmt, logs, pub, hC, hO, hLg, staged_of_vstarShows hP hV hL, hD, hLD, hPR, hH⟩
 
 /-- **The code facts about the readers and V\*, with the staging off the run**: `codeFacts_of_parts`, with each shape's
 `Staged` from the staging's fact about `D.vstar` (`VstarShows`) and an accepted run's first pairs (`RunPairs`). -/
