@@ -20,6 +20,7 @@ from verity.core.protocols.pouw import window as Wd
 EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]
 DELTA = ["1/2", "1/10", "1/100", "1/1000", "1/65536", "1/1048576", "3/7"]
 TILE_WORK = [1, 7, 64, 4096]
+DEADLINE = ["1", "1/2", "30", "600", "86400", "7/3"]
 
 
 def _hex(rng: random.Random, n: int = 64) -> str:
@@ -33,7 +34,7 @@ def honest(rng: random.Random) -> dict:
     params = {"check": {"entries": rng.randint(2, 32), "scheme": CC.SCHEME, "template": f"Pc8TileHidden{{{tw},1,1,sm120}}",
                         "tile_work": tw},
               "context": f"served-zk/run-{rng.randrange(1000)}/{_hex(rng, 8)}", "delta": rng.choice(DELTA),
-              "eps": rng.choice(EPS), "grid_bits": bits, "query": _hex(rng)}
+              "eps": rng.choice(EPS), "grid_bits": bits, "query": _hex(rng), "registration_deadline": rng.choice(DEADLINE)}
     top = rng.choice([4, 12, 24, 40])
     hi = rng.randint(2, 1 << top)
     ell_hi = Wd.level(Wd.floor_point(hi, bits), bits) - 1
@@ -100,6 +101,12 @@ MUTATIONS = [
     ("params-grid-other", "params", "grid_bits", 7), ("params-tile-other", "params", "check.tile_work", 3),
     ("params-template-other", "params", "check.template", "Other{1}"), ("params-query-other", "params", "query", None),
     ("params-range-low", "params", "range", None), ("params-range-high", "params", "range", None),
+    ("params-deadline-missing", "params", "registration_deadline", _DROP),
+    ("params-deadline-missing-keys", "params", "registration_deadline", _DROP),
+    ("params-deadline-type", "params", "registration_deadline", 600),
+    ("params-deadline-zero", "params", "registration_deadline", "0"),
+    ("params-deadline-form", "params", "registration_deadline", "-5"),
+    ("params-deadline-lowest", "params", "registration_deadline", "10/4"),
     ("record-format", "record", "format", "verity/registration/v0"), ("record-program", "record", "program", 7),
     ("record-partition", "record", "partition", _DROP), ("record-population-type", "record", "population", "8"),
     ("record-law-missing", "record", "law", _DROP), ("record-roots", "record", "roots", [{"port": "W"}]),
@@ -284,6 +291,8 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
         _set(case[part], path, value)
 
     mutate("params")
+    if name == "params-deadline-missing-keys":
+        case["params"]["extra"] = 1
     mutate("record")
     params, rec, ans = case["params"], case["record"], case["answer"]
     rec_b = _canon(rec).encode()

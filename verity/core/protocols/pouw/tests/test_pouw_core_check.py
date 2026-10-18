@@ -45,6 +45,11 @@ EXPECT = {
     "params-eps-range": "params: eps is not in (0, 1]", "params-eps-zero": "params: eps is not in (0, 1]",
     "params-eps-empty": 'params: eps: "" is not a natural', "params-grid": "params: grid_bits",
     "params-query": "params: query", "params-range": "params: range", "params-range-zero": "params: range",
+    "params-deadline-missing": f"params: {CC.DEADLINE_MISSING}", "params-deadline-missing-keys": f"params: {CC.DEADLINE_MISSING}",
+    "params-deadline-type": "params: registration_deadline is not a string",
+    "params-deadline-zero": "params: registration_deadline is not in (0, inf)",
+    "params-deadline-form": 'params: registration_deadline: "-5" is not a natural',
+    "params-deadline-lowest": 'params: registration_deadline: "10/4" is not in lowest terms',
     "params-eps-other": "public-value: sampling", "params-delta-other": "public-value: sampling",
     "params-grid-other": ("public-value:", "level:"), "params-tile-other": "public-value: check, work",
     "params-template-other": "public-value: check", "params-query-other": "query:", "params-range-low": "level:",
@@ -139,6 +144,18 @@ def test_every_mutation_hits_its_refusal():
                 assert a["reason"].startswith(want), (seed, name, a["reason"])
                 assert a["verdict"] == ("undecided" if name == "answer-undecided" else "reject")
                 assert a["public"] is None and a["profile"] is None
+
+
+def test_a_window_without_a_registration_deadline_is_refused_with_the_fix():
+    """Parameters without ``registration_deadline`` fail closed: an otherwise honest window is rejected before anything
+    else is read, its reason the refusal naming the fix, and an honest one reads its deadline as an exact ratio."""
+    for seed in range(5):
+        case = _instance(seed)
+        assert CC.params(case["params"])["registration_deadline"] == Fraction(case["params"]["registration_deadline"]) > 0
+        bare = {k: v for k, v in case["params"].items() if k != "registration_deadline"}
+        a = _answer({**case, "params": bare})
+        assert (a["verdict"], a["reason"], a["commitment"]) == ("reject", f"params: {CC.DEADLINE_MISSING}", None)
+    assert "positive ratio string" in CC.DEADLINE_MISSING and "late-registration" in CC.DEADLINE_MISSING
 
 
 def test_an_accepted_window_publishes_exactly_pouw_public():

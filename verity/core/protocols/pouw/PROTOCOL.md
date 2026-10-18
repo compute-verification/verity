@@ -47,7 +47,8 @@ Everything else is the protocol's (`audit`), the same for every scheme.
    window states it as `Check.registration_deadline`, seconds on the
    challenger's clock, and the proof service refuses a later registration, or one before the salt, as
    `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
-   `registration_deadline` in its parameters).
+   `registration_deadline` in its parameters). A window can't omit it: PoUW's check (`PouwCheck.paramsOf`, and
+   `core_check.params`) refuses parameters without one, with the fix in its reason, and so does the challenger.
 5. **Selection.** Served accounting uses only the sampled audit.
    - `Sampled(t)`: `derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`, the source
      being the epoch's draw coin, opened after the verifier recorded the transcript's root (`draw_coin`); draw j is
