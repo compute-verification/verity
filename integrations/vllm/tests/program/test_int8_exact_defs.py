@@ -55,6 +55,30 @@ def test_int8_linear_is_the_served_linear(seed):
         assert list(got[:K]) == _s8(xq[i]) and got[K] == _f32(sa[i:i + 1])[0] and list(got[K + 1:]) == _bf16(y[i])
 
 
+@pytest.mark.parametrize("K", [1, 7, 64, 4096])
+def test_the_replay_row_quantizer_is_the_definition_and_the_served_quantizer(K):
+    """`kernels.int8_rows` (the Commit's sampled replay of `Int8RowQuant_v1`) word for word against the Definition and
+    `engine.int8_exact.quantize_rows` on rows at four spreads, a zero row (the floored scale), a row of subnormals, -0 and +-1,
+    and one whose max is bf16's largest finite."""
+    from verity_vllm.program.kernels import int8_rows as Q
+    from verity_vllm.program.kernels import rows
+
+    g = torch.Generator().manual_seed(K)
+    x = torch.cat([_rows(g, 4, K, spread=sp) for sp in (0.5, 4.0, 12.0, 30.0)])
+    edge = torch.tensor([w - (w >> 15 << 16) for w in (0x0001, 0x8001, 0x8000, 0x3F80, 0xBF80, 0x007F)] * (-(-K // 6)),
+                        dtype=torch.int16)[:K]
+    big = _rows(g, 1, K).view(torch.int16).clone()
+    big[0, K // 2] = 0x7F7F
+    x = torch.cat([x, torch.zeros(1, K, dtype=torch.bfloat16), edge.view(torch.bfloat16)[None], big.view(torch.bfloat16)])
+    codes, s = Q.int8_row_quant_rows(x.view(torch.int16).numpy().view(np.uint16))
+    xq, sa = E.quantize_rows(x)
+    assert codes.tolist() == [_s8(r) for r in xq] and s.tolist() == _f32(sa)
+    defn = bind(X.Int8RowQuant, K=K)
+    for i in (0, 5, 15, 16, 17, 18) if K == 4096 else range(x.shape[0]):
+        assert list(evaluate(defn, _bf16(x[i]))) == codes[i].tolist() + [int(s[i])], i
+    assert rows.ROWS[Q.FAMILY].returns == ("0", "1") and Q.FAMILY in rows.EVALUATORS
+
+
 @pytest.mark.parametrize("n,s,h,g_heads,spread,ks_scale", [(5, 5, 2, 1, 4.0, 1.0), (1, 40, 4, 2, 4.0, 1.0),
                                                            (3, 33, 2, 2, 8.0, 0.25), (2, 6, 2, 1, 1.0, 40.0)])
 def test_int8_lut_attention_is_the_served_attention(n, s, h, g_heads, spread, ks_scale):
