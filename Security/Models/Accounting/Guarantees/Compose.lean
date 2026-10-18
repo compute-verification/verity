@@ -1,131 +1,146 @@
-import Models.Accounting.Guarantees.TS.Stages
 import Models.Accounting.Guarantees.Sheet
 import Models.Accounting.Assumptions.Compose
+import Models.Pouw.Guarantees.FiatShamir
 
 /-!
 # PoUW's credit on an arbitrary declared circuit (trusted)
 
-THEOREM's composed statement (note:20261018T0346Z-draft-theorem-compose), each `def G : Prop`, proved (or a `sorry`
-stub) as `Accounting.SecurityProofs.Compose.G` in `Proofs.Accounting.Compose`. The circuit is any `Declared` one, its
-credited subcircuits compiled to their kinds' templates (`Scheme`), and nothing about its form is a hypothesis: the
-premises are the data sheet's A1–A7, FOLD-OPT and FILL-OPT, the templates' noise (`TemplateNoise`), (I8) and, deployed,
-the seeds' grinding (`SeedGrind`).
+THEOREM's composed statement, round 2 (note:compute-accounting/20261018T0618Z-draft-theorem-compose-r2), restated after
+RT-COMPOSE (note:compute-accounting/20261018T0501Z-draft-rt-compose) under decisions 107 and 109–112. Each
+`def G : Prop` is to be proved as `Accounting.SecurityProofs.Compose.G` in `Proofs.Accounting.Compose`, where each is a
+`sorry` stub for now. The circuit is any `Declared` one, a `Gates.Dag` with its call sites, its units and their kinds read off the
+IR. Nothing about its form is a hypothesis beyond `Declared.Wf` (every gate's call site is one of its calls).
 
-* `WorkWeighted`: a uniform ticket draws each unit with probability its work weight.
-* `StageLuckOfTemplates`: units each lucky at most their template's receipt luck, all at most `p`, give `StageLuck p`.
-* `TemplateLocal`: the local lemma, one per template and uniform over them: a unit whose skip and receipt read off its
-  `b` fresh bits at fibre `Z` is lucky at most `Z·C(b, ⌊b/2⌋)/2^b` (`HMu.ReceiptLuckOfCoins` at its stage).
-* `CompilerFloor`: Lemma C (`CompilerC`) against the floor credit, (2.7♭) with `ε_sample`.
-* `StageIdealFloor`: `StageIdeal` against the floor credit, (2.7♭) itself at work-weighted draws.
-* `CircuitCreditLive`: the theorem with live per-subcircuit coins.
-* `CircuitCredit`: the theorem as deployed, with SHA-512 seeds, at `T·μ^m` more.
+The premises:
+* the data sheet's A1–A7 and FILL-OPT;
+* FOLD-OPT per word folded (`FoldOptFolded`);
+* (H-μ) per template (`HMu`), with each kind's luck at least its template's proved luck (`Scheme.LuckProved`);
+* sampled (I8)'s pieces as #2466 states them (`DrawnLayer.Of`, binding, joint proof soundness, `Pins`,
+  `RightFixedDrawn`), and the fold's E1(c) (`RightFoldedDrawn`);
+* the rate condition `SplitRate`, which `SplitRateClosed` and `SplitRateMerged` discharge in closed form.
 
-`ε = ε_♭ + ε_μ + ε_Λ` is NOTATION's, at the circuit's floor `♭ = Σ_j ♭_j`: `ε_Λ = κ·ln(1/δ_s)/(ln(1/p)·S)` is all that
-sampling and luck cost (`ε_sample = 0` at work-weighted draws), and needs `p ≥ 1/e` (`StageBudget`'s range).
+The guarantees:
+* `ServiceBudget`: the window's budget `RoundGame.BudgetAt Λ` for the service's one draw, from per-stage luck and the
+  stage-share bound (W3), with folded and whole shares priced apart (B1).
+* `SplitRateClosed`: `SplitRate` at `Λ = max(a(1 + Kρw_max)/(ρK(1 − p)), b/(ρK))` when whole units are luckless.
+* `SplitRateMerged`: `SplitRate` at `Λ = b(1 + Kρw_max)/(ρK(1 − q))` for any luck at most `q`.
+* `DrawnJointOfSoundAt`: #2466's per-draw `SoundAt δ_ZK` gives the joint form at `s·δ_ZK`.
+* `CircuitCredit`: the credit theorem with live coins, the prover system's work (decision 111), as a `Certificate`.
+* `CircuitCreditFS`: its Fiat–Shamir form, against proofs' `FiatShamirFloor` (decision 112).
+
+`Pouw.Guarantees.EndToEnd` is not subsumed and stays: it is the TT cost model with Fiat–Shamir in the random-oracle
+model, concluding `(1 − ε_s)^t + ε(q, N)`, where `CircuitCredit` is the TS model under live coins (round 1 said
+otherwise; RT-COMPOSE §6).
 -/
 
 namespace Accounting.Guarantees.Compose
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
-/-- **A uniform ticket is a work-weighted draw.** Each unit's work weight is `≥ 0` and at most the probability that a
-uniform ticket names it. -/
-def WorkWeighted : Prop :=
-  ∀ {κ K : Type} (Sc : Scheme κ K) (Cd : Declared κ) (u : UnitOf Sc Cd),
-    0 ≤ workWeight Sc Cd u ∧ workWeight Sc Cd u ≤ prob (fun t : TicketOf Sc Cd => ticketUnit Sc Cd t = u)
+/-- **The service's window budget.** For a window of `M` call sites' stages over `N` tiles with work weights `w ≥ 0`,
+each tile at least `ρ` times its work share of the `N` (`ρ·N·w_v ≤ 1`; at grid padding `ρ = 1/r`,
+`r = (N/N_real)·(w_max/w̄)`), every stage's work share at most `w_max`, per-stage luck `lk` folded and `lk0` whole
+(`SplitStages.LuckAt`), at most `p` and `p0` on every tile that carries work, and costs `a, b ≥ 0` per unit of folded
+and whole share: if `SplitRate K ρ p p0 a b w_max Λ`, the window's one round, its draw a uniform `K`-subset
+(`serviceGame`), has its saving per unit of detection bounded by `Λ`. Stages are independent given the past, so the
+cheater's best is to concentrate its share in one stage, and `Λ` falls as `1/K` until the stage share binds (W3). -/
+def ServiceBudget : Prop :=
+  ∀ {C Ξ : Type} [Fintype C] [Fintype Ξ] {N M : ℕ} (stg : Fin N → ℕ) (W : SplitStages C (Fin N) M)
+    (w lk lk0 : Fin N → ℝ) (K : ℕ) (ρ p p0 a b wmax Λ : ℝ),
+    (∀ v, 0 ≤ w v) → 0 < ρ → (∀ v, ρ * N * w v ≤ 1) → (∀ j, stageShare stg w j ≤ wmax) →
+    (∀ v, 0 < w v → lk v ≤ p ∧ lk0 v ≤ p0) → W.LuckAt lk lk0 stg → 0 ≤ a → 0 ≤ b →
+    SplitRate K ρ p p0 a b wmax Λ → RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) stg W w a b K)
 
-/-- **Per-stage luck from the templates.** If every unit is lucky at most its template's receipt luck in every round,
-and every unit's receipt luck is at most `p`, the window's per-stage coins are lucky at `p` (`StageLuck`). -/
-def StageLuckOfTemplates : Prop :=
-  ∀ {κ K C D : Type} [Fintype C] {M s n : ℕ} (Sc : Scheme κ K) (Cd : Declared κ)
-    (W : StageWindow C (UnitOf Sc Cd) D M s n) (p : ℝ),
-    (∀ u, luckOf Sc Cd u ≤ p) → TemplateLuck Sc Cd W → StageLuck p (stageOf Sc Cd) W
+/-- **The rate in closed form, whole units luckless.** For `K ≥ 1` draws, `ρ > 0`, `0 ≤ ρ·w_max ≤ 1`, folded luck
+`p ∈ [0, 1)`, whole luck `0`, `a > 0` and `b ≥ 0`, `SplitRate` holds at
+`Λ = max(a(1 + Kρw_max)/(ρK(1 − p)), b/(ρK))`, the larger of the folded and the whole branch: B1's
+`max(κ/ln(1/p), (σ_w + σ_f)/s)` for the service's one draw, with `1/(K(1 − p))` in place of `1/(K·ln(1/p))`. -/
+def SplitRateClosed : Prop :=
+  ∀ (K : ℕ) (ρ p a b wmax : ℝ), 1 ≤ K → 0 < ρ → 0 ≤ wmax → ρ * wmax ≤ 1 → 0 ≤ p → p < 1 → 0 < a → 0 ≤ b →
+    SplitRate K ρ p 0 a b wmax
+      (max (a * (1 + K * ρ * wmax) / (ρ * K * (1 - p))) (b / (ρ * K)))
 
-/-- **The local lemma, for every template.** A window whose units' skips and receipts read off their own fresh noise
-(`TemplateNoise`) has every unit lucky at most `fibreOf u · C(b, ⌊b/2⌋)/2^b`, `b = bitsOf u`, at its stage, whatever
-the past. -/
-def TemplateLocal : Prop :=
-  ∀ {κ K C D : Type} [Fintype C] {M s n : ℕ} (Sc : Scheme κ K) (Cd : Declared κ)
-    (W : StageWindow C (UnitOf Sc Cd) D M s n),
-    TemplateNoise Sc Cd W → TemplateLuck Sc Cd W
+/-- **The rate in closed form, merged.** For `K ≥ 1` draws, `ρ > 0`, `0 ≤ ρ·w_max ≤ 1`, luck `p, p0 ≤ q` with
+`q ∈ [0, 1)` and costs `0 < a ≤ b`, `SplitRate` holds at `Λ = b(1 + Kρw_max)/(ρK(1 − q))`: every skip priced at the
+whole cost and the larger luck, which needs no ruling on whole units' luck. -/
+def SplitRateMerged : Prop :=
+  ∀ (K : ℕ) (ρ p p0 q a b wmax : ℝ), 1 ≤ K → 0 < ρ → 0 ≤ wmax → ρ * wmax ≤ 1 → 0 ≤ q → p ≤ q → p0 ≤ q → q < 1 →
+    0 < a → a ≤ b → SplitRate K ρ p p0 a b wmax (b * (1 + K * ρ * wmax) / (ρ * K * (1 - q)))
 
-/-- **Lemma C against the floor credit.** As `CompilerC`, against the credit `T_cred = B_♭/f_max` of any labelled
-program ♭ in place of honest's time: outside an event of probability at most `δ`, every accepted run satisfies
-`T(M)/T_cred ≥ 1 − ε^♭_skip − ε^♭_cert − ε^♭_route − ε^♭_mand − ε^♭_jl − ε^♭_sample`. -/
-def CompilerFloor : Prop :=
-  ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
-    [Nonempty R] [Nonempty F] [Nonempty X]
-    (Z : Model K R T L U F X) (Fl : Labelled K) (Ω : Type) [Fintype Ω] (S : ℕ) (P : Play Ω S K T L U)
-    (lam : R → ℝ) (Λ p δ δbind δzk : ℝ) (nπ : ℕ),
-    IsCert lam → Z.Wf Fl → 0 < S → 0 < p → p < 1 → 0 < Λ →
-    0 < δ - S * (δbind + nπ * δzk) → (∀ x, (P.run x).Split) →
-    (∀ x, FacetCeilings Z.G (P.run x).run) → (∀ x, WordsWritten Z (P.run x)) → (∀ x, ScalarRoute Z (P.run x)) →
-    (∀ x, SideUnits Z (P.run x)) → (∀ x, NoSum (P.run x)) → (∀ x, FoldOpt Z (P.run x)) →
-    (∀ x, FillOpt Z (P.run x)) → RoundGame.BudgetAt Λ P.game → ProofsSound P Z.Nw δbind δzk nπ →
-    prob (fun x => P.accepts x ∧ (P.run x).run.time / Z.credit Fl <
-      1 - Z.epsSkip Fl lam - Z.epsCert Fl lam - Z.epsRoute Fl lam - Z.epsMand Fl lam -
-        Z.epsJl Fl lam p (δ - S * (δbind + nπ * δzk)) S -
-        Z.epsSample Fl lam Λ p (δ - S * (δbind + nπ * δzk)) S) ≤ δ
+/-- **Joint proof soundness from #2466's per-draw form.** For a sampled window's proofs (`DrawnLayer`), proof soundness
+at `δ_ZK` per draw (`SoundAt`) bounds the probability that some drawn unit's proof is accepted with an opening that
+fails its relation by `s·δ_ZK` in every round, the union over the draws. `CircuitCredit` takes the joint form, so the
+proofs' term can also be the window's knowledge term in WindowEps's shape, `max_c κ_c` plus one collision term `coll`
+along the window's run, in place of the union. -/
+def DrawnJointOfSoundAt : Prop :=
+  ∀ {J V : Type} (A B : Type) [Fintype A] [Fintype B] (S s : ℕ) (pf : DrawnLayer A B S s J V) (δzk : ℝ),
+    pf.SoundAt δzk → ∀ w, prob (fun x => ∃ i, pf.Unsound x w (pf.drawnAt x w i)) ≤ s * δzk
 
-/-- **D-ideal under per-stage coins, against the floor credit.** As `StageIdeal`, against the credit `T_cred = B_♭/f_max`
-of any labelled program ♭: with work-weighted draws, outside an event of probability at most `δ`, every accepted run
-satisfies `T(M)/T_cred ≥ 1 − ε^♭_skip − ε^♭_cert − ε^♭_route − ε^♭_mand − ε^♭_jl`, with no `ε_sample`. -/
-def StageIdealFloor : Prop :=
-  ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
-    [Nonempty R] [Nonempty F] [Nonempty X] {C V D : Type} [Fintype C] [Fintype V] [Fintype D] {M s : ℕ}
-    (Z : Model K R T L U F X) (Fl : Labelled K) (S : ℕ) (P : Play (Paths C M × (Fin s → D)) S K T L U)
-    (W : StageWindow C V D M s S) (stg : V → ℕ) (tk : D → V) (w : V → ℝ) (lam : R → ℝ) (p δ δbind δzk : ℝ)
-    (nπ : ℕ),
-    IsCert lam → Z.Wf Fl → 0 < S → 2 ≤ s → Real.exp (-1) ≤ p → p < 1 →
-    0 < δ - S * (δbind + nπ * δzk) → (∀ x, (P.run x).Split) →
-    (∀ x, FacetCeilings Z.G (P.run x).run) → (∀ x, WordsWritten Z (P.run x)) → (∀ x, ScalarRoute Z (P.run x)) →
-    (∀ x, SideUnits Z (P.run x)) → (∀ x, NoSum (P.run x)) → (∀ x, FoldOpt Z (P.run x)) →
-    (∀ x, FillOpt Z (P.run x)) → P.game = W.game stg tk w → (∀ u, 0 ≤ w u) →
-    (∀ u, w u ≤ prob (fun t => tk t = u)) → StageLuck p stg W → ProofsSound P Z.Nw δbind δzk nπ →
-    prob (fun x => P.accepts x ∧ (P.run x).run.time / Z.credit Fl <
-      1 - Z.epsSkip Fl lam - Z.epsCert Fl lam - Z.epsRoute Fl lam - Z.epsMand Fl lam -
-        Z.epsJl Fl lam p (δ - S * (δbind + nπ * δzk)) S) ≤ δ
+/-- **The credit theorem, live coins** (the prover system's work, decision 111). For every declared circuit `Cd`,
+scheme `Sc` and device of sheet `Sh`, run as one window: the circuit's call sites in order, each's noise coin released
+after its operands are committed, then the service's draw of `K_d` of the `N_p ≥ N` grid-padded tiles (`drawOf`, a
+uniform `K_d`-subset) with the proofs' coins `Ξ`, each drawn tile proved with its noise's generation. Under:
+* the parameters' ranges (`Scope`) and the model the circuit's on the sheet (`Fits`);
+* every tile at least `ρ` times its work share of the `N_p` (`ρ = 1/r` at the padding's
+  `r = (N_p/N)·(w_max/w̄)`, the coordinator's ruling of 18 Oct 05:52Z), every call site's work share at most `w_max`,
+  and every tile that carries work lucky at most `p` folded and `p0` whole;
+* `Λ > 0` and `SplitRate` at the circuit's costs (`aOf`, `bOf`);
+* the play's ideal game the service's at share `1` per unit of skipped work, its draws the service's, and sampled
+  (I8)'s pieces: `Of`, binding at `δ_bind` (WindowEps: `Σ_c δlink_c`), joint proof soundness at `δ_ks`
+  (`DrawnJointOfSoundAt`: `K_d·δ_ZK`; WindowEps: `max_c κ_c + coll`), `Pins`, `RightFixedDrawn` and
+  `RightFoldedDrawn`;
+* (H-μ) (`HMu`), A1–A7, FOLD-OPT per word folded and FILL-OPT;
 
-/-- **The credit theorem, live coins.** For every declared circuit `Cd` compiled by scheme `Sc` and run on the device
-of sheet `Sh`, a window of `S` rounds, each one run of the compiled circuit whose subcircuits' noise coins are released
-in order after their operands are committed, then `s ≥ 2` work-weighted draws of whole units, each proved with its
-noise's generation: under A1–A7, FOLD-OPT, FILL-OPT, the templates' noise and (I8) at `n_π = s`, the window is accepted
-with time per round below `(1 − ε)·T_cred` with probability at most `δ_s + S·(δ_bind + s·δ_ZK)`, where
-`T_cred = B(Σ_j ♭_j)/f_max` and `ε = ε_♭ + ε_μ + ε_Λ` at the circuit's floor. -/
-def CircuitCreditLive : Prop :=
-  ∀ {κ K P T L U F X C : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
-    [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] [Fintype C] {s S : ℕ}
-    (Sc : Scheme κ K) (Cd : Declared κ) (Sh : Sheet K P) (Z : Model K (SheetRow P) T L U F X)
-    (Pl : Play (Paths C Cd.N × (Fin s → TicketOf Sc Cd)) S K T L U)
-    (W : StageWindow C (UnitOf Sc Cd) (TicketOf Sc Cd) Cd.N s S) (lam : SheetRow P → ℝ) (p δs δbind δzk : ℝ),
-    Fits Sc Cd Sh Z → Scope Sc Cd Z lam S s p δs → PlayOf Sc Cd Pl W → (∀ x, (Pl.run x).Split) →
-    (∀ x, SheetClock Sh (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
-    (∀ x, SheetTensor Sh (Pl.run x).run) → (∀ x, SheetPipe Sh (Pl.run x).run) →
-    (∀ x, SheetSmem Sh (Pl.run x).run) → (∀ x, SheetWords Z (Pl.run x)) → (∀ x, SheetSemantics Z (Pl.run x)) →
-    (∀ x, FoldOpt Z (Pl.run x)) → (∀ x, FillOpt Z (Pl.run x)) → TemplateNoise Sc Cd W →
-    ProofsSound Pl Z.Nw δbind δzk s →
-    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time < (1 - epsOf Sc Cd Z lam p δs S) * creditOf Sc Cd Z) ≤
-      δs + S * (δbind + s * δzk)
-
-/-- **The credit theorem, as deployed.** As `CircuitCreditLive` for the live play `Pl`, and a deployed play `Pd` whose
-seeds are SHA-512 of the operands' roots, which grinds them at most `T·μ^m` past `Pl` at the theorem's threshold
-(`SeedGrind`): `Pd` is accepted with time per round below `(1 − ε)·T_cred` with probability at most
-`δ_s + S·(δ_bind + s·δ_ZK) + T·μ^m`. -/
+the window's certificate holds (`certOf`): it is accepted with time below `(1 − ε)·T_cred` with probability at most
+`δ_s + δ_bind + δ_ks`, where `T_cred = B(♭)/f_max` at the circuit's floor `♭ = Σ_u ♭_{kind u}` and
+`ε = ε_♭ + ε_μ + Λ·ln(1/δ_s)`. The certificate also reports the work per kind and `γ_♭` (W1). Work is the prover
+system's: no premise ties it to the audited device, and a joint device-time rule belongs to the layer that attributes
+certificates to devices. -/
 def CircuitCredit : Prop :=
-  ∀ {κ K P T L U F X C Ωd : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
-    [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] [Fintype C] [Fintype Ωd] {s S : ℕ}
-    (Sc : Scheme κ K) (Cd : Declared κ) (Sh : Sheet K P) (Z : Model K (SheetRow P) T L U F X)
-    (Pl : Play (Paths C Cd.N × (Fin s → TicketOf Sc Cd)) S K T L U)
-    (W : StageWindow C (UnitOf Sc Cd) (TicketOf Sc Cd) Cd.N s S) (Pd : Play Ωd S K T L U)
-    (lam : SheetRow P → ℝ) (p δs δbind δzk μ : ℝ) (Tq m : ℕ),
-    Fits Sc Cd Sh Z → Scope Sc Cd Z lam S s p δs → PlayOf Sc Cd Pl W → (∀ x, (Pl.run x).Split) →
+  ∀ {ι K P T L U F X C Ξ V : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
+    [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] [Fintype C] [Fintype Ξ]
+    (Sc : Scheme K) (Cd : Declared ι) (Sh : Sheet K P) (Z : Model K (SheetRow P) T L U F X) (H : Honest K)
+    {Np Kd : ℕ} (_hN : Cd.N ≤ Np) (hK : Kd ≤ Np) (W : SplitStages C (Fin Np) Cd.calls)
+    (Pl : Play (Paths C Cd.calls × (Equiv.Perm (Fin Np) × Ξ)) 1 K T L U)
+    (pf : DrawnLayer (Paths C Cd.calls) (Equiv.Perm (Fin Np) × Ξ) 1 Kd (Fin Np) V)
+    (folded : Paths (Paths C Cd.calls × (Equiv.Perm (Fin Np) × Ξ)) 1 → ℝ) (lam : SheetRow P → ℝ)
+    (ρ p p0 wmax Λ δs δbind δks t0 t1 : ℝ),
+    Fits Sc Cd Sh Z → Scope Sc Cd Z lam δs →
+    0 < ρ → (∀ t, ρ * Np * tileWeight Sc Cd Np t ≤ 1) →
+    (∀ j, stageShare (tileStage Cd Np) (tileWeight Sc Cd Np) j ≤ wmax) →
+    (∀ t, 0 < tileWeight Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0) →
+    0 < Λ → SplitRate Kd ρ p p0 (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) wmax Λ →
+    Pl.game = serviceGame (Ξ := Ξ) (tileStage Cd Np) W (tileWeight Sc Cd Np) 1 1 Kd →
+    pf.draw = drawOf hK → pf.Of Pl →
+    (∀ w, prob (fun x => ∃ i, pf.Moved x w (pf.drawnAt x w i)) ≤ δbind) →
+    (∀ w, prob (fun x => ∃ i, pf.Unsound x w (pf.drawnAt x w i)) ≤ δks) → pf.Pins →
+    HMu Sc Cd W → RightFixedDrawn Pl pf Z.Nw →
+    RightFoldedDrawn Pl pf Z.Nw (fun x => W.share (tileStage Cd Np) (tileWeight Sc Cd Np) (coinAt x 0).1 .whole)
+      folded →
+    (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sh (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
     (∀ x, SheetTensor Sh (Pl.run x).run) → (∀ x, SheetPipe Sh (Pl.run x).run) →
     (∀ x, SheetSmem Sh (Pl.run x).run) → (∀ x, SheetWords Z (Pl.run x)) → (∀ x, SheetSemantics Z (Pl.run x)) →
-    (∀ x, FoldOpt Z (Pl.run x)) → (∀ x, FillOpt Z (Pl.run x)) → TemplateNoise Sc Cd W →
-    ProofsSound Pl Z.Nw δbind δzk s →
-    SeedGrind Pd Pl ((1 - epsOf Sc Cd Z lam p δs S) * creditOf Sc Cd Z) Tq μ m →
-    prob (fun x => Pd.accepts x ∧ (Pd.run x).run.time < (1 - epsOf Sc Cd Z lam p δs S) * creditOf Sc Cd Z) ≤
-      δs + S * (δbind + s * δzk) + Tq * μ ^ m
+    (∀ x, FoldOptFolded Z (Pl.run x) (folded x)) → (∀ x, FillOpt Z (Pl.run x)) →
+    (certOf Sc Cd Z H lam Λ δs (δs + (δbind + δks)) t0 t1).Holds Pl
+
+/-- **The credit theorem's Fiat–Shamir form** (decision 112), against proofs' `FiatShamirFloor`. For a service whose
+stage draws are a uniform oracle's answers at the inputs its commitment names (SHA-512 at the window's salt, read as a
+random oracle: the statement's probability model, not a premise), an analysis's steer events `Steer`, `T_q` oracle
+calls and a saving `w ≥ 0` of the credit: if a try steers with probability at most `μ^m`, `0 ≤ μ ≤ 1`, with `m ≥ h·w`
+(`h ≥ 0` bits of matched noise per unit of saved work, which the GRIND workstream proves per template), and the live
+coins alone bound accepted runs charged below `(1 − ε − w)·T_cred` at unsteered draws by `ε_live`, then every
+adversary within `T_q` calls has its accepted runs charged below `(1 − ε − w)·T_cred` with probability at most
+`ε_live + T_q·μ^{h·w}`. At `μ = ½` that term is at most `δ_FS` once `w ≥ log₂(T_q/δ_FS)/h`, the premium GRIND prices a
+seed. The open link is `LiveFloorUnsteered` for the compiled circuit, from `CircuitCredit`: it needs a map from the
+service's adversaries to the circuit's plays, as `RunMapFS` is for the staged service. -/
+def CircuitCreditFS : Prop :=
+  ∀ {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
+    (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) (Λ δs : ℝ)
+    (J Nd Live : Type) [Fintype J] [Fintype Nd] [Fintype Live] (Mc : Pouw.RelativeSecurity.Machine)
+    (S : FSService J Nd Live) (Tq : ℕ) (Steer : SteerMap Mc S) (εlive μ h w : ℝ) (m : ℕ),
+    0 ≤ εlive → 0 ≤ μ → μ ≤ 1 → 0 ≤ h → 0 ≤ w → h * w ≤ m → Pouw.Assumptions.SteerBound Mc S Tq Steer μ m →
+    LiveFloorUnsteered Mc S Tq Steer ((1 - epsOf Sc Cd Z lam Λ δs - w) * creditOf Sc Cd Z) εlive →
+    ServiceFloorFS Mc S Tq ((1 - epsOf Sc Cd Z lam Λ δs - w) * creditOf Sc Cd Z) (εlive + Tq * μ ^ (h * w))
 
 end Accounting.Guarantees.Compose
