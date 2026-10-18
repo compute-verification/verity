@@ -34,6 +34,7 @@ Faults (negatives): `compiled_omit:<substring>` -- tensors whose name contains i
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
@@ -174,6 +175,7 @@ class ServedCompiledSource:
         self.inputs: dict[int, list[tuple[int, str]]] = {}
         self.logits_name = "logits_processor"
         self.modules: list[str] = []
+        self.launched: dict[int, tuple[Any, Any]] = {}                  # id -> (autotuner, the config it launched in a step or a capture)
         self.errors: list[str] = []
         self.stats: dict[str, Any] = {}
         self.stats_reset_step_counters()
@@ -267,6 +269,28 @@ class ServedCompiledSource:
         into.wrap(mr, "dispatch_cg_and_sync_dp", dispatch)
         into.wrap(attn.Attention, "__init__", attention_init)
         into.wrap(LogitsProcessor, "forward", logits)
+        self._install_launch_record(into)
+
+    def _install_launch_record(self, into: hooks.Hooks) -> None:
+        """The config each Inductor autotuner launches with in a served step or a capture (`launch_configs`): read off the one launcher
+        its run settled on, once per autotuner.  Compile-time tuning runs and Inductor's benchmark modules launch outside both."""
+        from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+
+        src = self
+
+        def tuner_run(orig):
+            def run(self_t, *a, **kw):
+                out = orig(self_t, *a, **kw)
+                if id(self_t) not in src.launched and (src.capturing is not None or src._job() is not None):
+                    launchers = getattr(self_t, "launchers", None) or []
+                    if len(launchers) == 1:
+                        src.launched[id(self_t)] = (self_t, launchers[0].config)
+                    else:
+                        src.errors.append(f"{getattr(self_t, 'filename', None)}: launched holding {len(launchers)} launchers")
+                return out
+            return run
+
+        into.wrap(CachingAutotuner, "run", tuner_run)
 
     def remove_hooks(self) -> None:
         """Undo `install_hooks`.  Code Inductor generated while they were installed keeps its hook lines."""
@@ -483,14 +507,13 @@ class ServedCompiledSource:
 
     begin_run = stats_reset_step_counters
 
-    @staticmethod
-    def launch_configs() -> dict[str, Any]:
-        """Each Triton kernel this process holds an autotuner of, by the sha256 of its kernel module's text (the wrapper's
-        `async_compile.triton` block, `inductor_templates.source_sha256`): the configs its autotuners compiled (``candidates``)
-        and the config of each autotuner that holds one launcher (``executed``: its only config, or the winner its first run
-        timed).  Every live autotuner counts, wherever it is held: the one a wrapper's call() runs need not be any module's global
-        (a combo kernel's is not), and Inductor's compile-time tuning run holds its own.  The served Build binds each launch to its
-        one executed config (`acquire.served`) and refuses a kernel whose autotuners settled on two."""
+    def launch_configs(self) -> dict[str, Any]:
+        """Each Triton kernel this process holds or launched an autotuner of, by the sha256 of its kernel module's text (the wrapper's
+        `async_compile.triton` block, `inductor_templates.source_sha256`): the configs its autotuners compiled (``candidates``), the
+        configs served steps and captures launched it with (``executed``, `_install_launch_record`), its live autotuners and the ones
+        that launched.  A live autotuner's state is no record of a launch: the one a wrapper's call() runs need not be any module's
+        global, nor even the live one of its kernel text (Qwen3-8B's combo kernels: one live autotuner each, never run).  The served
+        Build binds each launch to its one executed config (`acquire.served`) and refuses a kernel launched with two."""
         import gc
         import hashlib
 
@@ -504,27 +527,40 @@ class ServedCompiledSource:
         if frozen:                      # vLLM freezes the heap after capture, and get_objects skips what is frozen
             gc.unfreeze()
         try:
-            tuners = [o for o in gc.get_objects() if issubclass(type(o), CachingAutotuner)]
+            live = [o for o in gc.get_objects() if issubclass(type(o), CachingAutotuner)]
         finally:
             if frozen:
                 gc.freeze()
         out: dict[str, Any] = {}
         sha: dict[str, str] = {}
-        for t in tuners:
+
+        def record(t: Any) -> dict[str, Any] | None:
             path = getattr(t, "filename", None)
             if not path or not os.path.isfile(path):
-                continue
+                return None
             if path not in sha:
                 with open(path, "rb") as f:
                     sha[path] = hashlib.sha256(f.read()).hexdigest()
-            rec = out.setdefault(sha[path], {"candidates": [], "executed": [], "autotuners": 0})
-            rec["autotuners"] += 1
+            rec = out.setdefault(sha[path], {"candidates": [], "executed": [], "autotuners": 0, "launched": 0})
             for c in [cfg(r.config) for r in getattr(t, "compile_results", None) or []]:
                 if c not in rec["candidates"]:
                     rec["candidates"].append(c)
-            launchers = getattr(t, "launchers", None) or []
-            if len(launchers) == 1 and (c := cfg(launchers[0].config)) not in rec["executed"]:
+            return rec
+
+        for t in live:
+            if (rec := record(t)) is not None:
+                rec["autotuners"] += 1
+        for t, config in self.launched.values():
+            rec = record(t)
+            if rec is None:
+                self.errors.append(f"an autotuner of {getattr(t, 'filename', None)!r} launched with no kernel module on disk")
+                continue
+            rec["launched"] += 1
+            if (c := cfg(config)) not in rec["executed"]:
                 rec["executed"].append(c)
+        for rec in out.values():
+            for k in ("candidates", "executed"):
+                rec[k].sort(key=lambda c: json.dumps(c, sort_keys=True))
         return dict(sorted(out.items()))
 
     def summary(self) -> dict[str, Any]:

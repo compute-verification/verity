@@ -249,28 +249,45 @@ def _tuner(path, compiled: list[int], launched: list[int]):
     return t
 
 
-def test_launch_configs_reads_every_autotuner_of_a_kernel_frozen_heap_included(tmp_path):
-    """The autotuner a wrapper runs need not be any module's global, and vLLM freezes the heap after capture: every live autotuner
-    counts, keyed by its kernel module's text, and the heap is frozen again afterwards."""
+def test_launch_configs_are_the_configs_steps_and_captures_launched(tmp_path, monkeypatch):
+    """A live autotuner's state is no record of a launch (Qwen3-8B's combo kernels each had one live autotuner, never run): `executed`
+    is what served steps and captures launched, once per autotuner; a compile-time run launches outside both and does not count; two
+    autotuners of one kernel text launched with two configs are both recorded (the Build refuses the kernel).  Every live autotuner
+    gives its candidates, the heap frozen or not, and it is frozen again afterwards."""
     import gc
     import hashlib
 
+    from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+
+    monkeypatch.setattr(CachingAutotuner, "run", lambda self, *a, **kw: None)
+    src = S.ServedCompiledSource()
+    src._install_launch_record(src._hooks)
     one, two = tmp_path / "one.py", tmp_path / "two.py"
     one.write_text("def KERNEL(): pass\n")
     two.write_text("def OTHER(): pass\n")
-    held = [_tuner(one, [128, 64], [128, 64]), _tuner(one, [128, 64], [128]), _tuner(two, [128], [128]), _tuner(two, [128, 64], [64])]
+    idle, compile_time, served = _tuner(one, [128, 64], [128, 64]), _tuner(one, [128, 64], [64]), _tuner(one, [128], [128])
+    first, second = _tuner(two, [128], [128]), _tuner(two, [64], [64])
+    compile_time.run(stream=0)
+    src.capturing = ("FULL", 8)
+    served.run(stream=0)
+    first.run(stream=0)
+    src.capturing, src.c = None, SimpleNamespace(_cur=object())
+    served.run(stream=0)
+    second.run(stream=0)
     gc.freeze()
     try:
-        got = S.ServedCompiledSource.launch_configs()
+        got = src.launch_configs()
         assert gc.get_freeze_count() > 0
     finally:
         gc.unfreeze()
+        src.remove_hooks()
     a, b = (got[hashlib.sha256(p.read_bytes()).hexdigest()] for p in (one, two))
-    won = {"kwargs": {"XBLOCK": 2, "R0_BLOCK": 128}, "num_warps": 2, "num_stages": 1}
-    lost = {**won, "kwargs": {"XBLOCK": 2, "R0_BLOCK": 64}}
-    assert a == {"candidates": [won, lost], "executed": [won], "autotuners": 2}
-    assert b == {"candidates": [won, lost], "executed": [won, lost], "autotuners": 2}
-    del held
+    r128 = {"kwargs": {"XBLOCK": 2, "R0_BLOCK": 128}, "num_warps": 2, "num_stages": 1}
+    r64 = {**r128, "kwargs": {"XBLOCK": 2, "R0_BLOCK": 64}}
+    assert a == {"candidates": [r128, r64], "executed": [r128], "autotuners": 3, "launched": 1}
+    assert b == {"candidates": [r128, r64], "executed": [r128, r64], "autotuners": 2, "launched": 2}
+    assert src.errors == []
+    del idle, compile_time, served, first, second
 
 
 class _Meta(SimpleNamespace):
