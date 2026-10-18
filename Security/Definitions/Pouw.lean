@@ -167,8 +167,11 @@ definitions). `Proofs`: the block-support count and the cost bounds it gives.
 ## `Window`: a window of calls
 
 One draw that depends on the registration (C1), then the calls' sessions in order, in the form of C-Flock's one-stage
-audit: the game, the laws and their product (M1), the units' statements (self-contained tiles whose seed's position is
-their place in the registered partition, decision 106) and PoUW's harm family (`harmSets`), each call's analysis, and
-the premises of the window's composition.
-The window's ε from its calls' (M2) is `Models.Pouw.Guarantees.Window`, stated and not yet proved.
+audit: the game, the laws and their product (M1), the units' statements (self-contained tiles whose seed's position and
+roots are read at their place in the committed transcript, decision 106) and PoUW's harm family (`harmSets`), each
+call's analysis, the premises of the window's composition in the compiled tables' shape (a constant plus a term of the
+prover's state) and the window's collision term (`coll`), and the deployed draw, sampled proofs' service's uniform
+subset in rank-ordered sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`).
+The window's ε from its calls' (M2) and the service's draw at `η = 0` are `Models.Pouw.Guarantees.Window`, stated and
+not yet proved.
 -/
