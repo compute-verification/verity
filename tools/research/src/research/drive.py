@@ -960,7 +960,7 @@ class Driver:
         following = {rid for rec in drive.get("deferred", {}).values() for rid in rec["ids"]}
         for c, v in drive["launched"].items():
             if c not in on_chain and not dry_run and not set(v["ids"]) & following:
-                live = [rid for rid, (st, *_) in self._states(v["ids"]).items()
+                live = [rid for rid, (st, *_) in self._states([*v["ids"], *(v.get("touched") or [])]).items()
                         if st in ACTIVE and st != "unknown"]
                 if live:                                   # a failed one too: drive acted on its failure, and its slot is a
                                                            # train's (17 Oct 14:41Z: two held slots 40 min with 32 PRs queued)

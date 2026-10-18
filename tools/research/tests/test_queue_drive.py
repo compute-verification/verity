@@ -1079,3 +1079,19 @@ def test_of_several_failed_trains_drive_acts_on_the_lowest_only(world, monkeypat
     h.tick()
     assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0], h.posts
     assert [m.pr for m in h.q.chain()] == [2]
+
+
+def test_a_train_off_next_has_its_touched_suites_run_cancelled_too(world, monkeypatch):
+    """18 Oct 16:05Z: three touched-suites runs of trains a rebuild had dropped held check slots for 60-140 min, while drive
+    cancelled only those trains' checks."""
+    h = Harness(world, monkeypatch)
+    h.d.defer = frozenset({"pytest"})
+    h.d.launch_touched = lambda repo, commit, machine, base: (["r-touched"], "")
+    h.run_state["r-touched"] = ("running", None, None)
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    h.tick()
+    (rid,) = [r for r in h.run_state if r != "r-touched"]
+    h.q.eject(1, "a test", "ci")
+    h.tick()
+    assert set(h.cancelled) == {rid, "r-touched"}
