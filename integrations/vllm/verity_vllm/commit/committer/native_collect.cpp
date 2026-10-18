@@ -2105,6 +2105,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readwrite("auto_blocks", &Collector::auto_blocks)
       .def_readwrite("auto_bytes_per_block", &Collector::auto_bytes_per_block)
       .def_readwrite("drain_side", &Collector::side_drain)
+      .def("side_stream_for_test", [](Collector& c) { return reinterpret_cast<int64_t>(c.side_s); })
       .def("drain_errors", &Collector::drain_errors)
       .def_readonly("active", &Collector::active)
       .def_readonly("learning", &Collector::learning);
