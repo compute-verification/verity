@@ -30,7 +30,8 @@
  "expected_engine_steps": 32,
  "engine_args_required": {
   "max_num_batched_tokens": 2048,
-  "max_model_len": 288
+  "max_model_len": 288,
+  "async_scheduling": false
  },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 6b9e4e7fb171f92f (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
@@ -364,6 +365,7 @@
    12,
    0
   ],
-  "num_sms": 188
+  "num_sms": 188,
+  "async_scheduling": false
  }
 }
