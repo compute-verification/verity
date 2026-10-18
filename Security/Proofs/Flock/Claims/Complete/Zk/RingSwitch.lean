@@ -168,15 +168,29 @@ theorem rec_pre {resp : ℕ → Claims.Msg} {α : Type} {y : TMW PS α} (hy : (J
   obtain ⟨rs, bs, hrs, -, -⟩ := JsonRT.Rec.go hy e
   exact ⟨rs.toArray, Array.toList_inj.1 (by simp [hrs])⟩
 
-/-- **A masked rep that returns** ran zerocheck, lincheck and the ring switch on its claims in closed form: its ring
-switches are the prover's on those claims, and its final rounds begin with the rounds through the ring switch. -/
+/-- **The rank check, where it returns, keeps the transcript and the sends.** -/
+theorem rankCheckP_go {m kLog : ℕ} {prior : Array (List F128)} {words : List ℕ} {t t' : Transcript}
+    {l l' : Array Claims.Msg} {u : Unit}
+    (h : ((rankCheckP m kLog prior words : TMW PS Unit).run t).go l = (.ok (u, t'), l')) : t' = t ∧ l' = l := by
+  unfold rankCheckP at h
+  simp only [StateT.run_bind, StateT.run_get, pure_bind] at h
+  split at h
+  · simp only [StateT.run_pure, JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at h
+    exact ⟨h.1.2.symm, h.2.symm⟩
+  · change ((throw _ : PS _) >>= fun a => Pure.pure (a, t)).go l = _ at h
+    obtain ⟨_, _, h1, -⟩ := JsonRT.go_bind_ok h
+    cases h1
+
+/-- **A masked rep that returns** ran zerocheck, lincheck, the rank check and the ring switch on its claims in closed
+form: its ring switches are the prover's on those claims, and its final rounds begin with the rounds through the ring
+switch. -/
 theorem repPZk_rs (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
-    (nonce : ℕ → ℕ → UInt64) (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg) {P : Zk.ZkProof}
-    {t' : Transcript} {l' : Array Claims.Msg}
+    (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (t : Transcript)
+    (l : Array Claims.Msg) {P : Zk.ZkProof} {t' : Transcript} {l' : Array Claims.Msg}
     (h : ((repPZk (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
-      nonce).run t).go l = (.ok (P, t'), l')) :
+      nonce prior words).run t).go l = (.ok (P, t'), l')) :
     ∃ full, P.proof.ringSwitches = Rs.proof tr (abcClaims st.m st.kLog (Zc.out st.m (Zc.coinsAt resp l.size) tr)
         (Lc.out st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr)
           (Lc.coinsAt resp (l.size + 3 + (st.m - 6)) (st.fold.kLog - 6))) ++ extras) ∧
@@ -202,6 +216,10 @@ theorem repPZk_rs (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (s
     (Zc.out st.m (Zc.coinsAt resp l.size) tr) full _ l₁ hfold
   rw [bind_go hl] at h
   dsimp only at h
+  rw [StateT.run_bind] at h
+  obtain ⟨⟨u, t₃⟩, l₃', hk, h⟩ := JsonRT.go_bind_ok h
+  obtain ⟨ht₃, hl₃⟩ := rankCheckP_go hk
+  subst t₃ l₃'
   obtain ⟨l₃, -, hrs⟩ := ringSwitchP_go resp tr (abcClaims st.m st.kLog (Zc.out st.m (Zc.coinsAt resp l.size) tr)
     (Lc.out st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) (Lc.coinsAt resp l₁.size (st.fold.kLog - 6))) ++
       extras) (by simp [abcClaims]) _ l₂
@@ -369,7 +387,7 @@ theorem ringSwitchZk_goal (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : Jso
   have hi₀ := hi
   rw [htabs] at hi₀
   obtain rfl : i = 0 := by simpa using hi₀
-  obtain ⟨p, ic, l, t', l', -, hzp, hst', hrun⟩ := hrep r hr
+  obtain ⟨p, ic, l, t', l', prior, ws, -, hzp, hst', hrun⟩ := hrep r hr
   have hT : o.tabs[0]! = Setup.ofCircuit st := by rw [htabs]; rfl
   have hm : 14 ≤ (Setup.ofCircuit st).m := by show 14 ≤ st.m; omega
   obtain ⟨full, hsw, hpre⟩ := repPZk_rs (hm := hm) (h := hrun)

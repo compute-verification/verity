@@ -51,8 +51,9 @@ variable {H : Claims.Msg → Claims.Msg}
 theorem rep_rounds (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (hT : TableT st tr)
     (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
     (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
-    (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (l : Array Claims.Msg) (p : Zk.ZkProof)
-    (t' : Transcript) (l' : Array Claims.Msg) (hgo : (repT H r st tr ω i d v cm e rep ic).go l = (.ok (p, t'), l')) :
+    (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ)
+    (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Claims.Msg)
+    (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) :
     t'.rounds.size = repRoundsT st v e := by
   obtain ⟨h25, h35, hms, -, p0, w, hpe, hR0, -⟩ := hT
   obtain ⟨hf, -⟩ := holds_only hpe hR0
@@ -65,7 +66,7 @@ theorem rep_rounds (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stm
   unfold repT at hgo
   obtain ⟨full, lL, lg, zl, rec, tI, lI, rp, x, lgc, hfold, hlL, hlig, hre, hlgc, hinn, hP, hzl⟩ :=
     repPZk_split resp (Claims.hOf H) (Setup.ofCircuit st) v.1 v.2 rep d tr (packed tr (Setup.ofCircuit st).m) cm e
-      pads ic (ω.extra i) (ω.lanePad i) (ω.salt i rep) (ω.nonce i rep) hm14 _ l hgo
+      pads ic (ω.extra i) (ω.lanePad i) (ω.salt i rep) (ω.nonce i rep) prior ws hm14 _ l hgo
   have hn : v.1.n = st.m - 7 := zkSchedule_n hin.schedule
   have hx : ∀ c ∈ claimsR resp (Setup.ofCircuit st) tr l.size e, c.x.size = st.m - 6 :=
     claims_xsize' st hkm (by omega) tr (Zc.coinsAt resp l.size) (lcCoinsR resp (Setup.ofCircuit st) l.size) pts e

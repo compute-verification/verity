@@ -74,20 +74,23 @@ statement, its header's draw the statement's, a printable stratified or subset d
 holds at every good case (`stmtAt_all`) and `StmtOkZk` holds (`stmtOkZk`), and `completeRelS`, `completeJRelS` and
 `complete_zk_relationS` drop it. The four premises left each say something of one rep of one table, so they are
 stated once at a table, its trace, its tape row, its domain and its coins from the rep's first send (`Table`:
-`TableT`, `RepIn`, `CoinsT`; `RepShapedT`, `ProverRunsT`, `LigeritoT`, `InnerT`), and give `RepShapedAt`,
+`TableT`, `RepIn`, `CoinsT`, `MaskRankT`; `RepShapedT`, `ProverRunsT`, `LigeritoT`, `InnerT`), and give `RepShapedAt`,
 `ProverRunsAt` and `LgInnerAt` at each table `i` of every good case, its rep `r` starting after the `2 i + r` earlier
-reps (`repStartZk`; `Case.coinsT`, `Run.start_eq`), so masked completeness at any number of tables follows from the
-JSON specification and those four (`complete_jsonT`); at table `0` of a good masked case or run
-(`CaseZk.toCase`, `RunZk.toRun`) they give `complete_zk`'s `RepShapedZk`, `ProverRunsZk`, `LigeritoZk` and `Inner`
+reps (`repStartZk`; `Case.coinsT`, `Run.start_eq`), its rank check passing by `¬ BadZk` (`Case.maskRankT`) at its rep
+`0`'s claim points read off rep `0`'s rounds (`repT_points`), so masked completeness at any number of tables follows
+from the JSON specification, those four and the mask-rank bound (`complete_jsonT`); at table `0` of a good masked
+case or run (`CaseZk.toCase`, `RunZk.toRun`) they give `complete_zk`'s `RepShapedZk`, `ProverRunsZk`, `LigeritoZk` and `Inner`
 (`repShapedZk_of`, `proverRunsZk_of`, `lgInnerZk_of`). Each of the four splits into level 0's masked Ligerito,
 stated once (`Level0`: `ProverRuns`, `ProverShape`, `Lanes`, `Verifier`), and the rest (`Parts`); a returning rep runs
 stage by stage (`RepSplit`: `repPZk_split`), so given `Level0.Verifier` the verifier's view of it is the prover's
 (`View`: `view`), and `LigeritoT` and `InnerT` hold (`ligeritoRest`, `innerRest`; `complete_jsonT_of_parts`). A
 returning rep records `repRoundsT` rounds (`RepRuns`: `rep_rounds`), level 0's two lane rows vanish at the honest pads
 where its lane phase is in closed form (`LaneRows`: `lanes_hold`), and the verifier's masked replay returns on rounds
-carrying the prover's zerocheck and lincheck (`ReplayGo`: `replayWith_ok`). So a rep returns at good coins, its
-replay's and lanes' rows vanishing at its pads, and `RunsRest` holds (`RunsGo`: `repT_go`, `runsRest`); a returning
+carrying the prover's zerocheck and lincheck (`ReplayGo`: `replayWith_ok`). So a rep returns at good coins where its
+rank check passes, the rounds it reads giving its claim points at the coins (`lcRounds_points`), its replay's and
+lanes' rows vanishing at its pads, and `RunsRest` holds (`RunsGo`: `repT_go`, `runsRest`); a returning
 rep's proof has the masked PIOP's closed-form lengths, level 0's cap and Ligerito lengths, the inner proof's 192-byte
 salts and 64-byte path entries, and a file under `2^64` bytes at a good case's at most 2,048 extra claims
-(`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four
-(`complete_jsonT_of_level0`), which `Zk.Level0Premises` and `Zk.Level0Verifier` prove (`L0.complete_jsonT_closed`). -/
+(`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four and the
+mask-rank bound (`complete_jsonT_of_level0`); `Zk.Level0Premises` and `Zk.Level0Verifier` prove level 0's four
+(`L0.complete_jsonT_closed`). -/

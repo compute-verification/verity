@@ -21,8 +21,8 @@ shape the masked verifier decodes it at.
   proof at most `424 + 16·|y| + 168·(232 + 64·depth)` (`wInner_size_le`); every `--zk` schedule's part is under
   `2^32` (`zkSchedule_file`), and a good case's table has at most 2,050 claims (`Case.extras_le`).
 
-`complete_jsonT_of_level0`: so `complete_jsonT` follows from level 0's four premises alone (proved in
-`Zk.Level0Premises` and `Zk.Level0Verifier`: `L0.complete_jsonT_closed`).
+`complete_jsonT_of_level0`: so `complete_jsonT` follows from level 0's four premises (proved in `Zk.Level0Premises`
+and `Zk.Level0Verifier`) and the mask-rank bound (`L0.complete_jsonT_closed`).
 -/
 
 namespace FlockComplete.ZkTables
@@ -276,7 +276,7 @@ theorem inZ_shape {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (
 coefficients (`Level0.ProverShape`), the inner proof's salts and paths (`inZ_shape`), and a file under `2^64` bytes:
 `schedPartZk` under `2^32` (`zkSchedule_file`), `m, k_log ≤ 35` and at most 2,050 claims. -/
 theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
-  intro h1 h64 st tr hT ω i d k r v cm pts e rep ic hin he l pt l' hgo
+  intro h1 h64 st tr hT ω i d k r v cm pts e rep ic hin he prior ws l pt l' hgo
   obtain ⟨P, t'⟩ := pt
   show ZkView.Shaped _ P
   have h25 := hT.1
@@ -292,7 +292,7 @@ theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
   unfold repT at hgo
   obtain ⟨full, lL, lg, zl, rec, tI, lI, rp, x, lgc, -, -, hlg, -, -, hinn, hP, hzl⟩ :=
     repPZk_split _ (Claims.hOf H) (Setup.ofCircuit st) v.1 v.2 rep d tr _ cm e _ ic (ω.extra i) (ω.lanePad i)
-      (ω.salt i rep) (ω.nonce i rep) hm14 _ l hgo
+      (ω.salt i rep) (ω.nonce i rep) prior ws hm14 _ l hgo
   have hcm := hin.commit
   rw [hmerk] at hcm hlg
   have hH : (shapeZk (Setup.ofCircuit st) v.1 e.size).hashLen = 64 := by
@@ -365,11 +365,11 @@ theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
   exact ⟨by rw [hH]; norm_num, by show 1 ≤ v.1.levels.size - 1; omega, hfit, hcap, h1ab, h1c, hrounds, hlr, hzp,
     hrs, hrs128, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, hsalt, hpath⟩
 
-/-- **Masked completeness from level 0**: `complete_jsonT` from level 0's four premises (`Level0`) alone;
-`RepShapedT` beyond level 0's shape (`shapeRest`) and `ProverRunsT` beyond level 0 (`runsRest`) hold. -/
+/-- **Masked completeness from level 0**: `complete_jsonT` from level 0's four premises (`Level0`) and the mask-rank
+bound; `RepShapedT` beyond level 0's shape (`shapeRest`) and `ProverRunsT` beyond level 0 (`runsRest`) hold. -/
 theorem complete_jsonT_of_level0 (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
-    (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier) :
-    Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT_of_parts H S h0 h1 h2 h3 (shapeRest H) (runsRest H)
+    (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier)
+    (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk Readable.relation) :=
+  complete_jsonT_of_parts H S h0 h1 h2 h3 (shapeRest H) (runsRest H) hMR
 
 end FlockComplete.ZkTables
