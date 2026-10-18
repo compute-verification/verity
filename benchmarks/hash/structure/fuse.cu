@@ -386,8 +386,10 @@ struct Setup {
   std::vector<uint8_t> levels() {
     u64 used = 0;
     for (int d = 0; d <= cm.depth; ++d) used += cm.width >> d;
-    std::vector<uint8_t> v(used * 64);
-    CK(cudaMemcpy(v.data(), cm.levels, v.size(), cudaMemcpyDeviceToHost));
+    std::vector<u64> w(used * 8);
+    CK(cudaMemcpy(w.data(), cm.levels, w.size() * 8, cudaMemcpyDeviceToHost));
+    std::vector<uint8_t> v(used * 64);   // digest byte order: the device keeps each 8 bytes as a big-endian word
+    for (size_t i = 0; i < w.size(); ++i) sha::put_be64(v.data() + 8 * i, w[i]);
     return v;
   }
   void clear_levels() { CK(cudaMemset(cm.levels, 0xA5, n * 64)); for (int d = 1; d <= cm.depth; ++d) CK(cudaMemset(cm.lv[d], 0xA5, (cm.width >> d) * 64)); }
