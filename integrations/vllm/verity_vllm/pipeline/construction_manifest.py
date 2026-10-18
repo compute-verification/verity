@@ -42,7 +42,8 @@ def write_construction_manifest(out: str, res: dict) -> None:
                           "site_packages_by_package": tr.get("site_packages_by_package"),
                           "non_site_packages_paths": [p for p in tr.get("non_site_packages_paths", []) if not p.startswith("/usr/lib/python")]},
          "program": res.get("program"), "spec_histogram": res.get("spec_histogram"), "ok": res.get("ok"), "unsupported": res.get("unsupported"),
-         "files": ["descriptor.json.gz (verity.ml.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand run progressions)", "derive-report.json", "inputs.json", "result.json",
+         "files": ["descriptor.json.gz (verity.ml.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand run progressions)",
+                   "census.json.gz, kv_rows.json.gz (a request Program's census/v1 and KV rows: pipeline.memory_map.cache)", "derive-report.json", "inputs.json", "result.json",
                    "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
     if res.get("relabeled_from"):
         m["relabeled_from"] = res["relabeled_from"]

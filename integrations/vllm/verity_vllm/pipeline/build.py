@@ -654,6 +654,9 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
     json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
     write_instances(out, program, digest, corr_digest, supplied)
+    if res.get("wrapper") == "request":
+        from verity_vllm.pipeline import memory_map as MMP
+        res["census"] = MMP.cache_at_build(out, program, digest)
     # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
     art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
                                  applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)
