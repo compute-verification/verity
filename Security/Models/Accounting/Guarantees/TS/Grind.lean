@@ -39,6 +39,10 @@ zero-luck sampled rate; at `κ = p/(1 - p)` that is exactly the live analysis' c
   probability at most `p` over its column's coins (`HMu.CoinPointMassHalf`: `1/2`). If every unit meets
   `q·e^{n·rθw} + (1 - q)·(p·e^{rθw} + (1 - p)·e^{-κ·rθw})^n ≤ M`, the tile's moment is at most `M`, however the dead
   events and the lucky events correlate (AM-GM over the columns and over each column's units).
+* `TemplateCondition` and `TemplateMoment`: `TileLuck` at h1tile's segment (32 columns, words of at most 32 skipped
+  products, a one-bit dither so `q = 2^{-w}`, `p = 1/2`) with `M = 1` at `κ = 4` and `r·θ = 1/256`: `θ = 1/(256·r)` a
+  product, and a seed group's premium at most `256·r·ln(T/δ)` products. The condition's largest `r·θ` at `κ = 4` is
+  about `0.0099` (`benchmarks/pouw/grind_price.py`), 2.5 times this proved point.
 
 What these don't give, and stays a premise: the skip decision is fixed by the query (E3, `HMu`'s no-leak premise:
 a cheater that sees its luck after the seed and picks which units to skip pays `C(n, w)` and needs more than
@@ -122,5 +126,27 @@ def TileLuck : Prop :=
     ∑ ω : Ω₀ × (Fin n → E),
         Real.exp (θ * ∑ k, ∑ i, w k i * ((1 + κ) * (if lucky k i ω.1 (ω.2 k) then 1 else 0) - κ)) ≤
       M * Fintype.card (Ω₀ × (Fin n → E))
+
+/-- **The template's condition at one point.** h1tile's segment at `κ = 4`: a word of `w ≤ 32` skipped products over
+32 columns, dead with probability at most `2^{-w}` (a one-bit dither a row entry) and otherwise lucky with probability
+at most `1/2`, meets `TileLuck`'s condition with `M = 1` at `r·θ = 1/256`. -/
+def TemplateCondition : Prop :=
+  ∀ w : ℕ, w ≤ 32 →
+    (1 / 2 : ℝ) ^ w * Real.exp (32 * (1 / 256 * w)) +
+      (1 - (1 / 2 : ℝ) ^ w) * (1 / 2 * Real.exp (1 / 256 * w) + (1 - 1 / 2) * Real.exp (-(4 * (1 / 256) * w))) ^ 32
+        ≤ 1
+
+open Classical in
+/-- **The template's moment (its θ).** `TileLuck` at h1tile's segment: 32 columns share the rows' coins `Ω₀`, column
+`k` has its own coins in `E`, and each of the `r` rows' words skips `w k i ≤ 32` products, dead with probability at most
+`2^{-w}` and otherwise lucky with probability at most `1/2`. At `κ = 4` the segment's gain has moment at most 1 at rate
+`θ = 1/(256·r)` a product, so a seed group's premium is at most `256·r·ln(T/δ)` products. -/
+def TemplateMoment : Prop :=
+  ∀ {Ω₀ E : Type} [Fintype Ω₀] [Fintype E] {r : ℕ} (w : Fin 32 → Fin r → ℕ) (dead : Fin 32 → Fin r → Ω₀ → Prop)
+    (lucky : Fin 32 → Fin r → Ω₀ → E → Prop), 0 < r → (∀ k i, w k i ≤ 32) →
+    (∀ k i ω₀, ¬dead k i ω₀ → prob (lucky k i ω₀) ≤ 1 / 2) → (∀ k i, prob (dead k i) ≤ (1 / 2) ^ w k i) →
+    ∑ ω : Ω₀ × (Fin 32 → E),
+        Real.exp (1 / (256 * r) * ∑ k, ∑ i, (w k i : ℝ) * ((1 + 4) * (if lucky k i ω.1 (ω.2 k) then 1 else 0) - 4)) ≤
+      Fintype.card (Ω₀ × (Fin 32 → E))
 
 end Accounting.Guarantees.TS

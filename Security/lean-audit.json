@@ -1784,6 +1784,16 @@
    "assumptions": [],
    "type_hash": "5803510fd92c96e4606036e0695794c6210805a328862135c17ec7fd7f5544e8"
   },
+  "Accounting.SecurityProofs.TS.TemplateCondition": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.TemplateCondition : Accounting.Guarantees.TS.TemplateCondition"],
+   "assumptions": []
+  },
+  "Accounting.SecurityProofs.TS.TemplateMoment": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.TemplateMoment : Accounting.Guarantees.TS.TemplateMoment"],
+   "assumptions": []
+  },
   "Accounting.SecurityProofs.TS.TensorSlotCount": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.TensorSlotCount : Accounting.Guarantees.TS.TensorSlotCount"],
@@ -6036,7 +6046,9 @@
    "Accounting.SecurityProofs.TS.GrindMass": "lemma: the expectation form, the T queries' exponential moments summing to at most T M in mean under GrindPremium's per-query moment (a hypothesis); not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LuckMoment": "lemma: one unit's exponential moment p e^{theta w} + (1 - p) e^{-kappa theta w} at exchange rate kappa, its luck at most p (a hypothesis); not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.PrivateMoment": "lemma: exponential moments multiply over private coins whatever the shared ones (Fubini), each bound a hypothesis; not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.TileLuck": "lemma: the deployed tile's exponential moment at most M, n columns sharing coins and r units a column, each unit's dead mass q and alive luck p hypotheses (AM-GM over the columns and over each column's units); not a property of a Lean function."
+   "Accounting.SecurityProofs.TS.TileLuck": "lemma: the deployed tile's exponential moment at most M, n columns sharing coins and r units a column, each unit's dead mass q and alive luck p hypotheses (AM-GM over the columns and over each column's units); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.TemplateCondition": "lemma: h1tile's segment (32 columns, words of at most 32 skipped products, a one-bit dither) meets TileLuck's condition with M = 1 at κ = 4 and r·θ = 1/256, from elementary bounds on exp; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.TemplateMoment": "lemma: TileLuck at h1tile's segment, the gain's moment at most 1 at θ = 1/(256·r) a product and κ = 4; not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

@@ -80,6 +80,49 @@ theorem prod_exp_le_mean {r : ℕ} (hr : 0 < r) (θ : ℝ) (g : Fin r → ℝ) :
         congr 1; refine Finset.sum_congr rfl fun i _ => ?_
         rw [← Real.exp_nat_mul]; ring_nf
 
+theorem exp_neg_le (a : ℝ) (ha : 0 ≤ a) : Real.exp (-a) ≤ 1 / (1 + a) := by
+  rw [Real.exp_neg, ← one_div]
+  exact one_div_le_one_div_of_le (by linarith) (by linarith [Real.add_one_le_exp a])
+
+/-- A dead word's term: `2^{-w}·e^{w/8} ≤ (4/7)^w`, from `e^{1/8} < 8/7`. -/
+theorem dead_le (w : ℕ) : (1 / 2 : ℝ) ^ w * Real.exp (32 * (1 / 256 * w)) ≤ (4 / 7) ^ w := by
+  have h8 : Real.exp (1 / 8) ≤ 8 / 7 := by
+    have := Real.exp_bound_div_one_sub_of_interval' (x := 1 / 8) (by norm_num) (by norm_num)
+    norm_num at this ⊢
+    linarith
+  have he : Real.exp (32 * (1 / 256 * w)) = Real.exp (1 / 8) ^ w := by
+    rw [← Real.exp_nat_mul]
+    ring_nf
+  rw [he, ← mul_pow]
+  exact pow_le_pow_left₀ (by positivity) (by linarith) w
+
+/-- An alive word's term over its 32 columns, from `e^x ≤ 1 + x + x²` on `|x| ≤ 1` and `1 + x ≤ e^x`. -/
+theorem alive_le (x : ℝ) (h0 : 0 ≤ x) (h32 : x ≤ 32) :
+    (1 / 2 * Real.exp (1 / 256 * x) + (1 - 1 / 2) * Real.exp (-(4 * (1 / 256) * x))) ^ 32 ≤
+      Real.exp (-(3 / 16) * x + 17 / 4096 * x ^ 2) := by
+  set s := 1 / 256 * x with hs
+  have hs0 : 0 ≤ s := by positivity
+  have hs1 : s ≤ 1 / 8 := by rw [hs]; linarith
+  have e1 : Real.exp s ≤ 1 + s + s ^ 2 := by
+    have := Real.abs_exp_sub_one_sub_id_le (x := s) (by rw [abs_of_nonneg hs0]; linarith)
+    linarith [le_abs_self (Real.exp s - 1 - s)]
+  have e2 : Real.exp (-(4 * s)) ≤ 1 - 4 * s + 16 * s ^ 2 := by
+    have := Real.abs_exp_sub_one_sub_id_le (x := -(4 * s)) (by rw [abs_neg, abs_of_nonneg (by linarith)]; linarith)
+    nlinarith [le_abs_self (Real.exp (-(4 * s)) - 1 - -(4 * s))]
+  have h4 : -(4 * (1 / 256) * x) = -(4 * s) := by rw [hs]; ring
+  rw [h4]
+  have hg0 : 0 ≤ 1 / 2 * Real.exp s + (1 - 1 / 2) * Real.exp (-(4 * s)) := by positivity
+  have hg : 1 / 2 * Real.exp s + (1 - 1 / 2) * Real.exp (-(4 * s)) ≤ Real.exp (-(3 / 2) * s + 17 / 2 * s ^ 2) := by
+    have := Real.add_one_le_exp (-(3 / 2) * s + 17 / 2 * s ^ 2)
+    nlinarith
+  calc _ ≤ Real.exp (-(3 / 2) * s + 17 / 2 * s ^ 2) ^ 32 := pow_le_pow_left₀ hg0 hg 32
+    _ = _ := by
+      rw [← Real.exp_nat_mul]
+      congr 1
+      rw [hs]
+      push_cast
+      ring
+
 end Grind
 
 open Grind
@@ -321,5 +364,52 @@ theorem GrindPremiumAt : Accounting.Guarantees.TS.GrindPremiumAt := by
   rw [mul_div_cancel₀ _ hθ.ne', Real.exp_neg, Real.exp_log hTM] at this
   calc _ ≤ _ := this
     _ = δ + δb := by field_simp
+
+theorem TemplateCondition : Accounting.Guarantees.TS.TemplateCondition := by
+  intro w hw
+  have hx0 : (0 : ℝ) ≤ w := Nat.cast_nonneg w
+  have hx32 : (w : ℝ) ≤ 32 := by exact_mod_cast hw
+  have hq1 : (1 / 2 : ℝ) ^ w ≤ 1 := pow_le_one₀ (by norm_num) (by norm_num)
+  have hq0 : 0 ≤ (1 / 2 : ℝ) ^ w := by positivity
+  have key : (1 / 2 : ℝ) ^ w * Real.exp (32 * (1 / 256 * w)) +
+      (1 - (1 / 2 : ℝ) ^ w) * (1 / 2 * Real.exp (1 / 256 * w) + (1 - 1 / 2) * Real.exp (-(4 * (1 / 256) * w))) ^ 32
+        ≤ (4 / 7) ^ w + (1 - (1 / 2 : ℝ) ^ w) * Real.exp (-(3 / 16) * w + 17 / 4096 * (w : ℝ) ^ 2) :=
+    add_le_add (dead_le w) (mul_le_mul_of_nonneg_left (alive_le w hx0 hx32) (by linarith))
+  refine key.trans ?_
+  rcases Nat.lt_or_ge w 3 with h | h
+  · interval_cases w
+    · norm_num
+    · have he := exp_neg_le (751 / 4096) (by norm_num)
+      have hx : -(3 / 16) * ((1 : ℕ) : ℝ) + 17 / 4096 * ((1 : ℕ) : ℝ) ^ 2 = -(751 / 4096) := by norm_num
+      rw [hx]
+      norm_num at he ⊢
+      linarith
+    · have he := exp_neg_le (1468 / 4096) (by norm_num)
+      have hx : -(3 / 16) * ((2 : ℕ) : ℝ) + 17 / 4096 * ((2 : ℕ) : ℝ) ^ 2 = -(1468 / 4096) := by norm_num
+      rw [hx]
+      norm_num at he ⊢
+      linarith
+  · have h3 : (3 : ℝ) ≤ w := by exact_mod_cast h
+    have hE : -(3 / 16) * (w : ℝ) + 17 / 4096 * (w : ℝ) ^ 2 ≤ -(1 / 2) := by
+      nlinarith [mul_nonneg (sub_nonneg.2 h3) (sub_nonneg.2 hx32)]
+    have he : Real.exp (-(3 / 16) * (w : ℝ) + 17 / 4096 * (w : ℝ) ^ 2) ≤ 2 / 3 :=
+      calc _ ≤ Real.exp (-(1 / 2)) := Real.exp_le_exp.2 hE
+        _ ≤ 1 / (1 + 1 / 2) := exp_neg_le _ (by norm_num)
+        _ = 2 / 3 := by norm_num
+    have hd : (4 / 7 : ℝ) ^ w ≤ (4 / 7) ^ 3 := pow_le_pow_of_le_one (by norm_num) (by norm_num) h
+    nlinarith [mul_nonneg hq0 (Real.exp_pos (-(3 / 16) * (w : ℝ) + 17 / 4096 * (w : ℝ) ^ 2)).le]
+
+theorem TemplateMoment : Accounting.Guarantees.TS.TemplateMoment := by
+  intro Ω₀ E _ _ r w dead lucky hr hw hl hd
+  have hr' : (0 : ℝ) < r := by exact_mod_cast hr
+  have hθ : (r : ℝ) * (1 / (256 * r)) = 1 / 256 := by field_simp
+  have h := TileLuck (n := 32) (r := r) (fun k i => (w k i : ℝ)) dead lucky (fun _ _ => 1 / 2)
+    (fun k i => (1 / 2) ^ w k i) (1 / (256 * r)) 4 1 (by norm_num) hr (by positivity) (by norm_num)
+    (fun _ _ => Nat.cast_nonneg _) (fun _ _ => ⟨by norm_num, by norm_num⟩) hl hd (fun k i => by
+      rw [hθ]
+      have := TemplateCondition (w k i) (hw k i)
+      push_cast
+      exact this)
+  simpa only [one_mul] using h
 
 end Accounting.SecurityProofs.TS
