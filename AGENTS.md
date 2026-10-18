@@ -93,7 +93,7 @@ requires, `verity check tests|lean|circuits` runs only those parts, and `verity 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 uv run tools/verity/check/suites.py       # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run --extra torch-cpu verity check     # the check a merge requires; --record publishes it as an Attempt
+uv run --extra torch-cpu verity check --record --on auto   # the check a merge requires, in a check slot, as an Attempt
 ~~~
 
 ## Design rules
@@ -153,10 +153,16 @@ pytest-xdist workers), cached by input. The repository's own suite (`tests/`) ho
 testing skill, `.agents/skills/testing/SKILL.md`, says how to run them, what a suite may read (`[tool.verity.tests]
 inputs`), and the rules for slow tests, fixtures and dummy credentials.
 
-Heavy work runs on a node, never on an agent VM (16 GB, shared by every agent on it): circuit-check (24 GB a
-process), a Lean build of `Security/Proofs` (ArkLib), and the circuit_check and vLLM suites. Run them with `research run
---on vy-nebius-1 --project verity --source . --cwd source -- …` (the writing-runs skill), or through the quick tier
-(`research queue ready N --on vy-nebius-1`).
+An agent VM does no work beyond editing (Daniel, 18 Oct): it is 16 GB, shared by every agent on it, and one
+out-of-memory kill takes all of them down. Locally, run only git (`git merge-tree` included), reading and editing,
+messaging and the notes, one named test file or `-k` selection of under about a minute and 1 GB, `lake env lean` on one
+file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
+remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
+60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots: every suite (`suites.py` sends
+itself there from the checkout's commit; `--local` keeps one small selection here), circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
+and every GPU job (the writing-runs skill). The whole check (`verity check`, `check.py`) needs a check slot:
+`check.py --record --on auto`; on an agent VM a plain one refuses and says so. The shell hook refuses those commands locally and names the remote one;
+`AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
 
 No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
