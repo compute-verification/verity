@@ -330,16 +330,21 @@ the suite `verity-vllm` (`tools/verity/check/suites.py --list`).  Every tool is 
 
 A row's one config is its file `workloads/<row-id>.json`, schema `verity-vllm/workload/v2`, read as `config.RowConfig`: the
 checkpoint's repo (`model`) and role (`case`), an `engine` block (`config.RowEngine`: the checkpoint's full `revision`, the
-`vllm` commit, the engine `args`, the `env` that selects kernels, and the declared `target`), and the workload (requests,
-sampling, the sweep's parameters).  `verity-vllm workload` writes it.  The κ profile a Match folds with is the role's
+`vllm` commit, the engine `args`, the `env` that selects kernels, the declared `target`, and `reasons`: why the row sets a served
+switch away from vLLM's default), and the workload (requests, sampling, the sweep's parameters).  `verity-vllm workload` writes it.  The κ profile a Match folds with is the role's
 (`engine.profiles.generic.module_name`), never a field.  The stages' flags and variables override how a run goes, never the
-file; `row run` writes what a run used, its effective config, to `<sweep dir>/<row>/effective_config.json`.
+file; `row run` writes what a run used, its effective config, to `<sweep dir>/<row>/effective_config.json`.  Every Commit reads back,
+on every rank, the switches that select its kernels (`engine/served.py`: batch invariance, DeepGEMM, the shared-experts stream,
+the FlashInfer sampler, the model runner, NCCL P2P, the custom all-reduce, eager and compilation modes, the attention backend and
+FlashAttention version, the MoE backend) and fails closed unless each is vLLM's default or declared, with a reason, by the engine
+profile (`engine/env.py`), the row's execution label (only a `bi-*` row is batch invariant) or the row file; `served` in its
+versions.json and summary.json records them.
 
 The circuit database (`verity_vllm/records.py`) keeps, per row of record, the exact circuit it served and the evidence that it is
 faithful, by row id; committed values are never kept.  A row's entry is a preserved `vllm-config-record/v1` artifact labelled
 `row=<id>`: its payload is the row's config record (`pipeline/config_record.py`, `verity-vllm/config-record/v1`: the row file without
 its requests and its sha256, the κ profile, each rank's Program digests, the Match and Commit verdicts, every Commit gate, the run
-roots and the code it ran), and its refs are the evidence: the `vllm-build/v1` holding every rank's Program descriptors
+roots, the served switches and the code it ran), and its refs are the evidence: the `vllm-build/v1` holding every rank's Program descriptors
 (`research-outputs write ... build`), the manifest, the Match and Commit records and the conformance captures by property.
 `manifests/records.json` indexes them: per row id the record's art: id and the circuit's pins, every rank's Program digests (step,
 request shapes, GP-01's workload) as the record's Build made them, with the tier of the row's rebuild (`records publish --tier`;
@@ -352,7 +357,10 @@ passes superseded by the manifest of record.  `records.programs(row)` returns `{
 Program the Commit binds, and the step and request Programs it composes; `ranks=` and `part=` select), fetched by row id and
 checked against the record's digests, ready for `verity.ml.circuits.evaluation` on synthetic inputs.  `verity-vllm records
 publish` adds a row (a FAIL record, a Commit that committed against another manifest or other Programs than the Build's, a Build
-artifact that lacks a Program the record names, or a needed property neither cited nor a gap, is refused), `records show` prints
+artifact that lacks a Program the record names, or a needed property neither cited nor a gap, is refused).  `row chain` publishes
+it itself once the row's Build, Match and Commit Attempts pass (their artifacts, the Commit's summary.json and each needed
+property's newest capture of record, `--newest-captures`); a row that did not pass publishes nothing, and `records pull ART`
+indexes in a checkout the record a pod's job tree published.  `records show` prints
 the rows and their records' ids or a record, and `records programs` decodes a row one rank at a time.  A `research run` job has no store: the launcher
 writes the row's record and the descriptors the job needs into one file (`records fetch ROW --to FILE [--rank R] [--part P]`),
 sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/inputs/`), and the job reads them from it
@@ -364,6 +372,14 @@ derives GLM-5.3's constructions on vLLM-free stand-ins, in seconds.  `verity-vll
 pod and fails when a per-rank Program digest moved: fast is the small TP1/TP2 rows (about 10 minutes with the bootstrap), heavy is
 GLM-5.3's 8 ranks (about 50 minutes on a 256-CPU pod; its Build ends at GP-01, `--build-programs-only 1`, since its manifest takes
 hours).  `--update` re-pins a row from its rebuild and keeps its record, which the same PR re-publishes.
+
+A module that exists for particular models says so with a module-level `__models__ = ("<HF repo id>", ...)`, after its docstring
+(P8 and the by-name lint skip it; its circuit-check sidecar goes with it).  `verity-vllm glue [REPO ...] [--json]` (`glue.py`) reports
+per model the code those markers tie to it (files and lines by area, the rules they define, the lint allowlist entries on them, the
+profile patterns they supply, or why the profile refuses the `config.json` the Build reads), its family facts and capture maps, and
+the hours from its checkpoint's staging event to its first PASS record.  The step that stages a checkpoint's weights
+(`ops/pod_bootstrap.sh`) records that event as the label `staged` on `ckpt:<repo>@<revision>` (`verity-vllm records staged`, which
+also backfills one from other evidence).  A new model's module carries the marker from its first commit.
 
 `verity-vllm rejudge RUN` (`pipeline/tp/rejudge.py`) recomputes a finished TP Commit's gates that need no GPU from what it saved
 (its runs in the row's `runs.jsonl`, each run's verdict from its ranks', manifest agreement, the cross-rank check, `summary.pass`),

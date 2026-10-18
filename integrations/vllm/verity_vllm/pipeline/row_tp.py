@@ -46,7 +46,6 @@ from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
 
 TP_UTIL = "0.6"
-MATCH_LEG_KEPT = "a Match leg holds its GPUs to its exit: its engine is its last work"
 
 
 def _tail_bytes(path: str, n: int = 200) -> str:
@@ -327,11 +326,11 @@ class TpRow(Row):
         t0 = int(time.time())
         self.tl("stage.match", "start")
         rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
-                              lease_dir=f"{M}/lease/capture", kept=MATCH_LEG_KEPT)
+                              lease_dir=f"{M}/lease/capture", kept=GL.MATCH_LEG_KEPT)
         ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
         self.log(f"match capture rc={rc_cap} {(ranks + ' ' if ranks else '')[:300]}")
         rc_ctl = self.run_gpu("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"],
-                              lease_dir=f"{M}/lease/control", kept=MATCH_LEG_KEPT)
+                              lease_dir=f"{M}/lease/control", kept=GL.MATCH_LEG_KEPT)
         rc_chk = self.run_tl("match.check", to_m, f"{M}/check.log", self.cli("tp-match", "--arm", "check", "--out", M, *br))
         chk = R.tp_check_line(M)
         self.log(f"match check rc={rc_chk}: {chk or 'no tp2_match.json'}")

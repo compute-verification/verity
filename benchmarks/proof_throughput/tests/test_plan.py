@@ -55,11 +55,16 @@ def test_the_prover_point_is_a_gpu_host_job_on_node_one_and_records_its_identity
     assert T.parse_point(job) == {"workload": W.name, "b": "8", "warm": "1", "runs": "3", "identity": item.identity}
 
 
-def test_the_verifier_point_runs_on_a_cpu_node_never_cpu_one():
+def test_the_verifier_point_runs_in_the_proofs_pool_or_queued_on_the_gpu_node_never_cpu_one():
     cmd = P.verifier_command(Path("/r"), "art:abc", "r20261017-000000-abcd")
-    assert cmd[cmd.index("--on") + 1] in P.VERIFIER_NODES
+    flags = cmd[:cmd.index("--")]
+    assert flags[flags.index("--on") + 1] == "vy-nebius-cpu-3" and flags[flags.index("--pool") + 1] == "proofs"
+    assert flags[flags.index("--cwd") + 1] == "clone"
     assert "vy-nebius-cpu-1" not in P.VERIFIER_NODES
     assert T.parse_point(cmd) == {"bundle": "art:abc", "prove_run": "r20261017-000000-abcd"}
+    flags = P.verifier_command(Path("/r"), "art:abc", "r1", node=P.PROVER_NODE)
+    flags = flags[:flags.index("--")]
+    assert "--queue" in flags and "--gpu-host" not in flags and "--pool" not in flags and int(flags[flags.index("--cpus") + 1]) <= 4
 
 
 def test_tools_parse_only_their_keys():

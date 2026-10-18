@@ -699,6 +699,35 @@ def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
     CC._MEMO.clear()
 
 
+def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
+    """16 Oct, r20261016-231951-72a9: two checks on one node stored the same entry; they shared its temporary file, and the second's
+    rename found it gone (FileNotFoundError), which failed the whole check."""
+    import subprocess
+
+    from circuit_check import cache as CC
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "a.txt").write_text("a")
+    got = {"files": ["a.txt"], "dirs": [], "probes": [], "libs": []}
+    k, rep = {"version": "v", "request": {}}, {"failures": [], "warnings": []}
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+    replace, inner = os.replace, []
+
+    def racing(src, dst):
+        if not inner:                                                   # the other writer stores the same entry in between
+            inner.append(None)
+            inner[0] = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
+        replace(src, dst)
+
+    monkeypatch.setattr(CC.os, "replace", racing)
+    eid = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
+    assert eid and inner == [eid]
+    assert [p.name for p in (tmp_path / "cache").rglob("*") if p.is_file()] == [f"{eid}.json"]
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(not os.environ.get("VERITY_CIRCUIT_CHECK_SLOW"),
                     reason="8 min on a node, nearly all of it each worker's cold start: VERITY_CIRCUIT_CHECK_SLOW=1")

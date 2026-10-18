@@ -21,6 +21,8 @@ and `output.copy_(rows)` (an allocation written whole).  A role the vocabulary l
 
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import numpy as np
 import torch
 

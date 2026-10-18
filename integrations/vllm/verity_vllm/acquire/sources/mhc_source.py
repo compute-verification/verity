@@ -26,6 +26,8 @@ layer's two, so the binding takes a layer's attention side and FFN side in commi
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import inspect
 import sys
 from typing import Any, Mapping

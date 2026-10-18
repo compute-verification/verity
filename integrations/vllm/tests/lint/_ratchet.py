@@ -124,6 +124,12 @@ def docstring_ids(tree: ast.AST) -> frozenset[int]:
                      if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str))
 
 
+def marker_ids(tree: ast.Module) -> frozenset[int]:
+    """ids of the strings a module's ``__models__`` names (``verity_vllm.glue``: the models it exists for, which decide nothing)."""
+    return frozenset(id(c) for node in tree.body if isinstance(node, ast.Assign)
+                     and any(isinstance(t, ast.Name) and t.id == "__models__" for t in node.targets) for c in ast.walk(node.value))
+
+
 def docstrings(tree: ast.Module) -> Iterator[tuple[str, str, int]]:
     """(symbol, docstring, line) for the module and every class and function."""
     doc = ast.get_docstring(tree, clean=False)

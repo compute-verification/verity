@@ -7,6 +7,8 @@ unsupported rather than being interpreted as a non-split launch.
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import torch
 
 from verity.ml.circuits.refs import Coll

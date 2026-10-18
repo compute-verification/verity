@@ -22,6 +22,8 @@ every slot's scale bytes), and the step's per-cache metadata is the forward cont
 Each module keeps what it computed (`seen`) for the tests to compare with what a source bound."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import json
 import types
 from pathlib import Path

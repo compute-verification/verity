@@ -69,7 +69,7 @@ prof.apply_env()
 
 import torch  # noqa: E402
 
-from verity_vllm.engine import vllm_adapter as va  # noqa: E402
+from verity_vllm.engine import served as SV, vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
@@ -1223,6 +1223,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     print(f"[delta] engine {'REUSED (hot; originally built' if _live is not None else 'built'} in {eng.build_s:.1f}s{')' if _live is not None else ''} "
           f"(case {eng.case}, {eng.cp['repo']}), env {eng.env_flags}", flush=True)
     versions = va.versions_doc(eng)
+    versions["served"] = SV.require(eng.llm, wl, _ekw["target"], out)
     flip_weight_rec: dict | None = None                    # --flip-weight NEGATIVE TEST record (set once, before register_weights)
     versions["git_head"] = git_head()
     versions["source_identity"] = source_identity_doc      # [R18 infra, F-r17-tp-06] resolved_path / repo_root / git_sha per package + sys.path[0]

@@ -1,10 +1,10 @@
-"""verity_vllm/ops/pod_bootstrap.sh: the mode switch (gpu / cpu) and the readiness record it writes.
+"""verity_vllm/ops/pod_bootstrap.sh: the mode switch (gpu / cpu), the staging marker step 3 writes, and the readiness record.
 
 The script is infra (venv, wheels, checkpoints, native taps) and cannot run here; what CAN be checked mechanically is that it parses,
 that `--dry-run` resolves the mode the way the header promises (nvidia-smi on PATH -> gpu; absent -> cpu; `--cpu` forces), that a
-dry run touches nothing, and that the step-5 readiness heredoc is valid Python that, in cpu mode, writes a `verity-vllm/readiness/v1`
-record with `mode: cpu`, `cuda_available`, the CPU checks and no GPU check.  (Before 2026-09-23 a GPU-less pod died at step 4 with
-BOOTSTRAP_FAIL_CUDA before readiness.json existed.)"""
+dry run touches nothing, that step 3 marks a checkpoint staged only when it downloaded and checked it, and that the step-5 readiness
+heredoc is valid Python that, in cpu mode, writes a `verity-vllm/readiness/v1` record with `mode: cpu`, `cuda_available`, the CPU
+checks and no GPU check.  (Before 2026-09-23 a GPU-less pod died at step 4 with BOOTSTRAP_FAIL_CUDA before readiness.json existed.)"""
 
 from __future__ import annotations
 
@@ -140,3 +140,39 @@ def test_gpu_mode_record_shape_is_unchanged() -> None:
     assert 'if not gpu:\n    r["mode"] = mode' in src
     for name in ("torch_cuda", "hidden_gpu_so", "fa2_tap_so", "fa3_tap_so"):
         assert f'check("{name}"' in src, name
+
+
+HUB_STUB = """import os
+from pathlib import Path
+def snapshot_download(repo, revision, allow_patterns, cache_dir):
+    d = Path(os.environ["STUB_LOCAL"]); d.mkdir(parents=True, exist_ok=True)
+    (d / "config.json").write_text("{}"); (d / "model.safetensors").write_text(os.environ["STUB_BYTES"])
+    return str(d)
+"""
+
+
+def test_step3_stages_a_checkpoint_it_downloads_and_checks_and_no_other(tmp_path: Path) -> None:
+    """The step-3 heredoc writes the staging marker (repo, revision, UTC time, dir) that the step records with `verity-vllm records
+    staged` only when this run downloaded the weights and every shard's sha256 checked."""
+    m = re.search(r'\$PY - "\$CASE" manifests/checkpoints\.json "\$OUT/staged-\$CASE" <<\'EOF\'.*?\n(.*?)\nEOF\n', SCRIPT.read_text(), re.S)
+    assert m, "step-3 checkpoint heredoc not found (argument list or heredoc marker changed)"
+    (tmp_path / "step3.py").write_text(m.group(1))
+    (tmp_path / "hub" / "huggingface_hub").mkdir(parents=True)
+    (tmp_path / "hub" / "huggingface_hub" / "__init__.py").write_text(HUB_STUB)
+    local, rev = tmp_path / "ck", "a" * 40
+    (tmp_path / "ckpts.json").write_text(json.dumps({"checkpoints": [{"role": "T", "repo": "o/m", "revision": rev, "local_path": str(local),
+        "safetensors_sha256": {"model.safetensors": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"}}]}))
+    marker = tmp_path / "staged-T"
+
+    def step3(stub_bytes: str) -> int:
+        marker.unlink(missing_ok=True)
+        env = dict(os.environ, PYTHONPATH=str(tmp_path / "hub"), HF_HOME=str(tmp_path / "hf"), STUB_LOCAL=str(local), STUB_BYTES=stub_bytes)
+        return subprocess.run([sys.executable, str(tmp_path / "step3.py"), "T", str(tmp_path / "ckpts.json"), str(marker)],
+                              capture_output=True, text=True, env=env).returncode
+
+    assert step3("hello") == 0
+    repo, revision, at, where = marker.read_text().split()
+    assert (repo, revision, where) == ("o/m", rev, str(local)) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", at)
+    assert step3("hello") == 0 and not marker.exists(), "weights already on the host are not a staging"
+    (local / "model.safetensors").unlink()
+    assert step3("tampered") == 1 and not marker.exists(), "a shard whose sha256 fails is not staged"

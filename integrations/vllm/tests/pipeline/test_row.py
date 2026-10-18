@@ -121,6 +121,14 @@ def test_a_foreign_verity_tree_is_refused_by_name(tmp_path, capsys):
     assert e.value.rc == 3 and "PRECHECK_FAIL_SOURCE_IDENTITY" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("row, execution, bi", [(ROW, "bi-eager", "1"), ("glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", "eager", "0")])
+def test_a_rows_stages_run_batch_invariant_exactly_when_its_execution_is(tmp_path, monkeypatch, row, execution, bi):
+    monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
+    r = _row(tmp_path, row=row)
+    r.setup({})
+    assert (r.execution(), r.child_env["VLLM_BATCH_INVARIANT"], r.bi_eager()) == (execution, bi, execution == "bi-eager")
+
+
 # ---------------------------------------------------------------------------------------------------------------- cancel
 
 # the stage: a python parent that forks a grandchild; both write their pids (and the stage its `timeout`'s), close their end of the
@@ -640,6 +648,24 @@ def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_a
     aside = list(Path(r.d).glob(f"manifest.{slug}-*.json"))
     assert len(aside) == 1 and why in (Path(r.d) / "row.log").read_text()
     assert R.manifest_not_of_record(R.load_json(f"{r.d}/manifest.json"), PD, r.ck_) == ("", "")
+
+
+def test_a_passing_commit_verifies_the_manifest_its_preparation_named(tmp_path, monkeypatch):
+    """The Commit read the manifest of record out of `commit_prepare`'s scope, which it no longer shares: every passing single-GPU
+    Commit ended in a NameError (art:aef64aa6d6aa26bfa8e89a3ebdf2904507ae051ea6ad9045e48bbddf8509d81d)."""
+    r = _row(tmp_path)
+    verified: list[str] = []
+
+    def verify(man):
+        verified.append(man)
+        raise Stop(0)
+    monkeypatch.setattr(r, "commit_prepare", lambda: (600, ["commit"], f"{r.d}/manifest.json"))
+    monkeypatch.setattr(r, "gpu_exclusive", lambda stage: None)
+    monkeypatch.setattr(r, "run_gpu", lambda stage, to, log, cmd: 0)
+    monkeypatch.setattr(r, "manifest_verify", verify)
+    with pytest.raises(Stop):
+        r.commit()
+    assert verified == [f"{r.d}/manifest.json"]
 
 
 @pytest.mark.parametrize("kw, why", [({}, ""), ({"complete": False}, "not complete"), ({"query_id": "Q_module_body_v1"}, "query of record"),

@@ -10,6 +10,8 @@ each step closed by an `o_proj` reading the W_UV product and a sampling event:
   ports the source declares."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import copy
 import json
 from collections import defaultdict
