@@ -413,9 +413,10 @@ bits of the operands it reads. A gather is exempt: its value is one of its opera
 def OperandBits (B : ℕ) (C : Dag ι) : Prop :=
   ∀ g ∈ C, ∀ cls f, g.op = .budgeted cls f → (g.args.map fun j => (C[j]?.map Gate.bits).getD 0).sum ≤ B
 
-/-- MULT-LB's lane program (`Accounting.Program.Prog`) as a circuit: run inputs `0 … N−1`, then each instruction a
-neutral gate (`Budget.neutral`) that applies an arbitrary function to the earlier nodes it names, with the nodes `outs`
-(its `c` outputs) committed. A lane program is abstract, so its gates name no primitive (`prim = ""`). -/
+/-- A MULT-LB lane program (a straight-line dataflow, `Accounting.TS.Dataflow`, over its run inputs) as a circuit: run
+inputs `0 … N−1`, then each instruction a neutral gate (`Budget.neutral`) that applies an arbitrary function to the
+earlier nodes it names, with the nodes `outs` (its `c` outputs) committed. A lane program is abstract, so its gates
+name no primitive (`prim = ""`). -/
 def ofLane (N : ℕ) (instrs : List (List ℕ × (List ℤ → ℤ))) (outs : List ℕ) (lo hi : ℤ) : Dag ℕ :=
   (List.range N).map (fun i => ⟨.input .run i, [], lo, hi, 0, "", .other, decide (i ∈ outs)⟩) ++
     instrs.zipIdx.map fun e => ⟨.budgeted .neutral e.1.2, e.1.1, lo, hi, 0, "", .other, decide (N + e.2 ∈ outs)⟩
