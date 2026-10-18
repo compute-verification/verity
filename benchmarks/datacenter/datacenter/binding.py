@@ -59,16 +59,21 @@ class Placement:
 
 def place(circuit: Circuit, datacenter: Datacenter, where: dict[str, str], ticks_per_step: int = 1,
           transfer_steps: int = 2, deliver: str | None = None, offramps: tuple[Offramp, ...] = ()) -> Placement:
-    """Place `circuit` on `datacenter`: `where` maps a value name (or `*`, the default) to a device, an unnamed gate runs
-    on the device of its first operand that sits in a block (else the default), and each value's step is one past its
-    operands' (plus `transfer_steps` when an operand crosses a block). Each device's step s begins at tick
-    s·ticks_per_step. The outputs are delivered to `deliver`."""
+    """Place `circuit` on `datacenter`: `where` maps a value name (or `*`, the default) to a device; an unnamed value is
+    computed where it is needed, on the device of its first reader that sits in a block (else the default). Each
+    value's step is one past its operands' (plus `transfer_steps` when an operand crosses a block), and each device's
+    step s begins at tick s·ticks_per_step. The outputs are delivered to `deliver`."""
+    readers: dict[int, list[int]] = {}
+    for i, g in enumerate(circuit.gates):
+        for j in g.operands:
+            readers.setdefault(j, []).append(i)
     leaf: dict[int, str] = {}
+    for i in reversed(range(len(circuit.gates))):
+        name = circuit.names.get(i)
+        inside = [leaf[r] for r in readers.get(i, []) if datacenter.block_of(leaf[r]) is not None]
+        leaf[i] = where[name] if name in where else inside[0] if inside else where["*"]
     step: dict[int, int] = {}
     for i, g in enumerate(circuit.gates):
-        name = circuit.names.get(i)
-        inside = [leaf[j] for j in g.operands if datacenter.block_of(leaf[j]) is not None]
-        leaf[i] = where[name] if name in where else inside[0] if inside else where["*"]
         here = datacenter.block_of(leaf[i])
         step[i] = 1 + max((step[j] + (transfer_steps if datacenter.block_of(leaf[j]) is not here else 0)
                            for j in g.operands), default=-1)

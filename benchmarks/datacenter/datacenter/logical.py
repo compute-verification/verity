@@ -157,6 +157,11 @@ class _Tracer:
         self.circuit.gates.append(Gate(op, operands, self.bits))
         return _Tracer(self.circuit, len(self.circuit.gates) - 1)
 
+    def named(self, label: str) -> _Tracer:
+        """Name this value (a placement can then refer to it). Names never change the circuit's semantics."""
+        self.circuit.names[self.i] = label
+        return self
+
     __add__ = __radd__ = lambda s, o: s._op("add", o)
     __mul__ = __rmul__ = lambda s, o: s._op("mul", o)
     __xor__ = __rxor__ = lambda s, o: s._op("xor", o)
