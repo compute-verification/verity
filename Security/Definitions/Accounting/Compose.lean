@@ -16,7 +16,7 @@ window's grid-padded tiles, one a proof unit, and proves each drawn tile with th
 Each round's coin is `live` (the verifier's, released after the round's served values are committed) or `seeded`
 (a seed: SHA-512 of the window's salt, the unit's position and its operands' roots, Fiat–Shamir). The live statements
 (`CircuitWork`, `CircuitCredit`) describe the designed protocol: PoUW's code today has one salt a window and derives
-the noise in the scheme (`verity/core/protocols/pouw/coins.py`'s `LABELS`, `PROTOCOL.md`), so every deployed window is
+the noise in the scheme (`verity/core/protocols/pouw/coins.py`'s `LABELS`, `PROTOCOL.md`), so every window it runs is
 seeded, and its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), at a grinding premium
 per seed group (GRIND, decision 122's one seed a call).
 
@@ -54,8 +54,8 @@ The logical layer:
   template's noise proves at the worst operands (decision 109: `0` where its noise proves none), whether it is
   credited, its skip pattern's span, the form of its template's proved operand luck, the three lucks a live window is
   held to: (H-μ)'s point mass `μ`, the receipt's B′ luck `r_B` and the whole-unit guess bound, and the rate its
-  template's seeded gain is proved at (GRIND); no credited kind reading two activations (H1's attention) under seeded
-  coins. A folded unit's luck is `μ + (1 − μ)·r_B` (`7/8` at `μ = ¾`, `r_B = ½`,
+  template's seeded gain is proved at (GRIND); no credited kind reading two activations (H1 + fx1's attention) under
+  seeded coins. A folded unit's luck is `μ + (1 − μ)·r_B` (`7/8` at `μ = ¾`, `r_B = ½`,
   `Accounting.Guarantees.TS.LuckOfReceipt`).
 * `creditedWords`, `wordsOf`, `floorOf`, `kindCount`: the circuit's credited words, `N_w` (W3: from the IR, not a
   parameter), its floor `♭ = Σ_words ♭_{kind}` and its words per kind.
@@ -330,12 +330,12 @@ checkpoint (W6), the form of the operand luck its template proves, and the three
 * `seedRate`: the rate `θ_k`, per committed word of the circuit, at which a seed group of kind `k`'s template gain at
   `κ = 4` has moment at most `1` over its seed (GRIND's `Accounting.Guarantees.TS.TemplateMoment`: `1/(256·r)` per
   product, times a word's products), and `0` where none is proved, which charges a group its whole weight.
-Under live coins H1's attention matmuls are credited at their floors (decision 117, ATTN-NOISE r2): `QKᵀ` draws a coin
-per entry on both operands; `P·V`'s `P` carries only the period-32 word `U` and `V` a coin `b` per entry, and its floor
-is `U·b`'s, a cell per `k`, which holds under any salt-independent advice while the kernel commits a prefix word at most
-every 32 keys (at one every `C` keys it is `32·k/C`). Under seeded coins they are uncredited (`Scheme.SeedPriced`, in
-`ScopeSeeded`): GRIND prices no premium for a kind reading two activations, and at a head's seed group it would be 37.5%
-of `QKᵀ` and 75% of `P·V` (RT-COMPOSE r4). -/
+Under live coins H1 + fx1's attention matmuls are credited at their floors (decision 117, ATTN-NOISE r2): `QKᵀ` draws a
+coin per entry on both operands; `P·V`'s `P` carries only the period-32 word `U` and `V` a coin `b` per entry, and its
+floor is `U·b`'s, a cell per `k`, which holds under any salt-independent advice while the kernel commits a prefix word
+at most every 32 keys (at one every `C` keys it is `32·k/C`). Under seeded coins they are uncredited
+(`Scheme.SeedPriced`, in `ScopeSeeded`): GRIND prices no premium for a kind reading two activations, and at a head's
+seed group it would be 37.5% of `QKᵀ` and 75% of `P·V` (RT-COMPOSE r4). -/
 structure Scheme (K : Type) where
   floor : Kind → Labelled K
   credited : Kind → Bool
@@ -353,8 +353,8 @@ def Scheme.LuckProved {K : Type} (Sc : Scheme K) : Prop :=
   ∀ k, (Sc.form k).value (Sc.span k) ≤ Sc.mu k ∧ 0 ≤ Sc.rB k ∧ Sc.rB k ≤ 1 ∧ 0 ≤ Sc.guess k
 
 /-- **Every credited kind's seeded premium is priced**: no credited kind reads two activations (`Kind.actA` and
-`Kind.actB`), so H1's `QKᵀ` and `P·V` are uncredited under seeded coins, where GRIND prices no premium for them. The
-seeded statements take it (`ScopeSeeded`); a scheme for a seeded window sets `credited` false on those kinds. -/
+`Kind.actB`), so H1 + fx1's `QKᵀ` and `P·V` are uncredited under seeded coins, where GRIND prices no premium for them.
+The seeded statements take it (`ScopeSeeded`); a scheme for a seeded window sets `credited` false on those kinds. -/
 def Scheme.SeedPriced {K : Type} (Sc : Scheme K) : Prop :=
   ∀ k, Sc.credited k = true → ¬(k.actA = true ∧ k.actB = true)
 
@@ -648,7 +648,7 @@ def Declared.Seeded {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) : Prop :=
 
 /-- **The seeded statements' ranges**: the circuit well formed, every round holding a credited tile seeded and each
 seeded round one call site (`Declared.Seeded`), no credited kind whose premium GRIND hasn't priced
-(`Scheme.SeedPriced`: H1's attention uncredited), and `δ_s > 0`. The seeded statements read the templates' luck
+(`Scheme.SeedPriced`: H1 + fx1's attention uncredited), and `δ_s > 0`. The seeded statements read the templates' luck
 through GRIND's premise (`Assumptions.Compose.SeedLuckAt`), not through `Scheme.LuckProved`'s `μ`. -/
 def ScopeSeeded {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (δs : ℝ) : Prop :=
   Cd.Wf ∧ Cd.Seeded Sc ∧ Sc.SeedPriced ∧ 0 < δs

@@ -14,7 +14,7 @@ one round; each coin input read in its own round; one unit's words of one kind).
 
 The live statements (`CircuitWork`, `CircuitCredit`) need every round that holds a credited tile live (`Scope`'s
 `Declared.Live`), and describe the designed protocol. PoUW's code today has one salt a window and derives every noise
-in the scheme, so every deployed window is seeded, and its credit is the seeded statements' (`CircuitWorkSeeded`,
+in the scheme, so every window it runs is seeded, and its credit is the seeded statements' (`CircuitWorkSeeded`,
 `CircuitCreditSeeded`), over the same circuit and the same proofs' layer, at decision 122's grinding premium per seed
 group. The certificate records which (`Certificate.coins`). Nothing yet builds a `Declared` from a compiled Program,
 and `Properties.Compose.UnitsOfLayout`, which would tie its units to the service's layout, is unproved: until
@@ -196,8 +196,8 @@ every declared circuit `Cd` and scheme `Sc`, run as one window whose rounds are 
 its coin the oracle's answers to the cheater's `T_q` queries for that call's seed (`Fin T_q → B`, uniform), then the
 service's live draw of `K_d ≥ 1` of the `N_p` tiles (`drawOf`) with the proofs' coins `Ξ`. Under:
 * the seeded ranges (`ScopeSeeded`: every round holding a credited tile seeded, one call site a round, and no credited
-  kind GRIND hasn't priced, so H1's attention uncredited), the service's commit order (`LayerCommitted`, whose seeded
-  reading is Fiat–Shamir over the roots its seed preimages name), and `δ_g > 0`;
+  kind GRIND hasn't priced, so H1 + fx1's attention uncredited), the service's commit order (`LayerCommitted`, whose
+  seeded reading is Fiat–Shamir over the roots its seed preimages name), and `δ_g > 0`;
 * every tile at least `ρ` times its detected weight's share, costs `a > 0`, `b ≥ 0` and `κ₀ ≥ 0`;
 * the same play and the same proofs' layer as `CircuitWork` (`Declared.layer` at the run's `pr`), with `Of`,
   `MovedIn` at `δ_bind`, `JointSound` at `δ_ks`, `Pins` and `UnitFixed`;
@@ -301,7 +301,7 @@ def CircuitCredit : Prop :=
 every run, the window's certificate in device window `win` holds at `.seeded` (`certOf`): it is accepted with time
 below `(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks + 2·rounds·(δ_g + δ_b + ε_id)`, where
 `ε = ε_♭ + ε_μ + max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + (a + b)·Π + min(a, b)·D₀` (`rOfSeeded`, `Π` the seed groups'
-premiums from the IR). It is the credit of every deployed window, whose noise PoUW's code derives from the salt, once
+premiums from the IR). It is the credit of every window PoUW's code runs, whose noise it derives from the salt, once
 the code's seed preimages name the roots `LayerCommitted`'s seeded reading needs. Nothing yet builds a `Declared` from
 a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its units to the service's
 layout, is unproved: until both exist, this speaks of the declared circuit, not of a served workload. -/
