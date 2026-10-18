@@ -8,8 +8,16 @@
 #   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source --env GPU_LEASE_WHO=hash-intpipe \
 #     -- bash benchmarks/hash/intpipe/candidates.sh
 # LEASE_ARGS (default "--max-min 14"; on vy-nebius-2 "--preemptible --max-min 20"), REPS (15), N (65536,262144: 256 MiB
-# and 1 GiB), CHECK_N (1024).
+# and 1 GiB), CHECK_N (1024), FETCH (128: the bytes of each leaf stream the loader reads at a time); FETCHES="128 256"
+# runs the whole script once a value, one after another, into $OUT/f<FETCH>.
 set -uo pipefail
+if [ -n "${FETCHES:-}" ]; then
+  for F in $FETCHES; do
+    mkdir -p "$OUT/f$F"
+    OUT=$OUT/f$F FETCH=$F FETCHES='' bash "$0"
+  done
+  exit 0
+fi
 export O=${OUT:?}
 export PATH=/usr/local/cuda/bin:$PATH
 export I=benchmarks/hash/intpipe PY=python3 PYTHONPATH=.
@@ -26,7 +34,7 @@ FORMS=${FORMS:-1 0}
 for c in $CANDS; do
   IFS=: read -r name kind r _ <<< "$c"
   for f in $FORMS; do
-    ( nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v -DCAND_KIND="$kind" -DCAND_R="$r" -DSHA_ROLL="$f" \
+    ( nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v -DCAND_KIND="$kind" -DCAND_R="$r" -DSHA_ROLL="$f" -DFETCH="${FETCH:-128}" \
         -o "$W/cand-$name-r$f" $I/candidates.cu -lnvidia-ml > "$O/build-$name-r$f.log" 2>&1
       echo "build $name r$f rc $?" >> "$O/rc.txt" ) &
   done

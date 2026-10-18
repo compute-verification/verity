@@ -2,6 +2,7 @@
 
     python3 summary.py sha512 OUT     sha512_baseline.sh's run: per build, the raw rate and the 4 KiB row-seg leaves
     python3 summary.py hashes OUT     candidates.sh's run: per candidate, against full SHA-512 in the same rounds
+    python3 summary.py table RUN...   fetched candidates.sh runs' directories (research fetch RUN --all): the hash x GPU table
 
 The ceiling: SMs x 4 sub-partitions x the median SM clock x 32 lanes / the warp cycles a block (sass_count.py's bound:
 2 cycles an ALU or FMA instruction, 1 an issue).
@@ -121,9 +122,54 @@ def hashes(out: str) -> None:
             rec["leaf_gb_per_s"] = med([r["leaf_gb_per_s"] for r in rs])
             rec["base_leaf_gb_per_s"] = med([r["base_leaf_gb_per_s"] for r in rs])
             rec["threads_per_leaf"] = m["threads_per_leaf"]
+            rec["fetch"] = m.get("fetch", 128)
             rec["ands_per_byte"] = (m["leaf_comps"] * n + m["node_comps"] * (n - 1)) * ands / (4096 * n)
         print(json.dumps(rec))
 
 
+ORDER = ["sha512", "sha512r64", "sha512r48", "sha512r40", "sha512r32", "sha512r24", "sha256", "blake3", "blake3chunks"]
+
+
+def table(args: list[str]) -> None:
+    """The hash x GPU table (Markdown) from fetched runs' directories, the rolled form; leaves at the loader's best FETCH."""
+    raw: dict[tuple[str, str], tuple[dict, str]] = {}
+    leaf: dict[tuple[str, str, int], tuple[dict, str]] = {}
+    for d in args:
+        run = os.path.basename(os.path.normpath(d))
+        for root, _, files in os.walk(d):
+            if "summary.jsonl" not in files:
+                continue
+            for r in lines(os.path.join(root, "summary.jsonl")):
+                if r["sha_roll"] != 1:
+                    continue
+                if r["mode"] == "raw":
+                    raw.setdefault((r["candidate"], r["gpu"]), (r, run))
+                else:
+                    k = (r["candidate"], r["gpu"], r["leaves"])
+                    if k not in leaf or r["gb_per_s"] > leaf[k][0]["gb_per_s"]:
+                        leaf[k] = (r, run)
+    gpus = sorted({g for _, g in raw}, key=lambda g: ("RTX" not in g, g))
+    print("| hash | GPU | G cmp/s | GB/s raw (x SHA-512) | % ceiling | GB/s 4 KiB leaves 256 MiB / 1 GiB (x SHA-512) | fetch B "
+          "| ANDs/B raw / leaves | instr/B | runs |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for c in ORDER:
+        for g in gpus:
+            if (c, g) not in raw:
+                continue
+            r, rr = raw[(c, g)]
+            small, sr = leaf.get((c, g, 65536), ({}, ""))
+            big, br = leaf.get((c, g, 262144), ({}, ""))
+            runs = " ".join(sorted({rr, sr, br} - {""}))
+            print(f"| {c} | {g.replace('NVIDIA ', '').replace(' Blackwell Server Edition', '')} | {r['gcomp_per_s']:.2f} "
+                  f"| {r['gb_per_s']:.0f} ({r['ratio_to_base']:.2f}) | {100 * r.get('fraction_of_ceiling', float('nan')):.0f} "
+                  f"| {small.get('gb_per_s', float('nan')):.0f} / {big.get('gb_per_s', float('nan')):.0f} "
+                  f"({big.get('ratio_to_base', float('nan')):.2f}) | {big.get('fetch', '')} "
+                  f"| {r['ands_per_byte']:.0f} / {big.get('ands_per_byte', float('nan')):.0f} "
+                  f"| {r.get('instructions_per_byte', float('nan')):.1f} | {runs} |")
+
+
 if __name__ == "__main__":
-    {"sha512": sha512, "hashes": hashes}[sys.argv[1]](sys.argv[2])
+    if sys.argv[1] == "table":
+        table(sys.argv[2:])
+    else:
+        {"sha512": sha512, "hashes": hashes}[sys.argv[1]](sys.argv[2])

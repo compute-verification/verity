@@ -20,27 +20,35 @@ constexpr int LEAF = 4096;
 
 __device__ __forceinline__ u32 bswap32(u32 x) { return __byte_perm(x, 0, 0x0123); }
 
-// A warp's 32 threads each read a stream of BLOCK-byte blocks, stream s at base + s STRIDE: `block(b, q)` loads the
-// 32 streams' block b cooperatively (each load instruction covers whole 128-byte lines of BLOCK/16-uint4 rows) into this
-// warp's shared rows (padded by one uint4, so the per-thread reads hit distinct banks), then gives the thread its row.
-// Every lane calls it with the same b.
+// A warp's 32 threads each read a stream of BLOCK-byte blocks, stream s at base + s STRIDE, FETCH bytes of each stream
+// at a time (the same for every hash, so the DRAM pattern is the loader's, not the hash's): when b starts a fetch,
+// `block(b, q)` loads the 32 streams' next FETCH bytes cooperatively (each load instruction covers whole 128-byte lines)
+// into this warp's shared rows (padded by one uint4, so the per-thread reads hit distinct banks); then it gives the
+// thread block b of its row. Every lane calls it with the same b, in order.
+#ifndef FETCH
+#define FETCH 128
+#endif
 template <int BLOCK, int STRIDE>
 struct WarpLoader {
-  static constexpr int Q = BLOCK / 16, ROW = Q + 1;
+  static_assert(FETCH % BLOCK == 0 && STRIDE % FETCH == 0, "FETCH: a multiple of the block, dividing the stream");
+  static constexpr int G = FETCH / BLOCK, BQ = BLOCK / 16, Q = FETCH / 16, ROW = Q + 1;
   static constexpr int SMEM = 32 * ROW * 16;   // bytes a warp
   const uint8_t* base;
   uint4* sm;
   int lane;
   __device__ __forceinline__ void block(int b, uint4* q) const {
-    __syncwarp();
+    if (b % G == 0) {
+      __syncwarp();
 #pragma unroll
-    for (int k = 0; k < Q; ++k) {
-      const int i = k * 32 + lane, s = i / Q, o = i % Q;
-      sm[s * ROW + o] = __ldg(reinterpret_cast<const uint4*>(base + (size_t)s * STRIDE + (size_t)b * BLOCK) + o);
+      for (int k = 0; k < Q; ++k) {
+        const int i = k * 32 + lane, s = i / Q, o = i % Q;
+        sm[s * ROW + o] = __ldg(reinterpret_cast<const uint4*>(base + (size_t)s * STRIDE + (size_t)(b / G) * FETCH) + o);
+      }
+      __syncwarp();
     }
-    __syncwarp();
+    const int off = lane * ROW + (b % G) * BQ;
 #pragma unroll
-    for (int k = 0; k < Q; ++k) q[k] = sm[lane * ROW + k];
+    for (int k = 0; k < BQ; ++k) q[k] = sm[off + k];
   }
 };
 

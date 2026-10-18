@@ -1,7 +1,7 @@
 // One integer-pipe candidate (hashes.cuh) timed against full SHA-512 (sha512.cuh's compression) rep by rep on one GPU.
 // Build one binary a candidate: -DCAND_KIND=0 (SHA-512, the baseline itself), 1 (SHA-512 at -DCAND_R rounds), 2 (SHA-256),
 // 3 (BLAKE3, a thread a leaf), 4 (BLAKE3, a thread a chunk); -DSHA_ROLL=0|1 as sha512.cuh (1: the rolled form the
-// baseline's README times).
+// baseline's README times); -DFETCH=128|256..., the bytes of each leaf stream the loader reads at a time.
 //
 //   candidates dump DIR OPERAND N     the timed kernels' outputs for check.py: the raw chains at the timed grid
 //                                    (DIR/rate-base.bin, rate-cand.bin) and the 4 KiB-leaf tree of OPERAND's N leaves
@@ -151,6 +151,7 @@ static void leaves(const Tree<H>& T, const uint8_t* src, LeafK lk, cudaStream_t 
   const u64 threads = T.n * H::TPL;
   if (threads % LEAF_THREADS) { fprintf(stderr, "leaves x threads a leaf: a multiple of %d\n", LEAF_THREADS); exit(2); }
   constexpr int smem = (LEAF_THREADS / 32) * Loader<H>::SMEM;
+  CK(cudaFuncSetAttribute(lk, cudaFuncAttributeMaxDynamicSharedMemorySize, smem));
   lk<<<(unsigned)(threads / LEAF_THREADS), LEAF_THREADS, smem, st>>>(src, T.lv);
 }
 template <class H, class NodeK, class TopK>
@@ -195,10 +196,10 @@ static int rate_blocks() {
 static void meta(FILE* f, const cudaDeviceProp& prop) {
   fprintf(f, "\"candidate\": \"%s\", \"cand_kind\": %d, \"cand_r\": %d, \"sha_roll\": %d, \"gpu\": \"%s\", \"sms\": %d, "
           "\"cc\": %d, \"block_bytes\": %d, \"word_bytes\": %d, \"leaf_comps\": %d, \"node_comps\": %d, \"base_leaf_comps\": 33, "
-          "\"base_node_comps\": 2, \"threads_per_leaf\": %d, \"chain\": %d, \"rate_threads\": %d, \"rate_blocks\": %d",
+          "\"base_node_comps\": 2, \"threads_per_leaf\": %d, \"fetch\": %d, \"chain\": %d, \"rate_threads\": %d, \"rate_blocks\": %d",
           CAND_NAME.c_str(), CAND_KIND, CAND_KIND == 1 ? CAND_R : (CAND_KIND == 2 ? 64 : CAND_KIND >= 3 ? 7 : 80), SHA_ROLL, prop.name,
           prop.multiProcessorCount, prop.major * 10 + prop.minor, Cand::BLOCK, (int)sizeof(Cand::W), CAND_LEAF_COMPS,
-          CAND_NODE_COMPS, Cand::TPL, CHAIN, RATE_THREADS, prop.multiProcessorCount * 8);
+          CAND_NODE_COMPS, Cand::TPL, FETCH, CHAIN, RATE_THREADS, prop.multiProcessorCount * 8);
 }
 
 static int dump(const std::string& dir, const std::string& operand, u64 n) {
