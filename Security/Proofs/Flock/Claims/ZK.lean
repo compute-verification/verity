@@ -144,19 +144,24 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   the session's masked record), and over a stream with at most `b` stops the leak is at most `log₂ ∑_{i ≤ b} C(m, i)·r^i` bits
   (`stream_leak`). At the worker's own values the split is exact and the checks' errors drop out
   (`ZkServer.split_own`, `ZkServer.zk_server_own`), and a pad-blind worker (`ZkServer.BWorker`) is handed neither the
-  server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`).
+  server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`). The server that defers every stop to the last
+  round (`ZkServer.nextD`) releases the reference run or it with its last message the stop (`ZkServer.split_deferred`),
+  within a factor 2 of the simulator that guesses which (`ZkServer.zk_deferred`, `leaky1`).
 * `Blind`: the switched prover at the reference session (`RefSession.swP`, at values `RefSession.SwVals` indexed by what
   a pad-blind worker sees), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
   **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZKAt` at the same `ε_zk`, `γ` and simulator as `Flock.zkAt_deployZk_ref`
   for any values whose round encoding is causal (`RefSession.SwCausal`), `Flock.zkAt_deployZk_ref` its case at the
-  tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server at
-  every pad-blind worker within `D.V.k x + 2` of the guessing simulator, with no term for the masked checks, and at a
+  tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server that defers every
+  stop to the session's last round (`ZkServer.zk_deferred`) at every pad-blind worker within a factor 2 of the
+  simulator that guesses whether it stops (one bit a session; over a stream, `log₂ ∑_{i ≤ b} C(m, i)` bits,
+  `stream_leak_deferred`), with no term for the masked checks, and at a
   statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`), at the deployed coin layer with the
   tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
 * `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled `Flock.Firewall.Frame.round`
-  (`LeanRelease.refMsg_toSrv`, by definition). Its `Ref` is D8 (a)'s `FirewallComputes` plus the item-stream refinement
-  `LeanRelease.ItemsRefine` (`LeanRelease.ref`), so **`Flock.zk_server_lean`** is `Flock.zk_server_ref` at it with
-  those two in place of `hRef`.
+  (`LeanRelease.refMsg_toSrv`, by definition), stopping a session only at its `Finish` with its scheduled rounds in a
+  failed device's place (`LeanRelease.fillOf`). Its `RefD` is D8 (a)'s `FirewallComputes` plus the item-stream
+  refinement `LeanRelease.ItemsRefine` (`LeanRelease.refD`), so **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at
+  it, at any worker: one bit a session.
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
