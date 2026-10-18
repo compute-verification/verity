@@ -68,16 +68,20 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
             calib = None
             if use_calib:
                 amax: dict = {}
+                keys: list = []
 
                 def collect(name, x):
                     if name in FIRST.values():
                         g, a = GROUP[name], x.abs().amax(0)
                         amax[g] = torch.maximum(amax[g], a) if g in amax else a
+                    elif name == "keys":
+                        keys.append(x)
 
                 cal_in = cal.clone() if gptq_arms else None
                 for i in range(0, len(cal), B):
                     cal[i:i + B] = layer.forward(cal[i:i + B], cos_c, sin_c, collect=collect)
-                calib = {"amax": amax}
+                calib = {"amax": amax, "keys": torch.cat(keys)}
+                del keys
                 if gptq_arms:
                     H: dict = {}
 
@@ -87,6 +91,8 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
 
                     for arm in gptq_arms:
                         def collect_h(name, x, arm=arm):
+                            if name == "keys":
+                                return
                             run = Run(arm, 0, -1, layer, gates, cache, rotations, calib, hessian=hess)
                             steps = run.steps_for("linear", name)
                             if steps:
