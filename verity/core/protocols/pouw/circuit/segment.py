@@ -106,6 +106,15 @@ of the warp's chain states (redux.sync.xor), one word a set, KS + m words a warp
 `PouwCallCheck_v1`'s ports with a lane axis on the thread's own (NL = 32 a warp; fewer lanes check that many lanes'
 XOR), 1 exactly when word s of the leaf is the checkpoint after set s for every s < KS + m.
 
+DUO-CP-W and FX1-CP-W (#2438): duo's or fx1's chains with a full-state checkpoint after every set, the XOR over the warp
+of every chain's y and, separately, of every chain's z (`warp_checkpoint`), two words a set.
+
+    PouwWarpCheck_v2{KS, NL, FOLD}  (PouwWarpCheck_v1's ports, st: Array<NL, Array<P 8, u32>>) -> bit
+
+FOLD li (P = 1, `PouwWarpCheck_v1`), duo or fx1 (P = 2, st each lane's y then z); 1 exactly when words P s .. P s + P - 1
+of the leaf are the checkpoint after set s for every s < KS + m. The checkpoint is a set's, never spaced wider: the
+binding proved without FOLD-R's whole-state assumption is a set's 4 words a chain (note:20261018T0515Z-draft-proj-r4).
+
 A statement holds the operand leaves and ``rc`` to the trees committed before and after the coin, and recomputes the
 noise, keys and selections from the coin and the draw.
 """
@@ -159,6 +168,7 @@ __all__ = [
     "PouwSegCheckDitherV3",
     "PouwSegCheckV3",
     "PouwWarpCheck",
+    "PouwWarpCheckV2",
     "PouwSegDot",
     "PouwSegDotWord",
     "PouwSel8",
@@ -191,6 +201,7 @@ __all__ = [
     "LA",
     "LK",
     "V3FOLDS",
+    "WARP_FOLDS",
     "absorb",
     "call_check",
     "call_words",
@@ -203,6 +214,7 @@ __all__ = [
     "seg_check3",
     "thread_rows",
     "warp_check",
+    "warp_checkpoint",
 ]
 
 BIT = BL.BIT
@@ -663,7 +675,7 @@ def _seg_check_body(B, S, served, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel,
     return B.call(PouwWinOk, r, w, tj, tw, p[0], first)
 
 
-# --- every absorbed word recomputed: PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 ----------------------------------------
+# --- every absorbed word recomputed: PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 and _v2 --------------------------------
 
 def fx1_key(q: int) -> int:
     """fx1's multiplier of entry q (egemm.cu's fx_chain<FX1, t, e>: key_mul(1, 32 q), q = 4 t + e)."""
@@ -817,19 +829,30 @@ def call_check(x, xsel, b, w, wsel, c, u, z, st, rc, rsel, fold: str = "duo", ou
     return int([v & M32 for v in got] == [v & M32 for v in want])
 
 
-def warp_check(x, xsel, b, w, wsel, c, u, z, st, rc) -> int:
-    """`PouwWarpCheck_v1` on words: x and w KS leaves, then per lane xsel, b, wsel, c, u, z and st (8 words) as
-    `call_check`'s, and rc (512 words, the warp's checkpoints at 0 .. KS + m - 1)."""
+def warp_checkpoint(states: list[list[int]]) -> list[int]:
+    """A warp's checkpoint from its lanes' states: per part of a state (li: y; duo, fx1: y, then z), the XOR over lanes and
+    chains."""
+    out = []
+    for j in range(len(states[0]) // NCH):
+        cp = 0
+        for st in states:
+            for v in st[NCH * j:NCH * j + NCH]:
+                cp ^= v
+        out.append(cp & M32)
+    return out
+
+
+def warp_check(x, xsel, b, w, wsel, c, u, z, st, rc, fold: str = "li") -> int:
+    """`PouwWarpCheck_v1` (``fold`` li) and `PouwWarpCheck_v2` on words: x and w KS leaves, then per lane xsel, b, wsel, c,
+    u, z and st (li: 8 words; duo, fx1: 16) as `call_check`'s, and rc (512 words, the warp's checkpoints, P words after
+    each set s at P s .. P s + P - 1, P the state's parts)."""
     states = [list(s) for s in st]
     sets = [lane_words(x, w, xsel[ln], b[ln], wsel[ln], c[ln], u[ln], z[ln]) for ln in range(len(st))]
     ok = True
     for s in range(len(sets[0])):
-        cp = 0
-        for ln in range(len(st)):
-            states[ln] = _li_absorb(states[ln], sets[ln][s])
-            for v in states[ln]:
-                cp ^= v
-        ok &= cp == rc[s] & M32
+        states = [absorb(fold, states[ln], sets[ln][s]) for ln in range(len(st))]
+        cp = warp_checkpoint(states)
+        ok &= cp == [v & M32 for v in rc[len(cp) * s:len(cp) * s + len(cp)]]
     return int(ok)
 
 
@@ -1156,16 +1179,50 @@ def PouwCallCheck(B, S, x, xsel, b, w, wsel, c, u, z, st, rc, rsel):
     return _all_equal(B, [(want[i], got[i]) for i in range(n)])
 
 
-def _warp_signature(S):
-    ks, nl = S.KS, S.NL
+#: the warp checks' folds: absorb, and a lane's state words (li: y; duo, fx1: y, then z)
+WARP_FOLDS = {"li": (PouwLiAbsorb, NCH), "duo": (PouwDuoAbsorb, 2 * NCH), "fx1": (PouwFx1Absorb, 2 * NCH)}
+
+
+def _warp_ports(name: str, ks: int, nl: int, fold: str):
+    if fold not in WARP_FOLDS:
+        raise ValueError(f"{name}: FOLD {fold!r} is none of {sorted(WARP_FOLDS)}")
     if not 1 <= nl <= 32:
-        raise ValueError(f"PouwWarpCheck_v1: NL {nl} lanes is not 1 .. 32")
-    if ks + n_digits(ks) > RW:
-        raise ValueError(f"PouwWarpCheck_v1: KS {ks}'s {ks + n_digits(ks)} checkpoints overflow a leaf of {RW}")
+        raise ValueError(f"{name}: NL {nl} lanes is not 1 .. 32")
+    words = WARP_FOLDS[fold][1]
+    n = words // NCH * (ks + n_digits(ks))
+    if n > RW:
+        raise ValueError(f"{name}: KS {ks}'s {n} checkpoint words overflow a leaf of {RW}")
     ports = dict(_call_ports(ks))
     lane = ("xsel", "b", "wsel", "c", "u", "z")
     return ((("x", ports["x"]), *[(k, Array(nl, ports[k])) for k in lane[:2]], ("w", ports["w"]),
-             *[(k, Array(nl, ports[k])) for k in lane[2:]], ("st", Array(nl, Array(NCH, U32))), ("rc", Array(RW, U32))), BIT)
+             *[(k, Array(nl, ports[k])) for k in lane[2:]], ("st", Array(nl, Array(words, U32))), ("rc", Array(RW, U32))), BIT)
+
+
+def _warp_signature(S):
+    return _warp_ports("PouwWarpCheck_v1", S.KS, S.NL, "li")
+
+
+def _warp2_signature(S):
+    return _warp_ports("PouwWarpCheck_v2", S.KS, S.NL, S.FOLD)
+
+
+def _warp_checkpoint(B, states, parts: int):
+    """A warp's checkpoint words from its lanes' states (`warp_checkpoint`): per part, each lane's XOR over its chains
+    (`PouwXinFinal_v2`), then the XOR across lanes (`PouwXor32_v2`, redux.sync.xor)."""
+    return [_xor_tree(B, [B.call(PouwXinFinal, s.reshape(Array(parts, XS))[j]) for s in states], PouwXor32)
+            for j in range(parts)]
+
+
+def _warp_body(B, ks, nl, fold, x, xsel, b, w, wsel, c, u, z, st, rc):
+    ab, words = WARP_FOLDS[fold]
+    parts = words // NCH
+    sets = [_call_sets(B, ks, x, xsel[ln], b[ln], w, wsel[ln], c[ln], u[ln], z[ln]) for ln in range(nl)]
+    states = [st[ln].reshape(Array(32 * words, BIT)) for ln in range(nl)]
+    pairs = []
+    for s in range(len(sets[0])):
+        states = [B.call(ab, states[ln], sets[ln][s]) for ln in range(nl)]
+        pairs += [(cp, rc[parts * s + j]) for j, cp in enumerate(_warp_checkpoint(B, states, parts))]
+    return _all_equal(B, pairs)
 
 
 @composite("PouwWarpCheck", 1, ["KS", "NL"], _warp_signature, conformance="protocol-defined")
@@ -1174,13 +1231,13 @@ def PouwWarpCheck(B, S, x, xsel, b, w, wsel, c, u, z, st, rc):
     `PouwLiAbsorb_v2` from the lane's keys, each set's checkpoint the XOR of every lane's 8 chain states
     (`PouwXinFinal_v2`, the XOR of a state's words, then `PouwXor32_v2` across lanes, redux.sync.xor), equal to the leaf's
     word at the set's index."""
-    sets = [_call_sets(B, S.KS, x, xsel[ln], b[ln], w, wsel[ln], c[ln], u[ln], z[ln]) for ln in range(S.NL)]
-    states = [st[ln].reshape(Array(32 * NCH, BIT)) for ln in range(S.NL)]
-    pairs = []
-    for s in range(len(sets[0])):
-        words = []
-        for ln in range(S.NL):
-            states[ln] = B.call(PouwLiAbsorb, states[ln], sets[ln][s])
-            words.append(B.call(PouwXinFinal, states[ln]))
-        pairs.append((_xor_tree(B, words, PouwXor32), rc[s]))
-    return _all_equal(B, pairs)
+    return _warp_body(B, S.KS, S.NL, "li", x, xsel, b, w, wsel, c, u, z, st, rc)
+
+
+@composite("PouwWarpCheck", 2, ["KS", "NL", "FOLD"], _warp2_signature, conformance="protocol-defined")
+def PouwWarpCheckV2(B, S, x, xsel, b, w, wsel, c, u, z, st, rc):
+    """`PouwWarpCheck_v1` for FOLD li, duo or fx1, with a full-state checkpoint a set (DUO-CP-W, #2438): each lane's sets
+    absorbed by FOLD (`PouwLiAbsorb_v2`, `PouwDuoAbsorb_v2`, `PouwFx1Absorb_v2`) from its keys (li: y; duo, fx1: y, then
+    z), and after set s, per part of the state, the XOR over lanes and chains equal to the leaf's word: li's y at s; duo's
+    and fx1's y at 2 s and z at 2 s + 1."""
+    return _warp_body(B, S.KS, S.NL, S.FOLD, x, xsel, b, w, wsel, c, u, z, st, rc)

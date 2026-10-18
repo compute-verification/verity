@@ -8,8 +8,9 @@ from typing import Any
 def _pouw_roots() -> list[Any]:
     """The spot checks at their smallest shapes, every primitive they call with them: `PouwSegCheck_v2` at S = 1 (duo, and
     xin dithered); `PouwSegCheck_v3` at two segments a window each (duo) and one window of two (xin, dithered);
-    `PouwCallCheck_v1` at KS = 2 (one digit word) on duo's chain words and on fx1's full state; and `PouwWarpCheck_v1` at
-    KS = 2 over two lanes. Each grows linearly in KS (and NL), which the served shapes are priced by."""
+    `PouwCallCheck_v1` at KS = 2 (one digit word) on duo's chain words and on fx1's full state; and `PouwWarpCheck_v1` (li)
+    and `PouwWarpCheck_v2` (duo, fx1) at KS = 2 over two lanes. Each grows linearly in KS (and NL), which the served
+    shapes are priced by."""
     from verity.ml.circuits.defs import bind
     from verity.core.protocols.pouw.circuit import segment as SG
 
@@ -19,4 +20,6 @@ def _pouw_roots() -> list[Any]:
             bind(SG.PouwSegCheckDitherV3, KS=2, S=2, FOLD="xin"),
             bind(SG.PouwCallCheck, KS=2, FOLD="duo", OUT="chains"),
             bind(SG.PouwCallCheck, KS=2, FOLD="fx1", OUT="state"),
-            bind(SG.PouwWarpCheck, KS=2, NL=2)]
+            bind(SG.PouwWarpCheck, KS=2, NL=2),
+            bind(SG.PouwWarpCheckV2, KS=2, NL=2, FOLD="duo"),
+            bind(SG.PouwWarpCheckV2, KS=2, NL=2, FOLD="fx1")]
