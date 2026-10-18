@@ -7,8 +7,8 @@
   RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and either the explicitly
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
 * a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
-  exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and the rule derives per row `Attention_v4{T=i+1,...,MASKED_FROM}`
-  over the call's own k and v, opening the history the decode step after it reads;
+  exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and `rules/vllm_dsa_dense.py` derives per row
+  `Attention_v4{T=i+1,...,MASKED_FROM}` over the call's own k and v, opening the history the decode step after it reads;
 * each precondition refuses by name.
 
 The tiny fixture substitutes the old norm because `DsaRMSNorm_v1` is pinned to the real 128-thread widths (512/2048); a direct
@@ -32,7 +32,7 @@ from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
-from verity_vllm.program.frontend.rules import vllm_dsa
+from verity_vllm.program.frontend.rules import vllm_dsa, vllm_dsa_dense
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -48,7 +48,7 @@ VD = P + R                                   # the dense layer's v head: Attenti
 LD = NH * (P + VD)                           # the dense layer's latent, kv_b_proj's identity width
 TOPK, MAXPOS, EPS, BN = 4, 8, 1e-6, 16
 SCALE = (P + R) ** -0.5
-PREFILL, DENSE_SPLITS = vllm_dsa.PREFILL_BACKEND, vllm_dsa._dense_splits
+PREFILL, DENSE_SPLITS = vllm_dsa_dense.PREFILL_BACKEND, vllm_dsa_dense._dense_splits
 STEPS = ((0, 2), (2, 1))                     # (first position, tokens): a prefill of two, one decode step
 NAMES = ("layers.0.self_attn.attn", "layers.1.self_attn.attn")
 DOT = hopper.HopperBF16WgmmaDot16
@@ -611,7 +611,7 @@ def dense(served, monkeypatch):
     sparse geometry at the dense layer's latent, which the decode step after the prefill reads.  `fa3_model.split_plan` models head
     dims 64, 128 and 256, so the fixture's head P + R runs one split by fiat; the served head's count is checked below."""
     monkeypatch.setitem(vllm_dsa.DECODE_THRESHOLD, NH, 1)
-    monkeypatch.setattr(vllm_dsa, "_dense_splits", lambda tp, T, NH, D: 1)
+    monkeypatch.setattr(vllm_dsa_dense, "_dense_splits", lambda tp, T, NH, D: 1)
     monkeypatch.setitem(vllm_dsa.FA3_SPARSE_GEOMETRY, (R, LD), {"BN": BN, "DOT": DOT, "INV": hopper.Fa3InvSum})
     VB.observe_attention_impls({n: _dense_observation() for n in NAMES})
 
@@ -654,7 +654,7 @@ def test_the_served_dense_prefill_binds_attention_v4_at_the_128_x_80_tile():
     """GLM-5.3 TP8's dense prefill: qk and v head 256 at 8 heads per rank on the H200, `glm53_fa3_prefill_capture`'s geometry."""
     geom = TG.attention_geometry(H200, 256, 2048, 8, 8)
     assert (geom["BN"], geom["fa_version"], TG.fa3_tile_m(256, 2048, 1), TG.fa3_check_inf(H200)) == (80, 3, 128, True)
-    assert vllm_dsa._dense_splits(H200, 2048, 8, 256) == 1
+    assert vllm_dsa_dense._dense_splits(H200, 2048, 8, 256) == 1
     row = PROFILE_B1_EAGER_V3.kind("attention_dot", T=2048, NH=8, KVH=8, D=256, BN=80, DOT=DOT, INV=hopper.Fa3InvSum,
                                    MASKED_FROM=TG.fa3_masked_from(H200, 2048, 8, 8, 256, 2048, 2047))
     assert row.id.startswith("Attention_v4{")
@@ -684,7 +684,7 @@ def test_each_dense_prefill_precondition_refuses_by_name(case, needle, dense, mo
         for layer in model.layers:
             layer.scale = 0.5
     if case in ("splits", "head"):
-        monkeypatch.setattr(vllm_dsa, "_dense_splits", (lambda tp, T, NH, D: 2) if case == "splits" else DENSE_SPLITS)
+        monkeypatch.setattr(vllm_dsa_dense, "_dense_splits", (lambda tp, T, NH, D: 2) if case == "splits" else DENSE_SPLITS)
     if case == "target":
         VB.observe_target_profile(TargetProfile(compute_capability=(8, 0), num_sms=108, batch_invariant=False))
     hint = _hint(_derive(model, _inputs(model)))
