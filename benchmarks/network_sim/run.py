@@ -6,8 +6,8 @@ process tree it runs:
 2. the mock datacenter in five blocks (`mockdc.py down`, then `up --blocks 5`), whose blocks take its five strategies,
    run once (`DIR/mockdc/`) and once with the certifiers' salt on (`DIR/mockdc-salt/`);
 3. the fleet (`up --fleet --blocks 2`, `datacenter.examples.two_sites`): two sites of two blocks joined by a 20 ms WAN
-   between a certifier on each, the outside host on the west site, run twice with the strategies swapped between the
-   sites, so that each of the first four is played across the WAN once (`DIR/fleet/`, `DIR/fleet-swapped/`);
+   between their spines, the outside host on the west site, run twice with the strategies swapped between the sites,
+   so that each of the first four is played across the WAN once (`DIR/fleet/`, `DIR/fleet-swapped/`);
 4. the lab back in its default four blocks, and the workload's three runs of `python -m workload.lab_run run`: honest,
    `--tamper b1:flip-bit` and `--tamper b2:late` (`DIR/workload/<run>/`). They need a Python with torch: `--python`,
    else this one if it has torch, else one that `uv` builds in a scratch directory, as the workload's recorded run does.

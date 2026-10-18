@@ -152,8 +152,8 @@ def test_a_block_down_for_maintenance_is_refused_without_the_plan_and_charged_wh
 
 def test_a_fleet_is_validated_and_stood_up_merged(m, tmp_path):
     """`--fleet` is `two_sites`' fleet merged, its WAN as long as `--wan-latency-us`; a fleet declaration is merged
-    too, and one whose inter-site link doesn't end at a certifier is refused. A shape without the fleet's options, as
-    `workload.lab_run.shape_of` builds it, is the default leaf-spine."""
+    too, and one whose inter-site link leaves a block past its certifier is refused. A shape without the fleet's
+    options, as `workload.lab_run.shape_of` builds it, is the default leaf-spine."""
     import argparse
 
     lab_run = dict(declaration=None, blocks=4, leaves=2, spines=1, fabric_latency_us=2000, fabric_jitter_us=500)
@@ -163,23 +163,23 @@ def test_a_fleet_is_validated_and_stood_up_merged(m, tmp_path):
                  wan_latency_us=30_000)
     dc = m.lab(argparse.Namespace(**shape))
     assert dc.name == "east+west" and [b.name for b in dc.blocks] == ["east.b0", "west.b0"]
-    assert [(e.a, e.b, e.delay) for e in dc.links if e.kind == "wan"] == [("east.wan.cert", "west.wan.cert", 0.03)]
+    assert [(e.a, e.b, e.delay) for e in dc.links if e.kind == "wan"] == [("east.leaf0", "west.leaf0", 0.03)]
     path = tmp_path / "fleets.py"
     path.write_text("from datacenter import Fleet, Link\n"
                     "from datacenter.examples import two_sites\n"
                     "def bad():\n"
                     "    f = two_sites(1)\n"
-                    "    return Fleet(f.datacenters, [Link('east.leaf0', 'west.wan.cert', f.links[0].capacity)])\n")
+                    "    return Fleet(f.datacenters, [Link('east.b0.nic0', 'west.leaf0', f.links[0].capacity)])\n")
     assert m.lab(argparse.Namespace(**shape | {"declaration": f"{path}:two_sites"})).name == "east+west"
-    with pytest.raises(SystemExit, match="ends at 'east.leaf0', not a certifier"):
+    with pytest.raises(SystemExit, match="link east.b0.nic0-west.leaf0 passes no certifier"):
         m.lab(argparse.Namespace(**shape | {"declaration": f"{path}:bad"}))
 
 
 def test_a_fleets_blocks_are_each_audited_and_its_records_checked_on_every_port_of_the_merged_fleet(m, setup, tmp_path,
                                                                                                    capsys):
     """On the merged `two_sites` fleet, a late block on the east site and an honest one on the west each get both
-    audits, and one record check on every block's records together covers the fleet's four ports, the WAN's
-    certifiers having none: it refuses what the late block's own check refuses and carries the rest, and the account
+    audits, and one record check on every block's records together covers the fleet's four ports, the WAN between the
+    spines having none: it refuses what the late block's own check refuses and carries the rest, and the account
     charges the refused window at the east block's uplink capacity."""
     report, s = setup
     honest = m.ar.plan_configuration(m.trace()["configurations"][0], s)
@@ -189,7 +189,7 @@ def test_a_fleets_blocks_are_each_audited_and_its_records_checked_on_every_port_
         assert m.ar.run_virtual(plan, report, tmp_path / b) == {"server": 0, "proxy": 0, "peer": 0}
     summary = m.audit(tmp_path, dc, honest, plans, report, {"east.b0": "late", "west.b0": "honest"})
     assert summary["declaration"] == "east+west"
-    assert summary["wan"] == [["east.wan.cert-west.wan.cert", "wan/east-west=1e+11 bit/s (declared)",
+    assert summary["wan"] == [["east.spine0-west.spine0", "wan/east-west=1e+11 bit/s (declared)",
                                "wan/east-west-latency=0.02 s (declared)"]]
     east, west = summary["blocks"]["east.b0"], summary["blocks"]["west.b0"]
     both = ["occupancy differs from the declared profile", "a frame is not a committed crossing"]

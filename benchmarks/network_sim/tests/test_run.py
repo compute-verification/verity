@@ -23,7 +23,7 @@ SALT = {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1], "e
 EXITS = {"demo": 0, "lab --blocks 5": 0, "mockdc": 0, "mockdc-salt": 0, "lab --fleet --blocks 2": 0, "fleet": 0,
          "fleet-swapped": 0, "lab default": 0, "python": 0, "workload/honest": 0, "workload/flip-bit": 0,
          "workload/late": 0}
-WAN = [["east.wan.cert-west.wan.cert", "wan/east-west=1e+11 bit/s (declared)",
+WAN = [["east.spine0-west.spine0", "wan/east-west=1e+11 bit/s (declared)",
         "wan/east-west-latency=0.02 s (declared)"]]
 
 

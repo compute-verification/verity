@@ -150,23 +150,24 @@ def test_switches_route_every_fabric_subnet_through_a_two_tier_fabric(g, ex):
     assert walk(plan, "na-b2-cert", plan.address("b2", "b2.cert")) == "na-b2"
 
 
-def test_a_fleets_wan_certifiers_route_between_its_sites_and_its_wan_has_its_own_jitter(g, ex):
-    """A certifier at an end of the WAN watches no block, so it forwards and routes like a switch and has no guard; a
-    block's certifier still forwards nothing. The outside host, on the west site, reaches every block's certifier, the
-    east ones across the WAN, and no block; the WAN's netem is its latency, its own jitter and its capacity."""
+def test_a_fleets_wan_joins_its_sites_switches_and_has_its_own_jitter(g, ex):
+    """The WAN runs between the two spines, which route across it; only switches forward, and every certifier watches a
+    block and has its guard. The outside host, on the west site, reaches every block's certifier, the east ones across
+    the WAN, and no block; the WAN's netem is its latency, its own jitter and its capacity."""
     dc = ex.two_sites().merged()
     plan = g.netns_plan(dc, jitter=5e-4, wan_jitter=2e-3)
-    roles = {n.node: (n.role, n.forward) for n in plan.namespaces}
-    assert roles["east.wan.cert"] == roles["west.wan.cert"] == ("certifier", True)
-    assert roles["east.b0.cert"] == ("certifier", False) and roles["east.spine0"] == ("switch", True)
+    assert len(plan.namespaces) == 15
+    assert sorted(n.node for n in plan.namespaces if n.forward) == [f"{s}.{x}" for s in ("east", "west")
+                                                                   for x in ("leaf0", "leaf1", "spine0")]
     guarded = [c[3] for c in plan.up() if "iptables" in c]
     assert guarded == [f"na-{s}-b{i}-cert" for s in ("east", "west") for i in range(2)]
-    (wan,) = [i for i in plan.namespace("east.wan.cert").interfaces if i.peer[0] == "na-west-wan-cert"]
+    assert guarded == [n.name for n in plan.namespaces if n.role == "certifier"]
+    (wan,) = [i for i in plan.namespace("east.spine0").interfaces if i.peer[0] == "na-west-spine0"]
     assert wan.netem == ("delay", "20000us", "2000us", "rate", "100000000000bit")
     assert plan.namespace("ext0").interfaces[0].netem == ("delay", "2us", "500us", "rate", "400000000000bit")
     ext = plan.address("ext0", "west.leaf0")
     out = str(ipaddress.ip_interface(plan.namespace("ext0").interfaces[0].address).network)
-    assert dict(plan.namespace("east.spine0").routes)[out] == plan.address("east.wan.cert", "east.spine0")
+    assert dict(plan.namespace("east.spine0").routes)[out] == plan.address("west.spine0", "east.spine0")
     for b in (b.name for b in dc.blocks):
         cert = g.netns_name(f"{b}.cert")
         assert walk(plan, "na-ext0", plan.fabric_address(f"{b}.cert")) == cert and walk(plan, cert, ext) == "na-ext0"
@@ -174,7 +175,7 @@ def test_a_fleets_wan_certifiers_route_between_its_sites_and_its_wan_has_its_own
     assert walk(plan, "na-east-b0-cert", plan.fabric_address("west.b1.cert")) == "na-west-b1-cert"
     (_, graph), = parse_gml(g.shadow_gml(dc, jitter=5e-4, wan_jitter=2e-3))
     edges = {e["label"]: (e["latency"], e["jitter"]) for e in (dict(v) for k, v in graph if k == "edge")}
-    assert edges["east.wan.cert-west.wan.cert"] == ("20000000 ns", "2000000 ns")
+    assert edges["east.spine0-west.spine0"] == ("20000000 ns", "2000000 ns")
     assert edges["ext0-west.leaf0"] == ("2000 ns", "500000 ns")
 
 

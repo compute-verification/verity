@@ -4,7 +4,7 @@ The device graph, and a mock datacenter of Linux network namespaces that runs th
 accounting layer's declarations, `datacenter.Datacenter`, which `datacenter.examples` (`benchmarks/datacenter`) declares:
 `rtx_node` is the measured node (8 GPUs on two sockets, each GPU on a PCIe root port of its own, one NIC on socket 1) as
 one block, `leaf_spine` puts such nodes behind a leaf-spine fabric, each through its block's certifier, with hosts
-outside every block, and `two_sites` joins two leaf-spines by a WAN between a certifier on each.
+outside every block, and `two_sites` joins two leaf-spines by a WAN between their spines.
 
 - `graph.py`: the exports, which read any `Datacenter` that validates, a fleet's merged one included: the netns plan
   `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan, and
@@ -30,9 +30,8 @@ outside every block, and `two_sites` joins two leaf-spines by a WAN between a ce
 Every namespace is named `na-*`. Each block (`na-b0`, standing in for a node of 8 GPUs) has one interface, to its
 certifier's namespace (`na-b0-cert`), whose other interface goes to a leaf switch. By default there are four blocks, two
 leaves joined by a spine (`na-spine0`), and one host outside every block (`na-ext0`, on `na-leaf0`). Only the switches
-forward IP, and a certifier that watches no block, such as one at an end of a WAN (`graph.routers`). A block's
-certifier forwards nothing: a block reaches the fabric only through the connections the proxy makes and accepts, and an
-iptables rule in the certifier's namespace drops whatever the block opens. Each fabric link has netem, 2 ms ± 0.5 ms per
+forward IP. A certifier forwards nothing: a block reaches the fabric only through the connections the proxy makes and
+accepts, and an iptables rule in the certifier's namespace drops whatever the block opens. Each fabric link has netem, 2 ms ± 0.5 ms per
 hop at 400 Gbit/s by default. Nothing in the root namespace changes: each veth is created inside its namespaces, and
 deleting the namespaces deletes them.
 
@@ -149,24 +148,25 @@ back up in its default shape (`mockdc.py down`, then `up`), which `workload/lab_
 ### Two sites
 
 `--fleet` stands up `datacenter.examples.two_sites(2)`, many datacenters under one developer
-(`Fleet([east, west], [Link(east.wan.cert, west.wan.cert, wan)])`), merged (`Fleet.merged`): two leaf-spines, `east`
-and `west`, each of two blocks (`east.b0`, …, `west.b1`) and with a certifier of its own on its spine, and one WAN link
-between those two certifiers. The WAN's capacity and one-way latency are declared assumptions, `wan/east-west`
-(100 Gbit/s) and `wan/east-west-latency` (20 ms), and netem gives it 20 ms ± 2 ms (`--wan-latency-us`,
-`--wan-jitter-us`). The outside host is on the west site, so an east block's link runs through its own certifier, the
-two WAN certifiers and the west fabric to `na-ext0`. That makes 17 namespaces and 16 links.
+(`Fleet([east, west], [Link(east.spine0, west.spine0, wan)])`), merged (`Fleet.merged`): two leaf-spines, `east` and
+`west`, each of two blocks (`east.b0`, …, `west.b1`), and one WAN link between their spines. The WAN's capacity and
+one-way latency are declared assumptions, `wan/east-west` (100 Gbit/s) and `wan/east-west-latency` (20 ms), and netem
+gives it 20 ms ± 2 ms (`--wan-latency-us`, `--wan-jitter-us`). The outside host is on the west site, so an east block's
+link runs through its own certifier, the east fabric, the WAN and the west fabric to `na-ext0`. That makes 15 namespaces
+and 14 links.
 
-- The WAN ends at certifiers that watch no block. Ending it at a block's certifier would make that certifier forward the
-  other site's traffic past its block's guard. The WAN certifiers route like switches (`graph.routers`), and a block's
-  certifier still forwards nothing.
-- The WAN's certifiers have no port in the model (see Limits), so the fleet's ports are its blocks' eight.
+- The WAN is fabric, as a switch is. Blocks are the only units the account credits, and every block's boundary is
+  certified already, so a link between datacenters is no boundary (`Fleet`): a certifier on it would have no port and
+  publish no record. The spines route across it, and every certifier still forwards nothing.
+- The fleet's ports are its blocks' eight.
 - The Program is the same, one outside peer per link (see Limits), so what crosses the WAN is the east blocks' traffic
   with the outside host.
 
 Each block gets both audits, as on one site. Then the record check runs once more, on every block's records together
 against every block's declared ones, over the merged fleet's ports, with the account's charge for the whole run
 (`mockdc.charge` under the whole plan). `run.py` runs the fleet twice, with the first four strategies swapped between
-the sites, so that each is played across the WAN once. Run `r20261018-110501-432f` (the whole night, below):
+the sites, so that each is played across the WAN once. Run `r20261018-110501-432f` (the whole night, below), when the
+WAN still ran between two certifiers of its own, one on each spine, which watched no block:
 
 | Run | Block | Strategy | Certifier audit | Datacenter record check | Wire lag (median) | Worst tick |
 |---|---|---|---|---|---|---|
@@ -208,9 +208,6 @@ The verdicts are the single site's, block for block. What the WAN adds:
 - `active_replay`'s Program has one outside peer per link, so a fleet's traffic between sites is a block and the
   outside host, across the WAN. A Program in which a block on one site talks to a block on the other would need the
   far block, behind its own certifier, as a link's peer.
-- The WAN's certifiers publish no records: `Datacenter.port` gives a port only where a hop crosses a block's boundary,
-  and a link between two certifiers crosses none. Records of what crosses the WAN would need a port for a link between
-  datacenters, which the model doesn't have.
 
 ## Serving a workload on the lab
 

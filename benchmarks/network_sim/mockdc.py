@@ -6,8 +6,8 @@ certifier on each block's uplink, two leaf switches joined by a spine, and one h
 declaration whose blocks each have one uplink, to a certifier, and which has a device of kind `outside`, works too
 (`--declaration FILE.py:NAME`, a `Datacenter` or a `Fleet`, or a function returning one; a fleet is validated and stood
 up merged, `Fleet.merged`). `--fleet` is `datacenter.examples.two_sites`: two leaf-spines, `east` and `west`, joined by
-a WAN between a certifier on each, `--wan-latency-us` one way, with the outside host on the west site, so the east
-blocks' links cross the WAN. `up` creates the namespaces of its netns plan (`graph.netns_plan`), all named `na-*`, with
+a WAN between their spines, `--wan-latency-us` one way, with the outside host on the west site, so the east blocks'
+links cross the WAN. `up` creates the namespaces of its netns plan (`graph.netns_plan`), all named `na-*`, with
 netem on the fabric links (`--wan-jitter-us` of jitter on a WAN link). `down` stops every process in an `na-` namespace
 and deletes the namespaces, and their veths with them; the root namespace never holds a veth. `status` lists them and
 checks what can reach what, and in how long a round trip. All three run `ip` through `sudo -n`.
