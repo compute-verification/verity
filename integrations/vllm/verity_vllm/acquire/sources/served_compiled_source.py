@@ -17,7 +17,7 @@ Three execution paths give the committer the same sequence of (name, bytes):
     records the slots its (mode, padded size) writes.  The graph replays the copies every step.  Slots are allocated in the
     uncaptured warm-up pass vLLM runs before each capture, outside the graph pool; vLLM's memory-profiling captures are discarded
     with their slots.  With `batch_copies` (the default) a captured hook records its copy and the wrapper's flush lines issue the
-    recorded copies together, one multi-tensor byte copy per flush instead of one graph node per tensor; the flushes sit wherever
+    recorded copies together, a multi-tensor copy per flush (one per word width) instead of one graph node per tensor; the flushes sit wherever
     a recorded buffer's bytes could next change (`install_codegen_hooks`), so each copy reads what the immediate copy would.
   * a replayed step: nothing Python runs for captured work.  Live work inside the step (attention between PIECEWISE pieces, piece 0's
     inputs at its wrapper) copies into its slot the same way.  When the forward is complete (the logits) the step's slots are
@@ -51,6 +51,7 @@ GRAPH_MODES = ("FULL", "PIECEWISE")
 #: nodes go to `Scheduler.codegen_extern_call`).  The hooks are emitted after the call, for `scheduler.current_node`.
 CODEGEN_METHODS = ("codegen_node", "codegen_template", "codegen_combo_kernel", "codegen_nested_reduction", "codegen_mix_order_reduction")
 INPUT_NAMES = (("input_ids", "ids"), ("positions", "positions"))
+WORDS = ((8, torch.int64), (4, torch.int32), (2, torch.int16), (1, torch.uint8))
 
 
 def _capturing(val: torch.Tensor) -> bool:
@@ -489,14 +490,21 @@ class ServedCompiledSource:
         return order, name, slot, rows
 
     def _flush(self) -> None:
-        """Issue the recorded captured copies: the dense ones as one multi-tensor byte copy, the strided ones one by one."""
-        dense = [(d, v) for d, v in self.pending if d.is_contiguous() and v.is_contiguous()]
-        if dense:
-            torch._foreach_copy_([d.reshape(-1).view(torch.uint8) for d, _ in dense], [v.reshape(-1).view(torch.uint8) for _, v in dense])
+        """Issue the recorded captured copies: the dense ones as one multi-tensor copy per word width (the widest that divides a copy's
+        length and both its addresses), the strided ones one by one."""
+        groups: dict[torch.dtype, tuple[list, list]] = {}
         for d, v in self.pending:
             if not (d.is_contiguous() and v.is_contiguous()):
                 d.copy_(v)
                 self.stats["strided_copies"] += 1
+                continue
+            nb = v.numel() * v.element_size()
+            word = next(dt for w, dt in WORDS if nb % w == 0 and d.data_ptr() % w == 0 and v.data_ptr() % w == 0)
+            dst, src = groups.setdefault(word, ([], []))
+            dst.append(d.reshape(-1).view(word))
+            src.append(v.reshape(-1).view(word))
+        for dst, src in groups.values():
+            torch._foreach_copy_(dst, src)
         self.stats["capture_flushes"] += 1
         self.pending = []
 

@@ -187,6 +187,19 @@ def test_a_strided_recorded_copy_is_copied_alone_with_the_same_bytes():
     assert torch.equal(slot, val) and src.stats["strided_copies"] == 1 and src.pending == []
 
 
+def test_a_flush_copies_by_the_widest_word_each_copy_allows(monkeypatch):
+    calls: list[tuple[torch.dtype, int]] = []
+    real = torch._foreach_copy_
+    monkeypatch.setattr(torch, "_foreach_copy_", lambda d, s: calls.append((d[0].dtype, len(d))) or real(d, s))
+    src = S.ServedCompiledSource()
+    vals = [torch.arange(8, dtype=torch.int64), torch.arange(3, dtype=torch.int8), torch.arange(6, dtype=torch.int16)[1:],
+            torch.arange(4, dtype=torch.float32)]
+    slots = [src._stage((0, 0, i), f"c00.v/buf{i}", v, -1, defer=True)[2] for i, v in enumerate(vals)]
+    src._flush()
+    assert sorted(calls, key=str) == sorted([(torch.int64, 2), (torch.uint8, 1), (torch.int16, 1)], key=str)
+    assert all(torch.equal(s, v) for s, v in zip(slots, vals, strict=True))
+
+
 def test_a_captured_copy_left_unflushed_is_an_error(monkeypatch):
     src = S.ServedCompiledSource()
     src.codegen = {"batch": True}
