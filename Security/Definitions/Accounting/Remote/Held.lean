@@ -70,6 +70,9 @@ structure Pace (Ω : Type) where
   /-- `e_g = max(group g's last root's arrival, s_(g+1))` -/
   ended : Ω → ℕ → ℕ
 
+/-- What a route (`Trace.rebuilt`, `Trace.disk`, `Trace.link`) brings in over `[u, v)`. -/
+def over {Ω : Type} (f : Ω → ℕ → ℕ) (ω : Ω) (u v : ℕ) : ℕ := ∑ t ∈ Ico u v, f ω t
+
 namespace Trace
 
 variable {Ω : Type} (T : Trace Ω)
@@ -91,9 +94,6 @@ def held (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.mem ω (T.tick ω p)).c
 
 /-- Held over time: the registered blocks in node memory at each tick of `[u, v)`, summed over the ticks. -/
 def heldOver (ω : Ω) (u v : ℕ) : ℕ := ∑ t ∈ Ico u v, (T.mem ω t).card
-
-/-- The blocks a route brings in over `[u, v)`. -/
-def over (f : Ω → ℕ → ℕ) (ω : Ω) (u v : ℕ) : ℕ := ∑ t ∈ Ico u v, f ω t
 
 variable [Fintype Ω]
 

@@ -105,15 +105,15 @@ theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β W : ℝ} (hE : 0 < E) (hs : 0
       sum_passes _ _ hm] at this
     exact this
   have hin : ∑ τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes), T.entered ω τ ≤
-      T.over T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) + T.over T.disk ω (T.tick ω 0) (T.tick ω T.passes) := by
+      over T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) + over T.disk ω (T.tick ω 0) (T.tick ω T.passes) := by
     have h := sum_le_sum fun τ (_ : τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes)) => hr ω τ
     simp only [sum_add_distrib, hI ω, sum_const_zero, add_zero] at h
     exact h
-  have hreb : (T.over T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) : ℝ) ≤
+  have hreb : (over T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) : ℝ) ≤
       s / E * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) := by
     rw [div_mul_eq_mul_div, le_div_iff₀ hE, mul_comm _ E]
     exact hsq ω _ _ huv
-  have hdisk : (T.over T.disk ω (T.tick ω 0) (T.tick ω T.passes) : ℝ) ≤
+  have hdisk : (over T.disk ω (T.tick ω 0) (T.tick ω T.passes) : ℝ) ≤
       β * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) := hd ω _ _ huv
   have hspan : ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) ≤ (e : ℝ) - s₀ := by
     have h0' : (s₀ : ℝ) ≤ T.tick ω 0 := by exact_mod_cast h0
@@ -130,7 +130,7 @@ theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β W : ℝ} (hE : 0 < E) (hs : 0
       ((∑ τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes), T.entered ω τ : ℕ) : ℝ) := by
     exact_mod_cast hsum
   have hinR : ((∑ τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes), T.entered ω τ : ℕ) : ℝ) ≤
-      T.over T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) + T.over T.disk ω (T.tick ω 0) (T.tick ω T.passes) := by
+      over T.rebuilt ω (T.tick ω 0) (T.tick ω T.passes) + over T.disk ω (T.tick ω 0) (T.tick ω T.passes) := by
     exact_mod_cast hin
   linarith
 

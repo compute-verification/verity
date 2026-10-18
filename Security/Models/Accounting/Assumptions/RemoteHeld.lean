@@ -37,16 +37,16 @@ def Identity (T : Trace Ω) : Prop := ∀ ω t, T.link ω t = 0
 
 /-- **The links' ceiling**: on every outcome, the node's boundary links bring in at most `β` blocks a tick, over every
 interval. -/
-def Links (T : Trace Ω) (β : ℝ) : Prop := ∀ ω u v, u ≤ v → (T.over T.link ω u v : ℝ) ≤ β * (v - u : ℕ)
+def Links (T : Trace Ω) (β : ℝ) : Prop := ∀ ω u v, u ≤ v → (over T.link ω u v : ℝ) ≤ β * (v - u : ℕ)
 
 /-- **The squaring ceiling**: on every outcome, the node's compute re-encodes at most `s / E` blocks a tick over every
 interval: at most `s` squarings a tick at the codec's width, at least `E` a block. -/
 def SquaringCeiling (T : Trace Ω) (s E : ℝ) : Prop :=
-  ∀ ω u v, u ≤ v → E * (T.over T.rebuilt ω u v : ℝ) ≤ s * (v - u : ℕ)
+  ∀ ω u v, u ≤ v → E * (over T.rebuilt ω u v : ℝ) ≤ s * (v - u : ℕ)
 
 /-- **The disks' ceiling**: on every outcome, the node's disks bring back at most `β` blocks a tick over every
 interval. -/
-def Disks (T : Trace Ω) (β : ℝ) : Prop := ∀ ω u v, u ≤ v → (T.over T.disk ω u v : ℝ) ≤ β * (v - u : ℕ)
+def Disks (T : Trace Ω) (β : ℝ) : Prop := ∀ ω u v, u ≤ v → (over T.disk ω u v : ℝ) ≤ β * (v - u : ℕ)
 
 /-- **The chips' ceiling** (the Memory row): on every outcome, at most `S` registered blocks are on the node's chips at
 any tick. -/
