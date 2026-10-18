@@ -19,6 +19,7 @@
   "verity_vllm.collectives.collective_record": "TP path (lane/vllm-tp-n); test_tp_collective.py",
   "verity_vllm.linear": "the linear-site interface, ahead of its first consumer (the MVP's install, migration step 3 of the research store's docs/pouw/vllm-integration-api.md); tests/linear",
   "verity_vllm.linear.api": "see verity_vllm.linear",
+  "verity_vllm.commit.row_tables": "PoUW's interface to a window's row tables (the root pouw.roots binds, ranks, openings), ahead of its first consumer (compute accounting's pouw.roots binding, CMP-36); tests/pipeline/test_row_tables.py",
   "verity_vllm.linear.vllm_site": "see verity_vllm.linear; benchmarks/pouw's e2e.py, profile_decode.py and vllm_bench.py attach through it",
   "verity_vllm.program.registry.quarantine.collective": "provisional TP AllReduce definitions; test_tp_collective.py",
   "verity_vllm.program.registry.quarantine.collective.allreduce": "see quarantine.collective",
