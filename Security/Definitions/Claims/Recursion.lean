@@ -442,19 +442,21 @@ tape `x`'s nonce and rest draw. -/
 def ZkDeploy.prover {Coin : Type} (D : ZkDeploy Coin) (w : Flock.Wit) (x : Msg) : Prover (D.Nonce x × D.Rest x) :=
   ⟨fun x' hist ω => (D.P w).next x' hist (D.tapeOf x ω)⟩
 
-/-- **A masked record with its reference prover's public stop**: `stops x as` says whether the reference prover stops
-at the statement `x` once the verifier has answered `as` (its answers so far, in order; `[]` before the first round),
-read before each inner round and after the last: from there it sends the empty message every round. It reads the
-statement and the verifier's answers only, never the prover's messages, so a simulator reads it off its own run. At
-the deployment it is where the honest inner proof can be refused: an inner statement the inner verifier can't accept,
-or an inner coin in the inner completeness error (Flock's: a zerocheck outer coin at `1`). -/
+/-- **A masked record with its reference prover's public stop**: `stops H x as` says whether the reference prover stops
+at the statement `x` against `H` once the verifier has answered `as` (its answers so far, in order; `[]` before the
+first round), read before each inner round and after the last: from there it sends the empty message every round. It
+reads the hash, the statement and the verifier's answers only, never the prover's messages, so a simulator reads it off
+its own run. At the deployment it is where the honest inner proof can be refused: an inner statement the inner verifier
+can't accept against `H` (`Deploy.δc`'s `1`), or an inner coin in the inner completeness error (Flock's: a zerocheck
+outer coin at `1`). -/
 structure StopDeploy (Coin : Type) extends ZkDeploy Coin where
-  stops : Msg → List Out → Bool
+  stops : (Msg → Msg) → Msg → List Out → Bool
 
 /-- **The prover has stopped** after the transcript `ms`, its stop read at the first `n` rounds' starts and after the
 `n`-th: `stops` holds at the verifier's answers before some round `i ≤ n` that `ms` has reached. -/
-def StopDeploy.halted {Coin : Type} (D : StopDeploy Coin) (n : ℕ) (x : Msg) (ms : List (Msg × Out)) : Bool :=
-  (List.range (min ms.length n + 1)).any fun i => D.stops x ((ms.take i).map Prod.snd)
+def StopDeploy.halted {Coin : Type} (D : StopDeploy Coin) (H : Msg → Msg) (n : ℕ) (x : Msg) (ms : List (Msg × Out)) :
+    Bool :=
+  (List.range (min ms.length n + 1)).any fun i => D.stops H x ((ms.take i).map Prod.snd)
 
 section Recursion
 
@@ -684,16 +686,17 @@ def ZKPriv (H : Msg → Msg) (D : ZkDeploy Coin) (I : Inner Coin Flock.Wit) (DO 
 
 /-! ### Zero knowledge with the prover's public stop (restated, statement only) -/
 
-/-- **The recursion's simulator with the prover's stop**: `Sim`, except where the prover has stopped (`halted`, at the
-statement or after an inner answer): from there it sends the empty message every round left, as the prover does. -/
-def SimStop (D : StopDeploy Coin) (I : Inner Coin W) (SO : Msg → ℕ → OSim) : Simulator where
+/-- **The recursion's simulator with the prover's stop** against `H`: `Sim`, except where the prover has stopped
+(`halted`, at the statement or after an inner answer): from there it sends the empty message every round left, as the
+prover does. -/
+def SimStop (D : StopDeploy Coin) (I : Inner Coin W) (SO : Msg → ℕ → OSim) (H : Msg → Msg) : Simulator where
   C x := (Fin (I.V.k (xI D.toDeploy x)) → Fin D.saltLen → UInt8) ×
     (Fin (D.kS x) → Fin (D.nC x) → Fin D.saltLen → UInt8) × ((s : Fin (D.nS x)) → (SO x s).C)
   prog x c :=
     let n := I.V.k (xI D.toDeploy x)
-    spBind (simRounds (fun ms => if D.halted n x ms then .ret [] else
+    spBind (simRounds (fun ms => if D.halted H n x ms then .ret [] else
         if h : ms.length < n then spOf (D.toDeploy.zeroCommit (c.1 ⟨ms.length, h⟩)) else .ret []) n []) fun ms =>
-      if D.halted n x ms then simRounds (fun _ => .ret []) (D.V.k x - n) ms
+      if D.halted H n x ms then simRounds (fun _ => .ret []) (D.V.k x - n) ms
       else spBind (simStage D.toDeploy x n c.2.1 ms) fun ms =>
         simOuter SO x (D.vstar x ms) c.2.2 (List.finRange (D.nS x)) ms
 
@@ -705,14 +708,14 @@ coins themselves leaves that refusal unreachable and reveals nothing the verifie
 same prover, so its stop costs completeness at most `δc`. -/
 def ZKStop (H : Msg → Msg) (D : StopDeploy Coin) (I : Inner Coin Flock.Wit) (DO : Flock.Deploy Coin Col T) : Prop :=
   DO.zk = true ∧ ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, Hm96Hiding D.mask (D.saltHash H) δ₁ →
-    ZKmalRx D.Nonce D.Rest H D.V.k D.prover (R D.toDeploy I) (SimStop D I (D.SO t)) (εzk D.toDeploy I t δ₁)
+    ZKmalRx D.Nonce D.Rest H D.V.k D.prover (R D.toDeploy I) (SimStop D I (D.SO t) H) (εzk D.toDeploy I t δ₁)
       (γzk D.toDeploy t)
 
 /-- **The private variant: zero knowledge with the prover's public stop**, `ZKPriv` restated as `ZKStop` is `ZK`. -/
 def ZKPrivStop (H : Msg → Msg) (D : StopDeploy Coin) (I : Inner Coin Flock.Wit) (DO : Flock.Deploy Coin Col T) :
     Prop :=
   DO.zk = true ∧ ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, Hm96Hiding D.mask (D.saltHash H) δ₁ →
-    ZKmalRx D.Nonce D.Rest H D.V.k D.prover (RPriv D.toDeploy I) (SimStop D I (D.SO t))
+    ZKmalRx D.Nonce D.Rest H D.V.k D.prover (RPriv D.toDeploy I) (SimStop D I (D.SO t) H)
       (εzk D.toDeploy I t δ₁) (γzk D.toDeploy t)
 
 end Recursion

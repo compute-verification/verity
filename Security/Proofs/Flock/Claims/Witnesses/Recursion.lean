@@ -156,11 +156,11 @@ def zvZR (Coin : Type) (circ : Option Msg) (SO : ℕ → Msg → ℕ → OSim) :
 
 /-- `zkZR` with a stop that never fires. -/
 def zkSR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.StopDeploy Coin :=
-  { zkZR Coin SO with stops := fun _ _ => false }
+  { zkZR Coin SO with stops := fun _ _ _ => false }
 
 /-- `zkZPR` with a stop that never fires. -/
 def zkSPR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.StopDeploy Coin :=
-  { zkZPR Coin SO with stops := fun _ _ => false }
+  { zkZPR Coin SO with stops := fun _ _ _ => false }
 
 theorem recStmt_inScope : Recursion.InScope recStmt :=
   ⟨rfl, le_rfl, by decide, le_rfl, rfl, Or.inl ⟨rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
@@ -442,11 +442,11 @@ theorem sim_out_nil (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS []
 
 /-- `SimStop` outputs the empty transcript wherever the inner protocol, the staging and the V* sessions take no round
 and the stop doesn't fire at the start. -/
-theorem simStop_out_nil {W : Type} (D : Recursion.StopDeploy Coin) (I : Recursion.Inner Coin W)
-    (hI : I.V.k (xI D.toDeploy []) = 0) (hk : D.kS [] = 0) (hn : D.nS [] = 0) (hs : ∀ as, D.stops [] as = false)
-    (SO : Msg → ℕ → OSim) {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (c : (SimStop D I SO).C []) :
-    (SimStop D I SO).out H Vs θ [] c = [] := by
-  have hh : D.halted 0 [] [] = false := by simp [StopDeploy.halted, hs]
+theorem simStop_out_nil {W : Type} (D : Recursion.StopDeploy Coin) (I : Recursion.Inner Coin W) (H' : Msg → Msg)
+    (hI : I.V.k (xI D.toDeploy []) = 0) (hk : D.kS [] = 0) (hn : D.nS [] = 0) (hs : ∀ as, D.stops H' [] as = false)
+    (SO : Msg → ℕ → OSim) {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (c : (SimStop D I SO H').C []) :
+    (SimStop D I SO H').out H Vs θ [] c = [] := by
+  have hh : D.halted H' 0 [] [] = false := by simp [StopDeploy.halted, hs]
   unfold Simulator.out SimStop
   simp only [simStage, simRounds, spBind, hI, hk, hh, Bool.false_eq_true, ↓reduceIte]
   rw [simOuter_zero SO [] _ [] _ c.2.2 hn]
@@ -630,7 +630,7 @@ theorem ZKStop_fails (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
     ¬ ZKStop H (zkSR Coin SO) (zeroI Coin) (zkO Coin) := fun h =>
   ZKMal.not_zkmalR_of_out (N := Unit) (Ω := Unit) H _ _ [] _ _ _ [] ⟨[]⟩ ⟨recStmt, rfl, rfl, trivial⟩ Nat.one_pos
     (by rw [zk_εzk _ rfl rfl]; norm_num)
-    (fun c => by rw [simStop_out_nil (zkSR Coin SO) (zeroI Coin) rfl rfl rfl fun _ => rfl]; nofun)
+    (fun c => by rw [simStop_out_nil (zkSR Coin SO) (zeroI Coin) H rfl rfl rfl fun _ => rfl]; nofun)
     ((ZKMal.zkmalRx_const_of H _ (zkSR Coin SO).prover [] (fun _ _ => rfl) _ _ _ _).1
       (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _)))
 
@@ -643,7 +643,7 @@ theorem ZKPrivStop_fails (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
     ⟨{ recStmt with circ := some [] }, rfl, rfl, trivial⟩
     Nat.one_pos
     (by rw [zk_εzk _ rfl rfl]; norm_num)
-    (fun c => by rw [simStop_out_nil (zkSPR Coin SO) (zeroI Coin) rfl rfl rfl fun _ => rfl]; nofun)
+    (fun c => by rw [simStop_out_nil (zkSPR Coin SO) (zeroI Coin) H rfl rfl rfl fun _ => rfl]; nofun)
     ((ZKMal.zkmalRx_const_of H _ (zkSPR Coin SO).prover [] (fun _ _ => rfl) _ _ _ _).1
       (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _)))
 
