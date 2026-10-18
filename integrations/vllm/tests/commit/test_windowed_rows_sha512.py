@@ -33,14 +33,15 @@ def committer(mp, **kw) -> NC.NativeCollectCommitter:
 
 
 def rows_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes) -> bytes:
-    """step_rows's step root over the stream `commit_block_offline` packs (each tensor at the next ALIGN offset, zero-padded to 256 B)."""
+    """step_rows's step root over the stream `commit_block_offline` packs (each tensor at the next ALIGN offset, zero-padded to a
+    row), its layout counted in rows."""
     ref = nh.NativeHostCommitter(None, run_id=WR.RUN_ID, program_digest=WR.PD, geo_digest=WR.GEO, retain_values=False, gpu_tree=True)
     stream, metas, first_leaf = bytearray(), [], 0
     for i, (name, t) in enumerate(tensors):
         raw = t.cpu().contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
         stream.extend(b"\0" * (-len(stream) % nh.NativeHostCommitter.ALIGN))
-        n_leaves = -(-len(raw) // nh.GPU_CHUNK_BYTES)
-        m = nh.TensorMeta(i, name, nh._dtype_name(t), tuple(t.shape), len(raw), nh.GPU_CHUNK_BYTES, first_leaf, n_leaves)
+        n_leaves = -(-len(raw) // R.ROW_BYTES)
+        m = nh.TensorMeta(i, name, nh._dtype_name(t), tuple(t.shape), len(raw), R.ROW_BYTES, first_leaf, n_leaves)
         m.dev_off = m.stream_off = len(stream)
         stream.extend(raw)
         metas.append(m)
