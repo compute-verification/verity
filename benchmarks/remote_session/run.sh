@@ -70,10 +70,13 @@
 #   research run --queue --on vy-nebius-1 --phase cpu --cpus 16 ... --env ROLE=verifier --env PEER=vy-nebius-2 \
 #     --env PORT=7799 --env SESSIONS=2 --env WINDOWS=7 --env WINDOW_MS=60000 --env SAMPLES=33273 --env QUANTILE=max \
 #     --env JITTER_MS=50 --env VERIFIER_ARGS='--host-bytes 1843153879040' -- bash benchmarks/remote_session/run.sh
-#   research run --queue --on vy-nebius-2 --gpus 8 --preemptible --mem-gb 200 ... --env ROLE=prover --env PORT=7799 \
-#     --env SERVE=node --env PLAN=honest,skip:0.0625 --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 \
-#     --env ENGINE_ARGS='--step-hz 2' --env NODE_ARGS='--decode-s 60 --warm-openings 33273' \
-#     -- bash benchmarks/remote_session/run.sh
+#   research run --queue --on vy-nebius-2 --gpus 8 --preemptible --mem-gb 200 --max-min 60 --timeout 5h ... \
+#     --env ROLE=prover --env PORT=7799 --env SERVE=node --env PLAN=honest,skip:0.0625 --env ENGINE_CPUS=0-23 \
+#     --env PROVER_CPUS=24-47 --env ENGINE_ARGS='--step-hz 2 --align-steps' \
+#     --env NODE_ARGS='--decode-s 60 --warm-openings 33273' -- bash benchmarks/remote_session/run.sh
+#
+# Queue the prover first: its lease waits for all 8 GPUs (--timeout covers that wait, --max-min the lease), and once it
+# holds them it waits for the verifier's tunnel; start the verifier then.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
