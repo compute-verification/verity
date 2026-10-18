@@ -641,12 +641,13 @@ def by_handle(msg: dict | None, handle: str) -> bool:
     return bool(msg) and bool(msg.get("bot_id")) and msg.get("username") == handle
 
 
-def mentions(text: str, h: dict) -> str | None:
-    """Why `text` names the registry entry `h`, or None."""
+def mentions(text: str, h: dict, reg: dict) -> str | None:
+    """Why `text` names the registry entry `h`, or None.  A user-group mention names its id's group, which Slack shows and
+    notifies whatever the label says; the label counts only for an id no handle has (`lead_names` reads it so too)."""
     for gid, label in SUBTEAM_RE.findall(text or ""):
         if h.get("usergroup") and gid == h["usergroup"]:
             return f"user-group mention <!subteam^{gid}>"
-        if label.lstrip("@") == h["handle"]:
+        if label.lstrip("@") == h["handle"] and not any(o.get("usergroup") == gid for o in reg["handles"]):
             return f"user-group mention labelled @{h['handle']}"
     if re.search(rf"(?<![\w@./-])@{re.escape(h['handle'])}(?![\w-])", SUBTEAM_RE.sub(" ", text or "")):
         return f"plain-text @{h['handle']}"
@@ -654,7 +655,7 @@ def mentions(text: str, h: dict) -> str | None:
 
 
 def tagged(text: str, reg: dict) -> list[str]:
-    return [h["handle"] for h in reg["handles"] if mentions(text, h)]
+    return [h["handle"] for h in reg["handles"] if mentions(text, h, reg)]
 
 
 def is_announcement(msg: dict | None) -> bool:
@@ -687,12 +688,12 @@ def addressed(ev: dict, h: dict, reg: dict, key: str | None, api: Slack | None) 
     if not thread or thread == ev.get("ts"):
         if key and key != FRONT_DOOR and handle in subscribers(reg, key):
             return f"top-level post in #{key}, which @{handle} subscribes to"
-        if why := mentions(text, h):
+        if why := mentions(text, h, reg):
             return why
         if is_announcement(ev) and to_every_handle(text):
             return "an announcement to every handle"
         return None
-    if not is_status(text) and (why := mentions(text, h)):
+    if not is_status(text) and (why := mentions(text, h, reg)):
         return why
     if api is None:
         return None
@@ -706,7 +707,7 @@ def addressed(ev: dict, h: dict, reg: dict, key: str | None, api: Slack | None) 
     started = f"thread {thread} (started {both(thread)})"
     if by_handle(root, handle) or any(by_handle(m, handle) for m in msgs if m.get("ts") != ev.get("ts")):
         return f"{started}: @{handle} posted in it"
-    if root and mentions(root.get("text", ""), h):
+    if root and mentions(root.get("text", ""), h, reg):
         return f"{started}: its root addresses @{handle}"
     if key and key != FRONT_DOOR and handle in subscribers(reg, key):
         return f"{started} in #{key}, which @{handle} subscribes to"

@@ -628,6 +628,17 @@ def test_match_an_ask_only_for_its_owner(fake, registry, capsys):
     assert not fake.calls
 
 
+def test_a_user_group_mention_names_its_ids_group_whatever_its_label_says(fake, registry, capsys):
+    """Slack shows and notifies the group of a mention's id; the label is the sender's text, so it counts only for an id no
+    handle has (as in `lead_names`)."""
+    reg = slack.load_registry(registry)
+    forged = "<!subteam^SINFRA|@proofs> rotate the keys"
+    assert match(capsys, "infra", {"text": forged, "ts": "5.0"})[0] == 0
+    assert match(capsys, "proofs", {"text": forged, "ts": "5.0"}) == (1, "not addressed\n")
+    assert slack.tagged(forged, reg) == slack.lead_names(forged, reg) == ["infra"]
+    assert slack.tagged("<!subteam^SUNKNOWN|@proofs> hi", reg) == ["proofs"]
+
+
 def test_match_announcements_to_all_and_to_some(fake, registry, capsys):
     to_all = {"text": f"{slack.ANNOUNCE} *Announcement* from @infra to every handle\nbroker", "ts": "6.0", "channel": COORD,
               "username": "infra", "bot_id": BOT}
