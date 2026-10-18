@@ -117,4 +117,30 @@ def tail : Circuit :=
 #guard ProvedScope.scopeWhy false (rms 0) == "a unit reading 2 input groups"
 #guard ProvedScope.scopeWhy false tail == "a circuit whose outputs a tail stage computes (META out_net)"
 
+/-- A repeated last stage: two units, each wiring its own slot of a stage of two 16-bit output ports, the output words'
+`(slot, port)` (META `out_net_ports` of `[slot, port]` pairs) `slots` and `ports`. -/
+def slotted (slots ports : Array Nat) : Circuit :=
+  { circ #[net #[⟨0, 1, #[1]⟩] 1 #[1] #[(#[0], #[0])], net #[⟨0, 1, #[1]⟩] 1 #[16, 16] (Array.replicate 32 (#[0], #[0]))]
+      #[2, 2] #[(1, 0, 0, 0, 0, 0), (1, 1, 0, 0, 1, 0)] with
+    outNet := 1, outPorts := #[("y", 2)], outNetPorts := ports, outNetSlots := some slots }
+
+def slottedOk (slots ports : Array Nat) : Bool :=
+  HmRow.slottedOk (slotted slots ports) slots (portCols ((slotted slots ports).nets.getD 1 default).2.outGroups)
+
+-- one 16-bit port of a slot per output word, each (slot, port) once: any slot and port of the stage, in any order
+#guard slottedOk #[0, 1] #[0, 0] && slottedOk #[1, 0] #[0, 0] && slottedOk #[0, 0] #[0, 1] && slottedOk #[1, 1] #[1, 0]
+#guard !slottedOk #[0, 0] #[0, 0] && !slottedOk #[0, 2] #[0, 0] && !slottedOk #[0, 1] #[0, 2] && !slottedOk #[0] #[0]
+#guard ProvedScope.wiresAcyclic (slotted #[0, 1] #[0, 0]) && ProvedScope.scopeOkI (slotted #[0, 1] #[0, 0])
+-- output word `o` at its slot's port
+#guard (List.range 2).all fun o =>
+  HmOut.outCol (slotted #[0, 1] #[0, 0]) 1 o == (slotted #[0, 1] #[0, 0]).slotCol 1 1 o + WORD
+#guard HmOut.outCol (slotted #[1, 1] #[1, 0]) 0 0 == (slotted #[1, 1] #[1, 0]).slotCol 1 0 1 + WORD + 16
+
+-- META `out_net_ports`: ports alone (slot 0), `[slot, port]` pairs, or a mix
+#guard (HmRow.outNetEntries #[Lean.toJson 0, Lean.toJson 1]).toOption == some (#[0, 1], none)
+#guard (HmRow.outNetEntries #[.arr #[Lean.toJson 0, Lean.toJson 0], .arr #[Lean.toJson 1, Lean.toJson 0]]).toOption ==
+  some (#[0, 0], some #[0, 1])
+#guard (HmRow.outNetEntries #[Lean.toJson 3, .arr #[Lean.toJson 1, Lean.toJson 0]]).toOption == some (#[3, 0], some #[0, 1])
+#guard (HmRow.outNetEntries #[.arr #[Lean.toJson 1]]).toOption.isNone
+
 end Flock.Test.Wires
