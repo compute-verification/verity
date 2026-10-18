@@ -79,6 +79,16 @@ import Proofs.Flock.Claims.KS.ZkSlackW
 import Proofs.Flock.Claims.KS.ForkCoupling
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.ZkSlackFit
+import Proofs.Flock.Claims.KS.ZkSim
+import Proofs.Flock.Claims.KS.ZkLock
+import Proofs.Flock.Claims.KS.ZkStep
+import Proofs.Flock.Claims.KS.ZkClash0
+import Proofs.Flock.Claims.KS.PlainLevels
+import Proofs.Flock.Claims.KS.LevelsAll
+import Proofs.Flock.Claims.KS.ZkLevelsAll
+import Proofs.Flock.Claims.KS.ZkLevels
+import Proofs.Flock.Claims.KS.ZkClashL
+import Proofs.Flock.Claims.KS.ZkFork0
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -401,4 +411,38 @@ a query and level 0's weight under `2^40`, the joined weights are at most `2^41`
 at chances at most `2^{-128}`, so at the coupling's chances where every revealed length before the last round is
 positive (`ZkSlackFit`: `Claims.Flock.sum_slackCW_le`, `Claims.Flock.sum_slackTW_le`, `Claims.Flock.slackFitW_of_le`,
 `Claims.Flock.joinCW_le_room`, `FlockDeploy.KS.m1_slackNums`, `FlockDeploy.KS.zk_slackFitW`,
-`FlockDeploy.KS.zk_slackFitW_δN`). -/
+`FlockDeploy.KS.zk_slackFitW_δN`). The masked simulator runs each prover round by round at uniform functions of the
+live coins' history, its rounds on the masked wire at their stream and count, with each table's fork rounds at its
+reps' caps, pads and `τ` and level 0 at the link coin; it meets `ZkSimWJ`, so masked KS and the recursion's premise
+hold, from four named Props: its lockstep, its abort, its fork bounds and a view's self-clash giving a column clash
+(`ZkSim`: `FlockDeploy.KS.zkSim`, `FlockDeploy.KS.zkΦ`, `FlockDeploy.KS.zkRd`, `FlockDeploy.KS.zk_simFork_le`,
+`FlockDeploy.KS.ZkSimRunAt`, `FlockDeploy.KS.ZkSimAbortAt`, `FlockDeploy.KS.ZkSimForkLe`,
+`FlockDeploy.KS.ZkViewClash`, `FlockDeploy.KS.zkSimWJ_of_parts`, `FlockDeploy.KS.zk_KS_of_parts`,
+`FlockDeploy.KS.zk_tableBoundJOnAccR_of_parts`, `FlockDeploy.KS.zk_KSFlock_of_parts`). Its lockstep and abort hold at
+every statement: it sends `P`'s messages at `zkΦ`'s coins along the live history and aborts where `V true` rejects
+(`ZkLock`: `FlockDeploy.KS.zkSim_liveOut`, `FlockDeploy.KS.zkSimAbortAt`), and where `P`'s run accepts its live
+outcome is the record's view, the record's rounds read back stream by stream (`ZkStep`: `FlockDeploy.KS.zkSim_reps`,
+`FlockDeploy.KS.zkSimRun`, `FlockDeploy.KS.zkSimRunAt`), so masked KS and the recursion's premise rest on its fork
+bounds and view clashes alone (`FlockDeploy.KS.zk_KS_of_fork`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_fork`,
+`FlockDeploy.KS.zk_KSFlock_of_fork`). The view's clash splits along the self-clash's three cases (`ZkClash0`:
+`FlockDeploy.KS.ZkViewClashQ`, `FlockDeploy.KS.zkViewClash_of_Q`). At level 0, where the clash compares whole rows,
+the deployed decoders are right at the reps' opened rows at the view (`ZkRows`: `FlockDeploy.KS.decodesTableR_deploy`),
+which are the run's rows, each a Merkle opening in its log, so two that differ at one position collide there
+(`FlockDeploy.KS.rawRows_zk`, `FlockDeploy.KS.zk_rowClash_tiedJ`, `FlockDeploy.KS.zkViewClashQ₀`); masked KS and the
+recursion's premise rest on the fork bounds and the view's clashes past level 0 and at the pads
+(`FlockDeploy.KS.zk_KS_of_later`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_later`,
+`FlockDeploy.KS.zk_KSFlock_of_later`). Past level 0, each of an accepted masked rep's later requests is one level's
+(`ZkLevelsAll`: `FlockSoundness.Discharge.ZkExec.zk_rep_reqsL`), whose queries sit at round `zkLevelRound` of the rep's
+stream and pass the level's Merkle check against the proof's recursive cap (`ZkLevels`: `FlockDeploy.KS.zkLevelRound`,
+`FlockDeploy.KS.zkLevels_verifyWithM`), so two of one rep's level-`ℓ` rows at one position that differ collide in its
+log (`FlockDeploy.KS.zk_levelClash_tiedJ`). The decoders are right at those rows at the view too
+(`FlockSoundness.Discharge.ZkExec.zk_rep_rowsL`), so the view's clash past level 0 is such a collision (`ZkClashL`:
+`FlockDeploy.KS.zkViewClashQL`), and masked KS and the recursion's premise rest on the fork bounds and the view's pads
+clash alone (`FlockDeploy.KS.zk_KS_of_pads`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_pads`,
+`FlockDeploy.KS.zk_KSFlock_of_pads`). At level 0 the masked simulator's fork bound holds (`ZkFork0`:
+`FlockDeploy.KS.zkSimForkLe₀`): `Adv₀` after `Commit` is two independent runs, at most two independent live runs
+decoding to a level-0 clash (`FlockDeploy.KS.adv₀SZ_simAtJZ_le`, through the simulation after `j` coins of `ForkSim`),
+which are two accepting runs of `P` whose rows at one position differ and collide in their logs
+(`FlockDeploy.KS.zkPair₀`). So masked KS and the recursion's premise rest on the cap/`τ` and pads fork bounds and the
+pads clash (`FlockDeploy.KS.zk_KS_of_kinds`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_kinds`,
+`FlockDeploy.KS.zk_KSFlock_of_kinds`). -/
