@@ -40,24 +40,24 @@ eight items:
    (`Deploy.P`) at the deployed error (`Deploy.δc`), `ScopeMatches`, `Nontrivial`, and the private variant's `KSPriv`,
    `ZKPriv`; `At Flock` instantiates the inner protocol with Flock and its decoder. The inner protocol's claim the
    recursion rests on is `Inner.KSAbort`: its KS against provers that may abort after the inner rounds, on coins the
-   inner verifier doesn't read (with no aborts, `Inner.KS`). `KSBound` and `KSPrivBound` (option (d)) are `KS` and
-   `KSPriv` at the compiled record whose inner view runs the verifier at the representation V* binds (`Bound.IVStar`:
-   the inner session's commit strings and their openings), and `Bridge` states the inner claim they rest on, from
-   Flock's at that representation.
+   inner verifier doesn't read (with no aborts, `Inner.KS`).
 7. **Assumptions used.** `StrictBirthday` (for `B`), `ExpectedCR` (for `Be`), each read once in `Bits`; `Hm96Hiding`
    (hm96 leaves hide up to `δ₁`) at the deployed key's salt mask and salt hash (`Deploy.mask`, `Deploy.saltHash`), read
-   in `ZK`, `ZKPriv` and `ZKStop`; and `trustedBase`. The decoders are those within Flock's list-decoding radius
-   (`decOK`, `Flock.ListWithin`).
+   in `ZK` and `ZKPriv`; and `trustedBase`. The decoders are those within Flock's list-decoding radius (`decOK`,
+   `Flock.ListWithin`).
 8. **Status.** A draft: nothing here is frozen. `γ` and `γe` are the constants the recursion's KS proof gives from
    `Inner.KSAbort`; `κ` and `cBe` are the draft's, fixed by the proof before freezing. `ZK`'s errors are Flock's proved
    `--zk` simulation error at each V* session (`Nums.εzk`) and `2δ₁` per commit string of the inner session and the
-   staging messages. `ZKStop` restates `ZK` for Daniel's card, statement only: of the record's own reference prover on
-   the finite tape each statement's nonce and rest draw (`StopDeploy.prover`, `ZKmalRx`), which stops where the
-   statement and the public transcript before the sessions say the honest proof can be refused (`StopDeploy.stops`),
-   at the simulator that stops there too and commits to the zero digest as many strings at each inner round as the
-   reference prover's round carries (`SimStop`, `StopDeploy.nAt`), within `2δ₁` per string (`εzkStop`). Option
-   (d)'s section is a statement for review, with no proof. `Bound.WeightCovers`' constant is the draft's, fixed by
-   the bridge's proof before freezing.
+   staging messages. `ZKStop` restates `ZK` for Daniel's card, statement only, and reads `Hm96Hiding` as `ZK` does: of
+   the record's own reference prover on the finite tape each statement's nonce and rest draw (`StopDeploy.prover`,
+   `ZKmalRx`), which stops where the statement and the public transcript before the sessions say the honest proof can
+   be refused (`StopDeploy.stops`), at the simulator that stops there too and commits to the zero digest as many
+   strings at each inner round as the reference prover's round carries (`SimStop`, `StopDeploy.nAt`), within `2δ₁`
+   per string (`εzkStop`). Option (d)'s section is a statement for review, with no proof: `KSBound` and `KSPrivBound`
+   are `KS` and `KSPriv` at the compiled record whose inner view runs the verifier at the representation V* binds
+   (`Bound.IVStar`: the inner session's commit strings and their openings), and `Bridge` states the inner claim they
+   rest on, from Flock's at that representation. `Bound.WeightCovers`' constant is the draft's, fixed by the bridge's
+   proof before freezing.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
