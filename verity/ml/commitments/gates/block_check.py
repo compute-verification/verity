@@ -78,6 +78,8 @@ folds of the high half by C; a round adds about 9 N for its additions, negation 
 the receipt ROWS sketch rows of about 9 BYTES ANDs each and one compression (0.66 M at 16 rows); the receipt leaf's digest
 ceil((64 LEAF + 17) / 128) compressions, each hm96 leaf four, each read's leaf two and each level three, so DR + DP + DV
 levels. The C-Flock lowering adds about half again, ANDs on identical operands (circuit-check's redundant-gates/boolean).
+At A7's binding (p512/k2 unmasked, 4,096-byte blocks, 16 rows, LEAF 16, P 48, DR 2, DP 5, DV 6) the unit lowers to
+29,142,550 ANDs, k_log 26, within C-Flock's K_MAX of 27: checks 1-3 and 5 are one unit. p1024/k3/masked would be past K_MAX.
 
 `opening_check` is the reference, over an instance's u16 words; `opening_args` an instance's arguments, `opening_public` its
 public rows' (the verifier's own), `opening_rows` its rows (C-Flock's ``in_rows`` params), `row_words` its rows' words and
