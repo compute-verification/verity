@@ -19,7 +19,8 @@ arm's measures, each measurement naming its `arm` (stock, sha512, blake3). The v
 `python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis "..." --outcome kept|dropped --reason "..."`.
 
 - `job.sh`: the workload on one GPU: the model check, then in the lease the committer's GPU byte-identity tests and `check_b3.py`
-  (a failure is no timing), `prof.sh` under `gpu-lease 1 --wait` (the node's lease flags, timeouts inside the lease), the SM
+  once in each rows-sha512 leaf form (`VERITY_ROWS_FORM=fused` and `split`, `native_rows.cu`; the timed arms run the device's
+  own: fused on sm_120, split elsewhere; a failure is no timing), `prof.sh` under `gpu-lease 1 --wait` (the node's lease flags, timeouts inside the lease), the SM
   clocks read before and after, then `collect.py`.
 - The BLAKE3 sibling arm (`served-commit-rows-blake3`, `arms.py`): circuits' rows arm under the committer's research scheme
   `rows-blake3` (`verity_vllm.commit.step_rows_b3`, `native_rows_b3.cu`: the same step, keyed BLAKE3 in every hash position;
