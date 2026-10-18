@@ -18,6 +18,11 @@ negatives.
   (`verity.ml.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
   law, their witness rows bound to canonical commitments, then wired to the remote bandwidth audit's ledger as its
   requirement link (`audit.RequirementLink`).
+- `zk_cost.sh`: C-Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
+  host job on vy-nebius-1). A6's W8A8 coordinates at K = 4096 and 14336 are staged in statements of 1 to 512 units, and
+  sessions of 1 to 512 drawn units are proved by `flock-circuit prove --zk --gpu`, with the firewall's send check on and
+  off. The Lean verifier checks them, and the job fits the per-session, per-statement and per-unit costs with their
+  standard errors, writing `costfit` observations.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
