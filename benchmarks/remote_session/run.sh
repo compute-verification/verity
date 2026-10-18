@@ -54,7 +54,8 @@
 # against ROLE=verifier with SESSIONS=1 (one session a store). SERVE=tiny runs `serve.py --connect` (the vLLM tests'
 # tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
 # the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
-# tunnel; its Commit refuses --remote-verifier until it puts the store binder on its engine. Milestone 3's thin slice,
+# tunnel; its Commit puts the store binder on its engine and proves the store once its runs are done
+# (`verity_vllm.store.remote.CommitSession`: one GPU, synchronous scheduling, bf16 KV). Milestone 3's thin slice,
 # int8 Llama-3.1-8B:
 #
 #   research run --on vy-nebius-1 --phase cpu ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7797 \
