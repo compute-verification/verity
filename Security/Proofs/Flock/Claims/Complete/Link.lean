@@ -270,10 +270,7 @@ theorem Case.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Rea
     rw [hpi] at this
     exact this
   have hl := (FlockSoundness.Discharge.FailClosed.check_ok hc').1.2.2.2.1
-  have hcount : p.I.count ≤ 1 := by
-    rcases hR.2.2.2.2.1 with h | h
-    · rw [hzk] at h; cases h
-    · exact h
+  have hcount : p.I.count ≤ 1 := by simpa [hzk] using hR.2.2.2.2.1
   have hset := Ins.setup_read (setupOf_some c.setup).2
   rw [← ht] at hset
   unfold Readable.Read.setup at hset
