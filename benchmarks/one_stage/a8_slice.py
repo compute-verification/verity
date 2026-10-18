@@ -93,10 +93,10 @@ def main() -> int:
     return 0
 
 
-def ckpt_subset(ckpt: Path, layers: set[int], dst: Path) -> dict:
+def ckpt_subset(ckpt: Path, layers: set[int], dst: Path, extra: frozenset[str] = frozenset()) -> dict:
     """One safetensors file holding the checkpoint's tensors of `layers` but their routed experts (``mlp.experts.<e>.``),
-    byte for byte: the sources `weights_of_record.compose` reads for those layers' attention, dense MLP, router and shared
-    experts."""
+    and the tensors named in `extra` (``lm_head.weight``), byte for byte: the sources `weights_of_record.compose` reads for
+    those layers' attention, dense MLP, router and shared experts."""
     want = []
     for fn in sorted(p.name for p in ckpt.glob("*.safetensors")):
         with open(ckpt / fn, "rb") as f:
@@ -104,7 +104,7 @@ def ckpt_subset(ckpt: Path, layers: set[int], dst: Path) -> dict:
             hdr = json.loads(f.read(n))
         for name, meta in hdr.items():
             m = LAYER.match(name)
-            if name != "__metadata__" and m and int(m[1]) in layers and ".mlp.experts." not in name:
+            if name != "__metadata__" and (name in extra or (m and int(m[1]) in layers and ".mlp.experts." not in name)):
                 want.append((name, fn, 8 + n, meta))
     header, off = {}, 0
     for name, _fn, _base, meta in want:
