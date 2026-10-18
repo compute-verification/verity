@@ -8,7 +8,8 @@
 //     sr_data), with commit_gpu's tree schedule (a level a launch while a level is wider than 512 nodes, then one block for
 //     the rest); sr_data's fold and climb (k_leaf_fold), its nodes by length or (sm_100) through compress_compact /
 //     node_rt; sr_leaf4 (k_leaf_spec) with mask_roll;
-//   * hash_fast.cuh (benchmarks/pouw/pearl_c_sm120): row-seg's segments a thread from their header's state, then a fold a unit.
+//   * hash_fast.cuh (benchmarks/pouw/pearl_c_sm120): row-seg's segments a thread from their header's state, then a fold a unit;
+//     rows take one launch with their digests in shared memory, as hash_h3.cuh's s512_rows (benchmarks/pouw/pearl_c) does.
 #include <cuda_runtime.h>
 
 #include <cstdint>
@@ -748,18 +749,27 @@ __global__ void __launch_bounds__(128, 2) k_tile_segs(const __grid_constant__ Ro
   st_w(dig + 8 * t, st, 8);
 }
 
-// a unit's digest over its s segment digests (words) from the Q state, into out (byte order)
-DEV void seg_fold(const u64* qst, const u64* dig, u32 s, uint8_t* out) {
+// n words from global (__ldg) or, SH, shared memory, which __ldg can't read
+template <bool SH> DEV void ld_dig(const u64* p, u64* d, int n) {
+  if constexpr (SH) {
+#pragma unroll
+    for (int i = 0; i < n; ++i) d[i] = p[i];
+  } else {
+    ld_w(p, d, n);
+  }
+}
+// a unit's digest over its s segment digests (words; SH, in shared memory) from the Q state, into out (byte order)
+template <bool SH> DEV void seg_fold(const u64* qst, const u64* dig, u32 s, uint8_t* out) {
   u64 st[8], w[16];
   cpy8(st, qst);
   u32 j = 0;
 #pragma unroll 1
   for (; j + 1 < s; j += 2) {
-    ld_w(dig + 8 * j, w, 16);
+    ld_dig<SH>(dig + 8 * j, w, 16);
     sha::compress(st, w);
   }
   if (j < s) {
-    ld_w(dig + 8 * j, w, 8);
+    ld_dig<SH>(dig + 8 * j, w, 8);
 #pragma unroll
     for (int t = 8; t < 16; ++t) w[t] = 0;
     w[8] = 0x8000000000000000ull;
@@ -786,7 +796,7 @@ __global__ void __launch_bounds__(128) k_rows_seg(const __grid_constant__ RowK R
     if (r0 + q < n) seg_hash(R, tab, 0, j, rows + (r0 + q) * stride + (u64)SEG * j, sdig + 8 * t);
   }
   __syncthreads();
-  if (threadIdx.x < g && r0 + threadIdx.x < n) seg_fold(R.mid_Q[0], sdig + 8ull * s * threadIdx.x, s, out + 64 * (r0 + threadIdx.x));
+  if (threadIdx.x < g && r0 + threadIdx.x < n) seg_fold<true>(R.mid_Q[0], sdig + 8ull * s * threadIdx.x, s, out + 64 * (r0 + threadIdx.x));
 }
 constexpr u32 ROWS_SEG_MAX_S = 768;   // k_rows_seg's 64 s bytes of shared memory within the default 48 KiB
 
@@ -798,7 +808,7 @@ __global__ void __launch_bounds__(32) k_folds(const __grid_constant__ RowK R, co
   const bool head = u < n0;
   const u32 s = head ? R.s[0] : R.s[1];
   const u64 off = head ? u * R.s[0] : n0 * R.s[0] + (u - n0) * R.s[1];
-  seg_fold(R.mid_Q[head ? 0 : 1], dig + 8 * off, s, out + 64 * u);
+  seg_fold<false>(R.mid_Q[head ? 0 : 1], dig + 8 * off, s, out + 64 * u);
 }
 
 // Pearl-C's row seeds: H_seed-A(salt || digest || root_B || u64le(unit << 32 | row)), the first 32 bytes
