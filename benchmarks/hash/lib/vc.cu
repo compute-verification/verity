@@ -4,10 +4,10 @@
 // stream with no symbol copy:
 //   * native_rows.cu (circuits, cursor/commit-speed-21f3 934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
 //     hash_after_block, salt_prf, salt_digest, the nibble-table mask, the leaf, the level kernels and the host builder;
-//   * sharaw.cu (hash, cursor/verity-hash-15ad 4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
-//     sr_data), with commit_gpu's tree schedule (a level a launch while a level is wider than 512 nodes, then one block for
-//     the rest); sr_data's fold and climb (k_leaf_fold), its nodes by length or (sm_100) through compress_compact /
-//     node_rt; sr_leaf4 (k_leaf_spec) with mask_roll;
+//   * sharaw.cu (hash, cursor/verity-hash-15ad 4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8, on
+//     sm_120 sr_salt's nibble table; sr_data), with commit_gpu's tree schedule (a level a launch while a level is wider than
+//     512 nodes, then one block for the rest); sr_data's fold and climb (k_leaf_fold), its nodes by length or (sm_100)
+//     through compress_compact / node_rt; sr_leaf4 (k_leaf_spec) with mask_roll;
 //   * hash_fast.cuh (benchmarks/pouw/pearl_c_sm120): row-seg's segments a thread from their header's state, then a fold a unit;
 //     rows take one launch with their digests in shared memory, as hash_h3.cuh's s512_rows (benchmarks/pouw/pearl_c) does.
 #include <cuda_runtime.h>
@@ -837,18 +837,23 @@ __global__ void __launch_bounds__(THREADS) k_row_seeds(const __grid_constant__ S
   st_be(out + 32 * i, st, 4);
 }
 
-// The salt phase, a thread a position (sharaw's sr_salt8): M_key y from the byte table each CTA builds in shared memory from Tn,
-// c, the frame leaf's first block; a pad for n_total <= pos. Thread i < n_ctr zeroes k_leaf_fold's counter i.
-template <int SX>
+// The salt phase, a thread a position (sharaw's sr_salt8, or NIB its sr_salt): M_key y from the byte table each CTA builds in
+// shared memory from Tn (T8_BYTES), or NIB from Tn itself copied there (TN_BYTES); c, the frame leaf's first block; a pad for
+// n_total <= pos. Thread i < n_ctr zeroes k_leaf_fold's counter i.
+template <int SX, bool NIB>
 __global__ void __launch_bounds__(256, 2) k_salt8(const __grid_constant__ LeafK K, const uint8_t* __restrict__ tab,
                                                   const uint8_t* __restrict__ salts, u64 first, u64 m, u64 n_total, u64* __restrict__ rec,
                                                   uint8_t* __restrict__ lv0, u32* __restrict__ ctr, u64 n_ctr) {
   extern __shared__ uint4 T8[];
   const uint4* Tn = reinterpret_cast<const uint4*>(tab);
-  for (int k = threadIdx.x; k < 256 * 16; k += blockDim.x) {
-    const int b = k >> 4, c = k & 15;
-    const uint4 lo = Tn[16 * c + (b & 15)], hi = Tn[256 + 16 * c + (b >> 4)];
-    T8[17 * b + c] = make_uint4(lo.x ^ hi.x, lo.y ^ hi.y, lo.z ^ hi.z, lo.w ^ hi.w);
+  if constexpr (NIB) {
+    for (int k = threadIdx.x; k < TN_BYTES / 16; k += blockDim.x) T8[k] = Tn[k];
+  } else {
+    for (int k = threadIdx.x; k < 256 * 16; k += blockDim.x) {
+      const int b = k >> 4, c = k & 15;
+      const uint4 lo = Tn[16 * c + (b & 15)], hi = Tn[256 + 16 * c + (b >> 4)];
+      T8[17 * b + c] = make_uint4(lo.x ^ hi.x, lo.y ^ hi.y, lo.z ^ hi.z, lo.w ^ hi.w);
+    }
   }
   __syncthreads();
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
@@ -859,7 +864,8 @@ __global__ void __launch_bounds__(256, 2) k_salt8(const __grid_constant__ LeafK 
     u64 Y[24], c[8], my[8], f[8];
     u32 mk[16];
     salt_of(K, salts, i, pos, Y);
-    mask8(T8, Y, mk);
+    if constexpr (NIB) mask_nib_s(reinterpret_cast<const uint8_t*>(T8), Y, mk);
+    else mask8(T8, Y, mk);
     salt_digest(K, Y, c);
     mask_words(mk, my);
     u64* r = rec + (REC / 8) * i;
@@ -1311,6 +1317,16 @@ unsigned blocks(u64 n, u64 t) { return (unsigned)((n + t - 1) / t); }
 int depth_of(u64 n) { int d = 0; while ((1ull << d) < n) ++d; return d; }
 int rc() { return (int)cudaGetLastError(); }
 
+// the salt phase's table: the nibble table on sm_120, whose SM's shared memory (about 100 KiB) holds one byte-table CTA (68 KiB);
+// the byte table elsewhere
+int salts_launch(const Plan* p, const uint8_t* t, const uint8_t* salts, u64 first, u64 m, u64 n_total, u64* r, uint8_t* lv0,
+                 u32* ctr, u64 nc, cudaStream_t st) {
+  const bool nib = device_major() == 12;
+  const auto salt = p->leaf.sx ? (nib ? k_salt8<4, true> : k_salt8<4, false>) : (nib ? k_salt8<0, true> : k_salt8<0, false>);
+  salt<<<blocks(m, 256), 256, nib ? TN_BYTES : T8_BYTES, st>>>(p->leaf, t, salts, first, m, n_total, r, lv0, ctr, nc);
+  return rc();
+}
+
 }  // namespace
 
 extern "C" {
@@ -1472,8 +1488,8 @@ int vc_empty_root(const void* plan, uint8_t* out64) {
 }
 
 int vc_init(void) {
-  cudaError_t e = cudaFuncSetAttribute(k_salt8<0>, cudaFuncAttributeMaxDynamicSharedMemorySize, T8_BYTES);
-  if (!e) e = cudaFuncSetAttribute(k_salt8<4>, cudaFuncAttributeMaxDynamicSharedMemorySize, T8_BYTES);
+  cudaError_t e = cudaFuncSetAttribute(k_salt8<0, false>, cudaFuncAttributeMaxDynamicSharedMemorySize, T8_BYTES);
+  if (!e) e = cudaFuncSetAttribute(k_salt8<4, false>, cudaFuncAttributeMaxDynamicSharedMemorySize, T8_BYTES);
   return (int)e;
 }
 
@@ -1563,11 +1579,7 @@ int vc_salts_launch(const void* plan, const void* tables, const uint8_t* salts, 
   const Plan* p = plan_of(plan);
   if (!p || !p->has_hm96 || !tables || first + m > (1ull << 32)) return -1;
   if (!m) return 0;
-  const auto t = static_cast<const uint8_t*>(tables);
-  u64* r = static_cast<u64*>(scratch);
-  if (p->leaf.sx) k_salt8<4><<<blocks(m, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, first, m, n_total, r, lv0, nullptr, 0);
-  else k_salt8<0><<<blocks(m, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, first, m, n_total, r, lv0, nullptr, 0);
-  return rc();
+  return salts_launch(p, static_cast<const uint8_t*>(tables), salts, first, m, n_total, static_cast<u64*>(scratch), lv0, nullptr, 0, st);
 }
 
 int vc_leaves_x_launch(const void* plan, const uint8_t* x, uint64_t first, uint64_t m, uint64_t n_total, const void* scratch,
@@ -1724,12 +1736,7 @@ int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* r
     const u64 nc = fold_ctrs(width);
     const u32 cnt = (u32)(width < THREADS ? width : THREADS);
     const int depth = depth_of(n);
-    if (p->leaf.sx) {
-      k_salt8<4><<<blocks(width, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, 0, width, n, r, levels, ctr, nc);
-    } else {
-      k_salt8<0><<<blocks(width, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, 0, width, n, r, levels, ctr, nc);
-    }
-    if (int e = rc()) return e;
+    if (int e = salts_launch(p, t, salts, 0, width, n, r, levels, ctr, nc, st)) return e;
     // the compact node on sm_100 only: at 34,737 rows sharaw's v1 (by length) against v1n (compact) is 0.563 vs 0.555 ms on
     // B200, 0.502 vs 0.520 on RTX PRO 6000 and 0.877 vs 0.973 on H200
     const bool compact = device_major() == 10;
