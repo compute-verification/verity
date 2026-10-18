@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -279,6 +280,52 @@ def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
     (pkg / "remote.py").write_text("def tool_identity(): pass\n")
     assert remote.knows_queue(None) and remote.knows_queue(Path(remote.__file__).parent)
     assert not remote.knows_queue(pkg) and not remote.knows_queue(tmp_path / "nope")
+    assert remote.knows_gpus(None) and remote.knows_gpus(Path(remote.__file__).parent) and not remote.knows_gpus(pkg)
+
+
+def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypatch, capsys):
+    """`research run --on auto` (18 Oct, remote by default): --queue pinned to vy-nebius-2 (its Verity share, nice 19 inside the check
+    slots), from the checkout it runs in, as project verity and kind agent-test, which gives what the run doesn't declare."""
+    from research import remote
+
+    specs, sources = [], []
+
+    def place(src, run_id, spec):
+        specs.append(spec)
+        sources.append(src)
+        raise remote.Refused("placement reached")
+
+    monkeypatch.setattr(remote, "queue_placement", place)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    monkeypatch.chdir(repo)
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    assert main([*runs, "--", "pytest", "-q"]) == 3
+    assert main([*runs, "--cpus", "8", "--mem-gb", "32", "--timeout", "2h", "--", "pytest"]) == 3
+    assert [(s["project"], s["kind"], s["node"], s["cpus"], s["mem-gb"], s["max-s"]) for s in specs] == [
+        ("verity", "agent-test", "vy-nebius-2", None, None, None), ("verity", "agent-test", "vy-nebius-2", 8, 32, 7200)]
+    assert sources[0].resolve() == repo.resolve() and {s["preempt"] for s in specs} == {"requeue"}, "a guest on node 2 is preemptible"
+    assert "queued onto vy-nebius-2 as agent-test" in capsys.readouterr().err
+    assert main([*runs, "--queue", "--", "true"]) == 2 and "takes no --queue or --pool" in capsys.readouterr().err
+    monkeypatch.chdir(tmp_path)
+    assert main([*runs, "--", "true"]) == 2 and "no git checkout here" in capsys.readouterr().err
+
+
+def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):
+    """INF-55: `research run --on M --gpus N` asks the machine for N GPUs through its gpu-lease (remote.gpu_lease_wrap)."""
+    from research import remote
+
+    seen = []
+
+    def launch(**kw):
+        seen.append(kw["gpus"])
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+
+    monkeypatch.setattr(remote, "launch", launch)
+    on = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2"]
+    assert main([*on, "--gpus", "8", "--", "true"]) == 0 and main([*on, "--", "true"]) == 0
+    assert seen == [8, None]
 
 
 def test_pss_flags_for_a_source_tree_that_predates_them_are_refused_before_placement(tmp_path, monkeypatch, capsys):
