@@ -1580,11 +1580,14 @@ stays `NON_ZK_PROOF`. Its `pads` (and `tables`, for `J > 1`) name the prover's r
 statements (`Tags.osMasks`, Daniel's decision 4), ChaCha20 streams of the prover's seed for those pinned `@cec3e347` and
 earlier. **Agreement:** README.
 
-Each table's statement must have upstream's mask shape (`Zk.shapeOk`), and, which upstream does not check, its Δ and its
-regions avoid the mask slot (`Zk.maskFree`, D12): no pair of `da` or `db` has a row or a column in the mask range's
-word-aligned span, and every region fixes, at each of the span's words, an in-block word bit (`i + 7 < k_log`, not
-free) that differs from the word's bit `i`. Otherwise the verifier refuses: `zk: a pair of Δ or a region meets the mask
-slot`. The zero-knowledge proof covers no such statement: a region or a wire there would read the masks.
+Each table's statement must have upstream's mask shape (`Zk.shapeOk`): a mask slot of at least `2^13` bits
+(`Zk.SLOT_LOG_MIN`, the least slot the bound on the rank check's refusals covers; below it the verifier refuses
+`slot_log = 12: --zk needs a mask slot of slot_log >= 13`), and at least `128 · 4 + 64` mask words over the blocks.
+Its Δ and its regions must also, which upstream does not check, avoid the mask slot (`Zk.maskFree`, D12): no pair of
+`da` or `db` has a row or a column in the mask range's word-aligned span, and every region fixes, at each of the span's
+words, an in-block word bit (`i + 7 < k_log`, not free) that differs from the word's bit `i`. Otherwise the verifier
+refuses: `zk: a pair of Δ or a region meets the mask slot`. The zero-knowledge proof covers no such statement: a region
+or a wire there would read the masks.
 
 ### 16.15 The forms the soundness proof covers
 
