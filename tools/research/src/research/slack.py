@@ -2135,7 +2135,8 @@ def issue_answer(lin: Any, ident: str, asker: str | None) -> dict | None:
     """When the Linear issue `ident` was first taken up: its first move out of Backlog (by anyone: every write is the
     Verity Asks app's, so `by` is None), or the first comment by someone other than `asker`; {at, how, by}, or None when
     neither happened.
-    An issue filed straight into another state shows that as a move out of Backlog at its creation, which is no answer."""
+    An issue filed straight into another state shows that as a move out of Backlog at its creation, which times no answer:
+    with nothing later, it is answered but untimed (`linear-filed`, like CI-41 filed already Done)."""
     i = lin.gql(LINEAR_ANSWER_Q, {"id": ident})["issue"]
     born = _iso_epoch(i["createdAt"])
     out = [{"at": _iso_epoch(h["createdAt"]), "how": "linear-state", "by": None}
@@ -2145,6 +2146,9 @@ def issue_answer(lin: Any, ident: str, asker: str | None) -> dict | None:
     for c in i["comments"]["nodes"]:
         if (who := comment_by(c)) and who != asker:
             out.append({"at": _iso_epoch(c["createdAt"]), "how": "linear-comment", "by": who})
+    if not out and any((h.get("fromState") or {}).get("type") == "backlog" and (h.get("toState") or {}).get("type") not in (None, "backlog")
+                       for h in i["history"]["nodes"]):
+        return {"at": born, "how": "linear-filed", "by": None}
     return min(out, key=lambda a: a["at"], default=None)
 
 
@@ -2219,7 +2223,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
                    and any(x.get("name") in ANSWER_REACTIONS for x in root.get("reactions", [])))
         out.append({"lane": lane, "ts": root["ts"], "by": asker, "linear": link[1] if link else None, "record": record, "ref": ref,
                     "first": first["how"] if first else "reaction" if untimed else None, "answer_by": first["by"] if first else None,
-                    "minutes": round(max(first["at"] - t0, 0) / 60, 1) if first else None,
+                    "minutes": round(max(first["at"] - t0, 0) / 60, 1) if first and first["how"] != "linear-filed" else None,
                     "age_minutes": round((now - t0) / 60, 1)})
     pages, notion_errors = Pages(notion_client), []
     for c in daniel_cards(api, reg, since, now):
@@ -2237,9 +2241,9 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
         unanswered = [x for x in mine if not x["first"]]
         lanes.append({"lane": lane, "asks": len(mine), "answered": len(mine) - len(unanswered),
                       "slack": sum(x["first"] == "slack-reply" for x in mine),
-                      "linear": sum((x["first"] or "").startswith("linear-") for x in mine),
+                      "linear": sum((x["first"] or "").startswith("linear-") and x["first"] != "linear-filed" for x in mine),
                       "notion": sum(x["first"] == "notion-status" for x in mine),
-                      "untimed": sum(x["first"] == "reaction" for x in mine),
+                      "untimed": sum(x["first"] in ("reaction", "linear-filed") for x in mine),
                       "median_min": nearest_rank(timed, 0.5), "p90_min": nearest_rank(timed, 0.9),
                       "unanswered": len(unanswered), "stale": sum(x["age_minutes"] * 60 > stale_s for x in unanswered)})
     return {"since": since, "now": now, "lanes": lanes, "asks": out, "linear_errors": linear_errors, "notion_errors": notion_errors}

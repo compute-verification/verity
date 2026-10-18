@@ -2002,6 +2002,7 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     filed_started = ask_at(fake, proofs, 200, "lean", linked.replace("PRF-1", "PRF-2"))   # filed straight into In Progress
     later = ask_at(fake, proofs, 300, "lean", linked.replace("PRF-1", "PRF-3"))           # answered after --now
     lost = ask_at(fake, proofs, 400, "lean", linked.replace("PRF-1", "PRF-404"))          # Linear can't read it
+    settled = ask_at(fake, proofs, 450, "infra", linked.replace("PRF-1", "PRF-5"))         # filed already Done
     eyes = ask_at(fake, circuits, 500, "infra", "@circuits a second look at the lowering?", reactions=[{"name": "eyes", "users": ["U0VERITYBOT"], "count": 1}])
     both = ask_at(fake, circuits, 550, "infra", "@circuits @proofs who owns the cut?", reactions=[{"name": "eyes", "users": ["U0VERITYBOT"], "count": 1}])
     for box, dt in ((proofs, 551), (circuits, 552)):                                          # `deliver` rang circuits again
@@ -2022,6 +2023,7 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
                        comments=[(t + 30, "infra"), (t + 600, "~Daniel")]),                  # the asker's comment isn't an answer
         "PRF-2": issue(t + 99, moves=[(t + 99, "backlog", "started")], comments=[(t + 99 + 1800, "proofs")]),
         "PRF-3": issue(t + 199, moves=[(now + 60, "backlog", "started")], comments=[(now + 30, "proofs")]),
+        "PRF-5": issue(t + 349, moves=[(t + 349, "backlog", "completed")]),
     })
     monkeypatch.setattr(linear, "_http", fake_linear)
     monkeypatch.setenv("LINEAR_API_KEY", "dummy-key")
@@ -2030,7 +2032,8 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     by = {(a["lane"], a["ts"]): a for a in rep["asks"]}
     assert (by["circuits", renamed["ts"]]["minutes"], by["circuits", renamed["ts"]]["answer_by"]) == (3.0, "old-circuits")
     assert [by["proofs", x["ts"]]["answer_by"] for x in (linear_ask, filed_started)] == [None, "proofs"]   # the app moved it
-    assert rc == 0 and len(rep["asks"]) == 10 and sorted(fake_linear.asked) == ["PRF-1", "PRF-2", "PRF-3", "PRF-404"]
+    assert rc == 0 and len(rep["asks"]) == 11 and sorted(fake_linear.asked) == ["PRF-1", "PRF-2", "PRF-3", "PRF-404", "PRF-5"]
+    assert (by["proofs", settled["ts"]]["first"], by["proofs", settled["ts"]]["minutes"]) == ("linear-filed", None)   # untimed
     assert (by["circuits", slack_ask["ts"]]["first"], by["circuits", slack_ask["ts"]]["minutes"]) == ("slack-reply", 10.0)
     assert (by["proofs", linear_ask["ts"]]["first"], by["proofs", linear_ask["ts"]]["minutes"]) == ("linear-state", 5.0)
     assert (by["proofs", filed_started["ts"]]["first"], by["proofs", filed_started["ts"]]["minutes"]) == ("linear-comment", 30.0)
@@ -2042,13 +2045,13 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     assert rep["lanes"] == [
         {"lane": "circuits", "asks": 5, "answered": 3, "slack": 2, "linear": 0, "notion": 0, "untimed": 1, "median_min": 3.0,
          "p90_min": 10.0, "unanswered": 2, "stale": 1},
-        {"lane": "proofs", "asks": 5, "answered": 2, "slack": 0, "linear": 2, "notion": 0, "untimed": 0, "median_min": 5.0,
+        {"lane": "proofs", "asks": 6, "answered": 3, "slack": 0, "linear": 2, "notion": 0, "untimed": 1, "median_min": 5.0,
          "p90_min": 30.0, "unanswered": 3, "stale": 3}]
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
     lines = out.splitlines()
     assert rc == 0 and lines[0].startswith("ask latency over the last 24 h")
     assert lines[2].split() == ["@circuits", "5", "3", "2", "0", "0", "1", "3.0", "10.0", "2", "1"]
-    assert lines[3].split() == ["@proofs", "5", "2", "0", "2", "0", "0", "5.0", "30.0", "3", "3"]
+    assert lines[3].split() == ["@proofs", "6", "3", "0", "2", "0", "1", "5.0", "30.0", "3", "3"]
     assert lines[4] == "  linear: 1 issue(s) unread, counted from Slack alone: PRF-404: Linear: Entity not found: Issue"
 
 
