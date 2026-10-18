@@ -50,7 +50,7 @@ def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
 
 
 def _engine_main(args) -> None:
-    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof, env as engine_env
 
     prof.apply_env()
     from vllm import LLM
@@ -64,6 +64,7 @@ def _engine_main(args) -> None:
     wl = va.load_workload(args.workload, None)
     case = va.case_of(wl, args.case)
     env_flags = prof.apply_env()
+    engine_env.step_timeout(args.rpc_timeout)
     cp = prof.checkpoint_for(case, args.checkpoints)
     kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
     kw["enable_prefix_caching"] = False

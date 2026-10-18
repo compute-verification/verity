@@ -59,6 +59,14 @@ def apply_engine(hf_home: str | None) -> dict[str, str]:
     return got
 
 
+def step_timeout(seconds: float) -> dict[str, str]:
+    """vLLM's multiprocess executor waits ``VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS`` (300 by default) for each engine step's RPC and
+    fails the run past it, while an observed or committed TP step of a long prefill (the observer, its snapshots, the Commit's
+    taps) takes minutes: a stage gives a step its own RPC bound.  A liveness bound, not a served switch: nothing that runs
+    changes, so it stays out of the profile's flags.  A pin: an operator's export wins."""
+    return pin({"VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": str(int(seconds))})
+
+
 def apply_target(env: Mapping[str, str]) -> dict[str, str]:
     """A ``TargetProfile.env()``: the profile's values replace whatever the process had."""
     os.environ.update(env)
