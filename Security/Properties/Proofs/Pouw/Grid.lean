@@ -5,7 +5,7 @@ import Properties.Pouw
 
 On Lean core: `Nat.log2`'s bounds give a number's bit length, and so its shift; a point is a positive multiple of
 `2 ^ shift` (`isPoint_iff`); `point` steps by `2 ^ gap ℓ` (`point_succ`), so it is strictly increasing, and `level`
-inverts it. The floor point, the pad, the bucket and the levels follow.
+inverts it. The floor point, the pad, the credit and the levels follow.
 -/
 
 namespace Properties.Pouw.Window
@@ -308,20 +308,14 @@ theorem pad_least (bits n : Nat) (hn : 1 ≤ n) :
     refine ⟨hp, ?_, fun g hg hng => next_le hfp hg (by omega)⟩
     exact Nat.le_of_not_lt fun h => Nat.lt_irrefl _ (Nat.lt_of_lt_of_le hgt (le_fp_of_isPoint hp (Nat.le_of_lt h)))
 
-/-- A window of `real ≥ 1` real tiles is credited the largest point at most `real` and pads to the least point above it. -/
-theorem bucket_credits (bits real : Nat) (hr : 1 ≤ real) :
-    let w := bucket bits real
-    w = Work.at bits w.level ∧ w.credited = floorPoint bits real ∧ w.credited ≤ real ∧ real < w.n ∧
-      w.n = pad bits (real + 1) := by
-  have hfp := isPoint_fp (bits := bits) hr
-  have hp := isPoint_point bits (level bits (floorPoint bits real) + 1)
-  have hgt := lt_next hfp
-  have hn : real < point bits (level bits (floorPoint bits real) + 1) :=
-    Nat.lt_of_not_le fun h => Nat.lt_irrefl _ (Nat.lt_of_lt_of_le hgt (le_fp_of_isPoint hp h))
-  obtain ⟨hpad, hpad1, hpad2⟩ := pad_least bits (real + 1) (by omega)
-  dsimp only [bucket, Work.at]
-  refine ⟨rfl, point_level hfp, by rw [point_level hfp]; exact fp_le _ _, hn, Nat.le_antisymm ?_ (hpad2 _ hp hn)⟩
-  exact next_le hfp hpad (by have := fp_le bits real; omega)
+/-- A window of `n` tiles whose masked sum is `1 ≤ real < n` is credited the largest point at most `real`, of its `n`. -/
+theorem credit_credits (bits real n : Nat) (hr : 1 ≤ real) (hn : real < n) :
+    let w := credit bits real n
+    w = Work.at bits w.level n ∧ w.credited = floorPoint bits real ∧ w.credited ≤ real ∧ w.credited < w.n := by
+  have hc : point bits (level bits (floorPoint bits real)) = floorPoint bits real := point_level (isPoint_fp hr)
+  have := fp_le bits real
+  dsimp only [credit, Work.at]
+  exact ⟨rfl, hc, by rw [hc]; exact this, by rw [hc]; omega⟩
 
 theorem cost_arith {R F Y X : Nat} (hX : 0 < X) (hR : R < F + Y) (hF : Y * X ≤ F) (hF0 : 0 < F) :
     R * (X - 1) < F * X ∧ (F + Y) * X ≤ F * (X + 1) := by
@@ -335,15 +329,12 @@ theorem cost_arith {R F Y X : Nat} (hX : 0 < X) (hR : R < F + Y) (hF : Y * X ≤
       rw [Nat.add_mul] at h1; rw [Nat.mul_succ]; omega
   · rw [Nat.add_mul, Nat.mul_succ]; omega
 
-theorem bucket_cost (bits real : Nat) : CostBounded bits real (bucket bits real) := by
+theorem credit_cost (bits real n : Nat) : CostBounded bits real (credit bits real n) := by
   intro hr
   have hX := pow_pos' bits
   have h0 : 0 < real := by omega
   have hfp := isPoint_fp (bits := bits) h0
-  have hc : (bucket bits real).credited = floorPoint bits real := point_level hfp
-  have hn : (bucket bits real).n = floorPoint bits real + 2 ^ shift bits real := by
-    show point bits (level bits (floorPoint bits real) + 1) = _
-    rw [point_succ, point_level hfp, ← shift_point, point_level hfp, shift_fp h0]
+  have hc : (credit bits real n).credited = floorPoint bits real := point_level hfp
   have hF : 2 ^ shift bits real * 2 ^ bits ≤ floorPoint bits real := by
     by_cases hs : shift bits real = 0
     · rw [hs, Nat.pow_zero, Nat.one_mul]
@@ -352,13 +343,13 @@ theorem bucket_cost (bits real : Nat) : CostBounded bits real (bucket bits real)
     · have := fp_high (bits := bits) h0
       rw [← Nat.pow_add]
       exact Nat.le_trans (Nat.pow_le_pow_right (by omega) (by unfold shift at hs ⊢; omega)) this
-  rw [hc, hn]
-  exact cost_arith hX (lt_fp_add bits real) hF (fp_pos h0)
+  rw [hc]
+  exact (cost_arith hX (lt_fp_add bits real) hF (fp_pos h0)).1
 
-theorem bucket_cost3 (real : Nat) : CostBounded3 real (bucket gridBits real) := by
+theorem credit_cost3 (real n : Nat) : CostBounded3 real (credit gridBits real n) := by
   intro hr
-  have := bucket_cost gridBits real (by simpa [gridBits] using hr)
-  simp only [gridBits, Nat.reducePow, Nat.reduceSub, Nat.reduceAdd] at this ⊢
+  have := credit_cost gridBits real n (by simpa [gridBits] using hr)
+  simp only [gridBits, Nat.reducePow, Nat.reduceSub] at this ⊢
   omega
 
 theorem fp_mono {bits a b : Nat} (ha : 0 < a) (h : a ≤ b) : floorPoint bits a ≤ floorPoint bits b :=
@@ -374,7 +365,7 @@ theorem levels_count (bits lo hi : Nat) (hlo : 1 ≤ lo) : LevelsCounted bits lo
   intro hle
   have hhi : 0 < hi := by omega
   have hm := level_mono (isPoint_fp (bits := bits) hlo) (isPoint_fp hhi) (fp_mono hlo hle)
-  simp only [levels, bucket, Work.at]
+  simp only [levels]
   refine ⟨by omega, fun ℓ => ⟨?_, ?_⟩⟩
   · rintro ⟨r, h1, h2, rfl⟩
     have := level_mono (isPoint_fp (bits := bits) hlo) (isPoint_fp (by omega)) (fp_mono hlo h1)
