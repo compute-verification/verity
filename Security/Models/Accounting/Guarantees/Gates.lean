@@ -24,6 +24,18 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   the whole family (`2^s` members) its charged gates have at least `s` bits: `s = 63` at p1024 (`256^127 ≤ p`). It is a
   bound in bits, not in gates: a budgeted gate of `b` declared bits carries `b` of them. "Computes" is "on every member
   of `G`": on the fraction `ε` of the family, `G` has `ε · 2^s` members.
+* `SquaringCarryNibbles`: the same at `j = 4` on the nibble family (`nibbles`), whose bytes are all `8 mod 16` and
+  whose squares first differ mod 16 two bytes above their first differing nibble: `4s` bits, 252 at p1024 (`s = 63`).
+  Four free bits a byte is the most a fooling family of this kind gets (the squares' first difference must land in
+  the low `j` bits of a byte, with `j` bits of each input byte fixed), and with no reduction mod `p` the input has at
+  most `n/16` bytes.
+* `UnitsFooling`: `Fooling` in units. With registered inputs fixed and each budgeted gate but a gather declaring at
+  most `2^w` values, `|F| ≤ 2^(runBits C + w · budgeted C)`: a gate that reads only registered values is one value on
+  all of `F`, a budgeted one that reads a run or coin value is a unit of `w` bits, and a gather's value is fixed by its
+  index's class among its column's words and the `0` outside it, which its index's fresh bits count.
+* `SquaringUnits`: the two together. A circuit that squares the nibble family, its registered inputs fixed and its
+  coin inputs `a`'s bytes, has `4s ≤ runBits C + w · budgeted C`: at p1024 with no run input, 8 units at `w = 33` (or
+  `w = 32`, s32's window), 32 were each budgeted gate a byte (`w = 8`).
 * `Renormalization`: the step the encode bound needs and no counting argument gives, stated and unproved (the red
   team's Lemma R): returning a square's limbs to byte format takes `L − c − d(ε)` budgeted units, `d(ε) =
   d₀ + log₂(1/ε)/8`, at every `ε` above a floor `2^−t` (claimed at p1024 with `d₀ = 4`, `t = 64`; false with no
@@ -79,6 +91,48 @@ def SquaringCarry : Prop :=
     (∀ S ∈ G, ∀ i, FreeInput C i → x S i = byte (sparse S) (slot i)) →
     (∀ S ∈ G, InWindow C (x S) ∧ ∀ l < n, val C (x S) (out l) = byte (sparse S ^ 2 % p) l) →
     G.card ≤ volume C
+
+/-- **The carry bound, a nibble a byte.** For `(249·256^s)² ≤ p` and `s + 2 ≤ n`: a circuit `C` whose registered and
+coin inputs read the bytes of `a` (`slot i` the byte input `i` reads), and that on every `a = nibbles s t` with
+`t ∈ G` is in its window and outputs (`out l`, `l < n`) the bytes of `a² mod p`, has `|G| ≤ volume C`. On the whole
+family (`16^s` members) its charged gates have at least `4s` bits: 252 at p1024 (`s = 63`). -/
+def SquaringCarryNibbles : Prop :=
+  ∀ {ι : Type} (C : Dag ι) (p n s : ℕ) (G : Finset (Fin s → Fin 16)) (x : (Fin s → Fin 16) → ι → ℤ)
+    (slot : ι → ℕ) (out : ℕ → ℕ),
+    (249 * 256 ^ s) ^ 2 ≤ p → s + 2 ≤ n →
+    (∀ t ∈ G, ∀ i, FreeInput C i → x t i = byte (nibbles s t) (slot i)) →
+    (∀ t ∈ G, InWindow C (x t) ∧ ∀ l < n, val C (x t) (out l) = byte (nibbles s t ^ 2 % p) l) →
+    G.card ≤ volume C
+
+/-- **The fooling bound in units.** For a circuit `C` whose budgeted gates but gathers each declare at most `2^w`
+values (`w ≥ 1`), and a set `F` of inputs on each of which `C` is in its window, that agree in every registered input,
+agree pairwise mod `2^j` in every coin input, and pairwise differ mod `2^j` in some output gate of `out`:
+`|F| ≤ 2^(runBits C + w · budgeted C)`. A budgeted gate that reads a run or coin value carries its value's `w` bits
+for its unit; a gather's units carry its index's outcomes, the fresh index bits of `Gate.indexBits`, shared by the
+gathers of one index; every other gate is free or reads only registered values. -/
+def UnitsFooling : Prop :=
+  ∀ {ι κ : Type} (C : Dag ι) (F : Finset κ) (x : κ → ι → ℤ) (j w : ℕ) (out : List ℕ),
+    1 ≤ w → (∀ g ∈ C, ∀ cls f, g.op = .budgeted cls f → g.size ≤ 2 ^ w) →
+    (∀ s ∈ F, InWindow C (x s)) →
+    (∀ s ∈ F, ∀ s' ∈ F, ∀ i, (∃ g ∈ C, g.op = .input .registered i) → x s i = x s' i) →
+    (∀ s ∈ F, ∀ s' ∈ F, ∀ i, (∃ g ∈ C, g.op = .input .coin i) → x s i ≡ x s' i [ZMOD 2 ^ j]) →
+    (∀ s ∈ F, ∀ s' ∈ F, s ≠ s' → ∃ o ∈ out, ¬ val C (x s) o ≡ val C (x s') o [ZMOD 2 ^ j]) →
+    F.card ≤ 2 ^ (runBits C + w * budgeted C)
+
+/-- **The carry bound in units.** For `(249·256^s)² ≤ p`, `s + 2 ≤ n` and `w ≥ 1`: a circuit `C` whose budgeted gates
+but gathers each declare at most `2^w` values, whose registered inputs are fixed and whose coin inputs read the bytes
+of `a` (`slot i` the byte input `i` reads), and that on every `a = nibbles s t` with `t ∈ G` is in its window and
+outputs (`out l`, `l < n`) the bytes of `a² mod p`, has `|G| ≤ 2^(runBits C + w · budgeted C)`. On the whole family,
+`4s ≤ runBits C + w · budgeted C`: at p1024 (`s = 63`), with no run input and `w = 33`, at least 8 units. -/
+def SquaringUnits : Prop :=
+  ∀ {ι : Type} (C : Dag ι) (p n s w : ℕ) (G : Finset (Fin s → Fin 16)) (x : (Fin s → Fin 16) → ι → ℤ)
+    (slot : ι → ℕ) (out : ℕ → ℕ),
+    (249 * 256 ^ s) ^ 2 ≤ p → s + 2 ≤ n → 1 ≤ w →
+    (∀ g ∈ C, ∀ cls f, g.op = .budgeted cls f → g.size ≤ 2 ^ w) →
+    (∀ t ∈ G, ∀ t' ∈ G, ∀ i, (∃ g ∈ C, g.op = .input .registered i) → x t i = x t' i) →
+    (∀ t ∈ G, ∀ i, (∃ g ∈ C, g.op = .input .coin i) → x t i = byte (nibbles s t) (slot i)) →
+    (∀ t ∈ G, InWindow C (x t) ∧ ∀ l < n, val C (x t) (out l) = byte (nibbles s t ^ 2 % p) l) →
+    G.card ≤ 2 ^ (runBits C + w * budgeted C)
 
 /-- **Re-normalization** (the red team's Lemma R, note:20261017T1859Z-report-property-redteam R3.3 and R4.1;
 unproved): a square's limbs come back to byte format only through budgeted gates, about one a limb. Take a circuit

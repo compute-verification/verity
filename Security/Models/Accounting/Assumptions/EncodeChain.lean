@@ -50,7 +50,10 @@ and look-ahead carries) are within `B = 128`, and spend at least `L − d(0)` un
 open: a test at toy `n` with `B/n` fixed would settle the trend.
 
 **Units, and why a gather over run-time values pays one.** A gate that reads only registered values and constants is
-free (it computes one value on every draw), and a gather pays its fresh index bits. Without the extra unit for a
+free (it computes one value on every draw), and a gather pays its fresh index bits, `⌈log₂ (V + 1)⌉` for a column
+of `V` words and the `0` outside it (`Gate.indexBits`): a one-word gather of a run-time index is the comparison
+`[i ≤ 0]`, and were it free, thresholds and affine maps would carry a square's column sums back to bytes and the
+chain would cost nothing. Without the extra unit for a
 gather whose column holds a draw-dependent value, a tree of gathers indexed by the draw's bytes, over constant leaves,
 would compute any function of the draw (`(k + 2)·n` bits) for about that many units, a word for about 5,120 at p1024.
 
