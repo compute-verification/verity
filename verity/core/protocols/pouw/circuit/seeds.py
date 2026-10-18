@@ -124,7 +124,8 @@ def _block_body(B, S, seed_j, t):
 
 
 def _coin_salt(S):
-    return _ports.Ports(params={"salt": _ports.In(kind="coin")})
+    position = {"position": _ports.In(kind="position")} if "position" in _ports.KINDS else {}
+    return _ports.Ports(params={"salt": _ports.In(kind="coin"), **position})
 
 
 def _word_def(name: str, params, body, doc: str, ports=None) -> CompositeDefinition:

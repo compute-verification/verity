@@ -42,9 +42,12 @@ REDUCED = ((2048, 3), (8192, 2))
 BOOLEAN = {"DOT": BG.BlackwellS8ImmaDot32, "TDOT": None}
 PORTS = C._ports
 ports = pytest.mark.skipif(PORTS is None, reason="port types (ml.circuits.ports) are not on this tree")
-#: COIN-RULES (`ports._coin_role`) lets a coin reach only a noise primitive's or a receipt fold's coin port, so it refuses the
-#: salt's flow into the seed's gates until it gives the seed a role (`test_coin_rules_refuse_the_seed`)
-COIN_RULES = PORTS is not None and hasattr(PORTS, "_coin_role")
+#: COIN-RULES' seed role (`ports._coin_role`, a coin port beside an `In(kind="position")` one): the salt's flow into the seed
+#: is the seed's, and the Build check refuses some units before compile's own checks do (`UNIT_REFUSED`)
+SEEDS = PORTS is not None and "position" in PORTS.KINDS
+#: COIN-RULES before its seed role lets a coin reach only a noise primitive's or a receipt fold's coin port, so it refuses the
+#: salt's flow into the seed's gates
+COIN_RULES = PORTS is not None and hasattr(PORTS, "_coin_role") and not SEEDS
 compiles = pytest.mark.skipif(COIN_RULES, reason="COIN-RULES refuses the salt's flow into PouwSeed: E_COIN_FLOW")
 SALT = hashlib.sha512(b"salt").digest()
 
@@ -66,7 +69,8 @@ def _def(name, statics, signature, body, ports=None):
 
 COIN = {"params": lambda p: {"e": p.In(kind="coin")}}
 FOLD = {"params": lambda p: {"r": p.In(receipt=True)}, "ret": lambda p: p.Out(sink=True)}
-UNIT_PORTS = {"params": lambda p: {"salt": p.In(kind="coin")}, "ret": lambda p: {"receipt": p.Out(sink=True)}}
+UNIT_PORTS = {"params": lambda p: {"salt": p.In(kind="coin"), **({"position": p.In(kind="position")} if SEEDS else {})},
+              "ret": lambda p: {"receipt": p.Out(sink=True)}}
 
 ADD = {w: _prim(f"CompileTestAdd{w}", (("x", Value(w)), ("e", Value(w))), Value(w), lambda x, e, w=w: (x + e) % (1 << w))
        for w in (8, 16)}
@@ -218,11 +222,11 @@ def _bad(name, body):
 
 UNIT_REFUSED = [
     ("seed", "no-seed", _no_seed),
-    ("seed", "two-seeds", _two_seeds),
-    ("position", "own-position", _own_position),
+    ("E_COIN_REUSE" if SEEDS else "seed", "two-seeds", _two_seeds),
+    ("E_PORT_KIND" if SEEDS else "position", "own-position", _own_position),
     ("position", "own-roots", _own_roots),
-    ("salt-flow", "salt-leak", _salt_leak),
-    ("noise-in-z", "noised-z", _noised_z),
+    ("E_COIN_FLOW" if SEEDS else "salt-flow", "salt-leak", _salt_leak),
+    ("E_COIN_FLOW" if SEEDS else "noise-in-z", "noised-z", _noised_z),
 ]
 UNIT_REFUSED = [pytest.param(code, _bad(name, body), id=name) for code, name, body in UNIT_REFUSED]
 
@@ -507,7 +511,13 @@ REFUSED = {
 @compiles
 @pytest.mark.parametrize("code", sorted(REFUSED))
 def test_refused(code):
-    """Each rule's refusal; ``coin-read``: a served Program that derives a seed itself (the salt enters only through compile)."""
+    """Each rule's refusal; ``coin-read``: a served Program that derives a seed itself (the salt enters only through compile),
+    which COIN-RULES' seed role refuses as it is built: its seed's position is a constant."""
+    if code == "coin-read" and SEEDS:
+        with pytest.raises(PORTS.PortError) as e:
+            Program(bind(REFUSED[code]()))
+        assert e.value.code == "E_PORT_KIND", str(e.value)
+        return
     _refused(code, Program(bind(REFUSED[code]())))
 
 
@@ -668,7 +678,7 @@ def test_unit_refused(code, scheme):
 @compiles
 def test_shared_position_slots_refused(monkeypatch):
     """Two unit batches given the same slots of `pouw.positions` (here the second batch reading the first's) would seed two
-    units of a site alike: the root-level check refuses it."""
+    units of a site alike: the root-level check refuses it, and COIN-RULES' seed role as the compiled Program is built."""
     real = C._plan
 
     def shared(served, name):
@@ -678,7 +688,7 @@ def test_shared_position_slots_refused(monkeypatch):
         return dataclasses.replace(p, groups=tuple(groups))
 
     monkeypatch.setattr(C, "_plan", shared)
-    _refused("position", Program(bind(SHARED_X, K=64, N=5)))
+    _refused("E_COIN_REUSE" if SEEDS else "position", Program(bind(SHARED_X, K=64, N=5)))
 
 
 def _coin_served_body(B, S, x, w, u):
@@ -692,16 +702,6 @@ def test_served_coin_parameter_refused():
     defn = _def("CompileTestCoin", (), lambda S: ((*XW, ("u", Array(64, V8))), V32), _coin_served_body,
                 ports={"params": lambda p: {"u": p.In(kind="coin")}})
     _refused("coin-read", Program(bind(defn)))
-
-
-@pytest.mark.skipif(not COIN_RULES, reason="COIN-RULES (ports._coin_role) is not on this tree")
-def test_coin_rules_refuse_the_seed():
-    """Under COIN-RULES as it stands a coin reaches only a noise primitive's or a receipt fold's coin port, so the salt's flow
-    into the seed's gates is refused: COIN-RULES needs a seed role (the salt port of `seeds.PouwSeed` the coin's terminal,
-    many seeds reading one salt at distinct positions) before any compiled Program is valid."""
-    with pytest.raises(C.CompileError) as e:
-        C.compile(Program(bind(TWICE)), SCHEME)
-    assert e.value.code in ("E_COIN_FLOW", "E_COIN_REUSE"), str(e.value)
 
 
 # -- seeds and the verifier's rebuild ----------------------------------------------------------------------------------------

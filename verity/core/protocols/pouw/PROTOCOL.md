@@ -1326,9 +1326,10 @@ every unit it covers, so the grinding premium is a constant number of units per 
 - `name`, `scheme`: a parameter already named `pouw.*`, or a scheme or kind that isn't registered.
 
 `Compiled.check_gates` adds the gate-level cut (no value computed in two units), the separator and the width rule by
-reachability, for a Program small enough to flatten. COIN-RULES (`ports.py`'s `E_COIN_FLOW`) lets a coin reach only a noise
-primitive's or a receipt fold's coin port, so it refuses the salt's flow into the seed's gates until it gives the seed a role
-(the seed's salt port the coin's terminal, and many seeds reading one salt at distinct positions).
+reachability, for a Program small enough to flatten. Where COIN-RULES has its seed role (`ports.py`), the seed, each unit and
+the compiled Program declare their position `In(kind="position")` beside the salt's coin port, and its Build check refuses
+some units before compile's own checks do: two seeds at one position (`E_COIN_REUSE`), a position the unit computes
+(`E_PORT_KIND`), a seed's noise reaching z or past the unit's sinks (`E_COIN_FLOW`).
 
 **Schemes.** The pass's own `compile.SCHEMES`, separate from `circuit.SCHEMES`; `BUILTIN` loads this package's at the first
 name not registered.
