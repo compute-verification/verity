@@ -15,6 +15,8 @@ blocks' boundaries. They meet in one place, the consistency relation N3
     values     each unit's commitment to the values it holds
     block      a block's process: evaluate its gates step by step, send and receive crossing values as framed streams
     n3         the in-the-clear consistency check over what the certified links carried
+    n3_unit    N3's proof unit for one port-window, a Boolean Definition (`N3Window_v1{LAYOUT}`), and each window's
+               layout on the simulator and the lab
     run        build, place, run every block (in one process or one process each over TCP) and check
     accounting the Program, hardware and placement as `benchmarks/datacenter`'s objects, for its audit and account
     lab        the Program as the network certifier's sessions and server-sent events, for the mock datacenter

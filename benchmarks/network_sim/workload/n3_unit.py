@@ -96,6 +96,20 @@ def prefix(reason: str) -> bytes:
     return DOMAIN + reason.encode() + b"\0"
 
 
+SALT, SALT_STREAM = 3, 0xFFFF_FFFF
+
+
+def salt_frame(window: int, commitment: bytes, frame_bytes: int) -> bytes:
+    """Window `window`'s salt frame as the ingress certifier records it: kind `SALT` on `SALT_STREAM`, its payload the
+    window (u64, big-endian) and the salt's 64-byte commitment, which is public once the salt is revealed."""
+    return encode_frame(SALT, SALT_STREAM, window.to_bytes(8, "big") + commitment, frame_bytes)
+
+
+def _is_salt(frame: bytes) -> bool:
+    kind, stream, _ = HEADER.unpack_from(frame)
+    return kind == SALT and stream == SALT_STREAM
+
+
 # --- pieces -----------------------------------------------------------------------------------------------------------
 
 def const(data: bytes) -> tuple:
@@ -379,10 +393,13 @@ def arguments(digest: bytes, counts: Sequence[int], frames: Sequence[bytes], row
     return [np.asarray(a, dtype=np.uint8).reshape(1, -1) for a in flat]
 
 
-def evaluate(layout: dict, digest: bytes, counts: Sequence[int], frames: Sequence[bytes], rows: Sequence[bytes]) -> int:
-    if len(frames) != sum(layout["counts"]) or len(rows) != layout["rows"]:
-        raise ValueError(f"the layout takes {sum(layout['counts'])} frames and {layout['rows']} rows")
-    return int(np.asarray(evaluate_bits(unit(layout), *arguments(digest, counts, frames, rows))).reshape(-1)[0])
+def evaluate(layout: dict, *instances: tuple[bytes, Sequence[int], Sequence[bytes], Sequence[bytes]]) -> list[int]:
+    """The unit's output on each instance (digest, counts, frames, rows), all in one evaluation."""
+    for _, _, frames, rows in instances:
+        if len(frames) != sum(layout["counts"]) or len(rows) != layout["rows"]:
+            raise ValueError(f"the layout takes {sum(layout['counts'])} frames and {layout['rows']} rows")
+    args = [np.concatenate(a) for a in zip(*(arguments(*x) for x in instances))]
+    return [int(b) for b in np.asarray(evaluate_bits(unit(layout), *args)).reshape(-1)]
 
 
 # --- windows ----------------------------------------------------------------------------------------------------------
@@ -414,12 +431,12 @@ class Window:
         if self.layout is None:
             ok = self.why == EMPTY and not self.frames
             return out | {"by": "public data", "ok": ok, "why": self.why}
-        args = (self.layout, self.digest, self.counts, self.witness(), self.rows)
-        ref = reference(*args)
+        instance = (self.digest, self.counts, self.witness(), self.rows)
+        ref = reference(self.layout, *instance)
         out |= {"by": "unit", "ok": ref, "rows": len(self.rows), "compressions": compressions(self.layout)}
         if circuit:
             t0 = time.perf_counter()
-            out["circuit"] = evaluate(*args)
+            (out["circuit"],) = evaluate(self.layout, instance)
             out["seconds"] = round(time.perf_counter() - t0, 3)
             if out["circuit"] != ref:
                 raise AssertionError(f"{self.port}[{self.window}]: the circuit says {out['circuit']}, "
@@ -604,9 +621,14 @@ def lab_declared(S: Statement, block: str) -> tuple[list, list]:
     return egress, ingress
 
 
-def lab_windows(public: dict, witness: dict, published: dict[str, Sequence]) -> list[Window]:
+def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
+                salts: dict[tuple[str, int], bytes] | None = None) -> list[Window]:
     """The lab's windows: per block and link (`lab.EGRESS`, `lab.INGRESS`), each record's released frames, and the
-    layout of the declared frames at the positions the earlier windows' counts reach, at the record's counts."""
+    layout of the declared frames at the positions the earlier windows' counts reach, at the record's counts.
+
+    With `salts`, each salted ingress window's salt commitment by (block, window): the layout puts the certifier's salt
+    frame (`salt_frame`), a constant, in the slot the record holds a salt frame in (the first, behind any queue carried
+    from the window before; the first slot when the record holds none), and the declared frames in the others."""
     from verity.core.protocols.certifier.grid import occupancy
 
     from . import lab as L
@@ -622,14 +644,19 @@ def lab_windows(public: dict, witness: dict, published: dict[str, Sequence]) -> 
                 frames = list(L.released([rec]))
                 counts, reason = occupancy(rec.grid), rec.status.reason.value if rec.status.reason else ""
                 win = Window(f"{block}:{link}", rec.window, record_digest(frames, reason), counts, frames)
-                d, at = declared[at:at + len(frames)], at + len(frames)
+                salt = (salts or {}).get((block, rec.window)) if link == L.INGRESS else None
+                n = len(frames) - (salt is not None and len(frames) > 0)
+                d, at = declared[at:at + n], at + n
                 if not frames:
                     win.why = EMPTY
-                elif len(d) < len(frames):
+                elif len(d) < n:
                     win.why = f"frames past the Program's {len(declared)}"
                 elif bad := [p for p in d if isinstance(p, KeyError)]:
                     win.why = str(bad[0]).strip("'\"")
                 else:
+                    if salt is not None:
+                        slot = next((i for i, f in enumerate(frames) if _is_salt(f)), 0)
+                        d = d[:slot] + [[const(salt_frame(rec.window, salt, B))]] + d[slot:]
                     win = _window(win.port, rec.window, B, reason, counts, frames, d, S.units)
                 out.append(win)
     return out
