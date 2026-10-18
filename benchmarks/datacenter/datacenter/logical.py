@@ -9,9 +9,10 @@ function over words and traced, the way `jax.make_jaxpr` traces a function into 
 
     c = trace(layer, x=Input(8), w=Input(8, source="registered", digest=d))
 
-Word gates stand for Boolean circuits of known size (`Gate.boolean_size`), so for everything that counts gates a circuit
-is a Boolean circuit; the word view keeps the walkthrough readable. `Circuit.evaluate` is the reference semantics, and
-`commit` gives the hiding commitment the values sit under.
+Word gates stand for Boolean circuits of known size (`Gate.work`), so for everything that counts gates a circuit is a
+Boolean circuit; the word view keeps the walkthrough readable. A circuit adapted from another format (verity's word
+Definitions) brings each primitive's semantics and counts its work in that format's unit (`Circuit.unit`).
+`Circuit.evaluate` is the reference semantics, and `commit` gives the hiding commitment the values sit under.
 """
 from __future__ import annotations
 
@@ -66,16 +67,21 @@ class Value:
 
 @dataclass(frozen=True)
 class Gate:
+    """One gate, producing one value of `bits` bits. A word operation of `BASIS`, or a primitive of a circuit format
+    outside it (verity's word Definitions, say): then `fn` is its semantics and `size` its work in the circuit's unit."""
+
     op: str
     operands: tuple[int, ...]
     bits: int
     const: int | None = None
     input: Input | None = None
+    fn: Callable[..., int] | None = field(default=None, compare=False)
+    size: int | None = None
 
     @property
-    def boolean_size(self) -> int:
-        """The number of Boolean gates this word gate stands for."""
-        return BASIS[self.op](self.bits)
+    def work(self) -> int:
+        """The work this gate stands for: its `size`, or the Boolean gates of its word operation."""
+        return self.size if self.size is not None else BASIS[self.op](self.bits)
 
 
 def digest(value: int, bits: int) -> bytes:
@@ -85,11 +91,14 @@ def digest(value: int, bits: int) -> bytes:
 
 @dataclass
 class Circuit:
-    """Gates in topological order: gate i produces value i. `outputs` are the values the circuit delivers."""
+    """Gates in topological order: gate i produces value i. `outputs` are the values the circuit delivers, and `unit` is
+    what its gates' work counts: Boolean gates (`"gate"`) for a traced circuit, a format's own (a word primitive, a
+    tensor-core multiply-add) for one adapted from it."""
 
     gates: list[Gate] = field(default_factory=list)
     outputs: tuple[int, ...] = ()
     names: dict[int, str] = field(default_factory=dict)
+    unit: str = "gate"
 
     def value(self, i: int) -> Value:
         g = self.gates[i]
@@ -107,8 +116,9 @@ class Circuit:
         return [self.value(i) for i, g in enumerate(self.gates) if g.op == "input"]
 
     @property
-    def boolean_size(self) -> int:
-        return sum(g.boolean_size for g in self.gates)
+    def work(self) -> int:
+        """The circuit's work in its unit: for a traced circuit, its size as a Boolean circuit."""
+        return sum(g.work for g in self.gates)
 
     def evaluate(self, inputs: dict[str, int]) -> dict[int, int]:
         """Every value of the circuit on `inputs` (by input name): the reference semantics."""
@@ -116,6 +126,9 @@ class Circuit:
         for i, g in enumerate(self.gates):
             mask = (1 << g.bits) - 1
             a = [out[j] for j in g.operands]
+            if g.fn is not None:
+                out[i] = g.fn(*a) & mask
+                continue
             out[i] = {
                 "input": lambda: inputs[self.names[i]] & mask,
                 "const": lambda: g.const & mask,
@@ -129,7 +142,8 @@ class Circuit:
         return out
 
     def __repr__(self) -> str:
-        lines = [f"circuit ({len(self.gates)} word gates, {self.boolean_size} Boolean gates)"]
+        lines = [f"circuit ({len(self.gates)} word gates, "
+                 + (f"{self.work} Boolean gates)" if self.unit == "gate" else f"{self.work} {self.unit})")]
         for i, g in enumerate(self.gates):
             rhs = (f"input {g.input.source}" if g.op == "input" else f"const {g.const:#x}" if g.op == "const"
                    else f"{g.op} " + ", ".join(repr(self.value(j)) for j in g.operands))

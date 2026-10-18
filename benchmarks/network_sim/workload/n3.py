@@ -3,8 +3,8 @@ units committed, at the placement's buckets.
 
 The check reads three things, all JSON-shaped as `run` writes them:
 
-- `public`: the Program's digest and spec, the hardware, the frame size B, the placement's root, each unit's value root and
-  count, and the occupancy profile.
+- `public`: the Program's digest, its workload and spec (`model.build`), the hardware, the frame size B, the placement's
+  root, each unit's value root and count, and the occupancy profile.
 - `witness`: the placement's rows and salts, and each unit's value rows and salts. In the clear the checker reads them; in
   the protocol a zero-knowledge proof shows the same relation over the commitments.
 - `records`: per certified link direction (`Hardware.key`), the (bucket, frame) pairs logged on it (`merge` joins the units'
@@ -128,7 +128,7 @@ def _placement(public: dict, witness: dict, model: M.Model, hw: Hardware, report
     return placement
 
 
-def _open(public: dict, witness: dict, placement: P.Placement, hw: Hardware, edges: list[P.Edge],
+def _open(public: dict, witness: dict, placement: P.Placement, hw: Hardware, edges: list[P.Edge], width: int,
           report: Report) -> dict[int, int]:
     """Each crossing value, opened at its source unit's commitment and checked against the unit's public root."""
     by_unit: dict[str, list[P.Edge]] = defaultdict(list)
@@ -149,13 +149,13 @@ def _open(public: dict, witness: dict, placement: P.Placement, hw: Hardware, edg
         if reg.root != root:
             report.add("values", unit, "the unit's rows don't register to its public root")
             continue
-        uv = V.UnitValues(unit, gates, 1, reg)
+        uv = V.UnitValues(unit, gates, width, reg)
         openings: dict[int, advice.Opening] = {}
         for e in es:
             row, offset = uv.locate(e.value)
             if row not in openings:
                 openings[row] = uv.open(e.value)
-            v = V.verify(root, unit, count, 1, openings[row], row, offset)
+            v = V.verify(root, unit, count, width, openings[row], row, offset)
             if v is None:
                 report.add("values", unit, f"value {e.value} doesn't open")
                 continue
@@ -178,8 +178,7 @@ def _canonical_prefix(frame: bytes) -> bytes:
 
 def check(public: dict, witness: dict, records: Records) -> Report:
     report = Report()
-    spec = M.Spec(**public["spec"])
-    model = M.Model(spec)
+    model = M.build(public.get("workload", "mlp"), public["spec"])
     if program_digest(model.program) != public["program"]:
         report.add("program", "", "the public digest isn't the spec's Program's")
     hw = Hardware.from_json(public["hardware"])
@@ -192,7 +191,7 @@ def check(public: dict, witness: dict, records: Records) -> Report:
     occupancy = phi.occupancy()
     if occupancy != public["occupancy"]:
         report.add("occupancy", "", "the public occupancy profile isn't the committed placement's")
-    opened = _open(public, witness, placement, hw, edges, report)
+    opened = _open(public, witness, placement, hw, edges, model.value_bits, report)
     report.stats.update(edges=len(edges), messages=len(phi.messages), directions=len(occupancy))
 
     for key in sorted(set(public["occupancy"]) | set(records)):

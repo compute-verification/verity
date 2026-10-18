@@ -1,7 +1,8 @@
 """Each unit's commitment to the values it holds: the values placed at its leaves, as hiding rows.
 
 A unit's values are the gates the placement puts at its leaves, in canonical order. Row i of its commitment holds the bits of
-values [i·k, (i + 1)·k) packed least significant first (k = `ROW_BITS` / width for a Boolean Program's 1-bit values), under
+values [i·k, (i + 1)·k) packed least significant first, each in a slot of the model's widest value (`value_bits`: 1 for a
+Boolean Program, 32 for the served Program's words), k = `ROW_BITS` / width, under
 `verity.ml.commitments.advice` (hm96-sha512 leaves in a frame-v3-sha512 tree) with the binding SHA-512(`LABEL` ‖ the unit's name).
 The root is public; the rows and salts are the unit's. A crossing value is opened at its source unit's commitment
 (`UnitValues.open`, checked by `verify`): refinement puts every crossing value in the committed set.

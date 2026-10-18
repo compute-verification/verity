@@ -1,9 +1,11 @@
-"""Serve the MLP on the simulated datacenter, then check N3 in the clear.
+"""Serve a workload on the simulated datacenter, then check N3 in the clear.
 
-    python -m workload.run --out /tmp/netsim-run                        # 3 blocks of 2 devices, in one process
+    python -m workload.run --out /tmp/netsim-run                        # the MLP on 3 blocks of 2 devices, in one process
     python -m workload.run --out /tmp/netsim-run --transport tcp        # one localhost TCP process per unit
     python -m workload.run --out /tmp/netsim-run --tamper b0:fill       # a block writes into a frame's zero fill
     python -m workload.run --out /tmp/netsim-run --graph g.json         # on `graph.py --blocks 2 --json > g.json`
+    python -m workload.run --out /tmp/netsim-run --workload served --devices 1 --frame-bytes 1024
+                                                                        # verity_vllm's serving Program, a stage a block
 
 (run from `benchmarks/network_sim/`, or with it on `PYTHONPATH`). The prover's side commits the placement (`statement`),
 the units serve and commit their values, and the check reads what `run` writes to `--out`: `public.json` (the statement:
@@ -36,7 +38,8 @@ def statement(ctx: Context, results: dict[str, dict]) -> tuple[dict, dict]:
     """The public statement and the witness of a run: the placement committed once, each unit's committed values."""
     reg = ctx.placement.commit()
     held = {u: r["values"] for u, r in sorted(results.items()) if r["values"] is not None}
-    public = {"program": program_digest(ctx.model.program), "spec": ctx.spec.to_json(), "hardware": ctx.hw.to_json(),
+    public = {"program": program_digest(ctx.model.program), "workload": ctx.workload, "spec": ctx.spec.to_json(),
+              "hardware": ctx.hw.to_json(),
               "frame_bytes": ctx.phi.frame_bytes, "placement": reg.root.hex(),
               "values": {u: {"root": v["root"], "count": v["count"]} for u, v in held.items()},
               "occupancy": ctx.phi.occupancy()}
@@ -89,15 +92,31 @@ def run_tcp(ctx: Context, out: Path) -> dict[str, dict]:
     return {u: json.loads((out / f"unit-{u}.json").read_text()) for u in units}
 
 
+def crossing_bits(ctx: Context) -> dict[str, tuple[int, int]]:
+    """(values, bits) of the crossing edges, by the kind of value that crosses."""
+    out: dict[str, tuple[int, int]] = {}
+    for e in ctx.edges:
+        n, b = out.get(ctx.model.kind[e.value], (0, 0))
+        out[ctx.model.kind[e.value]] = (n + 1, b + e.width)
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Serve the MLP on the simulated datacenter and check N3 in the clear.")
+    ap = argparse.ArgumentParser(description="Serve a workload on the simulated datacenter and check N3 in the clear.")
     ap.add_argument("--out", required=True, type=Path, help="the directory to write the run's files to")
+    ap.add_argument("--workload", choices=M.WORKLOADS, default="mlp",
+                    help="the MLP, or verity_vllm's serving Program for a truncated SmolLM2 (`served`)")
     ap.add_argument("--blocks", type=int, default=3)
     ap.add_argument("--devices", type=int, default=2, help="devices in each block")
     ap.add_argument("--d", type=int, default=4, help="the MLP's width")
     ap.add_argument("--layers", type=int, default=3)
     ap.add_argument("--requests", type=int, default=3)
     ap.add_argument("--groups", type=int, default=1, help="row groups a layer is split into (Calls per layer and request)")
+    ap.add_argument("--hidden", type=int, default=64, help="served: the model's width")
+    ap.add_argument("--intermediate", type=int, default=128, help="served: the MLP's inner width")
+    ap.add_argument("--vocab", type=int, default=32, help="served: the vocabulary")
+    ap.add_argument("--prompt", type=int, default=2, help="served: prompt tokens")
+    ap.add_argument("--steps", type=int, default=1, help="served: greedy decode steps")
     ap.add_argument("--plan", choices=("pipeline", "tensor"), default="pipeline")
     ap.add_argument("--frame-bytes", type=int, default=64)
     ap.add_argument("--bucket-ticks", type=int, default=1, help="the mock's bucket, in ticks")
@@ -108,9 +127,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tamper", help=f"UNIT:MODE, MODE one of {', '.join(TAMPERS)}")
     args = ap.parse_args(argv)
 
-    config = {"spec": {"d": args.d, "layers": args.layers, "requests": args.requests, "groups": args.groups},
-              "blocks": args.blocks, "devices": args.devices, "plan": args.plan, "frame_bytes": args.frame_bytes,
-              "bucket_ticks": args.bucket_ticks, "seed": args.seed}
+    spec = ({"d": args.d, "layers": args.layers, "requests": args.requests, "groups": args.groups} if args.workload == "mlp"
+            else {"layers": args.layers, "hidden": args.hidden, "intermediate": args.intermediate, "vocab": args.vocab,
+                  "prompt": args.prompt, "steps": args.steps})
+    config = {"workload": args.workload, "spec": spec, "blocks": args.blocks, "devices": args.devices, "plan": args.plan,
+              "frame_bytes": args.frame_bytes, "bucket_ticks": args.bucket_ticks, "seed": args.seed}
     if args.graph:
         config["graph"] = json.loads(args.graph.read_text())
     if args.step_ticks:
@@ -130,13 +151,15 @@ def main(argv: list[str] | None = None) -> int:
                       ("records", {k: [[b, f.hex()] for b, f in v] for k, v in sorted(records.items())})):
         (args.out / f"{name}.json").write_text(json.dumps(obj, indent=1))
     answers = results[OUTSIDE]["answers"]
-    ref = M.reference(ctx.spec, M.requests(ctx.spec, ctx.seed), M.weights(ctx.spec, ctx.seed))
+    ref = ctx.model.reference(ctx.seed)
     hw = ctx.hw
     print(f"program {public['program'][:16]}… {ctx.model.n} gates; placement root {public['placement'][:16]}… "
           f"({args.plan} on {len(hw.units)} blocks of {', '.join(str(len(hw.devices(u))) for u in sorted(hw.units))} "
           f"devices; ℓ across units {hw.cross_latency} ticks, a bucket {hw.bucket_ticks})")
-    print(f"answers {'equal' if answers == ref else 'differ from'} the integer reference: {answers}")
-    print(f"{len(ctx.edges)} crossing edges in {len(ctx.phi.messages)} messages, {args.frame_bytes}-byte frames")
+    oracle = "integer reference" if args.workload == "mlp" else "Program evaluated in one process"
+    print(f"answers {'equal' if answers == ref else 'differ from'} the {oracle}: {answers}")
+    by_kind = ", ".join(f"{k} {n} values / {b} bits" for k, (n, b) in sorted(crossing_bits(ctx).items()))
+    print(f"{len(ctx.edges)} crossing edges ({by_kind}) in {len(ctx.phi.messages)} messages, {args.frame_bytes}-byte frames")
     for key, counts in public["occupancy"].items():
         print(f"  occupancy {key:<22} {counts}")
     s = report.stats

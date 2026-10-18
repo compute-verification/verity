@@ -1,13 +1,14 @@
 """The workload in the accounting layer's terms (`benchmarks/datacenter`, `import datacenter`), so that its `run`, `audit`
-and `account` read the MLP as they read a traced circuit.
+and `account` read the MLP and verity_vllm's serving Program as they read a traced circuit.
 
-- `circuit(model)`: one word gate of width 1 for each of the Program's Boolean gates, in canonical order, so value v of
-  the Program is value v of the circuit. `And2`, `Xor2` and `Not` are `and`, `xor` and `not`, a constant is a `const`,
-  and an input bit is an `input` named `<parameter>.<bit>` (`label`), from the outside for the requests and registered
-  for the weights.
-- `datacenter(hw, grid, rate)`: a block for each unit; a compute leaf is a `gpu` with a declared rate in Boolean gates,
-  a certifier a `certifier` (trusted by its kind), the client `outside`, and any other leaf a `switch`, which only
-  carries frames. A link's capacity is its β a tick over the grid's tick.
+- `circuit(model)`: one gate for each of the Program's gates, in canonical order, so value v of the Program is value v
+  of the circuit. An input is an `input` named `<parameter>.<index>` (`label`), from the outside for the requests and
+  registered for the weights, and a constant a `const`. The MLP is Boolean: `And2`, `Xor2` and `Not` are `and`, `xor`
+  and `not`, and its work is counted in Boolean gates. The served Program's gates are word Definitions (bf16, f32 and
+  i32 words): each is a gate carrying its Definition's semantics, and its work is counted in word operations (`op`).
+- `datacenter(hw, grid, unit, rate)`: a block for each unit; a compute leaf is a `gpu` with a declared rate in the
+  circuit's unit, a certifier a `certifier` (trusted by its kind), the client `outside`, and any other leaf a `switch`,
+  which only carries frames. A link's capacity is its β a tick over the grid's tick.
 - `placement(circuit, hw, p, dc)`: the same leaf, step and ticks as `placement.Placement`, each device's values in
   canonical order as its cells, and the outputs delivered to the client.
 
@@ -19,6 +20,7 @@ per connection.
     python -m workload.accounting                  # audit and account an honest run of the MLP on the mock
     python -m workload.accounting --extra-frame    # one covert frame on b0's uplink: refused
     python -m workload.accounting --assume fleet-closed   # attribute the credited work to its blocks under the premise
+    python -m workload.accounting --workload served --devices 1   # verity_vllm's serving Program, a stage a block
 """
 from __future__ import annotations
 
@@ -42,31 +44,41 @@ def label(model: M.Model) -> dict[int, str]:
     return {g: f"{name}.{j}" for pi, name in enumerate(model.params) for j, g in enumerate(model.input_gates(pi))}
 
 
-def circuit(model: M.Model) -> D.Circuit:
-    names = label(model)
-    c = D.Circuit(names=dict(names))
-    for v, g in enumerate(model.gates):
-        kind = model.kind[v]
+def _gates(model) -> list[tuple[object, tuple[int, ...], int]]:
+    """Each gate's primitive, operands and width, from the MLP's verity gates or the served Program's table."""
+    if hasattr(model, "prims"):
+        return list(zip(model.prims, model.operands, model.width))
+    return [(g.prim, tuple(g.operands), model.value_bits) for g in model.gates]
+
+
+def _semantics(prim):
+    lazy = getattr(prim, "evaluate_lazy", None)
+    return (lambda *a: lazy(lambda j: a[j])) if lazy is not None else prim.evaluate
+
+
+def circuit(model) -> D.Circuit:
+    names, constants, gates = label(model), model.constants(), _gates(model)
+    boolean = all(OPS.get(p.id.split("_")[0]) for (p, _, _), k in zip(gates, model.kind) if k == "computed")
+    c = D.Circuit(names=dict(names), unit="gate" if boolean else "op")
+    for v, ((prim, operands, bits), kind) in enumerate(zip(gates, model.kind)):
         if kind in ("run", "registered"):
-            source = "outside" if kind == "run" else "registered"
-            c.gates.append(Gate("input", (), 1, input=D.Input(1, source)))
+            c.gates.append(Gate("input", (), bits, input=D.Input(bits, "outside" if kind == "run" else "registered")))
         elif kind == "constant":
-            c.gates.append(Gate("const", (), 1, const=model.evaluate({}, [v])[v]))
+            c.gates.append(Gate("const", (), bits, const=constants[v]))
+        elif boolean:
+            c.gates.append(Gate(OPS[prim.id.split("_")[0]], operands, bits))
         else:
-            op = OPS.get(g.prim.id.split("_")[0])
-            if op is None:
-                raise ValueError(f"gate {v} is a {g.prim.id}, which has no word gate")
-            c.gates.append(Gate(op, tuple(g.operands), 1))
+            c.gates.append(Gate(prim.id, operands, bits, fn=_semantics(prim), size=1))
     c.outputs = tuple(model.outputs)
     return c
 
 
-def inputs(model: M.Model, x: list[list[int]], weights) -> dict[str, int]:
+def inputs(model, seed: int) -> dict[str, int]:
     names = label(model)
-    return {names[g]: bit for g, bit in model.bind_inputs(x, weights).items()}
+    return {names[g]: word for g, word in model.inputs(seed).items()}
 
 
-def datacenter(hw: Hardware, grid: D.Grid, rate: float = 1e9) -> D.Datacenter:
+def datacenter(hw: Hardware, grid: D.Grid, unit: str = "gate", rate: float = 1e9) -> D.Datacenter:
     def device(x: int) -> D.Device:
         name = hw.leaves[x]
         if x in hw.cert:
@@ -75,7 +87,7 @@ def datacenter(hw: Hardware, grid: D.Grid, rate: float = 1e9) -> D.Datacenter:
             return D.Device(name, "outside")
         u = hw.unit(x)
         if u != OUTSIDE and x in hw.devices(u):
-            return D.Device(name, "gpu", rate={"gate": D.Assumption(f"{name}.rate", rate, "gate/s", "declared")})
+            return D.Device(name, "gpu", rate={unit: D.Assumption(f"{name}.rate", rate, f"{unit}/s", "declared")})
         return D.Device(name, "switch")
 
     return D.Datacenter(
@@ -110,47 +122,50 @@ def epoch(dp: D.Placement) -> D.Interval:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Audit and account a run of the MLP with the accounting layer.")
+    ap.add_argument("--workload", choices=M.WORKLOADS, default="mlp",
+                    help="the MLP, or verity_vllm's serving Program for a truncated SmolLM2 (`served`)")
     ap.add_argument("--blocks", type=int, default=3)
     ap.add_argument("--devices", type=int, default=2)
-    ap.add_argument("--d", type=int, default=4)
+    ap.add_argument("--d", type=int, default=4, help="mlp: the width")
     ap.add_argument("--layers", type=int, default=3)
-    ap.add_argument("--requests", type=int, default=3)
-    ap.add_argument("--groups", type=int, default=1)
+    ap.add_argument("--requests", type=int, default=3, help="mlp: requests")
+    ap.add_argument("--groups", type=int, default=1, help="mlp: tensor groups")
+    ap.add_argument("--prompt", type=int, default=2, help="served: prompt tokens")
+    ap.add_argument("--steps", type=int, default=1, help="served: greedy decode steps")
     ap.add_argument("--plan", choices=sorted(P.PLANS), default="pipeline")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--frame-bits", type=int, default=32)
     ap.add_argument("--window", type=int, default=4, help="buckets a certifier's record covers")
     ap.add_argument("--syncs", type=int, default=128, help="the sync set's size, a window's timing advice")
     ap.add_argument("--tick", type=float, default=1e-3, help="seconds a tick")
-    ap.add_argument("--rate", type=float, default=1e9, help="each GPU's declared Boolean gates a second")
+    ap.add_argument("--rate", type=float, default=1e9, help="each GPU's declared rate in the circuit's unit of work")
     ap.add_argument("--extra-frame", action="store_true", help="add one covert frame on b0's uplink")
     ap.add_argument("--assume", action="append", default=[], choices=sorted(PREMISES),
                     help="a named premise for `account`")
     args = ap.parse_args(argv)
 
-    ctx = Context({"spec": {"d": args.d, "layers": args.layers, "requests": args.requests, "groups": args.groups},
-                   "blocks": args.blocks, "devices": args.devices, "plan": args.plan, "frame_bytes": 64,
-                   "seed": args.seed})
+    spec = ({"d": args.d, "layers": args.layers, "requests": args.requests, "groups": args.groups}
+            if args.workload == "mlp" else {"layers": args.layers, "prompt": args.prompt, "steps": args.steps})
+    ctx = Context({"workload": args.workload, "spec": spec, "blocks": args.blocks, "devices": args.devices,
+                   "plan": args.plan, "frame_bytes": 64 if args.workload == "mlp" else 1024, "seed": args.seed})
     grid = D.Grid(args.frame_bits, ctx.hw.bucket_ticks, args.window, args.syncs,
                   D.Assumption("tick", args.tick, "s", "declared"))
     c = circuit(ctx.model)
-    dc = datacenter(ctx.hw, grid, args.rate)
+    dc = datacenter(ctx.hw, grid, c.unit, args.rate)
     dp = placement(c, ctx.hw, ctx.placement, dc)
     mine = {(e.value, e.dst) for e in ctx.edges}
-    print(f"{ctx.model.n} gates as a datacenter.Circuit of {c.boolean_size} Boolean gates; datacenter problems: "
-          f"{dc.validate() or 'none'}; paced: {dp.paced()}")
+    print(f"{ctx.model.n} gates as a datacenter.Circuit of {c.work:g} {'Boolean gates' if c.unit == 'gate' else c.unit}; "
+          f"datacenter problems: {dc.validate() or 'none'}; paced: {dp.paced()}")
     print(f"crossings: {len(D.crossings(dp))} in the accounting layer, {len(mine)} in placement.crossings, "
           f"{'the same' if crossing_pairs(dp) == mine else 'different'} (value, unit) pairs")
-    x, ws = M.requests(ctx.spec, ctx.seed), M.weights(ctx.spec, ctx.seed)
     deviation = None
     if args.extra_frame:
         deviation = D.Deviation(extra={(D.Port("b0.cert", "egress"), ctx.hw.bucket(ctx.placement.tick(ctx.edges[0].value))): 1})
     plan = D.Plan(epoch(dp))
     profile = dp.public(plan)
-    trace = D.run(dp, inputs(ctx.model, x, ws), plan, deviation)
+    trace = D.run(dp, inputs(ctx.model, ctx.seed), plan, deviation)
     answers = ctx.model.output_words(trace.values)
-    print(f"answers {'equal' if answers == M.reference(ctx.spec, x, ws) else 'differ from'} the integer reference: "
-          f"{answers}")
+    print(f"answers {'equal' if answers == ctx.model.reference(ctx.seed) else 'differ from'} the reference: {answers}")
     for port, row in sorted(profile.occupancy.items(), key=lambda kv: repr(kv[0])):
         print(f"  occupancy {port!r:<12} {[row.get(b, 0) for b in range(max(row) + 1)]}")
     claims = D.audit(trace, profile)

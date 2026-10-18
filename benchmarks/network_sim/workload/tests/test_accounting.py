@@ -1,10 +1,10 @@
-"""The accounting layer (`benchmarks/datacenter`) reads the MLP: the same values, the same crossings, a sound account."""
+"""The accounting layer (`benchmarks/datacenter`) reads the MLP and verity_vllm's serving Program: the same values, the
+same crossings, a sound account, and a covert frame refused."""
 import pytest
 
 D = pytest.importorskip("datacenter", reason="benchmarks/datacenter isn't importable (it lands with PR #2475)")
 
 from workload import accounting as A  # noqa: E402
-from workload import model as M  # noqa: E402
 from workload.block import Context  # noqa: E402
 
 SPEC = {"d": 2, "layers": 3, "requests": 2}
@@ -14,24 +14,22 @@ GRID = D.Grid(frame_bits=32, bucket=1, window=4, syncs=128, tick=D.Assumption("t
 def adapted(**config):
     ctx = Context({"spec": SPEC, "blocks": 3, "devices": 2, "frame_bytes": 16, "seed": 1, **config})
     c = A.circuit(ctx.model)
-    dc = A.datacenter(ctx.hw, GRID)
+    dc = A.datacenter(ctx.hw, GRID, c.unit)
     return ctx, c, A.placement(c, ctx.hw, ctx.placement, dc)
 
 
-def honest(ctx, dp, deviation=None):
-    x, ws = M.requests(ctx.spec, 1), M.weights(ctx.spec, 1)
+def audited(ctx, dp, deviation=None):
     plan = D.Plan(A.epoch(dp))
     profile = dp.public(plan)
-    return D.audit(D.run(dp, A.inputs(ctx.model, x, ws), plan, deviation), profile), profile
+    trace = D.run(dp, A.inputs(ctx.model, 1), plan, deviation)
+    return trace, D.audit(trace, profile), profile
 
 
 def test_the_circuit_has_the_programs_values():
     ctx, c, _ = adapted()
-    x, ws = M.requests(ctx.spec, 1), M.weights(ctx.spec, 1)
-    t = ctx.model.bind_inputs(x, ws)
-    ctx.model.evaluate(t)
-    assert c.evaluate(A.inputs(ctx.model, x, ws)) == t
-    assert c.boolean_size == sum(k == "computed" for k in ctx.model.kind)
+    t = ctx.model.evaluate(dict(ctx.model.inputs(1)))
+    assert c.evaluate(A.inputs(ctx.model, 1)) == t
+    assert c.unit == "gate" and c.work == sum(k == "computed" for k in ctx.model.kind)
 
 
 @pytest.mark.parametrize("config", [{}, {"plan": "tensor", "blocks": 2, "spec": dict(SPEC, groups=2)}])
@@ -43,7 +41,7 @@ def test_both_layers_derive_the_same_crossings(config):
 
 def test_an_honest_run_is_audited_and_credited_to_the_blocks_it_ran_on():
     ctx, c, dp = adapted()
-    claims, profile = honest(ctx, dp)
+    _, claims, profile = audited(ctx, dp)
     assert not [k for k in claims if isinstance(k, D.Refused)]
     acc = D.account(claims, profile)
     assert acc.sound
@@ -56,7 +54,24 @@ def test_an_honest_run_is_audited_and_credited_to_the_blocks_it_ran_on():
 
 def test_a_covert_frame_is_refused():
     ctx, _, dp = adapted()
-    port = D.Port("b0.cert", "egress")
-    claims, _ = honest(ctx, dp, D.Deviation(extra={(port, 2): 1}))
+    _, claims, _ = audited(ctx, dp, D.Deviation(extra={(D.Port("b0.cert", "egress"), 2): 1}))
     refused = [k for k in claims if isinstance(k, D.Refused)]
     assert refused and {repr(k.on) for k in refused} == {"port b0.cert:out [0, 4)"}
+
+
+def test_the_served_program_is_audited_and_credited_stage_by_stage():
+    """verity_vllm's `Serve_v1` for a truncated SmolLM2, a pipeline stage a block: the accounting layer re-executes its
+    word Definitions, gets the tokens the Program does, and credits each stage's word operations to its block."""
+    pytest.importorskip("torch")
+    pytest.importorskip("verity_vllm")
+    from workload import served as S
+    cfg = S.Config()
+    ctx, c, dp = adapted(workload="served", spec=cfg.to_json(), devices=1, frame_bytes=1024)
+    assert c.unit == "op" and dp.datacenter.validate() == [] and dp.paced()
+    assert A.crossing_pairs(dp) == {(e.value, e.dst) for e in ctx.edges}
+    trace, claims, profile = audited(ctx, dp)
+    assert ctx.model.output_words(trace.values) == ctx.model.reference(1)
+    acc = D.account(claims, profile)
+    assert acc.sound and all(b.credited > 0 for b in acc.blocks)
+    assert sum(b.credited for b in acc.blocks) == sum(k == "computed" for k in ctx.model.kind)
+    assert acc.input_bits == {f"prompt.{j}": 32 for j in range(cfg.prompt)}

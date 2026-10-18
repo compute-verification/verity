@@ -57,7 +57,22 @@ def setup():
 def test_a_traced_circuit_evaluates_as_python_does():
     c = trace(two_layer, x=Input(16), w1=Input(16), w2=Input(16))
     assert c.evaluate(INPUTS)[c.outputs[0]] == (((7 * 3) ^ 0x5A) * 5 + 7) & 0xFFFF
-    assert c.boolean_size == 2 * 6 * 16 * 16 + 16 + 5 * 16
+    assert c.work == 2 * 6 * 16 * 16 + 16 + 5 * 16
+
+
+def test_a_circuit_of_another_formats_primitives_counts_work_in_its_unit():
+    """An adapted circuit (verity's word Definitions, say) brings each primitive's semantics and its work in the format's
+    unit, and the profile and the account credit that unit at the devices' declared rates in it."""
+    from datacenter.logical import Circuit, Gate
+    c = Circuit([Gate("input", (), 16, input=Input(16)), Gate("input", (), 16, input=Input(16, "registered")),
+                 Gate("Bf16Mul", (0, 1), 16, fn=lambda a, b: a * b + 1, size=1)], (2,), {0: "x", 1: "w"}, unit="op")
+    assert c.evaluate({"x": 3, "w": 4})[2] == 13 and c.work == 1
+    dc = datacenter()
+    dc.blocks[0] = Block("a", [replace(dc.blocks[0].devices[0], rate={"op": Assumption("a.gpu.ops", 10, "op/s")})])
+    p = place(c, dc, "a.gpu", deliver="world", x="world")
+    profile = p.public(Plan(EPOCH))
+    a = account(audit(run(p, {"x": 3, "w": 4}, Plan(EPOCH)), profile), profile).blocks[0]
+    assert profile.unit == "op" and a.credited == 1 and a.capacity == 10 * 16e-3
 
 
 def test_a_boundary_link_without_a_certifier_breaks_coverage():
@@ -95,7 +110,7 @@ def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(
 def test_the_profile_is_what_audit_and_account_read_of_the_placement(setup):
     c, dc, p = setup
     profile = p.public(Plan(EPOCH))
-    assert profile.work == {"a": c.boolean_size, "b": 0}
+    assert profile.work == {"a": c.work, "b": 0}
     assert profile.occupancy[Port("a.cert", "egress")] == {7: 1}     # the output, one frame, at the world's read tick
     assert list(profile.windows) == [0, 1, 2, 3]
 
@@ -106,14 +121,14 @@ def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
     profile = p.public(plan)
     claims = audit(run(p, INPUTS, plan), profile)
     assert not refusals(claims)
-    assert Computed("a", c.boolean_size, EPOCH) in claims and not any(isinstance(x, Computed) and x.part == "b" for x in claims)
+    assert Computed("a", c.work, EPOCH) in claims and not any(isinstance(x, Computed) and x.part == "b" for x in claims)
     assert Held("labels@b.gpu", HBM - RESIDUAL, Interval(0, 2)) in claims
     assert Entered("x", 16, "outside") in claims and not any(isinstance(x, Entered) and x.input == "w1" for x in claims)
     carried = [x for x in claims if isinstance(x, Carried)]
     assert len(carried) == len(dc.ports) * 4 and all(x.bits == 7 for x in carried)
     acc = account(claims, profile)
     a, b = acc.blocks
-    assert acc.sound and a.credited == c.boolean_size and b.credited == 0
+    assert acc.sound and a.credited == c.work and b.credited == 0
     assert b.carried == RESIDUAL and a.carried == HBM                # b was wiped down to its residual
     assert acc.input_bits == {"x": 16} and acc.located == {"labels@b.gpu": ["b.gpu"]}
 
