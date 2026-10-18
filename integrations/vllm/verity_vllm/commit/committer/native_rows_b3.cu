@@ -427,10 +427,26 @@ extern "C" int verity_rows_b3_build(const uint8_t* hash_key, const uint8_t* doma
   return 0;
 }
 
+// Once per device: the largest shared-memory carveout for each kernel, as native_rows.cu's rows_kernel_attributes.
+static int rows_b3_kernel_attributes() {
+  static bool done[64] = {};
+  int dev = 0;
+  if (const cudaError_t rc = cudaGetDevice(&dev)) return static_cast<int>(rc);
+  if (dev < 0 || dev >= 64) return static_cast<int>(cudaErrorInvalidDevice);
+  if (done[dev]) return 0;
+  for (const void* f : {reinterpret_cast<const void*>(rows_b3_leaf_kernel), reinterpret_cast<const void*>(rows_b3_level_kernel),
+                        reinterpret_cast<const void*>(rows_b3_levels_kernel)})
+    if (const cudaError_t rc = cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared))
+      return static_cast<int>(rc);
+  done[dev] = true;
+  return 0;
+}
+
 extern "C" int verity_rows_b3_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
                                             const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
                                             uint8_t* hs, uint64_t max_blocks, cudaStream_t st) {
   const B3K* p = static_cast<const B3K*>(params);
+  if (const int rc = rows_b3_kernel_attributes()) return rc;
   const u64 chunk = max_blocks ? max_blocks * THREADS : m;
   for (u64 c = 0; c < m; c += chunk) {
     const u64 mc = m - c < chunk ? m - c : chunk;
@@ -447,6 +463,7 @@ extern "C" int verity_rows_b3_level_launch(const void* params, const uint8_t* in
   if (!n_out) return 0;
   if (level < 0 || level + 1 >= LEVELS) return static_cast<int>(cudaErrorInvalidValue);
   const B3K* p = static_cast<const B3K*>(params);
+  if (const int rc = rows_b3_kernel_attributes()) return rc;
   const u64 chunk = max_blocks ? max_blocks * THREADS : n_out;
   for (u64 c = 0; c < n_out; c += chunk) {
     const u64 nc = n_out - c < chunk ? n_out - c : chunk;
@@ -463,6 +480,7 @@ extern "C" int verity_rows_b3_levels_launch(const void* params, const uint8_t* i
   if (n_levels > 10 || level < 0 || level + n_levels >= LEVELS || !n_in || n_in % (1ull << n_levels))
     return static_cast<int>(cudaErrorInvalidValue);
   const B3K* p = static_cast<const B3K*>(params);
+  if (const int rc = rows_b3_kernel_attributes()) return rc;
   rows_b3_levels_kernel<<<static_cast<unsigned>(n_in >> n_levels), THREADS, 0, st>>>(*p, in, out, n_in, level, base, n_levels);
   return static_cast<int>(cudaGetLastError());
 }
