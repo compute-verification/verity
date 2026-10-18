@@ -17,7 +17,7 @@ from verity.ml.circuits.types import Array, Tuple, Value as Word
 from datacenter import (FLEET_CLOSED, SALT_CUSTODY, Assumption, Block, Cadence, Carried, Challenge, Computed, Credit,
                         Datacenter, Deviation, Device, Entered, Fleet, Held, Interval, Ledger, Link, Maintenance, On,
                         Plan, Port, Record, Refused, Store, Wipe, account, audit, check_records, crossings,
-                        double_credit, evaluate, place, register, run, traffic, values, work)
+                        double_credit, evaluate, names, place, register, run, traffic, values, work)
 from datacenter.binding import hops
 from datacenter.logical import gate_work, gates
 from datacenter.models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, two_stage, words
@@ -101,6 +101,29 @@ def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_programs_
     assert profile.units == {"a": 32, "b": 32} and sampled_partition.units(PROGRAM, query) == 64
     claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)
     assert Computed("a", 1056, EPOCH, units=32) in claims and Computed("b", 1056, EPOCH, units=32) in claims
+
+
+@pytest.mark.slow
+def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_certifier():
+    """PoUW's compiler rewrites a served s8 matmul into sm_120's H1 tile unit, whose one coin is `pouw.salt`. The compiled
+    Program is placed like any other, read at the census's grain without expanding a gate: the salt enters at the block's
+    certifier, so it is trusted data the block consumes and the salt compute's custody counts, and the unit's work comes
+    out by kind, its SHA-512 seed, noise and receipt fold as Boolean gates and its exact products as int8 multiply-adds.
+    Its salt's cone, gate by gate, is past the explicit limit, so nothing is pinned by it. Slow: compiling builds the
+    unit's 15 million gates (about 40 s), and no other test has a compiled Program."""
+    from verity.core.protocols.pouw.circuit import compile as pouw
+    from verity.core.protocols.pouw.circuit import h1tile
+    from datacenter.models import s8_grid
+
+    compiled = pouw.compile(s8_grid(), h1tile.SCHEME).program
+    assert [n for n, b in zip(names(compiled), compiled.bindings) if b == "registration"] == ["w"]
+    p = place(compiled, datacenter(), "a.gpu", registration=register(compiled, {"w": [1] * 16 * 64 * 8}),
+              deliver="world", x="world", **{"pouw.salt": "a.cert", "pouw.positions": "world", "pouw.roots": "world"})
+    assert [p.source(k) for k in range(5)] == ["outside", "registered", "trusted", "outside", "outside"]
+    profile = p.public(Plan(EPOCH))
+    assert profile.work == {"a": {"cuda:gate": 13250921, "mac:int8": 4 * 16 * 64}, "b": {}}
+    assert profile.salt["a"] == profile.forced["a"] == 512 and profile.pinned["a"] == 0
+    assert {x.value.name for x in crossings(p) if x.dst == "world"} == {"pouw[0][0:2048]", "pouw[0][2048:2304]"}
 
 
 def test_work_counts_by_kind_is_credited_at_its_weight_and_takes_time_at_its_rate():

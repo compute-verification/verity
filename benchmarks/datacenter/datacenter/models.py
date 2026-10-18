@@ -3,8 +3,8 @@
 Every stage is a registered Definition: `LINEAR` is `Gemm_v2` at K = N = 32 over the BF16 tensor-core step (`GEMM_AMPERE`,
 `AmpereBF16TcDot16_v2`, the step sm_120 runs too), x[32] @ W[32, 32]^T, 1,024 multiply-adds and 32 roundings to BF16;
 `DOT` is one of its coordinates, a dot product of two 32-word rows (PoUW's noised product, in miniature, when one row is a
-trusted device's fresh data). `program` defines a Program's function from a body over named parameters, and `words` gives
-a parameter seeded BF16 words.
+trusted device's fresh data). `s8_grid` is a served s8 matmul on bits that PoUW's compiler takes. `program` defines a
+Program's function from a body over named parameters, and `words` gives a parameter seeded BF16 words.
 """
 from __future__ import annotations
 
@@ -54,3 +54,22 @@ def two_stage(name: str = "TwoStage") -> Program:
 
 WEIGHTS = {"w1": words("w1", K * K, 0.3), "w2": words("w2", K * K, 0.3)}
 X = words("x", K)
+
+
+def s8_grid(r: int = 4, c: int = 16, k: int = 64) -> Program:
+    """A served s8 matmul on bits, the shape PoUW's sm_120 scheme (`eps1-sm120-h1fx1`) tiles: each of r rows of x against
+    each of c rows of the registered w, a `GemmAccumulatorS8_v2` over the s8 IMMA step's Boolean form."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.ml.circuits.refs import Coll, concat
+
+    row = Array(k, Array(8, BL.BIT))
+    acc = bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
+
+    def body(B, x, w):
+        xs = Coll(Array(r * c, row), concat([x[i].refs for i in range(r) for _ in range(c)]))
+        ws = Coll(Array(r * c, row), concat([w[j].refs for _ in range(r) for j in range(c)]))
+        return B.batch(acc, xs, ws, axes=(0, 0))
+
+    return program("S8Grid", {"x": Array(r, row), "w": Array(c, row)}, Array(r * c, Array(32, BL.BIT)), body,
+                   registered=("w",))
