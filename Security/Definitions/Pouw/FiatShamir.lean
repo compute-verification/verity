@@ -104,8 +104,9 @@ def ServiceFloorFS [Fintype J] [Fintype N] [Fintype Live] (Mc : Machine) (S : FS
 
 /-- **An analysis's gain map** (GRIND's `R q`, note:compute-accounting/20261018T0700Z-draft-grind): per adversary,
 value of its own coins, oracle `H` and input `x`, what its run realizes through the draw at `x`, in work units. That
-is the work its units seeded at `x` skip and still pass with (lucky), less `κ` times the work they skip and fail with
-(unlucky), at the analysis's exchange rate `κ`, and nothing at an input no committed stage's seed reads. It is
+is the work its units seeded at `x` skip and still pass with (lucky), less `κₓ` times the work they skip and fail with
+(unlucky), at the analysis's exchange rate `κₓ` (GRIND's `κ`), and nothing at an input no committed stage's seed
+reads. It is
 relative to the stage's savings (RT4's change 2): a stage whose cheat saves no work gains nothing, however correlated
 its errors. It may read the whole oracle, so the adversary's run before the try and after it; what it costs is
 `SteerBound`'s, which redraws the oracle at `x` alone. -/
@@ -119,10 +120,10 @@ oracle's draws, charged below `F`, with every committed input's gain below the p
 round's check) are random: this is the live analysis at draws chosen by the adversary among those whose every seed
 realizes less than `π`.
 
-`F` is where the premium goes. At such draws a run's savings are at most `(1 + κ)·U` plus `π` a seed group, `U` its
-unlucky savings, which the checks catch at the zero-luck rate, so the staged instance's `F` is the live floor less
-the premium: `(1 − ε_FS)·W` with `ε_FS = ε_live + (κ − 3)/4·ε_luck + π/(units a group)` (GRIND's composition; the
-live analysis charges `κ = 3`, its luck `3/4`). -/
+`F` is where the premium goes. At such draws a run's savings are at most `(1 + κₓ)·U` plus `π` a seed group, `U`
+its unlucky savings, which the checks catch at the zero-luck rate, so the staged instance's `F` is the live floor less
+the premium: `(1 − ε_FS)·W` with `ε_FS = ε_live + (κₓ − 3)/4·ε_luck + π/(units a group)` (GRIND's composition; the
+live analysis charges `κₓ = 3`, its luck `3/4`). -/
 def LiveFloorUnsteered [Fintype J] [Fintype Live] (Mc : Machine) (S : FSService J N Live) (T : ℕ)
     (gain : GainMap Mc S) (π F κ : ℝ) (g : StateTerm Mc S) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : FSAdv Mc S Ω), FSWithin Mc S M T → ∀ (H : S.Q → N) (r : Ω),
