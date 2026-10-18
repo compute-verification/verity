@@ -82,7 +82,7 @@
   "policy": {"compile_time": {"Control.Bad": {"why": "the kernel control: its #eval adds the declaration",
    "digest": "4da2bab2648e444f57947d9604d9d9a74ae39700cffb41af077108b8bc006bd7"}}},
   "replay_only": true,
-  "fails": "replay: the kernel rejected a declaration under Control"
+  "fails": "replay: the kernel rejected a declaration under Control, in Control.Bad (exit 1)"
  },
  "initializer": {
   "write": {"Control/Bad.lean": "initialize\n  try IO.FS.writeFile \"FORGED\" \"{\\\"offenders\\\": []}\" catch _ => pure ()\n\ntheorem Control.bad : 1 = 2 := by sorry\n"},
@@ -125,7 +125,7 @@
               "lake-manifest.json": ["\"packages\": []", "\"packages\": [{\"type\": \"path\", \"scope\": \"\", \"name\": \"dep\", \"manifestFile\": \"lake-manifest.json\", \"inherited\": false, \"dir\": \".lake/packages/dep\", \"configFile\": \"lakefile.toml\"}]"],
               "Control.lean": ["import Control.Thms", "import Control.Thms\nimport Dep"]},
   "closure_only": true,
-  "fails": "replay: the kernel rejected a declaration in the import closure of Control"
+  "fails": "replay: the kernel rejected a declaration in the import closure of Control, in Dep (exit 1)"
  },
  "missing_policy": {
   "delete": ["lean-audit.json"],

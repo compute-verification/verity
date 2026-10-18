@@ -2150,7 +2150,8 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     if killed(rc):
         fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
     elif rc or "axioms" not in doc:
-        fails.append(f"replay: the kernel rejected a declaration {where} (exit {rc}):\n{text[-2000:]}")
+        fails.append(f"replay: the kernel rejected a declaration {where}"
+                     f"{', in ' + ', '.join(doc['rejected']) if doc.get('rejected') else ''} (exit {rc}):\n{text[-2000:]}")
     elif (walked := sorted(doc["axioms"])) != sorted(facts["axioms"]):
         fails.append(f"replay: the replayed environment uses the axioms {', '.join(walked) or 'none'}, the .olean files "
                      f"record {', '.join(sorted(facts['axioms'])) or 'none'}")
