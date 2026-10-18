@@ -15,12 +15,13 @@ family here, `plainCountedRD` and `zkCountedRD`, so this file reads the codes an
   `√ρ + 1/200`. It meets `ListWithin` at `θ = 1 − √ρ − 1/200` (`listWithin_plainDecodeR`; the Johnson count fits,
   `plainShape_nk`, least `n·k = 2^10·2^9` at `m = 22`), with `DecoderComplexity` `flockPolyR` at
   `(os.length + n)·2^k0·128` (`plainDecodeR_complexity`).
-* `plainDecodeRD`, the plain family (`famDecodeR`): `ListWithin` at `deployPlain rel`'s `len`, `enc` and `θ`
+* `plainDecodeRD`, the plain family (`famDecodeR`): `ListWithin` at `deployPlain rel`'s `len`, `enc` and `θ`, its code
+  read through any column map that keeps a column's lanes, `deployPlainTrim rel`'s trimmed code among them
   (`listWithin_plainDecodeRD`), with `DecoderComplexity` `14·(flockPolyR + X)` at the schedules' sizes summed
   (`plainSizeRD`, `plainDecodeRD_complexity`), its lists at most that long (`plainDecodeRD_length_le`).
-* `zkDecodeRD`, the masked family (`GS.RadiusFamily`): `ListWithin` at `deployZk rel`'s `len`, `enc` and `θ`
-  (`listWithin_zkDecodeRD`), with `DecoderComplexity` `11·(zkPolyR + X)` at `zkSizeRD` (`zkDecodeRD_complexity`), its
-  lists at most that long (`zkDecodeRD_length_le`).
+* `zkDecodeRD`, the masked family (`GS.RadiusFamily`): `ListWithin` at `deployZk rel`'s `len`, `enc` and `θ`, read
+  the same way (`listWithin_zkDecodeRD`), with `DecoderComplexity` `11·(zkPolyR + X)` at `zkSizeRD`
+  (`zkDecodeRD_complexity`), its lists at most that long (`zkDecodeRD_length_le`).
 
 Each family's size is affine in the number of opened columns, at most its size on no columns times one more than
 that number (`plainSizeRD_le`, `zkSizeRD_le`), and so in the opened word's encoded length, which `Flock.Efficient`
@@ -145,15 +146,15 @@ noncomputable def plainCountedRD (os : List (ℕ × List GF128)) : List Flock.Pl
 def plainSizeRD (os : List (ℕ × List GF128)) : ℕ :=
   ∑ i : Flock.PlainIdx, (os.length + 2 ^ Flock.plainLen i) * 2 ^ Flock.plainLanes i * 128
 
-/-- **The plain verifier's radius decoder meets `ListWithin`** at the deployed plain code, with the length `2^d` and
-the radius `1 − √ρ − 1/200` read off the trace's `m`. -/
-theorem listWithin_plainDecodeRD :
-    Flock.ListWithin Flock.plainLenD Flock.plainEncD Flock.plainThetaD plainDecodeRD :=
+/-- **The plain verifier's radius decoder meets `ListWithin`** at the deployed plain code read through any `t` that
+keeps a column's lanes, with the length `2^d` and the radius `1 − √ρ − 1/200` read off the trace's `m`. -/
+theorem listWithin_plainDecodeRD (t : List GF128 → List GF128) (ht : ∀ u ℓ, (t u).getD ℓ 0 = u.getD ℓ 0) :
+    Flock.ListWithin Flock.plainLenD (fun M q => t (Flock.plainEncD M q)) Flock.plainThetaD plainDecodeRD :=
   listWithin_famDecodeR (s := fun i => 2 ^ Flock.plainLanes i)
     (T := fun i => Message GF128 (Flock.plainLanes i) (Flock.plainCols i))
     (fun i _ => 2 ^ Flock.plainLen i) (fun i => (Flock.flockPlainLevelZero i).enc)
     (fun i _ => 1 - Real.sqrt ((2 : ℝ) ^ Flock.plainCols i / 2 ^ Flock.plainLen i) - 1 / 200) plainDecodeR
-    fun i => by
+    t ht fun i => by
       rw [Flock.flockPlainLevelZero, Flock.levelZero_enc]
       exact listWithin_plainDecodeR i
 

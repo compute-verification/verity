@@ -93,7 +93,8 @@ theorem Runs.forIn_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv
     exact ih
 
 /-- **The masked session runs**: the goal `SessionRunsZk`. -/
-theorem sessionRunsZk_goal (S : JsonSpec) (hS : StmtOkZk H rel) (hR : ProverRunsZk H rel) : SessionRunsZk H rel := by
+theorem sessionRunsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (hS : StmtOkZk H rel)
+    (hR : ProverRunsZk H rel) : SessionRunsZk H rel := by
   intro c
   obtain ⟨st, hst, hsp, hm1, hm2⟩ := c.table
   obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS c
