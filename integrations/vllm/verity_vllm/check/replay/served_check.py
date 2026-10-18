@@ -20,9 +20,13 @@ whose dot read a non-finite operand is never claimed exact.
 With a seed (the Commit's, drawn after the values are committed) a request's sampled rows at each step are a uniform draw of
 `ROWS` from that seed's generator, one draw a request a step shared by its GEMMs and its attention ops, and the report carries
 the seed and every draw; without one they are the fixed spread `sample`.
+
+`population` reconciles the report against the Build's identities one by one (what the check reached, what it noted outside
+them, what it never reached), the record's C2 population scope.
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Mapping
 
@@ -36,7 +40,8 @@ from verity_vllm.program.registry import b1, cublas_bf16
 from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import inductor as IR
-from verity_vllm.query.manifest.format import SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
+from verity_vllm.query.manifest.bind import split_name
+from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
 from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
 
 #: the rows of a request a GEMM or an attention op is evaluated on: all of a request's rows up to this many, else its first, its
@@ -130,8 +135,8 @@ class ServedCheck:
         batch = {r: hi - lo for r, lo, hi in st.rows}
         want = {r["request_id"]: r["tokens"] for r in plan["requests"]}
         if batch != want or n != plan["tokens"]:
-            return self._note(out, "batch", {"ok": False, "why": f"batch {batch}, the plan's {want}"})
-        self._note(out, "batch", {"ok": True})
+            return self._note(out, "batch", {"ok": False, "why": f"batch {batch}, the plan's {want}", "rows": batch})
+        self._note(out, "batch", {"ok": True, "rows": batch})
         names = set(st.values)
         V: dict[str, np.ndarray] = {}
         bad_shape = []
@@ -215,20 +220,22 @@ class ServedCheck:
             self._note(out, POSITIONS, _verdict(want, pos))
         if IDS in V:
             ids = V[IDS][:, 0].astype(np.int64)
-            want, rows, why = [], [], []
+            want, rows, why, checked = [], [], [], []
             for r, lo, hi in spans:
                 if r in self.sampled:
                     if hi - lo != 1:
                         why.append(f"{r} runs {hi - lo} rows after its first step")
                     want.append(self.sampled[r])
                     rows.append(lo)
+                    checked.append(r)
                 elif r in self.prompts:
                     if len(self.prompts[r]) != hi - lo:
                         why.append(f"{r}: a first step of {hi - lo} rows, a prompt of {len(self.prompts[r])}")
                         continue
                     want += [int(t) for t in self.prompts[r]]
                     rows += list(range(lo, hi))
-            v = _verdict(np.array(want, np.int64), ids[rows], rows=len(rows))
+                    checked.append(r)
+            v = _verdict(np.array(want, np.int64), ids[rows], rows=len(rows), requests=checked)
             self._note(out, IDS, {**v, "ok": v["ok"] and not why, **({"why": why[:4]} if why else {})})
 
     def _attention(self, out: dict[str, Any], a: dict[str, Any], V: dict[str, np.ndarray], spans, req,
@@ -307,3 +314,58 @@ def check(build: dict[str, Any], steps: Iterable[Step], weight: Callable[[str], 
     for st in steps:
         c.step(st)
     return c.report()
+
+
+def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int], first: int = 6) -> dict[str, Any]:
+    """The check's reach (`report`) reconciled against the Build's identities, its Q(P), identity by identity: an identity
+    (engine step, request, value) is reached when the report notes its value at that step for that request (a request of the
+    step's committed batch; the ids only of a request whose prompt or previous sampled id they were compared to).  A noted value
+    of a request the Build has no identity for is outside the query, an identity the report never reaches is without rows, and an
+    identity's rows (element_range / width) must be the request's committed rows at the step (one for the logits and the sampled
+    id).  The fields `c2_rules._query_population_scope` grades: `query_total`, `query_checks` (``ok`` False on any finding), `scope`."""
+    prog = build["program"]
+    width = {n: v["width"] for n, v in prog["values"].items()} | {LOGITS: prog["logits"]["gemm"][1], SAMPLED: 1}
+    want: dict[tuple[int, str, str, str], dict[str, Any]] = {}
+    fam: Counter = Counter()
+    for i in build["identities"]:
+        fam[i["family"]] += 1
+        want[(int(i["engine_step"]), str(i["request_id"]), str(i["op_path"]), str(i["output_member"]))] = i
+    reached: Counter = Counter()
+    outside, disagree, seen = [], [], set()
+    for s, notes in rep["steps"].items():
+        batch = (notes.get("batch") or {}).get("rows") or {}
+        for name, v in notes.items():
+            if name in ("batch", "coverage"):
+                continue
+            op, member = split_name(name)
+            for r in ((v.get("requests") or []) if name == IDS else batch):
+                at = {"request_id": r, "step": int(s), "op_path": op, "member": member}
+                i = want.get(key := (int(s), r, op, member))
+                if i is None:
+                    outside.append(at)
+                    continue
+                seen.add(key)
+                reached[i["family"]] += 1
+                lo, hi = i["element_range"]
+                rows = 1 if name in (LOGITS, SAMPLED) else batch[r]
+                if hi - lo != rows * width[name]:
+                    disagree.append({**at, "manifest_height": (hi - lo) / width[name], "program_rows": rows})
+    without = [{"request_id": k[1], "step": k[0], "op_path": k[2], "member": k[3]} for k in want if k not in seen]
+    manifest_ranks = sorted({int(i["rank"]) for i in build["identities"]})
+    total, n_reached = len(build["identities"]), sum(reached.values())
+    checks = {"vus_outside_query": {"n": len(outside), "first": outside[:first]},
+              "identities_without_rows": {"n": len(without), "first": without[:first]},
+              "rows_disagree": {"n": len(disagree), "first": disagree[:first]},
+              "ranks": {"replay": sorted(ranks), "manifest": manifest_ranks, "equal": manifest_ranks == sorted(ranks)},
+              "accounted": n_reached + len(without) == total,
+              "unstated_families": sorted(set(fam) - {SERVED_FAMILY})}
+    checks["ok"] = not (outside or without or disagree or checks["unstated_families"]) and checks["ranks"]["equal"] and checks["accounted"]
+    qid = build["kind"]
+    scope = (f"{qid}(P) = {total} identities ({', '.join(f'{k} {v}' for k, v in sorted(fam.items()))}): one per (engine step, request, "
+             f"value) of the served Program; the exact replay reaches {n_reached} ({100.0 * n_reached / max(total, 1):.1f}%): every call "
+             f"on every row, each GEMM and attention op on up to {rep.get('rows_per_request')} drawn rows of each request a step, the "
+             "logits and the sampled id of every request")
+    return {"query_total": {"source": "the served Build of record (acquire.served)", "query_id": qid, "identities": total,
+                            "by_family": dict(sorted(fam.items())), "manifest_digest": build["manifest_digest"],
+                            "program_digest": build["program_digest"]},
+            "query_checks": checks, "scope": scope}

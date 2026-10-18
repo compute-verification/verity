@@ -11,12 +11,14 @@ import numpy as np
 import pytest
 
 from verity_vllm.acquire import served as SV
+from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import served_check as SC
 from verity_vllm.program.kernels import inductor_rows as TW
 from verity_vllm.program.kernels.rows import token_select_first_max
 from verity_vllm.program.registry import b1, cublas_bf16
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import inductor as IR
+from verity_vllm.query.manifest.format import manifest_digest
 
 V, H, NH, KVH, D, I, P = 64, 64, 2, 1, 64, 32, 512
 QKV = (NH + 2 * KVH) * D
@@ -77,10 +79,12 @@ def _build() -> dict:
     _plans, missing = SV.step_plans(*args, {}, **kw)
     plans, missing = SV.step_plans(*args, {f"{M},{K_},{N}": _route(M) for M, K_, N in missing}, **kw)
     assert not missing
-    program = {"calls": PRE + POST, "attention": [ATTENTION], "values": {n: {"width": w} for n, w in WIDTHS.items()},
+    program = {"calls": PRE + POST, "attention": [ATTENTION], "values": {n: {"width": w, "piece": 0} for n, w in WIDTHS.items()},
                "logits": {"name": SV.LOGITS, "x": _v(OUT, H), "w": _w("lm_head", V, H), "gemm": [H, V]},
                "sampled": {"name": SV.SAMPLED, **SV.bound(b1.TokenSelect, V=V)}}
-    return {"program": program, "steps_plan": plans, "program_digest": "test"}
+    identities = SV.identities_of(plans, program["values"], V, SCHEDULE, "test", 0)
+    return {"kind": SV.KIND, "program": program, "steps_plan": plans, "program_digest": "test", "identities": identities,
+            "manifest_digest": manifest_digest(identities)}
 
 
 def _words(a) -> np.ndarray:
@@ -326,3 +330,56 @@ def test_steps_are_checked_in_order(served):
     c.step(served[2][1])
     with pytest.raises(ValueError, match="checked in order"):
         c.step(served[2][0])
+
+
+def _population(served, rep=None, build=None, ranks=(0,)):
+    pop = SC.population(build or served[0], rep or _check(served), ranks=list(ranks))
+    return pop, c2_rules._query_population_scope({"population": pop})
+
+
+def test_the_check_reaches_every_identity_of_the_build(served):
+    build = served[0]
+    pop, (scope, fail) = _population(served)
+    total = sum(len(p["requests"]) for p in build["steps_plan"]) * (len(WIDTHS) + 2)
+    assert pop["query_checks"]["ok"] and fail is None
+    assert pop["query_total"]["identities"] == len(build["identities"]) == total
+    assert pop["query_total"]["manifest_digest"] == build["manifest_digest"]
+    assert f"reaches {total} (100.0%)" in scope and SV.KIND in scope
+
+
+def test_a_step_the_check_never_reached_leaves_its_identities_without_rows(served):
+    steps = served[2]
+    pop, (_scope, fail) = _population(served, _check(served, [steps[0], steps[2], steps[3]]))
+    c = pop["query_checks"]
+    assert not c["ok"] and c["accounted"]
+    # step 1's every identity, and r1's ids at step 2: no id sampled before to compare them to
+    assert c["identities_without_rows"]["n"] == len(served[0]["steps_plan"][1]["requests"]) * (len(WIDTHS) + 2) + 1
+    assert "identities_without_rows" in fail
+
+
+def test_ids_compared_to_nothing_are_not_reached(served):
+    build, W, steps, prompts = served
+    rep = SC.check(build, steps, W.__getitem__, seed=None, rows=8, prompts={r: p for r, p in prompts.items() if r != "r2"})
+    pop, _ = _population(served, rep)
+    assert pop["query_checks"]["identities_without_rows"]["first"] == [
+        {"request_id": "r2", "step": 2, "op_path": "c00.input", "member": "ids"}]
+
+
+def test_an_identity_of_other_rows_disagrees(served):
+    build = copy.deepcopy(served[0])
+    i = next(i for i in build["identities"] if i["op_path"] == "c02.mm" and i["output_member"] == "buf4" and i["engine_step"] == 2)
+    i["element_range"] = [0, i["element_range"][1] + H]
+    c = _population(served, build=build)[0]["query_checks"]
+    assert not c["ok"] and c["rows_disagree"]["n"] == 1
+
+
+def test_a_value_the_build_does_not_require_is_outside_the_query(served):
+    build = copy.deepcopy(served[0])
+    build["identities"] = [i for i in build["identities"] if not (i["op_path"] == "logits_processor" and i["engine_step"] == 3)]
+    c = _population(served, build=build)[0]["query_checks"]
+    assert not c["ok"] and c["vus_outside_query"]["n"] == len(build["steps_plan"][3]["requests"])
+
+
+def test_another_rank_disagrees(served):
+    pop, (_scope, fail) = _population(served, ranks=(1,))
+    assert pop["query_checks"]["ranks"] == {"replay": [1], "manifest": [0], "equal": False} and "ranks replay [1]" in fail

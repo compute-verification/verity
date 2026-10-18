@@ -175,6 +175,7 @@ class ServedCommit:
         """One run's C2: ``components`` (sampled_replay, boundary_linkage), the ``value_correspondence`` fields of record
         (``compiled_check`` among them), ``ok`` and a log ``line``."""
         from verity_vllm.acquire.sources import served_compiled_source as S
+        from verity_vllm.check.replay import served_check as SC
         from verity_vllm.pipeline import c2_replay as C2
 
         seed, seed_src, seed_form, chal = C2.seed_of(SimpleNamespace(replay_seed=replay_seed, replay_challenge=challenge), rc)
@@ -199,11 +200,12 @@ class ServedCommit:
         chain = S.linkage(com)
         linked_ok = bool(pairs and not unlinked and chain["passed"])
         pop = self.build["populations"]
+        # one process serves the row (build_here refuses a second split graph): the check reads rank 0's committed values
         sampled = {"result": ok, "seed": seed, "seed_source": seed_src, "seed_form": seed_form,
                    "sample": {"seed": seed, "seed_source": seed_src, "seed_form": seed_form, "challenge": chal,
                               "rows_per_request": rep.get("rows_per_request"), "picks": rep.get("picks")},
                    "population": {"n": pop["identities"], "digest": self.build["manifest_digest"], "not_evaluable": {},
-                                  "source": "the served Build of record (acquire.served: every value of every engine step)"},
+                                  **SC.population(self.build, rep, ranks=[0])},
                    "n": n, "exact": exact, "tally": rep.get("tally"), "steps_checked": rep.get("steps_checked"),
                    "steps_unrun": rep.get("steps_unrun"), "mismatch": rep.get("failures"), "errors": self.src.errors,
                    "why": rep.get("error") or ("every value replays word for word from the committed values" if ok else "see mismatch/errors"),

@@ -31,7 +31,8 @@ COMMON=(--case "$CASE" --workload "$WL" --pairs "$PAIRS" --warmup 2 --max-num-se
         --engine-arg "gpu_memory_utilization=${GPU_UTIL:-0.3}" --engine-arg "kv_cache_memory_bytes=$(( ${KV_GIB:-4} << 30 ))"
         --retain host --window-mb "${WINDOW_MB:-256}" --window-slots "${WINDOW_SLOTS:-8}" --label "served-$CASE")
 for ca in ${EXTRA_COMMIT_ARGS:-}; do COMMON+=("$ca"); done
-TRT=(--committer native_collect_v2b --required-manifest "$BUILD" --program-digest "$PDIG" --checkpoint-dir "$CKPT" --openings 64)
+TRT=(--committer native_collect_v2b --required-manifest "$BUILD" --program-digest "$PDIG" --checkpoint-dir "$CKPT" --openings 64
+     --open-after-release)
 rm -rf "$D/commit"
 # run_arm <arm> <taps> <outdir>: one commit process, its own compile dirs exported before Python starts (torch reads the FX-cache switches
 # at import)

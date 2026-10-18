@@ -60,11 +60,11 @@ from verity_vllm.program.registry import inductor as IR
 from verity_vllm.program.registry.hopper import Fa3InvSum
 from verity_vllm.query.manifest.bind import split_name
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
-from verity_vllm.query.manifest.format import SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
+from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
 from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
 
 KIND = "verity/served-required-manifest/v1"
-FAMILY = "served_kernel_values"
+FAMILY = SERVED_FAMILY
 DOT = HopperBF16WgmmaDot16
 #: vllm-flash-attn's `_DEFAULT_MAX_NUM_SPLITS_FOR_CUDA_GRAPH`: the static split count of a step a full graph may hold
 SPLIT_CAP = 32
@@ -555,6 +555,29 @@ def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int
 
 
 # ------------------------------------------------------------------------------------------------------------- the Build
+def identities_of(plans: list[dict[str, Any]], values: dict[str, dict[str, Any]], V: int, schedule: list[dict[str, Any]], pdig: str,
+                  rank: int) -> list[dict[str, Any]]:
+    """One identity per (engine step, request, value): the request's rows of each of the Program's `values`, its logits row and
+    its sampled id."""
+    arrive = {r["request_id"]: r["arrive"] for r in schedule}
+    out = []
+    for plan in plans:
+        for r in plan["requests"]:
+            rid, toks = r["request_id"], r["tokens"]
+            for name in list(values) + [LOGITS, SAMPLED]:
+                op, member = split_name(name)
+                if name == LOGITS:
+                    numel, piece = V, None
+                elif name == SAMPLED:
+                    numel, piece = 1, None
+                else:
+                    numel, piece = toks * values[name]["width"], values[name]["piece"]
+                out.append({"family": FAMILY, "program_digest": pdig, "request_id": rid, "step": plan["step"] - arrive[rid],
+                            "invocation": 0, "op_path": op, "output_member": member, "element_range": [0, numel], "rank": rank,
+                            "kind": "input" if name in (IDS, POSITIONS) else "output", "piece": piece, "engine_step": plan["step"]})
+    return out
+
+
 def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any], routes: dict[str, Any], schedule: list[dict[str, Any]],
           steps: int, capture_sizes: list[int], max_num_seqs: int, sms: int, split_cap: int = SPLIT_CAP, backbone: str = "model",
           lm_head: str = "lm_head.weight", rank: int = 0) -> dict[str, Any]:
@@ -602,22 +625,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
                "dispatch": {"capture_sizes": capture_sizes, "max_num_seqs": max_num_seqs, "split_cap": split_cap, "sms": sms}}
     pdig = hashlib.sha512(json.dumps({"program": program, "steps": plans}, sort_keys=True).encode()).hexdigest()
     names = list(wired["values"])
-    arrive = {r["request_id"]: r["arrive"] for r in schedule}
-    identities = []
-    for plan in plans:
-        for r in plan["requests"]:
-            rid, toks = r["request_id"], r["tokens"]
-            for name in names + [LOGITS, SAMPLED]:
-                op, member = split_name(name)
-                if name == LOGITS:
-                    numel, piece = V, None
-                elif name == SAMPLED:
-                    numel, piece = 1, None
-                else:
-                    numel, piece = toks * wired["values"][name]["width"], wired["values"][name]["piece"]
-                identities.append({"family": FAMILY, "program_digest": pdig, "request_id": rid, "step": plan["step"] - arrive[rid],
-                                   "invocation": 0, "op_path": op, "output_member": member, "element_range": [0, numel], "rank": rank,
-                                   "kind": "input" if name in (IDS, POSITIONS) else "output", "piece": piece, "engine_step": plan["step"]})
+    identities = identities_of(plans, wired["values"], V, schedule, pdig, rank)
     return {"schema": SCHEMA, "kind": KIND, "identity_key": list(C.IDENTITY_KEY), "program_digest": pdig,
             "program": {"kind": "P_served (the served-compiled computation)", "inductor_dir": inductor_dir, "split_graph": split_graph,
                         "piece_wrappers": [os.path.relpath(w["path"], inductor_dir) for w in chosen], **program},
