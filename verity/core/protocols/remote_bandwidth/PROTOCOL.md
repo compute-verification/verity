@@ -245,8 +245,10 @@ leaf hashes the payload once for both (34 compressions), and \(b_j\) is one SHA-
 keeps \(d_j\), or \(b_j\) in its place, beside the block: 64 bytes a 4 KiB block, 1.6%. Blocks under the seed's key are
 unchanged, byte for byte. The bound key is `kv.py`'s
 `encode_token_layer(..., bound=True)` for \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\), byte for byte, and
-the tests pin it (`kv_vectors.json`'s "bound", and `vectors.json`'s `codec.bound`); `kv.cu`, `kv_twin.py` and
-vLLM's encoded store take the seed's key only (§8).
+the tests pin it (`kv_vectors.json`'s "bound", and `vectors.json`'s `codec.bound`). `kv.cu` and `paged.cu` take it as
+a per-block offset added to the tweak, \(b_j + \tau W (j - j')\) for a block written at another block's indices \(j'\)
+(`kv_encode_bound`, `paged.cu`'s offset table; gated against both pins by `kv_bench.py` and `paged_gate.py`);
+`kv_twin.py` and vLLM's encoded store take the seed's key only (§8).
 
 Three properties of registration matter:
 
@@ -742,9 +744,11 @@ and each window's, from it plus the node's capacities.
     \text{layer}\): serving records each block it completes, with its slot, the index it gave it and its \(d_j\), and
     each slot it frees, step by step (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its
     slot held), and the prover's audit side turns the record into appends, releases and plan changes (`Replay`). The record is the prover's: \(d_j\) is witness, and the
-    verifier sees only the append roots, the releases and the plans. A KV block under the seed's
-    key, as `kv.cu` and vLLM's encoded store (whose `Codec` is keyed by the store index alone) encode them today, is
-    not to be credited: its writer may have picked its encoding, and then its receipts need no read.
+    verifier sees only the append roots, the releases and the plans; `benchmarks/remote_session` carries them over
+    the wire, each root's message its appends, then its releases, then its plan as a change. A KV block under the
+    seed's key, as vLLM's encoded store (whose `Codec` is keyed by the store index alone) encodes them today, is not
+    to be credited: its writer may have picked its encoding, and then its receipts need no read. `kv.cu` and
+    `paged.cu` take the bound key as a per-block offset, which serving does not pass yet.
 - **Multi-GPU trees.** Each GPU's blocks should be an aligned power-of-two range of leaves, so that a pass's root is
   its GPUs' subtree roots combined. That keeps \(g\) to an all-gather, a few hashes and the next seed's broadcast.
 - **Sketch receipts** (a ±1 projection hashed, `RateAuditSketch`) are the stated receipt, sketch-sha512 (§4). Three

@@ -1,6 +1,7 @@
 """The verifier's and the prover's processes over a loopback socket, the driver's reference as the prover's backend and
 a clock that advances by one tick per pass: an honest session is accepted and its γ terms computed, a prover that
-dropped blocks is rejected at its openings, and a second session waits out the first's deadline."""
+dropped blocks is rejected at its openings, a second session waits out the first's deadline, and KV pages appended and
+released mid-session (a memory map's steps) are audited, accepted when held and rejected when dropped."""
 from __future__ import annotations
 
 import os
@@ -76,19 +77,19 @@ class TickingBackend(prover.CpuBackend):
     def calibrate(self) -> dict:
         return {**super().calibrate(), **({"read_tiers": self.tiers} if self.tiers else {})}
 
-    def run_pass(self, seed: bytes):
-        out = super().run_pass(seed)
+    def run_pass(self, seed: bytes, plan=None):
+        out = super().run_pass(seed, plan)
         self.clock.tick()
         return out
 
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
-        read_bytes_per_s: float = 1e20, tiers: dict | None = None):
+        read_bytes_per_s: float = 1e20, tiers: dict | None = None, **kv):
     clock = PassClock()
     a, b = socket.socketpair()
     vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
     backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers)
-    p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None)
+    p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None, **kv)
     results = []
 
     def prove() -> None:
@@ -193,12 +194,85 @@ def test_a_second_session_waits_out_the_first_and_is_accepted():
     assert rs[0]["coins"] != rs[1]["coins"]
 
 
+def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
+    """Two sessions over one registration, each beside a serving trace of memory-map/v1 steps (2 pages every 4th pass
+    over a pool of 10 slots): an honest one is accepted, its record counting the appends, releases and post-seed reads
+    the verifier saw, which its ledger leaves uncredited without a property verdict; then one whose prover drops the
+    pages it appends, whose appends start again from N, is rejected at a draw on a dropped page.  At 16 draws a window
+    the second's chance of drawing no dropped page is below 2^-30 at the passes these sessions make."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (honest, dropping), (ph, pd) = run("kv:2,kvdrop:2", sessions=2, samples=16, kv_every=4, kv_pool=8)
+    assert honest["accepted"] and ph["accepted"] and honest["failure"] is None
+    kv = ph["kv"]
+    assert kv["pool_slots"] == 10 and kv["steps"] >= 6 and kv["appended"] == 2 * kv["steps"]
+    assert kv["sent_appended"] == honest["appended"] >= 2 * (kv["steps"] - 2)
+    assert kv["sent_released"] == honest["released"] > 8
+    assert kv["pass_appended"][0] == 0 and 0 < max(kv["pass_appended"]) <= 10
+    assert all(8 < n <= 18 for n in kv["pass_blocks"])
+    pub = honest["record"]["public"]
+    assert (pub["appended"], pub["released"]) == (honest["appended"], honest["released"])
+    assert sum(pub["post_seed"]) == sum(kv["pass_appended"]) > 0
+    lg = honest["ledger"]
+    assert lg["inputs"]["post_seed_receipts"] == sum(pub["post_seed"]) and not lg["inputs"]["post_seed_credited"]
+    reads = lg["inputs"]["reads_bytes"]
+    whole = lg["spec"]["capacity_bytes_per_s"] * pub["span_ns"] / 1e9
+    credited = reads - sum(pub["post_seed"]) * rcodec.BLOCK_BYTES
+    assert lg["spec"]["terms"]["timing"] == pytest.approx(1 - credited / whole, rel=1e-12)
+    assert not dropping["accepted"] and not pd["accepted"]
+    assert dropping["failure"]["failure"] == "receipt" and pd["failure_on_dropped"] is True
+    assert pd["kv"]["appended"] > 0 and min(pd["dropped"]) == 16 and dropping["appended"] > 0
+
+
+def test_a_root_message_is_applied_in_order_and_a_plan_holding_a_released_block_is_rejected():
+    """`Verifier.root`: a message's appends, then its releases, then its root with its plan change; a plan that still
+    holds a block the message released, or one appended by no message, is the session's `plan` rejection, and a
+    message the session cannot read is malformed."""
+    reg = audit.register(os.urandom(32), b"test-node", 8, bytes(64), P512)
+    params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows)
+
+    def session():
+        from verity.core.protocols.remote_bandwidth import coins
+
+        s = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: 0,
+                          not_before_ns=0)
+        s.start()
+        return s
+
+    root = (b"\7" * 64).hex()
+    s = session()
+    msg = {"t": 0, "i": 0, "root": root, "appends": [[root, 2]], "released": [[3, 1]],
+           "change": [[[8, 2]], [[3, 1]]]}
+    assert verifier.Verifier.root(s, msg) is None
+    assert [p.runs for p in s.windows[0].plans] == [((0, 3), (4, 6))] and s.released == 1 and s.extent == 10
+    s = session()
+    v = verifier.Verifier.root(s, {**msg, "change": [[[8, 2]], []]})
+    assert v is not None and v.failure == "plan"
+    s = session()
+    v = verifier.Verifier.root(s, {**msg, "appends": [], "released": []})
+    assert v is not None and v.failure == "plan"
+    with pytest.raises(ValueError):
+        verifier.Verifier.root(session(), {**msg, "appends": [["zz", 2]]})
+
+
+def test_a_kv_plan_needs_its_pages_a_step():
+    assert prover.parse_plan("honest,kv:4,kvdrop:2,skip:0.5") == [("honest", 0.0), ("kv", 4.0), ("kvdrop", 2.0),
+                                                                  ("skip", 0.5)]
+    for bad in ("kv", "kv:0", "kv:1.5", "kvdrop:", "evict:2"):
+        with pytest.raises(ValueError):
+            prover.parse_plan(bad)
+
+
 def test_openings_round_trip_on_the_wire_and_a_short_body_is_none():
     o = audit.Opening(3, 17, bytes(range(256)) * 16, b"\1" * 1024, b"\2" * 192, (b"\3" * 64,) * 5, b"\4" * 192,
                       (b"\5" * 64,) * 9, b"")
-    body = wire.encode_openings([o, o])
-    assert wire.decode_openings(body) == [o, o]
+    appended = audit.Opening(4, 18, bytes(range(256)) * 16, b"\1" * 1024, b"\2" * 192, (b"\3" * 64,) * 5, b"\4" * 192,
+                             (b"\5" * 64,) * 3, b"", b"\6" * 64)
+    body = wire.encode_openings([o, appended, o])
+    assert wire.decode_openings(body) == [o, appended, o]
     assert wire.decode_openings(body[:-1]) is None and wire.decode_openings(b"") is None
+    with pytest.raises(ValueError):
+        wire.encode_openings([audit.Opening(3, 17, o.block, o.leaf, o.leaf_salt, o.receipt_path, o.payload_salt,
+                                            o.payload_path, b"", b"\6" * 63)])
 
 
 @pytest.mark.parametrize("name", ["p1024/k3/masked", "p1024/k2/masked", "p512/k2"])

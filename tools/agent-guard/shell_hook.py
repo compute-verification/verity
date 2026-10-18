@@ -18,6 +18,12 @@ nvcc) while the VM has less than $AGENT_GUARD_MIN_AVAIL (default 0.25) of its me
 limit less its use when that is less): on a VM several agents share, one more such job is how the kernel OOM-kills another
 agent's processes (circuits' coordinator VM, 15 and 18 Oct). The same command through `research run --on NODE`, or over ssh,
 runs elsewhere and passes; `AGENT_GUARD_LOW_MEM_OK=1` anywhere in the command passes it too.
+
+It also carries messages to running agents, the one channel that reaches a subagent mid-run (`inbox.py send AGENT_ID`).
+A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next allowed
+command is refused once, with the message as the refusal's text, which is what Cursor shows the agent (an `agent_message`
+on an allowed command reaches no one). The agent then re-runs the command. A refused secret-printing command keeps the
+message queued, and the delivered text is appended to `<conversation_id>.delivered`.
 """
 import json
 import os
@@ -26,6 +32,7 @@ import shlex
 import sys
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
+INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
 WRAPPER_ARG_OPTIONS = {"sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t"}, "doas": {"-u", "-C"}, "nice": {"-n"},
                        "timeout": {"-s", "-k", "--signal", "--kill-after"}, "taskset": {"-c", "-p"}}
@@ -284,12 +291,34 @@ def low_memory_reason(command: str) -> str | None:
             f"for memory; for a small run you know fits, put {LOW_MEM_OK} in the command.")
 
 
+def delivery(conversation: str) -> str | None:
+    """The message queued for agent `conversation` (`inbox.py send`), taken out of its inbox, or None."""
+    if not conversation or "/" in conversation or conversation.startswith("."):
+        return None
+    box = os.path.join(INBOX, conversation + ".md")
+    taking = box + ".taking"
+    try:
+        os.replace(box, taking)
+    except OSError:
+        return None
+    try:
+        with open(taking) as f:
+            text = f.read()
+        with open(os.path.join(INBOX, conversation + ".delivered"), "a") as log:
+            log.write(text)
+    finally:
+        os.remove(taking)
+    return text if text.strip() else None
+
+
 def main() -> int:
     raw = sys.stdin.read()
     try:
-        command = json.loads(raw).get("command") or ""
+        event = json.loads(raw)
+        command = event.get("command") or ""
+        conversation = str(event.get("conversation_id") or "")
     except (ValueError, AttributeError):
-        command = raw
+        command, conversation = raw, ""
     try:
         deny = refused_text(command)
     except Exception:                                   # a bug here must not allow what the fallback would refuse
@@ -304,7 +333,17 @@ def main() -> int:
                           "user_message": "Refused by tools/agent-guard/shell_hook.py: " + reason,
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
-        print(json.dumps({"permission": "allow"}))
+        try:
+            message = delivery(conversation)
+        except Exception:                               # an unreadable inbox must not block the agent's command
+            message = None
+        if message:
+            note = ("MESSAGE FROM YOUR COORDINATOR, delivered by the shell hook (tools/agent-guard/inbox.py). This command was "
+                    "refused only to deliver it: nothing is wrong with it, so re-run it exactly as it was, then act on the "
+                    "message.\n\n" + message)
+            print(json.dumps({"permission": "deny", "user_message": note, "agent_message": note}))
+        else:
+            print(json.dumps({"permission": "allow"}))
     return 0
 
 
