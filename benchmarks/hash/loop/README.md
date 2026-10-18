@@ -25,7 +25,8 @@ arm's measures, each measurement naming its `arm` (stock, sha512, blake3). The v
   per step, and the noise (stock's TPOT spread over its interleaved reps).
 - `label.py`: the labels, idempotent; rerun it on runs whose launching VM stopped waiting.
 - `plot.py`: iteration against each measure, one line per (GPU, arm), from the evidence store only
-  (`research data select --label campaign=hash-loop --kind bench-result/v1`); `--table` prints the iteration table.
+  (`research data select --label campaign=hash-loop --kind bench-result/v1`, after `research data refresh`, since each run
+  publishes its result from its node); `--table` prints the iteration table.
 
 ~~~sh
 OUT=/tmp/loop uv run --with matplotlib python3 benchmarks/hash/loop/plot.py --table

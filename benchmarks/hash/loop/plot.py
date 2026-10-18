@@ -2,9 +2,10 @@
 (`research data select --label campaign=hash-loop --kind bench-result/v1`: each run's result, its measures per arm in its
 measurements, its iteration and GPU in its labels). Several results at one (iteration, GPU) are averaged; each is also drawn as a dot.
 
-    python3 benchmarks/hash/loop/plot.py [--out DIR] [--measures a,b,...] [--table]
+    python3 benchmarks/hash/loop/plot.py [--out DIR] [--measures a,b,...] [--table] [--no-refresh]
 
-Writes DIR/hash-loop.png and DIR/hash-loop.json (the points plotted, with their result ids); DIR defaults to $OUT, else ./out.
+Refreshes this store's catalog from the remote first (`research data refresh`: incremental, though a fresh VM's first one
+downloads every manifest and attempt). Writes DIR/hash-loop.png and DIR/hash-loop.json (the points plotted, with their result ids); DIR defaults to $OUT, else ./out.
 --table prints the iteration table (markdown) as well. Needs matplotlib (`uv run --with matplotlib python3 ...`).
 """
 from __future__ import annotations
@@ -28,8 +29,12 @@ def research(*args: str) -> str:
     return subprocess.run(["research", *args], check=True, capture_output=True, text=True).stdout
 
 
-def load() -> list[dict]:
+def load(refresh: bool = True) -> list[dict]:
     """Every hash-loop result: {id, row, hardware, label, outcome, source, run, measures: {(arm, name): value}}."""
+    if refresh:     # a run's result is published from its node; this store indexes it only once refreshed
+        rc = subprocess.run(["research", "data", "refresh"], stdout=sys.stderr).returncode
+        if rc:      # an unreadable record anywhere in the bucket fails it; what it did fetch is indexed
+            print(f"plot.py: research data refresh exited {rc}; plotting what the catalog has", file=sys.stderr)
     ids = research("data", "select", "--label", "campaign=hash-loop", "--kind", "bench-result/v1", "--ids").split()
     out = []
     for art in ids:
@@ -83,10 +88,11 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("OUT", "out")))
     ap.add_argument("--measures", default=",".join(MEASURES))
     ap.add_argument("--table", action="store_true")
+    ap.add_argument("--no-refresh", action="store_true", help="read this store's catalog as it is (no `research data refresh`)")
     a = ap.parse_args()
-    results = load()
+    results = load(refresh=not a.no_refresh)
     if not results:
-        print("no result labeled campaign=hash-loop in this store (on a fresh VM: `research data refresh` first)", file=sys.stderr)
+        print("no result labeled campaign=hash-loop in the store", file=sys.stderr)
         return 1
     measures = a.measures.split(",")
     a.out.mkdir(parents=True, exist_ok=True)
