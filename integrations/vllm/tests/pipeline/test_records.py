@@ -16,6 +16,7 @@ from verity.ml.circuits.evaluation.reference import evaluate
 from verity_vllm import records
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import WORKLOADS, RowId, UsageError
+from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import epoch
 from verity_vllm.pipeline import research_outputs as ro
 from verity_vllm.properties.record import REGISTRY, seal
@@ -39,6 +40,8 @@ def test_index_names_rows_of_record():
         RowId.parse(row)
         assert (WORKLOADS / f"{row}.json").is_file(), row
         assert e["record"] is None or records.ART.fullmatch(e["record"]), (row, e["record"])
+        assert "aot" not in e or (records.RUN.fullmatch(e["aot"]["comparison"]) and records.ART.fullmatch(e["aot"]["trace"])
+                                  and RowId.parse(row).world > 1), (row, e["aot"])
 
 
 def _w(p: Path, doc) -> None:
@@ -257,6 +260,45 @@ def test_a_build_without_construction_manifests_is_refused(tmp_path, store):
     build = _build_art(store, d, tmp_path / "run")
     with pytest.raises(UsageError, match="the conformance they need, are unknown"):
         records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d))
+
+
+def _comparison(d: Path) -> dict:
+    """`verity-vllm predict compare`'s comparison of the row dir's Build: every Program predicted as traced."""
+    ranks = {r: {"step": p["step"], "workload": p["workload"], **p["requests"]} for r, p in epoch.build_programs(d).items()}
+    return {"row": ROW, "equal": True, "ranks": {r: {**{n: {"traced": v, "predicted": v, "equal": True} for n, v in ps.items()},
+                                                     "secs": {"step": 1.0}} for r, ps in ranks.items()}}
+
+
+def test_a_row_is_switched_by_a_comparison_equal_on_every_rank_and_publishes_only_its_aot_build(tmp_path, store):
+    d = _row_dir(tmp_path)
+    run, trace, cmp = "r20261018-001500-aaaa", "art:" + "5" * 64, _comparison(d)
+    with pytest.raises(UsageError, match="NOT equal"):
+        records.switch(ROW, {**cmp, "equal": False}, run=run, trace=trace, tier="fast")
+    with pytest.raises(UsageError, match="the comparison's run id"):
+        records.switch(ROW, cmp, run="20261018", trace=trace, tier="fast")
+    with pytest.raises(UsageError, match="needs --tier"):
+        records.switch(ROW, cmp, run=run, trace=trace)
+    with pytest.raises(UsageError, match="a single-GPU row's Build traces"):
+        records.switch(ROW.replace("__tp2__", "__tp1__"), {**cmp, "row": ROW.replace("__tp2__", "__tp1__")}, run=run, trace=trace, tier="fast")
+    e = records.switch(ROW, cmp, run=run, trace=trace, tier="fast")
+    assert e == {"record": None, "tier": "fast", "pinned_from": {"build": trace, "run": run}, "manifest_digest": None,
+                 "programs": epoch.build_programs(d), "aot": {"comparison": run, "trace": trace}}
+    assert CR.aot_of(ROW, records.INDEX) == e["aot"]
+    moved = {**cmp, "ranks": {**cmp["ranks"], "1": {**cmp["ranks"]["1"], "step": {"traced": "x", "predicted": "x", "equal": True}}}}
+    with pytest.raises(UsageError, match="re-pin it first"):
+        records.switch(ROW, moved, run=run, trace=trace)
+
+    build = _build_art(store, d, tmp_path / "run")
+    assert records.constructions(d) == {r: {"build_step": "trace", "build_request_LP9_T2": "trace"} for r in ("0", "1")}
+    with pytest.raises(UsageError, match=r"this Build traced 4 of them \(rank0 build_request_LP9_T2.*--build-construction record"):
+        records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+    s = json.loads((d / "build_summary.json").read_text())
+    _w(d / "build_summary.json", {**s, "ranks": {r: {p: {**v, "construction": "aot"} if p.startswith("build_") else v for p, v in rk.items()}
+                                                 for r, rk in s["ranks"].items()}})
+    build = _build_art(store, d, tmp_path / "run2")
+    art = records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+    assert records.index()[ROW] == {"record": art, "tier": "fast", "pinned_from": {"record": art, "build": build, "tree": "cursor/x@1b53f685a"},
+                                    "manifest_digest": "mm", "programs": e["programs"], "aot": e["aot"]}
 
 
 def test_a_job_reads_the_programs_from_a_bundle_with_no_store(tmp_path, store, monkeypatch):

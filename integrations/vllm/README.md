@@ -357,9 +357,19 @@ writes the row's record and the descriptors the job needs into one file (`record
 sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/inputs/`), and the job reads them from it
 (`records.programs(row, ..., bundle=PATH)`, or `records programs ROW --bundle PATH`), each digest checked against the record.
 
+A TP row's Build is the trace unless the row is switched.  `verity-vllm predict compare ROW_DIR` predicts every Program of a traced
+Build from the row's declared inputs (`verity_vllm/predict/`) and compares digests rank by rank; `records switch ROW --comparison
+comparison.json --run RUN --trace art:…` records, where every one is equal, the comparison run and that traced Build as the row's
+`aot` in `manifests/records.json`, and pins the predicted Programs.  A switched row's Build (`--build-construction record`, the
+default) derives each Program with `predict emit` (`verity_vllm/predict/aot.py`): the predicted Program, under the trace's annotations (the
+runtime correspondence: per Call, the fx occurrence, module, views and slots, which only the trace yields) and with its other
+files, refused unless the predicted Program and descriptor are the trace's, byte for byte.  `records publish` refuses a switched
+row's Build that traced any Program.  Neutrality's rebuild traces every row (`--build-construction trace`), so it checks a switched
+row's AOT pins against a fresh trace, and a switched row whose pins move loses its `aot`.
+
 A refactor that is meant to leave the circuits alone keeps two sets of pins.  The suite's `tests/program/test_derive_neutrality.py`
 derives GLM-5.3's constructions on vLLM-free stand-ins, in seconds.  `verity-vllm neutrality --tier fast|heavy`
-(`pipeline/neutrality.py`) rebuilds the rows `manifests/records.json` pins (a row may be pinned before it has a record) on a CPU
+(`pipeline/neutrality.py`) traces the rows `manifests/records.json` pins (a row may be pinned before it has a record) on a CPU
 pod and fails when a per-rank Program digest moved: fast is the small TP1/TP2 rows (about 10 minutes with the bootstrap), heavy is
 GLM-5.3's 8 ranks (about 50 minutes on a 256-CPU pod; its Build ends at GP-01, `--build-programs-only 1`, since its manifest takes
 hours).  `--update` re-pins a row from its rebuild and keeps its record, which the same PR re-publishes.

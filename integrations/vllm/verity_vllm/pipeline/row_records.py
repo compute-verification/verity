@@ -593,14 +593,15 @@ def tp_world(wl: str) -> int:
 
 
 def tp_build_summary(b: str, world: int) -> str:
-    """PASS | FAIL; writes ``build_summary.json`` beside ``b`` (per rank: step + request Programs + GP-01)."""
+    """PASS | FAIL; writes ``build_summary.json`` beside ``b`` (per rank: step + request Programs, each with its construction, the AOT
+    Build's or the trace's, + GP-01)."""
     out: dict[str, Any] = {"tp": {"world": world}, "ranks": {}}; ok = True
     for r in range(world):
         rd = f"{b}/rank{r}"; rk: dict[str, Any] = {}
         for p in [f"{rd}/build_step"] + sorted(p for p in glob.glob(f"{rd}/build_request_LP*_T*") if os.path.isdir(p)):   # not the .log/.rc beside each dir
             res = json.load(open(f"{p}/result.json")) if os.path.exists(f"{p}/result.json") else {"ok": False, "message": "no result.json"}
             rk[os.path.basename(p)] = {"ok": bool(res.get("ok")), "unsupported": res.get("unsupported"), "message": (res.get("message") or "")[:300],
-                                       "program_digest": (res.get("program") or {}).get("digest")}
+                                       "program_digest": (res.get("program") or {}).get("digest"), "construction": "aot" if res.get("aot") else "trace"}
             ok &= bool(res.get("ok"))
         wp = f"{rd}/build_workload/workload_program.json"; W = json.load(open(wp)) if os.path.exists(wp) else {}
         rk["workload"] = {"ok": bool(W.get("workload_digest")), "workload_digest": W.get("workload_digest"), "reason": W.get("reason"), "message": W.get("message"), "mechanism": "GP-01 cb_a.global_program"}

@@ -7,6 +7,9 @@
   the row stops (exit 21) when it names call boundaries (``Row.call_boundaries``: a TP Commit attaches no call-boundary source).
   With ``--build-relabel on`` one template rank's request derives write the other ranks' (`pipeline.tp.relabel_build`); with
   ``--build-programs-only 1`` the Build ends at GP-01, with no manifest and no call-boundary check (`pipeline.neutrality`'s heavy tier).
+  A switched row (its `aot` in ``manifests/records.json``, `config_record.aot_of`) has the AOT Build: each derive is
+  ``predict emit`` (`verity_vllm.predict.aot`), the predicted Program with the data its ``aot.trace`` Build holds about it
+  (``--aot-trace``, else fetched from the store), and refuses where they differ; ``--build-construction trace`` traces it.
 * **Match**: the capture under the observer and collective recorder, the ``--no-observer`` control, the collective-level
   check (``tp-match --arm check``); a request that stopped before its cap gets its served-shape Program derived per rank
   and GP-01 recomposed (``eos-truncated``); then, with a rank profile (default ``derived_<ROLE>_tp<W>``; ``--fold-profile ''``
@@ -39,9 +42,11 @@ import shutil
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
@@ -79,6 +84,7 @@ class TpRow(Row):
         self.config_run = commit.config_run == "1"
         self.replay_pending = False
         self.lctx: dict[tuple[int, int], list[str] | None] = {}
+        self.aot: dict[str, Any] | None = None
 
     def workload_gpu_util(self) -> str | None:
         """The workload's ``gpu_memory_utilization``, for a model whose weights don't fit `TP_UTIL` (GLM-5.3 TP8, about 88 GB a
@@ -204,11 +210,33 @@ class TpRow(Row):
         return f"{self.bdir}/rank{r}"
 
     def derive(self, r: int, out: str, *args: str) -> None:
-        """One CPU derive of rank ``r``; the .rc beside its log carries the exit code."""
-        rc = self.run_to(self.to_b, f"{out}.log", self.cli("build", "--model", self.repo, "--revision", self.rev, "--max-model-len", str(self.MML),
-                                                            "--workload", self.wl, "--tp", str(self.W), "--rank", str(r), "--out", out,
-                                                            *self.tgt_args, *args))
-        open(f"{out}.rc", "w").write(f"{rc}\n")
+        """One CPU derive of rank ``r``, a switched row's ``predict emit``; the .rc beside its log carries the exit code."""
+        if self.aot is not None:
+            cmd = self.cli("predict", "emit", "--row", self.row, "--rank", str(r), "--config", os.path.join(self.ck, "config.json"),
+                           "--trace", f"{self.aot_dir}/build/rank{r}/{os.path.basename(out)}", "--out", out, "--aot", json.dumps(self.aot), *args)
+        else:
+            cmd = self.cli("build", "--model", self.repo, "--revision", self.rev, "--max-model-len", str(self.MML), "--workload", self.wl,
+                           "--tp", str(self.W), "--rank", str(r), "--out", out, *self.tgt_args, *args)
+        open(f"{out}.rc", "w").write(f"{self.run_to(self.to_b, f'{out}.log', cmd)}\n")
+
+    def construction(self) -> None:
+        """The Build's construction (``--build-construction``): a switched row's AOT Build reads its ``aot.trace`` Build's derive dirs
+        (``--aot-trace``, else every rank's step and request dirs fetched from the store into ``aot_trace/``), marked
+        ``build.construction``."""
+        self.aot = CR.aot_of(self.row) if self.cb.build_construction == "record" else None
+        if self.aot is not None and not (aot_dir := self.cb.aot_trace):
+            from verity_vllm import records
+            aot_dir = f"{self.d}/aot_trace"
+            dirs = tuple(f"build/rank{r}/{n}/" for r in range(self.W) for n in ["build_step", *(f"build_request_LP{lp}_T{t}" for lp, t in self.shapes)])
+            try:
+                records.fetch(self.aot["trace"], Path(aot_dir), [p for p in records.listing(self.aot["trace"]) if p.startswith(dirs)])
+            except RuntimeError as e:
+                self.verdict("build", "FAIL", f"rc=1 the AOT Build's trace {self.aot['trace']} did not fetch ({e}); --aot-trace DIR gives it")
+                self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
+                raise Stop(10) from None
+        self.aot_dir = aot_dir if self.aot is not None else None
+        self.tl("build.construction", "mark", ("construction", "aot" if self.aot else "trace"),
+                *((("comparison", self.aot["comparison"]), ("trace", self.aot["trace"])) if self.aot else ()))
 
     def derive_all(self, todo: list[tuple[Any, ...]], jobs: int) -> None:
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
@@ -221,9 +249,10 @@ class TpRow(Row):
         return (r, out or f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8")
 
     def request(self, r: int, lp: int, t: int) -> tuple[Any, ...]:
+        """A request derive; the AOT Build's predicts its launch batch from the row's requests (`predict.build.launch_batch`)."""
         out = f"{self.rank(r)}/build_request_LP{lp}_T{t}"
         shutil.rmtree(out, ignore_errors=True)
-        return (r, out, "--wrapper", "request", "--LP", str(lp), "--T", str(t), *self.launch_of(lp, t))
+        return (r, out, "--wrapper", "request", "--LP", str(lp), "--T", str(t), *([] if self.aot is not None else self.launch_of(lp, t)))
 
     def launch_of(self, lp: int, t: int) -> list[str]:
         """The shape's `Row.launch_args`, read once for every rank; one that does not read fails the Build."""
@@ -286,8 +315,9 @@ class TpRow(Row):
         self.to_b = self.cb.build_timeout or 7200
         t0 = int(time.time())
         self.tl("stage.build", "start")
+        self.construction()
         todo, jobs = self.build_todo(), self.derive_jobs(self.shapes, self.W * (nsh + 1))
-        if self.cb.build_relabel == "on":
+        if self.cb.build_relabel == "on" and self.aot is None:
             from verity_vllm.pipeline.tp import relabel_build
             relabel_build.derive(self, todo, jobs)
         else:
@@ -304,7 +334,8 @@ class TpRow(Row):
         wall = int(time.time()) - t0
         digest, digests = R.tp_build_digests(self.d)
         wds = "/".join(R.tp_rank_workload_digest(self.bdir, r)[:16] for r in range(self.W))
-        self.verdict("build", ok, f"rc={0 if ok == 'PASS' else 1} manifest_rc={rc} wall={wall}s digest={digest} digests_r1..={digests} workload_digests_r0..={wds} shapes={nsh}")
+        self.verdict("build", ok, f"rc={0 if ok == 'PASS' else 1} manifest_rc={rc} wall={wall}s digest={digest} digests_r1..={digests} workload_digests_r0..={wds} shapes={nsh} "
+                     f"construction={'aot' if self.aot is not None else 'trace'}")
         self.tl("stage.build", "end", ("ok", ok), ("wall_s", wall))
         if ok != "PASS":
             hits = Counter(ln for p in sorted(glob.glob(f"{self.bdir}/rank*/*.log"))

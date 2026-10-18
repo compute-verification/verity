@@ -306,14 +306,18 @@ def test_score_never_writes_into_a_rows_root(tmp_path):
     S._refuse_inside(str(tmp_path / "out" / "score.json"), [str(rows)])
 
 
-def test_no_record_path_module_reads_the_predictor():
-    """The Build, Match and Commit never import `verity_vllm.predict`; the CLI's command table names it as a string only, and the
-    Build's input trace lists the package as a forbidden input."""
+def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_build():
+    """No module outside `verity_vllm.predict` imports it: the record path runs it only as `predict emit`, the derive of a switched
+    row's AOT Build (`row_tp.TpRow.derive`, under `config_record.aot_of`; `tests/pipeline/test_tp_build_width.py`), and the trace
+    that checks it lists the package as a forbidden input."""
     from verity_vllm.program.frontend import inputs_trace
     pkg = Path(S.__file__).resolve().parents[1]
     pat = re.compile(r"^\s*(from|import)\s+(verity_vllm\.predict|\.+predict)\b|import_module\([^)]*predict", re.M)
     hits = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1] and pat.search(p.read_text())]
     assert hits == []
+    runs = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1]
+            and re.search(r"""cli\(\s*["']predict["']""", p.read_text())]
+    assert runs == ["pipeline/row_tp.py"]
     assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)
 
 
