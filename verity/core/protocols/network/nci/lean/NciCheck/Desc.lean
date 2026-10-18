@@ -73,49 +73,95 @@ inductive Tgt where
   | gate (w : Nat)
   deriving Inhabited, BEq
 
-/-- `len` elements, `base + t * stride` for `t < len`. -/
+/-- `rows · len` elements in order, element `r · len + t` being `base + r * rowStride + t * stride` (a strided part's rows,
+or a batch's members): one row (`rows = 1`) unless the rows are what makes the piece. -/
 structure Piece where
   tgt : Tgt
   base : Int
   stride : Int
   len : Nat
+  rows : Nat := 1
+  rowStride : Int := 0
   deriving Inhabited
 
 def Piece.at (q : Piece) (t : Nat) : Int := q.base + t * q.stride
 
-/-- Elements `[a, b)` of `q`. -/
-def Piece.sub (q : Piece) (a b : Nat) : Piece := { q with base := q.at a, len := b - a }
+def Piece.count (q : Piece) : Nat := q.rows * q.len
 
-/-- The pieces' elements as intervals of naturals (an order-free view), not necessarily disjoint. Pieces of one stride
-`s > 1` and one length `n` whose bases run `b, b + 1, …, b + k − 1` (the rows of a transposed strided part) are `n`
-intervals `[b + t·s, b + t·s + k)`, one when `k ≥ s`; any other piece of stride `s > 1` is its `n` elements. -/
+/-- Row `r` of `q`. -/
+def Piece.row (q : Piece) (r : Nat) : Piece := { q with base := q.base + r * q.rowStride, rows := 1, rowStride := 0 }
+
+def Piece.rowsOf (q : Piece) : Array Piece := (Array.range q.rows).map q.row
+
+/-- Elements `[a, b)` of `q`, in order: a part of a row, the whole rows, a part of a row. -/
+def Piece.slice (q : Piece) (a b : Nat) : Array Piece :=
+  if b ≤ a then #[]
+  else if q.rows ≤ 1 then #[{ q.row 0 with base := q.at a, len := b - a }]
+  else
+    let part (r s e : Nat) : Array Piece := if s < e then #[{ q.row r with base := (q.row r).at s, len := e - s }] else #[]
+    let (r0, t0, r1, t1) := (a / q.len, a % q.len, b / q.len, b % q.len)
+    if r0 == r1 then part r0 t0 t1
+    else
+      let first := if t0 == 0 then #[] else part r0 t0 q.len
+      let lo := if t0 == 0 then r0 else r0 + 1
+      let mid : Array Piece := if lo < r1 then #[{ q with base := q.base + lo * q.rowStride, rows := r1 - lo }] else #[]
+      first ++ mid ++ part r1 0 t1
+
+/-- A set of naturals `⋃_{c < cnt} [lo + c·period, lo + c·period + len)`. -/
+structure PI where
+  lo : Nat
+  len : Nat
+  period : Nat
+  cnt : Nat
+
+/-- `q`'s elements as periodic intervals: each row a run or each column one when its rows are consecutive, else its
+elements. -/
+def Piece.pis (q : Piece) : Array PI :=
+  let n := q.len
+  let one (q : Piece) : Array PI :=
+    if q.len == 0 then #[]
+    else if q.stride == 0 || q.len == 1 then #[⟨q.base.toNat, 1, 1, 1⟩]
+    else
+      let lo := (if q.stride > 0 then q.base else q.at (q.len - 1)).toNat
+      if q.stride.natAbs == 1 then #[⟨lo, q.len, 1, 1⟩] else #[⟨lo, 1, q.stride.natAbs, q.len⟩]
+  if q.rows ≤ 1 || n == 0 then one (q.row 0)
+  else
+    let rlo (s : Int) (k : Nat) (b : Int) : Nat := (if s ≥ 0 then b else b + (k - 1 : Nat) * s).toNat
+    if q.stride.natAbs == 1 || n == 1 then
+      let run := rlo q.stride n q.base
+      #[⟨rlo q.rowStride q.rows run, n, q.rowStride.natAbs, q.rows⟩]
+    else if q.rowStride.natAbs == 1 && q.stride.natAbs ≥ q.rows then
+      let col := rlo q.rowStride q.rows q.base
+      #[⟨rlo q.stride n col, q.rows, q.stride.natAbs, n⟩]
+    else q.rowsOf.flatMap one
+
+/-- The pieces' elements as intervals of naturals (an order-free view), not necessarily disjoint. Periodic intervals of one
+period and count are sorted and those that abut or overlap merged: the rows of a transposed or of a row-strided part,
+read part by part, become one run per period, one interval when the runs fill the period. -/
 def ivsOf (qs : Array Piece) : Array (Nat × Nat) := Id.run do
   let mut out := #[]
-  let mut strided : Array (Nat × Nat × Nat) := #[]
+  let mut periodic : Array PI := #[]
   for q in qs do
-    if q.len == 0 then continue
-    if q.stride == 0 || q.len == 1 then out := out.push (q.base.toNat, q.base.toNat + 1)
-    else if q.stride == 1 then out := out.push (q.base.toNat, (q.at (q.len - 1)).toNat + 1)
-    else if q.stride == -1 then out := out.push ((q.at (q.len - 1)).toNat, q.base.toNat + 1)
-    else
-      let lo := if q.stride > 0 then q.base else q.at (q.len - 1)
-      strided := strided.push (q.stride.natAbs, q.len, lo.toNat)
-  let s := strided.qsort fun x y => x.1 < y.1 || (x.1 == y.1 && (x.2.1 < y.2.1 || (x.2.1 == y.2.1 && x.2.2 < y.2.2)))
-  let mut i := 0
-  for _ in [0:s.size] do
-    if i ≥ s.size then break
-    let (st, n, b) := s[i]!
-    let mut k := 1
-    let mut j := i + 1
-    for _ in [i + 1:s.size] do
-      let (st', n', b') := s[j]!
-      if st' != st || n' != n then break
-      if b' + 1 == b + k then j := j + 1
-      else if b' == b + k then k := k + 1; j := j + 1
-      else break
-    if k ≥ st then out := out.push (b, b + (n - 1) * st + k)
-    else for t in [0:n] do out := out.push (b + t * st, b + t * st + k)
-    i := j
+    for x in q.pis do
+      if x.cnt == 0 || x.len == 0 then continue
+      if x.cnt == 1 || x.len ≥ x.period then out := out.push (x.lo, x.lo + (x.cnt - 1) * x.period + x.len)
+      else periodic := periodic.push x
+  let s := periodic.qsort fun x y =>
+    x.period < y.period || (x.period == y.period && (x.cnt < y.cnt || (x.cnt == y.cnt && x.lo < y.lo)))
+  let emit (out : Array (Nat × Nat)) (x : PI) : Array (Nat × Nat) :=
+    if x.len ≥ x.period then out.push (x.lo, x.lo + (x.cnt - 1) * x.period + x.len)
+    else (Array.range x.cnt).foldl (fun o c => o.push (x.lo + c * x.period, x.lo + c * x.period + x.len)) out
+  let mut cur : Option PI := none
+  for x in s do
+    match cur with
+    | some c =>
+      if c.period == x.period && c.cnt == x.cnt && x.lo ≤ c.lo + c.len then
+        cur := some { c with len := max c.len (x.lo + x.len - c.lo) }
+      else
+        out := emit out c
+        cur := some x
+    | none => cur := some x
+  if let some c := cur then out := emit out c
   return out
 
 /-- A sequence of pieces with each one's first position. -/
@@ -126,8 +172,8 @@ structure PS where
   deriving Inhabited
 
 def PS.of (ps : Array Piece) : PS :=
-  let ps := ps.filter (·.len > 0)
-  let (starts, count) := ps.foldl (fun (acc : Array Nat × Nat) q => (acc.1.push acc.2, acc.2 + q.len)) (#[], 0)
+  let ps := ps.filter (·.count > 0)
+  let (starts, count) := ps.foldl (fun (acc : Array Nat × Nat) q => (acc.1.push acc.2, acc.2 + q.count)) (#[], 0)
   { ps, starts, count }
 
 /-- Positions `[lo, hi)`: the first piece by bisection over the starts, then the pieces it spans. -/
@@ -144,19 +190,21 @@ def PS.slice (s : PS) (lo hi : Nat) : Array Piece := Id.run do
     let st := s.starts[i]!
     if st ≥ hi then break
     let q := s.ps[i]!
-    let en := st + q.len
-    if en > lo then out := out.push (q.sub (max lo st - st) (min hi en - st))
+    let en := st + q.count
+    if en > lo then out := out ++ q.slice (max lo st - st) (min hi en - st)
   return out
 
-/-- A reference part as pieces: an affine part is one, a strided part one per row unless its rows abut. -/
+/-- A reference part as pieces: an affine part is one, a strided part its whole rows as one and a part of a row. -/
 def ofPart : Part → Array Piece
   | .affine p i b c => #[{ tgt := .ref p i, base := b, stride := 1, len := c }]
   | .strided p i b inner os is c =>
     if c == 0 then #[]
     else if inner == 1 then #[{ tgt := .ref p i, base := b, stride := os, len := c }]
     else if os == (inner : Int) * is then #[{ tgt := .ref p i, base := b, stride := is, len := c }]
-    else (Array.range ((c + inner - 1) / inner)).map fun (q : Nat) =>
-      { tgt := .ref p i, base := b + (q : Int) * os, stride := is, len := min inner (c - q * inner : Nat) }
+    else
+      let whole : Piece := { tgt := .ref p i, base := b, stride := is, len := inner, rows := c / inner, rowStride := os }
+      let rest : Piece := { tgt := .ref p i, base := b + ((c / inner : Nat) : Int) * os, stride := is, len := c % inner }
+      #[whole, rest].filter (·.count > 0)
   | .explicit it => it.foldl (init := #[]) fun acc r =>
     let one : Piece := { tgt := .ref r.p r.i, base := r.j, stride := 1, len := 1 }
     match acc.back? with
@@ -215,30 +263,36 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Piece)
     match q.tgt with
     | .gate _ | .ref true _ => return #[q]
     | .ref false k =>
-      if q.len == 0 then return #[]
+      if q.count == 0 then return #[]
       let node ← c.node k
       let o : Int := c.body.offsets[k]!
       let callee := c.P.defs[node.fn]!
+      let byRow (_ : Unit) : Except String (Array Piece) := do
+        let mut out := #[]
+        for x in q.rowsOf do out := out ++ (← down c fuel x)
+        return out
       match node.form with
       | .prim =>
         let .value w := callee.ret | throw "program"
-        return #[{ tgt := .gate w, base := o, stride := 0, len := q.len }]
+        return #[{ tgt := .gate w, base := o, stride := 0, len := q.count }]
       | .batch =>
         if callee.prim then
           let .value w := callee.ret | throw "program"
-          return #[{ tgt := .gate w, base := o + q.base, stride := q.stride, len := q.len }]
+          return #[{ q with tgt := .gate w, base := o + q.base }]
         let L := callee.outLeaves
         let G : Int := callee.gates
         let r := (c.memo[node.fn]!).ret
         if L == 0 then throw "program"
-        if q.stride == 1 then
-          if r.ps.size == 1 then
-            let g := r.ps[0]!
-            if let .gate w := g.tgt then
-              if g.len == L && (L == 1 || G == L * g.stride) then
-                let step : Int := if L == 1 then G else g.stride
-                let a := q.base.toNat
-                return #[{ tgt := .gate w, base := o + a / L * G + g.at (a % L), stride := step, len := q.len }]
+        -- every member returns one run of its gates, and the members' runs make one: leaf `e` is gate `A + e * F`
+        if r.ps.size == 1 then
+          let g := r.ps[0]!
+          if let .gate w := g.tgt then
+            if g.rows ≤ 1 && g.len == L && (L == 1 || G == L * g.stride) then
+              let F : Int := if L == 1 then G else g.stride
+              let A : Int := o + g.base
+              return #[{ q with tgt := .gate w, base := A + q.base * F, stride := q.stride * F, rowStride := q.rowStride * F }]
+        if q.rows > 1 then byRow ()
+        else if q.stride == 1 then
           let a := q.base.toNat
           let b := a + q.len
           let mut out := #[]
@@ -251,7 +305,8 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Piece)
             out := out ++ (← down c fuel { q with base := q.at t, stride := 1, len := 1 })
           return out
       | .call =>
-        if q.stride == 1 then fromCallee c fuel k 0 q.base.toNat (q.base.toNat + q.len)
+        if q.rows > 1 then byRow ()
+        else if q.stride == 1 then fromCallee c fuel k 0 q.base.toNat (q.base.toNat + q.len)
         else
           let mut out := #[]
           for t in [0:q.len] do
@@ -259,6 +314,7 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Piece)
           return out
       | .scan =>
         if node.n == 0 then throw "a scan with no iterations has no output to read"
+        if q.rows > 1 then return ← byRow ()
         let .tuple #[carry, y] := callee.ret | throw "a scan step returns (carry, y)"
         let cl := carry.leaves
         let yl := y.leaves
@@ -299,7 +355,7 @@ def throughArg (c : Ctx) : Nat → Nat → Nat → Nat → Piece → Except Stri
       let mut out := #[]
       for q in ap.slice lo hi do out := out ++ (← down c fuel q)
       return out
-    let elems : Array (Nat × Nat) :=
+    let elems : Array (Nat × Nat) := g.rowsOf.flatMap fun g =>
       if g.stride == 1 then #[(g.base.toNat, g.base.toNat + g.len)]
       else (Array.range g.len).map fun t => ((g.at t).toNat, (g.at t).toNat + 1)
     let mut out := #[]
@@ -482,7 +538,7 @@ def evaluate (j : Json) : Except String Json := do
     size := size.modify u (· + gatesOf k)
     for q in reads[k]! do
       let .gate w := q.tgt | continue
-      if q.len == 0 then continue
+      if q.count == 0 then continue
       let k' := nodeOf offs q.base.toNat
       if own[k']! == some u || theta[k']! then continue
       into := into.modify u (·.push (w, q))
