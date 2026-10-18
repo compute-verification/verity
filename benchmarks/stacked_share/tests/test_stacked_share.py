@@ -141,7 +141,7 @@ def test_a_modeled_variant_rebinds_repeats_layers_and_pairs_the_quantizer(monkey
     u = U.units(program)
     dyn = {int(k): v for k, v in u["arg_dyn"].items()}
     spec = {"layers": [2, 5], "ranks": 4, "once": ["TestStackedHead_v1"], "statics": {"TestStackedMm_v1": {"K": 8, "N": 6}}}
-    rows = U.modeled(program, u["callees"], spec, dyn, token="TestStackedEmbed_v1", attention="(none)")
+    rows = U.modeled(program, u["callees"], spec, dyn, token=EMBED.id, attention="(none)")
     assert rows["TestStackedEmbed_v1"] == {"family": "TestStackedEmbed_v1", "statics": {}, "instances": 2, "ranks": 4,
                                            "refused": {}, "units": {"roundings": 2 * 4}}
     mm = rows["TestStackedMm_v1{K=4,N=3}"]
@@ -150,7 +150,7 @@ def test_a_modeled_variant_rebinds_repeats_layers_and_pairs_the_quantizer(monkey
     assert (q["instances"], q["ranks"], q["units"]) == (10, 4, {"roundings": 8 * 10 * 4})
     assert "TestStackedQuant_v1{K=4}" not in rows
     assert (rows["TestStackedHead_v1"]["ranks"], rows["TestStackedHead_v1"]["units"]) == (1, {"compare_select": 1})
-    parts = U.components(rows, token="TestStackedEmbed_v1", sample=["TestStackedHead_v1"], attention="(none)")
+    parts = U.components(rows, token=EMBED.id, sample=["TestStackedHead_v1"], attention="(none)")
     assert parts["token"] == {"roundings": Fraction(8 + 560 + 320, 2)} and parts["sample"] == {"compare_select": 1}
 
 

@@ -1,7 +1,7 @@
 # The stacked share of live KV
 
 How much of a node's live KV a prover could hold as encoded carriers inside the honest compute budget the audit allows. That's
-the stacking law (`Security/Models/Accounting/Guarantees/Stacking.lean`), read in bytes:
+the stacking law, read in bytes:
 
     stock(L) = 128 R_cap L / E + R_in L        f = stock(L) / M_dyn
 
@@ -28,7 +28,7 @@ At f ≥ 1 no KV is credited.
   under `provisional:<class>`. `--as` models another model from the Program's callees at one rank's statics, for example
   `llama31-70b-tp8.json`.
 - `share.py --model NAME=UNITS.json,MIX.json ... --out share.json` combines units with a served trace
-  (`benchmarks/serve_bandwidth`'s `mix.json`). It computes R_cap per node (busy-time mean and peak 1 s window), M_dyn, and f
+  (the serve-bandwidth benchmark's `mix.json`). It computes R_cap per node (busy-time mean and peak 1 s window), M_dyn, and f
   for each E, L and R_in, as built and under each lever, cumulatively:
   - K' quantized once at the KV write;
   - V' stored once with a static scale;

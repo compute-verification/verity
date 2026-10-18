@@ -197,6 +197,7 @@
         "benchmarks/remote_session/",
         "benchmarks/resource_accounting/",
         "benchmarks/sketch_tag/",
+        "benchmarks/stacked_share/",
         "benchmarks/tag_fast/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
