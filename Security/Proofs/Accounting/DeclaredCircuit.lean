@@ -2,7 +2,8 @@ import Mathlib
 import Models.Accounting.Guarantees.DeclaredCircuit
 import Proofs.Accounting.Stacking
 
-/-! The proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, from its pieces: a carrier of a declared
+/-! The pieces of the proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, whose theorem waits on the red team
+of the statement (until then the lock lists the statement as `unstated`): a carrier of a declared
 circuit's is within its census over its life (`Provenance.OfCircuit.budget`), which the stacking property bounds by its
 caps a certified byte and its run-input bytes a window, a uniform function restricted along an
 injection is uniform (`pr_comp_embedding`), and key binding moves a store whose layout is steered after the coins to
@@ -97,15 +98,3 @@ theorem Assumptions.KeyBinding.pr_steered_le {Ω Ca Ch B : Type} [Fintype Ω] [F
         simp [Pous.Bits]
 
 end Accounting
-
-namespace Accounting.SecurityProofs
-
-open Pous (pr)
-open scoped ENNReal
-
-/-- **A declared circuit's held and moved bits from an accepted stacked audit**,
-`Accounting.Guarantees.DeclaredCircuitRequirement`. Held back while the red team attacks the statement. -/
-theorem DeclaredCircuitRequirement : Accounting.Guarantees.DeclaredCircuitRequirement := by
-  sorry
-
-end Accounting.SecurityProofs

@@ -2,10 +2,6 @@
  "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
  "assumptions": {
-  "Accounting.Assumptions.CircuitCarriers": {
-   "owner": "@memory-accounting",
-   "digest": "4c9419c06754e8d7df9c4427690db2afe2ad52487a877a74189291dc2cb6f435"
-  },
   "Accounting.Assumptions.EncodeChainHardness": {
    "owner": "@memory-accounting",
    "digest": "b017852df44b39b0d2fd40e91d34bb852531e4cd039425aff5c9c207edcaafd8"
@@ -45,10 +41,6 @@
   "Accounting.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
-  },
-  "Accounting.Assumptions.SteeredLayout": {
-   "owner": "@memory-accounting",
-   "digest": "6b3ad75df2921563a337682ea3311f97f2d65ae2612a30df4d378d8741c5fa71"
   },
   "Accounting.Assumptions.TS.FacetCeilings": {
    "owner": "@compute-accounting",
@@ -865,14 +857,6 @@
    ],
    "assumptions": [],
    "type_hash": "0620c0fb742047ca1143d4ed9d45e9c1a5197c2b1372bd430dcb20b53bb89167"
-  },
-  "Accounting.SecurityProofs.DeclaredCircuitRequirement": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement : Accounting.Guarantees.DeclaredCircuitRequirement"
-   ],
-   "assumptions": [],
-   "type_hash": "569af6c8280ed061c1dcf7fbb42d7a6af76c8f42a3809cef93fe0f83eb7ecc8f"
   },
   "Accounting.SecurityProofs.DerivedStateResidual": {
    "owner": "@memory-accounting",
@@ -6014,7 +5998,6 @@
    "Accounting.SecurityProofs.Gates.ProvenWindow": "frozen (no-function): The soundness of the gate model's interval analysis (Accounting.Gates.Proven) over every circuit and input, not a property of a Lean function: property/v1's interval analysis has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port.",
-   "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through at most a bits (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps over their life (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*life*R_in + ceil(1024*life*c*P*N*4096/E), a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits less a block a group (Requirement.bitsAt, readBits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement: each pass tau ticks of each device's clock from the one it begins the pass's step, Placement.passTicks and windowTicks, no device tick in two passes, Placement.Deadlines), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, EncodeChainHardness, KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from Fooling at j = 4, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.UnitsFooling": "frozen (no-function): A counting bound in budgeted units over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function.",
@@ -6032,7 +6015,8 @@
    "Accounting.SecurityProofs.TS.LuckCaseACube": "lemma: LuckCaseA at OperandLuckCube's 3/4, (L) at 3/4 in case (a) with degree-2 operands and no luck hypothesis; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.DuoFoldFanIn": "restatable: the fan-in floor of duo's run over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
    "Accounting.SecurityProofs.TS.FoldFanIn": "restatable: the fan-in floor of a fold of binding steps over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
-   "Accounting.SecurityProofs.TS.Fx1FoldFanIn": "restatable: the fan-in floor of fx1's run over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field."
+   "Accounting.SecurityProofs.TS.Fx1FoldFanIn": "restatable: the fan-in floor of fx1's run over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
+   "Accounting.Guarantees.DeclaredCircuitRequirement": "unstated: G, memory accounting's Milestone 2 composed statement (note:20261018T0230Z-report-declared-circuit-g), stated first: its theorem Accounting.SecurityProofs.DeclaredCircuitRequirement lands with its proof once the red team of the statement reports, and the named assumptions only it reads (Accounting.Assumptions.CircuitCarriers, SteeredLayout) return to `assumptions` with it. Its shape will be frozen (no-function,hash): the deployed sketch game on a steered per-pass store, a layer-1 bound on the prover system, with the circuit's credited reads linked pass by pass through the one-sided StoreMatches and PlanMatches, on the devices' clocks."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -6386,7 +6370,6 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
@@ -6564,7 +6547,6 @@
     "Accounting.Gates.nibbles": "c60b1f41d51faa275217f9e6b6a02d6623ed725af591a0f08398faf099670b86"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.RhoPairs",
@@ -6733,7 +6715,6 @@
     "Accounting.Gates.Op.gatherKind._sparseCasesOn_1": "8d2598c458f4e8f3c2e67946c6c040643850d368880714004b61d23c4f834c03"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.ClampOrWrap",
     "Accounting.SecurityProofs.Gates.DitherRange",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
@@ -7422,7 +7403,6 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditSketch",
     "Accounting.SecurityProofs.RateAuditSketchInteractiveRO",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
@@ -7463,7 +7443,6 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
     "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
@@ -7926,7 +7905,6 @@
     "Accounting.Tag.unreadSum": "1f8e83f1fa0da60f295e0e8589e62dcd3099e7d20aac633bad80388bb962172d"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
     "Accounting.SecurityProofs.RateAuditTensorSketchRank",
     "Accounting.SecurityProofs.RateTensorSketchTable",
@@ -9021,7 +8999,6 @@
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
     "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.Colocation",
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.HorizonSampling",
     "Accounting.SecurityProofs.LengthCode",
     "Accounting.SecurityProofs.Memory.Adds",
@@ -17848,7 +17825,6 @@
     "Accounting.Assumptions.EncodeChainHardness": "b017852df44b39b0d2fd40e91d34bb852531e4cd039425aff5c9c207edcaafd8"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.StackedRequirementRelay",
@@ -17904,7 +17880,6 @@
     "Accounting.Assumptions.SquaringCeiling": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
     "Accounting.SecurityProofs.RemoteSessionConservationRelay",
@@ -17929,7 +17904,6 @@
     "Accounting.Assumptions.SteeredLayout": "6b3ad75df2921563a337682ea3311f97f2d65ae2612a30df4d378d8741c5fa71"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
@@ -18085,7 +18059,7 @@
    "definitions": {
     "Accounting.Guarantees.DeclaredCircuitRequirement": "59fbd873c1bbac4c7620ac1903ec885b191ec95a4539a4bed62d0c7b23dbf811"
    },
-   "guarantees": ["Accounting.SecurityProofs.DeclaredCircuitRequirement"]
+   "guarantees": []
   },
   "Models.Accounting.Guarantees.Gates": {
    "digest": "034a6d0d1d580550562808661fa4fc7eb61ca824bf70e5a532be102d55237889",

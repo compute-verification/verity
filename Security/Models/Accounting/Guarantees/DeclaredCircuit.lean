@@ -12,7 +12,8 @@ held what (the node's boundary, HBM against host DRAM) is attribution, stated ap
 audit in its deployed sketch form (`StackedSessionConservationSketchDeployed`), on a layout the prover may steer after
 the coins, with the carriers' cost read from the property's caps (`Gates.Property`, under
 `Accounting.Assumptions.EncodeChainHardness`) and the audit linked to `W`'s placed requirement (A1's
-`Definitions/Accounting/Requirement.lean`) pass by pass, each pass and window on the devices' clocks. Its proof is in
+`Definitions/Accounting/Requirement.lean`) pass by pass, each pass and window on the devices' clocks. Its theorem waits
+on the red team of the statement, so the lock lists the statement as `unstated`; the proof's pieces are in
 `Security/Proofs/Accounting/DeclaredCircuit.lean`. -/
 
 namespace Accounting.Guarantees
@@ -94,13 +95,13 @@ node's devices held the tiles, and that the bits taken from outside the store ar
 boundary, are attribution's (`certifier-coverage`, `trusted-nebius-host` and the tiers' bandwidths at the deadline). A
 node that registers `R` times pays `δ_G` once a registration.
 
-Proof: `Accounting.SecurityProofs.DeclaredCircuitRequirement`: each carrier's inputs are at most `8·life·R_in` and its
-encodes at most `life·c·P·N·4096` units (`OfCircuit` with the property), so every pass rebuilds at most `X_r·τ + C`
-bits; an unpaid window at slack `k` tiles a pass has a rank-poor sign matrix, a guessed tag (at every store), or a pass
-with `k + 1` correct digests of unobtained sectors; `KeyBinding` at the whole layout, with a union over the `2^a`
-layouts inside the uniform store, bounds that pass at `2^a·(q_r·τ/2^96)^(k+1) + δ`; and a pass's reads outside its
-tiles of `W` are at most a tile's bits for each other tile, while its credit is at most a tile's bits for each of its
-tiles of `W`.
+Proof (to come, as `Accounting.SecurityProofs.DeclaredCircuitRequirement`): each carrier's inputs are at most
+`8·life·R_in` and its encodes at most `life·c·P·N·4096` units (`OfCircuit` with the property), so every pass rebuilds
+at most `X_r·τ + C` bits; an unpaid window at slack `k` tiles a pass has a rank-poor sign matrix, a guessed tag (at
+every store), or a pass with `k + 1` correct digests of unobtained sectors; `KeyBinding` at the whole layout, with a
+union over the `2^a` layouts inside the uniform store, bounds that pass at `2^a·(q_r·τ/2^96)^(k+1) + δ`; and a pass's
+reads outside its tiles of `W` are at most a tile's bits for each other tile, while its credit is at most a tile's bits
+for each of its tiles of `W`.
 
 Frozen (no-function, hash): `StackedSessionConservationSketchDeployed`'s game on a store per pass whose layout reads
 the codec and the append coins through at most `a` bits, with carriers of a declared circuit passing the stacking
