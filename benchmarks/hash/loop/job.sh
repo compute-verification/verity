@@ -5,20 +5,26 @@
 #
 # Env: ROW (the iteration), HYP (its hypothesis), ARMS (default below), REPS (3), WORK, VERITY_BENCH_VENV,
 # NATIVE_COLLECT_BUILD, HF_HOME (the node's, as iterate.sh's tables set them), LEASE (gpu-lease's flags, default "--max-min 75"),
-# CHECK_TESTS (the committer's GPU byte-identity tests, run in the lease before timing; a failure is exit 7 and no timing; empty
-# skips them).
+# CHECK_TESTS (the committer's GPU byte-identity tests and check_b3.py, the BLAKE3 arm against the hash lane's hm96 reference, run in
+# the lease before timing; a failure is exit 7 and no timing; empty skips them).
+# The BLAKE3 sibling arm (served-commit-rows-blake3, arms.py) runs through a copy of circuits' prof.sh with its one case line added;
+# prof.sh itself is circuits' and is not edited.
 # On a dc VM the GPU is held only for the timed bench; a queued job (vy-nebius-2) already runs inside the queue's lease, which
 # it reuses.
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 mkdir -p "$OUT"
-export ARMS=${ARMS:-stock,stock-prof,served-commit-rows} REPS=${REPS:-3}
+export ARMS=${ARMS:-stock,stock-prof,served-commit-rows,served-commit-rows-blake3} REPS=${REPS:-3}
 PY=${VERITY_BENCH_VENV:?}/bin/python
 HF_HOME=${HF_HOME:-/workspace/hf} "$PY" -c "
 from huggingface_hub import snapshot_download
 print(snapshot_download('Qwen/Qwen3-8B', revision='b968826d9c46dd6066d109eabc6255188de91218',
       allow_patterns=['*.json', '*.safetensors', '*.txt', '*.model', '*.py'], cache_dir='$HF_HOME/hub'))" || exit 8
-export CHECK_TESTS=${CHECK_TESTS-integrations/vllm/tests/commit/test_rows_cuda.py integrations/vllm/tests/commit/test_windowed_rows_sha512.py}
+export CHECK_TESTS=${CHECK_TESTS-integrations/vllm/tests/commit/test_rows_cuda.py integrations/vllm/tests/commit/test_windowed_rows_sha512.py benchmarks/hash/loop/check_b3.py}
+PROF=$(mktemp -d)/prof.sh
+sed '/^    served-commit-rows) /i\    served-commit-rows-blake3) mods+=(--arm-module hash.loop.arms:SERVED_COMMIT_ROWS_BLAKE3);;' benchmarks/served_commit/prof.sh > "$PROF"
+grep -q "hash.loop.arms" "$PROF" || { echo "prof.sh has no served-commit-rows case line to add the BLAKE3 arm beside"; exit 9; }
+export PROF
 bench='
   if [ -n "$CHECK_TESTS" ]; then
     OUT="$OUT/check" TESTS="$CHECK_TESTS" bash benchmarks/served_commit/gpu_tests.sh > "$OUT/check.log" 2>&1
@@ -27,7 +33,7 @@ bench='
   fi
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.before.csv"
-  NSYS=1 NSYS_EACH=1 SWEEP=b32 SPEC=qwen3-8b-bf16-h200-served bash benchmarks/served_commit/prof.sh
+  NSYS=1 NSYS_EACH=1 SWEEP=b32 SPEC=qwen3-8b-bf16-h200-served bash "$PROF"
   rc=$?
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.after.csv"
   exit $rc'

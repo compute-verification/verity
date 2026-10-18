@@ -57,7 +57,7 @@ from typing import Any
 import torch
 
 from verity.ml.commitments.merkle import merkle_depth
-from verity_vllm.commit import step_rows
+from verity_vllm.commit import step_rows, step_rows_b3
 from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
 from verity_vllm.commit.committer.host_retention import (HIDDEN_M1_FAMILIES, RETAIN_EXCLUDE_ALIASES, _excluded_chunk_ranges,  # noqa: F401
                                                          _HostRanges, _HostWindows, outside, retain_exclude_families)
@@ -476,11 +476,14 @@ class NativeCollectCommitter(NativeHostCommitter):
         # the commitment scheme (`commit_scheme`, unset = vllm-v1): vllm-v1 (the record), or rows-sha512 (`step_rows`: every
         # step_rows.ROW_BYTES (4 KiB) chunk an hm96-sha512 hiding leaf in a frame-v3-sha512 tree, 64-byte roots), on the windowed worker under chunk-leaf-v1.
         # Each step's salt key is fresh (`row_keys`); a replay that must reproduce a run's trees takes that run's keys
-        # (`replay_row_keys`, set before the run and dropped by its finalize)
+        # (`replay_row_keys`, set before the run and dropped by its finalize).  rows-blake3 (`step_rows_b3`) is the hash loop's research
+        # arm: rows-sha512's step with keyed BLAKE3 in every hash position; it commits and roots, and refuses openings
         self.commit_scheme = commit_scheme or "vllm-v1"
-        if self.commit_scheme not in ("vllm-v1", step_rows.NAME):
-            raise ValueError(f"unknown commit scheme {self.commit_scheme!r} (vllm-v1 | {step_rows.NAME})")
-        self.rows = self.commit_scheme == step_rows.NAME
+        if self.commit_scheme not in ("vllm-v1", step_rows.NAME, step_rows_b3.NAME):
+            raise ValueError(f"unknown commit scheme {self.commit_scheme!r} (vllm-v1 | {step_rows.NAME} | {step_rows_b3.NAME})")
+        self.rows = self.commit_scheme in (step_rows.NAME, step_rows_b3.NAME)
+        self.rows_b3 = self.commit_scheme == step_rows_b3.NAME
+        self._rows_mod = step_rows_b3 if self.rows_b3 else step_rows
         if self.rows and (not self.windowed or self.layout_v2 or self.hiding is not None):
             raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0) under "
                              "chunk-leaf-v1 position leaves only")
@@ -489,8 +492,11 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.row_keys: dict[int, bytes] = {}
         self.replay_row_keys: dict[int, bytes] | None = None
         self._row_tn: Any | None = None
-        self._row_consts = (step_rows.row_prefix(8 * step_rows.ROW_BYTES), step_rows.INST.salt_prefix,
-                            step_rows.INST.leaf_prefix(step_rows.KEY)) if self.rows else None
+        if self.rows_b3:
+            self._row_consts = (step_rows_b3.row_prefix(8 * step_rows.ROW_BYTES), step_rows_b3.SALT_PREFIX, step_rows_b3.leaf_prefix())
+        else:
+            self._row_consts = (step_rows.row_prefix(8 * step_rows.ROW_BYTES), step_rows.INST.salt_prefix,
+                                step_rows.INST.leaf_prefix(step_rows.KEY)) if self.rows else None
         # [R17 fp8, F-fp8-B8MEM] BOUNDED staging (VERITY_STAGING_BOUNDED; unset = on whenever staging is windowed): under chunk-leaf-v1 the
         # leaf header binds the step length M, which a LEARNING step (plan not yet known) only knows at step end -- the windowed path
         # therefore copied EVERY window of every step to pinned host (the learning re-hash source; the hit-plan "hedge" copy) and
@@ -562,7 +568,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         if self.fault or self.consumer_delay_s:
             self.name = f"{self.name}-STRESS[{self.fault or ''}{'+delay%gms' % (self.consumer_delay_s * 1e3) if self.consumer_delay_s else ''}]"
         if self.rows:
-            self.name = f"{self.name}+{step_rows.NAME}"
+            self.name = f"{self.name}+{self.commit_scheme}"
         self.extra_stats: dict[str, Any] = {}
 
     # ------------------------------------------------------------------ names
@@ -1175,7 +1181,7 @@ class NativeCollectCommitter(NativeHostCommitter):
     def _row_key(self, step: int) -> bytes:
         """Step `step`'s salt key: fresh from the OS generator, or the replayed run's."""
         if self.replay_row_keys is None:
-            ks = os.urandom(step_rows.KEY_BYTES)
+            ks = os.urandom(self._rows_mod.KEY_BYTES)
         elif step in self.replay_row_keys:
             ks = self.replay_row_keys[step]
         else:
@@ -1185,7 +1191,8 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     def _row_table(self) -> Any:
         if self._row_tn is None:
-            self._row_tn = torch.frombuffer(bytearray(step_rows.t_nibbles()), dtype=torch.uint8).cuda()
+            table = step_rows_b3.t_table() if self.rows_b3 else step_rows.t_nibbles()
+            self._row_tn = torch.frombuffer(bytearray(table), dtype=torch.uint8).cuda()
         return self._row_tn
 
     def _row_domain(self, step: int, n: int) -> Any:
@@ -1193,7 +1200,11 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     def _row_step(self, step: int, n: int, ks: bytes) -> Any:
         row_prefix, salt_prefix, leaf_prefix = self._row_consts
-        return ext().RowStep(self._row_domain(step, n).domain_id, ks, row_prefix, salt_prefix, leaf_prefix, step_rows.SCHEMA, step_rows.ROW_BYTES)
+        dom = self._row_domain(step, n)
+        if self.rows_b3:
+            return ext().RowStep(step_rows_b3.did(dom), ks, row_prefix, salt_prefix, leaf_prefix, step_rows_b3.SCHEMA, step_rows.ROW_BYTES, hash="blake3",
+                                 hash_key=step_rows_b3.HASH_KEY)
+        return ext().RowStep(dom.domain_id, ks, row_prefix, salt_prefix, leaf_prefix, step_rows.SCHEMA, step_rows.ROW_BYTES)
 
     def _level_path(self, levels: list, index: int) -> tuple:
         if not self.rows:
@@ -1201,7 +1212,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         return tuple(bytes(levels[d][(index >> d) ^ 1].cpu().numpy().tobytes()) for d in range(len(levels) - 1))
 
     def _gpu_salt(self, step: int, index: int) -> bytes:
-        return step_rows.salt(self.row_keys[step], index) if self.rows else b""
+        return self._rows_mod.salt(self.row_keys[step], index) if self.rows else b""
 
     def _fold_run_root(self, roots: list[bytes]) -> bytes | None:
         if not self.rows:
@@ -1213,6 +1224,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         root, which is in the run root."""
         if not self.rows:
             return super().verify(run, opening)
+        if self.rows_b3:
+            raise NotImplementedError(f"verify: {step_rows_b3.NAME} is a research arm; it is never opened")
         try:
             sc = run.steps[opening.step]
             ident = self.identity_of(opening.step, opening.index)
@@ -1693,7 +1706,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         nbytes = metas.nbytes
         n = padded // C
         layout_dig = self.layout_digest(metas)
-        root = (step_rows if rows else scheme).step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
+        root = (self._rows_mod if rows else scheme).step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
         self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
         self.spans.add("worker_idle", idle, step=job.step)                     # inside `hashing`: the rest of it is the worker's own work

@@ -18,8 +18,14 @@ label=hypothesis, source=branch@commit, hardware=GPU. A run's result (`result.js
 arm's measures, each measurement naming its `arm` (stock, sha512, blake3). The verdict on an iteration is a label too:
 `python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis "..." --outcome kept|dropped --reason "..."`.
 
-- `job.sh`: the workload on one GPU: the model check, then `prof.sh` under `gpu-lease 1 --wait` (the node's lease flags, timeouts
-  inside the lease), the SM clocks read before and after, then `collect.py`.
+- `job.sh`: the workload on one GPU: the model check, then in the lease the committer's GPU byte-identity tests and `check_b3.py`
+  (a failure is no timing), `prof.sh` under `gpu-lease 1 --wait` (the node's lease flags, timeouts inside the lease), the SM
+  clocks read before and after, then `collect.py`.
+- The BLAKE3 sibling arm (`served-commit-rows-blake3`, `arms.py`): circuits' rows arm under the committer's research scheme
+  `rows-blake3` (`verity_vllm.commit.step_rows_b3`, `native_rows_b3.cu`: the same step, keyed BLAKE3 in every hash position;
+  it never serves). `job.sh` names it to a copy of `prof.sh` with its one case line added. `check_b3.py` holds the scheme and its
+  kernels to the hash lane's hm96-blake3 reference: `ref/hm96_ref.py` and `ref/check.py` are verbatim copies of
+  `benchmarks/hash/intpipe/` at `cursor/verity-hash-15ad` 4369ae628.
 - `collect.py`: the run's measures per arm (its docstring defines them): TPOT and throughput overhead against stock with their 95%
   intervals (the headline), prefill and decode step time, the model's own GPU time per step and its rise over stock, hash GPU time
   per step, and the noise (stock's TPOT spread over its interleaved reps).
