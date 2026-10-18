@@ -21,6 +21,8 @@ for a in ${ARMS//,/ }; do
     served-commit-nativedrain-ring8) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_NATIVEDRAIN_RING8);;
     served-commit-rows-ring8) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_RING8);;
     served-commit-rows-w64) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_W64);;
+    served-commit-rows-cap) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_CAP);;
+    served-commit-rows-ring8-cap) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_RING8_CAP);;
     served-commit-rows-4k) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_4K);;
     served-commit-rows-layer) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_LAYER);;
     served-commit-rows-layer-4k) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_LAYER_4K);;

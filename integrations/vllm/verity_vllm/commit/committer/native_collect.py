@@ -451,6 +451,10 @@ class NativeCollectCommitter(NativeHostCommitter):
         win_mb = os.environ.get("VERITY_WINDOW_MB", "").strip() or window_mb_default(self.native_worker and self.gather, self.retain)
         self.win_bytes = int(float(win_mb) * (1 << 20)) // 256 * 256
         self.win_slots_req = int(os.environ.get("VERITY_WINDOW_SLOTS", WINDOW_SLOTS))
+        # rows-sha512: VERITY_ROWS_CAP_BLOCKS=<n> (0 = off) hashes a window in launches of at most n blocks while at least
+        # VERITY_ROWS_CAP_FREE ring slots are free (the serving thread is not waiting for one), leaving the other SMs to serving
+        self.rows_cap_blocks = int(os.environ.get("VERITY_ROWS_CAP_BLOCKS", 0))
+        self.rows_cap_free = int(os.environ.get("VERITY_ROWS_CAP_FREE", 2))
         self.windowed = self.win_bytes > 0 and self.native_worker and self.gather
         if self.win_bytes > 0 and not self.windowed:
             raise ValueError("windowed staging needs native_collect_v2b (native worker + gather)")
@@ -1330,9 +1334,11 @@ class NativeCollectCommitter(NativeHostCommitter):
             state.update(n_total=n_total, n_levels=n_levels, views=views, tops=[])
 
         def row_leaves(src: Any, nbytes: int, k: int) -> Any:
-            """rows-sha512: window k's leaves, its nbytes / 256 rows at src and then pads to the window's end (or the tree's width)."""
-            first = k << j
-            return H.rows_leaves(state["rs"], src, nbytes, first, min(1 << j, state["width"] - first), state["n_total"], tn, side.cuda_stream)[0]
+            """rows-sha512: window k's leaves, its nbytes / 256 rows at src and then pads to the window's end (or the tree's width); capped
+            launches for the window (its leaves and subtree) while the ring has room."""
+            first, rs = k << j, state["rs"]
+            rs.max_blocks = self.rows_cap_blocks if self.rows_cap_blocks and nc.free_slots() >= self.rows_cap_free else 0
+            return H.rows_leaves(rs, src, nbytes, first, min(1 << j, state["width"] - first), state["n_total"], tn, side.cuda_stream)[0]
 
         def absorb(k: int, lv_k: Any) -> None:
             """Subtree of window k (lv_k = its leaves, device) -> host level slices + top node kept on device."""

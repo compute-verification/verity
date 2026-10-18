@@ -1,11 +1,12 @@
 """The rows-sha512 floor on one GPU: the windowed worker's kernels (native_rows.cu, built here with nvcc and the JIT's CUDA flags into
 one shared library per leaf-kernel __launch_bounds__ form) over one window of rows (the leaves and the window's whole tree), alone and
-beside a busy stream (a bf16 GEMM loop, a device copy loop; at default and at the highest stream priority), and COMMIT-GPU's raw SHA-512
-compression rate on the same device.  Each form's root of a small padded domain is checked against step_rows before it is timed.
-Measurement only; JSON to $OUT/rows_floor.json.
+beside a busy stream (bf16 GEMM loops, a square one and decode's skinny one, a device copy loop; at default and at the highest stream
+priority, and in launches capped at a number of blocks), and COMMIT-GPU's raw SHA-512 compression rate on the same device.  Each form's
+root of a small padded domain is checked against step_rows before it is timed.  Measurement only; JSON to $OUT/rows_floor.json.
 
     bash benchmarks/served_commit/rows_floor.sh     (ROWS: row bytes, default 256 1024 4096; WINDOW_MB, default 256; REPS, default 9;
-                                                     MINB: the leaf kernel's min blocks per SM, default 1 2 3)
+                                                     MINB: the leaf kernel's min blocks per SM, default 1 2 3;
+                                                     CAPS: blocks per launch to time, default none)
 """
 from __future__ import annotations
 
@@ -57,8 +58,8 @@ class Rows:
         L = ctypes.CDLL(str(so))
         L.verity_rows_params_bytes.restype = ctypes.c_int
         L.verity_rows_build.argtypes = [ctypes.c_char_p] * 6 + [ctypes.c_int, ctypes.c_uint32, c_p]
-        L.verity_rows_leaves_launch.argtypes = [c_p, c_p, c_u64, c_u64, c_p, c_p, c_u64, c_u64, c_u64, c_p, c_p, c_p, c_p]
-        L.verity_rows_level_launch.argtypes = [c_p, c_p, c_p, c_u64, ctypes.c_int, c_u64, c_p]
+        L.verity_rows_leaves_launch.argtypes = [c_p, c_p, c_u64, c_u64, c_p, c_p, c_u64, c_u64, c_u64, c_p, c_p, c_p, c_u64, c_p]
+        L.verity_rows_level_launch.argtypes = [c_p, c_p, c_p, c_u64, ctypes.c_int, c_u64, c_u64, c_p]
         self.L = L
         self.tn = torch.frombuffer(bytearray(step_rows.t_nibbles()), dtype=torch.uint8).cuda()
 
@@ -71,16 +72,16 @@ class Rows:
         return buf
 
     def leaves(self, P: ctypes.Array, rows: torch.Tensor, row_bytes: int, n_rows: int, m: int, n_total: int, out: torch.Tensor,
-               stream: torch.cuda.Stream) -> None:
+               stream: torch.cuda.Stream, cap: int = 0) -> None:
         rc = self.L.verity_rows_leaves_launch(P, rows.data_ptr(), row_bytes, n_rows, None, self.tn.data_ptr(), 0, m, n_total,
-                                              out.data_ptr(), None, None, stream.cuda_stream)
+                                              out.data_ptr(), None, None, cap, stream.cuda_stream)
         assert rc == 0, rc
 
-    def tree(self, P: ctypes.Array, lv: torch.Tensor, m: int, stream: torch.cuda.Stream) -> None:
+    def tree(self, P: ctypes.Array, lv: torch.Tensor, m: int, stream: torch.cuda.Stream, cap: int = 0) -> None:
         """lv: [2m - 1, 64], the m leaves first, then each level above them."""
         off, n, level = 0, m, 0
         while n > 1:
-            rc = self.L.verity_rows_level_launch(P, lv[off].data_ptr(), lv[off + n].data_ptr(), n // 2, level, 0, stream.cuda_stream)
+            rc = self.L.verity_rows_level_launch(P, lv[off].data_ptr(), lv[off + n].data_ptr(), n // 2, level, 0, cap, stream.cuda_stream)
             assert rc == 0, rc
             off, n, level = off + n, n // 2, level + 1
 
@@ -169,6 +170,7 @@ def main() -> None:
     window = int(os.environ.get("WINDOW_MB", "256")) << 20
     sizes = [int(x) for x in os.environ.get("ROWS", "256 1024 4096").split()]
     forms = [int(x) for x in os.environ.get("MINB", "1 2 3").split()]
+    caps = [int(x) for x in os.environ.get("CAPS", "").split()]
     prop = torch.cuda.get_device_properties(0)
     arch = f"{prop.major}{prop.minor}"
     res: dict[str, Any] = {"device": prop.name, "sms": prop.multi_processor_count, "arch": arch, "window_bytes": window,
@@ -182,7 +184,10 @@ def main() -> None:
     b = torch.randn(8192, 8192, dtype=torch.bfloat16, device="cuda")
     c = torch.empty_like(a)
     src, dst = torch.empty(1 << 30, dtype=torch.uint8, device="cuda"), torch.empty(1 << 30, dtype=torch.uint8, device="cuda")
-    busy = {"gemm_bf16_8192": lambda: torch.matmul(a, b, out=c), "copy_1GiB": lambda: dst.copy_(src)}
+    x, w = torch.randn(32, 4096, dtype=torch.bfloat16, device="cuda"), torch.randn(4096, 12288, dtype=torch.bfloat16, device="cuda")
+    y = torch.empty(32, 12288, dtype=torch.bfloat16, device="cuda")
+    busy = {"gemm_bf16_8192": lambda: torch.matmul(a, b, out=c), "copy_1GiB": lambda: dst.copy_(src),
+            "gemm_bf16_32x4096x12288": lambda: torch.matmul(x, w, out=y)}
     busy_ms = {k: timed(lambda _s, f=f: f(), reps, bs) for k, f in busy.items()}
     res["busy_alone_ms"] = {k: round(v, 4) for k, v in busy_ms.items()}
 
@@ -199,14 +204,15 @@ def main() -> None:
         R = Rows(so)
         form["sizes"] = {}
         for rb in sizes:
-            form["sizes"][rb] = entry = size_floor(R, rb, data, reps, (hs, hs_hi, bs), busy, busy_ms)
+            form["sizes"][rb] = entry = size_floor(R, rb, data, reps, (hs, hs_hi, bs), busy, busy_ms, caps)
             print(f"minb{minb} rows {rb}", json.dumps(entry), flush=True)
     (out_dir / "rows_floor.json").write_text(json.dumps(res, indent=1))
 
 
-def size_floor(R: Rows, rb: int, data: torch.Tensor, reps: int, streams: tuple, busy: dict, busy_ms: dict) -> dict[str, Any]:
-    """One window of rb-byte rows: its leaves, its tree and both, alone; at the worker's row size also all-pad leaves and the commit
-    beside each busy loop."""
+def size_floor(R: Rows, rb: int, data: torch.Tensor, reps: int, streams: tuple, busy: dict, busy_ms: dict,
+               caps: list[int]) -> dict[str, Any]:
+    """One window of rb-byte rows: its leaves, its tree and both, alone and in launches of at most each cap's blocks; at the worker's
+    row size also all-pad leaves and the commit (whole-grid at both priorities, and capped) beside each busy loop."""
     hs, hs_hi, bs = streams
     window = data.numel()
     m = window // rb
@@ -216,26 +222,29 @@ def size_floor(R: Rows, rb: int, data: torch.Tensor, reps: int, streams: tuple, 
     P = R.params(domain(m, rb), os.urandom(step_rows.KEY_BYTES), rb)
     lv = torch.empty(2 * m - 1, 64, dtype=torch.uint8, device="cuda")
 
-    def leaves(s: torch.cuda.Stream, n_rows: int = m) -> None:
-        R.leaves(P, data, rb, n_rows, m, m, lv, s)
+    def leaves(s: torch.cuda.Stream, n_rows: int = m, cap: int = 0) -> None:
+        R.leaves(P, data, rb, n_rows, m, m, lv, s, cap)
 
-    def commit(s: torch.cuda.Stream) -> None:
-        leaves(s)
-        R.tree(P, lv, m, s)
+    def commit(s: torch.cuda.Stream, cap: int = 0) -> None:
+        leaves(s, cap=cap)
+        R.tree(P, lv, m, s, cap)
 
     leaf_ms, tree_ms = timed(leaves, reps, hs), timed(lambda s: R.tree(P, lv, m, s), reps, hs)
     total_ms, comps = timed(commit, reps, hs), compressions(m, rb)
     entry.update(leaf_ms=round(leaf_ms, 4), tree_ms=round(tree_ms, 4), total_ms=round(total_ms, 4),
                  gb_per_s=round(window / total_ms * 1e-6, 2), ns_per_leaf=round(total_ms * 1e6 / m, 3),
                  compressions=comps, gcomp_per_s=round(comps / total_ms * 1e-6, 3))
+    entry["capped_ms"] = {c: round(timed(lambda s, c=c: commit(s, c), reps, hs), 4) for c in caps}
     if rb != step_rows.ROW_BYTES:
         return entry
     entry["pads_ms"] = round(timed(lambda s: leaves(s, 0), reps, hs), 4)
     entry["beside"] = {}
     for k, f in busy.items():
         n_busy = max(1, math.ceil(2 * total_ms / busy_ms[k]))
-        for tag, stream in (("default", hs), ("high_priority", hs_hi)):
-            r = beside(commit, f, n_busy, stream, bs, reps)
+        runs = [(tag, stream, commit) for tag, stream in (("default", hs), ("high_priority", hs_hi))]
+        runs += [(f"cap{c}", hs, lambda s, c=c: commit(s, c)) for c in caps]
+        for tag, stream, fn in runs:
+            r = beside(fn, f, n_busy, stream, bs, reps)
             r.update(n_busy=n_busy, busy_alone_ms=round(n_busy * busy_ms[k], 4),
                      busy_slowdown=round(r["busy_done_ms"] / (n_busy * busy_ms[k]), 4),
                      commit_slowdown=round(r["commit_done_ms"] / total_ms, 4))

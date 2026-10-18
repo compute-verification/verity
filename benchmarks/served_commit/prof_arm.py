@@ -240,6 +240,21 @@ class RowsW64Arm(RowsArm):
     window = (64, 32)
 
 
+class RowsCapArm(RowsArm):
+    """The rows arm hashing each window in launches of at most PROF_ROWS_CAP (default 32) blocks while two ring slots are free (the
+    committer's VERITY_ROWS_CAP_BLOCKS policy): the same bytes, with the other SMs left to serving."""
+
+    def ready(self, target: Any) -> None:
+        import os
+
+        super().ready(target)
+        self.committer.rows_cap_blocks = int(os.environ.get("PROF_ROWS_CAP", "32"))
+
+
+class RowsRing8CapArm(RowsCapArm):
+    window = (256, 32)
+
+
 class Rows4kArm(RowsArm):
     """The rows arm at 4 KiB rows: one leaf per 4 KiB of a step's stream (the window's chunks 4 KiB), each the hm96 leaf over its
     row's SHA-512 as at 256 B. Set for the life of the arm's engine process (one process per arm). Measurement only: no scheme pins
@@ -397,6 +412,8 @@ SERVED_COMMIT_ROWS_BATCH = RowsBatchArm("served-commit-rows-batch", retain="none
 SERVED_COMMIT_NATIVEDRAIN_RING8 = NativeDrainRing8Arm("served-commit-nativedrain-ring8", retain="none")
 SERVED_COMMIT_ROWS_RING8 = RowsRing8Arm("served-commit-rows-ring8", retain="none")
 SERVED_COMMIT_ROWS_W64 = RowsW64Arm("served-commit-rows-w64", retain="none")
+SERVED_COMMIT_ROWS_CAP = RowsCapArm("served-commit-rows-cap", retain="none")
+SERVED_COMMIT_ROWS_RING8_CAP = RowsRing8CapArm("served-commit-rows-ring8-cap", retain="none")
 SERVED_COMMIT_ROWS_4K = Rows4kArm("served-commit-rows-4k", retain="none")
 SERVED_COMMIT_ROWS_LAYER = RowsLayerArm("served-commit-rows-layer", retain="none")
 SERVED_COMMIT_ROWS_LAYER_4K = RowsLayer4kArm("served-commit-rows-layer-4k", retain="none")
