@@ -1442,11 +1442,8 @@
    "assumptions": [],
    "type_hash": "8b5d59c8e389ebb7fca362bc1f59eb906994cdeb37ade677622b6b55e7d43910"
   },
-  "Properties.SampledProofs.bernoulliBoundsNothing": {
-   "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.bernoulliBoundsNothing : Properties.SampledProofs.BernoulliBoundsNothing"],
-   "assumptions": [],
-   "type_hash": "5ace41ec4bd032c56bec63d810edb0f8f8d7db00a89952264825b251de600497"
+  "Properties.SampledProofs.bernoulliBounds": {
+   "owner": "@proofs"
   },
   "Properties.SampledProofs.digestIsRecord's": {
    "owner": "@proofs",
@@ -2129,7 +2126,7 @@
     "function": "SampledProofs.OneStage.check",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.bernoulliBoundsNothing": {
+   "Properties.SampledProofs.bernoulliBounds": {
     "function": "SampledProofs.OneStage.check",
     "outcome": "accept"
    },
