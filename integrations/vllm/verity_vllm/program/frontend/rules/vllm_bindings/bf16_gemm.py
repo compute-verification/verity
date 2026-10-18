@@ -7,6 +7,8 @@ the launch's token count (`launch_tokens_of`), the request's own rows only for a
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import torch
 
 from verity.ml.circuits.refs import Coll

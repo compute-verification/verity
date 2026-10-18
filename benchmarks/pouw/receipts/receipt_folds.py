@@ -237,8 +237,15 @@ def e2e_xin_absorb(y: list[int], p: list[int], xa0, xa1) -> list[int]:
 FOLDS = {
     "duo": {"step": duo_step, "state": ("y", "z"), "keys": ("a0", "a1", "k0", "k1"), "xor_rotations": (),
             "key_rule": {"pfill": "key_ok (key_ok_r9 in an r9 build)", "served": "fixed public odd keys SERVED_KA"},
-            "status": "proved", "needs": (),
-            "ref": "no all-state kernel at 2, 4, 6 or 8 words; binds every word (note:20261016T1013Z-draft-pfill-fold §2)"},
+            "status": "open", "needs": ("D",),
+            "ref": "(D): different runs of a chain's words leave different final states on some start state. Proved for "
+                   "one, two and three words at every width (Lean Pouw.SecurityProofs.Receipt.DuoWordInjective, "
+                   "DuoPairNoKernel, DuoTripleNoKernel); false at four words for odd keys with r1 + r3 = 0 mod 32, "
+                   "a2 = -1 mod 2^r1 and a3 = ±1 mod 2^(33 - r1), which key_ok and both schedules' rotations exclude. "
+                   "At four words a kernel needs a2 = -1 mod 2^r1, for odd a1, a2, a3, 0 < r2, r3 < n and "
+                   "0 < r1 <= n - 3 (Lean DuoQuadNoKernel), so both schedules' keys have none; open for five or more "
+                   "words, and for the served receipt y ^ rotl(z, 16) at any length "
+                   "(note:20261017T1000Z-draft-fold-r §6.5)"},
     "xin13": {"step": xin13_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": (13, 19),
               "key_rule": {"pfill": "key_ok_r9", "egemm": "key_ok_r9", "e2e": "lambda8 (weaker: no key_ok)"},
               "status": "open", "needs": ("RT", "G3"),
@@ -250,7 +257,11 @@ FOLDS = {
            "key_rule": {"pfill": "key_ok_r9"},
            "status": "open", "needs": ("RT", "G3", "HO"),
            "ref": "as xin13 (RS-E-REF Part IX, P2-FF r11), and (HO): no hand-off (d1, d2) or (d3, next d0) joins two "
-                  "words whose rows or columns are equal or complementary (note:20261016T1117Z-draft-fullfloor-s-r9 §2)"},
+                  "words whose rows or columns are equal or complementary (note:20261016T1117Z-draft-fullfloor-s-r9 §2). "
+                  "With every absorbed word pinned and a checkpoint a segment (the XOR of the chains' states), none of "
+                  "them is read: a half step is a bijection and a checkpoint is injective in each word, for odd "
+                  "multipliers alone (Lean: Pouw.SecurityProofs.Receipt.LiHalfBijective, LiCheckpointWordInjective, "
+                  "LiCheckpointLowBit; note:20261017T1848Z-draft-li-alt)"},
     "ram": {"step": ram_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": None,
             "key_rule": {"pfill": "key_ok (key_ok_r9 in an r9 build)"},
             "status": "pairs-only", "needs": (),

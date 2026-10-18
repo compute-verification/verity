@@ -105,6 +105,8 @@ blocks per SM), whose registers and opcodes this capture reads the same way and 
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import argparse
 import ctypes
 import glob

@@ -10,6 +10,7 @@ import pytest
 from tests.pipeline.test_row import _row
 from verity_vllm.check.replay.driver import family_strata
 from verity_vllm.check.replay.sample import sample
+from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import program_cache as PC
 from verity_vllm.pipeline import row_config as RC
@@ -344,6 +345,10 @@ def test_the_tp2_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pas
 
 # ---------------------------------------------------------------------------------------------------------------- the config record
 
+#: The served switches of a Commit whose every rank read back what its row declares (`engine.served.record`).
+SERVED = {"schema": SV.SCHEMA, "ok": True, "problems": []}
+
+
 def _row_dir(tmp_path: Path, *, mismatch: int = 0, commit_pass: bool = True, word_ok: bool = True) -> Path:
     d = tmp_path / ROW
     (d / "commit").mkdir(parents=True)
@@ -360,6 +365,7 @@ def _row_dir(tmp_path: Path, *, mismatch: int = 0, commit_pass: bool = True, wor
            "commit": {"commit_pass": commit_pass, "commit_fail_reason": None if commit_pass else "C2 mismatch", "run_root": "rr",
                       "openings": {"n": 64, "verified": 64}, "expected_tensors": 9, "committed_tensors": 9, "sampled_replay": sr}}
     (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    (d / "commit" / "summary.json").write_text(json.dumps({"versions": {"served": SERVED}}))
     return d
 
 
@@ -381,10 +387,37 @@ def test_a_config_run_that_failed_says_why_first(tmp_path, kw, why):
         assert rec["replay"]["differed"][0]["family"] == "Gemm_v1" and rec["replay"]["by_family"] == {"Gemm_v1": 2}
 
 
+@pytest.mark.parametrize("verdict, why", [("PASS", None), ("FAIL", "match FAIL")])
+def test_a_single_gpu_rows_match_is_its_global_matchs_verdict(tmp_path, verdict, why):
+    """GM-01 writes ``verdict`` (`check.match.global_match`); the record read an ``ok`` it never writes, so the first single-GPU row
+    chain to reach its publish (r20261018-000059-6968) was refused as "match FAIL" over a passing Match."""
+    d = _row_dir(tmp_path)
+    (d / "global_match.json").write_text(json.dumps({"schema": "cb-a/global-match/v1", "verdict": verdict, "failed_checks": []}))
+    rec = CR.record(d, ROW)
+    assert (rec["match"]["ok"], rec["why"]) == (verdict == "PASS", why)
+
+
 def test_a_config_run_with_no_commit_is_not_pass(tmp_path):
     d = _row_dir(tmp_path)
     (d / "commit" / "runs.jsonl").unlink()
     assert CR.record(d, ROW)["why"] == "commit not run"
+
+
+def test_a_commit_that_read_no_switches_back_is_not_pass(tmp_path):
+    d = _row_dir(tmp_path)
+    (d / "commit" / "summary.json").unlink()
+    rec = CR.record(d, ROW)
+    assert (rec["outcome"], rec["why"], rec["served"]) == ("FAIL", "served switches not run", None)
+
+
+def test_a_commit_its_switches_failed_closed_says_so_first(tmp_path):
+    d = _row_dir(tmp_path)
+    (d / "commit" / "runs.jsonl").unlink()
+    bad = {**SERVED, "ok": False, "problems": ["rank 0: VLLM_BATCH_INVARIANT=True where row file declares False"]}
+    (d / "commit" / "summary.json").write_text(json.dumps({"schema": SV.SCHEMA, "pass": False, "served": bad}))
+    rec = CR.record(d, ROW)
+    assert rec["why"] == "served switches FAIL: rank 0: VLLM_BATCH_INVARIANT=True where row file declares False"
+    assert rec["served"] == bad
 
 
 ROW_TP2 = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
@@ -415,6 +448,7 @@ def _tp_row_dir(tmp_path: Path, *, mismatch_r1: int = 0, ranks: int = 2) -> Path
            "commit": {"tp_run_root": "tproot", "world": 2, "per_rank": per, "openings": {"n": 128, "verified": 128}, "tensors": 18,
                       "commit_pass": not fail, "commit_fail_reason": "rank 1: sampled replay mismatch" if fail else "PASS"}}
     (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    (d / "commit" / "summary.json").write_text(json.dumps({"served": SERVED}))
     return d
 
 

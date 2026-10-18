@@ -12,7 +12,8 @@
   writes the Commit's call-boundary plan on a PASS).
 * **Match**: the observed run and the fold (``match``), the per-request comparison (B=1 against the served shape; B>1
   the X-09 decomposition, deriving any shape it names as missing and rerunning once), the global Match (GM-01) and, on
-  a stochastic row, the sampler value check; ``row_records.match_summary`` decides.
+  a stochastic row, the sampler value check; ``row_records.match_summary`` decides.  A leased row runs ``match`` as its GPU
+  phase under the lease, then its CPU phase with no device (`pipeline.gpu_lease`).
 * **Commit**: the pairs protocol (``commit``) with the manifest of record, the Program digest read from the Build, the
   Match record for the live oracle compare, the Build's Programs for the sampled replay and the weights of record
   (derived beside the component Program, re-derived when stale); then the manifest verification and the verdict
@@ -42,6 +43,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_build as RB
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_group as RG
@@ -441,11 +443,15 @@ class SingleRow(Row):
             self.log(f"acquisition manifest for the capture: {d}/manifest.json (ACQUIRE_ENGINE={self.env.environ.get('ACQUIRE_ENGINE') or 'v2'})")
         if cm.match_phase == "all" and self.snap_def != "all" and os.path.isfile(f"{d}/manifest.json"):
             self.form_b()
-        cmd_m = self.match_cmd()
         t0 = int(time.time())
         self.tl("stage.match", "start")
         self.gpu_exclusive("match")
-        rcm = self.run_tl("match.run_config", to, f"{d}/match.log", cmd_m)
+        if self.leased and cm.match_phase == "all":
+            rcg = self.run_gpu("match.gpu", to, f"{d}/match_gpu.log", self.match_cmd("gpu"), lease_dir=f"{d}/match/lease",
+                               kept=GL.MATCH_LEG_KEPT)
+            rcm = self.run_tl("match.run_config", to, f"{d}/match.log", self.match_cmd("cpu")) or rcg
+        else:
+            rcm = self.run_tl("match.run_config", to, f"{d}/match.log", self.match_cmd())
         self.tl("match.compare", "start")
         if os.path.isfile(f"{d}/match/program.json") and os.path.isfile(f"{d}/match/instances.jsonl"):
             rcc, gm_rc, shared = self.compare(to_c)
@@ -481,13 +487,14 @@ class SingleRow(Row):
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "match"))
             raise Stop(11)
 
-    def match_cmd(self) -> list[str]:
+    def match_cmd(self, phase: str | None = None) -> list[str]:
+        """The Match's ``match`` command line, over ``phase`` (default the row's ``--match-phase``)."""
         d, cm = self.d, self.cm
         snapmax = ["--snapshot-max-bytes", cm.snapshot_max_bytes] if cm.snapshot_max_bytes else []
         # the Programs the Match compares against (B=1 the request Program, B>=2 its components): the fold binds their sampler construction
         progs = [p for p in ([f"{d}/build_request"] if self.B <= 1 else sorted(glob.glob(f"{d}/build_request_LP*_T*"))) if os.path.isfile(f"{p}/result.json")]
         return self.cli("match", "--case", self.role, "--workload", self.wl, "--out", f"{d}/match", "--checkpoint-dir", self.ck,
-                        "--phase", cm.match_phase, "--python-gpu", self.py, "--python-cpu", self.py312, "--max-num-seqs", str(self.B),
+                        "--phase", phase or cm.match_phase, "--python-gpu", self.py, "--python-cpu", self.py312, "--max-num-seqs", str(self.B),
                         "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax, *(x for p in progs for x in ("--program-dir", p)), "--skip", SKIP,
                         "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--cards-dir", f"{d}/match/cards", py=self.py312)
 
@@ -676,8 +683,8 @@ class SingleRow(Row):
             self.tl("validate.manifest_verify", "end", ("rc", 1))
             self.log(f"manifest of record VERIFY FAILED: {_tail(f'{d}/manifest_verify.log', 200)}")
 
-    def commit_prepare(self) -> tuple[int, list[str]]:
-        """The Commit stage up to its command line -> (its timeout, its command)."""
+    def commit_prepare(self) -> tuple[int, list[str], str]:
+        """The Commit stage up to its command line -> (its timeout, its command, its manifest of record or "")."""
         d, ck = self.d, self.ck_
         kb, kt = max(1, (self.B + 3) // 4), max(1, (self.I + self.O + 287) // 288)
         to = ck.commit_timeout or min(CAP, 2400 * kb * kt)
@@ -713,14 +720,14 @@ class SingleRow(Row):
             self.log(f"WARNING B={self.B}: no {d}/match/instances.jsonl: live C2 oracle-compare NOT armed -- request attribution of decode-step identities unverified")
         cmd += RP.commit_flags(self)
         self.tl("commit.prepare", "end")
-        return to, cmd
+        return to, cmd, man
 
     def commit(self) -> None:
         d, ck = self.d, self.ck_
         if ck.group:
             self.replay_pending = RG.commit(self, CAP)
             return
-        to, cmd = self.commit_prepare()
+        to, cmd, man = self.commit_prepare()
         t0 = int(time.time())
         if ck.hot_engine == "1" and not self.leased:
             self.log(f"HOT_ENGINE=1: Commit on the hot worker (root {self.env.hot_root}, idle {self.env.hot_idle}s)")

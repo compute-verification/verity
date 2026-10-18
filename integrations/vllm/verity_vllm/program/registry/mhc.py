@@ -75,6 +75,8 @@ the broadcast's K 7168 caps at 28 (T <= 256) and then runs the same 26 .. 8 regi
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 from verity.ml.circuits.defs import bind, composite, primitive
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
