@@ -147,6 +147,50 @@ def test_a_plan_that_reads_the_prompts_is_value_dependent_and_one_that_reads_len
     assert (cold["verdict"], cold["changed_by"]) == ("PUBLIC", [])
 
 
+SMALL = [("MoeExpertFp8Gemm_v1", {"E": 4, "K": 128, "N": 16, "G": 128, "KB": 128, "SWAP": False, "DOT": "HopperE4m3MmaV2Dot32_v1"}),
+         ("FlashInferFp8Linear_v1", {"K": 128, "N": 16}),
+         ("MoeRouterSigmoidBias_v1", {"E": 8, "TOPK": 2, "SCALE": 2.5, "KERNEL": "block"}),
+         ("RMSNormFusedCuda_v2", {"N": 16, "EPS": 1e-5}),
+         ("MoeExpertGemm_v2", {"E": 4, "K": 16, "N": 4, "DOT": "HopperBF16WgmmaDot16_v1"})]
+
+
+def test_the_lean_graph_is_the_reference_graph_and_cuts_to_its_units(monkeypatch):
+    """Expert gathers, FP8 block scales, a router's top-k and a separable body: the lean graph, resolved in forked workers over
+    64-gate ranges or in one pass, is `CallGraph`'s, and its units are `evaluate_definition`'s."""
+    from verity.ml.circuits.cut import CallGraph, evaluate_definition, separable
+    from verity_vllm.query.call_scope import specialization
+    monkeypatch.setattr(PR, "CHUNK_GATES", 64)
+    for name, statics in SMALL:
+        fn = specialization(name, statics)
+        ref = evaluate_definition(fn, PR.UNIT_BITS, {}).units
+        assert PR.lean_units(fn, {}) == PR.lean_units(fn, {}, jobs=2) == ref, fn.id
+        if separable(fn) is None:
+            assert PR.LeanGraph(fn, jobs=2).same_as(CallGraph(fn)) and PR.LeanGraph(fn).same_as(CallGraph(fn)), fn.id
+
+
+def test_units_read_a_cached_rule_by_its_digest_and_log_each_cut(tmp_path):
+    """A rule directory's entry is used as it stands (its count is deliberately wrong here), the rest are cut and logged, the
+    log serves as a cache, and recutting a cached Definition names the disagreement."""
+    from verity_vllm.query.call_scope import specialization
+    from verity_vllm.query.word import definition_digest
+    lin, router = (specialization(n, s) for n, s in SMALL[1:3])
+    rule = {"key": {"digest": definition_digest(lin), "query": [16, 32, 0]}, "rule": {"units_per_call": 999, "violations": []}}
+    (tmp_path / "rules" / "ab").mkdir(parents=True)
+    (tmp_path / "rules" / "ab" / "x.json").write_text(json.dumps(rule))
+    log = tmp_path / "cuts.jsonl"
+    u = PR.Units([tmp_path / "rules"], log, verify_below=10_000)
+    assert u.of({"lin": lin, "router": router}) == {"lin": 999, "router": 41}
+    s = u.summary()
+    assert (s["cached"], s["cut"], s["verified_units"], s["verified_graphs"], s["mismatches"]) == (1, 1, 1, 1, [])
+    assert [json.loads(x)["digest"] for x in log.read_text().splitlines()] == [definition_digest(router)]
+
+    again = PR.Units([log])
+    assert again.of({"router": router}) == {"router": 41} and again.summary()["cut"] == 0
+    recut = PR.Units([tmp_path / "rules"], recut=True)
+    assert recut.of({"lin": lin}) == {"lin": 146}
+    assert recut.summary()["mismatches"] == [{"definition": lin.id, "lean": 146, "cached": 999}]
+
+
 def test_served_reads_count_each_definition_per_row_and_name_the_embedding_gather():
     """r0 prefills 3 rows at step 0 and decodes 1 at step 1, beside r1's 2-row prefill: r0's decode row is what its EOS would key,
     and all 3 rows of step 1 are in the batch that stop would reshape."""
@@ -175,3 +219,27 @@ def test_served_reads_count_each_definition_per_row_and_name_the_embedding_gathe
 
     ignored = PR.analyze_served(build, ignore_eos=True)
     assert not ignored["eos"]["applied"] and ignored["summary"]["eos_step_keyed"]["calls"] == r["summary"]["eos_step_keyed"]["calls"]
+
+
+def test_served_moe_calls_take_the_step_plans_expert_gemm_once_per_routed_pair():
+    """A fused-MoE Call names its plan key: each of a token's TOPK = 2 pairs is one activation of the planned expert Gemm, which
+    gathers its expert's weights by the routed id."""
+    moe = {"definition": "MoeExpertGemm_v2{E=4,K=16,N=4,DOT=HopperBF16WgmmaDot16_v1}", "base": "MoeExpertGemm_v2",
+           "statics": {"E": 4, "K": 16, "N": 4, "DOT": "HopperBF16WgmmaDot16_v1"}}
+    gemm = {"definition": "Gemm_v2{K=16,N=4,DOT=HopperBF16WgmmaDot16_v1}", "base": "Gemm_v2",
+            "statics": {"K": 16, "N": 4, "DOT": "HopperBF16WgmmaDot16_v1"}}
+    calls = [{"op": "moe_up", "moe": "4,16,4,0", "writes": ["c01.moe/up"],
+              "reads": [{"value": "c00.input/x", "width": 16}, {"value": "c00.input/router_ids", "width": 2},
+                        {"weight": "w13", "shape": [4, 4, 16]}]}]
+    build = {"workload": {"schedule": [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 1}]},
+             "program": {"calls": calls, "attention": [],
+                         "values": {"c00.input/x": {"width": 16}, "c00.input/router_ids": {"width": 2}, "c01.moe/up": {"width": 8}},
+                         "logits": {"x": {"value": "c00.input/x", "width": 16}, "w": {"weight": "lm", "shape": [4, 16]}},
+                         "sampled": {"definition": "TokenSelect_v1{V=4}", "base": "TokenSelect_v1", "statics": {"V": 4}}},
+             "steps_plan": [{"step": 0, "tokens": 3, "gemms": {}, "moe": {"4,16,4,0": moe}, "logits": gemm,
+                             "requests": [{"request_id": "r0", "tokens": 3, "attention": []}]}]}
+    r = PR.analyze_served(build, units=True)
+    expert = _by_family(r)["MoeExpertGemm_v2"]
+    assert (expert["calls"], expert["units"], expert["verdict"]) == (6, 24, "PUBLIC")
+    assert expert["selects"] == [{"select": "GatherBf16x4", "V": 4, "count": 6 * 64, "index": ["input:router_ids"]}]
+    assert r["units_source"]["cut"] == 3 and r["units_source"]["mismatches"] == []
