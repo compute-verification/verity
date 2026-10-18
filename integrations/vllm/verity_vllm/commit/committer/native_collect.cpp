@@ -729,13 +729,13 @@ struct Collector {
     d["plans_dropped"] = plans.dropped(); d["plans_pending_emptied_step"] = plans.pending_emptied_step();
     d["strided_2d"] = tot_strided; d["contiguous_fallback"] = tot_fallback; d["flushes"] = tot_flushes; d["staged"] = tot_staged;
     d["gather_blocks"] = tot_blocks; d["auto_blocks"] = auto_blocks;
-    d["gather_side_flushes"] = tot_side_flushes; d["drain_side"] = side_drain;
+    d["gather_side_flushes"] = tot_side_flushes; d["drain_side"] = side_drain; d["gather_desc_copies"] = tot_desc_copies;
     d["expected"] = tot_expected; d["committed"] = tot_committed;
     d["window_waits"] = win_waits; d["window_wait_s"] = win_wait_s; d["windowed"] = windowed;
     return d;
   }
 
-  void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_side_flushes = 0; tot_expected = tot_committed = 0; }
+  void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_side_flushes = 0; tot_desc_copies = 0; tot_expected = tot_committed = 0; }
   void clear_plans() { plans.clear(); plan = nullptr; }
   void end_run() {             // the committer's reset between runs: the run totals, and the plans the run that ended did not use (freed by
     reset_stats();             // the next run's steps, native_plans.h)
@@ -750,6 +750,9 @@ struct Collector {
   struct GatherDesc { const char* src; char* dst; int64_t nbytes; int64_t width; int64_t pitch; int64_t skip; };
   GatherDesc* ring = nullptr;       // host-mapped pinned ring
   GatherDesc* ring_dev = nullptr;   // its device alias
+  // A device copy of the ring: a flush copies its descriptors there (one H2D on the gather's stream) and the kernel reads them from
+  // device memory, not over PCIe from every block (VERITY_GATHER_DESC_DEV=0, read at enable_gather, keeps the host-mapped reads).
+  GatherDesc* ring_gpu = nullptr;
   int64_t ring_cap = 0, ring_pos = 0, staged_from = 0;
   std::vector<at::Tensor> held;
   int blocks_per_desc = 8;
@@ -768,6 +771,24 @@ struct Collector {
     ring_cap = capacity;
     ring_pos = staged_from = 0;
     if (const char* e = std::getenv("VERITY_DRAIN_SIDE")) side_drain = std::string(e) != "0";
+    const char* dd = std::getenv("VERITY_GATHER_DESC_DEV");
+    if (!dd || std::string(dd) != "0") {
+      rc = cudaMalloc(&d, capacity * sizeof(GatherDesc));
+      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMalloc(gather descriptors): ") + cudaGetErrorString(rc));
+      ring_gpu = reinterpret_cast<GatherDesc*>(d);
+    }
+  }
+
+  // the n descriptors at ring index start, where the gather on s reads them: copied to the device ring ahead of it on s, or (no device
+  // ring, or s capturing a graph, whose replay must not re-copy a later step's ring) the host-mapped ring itself
+  const GatherDesc* descs_for(int64_t start, int64_t n, cudaStream_t s) {
+    if (!ring_gpu) return ring_dev + start;
+    cudaStreamCaptureStatus cs = cudaStreamCaptureStatusNone;
+    if (cudaStreamIsCapturing(s, &cs) != cudaSuccess || cs != cudaStreamCaptureStatusNone) return ring_dev + start;
+    const cudaError_t rc = cudaMemcpyAsync(ring_gpu + start, ring + start, n * sizeof(GatherDesc), cudaMemcpyHostToDevice, s);
+    if (rc != cudaSuccess) throw std::runtime_error(std::string("gather descriptors H2D: ") + cudaGetErrorString(rc));
+    ++tot_desc_copies;
+    return ring_gpu + start;
   }
 
   inline void push_one(const char* src, char* dst, int64_t nb, int64_t width, int64_t pitch, int64_t skip) {
@@ -881,7 +902,7 @@ struct Collector {
   bool side_drain = true, side_next = false, side_pending = false;
   cudaStream_t side_s = nullptr;
   cudaEvent_t side_fork = nullptr, side_done = nullptr;
-  int64_t tot_side_flushes = 0;
+  int64_t tot_side_flushes = 0, tot_desc_copies = 0;
 
   void join_side() {
     if (!side_pending) return;
@@ -920,12 +941,12 @@ struct Collector {
     win_max_nb = 0;
     tot_blocks += static_cast<int64_t>(bpd) * n;
     if (start + n <= ring_cap) {
-      int rc = verity_gather_launch(ring_dev + start, static_cast<int>(n), bpd, s);
+      int rc = verity_gather_launch(descs_for(start, n, s), static_cast<int>(n), bpd, s);
       if (rc != 0) throw std::runtime_error(std::string("gather launch: ") + cudaGetErrorString(static_cast<cudaError_t>(rc)));
     } else {                                                         // ring wrap: two launches
       const int64_t n1 = ring_cap - start;
-      int rc = verity_gather_launch(ring_dev + start, static_cast<int>(n1), bpd, s);
-      if (rc == 0) rc = verity_gather_launch(ring_dev, static_cast<int>(n - n1), bpd, s);
+      int rc = verity_gather_launch(descs_for(start, n1, s), static_cast<int>(n1), bpd, s);
+      if (rc == 0) rc = verity_gather_launch(descs_for(0, n - n1, s), static_cast<int>(n - n1), bpd, s);
       if (rc != 0) throw std::runtime_error(std::string("gather launch: ") + cudaGetErrorString(static_cast<cudaError_t>(rc)));
     }
     step_issue_s += now_s() - t0;

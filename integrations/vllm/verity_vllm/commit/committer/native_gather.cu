@@ -1,6 +1,7 @@
 // R10 acq-native, SECONDARY bet: one gather-copy kernel per legal collection point (owner 2's lifetime table, out/gen/r10/acq-life/lifetimes.md):
 // the staged tensors of a window are copied into the arena by ONE launch instead of one cudaMemcpyAsync each.  Descriptors live in a
-// host-mapped pinned ring (the kernel reads them over PCIe; no H2D copy call).  src == nullptr means "write zeros" (alignment gaps).
+// host-mapped pinned ring; the collector copies a flush's descriptors to a device ring ahead of the launch (or, capturing a graph, passes
+// the host-mapped ring, read over PCIe).  src == nullptr means "write zeros" (alignment gaps).
 #include <cuda_runtime.h>
 #include <cstdint>
 
@@ -14,7 +15,10 @@ struct GatherDesc {
 };
 
 __global__ void gather_copy_kernel(const GatherDesc* __restrict__ d, int n) {
-  const GatherDesc g = d[blockIdx.y];
+  __shared__ GatherDesc gs;                // one read of the descriptor a block, not one a warp
+  if (threadIdx.x == 0) gs = d[blockIdx.y];
+  __syncthreads();
+  const GatherDesc g = gs;
   const int64_t nb = g.nbytes;
   const bool contiguous = (g.pitch == g.width);
   const int64_t tid = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
