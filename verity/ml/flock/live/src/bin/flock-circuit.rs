@@ -945,21 +945,42 @@ struct ZkRep {
     t_commit: f64,
     /// Ligerito level 0's hiding, drawn once per session (both reps open the one level-0 codeword), with this rep's pair
     level0: Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
+    /// under the firewall, the rep's Lean frame, which drew `pads` and the pads tree's salts (or why it could not)
+    lean: Mutex<Option<Result<flock_live::firewall::LeanFrame, String>>>,
+}
+
+/// The rep's Lean frame and its draws (`flock_live::firewall::LeanFrame::start`), Rust's tree over them held to the frame's
+/// root.
+fn lean_draws(st: &Stmt, lay: &Layout) -> Result<(flock_live::firewall::LeanFrame, zkv::Pads, zkv::InnerCommit), String> {
+    let (frame, d) = flock_live::firewall::LeanFrame::start(&flock_live::firewall::lean_frame_exe(), lay, mask_slot(st))?;
+    let ic = zkv::InnerCommit::new(&d.pads, d.salts);
+    if ic.root() != d.root {
+        return Err(flock_live::firewall::refused(format!("the pads tree over the Lean frame's draws has root {} where the frame's is {}",
+                                                         hex(&ic.root()[..8]), hex(&d.root[..8]))));
+    }
+    Ok((frame, d.pads, ic))
 }
 
 /// A rep's pads and their commitment (M1), the pads tree under salt id `id`, with the session's level-0 hiding and this rep's pair.
+/// Under the firewall the rep's Lean frame draws them instead, from the OS.
 #[allow(clippy::too_many_arguments)]
 fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &flock_core::pcs::ligerito::zk::Level0Zk,
               points: &Arc<Mutex<Vec<Vec<F128>>>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> ZkRep {
     let tz0 = Instant::now();
     let lay = zk_layout(st);
-    let mut pads = zkv::Pads::draw(prng, &lay, rep);
+    let (mut pads, mut ic, lean) = match firewall_on(st).then(|| lean_draws(st, &lay)) {
+        Some(Ok((frame, pads, ic))) => (pads, Some(ic), Some(Ok(frame))),
+        Some(Err(why)) => (zkv::Pads::draw(prng, &lay, rep), None, Some(Err(why))),
+        None => (zkv::Pads::draw(prng, &lay, rep), None, None),
+    };
     if plan.zk_zero_pads {
         pads.h.iter_mut().for_each(|x| *x = F128::ZERO);
+        ic = None;
     }
-    let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
-    let sb = salts.lock().unwrap_or_else(PoisonError::into_inner).expand(id, n);
-    let ic = zkv::InnerCommit::new(&pads, sb);
+    let ic = ic.unwrap_or_else(|| {
+        let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
+        zkv::InnerCommit::new(&pads, salts.lock().unwrap_or_else(PoisonError::into_inner).expand(id, n))
+    });
     let self_check = if plan.zero_witness { zkv::SelfCheck::Skip } else { plan.zk_self_check };
     let t_commit = tz0.elapsed().as_secs_f64();
     // each rep's copy of the extra lanes (4 · 2^22 words at m = 35) written on rayon's threads, not one
@@ -968,7 +989,7 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
         extra: std::array::from_fn(|i| { use rayon::prelude::*; level0.extra[i].par_iter().copied().collect() }), pads: level0.pads.clone(),
     };
     ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, final_c_solved: plan.zk_final_c_solved, self_check,
-            t_commit, level0: Arc::new(level0) }
+            t_commit, level0: Arc::new(level0), lean: Mutex::new(lean) }
 }
 
 /// M1 on the device: level 0's hiding and both reps' pads with their commitments, drawn beside the witness build (they depend on
@@ -1014,11 +1035,16 @@ fn level0_root(st: &Stmt, wt: &WitData, lig: LigeritoProfile, level0: Option<&fl
     merkle_digest_bytes(&cm.cap).to_vec()
 }
 
+/// The mask slot: its first word, its words per block, and the blocks.
+fn mask_slot(st: &Stmt) -> flock_live::firewall::MaskSlot {
+    let r = st.c.ranges.iter().find(|r| r.kind == Kind::Mask).expect("a mask slot");
+    flock_live::firewall::MaskSlot { w0: r.start() >> 7, n: 1usize << (r.slot_log - 7), blocks: st.blocks() }
+}
+
 /// The mask slot's word indices in the packed witness (every block's slot).
 fn mask_words(st: &Stmt) -> Vec<usize> {
-    let r = st.c.ranges.iter().find(|r| r.kind == Kind::Mask).expect("a mask slot");
-    let (w0, n) = (r.start() >> 7, 1usize << (r.slot_log - 7));
-    (0..st.blocks()).flat_map(|b| (0..n).map(move |j| (b << (st.c.k_log - 7)) + w0 + j)).collect()
+    let s = mask_slot(st);
+    (0..s.blocks).flat_map(|b| (0..s.n).map(move |j| (b << (st.c.k_log - 7)) + s.w0 + j)).collect()
 }
 
 /// The two z-claims' word coordinates (`x_outer[1..]` of the opening's claim point) for the phase's coins: the replay on a
@@ -1039,10 +1065,12 @@ fn sent_pads(zk: &ZkRep) -> zkv::Pads {
 }
 
 /// A rep's masking challenger (M1) in front of its live stream: the pads it adds (a dishonest prover's other ones), and the
-/// rank check at the opening's label (the prover stops on degenerate coins).
+/// rank check at the opening's label (the prover stops on degenerate coins). Under the firewall the rep's Lean frame decides
+/// the refusals, and this challenger's are its cross-check (`defer`).
 fn zk_masking<C: flock_transcript::challenger::Challenger>(st: &Arc<Stmt>, ch: C, zk: &ZkRep) -> (zkv::Masking<Gate<C>>, zkv::Pads) {
     let sent = sent_pads(zk);
     let mut mch = zkv::Masking::new(Gate::new(ch), &zk.lay, &sent, zk.ic.root());
+    mch.defer = firewall_on(st);
     let (st2, lay, pts, words) = (st.clone(), zk.lay, zk.points.clone(), mask_words(st));
     mch.at_open = Some(Box::new(move |coins: &[F128]| {
         let tr = Instant::now();
@@ -1293,7 +1321,11 @@ impl Firewall {
                                                &mut flock_live::firewall::Recorder::default()).map(|r| r.cons.iter().map(|c| c.0).collect()).unwrap_or_default();
             t.begin_rep(rep, lay, &zk.pads, &zk.ic.root(), &domain(&st.c, rep), &self.cm, &items, &names)
         });
-        let lean = flock_live::firewall::LeanFrame::start(&flock_live::firewall::lean_frame_exe(), &lay, &sent_pads(zk).h, &zk.ic.root())?;
+        let mut lean = zk.lean.lock().unwrap_or_else(PoisonError::into_inner).take()
+            .unwrap_or_else(|| Err(flock_live::firewall::refused("a firewalled rep without its Lean frame")))?;
+        if let Some(prev) = self.rep.as_ref() {
+            lean.prior(&prev.coins)?;
+        }
         self.rep = Some(FirewallRep { rep, lay, zk0: zk.level0.clone(), checker: flock_live::firewall::Checker::new(items, lay.piop_exposed()), coins: Vec::new(),
                                   extras: None, link: None, shadow: None, t_wait: 0.0, algebra_tampered: false, failed: false, lean,
                                   t_lean: 0.0, lean_bytes: 0 });
@@ -1467,15 +1499,22 @@ impl Firewall {
         Ok(())
     }
 
-    /// The coins the stream answered the round the firewall passed: the algebraic phase's are logged (the claim points), the
-    /// opening's go to the shadow.
-    fn answer(&mut self, coins: &[F128]) {
+    /// The coins the stream answered the round the firewall released: the Lean frame's (its refusals read them), and the
+    /// algebraic phase's are logged (the claim points), the opening's go to the shadow. An error is the frame's stop on them,
+    /// or its fault.
+    fn answer(&mut self, coins: &[F128]) -> Result<(), String> {
         flock_live::firewall_transcript::with(|t| t.answer(coins));
-        if let Some(r) = self.rep.as_mut() {
-            match r.link.as_mut() {
-                Some(l) => l.answer(coins),
-                None => r.coins.extend_from_slice(coins),
-            }
+        let Some(r) = self.rep.as_mut() else { return Ok(()) };
+        let t = Instant::now();
+        let stop = r.lean.coins(coins);
+        r.t_lean += t.elapsed().as_secs_f64();
+        match r.link.as_mut() {
+            Some(l) => l.answer(coins),
+            None => r.coins.extend_from_slice(coins),
+        }
+        match stop? {
+            Some(why) => Err(why),
+            None => Ok(()),
         }
     }
 
@@ -1631,12 +1670,19 @@ fn firewalled_round<C: flock_transcript::challenger::Challenger>(firewall: &Opti
 }
 
 /// A round that leaves (the masking challenger's round, the Lean frame's, its coin count) onto the stream: its coins, which the
-/// firewall gets too.
+/// firewall and its Lean frame get too. The frame's stop on them stops the proof here; the masking challenger's deferred
+/// refusal where the frame goes on is the firewall's fault.
 fn released<C: flock_transcript::challenger::Challenger>(g: &Arc<Mutex<Firewall>>, mch: &mut zkv::Masking<Gate<C>>,
                                                          (c, release, k): (Vec<u8>, Vec<u8>, usize)) -> Vec<F128> {
     mch.inner.release = Some(release);
     let coins = replay_round(mch, &c, k).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
-    g.lock().unwrap_or_else(PoisonError::into_inner).answer(&coins);
+    let answered = g.lock().unwrap_or_else(PoisonError::into_inner).answer(&coins);
+    if let Err(why) = answered {
+        panic!("{why}");
+    }
+    if let Some(why) = mch.stopped.take() {
+        panic!("{}", flock_live::firewall::refused(format!("Rust's masking refused the rep ({why}) where the Lean frame went on")));
+    }
     coins
 }
 
@@ -5297,6 +5343,9 @@ fn main() {
             serve_loop(move || server_of(&sv, &st, &inst, tables))
         }
         "prove" => {
+            if firewall_on(&st) {
+                flock_live::firewall::lean_tap(&flock_live::firewall::lean_frame_exe()).unwrap_or_else(|e| refuse(e));
+            }
             let runs: usize = arg("--runs", "1").parse().unwrap();
             let warm: usize = arg("--warm", "0").parse().unwrap();
             let dump = arg("--dump", "");
