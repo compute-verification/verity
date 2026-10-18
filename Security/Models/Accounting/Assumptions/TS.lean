@@ -152,7 +152,10 @@ every accepted path:
   over `S`: a paid unit folds its words, a folded unit its committed ones, and only a whole unit skips its fold.
 
 It reads neither the draw nor the proofs: the modes are the run's, and the proofs only vouch for the drawn units
-(`Accounting.Guarantees.TS.DrawnRightOff`). With `Σ wt = S·N_w` and the share covering every unit that isn't good
+(`Accounting.Guarantees.TS.DrawnRightOff`). Under live coins a unit's coin is the live coin its noise reads; under
+seeded (Fiat–Shamir) coins it is read per query, on the circuit's cut layer: the layer's coins are the seed answers the
+prover queried, and a unit's coin the query its noise's seed answers (decision 128; it may stay on that layer because
+it reads no committed value). With `Σ wt = S·N_w` and the share covering every unit that isn't good
 (`DrawnLayer.Covers`), it gives `(1 − Σ_w d_w / S)·N_w` fixed words. It stays an assumption until the play's fixed and
 folded words are defined from the committed values (the adaptive model). -/
 def UnitFixed {C B : Type} {S m s : ℕ} {J Q Pos V : Type} [Fintype J] (P : Play (Paths C m × B) S K T L U)
