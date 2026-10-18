@@ -1,7 +1,8 @@
 """The exact-int8 profile's linear and attention (`TargetProfile.int8_exact`) as Definitions: what `verity_vllm.engine.int8_exact`
 (the plain int8 linear) and `verity_vllm.engine.int8_attention` (compute accounting's integer LUT softmax) compute in torch, on the
-CPU and the GPU alike.  Every matmul is the shared s8 family's plain arm (`verity.ml.circuits.ops.s8.S8Matmul_v1`: NOISE "none",
-no tail, COMMIT "final"); every rounding is its own primitive, so the census counts each.
+CPU and the GPU alike.  The linear's product is `verity.ml.circuits.ops.gemm.ScaledMmS8_v1` over the sm_120 s8 IMMA step; the
+attention's matmuls are the shared s8 family's plain arm (`verity.ml.circuits.ops.s8.S8Matmul_v1`: NOISE "none", no tail, COMMIT
+"final"); every rounding is its own primitive, so the census counts each.
 
 RN32 / RN64 are float32 / float64 round to nearest even, one rounding per operation; every division is a true IEEE division.
 
@@ -10,13 +11,14 @@ The quantizer (`Int8QuantElement`, one code; `Int8RowQuant{K}`, one scale over K
     s    = RN32(max(max_k |x_k|, RN32(1e-30)) / 127)            the max is exact, so its order is not part of the value
     X_k  = s8(clamp(rint(RN32(x_k / s)), -127, 127))           F32Div, then F32Rint (ties to even), then the exact clamp and cast
 
-The linear (`Int8Linear{K,N}` on one token row: `Int8RowQuant`, then `Int8ScaledMm`), weights W [N, K] s8 with per-row scales s_w:
+The linear (`Int8Linear{K,N}` on one token row: `Int8RowQuant`, then `ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}`, two Calls
+in a served Program), weights W [N, K] s8 with per-row scales s_w; per output, `ScaledMmS8Coordinate_v1`:
 
-    Y_n  = sum_k X_k W_nk                                      S8Matmul_v1{N, K}, exact in s32 (`s8.no_wrap`)
-    y_n  = bf16(RN32(RN32(RN32(Y_n) s_a) s_w[n]))              `Int8Dequant`: the activation scale first
+    Y_n  = sum_k X_k W_nk                                      K/32 satfinite IMMA steps from 0, exact: |Y_n| <= 127 * 128 * K < 2^31
+    y_n  = bf16(RN32(RN32(RN32(Y_n) s_a) s_w[n]))              S32ToF32Rn, F32MulV2 twice (the activation scale first), F2fpBf16
 
-The attention (`Int8LutAttentionWindow{N,S,H,G,D,SCALE}`: one request's window of S keys and its last N query rows, H query heads over
-G KV heads; `Int8LutAttentionRow{D,S,SCALE}` one query row at position pos = S - 1 of its own S keys):
+The attention, per request and KV head (`Int8KvQuant{S,D}`: its window of S keys) and per (query row, head) (`Int8LutAttentionRow{D,S,
+SCALE}`: the row at position pos = S - 1 over its own S keys, the first S rows of its KV head's `Int8KvQuant`):
 
     Q'   = Int8RowQuant{D}(q), scale s_q                       one scale per (head, token)
     K'   = Int8StaticQuant{D}(k, s_k)                          ONE scale per (layer, KV head) (`engine.int8_k_scales`)
@@ -29,10 +31,10 @@ G KV heads; `Int8LutAttentionRow{D,S,SCALE}` one query row at position pos = S -
     out  = bf16(RN32(RN32(RN32(RN32(Y_c) r) + RN32(z V'_0c)) s_v[c]))      `Int8AttnOut`: apv_ref.py's served f, no dither
 
 s_q s_k is exact in float64 (`F32MulWide`), and A is one 32-bit word: a value several proof units read is at most 32 bits.  What
-every row of a KV group reads (K', V', s_v, f32(V'_0)) is computed once, by the window.
+every row of a KV group reads (K', V', s_v, f32(V'_0)) is computed once, by `Int8KvQuant`.
 
 The primitives here are the ones no registry had: `F32Rint`, `F32ToS8Rzi`, `S8ToF32`, `F32MulWide`, `F64Mul`, `F64ToU32RniSat`,
-`LutIndex`, `Exp2Lut127`.  Each is total on encodings; the docstrings say where the served path's domain is narrower.
+`LutIndex`, `Exp2Lut127` (the LUT softmax's 256-entry gather, a u8 index to its 32-bit entry).  Each is total on encodings; the docstrings say where the served path's domain is narrower.
 """
 from __future__ import annotations
 
@@ -42,6 +44,7 @@ import struct
 import numpy as np
 
 from verity.ml.circuits.defs import bind, composite, primitive
+from verity.ml.circuits.ops import gemm as GEMM
 from verity.ml.circuits.ops import prims as CP
 from verity.ml.circuits.ops import s8 as S8
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, I32Add, I32Le, SelectI32
@@ -129,17 +132,18 @@ def F64ToU32RniSat(x: int) -> int:
     return int(min(np.rint(v), float(A_CAP)))
 
 
-@primitive("LutIndex", 1, [("d", I32), ("a", I32)], I32, conformance=_CONF)
+@primitive("LutIndex", 1, [("d", I32), ("a", I32)], V8, conformance=_CONF)
 def LutIndex(d: int, a: int) -> int:
-    """t = min(floor(max(d, 0) a / 2^32), 255), d a signed 32-bit word and a an unsigned one: fattn's min(umulhi(m - S, A), 255).
-    The served d = m - S is in [0, 2^23), so torch's int64 product does not wrap."""
+    """t = min(floor(max(d, 0) a / 2^32), 255) as an unsigned byte, d a signed 32-bit word and a an unsigned one: fattn's
+    min(umulhi(m - S, A), 255).  The served d = m - S is in [0, 2^23), so torch's int64 product does not wrap."""
     return min((max(_s32(d), 0) * (a & 0xFFFFFFFF)) >> 32, LUT_SIZE - 1)
 
 
-@primitive("Exp2Lut127", 1, [("t", I32)], I32, conformance=_CONF)
+@primitive("Exp2Lut127", 1, [("t", V8)], I32, conformance=_CONF)
 def Exp2Lut127(t: int) -> int:
-    """LUT[t] = rint(127 2^(-t/16)), the signed t clamped to [0, 255] (`LutIndex`'s range already)."""
-    return LUT[min(max(_s32(t), 0), LUT_SIZE - 1)]
+    """The LUT softmax's gather (`engine.int8_attention.lut_e`'s ``LUT[t]``): LUT[t] = rint(127 2^(-t/16)) for the unsigned byte t,
+    a 256-entry table whose entries are in [0, 127], as a 32-bit word."""
+    return LUT[t & 0xFF]
 
 
 C_TOP = CP.const(32, bits_of(float(TOP)))
@@ -199,38 +203,19 @@ def Int8RowQuant(B, S, x):
 # ---- the linear ----------------------------------------------------------------------------------------------------------
 
 
-@composite("Int8Dequant", 1, [], lambda S: ((("y", I32), ("sa", F32), ("sw", F32)), BF16), conformance=_CONF)
-def Int8Dequant(B, S, y, sa, sw):
-    """bf16(RN32(RN32(RN32(y) s_a) s_w))."""
-    return B.call(P.F32ToBf16Rn, B.call(P.F32Mul, B.call(P.F32Mul, B.call(I32ToF32, y), sa), sw))
-
-
-@composite("Int8ScaledDot", 1, ["K"], lambda S: ((("xq", Array(S.K, V8)), ("sa", F32), ("w", Array(S.K, V8)), ("sw", F32)), BF16),
-           conformance=_CONF)
-def Int8ScaledDot(B, S, xq, sa, w, sw):
-    """One output: `S8Matmul_v1{N=1, K}`'s plain arm against one weight row, then `Int8Dequant`."""
-    y = B.call(bind(S8.S8Matmul, **plain_arm(S.K, 1)), xq, w.reshape(Array(1, Array(S.K, V8))))
-    return B.call(Int8Dequant, y[0], sa, sw)
-
-
-def _mm_sig(S):
-    return (("xq", Array(S.K, V8)), ("sa", F32), ("w", Array(S.N, Array(S.K, V8))), ("sw", Array(S.N, F32))), Array(S.N, BF16)
-
-
-@composite("Int8ScaledMm", 1, ["K", "N"], _mm_sig, conformance=_CONF)
-def Int8ScaledMm(B, S, xq, sa, w, sw):
-    """One quantized row against the N weight rows, `Int8ScaledDot` per output: the N members read only the parameters, so the
-    query of record cuts one member (`verity.ml.circuits.cut.separable`) rather than the whole fan-in."""
-    return B.batch(bind(Int8ScaledDot, K=S.K), xq, sa, w, sw, axes=(None, None, 0, 0))
+def scaled_mm(K: int, N: int):
+    """`ScaledMmS8_v1{K, N, DOT=BlackwellS8ImmaDot32_v1}` (`verity.ml.circuits.ops.gemm`): one quantized token row against the N
+    weight rows, `ScaledMmS8Coordinate_v1` per output, each a `Q_word` unit (`verity.ml.circuits.cut.separable`)."""
+    return bind(GEMM.ScaledMmS8, K=K, N=N, **GEMM.GEMM_SM120_S8)
 
 
 @composite("Int8Linear", 1, ["K", "N"],
            lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, V8))), ("sw", Array(S.N, F32))),
                       Tuple(Array(S.K, V8), F32, Array(S.N, BF16))), conformance=_CONF)
 def Int8Linear(B, S, x, w, sw):
-    """The plain int8 linear on one token row: (X, s_a, y), `Int8RowQuant` then `Int8ScaledMm`."""
+    """The plain int8 linear on one token row: (X, s_a, y), `Int8RowQuant` then `ScaledMmS8_v1` (`scaled_mm`)."""
     q = B.call(bind(Int8RowQuant, K=S.K), x)
-    return tuple_of(q[0], q[1], B.call(bind(Int8ScaledMm, K=S.K, N=S.N), q[0], q[1], w, sw))
+    return tuple_of(q[0], q[1], B.call(scaled_mm(S.K, S.N), q[0], q[1], w, sw))
 
 
 # ---- the attention -------------------------------------------------------------------------------------------------------
@@ -280,7 +265,7 @@ def _pad_rows(B, rows: list[Coll], n: int) -> Coll:
 
 def _row_sig(S):
     D, K = S.D, S.S
-    return ((("q", Array(D, BF16)), ("kq", Array(K, Array(D, V8))), ("sk", F32), ("vq", Array(D, Array(K, V8))), ("sv", Array(D, F32)),
+    return ((("q", Array(D, BF16)), ("kq", Array(K, Array(D, V8))), ("sk", F32), ("vq", Array(K, Array(D, V8))), ("sv", Array(D, F32)),
              ("v0", Array(D, F32))), Array(D, BF16))
 
 
@@ -288,13 +273,14 @@ def _row_sig(S):
 def Int8LutAttentionRow(B, S, q, kq, sk, vq, sv, v0):
     """One query row over its S keys 0..pos (pos = S - 1): Q' (`Int8RowQuant`), the scores (`S8Matmul_v1{S, D}`), A
     (`Int8AttnScale`), the LUT softmax (`Int8LutSoftmax`), P V' (`S8Matmul_v1{D, S'}` over the keys zero-padded to a multiple of
-    32, P in [0, 127]) and the output (`Int8AttnOut` per channel).  `vq` is V' by channel, `sv` its per-channel scales, `v0` f32(V'_0)."""
+    32, P in [0, 127]) and the output (`Int8AttnOut` per channel).  `kq` and `vq` are K' and V' by key (`Int8KvQuant`'s first S
+    rows), `sk` the KV head's K scale, `sv` V's per-channel scales and `v0` f32(V'_0)."""
     D, K = S.D, S.S
     qq = B.call(bind(Int8RowQuant, K=D), q)
     sc = B.call(bind(S8.S8Matmul, **plain_arm(D, K)), qq[0], kq)
     soft = B.call(bind(Int8LutSoftmax, S=K), sc, B.call(bind(Int8AttnScale, SCALE=S.SCALE), qq[1], sk))
     p = _pad_rows(B, [soft[0]], K)[0]
-    v = _pad_rows(B, [vq[c] for c in range(D)], K)
+    v = _pad_rows(B, [Coll(Array(K, V8), concat([vq[j][c].refs for j in range(K)])) for c in range(D)], K)
     y = B.call(bind(S8.S8Matmul, **plain_arm(padded(K), D, (0, TOP))), p, v)
     return B.batch(Int8AttnOut, y, soft[1], soft[2], v0, sv, axes=(0, None, None, 0, 0))
 
@@ -310,37 +296,24 @@ def Int8ColumnQuant(B, S, v):
                     Coll(Array(D, F32), concat([out[c][1].refs for c in range(D)])))
 
 
-def _window_sig(S):
-    N, K, H, G, D = S.N, S.S, S.H, S.G, S.D
-    if H % G or not 0 < N <= K:
-        raise ValueError(f"Int8LutAttentionWindow: H = {H} query heads over G = {G} KV heads, N = {N} rows of an S = {K}-key window")
-    kv = Array(K, Array(G, Array(D, BF16)))
-    return (("q", Array(N, Array(H, Array(D, BF16)))), ("k", kv), ("v", kv), ("ks", Array(G, F32))), Array(N, Array(H, Array(D, BF16)))
+def _kv_sig(S):
+    K, D = S.S, S.D
+    kv = Array(K, Array(D, BF16))
+    return (("k", kv), ("v", kv), ("sk", F32)), Tuple(Array(K, Array(D, V8)), Array(K, Array(D, V8)), Array(D, F32), Array(D, F32))
 
 
-@composite("Int8LutAttentionWindow", 1, ["N", "S", "H", "G", "D", "SCALE"], _window_sig, conformance=_CONF)
-def Int8LutAttentionWindow(B, S, q, k, v, ks):
-    """One request's window: its S keys (K after RoPE and V, bf16) and its last N query rows (positions S - N .. S - 1), H query
-    heads over G KV heads (head h reads KV head h // (H / G)), the layer's K scales `ks`.  Per KV head: K' per key
-    (`Int8StaticQuant`), V' per channel over the window (`Int8ColumnQuant`) and f32(V'_0); per (row, head): `Int8LutAttentionRow` over the keys
-    0..pos."""
-    N, K, H, G, D = S.N, S.S, S.H, S.G, S.D
-    rep = H // G
-    out: dict[tuple[int, int], Coll] = {}
-    for g in range(G):
-        kg = Coll(Array(K, Array(D, BF16)), concat([k[j][g].refs for j in range(K)]))
-        vg = Coll(Array(K, Array(D, BF16)), concat([v[j][g].refs for j in range(K)]))
-        kq = B.batch(bind(Int8StaticQuant, K=D), kg, ks[g], axes=(0, None))
-        vq = B.call(bind(Int8ColumnQuant, S=K, D=D), vg)
-        v0 = B.batch(S8ToF32, Coll(Array(D, V8), concat([vq[0][c][0].refs for c in range(D)])), axes=(0,))
-        for i in range(N):
-            n = K - N + i + 1
-            vn = Coll(Array(D, Array(n, V8)), concat([vq[0][c][0:n].refs for c in range(D)]))
-            row = bind(Int8LutAttentionRow, D=D, S=n, SCALE=S.SCALE)
-            for h in range(g * rep, (g + 1) * rep):
-                out[(i, h)] = B.call(row, q[i][h], kq[0:n], ks[g], vn, vq[1], v0)
-    return Coll(Array(N, Array(H, Array(D, BF16))), concat([out[(i, h)].refs for i in range(N) for h in range(H)]))
+@composite("Int8KvQuant", 1, ["S", "D"], _kv_sig, conformance=_CONF)
+def Int8KvQuant(B, S, k, v, sk):
+    """One KV head's window of S keys (K after RoPE and V, bf16) under its K scale `sk`: (K', V' by key, s_v, f32(V'_0)).  K' per
+    key (`Int8StaticQuant`), V' per channel over the window (`Int8ColumnQuant`), and its first row widened (`S8ToF32`): what every
+    query row of the KV head reads (`Int8LutAttentionRow`), computed once."""
+    K, D = S.S, S.D
+    kq = B.batch(bind(Int8StaticQuant, K=D), k, sk, axes=(0, None))
+    cq = B.call(bind(Int8ColumnQuant, S=K, D=D), v)
+    vq = Coll(Array(K, Array(D, V8)), concat([cq[0][c][j].refs for j in range(K) for c in range(D)]))
+    v0 = B.batch(S8ToF32, vq[0], axes=(0,))
+    return tuple_of(kq, vq, cq[1], v0)
 
 
-INT8_COMPOSITES = [Int8QuantElement, Int8RowScale, Int8StaticQuant, Int8RowQuant, Int8Dequant, Int8ScaledDot, Int8ScaledMm, Int8Linear,
-                   Int8AttnScale, Int8LutSoftmax, Int8AttnOut, Int8LutAttentionRow, Int8ColumnQuant, Int8LutAttentionWindow]
+INT8_COMPOSITES = [Int8QuantElement, Int8RowScale, Int8StaticQuant, Int8RowQuant, Int8Linear, Int8AttnScale, Int8LutSoftmax,
+                   Int8AttnOut, Int8LutAttentionRow, Int8ColumnQuant, Int8KvQuant]

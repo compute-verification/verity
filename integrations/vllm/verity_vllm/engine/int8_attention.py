@@ -100,28 +100,44 @@ def lut_softmax(S: torch.Tensor, a: torch.Tensor, causal: torch.Tensor) -> tuple
     return F.pad(e[..., 1:], (1, 0)), r, z
 
 
-def window_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, k_scales: torch.Tensor, scale: float) -> torch.Tensor:
-    """out [n, H, d] bf16 of the window's last n query rows q [n, H, d] over its keys k and values v [s, G, d] (bf16, H a
-    multiple of G), with the layer's K scales k_scales [G] (float32)."""
+def kv_quant(k: torch.Tensor, v: torch.Tensor, k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """What every query row of a window reads, per KV head g, from its keys k and values v [s, G, d] (bf16) and the layer's K scales
+    k_scales [G] (float32): (K' int8 [G, s, d], V' int8 [G, s, d], s_v float32 [G, d], f32(V'(0)) float32 [G, d])."""
+    s, g_heads, d = k.shape
+    if s > MAX_KEYS or d > MAX_HEAD_DIM or tuple(v.shape) != (s, g_heads, d) or tuple(k_scales.shape) != (g_heads,):
+        raise ValueError(f"int8 attention: keys {tuple(k.shape)}, values {tuple(v.shape)}, {tuple(k_scales.shape)} K scales (head dim "
+                         f"at most {MAX_HEAD_DIM}, at most {MAX_KEYS} keys)")
+    kq = torch.stack([quant_static(k[:, g].float(), k_scales[g]) for g in range(g_heads)]).to(torch.int8)
+    vi, sv = quant(v.float().transpose(0, 1), 1)
+    vq = vi.to(torch.int8).contiguous()
+    return kq, vq, sv[:, 0].contiguous(), vq[:, 0].float()
+
+
+def window_rows(q: torch.Tensor, kq: torch.Tensor, vq: torch.Tensor, sv: torch.Tensor, v0: torch.Tensor, k_scales: torch.Tensor,
+                scale: float) -> torch.Tensor:
+    """out [n, H, d] bf16 of the window's last n query rows q [n, H, d] (H a multiple of G) over `kv_quant`'s results for its s keys."""
     n, h, d = q.shape
-    s, g_heads, _ = k.shape
-    if h % g_heads or not 0 < n <= s or s > MAX_KEYS or d > MAX_HEAD_DIM or tuple(k_scales.shape) != (g_heads,):
-        raise ValueError(f"int8 attention: {h} query heads over {g_heads} KV heads ({tuple(k_scales.shape)} K scales), head dim {d} "
-                         f"(at most {MAX_HEAD_DIM}), {n} rows of a {s}-key window (at most {MAX_KEYS})")
+    g_heads, s, _ = kq.shape
+    if h % g_heads or not 0 < n <= s:
+        raise ValueError(f"int8 attention: {h} query heads over {g_heads} KV heads, {n} rows of a {s}-key window")
     rep = h // g_heads
     dev = q.device
     causal = torch.arange(s, device=dev)[None, :] <= torch.arange(s - n, s, device=dev)[:, None]
     out = torch.empty(n, h, d, dtype=torch.bfloat16, device=dev)
     for g in range(g_heads):
         qi, sq = quant(q[:, g * rep:(g + 1) * rep].transpose(0, 1).float(), -1)
-        ki = quant_static(k[:, g].float(), k_scales[g])
-        S = int_mm(qi.reshape(rep * n, d), ki).view(rep, n, s)
+        S = int_mm(qi.reshape(rep * n, d), kq[g]).view(rep, n, s)
         p, r, z = lut_softmax(S, fixed_point_a(sq, k_scales[g], scale), causal)
-        vi, sv = quant(v[:, g].float(), 0)
-        y = int_mm(p.reshape(rep * n, s), vi.T).view(rep, n, d)
-        f = ((y.float() * r[..., None]) + (z[..., None] * vi[0])) * sv
+        y = int_mm(p.reshape(rep * n, s), vq[g].T).view(rep, n, d)
+        f = ((y.float() * r[..., None]) + (z[..., None] * v0[g])) * sv[g]
         out[:, g * rep:(g + 1) * rep] = f.transpose(0, 1).to(torch.bfloat16)
     return out
+
+
+def window_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, k_scales: torch.Tensor, scale: float) -> torch.Tensor:
+    """out [n, H, d] bf16 of the window's last n query rows q [n, H, d] over its keys k and values v [s, G, d] (bf16, H a
+    multiple of G), with the layer's K scales k_scales [G] (float32): `window_rows` over `kv_quant`."""
+    return window_rows(q, *kv_quant(k, v, k_scales), k_scales, scale)
 
 
 def window_of(key_cache: torch.Tensor, value_cache: torch.Tensor, blocks: torch.Tensor, s: int) -> tuple[torch.Tensor, torch.Tensor]:

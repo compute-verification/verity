@@ -223,10 +223,10 @@ def attention_checks(doc: dict[str, Any], taps: Any, tapped: list[str]) -> bool:
             rec = {"phase": phase, "module": name, "call": r["call"], "request": r["request"], **AG.compare(r)}
             doc["attention_equal"].append(rec)
             print(f"[int8] attn {phase} {name} call {rec['call']} req {rec['request']}: s={rec['s']} n={rec['n']} "
-                  f"rerun!={rec['rerun_mismatch']} cpu!={rec['cpu_mismatch']} oracle!={rec['oracle_mismatch']} "
+                  f"rerun!={rec['rerun_mismatch']} cpu!={rec['cpu_mismatch']} oracle!={rec['oracle_mismatch']} kv!={rec['kv_mismatch']} "
                   f"fattn_ref={rec['fattn_ref']} k_clamped={rec['k_clamped']} cache!={rec.get('cache_mismatch', '-')}", flush=True)
     eq = doc["attention_equal"]
-    keys = ("rerun_mismatch", "cpu_mismatch", "oracle_mismatch", "cache_mismatch")
+    keys = ("rerun_mismatch", "cpu_mismatch", "oracle_mismatch", "kv_mismatch", "cache_mismatch")
     doc["attention_totals"] = t = {"compared": len(eq), "prefills": sum(r["n"] == r["s"] for r in eq), "words": sum(r["words"] for r in eq),
                                    **{k: sum(r.get(k, 0) for r in eq) for k in keys},
                                    "fattn_ref_rows": sum(r["fattn_ref"] is not None for r in eq),

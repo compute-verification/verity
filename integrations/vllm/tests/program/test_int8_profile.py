@@ -63,8 +63,9 @@ def test_weights_record_carries_s8_weights_and_row_scales_and_the_map_names_them
 M, K, N = 5, 64, 16
 A_X, A_XQ, A_SA, A_Y, A_W, A_WS = 500, 501, 502, 503, 2, 3
 LIN_SCHEMA = "verity_int8::linear(Tensor x, Tensor w, Tensor s_w) -> (Tensor, Tensor, Tensor)"
-WIN_SCHEMA = ("verity_int8::window_attention(Tensor q, Tensor key_cache, Tensor value_cache, Tensor blocks, SymInt s, Tensor k_scales, "
-              "float scale) -> Tensor")
+KV_SCHEMA = ("verity_int8::kv_quant(Tensor key_cache, Tensor value_cache, Tensor blocks, SymInt s, Tensor k_scales) "
+             "-> (Tensor, Tensor, Tensor, Tensor)")
+ROWS_SCHEMA = "verity_int8::window_rows(Tensor q, Tensor kq, Tensor vq, Tensor sv, Tensor v0, Tensor k_scales, float scale) -> Tensor"
 UA_SCHEMA = ("vllm::unified_attention_with_output(Tensor query, Tensor key, Tensor value, Tensor(a!) output, str layer_name, "
              "Tensor? output_scale=None, Tensor? output_block_scale=None, Tensor? kv_cache_dummy_dep=None) -> ()")
 COPY_SCHEMA = "aten::copy_(Tensor(a!) self, Tensor src, bool non_blocking=False) -> Tensor(a!)"
@@ -113,7 +114,7 @@ def test_int8_linear_resolves_to_the_quantizer_then_the_product_with_both_weight
     assert spec_label(r.spec) == f"Int8RowQuant_v1{{K={K}}}" and r.rows == M and r.consumed
     assert [type(o) for o in r.operands] == [PerRow] and [type(o) for o in r.outputs] == [PerRow, PerRow]
     (mm,) = r.also
-    assert spec_label(mm.spec) == f"Int8ScaledMm_v1{{K={K},N={N}}}" and mm.rows == M and mm.consumed == ()
+    assert spec_label(mm.spec) == f"ScaledMmS8_v1{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}}" and mm.rows == M and mm.consumed == ()
     assert mm.operands[:2] == r.outputs and [type(o) for o in mm.operands[2:]] == [Shared, Shared] and [type(o) for o in mm.outputs] == [PerRow]
     assert mm.roots == (None, None, "model.layers.0.self_attn.qkv_proj.weight", "model.layers.0.self_attn.qkv_proj.weight_scale")
 
@@ -135,39 +136,52 @@ def _cache(which):
     return view(A_KV, (NB, BS, G, D), "bfloat16", strides=(BS * G * 2 * D, G * 2 * D, 2 * D, 1), offset=0 if which == "k" else D)
 
 
-def _attention(T, wins):
-    """`unified_attention_with_output` over T query rows with one window per (q0, n, s, result alloc), each copied into its rows."""
+def _attention(T, wins, rows_reads=None):
+    """`unified_attention_with_output` over T query rows with one kv_quant / window_rows pair per (q0, n, s, result alloc): kv_quant's
+    four results at allocs res + 10..13, window_rows reading them (or `rows_reads`) and its result copied into its rows."""
     q, out = view(A_Q, (T, H, D), "bfloat16"), view(A_OUT, (T, H, D), "bfloat16")
     ev, i = [DispatchEnter(1, None, 0, "forward", "vllm.unified_attention_with_output.default", UA_SCHEMA,
                            [q, view(700, (T, G, D), "bfloat16"), view(701, (T, G, D), "bfloat16"), out, LAYER], {}, 7, LAYER)], 2
+    ks = view(A_KS, (G,), "float32")
     for q0, n, s, res in wins:
-        args = [view(A_Q, (n, H, D), "bfloat16", strides=(H * D, D, 1), offset=q0 * H * D), _cache("k"), _cache("v"),
-                view(A_BT, (4,), "int32", offset=0), s, view(A_KS, (G,), "float32"), D ** -0.5]
-        ev += [DispatchEnter(i, 1, 0, "forward", "verity_int8.window_attention.default", WIN_SCHEMA, args, {}, 7, LAYER),
-               DispatchExit(i, view(res, (n, H, D), "bfloat16")),
-               DispatchEnter(i + 1, 1, 0, "forward", "aten.copy_.default", COPY_SCHEMA,
+        kv = (view(res + 10, (G, s, D), "int8"), view(res + 11, (G, s, D), "int8"), view(res + 12, (G, D), "float32"),
+              view(res + 13, (G, D), "float32"))
+        args = [view(A_Q, (n, H, D), "bfloat16", strides=(H * D, D, 1), offset=q0 * H * D), *(rows_reads or kv), ks, D ** -0.5]
+        ev += [DispatchEnter(i, 1, 0, "forward", "verity_int8.kv_quant.default", KV_SCHEMA,
+                             [_cache("k"), _cache("v"), view(A_BT, (4,), "int32", offset=0), s, ks], {}, 7, LAYER),
+               DispatchExit(i, kv),
+               DispatchEnter(i + 1, 1, 0, "forward", "verity_int8.window_rows.default", ROWS_SCHEMA, args, {}, 7, LAYER),
+               DispatchExit(i + 1, view(res, (n, H, D), "bfloat16")),
+               DispatchEnter(i + 2, 1, 0, "forward", "aten.copy_.default", COPY_SCHEMA,
                              [view(A_OUT, (n, H, D), "bfloat16", strides=(H * D, D, 1), offset=q0 * H * D), view(res, (n, H, D), "bfloat16")], {}, 7, LAYER),
-               DispatchExit(i + 1, None)]
-        i += 2
+               DispatchExit(i + 2, None)]
+        i += 3
     return _tree(ev + [DispatchExit(1, None)])
 
 
-def test_int8_attention_resolves_one_window_per_request_with_the_headers_k_scales():
+def test_int8_attention_resolves_kv_quant_per_kv_head_then_a_row_per_row_and_head():
     # r0 prefills 3 rows (positions 0..2), r1 decodes position 5: rows [r0:0, r0:1, r0:2, r1:5]
     rows = [("r0", 0), ("r0", 1), ("r0", 2), ("r1", 5)]
     ctx = _ctx(rows, {"r0": 3, "r1": 6}, {"r0": [2], "r1": [5]})
     r = Int8AttentionScope().match(_attention(4, [(0, 3, 3, A_T0), (3, 1, 6, A_T1)]), ctx)
     assert isinstance(r, Compute), r
     computes = [r, *r.also]
-    assert [spec_label(c.spec) for c in computes] == [f"Int8LutAttentionWindow_v1{{N=3,S=3,H={H},G={G},D={D},SCALE={D ** -0.5}}}",
-                                                       f"Int8LutAttentionWindow_v1{{N=1,S=6,H={H},G={G},D={D},SCALE={D ** -0.5}}}"]
-    c0, c1 = computes
-    assert c0.rows == c1.rows == 1
-    assert c0.operands[1].indices == ((32, 33, 34),) and c1.operands[1].indices == ((80, 81, 82, 83, 84, 85),)
-    assert c0.operands[3] == Const(32, tuple(KBITS), "k_scale")
-    assert isinstance(c1.outputs[0], GatherMany) and c1.outputs[0].view.offset == 3 * H * D and c1.outputs[0].indices == ((0,),)
-    assert c0.operands[0].view.offset == 0 and c1.operands[0].view.offset == 3 * H * D
-    assert set(r.consumed) == {1, 2, 3, 4, 5}
+    sc = D ** -0.5
+    kvq = lambda s: [f"Int8KvQuant_v1{{S={s},D={D}}}"] * G  # noqa: E731
+    row = lambda p: [f"Int8LutAttentionRow_v1{{D={D},S={p},SCALE={sc}}}"] * H  # noqa: E731
+    assert [spec_label(c.spec) for c in computes] == kvq(3) + row(1) + row(2) + row(3) + kvq(6) + row(6)
+    assert all(c.rows == 1 for c in computes) and set(r.consumed) == set(range(1, 8))
+    k1 = computes[1]                              # r0's KV head 1: its slots of head 1 in the caches, its K scale, kv_quant's head-1 slabs
+    assert k1.operands[0].indices == ((32, 33, 34),) and k1.operands[0].view.offset == 2 * D and k1.operands[0].view.shape == (NB * BS, D)
+    assert k1.operands[1].view.offset == 3 * D and k1.operands[2] == Const(32, KBITS[1], "k_scale")
+    assert [(o.view.alloc, o.view.offset, o.view.shape) for o in k1.outputs] == [(A_T0 + 10, 3 * D, (3, D)), (A_T0 + 11, 3 * D, (3, D)),
+                                                                                 (A_T0 + 12, D, (D,)), (A_T0 + 13, D, (D,))]
+    assert computes[G + 1 * H + 2].operands[1].view.shape == (2, D)      # r0's row 1 (position 1), head 2: keys 0..1
+    last = computes[-1]                           # r1's position 5, head 3 (KV head 1): all six keys, its output row and head
+    assert [type(o) for o in last.operands] == [Shared, Shared, Const, Shared, Shared, Shared] and last.operands[2] == Const(32, KBITS[1], "k_scale")
+    assert (last.operands[0].view.offset, last.operands[1].view.alloc, last.operands[1].view.offset, last.operands[1].view.shape) == (
+        3 * H * D + 3 * D, A_T1 + 10, 6 * D, (6, D))
+    assert last.outputs == (Shared(view(A_OUT, (D,), "bfloat16", offset=3 * H * D + 3 * D)),)
 
 
 def test_int8_attention_refuses_without_the_headers_k_scales_or_a_wrong_window():
@@ -176,6 +190,9 @@ def test_int8_attention_refuses_without_the_headers_k_scales_or_a_wrong_window()
     assert isinstance(r, Unsupported) and "int8_k_scales" in r.reason
     r = Int8AttentionScope().match(_attention(3, [(0, 3, 4, A_T0)]), _ctx(rows, {"r0": 3}, {"r0": [2]}))
     assert isinstance(r, Unsupported) and "last rows" in r.reason
+    other = (view(900, (G, 3, D), "int8"), view(901, (G, 3, D), "int8"), view(902, (G, D), "float32"), view(903, (G, D), "float32"))
+    r = Int8AttentionScope().match(_attention(3, [(0, 3, 3, A_T0)], rows_reads=other), _ctx(rows, {"r0": 3}, {"r0": [2]}))
+    assert isinstance(r, Unsupported) and "does not read its kv_quant" in r.reason
 
 
 @pytest.mark.parametrize("T", [1])

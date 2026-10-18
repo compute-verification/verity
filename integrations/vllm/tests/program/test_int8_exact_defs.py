@@ -58,15 +58,29 @@ def test_int8_linear_is_the_served_linear(seed):
 @pytest.mark.parametrize("n,s,h,g_heads,spread,ks_scale", [(5, 5, 2, 1, 4.0, 1.0), (1, 40, 4, 2, 4.0, 1.0),
                                                            (3, 33, 2, 2, 8.0, 0.25), (2, 6, 2, 1, 1.0, 40.0)])
 def test_int8_lut_attention_is_the_served_attention(n, s, h, g_heads, spread, ks_scale):
-    """Prefill (n = s) and decode rows, keys past one k step (s > 32), K clamped by a small scale (ks_scale < 1) and A saturated
-    by a large one."""
+    """`Int8KvQuant` per KV head is `kv_quant`'s values, and `Int8LutAttentionRow` per (row, head) over its first pos + 1 rows is
+    `window_attention`: prefill (n = s) and decode rows, keys past one k step (s > 32), K clamped by a small scale (ks_scale < 1)
+    and A saturated by a large one."""
     g = torch.Generator().manual_seed(n * 1000 + s)
     d, scale = 32, 32 ** -0.5
     q, k, v = _rows(g, n, h, d, spread=spread), _rows(g, s, g_heads, d, spread=spread), _rows(g, s, g_heads, d, spread=spread)
     ks = (k.float().abs().amax(dim=(0, 2)) / 127 * ks_scale).float()
+    kq, vq, sv, v0 = IA.kv_quant(k, v, ks)
     want = IA.window_attention(q, k, v, ks, scale)
-    got = evaluate(bind(X.Int8LutAttentionWindow, N=n, S=s, H=h, G=g_heads, D=d, SCALE=scale), _bf16(q), _bf16(k), _bf16(v), _f32(ks))
-    assert list(got) == _bf16(want)
+    kvd = bind(X.Int8KvQuant, S=s, D=d)
+    for gi in range(g_heads):
+        got = evaluate(kvd, _bf16(k[:, gi]), _bf16(v[:, gi]), _f32(ks[gi:gi + 1])[0])
+        sd = s * d
+        assert list(got[:sd]) == _s8(kq[gi]) and list(got[sd:2 * sd]) == _s8(vq[gi])
+        assert list(got[2 * sd:2 * sd + d]) == _f32(sv[gi]) and list(got[2 * sd + d:]) == _f32(v0[gi])
+    rep = h // g_heads
+    for i in range(n):
+        p = s - n + i + 1
+        row = bind(X.Int8LutAttentionRow, D=d, S=p, SCALE=scale)
+        for hd in range(h):
+            gi = hd // rep
+            got = evaluate(row, _bf16(q[i, hd]), _s8(kq[gi, :p]), _f32(ks[gi:gi + 1])[0], _s8(vq[gi, :p]), _f32(sv[gi]), _f32(v0[gi]))
+            assert list(got) == _bf16(want[i, hd]), (i, hd)
 
 
 @pytest.mark.parametrize("sq,sk,scale", [(0.01, 0.02, 128 ** -0.5), (1e-30 / 127, 1e-30 / 127, 0.125), (3.0, 100.0, 1.0)])
@@ -98,7 +112,8 @@ def test_primitives_at_their_edges():
     assert X.F64ToU32RniSat.evaluate(_f64(-1.0)) == 0 and X.F64ToU32RniSat.evaluate(_f64(math.nan)) == 0
     assert X.LutIndex.evaluate(5, 0xFFFFFFFF) == 4 and X.LutIndex.evaluate(300, 0xFFFFFFFF) == 255
     assert X.LutIndex.evaluate(0xFFFFFFFF, 0xFFFFFFFF) == 0 and X.LutIndex.evaluate(3, (1 << 31) + 1) == 1
-    assert X.Exp2Lut127.evaluate(0) == 127 and X.Exp2Lut127.evaluate(255) == X.LUT[255] and X.Exp2Lut127.evaluate(0xFFFFFFFF) == 127
+    assert X.Exp2Lut127.id == "Exp2Lut127_v1" and [p.w for _, p in X.Exp2Lut127.params] == [8] and X.Exp2Lut127.ret.w == 32
+    assert [X.Exp2Lut127.evaluate(t) for t in range(256)] == list(X.LUT) and X.Exp2Lut127.evaluate(0) == 127 and min(X.LUT) == 0
     assert X.F64Mul.evaluate(_f64(0.1), _f64(3.0)) == _f64(0.1 * 3.0)
     tiny, big = np.float32(1e-30) / np.float32(127), np.float32(3.4e38)
     for a, b in [(np.float32(0.1), np.float32(0.3)), (tiny, tiny), (big, big), (np.float32(1e-45), np.float32(-2.0))]:

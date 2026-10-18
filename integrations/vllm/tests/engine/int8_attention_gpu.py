@@ -4,8 +4,9 @@
 (k, v gathered from the paged cache after the call, as the step read them), the layer's K scales and the served output rows, on
 the CPU.  `compare` judges one kept request, every check bit for bit (the LUT softmax has no device-dependent step):
 
-  rerun     `int8_attention.window_attention` again on the GPU
+  rerun     `int8_attention.window_attention` (`window_rows` over `kv_quant`, as served) again on the GPU
   cpu       `window_attention` on the CPU
+  kv        `kv_quant`'s K', V', s_v and f32(V'(0)) on the GPU against the CPU's
   oracle    `fattn_oracle.attention` (fattn_ref.py's softmax, apv_ref.py's served f) on the CPU
   fattn_ref the window's last query row of its first head: `fattn_ref.check` on the GPU's own S, P, m, e(0), s_q and z_q (head
             dimension 128 only)
@@ -102,9 +103,11 @@ def compare(rec: dict[str, Any]) -> dict[str, Any]:
     rerun = A.window_attention(q.cuda(), k.cuda(), v.cuda(), ks.cuda(), scale).cpu()
     cpu = A.window_attention(q, k, v, ks, scale)
     oracle = O.attention(q, k, v, ks, scale)
+    kv_gpu, kv_cpu = A.kv_quant(k.cuda(), v.cuda(), ks.cuda()), A.kv_quant(k, v, ks)
     ow = _words(out)
     got = {"s": s, "n": n, "words": int(ow.numel()), "rerun_mismatch": int((_words(rerun) != ow).sum()),
            "cpu_mismatch": int((_words(cpu) != ow).sum()), "oracle_mismatch": int((_words(oracle) != ow).sum()),
+           "kv_mismatch": sum(int((a.cpu().view(torch.uint8) != b.view(torch.uint8)).sum()) for a, b in zip(kv_gpu, kv_cpu)),
            "fattn_ref": fattn_ref_row(q, k, ks, scale), "scale_is_head_dim": scale == q.shape[-1] ** -0.5,
            "k_clamped": int((k.float().abs() / ks[None, :, None] > 127.5).sum())}
     if "handed" in rec:

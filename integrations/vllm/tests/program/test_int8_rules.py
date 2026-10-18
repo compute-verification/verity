@@ -1,6 +1,8 @@
-"""The exact-int8 linear exported under the pinned `b1-eager-v3` profile: `verity_int8::linear` binds to `Int8RowQuant_v1{K}` then
-`Int8ScaledMm_v1{K,N}` per token row (`vllm_bindings.int8`), the Definition the Match fold resolves the same launch to (`observe/fold/patterns/int8.py`); the
-Program's words are the torch op's (xq, s_a and y, bit for bit); forms the op does not compute are refused by name."""
+"""The exact-int8 linear and attention exported under the pinned `b1-eager-v3` profile (`vllm_bindings.int8`): `verity_int8::linear`
+binds to `Int8RowQuant_v1{K}` then `ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}` per token row, and an int8 attention layer's call
+to `Int8KvQuant_v1{S,D}` per KV head then `Int8LutAttentionRow_v1{D,pos+1,SCALE}` per (row, head), the Definitions the Match fold
+resolves the same launches to (`observe/fold/patterns/int8.py`); the Programs' words are the torch ops' bit for bit; forms the ops
+do not compute are refused by name."""
 from __future__ import annotations
 
 import numpy as np
@@ -61,7 +63,7 @@ def test_int8_linear_binds_int8_linear_per_row_and_evaluates_to_the_op(sw_shape)
     x = (torch.randn(M, K) * 2).to(BF)
     rep = _derive(m, x)
     assert rep.unsupported is None, f"refused: {rep.unsupported}"
-    assert _emitted(rep) == [f"Int8RowQuant_v1{{K={K}}} x{M} + Int8ScaledMm_v1{{K={K},N={N}}} x{M}"], _emitted(rep)
+    assert _emitted(rep) == [f"Int8RowQuant_v1{{K={K}}} x{M} + ScaledMmS8_v1{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}} x{M}"], _emitted(rep)
     roles = rep.provenance["weight_roles"]
     assert roles["weight"]["role"] == "int8_w" and roles["weight_scale"]["role"] == "int8_ws"
     params = dict(m.named_parameters())
@@ -115,18 +117,18 @@ def _obs(ks: torch.Tensor, scale: float, **over) -> dict:
     return o | over
 
 
-def test_int8_attention_binds_one_window_and_evaluates_to_the_backend(vllm_attention):
+def test_int8_attention_binds_kv_quant_and_rows_and_evaluates_to_the_backend(vllm_attention):
     from verity_vllm.engine import int8_attention as IA
     from verity_vllm.program.frontend.rules.vllm_bindings import observe_attention_impls
     g = torch.Generator().manual_seed(3)
-    T, H, G, D = 3, 2, 1, 32
+    T, H, G, D = 3, 4, 2, 32
     scale = D ** -0.5
     q, k, v = (torch.randn(T, n, D, generator=g).to(BF) for n in (H, G, G))
     ks = (k.float().abs().amax(dim=(0, 2)) / 127).float()
     observe_attention_impls({LAYER: _obs(ks, scale)})
     rep = derive_report(Attn(), (q, k, v), **PROF, rules=vllm_ruleset(), name="Attn")
     assert rep.unsupported is None, f"refused: {rep.unsupported}"
-    assert _emitted(rep) == [f"Int8LutAttentionWindow_v1{{N={T},S={T},H={H},G={G},D={D},SCALE={scale}}} x1 (S={T}) + Const32 x{G}"], _emitted(rep)
+    assert _emitted(rep) == [f"Int8KvQuant_v1{{S={T},D={D}}} x{G} + Int8LutAttentionRow_v1{{S=1..{T}}} x{T * H} + Const32 x{G + T * H}"], _emitted(rep)
     t = materialize(rep.program, [_bits(a, torch.int16, np.uint16) for a in (q, k, v)])
     got = [int(np.uint32(t[o])) for o in rep.program.circuit.root_outputs()]
     assert got == _bits(IA.window_attention(q, k, v, ks, scale), torch.int16, np.uint16)

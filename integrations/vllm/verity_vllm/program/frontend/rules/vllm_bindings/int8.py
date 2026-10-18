@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll, array_of
+from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
@@ -29,14 +29,14 @@ def _int8_op(name: str) -> set:
 
 class Int8LinearRule(OpRule):
     """`verity_int8::linear(x bf16 [M, K], w int8 [N, K], s_w f32 [N, 1] or [N]) -> (xq, s_a, y)` -> per token row
-    `int8_row_quant{K}` (Int8RowQuant_v1) then `int8_scaled_mm{K,N}` (Int8ScaledMm_v1, separable over N): two Calls, so the query of
-    record cuts a member of the product instead of its whole fan-in; all three results are values (`xq` s8 [M, K], `s_a` f32 [M],
+    `int8_row_quant{K}` (Int8RowQuant_v1) then `int8_scaled_mm{K,N}` (ScaledMmS8_v1, ScaledMmS8Coordinate_v1 per output): two Calls,
+    so the query of record cuts one coordinate of the product instead of its whole fan-in; all three results are values (`xq` s8 [M, K], `s_a` f32 [M],
     `y` bf16 [M, N])."""
     modes = frozenset({"profile"})
     info = RuleInfo("Int8Linear[vllm]", 1, "op-binding",
                     applies_to="verity_int8::linear(Tensor x, Tensor w, Tensor s_w) -> (Tensor, Tensor, Tensor)",
                     preconditions=("x is a bf16 value [M, K]", "w is an int8 parameter [N, K]", "s_w is a float32 parameter [N, 1] or [N]"),
-                    evidence_domain="structural; numerics: Int8RowQuant_v1 + Int8ScaledMm_v1 = Int8Linear_v1 (engine.int8_exact's plain linear, bit-equal on the RTX PRO 6000 "
+                    evidence_domain="structural; numerics: Int8RowQuant_v1 + ScaledMmS8_v1 = Int8Linear_v1 (engine.int8_exact's plain linear, bit-equal on the RTX PRO 6000 "
                                     "to its CPU run)")
 
     def targets(self):
@@ -57,7 +57,7 @@ class Int8LinearRule(OpRule):
         if ss not in ((ws[0], 1), (ws[0],)):
             return f"shape: s_w {ss} vs N={ws[0]}"
         if xs[1] % 32:
-            return f"shape: K={xs[1]}; Int8Linear_v1's S8Matmul_v1 takes K a multiple of 32"
+            return f"shape: K={xs[1]}; ScaledMmS8Coordinate_v1 takes K a multiple of 32 (its IMMA k step)"
         if not dtype_is(ctx, w, torch.int8) or not dtype_is(ctx, sw, torch.float32):
             return f"numerics_unregistered: w {ctx.dtype_of(w)}, s_w {ctx.dtype_of(sw)}; Int8Linear_v1 reads int8 weights and float32 scales"
         if ctx.weight_of(w) is None or ctx.weight_of(sw) is None:
@@ -81,17 +81,20 @@ class Int8LinearRule(OpRule):
 
 class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
     """`vllm::unified_attention_with_output` on a layer whose OBSERVED impl is the int8 backend's (`INT8_ATTENTION_IMPL`): the call's
-    rows extend the layer's history as in `UnifiedAttentionWithOutput[vllm]`, and the call is ONE `int8_attention{N,S,H,G,D,SCALE}`
-    (Int8LutAttentionWindow_v1) over the window: its T query rows and the S = P0 + T keys so far, with the layer's K scales (the
-    impl's, read back when the layer is instantiated: `vllm_meta.attention_impls`' `int8_k_scales`) as one Const32 per KV head."""
-    info = RuleInfo("Int8UnifiedAttentionWithOutput[vllm]", 1, "state",
+    rows extend the layer's history as in `UnifiedAttentionWithOutput[vllm]`, over the window of its T query rows and the S = P0 + T
+    keys so far, as `engine.int8_ops.paged_attention` computes it: per KV head g, ONE `int8_kv_quant{S,D}` (Int8KvQuant_v1) over the
+    head's S keys; then per query row i (position P0 + i) and head h, ONE `int8_attention_row{D,P0+i+1,SCALE}` (Int8LutAttentionRow_v1)
+    over the first P0 + i + 1 rows of its KV head's Int8KvQuant_v1.  The layer's K scales (the impl's, read back when the layer is
+    instantiated: `vllm_meta.attention_impls`' `int8_k_scales`) enter as one Const32 before each Call that reads one, as the Match
+    fold emits them (`observe.fold.patterns.int8`)."""
+    info = RuleInfo("Int8UnifiedAttentionWithOutput[vllm]", 2, "state",
                     applies_to="vllm.unified_attention_with_output(query, key, value, Tensor! output, layer_name: str, None, None, kv_cache_dummy_dep?)",
                     preconditions=(f"the layer's OBSERVED attention impl is {INT8_ATTENTION_IMPL}, with its K scales (one per KV head) and "
                                    "float softmax scale read back",
                                    "q [T, NH, D], k, v [T, KVH, D] bf16; NH % KVH == 0", "output is an unwritten allocation of q's shape",
                                    "assumed (op contract): causal attention over the history + this call's rows"),
-                    evidence_domain="structural; numerics: Int8LutAttentionWindow_v1 (engine.int8_attention, bit-equal on the RTX PRO 6000 "
-                                    "to its CPU run and to fattn_ref.py)")
+                    evidence_domain="structural; numerics: Int8KvQuant_v1 + Int8LutAttentionRow_v1 (engine.int8_attention's kv_quant and "
+                                    "window_rows, bit-equal on the RTX PRO 6000 to its CPU run and to fattn_ref.py)")
 
     def impl_refusal(self, layer_name: str) -> str | None:
         obs = (_OBSERVED["attention_impls"] or {}).get(layer_name) or {}
@@ -103,7 +106,7 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
             return f"the layer has no observed float softmax scale ({obs.get('scale')!r})"
         role, _, window = attn_kind_for(obs)
         if role != "attention" or window is not None:
-            return f"numerics_unregistered: a soft cap or sliding window on {layer_name!r}; Int8LutAttentionWindow_v1 is plain causal"
+            return f"numerics_unregistered: a soft cap or sliding window on {layer_name!r}; Int8LutAttentionRow_v1 is plain causal"
         for k in INT8_ATTN_PINS:
             if _norm_attn(obs.get(k, "<absent>")) != _norm_attn(ATTN_PINS[k]):
                 return f"numerics_unregistered: attention {k}={obs.get(k, '<absent>')!r} on {layer_name!r}, not {ATTN_PINS[k]!r}"
@@ -116,17 +119,34 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
         bits, scale = [int(b) for b in obs["int8_k_scales"]], obs["scale"]
         if len(bits) != h.KVH:
             refuse("shape", node, h.mp, f"{len(bits)} K scales for {h.KVH} KV heads")
-        S = h.P0 + h.T
-        fn = ctx.kind("int8_attention", node, N=h.T, S=S, H=h.NH, G=h.KVH, D=h.D, SCALE=scale)
-        hint = f"{ctx.hint_name(node)}[t={h.P0}..{S - 1}]"
-        ks = array_of([ctx.call(ctx.kind("const", node, W=32, BITS=b), node=node, rule=self, name=f"{hint}/k_scale{g}") for g, b in enumerate(bits)])
-        kv = Array(S, Array(h.KVH, Array(h.D, Value(16))))
-        y = ctx.call(fn, h.qrows, Coll(kv, h.klog.cut(S)), Coll(kv, h.vlog.cut(S)), ks, node=node, rule=self, name=hint)
-        ctx.rebind(out, y.reshape(_tensor_type(h.qs, 16)), self, what="output")
-        ctx.record(self, node, {"layer_name": layer_name, "positions": [h.P0, S - 1], "NH": h.NH, "KVH": h.KVH, "D": h.D, "scale": scale,
+        S, D, rep = h.P0 + h.T, h.D, h.NH // h.KVH
+        hint = ctx.hint_name(node)
+        kv = Array(S, Array(h.KVH, Array(D, Value(16))))
+        klog, vlog = Coll(kv, h.klog.cut(S)), Coll(kv, h.vlog.cut(S))
+
+        def k_scale(g, name):
+            return ctx.call(ctx.kind("const", node, W=32, BITS=bits[g]), node=node, rule=self, name=f"{name}/k_scale")
+
+        fkv = ctx.kind("int8_kv_quant", node, S=S, D=D)
+        kvq = []
+        for g in range(h.KVH):
+            name = f"{hint}/kv_quant[g={g},s={S}]"
+            head = [Coll(Array(S, Array(D, Value(16))), concat([log[j][g].refs for j in range(S)])) for log in (klog, vlog)]
+            kvq.append(ctx.call(fkv, head[0], head[1], k_scale(g, name), node=node, rule=self, name=name))
+        rows = []
+        for i in range(h.T):
+            n = h.P0 + i + 1
+            fr = ctx.kind("int8_attention_row", node, D=D, S=n, SCALE=scale)
+            for hd in range(h.NH):
+                g, name = hd // rep, f"{hint}[t={h.P0 + i},h={hd}]"
+                c = kvq[g]
+                rows.append(ctx.call(fr, h.qrows[i][hd], c[0][0:n], k_scale(g, name), c[1][0:n], c[2], c[3], node=node, rule=self, name=name))
+        y = Coll(_tensor_type(h.qs, 16), concat([r.refs for r in rows]))
+        ctx.rebind(out, y, self, what="output")
+        ctx.record(self, node, {"layer_name": layer_name, "positions": [h.P0, S - 1], "NH": h.NH, "KVH": h.KVH, "D": D, "scale": scale,
                                 "k_scales": [f"0x{b:08x}" for b in bits], "kv_write_consumed": dep is not None, "assumed_causal": True,
                                 "impl": obs.get("impl")},
-                   emitted=f"{fn.id} x1 (S={S}) + Const32 x{len(bits)}")
+                   emitted=f"{fkv.id} x{h.KVH} + Int8LutAttentionRow_v1{{S={h.P0 + 1}..{S}}} x{h.T * h.NH} + Const32 x{h.KVH + h.T * h.NH}")
 
 
 __all__ = ["Int8LinearRule", "Int8UnifiedAttentionRule", "INT8_ATTENTION_IMPL"]
