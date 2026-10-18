@@ -173,6 +173,11 @@ def _row_problems(rows: list[dict], parameters: list[dict], sources: list[dict])
         for s in r.get("sources", []):
             if s not in sids:
                 out.append(f"row {rid}: source {s} is not in sources/")
+        chain = r.get("chain")
+        if chain is not None and not (isinstance(chain.get("kappa"), (int, float)) and 0 < chain["kappa"] <= 1
+                                      and isinstance(chain.get("d"), (int, float)) and chain["d"] >= 1
+                                      and chain.get("path")):
+            out.append(f"row {rid}: chain needs kappa in (0, 1], d >= 1 and a path")
     return out
 
 

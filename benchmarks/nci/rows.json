@@ -21,6 +21,11 @@
    "crossings": 2,
    "flops_per_token": 192000000000.0
   },
+  "chain": {
+   "kappa": 0.075,
+   "d": 1536,
+   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 1.92e11."
+  },
   "notes": "kappa = 4 of 6 flops per parameter per token multiply a weight by an activation. U = 1.04e12 x 2.5 bits; U_token = active 3.2e10 x 2.5. d = 2048 (routed-expert width, the smallest inner dimension); e = 4e4 (the thread draft's MoE estimate). w_cut = 7168 x 4 bits.",
   "sources": [
    "tseng-2024-qtip"
@@ -53,6 +58,11 @@
    "crossings": 2,
    "flops_per_token": 192000000000.0
   },
+  "chain": {
+   "kappa": 0.075,
+   "d": 1536,
+   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 1.92e11."
+  },
   "notes": "The activation-compression attack at its most aggressive published claim (Subspace Networks, unreplicated). Moves only the construction; the proven bound does not use w_cut.",
   "sources": [
    "ramasinghe-2025-protocolmodels"
@@ -79,6 +89,11 @@
    "w_cut": 28672,
    "crossings": 2,
    "flops_per_token": 192000000000.0
+  },
+  "chain": {
+   "kappa": 0.075,
+   "d": 1536,
+   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 1.92e11."
   },
   "notes": "U = 1.04e12 x 0.1 bits; U_token = 3.2e10 x 0.1.",
   "sources": [
@@ -107,6 +122,11 @@
    "w_cut": 28672,
    "crossings": 1,
    "flops_per_token": 64000000000.0
+  },
+  "chain": {
+   "kappa": 0.225,
+   "d": 1536,
+   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. Priced at rollout cost: kappa = 2 x 7.2e9 / 6.4e10."
   },
   "notes": "Rollouts dominate RL compute and multiply fresh weights by activations, so kappa is high (attention aside). Rows are priced at rollout cost: crossings 1, 2 flops per active parameter per token.",
   "sources": [
@@ -161,7 +181,7 @@
   "configuration": "LoRA-XS r = 2 (a trainable 2x2 core between frozen SVD factors of the base) on all about 69,600 modules",
   "state": "2.8e5 trainable parameters, 0.56 MB in bf16",
   "inputs": {
-   "kappa": 0.0001,
+   "kappa": 8.7e-06,
    "b_w": 16,
    "b_a": "b_a.activation/boundary-training:central",
    "d": 2,
@@ -175,7 +195,7 @@
    "crossings": 1,
    "flops_per_token": 64000000000.0
   },
-  "notes": "The SVD factors are functions of theta, so they can be committed. Decode is a merge, about 2e12 flops.",
+  "notes": "The SVD factors are functions of theta, so they can be committed. Decode is a merge, about 2e12 flops. kappa = 2 flops x 4 products x 69,600 modules / 6.4e10: only the 2x2 cores are updated.",
   "sources": [
    "balazy-2025-lora-xs"
   ]
@@ -422,6 +442,11 @@
    "w_cut": 49152,
    "crossings": 2,
    "flops_per_token": 600000000000.0
+  },
+  "chain": {
+   "kappa": 0.278,
+   "d": 12288,
+   "path": "per layer q, o, up and down of a d_model = 12288 transformer with a 4x MLP, forward only: 10 d^2 of the layer's 12 d^2 products; kappa = 0.833 x 2 / 6."
   },
   "notes": "Reproduces the draft's 'about 3e6 with FP4': kappa x 2.8e6. w_cut assumes d_model = 12288.",
   "sources": []

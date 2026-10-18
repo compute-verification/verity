@@ -77,8 +77,20 @@ def test_search_reproduces_the_shard_closed_form():
     assert c["reads"]["state"] == pytest.approx(K / 2, rel=1e-2)
 
 
+def test_chain_bound_is_kappa_f():
+    """rho >= kappa_chain f(K) / (2 alpha), the activation rate capped by the crossing over the residual's entries."""
+    K, Gamma = 2e7, 6.4e16
+    chain = {"kappa": 0.1, "d": 1536, "path": "x"}
+    want = 0.1 * S.read_factor(K, 4.0, 4.0, 1536) / (2 * K / Gamma)
+    assert S.chain_lower(BASE, chain, K, Gamma, 20, 12288) == pytest.approx(want)
+    narrow = BASE | {"w_cut": 12288.0}
+    assert S.chain_lower(narrow, chain, K, Gamma, 20, 12288) == pytest.approx(
+        0.1 * S.read_factor(K, 4.0, 1.0, 1536) / (2 * K / Gamma))
+
+
 def test_every_bracket_is_consistent():
     """A proven lower bound above an explicit construction's cost means a row's inputs break the theorem's
     assumptions; the caps in `rates` exist because two rows did."""
     for b in S.brackets(catalog.load("rows"), catalog.load("calibrations"), catalog.load("parameters")):
         assert 1 <= b["lower"] <= b["upper"] * (1 + 1e-9), b
+        assert b["chain"] is None or 1 <= b["chain"] <= b["upper"] * (1 + 1e-9), b

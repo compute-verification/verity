@@ -47,12 +47,12 @@ def render() -> str:
     for c in cals:
         out += [f"### Calibration `{c['id']}`: K = {_num(c['K'])} bits, Gamma = {_num(c['Gamma'])} gates, "
                 f"b_tok = {_num(c['b_tok'])}", "", c["description"], "",
-                "| Row | Lower (proven) | Upper (construction) | Chain bound* |", "|---|---|---|---|"]
+                "| Row | Thread theorem | Partial-sum law | Upper (construction) |", "|---|---|---|---|"]
         for b in slowdown.brackets(rows, [c], parameters):
-            r = {"id": b["row"]}
-            out.append(f"| `{r['id']}` | {_num(b['lower'])} | {_num(b['upper'])} ({b['upper_basis']}) | "
-                       f"{_num(b['chain'])} |")
-        out += ["", "\\* Rests on an assumption the lock marks falsified; for comparison only.", ""]
+            chain = _num(b["chain"]) if b["chain"] is not None else "-"
+            out.append(f"| `{b['row']}` | {_num(b['lower'])} | {chain} | {_num(b['upper'])} ({b['upper_basis']}) |")
+        out += ["", f"Both lower bounds are proven: `{slowdown.THREAD_THEOREM}` and `{slowdown.CHAIN_THEOREM}`, the "
+                "second on one forward chain of the row's reference circuit.", ""]
     for r in rows:
         out += [f"- **`{r['id']}`**: {r['method']}, {r['configuration']}. State: {r['state']}."
                 + (f" Sources: {', '.join(r['sources'])}." if r.get("sources") else "")]

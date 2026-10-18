@@ -60,6 +60,16 @@
   "note": "shape from N ~ 12 L d^2 with L ~ d/100; fanout ~ 11 d (q, k, v, gate, up)"
  },
  {
+  "id": "dense-100b",
+  "description": "the thread draft's dense example: 1e11 parameters, d_model 12288",
+  "n_total": 100000000000.0,
+  "n_active": 100000000000.0,
+  "d_model": 12288,
+  "entry_fee": 3072,
+  "fanout": 7168,
+  "note": "the thread draft's numbers, used by the dense-100b-1m-raw calibration and the dense-pretrain-thread-draft row"
+ },
+ {
   "id": "dense-405b",
   "description": "a dense transformer of 4.05e+11 parameters",
   "n_total": 405000000000.0,

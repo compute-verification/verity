@@ -84,8 +84,12 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   result is labeled `fit` (one block holds the whole computation), `shard` (slices split the state) or `decode-shard`
   (each slice reads a whole description and decodes its part). One sequential chain of blocks is assumed. The
   constructions are analytic; none has been run.
-- `chain` is the earlier bound \(\kappa F\), for comparison only. The lock marks its assumption as falsified, and on the
-  small-adapter rows it exceeds a compliant construction's cost.
+- `chain` is the partial-sum law, `Nci.SecurityProofs.ContainedTraining`: \(\rho \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
+  with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumptions are that
+  one chain of the reference circuit is incompressible at \(b_w\) and \(b_a\), in support form. A chain charges each
+  weight once per layer, so it is one forward path, and a row's `chain` gives that path's share \(\kappa_{\text{chain}}\)
+  and inner dimension. For Kimi K2 the path is the dense one (MLA projections and the shared expert), 7.5% of training's
+  work. The activation rate is capped by a compressed boundary's bits per residual entry. Rows without a chain get none.
 
 The invariant `lower <= upper` is tested on every row. The two caps on threading and token rates exist because rows
 violated it without them, so a violation means a row's inputs break the theorem. A tight bracket settles a row; a wide
