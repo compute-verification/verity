@@ -1256,25 +1256,25 @@
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.credited : Properties.Requirement.Credited"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "c9d2c2bb692980072d9e2351d54b36c6bd37a442a47aaa95c038789b1d07475d"
   },
   "Properties.Requirement.creditedBits": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.creditedBits : Properties.Requirement.CreditedBits"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "ff0129107a95f0ec1db5a4aac59ad8eec06eb28591fa33a795e7458cff4d2a8a"
   },
   "Properties.Requirement.creditedReadBits": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.creditedReadBits : Properties.Requirement.CreditedReadBits"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "c8f2930565971678897c609a38954d540e9d7e649262357ba7bf0dca10ebe1c9"
   },
   "Properties.Requirement.creditedReads": {
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.creditedReads : Properties.Requirement.CreditedReads"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "214299f961afcebd017b7362ebcddd918c6fef3316db3a4e67d44847ad18f809"
   },
   "Properties.Requirement.credits": {
    "owner": "@memory-accounting",
@@ -1298,7 +1298,7 @@
    "owner": "@memory-accounting",
    "signature": ["Properties.Requirement.incomplete : Properties.Requirement.Incomplete"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "074cf5338003e147d86bab7bad58d303ef44fea954c6f2b49c545ab318673e7d"
   },
   "Properties.Requirement.ingress": {
    "owner": "@memory-accounting",
@@ -2549,7 +2549,7 @@
    ]
   },
   "CircuitRequirement": {
-   "digest": "bb26c9e26f4f710cc2c7ea1eb2e4440f1b45523390c2f76ba7a268a72f8b0c28",
+   "digest": "51382a2b5be5e771034819d3b652d749c1fc7bd247844c90e8754d31b60eaa85",
    "definitions": {
     "CircuitRequirement.Instance": "6a19ecf3db2275179f9b41e9101dad07a32b8f034f0845279c8a8f7641c70ec8",
     "CircuitRequirement.Instance.apart": "74e694a52cf9ca1351045f3a9794e2809026001cb0e277fcf06a06395995b008",
@@ -2561,10 +2561,16 @@
     "CircuitRequirement.Instance.blockOf": "b11503716b08e556a32943b99fa5d48067dca1abe1339155fe47c04bf367ebcf",
     "CircuitRequirement.Instance.blocks": "b03f0fa33627c19a178d53e85012a9b7892000d37833c9757587bb606dbe467f",
     "CircuitRequirement.Instance.carries": "24a15caac8dde09141cc907620a333227e55c6bb30ec83a8ac4c4a544d89c055",
+    "CircuitRequirement.Instance.complete": "1e311f1ec8e4c252dc8a2bafcd67b3dcead43d8acd06324c74e95ebb9486e439",
+    "CircuitRequirement.Instance.credited": "9ec8211127f648de1a12a428edf1c582d355f973ee6f31133bce861d77d8a2a7",
+    "CircuitRequirement.Instance.creditedBits": "985c8e0dca8e1e00705d3b1a6f6f88b297184a49c74f47ecd12e6ec665877034",
+    "CircuitRequirement.Instance.creditedReadBits": "aab36b1a2774264c3d6bb7e8b708785c2754d4685b7bb20bee1c84fe6ac87d7f",
+    "CircuitRequirement.Instance.creditedReads": "64f6cfc259b3156e209f4796125601e88133f85ae50d54451130e91a240173e3",
     "CircuitRequirement.Instance.credits": "048ea39bbc919359c80a511e61a6dead2c9a4177cd0bd2dfd2922a7eebfa75c2",
     "CircuitRequirement.Instance.endOf": "489016157dfb31d9f4272b6e2d1e5ea4f44de75aaa4b3b03cf825d87e0d81a14",
     "CircuitRequirement.Instance.follows": "c7d8ea65433c1e7ff7dad5349a9c10c85348d05fd4028a5bca1e7b86b5c7f1a5",
     "CircuitRequirement.Instance.held": "a6c6543f70298b6ecabe03ef9d8919d682e439c12b7cf9b47487c5f75cb7ea5b",
+    "CircuitRequirement.Instance.incomplete": "240e78f57293c401ea0d465e65221b34c305c4961483ca3c3b54831494dbb390",
     "CircuitRequirement.Instance.ingress": "254eedb476743a21cc5f3566863f6784671293be574d27c145fab9869baa3dba",
     "CircuitRequirement.Instance.into": "b06f58455ad8ec66df314edcde006105b73e13701e38bad7df1e5dca49b364a7",
     "CircuitRequirement.Instance.live": "64ea9db6dc4035f027fd007bdcdc2086ec7284237f60270141084a50c8887e16",
@@ -2576,7 +2582,7 @@
     "CircuitRequirement.Instance.ops": "0f638ce5f39ed1520d05c801f2543fbecd27d7aea529a60d00ae902e80380b05",
     "CircuitRequirement.Instance.opsOf": "e4b0bdd5c9729f9cdd58c94a335e3239a30399c7506a919634ab5b4798e09f11",
     "CircuitRequirement.Instance.packs": "afe0a1513a4dd69dfe94133e08f39160ce314bba99599fbda46f37aff49bb826",
-    "CircuitRequirement.Instance.planMatches": "87ea950abdb017c76e9cd275c77a30d6589e679b4b461e098fc49c936987f2ca",
+    "CircuitRequirement.Instance.planMatches": "8bb6c2d5da986f0cf14414468caa615c2c02efb54031b14767981ad073e36246",
     "CircuitRequirement.Instance.ran": "f01d7bb3b7cc3e55f2242cc1133e06a925a7c19e6b1a0fee8551c5924343d803",
     "CircuitRequirement.Instance.read": "d2ff4b52636578cf76304ac753df94d0124af60f78dae731ab7e437ae00fe081",
     "CircuitRequirement.Instance.readBits": "c13accc3c4eecbaa6dea34df61bf27fdc52619135bf0ca3d92d06cf0973a93a0",
@@ -2588,7 +2594,7 @@
     "CircuitRequirement.Instance.step": "e2d57037c009f69d53a8778131210dc21d90ae786bbacba588de3af089865558",
     "CircuitRequirement.Instance.stepOf": "c4ea0cb6742381e78c3cd8a2ef7b94d0a7cd5a8a986d45cceaf45798b629dcd5",
     "CircuitRequirement.Instance.stepRegion": "48d7bea84d7436989841aa5498e7fa6f01693e3e116d3c2f14cbfe4838572122",
-    "CircuitRequirement.Instance.storeMatches": "52174a71168cbfb8a97d9c714e35364351a4b308c63343635024903ba68e50a9",
+    "CircuitRequirement.Instance.storeMatches": "6231256587e4b39721903746496e01a99f1bef6abf4eaa32169b904fa03b02b8",
     "CircuitRequirement.Instance.tick": "f4cfa974d2c654a72c863789217999fa37efcc076718c231cca0df773df594c1",
     "CircuitRequirement.Instance.uses": "cae58006e85592c514d863dc8b05238f9efcf706d47705804156786779c334d6",
     "CircuitRequirement.Instance.usesOf": "884688d297cd142b430cd489e5d0568dc122fa6a199e7b13fd259f0c403a5802",
@@ -2615,9 +2621,14 @@
     "CircuitRequirement.sameSet": "0a659ec09c56a68b105e2cd6e3fe9bde3b4b6691dd98bfd15b931f2e9b246098"
    },
    "guarantees": [
+    "Properties.Requirement.credited",
+    "Properties.Requirement.creditedBits",
+    "Properties.Requirement.creditedReadBits",
+    "Properties.Requirement.creditedReads",
     "Properties.Requirement.credits",
     "Properties.Requirement.follows",
     "Properties.Requirement.held",
+    "Properties.Requirement.incomplete",
     "Properties.Requirement.ingress",
     "Properties.Requirement.live",
     "Properties.Requirement.liveBits",
@@ -2815,7 +2826,7 @@
    "guarantees": ["Properties.Requirement.held", "Properties.Requirement.read", "Properties.Requirement.stepRegion"]
   },
   "Definitions.Accounting.Requirement": {
-   "digest": "38d2dd43454105bee37c8a5f23bdd02257274a7a75abf7c7a7f1cf22949478f8",
+   "digest": "3d7f9c703bf74db1def0ddf5c99aa0fa6c216a6bb74c553f8cb4d36e7a09623b",
    "definitions": {
     "Accounting.Requirement.Carries": "93fd6dff6b04c716c5141e9212142e6ea3701b3aa0de94ca12483c0b48591a4d",
     "Accounting.Requirement.Execution": "cd70ee0536fc5bb221c299172e35f32cb7f8664fbf0924096cf40b3a3ee791ea",
@@ -2832,14 +2843,14 @@
     "Accounting.Requirement.Placement.tick": "19d3bde72fc93c41ba0c3edad711ee176bb7ec53439c601bda5d55fe6dd5696c",
     "Accounting.Requirement.Placement.ticks": "60b1a8e6957cbd44187087579e43fbaa35f67d5ff5219c9d45423a53bbb91ae7",
     "Accounting.Requirement.Placement.toExecution": "5a02271ef98321e3e31bad7c561cd43cc9a9e7cda172bb44d4bf4a3a2c574ae9",
-    "Accounting.Requirement.PlanMatches": "3446fe70421d6f5818f116d517a0c5bb283236702b2a4171a7f8d15173caa730",
+    "Accounting.Requirement.PlanMatches": "88edb9b71a1678e2be54eaa53202d9324631a6ca9242a9661c78261df465c2c6",
     "Accounting.Requirement.Store": "1938f3251d1599270d57405be6bc6fc366ac23924f2e849c8b7b7acc6f7281ca",
     "Accounting.Requirement.Store.freed": "4e87eda5acc330bde17fdc1204a03f0f98440c589337d909921d93fec0758313",
     "Accounting.Requirement.Store.payload": "a17bee3d643705377f94199f7d34bad4c5c2d9bae5d7351647eab307cad64ad4",
     "Accounting.Requirement.Store.registered": "0be772098f8e8fb16c7419539601a60d72ebb997163fc82efb10abce4db236e5",
     "Accounting.Requirement.Store.resident": "6288862ccac1ec58bad7ae75f4bf8cbb24212257aea4a55bb31581cb649779c6",
     "Accounting.Requirement.Store.written": "d99299a8c7926bc9f52976b4d302df1f9ebe28e59e60ab696478ad75fc03791b",
-    "Accounting.Requirement.StoreMatches": "e486f273f071bc5a01e0d4d5f0bf590dee56a6e844ab0d3768b1871822d8a2b8",
+    "Accounting.Requirement.StoreMatches": "bc94eb7e36c2c3376a01b78a242889fe21fe87e971a59f4d9fae86838c8657a7",
     "Accounting.Requirement.Wiring": "67f416e91f81742945bad7c75704b565e448a72577d35db298f0d8514f89f1eb",
     "Accounting.Requirement.Wiring.ops": "84cea9a8dda1abcc6e1f039a48984fcaf6ee71e621e29d964abc18011a8d48e2",
     "Accounting.Requirement.Wiring.registered": "17de543eb7d0b9af217ea7d34e648ccc606223d8460c7be413f24e31608e8ca6",
@@ -2848,7 +2859,12 @@
     "Accounting.Requirement.bits": "64ed0ee81b2d8ba84f9ffd3c2964f2a68c6f7eca822492565bf9257671f88cb7",
     "Accounting.Requirement.bitsIn": "5440bee8fc2b080cd09ffdf36d4f4c2e490eab2913fd623940cc6a44c783c9b9",
     "Accounting.Requirement.blocks": "43dd99e049f112b0b8fd74d4c35cca07a1cb09150ed5369f33334bdf9d7fe1d7",
+    "Accounting.Requirement.credited": "b4bec13f6ee25481b84428aa13da8d2697aa312d832b4e4d3eccb8e148997c90",
+    "Accounting.Requirement.creditedBits": "fb64f44b0f111365b97d668d8b2d8d76161a493acc2b9cf54714549ededd733f",
+    "Accounting.Requirement.creditedReadBits": "fdc2d77e8461901f1693cebdbc57df73ac131831f769b92de58fcbf64be7f8e7",
+    "Accounting.Requirement.creditedReads": "d220b0af5657d6c89494429abb23cd5432c27654f37aeddbca856739796ea1d3",
     "Accounting.Requirement.held": "64cdeb5d4430c3aefead5921a08faa7345ce4003f6469f90e8639698aa4a6633",
+    "Accounting.Requirement.incomplete": "91a2d266794692a407607f1eb498164716016bcec707aa51838a9ddd85274120",
     "Accounting.Requirement.ingress": "db7ab43d43923959e21788123c6f6b6049f3d5d1c4040557a19435a3468cc5d4",
     "Accounting.Requirement.into": "86c3087c2495d791e6d6ac312bf1f45f9fdeba840aa6dd4d6bc7adbfa0c2b925",
     "Accounting.Requirement.live": "fc7c4f9b1b45bf183ac91ab06378d9fae1dd203361b5ddb5c99abb723f8fa163",
@@ -2865,9 +2881,14 @@
     "Accounting.Requirement.work": "3206697b7f531501caf4147e8259576c711665b5888e01fabec87c95bdd40237"
    },
    "guarantees": [
+    "Properties.Requirement.credited",
+    "Properties.Requirement.creditedBits",
+    "Properties.Requirement.creditedReadBits",
+    "Properties.Requirement.creditedReads",
     "Properties.Requirement.credits",
     "Properties.Requirement.follows",
     "Properties.Requirement.held",
+    "Properties.Requirement.incomplete",
     "Properties.Requirement.ingress",
     "Properties.Requirement.live",
     "Properties.Requirement.liveBits",
@@ -5752,11 +5773,16 @@
    ]
   },
   "Properties.Accounting.Requirement": {
-   "digest": "a6ff4e65249c258150a5d8826cf369f7dc5369a13d2987fccd60159c99dcd958",
+   "digest": "ecf5f4ed3a9c02b4abd079c6bf9e1da4d27702a8d22aafa44b2fb2edb67e33ff",
    "definitions": {
+    "Properties.Requirement.Credited": "279cf1e3bef979103af9d901ad4c4138c51967b6c129ea5f0873d1c8e2eac6bb",
+    "Properties.Requirement.CreditedBits": "29cabc7d8d0c680b7a1eb433ef7185ac36832aa73c91c8be53f152c062f88c07",
+    "Properties.Requirement.CreditedReadBits": "61cd2555e01be2e0b37b77ae8680a55e0f748ac1082aeace935997c37ce64f23",
+    "Properties.Requirement.CreditedReads": "2c10ccde342a147213e7dfc225a5ed7819416630577aa74b0b79a85b2d6fc02b",
     "Properties.Requirement.Credits": "8665ccb64dab2cab0b6996795d933610acb65b63a984da7403e207bc244c6709",
     "Properties.Requirement.Follows": "0db852472711542983e77851e2173368797dc4ed395edc2cd74c76691dc7a618",
     "Properties.Requirement.Held": "2acf8fbe2765670b6fd5b9f4c8e6b3a17e8f73223248983a158faa65dbb60385",
+    "Properties.Requirement.Incomplete": "600e9a26ec24ede3bd5bd82b49b3938cbde802201afdad7e2e96ea6db35cc942",
     "Properties.Requirement.Ingress": "70a630614d3eb58e410d65e871ddf5ae4ed3319ad33e4c5b5e07b21ad309f515",
     "Properties.Requirement.Live": "85b88b5ab6a07b692ac0af7519fb95d5e54e7be334727dec1c9def11e4bb95dd",
     "Properties.Requirement.LiveBits": "e138ec9212ecc782f17dff7ec1396fe8e68b396f354d183aa60e5a7eabfc5b71",
@@ -5779,9 +5805,14 @@
     "Properties.Requirement.wiring": "d40130b60f50d7e336ed05c27b4a1a8a83f9148f6706e9fd1663e1a1abdc095d"
    },
    "guarantees": [
+    "Properties.Requirement.credited",
+    "Properties.Requirement.creditedBits",
+    "Properties.Requirement.creditedReadBits",
+    "Properties.Requirement.creditedReads",
     "Properties.Requirement.credits",
     "Properties.Requirement.follows",
     "Properties.Requirement.held",
+    "Properties.Requirement.incomplete",
     "Properties.Requirement.ingress",
     "Properties.Requirement.live",
     "Properties.Requirement.liveBits",
