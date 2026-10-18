@@ -109,10 +109,6 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
-- 2026-10-18 (9:57 AM PDT, in memory accounting's chat): Lean is the definition and the verifier of record. Python in
-  `verity.ml` mirrors it, for the prover's speed, held to the Lean by difftest, and a verifier imports no `verity.ml`
-  code (`AGENTS.md`, "Design rules"). Each protocol still switches by the 8 Oct procedure (7:13 PM PDT, below), and
-  until then core's edges into ml and `SOUNDNESS_PATH` only shrink (`tests/test_boundaries.py`).
 - 2026-10-17 (8:20 PM PDT, in proofs' chat; compute accounting's card ba874f45): PoUW's per-matmul noise seeds may be
   derived by Fiat–Shamir, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)) from the epoch's
   live salt: "I'm happy to do Fiat-Shamir for this for now because it's going to happen at such a high-frequency that
@@ -297,9 +293,12 @@ Newest first. Each is Daniel's unless it names the coordinator.
   evidence. Its gap list shows nothing the Python checks that the Lean doesn't, for the record versions in use, and every
   recorded run in the store, replayed through the Lean, gets the verdict the Python gave, negative controls included. The
   Python keeps running beside it as the reference, the switch is a one-line change that can be reversed, and it moves
-  that protocol's properties from `Models/` to `Properties/`. Where it leads: 18 Oct, above. The same day: each lane
-  rereads the rules every night (`AGENTS.md`, "Lanes"), and each assignment from the coordinator lists the rules changed
-  since that lane last read them.
+  that protocol's properties from `Models/` to `Properties/`. The same day: each lane rereads the rules every night
+  (`AGENTS.md`, "Lanes"), and each assignment from the coordinator lists the rules changed since that lane last read them.
+  - 2026-10-18 (9:57 AM PDT, in memory accounting's chat), where it leads: Lean is the definition and the verifier of
+    record; Python in `verity.ml` mirrors it for the prover's speed, held to it by difftest; a verifier imports no
+    `verity.ml` code. Until a protocol switches, core's edges into ml and `SOUNDNESS_PATH` only shrink (`AGENTS.md`,
+    "Design rules").
 - 2026-10-08 (5:59 PM PDT, relayed by top): a named conjecture is a premise in a section of its own, with a falsification
   test that runs, and a claim resting on one is listed as conditional. A model of how a device computes, such as
   `TTOutPearlC`, is an assumption about the world, checked by measurement. Claims resting on a falsified premise come off
