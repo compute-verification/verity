@@ -1,11 +1,14 @@
 # Honest at L = 32 on the H200 (sm_90) with the LI fold and LI-CP-W's checkpoint reduced across the warp by ONE
-# redux.sync.xor.b32 a segment, a model profile (the accumulator is in registers, so no TMEM-load latency, and the sm_90
-# gate refuses a warp-collective op in a dynamic-trip OP_UNTIL loop, so the loop is not measured beside a saturated wgmma
-# here; DC EPS1 r9 measured the reduction alone: redux 0.5 /SM/clk, one instruction, against the 5-shuffle fallback's MIO
-# bound). One 4-byte word a warp a segment leaves the SM.
+# redux.sync.xor.b32 a segment. Measured (DC EPS1 r10): r9 could not time the loop because the sm_90 gate refuses a
+# warp-collective op in a dynamic-trip OP_UNTIL loop (a clock read ends up inside a loop); a static-trip OP_LOOP variant
+# (wgli_redux) keeps the clock reads outside the loop, so the redux gates, and times the honest loop beside the saturated
+# wgmma: it folds the 512 committed words a warpgroup with LI and reduces each segment by one redux.sync.xor, running the
+# wgmma at 0.5993 of its alone rate (the no-checkpoint loop wgli_base at 0.6309, the 5-shuffle fallback wgli_reduce at
+# 0.4937), so 204.25 SMSP-cycles a MMA, 3.2% above the model's 197.96 (its 0.6184). The accumulator is in registers, so a
+# committed word needs no TMEM load. One 4-byte word a warp a segment leaves the SM.
 name = "dc90-licpw-redux-l32"
-status = "provisional"
-source = "DC EPS1 r9 (scalar redux/reduce r20261017-200307-9f75) with DC-DESIGN's H200 LI shape (wgmix_mix_r512 r20261017-092536-be63): LI is LOP3 and IMAD a pair of words, 128 committed words a lane a MMA at L = 32, plus the per-segment checkpoint reduced by one redux.sync.xor"
+status = "measured"
+source = "DC EPS1 r10, wgli_redux (r20261017-212548-5c53): the static-trip honest LI loop with the per-segment redux checkpoint runs the saturated wgmma at 0.5993 of its alone rate (wgli_base, no checkpoint, 0.6309), so the plain GEMM's 122.41 SMSP-cycles a MMA over 0.5993 is 204.25; LI is LOP3 and IMAD a pair of words, 128 committed words a lane a MMA at L = 32, plus the per-segment checkpoint reduced by one redux.sync.xor"
 L = 32
 
 [mma]
@@ -19,6 +22,10 @@ IGMMA_S8_N256 = 1
 ALU = 68        # LI's 64 and the 4-LOP3 chain XOR a segment
 IMAD = 64
 SHFL = 3        # one redux.sync.xor at 2 SHFL and the store at 1
+
+[measured]
+cycles_per_mma = 204.25         # the plain GEMM's 122.41 SMSP-cycles a MMA over the measured tensor fraction 0.5993
+source = "DC EPS1 r10, wgli_redux (r20261017-212548-5c53): the static-trip honest LI loop with the per-segment redux.sync.xor checkpoint, no filler, runs the saturated wgmma at 0.5993 of its alone IGMMA rate (the no-checkpoint loop wgli_base at 0.6309, the 5-shuffle fallback wgli_reduce at 0.4937), so the plain GEMM's 122.41 SMSP-cycles a MMA over 0.5993 is 204.25, 3.2% above the model's 197.96 (its implied 0.6184)"
 
 [operands]      # the least operand delivery any program pays a MMA when the design names none
 floor = { IGMMA_S8_N256 = 0.0 }

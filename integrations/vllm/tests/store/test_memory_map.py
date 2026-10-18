@@ -1,8 +1,9 @@
 """The store's memory map (memory-map/v1) from its KV events: a serving-like trace of allocs, appends that fill pages
 over several steps, frees of written and part-written pages, re-allocation and overwrite.  The driver's
 `memory_map.parse` and `Replay` accept every step, the live slots and the blocks they hold are the store's own (a
-dirty or released block is in no slot, and in no plan), each digest is the payload's, a free lands in the next step
-and frees each block once, and indices run from N in record order."""
+dirty or released block is in no slot, and in no plan), each digest is the payload's, a free lands in the step whose
+forward ran last and frees each block once, a step's line closes when the next opens, indices run from N in record
+order, and a block as old as the lifetime cap is re-keyed before the first pass that could not hold it."""
 from __future__ import annotations
 
 import hashlib
@@ -81,20 +82,27 @@ TRACE = [
 
 
 def run_trace(s: Store, m, check=None) -> list[memory_map.Step]:
-    seen = 0
-    for step, (free, alloc, appends, life) in enumerate(TRACE):
-        before = m.text()
-        if free:
-            s.kv_free(list(free))
-        if alloc:
-            s.kv_alloc(list(alloc))
-        assert m.text() == before, "a free is in the next step's line, and an alloc in none"
-        s.kv_write_reference(appends, lambda li, p, x, life=life: kv_payload(li, p, x, life), step)
+    """The trace, each step's frees (a finished request's after the step before, a preempted one's in this step's
+    schedule) and allocs, then its write; ``check(step, lives, new, pages)`` after each write, with the lines it closed
+    and the pages it wrote, whose blocks are in the line it opened; then the last line closed."""
+    seen, lives = 0, {}
+    for step, (free, alloc, appends, life) in enumerate(TRACE + [((), (), [], 0)]):
+        if step == len(TRACE):
+            m.flush()
+        else:
+            before = m.text()
+            if free:
+                s.kv_free(list(free))
+            if alloc:
+                s.kv_alloc(list(alloc))
+            assert m.text() == before, "a free is in the open line, and an alloc in none"
+            s.kv_write_reference(appends, lambda li, p, x, life=life: kv_payload(li, p, x, life), step)
+            lives[step] = life
         _, steps = memory_map.parse(m.text().splitlines())
         steps = list(steps)
         new, seen = steps[seen:], len(steps)
         if check is not None:
-            check(step, life, new)
+            check(step, lives, new, {a.page for a in appends} if step < len(TRACE) else set())
     return steps
 
 
@@ -109,17 +117,20 @@ def test_a_serving_trace_is_a_memory_map_the_driver_replays_as_the_store_holds_i
     index_of: dict[tuple[int, int], int] = {}
     changes = []
 
-    def check(step: int, life: int, new: list[memory_map.Step]) -> None:
-        assert [x.step for x in new] == ([] if step in (2, 4) else [step])
+    def check(step: int, lives: dict, new: list[memory_map.Step], open_pages: set) -> None:
+        assert [x.step for x in new] == ([] if step in (0, 5) else [step - 1] if step < 7 else [6])
         for x in new:
             changes.append(replay.apply(x))
             assert list(x.freed) == sorted(x.freed) and [w.slot for w in x.written] == sorted(w.slot for w in x.written)
             for w in x.written:
                 page = int(p.page_of[(w.slot - 3) % 16])
-                assert w.digest == codec.digest(s.payload(w.slot)) == codec.digest(expected_payload(s, w.slot, page, life))
-                index_of[(w.slot, step)] = w.index
+                assert w.digest == codec.digest(s.payload(w.slot)) == codec.digest(
+                    expected_payload(s, w.slot, page, lives[x.step]))
+                index_of[(w.slot, x.step)] = w.index
         for slot, page, c in pool_blocks(s):
             held = replay.holds(slot)
+            if page in open_pages:
+                continue
             if p.dirty[page, c]:
                 assert held is None, f"step {step}: slot {slot} is dirty in the store and live in the map"
             elif p.step[page, c] < 0:
@@ -129,7 +140,7 @@ def test_a_serving_trace_is_a_memory_map_the_driver_replays_as_the_store_holds_i
         assert all(replay.holds(x) == x for x in (0, 1, 2, 35, 36))
 
     steps = run_trace(s, m, check)
-    assert [x.step for x in steps] == [0, 1, 3, 5, 6]
+    assert [x.step for x in steps] == [0, 1, 2, 3, 5, 6]
     written = [w for x in steps for w in x.written]
     assert [w.index for w in written] == list(range(37, 37 + len(written)))
     # K0 K1 V0 V1 of page p in layer l are store blocks 3 + 16 l + 4 p + (0, 1, 2, 3)
@@ -138,18 +149,21 @@ def test_a_serving_trace_is_a_memory_map_the_driver_replays_as_the_store_holds_i
     assert [(x.freed, tuple(w.slot for w in x.written)) for x in steps] == [
         (tuple(l0(2, 0, 2) + l1(2, 0, 2)), whole(1)),
         (tuple(l0(2, 1, 3) + l1(2, 1, 3)), tuple(l0(2, 0, 2) + l1(2, 0, 2))),
-        (tuple(sorted(whole(1) + tuple(l0(2, 0, 2) + l1(2, 0, 2)))), whole(2)),
-        ((), whole(1)),
-        (whole(2), whole(0)),
+        (tuple(sorted(whole(1) + tuple(l0(2, 0, 2) + l1(2, 0, 2)))), ()),
+        ((), whole(2)),
+        (whole(2), whole(1)),
+        ((), whole(0)),
     ]
     # step 0 releases the filler page 1 held (written) and the filler page 2's K0 V0 held (reached); step 1 page 2's
-    # K1 V1 filler (reached); step 3 every block of pages 1 and 2 but page 2's dirty K1 V1 (freed by kv_free, once);
-    # step 5 nothing (page 1's released blocks are rewritten); step 6 page 2 (freed) and page 0's filler (written)
+    # K1 V1 filler (reached); step 2, whose forward read them last, every block of pages 1 and 2 but page 2's dirty
+    # K1 V1 (freed by kv_free, once); step 3 nothing (page 2's released blocks are rewritten); step 5 page 2 (freed
+    # before step 6's write) and nothing page 1's write overwrote; step 6 page 0's filler (written)
     assert changes[0].released == ((7, 5), (13, 1), (23, 5), (29, 1)) and (changes[0].first, changes[0].count) == (37, 8)
     assert changes[1].released == ((12, 1), (14, 1), (28, 1), (30, 1))
-    assert changes[2].released == ((37, 12),)
+    assert changes[2].released == ((37, 12),) and changes[2].count == 0
     assert changes[3].released == ()
-    assert changes[4].released == ((3, 4), (19, 4), (49, 8))
+    assert changes[4].released == ((49, 8),)
+    assert changes[5].released == ((3, 4), (19, 4))
 
 
 def test_a_freed_page_is_released_out_of_every_plan_until_written_again():
@@ -196,7 +210,8 @@ def test_the_first_window_chains_from_the_registration_the_map_names():
 
 
 def test_a_dirty_block_is_in_no_step_until_a_write_completes_it():
-    """A dirty block is freed when a write first reaches it, so a `kv_free` of its page frees only the rest."""
+    """A dirty block is freed when a write first reaches it, so a `kv_free` of its page frees only its appended
+    blocks; its untouched ones stay resident."""
     s, _ = store()
     m = s.record_memory_map(registration=registration(s).digest)
     s.kv_alloc([0, 1])
@@ -204,15 +219,17 @@ def test_a_dirty_block_is_in_no_step_until_a_write_completes_it():
     s.kv_write_reference([Append(0, 3, 1)], kv_payload, 1)
     s.kv_write_reference([Append(1, 0, 2)], kv_payload, 2)
     s.kv_free([0, 1])
-    assert m.text().count("\n") == 4
+    assert m.text().count("\n") == 3
     s.kv_append([], 3)
     m.flush()
     _, steps = memory_map.parse(m.text().splitlines())
-    first, second, third, fourth = list(steps)
+    first, second, third = list(steps)
     assert (first.freed, first.written) == ((3, 5, 19, 21), ())
     assert first.step == 0 and [w.slot for w in second.written] == [3, 5, 19, 21] and second.freed == ()
-    assert (third.freed, third.written) == ((7, 9, 23, 25), ())
-    assert (fourth.step, fourth.freed, fourth.written) == (3, (3, 4, 5, 6, 8, 10, 19, 20, 21, 22, 24, 26), ())
+    assert (third.step, third.written) == (2, ())
+    # page 0's K0 V0 (appended at step 1), page 1's K0 V0 (reached at step 2); both pages' K1 V1 are untouched filler
+    assert third.freed == (3, 5, 7, 9, 19, 21, 23, 25)
+    assert all(m.replay.holds(x) == x for x in (4, 6, 8, 10, 20, 22, 24, 26))
 
 
 def test_digests_are_taken_once_the_steps_bytes_are_in_place():
@@ -229,6 +246,95 @@ def test_digests_are_taken_once_the_steps_bytes_are_in_place():
     assert step.step == 0 and step.written[0].slot == 3 + 12
     assert step.written[0].digest == codec.digest(CODEC.decode(b"\x07" * BLOCK, s.region("kv/0").word_index(12)))
     assert m.flush() == []
+
+
+def test_a_live_block_is_re_keyed_once_its_window_is_lifetime_old():
+    """Under L = 2, page 0, written at step 0 before window 0 and never freed, is written again in its slots with its
+    digests at fresh indices by the line that closes in window 2, the first whose passes could not hold it; page 1,
+    freed in that line, is not."""
+    s, _ = store()
+    reg = registration(s)
+    m = s.record_memory_map(registration=reg.digest, lifetime=2)
+    s.kv_alloc([0, 1])
+    s.kv_write_reference([Append(0, 0, 8), Append(1, 0, 8)], kv_payload, 0)
+    for w, step in ((0, 1), (1, 2), (2, 3)):
+        if w:
+            s.end_window()
+        s.begin_window(bytes(32), reg.digest if w == 0 else None)
+        if step == 3:
+            s.kv_free([1])
+        s.kv_append([], step)
+    m.flush()
+    first, rekey = memory_map.parse(m.text().splitlines())[1]
+    page0, page1 = [3, 4, 5, 6, 19, 20, 21, 22], [7, 8, 9, 10, 23, 24, 25, 26]
+    assert (first.step, [w.slot for w in first.written]) == (0, sorted(page0 + page1))
+    assert (rekey.step, rekey.freed, [w.slot for w in rekey.written]) == (2, tuple(page1), page0)
+    assert [w.digest for w in rekey.written] == [w.digest for w in first.written if w.slot in page0]
+    assert [w.index for w in rekey.written] == list(range(37 + 16, 37 + 24))
+    assert m.rekeyed == 8 and m.joined == dict.fromkeys(page0, 2)
+    assert all(m.replay.holds(w.slot) == w.index for w in rekey.written)
+
+
+def test_a_block_written_and_freed_in_one_step_is_no_write():
+    """A write that completes a block and a free of its page in the same step: the line drops the write, and frees
+    the block only if its slot held one (a reached block was freed when the write first reached it)."""
+    s, _ = store()
+    m = s.record_memory_map(registration=registration(s).digest)
+    s.kv_alloc([0])
+    s.kv_write_reference([Append(0, 0, 3)], kv_payload, 0)
+    s.kv_write_reference([Append(0, 3, 1)], kv_payload, 1)
+    s.kv_free([0])
+    m.flush()
+    (first,) = memory_map.parse(m.text().splitlines())[1]
+    assert (first.step, first.freed, first.written) == (0, (3, 5, 19, 21), ()) and m.last == 1
+    # step 1's line is empty: K0 V0's write is dropped, and K1 V1, which no write reached, stay resident filler
+    assert all(m.replay.holds(x) is None for x in (3, 5)) and all(m.replay.holds(x) == x for x in (4, 6))
+    assert m.joined == {} and not s.pool.dirty[0, [1, 3]].any()
+
+
+def test_a_freed_pages_untouched_blocks_stay_resident_until_a_write_reaches_them():
+    """`kv_free` frees only a page's appended blocks: its untouched filler (registered before the seed, never written
+    since) stays resident, in the filler a plan may read, until a write first reaches it (freed there, if the write
+    leaves it part written) or completes it (released by that write, as the slot's previous block)."""
+    s, _ = store()
+    m = s.record_memory_map(registration=registration(s).digest)
+    s.kv_alloc([1])
+    s.kv_write_reference([Append(1, 0, 4)], kv_payload, 0)          # page 1's K0 V0 whole
+    s.kv_append([], 1)
+    s.kv_free([1])
+    s.kv_append([], 2)
+    k1v1 = [8, 10, 24, 26]
+    assert all(m.replay.holds(x) == x for x in k1v1) and {5, 7} <= set(s.idle_blocks("kv/0").tolist())
+    assert not {4, 6} & set(s.idle_blocks("kv/0").tolist())
+    s.kv_alloc([1])
+    s.kv_write_reference([Append(1, 0, 6)], kv_payload, 3)          # K0 V0 again; K1 V1 reached, left part written
+    s.kv_write_reference([Append(1, 6, 2)], kv_payload, 4)          # K1 V1 completed
+    m.flush()
+    steps = list(memory_map.parse(m.text().splitlines())[1])
+    assert [(x.step, x.freed, tuple(w.slot for w in x.written)) for x in steps] == [
+        (0, (), (7, 9, 23, 25)), (1, (7, 9, 23, 25), ()), (3, tuple(k1v1), (7, 9, 23, 25)), (4, (), tuple(k1v1))]
+    replay = Replay(memory_map.parse(m.text().splitlines())[0])
+    changes = [replay.apply(x) for x in steps]
+    assert changes[0].released == ((7, 1), (9, 1), (23, 1), (25, 1)) and changes[2].released == ((8, 1), (10, 1),
+                                                                                                    (24, 1), (26, 1))
+
+
+def test_each_pass_names_the_step_kv_append_opened_last():
+    s, _ = store()
+    reg = registration(s)
+    s.record_memory_map(registration=reg.digest)
+    s.begin_window(bytes(32), reg.digest)
+    s.kv_append([], 0)
+    for bad in (1, -1):
+        with pytest.raises(ValueError, match="kv_append opened last"):
+            s.begin_pass(None, step=bad)
+    s.begin_pass(None, step=0)
+    assert s.end_pass().step == 0
+    s.kv_append([], 1)
+    with pytest.raises(ValueError, match="above the last pass's 0"):
+        s.begin_pass(None, step=0)
+    s.begin_pass(None, step=1)
+    assert s.end_pass().step == 1
 
 
 def test_the_map_goes_to_the_provers_file(tmp_path):

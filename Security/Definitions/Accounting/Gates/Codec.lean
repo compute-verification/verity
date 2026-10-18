@@ -30,11 +30,12 @@ circuit of the model (`Model.lean`) computing its words is:
   For the same reason `ρ(p − x) = p − ρ(x)` (`Guarantees.Gates.RhoPairs`): `ρ` maps the pair `{x, p − x}` to the
   pair `{s, p − s}` of `±x`'s roots and takes the member the symbol names, so the ideal model of a round is a random
   function on such pairs with that sign rule, not a random permutation of `[0, p)`.
-* **Computing.** A circuit computes words `words` on a draw when its inputs and budgeted gates hold their declared
-  intervals there (`DeclaredHold`, which with `Proven` puts it in its window) and its output gates `out i l` hold the
-  targets' bytes (`Encodes`). `encodeCost` is the fewest budgeted units (`budgeted`) of any circuit of the model, with
-  its window proven, at most `B` operand bits a budgeted gate (`Restricted`) and no run input, that computes `q`
-  distinct words on more than `ε` of the draws, and `⊤` when there is none: the cost 6a's `encodeBitsCost` reads.
+* **Computing.** A circuit computes words `words` on a draw when its inputs and budgeted gates but gathers hold
+  their declared intervals there (`DeclaredHold`, which with `Proven` puts it in its window) and its output gates
+  `out i l` hold the targets' bytes (`Encodes`). `encodeCost` is the fewest budgeted units (`budgeted`) of any circuit
+  of the model, with its window proven, at most `B` operand bits a budgeted gate (`Restricted`) and no run input, that
+  computes `q` distinct words on more than `ε` of the draws, and `⊤` when there is none: the cost 6a's
+  `encodeBitsCost` reads.
 -/
 
 namespace Accounting.Gates
@@ -114,8 +115,8 @@ def CodecInputs (F : Field) (C : Dag ι) (D : Finset (Draw k)) (m : ℕ → ℕ)
     ∀ i, (∃ g ∈ C, g.op = .input .coin i) →
       (∃ s : Slot, ∀ d ∈ D, x d i = s.value F d m) ∨ ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i
 
-/-- On draw `d`, `C`'s inputs and budgeted gates hold their declared intervals and its outputs `out i l` hold the
-bytes of words `words`' encodings, less their parity. -/
+/-- On draw `d`, `C`'s inputs and budgeted gates but gathers hold their declared intervals and its outputs `out i l`
+hold the bytes of words `words`' encodings, less their parity. -/
 def Encodes (F : Field) (C : Dag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
     (d : Draw k) : Prop :=
   DeclaredHold C (x d) ∧
@@ -146,5 +147,11 @@ noncomputable def encodeCost (F : Field) (k B εnum εden q : ℕ) : ℕ∞ :=
 /-- The carry bound's fooling family: `a_S = 16 · Σ_{i ∈ S} 256^i`, bit 4 of byte `i` set for `i ∈ S`, so every byte
 of `a_S` is even and byte `2i + 1` of `a_S²` is odd exactly when `i ∈ S`. -/
 def sparse (S : Finset ℕ) : ℕ := 16 * ∑ i ∈ S, 256 ^ i
+
+/-- The nibble family: `a_t = 8 + Σ_{i<s} (16·t_i + 8)·256^(i+1)` for `t : Fin s → Fin 16`, byte 0 `8` and byte `i + 1`
+`16·t_i + 8`, so every byte of `a_t` is `8 mod 16` and the high nibbles are `t`. For `t ≠ t'` first apart at `m`,
+`a_t − a_t' = 16·256^(m+1)·D` with `D ≢ 0 mod 16` and `a_t + a_t' = 16·O` with `O` odd, so the squares agree below
+byte `m + 2` and differ there mod 16. -/
+def nibbles (s : ℕ) (t : Fin s → Fin 16) : ℕ := 8 + ∑ i : Fin s, (16 * (t i : ℕ) + 8) * 256 ^ (i.1 + 1)
 
 end Accounting.Gates
