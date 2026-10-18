@@ -1,13 +1,25 @@
 import Proofs.Population.Egress
 import Proofs.Population.Pointer
+import Proofs.Population.Work
 
 /-!
-# Leakage is control plus amplification
+# Leakage is the wrong units' cone egress
 
 The prover knows the secrets `s` (the weights), and commits an assignment `σ s` with at most `m` wrong units; the
 observer sees its egress. Over a set `Cl` of secrets (for instance those the honest egress cannot tell apart), the
 number of egress values the observer can tell apart is the leakage, in bits its logarithm.
 
+* `card_leak_le_cone`, **leakage beyond the honest egress is the wrong units' cone egress**: in a population with
+  single assignment and acyclicity, the egress off the cone of the wrong set `B` is the honest egress, and which egress
+  slots lie in the cone is fixed by `B` and the wiring. So the egress takes at most `#honest · Σ_B |V| ^ E(B)` values,
+  `E(B)` the egress slots in `B`'s cone (`coneEgress`), and `E(B) ≤ Σ_{u ∈ B} E(u)` (`card_coneEgress_le`).
+  `card_leak_le_coneEgress` is Daniel's form: at most `m` wrong units and `E(u) ≤ E_max` give
+  `#honest · C(|U|, m) · |V| ^ (m E_max)`, that is `log₂ C(|U|, m) + m · E_max · log₂ |V|` bits beyond the honest egress.
+  `card_leak_le_coneEgress_sum` is the weighted form: a draw that bounds `Σ_{u ∈ B} E(u) ≤ M` gives `|V| ^ M` times the
+  number of wrong sets within that budget.
+  Amplification needs no hypothesis: a correct unit that routes secrets to the egress does so inside the cone, which
+  `E` prices. `scale_coneEgress` and `scale_amp` show the bound is attained, and `vmStatic_coneEgress` that a machine's
+  step reaches the whole egress, where the bound says nothing.
 * `card_leak_le`, **control times amplification**: at most `K · α` egress values, `K = (∑_{j ≤ m} C(n, j)) |V| ^ (m w)`
   the control count of `Egress.card_egressAt_le` and `α` a bound on every amplification set (`amp`): the egress values
   the rest of the population makes of the secrets once the wrong units and their writes are fixed. The count needs no
@@ -108,6 +120,118 @@ theorem card_leak_le_of_not_up [Fintype U] [Fintype S] [DecidableEq S] (hc : P.C
       (∑ j ∈ range (m + 1), (Fintype.card U).choose j) * Fintype.card V ^ (m * w) := by
   simpa using P.card_leak_le f a X O Cl m w 1 hw (fun B _ b => P.card_amp_le_one hc ha f a hX Cl B b) σ hσ hm
 
+/-! ## Leakage is the wrong units' cone egress -/
+
+/-- Assignments that hold the same inputs and whose wrong units lie in `B` agree on every slot outside the writes of
+`B`'s cone. -/
+theorem eq_off_cone [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
+    {σ τ : S → V} (hin : ∀ t ∈ P.input, σ t = τ t) (hσ : P.wrong f σ ⊆ B) (hτ : P.wrong f τ ⊆ B) {s : S}
+    (hs : s ∉ P.writesOf (P.down B)) : σ s = τ s := by
+  by_cases hsi : s ∈ P.input
+  · exact hin s hsi
+  · obtain ⟨v, hv⟩ := hc s hsi
+    refine P.eq_off_down hc ha f hin hσ hτ v (fun hvd => hs ?_) s hv
+    classical
+    simp only [writesOf, mem_biUnion]
+    exact ⟨v, hvd, hv⟩
+
+theorem mem_coneEgress [Fintype U] {O : Finset S} {B : Finset U} {s : S} :
+    s ∈ P.coneEgress O B ↔ s ∈ O ∧ s ∈ P.writesOf (P.down B) := by
+  classical
+  exact mem_inter
+
+/-- **`E(B) ≤ Σ_{u ∈ B} E(u)`**: the egress in a set's cone is at most the sum of its units' cone egress. -/
+theorem card_coneEgress_le [Fintype U] (O : Finset S) (B : Finset U) :
+    (P.coneEgress O B).card ≤ ∑ u ∈ B, (P.coneEgress O {u}).card := by
+  classical
+  refine (card_le_card fun s hs => ?_).trans card_biUnion_le
+  simp only [coneEgress, mem_inter, writesOf, mem_biUnion] at hs ⊢
+  obtain ⟨hsO, v, hv, hsv⟩ := hs
+  obtain ⟨u, hu, -⟩ := mem_biUnion.1 (P.down_subset_biUnion B hv)
+  obtain ⟨u', hu', huv⟩ := (P.mem_down).1 hv
+  exact ⟨u', hu', hsO, v, (P.mem_down).2 ⟨u', mem_singleton_self u', huv⟩, hsv⟩
+
+/-- **Leakage is at most the honest egress times the wrong units' cone egress**: for every index `i ∈ Cl` (a secret,
+or a secret with the prover's coins), let the prover commit `σ i`, holding the inputs of the honest assignment
+`honest i`, with its wrong units inside some `B ∈ 𝓑`. The egress then takes at most `#honest · Σ_{B ∈ 𝓑} |V| ^ E(B)`
+values: off the cone of `B` it is the honest egress, and the cone's egress slots are fixed by `B` and the wiring. -/
+theorem card_leak_le_cone [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V] [DecidableEq V]
+    (f : P.Fns V) (O : Finset S) (𝓑 : Finset (Finset U)) {ι : Type} (Cl : Finset ι) (σ honest : ι → S → V)
+    (hin : ∀ i ∈ Cl, ∀ t ∈ P.input, σ i t = honest i t) (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u)
+    (hB : ∀ i ∈ Cl, ∃ B ∈ 𝓑, P.wrong f (σ i) ⊆ B) :
+    (Cl.image fun i (o : O) => σ i o).card ≤
+      (Cl.image fun i (o : O) => honest i o).card * ∑ B ∈ 𝓑, Fintype.card V ^ (P.coneEgress O B).card := by
+  classical
+  let H : Finset (O → V) := Cl.image fun i (o : O) => honest i o
+  let φ : (B : Finset U) → (O → V) × (P.coneEgress O B → V) → O → V := fun B p o =>
+    if ho : o.1 ∈ P.coneEgress O B then p.2 ⟨o.1, ho⟩ else p.1 o
+  have hsub : Cl.image (fun i (o : O) => σ i o) ⊆ 𝓑.biUnion fun B => (H ×ˢ univ).image (φ B) := by
+    intro e he
+    obtain ⟨i, hi, rfl⟩ := mem_image.1 he
+    obtain ⟨B, hB𝓑, hwB⟩ := hB i hi
+    refine mem_biUnion.2 ⟨B, hB𝓑, mem_image.2 ⟨((fun o => honest i o), fun t => σ i t),
+      mem_product.2 ⟨mem_image_of_mem _ hi, mem_univ _⟩, funext fun o => ?_⟩⟩
+    by_cases ho : o.1 ∈ P.coneEgress O B
+    · simp only [φ, ho, ↓reduceDIte]
+    · simp only [φ, ho, ↓reduceDIte]
+      have hoc : o.1 ∉ P.writesOf (P.down B) := fun h => ho (by simp [coneEgress, o.2, h])
+      exact (P.eq_off_cone hc ha f (hin i hi) hwB (by simp [P.wrong_eq_empty (hh i hi)]) hoc).symm
+  calc _ ≤ _ := card_le_card hsub
+    _ ≤ ∑ B ∈ 𝓑, ((H ×ˢ univ).image (φ B)).card := card_biUnion_le
+    _ ≤ ∑ B ∈ 𝓑, H.card * Fintype.card V ^ (P.coneEgress O B).card := by
+        refine sum_le_sum fun B _ => card_image_le.trans (le_of_eq ?_)
+        rw [card_product, card_univ, Fintype.card_fun, Fintype.card_coe]
+    _ = _ := by rw [mul_sum]
+
+/-- **Daniel's form**: with at most `m` wrong units and every unit's cone egress `E(u) ≤ E`, the egress takes at most
+`#honest · C(|U|, m) · |V| ^ (m E)` values, so the leakage beyond the honest egress is at most
+`log₂ C(|U|, m) + m · E · log₂ |V|` bits. -/
+theorem card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
+    [DecidableEq V] [Nonempty V] (f : P.Fns V) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
+    (hE : ∀ u, (P.coneEgress O {u}).card ≤ E) {ι : Type} (Cl : Finset ι) (σ honest : ι → S → V)
+    (hin : ∀ i ∈ Cl, ∀ t ∈ P.input, σ i t = honest i t) (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u)
+    (hm : ∀ i ∈ Cl, (P.wrong f (σ i)).card ≤ m) :
+    (Cl.image fun i (o : O) => σ i o).card ≤
+      (Cl.image fun i (o : O) => honest i o).card * (Fintype.card U).choose m * Fintype.card V ^ (m * E) := by
+  classical
+  have hB : ∀ i ∈ Cl, ∃ B ∈ powersetCard m (univ : Finset U), P.wrong f (σ i) ⊆ B := by
+    intro i hi
+    obtain ⟨B, hsub, hcard⟩ := Finset.exists_superset_card_eq (hm i hi) hmU
+    exact ⟨B, mem_powersetCard.2 ⟨subset_univ _, hcard⟩, hsub⟩
+  refine (P.card_leak_le_cone hc ha f O _ Cl σ honest hin hh hB).trans ?_
+  rw [Nat.mul_assoc]
+  refine Nat.mul_le_mul_left _ ?_
+  calc ∑ B ∈ powersetCard m (univ : Finset U), Fintype.card V ^ (P.coneEgress O B).card
+      ≤ ∑ _B ∈ powersetCard m (univ : Finset U), Fintype.card V ^ (m * E) := by
+        refine sum_le_sum fun B hB => Nat.pow_le_pow_right Fintype.card_pos ?_
+        obtain ⟨-, hBm⟩ := mem_powersetCard.1 hB
+        calc (P.coneEgress O B).card ≤ ∑ u ∈ B, (P.coneEgress O {u}).card := P.card_coneEgress_le O B
+          _ ≤ ∑ _u ∈ B, E := sum_le_sum fun u _ => hE u
+          _ = m * E := by simp [hBm]
+    _ = (Fintype.card U).choose m * Fintype.card V ^ (m * E) := by
+        rw [sum_const, card_powersetCard, card_univ]
+        simp
+
+/-- **Weighted by cone egress**: when the draw bounds the wrong units' total cone egress `Σ_{u ∈ B} E(u) ≤ M` instead of
+their number, the egress takes at most `#honest · #𝓑 · |V| ^ M` values, `𝓑` the wrong sets within that budget. -/
+theorem card_leak_le_coneEgress_sum [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
+    [DecidableEq V] [Nonempty V] (f : P.Fns V) (O : Finset S) (M : ℕ) {ι : Type} (Cl : Finset ι)
+    (σ honest : ι → S → V) (hin : ∀ i ∈ Cl, ∀ t ∈ P.input, σ i t = honest i t)
+    (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u)
+    (hM : ∀ i ∈ Cl, ∑ u ∈ P.wrong f (σ i), (P.coneEgress O {u}).card ≤ M) :
+    (Cl.image fun i (o : O) => σ i o).card ≤ (Cl.image fun i (o : O) => honest i o).card *
+      ((univ : Finset (Finset U)).filter fun B => ∑ u ∈ B, (P.coneEgress O {u}).card ≤ M).card *
+        Fintype.card V ^ M := by
+  classical
+  refine (P.card_leak_le_cone hc ha f O ((univ : Finset (Finset U)).filter fun B =>
+    ∑ u ∈ B, (P.coneEgress O {u}).card ≤ M) Cl σ honest hin hh fun i hi =>
+      ⟨_, mem_filter.2 ⟨mem_univ _, hM i hi⟩, Subset.refl _⟩).trans ?_
+  rw [Nat.mul_assoc]
+  refine Nat.mul_le_mul_left _ ((sum_le_sum fun B hB => Nat.pow_le_pow_right Fintype.card_pos
+    ((P.card_coneEgress_le O B).trans (mem_filter.1 hB).2)).trans (le_of_eq ?_))
+  rw [sum_const]
+  simp
+
 end Population.Dataflow
 
 namespace Population
@@ -201,5 +325,37 @@ theorem scale_amp (N : ℕ) :
     simpa [σ] using this
   have := card_le_card_of_injOn _ (s := univ) (fun x _ => hmem x) hinj.injOn
   simpa using this
+
+/-- **The cone egress prices the amplification**: the scalar unit's cone holds the whole egress, so
+`card_leak_le_cone` allows `2 ^ N` egress values at the wrong set `{none}`, which `scale_amp` attains. -/
+theorem scale_coneEgress (N : ℕ) :
+    (scale N).coneEgress (univ.filter fun s => s.isOut) {none} = univ.filter fun s => s.isOut := by
+  ext s
+  rw [Dataflow.mem_coneEgress]
+  refine ⟨And.left, fun hs => ⟨hs, ?_⟩⟩
+  cases s with
+  | ptr => simp at hs
+  | zero i => simp at hs
+  | secret i => simp at hs
+  | out i =>
+    simp only [Dataflow.writesOf, mem_biUnion]
+    exact ⟨some i, (scale N).mem_down.2 ⟨none, mem_singleton_self _,
+      .single ⟨.ptr, by simp [scale], by simp [scale]⟩⟩, by simp [scale]⟩
+
+/-- **A machine's step reaches the whole egress**: in the pointer machine declared statically, the pointer step's
+cone holds every output word, so `E_max = |E|` and the cone bound says nothing. -/
+theorem vmStatic_coneEgress (N : ℕ) :
+    (vmStatic N).coneEgress (univ.filter fun s => s.isOut) {none} = univ.filter fun s => s.isOut := by
+  ext s
+  rw [Dataflow.mem_coneEgress]
+  refine ⟨And.left, fun hs => ⟨hs, ?_⟩⟩
+  cases s with
+  | ptr => simp at hs
+  | zero i => simp at hs
+  | secret i => simp at hs
+  | out i =>
+    simp only [Dataflow.writesOf, mem_biUnion]
+    exact ⟨some i, (vmStatic N).mem_down.2 ⟨none, mem_singleton_self _,
+      .single ⟨.ptr, by simp [vmStatic], by simp [vmStatic]⟩⟩, by simp [vmStatic]⟩
 
 end Population
