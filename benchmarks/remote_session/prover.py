@@ -31,20 +31,21 @@ kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes 
 ~~~
 
 With serving ahead of the passes (`Ahead`: --ahead K for a kv session, or a serving backend's own), serving runs on
-its own thread, at most K steps past the pass reading, and the session takes each pass's step from it: the pass at s,
-once serving has handed step s − 1's record, to which a kv session adds the re-keys the pass's window needs and the
-store's indices (`ServingTrace.take`).  Each block is read in its slot (`CpuBackend.write`, `place`), so a write that
-lands in a slot while a pass still has to read the block it held changes that pass's receipts: serving writes into a
-slot whose block was released at step r (freed at r, or overwritten by the write itself at r) only once the pass at
-r has read (`Ahead.reuse`, the free fence).  One pass is then in flight at a time, not two: the next pass's step waits
-on serving, whose write may wait on this pass's read.  Without serving ahead the trace's step is the session's own,
-before each pass, and a block lands in its slot when it is encoded.
+its own thread, at most K steps past the pass in flight, and each pass takes the newest step it can: s, once serving
+has handed step s − 1, the records of the steps since the last pass's applied first, to which a kv session adds the
+re-keys the pass's window needs and the store's indices (`ServingTrace.take`).  A step serving ran past between two
+passes has no pass, and is credited nothing.  Each block is read in its slot (`CpuBackend.write`, `place`), so a
+write that lands in a slot while a pass still has to read the block it held changes that pass's receipts: serving
+writes into a slot whose block was released at step r (freed at r, or overwritten by the write itself at r) only once
+no pass to come is at a step up to r (`Ahead.reuse`, the free fence).  One pass is then in flight at a time, not two:
+the next pass's step waits on serving, whose write may wait on this pass's read.  Without serving ahead the trace's
+step is the session's own, before each pass, and a block lands in its slot when it is encoded.
 
 With a serving trace, the appends a pass's step made go out after the root before it and before the pass is computed,
-each its own message (its tree's root and size, `Session.append`) answered with its coin, under which the backend
-encodes its blocks (`audit.Store.encode`); then the root's message carries the blocks released since the last root
-sent, as runs (`Session.release`), and the pass's plan as a change from the last one sent (`Session.receive(...,
-change=...)`).  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
+each its own message (its tree's root and size, `Session.append`; a pass's are sent together) answered with its
+coin, under which the backend encodes its blocks (`audit.Store.encode`); then the root's message carries the blocks
+released since the last root sent, as runs (`Session.release`), and the pass's plan as a change from the last one
+sent (`Session.receive(..., change=...)`).  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
 takes the chain over its appends when the pass is launched (`audit.Store.head`).  A pass whose appends went out is
 sent, never dropped at a boundary, since a coin no root follows rejects the session; one dropped before its appends
 went out sends nothing, and the next pass sends its appends and changes too.
@@ -156,34 +157,38 @@ def plan_change(before: rb.Plan, after: rb.Plan) -> tuple[tuple[tuple[int, int],
 
 
 class Ahead:
-    """Serving's steps beside the session's passes, serving at most `k` steps past the pass reading: the hook that takes
-    the audit off serving's critical path.  R is the last step whose pass has read (-1 before the first), and the
-    session's next pass is at step R + 1, one pass a serving step.
+    """Serving's steps beside the session's passes, serving at most `k` steps past the pass in flight: the hook that
+    takes the audit off serving's critical path.  T is the step of the last pass taken and R of the last that has
+    read (-1 before the first); one pass is in flight at a time, so R < T while it reads and R = T between passes.
+    Each pass takes the newest step it can, the one after the last serving has handed (after T, so once serving has
+    handed T), so serving runs up to k + 1 steps a pass and a step serving ran past between two passes has no pass.
 
     serving's thread (the run's)
-      begin(s)     before step s: waits until s ≤ R + 1 + k; False once the session has ended (`end`), and serving's
-                   steps from s on are unaudited
+      begin(s)     before step s: waits until s ≤ max(R + 1, T) + k; False once the session has ended (`end`), and
+                   serving's steps from s on are unaudited
       reuse(r)     before a write into memory whose block was released at step r (freed there, or overwritten by this
-                   very write, r = s): waits until R ≥ r, the free fence, so every pass that holds the block has read
-                   it in place first
-      hand(s, x)   once step s has run, its record x, which the session takes for the pass at s + 1
+                   very write, r = s): waits until R ≥ r or T > r, the free fence: every pass at a step up to r, which
+                   holds the block, has read it in place first, and every later pass is past r
+      hand(s, x)   once step s has run, its record x
       finish()     serving has no more steps: the passes after its last cover idle steps
       fail(e)      serving raised e: the session's next `take` raises
     the session's thread
-      take(s)      the record of step s − 1 (None for one serving never ran), once serving has handed it or finished
+      take()       the next pass's step s and the records of the steps since the last pass's (None for one serving
+                   never ran), which the pass's plan applies first
       passed(s)    the pass at s has read, or never will (dropped at a boundary before it read)
       end()        the session is over: serving runs free
 
-    With `fill`, `take` also waits until serving waits on the passes (in `begin` or `reuse`) or has finished, so each
-    pass reads with serving as far ahead as the bound and the fence let it, whatever the threads' timing: one schedule
-    a run, the furthest, for tests.  `leads` is, for each pass, how many steps past its own serving had begun when it
-    finished reading (at most k); `waits` counts serving's waits on the bound and on the fence."""
+    With `fill`, `take` also waits, before it takes the step and again after, until serving waits on the passes (in
+    `begin` or `reuse`) or has finished, so each pass covers the furthest step serving can reach and reads with
+    serving as far past it as the bound and the fence let it, whatever the threads' timing: one schedule a run, for
+    tests.  `leads` is, for each pass, how many steps past its own serving had begun when it finished reading (at
+    most k); `waits` counts serving's waits on the bound and on the fence."""
 
     def __init__(self, k: int, fill: bool = False) -> None:
         if type(k) is not int or k < 0:
             raise ValueError(f"serving runs k ≥ 0 steps past the passes, not {k!r}")
         self.k, self.fill = k, fill
-        self.read, self.begun, self.last = -1, -1, -1
+        self.read, self.taken, self.begun, self.last = -1, -1, -1, -1
         self.handed: dict[int, object] = {}
         self.waiting: Callable[[], bool] | None = None
         self.over = self.done = False
@@ -202,9 +207,12 @@ class Ahead:
         self.cv.wait_for(lambda: self.over or ready())
         self.waiting = None
 
+    def _stuck(self) -> bool:
+        return self.done or (self.waiting is not None and not self.waiting())
+
     def begin(self, s: int) -> bool:
         with self.cv:
-            self._hold("bound", lambda: s <= self.read + 1 + self.k)
+            self._hold("bound", lambda: s <= max(self.read + 1, self.taken) + self.k)
             if self.over:
                 return False
             self.begun = s
@@ -212,7 +220,7 @@ class Ahead:
 
     def reuse(self, r: int) -> None:
         with self.cv:
-            self._hold("fence", lambda: r <= self.read)
+            self._hold("fence", lambda: r <= self.read or r < self.taken)
 
     def hand(self, s: int, record) -> None:
         with self.cv:
@@ -230,13 +238,18 @@ class Ahead:
             self.error, self.done = error, True
             self.cv.notify_all()
 
-    def take(self, s: int):
+    def take(self) -> tuple[int, list]:
         with self.cv:
-            self.cv.wait_for(lambda: self.done or (self.last >= s - 1 and (
-                not self.fill or (self.waiting is not None and not self.waiting()))))
+            self.cv.wait_for(lambda: self.done or (self.last >= self.taken and (not self.fill or self._stuck())))
             if self.error is not None:
-                raise RuntimeError(f"serving raised before step {s}'s pass") from self.error
-            return self.handed.pop(s - 1, None)
+                raise RuntimeError(f"serving raised before step {self.taken + 1}'s pass") from self.error
+            s = max(self.last, self.taken) + 1
+            records = [self.handed.pop(r, None) for r in range(max(self.taken, 0), s)]
+            self.taken = s
+            self.cv.notify_all()
+            if self.fill:
+                self.cv.wait_for(self._stuck)
+            return s, records
 
     def passed(self, s: int) -> None:
         with self.cv:
@@ -287,7 +300,6 @@ class ServingTrace:
         self.full = set(range(N - pool, N))
         self.freed_at: dict[int, int] = {}
         self.ahead: Ahead | None = None
-        self.taken = -1
         self.live = set(range(N))
         self.held: dict[int, tuple[int, bytes]] = {}
         self.appends: list[audit.Append] = []
@@ -334,12 +346,12 @@ class ServingTrace:
             self.full.add(x)
         return tuple(freed), writes
 
-    def record(self, s: int, window: int, freed, writes) -> memory_map.Change | None:
-        """Step s's record, the session's, in `window`: serving's frees and writes, then the re-keys of the blocks stale
-        in `window`, at the store's next fresh indices, appended to the backend's store and placed in their slots;
-        None for a step that changes nothing."""
+    def record(self, s: int, window: int, freed, writes, rekey: bool = True) -> memory_map.Change | None:
+        """Step s's record, the session's, in `window`: serving's frees and writes, then (if `rekey`) the re-keys of the
+        blocks stale in `window`, at the store's next fresh indices, appended to the backend's store and placed in
+        their slots; None for a step that changes nothing."""
         slots, payloads = [x for x, _ in writes], [m for _, m in writes]
-        rekey = [x for x in self.stale(window) if x not in slots and x not in freed]
+        rekey = [x for x in self.stale(window) if x not in slots and x not in freed] if rekey else []
         if not (freed or slots or rekey):
             return None
         self.steps += bool(slots)
@@ -365,8 +377,8 @@ class ServingTrace:
         return change
 
     def run(self, ahead: Ahead, every: int, fenced: bool = True) -> None:
-        """Serving on its own thread, until the session ends: step s writes pages when s + 1 is a multiple of `every`
-        (the step before every `every`'th pass), each write past `ahead`'s free fence unless not `fenced`."""
+        """Serving on its own thread, until the session ends: step s writes pages when s + 1 is a multiple of `every`,
+        each write past `ahead`'s free fence unless not `fenced`."""
         fence = ahead.reuse if fenced else (lambda r: None)
         try:
             s = 0
@@ -377,13 +389,11 @@ class ServingTrace:
             ahead.fail(e)
 
     def take(self, window: int) -> int:
-        """The step of the session's next pass, in `window`: one pass a serving step, the pass at s once serving has
-        handed step s − 1 (`Ahead.take`), whose record, with the re-keys `window` needs, is applied first."""
-        s = self.taken + 1
-        got = self.ahead.take(s)
-        if s > 0:
-            self.record(s - 1, window, *(got or ((), ())))
-        self.taken = s
+        """The step s of the session's next pass, in `window` (`Ahead.take`): the records of the steps serving ran
+        since the last pass's are applied first, in order, the last with the re-keys `window` needs."""
+        s, records = self.ahead.take()
+        for r, got in enumerate(records, s - len(records)):
+            self.record(r, window, *(got or ((), ())), rekey=r == s - 1)
         return s
 
     def plan(self) -> rb.Plan:
@@ -719,12 +729,15 @@ class ProverSide:
             passes.append((x.t, x.i, x.start, seen, clock()))
 
         def flush(x: _Pass) -> dict | None:
-            """x's appends not yet sent, each sent and answered with its coin, under which the backend encodes its
-            blocks: None, or the session's `end` if it came first."""
+            """x's appends not yet sent, sent together and each answered with its coin in turn, under which the backend
+            encodes its blocks, so x waits one round trip however many steps it covers: None, or the session's `end`
+            if it came first."""
             nonlocal sent_appends
-            for a in trace.appends[sent_appends:x.upto[0]]:
+            todo = trace.appends[sent_appends:x.upto[0]]
+            for a in todo:
                 self.conn.send({"type": "append", "root": a.root.hex(), "count": a.count})
                 sent_appends, x.flushed = sent_appends + 1, True
+            for a in todo:
                 reply = self._appended(pending)
                 if reply["type"] == "end":
                     return reply
