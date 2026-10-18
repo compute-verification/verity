@@ -55,9 +55,9 @@ theorem partLogs_dense {Coin Col T : Type} {H : Msg → Msg} {D : Deploy Coin} {
 
 /-- **`PartOpens` at a dense part, rec-open or algebra** (`partOpens_of_climbs`). -/
 theorem partOpens_dense {Coin Col T : Type} {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T}
-    {L : Layout} {opening : Opening} {cmt dig : Msg → ℕ → Msg → Msg} {s : ℕ}
-    (hO : HeldOpens D DO L Form.Dense opening dig s) (hC : RegClimbs H D DO L Form.Dense cmt dig s) :
-    PartOpens H D DO L Form.Dense opening cmt s :=
+    {L : Layout} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {opening : Opening} {cmt dig : Msg → ℕ → Msg → Msg}
+    {s : ℕ} (hO : HeldOpens D DO L Form.Dense shows opening dig s)
+    (hC : RegClimbs H D DO L Form.Dense shows cmt dig s) : PartOpens H D DO L Form.Dense shows opening cmt s :=
   partOpens_of_climbs hO hC
 
 /-- **V\*'s parts at the dense shape**: every part a rec-open or an algebra part (`DensePart`), opening what it holds
@@ -68,8 +68,8 @@ theorem vstarParts_dense {Coin W Col T : Type} [Inhabited Coin] {H : Msg → Msg
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {cmt dig : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
     {pub : Msg → List (Msg × Msg)} (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (hP : ∀ s, DensePart D decode L shows chk logs s) (hO : ∀ s, HeldOpens D DO L Form.Dense opening dig s)
-    (hC : ∀ s, RegClimbs H D DO L Form.Dense cmt dig s) (hS : Staged H D I L Form.Dense shows cmt)
+    (hP : ∀ s, DensePart D decode L shows chk logs s) (hO : ∀ s, HeldOpens D DO L Form.Dense shows opening dig s)
+    (hC : ∀ s, RegClimbs H D DO L Form.Dense shows cmt dig s) (hS : Staged H D I L Form.Dense shows cmt)
     (hD : Decomp H D I.V Form.Dense chk) (hLD : LogDecompPub H D I.V Form.Dense logs pub)
     (hPR : PubReg H D Form.Dense pub) (hH : HeldPub D I L Form.Dense) : VStarParts H D I DO L opening Form.Dense :=
   ⟨shows, chk, cmt, logs, pub, fun s => partChecks_dense hDO (hP s), fun s => partOpens_dense (hO s) (hC s),
