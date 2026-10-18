@@ -2067,3 +2067,24 @@ def test_a_doorbell_quoting_a_cards_decided_mark_does_not_stop_the_decision_ring
     rc, _, err = run(capsys, "ask-daniel", "status", "42")
     assert rc == 0 and "route @top: rang with the decision" in err
     assert [m["text"].startswith("from ask-daniel, card `42` decided") for m in bells(fake, top)] == [False, True]
+
+
+def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writes_as_a_person(monkeypatch):
+    """With a person's LINEAR_API_KEY every comment shows as that person, its sender only as the body's `@handle: `
+    (`Linear.comment`), so the asker's own follow-up counted as someone taking the ask, and it left UNANSWERED."""
+    from research import linear
+    nodes, asked = [{"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "@infra: any news?"}], []
+
+    class Fake:
+        def gql(self, q, v):
+            asked.append(q)
+            return {"issue": {"state": {"type": "backlog"}, "comments": {"nodes": nodes}}}
+
+    monkeypatch.setattr(linear, "Linear", Fake)
+    assert slack.issue_taken("INF-1", "infra", {}) is False and "body" in asked[0]
+    nodes.append({"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "@circuits: on it"})
+    assert slack.issue_taken("INF-1", "infra", {}) is True
+    nodes[1:] = [{"botActor": {"userDisplayName": "infra"}, "user": None, "body": "still waiting"}]
+    assert slack.issue_taken("INF-1", "infra", {}) is False
+    nodes[1:] = [{"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "looking now"}]
+    assert slack.issue_taken("INF-1", "infra", {}) is True

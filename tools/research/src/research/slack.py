@@ -1818,15 +1818,25 @@ def cmd_watch(ns: argparse.Namespace, reg: dict) -> int:
 
 # --- traffic: the monitor ---------------------------------------------------------------------------------------------------
 
+def comment_by(c: dict) -> str | None:
+    """Who a Linear comment is from: the app's `createAsUser` name, else (a person's key, where every comment shows as that
+    person) the handle its body opens with, `@handle: ` (`Linear.comment`), else the person."""
+    if bot := (c.get("botActor") or {}).get("userDisplayName"):
+        return bot
+    if m := re.match(r"@([a-z0-9._-]+): ", c.get("body") or ""):
+        return m[1]
+    return (c.get("user") or {}).get("name")
+
+
 def issue_taken(ident: str, asker: str | None, cache: dict[str, bool]) -> bool:
     """Whether the Linear issue `ident` was taken up there: it left Backlog (accepted, started, done or canceled), or
     someone other than `asker` commented on it.  False when Linear can't say, so a doubtful ask still shows."""
     if ident not in cache:
         from . import linear  # noqa: PLC0415
-        q = "query($id: String!) { issue(id: $id) { state { type } comments { nodes { botActor { userDisplayName } user { name } } } } }"
+        q = "query($id: String!) { issue(id: $id) { state { type } comments { nodes { botActor { userDisplayName } user { name } body } } } }"
         try:
             i = linear.Linear().gql(q, {"id": ident})["issue"]
-            who = [(c.get("botActor") or {}).get("userDisplayName") or (c.get("user") or {}).get("name") for c in i["comments"]["nodes"]]
+            who = [comment_by(c) for c in i["comments"]["nodes"]]
             cache[ident] = i["state"]["type"] != "backlog" or any(w and w != asker for w in who)
         except (linear.LinearError, OSError, KeyError, TypeError, ValueError):
             cache[ident] = False
@@ -1903,7 +1913,7 @@ def is_ask(m: dict) -> bool:
 
 ANSWER_REACTIONS = ("eyes", "white_check_mark", "x")
 LINEAR_ANSWER_Q = ("query($id: String!) { issue(id: $id) { createdAt history(first: 100) { nodes { createdAt fromState { type } toState { type } } } "
-                   "comments(first: 100) { nodes { createdAt user { name } botActor { userDisplayName } } } } }")
+                   "comments(first: 100) { nodes { createdAt user { name } botActor { userDisplayName } body } } } }")
 
 
 def _iso_epoch(stamp: str) -> float:
@@ -1921,8 +1931,7 @@ def issue_answer(lin: Any, ident: str, asker: str | None) -> dict | None:
            if (h.get("fromState") or {}).get("type") == "backlog" and (h.get("toState") or {}).get("type") not in (None, "backlog")
            and _iso_epoch(h["createdAt"]) > born]
     for c in i["comments"]["nodes"]:
-        who = (c.get("botActor") or {}).get("userDisplayName") or (c.get("user") or {}).get("name")
-        if who and who != asker:
+        if (who := comment_by(c)) and who != asker:
             out.append({"at": _iso_epoch(c["createdAt"]), "how": "linear-comment", "by": who})
     return min(out, key=lambda a: a["at"], default=None)
 
