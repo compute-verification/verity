@@ -45,7 +45,7 @@ from verity_vllm.program.kernels import inductor_rows as TW
 from verity_vllm.program.kernels.act_rows import silu_mul_expf_rows
 from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
 from verity_vllm.program.kernels.rows import token_select_first_max
-from verity_vllm.program.registry import act, b1, cublas_bf16
+from verity_vllm.program.registry import act, b1, cublas_bf16, cublas_gemv
 from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import fa2_split as W2
@@ -116,6 +116,9 @@ EXPERTS: dict[str, bool] = {MOE.MoeExpertGemm.id: False, MOE.MoeExpertGemmV2.id:
 GEMMS: dict[str, Callable[..., np.ndarray]] = {
     b1.GemmV2.id: lambda S, x, w: BC.linear_rows(x, w),
     cublas_bf16.CublasSplitKGemmWord.id: lambda S, x, w: BC.cublas_splitk_rows(x, w, S["SPLIT_K"], out="bf16"),
+    cublas_bf16.CublasSplitKGemmBf16PartialsWord.id: lambda S, x, w: BC.cublas_splitk_rows(x, w, S["SPLIT_K"], partial="bf16", out="bf16"),
+    cublas_bf16.CublasSerialSplitKGemmWord.id: lambda S, x, w: BC.cublas_serial_splitk_rows(x, w, S["SPLIT_K"]),
+    cublas_gemv.CublasGemvWord.id: lambda S, x, w: BC.cublas_gemv_rows(x, w, S["LANES"]),
 }
 #: each attention row Definition's twin (q, kc, vc, NS, BN, masked_from, dot_prim, inv_prim) -> (out, nonfinite) and split count
 ATTENTION: dict[str, tuple[Callable[..., tuple[np.ndarray, np.ndarray]], Callable[[dict[str, Any]], int]]] = {

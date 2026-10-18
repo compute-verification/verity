@@ -22,8 +22,9 @@ its capture sizes; another step of at most the largest capture size replays PIEC
 uncaptured.  Each step names the Definitions its batch selects:
 
   * a GEMM of M rows (the padded size under a graph, the step's tokens without; the logits' M is the step's requests) is the
-    cuBLAS route the serving device takes at (M, K, N) (`routes`): `Gemm_v2` unsplit, `CublasSplitKGemm_v1` split-K, with the
-    device's k16 step;
+    cuBLAS route the serving device takes at (M, K, N) (`routes`): `Gemm_v2` unsplit, `CublasSplitKGemm_v1` split-K (cc 12.0's
+    bf16 workspace `CublasSplitKGemmBf16Partials_v1`, its slices through the output `CublasSerialSplitKGemm_v1`), with the
+    device's k16 step, or cc 12.0's M = 1 gemvx `CublasGemv_v1`;
   * a query row i of a request's qlen rows over klen keys sees T = klen - qlen + 1 + i keys in the device's attention launch
     (`served_device.launch`).  FA3's tile (kBlockM, kBlockN) is the batch's max query length's; its scheduler (vllm-flash-attn's
     `num_splits_heuristic` and its varlen split, statically capped at `split_cap` when the step has at most the largest capture
@@ -59,7 +60,7 @@ from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.config import UsageError, option
-from verity_vllm.program.registry import b1, cublas_bf16
+from verity_vllm.program.registry import b1, cublas_bf16, cublas_gemv
 from verity_vllm.program.registry import inductor as IR
 from verity_vllm.query.manifest.bind import split_name
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
@@ -504,11 +505,16 @@ def _layer_of(value: str, producer: dict[str, dict[str, Any]]) -> str:
 
 # ------------------------------------------------------------------------------------------------------------- the steps
 def gemm_definition(route: dict[str, Any], K: int, N: int, dot: Any) -> dict[str, Any]:
-    if route["kernel"] == "nosplit":
+    kind = route["kernel"]
+    if kind == "nosplit":
         return bound(b1.GemmV2, K=K, N=N, DOT=dot)
-    if route["kernel"] == "splitk":
-        return bound(cublas_bf16.CublasSplitKGemmWord, K=K, N=N, SPLIT_K=int(route["SPLIT_K"]), DOT=dot)
-    raise Unmodelled(f"cuBLAS route {route}")
+    if kind == "gemv":
+        return bound(cublas_gemv.CublasGemvWord, K=K, N=N, LANES=int(route["LANES"]))
+    split = {"splitk": cublas_bf16.CublasSplitKGemmBf16PartialsWord if route.get("partial") == "bf16" else cublas_bf16.CublasSplitKGemmWord,
+             "serialk": cublas_bf16.CublasSerialSplitKGemmWord}.get(kind)
+    if split is None:
+        raise Unmodelled(f"cuBLAS route {route}")
+    return bound(split, K=K, N=N, SPLIT_K=int(route["SPLIT_K"]), DOT=dot)
 
 
 def dispatch(n: int, uniform_decode: bool, capture_sizes: list[int], max_num_seqs: int) -> tuple[str, int]:
@@ -666,30 +672,35 @@ def _final_value(split_graph: str, graph: dict[str, Any], wired: dict[str, Any])
 # ------------------------------------------------------------------------------------------------------------- the routes
 def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
     """cuBLAS's route at each (M, K, N) on this GPU, read from the words of `torch.mm(x, w.t(), out=y)` as the served wrapper calls
-    it: x all ones, w `bf16_gemm_check.splitk_count_probe`'s rows (zeros past them), so a split partition is readable from one row
-    (`fit_cublas_split_k`), and the serial k16 chain (`linear_rows`) is the unsplit route."""
+    it (W rows past the probe's zero): x all ones against `bf16_gemm_check.splitk_count_probe`'s rows reads the split counts a
+    partition could have (`fit_cublas_split_k`); of the routes those leave (`cublas_routes_at`), the one whose twin
+    (`cublas_route_rows`) computes every word of `route_probe_rows`' spread and cancelling rows is the route, and none or more
+    than one is refused, naming each route's missed words."""
     import torch
 
     from verity_vllm.program.registry import bf16_gemm_check as BC
 
+    to = lambda a: torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
+
+    def mm(M: int, K: int, N: int, x: np.ndarray, rows: np.ndarray) -> np.ndarray:
+        w = torch.zeros((N, K), dtype=torch.bfloat16, device="cuda")
+        w[:len(rows)] = to(rows)
+        y = torch.empty((M, N), dtype=torch.bfloat16, device="cuda")
+        torch.mm(to(x), w.t(), out=y)
+        return y[:, :len(rows)].cpu().view(torch.int16).numpy().view(np.uint16)
+
     out: dict[str, Any] = {}
     for M, K, N in shapes:
-        probe = BC.splitk_count_probe(K, N)
-        w = np.zeros((N, K), np.uint16)
-        w[:len(probe)] = probe
-        x = np.full((M, K), 0x3F80, np.uint16)
-        to = lambda a: torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
-        y = torch.empty((M, N), dtype=torch.bfloat16, device="cuda")
-        torch.mm(to(x), to(w).t(), out=y)
-        got = y[:1, :len(probe)].cpu().view(torch.int16).numpy().view(np.uint16)
-        fits = BC.fit_cublas_split_k(x[:1], probe, got, out="bf16")
-        serial = np.array_equal(BC.linear_rows(x[:1], probe), got)
-        if serial and not fits:
-            out[f"{M},{K},{N}"] = {"kernel": "nosplit"}
-        elif len(fits) == 1 and not serial:
-            out[f"{M},{K},{N}"] = {"kernel": "splitk", "SPLIT_K": fits[0]}
-        else:
-            raise Unmodelled(f"cuBLAS at M={M} K={K} N={N}: serial chain {serial}, split counts fitting {fits}: no one route models it")
+        probe, x = BC.splitk_count_probe(K, N), np.full((M, K), 0x3F80, np.uint16)
+        fits = BC.fit_cublas_split_k(x[:1], probe, mm(M, K, N, x, probe)[:1], out="bf16")
+        rows = sorted({0, M // 2, M - 1})
+        tests = [(xr[rows], w, mm(M, K, N, xr, w)[rows]) for xr, w in BC.route_probe_rows(M, K, min(N, 256))]
+        missed = {json.dumps(r): sum(int(np.count_nonzero(BC.cublas_route_rows(r, a, w) != y)) for a, w, y in tests)
+                  for r in BC.cublas_routes_at(fits)}
+        exact = [r for r, n in missed.items() if n == 0]
+        if len(exact) != 1:
+            raise Unmodelled(f"cuBLAS at M={M} K={K} N={N}: words missed by each route {missed}: no one route models it")
+        out[f"{M},{K},{N}"] = json.loads(exact[0])
     return {"device": torch.cuda.get_device_name(), "versions": {"torch": torch.__version__, "cuda": torch.version.cuda},
             "routes": out}
 
