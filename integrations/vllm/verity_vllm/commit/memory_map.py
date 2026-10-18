@@ -3,15 +3,18 @@ and freed, from the Program of record and the engine's page layout, with each bl
 Commit's committed words, `pipeline.memory_map`).
 
 ~~~text
-row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`; a layer's rows are
-          the rows its Calls share, in the order its Calls first read them (its positions), K and V paired by position
+row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row
+          of a sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane); a layer's rows are the
+          rows its Calls share, in the order its Calls first read them (its positions), K and V paired by position.  DSA's
+          indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting ruled them uncredited
+          until the map packs them
 born      a row's step, and `last` its last reader's: the circuit's requirement (`requirement.from_census`) over the
           Program's census at its sampling events (`query.required.SAMPLING_EVENTS`)
 page      `block_size` slots in each layer as the engine lays them out (`page_of`, from its cache tensor): a K plane then a
-          V plane, a slot one row ("planes"), or one plane whose slot holds a position's K and V head by head ("packed",
-          `packed`); a request's position q sits at slot `tables[request][q // block_size] * block_size + q % block_size`,
-          its pages the ones the engine wrote its KV to (`tables`, from the slots the Commit committed), vLLM's null block
-          being page 0
+          V plane, a slot one row ("planes"), one plane whose slot holds a position's K and V head by head ("packed",
+          `packed`), or one plane of latent rows ("latent"); a request's position q sits at slot
+          `tables[request][q // block_size] * block_size + q % block_size`, its pages the ones the engine wrote its KV to
+          (`tables`, from the slots the Commit committed), vLLM's null block being page 0
 block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `firsts[layer] + ids[page, c]` (the `Store`'s
           numbering: a KV pool of one region per layer)
 appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
@@ -61,6 +64,8 @@ from verity_vllm.store.registry import _page_blocks
 
 #: an attention Call's cached K and V parameters
 KV = ("kc", "vc")
+#: the Definitions, by name, whose cached parameter is one plane of MLA latent rows (FA3's sparse MLA, each version)
+LATENT = {"SparseMla": ("kv",), "SparseMlaSplit": ("kv",)}
 #: vLLM's null block, no request's page
 NULL_PAGE = 0
 
@@ -79,8 +84,8 @@ class Row:
 
 @dataclass(frozen=True)
 class Rows:
-    """A request Program's KV rows, ``layers[l][plane][position]`` (from `rows`, plane 0 K and 1 V; after `packed`, one plane),
-    each `row_bytes` bytes of `word_bytes`-byte words, over its `steps` steps."""
+    """A request Program's KV rows, ``layers[l][plane][position]`` (from `rows`, plane 0 K and 1 V, or one plane of latent rows;
+    after `packed`, one plane), each `row_bytes` bytes of `word_bytes`-byte words, over its `steps` steps."""
 
     layers: tuple[tuple[tuple[Row, ...], ...], ...]
     row_bytes: int
@@ -129,7 +134,8 @@ class _Append:
 @dataclass(frozen=True)
 class Page:
     """One layer's KV page as the engine lays it out: `pages` pages of `block_size` slots, "planes" (a K plane then a V
-    plane) or "packed" (a slot holds a position's K and V, `head_words` words of each per head in turn)."""
+    plane), "packed" (a slot holds a position's K and V, `head_words` words of each per head in turn) or "latent" (a slot
+    holds a position's latent row, of `head_words` words)."""
 
     form: str
     pages: int
@@ -140,19 +146,26 @@ class Page:
 def page_of(shape: Sequence[int], stride: Sequence[int], itemsize: int, rs: Rows) -> Page:
     """The page of a layer's KV cache tensor (its shape, strides in elements and element bytes) holding `rs`'s rows: vLLM
     0.28's FlashAttention ``[pages, heads, block_size, 2 * head]`` slot-major (strides ``(bs*H*2D, 2D, H*2D, 1)``) is
-    "packed", ``[pages, 2, block_size, heads, head]`` contiguous "planes"; any other layout is refused."""
+    "packed", ``[pages, 2, block_size, heads, head]`` contiguous "planes", and MLA's ``[pages, block_size, row]`` contiguous
+    (bound squeezed of its one head) "latent", for latent rows; any other layout is refused."""
     words, shape, stride = rs.row_bytes // rs.word_bytes, tuple(map(int, shape)), tuple(map(int, stride))
+    planes = len(rs.layers[0]) if rs.layers else 0
     if itemsize != rs.word_bytes:
         raise ValueError(f"a KV cache of {itemsize}-byte elements holds rows of {rs.word_bytes}-byte words")
-    if len(shape) == 4:
+    if len(shape) == 3 and planes == 1:
+        nb, bs, w = shape
+        if w == words and stride == (bs * w, w, 1):
+            return Page("latent", nb, bs, w)
+    if len(shape) == 4 and planes == 2:
         nb, h, bs, d2 = shape
         if h * d2 == 2 * words and stride == (bs * h * d2, d2, h * d2, 1):
             return Page("packed", nb, bs, d2 // 2)
-    if len(shape) == 5:
+    if len(shape) == 5 and planes == 2:
         nb, two, bs, h, d = shape
         if two == 2 and h * d == words and stride == (2 * bs * h * d, bs * h * d, h * d, d, 1):
             return Page("planes", nb, bs, d)
-    raise ValueError(f"a KV cache {list(shape)} at strides {list(stride)} is no page memory-map/v1 lays out rows of {words} words in")
+    raise ValueError(f"a KV cache {list(shape)} at strides {list(stride)} is no page memory-map/v1 lays out {planes} plane(s) of "
+                     f"rows of {words} words in")
 
 
 def packed(rs: Rows) -> Rows:
@@ -163,7 +176,7 @@ def packed(rs: Rows) -> Rows:
 
 
 def _cut(refs, width: int, inputs: int, what: str) -> list[tuple[Slice, ...]]:
-    """A `kc` or `vc` argument's rows of `width` leaves, each as the function's slices it is."""
+    """A cached argument's (`kc`, `vc` or `kv`) rows of `width` leaves, each as the function's slices it is."""
     out, cur, need = [], [], width
     for space, k, lo, hi in runs(refs):
         if space != "n" or k < inputs:
@@ -206,42 +219,43 @@ def rows(program: Program, c: Mapping | None = None) -> Rows:
         return Row(group, born, max(req.last.get(v, born) for v in vs))
 
     layer_of: dict[tuple[Slice, ...], int] = {}
-    pair: dict[tuple[Slice, ...], tuple[Slice, ...]] = {}
+    pair: dict[tuple[Slice, ...], tuple[tuple[Slice, ...], ...]] = {}
     layers: list[list[tuple[Slice, ...]]] = []
     kind = None
     for k, nd in enumerate(body.nodes):
         if is_input(nd.fn) or isinstance(nd.fn, PrimitiveDefinition):
             continue
         names = [n for n, _ in nd.fn.signature()[0]]
-        if not set(KV) <= set(names):
+        cached = LATENT.get(getattr(nd.fn, "name", None), KV)
+        if not set(cached) <= set(names):
             continue
-        kc, vc = (nd.args[names.index(p)] for p in KV)
-        t = kc.type
-        if nd.form != "call" or not isinstance(t, Array) or vc.type != t or t.elem.homogeneous_width() is None:
-            raise ValueError(f"root node {k} ({nd.fn.id}) holds its KV otherwise than as one Call's kc, vc: Array(T, row) each")
-        here = (t.elem.leaves, t.elem.homogeneous_width())
+        args = [nd.args[names.index(p)] for p in cached]
+        t = args[0].type
+        if nd.form != "call" or not isinstance(t, Array) or any(a.type != t for a in args) or t.elem.homogeneous_width() is None:
+            raise ValueError(f"root node {k} ({nd.fn.id}) holds its KV otherwise than as one Call's {', '.join(cached)}: Array(T, row) each")
+        here = (len(cached), t.elem.leaves, t.elem.homogeneous_width())
         if kind not in (None, here):
-            raise ValueError(f"root node {k} ({nd.fn.id}) has rows of {here} (leaves, bits), another layer's are {kind}")
+            raise ValueError(f"root node {k} ({nd.fn.id}) has rows of {here} (planes, leaves, bits), another layer's are {kind}")
         kind = here
-        ks, vs = (_cut(a.refs, here[0], inputs, f"root node {k}'s {p}") for a, p in zip((kc, vc), KV))
+        ks, *vs = (_cut(a.refs, here[1], inputs, f"root node {k}'s {p}") for a, p in zip(args, cached))
         seen = {layer_of[g] for g in ks if g in layer_of}
         if len(seen) > 1:
             raise ValueError(f"root node {k} ({nd.fn.id}) reads the K rows of layers {sorted(seen)}")
         layer = seen.pop() if seen else len(layers)
         if layer == len(layers):
             layers.append([])
-        for kg, vg in zip(ks, vs):
-            if pair.setdefault(kg, vg) != vg:
+        for kg, *vg in zip(ks, *vs):
+            if pair.setdefault(kg, tuple(vg)) != tuple(vg):
                 raise ValueError(f"root node {k} ({nd.fn.id}) reads a K row with another V row than a Call before it")
             if kg not in layer_of:
                 layer_of[kg] = layer
                 layers[layer].append(kg)
     if kind is None:
-        raise ValueError("the Program has no attention Call with kc and vc: no KV to record")
-    leaves, bits = kind
+        raise ValueError("the Program has no attention Call with kc and vc, nor a sparse MLA Call's kv: no KV to record")
+    planes, leaves, bits = kind
     if bits % 8:
         raise ValueError(f"a KV word of {bits} bits is no whole bytes")
-    return Rows(tuple((tuple(row(g) for g in ks), tuple(row(pair[g]) for g in ks)) for ks in layers),
+    return Rows(tuple((tuple(row(g) for g in ks), *(tuple(row(pair[g][i]) for g in ks) for i in range(planes - 1))) for ks in layers),
                 leaves * bits // 8, bits // 8, req.steps)
 
 

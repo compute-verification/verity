@@ -2,7 +2,8 @@
 of 128 bf16) in pages of 4 slots, so a plane of a page is one 4 KiB block; request r0 (a 4-row prefill, then 5 decode steps) from
 step 0, and r1 (a 4-row prefill, then 1 decode step) from step 1, which ends while r0 runs.  The record is one
 `remote_bandwidth.memory_map.Replay` accepts, a complete block is in it exactly while the requirement has its rows live, and the
-pages are the ones the engine's slots name.
+pages are the ones the engine's slots name.  GLM-5.3's MLA: the DSA stand-in's rows are its latent rows, one plane a layer, in
+MLA's latent page, and 1152-byte latent rows lay out 18 blocks a page of 64 slots, rows straddling blocks.
 """
 from __future__ import annotations
 
@@ -11,8 +12,13 @@ import hashlib
 import pytest
 
 from tests.predict.test_predict import TINY, _phi
+from tests.program import test_dsa_derive as DSA
+from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.core.protocols.remote_bandwidth import codec
 from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
+from verity.ml.circuits.census import census
+from verity.ml.circuits.program import is_input
+from verity.ml.circuits.refs import runs
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.predict.build import build_program
 
@@ -46,18 +52,19 @@ def _slots(reqs, tables):
     return lambda r, step: [tables[r][q // 4] * 4 + q % 4 for q, x in enumerate(reqs[r].layers[0][0]) if ARRIVE[r] + x.born == step]
 
 
-def _engine(reqs, tables, planes=2):
-    """`block(layer, page, c)` of an engine whose caches hold each request's rows at its pages (unwritten slots zero), a page's
-    planes in order."""
+def _engine(reqs, tables, bs=4, payload=_payload):
+    """`block(layer, page, c)` of an engine whose caches hold each request's rows at its pages of `bs` slots (unwritten slots
+    zero), a page's planes in order."""
     pages: dict[tuple[int, int], bytearray] = {}
     for r, rs in reqs.items():
+        plane = bs * rs.row_bytes
         for layer, kv in enumerate(rs.layers):
             for q, page in enumerate(tables[r]):
-                buf = pages.setdefault((layer, page), bytearray(8192))
-                for plane, rows in enumerate(kv):
-                    for p in range(4 * q, min(4 * q + 4, rs.positions)):
-                        row = _payload(r, rows[p])
-                        at = plane * 4096 + (p % 4) * len(row)
+                buf = pages.setdefault((layer, page), bytearray(len(kv) * plane))
+                for k, rows in enumerate(kv):
+                    for p in range(bs * q, min(bs * q + bs, rs.positions)):
+                        row = payload(r, rows[p])
+                        at = k * plane + (p % bs) * len(row)
                         buf[at:at + len(row)] = row
     return lambda layer, page, c: bytes(pages[layer, page][c * 4096:(c + 1) * 4096])
 
@@ -287,3 +294,83 @@ def test_refusals(reqs):
     with pytest.raises(ValueError, match="KV differs"):
         MM.record({"r0": reqs["r0"], "t": MM.rows(build_program(_phi(TINY), "request", LP=4, T=1).program)}, {"r0": 0, "t": 0},
                   _payload, REGISTRATION, LAYOUT, {"r0": [1, 2, 3], "t": [4, 5]})
+
+
+# -- GLM-5.3's MLA: one plane of latent rows --------------------------------------------------------------------------------
+
+
+def dsa_program(model):
+    """The DSA stand-in's Program (`tests/program/test_dsa_derive.py`) with its census at its steps, each closed before the first
+    node reading the next step's inputs."""
+    program = DSA._derive(model, DSA._inputs(model)).program
+    nodes, first = program.root.body.nodes, sum(layer.n_inputs for layer in model.layers)
+    ends = [min(k for k, nd in enumerate(nodes) if not is_input(nd.fn) for a in nd.args for s, j, _, _ in runs(a.refs)
+                if s == "n" and t * first <= j < (t + 1) * first) for t in range(1, len(model.steps))]
+    return program, census(program, ends + [len(nodes)])
+
+
+@pytest.fixture
+def dsa(served):  # noqa: F811
+    program, c = dsa_program(DSA._model())
+    return program, MM.rows(program, c)
+
+
+def test_a_sparse_mla_layers_rows_are_its_latent_rows(dsa):
+    program, rs = dsa
+    # an indexer layer and an IndexShare layer, each its own history of one plane: positions 0 and 1 written at the prefill, 2 at
+    # the decode, which reads every row
+    assert (len(rs.layers), [len(kv) for kv in rs.layers], rs.positions, rs.row_bytes, rs.word_bytes, rs.steps) == (2, [1, 1], 3, 64, 2, 2)
+    nodes = program.root.body.nodes
+    inputs = sum(1 for nd in nodes if is_input(nd.fn))
+    for (plane,) in rs.layers:
+        assert [x.born for x in plane] == [0, 0, 1] and {x.last for x in plane} == {1}
+        # a row is the normed latent, then the roped key, as vLLM's MLA cache row holds them; the indexer's keys are no row
+        assert {tuple((nodes[inputs + j].fn.name, hi - lo) for _, j, lo, hi in x.group) for x in plane} == {
+            (("RMSNormTriton", DSA.L), ("RoPEHeadGptJ", DSA.R))}
+    assert not {x.group for x in rs.layers[0][0]} & {x.group for x in rs.layers[1][0]}
+
+
+def test_mlas_cache_is_a_latent_page(dsa, reqs):
+    _, rs = dsa
+    assert MM.page_of((10, 4, 32), (128, 32, 1), 2, rs) == MM.Page("latent", 10, 4, 32)
+    # DSA's indexer cache (bytes, [pages, block_size, 132]) lays out no rows of these: memory accounting has it uncredited until
+    # the map packs its rows across blocks
+    with pytest.raises(ValueError, match="1-byte elements"):
+        MM.page_of((10, 4, 36), (144, 36, 1), 1, rs)
+    with pytest.raises(ValueError, match="no page memory-map/v1 lays out 1 plane"):
+        MM.page_of((10, 1, 4, 32), (128, 128, 32, 1), 2, rs)          # unsqueezed of its one head
+    with pytest.raises(ValueError, match="no page memory-map/v1 lays out 1 plane"):
+        MM.page_of((10, 4, 32), (256, 32, 1), 2, rs)                  # a page apart from the next
+    with pytest.raises(ValueError, match="no page memory-map/v1 lays out 2 plane"):
+        MM.page_of((10, 4, 512), (2048, 512, 1), 2, reqs["r0"])       # K and V rows hold no latent page
+
+
+def latent(prefill: int, positions: int) -> MM.Rows:
+    """GLM-5.3's MLA rows of a request (576 bf16: the 512-wide latent and the 64-wide roped key) that prefills `prefill` positions,
+    then decodes one a step to `positions`, its last step reading every row: 2 layers of one plane."""
+    steps = 1 + positions - prefill
+    return MM.Rows(tuple((tuple(MM.Row((("mla", layer, q),), max(0, q - prefill + 1), steps - 1) for q in range(positions)),)
+                         for layer in range(2)), 1152, 2, steps)
+
+
+def _latent_payload(r: str, row: MM.Row) -> bytes:
+    return hashlib.shake_256(repr((r, row.group)).encode()).digest(1152)
+
+
+def test_a_latent_page_of_64_slots_is_18_blocks_its_rows_straddle():
+    rs, tables, layout = {"r": latent(70, 80)}, {"r": [1, 2]}, MM.Layout(block_size=64, pages=4)
+    head, steps = MM.record(rs, {"r": 0}, _latent_payload, REGISTRATION, layout, tables)
+
+    def at(page, *cs):
+        return sorted(layer * 4 * 18 + page * 18 + c for layer in range(2) for c in cs)
+    # page 2's block c holds slots [c*4096 // 1152, ceil((c+1)*4096 / 1152)): rows 3, 7, 10 and 14 straddle two; position q >= 70
+    # is born at step q - 69, so its blocks complete at steps 0, 2, 5 and 9, and block 4 (slots 14-17) stays dirty
+    assert head.blocks == 2 * 4 * 18 and [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [
+        (0, at(2, 1), sorted(at(1, *range(18)) + at(2, 0))), (2, at(2, 2), at(2, 1)), (5, at(2, 3), at(2, 2)), (9, at(2, 4), at(2, 3)),
+        (10, sorted(at(1, *range(18)) + at(2, 0, 1, 2, 3)), [])]
+    rows = rs["r"].layers[0][0]
+    want = codec.digest(b"".join(_latent_payload("r", x) for x in rows[64 + 3:64 + 8])[4096 - 3 * 1152:][:4096])
+    assert next(w.digest for w in steps[1].written if w.slot == at(2, 1)[0]) == want
+    got_head, got = parse(dumps(head, steps).splitlines())
+    assert _replayed(got_head, got).extent == head.blocks + 2 * (18 + 4)
+    assert MM.engine_agrees(rs, layout, tables, steps, _engine(rs, tables, bs=64, payload=_latent_payload)) == {"compared": 44, "equal": 44}
