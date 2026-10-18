@@ -131,7 +131,6 @@ class SingleRow(Row):
         if not os.path.isfile(self.path(self.wl)):
             print(f"no manifest {self.wl}")
             raise Stop(2)
-        self.refuse_unserved_engine()
         self.trap = True
         rel_line, rel_src = self.release_line(" (release_json.py failed; not installed here by pod_release.sh)")
         self.rel_tag = rel_line.split("|", 1)[0]
@@ -374,11 +373,11 @@ class SingleRow(Row):
 
     # ------------------------------------------------------------------------------------------------ Match
     def derive_missing(self, derived: list[str], label: str) -> None:
-        """Derive the request shapes X-09 named as missing (one request-wrapper derivation per (LP, T))."""
-        for lp, t in R.missing_derived(self.d):
-            self.log(f"{label}: deriving request Program LP={lp} T={t}")
-            out = f"{self.d}/build_request_LP{lp}_T{t}"
-            self.run_to(self.cb.build_timeout or 900, f"{out}.log", self.request_cmd(lp, t, out))
+        """Derive the request shapes X-09 named as missing (one request-wrapper derivation per (LP, T[, C]))."""
+        for s in R.missing_derived(self.d):
+            self.log(f"{label}: deriving request Program {PP.shape_name(s)}")
+            out = f"{self.d}/build_request_{PP.shape_name(s)}"
+            self.run_to(self.cb.build_timeout or 900, f"{out}.log", self.request_cmd(s[0], s[1], out, C=PP.cached_rows(s)))
             derived += ["--derived", out]
 
     def compare(self, to_c: int) -> tuple[int, int | None, bool]:

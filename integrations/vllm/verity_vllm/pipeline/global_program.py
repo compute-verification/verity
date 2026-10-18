@@ -296,11 +296,11 @@ def modelled_engine(execution: str, comps: dict) -> tuple[dict, str | None]:
     `applicability.engine` blocks (derive_step writes profile.modelled_engine(): enforce_eager False + compilation_mode/backend/cudagraph_mode/…)
     or their `applicability.compilation` dicts must AGREE and carry compilation facts (at least cudagraph_mode); the workload engine block
     is then enforce_eager False + `compilation` = the normalised facts (what GM-01 G1 compares with the record header) + GP-01's own
-    conditions (no prefix caching; chunked prefill modelled)."""
+    conditions (prefix caching as the manifest declares it, `workload_applicability`; chunked prefill modelled)."""
     ex = str(execution or "")
     # [compiled M-0174 (a)] the components' agreed applicability.engine block (derive_step: profile.modelled_engine()) is carried verbatim
     # into the workload engine block (claim text, program_derivation, attention note...); GP-01's own compose-level conditions stay
-    # authoritative for what GP-01 models (no prefix caching; chunked prefill modelled) and enforce_eager follows the execution label.
+    # authoritative for what GP-01 models (prefix caching the manifest's; chunked prefill modelled), enforce_eager follows the execution label.
     blocks = [a.get("engine") for a in comps.values() if a and isinstance(a.get("engine"), dict)]
     encs_b = {json.dumps(b, sort_keys=True, default=str) for b in blocks}
     if len(encs_b) > 1:

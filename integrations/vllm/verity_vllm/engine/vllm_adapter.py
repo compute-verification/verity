@@ -139,9 +139,17 @@ def sampling_params(req: dict, sampling: dict) -> Any:
                           logprobs=sampling.get("logprobs"))
 
 
+def fresh_prefix_cache(engine: Engine) -> None:
+    """Empty vLLM's prefix cache before a workload run of an engine that serves with it: a run's prefix-cache hits are its own requests'
+    (`program.prefix_plan`), never those of a run before it on the same engine (a warm-up, the other arm of a pair, a capture)."""
+    if engine.kwargs.get("enable_prefix_caching") and engine.llm.reset_prefix_cache() is False:
+        raise RuntimeError("vLLM refused to reset its prefix cache (a request is still running)")
+
+
 def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[dict[str, list[int]], dict]:
     """Add every request with *our* request ids and step the engine until all finish (driver.run_requests; with declared
     `arrive_step`s, `run_requests_arrivals`).  `timing["requests"]` carries the realized per-request steps (D87)."""
+    fresh_prefix_cache(engine)
     class _R:
         def __init__(self, d: dict, order: int) -> None:
             self.request_id = d["request_id"]

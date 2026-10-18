@@ -196,6 +196,7 @@ def nvidia_smi_used_mib() -> int | None:
 
 def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dict:
     """The serving loop (identical for both arms): admit requests at their arrive_step, step until done, time every step() return."""
+    va.fresh_prefix_cache(engine)
     eng = engine.llm.llm_engine
     pending = sorted(range(len(requests)), key=lambda i: (int(requests[i].get("arrive_step") or 0), i))
     tokens: dict[str, list[int]] = {}

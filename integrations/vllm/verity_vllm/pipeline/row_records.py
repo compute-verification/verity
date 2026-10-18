@@ -216,9 +216,9 @@ def build_line(d: str) -> tuple[str, str]:
     return digest, man
 
 
-def missing_derived(d: str) -> list[tuple[int, int]]:
-    """The request shapes X-09 named as not derived (``match_decomp.json`` missing_derived)."""
-    return [(int(lp), int(t)) for lp, t in json.load(open(f"{d}/match_decomp.json"))["missing_derived"]]
+def missing_derived(d: str) -> list[tuple[int, ...]]:
+    """The request shapes X-09 named as not derived (``match_decomp.json`` missing_derived): (LP, T), or (LP, T, C) for a cached prefix."""
+    return [PP.shape(*(int(x) for x in s)) for s in json.load(open(f"{d}/match_decomp.json"))["missing_derived"]]
 
 
 def decomp_rc(d: str) -> int:
