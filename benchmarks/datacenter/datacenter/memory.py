@@ -4,13 +4,16 @@ A `Store` is registered state: `bits` bits the developer says a device holds. It
 prover (a KV cache, which may itself hide state) or the verifier (`labels`: the challenger's labels, which hide nothing
 and so displace whatever else the device held).
 
-The trusted challenger asks for a store at a tick and wants the answer by a deadline (`Challenge`), or wants `bits` of
-it read within an interval (`Reads`). A `Wipe` is a store of labels the challenger fills a device's memory with,
-spot-checked within its interval: its `bits` are a protocol parameter, chosen by the verifier, not read off the device.
+The trusted challenger asks for a sample of a store at a tick and wants the answer by a deadline (`Challenge`, PoUS), or
+has the prover read a store through a window and counts the bits it read (`ReadWindow`, the bandwidth audits). A
+`Wipe` is a store of labels the challenger fills a device's memory with, spot-checked within its interval: its `bits`
+are a protocol parameter, chosen by the verifier, not read off the device.
 
-Where the bits really are decides how fast they can be served (`serve_time`): the holding device's read bandwidth, and,
-when they sit on another device, the path from there (each link's latency, the bits at its narrowest link). A deadline
-that only the registered holder can meet turns "the answer was on time" into "the bits were on that device".
+Where the bits really are decides how fast they can be served (`read_rate`, `serve_time`): the holding device's read
+bandwidth, and, when they sit on another device, the path from there (each link's latency, the bits at its narrowest
+link). A deadline that only the registered holder can meet turns "the answer was on time" into "the bits were on that
+device": by latency for a small sample, by bandwidth for a whole read. Labels the prover could rebuild from a seed
+faster than the deadline locate nowhere.
 """
 from __future__ import annotations
 
@@ -23,61 +26,91 @@ from .time import Interval
 
 @dataclass(frozen=True)
 class Store:
-    """Registered state: `bits` bits that `device` holds, by the registration. `content` says who chose them."""
+    """Registered state: `bits` bits that `device` holds, by the registration. `content` says who chose them. `regen` is
+    what rebuilding one bit costs, in the codec's squarings (`rate["square-1024"]`), for labels the prover can derive
+    from a seed (0: it can't, as for its own data or labels the challenger streams in)."""
 
     name: str
     bits: float
     device: str
     content: Literal["prover", "labels"] = "prover"
+    regen: float = 0.0
 
 
 @dataclass(frozen=True)
 class Challenge:
-    """`challenger` asks for store `store` at tick `at` and wants the answer within `deadline` ticks."""
+    """`challenger` asks for `sample` bits of store `store` (PoUS's s sampled blocks; None: all of it) at tick `at`
+    and wants the answer within `deadline` ticks."""
 
     store: str
     at: int
     deadline: int
     challenger: str = "challenger"
+    sample: float | None = None
 
 
 @dataclass(frozen=True)
-class Reads:
-    """A bandwidth audit's demand: `bits` of store `store` read within `during`."""
+class ReadWindow:
+    """One window of a bandwidth audit (the remote audit's window t): `challenger` sends its challenge at `start`, the
+    prover reads store `store` and commits receipts until `boundary`, and its roots are due by `deadline` (the boundary
+    plus the allowance A), before an openings coin checks them. How many bits were read is the window's output."""
 
     store: str
-    bits: float
-    during: Interval
+    start: int
+    boundary: int
+    deadline: int
     challenger: str = "challenger"
+
+    @property
+    def during(self) -> Interval:
+        return Interval(self.start, self.boundary)
 
 
 @dataclass(frozen=True)
 class Wipe:
-    """A verified wipe: `challenger` fills `device` with `bits` of labels and spot-checks them within `during`."""
+    """A verified wipe: `challenger` fills `device` with `bits` of labels and spot-checks `sample` bits of them (None:
+    all) within `during`. `regen` is what rebuilding one label bit costs the prover in squarings (0 if the challenger
+    streams the labels in)."""
 
     device: str
     bits: float
     during: Interval
     challenger: str = "challenger"
+    sample: float | None = None
+    regen: float = 0.0
 
     @property
     def store(self) -> Store:
-        return Store(f"labels@{self.device}", self.bits, self.device, "labels")
+        return Store(f"labels@{self.device}", self.bits, self.device, "labels", self.regen)
+
+
+def read_rate(dc: Datacenter, registered: str, actual: str) -> float:
+    """Bits a second a store registered on `registered` can be read at from where it really is, `actual`: the holder's
+    read bandwidth, and from another device no more than the path's narrowest link."""
+    from .binding import route
+    holder = dc.devices[actual]
+    rate = float(holder.bandwidth) if holder.bandwidth else float("inf")
+    if actual != registered:
+        rate = min(rate, min(float(l.capacity) for l in route(dc, actual, registered)))
+    return rate
 
 
 def serve_time(dc: Datacenter, registered: str, actual: str, bits: float) -> float:
-    """Seconds to serve `bits` of a store registered on `registered` from where it really is, `actual`: the holder's
-    read time, or, from another device, the slower of that and the path's narrowest link, plus the path's latency."""
+    """Seconds to serve `bits` of a store registered on `registered` from where it really is, `actual`: the read time at
+    `read_rate`, plus the path's latency from another device."""
     from .binding import route
-    holder = dc.devices[actual]
-    seconds = bits / float(holder.bandwidth) if holder.bandwidth else 0.0
-    if actual != registered:
-        path = route(dc, actual, registered)
-        seconds = max(seconds, bits / min(float(l.capacity) for l in path)) + sum(l.delay for l in path)
-    return seconds
+    latency = sum(l.delay for l in route(dc, actual, registered)) if actual != registered else 0.0
+    return bits / read_rate(dc, registered, actual) + latency
 
 
 def answer_time(dc: Datacenter, challenger: str, registered: str, actual: str, bits: float) -> float:
     """Seconds from a challenge to its answer: the challenger's round trip to the registered device, plus serving."""
     from .binding import route
     return 2 * sum(l.delay for l in route(dc, challenger, registered)) + serve_time(dc, registered, actual, bits)
+
+
+def regen_time(dc: Datacenter, store: Store, bits: float) -> float:
+    """Seconds the prover's fastest device needs to rebuild `bits` of `store` from its seed, at its declared
+    `rate["square-1024"]`, the codec's squarings (μ_rebuild's twin); infinite for a store that can't be rebuilt."""
+    rates = [float(d.rate["square-1024"]) for d in dc.devices.values() if "square-1024" in d.rate and not d.trusted]
+    return bits * store.regen / max(rates) if store.regen and rates else float("inf")

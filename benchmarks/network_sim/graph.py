@@ -1,23 +1,12 @@
-"""The device graph: the measured node, and a leaf-spine datacenter of them, as the accounting layer's declarations
-(`datacenter.Datacenter`, `benchmarks/datacenter`), and the two exports a datacenter's network needs: the plan of Linux
-network namespaces that `mockdc.py` stands up, and Shadow's network graph.
+"""The two exports a datacenter's network needs: the plan of Linux network namespaces that `mockdc.py` stands up, and
+Shadow's network graph.
 
-The types are `datacenter.physical`'s, the Lean physical model's mirror: a `Datacenter` of `Block`s, fabric `Device`s
-and `Link`s, in bits, seconds and bits per second, every capacity a named `Assumption` with its source.
-
-`rtx_node` is one node as vy-nebius-1 and -2 read with `nvidia-smi topo -m` and `lspci -tv` (18 Oct): two sockets, each
-a CPU with its host DRAM and a PCIe root complex (a switch); eight GPUs, GPUs 0–3 on socket 0 and 4–7 on socket 1, each
-on a root port of its own; one NIC, on socket 1. Its capacities are the ones memory accounting reads, at the values
-`verity.core.protocols.remote_bandwidth.timing` states (the tests pin them): each GPU's memory, read bandwidth and
-on-chip state (S_chip), its rate per op class (`Accounting.Op`'s tensor cores, CUDA cores and oracle, and the codec's
-squarings at each width), each socket's host DRAM read bandwidth and caches, and each PCIe link's bandwidth. A capacity
-not measured yet is `math.inf`: every reading of a capacity takes it as an upper bound, and infinity is the bound that
-claims nothing.
-
-`leaf_spine` puts such nodes behind a leaf-spine fabric, each node's NIC through its block's certifier.
-
-The exports read any `Datacenter`. Each block is one node, standing in for the whole block, each fabric device is another,
-and the links between two nodes are the network.
+They read any `datacenter.Datacenter` (`benchmarks/datacenter`, the Lean physical model's mirror: `Block`s, fabric
+`Device`s and `Link`s, in bits, seconds and bits per second, every capacity a named `Assumption` with its source). The
+declarations themselves, the measured node and the leaf-spine datacenter of them among them, are
+`datacenter.examples`'s; the tests pin their values against `verity.core.protocols.remote_bandwidth.timing` and the
+census. Each block is one node, standing in for the whole block, each fabric device is another, and the links between
+two nodes are the network.
 
     python graph.py --blocks 2 (--json | --netns | --gml)
 """
@@ -37,80 +26,10 @@ DATACENTER = str(Path(__file__).resolve().parents[1] / "datacenter")
 if DATACENTER not in sys.path:
     sys.path.insert(0, DATACENTER)
 
-from datacenter import Assumption, Block, Cadence, Datacenter, Device, Link  # noqa: E402
+from datacenter import Datacenter, Link  # noqa: E402
+from datacenter.examples import leaf_spine  # noqa: E402
 
 NETNS_PREFIX = "na-"
-INF = math.inf
-
-S_CHIP = Assumption("rtx-pro-6000/S_chip", 263_163_904 * 8, "bits", "measured")
-GPU_MEMORY = Assumption("rtx-pro-6000/memory", 103_079_215_104 * 8, "bits", "datasheet")
-GPU_READ = Assumption("rtx-pro-6000/memory-read", 1_539_000_000_000 * 8, "bit/s", "measured")
-GPU_RATE = {
-    "tc": Assumption("rtx-pro-6000-server/e4m3", 500_000_000_000_000, "multiply-adds/s", "datasheet"),
-    "cuda": Assumption("rtx-pro-6000/cuda-ops", INF, "ops/s", "measured"),
-    "oracle": Assumption("rtx-pro-6000/sha512", 7_000_000_000, "compressions/s", "measured"),
-    "square-1024": Assumption("rtx-pro-6000/squarings-p1024", 14_990_000_000, "squarings/s", "measured"),
-    "square-512": Assumption("rtx-pro-6000/squarings-p512", 51_300_000_000, "squarings/s", "measured"),
-}
-HOST_CHIP = Assumption("xeon-6776p/caches", 940_435_456 // 2 * 8, "bits", "declared")
-HOST_DRAM = Assumption("host-dram/socket-capacity", INF, "bits", "measured")
-HOST_READ = Assumption("host-dram/socket-read", 303_400_000_000 * 8, "bit/s", "measured")
-PCIE_GPU = Assumption("pcie/gpu", INF, "bit/s", "measured")
-PCIE_SOCKET = Assumption("pcie/socket-aggregate", INF, "bit/s", "measured")
-PCIE_NIC = Assumption("pcie/nic", INF, "bit/s", "measured")
-SOCKET_LINK = Assumption("socket/inter-socket", INF, "bit/s", "measured")
-
-
-def rtx_node(name: str = "node") -> Datacenter:
-    """One node, a datacenter of one block named `name` and no fabric. A link inside it has no latency until one is
-    measured: a delay of 0, the bound that claims nothing for a path's delay."""
-    devices, links = [], []
-    for s in range(2):
-        cpu = Device(f"{name}.cpu{s}", "cpu", memory=HOST_DRAM, bandwidth=HOST_READ, on_chip=HOST_CHIP)
-        rc = Device(f"{name}.pcie{s}", "switch")
-        devices += [cpu, rc]
-        links.append(Link(rc.name, cpu.name, PCIE_SOCKET, kind="pcie"))
-        for k in range(4 * s, 4 * s + 4):
-            gpu = Device(f"{name}.gpu{k}", "gpu", rate=dict(GPU_RATE), memory=GPU_MEMORY, bandwidth=GPU_READ,
-                         on_chip=S_CHIP)
-            devices.append(gpu)
-            links.append(Link(gpu.name, rc.name, PCIE_GPU, kind="pcie"))
-    nic = Device(f"{name}.nic0", "nic")
-    devices.append(nic)
-    links += [Link(nic.name, f"{name}.pcie1", PCIE_NIC, kind="pcie"),
-              Link(f"{name}.cpu0", f"{name}.cpu1", SOCKET_LINK, kind="upi")]
-    return Datacenter(name, [Block(name, devices)], [], links)
-
-
-def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: int = 1, uplink_gbps: int = 400,
-               spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
-               cadence: Cadence | None = None) -> Datacenter:
-    """`blocks` nodes (`rtx_node`, named b0, b1, …) behind a leaf-spine fabric: each node's NIC to its certifier
-    (`bI.cert`), the certifier to a leaf switch (round-robin over `leaves`), every leaf to every spine, and `outside`
-    hosts outside every block (`extC`, kind `outside`) on the leaves too. With one leaf, `spines` may be 0. Latencies
-    are one way, in seconds: `uplink_latency` from a NIC to its certifier, `fabric_latency` a fabric hop. `cadence` is
-    the certifiers' (`datacenter.Cadence`'s default when None)."""
-    if blocks < 1 or leaves < 1 or (leaves > 1 and spines < 1):
-        raise ValueError("at least one block and one leaf, and spines to join more than one leaf")
-    up = Assumption("fabric/uplink", uplink_gbps * 1_000_000_000, "bit/s", "declared")
-    trunk = Assumption("fabric/spine", spine_gbps * 1_000_000_000, "bit/s", "declared")
-    nic_hop = Assumption("fabric/uplink-latency", uplink_latency, "s", "declared")
-    hop = Assumption("fabric/hop-latency", fabric_latency, "s", "declared")
-    switches = [Device(f"leaf{j}", "switch") for j in range(leaves)]
-    nodes, certs, links = [], [], []
-    for i in range(blocks):
-        node = rtx_node(f"b{i}")
-        cert = Device(f"b{i}.cert", "certifier")
-        nodes += node.blocks
-        certs.append(cert)
-        links += node.links
-        links += [Link(f"b{i}.nic0", cert.name, up, nic_hop, "ethernet"),
-                  Link(cert.name, switches[i % leaves].name, up, hop, "ethernet")]
-    tops = [Device(f"spine{k}", "switch") for k in range(spines)]
-    links += [Link(sw.name, sp.name, trunk, hop, "ethernet") for sp in tops for sw in switches]
-    hosts = [Device(f"ext{c}", "outside") for c in range(outside)]
-    links += [Link(x.name, switches[c % leaves].name, up, hop, "ethernet") for c, x in enumerate(hosts)]
-    return Datacenter(f"leaf-spine-{blocks}", nodes, switches + certs + tops + hosts, links, cadence or Cadence())
 
 
 def check(dc: Datacenter) -> Datacenter:
@@ -119,13 +38,6 @@ def check(dc: Datacenter) -> Datacenter:
         raise ValueError(f"{dc.name}: " + "; ".join(problems))
     return dc
 
-
-def pending(dc: Datacenter) -> list[str]:
-    """The capacities still to be measured."""
-    return sorted(a.name for a in dc.assumptions() if a.value == INF)
-
-
-# The exports.
 
 def network(dc: Datacenter) -> tuple[dict[str, str], list[tuple[Link, str, str]]]:
     """The network the exports stand up: each node's role (`block`, or a fabric device's kind) and each link between
@@ -321,13 +233,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--blocks", type=int, default=2)
     ap.add_argument("--leaves", type=int, default=1)
     ap.add_argument("--spines", type=int, default=0)
-    ap.add_argument("--outside", type=int, default=1)
+    ap.add_argument("--outside", type=int, default=1, help="hosts outside every block, ext0, ext1, …")
     out = ap.add_mutually_exclusive_group(required=True)
-    out.add_argument("--json", action="store_true", help="the declaration")
+    out.add_argument("--json", action="store_true", help="the declaration (datacenter.examples.leaf_spine's)")
     out.add_argument("--netns", action="store_true", help="the netns plan's commands, one per line")
     out.add_argument("--gml", action="store_true", help="Shadow's network graph")
     args = ap.parse_args(argv)
-    dc = check(leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines, outside=args.outside))
+    dc = check(leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines,
+                          outside=tuple(f"ext{c}" for c in range(args.outside))))
     if args.json:
         print(json.dumps(dataclasses.asdict(dc), indent=1))
     elif args.netns:

@@ -1,5 +1,5 @@
-"""The device graph: the measured node and the leaf-spine generator as `datacenter` declarations, memory accounting's
-values, coverage, and the two exports."""
+"""The exports of `datacenter.examples`' declarations (coverage, the netns plan, Shadow's GML, the command line), and the
+declarations' values pinned against their sources: memory accounting's constants and the census."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ import json
 import math
 import re
 import sys
-from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
+CENSUS = HERE.parents[1] / "benchmarks" / "census" / "hardware.json"
 
 
 @pytest.fixture(scope="module")
@@ -29,79 +29,49 @@ def g():
         yield mod
 
 
-def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie_tree(g):
-    from datacenter import route
+@pytest.fixture(scope="module")
+def ex(g):
+    from datacenter import examples
 
-    dc = g.check(g.rtx_node("n"))
-    (block,) = dc.blocks
-    assert block.name == "n" and dc.fabric == [] and dc.boundary == []
-    assert Counter(d.kind for d in block.devices) == {"gpu": 8, "cpu": 2, "switch": 2, "nic": 1}
-    for k in range(8):
-        assert [(e.a, e.b, e.kind) for e in dc.links if f"n.gpu{k}" in (e.a, e.b)] == \
-            [(f"n.gpu{k}", f"n.pcie{k // 4}", "pcie")]  # its own root port, on its socket
-    assert [(e.a, e.b) for e in dc.links if "n.nic0" in (e.a, e.b)] == [("n.nic0", "n.pcie1")]
-    assert [(e.a, e.b) for e in route(dc, "n.gpu0", "n.nic0")] == [
-        ("n.gpu0", "n.pcie0"), ("n.pcie0", "n.cpu0"), ("n.cpu0", "n.cpu1"), ("n.pcie1", "n.cpu1"), ("n.nic0", "n.pcie1")]
-    assert all(e.latency is None and e.delay == 0.0 for e in dc.links)  # not measured: a delay that claims nothing
+    return examples
 
 
-def test_leaf_spine_puts_each_node_behind_its_certifier(g):
-    from datacenter import Cadence, Port
-
-    dc = g.check(g.leaf_spine(2))
-    assert [b.name for b in dc.blocks] == ["b0", "b1"]
-    assert [(d.name, d.kind, d.trusted) for d in dc.fabric] == [
-        ("leaf0", "switch", False), ("b0.cert", "certifier", True), ("b1.cert", "certifier", True),
-        ("ext0", "outside", False)]
-    assert [(e.a, e.b) for e in dc.boundary] == [("b0.nic0", "b0.cert"), ("b1.nic0", "b1.cert")]
-    assert [repr(p) for p in dc.ports] == ["b0.cert:in", "b0.cert:out", "b1.cert:in", "b1.cert:out"]
-    assert dc.port("b0.nic0", "b0.cert") == Port("b0.cert", "egress") and dc.port("b0.cert", "b0.nic0").direction == "ingress"
-    assert {(e.latency.name, e.latency.value) for e in dc.links if e.latency} == {
-        ("fabric/uplink-latency", 1e-6), ("fabric/hop-latency", 2e-6)}
-    assert dc.cadence == Cadence() and g.leaf_spine(1, cadence=Cadence(buckets=60)).cadence.buckets == 60
-    wide = g.check(g.leaf_spine(4, leaves=2, spines=3, outside=2))
-    trunks = sorted((e.a, e.b) for e in wide.links if e.b.startswith("spine"))
-    assert trunks == [(f"leaf{j}", f"spine{k}") for j in range(2) for k in range(3)]
-    assert [next(e.b for e in wide.links if e.a == f"b{i}.cert") for i in range(4)] == ["leaf0", "leaf1", "leaf0", "leaf1"]
-    with pytest.raises(ValueError, match="spines to join"):
-        g.leaf_spine(2, leaves=2)
-
-
-def test_a_path_around_a_certifier_breaks_coverage_and_no_export_takes_it(g):
+def test_a_path_around_a_certifier_breaks_coverage_and_no_export_takes_it(g, ex):
     from datacenter import Link
 
-    dc = g.leaf_spine(2)
-    dc.links.append(Link("b0.gpu3", "leaf0", g.PCIE_GPU))
+    dc = ex.leaf_spine(2)
+    dc.links.append(Link("b0.gpu3", "leaf0", ex.PCIE_GPU))
     assert dc.validate() == ["boundary link b0.gpu3-leaf0 passes no certifier (coverage)"]
     for export in (g.check, g.netns_plan, g.shadow_gml):
         with pytest.raises(ValueError, match="passes no certifier"):
             export(dc)
 
 
-def test_the_capacities_are_memory_accountings(g):
+def test_the_capacities_are_memory_accountings_and_the_censuss(ex):
     """The node states remote bandwidth's per-device constants: one GPU's, and each of the host's two sockets' halves.
-    What isn't measured yet is infinite, so a reading that takes it as an upper bound concludes nothing from it."""
+    Its tensor-core rates are the census's dense datasheet peaks, a multiply-add being two FLOP. What isn't measured yet
+    is infinite, so a reading that takes it as an upper bound concludes nothing from it."""
     from datacenter import serve_time
     from verity.core.protocols.remote_bandwidth import timing
 
-    dc = g.leaf_spine(1)
+    dc = ex.leaf_spine(1)
     gpu, cpu = dc.devices["b0.gpu0"], dc.devices["b0.cpu0"]
     assert gpu.on_chip.value == timing.GPU_CHIP_BYTES * 8 and gpu.memory.value == 96 * 2**30 * 8
     assert gpu.bandwidth.value == timing.GPU_READ_BYTES_PER_S * 8
-    assert gpu.rate["oracle"].value == timing.GPU_SHA512_PER_S and gpu.rate["tc"].value == 5e14
+    assert gpu.rate["oracle"].value == timing.GPU_SHA512_PER_S
     assert 1.597 * gpu.rate["square-1024"].value == timing.GPU_SQUARINGS_PER_S["p1024"]
     assert 1.567 * gpu.rate["square-512"].value == timing.GPU_SQUARINGS_PER_S["p512"]
     assert 2 * cpu.on_chip.value == timing.HOST_CHIP_BYTES * 8
     assert 2 * cpu.bandwidth.value == timing.HOST_READ_BYTES_PER_S * 8
-    assert g.pending(dc) == ["host-dram/socket-capacity", "pcie/gpu", "pcie/nic", "pcie/socket-aggregate",
-                             "rtx-pro-6000/cuda-ops", "socket/inter-socket"]
-    named = [a for d in dc.devices.values() for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip] if a]
-    named += [a for e in dc.links for a in (e.capacity, e.latency) if a] + [dc.cadence.tick]
-    assert all(a.name and a.source in ("datasheet", "measured", "declared") for a in named)
-    assert all(a == b for a in named for b in named if a.name == b.name)  # one name, one record
+    census = {e["id"]: e for e in json.loads(CENSUS.read_text())}
+    macs = [a for k, a in gpu.rate.items() if k.startswith("mac:")]
+    assert [a.name for a in macs] == ["rtx-pro-6000-server/bf16", "rtx-pro-6000-server/e4m3", "rtx-pro-6000-server/e2m1"]
+    assert all(2 * a.value == census[a.name]["flop_per_second"] and a.source == "datasheet" for a in macs)
+    assert sorted(a.name for a in dc.assumptions() if a.value == math.inf) == [
+        "pcie/socket-aggregate", "rtx-pro-6000/cuda-ops", "socket/inter-socket"]
     bits = 8e9
-    # a store registered on a GPU but kept in host DRAM: the pending PCIe path costs nothing, only the host's read
-    assert serve_time(dc, "b0.gpu0", "b0.cpu0", bits) == bits / cpu.bandwidth.value
+    # a store registered on a GPU but kept in host DRAM: the GPU's PCIe 5.0 x16 link is narrower than the host's read
+    assert ex.PCIE_GPU.value < cpu.bandwidth.value and serve_time(dc, "b0.gpu0", "b0.cpu0", bits) == bits / ex.PCIE_GPU.value
 
 
 def walk(plan, src: str, dst: str) -> str | None:
@@ -126,8 +96,8 @@ def walk(plan, src: str, dst: str) -> str | None:
     return None
 
 
-def test_the_netns_plan_puts_each_block_behind_its_certifier(g):
-    dc = g.leaf_spine(2)
+def test_the_netns_plan_puts_each_block_behind_its_certifier(g, ex):
+    dc = ex.leaf_spine(2)
     plan = g.netns_plan(dc)
     assert [(n.name, n.role, n.forward) for n in plan.namespaces] == [
         ("na-b0", "block", False), ("na-b1", "block", False), ("na-leaf0", "switch", True),
@@ -159,17 +129,17 @@ def test_the_netns_plan_puts_each_block_behind_its_certifier(g):
     assert walk(plan, "na-b0", plan.address("ext0", "leaf0")) is None
 
 
-def test_an_infinite_capacity_puts_no_rate_on_its_link(g):
+def test_an_infinite_capacity_puts_no_rate_on_its_link(g, ex):
     from datacenter import Assumption
 
-    dc = g.leaf_spine(1)
+    dc = ex.leaf_spine(1)
     dc.links = [replace(e, capacity=Assumption("fabric/open", math.inf, "bit/s", "measured")) if e.a == "ext0" else e
                 for e in dc.links]
     assert g.netns_plan(dc).namespace("ext0").interfaces[0].netem == ("delay", "2us")
 
 
-def test_switches_route_every_fabric_subnet_through_a_two_tier_fabric(g):
-    dc = g.leaf_spine(4, leaves=2, spines=2, outside=2)
+def test_switches_route_every_fabric_subnet_through_a_two_tier_fabric(g, ex):
+    dc = ex.leaf_spine(4, leaves=2, spines=2, outside=("ext0", "ext1"))
     plan = g.netns_plan(dc)
     certs = [d.name for d in dc.fabric if d.kind == "certifier"]
     for src in ("na-ext0", "na-ext1", "na-b2-cert"):
@@ -199,8 +169,8 @@ def parse_gml(text: str) -> list:
     return parse(0)[0]
 
 
-def test_the_shadow_gml_has_a_node_per_network_node_and_an_edge_per_link(g):
-    (key, graph), = parse_gml(g.shadow_gml(g.leaf_spine(2)))
+def test_the_shadow_gml_has_a_node_per_network_node_and_an_edge_per_link(g, ex):
+    (key, graph), = parse_gml(g.shadow_gml(ex.leaf_spine(2)))
     nodes = [dict(v) for k, v in graph if k == "node"]
     edges = [dict(v) for k, v in graph if k == "edge"]
     assert key == "graph" and dict(graph)["directed"] == 0
@@ -218,6 +188,8 @@ def test_the_command_line_prints_each_form(g, capsys):
     doc = json.loads(capsys.readouterr().out)
     assert doc["name"] == "leaf-spine-1" and len(doc["blocks"][0]["devices"]) == 13
     assert [d["name"] for d in doc["fabric"]] == ["leaf0", "b0.cert", "ext0"]
+    g.main(["--blocks", "1", "--outside", "2", "--json"])
+    assert [d["name"] for d in json.loads(capsys.readouterr().out)["fabric"]][-2:] == ["ext0", "ext1"]
     g.main(["--blocks", "1", "--netns"])
     assert capsys.readouterr().out.splitlines()[0] == "ip netns add na-b0"
     g.main(["--blocks", "1", "--gml"])

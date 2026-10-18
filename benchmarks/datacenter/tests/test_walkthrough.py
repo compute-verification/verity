@@ -5,9 +5,9 @@ in order, and `python tests/test_walkthrough.py` prints what the guide prints.
 """
 from __future__ import annotations
 
-from datacenter import (FLEET_CLOSED, Assumption, Block, Carried, Challenge, Credit, Datacenter, Deviation, Device, Fleet,
-                        Cadence, Input, Interval, Ledger, Link, Maintenance, Plan, Port, Reads, Refused, Store, Wipe, account, audit,
-                        commit, crossings, digest, double_credit, occupancy, place, run, trace)
+from datacenter import (FLEET_CLOSED, Assumption, Block, Cadence, Carried, Challenge, Credit, Datacenter, Deviation,
+                        Device, Fleet, Input, Interval, Ledger, Link, Maintenance, Plan, Port, ReadWindow, Refused, Store,
+                        Wipe, account, audit, commit, crossings, digest, double_credit, occupancy, place, run, trace)
 from datacenter.examples import GB
 
 INPUTS = {"x": 7, "w1": 3, "w2": 5}
@@ -149,9 +149,11 @@ def section_11():
     plan = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=8)])
     late = run(q, {"x": 3}, plan, Deviation(moved={"kv": "a.dram"}))
     print([x for x in audit(late, q.public(plan)) if isinstance(x, Refused)])
-    reads = Plan(Interval(0, 16), reads=[Reads("kv", 0.5 * GB, Interval(0, 10))])
+    reads = Plan(Interval(0, 16), reads=[ReadWindow("kv", start=0, boundary=10, deadline=12)])
     a = account(audit(run(q, {"x": 3}, reads), q.public(reads)), q.public(reads)).blocks[0]
     print(a.reads, a.reads_local_at_least)
+    sampled = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=1, sample=4096 * 8)])
+    print(account(audit(run(q, {"x": 3}, sampled), q.public(sampled)), q.public(sampled)).located)
 
 
 # §12 Telemetry and container images

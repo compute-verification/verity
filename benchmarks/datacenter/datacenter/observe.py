@@ -3,7 +3,7 @@
 `run` sits outside both layers: it is the world. It evaluates the circuit, sends each crossing's frames through the
 certifier ports on its path, and has every certifier record each window of each port: the frames in each bucket (the
 occupancy, the only thing timing can carry once content is fixed) and a digest of their content. The challenger records
-each answer: to a challenge, to a read demand, to a wipe's spot checks. A `Deviation` plays the adversary.
+each answer: to a challenge, to a read window, to a wipe's spot checks. A `Deviation` plays the adversary.
 
 This is the run's model, on simulated ticks. The same records come from the real certifier
 (`verity.core.protocols.certifier`) when the mock datacenter runs it on real links (`benchmarks/network_sim`).
@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from .binding import Placement, frames, traffic
 from .logical import Commitment, commit
-from .memory import Challenge, Reads, Wipe, answer_time, serve_time
+from .memory import Challenge, ReadWindow, Wipe, answer_time, read_rate
 from .physical import Port
 from .plan import Plan
 
@@ -33,12 +33,13 @@ class Record:
 
 @dataclass(frozen=True)
 class Answer:
-    """The challenger's record of one request (a challenge, a read demand, a wipe's spot checks): the tick the answer
-    was complete, and whether it was right."""
+    """The challenger's record of one request (a challenge, a read window, a wipe's spot checks): the tick the answer
+    was complete, whether it was right, and for a read window the bits its receipts certify."""
 
-    request: Challenge | Reads | Wipe
+    request: Challenge | ReadWindow | Wipe
     arrived: int
     correct: bool = True
+    bits: float = 0.0
 
 
 @dataclass
@@ -105,10 +106,12 @@ def run(p: Placement, inputs: dict[str, int], plan: Plan, deviation: Deviation |
     ticks = lambda seconds: math.ceil(seconds / float(g.tick) - 1e-9)  # noqa: E731
     for ch in plan.challenges:
         s = stores[ch.store]
-        answers.append(Answer(ch, ch.at + ticks(answer_time(dc, ch.challenger, s.device, dev.moved.get(s.name, s.device), s.bits))))
-    for rd in plan.reads:
-        s = stores[rd.store]
-        answers.append(Answer(rd, rd.during.start + ticks(serve_time(dc, s.device, dev.moved.get(s.name, s.device), rd.bits))))
+        bits = s.bits if ch.sample is None else ch.sample
+        answers.append(Answer(ch, ch.at + ticks(answer_time(dc, ch.challenger, s.device, dev.moved.get(s.name, s.device), bits))))
+    for rw in plan.reads:
+        s = stores[rw.store]
+        read = min(s.bits, read_rate(dc, s.device, dev.moved.get(s.name, s.device)) * g.seconds(rw.boundary - rw.start))
+        answers.append(Answer(rw, rw.boundary + ticks(answer_time(dc, rw.challenger, s.device, s.device, 0)), bits=read))
     for w in plan.wipes:
         answers.append(Answer(w, w.during.start, w.device not in dev.failed_wipes))
     return Trace(p, dict(inputs), values, commitment, salt, records, answers)
