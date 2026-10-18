@@ -28,6 +28,14 @@ def _payload(r: str, row: MM.Row) -> bytes:
     return b"".join(hashlib.shake_256(repr((r, g)).encode()).digest(1024) for g in row.group)
 
 
+def decode(prefill: int, positions: int) -> MM.Rows:
+    """The rows of a request that prefills `prefill` positions, then decodes one a step to `positions`, its last step reading
+    every row: 2 layers of K and V rows of 1 KiB, a row's group naming its (layer, plane, position)."""
+    steps = 1 + positions - prefill
+    return MM.Rows(tuple(tuple(tuple(MM.Row((("kv", layer, plane, q),), max(0, q - prefill + 1), steps - 1) for q in range(positions))
+                               for plane in range(2)) for layer in range(2)), 1024, 2, steps)
+
+
 def _slot(layer: int, page: int, plane: int) -> int:
     """A block's slot under `LAYOUT` for this session: 6 pages (the null page and 5), a page's K then V block, layer by layer."""
     return layer * 12 + page * 2 + plane
@@ -156,6 +164,18 @@ def test_the_engine_holds_the_maps_blocks(reqs):
     assert MM.engine_agrees(reqs, LAYOUT, TABLES, steps, block) == {"compared": 12, "equal": 12}
     bad = lambda layer, page, c: bytes(4096) if (layer, page, c) == (1, 2, 1) else block(layer, page, c)
     assert MM.engine_agrees(reqs, LAYOUT, TABLES, steps, bad) == {"compared": 12, "equal": 11}
+
+
+def test_a_block_no_step_reads_while_resident_is_in_no_record():
+    page = {p: sorted(_slot(layer, p, plane) for layer in range(2) for plane in range(2)) for p in range(3)}
+    layout = MM.Layout(block_size=4, pages=6)
+    # the prefill (positions 0-4) completes page 1 and reaches page 2, whose last row (7) the last step, 3, writes: page 2 is
+    # never resident while read, so no record writes it, and its filler is freed where the prefill first reaches it
+    _, steps = MM.record({"r": decode(5, 8)}, {"r": 0}, _payload, REGISTRATION, layout, {"r": [1, 2]})
+    assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [(0, page[2], page[1]), (3, page[1], [])]
+    # a prefill-only request's blocks are all in no record: the write reaching their filler frees it
+    _, steps = MM.record({"r": decode(8, 8)}, {"r": 0}, _payload, REGISTRATION, layout, {"r": [1, 2]})
+    assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [(0, sorted(page[1] + page[2]), [])]
 
 
 def test_a_page_reused_after_its_request_frees_its_filler_once(reqs):
