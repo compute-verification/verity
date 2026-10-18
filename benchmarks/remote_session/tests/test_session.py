@@ -470,8 +470,8 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_snapshot_does_not():
     """Two stretches of four groups of two passes over N blocks, every pass reading all of them: stretching one
     group's interval (a burst then idle until its deadline) lowers the time-held credit by its absent block-time,
-    rebuilds at 2·L_max each and the wrong receipts at Δ_g/n_g (L_max/n in the group after the stretch), and leaves the
-    snapshot's alone."""
+    rebuilds at 2·L_max each and the wrong receipts at Δ_g/n_g (L_max/n in the group after the stretch), and the
+    snapshot's only by the rebuilds its longer reads allow; a block in from the disks or a link counts as a rebuild."""
     N, b = 1000, 4096
     held = {"weights": 600 * b, "hbm": N * b, "host": 0}
     mem = {"windows": [{"average": {"held": held}} for _ in range(12)]}
@@ -484,18 +484,22 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
             t += span
         return out
 
-    def line(stretch: int, rebuild_per_ns: float = 0.0, wrong: float = 0.0) -> dict:
+    def line(stretch: int, rebuild_per_ns: float = 0.0, wrong: float = 0.0, ingress_per_ns: float = 0.0) -> dict:
         return verifier.paced_line(mem, seen(stretch), groups=4, wrong=wrong, blocks=N, rebuild_per_ns=rebuild_per_ns,
-                                   chip_bytes=0, block_bytes=b, node_bytes=10 * N * b)
+                                   chip_bytes=0, block_bytes=b, node_bytes=10 * N * b, ingress_per_ns=ingress_per_ns)
 
     even, burst = line(1, 1e-3, 50.0), line(9, 1e-3, 50.0)
-    assert even["snapshot"]["lost_blocks"] == pytest.approx(burst["snapshot"]["lost_blocks"] - 1e-3 * 80 / 8)
+    assert even["snapshot"]["lost_blocks"] == pytest.approx(burst["snapshot"]["lost_blocks"] - 1e-3 * (80 + 2 * 80) / 8)
     s = burst["stretches"][1]
     assert s["span_ns"] == 10 * 4 + 80 and s["l_max_ns"] == 90
     assert s["rebuild_absent_blocks"] == pytest.approx(2 * 90 * 1e-3 * (120 + 180) / 120)
     assert s["wrong_absent_blocks"] == pytest.approx(50 * 90 / 2 / 120)
     assert burst["time"]["weights_bytes"] < even["time"]["weights_bytes"] <= 600 * b
     assert line(1)["time"]["weights_bytes"] == line(1)["snapshot"]["weights_bytes"] == 600 * b
+    linked = line(9, 1e-3, 50.0, ingress_per_ns=2e-3)["stretches"][1]
+    assert linked["ingress_blocks"] == pytest.approx(2e-3 * (120 + 180))
+    assert linked["rebuild_absent_blocks"] == pytest.approx(2 * 90 * 3e-3 * (120 + 180) / 120)
+    assert linked[verifier.AVERAGE]["lost_blocks"] == pytest.approx((50 + 3e-3 * 300) / 8)
 
 
 def test_an_engines_arena_puts_each_weight_at_a_block_boundary_and_refuses_what_does_not_fit():

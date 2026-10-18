@@ -323,7 +323,7 @@ def pace_of(spec: str, pass_ms: float) -> dict:
 
 
 def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks: int, rebuild_per_ns: float,
-               chip_bytes: int, block_bytes: int, node_bytes: int) -> dict:
+               chip_bytes: int, block_bytes: int, node_bytes: int, ingress_per_ns: float = 0.0) -> dict:
     """A paced session's memory line over each stretch of `groups` groups (all but the closing stretch), on the
     verifier's clock, in two forms.
 
@@ -331,7 +331,8 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
     last root's arrival, by the chain.  So L_g = max(its last root's arrival, s_(g+1)) − s_g holds every read of g and
     the gaps around them, and a block read in passes p < p' lies absent between them for at most the L of every group
     from p's to p''s.  Snapshot (`AVERAGE`): the mean bytes of each kind a pass read, less `wrong`/P (`wrong`, the
-    session's pooled wrong receipts, `audit.pooled`), the stretch's rebuilds over its passes (X_r·Σ/P) and the chip.
+    session's pooled wrong receipts, `audit.pooled`), the rebuilds over its passes and the chip.  The stretch's reads
+    lie in [s_lo, e_(hi−1)], up to L_max outside Σ at either end, so the rebuilds that serve them are X_r·(Σ + 2·L_max).
 
     Held over time (`TIME_HELD`): at each instant a block is in node memory, on chip (at most S_chip blocks at once), or
     absent.  An absent stretch of a block lies between a pass of group a and its next correct read, in group c, every
@@ -343,7 +344,12 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
     spread over the groups at those rates, highest first, at most N a pass.  So the time a block is absent, summed over
     blocks, is at most 2·L_max·X_r·(Σ + 2·L_max) plus that fill.  It is averaged over the stretch, from the first
     group's end for the first stretch (before its reads a block may never have been there) to the next stretch's coin,
-    whose reads back it.  Both forms take the side link as carrying no block (Identity)."""
+    whose reads back it.
+
+    A block also comes back into node memory, or onto the chip, without a rebuild from the node's own disks, which
+    Identity leaves in (they are inside the node), and over its boundary links, which Identity takes as carrying no
+    block.  `ingress_per_ns`, those routes' read ceiling in blocks a ns, counts as rebuilds in both forms: in the
+    time-held one each such block ends an absent stretch of up to 2·L_max, not the τ of the snapshot."""
     b, N, chip = block_bytes, blocks, chip_bytes / block_bytes
     s, n = [w["released_ns"] for w in seen], [w["passes"] for w in seen]
     ends = [max(w["arrivals_ns"][-1] if w["arrivals_ns"] else s[g], s[g + 1] if g + 1 < len(s) else 0)
@@ -357,7 +363,7 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
         start, end = ends[0] if m == 0 else s[lo], s[hi]
         span, P = end - start, sum(n[lo:hi])
         l_max = max(L[g] for g in range(max(0, lo - 1), hi + 1))
-        rebuilds = rebuild_per_ns * (span + 2 * l_max)
+        rebuilds = (rebuild_per_ns + ingress_per_ns) * (span + 2 * l_max)
         v = {g: (l_max if g == hi else gap[g]) / n[g] for g in range(lo, hi + 1)}
         left, fill = wrong, 0.0
         for g in sorted(range(lo, hi + 1), key=lambda g: v[g], reverse=True):
@@ -366,10 +372,11 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
             if left <= 0:
                 break
         mean = {k: sum(h[k] * c for h, c in zip(held[lo:hi], n[lo:hi])) / P for k in ("weights", "hbm", "host")}
-        lost = {AVERAGE: wrong / P + rebuild_per_ns * span / P + chip,
+        lost = {AVERAGE: wrong / P + rebuilds / P + chip,
                 TIME_HELD: chip + (2 * l_max * rebuilds + fill) / span}
         stretches.append({"stretch": m, "groups": [lo, hi], "span_ns": span, "passes": P, "l_max_ns": l_max,
                           "l_mean_ns": sum(L[lo:hi]) / (hi - lo), "rebuild_blocks": rebuilds,
+                          "ingress_blocks": ingress_per_ns * (span + 2 * l_max),
                           "rebuild_absent_blocks": 2 * l_max * rebuilds / span, "wrong_absent_blocks": fill / span,
                           "held": mean, **{form: {"lost_blocks": x, "credited": {
                               k: max(0.0, mean[k] - x * b) for k in ("weights", "hbm")}} for form, x in lost.items()}})
@@ -411,9 +418,11 @@ class RealClock:
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
-                 registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0) -> None:
+                 registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
+                 ingress_bytes_per_s: float = 0.0) -> None:
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.hbm_bytes, self.host_bytes, self.regions = hbm_bytes, host_bytes, None
+        self.ingress_bytes_per_s = ingress_bytes_per_s
         self.checks = checks
         self.registry = audit.Registry() if registry is None else registry
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
@@ -710,7 +719,8 @@ class Verifier:
                     out["ledger"]["memory"], out["windows_seen"], groups=pace["groups"], wrong=audit.pooled(record)[0],
                     blocks=reg.blocks, rebuild_per_ns=rebuild.squarings_per_s / record.codec.encode_squarings / 1e9,
                     chip_bytes=timing.CHIP_BYTES, block_bytes=record.block_bytes,
-                    node_bytes=self.hbm_bytes + self.host_bytes)
+                    node_bytes=self.hbm_bytes + self.host_bytes,
+                    ingress_per_ns=self.ingress_bytes_per_s / record.block_bytes / 1e9)
         return out
 
     @staticmethod
@@ -854,6 +864,9 @@ def main() -> int:
                          "--window-ms and --samples): groups of K passes under a live coin each")
     ap.add_argument("--pace-pass-ms", type=float, default=17.0,
                     help="the pass the paced sessions' groups a stretch are counted at")
+    ap.add_argument("--ingress-bytes-per-s", type=float, default=0.0,
+                    help="the read ceiling of every route into node memory but a rebuild, which the paced line "
+                         "charges (`paced_line`): the node's disks, and its boundary links to drop Identity"),
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and exit")
@@ -888,7 +901,7 @@ def main() -> int:
     v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
-                 hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes)
+                 hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
