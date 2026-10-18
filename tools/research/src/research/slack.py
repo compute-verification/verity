@@ -1916,10 +1916,11 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     if bot and reg.get("bot_id") != bot:
         print(f"record  bot {bot} in {path}")
         reg["bot_id"], changed = bot, True
-    live = {g.get("handle"): g for g in api.call("usergroups.list", include_disabled="true").get("usergroups", [])}
+    groups = api.call("usergroups.list", include_disabled="true").get("usergroups", [])
+    live, by_id = {g.get("handle"): g for g in groups}, {g.get("id"): g for g in groups}
     for h in reg["handles"]:
         name, desc = h["handle"], h["remit"][:250]
-        g = live.get(name)
+        g = by_id.get(h.get("usergroup")) or live.get(name)          # by id first: a renamed handle keeps its group
         if g is None:
             print(f"create  @{name}")
             gid = (api.call("usergroups.create", name=name, handle=name, description=desc).get("usergroup") or {}).get("id") if write else None
@@ -1929,8 +1930,9 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
                 print(f"enable  @{name} ({gid})")
                 if write:
                     api.call("usergroups.enable", usergroup=gid)
-            if g.get("name") != name or (g.get("description") or "") != desc:
-                print(f"update  @{name} ({gid}): name/description")
+            if g.get("handle") != name or g.get("name") != name or (g.get("description") or "") != desc:
+                print(f"update  @{name} ({gid}): " + (f"handle @{g.get('handle')} -> @{name}" if g.get("handle") != name
+                                                     else "name/description"))
                 if write:
                     api.call("usergroups.update", usergroup=gid, name=name, handle=name, description=desc)
             elif not g.get("date_delete"):
@@ -1939,8 +1941,8 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
             print(f"record  @{name} -> {gid} in {path}")
             h["usergroup"] = gid
             changed = True
-    handles = {h["handle"] for h in reg["handles"]}
-    if extra := [g for n, g in live.items() if n not in handles and not g.get("date_delete")]:
+    handles, ids = {h["handle"] for h in reg["handles"]}, {h.get("usergroup") for h in reg["handles"]}
+    if extra := [g for n, g in live.items() if n not in handles and g.get("id") not in ids and not g.get("date_delete")]:
         routes = routes_of(ns)
         for g in extra:
             r = routes.get_route(g["handle"])

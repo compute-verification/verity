@@ -819,6 +819,24 @@ def test_groups_sync_disables_a_retired_names_group_and_leaves_other_groups_alon
     assert "disable" not in out
 
 
+def test_groups_sync_renames_a_renamed_handles_group_in_place(fake, registry, routes_dirs, capsys):
+    """The registry's group id wins over the handle: a renamed handle keeps its group (its id in old checkouts' tags and
+    in its holder's subscriptions), and the old name's closed route doesn't get that group disabled."""
+    reg = json.loads(registry.read_text())
+    next(h for h in reg["handles"] if h["handle"] == "kernels")["usergroup"] = "SHASH"
+    registry.write_text(json.dumps(reg))
+    add_route(routes_dirs[0], "hash", "1.0", closed="2026-10-18T16:47Z", forward_to="kernels")
+    fake.groups = [{"id": "SHASH", "name": "hash", "handle": "hash", "description": "old", "date_delete": 0}]
+    rc, out, _ = run(capsys, "groups", "sync")
+    assert rc == 0 and "update  @kernels (SHASH): handle @hash -> @kernels" in out
+    assert "create  @kernels" not in out and "disable" not in out
+    assert run(capsys, "groups", "sync", "--apply")[0] == 0
+    assert [g for g in fake.groups if g["id"] == "SHASH"] == [
+        {"id": "SHASH", "name": "kernels", "handle": "kernels", "description": next(
+            h["remit"] for h in reg["handles"] if h["handle"] == "kernels"), "date_delete": 0}]
+    assert "ok      @kernels (SHASH)" in run(capsys, "groups", "sync")[1]
+
+
 def test_research_slack_is_a_cli_subcommand(registry, capsys):
     from research.cli import main
 
