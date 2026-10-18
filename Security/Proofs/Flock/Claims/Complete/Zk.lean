@@ -44,6 +44,7 @@ import Proofs.Flock.Claims.Complete.Zk.ConsCoins
 import Proofs.Flock.Claims.Complete.Zk.MaskRank
 import Proofs.Flock.Claims.Complete.Zk.Layout
 import Proofs.Flock.Claims.Complete.Zk.RankBridge
+import Proofs.Flock.Claims.Complete.Zk.RankDual
 import Proofs.Flock.Claims.Complete.Zk.Complete
 import Proofs.Flock.Claims.Complete.Zk.Level0Pad
 import Proofs.Flock.Claims.Complete.Zk.Level0Run
@@ -106,7 +107,8 @@ those coins the prover's on rounds carrying its sends, with the rows as `ConsHol
 (`maskWords_ge`: an in-scope masked table has at least `1024` words), and the rank bound the prover's refusal needs
 (`DeployedRankBound`, open; at the verifier's coins `MaskRankBound`, a premise of `complete_zk`); `Layout` the layout
 every table of a masked session in scope has (`layoutOk_of_scope`); `RankBridge` `MaskRankBound` from
-`DeployedRankBound` and the small slots' `SmallSlotBound`, open (`maskRankBound_of`); `Complete` assembles them into
+`DeployedRankBound` and the small slots' `SmallSlotBound`, open (`maskRankBound_of`); `RankDual` the bound's dual side,
+the deficient coins summed over the killing functionals' supports (`card_deficient_le`); `Complete` assembles them into
 `complete_zk`, from those premises and the goals not yet proved, and `complete_zk_relation` at the deployed relation.
 `Level0Pad` is level 0's masked query identity: a row's padded lanes combine to the blinded table's, the padding
 cancelling (`row_comb`, `consE0_honestZk`); `Level0Run` the masked Ligerito prover returning where its pair's coins are
