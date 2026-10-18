@@ -17,6 +17,7 @@ from verity_vllm.pipeline import research as R
 ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 SHA = "1b53f685a81a38f649947e5f88b5ae360709a932"
 RECORD = "art:" + "e" * 64
+BUILD_RUN = "r20261018-021312-bf97"
 
 
 class _Research:
@@ -27,6 +28,7 @@ class _Research:
         self.rc, self.publish_rc, self.dirty = rc or {}, publish_rc, dirty
         self.ran: list[str] = []
         self.stage_of: dict[str, str] = {}
+        self.inputs: dict[str, list[str]] = {}
         self.published: list[list[str]] = []
 
     def art(self, stage: str) -> str:
@@ -38,10 +40,12 @@ class _Research:
             st = argv[argv.index("--tool") + 1].removeprefix("vllm.")
             self.ran.append(st)
             self.stage_of[argv[argv.index("--id") + 1]] = st
+            self.inputs[st] = [argv[i + 1] for i, a in enumerate(argv) if a == "--input"]
             return subprocess.CompletedProcess(argv, self.rc.get(st, 0))
         if argv[:3] == ["research", "data", "show"]:
             st = self.stage_of[argv[3]]
-            doc = {"id": argv[3], "outputs": {R.ACCOUNT[st]: self.art(st)}, "source": {"commit": SHA, "dirty": self.dirty}}
+            doc = {"id": argv[3], "tool": {"name": f"vllm.{st}"}, "status": {"rc": self.rc.get(st, 0)},
+                   "outputs": {R.ACCOUNT[st]: self.art(st)}, "source": {"commit": SHA, "dirty": self.dirty}}
             return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(doc))
         assert argv[1:5] == ["-m", "verity_vllm.pipeline.cli", "records", "publish"], argv
         self.published.append(argv)
@@ -90,6 +94,29 @@ def test_a_row_that_did_not_pass_its_build_match_and_commit_publishes_nothing(tm
     assert _chain(tmp_path, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast", *flags, stages=stages) == rc
     assert fake.ran == ran and fake.published == []
     assert "record" not in json.loads(Path(tmp_path, ROW, "row.json").read_text())
+
+
+def test_a_chain_citing_a_passing_build_attempt_runs_the_rest_on_it_and_publishes_with_it(tmp_path, research):
+    fake = research()
+    fake.stage_of[BUILD_RUN] = "build"
+    assert _chain(tmp_path, "--build-run", BUILD_RUN, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast", stages="match,commit") == 0
+    assert fake.ran == ["match", "commit"]
+    assert fake.inputs == {"match": [f"build={fake.art('build')}"], "commit": [f"build={fake.art('build')}", f"match={fake.art('match')}"]}
+    assert fake.published[0][fake.published[0].index("--build") + 1] == fake.art("build")
+    stages = json.loads(Path(tmp_path, ROW, "row.json").read_text())["stages"]
+    assert stages["build"] == {"run_id": BUILD_RUN, "artifact": fake.art("build"), "rc": 0}
+
+
+@pytest.mark.parametrize("stages, rc, why", [
+    ("match,commit", 1, f"--build-run {BUILD_RUN}: not a passing Build Attempt"),
+    ("build,match,commit", 0, "--stages without build"),
+])
+def test_a_cited_build_that_did_not_pass_or_beside_a_build_stage_is_refused_before_any_stage_runs(tmp_path, research, stages, rc, why):
+    fake = research(rc={"build": rc})
+    fake.stage_of[BUILD_RUN] = "build"
+    with pytest.raises(UsageError, match=why):
+        _chain(tmp_path, "--build-run", BUILD_RUN, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast", stages=stages)
+    assert fake.ran == []
 
 
 def test_a_refused_record_or_a_dirty_commit_fails_the_chain_with_its_own_exit(tmp_path, research):
