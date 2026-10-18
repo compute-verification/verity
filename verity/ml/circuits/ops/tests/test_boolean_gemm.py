@@ -75,6 +75,18 @@ def test_pinned_counts_and_digests(target) -> None:
     assert D.gates == prog.gates and codec.program_digest(codec.encode_program(D)) == digest
 
 
+@pytest.mark.parametrize("coord, binding, k", [
+    (BG.DotBf16, BG.GEMM_HOPPER, 16), (BG.GemmCoordinate, BG.GEMM_AMPERE, 16), (BG.Gemm, {"N": 2, **BG.GEMM_AMPERE}, 16),
+    (BG.GemmCoordinateE4m3, BG.GEMM_HOPPER_E4M3, 32), (BG.GemmCoordinateNvf4, BG.GEMM_SM120_NVF4, 64),
+    (BG.GemmCoordinateMxf4, BG.GEMM_SM120_MXF4, 64)], ids=lambda v: getattr(v, "name", None))
+def test_a_k_its_step_does_not_divide_is_refused_before_any_body(coord, binding, k) -> None:
+    """As for the word coordinates (`gemm.checked_k`): the pinned bindings above, each at a K its step divides, keep their
+    counts and digests."""
+    for K in (k // 2, k + k // 2):
+        with pytest.raises(ValueError, match=f"K is a multiple of the DOT step {k}, not {K}"):
+            bind(coord, K=K, **binding).signature()
+
+
 @pytest.mark.parametrize("d", [BG.F2fpBf16, BG.AmpereBF16TcDot16, BG.HopperBF16WgmmaDot16, BG.HopperE4m3QgmmaDot32,
                                BG.HopperE4m3MmaV2Dot32, BG.BlackwellE4m3QmmaDot32, BG.BlackwellE5m2QmmaDot32, BG.BlackwellNvf4OmmaDot64,
                                BG.BlackwellMxf4OmmaDot64], ids=lambda d: d.name)

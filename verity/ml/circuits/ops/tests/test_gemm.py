@@ -11,6 +11,7 @@ import struct
 from array import array
 from pathlib import Path
 
+import pytest
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluate import evaluate_call
@@ -137,6 +138,19 @@ def test_gemm_batches_the_coordinate() -> None:
     assert len(y) == N
     for i in range(N):
         assert y[i] == _ev(bind(G.GemmCoordinate, K=K, DOT=P.AmpereBF16TcDot16), x, w[i])[0]
+
+
+@pytest.mark.parametrize("coord, binding, k", [
+    (G.DotBf16, G.GEMM_AMPERE, 16), (G.GemmCoordinate, G.GEMM_HOPPER, 16), (G.Gemm, {"N": 2, **G.GEMM_AMPERE}, 16),
+    (G.GemmCoordinateE4m3, G.GEMM_SM120_E4M3, 32), (G.GemmCoordinateNvf4, G.GEMM_SM120_NVF4, 64),
+    (G.GemmCoordinateMxf4, G.GEMM_SM120_MXF4, 64)], ids=lambda v: getattr(v, "name", None))
+def test_a_k_its_step_does_not_divide_is_refused_before_any_body(coord, binding, k) -> None:
+    """The body is K/k whole steps, so a K the step doesn't divide would drop its last K mod k products: the signature refuses
+    it, before a body or digest exists, and a K the step divides gets the signature it always had."""
+    for K in (k // 2, k + k // 2, 3 * k - 1, "64"):
+        with pytest.raises(ValueError, match=f"K is a multiple of the DOT step {k}, not {K!r}"):
+            bind(coord, K=K, **binding).signature()
+    assert bind(coord, K=2 * k, **binding).signature()[0][0][1].n == 2 * k
 
 
 # ---- the sm_120 FP8 / FP4 coordinates -----------------------------------------------------------------------------------
