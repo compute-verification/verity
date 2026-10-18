@@ -7,7 +7,8 @@
 //   first block, its share of the pads, and a lane a level the tree's node templates (below 256 a node's first block is
 //   (dom_a, level) alone and the rest differs in the index byte).  Then thread 0 folds the row digest (`pd_fold`) and makes
 //   the hm96 leaf and frame leaf (3 compressions), while another warp makes the row's seed, line key and E_A line from the
-//   labels' midstates (PD_LABELS; 4 compressions).  The last CTA to finish (a counter in scratch, reset by that CTA) builds
+//   labels' midstates (PD_LABELS; 4 compressions; with PD_PAIR the counter below is taken after the leaf, so the last
+//   CTA's tail starts with its seed chain still running).  The last CTA to finish (a counter in scratch, reset by that CTA) builds
 //   the tree's levels, 2 compressions a level, each level's states kept in shared memory for the next, then seed_A and
 //   line_a (3) and E_A's filler lines (1, a thread a line).  Mode 1 stops after level 0 and the rows' lines, and pd_tree
 //   builds the rest: the tree and seed_A on a lane of their own when nothing in the call reads line_a.
@@ -224,7 +225,7 @@ template <int R> __device__ __noinline__ void pd_sched_call(const uint64_t* m16,
 // warp 0 and pair 1's a later warp (so pi = tid >= 32); every lane of both warps takes part, converged, each lane its own
 // compression.  PD_CONSUMERS: the barrier of the two consumer warps alone.
 constexpr int PD_PAIR_WORDS = 3080;   // 96 x 32 words and the stop word
-constexpr int PD_PAIR_SMEM = 2 * 8 * PD_PAIR_WORDS, PD_CONSUMERS = 11;
+constexpr int PD_PAIR_SMEM = 2 * 8 * PD_PAIR_WORDS, PD_CONSUMERS = 11, PD_LAST = 12;
 #ifndef PD_HOST
 DEV uint64_t* pd_dyn() {
   extern __shared__ uint64_t pd_dyn_smem[];
@@ -832,17 +833,43 @@ template <int V> DEV void pd_commit_t(const Args a) {
   }
   __syncthreads();
   if constexpr (PAIR) {
+    // the tail reads level 0 alone, so pair 0 takes the counter after the leaf and the last CTA's tail starts while pair 1
+    // still runs the seed chain, which learns the verdict on PD_LAST (warp 0 arriving, c1 and p1 waiting)
+    const bool rows = a.i[2] == 1;
     if (warp == 0) {                                // the hm96 leaf, then the frame leaf: level 0's node r
       uint64_t lt[8];
       pd_row_leaf<V, 1>(a.p[8], xr, mk, cc, ftw, ftm, lt);
-      if (lane == 0) s512_store(tree + 64ull * r, lt, 8);
-      pd_pstop();
-    } else if (warp == c1) {                        // the row's seed, line key and E_A line
-      pd_row_seed<V, 1>(a, unit, index, r, xr, lane == 0);
-      pd_pstop();
-    } else if (warp == cw || warp == p1) {
-      pd_pserve(warp == p1);
+      if (lane == 0) {
+        s512_store(tree + 64ull * r, lt, 8);
+        if (!rows) {
+          __threadfence();
+          last = atomicAdd(reinterpret_cast<unsigned*>(scratch), 1u) == (unsigned)count - 1;
+        }
+      }
+      __syncwarp();
+      const bool tail = !rows && last;
+      if (!rows) pd_bar_arrive(PD_LAST, 96);
+      if (!tail) {
+        pd_pstop();
+        return;
+      }
+    } else if (warp == c1 || warp == p1) {          // the row's seed, line key and E_A line
+      if (warp == c1) {
+        pd_row_seed<V, 1>(a, unit, index, r, xr, lane == 0);
+        pd_pstop();
+      } else {
+        pd_pserve(1);
+      }
+      if (rows) return;
+      pd_bar_sync(PD_LAST, 96);
+      if (!last) return;
+    } else {
+      if (warp == cw) pd_pserve(0);                 // pair 0's producer serves the leaf and, in the last CTA, the tail
+      return;
     }
+    __threadfence();
+    pd_tail<V>(a, tm, count, width, kw, root, lk, cw, c1, p1, scratch);
+    return;
   } else if (tid == 0) {
     uint64_t lt[8];
     pd_row_leaf<V>(a.p[8], xr, mk, cc, ftw, ftm, lt);
