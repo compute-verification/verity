@@ -6,7 +6,7 @@ line, a kernel source, a hook or a launch config it does not model is refused by
 incomplete."""
 from __future__ import annotations
 
-__models__ = ("meta-llama/Llama-3.2-1B",)
+__models__ = ("unsloth/Llama-3.2-1B",)
 
 import json
 import shutil

@@ -4,7 +4,7 @@ zeros, subnormals, squares that overflow), at small statics and at Llama-3.2-1B'
 refused; the split head is softmax attention within bf16 rounding, and one split is `AttentionHead_v4`."""
 from __future__ import annotations
 
-__models__ = ("meta-llama/Llama-3.2-1B",)
+__models__ = ("unsloth/Llama-3.2-1B",)
 
 import numpy as np
 import pytest
