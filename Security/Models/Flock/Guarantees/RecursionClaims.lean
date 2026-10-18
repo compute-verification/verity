@@ -17,9 +17,11 @@ namespace Flock.Guarantees
 reference prover's public stop and the pieces it reads (`ZKStop`, `StopDeploy`, `StopDeploy.prover`,
 `StopDeploy.halted`, `SimStop`, `εzkStop`), the claims at Flock as the inner protocol (`KSFlock`, `BitsFlock`), the
 inner protocol's KS and its KS against provers that may abort (`Inner.KS`, `Inner.KSAbort`), which the proof reads,
-the readable scope (`Scope`, `InScope`) and the decoders the claims quantify over (`decOK`); the shared claims they
-instantiate (`Claims.KS`, `ZKmalR`, `ZKmalRx`, `Flock.ListWithin`, `Complete`, `ScopeMatches`, `ExtractRunsLe`,
-`ExtractRunsExpLe`, `Nontrivial`), the named assumptions
+the readable scope (`Scope`, `InScope`) and the decoders the claims quantify over (`decOK`); option (d)'s KS at the
+representation V* binds (`KSBound`, `KSPrivBound`), the inner claim it rests on (`Bridge`, with its premises
+`Bound.PlainKSAbort`, `Bound.Binds` and `Bound.WeightCovers`) and the last message's binding the recursion's proof
+reads (`Bound.LastBinds`); the shared claims they instantiate (`Claims.KS`, `ZKmalR`, `ZKmalRx`, `Flock.ListWithin`,
+`Complete`, `ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `Nontrivial`), the named assumptions
 (`StrictBirthday`, `ExpectedCR`, `Hm96Hiding`) and `trustedBase`, equal to itself. -/
 def RecursionClaimsStated : Prop :=
   let claims := (@Claims.Recursion.KS, @Claims.Recursion.Bits, @Claims.Recursion.Efficient,
@@ -30,6 +32,8 @@ def RecursionClaimsStated : Prop :=
     @Claims.Recursion.KSFlock, @Claims.Recursion.BitsFlock,
     @Claims.Recursion.Inner.KS, @Claims.Recursion.Inner.KSAbort,
     @Claims.Recursion.Scope, Claims.Recursion.InScope, @Claims.Recursion.decOK,
+    @Claims.Recursion.KSBound, @Claims.Recursion.KSPrivBound, @Claims.Recursion.Bridge,
+    @Claims.Recursion.Bound.PlainKSAbort, @Claims.Recursion.Bound.LastBinds,
     @Claims.KS, @Claims.ZKmalR, @Claims.ZKmalRx, @Claims.Flock.ListWithin, @Claims.Complete, @Claims.ScopeMatches,
     @Claims.ExtractRunsLe, @Claims.ExtractRunsExpLe, @Claims.Nontrivial,
     @Claims.StrictBirthday, @Claims.ExpectedCR, @Claims.Hm96Hiding, Claims.trustedBase)

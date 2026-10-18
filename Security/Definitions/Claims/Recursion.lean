@@ -40,7 +40,10 @@ eight items:
    (`Deploy.P`) at the deployed error (`Deploy.δc`), `ScopeMatches`, `Nontrivial`, and the private variant's `KSPriv`,
    `ZKPriv`; `At Flock` instantiates the inner protocol with Flock and its decoder. The inner protocol's claim the
    recursion rests on is `Inner.KSAbort`: its KS against provers that may abort after the inner rounds, on coins the
-   inner verifier doesn't read (with no aborts, `Inner.KS`).
+   inner verifier doesn't read (with no aborts, `Inner.KS`). `KSBound` and `KSPrivBound` (option (d)) are `KS` and
+   `KSPriv` at the compiled record whose inner view runs the verifier at the representation V* binds (`Bound.IVStar`:
+   the inner session's commit strings and their openings), and `Bridge` states the inner claim they rest on, from
+   Flock's at that representation.
 7. **Assumptions used.** `StrictBirthday` (for `B`), `ExpectedCR` (for `Be`), each read once in `Bits`; `Hm96Hiding`
    (hm96 leaves hide up to `δ₁`) at the deployed key's salt mask and salt hash (`Deploy.mask`, `Deploy.saltHash`), read
    in `ZK`, `ZKPriv` and `ZKStop`; and `trustedBase`. The decoders are those within Flock's list-decoding radius
@@ -52,7 +55,9 @@ eight items:
    the finite tape each statement's nonce and rest draw (`StopDeploy.prover`, `ZKmalRx`), which stops where the
    statement and the public transcript before the sessions say the honest proof can be refused (`StopDeploy.stops`),
    at the simulator that stops there too and commits to the zero digest as many strings at each inner round as the
-   reference prover's round carries (`SimStop`, `StopDeploy.nAt`), within `2δ₁` per string (`εzkStop`).
+   reference prover's round carries (`SimStop`, `StopDeploy.nAt`), within `2δ₁` per string (`εzkStop`). Option
+   (d)'s section is a statement for review, with no proof. `Bound.WeightCovers`' constant is the draft's, fixed by
+   the bridge's proof before freezing.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
@@ -379,7 +384,9 @@ digest's under its salts, `Deploy.zeroCommit`); the V* statements of a run, from
 inner session and the staging rounds (`vstar`), and their count at `x` (`nS`, fixed by `x`'s form); outer session `s`'s
 view in a run's view (`session`: its messages and its verifier's decision as the compiled verifier's answers show it);
 the inner session's view read off a run's coins and the outer witnesses, at an oracle (`innerView`: the inner verifier
-runs at it); the SHA-512 evaluations the outer witnesses record (`calls`); the numbers of outer session `s` at `x`
+runs at it; at the representation V* binds, `KSBound`, its rounds before the last are the inner session's commit
+strings as V*'s parts hold them, and its last is their openings with the element-level last message, off the parts that
+hold them); the SHA-512 evaluations the outer witnesses record (`calls`); the numbers of outer session `s` at `x`
 (`nums`, the outer Flock's at that session's V* statements, which their public shape fixes); for the simulator, the
 pinned hm96 key's salts (`saltLen` bytes), its salt prefix `p_salt` and its GF(2)-linear salt mask `Φ`, into 64 bytes
 (`mask`); the reference prover (`P`), the honest prover the deployment runs, on its tapes (`Tape`, a nonempty
@@ -764,5 +771,270 @@ def BitsFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : F
   ∀ decI, decOK DI decI → Bits H D (Inner.ofFlock DI decI) DO
 
 end AtFlock
+
+/-! ## At the representation V* binds (option (d))
+
+The deployed V* never reads the inner session's framed transcript. It binds what the firewall's coin server records
+(`rec/inner-transcript/v1`, the run's inner rounds) and what its parts hold:
+
+* round 0: each table's level-0 top as salted commitments, one hm96 `b ‖ c` a cap node (`link.roots`), answered by the
+  link points;
+* each later round: the salted tops of the caps it absorbs, then the commitment `c_k` to its free elements `F_k` as one
+  registered row (none where `F_k` is empty), answered by its coins;
+* never in the run: the rows, the salts and the proof files, hidden values of V*'s parts.
+
+The firewall drops the rest of a round's framed bytes: the domain and labels (constants), the proof-of-work nonces
+(never checked, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
+the inner verifier `E*`'s views run at is one over that representation (`Bound.IVStar`): an element-level inner Flock
+(`Bound.DE`, at plain SHA-512 leaves), each round message before its last committed as rows under hm96 at the pinned
+key, its last message their openings with the element-level last message. `KSBound` is the recursion's KS there, and
+`Bridge` the inner claim it rests on, from Flock's KS at `DE`.
+
+**Where it is stated.** `KS` reads acceptance off the compiled record's inner view (`Deploy.innerView`, through `dec`)
+and reads the inner record's verifier only for its rounds. So `KSBound` takes the compiled record at each inner
+verifier, its inner view running that verifier (`RecAt`), and applies it at `IVStar`: the record's inner view then runs
+`IVStar`. A compiled record that ignores the inner verifier it is given is no `RecAt`: there `KS` would read an
+accept-all verifier's acceptance. At the deployment it is `deployRec · ivScope b`, with the readers at V*'s bound layout
+and `DE` the deployed plain record at plain leaves with only its verifier's steps, its columns and its weight replaced
+(`RecDeploy.KSBoundDeployed`, in `Proofs/`, as the deployed record is).
+
+**What binds each message of an inner view to the run**, in V*'s setup:
+
+* round 0's commit strings: `checkTopRows` (`pub.bin`'s rows of `rec-top-L0` are the coin server's `b ‖ c`, read off its
+  record by `innerLink`), with the schedule's node count (`checkLinkRounds`);
+* round 0's coins, the link points: `innerLink` (the inner session's record holds the coin server's points) and
+  `checkLink` (a check-5 part is refused without them);
+* a later round's salted tops: `checkOpenTops` and `checkLevelTopReads` (each opening's `out` reads the coin server's top
+  at its rep's coins), at the schedule's rounds and node counts (`checkLinkRounds`);
+* a later round's `c_k`: the registered value V*'s algebra opens that round's row against, which the setup builds from
+  `c_k` (`RecSetup.commits`, `checkInner`);
+* each round's coins: `innerCommits` (the record's coins are the coin server's);
+* the last message: the rows, salts and proof files are the parts' hidden values, and `IVStar`'s own openings hold
+  them to the earlier rounds' commit strings (`Bound.opens`, binding where `Bound.Binds`).
+
+**Why ZK's hiding route is compatible, and what it costs.** The run's inner messages are exactly the coin server's
+commit strings, each an hm96 `b ‖ c` at the pinned key: hiding commitments, one of the four kinds of public things.
+`IVStar`'s last message is never sent in the run; V*'s parts hold it inside the outer `--zk` proofs. So every message of
+an inner view that the run shows is one `Sim` replaces by a commit string to the zero digest under a fresh salt, and the
+views are `E*`'s alone. Two things stand between that and the deployment:
+
+* the deployed V* reads the inner session's `session.json` (`checkLink`, `filesOnly`), which holds the raw `root_f`,
+  `root_b`, `publics` and every framed round message. V* has to stop reading it, a code change;
+* a round carries the schedule's count of commit strings (`Bound.nAt`), not one: round 0 alone carries a level-0 top
+  of `2^7 = 128` cap nodes (`fast100`'s first level, 218 queries). `Sim`'s inner session, which commits one zero string
+  a round (`simInner`), and `εzk`'s inner term (`2δ₁·k_I`) have to count strings (`n_open`, `2δ₁·n_open`), so `ZK` as
+  stated is false at the bound record until it does. `ZK` is unchanged until that restatement. -/
+
+section Bound
+
+/-- An oracle program, then `f` on its result. -/
+def bindOC {α β : Type} : OC α → (α → OC β) → OC β
+  | .ret a, f => f a
+  | .query q k, f => .query q fun a => bindOC (k a) f
+
+/-- Oracle programs in order: `true` when each returns `true`, stopping at the first that returns `false`. -/
+def allOC : List (OC Bool) → OC Bool
+  | [] => .ret true
+  | p :: ps => bindOC p fun b => if b then allOC ps else .ret false
+
+/-- **`b` unmasked at a salt's mask `Φy`**: each of `b`'s first 64 bytes XOR the mask's, the rest kept. At a 64-byte `b`
+it is hm96's `b ⊕ Φy`, a bijection in `b` at each salt. -/
+def xorMask (b : Msg) (m : Fin 64 → UInt8) : Msg := b.mapIdx fun i v => v ^^^ (List.ofFn m).getD i 0
+
+variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+
+/-- **The inner session at the representation V\* binds**, a parameter as `Flock.Deploy` is:
+
+* the element-level inner Flock (`DE`), at plain SHA-512 leaves (`flock-leaf/sha512-unsalted`, which Flock's verifier
+  admits for hidden outputs without `--zk`). Its round messages before the last are the rows the firewall commits at
+  that round, joined (`join`); its last message is the proof files' rest, the openings at the query positions under
+  the caps its rounds committed;
+* the answer to a round before the last: its coin (`ans`);
+* the count of commit strings the schedule fixes at each round before the last (`nAt x j`): the round's cap nodes,
+  then one for `F_k` where it is nonempty; a round with neither carries none;
+* the pinned hm96 key: its salts (`saltLen` bytes), its salt prefix `p_salt` and its GF(2)-linear salt mask `Φ`, into
+  64 bytes (the compiled verifier's `Deploy.saltLen`, `saltPrefix` and `mask`);
+* a row's digest input (`rowIn`), `hm96-sha512/row/v1`'s `sha512_row_prefix(role, 16, n_words) ‖ row`. A cap node's
+  row is its 64 bytes then 64 zero bytes (`rec_live.top_rows`). `F_k`'s row is its elements, 16 bytes each,
+  zero-padded to whole 128-byte blocks (`message_rows`);
+* how the last message reads (`final`): per earlier round, its rows with their salts in commit order, then `DE`'s last
+  message;
+* `γ`'s weight at `IVStar` (`weight`). -/
+structure Bound (Coin Col T : Type) where
+  DE : Flock.Deploy Coin Col T
+  ans : Coin → Msg
+  join : List Msg → Msg
+  nAt : Msg → ℕ → ℕ
+  saltLen : ℕ
+  saltPrefix : Msg
+  mask : (Fin saltLen → UInt8) → Fin 64 → UInt8
+  rowIn : Msg → Msg
+  final : Msg → Option (List (List (Msg × (Fin saltLen → UInt8))) × Msg)
+  weight : Msg → ℝ
+
+/-- **A commit string opens to a row under a salt** (`hm96-sha512/row/v1` at the bound key), through two calls of the
+oracle, as `VStar.Opening.twoCalls` opens. The salt must hash to the commit string's bytes after its first 64,
+`H(p_salt ‖ y) = c`, and the row's digest must be its first 64 bytes unmasked at the salt, `H(rowIn row) = b ⊕ Φy`.
+Two openings of one commit string to different rows collide: on the salts' hashes where the salts differ, on the rows'
+digests where they share it (where `rowIn` is injective, `Bound.Binds`). -/
+def Bound.opens (Bd : Bound Coin Col T) (a row : Msg) (y : Fin Bd.saltLen → UInt8) : OC Bool :=
+  .query (Bd.saltPrefix ++ List.ofFn y) fun c => .query (Bd.rowIn row) fun d =>
+    .ret (decide (c = a.drop 64 ∧ d = xorMask (a.take 64) (Bd.mask y)))
+
+/-- **A round message opens to rows under salts**: it is as many 128-byte commit strings as there are rows, in order,
+each opening to its row under its salt. -/
+def Bound.opensRound (Bd : Bound Coin Col T) (a : Msg) (os : List (Msg × (Fin Bd.saltLen → UInt8))) : OC Bool :=
+  if a.length = 128 * os.length then allOC (os.mapIdx fun i o => Bd.opens ((a.drop (128 * i)).take 128) o.1 o.2)
+  else .ret false
+
+/-- The element-level messages a last message opens: each earlier round's rows joined, then `DE`'s last message. -/
+def Bound.opened (Bd : Bound Coin Col T) (os : List (List (Msg × (Fin Bd.saltLen → UInt8)))) (last : Msg) :
+    List Msg :=
+  os.map (fun o => Bd.join (o.map Prod.fst)) ++ [last]
+
+/-- **The element-level verifier accepts the messages `ms` at the coins `cs`**: it answers each round before the last
+with that round's coin (`ans`) and accepts at the last. -/
+def Bound.agrees (Bd : Bound Coin Col T) (x : Msg) (ms : List Msg) (cs : List Coin) : OC Bool :=
+  allOC ((List.range ms.length).map fun j =>
+    bindOC (Bd.DE.V.next x (ms.take (j + 1)) (cs.take (j + 1))) fun b =>
+      .ret (decide (b = if j + 1 < ms.length then .msg (Bd.ans (cs.getD j default)) else .acc)))
+
+/-- **`IVStar`, the inner verifier at the representation V\* binds.** It has `DE`'s rounds. At each round before its
+last it answers the round's coin and decides nothing. At its last round it reads the last message (`final`) and accepts
+exactly when two things hold:
+
+* each earlier round's message opens to that round's rows under their salts, as many as the schedule fixes (`nAt`);
+* the element-level verifier accepts the opened messages (`opened`) at the run's coins. -/
+def Bound.IVStar (Bd : Bound Coin Col T) : Verifier Coin where
+  k := Bd.DE.V.k
+  next x as cs :=
+    if as.length < Bd.DE.V.k x then .ret (.msg (Bd.ans (cs.getLastD default)))
+    else match Bd.final (as.getLastD []) with
+      | none => .ret .rej
+      | some (os, last) =>
+        if os.length + 1 = as.length ∧ ∀ j < os.length, (os.getD j []).length = Bd.nAt x j then
+          bindOC (allOC ((as.dropLast.zip os).map fun p => Bd.opensRound p.1 p.2)) fun ok =>
+            if ok then bindOC (Bd.agrees x (Bd.opened os last) cs) fun acc => .ret (if acc then .acc else .rej)
+            else .ret .rej
+        else .ret .rej
+
+/-- **A view, opened**: its prover messages are the element-level ones its last message opens (`opened`), its answers
+and decision kept; unchanged where its last message doesn't read. -/
+def Bound.openView (Bd : Bound Coin Col T) (v : Seen) : Seen :=
+  match Bd.final (v.msgs.getLastD ([], .rej)).1 with
+  | none => v
+  | some (os, last) => ⟨(Bd.opened os last).zip (v.msgs.map Prod.snd), v.out⟩
+
+/-- **The bound record**: the element-level Flock `DE` with `IVStar` for its verifier and `weight` for `γ`'s weight; its
+extractor's opening of a view is `DE`'s of the view opened (`openView`). Its parser, tables, code, decoder and every
+other number are `DE`'s, so its `κ` is `DE`'s. -/
+def Bound.deploy (Bd : Bound Coin Col T) : Flock.Deploy Coin Col T :=
+  { Bd.DE with V := Bd.IVStar, cols := fun v => Bd.DE.cols (Bd.openView v), weight := Bd.weight }
+
+/-- The commit strings a run at `x` opens: the schedule's, at each round before the last. -/
+def Bound.nOpen (Bd : Bound Coin Col T) (x : Msg) : ℕ := ((List.range (Bd.DE.V.k x - 1)).map (Bd.nAt x)).sum
+
+/-- **(P2) The commit strings bind**: a row's digest input is injective (the deployed `rowIn`'s first block fixes the
+row's length), so two openings of one commit string to different rows give a SHA-512 collision among their calls
+(`Bound.opens`). -/
+def Bound.Binds (Bd : Bound Coin Col T) : Prop := Function.Injective Bd.rowIn
+
+/-- **(P3) `γ`'s weight covers the openings**: at each statement, `√C_IVStar ≥ √C_DE + √(2·n_open)`. So `B`'s fork at
+`IVStar` charges two kinds of collision: the element-level Flock's, and those of two runs that open one of the
+`n_open` commit strings two ways, two calls each. A draft constant, which the bridge's proof fixes before the statement
+freezes. -/
+def Bound.WeightCovers (Bd : Bound Coin Col T) : Prop :=
+  ∀ x, Real.sqrt (Bd.DE.weight x) + Real.sqrt (2 * Bd.nOpen x) ≤ Real.sqrt (Bd.weight x)
+
+/-- **(P4) The last message, as `final` reads it, is bound by the rounds before it.** Take two decisions `IVStar` accepts
+at one statement, on messages and coins that agree before the last round, whose last messages `final` reads
+differently. They show a SHA-512 collision among `IVStar`'s calls in the two decisions.
+
+It is stated modulo `final` because everything the extractor reads of the last message goes through `final`: `IVStar`'s
+decision and its calls, and the opened view whose columns `Bound.deploy` takes (`Bound.ivstar_congr_final`,
+`Bound.openView_congr_final`). Two last messages `final` reads alike are one view to `E*`, and asking a collision of
+them would make (P4) false at every record whose `final` tolerates a difference, such as trailing bytes.
+
+Where the two readings' openings differ, the collision is `Binds`': the commit strings are shared, so a different salt
+collides on the salt hashes and a different row, at one salt, on the row digests. Where the openings agree and only
+`DE`'s last message differs, it binds only where `DE`'s verifier binds its last message to the caps its earlier rounds
+committed (Flock's Merkle binding at plain leaves). At the deployment those steps are the code side's (`nextE`), so
+(P4) is a premise of the bound record, not a consequence of `Binds`.
+
+The recursion's KS reads this, not the bridge. `E*`'s inner views read the last message off the outer witnesses, and
+those differ across `E*`'s reruns. -/
+def Bound.LastBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
+  ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
+    cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →
+    Bd.final (as.getLastD []) ≠ Bd.final (as'.getLastD []) →
+    ((Bd.IVStar.next x as cs).eval H).1 = .acc → ((Bd.IVStar.next x as' cs').eval H).1 = .acc →
+    ∃ q ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
+      ∃ q' ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
+        Collision H q q'
+
+/-- **(P1) The element-level Flock's KS against aborting provers, at plain leaves**: `Inner.KSAbort` at `DE`, at every
+inner decoder that meets the list-decoding spec. `Bridge` takes it at each decoder. It is a new claim, not on hand:
+Flock's KS gives `KSAbort` only at the framed record, and Flock's KS alone doesn't give `KSAbort` (`flockKS_not_KSAbort`),
+so at `DE` it rests on Flock's table bound there, at plain leaves. -/
+def Bound.PlainKSAbort [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
+  ∀ decI, decOK Bd.DE decI → Inner.KSAbort H (Inner.ofFlock Bd.DE decI)
+
+/-- **The bridge, option (d)'s inner claim (to be proved).** At every inner decoder that meets the list-decoding spec,
+`IVStar`'s KS against provers that may abort (`Inner.KSAbort` at the bound record) follows from three premises:
+
+* (P1) the element-level Flock's KS against aborting provers at plain leaves (`Inner.KSAbort` at `DE`,
+  `Bound.PlainKSAbort` at one decoder), which Flock's KS proof is to give through its table bound at `DE`;
+* (P2) the commit strings bind (`Binds`);
+* (P3) `γ`'s weight covers their openings (`WeightCovers`).
+
+The recursion's KS at the bound record (`KSBound`) rests on the bridge and on (P1) to (P3), and also on (P4), the last
+message's binding (`LastBinds`), which the recursion's proof reads and the bridge doesn't.
+
+The proof builds, from a prover against `IVStar`, a prover against `DE`. At each round it sends the rows that the
+plurality of `IVStar`'s accepted continuations open there (or the rows of one accepted continuation drawn uniformly),
+and it aborts where the run opens otherwise. Never the first accepted continuation in coin order: a prover can make that
+one the lone deviant, and then `DE`'s prover aborts on almost every run while `IVStar` accepts on almost every run,
+which `B`'s two random runs see with probability about `2/|coins|`. With the plurality, or a random continuation, a run
+that opens one commit string two ways is a collision among `IVStar`'s calls on two runs, which `B`'s fork at `IVStar`
+charges. `IVStar` and `DE` share their rounds, waits, truncation and `κ`, and `E^rep` at the bound record opens `DE`'s
+columns of the opened view. -/
+def Bridge [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
+  ∀ decI, decOK Bd.DE decI → Bd.Binds → Bd.WeightCovers →
+    Inner.KSAbort H (Inner.ofFlock Bd.DE decI) → Inner.KSAbort H (Inner.ofFlock Bd.deploy decI)
+
+variable {Col' T' : Type} [DecidableEq Col']
+
+/-- **The compiled record at each inner verifier, its inner view running it** (`KSBound`'s compiled record): `record IV`
+is a compiled record whose inner view (`Deploy.innerView`) is `IV`'s run, at the claim's oracle and the run's first
+coins, of the inner messages the outer witnesses give (`msgs`) at the inner statement (`xI`). So `KSBound` reads
+`IVStar`'s acceptance. A compiled record that ignores the inner verifier it is given is none: there `KS` would read an
+accept-all verifier's acceptance (`KSFlock` with the inner record's verifier replaced by an accept-all one). At the
+deployment `record` is `deployRec · ivScope b` at V*'s bound layout (`RecDeploy.recBoundAt`). -/
+structure RecAt (Coin : Type) [Inhabited Coin] where
+  record : Verifier Coin → Deploy Coin
+  msgs : Msg → List Flock.Wit → List Msg
+  xI : Msg → Msg
+  runs : ∀ (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin ((record IV).V.k x) → Coin) (ws : List Flock.Wit),
+    (record IV).innerView H x r ws = (run H (replay (msgs x ws)) IV (xI x) () fun i => coinSeq r i.val).seen
+
+/-- **The recursion: KS at the representation V\* binds** (option (d)): `KS` at the compiled record whose inner view runs
+`IVStar` (`D.record Bd.IVStar`), over the bound record (`Bound.deploy`), at every inner and outer decoder that meets the
+spec. `E*`'s inner views are what the compiled verifier reads off the outer witnesses (`Deploy.innerView`): at each
+round before the last, the inner session's commit strings, and at the last, their openings with `DE`'s last message.
+`IVStar` is the verifier that accepts them, and `KS` reads its acceptance there (`RecAt.runs`). At the deployment `D` is
+`deployRec · ivScope b` at V*'s bound layout and the guarantee is `RecDeploy.KSBoundDeployed`, in its ∀-form
+`RecDeploy.KSBoundRoute`. `KSFlock` at the deployed framed Flock is false at the deployed record (counterexample B: an
+honest view's held rounds are free-element rows, never its framed bytes). -/
+def KSBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
+    (DO : Flock.Deploy Coin Col' T') : Prop :=
+  KSFlock H (D.record Bd.IVStar) Bd.deploy DO
+
+/-- **The private variant: KS at the representation V\* binds**, at the compiled record whose inner view runs `IVStar`,
+over the bound record, at every inner and outer decoder that meets the spec. -/
+def KSPrivBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
+    (DO : Flock.Deploy Coin Col' T') : Prop :=
+  ∀ decI, decOK Bd.DE decI → KSPriv H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO
+
+end Bound
 
 end Claims.Recursion

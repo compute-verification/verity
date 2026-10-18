@@ -30,6 +30,8 @@ import Proofs.Flock.Claims.Recursion.DeployPremises
 import Proofs.Flock.Claims.Recursion.DeployZK
 import Proofs.Flock.Claims.Recursion.DeployStop
 import Proofs.Flock.Claims.Recursion.VStar
+import Proofs.Flock.Claims.Recursion.VStarBound
+import Proofs.Flock.Claims.Recursion.BoundDeploy
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion
