@@ -11,6 +11,8 @@ arm_modules = ["benchmarks.pouw.pearl_c_vllm.bench_arm:PEARL_C"]
 sweep = "quick"
 reps = 3
 eager = true
+# The arm's cubin, built and SASS-gated from the dispatched commit.
+setup = "benchmarks/harness/setup/pearl_c.sh"
 
 [preset]
 id = "llama31-8b-fp8-1gpu-pouw"

@@ -13,55 +13,19 @@ arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), 
 RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative control changing the
 transcript root.
 
-Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's,
-else `built_cubin`'s), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule), ``PEARLC_SCHEME``,
-``PEARLC_BENCH_EPOCH``, ``PEARLC_BUILD_CACHE``.
-
-A spec names it as ``benchmarks.pouw.pearl_c_vllm.bench_arm:PEARL_C`` (`benchmarks/specs/llama31-8b-fp8-1gpu-pouw.toml`),
-which a dispatched point imports from the tree root on its ``PYTHONPATH``.
+Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's),
+``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule), ``PEARLC_SCHEME``, ``PEARLC_BENCH_EPOCH``.
 """
 from __future__ import annotations
 
 import hashlib
 import os
-import shutil
-import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
-#: the kernel directory's files the cubin is a function of, beside the toolkit
-BUILD_INPUTS = ("build.sh", "sass_gate.py", "pearl_c_sm120.cu", "hash_fast.cuh", "mainloop_sm120.cuh")
-
-
-def built_cubin(kernel_dir: Path) -> Path:
-    """build.sh's SASS-gated cubin (``CUBIN_ONLY``) for the kernel directory's sources, under ``PEARLC_BUILD_CACHE``
-    (default ``~/.cache/verity/pearl_c_sm120``) by the digest of `BUILD_INPUTS` and the toolkit, built once."""
-    cuda = os.environ.get("CUDA") or os.environ.get("CUDA_HOME") or "/usr/local/cuda-13.0"
-    digest = hashlib.sha256(cuda.encode())
-    for name in BUILD_INPUTS:
-        digest.update(b"\0" + name.encode() + b"\0" + (kernel_dir / name).read_bytes())
-    root = Path(os.environ.get("PEARLC_BUILD_CACHE") or Path.home() / ".cache" / "verity" / "pearl_c_sm120")
-    out = root / digest.hexdigest()[:16]
-    cubin = out / "pearl_c_sm120.cubin"
-    if cubin.is_file():
-        return cubin
-    root.mkdir(parents=True, exist_ok=True)
-    scratch = Path(tempfile.mkdtemp(dir=root))
-    try:
-        subprocess.run(["bash", str(kernel_dir / "build.sh"), str(scratch / "ship")], check=True,
-                       env={**os.environ, "CUDA": cuda, "CUBIN_ONLY": "1"})
-        try:
-            (scratch / "ship").rename(out)
-        except OSError:
-            if not cubin.is_file():
-                raise
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
-    return cubin
 
 
 class _Coins:
@@ -99,8 +63,6 @@ class PearlCArm:
         self.run = self.stack = self.weights = None
 
     def install(self, target: Any) -> "PearlCArm":
-        if self.cubin is None and not any(self.kernel_dir.glob("*.cubin")):
-            self.cubin = str(built_cubin(self.kernel_dir))
         return self
 
     def engine_overrides(self, target: Any) -> dict[str, Any]:
