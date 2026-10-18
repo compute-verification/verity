@@ -17,8 +17,8 @@ draw `d`, and no draw in the record is read, as the masked side does (`Composed.
   is accepted at the setup at its statement's draw and records its live outcome there, with no premise on the record's
   draw (`setupOf_plainInputs`, `recordsLiveAtP_of_checks` and `accepts_of_decide_plain` without `hdraw`).
 * `plainVerdictAt`, `plainVerdictAt_of_run`: `plainVerdict` at `wrPD`, which every accepting run of `V false` with no
-  column off `C` has at its live outcome, on every draw-carrying record (`plainVerdict_of_run` without
-  `RecordDrawVerbatim`).
+  column off `C` has at its live outcome, on every draw-carrying record (`plainVerdict_of_run` without its premise
+  that the record carry the statement's draw verbatim).
 -/
 
 namespace Claims.Bridge.PlainDraw

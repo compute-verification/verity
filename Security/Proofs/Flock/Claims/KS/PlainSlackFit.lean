@@ -21,8 +21,8 @@ message's coin being revealed to nobody. The plain fork rounds are before the la
 * `slack_fits_fast100`, `plain_slack_fits`: so the slack fits, with room to spare, at the deployed plain verifier's
   coins (`GF128`, `M = 65536`);
 * `plain_fork_le_fnAt`: and a fork bound at most the simulated fork at `fnAt` at a plain fork round is at most the
-  accepting fork with a collision there (`plainForkEv`) and the slack at those chances, as `PlainSimWrPAt` and
-  `PlainSimWrPAtD` ask (`forkCoinCoupling_plain`, `slack_of_coupling`).
+  accepting fork with a collision there (`plainForkEv`) and the slack at those chances, as `PlainSimWrPAtD` asks
+  (`forkCoinCoupling_plain`, `slack_of_coupling`).
 -/
 
 namespace Claims.Flock
@@ -246,7 +246,7 @@ theorem plainJ_succ_lt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
 /-- **The slack fits the plain weight at the coupling's chances**: at the deployed plain verifier, with the chances
 `FnFork.δN GF128 65536 n` of the coupling at `fnAt` (`forkCoinCoupling_plain`) and a positive revealed length
 `n t ≥ 1` at every round before the last, the slack's escapes' weights at the plain fork rounds total at most level
-0's `2·2^{d₀}·Q₀`, as `slackEsc_fitsFork_plain` and `PlainSimWrPAt` ask. -/
+0's `2·2^{d₀}·Q₀`, as `slackEsc_fitsFork_plain` and `PlainSimWrPAtD` ask. -/
 theorem plain_slack_fits {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) {m k0 : ℕ} {l₀ l₁ : FlockSoundness.Accounting.Level}
     {rest : List FlockSoundness.Accounting.Level} {ext : ℕ}
@@ -268,7 +268,7 @@ theorem plain_slack_fits {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
 /-- **The fork clause at `fnAt`**: at a plain fork round, a bound at most the simulated fork of a simulator whose
 coins are `Claims.Bridge.Live.fnAt` at a prefix key is at most the accepting fork with a collision there
 (`plainForkEv`) and the slack at the coupling's chances `FnFork.δN GF128 65536 n` (`slack_of_coupling` at
-`forkCoinCoupling_plain`), the fork bound `PlainSimWrPAt` and `PlainSimWrPAtD` ask for. -/
+`forkCoinCoupling_plain`), the fork bound `PlainSimWrPAtD` asks for. -/
 theorem plain_fork_le_fnAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     {m k0 : ℕ} {l₀ l₁ : FlockSoundness.Accounting.Level} {rest : List FlockSoundness.Accounting.Level} {ext : ℕ}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) {D : Type} [Fintype D]
