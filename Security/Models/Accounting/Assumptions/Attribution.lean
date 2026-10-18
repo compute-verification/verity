@@ -16,8 +16,8 @@ only after the deadline, so at a fixed draw the salt is the window's one coin. T
   at each draw). Deployed, the challenger sends the salt encrypted under a key the auditor's devices share, the block's
   certifier releases it on the block's side at `ts`, and the verifier publishes it only after registration. The premise
   is the information-theoretic form; the keystream's computational gap is outside it.
-* `SaltContainment`: what the block sends during the window over links with no certifier on them takes at most `2^kc`
-  values across salts. This is the premise about the prover's own host. The hardware `H` is to declare every physical
+* `SaltContainment`: what the block sends, up to the window's end, to readers that aren't certifiers takes at most
+  `2^kc` values across salts. This is the premise about the prover's own host. The hardware `H` is to declare every physical
   channel out of the block as an uncertified link with its capacity: power draw (a shared PDU, host sensors), EM,
   thermal and acoustic emission, shared DRAM and PCIe peers on the block's host, the BMC and DPU. `DeclaredLinks` is
   then a premise about the auditor's model of the hardware, and `SaltContainment` says those channels carry fewer than
@@ -55,13 +55,14 @@ def SaltCustody {Ωs Ωd L : Type*} [LinearOrder L] [Fintype L] (S : Ωs × Ωd 
     (w : Window) : Prop :=
   ∀ d, Secrets (fun s => S (s, d)) cert X w.start
 
-/-- **Salt containment** (at each draw `d`): what the block `X` sends during the window `w` to readers that aren't
-certifiers (`Actual.Run.sent`, its wires to leaves outside `X ∪ cert`) takes at most `2^kc` values across salts. The
-hardware declares every physical channel out of `X` (power, EM, thermal, shared DRAM, PCIe peers, the BMC) as a link,
-so this is the block's leak about its coins through all of them: fewer than `kc` bits a window. -/
+/-- **Salt containment** (at each draw `d`): what the block `X` sends, from the gates it places before the window `w`
+ends, to readers that aren't certifiers (`Actual.Run.sent`, its wires to leaves outside `X ∪ cert`) takes at most
+`2^kc` values across salts. A wire is keyed by its source's tick, so a value placed before `ts` and read in the window
+is counted too. The hardware declares every physical channel out of `X` (power, EM, thermal, shared DRAM, PCIe peers,
+the BMC) as a link, so this is the block's leak about its coins through all of them: fewer than `kc` bits a window. -/
 def SaltContainment {Ωs Ωd L : Type*} (S : Ωs × Ωd → Actual.Run L) (cert X : Finset L) (w : Window) (kc : ℕ) :
     Prop :=
-  ∀ d, (Set.range fun s => (S (s, d)).sent (X : Set L) (w.ticks : Set ℕ) ∩ {p | p.2.1 ∉ cert}).encard ≤
+  ∀ d, (Set.range fun s => (S (s, d)).sent (X : Set L) (Set.Iio (w.start + w.len)) ∩ {p | p.2.1 ∉ cert}).encard ≤
     ((2 ^ kc : ℕ) : ℕ∞)
 
 /-- **Salt-free jitter**: `TrustedUnits`' W2 and J with each certifier's jitter word `J d y` a function of the draw `d`
