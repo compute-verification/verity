@@ -92,3 +92,25 @@ def test_it_stops_every_process_of_a_live_run_outside_the_slots_but_its_runner(t
     assert sent == [(20, signal.SIGTERM), (21, signal.SIGTERM), (40, signal.SIGTERM)]
     rec = json.loads(log.read_text())
     assert rec["run"] == "r-off" and rec["workload_group_seen"] and rec["sigterm"] == [20, 21, 40]
+
+
+def test_renice_moves_a_direct_runs_processes_to_nice_19_once_and_leaves_slot_runs_alone(tmp_path, monkeypatch, capsys):
+    """Node 1 (top, 18 Oct): lanes' direct runs took the cores the train checks need. `--renice 19` stops nothing: it renices every
+    process of a live run outside the slots, its runner too, and logs a run only while it moved a process."""
+    runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "direct-runs-nice", tmp_path / "direct-nice.jsonl"
+    gate = _run(runs, "r-gate", "running", ["python3", "tools/verity/check/slot.py", "--", "true"], pgid=10, runner=9)
+    off = _run(runs, "r-off", "running", ["uv", "run", "pytest", "-x"], pgid=20, runner=19)
+    for pid, run in ((10, gate), (19, off), (20, off), (21, off)):
+        _proc(proc, pid, pid, run)
+    nice = {10: 0, 19: 0, 20: 0, 21: 5}
+    monkeypatch.setattr(S.os, "getpriority", lambda which, pid: nice[pid])
+    monkeypatch.setattr(S.os, "setpriority", lambda which, pid, n: nice.__setitem__(pid, n))
+    monkeypatch.setattr(S.os, "kill", lambda *a: (_ for _ in ()).throw(AssertionError("--renice stops nothing")))
+    monkeypatch.setattr(S, "renice", lambda o, n, dry_run=False, _r=S.renice: _r(o, n, proc=proc, dry_run=dry_run))
+    marker.write_text("")
+    argv = ["--runs", str(runs), "--marker", str(marker), "--log", str(log), "--renice", "19"]
+    assert S.main(argv) == 0
+    assert nice == {10: 0, 19: 19, 20: 19, 21: 19}
+    rec = json.loads(log.read_text())
+    assert rec["run"] == "r-off" and rec["reniced"] == [19, 20, 21] and rec["nice"] == 19
+    assert S.main(argv) == 0 and len(log.read_text().splitlines()) == 1, "a run already at 19 isn't logged again"

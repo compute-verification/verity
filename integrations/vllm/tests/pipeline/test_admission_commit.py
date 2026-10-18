@@ -27,7 +27,7 @@ def _fixture(name: str):
 @pytest.mark.parametrize("name,max_ratio", [("b16", 1.06), ("b4", 1.12), ("phi3b1", 1.16)])
 def test_scheduled_bound_is_sound_and_tight_on_the_r16_records(name, max_ratio):
     sizing, wl, obs = _fixture(name)
-    mnbt = wl["engine_args_required"]["max_num_batched_tokens"]
+    mnbt = wl["engine"]["args"]["max_num_batched_tokens"]
     sched = ADM.scheduled_step_bytes(sizing, wl["requests"], max_num_batched_tokens=mnbt, lag=1)
     chk = ADM.compare_observed(sched, obs)
     assert chk["sound"], f"{name}: under-predicted steps {chk['under']}"
@@ -195,13 +195,14 @@ def test_the_commit_admission_counts_the_declared_lag():
     pytest.importorskip("torch")
     import inspect
 
+    from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import commit as C
     from verity_vllm.pipeline import global_program as GP
 
-    wl = json.loads((REPO / "workloads" / "olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json").read_text())
-    assert C.admission_lag(wl) == GP.workload_target(wl).lag()
+    wl = va.load_workload(str(REPO / "workloads" / "olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json"), None)
+    assert C.admission_lag(wl) == GP.workload_target(wl["target"]).lag()
     for declared, lag in ((False, 0), (True, 1)):
-        assert C.admission_lag(dict(wl, target={**(wl.get("target") or {}), "async_scheduling": declared})) == lag
+        assert C.admission_lag(dict(wl, target={**(wl["target"] or {}), "async_scheduling": declared})) == lag
     assert "lag=admission_lag(wl)" in inspect.getsource(C.main)
 
 

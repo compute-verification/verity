@@ -7,8 +7,8 @@
 # (rec_vstar) over the verifier's record; the verifier's fold points (rec_vstage points) and InnerFold.lean --hide unit (an
 # executable, cached by its sources): each rep's public comb and Lean's full fold; rec_session --check-fold (comb + the
 # session's h is the full fold, h nonzero); rec_vstage stage --levels none (the holo algebra's InnerRepCheck parts, h read from
-# the session's rows, each holding); and Lean's flock-verify on the prover's session (verity/flock-circuit+plain-leaves, refused
-# with exit 2 until soundness covers plain leaves: recorded, not required). Run from the verity tree (research run --cwd
+# the session's rows, each holding); and Lean's flock-verify on the prover's session (verity/flock-circuit+plain-leaves, checked
+# without --zk: recorded, not required). Run from the verity tree (research run --cwd
 # source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, session.log, time-prove.txt, prove.txt/.err,
 # inner/ (schedule.json, public.json, private.json, session/, prover/), replay.txt, vstar.json, points.json, fold.json,
 # check-fold.json, vstage.json, lean.log, summary.json. Exits 1 unless the session, replay, rec_vstar, the fold check and the

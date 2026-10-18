@@ -106,12 +106,26 @@ GATE_FAMILIES = {r"And(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [fp.and_reduce(C,
                  r"Xor(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [reduce(lambda s, b: s ^ b[0], x[1:], x[0][0])]}
 
 
+@lru_cache(maxsize=None)
+def _boolean_ops() -> None:
+    import importlib
+    import pkgutil
+
+    from verity.ml.circuits.ops import boolean as OB
+
+    for m in pkgutil.iter_modules(OB.__path__):
+        importlib.import_module(f"{OB.__name__}.{m.name}")
+
+
 def _boolean_build(key):
     """The ``build`` of a registered Boolean Definition (``verity.ml.circuits.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
-    lowers an activation of the Definition itself (`lower_gates`), commits included."""
+    lowers an activation of the Definition itself (`lower_gates`), commits included. Every module of
+    `verity.ml.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps, `ops.s8`'s
+    limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has no build."""
     from verity.ml.circuits.defs import REGISTRY
 
+    _boolean_ops()
     for d in list(REGISTRY.defs.values()):
         w, build = getattr(d, "word", None), getattr(d, "build", None)
         if callable(build) and getattr(w, "id", None) == key:

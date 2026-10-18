@@ -32,6 +32,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from verity_vllm.config import RowEngine
 from verity_vllm.pipeline import research_tools
 
 SPEC_SCHEMA = "verity-gen/spec/v1"
@@ -131,7 +132,7 @@ def build_spec(*, config_id: str, case: str, profile: str | None, workload_path:
             "engine_args": dict(engine_args),         # the LLM(**kw) overrides the harness will pass (workload-required + CLI)
             "max_num_seqs": max_num_seqs,
             # the served dtype: the driver's explicit value, else the engine-argument override the harness passes to LLM(**kw)
-            # (a workload's `engine_args_required.dtype`, e.g. float16 -- fp16 column, 2026-09-17), else the checkpoint's torch_dtype
+            # (a workload's `engine.args.dtype`, e.g. float16 -- fp16 column, 2026-09-17), else the checkpoint's torch_dtype
             "dtype": dtype or (engine_args or {}).get("dtype") or (hf_config or {}).get("torch_dtype"),
             "tensor_parallel": tp,
             "snapshot_steps_requested": snapshot_steps, "snapshot_max_bytes": snapshot_max_bytes,
@@ -142,7 +143,7 @@ def build_spec(*, config_id: str, case: str, profile: str | None, workload_path:
             "file_sha256": _sha256(Path(workload_path)) if workload_path and Path(workload_path).exists() else None,
             "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
             "length_seed": wl.get("length_seed"), "prompt_seed": wl.get("prompt_seed"), "replicate": wl.get("replicate"),
-            "expected_engine_steps": wl.get("expected_engine_steps"), "engine_args_required": wl.get("engine_args_required"),
+            "expected_engine_steps": wl.get("expected_engine_steps"), "engine_args_required": dict(RowEngine.of(wl).args),
             "sampling": {**(wl.get("sampling") or {}), **{k: v for k, v in (sampling or {}).items() if v is not None}},
             "variants": wl.get("variants"),           # named sampling parameter sets the `sampling.variant` / per-request `variant` select
             "n_requests": len(reqs), "requests": reqs,

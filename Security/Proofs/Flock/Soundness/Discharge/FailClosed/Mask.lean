@@ -35,8 +35,19 @@ theorem maskFree_of_shapeOk {st : Stmt} (h : Zk.shapeOk st = .ok ()) :
   | some r =>
     simp only [hr] at h
     refine ⟨r, rfl, ?_⟩
-    have h := (Refine.ite_throw_ok'.1 (Refine.ite_throw_ok.1 h).2).1
+    have h := (Refine.ite_throw_ok'.1 (Refine.ite_throw_ok.1 (Refine.ite_throw_ok.1 h).2).2).1
     simpa using h
+
+/-- `Zk.shapeOk`'s mask range has at least `2^SLOT_LOG_MIN` bits. -/
+theorem slotLog_of_shapeOk {st : Stmt} (h : Zk.shapeOk st = .ok ()) :
+    ∃ r, st.c.ranges.find? (·.kind == Kind.mask) = some r ∧ Zk.SLOT_LOG_MIN ≤ r.slotLog := by
+  unfold Zk.shapeOk at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  cases hr : st.c.ranges.find? (·.kind == Kind.mask) with
+  | none => simp only [hr] at h; cases h
+  | some r =>
+    simp only [hr] at h
+    exact ⟨r, rfl, Nat.not_lt.1 (Refine.ite_throw_ok.1 h).1⟩
 
 /-- **`maskFree` at the mask range is `avoidsMask`'s three checks.** -/
 theorem avoidsMask_of_maskFree {st : Stmt} {r : Range} (hr : st.c.ranges.find? (·.kind == Kind.mask) = some r)

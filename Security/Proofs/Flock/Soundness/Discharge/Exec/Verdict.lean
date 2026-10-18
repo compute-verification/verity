@@ -81,6 +81,71 @@ theorem table_verdict_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statemen
   simp only [tableOutL, hv₀, hv₁, Bool.true_and, decide_eq_true_eq]
   exact ⟨hok₀, hok₁⟩
 
+/-- **One table's verdict accepts, under plain SHA-512 leaves** (`flock-leaf/sha512-unsalted`): `table_verdict_hm96`
+with `table_refines_plain`, the verdict at `leafPlain`. -/
+theorem table_verdict_plain (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+    (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
+    (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (extra : List (Model.Claim 𝔽 S.m))
+    (sess : Session) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
+    (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
+    (h0 : verifyRep spec st sch sess i 0 b₀ = .ok c) (h1 : verifyRep spec st sch sess i 1 b₁ = .ok c) :
+    ∃ (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
+      decodeProof (shapeOf st sch extra.length) b₀ = .ok p₀ ∧
+      decodeProof (shapeOf st sch extra.length) b₁ = .ok p₁ ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
+      Plays fOf (Model.repC execArith 0 S (schedOf sch) hm extra)
+        (repMsgs st sch (2 + extra.length) p₀ capDig) (s₀.rounds.toList.map (·.coins)) pend₀ ∧
+      Plays fOf (Model.repC execArith 1 S (schedOf sch) hm extra)
+        (repMsgs st sch (2 + extra.length) p₁ capDig) (s₁.rounds.toList.map (·.coins)) pend₁ ∧
+      (tableOutL H512 enc512 leafPlain (capOfRoot sess.rootB[i]!) (pend₀, pend₁)
+        (opnOf st sch extra.length #[b₀, b₁])).accepted = true := by
+  obtain ⟨p₀, p₁, s₀, s₁, pend₀, pend₁, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, hv₀, hv₁, hok₀, hok₁⟩ :=
+    table_refines_plain spec st S hm hmS hkS hfold hms extra sess hext hwf sch hf i b₀ b₁ c h0 h1
+  have h15 : 15 ≤ S.m := by have := exec_fast100_ge hf; omega
+  obtain ⟨hdim, hsm⟩ := fast100_dims st.m sch hf
+  have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
+    fast100_level st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
+  have hα1 : ∀ i < sch.levels.size, Accounting.ceilLog2 (sch.levels.getD i default).q ≠ 1 := fun i hi =>
+    fast100_alpha st.m sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
+  obtain ⟨-, p₀', -, hp₀', hc₀, hroot, -, hw₀, -⟩ := rep_refines (D := Dig) spec st S hm h15 sch hmS hkS hfold
+    extra sess hext hdim hlv hα1 (hsm.trans hmS) hwf i 0 _ _ h0
+  obtain rfl : p₀' = p₀ := Except.ok.inj (hp₀'.symm.trans hp₀)
+  rw [hms] at hw₀
+  have hcap : capDig p₀'.cap = capOfRoot sess.rootB[i]! :=
+    (capOfRoot_eq hw₀ (hc₀.symm.trans (bytes_eq_of_beq hroot))).symm
+  refine ⟨p₀', p₁, s₀, s₁, pend₀, pend₁, hp₀, hp₁, hs₀, hs₁, hpl₀, hpl₁, ?_⟩
+  rw [opnOf_pair hp₀ hp₁, ← hcap]
+  simp only [tableOutL, hv₀, hv₁, Bool.true_and, decide_eq_true_eq]
+  exact ⟨hok₀, hok₁⟩
+
+/-- **One table's verdict accepts at the model's leaf of its scheme** (`leafOfId`), under `hm96-sha512/v1` or plain
+SHA-512 leaves: `table_verdict_hm96` or `table_verdict_plain`. -/
+theorem table_verdict_leaf (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+    (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) {id : String}
+    (hms : (id = "hm96-sha512/v1" ∧ st.merkle = MerkleScheme.hm96Sha512) ∨
+      (id = "flock-leaf/sha512-unsalted" ∧ st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted"))
+    (extra : List (Model.Claim 𝔽 S.m))
+    (sess : Session) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
+    (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
+    (h0 : verifyRep spec st sch sess i 0 b₀ = .ok c) (h1 : verifyRep spec st sch sess i 1 b₁ = .ok c) :
+    ∃ (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
+      decodeProof (shapeOf st sch extra.length) b₀ = .ok p₀ ∧
+      decodeProof (shapeOf st sch extra.length) b₁ = .ok p₁ ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+      sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
+      Plays fOf (Model.repC execArith 0 S (schedOf sch) hm extra)
+        (repMsgs st sch (2 + extra.length) p₀ capDig) (s₀.rounds.toList.map (·.coins)) pend₀ ∧
+      Plays fOf (Model.repC execArith 1 S (schedOf sch) hm extra)
+        (repMsgs st sch (2 + extra.length) p₁ capDig) (s₁.rounds.toList.map (·.coins)) pend₁ ∧
+      (tableOutL H512 enc512 (leafOfId id) (capOfRoot sess.rootB[i]!) (pend₀, pend₁)
+        (opnOf st sch extra.length #[b₀, b₁])).accepted = true := by
+  rcases hms with ⟨rfl, hms⟩ | ⟨rfl, hms⟩
+  · rw [leafOfId_hm96]
+    exact table_verdict_hm96 spec st S hm hmS hkS hfold hms extra sess hext hwf sch hf i b₀ b₁ c h0 h1
+  · rw [leafOfId_plain]
+    exact table_verdict_plain spec st S hm hmS hkS hfold hms extra sess hext hwf sch hf i b₀ b₁ c h0 h1
+
 /-- **flock-verify's acceptance makes each table's salted verdict accept** (§5, §9–§14, S16). When `Accepts I t` under
 tags whose leaf scheme is `hm96-sha512/v1`, the record decodes against the session's spec, and for every table `j`, at
 its `fast100` schedule and at the statement `stmtOf sts[j]` read off its layout and the record's link points, each
