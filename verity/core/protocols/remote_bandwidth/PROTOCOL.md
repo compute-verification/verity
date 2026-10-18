@@ -715,7 +715,9 @@ commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z
 (`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), the block layout, the sketch's rows
 (`rows`), each window's passes and receipts \(U_t\) and how many of them are of blocks appended after the seed
 (`post_seed`), the blocks the session appended and released (`appended`, `released`), the lifetime cap \(L\) it held
-the appended blocks to (`lifetime`, §4), and the session's span. The
+the appended blocks to (`lifetime`, §4), the chain \(a\) over its appends in the order received (`appends`, §4's
+`a_(t,i)` after the last append, null without one: a hash over hiding roots and their indices, which the memory-map
+unit's verdict is on, §8), and the session's span. The
 digest binds the kind, `bind`, the
 codec, the layout and the rows already, but the record names them as well: what its receipts rest on depends on the
 kind, `bind` and the rows (§4), and `ledger` takes a link term only from a record that binds \(z\);
@@ -797,7 +799,8 @@ and each window's, from it plus the node's capacities.
 - **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
   circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three
   of its gaps are on the audit's side. `ledger` takes the link as `requirement`, a `RequirementLink`: whether its
-  proofs hold, the density \(D\) and the circuit's read bits at each step. On it, a pass's credit is its credited
+  proofs hold, the density \(D\), the circuit's read bits at each step, and the memory-map unit's verdict on the
+  session's appends (`mapped`, below). On it, a pass's credit is its credited
   receipts at \(D\) bits each, at most the circuit's read bits at the pass's step, and the ledger says it is linked
   (`Ledger.linked`); without it, the credit is the store's, flagged as such. The checks behind the link belong to the
   units named below, and the ledger takes them as given.
@@ -816,6 +819,30 @@ and each window's, from it plus the node's capacities.
     the step that reads the block's values for the last time. That each free is at its values' last read is the
     memory-map unit's to prove (I4). Until it does, a dense decoder's weights, which every step reads, need no free,
     and the census must show it.
+  - *The memory map's choices* (the red team's KB-2, note:20261017T1859Z-report-property-redteam §R4.2). Between a
+    pass's seed and its reads, the writers could choose which pages to free, when to re-key a block, the order of a
+    batch of appends, and dummy appends that shift every later \(j\). Each choice moves the bound keys
+    \(b_j = H(\text{seed}, j, d_j)\) or the live set, and none of them costs an encode beyond the writes. Freeing 100
+    of \(10^4\) live pages is 803 bits of choice, past what the advice bound tolerates. The audit charges no advice for
+    these choices because W's memory map fixes them: memory-map/v1's frees and writes are functions of the served
+    steps, fixed before the coins. That the session's appends, releases and plans are that map's is the memory-map
+    unit's to prove (proofs', I4), inside zero knowledge, and the audit relies on it for exactly this:
+    1. every append is a write of the map, of a value produced at the write's step, appended at or after that step
+       and before any plan holds it (§4 checks the latter);
+    2. the appends are in the map's order, each at the index the verifier gave it (the store's next fresh one), and
+       the map has no write the session doesn't append and no append it doesn't write, so there are no dummy appends;
+    3. a re-key (a release and the payload appended again, §4's lifetime cap) is the map's, at the cap, of the same
+       payload, so \(d_j\) is unchanged and only its index and key are fresh (KB-6);
+    4. every free is at its values' last read, of a registered block or a written one (above);
+    5. the map is the one the plan unit's plans are of (`PlanMatches` reads the same map).
+
+    The unit's public input is the record's `appends`, the chain \(a\) over the session's appends (§4, §7), together
+    with each pass's seed, which binds the chain up to that pass's root, so the appends' places among the passes are
+    bound too. Its witness is the map, the appends' digests \(d_j\) and salts, and the plans. The releases stay
+    witness, held to the map through the plans; the verifier here sees them in the clear and keeps released blocks
+    out of later plans, a check deployment moves into the plan unit. `ledger` takes the unit's verdict as
+    `RequirementLink.mapped(record.appends)` and refuses a link whose verdict isn't true of the record's chain: without
+    it the credit is the store's, as without a link. The proof is proofs'; the audit side is the chain and the hook.
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
   its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
   but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that

@@ -225,13 +225,19 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
 @dataclasses.dataclass(frozen=True)
 class Link:
     """A requirement link that holds or not, at `density_bits`, reading `reads[step]` bits at a step (plenty
-    otherwise)."""
+    otherwise), its memory-map unit's verdict `maps` on the appends it is asked about, each kept in `asked`."""
     holds: bool
     density_bits: int
     reads: dict
+    maps: object = True
+    asked: list = dataclasses.field(default_factory=list)
 
     def read_bits(self, step: int):
         return self.reads.get(step, 10**9)
+
+    def mapped(self, appends: bytes | None):
+        self.asked.append(appends)
+        return self.maps
 
 
 def test_on_a_requirement_link_a_pass_is_credited_at_most_the_circuit_s_reads_at_its_step(honest) -> None:
@@ -263,6 +269,25 @@ def test_on_a_requirement_link_a_pass_is_credited_at_most_the_circuit_s_reads_at
     bare = synthetic((10, 12), ())
     with pytest.raises(ValueError, match="name none"):
         audit.ledger(bare, **dict(common, rebuild=audit.Rebuild(bare.codec, 0.0)), requirement=Link(True, 8192, {}))
+
+
+def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_record_s_appends(honest) -> None:
+    """The red team's KB-2: frees, re-keys and append order chosen after the seed cost no encode, so the advice they
+    give is zero only if W's memory map fixes them, which the memory-map unit proves.  The record carries the chain
+    over the session's appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked
+    about exactly that chain, and a link whose unit doesn't make those appends is refused."""
+    r, _ = honest
+    rec = r.s.record()
+    assert r.head is not None and rec.appends == r.head and rec.public()["appends"] == r.head.hex()
+    common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    link = Link(True, 8 * 4096, {})
+    assert audit.ledger(rec, **common, requirement=link).linked and link.asked == [r.head]
+    for maps in (False, None, 1):
+        with pytest.raises(ValueError, match="memory-map unit"):
+            audit.ledger(rec, **common, requirement=Link(True, 8 * 4096, {}, maps))
+    none = Link(True, 8 * 4096, {})
+    audit.ledger(dataclasses.replace(rec, appends=None), **common, requirement=none)
+    assert none.asked == [None]
 
 
 def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = ()) -> audit.Record:
