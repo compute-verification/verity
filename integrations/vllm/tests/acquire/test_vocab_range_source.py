@@ -76,3 +76,13 @@ def test_attach_refuses_a_manifest_without_vocab_range_and_adds_the_required_cla
     man = _rank_manifest(1, True)
     classes, src = S.attach(com, True, man, ("a",), model=_model().__class__())
     assert classes == ("a", VR.FAMILY) and src.sites == {"model.embed_tokens": {"start": VS, "shard_rows": VS}} and com.sources == [src]
+
+
+def test_a_wrapper_prefixed_site_names_the_models_module():
+    """[GLM-5.3] the global TP manifest spells `inner.model.model.embed_tokens`; the served model's module is `model.embed_tokens`."""
+    from verity_vllm.acquire.sources.vocab_range_source import module_of
+    mods = {"": 0, "model": 1, "model.embed_tokens": 2, "model.layers.0": 3, "lm_head": 4}
+    assert module_of("model.embed_tokens", mods) == "model.embed_tokens"
+    assert module_of("inner.model.model.embed_tokens", mods) == "model.embed_tokens"
+    assert module_of("inner.model.model.vision.embed_tokens", mods) is None
+    assert module_of("x.a.b", {"a.b": 0, "b": 1}) is None          # two candidate suffixes: ambiguous

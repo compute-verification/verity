@@ -116,6 +116,10 @@ def fake_vllm(monkeypatch, *, fused_grouped_topk: bool = True) -> types.SimpleNa
         calls.append("grouped_topk")
         return T(gating_output.shape[0], topk, dtype=torch.float32), T(gating_output.shape[0], topk, dtype=torch.int32)
 
+    def per_token_group_fp8_quant(input, output_q, output_s, group_size, eps, fp8_min, fp8_max, scale_ue8m0=False):
+        calls.append("group_quant")
+
+    monkeypatch.setattr(torch.ops._C, MS.GROUP_QUANT_OP, per_token_group_fp8_quant, raising=False)
     mod("vllm")
     mod("vllm.envs", VLLM_USE_FUSED_MOE_GROUPED_TOPK=fused_grouped_topk)
     mod("vllm.platforms", current_platform=types.SimpleNamespace(is_cuda=lambda: True))
@@ -129,37 +133,52 @@ def fake_vllm(monkeypatch, *, fused_grouped_topk: bool = True) -> types.SimpleNa
     return types.SimpleNamespace(ops=ops, fm=fm, tm=tm, gr=gr, calls=calls)
 
 
+def group_quant(x: T) -> tuple[T, T]:
+    """`per_token_group_quant_fp8(x, 128, use_ue8m0=True)` as fp8_utils runs it on CUDA: allocate (x_q, x_s), then the `_C` op."""
+    x_q, x_s = T(*x.shape, dtype=torch.float8_e4m3fn), T(x.shape[0], x.shape[1] // 128, dtype=torch.float32)
+    torch.ops._C.per_token_group_fp8_quant(x, x_q, x_s, 128, 1e-10, -448.0, 448.0, True)
+    return x_q, x_s
+
+
 class MoERunner(torch.nn.Module):
     """One MoE layer's forward as the pinned vLLM runs it for GLM-5.3 at TP8: `GroupedTopKRouter._compute_routing` (the module-global
-    `grouped_topk`, by keyword), then `TritonExperts.apply` with 128x128 block FP8 and SiLU (the w13 launch, the fused SiLU block quant,
-    the w2 launch, `moe_sum`).  `block_fp8=False` runs the bf16 path instead (`self.activation`, then an unquantized w2 input)."""
+    `grouped_topk`, by keyword), then `TritonExperts.apply` with 128x128 block FP8 and SiLU.  `path` "served" is the default kernels' path
+    (DeepGEMM's ue8m0 on: the input's group quant, the w13 launch, `_C.silu_and_mul`, the activation's group quant, the w2 launch,
+    `moe_sum`), "fused" the SiLU fused into the quant (`silu_and_mul_per_block_quant`), "bf16" no quant.  The forward returns the
+    shared expert's output plus the routed sum, a fresh tensor; `reduce_results` is False, as GLM-5.3 builds it."""
 
-    def __init__(self, v: types.SimpleNamespace, *, block_fp8: bool = True) -> None:
+    reduce_results = False
+
+    def __init__(self, v: types.SimpleNamespace, *, path: str = "served") -> None:
         super().__init__()
-        self.v, self.block_fp8 = v, block_fp8
+        self.v, self.path = v, path
         self.bias = T(E, dtype=torch.float32)
+        self.shared_quant = False           # a shared-expert group quant between the routed path's calls
 
     def forward(self, hidden_states: T, router_logits: T) -> T:
-        v, M = self.v, hidden_states.shape[0]
+        v, M, fp8_on = self.v, hidden_states.shape[0], self.path != "bf16"
         topk_weights, topk_ids = v.gr.grouped_topk(
             hidden_states=hidden_states, gating_output=router_logits, topk=TOPK, renormalize=True, num_expert_group=1, topk_group=1,
             scoring_func="sigmoid", routed_scaling_factor=2.5, e_score_correction_bias=self.bias)
         N = 2 * MIL
         cache1, cache3, out = T(M, TOPK, N), T(M, TOPK, H), T(M, H)
         sorted_ids, expert_ids, npp, config = T(M * TOPK, dtype=torch.int32), T(M, dtype=torch.int32), T(1, dtype=torch.int32), {}
-        fp8 = dict(compute_type=None, use_fp8_w8a8=self.block_fp8, use_int8_w8a8=False, use_int8_w8a16=False, use_int4_w4a16=False,
-                   per_channel_quant=False, block_shape=[128, 128] if self.block_fp8 else None, B_bias=None)
-        a1q_scale = T(M, H // 128, dtype=torch.float32) if self.block_fp8 else None
-        v.tm.invoke_fused_moe_triton_kernel(hidden_states, T(E, N, H), cache1, a1q_scale, None, None, sorted_ids, expert_ids, npp, False,
+        fp8 = dict(compute_type=None, use_fp8_w8a8=fp8_on, use_int8_w8a8=False, use_int8_w8a16=False, use_int4_w4a16=False,
+                   per_channel_quant=False, block_shape=[128, 128] if fp8_on else None, B_bias=None)
+        a1, a1q_scale = group_quant(hidden_states) if fp8_on else (hidden_states, None)
+        v.tm.invoke_fused_moe_triton_kernel(a1, T(E, N, H), cache1, a1q_scale, None, None, sorted_ids, expert_ids, npp, False,
                                             TOPK, config, **fp8)
-        if self.block_fp8:
+        if self.path == "fused":
             q2, a2q_scale = v.ops.silu_and_mul_per_block_quant(cache1.view(-1, N), group_size=128, quant_dtype=torch.float8_e4m3fn)
         else:
-            q2, a2q_scale = T(M * TOPK, MIL), None
+            cache2 = T(M * TOPK, MIL)                                       # torch.ops._C.silu_and_mul(cache2, cache1.view(-1, N))
+            q2, a2q_scale = group_quant(cache2) if fp8_on else (cache2, None)
+        if self.shared_quant:
+            group_quant(T(M, H))
         v.tm.invoke_fused_moe_triton_kernel(q2, T(E, H, MIL), cache3, a2q_scale, None, topk_weights, sorted_ids, expert_ids, npp, True, 1,
                                             config, **fp8)
         v.ops.moe_sum(cache3, out)
-        return out
+        return T(M, H)
 
 
 def moe_model(v: types.SimpleNamespace, layers: list[int], **kw) -> torch.nn.Module:
@@ -183,39 +202,138 @@ def run_step(model: torch.nn.Module, layers: list[int], M: int) -> None:
 MOE_LAYERS = CM.layer_set(CMAP, "moe", ENV)
 
 
-def test_the_moe_source_commits_exactly_the_maps_moe_taps_on_a_block_fp8_step(monkeypatch):
+def run_source(monkeypatch, layers: list[int], M: int = 4, *, world: int = TP, **kw) -> tuple[Committer, MS.MoeBlockSource, list[str]]:
+    """One step of the MoE source on `layers` (installed, run, uninstalled): the committer, the source and the names it acquired."""
+    v = fake_vllm(monkeypatch)
+    c = Committer()
+    model = moe_model(v, layers, **kw)
+    src = MS.MoeBlockSource(c, model, world=world)
+    src.install()
+    try:
+        run_step(model, layers, M=M)
+    finally:
+        src.uninstall()
+    return c, src, [n for kind, n in c.log if kind == "acquire"]
+
+
+def test_the_moe_source_commits_exactly_the_maps_moe_taps_on_a_served_step(monkeypatch):
+    from verity_vllm.query.manifest.format import MOE_FP8_PLANES
+
     v = fake_vllm(monkeypatch)
     c = Committer()
     model = moe_model(v, MOE_LAYERS)
-    src = MS.MoeBlockSource(c, model)
-    orig = v.gr.grouped_topk
+    src = MS.MoeBlockSource(c, model, world=TP)
+    orig, orig_q = v.gr.grouped_topk, getattr(torch.ops._C, MS.GROUP_QUANT_OP)
     src.install()
-    assert v.gr.grouped_topk is not orig
+    assert v.gr.grouped_topk is not orig and getattr(torch.ops._C, MS.GROUP_QUANT_OP) is not orig_q
     try:
         run_step(model, MOE_LAYERS, M=256)
     finally:
         src.uninstall()
-    assert v.gr.grouped_topk is orig and v.calls.count("grouped_topk") == len(MOE_LAYERS)
+    assert v.gr.grouped_topk is orig and getattr(torch.ops._C, MS.GROUP_QUANT_OP) is orig_q
+    assert v.calls.count("grouped_topk") == len(MOE_LAYERS) and v.calls.count("group_quant") == 2 * len(MOE_LAYERS)
     names = [n for kind, n in c.log if kind == "acquire"]
     got = CM.bind_names(CMAP, ENV, names, profile="0123456789ab", request="r0", t=0, phase="prefill", routes=("dense-mha",), rank=0,
                         binders=("moe",))
-    assert got["unknown"] == [] and got["missing"] == [] and len(names) == len(set(names)) == 7 * len(MOE_LAYERS)
+    assert got["unknown"] == [] and got["missing"] == [] and len(names) == len(set(names)) == 11 * len(MOE_LAYERS)
     assert got["ids"] == sorted(CM.identities(CMAP, ENV, profile="0123456789ab", request="r0", t=0, phase="prefill",
                                               routes=("dense-mha",), rank=0, binders=("moe",)))
     first = MOE_LAYERS[0]
-    assert c.log[:8] == [("acquire", f"moe/L{first}/router_w"), ("acquire", f"moe/L{first}/router_ids"), ("acquire", f"moe/L{first}/up"),
-                         ("flush", "up"), ("acquire", f"moe/L{first}/act"), ("acquire", f"moe/L{first}/act_scale"),
-                         ("acquire", f"moe/L{first}/down"), ("acquire", f"moe/L{first}/sum")]
+    planes = [("acquire", f"moe/L{first}/{p}") for p in MOE_FP8_PLANES]
+    assert c.log[:12] == planes[:5] + [("flush", "up")] + planes[5:] + [("acquire", f"model.layers.{first}.mlp.experts/out")]
     # each name is the tensor the map says, at its dtype and shape on one rank
     want = CM.committer_names(CMAP, ENV, routes=("dense-mha",), binders=("moe",))
     for name, t in c.acquired.items():
         tap, _layer = want[name]
         assert str(t.dtype).replace("torch.", "") == tap["dtype"], name
         assert list(t.shape) == [CM.dim(d, {**ENV, "M": 256}, {}) for d in tap["shape"]], name
-    assert src.stats["tensors_per_layer"] == 7 and src.act_scaled is True and c.errors == []
+    assert src.stats["tensors_per_layer"] == len(MOE_FP8_PLANES) == 10 and src.planes == MOE_FP8_PLANES and c.errors == []
+    assert src.act_scaled is True and src.stats["outputs"] == len(MOE_LAYERS)
+    assert src.out_site_names() == sorted(f"model.layers.{k}.mlp.experts" for k in MOE_LAYERS)
     assert src.stats["router"] == {"sigmoid:block": len(MOE_LAYERS)} and src.router_steps == {"block": [0]}
     decl = src.declaration_classes()[0]
-    assert decl["tensors_per_layer"] == 7 and decl["router_kernel_steps"] == {"block": [0]}
+    assert decl["tensors_per_layer"] == 10 and decl["planes"] == list(MOE_FP8_PLANES) and decl["router_kernel_steps"] == {"block": [0]}
+
+
+def test_the_act_plane_is_the_input_of_the_quant_that_wrote_the_w2_input(monkeypatch):
+    """A shared expert's group quant between the routed activation's quant and the w2 launch does not move `act`: it is matched to the
+    w2's A by identity, not taken as the last quant."""
+    seen: list[tuple[Any, Any]] = []
+    v = fake_vllm(monkeypatch)
+    inner = getattr(torch.ops._C, MS.GROUP_QUANT_OP)
+
+    def spy(input, output_q, *a, **k):
+        seen.append((input, output_q))
+        return inner(input, output_q, *a, **k)
+
+    monkeypatch.setattr(torch.ops._C, MS.GROUP_QUANT_OP, spy)
+    c = Committer()
+    model = moe_model(v, [3])
+    model.model.layers[3].mlp.experts.shared_quant = True
+    src = MS.MoeBlockSource(c, model, world=TP)
+    src.install()
+    run_step(model, [3], M=4)
+    src.uninstall()
+    (x_in, q_in), (x_act, q_act), (x_shared, _q) = seen
+    assert c.acquired["moe/L3/in_q"] is q_in and c.acquired["moe/L3/act"] is x_act and c.acquired["moe/L3/act_q"] is q_act
+    assert x_shared is not x_act and c.errors == [] and src.stats["tensors_per_layer"] == 10
+
+
+def test_the_fused_silu_quant_binds_nine_planes_without_act(monkeypatch):
+    from verity_vllm.query.manifest.format import MOE_FP8_PLANES
+
+    c, src, names = run_source(monkeypatch, [3], path="fused")
+    planes = tuple(p for p in MOE_FP8_PLANES if p != "act")
+    assert names == [f"moe/L3/{p}" for p in planes] + ["model.layers.3.mlp.experts/out"]
+    assert src.planes == planes and src.stats["tensors_per_layer"] == 9 and c.errors == []
+
+
+def test_a_w2_input_that_no_group_quant_of_the_layer_wrote_is_an_error(monkeypatch):
+    v = fake_vllm(monkeypatch)
+    raw = getattr(torch.ops._C, MS.GROUP_QUANT_OP)
+    c = Committer()
+    model = moe_model(v, [3])
+    src = MS.MoeBlockSource(c, model, world=TP)
+    src.install()
+    setattr(torch.ops._C, MS.GROUP_QUANT_OP, raw)          # a call site that holds the op from before the install: no quant is seen
+    run_step(model, [3], M=4)
+    src.uninstall()
+    names = [n for kind, n in c.log if kind == "acquire"]
+    assert "moe/L3/act" not in names and "moe/L3/in_q" in names and c.x03_expected == 1
+    assert any("no per_token_group_fp8_quant output" in e for e in c.errors)
+
+
+def test_the_moe_output_is_bound_only_on_a_tp_rank_of_a_module_that_does_not_reduce_it(monkeypatch):
+    _c, src, names = run_source(monkeypatch, [3], world=1)
+    assert src.outputs == set() and not any(n.endswith("/out") for n in names) and len(names) == 10
+    v = fake_vllm(monkeypatch)
+    model = moe_model(v, [3])
+    model.model.layers[3].mlp.experts.reduce_results = True
+    assert MS.MoeBlockSource(Committer(), model, world=TP).outputs == set()
+
+
+def test_identity_check_holds_a_served_step_to_ten_planes_per_layer_and_its_out(monkeypatch):
+    from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+
+    _c, src, names = run_source(monkeypatch, [3, 4])
+    com = NativeHostCommitter(None, run_id="glm53-moe", gpu_tree=True)
+    com._modules, com.sources = [], [src]
+    man = com.expected_manifest()
+    assert man["modules"] == ["model.layers.3.mlp.experts", "model.layers.4.mlp.experts"] and man["moe_tensors_per_layer"] == 10
+
+    def check(steps: list[list[str]]) -> dict[str, Any]:
+        com._layouts = {}
+        for k, ns in enumerate(steps):
+            com._layouts[k] = [TensorMeta(i, n, "bfloat16", (4, 8), 64, GPU_CHUNK_BYTES, i, 1) for i, n in enumerate(ns)]
+            for i, m in enumerate(com._layouts[k]):
+                m.dev_off = m.stream_off = 64 * i
+        return com.identity_check()
+
+    assert check([names, names])["ok"] is True
+    r = check([names, [n for n in names if n != "moe/L4/act"]])
+    assert r["ok"] is False and r["violations"][0]["moe_layers_bad"] == {4: 9}
+    r = check([names, [n for n in names if n != "model.layers.4.mlp.experts/out"]])
+    assert r["ok"] is False and r["violations"][0]["missing_modules"] == ["model.layers.4.mlp.experts"]
 
 
 def test_the_router_kernel_follows_the_custom_ops_launch_rule(monkeypatch):
@@ -242,20 +360,20 @@ def test_grouped_topk_on_its_torch_path_is_not_bound(monkeypatch):
     run_step(model, [3], M=4)
     src.uninstall()
     names = [n for kind, n in c.log if kind == "acquire"]
-    assert "moe/L3/router_w" not in names and len(names) == 5 and c.x03_expected == 1
+    assert "moe/L3/router_w" not in names and len(names) == 8 and c.x03_expected == 1
     assert any("torch path" in e for e in c.errors)
 
 
 def test_the_bf16_path_keeps_six_tensors_and_a_switch_mid_run_is_an_error(monkeypatch):
     v = fake_vllm(monkeypatch)
     c = Committer()
-    model = moe_model(v, [3], block_fp8=False)
+    model = moe_model(v, [3], path="bf16")
     src = MS.MoeBlockSource(c, model)
     src.install()
     run_step(model, [3], M=4)
     assert [n for kind, n in c.log if kind == "acquire"] == [f"moe/L3/{p}" for p in ("router_w", "router_ids", "up", "act", "down", "sum")]
     assert src.stats["tensors_per_layer"] == MS.TENSORS_PER_LAYER and c.errors == []
-    model.model.layers[3].mlp.experts.block_fp8 = True
+    model.model.layers[3].mlp.experts.path = "served"
     run_step(model, [3], M=4)
     src.uninstall()
     assert any("A_scale" in e for e in c.errors) and src.stats["tensors_per_layer"] == MS.TENSORS_PER_LAYER
@@ -434,8 +552,10 @@ def test_the_allreduce_norm_wrap_binds_the_maps_names_on_either_path(monkeypatch
     route = ("dense-mha",)
     got = CM.bind_names(CMAP, ENV, names, profile="0123456789ab", request="r0", t=0, phase="prefill", routes=route, rank=3,
                         binders=("allreduce_norm",))
-    # layer 0's input_layernorm is the module hook's own tap (no residual: a tensor), every other name is the map's
-    assert got["unknown"] == ["model.layers.0.input_layernorm"] and got["missing"] == [] and len(names) == len(set(names))
+    # layer 0's input_layernorm is the module hook's own tap (no residual: a tensor); the unfused path's reduced input to each norm is
+    # the call's own (`<norm>/all_reduce`, off the map: the manifest's identity rows bind it); every other name is the map's
+    reduced = sorted(f"{s}/all_reduce" for s in src.far.site_names()) if path == "N" else []
+    assert got["unknown"] == sorted(["model.layers.0.input_layernorm", *reduced]) and got["missing"] == [] and len(names) == len(set(names))
     assert got["ids"] == sorted(CM.identities(CMAP, ENV, profile="0123456789ab", request="r0", t=0, phase="prefill", routes=route,
                                               rank=3, binders=("allreduce_norm",)))
     assert run.v.calls == [{"F": "flashinfer", "N": "all_reduce"}[path]] * (2 * ENV["L"])
@@ -471,6 +591,51 @@ def test_the_allreduce_norm_partial_is_the_calls_hidden_states_and_the_returns_i
     assert run.c.acquired[f"{site}/0"] is normed and run.c.acquired[f"{site}/1"] is hs
 
 
+def test_the_unfused_path_binds_the_all_reduce_output_the_norm_reads_and_copies_it_before_the_norm_runs(monkeypatch):
+    seen: list = []
+    run = FarRun(monkeypatch, rank=0)
+    norm = run.root.model.layers[0].post_attention_layernorm
+    h = norm.register_forward_hook(lambda _m, args, _out: seen.append((args[0], len(run.c.log))))
+    run.step(256)
+    h.remove()
+    site = "model.layers.0.post_attention_layernorm"
+    (reduced, n_log), = seen                              # n_log: the log as the norm's forward returned
+    assert run.c.acquired[f"{site}/all_reduce"] is reduced
+    i = run.c.log.index(("acquire", f"{site}/all_reduce"))
+    assert run.c.log[i + 1] == ("flush", "nc") and i + 1 < n_log
+    assert run.src.far.stats["reduced_bound"] == 2 * ENV["L"] and run.src.far.order[0] == site
+
+
+@pytest.mark.parametrize("M,fused", [(42, True), (43, False)])
+def test_the_meta_export_shim_emits_the_fused_leaf_only_on_flashinfers_served_range(monkeypatch, M, fused):
+    from verity_vllm.program.frontend.export_compat import fused_allreduce_rms_norm_leaf
+
+    v = fake_far(monkeypatch)
+    model = Root()
+    seen: list[tuple] = []
+
+    class Bus:
+        settings = {"flashinfer": True}
+
+        def fused_allreduce_rms_norm(self, hidden_states, residual, weight, eps):
+            seen.append((tuple(hidden_states.shape), tuple(residual.shape), tuple(weight.shape), eps))
+            return T(*hidden_states.shape), T(*residual.shape)
+
+    parallel = types.ModuleType("vllm.distributed.parallel_state")
+    parallel.get_tp_group = lambda: types.SimpleNamespace(world_size=TP, bus=Bus())
+    distributed = types.ModuleType("vllm.distributed")
+    distributed.parallel_state = parallel
+    monkeypatch.setitem(sys.modules, distributed.__name__, distributed)
+    monkeypatch.setitem(sys.modules, parallel.__name__, parallel)
+
+    hidden, residual = T(M, H), T(M, H)
+    with fused_allreduce_rms_norm_leaf(model):
+        out = v.user.fused_allreduce_rms_norm(hidden, residual, model.model.layers[0].input_layernorm)
+    assert bool(seen) is fused
+    assert v.calls == ([] if fused else ["all_reduce"])
+    assert tuple(out[0].shape) == (M, H) and tuple(out[1].shape) == (M, H)
+
+
 def test_a_model_that_calls_it_and_makes_no_call_declares_a_site_no_step_binds(monkeypatch):
     from verity_vllm.acquire.sources.allreduce_norm import NO_CALL_SITE
     from verity_vllm.acquire.sources.partial_source import TPPartialSource
@@ -478,7 +643,8 @@ def test_a_model_that_calls_it_and_makes_no_call_declares_a_site_no_step_binds(m
     fake_far(monkeypatch)
     src = TPPartialSource(far_committer(), Root(), rank=0, world=TP)
     assert src.far.used and src.far.site_names() == [NO_CALL_SITE] and src.site_counts()[NO_CALL_SITE] == 1
-    assert len(src.far.candidates) == 2 * ENV["L"] + 1 and src.extra_step_bytes({}, None)["tensors_per_step"] == 2 * ENV["L"] + 1
+    # per candidate: its partial, and the unfused path's all-reduce output
+    assert len(src.far.candidates) == 2 * ENV["L"] + 1 and src.extra_step_bytes({}, None)["tensors_per_step"] == 2 * (2 * ENV["L"] + 1)
     assert TPPartialSource(far_committer(), Root(), rank=0, world=1).far.site_names() == []
 
 
@@ -486,7 +652,9 @@ def test_steps_on_different_paths_commit_the_same_names_and_a_step_missing_a_cal
     run = FarRun(monkeypatch)
     run.step(256)
     run.step(4)
-    assert run.steps[0] == run.steps[1]                                  # the same names in the same order: the module hook fires inside
+    reduced = [n for n in run.steps[0] if n.endswith("/all_reduce")]   # the unfused path's own: its all-reduce output, per call
+    assert reduced == [f"{s}/all_reduce" for s in run.src.far.order] and not any(n.endswith("/all_reduce") for n in run.steps[1])
+    assert [n for n in run.steps[0] if n not in reduced] == run.steps[1]  # otherwise the same names in the same order: the module hook fires inside
     assert [p for _s, p in run.src.far.paths] == ["N" * (2 * ENV["L"]), "F" * (2 * ENV["L"])]
     assert run.identity_check()["ok"] is True
     run.root.model.layers[5].forward = lambda hs, res: (T(*hs.shape), res)

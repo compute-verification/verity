@@ -1,0 +1,4 @@
+order = 180
+path = "`nvfp4_sm120/`"
+runs_on = "RTX PRO 6000"
+what = "The plain NVFP4 GEMM as harness baseline entries (`nvf4_plain.cu` on `mainloop_nvf4.cuh`), and its standalone benches"

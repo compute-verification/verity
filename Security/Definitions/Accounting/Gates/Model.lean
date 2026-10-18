@@ -1,5 +1,6 @@
 import Mathlib.Algebra.BigOperators.Group.List.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Order.Field.Rat
 import Mathlib.Data.Nat.Log
 import Mathlib.Data.Finset.Card
 
@@ -37,28 +38,32 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
   extraction, limb split and word reinterpretation), a comparison, selection or 1-bit logic op, a gather, a receipt
   fold's step, and a neutral gate (a lane instruction whose class is its own, in no cap). A budgeted gate is any
   function of its operands (`budgeted`), the most a cheater could ask of a primitive, except a gather, which selects a
-  word of its column by its index (`gather`). The registry's primitives map to exactly one class each
-  (`Gates/Registry.lean`); an unlisted primitive is refused, so it has no `Op`.
+  word of its column by its index, or a table read's by its index's low bits (`gather`). The registry's primitives map
+  to exactly one class each (`Gates/Registry.lean`); an unlisted primitive is refused, so it has no `Op`.
 * **The window.** On an input, every gate's exact value lies in its declared interval, and every s8-family step's
   operands lie in their formats and its exact sum in s32, so no accumulator clamps or wraps (`InWindow`). The property
-  proves it for the free gates by interval analysis over the whole DAG from the declared intervals of inputs and
-  budgeted gates (`Proven`), never from a free gate's declaration, and proves each affine map's declared interval
-  within s32, where `I32Add` and `I32Sub` are exact; so on an input on which the inputs and budgeted gates hold their
-  declared intervals (`DeclaredHold`), the circuit is in its window, where an s8-family step's clamp and wrap agree
-  (`Gate.Reclamped` relates the two arms).
+  proves it for the free gates and the gathers by interval analysis over the whole DAG from the declared intervals of
+  inputs and budgeted gates but gathers (`Proven`), never from a free gate's or a gather's declaration (a gather's
+  value is a word of its column or 0, so its interval is the hull of its column's and 0: a gather at a fixed index
+  can't re-declare a wide value narrow), and proves each affine map's declared interval within s32, where `I32Add`
+  and `I32Sub` are exact; so on an input on which the inputs and those budgeted gates hold their declared intervals
+  (`DeclaredHold`), the circuit is in its window, where an s8-family step's clamp and wrap agree (`Gate.Reclamped`
+  relates the two arms).
 * **Units** (property/v1's count, `units`). A budgeted gate is one unit when it reads a value that depends on a run or
   coin input (`dynamic`), and none otherwise: a gate of constants and registered values computes the same value at
-  registration. A gather whose index depends on one is the index bits no earlier gather of that index paid (fresh index
-  bits, `⌈log₂ V⌉` for a column of `V` words), and one more when its column holds such a value too: a selection among
-  run-time values is a `V`-way select. Without that unit a tree of gathers that share indices, over constant leaves,
-  would compute any function of `b` index bits for `b` units. A gather at a fixed index is wiring.
+  registration. A gather whose index depends on one is the index bits no earlier gather of that index and kind paid
+  (fresh index bits, `⌈log₂ (V + 1)⌉` for a column of `V` words and the `0` outside it, so a one-word column's
+  `[i ≤ 0]` pays as a comparison does, and `n` for a table read of the index's low `n` bits; property/v1's `range` and
+  `low` kinds), and one more when its column holds such a value too: a selection among run-time values is a
+  `V`-way select. Without that unit a tree of gathers that share indices, over constant leaves, would compute any
+  function of `b` index bits for `b` units. A gather at a fixed index is wiring.
 * **Cost.** The census (`census`) counts the units of a set of steps by class, the s8 family's MACs (served and tail
   apart), the limb splits' carries, the committed outputs and the inputs' bits. The counting bounds charge each
   budgeted gate and each run input the size of its declared interval (`volume`, `chargedBits`).
 * **The property.** `Property caps A W`: the stacking property `P(c, R_in, L)` of property/v1 as a predicate on `W`'s
-  census and the audit's certified reads: per window, each budgeted class's units within its cap per certified byte
-  read, no neutral unit and the run inputs within `R_in`, every gate in a window, and no value read more than `L`
-  engine steps after it is produced.
+  census and the audit's certified reads: per window, each budgeted class's units within its cap (a rational) per
+  certified byte read, no neutral unit and the run inputs within `R_in`, every gate in a window, and no value read
+  more than `L` engine steps after it is produced.
 * **The chain's restriction.** Every budgeted gate reads at most `B` operand bits, the declared bits of its operands
   (`OperandBits`): one gate that reads a word's bits computes a byte of its root.
 * **Fan-in.** MULT-LB's lane programs (`ofLane`: inputs, then instructions that each apply an arbitrary function to at
@@ -129,8 +134,9 @@ inductive Op (ι : Type)
   /-- an s8-family step's coordinate: operands `C :: a_1 … a_k ++ b_1 … b_k`, `C + Σ a_i·b_i`, then clamped
   (`satfinite`) or wrapped to s32 -/
   | mma (a b : Int8Fmt) (k : ℕ) (satfinite : Bool)
-  /-- a gather: operands `idx :: column`, the column's word at `idx` (0 outside it) -/
-  | gather
+  /-- a gather: operands `idx :: column`, the column's word at `idx` (0 outside it), or for a table read
+  (`low = some n`) at `idx`'s low `n` bits -/
+  | gather (low : Option ℕ)
   /-- a budgeted primitive of class `cls`: any function of its operands -/
   | budgeted (cls : Budget) (f : List ℤ → ℤ)
 
@@ -150,13 +156,19 @@ def le : Op ι := budgeted .compareSelect fun v => if v.headD 0 ≤ v.tail.headD
 /-- `c ≠ 0 ? a : b`, a selection. -/
 def select : Op ι := budgeted .compareSelect fun v => if v.headD 0 ≠ 0 then v.tail.headD 0 else v.tail.tail.headD 0
 
+/-- The column position a gather reads at index `z`: `z` itself, or for a table read of `n` bits its low `n` bits
+(two's complement's, `z mod 2^n`). -/
+def gatherAt : Option ℕ → ℤ → ℕ
+  | none, z => z.toNat
+  | some n, z => (z % 2 ^ n).toNat
+
 /-- The exact value of an operation on operands `v`, before an s8-family step's clamp or wrap. -/
 def raw : Op ι → (ι → ℤ) → List ℤ → ℤ
   | input _ i, x, _ => x i
   | const c, _, _ => c
   | affine c₀ cs, _, v => c₀ + (List.zipWith (· * ·) cs v).sum
   | mma _ _ k _, _, v => v.headD 0 + dot k v.tail
-  | gather, _, v => v.tail.getD (v.headD 0).toNat 0
+  | gather low, _, v => v.tail.getD (gatherAt low (v.headD 0)) 0
   | budgeted _ f, _, v => f v
 
 /-- The value an operation produces from its exact value: an s8-family step clamps or wraps it, every other passes
@@ -169,20 +181,21 @@ def out : Op ι → ℤ → ℤ
 /-- An operation whose value the counting bounds charge: a run input or a budgeted gate. -/
 def charged : Op ι → Bool
   | input .run _ => true
-  | gather => true
+  | gather _ => true
   | budgeted _ _ => true
   | _ => false
 
 /-- Its budgeted class, if any. -/
 def budget : Op ι → Option Budget
-  | gather => some .gather
+  | gather _ => some .gather
   | budgeted cls _ => some cls
   | _ => none
 
-/-- A gather. -/
-def isGather : Op ι → Bool
-  | gather => true
-  | _ => false
+/-- A gather's kind, property/v1's kind of its index bits: `true` for a table read of its index's low bits (`low`),
+`false` for a read at its index (`range`); `none` for any other operation. -/
+def gatherKind : Op ι → Option Bool
+  | gather low => some low.isSome
+  | _ => none
 
 /-- An s8-family step's operands are `C` and `2k` words in their formats; other operations ask nothing. -/
 def OperandsOk : Op ι → List ℤ → Prop
@@ -196,9 +209,10 @@ def IsMma : Op ι → Prop
   | mma .. => True
   | _ => False
 
-/-- A free operation whose interval the property derives: a constant, an affine map, an s8-family step. -/
+/-- An operation whose interval the property derives from its operands', never its declaration: the free ones (a
+constant, an affine map, an s8-family step) and a gather, whose value is a word of its column or 0. -/
 def IsDerived : Op ι → Prop
-  | const _ | affine .. | mma .. => True
+  | const _ | affine .. | mma .. | gather _ => True
   | _ => False
 
 end Op
@@ -279,8 +293,13 @@ variable {ι : Type} (g : Gate ι)
 /-- Its role: its primitive's and site's (`roleOf`). -/
 def role : Role := roleOf g.prim g.site
 
-/-- A gather's index bits: `⌈log₂ V⌉` for its column of `V` words. -/
-def indexBits : ℕ := Nat.clog 2 (g.args.length - 1)
+/-- A gather's index bits: `⌈log₂ (V + 1)⌉` for its column of `V` words, the bits that tell its `V + 1` outcomes apart:
+a word of the column, or `0` for an index outside it. A one-word column is a comparison (`[i ≤ 0]`), one bit. A table
+read of its index's low `n` bits reads `n`, which tell its `2^n` positions apart (property/v1's `low` kind). -/
+def indexBits : ℕ :=
+  match g.op with
+  | .gather (some n) => n
+  | _ => Nat.clog 2 g.args.length
 
 /-- The gate's operand values, read from the values `vs` of the gates before it. -/
 def operands (vs : List ℤ) : List ℤ := g.args.map fun j => vs.getD j 0
@@ -363,8 +382,12 @@ def Iv.mul (a b : Iv) : Iv :=
 /-- `[a] ⊆ [lo, hi]`. -/
 def Iv.Within (a : Iv) (lo hi : ℤ) : Prop := lo ≤ a.1 ∧ a.2 ≤ hi
 
+/-- The hull of `[a]` and `[b]`. -/
+def Iv.join (a b : Iv) : Iv := (min a.1 b.1, max a.2 b.2)
+
 /-- The interval a gate's value is derived to lie in, from its operands' derived intervals `ivs`: a constant's own
-value, an affine map's or an s8-family step's image, and every other gate's declared interval. -/
+value, an affine map's or an s8-family step's image, a gather's hull of its column's intervals and 0 (its value
+outside the column), and every other gate's declared interval. -/
 def Gate.derive (g : Gate ι) (ivs : List Iv) : Iv :=
   let a := g.args.map fun j => ivs.getD j (0, 0)
   match g.op with
@@ -372,15 +395,16 @@ def Gate.derive (g : Gate ι) (ivs : List Iv) : Iv :=
   | .affine c₀ cs => (List.zipWith Iv.scale cs a).foldl Iv.add (c₀, c₀)
   | .mma _ _ k _ =>
       (List.zipWith Iv.mul (a.tail.take k) (a.tail.drop k)).foldl Iv.add (a.headD (0, 0))
+  | .gather _ => a.tail.foldl Iv.join (0, 0)
   | _ => (g.lo, g.hi)
 
 /-- The derived intervals of a circuit's gates, in order. -/
 def intervals (C : Dag ι) : List Iv := C.foldl (fun ivs g => ivs ++ [g.derive ivs]) []
 
-/-- **The window, proven** (property/v1's interval analysis over the whole DAG): every constant, affine map and
-s8-family step has its derived interval within its declared one, every affine map its declared interval within s32
-(where `I32Add` and `I32Sub` don't wrap), and every s8-family step its operands' derived intervals within their
-formats and its declared interval within s32. -/
+/-- **The window, proven** (property/v1's interval analysis over the whole DAG): every constant, affine map,
+s8-family step and gather has its derived interval within its declared one, every affine map its declared interval
+within s32 (where `I32Add` and `I32Sub` don't wrap), and every s8-family step its operands' derived intervals within
+their formats and its declared interval within s32. -/
 def Proven (C : Dag ι) : Prop :=
   ∀ i (h : i < C.length),
     let g := C[i]
@@ -392,8 +416,8 @@ def Proven (C : Dag ι) : Prop :=
           (∀ j ∈ g.args.tail.take k, (ivs.getD j (0, 0)).Within fa.lo fa.hi) ∧
           ∀ j ∈ g.args.tail.drop k, (ivs.getD j (0, 0)).Within fb.lo fb.hi
 
-/-- Every input and budgeted gate's value lies in its declared interval on input `x`: what a primitive's output type
-guarantees, and a run input's. -/
+/-- Every input's and budgeted gate's but a gather's value lies in its declared interval on input `x`: what a
+primitive's output type guarantees, and a run input's. -/
 def DeclaredHold (C : Dag ι) (x : ι → ℤ) : Prop :=
   ∀ i (h : i < C.length), ¬ C[i].op.IsDerived →
     C[i].lo ≤ C[i].raw x (values (C.take i) x) ∧ C[i].raw x (values (C.take i) x) ≤ C[i].hi
@@ -432,9 +456,10 @@ def dynamic (C : Dag ι) : List Bool :=
 
 /-- **Gate `i`'s units** (property/v1's count). A budgeted gate is one unit when it reads a value that depends on a run
 or coin input, and none when it doesn't (it computes the same value at registration). A gather whose index depends on
-one is the index bits no earlier gather of that index paid (fresh index bits), and one more when its column holds
-such a value: a `V`-way selection among run-time values, without which a tree of gathers sharing indices would
-select among `2^b` constants for `b` units. A gather at a fixed index is wiring, and every other gate is free. -/
+one is the index bits no earlier gather of that index and kind paid (fresh index bits, per index and kind as
+property/v1 keys them), and one more when its column holds such a value: a `V`-way selection among run-time values,
+without which a tree of gathers sharing indices would select among `2^b` constants for `b` units. A gather at a fixed
+index is wiring, and every other gate is free. -/
 def units (C : Dag ι) (i : ℕ) : ℕ :=
   let dyn := fun j => (dynamic C).getD j false
   match C[i]? with
@@ -442,10 +467,11 @@ def units (C : Dag ι) (i : ℕ) : ℕ :=
   | some g =>
     match g.op, g.args with
     | .budgeted _ _, args => if args.any dyn then 1 else 0
-    | .gather, j :: col =>
+    | .gather low, j :: col =>
         if dyn j then
-          (g.indexBits - (((C.take i).filter fun h => h.op.isGather && h.args.head? == some j).map
-            Gate.indexBits).foldl max 0) + (if col.any dyn then 1 else 0)
+          (g.indexBits - (((C.take i).filter fun h =>
+              h.op.gatherKind == some low.isSome && h.args.head? == some j).map Gate.indexBits).foldl max 0) +
+            (if col.any dyn then 1 else 0)
         else 0
     | _, _ => 0
 
@@ -527,19 +553,20 @@ def budgeted (C : Dag ι) : ℕ := ∑ i ∈ Finset.range C.length, units C i
 /-- The run inputs' declared bits. -/
 def runBits (C : Dag ι) : ℕ := (C.map (Gate.inputBits .run)).sum
 
-/-- The property's parameters: each budgeted class's cap in units per certified byte read, `R_in` and `L`. -/
+/-- The property's parameters: each budgeted class's cap in units per certified byte read, a rational as property/v1's
+`c` is (an honest circuit's rate is a small fraction of a unit a byte), `R_in` and `L`. -/
 structure Caps where
-  rounding : ℕ
-  compareSelect : ℕ
-  gather : ℕ
-  fold : ℕ
+  rounding : ℚ
+  compareSelect : ℚ
+  gather : ℚ
+  fold : ℚ
   /-- `R_in`: run-input bytes a window -/
   runBytes : ℕ
   /-- `L`: the engine steps a value may be read after the step that produced it -/
   life : ℕ
 
 /-- The budgeted units the caps allow per certified byte read. -/
-def Caps.total (k : Caps) : ℕ := k.rounding + k.compareSelect + k.gather + k.fold
+def Caps.total (k : Caps) : ℚ := k.rounding + k.compareSelect + k.gather + k.fold
 
 /-- The audit's windows: `windows` of them, the window `win t` of each engine step `t`, and the bytes the audit
 certified `W` read in each (`reads w`). -/
@@ -556,8 +583,8 @@ def Property (k : Caps) (A : Audit) (W : Dag ι) : Prop :=
   (∀ g ∈ W, A.win g.step < A.windows) ∧
     (∀ w < A.windows,
       let c := census W (fun t => A.win t = w)
-      c.rounding ≤ k.rounding * A.reads w ∧ c.compareSelect ≤ k.compareSelect * A.reads w ∧
-        c.gather ≤ k.gather * A.reads w ∧ c.fold ≤ k.fold * A.reads w ∧
+      (c.rounding : ℚ) ≤ k.rounding * A.reads w ∧ (c.compareSelect : ℚ) ≤ k.compareSelect * A.reads w ∧
+        (c.gather : ℚ) ≤ k.gather * A.reads w ∧ (c.fold : ℚ) ≤ k.fold * A.reads w ∧
           c.neutral = 0 ∧ c.runBits ≤ 8 * k.runBytes) ∧
     ∀ i (h : i < W.length), ∀ j ∈ W[i].args, ∀ g ∈ W[j]?, W[i].step ≤ g.step + k.life
 

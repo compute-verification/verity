@@ -1,0 +1,4 @@
+order = 60
+path = "`facet_break/`"
+runs_on = "RTX PRO 6000"
+what = "The search for programs that beat a facet of the machine model: a seeded generator of MMA + lane programs around each facet's vertices, timed under opcode_probe's gates, and every measured program's load on every facet (`loads.py summary`, `refit`; its own README)"

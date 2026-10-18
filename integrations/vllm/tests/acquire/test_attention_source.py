@@ -5,8 +5,9 @@ and a sparse prefill step, and a real `NativeHostCommitter`, whose `_acquire` re
 
 It catches a name the map lists that the source does not bind on a step's routes, or binds off them or off the target; a value
 taken from the wrong tensor, rows or moment (a cache row at the wrong slot or outside the indexer cache's block layout, the other
-path's output rows, the shared top-k buffer after the next layer cleared it); and a step on the target that drops a target-only tap,
-or a step off it that commits one."""
+path's output rows, the shared top-k buffer after the next layer cleared it); a step on the target that drops a target-only tap,
+or a step off it that commits one; and a sparse MLA call boundary bound at a step whose `attn` tensor is not its value's shape, or
+bound to another step's tensor or a layer's other output, or claimed without the attention source attached."""
 from __future__ import annotations
 
 import copy
@@ -21,7 +22,10 @@ from tests.acquire import glm53_model as G
 from tests.acquire.glm53_model import CMAP, INDEXER, L, SPARSE, STEPS, glm_model, metadata, run_step
 from tests.acquire.test_route_source import Run, map_names
 from verity_vllm.acquire.sources import attention_source as AS
+from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import route_source as RS
+from verity_vllm.commit import binding as B
+from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
 
 NORM_ROPE = G.fused_norm_rope
 OTHERS = ("module_hook", "sampler", "allreduce_norm")
@@ -32,9 +36,9 @@ class AttnRun(Run):
     """`Run` with the attention source attached, recording each step's bound copies, the committer's acquire/flush order and what
     every layer computed."""
 
-    def __init__(self, target: bool = True) -> None:
+    def __init__(self, target: bool = True, identities: tuple[dict[str, Any], ...] = ()) -> None:
         super().__init__(target)
-        self.att = AS.AttentionSource(self.com, self.src)
+        self.att = AS.AttentionSource(self.com, self.src, identities)
         self.src.attention = self.att
         self.att.install()
         self.rec: dict[int, list[tuple[str, torch.Tensor]]] = {}
@@ -90,7 +94,9 @@ def expected(tid: str, seen: dict[str, Any]) -> torch.Tensor:
     if tid == "mla_kv_cache":
         return torch.cat((seen["kv_c"], seen["k_pe"]), dim=1)
     if tid == "indexer.k_cache":
-        return torch.stack([torch.cat(G.index_key(k)) for k in seen["index_k"]])
+        return torch.stack([G.index_key(k)[0] for k in seen["index_k"]])
+    if tid == "indexer.k_scale":
+        return torch.stack([G.index_key(k)[1].view(torch.float32) for k in seen["index_k"]])
     return {"indexer.topk": lambda: seen["topk"], "v_absorb": lambda: seen["output"][: seen["mqa_rows"]],
             "attn": lambda: seen["attn_mqa"], "attn.mha": lambda: seen["attn_mha"]}[tid]()
 
@@ -122,7 +128,7 @@ def test_each_bound_value_is_the_one_the_layer_computed(runs):
 
 def test_the_shared_top_k_buffer_is_flushed_as_soon_as_it_is_bound(runs):
     log = runs[True].log
-    topk = [j for j, (what, name) in enumerate(log) if what == "acquire" and name.endswith("indexer_op/topk")]
+    topk = [j for j, (what, name) in enumerate(log) if what == "acquire" and name.endswith("self_attn/topk")]
     assert len(topk) == 3 * len(INDEXER), "the decode, mixed and sparse prefill steps, on every indexer layer"
     assert all(log[j + 1] == ("flush", AS.TOPK) for j in topk)
 
@@ -162,7 +168,7 @@ def routes_bad(violation: dict[str, Any], names: set[str], counts: tuple[int, in
 
 
 def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(runs, capsys):
-    q8 = f"model.layers.{min(INDEXER)}.self_attn.indexer/q_fp8"
+    q8 = f"model.layers.{min(INDEXER)}.self_attn/index_q"
     on, off = runs[True], runs[False]
     steps = full_steps(on, capsys, True)
     got = on.check(steps, sources=[on.src, on.att])
@@ -184,7 +190,7 @@ def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
     finally:
         G.fused_norm_rope = wrapped
         r.close()
-    rows = {r.att.names["mla_kv_cache"][i] for i in range(L)} | {r.att.names["indexer.k_cache"][i] for i in INDEXER}
+    rows = {r.att.names["mla_kv_cache"][i] for i in range(L)} | {r.att.names[t][i] for t in ("indexer.k_cache", "indexer.k_scale") for i in INDEXER}
     assert set(map_names(capsys, SPARSE, "decode", binders=(AS.BINDER,))) - set(r.names(0)) == rows
     assert r.att.stats["unpaired"] == L and G.fused_norm_rope is NORM_ROPE
     v = r.check({0: r.names(0) + map_names(capsys, SPARSE, "decode", binders=OTHERS)}, sources=[r.src, r.att])["violations"]
@@ -255,3 +261,107 @@ def test_a_layer_or_a_map_the_source_cannot_bind_is_refused():
     cmap["taps"].append({**copy.deepcopy(tap), "id": "attn.lse", "commit": {**tap["commit"], "name": "model.layers.{i}.self_attn/lse"}})
     with pytest.raises(ValueError, match="binds no tap"):
         AS.AttentionSource(None, RS.RouteSource(None, glm_model(), cmap))
+
+
+WIDTH = G.NHL * G.KVL
+PD = "f" * 64
+
+
+def boundary(step: int, layer: int, rows: int, **kw: Any) -> dict[str, Any]:
+    """A sparse MLA call boundary of rank 3 as the GLM-5.3 TP manifest spells it: the Build's export-wrapper prefix, fx node
+    `dsa_indexer_attn_<step * L + layer>`, [rows, NHL * KVL] bf16 words."""
+    k = step * L + layer
+    return {"family": "call_boundaries", "request_id": "r0", "step": step, "engine_step": step, "invocation": 0, "rank": 3,
+            "op_path": f"inner.model.model.layers.{layer}.self_attn/dsa_indexer_attn" + (f"_{k}" if k else ""), "output_member": "out",
+            "element_range": [0, rows * WIDTH], "rows": rows, "width": WIDTH, "dtype": "bf16", "spec": "SparseMlaSplit_v1{T=1,NH=8}", **kw}
+
+
+#: every layer's sparse MLA at the decode (1 row) and the sparse prefill (3 rows); layer 0's also at the dense prefill, which runs no
+#: MQA, and at the mixed step as the Program would state it (4 rows), where MQA attends its 1 decode row only
+BOUNDARIES = tuple([boundary(1, i, 1) for i in range(L)] + [boundary(3, i, 3) for i in range(L)] + [boundary(0, 0, 3), boundary(2, 0, 4)])
+
+
+@pytest.fixture(scope="module")
+def bruns() -> dict[bool, AttnRun]:
+    out = {}
+    for target in (True, False):
+        r = AttnRun(target, BOUNDARIES)
+        try:
+            for k, (md, _routes, _phase) in enumerate(STEPS):
+                r.step(k, md)
+        finally:
+            r.close()
+        out[target] = r
+    return out
+
+
+def test_the_source_claims_a_layers_sparse_mla_output_and_nothing_else():
+    b = boundary(1, 2, 1)
+    assert AS.claims(b) == AS.BINDER and CB.claimed(b) == AS.BINDER and not CB.manifest_sites({"identities": [b]})
+    assert AS.sparse_mla_layer(b) == 2 and AS.sparse_mla_layer(boundary(0, 0, 3)) == 0
+    for other in ({"spec": "SparseMla_v1{T=1}"},):
+        assert AS.claims({**b, **other}) == AS.BINDER
+    for other in ({"spec": "DsaMqaLogits_v3{N=2}"}, {"output_member": "lse"}, {"dtype": "f32"}, {"family": "instance_outputs"},
+                  {"op_path": "inner.model.model.layers.2.self_attn/dsa_norm_rope_9"}, {"op_path": "inner.model.model.layers.2.mlp/dsa_indexer_attn_9"}):
+        assert AS.claims({**b, **other}) is None, other
+
+
+def test_each_sparse_mla_call_boundary_binds_the_attn_tensor_of_its_layer_and_step(bruns):
+    on = bruns[True]
+    attn = on.att.names[AS.ATTN_MQA]
+    want = {attn[i]: {1: (boundary(1, i, 1)["op_path"], "out"), 3: (boundary(3, i, 3)["op_path"], "out")} for i in range(L)}
+    assert on.att.name_bindings() == want and on.att.stats["call_boundaries_held"] == 2 * L
+    assert len(on.com.errors) == 1 and on.com.errors[0].startswith("attention: layer 0 at engine step 2: forward_mqa returned (1, ")
+    off = bruns[False]
+    assert off.att.name_bindings() == {} and off.com.errors == [], "off the target the attn tap is not bound, so neither are they"
+
+
+def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_rest(bruns):
+    on = bruns[True]
+    layouts = {}
+    for k, recs in on.rec.items():
+        layouts[k], off = [], 0
+        for j, (name, t) in enumerate(recs):
+            nb = t.numel() * t.element_size()
+            m = TensorMeta(j, name, "bfloat16", tuple(t.shape), nb, GPU_CHUNK_BYTES, off // GPU_CHUNK_BYTES, 1)
+            m.stream_off, off = off, off + nb
+            layouts[k].append(m)
+    steps = [types.SimpleNamespace(root=bytes([k]) * 32) for k in range(len(STEPS))]
+    bmap = B.build_binding_map(layouts, steps, b"\0" * 32, PD, rank=3, name_bindings=B.source_name_bindings([on.att]))
+    pop = [B.identity(PD, r["request_id"], r["engine_step"], 0, r["op_path"], "out", *r["element_range"], 3) for r in BOUNDARIES]
+    cov = B.coverage_check(pop, bmap)
+    assert (cov["expected_n"], cov["bound_n"], cov["ambiguous_n"]) == (len(BOUNDARIES), 2 * L, 0)
+    assert sorted((m["step"], m["op_path"]) for m in cov["missing"]) == [(0, boundary(0, 0, 3)["op_path"]), (2, boundary(2, 0, 4)["op_path"])]
+    attn = on.att.names[AS.ATTN_MQA]
+    tapped = [e for e in bmap["entries"] if e.get("observation") == "tap"]
+    assert len(tapped) == 2 * L
+    for e in tapped:
+        i, st, rows = AS.sparse_mla_layer({**e["identity"], "family": CB.FAMILY, "dtype": "bf16", "spec": "SparseMlaSplit_v1"}), e["identity"]["step"], e["encoding"]["shape"][0]
+        assert e["name"] == attn[i] and st in (1, 3) and e["encoding"]["shape"] == [rows, G.NHL, G.KVL]
+        assert e["identity"]["element_range"] == [0, rows * WIDTH] == boundary(st, i, rows)["element_range"]
+    assert not [e for e in bmap["entries"] if e["name"] == attn[0] and e["identity"]["step"] == 2 and e["identity"]["op_path"] != split_attn(attn[0])], \
+        "the mixed step's 1-row tensor stays under its own name"
+
+
+def split_attn(name: str) -> str:
+    return B.split_name(name)[0]
+
+
+def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step():
+    """[GLM-5.3] ql_nope is bmm(q_nope^T, W_UK_T).transpose(0, 1): [M, NH, L] over strides no 2-D pitch describes, which the native
+    committer refuses ("layout is not 2-D pitched"); the source stages its contiguous copy, the same values in row-major order."""
+    import torch
+    from verity_vllm.acquire.sources import attention_source as AS
+    got = []
+    src = object.__new__(AS.AttentionSource)
+    src.c = type("C", (), {"_acquire": lambda self, name, t, job: got.append((name, t))})()
+    src.names, src.stats, src._copies = {"ql": {0: "model.layers.0.self_attn/ql"}}, {"bound": 0, "by_tap": {}, "copied_by_tap": {}}, []
+    x = torch.arange(2 * 3 * 4, dtype=torch.float32).reshape(3, 2, 4).transpose(0, 1)
+    assert not x.is_contiguous()
+    src._bind("ql", 0, x, job=None)
+    (name, t), = got
+    assert name == "model.layers.0.self_attn/ql" and t.is_contiguous() and torch.equal(t, x) and src._copies == [t]
+    src.on_step_begin = AS.AttentionSource.on_step_begin.__get__(src)
+    src._pending = src._active = None
+    src.on_step_begin()
+    assert src._copies == []

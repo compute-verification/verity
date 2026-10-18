@@ -1,15 +1,25 @@
 import Models.Pouw.Guarantees.Receipt
 import Proofs.Pouw.Receipt.Duo
+import Proofs.Pouw.Receipt.Window
 import Proofs.Pouw.Receipt.Li
 import Proofs.Pouw.Receipt.Fx1
 import Proofs.Pouw.Receipt.Run
+import Proofs.Pouw.Receipt.DuoReceipt
+import Proofs.Pouw.Receipt.AtState
 
 /-!
 # The receipt folds duo's, fx1's and li's guarantees
 
+duo's four words anywhere in a run, its checkpoints every four words and the kernel of its long runs are in
+`Receipt/Window.lean`.
+
 Each statement of `Models/Pouw/Guarantees/Receipt.lean`: duo's words, pairs, triples and quadruples in
-`Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, fx1's transport of each in
-`Receipt/Fx1.lean`, and li's half steps and checkpoints in `Receipt/Li.lean`.
+`Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, the served receipt in
+`Receipt/DuoReceipt.lean`, fx1's transport of each in `Receipt/Fx1.lean`, and li's half steps and checkpoints in
+`Receipt/Li.lean`.
+
+Runs at one start state, the counting bound past two words and the served chain's two-word counterexample, are in
+`Receipt/AtState.lean`.
 -/
 
 namespace Pouw.SecurityProofs.Receipt
@@ -33,6 +43,15 @@ theorem DuoStepBijective : Pouw.Guarantees.Receipt.DuoStepBijective :=
 
 theorem DuoRunWordInjective : Pouw.Guarantees.Receipt.DuoRunWordInjective :=
   fun _ _ k a r s w i => Pouw.ReceiptProofs.duoRun_update_injective k a r s w i
+
+theorem DuoWindowNoKernel : Pouw.Guarantees.Receipt.DuoWindowNoKernel :=
+  fun _ _ _ k a r w q k' a' r' w' => Pouw.ReceiptProofs.duoWindow_injective k a r w q k' a' r' w'
+
+theorem DuoCheckpointNoKernel : Pouw.Guarantees.Receipt.DuoCheckpointNoKernel :=
+  fun _ _ q => Pouw.ReceiptProofs.duoCheckpoints_injective q
+
+theorem DuoLongRunKernel : Pouw.Guarantees.Receipt.DuoLongRunKernel :=
+  fun n _ k a r => Pouw.ReceiptProofs.duoRun_kernel n.succ_pos (by omega) k a r
 
 theorem Fx1WordInjective : Pouw.Guarantees.Receipt.Fx1WordInjective :=
   fun _ k a r m s => Pouw.ReceiptProofs.fx1Word_injective k a r m s
@@ -63,5 +82,18 @@ theorem LiCheckpointWordInjective : Pouw.Guarantees.Receipt.LiCheckpointWordInje
 
 theorem LiCheckpointLowBit : Pouw.Guarantees.Receipt.LiCheckpointLowBit :=
   fun _ _ x before after pre k a d post y => Pouw.ReceiptProofs.liCheckpoint_lowBit x before after pre k a d post y
+
+theorem DuoWordProjNoKernel : Pouw.Guarantees.Receipt.DuoWordProjNoKernel :=
+  fun _ k a r h => Pouw.ReceiptProofs.duoWordProj_injective k a r h
+
+theorem DuoReceiptNotInjective : Pouw.Guarantees.Receipt.DuoReceiptNotInjective :=
+  fun hinj => (by decide : (0x1632c#32) ≠ 0x2237a#32) (hinj (a₁ := 0x1632c#32) (a₂ := 0x2237a#32) (by decide))
+
+theorem DuoPairAtStateNotInjective : Pouw.Guarantees.Receipt.DuoPairAtStateNotInjective :=
+  fun hinj => (by decide : ((0x40156b95#32, 0x0#32) : BitVec 32 × BitVec 32) ≠ (0xb4d85e5c#32, 0x375f7285#32))
+    (hinj (a₁ := (0x40156b95#32, 0x0#32)) (a₂ := (0xb4d85e5c#32, 0x375f7285#32)) (by decide))
+
+theorem DuoRunAtStateNotInjective : Pouw.Guarantees.Receipt.DuoRunAtStateNotInjective :=
+  fun n L k a r s => Pouw.ReceiptProofs.duoRun_atState_not_injective k a r s (Nat.succ_pos n) (by omega : 2 < L + 3)
 
 end Pouw.SecurityProofs.Receipt

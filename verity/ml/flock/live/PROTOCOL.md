@@ -327,6 +327,8 @@ is the minimum.
   The mask slot must have `blocks · 2^(mask_log−7) ≥ 128 · 4` words for the rank to be reachable. Both sides refuse a
   statement, or a table of a split session, with fewer than `128 · 4 + 64` words when it is built, before `Hello`
   (`zk_shape_ok`). RoPE and GEMM have 1024 at every split tried: m ≥ 25 at their `k_log` means at least 8 blocks.
+  Both sides also refuse a mask slot below `2^13` bits (`slot_log < 13`, `SLOT_LOG_MIN`): the bound on this check
+  refusing an honest prover's coin covers no smaller slot. Every deployed circuit has `mask_log = 14`.
 
 Negatives, each rejected on both reps (RoPE CPU selftest):
 - another extra lane folded than the committed one;
@@ -625,9 +627,31 @@ C(m, i)` bits over `m` sessions with at most `b` stopped (the claims' `ZkServer.
 
 What the deferral costs: a bad worker is caught only at its session's `Finish`, one session's latency later than at its
 first bad message, and the rest of a doomed session's device and firewall work is spent for nothing (the firewall's share
-is the shadow opening and the inner proof, which it runs on every session anyway). Still open: a device that stops (an
-error, a panic) or never reaches its `Commit` stops the session where it does. Timing (when a message leaves) is not in this
-rule; the network certifier covers it.
+is the shadow opening and the inner proof, which it runs on every session anyway). Timing (when a message leaves) is not in
+this rule; the network certifier covers it.
+
+**A worker that fails is a failed check like any other.** The device runs on a thread of its own (`firewall::run_worker`),
+and the firewall serves its rounds and its `Commit` on the session's thread, so where a rep ends never depends on its worker.
+Each way the worker can fail fails the rep (`FIREWALL-REFUSED: the device failed: …`):
+- an error it returns (a nonzero return code, its return code 240's claim of degenerate coins among them);
+- output that does not decode;
+- a panic;
+- silence past the firewall's deadline (`FC_FIREWALL_DEADLINE_S` seconds between two of its asks, an hour by default).
+
+The firewall then releases the rest of the schedule itself, takes the `Commit` with the recheck's root if the worker never
+reached it, and stops at `Finish`. A worker the firewall gave up may still run, but nothing it asks later is answered. A tree
+the device draws at another size than the shadow's gets salts of its own (`LeafSalts` pairs a tree's two draws by id and
+size), so its opening fails the check, and neither side panics.
+
+The stops the coins decide are the firewall's own, taken from the public coins and never from the worker:
+- the masking challenger's refusal of an outer coin 1 (`refuse_outer`);
+- the mask slot's rank at the opening (`mask_rank_ok`);
+- the shadow opening's ρ-independence, which the device reports as return code 240;
+- β = 0 in the inner proof.
+
+Each stops the session where those coins stand, which is where an honest device stops too. A table's proofs leave only
+after both reps' Lean frames answer `ok` at their `finish`, and the proofs a prover without the barrier would send early
+(`Plan::early_proofs`) exist only in a test harness's build.
 
 ### 10.2 The level-0 recheck
 
@@ -649,6 +673,7 @@ the proof's level-0 rows and paths are checked against it at the end. Its cost i
 | `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the coin server as a registered row's `b ‖ c` (`rec_live.top_rows`: its 32 u16 words, then 32 zero words; `hm96-sha512/row/v1`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
 | a round's caps (its `BYTES` frames that commit a tree) | salted, or counted | a fresh top as the roots, one fresh salt per node; a copy of a level-0 top committed at `Commit` (the rep's binding round's cap, which must be `root_B`, and Ligerito's first absorb) is counted (`level0`), never committed again |
 | a round's free message | salted | `c_k`, its one row committed under a fresh salt (as before) |
+| `Register` | constant | the firewall answers it itself with the verifier's draw, every unit of the population (`rec_live --draw FILE`, `rec_live.full_draw`: the stratified law at `K = N`, so each stratum's `k` is its size), and the record holds that draw as `unit_draw` from the session's start; `verify --stratified N --program --partition` derives the same draw and refuses any other |
 | statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
 | `Link`'s `y` | constant `0` | the schedule fixes its length (`link.y` elements of 16 bytes); the firewall refuses any other byte length, and any nonzero byte |
 | the order of `Hello`, `Commit`, `Link` and `Finish` | constant | the firewall itself refuses a `Commit` before `Hello` or after the first, a `Link` before `Commit` or after the first, and a `Finish` before the schedule's last round (counted from its own streams, never by reading the coin server), each before any call on the coin server: a request out of its place reaches the coin server as a plain stop at the same point |
@@ -732,6 +757,14 @@ the same way at the second table:
 | `algebra` | flips a masked value, in its frame and its proof alike | `FIREWALL-REFUSED: circuit: the constraints … fail on a rep's pads` |
 | `algebra-proof` | flips a masked value in its returned proof only | `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
 | `shape` | appends a value to its returned proof's `round1_ab`, past the ones the firewall compares | `FIREWALL-REFUSED: the proof's shape (…) is [65, 64, …] where the statement's is [64, 64, …]` |
+| `cut-rc` | returns an error at its round `FC_FIREWALL_CUT_AT` | `FIREWALL-REFUSED: the device failed: CUDA circuit prover returned error 1` |
+| `cut-rc240` | claims degenerate coins (return code 240) at that round, on coins that are not | `FIREWALL-REFUSED: the device failed: PROVER-STOPPED: degenerate coins: …` |
+| `cut-panic` | panics at that round | `FIREWALL-REFUSED: the device failed: panicked: the worker panics at its round …` |
+| `cut-silent` | falls silent at that round (it ticks the deadline's injected clock, so no test waits on the wall clock) | `FIREWALL-REFUSED: the device failed: silent past the firewall's deadline` |
+| `cut-decode` | returns output that does not decode, from the rep that holds that round | `FIREWALL-REFUSED: the device failed: the device's output does not decode: …` |
+| `cut-tree` | draws its first tree at or after that round one leaf larger than the statement's (the CPU device: its trees draw through the salt context) | `FIREWALL-REFUSED: opening round …` |
+
+`FC_FIREWALL_CUT_AT` counts the table's device rounds over both reps (default 0), and a `cut-` control fires once a table.
 
 With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only, a statement of one table: several are refused), each gated session also writes what the firewall let out as a
 `verity/firewall-transcript/v0` transcript, `DIR/session-<k>.json`, for the firewall's contract (`flock-firewall contract`):
@@ -773,8 +806,8 @@ over the eight, under contention) and the comb fold stay on the session's path.
 
 A recursive session is the inner phase's session and the outer phase's sessions, one per V* statement (at K = 4096 eight: the
 levels L0–L6 and the algebra). With §10.1 and §10.3, every message of a session that reaches the auditor is fixed, and so is
-their order: `Hello`, `Commit`, `Link`, each stream's `Open` and rounds, the proofs, `Finish` (`Ping`, and `Register` in a
-session that draws no units, change no record: the inner firewall answers `Register` itself). An inner `Open` may come any
+their order: `Hello`, `Commit`, `Link`, each stream's `Open` and rounds, the proofs, `Finish` (`Ping` and `Register` change
+no record: the inner firewall answers `Register` itself, with the full draw the record already holds). An inner `Open` may come any
 time before its stream's first round, but the firewall passes it to the coin server only at that round (§10.3), so where it
 came never reaches the auditor. A `Commit`, `Link` or `Finish` out of its place is refused by the firewall before any call
 on the coin server (§10.3), so it reaches the auditor as a plain stop. What a worker still chooses is
