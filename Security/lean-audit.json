@@ -859,7 +859,12 @@
    "type_hash": "0620c0fb742047ca1143d4ed9d45e9c1a5197c2b1372bd430dcb20b53bb89167"
   },
   "Accounting.SecurityProofs.DeclaredCircuitRequirement": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement : Accounting.Guarantees.DeclaredCircuitRequirement"
+   ],
+   "assumptions": [],
+   "type_hash": "569af6c8280ed061c1dcf7fbb42d7a6af76c8f42a3809cef93fe0f83eb7ecc8f"
   },
   "Accounting.SecurityProofs.DerivedStateResidual": {
    "owner": "@memory-accounting",
@@ -1432,6 +1437,12 @@
    "assumptions": [],
    "type_hash": "8d29d2e533802015098f254806edb1e99d0a93e33acf916a76ca12484b570e3e"
   },
+  "Accounting.SecurityProofs.RequirementCredits": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementCredits : Accounting.Guarantees.RequirementCredits"],
+   "assumptions": [],
+   "type_hash": "e388765e148bc5b99473bbb1b136a24495ca0259d9168c69546fdc9278ee4048"
+  },
   "Accounting.SecurityProofs.RequirementDense": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RequirementDense : Accounting.Guarantees.RequirementDense"],
@@ -1444,11 +1455,41 @@
    "assumptions": [],
    "type_hash": "eb1d71eefdaee8934a9bf238b893b3128bacc151ddc6273bd93b97fa553311ba"
   },
+  "Accounting.SecurityProofs.RequirementHeldLive": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementHeldLive : Accounting.Guarantees.RequirementHeldLive"],
+   "assumptions": [],
+   "type_hash": "ac5fbd7cb074161194e931f4f16b51f8cb6dc8b6067cdd77cf71c31ebf8edad6"
+  },
+  "Accounting.SecurityProofs.RequirementHelp": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementHelp : Accounting.Guarantees.RequirementHelp"],
+   "assumptions": [],
+   "type_hash": "5a7b277fa29473b8b6618281542ca3dc6474e5f04aacce6eb1be509576a932b5"
+  },
   "Accounting.SecurityProofs.RequirementMoved": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RequirementMoved : Accounting.Guarantees.RequirementMoved"],
    "assumptions": [],
    "type_hash": "0e3f73f68c101849e6b3822676bab1e1c8a4feadf7be7da359644da590003269"
+  },
+  "Accounting.SecurityProofs.RequirementSteps": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementSteps : Accounting.Guarantees.RequirementSteps"],
+   "assumptions": [],
+   "type_hash": "90fe6e61a65a4879930d007079bb0249c36ca5a97b34093cd2c9e094b86f26ee"
+  },
+  "Accounting.SecurityProofs.RequirementUncredited": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementUncredited : Accounting.Guarantees.RequirementUncredited"],
+   "assumptions": [],
+   "type_hash": "049084db75f56441163aad644f8909ba8f96c9c780dda080982f02ff5ea3cef1"
+  },
+  "Accounting.SecurityProofs.RequirementUnplanned": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementUnplanned : Accounting.Guarantees.RequirementUnplanned"],
+   "assumptions": [],
+   "type_hash": "6e558489a11f959d9bdc38f44692b44329f9e318d310bdc34bc8e985e8d6f6ca"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -5710,8 +5751,14 @@
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
    "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementHeldLive": "frozen (no-function): A counting identity over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), W's credited live bits (those in complete blocks) are those in the held blocks plus the live bits of each resident block not held; about no function of the code.",
    "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
    "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementCredits": "frozen (no-function): An identity over a declared circuit's wiring, its placed execution and PoUW's vocabulary (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean): on the placed execution's actual run, PouwWork.credits is the work of W's region outside the marking; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementHelp": "frozen (no-function): An identity over a declared circuit's wiring, its placed execution and PoUW's vocabulary (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean): for a topological wiring the execution follows, PouwWork.help on its actual run is W's ingress into the node and the verifier's leaves; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementSteps": "frozen (no-function): An identity over a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean): when every device of X paces its engine steps and begins the window's first and last steps at its ends, W's region over the ticks is its gates at those engine steps; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementUncredited": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches) and the live values in incomplete blocks lie in one block per group (OneBlockEach), W's live bits exceed its credited live bits by at most B per group holding one; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most B per group holding one; about no function of the code.",
    "Accounting.SecurityProofs.StackedRequirementSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan are W's at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*32768 by RequirementHeld and RequirementMoved; abstract chip programs in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.SketchRank, SketchHashBudget, EncodeChainHardness and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.StackedRequirementRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationRelay with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan are W's at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*b by RequirementHeld and RequirementMoved; abstract pass devices in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.WorkHardness, SquaringCeiling, EncodeChainHardness and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.Gates.Fooling": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
@@ -6030,10 +6077,11 @@
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
   "Definitions.Accounting.Carrier": {
-   "digest": "adc38ca4cb29744f904d9a951ebce2aefe085197c0b83bd2d1841ad491459025",
+   "digest": "b3965eb244851f6e74bddb6718a5031018f0dd9a03a80b87a07b6e8ba389a15a",
    "definitions": {
     "Accounting.Rate.PIChip.linkBitsEven": "664fdfcc22cb307c84e0dced36156f3512a82bd18bac34e67c7f1b1b3020dca6",
     "Accounting.Rate.PassProvenance": "ee44265e1c690be67eb25e35098885dc2a5c05ae23924c5202dbff4731579ede",
+    "Accounting.Rate.PassProvenance.OfCircuit": "fce70b4e81284bfe8fc63fc12498eb3fe11efa7f2ee467070af0836a71630796",
     "Accounting.Rate.PassProvenance.below": "e0f64354213cb9437ab2256d50a1f7705f8c248ee6e8c03e76665937a9a34926",
     "Accounting.Rate.PassProvenance.brecOn": "9c0a75028147e728ff9436860fce058f9d281c7507a426f5d4847d16f7effad7",
     "Accounting.Rate.PassProvenance.brecOn.go": "73d2c36f86637e39368dbc2fd2e9c129554a8f2094a8446f0fc0de969137f2f0",
@@ -6072,6 +6120,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
@@ -6192,6 +6241,7 @@
     "Accounting.SecurityProofs.CovertResidual",
     "Accounting.SecurityProofs.CovertResidualPerRun",
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointPerRun",
@@ -6243,6 +6293,7 @@
     "Accounting.Gates.sparse": "7c1a17c12010cff703689a84ee595aa07cc738e98414387aca0b0db81c4ba6a1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.RhoPairs",
@@ -6254,7 +6305,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Model": {
-   "digest": "8e302234ed9dbead5eb7a26f772b5238482c4da323366b5f860a5e7ebd72bc40",
+   "digest": "b806d1418528add02b1c0629aced940adf0d4a79adbaec0add01156bd33fc589",
    "definitions": {
     "Accounting.Gates.Audit": "fe61c4f5697390b50450c728a1be07af859a208e40eb950dcabcb11d1ec58ce1",
     "Accounting.Gates.Audit.reads": "777cbb0f97dae2e1110f03d6eeaa958843d1e2c9b625cb1a1fcab1c386384c7e",
@@ -6285,6 +6336,7 @@
     "Accounting.Gates.Caps.runBytes": "5fac3feabee1fa53185dd4e2ae7c79c83092cc382e2165da035f0cb86a6c302f",
     "Accounting.Gates.Caps.total": "f06b223a4757ae95408fd43051d5ddf8f898646f7ebdcff7b8e6aa0c23b1fb74",
     "Accounting.Gates.Census": "86d06c3962effe92d4d181104847b73e9fb55a49086fd48656621a85dd8996ba",
+    "Accounting.Gates.Census.budgeted": "4344ab37db3b0429b3dccb0cdfc837831094e6d415e51d8523fde3233c7cb486",
     "Accounting.Gates.Census.compareSelect": "f5c3b1014eaedcd3898a73d1533171313dcae62b3aff3911c03f02a06d5621df",
     "Accounting.Gates.Census.fold": "82a235967f9e6fdf9fff5919454679a5575eb7752dadee233d71489118395e4d",
     "Accounting.Gates.Census.gather": "c56b62b16e7467a7f97137ab8e5b8585a3bf1c138c7e71a986c418f5cc61d988",
@@ -6405,6 +6457,7 @@
     "Accounting.Gates.wrapS32": "c2b80b5f88ef1f826eadce16b5aa10d1c1b8a090ecd6b15863701843163ab56f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.ClampOrWrap",
     "Accounting.SecurityProofs.Gates.DitherRange",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
@@ -6671,6 +6724,7 @@
     "Accounting.SecurityProofs.BoundReceiptLink",
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
     "Accounting.SecurityProofs.Colocation",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAudit",
     "Accounting.SecurityProofs.RateAuditInteractive",
     "Accounting.SecurityProofs.RateAuditInteractiveRO",
@@ -6770,6 +6824,7 @@
     "Accounting.Rate.PIDevice.world": "636dadc8e309bdf6c5e2f71b400631ea1f60e0b231e64788906bd88380d983f8"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
     "Accounting.SecurityProofs.RemoteSessionConservationRelay",
@@ -6795,6 +6850,7 @@
     "Accounting.Rate.instFintypeWindowCoins": "83a3de5f215b4806ab4abeb991fcfd9169bc9d18118a6ba8c06150acea81feec"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.HorizonSampling",
     "Accounting.SecurityProofs.RateSessionDraw",
     "Accounting.SecurityProofs.RateSessionSampledNamedRO",
@@ -6854,6 +6910,7 @@
     "Accounting.RealizesRateInteractive.dev": "fe3324e45201dba3a7946d9006e20450b5824809746f6aa96ac984bb4b065e91"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditInteractive",
     "Accounting.SecurityProofs.RateAuditInteractiveRO",
     "Accounting.SecurityProofs.RateChain",
@@ -6978,6 +7035,7 @@
     "Accounting.Rate.instFintypePassCoins": "8a08fc29342c632c72d82e9f7bdfd822ea8c878b7d6b58c6d421ecdb8582a01c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateChain",
     "Accounting.SecurityProofs.RateChainPaid",
     "Accounting.SecurityProofs.RateChainPaidRO",
@@ -7227,7 +7285,7 @@
    ]
   },
   "Definitions.Accounting.Requirement": {
-   "digest": "01da8cbbc3b00d299ff9a128cd43adbfe90de14bc4c03e7611494ccf2e58624d",
+   "digest": "c18b000fbe19646aec16505964401fbf95c5b403e257b0c16ff3ee4b4eab7554",
    "definitions": {
     "Accounting.Requirement.Carries": "93fd6dff6b04c716c5141e9212142e6ea3701b3aa0de94ca12483c0b48591a4d",
     "Accounting.Requirement.Execution": "cd70ee0536fc5bb221c299172e35f32cb7f8664fbf0924096cf40b3a3ee791ea",
@@ -7238,14 +7296,14 @@
     "Accounting.Requirement.Layout.block": "8b8a656a1a4ac9e1cb112cce0478d031ce085c24f455672653142a34e439b901",
     "Accounting.Requirement.Layout.offset": "ea578971e1a12eb8fb75d0c055037d8e6b64e444bd1fb555fc29d173a87a90cb",
     "Accounting.Requirement.Packs": "c1dcea15b3eb160b861154472627e3db97bbf61009e5a7dc8d32cfd612f0153d",
-    "Accounting.Requirement.PlanMatches": "3446fe70421d6f5818f116d517a0c5bb283236702b2a4171a7f8d15173caa730",
+    "Accounting.Requirement.PlanMatches": "88edb9b71a1678e2be54eaa53202d9324631a6ca9242a9661c78261df465c2c6",
     "Accounting.Requirement.Store": "1938f3251d1599270d57405be6bc6fc366ac23924f2e849c8b7b7acc6f7281ca",
     "Accounting.Requirement.Store.freed": "4e87eda5acc330bde17fdc1204a03f0f98440c589337d909921d93fec0758313",
     "Accounting.Requirement.Store.payload": "a17bee3d643705377f94199f7d34bad4c5c2d9bae5d7351647eab307cad64ad4",
     "Accounting.Requirement.Store.registered": "0be772098f8e8fb16c7419539601a60d72ebb997163fc82efb10abce4db236e5",
     "Accounting.Requirement.Store.resident": "6288862ccac1ec58bad7ae75f4bf8cbb24212257aea4a55bb31581cb649779c6",
     "Accounting.Requirement.Store.written": "d99299a8c7926bc9f52976b4d302df1f9ebe28e59e60ab696478ad75fc03791b",
-    "Accounting.Requirement.StoreMatches": "e486f273f071bc5a01e0d4d5f0bf590dee56a6e844ab0d3768b1871822d8a2b8",
+    "Accounting.Requirement.StoreMatches": "bc94eb7e36c2c3376a01b78a242889fe21fe87e971a59f4d9fae86838c8657a7",
     "Accounting.Requirement.Wiring": "67f416e91f81742945bad7c75704b565e448a72577d35db298f0d8514f89f1eb",
     "Accounting.Requirement.Wiring.ops": "84cea9a8dda1abcc6e1f039a48984fcaf6ee71e621e29d964abc18011a8d48e2",
     "Accounting.Requirement.Wiring.registered": "17de543eb7d0b9af217ea7d34e648ccc606223d8460c7be413f24e31608e8ca6",
@@ -7255,17 +7313,17 @@
     "Accounting.Requirement.bitsAt": "893a7715539d4e1d88db8afcaf3f2f212e325676cfe6bf6dd25816df7f8a050f",
     "Accounting.Requirement.bitsIn": "5440bee8fc2b080cd09ffdf36d4f4c2e490eab2913fd623940cc6a44c783c9b9",
     "Accounting.Requirement.blocks": "43dd99e049f112b0b8fd74d4c35cca07a1cb09150ed5369f33334bdf9d7fe1d7",
-    "Accounting.Requirement.held": "64cdeb5d4430c3aefead5921a08faa7345ce4003f6469f90e8639698aa4a6633",
+    "Accounting.Requirement.credited": "b4bec13f6ee25481b84428aa13da8d2697aa312d832b4e4d3eccb8e148997c90",
+    "Accounting.Requirement.creditedBits": "fb64f44b0f111365b97d668d8b2d8d76161a493acc2b9cf54714549ededd733f",
+    "Accounting.Requirement.creditedReadBits": "fdc2d77e8461901f1693cebdbc57df73ac131831f769b92de58fcbf64be7f8e7",
+    "Accounting.Requirement.creditedReads": "d220b0af5657d6c89494429abb23cd5432c27654f37aeddbca856739796ea1d3",
+    "Accounting.Requirement.incomplete": "91a2d266794692a407607f1eb498164716016bcec707aa51838a9ddd85274120",
     "Accounting.Requirement.live": "fc7c4f9b1b45bf183ac91ab06378d9fae1dd203361b5ddb5c99abb723f8fa163",
-    "Accounting.Requirement.liveBits": "de62460b5313ef9bdae1bbd45f81196e59929ae2430c0b2ec1c4b664e93f11d5",
-    "Accounting.Requirement.liveBlocks": "96782dd578d5b274d1f92a82085f3a5c06ecef44cf189e64d04ea620d0ba09e8",
     "Accounting.Requirement.liveIn": "52436c3c7a6b7a3c6935576d5b86b4b71b69e9e45f3c5a000dd54b3fe9ba2b26",
-    "Accounting.Requirement.read": "9b70831840160d624205252e630720c7c4271001fdccf201007417b2aeaac75f",
-    "Accounting.Requirement.readBits": "940ebb457d7936b46131a3e37e10e46cbf7281232b011c0bb9a16af8b8005fa9",
-    "Accounting.Requirement.readBlocks": "331777b495aa32b4f7a2d537b06f6c2c15aa89d44145e262922ef53deffa9179",
     "Accounting.Requirement.reads": "1055164e912eff3e5e598f08c907dc222843666d7ddee15fd3753a5f5eb2530a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RequirementDense",
     "Accounting.SecurityProofs.RequirementHeld",
     "Accounting.SecurityProofs.RequirementMoved",
@@ -8608,6 +8666,7 @@
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
     "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.Colocation",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.HorizonSampling",
     "Accounting.SecurityProofs.LengthCode",
     "Accounting.SecurityProofs.Memory.Adds",
@@ -17414,6 +17473,7 @@
     "Accounting.Assumptions.EncodeChainHardness": "b017852df44b39b0d2fd40e91d34bb852531e4cd039425aff5c9c207edcaafd8"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.StackedRequirementRelay",
@@ -17445,6 +17505,7 @@
     "Accounting.Assumptions.WorkHardness": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartialPasses",
@@ -17469,6 +17530,7 @@
     "Accounting.Assumptions.SquaringCeiling": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
     "Accounting.SecurityProofs.RemoteSessionConservationRelay",
@@ -17491,6 +17553,7 @@
     "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
@@ -17637,6 +17700,13 @@
     "Accounting.Guarantees.Fit": "3dad2744dedc3335f643260612186bf5c3ce25104fde75630f3a0b405302b605"
    },
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
+  },
+  "Models.Accounting.Guarantees.DeclaredCircuit": {
+   "digest": "3242ff53d30b16b3f484e5d5f224502f96a9d9a47ecdbcdaa972ab8ef69186d9",
+   "definitions": {
+    "Accounting.Guarantees.DeclaredCircuitRequirement": "284c196d79a9145ac7efb0c101927d6c497c0a8b01913124770868a1ca694498"
+   },
+   "guarantees": ["Accounting.SecurityProofs.DeclaredCircuitRequirement"]
   },
   "Models.Accounting.Guarantees.Gates": {
    "digest": "32bb3869dfa71001694449d945a326c3f9684742af38cb4b1f3f8c441737c2d2",
@@ -17921,11 +17991,11 @@
    ]
   },
   "Models.Accounting.Guarantees.Requirement": {
-   "digest": "73bfe8651ce6f040a85e8f5f7315c5801333cee4ca7f244503245f0162d1dcb8",
+   "digest": "772c477883c3844bfd9e4ff7700fe26fa5b43bc1e740831eaa193920d719eabc",
    "definitions": {
-    "Accounting.Guarantees.RequirementDense": "bc0c260f0105455699aef511a58389d289b3ffa932aa16305994e4dbac4f51cd",
-    "Accounting.Guarantees.RequirementHeld": "fb24a81856c506c3b2d41c062cd0cfb59c0b4de8d77562979377d2c41f26d4b8",
-    "Accounting.Guarantees.RequirementMoved": "4a10e3a792090f532ddcfa01a0e221a20f815cdd43ba694aea268337fe3cbdaf"
+    "Accounting.Guarantees.RequirementDense": "d95859d8b171b9c55a9b18f60131b84528df9510b7b8ec7665d1a4c7a668fcd9",
+    "Accounting.Guarantees.RequirementHeld": "85f227e54923f20dc2e0e0bb24a8b68c2786b9ae72b9f3508c7aa21d61c4a38e",
+    "Accounting.Guarantees.RequirementMoved": "449b033d7164ea7c1b472bdb212ac13284286caa6d191649aaec6bca0ba289a1"
    },
    "guarantees": [
     "Accounting.SecurityProofs.RequirementDense",
@@ -17982,11 +18052,11 @@
    ]
   },
   "Models.Accounting.Guarantees.Stacking": {
-   "digest": "d6e269fd5febea72adab87a6ae9aeab1f535c92bfe342e209bbf97851ba53369",
+   "digest": "b9e781c380d25756179d62e2a8cbfc6a257c3c2733439eeda519abbd080e1719",
    "definitions": {
     "Accounting.Guarantees.CarrierBits": "20428995c2321369af63229df03218efa0f480d915fc3d6b52a08f798f159c97",
-    "Accounting.Guarantees.StackedRequirementRelay": "d80a1fe5a94d1f7f5eebb709352b05ab7f91f538dabbbc6657f3ba1694ead06d",
-    "Accounting.Guarantees.StackedRequirementSketchDeployed": "497da6c3ab9e8ed9e1b6d5f5126e9dd598775499de36fe11e9d2e57f7be96691",
+    "Accounting.Guarantees.StackedRequirementRelay": "dd4c5d1cb4886775a0799970ef31cea6a6ebcf0a0159d588176e87b98382a461",
+    "Accounting.Guarantees.StackedRequirementSketchDeployed": "479d81ce4859a1dfc20a817f3116aaa6c96ba6b6489d935572f494f73725629f",
     "Accounting.Guarantees.StackedSessionConservationRelay": "54fa5577b3572c5c07606968727baf4b3e76cf3da121752f8bec4d052940141f",
     "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "429e50221f92a82bf774c075a87ab5594f56c27e673d5fb81e25df7dd44c1202"
    },
