@@ -61,7 +61,9 @@ folds of the high half by C; a round adds about 9 N for its additions, negation 
 K rounds and 2 + ceil((BYTES + 17) / 128) compressions: whole, about 15.6 M ANDs at p512/k2 (13.4 M of rounds, 2.0 M of the
 digest and binding) and about 32 M at p1024/k3/masked; in four slices about 5.4 M ANDs each at p512/k2.
 ``BlockReceiptCheck`` is ROWS sketch rows of about 9 BYTES ANDs each (a carry-save count of the block's sign-flipped bits)
-and one compression at 16 rows: about 0.66 M ANDs.
+and one compression at 16 rows: about 0.66 M ANDs. The C-Flock lowering adds about half again, ANDs on identical operands
+(circuit-check's redundant-gates/boolean, 29-35% of each part's lowered ANDs): a p512/k2 slice of four lowers to 8,010,522
+ANDs and the receipt unit at 16 rows to 994,987.
 
 `decode_check` and `receipt_check` are the references, over each instance's u16 words; `decode_args` and `receipt_args` an
 instance's arguments, `decode_public` and `receipt_public` their public rows' (the verifier's own), `decode_rows` and
