@@ -481,9 +481,8 @@ def _pair_body(B, S, z):
 PAIR = _def("CompileTestPair", (), lambda S: ((("z", V32),), Array(2, V32)), _pair_body)
 
 
-def _seeding_body(B, S, x, w, salt):
-    e = H.Emit(B)
-    seed = SD.seed_call(B, salt, e.array([0, 0]), Coll(Array(2, SD.DIGEST), concat([salt.refs, salt.refs])), False)
+def _seeding_body(B, S, x, w, salt, roots):
+    seed = SD.seed_call(B, salt, H.Emit(B).array([0, 0]), roots, False)
     return B.call(ADD32, B.call(_acc(64), x, w), seed[0])
 
 
@@ -499,7 +498,9 @@ REFUSED = {
     "no-matmul": lambda: _def("CompileTestNoMatmul", (), lambda S: ((("z", V32),), Array(2, V32)), lambda B, S, z: B.call(PAIR, z)),
     "name": lambda: _def("CompileTestSaltName", (), lambda S: (((C.SALT, Array(64, V8)), ("w", Array(64, V8))), V32),
                          lambda B, S, x, w: B.call(_acc(64), x, w)),
-    "coin-read": lambda: _def("CompileTestSeeding", (), lambda S: ((*XW, ("salt", SD.DIGEST)), V32), _seeding_body),
+    "coin-read": lambda: _def("CompileTestSeeding", (),
+                              lambda S: ((*XW, ("salt", SD.DIGEST), ("roots", Array(2, SD.DIGEST))), V32), _seeding_body,
+                              ports={"params": lambda p: {"salt": p.In(kind="coin")}}),
 }
 
 
