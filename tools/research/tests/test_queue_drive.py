@@ -1057,3 +1057,25 @@ def test_a_failed_touched_suites_run_ejects_the_pr_that_changed_the_failing_test
     h.d.evidence = lambda repo, ids: report if ids == ["r-touched"] else steps
     h.tick()
     assert any("Ejected #2" in x and "touched suites failed" in x for x in h.posts), h.posts
+
+
+def test_of_several_failed_trains_drive_acts_on_the_lowest_only(world, monkeypatch, tmp_path):
+    """18 Oct 10:30Z: c93469 (#2478 #2479 #2480 #2484) failed lean-audit on #2484's Security change, and 5c00b3 above it failed
+    too. In one tick drive ejected #2484 for the lower and, for the upper, whose lower train was by then failed rather than
+    running, #2478 and #2486 as well. A train above a failed one holds its failure; its own check runs again once `next` is
+    rebuilt."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    world.gh.put(1, world.change({"pkgA/A.lean": "theorem a : True := trivial\n"}))
+    world.gh.put(2, world.change({"pkgB/B.lean": "theorem b : True := trivial\n"}))
+    h.tick()
+    low, tip = h.q.chain()[0].commit, _tip(world)
+    _check(world, monkeypatch, low, ("false",))
+    _check(world, monkeypatch, tip, ("false",))
+    lower = [_lean_run(tmp_path / "low", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\n  dependencies: differ\n")]
+    upper = [_lean_run(tmp_path / "up", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\nAUDIT /w/lean-audit-scratch-1-x/pkgB: FAIL\n")]
+    ids = {c: v["ids"] for c, v in h.d.q.load_state()["drive"]["launched"].items()}
+    h.d.evidence = lambda repo, rids: lower if rids == ids[low] else upper
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0], h.posts
+    assert [m.pr for m in h.q.chain()] == [2]
