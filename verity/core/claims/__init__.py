@@ -317,8 +317,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
     Entry("accounting-ts-unit-fixed", "assumption",
           "Lemma E1(c) per unit, which doesn't read the draw: on an accepted window the fixed words per round are at "
-          "least the good units' words over the rounds, a good unit being one whose upstream units, itself included, "
-          "have their committed values held and right", "TS unit fixed", "proven"),
+          "least the good units' words over the rounds, a good unit being one that, with every unit writing it a value "
+          "after the coin its noise reads, has its committed values held and right", "TS unit fixed", "proven"),
 )}
 
 
