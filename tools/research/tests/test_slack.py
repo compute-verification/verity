@@ -1987,5 +1987,7 @@ def test_a_doorbell_shaped_reply_the_router_didnt_post_neither_stops_a_doorbell_
         fake.add(COORD, text=f"from infra, thread {post['ts']}: @circuits is node 2 free?", thread_ts=box, **who)
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
     assert rc == 0 and {x["ts"]: x["missed"] for x in json.loads(out)["replay"]}.get(post["ts"]) == ["circuits"]
+    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "1e6", "--now", "1700100000", "--json")
+    assert rc == 0 and json.loads(out)["asks"] == []
     assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
     assert sum(m.get("username") == "router" and m.get("bot_id") == BOT for m in bells(fake, box)) == 1

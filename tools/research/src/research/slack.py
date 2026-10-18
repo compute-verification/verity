@@ -1928,7 +1928,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
                          if float(m["ts"]) <= now}
         seen = set()
         for b in api.paged("conversations.replies", "messages", channel=rch, ts=r["inbox_ts"], oldest=f"{since:.6f}"):
-            d = DOORBELL_RE.match(b.get("text") or "") if b.get("username") == "router" and b.get("ts") != r["inbox_ts"] else None
+            d = DOORBELL_RE.match(b.get("text") or "") if is_doorbell(b, reg) and b.get("ts") != r["inbox_ts"] else None
             if not d or (d[4] and d[4] != d[3]) or d[3] in seen:
                 continue                                             # a reply's doorbell, or one `deliver` rang again
             root = tops[rch].get(d[3])
