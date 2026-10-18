@@ -15,7 +15,24 @@ from dataclasses import dataclass
 
 from .binding import route
 from .physical import Datacenter
-from .time import Clock
+from .time import Clock, Interval, Wipe
+
+
+def label_store(dc: Datacenter, wipe: Wipe) -> Store:
+    """The store a wipe registers: labels filling the device's memory but for its residual, which no store reaches."""
+    d = dc.devices[wipe.device]
+    return Store(f"wipe:{d.name}", float(d.memory) - (float(d.residual) if d.residual else 0.0), d.name)
+
+
+def read_time(dc: Datacenter, registered: str, actual: str, bits: float) -> float:
+    """Seconds to read `bits` of a store registered on `registered` that sits on `actual`: the holder's read bandwidth,
+    and the narrowest link of the path when it is another device."""
+    holder = dc.devices[actual]
+    seconds = bits / float(holder.bandwidth) if holder.bandwidth else 0.0
+    if actual != registered:
+        path = route(dc, actual, registered)
+        seconds = max(seconds, bits / min(float(l.capacity) for l in path)) + sum(l.latency for l in path)
+    return seconds
 
 
 @dataclass(frozen=True)
@@ -25,6 +42,15 @@ class Store:
     name: str
     bits: float
     device: str
+
+
+@dataclass(frozen=True)
+class ReadAudit:
+    """A bandwidth audit's window: the prover must read `bits` of store `store` within `window`."""
+
+    store: str
+    window: Interval
+    bits: float
 
 
 @dataclass(frozen=True)

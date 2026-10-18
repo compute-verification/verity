@@ -43,6 +43,8 @@ class Device:
     trusted: bool = False
     #: bits per second the device reads from its own memory
     bandwidth: Assumption | None = None
+    #: bits of on-chip state (SRAM, registers, caches) a read pass needn't touch memory for
+    on_chip: Assumption | None = None
 
     def __repr__(self) -> str:
         return f"{self.kind}:{self.name}"
@@ -123,7 +125,7 @@ class Datacenter:
         """Every named premise the declaration makes, once each."""
         out: dict[str, Assumption] = {}
         for d in self.devices.values():
-            for a in [*d.rate.values(), d.memory, d.residual, d.bandwidth]:
+            for a in [*d.rate.values(), d.memory, d.residual, d.bandwidth, d.on_chip]:
                 if a is not None:
                     out[a.name] = a
         for l in self.links:

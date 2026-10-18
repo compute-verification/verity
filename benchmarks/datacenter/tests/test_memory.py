@@ -2,7 +2,7 @@
 another node answers late, and a deadline too loose to tell the tiers apart locates the store to no single device."""
 from __future__ import annotations
 
-from datacenter import (Answered, Assumption, Block, Challenge, Clock, Datacenter, Device, Input, Interval, Link,
+from datacenter import (Assumption, Held, Block, Challenge, Clock, Datacenter, Device, Input, Interval, Link,
                         Refused, Store, account, audit, occupancy, place, run, trace)
 
 GB = 8e9
@@ -42,7 +42,7 @@ def test_the_honest_holder_answers_in_time_and_only_it_could_have():
     p, challenges = setup(deadline=8)        # honest: 6 µs of round trip + 1 GB at 1.6 TB/s ≈ 0.63 ms ≈ 7 ticks
     t = run(p, {"x": 3}, window=4, challenges=challenges, clock=CLOCK)
     claims = audit(t, occupancy(p, 32, 1, window=4))
-    assert [c for c in claims if isinstance(c, Answered)] and not [c for c in claims if isinstance(c, Refused)]
+    assert [c for c in claims if isinstance(c, Held)] and not [c for c in claims if isinstance(c, Refused)]
     acc = account(claims, p, CLOCK, Interval(0, 100))
     assert acc.located == {"kv": ["a.gpu"]}
 

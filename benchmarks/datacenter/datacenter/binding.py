@@ -39,6 +39,9 @@ class Placement:
     leaf: dict[int, str]
     step: dict[int, int]
     ticks: dict[str, list[int]] = field(default_factory=dict)
+    #: the cell of its device at which each value is produced, so one cell produces at most one value a step
+    #: (`Accounting.Placed.cell`, `cell_inj`)
+    cell: dict[int, int] = field(default_factory=dict)
     #: the device the circuit's outputs are delivered to (usually the outside world), or None
     deliver: str | None = None
     #: declared streams of unexplained data (telemetry), charged in full
@@ -83,7 +86,12 @@ def place(circuit: Circuit, datacenter: Datacenter, where: dict[str, str], ticks
     horizon = max(step.values(), default=0) + 1 + transfer_steps
     devices = set(leaf.values()) | ({deliver} if deliver else set())
     ticks = {d: [s * ticks_per_step for s in range(horizon)] for d in devices}
-    return Placement(circuit, datacenter, leaf, step, ticks, deliver, tuple(offramps), tuple(stores))
+    cell: dict[int, int] = {}
+    used: dict[tuple[str, int], int] = {}
+    for i in range(len(circuit.gates)):
+        cell[i] = used.get((leaf[i], step[i]), 0)
+        used[leaf[i], step[i]] = cell[i] + 1
+    return Placement(circuit, datacenter, leaf, step, ticks, cell, deliver, tuple(offramps), tuple(stores))
 
 
 @dataclass(frozen=True)

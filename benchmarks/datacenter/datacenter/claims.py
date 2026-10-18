@@ -1,17 +1,19 @@
 """The logical layer's verdicts: what an audit establishes from records and commitments alone.
 
 `audit` reads only cryptographic objects (the commitment to every value, the trusted devices' records) and public
-declarations (the circuit, the occupancy profile, the sync set). It never reads a device's capacity: that is the
-physical layer's job. Its output is a list of claims about the prover *system*, each a fact a proof would establish:
+declarations (the circuit, the occupancy profile, the sync set, each challenge's deadline). It never reads a device's
+capacity or names a device as the place something happened: that is the physical layer's job. Its output is a list of
+claims about the prover *system*, each a fact a proof would establish:
 
 - `Computed`: the committed values are the circuit's evaluation (here by re-execution; in Verity, sampled proofs at ε).
 - `Carried`: a boundary link-window carried the committed crossings and nothing else, so its only freedom was timing
   advice, at most `bits`.
 - `Entered`: an input's bits entered the computation.
 - `Emitted`: a declared off-ramp (telemetry) carried bits the circuit doesn't explain.
-- `Erased`: a device's memory was overwritten and checked during an interval.
-- `Answered`: a challenge to a registered store came back right, within so many ticks.
-- `Refused`: something didn't check, and which window or device it was.
+- `Held`: the prover system held `bits` of a registered store throughout an interval (PoUS; a wipe is a store that
+  fills a device's memory, so a verified wipe is a `Held`).
+- `Read`: the prover system read at least `bits` of a registered store within an interval (the bandwidth audits).
+- `Refused`: something didn't check, and which window, store or link it was.
 """
 from __future__ import annotations
 
@@ -55,20 +57,25 @@ class Emitted:
 
 
 @dataclass(frozen=True)
-class Erased:
-    device: str
+class Held:
+    """The prover system held `bits` of registered store `store` throughout `at`: every challenge in it came back right
+    by its deadline. Where the bits were is the physical layer's reading of the deadlines."""
+
+    store: str
+    bits: float
     at: Interval
+    epsilon: float = 0.0
 
 
 @dataclass(frozen=True)
-class Answered:
-    """A challenge to a registered store was answered correctly within `ticks` of being asked: its deadline, which is
-    public protocol structure. The exact latency is the challenger's observation and stays witness. The claim says
-    nothing about where the bits were: that is the physical layer's reading of `ticks`."""
+class Read:
+    """The prover system read at least `bits` of registered store `store` within `window`, of which `credited` count as
+    useful reads."""
 
     store: str
-    at: int
-    ticks: int
+    window: Interval
+    bits: float
+    credited: float
 
 
 @dataclass(frozen=True)
@@ -77,7 +84,7 @@ class Refused:
     why: str
 
 
-Claim = Computed | Carried | Entered | Emitted | Erased | Answered | Refused
+Claim = Computed | Carried | Entered | Emitted | Held | Read | Refused
 
 
 def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: int = 1) -> list[Claim]:
@@ -111,17 +118,20 @@ def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: i
         spec = c.gates[v.id].input
         if spec.source != "registered":
             out.append(Entered(v.name, spec.bits, spec.source))
-    for w in trace.wipes:
-        out.append(Erased(w.wipe.device, w.wipe.at) if w.passed else Refused(f"wipe of {w.wipe.device}", "a spot check failed"))
+    stores = {s.name: s for s in trace.stores}
     for r in trace.challenges:
-        took = r.answered - r.challenge.at
+        ch, took = r.challenge, r.answered - r.challenge.at
         if not r.correct:
-            out.append(Refused(f"challenge to {r.challenge.store} at {r.challenge.at}", "the answer was wrong"))
-        elif took > r.challenge.deadline:
-            out.append(Refused(f"challenge to {r.challenge.store} at {r.challenge.at}",
-                               f"answered after {took} ticks, past its deadline of {r.challenge.deadline}"))
+            out.append(Refused(f"store {ch.store} at {ch.at}", "the answer was wrong"))
+        elif took > ch.deadline:
+            out.append(Refused(f"store {ch.store} at {ch.at}", f"answered after {took} ticks, past its deadline of {ch.deadline}"))
         else:
-            out.append(Answered(r.challenge.store, r.challenge.at, r.challenge.deadline))
+            out.append(Held(ch.store, stores[ch.store].bits, Interval(ch.at, ch.at + ch.deadline)))
+    for r in trace.reads:
+        if r.served > r.audit.window.end:
+            out.append(Refused(f"reads of {r.audit.store} in {r.audit.window}", "the reads finished after the window"))
+        else:
+            out.append(Read(r.audit.store, r.audit.window, r.audit.bits, r.audit.bits))
     return out
 
 

@@ -6,7 +6,7 @@ in order, and `python tests/test_walkthrough.py` prints what the guide prints.
 from __future__ import annotations
 
 from datacenter import (Assumption, Block, Clock, Credit, Datacenter, Deviation, Device, Fleet, Input, Interval, Link,
-                        Offramp, Refused, Wipe, account, audit, commit, crossings, feasible, occupancy, place, run,
+                        Offramp, Refused, Wipe, account, audit, commit, crossings, occupancy, place, run, schedulable,
                         trace)
 
 
@@ -122,10 +122,10 @@ def section_11(c, dc):
 
 # §12 Two audits, one device
 def section_12():
-    rate = {"a.gpu": 1e6}
-    pouw = Credit("a.gpu", Interval(0, 10), 8e6)
-    pous = Credit("a.gpu", Interval(2, 8), 4e6)
-    print(feasible([pouw, pous], rate))
+    capacity = {("a.gpu", "compute"): 1e6}
+    pouw = Credit("a.gpu", "compute", Interval(0, 10), 8e6)
+    other = Credit("a.gpu", "compute", Interval(2, 8), 4e6)
+    print(schedulable([pouw, other], capacity))
 
 
 # §13 Many datacenters

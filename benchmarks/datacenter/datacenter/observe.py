@@ -17,7 +17,7 @@ import math
 
 from .binding import Placement, crossings, route
 from .logical import Commitment, commit
-from .memory import Challenge, answer_time
+from .memory import Challenge, ReadAudit, Store, answer_time, label_store, read_time
 from .time import Clock, Interval, Wipe
 
 
@@ -35,20 +35,20 @@ class Record:
 
 
 @dataclass(frozen=True)
-class WipeRecord:
-    """The challenger's record of a wipe: which device, when, and whether every spot check came back right in time."""
-
-    wipe: Wipe
-    passed: bool
-
-
-@dataclass(frozen=True)
 class ChallengeRecord:
     """The challenger's record of a challenge: the tick its answer arrived, and whether the answer was right."""
 
     challenge: Challenge
     answered: int
     correct: bool = True
+
+
+@dataclass(frozen=True)
+class ReadRecord:
+    """The verifier's record of a bandwidth audit window: the tick the last read was served."""
+
+    audit: ReadAudit
+    served: int
 
 
 @dataclass
@@ -73,12 +73,13 @@ class Trace:
     values: dict[int, int]
     salt: bytes
     records: list[Record]
-    wipes: list[WipeRecord]
     inputs: dict[str, int]
     frame_bits: int
     bucket: int
     window: int
+    stores: tuple[Store, ...] = ()
     challenges: list[ChallengeRecord] = field(default_factory=list)
+    reads: list[ReadRecord] = field(default_factory=list)
     clock: Clock = field(default_factory=Clock)
 
 
@@ -90,10 +91,11 @@ def _digest(frames: list[tuple[int, int]]) -> bytes:
 
 
 def run(p: Placement, inputs: dict[str, int], *, frame_bits: int = 32, bucket: int = 1, window: int = 8,
-        wipes: list[Wipe] | None = None, challenges: list[Challenge] | None = None, clock: Clock | None = None,
-        deviation: Deviation | None = None) -> Trace:
+        wipes: list[Wipe] | None = None, challenges: list[Challenge] | None = None,
+        reads: list[ReadAudit] | None = None, clock: Clock | None = None, deviation: Deviation | None = None) -> Trace:
     """Execute placement `p` on `inputs`, recording every boundary link in windows of `window` buckets of `bucket`
-    ticks, each wipe, and each challenge to a registered store, answered from wherever its bits really are."""
+    ticks, each challenge to a registered store and each bandwidth-audit window, served from wherever the bits really
+    are. A wipe is a store of labels filling its device's memory (`label_store`), spot-checked within its interval."""
     clock = clock or Clock()
     dev = deviation or Deviation()
     values = p.circuit.evaluate(inputs)
@@ -130,12 +132,20 @@ def run(p: Placement, inputs: dict[str, int], *, frame_bits: int = 32, bucket: i
             cs = tuple(row.get(w * window + t, 0) for t in range(window))
             records.append(Record(key, w, cs, _digest(content.get((key, w), [])), cert.name if cert else "?",
                                   tuple(sorted(offramp.get((key, w), {}).items()))))
-    wipe_records = [WipeRecord(w, w.device not in dev.failed_wipes) for w in (wipes or [])]
     stores = {s.name: s for s in p.stores}
     answers = []
     for ch in challenges or []:
         s = stores[ch.store]
         seconds = answer_time(p.datacenter, clock, ch.challenger, s.device, dev.moved.get(s.name, s.device), s.bits)
         answers.append(ChallengeRecord(ch, ch.at + math.ceil(seconds / clock.tick - 1e-9)))
-    return Trace(p, commitment, values, salt, records, wipe_records, dict(inputs), frame_bits, bucket, window, answers,
-                 clock)
+    for w in wipes or []:
+        s = label_store(p.datacenter, w)
+        stores[s.name] = s
+        answers.append(ChallengeRecord(Challenge(s.name, w.at.start, w.at.length), w.at.start, w.device not in dev.failed_wipes))
+    served = []
+    for ra in reads or []:
+        s = stores[ra.store]
+        seconds = read_time(p.datacenter, s.device, dev.moved.get(s.name, s.device), ra.bits)
+        served.append(ReadRecord(ra, ra.window.start + math.ceil(seconds / clock.tick - 1e-9)))
+    return Trace(p, commitment, values, salt, records, dict(inputs), frame_bits, bucket, window, tuple(stores.values()),
+                 answers, served, clock)

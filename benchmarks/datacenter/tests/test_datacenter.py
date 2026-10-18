@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from datacenter import (Assumption, Block, Carried, Clock, Computed, Credit, Datacenter, Deviation, Device, Entered,
-                        Erased, Fleet, Input, Interval, Link, Refused, Wipe, account, audit, crossings, feasible,
-                        occupancy, place, run, trace)
+                        Fleet, Held, Input, Interval, Link, Refused, Wipe, account, audit, crossings, occupancy, place,
+                        run, schedulable, trace)
 
 
 def two_layer(x, w1, w2):
@@ -70,6 +70,8 @@ def test_a_boundary_link_without_a_certifier_breaks_coverage():
 def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(setup):
     c, dc, p = setup
     assert p.paced()
+    cells = [(p.leaf[i], p.cell[i], p.tick(i)) for i in range(len(c.gates))]
+    assert len(set(cells)) == len(cells)                     # one value a cell a tick (Placed.cell_inj)
     moved = {(x.value.name, x.src, x.dst) for x in crossings(p)}
     assert moved == {("x", "world", "a.gpu"), ("w2", "b.gpu", "a.gpu"), (None, "a.gpu", "world")}
     for x in crossings(p):
@@ -82,7 +84,8 @@ def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
     t = run(p, INPUTS, window=4, wipes=[Wipe("b.gpu", Interval(0, 2))])
     claims = audit(t, profile, syncs=128)
     assert not [x for x in claims if isinstance(x, Refused)]
-    assert Computed(c.boolean_size) in claims and Erased("b.gpu", Interval(0, 2)) in claims
+    assert Computed(c.boolean_size) in claims
+    assert Held("wipe:b.gpu", 6.4e10 - 8e6, Interval(0, 2)) in claims
     assert Entered("x", 16, "outside") in claims and not any(isinstance(x, Entered) and x.input == "w1" for x in claims)
     assert all(x.bits == 7 for x in claims if isinstance(x, Carried))
     acc = account(claims, p, Clock(1e-3), Interval(0, 16))
@@ -95,7 +98,7 @@ def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
 @pytest.mark.parametrize("deviation, why", [
     (Deviation(extra={(("a.gpu", "a.cert"), 2): 1}), "occupancy differs"),
     (Deviation(hold={(("a.gpu", "a.cert"), 0): 3}), "occupancy differs"),
-    (Deviation(failed_wipes={"b.gpu"}), "spot check failed"),
+    (Deviation(failed_wipes={"b.gpu"}), "answer was wrong"),
 ])
 def test_each_deviation_is_refused_for_its_own_reason(setup, deviation, why):
     c, dc, p = setup
@@ -127,12 +130,14 @@ def test_work_a_helper_could_ship_in_is_bounded_by_the_certified_ingress(setup):
     assert a_narrow.local_at_least > 0.9 * a_narrow.credited and a_wide.local_at_least == 0
 
 
-def test_credit_from_two_audits_on_one_device_must_fit_every_interval():
-    rate = {"gpu0": 10.0}
-    fits = [Credit("gpu0", Interval(0, 10), 60), Credit("gpu0", Interval(5, 15), 40)]
-    assert feasible(fits, rate) == []
-    double = [Credit("gpu0", Interval(0, 10), 80), Credit("gpu0", Interval(2, 8), 40)]
-    assert feasible(double, rate) and feasible(double, rate)[0][1] == Interval(0, 10)
+def test_credit_from_two_audits_on_one_device_must_fit_every_interval_per_resource():
+    capacity = {("gpu0", "compute"): 10.0, ("gpu0", "read"): 10.0}
+    fits = [Credit("gpu0", "compute", Interval(0, 10), 60), Credit("gpu0", "compute", Interval(5, 15), 40)]
+    assert schedulable(fits, capacity) == []
+    double = [Credit("gpu0", "compute", Interval(0, 10), 80), Credit("gpu0", "compute", Interval(2, 8), 40)]
+    assert schedulable(double, capacity) and schedulable(double, capacity)[0][2] == Interval(0, 10)
+    other_resource = [Credit("gpu0", "compute", Interval(0, 10), 80), Credit("gpu0", "read", Interval(2, 8), 40)]
+    assert schedulable(other_resource, capacity) == []
 
 
 def test_telemetry_leaves_on_a_declared_offramp_and_is_charged_in_full(setup):
