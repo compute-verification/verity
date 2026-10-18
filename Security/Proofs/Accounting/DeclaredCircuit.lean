@@ -7,7 +7,8 @@ of the statement (until then the lock lists the statement as `unstated`): a carr
 circuit's is within its census over its life, its inputs within the run-input bytes the stacking property's caps
 allow its windows (`Provenance.OfCircuit.budget`), a uniform function restricted along an
 injection is uniform (`pr_comp_embedding`), and key binding moves a store whose layout is steered after the coins to
-uniform blocks at `2^a` times their event, `δ` once (`KeyBinding.pr_steered_le`). -/
+uniform blocks at `2^a` times their likeliest summary's event, `δ` once, against an event that reads the summary as a
+device told it does (`KeyBinding.pr_steered_le`). -/
 
 namespace Accounting.RateSketch.Provenance
 
@@ -69,17 +70,20 @@ theorem pr_comp_embedding_prod {α β B C : Type} [Fintype α] [DecidableEq α] 
   congr 1
   exact Finset.sum_congr rfl fun c _ => pr_comp_embedding π (fun E => Q E c)
 
-/-- **Key binding with a layout steered after the coins**: when the layout is one of `2^a`, chosen by any function
-`steer` of the codec and the coins, an event of the blocks and of independent coins is at most `2^a` times as likely
-as on uniform blocks, plus `δ`. Key binding applies once, at the whole layout, and the union over the `2^a` layouts is
-taken inside the uniform store, so `δ` is not multiplied. -/
+/-- **Key binding with a layout steered after the coins, against devices told the summary**: when the layout is one
+of `2^a`, `slot` of a summary `steer` that is any function of the codec and the coins, an event of the summary, the
+blocks and independent coins is at most `2^a` times as likely as its likeliest summary's event on uniform blocks, plus
+`δ`. The event may read the summary, as a device told it does. Key binding applies once, at the whole layout, and the
+union over the `2^a` summaries is taken inside the uniform store, so `δ` is not multiplied. -/
 theorem Assumptions.KeyBinding.pr_steered_le {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] [Nonempty B]
     {T M N a : ℕ} {δ : ℝ≥0∞} {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B}
     (h : Assumptions.KeyBinding T M δ enc) (choose : Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
     (slot : Pous.Bits a → Fin N ↪ Fin T × Fin M) (steer : Ω × (Fin T → Ca) → Pous.Bits a) {C : Type} [Fintype C]
-    (Q : (Fin N → B) → C → Prop) :
-    pr (fun x : (Ω × (Fin T → Ca)) × C => Q (appendCoinBlocks enc choose (slot (steer x.1)) x.1) x.2)
-      ≤ 2 ^ a * pr (fun y : (Fin N → B) × C => Q y.1 y.2) + δ := by
+    (Q : Pous.Bits a → (Fin N → B) → C → Prop) {p : ℝ≥0∞}
+    (hQ : ∀ s, pr (fun y : (Fin N → B) × C => Q s y.1 y.2) ≤ p) :
+    pr (fun x : (Ω × (Fin T → Ca)) × C =>
+        Q (steer x.1) (appendCoinBlocks enc choose (slot (steer x.1)) x.1) x.2)
+      ≤ 2 ^ a * p + δ := by
   classical
   let full : Fin (T * M) ↪ Fin T × Fin M := finProdFinEquiv.symm.toEmbedding
   let π : Pous.Bits a → Fin N ↪ Fin (T * M) := fun s => (slot s).trans finProdFinEquiv.toEmbedding
@@ -90,17 +94,19 @@ theorem Assumptions.KeyBinding.pr_steered_le {Ω Ca Ch B : Type} [Fintype Ω] [F
       show _ = appendCoinBlocks enc choose full y (finProdFinEquiv (slot s u))
       unfold appendCoinBlocks
       rw [hfull]
-  have h1 := (h.uniformBut_blocks choose full).pr_le () (fun F c => ∃ s, Q (F ∘ π s) c)
-  calc pr (fun x : (Ω × (Fin T → Ca)) × C => Q (appendCoinBlocks enc choose (slot (steer x.1)) x.1) x.2)
-      ≤ pr (fun x : (Ω × (Fin T → Ca)) × C => ∃ s, Q (appendCoinBlocks enc choose full x.1 ∘ π s) x.2) :=
+  have h1 := (h.uniformBut_blocks choose full).pr_le () (fun F c => ∃ s, Q s (F ∘ π s) c)
+  calc pr (fun x : (Ω × (Fin T → Ca)) × C =>
+        Q (steer x.1) (appendCoinBlocks enc choose (slot (steer x.1)) x.1) x.2)
+      ≤ pr (fun x : (Ω × (Fin T → Ca)) × C => ∃ s, Q s (appendCoinBlocks enc choose full x.1 ∘ π s) x.2) :=
         Bandwidth.pr_mono fun x hx => ⟨steer x.1, by rw [← hblk]; exact hx⟩
-    _ ≤ pr (fun y : (Fin (T * M) → B) × C => ∃ s, Q (y.1 ∘ π s) y.2) + δ := h1
-    _ ≤ (∑ s, pr (fun y : (Fin (T * M) → B) × C => Q (y.1 ∘ π s) y.2)) + δ :=
+    _ ≤ pr (fun y : (Fin (T * M) → B) × C => ∃ s, Q s (y.1 ∘ π s) y.2) + δ := h1
+    _ ≤ (∑ s, pr (fun y : (Fin (T * M) → B) × C => Q s (y.1 ∘ π s) y.2)) + δ :=
         add_le_add (Bandwidth.pr_exists_le _) le_rfl
-    _ = (∑ _s : Pous.Bits a, pr (fun y : (Fin N → B) × C => Q y.1 y.2)) + δ := by
+    _ = (∑ s, pr (fun y : (Fin N → B) × C => Q s y.1 y.2)) + δ := by
         congr 1
-        exact Finset.sum_congr rfl fun s _ => pr_comp_embedding_prod (π s) Q
-    _ = 2 ^ a * pr (fun y : (Fin N → B) × C => Q y.1 y.2) + δ := by
+        exact Finset.sum_congr rfl fun s _ => pr_comp_embedding_prod (π s) (Q s)
+    _ ≤ (∑ _s : Pous.Bits a, p) + δ := add_le_add (Finset.sum_le_sum fun s _ => hQ s) le_rfl
+    _ = 2 ^ a * p + δ := by
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
         simp [Pous.Bits]
 
