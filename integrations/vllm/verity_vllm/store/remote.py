@@ -141,7 +141,7 @@ class Serving:
         self.map = self.store.record_memory_map(
             backend.path, registration.digest, lifetime, lambda change: self._events.append(("line", change)),
             lambda first, slots, digests, payloads: self._events.append(("append", first, slots, digests, payloads)))
-        self.moves = True
+        self.moves, self._early = True, False
         self.map.ahead = 1
         self.step, self.steps, self.first = -1, 0, None
         self.live = np.ones(registration.blocks, bool)
@@ -158,17 +158,27 @@ class Serving:
         return self.map.rekeyed
 
     def ready(self) -> None:
-        """Before the session arms its first window: an engine in lockstep with a run waits until the run is at its
-        first step (`Lockstep.arrived`)."""
+        """Before the session arms its first window: wait for a run in lockstep to be at its first step
+        (`Lockstep.arrived`), then run that step, pass 0's (`advance`), so the first window's clock starts at pass 0's
+        appends and read and not at its step, as a pass moved past a boundary starts at its read (`ProverSide`)."""
         getattr(self.backend.engine, "arrived", lambda: None)()
+        self.advance(None)
+        self._early = True
 
-    def advance(self, window: int) -> int:
-        """The engine's next step s, run against the store up to its pass (in ``window``, the store's open one), its
-        completed blocks appended once it has returned (`MemoryMap.complete`): each append made as the audit's, and
-        each line closed applied as its releases and its writes.  Returns s: the session's first step takes the
-        number the engine gives it (a binder on an engine that served before the session numbers on from there), and
-        each later one the next."""
-        if not self.store.window_open or self.store.window != window:
+    def advance(self, window: int | None) -> int:
+        """The engine's next step s, run against the store up to its pass (in ``window``, the store's open one; None:
+        before the first, from `ready`), its completed blocks appended once it has returned (`MemoryMap.complete`):
+        each append made as the audit's, and each line closed applied as its releases and its writes.  Returns s: the
+        session's first step takes the number the engine gives it (a binder on an engine that served before the
+        session numbers on from there), and each later one the next.  Pass 0's step, run by `ready`, is taken
+        as it stands."""
+        if self._early:
+            self._early = False
+            return self.step
+        if window is None:
+            if self.store.window_open or self.store.window != -1:
+                raise RuntimeError(f"a step before the first window, and window {self.store.window} has begun")
+        elif not self.store.window_open or self.store.window != window:
             raise RuntimeError(f"the pass is in window {window}, the store's open window is {self.store.window}")
         s, phases = self.step + 1, self.backend.phases
         with phases.time("engine"):
@@ -509,8 +519,9 @@ class Lockstep:
     """A run's engine steps as a session's: the session's backend, on the session's thread, asks for its next engine
     step (``lockstep(s)``, the backend's ``engine``) and waits; the run, on its own thread, takes each ask in `step`,
     runs its engine step and hands back.  So the session's steps are the run's first steps, one a pass, and one thread
-    at a time touches the store.  The session arms its first window only once the run is at its first step
-    (`arrived`), so the window's clock starts at the run's step and not at the run's setup before it.  Once the session
+    at a time touches the store.  The session waits for the run to be at its first step (`arrived`) and runs it, pass
+    0's, before it arms its first window (`Serving.ready`), so the window's clock starts at pass 0's read and not at
+    the run's setup or its prefill.  Once the session
     has ended (`close`), the run's later steps are unaudited (``unaudited``); a run that ends while the session still
     asks for steps fails the session (`finish`)."""
 
@@ -585,9 +596,9 @@ class CommitSession:
     check        after the build: the engine core in this process, scheduling synchronous, the KV cache bf16, the pool
                  registered
     begin        before the Commit's first instrumented run: the session on its own thread, registered before the run
-                 goes on, and its first window armed once the run is at its first step (`Lockstep.arrived`).  Its backend is ``backend_of(session, path)``'s (the
-                 store read where the engine holds it, `in_place.InPlaceBackend.for_commit`, kv.cu at ``kv_lib``
-                 encoding it in place) or, without one, a host mirror encoded by kv.cu at ``kv_lib`` (`KvDevice`) or
+                 goes on, and its first window armed once the run's first step has run (`Serving.ready`).  Its
+                 backend is ``backend_of(session, path)``'s (the store read where the engine holds it,
+                 `in_place.InPlaceBackend.for_commit`, kv.cu at ``kv_lib`` encoding it in place) or, without one, a host mirror encoded by kv.cu at ``kv_lib`` (`KvDevice`) or
                  on the CPU
     (the run)    each of its engine steps through the returned `Lockstep`: a pass's step while the session lasts, so the
                  memory map, recorded against the registration's digest beside the Commit (``out``), is of the run's

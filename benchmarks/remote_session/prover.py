@@ -23,9 +23,9 @@ kvdrop:P        kv:P, but the appended pages are not held: each pass's receipts 
                 opening of one carries the true page, as skip's do
 serve           honest, beside the backend's own serving (`backend.serving`: a node's `Store`, whose engine steps
                 write, free and re-key its KV, `verity_vllm.store.remote`): before each pass the backend's engine runs
-                its next step, and the pass reads every live block at it; one pass in flight, since a launch waits
-                on its step, and a pass whose step ran past a boundary of a window with a root is the next window's
-                first, so the allowance covers a read, not a step
+                its next step (pass 0's before the first window, `ready`), and the pass reads every live block at it;
+                one pass in flight, since a launch waits on its step, and a pass whose step ran past a boundary of a
+                window with a root is the next window's first, so the allowance covers a read, not a step
 servedrop:K     serve, but the first K blocks appended (1 by default) are not held, as kvdrop's
 kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes skip the free fence: a write lands in
                 a slot whose block a pass still has to read, that pass's receipt of it is of the new bytes, and an
@@ -697,8 +697,8 @@ class ProverSide:
         self.dropped, self.opened = dropped, []
         if self.defer_openings:
             self.open_enabled.clear()
-        # A serving trace whose steps are another run's waits for that run here, so the first window's clock starts
-        # at its first step and not at its setup.
+        # A serving trace runs pass 0's engine step here (after waiting for the run whose steps it takes, if any), so
+        # the first window's clock starts at pass 0's appends and read: the step is not a read, as a moved pass's.
         getattr(trace, "ready", lambda: None)()
         self.conn.send({"type": "armed", "k": k})
         head, _, _ = self.expect("coin")

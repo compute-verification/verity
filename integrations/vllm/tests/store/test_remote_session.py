@@ -347,10 +347,11 @@ class Stats:
         return {}
 
 
-def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Callable[[], None] | None = None):
+def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Callable[[], None] | None = None,
+             each: Callable[[int], None] | None = None):
     """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 2 windows,
-    the run ``run_steps`` steps of the scripted engine, each through the session's `Lockstep`, after ``setup()``, the
-    run's work between `begin` and its first step."""
+    the run ``run_steps`` steps of the scripted engine, each through the session's `Lockstep` and after ``each(k)``,
+    after ``setup()``, the run's work between `begin` and its first step."""
     clock = PassClock()
     monkeypatch.setattr(remote, "StoreBackend", lambda *a, **kw: TickingBackend(clock, *a, **kw))
     lsock = wire.listen("127.0.0.1", 0)
@@ -376,8 +377,14 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
     if setup is not None:
         setup()
     step, steps = engine(cs.store), []
+    def run(k: int):
+        steps.append(k)
+        if each is not None:
+            each(k)
+        return step(k)
+
     for k in range(run_steps):
-        lock.step(lambda: steps.append(k) or step(k))
+        lock.step(lambda: run(k))
     rec = cs.end()
     th.join()
     return rec, seen[0], cs, steps
@@ -400,16 +407,20 @@ def test_the_commits_session_runs_in_lockstep_with_its_run_and_its_map_stops_wit
     assert json.loads((tmp_path / "remote_session.json").read_text())["run"] == run
 
 
-def test_the_commits_session_arms_its_first_window_once_its_run_is_at_its_first_step(tmp_path, monkeypatch):
-    """The run's work between `begin` and its first step is in no window: the session is registered by then, and arms
-    its first window (the verifier's first coin follows `armed`) only once the run steps."""
-    sent, at_setup = [], []
+def test_the_commits_session_arms_its_first_window_once_its_runs_first_step_has_run(tmp_path, monkeypatch):
+    """The run's work between `begin` and its first step, and that step, pass 0's, are in no window: the session is
+    registered by then, and arms its first window (the verifier's first coin follows `armed`) once the step has run,
+    so the window's clock starts at pass 0's appends and read."""
+    sent, at = [], {}
     send = wire.Conn.send
     monkeypatch.setattr(wire.Conn, "send", lambda self, head, *a, **kw: sent.append(head["type"]) or send(self, head, *a, **kw))
-    rec, r, _, _ = lockstep(tmp_path, monkeypatch, 40, windows=3, setup=lambda: at_setup.extend(sent))
+    rec, r, _, _ = lockstep(tmp_path, monkeypatch, 40, windows=3, setup=lambda: at.setdefault("setup", list(sent)),
+                            each=lambda k: at.setdefault(k, list(sent)))
     assert r["accepted"] and rec["accepted"]
-    assert "ready" in at_setup and "armed" not in at_setup and "coin" not in at_setup
-    assert sent.index("armed") < sent.index("coin") < sent.index("root")
+    assert "ready" in at["setup"] and not {"armed", "coin"} & {*at["setup"], *at[0]}
+    assert "root" in at[1] and sent.index("armed") < sent.index("coin") < sent.index("append") < sent.index("root")
+    steps = [x for w in r["record"]["profile"]["windows"] for x in w["steps"]]
+    assert steps[0] == rec["memory_map"]["first_step"] == 0
 
 
 def test_a_run_that_ends_before_its_session_fails_the_session(tmp_path, monkeypatch):
