@@ -588,3 +588,31 @@ def test_r7_holds_a_pinned_value_to_its_pin():
     v1 = {k: x for k, x in rec.items() if k != "registered"} | {"format": "verity/registration/v1"}
     with pytest.raises(ValueError):
         R.check(v1, **{**check, "registered": None, "supplied": None}, pinned={})
+
+
+#: an AROW row table's port (`verity_vllm.commit.serving_rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
+ROW_TABLE = "row-table/3/model.layers.0.mlp.down_proj"
+
+
+def test_pouw_roots_reads_an_arow_row_table_root():
+    """AROW: a row table the record registers as a port (one `hm96-sha512/row-seg/v1` leaf per token row) is read as any
+    port's root, so the verifier fills `pouw.roots` from it, and a record whose row table moved after `pouw.roots` was
+    fixed is `R7-supplied`."""
+    _, check, w, _ = _seeded_case()
+    prog, q = check["program"], check["query"]
+    part = P.partition(prog, q)
+    dom = R.served_domain(part["program"], P.digest(part), ROW_TABLE, "hm96-sha512/row-seg/v1", 5, "r-registered")
+    ports = {**check["ports"], ROW_TABLE: {"leaves": 5, "domain": dom}}
+    sup = {"pouw.roots": [[{"port": ROW_TABLE}, {"value": "W"}]] * 2}
+    check = {**check, "ports": ports, "supplied": sup}
+
+    def record(table_root, roots=None):
+        served = [{"port": p, "root": table_root if p == ROW_TABLE else "ab" * 64, **ports[p]} for p in ports]
+        base = R.record(prog, q, LAW, SCHEME, served, SERVED, registered=[w.entry()])
+        roots = roots or G.supplied_value(prog, "pouw.roots", G.sources(sup)["pouw.roots"], base, ["pouw.roots"])
+        return R.record(prog, q, LAW, SCHEME, served, SERVED, registered=[w.entry(), roots.entry()]), roots
+
+    rec, roots = record("5e" * 64)
+    assert [list(r) for r in roots.rows] == [G.bytes_leaves(bytes.fromhex("5e" * 64) + w.root, 32)] * 2
+    assert R.check(rec, **check).ok
+    assert R.check(record("5f" * 64, roots)[0], **check).codes == ("R7-supplied",)
