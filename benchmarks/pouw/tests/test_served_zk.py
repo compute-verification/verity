@@ -73,6 +73,8 @@ def _raw(man: dict) -> bytes:
 
 #: the window's shape: two calls of 16 slots and N weight rows, at pass tiles 5 and 9
 SHAPE = [{"m": 16, "n": N, "tile0": 5}, {"m": 16, "n": N, "tile0": 9}]
+#: the shape's tiles, its N; the last is the filler
+TILES = Wd.shape_tiles(Wd.shape_of(SHAPE))
 
 
 def _params(run: str, raw: bytes) -> dict:
@@ -337,12 +339,13 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
     reg = _held(ch, "honest", rec)
     assert ch.passes == {"honest": "coin"} and "draw" not in ch.openings
     d = ch.select("honest")
-    assert len(d.units) == k and d.draw["population"] == 26 and d.units == sorted(d.units) and all(0 <= u < 26 for u in d.units)
+    n = TILES
+    assert len(d.units) == k and d.draw["population"] == n and d.units == sorted(d.units) and all(0 <= u < n for u in d.units)
     o = ch.openings["draw"]
     assert o.after == bytes.fromhex(reg.digest) and coin_reason(ch.coins.commitment, o, "draw", o.after) is None
     st = ch.regs["honest"][0]
-    src = SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, 26)
-    assert len(src) == 2 * k * CC.width(26) + 64 and d.units == CC.stream_subset(k, 26, src)
+    src = SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, n)
+    assert len(src) == 2 * k * CC.width(n) + 64 and d.units == CC.stream_subset(k, n, src)
     assert ch.coins_of("honest") == {"commitment": ch.coins.commitment.to_json(), "pass": "coin", "draw": o.to_json()}
     with pytest.raises(S.Refused) as e:
         ch.select("honest")
@@ -489,10 +492,10 @@ def test_check_opens_the_drawn_units_rows_only(served, tmp_path):
     rec = _register(params, public)
     SC.save(tmp_path / "p.npz", priv)
     priv = SC.load(tmp_path / "p.npz")
-    draw = {"law": "subset", "population": 26, "k": 3, "units": [5, 13, 25]}
+    draw = {"law": "subset", "population": TILES, "k": 3, "units": [5, 13, TILES - 1]}
     for t in draw["units"]:
         assert SC.check(params, rec, draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t)) is None
-    assert SC.opening(advice, priv, params, 25)["entry_value"]["kind"] == "filler"
+    assert SC.opening(advice, priv, params, TILES - 1)["entry_value"]["kind"] == "filler"
     op = SC.opening(advice, priv, params, 5)
     assert "not entry 0's row" in SC.check(params, rec, draw, 5, _unit_pub(advice, priv, 6), op)
     assert "not drawn" in SC.check(params, rec, draw, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6))
@@ -563,7 +566,7 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
         with pytest.raises(S.Refused) as e:
             _held(ch, f"{name}-retry", rec, stream=name)
         assert _codes(e) == {"stopped"}
-    assert body["audit"]["verdicts"]["opening"]["units"] == [False] * 4
+    assert body["audit"]["verdicts"]["opening"]["units"] == [False] * len(d.units)
 
 
 def _through(ch, rec, name="honest"):
@@ -748,7 +751,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     record.close()
     monkeypatch.undo()
     op, served_domain = SC.opening(advice, priv, params, t), SC.window_domain
-    monkeypatch.setattr(SC, "window_domain", lambda params, ell: served_domain({**params, "context": "other"}, ell))
+    monkeypatch.setattr(SC, "window_domain", lambda params: served_domain({**params, "context": "other"}))
     record = OR.Record()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), op, record=record) == \
         f"{OR.DISAGREE}: prelude"
@@ -930,7 +933,7 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     (tmp_path / "params.json").write_text(json.dumps(params))
     SC.save(tmp_path / "prover.npz", priv)
     stage = Path(__file__).resolve().parents[1] / "served_zk" / "stage_tile.py"
-    draw = {"law": "subset", "population": 26, "k": 2, "units": [7, 25]}
+    draw = {"law": "subset", "population": TILES, "k": 2, "units": [7, TILES - 1]}
     runs = {t: subprocess.Popen([sys.executable, str(stage), str(tmp_path), str(tmp_path / "params.json"), str(t),
                                  str(tmp_path / f"u{t}")], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             for t in draw["units"]}
@@ -946,4 +949,4 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
             "to the template or to C-Flock's lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")
         op = json.loads((out / "opening.json").read_text())
         assert SC.check(params, rec, draw, t, (out / "pub.bin").read_bytes(), op) is None, t
-    assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"
+    assert json.loads((tmp_path / f"u{TILES - 1}" / "stage.json").read_text())["kind"] == "filler"
