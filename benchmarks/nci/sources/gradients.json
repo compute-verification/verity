@@ -1232,6 +1232,26 @@
     "grade": "measured-small",
     "bears_on": "Claimed m_A about 1.9; Wen 2025 and Essential AI measure 1.1-1.4 against tuned AdamW.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "liu-2025-muon-scalable/2",
+    "claim": "Fitted laws: Muon 2.506 C^-0.052 vs AdamW 2.608 C^-0.054 (LM loss at 8K context).",
+    "quote": "Muon | AdamW | LM loss (seqlen=8K) | 2.506×C−0.052 | 2.608×C−0.054",
+    "location": "Table 3",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Muon's multiplier falls as about C^-0.037: 1.36/1.25/1.15 at 1e24/1e25/1e26 (extrapolation).",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "liu-2025-muon-scalable/3",
+    "claim": "The AdamW baseline was grid-searched.",
+    "quote": "Building a strong baseline is of crucial importance in optimizer research. Hence, we perform a grid search for hyper-parameters of AdamW",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "399M-1.5B on 8.9-38.9B tokens; Muon reuses AdamW's hyperparameters.",
+    "from_review": "efficiency-metrics"
    }
   ]
  },

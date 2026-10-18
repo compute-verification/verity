@@ -1,1 +1,923 @@
-[]
+[
+ {
+  "id": "erdil-2022-algorithmic-progress-vision",
+  "title": "Algorithmic progress in computer vision",
+  "authors": "Ege Erdil, Tamay Besiroglu",
+  "year": 2022,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2212.05153",
+  "topics": [
+   "efficiency-metrics"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "erdil-2022-algorithmic-progress-vision/1",
+    "claim": "On ImageNet, compute-augmenting algorithmic progress halved the compute needed for a given accuracy every 9 months (95% CI 4-25 months), about 2.5x per year.",
+    "quote": "In particular, we estimate that compute-augmenting innovations halve compute requirements every nine months (95% confidence interval: 4 to 25 months).",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 9,
+      "unit": "months per halving of compute",
+      "condition": "ImageNet top-1 accuracy, compute-augmenting term of an observational scaling-law fit across published models; 95% CI 4-25 months"
+     },
+     {
+      "param": "other",
+      "value": 2.52,
+      "unit": "x per year",
+      "condition": "derived: 2^(12/9); 1.39-8x per year from the 25- and 4-month CI ends"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The vision analogue of the LM rate and the template for effective compute: progress as a multiplier on compute fitted to observational data, so it inherits the selection bias in whitfill-2025-selection-bias/1. Metric is accuracy, not held-out loss."
+   },
+   {
+    "id": "erdil-2022-algorithmic-progress-vision/2",
+    "claim": "The fit attributes algorithmic progress mostly to compute-augmenting gains rather than data-augmenting ones.",
+    "quote": "Our estimates indicate that algorithmic innovations mostly take the form of compute-augmenting algorithmic advances (which enable researchers to get better performance from less compute), not data-augmenting algorithmic advances.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Supports writing an algorithm's effect as a compute multiplier m_A. In a Chinchilla-form law an effective-data gain s or effective-parameter gain k gives a frontier m of s or k, but a steps-to-target speedup at one fixed model size equals m only for a pure effective-data gain."
+   }
+  ]
+ },
+ {
+  "id": "whitfill-2025-selection-bias",
+  "title": "Note on Selection Bias in Observational Estimates of Algorithmic Progress",
+  "authors": "Parker Whitfill",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2508.11033",
+  "topics": [
+   "efficiency-metrics"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "whitfill-2025-selection-bias/1",
+    "claim": "Because labs choose compute in response to algorithm quality, observational estimates of algorithmic progress are biased; Ho et al.'s compute coefficient (beta about 0.04) against the experimental Chinchilla value (about 0.37) suggests the progress rate is overstated about ninefold.",
+    "quote": "then a first-pass estimate is that algorithmic progress is overstated by around a factor of nine.",
+    "location": "Section 1.3 (Formal Bias Analysis), with footnote 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 9,
+      "unit": "x overstatement of the log progress rate",
+      "condition": "first-pass: beta about 0.37 in Hoffmann et al. and Besiroglu et al. vs about 0.04 in Ho et al. 2024; the author flags other possible causes"
+     },
+     {
+      "param": "other",
+      "value": 1.12,
+      "unit": "x per year",
+      "condition": "derived: Ho et al.'s 2.83x per year with its log rate divided by 9"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "The central LM rate (ho-2024-algorithmic-progress/1) may be an order of magnitude too fast in log terms. Ho et al. attribute the beta gap to model scale, so this is an upper bound on the bias, not a correction."
+   },
+   {
+    "id": "whitfill-2025-selection-bias/2",
+    "claim": "In simulation, a +0.5 correlation between algorithm quality and compute makes a true 45%/year look like 16.5%/year, and -0.5 makes it look like 93%/year.",
+    "quote": "The bias is economically significant—with correlation 0.5, the true 45% annual progress is estimated as only 16.5%, while with correlation -0.5 it appears as 93%.",
+    "location": "Section 2 (Monte Carlo Simulation)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 16.5,
+      "unit": "% per year estimated",
+      "condition": "true 45% per year, correlation +0.5 between algorithm quality and compute"
+     },
+     {
+      "param": "other",
+      "value": 93,
+      "unit": "% per year estimated",
+      "condition": "true 45% per year, correlation -0.5"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "The sign of the bias is not known in advance, so observational rates carry a factor-of-two error in either direction on top of their statistical intervals."
+   }
+  ]
+ },
+ {
+  "id": "whitfill-2025-time-horizon",
+  "title": "Forecasting AI Time Horizon Under Compute Slowdowns",
+  "authors": "Parker Whitfill, Ben Snodin, Joel Becker",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2511.19492",
+  "topics": [
+   "efficiency-metrics",
+   "capability-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "whitfill-2025-time-horizon/1",
+    "claim": "Fitting METR 50% time horizons against compute within the Qwen-2.5 and Llama-3.1 families gives algorithmic progress of about 3.5x per year (95% CI about 1.9-37x).",
+    "quote": "The point estimate corresponds to roughly 3.5× per year, which closely matches the estimate in Ho et al. [2024].",
+    "location": "Appendix G, Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3.5,
+      "unit": "x per year",
+      "condition": "METR p50 time horizon (post-trained models), d ln A/dt = 1.265 from Qwen-2.5 and Llama-3.1 families"
+     },
+     {
+      "param": "other",
+      "value": 1.95,
+      "unit": "x per year",
+      "condition": "derived: exp(0.667), lower end of the 95% CI"
+     },
+     {
+      "param": "other",
+      "value": 37.1,
+      "unit": "x per year",
+      "condition": "derived: exp(3.614), upper end of the 95% CI"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A downstream, post-training-inclusive rate that agrees with the loss-based 2.8x per year; the authors warn about external validity from two families."
+   }
+  ]
+ },
+ {
+  "id": "ho-2026-least-understood",
+  "title": "The least understood driver of AI progress",
+  "authors": "Anson Ho",
+  "year": 2026,
+  "venue": "Epoch AI Gradient Updates",
+  "url": "https://epoch.ai/gradient-updates/the-least-understood-driver-of-ai-progress",
+  "topics": [
+   "efficiency-metrics"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ho-2026-least-understood/1",
+    "claim": "Epoch's author's best guess for software progress, counting all training compute including post-training, is about 10x per year (80% interval 2-50x).",
+    "quote": "So here’s my best guess: after accounting for all training compute (including post-training), I think we’re seeing software progress at around 10× per year, and my 80% credible interval would probably range from 2× to 50× per year.",
+    "location": "Section II",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10,
+      "unit": "x per year",
+      "condition": "author's judgment, all training compute including post-training; 80% credible interval 2-50x"
+     }
+    ],
+    "grade": "speculative",
+    "bears_on": "The upper reference for the bracketed algorithmic factor; it includes post-training and data, which the held-out-loss yardstick does not credit."
+   },
+   {
+    "id": "ho-2026-least-understood/2",
+    "claim": "Published estimates of software progress range from about 1.1x to 300x per year.",
+    "quote": "across the different estimates, they range from around 1.1× to 300× per year!",
+    "location": "Section II",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.1,
+      "unit": "x per year",
+      "condition": "lowest of the estimates the post surveys"
+     },
+     {
+      "param": "other",
+      "value": 300,
+      "unit": "x per year",
+      "condition": "highest of the estimates the post surveys"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The estimates measure different things (loss or benchmarks, with or without post-training and distillation), so a rate must name its metric before it can be compared or used."
+   },
+   {
+    "id": "ho-2026-least-understood/3",
+    "claim": "Most software progress may come from data quality rather than algorithms.",
+    "quote": "But most software progress might actually be due to data quality improvements (hence “algorithmic progress” may be a misnomer).",
+    "location": "Introduction",
+    "quantities": [],
+    "grade": "speculative",
+    "bears_on": "If data dominates, the bracketed factor is mostly data-side recipes (filtering, rephrasing, mixtures), whose multipliers are corpus-dependent and mostly measured on benchmarks rather than broad held-out loss."
+   },
+   {
+    "id": "ho-2026-least-understood/4",
+    "claim": "Gundlach et al.'s scale-dependence result rests on experiments at 10^13-10^18 FLOP extrapolated to 10^23 FLOP.",
+    "quote": "it uses scaling experiments between 10^13 FLOP and 10^18 FLOP (or under 10^17 FLOP for LSTMs) to infer efficiency improvements as far as 10^23 FLOP — so it involves heroically extrapolating out five orders of magnitude.",
+    "location": "Footnote 18",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 5,
+      "unit": "orders of magnitude extrapolated",
+      "condition": "Gundlach et al. 2025: experiments to 10^18 FLOP, conclusions at 10^23 FLOP"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "The 89-91% scale-dependent share and the exponent-change multipliers (LSTM, Chinchilla allocation) are extrapolations, not measurements, at 1e23 FLOP and above."
+   },
+   {
+    "id": "ho-2026-least-understood/5",
+    "claim": "Effective compute breaks down for distilled models, whose gain comes from a larger model's outputs.",
+    "quote": "This definition of effective compute breaks down somewhat if you include distilled models — that’s because the compute efficiency gain largely comes from being able to use data from an existing larger model.",
+    "location": "Footnote 4",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "A distilled or synthetic-data recipe's m_A must count the teacher's or generator's compute, or be excluded; otherwise it is bounded only by the teacher, which was trained at the frontier."
+   }
+  ]
+ },
+ {
+  "id": "anthropic-2023-rsp",
+  "title": "Anthropic's Responsible Scaling Policy, Version 1.0",
+  "authors": "Anthropic",
+  "year": 2023,
+  "venue": "Anthropic policy document",
+  "url": "https://www-cdn.anthropic.com/1adf000c8f675958c2ee23805d91aaade1cd4613/responsible-scaling-policy.pdf",
+  "topics": [
+   "efficiency-metrics",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "anthropic-2023-rsp/1",
+    "claim": "Anthropic defines effective compute as the compute a model would have needed without pretraining or fine-tuning improvements, operationalized by the scaling of capabilities such as test-set cross-entropy.",
+    "quote": "Effective Compute: We define effective compute as roughly the amount of compute it would have taken to train a model if no improvements to pretraining or fine-tuning techniques are included. This is operationalized by tracking the scaling of model capabilities (e.g. cross-entropy loss on a test set).",
+    "location": "ASL evaluation protocol (Timing and Effective Compute)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Matches the yardstick's m_A (reference compute at equal held-out loss) but leaves the reference recipe and the test set unspecified."
+   },
+   {
+    "id": "anthropic-2023-rsp/2",
+    "claim": "Anthropic evaluates for next-level capabilities after every 4x of effective compute, including mid-training.",
+    "quote": "after every 4x jump in effective compute, including if this occurs mid-training",
+    "location": "ASL evaluation protocol (Timing)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "x effective compute between evaluations",
+      "condition": "RSP v1.0 evaluation trigger"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "A lab already resolves effective compute to a factor of 4, which bounds how precisely it believes it measures m."
+   }
+  ]
+ },
+ {
+  "id": "deepmind-2024-fsf",
+  "title": "Frontier Safety Framework",
+  "authors": "Google DeepMind",
+  "year": 2024,
+  "venue": "Google DeepMind technical report",
+  "url": "https://storage.googleapis.com/deepmind-media/DeepMind.com/Blog/introducing-the-frontier-safety-framework/fsf-technical-report.pdf",
+  "topics": [
+   "efficiency-metrics",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "deepmind-2024-fsf/1",
+    "claim": "DeepMind defines effective compute through scaling laws combining model size, data, algorithms and compute, and evaluates every 6x of it, which it equates to about 2-2.5x in model size.",
+    "quote": "Effective compute is a measure of the performance of a foundation model that uses scaling laws to integrate model size, dataset size, algorithmic progress, and compute into a single metric. While there is no direct relationship between effective compute and model size, a rough estimate suggests that a 6x increase in effective compute would correspond to approximately 2-2.5x increase in model size.",
+    "location": "Footnote 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 6,
+      "unit": "x effective compute between evaluations",
+      "condition": "Frontier Safety Framework evaluation cadence"
+     },
+     {
+      "param": "other",
+      "value": 2.25,
+      "unit": "x model size per 6x effective compute",
+      "condition": "midpoint of 2-2.5x; derived: sqrt(6) = 2.45, consistent with Chinchilla N proportional to C^0.5"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "The lab's effective compute is a scaling-law construct with Chinchilla allocation, the same reference the yardstick uses; the measurement protocol is not published."
+   }
+  ]
+ },
+ {
+  "id": "openai-2023-preparedness",
+  "title": "Preparedness Framework (Beta)",
+  "authors": "OpenAI",
+  "year": 2023,
+  "venue": "OpenAI policy document",
+  "url": "https://cdn.openai.com/openai-preparedness-framework-beta.pdf",
+  "topics": [
+   "efficiency-metrics",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "openai-2023-preparedness/1",
+    "claim": "OpenAI re-evaluates whenever effective compute more than doubles or there is a major algorithmic breakthrough; it gives no definition of effective compute.",
+    "quote": "This would include whenever there is a >2x effective compute increase or major algorithmic breakthrough.",
+    "location": "Evaluating pre-mitigation risk",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x effective compute between evaluations",
+      "condition": "Preparedness Framework (Beta) trigger"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Three labs use effective compute with triggers of 2x, 4x and 6x and publish neither the reference nor the measurement; a policy constant tied to m_A needs the protocol these frameworks omit."
+   }
+  ]
+ },
+ {
+  "id": "heim-2024-compute-thresholds",
+  "title": "Training Compute Thresholds: Features and Functions in AI Regulation",
+  "authors": "Lennart Heim, Leonie Koessler",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2405.10799",
+  "topics": [
+   "efficiency-metrics",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "heim-2024-compute-thresholds/1",
+    "claim": "Effective compute is only as good as the performance metric it is normalized to; tied to loss, it is no better a proxy than training compute.",
+    "quote": "If the performance metric is loss, then effective compute is as good as training compute.",
+    "location": "Section 6.4.3 (Effective Compute)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Choosing held-out loss makes m_A well defined and smooth, at the price of measuring what compute already measures; the talk should say m is a loss-based quantity."
+   },
+   {
+    "id": "heim-2024-compute-thresholds/2",
+    "claim": "Test loss is easy to measure and scales smoothly, but may not track real-world impact, and using it hides that.",
+    "quote": "Technical metrics like test loss are easier to measure and scale more smoothly with compute, but they may not accurately represent real-world impact, which makes them similar to training compute as a metric while concealing this fact.",
+    "location": "Section 6.4.3 (Effective Compute)",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Loss-based multipliers miss gains that do not lower broad held-out loss (post-training, benchmark-targeted data), so R bounds loss-equivalent efficiency, not capability per FLOP."
+   }
+  ]
+ },
+ {
+  "id": "li-2024-compression-time-split",
+  "title": "Evaluating Large Language Models for Generalization and Robustness via Data Compression",
+  "authors": "Yucheng Li, Yunhao Guo, Frank Guerin, Chenghua Lin",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2402.00861",
+  "topics": [
+   "efficiency-metrics",
+   "capability-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2024-compression-time-split/1",
+    "claim": "Compressing text written after each model's training cutoff (83 months of data, 2017-2023) shows that many models compress markedly worse after their cutoff.",
+    "quote": "We find that the compression rate of many models reduces significantly after their cutoff date, but models such as Mistral and Llama-2 demonstrate a good balance between performance and robustness.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The held-out corpus must post-date every compared model's training data; otherwise contamination inflates m_A for whichever model saw the test period."
+   },
+   {
+    "id": "li-2024-compression-time-split/2",
+    "claim": "Context size and tokenization change measured compression substantially.",
+    "quote": "We also find the context size and tokenization implementation have a big impact of on the overall compression performance.",
+    "location": "Abstract; Sections 5.5-5.6",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Fix the context length and score in bits per byte, or tokenizer and context differences show up as efficiency."
+   }
+  ]
+ },
+ {
+  "id": "gao-2020-pile",
+  "title": "The Pile: An 800GB Dataset of Diverse Text for Language Modeling",
+  "authors": "Leo Gao, Stella Biderman, Sid Black, Laurence Golding, Travis Hoppe, Charles Foster, Jason Phang, Horace He, Anish Thite, Noa Nabeshima, Shawn Presser, Connor Leahy",
+  "year": 2020,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2101.00027",
+  "topics": [
+   "efficiency-metrics"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gao-2020-pile/1",
+    "claim": "Bits per UTF-8 byte is the preferred held-out metric because it does not depend on the tokenizer.",
+    "quote": "Bits per byte is preferred over bits per character or perplexity when using Pile as a metric due to its invariance to different tokenization schemes and the ambiguity of measuring characters in Unicode.",
+    "location": "Section 3.1",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The yardstick's loss should be bits per byte on a fixed broad corpus, so recipes with different tokenizers are comparable."
+   },
+   {
+    "id": "gao-2020-pile/2",
+    "claim": "The Pile averages 0.29335 GPT-2 tokens per byte, the factor that converts nats per token to bits per byte.",
+    "quote": "We find that LT/LB is 0.29335 GPT-2-tokens/byte across the Pile; dataset-specific values of LT/LB can be found in Table 7.",
+    "location": "Section 3.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.29335,
+      "unit": "GPT-2 tokens per byte",
+      "condition": "whole Pile"
+     },
+     {
+      "param": "other",
+      "value": 0.4232,
+      "unit": "bits per byte per nat per token",
+      "condition": "derived: 0.29335 / ln 2, GPT-2 tokenizer on the Pile"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Converts published per-token losses to bits per byte; the factor depends on tokenizer and corpus, so each comparison needs its own."
+   }
+  ]
+ },
+ {
+  "id": "magnusson-2023-paloma",
+  "title": "Paloma: A Benchmark for Evaluating Language Model Fit",
+  "authors": "Ian Magnusson, Akshita Bhagia, Valentin Hofmann, Luca Soldaini, et al.",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2312.10523",
+  "topics": [
+   "efficiency-metrics",
+   "capability-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "magnusson-2023-paloma/1",
+    "claim": "Models pretrained only on Common Crawl show anomalous gaps in fit to many domains, and loss is dominated by the most frequent strings.",
+    "quote": "models pretrained without data beyond Common Crawl exhibit anomalous gaps in LM fit to many domains or that loss is dominated by the most frequently occurring strings in the vocabulary",
+    "location": "Abstract; Section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The held-out corpus must be broad (many domains, per-domain reporting); a web-only test set rewards recipes that fit web text and penalizes broader ones."
+   },
+   {
+    "id": "magnusson-2023-paloma/2",
+    "claim": "No single perplexity evaluation correlates well with all downstream tasks.",
+    "quote": "it is apparent that no single perplexity evaluation correlates well with all downstream tasks, suggesting the importance of evaluating across a range of diverse perplexity evaluations rather than a single monolithic validation loss.",
+    "location": "Appendix A (Downstream Correlation Analysis)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "A standardized multiplier needs a fixed, published mixture of held-out domains; a single validation loss can be gamed by matching its distribution."
+   }
+  ]
+ },
+ {
+  "id": "du-2024-emergent-loss",
+  "title": "Understanding Emergent Abilities of Language Models from the Loss Perspective",
+  "authors": "Zhengxiao Du, Aohan Zeng, Yuxiao Dong, Jie Tang",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2403.15796",
+  "topics": [
+   "efficiency-metrics",
+   "capability-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "du-2024-emergent-loss/1",
+    "claim": "With corpus, tokenizer and architecture fixed, models of 300M-32B parameters with equal pre-training loss perform equally on 12 downstream tasks, whatever their size and token count.",
+    "quote": "We demonstrate that the Transformer models with the same pre-training loss, but different model and data sizes, generate the same performance on various downstream tasks, with a fixed data corpus, tokenization, and model architecture.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Supports loss as the yardstick within one recipe family; it is silent on recipes that change the corpus, tokenizer or architecture, which are the algorithms in scope."
+   }
+  ]
+ },
+ {
+  "id": "gadre-2024-overtraining",
+  "title": "Language models scale reliably with over-training and on downstream tasks",
+  "authors": "Samir Yitzhak Gadre, Georgios Smyrnis, Vaishaal Shankar, Suchin Gururangan, Mitchell Wortsman, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2403.08540",
+  "topics": [
+   "efficiency-metrics",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gadre-2024-overtraining/1",
+    "claim": "At a fixed tokens-per-parameter ratio, over-training leaves the compute exponent unchanged and shifts only the scalar, so it acts as a constant compute multiplier.",
+    "quote": "We find that as one increases the ratio of tokens to parameters, corresponding to more over-training, the scaling exponent η remains about the same, while the scalar λ changes.",
+    "location": "Section 1 (Introduction)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.61,
+      "unit": "x compute multiplier",
+      "condition": "derived: Besiroglu et al. refit L(N,D), 200 tokens/parameter vs compute-optimal, at 1e24 FLOP (0.67 at 1e20, 0.58 at 1e26)"
+     },
+     {
+      "param": "other",
+      "value": 0.78,
+      "unit": "x compute multiplier",
+      "condition": "derived: same law, 100 tokens/parameter at 1e24 FLOP (0.83 at 1e20, 0.75 at 1e26)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A recipe that over-trains for cheaper inference has m_A below 1 against the Chinchilla-optimal reference, roughly constant across scale."
+   },
+   {
+    "id": "gadre-2024-overtraining/2",
+    "claim": "Laws fitted on 104 models (0.011B-6.9B) predict the validation loss of a 32x over-trained 1.4B run and a compute-optimal 6.9B run from 300x less compute.",
+    "quote": "This enables us to predict the validation loss of a 1.4B parameter, 900B token run (i.e., 32× over-trained) and a 6.9B parameter, 138B token run (i.e., a compute-optimal run)—each from experiments that take 300× less compute.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 300,
+      "unit": "x compute extrapolation",
+      "condition": "validation loss of 1.4B/900B-token and 6.9B/138B-token runs"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Loss extrapolates over about 2.5 orders of magnitude within one recipe; from 1e21 FLOP experiments to 1e24-1e26 FLOP is 3-5 orders, beyond what has been checked."
+   }
+  ]
+ },
+ {
+  "id": "brandfonbrener-2024-loss-to-loss",
+  "title": "Loss-to-Loss Prediction: Scaling Laws for All Datasets",
+  "authors": "David Brandfonbrener, Nikhil Anand, Nikhil Vyas, Eran Malach, Sham Kakade",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2411.12925",
+  "topics": [
+   "efficiency-metrics",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "brandfonbrener-2024-loss-to-loss/1",
+    "claim": "The losses of models trained on different datasets, paired by compute, follow shifted power laws in each other, and predictions hold at 20x the largest fitted FLOP budget.",
+    "quote": "Our predictions extrapolate well even at 20x the largest FLOP budget used to fit the curves.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 20,
+      "unit": "x FLOP beyond the fit",
+      "condition": "train-to-train, train-to-test and test-to-test loss prediction across pretraining datasets"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Gives a way to translate a recipe trained on another corpus onto the standard held-out corpus; the shift parameters are per pair of datasets and must be fitted."
+   }
+  ]
+ },
+ {
+  "id": "liu-2022-same-loss",
+  "title": "Same Pre-training Loss, Better Downstream: Implicit Bias Matters for Language Models",
+  "authors": "Hong Liu, Sang Michael Xie, Zhiyuan Li, Tengyu Ma",
+  "year": 2022,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2210.14199",
+  "topics": [
+   "efficiency-metrics",
+   "capability-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2022-same-loss/1",
+    "claim": "Models with the same, statistically optimal pre-training loss can differ downstream; continued training after convergence, larger models and different training algorithms each do it.",
+    "quote": "we identify three ways to produce models with the same (statistically optimal) pre-training loss but different downstream performance: continue pre-training after convergence, increasing the model size, and changing the training algorithm.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Negative result for loss as a sufficient statistic: m_A at equal loss can understate optimizers and architectures that change implicit bias. Shown on simplified datasets."
+   }
+  ]
+ },
+ {
+  "id": "schaeffer-2024-elusive",
+  "title": "Why Has Predicting Downstream Capabilities of Frontier AI Models with Scale Remained Elusive?",
+  "authors": "Rylan Schaeffer, Hailey Schoelkopf, Brando Miranda, Gabriel Mukobi, Varun Madan, Adam Ibrahim, Herbie Bradley, Stella Biderman, Sanmi Koyejo",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2406.04391",
+  "topics": [
+   "efficiency-metrics",
+   "capability-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "schaeffer-2024-elusive/1",
+    "claim": "Multiple-choice accuracy is computed from log-likelihoods through transformations that progressively weaken its relation to scale.",
+    "quote": "we demonstrate that downstream performance is computed from negative log likelihoods via a sequence of transformations that progressively degrades the statistical relationship between performance and scale.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Why the yardstick is held-out loss rather than benchmark accuracy: loss scales smoothly, accuracy does not, so benchmark-based multipliers do not extrapolate."
+   }
+  ]
+ },
+ {
+  "id": "lourie-2025-unreliable",
+  "title": "Scaling Laws Are Unreliable for Downstream Tasks: A Reality Check",
+  "authors": "Nicholas Lourie, Michael Y. Hu, Kyunghyun Cho",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2507.00885",
+  "topics": [
+   "efficiency-metrics",
+   "capability-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "lourie-2025-unreliable/1",
+    "claim": "Across published downstream scaling data, predictable scaling holds only 39% of the time.",
+    "quote": "we find that predictable scaling only occurs in a minority of cases: 39% of the time.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 39,
+      "unit": "% of cases with predictable downstream scaling",
+      "condition": "meta-analysis of existing downstream scaling data"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Benchmark multipliers such as FineWeb-Edu's 10x on MMLU or DCLM's 6.6x cannot be reliably extrapolated or converted to loss."
+   },
+   {
+    "id": "lourie-2025-unreliable/2",
+    "claim": "Changing the validation corpus can reverse which pretraining corpus appears to scale better.",
+    "quote": "Choosing a different dataset for the validation perplexity can flip scaling trends. For instance, models pretrained on one corpus might appear to improve faster than another, but this trend can reverse with different validation data (§3).",
+    "location": "Section 1 (Introduction); Section 3",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The held-out corpus can flip the sign of a data recipe's m_A, so the standard corpus must be fixed in advance and published."
+   }
+  ]
+ },
+ {
+  "id": "tay-2021-scale-efficiently",
+  "title": "Scale Efficiently: Insights from Pre-training and Fine-tuning Transformers",
+  "authors": "Yi Tay, Mostafa Dehghani, Jinfeng Rao, William Fedus, Samira Abnar, Hyung Won Chung, Sharan Narang, Dani Yogatama, Ashish Vaswani, Donald Metzler",
+  "year": 2021,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2109.10686",
+  "topics": [
+   "efficiency-metrics",
+   "capability-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "tay-2021-scale-efficiently/1",
+    "claim": "Pre-training perplexity is often a misleading indicator of downstream quality across Transformer shapes.",
+    "quote": "Our findings show that pre-training perplexity can often be a deceiving indicator of downstream quality and therefore model building based on upstream perplexity can be challenging.",
+    "location": "Section 1 (Introduction)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Negative result for loss as the only yardstick: architectures with equal upstream perplexity can differ after fine-tuning (T5 shapes)."
+   }
+  ]
+ },
+ {
+  "id": "pearce-2024-reconciling",
+  "title": "Reconciling Kaplan and Chinchilla Scaling Laws",
+  "authors": "Tim Pearce, Jinyeop Song",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2406.12907",
+  "topics": [
+   "efficiency-metrics",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "pearce-2024-reconciling/1",
+    "claim": "Most of the Kaplan-Chinchilla discrepancy comes from Kaplan counting non-embedding parameters and fitting at small scale.",
+    "quote": "This paper finds that much of this discrepancy can be attributed to Kaplan counting non-embedding rather than total parameters, combined with their analysis being performed at small scale.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Allocation laws fitted at small scale with non-embedding counts are biased; the reference must count total parameters and compute."
+   },
+   {
+    "id": "pearce-2024-reconciling/2",
+    "claim": "Under Chinchilla, reducible loss (L - E) falls as compute to the -0.178 (Kaplan's total loss as compute to the -0.057); the introduction omits the minus signs that the body's equations carry.",
+    "quote": "Kaplan: L_optimal∝C^0.057, Chinchilla: L_optimal−E∝C^0.178.",
+    "location": "Section 1 (Introduction)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.178,
+      "unit": "exponent of reducible loss in compute",
+      "condition": "Chinchilla, L - E proportional to C^-0.178"
+     },
+     {
+      "param": "other",
+      "value": 1.058,
+      "unit": "x compute per 1% reduction in reducible loss",
+      "condition": "derived: 0.99^(-1/0.178); 10% gives 1.81x"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "The loss-to-compute conversion: a constant fractional cut in reducible loss is a constant m_A, but a constant absolute loss gain is worth more compute as L nears E, and E itself is uncertain."
+   }
+  ]
+ },
+ {
+  "id": "sardana-2023-beyond-chinchilla",
+  "title": "Beyond Chinchilla-Optimal: Accounting for Inference in Language Model Scaling Laws",
+  "authors": "Nikhil Sardana, Jacob Portes, Sasha Doubov, Jonathan Frankle",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2401.00448",
+  "topics": [
+   "efficiency-metrics",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sardana-2023-beyond-chinchilla/1",
+    "claim": "Quality keeps improving up to 10,000 tokens per parameter, and laws fitted at typical ratios overestimate the value of extra tokens at extreme ratios.",
+    "quote": "find that model quality continues to improve as we scale tokens per parameter to extreme ranges (up to 10,000). Finally, we ablate the procedure used to fit the Chinchilla scaling law coefficients and find that developing scaling laws only from data collected at typical token/parameter ratios overestimates the impact of additional tokens at these extreme ranges.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10000,
+      "unit": "tokens per parameter",
+      "condition": "largest ratio tested, 47 models"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Over-training multipliers derived from a Chinchilla-form law fitted near 20 tokens/parameter (gadre-2024-overtraining/1) are uncertain at extreme ratios."
+   }
+  ]
+ },
+ {
+  "id": "choshen-2024-hitchhiker",
+  "title": "A Hitchhiker's Guide to Scaling Law Estimation",
+  "authors": "Leshem Choshen, Yang Zhang, Jacob Andreas",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2410.11840",
+  "topics": [
+   "efficiency-metrics",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "choshen-2024-hitchhiker/1",
+    "claim": "Across 1000+ fitted scaling laws, the best typical absolute relative error in predicted loss is about 4%; up to 20% still separates many modeling choices.",
+    "quote": "4% is the best ARE typically obtained; ARE up to 20% can still distinguish between many modeling choices.",
+    "location": "Section 4 (How well should scaling laws predict?)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "% absolute relative error in predicted loss",
+      "condition": "best typically obtained across 485 pretrained models and 1000+ laws"
+     },
+     {
+      "param": "other",
+      "value": 2.3,
+      "unit": "x compute per 1% of loss",
+      "condition": "derived: Besiroglu et al. refit at 1e24 FLOP (L* = 1.96, E = 1.82); 1.2x at 1e20, 7.4x at 1e26; 4% at 1e24 spans 0.09x-88x"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Loss-predicted multipliers at 1e24-1e26 FLOP carry errors far larger than most algorithms' m_A, because the frontier sits close to the irreducible loss."
+   }
+  ]
+ },
+ {
+  "id": "bi-2024-deepseek-llm",
+  "title": "DeepSeek LLM: Scaling Open-Source Language Models with Longtermism",
+  "authors": "Xiao Bi, Deli Chen, Guanting Chen, Shanhuang Chen, Damai Dai, et al. (DeepSeek-AI)",
+  "year": 2024,
+  "venue": "arXiv technical report",
+  "url": "https://arxiv.org/abs/2401.02954",
+  "topics": [
+   "efficiency-metrics",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bi-2024-deepseek-llm/1",
+    "claim": "The compute-optimal allocation depends on data quality: the model-scaling exponent rises from 0.450 on early in-house data to 0.524 on current data and 0.578 on OpenWebText2.",
+    "quote": "We attempted to fit the scaling curve on various datasets and found that the data quality significantly influences the optimal model/data scaling-up allocation strategy. The higher the data quality, the more the increased compute budget should be allocated to model scaling.",
+    "location": "Section 3 (Scaling Laws); Table 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.45,
+      "unit": "exponent a in N_opt proportional to C^a",
+      "condition": "DeepSeek early in-house data, 1e17-3e20 FLOP fits"
+     },
+     {
+      "param": "other",
+      "value": 0.524,
+      "unit": "exponent a in N_opt proportional to C^a",
+      "condition": "DeepSeek current in-house data"
+     },
+     {
+      "param": "other",
+      "value": 0.578,
+      "unit": "exponent a in N_opt proportional to C^a",
+      "condition": "OpenWebText2"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The reference's optimal allocation, and so C_ref(L), depends on its training corpus; the yardstick must fix the reference's training corpus as well as the held-out one."
+   }
+  ]
+ },
+ {
+  "id": "goyal-2024-data-filtering-compute",
+  "title": "Scaling Laws for Data Filtering -- Data Curation cannot be Compute Agnostic",
+  "authors": "Sachin Goyal, Pratyush Maini, Zachary C. Lipton, Aditi Raghunathan, J. Zico Kolter",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2404.07177",
+  "topics": [
+   "efficiency-metrics"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "goyal-2024-data-filtering-compute/1",
+    "claim": "Aggressive quality filtering wins at low compute, but once the filtered pool must be repeated, less aggressive filtering wins; the best filter depends on compute.",
+    "quote": "The key message from our work is that data curation cannot be agnostic of compute. When training for a low compute budget (less repetitions), quality triumphs under QQT, as highlighted by the best performance of aggressive filtering (Bucket E) under low compute in Figure 1.",
+    "location": "Section 1 (Introduction)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Classifier filtering's multiplier is not constant: it shrinks when compute is large relative to the high-quality pool, the frontier regime. Evidence from CLIP (ViT-B/32), not LMs."
+   }
+  ]
+ },
+ {
+  "id": "xiao-2024-densing-law",
+  "title": "Densing Law of LLMs",
+  "authors": "Chaojun Xiao, Jie Cai, Weilin Zhao, Guoyang Zeng, Biyuan Lin, Jie Zhou, et al.",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2412.04315",
+  "topics": [
+   "efficiency-metrics",
+   "capability-measures"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "xiao-2024-densing-law/1",
+    "claim": "The parameters needed for a given benchmark score fall by half about every 3.3 months across 29 open base models, about 12x per year in parameters, not compute.",
+    "quote": "A trend is fitted between maximum capability density and release date, revealing that A≈0.007 with R^2≈0.93. This indicates the maximum capability density of LLMs doubles approximately every 3.3 months",
+    "location": "Section 1 (Introduction), with footnote 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3.3,
+      "unit": "months per doubling of capability density",
+      "condition": "effective parameters at equal score on MMLU, BBH, MATH, HumanEval, MBPP over actual parameters; 29 open base models since 2023"
+     },
+     {
+      "param": "other",
+      "value": 12.4,
+      "unit": "x per year in parameters",
+      "condition": "derived: 2^(12/3.3); parameter-equivalent, includes over-training and distillation"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A parameter-equivalent benchmark rate, not compute at equal loss; the paper's footnote says it depends on benchmarks and reference models. Shows the metric choice moves the rate by about 4x per year relative to Ho et al."
+   }
+  ]
+ }
+]

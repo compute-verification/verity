@@ -852,6 +852,16 @@
     "grade": "speculative",
     "bears_on": "Consistent with NCI's premise that inference fits inside small blocks; NCI's Gamma (~1e18 gates per block) plays the role of 'a few dozen chips for a session'.",
     "from_review": "governance"
+   },
+   {
+    "id": "sastry-2024-compute-governance/5",
+    "claim": "Compute itself drives algorithmic progress by enabling experiments at scale.",
+    "quote": "Compute itself is arguably a significant driver of algorithmic progress (Barnett, 2023), as it enables experimenting with more architectures, scaling up what works, and gaining insights that may be only visible at scale.",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Throttling training compute may also slow algorithmic progress, which feeds the bracketed term.",
+    "from_review": "efficiency-metrics"
    }
   ]
  },

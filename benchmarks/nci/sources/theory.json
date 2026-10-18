@@ -249,6 +249,26 @@
     "grade": "measured-at-scale",
     "bears_on": "The reference allocation is robust (Approaches 1-2), though fitted constants carry wide uncertainty.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "besiroglu-2024-chinchilla-replication/2",
+    "claim": "The refitted Chinchilla law: L(N,D) = 1.8172 + 482.01/N^0.3478 + 2085.43/D^0.3658.",
+    "quote": "L(N,D)=1.8172+482.01/N^0.3478+2085.43/D^0.3658",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The reference law for converting loss to compute.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "besiroglu-2024-chinchilla-replication/3",
+    "claim": "Chinchilla's reported intervals would need over 600,000 experiments; they likely ran fewer than 500.",
+    "quote": "intervals this narrow would require over 600,000 experiments, while they likely only ran fewer than 500",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Scaling-law constants are less certain than reported.",
+    "from_review": "efficiency-metrics"
    }
   ]
  },
@@ -568,6 +588,56 @@
     "grade": "theoretical",
     "bears_on": "The unit of m_A used throughout this corpus.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "davidson-2023-ceg/2",
+    "claim": "Most surveyed post-training enhancements are worth more than 5x training compute, some more than 20x, at under 1% of training cost.",
+    "quote": "most surveyed enhancements improve benchmark performance by more than a 5x increase in training compute, some by more than 20x. Post-training enhancements are relatively cheap to develop: fine-tuning costs are typically <1% of the original training cost.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Post-training gains are large in compute-equivalent terms and cheap; under the policy, those that fit in a block's budget are unthrottled.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "davidson-2023-ceg/3",
+    "claim": "InstructGPT's CEG: over 3900x at instruction following, over 130x on some NLP benchmarks, none on many.",
+    "quote": "> 3900 at instruction following; > 130 on some other NLP benchmarks; no gain on many NLP benchmarks",
+    "location": "Table 1, InstructGPT row",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "CEG varies by orders of magnitude across benchmarks.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "davidson-2023-ceg/4",
+    "claim": "Some CEG estimates are implausibly high (Minerva plus majority voting at 1,200,000x on MATH), a sign the log-linear model breaks.",
+    "quote": "Some of these estimates seem implausibly high, suggesting that the log-linear model is not adequately capturing the true scaling behavior.",
+    "location": "Table 3 discussion",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "CEGs near benchmark floors or ceilings are not conversion rates.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "davidson-2023-ceg/5",
+    "claim": "A high CEG may mean training compute doesn't help on that benchmark rather than that the enhancement helps much.",
+    "quote": "a high CEG might not indicate that the post-training enhancement significantly improves performance, but instead indicate that additional training compute doesn't improve performance.",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Why CEG must be read alongside the baseline's own scaling.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "davidson-2023-ceg/6",
+    "claim": "The highest CEG numbers may come from weak scaling baselines.",
+    "quote": "These selection biases mean that the highest CEG numbers may be due to weak scaling baselines",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Selection bias inflates reported CEGs.",
+    "from_review": "efficiency-metrics"
    }
   ]
  },
@@ -957,6 +1027,83 @@
     "grade": "measured-small",
     "bears_on": "Optimizer and tweak multipliers are constant in C.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "gundlach-2025-origin/12",
+    "claim": "Of 21,400x measured progress relative to an LSTM, 846x comes from LSTMs to Kaplan Transformers and nearly 10x from Chinchilla rebalancing.",
+    "quote": "Of the total measured progress of 21,400× (relative to an LSTM), we find that 846× is achieved through LSTMs to Kaplan Transformers, and nearly 10× is attributable to Chinchilla rebalancing.",
+    "location": "Section 5",
+    "quantities": [],
+    "grade": "extrapolated",
+    "bears_on": "Most algorithmic progress is two scale-dependent changes.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "gundlach-2025-origin/13",
+    "claim": "At the 2023 frontier (1.3e22 FLOPs) the LSTM-to-Kaplan-Transformer transition accounts for 725x; Chinchilla rebalancing 3.7x and scale-invariant innovations 2.6x.",
+    "quote": "Extrapolating our measured scaling exponents to the 2023 frontier compute budgets (1.3×10^22 FLOPs), the LSTM to Kaplan Transformer transition alone accounts for 725× of the efficiency gains.",
+    "location": "Section 5",
+    "quantities": [],
+    "grade": "extrapolated",
+    "bears_on": "Frontier-scale multipliers come from extrapolated exponents.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "gundlach-2025-origin/14",
+    "claim": "The CEG multiplier grows about 2.23x per year, 6,930x in total, 89% of it from scale-dependent changes.",
+    "quote": "the growth rate of our CEG multiplier is approximately 2.23× annually, for a total of 6,930×, of which 2,700× (89%) is due to scale-dependent changes.",
+    "location": "Section 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.23,
+      "unit": "x per year",
+      "condition": "CEG multiplier growth, relative to LSTM"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The loss-based algorithmic-progress rate for the bracketed term, mostly scale-dependent.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "gundlach-2025-origin/15",
+    "claim": "The LSTM-to-Transformer gain is 6x at 1e15 FLOPs and over 100x at 1e23.",
+    "quote": "The LSTM-to-Transformer transition showed only 6× gains at 10^15 FLOPs but more than 100× gains at 10^23 FLOPs.",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "extrapolated",
+    "bears_on": "A multiplier is a function of compute.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "gundlach-2025-origin/16",
+    "claim": "Relative to LSTMs the CEG grows about 63% per year; relative to dense Transformers it is a constant 2x, 0% growth.",
+    "quote": "Measuring the CEG multiplier with respect to LSTMs for each model Mt yields an exponential in t, with a growth rate of about 63% annually (Figure 7). However, measuring with respect to the dense Transformers yields a constant multiplier of 2× (Section 3.3), and therefore a 0% growth rate.",
+    "location": "Section 5",
+    "quantities": [],
+    "grade": "extrapolated",
+    "bears_on": "The rate of algorithmic progress depends on the reference model.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "gundlach-2025-origin/17",
+    "claim": "At large compute (about 1e23) the Chinchilla-over-Kaplan multiplier is approximated by a power law, M(C) = 6.13e-12 C^0.508.",
+    "quote": "As C gets large (roughly 10^23 FLOPs), we can use a power law to approximate this expression",
+    "location": "Appendix B",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Recomputed exactly with the paper's constants: 17.5x at 1e24, 46x at 1e25, 129x at 1e26 (extrapolation).",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "gundlach-2025-origin/18",
+    "claim": "Fits of the irreducible loss range from 1.68 to 2.01.",
+    "quote": "They find irreducible loss fits from 1.68 to 2.01.",
+    "location": "Appendix D",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The loss floor is uncertain, which makes loss-to-compute conversions near it unstable.",
+    "from_review": "efficiency-metrics"
    }
   ]
  },
@@ -1012,6 +1159,26 @@
     "grade": "measured-small",
     "bears_on": "Measures m_A at a fixed old capability, which favours scale-invariant innovations.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "hernandez-2020-algorithmic-efficiency/2",
+    "claim": "Algorithmic efficiency doubled every 16 months over 7 years (ImageNet).",
+    "quote": "This corresponds to algorithmic efficiency doubling every 16 months over a period of 7 years.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "A slower, older estimate for vision.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "hernandez-2020-algorithmic-efficiency/3",
+    "claim": "The approach likely underestimates progress because new capabilities are a larger share of progress than efficiency gains.",
+    "quote": "We believe our approach underestimates algorithmic progress, primarily because new capabilities are likely a larger portion of algorithmic progress than observed efficiency gains",
+    "location": "Section 5",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Efficiency at fixed capability misses new capabilities.",
+    "from_review": "efficiency-metrics"
    }
   ]
  },
@@ -1061,6 +1228,63 @@
     "grade": "extrapolated",
     "bears_on": "The largest single architecture multiplier in the record; m_A for the reference recipe already includes it.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "ho-2024-algorithmic-progress/3",
+    "claim": "The median doubling time of effective compute is 8.4 months (95% CI 4.5-14.3).",
+    "quote": "the median doubling time for effective compute is 8.4 months, with a 95% confidence interval of 4.5 to 14.3 months",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 8.4,
+      "unit": "months per doubling",
+      "condition": "effective compute, language models"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Central loss-based algorithmic progress: about 2.7x per year.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "ho-2024-algorithmic-progress/4",
+    "claim": "Chinchilla over Kaplan scaling is worth 1.75x at GPT-2 scale to 4x at PaLM scale.",
+    "quote": "the compute equivalent multiplier from the Chinchilla scaling laws for dense autoregressive transformer models is between 1.75-fold (for GPT-2 scale models) and 4-fold (for PaLM-scale models",
+    "location": "Appendix B",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "A scale-dependent multiplier.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "ho-2024-algorithmic-progress/5",
+    "claim": "Doubling times are 14.9, 5.9 and 6.9 months depending on the reference model.",
+    "quote": "Doubling times of effective compute are 14.9, 5.9, and 6.9 months",
+    "location": "Appendix A",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The rate depends on the reference model by up to 2.5x.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "ho-2024-algorithmic-progress/6",
+    "claim": "Extrapolation neglects the scale-dependence of innovations.",
+    "quote": "One specific reason for caution is that the extrapolation neglects the scale-dependence of algorithmic innovations.",
+    "location": "Section 5",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Small-scale rates may not carry to frontier scale.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "ho-2024-algorithmic-progress/7",
+    "claim": "A later version reports 6.1 months (90% CI 3.3-11.3).",
+    "quote": "6.1 months, with a 90% confidence interval of 3.3 to 11.3 months",
+    "location": "NeurIPS version",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Confirm which version the URL serves.",
+    "from_review": "efficiency-metrics"
    }
   ]
  },
@@ -1603,6 +1827,26 @@
     "grade": "measured-small",
     "bears_on": "The Kaplan-to-Chinchilla multiplier is a methodology fix, available to anyone at no NCI cost.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "porian-2024-resolving-discrepancies/2",
+    "claim": "Careful learning-rate decay is not essential for the Chinchilla law to hold.",
+    "quote": "Counter to a hypothesis implied in Hoffmann et al. [25], we find that careful learning rate decay is not essential for the validity of their scaling law.",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The reference law is robust to schedule choice.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "porian-2024-resolving-discrepancies/3",
+    "claim": "Tuning AdamW's beta2 is essential at lower batch sizes.",
+    "quote": "tuning the AdamW β2 parameter is essential at lower batch sizes",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "An untuned baseline inflates multipliers.",
+    "from_review": "efficiency-metrics"
    }
   ]
  },
@@ -1712,6 +1956,36 @@
     "grade": "measured-at-scale",
     "bears_on": "Supports modelling a recipe as a single compute multiplier m_A on log C, the form used for C_eff.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "ruan-2024-observational-scaling/2",
+    "claim": "Three principal components explain about 97% of the variance in benchmark scores across models.",
+    "quote": "the top 3 PCs explaining ∼ 97% of the variance",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "A low-dimensional capability space makes a single capability index defensible.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ruan-2024-observational-scaling/3",
+    "claim": "The method predicts the impact of post-training interventions such as chain-of-thought and self-consistency.",
+    "quote": "we show how to predict the impact of post-training interventions like Chain-of-Thought and Self-Consistency as language model capabilities continue to improve",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Post-training gains can be mapped onto the pretraining-compute axis.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ruan-2024-observational-scaling/4",
+    "claim": "Only pretrained base models are fitted; instruction-tuned models are left out.",
+    "quote": "we consider only pretrained base models to avoid the complexities introduced by instruction tuning",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Post-trained models sit outside the fit, so their placement on the compute axis is an extrapolation.",
+    "from_review": "capability-measures"
    }
   ]
  },
@@ -1915,6 +2189,36 @@
     "grade": "measured-small",
     "bears_on": "m_A about 3 against a 2021 baseline; against a modern (SwiGLU, RoPE) baseline the gain is smaller.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "so-2021-primer/3",
+    "claim": "Primer's gain is a constant compute reduction factor across scales; only absolute savings grow.",
+    "quote": "The intuition behind this is that b is a constant compute reduction factor for all l",
+    "location": "Appendix A.9",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Primer's multiplier is constant, not growing with scale.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "so-2021-primer/4",
+    "claim": "Speedup is the fraction of compute each model needs to match the vanilla baseline: Primer 2.12/2.13/1.72 and Transformer++ 1.37/1.54/1.33 across three setups (LM1B, 35M).",
+    "quote": "“Speedup” describes the fraction of compute used by each model to achieve the same results as the vanilla Transformer baseline trained with the full compute budget.",
+    "location": "Table 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Primer over Transformer++ is about 1.29-1.55x.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "so-2021-primer/5",
+    "claim": "In masked language modeling Primer is not obviously better than Transformer++.",
+    "quote": "while Primer improves upon vanilla Transformer, it is not obviously better than Transformer++",
+    "location": "Section 5",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Gains over a modern baseline are small.",
+    "from_review": "efficiency-metrics"
    }
   ]
  },
@@ -2037,6 +2341,16 @@
     "grade": "measured-at-scale",
     "bears_on": "m_A about 2 at about 2.5e24 FLOP on downstream metrics.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "tay-2022-ul2r/2",
+    "claim": "UL2 and causal language-modeling losses are not comparable.",
+    "quote": "loss with UL2 and causal language modeling is not comparable",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "UL2R's multiplier cannot be stated in held-out loss.",
+    "from_review": "efficiency-metrics"
    }
   ]
  },
