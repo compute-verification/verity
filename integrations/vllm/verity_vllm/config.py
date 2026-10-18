@@ -400,7 +400,7 @@ class MatchConfig:
 
     match_impl: str = option("--match-impl", env="MATCH_IMPL", default="fast", help="global match checker: fast or record (the audit)")
     match_pipeline: str = option("--match-pipeline", env="MATCH_PIPELINE", default="shared",
-                                 help="shared = one batch decomposition inside the global match")
+                                 help="shared = one batch decomposition inside the global match (a TP row's: per rank)")
     match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "gpu", "cpu"),
                               help="cpu = resume the CPU half over the capture already on disk; gpu (TP) = the capture and control alone, "
                                    "which need no Build, then the row stops")

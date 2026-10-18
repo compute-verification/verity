@@ -828,12 +828,13 @@ def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path,
     assert int(cmd[cmd.index("--timeout") + 1]) == leg and to == 4 * leg
 
 
-@pytest.mark.parametrize("argv, workers, reuse", [((), "0", []), (("--fold-rank-workers", "2", "--match-reuse", "fold"), "2", ["--reuse-fold"]),
-                                                  (("--match-reuse", "legs"), "0", ["--reuse-fold", "--reuse-legs"])])
-def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, monkeypatch, argv, workers, reuse):
+@pytest.mark.parametrize("argv, workers, reuse, shared", [((), "0", [], True), (("--fold-rank-workers", "2", "--match-reuse", "fold"), "2", ["--reuse-fold"], True),
+                                                          (("--match-reuse", "legs", "--match-pipeline", "standalone"), "0", ["--reuse-fold", "--reuse-legs"], False)])
+def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, monkeypatch, argv, workers, reuse, shared):
     """A GLM-5.3 B8 CPU half whose eight X-09 compares (200+ GB each) ran out of host memory reruns over the folds it persisted
     (`--match-reuse fold`, and with `legs` the compares and GM-01s it wrote), `--fold-rank-workers` ranks at a time; a capture removes
-    the folds and legs of any earlier one, so none is ever kept."""
+    the folds and legs of any earlier one, so none is ever kept.  Under the row's `--match-pipeline shared` (the default) each rank's
+    X-09 is its GM-01's (`--shared-x09`), as a single-GPU row's is."""
     t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
     t.fold_profile = "derived_GLM53_tp8"
     os.makedirs(t.M)
@@ -845,6 +846,7 @@ def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, 
     t.match()
     cmd = seen["match.fold_match"]
     assert cmd[cmd.index("--rank-workers") + 1] == workers and [a for a in cmd if a.startswith("--reuse-")] == reuse
+    assert ("--shared-x09" in cmd) is shared
     gpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu", *argv)
     os.makedirs(f"{gpu.M}/fold_match/rank0", exist_ok=True)
     monkeypatch.setattr(gpu, "run_gpu", lambda stage, to, log, cmd, **kw: 0)
@@ -863,6 +865,37 @@ def test_reused_legs_keep_a_b8_ranks_x09_compare_and_rerun_one_cut_short(tmp_pat
         doc.write_text(text)
         got = FM.compare_rank("/bin/false", tmp_path, tmp_path / "build", ["derived"], "dag", None, reuse=reuse)
         assert got["verdict"].split()[0] == verdict, (text, reuse, got)
+
+
+def test_a_b8_tp_ranks_x09_is_the_one_its_gm01_writes(tmp_path, monkeypatch):
+    """Under --shared-x09 a B>1 rank decomposes its fold once: GM-01 runs with --decomp-out and the rank's request Programs as --derived,
+    and the compare reads that document (rc as batch_decomp's CLI returns it) without a batch-decomp process; under --reuse-legs a
+    written global_match.json beside no X-09 document (a GM-01 run without --decomp-out) runs again."""
+    from verity_vllm.pipeline.tp import fold_match as FM
+    ran: list[list[str]] = []
+
+    def run(cmd, log, timeout=None):
+        ran.append(cmd)
+        (tmp_path / "global_match.json").write_text(json.dumps({"verdict": "PASS"}))
+        (tmp_path / "match_decomp.json").write_text(json.dumps({"verdict": "PASS", "requests": [{"canonical_equal": True}]}))
+        return 0
+
+    monkeypatch.setattr(FM, "_run", run)
+    (tmp_path / "global_match.json").write_text(json.dumps({"verdict": "PASS"}))
+    g = FM.global_match_rank("py", tmp_path, tmp_path / "gp.json", tmp_path / "wl.json", "dag", None, reuse=True, x09=["b0", "b1"])
+    assert g["ok"] and len(ran) == 1
+    cmd = ran[0]
+    assert cmd[cmd.index("--decomp-out") + 1] == str(tmp_path / "match_decomp.json")
+    assert [cmd[i + 1] for i, a in enumerate(cmd) if a == "--derived"] == ["b0", "b1"]
+    FM.global_match_rank("py", tmp_path, tmp_path / "gp.json", tmp_path / "wl.json", "dag", None, reuse=True, x09=["b0", "b1"])
+    assert len(ran) == 1
+    c = FM.compare_rank("/bin/false", tmp_path, tmp_path / "b0", ["b1"], "dag", None, shared=True)
+    assert (c["verdict"], c["rc"], c["comparator"]) == ("PASS", 0, "cb_a.global_match --decomp-out (X-09)") and len(ran) == 1
+    for doc, rc in (({"verdict": "MISSING_DERIVED"}, 4), (None, 3)):
+        p = tmp_path / "match_decomp.json"
+        p.write_text(json.dumps(doc)) if doc else p.unlink()
+        c = FM.compare_rank("/bin/false", tmp_path, tmp_path / "b0", ["b1"], "dag", None, shared=True)
+        assert c["verdict"].startswith("FAIL") and c["rc"] == rc
 
 
 def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_path, monkeypatch):

@@ -119,7 +119,8 @@ class TpRow(Row):
     def prepare(self) -> None:
         env = self.env
         self.ncb = env.native_collect_build or env.native_collect_default
-        self.setup({"NATIVE_COLLECT_BUILD": self.ncb, "VERITY_INSTANCES_FORM": self.cm.instances_form})
+        self.setup({"MATCH_IMPL": self.cm.match_impl, "MATCH_PIPELINE": self.cm.match_pipeline, "NATIVE_COLLECT_BUILD": self.ncb,
+                    "VERITY_INSTANCES_FORM": self.cm.instances_form})
         if not os.path.isfile(self.path(self.wl)):
             print(f"no manifest {self.wl}")
             raise Stop(2)
@@ -395,6 +396,8 @@ class TpRow(Row):
                     fargs += ["--gprog-rank", f"{r}={gp}"]
             if phase == "cpu" and cm.match_reuse != "off":
                 fargs += ["--reuse-fold", *(["--reuse-legs"] if cm.match_reuse == "legs" else [])]
+            if cm.match_pipeline == "shared":
+                fargs.append("--shared-x09")
             # --timeout bounds each subprocess: a rank runs three in turn (fold, compare, GM-01), and the cross-rank leg follows them
             rc_fold = self.run_tl("match.fold_match", 4 * to_f, f"{M}/fold_match.log",
                                   self.cli("tp-fold-match", "--capture", f"{M}/capture", "--profile", fp, *fargs, "--workload", self.wl,
