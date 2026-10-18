@@ -136,6 +136,10 @@ class GemmTarget:
     #: the NVFP4 (W4A4) linear (`CutlassNvFp4LinearKernel`: `cvt_fp16_to_fp4` then the block-scaled GEMM), as measured (`evidence`):
     #: its k64 block-scaled step (`targets.FP4_DOTS`); None = not recorded on this target.
     fp4_dot: str | None = None
+    #: why the record vouches for no batch-invariant launch (vLLM's `matmul_kernel_persistent` at the family's tuned table, the bf16
+    #: matmuls cuBLASLt runs under VLLM_BATCH_INVARIANT=1), when it vouches for none: `gemm_target_for` refuses the target to every
+    #: batch-invariant consumer, and only a served Build (`acquire.served_device`: cuBLAS at vLLM's defaults) reads its `dot`.
+    batch_invariant_refusal: str | None = None
 
     def launch_config(self, M: int, N: int, K: int) -> tuple[dict[str, Any], int, int, str]:
         """vLLM `_get_matmul_config(M, N, K, bf16, default)` on this target: `(constexprs, num_warps, num_stages, source)`;
@@ -245,6 +249,16 @@ REGISTERED: dict[str, GemmTarget] = {
                   "step misses 3,942 words, the swapped scale order 577, CUTLASS's 568, an unfused mul + add 575; the expert inputs' quant, "
                   "quant/K4096/G64 and quant/K192/G64 (300 rows each), exact against Fp8GroupQuant_v1{G=64}; the run's 21,952,000 words, "
                   "0 mismatched")),
+    # cc 10.0 (the B200): served Builds only.  cuBLAS's bf16 kernels there issue `tcgen05.mma.cta_group::1.kind::f16` (UTCHMMA), a k16
+    # step into a TMEM accumulator, and FA2 (the driver's JIT of vllm-flash-attn's compute_80 PTX) issues `mma.sync.m16n8k16`.  vLLM's
+    # family "blackwell" launches the batch-invariant Triton GEMM at a tuned table nothing here pins, so every batch-invariant
+    # consumer is refused (`batch_invariant_refusal`).
+    "blackwell": GemmTarget(
+        key="blackwell", compute_capabilities=((10, 0),), vllm_arch_family="blackwell", dot="HopperBF16WgmmaDot16", tuned_table={},
+        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}",
+        batch_invariant_refusal="vLLM's tuned 'blackwell' table of matmul_kernel_persistent is not pinned and no batch-invariant launch "
+                                "on cc 10.0 has a correspondence run",
+        evidence=("provisional: tc_probe r20261018-234914-864e (sm100.tcgen05.mma.bf16, sm100.mma.m16n8k16.bf16 on the B200) in flight",)),
 }
 
 
@@ -268,9 +282,10 @@ def vllm_tuned_gemm_arch_family(compute_capability: tuple[int, int]) -> str | No
     return None
 
 
-def gemm_target_for(compute_capability, arch_family: Any = ...) -> GemmTarget:
+def gemm_target_for(compute_capability, arch_family: Any = ..., *, batch_invariant: bool = True) -> GemmTarget:
     """The registered specialization for a target capability (and, when given, the arch family the host actually reported — it
-    must be the record's; a differing host answer is a refusal, not a re-selection).  Raises `UnregisteredGemmTarget`."""
+    must be the record's; a differing host answer is a refusal, not a re-selection).  `batch_invariant=False` is a served Build's
+    question (its cuBLAS GEMMs' k16 step), which a record with a `batch_invariant_refusal` answers.  Raises `UnregisteredGemmTarget`."""
     cc = (int(compute_capability[0]), int(compute_capability[1]))
     fam = vllm_tuned_gemm_arch_family(cc) if arch_family is ... else arch_family
     for t in REGISTERED.values():
@@ -278,6 +293,9 @@ def gemm_target_for(compute_capability, arch_family: Any = ...) -> GemmTarget:
             if fam != t.vllm_arch_family:
                 raise UnregisteredGemmTarget(f"numerics_unregistered: GEMM target cc {cc[0]}.{cc[1]} reports tuned_gemm_arch_family={fam!r}, the registered "
                                              f"'{t.key}' specialization requires {t.vllm_arch_family!r} (vLLM's table selection changed: not this Definition)")
+            if batch_invariant and t.batch_invariant_refusal:
+                raise UnregisteredGemmTarget(f"numerics_unregistered: GEMM target cc {cc[0]}.{cc[1]} (tuned_gemm_arch_family={fam!r}) is registered "
+                                             f"for served Builds only ('{t.key}'): {t.batch_invariant_refusal}")
             return t
     known = ", ".join(f"{t.key} (cc {'/'.join(f'{a}.{b}' for a, b in t.compute_capabilities)}, family {t.vllm_arch_family!r})" for t in REGISTERED.values())
     raise UnregisteredGemmTarget(f"numerics_unregistered: no registered GEMM specialization for target cc {cc[0]}.{cc[1]} "

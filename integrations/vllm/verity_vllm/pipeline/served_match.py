@@ -1,6 +1,8 @@
 """The Match of a served-compiled row on live data.
 
-vLLM serves the workload at its defaults (execution label ``compiled``) with every value of every engine step committed
+vLLM serves the workload at its defaults (execution label ``compiled``), with the row's ``engine.args`` laid over them and its
+switches judged as a Commit judges them (`engine.served`: each one away from vLLM's default declared with its ``engine.reasons``),
+with every value of every engine step committed
 (`ServedCompiledSource`: graph-safe acquisition, the native collector retaining the values on the host); the served Build is
 derived from that process's own compile artifact (`acquire.served`: its Inductor wrappers, vLLM's split graph, the kernels'
 launch configs, and each GEMM's cuBLAS route probed on this GPU); and the Build's Program is checked word for word against the
@@ -11,7 +13,7 @@ committed values (`check.replay.served_check`), with the weights the engine serv
 DIR gets match.json (the verdict), build.json (the Build, its compile artifact pinned: `acquire.served_artifact`),
 launch_configs.json, routes.json and facts.json.  With --build-of-record, the process's fresh Inductor dir is seeded with that
 Build's autotune winners and the Build derived here must carry its program digest.  Exit 0 when the Match passes, 1 when it fails,
-3 when the Build refuses the artifact.
+3 when the Build refuses the artifact, the device or the served switches.
 
 The process's own compile dirs are under DIR (`engine.env.own_compile_dirs`); the committer retains on the host
 (``VERITY_RETAIN=host``, which the run exports).
@@ -341,6 +343,7 @@ def main(a: Options) -> int:
     from verity_vllm.acquire.inductor_templates import Unmodelled
     from verity_vllm.acquire.sources import served_compiled_source as S
     from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+    from verity_vllm.engine import served as SW
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.engine.arrivals import run_requests_arrivals
 
@@ -355,11 +358,15 @@ def main(a: Options) -> int:
     src = S.ServedCompiledSource()
     src.install_hooks()
     eng = va.build_engine(config.CHECKPOINTS, max_num_seqs=a.max_num_seqs, case=a.case, execution="compiled",
-                          engine_args={"gpu_memory_utilization": a.gpu_memory_utilization, "kv_cache_memory_bytes": a.kv_cache_gib << 30})
+                          engine_args={**config.RowEngine.of(wl).args, "gpu_memory_utilization": a.gpu_memory_utilization,
+                                       "kv_cache_memory_bytes": a.kv_cache_gib << 30})
     src.note_engine(eng.model)
     facts = facts_of(eng)
+    facts["served"] = SW.record(list(eng.llm.collective_rpc(SW.read_rank)), SW.declared({**wl, "execution": "compiled"}))
     log(f"engine {a.case}: {json.dumps(eng.effective, default=str)[:400]}")
     try:
+        if not facts["served"]["ok"]:
+            raise Unmodelled("served switches: " + "; ".join(facts["served"]["problems"]))
         device_of(facts)
     except Unmodelled as e:
         log(f"Build refused: {e}")
