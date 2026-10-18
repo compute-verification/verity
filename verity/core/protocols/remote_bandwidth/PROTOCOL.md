@@ -999,10 +999,11 @@ and each window's, from it plus the node's capacities.
     and `scan` iterations. `ml.circuits.post_seed` mirrors it in Python for the prover, held to it by
     `lean/tests/test_post_seed_difftest.py`. The verdict binds the result to the session by equalities between things
     the verifier holds, each refused by name: W's digest is the one-stage audit's `program` (1); each memory-map
-    unit's `val{k}` row is W's value leaf at `pos[k]` (`map_value_leaves`, 2); the session's appends are the map
-    units' payloads (`RequirementLink.mapped`, 3). It carries W's digest, its \(L\) and its windows, and `ledger`
-    refuses a `PostSeed` whose \(L\) and windows aren't the record's (4, `property_reading`); a verdict of any other
-    kind is taken as given. That no appended block is credited past \(L\) the session checks itself (§4, `lifetime`).
+    unit's `val{k}` row is W's value leaf at `pos[k]` (`map_value_leaves`, 2); the session's appends, each pass's head
+    and its stale bound are the map units' (`RequirementLink.mapped(record)`, above, 3). It carries W's digest, its
+    \(L\) and its windows, and `ledger` refuses a `PostSeed` whose \(L\) and windows aren't the record's (4,
+    `property_reading`); a verdict of any other kind is taken as given. That no appended block is credited past \(L\)
+    the session checks itself (§4, `lifetime`).
 
     The record's windows and lifetime cap convert to property/v1's census steps as follows (memory-accounting,
     MEM-38). *Step ranges:* pass \(i\), in order, names step \(s_i\), with \(s_0 = -1\), and covers the census steps

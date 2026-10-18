@@ -11,7 +11,8 @@ by construction. What is left is binding, each an equality between things the ve
 1. ``program``: W's digest (`codec.program_digest`) is `audited`, the one-stage audit's `program`;
 2. ``values``: each memory-map unit's ``val{k}`` row is W's value leaf at ``pos[k]`` (`map_value_leaves` of its public row
    under `map_statics`): `map_rows[i]` its rows' commit strings, `values` the one-stage value commitments' leaves;
-3. ``mapped``: the session's appends are the map units' payloads, the memory-map unit's verdict, passed in;
+3. ``mapped``: the session's appends, each pass's head and its stale bound are the map units', the memory-map unit's
+   verdict on the record, passed in;
 
 and ``property``: P(c, R_in, L) holds at B operand bits. The windows and L are the record's, read by
 `audit.property_reading` (binding 4), which the session holds the verdict to.

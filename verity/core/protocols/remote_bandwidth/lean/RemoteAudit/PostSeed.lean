@@ -12,7 +12,8 @@ writers' Program W at its step ends, under the windows and lifetime cap the sess
 1. ``program``: W's SHA-512 (`Flock.Program.Prog.sha512`, `codec.program_digest`) is `audited`, the one-stage audit's;
 2. ``values``: each memory-map unit's ``val{k}`` row is the one-stage value commitments' leaf at ``pos[k]``
    (`mapValueLeaves` of its public row);
-3. ``mapped``: the session's appends are the map units' payloads (the memory-map unit's verdict, given);
+3. ``mapped``: the session's appends, each pass's head and its stale bound are the map units' (the memory-map unit's
+   verdict on the record, given);
 
 and ``property``: P(c, R_in, L) holds at B operand bits. The census is W's by construction: the verdict computes what it
 reads of W at the ends it is given.
