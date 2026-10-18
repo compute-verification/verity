@@ -1,0 +1,702 @@
+"""One-stage audit, run A8: GLM-5.3 TP8 B1 (row ``glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager``), rank 0, through
+the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family) whose unit M0 lowers (`a8_kinds.py`'s table)
+is a template, its units staged from the step's own values, sampled by the stratified law in one audit, proved by M0 under
+``--zk`` and held by the Lean verifier of record.
+
+    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
+      python benchmarks/one_stage/a8.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
+      --lean flock-verify --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
+
+* **Values.** ``--values`` is `a8_slice.py`'s tar extracted: rank 0's observation log, the capture's snapshots of a few
+  layers' events (activations, copied right after each call) and ``ckpt/``, the checkpoint of record's tensors of those
+  layers. The log is folded into the request Program's root Calls (`observe.fold`, the integration's derived profile). A
+  Call's operand is the snapshot of its view taken before the Call ran, else (an operand produced outside the slice's
+  events) the producing Call's output snapshot; a weight field is composed for rank 0 of 8 from the checkpoint by
+  `check.weights_of_record.compose` and the Build's load-time ue8m0 rewrite (`check.fp8_ue8m0`, roles from ``--roles``), the
+  composition whose per-field digests the Commit's weights pin held equal to the served parameters; the rotary table is the
+  capture's ``cos_sin_cache.npy``. A Call reading another rank's values (``peers``) has none here and is not staged.
+* **Units.** The Call is evaluated gate by gate (`circuits.evaluate`) on those operands and held to the capture's output
+  snapshot (the twin); its first ``--per-kind`` unit calls (the kind's unit, `a8_kinds.chain`) give each unit's arguments
+  and returns. Each is packed into the unit's rows (`a8_kinds.rows_of`) and staged by C-Flock's `UnitStager` bound to the
+  partition, whose IR reference check and the transcript's returns must agree.
+* **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one registration before the
+  draw; the verifier's Lean stratified draw over its own program and partition; each member serves its share
+  (``serve --zk --draw-file``) and Lean ``verify --zk --partition --program`` holds each session; the audit record and
+  a6's negatives. A tampered copy of one kind's member (bit 0 of every instance's first output word flipped before it is
+  committed) is registered and proved on its own (``subset:2``), and the Lean verifier must refuse it.
+
+The window is a stand-in: the Commit (``retain=host``) kept no values, so these are the Match capture's, an independent
+instrumented run of the same row whose equality to the Commit's committed values rests on the row's oracle comparison and
+token equality, provenance and not proof.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+import time
+import traceback
+from pathlib import Path
+
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "served_units"))
+sys.setrecursionlimit(100000)
+
+import a0  # noqa: E402
+import a6  # noqa: E402
+import a8_kinds as K  # noqa: E402
+from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
+from verity.ml.circuits.program import Program  # noqa: E402
+from verity.ml.circuits.refs import runs  # noqa: E402
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity_flock import circuit as FC  # noqa: E402
+from verity_flock import class_statement as CS  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+
+ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
+WINDOW_OF = ("GLM-5.3 TP8 B1 rank 0's step values: the Match capture's activation snapshots of row " + ROW
+             + " and its weights composed for rank 0 from the checkpoint of record (zai-org/GLM-5.3 aca966e4)")
+LINK = ("provenance, not proof: the Commit (retain=host) kept no values; the Match capture is an independent instrumented run of "
+        "the same row, equal to the Commit by the row's oracle comparison (TP partials) and token equality, and its weights by "
+        "the Commit's weights pin (per-field sha256 of the served parameters against this composition)")
+LAYER = re.compile(r"layers\.(\d+)/")
+WRAPPER = "inner.model."
+
+
+def field_type(t, name: str):
+    """The type of weights field ``name`` (`_field_intervals`' ``a[i].b`` names) in the weights Record ``t``."""
+    for part in name.split("."):
+        m = re.fullmatch(r"(\w+)(?:\[(\d+)\])?", part)
+        t = t.fields[t.index(m[1])][1]
+        if m[2] is not None:
+            t = t.elem
+    return t
+
+
+def shape_bits(t) -> tuple[list[int], int]:
+    shape = []
+    while hasattr(t, "elem"):
+        shape.append(t.n)
+        t = t.elem
+    return shape, t.w
+
+
+class Weights:
+    """Leaves of the Program's ``weights`` parameter: each field composed for rank ``rank`` of ``world`` from the checkpoint of
+    record, as `weights_of_record` composes the field it pins."""
+
+    def __init__(self, wtype, profile, ckpt: Path, roles_file: Path | None, cos_sin: Path, world: int = 8, rank: int = 0) -> None:
+        from verity_vllm.check import fp8_ue8m0, weights_of_record as WR
+        from verity_vllm.check.checkpoint_index import CheckpointIndex
+        from verity_vllm.program.frontend.rules.family import _field_intervals
+        self.WR, self.wtype, self.world, self.rank, self.cos_sin = WR, wtype, world, rank, cos_sin
+        self.ck = CheckpointIndex(str(ckpt), verify_shards=False)
+        self.intervals = _field_intervals(wtype, "")
+        roles = {}
+        if roles_file is not None:
+            roles = fp8_ue8m0.build_roles(str(roles_file.parent)) if roles_file.name.startswith("derive-report") else {}
+        # every served name the Program can read: the Build's roles, the checkpoint's own names and their fused names
+        names = {f[len(WRAPPER):] if f.startswith(WRAPPER) else f for f in roles} | set(self.ck.tensors)
+        for n in list(self.ck.tensors):
+            for fused, srcs in WR.FUSED.items():
+                for s in srcs:
+                    if f".{s}." in n:
+                        names.add(n.replace(f".{s}.", f".{fused}."))
+            m = re.match(r"^(model\.layers\.\d+)\.self_attn\.kv_b_proj\.weight$", n)
+            if m:
+                names |= {f"{m[1]}.self_attn.W_UK_T", f"{m[1]}.self_attn.W_UV"}
+        self.served: dict[str, str] = {}
+        for n in sorted(names):
+            path = profile.weight_field(n)
+            if path:
+                key = ".".join(f"{p}[{path[i + 1]}]" if i + 1 < len(path) and isinstance(path[i + 1], int) else str(p)
+                               for i, p in enumerate(path) if not isinstance(p, int))
+                self.served.setdefault(key, n)
+        self.dims = {}
+        for f, s in self.served.items():
+            self.dims[WRAPPER + s] = shape_bits(field_type(wtype, f))
+        for n, (_fn, _dt, shape, _lo, _hi) in self.ck.tensors.items():
+            self.dims.setdefault(WRAPPER + n, ([shape[0] // world] + list(shape[1:]) if shape else [], 0))
+        self.rw = fp8_ue8m0.Rewrites(list(self.dims), roles, self._raw, self.ck.config)
+        self.notes: dict[str, dict] = {}
+        self._cache: dict[str, np.ndarray] = {}
+
+    def _raw(self, field: str):
+        shape, bits = self.dims[field]
+        live = field[len(WRAPPER):]
+        return self.WR.compose(live, shape, bits or {"F8_E4M3": 8, "F32": 32, "BF16": 16}[self.ck.dtype(live)], self.ck,
+                               world=self.world, rank=self.rank)
+
+    def field(self, name: str) -> np.ndarray:
+        if name in self._cache:
+            return self._cache[name]
+        shape, bits = shape_bits(field_type(self.wtype, name))
+        if name == "cos_sin":
+            arr, note = np.load(self.cos_sin), {"rule": "the capture's rank0/cos_sin_cache.npy (the served table's words)"}
+        else:
+            live = self.served.get(name)
+            if live is None:
+                raise LookupError(f"weights field {name}: no served parameter maps to it")
+            full = WRAPPER + live
+            arr, note = (self.rw.compose(full, shape) if self.rw.covers(full)
+                         else self.WR.compose(live, shape, bits, self.ck, world=self.world, rank=self.rank))
+        w = np.ascontiguousarray(arr).reshape(-1)
+        if w.size != int(np.prod(shape)):
+            raise LookupError(f"weights field {name}: {w.size} words for shape {shape}")
+        self._cache[name] = w
+        self.notes[name] = {"served": self.served.get(name), "sha256": hashlib.sha256(w.tobytes()).hexdigest(),
+                            **{k: note.get(k) for k in ("rule", "shard", "cast")}}
+        return w
+
+    def words(self, lo: int, hi: int) -> np.ndarray:
+        out = []
+        for flo, fhi, name in self.intervals:
+            if fhi <= lo or flo >= hi:
+                continue
+            try:
+                w = self.field(name)
+            except KeyError as e:
+                raise LookupError(f"weights field {name}: {e}") from None
+            out.append(w[max(lo, flo) - flo:min(hi, fhi) - flo].astype(np.uint64))
+        w = np.concatenate(out) if out else np.zeros(0, np.uint64)
+        if w.size != hi - lo:
+            raise LookupError(f"weights leaves [{lo}, {hi}) not covered")
+        return w
+
+
+def fold_values(vdir: Path, profile_name: str, roles: Path | None):
+    """The rank's log folded into the request Program's root Calls, its snapshots, and the weights."""
+    from verity_vllm.check.fold_compare import SnapshotStore, Values, _attach_specs, load_profile
+    from verity_vllm.observe.events import RunHeader
+    from verity_vllm.observe.fold.fold import fold
+    from verity_vllm.observe.fold.patterns.pouw import with_protocols
+    from verity_vllm.observe.log import read_log
+    t0 = time.time()
+    profile = load_profile(profile_name)
+    events = list(read_log(next(vdir.glob("log.rank*.jsonl.gz"))))
+    header = next((e for e in events if isinstance(e, RunHeader)), None)
+    res = fold(events, with_protocols(profile, header), strict=None, with_program=False)
+    _attach_specs(res)
+    store = SnapshotStore(vdir / "rank0")
+    weights = Weights(res.params[-1][1], profile, vdir / "ckpt", roles, vdir / "rank0" / "cos_sin_cache.npy")
+
+    class A8Values(Values):
+        def of_run(self, space, idx, lo, hi):
+            if space == "p":
+                if idx == self.W:
+                    return weights.words(lo, hi)
+                name = self.r.params[idx][0]
+                if name == "prompt":
+                    toks = self.r.requests[0]["prompt_token_ids"]
+                    return np.array([int(t) & 0xFFFFFFFF for t in toks[lo:hi]], dtype=np.uint64)
+                raise LookupError(f"parameter {name!r}: another rank's values, which this slice does not hold")
+            return super().of_run(space, idx, lo, hi)
+
+    return res, store, weights, A8Values(res, store, None), round(time.time() - t0, 1)
+
+
+def operands(res, store, vals, m: dict) -> list[np.ndarray]:
+    """Each operand's words: its view's snapshot before the Call ran, else by provenance (weights, prompt, producers' outputs)."""
+    from verity_vllm.check.fold_compare import _in_place
+    node = res.body.nodes[m["node"]]
+    out = []
+    for k, a in enumerate(node.args):
+        rr = runs(a.refs)
+        view = m["operand_views"][k] if k < len(m["operand_views"]) else None
+        w = None
+        if not all(s == "p" for s, *_ in rr) and view is not None and view.numel == a.refs.count:
+            s = store.find(view, before=m["event"] if _in_place(m) else m["event"] + 1)
+            if s is not None:
+                w = store.extract(s, view).astype(np.uint64)
+        out.append(w if w is not None else vals.of_refs(a.refs).astype(np.uint64))
+    return out
+
+
+def output_words(store, m: dict) -> np.ndarray | None:
+    parts = []
+    for view in m["output_views"]:
+        s = None if view is None else store.find(view, at=m["event"])
+        if s is None:
+            return None
+        parts.append(store.extract(s, view).astype(np.uint64))
+    return np.concatenate(parts) if parts else None
+
+
+def find_units(circuit, unit, n: int) -> list:
+    out: list = []
+
+    def walk(calls) -> None:
+        for c in calls:
+            if len(out) >= n:
+                return
+            if c.is_primitive:
+                continue
+            if c.fn.id == unit.id:
+                out.append(c)
+            elif c.fn.gates > unit.gates:
+                walk(c.children())
+
+    walk(circuit.root_calls())
+    return out
+
+
+def evaluate_units(spec, unit, args: list[np.ndarray], n: int, full_gates: int) -> dict:
+    """The Call evaluated gate by gate on ``args``; the first ``n`` unit calls' argument and return leaves."""
+    t0 = time.time()
+    prog = Program(spec)
+    C = prog.circuit
+    t: dict[int, int] = {}
+    for pi, w in enumerate(args):
+        gates = [(lo, hi) for _s, _i, lo, hi in runs(prog.input_coll(pi).refs)]
+        if sum(hi - lo for lo, hi in gates) != w.size:
+            raise ValueError(f"parameter {pi}: {w.size} words for {sum(hi - lo for lo, hi in gates)} input gates")
+        vals, at = w.tolist(), 0
+        for lo, hi in gates:
+            t.update(zip(range(lo, hi), vals[at:at + hi - lo]))
+            at += hi - lo
+    n_in = prog.input_gates
+    if unit.id == spec.id:
+        units = None
+        hi = C.size
+    else:
+        units = find_units(C, unit, n)
+        if not units:
+            raise ValueError(f"no {unit.id} call in {spec.id}")
+        hi = C.size if C.size - n_in <= full_gates else max(c.hi for c in units)
+    evaluate_region(C, C.region(n_in, hi), t)
+    outs = C.root_outputs()
+    got = [t.get(g) for g in outs]
+    if units is None:
+        leaves_in = [[t[g] for g in range(n_in)]]
+        leaves_out = [got]
+    else:
+        leaves_in = [[t[g] for g in c.args] for c in units]
+        leaves_out = [[t[g] for g in c.returns] for c in units]
+    return {"in": leaves_in, "out": leaves_out, "call_out": got, "gates": C.size - n_in, "evaluated": hi - n_in,
+            "seconds": round(time.time() - t0, 1)}
+
+
+def pack(vals, widths, pad16: bool = False) -> np.ndarray:
+    """Leaves little-endian bit-concatenated (`class_statement.unit_lowering`'s rows) as u16 words."""
+    bits = []
+    i = 0
+    while i < len(widths):
+        j = i
+        while j < len(widths) and widths[j] == widths[i]:
+            j += 1
+        w, v = widths[i], vals[i:j]
+        if w in (8, 16, 32, 64):
+            dt = {8: "<u1", 16: "<u2", 32: "<u4", 64: "<u8"}[w]
+            bits.append(np.unpackbits(np.asarray([int(x) & ((1 << w) - 1) for x in v], dtype=np.uint64).astype(dt).view(np.uint8),
+                                      bitorder="little"))
+        elif w < 64:
+            a = np.asarray([int(x) for x in v], dtype=np.uint64)
+            bits.append(((a[:, None] >> np.arange(w, dtype=np.uint64)) & 1).astype(np.uint8).reshape(-1))
+        else:
+            bits.append(np.array([(int(x) >> b) & 1 for x in v for b in range(w)], dtype=np.uint8))
+        i = j
+    b = np.concatenate(bits) if bits else np.zeros(0, np.uint8)
+    if b.size % 16:
+        if not pad16:
+            raise ValueError(f"{b.size} bits are not whole u16 words")
+        b = np.concatenate([b, np.zeros(16 - b.size % 16, np.uint8)])
+    return np.packbits(b, bitorder="little").view("<u2").copy()
+
+
+def unit_rows(unit, rows_spec, leaves_in: list[list[int]], leaves_out: list[list[int]]):
+    """Each instance's input rows ``{row: (n, words)}`` and output ports ``{o{j}: (n, words)}`` from its leaves."""
+    params, ret = unit.signature()
+    spans, at = {}, 0
+    for name, t in params:
+        spans[name] = (at, at + t.leaves, t.leaf_widths())
+        at += t.leaves
+    rows = {}
+    for r, _s, _b, ps in rows_spec:
+        per = []
+        for lv in leaves_in:
+            vals, ws = [], []
+            for p in ps:
+                lo, hi, w = spans[p]
+                vals += lv[lo:hi]
+                ws += w
+            per.append(pack(vals, ws))
+        rows[r] = np.stack(per)
+    fields = ret.fields if hasattr(ret, "fields") else (ret,)
+    outs, at = {}, 0
+    for j, f in enumerate(fields):
+        outs[f"o{j}"] = np.stack([pack(lv[at:at + f.leaves], f.leaf_widths(), pad16=True) for lv in leaves_out])
+        at += f.leaves
+    return rows, outs
+
+
+def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit_gates: int):
+    """The kind's Calls in the chosen steps and layers (layer-less Calls too), earliest step first, each with its unit: the
+    deepest Definition of the Call's chain in the probed unit's family."""
+    cands = []
+    for m in res.instances:
+        if K.family(m["spec"]) != kind or m["step"] not in steps:
+            continue
+        lm = LAYER.search(m["name"])
+        if lm and int(lm[1]) not in layers:
+            continue
+        cands.append(m)
+    cands.sort(key=lambda m: (steps.index(m["step"]), m["event"]))
+    for m in cands:
+        spec = res.body.nodes[m["node"]].fn
+        unit = next((f for f, _n in reversed(K.chain(spec, unit_gates)) if K.family(f.id) == unit_fam), None)
+        if unit is not None:
+            yield m, spec, unit
+
+
+def call_twin(store, m: dict, got: list) -> dict:
+    """The evaluated Call's returns against the capture's output snapshot, on the returns evaluated."""
+    want = output_words(store, m)
+    if want is None:
+        return {"compared": 0, "agree": None, "why": "no output snapshot"}
+    if len(want) != len(got):
+        return {"compared": 0, "agree": False, "why": f"{len(got)} returns vs {len(want)} snapshot words"}
+    idx = [i for i, g in enumerate(got) if g is not None]
+    diff = [i for i in idx if int(got[i]) != int(want[i])]
+    return {"compared": len(idx), "of": len(got), "agree": not diff, "first_diff": diff[:4]}
+
+
+def kind_values(res, store, vals, rec: dict, a) -> dict:
+    """One kind: a Call whose operands resolve, evaluated and held to its output snapshot, and its first ``--per-kind`` units'
+    rows; a kind whose unit is the Call itself takes one unit from each of up to ``--per-kind`` Calls of that Definition."""
+    steps, layers = [int(s) for s in a.steps.split(",")], {int(x) for x in a.layers.split(",")}
+    why, tried = [], 0
+    acc: dict | None = None
+    for m, spec, unit in pick(res, rec["kind"], K.family(rec["unit"]), steps, layers, a.unit_gates):
+        if acc is not None and len(acc["in"]) >= a.per_kind:
+            break
+        if acc is not None and spec.id != acc["spec"]:
+            continue
+        tried += 1
+        if acc is None and tried > a.tries:
+            break
+        try:
+            args = operands(res, store, vals, m)
+        except LookupError as e:
+            why.append(f"{m['name']}: {e}")
+            continue
+        if acc is None:
+            rows_spec = K.rows_of(unit)
+            if rows_spec is None:
+                return {"staged": False, "why": f"{unit.id}: the parameters' bits are not whole u16 words"}
+            acc = {"unit": unit, "spec": spec.id, "rows_spec": rows_spec, "in": [], "out": [], "calls": [], "twins": [], "evals": []}
+        ev = evaluate_units(spec, unit, args, a.per_kind - len(acc["in"]), a.full_gates)
+        twin = call_twin(store, m, ev.pop("call_out"))
+        acc["in"] += ev.pop("in")
+        acc["out"] += ev.pop("out")
+        acc["calls"].append({"name": m["name"], "step": m["step"], "event": m["event"], "node": m["node"]})
+        acc["twins"].append(twin)
+        acc["evals"].append(ev)
+        if unit.id != spec.id:
+            break
+    if acc is None:
+        return {"staged": False, "why": "; ".join(why[-3:]) or "no Call of this kind in the slice's steps and layers"}
+    rows, outs = unit_rows(acc["unit"], acc["rows_spec"], acc["in"], acc["out"])
+    agree = [t["agree"] for t in acc["twins"]]
+    twin = {"calls": len(agree), "agree": False if False in agree else (True if all(agree) else None),
+            "compared": sum(t["compared"] for t in acc["twins"]), "each": acc["twins"][:4]}
+    c0 = acc["calls"][0]
+    return {"staged": True, "unit": acc["unit"], "spec": acc["spec"], "name": c0["name"], "step": c0["step"], "event": c0["event"],
+            "calls": acc["calls"], "rows_spec": acc["rows_spec"], "rows": rows, "outs": outs, "n": len(acc["in"]), "twin": twin,
+            "eval": acc["evals"][0], "skipped_calls": why[-3:]}
+
+
+def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_name: str) -> dict:
+    """`UnitStager.stage` with bit 0 of every instance's first output word flipped before the set is committed."""
+    from types import SimpleNamespace
+    iset = SimpleNamespace(**{**vars(st.iset), "name": set_name})
+    n = len(rows[st.in_rows[0][0]])
+    flat = np.concatenate([np.asarray(rows[r], dtype=np.uint16) for r in st.row_ports], axis=1)
+    got, _cut, ok = st.low.evaluate(flat.astype(np.uint64))
+    if int(ok) != (1 << n) - 1:
+        raise AssertionError(f"{st.name}: a unit is unsatisfied on its rows")
+    got = got.astype(np.uint16)
+    at = np.cumsum([0] + st.out_words)
+    outs = {f"o{j}": got[:, at[j]:at[j + 1]].copy() for j in range(len(st.out_words))}
+    st.reference_check(rows, outs)
+    outs["o0"][:, 0] ^= 1
+    salts = FC.stage_salts(iset, 0, n, st.ports, salt_key)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    FC.write(st.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+             rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in st.in_rows}, outs=outs, salts=salts, public_words={},
+             digests=(st.pin, st.class_sha512), indices=[int(u) for u in indices])
+    return {"meta": json.loads(st._meta), "tampered": "o0", "word": 0, "bit": 0}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--values", required=True, help="a8_slice.py's tar, extracted")
+    ap.add_argument("--kinds", required=True, help="a8_kinds.py's table")
+    ap.add_argument("--roles", default=None, help="the Build's derive-report.json (weight_roles: the ue8m0 rewrite)")
+    ap.add_argument("--profile", default="derived_GLM53_tp8")
+    ap.add_argument("--bin", required=True)
+    ap.add_argument("--lean", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--per-kind", type=int, default=8, help="units staged per kind (at most the statement cap)")
+    ap.add_argument("--steps", default="1,0", help="steps to take a kind's Call from, in preference order")
+    ap.add_argument("--layers", default="0,3")
+    ap.add_argument("--only", default=None, help="comma-separated kinds")
+    ap.add_argument("--k", type=int, default=None, help="the stratified rule's k (default: one unit a template)")
+    ap.add_argument("--tries", type=int, default=4, help="Calls tried per kind")
+    ap.add_argument("--unit-gates", type=int, default=4096)
+    ap.add_argument("--full-gates", type=int, default=4_000_000, help="a Call up to this many gates is evaluated whole")
+    ap.add_argument("--tamper", default=None, help="the kind whose member is tampered (default: the first staged)")
+    ap.add_argument("--delta", type=float, default=2.0 ** -20)
+    ap.add_argument("--port", type=int, default=7581)
+    ap.add_argument("--values-only", action="store_true", help="stop after staging values (no registration or proofs)")
+    a = ap.parse_args()
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    summary: dict = {"row": ROW, "rank": 0, "steps": a.steps, "layers": a.layers, "per_kind": a.per_kind}
+
+    table = json.loads(Path(a.kinds).read_text())
+    kinds = {f: r for f, r in table["kinds"].items() if r.get("gates", 0) > 0 and not f.startswith("Const")}
+    lowers = [f for f, r in kinds.items() if r.get("outcome") == "lowers" and (not a.only or f in a.only.split(","))]
+    res, store, weights, vals, fold_s = fold_values(Path(a.values), a.profile, Path(a.roles) if a.roles else None)
+    print(f"A8 fold: {len(res.instances)} Calls, {len(store.entries)} snapshots, {len(weights.served)} weight fields mapped, {fold_s} s",
+          flush=True)
+    staged, rows_of_kind = {}, {}
+    for f in lowers:
+        t = time.time()
+        try:
+            kv = kind_values(res, store, vals, {"kind": f, **kinds[f]}, a)
+        except Exception as e:  # noqa: BLE001
+            kv = {"staged": False, "why": f"{type(e).__name__}: {str(e)[:400]}", "trace": traceback.format_exc()[-1500:]}
+        kv["seconds"] = round(time.time() - t, 1)
+        staged[f] = {x: (y.id if x == "unit" else y) for x, y in kv.items() if x not in ("rows", "outs", "rows_spec")}
+        if kv["staged"]:
+            rows_of_kind[f] = kv
+        print(f"A8 values {f}: " + json.dumps(staged[f], default=str)[:700], flush=True)
+    summary["values"] = staged
+    summary["weights"] = weights.notes
+    if a.values_only or not rows_of_kind:
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        return 0 if rows_of_kind else 1
+
+    # templates: one per unit Definition; kinds sharing one are consecutive members of its range
+    templates: dict[str, dict] = {}
+    for f, kv in rows_of_kind.items():
+        templates.setdefault(kv["unit"].id, {"defn": kv["unit"], "kinds": []})["kinds"].append(f)
+    defs = [t["defn"] for t in templates.values()]
+    ns = [sum(rows_of_kind[f]["n"] for f in t["kinds"]) for t in templates.values()]
+    program = P.mixed_population_program(list(zip(defs, ns)))
+    query = P.template_instances_query(defs)
+    part = P.partition(program, query)
+    pd = P.digest(part)
+    n_all = P.units(program, query)
+    ranges = P.ranges(program, query)
+    (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
+    (out / "program.json").write_bytes(canonical_json(encode_program(program)))
+    k = a.k or len(defs)
+    law = D.parse_law(f"stratified:{k}")
+    bound = {"partition": pd, "program": part["program"]}
+
+    members = []
+    for (uid, tpl), (tid, base, cnt) in zip(templates.items(), ranges):
+        assert tid == P.template_id(tpl["defn"])
+        t0 = time.time()
+        tag = K.family(uid)
+        sdir = out / f"stage-{tag}"
+        kv0 = rows_of_kind[tpl["kinds"][0]]
+        st = CS.UnitStager(tpl["defn"], f"unit/a8-{tag}", kv0["rows_spec"], [(V2, tuple(range(len(kv0["outs"]))))],
+                           circuit=sdir / "circuit.txt", bind=bound)
+        tpl["stager"], t_build = st, round(time.time() - t0, 1)
+        cap = a6.chunk_cap(st.meta)
+        salt_key = hashlib.sha256(f"verity/one-stage/a8/salts\0{uid}".encode()).digest()
+        lo = 0
+        for f in tpl["kinds"]:
+            kv, t1 = rows_of_kind[f], time.time()
+            n = kv["n"]
+            if n > cap:
+                raise SystemExit(f"{f}: {n} units over the statement cap {cap}; lower --per-kind")
+            d, set_name = sdir / f, f"{st.iset.name}-{f}"
+            got = st.stage(kv["rows"], d, salt_key, indices=range(base + lo, base + lo + n), set_name=set_name)
+            (d / "inst.bin").rename(d / f"inst-{n}.bin")
+            (d / "pub.bin").rename(d / f"pub-{n}.bin")
+            (d / "tables").mkdir(exist_ok=True)
+            if not (d / "circuit.txt").exists():
+                (d / "circuit.txt").symlink_to("../circuit.txt")
+            agree = all(np.array_equal(np.asarray(got["outs"][o], dtype=np.uint16)[:, :kv["outs"][o].shape[1]], kv["outs"][o])
+                        for o in kv["outs"])
+            ms = {"tag": f, "dir": d, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name, "lo": lo, "n": n,
+                  "cap": cap, "twin": {"agrees": agree, "instances": n, "call": kv["twin"]}, "ands": got["ands"],
+                  "unit_nnz": got["unit_nnz"], "seconds": {"build": t_build if lo == 0 else 0.0, "stage": round(time.time() - t1, 1)},
+                  "partition_file": out / "partition.json", "program_file": out / "program.json"}
+            members.append({"name": f, "kind": f, "n": n, "base": base + lo, "defn": tpl["defn"], "st": ms,
+                            "header": a0.public_header(d, n), "salt_key": salt_key, "stager": st, "rows": kv["rows"]})
+            print(f"A8 staged {f}: {n} units of {uid} from {base + lo} (cap {cap}), {got['ands']} ANDs, k_log {st.meta.get('k_log')}, "
+                  f"unit twin {agree}, Call twin {kv['twin']}, {ms['seconds']}", flush=True)
+            lo += n
+    summary["members"] = [{"name": m["name"], "template": P.template_id(m["defn"]), "n": m["n"], "base": m["base"], "set": m["st"]["set"],
+                           "cap": m["st"]["cap"], "ands": m["st"]["ands"], "unit_nnz": m["st"]["unit_nnz"],
+                           "k_log": m["st"]["meta"].get("k_log"), "pin": m["st"]["pin"], "class": m["st"]["class"],
+                           "twin": m["st"]["twin"], "stage_s": m["st"]["seconds"]} for m in members]
+
+    # one registration, before the draw
+    want, roots, publics = {}, [], {}
+    for m in members:
+        fv = m["header"]["frame_v3"]
+        for port, w in a6.frame_ports(m["st"]["set"], m["st"]["meta"], m["n"]).items():
+            want[f"{m['name']}/{port}"] = w
+            roots.append({"port": f"{m['name']}/{port}", "root": fv["roots"][port], "leaves": w["leaves"], "domain": fv["domain_ids"][port]})
+        publics[m["name"]] = a0.sha512_file(m["st"]["dir"] / f"pub-{m['n']}.bin")
+    leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
+    window = {"kind": "stand-in", "of": WINDOW_OF, "link": LINK,
+              "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]],
+                                      "call": staged[m["kind"]]["name"], "step": staged[m["kind"]]["step"]} for m in members}}
+    rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
+    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    for m in members:
+        checks[f"statement/{m['name']}"] = a6.statement_checks(m, rec, want)
+        ok = m["st"]["twin"]["agrees"] and m["st"]["twin"]["call"].get("agree") is not False
+        checks[f"twin/{m['name']}"] = {"ok": ok, "codes": [] if ok else ["twin"], "detail": m["st"]["twin"]}
+    receipt = R.receipt(rec, "one-stage-e2e verifier (a8.py)")
+    (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
+    summary.update(population=n_all, partition=pd, registration=R.digest(rec), law=rec["law"],
+                   checks_before_draw={c: v["ok"] for c, v in checks.items()})
+    if not all(v["ok"] for v in checks.values()):
+        summary["checks"] = checks
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        print("A8 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}, default=str))
+        return 1
+
+    # the verifier's stratified draw, by its own Lean over its own program and partition object; each member serves its share
+    p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+                "--stratified", str(k)], out / "draw.log")
+    lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
+    (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
+    served, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
+    for j, m in enumerate(members):
+        local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + m["n"])
+        counts[m["name"]] = len(local)
+        if not local:
+            continue
+        sdir = out / f"session-{m['name']}"
+        sdir.mkdir(parents=True, exist_ok=True)
+        (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m["n"], "k": len(local), "units": local}, sort_keys=True))
+        t = time.time()
+        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{len(local)}", a.port + j, sdir, draw_file=sdir / "draw.json", zk=True)
+        session_s = round(time.time() - t, 1)
+        draw_t = (record or {}).get("unit_draw") or {}
+        v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
+        served += [m["base"] + u for u in draw_t.get("units", [])]
+        session_roots.update({f"{m['name']}/{port}": r for port, r in ((live or {}).get("roots") or {}).items()})
+        proved += a0.proved_units(m["header"], live or {})
+        instances += (live or {}).get("instances", 0)
+        lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
+                                             "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
+        verdicts[f"m0-verifier/{m['name']}"] = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
+                                                and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
+                                                "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
+        verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
+        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, zk=True),
+                                                "tool": "flock-verify verify --zk --archive --partition --program"}
+        statement[m["name"]] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
+                                "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
+                                "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
+                                "lean_verify_s": verdicts[f"lean-verify/{m['name']}"].get("verify_s"),
+                                "lean_partition": verdicts[f"lean-verify/{m['name']}"].get("partition")}
+        sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
+        lv, mv = verdicts[f"lean-verify/{m['name']}"], verdicts[f"m0-verifier/{m['name']}"]
+        print(f"A8 session {m['name']}: {len(local)} units, M0 {mv['accepted']}, Lean {lv['accepted']} {lv.get('why') or ''}, "
+              f"{session_s} s", flush=True)
+    result = V.audit_record(rec, receipt, lean_draw, rec["law"], sorted(proved), instances, statement, verdicts, a.delta,
+                            sessions=sessions, served=sorted(served), session_roots=session_roots)
+    result["draw_counts"] = counts
+    result["checks_before_draw"] = checks
+    (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
+
+    # negatives: a6's, each re-deciding one input altered
+    neg: dict[str, dict] = {}
+    fewer = P.mixed_population_program([(d, n - (1 if i == 0 else 0)) for i, (d, n) in enumerate(zip(defs, ns))])
+    v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    if len(defs) > 1:
+        v = V.check(rec, program, P.template_instances_query(defs[:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
+        neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    for name, other in (("registration-law-another-k (R1)", D.parse_law(f"stratified:{k + 1}")),
+                        ("registration-law-subset-not-stratified (R1)", D.parse_law(f"subset:{k}"))):
+        v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
+        neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = V.check(rec, program, query, law, a0.SCHEME, want,
+                leaf_layer=hashlib.sha512(canonical_json({**publics, members[0]["name"]: "00" * 64})).hexdigest())
+    neg["public-file-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = V.check_draw({**lean_draw, "units": lean_draw["units"][:-1] + [n_all]}, rec, rec["law"])
+    neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
+    if proved:
+        v = V.check_proved(lean_draw, proved[1:], len(proved) - 1)
+        neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
+        moved = sorted(proved)
+        moved[0] = next(u for u in range(n_all) if u not in lean_draw["units"])
+        v = V.check_proved(lean_draw, sorted(moved), instances)
+        neg["proved-unit-not-drawn"] = {"refused": not v.ok, "codes": list(v.codes)}
+    m0 = members[0]
+    other_pd = P.digest(P.partition(fewer, query))
+    c = a6.statement_checks({**m0, "st": {**m0["st"], "meta": {**m0["st"]["meta"], "partition": {"rule": P.FORMAT, "digest": other_pd}}}},
+                            rec, want)
+    neg["statement-binds-another-partition"] = {"refused": not c["ok"], "codes": c["codes"]}
+    neg.update(a0.audit_negatives(result, rec["law"], a.delta, session_roots, served=sorted(served)))
+
+    # a tampered copy of one kind's member: wrong outputs committed, registered and proved on its own; Lean must refuse it
+    tm = next((m for m in members if m["kind"] == a.tamper), None) or next((m for m in members if m["n"] >= 2), None)
+    if tm is not None:
+        tn = min(tm["n"], 4)
+        tdef = tm["defn"]
+        tprog = P.mixed_population_program([(tdef, tn)])
+        tq = P.template_instances_query([tdef])
+        tpart = P.partition(tprog, tq)
+        tdir = out / "tampered"
+        tdir.mkdir(exist_ok=True)
+        (tdir / "partition.json").write_text(json.dumps(tpart, sort_keys=True))
+        (tdir / "program.json").write_bytes(canonical_json(encode_program(tprog)))
+        tst = CS.UnitStager(tdef, f"unit/a8-tampered-{tm['kind']}", rows_of_kind[tm["kind"]]["rows_spec"],
+                            [(V2, tuple(range(len(rows_of_kind[tm["kind"]]["outs"]))))], circuit=tdir / "circuit.txt",
+                            bind={"partition": P.digest(tpart), "program": tpart["program"]})
+        d, set_name = tdir / "set", f"{tst.iset.name}-tampered"
+        stage_tampered(tst, {r: v[:tn] for r, v in tm["rows"].items()}, d, tm["salt_key"], range(tn), set_name)
+        (d / "inst.bin").rename(d / f"inst-{tn}.bin")
+        (d / "pub.bin").rename(d / f"pub-{tn}.bin")
+        (d / "tables").mkdir(exist_ok=True)
+        (d / "circuit.txt").symlink_to("../circuit.txt")
+        tst_d = {"dir": d, "meta": tst.meta, "pin": tst.pin, "partition_file": tdir / "partition.json", "program_file": tdir / "program.json"}
+        theader = a0.public_header(d, tn)
+        tlaw = D.parse_law("subset:2")
+        twant = a6.frame_ports(set_name, tst.meta, tn)
+        trec = R.record(tprog, tq, tlaw, a0.SCHEME, a0.registered_roots(theader, twant),
+                        {"kind": "stand-in", "of": f"tampered copy of {tm['kind']}'s first {tn} units: bit 0 of every instance's "
+                                                   "first output word flipped before commitment"},
+                        leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
+        tcheck = V.check(trec, tprog, tq, tlaw, a0.SCHEME, twant, leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
+        trecord, tlive = a0.session(a.bin, tst_d, tn, "subset:2", a.port + len(members) + 1, tdir / "session", zk=True)
+        tlean = a0.lean_verify(a.lean, tst_d, tn, tdir / "session", zk=True)
+        tm0 = ((trecord or {}).get("verdict") or {})
+        neg[f"wrong-output-word ({tm['kind']})"] = {
+            "refused": a0.lean_refused(tlean) and tm0.get("accepted") is not True, "registration_ok": tcheck.ok,
+            "m0_verifier": tm0.get("why"), "m0_accepted": tm0.get("accepted"), "lean": tlean.get("why"),
+            "lean_refused": a0.lean_refused(tlean), "prover": (tlive or {}).get("why"), "draw": (trecord or {}).get("unit_draw")}
+    (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True, default=str))
+
+    summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units", "profile")}
+    summary["audit"]["verdicts"] = {x: y.get("accepted") for x, y in verdicts.items()}
+    summary["audit"]["why"] = {x: y.get("why") for x, y in verdicts.items() if y.get("accepted") is not True}
+    summary.update(draw=lean_draw["units"], draw_counts=counts, served_is_lean_draw=sorted(served) == sorted(lean_draw["units"]),
+                   timing=statement, negatives={x: y["refused"] for x, y in neg.items()})
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    ok = bool(result.get("accepted")) and all(summary["negatives"].values())
+    print("A8 " + json.dumps({x: summary[x] for x in ("population", "draw_counts", "audit", "negatives")}, sort_keys=True, default=str))
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
