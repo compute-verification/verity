@@ -174,11 +174,12 @@ class Weights:
         return w
 
 
-def fold_values(vdir: Path, profile_name: str, roles: Path | None):
-    """The rank's log folded into the request Program's root Calls, its snapshots, and the weights."""
+def fold_values(vdir: Path, profile_name: str, roles: Path | None, last_step: int | None = None):
+    """The rank's log folded into the request Program's root Calls, its snapshots, and the weights; with ``last_step``, only the
+    log up to that step's end (the fold is causal, so its Calls are those of the whole log's first steps)."""
     from verity_vllm.check import fold_compare
     from verity_vllm.check.fold_compare import SnapshotStore, Values, _attach_specs, load_profile
-    from verity_vllm.observe.events import RunHeader
+    from verity_vllm.observe.events import RunHeader, StepStart
     from verity_vllm.observe.fold.fold import fold
     from verity_vllm.observe.fold.patterns.pouw import with_protocols
     from verity_vllm.observe.log import read_log
@@ -186,7 +187,11 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None):
     for dt in ("float8_e4m3fn", "float8_e5m2", "float8_e8m0fnu"):
         fold_compare._NP.setdefault(dt, np.uint8)
     profile = load_profile(profile_name)
-    events = list(read_log(next(vdir.glob("log.rank*.jsonl.gz"))))
+    events = []
+    for e in read_log(next(vdir.glob("log.rank*.jsonl.gz"))):
+        if last_step is not None and isinstance(e, StepStart) and e.step > last_step:
+            break
+        events.append(e)
     header = next((e for e in events if isinstance(e, RunHeader)), None)
     res = fold(events, with_protocols(profile, header), strict=None, with_program=False)
     _attach_specs(res)
