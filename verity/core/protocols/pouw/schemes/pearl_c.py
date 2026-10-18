@@ -30,7 +30,9 @@ leaf      for each tile row r and each 32-column chunk h: d_rh = TurboSHAKE128(l
           (-h3: the leaf is `sha512/row-seg/v1` over the messages themselves, 64 bytes)
 trees     A's rows, B's rows and the tile leaves: `verity.core.protocols.pouw.audit`'s framed SHA-256 Merkle trees
           (-h3: `audit.HM96`, frame-v3-sha512 with hm96-sha512 leaves over each row's `sha512/row-seg/v1` digest and each
-          tile's leaf, salted by the prover)
+          tile's leaf, salted by the prover; -h4: A's rows are not the scheme's, but the Commit tap's row table over the
+          linear's BF16 input, `audit.tap_binding`, whose root and row digests seed_A and the row seeds read: each opened
+          row's k BF16 words, widened to A's FP32 words in the unit, `parse_tap_row`)
 tickets   Pearl's lottery over C̃: per 16 x 16 subtile, the 16-lane fold (`pearl_kw.extract`) hashed as H_"jackpot"(z; seed_A)
           (-h3: `s512`'s H_"jackpot"(seed_A ‖ z))
 useful    U_ij / (α_A,i · α_B,j), the model's own unscale (glue)
@@ -104,7 +106,9 @@ LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
 #: messages and leaf, SHA-256 trees) and h3 (SHA-512 throughout: `s512` seeds, lines and tickets, a `sha512/row-seg/v1` tile
 #: leaf and `audit.HM96` trees, each row of A seeding its own E_A line from its row digest).  The BLAKE3 formats h1, h2 and
 #: BLAKE3 -h3 are in ``archive/pouw-blake3/`` (one hash, SHA-512: Daniel, 2026-10-06).
-HASHINGS = ("h0", "h3")
+HASHINGS = ("h0", "h3", "h4")
+#: the formats that are SHA-512 throughout: h3, and h4 (h3 with A read from the Commit tap: `a_rows_tap`)
+S512_HASHINGS = ("h3", "h4")
 #: the formats whose rows seed their own E_A lines (`HashFormat.seed_a` ``row``)
 ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
 #: each hashing format's frame hash for the row and transcript trees (`verity.ml.commitments.merkle`), from the one table
@@ -144,12 +148,12 @@ class S512Seed(bytes):
 def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int, hashing: str = "h0") -> bytes:
     """A unit's seed_A: H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE); under -h3 H_"seed-A" (`s512`)."""
     msg = salt + root_a + root_b + index.to_bytes(8, "little")
-    return S512Seed(s512("seed-A", msg)) if hashing == "h3" else _labelled(msg, "seed-A")
+    return S512Seed(s512("seed-A", msg)) if hashing in S512_HASHINGS else _labelled(msg, "seed-A")
 
 
 def seed_b(salt: bytes, root_b: bytes, hashing: str = "h0") -> bytes:
     """An epoch weight's seed_B: H_"pearl-c/v0/seed-B"(salt ‖ root_B); under -h3 H_"seed-B" (`s512`)."""
-    return S512Seed(s512("seed-B", salt + root_b)) if hashing == "h3" else _labelled(salt + root_b, "seed-B")
+    return S512Seed(s512("seed-B", salt + root_b)) if hashing in S512_HASHINGS else _labelled(salt + root_b, "seed-B")
 
 
 def line_key(seed: bytes) -> bytes:
@@ -168,9 +172,10 @@ def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashi
 
 
 def row_digest(row: bytes) -> bytes:
-    """-h3's key of a row's seed: ``sha512/row-seg/v1`` over the row's bytes (its FP32 words little-endian, the row A's
-    tree commits), `rowleaf.sha512_row_seg_digest`: 1 KiB segments hashed on their own, then their digests.  It is also
-    the inner digest x of the row's hm96 leaf in A's tree (`audit.Hm96Domain`)."""
+    """-h3's key of a row's seed: ``sha512/row-seg/v1`` over the row's committed bytes (its FP32 words little-endian, the
+    row A's tree commits; under h4 the Commit tap's k BF16 words), `rowleaf.sha512_row_seg_digest`: 1 KiB segments hashed
+    on their own, then their digests.  It is also the inner digest x of the row's hm96 leaf in A's tree, or the tap's
+    (`audit.Hm96Domain`)."""
     return sha512_row_seg_digest(row, 8 * len(row))
 
 
@@ -358,6 +363,22 @@ def f32_row(words: Sequence[int]) -> bytes:
     return struct.pack(f"<{len(words)}I", *words)
 
 
+def parse_tap_row(row: bytes, k: int) -> list[int]:
+    """h4's A row: the Commit tap's row, k BF16 words u16 little-endian, read as A's FP32 words by widening each (w << 16,
+    exact).  The widening is wiring in a proof (the FP32 word's high half is the BF16 word, its low half zero), so A's words
+    are a function of the committed row and the unit commits nothing new."""
+    if len(row) != 2 * k:
+        raise P.Reject("an h4 A row is the tap's k BF16 words")
+    return [_check_finite(w << 16) for w in struct.unpack(f"<{k}H", row)]
+
+
+def tap_row(words: Sequence[int]) -> bytes:
+    """The tap's row of A's FP32 words when each is a widened BF16 word (its low half zero), else ValueError."""
+    if any(w & 0xFFFF for w in words):
+        raise ValueError("an FP32 word with a nonzero low half is no BF16 word's widening")
+    return struct.pack(f"<{len(words)}H", *(w >> 16 for w in words))
+
+
 def s5_stats(x: Sequence[int]) -> tuple[int, int, int, int]:
     """(s, ρ, α, β_row) of one row of FP32 words, as FP32 words, in the pinned order (module docstring)."""
     s = max((w & 0x7FFFFFFF for w in x), default=0)
@@ -431,7 +452,7 @@ def leaf(checked: Checked, hashing: str = "h0") -> bytes:
     """The tile leaf.  Under h0, TurboSHAKE128 (D = 0x22) over the per-(row, 32-column chunk) message digests, row-major,
     chunks in order.  Under -h3, the 64-byte ``sha512/row-seg/v1`` digest of the messages themselves, so each 1 KiB
     segment's digest (four 256-byte messages of a 64-column tile) takes the message digests' place."""
-    if hashing == "h3":
+    if hashing in S512_HASHINGS:
         joined = b"".join(messages(checked))
         return sha512_row_seg_digest(joined, 8 * len(joined))
     return turboshake128(b"".join(message_digest(msg) for msg in messages(checked)), D_LEAF, 32)
@@ -445,7 +466,7 @@ def tickets(seed_a: bytes, checked: Checked, hashing: str = "h0") -> list[bytes]
         for j in range(0, len(checked.c[0]), P.TILE):
             sub = [[P.f32_of_bits(w) for w in row[j:j + P.TILE]] for row in checked.c[i:i + P.TILE]]
             fold = P.extract(sub)
-            out.append(s512("jackpot", seed_a + fold) if hashing == "h3" else P.hash_labelled(fold, "jackpot", seed_a))
+            out.append(s512("jackpot", seed_a + fold) if hashing in S512_HASHINGS else P.hash_labelled(fold, "jackpot", seed_a))
     return out
 
 
@@ -464,7 +485,10 @@ class PearlC:
         if forming == "v0" and device != H100:
             raise ValueError(f"forming v0 is #311's H100 port; {device.name} takes v1")
         if hashing not in HASHINGS:
-            raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256) or h3 (SHA-512, per-row seeds)")
+            raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256), h3 (SHA-512, per-row seeds) or h4 (h3 "
+                             "with A read from the Commit tap)")
+        if HASH_FORMATS[hashing].a_rows == "tap" and forming != "v1":
+            raise ValueError(f"hashing {hashing!r} reads A's FP32 words as the tap's BF16 words widened, forming v1's rows")
         prices = prices or device.prices
         if forming == "v0" and prices != H100_PRICES:
             raise ValueError(f"forming v0 is #311's H100 port, priced on the H100 only, not {prices.device}")
@@ -474,6 +498,8 @@ class PearlC:
         #: ρ, the device record's: the tile rule's debit cap and the credit's (1 − ρ) (`pearl_c_work`)
         self.cap = device.cap
         self.commitment_hash = TREE_HASH[hashing]
+        #: whether A's committed rows are the Commit tap's BF16 rows (h4), which `encode` widens to FP32 words
+        self.a_tap = HASH_FORMATS[hashing].a_rows == "tap"
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
         allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
                      "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
@@ -578,7 +604,8 @@ class PearlC:
         e = [sample_line(seed_e, side, 0, i) for i in idx] if e is None else e
         f = _basis(seed_b, side, k, self.line_norm)
         if self.forming == "v1":
-            return form_v1([parse_f32_row(r, k) for r in rows], e, f, self.device), e
+            parse = parse_tap_row if side == 0 and self.a_tap else parse_f32_row
+            return form_v1([parse(r, k) for r in rows], e, f, self.device), e
         planes = [P.parse_row(r, k) for r in rows]
         clean = [P.open_row(c, s) for c, s in planes]
         norms = [P.exact_norms(c, s) for c, s in planes]

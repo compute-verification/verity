@@ -4,7 +4,8 @@
 1. **Weights.**  Each weight is committed as its rows along k; `weights_root` binds every weight root.
 2. **Salt.**  The challenger opens the epoch's salt coin after it recorded the weights' root, and the salt is
    ``derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": root, "weights": weights_root})`` (`Epoch.start`).
-3. **Units.**  For each matmul the prover commits the activation rows (bound to the salt and the index); the scheme
+3. **Units.**  For each matmul the prover commits the activation rows (bound to the salt and the index: A's own tree, or
+   under a format that reads A from the Commit tap, h4, the tap's row table, `a_binding`); the scheme
    derives its noise from (salt, matmul, roots), and every tile yields checked values and a digest.  The useful output is
    assembled from the tiles.
 4. **Transcript.**  A Merkle root over every tile's digest, in matmul order and then tile order.
@@ -45,6 +46,7 @@ from verity.ml.randomness import derive
 
 from .coins import Challenger, CoinCommitment, CoinOpening, coin_reason
 from .protocol import Certificate, Context, DomainError, Matmul, PoUWScheme, Tile, tagged
+from .serving import HASH_FORMATS
 
 SALT_DOMAIN = "verity/pouw/salt/v1"
 EPOCH_SALT_DOMAIN = "verity/pouw/epoch-salt/v1"
@@ -135,6 +137,20 @@ def weight_binding(weight: int) -> bytes:
 
 def activation_binding(salt: bytes, index: int) -> bytes:
     return tagged("verity/pouw/activation-rows/v1", salt, index)
+
+
+def tap_binding(salt: bytes, index: int) -> bytes:
+    """The binding of call `index`'s Commit tap: the row table over the linear's input as served (BF16 words, one
+    ``hm96-sha512/row-seg/v1`` leaf a row, `verity.ml.commitments.row_table`'s layout), fixed before the call.  A scheme whose
+    format reads A from the tap (``a_rows`` ``tap``, h4) opens A's rows against this table's root and builds no tree of A."""
+    return tagged("verity/commit/tap-rows/v1", salt, index)
+
+
+def a_binding(scheme: PoUWScheme, salt: bytes, index: int) -> bytes:
+    """The binding of call `index`'s A rows under `scheme`: the Commit tap's (`tap_binding`) when its hashing format reads A
+    from the tap, else A's own tree's (`activation_binding`)."""
+    fmt = HASH_FORMATS.get(getattr(scheme, "hashing", None))
+    return (tap_binding if fmt is not None and fmt.a_rows == "tap" else activation_binding)(salt, index)
 
 
 def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "sha256", salt_key: bytes | None = None,
@@ -315,7 +331,7 @@ class Prover:
             rows = list(activations[u.index])
             if len(rows) != u.shape.m:
                 raise DomainError(f"matmul {u.index} has {u.shape.m} activation rows")
-            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index)
+            tree = commit_rows(a_binding(scheme, epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index)
             self._act_trees.append(tree)
             ctx = Context(epoch.salt, u, tree.commitment.root, epoch.weight_roots[u.weight])
             tiles = scheme.tiles(u.shape)
@@ -444,7 +460,7 @@ class Verifier:
         u = ep.workload.matmuls[ref.matmul]
         root_a, root_b = transcript.activation_roots[ref.matmul], ep.weight_roots[u.weight]
         h = commitment_hash(scheme)
-        da = rows_domain(activation_binding(ep.salt, u.index), u.index, u.shape.m, h)
+        da = rows_domain(a_binding(scheme, ep.salt, u.index), u.index, u.shape.m, h)
         db = rows_domain(weight_binding(u.weight), -2, u.shape.n, h)
         if [o.position for o in opening.a] != list(ref.tile.rows) or [o.position for o in opening.b] != list(ref.tile.cols):
             return Verdict(ref.id, False, "openings do not cover the tile")
@@ -492,5 +508,5 @@ class Verifier:
 
 
 __all__ = ["AUDIT_DOMAIN", "EPOCH_SALT_DOMAIN", "HM96", "SALT_DOMAIN", "Audit", "Epoch", "Hm96Domain", "Lottery", "Prover", "Sampled",
-           "TileOpening", "TileRef", "Transcript", "Verdict", "Verifier", "WorkProfile", "Workload", "commit_rows", "commitment_hash",
-           "draw_coin", "hm96_kernel_constants", "hm96_salt", "opened_value", "reference_kernel", "salt_of", "tickets", "tile_refs"]
+           "TileOpening", "TileRef", "Transcript", "Verdict", "Verifier", "WorkProfile", "Workload", "a_binding", "activation_binding",
+           "commit_rows", "commitment_hash", "draw_coin", "hm96_kernel_constants", "hm96_salt", "opened_value", "reference_kernel", "salt_of", "tap_binding", "tickets", "tile_refs"]
