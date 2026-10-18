@@ -49,9 +49,11 @@ export their paths, say), are part of the resolved spec and so of every point's 
    - `engine-identity`: in `blocks`, each timed engine reports the gated engine's KV pool, kernel digest, versions,
      GPU and overrides.
 2. **Resident interleaving, else alternating blocks.** When every arm's engine fits on the GPU at once (`resident`), each
-   point is warmed once per arm (discarded), then each rep runs every arm once. The baseline alternates between the first
+   point is warmed per arm (discarded), then each rep runs every arm once. The baseline alternates between the first
    and last slot (`interleave_order`). An arm that needs its own engine lifetime makes the whole run `blocks`: each arm
-   gets its own engine for two cycles, the second in reverse arm order, with a discarded warm-up per point in each.
+   gets its own engine for two cycles, the second in reverse arm order, with discarded warm-ups per point in each. The
+   spec's `warmups` (default 1, part of the identity) is how many discarded runs each engine makes of a point before
+   timing it, and the schedule keeps each one's wall time, time to first token and host counters.
    Either way each arm's mean timed position is the same over an even number of reps, so drift over the run (clocks,
    heat) cancels in the means; with odd reps it doesn't quite. `execution` records the mode, why resident failed, and the
    full warm-up and timed schedule. Prefix caching is off, so no run reuses an earlier run's KV.
@@ -75,6 +77,11 @@ Each timed rep records:
   after the last step, an arm's `end_run` included, exceeds 1% of it (work the host step times didn't see; each rep's
   `host_timing` records the lag and that tail), and recorded for an arm's point only when every rep and every baseline rep has it (the engine's
   scheduler is reachable); the table shows the row only where every arm has it.
+
+Each timed rep also keeps where its time went: `trace` (every `step()` iteration's host time and its prefill and decode
+tokens, every request's arrival and first output from the run's start, and the seconds since its engine became ready) and
+`host` (the process's CPU time, the engine thread's, context switches, page faults and garbage-collection time over the
+run, and the 1-minute load average when it began).
 
 Every metric is reported as a mean, and as a ratio to the baseline (`stock-fp8`, else `stock`) paired by rep, each with
 `n` and, from two reps, a 95% Student-t interval (`ci95`, the quantile of the largest tabulated degrees of freedom at

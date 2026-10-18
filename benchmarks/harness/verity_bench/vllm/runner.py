@@ -46,7 +46,7 @@ class BenchEngine(Protocol):
 
     def gate(self, point: SweepPoint) -> Mapping[str, tuple[int, ...]]: ...
     def custom_gate(self) -> Mapping[str, Any]: ...
-    def warmup(self, point: SweepPoint) -> None: ...
+    def warmup(self, point: SweepPoint) -> Mapping[str, Any] | None: ...
     def measure(self, point: SweepPoint) -> Mapping[str, Any]: ...
     def close(self) -> None: ...
 
@@ -256,6 +256,14 @@ def _record(
     schedule.append({"phase": "timed", "mode": mode, "arm": arm, "point": point.id, "rep": rep})
 
 
+def _warm(engine: BenchEngine, point: SweepPoint, warmups: int, schedule: list[dict[str, Any]],
+          entry: Mapping[str, Any]) -> None:
+    for index in range(warmups):
+        got = engine.warmup(point)
+        schedule.append({"phase": "warmup", **entry, "point": point.id, "warmup": index,
+                         **({"run": dict(got)} if isinstance(got, Mapping) and got else {})})
+
+
 def decode_time_per_token(
     steps: list[Mapping[str, Any]], *, output_lag: int = 0, device_tail_s: float = 0.0, generated: int | None = None
 ) -> float | None:
@@ -319,6 +327,68 @@ def _aggregate(
     return out
 
 
+def run_trace(timing: Mapping[str, Any], start: float, ready: float) -> dict[str, Any]:
+    """A timed rep's own record of where its time went, small enough to keep in every rep: each `step()` iteration's host
+    time and the prefill and decode tokens its schedule computed, each request's arrival and first output (seconds from
+    the run's start, in request order), and how long after the engine became ready the run started."""
+
+    def us(x: Any) -> float | None:
+        return None if x is None else round(float(x), 6)
+
+    steps = timing.get("steps") or []
+    requests = list(timing["requests"].values())
+    return {
+        "since_ready_s": us(start - ready),
+        "step_s": [us(s["s"]) for s in steps],
+        "step_prefill_tokens": [s.get("prefill_tokens") for s in steps],
+        "step_decode_tokens": [s.get("decode_tokens") for s in steps],
+        "arrival_s": [us(r.get("arrival_s")) for r in requests],
+        "first_output_s": [us(r.get("first_output_s")) for r in requests],
+    }
+
+
+class HostProbe:
+    """The process's CPU time, context switches, page faults and garbage collections over a window, and the host's load
+    when it opened: a slow rep with as much CPU time but more involuntary switches waited on a contended host, one with
+    more CPU time ran slower code (or a slower clock), and one with neither waited on the device."""
+
+    def __init__(self) -> None:
+        import gc
+        import os
+        import resource
+
+        self._gc, self._resource = gc, resource
+        self.load = os.getloadavg()[0]
+        self.gc_s, self._gc_at = 0.0, None
+        gc.callbacks.append(self._on_gc)
+        self.thread = time.thread_time()
+        self.usage = resource.getrusage(resource.RUSAGE_SELF)
+
+    def _on_gc(self, phase: str, _info: Mapping[str, Any]) -> None:
+        if phase == "start":
+            self._gc_at = time.perf_counter()
+        elif self._gc_at is not None:
+            self.gc_s += time.perf_counter() - self._gc_at
+            self._gc_at = None
+
+    def close(self) -> dict[str, Any]:
+        after = self._resource.getrusage(self._resource.RUSAGE_SELF)
+        thread = time.thread_time() - self.thread
+        if self._on_gc in self._gc.callbacks:
+            self._gc.callbacks.remove(self._on_gc)
+        b = self.usage
+        return {
+            "loadavg_1m": round(self.load, 2),
+            "process_cpu_s": round(after.ru_utime + after.ru_stime - b.ru_utime - b.ru_stime, 6),
+            "thread_cpu_s": round(thread, 6),
+            "involuntary_switches": after.ru_nivcsw - b.ru_nivcsw,
+            "voluntary_switches": after.ru_nvcsw - b.ru_nvcsw,
+            "minor_faults": after.ru_minflt - b.ru_minflt,
+            "major_faults": after.ru_majflt - b.ru_majflt,
+            "gc_s": round(self.gc_s, 6),
+        }
+
+
 def _git_head() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
@@ -332,6 +402,7 @@ def _identity(
     config_identity: Mapping[str, Any] | None = None,
     *,
     reps: int,
+    warmups: int = 1,
     interleave: str,
 ) -> dict[str, Any]:
     shared = {}
@@ -362,6 +433,7 @@ def _identity(
         "git_commit": git_commit,
         "sweep": sweep,
         "reps": reps,
+        "warmups": warmups,
         "interleave": interleave,
         **({"config": dict(config_identity)} if config_identity is not None else {}),
     }
@@ -377,11 +449,15 @@ def run_benchmark(
     factory: EngineFactory,
     git_commit: str | None = None,
     config_identity: Mapping[str, Any] | None = None,
+    warmups: int = 1,
 ) -> dict[str, Any]:
-    """Run every gate before any timing, then use resident interleaving or alternating blocks."""
+    """Run every gate before any timing, then use resident interleaving or alternating blocks, with `warmups` discarded
+    runs of a point before an engine's first timed one."""
 
     if reps < 1 or not arms or not points:
         raise ValueError("benchmark needs at least one arm, point, and repetition")
+    if warmups < 1:
+        raise ValueError("benchmark needs at least one warm-up a point")
     if any(a.control == a.id for a in arms):
         raise ValueError("an arm cannot be its own control: its greedy gate would compare it with itself")
     baseline = "stock-fp8" if any(a.id == "stock-fp8" for a in arms) else "stock" if any(a.id == "stock" for a in arms) else arms[0].id
@@ -412,8 +488,7 @@ def run_benchmark(
             if all(g["passed"] for g in gates):
                 for point in points:
                     for arm in arms:
-                        engines[arm.id].warmup(point)
-                        schedule.append({"phase": "warmup", "mode": "resident", "arm": arm.id, "point": point.id})
+                        _warm(engines[arm.id], point, warmups, schedule, {"mode": "resident", "arm": arm.id})
                     for rep in range(reps):
                         for arm_id in interleave_order(arms, baseline, rep):
                             _record(samples, schedule, arm_id, point, rep, engines[arm_id], "resident")
@@ -448,9 +523,7 @@ def run_benchmark(
                         continue
                     try:
                         for point in points:
-                            engine.warmup(point)
-                            schedule.append({"phase": "warmup", "mode": "blocks", "cycle": cycle,
-                                             "arm": arm.id, "point": point.id})
+                            _warm(engine, point, warmups, schedule, {"mode": "blocks", "cycle": cycle, "arm": arm.id})
                             for rep in indices:
                                 _record(samples, schedule, arm.id, point, rep, engine, "blocks")
                     finally:
@@ -460,14 +533,15 @@ def run_benchmark(
     if all(g["passed"] for g in gates):
         gates += _timed_token_gates(arms, points, samples)
     identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity,
-                         reps=reps, interleave=mode)
+                         reps=reps, warmups=warmups, interleave=mode)
     doc = {
         "schema": result_format.SCHEMA,
         "identity": identity,
         "baseline": baseline,
         "sweep": [p.to_json() for p in points],
         "gates": gates,
-        "execution": {"interleave": mode, "resident_failure": resident_failure, "reps": reps, "schedule": schedule},
+        "execution": {"interleave": mode, "resident_failure": resident_failure, "reps": reps, "warmups": warmups,
+                      "schedule": schedule},
         "points": _aggregate(arms, points, baseline, samples) if all(g["passed"] for g in gates) else [],
     }
     result_format.validate(doc)
@@ -608,6 +682,7 @@ class _VllmEngine:
             "torch_version": f"{torch.__version__} cuda {torch.version.cuda}",
             "engine_overrides": dict(self.llm.engine_record.get("engine_overrides") or {}),
         }
+        self.ready_at = time.perf_counter()
 
     def _requests(self, point: SweepPoint) -> list[Any]:
         vocab = int(self.llm.vllm.llm_engine.vllm_config.model_config.hf_config.vocab_size)
@@ -650,6 +725,7 @@ class _VllmEngine:
         self.target.tokens = sum(len(r.prompt_token_ids) + r.max_tokens for r in requests)
         if self.obj is not None:
             _callback(self.obj, "begin_run", self.target, None)
+        probe = HostProbe()
         start = time.perf_counter()
         finished, timing = run_requests_arrivals(
             self.llm.vllm,
@@ -663,12 +739,14 @@ class _VllmEngine:
             _callback(self.obj, "end_run", self.target, None)
         torch.cuda.synchronize()
         end = time.perf_counter()
+        host = probe.close()
         wall, device_tail = end - start, end - returned
         tokens = {rid: tuple(int(t) for t in out.outputs[0].token_ids) for rid, out in finished.items()}
-        if not measured:
-            return tokens, {}
-        generated = sum(map(len, tokens.values()))
         ttft = [float(r["time_to_first_token_s"]) for r in timing["requests"].values()]
+        if not measured:
+            return tokens, {"wall_s": round(wall, 6), "time_to_first_token_s": round(statistics.fmean(ttft), 6),
+                            "since_ready_s": round(start - self.ready_at, 6), "host": host}
+        generated = sum(map(len, tokens.values()))
         after = self._spans()
         extras = _callback(self.obj, "extras", self.target, {}) if self.obj is not None else {}
         metrics = {
@@ -686,6 +764,8 @@ class _VllmEngine:
             "metrics": metrics,
             "token_digest": _token_digest(tokens),
             "host_timing": {"output_lag_steps": lag, "device_tail_s": device_tail},
+            "host": host,
+            "trace": run_trace(timing, start, self.ready_at),
             "spans": _delta(after, before),
             "extras": extras or {},
             "generated_tokens": generated,
@@ -705,8 +785,8 @@ class _VllmEngine:
             return {"passed": got, "provided": True}
         return dict(got)
 
-    def warmup(self, point: SweepPoint) -> None:
-        self._run(point, "warmup")
+    def warmup(self, point: SweepPoint) -> Mapping[str, Any]:
+        return self._run(point, "warmup")[1]
 
     def measure(self, point: SweepPoint) -> Mapping[str, Any]:
         return self._run(point, "measure")[1]
@@ -791,8 +871,8 @@ class _ProcessEngine:
     def custom_gate(self) -> Mapping[str, Any]:
         return self._ask("custom_gate")
 
-    def warmup(self, point: SweepPoint) -> None:
-        self._ask("warmup", point)
+    def warmup(self, point: SweepPoint) -> Mapping[str, Any] | None:
+        return self._ask("warmup", point)
 
     def measure(self, point: SweepPoint) -> Mapping[str, Any]:
         return self._ask("measure", point)

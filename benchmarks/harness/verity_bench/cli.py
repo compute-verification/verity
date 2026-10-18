@@ -69,6 +69,7 @@ def _point(args: Any) -> int:
         (item.point,),
         sweep=spec.sweep.id,
         reps=spec.reps,
+        warmups=spec.warmups,
         factory=ProcessEngineFactory(eager=eager),
         git_commit=plan.toolchain.commit,
         config_identity={
