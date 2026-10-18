@@ -4900,6 +4900,9 @@
    "assumptions": [],
    "type_hash": "66ead21683656113cf926808d76850f0e2838d9d8254b0aa9e5e1a4086ad9ddc"
   },
+  "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoQuadNoKernel : Pouw.Guarantees.Receipt.DuoQuadNoKernel"],
@@ -4911,6 +4914,9 @@
    "signature": ["Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective : Pouw.Guarantees.Receipt.DuoReceiptNotInjective"],
    "assumptions": [],
    "type_hash": "0eef8a8219c603404d51a23bf68d8b863d5db41699d9dd93467b160bd5b683bd"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective": {
+   "owner": "@compute-accounting"
   },
   "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
    "owner": "@compute-accounting",
@@ -5223,6 +5229,10 @@
    },
    "Pouw.SecurityProofs.Receipt.DuoWordProjNoKernel": {
     "function": "Pouw.Receipt.duoWordSpread",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective": {
+    "function": "Pouw.Receipt.duoRun",
     "outcome": "none"
    }
   },
@@ -5730,7 +5740,8 @@
    "Accounting.SecurityProofs.TS.LuckCaseAKeyed": "lemma: LuckCaseA at the operand luck 0 that a share of wrong words (a definition, the keyed rounds' share) gives, (L) at 0 in case (a); not a property of a Lean function.",
    "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective": "lemma: the counterexample to the served receipt's binding at a state (two words, one receipt y ⊕ rotl(z, 16) at the served word 0's keys); a statement about one concrete step, not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.DuoSegmentsBind": "lemma: Lemma B for duo checkpoint units (a definition: a warp's window, a full-state checkpoint a segment, one deficient word a segment), from DuoRunWordInjective segment by segment; not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.Fx1SegmentsBind": "lemma: Lemma B for fx1 checkpoint units (a definition: duo checkpoint units on the words times odd IMAD multipliers), from DuoSegmentsBind's segment lemma and the odd multiplier's injectivity; not a property of a Lean function."
+   "Accounting.SecurityProofs.TS.Fx1SegmentsBind": "lemma: Lemma B for fx1 checkpoint units (a definition: duo checkpoint units on the words times odd IMAD multipliers), from DuoSegmentsBind's segment lemma and the odd multiplier's injectivity; not a property of a Lean function.",
+   "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective": "lemma: the counterexample to two words' binding at a state (two word pairs, one full state at the served chain 0's first two words' keys); a statement about one concrete run, not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
