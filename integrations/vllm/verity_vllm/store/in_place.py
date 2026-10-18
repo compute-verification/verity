@@ -267,20 +267,26 @@ class InPlaceBackend(StoreBackend):
         payloads = self.audit.pending.pop(first, None)
         if payloads is None:
             raise ValueError(f"no append from block {first} awaits its coin")
-        a, N, k = self.audit.of(first), self.blocks, self.registration.key
+        a, N, k, phases = self.audit.of(first), self.blocks, self.registration.key, self.phases
         slots = np.array(self.app_slots[first - N:first - N + a.count], np.int64)
-        data = self._gather(slots)
-        held = data.cpu().numpy()
-        for u, m in enumerate(payloads):
-            if held[u].tobytes() != m:
-                raise RuntimeError(f"slot {slots[u]} no longer holds block {first + u}'s payload when its append's coin "
-                                   "arrives: rewritten before its encode")
-        self.device.encode_in_place(data.reshape(-1), first, [rcodec.binding(d, first + u, k, coin)
-                                                              for u, d in enumerate(a.digests)])
-        if data[0].cpu().numpy().tobytes() != rcodec.encode(payloads[0], first, k, bound=True, coin=coin):
-            raise RuntimeError(f"kv.cu's block {first}, encoded in place under its append's coin, is not codec.encode's")
-        self._scatter(slots, data)
-        self.torch.cuda.synchronize()
+        with phases.time("encode.check"):
+            data = self._gather(slots)
+            held = data.cpu().numpy()
+            for u, m in enumerate(payloads):
+                if held[u].tobytes() != m:
+                    raise RuntimeError(f"slot {slots[u]} no longer holds block {first + u}'s payload when its append's "
+                                       "coin arrives: rewritten before its encode")
+        with phases.time("encode.bind"):
+            offsets = [rcodec.binding(d, first + u, k, coin) for u, d in enumerate(a.digests)]
+        with phases.time("encode.device"):
+            self.device.encode_in_place(data.reshape(-1), first, offsets)
+        with phases.time("encode.gate"):
+            if data[0].cpu().numpy().tobytes() != rcodec.encode(payloads[0], first, k, bound=True, coin=coin):
+                raise RuntimeError(f"kv.cu's block {first}, encoded in place under its append's coin, is not "
+                                   "codec.encode's")
+        with phases.time("encode.device"):
+            self._scatter(slots, data)
+            self.torch.cuda.synchronize()
         self.audit.coins[first] = coin
         self.stats["encoded_appends"] += 1
         self.gates["device_encode"]["appends"] += 1
@@ -295,10 +301,12 @@ class InPlaceBackend(StoreBackend):
         p, store = self.store.pool, self.store
         ids = p.ids[keys // p.per_page, keys % p.per_page]
         slots = np.sort(np.concatenate([store.region(rn).first + ids for rn in p.regions]).astype(np.int64))
-        data = self._gather(slots)
+        with self.phases.time("copy"):
+            data = self._gather(slots)
+            host = data.cpu().numpy()
         if self.saved:
             self.saved[-1].device = None
-        self.saved.append(Saved(step, slots, data.cpu().numpy(), data))
+        self.saved.append(Saved(step, slots, host, data))
         self._windex = None
         self.stats["saved_blocks"] += len(slots)
 
@@ -325,20 +333,23 @@ class InPlaceBackend(StoreBackend):
         return ticket["root"], ticket["handle"]
 
     def run_pass(self, seed: bytes, plan: rb.Plan | None = None, step: int | None = None):
-        if moved := self.moved():
-            raise RuntimeError(f"registered tensors moved since registration ({', '.join(moved[:8])}): the pass reads "
-                               "the store at their registered addresses, so the session fails")
-        plan = plan or rb.Plan.whole(self.blocks)
-        runs = np.frombuffer(plan.encode(), dtype=">u8", offset=4).reshape(-1, 2).astype(np.int64)
-        for first, payloads in self.audit.pending.items():
-            if ((runs[:, 0] < first + len(payloads)) & (runs[:, 0] + runs[:, 1] > first)).any():
-                raise RuntimeError(f"the plan holds the append from {first}, not yet encoded (deferred residency)")
+        with self.phases.time("moved"):
+            if moved := self.moved():
+                raise RuntimeError(f"registered tensors moved since registration ({', '.join(moved[:8])}): the pass "
+                                   "reads the store at their registered addresses, so the session fails")
+            plan = plan or rb.Plan.whole(self.blocks)
+            runs = np.frombuffer(plan.encode(), dtype=">u8", offset=4).reshape(-1, 2).astype(np.int64)
+            for first, payloads in self.audit.pending.items():
+                if ((runs[:, 0] < first + len(payloads)) & (runs[:, 0] + runs[:, 1] > first)).any():
+                    raise RuntimeError(f"the plan holds the append from {first}, not yet encoded (deferred residency)")
         self._mode = ("pass", step)
         t0 = time.perf_counter_ns()
-        root, handle = self.ip.run_pass(seed, plan)
-        self.torch.cuda.synchronize()
+        with self.phases.time("pass"):
+            root, handle = self.ip.run_pass(seed, plan)
+            self.torch.cuda.synchronize()
         self.pass_ns.append(time.perf_counter_ns() - t0)
         self._mode, self._held = None, []
+        self.phases.close()
         return root, (handle, step)
 
     def _slots_of(self, js):
@@ -457,4 +468,6 @@ class InPlaceBackend(StoreBackend):
         at = lambda q: ms[min(len(ms) - 1, int(q * len(ms)))] if ms else None
         return {"in_place": True, "passes": len(ms), "pass_ms": {"p50": at(0.5), "p99": at(0.99), "max": at(1.0),
                                                                  "mean": sum(ms) / len(ms) if ms else None},
-                "store_blocks": self.ip.blocks, "saved_steps": len(self.saved), **self.stats}
+                "store_blocks": self.ip.blocks, "saved_steps": len(self.saved), "phases_ms": self.phases.summary(),
+                "intervals_ms": [{k: round(v / 1e6, 2) for k, v in x.items()} for x in self.phases.closed],
+                **self.stats}

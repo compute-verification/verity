@@ -49,7 +49,10 @@ import queue
 import socket
 import sys
 import threading
+import time
+from collections import defaultdict
 from collections.abc import Callable, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -88,6 +91,42 @@ def session_module(name: str, directory: str | Path = config.REMOTE_SESSION) -> 
     return module
 
 
+class Phases:
+    """The host's time in each phase of a pass interval, from one pass's end to the next's (`close`), for the session's
+    record: ``wall`` the interval, each phase timed by `time`, and what the phases leave of ``wall`` (the appends'
+    round trips, the root's send) as ``other``."""
+
+    def __init__(self) -> None:
+        self.open: dict[str, int] = defaultdict(int)
+        self.closed: list[dict[str, int]] = []
+        self.since: int | None = None
+
+    @contextmanager
+    def time(self, name: str):
+        t0 = time.perf_counter_ns()
+        try:
+            yield
+        finally:
+            self.open[name] += time.perf_counter_ns() - t0
+
+    def close(self) -> None:
+        now = time.perf_counter_ns()
+        if self.since is not None:
+            self.closed.append({**self.open, "wall": now - self.since,
+                                "other": now - self.since - sum(self.open.values())})
+        self.open.clear()
+        self.since = now
+
+    def summary(self) -> dict[str, dict[str, float]]:
+        """Each phase's p50, p99, max and mean over the intervals, in ms (0 in an interval it didn't run in)."""
+        out = {}
+        for k in sorted({k for x in self.closed for k in x}):
+            ms = sorted(x.get(k, 0) / 1e6 for x in self.closed)
+            at = lambda q: round(ms[min(len(ms) - 1, int(q * len(ms)))], 3)  # noqa: E731
+            out[k] = {"p50": at(0.5), "p99": at(0.99), "max": at(1.0), "mean": round(sum(ms) / len(ms), 3)}
+        return out
+
+
 class Serving:
     """The serving node's steps as a session sees them, `ProverSide`'s serving trace in its ``serve`` modes: the
     memory map's appends as the audit's (`appends`, each an `audit.Append`, and `appended`, their indices), made as
@@ -122,13 +161,20 @@ class Serving:
         each later one the next."""
         if not self.store.window_open or self.store.window != window:
             raise RuntimeError(f"the pass is in window {window}, the store's open window is {self.store.window}")
-        s = self.step + 1
-        self.backend.engine(s)
+        s, phases = self.step + 1, self.backend.phases
+        with phases.time("engine"):
+            self.backend.engine(s)
         if self.map.last < s or (self.steps and self.map.last != s):
             raise RuntimeError(f"the engine's step after {self.step} opens one memory-map line (kv_append({s}))")
         s = self.map.last
         if not self.steps:
             self.first = s
+        with phases.time("appends"):
+            self._apply(s)
+        self.step, self.steps = s, self.steps + 1
+        return s
+
+    def _apply(self, s: int) -> None:
         self.map.complete()
         for kind, *ev in self._events:
             if kind == "append":
@@ -152,8 +198,6 @@ class Serving:
             self.live[gone] = False
             self.live[change.first:change.first + change.count] = True
         self._events.clear()
-        self.step, self.steps = s, self.steps + 1
-        return s
 
     def encoded(self, first: int) -> None:
         """The append from ``first`` is encoded: the record writes its blocks in the line open now, at the step the
@@ -174,9 +218,10 @@ class Serving:
                 "encodes": [[m, w, a.first, a.count] for m, w, a in zip(self.made, landed, self.appends)]}
 
     def plan(self) -> rb.Plan:
-        edge = np.diff(np.concatenate([[False], self.live, [False]]).astype(np.int8))
-        starts, ends = np.flatnonzero(edge == 1), np.flatnonzero(edge == -1)
-        return rb.Plan.from_array(np.stack([starts, ends - starts], axis=1).astype(np.int64), self.map.extent)
+        with self.backend.phases.time("plan"):
+            edge = np.diff(np.concatenate([[False], self.live, [False]]).astype(np.int8))
+            starts, ends = np.flatnonzero(edge == 1), np.flatnonzero(edge == -1)
+            return rb.Plan.from_array(np.stack([starts, ends - starts], axis=1).astype(np.int64), self.map.extent)
 
 
 class StoreBackend:
@@ -193,6 +238,7 @@ class StoreBackend:
         self.gates: dict = {}
         self.trace: Serving | None = None
         self.previous: bytes | None = None
+        self.phases = Phases()
 
     def layout(self) -> list[dict]:
         """The hello's public layout: each registered region's kind, tier and blocks, in store order."""
