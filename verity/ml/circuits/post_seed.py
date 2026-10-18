@@ -2,10 +2,11 @@
 Python that mirrors its Lean definition (`RemoteAudit.PostSeed.verdict`, which the remote audit's verifier runs) for the
 prover's speed, held to it by the difftest in `verity/core/protocols/remote_bandwidth/lean/tests/`.
 
-Everything property/v1 reads is public: the writers' Program W, its step ends, the windows and the parameters. So no proof
-unit is involved. The verdict runs `stacking.check` on W's own census at those ends, `census.census(W, ends, digest)`, so
-the census it judges is W's by construction. What is left is binding, each an equality between public things, refused
-by name (`BINDINGS`):
+The writers' Program W, its step ends and the parameters are public, and no proof unit is involved. The windows come from
+the passes' steps, which are committed values the record still carries in the clear (PROTOCOL.md §8, open). The verdict
+runs `stacking.check` on W's own census at those ends, `census.census(W, ends, digest)`, so the census it judges is W's
+by construction. What is left is binding, each an equality between things the verifier holds, refused by name
+(`BINDINGS`):
 
 1. ``program``: W's digest (`codec.program_digest`) is `audited`, the one-stage audit's `program`;
 2. ``values``: each memory-map unit's ``val{k}`` row is W's value leaf at ``pos[k]`` (`map_value_leaves` of its public row
