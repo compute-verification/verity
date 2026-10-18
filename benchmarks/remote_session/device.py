@@ -8,7 +8,8 @@ segments   the store's N blocks as contiguous segments of whole chunks: first a 
            the GPU reads over its own PCIe link. Segment s holds blocks base_s … base_s + n_s − 1, and every position,
            leaf and node index is the store's, so the tree is `receipts.tree` over the whole store in block order
            whatever the GPUs and tiers (one GPU and no host tier is the same code)
-payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), its
+payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), or a
+           buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`), its
            tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j);
            built a chunk at a time on the chunk's GPU and retained on the CPU, so it does not displace the store
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) on each segment's GPU at the
@@ -388,7 +389,9 @@ class DeviceStore:
     the same pass, beside its shard (`host_ctas` receipt CTAs and `host_consumers` consumer CTAs). Segment s holds the
     store's blocks base_s … base_s + n_s − 1 in that order, so every position, leaf and node index is the store's
     whatever the tier. `generator` seeds each segment's blocks: an int (segment s's from seed + s), or for one GPU and
-    no host tier a torch generator on it.
+    no host tier a torch generator on it. With `hbm` (a uint8 buffer a GPU, on it, whole chunks, such as a serving
+    engine's weights arena, `node.py`) the HBM tier is those buffers, their bytes as they are the payload, so a GPU's
+    shard is its buffer's chunks and nothing is filled.
 
     What a pass keeps goes to a ring of SLOTS on each GPU and from there, on each GPU's offload stream as its part ends,
     to a pinned host ring, both allocated with the store's shape (`shape`); the store's offloader copies each slot into
@@ -396,7 +399,7 @@ class DeviceStore:
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *, gpus=None,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
-                 host_blocks: int = 0, host_ctas: int = 16, host_consumers: int = 8) -> None:
+                 host_blocks: int = 0, host_ctas: int = 16, host_consumers: int = 8, hbm=None) -> None:
         gpus = gpus or [Gpu(torch, torch.cuda.current_device(), own=False)]
         G = len(gpus)
         if blocks % PER_LEAF or blocks % chunk or blocks // chunk < G or G > 16 or host_blocks % chunk:
@@ -410,6 +413,11 @@ class DeviceStore:
         self.host_ctas, self.host_consumers = host_ctas, host_consumers
         chunks, hchunks = blocks // chunk, host_blocks // chunk
         per = [chunks // G + (g < chunks % G) for g in range(G)]
+        if hbm is not None:
+            per = [t.numel() // (chunk * BLOCK) for t in hbm]
+            if (len(hbm) != G or sum(per) != chunks or any(t.numel() != p * chunk * BLOCK for t, p in zip(hbm, per))
+                    or any(t.device != torch.device("cuda", gpu.index) for t, gpu in zip(hbm, gpus))):
+                raise ValueError(f"the HBM tier's buffers are one a GPU, on it, each whole chunks, {blocks} blocks in all")
         hper = [hchunks // G + (g < hchunks % G) for g in range(G)]
         self.seg_gpu = list(range(G)) + [g for g in range(G) if hper[g]]
         self.n = [p * chunk for p in per] + [hper[g] * chunk for g in range(G) if hper[g]]
@@ -432,6 +440,9 @@ class DeviceStore:
                 raise ValueError("a store on several GPUs or tiers takes an int seed")
             with self.on(gpu):
                 n = self.n[s]
+                if hbm is not None and not self.on_host[s]:
+                    self.data_g.append(hbm[g])
+                    continue
                 if self.on_host[s]:
                     d = host_tier(torch, n * BLOCK, gpu.numa)
                     stage = torch.empty(min(n, 1 << 18) * BLOCK, dtype=torch.uint8, device=dev)
@@ -1099,7 +1110,7 @@ class Device:
                  calibration_passes: int = 4000, warm_openings: int = 2773, warm_passes: int = 64,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
                  trace_allocator: bool = False, host_blocks: int = 0, host_ctas: int = 16,
-                 host_consumers: int = 8) -> None:
+                 host_consumers: int = 8, hbm=None) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks + host_blocks, warm_openings
         self.host = {"host_ctas": host_ctas, "host_consumers": host_consumers}
         self.trace_allocator, self.calibration_trace = trace_allocator, None
@@ -1130,7 +1141,7 @@ class Device:
         self.salt_key = self.rng.bytes(32)
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,
-                                 host_blocks=host_blocks, **self.host, **self.shape)
+                                 host_blocks=host_blocks, hbm=hbm, **self.host, **self.shape)
 
     def payload_root(self, node: bytes) -> bytes:
         self.node = node
