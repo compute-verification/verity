@@ -364,6 +364,22 @@ def test_a_run_creating_behind_the_latest_is_recorded_stuck(tmp_path):
     assert started == [] and api.posts == [], "a goal run's stream can't be read, and the API refuses to cancel a CREATING run"
 
 
+def test_a_run_left_creating_with_a_newer_one_started_is_not_stuck(tmp_path):
+    """memory-accounting, 20:01Z 18 Oct: run-6fd1b6c4 CREATING from 19:50:43Z, but run-84157683, created 4 s after it, started
+    and waits on background work: the CREATING one blocks nothing (so does proofs' from 08:26Z, after 15:32Z)."""
+    clock = Clock(W.epoch("2026-10-18T20:05:00Z"))
+    api = FakeApi([{"id": "bc-m", "name": "memory-accounting", "status": "ACTIVE", "latestRunId": "run-z"}],
+                  {"run-z": {"status": "CANCELLED"},
+                   "run-w": {"status": "WAITING_FOR_BACKGROUND_WORK", "updatedAt": "2026-10-18T19:52:04.724Z"},
+                   "run-c": {"status": "CREATING", "updatedAt": "2026-10-18T19:50:43.000Z"},
+                   "run-s": {"status": "CANCELLED", "durationMs": 36567983},
+                   "run-q": {"status": "CREATING", "updatedAt": "2026-10-18T08:26:05.281Z"}},
+                  older={"bc-m": ["run-w", "run-c", "run-s", "run-q"]})
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.sweep(started.append)
+    assert records(tmp_path) == [] and [r.run for r in started] == ["run-w"]
+
+
 def test_a_stream_that_ends_is_followed_again(tmp_path):
     """The stream returns on 400, 404 or 410 (410 stream_expired past the retention window); the run stayed followed with
     nothing feeding it and was never judged again."""
