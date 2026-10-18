@@ -48,9 +48,10 @@ from the shape alone, and `window_problem` is the window statement (L4) in Pytho
 fields (`side_field`): the entries are the shape's, every call's -h3 root is the pass's, each side row's index is its
 leaf, every row not admitted is the canonical empty row, the filler's are not admitted, and the registered level is
 `credit` of the masked sum; given the records it also holds them to the entries.  It is not proved yet: no Program
-states it, and the annotation words are the committer's, since the units that form them (the row units, the request
-queue's admission, the tally) are not drawn: a row with both words set wrongly is credited until a draw weighted by the
-credit each annotation gates proves them.
+states it, and the annotation words are the committer's, since the units that form them (the A rows' formings, the B
+rows' formings each epoch, the request queue's admission, the tally's limbs) are not yet the always-proved set of
+`note:compute-accounting/20261018T2200Z-draft-padded-credit-rule` (§8): until they are, a row with both words set wrongly
+is credited.  The draw stays uniform over the N tiles, never weighted by an annotation.
 
 **The layout for gates** (`note:proofs/20261006T1940Z-draft-units-to-inner-layout`, §2) is specified in PoUW's PROTOCOL.md,
 "The served audit window": the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the side trees of 2^D leaves
