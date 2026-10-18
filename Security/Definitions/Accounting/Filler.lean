@@ -23,6 +23,11 @@ as `benchmarks/pouw/filler/pfill_ref.py` computes a tile and the service checks 
 * **The checks** (`CellRight`, `FullFill`, `SpotFill`, `FillBlocks`): a window whose every round checks every cell
   (𝒫_full), one uniform cell (the spot check), or one uniform cell beside another block's one-draw check on
   independent coins (Theorem S with each block at its own `p`, the budget `eps.py`'s cheater LP reads).
+* **Pinned receipts** (`wrongShare`, `FullPinnedFill`, `SpotPinnedFill`, `PinnedFillBlocks`): a filler whose check
+  recomputes each tile's receipt from the round's committed data and live coins and compares it with the committed one
+  (lfill's tile receipt, `lf_ref`; a lane chain absorbed into the fold's receipt; keyed rounds in the fold), checked in
+  full, at one uniform tile, or at one uniform tile beside another block. The round's share is the share of tiles whose
+  committed receipt isn't the recomputed one.
 -/
 
 namespace Accounting.Filler
@@ -130,5 +135,51 @@ def FillBlocks {Ω₀ : Type} [Fintype Ω₀] (p₀ : ℝ) (c : Y → Fin K → 
       ∀ a, FillBlocks p₀ c (next a)
 
 end Checks
+
+section Pinned
+
+variable {D C τ V : Type} [Fintype τ]
+
+/-- **A round's wrong share**: the share of tiles whose committed receipt `R t` isn't the tile's receipt `F w c t`, a
+function of the round's committed data `w` and live coins `c` that the verifier recomputes. -/
+noncomputable def wrongShare (F : D → C → τ → V) (w : D) (c : C) (R : τ → V) : ℝ := prob fun t => R t ≠ F w c t
+
+/-- **A full-checking window of pinned receipts**: each round's committed data `w` and receipts `R` are any functions of
+its live coins, the round's share is their wrong share, and it passes only where every tile's committed receipt is the
+recomputed one. -/
+def FullPinnedFill (F : D → C → τ → V) : {n : ℕ} → RoundGame C n → Prop
+  | _, .done => True
+  | _, .round d pass next =>
+    (∃ (w : C → D) (R : C → τ → V), (∀ c, d c = wrongShare F (w c) c (R c)) ∧
+        ∀ c, pass c → ∀ t, R c t = F (w c) c t) ∧
+      ∀ c, FullPinnedFill F (next c)
+
+/-- **A spot-checked window of pinned receipts**: each round's coins are its live coins and the verifier's uniform tile,
+drawn after the receipts are committed; the committed data and receipts are any functions of the live coins, the
+round's share is their wrong share, and it passes only where the drawn tile's committed receipt is the recomputed
+one. -/
+def SpotPinnedFill (F : D → C → τ → V) : {n : ℕ} → RoundGame (C × τ) n → Prop
+  | _, .done => True
+  | _, .round d pass next =>
+    (∃ (w : C → D) (R : C → τ → V), (∀ a, d a = wrongShare F (w a.1) a.1 (R a.1)) ∧
+        ∀ a, pass a → R a.1 a.2 = F (w a.1) a.1 a.2) ∧
+      ∀ a, SpotPinnedFill F (next a)
+
+/-- **A window of a block beside pinned receipts** (Theorem S with the filler at `p = 0`): each round's coins are
+another block's (`Ω₀`) and the pinned receipts' spot check's, independent. The other block's share `d₀ ≥ 0` is fixed
+before its coins and its check passes with probability at most `1 − (1 − p₀)·d₀`; the committed data and receipts are
+any functions of the coins but the tile. The round's share is `(1 − p₀)·d₀ + wrongShare`, `eps.py`'s budget row at the
+filler's `p = 0`, and the round passes only where both blocks' checks do. -/
+def PinnedFillBlocks {Ω₀ : Type} [Fintype Ω₀] (p₀ : ℝ) (F : D → C → τ → V) :
+    {n : ℕ} → RoundGame (Ω₀ × (C × τ)) n → Prop
+  | _, .done => True
+  | _, .round d pass next =>
+    (∃ (d₀ : ℝ) (pass₀ : Ω₀ → Prop) (w : Ω₀ → C → D) (R : Ω₀ → C → τ → V), 0 ≤ d₀ ∧
+      prob pass₀ ≤ 1 - (1 - p₀) * d₀ ∧
+      (∀ a, d a = (1 - p₀) * d₀ + wrongShare F (w a.1 a.2.1) a.2.1 (R a.1 a.2.1)) ∧
+      ∀ a, pass a → pass₀ a.1 ∧ R a.1 a.2.1 a.2.2 = F (w a.1 a.2.1) a.2.1 a.2.2) ∧
+      ∀ a, PinnedFillBlocks p₀ F (next a)
+
+end Pinned
 
 end Accounting.Filler
