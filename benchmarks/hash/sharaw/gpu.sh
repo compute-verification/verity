@@ -6,7 +6,7 @@
 # (DECODE_N, PREFILL_N leaves of 4 KiB) the bench: every committer's levels compared with commit_gpu's, then the raw rate,
 # commit_gpu, native_rows and the sharaw forms interleaved rep by rep with the SM clock of each, then the time split.
 # PROF=1: a second lease for nsys (each arm at both sizes) and ncu (the leaf kernels at the decode size). Clocks are read,
-# never set.
+# never set: ncu runs with --clock-control none (its default locks the SM clock to base while it profiles).
 #
 #   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source --env GPU_LEASE_WHO=hash-sha-raw \
 #     -- bash benchmarks/hash/sharaw/gpu.sh
@@ -93,7 +93,7 @@ if [ "${PROF:-1}" = 1 ]; then
     done
     for a in $PROF_ARMS; do
       [ $a = native_rows ] && [ -z "$SO" ] && continue
-      ncu --set basic --section WarpStateStats --section SchedulerStats --section Occupancy --section ComputeWorkloadAnalysis \
+      ncu --clock-control none --set basic --section WarpStateStats --section SchedulerStats --section Occupancy --section ComputeWorkloadAnalysis \
         --section MemoryWorkloadAnalysis -k regex:"salt|leaf|level|node|sr_" --launch-count 6 --csv --page details \
         "$W/$PROF_BIN" nsys "$W/p-$DECODE_N.bin" $DECODE_N $a $SO > "$O/ncu-$a.csv" 2> "$O/ncu-$a.err"
       echo "ncu $a rc $?" >> "$O/rc.txt"
