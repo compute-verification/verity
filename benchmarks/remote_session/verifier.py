@@ -509,6 +509,7 @@ def main() -> int:
     if a.out is None:
         ap.error("--out is required")
     a.out.mkdir(parents=True, exist_ok=True)
+    save_registry(a.registry, registry)
     sys.setswitchinterval(2e-4)
     w0 = time.monotonic_ns()
     checks = Checks(a.check_workers) if a.check_workers > 0 else None
