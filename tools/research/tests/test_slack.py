@@ -1577,6 +1577,21 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
 
 
+def test_traffic_replay_names_each_post_whose_doorbells_differ_from_route_targets(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "circuits")
+    rung = posted(fake, run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "rang as it should")[1])
+    typed = fake.add(COORD, text="@circuits sent by a client that never delivered", username="proofs", bot_id=BOT)
+    stray = fake.add(COORD, text="for no one in particular", username="lean", bot_id=BOT)
+    fake.add(COORD, text=slack.doorbell("lean", stray["ts"], stray["ts"], stray["text"]), username="router", bot_id=BOT, thread_ts=box)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
+    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
+    assert rc == 0 and rung["ts"] not in rep
+    assert (rep[typed["ts"]]["missed"], rep[typed["ts"]]["extra"]) == (["circuits"], [])
+    assert (rep[stray["ts"]]["missed"], rep[stray["ts"]]["extra"]) == ([], ["circuits"])
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay")
+    assert f"REPLAY {typed['ts']} by @proofs: missed @circuits: @circuits sent by a client" in out and "replayed: 2 post(s)" in out
+
+
 def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
     """A stale analysis checkout must not report a fresher sender's group mentions as dropped (14 Oct: three false
     DROPPED lines for groups created that morning); a group origin/main doesn't know either still drops."""
