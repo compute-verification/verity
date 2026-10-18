@@ -1,7 +1,7 @@
 """The night's summary and its expected verdicts (`run.py`), on summaries in the shape mockdc and lab_run write them,
-with a recorded night's verdicts and timings (`r20261018-102319-bb80`; the fleet's from `FLEET_RUN`): those are the
-expected ones, and a differing verdict or answer, a step that exited nonzero, a missing summary or a proxy tick past its
-slack each fails the night, named in `summary.txt`."""
+with the recorded night's verdicts and timings (`r20261018-110501-432f`): those are the expected ones, and a differing
+verdict or answer, a step that exited nonzero, a missing summary or a proxy tick past its slack each fails the night,
+named in `summary.txt`."""
 
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ SALT = {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1], "e
 EXITS = {"demo": 0, "lab --blocks 5": 0, "mockdc": 0, "mockdc-salt": 0, "lab --fleet --blocks 2": 0, "fleet": 0,
          "fleet-swapped": 0, "lab default": 0, "python": 0, "workload/honest": 0, "workload/flip-bit": 0,
          "workload/late": 0}
-FLEET_RUN = "r20261018-000000-0000"
 WAN = [["east.wan.cert-west.wan.cert", "wan/east-west=1e+11 bit/s (declared)",
         "wan/east-west-latency=0.02 s (declared)"]]
 
@@ -49,15 +48,17 @@ def timing(late: float, lag: float, over: int = 0) -> dict:
 
 # Each block's worst proxy tick and median wire lag, in ms.
 TIMES = {
-    "mockdc": {"b0": (3.48, 5.575), "b1": (3.34, 9.968), "b2": (3.491, 5.586), "b3": (3.606, 9.974),
-               "b4": (4.209, 5.652)},
-    "mockdc-salt": {"b0": (4.338, 5.533), "b1": (4.279, 9.946), "b2": (3.862, 5.658), "b3": (3.487, 9.827),
-                    "b4": (4.286, 5.527)},
-    "fleet": {"east.b0": (3.5, 33.6), "east.b1": (3.6, 33.7), "west.b0": (3.4, 5.6), "west.b1": (3.5, 10.0)},
-    "fleet-swapped": {"east.b0": (3.5, 33.5), "east.b1": (3.4, 33.8), "west.b0": (3.6, 5.5), "west.b1": (3.7, 9.9)},
-    "honest": {"b0": (3.858, 5.614), "b1": (3.854, 9.865), "b2": (3.854, 5.567), "b3": (3.725, 9.949)},
-    "flip-bit": {"b0": (3.214, 5.474), "b1": (4.133, 9.843), "b2": (4.074, 5.469), "b3": (4.044, 9.97)},
-    "late": {"b0": (4.127, 5.556), "b1": (3.326, 9.906), "b2": (3.333, 5.525), "b3": (3.843, 9.91)},
+    "mockdc": {"b0": (4.172, 5.639), "b1": (4.172, 9.977), "b2": (3.543, 5.551), "b3": (4.132, 9.833),
+               "b4": (3.798, 5.425)},
+    "mockdc-salt": {"b0": (4.359, 5.496), "b1": (3.856, 10.02), "b2": (4.361, 5.454), "b3": (3.439, 9.88),
+                    "b4": (3.815, 5.475)},
+    "fleet": {"east.b0": (3.295, 35.344), "east.b1": (3.439, 35.243), "west.b0": (3.819, 5.561),
+              "west.b1": (3.661, 9.961)},
+    "fleet-swapped": {"east.b0": (3.574, 35.291), "east.b1": (4.025, 35.15), "west.b0": (3.783, 5.533),
+                      "west.b1": (3.805, 9.785)},
+    "honest": {"b0": (4.12, 5.562), "b1": (4.157, 10.011), "b2": (3.561, 5.621), "b3": (3.874, 9.968)},
+    "flip-bit": {"b0": (4.238, 5.469), "b1": (3.597, 9.99), "b2": (3.634, 5.513), "b3": (3.545, 9.918)},
+    "late": {"b0": (3.605, 5.548), "b1": (3.598, 9.998), "b2": (3.424, 5.54), "b3": (4.318, 10.019)},
 }
 
 
@@ -186,8 +187,8 @@ def test_the_recorded_runs_verdicts_are_the_expected_ones(run, tmp_path, capsys)
     assert run.finish(tmp_path, EXITS) == 0
     summary = json.loads((tmp_path / "summary.json").read_text())
     assert summary["ok"] and summary["mismatches"] == [] and summary["ticks_over_slack"] == 0
-    assert summary["worst_tick"] == {"late_ms": 4.338, "slack_ms": 25.0, "over": 0, "lag_ms": 5.533,
-                                     "at": "mockdc-salt b0"}
+    assert summary["worst_tick"] == {"late_ms": 4.361, "slack_ms": 25.0, "over": 0, "lag_ms": 5.454,
+                                     "at": "mockdc-salt b2"}
     b4 = summary["runs"]["mockdc"]["blocks"]["b4"]
     assert b4["verdicts"]["charged"] == ["timing", "serviced"] and b4["verdicts"]["unplanned_charged"] == ["timing", "refused"]
     assert b4["account"]["covert_bits"] == 16.0 + HELD and b4["unplanned_account"]["covert_bits"] == 16.0 + 2 * LINE
@@ -205,31 +206,31 @@ def test_the_recorded_runs_verdicts_are_the_expected_ones(run, tmp_path, capsys)
                                 "(bits)", "wire", "lag", "worst", "tick"]
     assert len(lines) == 1 + 2 * 6 + 2 * 5 + 3 * 4 + 5 and all(line.endswith(" ok") for line in lines[1:35])
     row = {tuple(line.split()[:2]): " ".join(line.split()) for line in lines[1:35]}
-    assert row["mockdc", "b0"] == "mockdc b0 honest accepted records accepted 24 sound 5.6 ms 3.5/25 ms ok"
+    assert row["mockdc", "b0"] == "mockdc b0 honest accepted records accepted 24 sound 5.6 ms 4.2/25 ms ok"
     assert row["mockdc", "b2"] == ("mockdc b2 late refused responses[0] status:coverage-never-established records "
                                    "refused out [0, 6000) 2.4e+12 NOT sound 5.6 ms 3.5/25 ms ok")
     assert row["mockdc", "b4"] == ("mockdc b4 maintenance refused responses[1] no-verdict, requests[1] no-verdict records "
                                    "accepted; unplanned refused out, in [6000, 12000) 2.16e+13 sound; unplanned 4.8e+12 "
-                                   "NOT sound 5.7 ms 4.2/25 ms ok")
+                                   "NOT sound 5.4 ms 3.8/25 ms ok")
     assert row["mockdc", "all"] == ("mockdc all 10 ports records refused b2 out [0, 6000); b3 out [12000, 18000) "
                                     "2.64e+13 NOT sound ok")
-    assert row["mockdc-salt", "b1"] == ("mockdc-salt b1 bits accepted; salt accepted records accepted 24 sound 9.9 ms "
-                                        "4.3/25 ms ok")
+    assert row["mockdc-salt", "b1"] == ("mockdc-salt b1 bits accepted; salt accepted records accepted 24 sound 10.0 ms "
+                                        "3.9/25 ms ok")
     assert "no-verdict; salt refused [1] records accepted;" in row["mockdc-salt", "b4"]
     assert row["fleet", "east.b1"] == ("fleet east.b1 late refused responses[0] status:coverage-never-established "
-                                       "records refused out [0, 6000) 2.4e+12 NOT sound 33.7 ms 3.6/25 ms ok")
-    assert row["fleet", "west.b0"] == "fleet west.b0 bits accepted records accepted 24 sound 5.6 ms 3.4/25 ms ok"
+                                       "records refused out [0, 6000) 2.4e+12 NOT sound 35.2 ms 3.4/25 ms ok")
+    assert row["fleet", "west.b0"] == "fleet west.b0 bits accepted records accepted 24 sound 5.6 ms 3.8/25 ms ok"
     assert row["fleet", "all"] == ("fleet all 8 ports records refused east.b1 out [0, 6000); west.b1 out "
                                    "[12000, 18000) 4.8e+12 NOT sound ok")
     assert row["fleet-swapped", "all"] == ("fleet-swapped all 8 ports records refused east.b1 out [12000, 18000); "
                                            "west.b1 out [0, 6000) 4.8e+12 NOT sound ok")
-    assert row["workload/flip-bit", "b2"] == "workload/flip-bit b2 - accepted N3 refused (content) 5.5 ms 4.1/25 ms ok"
+    assert row["workload/flip-bit", "b2"] == "workload/flip-bit b2 - accepted N3 refused (content) 5.5 ms 3.6/25 ms ok"
     assert row["workload/late", "b2"] == ("workload/late b2 late refused responses[0] status:coverage-never-established "
-                                          "N3 refused (missing, values) 5.5 ms 3.3/25 ms ok")
+                                          "N3 refused (missing, values) 5.5 ms 3.4/25 ms ok")
     assert lines[35:] == [
         "",
         "answers: honest [16, 16] equal the reference; flip-bit [16, 16] equal the reference; late none",
-        "worst proxy tick: 4.3 ms late against 25 ms of slack (mockdc-salt b0), 0 ticks past the slack in the night",
+        "worst proxy tick: 4.4 ms late against 25 ms of slack (mockdc-salt b2), 0 ticks past the slack in the night",
         "steps: " + ", ".join(f"{s} 0" for s in EXITS),
         "every verdict is the expected one"]
 
