@@ -23,8 +23,10 @@ local notation "𝔽" => FlockLevel3.GF128
 open Classical Discharge.Tables in
 /-- **The live sessions' bound at table 0, with escapes on accepted runs**: `PlainLiveAt` with each fork event only
 where both forked deployed runs accept and each one-run event only where its run accepts, and with the events bounding
-the live strategies' decoded self-clashes on accepted live runs. -/
-def PlainLiveAccAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+the live strategies' decoded self-clashes on accepted live runs, all at the model leaf `Lf`. -/
+def PlainLiveAccAt (Ok : Claims.Msg → List 𝔽 → Prop)
+    (Lf : FlockSoundness.Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) {x : Claims.Msg} {spec : SessionSpec}
+    {st : Stmt}
     (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -53,10 +55,10 @@ def PlainLiveAccAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {sp
             Model.Cap Refine.Dig)
           (N : ℕ) (rootB₀ : Array ByteArray)
           (hdec : ∀ j, DecodesTable
-            (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
-            (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
+            (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+            (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
               ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOf rootB₀ ⟨0, Nat.one_pos⟩) (Claims.Flock.oracleOf C) o ∧
-              ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+              ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
             pL opn dec one fin capOf
             (fun j => repsOf (D := Refine.Dig) execArith
               ([plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay].get j))
@@ -70,13 +72,13 @@ def PlainLiveAccAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {sp
                 Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧
                   u ≠ C p) ≤
             (∑ u, (prob pL _ (σL u)).toReal) / Fintype.card τ ∧
-          (∀ r ℓ, (∑ u, advRSL execArith Refine.H512 Refine.enc512 Refine.leaf512 (L.model (Refine.regionsOf st)) m
+          (∀ r ℓ, (∑ u, advRSL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m
               k0 l₀ l₁ rest ext hk0 hm ptLocal spec.mPts [] [] (capOf rootB₀ ⟨0, Nat.one_pos⟩) r.val (ℓ.val + 1)
-              (simAt execArith Refine.H512 Refine.enc512 Refine.leaf512
+              (simAt execArith Refine.H512 Refine.enc512 Lf
                 (plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay) _ pL opn dg dec one fin capOf N hdec rootB₀
                 (σL u) (hσ u))) / Fintype.card τ ≤
             Claims.Pr fun s : (Fin ((V false).k x) → Coin) × (Fin ((V false).k x) → Coin) => ev r ℓ ω s.1 s.2) ∧
-          (∑ u, (prob (LiveSelfClash Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pL opn
+          (∑ u, (prob (LiveSelfClash Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pL opn
               dec one fin capOf fun j => repsOf (D := Refine.Dig) execArith
                 ([plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay].get j))
             (liveSession dg [plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay].length spec.mPts N)
@@ -86,26 +88,29 @@ def PlainLiveAccAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {sp
 open Classical Discharge.Tables in
 /-- **`PlainLiveAccAt` gives `PlainLiveAt`**: the decoded self-clashes on accepted live runs bound the simulated
 strategies' self-clash after `Commit`. -/
-theorem plainLiveAt_of_acc {Ok : Claims.Msg → List 𝔽 → Prop} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem plainLiveAt_of_acc {Ok : Claims.Msg → List 𝔽 → Prop}
+    {Lf : FlockSoundness.Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512} {x : Claims.Msg}
+    {spec : SessionSpec} {st : Stmt}
     {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m} {ptLocal : ℕ}
     {hlay : (L.model (Refine.regionsOf st)).LinkLayout ptLocal spec.mPts}
-    (hl : PlainLiveAccAt Ok h L m k0 l₀ l₁ rest ext hsch hk0 hm ptLocal hlay) :
-    PlainLiveAt Ok h L m k0 l₀ l₁ rest ext hsch hk0 hm ptLocal hlay := by
+    (hl : PlainLiveAccAt Ok Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm ptLocal hlay) :
+    PlainLiveAt Ok Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm ptLocal hlay := by
   intro Ω _ _ P
   obtain ⟨ev, ev₁, tied, tied₁, -, -, hω⟩ := hl Ω P
   refine ⟨ev, ev₁, tied, tied₁, fun ω C hok => ?_⟩
   obtain ⟨pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hdec, τ, _, _, σL, hσ, htr, hadv, hsc⟩ := hω ω C hok
   exact ⟨pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hdec, τ, inferInstance, inferInstance, σL, hσ, htr, hadv,
-    le_trans (mean_selfClash_le_live execArith Refine.H512 Refine.enc512 Refine.leaf512
+    le_trans (mean_selfClash_le_live execArith Refine.H512 Refine.enc512 Lf
       (plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay) _ pL opn dg dec one fin capOf N hdec rootB₀ σL hσ) hsc⟩
 
 open Classical Discharge.Tables in
 /-- **The plain table bound at a statement, with escapes on accepted runs, from live sessions**: the old escapes at the
 plain fork rounds, on accepted runs, with `plain_le_sessions` at the simulated strategies after `Commit` (`simAt`). -/
 theorem plain_tableBoundθAccAt_of_live (rel : Readable.Parsed → Readable.Relation)
-    (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+    (Ok : Claims.Msg → List 𝔽 → Prop) (Lf : FlockSoundness.Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512)
+    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -113,7 +118,7 @@ theorem plain_tableBoundθAccAt_of_live (rel : Readable.Parsed → Readable.Rela
     (hnc : ∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, Ok x (C p)) →
       ¬ Claims.Flock.GoodTable (deployPlain rel) (wordLen false) x C →
       ¬ Committed execArith (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (Claims.Flock.oracleOf C))
-    (hl : PlainLiveAccAt Ok h L m k0 l₀ l₁ rest ext hsch hk0 hm ptLocal hlay) :
+    (hl : PlainLiveAccAt Ok Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm ptLocal hlay) :
     Claims.Flock.TableBoundθAccAt sha512 (deployPlain rel) (wordLen false) Ok x := by
   intro Ω _ _ P
   obtain ⟨ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ := hl Ω P
@@ -122,28 +127,29 @@ theorem plain_tableBoundθAccAt_of_live (rel : Readable.Parsed → Readable.Rela
       (plainJ (tables_head_one h) hsch) ev ev₁ tied tied₁ hacc hacc₁,
     oldEsc_fitsFork_plainJ rel P x (tables_head_one h) hsch ev ev₁ tied tied₁, fun ω C hok hg => ?_⟩
   obtain ⟨pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hdec, τ, _, _, σL, hσ, htr, hadv, hsc⟩ := hω ω C hok
-  exact plain_le_sessions h L m k0 l₀ l₁ rest ext hsch hk0 hm ptLocal hlay P ev ev₁ tied tied₁ ω C (hnc C hok hg) τ
-    (capOf rootB₀ ⟨0, Nat.one_pos⟩) (fun u => simAt execArith Refine.H512 Refine.enc512 Refine.leaf512
+  exact plain_le_sessions Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm ptLocal hlay P ev ev₁ tied tied₁ ω C (hnc C hok hg)
+    τ (capOf rootB₀ ⟨0, Nat.one_pos⟩) (fun u => simAt execArith Refine.H512 Refine.enc512 Lf
       (plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay) _ pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u))
-    (le_trans htr (mean_live_le_simAt execArith Refine.H512 Refine.enc512 Refine.leaf512
+    (le_trans htr (mean_live_le_simAt execArith Refine.H512 Refine.enc512 Lf
       (plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay) _ pL opn dg dec one fin capOf N hdec rootB₀ σL hσ))
     hadv
-    (le_trans (mean_selfClash_le_live execArith Refine.H512 Refine.enc512 Refine.leaf512
+    (le_trans (mean_selfClash_le_live execArith Refine.H512 Refine.enc512 Lf
       (plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay) _ pL opn dg dec one fin capOf N hdec rootB₀ σL hσ) hsc)
 
 /-- **The live sessions' bound at a plain statement, with escapes on accepted runs**: `PlainLiveAccAt` where
-`PlainLive` reads `PlainLiveAt`. -/
+`PlainLive` reads `PlainLiveAt`, at some model leaf. -/
 def PlainLiveAcc (x : Claims.Msg) : Prop :=
   ∀ (spec : SessionSpec) (st : Stmt) (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts),
-    PlainLiveAccAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay
+    ∃ Lf : FlockSoundness.Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512,
+      PlainLiveAccAt (wide false) Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay
 
 theorem plainLive_of_acc {x : Claims.Msg} (hl : PlainLiveAcc x) : PlainLive x :=
   fun spec st h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay =>
-    plainLiveAt_of_acc (hl spec st h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay)
+    (hl spec st h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay).imp fun _ => plainLiveAt_of_acc
 
 /-- **The plain table bound at a statement in scope, with escapes on accepted runs**: at tables of full-width columns,
 where the statement parses in scope and sets up. -/
@@ -160,8 +166,9 @@ theorem plain_tableBoundθAccAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
   obtain ⟨k0, l₀, l₁, rest, ext, hsch, hk0, e⟩ := plain_sched h22 h35
   have ht := tables_of_one hset h1
   have hm13 : 13 ≤ (L.model (Refine.regionsOf (sts[0]'h0))).m := by show 13 ≤ (sts[0]'h0).m; omega
-  refine plain_tableBoundθAccAt_of_live Readable.relation (wide false) ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13
-    PT_LOCAL hlay (fun C hw hg => ?_) (hl spec _ ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay)
+  obtain ⟨Lf, hLf⟩ := hl spec _ ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay
+  refine plain_tableBoundθAccAt_of_live Readable.relation (wide false) Lf ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13
+    PT_LOCAL hlay (fun C hw hg => ?_) hLf
   have := plain_not_committed hs hin hset h0 L C hw hg
   rwa [e] at this
 

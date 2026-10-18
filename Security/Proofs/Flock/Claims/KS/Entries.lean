@@ -14,7 +14,8 @@ with their rows, the deployed reader's entries. This file proves all three at fl
   that decodes are `zkRepCols`'s, and a drawn position is below `2^d` at a level `fast100` uses.
 * `Claims.Flock.exists_ne_of_entries`: `exists_ne_of_off₀L_sc` with the entries given as one list equation.
 * `accepts_opens₀L`: when `Accepts I t`, whether or not the outputs are hidden, at every table, every pair of the
-  reps' runs on the proof files' messages and the streams' coins whose salted output accepts at a cap has every level-0
+  reps' runs on the proof files' messages and the streams' coins whose salted output accepts at a cap, at any model
+  leaf (`leaf512` for `hm96-sha512/v1`, `leafPlain` for plain SHA-512 leaves), has every level-0
   opening verifying against that cap, at level 0's lanes and path length, below `2^d`, and its level-0 openings'
   positions and rows are its reps' `plainRepColsOf` entries at the session's shape, stream rounds and proof files
   (`accepts_req0`, `verified_opens₀L`); `accepts_verdict_hm96` gives such runs, accepted at `capOfRoot` of the table's
@@ -105,11 +106,12 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **At flock-verify's acceptance, each table's level-0 openings are its reps' deployed entries** (§9–§14). When
 `Accepts I t`, at every table `j`, its `fast100` schedule and the statement read off its layout,
-every pair of the reps' runs on the proof files' messages and the streams' coins whose salted output accepts at a cap
-has its level-0 openings verifying against that cap at level 0's lanes and path length, below `2^d`, and its level-0
-openings' positions and rows are the reps' `plainRepColsOf` entries, rep 0's then rep 1's, at the table's shape, the
-reps' stream rounds and the proof files. -/
-theorem accepts_opens₀L {I : Inputs} {t : Transcript} (h : Accepts I t) :
+every pair of the reps' runs on the proof files' messages and the streams' coins whose salted output at the model leaf
+`Lf` accepts at a cap has its level-0 openings verifying against that cap at level 0's lanes and path length, below
+`2^d`, and its level-0 openings' positions and rows are the reps' `plainRepColsOf` entries, rep 0's then rep 1's, at
+the table's shape, the reps' stream rounds and the proof files. -/
+theorem accepts_opens₀L (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) {I : Inputs} {t : Transcript}
+    (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
@@ -135,11 +137,11 @@ theorem accepts_opens₀L {I : Inputs} {t : Transcript} (h : Accepts I t) :
             (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
               PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₁ capDig)
             (s₁.rounds.toList.map (·.coins)) pend₁ →
-          out = tableOutL H512 enc512 leaf512 cap (pend₀, pend₁)
+          out = tableOutL H512 enc512 Lf cap (pend₀, pend₁)
             (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
               sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]) →
           out.accepted = true →
-          (∀ x ∈ opens₀L (schedOf sch) out, VerifiedL H512 enc512 leaf512 cap
+          (∀ x ∈ opens₀L (schedOf sch) out, VerifiedL H512 enc512 Lf cap
             (lvOf (schedOf sch) 0).lanes (Model.pathLen (lvOf (schedOf sch) 0)) x ∧
               x.1 < 2 ^ (sch.levels.getD 0 default).d) ∧
           (opens₀L (schedOf sch) out).map (fun x => (x.1, x.2.1)) =
@@ -165,7 +167,7 @@ theorem accepts_opens₀L {I : Inputs} {t : Transcript} (h : Accepts I t) :
       R.positions = (Flock.positions (sch.levels.getD 0 default) coins).toList →
       R.positions.length = (sch.levels.getD 0 default).q := fun R coins h => by
     rw [h, Array.length_toList, positions_size _ hseam]
-  have hent : (opens₀L (schedOf sch) (tableOutL H512 enc512 leaf512 cap (pend₀, pend₁)
+  have hent : (opens₀L (schedOf sch) (tableOutL H512 enc512 Lf cap (pend₀, pend₁)
       (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
         sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]))).map
         (fun x => (x.1, x.2.1)) =
@@ -182,7 +184,7 @@ theorem accepts_opens₀L {I : Inputs} {t : Transcript} (h : Accepts I t) :
     · exact Claims.Flock.slotOpensL_entries _ 0 _ _ _ R₀ rest₀ hR₀ hl₀ hpos₀ (hq _ _ hpos₀) hrw₀ fun _ => rfl
     · exact Claims.Flock.slotOpensL_entries _ 1 _ _ _ R₁ rest₁ hR₁ hl₁ hpos₁ (hq _ _ hpos₁) hrw₁ fun _ => rfl
   refine ⟨fun x hx => ⟨?_, ?_⟩, hent⟩
-  · refine Claims.Flock.verified_opens₀L H512 enc512 leaf512 (schedOf sch) _ (pend₀, pend₁) _ hacc
+  · refine Claims.Flock.verified_opens₀L H512 enc512 Lf (schedOf sch) _ (pend₀, pend₁) _ hacc
       (fun r hr R hR hlR => ?_) x hx
     rcases r with _ | _ | r
     · exact hlR ▸ hsh₀ R hR

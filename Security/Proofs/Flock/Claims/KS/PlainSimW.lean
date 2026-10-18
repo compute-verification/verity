@@ -98,18 +98,20 @@ open Classical in
 /-- **A simulator of each prover at `wrP`'s verdict**: for each prover `P` and tape `ω`, a live prover `P'` with the
 deployed coins as its tape, whose strategies send `P`'s roots, that simulates `P`'s accepting runs at `plainCoins`
 (`PlainSimRun`), whose live self-clashes give `P`'s accepting runs with a collision there (`PlainClashRun`), and whose
-strategies' fork bound is no more than an accepting fork's with a collision (`plainForkEv`). -/
-def PlainSimWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+strategies' fork bound is no more than an accepting fork's with a collision (`plainForkEv`), all at the model leaf
+`Lf`. -/
+def PlainSimWrPAt (Lf : FlockSoundness.Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) {x : Claims.Msg}
+    {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
-      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
-        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
+      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
           ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
-          ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
         (plainVerdict I d C rootB₀) opn (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
         (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
         (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
@@ -122,15 +124,15 @@ def PlainSimWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables 
       PlainSimRun P x ω spec.mPts N dg w P' (plainCoins hk n) ∧
       (∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) →
         PlainClashRun P x ω spec.mPts N dg w P' hk n
-          (LiveSelfClash Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+          (LiveSelfClash Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
             (plainVerdict I d C (plainRoot P x ω)) opn
             (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
             (fun rs _ => capOfRoot rs[0]!) fun j => repsOf (D := Refine.Dig) execArith
               ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))) ∧
       (∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) → ∀ r ℓ,
-        (∑ u, advRSL execArith Refine.H512 Refine.enc512 Refine.leaf512 (L.model (Refine.regionsOf st)) m
+        (∑ u, advRSL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m
             k0 l₀ l₁ rest ext hk0 hm PT_LOCAL spec.mPts [] [] (capOfRoot (plainRoot P x ω)[0]!) r.val (ℓ.val + 1)
-            (simAt execArith Refine.H512 Refine.enc512 Refine.leaf512
+            (simAt execArith Refine.H512 Refine.enc512 Lf
               (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdict I d C (plainRoot P x ω)) opn dg
               (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
               (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
@@ -143,25 +145,26 @@ open Classical in
 /-- **A simulator gives the live sessions' bound at `wrP`'s verdict**, at a statement that sets up at `ins` and the
 draw `d` and whose provers' accepting runs carry `d` verbatim: the first bound by `plain_first_of_run`, the third by
 `plainMix_le_of_run`, the second as `PlainSimWrPAt` gives it. -/
-theorem plainLiveWrPAt_of_sim {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem plainLiveWrPAt_of_sim {Lf : FlockSoundness.Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512}
+    {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
     {hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
     {hdec : ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
-      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
-        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
+      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
           ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
-          ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
         (plainVerdict ins.read.I d C rootB₀) opn (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
         (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
         (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
         j}
     (hset : setupOf false x = some (ins, spec, sts)) (hd : ins.read.draw = some d)
     (hdraw : ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω) (ω : Ω), RecordDrawVerbatim P x ω)
-    (hs : PlainSimWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d opn hdec) :
-    PlainLiveWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d opn hdec := by
+    (hs : PlainSimWrPAt Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d opn hdec) :
+    PlainLiveWrPAt Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d opn hdec := by
   intro Ω _ _ P
   refine ⟨fun r ℓ ω s s' => plainForkEv h hsch P r ℓ ω s s', plainEv₁ P x, fun _ _ _ _ _ he => he.2.2,
     fun _ _ he => he.2, fun _ _ _ _ _ he => ⟨he.1, he.2.1⟩, fun _ _ he => he.1, fun ω C hC => ?_⟩
@@ -172,8 +175,8 @@ theorem plainLiveWrPAt_of_sim {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} 
     plainMix_le_of_run x ω spec.mPts N dg w P' hk n _ (plainEv₁ P x ω) (hsc C hC)⟩
 
 /-- **A simulator at a plain statement**: `PlainSimWrPAt` at the statements in scope that set up at a draw, at
-`plainOpn` where the outputs are public and at `plainOpnH` where they are hidden under `hm96-sha512/v1` leaves, and
-`PlainLiveAccAt` where they are hidden under any other leaf the scope admits, as `PlainLiveW` asks. -/
+`plainOpn` and `leaf512` where the outputs are public and at `plainOpnH` and the model's leaf of the statement's leaf
+scheme where they are hidden (`Refine.leafOfId`, `hm96-sha512/v1` or plain SHA-512 leaves), as `PlainLiveW` asks. -/
 def PlainSimW (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -183,24 +186,22 @@ def PlainSimW (x : Claims.Msg) : Prop :=
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts),
     (∀ hh : ins.read.I.tags.hiddenOutputs = false,
-      PlainSimWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
+      PlainSimWrPAt Refine.leaf512 h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdec hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
-    (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"),
-      PlainSimWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
-        (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-        (plain_hdecH hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
-    (∀ (_ : ins.read.I.tags.hiddenOutputs = true) (_ : ins.read.I.tags.merkleLeaf ≠ "hm96-sha512/v1"),
-      PlainLiveAccAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay)
+    (∀ hh : ins.read.I.tags.hiddenOutputs = true,
+      PlainSimWrPAt (Refine.leafOfId ins.read.I.tags.merkleLeaf) h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
+        ins.read.I d (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
+        (plain_hdecH hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay))
 
 /-- **`PlainSimW` gives `PlainLiveW`** where every prover's accepting runs carry the statement's draw verbatim. -/
 theorem plainLiveW_of_sim {x : Claims.Msg}
     (hdraw : ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω) (ω : Ω), RecordDrawVerbatim P x ω)
     (hs : PlainSimW x) : PlainLiveW x := by
   intro s hs' hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
-  obtain ⟨hw, hhid, hplain⟩ := hs s hs' hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
+  obtain ⟨hw, hhid⟩ := hs s hs' hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   exact ⟨fun hh => plainLiveWrPAt_of_sim hset hd hdraw (hw hh),
-    fun hh hl => plainLiveWrPAt_of_sim hset hd hdraw (hhid hh hl), hplain⟩
+    fun hh => plainLiveWrPAt_of_sim hset hd hdraw (hhid hh)⟩
 
 /-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, at the statements some run accepts from
 a simulator of each prover (`PlainSimW`) and the record's draw verbatim (`RecordDrawVerbatim`), and `Extendθ` at

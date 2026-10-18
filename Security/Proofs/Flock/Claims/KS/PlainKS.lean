@@ -31,8 +31,10 @@ open Classical Discharge.Tables in
 tables of `Ok` columns. Every prover has escapes at the plain fork rounds such that, at each tape and table `C`, live
 strategies `σL` whose roots agree bound the deployed runs accepting on `C` by their verdict `pL`, the decoder is right
 for `pL` accepting with no opening off `C` unless it self-clashes, and the escapes' events bound the simulated
-strategies' `Adv` and self-clash. -/
-def PlainLiveAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+strategies' `Adv` and self-clash, all at the model leaf `Lf`. -/
+def PlainLiveAt (Ok : Claims.Msg → List 𝔽 → Prop)
+    (Lf : FlockSoundness.Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) {x : Claims.Msg} {spec : SessionSpec}
+    {st : Stmt}
     (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m) (ptLocal : ℕ)
@@ -58,10 +60,10 @@ def PlainLiveAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec 
             Model.Cap Refine.Dig)
           (N : ℕ) (rootB₀ : Array ByteArray)
           (hdec : ∀ j, DecodesTable
-            (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
-            (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
+            (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+            (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
               ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOf rootB₀ ⟨0, Nat.one_pos⟩) (Claims.Flock.oracleOf C) o ∧
-              ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+              ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
             pL opn dec one fin capOf
             (fun j => repsOf (D := Refine.Dig) execArith
               ([plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay].get j))
@@ -75,31 +77,33 @@ def PlainLiveAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec 
                 Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧
                   u ≠ C p) ≤
             (∑ u, (prob pL _ (σL u)).toReal) / Fintype.card τ ∧
-          (∀ r ℓ, (∑ u, advRSL execArith Refine.H512 Refine.enc512 Refine.leaf512 (L.model (Refine.regionsOf st)) m
+          (∀ r ℓ, (∑ u, advRSL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m
               k0 l₀ l₁ rest ext hk0 hm ptLocal spec.mPts [] [] (capOf rootB₀ ⟨0, Nat.one_pos⟩) r.val (ℓ.val + 1)
-              (simAt execArith Refine.H512 Refine.enc512 Refine.leaf512
+              (simAt execArith Refine.H512 Refine.enc512 Lf
                 (plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay) _ pL opn dg dec one fin capOf N hdec rootB₀
                 (σL u) (hσ u))) / Fintype.card τ ≤
             Claims.Pr fun s : (Fin ((V false).k x) → Coin) × (Fin ((V false).k x) → Coin) => ev r ℓ ω s.1 s.2) ∧
           (∑ u, expect (ind fun outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8)) =>
-              SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+              SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
                 (outs.getD 0 dfltOutL))
-            (sessAfterL execArith Refine.H512 Refine.enc512 Refine.leaf512 (L.model (Refine.regionsOf st))
+            (sessAfterL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st))
               ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal spec.mPts [] [] (capOf rootB₀ ⟨0, Nat.one_pos⟩))
-            (simAt execArith Refine.H512 Refine.enc512 Refine.leaf512
+            (simAt execArith Refine.H512 Refine.enc512 Lf
               (plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay) _ pL opn dg dec one fin capOf N hdec rootB₀
               (σL u) (hσ u))) / Fintype.card τ ≤
             Claims.Pr fun s : Fin ((V false).k x) → Coin => ev₁ ω s
 
 /-- **The live sessions' bound at a plain statement**: `PlainLiveAt` at tables of full-width columns, at link layout
-`PT_LOCAL`, wherever the setup has the one table `st`, at its every `fast100` schedule of two levels or more. -/
+`PT_LOCAL`, wherever the setup has the one table `st`, at its every `fast100` schedule of two levels or more, at some
+model leaf (the bound holds at any, so the deployed one need not be named here). -/
 def PlainLive (x : Claims.Msg) : Prop :=
   ∀ (spec : SessionSpec) (st : Stmt) (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts),
-    PlainLiveAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay
+    ∃ Lf : FlockSoundness.Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512,
+      PlainLiveAt (wide false) Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay
 
 /-- The tables of a setup with one statement. -/
 theorem tables_of_one {zk : Bool} {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -168,8 +172,9 @@ theorem plain_tableBoundθAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
   obtain ⟨k0, l₀, l₁, rest, ext, hsch, hk0, e⟩ := plain_sched h22 h35
   have ht := tables_of_one hset h1
   have hm13 : 13 ≤ (L.model (Refine.regionsOf (sts[0]'h0))).m := by show 13 ≤ (sts[0]'h0).m; omega
-  refine plain_tableBoundθAt_of_live Readable.relation (wide false) ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13 PT_LOCAL
-    hlay (fun C hw hg => ?_) (hl spec _ ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay)
+  obtain ⟨Lf, hLf⟩ := hl spec _ ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay
+  refine plain_tableBoundθAt_of_live Readable.relation (wide false) Lf ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13
+    PT_LOCAL hlay (fun C hw hg => ?_) hLf
   have := plain_not_committed hs hin hset h0 L C hw hg
   rwa [e] at this
 

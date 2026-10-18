@@ -13,10 +13,10 @@ the deployed runs. At a plain statement in scope with a draw, `wrP`'s decoders a
   decoder, at the draw and no drawn unit.
 * `PlainLiveWrPAt`: `PlainLiveAccAt` at `wrP`'s verdict and decoder and at openings whose decoders are right, and
   `plainLiveAccAt_of_wrP`, which gives it.
-* `PlainLiveW`: `PlainLiveWrPAt` at `plainOpn` where the outputs are public and at `plainOpnH` where they are hidden
-  under `hm96-sha512/v1` leaves, and `PlainLiveAccAt` itself where they are hidden under plain SHA-512 leaves, which the
-  scope admits and the deployed decoders are not yet proved right at, at the statements in scope that set up at a
-  draw; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`), and with `Extendθ`, KS (`plain_KS_of_w`).
+* `PlainLiveW`: `PlainLiveWrPAt` at `plainOpn` and `leaf512` where the outputs are public, and at `plainOpnH` and the
+  model's leaf of the statement's leaf scheme where they are hidden (`Refine.leafOfId`: `hm96-sha512/v1` or plain
+  SHA-512 leaves, both of which the scope admits there), at the statements in scope that set up at a draw; it gives
+  `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`), and with `Extendθ`, KS (`plain_KS_of_w`).
 -/
 
 namespace FlockDeploy.KS
@@ -85,19 +85,20 @@ noncomputable def plainDec {mPts : ℕ} (T : TabSpec mPts) (_ : Fin 1) : ℕ →
 open Classical Discharge.Tables in
 /-- **The live sessions' bound at table 0, at the deployed plain decoders**: `PlainLiveAccAt` at full-width columns
 with `wrP`'s verdict and decoder at the statement's inputs `I` and draw `d` (`plainVerdict`, `plainDec`) and openings
-`opn` whose decoders are right at `plainTab` (`hdec`), so it asks for the mixture of live strategies and its bounds
-only. -/
-def PlainLiveWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+`opn` whose decoders are right at `plainTab` (`hdec`), all at the model leaf `Lf`, so it asks for the mixture of live
+strategies and its bounds only. -/
+def PlainLiveWrPAt (Lf : FlockSoundness.Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) {x : Claims.Msg}
+    {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
-      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
-        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
+      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
           ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
-          ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
         (plainVerdict I d C rootB₀) opn (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
         (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
         (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
@@ -124,15 +125,15 @@ def PlainLiveWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables
                 Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧
                   u ≠ C p) ≤
             (∑ u, (prob (plainVerdict I d C rootB₀) _ (σL u)).toReal) / Fintype.card τ ∧
-          (∀ r ℓ, (∑ u, advRSL execArith Refine.H512 Refine.enc512 Refine.leaf512 (L.model (Refine.regionsOf st)) m
+          (∀ r ℓ, (∑ u, advRSL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m
               k0 l₀ l₁ rest ext hk0 hm PT_LOCAL spec.mPts [] [] (capOfRoot rootB₀[0]!) r.val (ℓ.val + 1)
-              (simAt execArith Refine.H512 Refine.enc512 Refine.leaf512
+              (simAt execArith Refine.H512 Refine.enc512 Lf
                 (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdict I d C rootB₀) opn dg
                 (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
                 (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) N (hdec C rootB₀) rootB₀ (σL u) (hσ u))) /
                 Fintype.card τ ≤
             Claims.Pr fun s : (Fin ((V false).k x) → Coin) × (Fin ((V false).k x) → Coin) => ev r ℓ ω s.1 s.2) ∧
-          (∑ u, (prob (LiveSelfClash Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+          (∑ u, (prob (LiveSelfClash Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
               (plainVerdict I d C rootB₀) opn (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
               (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) fun j => repsOf (D := Refine.Dig)
                 execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
@@ -143,23 +144,24 @@ def PlainLiveWrPAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables
 open Classical Discharge.Tables in
 /-- **`PlainLiveWrPAt` gives `PlainLiveAccAt`**, at `wrP`'s verdict and decoder and the openings `opn`, whose decoders
 `hdec` says are right at `plainTab`. -/
-theorem plainLiveAccAt_of_wrP {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} {h : tables false x = [(spec, st)]}
+theorem plainLiveAccAt_of_wrP {Lf : FlockSoundness.Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512}
+    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} {h : tables false x = [(spec, st)]}
     {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level} {rest : List Accounting.Level} {ext : ℕ}
     {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩} {hk0 : l₀.lanes = k0}
     {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
     {hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
     {hdec : ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
-      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
-        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
+      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
           ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
-          ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
         (plainVerdict I d C rootB₀) opn (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
         (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
         (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
         j}
-    (hl : PlainLiveWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d opn hdec) :
-    PlainLiveAccAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay := by
+    (hl : PlainLiveWrPAt Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d opn hdec) :
+    PlainLiveAccAt (wide false) Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay := by
   intro Ω _ _ P
   obtain ⟨ev, ev₁, tied, tied₁, acc, acc₁, hω⟩ := hl Ω P
   refine ⟨ev, ev₁, tied, tied₁, acc, acc₁, fun ω C hok => ?_⟩
@@ -169,9 +171,9 @@ theorem plainLiveAccAt_of_wrP {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} 
     inferInstance, σL, hσ, htr, hadv, hsc⟩
 
 /-- **The live sessions' bound at a plain statement, at the deployed decoders**: at each statement in scope that sets
-up at a draw, `PlainLiveWrPAt` at `wrP`'s openings, `plainOpn` where the outputs are public (`plain_hdec`) and
-`plainOpnH` where they are hidden under `hm96-sha512/v1` leaves (`plain_hdecH`); where they are hidden under any other
-leaf the scope admits (plain SHA-512 leaves), `PlainLiveAccAt` itself. -/
+up at a draw, `PlainLiveWrPAt` at `wrP`'s openings, `plainOpn` at `leaf512` where the outputs are public
+(`plain_hdec`, whose leaves are `hm96-sha512/v1`), and `plainOpnH` at the model's leaf of the statement's leaf scheme
+where they are hidden (`plain_hdecH`, at `hm96-sha512/v1` or plain SHA-512 leaves). -/
 def PlainLiveW (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -181,15 +183,13 @@ def PlainLiveW (x : Claims.Msg) : Prop :=
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts),
     (∀ hh : ins.read.I.tags.hiddenOutputs = false,
-      PlainLiveWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
+      PlainLiveWrPAt Refine.leaf512 h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdec hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
-    (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"),
-      PlainLiveWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
-        (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-        (plain_hdecH hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
-    (∀ (_ : ins.read.I.tags.hiddenOutputs = true) (_ : ins.read.I.tags.merkleLeaf ≠ "hm96-sha512/v1"),
-      PlainLiveAccAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay)
+    (∀ hh : ins.read.I.tags.hiddenOutputs = true,
+      PlainLiveWrPAt (Refine.leafOfId ins.read.I.tags.merkleLeaf) h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
+        ins.read.I d (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
+        (plain_hdecH hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay))
 
 /-- **`PlainLiveW` gives `PlainLiveAcc`** where some run accepts: the statement parses in scope (`acc_inScope`) and sets
 up at a draw (`acc_draw`). -/
@@ -204,12 +204,10 @@ theorem plainLiveAcc_of_w {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (
     rw [hset] at hmem
     obtain ⟨a, -, ha⟩ := List.mem_map.1 hmem
     exact (Prod.mk.inj ha).1
-  obtain ⟨hw, hhid, hplain⟩ := hl s hs hin ins spec' sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
+  obtain ⟨hw, hhid⟩ := hl s hs hin ins spec' sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   cases hh : ins.read.I.tags.hiddenOutputs
-  · exact plainLiveAccAt_of_wrP (hw hh)
-  · by_cases hleaf : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"
-    · exact plainLiveAccAt_of_wrP (hhid hh hleaf)
-    · exact hplain hh hleaf
+  · exact ⟨_, plainLiveAccAt_of_wrP (hw hh)⟩
+  · exact ⟨_, plainLiveAccAt_of_wrP (hhid hh)⟩
 
 /-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, from the live sessions' bound at the
 deployed decoders (`PlainLiveW`) at the statements some run accepts, and `Extendθ` at full-width columns. -/
