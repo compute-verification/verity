@@ -674,37 +674,52 @@ unsafe def main (args : List String) : IO UInt32 := do
         acc := acc.insert p rs
     return acc
   lap "reads" readsOf.size
-  let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do
-    return (p.toString, ← pinInfo env meaning axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
+  -- each pin's facts are a function of the environment and the maps above, so chunks run as tasks, joined in order
+  let chunks := (List.range ((pins.size + 7) / 8)).toArray.map fun i => pins.extract (8 * i) (8 * i + 8)
+  let tasks ← chunks.mapM fun ch => IO.asTask do
+    let (out, _) ← (MetaM.run' (ch.mapM fun p => do
+      return (p.toString, ← pinInfo env meaning axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
+    return out
+  let pinned ← tasks.foldlM (init := #[]) fun acc t => return acc ++ (← IO.ofExcept t.get)
   lap "pins" pinned.size
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
-    let h ← IO.FS.Handle.mk path .write
+    -- each line's text is computed in a task (`Task.spawn` takes the closure, so the text is not built here) and the
+    -- lines are written in this order
+    let mut lines : Array (Task String) := #[]
     let mut done : NameSet := {}
     let mut named : NameSet := {}
     for p in pins do
       let some ci := env.find? p | continue
-      h.putStrLn (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
+      lines := lines.push <| Task.spawn fun _ =>
+        (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
       let head := liftOf env meaning ci.type
       if let some (g, s) := head then
         let m := (env.getModuleIdxFor? g).map fun i => (moduleName env i).toString
-        h.putStrLn (Json.mkObj [("id", toJson s!"lift:{p}"), ("head", toJson g.toString), ("module", toJson m),
-          ("canon", toJson (canonText s))]).compress
+        lines := lines.push <| Task.spawn fun _ =>
+          (Json.mkObj [("id", toJson s!"lift:{p}"), ("head", toJson g.toString), ("module", toJson m),
+            ("canon", toJson (canonText s))]).compress
       if !back.isEmpty then
         named := (ci.type.getUsedConstants ++ ((head.map (·.2.getUsedConstants)).getD #[])).foldl (·.insert ·) (named.insert p)
-        let unfolded := match head with
-          | some (g, s) => [("head", toJson g.toString), ("unfolded", toJson (canonText s rn))]
-          | none => []
-        h.putStrLn (Json.mkObj ([("id", toJson s!"moved-pin:{p}"), ("as", toJson (rn p).toString),
-          ("canon", toJson (canonText ci.type rn))] ++ unfolded)).compress
+        lines := lines.push <| Task.spawn fun _ =>
+          let unfolded := match head with
+            | some (g, s) => [("head", toJson g.toString), ("unfolded", toJson (canonText s rn))]
+            | none => []
+          (Json.mkObj ([("id", toJson s!"moved-pin:{p}"), ("as", toJson (rn p).toString),
+            ("canon", toJson (canonText ci.type rn))] ++ unfolded)).compress
       for (c, _, rci) in (readsOf.getD p (#[], #[])).1 do
         if done.contains c then continue
         done := done.insert c
-        h.putStrLn (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
+        lines := lines.push <| Task.spawn fun _ =>
+          (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
         if !back.isEmpty then
           named := (uses rci).foldl (·.insert ·) (named.insert c)
-          h.putStrLn (Json.mkObj [("id", toJson s!"moved-read:{c}"), ("as", toJson (rn c).toString),
-            ("canon", toJson (readCanon rci rn))]).compress
+          lines := lines.push <| Task.spawn fun _ =>
+            (Json.mkObj [("id", toJson s!"moved-read:{c}"), ("as", toJson (rn c).toString),
+              ("canon", toJson (readCanon rci rn))]).compress
+    let h ← IO.FS.Handle.mk path .write
+    for l in lines do
+      h.putStrLn l.get
     let (kept, renamed) := (named.toArray.qsort Name.lt).partition fun c => rn c == c
     let mut took : Std.HashMap Name Name := kept.foldl (fun m c => m.insert c c) {}
     for c in renamed do
