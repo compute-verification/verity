@@ -18,7 +18,8 @@ blocks' boundaries. They meet in one place, the consistency relation N3
     n3_unit    N3's proof unit for one port-window, a Boolean Definition (`N3Window_v3`), the outbox and layout
                commitments and N2's record commitment it opens, and each window's instance on the simulator and the lab
     run        build, place, run every block (in one process or one process each over TCP) and check
-    accounting the Program, hardware and placement as `benchmarks/datacenter`'s objects, for its audit and account
+    accounting the hardware and placement as `benchmarks/datacenter`'s objects, whose audit and account read the
+               Program itself
     lab        the Program as the network certifier's sessions and server-sent events, for the mock datacenter
                (`../mockdc.py`), and N3 over the records the certifiers publish
     lab_run    serve a workload on the mock datacenter, each block behind the real certifier's proxy on its uplink, then
