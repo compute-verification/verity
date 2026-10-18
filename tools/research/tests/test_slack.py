@@ -1012,6 +1012,25 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
     assert run(capsys, "ask-daniel", "status")[0] == 2
 
 
+def test_a_decided_card_rings_tops_inbox_once_with_its_question_outcome_and_asker(route, fake, registry, routes_dirs, capsys, monkeypatch):
+    """Leads filed TOP issues only to get Daniel's decisions logged (eight on 17 Oct; COMM-34)."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    top = inbox(fake, routes_dirs, "top")
+    card = fake.add(ASK, text="No objection by the deadline, so the default applies.", username="Verity", bot_id=BOT, blocks=[
+        {"type": "section", "text": {"type": "mrkdwn", "text": "`DEFAULT` *Move the nightly check to 02:00 PT?*"}},
+        {"type": "context", "elements": [{"type": "mrkdwn", "text": "asked by <https://cursor.com/agents/bc-x|infra> (agent `bc-x`)"}]}])
+    route.statuses = [{"status": "decided", "choice": "yes", "source": "default", "decided_at": "2026-09-30T22:00:05Z",
+                       "ts": card["ts"], "channel": ASK}]
+    rc, _, err = run(capsys, "ask-daniel", "status", "42")
+    assert rc == 0 and "route @top: rang with the decision" in err
+    (bell,) = bells(fake, top)
+    assert bell["text"].startswith("from ask-daniel, card `42` decided: `yes` (default, 2026-09-30T22:00:05Z)")
+    assert "on: Move the nightly check to 02:00 PT?; asked by infra" in bell["text"]
+    assert run(capsys, "ask-daniel", "status", "42")[0] == 0 and len(bells(fake, top)) == 1          # once per card
+    route.statuses = [{"status": "pending"}]
+    assert run(capsys, "ask-daniel", "status", "43")[0] == 1 and len(bells(fake, top)) == 1          # pending rings no one
+
+
 def test_status_404_says_no_card_has_that_id(route, registry, capsys):
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
