@@ -172,7 +172,8 @@ theorem plainLiveWrPAt_of_sim {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} 
     plainMix_le_of_run x ω spec.mPts N dg w P' hk n _ (plainEv₁ P x ω) (hsc C hC)⟩
 
 /-- **A simulator at a plain statement**: `PlainSimWrPAt` at the statements in scope that set up at a draw, at
-`plainOpn` where the outputs are public and at `plainOpnH` where they are hidden, as `PlainLiveW` asks. -/
+`plainOpn` where the outputs are public and at `plainOpnH` where they are hidden and the leaves `hm96-sha512/v1`, as
+`PlainLiveW` asks. -/
 def PlainSimW (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -185,10 +186,10 @@ def PlainSimW (x : Claims.Msg) : Prop :=
       PlainSimWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdec hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
-    (∀ hh : ins.read.I.tags.hiddenOutputs = true,
+    (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hlf : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"),
       PlainSimWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-        (plain_hdecH hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay))
+        (plain_hdecH hs hin hset h hh hlf hd L m k0 l₀ l₁ rest ext hsch hm hlay))
 
 /-- **`PlainSimW` gives `PlainLiveW`** where every prover's accepting runs carry the statement's draw verbatim. -/
 theorem plainLiveW_of_sim {x : Claims.Msg}
@@ -196,18 +197,21 @@ theorem plainLiveW_of_sim {x : Claims.Msg}
     (hs : PlainSimW x) : PlainLiveW x := by
   intro s hs' hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   obtain ⟨hw, hhid⟩ := hs s hs' hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
-  exact ⟨fun hh => plainLiveWrPAt_of_sim hset hd hdraw (hw hh), fun hh => plainLiveWrPAt_of_sim hset hd hdraw (hhid hh)⟩
+  exact ⟨fun hh => plainLiveWrPAt_of_sim hset hd hdraw (hw hh),
+    fun hh hlf => plainLiveWrPAt_of_sim hset hd hdraw (hhid hh hlf)⟩
 
 /-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, at the statements some run accepts from
-a simulator of each prover (`PlainSimW`) and the record's draw verbatim (`RecordDrawVerbatim`), and `Extendθ` at
-full-width columns. A prover whose record carries the draw with its keys in another order still passes the checks
-(`drawEq_ne`), so `hdraw` holds only where the verifier reads the record's draw as the statement's term. -/
+a simulator of each prover (`PlainSimW`) and the record's draw verbatim (`RecordDrawVerbatim`), `PlainLiveAcc` at
+those committed under plain SHA-512 leaves (`PlainLeaves`), and `Extendθ` at full-width columns. A prover whose record
+carries the draw with its keys in another order still passes the checks (`drawEq_ne`), so `hdraw` holds only where the
+verifier reads the record's draw as the statement's term. -/
 theorem plain_KS_of_sim
     (hdraw : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x →
       ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω) (ω : Ω), RecordDrawVerbatim P x ω)
     (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimW x)
+    (hpl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeaves x → PlainLiveAcc x)
     (hext : Claims.Flock.Extendθ (deployPlain Readable.relation) (wordLen false) (wide false)) :
     Claims.Flock.KS sha512 (deployPlain Readable.relation) :=
-  plain_KS_of_w (fun x hno => plainLiveW_of_sim (hdraw x hno) (hs x hno)) hext
+  plain_KS_of_w (fun x hno => plainLiveW_of_sim (hdraw x hno) (hs x hno)) hpl hext
 
 end FlockDeploy.KS

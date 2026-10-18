@@ -5,7 +5,8 @@ import Proofs.Flock.Claims.KS.DecodeHidden
 
 `PlainLiveAccAt` asks for decoders right at `plainTab` and a mixture of live strategies whose verdict at them bounds
 the deployed runs. At a plain statement in scope with a draw, `wrP`'s decoders are right there, at public outputs
-(`plain_hdec`) and at hidden ones (`plain_hdecH`), so what is left is the mixture at them:
+(`plain_hdec`) and at hidden ones under `hm96-sha512/v1` leaves (`plain_hdecH`), so what is left is the mixture at
+them, and under plain SHA-512 leaves (`PlainLeaves`) the bound itself:
 
 * `checks_draw`, `acc_draw`: a statement some run accepts carries a draw, the checks after the verdict refusing a
   session without one.
@@ -15,7 +16,7 @@ the deployed runs. At a plain statement in scope with a draw, `wrP`'s decoders a
   `plainLiveAccAt_of_wrP`, which gives it.
 * `PlainLiveW`: `PlainLiveWrPAt` at `plainOpn` where the outputs are public and at `plainOpnH` where they are hidden, at
   the statements in scope that set up at a draw; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`),
-  and with `Extendθ`, KS (`plain_KS_of_w`).
+  and with `PlainLiveAcc` under plain SHA-512 leaves and `Extendθ`, KS (`plain_KS_of_w`).
 -/
 
 namespace FlockDeploy.KS
@@ -169,7 +170,7 @@ theorem plainLiveAccAt_of_wrP {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} 
 
 /-- **The live sessions' bound at a plain statement, at the deployed decoders**: at each statement in scope that sets
 up at a draw, `PlainLiveWrPAt` at `wrP`'s openings, `plainOpn` where the outputs are public (`plain_hdec`) and
-`plainOpnH` where they are hidden (`plain_hdecH`). -/
+`plainOpnH` where they are hidden and the leaves `hm96-sha512/v1` (`plain_hdecH`). -/
 def PlainLiveW (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -182,15 +183,15 @@ def PlainLiveW (x : Claims.Msg) : Prop :=
       PlainLiveWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdec hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
-    (∀ hh : ins.read.I.tags.hiddenOutputs = true,
+    (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hlf : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"),
       PlainLiveWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-        (plain_hdecH hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay))
+        (plain_hdecH hs hin hset h hh hlf hd L m k0 l₀ l₁ rest ext hsch hm hlay))
 
 /-- **`PlainLiveW` gives `PlainLiveAcc`** where some run accepts: the statement parses in scope (`acc_inScope`) and sets
-up at a draw (`acc_draw`). -/
-theorem plainLiveAcc_of_w {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) (hl : PlainLiveW x) :
-    PlainLiveAcc x := by
+up at a draw (`acc_draw`); under plain SHA-512 leaves (`PlainLeaves`) it is given. -/
+theorem plainLiveAcc_of_w {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) (hl : PlainLiveW x)
+    (hpl : PlainLeaves x → PlainLiveAcc x) : PlainLiveAcc x := by
   intro spec st h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
   obtain ⟨ins, spec', sts, d, hset, hd⟩ := acc_draw hno
@@ -203,13 +204,17 @@ theorem plainLiveAcc_of_w {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (
   obtain ⟨hw, hhid⟩ := hl s hs hin ins spec' sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   cases hh : ins.read.I.tags.hiddenOutputs
   · exact plainLiveAccAt_of_wrP (hw hh)
-  · exact plainLiveAccAt_of_wrP (hhid hh)
+  · rcases hm96_or_plainLeaves hs hin hset h hh hd with hlf | hp
+    · exact plainLiveAccAt_of_wrP (hhid hh hlf)
+    · exact hpl hp spec' st h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
 
 /-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, from the live sessions' bound at the
-deployed decoders (`PlainLiveW`) at the statements some run accepts, and `Extendθ` at full-width columns. -/
+deployed decoders (`PlainLiveW`) at the statements some run accepts, `PlainLiveAcc` at those committed under plain
+SHA-512 leaves (`PlainLeaves`), and `Extendθ` at full-width columns. -/
 theorem plain_KS_of_w (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLiveW x)
+    (hpl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeaves x → PlainLiveAcc x)
     (hext : Claims.Flock.Extendθ (deployPlain Readable.relation) (wordLen false) (wide false)) :
     Claims.Flock.KS sha512 (deployPlain Readable.relation) :=
-  plain_KS_of_liveAcc (fun x hno => plainLiveAcc_of_w hno (hl x hno)) hext
+  plain_KS_of_liveAcc (fun x hno => plainLiveAcc_of_w hno (hl x hno) (hpl x hno)) hext
 
 end FlockDeploy.KS

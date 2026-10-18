@@ -64,6 +64,7 @@ theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
   obtain ⟨-, hpr, -⟩ := parseBytes_setup hp hset
   obtain ⟨-, -, -, -, -, ht, hrr, hl, -⟩ := hin
   simp only [Readable.toReadable, Readable.Read.form, Bool.not_eq_true] at ht hrr hl
+  replace hl := hl.resolve_right fun h => by simp at h
   have htags : p.toRead.tags = ZkExec.zkTags ins.read.I := by
     rw [hpr]
     simp [Readable.Read.tags, hzk]

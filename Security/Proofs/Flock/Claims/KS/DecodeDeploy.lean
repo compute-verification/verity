@@ -45,6 +45,7 @@ theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
   rw [hform] at ht hrr hl hc1 hpi hg
   simp only [Readable.Read.form, htags] at ht hrr hl hc1 hpi hg
   simp only [hh, Bool.false_eq_true, false_and, or_false] at hg
+  simp only [hh, Bool.false_eq_true, false_and, and_false, or_false] at hl
   obtain ⟨-, ho⟩ := hg
   simp only [Bool.not_eq_true] at ht
   simp only [Bool.false_eq_true, ↓reduceIte] at hc1

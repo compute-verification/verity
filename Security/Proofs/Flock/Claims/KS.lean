@@ -197,8 +197,10 @@ with no level-0 opening off `C` unless it self-clashes, on the outcomes flock-ve
 deployed reader looks up no column off `C` (`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`,
 `Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). At a plain statement in scope with public outputs, that table is
 `plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for (`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`).
-With hidden outputs, the hidden table is `plainTab` too, and the same holds at its openings (`DecodeHidden`:
-`Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`). A statement some run accepts sets
+With hidden outputs, the hidden table is `plainTab` too, and the same holds at its openings under `hm96-sha512/v1`
+leaves (`DecodeHidden`: `Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`); the scope also
+admits plain SHA-512 leaves there, where these decoders don't apply, so each plain chain takes those statements' table
+bound as given (`FlockDeploy.KS.PlainLeaves`, `FlockDeploy.KS.hm96_or_plainLeaves`). A statement some run accepts sets
 up at a draw, so the plain chain asks only for the mixture at those decoders, whether or not the outputs are hidden
 (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`, `FlockDeploy.KS.PlainLiveW`,
 `FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the statement's draw, the event the

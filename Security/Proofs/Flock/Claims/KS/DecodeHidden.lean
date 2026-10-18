@@ -10,15 +10,15 @@ import Proofs.Flock.Soundness.Discharge.HiddenDec
 * `decodesTable_wrP_scH`: `decodesTable_wrP_sc` at the hidden tables, from `accepts_repsH` and `tableAtH_of_acceptsI`;
   `accepts_opens₀L` holds at hidden outputs too.
 * `plain_setupHidden`: a plain statement in scope with hidden outputs sets its one table up at its draw under
-  setupHidden, with the tags `HiddenDec.TagsOkH` asks.
+  setupHidden, with the tags `HiddenDec.TagsOkHL` asks (`hm96-sha512/v1` or plain SHA-512 leaves).
 
 None of them reads which net returns the outputs: `InScope`'s general instance form (hidden outputs and `wiresAcyclic`)
 may have tail stages, which the verifier evaluates and the table's statement (`stmtOf` of setupHidden's) carries, and
 the decoders read only the table's committed rows.
 * `tableAtH_plainTab`: the hidden table of a draw that sets up `st` is `plainTab` at `st`, its statement read off any
   layout (`Integrate.model_eq`).
-* `plain_hdecH`: so at the draw `d` and no drawn unit, `decodesTable_wrP_scH` is the decoders' fact `PlainLiveAccAt`
-  asks, at `plainTab`.
+* `plain_hdecH`: so at the draw `d`, no drawn unit and `hm96-sha512/v1` leaves, `decodesTable_wrP_scH` is the
+  decoders' fact `PlainLiveAccAt` asks, at `plainTab`.
 -/
 
 namespace Claims.Bridge.DecodePlain
@@ -72,7 +72,8 @@ theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inpu
   obtain ⟨hd, hprf, hrec⟩ := recordsLive_wrP1 (Reg := Reg) (mPts := mPts) I dj S R (oneOf o) hacc
   obtain ⟨hSD, hmPts⟩ := hS
   obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsI ht hc hh hc1 dj x₀ hacc hd hSD hmPts
-  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsH hh hrr hl hc1 hacc
+  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsH hh hrr (Or.inl hl) hc1 hacc
+  rw [hl, leafOfId_hm96] at hk
   rw [hd] at hst
   obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
   obtain ⟨hroot, hpts, hstreams⟩ := hrec spec #[st] sess hsu hdec
@@ -158,13 +159,13 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A plain statement in scope with hidden outputs sets up its one table at its draw**: `plain_setupH` with
 setupHidden for setupH and `HmOut.parse` for `HmRow.parse`, in the general instance form (any input groups, any tail
-stages the verifier evaluates, whichever net returns the outputs). -/
+stages the verifier evaluates, whichever net returns the outputs), at either leaf scheme the scope admits. -/
 theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) {d : Json} (hd : ins.read.draw = some d) :
     ins.read.I.tags.typed = false ∧ HmOut.parse ins.read.I.tags ins.read.I.circuitFile ins.read.I.tables = .ok st.c ∧
-      HiddenDec.TagsOkH ins.read.I ∧
+      HiddenDec.TagsOkHL ins.read.I ∧
       Stmt.setupHidden ins.read.I.tags ins.read.I.circuitFile ins.read.I.publicFile ins.read.I.coins
         ins.read.I.tables (some d) ins.read.I.partition ins.read.I.program = .ok st ∧ spec = st.spec ∧ 22 ≤ st.m ∧
       st.m ≤ 35 := by
@@ -195,9 +196,25 @@ theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
   have hc := HiddenExec.setupHidden_parseC hst
   have hm := parse_m hs hset (by simp)
   simp only [Bool.false_eq_true, ↓reduceIte] at hm₁
-  refine ⟨ht, hc, ⟨hh, hrr, hl, hc1⟩, hst, hsp, ?_, ?_⟩
+  refine ⟨ht, hc, ⟨hh, hrr, hl.imp_right fun h => h.2.2, hc1⟩, hst, hsp, ?_, ?_⟩
   · simpa [hm] using hm₁
   · simpa [hm] using hm₂
+
+/-- **A plain statement committed under plain SHA-512 leaves**: it sets up with the tags' leaf scheme
+`flock-leaf/sha512-unsalted`, which the scope admits only at hidden outputs. The plain decoders here are right only at
+`hm96-sha512/v1` leaves (`plain_hdecH`), so the chains read off them take such a statement's table bound as given. -/
+def PlainLeaves (x : Claims.Msg) : Prop :=
+  ∃ ins spec sts, setupOf false x = some (ins, spec, sts) ∧
+    ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted"
+
+/-- **A plain statement in scope with hidden outputs commits under `hm96-sha512/v1` leaves or plain SHA-512 ones**
+(`plain_setupHidden`'s `TagsOkHL`). -/
+theorem hm96_or_plainLeaves {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = true) {d : Json} (hd : ins.read.draw = some d) :
+    ins.read.I.tags.merkleLeaf = "hm96-sha512/v1" ∨ PlainLeaves x :=
+  (plain_setupHidden hs hin hset h hh hd).2.2.1.2.2.1.imp_right fun hl => ⟨ins, spec, sts, hset, hl⟩
 
 /-- **The hidden table of a draw that sets up `st` is `plainTab` at `st`**: its statement `stmtOf st` is the one any
 layout reads (`Integrate.model_eq`), and the schedule is `fast100`'s at `st.m`. -/
@@ -227,12 +244,13 @@ theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ
   exact hS'.symm
 
 open Classical Discharge.Tables Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
-/-- **The deployed plain decoders are right at `plainTab` at hidden outputs**: `plain_hdec` with `decodesTable_wrP_scH`
-and the hidden openings `HiddenDec.opnAtH`. -/
+/-- **The deployed plain decoders are right at `plainTab` at hidden outputs and `hm96-sha512/v1` leaves**: `plain_hdec`
+with `decodesTable_wrP_scH` and the hidden openings `HiddenDec.opnAtH`. -/
 theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
-    (hh : ins.read.I.tags.hiddenOutputs = true) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
+    (hh : ins.read.I.tags.hiddenOutputs = true) (hlf : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}
+    (hd : ins.read.draw = some d) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -252,7 +270,8 @@ theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
       (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
       (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
       j := by
-  obtain ⟨ht, hc, hT, hst, rfl, h22, h35⟩ := plain_setupHidden hs hin hset h hh hd
+  obtain ⟨ht, hc, ⟨-, hrr, -, hc1⟩, hst, rfl, h22, h35⟩ := plain_setupHidden hs hin hset h hh hd
+  have hT : HiddenDec.TagsOkH ins.read.I := ⟨hh, hrr, hlf, hc1⟩
   obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
     have e := Refine.fast100_schedOf st.m
     rw [hsch] at e
