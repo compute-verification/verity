@@ -55,6 +55,7 @@ structure InvOn (P : Params) (R : Registration) (AC : Array ByteArray) (ws : Arr
   beyond : ∀ t (ht : t < ws.size), filling < t → ws[t].roots.size = 0
   below : ∀ t (ht : t < ws.size) i (hi : i < ws[t].steps.size), (ws[t].steps[i] : Int) ≤ stp
   limit : stp < STEP_LIMIT
+  nonneg : -1 ≤ stp
   inc : ∀ t₁ t₂ (h₁ : t₁ < ws.size) (h₂ : t₂ < ws.size) i₁ i₂ (hi₁ : i₁ < ws[t₁].steps.size)
     (hi₂ : i₂ < ws[t₂].steps.size), (t₁ < t₂ ∨ (t₁ = t₂ ∧ i₁ < i₂)) → ws[t₁].steps[i₁] < ws[t₂].steps[i₂]
   reads : ∀ t (ht : t < ws.size) i (hi : i < ws[t].plans.size), ReadsDistinct ws[t].plans[i] extent
@@ -72,33 +73,43 @@ def Inv (s : State) : Prop :=
 
 theorem inv_init (params : Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat) :
     Inv (State.init params reg coins appendCoins notBeforeNs) := by
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     simp [State.init, STEP_LIMIT, chainOf]
 
 /-! ## Window updates -/
 
-/-- Windows that agree with `ws` on everything the invariant reads, and accept no window `ws` doesn't. -/
-def SamePasses (ws ws' : Array Win) : Prop :=
-  ws'.size = ws.size ∧ ∀ t (h : t < ws.size) (h' : t < ws'.size), ws'[t].roots = ws[t].roots ∧
-    ws'[t].plans = ws[t].plans ∧ ws'[t].steps = ws[t].steps ∧ ws'[t].heads = ws[t].heads ∧
-    ws'[t].drawn = ws[t].drawn ∧ (ws'[t].verdict = some .accept → ws[t].verdict = some .accept)
+/-- `w'` keeps `w`'s passes, is drawn only if `w` was or has `min_passes` passes, stays drawn, and is accepted only if
+`w` was or it is drawn. -/
+def Keeps (P : Params) (w w' : Win) : Prop :=
+  w'.roots = w.roots ∧ w'.plans = w.plans ∧ w'.steps = w.steps ∧ w'.heads = w.heads ∧
+    (w'.drawn.isSome → w.drawn.isSome ∨ P.minPasses ≤ w.roots.size) ∧ (w.drawn.isSome → w'.drawn.isSome) ∧
+    (w'.verdict = some .accept → w.verdict = some .accept ∨ w'.drawn.isSome)
+
+theorem keeps_refl (P : Params) (w : Win) : Keeps P w w := ⟨rfl, rfl, rfl, rfl, Or.inl, id, Or.inl⟩
+
+/-- Windows that keep `ws`'s, one for one. -/
+def SamePasses (P : Params) (ws ws' : Array Win) : Prop :=
+  ws'.size = ws.size ∧ ∀ t (h : t < ws.size) (h' : t < ws'.size), Keeps P ws[t] ws'[t]
 
 theorem invOn_same {P R AC ws filling stp extent appends drawnN head} {ws' : Array Win}
-    (h : InvOn P R AC ws filling stp extent appends drawnN head) (hs : SamePasses ws ws') :
+    (h : InvOn P R AC ws filling stp extent appends drawnN head) (hs : SamePasses P ws ws') :
     InvOn P R AC ws' filling stp extent appends drawnN head := by
   obtain ⟨hsz, hw⟩ := hs
-  have e : ∀ t (h' : t < ws'.size), ws'[t].roots = ws[t].roots ∧ ws'[t].plans = ws[t].plans ∧
-      ws'[t].steps = ws[t].steps ∧ ws'[t].heads = ws[t].heads ∧ ws'[t].drawn = ws[t].drawn ∧
-      (ws'[t].verdict = some .accept → ws[t].verdict = some .accept) := fun t h' => hw t (by omega) h'
-  refine ⟨fun t ht => ?_, fun t ht hd => ?_, fun t ht hv => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, h.limit,
+  have e : ∀ t (h' : t < ws'.size), Keeps P ws[t] ws'[t] := fun t h' => hw t (by omega) h'
+  refine ⟨fun t ht => ?_, fun t ht hd => ?_, fun t ht hv => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, h.limit, h.nonneg,
     fun t₁ t₂ h₁ h₂ i₁ i₂ hi₁ hi₂ hlt => ?_, fun t ht i hi => ?_, h.store, h.drawnN, h.coins, h.extentSum, h.firsts,
     h.chain, fun t ht i hi => ?_⟩
   · obtain ⟨e1, e2, e3, e4, -⟩ := e t ht
     rw [e1, e2, e3, e4]; exact h.sizes t (by omega)
   · obtain ⟨e1, -, -, -, e5, -⟩ := e t ht
-    rw [e1]; rw [e5] at hd; exact h.few t (by omega) hd
-  · obtain ⟨-, -, -, -, e5, e6⟩ := e t ht
-    rw [e5]; exact h.drawn t (by omega) (e6 hv)
+    rw [e1]
+    rcases e5 hd with hd' | hd'
+    · exact h.few t (by omega) hd'
+    · exact hd'
+  · obtain ⟨-, -, -, -, -, e6, e7⟩ := e t ht
+    rcases e7 hv with hv' | hv'
+    · exact e6 (h.drawn t (by omega) hv')
+    · exact hv'
   · obtain ⟨e1, -⟩ := e t ht
     rw [e1]; exact h.beyond t (by omega) hf
   · obtain ⟨-, -, e3, -⟩ := e t ht
@@ -120,26 +131,30 @@ theorem invOn_same {P R AC ws filling stp extent appends drawnN head} {ws' : Arr
     have := h.heads t (by omega) i hi'
     simp only [e4]; exact this
 
-theorem samePasses_modify (ws : Array Win) (u : Nat) (f : Win → Win)
-    (hf : ∀ w, (f w).roots = w.roots ∧ (f w).plans = w.plans ∧ (f w).steps = w.steps ∧ (f w).heads = w.heads ∧
-      (f w).drawn = w.drawn ∧ ((f w).verdict = some .accept → w.verdict = some .accept)) :
-    SamePasses ws (ws.modify u f) := by
+theorem samePasses_modify (P : Params) (ws : Array Win) (u : Nat) (f : Win → Win)
+    (hf : ∀ hu : u < ws.size, Keeps P ws[u] (f ws[u])) : SamePasses P ws (ws.modify u f) := by
   refine ⟨Array.size_modify, fun t h h' => ?_⟩
   rw [Array.getElem_modify]
   split
-  · exact hf _
-  · exact ⟨rfl, rfl, rfl, rfl, rfl, id⟩
+  · rename_i hu; subst hu; exact hf h
+  · exact keeps_refl P _
+
+/-- A change of fields the invariant doesn't read, or a rejection. -/
+theorem keeps_of (P : Params) (w w' : Win) (e1 : w'.roots = w.roots) (e2 : w'.plans = w.plans) (e3 : w'.steps = w.steps)
+    (e4 : w'.heads = w.heads) (e5 : w'.drawn = w.drawn) (e6 : w'.verdict = some .accept → w.verdict = some .accept) :
+    Keeps P w w' :=
+  ⟨e1, e2, e3, e4, fun hd => Or.inl (e5 ▸ hd), fun hd => e5 ▸ hd, fun hv => Or.inl (e6 hv)⟩
 
 theorem inv_fail {s : State} (h : Inv s) (t : Nat) (f : Failure) (at? : Option (Nat × Nat)) : Inv (s.fail t f at?).2 := by
   unfold State.fail
   dsimp only
   split
-  · exact invOn_same h (samePasses_modify _ _ _ fun w => ⟨rfl, rfl, rfl, rfl, rfl, fun hv => by cases hv⟩)
+  · exact invOn_same h (samePasses_modify _ _ _ _ fun _ => keeps_of _ _ _ rfl rfl rfl rfl rfl fun hv => by cases hv)
   · exact h
 
 theorem inv_final {s : State} (h : Inv s) (u : Nat) :
     Inv { s with windows := s.windows.modify u ({· with final := true}) } :=
-  invOn_same h (samePasses_modify _ _ _ fun _ => ⟨rfl, rfl, rfl, rfl, rfl, id⟩)
+  invOn_same h (samePasses_modify _ _ _ _ fun _ => keeps_refl _ _)
 
 /-- A fresh window: no passes, not drawn, no verdict. -/
 theorem invOn_push {P R AC ws filling stp extent appends drawnN head} (h : InvOn P R AC ws filling stp extent appends drawnN head)
@@ -150,7 +165,7 @@ theorem invOn_push {P R AC ws filling stp extent appends drawnN head} (h : InvOn
     intro t ht hn; simp [Array.getElem_push, hn]
   have k : ∀ t (ht : t < (ws.push w).size) (hl : t < ws.size), (ws.push w)[t] = ws[t] := by
     intro t ht hl; simp [Array.getElem_push, hl]
-  refine ⟨fun t ht => ?_, fun t ht hdr => ?_, fun t ht hvr => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, h.limit,
+  refine ⟨fun t ht => ?_, fun t ht hdr => ?_, fun t ht hvr => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, h.limit, h.nonneg,
     fun t₁ t₂ h₁ h₂ i₁ i₂ hi₁ hi₂ hlt => ?_, fun t ht i hi => ?_, h.store, h.drawnN, h.coins, h.extentSum, h.firsts,
     h.chain, fun t ht i hi => ?_⟩
   · by_cases hl : t < ws.size
@@ -183,7 +198,7 @@ theorem invOn_push {P R AC ws filling stp extent appends drawnN head} (h : InvOn
 
 theorem inv_boundaryNs {s : State} (h : Inv s) (u now : Nat) :
     Inv { s with windows := s.windows.modify u ({· with boundaryNs := some now}) } :=
-  invOn_same h (samePasses_modify _ _ _ fun _ => ⟨rfl, rfl, rfl, rfl, rfl, id⟩)
+  invOn_same h (samePasses_modify _ _ _ _ fun _ => keeps_refl _ _)
 
 theorem inv_releaseCoin {s : State} (h : Inv s) (t now : Nat) : Inv (s.releaseCoin t now) :=
   invOn_push h _ rfl rfl rfl rfl rfl rfl
@@ -213,7 +228,7 @@ theorem invOn_append {P R AC ws filling stp extent appends drawnN head}
   have hcoin : AC[drawnN]! = coin := by
     rw [getElem!_pos AC drawnN hlt]; rw [Array.getElem?_eq_getElem hlt] at hc; exact Option.some.inj hc
   have hsz := h.drawnN.1
-  refine ⟨h.sizes, h.few, h.drawn, h.beyond, h.below, h.limit, h.inc,
+  refine ⟨h.sizes, h.few, h.drawn, h.beyond, h.below, h.limit, h.nonneg, h.inc,
     fun t ht i hi => readsDistinct_mono (h.reads t ht i hi) (by omega), by have := h.store; omega,
     ⟨by simp [hsz], by omega⟩, fun k hk => ?_, ?_, fun k hk => ?_, ?_, fun t ht i hi => ?_⟩
   · rw [Array.getElem_push]
@@ -262,5 +277,167 @@ theorem inv_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Inv 
     | exact h
     | exact inv_releaseCoin (inv_boundaryNs h _ _) _ _
     | exact inv_boundaryNs h _ _
+
+theorem inv_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State} (h : Inv s)
+    (he : append s root count = .ok (r, s')) : Inv s' := by
+  unfold append at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact inv_fail h _ _ _
+    | exact invOn_append h _ _ _ (by assumption)
+
+theorem inv_draw {s : State} (h : Inv s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat)
+    (hm : ∀ hu : u < s.windows.size, s.params.minPasses ≤ s.windows[u].roots.size) :
+    Inv { s with windows := s.windows.modify u ({· with drawn := some d, openedNs := some now}) } :=
+  invOn_same h (samePasses_modify _ _ _ _ fun hu =>
+    ⟨rfl, rfl, rfl, rfl, fun _ => Or.inr (hm hu), fun _ => rfl, fun _ => Or.inr rfl⟩)
+
+theorem inv_accept {s : State} (h : Inv s) (u : Nat) (hd : ∀ hu : u < s.windows.size, s.windows[u].drawn.isSome) :
+    Inv { s with windows := s.windows.modify u ({· with verdict := some .accept}) } :=
+  invOn_same h (samePasses_modify _ _ _ _ fun hu =>
+    ⟨rfl, rfl, rfl, rfl, Or.inl, id, fun _ => Or.inr (hd hu)⟩)
+
+theorem roots_final (ws : Array Win) (u : Nat) (hu : u < (ws.modify u ({· with final := true})).size) :
+    (ws.modify u ({· with final := true}))[u].roots.size = ws[u]!.roots.size := by
+  rw [Array.getElem_modify, ite_eq_left rfl, getElem!_pos ws u (by simpa using hu)]
+
+theorem drawn_of_get! (ws : Array Win) (u : Nat) (d : Array (Nat × Nat)) (h : ws[u]!.drawn = some d) :
+    ∀ hu : u < ws.size, ws[u].drawn.isSome := by
+  intro hu
+  rw [getElem!_pos ws u hu] at h
+  rw [h]; rfl
+
+/-- A pass of window `f`: its root, plan, step and the session's head pushed. -/
+def addPass (root : ByteArray) (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray) (w : Win) : Win :=
+  { w with roots := w.roots.push root, plans := w.plans.push plan, post := w.post.push post,
+           steps := w.steps.push st.toNat, heads := w.heads.push head }
+
+theorem invOn_add {P R AC ws filling stp extent appends drawnN head}
+    (h : InvOn P R AC ws filling stp extent appends drawnN head) (root : ByteArray) (plan : Plan) (post : Nat)
+    (st : Int) (hst : stp < st) (hlim : st < STEP_LIMIT) (hplan : ReadsDistinct plan extent) :
+    InvOn P R AC (ws.modify filling (addPass root plan post st head)) filling st extent appends drawnN head := by
+  have hst0 : ((st.toNat : Nat) : Int) = st := Int.toNat_of_nonneg (by have := h.nonneg; omega)
+  have get : ∀ t (ht : t < (ws.modify filling (addPass root plan post st head)).size),
+      (ws.modify filling (addPass root plan post st head))[t] =
+        if filling = t then addPass root plan post st head (ws[t]'(by simpa using ht)) else ws[t]'(by simpa using ht) :=
+    fun t ht => Array.getElem_modify ht
+  have hsz : (ws.modify filling (addPass root plan post st head)).size = ws.size := Array.size_modify
+  refine ⟨fun t ht => ?_, fun t ht hd => ?_, fun t ht hv => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, hlim,
+    by have := h.nonneg; omega, fun t₁ t₂ h₁ h₂ i₁ i₂ hi₁ hi₂ hlt => ?_, fun t ht i hi => ?_, h.store, h.drawnN, h.coins, h.extentSum, h.firsts,
+    h.chain, fun t ht i hi => ?_⟩
+  · rw [get t ht]
+    have := h.sizes t (by omega)
+    split
+    · simp only [addPass, Array.size_push]; omega
+    · exact this
+  · rw [get t ht] at hd ⊢
+    split
+    · rename_i he; rw [ite_eq_left he] at hd
+      have := h.few t (by omega) hd
+      simp only [addPass, Array.size_push]; omega
+    · rename_i he; rw [ite_eq_right he] at hd; exact h.few t (by omega) hd
+  · rw [get t ht] at hv ⊢
+    split
+    · rename_i he; rw [ite_eq_left he] at hv; exact h.drawn t (by omega) hv
+    · rename_i he; rw [ite_eq_right he] at hv; exact h.drawn t (by omega) hv
+  · rw [get t ht, ite_eq_right (by omega)]; exact h.beyond t (by omega) hf
+  · have hb := h.below t (by omega)
+    revert hi
+    rw [get t ht]
+    split
+    · intro hi
+      simp only [addPass, Array.getElem_push]
+      split
+      · have := hb i (by assumption); omega
+      · omega
+    · intro hi; have := hb i hi; omega
+  · have hsz₁ := (h.sizes t₁ (by omega)).2.1
+    have hsz₂ := (h.sizes t₂ (by omega)).2.1
+    revert hi₁ hi₂
+    rw [get t₁ h₁, get t₂ h₂]
+    intro hi₁ hi₂
+    by_cases e₁ : filling = t₁ <;> by_cases e₂ : filling = t₂
+    · subst e₁; subst e₂
+      simp only [ite_true, addPass, Array.getElem_push, Array.size_push] at hi₁ hi₂ ⊢
+      rcases hlt with hlt | ⟨-, hlt⟩
+      · omega
+      split
+      · split
+        · exact h.inc _ _ _ _ _ _ _ _ (Or.inr ⟨rfl, hlt⟩)
+        · have := h.below filling (by omega) i₁ (by assumption); omega
+      · split
+        · omega
+        · omega
+    · subst e₁
+      simp only [ite_true, ite_false, e₂, addPass, Array.getElem_push, Array.size_push] at hi₁ hi₂ ⊢
+      split
+      · exact h.inc _ _ _ _ _ _ _ _ hlt
+      · exfalso
+        rcases hlt with hlt | ⟨hlt, -⟩
+        · have := h.beyond t₂ (by omega) hlt; omega
+        · exact e₂ hlt
+    · subst e₂
+      simp only [ite_true, ite_false, e₁, addPass, Array.getElem_push, Array.size_push] at hi₁ hi₂ ⊢
+      split
+      · exact h.inc _ _ _ _ _ _ _ _ hlt
+      · have := h.below t₁ (by omega) i₁ hi₁; omega
+    · simp only [ite_false, e₁, e₂] at hi₁ hi₂ ⊢
+      exact h.inc _ _ _ _ _ _ _ _ hlt
+  · revert hi
+    rw [get t ht]
+    split
+    · intro hi
+      simp only [addPass, Array.getElem_push]
+      split
+      · exact h.reads t (by omega) i (by assumption)
+      · exact hplan
+    · intro hi; exact h.reads t (by omega) i hi
+  · revert hi
+    rw [get t ht]
+    split
+    · intro hi
+      simp only [addPass, Array.getElem_push]
+      split
+      · exact h.heads t (by omega) i (by assumption)
+      · exact ⟨appends.size, Nat.le_refl _, by rw [h.chain, Array.extract_size]⟩
+    · intro hi; exact h.heads t (by omega) i hi
+
+theorem inv_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State} (h : Inv s)
+    (he : close s t now = .ok (r, s')) : Inv s' := by
+  unfold close at he
+  dsimp only at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact inv_fail (inv_final h _) _ _ _
+    | exact inv_draw (inv_final h _) _ _ _ (fun hu => by dsimp only at hu ⊢; rw [roots_final]; omega)
+
+theorem inv_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State} (h : Inv s)
+    (he : verify s t openings = (r, s')) : Inv s' := by
+  unfold verify at he
+  simp only [Id.run] at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact inv_fail h _ _ _
+    | exact inv_accept h _ (drawn_of_get! _ _ _ (by assumption))
+
+theorem inv_release {s : State} {runs : Array (Int × Int)} {r : Result} {s' : State} (h : Inv s)
+    (he : release s runs = (r, s')) : Inv s' := by
+  unfold release at he
+  simp only [Id.run] at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact inv_fail h _ _ _
 
 end Properties.RemoteAudit
