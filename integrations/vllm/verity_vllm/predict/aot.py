@@ -7,7 +7,8 @@ of the trace:
 
     descriptor.json.gz   the predicted Program, under the trace's annotations: the runtime correspondence (per Call, the fx occurrence
                          it was lowered from, its module, views and slots), which only the trace yields
-    instances.json.gz    the predicted Program's instance sequence (`pipeline.build.write_instances`)
+    instances.json.gz    the predicted Program's instance sequence (`pipeline.build.write_instances`), with the Call and weight
+                         names the trace gave it (`traced_names`), which no digest covers and Match and the manifest read
     the rest (CARRIED)   as the trace wrote them, with `aot` in result.json and construction_manifest.json: what predicted the
                          Program, from which trace
 
@@ -24,6 +25,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -56,6 +58,23 @@ def predict(phi: Phi, wrapper: str, *, M: int = 1, pos0: int = 8, LP: int | None
     return build_program(phi, "step", M=M, pos0=pos0) if wrapper == "step" else build_program(phi, "request", LP=LP, T=T)
 
 
+def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None], list[list[str]]]:
+    """The names no digest covers, as the trace gave them: each Call's naming hint (the descriptor's `node_hints`: the Calls are the
+    trace's, the descriptors being byte-equal) and each weights record field's leaf name (`derive-report.json`'s `provenance.weights`,
+    in field order), refused where the fields differ in number or size."""
+    from verity.ml.circuits.types import Record
+    hints = {int(k): v for k, v in ((desc.get("annotations") or {}).get("node_hints") or {}).items()}
+    params = []
+    for n, t in program.fn.body.params:
+        if isinstance(t, Record):
+            leaves = sorted(json.loads(Path(trace, "derive-report.json").read_text())["provenance"]["weights"], key=lambda w: w["field"])
+            if (got := [f.leaves for _, f in t.fields]) != (want := [math.prod(w["shape"]) for w in leaves]):
+                raise UsageError(f"{trace}: the predicted {n} record's {len(got)} fields are not the trace's {len(want)} weight leaves in size")
+            t = Record(*((w["name"], f) for w, (_, f) in zip(leaves, t.fields)))
+        params.append([n, str(t)])
+    return hints, params
+
+
 def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int = 8, LP: int | None = None, T: int | None = None,
          aot: dict | None = None) -> dict:
     """One derive dir of a switched row's Build at `out`: the predicted Program, with the data `trace` (the traced derive dir at the
@@ -74,10 +93,12 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
     if (got := (hashlib.sha256(raw).hexdigest(), correspondence_digest(desc))) != (traced.get("descriptor_sha256"), traced.get("correspondence_digest")):
         raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {got[1][:16]}…), "
                          f"the trace's {str(traced.get('descriptor_sha256'))[:16]}… ({str(traced.get('correspondence_digest'))[:16]}…)")
+    names, params = traced_names(r.program, desc, trace)
     os.makedirs(out, exist_ok=True)
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
         f.write(raw)
-    write_instances(out, r.program, r.digest, traced.get("correspondence_digest"), {"supplied": s} if (s := traced.get("supplied")) else {})
+    write_instances(out, r.program, r.digest, traced.get("correspondence_digest"), {"supplied": s} if (s := traced.get("supplied")) else {},
+                    names=names, params=params)
     block = {"mechanism": MECHANISM, "predicted_digest": r.digest, "code_version": S.code_version(), "timings": r.timings, **(aot or {})}
     for name in CARRIED:
         src = os.path.join(trace, name)

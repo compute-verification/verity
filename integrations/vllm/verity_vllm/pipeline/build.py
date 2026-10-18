@@ -85,12 +85,19 @@ def _write_instances_file(path: str, head: dict, rows) -> None:
         _write_instances(f, head, rows)
 
 
-def write_instances(out: str, program, digest: str, corr_digest: str | None, supplied: dict) -> None:
-    """A derive dir's `instances.json.gz`: the Program's instance sequence (`_instance_rows`) under its digests."""
+def write_instances(out: str, program, digest: str, corr_digest: str | None, supplied: dict, *, names: dict[int, str | None] | None = None,
+                    params: list[list[str]] | None = None) -> None:
+    """A derive dir's `instances.json.gz`: the Program's instance sequence (`_instance_rows`) under its digests.  `names` (by Call)
+    and `params` stand in for the Program's own Call names and parameters, which no digest covers (`predict.aot.emit`: as its
+    trace named them)."""
+    rows = _instance_rows(program)
+    if names is not None:
+        rows = ({**r, "name": names.get(r["i"])} for r in rows)
+    if params is None and hasattr(program.fn.body, "params"):
+        params = [[n, str(t)] for n, t in program.fn.body.params]
     _write_instances_file(os.path.join(out, "instances.json.gz"),
-                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest,
-                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
-                          _instance_rows(program))
+                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest, "params": params, **supplied},
+                          rows)
 
 
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers, this driver,
