@@ -12,8 +12,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.program.registry import fa3_check_inf, hopper
 
     return [
-        # GLM-5.3's dense-MHA prefill (DsaDenseMha[vllm-dsa]) at its 128 x 80 tile of head 256, one head: row 160 of a prefill, three
-        # key blocks of which block 0 is below the tile's MASKED_FROM (`targets.fa3_masked_from`)
-        ("Attention_v4", lambda: bind(fa3_check_inf.AttentionV4, T=161, NH=1, KVH=1, D=256, BN=80, MASKED_FROM=1,
+        # GLM-5.3's dense-MHA prefill (DsaDenseMha[vllm-dsa]) at its tile's 80-key blocks, one head: row 160 of a prefill, three key
+        # blocks of which block 0 is below the 128-row tile's MASKED_FROM (`targets.fa3_masked_from`).  Head 32 (two k16 QK steps)
+        # keeps the catalog's cost down; the served head 256 is the same id at D=256, which `circuit-check` takes on demand
+        ("Attention_v4", lambda: bind(fa3_check_inf.AttentionV4, T=161, NH=1, KVH=1, D=32, BN=80, MASKED_FROM=1,
                                       DOT=hopper.HopperBF16WgmmaDot16, INV=hopper.Fa3InvSum)),
     ]
