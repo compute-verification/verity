@@ -220,7 +220,10 @@ theorem innerAdmitted_of_accepts {x : Msg} {cs : List Coin} {v : List (Msg × Ms
     (h : InnerAccepts FlockDeploy.sha512 (FlockDeploy.V false) x cs v) : InnerAdmitted x := by
   have hacc : ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.V false) (xIOf x) := fun hn => hn _ _ _ _ h
   obtain ⟨ins, spec, sts, -, -, hs, -, hc⟩ := FlockDeploy.KS.acc_check hacc
-  exact ⟨ins, spec, sts, hs, hc, FlockDeploy.KS.acc_draw hacc hs⟩
+  obtain ⟨ins', spec', sts', d, hs', hd⟩ := FlockDeploy.KS.acc_draw hacc
+  rw [hs] at hs'
+  cases hs'
+  exact ⟨ins, spec, sts, hs, hc, d, hd⟩
 
 /-! ## The code's side -/
 
