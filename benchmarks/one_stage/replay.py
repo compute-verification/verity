@@ -26,8 +26,7 @@ run recorded.
   checks, verdict; public) and codes.
 * **The whole record.** Where the registration passes and the draw is an object, the audit record itself by the
   verifier of record (`one_stage.verifier.audit_record`: the Lean's `record` beside Python's `audit_record`, equal under
-  canonical JSON but for `wrong_units.bound` under a Bernoulli law, which is Python's on both), on the case's evidence
-  with its floats; whether they agree, and the fields where they don't.
+  canonical JSON), on the case's evidence with its floats; whether they agree, and the fields where they don't.
 * **No recorded verdict.** A run that recorded no verdict (a serving bundle no verifier audited in its own run, an A2
   or A4 run that stopped before its audit record) compares Lean with today's Python on the stages it holds: the whole
   audit where it kept the session, else the registration alone (its `stages`; each outcome read up to them, one that
@@ -587,7 +586,7 @@ def python(c: Case) -> dict:
         return out("undecided", f"the verifier of record {next(k for k, v in of_record if v.get('accepted') is None)} has not run")
     profile = audit.profile(rec, e["draw"], delta).to_json()
     wrong = a["wrong_units"]
-    public = {"bound": wrong["bound"] if isinstance(wrong["bound"], int) else None, "drawn": list(e["draw"]["units"]),
+    public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
               "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
     return out("accept", None, public, {**profile, "delta": str(profile["delta"])})
 

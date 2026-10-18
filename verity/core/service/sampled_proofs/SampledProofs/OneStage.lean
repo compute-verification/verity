@@ -21,9 +21,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   registered reads against, `Record.sessionRegistered`, each the registered one). It rejects when one fails or
   a verdict that ran did not accept; it is undecided when they all hold but no verifier of record accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
-* on acceptance, **public** is the drawn and proved units with the exact bounds on wrong units at δ (`Bound`; null for a
-  Bernoulli law, whose bound is a float in Python), and the **profile** is `audit.profile`'s `IntegrityProfile`: one level
-  `unit`, the partition's units, drawn by the verifier's law.
+* on acceptance, **public** is the drawn and proved units with the exact bounds on wrong units at δ (`Bound.boundOf`,
+  and each template's own under a stratified or work law), and the **profile** is `audit.profile`'s `IntegrityProfile`:
+  one level `unit`, the partition's units, drawn by the verifier's law.
 -/
 import CoreProtocol.Cli
 import CoreProtocol.Profile
@@ -57,7 +57,7 @@ structure Evidence where
 structure Public where
   drawn : Array Nat
   proved : Array Nat
-  bound : Option Nat
+  bound : Nat
   perTemplate : Option (Array (String × Nat))
 
 private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
@@ -220,7 +220,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       strata.map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none
     .accept
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
-        bound := strata.map (Bound.countBound · p.delta), perTemplate }
+        bound := Bound.boundOf population draw p.delta, perTemplate }
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := population, draw := some draw }],
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
@@ -228,7 +228,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
 
 def publicJson (x : Public) : Json :=
   Json.mkObj [("drawn", natsJson x.drawn), ("proved", natsJson x.proved),
-    ("bound", match x.bound with | some b => Lean.toJson b | none => Json.null),
+    ("bound", Lean.toJson x.bound),
     ("per_template", match x.perTemplate with
       | some ts => Json.mkObj (ts.toList.map fun (t, m) => (t, Lean.toJson m))
       | none => Json.null)]

@@ -367,8 +367,8 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
 - `profile` is the profile's JSON, except that a stratified or work sampling design keeps the v0 form: its JSON with
   `delta` and the count drawn per template.
 - `wrong_units` is `{"delta", "of": population, "bound", "rule", ["per_template"]}`: `bound` is core's exact
-  `Stratified.count_bound` at delta for `subset` (one stratum), `stratified` and `work`, and the linear relaxation for
-  `bernoulli`; a stratified or work sampling design adds each template's own bound.
+  `Stratified.count_bound` at delta for `subset` (one stratum), `stratified` and `work`, and `Bernoulli.count_bound` (the
+  largest M with (1 - p)^M >= delta) for `bernoulli`; a stratified or work sampling design adds each template's own bound.
 - `integrity_profile` is `verity/integrity-profile/v1`: `{"format", "protocol", "program", "query", "partition",
   "population", "registration": <digest>, "scheme", "roots": [{"port", "root", "leaves"}], "law", "drawn",
   "inputs": {"anchored": <anchors>, "linked": []}, "budget_log2_t": null, "terms": null, "epsilon_log2": null,
