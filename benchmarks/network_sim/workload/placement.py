@@ -60,6 +60,10 @@ class Placement:
     def tick_of(self) -> tuple[int, ...]:
         return tuple(self.ticks[x][s] for x, s in zip(self.leaf, self.step))
 
+    def at(self, xs: frozenset[int]) -> list[int]:
+        """The values placed at leaves xs, in canonical order."""
+        return [v for v, x in enumerate(self.leaf) if x in xs]
+
     def paced(self, xs: Sequence[int]) -> bool:
         return all(all(a < b for a, b in zip(self.ticks[x], self.ticks[x][1:])) for x in xs)
 

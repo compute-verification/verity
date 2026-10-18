@@ -63,6 +63,10 @@ class Hardware:
         """The unit of leaf x, or `OUTSIDE`."""
         return self._unit_of.get(x, OUTSIDE)
 
+    def leaves_of(self, unit: str) -> frozenset[int]:
+        """The leaves at which a unit holds values: a block's devices, or the client's leaf for `OUTSIDE`."""
+        return frozenset({self.client}) if unit == OUTSIDE else self.units[unit]
+
     def unit_names(self) -> list[str]:
         """The units in canonical order: the blocks by name, then `OUTSIDE`."""
         return sorted(self.units) + [OUTSIDE]

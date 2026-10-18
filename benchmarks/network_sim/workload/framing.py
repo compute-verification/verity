@@ -16,7 +16,8 @@ function of public data, so it carries nothing.
 
 **Links and buckets.** A message crosses the certified unit boundaries on the route from its first edge's source leaf to its
 destination leaf (`Hardware.watched`), and on each its frames are counted in the bucket of the message's read tick, at the
-reader's tick as `Placed.readOn` counts what a link delivers. A connection's `HELLO` is counted with its first message.
+reader's tick as `Placed.readOn` counts what a link delivers. A source sends its messages in send order (ready tick, then
+stream), and a connection's `HELLO` goes ahead of, and is counted with, the first message sent on it (`openers`).
 
 **The occupancy profile** (`occupancy`) is, per certified link direction and bucket, the number of frames: public, because it
 is a property of the placement, and it fixes each certifier's grid.
@@ -125,20 +126,29 @@ class Phi:
     def by_stream(self) -> dict[int, Message]:
         return {m.stream: m for m in self.messages}
 
+    def send_order(self) -> list[Message]:
+        return sorted(self.messages, key=lambda m: (m.ready_tick, m.stream))
+
+    def openers(self) -> dict[tuple[str, str], Message]:
+        """Per connection (source unit, destination unit), the first message sent on it."""
+        out: dict[tuple[str, str], Message] = {}
+        for m in self.send_order():
+            out.setdefault((m.src, m.dst), m)
+        return out
+
     def route(self, m: Message) -> list[str]:
         """The certified link directions message m crosses, by `Hardware.key`."""
         e = m.edges[0]
         return [self.hw.key(link, to) for link, to in self.hw.watched(e.src_leaf, e.dst_leaf)]
 
     def slots(self) -> dict[str, list[Slot]]:
-        """Per certified link direction, the frames φ puts on it, in canonical order (bucket, then stream)."""
+        """Per certified link direction, the frames φ puts on it, in send order."""
         out: dict[str, list[Slot]] = defaultdict(list)
-        opened: set[tuple[str, str, str]] = set()
-        for m in self.messages:
+        openers = {m.stream for m in self.openers().values()}
+        for m in self.send_order():
             b = self.hw.bucket(m.read_tick)
             for key in self.route(m):
-                if (key, m.src, m.dst) not in opened:
-                    opened.add((key, m.src, m.dst))
+                if m.stream in openers:
                     out[key].append(Slot(b, "hello", HELLO_STREAM, 0, m.src, m.dst))
                 out[key] += [Slot(b, "data", m.stream, j, m.src, m.dst) for j in range(frame_count(m, self.frame_bytes))]
         return dict(out)

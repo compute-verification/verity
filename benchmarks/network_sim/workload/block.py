@@ -18,8 +18,8 @@ after a stream's end) stay in the inbox and go into the record at the end.
 
 **Records.** A block records, on each of its certified boundary link directions, the frames that crossed it: what it sent on
 egress, in send order, and what it took on ingress, in the order it took them, then what was left over. Each frame is tagged
-with its bucket: that of the tick at which the message is read, at which the occupancy profile counts it (left-over frames
-take the bucket of the block's last tick). These logs stand in for the certifiers' records; under certifiers the bucket
+with its bucket: that of the tick at which the message is read, at which the occupancy profile counts it (a `HELLO` takes
+its connection's opener's, `framing.Phi.openers`, and left-over frames the block's last tick's). These logs stand in for the certifiers' records; under certifiers the bucket
 comes from each certifier's clock.
 
 **Transports.** `MemoryNet` runs every unit in one event loop and hands frames over directly; `serve_tcp` runs one unit as an
@@ -69,7 +69,7 @@ class Context:
         self.spec = M.Spec(**config["spec"])
         self.model = M.Model(self.spec)
         self.hw = Hardware.from_json(config["hardware"]) if "hardware" in config else \
-            mock(config["blocks"], config.get("devices", 1))
+            mock(config["blocks"], config.get("devices", 1), bucket_ticks=config.get("bucket_ticks", 1))
         self.placement = P.place(self.model, self.hw, P.PLANS[config.get("plan", "pipeline")](self.model, self.hw))
         bad = P.causal(self.model, self.placement, self.hw)
         if bad:
@@ -84,13 +84,8 @@ class Context:
     def inputs(self) -> dict[int, int]:
         return self.model.bind_inputs(M.requests(self.spec, self.seed), M.weights(self.spec, self.seed))
 
-    def leaves(self, unit: str) -> frozenset[int]:
-        return frozenset({self.hw.client}) if unit == OUTSIDE else self.hw.units[unit]
-
     def held(self, unit: str) -> list[int]:
-        """The values placed at the unit's leaves, in canonical order."""
-        xs = self.leaves(unit)
-        return [g for g, x in enumerate(self.placement.leaf) if x in xs]
+        return self.placement.at(self.hw.leaves_of(unit))
 
     def units(self) -> list[str]:
         return self.hw.unit_names()
@@ -179,6 +174,7 @@ class Block:
                 self.inbound[m.read_tick].append(m)
             if m.src == unit:
                 self.outbound[m.ready_tick].append(m)
+        self.openers = phi.openers()
         self.inbox = Inbox(ctx, unit, {m.src for m in phi.messages if m.dst == unit})
         self.held = ctx.held(unit)
         held = set(self.held)
@@ -198,9 +194,12 @@ class Block:
     def _keys(self, m: F.Message) -> list[str]:
         return [k for k in self.ctx.phi.route(m) if k.split(">")[0] in self.mine]
 
-    def _record(self, m: F.Message, frames: list[bytes]) -> None:
-        b = self.ctx.hw.bucket(m.read_tick)
+    def _record(self, m: F.Message, frames: list[bytes], hello: bytes | None = None) -> None:
+        hw = self.ctx.hw
+        b = hw.bucket(m.read_tick)
         for k in self._keys(m):
+            if hello is not None:
+                self.records[k].append((hw.bucket(self.openers[(m.src, m.dst)].read_tick), hello))
             self.records[k] += [(b, f) for f in frames]
 
     async def _send(self, m: F.Message) -> None:
@@ -217,23 +216,24 @@ class Block:
             else:
                 extra = [encode_frame(LAST, COVERT_STREAM, b"covert", B)]
         out = list(frames) + extra
+        hello = None
         if m.dst not in self.writers:
             self.writers[m.dst] = await self.connect(self.unit, m.dst)
-            out.insert(0, F.hello(self.ctx.hw, self.unit, m.dst, B))
-        self._record(m, out)
+            hello = F.hello(self.ctx.hw, self.unit, m.dst, B)
+        self._record(m, out, hello)
         w = self.writers[m.dst]
-        for f in out:
+        for f in ([hello] if hello else []) + out:
             await w.write(f)
 
     async def _take(self, m: F.Message) -> None:
         got = await self.inbox.take(m.stream)
-        frames = [f for src, f in got]
         if any(src != m.src for src, _ in got):
             raise ConnectionError(f"stream {m.stream} arrived from another unit than {m.src}")
+        hello = None
         if m.src not in self.taken:
             self.taken.add(m.src)
-            frames.insert(0, self.inbox.hellos[m.src])
-        self._record(m, frames)
+            hello = self.inbox.hellos[m.src]
+        self._record(m, [f for _, f in got], hello)
         payload = b"".join(decode_frame(f)[2] for src, f in got)
         self.transcript.update(F.decode(m, payload))
 
@@ -265,7 +265,7 @@ class Block:
         """Frames no message took, on the boundary link direction into this unit (the one the client's route enters by)."""
         hw = self.ctx.hw
         b = hw.bucket(self.last_tick)
-        into = [hw.key(e, to) for e, to in hw.watched(hw.client, min(self.ctx.leaves(self.unit)))
+        into = [hw.key(e, to) for e, to in hw.watched(hw.client, min(hw.leaves_of(self.unit)))
                 if hw.links[e].name in self.mine]
         for _src, f in self.inbox.leftovers():
             for k in into:
