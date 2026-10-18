@@ -6,9 +6,10 @@ import Proofs.Flock.Claims.ZK.Indexed
 # Sampling's zero knowledge from a committed-coin protocol
 
 `Claims.Sampling.ZK` is `ZKmalRx` at the sampled verifier's rounds, `ZKmalR` at a record masked at one tape
-(`zkmalRx_const_of`), of the masked record's reference prover and at its simulator, on the honest pairs whose published leaf layer is `l x`, with the simulator given `l x`. Its binding term is
-`γ` times `Fork` of the sampled prover's own two runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled
-protocol itself, with every coin it draws (the selection's and each checked unit's session's) committed at its `Hello`.
+(`zkmalRx_const_of`), of the masked record's reference prover and at its simulator, on the honest pairs whose published
+leaf layer is `l x`, with the simulator given `l x`. Its binding term is `γ` times `Fork` of the sampled prover's own two
+runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled protocol itself, with every coin it draws (the
+selection's and each checked unit's session's) committed at its `Hello`.
 Flock's zero knowledge at each session does not compose to it: a hybrid over the sessions charges each session's `Fork`
 against a verifier that has already simulated the earlier sessions, and no term of the sampled claim bounds those.
 

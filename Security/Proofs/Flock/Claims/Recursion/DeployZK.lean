@@ -5,8 +5,8 @@ import Proofs.Flock.Claims.DeployOC
 # What the recursion's zero knowledge rests on at `deployRec`
 
 `Claims.Recursion.ZK` at the masked record `deployRecZ IV ivScope b tapeOf SO` (`deployRec` with its reference prover's
-tape at each statement drawn from a finite nonce and rest by `tapeOf`, and the outer simulators `SO`) and the outer record
-`deployZkRec relO` is `DO.zk = true`, which holds (`deployZkRec` is the masked record), and the bound `ZKBound`: at
+tape at each statement drawn from a finite nonce and rest by `tapeOf`, and the outer simulators `SO`) and the outer
+record `deployZkRec relO` is `DO.zk = true`, which holds (`deployZkRec` is the masked record), and the bound `ZKBound`: at
 each attempt budget `t ≥ 1` and wherever hm96 leaves hide up to `δ₁` at the pinned key, `ZKmalRx` at `Sim` within
 `εzk + γzk · Pr[Fork]` (`zk_deployRec`, `zk_deployRec_iff`). `ZKBound` is the hybrid over the three parts of a run, and
 this file proves what `deployRec` fixes of each:
