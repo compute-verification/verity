@@ -1,8 +1,13 @@
-"""served_h1's receipt trees: hm96-sha512 hiding leaves (`verity.ml.commitments.hm96.SHA512`, its pinned key) in a
-frame-v3-sha512 tree per covered call, leaf u unit u's receipt (its 2 (KS + m) u32 words LE, hm96-sha512/row-seg/v1).
+"""served_h1's tables: hm96-sha512 hiding leaves (`verity.ml.commitments.hm96.SHA512`, its pinned key) under
+hm96-sha512/row-seg/v1, in a frame-v3-sha512 tree per (step, linear) call and kind:
+
+    a-table   slot row i: its K s8 bytes, then its f32 scale LE (`s8_rows`; AROW's leaf); an empty slot is a zero row with
+              scale 0 (a served row's scale is at least the quantizer's floor, so never 0)
+    receipts  unit u: its receipt's 2 (KS + m) u32 words LE (`receipt_rows`)
+
 Stdlib, numpy and `verity.ml.commitments` only, so pool workers start light.
 
-A tree's domain is `domain(fields, count)`: identity_digest_sha512("verity/pouw/served-h1/receipts/v0", fields), owner -1,
+A tree's domain is `domain(fields, count, kind)`: identity_digest_sha512("verity/pouw/served-h1/<kind>/v0", fields), owner -1,
 ranks 0 .. count - 1.  A leaf's 192-byte hm96 salt is ``salt(key, label, i)``: SHA-512(SALT_TAG ‖ key ‖ u32be len(label) ‖
 label ‖ u64be i ‖ u8 c) for c = 0, 1, 2, from the window's secret 64-byte key (the prover's), so the prover's data is the
 key; the reference hm96 salt is 192 fresh OS bytes a leaf, which this replaces by a SHA-512 PRF of one fresh key.
@@ -26,14 +31,19 @@ SALT_TAG = b"verity/pouw/served-h1/salt/v0\0"
 SCHEMA = SCHEMA_HM96_SHA512_ROW_SEG
 
 
-def domain(fields: dict, count: int) -> CommitmentDomain:
-    return CommitmentDomain(identity_digest_sha512("verity/pouw/served-h1/receipts/v0", fields), -1,
+def domain(fields: dict, count: int, kind: str = "receipts") -> CommitmentDomain:
+    return CommitmentDomain(identity_digest_sha512(f"verity/pouw/served-h1/{kind}/v0", fields), -1,
                             RangeIndexedDomain(0, count), hash="sha512")
 
 
 def salt(key: bytes, label: str, i: int) -> bytes:
     head = SALT_TAG + key + len(label.encode()).to_bytes(4, "big") + label.encode() + i.to_bytes(8, "big")
     return b"".join(hashlib.sha512(head + bytes([c])).digest() for c in range(3))
+
+
+def s8_rows(q: np.ndarray, scales: np.ndarray) -> np.ndarray:
+    """(n, K + 4) uint8: each row's s8 bytes, then its f32 scale little-endian."""
+    return np.concatenate([q.astype(np.int8).view(np.uint8), scales.astype("<f4").reshape(-1, 1).view(np.uint8)], axis=1)
 
 
 def receipt_rows(receipts: np.ndarray) -> np.ndarray:
