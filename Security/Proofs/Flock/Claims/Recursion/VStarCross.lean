@@ -44,14 +44,16 @@ appeal to V*'s circuits, at every shape.
 * **`LogDecomp` over Flock's deployed verifier asks the parts for its setup's calls** (`logDecomp_setup`,
   `logDecomp_deployed_setup`): every decision runs the inner statement's setup over `OC` first, on public data (the
   inner circuit file's bytes, its sigma's), so with `PartLogs` some part's SHA-512 gadgets would have to record each of
-  them. With those calls admitted as public (`LogDecompPub`), it is the verdict's calls alone that must be the parts'
+  them. With those calls admitted as public (`VStar.LogDecompPub`, which `VStarParts` asks for with the public calls
+  the V* setup's own evaluations, `VStar.PubReg`), it is the verdict's calls alone that must be the parts'
   (`VerdictCut`, `logDecompPub_of_cut`).
 * **At the registered ports' layout** (`layoutOf`, `DeployLayout.lean`): `Staged` needs only `b.tr x` injective
   (`staged_layoutOf`), since the layout spans exactly the inner verifier's rounds. `Held` holds exactly at a shape no
   compiled statement parses at (`held_layoutOf_iff`). The layout records no call, so `PartLogs` leaves each part no
   inner call at its own points (`partLogs_layoutOf_nil`), and with `LogDecomp` the inner setup makes none at an
   accepted inner replay there (`setupLog_nil_layoutOf`), off a collision among the V* setup's own evaluations. The
-  inner setup always hashes (its digest and sigma), so off such a collision no inner replay at the parts' points accepts.
+  inner setup always hashes (its digest and sigma), so off such a collision no inner replay at the parts' points accepts
+  under `LogDecomp`; `VStarParts` asks for `LogDecompPub` instead, which admits those calls.
 -/
 
 namespace RecDeploy
@@ -665,16 +667,6 @@ theorem next_decide_log_mem {zk : Bool} (H : Msg → Msg) {x : Msg} {as : List M
       · exact he
       · cases w <;> cases he
 
-/-- **`LogDecomp` with public calls admitted**: at a compiled statement of the shape, each SHA-512 call `IV` makes on
-the inner messages `ms` at the coins `c` is one that some part's inner check makes there, or one of the calls `pub x`
-on the statement's public data. -/
-def LogDecompPub (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (IV : Claims.Verifier Coin)
-    (shape : Claims.Recursion.Form → Prop) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg))
-    (pub : Msg → List (Msg × Msg)) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
-    ∀ e ∈ (run H (replay ms) IV (Claims.Recursion.xI D x) () fun i => c i.val).vLog,
-      (∃ s < D.nS x, e ∈ logs s x c ms) ∨ e ∈ pub x
-
 /-- **The inner statement's setup calls** against `H`: those Flock's deployed verifier makes at its decision, its
 statement's setup over `OC` (none where the statement doesn't set up). -/
 def innerSetupLog (zk : Bool) (H : Msg → Msg) (x : Msg) : List (Msg × Msg) :=
@@ -704,7 +696,8 @@ public: each call of a replay is at one step (`stepWith_replay_vLog`), which log
 (`next_rej`, `next_coin`), whose calls are its setup's or its verdict's (`next_decide_log_mem`). -/
 theorem logDecompPub_of_cut {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
     {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} (h : VerdictCut H D shape logs) :
-    LogDecompPub H D (FlockDeploy.V false) shape logs fun x => innerSetupLog false H (Claims.Recursion.xI D x) := by
+    Claims.Recursion.VStar.LogDecompPub H D (FlockDeploy.V false) shape logs fun x =>
+      innerSetupLog false H (Claims.Recursion.xI D x) := by
   intro x st hst hf c ms e he
   let x' := Claims.Recursion.xI D x
   let g : ℕ → Msg := fun i => ms.getD i []
