@@ -58,8 +58,12 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
             pre = next(x for x in comp["identities"] if x["family"] == hidden_family and x["op_path"] == op and x["step"] == 0)
             dec = next((x for x in comp["identities"] if x["family"] == hidden_family and x["op_path"] == op and x["step"] == 1), None)
             D = int(pre["geometry"]["D"])
-            NH = int(pre["geometry"]["HB"])
-            KVH = int(dec["geometry"]["HB"]) if dec is not None and int(dec["geometry"]["M"]) > 1 else NH
+            if hidden_family[:3] == "fa3":       # FA3 packs a KV group's query heads into its rows: HB = KVH, M = rows * NH / KVH
+                KVH = int(pre["geometry"]["HB"])
+                NH = KVH * (int(pre["geometry"]["M"]) // max(1, int(pre["geometry"]["rows"])))
+            else:                                # FA2: a prefill's slabs are its query heads, a swapped decode's its KV heads
+                NH = int(pre["geometry"]["HB"])
+                KVH = int(dec["geometry"]["HB"]) if dec is not None and int(dec["geometry"]["M"]) > 1 else NH
             fn = fmt.fa3_geometry if hidden_family[:3] == "fa3" else fmt.fa2_geometry
             HB, M, NB, BN, gname = fn(a["T_max"], a["max_rows"] * a["n_seq"], NH, KVH, D, a["n_seq"])
             ids.append({"family": hidden_family, "program_digest": pdig, "request_id": "*", "requests": a["requests"], "step": "*", "engine_step": e, "invocation": 0,
