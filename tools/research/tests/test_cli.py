@@ -279,6 +279,23 @@ def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
     (pkg / "remote.py").write_text("def tool_identity(): pass\n")
     assert remote.knows_queue(None) and remote.knows_queue(Path(remote.__file__).parent)
     assert not remote.knows_queue(pkg) and not remote.knows_queue(tmp_path / "nope")
+    assert remote.knows_gpus(None) and remote.knows_gpus(Path(remote.__file__).parent) and not remote.knows_gpus(pkg)
+
+
+def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):
+    """INF-55: `research run --on M --gpus N` asks the machine for N GPUs through its gpu-lease (remote.gpu_lease_wrap)."""
+    from research import remote
+
+    seen = []
+
+    def launch(**kw):
+        seen.append(kw["gpus"])
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+
+    monkeypatch.setattr(remote, "launch", launch)
+    on = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2"]
+    assert main([*on, "--gpus", "8", "--", "true"]) == 0 and main([*on, "--", "true"]) == 0
+    assert seen == [8, None]
 
 
 def test_pss_flags_for_a_source_tree_that_predates_them_are_refused_before_placement(tmp_path, monkeypatch, capsys):

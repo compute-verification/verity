@@ -7,7 +7,8 @@
   research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (infra/cluster) places the job and runs it under its node's executor
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
-               [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
+               [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
+                                                 # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
                                                  # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc
   research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
@@ -205,7 +206,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                                    "--on then pins its node, and --mem-gb is its memory")
     q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
     q.add_argument("--class", dest="queue_class", default="work", metavar="P", help="its priority class (the description's [priorities]; default work)")
-    q.add_argument("--gpus", type=int, default=None, metavar="N", help="default: its kind's (else 0)")
+    q.add_argument("--gpus", type=int, default=None, metavar="N",
+                   help="with --queue: default its kind's (else 0). With --on MACHINE alone: on a machine whose GPUs gpu-lease hands out, "
+                        "the workload waits first come first served for N of them (`gpu-lease N --wait`; the wait counts against "
+                        "--timeout); a run without --gpus sees no GPU there")
     q.add_argument("--gpu-model", default=None, metavar="M", help="e.g. rtx-pro-6000; a node with other GPUs is never chosen")
     q.add_argument("--cpus", type=int, default=None, metavar="N", help="default: its kind's (else 1); also the workload's OMP, OpenBLAS, MKL and NumExpr threads unless --env sets them")
     q.add_argument("--max-min", type=int, default=None, metavar="M",
@@ -294,7 +298,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             print(f"research run: --timeout: {e}", file=sys.stderr)
             return 2
         return _run_queued(ns, harness_opts, command)
-    queue_only = [flag for flag, given in (("--gpus", ns.gpus is not None), ("--cpus", ns.cpus is not None),
+    queue_only = [flag for flag, given in (("--gpus", ns.gpus is not None and not ns.on), ("--cpus", ns.cpus is not None),
                                            ("--gpu-model", ns.gpu_model), ("--max-min", ns.max_min is not None),
                                            ("--kind", ns.queue_kind != "adhoc"), ("--question", ns.question),
                                            ("--phase", ns.queue_phase), ("--class", ns.queue_class != "work"),
@@ -426,6 +430,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
     # runs with the caller's environment (a workload-only AWS_* must not become the push credentials)
     apply_env = {k: v for k, v in env_map.items() if not (ns.claimed and k == "PYTHONPATH")}   # launch_request composed it: tool, tree roots, then this
+    if ns.claimed and (remote_info or {}).get("gpus"):
+        apply_env.pop("CUDA_VISIBLE_DEVICES", None)          # launch_request hid the GPUs (or gpu-lease names them): --env can't undo it
     apply_env = {**clone_env, **apply_env}
     saved_env = {k: os.environ.get(k) for k in apply_env}
     os.environ.update(apply_env)
@@ -1013,7 +1019,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
                             custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
-                            job_user=ns.job_user)
+                            job_user=ns.job_user, gpus=None if queue else ns.gpus)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
