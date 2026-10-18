@@ -147,3 +147,44 @@ def test_the_refusal_tells_the_agent_how_to_list_names_and_input_that_is_not_jso
     assert "compgen -e" in json.loads(out)["agent_message"]
     out = subprocess.run([sys.executable, HOOK], input="env", capture_output=True, text=True, check=True).stdout
     assert json.loads(out)["permission"] == "deny"
+
+
+INBOX_TOOL = ROOT / "tools/agent-guard/inbox.py"
+
+
+def hook(command: str, conversation: str, inbox: Path) -> dict:
+    out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution",
+                                                                     "command": command, "conversation_id": conversation}),
+                         capture_output=True, text=True, env={**os.environ, "AGENT_INBOX": str(inbox)}, check=True).stdout
+    return json.loads(out)
+
+
+def queue(agent: str, text: str, inbox: Path) -> None:
+    subprocess.run([sys.executable, INBOX_TOOL, "send", agent, "--text", text], env={**os.environ, "AGENT_INBOX": str(inbox)},
+                   check=True, capture_output=True)
+
+
+def test_a_queued_message_refuses_the_agents_next_command_once_with_the_message_as_its_text(tmp_path):
+    queue("bc-worker", "rebase on main first", tmp_path)
+    queue("bc-worker", "then mark nothing", tmp_path)
+    first = hook("ls", "bc-worker", tmp_path)
+    assert first["permission"] == "deny"
+    assert "re-run it exactly as it was" in first["user_message"]
+    assert "rebase on main first" in first["user_message"] and "then mark nothing" in first["user_message"]
+    assert hook("ls", "bc-worker", tmp_path) == {"permission": "allow"}
+    assert "rebase on main first" in (tmp_path / "bc-worker.delivered").read_text()
+
+
+def test_a_message_is_only_its_agents_and_a_secret_refusal_keeps_it_queued(tmp_path):
+    queue("bc-worker", "hello", tmp_path)
+    assert hook("ls", "bc-other", tmp_path) == {"permission": "allow"}
+    refused = hook("env | cut -d= -f1", "bc-worker", tmp_path)
+    assert refused["permission"] == "deny" and "hello" not in refused["user_message"]
+    assert "hello" in hook("ls", "bc-worker", tmp_path)["user_message"]
+
+
+def test_an_unreadable_inbox_or_a_path_as_an_id_never_blocks_a_command(tmp_path):
+    inbox = tmp_path / "not-a-dir"
+    inbox.write_text("")
+    assert hook("ls", "bc-worker", inbox) == {"permission": "allow"}
+    assert hook("ls", "../etc/passwd", tmp_path) == {"permission": "allow"}
