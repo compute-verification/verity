@@ -9,7 +9,10 @@
 #   research run --on vy-nebius-2 --project verity --campaign hash-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-pouw-decode -- bash benchmarks/hash/pouw_decode/run.sh
 # REPS (default 30), ROWS (default 32,128), SHAPES (default qkv,o,gate_up,down), PD_SIDE (the variants of the schedules with
-# side lanes, pd_host.SIDE, default 19,51,83) pass through.
+# side lanes, pd_host.SIDE, default 19,51,83) pass through.  NCU=KERNELS (a regex of launch names, as pd_commit_19)
+# replaces the timing and the trace with bench.py under ncu (--clock-control none, --set full, the first NCU_COUNT
+# matching launches, default 4, built with -lineinfo): the details page and each source line's and SASS instruction's
+# samples (ncu_*.csv).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 CUDA=${CUDA:-/usr/local/cuda}
@@ -18,6 +21,7 @@ REPS=${REPS:-30}; ROWS=${ROWS:-32,128}; SHAPES=${SHAPES:-qkv,o,gate_up,down}
 SCR=$(mktemp -d); trap 'rm -rf "$SCR"' EXIT
 
 FLAGS=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxas -v -cubin)
+[[ -z "${NCU:-}" ]] || FLAGS+=(-lineinfo)
 { "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]}"; g++ --version | head -1; } > "$OUT/toolchain.txt"
 "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$SCR/pearl_c_sm120.cubin" "$ROOT/benchmarks/pouw/pearl_c_sm120/pearl_c_sm120.cu" \
   2> "$OUT/ptxas_pearl_c_sm120.txt"
@@ -48,6 +52,15 @@ tail -3 "$OUT/host_test.txt"
 
 export PD_SIDE=${PD_SIDE:-19,51,83}
 B=(python3 "$HERE/bench.py" "$SCR/pearl_c_sm120.cubin" "$SCR/pd.cubin" --out "$OUT" --reps "$REPS" --rows "$ROWS" --shapes "$SHAPES")
+if [[ -n "${NCU:-}" ]]; then
+  gpu-lease 1 --wait --preemptible --max-min 25 -- "$CUDA/bin/ncu" --clock-control none --set full --import-source yes \
+    -k "regex:^($NCU)\$" --launch-count "${NCU_COUNT:-4}" -o "$OUT/ncu" -f "${B[@]}" > "$OUT/ncu.log" 2>&1
+  "$CUDA/bin/ncu" -i "$OUT/ncu.ncu-rep" --page details --csv > "$OUT/ncu_details.csv"
+  "$CUDA/bin/ncu" -i "$OUT/ncu.ncu-rep" --page source --csv --print-source cuda > "$OUT/ncu_source_cuda.csv"
+  "$CUDA/bin/ncu" -i "$OUT/ncu.ncu-rep" --page source --csv --print-source sass | gzip > "$OUT/ncu_source_sass.csv.gz"
+  du -sh "$OUT"
+  exit 0
+fi
 gpu-lease 1 --wait --preemptible --max-min 25 -- bash -c '
   set -euo pipefail
   nvidia-smi --query-gpu=index,uuid,clocks.sm,clocks.max.sm,temperature.gpu,power.draw --format=csv > "$OUT/gpu.csv"
