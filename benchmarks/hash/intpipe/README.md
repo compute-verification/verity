@@ -12,8 +12,10 @@ produce against a CPU reference in the same run before timing, interleaves full 
 | `sha512_baseline.sh` | compute-accounting's `benchmarks/pouw/commit_gpu` as is: raw SHA-512 and its hm96 row-seg leaves | `benchmarks/pouw/commit_gpu/reference.py` |
 | `candidates.sh` (`candidates.cu`) | raw compressions and plain 4 KiB-leaf trees: SHA-512 at r rounds, SHA-256, BLAKE3, a no-hash control | `check.py` |
 | `hm96.sh` (`hm96.cu`) | 4 KiB rows in Verity's hm96 leaf format, base SHA-512 against each candidate in every hash position | `hm96_ref.py` |
+| `hm96lat.sh` (`hm96lat.cu`) | latency levers for full SHA-512 in hm96 format at decode-sized windows | `hm96_ref.py`, `hm96lat_ref.py` |
 
-`summary.py` turns a run into JSON lines and fetched runs into the tables (`summary.py table`, `summary.py hm96table`).
+`summary.py` turns a run into JSON lines and fetched runs into the tables (`summary.py table`, `summary.py hm96table`,
+`summary.py hm96windows`, `summary.py lattable`).
 `sass_count.py` counts a kernel's SASS by pipe for the integer-issue ceilings. `hashes.cuh` holds the candidates' device
 code and the leaf loader every driver shares (`WarpLoader`: a warp reads its 32 streams' next `FETCH` bytes cooperatively
 into shared memory; `LOADER_ASYNC=1` double-buffers it with `cp.async`).
@@ -79,4 +81,20 @@ research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd s
 ```
 
 Options: `CANDS` (`sha512:0:80 sha512r32:1:32 sha512r24:1:24 blake3k:3:0`), `N`, `CHECK_N`, `REPS`, `FETCH`, `ASYNC`,
-`WARPS` and `LEASE_ARGS`, as the script's header says.
+`WARPS`, `LEASE_ARGS`, and the leaf geometry `LEAF` (4096) and `SEGB` (1024), as the script's header says. Verity's
+row-seg/v1 fixes 1 KiB segments, so `LEAF=2048` (two segments) is still its format and `hm96_ref.py check` holds it to
+`verity.ml.commitments`; any other `SEGB` is a FORMAT CHANGE, checked against `hm96_ref.py` alone.
+
+## Latency levers (`hm96lat`)
+
+`hm96lat.cu` includes `hm96.cu` (base arm only) and times full SHA-512 in hm96 format at decode windows, each lever as one
+CUDA graph ending with its output in pinned host memory: `host` ms is graph launch to the root on the host (the critical
+path), `gpu` ms the same graph queued behind a spin (GPU busy time). Levers: `base` (hm96.cu's tree), `top512` /
+`top1024` (the one-CTA top from 512 / 1024 nodes), `host4` / `host6` / `host8` (the last 4 / 6 / 8 levels on the host),
+and `k4` / `k8`, a 4-ary / 8-ary frame tree: **FORMAT CHANGE (hypothetical; proofs' decision)**, checked against
+`hm96lat_ref.py`. Binary levers are checked word for word against hm96.cu's own tree, which `hm96_ref.py check` holds to
+Verity in the same run. `hm96lat overlap` runs a memory-bound stand-in for a decode step (252 streaming-read kernels in one
+graph, calibrated to `TARGET_MS` alone) on one stream and the commit on another at the lowest and highest priority, and
+reports the stand-in's time alone and with the commit, and when the commit's root is written. `hm96lat.sh` also runs
+`hm96.sh` for 4 KiB leaves at every size and for 2 KiB leaves (1 KiB and 512 B segments), and times windows of `BATCH` (2,
+4, 8) decode steps.
