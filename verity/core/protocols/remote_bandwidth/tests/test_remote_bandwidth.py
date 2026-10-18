@@ -179,7 +179,7 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
                           "post_seed": [0, 0, 0], "protocol": audit.PROTOCOL_ID,
                           "receipt": "sketch-sha512", "receipts": [4 * N, 3 * N, 3 * N],
                           "registration": store.registration.digest.hex(), "released": 0, "rows": 16,
-                          "span_ns": 3000 + A, "stale": [[N] * 4, [N] * 3, [N] * 3]}
+                          "span_ns": 3000 + A}
     assert r.codec == store.registration.codec == codec.FALLBACK
     w1 = r.profile()["windows"][1]
     assert w1["lengths"] == [N] * 3 and w1["released_ns"] == 1000 and w1["deadline_ns"] == 2000 + A

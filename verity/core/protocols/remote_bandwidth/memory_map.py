@@ -68,11 +68,11 @@ the next step's reads, its blocks are the step's own append (`Change.append_tree
 appends sent before whose writes the step records.  The appends are sent before the root of any pass whose plan
 holds them, and that pass's seed binds them (`audit.chained`), so it is computed after they are sent.
 That the session's appends, re-keys and frees are this record's, in its order and at its steps, is the memory-map
-unit's to prove against the record's append chain, each pass's head and each pass's stale bound
-(`audit.Record.appends`, `WindowRecord.heads`, `WindowRecord.stale`, `RequirementLink.mapped`, `PROTOCOL.md` §8
-"The memory map's choices"): frees, re-keys and append order chosen after the seed would otherwise be advice.  So a
-step's appends are sent after the pass at that step's root and before the next pass's, and a re-key's old index is
-below the stale bound of the pass after its step.
+unit's to prove against the record's append chain and each pass's head (`audit.Record.appends`,
+`WindowRecord.heads`, `RequirementLink.mapped`, `PROTOCOL.md` §8 "The memory map's choices"): frees, re-keys and
+append order chosen after the seed would otherwise be advice.  So a step's appends are sent after the pass at that
+step's root and before the next pass's, and a re-key's old index is below the stale bound of the pass after its step
+(`WindowRecord.stale`, a value the unit recomputes inside its proof from the committed appends).
 
 Passes and steps.  Each pass of the audit covers one step `s`, which it names with its root (`Session.receive(...,
 step=s)`, public), and the steps of a session's passes strictly increase.  Its plan is the blocks the circuit reads at

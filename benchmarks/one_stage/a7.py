@@ -385,7 +385,7 @@ class UnitsLink:
     rows open, every witness row is bound to its canonical commitment, and v0's bridge holds the canonical plans and map
     to the session's own. `mapped` holds of a record whose chain is the one `appends` the map units' writes make
     (`units_appends`), once every map unit is drawn and proved (`proved`); it doesn't yet check the record's per-pass
-    heads and stale bounds (`audit.WindowRecord.heads`, `stale`). `epsilon` and `delta` are what the units' draw established (`uncertified`):
+    heads (`audit.WindowRecord.heads`) or recompute the stale bounds from the appends (`stale`). `epsilon` and `delta` are what the units' draw established (`uncertified`):
     the most share of the linked credit the wrong units it allows can carry, at the audit's delta; until they are set,
     the link credits nothing."""
     holds: bool
