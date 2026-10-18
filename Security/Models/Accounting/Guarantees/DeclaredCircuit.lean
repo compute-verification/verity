@@ -45,14 +45,19 @@ certifies, and its run inputs within `R_in = caps.runBytes` bytes. A window cert
 *The requirement.* The prover chooses everything on `W`'s side after every coin: the placed execution `p x` (each
 value's device `leaf` and the tick `ticks d s` at which device `d` begins engine step `s`), the layout of values in
 blocks `ℓ x`, the groups `grp x` (a KV value's sequence, layer and plane), the step `bind x w j` each pass is bound to,
-strictly increasing over the passes (#2378), and the store position `addr x k` of each block `k`. On device `d`'s
-clock pass `j` of window `w` is the `τ` ticks from the one at which `d` begins the pass's step
-(`Requirement.Placement.passTicks`), window `w` its passes' ticks (`Requirement.Placement.windowTicks`), and no device
-tick is in two windows or two passes of one (`Requirement.Placement.Deadlines`). At each bound step `t` the layout packs
-the live values and the values read into blocks of 32,768 bits, the values `t` reads from incomplete blocks lie in one
-block a group, and the blocks of `W`'s credited reads at `t` are at distinct tiles of the pass's store. The pass's tiles
-of `W` are those tiles, and its credit is the larger of `W`'s credited live bits in those blocks (held) and the bits `t`
-reads less a block a group (moved):
+strictly increasing over the passes (#2378), the memory map `σ x`, each pass's plan `plan x w j` (its blocks), and the
+store position `addr x k` of each block `k`. On device `d`'s clock pass `j` of window `w` is the `τ` ticks from the one
+at which `d` begins the pass's step (`Requirement.Placement.passTicks`), window `w` its passes' ticks
+(`Requirement.Placement.windowTicks`), and no device tick is in two windows or two passes of one
+(`Requirement.Placement.Deadlines`). At each bound step `t` the memory map holds `W`'s credited blocks
+(`Requirement.StoreMatches`: every block holding a credited value is resident, the live values are packed into blocks
+of 32,768 bits, and each credited value is in its block's payload), the pass's plan covers `W`'s reads
+(`Requirement.PlanMatches`: every complete block `t` reads is planned, and the values read are packed), the values `t`
+reads from incomplete blocks lie in one block a group, and the plan's blocks are at distinct positions of the pass's
+store. The links are one-sided: other blocks may be resident or planned (filler, dead values, another workload's), and
+they earn `W` nothing. The pass's tiles of `W` are the tiles of the blocks of `W`'s credited reads at `t`, and its
+credit is the larger of `W`'s credited live bits in those blocks (held) and the bits `t` reads less a block a group
+(moved):
 
   `credit t = max (bitsAt (credited t) (blocks (creditedReads t))) (readBits t − |grp(reads t \ creditedReads t)|·32768)`.
 
@@ -80,7 +85,8 @@ those tiles at that pass, in the window's ticks on each device's clock, and the 
 `W`'s live bits in the blocks it read then, and moved, what it read then. The shortfall is a share of the store:
 relative to `W` it is `ε_W = (0.0015 + γ)·n·P·N·32768/Σ credit`. What the game doesn't hold, the code does: that `Wc`
 (the gate model's) and `W` (the requirement's wiring) are one circuit (requirement.py and census/v1 read one IR), that
-the blocks at `addr` carry `W`'s credited values (`Requirement.Carries`: the memory-map unit, and the appends' digests
+the memory map and the plans hold `W`'s credited blocks (`StoreMatches`, `PlanMatches`: `core_requirement`'s one-sided
+check, and the memory-map and plan units), that the payloads at `addr` are the store's blocks (the appends' digests,
 by `remote_bandwidth`'s Replay), that each pass's plan is its step's (#2378), and that the pass ran in its ticks (a
 certifier stamping step records and pass roots on one clock). A credit across circuits needs their credited blocks
 disjoint, and a device tick credited to a pass here and to another window elsewhere is joint accounting's. Which of the
@@ -99,7 +105,8 @@ tiles of `W`.
 Frozen (no-function, hash): `StackedSessionConservationSketchDeployed`'s game on a store per pass whose layout reads
 the codec and the append coins through at most `a` bits, with carriers of a declared circuit passing the stacking
 property within its caps over their life, its shortfall read pass by pass against the circuit's credited reads at the
-step each pass is bound to, each pass and window on the devices' clocks, in the random-oracle and ideal encoding
+step each pass is bound to, with the memory map and plans holding its credited blocks (one-sided), each pass and
+window on the devices' clocks, in the random-oracle and ideal encoding
 models, under the per-pass hash budget, `EncodeChainHardness`, `KeyBinding`, `CircuitCarriers` and `SteeredLayout`. -/
 def DeclaredCircuitRequirement : Prop :=
   ∀ (n P N ρ S q G Xr Lr qr τ k a life E B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
@@ -113,6 +120,8 @@ def DeclaredCircuitRequirement : Prop :=
     (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Layout V)
     (grp : RateSketch.StackedCoins Ω Ca T n P N ρ G → V → K)
     (bind : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → ℕ)
+    (σ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store)
+    (plan : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → Finset ℕ)
     (addr : RateSketch.StackedCoins Ω Ca T n P N ρ G → ℕ → Fin T × Fin M),
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
@@ -125,13 +134,12 @@ def DeclaredCircuitRequirement : Prop :=
     (∀ x, (p x).Deadlines (bind x) τ ∧ (∀ w j w' j', w < w' ∨ w = w' ∧ j < j' → bind x w j < bind x w' j') ∧
       ∀ w j,
         let e := (p x).toExecution
-        Requirement.Packs W (ℓ x) 32768 (Requirement.live W e (bind x w j)) ∧
-        Requirement.Packs W (ℓ x) 32768 (Requirement.reads W e (bind x w j)) ∧
+        Requirement.StoreMatches W e (ℓ x) (σ x) 32768 (bind x w j) ∧
+        Requirement.PlanMatches W e (ℓ x) (plan x w j) 32768 (bind x w j) ∧
         Requirement.OneBlockEach (ℓ x) (grp x)
           (Requirement.reads W e (bind x w j) \ Requirement.creditedReads W e (ℓ x) (bind x w j)) ∧
-        Set.InjOn (addr x) ↑(Requirement.blocks (ℓ x) (Requirement.creditedReads W e (ℓ x) (bind x w j))) ∧
-        ∀ b ∈ Requirement.blocks (ℓ x) (Requirement.creditedReads W e (ℓ x) (bind x w j)),
-          addr x b ∈ Set.range (layout (RateSketch.SketchPrefix.of x.2 w j) x.1)) →
+        Set.InjOn (addr x) ↑(plan x w j) ∧
+        ∀ b ∈ plan x w j, addr x b ∈ Set.range (layout (RateSketch.SketchPrefix.of x.2 w j) x.1)) →
     let C := 8 * life * caps.runBytes + ⌈(1024 * life * (P * N * 4096) : ℚ) * caps.total / E⌉₊
     let γ := RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768)
     let credit := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (t : ℕ) =>
