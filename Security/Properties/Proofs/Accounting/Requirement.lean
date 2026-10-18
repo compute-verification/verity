@@ -6,7 +6,7 @@ import Properties.Accounting.Requirement
 
 A list the code returns has the members of the definition's set: a hash set's membership is its list's
 (`Std.HashSet.contains_ofList`, `mem_toList`), and a sorted list's is the list's (`List.mem_mergeSort`). A sum over a list
-is the set's because the list repeats no value (`List.sum_toFinset`), and a window's sum is its ticks' by induction on
+is the set's because the list repeats no value (`List.sum_toFinset`), and a window's sum is its steps' by induction on
 its length. `packs` sorts the values by block, first bit and end (`before`, a total preorder, so the sort is ordered:
 `List.pairwise_mergeSort`) and checks neighbours: on the sorted list, neighbours of one block that don't overlap chain
 (`Chained` is transitive), so every pair of one block is apart (`apart_pairwise`), and conversely (`apart_of`).
@@ -29,7 +29,7 @@ theorem sameSet_iff {a b : List ℕ} : sameSet a b = true ↔ a.toFinset = b.toF
   simp only [sameSet, Bool.and_eq_true, List.all_eq_true, contains_iff, Finset.ext_iff, List.mem_toFinset]
   exact ⟨fun h x => ⟨h.1 x, h.2 x⟩, fun h => ⟨fun x => (h x).1, fun x => (h x).2⟩⟩
 
-/-- A window's sum over a list of its steps is the sum over its ticks. -/
+/-- A window's sum over a list of its steps is the sum over its steps' `Finset`. -/
 theorem sum_range' (f : ℕ → ℕ) (start len : ℕ) :
     ((List.range' start len).map f).sum = ∑ t ∈ Finset.Ico start (start + len), f t := by
   induction len generalizing start with
@@ -70,6 +70,14 @@ theorem reads_nodup (t : ℕ) : (i.reads t).Nodup := by
   simp only [Instance.reads]
   exact (ran_nodup i).filter _
 
+theorem topological_iff : i.topological = true ↔ (wiring i).Topological := by
+  simp only [Instance.topological, List.all_eq_true, List.mem_range, decide_eq_true_eq,
+    Accounting.Requirement.Wiring.Topological, wiring, List.mem_toFinset]
+  refine ⟨fun h g v hv => ?_, fun h g _ v hv => h g v hv⟩
+  by_cases hg : g < i.ops.size
+  · exact h g hg v hv
+  · simp [Instance.opsOf, Array.getD, hg] at hv
+
 theorem follows_iff : i.follows = true ↔ (execution i).Follows (wiring i) := by
   simp only [Instance.follows, Bool.and_eq_true, List.all_eq_true, contains_iff, Bool.or_eq_true, decide_eq_true_eq,
     Accounting.Requirement.Execution.Follows, execution, wiring, Finset.subset_iff, List.mem_toFinset,
@@ -95,12 +103,12 @@ theorem readBits_eq (t : ℕ) : i.readBits t = Accounting.Requirement.readBits (
 
 theorem held_eq (start len : ℕ) :
     i.held start len = Accounting.Requirement.held (wiring i) (execution i) ⟨start, len⟩ := by
-  rw [Instance.held, sum_range', Accounting.Requirement.held, Accounting.Window.ticks]
+  rw [Instance.held, sum_range', Accounting.Requirement.held, Accounting.Window.steps]
   exact Finset.sum_congr rfl fun t _ => liveBits_eq i t
 
 theorem read_eq (start len : ℕ) :
     i.read start len = Accounting.Requirement.read (wiring i) (execution i) ⟨start, len⟩ := by
-  rw [Instance.read, sum_range', Accounting.Requirement.read, Accounting.Window.ticks]
+  rw [Instance.read, sum_range', Accounting.Requirement.read, Accounting.Window.steps]
   exact Finset.sum_congr rfl fun t _ => readBits_eq i t
 
 theorem blocks_eq (S : List ℕ) : (i.blocks S).toFinset = Accounting.Requirement.blocks (layout i) S.toFinset := by
@@ -183,8 +191,8 @@ theorem apart_of : ∀ {L : List ℕ}, L.Nodup → L.Pairwise (fun a b => i.befo
       omega
     · exact Or.inl hbl
 
-theorem packs_iff {S : List ℕ} (h : S.Nodup) (B : ℕ) :
-    i.packs B S = true ↔ Accounting.Requirement.Packs (wiring i) (layout i) B S.toFinset := by
+theorem packs_iff {S : List ℕ} (h : S.Nodup) (b : ℕ) :
+    i.packs b S = true ↔ Accounting.Requirement.Packs (wiring i) (layout i) b S.toFinset := by
   have hperm := List.mergeSort_perm S i.before
   have hsort := List.pairwise_mergeSort (before_trans i) (before_total i) S
   have hmem : ∀ x, x ∈ S.mergeSort i.before ↔ x ∈ S := fun x => hperm.mem_iff
@@ -246,15 +254,15 @@ theorem creditedReadBits_eq (t : ℕ) :
   rw [Instance.creditedReadBits, bits_eq i (creditedReads_nodup i t), creditedReads_eq,
     Accounting.Requirement.creditedReadBits]
 
-theorem storeMatches_iff (s : CircuitRequirement.Store) (B t : ℕ) :
-    i.storeMatches s B t = true ↔
-      Accounting.Requirement.StoreMatches (wiring i) (execution i) (layout i) (store s) B t := by
+theorem storeMatches_iff (s : CircuitRequirement.Store) (b t : ℕ) :
+    i.storeMatches s b t = true ↔
+      Accounting.Requirement.StoreMatches (wiring i) (execution i) (layout i) (store s) b t := by
   simp only [Instance.storeMatches, Bool.and_eq_true, sameSet_iff, resident_eq, blocks_eq, packs_iff i (live_nodup i t),
     carries_iff, live_eq, credited_eq, Accounting.Requirement.StoreMatches, and_assoc]
 
-theorem planMatches_iff (plan : List ℕ) (B t : ℕ) :
-    i.planMatches plan B t = true ↔
-      Accounting.Requirement.PlanMatches (wiring i) (execution i) (layout i) plan.toFinset B t := by
+theorem planMatches_iff (plan : List ℕ) (b t : ℕ) :
+    i.planMatches plan b t = true ↔
+      Accounting.Requirement.PlanMatches (wiring i) (execution i) (layout i) plan.toFinset b t := by
   simp only [Instance.planMatches, Bool.and_eq_true, sameSet_iff, blocks_eq, packs_iff i (reads_nodup i t), reads_eq,
     creditedReads_eq, Accounting.Requirement.PlanMatches]
 
@@ -265,14 +273,17 @@ theorem distinct_nodup (l : List ℕ) : (distinct l).Nodup :=
 
 variable (p : CircuitRequirement.Placement) (X : List ℕ)
 
+theorem mem_computed {g : ℕ} : g ∈ i.computed ↔ g ∈ i.ran ∧ g ∉ i.registered ∧ g ∉ i.inputs := by
+  simp only [Instance.computed, List.mem_filter, Bool.and_eq_true, not_contains_iff]
+
 theorem mem_region {lo hi g : ℕ} : g ∈ i.region p X lo hi ↔
-    g ∈ i.ran ∧ g ∉ i.registered ∧ p.leafOf g ∈ X ∧ lo ≤ i.tick p g ∧ i.tick p g < hi := by
-  simp only [Instance.region, List.mem_filter, Bool.and_eq_true, not_contains_iff, contains_iff, decide_eq_true_eq,
+    g ∈ i.ran ∧ g ∉ i.registered ∧ g ∉ i.inputs ∧ p.leafOf g ∈ X ∧ lo ≤ i.tick p g ∧ i.tick p g < hi := by
+  simp only [Instance.region, List.mem_filter, mem_computed, Bool.and_eq_true, contains_iff, decide_eq_true_eq,
     and_assoc]
 
 theorem region_nodup (lo hi : ℕ) : (i.region p X lo hi).Nodup := by
-  simp only [Instance.region]
-  exact (ran_nodup i).filter _
+  simp only [Instance.region, Instance.computed]
+  exact ((ran_nodup i).filter _).filter _
 
 theorem region_eq (lo hi : ℕ) : (i.region p X lo hi).toFinset =
     Accounting.Requirement.region (wiring i) (placement i p) X.toFinset (Set.Ico lo hi) := by
@@ -283,9 +294,9 @@ theorem region_eq (lo hi : ℕ) : (i.region p X lo hi).toFinset =
 theorem stepRegion_eq (start len : ℕ) : (i.stepRegion p X start len).toFinset =
     Accounting.Requirement.stepRegion (wiring i) (placement i p) X.toFinset ⟨start, len⟩ := by
   ext g
-  simp only [Instance.stepRegion, List.mem_toFinset, List.mem_filter, Bool.and_eq_true, not_contains_iff, contains_iff,
+  simp only [Instance.stepRegion, List.mem_toFinset, List.mem_filter, mem_computed, Bool.and_eq_true, contains_iff,
     decide_eq_true_eq, Accounting.Requirement.stepRegion, Finset.mem_filter, wiring, placement, execution,
-    Accounting.Window.ticks, Finset.mem_Ico, and_assoc]
+    Accounting.Window.steps, Finset.mem_Ico, and_assoc]
 
 theorem mem_into {S : List ℕ} {a : ℕ} : a ∈ i.into S ↔ (∃ g ∈ S, a ∈ i.usesOf g) ∧ a ∉ S := by
   simp only [Instance.into, mem_distinct, List.mem_filter, List.mem_flatMap, not_contains_iff]
@@ -316,6 +327,7 @@ end Instance
 
 /-! ## The equalities -/
 
+theorem topological : Topological := topological_iff
 theorem follows : Follows := follows_iff
 theorem live : Live := live_eq
 theorem reads : Reads := reads_eq

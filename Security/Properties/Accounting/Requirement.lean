@@ -24,6 +24,7 @@ open CircuitRequirement
 def wiring (i : Instance) : Accounting.Requirement.Wiring ℕ where
   width := i.widthOf
   registered := i.registered.toFinset
+  inputs := i.inputs.toFinset
   ops g := (i.opsOf g).toFinset
   uses _ g := (i.usesOf g).toFinset
 
@@ -50,6 +51,9 @@ def placement (i : Instance) (p : CircuitRequirement.Placement) : Accounting.Req
   toExecution := execution i
   leaf := p.leafOf
   ticks := p.ticksOf
+
+/-- `topological` decides `Wiring.Topological`. -/
+def Topological : Prop := ∀ i : Instance, i.topological = true ↔ (wiring i).Topological
 
 /-- `follows` decides `Execution.Follows`. -/
 def Follows : Prop := ∀ i : Instance, i.follows = true ↔ (execution i).Follows (wiring i)
@@ -109,14 +113,14 @@ def CreditedReadBits : Prop :=
 
 /-- `storeMatches` decides `StoreMatches`. -/
 def StoreMatches : Prop :=
-  ∀ (i : Instance) (s : CircuitRequirement.Store) (B t : ℕ),
-    i.storeMatches s B t = true ↔ Accounting.Requirement.StoreMatches (wiring i) (execution i) (layout i) (store s) B t
+  ∀ (i : Instance) (s : CircuitRequirement.Store) (b t : ℕ),
+    i.storeMatches s b t = true ↔ Accounting.Requirement.StoreMatches (wiring i) (execution i) (layout i) (store s) b t
 
 /-- `planMatches` decides `PlanMatches`, of the plan's blocks. -/
 def PlanMatches : Prop :=
-  ∀ (i : Instance) (plan : List ℕ) (B t : ℕ),
-    i.planMatches plan B t = true ↔
-      Accounting.Requirement.PlanMatches (wiring i) (execution i) (layout i) plan.toFinset B t
+  ∀ (i : Instance) (plan : List ℕ) (b t : ℕ),
+    i.planMatches plan b t = true ↔
+      Accounting.Requirement.PlanMatches (wiring i) (execution i) (layout i) plan.toFinset b t
 
 /-- `region` is `W`'s region at the ticks `[lo, hi)`. -/
 def Region : Prop :=
@@ -135,8 +139,9 @@ def Ingress : Prop :=
   ∀ (i : Instance) (p : CircuitRequirement.Placement) (X : List ℕ) (lo hi : ℕ),
     i.ingress p X lo hi = Accounting.Requirement.ingress (wiring i) (placement i p) X.toFinset (Set.Ico lo hi)
 
-/-- `credits` is the work, at the pricing `price`, of `W`'s region at the ticks `[lo, hi)` less the marked values:
-`PouwWork.credits` over the placed execution, by `RequirementCredits`. -/
+/-- `credits` is the work, at the pricing `price`, of `W`'s region at the ticks `[lo, hi)` less the marked values. Over
+the wiring on `Fin n` with these values, `RequirementCredits` makes that work what PoUW credits a node that runs it as
+placed (`PouwWork.credits`); this equality is over `ℕ`, and transfers to it only through that restriction. -/
 def Credits : Prop :=
   ∀ (i : Instance) (p : CircuitRequirement.Placement) (price : Array ℕ) (X marked : List ℕ) (lo hi : ℕ),
     i.credits p price X marked lo hi =

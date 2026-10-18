@@ -10,7 +10,7 @@ import CircuitRequirement
 (`tests/test_requirement_difftest.py`) holds it to `verity.ml.circuits.requirement`. Its one function, `requirement`,
 takes an instance, value by value, with the store, a plan per step, the block size and the number of steps:
 
-    {"width": [w], "registered": [v], "ops": [[v]], "uses": [[v]], "step": [s | null], "value": [x],
+    {"width": [w], "registered": [v], "inputs": [v], "ops": [[v]], "uses": [[v]], "step": [s | null], "value": [x],
      "block": [j], "offset": [o], "store": {"registered": N, "written": [[j]], "freed": [[j]], "payload": [hex]},
      "plans": [[j]], "block_bits": B, "steps": T,
      "leaf": [x], "ticks": [[tick]], "price": [π],
@@ -19,12 +19,13 @@ takes an instance, value by value, with the store, a plan per step, the block si
 A step is an engine step; `ticks` gives, device by device, the tick at which it begins each engine step. A payload is
 lowercase hex (Python writes no integer of more than 4,300 digits, a block's payload among them). It refuses an instance
 that isn't one (a field missing or of the wrong kind, a per-value list not of one entry per value, a registered value
-that isn't one, a plan count that isn't `T`) and an execution that doesn't follow its wiring. For each step `t < T` it
-returns the live and read values, their bits, the blocks that hold them with the bits in each, those of them in complete
-blocks (`credited`, `creditedReads`) and their bits, the resident blocks, and whether the store and the plan are `W`'s
-(`storeMatches`, `planMatches`), with `held` and `read` over the `T` steps; and
-for each window, PoUW's over the placed execution: the region at its ticks and at its engine steps, its ingress and its
-credits at the pricing `price`.
+or run input that isn't one, a plan count that isn't `T`), an execution that doesn't follow its wiring, and, when it is
+asked for a window, a placement that doesn't place the execution (`Instance.places`). It returns whether the wiring is
+topological; for each step `t < T` the live and read values, their bits, the blocks that hold them with the bits in
+each, those of them in complete blocks (`credited`, `creditedReads`) and their bits, the resident blocks, and whether
+the store and the plan are `W`'s (`storeMatches`, `planMatches`), with `held` and `read` over the `T` steps; and for each
+window, PoUW's over the placed execution: the region at its ticks and at its engine steps, its ingress and its credits
+at the pricing `price`.
 -/
 
 namespace CircuitRequirement.Difftest
@@ -64,8 +65,10 @@ def decode (j : Json) : Flock.V Instance := do
   let n := width.size
   let registered ← nats (← Flock.J.get j "registered" "input") "registered"
   if registered.any (n ≤ ·) then throw "registered: a value the circuit doesn't have"
+  let inputs ← nats (← Flock.J.get j "inputs" "input") "inputs"
+  if inputs.any (n ≤ ·) then throw "inputs: a value the circuit doesn't have"
   return {
-    width, registered
+    width, registered, inputs
     ops := ← perValue j "ops" n nats
     uses := ← perValue j "uses" n nats
     step := ← perValue j "step" n optNat
@@ -130,7 +133,10 @@ def requirement (j : Json) : Flock.V Json := do
   let price ← perValue j "price" i.width.size Flock.J.asNat
   let windows ← (← Flock.J.arr j "windows" "input").mapM window
   if !i.follows then throw "the execution does not follow its wiring (`Execution.Follows`)"
-  return Json.mkObj [("held", toJson (i.held 0 T)), ("read", toJson (i.read 0 T)),
+  if !windows.isEmpty && !i.places p then
+    throw "the placement doesn't place the execution: a value it produces has no device, or a gate it computes no tick \
+      at its step on its device"
+  return Json.mkObj [("topological", toJson i.topological), ("held", toJson (i.held 0 T)), ("read", toJson (i.read 0 T)),
     ("steps", .arr ((List.range T).map fun t => stepJson i s (plans.getD t []) B t).toArray),
     ("windows", .arr (windows.map (windowJson i p price)))]
 
