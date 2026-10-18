@@ -74,31 +74,51 @@ def sha512(out: str) -> None:
         print(json.dumps(rec))
 
 
+def ands_per_compression(kind: int, rounds: int) -> int:
+    """hm96/PROTOCOL.md section 5's model: a w-bit addition w - 1 ANDs, Ch and Maj w each, XOR free."""
+    if kind in (0, 1):
+        return rounds * (7 * 63 + 2 * 64) + max(0, rounds - 16) * 3 * 63 + 8 * 63
+    if kind == 2:
+        return 64 * (7 * 31 + 2 * 32) + 48 * 3 * 31 + 8 * 31
+    return 7 * 8 * 6 * 31
+
+
 def hashes(out: str) -> None:
-    rows = lines(os.path.join(out, "bench.jsonl"))
-    sass = {}
-    for name in os.listdir(out):
-        if name.startswith("sass-") and name.endswith(".json"):
-            s = json.load(open(os.path.join(out, name)))
-            sass[s["candidate"]] = s
-    n_sm = sms(out)
-    by: dict[tuple[str, str], list[dict]] = {}
-    for r in rows:
+    by: dict[tuple[str, int, str], list[dict]] = {}
+    for r in lines(os.path.join(out, "bench.jsonl")):
         if "candidate" in r:
-            by.setdefault((r["candidate"], r["mode"]), []).append(r)
-    for (cand, mode), rs in sorted(by.items()):
+            by.setdefault((r["candidate"], r["sha_roll"], r["mode"]), []).append(r)
+    for (cand, roll, mode), rs in sorted(by.items()):
+        m = rs[0]
         mhz = med([r["mhz"] for r in rs])
-        rec = {"candidate": cand, "mode": mode, "gpu": gpu_name(out), "sms": n_sm, "reps": len(rs),
+        ands = ands_per_compression(m["cand_kind"], m["cand_r"])
+        rec = {"candidate": cand, "sha_roll": roll, "mode": mode, "gpu": m["gpu"], "sms": m["sms"], "reps": len(rs),
                "gcomp_per_s": med([r["gcomp_per_s"] for r in rs]), "gb_per_s": med([r["gb_per_s"] for r in rs]),
-               "baseline_gcomp_per_s": med([r["base_gcomp_per_s"] for r in rs]), "baseline_gb_per_s": med([r["base_gb_per_s"] for r in rs]),
-               "ratio_to_baseline_gb": med([r["gb_per_s"] / r["base_gb_per_s"] for r in rs]),
-               "mhz": mhz, "base_mhz": med([r["base_mhz"] for r in rs])}
-        s = sass.get(cand)
-        if s and mode == "raw":
-            rec["sass_total_per_block"] = s["total_per_block"]
-            rec["sass_pipes_per_block"] = s["pipes_per_block"]
-            rec["ceiling_gcomp_per_s"] = ceiling(s, n_sm, mhz)
-            rec["instructions_per_byte"] = s["total_per_block"] / s["block_bytes"]
+               "base_gcomp_per_s": med([r["base_gcomp_per_s"] for r in rs]), "base_gb_per_s": med([r["base_gb_per_s"] for r in rs]),
+               "ratio_to_base": med([r["gb_per_s"] / r["base_gb_per_s"] for r in rs]),
+               "mhz": mhz, "base_mhz": med([r["base_mhz"] for r in rs]), "ands_per_compression": ands}
+        if mode == "raw":
+            rec["ands_per_byte"] = ands / m["block_bytes"]
+            p = os.path.join(out, f"sass-{cand}-r{roll}.json")
+            straight = os.path.join(out, f"sass-{cand}-r0.json")
+            s = json.load(open(p)) if os.path.exists(p) else {}
+            s0 = json.load(open(straight)) if os.path.exists(straight) else {}
+            if s:
+                rec["sass_total_per_block"] = s["total_per_block"]
+                rec["sass_pipes_per_block"] = s["pipes_per_block"]
+                rec["ceiling_gcomp_per_s"] = ceiling(s, m["sms"], mhz)
+            if s0:
+                rec["straight_sass_total_per_block"] = s0["total_per_block"]
+                rec["straight_sass_pipes_per_block"] = s0["pipes_per_block"]
+                rec["instructions_per_byte"] = s0["total_per_block"] / m["block_bytes"]
+                rec["ceiling_from_straight_line_gcomp_per_s"] = ceiling(s0, m["sms"], mhz)
+                rec["fraction_of_ceiling"] = rec["gcomp_per_s"] / rec["ceiling_from_straight_line_gcomp_per_s"]
+        else:
+            n = m["leaves"]
+            rec["leaves"] = n
+            rec["leaf_ms"] = med([r["leaf_ms"] for r in rs])
+            rec["ms"] = med([r["ms"] for r in rs])
+            rec["ands_per_byte"] = (m["leaf_comps"] * n + m["node_comps"] * (n - 1)) * ands / (4096 * n)
         print(json.dumps(rec))
 
 
