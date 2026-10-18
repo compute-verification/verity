@@ -1381,7 +1381,7 @@
    "description_bits": null,
    "boundary_width_fraction": 1.0,
    "boundary_bits": 16.0,
-   "crossings": 2,
+   "crossings": 8,
    "flops_per_token_per_param": 24.0,
    "data_tokens_per_token": 1.0,
    "decode_flops_per_param": 0.0,
@@ -1390,7 +1390,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A about 1 at small scale; concentrates many gates of work on few updated weights. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Unique updated weights per FLOP fall by the loop count (about 2x in MoR); same weights reused. Traits at r = 4 loops: n_active counts unique parameters, each used 4x per token (24 flops per parameter, uses per thread 8). Looping cuts state reads per FLOP by r but not activation crossings, which scale with the loops.",
+  "notes": "m_A about 1 at small scale; concentrates many gates of work on few updated weights. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Unique updated weights per FLOP fall by the loop count (about 2x in MoR); same weights reused. Traits at r = 4 loops: n_active counts unique parameters, each used 4x per token (24 flops per parameter, uses per thread 8). Looping cuts state reads per FLOP by r but not activation crossings, which scale with the loops. Crossings 8: activations cross each slice boundary once per loop, forward and backward, so looping amortizes state reads but not boundary traffic.",
   "scaling": [
    {
     "evidence": [
@@ -5359,7 +5359,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "Every variant is found by backprop. Confidence low.",
+  "notes": "Every variant is found by backprop. Confidence low. No multiplier for the restricted problem: the reachable loss is capped far above frontier loss (m = 0 for redoing a frontier pretrain); 0.05 is a parameter-equivalent of that cap.",
   "scaling": [
    {
     "evidence": [
@@ -5376,14 +5376,7 @@
     "note": "A random 512-wide transformer with only its embeddings trained equals a fully trained 0.7M model; tokens unmatched. BatchNorm-only reaches 32% top-5 on ImageNet."
    }
   ],
-  "multiplier": {
-   "value": 0.05,
-   "trend": "shrinks-with-scale",
-   "evidence": [
-    "zhong-2024-random-transformers/1"
-   ],
-   "metric": "parameter-equivalent of the reachable loss (derived)"
-  },
+  "multiplier": null,
   "convention": "as-published"
  },
  {
