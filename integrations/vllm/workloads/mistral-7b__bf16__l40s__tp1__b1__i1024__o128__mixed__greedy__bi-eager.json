@@ -1,8 +1,15 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "unsloth/mistral-7b-v0.3",
  "case": "MISTRAL7B",
- "tokenizer_revision": "9ea1b83f5ced5663c5fa89c300fe59f9bdcd2b10",
+ "engine": {
+  "revision": "9ea1b83f5ced5663c5fa89c300fe59f9bdcd2b10",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 2048,
+   "max_model_len": 1152
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,10 +35,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 128,
- "engine_args_required": {
-  "max_num_batched_tokens": 2048,
-  "max_model_len": 1152
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 60b945759e27a63c (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   1024

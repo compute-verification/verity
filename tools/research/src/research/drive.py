@@ -27,8 +27,10 @@ import functools
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,6 +76,8 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests")
 #: what a verdict says when it passed with `--defer`'s steps still running
 DEFERRED = "every step but the deferred ones passed"
+#: a Lake package's lock, which a train's Lean check may regenerate (`merge.LOCK`)
+LOCK = "lean-audit.json"
 #: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
 SIGTERM_RC = 143
 #: pre-warms running at once: each is a whole check in a slot, and a train waits behind every one (18 Oct 00:43Z: four took the
@@ -389,8 +393,11 @@ class Driver:
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs,
-                 evidence: Callable[[Path, list[str]], list[Path]] = evidence, defer: frozenset[str] = frozenset()):
+                 evidence: Callable[[Path, list[str]], list[Path]] = evidence, defer: frozenset[str] = frozenset(),
+                 regenerate_locks: bool = False):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
+        #: commit the locks a train's Lean check regenerated onto it as it lands (CI-64: Daniel through top, 18 Oct)
+        self.regenerate_locks = regenerate_locks
         #: steps a train lands without (Daniel through top, 17 Oct, CI-30's interim): they run on after the landing, and one
         #: that fails reverts it.  The Lean check's steps are never deferred.
         defer = {x for x in defer if not x.startswith("lean")}
@@ -579,39 +586,82 @@ class Driver:
                 q.log(f"research queue drive: would land {prs} ({m.commit[:12]}, check {v.attempt})"
                       + (f" onto the moved `main` {main[:12]}" if moved else "") + (" [shadow]" if q.shadow else ""))
                 return m
-            _git(self.repo, "checkout", "-q", "-B", "main", "refs/remotes/origin/main")
-            if moved:
-                gained = _out(self.repo, "log", "--first-parent", "--format=%s", f"{base}..{main}").splitlines()
-                body = (f"Merge {m.commit[:12]} ({' + '.join(x.head[:8] for x in members)})\n\n{prs}\n\n"
-                        f"Checked: {v.attempt} (full check of {m.commit[:12]} = main {base[:12]} + "
-                        f"{' + '.join(f'#{x.pr}@{x.head[:9]}' for x in members)}: passed)\n"
-                        f"Skipped-check: main {base[:12]}..{main[:12]} ({'; '.join(gained)}) shares no files with {prs}\n")
-                r = _git(self.repo, "merge", "--no-ff", "--no-edit", "-m", body, m.commit, check=False, env=IDENTITY)
-            else:
-                r = _git(self.repo, "merge", "-q", "--ff-only", m.commit, check=False)
-            if r.returncode:
-                _git(self.repo, "merge", "--abort", check=False)
-                _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
-                self.refuse(drive, f"land:{m.commit}", f"{prs} passed ({v.attempt}) but doesn't merge onto `main` {main[:12]}: "
-                                                        f"{(r.stderr or r.stdout).strip()[-200:]}")
-                return None
-            p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", "main:refs/heads/main", ok=None)
-            if p.returncode:
-                _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
-                q.log(f"research queue drive: pushing `main` was refused ({p.stderr.strip()[-200:]}); the next tick tries again")
-                return None
-            tip = _out(self.repo, "rev-parse", "HEAD")
-            q.log(f"research queue drive: landed {prs} on `main` at {tip[:12]} (check {v.attempt})")
-            if v.why.startswith(DEFERRED):
-                drive.setdefault("deferred", {})[tip] = {"ids": v.attempt.split(), "base": main, "prs": prs}
-            from .merge import _sweep_after, caught_up
-
-            with authed(q.auth):
-                caught_up(self.repo, "origin", "check", since=main, log=q.log,
-                          runs={x.commit: v.attempt for x in members} | {tip: v.attempt})
-                _sweep_after(self.repo, "main", "origin")
-            return m
+            scratch = Path(tempfile.mkdtemp(prefix="drive-locks-"))
+            try:
+                return self._land(drive, m, members, prs, v, base, main, moved, scratch)
+            finally:
+                shutil.rmtree(scratch, ignore_errors=True)
         return None
+
+    def _locks(self, v: Verdict, scratch: Path) -> tuple[str, dict[str, Path]]:
+        """(the check that regenerated them, {package: its regenerated lock fetched under ``scratch``}) of a passed train, when
+        drive commits regenerated locks; ("", {}) otherwise."""
+        if not self.regenerate_locks:
+            return "", {}
+        from .merge import regenerated_records
+
+        for rid in v.attempt.split():
+            try:
+                recs = regenerated_records(self.q.store, rid, scratch / rid)
+            except Exception as e:  # noqa: BLE001  (the train still lands; its locks stay as its PRs left them)
+                self.q.log(f"research queue drive: {rid}'s regenerated locks couldn't be read ({type(e).__name__}: {e})")
+                continue
+            if recs:
+                return rid, {pkg: path for pkg, (_, path) in recs.items() if path is not None}
+        return "", {}
+
+    def _land(self, drive: dict, m: Member, members: list[Member], prs: str, v: Verdict, base: str, main: str,
+              moved: list[str], scratch: Path) -> Member | None:
+        """Land ``m``'s train (`land`), with the locks its check regenerated committed on top (`regenerate_locks`)."""
+        q = self.q
+        rid, locks = self._locks(v, scratch)
+        if locks and moved:
+            q.log(f"research queue drive: {prs} passed ({v.attempt}) by regenerating {', '.join(sorted(locks))}'s locks on "
+                  f"{base[:12]}, but `main` moved to {main[:12]}: the next sync rebuilds `{q.branch}` for a new check")
+            return None
+        _git(self.repo, "checkout", "-q", "-B", "main", "refs/remotes/origin/main")
+        if moved:
+            gained = _out(self.repo, "log", "--first-parent", "--format=%s", f"{base}..{main}").splitlines()
+            body = (f"Merge {m.commit[:12]} ({' + '.join(x.head[:8] for x in members)})\n\n{prs}\n\n"
+                    f"Checked: {v.attempt} (full check of {m.commit[:12]} = main {base[:12]} + "
+                    f"{' + '.join(f'#{x.pr}@{x.head[:9]}' for x in members)}: passed)\n"
+                    f"Skipped-check: main {base[:12]}..{main[:12]} ({'; '.join(gained)}) shares no files with {prs}\n")
+            r = _git(self.repo, "merge", "--no-ff", "--no-edit", "-m", body, m.commit, check=False, env=IDENTITY)
+        else:
+            r = _git(self.repo, "merge", "-q", "--ff-only", m.commit, check=False)
+        if r.returncode:
+            _git(self.repo, "merge", "--abort", check=False)
+            _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
+            self.refuse(drive, f"land:{m.commit}", f"{prs} passed ({v.attempt}) but doesn't merge onto `main` {main[:12]}: "
+                                                    f"{(r.stderr or r.stdout).strip()[-200:]}")
+            return None
+        if locks:
+            files = []
+            for pkg, src in sorted(locks.items()):
+                dst = f"{pkg}/{LOCK}" if pkg not in ("", ".") else LOCK
+                shutil.copyfile(src, self.repo / dst)
+                files.append(dst)
+            _git(self.repo, "add", "--", *files)
+            _git(self.repo, "commit", "-q", "-m", f"Lock records regenerated for {prs}\n\nChecked: {rid} (the Lean check of "
+                                                  f"{m.commit[:12]}, passed by regenerating them)\nRegenerated: {', '.join(files)}\n",
+                 env=IDENTITY)
+        p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", "main:refs/heads/main", ok=None)
+        if p.returncode:
+            _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
+            q.log(f"research queue drive: pushing `main` was refused ({p.stderr.strip()[-200:]}); the next tick tries again")
+            return None
+        tip = _out(self.repo, "rev-parse", "HEAD")
+        q.log(f"research queue drive: landed {prs} on `main` at {tip[:12]} (check {v.attempt})"
+              + (f", with the locks it regenerated for {', '.join(sorted(locks))}" if locks else ""))
+        if v.why.startswith(DEFERRED):
+            drive.setdefault("deferred", {})[tip] = {"ids": v.attempt.split(), "base": main, "prs": prs}
+        from .merge import _sweep_after, caught_up
+
+        with authed(q.auth):
+            caught_up(self.repo, "origin", "check", since=main, log=q.log,
+                      runs={x.commit: v.attempt for x in members} | {tip: v.attempt})
+            _sweep_after(self.repo, "main", "origin")
+        return m
 
     # -- refusals
 
@@ -673,7 +723,10 @@ class Driver:
             for st in failed_steps(d):
                 step = st.get("step") or ""
                 if step.startswith("lean") and step != "lean-suites":
-                    rules.append(("Lean sources", lambda f: f.endswith(LEAN_INPUTS)))
+                    if pkgs := self._failed_packages(d, st, tip):
+                        rules.append((f"Lean package {', '.join(sorted(pkgs))}", lambda f, pkgs=pkgs: under(f, sorted(pkgs))))
+                    else:
+                        rules.append(("Lean sources", lambda f: f.endswith(LEAN_INPUTS)))
                 elif step == "circuit-check":
                     rules.append(("circuit-check's inputs", lambda f: forces_cold([f])))
         out, why = [], set()
@@ -682,6 +735,24 @@ class Driver:
                 out.append(x)
                 why |= t
         return out, ", ".join(sorted(why))
+
+    def _failed_packages(self, run_dir: Path, step: dict, tip: str) -> set[str]:
+        """The Lake packages a failed Lean step's log reports `FAIL` for, with each package its manifest requires by path, at
+        ``tip``; empty when the log names none (18 Oct: a stale record in verity/core/primitives/requirement, #2386's, failed two
+        trains, and the fallback on every Lean source ejected #2341, #2370 and #2371 with it)."""
+        try:
+            log = (run_dir / Path(step.get("log") or "").name).read_text(errors="replace") if step.get("log") else ""
+        except OSError:
+            return set()
+        out = set()
+        for pkg in set(LEAN_AUDIT_RE.findall(log)):
+            out.add(pkg)
+            r = _git(self.repo, "show", f"{tip}:{pkg}/lake-manifest.json", check=False)
+            with contextlib.suppress(ValueError, AttributeError):
+                for dep in json.loads(r.stdout).get("packages", []) if not r.returncode else []:
+                    if dep.get("type") == "path":
+                        out.add(os.path.normpath(os.path.join(pkg, dep.get("dir", ""))))
+        return {p for p in out if not p.startswith("..")}
 
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
         """Act on a failed train with no lander (16 Oct, Daniel through top): eject every member whose change touches what the
@@ -695,6 +766,16 @@ class Driver:
         if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}):
             self.resend(drive, m, prs, v)
             return
+        # a member a lower train's running or passed check covers is left to that check: ejecting it would cancel that train,
+        # and were it the cause, that check fails too
+        main = _out(self.repo, "rev-parse", "origin/main")
+        floor = max((k + 1 for k, x in enumerate(members[:-1]) if x.commit in drive["launched"]
+                     and self.verdict(x.commit, main, drive).state in ("running", "passed")), default=0)
+        if hit and all(members.index(x) < floor for x in hit):
+            self.q.log(f"research queue drive: {m.commit[:12]} failed on {what}, which only members the check of "
+                       f"{members[floor - 1].commit[:12]} covers change: waiting on that check")
+            return
+        hit = [x for x in hit if members.index(x) >= floor]
         ejected, why = [], what
         for x in hit:
             reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which #{x.pr} changes"
