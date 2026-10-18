@@ -308,6 +308,81 @@ def node_line(mem: dict, *, host_bytes: int) -> dict:
                                                                   "lost_blocks_rebuild_per_pass")}}
 
 
+TIME_HELD = "held over time"
+"""The paced session's third form (`paced_line`): the blocks in node memory at each instant, averaged over time."""
+
+
+def pace_of(spec: str, pass_ms: float) -> dict:
+    """`K:T_MS:DRAWS:WINDOWS` as a session's pacing: groups of K passes, each a `Session` window of its own whose coin
+    is a live coin, WINDOWS credited stretches of T_MS and a closing one after them, `groups` groups a stretch (at
+    `pass_ms` a pass) and `draws` = DRAWS/groups openings a group, so a stretch draws as an unpaced T_MS window would."""
+    k, t_ms, draws_t, windows = (float(x) if i == 1 else int(x) for i, x in enumerate(spec.split(":")))
+    groups = max(1, round(t_ms / (k * pass_ms)))
+    return {"k": k, "t_ms": t_ms, "draws_t": draws_t, "windows": windows, "groups": groups,
+            "draws": math.ceil(draws_t / groups), "pass_ms": pass_ms}
+
+
+def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks: int, rebuild_per_ns: float,
+               chip_bytes: int, block_bytes: int, node_bytes: int) -> dict:
+    """A paced session's memory line over each stretch of `groups` groups (all but the closing stretch), on the
+    verifier's clock, in two forms.
+
+    Group g's coin left at s_g (its `released_ns`) and its seeds take it, so its reads come after s_g, and before its
+    last root's arrival, by the chain.  So L_g = max(its last root's arrival, s_(g+1)) − s_g holds every read of g and
+    the gaps around them, and a block read in passes p < p' lies absent between them for at most the L of every group
+    from p's to p''s.  Snapshot (`AVERAGE`): the mean bytes of each kind a pass read, less `wrong`/P (`wrong`, the
+    session's pooled wrong receipts, `audit.pooled`), the stretch's rebuilds over its passes (X_r·Σ/P) and the chip.
+
+    Held over time (`TIME_HELD`): at each instant a block is in node memory, on chip (at most S_chip blocks at once), or
+    absent.  An absent stretch of a block ends in a rebuild before its next correct read, or runs on through wrong
+    receipts.  One that ends in a rebuild, with no wrong read inside it, spans at most two groups: 2·L_max, against
+    rebuilds ≤ X_r·(Σ + 2·L_max).  A group whose passes all read the block wrong adds its L_g, which those n_g wrong
+    reads pay for, (L_(g−1) + L_g)/n_g each, which also covers the group before it for a stretch still absent past the
+    stretch's end.  The session's `wrong` receipts are spread over the groups at those rates, highest first, at most
+    N a pass.  So the time a block is absent, summed over blocks, is at most 2·L_max·X_r·(Σ + 2·L_max) plus that fill.
+    It is averaged over the stretch, from the first group's end for the first stretch (before its reads a block may
+    never have been there) and through the closing stretch's coin for the last, whose reads back it.  Both forms take
+    the side link as carrying no block (Identity)."""
+    b, N, chip = block_bytes, blocks, chip_bytes / block_bytes
+    s, n = [w["released_ns"] for w in seen], [w["passes"] for w in seen]
+    ends = [max(w["arrivals_ns"][-1] if w["arrivals_ns"] else s[g], s[g + 1] if g + 1 < len(s) else 0)
+            for g, w in enumerate(seen)]
+    L = [e - x for e, x in zip(ends, s)]
+    v = [((L[g - 1] if g else 0) + L[g]) / n[g] for g in range(len(seen))]
+    held = [x["average"]["held"] for x in mem["windows"]]
+    stretches = []
+    for m in range(len(seen) // groups - 1):
+        lo, hi = m * groups, (m + 1) * groups
+        start, end = ends[0] if m == 0 else s[lo], s[hi]
+        span, P = end - start, sum(n[lo:hi])
+        l_max = max(L[g] for g in range(max(0, lo - 1), hi + 1))
+        rebuilds = rebuild_per_ns * (span + 2 * l_max)
+        left, fill = wrong, 0.0
+        for g in sorted(range(lo, hi + 1), key=lambda g: v[g], reverse=True):
+            took = min(left, n[g] * N)
+            fill, left = fill + took * v[g], left - took
+            if left <= 0:
+                break
+        mean = {k: sum(h[k] * c for h, c in zip(held[lo:hi], n[lo:hi])) / P for k in ("weights", "hbm", "host")}
+        lost = {AVERAGE: wrong / P + rebuild_per_ns * span / P + chip,
+                TIME_HELD: chip + (2 * l_max * rebuilds + fill) / span}
+        stretches.append({"stretch": m, "groups": [lo, hi], "span_ns": span, "passes": P, "l_max_ns": l_max,
+                          "l_mean_ns": sum(L[lo:hi]) / (hi - lo), "rebuild_blocks": rebuilds,
+                          "rebuild_absent_blocks": 2 * l_max * rebuilds / span, "wrong_absent_blocks": fill / span,
+                          "held": mean, **{form: {"lost_blocks": x, "credited": {
+                              k: max(0.0, mean[k] - x * b) for k in ("weights", "hbm")}} for form, x in lost.items()}})
+
+    def line(form: str) -> dict:
+        worst = min(stretches, key=lambda x: x[form]["credited"]["weights"])
+        w = worst[form]["credited"]["weights"]
+        return {"form": form, "stretch": worst["stretch"], "lost_blocks": worst[form]["lost_blocks"],
+                "weights_bytes": w, "share": w / node_bytes, "hbm_bytes": worst[form]["credited"]["hbm"],
+                "hbm_share": worst[form]["credited"]["hbm"] / node_bytes}
+
+    return {"groups": groups, "wrong": wrong, "chip_blocks": chip, "node_bytes": node_bytes, "stretches": stretches,
+            "snapshot": line(AVERAGE), "time": line(TIME_HELD)}
+
+
 class RealClock:
     def now(self) -> int:
         return time.monotonic_ns()
@@ -426,14 +501,20 @@ class Verifier:
         return timing.deadline(int(pass_ns), gap_ns=int(gap_ns), down_ns=r // 2 + 1, up_ns=r - r // 2 + 1,
                                jitter_ns=self.jitter_ns)
 
-    def session(self, k: int, allowance_ns: int, not_before_ns: int | None) -> dict:
-        W, reg = self.W, self.registration
-        params = audit.Params(reg.blocks, allowance_ns, W, self.samples, self.delta, window_ns=self.T, codec=reg.codec,
+    def session(self, k: int, allowance_ns: int, not_before_ns: int | None, pace: dict | None = None) -> dict:
+        """One session.  With `pace` (`pace_of`), its windows are groups of `pace["k"]` passes: a group's boundary
+        leaves once it has k − 1 roots (the pass in flight is its last), or for k = 1 once the group before has its
+        root (the first group's at once), so the honest prover never waits on a coin; and at the latest at max(its
+        coin + (k − 1)·A, the group before's deadline), so its roots are due within about k allowances of its coin."""
+        reg, K = self.registration, None if pace is None else pace["k"]
+        W = self.W if pace is None else pace["groups"] * (pace["windows"] + 1)
+        samples, window_ns = (self.samples, self.T) if pace is None else (pace["draws"], 1)
+        params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime)
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         session = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
-                        "commitment": session.commitment.to_json()})
+                        "commitment": session.commitment.to_json(), "pace": K})
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -469,8 +550,27 @@ class Verifier:
             draws_at[t] = self.clock.now()
             self.conn.send({"type": "draws", "t": t, "draws": [list(d) for d in out]})
 
+        def bound() -> None:
+            nonlocal sent
+            coin = session.boundary()
+            sent += 1
+            self.conn.send({"type": "coin", "coin": wire.coin_json(coin)} if coin else {"type": "close"})
+
+        def due(t: int) -> bool:
+            ws = session.windows
+            return len(ws[t].roots) >= K - 1 and (K > 1 or t == 0 or len(ws[t - 1].roots) >= 1)
+
         while failure is None and len(verdicts) < W:
-            if sent < W:
+            if K is not None and sent < W and due(sent):
+                if self.clock.now() > session.windows[sent].released_ns:
+                    bound()
+                    continue
+                until = session.windows[sent].released_ns + 1
+            elif sent < W and K is not None:
+                before = session.deadline(sent - 1) if sent else None
+                until = max(session.windows[sent].released_ns + (K - 1) * allowance_ns, before or 0,
+                            session.windows[sent].released_ns + 1)
+            elif sent < W:
                 until = session.windows[sent].released_ns + self.T
             elif drawn < W:
                 until = session.deadline(W - 1) + 1
@@ -479,9 +579,7 @@ class Verifier:
             item = self.clock.wait(self.inbox, until)
             if item is None:
                 if sent < W:
-                    coin = session.boundary()
-                    sent += 1
-                    self.conn.send({"type": "coin", "coin": wire.coin_json(coin)} if coin else {"type": "close"})
+                    bound()
                 else:
                     close(drawn)
                     drawn += 1
@@ -585,7 +683,7 @@ class Verifier:
             if head["k"] == k:
                 break
         out = {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
-               "samples": self.samples, "delta": self.delta, "window_ns": self.T, "windows": W,
+               "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "appended": session.extent - reg.blocks, "released": session.released,
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
@@ -604,6 +702,13 @@ class Verifier:
             out["record"] = {"public": record.public(), "profile": record.profile(), "end_ns": record.end_ns}
             out["end_ns"] = record.end_ns
             out["ledger"] = self.ledgers(record, arrivals, [w.plans for w in session.windows])
+            if pace is not None:
+                rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
+                out["ledger"]["paced"] = paced_line(
+                    out["ledger"]["memory"], out["windows_seen"], groups=pace["groups"], wrong=audit.pooled(record)[0],
+                    blocks=reg.blocks, rebuild_per_ns=rebuild.squarings_per_s / record.codec.encode_squarings / 1e9,
+                    chip_bytes=timing.CHIP_BYTES, block_bytes=record.block_bytes,
+                    node_bytes=self.hbm_bytes + self.host_bytes)
         return out
 
     @staticmethod
@@ -742,6 +847,11 @@ def main() -> int:
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
+    ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS",
+                    help="pace each session's passes, one spec a session (`pace_of`; replaces --sessions, --windows, "
+                         "--window-ms and --samples): groups of K passes under a live coin each")
+    ap.add_argument("--pace-pass-ms", type=float, default=17.0,
+                    help="the pass the paced sessions' groups a stretch are counted at")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and exit")
@@ -806,15 +916,20 @@ def main() -> int:
         save_registry(a.registry, registry)
 
     record()
+    paces = [pace_of(x, a.pace_pass_ms) for x in a.paced] if a.paced else None
     try:
-        for k in range(a.sessions):
-            r = v.session(k, allowance, not_before)
+        for k in range(len(paces) if paces else a.sessions):
+            r = v.session(k, allowance, not_before, paces[k] if paces else None)
             results.append(r)
             not_before = r.get("end_ns", v.clock.now())
             lg, pub = r.get("ledger", {}).get("spec", {}), r.get("record", {}).get("public", {})
             mem = r.get("ledger", {}).get("memory", {})
+            if (pl := r.get("ledger", {}).get("paced")) is not None:
+                print(f"verifier: session {k} paced {json.dumps(r['pace'])}: snapshot {pl['snapshot']['share']:.4%} "
+                      f"time {pl['time']['share']:.4%} gamma horizon {lg.get('horizon', {}).get('gamma')}", flush=True)
+            passes = [w["passes"] for w in r["windows_seen"]]
             print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
-                  f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')} "
+                  f"passes={passes if r.get('pace') is None else sum(passes)} gamma={lg.get('gamma')} "
                   f"appended={r['appended']} released={r['released']} post_seed={pub.get('post_seed')} "
                   f"memory share={mem.get('share')} residual={mem.get('residual')} epsilon={mem.get('epsilon')} "
                   f"average share={mem.get('average', {}).get('share')} "

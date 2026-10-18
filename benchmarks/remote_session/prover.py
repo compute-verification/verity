@@ -47,6 +47,7 @@ import argparse
 import gc
 import hashlib
 import json
+import math
 import os
 import queue
 import random
@@ -382,7 +383,7 @@ class ProverSide:
         return out
 
     def session(self, head: dict, mode: str, fraction: float) -> dict:
-        k, W = head["k"], head["windows"]
+        k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
         commitment = wire.commitment_of(head["commitment"])
         if commitment.registration != self.registration.digest or commitment.count != 2 * W:
             raise ValueError("the session's coins are not for this registration")
@@ -410,7 +411,7 @@ class ProverSide:
         if self.defer_openings:
             self.open_enabled.clear()
         self.conn.send({"type": "armed", "k": k})
-        head, _, _ = self.expect("coin")
+        coin0, _, first = self.expect("coin")
         t = 0
 
         def take(coin) -> bytes:
@@ -440,8 +441,8 @@ class ProverSide:
             return _Pass(t, i, backend.launch(i, after, plan), start, step=n, plan=plan,
                          upto=(len(trace.appends), len(trace.released)))
 
-        backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
-        inflight = deque([launch(0, 0, None, clock())])
+        backend.begin_window(take(wire.coin_of(coin0["coin"])), self.registration.digest)
+        inflight = deque([launch(0, 0, None, first if cap < math.inf else clock())])
         pending: deque = deque()
         passes, last, nxt, stopping, ended, discarded = [], None, 1, False, None, 0
 
@@ -474,8 +475,20 @@ class ProverSide:
                 backend.encode_append(a.first, bytes.fromhex(reply["coin"]))
             return None
 
-        while inflight:
-            if not stopping and len(inflight) < 2:
+        while inflight or (cap < math.inf and not stopping):
+            if not inflight:
+                msg, _, stamp = pending.popleft() if pending else self._boundary()
+                if msg["type"] != "coin":
+                    ended, stopping = (msg, True) if msg["type"] == "end" else (ended, True)
+                    break
+                t += 1
+                backend.begin_window(take(wire.coin_of(msg["coin"])), None)
+                # From its coin's arrival: the next coin can come before this process reads its clock, and a pass
+                # under this coin stays this group's whatever comes after the coin.
+                inflight.append(launch(t, 0, last.ticket if last else None, stamp))
+                nxt = 1
+                continue
+            if not stopping and len(inflight) < 2 and nxt < cap:
                 inflight.append(launch(t, nxt, inflight[-1].ticket, None))
                 nxt += 1
             x = inflight.popleft()
@@ -521,7 +534,8 @@ class ProverSide:
                 continue
             t += 1
             backend.begin_window(take(wire.coin_of(msg["coin"])), None)
-            inflight.append(launch(t, 0, last.ticket if last else None, None if inflight else clock()))
+            inflight.append(launch(t, 0, last.ticket if last else None,
+                                   stamp if cap < math.inf else None if inflight else clock()))
             nxt = 1
         if mode == "kvdrop":
             dropped = self.dropped = np.array(sorted(trace.appended), dtype=np.int64)
@@ -585,6 +599,15 @@ class ProverSide:
                 raise wire.Closed(item[0].get("why", "bye"))
             if kind in BOUNDARIES:
                 pending.append(item)
+
+    def _boundary(self):
+        """The next boundary message, waited for."""
+        while True:
+            item = self.inbox.get()
+            if item[0]["type"] in ("lost", "bye"):
+                raise wire.Closed(item[0].get("why", "bye"))
+            if item[0]["type"] in BOUNDARIES:
+                return item
 
 
 def main() -> int:
