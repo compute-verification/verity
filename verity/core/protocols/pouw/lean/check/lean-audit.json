@@ -15,12 +15,26 @@
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.Inputs": {
-   "imports": ["CoreProtocol.Protocol", "CoreProtocol.Profile", "Flock.Hash", "PouwCheck.Json", "PouwCheck.Tile", "PouwWindow.Shape"],
+   "imports": [
+    "CoreProtocol.Protocol",
+    "CoreProtocol.Profile",
+    "Flock.Hash",
+    "PouwCheck.Json",
+    "PouwCheck.Tile",
+    "PouwWindow.Shape"
+   ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.Check": {
-   "imports": ["CoreProtocol.Protocol", "PouwWindow.Grid", "PouwWindow.Draw", "PouwWindow.Public", "PouwWindow.Shape", "PouwCheck.Inputs"],
+   "imports": [
+    "CoreProtocol.Protocol",
+    "PouwWindow.Grid",
+    "PouwWindow.Draw",
+    "PouwWindow.Public",
+    "PouwWindow.Shape",
+    "PouwCheck.Inputs"
+   ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
