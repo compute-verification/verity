@@ -6,7 +6,8 @@ import Proofs.Flock.Claims.Complete.Zk.Replay
 
 `repPZk_split`: a masked rep (`repPZk`) that returns, run in the pure session from the bodies `l`, ran its zerocheck,
 lincheck and ring switch in closed form at the replies' coins (`zerocheckPZk_go`, `lincheckPZk_go`, `ringSwitchP_go`),
-ending at `tPiop` with `|l| + piopSends` bodies sent; then its masked Ligerito from there, on the ring switch's `T` and
+its rank check between them keeping the transcript and the sends (`rankCheckP_go`), ending at `tPiop` with
+`|l| + piopSends` bodies sent; then its masked Ligerito from there, on the ring switch's `T` and
 batched basis; then, on the transcript the Ligerito left, the verifier's own replay of its rounds, level 0's lane
 constraints of the Ligerito's record, and its inner proof on every constraint, which returned the rep's inner proof
 and its final transcript and bodies. The rep's proof is the stages' outputs.
@@ -78,10 +79,10 @@ theorem liftV_bind_ok {α β : Type} {v : V α} {f : α → TMW PS β} {t : Tran
 theorem repPZk_split (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
-    (nonce : ℕ → ℕ → UInt64) (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg) {P : Zk.ZkProof}
-    {t' : Transcript} {l' : Array Claims.Msg}
+    (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (t : Transcript)
+    (l : Array Claims.Msg) {P : Zk.ZkProof} {t' : Transcript} {l' : Array Claims.Msg}
     (h : ((repPZk (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
-      nonce).run t).go l = (.ok (P, t'), l')) :
+      nonce prior words).run t).go l = (.ok (P, t'), l')) :
     ∃ (full : Array F128) (lL : Array Claims.Msg) (lg : LigeritoProof) (zl : Zk.Level0Msgs) (rec : Zk.L0Rec)
       (tI : Transcript) (lI : Array Claims.Msg) (rp : Zk.Replayed) (x : Transcript) (lgc : Array (String × Zk.Lin)),
       st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0) (skipWeights (zcR resp st tr l.size).z)
@@ -119,6 +120,10 @@ theorem repPZk_split (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray)
     (Zc.out st.m (Zc.coinsAt resp l.size) tr) full _ l₁ hfold
   rw [bind_go hl] at h
   dsimp only at h
+  rw [StateT.run_bind] at h
+  obtain ⟨⟨u, t₃⟩, l₃', hk, h⟩ := JsonRT.go_bind_ok h
+  obtain ⟨ht₃, hl₃'⟩ := rankCheckP_go hk
+  subst t₃ l₃'
   obtain ⟨l₃, hl₃, hrs⟩ := ringSwitchP_go resp tr (abcClaims st.m st.kLog (Zc.out st.m (Zc.coinsAt resp l.size) tr)
     (Lc.out st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) (Lc.coinsAt resp l₁.size (st.fold.kLog - 6))) ++
       extras) (by simp [abcClaims]) _ l₂

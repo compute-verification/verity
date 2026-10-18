@@ -65,16 +65,16 @@ theorem push_getElem!_size {α : Type} [Inhabited α] (xs : Array α) (x : α) :
 
 /-- **Rep `rep`'s run**: the rep, on the table's trace `tr`, its packed table, the masked level-0 commitment `cm`, the
 extra claims `e`, and rep `rep`'s pads committed as `ic`, returns a proof with `q`, from the empty transcript at its
-domain, ending at the rounds `rs`. -/
+domain, ending at the rounds `rs`, its rank check at some earlier claim points and mask words. -/
 def RepRunZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup)
     (v : Schedule × ℕ) (tr : Trace) (cm : Commit) (e : Array Claim) (tape : TapeZk) (rep : ℕ) (rs : Array Round)
     (q : Zk.ZkProof → Prop) : Prop :=
-  ∃ p ic l t' l', innerCommitP (Hashes.ofSha512 h : Hashes V)
+  ∃ p ic l t' l' prior ws, innerCommitP (Hashes.ofSha512 h : Hashes V)
       (padsOf tape 0 rep (Zk.PadLayout.new st.m st.kLog v.1.k0)) (tape.innerSalt 0 rep) = .ok ic ∧ q p ∧
     rs = t'.rounds ∧
     ((repPZk (asksS resp) (Hashes.ofSha512 h) st v.1 v.2 rep (spec.domain spec.tables[0]! rep).toUTF8 tr
       (packed tr st.m) cm e (padsOf tape 0 rep (Zk.PadLayout.new st.m st.kLog v.1.k0)) ic (tape.extra 0)
-      (tape.lanePad 0) (tape.salt 0 rep) (tape.nonce 0 rep)).run
+      (tape.lanePad 0) (tape.salt 0 rep) (tape.nonce 0 rep) prior ws).run
         (Transcript.init #[] (spec.domain spec.tables[0]! rep).toUTF8)).go l = (.ok (p, t'), l')
 
 /-- **The one-table masked session, rep by rep**: `sessionPZk_facts` and `sessionPZk_files` on the same streams, the
@@ -82,16 +82,17 @@ def RepRunZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : S
 theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
     (hown : Json.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
-    (trs : Array Trace) (tape : TapeZk)
+    (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hC : ∀ v, Zk.schedule st.m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 g extra lanePad
         salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64)
-    (hR : ∀ v, Zk.schedule st.m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+    (hR : ∀ v, Zk.schedule st.m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
-        lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
+        lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
     {r : String × Array ByteArray} {bodies : Array Claims.Msg}
-    (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] trs tape).go #[] = (.ok r, bodies)) :
+    (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] words trs tape).go #[] =
+      (.ok r, bodies)) :
     ∃ v cm e streams, Zk.schedule st.m = .ok v ∧
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2
         (packed trs[0]! st.m) (tape.extra 0) (tape.lanePad 0) (tape.salt 0 0 0) = .ok cm ∧
@@ -179,8 +180,8 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
     rw [Still.go (Still.of_pureS (innerCommitP_pureS _ _ _)) e0] at e3
     obtain ⟨⟨pf, tr'⟩, l₂, e2, e⟩ := go_bind_ok e3
     have hex' : st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras := by simpa [ptsOf] using hex
-    have hok := Ret.go (hR v hv _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
-    obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
+    have hok := Ret.go (hR v hv _ _ _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
+    obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
     simp only [go_pure, Prod.mk.injEq, Except.ok.injEq] at e
     obtain ⟨rfl, rfl⟩ := e
     have hsz : l.size = 1 + (ss.toList.flatMap Array.toList).length := by
@@ -200,7 +201,7 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
       rcases Nat.lt_succ_iff_lt_or_eq.1 hj with hj | rfl
       · rw [push_getElem!_lt _ _ (by omega), push_getElem!_lt _ _ (by omega)]
         exact h₅ extras hex' j hj
-      · refine ⟨pf, ic, l, tr', l₂, hic, ?_, ?_, by simpa using e2⟩
+      · refine ⟨pf, ic, l, tr', l₂, priorOf st ss j, words[0]!, hic, ?_, ?_, by simpa using e2⟩
         · rw [← h₂, push_getElem!_size]
           simp
         · rw [← h₁, push_getElem!_size]
@@ -234,7 +235,7 @@ theorem RunZk.walk (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 
   unfold sessionSZk at hrun
   rw [hst, htabs] at hrun
   obtain ⟨v, cm, e, streams, hv, hcm, he, hrec, hrb, -, hss, -, hrs, ⟨bs, -, hrecs⟩, hreps⟩ :=
-    sessionPZk_walk H _ ht hct hown hc (Setup.ofCircuit st) _ _ hC hRk hrun
+    sessionPZk_walk H _ ht hct hown hc (Setup.ofCircuit st) _ _ _ hC hRk hrun
   rw [show o.resp 0 = (Claims.coinSeq o.r 0).bytes from rfl, ptsOf_coin] at hrec he
   have hpts : (pointsOf o.spec (Claims.coinSeq o.r 0)).size = o.spec.points := by simp [pointsOf]
   have hpm : ∀ p ∈ pointsOf o.spec (Claims.coinSeq o.r 0), p.size = o.spec.mPts := by
@@ -270,12 +271,12 @@ theorem RunZk.walk (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 
     rcases (show r = 0 ∨ r = 1 by omega) with rfl | rfl <;> simp
   refine ⟨st, v, cm, e, #[s0, s1], hotabs, hsch0, rfl, fun rs hrs x hx => ?_, hstream, hext0, h25, fun r hr => ?_⟩
   · exact Recs.bytes hrecs x (List.mem_flatMap.2 ⟨rs, Array.mem_toList_iff.2 hrs, Array.mem_toList_iff.2 hx⟩)
-  · obtain ⟨p, ic, l, t', l', hic, hb, hrr, hp⟩ := hreps r hr
+  · obtain ⟨p, ic, l, t', l', prior, ws, hic, hb, hrr, hp⟩ := hreps r hr
     have hR' := hR o.toCaseZk st v cm e hst hv (by rw [hst]; exact hcm) he r ic hic
-      (o.spec.domain o.spec.tables[0]! r).toUTF8
+      (o.spec.domain o.spec.tables[0]! r).toUTF8 prior ws
     rw [hst] at hR'
     have hps := Ret.go hR' hp
-    refine ⟨p, ic, l, t', l', hic, ?_, hrr, by rw [hst]; exact hp⟩
+    refine ⟨p, ic, l, t', l', prior, ws, hic, ?_, hrr, by rw [hst]; exact hp⟩
     have hdec' : Zk.decode (shapeZk o.tabs[0]! (o.sch 0) (o.extras 0).size) (o.bytes 0 r) = .ok p := by
       rw [show o.bytes 0 r = o.proofs[r]! by simp [RunZk.bytes], hb, hsch0, hext0,
         show o.tabs[0]! = Setup.ofCircuit st by rw [hotabs]; rfl]

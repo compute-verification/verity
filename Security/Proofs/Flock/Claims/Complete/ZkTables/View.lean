@@ -375,8 +375,9 @@ theorem view (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr
     (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
     (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
     (hin : RepIn H st tr ω i v cm pts e rep ic)
-    (hrep : rep < 2) (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Claims.Msg)
-    (hgo : (repT H r st tr ω i d v cm e rep ic).go l = (.ok (p, t'), l')) (R : Array Round)
+    (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ) (l : Array Claims.Msg) (p : Zk.ZkProof)
+    (t' : Transcript) (l' : Array Claims.Msg)
+    (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) (R : Array Round)
     (hAg : Agrees R t'.rounds 0) (q : Zk.Replayed × Transcript)
     (hq : (Zk.replayWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st)
         (Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0) p.proof p.inner.root).run
@@ -405,11 +406,11 @@ theorem view (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr
   set lay := Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0 with hlay
   set pads := padsOf ω i rep lay with hpads
   unfold repT at hgo
-  obtain ⟨rs, bs, hrs, -, hrec⟩ := JsonRT.repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ l p t' l'
-    hgo
+  obtain ⟨rs, bs, hrs, -, hrec⟩ := JsonRT.repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ l p t'
+    l' hgo
   obtain ⟨full, lL, lg, zl, rec, tI, lI, rp, x, lgc, hfold, hlL, hlig, hre, hlgc, hinn, hP, hzl⟩ :=
     repPZk_split resp (Claims.hOf H) (Setup.ofCircuit st) v.1 v.2 rep d tr (packed tr (Setup.ofCircuit st).m) cm e
-      pads ic (ω.extra i) (ω.lanePad i) (ω.salt i rep) (ω.nonce i rep) hm14 _ l hgo
+      pads ic (ω.extra i) (ω.lanePad i) (ω.salt i rep) (ω.nonce i rep) prior ws hm14 _ l hgo
   have hpre1 : Prefix (tPiop resp (Setup.ofCircuit st) tr l.size lay pads.h (Setup.ofCircuit st).digest (flat cm.cap)
       ic.root full e (Transcript.init #[] d)).rounds tI.rounds :=
     rec_pre (JsonRT.ligeritoPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _) _ _ _ _ hlig

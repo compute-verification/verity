@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
 import Proofs.Flock.Claims.Complete.Zk.Discharge
 import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Bridge.Custody
 
 /-!
 # The masked scope at several tables
@@ -9,6 +10,8 @@ import Proofs.Flock.Claims.Scope.Fit
   every session links at two points (`setupTables_points`).
 * `Case.tables`: at a good case the session has `1 ≤ |tables| ≤ 64`, the spec names one table per statement, and
   every table is of `25 ≤ m ≤ 35` and commits with `hm96-sha512/v1`.
+* `maskWords_ge_of_setup`, `Case.maskWords`: every table a masked session sets up has `N = 2^D` mask words with
+  `D ≥ 10`, so no in-scope masked table has fewer than `1024`.
 -/
 
 open Flock FlockDeploy
@@ -148,5 +151,21 @@ theorem Case.tables (c : Case H rel) :
     exact hm35
   · obtain ⟨d, hd, -⟩ := hall j hj
     exact HiddenExec.setupOne_tagsAt_hm96 hl hd
+
+/-- **Every table a masked session sets up has `N = 2^D ≥ 1024` mask words** (`MaskRank.maskWords_ge`): `verify --zk`'s
+setup passes every table's `Zk.shapeOk` (`setup_shapeOk`), which refuses a mask slot of fewer than `576` words. -/
+theorem maskWords_ge_of_setup {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (h : setupOf true x = some (s, spec, sts)) :
+    ∀ st ∈ sts, ∃ D, 10 ≤ D ∧ (Composed.maskWordsOf st).length = 2 ^ D := by
+  obtain ⟨hi, hs⟩ := setupOf_some h
+  have hr : readOf true x = some s.read := by unfold readOf; rw [hi]; rfl
+  have hz := Claims.Bridge.Custody.setup_shapeOk hs (readOf_zk hr)
+  intro st hst
+  obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hst
+  exact MaskRank.maskWords_ge (Readable.array_forM_ok hz j hj)
+
+/-- **Every table of a good case has `N = 2^D ≥ 1024` mask words.** -/
+theorem Case.maskWords (c : Case H rel) : ∀ st ∈ c.sts, ∃ D, 10 ≤ D ∧ (Composed.maskWordsOf st).length = 2 ^ D :=
+  maskWords_ge_of_setup c.setup
 
 end FlockComplete.ZkTables

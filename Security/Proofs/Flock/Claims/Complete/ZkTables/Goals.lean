@@ -59,14 +59,15 @@ theorem Run.jsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.
   have hrun := o.ran
   unfold sessionS at hrun
   obtain ⟨rbs, streams, hrbs, hrec, hrb, hss, hrs, bs, hbs, hrecs⟩ :=
-    sessionPZk_factsJ H _ hct hown hcz (tabsOf o.sts) _ _
+    sessionPZk_factsJ H _ hct hown hcz (tabsOf o.sts) _ _ _
       (fun st hst' => by
         obtain ⟨st', hst'', rfl⟩ := Array.mem_map.1 hst'
         exact (hP st' hst'').1)
       (fun st hst' => by
         obtain ⟨st', hst'', rfl⟩ := Array.mem_map.1 hst'
         exact (hP st' hst'').2) hst hrun
-  have hpf := sessionPZk_proofs (Claims.hOf H) _ o.spec (tabsOf o.sts) (traces o.sts o.w) o.ω #[] _ _ o.ran
+  have hpf := sessionPZk_proofs (Claims.hOf H) _ o.spec (tabsOf o.sts) (MaskRank.masksOf o.sts) (traces o.sts o.w) o.ω
+    #[] _ _ o.ran
   dsimp only at hrec
   rw [ptsOf_coin] at hrec
   rw [tabsOf_size, ← hsz] at hrbs
@@ -304,7 +305,7 @@ theorem completeJ (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Rea
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hFJ : FilesJ H rel)
-    (hOp : OpenJ H rel) : Claims.Flock.Complete H (deployZk rel) :=
-  complete H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (recordJ_of S h64 hSJ hFJ) hOp
+    (hOp : OpenJ H rel) (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk rel) :=
+  complete H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (recordJ_of S h64 hSJ hFJ) hOp hMR
 
 end FlockComplete.ZkTables

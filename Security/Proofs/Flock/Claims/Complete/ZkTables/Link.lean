@@ -46,7 +46,8 @@ theorem sessionS_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg
       dsimp only at h
       rw [Array.size_empty] at h
       refine ⟨schs, cms, rfl, hc, ?_⟩
-      obtain ⟨bs, -, hl⟩ := afterLinkPZk_sim H resp spec (tabsOf sts) (traces sts w) ω schs
+      obtain ⟨bs, -, hl⟩ := afterLinkPZk_sim H resp spec (tabsOf sts) (MaskRank.masksOf sts) (traces sts w) ω
+        schs
         (tablesP (tabsOf sts) (traces sts w)) cms (coinOf (resp 0)) (#[].push (linkBody
           (cms.map fun c => flat c.cap).toList ((tabsOf sts).map fun _ => ByteArray.empty).toList))
       rw [h] at hl

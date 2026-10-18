@@ -33,14 +33,15 @@ open Flock FlockDeploy
 premises. -/
 theorem complete_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hR : JsonRT.RepShapedZk H rel)
-    (hPR : JsonRT.ProverRunsZk H rel) (hX : RsExtrasZk H rel) (hLg : LigeritoZk H rel) (hIn : Inner H rel) :
+    (hPR : JsonRT.ProverRunsZk H rel) (hX : RsExtrasZk H rel) (hLg : LigeritoZk H rel) (hIn : Inner H rel)
+    (hMR : MaskRank.MaskRankBound) :
     CompleteWith H (deployZk rel) honestPZk (δcZk H) :=
   have hS : JsonRT.StmtOkZk H rel := JsonRT.stmtOkZk S
   have hP : JsonRT.ProverOkZk H rel := JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H rel)
   have hD : RepDecodesZk H rel := JsonRT.repDecodesZk_goal S h64 hS hP hR
   have hRp : Replay H rel := replay_goal S h64 hS hP hR
   have hRS : RingSwitchZk H rel := ringSwitchZk_goal S h64 hS hP hR hX
-  complete_zk_of_goals H rel
+  complete_zk_of_goals H rel hMR
     { session := JsonRT.sessionRunsZk_goal S hS hPR
       sends := sendCountZk_goal H rel
       linkFirst := linkFirstZk_goal H h64 rel
@@ -76,8 +77,8 @@ theorem complete_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
 error, `δcZk H`, from named premises. -/
 theorem complete_zk_relation (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
-    (hLg : LigeritoZk H Readable.relation) (hIn : Inner H Readable.relation) :
+    (hLg : LigeritoZk H Readable.relation) (hIn : Inner H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     CompleteWith H (deployZk Readable.relation) honestPZk (δcZk H) := fun h64 =>
-  complete_zk H Readable.relation S h64 hR hPR (rsExtrasZk H) hLg hIn h64
+  complete_zk H Readable.relation S h64 hR hPR (rsExtrasZk H) hLg hIn hMR h64
 
 end FlockComplete
