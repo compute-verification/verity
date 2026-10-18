@@ -54,6 +54,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import numpy as np
+
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, memory_map, receipts as rb
 from verity_vllm import config
 from verity_vllm.store import memory_map as store_map
@@ -98,9 +100,9 @@ class Serving:
         self._events: list[tuple] = []
         self.map = self.store.record_memory_map(
             backend.path, registration.digest, lifetime, lambda change: self._events.append(("line", change)),
-            lambda first, digests, payloads: self._events.append(("append", first, digests, payloads)))
+            lambda first, slots, digests, payloads: self._events.append(("append", first, slots, digests, payloads)))
         self.step, self.steps, self.first = -1, 0, None
-        self.live = set(range(registration.blocks))
+        self.live = np.ones(registration.blocks, bool)
         self.appends: list[audit.Append] = []
         self.released: list[int] = []
         self.appended: list[int] = []
@@ -130,8 +132,8 @@ class Serving:
         self.map.complete()
         for kind, *ev in self._events:
             if kind == "append":
-                first, digests, payloads = ev
-                a = self.backend.append(payloads, [self.backend.randbytes(rb.SALT_BYTES) for _ in payloads])
+                first, slots, digests, payloads = ev
+                a = self.backend.append(payloads, self.backend.append_salts(first, len(payloads)), slots)
                 if a.first != first or a.digests != digests:
                     raise AssertionError("the store's append is not its memory map's: a completed block's bytes "
                                          "changed between its digest and its append")
@@ -145,8 +147,10 @@ class Serving:
                 raise AssertionError(f"step {change.step}'s writes from {change.first} are not the blocks appended there")
             gone = [j for f, c in change.released for j in range(f, f + c)]
             self.released.extend(gone)
-            self.live.difference_update(gone)
-            self.live.update(range(change.first, change.first + change.count))
+            if len(self.live) < change.first + change.count:
+                self.live = np.concatenate([self.live, np.zeros(change.first + change.count - len(self.live), bool)])
+            self.live[gone] = False
+            self.live[change.first:change.first + change.count] = True
         self._events.clear()
         self.step, self.steps = s, self.steps + 1
         return s
@@ -170,13 +174,9 @@ class Serving:
                 "encodes": [[m, w, a.first, a.count] for m, w, a in zip(self.made, landed, self.appends)]}
 
     def plan(self) -> rb.Plan:
-        out: list[list[int]] = []
-        for j in sorted(self.live):
-            if out and out[-1][0] + out[-1][1] == j:
-                out[-1][1] += 1
-            else:
-                out.append([j, 1])
-        return rb.Plan(tuple((f, c) for f, c in out), self.map.extent)
+        edge = np.diff(np.concatenate([[False], self.live, [False]]).astype(np.int8))
+        starts, ends = np.flatnonzero(edge == 1), np.flatnonzero(edge == -1)
+        return rb.Plan.from_array(np.stack([starts, ends - starts], axis=1).astype(np.int64), self.map.extent)
 
 
 class StoreBackend:
@@ -223,13 +223,21 @@ class StoreBackend:
         self.trace = Serving(self, registration, lifetime)
         return self.trace
 
-    def append(self, payloads, salts) -> audit.Append:
+    def append_salts(self, first: int, count: int) -> list[bytes]:
+        """The payload salts of an append's blocks ``first`` …, hiding each digest in its tree."""
+        return [self.randbytes(rb.SALT_BYTES) for _ in range(count)]
+
+    def append(self, payloads, salts, slots=()) -> audit.Append:
         return self.audit.append(payloads, salts)
 
     def encode_append(self, first: int, coin: bytes) -> None:
         self.audit.encode(first, coin)
         if self.trace is not None:
             self.trace.encoded(first)
+
+    def holds(self, slot: int, j: int, digest: bytes) -> bool:
+        """Whether ``slot`` holds bytes of the payload of digest d_j (`agreement`'s check of an appended block)."""
+        return rcodec.digest(self.store.payload(slot)) == digest
 
     def calibrate(self) -> dict:
         return {"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": self.read_bytes_per_s}
@@ -331,6 +339,21 @@ class KvDevice:
             raw = e.cpu().numpy().tobytes()
             out.extend(raw[i * rcodec.BLOCK_BYTES:(i + 1) * rcodec.BLOCK_BYTES] for i in range(len(part)))
         return out
+
+    def encode_in_place(self, data: Any, first: int, offsets: Sequence[int] | None = None) -> None:
+        """Blocks ``first`` … held contiguously on the GPU at ``data`` (a uint8 tensor of whole blocks), encoded where
+        they are: under the seed's key, or each under its bound offset."""
+        torch, w, k = self.torch, self.codec.field.block_words, self.codec.rounds
+        stream, n = torch.cuda.current_stream().cuda_stream, data.numel() // rcodec.BLOCK_BYTES
+        if not data.is_contiguous() or data.numel() != n * rcodec.BLOCK_BYTES:
+            raise ValueError("an in-place encode is of whole blocks held contiguously")
+        for u in range(0, n, self.CHUNK):
+            ptr, c = data.data_ptr() + u * rcodec.BLOCK_BYTES, min(self.CHUNK, n - u)
+            if offsets is None:
+                self.lib.call("kv_encode", ptr, ptr, c * w, (first + u) * w, k, 0, stream)
+            else:
+                b = self.paged.offsets(torch, list(offsets[u:u + c]), self.field)
+                self.lib.call("kv_encode_bound", ptr, ptr, c * w, (first + u) * w, k, b.data_ptr(), 0, stream)
 
 
 class DeviceEncoded(audit.Store):
@@ -472,15 +495,17 @@ class CommitSession:
 
     ~~~text
     engine_args  before the build: one GPU, synchronous scheduling, no prefix caching, bf16 KV (refusing anything else),
-                 the KV pool at ``kv_pages`` pages
+                 the KV pool at ``kv_pages`` pages (None: the engine's own, at the row's gpu_memory_utilization)
     target       before the build: the row's target declares synchronous scheduling (its Program's LAG 0)
     install      before the build: ``binder.Binder(store, passes=False)`` on vLLM's model runner, block pool and
                  scheduler, registering weight tensors up to ``weight_blocks`` blocks and the KV pool
     check        after the build: the engine core in this process, scheduling synchronous, the KV cache bf16, the pool
                  registered
     begin        before the Commit's first instrumented run: the session on its own thread, registered and its first
-                 window's coin in before the run's first step; the store encoded by kv.cu at ``kv_lib`` (`KvDevice`) or,
-                 without it, on the CPU
+                 window's coin in before the run's first step.  Its backend is ``backend_of(session, path)``'s (the
+                 store read where the engine holds it, `in_place.InPlaceBackend.for_commit`, kv.cu at ``kv_lib``
+                 encoding it in place) or, without one, a host mirror encoded by kv.cu at ``kv_lib`` (`KvDevice`) or
+                 on the CPU
     (the run)    each of its engine steps through the returned `Lockstep`: a pass's step while the session lasts, so the
                  memory map, recorded against the registration's digest beside the Commit (``out``), is of the run's
                  steps from its first, and its KV payloads the run's K and V; the steps after the session unaudited
@@ -493,9 +518,11 @@ class CommitSession:
     first K blocks appended) and the session audits one run: with more than one pair, the later instrumented runs are
     committed and unaudited.  The control arm is never audited."""
 
-    def __init__(self, verifier: str, *, plan: str = "serve", kv_pages: int = 32, weight_blocks: int | None = None,
-                 kv_lib: str | None = None, out: str | Path | None = None, node: str | None = None,
-                 codec: rcodec.Codec = rcodec.DEFAULT, log: Callable[[str], None] = print) -> None:
+    def __init__(self, verifier: str, *, plan: str = "serve", kv_pages: int | None = 32,
+                 weight_blocks: int | None = None, kv_lib: str | None = None,
+                 backend_of: Callable[[CommitSession, Path | None], StoreBackend] | None = None,
+                 out: str | Path | None = None, node: str | None = None, codec: rcodec.Codec = rcodec.DEFAULT,
+                 log: Callable[[str], None] = print) -> None:
         address(verifier)
         node = f"verity-vllm/{socket.gethostname()}" if node is None else node
         if not 1 <= len(node.encode()) <= audit.NODE_BYTES:
@@ -503,10 +530,16 @@ class CommitSession:
         if "," in plan:
             raise ValueError("a store serves one session: --remote-plan is one mode")
         session_module("prover").parse_plan(plan)
-        if kv_pages < 1:
-            raise ValueError("the session's KV pool is at least a page")
-        self.verifier, self.plan, self.kv_pages, self.weight_blocks = verifier, plan, int(kv_pages), weight_blocks
-        self.kv_lib, self.out, self.node, self.codec, self.log = kv_lib, None if out is None else Path(out), node, codec, log
+        if kv_pages is not None and kv_pages < 1:
+            raise ValueError("the session's KV pool is at least a page (None: the engine's own)")
+        if backend_of is not None and kv_lib is None:
+            raise ValueError("a store read in place is encoded in place by kv.cu: give kv_lib with backend_of")
+        if backend_of is None and kv_pages is None:
+            raise ValueError("a host mirror copies every block of the store: give it a KV pool of kv_pages pages, or "
+                             "read the store in place (backend_of)")
+        self.verifier, self.plan, self.kv_pages, self.weight_blocks = verifier, plan, kv_pages, weight_blocks
+        self.kv_lib, self.backend_of = kv_lib, backend_of
+        self.out, self.node, self.codec, self.log = None if out is None else Path(out), node, codec, log
         self.store, self.binder = Store(), None
         self.lockstep: Lockstep | None = None
         self.backend: StoreBackend | None = None
@@ -525,8 +558,8 @@ class CommitSession:
             why.append("prefix caching (a prefix hit brings a page back with its KV)")
         if why:
             raise SystemExit("--remote-verifier refuses " + "; ".join(why))
-        return {**engine_args, "async_scheduling": False, "enable_prefix_caching": False,
-                "num_gpu_blocks_override": self.kv_pages}
+        pool = {} if self.kv_pages is None else {"num_gpu_blocks_override": self.kv_pages}
+        return {**engine_args, "async_scheduling": False, "enable_prefix_caching": False, **pool}
 
     def target(self, target: Any) -> None:
         """Before the build: the row's target declares synchronous scheduling, so its Program is the one the engine
@@ -565,8 +598,11 @@ class CommitSession:
             raise RuntimeError("a store serves one session: the Commit's session audits one run")
         self.lockstep = Lockstep()
         path = None if self.out is None else self.out / "memory_map.jsonl"
-        device = None if self.kv_lib is None else KvDevice(self.kv_lib, self.codec)
-        self.backend = StoreBackend(self.store, self.lockstep, path=path, device=device)
+        if self.backend_of is not None:
+            self.backend = self.backend_of(self, path)
+        else:
+            device = None if self.kv_lib is None else KvDevice(self.kv_lib, self.codec)
+            self.backend = StoreBackend(self.store, self.lockstep, path=path, device=device)
         self._thread = threading.Thread(target=self._session, name="remote-session", daemon=True)
         self._thread.start()
         self.lockstep.ready()
@@ -580,13 +616,15 @@ class CommitSession:
         except Exception as e:  # noqa: BLE001  -- recorded: a session that fails is rejected, and the Commit's verdict still written
             error = f"{type(e).__name__}: {e}"
         try:
+            getattr(backend, "close", lambda: None)()
             trace = backend.trace
             self.record = {
                 "schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan,
                 "accepted": error is None and bool(result.get("accepted")), "error": error, "prover": result,
                 "store": self.binder.stats() if self.binder is not None else None, "layout": backend.layout(),
                 "kv_pages": self.kv_pages, "weight_blocks": self.weight_blocks,
-                "encode": "kv.cu" if backend.device is not None else "cpu", "gates": backend.gates,
+                "encode": ("kv.cu in place" if self.backend_of else "kv.cu") if backend.device is not None else "cpu",
+                "gates": backend.gates,
                 "memory_map": None if trace is None else {
                     "path": None if backend.path is None else str(backend.path),
                     "registration": backend.registration.digest.hex(), "first_step": trace.first, "steps": trace.steps,
@@ -624,14 +662,23 @@ def agreement(backend: StoreBackend) -> dict[str, Any]:
             digests.update((w.index, w.digest) for w in st.written)
         return r, digests
 
+    def resident(r: memory_map.Replay) -> np.ndarray:
+        out = np.zeros(max(r.extent, len(trace.live)), bool)
+        out[:r.header.blocks] = True
+        out[[x for x in r.moved if x < r.header.blocks]] = False
+        out[[j for j in r.moved.values() if j is not None]] = True
+        return out
+
     r, digests = replay()
     n = r.header.blocks
-    live = {j for x in range(n) if (j := r.holds(x)) is not None} == trace.live
+    mine = np.zeros(max(r.extent, len(trace.live)), bool)
+    mine[:len(trace.live)] = trace.live
+    live = bool(np.array_equal(resident(r), mine))
     appends = sorted(digests) == list(range(n, r.extent)) and trace.digests[:r.extent - n] == [digests[j] for j in sorted(digests)]
     store.memory_map.flush()
     r, digests = replay()
-    held = [x for x in range(n) if (r.holds(x) or 0) >= n]
-    wrong = [x for x in held if rcodec.digest(store.payload(x)) != digests[r.holds(x)]]
+    held = sorted(x for x, j in r.moved.items() if j is not None and j >= n)
+    wrong = [x for x in held if not backend.holds(x, r.holds(x), digests[r.holds(x)])]
     return {"live_agrees": live, "appends_agree": appends, "recorded": r.extent - n,
             "unrecorded": len(trace.digests) - (r.extent - n), "held_appended": len(held), "held_wrong": wrong[:16],
             "agrees": live and appends and not wrong}

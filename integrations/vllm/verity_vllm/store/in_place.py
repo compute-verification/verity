@@ -1,0 +1,460 @@
+"""`InPlaceBackend`: the remote bandwidth session's prover over vLLM's own tensors, the weights and the KV pool where
+the binder registered them, with no copy of the store (`benchmarks/remote_session/inplace.py`'s `InPlace`, from
+`Region.of_backing` over each registered region's backing, and session.cu).
+
+~~~text
+hello         the payload tree on the GPU from the tensors' bytes (`rs_payload_leaves`, block j's salt
+              `device.store_salt(key, PAYLOAD_LABEL, j)`), its levels kept on the host for the openings
+registration  every registered block encoded in place by kv.cu under the seed's key (`KvDevice.encode_in_place`),
+              checked against `codec.encode` at each region's first block and the store's last
+append        the step's completed blocks at their slots (`InPlace.append`), committed by their digests under the
+              device's salts; once the coin is back, their slots' bytes (still the payloads appended, or the session
+              fails) are encoded in place under b_j(c_a) and the memory map records their writes (deferred residency)
+pass          run when launched, after the engine step it follows (`step_of`), over the tensors as they are: each
+              plan position read through the map, except a block the step's forward rewrote, read from the copy taken
+              before the forward (`Store.on_write`), and a block withheld (servedrop), read as zeros
+opening       its subtree recomputed from the store under the same map, a block rewritten since the pass read from the
+              earliest copy taken at or after the pass's step; a subtree that still differs from the pass's raises
+              `Stale` (a block rewritten after its receipt with no copy)
+~~~
+
+A registered tensor stays where it is for the session (`Binder.moved`, checked before every pass: a tensor moved
+fails the session by name).  The tensors hold the codec's encoding from registration on, so the engine's kernels read
+encoded weights and KV: until they decode what they read (a per-layer transient for the weights, paged.cu's decoded
+windows for attention), the model's output under a session is not the model's.  A re-key would append a block whose
+payload the map reads from its slot, which holds its encoding: the in-place session refuses it, so its lifetime cap
+must outlast its windows.
+"""
+from __future__ import annotations
+
+import bisect
+import os
+import time
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from typing import Any
+
+import numpy as np
+
+from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, receipts as rb
+from verity_vllm import config
+from verity_vllm.store.interface import Stale
+from verity_vllm.store.registry import Store
+from verity_vllm.store.remote import KvDevice, StoreBackend, session_module
+
+BLOCK = rcodec.BLOCK_BYTES
+ROW = 64
+CHUNK = 1 << 16
+STEP_BITS = 24
+
+
+@dataclass
+class Saved:
+    """The bytes of the pool's blocks at ``slots`` (ascending) before step ``step``'s forward wrote them: ``host``,
+    and while it is the newest, ``device``."""
+
+    step: int
+    slots: np.ndarray
+    host: np.ndarray
+    device: Any = None
+
+
+class Appends:
+    """The session's appends as `audit.Store` keeps them, without the store's blocks: each committed by its digests
+    (`audit.append_tree`), its payloads pending until its coin arrives (``coins``)."""
+
+    def __init__(self, registration: audit.Registration) -> None:
+        self.registration = registration
+        self.appends: list[audit.Append] = []
+        self.firsts: list[int] = []
+        self.pending: dict[int, tuple[bytes, ...]] = {}
+        self.coins: dict[int, bytes] = {}
+        self.head: bytes | None = None
+        self.extent = registration.blocks
+
+    def append(self, payloads: Sequence[bytes], salts: Sequence[bytes]) -> audit.Append:
+        reg, first = self.registration, self.extent
+        digests = tuple(rcodec.digest(m) for m in payloads)
+        a = audit.Append(first, digests, tuple(salts), audit.append_tree(reg.digest, first, digests, salts))
+        self.appends.append(a)
+        self.firsts.append(first)
+        self.extent += a.count
+        self.pending[first] = tuple(payloads)
+        self.head = audit.append_head(self.head, a.first, a.count, a.root)
+        return a
+
+    def of(self, j: int) -> audit.Append:
+        return self.appends[bisect.bisect_right(self.firsts, j) - 1]
+
+
+class InPlaceBackend(StoreBackend):
+    """`StoreBackend` over the store's tensors in place (the module's docstring): ``backings`` are the registered
+    regions' backings in store order (`Store.backing`), ``session_lib`` session.cu's build and ``kv_lib`` kv.cu's at
+    the codec's field and mask, ``moved()`` the registered tensors no longer where they were (`Binder.moved`)."""
+
+    def __init__(self, store: Store, engine: Callable[[int], None], backings: Sequence[Any], *, session_lib: str,
+                 kv_lib: str, codec: rcodec.Codec = rcodec.DEFAULT, moved: Callable[[], list[str]] = list,
+                 path: Any = None, randbytes: Callable[[int], bytes] = os.urandom, kept_from: int = 6) -> None:
+        import torch
+
+        super().__init__(store, engine, randbytes=randbytes, path=path, device=KvDevice(kv_lib, codec))
+        session_module("prover")
+        self.dev = session_module("device", config.REMOTE_SESSION)
+        ipm = session_module("inplace", config.REMOTE_SESSION)
+        self.torch, self.codec, self.moved = torch, codec, moved
+        self.lib = self.dev.Lib(str(session_lib), torch)
+        self.key = randbytes(32)
+        lay = store.layout()
+        if len(backings) != len(lay.regions):
+            raise ValueError(f"a backing a region: {len(backings)} for {len(lay.regions)} regions")
+        self.backings = list(backings)
+        self.regions = [ipm.Region.of_backing(r.first, b) for r, b in zip(lay.regions, backings)]
+        backend = self
+
+        class Mapped(ipm.InPlace):
+            def map(self, plan):
+                return backend._patched(*super().map(plan))
+
+            def tree(self, ys, c0, real, width):
+                return backend._subtree(super().tree(ys, c0, real, width), c0, width)
+
+        self.ip = Mapped(torch, self.lib, self.regions, self.key, kept_from=kept_from)
+        self.cuda = self.ip.device
+        self._firsts = np.array([r.first for r in self.regions], np.int64)
+        self._table = np.array([[r.addr, r.plane_blocks, r.planes, r.page_stride, r.plane_stride]
+                                for r in self.regions], np.int64)
+        self.zero = torch.zeros(BLOCK, dtype=torch.uint8, device=self.cuda)
+        self.app_slots: list[int] = []
+        self._app_dev = None
+        self._dropped_dev = None
+        self.saved: list[Saved] = []
+        self._windex: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
+        self._mode: tuple | None = None
+        self._stale: list[int] = []
+        self._held: list[Any] = []
+        self.pass_ns: list[int] = []
+        self.stats = {"payload_s": 0.0, "encode_s": 0.0, "saved_blocks": 0, "pass_patched": 0, "open_patched": 0,
+                      "appended": 0, "encoded_appends": 0}
+        store.on_write = self._before_write
+
+    # --- the tensors' blocks ------------------------------------------------------------------------------------
+
+    def _addresses(self, slots: np.ndarray) -> np.ndarray:
+        """Each registered block's device address (`Region.address`)."""
+        slots = np.asarray(slots, np.int64)
+        r = np.searchsorted(self._firsts, slots, side="right") - 1
+        addr, pb, planes, ps, ks = self._table[r].T
+        x = slots - self._firsts[r]
+        q = np.where(pb > 0, x // np.maximum(pb, 1), 0)
+        paged = addr + q // planes * ps + q % planes * ks + BLOCK * (x % np.maximum(pb, 1))
+        return np.where(pb > 0, paged, addr + BLOCK * x)
+
+    def _gather(self, slots: np.ndarray):
+        """The blocks at ``slots`` as they are, an (n, 4096) uint8 tensor on the device (`rs_gather64`)."""
+        torch, n = self.torch, len(slots)
+        out = torch.empty((max(n, 1) * BLOCK // ROW, 8), dtype=torch.int64, device=self.cuda)
+        if n:
+            rows = (self._addresses(slots)[:, None] + np.arange(0, BLOCK, ROW)).reshape(-1)
+            self.lib.call("rs_gather64", torch.from_numpy(rows).to(self.cuda).data_ptr(), len(rows), out.data_ptr())
+        return out.view(torch.uint8).view(-1, BLOCK)[:n]
+
+    def _kv_rows(self, slots: np.ndarray):
+        """The KV blocks at ``slots`` as rows of their storages: [(storage's (blocks, 4096) view, rows, which)]."""
+        torch, addr, out = self.torch, self._addresses(slots), []
+        r = np.searchsorted(self._firsts, slots, side="right") - 1
+        for key in sorted({id(self.backings[i].flat) for i in set(r.tolist())}):
+            which = np.flatnonzero(np.array([id(self.backings[i].flat) == key for i in r]))
+            flat = self.backings[r[which[0]]].flat
+            off = addr[which] - flat.data_ptr()
+            if getattr(self.backings[r[which[0]]], "physical", None) is None or (off % BLOCK).any():
+                raise ValueError("an appended block is a KV block at a 4096-byte boundary of its storage")
+            view = flat[:flat.numel() // BLOCK * BLOCK].view(-1, BLOCK)
+            out.append((view, torch.from_numpy(off // BLOCK).to(self.cuda), torch.from_numpy(which).to(self.cuda)))
+        return out
+
+    def _scatter(self, slots: np.ndarray, data) -> None:
+        for view, rows, which in self._kv_rows(slots):
+            view[rows] = data[which]
+
+    def _chunks(self):
+        """The registered store in codec order, a chunk at a time: (first j, contiguous uint8 blocks, write back)."""
+        torch = self.torch
+        for r, b in zip(self.regions, self.backings):
+            if not r.plane_blocks:
+                flat = b.flat[:r.blocks * BLOCK]
+                for u in range(0, r.blocks, CHUNK):
+                    yield r.first + u, flat[u * BLOCK:min(r.blocks, u + CHUNK) * BLOCK], lambda d: None
+                continue
+            per = r.planes * r.plane_blocks
+            pages = r.blocks // per
+            view = torch.as_strided(b.flat, (pages, r.planes, r.plane_blocks * BLOCK), (r.page_stride, r.plane_stride, 1),
+                                    b.base)
+            step = max(1, CHUNK // per)
+            for p0 in range(0, pages, step):
+                part = view[p0:p0 + step]
+                yield r.first + p0 * per, part.contiguous().view(-1), lambda d, part=part: part.copy_(d.view(part.shape))
+
+    def _words_below_p(self, data) -> None:
+        f = self.codec.field
+        top = data.view(self.torch.int16).view(-1, f.word_bytes // 2)[:, -1]
+        if bool((top == -1).any()):
+            words = data.view(-1, f.word_bytes)[top == -1].cpu().numpy()
+            if any(int.from_bytes(w.tobytes(), "little") >= f.p for w in words):
+                raise ValueError(f"a registered block holds a {f.word_bytes}-byte word ≥ p: no {self.codec.name} "
+                                 "payload")
+
+    # --- registration ---------------------------------------------------------------------------------------------
+
+    def payload_root(self, node: bytes) -> bytes:
+        torch, dev, N = self.torch, self.dev, self.blocks
+        t0 = time.perf_counter()
+        width = 1 << max(N - 1, 0).bit_length()
+        dom = audit.payload_domain(node, N)
+        self.lib.set_tree(bytes(128), BLOCK, BLOCK, dom.domain_id, dev.SALT_DOMAIN + self.key + dev.PAYLOAD_LABEL, N)
+        level = torch.empty((width, 8), dtype=torch.int64, device=self.cuda)
+        for j0, data, _ in self._chunks():
+            self._words_below_p(data)
+            self.lib.call("rs_payload_leaves", data.data_ptr(), j0, data.numel() // BLOCK, level.data_ptr() + ROW * j0)
+        if N < width:
+            self.lib.call("rb_pads", N, width - N, level.data_ptr() + ROW * N)
+        up = torch.empty((max(width - 1, 1), 8), dtype=torch.int64, device=self.cuda)
+        self.payload_levels = [x.cpu().numpy() for x in dev.climb(self.lib, level, 0, width, up)]
+        del level, up
+        self.stats["payload_s"] = time.perf_counter() - t0
+        return dev.digests(self.payload_levels[-1])[0]
+
+    def payload_path(self, j: int) -> tuple[bytes, ...]:
+        lv = self.payload_levels
+        return tuple(self.dev.digests(np.stack([lv[h][(j >> h) ^ 1] for h in range(len(lv) - 1)]))) if len(lv) > 1 else ()
+
+    def encode(self, registration: audit.Registration) -> dict:
+        self.registration, N = registration, self.blocks
+        sample = np.array(sorted({r.first for r in self.regions} | {N - 1}), np.int64)
+        before = self._gather(sample).cpu().numpy()
+        t0 = time.perf_counter()
+        self.device.set_key(registration.key)
+        for j0, data, back in self._chunks():
+            self.device.encode_in_place(data, j0)
+            back(data)
+        self.torch.cuda.synchronize()
+        self.stats["encode_s"] = secs = time.perf_counter() - t0
+        after = self._gather(sample).cpu().numpy()
+        for j, m, e in zip(sample.tolist(), before, after):
+            if e.tobytes() != rcodec.encode(m.tobytes(), j, registration.key):
+                raise RuntimeError(f"kv.cu's block {j}, encoded in place, is not codec.encode's")
+        self.gates["device_encode"] = {"registered": N, "appends": 0, "blocks_checked": len(sample), "in_place": True}
+        self.audit = Appends(registration)
+        return {"encode_bytes_per_s": N * BLOCK / secs}
+
+    # --- serving ----------------------------------------------------------------------------------------------------
+
+    def append_salts(self, first: int, count: int) -> list[bytes]:
+        return [self.dev.store_salt(self.key, self.dev.PAYLOAD_LABEL, first + u) for u in range(count)]
+
+    def append(self, payloads, salts, slots=()) -> audit.Append:
+        if self.trace is not None and self.trace.rekeyed:
+            raise RuntimeError("the memory map re-keyed a block, whose payload it reads from its slot, which holds its "
+                               "encoding in place: an in-place session's lifetime cap outlasts its windows")
+        a = self.audit.append(payloads, salts)
+        if self.ip.append([int(x) for x in slots]) != a.first:
+            raise AssertionError("InPlace's next index is not the append's")
+        self.app_slots.extend(int(x) for x in slots)
+        self._app_dev = None
+        self.stats["appended"] += a.count
+        return a
+
+    def encode_append(self, first: int, coin: bytes) -> None:
+        payloads = self.audit.pending.pop(first, None)
+        if payloads is None:
+            raise ValueError(f"no append from block {first} awaits its coin")
+        a, N, k = self.audit.of(first), self.blocks, self.registration.key
+        slots = np.array(self.app_slots[first - N:first - N + a.count], np.int64)
+        data = self._gather(slots)
+        held = data.cpu().numpy()
+        for u, m in enumerate(payloads):
+            if held[u].tobytes() != m:
+                raise RuntimeError(f"slot {slots[u]} no longer holds block {first + u}'s payload when its append's coin "
+                                   "arrives: rewritten before its encode")
+        self.device.encode_in_place(data.reshape(-1), first, [rcodec.binding(d, first + u, k, coin)
+                                                              for u, d in enumerate(a.digests)])
+        if data[0].cpu().numpy().tobytes() != rcodec.encode(payloads[0], first, k, bound=True, coin=coin):
+            raise RuntimeError(f"kv.cu's block {first}, encoded in place under its append's coin, is not codec.encode's")
+        self._scatter(slots, data)
+        self.torch.cuda.synchronize()
+        self.audit.coins[first] = coin
+        self.stats["encoded_appends"] += 1
+        self.gates["device_encode"]["appends"] += 1
+        self.gates["device_encode"]["blocks_checked"] += 1
+        if self.trace is not None:
+            self.trace.encoded(first)
+
+    def _before_write(self, step: int, keys: np.ndarray) -> None:
+        """`Store.on_write`: the pool blocks ``keys`` the step's forward is about to write, copied first."""
+        if not len(keys):
+            return
+        p, store = self.store.pool, self.store
+        ids = p.ids[keys // p.per_page, keys % p.per_page]
+        slots = np.sort(np.concatenate([store.region(rn).first + ids for rn in p.regions]).astype(np.int64))
+        data = self._gather(slots)
+        if self.saved:
+            self.saved[-1].device = None
+        self.saved.append(Saved(step, slots, data.cpu().numpy(), data))
+        self._windex = None
+        self.stats["saved_blocks"] += len(slots)
+
+    def holds(self, slot: int, j: int, digest: bytes) -> bool:
+        block = self._gather(np.array([slot])).cpu().numpy()[0].tobytes()
+        coin = self.audit.coins.get(self.audit.of(j).first)
+        m = block if coin is None else rcodec.decode(block, j, self.registration.key, digest, coin)
+        return m is not None and rcodec.digest(m) == digest
+
+    # --- passes and openings ----------------------------------------------------------------------------------------
+
+    def arm(self, dropped) -> None:
+        super().arm(dropped)
+        self._dropped_dev = (self.torch.tensor(sorted(self.dropped), dtype=self.torch.int64, device=self.cuda)
+                             if self.dropped else None)
+
+    def launch(self, i: int, after: dict | None, plan: rb.Plan | None = None) -> dict:
+        ticket = super().launch(i, after, plan)
+        prev = audit.chained(ticket["previous"] if after is None else after["root"], ticket["head"])
+        ticket["root"], ticket["handle"] = self.run_pass(rb.seed(ticket["challenge"], i, prev), plan, ticket["step"])
+        return ticket
+
+    def wait(self, ticket: dict):
+        return ticket["root"], ticket["handle"]
+
+    def run_pass(self, seed: bytes, plan: rb.Plan | None = None, step: int | None = None):
+        if moved := self.moved():
+            raise RuntimeError(f"registered tensors moved since registration ({', '.join(moved[:8])}): the pass reads "
+                               "the store at their registered addresses, so the session fails")
+        plan = plan or rb.Plan.whole(self.blocks)
+        runs = np.frombuffer(plan.encode(), dtype=">u8", offset=4).reshape(-1, 2).astype(np.int64)
+        for first, payloads in self.audit.pending.items():
+            if ((runs[:, 0] < first + len(payloads)) & (runs[:, 0] + runs[:, 1] > first)).any():
+                raise RuntimeError(f"the plan holds the append from {first}, not yet encoded (deferred residency)")
+        self._mode = ("pass", step)
+        t0 = time.perf_counter_ns()
+        root, handle = self.ip.run_pass(seed, plan)
+        self.torch.cuda.synchronize()
+        self.pass_ns.append(time.perf_counter_ns() - t0)
+        self._mode, self._held = None, []
+        return root, (handle, step)
+
+    def _slots_of(self, js):
+        torch, N = self.torch, self.blocks
+        if not self.app_slots:
+            return js
+        if self._app_dev is None or len(self._app_dev) != len(self.app_slots):
+            self._app_dev = torch.tensor(self.app_slots, dtype=torch.int64, device=self.cuda)
+        return torch.where(js < N, js, self._app_dev[(js - N).clamp(0, len(self.app_slots) - 1)])
+
+    def _patched(self, addrs, js):
+        """The map with the session's substitutions (the module's docstring), by the mode it is read in."""
+        torch, mode = self.torch, self._mode
+        if mode is not None and mode[0] == "pass":
+            if self.saved and self.saved[-1].step == mode[1] and self.saved[-1].device is not None:
+                s = self.saved[-1]
+                targets = torch.from_numpy(s.slots).to(self.cuda)
+                sl = self._slots_of(js)
+                at = torch.searchsorted(targets, sl).clamp(max=len(targets) - 1)
+                hit = targets[at] == sl
+                addrs[hit] = s.device.data_ptr() + BLOCK * at[hit]
+                self.stats["pass_patched"] += int(hit.sum())
+        elif mode is not None and mode[0] == "open":
+            self._patch_open(addrs, js, *mode[1:])
+        if self._dropped_dev is not None:
+            d = self._dropped_dev
+            at = torch.searchsorted(d, js).clamp(max=len(d) - 1)
+            addrs[d[at] == js] = self.zero.data_ptr()
+        return addrs, js
+
+    def _write_index(self):
+        if self._windex is None:
+            if not self.saved:
+                self._windex = (np.zeros(0, np.int64),) * 3
+            else:
+                key = np.concatenate([s.slots << STEP_BITS | s.step for s in self.saved])
+                which = np.concatenate([np.full(len(s.slots), k) for k, s in enumerate(self.saved)])
+                row = np.concatenate([np.arange(len(s.slots)) for s in self.saved])
+                o = np.argsort(key, kind="stable")
+                self._windex = (key[o], which[o], row[o])
+        return self._windex
+
+    def _patch_open(self, addrs, js, step: int, handle, positions: Sequence[int]) -> None:
+        """An opening's subtrees read each block rewritten since the pass from the earliest copy taken at or after the
+        pass's step, before the write that followed it."""
+        key, which, row = self._write_index()
+        if not len(key) or step is None:
+            return
+        n, sub = handle.plan.length, rb.PER_LEAF << handle.h0
+        pos = np.concatenate([np.arange(s, min(s + sub, n)) for s in sorted({p // sub * sub for p in positions})])
+        pos_d = self.torch.from_numpy(pos).to(self.cuda)
+        sl = self._slots_of(js[pos_d]).cpu().numpy()
+        q = sl << STEP_BITS | step
+        at = np.searchsorted(key, q)
+        ok = at < len(key)
+        ok[ok] = (key[at[ok]] >> STEP_BITS) == sl[ok]
+        if not ok.any():
+            return
+        rows = np.stack([self.saved[w].host[r] for w, r in zip(which[at[ok]], row[at[ok]])])
+        buf = self.torch.from_numpy(rows).to(self.cuda)
+        self._held.append(buf)
+        addrs[pos_d[self.torch.from_numpy(np.flatnonzero(ok)).to(self.cuda)]] = (
+            buf.data_ptr() + BLOCK * self.torch.arange(len(rows), device=self.cuda))
+        self.stats["open_patched"] += len(rows)
+
+    def _subtree(self, nodes, c0: int, width: int):
+        mode = self._mode
+        if mode is not None and mode[0] == "open":
+            h = mode[2]
+            if width == 1 << h.h0 and not self.torch.equal(nodes[2 * width - 2], h.kept[c0 >> h.h0]):
+                self._stale.append(c0)
+        return nodes
+
+    def open_window(self, items) -> list[list[tuple]]:
+        out = [self.open(handle, positions) for handle, positions in items]
+        self._held = []
+        return out
+
+    def open(self, handle, positions: list[int]) -> list[tuple]:
+        h, step = handle
+        self._mode, self._stale = ("open", step, h, positions), []
+        try:
+            got = self.ip.open(h, positions)
+        finally:
+            self._mode = None
+        if self._stale:
+            sub = rb.PER_LEAF << h.h0
+            gone = sorted({h.plan.block(p) for p in positions if p // sub * sub // rb.PER_LEAF in self._stale})
+            raise Stale(f"the pass at step {step}: blocks {gone[:8]} were rewritten after its receipts, with no copy "
+                        "taken before the write")
+        return [(*g, *self.committed(h.plan.block(p))) for g, p in zip(got, positions)]
+
+    def committed(self, j: int) -> tuple[bytes, tuple[bytes, ...], bytes]:
+        if j < self.blocks:
+            return self.dev.store_salt(self.key, self.dev.PAYLOAD_LABEL, j), self.payload_path(j), b""
+        a = self.audit.of(j)
+        return a.salts[j - a.first], a.tree.open(j).path, a.digests[j - a.first]
+
+    def close(self) -> None:
+        """The session is over: the engine's later writes are copied no more."""
+        if self.store.on_write == self._before_write:
+            self.store.on_write = None
+        self.saved, self._windex = [], None
+
+    @classmethod
+    def for_commit(cls, session_lib: str) -> Callable[[Any, Any], InPlaceBackend]:
+        """`CommitSession`'s ``backend_of``: the backend over its store, in lockstep with its run."""
+        def build(cs, path) -> InPlaceBackend:
+            backings = [cs.store.backing(r.name) for r in cs.store.layout().regions]
+            return cls(cs.store, cs.lockstep, backings, session_lib=session_lib, kv_lib=cs.kv_lib, codec=cs.codec,
+                       moved=cs.binder.moved, path=path)
+        return build
+
+    def session_stats(self) -> dict:
+        ms = sorted(x / 1e6 for x in self.pass_ns)
+        at = lambda q: ms[min(len(ms) - 1, int(q * len(ms)))] if ms else None
+        return {"in_place": True, "passes": len(ms), "pass_ms": {"p50": at(0.5), "p99": at(0.99), "max": at(1.0),
+                                                                 "mean": sum(ms) / len(ms) if ms else None},
+                "store_blocks": self.ip.blocks, "saved_steps": len(self.saved), **self.stats}
