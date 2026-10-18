@@ -600,7 +600,8 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         a_rows = CM.s8_rows(slots.numpy(), scales)
         bits = CR.admit(a_rows)
         live = bool(bits[32 * ri:32 * ri + 32].any())
-        z, ungated = RC.reference(call, salt, c["base"], root_a, root_b, u)
+        z, template = RC.reference(call, salt, c["base"], root_a, root_b, u)
+        ungated = template if live else RC.reference(call, salt, c["base"], root_a, root_b, u, gated=False)[1]
         want = RC.gated_reference(call, bits, salt, c["base"], root_a, root_b, u)
         got = [int(v) for v in d["receipts"][u]]
         y = E.int_mm(slots[32 * ri:32 * ri + 32].to(weight.device), weight[32 * cj:32 * cj + 32]).cpu().to(torch.int64)
@@ -651,7 +652,8 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
             b_roots[c["linear"]] = (rebuilt, PH.weight_root(c["linear"], b_rows))
         r = {"step": c["step"], "linear": c["linear"], "module": c["module"], "k": c["k"], "unit": u,
              "position": c["base"] + u, "real_rows_in_tile": max(0, min(32, d["m"] - 32 * ri)),
-             "receipt_equal_reference": got == want, "z_equal_served_product": z_ok, **sel,
+             "receipt_equal_reference": got == want, "receipt_equal_template": got == template,
+             "z_equal_served_product": z_ok, **sel,
              "receipt_opens": CM.verify(dom, root_r, u, leaf, sibs),
              "flipped_receipt_refused": not CM.verify(dom, root_r, u, leaf_f, sibs),
              "a_root_rebuilt": a_root == root_a, "tampered_a_row_changes_root": a_tampered != root_a,

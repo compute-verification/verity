@@ -1397,17 +1397,22 @@ name not registered.
   X = A + b and W' = B + c + U with fx1 from its keys, and receipt words 2 s and 2 s + 1 are the warp's XOR of y and of z
   after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's and
   column's from blocks of seed_j's own, and each lane's fold keys, its chain's start, a block of σ_R's (`h1tile.fold_keys`).
-  The edited GEMM kernel still starts its chains from the noise seed (`benchmarks/pouw/edited_gemm/cgemm.cu`'s
+  A dead tile, all-zero rows of A, has the zero receipt through the same gates (each word masked by the tile's live bit), so
+  a padded window's empty tiles cost serving no noise and a drawn one's proof shows nothing of which tiles were dead; in a
+  live window the unit's salt is its round's, `h1tile.live_salt` (`window.round_key`'s stream, 64 bytes), and each unit
+  derives its own noise from it. The edited GEMM kernel still starts its chains from the noise seed (`benchmarks/pouw/edited_gemm/cgemm.cu`'s
   ``ch[e].y = mix32(a.seed ^ …)``), which decision 121 retires: a kernel follow-up keys them from σ_R. Whether a tile is a
   legal proof unit under the 16-bit output rule, or the warp check must be a unit kind of its own aggregating coordinates, is
   decision 107's, still open.
 
-The seed, the unit's two seeds and the noise block (`_v1` on words, `_v2` on bits), `PouwU129` and `PouwH1Tile` are
+The seed, the unit's two seeds and the noise block (`_v1` on words, `_v2` on bits), `PouwU129`, the dead tile's
+`PouwAnyByte`, `PouwOrBit` and `PouwMask32`, and `PouwH1Tile` are
 registered Definitions, each checked by circuit-check at its sidecar's binding (`seeds.circuit-check.py`,
 `h1tile.circuit-check.py`); `PouwH1Tile` only where `circuit/segment.py` is on the tree, at one lane (4 × 8, K = 64).
 
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
-site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.
+site that fills none, past a dead one (decode's few tokens in a live tile); the vLLM integration serving the compiled
+Program.
 
 ## Not here yet
 

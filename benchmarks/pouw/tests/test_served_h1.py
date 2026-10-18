@@ -98,7 +98,8 @@ def test_dead_units_skip_noise_and_receipt():
     for u in range(len(call.units)):
         want = RC.gated_reference(call, bits, SALT, 9, RA, RB, u)
         assert list(got[u]) == want
-        ungated = RC.reference(call, SALT, 9, RA, RB, u)[1]
+        assert want == RC.reference(call, SALT, 9, RA, RB, u)[1]
+        ungated = RC.reference(call, SALT, 9, RA, RB, u, gated=False)[1]
         assert (want == ungated) if u in live else (not any(want) and any(ungated))
 
 

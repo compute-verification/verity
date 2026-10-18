@@ -6,10 +6,10 @@ from typing import Any
 
 
 def _pouw_roots() -> list[Any]:
-    """`PouwH1Tile_v1` at its smallest tile, one lane (4 × 8) at K = 64 (KS = 2, one digit word), on the s8 accumulator on bits:
-    the seed, 13 noise blocks, 32 exact dots and the lane's four fx1 sets. It grows linearly in lanes and in KS. None where
-    `circuit.segment` (E2E-120) is not on the tree, which is where `PouwH1Tile` is registered. `PouwU129` is a catalog root
-    (a primitive and a static-free composite)."""
+    """`PouwH1Tile_v2` at its smallest tile, one lane (4 × 8) at K = 64 (KS = 2, one digit word), on the s8 accumulator on bits:
+    the seed, 13 noise blocks, 32 exact dots, the lane's four fx1 sets and the dead-tile mask. It grows linearly in lanes and
+    in KS. None where `circuit.segment` (E2E-120) is not on the tree, which is where `PouwH1Tile` is registered. `PouwU129`,
+    `PouwAnyByte`, `PouwOrBit` and `PouwMask32` are catalog roots (primitives and static-free composites)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity.core.protocols.pouw.circuit import h1tile as H
