@@ -9,7 +9,8 @@
 #   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source --env GPU_LEASE_WHO=hash-intpipe \
 #     -- bash benchmarks/hash/intpipe/hm96.sh
 # LEASE_ARGS (default "--max-min 14"; on vy-nebius-2 "--preemptible --max-min 20"), REPS (15), N (34668,262144: 142 MB and
-# 1 GiB), CHECK_N (700), FETCH (128), ASYNC (0), WARPS (4: warps a segment CTA).
+# 1 GiB), CHECK_N (700), FETCH (128), ASYNC (0), WARPS (4: warps a segment CTA), LEAF (4096) and SEGB (1024): the leaf's
+# bytes and its segments' (Verity's row-seg/v1 fixes 1024-byte segments; any other SEGB is a FORMAT CHANGE).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda/bin:$PATH
@@ -23,6 +24,7 @@ case $CC in 120) SM=120a ;; *) SM=$CC ;; esac
 echo "compute_cap $CC sm_$SM" > "$O/arch.txt"
 # name:kind:rounds
 CANDS=${CANDS:-sha512:0:80 sha512r32:1:32 sha512r24:1:24 blake3k:3:0}
+export HM96_LEAF=${LEAF:-4096} HM96_SEG=${SEGB:-1024}
 export N=${N:-34668,262144} CHECK_N=${CHECK_N:-700} REPS=${REPS:-15}
 SIZES="$CHECK_N ${N//,/ }"
 export SIZES
@@ -30,6 +32,7 @@ for c in $CANDS; do
   IFS=: read -r name kind r <<< "$c"
   ( nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v -DCAND_KIND="$kind" -DCAND_R="$r" -DSHA_ROLL=1 \
       -DFETCH="${FETCH:-128}" -DLOADER_ASYNC="${ASYNC:-0}" -DSEG_WARPS="${WARPS:-4}" \
+      -DLEAF_BYTES="$HM96_LEAF" -DSEG_BYTES="$HM96_SEG" \
       -o "$W/hm96-$name" $I/hm96.cu -lnvidia-ml > "$O/build-$name.log" 2>&1
     echo "build $name rc $?" >> "$O/rc.txt" ) &
   mkdir -p "$W/p-$name"

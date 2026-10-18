@@ -35,7 +35,15 @@ from verity.ml.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, SHA512_RO
                                            row_leaf, sha512_row_seg_digest, sha512_row_seg_prefix)
 from verity.ml.crypto import blake3 as b3  # noqa: E402
 
-LEAF, SEG, NSEG = 4096, 1024, 4
+#: the row geometry: 4 KiB rows of 1 KiB segments unless HM96_LEAF / HM96_SEG say otherwise (`check` reads the dump's own);
+#: Verity's row-seg/v1 has 1 KiB segments, so another SEG is a hypothetical format, never held to Verity
+LEAF, SEG = int(os.environ.get("HM96_LEAF", 4096)), int(os.environ.get("HM96_SEG", 1024))
+NSEG = LEAF // SEG
+
+
+def set_geometry(leaf: int, seg: int) -> None:
+    global LEAF, SEG, NSEG
+    LEAF, SEG, NSEG = leaf, seg, leaf // seg
 FRAME = b"veritor/protocol/merkle/frame/v3\0"
 SCHEMA = SCHEMA_HM96_SHA512_ROW_SEG.encode()
 INST = hm96.SHA512
@@ -161,8 +169,8 @@ class Format:
         p, w = self.p, self.p.words
         nb_bytes = lambda v: len(uint(v))  # noqa: E731
         out = [*p.iv()]
-        for j in range(NSEG):
-            out += p.first(self.s[j])
+        for j in range(4):
+            out += p.first(self.s[j]) if j < NSEG else [0] * 8
         out += p.first(self.q) + p.first(self.salt_prefix) + p.first(self.leaf_prefix)
         for level in range(LEVELS):
             out += p.first(message(b"node", self.did, uint(level), b"\0", bytes(p.nb), bytes(p.nb)))
@@ -231,7 +239,7 @@ def check_arm(f: Format, raw_levels: bytes, raw_bc: bytes, full: bool, rng: rand
     def check_bc(pos: int, bc: bytes) -> None:
         got = bcat(pos)
         bad.extend(f"{half} {pos}" for half, sl in (("b", slice(0, p.nb)), ("c", slice(p.nb, None))) if got[sl] != bc[sl])
-    verity = p.name == "sha512"
+    verity = p.name == "sha512" and SEG == 1024
     if full:
         leaves, held = [], 0
         for pos in range(n):
@@ -294,7 +302,8 @@ def main(argv: list[str]) -> int:
         with open(os.path.join(d, "meta.json")) as fh:
             meta = json.load(fh)
         n = meta["leaves"]
-        out = {"candidate": meta["candidate"], "leaves": n, "gpu": meta["gpu"]}
+        set_geometry(meta.get("leaf_bytes", 4096), meta.get("seg_bytes", 1024))
+        out = {"candidate": meta["candidate"], "leaves": n, "gpu": meta["gpu"], "leaf_bytes": LEAF, "seg_bytes": SEG}
         ok = True
         for arm, name in (("base", "sha512"), ("cand", meta["candidate"])):
             f = Format(Prim(name), n)

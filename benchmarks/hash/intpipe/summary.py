@@ -300,8 +300,77 @@ def hm96windows(args: list[str]) -> None:
                       f"{1e3 * tot:.0f} | {r['mhz']:.0f} |")
 
 
+LAT_KEYS = ("host_pre_ms", "host_step_ms", "gpu_pre_ms", "gpu_step_ms", "mhz")
+OVL_KEYS = ("standin_alone_ms", "commit_alone_ms", "standin_with_ms", "root_ms", "mhz")
+
+
+def lat(out: str) -> None:
+    """hm96lat.sh's run: per lever and size the medians of `bench`, then per window, commit and priority those of `overlap`,
+    with the stand-in's slowdown (with - alone) as the median of the rep-by-rep differences."""
+    rec: dict[tuple, list[dict]] = {}
+    for r in lines(os.path.join(out, "lat.jsonl")):
+        rec.setdefault((r["lever"], r["leaves"]), []).append(r)
+    for (lever, n), rs in rec.items():
+        r0 = rs[0]
+        print(json.dumps({"mode": "lat", "gpu": r0["gpu"], "lever": lever, "leaves": n, "bytes": r0["bytes"],
+                          "leaf_bytes": r0["leaf_bytes"], "depth": r0["depth"], "host_levels": r0["host_levels"],
+                          "reps": len(rs), **{k: med([r[k] for r in rs]) for k in LAT_KEYS}}))
+    for r in lines(os.path.join(out, "overlap.jsonl")):
+        if r["mode"] == "standin":
+            print(json.dumps(r))
+    ovl: dict[tuple, list[dict]] = {}
+    for r in lines(os.path.join(out, "overlap.jsonl")):
+        if r["mode"] == "overlap":
+            ovl.setdefault((r["leaves"], r["commit"], r["prio"]), []).append(r)
+    for (n, c, p), rs in ovl.items():
+        r0 = rs[0]
+        print(json.dumps({"mode": "overlap", "gpu": r0["gpu"], "leaves": n, "bytes": r0["bytes"], "commit": c, "prio": p,
+                          "reps": len(rs), **{k: med([r[k] for r in rs]) for k in OVL_KEYS},
+                          "slowdown_ms": med([r["standin_with_ms"] - r["standin_alone_ms"] for r in rs]),
+                          "root_after_standin_ms": med([r["root_ms"] - r["standin_alone_ms"] for r in rs]),
+                          "critical_ms": med([max(r["standin_with_ms"], r["root_ms"]) - r["standin_alone_ms"] for r in rs])}))
+
+
+DECODE_MS = {"B200": 4.08, "H200": 5.65, "RTX PRO 6000": 15.0}
+
+
+def step_ms(g: str) -> float:
+    return next((v for k, v in DECODE_MS.items() if k in g), float("nan"))
+
+
+def lattable(args: list[str]) -> None:
+    """Fetched hm96lat.sh runs: per GPU, size and lever the critical path (host: graph launch to the root on the host) and
+    the GPU time (graph behind a spin), pre and step, as µs and as % of the decode step; then the overlap."""
+    lat_r, ovl_r, runs = [], [], {}
+    for d in args:
+        run = os.path.basename(os.path.normpath(d))
+        for root, _, files in os.walk(d):
+            if "summary-lat.jsonl" in files:
+                for r in lines(os.path.join(root, "summary-lat.jsonl")):
+                    runs[r["gpu"]] = run
+                    (lat_r if r["mode"] == "lat" else ovl_r if r["mode"] == "overlap" else []).append(r)
+    order = lambda g: ("B200" not in g, "H200" not in g, g)  # noqa: E731
+    print("| GPU | MB (leaves) | lever | host µs pre / step | GPU µs pre / step | % of step (host, step) | run |")
+    print("|---|---|---|---|---|---|---|")
+    for r in sorted(lat_r, key=lambda r: (order(r["gpu"]), r["leaves"], r["lever"])):
+        s = step_ms(r["gpu"])
+        print(f"| {short(r['gpu'])} | {r['bytes'] / 1e6:.1f} ({r['leaves']}) | {r['lever']} | {1e3 * r['host_pre_ms']:.0f} / "
+              f"{1e3 * r['host_step_ms']:.0f} | {1e3 * r['gpu_pre_ms']:.0f} / {1e3 * r['gpu_step_ms']:.0f} | "
+              f"{100 * r['host_step_ms'] / s:.1f}% | {runs[r['gpu']]} |")
+    print()
+    print("| GPU | MB | commit | priority | stand-in alone ms | with commit ms | slowdown µs | commit alone µs | root at ms "
+          "| root after stand-in µs | critical path µs (% of step) |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    for r in sorted(ovl_r, key=lambda r: (order(r["gpu"]), r["leaves"], r["commit"], r["prio"])):
+        s = step_ms(r["gpu"])
+        print(f"| {short(r['gpu'])} | {r['bytes'] / 1e6:.1f} | {r['commit']} | {r['prio']} | {r['standin_alone_ms']:.3f} | "
+              f"{r['standin_with_ms']:.3f} | {1e3 * r['slowdown_ms']:.0f} | {1e3 * r['commit_alone_ms']:.0f} | "
+              f"{r['root_ms']:.3f} | {1e3 * r['root_after_standin_ms']:.0f} | {1e3 * r['critical_ms']:.0f} "
+              f"({100 * r['critical_ms'] / s:.1f}%) |")
+
+
 if __name__ == "__main__":
-    if sys.argv[1] in ("table", "hm96table", "hm96windows"):
-        {"table": table, "hm96table": hm96table, "hm96windows": hm96windows}[sys.argv[1]](sys.argv[2:])
+    if sys.argv[1] in ("table", "hm96table", "hm96windows", "lattable"):
+        {"table": table, "hm96table": hm96table, "hm96windows": hm96windows, "lattable": lattable}[sys.argv[1]](sys.argv[2:])
     else:
-        {"sha512": sha512, "hashes": hashes, "hm96": hm96}[sys.argv[1]](sys.argv[2])
+        {"sha512": sha512, "hashes": hashes, "hm96": hm96, "lat": lat}[sys.argv[1]](sys.argv[2])

@@ -54,14 +54,21 @@ using u64 = uint64_t;
     }                                                                                            \
   } while (0)
 
-constexpr int LEAF = 4096, SEGB = 1024, NSEG = 4, MAXW = 48, LEVELS = 33, THREADS = 256, TOP = 256;
+#ifndef LEAF_BYTES
+#define LEAF_BYTES 4096
+#endif
+#ifndef SEG_BYTES
+#define SEG_BYTES 1024
+#endif
+constexpr int LEAF = LEAF_BYTES, SEGB = SEG_BYTES, NSEG = LEAF / SEGB, MAXW = 48, LEVELS = 33, THREADS = 256, TOP = 256;
+static_assert(LEAF % SEGB == 0 && NSEG <= 4 && SEGB % 128 == 0, "1 to 4 segments of whole SHA-512 blocks");
 constexpr int SEG_THREADS = 32 * SEG_WARPS;
 
 // One arm's constants (hm96_ref.Format.params): u64 fields, a BLAKE3 word in the low half. Templates are whole messages
 // with the variable fields zero and no padding; midstates are chaining values after a message's first block.
 struct HP {
   u64 iv[8];                 // SHA-512's IV; BLAKE3: its key's words
-  u64 seg_mid[NSEG][8];      // after S(j, 4, 8192)
+  u64 seg_mid[4][8];         // after S(j, NSEG, 8 SEGB), j < NSEG (the rest zero)
   u64 q_mid[8], salt_mid[8], leaf_mid[8];
   u64 node_mid[LEVELS][8];   // after a node message's first block at each level
   u64 prf_tpl[16];           // Ks || u64be 0 || u64be 0
@@ -361,7 +368,7 @@ __global__ void __launch_bounds__(SEG_THREADS) seg_kernel(const uint8_t* __restr
   const L ld{src + (t - lane) * SEGB, smem + warp * (L::SMEM / 16), lane};
   ld.start();
   typename P::W cv[8];
-  ldc(cv, HPC[A].seg_mid[t & 3], 8);
+  ldc(cv, HPC[A].seg_mid[t % NSEG], 8);
   P::seg(ld, cv, HPC[A].iv);
   if (t < nseg) st8(D + 8 * t, cv);
 }
@@ -369,12 +376,12 @@ template <class P, int A, int NBY>
 DEV void leaf_nb(u64 pos, const typename P::W* D, const typename P::W* S, const typename P::W* F, typename P::W* out,
                  typename P::W* bc) {
   using W = typename P::W;
-  constexpr int NB = P::NB, LX = P::BLOCK + 4 * NB, LH = P::BLOCK + 2 * NB;
+  constexpr int NB = P::NB, LX = P::BLOCK + NSEG * NB, LH = P::BLOCK + 2 * NB;
   W mx[16 * P::nblk(LX)], x[8];
 #pragma unroll
   for (int i = 0; i < 16 * P::nblk(LX); ++i) mx[i] = 0;
 #pragma unroll
-  for (int i = 0; i < 32; ++i) mx[16 + i] = D[32 * pos + i];
+  for (int i = 0; i < 8 * NSEG; ++i) mx[16 + i] = D[8 * NSEG * pos + i];
   ldc(x, HPC[A].q_mid, 8);
   finish<P, LX, 1>(x, mx);
   W mh[16 * P::nblk(LH)], h[8];
@@ -589,9 +596,9 @@ struct Nv {
 };
 static void meta(FILE* f, const cudaDeviceProp& prop) {
   fprintf(f, "\"candidate\": \"%s\", \"cand_kind\": %d, \"cand_r\": %d, \"gpu\": \"%s\", \"sms\": %d, \"cc\": %d, \"fetch\": %d, "
-          "\"loader_async\": %d, \"seg_warps\": %d, \"sha_roll\": %d",
+          "\"loader_async\": %d, \"seg_warps\": %d, \"sha_roll\": %d, \"leaf_bytes\": %d, \"seg_bytes\": %d",
           CAND_NAME.c_str(), CAND_KIND, CAND_KIND == 1 ? CAND_R : CAND_KIND == 0 ? 80 : 7, prop.name, prop.multiProcessorCount,
-          prop.major * 10 + prop.minor, FETCH, LOADER_ASYNC, SEG_WARPS, SHA_ROLL);
+          prop.major * 10 + prop.minor, FETCH, LOADER_ASYNC, SEG_WARPS, SHA_ROLL, LEAF, SEGB);
 }
 
 static int dump(const std::string& params, const std::string& dir, u64 n) {
@@ -696,6 +703,7 @@ static int bench(const std::string& pdir, int reps, const std::vector<u64>& size
   return 0;
 }
 
+#ifndef HM96_NO_MAIN
 int main(int argc, char** argv) {
   if (argc >= 5 && !strcmp(argv[1], "dump")) return dump(argv[2], argv[3], strtoull(argv[4], nullptr, 10));
   if (argc >= 5 && !strcmp(argv[1], "bench")) {
@@ -706,3 +714,4 @@ int main(int argc, char** argv) {
   fprintf(stderr, "usage: hm96 dump PARAMS DIR N | bench PDIR REPS N[,N...]\n");
   return 2;
 }
+#endif
