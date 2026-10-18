@@ -130,6 +130,44 @@ def test_a_programs_rows_written_from_its_logs_are_the_json_dumps_text(tmp_path,
     _read_as_json_load(p)
 
 
+def _glm_attention_layer(rows: int, heads: int):
+    """One GLM-5.3 TP8 layer's dense attention prefill as the derive leaves it, its nodes only: per row and head an `Attention_v4`
+    call reading q, the head's key log cut at the row (k_nope's and k_pe's rows, two producers a row) and its value log."""
+    from types import SimpleNamespace as NS
+
+    from verity.ml.circuits.refs import Affine, PartLog
+    keys, values, nodes = [PartLog() for _ in range(heads)], [PartLog() for _ in range(heads)], []
+    for t in range(rows):
+        for h in range(heads):
+            keys[h].append(Affine("n", 1000 + 3 * t, 192 * h, 192 * h + 128))
+            keys[h].append(Affine("n", 1001 + 3 * t, 0, 64))
+            values[h].append(Affine("n", 1002 + 3 * t, 128 * h, 128 * h + 128))
+            args = [Affine("n", 10 * t, 192 * h, 192 * h + 192), keys[h].cut(len(keys[h])), values[h].cut(len(values[h]))]
+            nodes.append(NS(fn=f"Attention_v4{{T={t + 1},NH=1,KVH=1}}", form="call", name=f"layers.0.attn/h{h}[{t}]",
+                            args=[NS(refs=r) for r in args]))
+    return NS(fn=NS(body=NS(nodes=nodes)))
+
+
+def test_the_writer_encodes_each_heads_items_once_not_once_a_call(monkeypatch):
+    """A GLM-5.3 TP8 layer at 256 input tokens (8 heads): the row dicts encode every key item once per call that reads it, 8 x the
+    sum of 1..256 (267,264 items), where `RowTexts` encodes each once and each call's last few (8,184), into the same text: 33
+    times less work here, and rows/8 times less at any length.  The work is counted, not timed (no test reads a clock): the I2048
+    rank's 4 h writer was that sum, 1.3e9 items."""
+    from verity.ml.circuits import codec
+    from verity_vllm.program import compact
+    from verity_vllm.program.instances_file import RowTexts, instance_rows
+    monkeypatch.setattr(codec, "descriptor_id", lambda fn: fn)
+    program, encoded = _glm_attention_layer(256, 8), []
+    items = compact._file_items
+    monkeypatch.setattr(compact, "_file_items", lambda progs: encoded.append(len(progs)) or items(progs))
+    rows = list(instance_rows(program))
+    old, encoded[:] = sum(encoded), []
+    texts = list(RowTexts().rows(program))
+    new = sum(encoded)
+    assert texts == [json.dumps(r) for r in rows]
+    assert old > 8 * 256 * 257 // 2 and new <= 4 * len(rows) and old > 25 * new, (old, new)
+
+
 def _read_as_json_load(p, **dump) -> None:
     from verity_vllm.program.compact import expanded_file_args
     from verity_vllm.program.instances_file import read_instances
