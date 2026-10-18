@@ -894,6 +894,30 @@
    "assumptions": [],
    "type_hash": "af808417b86286bf2f51de39df9be42488ce6ca4dcbe4896584f37670a01305c"
   },
+  "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit : Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit"
+   ],
+   "assumptions": [],
+   "type_hash": "2f39c6478ae15205408206d3f229d6bd8d8ad632899ccec306970be3b1dfb190"
+  },
+  "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget : Accounting.Guarantees.FillerLuck.PinnedFillBudget"
+   ],
+   "assumptions": [],
+   "type_hash": "96913af44b3f9a89cbf1ca9f625bdb5381d13300e0ea209313b5bce8461708c5"
+  },
+  "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt : Accounting.Guarantees.FillerLuck.PinnedFillLuckAt"
+   ],
+   "assumptions": [],
+   "type_hash": "18cb0865c7c3915b5af89ea6def60eccaa01745f2c667187d02cf24c6d738fd8"
+  },
   "Accounting.SecurityProofs.Fit": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Fit.{u_1} : Accounting.Guarantees.Fit"],
@@ -5940,7 +5964,10 @@
    "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit": "frozen (no-function): Theorem S with each block at its own p over every window of another block's one-draw check beside the filler's spot check (Accounting.Filler.FillBlocks), not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape, and the column's uniform parity a hypothesis.",
    "Accounting.SecurityProofs.TS.LiSegmentsBind": "lemma: Lemma B for li units (a definition: a warp's window, a checkpoint a segment, one deficient word a segment), from LiCheckpointWordInjective segment by segment; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LiWindowUnbound": "lemma: the counterexample to LiSegmentsBind with the window's last checkpoint alone (two top-bit flips cancel whatever the keys); a statement about li units (a definition), not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.LuckCaseAKeyed": "lemma: LuckCaseA at the operand luck 0 that a share of wrong words (a definition, the keyed rounds' share) gives, (L) at 0 in case (a); not a property of a Lean function."
+   "Accounting.SecurityProofs.TS.LuckCaseAKeyed": "lemma: LuckCaseA at the operand luck 0 that a share of wrong words (a definition, the keyed rounds' share) gives, (L) at 0 in case (a); not a property of a Lean function.",
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt": "frozen (no-function): (I7) LuckAt at 0 over every full-checking window of pinned receipts (Accounting.Filler.FullPinnedFill), at any receipt function of the round's committed data and live coins, not a Lean function: the service's filler check has no Lean code yet.",
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget": "frozen (no-function): Lemma C's BudgetAt at 1 over every spot-checked window of pinned receipts (Accounting.Filler.SpotPinnedFill), at any receipt function, not a Lean function: the service's spot check has no Lean code yet.",
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": "frozen (no-function): Theorem S with another block's one-draw check beside a pinned receipt's spot check (Accounting.Filler.PinnedFillBlocks), the filler at p = 0, not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -6369,17 +6396,20 @@
    ]
   },
   "Definitions.Accounting.Filler": {
-   "digest": "168df4cf449650549626437e5e18603f4d162fc84ab460c96848e4b77eda2857",
+   "digest": "0378651fa9f8a73ae75d70599f62b8d233cd09d24c85482a5ac15ca7ba259cf8",
    "definitions": {
     "Accounting.Filler.CellProducts": "ed1ea49ad93f31994eec73d6ab2be4f15a83154e2a79c21f6f2c833472e09da3",
     "Accounting.Filler.CellRight": "0c8a01ad7c8d4edab27d7e5870efabb413a0b632b8ff55d88f029f3627fc9a4d",
     "Accounting.Filler.FillBlocks": "92ff54e3cb8e2dabf0db2b40fff7c2a9780d0fa433cd99549de464221879ef53",
     "Accounting.Filler.FullFill": "2bd41463cd009f5119005f1ccaad98ad94347668a609dc9bb648e35c34e4c786",
+    "Accounting.Filler.FullPinnedFill": "1449fc14e349155e7fd69573e4dd2dd83e2aeb70726c233270fd1a21511542df",
     "Accounting.Filler.Noise": "5fa7fc94a693d7f5c09dd2703f25a6f74efad6ced81a90abfcab56e9c36262c4",
     "Accounting.Filler.ParityBalanced": "5d56b71a6e795b28f87ae39d085e57d666bb556d34249e384f356413c7a0eca5",
+    "Accounting.Filler.PinnedFillBlocks": "a2e037d78448e3cac45a2416441e35cc8e05ca05f3144edfb7da354b4412747b",
     "Accounting.Filler.Products": "503448ba199f123891e73476506b590d20033b4cccc379abea8713cf349859c1",
     "Accounting.Filler.Short": "20b06d08794750166ce5b7e475d2365b18e8ad762a6e6a42bd40f15e719af638",
     "Accounting.Filler.SpotFill": "3eecffd7a751d75dff52de3386c9e4cdbd82628e3bb8f471b6a0ff8cb3e2d234",
+    "Accounting.Filler.SpotPinnedFill": "217f8957742e46987371cc276394783ed8e4fd34ba582bc7d96b105f30dfa354",
     "Accounting.Filler.bit": "c14984210c30a2f10b83973767ed3e4e6b7f0035c99557632fe4a65d80d72d36",
     "Accounting.Filler.bitsCol": "596335ac6fe95ef8722335a96bf1a5b7634432f096fc27b1635c3088a4c9d627",
     "Accounting.Filler.buCol": "59179265b0c6d5e8a36bf6991571b9c596c6bc244b040888c48fbbbf7cec0fbd",
@@ -6387,7 +6417,8 @@
     "Accounting.Filler.luck": "7b42dd7c04afbcd32e820924838d314c93877d7294cdcd8fe21af4904b7d83cc",
     "Accounting.Filler.parity": "8963af4a8c8ef3c756ebe078c38d3952035b20c458c021282bb1e7cf9d652069",
     "Accounting.Filler.shortShare": "749d4ab76abac60994e92b0352ffef2096185b20667dc6b4d95ce6ba20daa4c8",
-    "Accounting.Filler.uOf": "6e02d6c2f348edcf0deaa55a3e59de98c5444858b2a7bae416e3b0a1f3522516"
+    "Accounting.Filler.uOf": "6e02d6c2f348edcf0deaa55a3e59de98c5444858b2a7bae416e3b0a1f3522516",
+    "Accounting.Filler.wrongShare": "438bc82c4dd0103c1c8821e983ade709e9d5a3b4929dccf0ef1b7bf89f645a6e"
    },
    "guarantees": [
     "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit",
@@ -6395,7 +6426,10 @@
     "Accounting.SecurityProofs.FillerLuck.FillerCellLuck",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.FillerParityBalanced",
-    "Accounting.SecurityProofs.FillerLuck.ParityLuck"
+    "Accounting.SecurityProofs.FillerLuck.ParityLuck",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt"
    ]
   },
   "Definitions.Accounting.Gates.Codec": {
@@ -7576,6 +7610,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
@@ -12915,6 +12951,9 @@
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.FillerParityBalanced",
     "Accounting.SecurityProofs.FillerLuck.ParityLuck",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
     "Accounting.SecurityProofs.HMu.LemmaB",
@@ -17822,6 +17861,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
@@ -17953,14 +17993,17 @@
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
   },
   "Models.Accounting.Guarantees.FillerLuck": {
-   "digest": "abf8b660686a8797141c8e763e897c75e9768446905b97609354d9b66d0f14e1",
+   "digest": "d3cde4e711bc94a457e80fc73d8515d402260e5bf42307429c1415f56759a67b",
    "definitions": {
     "Accounting.Guarantees.FillerLuck.FillerBlocksDeficit": "8da4c946531f8e64c4b05cfe2a5894f3fb7694ced5855fb91188570eb7d0e394",
     "Accounting.Guarantees.FillerLuck.FillerBudget": "35de8916ef07ff71e8731e9f793411083ec5d1a67b3055f54e47c90cbca43cf9",
     "Accounting.Guarantees.FillerLuck.FillerCellLuck": "2d8bd16cd09901a4144bb17c1ceaac130106be595383b551854b31f870af7df5",
     "Accounting.Guarantees.FillerLuck.FillerLuckAt": "0557ffca8a327015b4527ca0100be93c93105bdac6cbd75f2def3d77db478d86",
     "Accounting.Guarantees.FillerLuck.FillerParityBalanced": "b604dfde3343972900432c63900b828c3d384d6cac98a3ccaac176012ee9a28d",
-    "Accounting.Guarantees.FillerLuck.ParityLuck": "bdad999a09ada08b3018423812c5273f4e690d56c2219d49755edb9df8c18a75"
+    "Accounting.Guarantees.FillerLuck.ParityLuck": "bdad999a09ada08b3018423812c5273f4e690d56c2219d49755edb9df8c18a75",
+    "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit": "2256eacb54b3c10f1870cd24db97fec5e07a08adbda779be30756a8a0b620bf3",
+    "Accounting.Guarantees.FillerLuck.PinnedFillBudget": "6c80c3f1d604b40de849da7ada0c444dcf2410cc8281f1d2df4e36ca487fa201",
+    "Accounting.Guarantees.FillerLuck.PinnedFillLuckAt": "9f7887460a682ed0032bf308da156e0a74810374f727cddd30436dfba2e020c7"
    },
    "guarantees": [
     "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit",
@@ -17968,7 +18011,10 @@
     "Accounting.SecurityProofs.FillerLuck.FillerCellLuck",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.FillerParityBalanced",
-    "Accounting.SecurityProofs.FillerLuck.ParityLuck"
+    "Accounting.SecurityProofs.FillerLuck.ParityLuck",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
+    "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt"
    ]
   },
   "Models.Accounting.Guarantees.Gates": {
