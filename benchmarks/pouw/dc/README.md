@@ -7,7 +7,8 @@ there; the rates and the GEMM's exactness need the GPU (`run.sh`).
 
 | File | What |
 |---|---|
-| `probes/sm90_wgmma.cu` | M3: wgmma alone (s8 m64nNk32 for N = 8, 16, 32, 64, 128, 192, 256, SS and RS, u8×s8, E4M3 N 128/256, E5M2, F16, BF16 N 128/256, TF32, b1 AND.POPC; wait_group 0 and 1; zero-data twins), wgmma s8 n256 beside a lane (warp-specialized `wgspec_` and interleaved `wgmix_`: mix, IMAD, LOP3, SHFL, redux, reduce, duo; `wgU_`: the lanes or mma.sync run until the wgmma ends), mma.sync s8 k16/k32, F16, BF16, TF32, b1, E4M3 |
+| `probes/sm90_wgmma.cu` | M3: wgmma alone (s8 m64nNk32 for N = 8, 16, 32, 64, 128, 192, 256, SS and RS, u8×s8, E4M3 N 128/256, E5M2, F16, BF16 N 128/256, TF32, b1 AND.POPC; wait_group 0 and 1; zero-data twins), wgmma s8 n256 beside a lane (warp-specialized `wgspec_` and interleaved `wgmix_`: mix, IMAD, LOP3, SHFL, redux, reduce, duo; `wgU_`: the lanes or mma.sync run until the wgmma ends), mma.sync s8 k16/k32, F16, BF16, TF32, b1, E4M3; `wgli_` the honest LI loop beside the wgmma with no checkpoint, with LI-CP-W's redux and with its reduce, and `wgli_fill` the redux loop with ffill's filler |
+| `ffill.cuh`, `ffill.cu`, `ffill_ref.py`, `ffill.sh` | ffill, the H200's FFMA filler (`dither-2s-licpw-redux-l32`'s `[filler]`): an IMAD and two `fma.rn.f32` on 3 of a thread's 128 accumulator words a MMA, two chains from the round's coins. `ffill_ref.py` is the receipt in exact arithmetic (F32FmaV2, rounded once) and checks `ffill.cu`'s dumps (`fma`: specials, subnormals, ties and seeded cases; `chain`: the kernel's chains); `ffill.sh` is the H200 job: build, SASS check (no `.FTZ`, the chain an IMAD and two FFMA a step), conformance, and the probes for `wgli_fill` against `wgli_redux` |
 | `probes/sm100_tcgen05.cu` | M4: tcgen05.mma kind::i8 M 64/128 × N 32–256, f8f6f4 E4M3 N 128/256, f16 BF16 (one thread issues, 4 a loop, into TMEM); tcgen05.ld 32x32b.x{1,4,16,32,64,128}, 16x64b.x16, 16x128b.x8, 16x256b.x4 alone; tcgen05.ld, mma.sync and lanes (mix, IMAD, duo, redux, reduce) beside the saturated MMA, block-timed and exact (`ldU_`, `mmaU_`, `syncU_`, `tclaneU_`: one role fixed, the other until it ends); `tcliU_` the honest LI loop (TMEM load then LI fold a segment) with no checkpoint, with LI-CP-W's redux reduction, and with its 5-shuffle fallback, so the ratio is what the checkpoint costs the latency-bound loop |
 | `probes/scalar.cu` | Every family: IADD3, LOP3, IMAD, FFMA, SHF, LEA.HI, SHFL, mix, duo, redux (one `redux.sync.xor.b32`) and reduce (the same by 5 butterfly shuffles + 5 XORs) alone, and the pairs that assign them to pipes (M3's INT32-pipe question, M4d). redux/reduce are LI-CP-W's per-segment checkpoint reduction |
 | `probes/lanes.cuh` | The lane ops all three share |
@@ -27,7 +28,9 @@ there; the rates and the GEMM's exactness need the GPU (`run.sh`).
 
 The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
 dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
-pipe.py's SASS profile and q*, uniform.py's tables, fit and writer). A probe's rate is
+pipe.py's SASS profile and q*, uniform.py's tables, fit and writer) and `../tests/test_ffill.py` (ffill's reference
+against the integer FP32 pipe, its coins, chains and pinned receipts, its dump checks, the header's host build, the
+design that prices it). A probe's rate is
 opcode_probe's: warp instructions a SM a clock, timed only after its SASS gate, its poisoned sink and its no-write
 control pass (`../opcode_probe/README.md`).
 
@@ -45,10 +48,11 @@ python3 benchmarks/pouw/dc/census.py sm90 ~/.research/runs/RUN/out... --write be
 research run --on vy-dc-b200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
 research run --on vy-dc-b200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
 python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/SAT_RUN/out... --write
+research run --on vy-dc-h200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
 ~~~
 
 The node needs CUDA 13.0 (`/usr/local/cuda-13.0`, driver ≥ 580). Each run builds and SASS-gates everything before it
-touches the GPU (91 gates on sm_90a, 68 on sm_100a), then under one lease: the GEMM gate at three shapes (each dump
+touches the GPU (103 gates on sm_90a, 68 on sm_100a), then under one lease: the GEMM gate at three shapes (each dump
 rechecked by `dgemm_ref.py`), the bench only if all three are exact, fp8acc (sm100), the probes with nvidia-smi sampled
 every 200 ms, and `analyze.py` (`verdict.json`). A run is about 6 minutes on the GPU.
 
