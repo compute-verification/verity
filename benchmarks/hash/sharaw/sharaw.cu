@@ -35,7 +35,8 @@ namespace sr {
 constexpr u32 LB = 4096;          // row bytes: sha512/row/v2 at 32768 bits
 constexpr int NBLK = LB / 128;    // its whole data blocks; the padding block is C.kw_xpad
 
-// Diagnostic forms (timing only, never verified): what a part of the leaf costs, by leaving it out.
+// Diagnostic forms (timing only, never verified): what a part of the leaf costs, by leaving it out. NOFOLD is the whole
+// leaf without the fold, which v1_cg's tree launches complete.
 enum Diag : int { FULL = 0, NOLOAD = 1, ROWONLY = 2, NOFOLD = 3 };
 
 // x = SHA-512(P(32768) || row). PF: block b+1's loads are issued before block b's compression (a register double buffer).
@@ -211,8 +212,15 @@ __global__ void __launch_bounds__(TPB, MINB)
 // commit_gpu's helpers inline a compression at each call, and those that switch on a length (frame leaf, pad, node) one per
 // length: a leaf kernel built from them holds some 25 copies, so warps in different phases fetch different code. Here a
 // block whose words the host fixed (compress_from's prefix) is hashed whole instead, which costs a few rounds a leaf.
-__device__ __noinline__ void cmp(u64* st, u64* w) { sha::compress(st, w); }
-__device__ __noinline__ void cmp_kw(u64* st, const u64* kw) { sha::compress_kw(st, kw); }
+// SR_INLINE=1 (the _inl build): the same kernels with every call inlined. A call passes st and w through the stack, and on
+// sm_120 (128 KB of L1 a SM) that local traffic at full occupancy costs more than the code footprint saves.
+#if SR_INLINE
+#define SR_CALL __forceinline__
+#else
+#define SR_CALL __noinline__
+#endif
+__device__ SR_CALL void cmp(u64* st, u64* w) { sha::compress(st, w); }
+__device__ SR_CALL void cmp_kw(u64* st, const u64* kw) { sha::compress_kw(st, kw); }
 
 template <int NB>
 DEV void f_first_nb(u64 pos, u64* out) {
@@ -747,6 +755,12 @@ struct Mine {
     const u32 cnt = (u32)std::min<u64>(width, TPB);
     sr_data<TPB, MINB, PF, DG><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, n, width, depth, S, F, levels, bc, ctr);
   }
+  // v1's salt and leaf kernels (every compression inlined), the leaves unfolded, then commit_gpu's tree schedule
+  void v1_cg(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
+    salts(st);
+    data<256, 2, false, NOFOLD>(rows, st, bc);
+    nodes_cg(st);
+  }
   void release() { cudaFree(levels); cudaFree(S); cudaFree(F); cudaFree(ctr); cudaFree(Tn); }
 };
 }  // namespace sr
@@ -888,6 +902,7 @@ static int check(int argc, char** argv) {
       case 10: me.v4<64>(d, 0, bc); break;
       case 11: me.v3s_cg(d, 0, 1, nullptr, nullptr, bc); break;
       case 13: me.v4<128, false>(d, 0, bc); break;
+      case 14: me.v1_cg(d, 0, bc); break;
       case 12: {
         static cudaStream_t s2;
         static cudaEvent_t e2[2];
@@ -982,6 +997,7 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   cudaEvent_t ovev[2];
   CK(cudaEventCreateWithFlags(&ovev[0], cudaEventDisableTiming));
   CK(cudaEventCreateWithFlags(&ovev[1], cudaEventDisableTiming));
+  arms.push_back({"v1_cg", true, [&](cudaStream_t s) { me.v1_cg(src, s); }, comps});
   arms.push_back({"v3s_cg", true, [&](cudaStream_t s) { me.v3s_cg(src, s); }, comps});
   arms.push_back({"v3s_cg_ov", true, [&](cudaStream_t s) { me.v3s_cg(src, s, 2, st2, ovev); }, comps});
   arms.push_back({"v4_64", true, [&](cudaStream_t s) { me.v4<128>(src, s); }, comps});
