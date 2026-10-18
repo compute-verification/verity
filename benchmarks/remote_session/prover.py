@@ -44,8 +44,11 @@ step is the session's own, before each pass, and a block lands in its slot when 
 With a serving trace, the appends a pass's step made go out after the root before it and before the pass is computed,
 each its own message (its tree's root and size, `Session.append`; a pass's are sent together) answered with its
 coin, under which the backend encodes its blocks (`audit.Store.encode`); then the root's message carries the blocks
-released since the last root sent, as runs (`Session.release`), and the pass's plan as a change from the last one
-sent (`Session.receive(..., change=...)`).  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
+released since the last root sent, as runs, with those among them the trace withdrew (`withdrawn`, freed before their
+encode landed, so never written: `Session.release(released, withdrawn)`), and the pass's plan as a change from the
+last one sent (`Session.receive(..., change=...)`).  The hello says whether the backend defers an appended block's
+residency to its encode (`deferred`, a backend's attribute, False if it has none), which the verifier refuses under a
+lifetime of one window.  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
 takes the chain over its appends when the pass is launched (`audit.Store.head`).  A pass whose appends went out is
 sent, never dropped at a boundary, since a coin no root follows rejects the session; one dropped before its appends
 went out sends nothing, and the next pass sends its appends and changes too.
@@ -109,7 +112,7 @@ class _Pass:
     step: int = 0
     discard: bool = False
     plan: rb.Plan | None = None
-    upto: tuple[int, int] = (0, 0)
+    upto: tuple[int, int, int] = (0, 0, 0)
     flushed: bool = False
 
 
@@ -306,6 +309,7 @@ class ServingTrace:
         self.held: dict[int, tuple[int, bytes]] = {}
         self.appends: list[audit.Append] = []
         self.released: list[int] = []
+        self.withdrawn: list[int] = []
         self.appended: list[int] = []
 
     def stale(self, window: int) -> list[int]:
@@ -376,6 +380,7 @@ class ServingTrace:
             self.live.update(range(a.first, a.first + a.count))
         gone = [j for f, c in change.released for j in range(f, f + c)]
         self.released.extend(gone)
+        self.withdrawn.extend(j for f, c in change.withdrawn for j in range(f, f + c))
         self.live.difference_update(gone)
         return change
 
@@ -614,7 +619,7 @@ class ProverSide:
         layout = self.backend.layout() if hasattr(self.backend, "layout") else None
         self.conn.send({"type": "hello", "node": self.node.hex(), "blocks": self.backend.blocks,
                         "payload_root": root.hex(), "codec": codec.name, "receipt": receipt, "rows": rows,
-                        "layout": layout})
+                        "layout": layout, "deferred": bool(getattr(self.backend, "deferred", False))})
         head, _, _ = self.expect("registration")
         self.registration = wire.registration_of(head["registration"])
         if self.registration.payload_root != root or self.registration.blocks != self.backend.blocks:
@@ -675,7 +680,7 @@ class ProverSide:
 
         backend, clock = self.backend, self.conn.clock
         step_of = getattr(backend, "step_of", None)
-        launched, sent_plan, sent_released, sent_appends = 0, rb.Plan.whole(N), 0, 0
+        launched, sent_plan, sent_released, sent_withdrawn, sent_appends = 0, rb.Plan.whole(N), 0, 0, 0
         ahead: Ahead | None = getattr(trace, "ahead", None)
         self.misread = {}
 
@@ -705,7 +710,7 @@ class ProverSide:
             ticket = backend.launch(i, after, plan)
             return _Pass(t, i, ticket, clock() if ahead is not None else start,
                          step=step_of(ticket) if step_of is not None and ahead is None else n, plan=plan,
-                         upto=(len(trace.appends), len(trace.released)))
+                         upto=(len(trace.appends), len(trace.released), len(getattr(trace, "withdrawn", ()))))
 
         backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
         pending: deque = deque()
@@ -714,16 +719,18 @@ class ProverSide:
         misread = getattr(backend, "misread", None)
 
         def send(x: _Pass, root: bytes, handle, seen: int) -> None:
-            nonlocal sent_plan, sent_released
+            nonlocal sent_plan, sent_released, sent_withdrawn
             with self.lock:
                 self.kept[(x.t, x.i)] = handle
             msg = {"type": "root", "t": x.t, "i": x.i, "root": root.hex(), "step": x.step}
             if x.plan is not None:
                 if x.upto[1] > sent_released:
                     msg["released"] = [list(r) for r in runs_of(sorted(trace.released[sent_released:x.upto[1]]))]
+                if x.upto[2] > sent_withdrawn:
+                    msg["withdrawn"] = [list(r) for r in runs_of(sorted(trace.withdrawn[sent_withdrawn:x.upto[2]]))]
                 msg["change"] = [[list(r) for r in side] for side in plan_change(sent_plan, x.plan)]
                 self.plans[(x.t, x.i)] = x.plan
-                sent_plan, sent_released = x.plan, x.upto[1]
+                sent_plan, sent_released, sent_withdrawn = x.plan, x.upto[1], x.upto[2]
             if misread is not None and (got := misread(x.ticket)):
                 self.misread[(x.t, x.i)] = got
             self.conn.send(msg)

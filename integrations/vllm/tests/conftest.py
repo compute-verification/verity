@@ -72,3 +72,11 @@ def pytest_collection_modifyitems(items) -> None:
     for item in items:
         if reason := KNOWN_FAILURES.get(item.nodeid):
             item.add_marker(pytest.mark.xfail(reason=f"known failure on main: {reason}", strict=False))
+
+
+@pytest.fixture(autouse=True)
+def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
+    """The row driver's sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
+    SWEEP_DIR unset would write rows there (VLLM-21); every test gets its own instead, which a test can still override."""
+    monkeypatch.setenv("SWEEP_DIR", str(tmp_path_factory.mktemp("sweep")))
+

@@ -405,8 +405,8 @@ def lean_class_of() -> tuple[dict[str, str], dict[str, str]]:
 def test_the_table_is_leans_class_of():
     """Lean's `Accounting.Gates.classOf` id for id: each of the registry's ids is in its class here, a family's instances in
     the family's (run and registered inputs are read by their node, not the table); and each id the table lists that Lean
-    doesn't is in `NOT_IN_LEAN`. Then the FP dots are roundings (refused for their operand bits, not their class), and so
-    are the integer products reduced mod 2^w and the field extractions; the clamps and the 1-bit logic ops are
+    doesn't is in `NOT_IN_LEAN`. Then the FP dots are roundings (refused for their operand bits, not their class),
+    and so are the integer products reduced mod 2^w and the field extractions; the clamps and the 1-bit logic ops are
     compare_selects; PoUW's wrapping dots are family steps, and the receipt fold a fold."""
     ids, families = lean_class_of()
     assert len(ids) > 200 and {i: (P.class_of(i), c) for i, c in ids.items() if P.class_of(i) != c} == {}
