@@ -178,9 +178,9 @@ inputs only, nothing of the inner proof. One-sided at every event, so both ways 
 Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
 that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512.
 
-The salts are drawn uniformly here; the firewall reads them from the operating system, and under A3
-(`uniform/io-getrandombytes`) the same bound holds at those bytes (`Flock.SecurityProofs.recursiveZK_os_gap`), so no
-premise on a stream generator enters. -/
+The salts are drawn uniformly here; the firewall reads them from the operating system, and under A3 per test
+(`UniformRandomBytesTest`, `uniform/io-getrandombytes`) the same bound plus the source's slack `η` on the event's test
+holds at those bytes (`Flock.SecurityProofs.recursiveZK_os_gap`), so no premise on a stream generator enters. -/
 def RecursiveZK : Prop :=
   ∀ {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo]
     [Fintype Ωs] [Nonempty Ωs] (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)

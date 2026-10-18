@@ -164,10 +164,11 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   `LiveRefine` at the worker's passed rounds and `FillRefine` at the scheduled rounds, where the frame takes the coins,
   and `StopRefine`, the stop where it refuses them; `LeanRelease.refD`), so
   **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at it, at any worker: one bit a session.
-* `Os`: the server's tape as the operating system's bytes (`OsTape`: the frames' draws and the tap's reads, one for one),
-  and A3's step to a uniform tape beside independent randomness (`Pr_os_prod`). `ZkDeferredOs`, `ZkServerBlindOs` and
-  `ZkServerLeanOs` state the three theorems at those bytes under A3, the bound unchanged; they are statements, not yet
-  proved here.
+* `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
+  frame and the tap's streams, one for one), the frame's read proved to be the release's draws (`frame_draws`, with a read
+  of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under
+  A3 per test, up to its slack `η` (`Pr_os_prod`). `ZkDeferredOs`, `ZkServerBlindOs` and `ZkServerLeanOs` state the
+  three theorems at those bytes, the bound plus `η`, proved as `zkDeferredOs`, `zkServerBlindOs` and `zkServerLeanOs`.
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
