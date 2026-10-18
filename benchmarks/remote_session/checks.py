@@ -73,8 +73,8 @@ class Checks:
     @staticmethod
     def snapshot(session: audit.Session, t: int) -> bytes:
         """What `_check` reads of window t, pickled: the session's parameters, tiles, registration, payload domain and
-        appends so far, the window's challenge, plans, roots and the appends' head at each, and the window before's
-        last root."""
+        appends so far with their coins, the window's challenge, plans, roots and the appends' head at each, and the
+        window before's last root."""
         w = session.windows[t]
         view = object.__new__(type(session))
         view.params, view.tiles, view.registration = session.params, session.tiles, session.registration
