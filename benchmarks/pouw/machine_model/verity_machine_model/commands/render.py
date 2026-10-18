@@ -1,6 +1,6 @@
 """machine-model render [SECTION ...]       every table of the data directory as Markdown, read from data/ alone (no
                                           solve): vectors, epochs, rows, floors, designs, honest, units, forms, table,
-                                          attacks, devices (default: all of them); the README holds none"""
+                                          headline, attacks, devices (default: all of them); the README holds none"""
 from __future__ import annotations
 
 import tomllib
@@ -135,6 +135,20 @@ def _route(data: Path) -> str | None:
                    "source"], [[t["q"], t["bytes"], l2, t["sms"], t["mhz"], t.get("status"), t["source"]]])
 
 
+def _headline(data: Path) -> str | None:
+    p = data / "headline.toml"
+    if not p.is_file():
+        return None
+    t = tomllib.loads(p.read_text())
+    readings = list(t.get("reading", {}))
+    body = [[f, x.get("gpu"), f"`{x['design']}`", x.get("p1") and f"`{x['p1']}`",
+             *(x.get(r, {}).get("vector") for r in readings), "; ".join(x.get("conditions", ()))]
+            for f, x in t.get("family", {}).items()]
+    head = ["family", "GPU", "design", "p = 1 sibling",
+            *(f"{t['reading'][r].get('title', r)} (q* = {t['reading'][r]['q']:g})" for r in readings), "conditions"]
+    return _table(head, body)
+
+
 def _attacks(data: Path) -> str | None:
     fams: dict[str, list] = {}
     for a in all_attacks(data):
@@ -162,8 +176,8 @@ def _devices(_data: Path) -> str | None:
 SECTIONS = {"vectors": ("Vectors", _vectors), "epochs": ("Epochs and their census", _epochs),
             "rows": ("Rows", _rows), "floors": ("Floors", _floors), "designs": ("Designs", _designs),
             "honest": ("Honest kernels", _honest), "units": ("Proof units", _units), "forms": ("MMA forms", _forms),
-            "table": ("The table route", _route), "attacks": ("Attack families", _attacks),
-            "devices": ("Devices", _devices)}
+            "table": ("The table route", _route), "headline": ("The per-family headline's designs", _headline),
+            "attacks": ("Attack families", _attacks), "devices": ("Devices", _devices)}
 
 
 def _where(data: Path) -> str:

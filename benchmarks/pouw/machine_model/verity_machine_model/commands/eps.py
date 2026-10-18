@@ -17,17 +17,17 @@
                                           charges a uniform instruction C times an ALU's cost on the issue rows
                                           (a no-op where the census has it there already); --checking full
                                           (default) is the protocol with every word and operand verified, the
-                                          core ε alone, and --checking sampled adds ε_sample = ε_luck + ε_adapt
-                                          on its own line, for the design's proof unit (data/adapt.toml) or
-                                          --adapt UNIT's
+                                          core ε alone (ε_luck in it, Corollary D3), and --checking sampled adds
+                                          ε_sample = ε_adapt on its own line, for the design's proof unit
+                                          (data/adapt.toml) or --adapt UNIT's
 machine-model eps --table [DESIGN ...] [--fold-sweep R,R,...] [--fill X [--fill-mix K=V,...]] [--operands O]
                   [--credit C] [--q Q] [--lookups ...] [--uni-issue C] [--checking full|sampled [--adapt UNIT]]
                                           one line a design (every design by default; with --fold-sweep, each at
                                           each fold cost), in two column groups: the core (γ and γ_f, γ with the
                                           clock gap f_max/f_H, the credited time, ε_skip, ε_sched, ε_machine at
-                                          q* = 2, 4, 8, 16 and its floor, the core ε at q* = 2, 8 and Q, and the
-                                          thresholds), then with --checking sampled the sample (ε_luck, ε_adapt
-                                          and ε_sample at Q)"""
+                                          q* = 2, 4, 8, 16 and its floor, ε_luck at Q, the core ε at q* = 2, 8
+                                          and Q, and the thresholds), then with --checking sampled the sample
+                                          (ε_adapt and ε_sample at Q)"""
 from __future__ import annotations
 
 import argparse
@@ -68,8 +68,8 @@ def add(sub) -> None:
                    help="put the uniform classes on the issue rows (issue, the joint JI…_0) at C times an ALU's "
                         "cost there (PREDICT's u16s_l7qs measured 0.92, r20261017-045133-67bf)")
     e.add_argument("--checking", choices=("full", "sampled"), default="full",
-                   help="full: every word and operand verified, the core ε alone (default); sampled: also ε_sample = "
-                        "ε_luck + ε_adapt, on its own line and columns")
+                   help="full: every word and operand verified, the core ε alone, ε_luck in it (default); sampled: "
+                        "also ε_sample = ε_adapt, on its own line and columns")
     e.add_argument("--adapt", metavar="UNIT",
                    help="with --checking sampled: the proof unit (data/adapt.toml; default: the design's own)")
     e.add_argument("--lookup-bytes", type=float, metavar="B",
@@ -160,10 +160,10 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
         "measured_cycles_per_mma": e.T_honest_measured * per_mma if e.T_honest_measured else None,
         "checking": checking, "terms": e.terms(), "cert": e.cert, "route": e.route, "floor": e.floor,
         "machine_as_built": e.machine_as_built, "core": e.core(), "core_certified": e.core(sched=False),
+        "luck_budget": {"checks": d.checks, "delta": d.delta, "p": d.p},
         "sample": None if not sampled else {
-            "eps": e.sample(), "luck": e.luck, "adapt": adapt.eps if adapt else 0.0,
-            "unit": adapt.name if adapt else None, "selection": adapt.selection if adapt else None,
-            "budget": {"checks": d.checks, "delta": d.delta, "p": d.p}},
+            "eps": e.sample(), "adapt": adapt.eps if adapt else 0.0,
+            "unit": adapt.name if adapt else None, "selection": adapt.selection if adapt else None},
         "sources": {"skip": {k: p.source for k, p in d.skip.items()}, "mand": {k: p.source for k, p in d.mand.items()},
                     "clock": d.clock.source, "luck": d.luck_source, "baseline": d.baseline_source,
                     "operands": d.floor_source if operands == "floor" else operands},
@@ -193,19 +193,19 @@ def _eps_table(args, pi: E.Machine) -> int:
                                   f"word ({_l2(tb)})")
     unit = "" if not sampled else (f" Sample (the sampling compiler, never in core): the proof unit ("
                                    f"{f'{args.adapt} for every design' if args.adapt else 'each design its own'}), "
-                                   f"ε_luck at q* = {args.q:g}, ε_adapt, ε_sample = their sum.")
+                                   f"ε_adapt, ε_sample = ε_adapt.")
     print(f"Π {pi.vector}, operands {args.operands}, credit {cred}{look}, checking {args.checking}. Core (every word "
           f"and operand verified): γ_f γ with the clock gap f_max/f_H; T/MMA the credited time and its binding rows, "
           f"H/cred honest's time over it; ε_skip; "
           f"ε_sched; ε_machine at q* = {', '.join(map(str, qs))} and its floor (the lane and uniform routes closed); "
-          f"core ε at q* = {', '.join(f'{q:g}' for q in qe)}; q*₀ the least q* at which ε_machine reaches its floor "
-          f"(all routes; lanes alone); the uniform route alone at q* = 16.{unit}")
+          f"ε_luck at q* = {args.q:g}; core ε at q* = {', '.join(f'{q:g}' for q in qe)}; q*₀ the least q* at which "
+          f"ε_machine reaches its floor (all routes; lanes alone); the uniform route alone at q* = 16.{unit}")
     print(f"{'design':26s} {'fold':>6s} {'L':>3s} {'γ':>6s} {'γ_f':>6s} {'T/MMA':>7s} {'binds':12s} {'H/cred':>6s} "
           f"{'skip':>7s} "
           f"{'sched':>6s} " + " ".join(f"{'m@' + str(q):>7s}" for q in qs)
-          + f" {'floor':>7s} " + " ".join(f"{f'core@{q:g}':>9s}" for q in qe)
+          + f" {'floor':>7s} {'luck':>7s} " + " ".join(f"{f'core@{q:g}':>9s}" for q in qe)
           + f" {'q*₀':>9s} {'lanes':>6s} {'UP@16':>6s}"
-          + (f" | {'unit':>15s} {'luck':>7s} {'adapt':>7s} {'sample':>7s}" if sampled else ""))
+          + (f" | {'unit':>15s} {'adapt':>7s} {'sample':>7s}" if sampled else ""))
     rows = []
     for n in names:
         for r in sweep:
@@ -228,11 +228,10 @@ def _eps_table(args, pi: E.Machine) -> int:
               f"{e.baseline.T * per_mma:7.3f} "
               f"{','.join(e.baseline.binding)[:12]:12s} {e.credit_ratio:6.3f} {100 * e.skip:6.3f}% {sched:>6s} "
               + " ".join(f"{100 * es[q].machine_eps:6.2f}%" for q in qs)
-              + f" {100 * e.floor:6.2f}% "
+              + f" {100 * e.floor:6.2f}% {100 * eq.luck:6.3f}% "
               + " ".join(f"{100 * es[q].core():8.3f}%" for q in qe)
               + f" {_thr(t):>9s} {_thr(tl):>6s} {100 * up:5.2f}%"
-              + (f" | {ad.name:>15s} {100 * eq.luck:6.3f}% {100 * ad.eps:6.3f}% {100 * eq.sample():6.3f}%"
-                 if ad else ""))
+              + (f" | {ad.name:>15s} {100 * ad.eps:6.3f}% {100 * eq.sample():6.3f}%" if ad else ""))
     return 0
 
 
@@ -299,16 +298,16 @@ def run(args) -> int:
     print(f"  ε_machine  {_pct(t['machine'])} = ε_cert(π*) {_pct(e.cert)} + ε_route(π*) {_pct(e.route)}; floor "
           f"{_pct(e.floor)} (the lane and uniform routes closed); against honest as built {_pct(e.machine_as_built)}")
     print(f"  ε_clock    {_pct(t['clock'])}: " + (d.clock.source if args.credit == "H" else "credited at f_max, in γ"))
-    core = ("skip", "mand", "machine", "sched", "clock")
-    print(f"  ε core     {_pct(e.core())} (100% checking, every word and operand verified; first order "
+    short = ", ".join(f"{k} {100 * v:.4f}%" for k, v in e.lucky.short.items())
+    print(f"  ε_luck     {_pct(t['luck'])}: the lucky cheater leaves undone {short} (words alone: d̄ "
+          f"{100 * e.deficit:.4f}%; budget δ {d.delta:.3g}, p {d.p} a word"
+          + "".join(f", {f.p} filler {j + 1}" for j, (f, _) in enumerate(e.fillers)) + f", S {d.checks:g}: "
+          f"{d.luck_source})")
+    core = ("skip", "mand", "machine", "luck", "sched", "clock")
+    print(f"  ε core     {_pct(e.core())} (100% checking, every word and operand verified, Corollary D3; first order "
           f"{_pct(sum(t[k] or 0.0 for k in core))})")
     if args.checking == "sampled":
-        short = ", ".join(f"{k} {100 * v:.4f}%" for k, v in e.lucky.short.items())
-        print(f"  ε_sample   {_pct(e.sample())} (the sampling compiler's, never in the core ε) = ε_luck + ε_adapt")
-        print(f"      ε_luck  {_pct(t['luck'])}: the lucky cheater leaves undone {short} (words alone: d̄ "
-              f"{100 * e.deficit:.4f}%; budget δ {d.delta:.3g}, p {d.p} a word"
-              + "".join(f", {f.p} filler {j + 1}" for j, (f, _) in enumerate(e.fillers)) + f", S {d.checks:g}: "
-              f"{d.luck_source})")
+        print(f"  ε_sample   {_pct(e.sample())} (the sampling compiler's, never in the core ε) = ε_adapt")
         print(f"      ε_adapt {_pct(t['adapt'])}: proof unit {ad.name}, {ad.selection}: {ad.source}")
     print(f"  q* threshold (ε_machine = its floor): {_thr(rec['threshold'])}; lanes alone "
           f"{_thr(rec['threshold_lanes'])}; the uniform route alone at q* = 16: {_pct(rec['uniform_at_16'])}")

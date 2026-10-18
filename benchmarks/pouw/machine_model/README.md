@@ -37,6 +37,7 @@ uv run machine-model eps --table --credit floor --lookups --index-bits 2   # 2-b
 uv run machine-model eps --table --credit floor --uni-issue 0.92   # a uniform instruction takes an issue slot
 uv run machine-model eps --device sm89 --table --credit floor --operands floor   # the L40S: Dither-1S/2S/C at L = 16, 32
 uv run machine-model eps --device sm100 --table --credit floor --operands floor   # the B200 at L = 32 to 256
+uv run machine-model headline             # each family's design of record at the data-sheet and measured readings
 uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
 ~~~
 
@@ -71,6 +72,8 @@ The data, each kind of thing a file or a line of its own:
   product is exact, and its SASS.
 - `data/table.toml`: the cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2
   bandwidth it is bound by (the most L2 read in any measured pattern, + 2%).
+- `data/headline.toml`: the per-family headline's spec: each GPU family's design of record, the vector each reading
+  prices it on, and the conditions no computation shows.
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 
 The code:
@@ -90,6 +93,7 @@ The code:
   hidden(n̄) the useful work any program could still add beside the pooled certified load n̄ (the filler workstream,
   decision 77; note:20261017T0652Z-draft-filler).
 - `verity_machine_model/redteam.py`: the red-team audit of a headline design against a device's committed census.
+- `verity_machine_model/headline.py`: the per-family headline, every number computed from the design files and vectors.
 - `verity_machine_model/cli.py` and `verity_machine_model/commands/`: the `machine-model` command. `cli.py` only
   dispatches; each command is a module of `commands/` with its usage as its docstring, `add(sub)` its arguments and
   `run(args)` its body, so a new command is a new module and touches no other.
