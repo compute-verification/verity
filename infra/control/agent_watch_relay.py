@@ -25,12 +25,15 @@ REG = slack.load_registry(slack.registry_path())
 ALERTS = slack.channel_id_for(REG, "agent-alerts")
 HOLDERS = {a: h["handle"] for h in REG.get("handles") or []
            for a in re.findall(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", str(h.get("holder", "")))}
-SAY = {"held": "was held after a finished tool call since {since} ({minutes} min); the watch {action}",
+SAY = {"held": "was held after a finished tool call or the end of its turn since {since} ({minutes} min); the watch {action}",
        "held_again": "was held again since {since} ({minutes} min), within an hour of the last restart: left for a person",
+       "continued": "got the continue run the API had refused after the watch cancelled its held run",
+       "continue_failed": "had its held run cancelled at {since}, and the API refused the continue run for 30 min: left for "
+                          "a person (send it a message)",
        "long_call": "has had a tool call running since {since} (45+ min); not cancelled",
        "crashed": "ended in ERROR; the watch {action}",
        "erroring": "ended in ERROR again after {restarts} restarts in a row: left for a person (relaunch it, or report it to Cursor)",
-       "stuck": "has a run in {status} since {since} ({minutes} min) and starts no other; not cancelled (the API refuses it)"}
+       "stuck": "has a run in {status} since {since} ({minutes} min), nothing streamed or started behind it; not cancelled"}
 
 
 def log(msg: str) -> None:
@@ -51,8 +54,11 @@ def pod(cmd: str) -> str:
 
 def once() -> None:
     done = int(OFFSET.read_text()) if OFFSET.exists() else 0
-    lines = pod(f"tail -n +{done + 1} {EVENTS} 2>/dev/null || true").splitlines()
-    for ln in lines:
+    *lines, _ = pod(f"cat {EVENTS} 2>/dev/null || true").split("\n")   # a line still being written waits a pass
+    if len(lines) < done:
+        log(f"{EVENTS} has {len(lines)} lines, fewer than the {done} posted: replaced, so posting it from the top")
+        done = 0
+    for ln in lines[done:]:
         try:
             rec = json.loads(ln)
         except ValueError:
@@ -72,7 +78,7 @@ def main() -> int:
     while True:
         try:
             once()
-        except (subprocess.SubprocessError, OSError) as e:
+        except (subprocess.SubprocessError, OSError, slack.SlackError) as e:   # a refused post is posted again next pass
             log(f"pass failed: {type(e).__name__}: {e}")
         if "--once" in sys.argv:
             return 0
