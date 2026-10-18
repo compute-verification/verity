@@ -860,6 +860,9 @@
    "assumptions": [],
    "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
   },
+  "Accounting.SecurityProofs.Gates.Bf16ToF32Affine": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Gates.ClampOrWrap": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Gates.ClampOrWrap : Accounting.Guarantees.Gates.ClampOrWrap"],
@@ -5261,6 +5264,10 @@
    },
    "Accounting.SecurityProofs.Gates.S32LowByteRange": {
     "function": "Accounting.Gates.s32LowByte",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Gates.Bf16ToF32Affine": {
+    "function": ["Accounting.Gates.classOf", "Verity.Prims.bf16ToF32"],
     "outcome": "none"
    }
   },
