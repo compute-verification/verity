@@ -6,8 +6,9 @@ the model's query heads) under the seed's key, layer l's slots at codec words ``
 ~~~text
 copy      pg_window copies the cache (``encoded`` False)
 flagged   decoded, every slot flagged plaintext
-encoded   decoded: at each step's first layer every slot an earlier step wrote (its window flagged it from slot_mapping) is
-          encoded in place under the seed's key and unflagged, as the session encodes a slot once its append's coin arrives
+encoded   decoded: before each layer's window every slot an earlier step wrote (its window flagged it from slot_mapping) is
+          encoded in place under the seed's key and unflagged, as the session encodes a slot once its append's coin arrives,
+          but for a slot this step's write refilled
 ~~~
 
 Unset, nothing is installed.  A value that is not ``MODE:PATH`` with one of these modes, or a model without int8 attention
@@ -58,26 +59,30 @@ def paged_module() -> ModuleType:
 
 
 class SettlingRead(CreditedRead):
-    """`encoded`: before each step's windows, every layer's flagged slots encoded in place at their codec words and unflagged
-    (a layer's cache vLLM's view [pages, KV heads, slots, 2 head_dim] over [pages][slots][KV heads][K ‖ V])."""
+    """`encoded`: before each layer's window, its slots an earlier step flagged encoded in place at their codec words and
+    unflagged, but for the slots this step's write refilled (a freed block handed to a new request): the layer's write
+    precedes its window, so those hold this step's plaintext and stay flagged (a layer's cache vLLM's view [pages, KV heads,
+    slots, 2 head_dim] over [pages][slots][KV heads][K ‖ V])."""
 
-    def __init__(self, paged: Any, lib: Any, caches: list[torch.Tensor], bases: dict[int, int], flags: list[torch.Tensor],
-                 words: int) -> None:
+    def __init__(self, paged: Any, lib: Any, bases: dict[int, int], flags: list[torch.Tensor], words: int) -> None:
         super().__init__(paged, lib, lambda layer: LayerKeys(bases[layer], None, flags[layer]), rounds=ROUNDS)
-        self.caches, self.bases, self.flags, self.words = caches, bases, flags, words
+        self.bases, self.flags, self.words = bases, flags, words
         self.settled = 0
 
-    def buffers(self, *args: Any) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        st = self.paged.stream(torch)
-        for layer, cache in enumerate(self.caches):
-            slots = self.flags[layer].nonzero().flatten().tolist()
-            base, block = cache.data_ptr(), cache.stride(2) * cache.element_size()
-            for s in slots:
-                p = base + s * block
-                self.lib.call("kv_encode", p, p, self.words, self.bases[layer] + s * self.words, ROUNDS, 0, st)
-            self.flags[layer].zero_()
-            self.settled += len(slots)
-        return super().buffers(*args)
+    def read(self, kv_cache: torch.Tensor, layer: int, block_table: torch.Tensor, slot_mapping: torch.Tensor | None,
+             *rest: torch.Tensor) -> None:
+        flags = self.flags[layer]
+        due = flags.clone()
+        if slot_mapping is not None:
+            due[slot_mapping[slot_mapping >= 0].long()] = 0
+        slots = due.nonzero().flatten().tolist()
+        base, block, st = kv_cache.data_ptr(), kv_cache.stride(2) * kv_cache.element_size(), self.paged.stream(torch)
+        for s in slots:
+            p = base + s * block
+            self.lib.call("kv_encode", p, p, self.words, self.bases[layer] + s * self.words, ROUNDS, 0, st)
+        flags.zero_()
+        self.settled += len(slots)
+        super().read(kv_cache, layer, block_table, slot_mapping, *rest)
 
 
 def install(engine: Any, value: str | None) -> dict[str, Any] | None:
@@ -103,6 +108,6 @@ def install(engine: Any, value: str | None) -> dict[str, Any] | None:
         read = CreditedRead(P, lib, lambda layer: LayerKeys(bases[layer], None, ones[layer]), rounds=ROUNDS)
     else:
         flags = [torch.zeros(nslots, dtype=torch.uint8, device=c.device) for c in caches]
-        read = SettlingRead(P, lib, caches, bases, flags, words)
+        read = SettlingRead(P, lib, bases, flags, words)
     layers = install_credited_read(engine.model, read)
     return {"mode": mode, "paged_so": so, "lib": dict(lib.shape), "layers": len(layers), "slots": nslots, "token_layer_words": words}
