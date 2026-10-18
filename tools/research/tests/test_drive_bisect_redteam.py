@@ -8,11 +8,10 @@ import subprocess
 
 import pytest
 
-from research.cli import main as research_main
 from research.drive import CHECK_STEPS, NOT_STARTED, SIGTERM_RC
 from test_merge_gate import CHECKED
 from test_queue import World, _git
-from test_queue_drive import Harness, _failed_run, _tip
+from test_queue_drive import Harness, _check, _failed_run, _tip
 
 FAILURE = ("tests/test_x.py::test_y", "tests/test_x.py:2")      # suite pkg's test, which no PR changes
 _seq = itertools.count()
@@ -24,14 +23,7 @@ def world(tmp_path):
 
 
 def _record(world: World, monkeypatch, commit: str, ok: bool) -> None:
-    """A recorded `check` attempt of ``commit`` that passes or fails, once per check of it (a resend checks it again)."""
-    monkeypatch.setenv("RESEARCH_STORE", str(world.tmp / "store"))
-    tree = world.tmp / f"rt-{commit[:12]}-{next(_seq)}"
-    _git(world.dev, "fetch", "-q", "origin")
-    _git(world.dev, "worktree", "add", "-q", "--detach", str(tree), commit)
-    monkeypatch.chdir(tree)
-    research_main(["run", "--runs-dir", str(world.tmp / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_check:T",
-                   "--cwd", "source", "--", *(CHECKED if ok else ("false",))])
+    _check(world, monkeypatch, commit, CHECKED if ok else ("false",))
 
 
 def _has(world: World, commit: str, path: str) -> bool:

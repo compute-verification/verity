@@ -420,7 +420,7 @@ class Driver:
         self.launch_touched: Callable[[Path, str, str, str], tuple[list[str], str]] = (
             lambda repo, commit, machine, base: train_launch(repo, commit, machine, False, auth=q.auth, against=base))
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
-        self.repo, self.dry_run, self._seen, self._prs = q.workdir, False, {}, None
+        self.repo, self.dry_run, self._seen, self._prs, self._ev = q.workdir, False, {}, None, {}
         self._drive: dict | None = None
         q.warming = self.warming
 
@@ -432,6 +432,13 @@ class Driver:
         if missing := [rid for rid in ids if rid not in self._seen]:
             self._seen.update(self.states(self.repo, missing))
         return {rid: self._seen[rid] for rid in ids}
+
+    def _evidence(self, v: Verdict) -> list[Path]:
+        """`evidence` of a failed verdict, fetched once a tick: `failed` reads it before the sync and again for the trains, and a
+        bisection can wait hours on a check slot."""
+        if v.attempt not in self._ev:
+            self._ev[v.attempt] = self.evidence(self.repo, v.attempt.split())
+        return self._ev[v.attempt]
 
     def verdict(self, commit: str, base: str, drive: dict) -> Verdict:
         """`commit`'s check: passed (the gate's rule, against `base`), failed, running (a launch of ours not yet in the store),
@@ -723,7 +730,7 @@ class Driver:
         file, `NO_REPORT`, `UNTOUCHED` when no change touches the declared inputs of what failed either (`by_inputs`), else
         that overlap, which only informs (18 Oct 01:55Z: ejecting on it took #2348 and nine others with the culprit)."""
         found: set[str] = set()
-        dirs = self.evidence(self.repo, v.attempt.split())
+        dirs = self._evidence(v)
         for d in dirs:
             if (paths := implicated(d)) is None:
                 if killed(d, v.why):
@@ -986,7 +993,7 @@ class Driver:
 
     def tick(self, dry_run: bool = False) -> str:
         q = self.q
-        self.dry_run, self._seen, self._prs = dry_run, {}, None
+        self.dry_run, self._seen, self._prs, self._ev = dry_run, {}, None, {}
         q._clone()
         q.fetch()
         if q.store is not None and q.store.remote is not None:

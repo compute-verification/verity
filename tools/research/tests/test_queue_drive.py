@@ -2,6 +2,7 @@
 goes to the lander once.  On `test_queue`'s throwaway origin, with the launch, the runs' states and the merge-thread post injected."""
 from __future__ import annotations
 
+import itertools
 import os
 import pytest
 
@@ -38,10 +39,13 @@ class Harness:
         return self.d.tick(**kw)
 
 
+_checks = itertools.count()
+
+
 def _check(world: World, monkeypatch, commit: str, command=CHECKED) -> None:
-    """A recorded `check` attempt of `commit` that runs `command` (CHECKED passes)."""
+    """A recorded `check` attempt of `commit` that runs `command` (CHECKED passes), as often as `commit` is checked."""
     monkeypatch.setenv("RESEARCH_STORE", str(world.tmp / "store"))
-    tree = world.tmp / f"check-{commit[:12]}"
+    tree = world.tmp / f"check-{commit[:12]}-{next(_checks)}"
     _git(world.dev, "fetch", "-q", "origin")
     _git(world.dev, "worktree", "add", "-q", "--detach", str(tree), commit)
     monkeypatch.chdir(tree)
