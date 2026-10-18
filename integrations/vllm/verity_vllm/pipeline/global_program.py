@@ -29,7 +29,7 @@ from dataclasses import dataclass
 
 from verity.ml.circuits.codec import canonical_json, descriptor_size
 from verity.ml.circuits.defs import REGISTRY
-from verity_vllm.config import option
+from verity_vllm.config import RowEngine, option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import workload as W
 from verity_vllm.program.registry.catalog import load as _load_registry
@@ -125,12 +125,13 @@ def eos_lag_rows_declared(engine: dict | None) -> int | None:
     return None
 
 
-def workload_target(manifest: dict):
-    """[R17-1] The row's declared TargetProfile as GP-01 reads it: the manifest's `target` block (the ONE declared target source; row_pod
-    passes the same block to derive_step as --target and every GPU stage builds its engine for it) over the default profile.  A GP-01
-    compose has no GPU, so cc / SMs are whatever the block says (they do not enter the lag); an unknown field is refused by name."""
+def workload_target(target: dict | None):
+    """[R17-1] The row's declared TargetProfile as GP-01 reads it: its declared `target` block (the row file's `engine.target`, the ONE
+    declared target source; the row driver passes the same block to derive_step as --target and every GPU stage builds its engine for it)
+    over the default profile.  A GP-01 compose has no GPU, so cc / SMs are whatever the block says (they do not enter the lag); an unknown
+    field is refused by name."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    t = manifest.get("target") if isinstance(manifest.get("target"), dict) else {}
+    t = target if isinstance(target, dict) else {}
     unknown = set(t) - set(TargetProfile.__dataclass_fields__)
     if unknown:
         raise ValueError(f"workload target: unknown TargetProfile fields {sorted(unknown)}")
@@ -160,7 +161,7 @@ def workload_lag(manifest: dict, shapes: dict) -> dict:
     the first disagreement.  The record's resolved read-back is compared by GM-01 G1/G6 -- never read here (a Build reads no execution)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     try:
-        tp = workload_target(manifest)
+        tp = workload_target(RowEngine.of(manifest).target)
     except (TypeError, ValueError) as e:
         return {"schema": "verity/workload-program/v1/lag", "value": None, "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
     decl = tp.async_scheduling_declaration()
@@ -227,7 +228,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
     `moe_block_present` labels the workload; `population_label` is what PADDED-TABLE reports the row under (R17-45 (1): actual population)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     try:
-        tp = workload_target(manifest)
+        tp = workload_target(RowEngine.of(manifest).target)
     except (TypeError, ValueError) as e:
         return {"schema": "verity/workload-program/v1/moe_construction", "value": None, "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
     decl = tp.moe_construction_declaration()

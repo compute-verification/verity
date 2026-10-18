@@ -57,6 +57,10 @@ path = "../../verity/core/service/sampled_proofs"
 name = "verity_evaluate"
 path = "../../verity/core/primitives/evaluate"
 
+[[require]]
+name = "core_requirement"
+path = "../../verity/core/primitives/requirement"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Proofs.Pouw",
@@ -66,5 +70,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Proofs.Pous.MemoryChallenger", "Properties.Proofs.Pous.Run", "Properties.NetworkCertifier", "Properties.Proofs.NetworkCertifier",
   "Properties.CertifierNetwork", "Properties.Proofs.CertifierNetwork", "Properties.CertifierNetwork.Runs",
   "Properties.Proofs.CertifierNetwork.Runs", "Properties.Identity", "Properties.Proofs.Identity",
-  "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.Evaluate", "Properties.Proofs.Evaluate",
-  "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords"]
+  "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.SampledProofs.Draw",
+  "Properties.Evaluate", "Properties.Proofs.Evaluate",
+  "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords", "Properties.Accounting.Requirement",
+  "Properties.Proofs.Accounting.Requirement"]

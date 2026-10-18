@@ -30,8 +30,8 @@ open Classical Discharge.Tables in
 /-- **The live sessions' bound at table 0**: `plain_tableBoundθAt_of_live`'s hypothesis on the deployed prover, at
 tables of `Ok` columns. Every prover has escapes at the plain fork rounds such that, at each tape and table `C`, live
 strategies `σL` whose roots agree bound the deployed runs accepting on `C` by their verdict `pL`, the decoder is right
-for `pL` accepting with no opening off `C`, and the escapes' events bound the simulated strategies' `Adv` and
-self-clash. -/
+for `pL` accepting with no opening off `C` unless it self-clashes, and the escapes' events bound the simulated
+strategies' `Adv` and self-clash. -/
 def PlainLiveAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -59,8 +59,9 @@ def PlainLiveAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec 
           (N : ℕ) (rootB₀ : Array ByteArray)
           (hdec : ∀ j, DecodesTable
             (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
-            (fun _ o => o.accepted = true ∧ ¬ Off₀L Refine.H512 Refine.enc512 Refine.leaf512
-              ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOf rootB₀ ⟨0, Nat.one_pos⟩) (Claims.Flock.oracleOf C) o)
+            (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
+              ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOf rootB₀ ⟨0, Nat.one_pos⟩) (Claims.Flock.oracleOf C) o ∧
+              ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
             pL opn dec one fin capOf
             (fun j => repsOf (D := Refine.Dig) execArith
               ([plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay].get j))

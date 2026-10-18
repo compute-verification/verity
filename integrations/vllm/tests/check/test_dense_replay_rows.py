@@ -112,7 +112,7 @@ def test_a_one_output_row_is_compared_under_its_one_member_however_the_module_sp
 
     def replay(members, committed):
         d = {"family": "RsqrtF32_v1", "statics": {"N": 1}, "op_path": "model.norm", "row": 0, "step": 0, "members": members}
-        pi = SimpleNamespace(by_i={0: {"i": 0, "spec": "RsqrtF32_v1{N=1}"}}, describe=lambda r: d)
+        pi = SimpleNamespace(by_i={0: {"i": 0, "spec": "RsqrtF32_v1{N=1}"}}, describe=lambda r: d, member_of_port=lambda i: {})
         store = SimpleNamespace(words=lambda *a: (committed, ""))
         return E.replay_vu(pi, store, None, {"i": 0, "request_id": "r0", "phase": "prefill"}, arrive=0)
 

@@ -216,9 +216,14 @@ def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
 
 def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None) -> tuple[int, str]:
     """`lake build` (of ``targets``, else the default ones) of ``tree/pkg`` in the sandbox; Lake's output is echoed as it
-    comes."""
+    comes. Before the default targets it links the dependencies' compiler plugins alone (`check.py`'s `plugin_targets`)."""
+    if targets is None and (plugins := AUDIT.plugin_targets(tree / pkg)):
+        rc, text = build(pkg, tree, lake, plugins)
+        if rc:
+            return rc, text
     argv = in_sandbox(pkg, tree, [lake, "build", *(targets or [])])
-    env = {**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())}
+    env = {**os.environ, "LEAN_NUM_THREADS": os.environ.get("LEAN_NUM_THREADS") or
+           str(AUDIT.build_threads(tree / pkg) or LA.COMMON.cores())}
     p = subprocess.Popen(argv, cwd=tree / pkg, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                          encoding="utf-8", errors="replace")
     out = []
