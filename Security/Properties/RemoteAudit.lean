@@ -211,14 +211,15 @@ def PassesChained : Prop :=
             s.windows[t].plans[i]!.block p < reg.blocks + ((s.appends.toList.take m).map (·.count)).sum
 
 /-- A block released by an accepted release is read by no pass received after it: a run to `s₁`, a release of `runs`
-answered `.ok`, and a run on to `s`; every pass `s` records past `s₁`'s (in a later window, or later in its window)
-reads no block of `runs` (`receive` refuses a plan holding a released block with `plan`). -/
+(naming any `withdrawn` among them) answered `.ok`, and a run on to `s`; every pass `s` records past `s₁`'s (in a later
+window, or later in its window) reads no block of `runs` (`receive` refuses a plan holding a released block with
+`plan`). -/
 def ReleasedStayOut : Prop :=
   ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
-    (events₁ events₂ : Array Session.Event) (runs : Array (Int × Int)) (rs₁ rs : Array Session.Result)
+    (events₁ events₂ : Array Session.Event) (runs withdrawn : Array (Int × Int)) (rs₁ rs : Array Session.Result)
     (s₁ s₂ s : Session.State),
     Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events₁ = .ok (rs₁, s₁) →
-    Session.step s₁ (.release runs) = .ok (.ok, s₂) →
+    Session.step s₁ (.release runs withdrawn) = .ok (.ok, s₂) →
     Session.run s₂ events₂ = .ok (rs, s) →
       ∀ r ∈ runs, ∀ t (ht : t < s.windows.size) i (hi : i < s.windows[t].plans.size),
         (s₁.windows.size ≤ t ∨ s₁.windows[t]!.plans.size ≤ i) →
