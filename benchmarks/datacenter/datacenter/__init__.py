@@ -1,67 +1,29 @@
 """A datacenter as Verity accounts for it.
 
-The logical layer (`logical`, `claims`) is where the cryptography happens: a circuit, commitments to its values, and the
-claims an audit establishes about the prover system. The physical layer (`physical`, `time`, `account`) interprets those
-claims in light of the declared hardware, named assumptions and trusted devices. The binding (`binding`) places the
-circuit onto the hardware, and `observe` runs it and records what the trusted devices see.
+The logical layer (`logical`, `claims`) is where the cryptography happens: a circuit, the commitment to its values, and
+`audit`, the claims a proof establishes about the prover system. The physical layer (`physical`, `memory`, `account`)
+interprets those claims in light of the declared hardware, named assumptions and trusted devices. The bridge
+(`binding`) places the circuit on the hardware and publishes the placement's properties (`Profile`); the verifier's
+`Plan` says what it will check; `observe.run` is the world, executing a placement and recording what trusted devices see.
+
+    profile = p.public(plan)
+    claims = audit(run(p, inputs, plan), profile)
+    print(account(claims, profile))
 """
-from .account import Account, BlockAccount, Credit, Ledger, account, schedulable
-from .binding import Crossing, Offramp, Placement, Stream, crossings, occupancy, place, route
-from .claims import Carried, Computed, Emitted, Entered, Held, Read, Refused, Scheduled, audit
-from .logical import Circuit, Commitment, Input, Value, commit, name, trace
-from .memory import Challenge, ReadAudit, Store, answer_time, label_store, read_time
-from .observe import Deviation, Record, Trace, run
-from .physical import Assumption, Block, Datacenter, Device, Fleet, Link
-from .time import Clock, Interval, Wipe
+from .account import FLEET_CLOSED, Account, BlockAccount, Credit, Ledger, account, credits, double_credit
+from .binding import Crossing, Placement, Profile, crossings, occupancy, place, route, traffic
+from .claims import Carried, Computed, Entered, Held, On, Read, Refused, Scheduled, audit
+from .logical import Circuit, Commitment, Input, Value, commit, digest, trace
+from .memory import Challenge, Reads, Store, Wipe, answer_time, serve_time
+from .observe import Answer, Deviation, Record, Trace, run
+from .physical import Assumption, Block, Datacenter, Device, Fleet, Grid, Link, Port
+from .plan import Plan
+from .time import Interval
 
 __all__ = [
-    "Account",
-    "Assumption",
-    "Block",
-    "BlockAccount",
-    "Carried",
-    "Challenge",
-    "Circuit",
-    "Clock",
-    "Commitment",
-    "Computed",
-    "Credit",
-    "Crossing",
-    "Datacenter",
-    "Deviation",
-    "Device",
-    "Emitted",
-    "Entered",
-    "Fleet",
-    "Held",
-    "Input",
-    "Interval",
-    "Ledger",
-    "Link",
-    "Offramp",
-    "Placement",
-    "Read",
-    "ReadAudit",
-    "Record",
-    "Refused",
-    "Scheduled",
-    "Stream",
-    "Store",
-    "Trace",
-    "Value",
-    "Wipe",
-    "account",
-    "answer_time",
-    "audit",
-    "commit",
-    "crossings",
-    "label_store",
-    "name",
-    "occupancy",
-    "place",
-    "read_time",
-    "route",
-    "run",
-    "schedulable",
-    "trace",
+    "FLEET_CLOSED", "Account", "Answer", "Assumption", "Block", "BlockAccount", "Carried", "Challenge", "Circuit",
+    "Commitment", "Computed", "Credit", "Crossing", "Datacenter", "Deviation", "Device", "Entered", "Fleet", "Grid", "Held",
+    "Input", "Interval", "Ledger", "Link", "On", "Placement", "Plan", "Port", "Profile", "Read", "Reads", "Record",
+    "Refused", "Scheduled", "Store", "Trace", "Value", "Wipe", "account", "answer_time", "audit", "commit", "credits",
+    "crossings", "digest", "double_credit", "occupancy", "place", "route", "run", "serve_time", "trace", "traffic",
 ]

@@ -1,49 +1,50 @@
-"""The logical layer's verdicts: what an audit establishes from records and commitments alone.
+"""The logical layer's verdicts: what an audit establishes, inside the proof, from the trace and the public profile.
 
-`audit` reads only cryptographic objects (the commitment to every value, the trusted devices' records) and public
-declarations (the circuit, the occupancy profile, the sync set, each challenge's deadline). It never reads a device's
-capacity or names a device as the place something happened: that is the physical layer's job. Its output is a list of
-claims about the prover *system*, each a fact a proof would establish:
+`audit` reads the trace (witness: the placement, the values, the trusted devices' records and answers) and the profile
+(public). It never reads a capacity, and its claims never say which device did something: that is the physical layer's
+question. Each claim is a fact a proof would establish about the prover *system*, over an interval `during` of the
+trusted clock:
 
-- `Computed`: the committed values are the circuit's evaluation (here by re-execution; in Verity, sampled proofs at ε
-  and δ).
-- `Carried`: a boundary link-window carried the committed crossings and nothing else, so its only freedom was timing
-  advice, at most `bits`.
-- `Entered`: an input's bits entered the computation.
-- `Emitted`: a declared off-ramp (telemetry) carried bits the circuit doesn't explain.
-- `Scheduled`: the occupancy profile was one of so many registered profiles, which is advice worth log2 of that.
-- `Held`: the prover system held `bits` of a registered store throughout an interval (PoUS; a wipe is a store that
-  fills a device's memory, so a verified wipe is a `Held`).
-- `Read`: the prover system read at least `bits` of a registered store within an interval (the bandwidth audits).
-- `Refused`: something didn't check, and which window, store or link it was.
+- `Computed(part, work)`: the values committed for a part of the circuit are its evaluation (here by re-execution; in
+  Verity, sampled proofs at ε and δ).
+- `Carried(port, bits)`: a certifier port carried exactly the committed crossings in the declared occupancy, so its only
+  freedom was `bits` of timing advice.
+- `Entered(input, bits)`: an input's bits entered the computation (registered and trusted inputs don't count).
+- `Scheduled(bits)`: the occupancy profile was one of several registered ones: advice, once.
+- `Held(store, bits)`: the system held a registered store throughout `during` (PoUS; a wipe's labels too).
+- `Read(store, bits)`: the system read so many bits of a registered store within `during` (the bandwidth audits).
+- `Refused(on, why)`: something didn't check, and `on` says what: a port's window, a store, a part, an input.
+
+A record must exist for every certifier port and every window of the epoch: a missing one is refused, never silence.
 """
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Literal
 
-from .binding import occupancy, traffic
-from .logical import commit
-from .observe import Trace, _digest
+from .binding import Profile, traffic
+from .logical import commit, digest as content_digest
+from .memory import Challenge, Reads, Wipe
+from .observe import Trace, digest
+from .physical import Port
 from .time import Interval
 
 
 @dataclass(frozen=True)
 class Computed:
-    """The committed values are the circuit's evaluation: `work` units of it (here Boolean gates; PoUW's are MACs at
-    window.py's grid), all but a share `epsilon` of it right, except with probability `delta`, within `window`."""
-
+    part: str
     work: float
+    during: Interval
     epsilon: float = 0.0
     delta: float = 0.0
-    window: Interval | None = None
 
 
 @dataclass(frozen=True)
 class Carried:
-    link: tuple[str, str]
-    window: int
+    port: Port
     bits: float
+    during: Interval
 
 
 @dataclass(frozen=True)
@@ -54,120 +55,108 @@ class Entered:
 
 
 @dataclass(frozen=True)
-class Emitted:
-    """Off-ramp data (telemetry) left on a link in a window: `bits` bits the circuit doesn't explain."""
-
-    stream: str
-    link: tuple[str, str]
-    window: int
-    bits: int
-
-
-@dataclass(frozen=True)
 class Scheduled:
-    """The occupancy profile was one of `profiles` registered profiles (a declared scheduler), so its choice is advice
-    worth `bits` = log2 profiles, once per audit."""
-
-    profiles: int
     bits: float
 
 
 @dataclass(frozen=True)
 class Held:
-    """The prover system held `bits` of registered store `store` throughout `at`: every challenge in it came back right
-    by its deadline. Where the bits were is the physical layer's reading of the deadlines."""
-
     store: str
     bits: float
-    at: Interval
+    during: Interval
+    by: str = "challenger"
     epsilon: float = 0.0
     delta: float = 0.0
 
 
 @dataclass(frozen=True)
 class Read:
-    """The prover system read at least `bits` of registered store `store` within `window`, of which `credited` count as
-    useful reads."""
-
     store: str
-    window: Interval
     bits: float
-    credited: float
+    during: Interval
+    by: str = "challenger"
     epsilon: float = 0.0
     delta: float = 0.0
 
 
 @dataclass(frozen=True)
+class On:
+    """What a refusal is about: a certifier port during a window, a store, a part of the circuit, or an input."""
+
+    kind: Literal["port", "store", "part", "input"]
+    name: str
+    during: Interval | None = None
+
+    def __repr__(self) -> str:
+        return f"{self.kind} {self.name}" + (f" {self.during}" if self.during else "")
+
+
+@dataclass(frozen=True)
 class Refused:
-    what: str
+    on: On
     why: str
 
 
-Claim = Computed | Carried | Entered | Emitted | Scheduled | Held | Read | Refused
+Claim = Computed | Carried | Entered | Scheduled | Held | Read | Refused
 
 
-def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: int = 1, profiles: int = 1) -> list[Claim]:
-    """The claims `trace` supports against the public occupancy `profile` (declared before the run, one of `profiles`
-    registered profiles) and a sync set of `syncs` values per window (the timing advice each window may carry: log2 syncs
-    bits). Every boundary link must have a record for every window the profile spans: a missing one fails closed."""
+def audit(trace: Trace, profile: Profile) -> list[Claim]:
+    """The claims `trace` supports against the public `profile`."""
     p, out = trace.placement, []
-    c = p.circuit
+    c, g, plan = p.circuit, profile.datacenter.grid, profile.plan
     reference = c.evaluate(trace.inputs)
-    recommitted, _ = commit([reference[i] for i in range(len(reference))], [g.bits for g in c.gates], trace.salt)
-    if recommitted != trace.commitment:
-        out.append(Refused("computation", "the committed values are not the circuit's evaluation"))
+    if commit(c, reference, trace.salt)[0] != trace.commitment:
+        out += [Refused(On("part", b), "the committed values are not the circuit's evaluation") for b in profile.work]
     else:
-        out.append(Computed(c.boolean_size))
-    expected: dict[tuple[tuple[str, str], int], list[tuple[int, int]]] = {}
-    for hop, row in traffic(p, trace.frame_bits, trace.bucket, trace.window).items():
-        for b, slot in row.items():
-            expected.setdefault((hop, b // trace.window), []).extend((v.id, reference[v.id]) for v in slot.values)
-    if profiles > 1:
-        out.append(Scheduled(profiles, math.log2(profiles)))
-    horizon = max((b for row in profile.values() for b in row), default=0) // trace.window + 1
-    have = {(r.link, r.window) for r in trace.records}
-    for link in sorted(profile):
-        for w in range(horizon):
-            if (link, w) not in have:
-                out.append(Refused(f"link {link} window {w}", "no record: the certifier was down or its record was withheld"))
-    declared_streams = {s.name: s for s in p.streams}
-    for r in trace.records:
-        where = f"link {r.link} window {r.window}"
-        declared = tuple(profile.get(r.link, {}).get(r.window * trace.window + t, 0) for t in range(trace.window))
-        problems = []
-        if r.counts != declared:
-            problems.append(Refused(where, "occupancy differs from the declared profile"))
-        if r.digest != _digest(expected.get((r.link, r.window), [])):
-            problems.append(Refused(where, "a frame is not a committed crossing"))
-        problems += [Refused(f"stream {name} on {r.link} window {r.window}", "its bytes differ from the registered digest")
-                     for name, _, ok in r.streams if declared_streams[name].registered and not ok]
-        if problems:
-            out += problems
-            continue
-        out.append(Carried(r.link, r.window, math.log2(syncs)))
-        out += [Emitted(name, r.link, r.window, n * trace.frame_bits)
-                for name, n, _ in r.streams if not declared_streams[name].registered]
+        out += [Computed(b, w, plan.epoch) for b, w in profile.work.items() if w]
     for v in c.inputs:
         spec = c.gates[v.id].input
-        if spec.source not in ("registered", "trusted"):
+        if spec.source == "registered" and spec.digest is not None and content_digest(trace.inputs[v.name], v.bits) != spec.digest:
+            out.append(Refused(On("input", v.name), "its bytes differ from the registered digest"))
+        elif spec.source in ("outside", "inside"):
             out.append(Entered(v.name, spec.bits, spec.source))
-    stores = {s.name: s for s in trace.stores}
-    for r in trace.challenges:
-        ch, took = r.challenge, r.answered - r.challenge.at
-        if not r.correct:
-            out.append(Refused(f"store {ch.store} at {ch.at}", "the answer was wrong"))
-        elif took > ch.deadline:
-            out.append(Refused(f"store {ch.store} at {ch.at}", f"answered after {took} ticks, past its deadline of {ch.deadline}"))
-        else:
-            out.append(Held(ch.store, stores[ch.store].bits, Interval(ch.at, ch.at + ch.deadline)))
-    for r in trace.reads:
-        if r.served > r.audit.window.end:
-            out.append(Refused(f"reads of {r.audit.store} in {r.audit.window}", "the reads finished after the window"))
-        else:
-            out.append(Read(r.audit.store, r.audit.window, r.audit.bits, r.audit.bits))
+    if plan.profiles > 1:
+        out.append(Scheduled(math.log2(plan.profiles)))
+
+    per = g.bucket * g.window
+    expected: dict[tuple[Port, int], list[tuple[int, int]]] = {}
+    for port, row in traffic(p).items():
+        for b, vs in row.items():
+            expected.setdefault((port, b // g.window), []).extend((v.id, reference[v.id]) for v in vs)
+    have = {(r.port, r.window) for r in trace.records}
+    for port in profile.datacenter.ports:
+        for w in profile.windows:
+            if (port, w) not in have:
+                out.append(Refused(On("port", repr(port), Interval(w * per, (w + 1) * per)),
+                                   "no record: the certifier was down or its record was withheld"))
+    for r in trace.records:
+        during = Interval(r.window * per, (r.window + 1) * per)
+        declared = tuple(profile.occupancy.get(r.port, {}).get(r.window * g.window + t, 0) for t in range(g.window))
+        problems = []
+        if r.counts != declared:
+            problems.append("occupancy differs from the declared profile")
+        if r.digest != digest(expected.get((r.port, r.window), [])):
+            problems.append("a frame is not a committed crossing")
+        if problems:
+            out += [Refused(On("port", repr(r.port), during), why) for why in problems]
+        elif r.window in profile.windows:
+            out.append(Carried(r.port, math.log2(g.syncs), during))
+
+    for a in trace.answers:
+        q = a.request
+        if isinstance(q, Wipe):
+            out.append(Held(q.store.name, q.bits, q.during, q.challenger) if a.correct
+                       else Refused(On("store", q.store.name, q.during), "a spot check came back wrong"))
+        elif isinstance(q, Challenge):
+            s, during = profile.stores[q.store], Interval(q.at, q.at + q.deadline)
+            if not a.correct:
+                out.append(Refused(On("store", q.store, during), "the answer was wrong"))
+            elif a.arrived - q.at > q.deadline:
+                out.append(Refused(On("store", q.store, during),
+                                   f"answered after {a.arrived - q.at} ticks, past its deadline of {q.deadline}"))
+            else:
+                out.append(Held(q.store, s.bits, during, q.challenger))
+        elif isinstance(q, Reads):
+            out.append(Read(q.store, q.bits, q.during, q.challenger) if a.correct and a.arrived <= q.during.end
+                       else Refused(On("store", q.store, q.during), "the reads finished after the window"))
     return out
-
-
-def declared_profile(trace: Trace) -> dict[tuple[str, str], dict[int, int]]:
-    """The honest occupancy profile of `trace`'s placement: what the developer declares before the run."""
-    return occupancy(trace.placement, trace.frame_bits, trace.bucket, trace.window)
