@@ -12,7 +12,9 @@ import struct
 import numpy as np
 
 from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.defs import bind
 from verity_flock import ir_lower as IL
+from verity_flock import tail_pieces as TP
 from verity_flock.gf2 import Circuit
 from verity_vllm.program.registry import int8_exact as X
 from verity_vllm.program.registry.dsa import I32Sub
@@ -21,7 +23,8 @@ U64 = np.uint64
 
 
 def _agree(prim, *inputs: np.ndarray) -> np.ndarray:
-    """The piece's outputs on ``inputs`` (one array a parameter), held to the Definition's reference; the reference."""
+    """The piece's outputs on ``inputs`` (one array a parameter, an array parameter's T x K), held to the Definition's reference;
+    the reference."""
     params, _ = E.batch.signature_of(prim)
     widths = [w for pt in params for w in pt.leaf_widths()]
     C = Circuit()
@@ -29,14 +32,15 @@ def _agree(prim, *inputs: np.ndarray) -> np.ndarray:
     (out,) = IL.lower(C, prim, ins)
     C.output("out", out)
     inputs = [np.asarray(x, dtype=U64) for x in inputs]
-    T = len(inputs[0])
-    got_s, fail = C.evaluate({f"in{j}": IL.slice_words(x, w) for j, (x, w) in enumerate(zip(inputs, widths))}, T)
+    leaves = [c for x in inputs for c in (x.T if x.ndim == 2 else [x])]
+    T = len(leaves[0])
+    got_s, fail = C.evaluate({f"in{j}": IL.slice_words(x, w) for j, (x, w) in enumerate(zip(leaves, widths))}, T)
     assert not fail
     got = IL.unslice_words(got_s["out"], T)
     ref = E.evaluate_batch(prim, *inputs).astype(U64).reshape(T, -1)[:, 0]
     bad = np.flatnonzero(got != ref)
     assert not bad.size, (f"{prim.id}: {bad.size} of {T} instances differ from the reference, first at inputs "
-                          f"{[hex(int(x[bad[0]])) for x in inputs]}: {hex(int(got[bad[0]]))} != {hex(int(ref[bad[0]]))}")
+                          f"{[hex(int(x[bad[0]])) for x in leaves]}: {hex(int(got[bad[0]]))} != {hex(int(ref[bad[0]]))}")
     return ref
 
 
@@ -161,3 +165,30 @@ def test_the_f64_to_u32_rni_sat_piece_rounds_and_saturates() -> None:
     ref = _agree(X.F64ToU32RniSat, np.asarray(vals, dtype=U64))
     assert vals[11] == _f64(4294967295.5) - 1
     assert ref[[3, 6, 7, 8, 9, 11, 12, 13, 15, 16]].tolist() == [0, 2, 2, 4, 0xFFFFFFFE] + [0xFFFFFFFF] * 4 + [0]
+
+
+def _nnz(prim) -> int:
+    """The terms of every form the ANDs of ``prim``'s lowering read (``nnz_AB``)."""
+    params, _ = E.batch.signature_of(prim)
+    C = Circuit()
+    ins = [C.input(f"in{j}", w) for j, w in enumerate(w for pt in params for w in pt.leaf_widths())]
+    C.output("out", IL.lower(C, prim, ins)[0])
+    return C.counts()["nnz_AB"]
+
+
+def test_a_rows_running_max_stays_linear_in_its_length() -> None:
+    """``Int8RowScale_v1``'s amax is ``m = fmaxf(m, |x_k|)`` along the row, and PTX max's result carries its first operand's form
+    (5 terms more a step): the max piece commits a bit past ``TP.FORM_TERMS``, so the lowering's ``nnz_AB`` grows with K, not
+    K^2 (unbounded, x65 from K = 16 to 128, and the row's K = 4096 lowering held 250 GiB); the scale agrees with the reference,
+    NaN, ±inf, ±0 and subnormals in the row."""
+    rng = np.random.default_rng(77)
+    edges = np.asarray([0x7FC0, 0xFFC0, 0x7F81, 0x7F80, 0xFF80, 0x0000, 0x8000, 0x0001, 0x807F, 0x7F7F, 0xFF7F, 0x3F80], dtype=U64)
+    nnz = {}
+    for K in (16, 128):
+        prim = bind(X.Int8RowScale, K=K)
+        rows = rng.integers(0, 1 << 16, size=(K, 400), dtype=U64)
+        rows[:, :len(edges)] = edges[rng.integers(0, len(edges), size=(K, len(edges)))]
+        rows[rng.integers(0, K, 60), rng.integers(0, 400, 60)] = rng.choice(edges, 60)
+        _agree(prim, rows.T)
+        nnz[K] = _nnz(prim)
+    assert nnz[128] < 10 * nnz[16], nnz

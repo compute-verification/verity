@@ -151,6 +151,15 @@ def _word(C, cases, default):
     return out
 
 
+#: a result bit whose form has more terms is committed (one row): a piece whose result carries an operand's form (a mux, as PTX
+#: max carries the larger operand) would otherwise grow it along a chain, so a row's ``m = fmaxf(m, x)`` over K would cost K^2
+FORM_TERMS = 32
+
+
+def _bounded(C, word):
+    return [C.commit([w])[0] if len(w.s) > FORM_TERMS else w for w in word]
+
+
 # --- attention's softmax (the FTZ f32 ops, F32Max and GuardNegInfZero are `verity.ml.circuits.ops.boolean.softmax`'s) ---------------------
 
 def mufu_ex2(C, x):
@@ -762,8 +771,8 @@ PIECES = {
     "SelectBf16_v1": lambda C, s, a, b: mux(C, s[0], a, b),
     "F32Fabs_v1": lambda C, a: list(a[:31]) + [ZERO],
     "F32Neg_v1": lambda C, a: fp.f32_neg(a),
-    "F32Fmaxf_v1": lambda C, a, b: _fmaxmin(C, a, b, True),
-    "F32Fminf_v1": lambda C, a, b: _fmaxmin(C, a, b, False),
+    "F32Fmaxf_v1": lambda C, a, b: _bounded(C, _fmaxmin(C, a, b, True)),
+    "F32Fminf_v1": lambda C, a, b: _bounded(C, _fmaxmin(C, a, b, False)),
     "F32ToE4m3Sat_v1": f32_to_e4m3_sat,
     # NVFP4 quantization's casts and the bit AND (PoUW's units; verity_vllm.program.registry.nvfp4)
     "E4m3ToF32_v1": e4m3_to_f32,
