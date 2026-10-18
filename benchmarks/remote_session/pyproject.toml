@@ -11,4 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
           "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
-          "verity/core/protocols/bandwidth", "integrations/vllm/verity_vllm"]
+          # test_vllm_serve.py, where vLLM and a GPU are: the integration's store and what it imports
+          "verity/core/protocols/bandwidth",
+          "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
+          "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/store"]
