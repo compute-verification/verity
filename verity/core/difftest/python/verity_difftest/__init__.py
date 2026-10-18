@@ -19,6 +19,10 @@ seed=S)` finds the same minimal input again whatever modules the process has loa
 one input. Nothing here reads a clock or times out (`tests/test_no_wall_clock.py`): a port whose Lean
 never answers hangs its test.
 
+A port names its verifier of record (`of_record`): ``"python"`` until its protocol switches to its Lean by the 8 Oct
+procedure, ``"lean"`` after (PoUW's switch is `verity/core/protocols/pouw/verifier.py`). Either way the two sides must
+agree; the side of record is the verdict a `Mismatch` holds the other to, and what a run's `Stats` count.
+
 The harness never skips: when `lake` is missing or the build fails it raises. A port's test module skips on `lake` itself
 (`pytestmark = pytest.mark.skipif(shutil.which("lake") is None, ...)`), which puts its suite among those `check` runs after
 its Lean steps (`AFTER_LEAN` in `tools/verity/check/check.py`, held by `tests/test_no_wall_clock.py`).
@@ -64,12 +68,16 @@ class BuildError(Exception):
 
 class Mismatch(AssertionError):
     """Lean and Python differ on `input` (the minimal one Hypothesis found): `lean` and `python` are each side's
-    `Outcome`."""
+    `Outcome`, and `of_record` is the port's side of record, whose verdict the message holds the other to."""
 
-    def __init__(self, label: str, value: Any, lean: Outcome, python: Outcome):
-        self.label, self.input, self.lean, self.python = label, value, lean, python
+    def __init__(self, label: str, value: Any, lean: Outcome, python: Outcome, of_record: str = "python"):
+        self.label, self.input, self.lean, self.python, self.of_record = label, value, lean, python, of_record
         self.report = ""
-        super().__init__(f"{label}: Lean {_show(lean)}, Python {_show(python)} on {canonical(value)}")
+        if of_record == "lean":
+            super().__init__(f"{label}: Python {_show(python)} where Lean, of record, gives {_show(lean)}, on "
+                             f"{canonical(value)}")
+        else:
+            super().__init__(f"{label}: Lean {_show(lean)}, Python {_show(python)} on {canonical(value)}")
 
     def __str__(self) -> str:
         return self.report or super().__str__()
@@ -210,11 +218,21 @@ def _undeclared(e: Exception, declared: tuple[type[BaseException], ...]) -> Outc
     return "error", f"the reference raised {type(e).__name__}: {e}, not one of {[r.__name__ for r in declared]}"
 
 
+#: A port's sides that can be of record.
+RECORDS = ("python", "lean")
+
+
+def _check_record(port: Port | ProtocolPort) -> None:
+    if port.of_record not in RECORDS:
+        raise ValueError(f"of_record is {port.of_record!r}, not one of {list(RECORDS)}")
+
+
 @dataclass(frozen=True)
 class Port:
     """One ported function. `exe` is the server executable's path, or with `package` the name of a `lean_exe` of that Lake
     package, which `run` builds. `reference(value)` returns the expected output (canonical JSON's domain) or raises one of
-    `rejects`. `inputs` draws inputs, invalid ones included; `need_rejects=False` waives the check that some are rejected."""
+    `rejects`. `inputs` draws inputs, invalid ones included; `need_rejects=False` waives the check that some are rejected.
+    `of_record` is the side of record (`RECORDS`)."""
 
     exe: str | Path
     fn: str
@@ -223,7 +241,11 @@ class Port:
     package: Path | None = None
     rejects: tuple[type[BaseException], ...] = (Reject,)
     need_rejects: bool = True
+    of_record: str = "python"
     accepted = "output"
+
+    def __post_init__(self) -> None:
+        _check_record(self)
 
     @property
     def label(self) -> str:
@@ -272,7 +294,8 @@ class ProtocolPort:
     """A core protocol's port: its executable (`exe`, or a `lean_exe` of the Lake package `package`) run as `EXE serve`.
     `reference(case)` returns the outcome dict, all six fields (`verity_difftest.protocol.answer` builds one as
     `Core.Protocol.case` does). `inputs` draws cases, `{"commitment": hex, "evidence": hex, "params": JSON}` and malformed
-    ones (bad hex, params, evidence, missing fields); `need_rejects=False` waives the check that some aren't accepted."""
+    ones (bad hex, params, evidence, missing fields); `need_rejects=False` waives the check that some aren't accepted.
+    `of_record` is the side of record (`RECORDS`)."""
 
     exe: str | Path
     reference: Callable[[Any], dict]
@@ -280,7 +303,11 @@ class ProtocolPort:
     package: Path | None = None
     need_rejects: bool = True
     serve: tuple[str, ...] = ("serve",)
+    of_record: str = "python"
     accepted = "accept"
+
+    def __post_init__(self) -> None:
+        _check_record(self)
 
     @property
     def label(self) -> str:
@@ -324,9 +351,10 @@ def _compare(port: Port | ProtocolPort, server: Server, value: Any, seen: dict[s
         lean = port.lean(server, value)
     except ProtocolError as e:
         lean = ("error", str(e))
-    seen[python[0]] = seen.get(python[0], 0) + 1
+    kind = (lean if port.of_record == "lean" else python)[0]
+    seen[kind] = seen.get(kind, 0) + 1
     if "error" in (lean[0], python[0]) or port.key(lean) != port.key(python):
-        raise Mismatch(port.label, value, lean, python)
+        raise Mismatch(port.label, value, lean, python, port.of_record)
     return lean
 
 
@@ -372,7 +400,8 @@ def _no_local_constants() -> Iterator[None]:
 def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None) -> Stats:
     """Draw `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
     `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`. The `Stats`
-    count Python's outcomes by kind.  Hypothesis is imported here, so the server, `build` and `replay` run without it."""
+    count the outcomes of the side of record by kind.  Hypothesis is imported here, so the server, `build` and `replay` run
+    without it."""
     from hypothesis import HealthCheck, given, settings
     from hypothesis import seed as use_seed
 
@@ -389,10 +418,13 @@ def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: S
         try:
             differential()
         except Mismatch as e:
+            lean_of_record = port.of_record == "lean"
             e.report = "\n".join([
-                f"difftest of {port.label!r} ({s.argv[0]}): Lean and Python differ; the minimal input Hypothesis found:",
+                f"difftest of {port.label!r} ({s.argv[0]}): "
+                + ("Python differs from the Lean, the verifier of record" if lean_of_record else "Lean and Python differ")
+                + "; the minimal input Hypothesis found:",
                 f"  input:  {canonical(e.input)}",
-                f"  lean:   {_show(e.lean)}",
+                f"  lean:   {_show(e.lean)}" + ("  (of record)" if lean_of_record else ""),
                 f"  python: {_show(e.python)}",
                 f"reproduce: verity_difftest.replay(port, {e.input!r}), or the whole run: "
                 f"verity_difftest.run(port, examples={examples}, seed={seed})"])

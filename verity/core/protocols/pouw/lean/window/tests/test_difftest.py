@@ -1,5 +1,6 @@
-"""The window's Lean against `verity.core.protocols.pouw.window`, on the shared harness (`verity_difftest`): one
-`Port` per ported function of `window.py`, served by `pouw-window-difftest` (`PouwWindow/Difftest.lean`).
+"""`verity.core.protocols.pouw.window` held to the window's Lean, PoUW's verifier of record (`pouw.verifier`), on the
+shared harness (`verity_difftest`, `of_record="lean"`): one `Port` per function of `window.py` the Lean states, served by
+`pouw-window-difftest` (`PouwWindow/Difftest.lean`).
 
 The inputs are drawn by the generators below from a Hypothesis-controlled `random.Random` (`st.randoms`), so a run is
 deterministic and shrinks. The grid's numbers run over bits 0 … 6, n up to 2^60 and the integers at or below 0; K′'s
@@ -28,7 +29,9 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
+from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 
@@ -644,6 +647,37 @@ def public_inputs(v: dict) -> str:
     return Wd.public_inputs(v["registration"], v["drawn"], v["sigma"], v["cap"], bytes.fromhex(v["domain_h3"])).hex()
 
 
+#: layouts a live window's coin commitment may have, PoUW's and ones it isn't
+_LIVE_LAYOUTS = [None, None, None, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 2)), ((Wd.SALT, 1), (Wd.ROUND, 3)),
+                 ((Wd.SALT, 1), (Wd.DRAW, 1), ("pouw/rounds", 2)), ((Wd.SALT, 2), (Wd.DRAW, 1), (Wd.ROUND, 2)),
+                 ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 2), ("x", 1))]
+
+
+def live_commitment_in(rng: random.Random) -> dict:
+    layout = rng.choice(_LIVE_LAYOUTS) or Wd.live_families(rng.randint(1, 9))
+    scheme = rng.choice([Wd.LIVE_SCHEME] * 3 + ["verity/vllm/commit-coins/v1"])
+    c = Ch.LiveCommitment(scheme, rng.choice([0, 1, 7, 1 << 40]), layout, rng.randbytes(64)).to_json()
+    if rng.random() < 0.1:
+        c[rng.choice(["root", "epoch", "families"])] = rng.choice(["zz", -1, None])
+    return {"commitment": c}
+
+
+def live_epoch_reason(v: dict) -> str | None:
+    why = Wd.live_epoch_reason(Ch.LiveCommitment.from_json(v["commitment"]))
+    SEEN["live_epoch_reason"].add("accept" if why is None else "scheme" if "scheme" in why else "coins")
+    return why
+
+
+def round_key_in(rng: random.Random) -> dict:
+    return {**live_commitment_in(rng), "coin": rng.randbytes(rng.choice([0, 5, 32, 32, 32])).hex(),
+            "round": rng.randrange(9), "root": rng.randbytes(rng.choice([0, 64, 64])).hex()}
+
+
+def round_key(v: dict) -> str:
+    c = Ch.LiveCommitment.from_json(v["commitment"])
+    return Wd.round_key(c, bytes.fromhex(v["coin"]), v["round"], bytes.fromhex(v["root"])).value.hex()
+
+
 def layout_constants(_: dict) -> dict:
     return {"T_BITS": Wd.T_BITS, "DEPTHS": Wd.DEPTHS, "PORT": Wd.PORT, "ENTRY_SCHEMA": Wd.ENTRY_SCHEMA,
             "ENTRY_BYTES": Wd.ENTRY_BYTES, "TILE": Wd.TILE, "ROW_STEP": Wd.ROW_STEP, "SIDE_DOMAIN": Wd.SIDE_DOMAIN,
@@ -657,7 +691,7 @@ def layout_constants(_: dict) -> dict:
 #: of each function that returns one, and its accept.
 REACHES = {"k_prime": {"refused", "capped", "k > 10,000", "n > 2^50", "exact"},
            "layout_problem": {"accept", *LAYOUT}, "record_problem": {"accept", *RECORD},
-           "window_problem": {"accept", "refused", *WINDOW}}
+           "window_problem": {"accept", "refused", *WINDOW}, "live_epoch_reason": {"accept", "scheme", "coins"}}
 SEEN: dict[str, set[str]] = {fn: set() for fn in REACHES}
 
 
@@ -676,8 +710,9 @@ def k_prime(v: dict) -> int:
 
 
 def _port(fn: str, reference: Callable[[dict], Any], gen: Callable[[random.Random], dict], **kw) -> D.Port:
+    kw.setdefault("rejects", (ValueError,))
     return D.Port(EXE, fn, reference=reference, inputs=st.randoms(use_true_random=False).map(gen), package=LEAN,
-                  rejects=(ValueError,), **kw)
+                  of_record=V.RECORD_VERDICT, **kw)
 
 
 PORTS = {
@@ -727,11 +762,13 @@ PORTS = {
     "instance_ts": (_port("instance_ts", lambda v: Wd.instance_ts(v["registration"], v["drawn"], v["sigma"], v["cap"]),
                           instance_ts_in), 1000),
     "public_inputs": (_port("public_inputs", public_inputs, public_inputs_in), 500),
+    "live_epoch_reason": (_port("live_epoch_reason", live_epoch_reason, live_commitment_in), 300),
+    "round_key": (_port("round_key", round_key, round_key_in, rejects=(ValueError, TypeError)), 300),
     "layout_constants": (D.Port(EXE, "layout_constants", reference=layout_constants, inputs=st.just({}), package=LEAN,
-                                need_rejects=False), 1),
+                                need_rejects=False, of_record=V.RECORD_VERDICT), 1),
     "constants": (D.Port(EXE, "constants", reference=lambda _: {
         "PUBLIC": [list(p) for p in Wd.PUBLIC], "REGISTERED": list(Wd.REGISTERED), "KINDS": list(Wd.KINDS),
-        "GRID_BITS": Wd.GRID_BITS}, inputs=st.just({}), package=LEAN, need_rejects=False), 1),
+        "GRID_BITS": Wd.GRID_BITS}, inputs=st.just({}), package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT), 1),
 }
 
 server = D.server_fixture(PORTS["constants"][0])
@@ -773,7 +810,7 @@ def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -
 
 
 @pytest.mark.parametrize("fn", sorted(PORTS))
-def test_the_lean_is_the_python(fn: str, server) -> None:
+def test_the_python_is_the_lean(fn: str, server) -> None:
     port, examples = PORTS[fn]
     SEEN.get(fn, set()).clear()
     D.run(port, examples=examples, server=server)
