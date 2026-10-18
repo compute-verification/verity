@@ -23,6 +23,8 @@
     S32ToF32Rn_v2               (a: Array<32, Value<1>>) -> Array<32, Value<1>>                       word view: S32ToF32Rn_v1
     GemmAccumulatorS8_v2{K, DOT}    (x, wrow: Array<K, Array<8, Value<1>>>) -> Array<32, Value<1>>   word view: GemmAccumulatorS8_v1{K, DOT'}
     ScaledMmS8Coordinate_v2{K, DOT} (x, sx, wrow, sw) -> Array<16, Value<1>>                          word view: ScaledMmS8Coordinate_v1{K, DOT'}
+    ScaledMmS8_v2{K, N, DOT}    (x: Array<K, s8 bits>, sx, w: Array<N, Array<K, s8 bits>>, sw: Array<N, f32 bits>)
+                                -> Array<N, Array<16, Value<1>>>                                      word view: ScaledMmS8_v1{K, N, DOT'}
 
 The steps and the cast are traced from `fp`'s builders (`trace.definition`): their bodies are And/Xor/Not gates, with exactly
 the builders' live ANDs. `GemmCoordinate_v3` is `GemmCoordinate_v2`'s body on bits: K/16 calls of `DOT` from the zero
@@ -31,8 +33,8 @@ accumulator (32 constant-0 bits), then `F2fpBf16_v2`; `DotBf16_v3` is the same s
 (`HopperE4m3MmaV2Dot32_v2` on the operands in `MMAV2_E4M3_K_ORDER`; the E5M2 step `fp.tc_dot_e5m2`),
 and `GemmCoordinateE4m3_v2` is K/32 of them, then the cast; the FP4 steps are `fp4.step_total` and their coordinates K/64 of
 them. The s8 step is `integer.step_s8_bits` (Baugh-Wooley arrays, one carry-save reduction modulo 2^33, the clamp at D), the
-int-to-float cast `fp.s32_to_f32`, and `ScaledMmS8Coordinate_v2` the accumulator, the cast, two `F32Mul_v4` and `F2fpBf16_v2`.
-Each names its word
+int-to-float cast `fp.s32_to_f32`, and `ScaledMmS8Coordinate_v2` the accumulator, the cast, two `F32Mul_v4` and `F2fpBf16_v2`;
+`ScaledMmS8_v2` is that coordinate batched over W's N rows and their scales. Each names its word
 Definition (`trace.word_of`; ``DOT'`` is `DOT`'s); the tests check that the two agree, on random and special words and on the
 hardware captures. Each composite refuses at `bind` the K its word Definition refuses (its `refuse`).
 """
@@ -56,7 +58,7 @@ __all__ = ["AmpereBF16TcDot16", "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot3
            "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_HOPPER_E4M3", "GEMM_HOPPER_E4M3_MMAV2", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4",
            "GEMM_SM120_S8", "Gemm", "GemmAccumulatorS8",
            "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "HopperBF16WgmmaDot16",
-           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "S32ToF32Rn", "ScaledMmS8Coordinate"]
+           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "S32ToF32Rn", "ScaledMmS8", "ScaledMmS8Coordinate"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -211,6 +213,15 @@ def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
     return B.call(F2fpBf16, B.call(EW.F32MulV4, B.call(EW.F32MulV4, acc, sx), sw))
 
 
+@composite("ScaledMmS8", 2, ["K", "N", "DOT"],
+           lambda S: ((("x", Array(S.K, E4M3)), ("sx", F32), ("w", Array(S.N, Array(S.K, E4M3))), ("sw", Array(S.N, F32))),
+                      Array(S.N, BF16)),
+           conformance=G.ScaledMmS8.conformance, refuse=G.ScaledMmS8.refuse)
+def ScaledMmS8(B, S, x, sx, w, sw):
+    """A W8A8 linear on one token row on bits: `ScaledMmS8Coordinate_v2` over the N weight rows and their scales."""
+    return B.batch(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, w, sw, axes=(None, None, 0, 0))
+
+
 DotBf16.word = lambda b: bind(G.DotBf16, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinate.word = lambda b: bind(G.GemmCoordinate, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 Gemm.word = lambda b: bind(G.Gemm, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
@@ -219,6 +230,7 @@ GemmCoordinateNvf4.word = lambda b: bind(G.GemmCoordinateNvf4, K=b["K"], DOT=wor
 GemmCoordinateMxf4.word = lambda b: bind(G.GemmCoordinateMxf4, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmAccumulatorS8.word = lambda b: bind(G.GemmAccumulatorS8, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 ScaledMmS8Coordinate.word = lambda b: bind(G.ScaledMmS8Coordinate, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+ScaledMmS8.word = lambda b: bind(G.ScaledMmS8, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 
 GEMM_AMPERE: dict = {"DOT": AmpereBF16TcDot16}
 GEMM_HOPPER: dict = {"DOT": HopperBF16WgmmaDot16}
