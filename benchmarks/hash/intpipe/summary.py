@@ -238,15 +238,16 @@ def hm96table(args: list[str]) -> None:
                   + f" | {med([r['base_mhz'] for r in rs if r]):.0f} | |")
     print()
     cands = [c for c in HM96_ORDER if c != "sha512"]
-    print("| GPU | step | " + " | ".join(f"{c} pre / step" for c in cands) + " |")
-    print("|---|---|" + "---|" * len(cands))
+    big = sorted(sizes, reverse=True)
+    print("| GPU | " + " | ".join(f"{c} {lab[n]}" for c in cands for n in big) + " |")
+    print("|---|" + "---|" * (len(cands) * len(big)))
     for g in gpus:
-        for n in sizes:
-            cells = []
-            for c in cands:
+        cells = []
+        for c in cands:
+            for n in big:
                 r = rec.get((c, g, n), ({}, ""))[0]
                 cells.append(f"{r['pre_ratio']:.2f} / {r['step_ratio']:.2f}" if r else "—")
-            print(f"| {short(g)} | {lab[n]} | " + " | ".join(cells) + " |")
+        print(f"| {short(g)} | " + " | ".join(cells) + " |")
 
 
 if __name__ == "__main__":
