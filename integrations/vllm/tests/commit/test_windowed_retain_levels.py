@@ -57,18 +57,20 @@ class _Sched:
         self.scheduled_cached_reqs = SimpleNamespace(req_ids=self.req_ids, num_computed_tokens=list(kv))
 
 
-def committer(mp, *, retain: str = "none", retain_levels: bool = True, bounded: bool = False) -> NC.NativeCollectCommitter:
+def committer(mp, *, retain: str = "none", retain_levels: bool = True, bounded: bool = False,
+              commit_scheme: str | None = None) -> NC.NativeCollectCommitter:
     for k in ENV:
         mp.delenv(k, raising=False)
     mp.setenv("VERITY_RETAIN", retain)
     mp.setenv("VERITY_WINDOW_MB", WINDOW_MB)
     mp.setenv("VERITY_WINDOW_SLOTS", "4")
+    mp.setenv("VERITY_STAGING_BOUNDED", "1" if bounded else "0")
     if bounded:
-        mp.setenv("VERITY_STAGING_BOUNDED", "1")
         mp.setenv("VERITY_LEARN_HOST_BUDGET_MB", str(16 / 1024))   # under a step: a learn-only pass discards every learning step
     eng = SimpleNamespace(model=torch.nn.Module(), runner=_Runner())
     com = NC.NativeCollectCommitter(eng, run_id=RUN_ID, program_digest=PD, geo_digest=GEO, arena_bytes=None, wrap=True, gather=True,
-                                    native_hooks=True, auto_blocks=True, native_worker=True, retain_levels=retain_levels)
+                                    native_hooks=True, auto_blocks=True, native_worker=True, retain_levels=retain_levels,
+                                    commit_scheme=commit_scheme)
     com.enable_windows(None)
     eng.runner.committer = com
     return com

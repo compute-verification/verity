@@ -1,4 +1,4 @@
-"""The windowed worker under ``rows-sha512`` (``VERITY_COMMIT_SCHEME``, ``verity_vllm.commit.step_rows``) commits what the reference
+"""The windowed worker under ``rows-sha512`` (``commit_scheme``, ``verity_vllm.commit.step_rows``) commits what the reference
 does, on the real collector, window ring and kernels: each step's root is ``step_rows``'s over the step's packed stream (the same
 stream ``commit_block_offline`` hashes under vllm-v1) with the step's recorded salt key, on a learning run (windows re-hashed from
 host once the step's length is known), a hit run (hashed in place, pad-only windows absorbed after the data windows), with and without
@@ -27,8 +27,7 @@ SCHED = WR.SCHED
 
 
 def committer(mp, **kw) -> NC.NativeCollectCommitter:
-    mp.setenv("VERITY_COMMIT_SCHEME", R.NAME)
-    com = WR.committer(mp, **kw)
+    com = WR.committer(mp, commit_scheme=R.NAME, **kw)
     assert com.rows and com.name.endswith("+" + R.NAME)
     return com
 
@@ -130,15 +129,15 @@ def test_a_run_without_levels_opens_from_a_replay_that_took_its_keys(monkeypatch
 def test_what_rows_sha512_refuses(monkeypatch):
     for k in WR.ENV:
         monkeypatch.delenv(k, raising=False)
-    monkeypatch.setenv("VERITY_COMMIT_SCHEME", R.NAME)
+    monkeypatch.setenv("VERITY_WINDOW_MB", "0")
     eng = SimpleNamespace(model=torch.nn.Module(), runner=WR._Runner())
     base = dict(run_id=WR.RUN_ID, program_digest=WR.PD, geo_digest=WR.GEO, arena_bytes=None, wrap=True, gather=True, native_hooks=True,
                 auto_blocks=True, native_worker=True)
     with pytest.raises(ValueError, match="windowed worker"):
-        NC.NativeCollectCommitter(eng, **base)
+        NC.NativeCollectCommitter(eng, commit_scheme=R.NAME, **base)
     monkeypatch.setenv("VERITY_WINDOW_MB", WR.WINDOW_MB)
     with pytest.raises(ValueError, match="windowed worker"):
-        NC.NativeCollectCommitter(eng, layout="chunk-leaf-v2", **base)
+        NC.NativeCollectCommitter(eng, layout="chunk-leaf-v2", commit_scheme=R.NAME, **base)
     with pytest.raises(ValueError, match="unknown commit scheme"):
         NC.NativeCollectCommitter(eng, commit_scheme="rows-sha256", **base)
     com = committer(monkeypatch)

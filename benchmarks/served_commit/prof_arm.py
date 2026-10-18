@@ -198,16 +198,9 @@ class NativeDrainArm(NoLevelsArm):
 
 
 class RowsArm(NativeDrainArm):
-    """The nativedrain arm committing under rows-sha512 (VERITY_COMMIT_SCHEME), COMMIT-GPU's leaves and trees on the windowed worker."""
+    """The nativedrain arm committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
 
-    def ready(self, target: Any) -> None:
-        import os
-
-        os.environ["VERITY_COMMIT_SCHEME"] = "rows-sha512"
-        try:
-            super().ready(target)
-        finally:
-            os.environ.pop("VERITY_COMMIT_SCHEME", None)
+    commit_scheme = "rows-sha512"
 
 
 class FinalizeProfArm(NativeDrainArm):

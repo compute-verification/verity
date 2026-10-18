@@ -1,7 +1,6 @@
 """The Commit's ``rows-sha512`` scheme (VLLM-17 step 1): COMMIT-GPU's construction (``benchmarks/pouw/commit_gpu``) over a step's
-stream, opt-in on the windowed worker (``NativeCollectCommitter(commit_scheme="rows-sha512")`` or ``VERITY_COMMIT_SCHEME=rows-sha512``);
-``vllm-v1`` stays the record.  Every rule is core's (``hm96.SHA512``, ``rowleaf``, ``merkle``, ``vllm_v1``); this module only names
-the step's pieces, and ``native_rows.cu`` hashes the same bytes (``tests/commit/test_step_rows.py`` pins this module to core's
+stream, opt-in on the windowed worker (``NativeCollectCommitter(commit_scheme="rows-sha512")``); ``vllm-v1`` stays the record.
+Every rule is core's (``hm96.SHA512``, ``rowleaf``, ``merkle``, ``vllm_v1``); this module only names the step's pieces, and ``native_rows.cu`` hashes the same bytes (``tests/commit/test_step_rows.py`` pins this module to core's
 conformance vectors, ``tests/commit/test_rows_cuda.py`` the kernels to this module).
 
 Each ``ROW_BYTES``-byte chunk of a step's zero-padded stream is a row of ``8 ROW_BYTES`` bits, committed as a hiding leaf at its

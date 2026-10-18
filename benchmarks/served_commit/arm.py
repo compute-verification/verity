@@ -32,6 +32,7 @@ class ServedCommitArm:
     precision = "bfloat16"
     control = "stock"
     resident = True
+    commit_scheme: str | None = None
 
     def __init__(self, id: str, retain: str) -> None:
         self.id, self.retain = id, retain
@@ -57,7 +58,7 @@ class ServedCommitArm:
         engine = target.engine._engine
         self.source.note_engine(engine.model)
         com = NativeCollectCommitter(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
-                                     native_hooks=True, auto_blocks=True, native_worker=True)
+                                     native_hooks=True, auto_blocks=True, native_worker=True, commit_scheme=self.commit_scheme)
         self.source.attach(com)
         vc = engine.llm.llm_engine.vllm_config
         tokens = int(vc.scheduler_config.max_num_batched_tokens)
