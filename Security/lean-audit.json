@@ -6305,7 +6305,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Model": {
-   "digest": "8e302234ed9dbead5eb7a26f772b5238482c4da323366b5f860a5e7ebd72bc40",
+   "digest": "ea10922fb1e8c6e16701b54513979a77d53a13d0d57f0465a2abe6a7195b5bd3",
    "definitions": {
     "Accounting.Gates.Audit": "fe61c4f5697390b50450c728a1be07af859a208e40eb950dcabcb11d1ec58ce1",
     "Accounting.Gates.Audit.reads": "777cbb0f97dae2e1110f03d6eeaa958843d1e2c9b625cb1a1fcab1c386384c7e",
@@ -6354,7 +6354,7 @@
     "Accounting.Gates.Gate.commit": "43ed11295805091023a47b2fc3450bda67197d59cd4fa268d4705ab04d583390",
     "Accounting.Gates.Gate.derive": "11f670cf47657abf125b7ed338316772ec6bbfd26da475161d9ab8d3ba75bc22",
     "Accounting.Gates.Gate.hi": "98a1a62e76e0723e682b8405233c130f0df4ed36dbe2d9955ca0236aba2a0589",
-    "Accounting.Gates.Gate.indexBits": "63cba9aa93a1a237779b6a84f6bc3a0e81675f4a041d20388c17c2eda6cbd0bb",
+    "Accounting.Gates.Gate.indexBits": "c3a48aa756a390b8960ef567628a7982995da4b9acdfbe1ec41f4e8947a3b82b",
     "Accounting.Gates.Gate.inputBits": "10f2766efc14697c07110cb74f5abd88af47b92e452455d1123d399fe709dab8",
     "Accounting.Gates.Gate.lo": "aca2bca0fcdcf1cdeedb99183570fffe7dd02d40f18eff3d784ee64b8611327e",
     "Accounting.Gates.Gate.macs": "b3bc351d1ca6fc1852cec27d9a7e2c3707e8ccaf198f9046b9b692ec66839f88",
