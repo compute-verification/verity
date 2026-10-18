@@ -1,8 +1,9 @@
 // libvc's served-row commit (vc_commit_rows_launch: hm96-sha512/row/v2 leaves of 4 KiB rows, PRF salts, the frame-v3-sha512
 // tree) interleaved rep by rep with the committers it replaces, on one die: commit_gpu's path, native_rows (dlopen'd) and
-// sharaw's forms. This file is sharaw.cu (SHARAW_CU, fetched at its pinned commit by bench.sh) with its main renamed, so every
-// replaced arm is sharaw's own code; it adds the libvc arms and a driver that compares every arm's levels with commit_gpu's on
-// the device before anything is timed, then times each arm once a rep, in turn, with the SM clock (NVML) of each rep.
+// sharaw's forms. This file is sharaw.cu (SHARAW_CU, fetched at its pinned commit by bench.sh) with its main renamed, so the
+// commit_gpu and sharaw arms are sharaw's own code; it adds a native_rows loader for the launchers bench.sh pins (Nr), the libvc
+// arms, and a driver that compares every arm's levels with commit_gpu's on the device before anything is timed, then times each
+// arm once a rep, in turn, with the SM clock (NVML) of each rep.
 //
 //   rows PARAMS N REPS NATIVE_SO     JSON lines on stdout (PARAMS: commit_gpu's reference.py params, rows of 32768 bits)
 #define main sharaw_main
@@ -59,6 +60,67 @@ struct Vc {
   }
 };
 
+// native_rows.cu's launchers as bench.sh pins them (NR), which take max_blocks before the stream (sharaw's Native predates it),
+// run on StepHasher's schedule (native_collect.cpp's rows_levels_above): the leaf kernel over the padded width, a launch a level
+// above kWideLevel nodes, then kFusedLevels levels a launch.
+struct Nr {
+  static constexpr u64 kWideLevel = 1ull << 16;
+  static constexpr int kFusedLevels = 10;
+  int (*params_bytes)() = nullptr;
+  int (*build)(const uint8_t*, const uint8_t*, const uint8_t*, const uint8_t*, const uint8_t*, const char*, int, uint32_t, void*) = nullptr;
+  int (*leaves)(const void*, const uint8_t*, uint64_t, uint64_t, const uint8_t*, const uint8_t*, uint64_t, uint64_t, uint64_t, uint8_t*,
+                uint8_t*, uint8_t*, uint64_t, cudaStream_t) = nullptr;
+  int (*level)(const void*, const uint8_t*, uint8_t*, uint64_t, int, uint64_t, uint64_t, cudaStream_t) = nullptr;
+  int (*levels)(const void*, const uint8_t*, uint8_t*, uint64_t, int, uint64_t, int, cudaStream_t) = nullptr;
+  std::vector<uint8_t> P;
+  uint8_t* lv = nullptr;
+  const uint8_t* tn = nullptr;
+  u64 n = 0, width = 0;
+  bool load(const char* so) {
+    void* h = dlopen(so, RTLD_NOW | RTLD_LOCAL);
+    if (!h) { fprintf(stderr, "dlopen %s: %s\n", so, dlerror()); return false; }
+    params_bytes = (decltype(params_bytes))dlsym(h, "verity_rows_params_bytes");
+    build = (decltype(build))dlsym(h, "verity_rows_build");
+    leaves = (decltype(leaves))dlsym(h, "verity_rows_leaves_launch");
+    level = (decltype(level))dlsym(h, "verity_rows_level_launch");
+    levels = (decltype(levels))dlsym(h, "verity_rows_levels_launch");
+    return params_bytes && build && leaves && level && levels;
+  }
+  void init(const Params& p, u64 n_, const uint4* tn_) {
+    n = n_;
+    width = 1ull << depth_of(n);
+    P.resize(params_bytes());
+    static const char schema[] = "hm96-sha512/row/v2";
+    if (build(p.domain_id, p.ks, p.P, p.salt_prefix, p.leaf_prefix, schema, 18, sr::LB, P.data())) { fprintf(stderr, "native build\n"); exit(2); }
+    CK(cudaMalloc(&lv, (2 * width) * 64));
+    tn = (const uint8_t*)tn_;
+  }
+  void run(const uint8_t* rows, cudaStream_t st) {
+    if (int e = leaves(P.data(), rows, sr::LB, n, nullptr, tn, 0, width, n, lv, nullptr, nullptr, 0, st)) {
+      fprintf(stderr, "native leaves %d\n", e);
+      exit(3);
+    }
+    u64 off = 0, m = width;
+    int l = 0;
+    while (m > 1) {
+      if (m > kWideLevel) {
+        if (int e = level(P.data(), lv + 64 * off, lv + 64 * (off + m), m / 2, l, 0, 0, st)) { fprintf(stderr, "native level %d\n", e); exit(3); }
+        off += m;
+        m /= 2;
+        ++l;
+        continue;
+      }
+      const int k = std::min(depth_of(m), kFusedLevels);
+      if (int e = levels(P.data(), lv + 64 * off, lv + 64 * (off + m), m, l, 0, k, st)) { fprintf(stderr, "native levels %d\n", e); exit(3); }
+      for (int i = 0; i < k; ++i) {
+        off += m;
+        m /= 2;
+      }
+      l += k;
+    }
+  }
+};
+
 int rows_bench(int argc, char** argv) {
   if (argc < 6) { fprintf(stderr, "rows PARAMS N REPS NATIVE_SO\n"); return 2; }
   const Params p = read_params(argv[2]);
@@ -79,7 +141,7 @@ int rows_bench(int argc, char** argv) {
   cm.init(p, n, sr::LB, false);
   sr::Mine me;
   me.init(p, n);
-  Native nat;
+  Nr nat;
   const bool have_nat = so && *so && nat.load(so);
   if (have_nat) nat.init(p, n, me.Tn);
   Vc vs, vf, vo, vg;
