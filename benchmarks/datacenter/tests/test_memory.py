@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import pytest
 
-from datacenter import (Assumption, Block, Cadence, Challenge, Datacenter, Deviation, Device, Held, Input, Interval, Link,
-                        Plan, Read, ReadWindow, Refused, Store, account, audit, place, run, trace)
+from datacenter import (BLOCK_BITS, Append, Assumption, Block, Cadence, Challenge, Datacenter, Deviation, Device, Held,
+                        Input, Interval, Link, Plan, Read, ReadWindow, Rekey, Release, Refused, Store, account, audit,
+                        place, run, trace)
 
 GB = 8e9
 US = Assumption("hop", 1e-6, "s", "measured")
@@ -79,6 +80,29 @@ def test_a_small_sample_locates_by_latency_and_labels_rebuilt_in_time_locate_now
         labels = Store("labels", 1 * GB, "a.gpu", "labels", regen)
         p, plan, profile = setup(Plan(Interval(0, 1000), challenges=[Challenge("labels", 0, 1, sample=block)]), (labels,))
         assert bool(account(audit(run(p, {"x": 3}, plan), profile), profile).located["labels"]) == located, regen
+
+
+def test_a_store_changes_as_blocks_land_and_leave_under_the_verifiers_coins():
+    """Memory's event shapes. KV blocks are appended under append coins and count from when their encode lands
+    (deferred residency); they are released, or re-keyed at their lifetime cap (the old indices go at once, the new
+    ones count from their residency); a block released before it lands is withdrawn and never counts. A store's bits
+    change mid-window, so a challenge's Held is the average over its interval."""
+    B = BLOCK_BITS
+    changes = [Append("kv", at=0, first=0, count=1000, coin_at=1, resident_at=4),
+               Rekey("kv", old_first=0, new_first=1000, count=500, at=8, resident_at=10),
+               Release("kv", first=500, count=500, at=12),
+               Append("kv", at=2, first=2000, count=10, coin_at=3, resident_at=9), Release("kv", 2000, 10, at=6)]
+    plan = Plan(Interval(0, 16), changes=changes, lifetime=3, deferred=True)
+    assert [plan.bits(KV, t) - KV.bits for t in (3, 5, 9, 11, 13)] == [0, 1000 * B, 500 * B, 1000 * B, 500 * B]
+    assert plan.held(KV, Interval(4, 12)) == KV.bits + (500 * 4 + 500 * 8 + 500 * 2) / 8 * B
+    challenged = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=8)], changes=changes)
+    p, _, profile = setup(challenged)
+    assert Held("kv", KV.bits + 500 * B, Interval(0, 8)) in audit(run(p, {"x": 3}, challenged), profile)
+    with pytest.raises(ValueError, match="deferred residency"):
+        Plan(Interval(0, 16), lifetime=1, deferred=True)
+    with pytest.raises(ValueError, match="past its lifetime"):
+        Plan(Interval(0, 40), changes=changes[:1], lifetime=2,
+             reads=[ReadWindow("kv", start=t, boundary=t + 2, deadline=t + 3) for t in (4, 8, 12)])
 
 
 def test_a_read_windows_bits_are_its_output_and_local_beyond_every_path_into_the_device():

@@ -11,8 +11,11 @@ concludes:
   work that must have run on the block. Crossing bytes bound nothing by themselves: a helper holding the registered
   weights needs only small inputs and outputs. Work is pinned to the block only by data it must consume that only the
   block receives, a trusted device's fresh data (`Input(source="trusted")`), which a helper could get only through the
-  block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the named premise `FLEET_CLOSED`. With
-  neither, it is unbounded and nothing is attributed;
+  block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the named premise `FLEET_CLOSED`. Or,
+  under the premise `SALT_CUSTODY`, by a salt the block's own certifier releases only into it: the work that depends
+  on it is pinned while `custody`, k, the bits that could carry the salt out before registration (the block's egress
+  timing advice, the profile's advice, inside inputs and salt-dependent values crossing out), stays at most 384. With
+  none, it is unbounded and nothing is attributed;
 - `reads` and `reads_local_at_least`: the reads the bandwidth audits certify for stores on the block's devices, and the
   part no path into the registered device (a boundary link, or host DRAM over PCIe) can have carried in;
 - `carried`: the bits that could have been carried into the epoch: each device's memory, less what a wipe's labels
@@ -36,6 +39,10 @@ from .time import Interval
 
 #: the premise that no undeclared compute is reachable from a block (compute accounting's option (a))
 FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
+#: compute accounting's salt custody (note:compute-accounting/20261018T0730Z-draft-attrib, unproved): a salt the block's
+#: certifier releases only into it pins the work that depends on it, while k, the bits that could carry it out before
+#: registration, stays at most this many
+SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
 
 
 @dataclass
@@ -50,6 +57,8 @@ class BlockAccount:
     reads_local_at_least: float = 0.0
     forced: float = 0.0
     assumptions: list[str] = field(default_factory=list)
+    #: for a block with a salt in its certifier's custody, k: the bits that could carry it out before registration
+    custody: float | None = None
 
     @property
     def headroom(self) -> float:
@@ -101,6 +110,8 @@ class Account:
             lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
                          f"store {s}: held on one of {', '.join(where)}" if where else
                          f"store {s}: located nowhere (its deadline leaves time to rebuild it)")
+        lines += [f"salt custody of {b.block}: k = {b.custody:g} bits could carry its salt out before registration"
+                  for b in self.blocks if b.custody is not None]
         if self.delta:
             lines.append(f"fails with probability at most {self.delta:.3g}")
         lines += [f"REFUSED {r.on!r}: {r.why}" for r in self.refused]
@@ -115,10 +126,10 @@ def _boundary_rate(dc: Datacenter, block: str) -> float:
 
 def _sample(profile: Profile, c: Held) -> float:
     """The bits that answered the request behind `c`: the challenge's or the wipe's sample, else the whole store."""
-    plan, s = profile.plan, profile.stores[c.store]
+    plan = profile.plan
     asks = [q.sample for q in plan.challenges if q.store == c.store and Interval(q.at, q.at + q.deadline) == c.during]
     asks += [w.sample for w in plan.wipes if w.store.name == c.store and w.during == c.during]
-    return next((a for a in asks if a is not None), s.bits)
+    return next((a for a in asks if a is not None), c.bits)
 
 
 def _into(dc: Datacenter, device: str) -> float:
@@ -150,7 +161,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
         if isinstance(c, Held) and inside(c) and c.store not in refused_stores and c.store not in located:
             s, bits, deadline = profile.stores[c.store], _sample(profile, c), dc.cadence.seconds(c.during.length)
             located[c.store] = [] if regen_time(dc, s, bits) <= deadline else [
-                d.name for d in dc.devices.values() if d.memory is not None and float(d.memory) >= s.bits
+                d.name for d in dc.devices.values() if d.memory is not None and float(d.memory) >= c.bits
                 and answer_time(dc, c.by, s.device, d.name, bits) <= deadline]
             rejoined = c.during.start >= back.get(getattr(dc.block_of(s.device), "name", None), epoch.start)
             if s.content == "labels" and located[c.store] == [s.device] and rejoined:
@@ -165,6 +176,8 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                 reads_local[b.name] += max(c.bits - _into(dc, device) * dc.cadence.seconds(c.during.length), 0.0)
 
     premises = {a.name for a in assume}
+    ports = {repr(p): p for p in dc.ports}
+    refused_blocks = {dc.watched(ports[r.on.name]).name for r in refused if r.on.kind == "port" and r.on.name in ports}
     blocks = []
     for b in dc.blocks:
         work = profile.work[b.name] if credited[b.name] else {}
@@ -174,15 +187,22 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                       for d in b.devices if d.memory is not None)
         names = [a.name for d in b.devices for a in [*(d.rate.get(k) for k in work), d.memory, d.residual, d.bandwidth,
                                                      d.on_chip] if a is not None]
+        bounds = [float("inf")]
         if FLEET_CLOSED.name in premises:
-            outsourceable = 0.0
+            bounds.append(0.0)
             names.append(FLEET_CLOSED.name)
-        elif profile.forced[b.name]:
-            outsourceable = min(credited[b.name], _boundary_rate(dc, b.name) * seconds * credited[b.name] / profile.forced[b.name])
-        else:
-            outsourceable = float("inf")
-        blocks.append(BlockAccount(b.name, credited[b.name], busy, outsourceable, carried, reads[b.name],
-                                   reads_local[b.name], profile.forced[b.name], names))
+        if profile.forced[b.name]:
+            bounds.append(min(credited[b.name], _boundary_rate(dc, b.name) * seconds * credited[b.name] / profile.forced[b.name]))
+        k = None
+        if profile.salt.get(b.name):
+            k = profile.salt_out[b.name] + sum(c.bits for c in claims if isinstance(c, Scheduled)) + sum(
+                c.bits for c in claims if isinstance(c, Carried) and c.port.direction == "egress"
+                and dc.watched(c.port).name == b.name and c.during.start < profile.plan.registration)
+            if SALT_CUSTODY.name in premises and k <= float(SALT_CUSTODY) and b.name not in refused_blocks:
+                bounds.append(max(credited[b.name] - profile.pinned[b.name], 0.0))
+                names.append(SALT_CUSTODY.name)
+        blocks.append(BlockAccount(b.name, credited[b.name], busy, min(bounds), carried, reads[b.name],
+                                   reads_local[b.name], profile.forced[b.name], names, k))
 
     links = {repr(port): dc.uplink(port.certifier) for port in dc.ports}
     window_seconds = dc.cadence.seconds(dc.cadence.window_ticks)

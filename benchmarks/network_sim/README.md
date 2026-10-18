@@ -88,8 +88,6 @@ certifier verdicts: `r20261018-065536-38c4`, before the declarations, and `r2026
 
 - All the processes share one host's monotonic clock, so one origin times every proxy. Blocks on separate hosts would
   need their clocks synchronized to within the slack.
-- `mockdc.py` has its own server, proxy and peer coroutines because `active_replay`'s bind `127.0.0.1`. A host parameter
-  there would let it reuse them.
 - `datacenter.Cadence` holds one cadence for both directions. The lab's egress and ingress agree on frame size, bucket
   and window, which `records.cadence` checks, but not on the frames per bucket (2 out, 1 in), which `Cadence` doesn't
   hold.

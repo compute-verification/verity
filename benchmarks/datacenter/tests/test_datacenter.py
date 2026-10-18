@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from datacenter import (FLEET_CLOSED, Assumption, Block, Carried, Computed, Credit, Datacenter, Deviation, Device,
+from datacenter import (FLEET_CLOSED, SALT_CUSTODY, Assumption, Block, Carried, Computed, Credit, Datacenter, Deviation, Device,
                         Entered, Fleet, Cadence, Held, Input, Interval, Ledger, Link, Maintenance, On, Plan, Port, Record,
                         Refused, Wipe,
                         account, audit, check_records, crossings, digest, double_credit, place, run, trace, traffic)
@@ -229,6 +229,41 @@ def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named
 
     narrow, wide = attributed(1e-9), attributed(1e-3)               # 16 ns of egress: almost nothing out; 16 ms: plenty
     assert narrow.forced == 16 and narrow.local_at_least > 0.85 * narrow.credited and wide.local_at_least == 0
+
+
+def test_a_salt_in_its_certifiers_custody_pins_the_work_that_depends_on_it():
+    """Compute's third anchor (ATTRIB). Block a's certifier releases a 512-bit salt into a alone. The noised product p
+    (PoUW's proof work) depends on it and never leaves, so a helper off the block can't have computed it. That holds
+    while k, the bits that could carry the salt out before registration, stays at most 384: a's egress timing advice
+    (4 windows × 7 bits) and nothing else here. A 512-bit telemetry input delivered out of a voids it, and so does a
+    refused port-window of a's."""
+    def noised(x, w1, w2, s, t):
+        h = ((x * w1) ^ 0x5A).named("h")
+        (h * s).named("p")
+        return (h * w2 + x).named("y"), t
+
+    c = trace(noised, x=Input(16), w1=Input(16, "registered"), w2=Input(16, "registered"), s=Input(512, "trusted"),
+              t=Input(16, "inside"))
+    dc = datacenter()
+    inputs = INPUTS | {"s": 2**511 + 9, "t": 45}
+
+    def custody(t_bits: int = 16, deviation: Deviation | None = None):
+        ct = trace(noised, x=Input(16), w1=Input(16, "registered"), w2=Input(16, "registered"),
+                   s=Input(512, "trusted"), t=Input(t_bits, "inside")) if t_bits != 16 else c
+        p = place(ct, dc, "a.gpu", deliver="world", x="world", s="a.cert", t="b.gpu" if t_bits == 16 else "a.gpu",
+                  h="a.gpu", p="a.gpu", w2="b.gpu", y="b.gpu")
+        profile = p.public(Plan(EPOCH))
+        return profile, account(audit(run(p, inputs, Plan(EPOCH), deviation), profile), profile, assume=(SALT_CUSTODY,))
+
+    profile, acc = custody()
+    a = acc.blocks[0]
+    assert profile.salt == {"a": 512, "b": 0} and profile.pinned["a"] == 6 * 16 * 16 and profile.salt_out["a"] == 0
+    assert a.custody == 4 * 7 and a.local_at_least == 6 * 16 * 16 and "salt-custody" in a.assumptions
+    assert acc.blocks[1].custody is None and acc.blocks[1].local_at_least == 0
+    leaky, acc = custody(t_bits=512)
+    assert leaky.salt_out["a"] == 512 and acc.blocks[0].custody == 4 * 7 + 512 and acc.blocks[0].local_at_least == 0
+    _, acc = custody(deviation=Deviation(down={(Port("a.cert", "egress"), 0)}))
+    assert not acc.sound and acc.blocks[0].local_at_least == 0
 
 
 def test_credit_from_two_audits_on_one_device_must_fit_every_interval_per_resource():

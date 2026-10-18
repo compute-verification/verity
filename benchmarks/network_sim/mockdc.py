@@ -11,11 +11,12 @@ them and checks what can reach what. All three run `ip` through `sudo -n`.
 
 `run` runs one configuration on every block at once, each block with its own strategy (by default the blocks take
 `honest`, `bits`, `late` and `extra` in turn; `--block b1=late` sets one). For each block, three processes, each in its
-own namespace as the invoking user (`sudo ip netns exec NS setpriv ...`), on the host's monotonic clock from one origin,
-built from `benchmarks/network_traces/active_replay.py`'s classes and the certifier's own, unmodified:
-- **the server** (`active_replay.Server`) inside the block, on its uplink's address;
+own namespace as the invoking user (`sudo ip netns exec NS setpriv ...`), on the host's monotonic clock from one origin:
+`benchmarks/network_traces/active_replay.py`'s server, proxy and peer, on the namespaces' addresses, with the
+certifier's own proxy unmodified:
+- **the server** (`active_replay.Server`) inside the block, on its uplink's address at `SERVER_PORT`;
 - **the proxy** (`verity.core.protocols.certifier.active.Proxy`) in the block's certifier namespace, its link on the
-  certifier's fabric address and its upstream the block's server;
+  certifier's fabric address at `LINK_PORT` and its upstream the block's server;
 - **the peer** (`active_replay.Peer`) on the outside host, across the fabric.
 
 The configuration is `test_active_replay`'s synthetic trace, three windows of 60 buckets of 100 ms, calibrated by the
@@ -57,7 +58,6 @@ import records  # noqa: E402
 from datacenter import Carried, Datacenter, Refused, check_records  # noqa: E402
 from datacenter.examples import leaf_spine  # noqa: E402
 from verity.core.protocols.certifier import calibration  # noqa: E402
-from verity.core.protocols.certifier.active import Proxy  # noqa: E402
 from verity.core.protocols.certifier.audit import Audit  # noqa: E402
 
 T = 60
@@ -211,74 +211,33 @@ def strategy_plan(plan: dict, setup: ar.Setup, strategy: str) -> dict:
     return ar.adversary_plan(plan, setup, strategy, seed=1)
 
 
-# The three processes, each in its own namespace. Each prints one line when it is ready and reads the origin from its
-# stdin; the server then reads one more line before it stops.
+# The three processes, each in its own namespace: active_replay's server, proxy and peer on the namespaces' addresses.
+# Each prints one line when it is ready and reads the origin from its stdin; the server then reads one more line
+# before it stops.
 
-async def _line() -> str:
-    return await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readline)
+class Pipe:
+    """A role's pipe to `run`, in the shape active_replay's roles take: what the role sends is its ready line, and what
+    it receives is a line of its stdin, as JSON."""
 
+    def send(self, value) -> None:
+        print(json.dumps({"ready": True, "sent": value}), flush=True)
 
-def _ready(**info) -> None:
-    print(json.dumps({"ready": True} | info), flush=True)
-
-
-async def server_role(cfg: dict) -> None:
-    server = ar.Server(cfg["plan"], cfg["params"])
-    listening = await asyncio.start_server(server.handle, cfg["host"], SERVER_PORT)
-    _ready()
-    await server.serve(float(await _line()))
-    await _line()
-    listening.close()
-    server.close()
-    ar.write_logs(Path(cfg["out"]), server=server)
+    def recv(self):
+        return json.loads(sys.stdin.readline())
 
 
-async def proxy_role(cfg: dict) -> None:
-    setup, out = ar.Setup(cfg["report"]), Path(cfg["out"])
-    publish = ar.Publisher(out, setup)
-    advice = ar.prover_args(cfg["plan"], setup)
-    done = asyncio.get_running_loop().create_future()
-    holder: dict = {}
-
-    async def on_link(reader, writer) -> None:
-        if "link" in holder:  # one link: a second connection is never the peer's
-            writer.close()
-            return
-        holder["link"] = writer.get_extra_info("peername")
-        await holder["proxy"].run(reader, writer)
-        done.set_result(None)
-
-    listening = await asyncio.start_server(on_link, cfg["host"], LINK_PORT)
-    _ready()
-    origin = float(sys.stdin.readline())  # blocks the loop, so the peer's connection waits until the proxy exists
-    proxy = holder["proxy"] = Proxy((cfg["upstream"], SERVER_PORT), setup.egress_params, setup.ingress_params,
-                                    setup.sync_set, advice.pop("syncs"), origin=origin, publish=publish,
-                                    egress_link=setup.egress_link, ingress_link=setup.ingress_link, **advice)
-    await done
-    listening.close()
-    publish.close()
-    ar.write_logs(out, proxy=proxy)
-    (out / "link.json").write_text(json.dumps({"peer": holder["link"]}))
-
-
-async def peer_role(cfg: dict) -> None:
-    peer = ar.Peer(cfg["plan"], cfg["params"])
-    reader, writer = await asyncio.open_connection(cfg["link"], LINK_PORT, limit=1 << 22)
-    _ready(local=writer.get_extra_info("sockname"))
-    origin = float(await _line())
-    sending = asyncio.create_task(peer.send(writer, origin))
-    await peer.read(reader, origin)
-    sending.cancel()
-    writer.close()
-    ar.write_logs(Path(cfg["out"]), peer=peer)
-
-
-ROLES = {"server": server_role, "proxy": proxy_role, "peer": peer_role}
+ROLES = {
+    "server": lambda cfg, pipe: ar._server(cfg["plan"], cfg["params"], pipe, Path(cfg["out"]), cfg["host"],
+                                           SERVER_PORT),
+    "proxy": lambda cfg, pipe: ar._proxy(cfg["plan"], ar.Setup(cfg["report"]), (cfg["upstream"], SERVER_PORT), pipe,
+                                         Path(cfg["out"]), host=cfg["host"], port=LINK_PORT),
+    "peer": lambda cfg, pipe: ar._peer(cfg["plan"], cfg["params"], LINK_PORT, pipe, Path(cfg["out"]), cfg["link"]),
+}
 
 
 def role(args) -> None:
     ar._quiet_runtime()
-    asyncio.run(ROLES[args.name](json.loads(Path(args.config).read_text())))
+    asyncio.run(ROLES[args.name](json.loads(Path(args.config).read_text()), Pipe()))
 
 
 class Process:
@@ -356,7 +315,7 @@ def run(args) -> None:
     codes = {}
     for b, (server, proxy, peer) in procs.items():
         codes[b] = {"proxy": proxy.wait(), "peer": peer.wait()}
-        server.send("stop")
+        server.send(json.dumps("stop"))
         codes[b]["server"] = server.wait()
         (out / b / "processes.json").write_text(json.dumps({"exit": codes[b], "origin": origin, "clock": "real",
                                                             "namespaces": [p.name for p in (server, proxy, peer)]}))

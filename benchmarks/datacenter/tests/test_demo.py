@@ -16,6 +16,13 @@ def test_an_honest_night_on_a_rack_is_sound_and_located():
     assert n0.carried < n1.carried            # n0's DPU and BMC were wiped
 
 
+def test_under_salt_custody_each_nodes_noised_product_is_pinned_to_it():
+    from datacenter import SALT_CUSTODY
+    n0, n1 = night(assume=(SALT_CUSTODY,)).blocks
+    assert (n0.custody, n1.custody) == (3 + 4 * 7, 3 + 4 * 7 + 16)    # advice, egress timing, n1's telemetry
+    assert n0.local_at_least == n1.local_at_least == 6 * 32 * 32 and n0.local_at_least < n0.credited
+
+
 def test_each_of_the_adversarys_attempts_is_refused_for_its_own_reason():
     acc = night(Deviation(extra={(Port("n0.cert", "egress"), 5): 2}, moved={"kv": "n1.cpu0"}, failed_wipes={"n0.bmc"},
                           down={(Port("n1.cert", "ingress"), 2)}), image=0xBADC0DE)
