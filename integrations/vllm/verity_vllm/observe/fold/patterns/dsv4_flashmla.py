@@ -72,8 +72,9 @@ def sparse_layer(node: TreeNode, ctx: StepContext, D: int, sink: object, scale: 
 
 
 def _consts(*runs_: tuple[int, int]) -> Pieces:
-    """One row of shared i32 constants: each (bits, count) run, in order."""
-    return Pieces((tuple(Const(32, bits, "idx", shared=True, count=n) for bits, n in runs_ if n),))
+    """One row of shared i32 constants: each (bits, count) run, in order.  A run of no copies still emits its constant, as the Build's
+    `[i32(v)] * n` does at n = 0 (the decode's -1 when its window and compressed rows fill their blocks)."""
+    return Pieces((tuple(Const(32, bits, "idx", shared=True, count=n) for bits, n in runs_),))
 
 
 def mla_compress(node: TreeNode, ctx: StepContext, sl: SparseLayer) -> list[Compute] | Unsupported:

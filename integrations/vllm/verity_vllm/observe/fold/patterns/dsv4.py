@@ -16,18 +16,16 @@ from dataclasses import dataclass
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP
 from verity_vllm.observe.fold.patterns.cublas import CublasLinear, CublasMmF32Out
-from verity_vllm.observe.fold.patterns.dsv4_cache import (_entry_slots, _is, _module, _slots, _weights, block_runs, state_block, state_row,
-                                                          swa_block)
+from verity_vllm.observe.fold.patterns.dsv4_cache import _is, _module, _slots, _weights, block_runs, state_block, swa_block
 from verity_vllm.observe.fold.patterns.dsv4_flashmla import SparseDecode, SparsePrefill
 from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_int, sub_rows
+from verity_vllm.observe.fold.patterns.geometry import GeometryError, sub_rows
 from verity_vllm.observe.fold.patterns.norms import CudaRmsNorm
 from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import attribution_for, unsupported
 from verity_vllm.observe.fold.patterns.rotary import step_positions
 from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
-from verity_vllm.observe.fold.resolver import (Compute, Const, Gather, Group, PerRow, Pieces, Resolution, Shared, StepContext, Transparent,
-                                               Unsupported)
+from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
 from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import FP8_QUANT_PINS
@@ -53,7 +51,7 @@ INV_ROPE_SRC_SHA = "25e6ced0c59d2464bfa83a706c99bfe09d5b00f31e1ab31a600797d0cc8c
 INV_ROPE_FP8_MAX, INV_ROPE_EPS = 448.0, 1e-10
 INDEXER_COMPRESS_KERNEL = "_fused_kv_compress_norm_rope_insert_indexer_attn"
 INDEXER_COMPRESS_SRC_SHA = "9fa36754ffe4c4483c15a2f9bd19eee999f1473b5dd95aa467e94b615a0babef"
-F32_NEG_INF = 0xFF800000
+INDEXER_COMPRESSOR = ".indexer.compressor"
 
 
 
@@ -283,14 +281,23 @@ class QNormRopeKvInsert:
 
 
 
+def indexer_short_path(node: TreeNode, pattern: str) -> Transparent:
+    """A launch of a ratio-4 layer's indexer compressor (`<layer>.attn.indexer.compressor`): on the indexer's short path, every
+    compressed row selected, nothing reads its state rows or key cache, and the Build's indexer leaf states nothing (`dsv4_leaves`), so
+    the launch folds to nothing and leaves those caches unwritten.  The long path, which reads them, has no pattern, and the attention
+    refuses more compressed rows than the top-k (`dsv4_flashmla.sparse_layer`)."""
+    return Transparent("noop", tuple(sorted(node.ids())), hint=f"{_module(node)}: the indexer's short path", kernels=(triton_name(node),),
+                       pattern=pattern)
+
+
 @dataclass
 class SavePartialStates:
     """`_save_partial_states_kernel[(T,)]` (`save_partial_states`, a compressor's state rows) -> per token kv[t] moved to the first W
     words of its slot of the state cache, and `Dsv4CompressorScore_v1{W}` of score[t] and ape[positions[t] % R] in the next W: the
     Build's `Dsv4CompressorStateRule`.  The slot is the token's in `<compressor>.state_cache`'s KV group, so the tokens of one cache
-    block are one move and one Compute (`state_block`).  A ratio-4 layer's indexer runs the kernel on its own compressor's state, a
-    cache only the indexer's long path reads.  A head-512 compressor's window ends are recorded for the layer's attention, which
-    emits the compress the CuTe DSL runs next (`mla_compress`)."""
+    block are one move and one Compute (`state_block`).  A ratio-4 layer's indexer runs the kernel on its own compressor's state
+    (`indexer_short_path`).  A head-512 compressor's window ends are recorded for the layer's attention, which emits the compress the
+    CuTe DSL runs next (`mla_compress`)."""
 
     name = "dsv4.save_partial_states"
 
@@ -299,6 +306,8 @@ class SavePartialStates:
             return None
         if node.enter.src_sha != SAVE_STATES_SRC_SHA or node.enter.num_warps != 4:
             return unsupported(node, "the kernel's source or warps differ from the pin", src_sha=node.enter.src_sha, num_warps=node.enter.num_warps)
+        if _module(node).endswith(INDEXER_COMPRESSOR):
+            return indexer_short_path(node, self.name)
         a = bound_args(node)
         kv, score, ape, cache, sm = (a.get(k) for k in ("kv_ptr", "score_ptr", "ape_ptr", "state_cache_ptr", "slot_mapping_ptr"))
         W, R, bs = a.get("HEAD_SIZE"), a.get("COMPRESS_RATIO"), a.get("block_size")
@@ -345,12 +354,8 @@ class SavePartialStates:
 
 @dataclass
 class IndexerCompress:
-    """`_fused_kv_compress_norm_rope_insert_indexer_attn[(T,)]`, a ratio-4 layer's indexer compressor -> at each token whose position
-    p ends a window ((p + 1) % 4 == 0) `Dsv4IndexerCompress_v1{D,ROPE,EPS}` of the 8 state rows of positions p - 7 .. p, the norm
-    weight and cos_sin[(p // 4) * 4], into compressed entry p // 4's slot of the indexer's key cache (`registry.dsv4_indexer`): its D
-    bytes, and its f32 scale after the block's byte rows.  State row r reads kv words [(r >= 4) D, +D) of its position's slot and the
-    score STATE_WIDTH words on; a row below position 0 is kv 0 and score -inf, as the kernel's masked loads.  One Compute per key-cache
-    block; a launch with no window end writes nothing.  Only the indexer's long path reads the cache."""
+    """`_fused_kv_compress_norm_rope_insert_indexer_attn[(T,)]`, a ratio-4 layer's indexer compressor's compress into the indexer's
+    key cache (`registry.dsv4_indexer`'s `Dsv4IndexerCompress`), under its pin: the indexer's short path (`indexer_short_path`)."""
 
     name = "dsv4.indexer_compress"
 
@@ -358,75 +363,10 @@ class IndexerCompress:
         if triton_name(node) != INDEXER_COMPRESS_KERNEL:
             return None
         e = node.enter
-        if e.src_sha != INDEXER_COMPRESS_SRC_SHA or e.num_warps != 1:
-            return unsupported(node, "the kernel's source or warps differ from the pin", src_sha=e.src_sha, num_warps=e.num_warps)
-        a, c = bound_args(node), e.constexprs
-        state, pos_v, sm, w, cs, kc, ksm = (a.get(k) for k in ("state_cache_ptr", "positions_ptr", "slot_mapping_ptr", "rms_norm_weight_ptr",
-                                                                "cos_sin_cache_ptr", "k_cache_ptr", "kv_slot_mapping_ptr"))
-        D, W, R, ROPE, bs, n, eps = (c.get("HEAD_SIZE"), c.get("STATE_WIDTH"), c.get("COMPRESS_RATIO"), c.get("ROPE_HEAD_DIM"), a.get("block_size"),
-                                     a.get("kv_cache_block_size"), as_float(a.get("rms_norm_eps")))
-        rows = tuple(ctx.start.rows)
-        T = len(rows)
-        if not all(isinstance(v, ViewDesc) for v in (state, pos_v, sm, w, cs, kc, ksm)) \
-                or not all(isinstance(x, int) and x > 0 for x in (D, W, R, ROPE, bs, n)) or eps is None:
-            return unsupported(node, "the arguments are not bound as (state cache, positions, slots, norm weight, cos_sin, key cache, key slots) "
-                               "with static sizes")
-        pins = {"TRITON_BLOCK_SIZE": D, "QUANT_BLOCK": D, "TOKEN_STRIDE": D, "STATE_WIDTH": 2 * D, "OVERLAP": True, "FP8_MAX": INV_ROPE_FP8_MAX,
-                "SCALE_DIM": 4, "KV_BLOCK_STRIDE": kc.strides[0] if kc.rank else None}
-        if any(c.get(k) != v for k, v in pins.items()) or 2 * R != I.ROWS or e.grid != [T]:
-            return unsupported(node, f"the launch is not one program per token over {I.ROWS} overlapped state rows of one quant block",
-                               constexprs=c, grid=e.grid, T=T)
-        try:
-            I.check_norm_statics(D, ROPE, eps)
-        except ValueError as err:
-            return unsupported(node, str(err))
-        if not (state.dtype == "float32" and state.rank == 3 and state.shape[1:] == (bs, 2 * W) and state.strides[2] == 1
-                and (a.get("state_cache_stride0"), a.get("state_cache_stride1")) == state.strides[:2]) \
-                or not (kc.dtype == "uint8" and kc.rank == 3 and kc.shape[1:] == (n, D + 4) and kc.strides[1:] == (D + 4, 1)
-                        and (kc.offset + n * D) % 4 == 0 and kc.strides[0] % 4 == 0) \
-                or not (_is(w, (D,), "bfloat16") and cs.dtype == "float32" and cs.rank == 2 and cs.shape[1] == ROPE
-                        and cs.strides == (a.get("cos_sin_stride"), 1)):
-            return unsupported(node, "the state cache, key cache, norm weight or cos_sin are not the kernel's layouts", state=repr(state),
-                               k_cache=repr(kc), w=repr(w), cs=repr(cs))
-        pos = step_positions(node, ctx, pos_v, T)
-        if isinstance(pos, Unsupported):
-            return pos
-        mod = _module(node)
-        if isinstance(slots := _slots(node, ctx, f"{mod}.state_cache", bs, sm, T), Unsupported):
-            return slots
-        ends = [t for t, p in enumerate(pos) if (p + 1) % R == 0]
-        if not ends:
-            return Transparent("noop", tuple(sorted(node.ids())), hint=f"{mod}/compress", kernels=(triton_name(node),), pattern=self.name)
-        if len({rows[t][0] for t in ends}) != 1 or not is_int(ksm) or ksm.numel < T:
-            return unsupported(node, "the window ends are not one request's, or the key slots do not cover the tokens")
-        req, key = rows[ends[0]][0], f"{mod.removesuffix('.compressor')}.k_cache"
-        win = [s for t in ends for s in range(pos[t] - I.ROWS + 1, pos[t] + 1) if s >= 0]
-        if isinstance(src := _entry_slots(node, ctx, f"{mod}.state_cache", req, sorted(set(win)), bs), Unsupported):
-            return src
-        if isinstance(dst := _entry_slots(node, ctx, key, req, [pos[t] // R for t in ends], n, ratio=R), Unsupported):
-            return dst
-        src = dict(zip(sorted(set(win)), src))
-        wroots, croots = ctx.roots_of(w), ctx.roots_of(cs)
-        if not wroots or not croots:
-            return unsupported(node, "the norm weight or the rotary table is no root of the capture", w=repr(w), cs=repr(cs))
-
-        def row(s: int, k: int, r: int) -> ViewDesc | Const:
-            if s < 0:
-                return Const(32, F32_NEG_INF if k else 0, "score_masked" if k else "kv_masked", shared=True, count=D)
-            return state_row(state, src[s], k, W, r // R * D, D)
-
-        spec, parts = vocab_kind(ctx, "dsv4_indexer_compress", D=D, ROPE=ROPE, EPS=eps), []
-        for b, lo, hi in block_runs(dst, n):
-            base = kc.offset + b * kc.strides[0]
-            q = ViewDesc(kc.alloc, base, (n, D), (D, 1), "float8_e4m3fn", kc.device)
-            sc = ViewDesc(kc.alloc, (base + n * D) // 4, (n, 1), (1, 1), "float32", kc.device)
-            ps = [pos[t] for t in ends[lo:hi]]
-            kv, score = (Pieces(tuple(tuple(row(p - I.ROWS + 1 + r, k, r) for r in range(I.ROWS)) for p in ps)) for k in (0, 1))
-            idx = tuple(s % n for s in dst[lo:hi])
-            parts.append(Compute(spec, hi - lo, (kv, score, Shared(w), Gather(cs, tuple(p // R * R for p in ps))), (Gather(q, idx), Gather(sc, idx)),
-                                 () if parts else (node.id,), hint=f"{mod}/compress", kernels=(triton_name(node),),
-                                 attribution=tuple(rows[t] for t in ends[lo:hi]), pattern=self.name, roots=(None, None, wroots[0].name, croots[0].name)))
-        return Group(tuple(parts), tuple(sorted(node.ids())), hint=mod, pattern=self.name)
+        if e.src_sha != INDEXER_COMPRESS_SRC_SHA or e.num_warps != 1 or not _module(node).endswith(INDEXER_COMPRESSOR):
+            return unsupported(node, "the kernel's source, warps or module differ from the pin", src_sha=e.src_sha, num_warps=e.num_warps,
+                               module=_module(node))
+        return indexer_short_path(node, self.name)
 
 
 @dataclass
@@ -545,4 +485,5 @@ def dsv4_patterns() -> list:
             SparsePrefill(), DynamicDeepGemmFp8Linear(), CublasLinear(), CublasMmF32Out(), CudaRmsNorm()]
 
 
-__all__ = ["Fp8Einsum", "IndexerCompress", "InvRopeQuant", "Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "SavePartialStates", "dsv4_patterns"]
+__all__ = ["Fp8Einsum", "IndexerCompress", "InvRopeQuant", "Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "SavePartialStates", "dsv4_patterns",
+           "indexer_short_path"]

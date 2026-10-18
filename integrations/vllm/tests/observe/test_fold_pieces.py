@@ -1,7 +1,7 @@
 """`Pieces` (row i reads the concatenation of its pieces) and the shared `Const` (one instance per value in the resolution), on the
 toy profile of `test_fold_synthetic`: a read split into one piece per KV slot is the same Program as `GatherMany` of the slots, a
-shared constant repeated across rows and parts is one instance per value and resolution, and a piece's unshared constant is
-refused."""
+shared constant repeated across rows and parts is one instance per value and resolution (a piece of no copies too), and a piece's
+unshared constant is refused."""
 
 from __future__ import annotations
 
@@ -55,6 +55,15 @@ def test_a_shared_constant_is_one_instance_per_value_in_the_resolution(memory):
     attn = {m["resolution"] for m in r.instances if m["spec"].startswith("Attention_v3")}
     consts = [m["resolution"] for m in r.instances if m.get("const") and m["const"]["bits"] == "0x0000"]
     assert attn and sorted(consts) == sorted(attn), "one zero per attention resolution, whatever its rows and copies"
+
+
+def test_a_shared_constant_of_no_copies_is_still_its_instance(memory):
+    def padded(v, slots):
+        return Pieces(((*_zeros(v, slots).rows[0], Const(16, 0xFFFF, "pad", shared=True, count=0)),))
+    r = fold(T.toy_log(), _profile(_attention(padded)), strict=True, with_program=False)
+    attn = {m["resolution"] for m in r.instances if m["spec"].startswith("Attention_v3")}
+    pads = [m["resolution"] for m in r.instances if m.get("const") and m["const"]["bits"] == "0xffff"]
+    assert attn and sorted(pads) == sorted(attn), "a Build rule's [c] * 0 still calls c"
 
 
 def test_a_pieces_constant_that_is_not_shared_is_refused(memory):

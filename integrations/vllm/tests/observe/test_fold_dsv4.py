@@ -11,16 +11,16 @@
 * the q norm / RoPE / window insert is the Build's `Dsv4QNormRopeKvInsert_v1` per token, its kv row's NoPE, scale bytes and RoPE
   written to the token's slot of the layer's KV group in fp8_ds_mla's block layout, one Compute per cache block;
 * save_partial_states moves each token's kv row to its compressor state slot and writes the Build's `Dsv4CompressorScore_v1{W}`
-  of its score row and ape[pos % R] beside it, per cache block, the indexer's compressor at its own width;
+  of its score row and ape[pos % R] beside it, per cache block;
 * the o-projection input's inverse RoPE and FP8 quantisation is the Build's `Dsv4InvRopeQuantHead_v1` per token and head, into its
   group's row and the wrapper's TMA-aligned scale layout, refused off the Definition's floor or that layout;
 * DeepGEMM's wo_a einsum leaves only z's allocation after it, which is the Build's `ScaledMmFp8BlockGrouped_v1` per token over the
   quant's rows and wo_a's roots;
-* the indexer's compress is `Dsv4IndexerCompress_v1` at each window end over its 8 state rows (the masked rows below position 0 the
-  kernel's constants) into the compressed entry's key-cache slot;
+* the indexer's compressor (its state write and its compress) folds to nothing, as the Build's indexer leaf on the short path,
+  and its compress off its pin or outside the indexer's compressor is refused;
 * a head-512 compressor's compress, which leaves no event, is the attention's: at each window end its state rows' `Dsv4MlaCompressC128_v1`
   or `Dsv4MlaCompressC4_v1{ROWS}` into the layer's compressed cache, then the decode's `FlashMlaDecode_v1` over the window rows and the
-  compressed rows at FlashMLA's planned splits, or the prefill's `FlashMlaGatherRow_v1` of each workspace row and `FlashMlaPrefill_v1` per
+  compressed rows at FlashMLA's planned splits (its -1 index constant emitted when no row is padding, as the Build's), or the prefill's `FlashMlaGatherRow_v1` of each workspace row and `FlashMlaPrefill_v1` per
   run of tokens with one NP.
 """
 from __future__ import annotations
@@ -268,12 +268,6 @@ def test_save_partial_states_moves_each_kv_row_and_is_the_builds_score_call_per_
     assert (kv1.src.view.offset, kv1.dst.view.offset, kv1.dst.view.strides, kv1.dst.indices) == (0, 27 * STATE_STRIDE, (1024, 1), (6, 7))
     assert (score1.operands[0].view.offset, score1.outputs[0].view.offset, score1.outputs[0].view.shape) == (512, 27 * STATE_STRIDE + 512, (8, 512))
     assert kv2.src.view.offset == 2 * 1024 and score2.outputs[0].view.offset == 5 * STATE_STRIDE + 512 and score2.outputs[0].indices == (0,)
-    ix = Root(view(982, (4, 256), "float32"), "weight", "model.layers.2.attn.indexer.compressor.ape")
-    g = SavePartialStates().match(_save_states(1, W=256, R=4, bs=4, module="model.layers.2.attn.indexer.compressor", ape=ix.view),
-                                  ctx := _insert_ctx(1, [9], "model.layers.2.attn.indexer.compressor.state_cache", (ix,), bs=4))
-    assert spec_label(g.parts[1].spec) == "Dsv4CompressorScore_v1{W=256}" and g.parts[1].operands[1].indices == (0,)
-    assert g.parts[1].outputs[0].view.offset == 2 * STATE_STRIDE + 256 and g.parts[1].outputs[0].indices == (1,)
-    assert "dsv4_compress" not in ctx.scratch, "the indexer's compress is its own launch"
 
 
 def test_save_partial_states_records_a_head_512_compressors_window_ends_for_the_layers_attention():
@@ -359,57 +353,26 @@ def test_an_einsum_allocation_off_z_or_without_the_wo_a_roots_is_refused():
     assert isinstance(_einsum(3, roots=(CS_ROOT,)), Unsupported)
 
 
-IX = "model.layers.2.attn.indexer"
-IX_W = Root(view(1001, (128,)), "weight", f"{IX}.compressor.norm.weight")
-IX_STATE_STRIDE, IX_STATE_BT, IX_KEY_OFFSET = 358992, [9, 3, 7], 53568
+IX = "model.layers.2.attn.indexer.compressor"
 
 
-def _indexer_ctx(T, roots=(CS_ROOT, IX_W), key_layer=f"{IX}.k_cache"):
-    ctx = _ctx(T, ROOTS + list(roots))
-    groups = [{"layers": [f"{IX}.compressor.state_cache"], "block_size": 4, "block_tables": {"r0": IX_STATE_BT},
-               "slot_mapping": [IX_STATE_BT[p // 4] * 4 + p % 4 for p in range(T)]},
-              {"layers": [key_layer], "block_size": 256, "block_tables": {"r0": [5]}, "slot_mapping": list(range(1280, 1280 + T))}]
-    return dataclasses.replace(ctx, start=dataclasses.replace(ctx.start, positions_view=view(POS, (T,), "int64"), kv_groups=groups))
-
-
-def _indexer(T, src=INDEXER_COMPRESS_SRC_SHA):
-    args = {"state_cache_ptr": ViewDesc(1000, 0, (40, 4, 512), (IX_STATE_STRIDE, 512, 1), "float32", CUDA), "state_cache_stride0": IX_STATE_STRIDE,
-            "state_cache_stride1": 512, "token_to_req_indices_ptr": view(1005, (T,), "int32"), "positions_ptr": view(POS, (T,), "int64"),
-            "slot_mapping_ptr": view(1002, (T,), "int64"), "block_table_ptr": view(1003, (1, 96), "int32"), "block_table_stride": 96,
-            "block_size": 4, "rms_norm_weight_ptr": IX_W.view, "rms_norm_eps": 1e-6, "cos_sin_cache_ptr": CS_ROOT.view, "cos_sin_stride": 64,
-            "k_cache_ptr": ViewDesc(1000, IX_KEY_OFFSET, (40, 64, 132), (CACHE_STRIDE, 132, 1), "uint8", CUDA),
-            "kv_slot_mapping_ptr": view(1004, (T,), "int64"), "kv_cache_block_size": 64}
-    consts = {"HEAD_SIZE": 128, "TRITON_BLOCK_SIZE": 128, "STATE_WIDTH": 256, "COMPRESS_RATIO": 4, "OVERLAP": True, "ROPE_HEAD_DIM": 64,
-              "FP8_MAX": 448.0, "QUANT_BLOCK": 128, "TOKEN_STRIDE": 128, "SCALE_DIM": 4, "KV_BLOCK_STRIDE": CACHE_STRIDE}
-    ev = TritonLaunch(1, None, 0, "forward", INDEXER_COMPRESS_KERNEL, src, {**args, **consts}, consts, [T], 1, 3, 7, f"{IX}.compressor")
+def _indexer(T, src=INDEXER_COMPRESS_SRC_SHA, module=IX):
+    consts = {"HEAD_SIZE": 128, "TRITON_BLOCK_SIZE": 128, "STATE_WIDTH": 256, "COMPRESS_RATIO": 4, "ROPE_HEAD_DIM": 64}
+    ev = TritonLaunch(1, None, 0, "forward", INDEXER_COMPRESS_KERNEL, src, {"positions_ptr": view(POS, (T,), "int64"), **consts}, consts, [T],
+                      1, 3, 7, module)
     return build_trees([ev])[0][0]
 
 
-def test_the_indexer_compress_is_the_registered_entry_of_each_window_end_over_its_state_rows_into_the_key_cache():
-    (c,) = IndexerCompress().match(_indexer(8), _indexer_ctx(8)).parts
-    assert spec_label(c.spec) == "Dsv4IndexerCompress_v1{D=128,ROPE=64,EPS=1e-06}" and c.rows == 2 and c.roots[2:] == (IX_W.name, CS_ROOT.name)
-    kv, score, w, cs = c.operands
-    slot = {s: (IX_STATE_BT[s // 4], s % 4) for s in range(8)}
-
-    def at(s, k, r):
-        return slot[s][0] * IX_STATE_STRIDE + slot[s][1] * 512 + k * 256 + (r >= 4) * 128
-
-    first, second = kv.rows
-    assert all(p.bits == 0 and p.shared and p.count == 128 for p in first[:4]) and [p.offset for p in first[4:]] == [at(s, 0, 4) for s in range(4)]
-    assert [p.offset for p in second] == [at(s, 0, r) for r, s in enumerate(range(8))] and all(p.shape == (128,) for p in second)
-    assert all(p.bits == 0xFF800000 for p in score.rows[0][:4]) and [p.offset for p in score.rows[1]] == [at(s, 1, r) for r, s in enumerate(range(8))]
-    assert w.view == IX_W.view and cs.indices == (0, 4)
-    q, sc = c.outputs
-    base = IX_KEY_OFFSET + 5 * CACHE_STRIDE
-    assert (q.view.offset, q.view.shape, q.view.dtype, q.indices) == (base, (64, 128), "float8_e4m3fn", (0, 1))
-    assert (sc.view.offset, sc.view.dtype, sc.indices) == ((base + 64 * 128) // 4, "float32", (0, 1))
-    assert IndexerCompress().match(_indexer(1), _indexer_ctx(1)).effect == "noop", "position 0 ends no window"
+def test_the_indexers_compressor_folds_to_nothing_as_the_builds_indexer_leaf_on_its_short_path():
+    r = IndexerCompress().match(_indexer(8), _ctx(8))
+    assert (r.effect, r.consumed, r.pattern) == ("noop", (1,), "dsv4.indexer_compress")
+    r = SavePartialStates().match(_save_states(8, W=256, R=4, bs=4, module=IX), ctx := _ctx(8))
+    assert (r.effect, r.consumed) == ("noop", (1,)) and "dsv4_compress" not in ctx.scratch, "its window ends are no attention's"
 
 
-def test_an_indexer_compress_off_its_pin_or_key_cache_group_or_without_its_weight_root_is_refused():
-    assert isinstance(IndexerCompress().match(_indexer(8, src="0" * 64), _indexer_ctx(8)), Unsupported)
-    assert isinstance(IndexerCompress().match(_indexer(8), _indexer_ctx(8, key_layer="other")), Unsupported)
-    assert isinstance(IndexerCompress().match(_indexer(8), _indexer_ctx(8, roots=(CS_ROOT,))), Unsupported)
+def test_an_indexer_compress_off_its_pin_or_outside_the_indexers_compressor_is_refused():
+    assert isinstance(IndexerCompress().match(_indexer(8, src="0" * 64), _ctx(8)), Unsupported)
+    assert isinstance(IndexerCompress().match(_indexer(8, module="model.layers.2.attn.compressor"), _ctx(8)), Unsupported)
 
 
 L0, L2, SCALE = "model.layers.0.attn", "model.layers.2.attn", 0.04419417382415922
@@ -477,7 +440,8 @@ def test_the_decode_at_a_window_end_is_the_layers_compress_then_the_builds_flash
     assert [p.offset for p in nopes.rows[0]] == [_window_row(s) for s in range(128, 256)] + comp + comp[:1] * 62
     assert scales.rows[0][0].offset == SWA_BT[2] * CACHE_STRIDE + 64 * 576 and scales.rows[0][0].shape == (7,)
     assert ropes.rows[0][-1].offset == (base + 448) // 2 and ropes.rows[0][-1].shape == (64,)
-    assert [(c.bits, c.count) for c in idx.rows[0]] == [(0, 128), (0, 2), (NEG1, 62)] and (swa.bits, nc.bits) == (128, 2)
+    assert [(c.bits, c.count) for c in idx.rows[0]] == [(0, 128), (NEG1, 0), (0, 2), (NEG1, 62)] and (swa.bits, nc.bits) == (128, 2), \
+        "a run of no copies keeps its constant, as the Build's [i32(-1)] * 0"
     assert sink.view.shape == (16,) and attn.roots[-1] == ATTN_ROOTS[L0][0].name
 
 
