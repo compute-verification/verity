@@ -419,7 +419,10 @@
   "Models.Accounting.Assumptions",
   "Models.Accounting.Guarantees",
   "Definitions.Accounting.Bandwidth",
-  "Models.Accounting.Guarantees.Bandwidth"
+  "Models.Accounting.Guarantees.Bandwidth",
+  "Definitions.Hash",
+  "Models.Hash.Assumptions",
+  "Models.Hash.Guarantees"
  ],
  "layers": {
   "Definitions.Core": {
@@ -654,6 +657,21 @@
    "imports": ["Mathlib", "Definitions.Claims"],
    "except": [],
    "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Hash": {
+   "imports": ["Mathlib", "Definitions.Hash"],
+   "except": [],
+   "why": "the hash area's definitions are trusted text: messages, digests, a Merkle path, an SIS leaf and the keyed window game, on Mathlib alone; they import no assumption, guarantee or proof"
+  },
+  "Models.Hash.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Hash", "Models.Hash.Assumptions"],
+   "except": [],
+   "why": "a named assumption reads the hash area's definitions, never a guarantee or a proof"
+  },
+  "Models.Hash.Guarantees": {
+   "imports": ["Mathlib", "Definitions.Hash", "Models.Hash.Assumptions", "Models.Hash.Guarantees"],
+   "except": [],
+   "why": "a guarantee is stated over the hash area's definitions with its named assumptions as hypotheses, never over a proof"
   }
  },
  "reads_exempt": {
@@ -670,7 +688,7 @@
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct"
  },
- "four_names": ["Nci", "NetTiming", "Accounting"],
+ "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
   "Accounting.SecurityProofs.Actual.Runtime": {
    "owner": "@lean",
@@ -5910,7 +5928,11 @@
    "Accounting.SecurityProofs.Gates.UnitsFooling": "frozen (no-function): A counting bound in budgeted units over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function.",
    "Accounting.SecurityProofs.HMu.LemmaB": "lemma: Lemma B of the receipt-aggregate binding note (decisions 22 and 48), receipt luck at most Z*mu times the deficiency under (H-mu+) taken as a hypothesis (SkipRound.HMuPlus, a definition, not a named assumption); ReceiptLuckOfCoins and ReceiptLuckOfCoin are what it is for.",
-   "Accounting.SecurityProofs.HMu.PersistentOneWord": "lemma: Lemma B' for a persistent pattern with one word before the checkpoint, a fold's checkpoint state injective in the skipped value from the step's injectivity in state and word and the pattern's positions, taken as hypotheses; it gives SkipRound.Inj with Z = 1."
+   "Accounting.SecurityProofs.HMu.PersistentOneWord": "lemma: Lemma B' for a persistent pattern with one word before the checkpoint, a fold's checkpoint state injective in the skipped value from the step's injectivity in state and word and the pattern's positions, taken as hypotheses; it gives SkipRound.Inj with Z = 1.",
+   "Hash.Guarantees.TreeBinding": "unstated: a hash lane proposal, statement first (Daniel's ruling): red team, then a card to Daniel, then the proof, Hash.SecurityProofs.TreeBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
+   "Hash.Guarantees.SisTreeBinding": "unstated: a hash lane proposal, statement first (Daniel's ruling): red team, then a card to Daniel, then the proof, Hash.SecurityProofs.SisTreeBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
+   "Hash.Guarantees.SisEpochBinding": "unstated: a hash lane proposal, statement first (Daniel's ruling): red team, then a card to Daniel, then the proof, Hash.SecurityProofs.SisEpochBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
+   "Hash.Guarantees.EpochBinding": "unstated: a hash lane proposal, statement first (Daniel's ruling): red team, then a card to Daniel, then the proof, Hash.SecurityProofs.EpochBinding in Security/Proofs/Hash/, which the lock then lists under guarantees"
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
