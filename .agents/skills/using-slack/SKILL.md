@@ -3,7 +3,7 @@ name: using-slack
 description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
   (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @lean, @ci, @comms,
-  @vllm, @benchmarks, @console and @top) are roles; everything between them happens in #agent-coordination,
+  @vllm, @benchmarks, @hash, @console and @top) are roles; everything between them happens in #agent-coordination,
   #agent-alerts is machines to @infra, and #ask-daniel holds everything that needs Daniel, one question per card (`research
   msg ask-daniel`: blocking or default, options with a recommendation, a Pacific deadline). Covers the three interactions
   (ask one handle, announce to some, announce to all), asking Daniel, the
@@ -20,7 +20,7 @@ The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles, one per coordinator: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
   `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), `@lean`, `@ci`, `@comms`,
-  `@vllm`, `@benchmarks`, `@console` and `@top` (the admin, Daniel's coordinator). The old advisors' handles
+  `@vllm`, `@benchmarks`, `@hash` (the commitment hash), `@console` and `@top` (the admin, Daniel's coordinator). The old advisors' handles
   (`@old-accounting`, `@old-circuits-and-proofs`) and `@pr-captain` retired on 17 Oct (COMM-14). Since
   14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own subagents.
   `@console` is Daniel's desktop agent on his laptop, beside the console's dev server. Nothing wakes it: its inbox holds
@@ -263,6 +263,9 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
   deadline itself.
 - **Record each answer as a ruling**, for the class of case, where the next asker will read it (friction skill §3). The card
   is the evidence; cite its permalink.
+- **The decision reaches @top by itself.** When your card's thread wakes you with a decision, run `research msg ask-daniel
+  status ID` (or `resolve`): it rings @top's inbox once with the question, the outcome and you, for Daniel's decisions
+  log. File no TOP issue just to log it (COMM-34).
 
 ## Norms
 

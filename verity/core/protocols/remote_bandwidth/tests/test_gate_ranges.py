@@ -8,20 +8,33 @@ functions on (`f32MaxMin_f32Rows`, `f32RzByte_rzRows`, `rules_ruleRows`, `rzByte
 recompute each row from the Python: `scalar.F32Fmaxf` and `F32Fminf`, `cvt.rzi.u32.f32`'s low byte by the float's
 truncation (the evaluator of record, `dsv4_qnorm_insert.f32_to_u32_rz_byte`, is in `verity_vllm`, which `verity` doesn't
 import), and property/v1's rules where `verity.ml.circuits.stacking` exists. An f32 is its encoding read as s32.
+
+`Accounting.Gates.exp2Lut127` (Ranges.lean), the table `Exp2Lut127Range` and `LutPvWindow` are over, is held to vLLM's
+LUT softmax table on all 256 entries: `fixtures/exp2_lut127.json` pins `engine.int8_attention.LUT` as #2455's head
+writes it, and its words' sha256 is the one `verity_flock.tail_pieces.EXP2_LUT127_SHA256` pins there.
 """
 
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import math
+import re
 import struct
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from verity.ml.circuits.ops.scalar import F32Fmaxf, F32Fminf
 
-LEAN_GATES = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "Gates.lean"
+ROOT = Path(__file__).resolve().parents[5]
+LEAN_GATES = ROOT / "Security" / "Proofs" / "Accounting" / "Gates.lean"
+LEAN_RANGES = ROOT / "Security" / "Definitions" / "Accounting" / "Gates" / "Ranges.lean"
+LUT_FIXTURE = Path(__file__).parent / "fixtures" / "exp2_lut127.json"
+#: `tail_pieces.EXP2_LUT127_SHA256` at #2455's head: the sha256 of the table's 256 little-endian u32 words
+EXP2_LUT127_SHA256 = "6eb8e9b3478db58b4e5a711f31968394f7e93fa4e1df2e0d801eab92a5f66f84"
 M32 = 0xFFFFFFFF
 
 
@@ -70,6 +83,25 @@ def test_rz_byte_agrees_with_lean() -> None:
         assert rz_byte(z) == byte, z
         exponents.add(-1 if z < 0 else (z >> 23) & 0xFF)
     assert {-1, 126, 127, 149, 150, 158, 159, 255} <= exponents, exponents
+
+
+def lean_exp2_lut127() -> list[int]:
+    """`exp2Lut127` as Ranges.lean writes it: a list literal, then `++ List.replicate n v`."""
+    m = re.search(r"\ndef exp2Lut127 : List ℤ :=\s*\[([^\]]*)\]\s*\+\+\s*List\.replicate (\d+) (-?\d+)\n",
+                  LEAN_RANGES.read_text())
+    assert m, "exp2Lut127's form in Ranges.lean changed: update this reader"
+    return [int(t) for t in m.group(1).replace("\n", " ").split(",")] + [int(m.group(3))] * int(m.group(2))
+
+
+def test_exp2_lut127_agrees_with_vllm() -> None:
+    fixture = json.loads(LUT_FIXTURE.read_text())
+    vllm = fixture["entries"]
+    assert hashlib.sha256(np.asarray(vllm, dtype="<u4").tobytes()).hexdigest() == EXP2_LUT127_SHA256
+    assert vllm == np.rint(127.0 * np.exp2(-np.arange(256) / 16.0)).astype(np.int64).tolist()
+    lean = lean_exp2_lut127()
+    assert len(lean) == len(vllm) == 256
+    assert [t for t in range(256) if lean[t] != vllm[t]] == []
+    assert (min(lean), max(lean)) == (0, 127)
 
 
 def test_rules_agree_with_property_v1() -> None:

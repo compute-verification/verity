@@ -32,6 +32,7 @@ from collections import Counter
 from typing import Any, Iterable, Iterator
 
 from verity_vllm.commit import challenge as CH
+from verity_vllm.query.manifest.format import MOE_PLANES
 from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
 from verity_vllm.query.manifest.format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
 from verity_vllm.query.manifest.format import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
@@ -108,7 +109,7 @@ def _numel(shape: Iterable[int]) -> int:
 def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, program_digest: str, *, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                       request_id: str = "r0", rank: int = 0, layout_version: str = "chunk-leaf-v1", chunk: int = 256,
                       weight_registration: dict | None = None, collector: dict | None = None,
-                      name_bindings: dict[str, list[str] | tuple[str, str]] | None = None) -> dict[str, Any]:
+                      name_bindings: dict[str, Any] | None = None) -> dict[str, Any]:
     """identity -> commitment location, for every committed tensor of every step, from the published layouts + the step roots.
 
     `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the
@@ -116,10 +117,17 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
     `name_bindings` [R19 int-20]: committed name -> (op_path, member) of the identity it binds when that is not the name's own (a promoted
-    member observed at its consumer's input: `<consumer>/in` binds (producer, `out`); `promoted_input_acquisition`).  The entry keeps the
-    committed name and says so (`observation`)."""
+    member observed at its consumer's input: `<consumer>/in` binds (producer, `out`); `promoted_input_acquisition`), or {engine step:
+    (op_path, member)} when the identity is the step's own (a per-step call boundary bound from a tap of its value,
+    `attention_source.AttentionSource.name_bindings`).  The entry keeps the committed name and says so (`observation`)."""
     entries: list[dict[str, Any]] = []
-    rebind = {str(k): (str(v[0]), str(v[1])) for k, v in (name_bindings or {}).items()}
+    rebind: dict[str, tuple[str, str]] = {}
+    per_step: dict[str, dict[int, tuple[str, str]]] = {}
+    for k, v in (name_bindings or {}).items():
+        if isinstance(v, dict):
+            per_step[str(k)] = {int(s): (str(b[0]), str(b[1])) for s, b in v.items()}
+        else:
+            rebind[str(k)] = (str(v[0]), str(v[1]))
     for step in sorted(layouts):
         metas = layouts[step]
         sc = steps[step] if step < len(steps) else None
@@ -128,6 +136,9 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
         for m in metas:
             op, member = split_name(m.name)
             bound_via = rebind.get(m.name)
+            observation = "consumer-input"
+            if bound_via is None and m.name in per_step:
+                bound_via, observation = per_step[m.name].get(int(step)), "tap"
             if bound_via is not None:
                 op, member = bound_via
             k = inv[m.name]
@@ -172,7 +183,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                     "leaf_lo": int(off // chunk), "leaf_hi": int((off + max(m.nbytes, 1) - 1) // chunk + 1),
                     "stream_offset": int(off), "width_bytes": int(m.nbytes), "encoding": {"dtype": m.dtype, "shape": list(m.shape)}, "element_offset": int(goff),
                     "tensor_ordinal": int(m.ordinal), "name": m.name,
-                    **({"observation": "consumer-input"} if bound_via is not None else {}),
+                    **({"observation": observation} if bound_via is not None else {}),
                 })
     if weight_registration:
         entries.append({"identity": identity_dict(identity(program_digest, "*", -1, 0, "weights", "registered", 0, 0, rank)), "kind": "registered-input",
@@ -180,6 +191,13 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
     canon = json.dumps(entries, sort_keys=True, separators=(",", ":"), default=str).encode()
     return {"schema": MAP_SCHEMA, "rules_version": RULES_VERSION, "program_digest": program_digest, "run_root": run_root.hex(), "rank": rank,
             "layout": layout_version, "collector": collector or {}, "entries_n": len(entries), "digest": hashlib.sha256(canon).hexdigest(), "entries": entries}
+
+
+def source_name_bindings(sources: Iterable[Any]) -> dict[str, Any] | None:
+    """`build_binding_map`'s `name_bindings` from the committer's sources that bind an identity from a tensor committed under another
+    name (`name_bindings()`: the attention source's sparse MLA call boundaries); None when none does."""
+    out = {k: v for s in sources if callable(getattr(s, "name_bindings", None)) for k, v in s.name_bindings().items()}
+    return out or None
 
 
 def member_matches(required: str, got: str) -> bool:
@@ -282,7 +300,7 @@ def structure_of(committer, *, stochastic: bool = False, derived_splits: bool = 
     moe_src = next((s for s in committer.sources if getattr(s, "short_name", "") == "moe"), None)
     moe_layers = sorted(set(moe_src.layers.values())) if moe_src is not None else []
     return {"modules": mods, "attention_layers": sorted(attn_layers), "hidden": hidden, "moe_layers": moe_layers,
-            "moe_planes": ["router_w", "router_ids", "up", "act", "down", "sum"] if moe_layers else [],
+            "moe_planes": list(getattr(moe_src, "planes", MOE_PLANES)) if moe_layers else [],
             "weights_registered": bool(getattr(committer, "weights", None))}
 
 

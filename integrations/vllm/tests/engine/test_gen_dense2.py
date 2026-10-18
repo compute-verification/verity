@@ -319,7 +319,7 @@ def test_check_header_gemma2_checks_the_softcap_and_window_facts():
 def test_workloads_mirror_the_b1_one_request_workload(name, case, model, V):
     ref = json.loads((PROFILES / "workload_qwen15_32x16_1req.json").read_text())
     doc = json.loads((PROFILES / name).read_text())
-    assert doc["schema"] == ref["schema"] == "verity-vllm/workload/v1" and doc["case"] == case and doc["model"] == model
+    assert doc["schema"] == ref["schema"] == "verity-vllm/workload/v2" and doc["case"] == case and doc["model"] == model
     assert doc["variants"] == ref["variants"] and doc["prompt_lengths"] == [32] and doc["max_tokens"] == [16]
     (r,) = doc["requests"]
     assert len(r["prompt_token_ids"]) == 32 == r["prompt_len"] and r["max_tokens"] == 16

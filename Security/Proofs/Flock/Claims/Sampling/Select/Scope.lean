@@ -1,0 +1,59 @@
+import Proofs.Flock.Claims.Sampling.Select.Design
+import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+
+/-!
+# The sampling scope check from the deployed design (`Claims.Sampling.ScopeMatches`, `Refuses`)
+
+The readable scope (`InScope`) is a program part (a topologically ordered program, and a partition of it into proof
+units) and a design part (`Design.WellFormed`). The design part holds of every statement the sampled verifier lays out
+and draws on (`designWellFormed`), so the scope check need check only the program part:
+
+* `ProgramScope`: the scope check takes a statement exactly when it parses, its query evaluates, and the program part
+  holds.
+* `ChecksScope`: a run the verifier accepts is of a statement the scope check takes.
+* `scopeMatches_of`: `ScopeMatches` where the statement is the verifier's own (`DrawSlots`) and the scope check is the
+  program part.
+* `refuses_of`: `Refuses` from `ScopeMatches` where the verifier runs its scope check.
+-/
+
+open SampledProofs
+
+namespace Claims.Sampling
+
+open Properties.SampledProofs Properties.SampledProofs.SecurityProofs
+
+variable {Coin Col T : Type}
+
+/-- **The scope check is the readable scope's program part**: it takes a statement exactly when it parses, its query
+evaluates to a partition, the program is topologically ordered and the partition partitions it into proof units of at
+most 16 committed values. The design part it need not check (`scopeMatches_of`). -/
+def ProgramScope (D : Deploy Coin Col T) : Prop :=
+  ∀ x, D.scopeCheck x = true ↔ ∃ s Pt, D.parse x = some s ∧ D.partition s.prog s.query = some Pt ∧
+    s.prog.Topological ∧ Pt.Partitions s.prog
+
+/-- **The verifier runs its scope check**: a run it accepts is of a statement its scope check takes. -/
+def ChecksScope [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
+  ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P D.V x ω r).out = .acc → D.scopeCheck x = true
+
+/-- **The readable scope is the verifier's**: where its statements are its own layout and design (`DrawSlots`) and its
+scope check is the program part (`ProgramScope`), the design is well formed on the partition (`designWellFormed`), so
+the scope check is the whole readable scope. -/
+theorem scopeMatches_of [Fintype Coin] (D : Deploy Coin Col T) (hslots : DrawSlots D) (hprog : ProgramScope D) :
+    ScopeMatches D := by
+  intro x
+  rw [hprog x]
+  constructor
+  · rintro ⟨s, Pt, hx, hP, htop, hpart, -⟩
+    exact ⟨s, Pt, hx, hP, htop, hpart⟩
+  · rintro ⟨s, Pt, hx, hP, htop, hpart⟩
+    obtain ⟨rule, d, query, table, -, l, -, -, hl, rfl, hds, -, -⟩ := hslots x s Pt hx hP
+    exact ⟨s, _, hx, hP, htop, hpart, designWellFormed rule d query table l s.design hl hds⟩
+
+/-- **The verifier refuses what is out of scope**: an accepted run's statement passed the scope check (`ChecksScope`),
+which is the readable scope (`ScopeMatches`). -/
+theorem refuses_of [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin Col T) (hscope : ScopeMatches D)
+    (hchecks : ChecksScope H D) :
+    Refuses H D :=
+  fun x Ω P ω r hacc => (hscope x).2 (hchecks x Ω P ω r hacc)
+
+end Claims.Sampling

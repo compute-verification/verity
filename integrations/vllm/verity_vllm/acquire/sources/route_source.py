@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import torch
 
@@ -91,6 +91,16 @@ def find_map(model: Any, world: int | None = None) -> dict[str, Any] | None:
         return None
     world = world_of(model) if world is None else world
     return next((m for m in maps if m["target"]["tensor_parallel_size"] == world), None)
+
+
+def manifest_map(manifest: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """The capture map with a `route_site` a manifest's TP Commit attaches on every rank (`find_map` on the served model): its pinned
+    checkpoint is the manifest's model (`fixture.model`) and its target runs the manifest's ranks; None when none is."""
+    model, ranks = ((manifest or {}).get("fixture") or {}).get("model"), int((manifest or {}).get("ranks") or 1)
+    if not model:
+        return None
+    return next((m for m in (CM.load(p) for p in sorted(MAPS.glob("*.json"))) if m.get("route_site")
+                 and ((m.get("pins") or {}).get("checkpoint") or {}).get("repo") == model and m["target"]["tensor_parallel_size"] == ranks), None)
 
 
 class UnbuiltBinders(ValueError):
@@ -330,12 +340,12 @@ class RouteSource:
         return []
 
 
-def attach(com: Any, model: Any, rank: int = 0) -> RouteSource | None:
+def attach(com: Any, model: Any, rank: int = 0, identities: Sequence[Mapping[str, Any]] = ()) -> RouteSource | None:
     """Attach the source to `com` when a capture map with a `route_site` describes `model`, and the attention sources
-    (`attention_source`, `dsv4_attention_source`) and the mHC source (`mhc_source`) beside it when the map binds taps through them;
-    None when no map describes the model.  A map that describes it and names a binder no source builds (`unbuilt`) refuses the run
-    (`UnbuiltBinders`, which names them): nothing would commit that binder's taps while the source releases the modules the map
-    knows from the module rule."""
+    (`attention_source`, given the rank's manifest rows `identities`, and `dsv4_attention_source`) and the mHC source (`mhc_source`)
+    beside it when the map binds taps through them; None when no map describes the model.  A map that describes it and names a
+    binder no source builds (`unbuilt`) refuses the run (`UnbuiltBinders`, which names them): nothing would commit that binder's taps
+    while the source releases the modules the map knows from the module rule."""
     cmap = find_map(model)
     if cmap is None:
         return None
@@ -346,7 +356,7 @@ def attach(com: Any, model: Any, rank: int = 0) -> RouteSource | None:
     if not cmap.get("route_site"):
         return None
     src = RouteSource(com, model, cmap, rank=rank)
-    attn = attention_source.AttentionSource(com, src) if attention_source.binds(cmap) else None
+    attn = attention_source.AttentionSource(com, src, identities) if attention_source.binds(cmap) else None
     mhc = mhc_source.MhcSource(com, src, model) if mhc_source.binds(cmap) else None
     dsv4 = dsv4_attention_source.Dsv4AttentionSource(com, src, model) if dsv4_attention_source.binds(cmap) else None
     com.attach_source(src)
