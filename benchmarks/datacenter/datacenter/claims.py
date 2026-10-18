@@ -165,7 +165,7 @@ def audit(trace: Trace, profile: Profile) -> list[Claim]:
                 out.append(Refused(On("store", q.store, during),
                                    f"answered after {a.arrived - q.at} ticks, past its deadline of {q.deadline}"))
             else:
-                out.append(Held(q.store, s.bits, during, q.challenger))
+                out.append(Held(q.store, plan.held(s, during), during, q.challenger))
         elif isinstance(q, ReadWindow):
             out.append(Read(q.store, a.bits, q.during, q.challenger) if a.correct and a.arrived <= q.deadline
                        else Refused(On("store", q.store, q.during), "the roots arrived after the deadline"))

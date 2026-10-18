@@ -84,6 +84,48 @@ class Wipe:
         return Store(f"labels@{self.device}", self.bits, self.device, "labels", self.regen)
 
 
+#: a store block: 4 KiB, as requirement.BLOCK_BITS and the remote audit's receipts count them
+BLOCK_BITS = 4096 * 8
+
+
+@dataclass(frozen=True)
+class Append:
+    """Blocks `first` … `first + count − 1` appended to store `store` (KV pages): their digests arrive at `at`, the
+    verifier releases the append coin at `coin_at`, and they count toward the store from `resident_at`, when their
+    encode lands (deferred residency)."""
+
+    store: str
+    at: int
+    first: int
+    count: int
+    coin_at: int
+    resident_at: int
+
+
+@dataclass(frozen=True)
+class Release:
+    """Blocks `first` … `first + count − 1` of store `store` released at `at`: no later read or plan touches them. A
+    block released before it was resident is withdrawn, and never counts."""
+
+    store: str
+    first: int
+    count: int
+    at: int
+
+
+@dataclass(frozen=True)
+class Rekey:
+    """Blocks `old_first` … re-keyed at their lifetime cap: the old indices are released at `at`, and the same count
+    at `new_first` … counts from `resident_at`."""
+
+    store: str
+    old_first: int
+    new_first: int
+    count: int
+    at: int
+    resident_at: int
+
+
 def read_rate(dc: Datacenter, registered: str, actual: str) -> float:
     """Bits a second a store registered on `registered` can be read at from where it really is, `actual`: the holder's
     read bandwidth, and from another device no more than the path's narrowest link."""

@@ -115,10 +115,10 @@ def _boundary_rate(dc: Datacenter, block: str) -> float:
 
 def _sample(profile: Profile, c: Held) -> float:
     """The bits that answered the request behind `c`: the challenge's or the wipe's sample, else the whole store."""
-    plan, s = profile.plan, profile.stores[c.store]
+    plan = profile.plan
     asks = [q.sample for q in plan.challenges if q.store == c.store and Interval(q.at, q.at + q.deadline) == c.during]
     asks += [w.sample for w in plan.wipes if w.store.name == c.store and w.during == c.during]
-    return next((a for a in asks if a is not None), s.bits)
+    return next((a for a in asks if a is not None), c.bits)
 
 
 def _into(dc: Datacenter, device: str) -> float:
@@ -150,7 +150,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
         if isinstance(c, Held) and inside(c) and c.store not in refused_stores and c.store not in located:
             s, bits, deadline = profile.stores[c.store], _sample(profile, c), dc.cadence.seconds(c.during.length)
             located[c.store] = [] if regen_time(dc, s, bits) <= deadline else [
-                d.name for d in dc.devices.values() if d.memory is not None and float(d.memory) >= s.bits
+                d.name for d in dc.devices.values() if d.memory is not None and float(d.memory) >= c.bits
                 and answer_time(dc, c.by, s.device, d.name, bits) <= deadline]
             rejoined = c.during.start >= back.get(getattr(dc.block_of(s.device), "name", None), epoch.start)
             if s.content == "labels" and located[c.store] == [s.device] and rejoined:

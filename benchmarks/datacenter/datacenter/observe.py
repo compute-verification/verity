@@ -106,11 +106,12 @@ def run(p: Placement, inputs: dict[str, int], plan: Plan, deviation: Deviation |
     ticks = lambda seconds: math.ceil(seconds / float(g.tick) - 1e-9)  # noqa: E731
     for ch in plan.challenges:
         s = stores[ch.store]
-        bits = s.bits if ch.sample is None else ch.sample
+        bits = plan.bits(s, ch.at) if ch.sample is None else ch.sample
         answers.append(Answer(ch, ch.at + ticks(answer_time(dc, ch.challenger, s.device, dev.moved.get(s.name, s.device), bits))))
     for rw in plan.reads:
         s = stores[rw.store]
-        read = min(s.bits, read_rate(dc, s.device, dev.moved.get(s.name, s.device)) * g.seconds(rw.boundary - rw.start))
+        rate = read_rate(dc, s.device, dev.moved.get(s.name, s.device))
+        read = min(plan.bits(s, rw.start), rate * g.seconds(rw.boundary - rw.start))
         answers.append(Answer(rw, rw.boundary + ticks(answer_time(dc, rw.challenger, s.device, s.device, 0)), bits=read))
     for w in plan.wipes:
         answers.append(Answer(w, w.during.start, w.device not in dev.failed_wipes))
