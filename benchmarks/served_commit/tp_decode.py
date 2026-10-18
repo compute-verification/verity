@@ -307,8 +307,8 @@ def main() -> None:
     with (out / "runs.jsonl").open("w") as f:
         for b in batches:
             (out / f"b{b}").mkdir(exist_ok=True)
-            PH.warmups(1, lambda i: run_workload(eng, va.throwaway_requests(eng, reqs[b], seed=100 + i), sampling))
-            WU.run(llm, lambda: run_workload(eng, va.throwaway_requests(eng, reqs[b], seed=200), sampling), out / f"b{b}", a.arm, a.rpc_timeout)
+            PH.warmups(1, lambda i, b=b: run_workload(eng, va.throwaway_requests(eng, reqs[b], seed=100 + i), sampling))
+            WU.run(llm, lambda b=b: run_workload(eng, va.throwaway_requests(eng, reqs[b], seed=200), sampling), out / f"b{b}", a.arm, a.rpc_timeout)
             for pair in range(a.pairs):
                 for k, arm in enumerate(("control", a.arm) if pair % 2 == 0 else (a.arm, "control")):
                     gc.collect()
