@@ -26,6 +26,7 @@ import Proofs.Flock.Claims.ZK.MaskedTables
 import Proofs.Flock.Claims.ZK.Masked
 import Proofs.Flock.Claims.ZK.MaskTape
 import Proofs.Flock.Claims.ZK.MaskFamily
+import Proofs.Flock.Claims.ZK.OneTape
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -146,7 +147,12 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 * `MaskFamily`: the masked claim on a class of statements (`Flock.zk_deployZk_masked_on`), whose tape bounds the class's
   table count (`Masked.jOf_lt_card_on`; no tape at every `Live` statement once they have every table count:
   `Masked.not_fibersEq_live`), and on statement-indexed tapes: `ZKfam`, `Claims.ZKmalRx`'s body at a family of masked
-  records, at the mask tape of each statement with no tape premise (`Flock.zk_deployZk_masked_atMask_rx`, `…_stop_rx`).
+   records, at the mask tape of each statement with no tape premise (`Flock.zk_deployZk_masked_atMask_rx`, `…_stop_rx`).
+* `OneTape`: the masked scope caps the table count at `zkTableCap` (`Masked.jOf_le_cap`), so one tape serves every
+  statement: a cell per table (`Masked.TapeLayout`, read as each table's randomness with fibers of one size, its mask
+  words in `TapeZk.mask`), the tape `Masked.TapePlan.ofLayout`, read with fibers of one size at every statement
+  (`Masked.fibersEq_ofLayout`); `Flock.zk_deployZk_masked_layout_gap` is `Flock.zk_deployZk_masked_gap` with `hT`
+  discharged, under the round plan's `Causal` and the three rounds.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree

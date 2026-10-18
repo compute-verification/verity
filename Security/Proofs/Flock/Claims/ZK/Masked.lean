@@ -21,9 +21,10 @@ The session's Props at every plan:
   (`MaskedTables`).
 * `Causal` is the round plan's (`RoundPlan.Causal`): the cut view round `i` encodes is at the tables' coins `cz x c`,
   whose type reads every coin, so no typing of `enc` makes it hold.
-* `TapeOK` is `FibersEq (U.tape x)` on `Live` statements (`Flock.zk_deployZk_masked`, a Prop of the tape plan), or, on
-  the tape of one statement's tables' randomness (`TapePlan.at`), a theorem (`fibersEq_at`,
-  `Flock.zk_deployZk_masked_at`): what statement-indexed tapes read at that statement.
+* `TapeOK` is `FibersEq (U.tape x)` on `Live` statements (`Flock.zk_deployZk_masked`, a Prop of the tape plan), a
+  theorem at a layout's tape of a cell per table (`OneTape`, `fibersEq_ofLayout`), and, on the tape of one statement's
+  tables' randomness (`TapePlan.at`), a theorem (`fibersEq_at`, `Flock.zk_deployZk_masked_at`): what
+  statement-indexed tapes read at that statement.
 * hm96's hiding is at the pinned key's gap, with no premise (`Flock.zk_deployZk_masked_gap`,
   `Flock.zk_deployZk_masked_at_gap`).
 * `HonestMsgs` is its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`) on `Live`, at the deployed relation's

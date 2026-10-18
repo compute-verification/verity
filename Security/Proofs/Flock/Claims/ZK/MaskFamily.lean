@@ -11,7 +11,8 @@ import Proofs.Flock.Claims.ZK.MaskTape
 * A class tape bounds the class's table count (`jOf_lt_card_of_fibersEq`): a map with fibers of one size from a nonempty
   finite type is onto (`FibersEq.surjective`), and every table has a pre-final leaf with its own 1536-bit salt. So no tape
   plan is read with fibers of one size at every `Live` statement once `Live` has statements of every table count
-  (`not_fibersEq_live`), and `Flock.zk_deployZk_masked_gap`'s `hT` holds only on a class of bounded table count.
+  (`not_fibersEq_live`), and `Flock.zk_deployZk_masked_gap`'s `hT` holds only on a class of bounded table count. The
+  masked scope caps the table count at `zkTableCap`, so `Live` is one (`OneTape`, `jOf_le_cap`).
   On a class of two or more statements, the rounds read one executable tape (`TapePlan.tapeZk`) at each of them, so a
   class tape is a layout of the executable's tape coordinates shared by the class's statements, not a product of their
   tables' randomness: one `TapeZk.mask` can't carry two statements' independent slot words.
