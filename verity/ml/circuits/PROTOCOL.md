@@ -6,7 +6,7 @@ implementation (the Lean port of `Q_word` first). It describes the bytes the cod
 
 - Reference: `verity.ml.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`),
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
-  `parts.n_members`, for §8, §10 and §11 `cut` and `partition_object`, for §9 `boolean`, and for §12 `ports`.
+  `parts.n_members`, for §8, §10 and §11 `cut` and `partition_object`, and for §9 `boolean`.
 - Vectors: `verity/ml/circuits/tests/format_vectors.json`, written by
   `python verity/ml/circuits/tests/test_format_spec.py --write`.
 - Conformance: `verity/ml/circuits/tests/test_format_spec.py` checks the reference against every vector, and restates
@@ -40,8 +40,8 @@ On this domain the bytes are:
 Outside the domain Python and JCS differ: Python escapes non-ASCII and DEL as `\uXXXX` where JCS writes UTF-8, JCS writes
 2^53 + 1 as `9007199254740992` and 10^21 as `1e+21`, `1.0` is `1.0` against `1`, and non-BMP keys sort differently.
 `encode_program` and `decode_program` refuse a descriptor whose free-form parts leave the domain (`jcs_domain_error`): every
-top-level field but `definitions` and `annotations`, and each definition's key, `id`, `bindings`, `params`, `ret`, `ports`, and
-its body's `params` and `ret_type`. The rest of a descriptor is integers bounded by the program's own table sizes and leaf counts,
+top-level field but `definitions` and `annotations`, and each definition's key, `id`, `bindings`, `params`, `ret`, and its
+body's `params` and `ret_type`. The rest of a descriptor is integers bounded by the program's own table sizes and leaf counts,
 and strings of a fixed vocabulary, which the decoder checks (§4.6).
 
 A stored descriptor file need not be canonical (builds write it with spaces). The program digest, `program_digest`, is the hex
@@ -127,9 +127,6 @@ Vectors: `refs` (sequence, references), `take` (type, sequence, axis, member, re
 A primitive is one gate producing one `Value<w>`. Its evaluator is code, found by id in a registry, and the decoder refuses a
 primitive whose `params` or `ret` differ from the registry's; an `Input<w>_v1` or `RegisteredInput<w>_v1` id always denotes
 the IR's input primitive of that binding time (§5.2). A body's `params` and `ret_type` are inline types, not interned.
-
-Either entry may also carry `ports` (§12), and carries it only when its Definition declares port types. An entry without it is
-exactly the entry above.
 
 ### 4.3 Descriptor ids and binding records
 
@@ -220,9 +217,7 @@ have):
 - a node whose arguments do not type-check against its callee as in §4.4, or whose declared `out` is not the type §4.4
   computes (the decoder rebuilds every node through `defs.Builder`, with the checks a program is built with);
 - a type that is malformed, or whose width or length is a boolean;
-- a body whose `ret` does not have its `ret_type`;
-- `ports` that are malformed or not canonical, a primitive's that differ from the registry's, or a Program the port rules
-  refuse (§12, `ports.PortError`, a `ValueError`).
+- a body whose `ret` does not have its `ret_type`.
 
 Vectors: `decoder_rejects` (label, the refusal), each a one-field mutation of the descriptor vector (`REJECT` in the test).
 
@@ -516,87 +511,3 @@ across units and one within a unit; former wiring; a dead gate; and a gate of 4,
 Call, two 32-bit sub-Calls, constant bits, a 33-bit ripple-carry adder and a 5,000-input AND. The refusals are `gate-too-wide` (at
 X = 16 and for a 64-bit gate), `root-form` (batch, scan), not topological, another program, every served-commit check, and the
 objects `validate` refuses.
-
-## 12. Port types
-
-A Definition may declare *port types*: what it assumes of the leaves it takes and guarantees of the leaves it returns, beyond
-their widths. The declaration is `ports.Ports(params={name: tree}, ret=tree)` (a composite's may be a function of its statics),
-and the descriptor writes it as the entry's `ports` (§4.2). Undeclared is the default: no interval, not a sink, kind `value`, no
-word type. A Definition that declares nothing has no `ports` key, so its entry, its descriptor id and every digest over it are
-what they are without this section.
-
-~~~text
-"ports": {"params": [[i, lo, hi, <in>], ...], "ret": [[lo, hi, <out>], ...], "inputs": [[k, lo, hi, <in>], ...],
-          "transfer": true}
-<in>  = {"bound": [a, b], "kind": "coin" | "static", "receipt": true, "word": <name>}
-<out> = {"interval": [a, b], "sink": true, "word": <name>}
-~~~
-
-A row types leaves `[lo, hi)` of parameter `i`, of the return, or of root node `k`, which is an input node (§5.2). The program
-function's parameter ports become its input nodes' (`inputs`), and its return ports the root's. `inputs` appears only on the
-root, which has no `params`. A port names only what differs from the default (at least one key; no `"kind": "value"`, no `false`).
-The rows of each array are sorted (by `i` then `lo`, by `lo`, by `k` then `lo`), disjoint and maximal: two adjacent rows with
-equal ports are one. An empty array is omitted, and so is `ports` when nothing is declared. A word type is a name matching
-`[a-z][a-z0-9_]*`.
-
-An interval `[a, b]` has integers `a ≤ b`. It types leaves of one width `w`, and reads them as signed when `a < 0` and as
-unsigned otherwise, so it lies within `[-2^(w-1), 2^(w-1) - 1]` or within `[0, 2^w - 1]`. A *full* interval is one of those
-two ranges, and assumes nothing. One interval is *within* another when every encoding it holds is one the other holds. A
-Definition with a receipt port (`"receipt": true`) declares `"sink": true` on its whole return.
-
-`"transfer": true` is a primitive's only (a composite's `ports` never carries it), and never beside a return `interval`: the
-primitive's return interval follows from its operands' by its *transfer* (`Ports(transfer=f)`), a function its registered
-evaluator comes with, as an exact integer step's sum follows from its operands' ranges. Like a primitive's declared interval it
-is a fact about its evaluator, which circuit-check tests on drawn operand intervals within the declared bounds (its `ports`
-check), and the decoder takes it from the registry, whose `ports` the entry's must equal.
-
-**Facts.** Every leaf of a Program has a fact: an interval (or none: it spans its width), an origin, whether it is a sink, and
-a word type (or none). The origins are:
-
-- `gate`, for a computed value;
-- `static`, for the output of a primitive without parameters (a constant);
-- `input` and `registered`, for an input node's leaf by its binding time;
-- `coin`, for an input leaf whose port is `"kind": "coin"`.
-
-An input leaf's interval and word are its port's `bound` and `word`. A constant's interval is its value: its encoding, read as
-signed when its top bit is set and `w > 1` (none for a constant that reads a table). A node's output leaves carry what its
-callee's `ret` ports declare, nothing else, whether the callee is a primitive or a composite; a primitive with a transfer
-gives them the interval its transfer gives from that node's operands (each operand's interval the hull of its leaves', none
-when one has none or the hull is no interval of its width), unless the node is a scan. A batch repeats that per member, its
-operands each member's join. A scan's final carry is its `init` when `n` is 0 and the step's declared carry otherwise,
-followed by the step's declared `y` per iteration.
-
-Inside a composite's body, a parameter's leaves carry the *join* of the operands of every instance of that Definition in the
-Program: every call, batch member and scan iteration, a scan step's carry being both its `init` and its own declared carry.
-The join takes the hull of the intervals (none absorbs), the union of the origins, a sink if either is one, and the word
-type if both share it (else *mixed*). A hull of a signed and an unsigned reading that is no interval of the leaf's width
-(`a < 0 ≤ 2^(w-1) ≤ b`) holds nothing (`ports.reading`). A receipt parameter's leaves are no sinks inside the body. Facts
-flow top-down, callers before callees, so a bound sees its operand's producer through any number of calls. They flow up only
-as declared, so a composite over exact steps declares the intervals its operands' bounds prove, and is held to them.
-
-**The rules.** `program.Program` and `decode_program` refuse a Program, with `ports.PortError` and its code, when:
-
-- **`E_PORT_BOUND`**: a node's operand leaf at a port with `bound` `[a, b]` has an interval not within `[a, b]`, or none,
-  unless `[a, b]` is full.
-- **`E_PORT_INTERVAL`**: a composite's declared `interval` does not contain the interval of what its body returns there. A
-  primitive's is a fact about its evaluator, which circuit-check tests (its `ports` check).
-- **`E_PORT_SINK`**: a primitive node reads a sink at a port without `receipt`, or a composite other than the root returns a
-  sink at a leaf it does not declare `"sink": true`. A sink reaches only receipt ports and the Program's outputs.
-- **`E_PORT_KIND`**: a `"kind": "coin"` port reads a leaf whose origin is not exactly `coin`; a `"kind": "static"` port reads
-  one whose origin is not exactly `static`; an input node's port is `"kind": "static"`; or a registered input node's is
-  `"kind": "coin"`. So a noise derivation whose ports are coins and statics reads live verifier coins, passed through
-  untouched, and constants only. (A one-Call harness that evaluates a Definition on arbitrary operands, `ports.harness`,
-  builds a static port's operand from an input, and is never decoded.)
-- **`E_PORT_WORD`**: a port with `word` `t` reads a leaf of origin `gate` whose word type is not `t`; a composite's declared
-  `word` is not the word type its body returns there; or a composite other than the root returns a leaf with a word type it
-  does not declare, or a mixed one. So a runtime word is read only as the type its producer fixed. Only inputs, constants and
-  registered (pre-seed) words are reinterpreted, and a limb split of a runtime word is a Definition of its own that reads the
-  word as its producer's type.
-- **`E_PORT_DECL`**: the `ports` are malformed or not canonical, or a transfer gives no interval of its return's width.
-
-`ports.facts(root)` gives every leaf's fact to the census and the stacking property. A Program in which no Definition declares
-ports is refused by none of the rules, and nothing is computed for it (`ports.check` returns None).
-
-Vectors: `verity/ml/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; a chain of exact
-steps declaring its words' intervals and a limb split's bound on them; tampered descriptors; the canonical form; and a pinned
-digest of one typed descriptor.

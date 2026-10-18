@@ -5,14 +5,15 @@ into the audit's appends, releases and plan changes.
 ~~~text
 line 1       {"schema": "verity/memory-map/v1", "registration": hex(Registration.digest), "blocks": N,
               "block_bytes": 4096}
-line 2, …    {"step": s, "freed": [slot, …], "written": [[slot, j, hex(d_j)], …]}, one per serving step that wrote or
-              freed a block, steps strictly increasing
+line 2, …    {"step": s, "freed": [slot, …], "written": [[slot, j, hex(d_j)], …], "withdrawn": [j, …]}, one per serving
+              step that wrote, freed or withdrew a block, steps strictly increasing; "withdrawn" only on a step that
+              withdraws one (a map without any reads as before it had the key)
 slot         4,096 bytes of the node's memory, named by the registered block it held at registration (vLLM: its
               registry's region block index, a KV pool's pages registered as filler), or from N up for memory outside
               the registered store, below 2^63.  A slot below N starts live, holding registered block `slot`; one at
               or above N is live once written
-j            the store index the writer gave the block: the store's next fresh one, N plus every block written before
-              in the session, in record order
+j            the store index the writer gave the block: the store's next fresh one, N plus every block written or
+              withdrawn before in the session, in record order
 d_j          codec.digest(payload_j), the sha512/row/v2 digest of the block's 4,096-byte payload, 64 bytes: the device
               encodes the payload under its bound key (codec.binding(d_j, j, key, c_a)) at index j, once the verifier
               has sent its append's coin c_a
@@ -24,8 +25,9 @@ free releases the slot's block and leaves the slot not live, its memory out of t
 credited past the circuit's use of it and past the lifetime cap, so the writer records the free, and the store's
 filler plan leaves the released blocks out.  A free of a slot below N releases its registered block, and the writer
 records one at the step that reads the block's values for the last time (weights only some steps read), so no
-registered block stays credited past its last read; that every free, of a registered block or a written one, is at
-its values' last read is the memory-map unit's to prove (I4, `PROTOCOL.md` §8 "The requirement's link").  A step's
+registered block stays credited past its last read; that every free but a re-key's (below), of a registered block or
+a written one, is at its values' last read is the memory-map unit's to prove (I4, `PROTOCOL.md` §8 "The requirement's
+link").  A step's
 frees apply before its writes; a step frees a slot at most once,
 only a live one, and writes a slot at most once.  A block is written once, complete and encoded (deferred residency):
 a KV block the step's tokens are still filling is not in the record until it is complete, and a complete one is not
@@ -35,10 +37,24 @@ s + 1's reads, later if not.  Until then the block is in no record and uncredite
 prover-side registry's dirty blocks, the block its slot held freed at the step a write first reached it), though
 serving reads it as plaintext from its slot.
 
+Withdrawn.  A block freed before its encode lands (its values' last read at or before the step its write would be
+recorded at) is withdrawn: no write, no free, no credit.  It was never resident encoded, and a block no step reads
+while it is resident is in no record, so the line its write would be in, the one open when its encode lands, lists
+its index in `withdrawn` instead.  A line's writes and withdrawals take the store's next fresh indices together, each
+once and in index order, so a withdrawn index is never written.  Its slot holds nothing in the record from the step
+that reached it until a later write, and the writer records no free of it.  The prover releases the index
+(`Change.released` covers it) and names it withdrawn (`Change.withdrawn`, `Session.release(released, withdrawn)`), and
+the verifier checks that no plan held it, so it was never written.
+
 Lifetime.  No plan holds a written block L windows or more after the window its append joined (`audit.Params.lifetime`,
 an hour at the stated window), so every block written leaves the credited store within L.  A block the writer keeps
-longer (a prefix cache's) is re-keyed: written again in its own slot with the same `d_j` at the store's next fresh
-index, which releases its old index and gives it a fresh bound key under a fresh coin, so the device encodes it anew.
+longer (a prefix cache's) is re-keyed: its payload appended again, the same `d_j` at the store's next fresh index
+under a fresh coin, so the device encodes it anew under a fresh bound key.  A re-key's free is the one exception to a
+free at its values' last read: the re-key's step frees the slot, releasing the old index, and the new index is
+written in the slot when its encode lands (deferred residency, above), so the value is uncredited in between, and
+withdrawn if its last read comes first.  A block appended in window w is resident from w or w + 1, so its re-key,
+recorded at a step before the first pass of window w + L, falls at age L − 1 at the latest.  At L = 1 that is the window
+it was appended in, before it may be resident, so a session that defers residency has L ≥ 2 (`audit.Params.deferred`).
 
 The record is the prover's: `d_j` is a hash of user data, a witness, never public (AGENTS.md's zero-knowledge rule).
 The prover's audit side commits the digests of the blocks serving completes in an append tree (`audit.append_tree`,
@@ -113,15 +129,20 @@ class Written:
 
 @dataclass(frozen=True, slots=True)
 class Step:
-    """One serving step's record: the slots it freed, then the blocks it wrote, in index order."""
+    """One serving step's record: the slots it freed, then the blocks it wrote, in index order, and the appended
+    indices it withdrew, in index order (none by default)."""
 
     step: int
     freed: tuple[int, ...]
     written: tuple[Written, ...]
+    withdrawn: tuple[int, ...] = ()
 
     def to_json(self) -> dict:
-        return {"freed": list(self.freed), "step": self.step,
-                "written": [[w.slot, w.index, w.digest.hex()] for w in self.written]}
+        out = {"freed": list(self.freed), "step": self.step,
+               "written": [[w.slot, w.index, w.digest.hex()] for w in self.written]}
+        if self.withdrawn:
+            out["withdrawn"] = list(self.withdrawn)
+        return out
 
 
 def _int(value: object, what: str, limit: int) -> int:
@@ -153,11 +174,11 @@ def header(doc: object) -> Header:
 
 
 def step(doc: object) -> Step:
-    if type(doc) is not dict or set(doc) != {"freed", "step", "written"}:
-        raise MemoryMapError("a step's line is {step, freed, written}")
+    if type(doc) is not dict or not {"freed", "step", "written"} <= set(doc) <= {"freed", "step", "withdrawn", "written"}:
+        raise MemoryMapError("a step's line is {step, freed, written}, with withdrawn if it withdraws a block")
     s = _int(doc["step"], "a step", audit.STEP_LIMIT)
-    if type(doc["freed"]) is not list or type(doc["written"]) is not list:
-        raise MemoryMapError(f"step {s}'s freed and written are lists")
+    if type(doc["freed"]) is not list or type(doc["written"]) is not list or type(doc.get("withdrawn", [])) is not list:
+        raise MemoryMapError(f"step {s}'s freed, written and withdrawn are lists")
     freed = tuple(_int(x, f"step {s}'s freed slot", SLOT_LIMIT) for x in doc["freed"])
     written = []
     for w in doc["written"]:
@@ -165,7 +186,8 @@ def step(doc: object) -> Step:
             raise MemoryMapError(f"step {s}'s written block is [slot, index, digest], not {w!r}")
         written.append(Written(_int(w[0], f"step {s}'s written slot", SLOT_LIMIT),
                                _int(w[1], f"step {s}'s store index", 1 << 64), _digest(w[2], f"step {s}'s d_j")))
-    return Step(s, freed, tuple(written))
+    withdrawn = tuple(_int(j, f"step {s}'s withdrawn index", 1 << 64) for j in doc.get("withdrawn", []))
+    return Step(s, freed, tuple(written), withdrawn)
 
 
 def parse(lines: Iterable[str]) -> tuple[Header, Iterator[Step]]:
@@ -196,30 +218,44 @@ def _runs(indices: Iterable[int]) -> tuple[tuple[int, int], ...]:
 
 @dataclass(frozen=True, slots=True)
 class Change:
-    """What one step does to the audit's store: blocks `first` … appended with digests `digests` (none if empty), and
-    the store indices it released, freed or overwritten, as canonical runs."""
+    """What one step does to the audit's store: from `first`, the step's fresh indices, the blocks it writes, with
+    digests `digests` (none if empty) at `indices`, and those it withdraws (`withdrawn`, canonical runs); and the store
+    indices it releases, freed, overwritten or withdrawn, as canonical runs (`released`, which covers `withdrawn`: the
+    prover sends both, `Session.release(released, withdrawn)`)."""
 
     step: int
     first: int
     digests: tuple[bytes, ...]
     released: tuple[tuple[int, int], ...]
+    withdrawn: tuple[tuple[int, int], ...] = ()
 
     @property
     def count(self) -> int:
         return len(self.digests)
 
+    @property
+    def indices(self) -> tuple[int, ...]:
+        """The store indices of the blocks the step writes, `digests`' in order: its fresh ones less those withdrawn."""
+        gone = {j for f, c in self.withdrawn for j in range(f, f + c)}
+        return tuple(j for j in range(self.first, self.first + self.count + len(gone)) if j not in gone)
+
     def append_tree(self, registration: bytes, salts: Sequence[bytes]) -> MerkleTree | None:
         """The step's append tree under fresh `salts`, a salt a block (`audit.append_tree`), whose root and `count`
-        go to `Session.append`; None if the step wrote nothing."""
+        go to `Session.append`; None if the step wrote nothing.  A step that withdraws a block has none: its writes
+        are not the whole of the append its blocks went out in when they completed, whose tree is the one sent."""
+        if self.withdrawn:
+            raise MemoryMapError(f"step {self.step} withdraws a block, so its writes are not one append's whole: the "
+                                 "tree is the append made when its blocks completed")
         return audit.append_tree(registration, self.first, self.digests, salts) if self.digests else None
 
 
 class Replay:
     """The prover's audit side of a memory map: the block each slot holds, each step's `Change` (`apply`), and the
     plan's change for the pass at a step since the last pass (`take`).  Refuses (`MemoryMapError`) a map that breaks
-    memory-map/v1's rules across lines: steps out of order, a freed slot not live, an index that is not the store's
-    next fresh one, or a header of another registration; a refused step changes nothing.  And refuses a pass whose
-    step is not after every step applied and every pass's step taken."""
+    memory-map/v1's rules across lines: steps out of order, a freed slot not live, a written or withdrawn index that
+    is not the store's next fresh one, or a header of another registration; a refused step changes nothing.  And
+    refuses a pass whose step is not after every step applied and every pass's step taken.  A withdrawn index joins no
+    plan, so `take` neither adds nor removes it."""
 
     def __init__(self, head: Header, registration: audit.Registration | None = None) -> None:
         if registration is not None and (head.registration != registration.digest or head.blocks != registration.blocks):
@@ -249,24 +285,30 @@ class Replay:
                                      "is live once written, and a freed one until it is written again")
         if len({w.slot for w in s.written}) != len(s.written):
             raise MemoryMapError(f"step {s.step} writes a slot twice")
-        first = self.extent
-        for u, w in enumerate(s.written):
-            if w.index != first + u:
+        first, k = self.extent, len(s.written) + len(s.withdrawn)
+        if (any(not first <= j < first + k for j in s.withdrawn)
+                or any(a >= b for a, b in zip(s.withdrawn, s.withdrawn[1:]))):
+            raise MemoryMapError(f"step {s.step} withdraws {list(s.withdrawn)}: a withdrawal takes the index its block's "
+                                 f"write would have, among the step's fresh ones from {first}, in increasing order")
+        taken = set(s.withdrawn)
+        for w, j in zip(s.written, (j for j in range(first, first + k) if j not in taken)):
+            if w.index != j:
                 raise MemoryMapError(f"step {s.step}'s block at slot {w.slot} has index {w.index}, not the store's next "
-                                     f"fresh one, {first + u}: N plus every block written before, in record order")
+                                     f"fresh one, {j}: N plus every block written or withdrawn before, in record order")
         gone = [self.holds(slot) for slot in s.freed]
         self.moved.update((slot, None) for slot in s.freed)
         gone += [j for w in s.written if (j := self.holds(w.slot)) is not None]
         self.moved.update((w.slot, w.index) for w in s.written)
-        self.extent = first + len(s.written)
+        self.extent = first + k
         self.last = s.step
         for j in gone:
             if j in self._added:
                 self._added.discard(j)
             else:
                 self._removed.add(j)
-        self._added.update(range(first, self.extent))
-        return Change(s.step, first, tuple(w.digest for w in s.written), _runs(gone))
+        self._added.update(w.index for w in s.written)
+        return Change(s.step, first, tuple(w.digest for w in s.written), _runs(gone + list(s.withdrawn)),
+                      _runs(s.withdrawn))
 
     def take(self, step: int) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
         """The plan's change for the pass that covers `step`, since the last `take`, for a prover whose plans hold

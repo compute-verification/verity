@@ -560,6 +560,46 @@ def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
         verifier.regions_of(layout, 16)
 
 
+def greeted(lifetime: int, deferred: bool) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
+    """A prover whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`: the verifier, its refusal
+    if it refused, and the reason the prover read in its `bye`."""
+    a, b = socket.socketpair()
+    backend = prover.CpuBackend(16, random.Random(7))
+    backend.deferred = deferred
+    p = prover.ProverSide(wire.Conn(b), backend, b"test-node", prover.parse_plan("honest"), seed=11, log=lambda m: None)
+    heard = []
+
+    def prove() -> None:
+        try:
+            p.register(codec=P512)
+        except wire.Closed as e:
+            heard.append(str(e))
+
+    th = threading.Thread(target=prove, daemon=True)
+    th.start()
+    v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
+                          jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime)
+    refused = None
+    try:
+        v.register()
+    except ValueError as e:
+        refused = e
+    th.join()
+    return v, refused, heard
+
+
+def test_a_prover_that_defers_residency_is_refused_under_a_lifetime_of_one_window():
+    """The hello says whether the prover defers an appended block's residency to its encode: a block appended in window
+    w is then resident from w or w + 1, so its re-key falls at age L − 1, and under L = 1 the verifier refuses it with
+    `bye` before drawing a registration.  At L = 2, or not deferring, the session's parameters carry it."""
+    v, refused, heard = greeted(1, True)
+    assert refused is not None and "lifetime of at least 2 windows, not 1" in str(refused)
+    assert heard == [f"refused: {refused}"] and v.registry.drawn(b"test-node") == 0
+    for lifetime, deferred in ((2, True), (1, False)):
+        v, refused, heard = greeted(lifetime, deferred)
+        assert refused is None and heard == [] and v.deferred is deferred and v.registry.drawn(b"test-node") == 1
+
+
 def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp_path, monkeypatch, capsys):
     """`--registry R --close NODE`: a registration a verifier process left live (its session in flight when it ended)
     closes with that session unended, counted as failed, and the node may register again."""
@@ -629,6 +669,39 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
         verifier.Verifier.append(session(), {"type": "append", "root": "zz", "count": 2})
     with pytest.raises(ValueError, match="message of its own"):
         verifier.Verifier.root(session(), {**msg, "appends": [[root, 2]]})
+
+
+def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
+    """`Verifier.root` hands a message's withdrawn runs to its release (`Session.release(released, withdrawn)`): an
+    appended block no plan held, freed before its encode landed, is withdrawn; one a plan held, a registered one, or a
+    withdrawal outside the message's releases is the session's `release` rejection."""
+    from verity.core.protocols.remote_bandwidth import coins
+
+    reg = audit.register(os.urandom(32), b"test-node", 8, bytes(64), P512)
+    params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows,
+                          lifetime=2, deferred=True)
+    root = (b"\7" * 64).hex()
+
+    def session():
+        s = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: 0,
+                          not_before_ns=0)
+        s.start()
+        verifier.Verifier.append(s, {"type": "append", "root": root, "count": 3})
+        return s
+
+    msg = {"t": 0, "i": 0, "root": root, "released": [[9, 1]], "withdrawn": [[9, 1]],
+           "change": [[[8, 1], [10, 1]], []], "step": 5}
+    s = session()
+    assert verifier.Verifier.root(s, msg) is None and s.released == 1
+    for bad in ({"released": [[3, 1]], "withdrawn": [[3, 1]], "change": [[[8, 3]], [[3, 1]]]},
+                {"released": [[3, 1]], "change": [[[8, 3]], [[3, 1]]]},
+                {"released": []}):
+        v = verifier.Verifier.root(session(), {**msg, **bad})
+        assert v is not None and v.failure == "release"
+    s = session()
+    assert verifier.Verifier.root(s, {**msg, "released": [], "withdrawn": [], "change": [[[8, 3]], []]}) is None
+    v = verifier.Verifier.root(s, {**msg, "i": 1, "change": [[], [[9, 1]]], "step": 6})
+    assert v is not None and v.failure == "release"
 
 
 def test_a_kv_plan_needs_its_pages_a_step():
