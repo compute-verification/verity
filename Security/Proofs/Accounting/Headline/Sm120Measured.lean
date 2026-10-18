@@ -139,7 +139,7 @@ theorem sm120m_wf : Sm120Measured.model.Wf Sm120Measured.flat := by
     norm_num
 
 theorem sm120m_vecMin : (vqM : ℝ) ≤ Sm120Measured.model.vecMin Sm120Measured.piStar := by
-  haveI : Nonempty ↥Sm120Measured.model.vec :=
+  have : Nonempty ↥Sm120Measured.model.vec :=
     ⟨⟨idx 122 13, List.mem_toFinset.mpr (List.mem_map.mpr ⟨13, by decide, rfl⟩)⟩⟩
   unfold Model.vecMin
   refine le_ciInf fun k => ?_
@@ -151,7 +151,10 @@ theorem sm120m_vecMin : (vqM : ℝ) ≤ Sm120Measured.model.vecMin Sm120Measured
 (`sm120m_writers`), and so are the vector and table routes' at `9/8` (`sm120m_vec`). -/
 theorem sm120m_wStar : Sm120Measured.model.wStar (onFacet Sm120Measured.piStar) = (wqM : ℝ) := by
   have hvec : (wqM : ℝ) ≤ 9 / 8 / 32 * Sm120Measured.model.vecMin Sm120Measured.piStar := by
-    have h : (wqM : ℝ) ≤ 9 / 8 / 32 * (vqM : ℝ) := by exact_mod_cast sm120m_wv
+    have h0 : (wqM : ℝ) ≤ ((9 / 8 / 32 * vqM : ℚ) : ℝ) := Rat.cast_le.mpr sm120m_wv
+    have h : (wqM : ℝ) ≤ 9 / 8 / 32 * (vqM : ℝ) := by
+      push_cast at h0
+      linarith
     exact h.trans (mul_le_mul_of_nonneg_left sm120m_vecMin (by norm_num))
   refine le_antisymm
     ((iInf_le_price (onFacet Sm120Measured.piStar) Sm120Measured.model.demand
@@ -164,7 +167,7 @@ theorem sm120m_wStar : Sm120Measured.model.wStar (onFacet Sm120Measured.piStar) 
       | rw [wqM, Rat.cast_div, Rat.cast_natCast]
       | simp only [wqM, Rat.cast_div, Rat.cast_natCast]
       | (unfold wqM; push_cast; ring)
-  · haveI : Nonempty (Head (Fin 15) Unit Empty) := ⟨.vector⟩
+  · have : Nonempty (Head (Fin 15) Unit Empty) := ⟨.vector⟩
     unfold Model.wStar
     refine le_ciInf fun h => ?_
     rw [demandPrice_onFacet]
@@ -175,7 +178,11 @@ theorem sm120m_wStar : Sm120Measured.model.wStar (onFacet Sm120Measured.piStar) 
           ((Sm120Measured.h1fx1.writers.getD t.val (0, 0)).1 % 122) : ℝ) /
           ((Sm120Measured.h1fx1.writers.getD t.val (0, 0)).2 : ℝ)
       rw [le_div_iff₀ (by exact_mod_cast hw.1)]
-      exact_mod_cast hw.2
+      have h : ((wqM * ((Sm120Measured.h1fx1.writers.getD t.val (0, 0)).2 : ℚ) : ℚ) : ℝ) ≤
+          ((vfCoef Sm120Measured.piStar.val ((Sm120Measured.h1fx1.writers.getD t.val (0, 0)).1 % 122) : ℚ) : ℝ) :=
+        Rat.cast_le.mpr hw.2
+      push_cast at h
+      linarith
     | vector =>
       show (wqM : ℝ) ≤ Sm120Measured.model.q / 32 * Sm120Measured.model.vecMin Sm120Measured.piStar
       rw [sm120m_q]
@@ -196,7 +203,7 @@ theorem sm120m_phiStar : (phiqM : ℝ) ≤ Sm120Measured.model.phiStar (onFacet 
   show (phiqM : ℝ) ≤
     Sm120Measured.model.G.load (Sparse.counts (Sm120Measured.h1fx1.folds.getD φ.val [])) Sm120Measured.piStar
   rw [load_counts _ vfRow sm120m_hG]
-  exact_mod_cast sm120m_fold φ.val φ.isLt
+  exact Rat.cast_le.mpr (sm120m_fold φ.val φ.isLt)
 
 /-- FILL-OPT on any run: the model has no filler, so `χ* = 0` and the run's filler is priced `≥ 0`. -/
 theorem sm120m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty)
@@ -219,7 +226,10 @@ theorem sm120m_final :
         128 * (wqM : ℝ) / Sm120Measured.model.bnd Sm120Measured.flat * (41 * (6931471808 / 10000000000) / 12000) ≤
       27 / 5000 := by
   rw [sm120m_bnd]
-  exact_mod_cast sm120m_final_q
+  have h : ((1 - (128 * wqM + 128 * phiqM) / BqM + 128 * wqM / BqM * (41 * (6931471808 / 10000000000) / 12000) : ℚ) :
+      ℝ) ≤ ((27 / 5000 : ℚ) : ℝ) := Rat.cast_le.mpr sm120m_final_q
+  push_cast at h
+  linarith
 
 /-- The terms at `π*` and `δ′ ≥ 2^-41` sum to at most `27/5000`. -/
 theorem sm120m_eps_le (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :

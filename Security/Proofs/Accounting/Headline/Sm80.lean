@@ -116,7 +116,11 @@ theorem sm80_phiStar : 1 / 8 ≤ Sm80.model.phiStar (onFacet Sm80.piStar) := by
   rw [demandPrice_onFacet]
   show (1 : ℝ) / 8 ≤ Sm80.model.G.load (Sparse.counts (Sm80.d2s.folds.getD φ.val [])) Sm80.piStar
   rw [load_counts _ (sheetCoef Sm80.ds80) sm80_hG]
-  exact_mod_cast sm80_fold φ.val φ.isLt
+  have h : ((1 / 8 : ℚ) : ℝ) ≤
+      ((dot (sheetCoef Sm80.ds80 Sm80.piStar) 35 (Sm80.d2s.folds.getD φ.val []) : ℚ) : ℝ) :=
+    Rat.cast_le.mpr (sm80_fold φ.val φ.isLt)
+  push_cast at h
+  linarith
 
 /-- FILL-OPT on any run: the model has no filler, so `χ* = 0` and the run's filler is priced `≥ 0`. -/
 theorem sm80_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm80.checks (Fin 35) (Fin 23) Unit Empty)
@@ -141,7 +145,9 @@ theorem sm80_jl (δ' : ℝ) : Sm80.model.epsJl Sm80.flat (onFacet Sm80.piStar) (
 
 theorem sm80_final : 1 - 16 / Sm80.model.bnd Sm80.flat ≤ 147 / 100000 := by
   rw [sm80_bnd]
-  exact_mod_cast sm80_final_q
+  have h : ((1 - 16 / Bq80 : ℚ) : ℝ) ≤ ((147 / 100000 : ℚ) : ℝ) := Rat.cast_le.mpr sm80_final_q
+  push_cast at h
+  linarith
 
 /-- The terms at `π*` sum to at most `147/100000`. -/
 theorem sm80_eps_le (δ' : ℝ) :

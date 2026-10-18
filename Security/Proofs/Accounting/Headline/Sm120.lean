@@ -96,7 +96,7 @@ theorem sm120_wf : Sm120.model.Wf Sm120.flat := by
     norm_num
 
 theorem sm120_vecMin : 1 ≤ Sm120.model.vecMin .issue := by
-  haveI : Nonempty ↥Sm120.model.vec :=
+  have : Nonempty ↥Sm120.model.vec :=
     ⟨⟨idx 122 13, List.mem_toFinset.mpr (List.mem_map.mpr ⟨13, by decide, rfl⟩)⟩⟩
   unfold Model.vecMin
   refine le_ciInf fun k => ?_
@@ -110,7 +110,7 @@ theorem sm120_wStar : Sm120.model.wStar (onFacet Sm120.piStar) = 1 / 128 := by
   · rw [demandPrice_onFacet]
     show (1 : ℝ) / ((128 : ℕ) : ℝ) = 1 / 128
     norm_num
-  · haveI : Nonempty (Head (Fin 17) Unit Empty) := ⟨.vector⟩
+  · have : Nonempty (Head (Fin 17) Unit Empty) := ⟨.vector⟩
     unfold Model.wStar
     refine le_ciInf fun h => ?_
     rw [demandPrice_onFacet]
@@ -140,7 +140,10 @@ theorem sm120_phiStar : 1 / 8 ≤ Sm120.model.phiStar (onFacet Sm120.piStar) := 
   rw [demandPrice_onFacet]
   show (1 : ℝ) / 8 ≤ Sm120.model.G.load (Sparse.counts (Sm120.h1fx1.folds.getD φ.val [])) .issue
   rw [load_counts _ (sheetCoef Sm120.ds120) sm120_hG]
-  exact_mod_cast sm120_fold φ.val φ.isLt
+  have h : ((1 / 8 : ℚ) : ℝ) ≤ ((dot (sheetCoef Sm120.ds120 .issue) 122 (Sm120.h1fx1.folds.getD φ.val []) : ℚ) : ℝ) :=
+    Rat.cast_le.mpr (sm120_fold φ.val φ.isLt)
+  push_cast at h
+  linarith
 
 /-- FILL-OPT on any run: the model has no filler, so `χ* = 0` and the run's filler is priced `≥ 0`. -/
 theorem sm120_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty)
@@ -191,7 +194,10 @@ theorem sm120_final :
     1 - 17 / Sm120.model.bnd Sm120.flat +
         1 / Sm120.model.bnd Sm120.flat * (41 * (6931471808 / 10000000000) / 12000) ≤ 117 / 20000 := by
   rw [sm120_bnd]
-  exact_mod_cast sm120_final_q
+  have h : ((1 - 17 / Bq + 1 / Bq * (41 * (6931471808 / 10000000000) / 12000) : ℚ) : ℝ) ≤ ((117 / 20000 : ℚ) : ℝ) :=
+    Rat.cast_le.mpr sm120_final_q
+  push_cast at h
+  linarith
 
 /-- The terms at `π*` and `δ′ ≥ 2^-41` sum to at most `117/20000`. -/
 theorem sm120_eps_le (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
