@@ -15,7 +15,8 @@
 # CHECK=quick|full (default full); REPS (default 9); BUILDS (default a0r0l; tags a<SHA_ADD>r<SHA_ROT>[l][nomask][merged][quad], l for
 # SHA_ROLL=1);
 # SWEEP and SEG_SWEEP (int8 values a leaf); TILE_M, TILE_R, TILESEG_R; GENCODE (default arch=compute_120a,code=sm_120a; H200:
-# arch=compute_90,code=sm_90); PY, the Python that runs reference.py (default python3).
+# arch=compute_90,code=sm_90); PY, the Python that runs reference.py (default python3); LEASE, the command that leases the GPU
+# (default gpu-lease 1 --wait --max-min 20 --; empty when the whole script already runs under a lease).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -56,8 +57,9 @@ wait
 cat "$O/rc.txt"
 
 export REPS=${REPS:-9}
-# shellcheck disable=SC2016
-gpu-lease 1 --wait --max-min 20 -- bash -c '
+LEASE=${LEASE-gpu-lease 1 --wait --max-min 20 --}
+# shellcheck disable=SC2016,SC2086
+$LEASE bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit --format=csv -i "$GPU_LEASE_UUID" \
     > "$O/gpu.txt" 2>&1
   timed=""
