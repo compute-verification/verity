@@ -1,6 +1,7 @@
 """`verity.ml.circuits.boolean.table`: a table read on bits is the entry at the index's low bits at every index, whatever the
 index's high bits, in exactly (2^IB - 1) * 16 EW ANDs and no lookup; the Boolean form of a word read is Boolean, names the word,
-takes its signature in bits and agrees with it through the word view; a word whose table does not fill its rows is refused."""
+takes its signature in bits and agrees with it through the word view; a word whose table does not fill its rows, or has more than
+`MAX_WORDS` words, is refused."""
 from __future__ import annotations
 
 import numpy as np
@@ -86,3 +87,9 @@ def test_a_word_whose_table_does_not_fill_its_rows_is_refused():
         BT.table_read(word, 5)
     with pytest.raises(ValueError, match="BtReadBad_v1: not a read of 2\\^9 entries"):
         BT.table_read(word, 9)
+
+
+def test_a_table_past_max_words_has_no_form():
+    BT.table_read(_word(11, 2, 16), 11)
+    with pytest.raises(ValueError, match="BtRead12x2i16_v1: a table of 8192 words has no Boolean form"):
+        BT.table_read(_word(12, 2, 16), 12)

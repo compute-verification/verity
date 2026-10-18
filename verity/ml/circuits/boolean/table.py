@@ -11,7 +11,8 @@ and an XOR of candidates: the circuit's own rows, with no lookup.
 
 `table_read(word, IB)` is the Boolean form of a word read ``word`` (`verity_vllm.program.registry.tables.table_read`, which makes
 both): its signature on bits, the next version of its name, and ``word`` as its word. C-Flock lowers the word read by this
-form's builder (`verity_flock.ir_lower._boolean_build`).
+form's builder (`verity_flock.ir_lower._boolean_build`). A table of more than `MAX_WORDS` words has no form, so a read of it
+stays a `NoPiece`.
 """
 from __future__ import annotations
 
@@ -22,9 +23,13 @@ from verity.ml.circuits.types import Array, Value
 from .gather import gather
 from .trace import definition
 
-__all__ = ["ROW_WORDS", "WORD_BITS", "read", "table_read"]
+__all__ = ["MAX_WORDS", "ROW_WORDS", "WORD_BITS", "read", "table_read"]
 
 ROW_WORDS, WORD_BITS = 64, 16
+#: the most table words a Boolean form selects among (65,520 ANDs a read). A registered form is traced whenever circuit-check's
+#: catalog meets it, and past this the trace alone is too slow for `check`: 2^16 words (`gelu_tanh_bf16`) take 43 s, and 2^28
+#: (`tanh_rn`, 4,294,967,264 ANDs) never finish
+MAX_WORDS = 1 << 12
 
 _FORMS: dict[str, CompositeDefinition] = {}
 
@@ -54,6 +59,8 @@ def table_read(word: PrimitiveDefinition, index_bits: int) -> CompositeDefinitio
     if rem or not ew or not isinstance(it, Value) or not 0 < index_bits <= it.w or rows * ROW_WORDS != ew << index_bits \
             or tt != Array(rows, Array(ROW_WORDS, Value(WORD_BITS))):
         raise ValueError(f"{word.id}: not a read of 2^{index_bits} entries of 16-bit words in rows of {ROW_WORDS} by a wider index")
+    if ew << index_bits > MAX_WORDS:
+        raise ValueError(f"{word.id}: a table of {ew << index_bits} words has no Boolean form, over MAX_WORDS = {MAX_WORDS}")
 
     def build(C, idx, *words, _ib=index_bits, _ew=ew):
         return read(C, idx, words, _ib, _ew)

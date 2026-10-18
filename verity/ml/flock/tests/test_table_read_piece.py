@@ -1,7 +1,8 @@
 """A read of a table the program brings (`verity_vllm.program.registry.tables`' `TableRead{IB}x{EW}_v1`) lowers by its Boolean form's
 builder (`verity.ml.circuits.boolean.table`, through `ir_lower._boolean_build`): the entry at the index's low bits at every index and
-on random tables, in (2^IB - 1) * 16 EW ANDs over the unit's own input bits and no lookup; and a Program whose reads share one
-registered table lowers under `Q_word` with every unit lowered and each unit equal to the reference on synthetic draws."""
+on random tables, in (2^IB - 1) * 16 EW ANDs over the unit's own input bits and no lookup; a read of a table past `BT.MAX_WORDS`
+(`gelu_tanh_bf16`, `tanh_rn`) has no piece; and a Program whose reads share one registered table lowers under `Q_word` with every
+unit lowered and each unit equal to the reference on synthetic draws."""
 from __future__ import annotations
 
 import random
@@ -40,6 +41,12 @@ def test_a_table_read_is_its_boolean_form_on_every_index(ib, ew):
     outs, _ = C.evaluate(ins, len(lanes))
     got = [int(x) for x in IL.unslice_words(outs["o"], len(lanes))]
     assert got == [p.evaluate(i, *w) for i, w in lanes]
+
+
+@pytest.mark.parametrize("name", ["gelu_tanh_bf16", "tanh_rn"])
+def test_a_read_of_a_table_past_max_words_has_no_piece(name):
+    p = T.table_read(*T.TABLES[name])
+    assert p.id not in IL.PIECES
 
 
 def test_reads_of_one_registered_table_lower_unit_by_unit():

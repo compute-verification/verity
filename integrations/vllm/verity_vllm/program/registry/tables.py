@@ -9,8 +9,9 @@ A table of 2^IB entries of EW u16 words (an entry's low word first) is the regis
 
     TableRead{IB}x{EW}_v1  (index: Value<16> if IB <= 16 else Value<32>, table: Array<2^IB EW / 64, Array<64, Value<16>>>)
                            -> Value<16 EW>: the entry at the index's low IB bits, its words joined low first; total
-    TableRead{IB}x{EW}_v2  its Boolean form, made with it (`verity.ml.circuits.boolean.table`): the multiplexer tree over the
-                           2^IB entries, (2^IB - 1) 16 EW ANDs, by which C-Flock lowers the read
+    TableRead{IB}x{EW}_v2  its Boolean form, made with it up to `BT.MAX_WORDS` table words (`verity.ml.circuits.boolean.table`):
+                           the multiplexer tree over the 2^IB entries, (2^IB - 1) 16 EW ANDs, by which C-Flock lowers the
+                           read; `gelu_tanh_bf16` and `tanh_rn` are past it, so a read of either stays a NoPiece
 
 `GeluTanhMulBf16_v3` / `GeluTanhMul_v3{I}` are `GeluTanhMulBf16_v1` / `GeluTanhMul_v1{I}` with the activation read from the
 registered `gelu_tanh_bf16` rather than computed by the primitive's evaluator.  `TanhF32Rn_v2` is `TanhF32Rn_v1` with |x| in
@@ -75,7 +76,8 @@ def table_read(index_bits: int, entry_words: int) -> PrimitiveDefinition:
                                 conformance="exact by construction: an index into the operand")
         p.evaluate_lazy = ev_lazy  # type: ignore[attr-defined]
         _READS[key] = p
-        BT.table_read(p, ib)
+        if ew << ib <= BT.MAX_WORDS:
+            BT.table_read(p, ib)
     return p
 
 
