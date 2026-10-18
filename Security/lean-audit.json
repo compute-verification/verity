@@ -3,7 +3,8 @@
  "proved_in": ["Proofs"],
  "assumptions": {
   "Accounting.Assumptions.CircuitCarriers": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "4c9419c06754e8d7df9c4427690db2afe2ad52487a877a74189291dc2cb6f435"
   },
   "Accounting.Assumptions.EncodeChainHardness": {
    "owner": "@memory-accounting",
@@ -46,7 +47,8 @@
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
   },
   "Accounting.Assumptions.SteeredLayout": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "6b3ad75df2921563a337682ea3311f97f2d65ae2612a30df4d378d8741c5fa71"
   },
   "Accounting.Assumptions.TS.FacetCeilings": {
    "owner": "@compute-accounting",
@@ -6085,11 +6087,10 @@
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
   "Definitions.Accounting.Carrier": {
-   "digest": "b3965eb244851f6e74bddb6718a5031018f0dd9a03a80b87a07b6e8ba389a15a",
+   "digest": "283ccf9b3cb853543f95932eebae56802a0ef87b63819f36ea1f1b2e5cab2d60",
    "definitions": {
     "Accounting.Rate.PIChip.linkBitsEven": "664fdfcc22cb307c84e0dced36156f3512a82bd18bac34e67c7f1b1b3020dca6",
     "Accounting.Rate.PassProvenance": "ee44265e1c690be67eb25e35098885dc2a5c05ae23924c5202dbff4731579ede",
-    "Accounting.Rate.PassProvenance.OfCircuit": "fce70b4e81284bfe8fc63fc12498eb3fe11efa7f2ee467070af0836a71630796",
     "Accounting.Rate.PassProvenance.below": "e0f64354213cb9437ab2256d50a1f7705f8c248ee6e8c03e76665937a9a34926",
     "Accounting.Rate.PassProvenance.brecOn": "9c0a75028147e728ff9436860fce058f9d281c7507a426f5d4847d16f7effad7",
     "Accounting.Rate.PassProvenance.brecOn.go": "73d2c36f86637e39368dbc2fd2e9c129554a8f2094a8446f0fc0de969137f2f0",
@@ -6105,6 +6106,7 @@
     "Accounting.RateSketch.Carrier.carried": "10f81ebb2467e3794edeb76d3fed9cf3936e3dbc6e271b22f256dd8593daeaeb",
     "Accounting.RateSketch.Carrier.provenance": "83fe2280f4e4a4cafcf9e61259f2d053aec04fb3fc65a15873296a8a3d6a0df4",
     "Accounting.RateSketch.Provenance": "e1c403ace5ce67331b8bc30903a25604bdb1c5587793475ffc4fd90c358bd839",
+    "Accounting.RateSketch.Provenance.OfCircuit": "9720606afac4619092f0e2efcf182e32bcd3177e20723733f6a8d25c6fc72304",
     "Accounting.RateSketch.Provenance.below": "4a48f157a7503f7554ee492f74fbecd0ceb6fc0bec60f0972ca47d597325c54b",
     "Accounting.RateSketch.Provenance.brecOn": "ff2bee70e358db270dc1f9003b9314e630160852d793ad5f482f796f4e21359f",
     "Accounting.RateSketch.Provenance.brecOn.go": "291335639b407bf01e1245cbca082ba4f9a9b58751242c79fe55b0d9ace72021",
@@ -6118,11 +6120,14 @@
     "Accounting.RateSketch.Provenance.rec": "29ef2b5e0697a74454072abd56c2e61301503db37e36fc206de6f1d1a32233df",
     "Accounting.RateSketch.Provenance.run": "f3927eefe53c708fe975d11873e6d296127a232b98f78b1746368901d89641bf",
     "Accounting.RateSketch.SketchDeployedWindow.correctOn": "dc50e94282b5a9924e9bad4abf22c547b80cf436b8914c64a5c36f8360f2dbc9",
+    "Accounting.RateSketch.SketchDeployedWindow.readsIn": "6363e10290c0cea321ee3be9786639c485ed6dfabc15d41c1a09070234e64c8c",
     "Accounting.RateSketch.SketchDeployedWindow.readsOn": "9582b9fe872e4468f07cb2ad4ebed9dbea2e8d589a9c747a597e04d40da92e82",
     "Accounting.RateSketch.SketchPrefix": "bc7d444025216fd652270044404eb72ef7443e4bb83aa38cc7b24fad18380e33",
     "Accounting.RateSketch.SketchPrefix.of": "47c5593dde0b838373447a801b4641585b2b445fb5b4c6aa64e9c2185ae2acd7",
+    "Accounting.RateSketch.StackedCoins": "85592ae5eae40b5e3db0144242371c241acede632131dbde804f59cbb4590cd5",
     "Accounting.RateSketch.coinStore": "d28d5837fcb7dbac5beea7b4c4fd18457ff07959f76a4102f144601eb11bdf0f",
     "Accounting.RateSketch.programmed": "085b9626b60659b90f27f2315c28c0b59e3a0a53f9ec4a7b4fd08f48890fd2df",
+    "Accounting.RateSketch.steeredStore": "33418186501154eb79c4c6e8ad5b0ea0ad8ce94ed0aed87b7e953fc7601250d7",
     "Accounting.appendCoinBlocks": "bc4317475084be00b2ce3d53a254399d6817a4f68ca2bb62363dd99a8fd79903",
     "Accounting.encodeBitsCost": "1808f6f6b51023f9cfefb8f7ec75fceaadc53a568568bb6e427dd1fd4cb7f64a"
    },
@@ -6251,7 +6256,6 @@
     "Accounting.SecurityProofs.CovertResidual",
     "Accounting.SecurityProofs.CovertResidualPerRun",
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointPerRun",
@@ -6739,7 +6743,6 @@
     "Accounting.SecurityProofs.BoundReceiptLink",
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
     "Accounting.SecurityProofs.Colocation",
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAudit",
     "Accounting.SecurityProofs.RateAuditInteractive",
     "Accounting.SecurityProofs.RateAuditInteractiveRO",
@@ -6839,7 +6842,6 @@
     "Accounting.Rate.PIDevice.world": "636dadc8e309bdf6c5e2f71b400631ea1f60e0b231e64788906bd88380d983f8"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
     "Accounting.SecurityProofs.RemoteSessionConservationRelay",
@@ -6865,7 +6867,6 @@
     "Accounting.Rate.instFintypeWindowCoins": "83a3de5f215b4806ab4abeb991fcfd9169bc9d18118a6ba8c06150acea81feec"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.HorizonSampling",
     "Accounting.SecurityProofs.RateSessionDraw",
     "Accounting.SecurityProofs.RateSessionSampledNamedRO",
@@ -6925,7 +6926,6 @@
     "Accounting.RealizesRateInteractive.dev": "fe3324e45201dba3a7946d9006e20450b5824809746f6aa96ac984bb4b065e91"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditInteractive",
     "Accounting.SecurityProofs.RateAuditInteractiveRO",
     "Accounting.SecurityProofs.RateChain",
@@ -7050,7 +7050,6 @@
     "Accounting.Rate.instFintypePassCoins": "8a08fc29342c632c72d82e9f7bdfd822ea8c878b7d6b58c6d421ecdb8582a01c"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateChain",
     "Accounting.SecurityProofs.RateChainPaid",
     "Accounting.SecurityProofs.RateChainPaidRO",
@@ -7133,6 +7132,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditSketch",
     "Accounting.SecurityProofs.RateAuditSketchInteractiveRO",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
@@ -7173,6 +7173,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
     "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
@@ -7623,6 +7624,7 @@
     "Accounting.Tag.unreadSum": "1f8e83f1fa0da60f295e0e8589e62dcd3099e7d20aac633bad80388bb962172d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
     "Accounting.SecurityProofs.RateAuditTensorSketchRank",
     "Accounting.SecurityProofs.RateTensorSketchTable",
@@ -17554,7 +17556,6 @@
     "Accounting.Assumptions.WorkHardness": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.RateAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartialPasses",
@@ -17597,9 +17598,11 @@
    ]
   },
   "Models.Accounting.Assumptions.Stacking": {
-   "digest": "b589a81e2fee78e506a7f7166f7e811e70fd350706f1d22241fe43a3d89e005a",
+   "digest": "30256a25f0e4304f0e3669ec0aa1179c3066dab776cfc95631ee62469202acbe",
    "definitions": {
-    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+    "Accounting.Assumptions.CircuitCarriers": "4c9419c06754e8d7df9c4427690db2afe2ad52487a877a74189291dc2cb6f435",
+    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
+    "Accounting.Assumptions.SteeredLayout": "6b3ad75df2921563a337682ea3311f97f2d65ae2612a30df4d378d8741c5fa71"
    },
    "guarantees": [
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
@@ -17751,9 +17754,9 @@
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
   },
   "Models.Accounting.Guarantees.DeclaredCircuit": {
-   "digest": "3242ff53d30b16b3f484e5d5f224502f96a9d9a47ecdbcdaa972ab8ef69186d9",
+   "digest": "47bba1146dd7f001bedb0a5c182d6a1bd442b1a5bb946d5c1ca250ca22715b0c",
    "definitions": {
-    "Accounting.Guarantees.DeclaredCircuitRequirement": "284c196d79a9145ac7efb0c101927d6c497c0a8b01913124770868a1ca694498"
+    "Accounting.Guarantees.DeclaredCircuitRequirement": "59fbd873c1bbac4c7620ac1903ec885b191ec95a4539a4bed62d0c7b23dbf811"
    },
    "guarantees": ["Accounting.SecurityProofs.DeclaredCircuitRequirement"]
   },
