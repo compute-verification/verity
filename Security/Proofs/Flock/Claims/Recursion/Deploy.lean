@@ -47,8 +47,9 @@ being the one the prover staged (`ract_sess`). `next_acc`: the whole run
 accepts only at the last session's last round, where the outer verifier accepts.
 
 `deployRec IV ivScope b` is the record the recursion's claims read, at the inner verifier `IV`, its scope check and
-what the deployment brings (`Brings`): the coin server's transcript, the stager `stage` reads, the outer witnesses'
-readers (`Readers`: the inner messages and the SHA-512 evaluations they record), each outer session's `--zk` leaf counts
+what the deployment brings (`Brings`): the coin server's transcript, the stager `stage` reads, the readers (`Readers`:
+the inner messages off the V* statements and the outer witnesses, and the SHA-512 evaluations the witnesses record),
+each outer session's `--zk` leaf counts
 and the reference prover's pieces. `innerView` runs `IV` at the claim's oracle on those messages and the run's first
 `k_I` coins. The hm96 key is the pinned one (`Hm96.Default512`). The record's `stage` lays out the staging message
 from the inner rounds and its commit strings (`Brings.hs`, `Brings.nC`), as the spec has it. The reference prover
@@ -423,17 +424,17 @@ noncomputable def session (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.M
   let seg := fixLast (s + 1 == nS x) k ((v.msgs.drop off).take k)
   ⟨seg, if v.out = .acc then .acc else segOut seg⟩
 
-/-- What the outer witnesses give: the inner session's messages, and the SHA-512 evaluations session `s`'s witness
-records. -/
+/-- What the V* statements and the outer witnesses give: the inner session's messages, off the V* statements and the
+witnesses, and the SHA-512 evaluations session `s`'s witness records. -/
 structure Readers where
-  msgs : Claims.Msg → List Claims.Flock.Wit → List Claims.Msg
+  msgs : Claims.Msg → List Claims.Msg → List Claims.Flock.Wit → List Claims.Msg
   calls : Claims.Msg → ℕ → Claims.Flock.Wit → List (Claims.Msg × Claims.Msg)
 
-/-- **The inner session's view**: `IV`'s run at `H` of the inner messages the outer witnesses give, at the run's first
-`k_I` coins. -/
+/-- **The inner session's view**: `IV`'s run at `H` of the inner messages the V* statements `xs` and the outer
+witnesses `ws` give, at the run's first `k_I` coins. -/
 def innerView (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (rd : Readers) (x : Claims.Msg) {k : ℕ}
-    (r : Fin k → Coin) (ws : List Claims.Flock.Wit) : Claims.Seen :=
-  (Claims.run H (Claims.replay (rd.msgs x ws)) IV (xIOf x) () fun i => Claims.coinSeq r i.val).seen
+    (r : Fin k → Coin) (xs : List Claims.Msg) (ws : List Claims.Flock.Wit) : Claims.Seen :=
+  (Claims.run H (Claims.replay (rd.msgs x xs ws)) IV (xIOf x) () fun i => Claims.coinSeq r i.val).seen
 
 /-! ## The reference prover -/
 
@@ -607,7 +608,7 @@ noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg �
   vstar := vstar b.st
   nS := nS
   session := session IV b.st
-  innerView H x r ws := innerView H IV b.rd x r ws
+  innerView H x r xs ws := innerView H IV b.rd x r xs ws
   calls x ws := (ws.mapIdx fun s w => b.rd.calls x s w).flatten
   nums := numsZk b.zl b.st
   saltLen := Hm96.sha512.saltBytes

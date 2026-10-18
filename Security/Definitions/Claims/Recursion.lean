@@ -29,15 +29,16 @@ eight items:
    the V* statements, then the V* sessions. `E*` (`E`): the outer extractor `E_O` (`EO`: per V* session, `E^rep` over
    forks of the judged run at the session's first round, with the outer Flock's assemble and check), then the inner one
    (`E^rep` at the inner protocol's waits, assemble and check), each inner rerun served by `E_O` at that rerun's coins
-   and read off its output at the claim's oracle (`served`, `dec`). The simulator `Sim`: the inner session's commit
-   strings to zero messages under fresh salts at the pinned hm96 key (`Deploy.zeroCommit`), the staging messages
-   (`Deploy.stage`) at their commit strings to zero messages under fresh salts (the honest prover stages its values'
-   under its own), then the outer simulator on each V* statement (`SO`, the named Flock simulator, a parameter as in
-   `Flock.ZK`). The extraction-based finder `Be`: `B`'s fork, `E_O` on both runs, a collision among the SHA-512
-   evaluations their outer witnesses record (`Deploy.calls`), which no party computes in the clear. The registered
-   finder `Br`: `Be`'s fork and extractions, a collision among the SHA-512 evaluations the V* setup makes outside the
-   oracle at the two runs' V* statements (`Deploy.setup`: its registered reads and the roots it recomputes from public
-   data), or between one of them and a recorded call.
+   and read off its output, the rerun's V* statements and the outer witnesses, at the claim's oracle (`served`, `dec`,
+   `Deploy.innerView`). The simulator `Sim`: the inner session's commit strings to zero messages under fresh salts at
+   the pinned hm96 key (`Deploy.zeroCommit`), the staging messages (`Deploy.stage`) at their commit strings to zero
+   messages under fresh salts (the honest prover stages its values' under its own), then the outer simulator on each
+   V* statement (`SO`, the named Flock simulator, a parameter as in `Flock.ZK`). The extraction-based finder `Be`:
+   `B`'s fork, `E_O` on both runs, a collision among the SHA-512 evaluations their outer witnesses record
+   (`Deploy.calls`), which no party computes in the clear. The registered finder `Br`: `Be`'s fork and extractions, a
+   collision among the SHA-512 evaluations the V* setup makes outside the oracle at the two runs' V* statements
+   (`Deploy.setup`: its registered reads and the roots it recomputes from public data), or between one of them and a
+   recorded call.
 6. **Claims.** `KS` with costs (`Efficient`), `Bits`, `ZK`, `Complete` on the scope of the deployed reference prover
    (`Deploy.P`) at the deployed error (`Deploy.δc`), `ScopeMatches`, `Nontrivial`, and the private variant's `KSPriv`,
    `ZKPriv`; `At Flock` instantiates the inner protocol with Flock and its decoder. The inner protocol's claim the
@@ -378,15 +379,15 @@ those commit strings: the honest prover's are its staged values' under its own s
 digest's under its salts, `Deploy.zeroCommit`); the V* statements of a run, from the public transcript of the
 inner session and the staging rounds (`vstar`), and their count at `x` (`nS`, fixed by `x`'s form); outer session `s`'s
 view in a run's view (`session`: its messages and its verifier's decision as the compiled verifier's answers show it);
-the inner session's view read off a run's coins and the outer witnesses, at an oracle (`innerView`: the inner verifier
-runs at it); the SHA-512 evaluations the outer witnesses record (`calls`); the numbers of outer session `s` at `x`
-(`nums`, the outer Flock's at that session's V* statements, which their public shape fixes); for the simulator, the
-pinned hm96 key's salts (`saltLen` bytes), its salt prefix `p_salt` and its GF(2)-linear salt mask `Φ`, into 64 bytes
-(`mask`); the reference prover (`P`), the honest prover the deployment runs, on its tapes (`Tape`, a nonempty
-type); its completeness error as the deployment states it, at each hash (`δc H x` at `H`): `Complete` is at that
-error and no other; and the inputs of the SHA-512 evaluations the V* setup makes outside the oracle at a V* statement
-(`setup`: its registered reads' leaves and climbs, and the roots it recomputes from public data, a function of the
-statement's bytes), none by default. -/
+the inner session's view read off a run's coins, its V* statements and the outer witnesses, at an oracle (`innerView`:
+the inner verifier runs at it); the SHA-512 evaluations the outer witnesses record (`calls`); the numbers of outer
+session `s` at `x` (`nums`, the outer Flock's at that session's V* statements, which their public shape fixes); for
+the simulator, the pinned hm96 key's salts (`saltLen` bytes), its salt prefix `p_salt` and its GF(2)-linear salt mask
+`Φ`, into 64 bytes (`mask`); the reference prover (`P`), the honest prover the deployment runs, on its tapes (`Tape`,
+a nonempty type); its completeness error as the deployment states it, at each hash (`δc H x` at `H`): `Complete` is
+at that error and no other; and the inputs of the SHA-512 evaluations the V* setup makes outside the oracle at a V*
+statement (`setup`: its registered reads' leaves and climbs, and the roots it recomputes from public data, a function
+of the statement's bytes), none by default. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
@@ -397,7 +398,25 @@ structure Deploy (Coin : Type) where
   vstar : Msg → List (Msg × Out) → List Msg
   nS : Msg → ℕ
   session : Msg → ℕ → Seen → Seen
-  innerView : (Msg → Msg) → (x : Msg) → (Fin (V.k x) → Coin) → List Flock.Wit → Seen
+  /-- **The inner session's view** at the oracle `H`, read off a run's coins `r`, the run's V* statements `xs`
+  (`vstar`'s at its inner and staging rounds, which `E_O` gives with its witnesses) and the outer witnesses `ws`: the
+  inner verifier's run at `H` and at `r`'s first `k_I` coins, on inner messages each of which `x` fixes, the run sent
+  in the clear and the V* statements stage, or the witnesses' hidden values hold. With Flock inside, the link message
+  (round 0's: each table's `root_B` and public words) is read off the coin server's transcript of the inner rounds,
+  which each V* statement holds, and the last message (tag 1) is `x`'s inner statement, the inner session's record off
+  the V* statements, and the proof files off the witnesses; each other round is a part's, or the constant frame of a
+  stream round that absorbs no message.
+
+  Reading `xs` doesn't weaken `KS`. `KS`'s relation, bound and finders don't read the inner view; it only makes `E*`
+  the extractor it is. That extractor reads nothing new: `E_O` computes `xs` at its replay of the judged run, off the
+  public messages of the run's inner and staging rounds, with no oracle call and no rerun, so `E*`'s reruns and cost
+  are `Efficient`'s as before. What `E*` must achieve is unchanged too: each rerun the inner `E^rep` makes is to be
+  seen as a view the inner verifier accepts at its own coins, the draw's first `k_I`, since `Inner.KSAbort` is about
+  the inner verifier's runs alone. And every message it reads off `xs` is a public run message that V*'s checks bind:
+  the transcript is the coin server's record of the run's inner messages and coins, and V*'s setup holds the staged
+  record to it (each rep's coins the record's), and its circuit tables' tops (`root_B`, read at fixed `rec-top-L0`
+  rows) and check 5's link points. -/
+  innerView : (Msg → Msg) → (x : Msg) → (Fin (V.k x) → Coin) → List Msg → List Flock.Wit → Seen
   calls : Msg → List Flock.Wit → List (Msg × Msg)
   nums : Msg → ℕ → Nums
   saltLen : ℕ
@@ -452,27 +471,29 @@ def Scope (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : Prop :=
 
 /-- **The outer extractor `E_O`**: replay the judged run; if it accepted, for each V* session `s` in order, at its
 statement (read off the judged run's inner and staging rounds), `E^rep` with the outer Flock's assemble and check over
-forks of the judged run at the session's first round, each rerun seen as the session's view; all the sessions'
-witnesses, or none. -/
+forks of the judged run at the session's first round, each rerun seen as the session's view; the V* statements with
+all the sessions' witnesses, or none. -/
 noncomputable def EO (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
-    (decO : List (ℕ × Col) → List T) : Extractor Coin (List Flock.Wit) D.V where
+    (decO : List (ℕ × Col) → List T) : Extractor Coin (List Msg × List Flock.Wit) D.V where
   C x := (s : Fin (D.nS x)) → Fin (D.nums x s).waits → Fin (D.nums x s).cap → Fin (D.V.k x) → Coin
   ext x r₀ c := .rerun r₀ fun v₀ =>
     if v₀.out = .acc then
       let xs := D.vstar x (v₀.msgs.take (I.V.k (xI D x) + D.kS x))
-      collect ((List.finRange (D.nS x)).map fun (s : Fin (D.nS x)) =>
+      (collect ((List.finRange (D.nS x)).map fun (s : Fin (D.nS x)) =>
         serve (viewing (D.session x s))
           (firstWait (D.nums x s).k (fun v => [DO.cols v])
             (Flock.assemble DO.parse DO.table decO DO.read (xs.getD s []))
             (Flock.check DO.parse (xs.getD s []))
             ((List.finRange (D.nums x s).waits).map fun i => (List.finRange (D.nums x s).cap).map fun j =>
-              fork (I.V.k (xI D x) + D.kS x + ((xs.take s).map DO.V.k).sum) r₀ (c s i j))))
+              fork (I.V.k (xI D x) + D.kS x + ((xs.take s).map DO.V.k).sum) r₀ (c s i j))))).bind
+        fun ows => .ret (ows.map fun ws => (xs, ws))
     else .ret none
 
-/-- The inner session's view at a draw, read off the outer extractor's output with the inner verifier at the oracle
-`H`; a rejected view when it gave up. -/
-def dec (H : Msg → Msg) (D : Deploy Coin) (x : Msg) (r : Fin (D.V.k x) → Coin) : Option (List Flock.Wit) → Seen
-  | some ws => D.innerView H x r ws
+/-- The inner session's view at a draw, read off the outer extractor's output, its V* statements and witnesses, with
+the inner verifier at the oracle `H`; a rejected view when it gave up. -/
+def dec (H : Msg → Msg) (D : Deploy Coin) (x : Msg) (r : Fin (D.V.k x) → Coin) :
+    Option (List Msg × List Flock.Wit) → Seen
+  | some (xs, ws) => D.innerView H x r xs ws
   | none => ⟨[], .rej⟩
 
 /-- **`E*`, the recursion's extractor** at the oracle `H`: the outer extractor, then the inner one. The inner
@@ -496,8 +517,9 @@ noncomputable def Be (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO 
   ne := ⟨(⟨⟨0, hk⟩, Classical.arbitrary _, fun _ => default, fun _ => default⟩, Classical.arbitrary _,
     Classical.arbitrary _)⟩
   out s :=
-    findColl (D.calls x (((EO D I DO decO).eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1.getD []) ++
-      D.calls x (((EO D I DO decO).eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).1.getD []))
+    findColl (D.calls x ((((EO D I DO decO).eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1.map Prod.snd).getD []) ++
+      D.calls x ((((EO D I DO decO).eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).1.map
+        Prod.snd).getD []))
   cost s :=
     (run H P D.V x s.1.2.1 s.1.2.2.1).pLog.length + (run H P D.V x s.1.2.1 s.1.2.2.1).vLog.length +
       (run H P D.V x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2)).pLog.length +
@@ -542,15 +564,15 @@ noncomputable def Br (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO 
     Classical.arbitrary _)⟩
   out s :=
     let r₂ := forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2
-    findCollIn (D.calls x (((EO D I DO decO).eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1.getD []) ++
-        D.calls x (((EO D I DO decO).eval H P x s.1.2.1 r₂ s.2.2).1.getD []))
+    findCollIn (D.calls x ((((EO D I DO decO).eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1.map Prod.snd).getD []) ++
+        D.calls x ((((EO D I DO decO).eval H P x s.1.2.1 r₂ s.2.2).1.map Prod.snd).getD []))
       (setupCalls H D (runStmts H D I P x s.1.2.1 s.1.2.2.1) ++ setupCalls H D (runStmts H D I P x s.1.2.1 r₂))
   cost s :=
     let r₂ := forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2
     (Be H D I DO decO P x hk).cost s +
       (setupCalls H D (runStmts H D I P x s.1.2.1 s.1.2.2.1) ++ setupCalls H D (runStmts H D I P x s.1.2.1 r₂)).length +
-      (D.calls x (((EO D I DO decO).eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1.getD []) ++
-        D.calls x (((EO D I DO decO).eval H P x s.1.2.1 r₂ s.2.2).1.getD [])).length
+      (D.calls x ((((EO D I DO decO).eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1.map Prod.snd).getD []) ++
+        D.calls x ((((EO D I DO decO).eval H P x s.1.2.1 r₂ s.2.2).1.map Prod.snd).getD [])).length
 
 /-- `Pr[Br^{P*}(x) outputs a collision]`, `0` for a verifier that takes no rounds at `x`. -/
 noncomputable def PrBr (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)

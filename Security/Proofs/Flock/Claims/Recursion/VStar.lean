@@ -15,10 +15,12 @@ the inner verifier.
   as part `s` holds it (`Layout.held`), as segments of constant bytes (a frame) and hidden values, and each SHA-512
   evaluation part `s` computes, a constant prefix then hidden values. It also fixes the message of a round that carries
   none (`Layout.fixedAt`, a stream round's constant frame), and names the public rounds, whose message the prover sends
-  in the clear (`Layout.pubAt`, the link message). The inner view's messages are each round's fixed message, or its
-  message off the first part that holds it (`Layout.msgs`); the recorded calls are each part's evaluations
-  (`Layout.calls`). These have the types of `deployRec`'s `Readers` fields (`Recursion/Deploy.lean`), so
-  `deployRec` at `⟨L.msgs, L.calls⟩` reads through them (`ReadsThrough`) by its definition.
+  in the clear (`Layout.pubAt`, the link message). The inner view's messages are the last round's off the run's V*
+  statements and the witnesses (`Layout.finalRead`), and each other round's fixed message, its message off the V*
+  statements at a public round (`Layout.pubRead`), or its message off the first part that holds it (`Layout.msgs`);
+  the recorded calls are each part's evaluations (`Layout.calls`). These have the types of `deployRec`'s `Readers`
+  fields (`Recursion/Deploy.lean`), so `deployRec` at `⟨L.msgs, L.calls⟩` reads through them (`ReadsThrough`) by its
+  definition.
 * **The named facts**, at an inner check `chk s` per part, read at the coins a V* statement shows (`shows`) on a list
   of inner messages:
   * `PartChecks s`: part `s`'s circuit accepts only if its inner check holds on the messages it holds, or two of its
@@ -107,29 +109,40 @@ segments, each constant bytes the statement fixes (a round's frame, a length pre
 next bits, in order; each SHA-512 evaluation part `s` computes (`shaAt x s`): the constant bytes its input starts with
 (a domain prefix the circuit fixes, such as a row's or the salt's), then the hidden values of the rest of its input's
 bits, and those of its output's; the rounds whose message the statement fixes (`fixedAt x i`: a stream round that
-absorbs no message, whose framed message is constant), which no part holds; and the public rounds (`pubAt x i`), whose
-message is the run's own, sent in the clear, as the link message is. -/
+absorbs no message, whose framed message is constant), which no part holds; the public rounds (`pubAt x i`), whose
+message is the run's own, sent in the clear, as the link message is, and their messages off the run's V* statements
+`xs` (`pubRead x xs i`: the coin server's transcript of the inner rounds, which each V* statement holds, shows the
+run's message there); and the last round's message off the V* statements and the witnesses (`finalRead x xs ws`),
+which no one part holds: Flock's tag-1 message, `x`'s inner statement, the inner session's record off the V*
+statements (the prover stages it in the clear) and the proof files off the parts' hidden values. -/
 structure Layout where
   rounds : Msg → ℕ
   msgAt : Msg → ℕ → ℕ → Option (List (Msg × List ℕ))
   shaAt : Msg → ℕ → List (Msg × List ℕ × List ℕ)
   fixedAt : Msg → ℕ → Option Msg := fun _ _ => none
   pubAt : Msg → ℕ → Bool := fun _ _ => false
+  pubRead : Msg → List Msg → ℕ → Msg := fun _ _ _ => []
+  finalRead : Msg → List Msg → List Flock.Wit → Msg := fun _ _ _ => []
 
 /-- Inner round `i`'s message as part `s` holds it, off its witness `w`: none at a round the statement fixes. -/
 def Layout.held (L : Layout) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ) : Option Msg :=
   if (L.fixedAt x i).isSome then none else (L.msgAt x s i).map (readSegs w)
 
-/-- Inner round `i`'s message off the witnesses: the statement's where it fixes it, else as the first part that holds
-it holds it, empty where none does. -/
-def Layout.msg (L : Layout) (x : Msg) (ws : List Flock.Wit) (i : ℕ) : Msg :=
-  match L.fixedAt x i with
-  | some m => m
-  | none => ((List.range ws.length).findSome? fun s => ws[s]?.bind fun w => L.held x s w i).getD []
+/-- Inner round `i`'s message off the V* statements `xs` and the witnesses `ws`: at the last round, the one read off
+both (`finalRead`); else the statement's where it fixes it, the one off the V* statements at a public round, and
+otherwise as the first part that holds it holds it, empty where none does. -/
+def Layout.msg (L : Layout) (x : Msg) (xs : List Msg) (ws : List Flock.Wit) (i : ℕ) : Msg :=
+  if i + 1 = L.rounds x then L.finalRead x xs ws else
+    match L.fixedAt x i with
+    | some m => m
+    | none =>
+      if L.pubAt x i then L.pubRead x xs i
+      else ((List.range ws.length).findSome? fun s => ws[s]?.bind fun w => L.held x s w i).getD []
 
-/-- **The deployed readers' inner messages**: the inner session's `rounds x` messages, each off the first part that
-holds it. -/
-def Layout.msgs (L : Layout) (x : Msg) (ws : List Flock.Wit) : List Msg := (List.range (L.rounds x)).map (L.msg x ws)
+/-- **The deployed readers' inner messages**: the inner session's `rounds x` messages off the V* statements and the
+witnesses. -/
+def Layout.msgs (L : Layout) (x : Msg) (xs : List Msg) (ws : List Flock.Wit) : List Msg :=
+  (List.range (L.rounds x)).map (L.msg x xs ws)
 
 /-- **The deployed readers' calls**: part `s`'s SHA-512 evaluations off its witness `w`, each its input (its constant
 prefix, then the bytes at its hidden values) and its output read at their hidden values. -/
@@ -405,11 +418,12 @@ section Facts
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- **`D` reads through the readers `msgs`, `calls`**: its inner view is `IV`'s run at `H` of the messages
-`msgs x ws` at the run's first coins, and its recorded calls are each session's witness's, in order. `deployRec`
-(`Recursion/Deploy.lean`) at the readers `⟨msgs, calls⟩` is defined so. -/
-def ReadsThrough (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (msgs : Msg → List Flock.Wit → List Msg)
-    (calls : Msg → ℕ → Flock.Wit → List (Msg × Msg)) : Prop :=
-  (∀ x r ws, D.innerView H x r ws = (run H (replay (msgs x ws)) IV (xI D x) () fun i => coinSeq r i.val).seen) ∧
+`msgs x xs ws` off the V* statements and the witnesses, at the run's first coins, and its recorded calls are each
+session's witness's, in order. `deployRec` (`Recursion/Deploy.lean`) at the readers `⟨msgs, calls⟩` is defined so. -/
+def ReadsThrough (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin)
+    (msgs : Msg → List Msg → List Flock.Wit → List Msg) (calls : Msg → ℕ → Flock.Wit → List (Msg × Msg)) : Prop :=
+  (∀ x r xs ws,
+      D.innerView H x r xs ws = (run H (replay (msgs x xs ws)) IV (xI D x) () fun i => coinSeq r i.val).seen) ∧
     ∀ x ws, D.calls x ws = (ws.mapIdx fun s w => calls x s w).flatten
 
 /-- Part `s`'s recorded calls are among the calls read through the readers. -/
@@ -822,13 +836,18 @@ def FinalOpens (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Floc
       opening.opens (((run H P D.V x ω r).msgs.map Prod.fst).getD j [])
         (((D.innerView H x r ws).msgs.map Prod.fst).getD j []) cs) ∨ CallsColl H D x (runVstar H D I P x ω r) ws
 
-/-- **Each inner round before the last is public, fixed or held** (a code fact about the layout at the shape): at a
-compiled statement of the shape, the layout spans the inner verifier's rounds, and each round before the inner
-verifier's last is a public round (`pubAt`), a round the statement fixes (`fixedAt`), or one some part holds. The last
-inner round, Flock's last message, is `FinalOpens`'. -/
+/-- **Each inner round is the last, or public, fixed or held** (a code fact about the layout at the shape): at a
+compiled statement of the shape, the layout's rounds are the inner verifier's, so the readers read the inner
+verifier's last message off the V* statements and the witnesses together (`Layout.finalRead`); and each round before
+it is a public round (`pubAt`, its message off the V* statements, `Layout.pubRead`), a round the statement fixes
+(`fixedAt`), or one some part holds. With Flock inside, the last message is the tag-1 message: `x`'s inner statement,
+the inner session's record, which the prover stages and V*'s setup holds to the coin server's transcript, and the proof
+files the parts hold. It is read after the inner verifier's last coin, which that verifier never reads (it decides on
+the coins before it), and no two runs need agree on it: two runs that share their coins before a round `j` of the
+inner verifier's are to agree on its rounds before `j`, never on its last. -/
 def HeldPub (D : Deploy Coin) (I : Inner Coin W) (L : Layout) (shape : Form → Prop) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form →
-    I.V.k (xI D x) ≤ L.rounds x ∧ ∀ i, i + 1 < I.V.k (xI D x) →
+    L.rounds x = I.V.k (xI D x) ∧ ∀ i, i + 1 < I.V.k (xI D x) →
       L.pubAt x i = true ∨ (L.fixedAt x i).isSome ∨ ∃ s < D.nS x, (L.msgAt x s i).isSome
 
 /-- **The played openings at one shape, from V*'s parts**: the inner view's message at a round it plays is the
