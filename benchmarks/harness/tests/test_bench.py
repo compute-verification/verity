@@ -619,6 +619,9 @@ def test_decode_time_per_token_counts_only_decode_only_forwards():
     assert decode_time_per_token(steps) == pytest.approx(0.4 / 16)
     assert decode_time_per_token([{**s, "prefill_tokens": None, "decode_tokens": None} for s in steps]) is None
     assert decode_time_per_token([]) is None
+    # 23 decode tokens across all steps (7 + 8 + 8); a run that generated fewer had prompt tokens counted as decode
+    assert decode_time_per_token(steps, generated=23) == pytest.approx(0.4 / 16)
+    assert decode_time_per_token(steps, generated=22) is None
 
 
 def test_the_decode_metric_is_reported_only_where_every_rep_has_it():

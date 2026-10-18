@@ -257,7 +257,7 @@ def _record(
 
 
 def decode_time_per_token(
-    steps: list[Mapping[str, Any]], *, output_lag: int = 0, device_tail_s: float = 0.0
+    steps: list[Mapping[str, Any]], *, output_lag: int = 0, device_tail_s: float = 0.0, generated: int | None = None
 ) -> float | None:
     """Host time of the engine steps that returned a decode-only forward's tokens (a forward with decode tokens and no
     prefill tokens), over the tokens it decoded: per-token decode cost with prefill left out, which time per output
@@ -266,8 +266,13 @@ def decode_time_per_token(
     under async scheduling, so the time of iteration i + lag is charged to the forward of iteration i. None when no
     step qualifies, the steps carry no token counts (`run_requests_arrivals` without a reachable scheduler), or the
     device work left after the last step (`device_tail_s`) exceeds DECODE_TAIL_SHARE of the decode time, which shows
-    device work the host step times didn't see."""
+    device work the host step times didn't see. Also None when the steps' decode tokens add up to more than the run
+    `generated`: a decode token is one generated token, so a larger total means the counts misclassify prompt tokens
+    as decode (18 Oct: `arrivals.scheduled_tokens` looked prompt lengths up by the submitted request id, which this vLLM
+    pin renames, so every prompt token counted as decode)."""
 
+    if generated is not None and sum(int(s.get("decode_tokens") or 0) for s in steps) > generated:
+        return None
     lag = int(output_lag)
     decode = [
         (float(steps[i + lag]["s"]), int(s["decode_tokens"]))
@@ -673,7 +678,8 @@ class _VllmEngine:
             "peak_gpu_memory_bytes": float(torch.cuda.max_memory_allocated()),
         }
         lag = int(timing.get("output_lag_steps") or 0)
-        decode = decode_time_per_token(timing.get("steps") or [], output_lag=lag, device_tail_s=device_tail)
+        decode = decode_time_per_token(timing.get("steps") or [], output_lag=lag, device_tail_s=device_tail,
+                                       generated=generated)
         if decode is not None:
             metrics["decode_time_per_token_s"] = decode
         return tokens, {
