@@ -51,6 +51,14 @@ ROLE_KERNELS = {"mhc_pre_broadcast": "layer 0's TF32 pre (MhcPreBroadcast_v1)",
                 "mhc_post": "mhc_post_tilelang (MhcPost_v1)",
                 "hc_head": "hc_head_fuse_tilelang (HcHead_v1)"}
 
+def post_pre_path(M: int, HC: int, H: int, sms: int) -> tuple[str, int]:
+    """The role `mhc_fused_post_pre_tilelang` runs at M launch tokens and its split count: the FMA path's 4 (8 below 8 tokens at
+    H <= 4096) at most `SMALL_FMA_TOKENS`, above them DeepGEMM's TF32 split count over HC*H on `sms` SMs."""
+    if M <= SMALL_FMA_TOKENS:
+        return "mhc_fused_post_pre", 8 if M < 8 and H <= 4096 else 4
+    return "mhc_post_pre_tf32", tf32_num_split(M, HC * H, sms)
+
+
 def _geometry(H: int) -> dict | str:
     g = MHC_GEOMETRY.get(H)
     return g if g is not None else f"numerics_unregistered: no pinned mHC thread geometry at hidden size {H} (pinned: {sorted(MHC_GEOMETRY)})"
@@ -188,9 +196,8 @@ class MhcFusedPostPreRule(OpRule):
         S = _pre_statics(ctx, a, HC, H)
         if isinstance(S, str):
             return S
-        if M <= SMALL_FMA_TOKENS:
-            return a, T, "mhc_fused_post_pre", {**S, "NS": 8 if M < 8 and H <= 4096 else 4, "TH": MHC_GEOMETRY[H]["TH"]}
-        return a, T, "mhc_post_pre_tf32", {**S, "NS": tf32_num_split(M, HC * H, active_target_profile().num_sms)}
+        role, NS = post_pre_path(M, HC, H, active_target_profile().num_sms)
+        return a, T, role, {**S, "NS": NS, **({"TH": MHC_GEOMETRY[H]["TH"]} if role == "mhc_fused_post_pre" else {})}
 
     def applies(self, node, ctx):
         S = self._statics(node, ctx)
@@ -288,4 +295,5 @@ class HcHeadRule(OpRule):
 
 VLLM_MHC_RULES = [MhcPreBroadcastRule(), MhcFusedPostPreRule(), MhcPostRule(), HcHeadRule()]
 
-__all__ = ["HcHeadRule", "MHC_GEOMETRY", "MhcFusedPostPreRule", "MhcPostRule", "MhcPreBroadcastRule", "SMALL_FMA_TOKENS", "VLLM_MHC_RULES"]
+__all__ = ["HcHeadRule", "MHC_GEOMETRY", "MhcFusedPostPreRule", "MhcPostRule", "MhcPreBroadcastRule", "SMALL_FMA_TOKENS", "VLLM_MHC_RULES",
+           "post_pre_path"]

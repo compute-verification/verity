@@ -650,9 +650,10 @@ def _tp_rank_patterns(patterns: list, cfg: dict[str, Any], world: int) -> list:
 
 def _mhc_profile(role: str, cfg: dict[str, Any], src: dict[str, Any], C: dict[str, Any], prov: dict[str, str], world: int,
                  repo: str | None, revision: str | None) -> Profile:
+    from verity_vllm.observe.fold.patterns.dsv4 import dsv4_patterns
     fam = FF.facts_for(cfg)
     wtype = mhc_weights_type(cfg, C)
-    patterns = _tp_rank_patterns(_mhc_patterns(C), cfg, world)
+    patterns = dsv4_patterns() + _tp_rank_patterns(_mhc_patterns(C), cfg, world)
     hand = {**({"model": repo} if repo else {}), **({"revision": revision} if revision else {}), **{k: C[k] for k in fam["facts"] if k in C}}
     notes = {
         "case": role, "model": {"repo": repo, "note": f"{repo or role} @ {(revision or '')[:8] or '?'} ({fam['vllm_class']}; profiles.generic "
