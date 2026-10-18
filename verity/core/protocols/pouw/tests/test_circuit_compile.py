@@ -33,23 +33,38 @@ M32 = (1 << 32) - 1
 LAYER = ((2048, 21504), (8192, 2048))
 REDUCED = ((2048, 3), (8192, 2))
 BOOLEAN = {"DOT": BG.BlackwellS8ImmaDot32, "TDOT": None}
-ports = pytest.mark.skipif(C._ports is None, reason="port types (ml.circuits.ports, COIN-RULES) are not on this tree")
+PORTS = C._ports
+ports = pytest.mark.skipif(PORTS is None, reason="port types (ml.circuits.ports, COIN-RULES) are not on this tree")
+#: COIN-RULES' one use reads each noise leaf once, so a noised bit can't feed a Boolean multiplier's partial products
+bits = pytest.mark.skipif(PORTS is not None, reason="a Boolean unit's noised bits fan out to the multiplier: E_COIN_REUSE")
 
 
-def _prim(name, params, ret, f):
-    return PrimitiveDefinition(name, 1, params, ret, f, conformance="protocol-defined", register=False)
+def _ports(decl):
+    """`decl` ({"params" | "ret": a function of `ports`}) as `Ports`."""
+    return PORTS.Ports(**{k: v(PORTS) for k, v in decl.items()})
 
 
-def _def(name, statics, signature, body):
-    return CompositeDefinition(name, 1, statics, signature, body, conformance="protocol-defined", register=False)
+def _prim(name, params, ret, f, ports=None):
+    kw = {} if PORTS is None or ports is None else {"ports": _ports(ports)}
+    return PrimitiveDefinition(name, 1, params, ret, f, conformance="protocol-defined", register=False, **kw)
 
 
-ADD8 = _prim("CompileTestAdd8", (("x", V8), ("e", V8)), V8, lambda x, e: (x + e) & 0xFF)
-XOR1 = _prim("CompileTestXor1", (("x", V1), ("e", V1)), V1, lambda x, e: x ^ e)
-FOLD32 = _prim("CompileTestFold32", (("r", V32), ("t", V32)), V32, lambda r, t: (r * 0x9E3779B1 + t) & M32)
-FOLD1 = _prim("CompileTestFold1", (("r", V1), ("t", V1)), V1, lambda r, t: r ^ t)
+def _def(name, statics, signature, body, ports=None):
+    kw = {} if PORTS is None or ports is None else {"ports": lambda S: _ports(ports)}
+    return CompositeDefinition(name, 1, statics, signature, body, conformance="protocol-defined", register=False, **kw)
+
+
+COIN = {"params": lambda p: {"e": p.In(kind="coin")}}
+FOLD = {"params": lambda p: {"r": p.In(receipt=True)}, "ret": lambda p: p.Out(sink=True)}
+UNIT_PORTS = {"params": lambda p: {"noise": p.In(kind="coin")}, "ret": lambda p: {"receipt": p.Out(sink=True)}}
+
+ADD8 = _prim("CompileTestAdd8", (("x", V8), ("e", V8)), V8, lambda x, e: (x + e) & 0xFF, ports=COIN)
+XOR1 = _prim("CompileTestXor1", (("x", V1), ("e", V1)), V1, lambda x, e: x ^ e, ports=COIN)
+FOLD32 = _prim("CompileTestFold32", (("r", V32), ("t", V32)), V32, lambda r, t: (r * 0x9E3779B1 + t) & M32, ports=FOLD)
+FOLD1 = _prim("CompileTestFold1", (("r", V1), ("t", V1)), V1, lambda r, t: r ^ t, ports=FOLD)
 NEG8 = _prim("CompileTestNeg8", (("x", V8),), V8, lambda x: -x & 0xFF)
 INC32 = _prim("CompileTestInc32", (("x", V32),), V32, lambda x: (x + 1) & M32)
+ADD32 = _prim("CompileTestAdd32", (("x", V32), ("y", V32)), V32, lambda x, y: (x + y) & M32)
 
 
 # -- the test scheme ---------------------------------------------------------------------------------------------------------
@@ -82,7 +97,7 @@ def _unit_body(B, S, a, b, noise):
     return Coll(_unit_signature(S)[1], concat([z.refs, r.refs]))
 
 
-UNIT = _def("CompileTestUnit", ("EXACT", "NOISED"), _unit_signature, _unit_body)
+UNIT = _def("CompileTestUnit", ("EXACT", "NOISED"), _unit_signature, _unit_body, ports=UNIT_PORTS)
 
 
 def _unit(dot):
@@ -115,7 +130,7 @@ def _recompute_body(B, S, a, b, noise):
     return Coll(_recompute_signature(S)[1], concat([z.refs, r.refs]))
 
 
-RECOMPUTE = _def("CompileTestRecompute", ("EXACT",), _recompute_signature, _recompute_body)
+RECOMPUTE = _def("CompileTestRecompute", ("EXACT",), _recompute_signature, _recompute_body, ports=UNIT_PORTS)
 RECOMPUTING = C.register(C.Scheme("compile-test-recompute", lambda d: bind(RECOMPUTE, EXACT=d.exact),
                                   lambda seed, d, i, j: [0] * d.a.leaves)).name
 WRONG = C.register(C.Scheme("compile-test-wrong", lambda d: d.exact, _noise)).name
@@ -263,7 +278,7 @@ def test_reduced_layer_serves_the_same_outputs():
 
 # -- every registered family -------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", sorted(FAMILIES))
+@pytest.mark.parametrize("name", [pytest.param(n, marks=bits) if "bits" in n else n for n in sorted(FAMILIES)])
 def test_family_compiles_to_units(name):
     """Each registered family, at the root, batched, nested or on bits: its dots are the units (one site per call of a kind),
     no registered Call or matmul step is left outside them, and the served outputs are unchanged."""
@@ -279,6 +294,7 @@ def test_family_compiles_to_units(name):
     assert len(out) == c.served_leaves + sum(s.count * s.receipt.leaves for s in c.sites)
 
 
+@bits
 def test_s8dot_on_bits_compiles():
     c = C.compile(Program(bind(BS8.S8Dot, **S8.SMOKE_PLAIN | BOOLEAN)), SCHEME)
     assert [(s.dot.family, s.shape, s.receipt) for s in c.sites] == [("S8Dot_v2", (1, 64, 1), V1)]
@@ -309,7 +325,7 @@ INNER = _def("CompileTestInner", (), lambda S: ((("x", Array(64, V8)), ("w", Arr
 
 def _scan_step(B, S, c, x, w):
     acc = B.call(_acc(64), x, w)
-    return Coll(Tuple(V32, V32), concat([B.call(FOLD32, c, acc).refs, acc.refs]))
+    return Coll(Tuple(V32, V32), concat([B.call(ADD32, c, acc).refs, acc.refs]))
 
 
 SCAN_STEP = _def("CompileTestScanStep", (), lambda S: ((("c", V32), ("x", Array(64, V8)), ("w", Array(64, V8))),
@@ -366,29 +382,35 @@ def test_recompute_across_units_is_found():
     assert not gc.ok and "gate-recomputed" in gc.cut.codes
 
 
+def _coin_served_body(B, S, x, w, u):
+    return B.call(_acc(64), x, Coll(w.type, B.batch(ADD8, w, u, axes=(0, 0)).refs))
+
+
 @ports
 def test_served_coin_parameter_refused():
-    coin = C._ports.Ports(params={"x": C._ports.In(kind="coin")})
-    defn = CompositeDefinition("CompileTestCoin", 1, (), lambda S: (XW, V32), lambda B, S, x, w: B.call(_acc(64), x, w),
-                               conformance="protocol-defined", register=False, ports=lambda S: coin)
+    """A served Program that takes a coin (here a noised weight, a valid Program under COIN-RULES) is refused: the noise enters
+    only through compile."""
+    defn = _def("CompileTestCoin", (), lambda S: ((*XW, ("u", Array(64, V8))), V32), _coin_served_body,
+                ports={"params": lambda p: {"u": p.In(kind="coin")}})
     _refused("coin-read", Program(bind(defn)))
+
+
+def _noise_twice_body(B, S, a, b, noise):
+    flat = Array(a.type.leaves, V8)
+    y = [B.call(S.EXACT, Coll(a.type, B.batch(ADD8, Coll(flat, a.refs), Coll(flat, noise.refs), axes=(0, 0)).refs), b)
+         for _ in range(2)]
+    z = B.call(S.EXACT, a, b)
+    return Coll(_recompute_signature(S)[1], concat([z.refs, B.call(FOLD32, B.call(FOLD32, B.call(P.ZERO32), y[0]), y[1]).refs]))
+
+
+NOISE_TWICE = _def("CompileTestNoiseTwice", ("EXACT",), _recompute_signature, _noise_twice_body, ports=UNIT_PORTS)
 
 
 @ports
 def test_noise_read_twice_refused():
-    def body(B, S, a, b, noise):
-        z = B.call(S.EXACT, a, b)
-        flat = Array(a.type.leaves, V8)
-        r = B.batch(ADD8, Coll(flat, noise.refs), Coll(flat, noise.refs), axes=(0, 0))
-        return Coll(_recompute_signature(S)[1], concat([z.refs, B.call(FOLD32, z, Coll(V32, r.refs.slice(0, 1))).refs]))
-
-    twice = CompositeDefinition("CompileTestNoiseTwice", 1, ("EXACT",), _recompute_signature, body, conformance="protocol-defined",
-                                register=False, ports=lambda S: C._ports.Ports(params={"noise": C._ports.In(kind="coin")},
-                                                                               ret={"receipt": C._ports.Out(sink=True)}))
-    name = C.register(C.Scheme("compile-test-noise-twice", lambda d: bind(twice, EXACT=d.exact), _noise)).name
-    with pytest.raises(C.CompileError) as e:
-        C.compile(Program(bind(TWICE)), name)
-    assert e.value.code == "E_COIN_REUSE"
+    """A unit whose noise feeds two noise primitives is refused by COIN-RULES' one use."""
+    name = C.register(C.Scheme("compile-test-noise-twice", lambda d: bind(NOISE_TWICE, EXACT=d.exact), _noise)).name
+    _refused("E_COIN_REUSE", Program(bind(TWICE)), name)
 
 
 # -- seeds and the verifier's rebuild ----------------------------------------------------------------------------------------

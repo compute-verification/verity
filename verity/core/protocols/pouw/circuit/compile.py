@@ -890,7 +890,7 @@ def compile(program: Program, scheme: str) -> Compiled:
         compiled = Program(fn, registered=registered)
     except ValueError as e:
         if _ports is not None and isinstance(e, _ports.PortError):
-            raise CompileError(e.code, str(e)) from e
+            raise CompileError(e.code, str(e).removeprefix(f"{e.code}: ")) from e
         raise
     c = Compiled(compiled, program, SCHEMES[scheme], _sites(served, plan))
     _check(c)
