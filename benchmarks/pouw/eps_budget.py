@@ -90,6 +90,8 @@ RATES = {
                                         # bound (JI3n_0, 21.47 a MMA); a served-checked cheater pays its ¼, the 4th IMMA
     "apv_tail_macs": 1.57,   # the same mainloop MACs a strip product, on a device with no apv kernel at ♭'s price a MAC
     "c_vsum": 35 / 32,       # an entry: vsum's 35 per-thread instructions an entry (BC-KERNEL r2), a warp's a cycle
+    "c_vfold": 0.7265,       # an entry: vfold's sums, vfold - vfold_x by ncu, 0.6884 / 0.7265 / 0.7221 warp instructions
+                             # at 2K / 8K / 32K, the most (D2S-KERNEL r3, #2300, r20261017-113844-b913)
     "c_apv_serve": 4.4 / 128,  # a cell: the served f's 4.4 warp instructions a 128-cell tile
     "t_quant": 0.56e-12,     # s an element, plain activation quantizer (COMMIT-GPU r5: +23 ms at 8 x 4K, 40.8 G elements)
     "t_dither": 0.48e-12,    # s an element, the dither's bits (EGEMM r20261016-104404-700b: qdither - qplain 0.016 ms, 8192 x 4096)
@@ -422,21 +424,13 @@ class Prices:
     tail_checked: float
 
 
-def priced(d: Design, data: Path = DATA) -> Design:
-    """The design whose ♭ and L price `d`'s ε_skip: its nearest base while the base has the same noise and an L at
-    least d's. Such a variant adds machine work (dither-2s-fill's filler) or halves L (co-dither-l16), so its base's
-    ε_skip is the larger: ♭ only grows with the variant's work, and a strip's share doesn't grow as L halves."""
-    while d.base and (b := design(d.base, data)).noise == d.noise and b.L >= d.L:
-        d = b
-    return d
-
-
 @functools.lru_cache(maxsize=None)
 def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
-    """`name`'s prices on `data`'s device at `vector` (its current vector by default), as `priced` names. ♭ is
-    `machine-model eps --credit floor --operands floor`'s credited program, a committed word's time × 4096 / L: the
-    tensor route at the noise's φ_del, the fold, the fillers and the baseline program, with no overhead (SPEC §0.7a)."""
-    d = priced(design(name, data), data)
+    """`name`'s prices on `data`'s device at `vector` (its current vector by default). ♭ is the design's own (decision
+    90: a variant's too, its verified filler included), `machine-model eps --credit floor --operands floor`'s credited
+    program, a committed word's time × 4096 / L: the tensor route at the noise's φ_del, the fold, the fillers and the
+    baseline program, with no overhead (SPEC §0.7a)."""
+    d = design(name, data)
     pi = machine(vector, data)
     imma = next(k for k in IMMA16832 if k in pi.c)
     tile = 128 * 2 * (32 + 1)
@@ -456,8 +450,8 @@ def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path =
 
     - the peel's tail, a strip product at its mainloop MACs' price (`c_tail_pv`, apv's measured issue bound on sm_120;
       `apv_tail_macs` of ♭'s MACs elsewhere) or at Π's price of its instructions (`prices`), whichever is more; ¼ of
-      the mainloop part and the 4th IMMA a served-checked cheater pays. Its sums (`c_vsum`) and served epilogue
-      (`c_apv_serve`) are vector instructions at one an issue cycle;
+      the mainloop part and the 4th IMMA a served-checked cheater pays. Its sums (`c_vsum`, or `c_vfold` for a design
+      whose `sums` is vfold) and served epilogue (`c_apv_serve`) are vector instructions at one an issue cycle;
     - a one-sided strip, its 2L executed products at ♭'s price a MAC;
     - a TS leaf's skippable vector work, prefill only: TS_EPS of TS_CHEAT (co32c, cohalf), and pv's gap `pv_ts` at
       16 cycles a plain MMA times its γ.
@@ -467,7 +461,7 @@ def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path =
     longer), an upper bound on ε_skip there."""
     s, r = MODELS[name], rates
     p = prices(d.name, data, vector)
-    L_ = priced(d, data).L
+    L_ = d.L
     keys = (ctx + 1) / 2 if phase == "prefill" else ctx
     lm_head = s.vocab / s.layers / (ctx if phase == "prefill" else 1)
     outs = {"linears": sum(n for _, _, n in s.linears), "lm_head": lm_head, "QKᵀ": s.heads * keys, "P·V": s.heads * s.d}
@@ -480,7 +474,7 @@ def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path =
     for comp in flat:
         leaf = d.noise[COMP[comp]]
         if comp == "P·V" and leaf == "peel":
-            strip, sums = outs[comp] * 2 * (L_ + 1), r["c_vsum"] * s.kv * s.d
+            strip, sums = outs[comp] * 2 * (L_ + 1), r[f"c_{d.sums}"] * s.kv * s.d
             free[comp] = strip * tail + sums + r["c_apv_serve"] * s.heads * s.d
             chk[comp] = strip * tail_chk + sums
         elif leaf == "one-sided":

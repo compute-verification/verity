@@ -241,7 +241,7 @@ def _adapt(args, d: E.Design) -> E.Adapt | None:
 
 def _registry(d: E.Design) -> dict:
     return {"name": d.name, "title": d.title, "aliases": list(d.aliases), "base": d.base or None,
-            "summary": d.summary, "noise": d.noise, "fold": {"name": d.fold_name, **d.fold},
+            "summary": d.summary, "noise": d.noise, "sums": d.sums, "fold": {"name": d.fold_name, **d.fold},
             "filler": [{"per_word": f.per_word, "mix": f.mix, "route": f.route} for f in d.filler], "L": d.L,
             "unit": d.unit, "coins": {"bits": d.coin_bits, "source": d.coins_source}, "ppl": d.ppl or None}
 

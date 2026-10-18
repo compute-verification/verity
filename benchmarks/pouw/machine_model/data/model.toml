@@ -19,7 +19,7 @@ adopted = "U±64, F±1"
 epochs = ["VF", "DS-120", "VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict-r8",
           "VF3i-strict",
           "VF3j", "VF3j-8", "VF3k-16", "VF3l-16", "VF3m-16", "VF3n-16", "VF3o-16",
-          "VF3p-16", "VF3q-16", "VF3r-16"]
+          "VF3p-16", "VF3q-16", "VF3r-16", "VF3s-16"]
 
 # The CUDA lane kinds (i) binds, in constraint order.
 cuda = ["FFMA", "VIMNMX", "HFMA2", "IMAD", "ALU", "F2FS", "XU", "SHFL", "NOROW", "SEL"]
