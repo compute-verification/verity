@@ -12,11 +12,9 @@ Per fixture directory `<family>_<phase>_<n>/`:
   `fixture.json` says which slice the GEMM consumed), little-endian BF16.
 - `w_row.u16` -- the opened weight row `W[j, :]` (= column j of W^T), K words.
 - `out_row.u16` -- the committed output row; the checked coordinate is word `j`.
-- `openings.json` -- the three Merkle openings (`x`, `w_row`, `out_row`) as
-  `verity_vllm.commit.Opening.to_json()`; verify with `verify_opening_in(commitments, opening_from_json(o))`
-  against `commitments.json` (copied from the bundle; sha256 in `manifest.json`).
 - `fixture.json` -- ids, shape, kernel identity (`runtime_impl`, `runtime_op`, `kernel_path`, coverage
   family), profile id, semantics, per-file sha256.
 
-`sha256s.json` lists every file; `manifest.json` the index.  Use: feed `x[arg_cols]` and `w_row` to
+`sha256s.json` lists every file of the bundle (its `openings.json` and `commitments.json` were not copied: the fixtures pin
+the relation, not the commitment); `manifest.json` the index.  Use: feed `x[arg_cols]` and `w_row` to
 any implementation of the relation and compare with `out_row[j]`.
