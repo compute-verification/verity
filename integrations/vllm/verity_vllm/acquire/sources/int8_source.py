@@ -7,7 +7,8 @@ inside one module body, committed as the ops computed them.
   one Int8RowQuant_v1 site.
 - `verity_int8::kv_quant` inside an attention module: its (K', V', s_v, f32(V'_0)) per KV head are the `instance_outputs` identities
   `<attention>/0..3` (`Int8KvQuant_v1`, hinted), each the op's result over every KV head; several requests at one step are committed
-  in call order, concatenated.
+  in call order, concatenated.  Under a credited read (`engine.int8_window`) the layer quantizes the window it read with
+  `verity_int8::kv_quant_window` instead, the same results, committed under the same names.
 
 Attached whenever the required manifest names either (`taps.attach`); no kernel changes: the wrappers run the installed ops unchanged
 and acquire their results on their device.
@@ -22,6 +23,8 @@ from verity_vllm.acquire.sources.call_boundary_plan import FAMILY
 SHORT_NAME = "int8"
 QUANT_SPEC = "Int8RowQuant_v1"
 KV_SPEC = "Int8KvQuant_v1"
+#: the ops whose results are an attention module's Int8KvQuant_v1: the paged read's and a credited read's
+KV_OPS = ("kv_quant", "kv_quant_window")
 KV_MEMBERS = ("0", "1", "2", "3")
 KV_CLASS = "int8_kv_quant"
 
@@ -89,7 +92,8 @@ class Int8Source:
         if self.quant:
             self._hooks.append(hooks.patch(int8_ops, "row_quant", self._wrap_quant(int8_ops.row_quant)))
         if self.kv:
-            self._hooks.append(hooks.patch(int8_ops, "kv_quant", self._wrap_kv(int8_ops.kv_quant)))
+            for name in KV_OPS:
+                self._hooks.append(hooks.patch(int8_ops, name, self._wrap_kv(getattr(int8_ops, name))))
         self.active = True
 
     def uninstall(self) -> None:
@@ -165,8 +169,8 @@ class Int8Source:
     def _wrap_kv(self, orig: Any) -> Any:
         me = self
 
-        def kv_quant(key_cache: Any, value_cache: Any, blocks: Any, s: int, k_scales: Any) -> Any:
-            out = orig(key_cache, value_cache, blocks, s, k_scales)
+        def kv_quant(*args: Any) -> Any:
+            out = orig(*args)
             if me.c._cur is not None and me._scope and me._scope[-1] in me._kv_out:
                 me._kv_out[me._scope[-1]].append(tuple(out))
             return out
@@ -230,7 +234,7 @@ class Int8Source:
             out.append({"class": KV_CLASS, "how": "bound-as-leaf", "rule": None, "count": self.stats["kv_tensors"], "bytes": self.stats["kv_bytes"],
                         "tensors": self.stats["kv_tensors"], "errors": self.stats["errors"],
                         "evidence": (f"int8 source: `<attention>/0..3` of {len(self.kv)} attention modules, the results of verity_int8::kv_quant "
-                                     "per KV head as the served op computed them (engine.int8_ops; no kernel change)")})
+                                     "(kv_quant_window under a credited read) per KV head as the served op computed them (engine.int8_ops; no kernel change)")})
         return out
 
 

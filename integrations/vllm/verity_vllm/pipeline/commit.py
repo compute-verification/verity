@@ -1900,9 +1900,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
                 # challenge derived from the PRECHALLENGE run root (the root is fixed before the positions exist)
-                from verity_vllm.commit.challenge import challenge_positions
+                from verity_vllm.commit.challenge import challenge_positions, run_root_of
 
-                sample = challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode())
+                sample = challenge_positions(run_root_of(rc), [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode())
                 TL.start("validate.openings", pair=pair)
                 t_o = time.perf_counter()
                 skipped = None
