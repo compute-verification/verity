@@ -40,7 +40,8 @@ Each finding is a line of JSON in `--log`; each sweep overwrites `status.json` b
 follows), so a reader can tell a quiet watch from a dead one. `state.json` beside it keeps what must outlive a restart (the
 watch restarts on every deploy): when it last cancelled or restarted each agent, the restart counts, the continue runs still to
 start and the runs already recorded. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack
-credential, so infra's relay reads the log over ssh and rings the agent's coordinator. Cancelling and restarting don't wait for it.
+credential, so infra's relay reads the log over ssh and posts each finding in #agent-alerts (it rings no inbox). Cancelling and
+restarting don't wait for it.
 """
 from __future__ import annotations
 
