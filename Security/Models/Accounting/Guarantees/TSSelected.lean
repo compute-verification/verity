@@ -4,7 +4,7 @@ import Models.Accounting.Assumptions.TSSelected
 # A padded window's guarantee statements (trusted)
 
 `ProofsSoundOfDrawn`'s and `CompilerC`'s counterparts for a window that credits only its selected units
-(`Accounting.TS.SelectLayer`, note:20261018T2200Z-draft-padded-credit-rule, round 2). Statement drafts, no proof: they
+(`Accounting.TS.SelectLayer`, note:20261018T2200Z-draft-padded-credit-rule, round 3). Statement drafts, no proof: they
 go to a red team, then to a decision, before they are listed in `lean-audit.json` and proved as
 `Accounting.SecurityProofs.TS.G`.
 
@@ -24,8 +24,9 @@ open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 (`SelectLayer`) with nonnegative unit weights, whose positions' writers read them (`WriterReads`), whose selections have
 sources (`SelectionsSourced`), whose floor operands are written by their certificates' writers (`CertifiedOperands`),
 whose selections are committed before their units' coins (`NoLateSelection`), whose always-proved units are in every
-draw (`AlwaysProved`), with the tally among them (`TallyIn`), reading every gate position (`GatesTallied`) and
-publishing at most the selected weight when right (`TallyComputes`), whose registration's certificates are right
+draw (`AlwaysProved`), with the tally among them (`TallyIn`: every limb unit), reading every gate position
+(`GatesTallied`) and publishing at most the selected weight when right (`TallyComputes`, provable from the tally's
+Program when it reads only the gates and its own limbs and carries, `TallyReads`), whose registration's certificates are right
 (`RegisteredRight`, the registration's own guarantee at its `δ_reg`, which a composition adds), with a play that is its
 drawn units' proofs' (`Of`), the run's modes `mode` and folded words `folded`, a share covering every selected unit
 that isn't good with its selections (`SelCovers`: a property of the share's definition, proved for each game; a share
@@ -36,8 +37,9 @@ and its fixed words per round are at least its published credit less `d·N_w`, o
 
 What it rules out: a wrong always-proved unit (the tally, an A row's forming, a done flag) is a drawn unit whose proof
 is unsound (`JointSound`), so outside the event the published credit is at most the selected weight and every gate
-from the set is honest; a padding unit counts only when selected, and a wrong selection unit outside the set leaves
-every unit it gates not good, in the share; an operand rewritten after its certificate is refused by structure. -/
+from the set is honest; a wrong forming of a certified row (A or B) is likewise unsound; a padding unit counts only
+when selected, and a wrong selection unit outside the set leaves every unit it gates not good, in the share; an
+operand rewritten after its certificate, and a selection committed after its unit's noise, are refused by structure. -/
 def ProofsSoundOfSelected : Prop :=
   ∀ {K T L U J Q Pos V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype J] [Nonempty V]
     (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ) (P : Play (Paths C m × B) S K T L U)

@@ -4,7 +4,7 @@ import Models.Accounting.Assumptions.TS
 # A padded window's named assumption: E1(c) per selected unit (trusted)
 
 `UnitFixed`'s counterpart for a window that credits only its selected units (`Accounting.TS.SelectLayer`,
-note:20261018T2200Z-draft-padded-credit-rule, round 2). Statement draft: its claim id `accounting-ts-selected-fixed`
+note:20261018T2200Z-draft-padded-credit-rule, round 3). Statement draft: its claim id `accounting-ts-selected-fixed`
 is proposed, not yet in `verity.core.claims`, pending the red team and the decision.
 -/
 
@@ -25,10 +25,11 @@ always-proved unit are right:
 * the run's owned right fixed words per round are at least the words `wt w j` of the selected units that are good with
   their selections (`SelectLayer.SelGood`: the run paid for every unit feeding it along late edges and along gates from
   units outside the always-proved set) over `S`. A certificate written by a paid unit, an always-proved right one or
-  the registration is its operand's honest forming verdict, and its writer wrote that operand (`CertifiedOperands`),
-  so the operand the unit reads is one its certificate admits, and `wt` is the unit's floor there, noise included.
-  Every certificate and every value committed before the unit's coin is fixed when its noise is drawn
-  (`NoLateSelection`; E1(c) per unit, as `UnitFixed`);
+  the registration is its raw row's honest forming verdict, and the operand the unit reads is an always-proved right
+  forming of that raw row under its noise (`CertifiedOperands`), so it is one its certificate admits, and `wt` is the
+  unit's floor there. Every certificate and every value committed before the unit's coin is fixed when its noise is
+  drawn (`NoLateSelection`; E1(c) per unit, as `UnitFixed`). The noise is PoUW's seeded derivation; its grinding is
+  inside the seeded-noise conjecture's error term, as for `UnitFixed`;
 * the fold clause: the run's folded words per round are at least the words of the selected units not skipped whole,
   over `S`.
 

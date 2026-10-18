@@ -8,23 +8,31 @@ credited its words. A padded static window (Daniel, 18 Oct, 20:52Z) credits only
 circuit shaped by public parameters, a static superset of units, and which of them are credited is a value, a selection
 (a mask, a forming's `ok`, a done flag) that a unit computes from committed values, or that the weights' registration
 proved once, and that is committed like any value. A wrong unit can emit a wrong selection; it can't rewire. This is
-the credit rule of note:20261018T2200Z-draft-padded-credit-rule (round 2, after
-note:20261018T2207Z-report-redteam-padded-credit), on the conditions of note:20261018T2125Z-report-format-table-r4-r5
+the credit rule of note:20261018T2200Z-draft-padded-credit-rule (round 3, after
+note:20261018T2207Z-report-redteam-padded-credit and note:proofs/20261018T2230Z-report-rt10-padded-credit), on the
+conditions of note:20261018T2125Z-report-format-table-r4-r5
 (C4's ✓):
 
 * credit only selected units, a unit being selected when every selection value gating it is committed as one;
 * each selection value is a unit's output, or a certificate the weights' registration proved (`SelectionsSourced`);
   in the first version every in-window selection unit is always proved (`SelectionsProved`);
-* the writer of every operand a credited unit's floor depends on writes one of its certificates (`CertifiedOperands`),
-  so a mask or a mux applied after the forming is refused: the certificate is computed from the position the unit
-  reads;
-* no selection is committed after its unit's coin (`NoLateSelection`), so there is no grinding;
+* every operand a credited unit's floor depends on is written by an always-proved forming unit that reads the raw row
+  one of its certificates certifies (`CertifiedOperands`), so a mask or a mux applied after the forming is refused, and
+  a wrong forming is an unsound proof;
+* no selection is committed after the coin its unit's noise reads (`NoLateSelection`): `ok_A` is committed with the
+  raw activation row, before the noise is derived, and `ok_B` with the raw weight row at registration, before the
+  salt, each a function of its raw row alone; so there is no grinding;
 * each selection unit outside the always-proved set is charged the cone it gates: a unit is good only if the run paid
   for every unit that feeds it, along late edges and along gates from units outside that set (`Feeds`, `SelGood`), and
   a share charging each unpaid unit its cone (`selConeWt`) covers every selected unit that isn't good (`SelCovers`);
-* the always-proved set (`proved`: the A rows' formings, the tally, any chained selection such as a done flag) is in
-  every round's draw (`AlwaysProved`); the tally is in it, reads every gate position (`GatesTallied`), and right tally
-  units publish at most the selected units' weight (`TallyComputes`).
+* the always-proved set (`proved`: the A rows' ok units and formings, the B rows' per-epoch formings, the tally's limb
+  units, any chained selection such as a done flag) is in every draw of its round (`AlwaysProved`); the tally is in it,
+  reads every gate position (`GatesTallied`) and only gate positions and its own limbs and carries (`TallyReads`), and
+  right tally units publish at most the selected units' weight (`TallyComputes`).
+
+The draw stays value-free (`DrawnLayer.draw` reads only the draw coin): a draw weighted by committed selections would
+publish, through its drawn indices, which slots are live and which weight rows the forming refuses, a private
+partition.
 
 * `SelectLayer`: a `DrawnLayer` with each unit's gating positions and the slots its floor depends on, the reading of a
   committed selection value as selected, the always-proved set, the tally's units, each position's registration record
@@ -35,8 +43,9 @@ note:20261018T2207Z-report-redteam-padded-credit), on the conditions of note:202
   or a gate from a unit outside the always-proved set; a unit whose cone over both the run paid for; an unpaid unit's
   charge; the cone factor of the selection units outside the always-proved set.
 * `AfterCoin`, `NoLateSelection`: a position committed after a unit's coin; no gate position is.
-* `SelectionsSourced`, `SelectionsProved`, `CertifiedOperands`, `AlwaysProved`, `TallyIn`, `GatesTallied`: protocol
-  structure, checked by the window's shape check.
+* `ReadsPos`: a unit has a position among its slots.
+* `SelectionsSourced`, `SelectionsProved`, `CertifiedOperands`, `AlwaysProved`, `TallyIn`, `GatesTallied`,
+  `TallyReads`: protocol structure, checked by the window's shape check.
 * `RegisteredRight`: every registration record's certificate is right, the registration's own guarantee.
 * `TallyComputes`: a property of the tally's Definition, proved for each window.
 * `SelCovers`: the share covers every selected unit that isn't good, a property of the share's definition, proved for
@@ -47,7 +56,7 @@ note:20261018T2207Z-report-redteam-padded-credit), on the conditions of note:202
 
 The hardness premise's condition is outside this vocabulary, and `Accounting.Assumptions.TS.SelectedFixed` is claimed
 only where it holds: each unit's weight is its floor at every value of its slots outside `floor` and at every value of
-its `floor` slots that its certificates admit (its branches' minimum, its noise included).
+its `floor` slots that is the forming, under its noise, of a raw row its certificates admit (its branches' minimum).
 -/
 
 namespace Accounting.TS
@@ -59,18 +68,27 @@ open Pouw.RelativeSecurity
   forming's `ok` of each operand row, a done flag;
 * `floor w j`: the slots its hardness floor depends on (a tile's operand rows; empty for a unit whose noise makes it
   hard at every operand);
+* `certRow ℓ`: the raw row the certificate at gate position `ℓ` certifies (`ok_A,i`: activation row `x_i`; `ok_B,j`:
+  weight row `B_j`);
+* `forms`: the units whose Definition is a forming (`Pc8RowA`'s, `Pc8RowB`'s): their output is the noised forming of the
+  raw row they read;
 * `one v`: the committed value `v` of a selection position reads as selected;
-* `proved`: the always-proved units (the A rows' formings, the tally, chained selections), each in every draw of its
-  round;
-* `tally ⊆ proved`: the units computing the published credit;
-* `regd ℓ`: the weights' registration record `ℓ` belongs to, if any (a B row's operand words and its `ok_B` share
-  one), committed and proved once at registration, before every window's salt;
-* `regRight r`: record `r`'s certificate is its row's forming verdict, at the record's committed values;
+* `proved`: the always-proved units (the A rows' ok units and formings, the B rows' per-epoch formings, the tally's limb
+  units, chained selections), each in every draw of its round;
+* `tally ⊆ proved`: the units computing the published credit, each output at most 16 bits (limbs, with carries
+  committed between them);
+* `regd ℓ`: the weights' registration record `ℓ` belongs to, if any (a raw weight row `B_j` and its `ok_B,j` share
+  one), committed and proved once at registration, before every salt; the formed B row is not in it (its noise reads
+  the epoch's salt);
+* `regRight r`: record `r`'s certificate is its raw row's forming verdict (finite, `ρ·α ≥ 1`, at most `k/64` dead lanes),
+  at the record's committed values;
 * `out`, `credOf`: the tally's output position, and the credit its value reads (`point(level)` tiles' words, at most
   16 bits of output). -/
 structure SelectLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) extends DrawnLayer C B S m s J Q Pos V where
   gates : Fin S → J → Finset Pos
   floor : Fin S → J → Finset Q
+  certRow : Pos → Pos
+  forms : Finset (Fin S × J)
   one : V → Prop
   proved : Finset (Fin S × J)
   tally : Finset (Fin S × J)
@@ -134,8 +152,11 @@ def AfterCoin (ℓ : Pos) (w : Fin S) (j : J) : Prop :=
   w < (sl.cut ℓ).1 ∨ w = (sl.cut ℓ).1 ∧ (sl.coin w j).castSucc < (sl.cut ℓ).2
 
 /-- **No selection is committed after its unit's coin**: every gate position is committed before the coin the gated
-unit's noise reads, so a selection is fixed before the noise and buys no grinding. STATIC-WIN meets it (`ok` is in the
-side row, committed before the window's coin). Protocol structure. -/
+unit's noise reads (`coin`, a coin before the draw: for PoUW's seeded noise, the derivation from the salt and the roots
+it hashes), so a selection is fixed before the noise and buys no grinding. STATIC-WIN's side row, whose `ok` sits
+beside codes that read the noise, fails it (RT10 (e)); the corrected layout commits `ok_A,i` with the raw row `x_i` in
+the activation commitment the noise's seed hashes, and `ok_B,j` with `B_j` at registration, before the salt. Protocol
+structure. -/
 def NoLateSelection : Prop := ∀ w j, ∀ ℓ ∈ sl.gates w j, ¬ sl.AfterCoin ℓ w j
 
 /-- **Every selection value has a source**: a unit's output, or a certificate of the weights' registration. Never a
@@ -144,20 +165,30 @@ def SelectionsSourced : Prop :=
   ∀ w j, ∀ ℓ ∈ sl.gates w j, (∃ g, sl.src ℓ = some g) ∨ (sl.src ℓ = none ∧ ∃ r, sl.regd ℓ = some r)
 
 /-- **Every selection value is proved**: an always-proved unit's output, or a registered certificate. The first
-version's window (A rows always proved, B rows' formings proved at registration). Protocol structure. -/
+version's window (the A rows' ok units always proved, `ok_B` proved at registration). Protocol structure. -/
 def SelectionsProved : Prop :=
   ∀ w j, ∀ ℓ ∈ sl.gates w j, (∃ g ∈ sl.proved, sl.src ℓ = some g) ∨ (sl.src ℓ = none ∧ ∃ r, sl.regd ℓ = some r)
 
-/-- **The writer of every operand a unit's floor depends on writes one of its certificates**: for every slot `k` in
-unit `j`'s `floor`, some gate position of `j` has the same writer (`src`), or the same registration record (`regd`).
-The certificate is then computed by the unit that wrote the operand, from the position the unit reads: a mask or a
-mux applied by arithmetic after the forming (`codes' = codes·(1 − done)`, RT W5's R1) writes an operand no certificate's
-writer writes, and is refused. A unit with no gates has an empty floor. STATIC-WIN meets it (`Pc8RowA` writes the row
-and its `ok` together; a B row and its `ok_B` share a registration record). Protocol structure. -/
+/-- **Unit `u` has position `ℓ` among its slots.** -/
+def ReadsPos (u : Fin S × J) (ℓ : Pos) : Prop := ∃ k, sl.pos u.1 u.2 k = ℓ
+
+/-- **Every operand a unit's floor depends on is an always-proved forming of a certified raw row**: for every slot `k`
+in unit `j`'s `floor`, some gate position `ℓ` of `j` certifies a raw row (`certRow ℓ`) such that
+* the operand's writer is an always-proved forming unit (`forms`, `proved`) that reads that raw row, and
+* the certificate is computed from that raw row: its writer reads it, or the raw row and the certificate share a
+  registration record.
+
+So the operand is the noised forming of the very row the certificate admits, and a wrong forming (zero codes, a zero
+`P`: RT10 (c), every tile of its column `+0` with no chain) is an accepted unsound proof. A mask or a mux applied by
+arithmetic after the forming (`codes' = codes·(1 − done)`, RT W5's R1) is no forming of the certified row and is
+refused. A unit with no gates has an empty floor. The corrected layout meets it: `Pc8RowA`'s forming reads `x_i`,
+whose `ok_A,i` the always-proved ok unit computes from `x_i`; the epoch's `Pc8RowB` forming reads `B_j`, registered
+with `ok_B,j`. Protocol structure. -/
 def CertifiedOperands : Prop :=
-  ∀ w j, ∀ k ∈ sl.floor w j, ∃ ℓ ∈ sl.gates w j,
-    (∃ g, sl.src (sl.pos w j k) = some g ∧ sl.src ℓ = some g) ∨
-      (∃ r, sl.regd (sl.pos w j k) = some r ∧ sl.regd ℓ = some r)
+  ∀ w j, ∀ k ∈ sl.floor w j, ∃ ℓ ∈ sl.gates w j, ∃ g ∈ sl.proved,
+    g ∈ sl.forms ∧ sl.src (sl.pos w j k) = some g ∧ sl.ReadsPos g (sl.certRow ℓ) ∧
+      ((∃ c, sl.src ℓ = some c ∧ sl.ReadsPos c (sl.certRow ℓ)) ∨
+        (∃ r, sl.regd ℓ = some r ∧ sl.regd (sl.certRow ℓ) = some r))
 
 /-- **The always-proved units are in every draw**: each is named by every draw of its round. Protocol structure. -/
 def AlwaysProved : Prop := ∀ t ∈ sl.proved, ∀ b : B, ∃ i, sl.draw b i = t.2
@@ -169,9 +200,17 @@ def TallyIn : Prop := sl.tally ⊆ sl.proved
 value is its opening, not an arbitrary one. Protocol structure. -/
 def GatesTallied : Prop := ∀ w j, ∀ ℓ ∈ sl.gates w j, ∃ t ∈ sl.tally, ∃ k, sl.pos t.1 t.2 k = ℓ
 
-/-- **The registration's certificates are right**: every record's certificate is its row's forming verdict. The
-registration's own guarantee (its formings proved once, at registration), at its own `δ_reg`. -/
+/-- **The registration's certificates are right**: every record's certificate is its raw row's forming verdict
+(`ok_B,j` over `B_j` alone, which no salt changes). The registration's own guarantee (each `ok_B` proved once, at
+registration, before every salt), at its own `δ_reg`. -/
 def RegisteredRight : Prop := ∀ r, sl.regRight r
+
+/-- **The tally reads only the selections and itself**: every slot of a tally unit is a gate position, or written by
+a tally unit (a limb, a carry between limbs, a partial sum). A tally reading a value a data unit writes could be moved
+by that unit. Each tally unit's outputs are at most 16 bits, so `real ≤ 2^40` is carried in limbs, each limb unit in
+`proved`. Protocol structure; with `TallyComputes`, a property of the tally's Program. -/
+def TallyReads : Prop :=
+  ∀ t ∈ sl.tally, ∀ k, (∃ w j, sl.pos t.1 t.2 k ∈ sl.gates w j) ∨ ∃ u ∈ sl.tally, sl.src (sl.pos t.1 t.2 k) = some u
 
 /-- **A right tally publishes at most the selected units' weight**: on every path where each tally unit is right at
 its committed slots, the published credit is at most the selected units' weight at the committed selections. A
