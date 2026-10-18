@@ -18,7 +18,8 @@ a heartbeat counts as nothing. A run is
 Only RUNNING is judged. WAITING_FOR_BACKGROUND_WORK (an agent waiting on its background workers) is not held. An agent whose latest
 run the runs endpoint won't read (a goal run's `run-goal-...` id gets 400) is recorded once as unreadable and skipped.
 
-Each finding is a line of JSON in `--log`. The control pod holds no Slack credential, so infra's relay reads that file over ssh and
+Each finding is a line of JSON in `--log`; each sweep overwrites `status.json` beside it (its time, the ACTIVE agents, the runs it
+follows), so a reader can tell a quiet watch from a dead one. The control pod holds no Slack credential, so infra's relay reads that file over ssh and
 rings the agent's coordinator. Cancelling and restarting don't wait for it.
 """
 from __future__ import annotations
@@ -222,6 +223,8 @@ class Watch:
                 self.record("crashed", Run(a["id"], run, a.get("name") or ""), status="ERROR")
         with self.lock:
             runs = list(self.runs.values())
+        status = self.log.with_name("status.json")
+        status.write_text(json.dumps({"t": iso(t), "active": len(live), "followed": [r.run for r in runs]}) + "\n")
         for r in runs:
             with self.lock:
                 kind = self.classify(r, t)

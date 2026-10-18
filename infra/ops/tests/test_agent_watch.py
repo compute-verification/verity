@@ -45,6 +45,7 @@ def records(tmp_path):
 def test_a_run_held_after_a_finished_tool_call_is_cancelled_and_continued_once(tmp_path):
     api, clock, w, started = setup(tmp_path)
     assert [r.run for r in started] == ["run-1"]
+    assert json.loads((tmp_path / "status.json").read_text()) == {"t": W.iso(clock.t), "active": 1, "followed": ["run-1"]}
     w.on_event("run-1", "tool_call", {"callId": "c1", "name": "Shell", "status": "running"})
     clock.t += 30
     w.on_event("run-1", "tool_call", {"callId": "c1", "name": "Shell", "status": "completed"})
