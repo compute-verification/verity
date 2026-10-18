@@ -156,7 +156,7 @@ noncomputable def TapePlan.ofLayout {P : Composed.LigProver} (L : TapeLayout P)
     haveI : Fintype L.Cell := L.finCell
     exact inferInstance
   neTape := by
-    haveI : Nonempty L.Cell := L.neCell
+    have : Nonempty L.Cell := L.neCell
     exact inferInstance
   tapeZk t := { z t with mask := fun c k => if hc : c < Claims.Flock.zkTableCap then L.maskAt (t ⟨c, hc⟩) k else 0 }
   tape x t := rejoin (tabC P) x fun j => L.read x j (t (Fin.castLE (jOf_le_cap x) j))
@@ -172,6 +172,7 @@ of one size, then joined by a bijection. -/
 theorem fibersEq_ofLayout {P : Composed.LigProver} (L : TapeLayout P)
     (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (x : Msg) :
     FibersEq ((TapePlan.ofLayout L z).tape x) := by
+  have : Fintype L.Cell := L.finCell
   have h1 : FibersEq (cut (Cod := L.Cell) (jOf_le_cap x)) := fibersEq_cut _
   have h2 : FibersEq fun (g : Fin (jOf x) → L.Cell) j => L.read x j (g j) :=
     FibersEq.pi (f := fun j => L.read x j) fun j => L.fibers x j
