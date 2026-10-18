@@ -410,10 +410,11 @@ def update_pins(rep: dict) -> dict:
 
 
 #: the targets that peak over `HEAVY_GB`, each with its peak in GiB (`run`'s scheduling; ``peak_gb``, which counts the 9.6 GiB
-#: task list each process is forked with), from the isolated cold `--all` run r20261009-170758-f674 on vy-cpu-1: its first 239
-#: targets, every one an earlier list held among them, peaked at 125-151 GiB (these six) or at most 10.6 GiB (the rest; the
-#: earlier 29.4 and 104.2 GiB entries were what a long-lived worker kept from a previous target); its other targets confirm it.
-#: No key holds it (`cache.HEAVY`), so a new entry reruns no target
+#: task list each process of `--all` is forked with).  The commit that writes a peak names the run it was measured in; the
+#: first six are from the isolated cold `--all` run r20261009-170758-f674 on vy-cpu-1, whose first 239 targets, every one an
+#: earlier list held among them, peaked at 125-151 GiB (these six) or at most 10.6 GiB (the rest; the earlier 29.4 and 104.2 GiB
+#: entries were what a long-lived worker kept from a previous target).  No key holds it (`cache.HEAVY`), so a new peak reruns
+#: no target and needs no edit here
 HEAVY = CC.HEAVY
 HEAVY_GB = 16
 PEAKS_REPORTED = 50
