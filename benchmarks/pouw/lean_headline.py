@@ -11,13 +11,13 @@ exact: a census value or a TOML value read as its decimal, and eps_budget's ε_s
 
 `instance()` derives one and checks it against Python's own numbers: the sheet reproduces every DS coefficient, ♭ is
 `setup`'s floor program at ω's words, π* is one facet, and the bound the Lean proof reads off the identity (w* and φ*
-at π*, ln 2 < 0.6931471808, ln(4/3) ≥ 1/4) is at most the family's headline.
+at π*, p = 7/8, ln 2 < 0.6931471808, ln(8/7) ≥ 1/8) is at most the family's headline.
 
 sm_120's measured instance (`Accounting.TS.Headline.Sm120Measured`, read by
 `Accounting.Guarantees.TS.Sm120MeasuredHeadline`): the same design and ♭ on the measured vector (VF3r-16, its rows
 sparse), the writer kinds at forms.toml's per-word count (`ω = m·n·k_dense/(L·split)`, rounded up), the scalar routes
 at `q = q_T = 9/8`, ♭'s skippable work at VF3r-16's ε_skip, and π* at q* = 9/8. `measured()` checks it the same way,
-against 0.540%.
+against 0.591%.
 """
 from __future__ import annotations
 
@@ -40,7 +40,9 @@ OUT_M = OUT.with_name("Sm120Measured.lean")
 
 Q = Fraction(1, 2)                 # A6's floors: two words a lane, so q = q_T = ½ and b_T = 0 (SheetScalarRouteHalf)
 LN2 = Fraction(6931471808, 10**10)  # Mathlib's Real.log_two_lt_d9
-LN_P = Fraction(1, 4)              # 1 − 3/4 ≤ ln(4/3) (Real.one_sub_inv_le_log_of_pos)
+P_OPERAND = Fraction(3, 4)         # the operand luck (OperandLuckCube, luck_quad's ¾): eps_budget's p
+P = P_OPERAND + (1 - P_OPERAND) / 2  # (I7): the receipt luck ½ on the rest (ReceiptLuckAt, LuckOfReceipt), 7/8
+LN_P = 1 - P                       # 1 − p ≤ ln(1/p) (Real.one_sub_inv_le_log_of_pos)
 TENSOR = re.compile(r"([HIBDQO])MMA(?:SP|SF)?(16|8)8(\d+)")   # a census MMA class: its type letter and m (n = 8), k
 SPARSE = re.compile(r"[HIBDQO]MMASP")
 
@@ -78,7 +80,7 @@ class Family:
 SM120 = Family(
     "Sm120", "RTX PRO 6000", device("sm_120"), "DS-120", "dither-c-peel-fx1", "h1fx1", "H1 + fx1",
     {"DS_imad": ("imad", 64), "DS_lop": ("lop", 64), "DS_xu": ("xu", 16), "DS_shfl": ("shfl", 32)},
-    (256, 512, 1024, 2048), 2430, "SPEC's P1", {"UNI": 1, "UNI64": 2}, "LDG32", "NOROW", Fraction(117, 20000),
+    (256, 512, 1024, 2048), 2430, "SPEC's P1", {"UNI": 1, "UNI64": 2}, "LDG32", "NOROW", Fraction(599, 100000),
     "an IMMA.16832 at L = 32",
     "fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word)")
 SM80 = Family(
@@ -92,7 +94,7 @@ DEVICE, DESIGN, FMAX = SM120.device, SM120.design, SM120.fmax
 UNIFORM, SKIP, EPS = SM120.uniform, SM120.skip, SM120.eps
 VECTOR = "VF3r-16"                 # the measured reading's vector
 Q_M = Fraction(9, 8)               # scalar floors: q*₀ 1.120 (operands free), ClassPSlots' lane floor ≥ 9/8 at w ≤ 15
-EPS_M = Fraction(27, 5000)         # the measured reading: 0.540%
+EPS_M = Fraction(591, 100000)      # the measured reading: 0.591%
 OFF_MENU = ("MMA", "UNI64")        # census lines no writer kind is: the forms' fallback line, and UNI64 (on UP alone)
 STAR = {"DS_issue": "issue", "DS_tensor": "tensor", "DS_smem": "smem"}
 
@@ -171,8 +173,8 @@ def instance(fam: Family = SM120) -> Instance:
     d = E.design(fam.design, fam.data)
     h = E.honest(d.honest, fam.data)
     fms = {f.kind: f for f in E.forms(fam.data)}
-    if (d.delta, d.p, d.checks) != (2.0 ** -41, 0.75, 48000):
-        raise SystemExit(f"{fam.design}: the statement takes δ′ = 2^-41, p = 3/4 and 48000 checks; the design has "
+    if (d.delta, d.p, d.checks) != (2.0 ** -41, float(P_OPERAND), 48000):
+        raise SystemExit(f"{fam.design}: the statement takes δ′ = 2^-41, operand luck 3/4 and 48000 checks; the design has "
                          f"{d.delta}, {d.p}, {d.checks}")
     if d.filler:
         raise SystemExit(f"{fam.design}: the instance has no filler route (FillOpt is proved for an empty menu)")
@@ -324,9 +326,9 @@ def measured(i: Instance | None = None) -> Measured:
 
 
 def exact_logs(i: Instance | Measured) -> float:
-    """The bound with ln 2 and ln(4/3) exact, for the record."""
+    """The bound with ln 2 and ln(1/p) exact, for the record."""
     return float(i.bound) - float(i.kappa * 41) * (float(LN2) / (float(LN_P) * i.checks)
-                                                   - math.log(2) / (math.log(4 / 3) * i.checks))
+                                                   - math.log(2) / (math.log(1 / float(P)) * i.checks))
 
 
 def _wrap(items: list[str], indent: str, width: int = 120) -> str:

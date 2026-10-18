@@ -1,5 +1,5 @@
 import Proofs.Accounting.Headline.Encoding
-import Proofs.Accounting.TS
+import Proofs.Accounting.Headline.Luck
 import Models.Accounting.Guarantees.Headline
 
 /-!
@@ -14,8 +14,10 @@ hypotheses discharged and the terms bounded:
 * the certificate is `π*`, the issue facet (`isCert_onFacet`), and FILL-OPT holds since there is no filler
   (`sm120_fillOpt`);
 * `identity` at `d̄ = ā = 0` gives `ε_skip + ε_cert + ε_route + ε_mand ≤ 1 − (N_w w* + N_w φ*)/B_♭ ≤ 1 − 17/B_♭`, and
-  `ε_jl ≤ (1/B_♭)·41 ln 2/(48,000 · ¼)` from `δ′ ≥ 2^-41`, `ln 2 < 0.6931471808` and `ln(4/3) ≥ ¼` (`sm120_jl`);
-* their sum is below `117/20000`, by `decide` on the rationals (`sm120_final`).
+  `ε_jl ≤ (1/B_♭)·41 ln 2/(48,000 · ⅛)` at `p = 7/8` from `δ′ ≥ 2^-41`, `ln 2 < 0.6931471808` and `ln(8/7) ≥ ⅛`
+  (`sm120_jl`);
+* their sum is below `599/100000`, by `decide` on the rationals (`sm120_final`);
+* (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
 
 namespace Accounting.SecurityProofs.TS.Headline
@@ -47,7 +49,7 @@ theorem sm120_fold :
   decide +kernel
 
 theorem sm120_final_q :
-    (1 - 17 / Bq + 1 / Bq * (41 * (6931471808 / 10000000000) / 12000) : ℚ) ≤ 117 / 20000 := by
+    (1 - 17 / Bq + 1 / Bq * (41 * (6931471808 / 10000000000) / 6000) : ℚ) ≤ 599 / 100000 := by
   decide +kernel
 
 theorem sm120_hG : ∀ r k, Sm120.model.G.a r k = (sheetCoef Sm120.ds120 r k.val : ℝ) := sheet_a Sm120.ds120 122
@@ -161,10 +163,10 @@ theorem sm120_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 1
   rw [sub_zero, one_mul]
   exact hchi.trans hprice
 
-/-- `ε_jl ≤ (1/B_♭)·41·0.6931471808/12000` at `δ′ ≥ 2^-41`. -/
+/-- `ε_jl ≤ (1/B_♭)·41·0.6931471808/6000` at `p = 7/8` and `δ′ ≥ 2^-41`. -/
 theorem sm120_jl (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
-    Sm120.model.epsJl Sm120.flat (onFacet Sm120.piStar) (3 / 4) δ' Sm120.checks ≤
-      1 / Sm120.model.bnd Sm120.flat * (41 * (6931471808 / 10000000000) / 12000) := by
+    Sm120.model.epsJl Sm120.flat (onFacet Sm120.piStar) (7 / 8) δ' Sm120.checks ≤
+      1 / Sm120.model.bnd Sm120.flat * (41 * (6931471808 / 10000000000) / 6000) := by
   have hBpos : 0 < Sm120.model.bnd Sm120.flat := sm120_wf.2.2.2.1
   have hκ : Sm120.model.kappa Sm120.flat (onFacet Sm120.piStar) = 1 / Sm120.model.bnd Sm120.flat := by
     unfold Model.kappa
@@ -178,10 +180,10 @@ theorem sm120_jl (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
     calc Real.log (1 / δ') ≤ Real.log ((2 : ℝ) ^ 41) := Real.log_le_log (one_div_pos.mpr hδpos) hinv
       _ = 41 * Real.log 2 := by rw [Real.log_pow]; norm_num
       _ ≤ 41 * (6931471808 / 10000000000) := by linarith
-  have hlogp : (1 : ℝ) / 4 ≤ Real.log (1 / (3 / 4)) := by
-    calc (1 : ℝ) / 4 = 1 - (1 / (3 / 4))⁻¹ := by norm_num
-      _ ≤ Real.log (1 / (3 / 4)) := Real.one_sub_inv_le_log_of_pos (by norm_num)
-  have hq : Real.log (1 / δ') / (Real.log (1 / (3 / 4)) * 48000) ≤ 41 * (6931471808 / 10000000000) / 12000 :=
+  have hlogp : (1 : ℝ) / 8 ≤ Real.log (1 / (7 / 8)) := by
+    calc (1 : ℝ) / 8 = 1 - (1 / (7 / 8))⁻¹ := by norm_num
+      _ ≤ Real.log (1 / (7 / 8)) := Real.one_sub_inv_le_log_of_pos (by norm_num)
+  have hq : Real.log (1 / δ') / (Real.log (1 / (7 / 8)) * 48000) ≤ 41 * (6931471808 / 10000000000) / 6000 :=
     div_le_div₀ (by norm_num) hlogδ (by norm_num) (by linarith)
   have hS : ((Sm120.checks : ℕ) : ℝ) = 48000 := by
     show ((48000 : ℕ) : ℝ) = 48000
@@ -192,20 +194,20 @@ theorem sm120_jl (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
 
 theorem sm120_final :
     1 - 17 / Sm120.model.bnd Sm120.flat +
-        1 / Sm120.model.bnd Sm120.flat * (41 * (6931471808 / 10000000000) / 12000) ≤ 117 / 20000 := by
+        1 / Sm120.model.bnd Sm120.flat * (41 * (6931471808 / 10000000000) / 6000) ≤ 599 / 100000 := by
   rw [sm120_bnd]
-  have h : ((1 - 17 / Bq + 1 / Bq * (41 * (6931471808 / 10000000000) / 12000) : ℚ) : ℝ) ≤ ((117 / 20000 : ℚ) : ℝ) :=
+  have h : ((1 - 17 / Bq + 1 / Bq * (41 * (6931471808 / 10000000000) / 6000) : ℚ) : ℝ) ≤ ((599 / 100000 : ℚ) : ℝ) :=
     Rat.cast_le.mpr sm120_final_q
   push_cast at h
   linarith
 
-/-- The terms at `π*` and `δ′ ≥ 2^-41` sum to at most `117/20000`. -/
+/-- The terms at `π*`, `p = 7/8` and `δ′ ≥ 2^-41` sum to at most `599/100000`. -/
 theorem sm120_eps_le (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
-    1 - 117 / 20000 ≤ 1 - Sm120.model.epsSkip Sm120.flat (onFacet Sm120.piStar) -
+    1 - 599 / 100000 ≤ 1 - Sm120.model.epsSkip Sm120.flat (onFacet Sm120.piStar) -
       Sm120.model.epsCert Sm120.flat (onFacet Sm120.piStar) -
       Sm120.model.epsRoute Sm120.flat (onFacet Sm120.piStar) -
       Sm120.model.epsMand Sm120.flat (onFacet Sm120.piStar) -
-      Sm120.model.epsJl Sm120.flat (onFacet Sm120.piStar) (3 / 4) δ' Sm120.checks := by
+      Sm120.model.epsJl Sm120.flat (onFacet Sm120.piStar) (7 / 8) δ' Sm120.checks := by
   have hid := identity Sm120.model Sm120.flat (onFacet Sm120.piStar) 0 0 sm120_wf
   have hBpos : 0 < Sm120.model.bnd Sm120.flat := sm120_wf.2.2.2.1
   have hχ := (stars_nonneg Sm120.model Sm120.flat (onFacet Sm120.piStar) sm120_wf (isCert_onFacet _)).2.2.2
@@ -229,20 +231,23 @@ namespace Accounting.SecurityProofs.TS
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
   Accounting.SecurityProofs.TS.Headline
 
-/-- sm_120's headline at the data sheet: `SheetDIdealFloor` at `π*`, `p = ¾`, `S = 48,000` and `δ = 2^-40`, (I8) from
-its pieces (`ProofsSoundOfPinned`), FILL-OPT from the data, and the terms bounded by `sm120_eps_le`. -/
+/-- sm_120's headline at the data sheet: `SheetDIdealFloor` at `π*`, `p = 7/8`, `S = 48,000` and `δ = 2^-40`, (I7)
+from the receipt split (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`), FILL-OPT from the data,
+and the terms bounded by `sm120_eps_le`. -/
 theorem Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline := by
-  intro Ω _ Pl V nπ pf δbind δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hL hOf hB hZK hPin hRF
-  have hPS := ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120.model.Nw δbind δzk hOf hB hZK hPin hRF
+  intro α ι _ _ _ R _ Pl G V nπ pf δbind δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hCube hRL hOf hB hZK hPin hRF
+  have hL := luck_of_receipt_half R Pl.game G hG hPinG hCube hRL
+  have hPS :=
+    ProofsSoundOfPinned (α × Finset ι) Sm120.checks nπ Pl pf Sm120.model.Nw δbind δzk hOf hB hZK hPin hRF
   have hδlo : (1 / 2 : ℝ) ^ 41 ≤ (1 / 2) ^ 40 - (Sm120.checks : ℝ) * (δbind + nπ * δzk) := by
     have e : ((1 : ℝ) / 2) ^ 40 = 2 * (1 / 2) ^ 41 := by norm_num
     linarith
   have hδpos : 0 < (1 / 2 : ℝ) ^ 40 - (Sm120.checks : ℝ) * (δbind + nπ * δzk) :=
     lt_of_lt_of_le (by positivity) hδlo
-  have hmain := SheetDIdealFloor Sm120.sheet Sm120.model Sm120.flat Ω Sm120.checks Pl (onFacet Sm120.piStar)
-    (3 / 4) ((1 / 2) ^ 40) δbind δzk nπ rfl (isCert_onFacet _) sm120_wf (by decide) (by norm_num) (by norm_num)
-    hδpos hSplit (le_of_eq sm120_q) (le_of_eq sm120_qT) le_rfl h1 h2 h3 h4 h5 h6 h7 hF (sm120_fillOpt Pl hSplit) hL
-    hPS
+  have hmain := SheetDIdealFloor Sm120.sheet Sm120.model Sm120.flat (α × Finset ι) Sm120.checks Pl
+    (onFacet Sm120.piStar) (7 / 8) ((1 / 2) ^ 40) δbind δzk nπ rfl (isCert_onFacet _) sm120_wf (by decide)
+    (by norm_num) (by norm_num) hδpos hSplit (le_of_eq sm120_q) (le_of_eq sm120_qT) le_rfl h1 h2 h3 h4 h5 h6 h7 hF
+    (sm120_fillOpt Pl hSplit) hL hPS
   refine le_trans (prob_mono ?_) hmain
   rintro x ⟨ha, hlt⟩
   exact ⟨ha, lt_of_lt_of_le hlt (sm120_eps_le _ hδlo)⟩

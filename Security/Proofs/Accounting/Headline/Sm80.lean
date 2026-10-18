@@ -1,5 +1,5 @@
 import Proofs.Accounting.Headline.Encoding
-import Proofs.Accounting.TS
+import Proofs.Accounting.Headline.Luck
 import Models.Accounting.Guarantees.Headline
 
 /-!
@@ -15,7 +15,8 @@ hypotheses discharged and the terms bounded:
 * the certificate is `π*`, the ALU facet (`isCert_onFacet`), and FILL-OPT holds since there is no filler
   (`sm80_fillOpt`);
 * `identity` at `d̄ = ā = 0` gives `ε_skip + ε_cert + ε_route + ε_mand ≤ 1 − N_w φ*/B_♭ ≤ 1 − 16/B_♭`, below
-  `147/100000` by `decide` on the rationals (`sm80_final`).
+  `147/100000` by `decide` on the rationals (`sm80_final`);
+* (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
 
 namespace Accounting.SecurityProofs.TS.Headline
@@ -139,7 +140,7 @@ theorem sm80_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm80.checks (Fin 35)
   exact hchi.trans hprice
 
 /-- `ε_jl = 0` at `π*`, at any `δ′`: `κ = N_w w*/B_♭ = 0`. -/
-theorem sm80_jl (δ' : ℝ) : Sm80.model.epsJl Sm80.flat (onFacet Sm80.piStar) (3 / 4) δ' Sm80.checks = 0 := by
+theorem sm80_jl (δ' : ℝ) : Sm80.model.epsJl Sm80.flat (onFacet Sm80.piStar) (7 / 8) δ' Sm80.checks = 0 := by
   unfold Model.epsJl Model.kappa
   rw [sm80_wStar, mul_zero, zero_div, zero_mul, zero_div]
 
@@ -155,7 +156,7 @@ theorem sm80_eps_le (δ' : ℝ) :
       Sm80.model.epsCert Sm80.flat (onFacet Sm80.piStar) -
       Sm80.model.epsRoute Sm80.flat (onFacet Sm80.piStar) -
       Sm80.model.epsMand Sm80.flat (onFacet Sm80.piStar) -
-      Sm80.model.epsJl Sm80.flat (onFacet Sm80.piStar) (3 / 4) δ' Sm80.checks := by
+      Sm80.model.epsJl Sm80.flat (onFacet Sm80.piStar) (7 / 8) δ' Sm80.checks := by
   have hid := identity Sm80.model Sm80.flat (onFacet Sm80.piStar) 0 0 sm80_wf
   have hBpos : 0 < Sm80.model.bnd Sm80.flat := sm80_wf.2.2.2.1
   have hχ := (stars_nonneg Sm80.model Sm80.flat (onFacet Sm80.piStar) sm80_wf (isCert_onFacet _)).2.2.2
@@ -179,18 +180,21 @@ namespace Accounting.SecurityProofs.TS
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
   Accounting.SecurityProofs.TS.Headline
 
-/-- sm_80's headline at the data sheet: `SheetDIdealFloor` at `π*`, `p = ¾`, `S = 48,000` and `δ = 2^-40`, (I8) from
-its pieces (`ProofsSoundOfPinned`), FILL-OPT from the data, and the terms bounded by `sm80_eps_le`. -/
+/-- sm_80's headline at the data sheet: `SheetDIdealFloor` at `π*`, `p = 7/8`, `S = 48,000` and `δ = 2^-40`, (I7)
+from the receipt split (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`), FILL-OPT from the data,
+and the terms bounded by `sm80_eps_le`. -/
 theorem Sm80SheetHeadline : Accounting.Guarantees.TS.Sm80SheetHeadline := by
-  intro Ω _ Pl V nπ pf δbind δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hL hOf hB hZK hPin hRF
-  have hPS := ProofsSoundOfPinned Ω Sm80.checks nπ Pl pf Sm80.model.Nw δbind δzk hOf hB hZK hPin hRF
+  intro α ι _ _ _ R _ Pl G V nπ pf δbind δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hCube hRL hOf hB hZK hPin hRF
+  have hL := luck_of_receipt_half R Pl.game G hG hPinG hCube hRL
+  have hPS :=
+    ProofsSoundOfPinned (α × Finset ι) Sm80.checks nπ Pl pf Sm80.model.Nw δbind δzk hOf hB hZK hPin hRF
   have hδlo : (1 / 2 : ℝ) ^ 41 ≤ (1 / 2) ^ 40 - (Sm80.checks : ℝ) * (δbind + nπ * δzk) := by
     have e : ((1 : ℝ) / 2) ^ 40 = 2 * (1 / 2) ^ 41 := by norm_num
     linarith
   have hδpos : 0 < (1 / 2 : ℝ) ^ 40 - (Sm80.checks : ℝ) * (δbind + nπ * δzk) :=
     lt_of_lt_of_le (by positivity) hδlo
-  have hmain := SheetDIdealFloor Sm80.sheet Sm80.model Sm80.flat Ω Sm80.checks Pl (onFacet Sm80.piStar)
-    (3 / 4) ((1 / 2) ^ 40) δbind δzk nπ rfl (isCert_onFacet _) sm80_wf (by decide) (by norm_num) (by norm_num)
+  have hmain := SheetDIdealFloor Sm80.sheet Sm80.model Sm80.flat (α × Finset ι) Sm80.checks Pl (onFacet Sm80.piStar)
+    (7 / 8) ((1 / 2) ^ 40) δbind δzk nπ rfl (isCert_onFacet _) sm80_wf (by decide) (by norm_num) (by norm_num)
     hδpos hSplit (le_of_eq sm80_q) (le_of_eq sm80_qT) le_rfl h1 h2 h3 h4 h5 h6 h7 hF (sm80_fillOpt Pl hSplit) hL
     hPS
   refine le_trans (prob_mono ?_) hmain
