@@ -21,10 +21,10 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   serve     the prompts again with the option, and the receipts computed inside its `record` for every prefill call; the
             token ids must be the reference's
   receipts  one receipt tree per covered call (one hm96-sha512/row-seg/v1 leaf per unit, `commit`)
+  prover    the prover's data (the option's A salt key, the receipt key, each covered call's A rows, scales and receipts) into
+            the store (`research data put`, else OUT/prover), before the gate so a gate failure keeps it
   gate      drawn units of each site against `h1tile.reference` (receipt) and the served integer product (z); controls: the
             unit at the next position, a receipt with one bit flipped, root(A) and root(B) rebuilt, a tampered A row and B row
-  prover    the prover's data (the option's A salt key, the receipt key, each covered call's A rows, scales and receipts) into
-            the store (`research data put`)
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting
@@ -36,6 +36,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -321,7 +322,6 @@ def run(a: argparse.Namespace) -> dict:
     rec.step("receipt_trees", {"calls": len(calls), "leaves": sum(c["units"] for c in calls),
                                "s": round(time.perf_counter() - t0, 1)})
 
-    rec.step("gate", gate(a, calls, data, levels, layers, h1, key, E, PH))
     comp.close()
 
     manifest = {"schema": SCHEMA, "scheme": SCHEME, "tile": [RC.R, RC.C_], "framing": FRAMING, "not_covered": NOT_COVERED,
@@ -346,6 +346,10 @@ def run(a: argparse.Namespace) -> dict:
                 "tokens_equal": all(equal)}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
     rec.step("prover", prover(a, out, key, h1, calls, data))
+    try:
+        rec.step("gate", gate(a, calls, data, levels, layers, h1, key, E, PH))
+    except Exception as e:  # noqa: BLE001
+        rec.step("gate", {"ok": False, "error": f"{type(e).__name__}: {e}"[:4000]})
     s = rec.doc["steps"]["serve"]
     rec.doc["ok"] = bool(all(equal) and calls and not a_check["mismatch"] and not a_check["untapped"]
                          and s["units_match_option"] and s["consecutive"] and rec.doc["steps"]["gate"]["ok"])
@@ -432,11 +436,16 @@ def prover(a, out: Path, key: bytes, h1, calls: list[dict], data: list[dict]) ->
         with tar.open("rb") as f:
             for blk in iter(lambda: f.read(1 << 24), b""):
                 h.update(blk)
-        r = subprocess.run(["research", "data", "put", "--kind", "pouw-h1-prover", "--file", str(tar), "--preserve"],
-                           capture_output=True, text=True)
-        doc = {"bytes": size, "sha256": h.hexdigest(), "put_rc": r.returncode, "put_out": r.stdout[-800:],
-               "put_err": r.stderr[-800:]}
-        if r.returncode:
+        cli = [shutil.which("research")] if shutil.which("research") else ["python3", "-m", "research"]
+        env = {**os.environ, "PYTHONPATH": f"{HERE.parents[2] / 'tools' / 'research' / 'src'}:{os.environ.get('PYTHONPATH', '')}"}
+        try:
+            r = subprocess.run([*cli, "data", "put", "--kind", "pouw-h1-prover", "--file", str(tar), "--preserve"],
+                               capture_output=True, text=True, env=env)
+            rc, so, se = r.returncode, r.stdout, r.stderr
+        except OSError as e:
+            rc, so, se = -1, "", repr(e)
+        doc = {"bytes": size, "sha256": h.hexdigest(), "cli": cli, "put_rc": rc, "put_out": so[-800:], "put_err": se[-800:]}
+        if rc:
             (out / "prover").mkdir(exist_ok=True)
             os.replace(tar, out / "prover" / "prover.tar")
             doc["in_out"] = "prover/prover.tar"
