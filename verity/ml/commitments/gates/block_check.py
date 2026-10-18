@@ -1,44 +1,60 @@
-"""The remote bandwidth audit's check 3 (`verity.core.protocols.remote_bandwidth`, PROTOCOL.md §8) as Boolean Definitions:
-what a proof runs on a drawn receipt's block in place of opening it, so the verifier holds the block, its payload and its
-receipts only as hiding commitments, and a unit's verdict.
+"""The remote bandwidth audit's opening of a drawn receipt (`verity.core.protocols.remote_bandwidth`, PROTOCOL.md §6's checks
+1-3 and 5, as §8 deploys them) as one Boolean Definition: what a proof runs on a drawn receipt in place of opening it, so the
+block, its payload, its receipt leaf and every salt and path stay the unit's witness and the verifier reads the unit's
+verdict.
 
-    BlockDecodeCheck_v1{N, C, K, MASKED, BYTES, WORDS}
-        (j: Array<4, U16>, q: U16, bound: U16, seed: Array<16, U16>, coin: Array<16, U16>, tau: F, t0: F, c: Array<K, F>,
-         [mask: F,] block: Array<BYTES / 2, U16>, payload: Array<BYTES / 2, U16>) -> U16
-    BlockReceiptCheck_v1{ROWS, LEAF, P, BYTES}
-        (mid: Array<32, U16>, j: Array<4, U16>, k: U16, pos: U16, signs: Array<ROWS, Array<BYTES / 16, U16>>,
-         block: Array<BYTES / 2, U16>, leaf: Array<LEAF, Array<32, U16>>, plan: Array<P, U16>) -> U16
-        U16 = Array<16, Value<1>>, F = Array<N / 16, U16>: an integer little-endian, a byte string in order (bit t is bit
-        t & 7 of byte t >> 3); each returns one ok word, bit 0 the verdict, bits 1-15 zero in gates
+    BlockOpeningCheck_v1{N, C, K, MASKED, BYTES, ROWS, LEAF, P, DR, DP, DV}
+        (j: Array<4, U16>, bound: U16, seed: Array<16, U16>, coin: Array<16, U16>, tau: F, t0: F, c: Array<K, F>, [mask: F,]
+         mid: Array<32, U16>, pos: U16, rroot: H, rdom: H, rdepth: U16, proot: H, pdom: H, prank: Array<2, U16>, pdepth: U16,
+         vroot: H, vdom: H, vrank: Array<2, U16>, vdepth: U16,
+         signs: Array<ROWS, Array<BYTES / 16, U16>>, block: Array<BYTES / 2, U16>, payload: Array<BYTES / 2, U16>,
+         leaf: Array<LEAF, Array<32, U16>>, plan: Array<P, U16>, salts: Array<2, Array<96, U16>>,
+         rpath: Array<DR, H>, ppath: Array<DP, H>, vpath: Array<DV, H>) -> U16
+        U16 = Array<16, Value<1>>, F = Array<N / 16, U16> and H = Array<32, U16> (a 64-byte digest): an integer
+        little-endian, a byte string in order (bit t is bit t & 7 of byte t >> 3); ``mid`` is SHA-512's eight words, each
+        64 bits LSB first
 
-**The decode.** ``BlockDecodeCheck`` is 1 iff q is below W / WORDS and every word w of slice q of ``block`` (q WORDS <= w
-< (q + 1) WORDS, word w its bytes [S w, S (w + 1)), S = N / 8, of the W = BYTES / S) is below p = 2^N - C and decodes to
-``payload``'s word w (`codec.decode_word`): x -> rho^-1(x) - c_r - t_w mod p for r = K - 1 ... 0, and, ``MASKED``, x ->
-sigma_K(x) after each round r >= 1, with t_w = t0 + (w - q WORDS) tau + b mod p and b = 0 unless ``bound``'s bit 0, then b_j(c_a), derived in the unit from the payload it holds: LE(SHA-512(DOMAIN || u8
-len(name) || name || seed || u32be 2^32 - 4 || u64be j || d || coin || u32be 0)) mod p, d = sha512/row/v2 of the payload
-(`codec.binding` with its coin, `codec.digest`). So at ``bound`` the W / WORDS slices are
-``codec.decode(block, j, key, d, coin) == payload``, d the payload's own digest, and without it ``codec.decode(block, j, key)
-== payload`` (a registered block, under the seed's key). A slice is a unit of its own, so a block's decode is lowered once at
-any size (WORDS = W: the whole block, one unit); each slice's unit holds the whole block and payload rows, and recomputes d
-and b. The public row (j, q, bound, seed, coin, tau, t0, c, mask) is the verifier's own: the codec key of the
-registration's seed (`codec.key`), t0 = tau (W j + q WORDS) mod p, the append's coin (zero bytes under the seed's key). A field's name is kv/v0's
-(p512 = 2^512 - 569, p1024 = 2^1024 - 105); ``toy32`` (2^32 - 5) is circuit-check's and the tests' binding with a short
-block (``BYTES`` below 4,096), the same circuit on small words, never deployed.
+**Public** (the verifier's own, `opening_public`), each of the four kinds the rules allow: the draw (block j, its position
+pos in the pass, whose leaf is pos >> 4 and whose receipt is entry pos & 15 of it) and the registration's codec key at j
+(the seed's codec key, `codec.key`: c, tau and mask; t0 = tau W j mod p for the block's W words; the seed itself), the
+append's coin c_a (``bound``, an appended block; zero bytes and unbound for a registered one), the pass's receipt prefix
+``mid`` (the chaining value after `receipts.sketch_prefix` of its seed) and sign rows ``signs`` (`receipts.sign_bits`), and
+three roots, each with its tree's domain id and depth (`merkle.merkle_depth` of its count): the pass's receipt root
+(``rroot``), the payload's (``proot``: the registration's payload root, or the root of the append holding j, with rank
+``prank`` = j - first), and, for an appended block, the value commitment's (``vroot``, its rank and position ``vrank``).
+**Witness:** the block, its payload, the receipt leaf (LEAF receipts), the step's certified plan row (P entries), the receipt
+leaf's and the payload's salts (192 bytes each) and their paths, each padded with zero digests to its tree's D.
 
-**The receipt.** ``BlockReceiptCheck`` is 1 iff the sketch-sha512 receipt of ``block`` (`receipts.SketchReceipter`): y =
-SHA-512(prefix || u64be j || sigma), its chaining value after the one-block prefix ``mid`` (`receipts.sketch_prefix` of the
-pass's seed) and sigma ROWS int32 little-endian, sigma_c = sum_u (-1)^(signs[c][u]) int8(block[u]), is ``leaf[k]`` (k <
-LEAF), and the plan row holds block j at the position drawn: ``plan[pos] = j`` (pos < P, j < 2^16). Public: mid, j, k, pos and
-the pass's sign bits (`receipts.sign_bits`, bit u of row c at bit u). Witness: the block, the receipt leaf (the receipts of
-position pos's leaf, LEAF of them, the receipt tree's leaf under its salt) and the plan (the step's certified plan,
-`requirement_units.PlanMatch`'s row).
+**What it proves**, each check a flag of the verdict:
 
-**The links.** A unit's rows are hm96-sha512/row/v2 rows, and a row under the salt of another commitment of the same bytes
-has that commitment's ``b || c`` (`receipts.hidden`), so the verifier holds every witness row to its commitment by
-``b || c`` alone: the two units' block rows to each other; the payload row's to the canonical payload row the memory-map unit
-reads (written blocks) and, through ``HM96.tree_leaf``, to leaf j of the append's tree or the registration's payload tree;
-the receipt leaf's to its leaf of the pass's receipt tree; the plan row's to the plan unit's. The decode's ``d`` is
-recomputed from the payload row: the statement's hm96 layer hashes the same bytes, but a unit reads none of it.
+- *receipt-path* (check 2): the receipt leaf, hidden under ``salts[0]`` (`gates.hm96` over its sha512/row/v2 digest,
+  `receipts.hidden`), opens at rank and position pos >> 4 to ``rroot`` in the tree of domain id ``rdom`` (the pass's seed
+  and plan, `receipts.domain`) at depth ``rdepth``; and the plan row holds j at pos: plan[pos] = j (pos < P, j < 2^16).
+- *codec* (check 3): every word w of ``block`` (bytes [S w, S (w + 1)), S = N / 8, of its W = BYTES / S) is below
+  p = 2^N - C and decodes to ``payload``'s word w (`codec.decode_word`): x -> rho^-1(x) - c_r - t_w mod p for r = K - 1
+  ... 0, and, ``MASKED``, x -> sigma_K(x) after each round r >= 1, with t_w = t0 + w tau + b mod p, b = 0 unless
+  ``bound``'s bit 0, then b_j(c_a): LE(SHA-512(DOMAIN || u8 len(name) || name || seed || u32be 2^32 - 4 || u64be j || d ||
+  coin || u32be 0)) mod p, d = sha512/row/v2 of the payload (`codec.binding`, `codec.digest`). So the block is
+  ``codec.decode(block, j, key, d, coin) == payload`` when bound, and ``codec.decode(block, j, key) == payload`` when not.
+- *payload-path* (check 3): the payload, hidden under ``salts[1]`` over the same d, opens at rank ``prank`` and position j
+  to ``proot`` in the tree of domain id ``pdom`` at depth ``pdepth``; and, when bound, at rank and position ``vrank`` to the
+  value commitment ``vroot`` in ``vdom`` at ``vdepth``: the payload is the committed KV the circuit wrote to block j, the
+  payload row the memory-map unit holds to the step's values under the layout (its ``pay`` row at the place
+  `requirement_units.map_value_leaves` names block j).
+- *receipt* (check 5): the sketch-sha512 receipt of the block (`receipts.SketchReceipter`): y = SHA-512(prefix || u64be j ||
+  sigma), its chaining value from ``mid``, sigma ROWS int32 little-endian, sigma_r = sum_u (-1)^(signs[r][u]) int8(block[u]),
+  is ``leaf[pos & 15]`` (pos & 15 < LEAF).
+
+Check 1 is the unit's shape: every port has its fixed size, and the public row is the verifier's. The verdict word is bit 0
+the four checks' AND (accepted) and bits 1-4 each check's failure in that order (`VERDICT`), bits 5-15 zero, within the 16-bit
+output limit; `verdict` reads it as §6's names, None for accepted or the first check that failed. A field's name is kv/v0's
+(p512 = 2^512 - 569, p1024 = 2^1024 - 105); ``toy32`` (2^32 - 5) is circuit-check's and the tests' binding with a short block
+(``BYTES`` below 4,096), the same circuit on small words, never deployed.
+
+**The plan link.** The plan row is the one witness row the verifier holds outside the unit: a row's commitment is
+hm96-sha512/row/v2, so under the salt of another commitment of the same words it has that commitment's ``b || c``, and the
+verifier holds the plan row's to the certified plan row of the pass's step (the plan unit's) by ``b || c`` alone. The other
+rows' ``b || c`` are hiding and nothing reads them.
 
 **The parts**, each its own traced Definition lowered by its builder (``build``), so a C-Flock unit gets the builder's
 commits and the Definition the trace's ANDs:
@@ -50,24 +66,22 @@ commits and the Definition the trace's ANDs:
     CodecRound_v1{N, C, MASK}       (x, c, t[, mask]) -> rho^-1(x) - c - t mod p, then sigma_K if MASK
     CodecMatch_v1{N}                (x, y, a) -> a and x = y
     CodecWord_v1{N, C, K, MASKED}   (y, t, c: Array<K, Array<N>>[, mask], want) -> y < p and its decode is want
-    CodecPick_v1{N, WORDS, SLICES}  (q: U16, words: Array<WORDS SLICES, Array<N>>) -> slice q, WORDS words
-    BlockOk_v1{W, SLICES}           (oks: Array<W>, q: U16) -> U16
     SketchRow_v1{BYTES}             (block: Array<8 BYTES>, signs: Array<BYTES>) -> Array<32>, one row of sigma
-    LeafMatch_v1{LEAF, P}           (y: Array<8, Word>, leaf, k, plan, pos, j) -> U16
+    LeafMatch_v1{LEAF, P}           (y: Array<8, Word>, leaf, k: U16, plan, pos: U16, j: Array<64>) -> Array<2>
+    BlockVerdict_v1{W}              (oks: Array<W>, match: Array<2>, reads: Array<3>, bound) -> U16
+    Hm96Sha512Leaf_v1, FrameV3ReadAt_v1{D, 4, hm96-sha512/row/v2}   `gates.hm96`, `gates.frame_v3`
     Word = Array<64, Value<1>>, a SHA-512 word LSB first; Array<n> = Array<n, Value<1>>
 
 **Cost.** A squaring mod p is a Karatsuba square down to 32-bit schoolbook squares (about 96,000 ANDs at N = 512) and two
-folds of the high half by C; a round adds about 9 N for its additions, negation and selections. ``BlockDecodeCheck`` is WORDS
-K rounds and 2 + ceil((BYTES + 17) / 128) compressions: whole, about 15.6 M ANDs at p512/k2 (13.4 M of rounds, 2.0 M of the
-digest and binding) and about 32 M at p1024/k3/masked; in four slices about 5.4 M ANDs each at p512/k2.
-``BlockReceiptCheck`` is ROWS sketch rows of about 9 BYTES ANDs each (a carry-save count of the block's sign-flipped bits)
-and one compression at 16 rows: about 0.66 M ANDs. The C-Flock lowering adds about half again, ANDs on identical operands
-(circuit-check's redundant-gates/boolean, 29-35% of each part's lowered ANDs): a p512/k2 slice of four lowers to 8,010,522
-ANDs and the receipt unit at 16 rows to 994,987.
+folds of the high half by C; a round adds about 9 N for its additions, negation and selections. The decode is W K rounds and
+2 + ceil((BYTES + 17) / 128) compressions (about 15.6 M ANDs at p512/k2, 13.4 M of rounds; about 32 M at p1024/k3/masked);
+the receipt ROWS sketch rows of about 9 BYTES ANDs each and one compression (0.66 M at 16 rows); the receipt leaf's digest
+ceil((64 LEAF + 17) / 128) compressions, each hm96 leaf four, each read's leaf two and each level three, so DR + DP + DV
+levels. The C-Flock lowering adds about half again, ANDs on identical operands (circuit-check's redundant-gates/boolean).
 
-`decode_check` and `receipt_check` are the references, over each instance's u16 words; `decode_args` and `receipt_args` an
-instance's arguments, `decode_public` and `receipt_public` their public rows' (the verifier's own), `decode_rows` and
-`receipt_rows` its rows (C-Flock's ``in_rows`` params), `row_words` its rows' words.
+`opening_check` is the reference, over an instance's u16 words; `opening_args` an instance's arguments, `opening_public` its
+public rows' (the verifier's own), `opening_rows` its rows (C-Flock's ``in_rows`` params), `row_words` its rows' words and
+`verdict` the name its verdict word says.
 """
 from __future__ import annotations
 
@@ -83,18 +97,20 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, OR, and_reduce, const_bi
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
-from verity.ml.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, sha512_row_v2_digest, sha512_row_v2_prefix
 
+from .frame_v3 import opens_at, read_at
+from .hm96 import Hm96Sha512Leaf, reference as hm96_leaf
 from .sha512 import IV, commit as _commit, compress_gadget, compress_ref, midstate, pad_tail, words_be
 
-__all__ = ["BlockDecodeCheck", "BlockReceiptCheck", "FIELDS", "TOY", "decode_args", "decode_check", "decode_public",
-           "decode_rows", "key", "receipt", "receipt_args", "receipt_check", "receipt_public", "receipt_rows", "row_words",
-           "sketch"]
+__all__ = ["BlockOpeningCheck", "FIELDS", "TOY", "VERDICT", "key", "opening_args", "opening_check", "opening_public",
+           "opening_rows", "receipt", "row_words", "sketch", "verdict"]
 
 BIT = BL.BIT
 U16 = Array(16, BIT)
 WORD = Array(64, BIT)
 DIGEST = Array(8, WORD)
+H = Array(32, U16)
 #: (N, C) -> the field's name in the codec's derivations (`codec.Field.name`)
 FIELDS = {(1024, 105): "p1024", (512, 569): "p512", (32, 5): "toy32"}
 TOY = (32, 5)
@@ -102,6 +118,13 @@ BLOCK_BYTES = 4096
 DOMAIN = b"verity/word-codec/kv/v0\0"
 TWEAK_INDEX, MASK_INDEX, COIN_INDEX = (1 << 32) - 1, (1 << 32) - 2, (1 << 32) - 4
 SEED_BYTES = COIN_BYTES = 32
+SALT_BYTES = 192
+#: a receipt leaf holds this many receipts: position pos is entry pos & 15 of leaf pos >> 4 (`receipts.PER_LEAF`)
+PER_LEAF = 16
+#: a read's position is a u32 (uint 1 ... 4 bytes)
+POSITION_BYTES = 4
+#: the verdict word's bits 1 ... 4: each check's failure, in the order §6 checks them (`audit.FAILURES`' names)
+VERDICT = ("receipt-path", "codec", "payload-path", "receipt")
 #: a carry-save tree commits a form longer than this; a ripple carry, one longer than CARRY
 LIMIT, CARRY = 6, 4
 #: Karatsuba squares down to schoolbook squares of at most this many bits
@@ -121,19 +144,13 @@ def _check_bytes(S, field: bool) -> None:
         raise ValueError(f"a block of the codec's {FIELDS[S.N, S.C]} is {BLOCK_BYTES} bytes; a shorter one is the toy's")
 
 
-def _check_decode(S) -> None:
+def _check_opening(S) -> None:
     _check_field(S)
     _check_bytes(S, True)
     if isinstance(S.K, bool) or not isinstance(S.K, int) or not 2 <= S.K <= 8 or S.MASKED not in (0, 1):
         raise ValueError(f"K is 2 to 8 rounds and MASKED 0 or 1, not K = {S.K!r}, MASKED = {S.MASKED!r}")
-    W = _words_of(S)
-    if isinstance(S.WORDS, bool) or not isinstance(S.WORDS, int) or not 1 <= S.WORDS <= W or W % S.WORDS:
-        raise ValueError(f"WORDS divides the block's {W} words, not {S.WORDS!r}")
-
-
-def _check_receipt(S) -> None:
-    _check_bytes(S, False)
-    _check_ints(S, ("ROWS", 64), ("LEAF", 16), ("P", (1 << 16) - 1))
+    # the receipt leaf's rank is pos >> 4 of a u16 pos; the payload's and value's ranks are u32s whose uint is at most 3 bytes
+    _check_ints(S, ("ROWS", 64), ("LEAF", PER_LEAF), ("P", (1 << 16) - 1), ("DR", 12), ("DP", 24), ("DV", 24))
 
 
 def _check_ints(S, *bounds: tuple[str, int]) -> None:
@@ -436,40 +453,6 @@ CodecWord = CompositeDefinition(
         "word's tweak t, sigma_K after each round r >= 1 if MASKED (codec.decode_word)")
 
 
-def _sig_pick(S):
-    if S.N not in {n for n, _c in FIELDS}:
-        raise ValueError(f"N is a codec field's width, one of {sorted({n for n, _c in FIELDS})}, not {S.N!r}")
-    _check_ints(S, ("WORDS", BLOCK_BYTES), ("SLICES", BLOCK_BYTES))
-    return (("q", U16), ("words", Array(S.WORDS * S.SLICES, _f(S)))), Array(S.WORDS, _f(S))
-
-
-def _build_pick(C, S, q, *words):
-    if S.SLICES == 1:
-        return [list(w) for w in words]
-    hot = [_eqc(C, q, k) for k in range(S.SLICES)]
-    out = []
-    for i in range(S.WORDS):
-        acc = [ZERO] * S.N
-        for k, h in enumerate(hot):
-            acc = [a ^ C.AND(h, x) for a, x in zip(acc, words[k * S.WORDS + i])]
-        out.append(acc)
-    return out
-
-
-CodecPick = _part("CodecPick", ("N", "WORDS", "SLICES"), _sig_pick, _build_pick,
-                  "Slice q of a block's words: words [q WORDS, (q + 1) WORDS), zero for q at or past SLICES")
-
-
-def _sig_ok(S):
-    _check_ints(S, ("W", BLOCK_BYTES), ("SLICES", BLOCK_BYTES))
-    return (("oks", Array(S.W, BIT)), ("q", U16)), U16
-
-
-BlockOk = _part("BlockOk", ("W", "SLICES"), _sig_ok,
-                lambda C, S, oks, q: [and_reduce(C, list(oks) + [or_reduce(C, [_eqc(C, q, k) for k in range(S.SLICES)])])]
-                + [ZERO] * 15, "The ok word: bit 0 the AND of W verdicts and q < SLICES, bits 1-15 zero")
-
-
 def _sig_sketch(S):
     _check_bytes(S, False)
     return (("block", Array(8 * S.BYTES, BIT)), ("signs", Array(S.BYTES, BIT))), Array(32, BIT)
@@ -498,9 +481,9 @@ SketchRow = _part(
 
 
 def _sig_leaf(S):
-    _check_ints(S, ("LEAF", 16), ("P", (1 << 16) - 1))
+    _check_ints(S, ("LEAF", PER_LEAF), ("P", (1 << 16) - 1))
     return ((("y", DIGEST), ("leaf", Array(S.LEAF, Array(512, BIT))), ("k", U16), ("plan", Array(S.P, U16)), ("pos", U16),
-             ("j", Array(64, BIT))), U16)
+             ("j", Array(64, BIT))), Array(2, BIT))
 
 
 def _build_leaf(C, S, *e):
@@ -514,16 +497,35 @@ def _build_leaf(C, S, *e):
     entry = [ZERO] * 16
     for h, w in zip(at, plan):
         entry = [o ^ C.AND(h, x) for o, x in zip(entry, w)]
-    oks = [or_reduce(C, hot), _eq(C, picked, y), or_reduce(C, at), _eq(C, entry, j[:16]), or_reduce(C, j[16:]).inv()]
-    return [and_reduce(C, oks)] + [ZERO] * 15
+    return [C.AND(or_reduce(C, hot), _eq(C, picked, y)),
+            and_reduce(C, [or_reduce(C, at), _eq(C, entry, j[:16]), or_reduce(C, j[16:]).inv()])]
 
 
 LeafMatch = _part(
     "LeafMatch", ("LEAF", "P"), _sig_leaf, _build_leaf,
-    "The receipt check's ok word: y = leaf[k] (k < LEAF) and plan[pos] = j (pos < P, j below 2^16)")
+    "The receipt's two matches: bit 0 y = leaf[k] (k < LEAF), bit 1 plan[pos] = j (pos < P, j below 2^16)")
 
 
-# --- the units ---------------------------------------------------------------------------------------------------------------
+def _sig_verdict(S):
+    _check_ints(S, ("W", BLOCK_BYTES))
+    return (("oks", Array(S.W, BIT)), ("match", Array(2, BIT)), ("reads", Array(3, BIT)), ("bound", BIT)), U16
+
+
+def _build_verdict(C, S, oks, match, reads, bound):
+    ok = {"receipt-path": C.AND(reads[0], match[1]), "codec": and_reduce(C, list(oks)),
+          "payload-path": C.AND(reads[1], OR(C, reads[2], bound[0].inv())), "receipt": match[0]}
+    flags = [ok[n] for n in VERDICT]
+    return [and_reduce(C, flags)] + [f.inv() for f in flags] + [ZERO] * (15 - len(flags))
+
+
+BlockVerdict = _part(
+    "BlockVerdict", ("W",), _sig_verdict, _build_verdict,
+    "The opening's verdict word: bit 0 the AND of its four checks, bits 1-4 each one's failure (receipt-path: the receipt "
+    "leaf's read and plan[pos] = j; codec: the W words' decodes; payload-path: the payload's read and, if bound, the value "
+    "commitment's; receipt: y = leaf[k]), bits 5-15 zero")
+
+
+# --- the unit ----------------------------------------------------------------------------------------------------------------
 
 class _Wires:
     """Bit references in a body: the constant bits, and Colls of any references."""
@@ -547,13 +549,22 @@ def _uwords(n_bits: int):
     return Array(n_bits // 16, U16)
 
 
-def _decode_signature(S):
-    _check_decode(S)
+PUBLIC = ("j", "bound", "seed", "coin", "tau", "t0", "c", "mask", "mid", "pos", "rroot", "rdom", "rdepth", "proot", "pdom", "prank",
+          "pdepth", "vroot", "vdom", "vrank", "vdepth")
+AUX = ("salts", "rpath", "ppath", "vpath")
+
+
+def _opening_signature(S):
+    _check_opening(S)
     F = _uwords(S.N)
-    return (((("j", Array(4, U16)), ("q", U16), ("bound", U16), ("seed", Array(16, U16)), ("coin", Array(16, U16)), ("tau", F),
-              ("t0", F),
-              ("c", Array(S.K, F))) + ((("mask", F),) if S.MASKED else ())
-             + (("block", _uwords(8 * S.BYTES)), ("payload", _uwords(8 * S.BYTES)))), U16)
+    pub = (("j", Array(4, U16)), ("bound", U16), ("seed", Array(16, U16)), ("coin", Array(16, U16)), ("tau", F), ("t0", F),
+           ("c", Array(S.K, F))) + ((("mask", F),) if S.MASKED else ()) + (
+        ("mid", Array(32, U16)), ("pos", U16), ("rroot", H), ("rdom", H), ("rdepth", U16), ("proot", H), ("pdom", H),
+        ("prank", Array(2, U16)), ("pdepth", U16), ("vroot", H), ("vdom", H), ("vrank", Array(2, U16)), ("vdepth", U16))
+    wit = (("signs", Array(S.ROWS, _uwords(S.BYTES))), ("block", _uwords(8 * S.BYTES)), ("payload", _uwords(8 * S.BYTES)),
+           ("leaf", Array(S.LEAF, H)), ("plan", Array(S.P, U16)), ("salts", Array(2, _uwords(8 * SALT_BYTES))),
+           ("rpath", Array(S.DR, H)), ("ppath", Array(S.DP, H)), ("vpath", Array(S.DV, H)))
+    return pub + wit, U16
 
 
 def _compress(B, X: _Wires, cv: Coll, data: list[list]) -> Coll:
@@ -563,66 +574,89 @@ def _compress(B, X: _Wires, cv: Coll, data: list[list]) -> Coll:
     return cv
 
 
-def _decode_body(B, S, *colls):
-    params, _ret = _decode_signature(S)
+def _row_digest(B, X: _Wires, bits: list) -> Coll:
+    """sha512/row/v2 of a row of whole bytes, from its one-block prefix's constant chaining value."""
+    prefix = sha512_row_v2_prefix(len(bits))
+    cv = X.coll(DIGEST, [b for v in midstate(prefix) for b in X.const(v, 64)])
+    return _compress(B, X, cv, _octets(bits) + [X.const(b, 8) for b in pad_tail(len(prefix) + len(bits) // 8)])
+
+
+def _digests(bits: list, n: int) -> list:
+    """n byte strings of 64 bytes each (bits in byte order) as SHA-512 words."""
+    return [x for i in range(n) for x in _join(_words(_octets(bits[512 * i:512 * (i + 1)])))]
+
+
+def _salt(X: _Wires, bits: list) -> Coll:
+    return X.coll(Array(SALT_BYTES // 8, WORD), _join(_words(_octets(bits))))
+
+
+def _opening_body(B, S, *colls):
+    params, _ret = _opening_signature(S)
     a = dict(zip([n for n, _ in params], colls))
     X = _Wires(B)
-    F, W, WS = _f(S), _words_of(S), S.WORDS
-    pay = X.refs(a["payload"])
-    prefix = sha512_row_v2_prefix(8 * S.BYTES)
-    cv = X.coll(DIGEST, [b for v in midstate(prefix) for b in X.const(v, 64)])
-    d = _compress(B, X, cv, _octets(pay) + [X.const(b, 8) for b in pad_tail(len(prefix) + S.BYTES)])
-    pick = bind(CodecPick, N=S.N, WORDS=WS, SLICES=W // WS)
-    block = B.call(pick, a["q"], X.coll(Array(W, F), X.refs(a["block"])))
-    want = B.call(pick, a["q"], X.coll(Array(W, F), pay))
-    b = B.call(bind(CodecBinding, N=S.N, C=S.C), a["bound"][0], X.coll(Array(256, BIT), X.refs(a["seed"])),
-               X.coll(Array(64, BIT), X.refs(a["j"])), d, X.coll(Array(256, BIT), X.refs(a["coin"])))
+    F, W = _f(S), _words_of(S)
+    pay, jb, pos = X.refs(a["payload"]), X.refs(a["j"]), X.refs(a["pos"])
+    j64, zero = X.coll(Array(64, BIT), jb), X.bit[0]
+
+    # check 3: the payload's digest, its block's binding offset and every word's decode
+    d = _row_digest(B, X, pay)
+    b = B.call(bind(CodecBinding, N=S.N, C=S.C), a["bound"][0], X.coll(Array(256, BIT), X.refs(a["seed"])), j64, d,
+               X.coll(Array(256, BIT), X.refs(a["coin"])))
     add = bind(CodecModAdd, N=S.N, C=S.C)
     tau = X.coll(F, X.refs(a["tau"]))
     t = B.call(add, X.coll(F, X.refs(a["t0"])), b)
     ts = [t]
-    for _w in range(1, WS):
+    for _w in range(1, W):
         t = B.call(add, t, tau)
         ts.append(t)
-    args = [block, X.coll(Array(WS, F), _join(X.refs(x) for x in ts)), X.coll(Array(S.K, F), X.refs(a["c"]))]
+    args = [X.coll(Array(W, F), X.refs(a["block"])), X.coll(Array(W, F), _join(X.refs(x) for x in ts)),
+            X.coll(Array(S.K, F), X.refs(a["c"]))]
     axes: tuple = (0, 0, None)
     if S.MASKED:
         args.append(X.coll(F, X.refs(a["mask"])))
         axes += (None,)
-    oks = B.batch(bind(CodecWord, N=S.N, C=S.C, K=S.K, MASKED=S.MASKED), *args, want, axes=axes + (0,))
-    return B.call(bind(BlockOk, W=WS, SLICES=W // WS), oks, a["q"])
+    oks = B.batch(bind(CodecWord, N=S.N, C=S.C, K=S.K, MASKED=S.MASKED), *args, X.coll(Array(W, F), pay), axes=axes + (0,))
 
-
-BlockDecodeCheck = CompositeDefinition(
-    "BlockDecodeCheck", 1, ("N", "C", "K", "MASKED", "BYTES", "WORDS"), _decode_signature, _decode_body,
-    conformance="exact-model-tested",
-    doc="1 iff every word of slice q (WORDS words) of block is below p and decodes to payload's under the codec key (tau, c, "
-        "mask) at block j (t0 = tau (W j + q WORDS) mod p), with b_j(c_a) of the payload's own digest and coin if bound "
-        "(codec.decode)")
-
-
-def _receipt_signature(S):
-    _check_receipt(S)
-    return ((("mid", Array(32, U16)), ("j", Array(4, U16)), ("k", U16), ("pos", U16), ("signs", Array(S.ROWS, _uwords(S.BYTES))),
-             ("block", _uwords(8 * S.BYTES)), ("leaf", Array(S.LEAF, Array(32, U16))), ("plan", Array(S.P, U16))), U16)
-
-
-def _receipt_body(B, S, mid, j, k, pos, signs, block, leaf, plan):
-    X = _Wires(B)
-    sig = X.refs(B.batch(bind(SketchRow, BYTES=S.BYTES), X.coll(Array(8 * S.BYTES, BIT), X.refs(block)),
-                         X.coll(Array(S.ROWS, Array(S.BYTES, BIT)), X.refs(signs)), axes=(None, 0)))
-    jb = X.refs(j)
+    # check 5 and the plan entry: the block's sketch receipt from the pass's prefix, entry pos & 15 of the leaf; plan[pos] = j
+    sig = X.refs(B.batch(bind(SketchRow, BYTES=S.BYTES), X.coll(Array(8 * S.BYTES, BIT), X.refs(a["block"])),
+                         X.coll(Array(S.ROWS, Array(S.BYTES, BIT)), X.refs(a["signs"])), axes=(None, 0)))
     data = _u64be(jb) + _octets(sig)
-    data += [X.const(b, 8) for b in pad_tail(128 + len(data))]
-    y = _compress(B, X, X.coll(DIGEST, X.refs(mid)), data)
-    return B.call(bind(LeafMatch, LEAF=S.LEAF, P=S.P), y, X.coll(Array(S.LEAF, Array(512, BIT)), X.refs(leaf)), k,
-                  X.coll(Array(S.P, U16), X.refs(plan)), pos, X.coll(Array(64, BIT), jb))
+    data += [X.const(b_, 8) for b_ in pad_tail(128 + len(data))]
+    y = _compress(B, X, X.coll(DIGEST, X.refs(a["mid"])), data)
+    leaf = X.refs(a["leaf"])
+    match = B.call(bind(LeafMatch, LEAF=S.LEAF, P=S.P), y, X.coll(Array(S.LEAF, Array(512, BIT)), leaf),
+                   X.coll(U16, pos[:4] + [zero] * 12), X.coll(Array(S.P, U16), X.refs(a["plan"])), a["pos"], j64)
+
+    # check 2: the receipt leaf, hidden under its salt, on its path to the pass's root at rank and position pos >> 4
+    salts = X.refs(a["salts"])
+    hl = X.refs(B.call(Hm96Sha512Leaf, _row_digest(B, X, leaf), _salt(X, salts[:8 * SALT_BYTES])))
+
+    def read(D, root, dom, value, rank, position, depth, path):
+        nb = 8 * POSITION_BYTES
+        return B.call(read_at(D, POSITION_BYTES, V2), X.coll(DIGEST, _digests(X.refs(a[root]), 1)),
+                      X.coll(DIGEST, _digests(X.refs(a[dom]), 1)), value, X.coll(Array(D, BIT), (rank + [zero] * D)[:D]),
+                      X.coll(Array(nb, BIT), (position + [zero] * nb)[:nb]), a[depth],
+                      X.coll(Array(D, DIGEST), _digests(X.refs(a[path]), D)))
+
+    r = read(S.DR, "rroot", "rdom", X.coll(DIGEST, hl[1024:]), pos[4:], pos[4:], "rdepth", "rpath")
+
+    # check 3: the payload, hidden under its salt, on its path to the payload root (or its append's) at its rank and position
+    # j, and, bound, to the value commitment at its rank and position
+    hp = X.coll(DIGEST, X.refs(B.call(Hm96Sha512Leaf, d, _salt(X, salts[8 * SALT_BYTES:])))[1024:])
+    p = read(S.DP, "proot", "pdom", hp, X.refs(a["prank"]), jb, "pdepth", "ppath")
+    vr = X.refs(a["vrank"])
+    v = read(S.DV, "vroot", "vdom", hp, vr, vr, "vdepth", "vpath")
+    return B.call(bind(BlockVerdict, W=W), oks, match, X.coll(Array(3, BIT), X.refs(r) + X.refs(p) + X.refs(v)), a["bound"][0])
 
 
-BlockReceiptCheck = CompositeDefinition(
-    "BlockReceiptCheck", 1, ("ROWS", "LEAF", "P", "BYTES"), _receipt_signature, _receipt_body, conformance="exact-model-tested",
-    doc="1 iff block's sketch-sha512 receipt at j, from the prefix's chaining value mid under the pass's sign rows, is "
-        "leaf[k], and plan[pos] = j (receipts.SketchReceipter)")
+BlockOpeningCheck = CompositeDefinition(
+    "BlockOpeningCheck", 1, ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "P", "DR", "DP", "DV"), _opening_signature,
+    _opening_body, conformance="exact-model-tested",
+    doc="A drawn receipt's opening (remote_bandwidth §6 checks 1-3 and 5): the receipt leaf on its path to the pass's root "
+        "and plan[pos] = j (receipt-path); every word of block below p and decoding to payload under the codec key at j, with "
+        "b_j(c_a) of the payload's own digest and coin if bound (codec); the payload on its path to the payload root or its "
+        "append's and, if bound, to the value commitment (payload-path); the block's sketch receipt the leaf's entry pos & 15 "
+        "(receipt). Returns bit 0 accepted, bits 1-4 each check's failure")
 
 
 # --- references --------------------------------------------------------------------------------------------------------------
@@ -643,7 +677,7 @@ def _message(S, seed: bytes, r: int) -> bytes:
 def key(S, seed: bytes) -> tuple[tuple[int, ...], int, int | None]:
     """The codec key of ``seed`` at (N, C, K, MASKED): its round constants c_0 .. c_(K-1), its tweak tau and its mask
     (`codec.key`'s, over any field of `FIELDS`)."""
-    _check_decode(S)
+    _check_field(S)
     if type(seed) is not bytes or len(seed) != SEED_BYTES:
         raise ValueError(f"a codec seed is {SEED_BYTES} bytes")
     p, w = _p(S), S.N // 8
@@ -685,54 +719,6 @@ def _u16s(x: int | bytes, n: int | None = None) -> list[int]:
     return [(x >> (16 * i)) & 0xFFFF for i in range(n)]
 
 
-def decode_check(S, a: dict) -> int:
-    """`BlockDecodeCheck`'s reference on an instance's u16 words (``a[param]``, as `decode_args` gives them), its public
-    field elements below p."""
-    _check_decode(S)
-    p, w, fw, q = _p(S), S.N // 8, S.N // 16, a["q"][0]
-    if q >= _words_of(S) // S.WORDS:
-        return 0
-    block, payload = _bytes_of(a["block"]), _bytes_of(a["payload"])
-    at = range(q * S.WORDS, (q + 1) * S.WORDS)
-    ys = [int.from_bytes(block[w * i:w * (i + 1)], "little") for i in at]
-    ms = [int.from_bytes(payload[w * i:w * (i + 1)], "little") for i in at]
-    tau, t0 = _int(a["tau"]), _int(a["t0"])
-    c = [_int(a["c"][fw * r:fw * (r + 1)]) for r in range(S.K)]
-    mask = _int(a["mask"]) if S.MASKED else None
-    b = 0
-    if a["bound"][0] & 1:
-        d = sha512_row_v2_digest(payload, 8 * S.BYTES)
-        b = _binding(S, _bytes_of(a["seed"]), _int(a["j"]), d, _bytes_of(a["coin"]))
-    return int(all(y < p and _decode_word(S, y, (t0 + i * tau + b) % p, c, mask) == m for i, (y, m) in enumerate(zip(ys, ms))))
-
-
-def decode_public(S, seed: bytes, j: int, coin: bytes | None = None, q: int = 0) -> dict[str, list[int]]:
-    """The public row's words of slice q of block j (`decode_rows`' first), which the verifier derives itself: the codec key of
-    ``seed``, bound under its append's ``coin`` if one is given (an appended block), else the seed's key (a registered block)."""
-    _check_decode(S)
-    if not 0 <= j < 1 << 64 or not 0 <= q < 1 << 16:
-        raise ValueError("j is a u64 and q a u16")
-    if coin is not None and (type(coin) is not bytes or len(coin) != COIN_BYTES):
-        raise ValueError(f"an append's coin is {COIN_BYTES} bytes")
-    c, tau, mask = key(S, seed)
-    fw = S.N // 16
-    out = {"j": _u16s(j, 4), "q": [q], "bound": [int(coin is not None)], "seed": _u16s(seed),
-           "coin": _u16s(coin or bytes(COIN_BYTES)), "tau": _u16s(tau, fw),
-           "t0": _u16s(tau * (_words_of(S) * j + q * S.WORDS) % _p(S), fw), "c": [x for r in c for x in _u16s(r, fw)]}
-    if S.MASKED:
-        out["mask"] = _u16s(mask, fw)
-    return out
-
-
-def decode_args(S, seed: bytes, j: int, block: bytes, payload: bytes, coin: bytes | None = None, q: int = 0
-                ) -> dict[str, list[int]]:
-    """An instance's u16 words: slice q of block j's encoding and its payload, with `decode_public`'s public row."""
-    _check_decode(S)
-    if len(block) != S.BYTES or len(payload) != S.BYTES:
-        raise ValueError(f"a block and its payload are {S.BYTES} bytes")
-    return {**decode_public(S, seed, j, coin, q), "block": _u16s(block), "payload": _u16s(payload)}
-
-
 def sketch(block: bytes, signs: Sequence[bytes]) -> bytes:
     """sigma: per sign row, sum_u (-1)^(its bit u) int8(block[u]), as int32 little-endian (`receipts.SketchReceipter.sketch`)."""
     e = [b - 256 if b > 127 else b for b in block]
@@ -756,57 +742,131 @@ def _digest_from(mid: Sequence[int], tail: bytes) -> bytes:
     return b"".join(v.to_bytes(8, "big") for v in cv)
 
 
-def receipt_check(S, a: dict) -> int:
-    """`BlockReceiptCheck`'s reference on an instance's u16 words (``a[param]``, as `receipt_args` gives them)."""
-    _check_receipt(S)
+def _paths(words: Sequence[int], n: int) -> list[bytes]:
+    raw = _bytes_of(words)
+    return [raw[64 * i:64 * (i + 1)] for i in range(n)]
+
+
+def opening_check(S, a: dict) -> int:
+    """`BlockOpeningCheck`'s reference on an instance's u16 words (``a[param]``, as `opening_args` gives them), its public
+    field elements below p: the verdict word."""
+    _check_opening(S)
+    p, w, fw, W = _p(S), S.N // 8, S.N // 16, _words_of(S)
+    block, payload = _bytes_of(a["block"]), _bytes_of(a["payload"])
+    j, pos, bound = _int(a["j"]), a["pos"][0], a["bound"][0] & 1
+    ys = [int.from_bytes(block[w * i:w * (i + 1)], "little") for i in range(W)]
+    ms = [int.from_bytes(payload[w * i:w * (i + 1)], "little") for i in range(W)]
+    tau, t0 = _int(a["tau"]), _int(a["t0"])
+    c = [_int(a["c"][fw * r:fw * (r + 1)]) for r in range(S.K)]
+    mask = _int(a["mask"]) if S.MASKED else None
+    d = sha512_row_v2_digest(payload, 8 * S.BYTES)
+    b = _binding(S, _bytes_of(a["seed"]), j, d, _bytes_of(a["coin"])) if bound else 0
+    codec = all(y < p and _decode_word(S, y, (t0 + i * tau + b) % p, c, mask) == m for i, (y, m) in enumerate(zip(ys, ms)))
+
     mid = [_int(a["mid"][4 * k:4 * (k + 1)]) for k in range(8)]
-    j, k, pos = _int(a["j"]), a["k"][0], a["pos"][0]
     rw = S.BYTES // 16
-    signs = [_bytes_of(a["signs"][rw * c:rw * (c + 1)]) for c in range(S.ROWS)]
-    y = _digest_from(mid, j.to_bytes(8, "big") + sketch(_bytes_of(a["block"]), signs))
-    leaf = _bytes_of(a["leaf"])
-    return int(k < S.LEAF and leaf[64 * k:64 * (k + 1)] == y and pos < S.P and j < 1 << 16 and a["plan"][pos] == j)
+    signs = [_bytes_of(a["signs"][rw * r:rw * (r + 1)]) for r in range(S.ROWS)]
+    y = _digest_from(mid, j.to_bytes(8, "big") + sketch(block, signs))
+    leaf, k = _bytes_of(a["leaf"]), pos % PER_LEAF
+    rec = k < S.LEAF and leaf[64 * k:64 * (k + 1)] == y
+    plan = pos < S.P and j < 1 << 16 and a["plan"][pos] == j
+
+    salts = _bytes_of(a["salts"])
+    aux = {"r": _paths(a["rpath"], S.DR), "p": _paths(a["ppath"], S.DP), "v": _paths(a["vpath"], S.DV)}
+    lv = hm96_leaf(sha512_row_v2_digest(leaf, 512 * S.LEAF), salts[:SALT_BYTES])[2]
+    pv = hm96_leaf(d, salts[SALT_BYTES:])[2]
+    top = (1 << 8 * POSITION_BYTES) - 1
+
+    def at(root: str, dom: str, value: bytes, rank: int, position: int, depth: str, path: list[bytes], D: int) -> bool:
+        return bool(opens_at(V2, _bytes_of(a[root]), _bytes_of(a[dom]), value, rank % (1 << D), position & top, a[depth][0], path))
+
+    r = at("rroot", "rdom", lv, pos >> 4, pos >> 4, "rdepth", aux["r"], S.DR)
+    pp = at("proot", "pdom", pv, _int(a["prank"]), j, "pdepth", aux["p"], S.DP)
+    vv = at("vroot", "vdom", pv, _int(a["vrank"]), _int(a["vrank"]), "vdepth", aux["v"], S.DV)
+    ok = {"receipt-path": r and plan, "codec": codec, "payload-path": pp and (vv or not bound), "receipt": rec}
+    flags = [ok[n] for n in VERDICT]
+    return int(all(flags)) | sum((not f) << (1 + i) for i, f in enumerate(flags))
 
 
-def receipt_public(S, prefix: bytes, signs: Sequence[bytes], j: int, k: int, pos: int) -> dict[str, list[int]]:
-    """The public rows' words (`receipt_rows`' first two), which the verifier derives itself: the pass's one-block receipt
-    ``prefix`` (`receipts.sketch_prefix`) and sign rows (`receipts.sign_bits`), block j at position ``pos`` of the plan and
-    ``k`` its place in its receipt leaf."""
-    _check_receipt(S)
+def verdict(word: int) -> str | None:
+    """The name the verdict word says: None (accepted, word 1) or the first failed check's (`VERDICT`); "malformed" for a word
+    no unit returns."""
+    if word == 1:
+        return None
+    return next((n for i, n in enumerate(VERDICT) if (word >> (1 + i)) & 1), "malformed")
+
+
+def _tree(t: tuple[bytes, bytes, int, int] | None, D: int, name: str) -> dict[str, list[int]]:
+    root, dom, rank, depth = t if t is not None else (bytes(64), bytes(64), 0, 0)
+    if len(root) != 64 or len(dom) != 64 or not 0 <= rank < 1 << 32 or not 0 <= depth <= D:
+        raise ValueError(f"the {name} tree is a 64-byte root and domain id, a u32 rank and a depth of at most {D}")
+    return {"root": _u16s(root), "dom": _u16s(dom), "rank": _u16s(rank, 2), "depth": [depth]}
+
+
+def opening_public(S, seed: bytes, j: int, coin: bytes | None, prefix: bytes, signs: Sequence[bytes], pos: int,
+                   receipts: tuple[bytes, bytes, int], payloads: tuple[bytes, bytes, int, int],
+                   values: tuple[bytes, bytes, int, int] | None) -> dict[str, list[int]]:
+    """The public rows' words (`opening_rows`' first two), which the verifier derives itself: block j's codec key under the
+    registration's codec ``seed``, bound under its append's ``coin`` if one is given (an appended block), else the seed's
+    key (a registered block); the pass's one-block receipt ``prefix`` (`receipts.sketch_prefix`) and sign rows
+    (`receipts.sign_bits`), position ``pos`` of its plan; and the trees: ``receipts`` the pass's (root, domain id, depth),
+    ``payloads`` the payload's (root, domain id, rank of j, depth), ``values`` the value commitment's (root, domain id, rank
+    and position, depth; None, read as zeros, for a registered block)."""
+    _check_opening(S)
+    if not 0 <= j < 1 << (8 * POSITION_BYTES) or not 0 <= pos < 1 << 16:
+        raise ValueError(f"j is below 2^{8 * POSITION_BYTES} and pos a u16")
+    if coin is not None and (type(coin) is not bytes or len(coin) != COIN_BYTES):
+        raise ValueError(f"an append's coin is {COIN_BYTES} bytes")
     if len(prefix) != 128 or len(signs) != S.ROWS or any(len(r) != S.BYTES // 8 for r in signs):
         raise ValueError(f"a prefix is one block and the signs {S.ROWS} rows of {S.BYTES // 8} bytes")
-    if not (0 <= j < 1 << 64 and 0 <= k < 1 << 16 and 0 <= pos < 1 << 16):
-        raise ValueError("j is a u64, k and pos u16s")
-    return {"mid": [x for v in midstate(prefix) for x in _u16s(v, 4)], "j": _u16s(j, 4), "k": [k], "pos": [pos],
-            "signs": [x for r in signs for x in _u16s(r)]}
+    c, tau, mask = key(S, seed)
+    fw = S.N // 16
+    out = {"j": _u16s(j, 4), "bound": [int(coin is not None)], "seed": _u16s(seed), "coin": _u16s(coin or bytes(COIN_BYTES)),
+           "tau": _u16s(tau, fw), "t0": _u16s(tau * _words_of(S) * j % _p(S), fw), "c": [x for r in c for x in _u16s(r, fw)]}
+    if S.MASKED:
+        out["mask"] = _u16s(mask, fw)
+    out["mid"] = [x for v in midstate(prefix) for x in _u16s(v, 4)]
+    out["pos"] = [pos]
+    r = _tree((receipts[0], receipts[1], pos >> 4, receipts[2]), S.DR, "receipt")
+    out.update(rroot=r["root"], rdom=r["dom"], rdepth=r["depth"])
+    t = _tree(payloads, S.DP, "payload")
+    out.update(proot=t["root"], pdom=t["dom"], prank=t["rank"], pdepth=t["depth"])
+    t = _tree(values, S.DV, "value")
+    out.update(vroot=t["root"], vdom=t["dom"], vrank=t["rank"], vdepth=t["depth"])
+    out["signs"] = [x for r_ in signs for x in _u16s(r_)]
+    return out
 
 
-def receipt_args(S, prefix: bytes, signs: Sequence[bytes], j: int, k: int, pos: int, block: bytes, leaf: bytes,
-                 plan: Sequence[int]) -> dict[str, list[int]]:
-    """An instance's u16 words: `receipt_public`'s public rows, the block's encoding, its receipt leaf ``leaf`` (LEAF
-    receipts) and the step's plan row (P entries)."""
-    _check_receipt(S)
-    if len(block) != S.BYTES or len(leaf) != 64 * S.LEAF or len(plan) != S.P:
-        raise ValueError(f"a block is {S.BYTES} bytes, its leaf {S.LEAF} receipts and the plan {S.P} entries")
-    return {**receipt_public(S, prefix, signs, j, k, pos), "block": _u16s(block), "leaf": _u16s(leaf), "plan": list(plan)}
+def opening_args(S, public: dict[str, list[int]], block: bytes, payload: bytes, leaf: bytes, plan: Sequence[int],
+                 leaf_salt: bytes, payload_salt: bytes, rpath: Sequence[bytes], ppath: Sequence[bytes],
+                 vpath: Sequence[bytes]) -> dict[str, list[int]]:
+    """An instance's u16 words: `opening_public`'s public rows, the block's encoding and its payload, its receipt leaf
+    (LEAF receipts), the step's plan row (P entries), the receipt leaf's and the payload's salts, and the three paths (each
+    at most its tree's D siblings, padded with zero digests)."""
+    _check_opening(S)
+    if len(block) != S.BYTES or len(payload) != S.BYTES or len(leaf) != 64 * S.LEAF or len(plan) != S.P:
+        raise ValueError(f"a block and its payload are {S.BYTES} bytes, the leaf {S.LEAF} receipts and the plan {S.P} entries")
+    if len(leaf_salt) != SALT_BYTES or len(payload_salt) != SALT_BYTES:
+        raise ValueError(f"a salt is {SALT_BYTES} bytes")
+    out = dict(public, block=_u16s(block), payload=_u16s(payload), leaf=_u16s(leaf), plan=list(plan),
+               salts=_u16s(leaf_salt + payload_salt))
+    for name, path, D in (("rpath", rpath, S.DR), ("ppath", ppath, S.DP), ("vpath", vpath, S.DV)):
+        if len(path) > D or any(len(x) != 64 for x in path):
+            raise ValueError(f"{name} is at most {D} digests of 64 bytes, not {len(path)}")
+        out[name] = _u16s(b"".join(path) + bytes(64 * (D - len(path))))
+    return out
 
 
 # --- each instance's rows ----------------------------------------------------------------------------------------------------
 
-def decode_rows(S) -> list[tuple[str, int, list[str]]]:
-    """BlockDecodeCheck's rows: (row, bits, params), the public row first."""
-    _check_decode(S)
-    pub = ["j", "q", "bound", "seed", "coin", "tau", "t0", "c"] + (["mask"] if S.MASKED else [])
-    bits = 16 * (4 + 1 + 1 + 16 + 16) + S.N * (2 + S.K + int(bool(S.MASKED)))
-    return [("pub", bits, pub), ("block", 8 * S.BYTES, ["block"]), ("payload", 8 * S.BYTES, ["payload"])]
-
-
-def receipt_rows(S) -> list[tuple[str, int, list[str]]]:
-    """BlockReceiptCheck's rows: (row, bits, params), the public rows (the pass's chaining value and indices, its sign rows)
-    first."""
-    _check_receipt(S)
-    return [("pub", 16 * (32 + 4 + 2), ["mid", "j", "k", "pos"]), ("signs", S.ROWS * S.BYTES, ["signs"]),
-            ("block", 8 * S.BYTES, ["block"]), ("leaf", 512 * S.LEAF, ["leaf"]), ("plan", 16 * S.P, ["plan"])]
+def opening_rows(S) -> list[tuple[str, int, list[str]]]:
+    """BlockOpeningCheck's rows: (row, bits, params), the public rows (its public data, the pass's sign rows) first."""
+    params, _ = _opening_signature(S)
+    bits = {n: t.leaves for n, t in params}
+    pub = [n for n in PUBLIC if n in bits]
+    return ([("pub", sum(bits[n] for n in pub), pub), ("signs", bits["signs"], ["signs"])]
+            + [(n, bits[n], [n]) for n in ("block", "payload", "leaf", "plan")]
+            + [("aux", sum(bits[n] for n in AUX), list(AUX))])
 
 
 def row_words(rows: Sequence[tuple[str, int, list[str]]], args: dict) -> dict[str, list[int]]:
