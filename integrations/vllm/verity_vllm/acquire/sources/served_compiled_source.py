@@ -272,25 +272,31 @@ class ServedCompiledSource:
         self._install_launch_record(into)
 
     def _install_launch_record(self, into: hooks.Hooks) -> None:
-        """The config each Inductor autotuner launches with in a served step or a capture (`launch_configs`): read off the one launcher
-        its run settled on, once per autotuner.  Compile-time tuning runs and Inductor's benchmark modules launch outside both."""
-        from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+        """The config each Inductor autotuner launches with in a served step or a capture (`launch_configs`), once per autotuner: the
+        launcher `run`'s fast path cached at its first launch when that path is taken (whatever `launchers` holds since: a later
+        precompile's rblock rescale re-makes two), else the one launcher its run settled on.  Compile-time tuning runs and Inductor's
+        benchmark modules launch outside both."""
+        from torch._inductor.runtime import triton_heuristics as th
 
         src = self
 
         def tuner_run(orig):
             def run(self_t, *a, **kw):
+                fast = getattr(self_t, "_cached_launcher", None)
                 out = orig(self_t, *a, **kw)
                 if id(self_t) not in src.launched and (src.capturing is not None or src._job() is not None):
                     launchers = getattr(self_t, "launchers", None) or []
-                    if len(launchers) == 1:
+                    if (fast is not None and set(kw) <= {"stream", "benchmark_run"} and not kw.get("benchmark_run")
+                            and not th.autograd_profiler._is_profiler_enabled and not th.get_active_debug_mode()):
+                        src.launched[id(self_t)] = (self_t, fast.config)
+                    elif len(launchers) == 1:
                         src.launched[id(self_t)] = (self_t, launchers[0].config)
                     else:
                         src.errors.append(f"{getattr(self_t, 'filename', None)}: launched holding {len(launchers)} launchers")
                 return out
             return run
 
-        into.wrap(CachingAutotuner, "run", tuner_run)
+        into.wrap(th.CachingAutotuner, "run", tuner_run)
 
     def remove_hooks(self) -> None:
         """Undo `install_hooks`.  Code Inductor generated while they were installed keeps its hook lines."""
