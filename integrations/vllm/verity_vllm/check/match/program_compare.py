@@ -481,6 +481,7 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
                              "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in (o.get("operand_refs") or [])],
                              "pattern": o.get("pattern"),
                              "request": o.get("request"),  # [X-09] the fold's own attribution when recorded
+                             "position": o.get("position"),  # prefix_reads links a cached row to its producer by position (and layer: hint)
                              "operand_roots": o.get("operand_roots")})  # [R15 fp8] per-operand weight names (multi-weight Computes)
     if d not in LOAD_NOTES:     # a pre-header instances.jsonl (no schema line): the form is the default, the digests are still stated
         LOAD_NOTES[d] = {"source": "record files", "instances_schema": None, "operand_refs_form": "runs", "program_sha256": program_sha}

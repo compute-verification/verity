@@ -25,6 +25,7 @@ from verity_vllm.program.compact import expand, idx_values, rle_mapped
 
 PREFIX_FILE = "prefix_cache.json"
 KV_OPERANDS = (1, 2)   # an attention Call's key and value operands: (q, k, v[, scale]), the fold's and the Program's alike
+FOLD_META = frozenset({"request", "position", "hint"})   # the fold rows' fields a link reads: program_compare.load_oracle must keep them
 _LAYER = re.compile(r"layers\.(\d+)")
 _KVH, _D = re.compile(r"[{,]KVH=(\d+)"), re.compile(r"[{,]D=(\d+)")
 
@@ -153,7 +154,7 @@ class CachedKv:
 
     def _kv_reads(self, i: int, kv: int, a: list, rl: int, unfold: bool, count: bool = True) -> list[tuple[tuple, str | None]]:
         """Canonical sources of one key / value operand, each with the request whose row it links to (None for the request's own)."""
-        layer = layer_number((self._meta(self.inst[i]["k"]) or {}).get("name"))
+        layer = layer_number((self._meta(self.inst[i]["k"]) or {}).get("hint"))
         out, o = [], 0
         for p in a:
             if self.compact and not (p[0] == "n" and any(self._foreign(x) for x in idx_values(p))):
@@ -176,7 +177,7 @@ class CachedKv:
         j = o // rl
         m = self._meta(idx) or {}
         if (hi > lo and (o + hi - lo - 1) // rl == j and j < self.cached_rows and m.get("position") == j and layer is not None
-                and layer_number(m.get("name")) == layer and m.get("request") is not None):
+                and layer_number(m.get("hint")) == layer and m.get("request") is not None):
             return ("PFX", layer, kv, o, o + hi - lo), str(m["request"])
         if count:
             self._xreq("prefix-unlinked", idx, lo, hi)

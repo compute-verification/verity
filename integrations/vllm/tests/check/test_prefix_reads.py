@@ -74,6 +74,13 @@ def warm_program(tmp_path, compact: bool = False, layers: list[str] = LAYERS) ->
     return P
 
 
+def _meta(k: int, request: str, position: int, hint: str) -> dict:
+    """A fold row with only the fields a link reads (`PX.FOLD_META`)."""
+    row = {"node": k - 3, "request": request, "position": position, "hint": hint}
+    assert row.keys() - {"node"} == PX.FOLD_META
+    return row
+
+
 def fold(compact: bool = False, read_row=lambda l, j: (l, j)) -> tuple[C.Prog, list[int]]:
     """The batch: r0 computes rows 0..C-1 of every layer, r1 (warm) computes row C and reads r0's rows as its first C rows.
     `read_row(l, j)` is the (layer, position) of r0's row r1 reads as its row j of layer l.  Returns the fold and r1's instances."""
@@ -87,7 +94,7 @@ def fold(compact: bool = False, read_row=lambda l, j: (l, j)) -> tuple[C.Prog, l
         for j in range(C_ROWS):
             rows = _rows(k, 0, j)
             inst += rows
-            meta += [{"node": r["k"] - 3, "request": "r0", "position": j, "name": f"t={j}/layers.{l}/qkv"} for r in rows]
+            meta += [_meta(r["k"], "r0", j, f"model.layers.{l}.self_attn.qkv_proj/{WNAME}") for r in rows]
             r0[(l, j)] = k
             k += 3
     mine = []
@@ -99,11 +106,11 @@ def fold(compact: bool = False, read_row=lambda l, j: (l, j)) -> tuple[C.Prog, l
         for r in rows + [att]:
             mine.append(len(inst))
             inst.append(r)
-            meta.append({"node": r["k"] - 3, "request": "r1", "position": C_ROWS, "name": f"t={C_ROWS}/layers.{l}/" + ("attn" if r is att else "qkv")})
+            meta.append(_meta(r["k"], "r1", C_ROWS, LAYERS[l] + "/attn" if r is att else f"model.layers.{l}.self_attn.qkv_proj/{WNAME}"))
         k += 4
     mine.append(len(inst))
     inst.append(_select(k, k - 1))
-    meta.append({"node": k - 3, "request": "r1", "position": C_ROWS, "name": "t=2/sample"})
+    meta.append(_meta(k, "r1", C_ROWS, "sampler"))
     F.oracle_rows = meta
     return _finish(F, inst, compact), mine
 
@@ -167,6 +174,13 @@ def test_the_program_side_needs_its_layout_and_the_layer_order_it_names(tmp_path
     (d / PX.PREFIX_FILE).write_text(json.dumps({"input": 1, "C": C_ROWS + 1, "row_leaves": RL, "layers": LAYERS}))
     with pytest.raises(ValueError, match="is not one Input node"):
         PX.load_layout(A, str(d))
+
+
+def test_the_fold_rows_global_match_loads_keep_what_a_link_reads(tmp_path):
+    from tests.check import test_global_match as T
+    _gp, oracle = T.assemble([T.R0, T.R1_LATE], tmp_path)
+    rows = C.load_oracle(oracle, "oracle").oracle_rows
+    assert all(PX.FOLD_META <= r.keys() for r in rows) and any(r["position"] for r in rows)
 
 
 def test_the_served_rows_are_the_first_scheduled_position_under_prefix_caching_only():
