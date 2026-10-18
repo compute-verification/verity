@@ -8,6 +8,9 @@
   "args": {
    "max_num_batched_tokens": 2048,
    "max_model_len": 288
+  },
+  "target": {
+   "ir": "boolean"
   }
  },
  "seed": 0,
