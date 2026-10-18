@@ -141,7 +141,7 @@ def section_10b():
 # §11 Telemetry on an off-ramp
 def section_11(c, dc):
     temps = Offramp("telemetry", "b.gpu", "world", bits=64, windows=2)
-    p = place(c, dc, PIPELINE, deliver="world", offramps=(temps,))
+    p = place(c, dc, PIPELINE, deliver="world", streams=(temps,))
     t = run(p, INPUTS, window=4)
     acc = account(audit(t, occupancy(p, 32, 1, window=4), syncs=128), p, Clock(1e-3), Interval(0, 16))
     print(acc.offramp_bits, acc.covert_bits)

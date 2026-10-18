@@ -10,6 +10,7 @@ claims about the prover *system*, each a fact a proof would establish:
   advice, at most `bits`.
 - `Entered`: an input's bits entered the computation.
 - `Emitted`: a declared off-ramp (telemetry) carried bits the circuit doesn't explain.
+- `Scheduled`: the occupancy profile was one of so many registered profiles, which is advice worth log2 of that.
 - `Held`: the prover system held `bits` of a registered store throughout an interval (PoUS; a wipe is a store that
   fills a device's memory, so a verified wipe is a `Held`).
 - `Read`: the prover system read at least `bits` of a registered store within an interval (the bandwidth audits).
@@ -57,6 +58,15 @@ class Emitted:
 
 
 @dataclass(frozen=True)
+class Scheduled:
+    """The occupancy profile was one of `profiles` registered profiles (a declared scheduler), so its choice is advice
+    worth `bits` = log2 profiles, once per audit."""
+
+    profiles: int
+    bits: float
+
+
+@dataclass(frozen=True)
 class Held:
     """The prover system held `bits` of registered store `store` throughout `at`: every challenge in it came back right
     by its deadline. Where the bits were is the physical layer's reading of the deadlines."""
@@ -84,12 +94,13 @@ class Refused:
     why: str
 
 
-Claim = Computed | Carried | Entered | Emitted | Held | Read | Refused
+Claim = Computed | Carried | Entered | Emitted | Scheduled | Held | Read | Refused
 
 
-def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: int = 1) -> list[Claim]:
-    """The claims `trace` supports against the public occupancy `profile` (declared before the run) and a sync set of
-    `syncs` values per window (the timing advice each window may carry: log2 syncs bits)."""
+def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: int = 1, profiles: int = 1) -> list[Claim]:
+    """The claims `trace` supports against the public occupancy `profile` (declared before the run, one of `profiles`
+    registered profiles) and a sync set of `syncs` values per window (the timing advice each window may carry: log2 syncs
+    bits). Every boundary link must have a record for every window the profile spans: a missing one fails closed."""
     p, out = trace.placement, []
     c = p.circuit
     reference = c.evaluate(trace.inputs)
@@ -105,6 +116,15 @@ def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: i
             if (l.a, l.b) in boundary:
                 w = p.tick(x.value) // trace.bucket // trace.window
                 expected.setdefault(((l.a, l.b), w), []).append((x.value.id, reference[x.value.id]))
+    if profiles > 1:
+        out.append(Scheduled(profiles, math.log2(profiles)))
+    horizon = max((b for row in profile.values() for b in row), default=0) // trace.window + 1
+    have = {(r.link, r.window) for r in trace.records}
+    for link in sorted(boundary):
+        for w in range(horizon):
+            if (link, w) not in have:
+                out.append(Refused(f"link {link} window {w}", "no record: the certifier was down or its record was withheld"))
+    declared_streams = {s.name: s for s in p.streams}
     for r in trace.records:
         declared = tuple(profile.get(r.link, {}).get(r.window * trace.window + t, 0) for t in range(trace.window))
         if r.counts != declared:
@@ -113,7 +133,11 @@ def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: i
             out.append(Refused(f"link {r.link} window {r.window}", "a frame is not a committed crossing"))
         else:
             out.append(Carried(r.link, r.window, math.log2(syncs)))
-            out += [Emitted(s, r.link, r.window, n * trace.frame_bits) for s, n in r.offramp]
+            for name, n, ok in r.streams:
+                if not declared_streams[name].registered:
+                    out.append(Emitted(name, r.link, r.window, n * trace.frame_bits))
+                elif not ok:
+                    out.append(Refused(f"stream {name} on {r.link} window {r.window}", "its bytes differ from the registered digest"))
     for v in c.inputs:
         spec = c.gates[v.id].input
         if spec.source != "registered":

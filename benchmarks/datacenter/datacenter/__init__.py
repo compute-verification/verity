@@ -6,8 +6,8 @@ claims in light of the declared hardware, named assumptions and trusted devices.
 circuit onto the hardware, and `observe` runs it and records what the trusted devices see.
 """
 from .account import Account, BlockAccount, Credit, account, schedulable
-from .binding import Crossing, Offramp, Placement, crossings, occupancy, place, route
-from .claims import Carried, Computed, Emitted, Entered, Held, Read, Refused, audit
+from .binding import Crossing, Offramp, Placement, Stream, crossings, occupancy, place, route
+from .claims import Carried, Computed, Emitted, Entered, Held, Read, Refused, Scheduled, audit
 from .logical import Circuit, Commitment, Input, Value, commit, name, trace
 from .memory import Challenge, ReadAudit, Store, answer_time, label_store, read_time
 from .observe import Deviation, Record, Trace, run
@@ -43,6 +43,8 @@ __all__ = [
     "ReadAudit",
     "Record",
     "Refused",
+    "Scheduled",
+    "Stream",
     "Store",
     "Trace",
     "Value",

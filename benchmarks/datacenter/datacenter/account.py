@@ -23,7 +23,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from .binding import Placement
-from .claims import Carried, Claim, Computed, Emitted, Entered, Held, Read, Refused
+from .claims import Carried, Claim, Computed, Emitted, Entered, Held, Read, Refused, Scheduled
 from .memory import Store, answer_time, label_store
 from .physical import Datacenter
 from .time import Clock, Interval, Wipe
@@ -66,6 +66,8 @@ class Account:
     offramp_bits: dict[str, int] = field(default_factory=dict)
     #: each held store, and every device that could have held it and still answered by its deadlines
     located: dict[str, list[str]] = field(default_factory=dict)
+    #: bits of advice in the choice of occupancy profile (NET-5's declared scheduler), once per audit
+    advice_bits: float = 0.0
 
     @property
     def sound(self) -> bool:
@@ -73,8 +75,9 @@ class Account:
 
     @property
     def covert_bits(self) -> float:
-        """Every bit the run could have carried beyond the committed computation: timing advice, inputs, off-ramps."""
-        return self.timing_bits + sum(self.input_bits.values()) + sum(self.offramp_bits.values())
+        """Every bit the run could have carried beyond the committed computation: the profile's advice, timing advice,
+        inputs and off-ramps."""
+        return self.advice_bits + self.timing_bits + sum(self.input_bits.values()) + sum(self.offramp_bits.values())
 
     def __repr__(self) -> str:
         lines = [f"{'block':8} {'credited':>9} {'local ≥':>9} {'capacity':>9} {'headroom':>9} {'outsourceable':>13} "
@@ -82,7 +85,7 @@ class Account:
         for b in self.blocks:
             lines.append(f"{b.block:8} {b.credited:9.3g} {b.local_at_least:9.3g} {b.capacity:9.3g} {b.headroom:9.3g} "
                          f"{b.outsourceable:13.3g} {b.reads:9.3g} {b.state:12.3g}")
-        lines.append(f"covert budget: {self.covert_bits:g} bits = {self.timing_bits:g} timing advice + "
+        lines.append(f"covert budget: {self.covert_bits:g} bits = {self.advice_bits:g} profile advice + {self.timing_bits:g} timing advice + "
                      f"{sum(self.input_bits.values())} inputs ({', '.join(f'{k}: {v}' for k, v in self.input_bits.items()) or 'none'}) + "
                      f"{sum(self.offramp_bits.values())} off-ramp ({', '.join(f'{k}: {v}' for k, v in self.offramp_bits.items()) or 'none'})")
         for s, where in self.located.items():
@@ -161,7 +164,8 @@ def account(claims: list[Claim], p: Placement, clock: Clock, epoch: Interval, op
         offramp[stream] += bits
     timing = sum(c.bits for c in claims if isinstance(c, Carried))
     inputs = {c.input: c.bits for c in claims if isinstance(c, Entered)}
-    return Account(blocks, timing, inputs, refused, dict(offramp), located)
+    advice = sum(c.bits for c in claims if isinstance(c, Scheduled))
+    return Account(blocks, timing, inputs, refused, dict(offramp), located, advice)
 
 
 @dataclass(frozen=True)

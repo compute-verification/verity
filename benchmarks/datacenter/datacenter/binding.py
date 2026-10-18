@@ -18,16 +18,28 @@ from .physical import Datacenter, Link
 
 
 @dataclass(frozen=True)
-class Offramp:
-    """A declared stream of data the circuit doesn't explain (telemetry, logs, metrics): `bits` bits a window from device
-    `src` to device `dst`, for `windows` windows. Its frames count in the occupancy profile like any other, its content
-    isn't checked against the circuit, and the account charges every bit of it."""
+class Stream:
+    """Declared traffic that isn't a circuit value: `bits` bits a window from device `src` to device `dst`, for `windows`
+    windows. Its frames count in the occupancy profile like any other. With a `digest` it is *registered* (a container
+    image, a checkpoint restore): its content must match the digest, declared before the run, and it is not charged.
+    Without one it is an *off-ramp* (telemetry, logs, metrics): its content isn't checked, and the account charges every
+    bit."""
 
     name: str
     src: str
     dst: str
     bits: int
     windows: int = 1
+    digest: bytes | None = None
+
+    @property
+    def registered(self) -> bool:
+        return self.digest is not None
+
+
+def Offramp(name: str, src: str, dst: str, bits: int, windows: int = 1) -> Stream:
+    """A stream of data the circuit doesn't explain, charged in full."""
+    return Stream(name, src, dst, bits, windows)
 
 
 @dataclass
@@ -44,8 +56,8 @@ class Placement:
     cell: dict[int, int] = field(default_factory=dict)
     #: the device the circuit's outputs are delivered to (usually the outside world), or None
     deliver: str | None = None
-    #: declared streams of unexplained data (telemetry), charged in full
-    offramps: tuple[Offramp, ...] = ()
+    #: declared traffic that isn't a circuit value: registered streams (images) and off-ramps (telemetry)
+    streams: tuple[Stream, ...] = ()
     #: registered state, each on the device the developer says holds it
     stores: tuple = ()
 
@@ -63,12 +75,12 @@ class Placement:
 
 
 def place(circuit: Circuit, datacenter: Datacenter, where: dict[str, str], ticks_per_step: int = 1,
-          transfer_steps: int = 2, deliver: str | None = None, offramps: tuple[Offramp, ...] = (),
+          transfer_steps: int = 2, deliver: str | None = None, streams: tuple[Stream, ...] = (),
           stores: tuple = ()) -> Placement:
     """Place `circuit` on `datacenter`: `where` maps a value name (or `*`, the default) to a device; an unnamed value is
     computed where it is needed, on the device of its first reader that sits in a block (else the default). Each
     value's step is one past its operands' (plus `transfer_steps` when an operand crosses a block), and each device's
-    step s begins at tick s·ticks_per_step. The outputs are delivered to `deliver`."""
+    step s begins at tick s·ticks_per_step. The outputs are delivered to `deliver`; `streams` and `stores` are declared beside the circuit."""
     readers: dict[int, list[int]] = {}
     for i, g in enumerate(circuit.gates):
         for j in g.operands:
@@ -91,7 +103,7 @@ def place(circuit: Circuit, datacenter: Datacenter, where: dict[str, str], ticks
     for i in range(len(circuit.gates)):
         cell[i] = used.get((leaf[i], step[i]), 0)
         used[leaf[i], step[i]] = cell[i] + 1
-    return Placement(circuit, datacenter, leaf, step, ticks, cell, deliver, tuple(offramps), tuple(stores))
+    return Placement(circuit, datacenter, leaf, step, ticks, cell, deliver, tuple(streams), tuple(stores))
 
 
 @dataclass(frozen=True)
@@ -145,8 +157,8 @@ def crossings(p: Placement) -> list[Crossing]:
 
 def occupancy(p: Placement, frame_bits: int, bucket: int, window: int = 8) -> dict[tuple[str, str], dict[int, int]]:
     """The public occupancy profile: for each boundary link (by its ends) and each bucket of `bucket` ticks, the number
-    of frames of `frame_bits` the honest run puts on it. A crossing's frames leave at its value's tick; an off-ramp's at
-    the first bucket of each of its windows."""
+    of frames of `frame_bits` the honest run puts on it. A crossing's frames leave at its value's tick; a stream's at the
+    first bucket of each of its windows."""
     boundary = {(l.a, l.b) for l in p.datacenter.boundary}
     out: dict[tuple[str, str], dict[int, int]] = {}
 
@@ -158,7 +170,7 @@ def occupancy(p: Placement, frame_bits: int, bucket: int, window: int = 8) -> di
 
     for x in crossings(p):
         put(x.path, p.tick(x.value) // bucket, -(-x.value.bits // frame_bits))
-    for o in p.offramps:
+    for o in p.streams:
         for w in range(o.windows):
             put(route(p.datacenter, o.src, o.dst), w * window, -(-o.bits // frame_bits))
     return out

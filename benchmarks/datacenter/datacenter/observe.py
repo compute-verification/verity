@@ -30,8 +30,9 @@ class Record:
     counts: tuple[int, ...]
     digest: bytes
     certifier: str
-    #: frames of declared off-ramp streams in the window, by stream (the certifier reads a frame's stream from its header)
-    offramp: tuple[tuple[str, int], ...] = ()
+    #: frames of declared streams in the window, by stream (the certifier reads a frame's stream from its header), and
+    #: whether a registered stream's frames matched its digest
+    streams: tuple[tuple[str, int, bool], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -55,12 +56,16 @@ class ReadRecord:
 class Deviation:
     """How a dishonest run departs from the honest one: `extra[(link, bucket)]` frames of covert content added on a
     boundary link, `hold[(link, bucket)] = bucket'` moving a bucket's frames later, wipes that fail, and stores kept on
-    another device than the registered one (`moved[store] = device`)."""
+    another device than the registered one (`moved[store] = device`), registered streams whose bytes differ from their
+    digest (`tampered`), and link-windows with no record because the certifier was down or its record was suppressed
+    (`down`)."""
 
     extra: dict[tuple[tuple[str, str], int], int] = field(default_factory=dict)
     hold: dict[tuple[tuple[str, str], int], int] = field(default_factory=dict)
     failed_wipes: set[str] = field(default_factory=set)
     moved: dict[str, str] = field(default_factory=dict)
+    tampered: set[str] = field(default_factory=set)
+    down: set[tuple[tuple[str, str], int]] = field(default_factory=set)
 
 
 @dataclass
@@ -112,15 +117,15 @@ def run(p: Placement, inputs: dict[str, int], *, frame_bits: int = 32, bucket: i
             b = dev.hold.get((key, p.tick(x.value) // bucket), p.tick(x.value) // bucket)
             counts[key][b] = counts[key].get(b, 0) + frames
             content.setdefault((key, b // window), []).append((x.value.id, values[x.value.id]))
-    offramp: dict[tuple[tuple[str, str], int], dict[str, int]] = {}
-    for o in p.offramps:
+    streamed: dict[tuple[tuple[str, str], int], dict[str, tuple[int, bool]]] = {}
+    for o in p.streams:
         frames = -(-o.bits // frame_bits)
         for w in range(o.windows):
             for l in route(p.datacenter, o.src, o.dst):
                 key = (l.a, l.b)
                 if key in boundary:
                     counts[key][w * window] = counts[key].get(w * window, 0) + frames
-                    offramp.setdefault((key, w), {})[o.name] = frames
+                    streamed.setdefault((key, w), {})[o.name] = (frames, o.name not in dev.tampered)
     for (key, b), n in dev.extra.items():
         counts[key][b] = counts[key].get(b, 0) + n
         content.setdefault((key, b // window), []).append((1 << 31, n))
@@ -129,9 +134,11 @@ def run(p: Placement, inputs: dict[str, int], *, frame_bits: int = 32, bucket: i
     for key, row in counts.items():
         cert = p.datacenter.certifier_of(boundary[key])
         for w in range(horizon):
+            if (key, w) in dev.down:
+                continue
             cs = tuple(row.get(w * window + t, 0) for t in range(window))
             records.append(Record(key, w, cs, _digest(content.get((key, w), [])), cert.name if cert else "?",
-                                  tuple(sorted(offramp.get((key, w), {}).items()))))
+                                  tuple(sorted((n, f, ok) for n, (f, ok) in streamed.get((key, w), {}).items()))))
     stores = {s.name: s for s in p.stores}
     answers = []
     for ch in challenges or []:

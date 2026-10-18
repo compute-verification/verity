@@ -144,7 +144,7 @@ def test_telemetry_leaves_on_a_declared_offramp_and_is_charged_in_full(setup):
     from datacenter import Emitted, Offramp
     c, dc, _ = setup
     temps = Offramp("telemetry", "b.gpu", "world", bits=64, windows=2)
-    p = place(c, dc, {"*": "a.gpu", "x": "world", "w2": "b.gpu"}, deliver="world", offramps=(temps,))
+    p = place(c, dc, {"*": "a.gpu", "x": "world", "w2": "b.gpu"}, deliver="world", streams=(temps,))
     t = run(p, INPUTS, window=4)
     claims = audit(t, occupancy(p, 32, 1, window=4), syncs=128)
     assert not [x for x in claims if isinstance(x, Refused)]
@@ -154,6 +154,35 @@ def test_telemetry_leaves_on_a_declared_offramp_and_is_charged_in_full(setup):
     undeclared = place(c, dc, {"*": "a.gpu", "x": "world", "w2": "b.gpu"}, deliver="world")
     refused = [x for x in audit(t, occupancy(undeclared, 32, 1, window=4)) if isinstance(x, Refused)]
     assert refused, "telemetry the developer didn't declare doesn't fit the declared occupancy"
+
+
+def test_an_image_pull_is_a_registered_stream_free_unless_its_bytes_differ(setup):
+    from datacenter import Stream
+    c, dc, _ = setup
+    image = Stream("image", "world", "a.gpu", bits=256, windows=1, digest=b"\x01" * 64)
+    p = place(c, dc, {"*": "a.gpu", "x": "world", "w2": "b.gpu"}, deliver="world", streams=(image,))
+    profile = occupancy(p, 32, 1, window=4)
+    honest = account(audit(run(p, INPUTS, window=4), profile, syncs=128), p, Clock(1e-3), Interval(0, 16))
+    assert honest.sound and honest.offramp_bits == {}
+    swapped = audit(run(p, INPUTS, window=4, deviation=Deviation(tampered={"image"})), profile, syncs=128)
+    assert any("registered digest" in r.why for r in swapped if isinstance(r, Refused))
+
+
+def test_a_window_with_no_record_fails_closed(setup):
+    """Maintenance, a failure, or a withheld record: the audit treats a missing link-window as a violation, never as
+    silence (the network-tap draft's downtime attack)."""
+    c, dc, p = setup
+    profile = occupancy(p, 32, 1, window=4)
+    t = run(p, INPUTS, window=4, deviation=Deviation(down={(("a.gpu", "a.cert"), 0)}))
+    refused = [x for x in audit(t, profile) if isinstance(x, Refused)]
+    assert refused and "no record" in refused[0].why
+
+
+def test_choosing_the_profile_from_a_registered_set_costs_its_log(setup):
+    c, dc, p = setup
+    claims = audit(run(p, INPUTS, window=4), occupancy(p, 32, 1, window=4), syncs=128, profiles=8)
+    acc = account(claims, p, Clock(1e-3), Interval(0, 16))
+    assert acc.advice_bits == 3 and acc.covert_bits == 3 + acc.timing_bits + 16
 
 
 def test_a_circuit_placed_across_a_fleet_crosses_the_inter_datacenter_link():
