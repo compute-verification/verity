@@ -590,19 +590,22 @@ theorem vstarAccepts_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : Deplo
 /-- **V\*'s parts at the holo shape, from the parts' links** (`VStarParts` at `Form.Holo`, what `codeFacts_of_parts`
 and `ksA_deployed_parts` read there): with every part a holo part (`HoloPart`), its `PartChecks` from its links
 (`partChecks_holo`), its `PartOpens` through registered climbs (`partOpens_holo`), and its `PartLogs` nil where its
-coins are shown or from a level's links for its calls (`partLogs_holo`). -/
+coins are shown or from a level's links for its calls (`partLogs_holo`), the inner verifier's calls theirs or public
+ones the V* setup evaluates (`LogDecompPub`, `PubReg`). -/
 theorem vstarParts_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {L : Layout} {opening : Opening} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {cmt dig : Msg → ℕ → Msg → Msg}
-    {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {decode : Msg → Option Flock.Readable.Read}
+    {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {pub : Msg → List (Msg × Msg)}
+    {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hP : ∀ s, HoloPart H D DO decode L shows chk logs s)
     (hO : ∀ s, HeldOpens D DO L Form.Holo shows opening dig s)
     (hRC : ∀ s, RegClimbs H D DO L Form.Holo shows cmt dig s)
     (hS : Staged H D I L Form.Holo shows cmt) (hD : Decomp H D I.V Form.Holo chk)
-    (hLD : LogDecomp H D I.V Form.Holo logs) (hH : Held D I L Form.Holo) : VStarParts H D I DO L opening Form.Holo :=
-  ⟨shows, chk, cmt, logs, partChecks_holo hDO fun s => (hP s).1, partOpens_holo hO hRC,
-    partLogs_holo hDO fun s => (hP s).2, hS, hD, hLD, hH⟩
+    (hLD : LogDecompPub H D I.V Form.Holo logs pub) (hPR : PubReg H D Form.Holo pub) (hH : Held D I L Form.Holo) :
+    VStarParts H D I DO L opening Form.Holo :=
+  ⟨shows, chk, cmt, logs, pub, partChecks_holo hDO fun s => (hP s).1, partOpens_holo hO hRC,
+    partLogs_holo hDO fun s => (hP s).2, hS, hD, hLD, hPR, hH⟩
 
 /-- **V\*'s parts at the holo shape with the staging off the run, from the parts' links** (`VStarPartsStaging` at
 `Form.Holo`, what `KS_of_parts` reads there): `vstarParts_holo_of_links` with the staging's fact about `D.vstar`
@@ -611,16 +614,16 @@ theorem vstarPartsStaging_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : 
     {DO : Flock.Deploy Coin Col T} {L : Layout} {opening : Opening} {decC : Msg → Msg → Coin}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {cmt dig : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
-    {decode : Msg → Option Flock.Readable.Read}
+    {pub : Msg → List (Msg × Msg)} {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hP : ∀ s, HoloPart H D DO decode L shows chk logs s)
     (hO : ∀ s, HeldOpens D DO L Form.Holo shows opening dig s)
     (hRC : ∀ s, RegClimbs H D DO L Form.Holo shows cmt dig s)
     (hV : VstarShows D I L Form.Holo decC shows cmt) (hD : Decomp H D I.V Form.Holo chk)
-    (hLD : LogDecomp H D I.V Form.Holo logs) (hH : Held D I L Form.Holo) :
+    (hLD : LogDecompPub H D I.V Form.Holo logs pub) (hPR : PubReg H D Form.Holo pub) (hH : Held D I L Form.Holo) :
     VStarPartsStaging D I DO H L opening decC Form.Holo :=
-  ⟨shows, chk, cmt, logs, partChecks_holo hDO fun s => (hP s).1, partOpens_holo hO hRC,
-    partLogs_holo hDO fun s => (hP s).2, hV, hD, hLD, hH⟩
+  ⟨shows, chk, cmt, logs, pub, partChecks_holo hDO fun s => (hP s).1, partOpens_holo hO hRC,
+    partLogs_holo hDO fun s => (hP s).2, hV, hD, hLD, hPR, hH⟩
 
 end Facts
 
@@ -663,12 +666,13 @@ theorem vstarParts_holo_deployRec {L : Layout} {opening : Opening}
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       Form.Holo shows cmt dig s)
     (hS : Staged H (RecDeploy.deployRec I.V ivScope b) I L Form.Holo shows cmt)
-    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk)
-    (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs)
+    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk) {pub : Msg → List (Msg × Msg)}
+    (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs pub)
+    (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) Form.Holo pub)
     (hH : Held (RecDeploy.deployRec I.V ivScope b) I L Form.Holo) :
     VStarParts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
       Form.Holo :=
-  vstarParts_holo_of_links rfl hP hO hRC hS hD hLD hH
+  vstarParts_holo_of_links rfl hP hO hRC hS hD hLD hPR hH
 
 /-- **V\*'s parts at the holo shape at `deployRec`, with the staging off the run** (`KS_of_parts`' holo premise
 there): `vstarPartsStaging_holo_of_links` with the outer record `deployZkRec relation`'s parser by definition. -/
@@ -682,12 +686,13 @@ theorem vstarPartsStaging_holo_deployRec {L : Layout} {opening : Opening} {decC 
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       Form.Holo shows cmt dig s)
     (hV : VstarShows (RecDeploy.deployRec I.V ivScope b) I L Form.Holo decC shows cmt)
-    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk)
-    (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs)
+    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk) {pub : Msg → List (Msg × Msg)}
+    (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs pub)
+    (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) Form.Holo pub)
     (hH : Held (RecDeploy.deployRec I.V ivScope b) I L Form.Holo) :
     VStarPartsStaging (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) H L
       opening decC Form.Holo :=
-  vstarPartsStaging_holo_of_links rfl hP hO hRC hV hD hLD hH
+  vstarPartsStaging_holo_of_links rfl hP hO hRC hV hD hLD hPR hH
 
 end Deployed
 

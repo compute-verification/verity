@@ -1116,18 +1116,20 @@ theorem vstarAccepts_of_linked {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
 
 /-- **V\*'s parts at any shape, from every part's links** (`VStarParts`, what `codeFacts_of_parts` and
 `ksA_deployed_parts` read at each shape): every part linked (`LinkedPart`), its `PartOpens` through registered climbs,
-with the staging, the decompositions and the held rounds. -/
+with the staging, the decompositions, the public calls the V* setup evaluates and the held rounds. -/
 theorem vstarParts_of_linked {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {L : Layout} {opening : Opening} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {cmt dig : Msg → ℕ → Msg → Msg}
-    {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {decode : Msg → Option Flock.Readable.Read}
+    {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {pub : Msg → List (Msg × Msg)}
+    {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hP : ∀ s, LinkedPart H D decode L shape shows chk logs s)
     (hO : ∀ s, HeldOpens D DO L shape shows opening dig s) (hRC : ∀ s, RegClimbs H D DO L shape shows cmt dig s)
-    (hS : Staged H D I L shape shows cmt) (hD : Decomp H D I.V shape chk) (hLD : LogDecomp H D I.V shape logs)
+    (hS : Staged H D I L shape shows cmt) (hD : Decomp H D I.V shape chk)
+    (hLD : LogDecompPub H D I.V shape logs pub) (hPR : PubReg H D shape pub)
     (hH : Held D I L shape) : VStarParts H D I DO L opening shape :=
-  ⟨shows, chk, cmt, logs, partChecks_linked hDO hP, fun s => partOpens_of_climbs (hO s) (hRC s),
-    partLogs_linked hDO hP, hS, hD, hLD, hH⟩
+  ⟨shows, chk, cmt, logs, pub, partChecks_linked hDO hP, fun s => partOpens_of_climbs (hO s) (hRC s),
+    partLogs_linked hDO hP, hS, hD, hLD, hPR, hH⟩
 
 /-- **V\*'s parts at any shape with the staging off the run, from every part's links** (`VStarPartsStaging`, what
 `KS_of_parts` reads): `vstarParts_of_linked` with the staging's fact about `D.vstar` (`VstarShows`) for `Staged`. -/
@@ -1135,14 +1137,15 @@ theorem vstarPartsStaging_of_linked {H : Msg → Msg} {D : Deploy Coin} {I : Inn
     {DO : Flock.Deploy Coin Col T} {L : Layout} {opening : Opening} {decC : Msg → Msg → Coin} {shape : Form → Prop}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {cmt dig : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
-    {decode : Msg → Option Flock.Readable.Read}
+    {pub : Msg → List (Msg × Msg)} {decode : Msg → Option Flock.Readable.Read}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hP : ∀ s, LinkedPart H D decode L shape shows chk logs s)
     (hO : ∀ s, HeldOpens D DO L shape shows opening dig s) (hRC : ∀ s, RegClimbs H D DO L shape shows cmt dig s)
     (hV : VstarShows D I L shape decC shows cmt) (hD : Decomp H D I.V shape chk)
-    (hLD : LogDecomp H D I.V shape logs) (hH : Held D I L shape) : VStarPartsStaging D I DO H L opening decC shape :=
-  ⟨shows, chk, cmt, logs, partChecks_linked hDO hP, fun s => partOpens_of_climbs (hO s) (hRC s),
-    partLogs_linked hDO hP, hV, hD, hLD, hH⟩
+    (hLD : LogDecompPub H D I.V shape logs pub) (hPR : PubReg H D shape pub) (hH : Held D I L shape) :
+    VStarPartsStaging D I DO H L opening decC shape :=
+  ⟨shows, chk, cmt, logs, pub, partChecks_linked hDO hP, fun s => partOpens_of_climbs (hO s) (hRC s),
+    partLogs_linked hDO hP, hV, hD, hLD, hPR, hH⟩
 
 end Bundles
 
@@ -1183,12 +1186,13 @@ theorem vstarParts_deployRec_of_linked {L : Layout} {opening : Opening} {shape :
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       shape shows cmt dig s)
     (hS : Staged H (RecDeploy.deployRec I.V ivScope b) I L shape shows cmt)
-    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk)
-    (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V shape logs)
+    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk) {pub : Msg → List (Msg × Msg)}
+    (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V shape logs pub)
+    (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) shape pub)
     (hH : Held (RecDeploy.deployRec I.V ivScope b) I L shape) :
     VStarParts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
       shape :=
-  vstarParts_of_linked rfl hP hO hRC hS hD hLD hH
+  vstarParts_of_linked rfl hP hO hRC hS hD hLD hPR hH
 
 /-- **V\*'s parts at any shape at `deployRec`, with the staging off the run** (`KS_of_parts`' premise there):
 `vstarPartsStaging_of_linked` with the outer record `deployZkRec relation`'s parser by definition. -/
@@ -1202,12 +1206,13 @@ theorem vstarPartsStaging_deployRec_of_linked {L : Layout} {opening : Opening} {
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       shape shows cmt dig s)
     (hV : VstarShows (RecDeploy.deployRec I.V ivScope b) I L shape decC shows cmt)
-    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk)
-    (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V shape logs)
+    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk) {pub : Msg → List (Msg × Msg)}
+    (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V shape logs pub)
+    (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) shape pub)
     (hH : Held (RecDeploy.deployRec I.V ivScope b) I L shape) :
     VStarPartsStaging (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) H L
       opening decC shape :=
-  vstarPartsStaging_of_linked rfl hP hO hRC hV hD hLD hH
+  vstarPartsStaging_of_linked rfl hP hO hRC hV hD hLD hPR hH
 
 end Deployed
 
@@ -1830,13 +1835,14 @@ theorem vstarParts_deployRec_staged {L : Layout} {opening : Opening} {shape : Fo
       shape (RecDeploy.showsPart b) opening dig s)
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
       shape (RecDeploy.showsPart b) (RecDeploy.cmtTr b) dig s)
-    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk)
-    (hLD : LogDecomp H (RecDeploy.deployRec I.V ivScope b) I.V shape logs)
+    (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk) {pub : Msg → List (Msg × Msg)}
+    (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V shape logs pub)
+    (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) shape pub)
     (hH : Held (RecDeploy.deployRec I.V ivScope b) I L shape) :
     VStarParts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
       shape :=
   vstarParts_deployRec_of_linked H I ivScope b (fun s => linkedPart_deployRec H I ivScope b (hP s)) hO hRC
-    (RecDeploy.staged_deployRec_part H I ivScope b L shape htr hL) hD hLD hH
+    (RecDeploy.staged_deployRec_part H I ivScope b L shape htr hL) hD hLD hPR hH
 
 /-- **`VStarAcceptsR` at any shape at `deployRec`, with the staging proved**: `vstarAccepts_deployRec_of_linked` at
 `showsPart`, with `Staged` from `staged_deployRec_part`. -/

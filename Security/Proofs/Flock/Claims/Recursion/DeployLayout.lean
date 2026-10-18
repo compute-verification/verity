@@ -121,7 +121,7 @@ theorem not_vstarParts_layoutOf {W Col T : Type} {H : Msg → Msg} {D : Claims.R
     {shape : Claims.Recursion.Form → Prop}
     (h : Claims.Recursion.VStar.VStarParts H D I DO layoutOf opening shape) :
     ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → ¬ shape st.form := by
-  obtain ⟨_, _, _, _, -, -, -, -, -, -, hH⟩ := h
+  obtain ⟨_, _, _, _, _, -, -, -, -, -, -, -, hH⟩ := h
   exact not_held_layoutOf hH
 
 /-! ## The readers at the ports -/

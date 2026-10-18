@@ -17,8 +17,8 @@ that are not the circuit's:
   recorded calls.
 
 `vstarParts_dense` puts them together: with each part a rec-open or an algebra part (`DensePart`), the staged V*
-statements showing the run (`Staged`), the parts' checks and calls the inner verifier's (`Decomp`, `LogDecomp`) and
-some part holding each inner round (`Held`), V*'s parts meet `VStarParts` at the dense shape, which
+statements showing the run (`Staged`), the parts' checks and calls the inner verifier's, apart from public calls the V*
+setup evaluates (`Decomp`, `LogDecompPub`, `PubReg`), and some part holding each inner round (`Held`), V*'s parts meet `VStarParts` at the dense shape, which
 `codeFacts_of_parts` and `RecDeploy.ksA_deployed_parts` read.
 -/
 
@@ -62,17 +62,17 @@ theorem partOpens_dense {Coin Col T : Type} {H : Msg → Msg} {D : Deploy Coin} 
 
 /-- **V\*'s parts at the dense shape**: every part a rec-open or an algebra part (`DensePart`), opening what it holds
 through registered climbs (`HeldOpens`, `RegClimbs`), with the staging, the inner verifier's checks and calls, and the
-held rounds (`Staged`, `Decomp`, `LogDecomp`, `Held`). -/
+held rounds (`Staged`, `Decomp`, `LogDecompPub` with its public calls the V* setup's (`PubReg`), `Held`). -/
 theorem vstarParts_dense {Coin W Col T : Type} [Inhabited Coin] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {L : Layout} {opening : Opening} {decode : Msg → Option Flock.Readable.Read}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {cmt dig : Msg → ℕ → Msg → Msg} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
-    (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
+    {pub : Msg → List (Msg × Msg)} (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
     (hP : ∀ s, DensePart D decode L shows chk logs s) (hO : ∀ s, HeldOpens D DO L Form.Dense shows opening dig s)
     (hC : ∀ s, RegClimbs H D DO L Form.Dense shows cmt dig s) (hS : Staged H D I L Form.Dense shows cmt)
-    (hD : Decomp H D I.V Form.Dense chk) (hLD : LogDecomp H D I.V Form.Dense logs) (hH : Held D I L Form.Dense) :
-    VStarParts H D I DO L opening Form.Dense :=
-  ⟨shows, chk, cmt, logs, fun s => partChecks_dense hDO (hP s), fun s => partOpens_dense (hO s) (hC s),
-    fun s => partLogs_dense hDO (hP s), hS, hD, hLD, hH⟩
+    (hD : Decomp H D I.V Form.Dense chk) (hLD : LogDecompPub H D I.V Form.Dense logs pub)
+    (hPR : PubReg H D Form.Dense pub) (hH : Held D I L Form.Dense) : VStarParts H D I DO L opening Form.Dense :=
+  ⟨shows, chk, cmt, logs, pub, fun s => partChecks_dense hDO (hP s), fun s => partOpens_dense (hO s) (hC s),
+    fun s => partLogs_dense hDO (hP s), hS, hD, hLD, hPR, hH⟩
 
 end Claims.Recursion.VStar
