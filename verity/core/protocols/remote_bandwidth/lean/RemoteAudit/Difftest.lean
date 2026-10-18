@@ -74,7 +74,7 @@ def eventOf (j : Json) : V Session.Event := do
   | "start" => pure (.start (← nat j "now"))
   | "boundary" => pure (.boundary (← nat j "now"))
   | "append" => pure (.append (← hex j "root") (← int j "count"))
-  | "release" => pure (.release (← runsOf (← J.get j "runs" "event") "runs"))
+  | "release" => pure (.release (← runsOf (← J.get j "runs" "event") "runs") (← runsOf (← J.get j "withdrawn" "event") "withdrawn"))
   | "receive" =>
     let runs ← match ← J.get j "runs" "event" with
       | .null => pure none
@@ -116,7 +116,9 @@ private def positive (p : Json) (k : String) : V Nat := do
   pure n
 
 /-- A session's events through the verifier: `{"registration", "params", "not_before_ns", "coins", "append_coins",
-"events"}` to every event's result, the outcome and the record. -/
+"events"}` to every event's result, the outcome and the record. The parameters name whether the prover defers an
+appended block's residency to its encode (`deferred`), which `audit.Params` refuses at a lifetime of one window: a
+block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1. -/
 def sessionFn (j : Json) : V Json := do
   let reg ← registrationOf (← J.get j "registration" "input")
   let p ← J.get j "params" "input"
@@ -127,6 +129,8 @@ def sessionFn (j : Json) : V Json := do
       minPasses := ← positive p "min_passes"
       windowNs := ← positive p "window_ns"
       lifetime := ← positive p "lifetime" }
+  if (← J.bool p "deferred" "params") && params.lifetime < 2 then
+    throw "a session that defers residency has a lifetime of at least 2 windows"
   let coins ← hexes j "coins"
   if coins.size ≠ 2 * params.windows || coins.any (·.size ≠ Codec.COIN_BYTES) then throw "2W coins of 32 bytes"
   let appendCoins ← hexes j "append_coins"

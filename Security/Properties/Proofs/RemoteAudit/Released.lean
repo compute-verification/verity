@@ -315,8 +315,8 @@ theorem rel_append {R old} {s : State} {root : ByteArray} {count : Int} {r : Res
     | exact h
     | exact rel_fail h _ _ _
 
-theorem rel_release {R old} {s : State} {runs : Array (Int × Int)} {r : Result} {s' : State} (h : Rel R old s)
-    (he : release s runs = (r, s')) : Rel R old s' := by
+theorem rel_release {R old} {s : State} {runs withdrawn : Array (Int × Int)} {r : Result} {s' : State}
+    (h : Rel R old s) (he : release s runs withdrawn = (r, s')) : Rel R old s' := by
   unfold release at he
   simp only [Id.run] at he
   repeat' split at he
@@ -403,7 +403,7 @@ theorem step_rel {R old} {s : State} {e : Event} {r : Result} {s' : State} (h : 
   | start now => injection he with he; exact rel_start h he
   | boundary now => injection he with he; exact rel_boundary h he
   | append root count => exact rel_append h he
-  | release runs => injection he with he; exact rel_release h he
+  | release runs withdrawn => injection he with he; exact rel_release h he
   | receive t i root runs change st now => injection he with he; exact rel_receive h he
   | close t now => exact rel_close h he
   | verify t openings => injection he with he; exact rel_verify h he
@@ -414,8 +414,8 @@ theorem run_rel {R old} {s : State} {events : Array Event} {rs : Array Result} {
 
 /-! ## The statement -/
 
-theorem release_ok {s : State} {runs : Array (Int × Int)} {s' : State} (he : release s runs = (.ok, s'))
-    (hwf : ∀ g ∈ s.gone, g.1 ≤ g.2) :
+theorem release_ok {s : State} {runs withdrawn : Array (Int × Int)} {s' : State}
+    (he : release s runs withdrawn = (.ok, s')) (hwf : ∀ g ∈ s.gone, g.1 ≤ g.2) :
     s'.windows = s.windows ∧ (∀ g ∈ s'.gone, g.1 ≤ g.2) ∧
       ∀ x : Nat, (∃ r ∈ runs, r.1 ≤ (x : Int) ∧ (x : Int) < r.1 + r.2) → Covered s'.gone x := by
   unfold release at he
@@ -427,7 +427,8 @@ theorem release_ok {s : State} {runs : Array (Int × Int)} {s' : State} (he : re
     unfold RemoteAudit.Session.live at hl
     cases hf : s.failed <;> simp [hf] at hl
   · cases he
-  · rename_i pl hp _
+  · cases he
+  · rename_i pl hp _ _
     cases he
     have hw : ∀ g ∈ s.gone ++ pl.runs.map (fun (f, c) => (f, f + c)), g.1 ≤ g.2 :=
       fun g hg => (Array.mem_append.1 hg).elim (hwf g) (wf_runs pl g)
@@ -439,7 +440,7 @@ theorem release_ok {s : State} {runs : Array (Int × Int)} {s' : State} (he : re
   · cases he
 
 theorem releasedStayOut : ReleasedStayOut := by
-  intro params reg coins appendCoins notBeforeNs events₁ events₂ runs rs₁ rs s₁ s₂ s h₁ hrel h₂
+  intro params reg coins appendCoins notBeforeNs events₁ events₂ runs withdrawn rs₁ rs s₁ s₂ s h₁ hrel h₂
   have r₁ : Rel (fun _ => False) #[] s₁ := run_rel (rel_init params reg coins appendCoins notBeforeNs) h₁
   injection hrel with hrel
   obtain ⟨hw, hwf, hcov⟩ := release_ok hrel r₁.wf

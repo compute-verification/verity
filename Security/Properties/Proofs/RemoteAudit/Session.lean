@@ -454,8 +454,8 @@ theorem inv_verify {s : State} {t : Int} {openings : Array Opening} {r : Result}
     | exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
     | exact ⟨inv_accept h _ (drawn_of_get! _ _ _ (by assumption)), rfl, rfl, rfl⟩
 
-theorem inv_release {s : State} {runs : Array (Int × Int)} {r : Result} {s' : State} (h : Inv s)
-    (he : release s runs = (r, s')) : Inv s' ∧ Frame s s' := by
+theorem inv_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Result} {s' : State} (h : Inv s)
+    (he : release s runs withdrawn = (r, s')) : Inv s' ∧ Frame s s' := by
   unfold release at he
   simp only [Id.run] at he
   repeat' split at he
@@ -532,7 +532,7 @@ theorem step_inv {s : State} {e : Event} {r : Result} {s' : State} (h : Inv s) (
   | start now => injection he with he; exact inv_start h he
   | boundary now => injection he with he; exact inv_boundary h he
   | append root count => exact inv_append h he
-  | release runs => injection he with he; exact inv_release h he
+  | release runs withdrawn => injection he with he; exact inv_release h he
   | receive t i root runs change st now => injection he with he; exact inv_receive h he
   | close t now => exact inv_close h he
   | verify t openings => injection he with he; exact inv_verify h he

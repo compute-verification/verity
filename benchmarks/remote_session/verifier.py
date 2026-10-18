@@ -5,7 +5,10 @@ One connection serves one registration and then `--sessions` sessions over it, e
 `--window-ms`:
 
 1. registration: the prover's hello names its node, N, payload root and, if it has one, its store's layout (each
-   region's kind and tier, `regions_of`, the memory line's labels); the verifier draws the codec seed from its
+   region's kind and tier, `regions_of`, the memory line's labels), and whether it defers an appended block's
+   residency to its encode (`deferred`, `audit.Params.deferred`: refused with `bye` under `--lifetime` 1, since a
+   block appended in window w is resident from w or w + 1 and its re-key falls at age L − 1); the verifier draws the
+   codec seed from its
    secret (`audit.register`) and sends the registration; the prover encodes its store and answers `ready` with its
    calibration (pass times, the gap, its measured read rate);
 2. the round trip, measured by pings;
@@ -13,8 +16,9 @@ One connection serves one registration and then `--sessions` sessions over it, e
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
    (`--lifetime`, windows, sent with the session so the prover re-keys in time); the coin commitment sent first, then
    σ_0, a boundary message every window, each append answered with its coin (`Verifier.append`), each root fed to
-   `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, its
-   plan as a change when it carries one, and the step its pass covers: `Verifier.root`), each window closed
+   `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
+   the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
+   `Verifier.root`), each window closed
    (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
    verdict as `Session.verify`'s) or by `Session.verify` on a thread of the verifier's, so a window's checks run while
@@ -226,7 +230,7 @@ class Verifier:
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
                  registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0) -> None:
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
-        self.hbm_bytes, self.host_bytes, self.regions = hbm_bytes, host_bytes, None
+        self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
         self.checks = checks
         self.registry = audit.Registry() if registry is None else registry
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
@@ -273,10 +277,12 @@ class Verifier:
 
     def register(self) -> tuple[audit.Registration, dict]:
         """The hello's registration, drawn through the registry: refused, with `bye` and the reason, for a node with a
-        live registration (`audit.RegistryError`, raised), or with a malformed layout (`regions_of`'s ValueError)."""
+        live registration (`audit.RegistryError`, raised), with a malformed layout (`regions_of`'s ValueError), or
+        deferring residency under a lifetime of one window (`audit.Params`'s ValueError)."""
         hello, _, _ = self.expect("hello")
         try:
             self.regions = regions_of(hello.get("layout"), hello["blocks"])
+            self.deferred = audit.Params(1, 1, 1, lifetime=self.lifetime, deferred=hello.get("deferred", False)).deferred
         except ValueError as e:
             self.conn.send({"type": "bye", "why": f"refused: {e}"})
             raise
@@ -319,7 +325,7 @@ class Verifier:
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None) -> dict:
         W, reg = self.W, self.registration
         params = audit.Params(reg.blocks, allowance_ns, W, self.samples, self.delta, window_ns=self.T, codec=reg.codec,
-                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime)
+                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred)
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         session = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
@@ -509,13 +515,16 @@ class Verifier:
 
     @staticmethod
     def root(session: audit.Session, head: dict) -> audit.Verdict | None:
-        """A root's message to the session in the order the prover sends it: the blocks it releases
-        (`Session.release`), then the root with its plan, a change from the last plan if it carries one and the
-        registered store otherwise, and its step (`Session.receive`).  The first rejection, if any.  Appends come as
-        messages of their own (`append`), each answered with its coin: a root's message carrying any is malformed."""
+        """A root's message to the session in the order the prover sends it: the blocks it releases, with those among
+        them it withdrew (`Session.release`), then the root with its plan, a change from the last plan if it carries
+        one and the registered store otherwise, and its step (`Session.receive`).  The first rejection, if any.
+        Appends come as messages of their own (`append`), each answered with its coin: a root's message carrying any
+        is malformed."""
         if "appends" in head:
             raise ValueError("an append is a message of its own, answered with its coin")
-        if head.get("released") and (v := session.release([tuple(r) for r in head["released"]])) is not None:
+        withdrawn = [tuple(r) for r in head.get("withdrawn", ())]
+        if ((head.get("released") or withdrawn)
+                and (v := session.release([tuple(r) for r in head.get("released", ())], withdrawn)) is not None):
             return v
         change = head.get("change")
         if change is not None:

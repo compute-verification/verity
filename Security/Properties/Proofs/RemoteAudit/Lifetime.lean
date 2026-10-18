@@ -306,8 +306,8 @@ theorem life_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s
     | exact life_fail h _ _ _
     | exact lifeOn_append h _
 
-theorem life_release {s : State} {runs : Array (Int × Int)} {r : Result} {s' : State} (h : Life s)
-    (he : release s runs = (r, s')) : Life s' := by
+theorem life_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Result} {s' : State} (h : Life s)
+    (he : release s runs withdrawn = (r, s')) : Life s' := by
   unfold release at he
   simp only [Id.run] at he
   repeat' split at he
@@ -401,7 +401,7 @@ theorem step_life {s : State} {e : Event} {r : Result} {s' : State} (hi : Inv s)
   | start now => injection he with he; exact life_start h he
   | boundary now => injection he with he; exact life_boundary h he
   | append root count => exact life_append h he
-  | release runs => injection he with he; exact life_release h he
+  | release runs withdrawn => injection he with he; exact life_release h he
   | receive t i root runs change st now => injection he with he; exact life_receive hi h he
   | close t now => exact life_close h he
   | verify t openings => injection he with he; exact life_verify h he
