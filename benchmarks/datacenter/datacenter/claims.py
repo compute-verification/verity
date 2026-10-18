@@ -6,7 +6,7 @@ question. Each claim is a fact a proof would establish about the prover *system*
 trusted clock:
 
 - `Computed(part, work)`: the values committed for a part of the Program are its evaluation (here by re-execution; in
-  Verity, sampled proofs at ε and δ over the Program's proof units).
+  Verity, sampled proofs at ε and δ over the part's proof units, `units` of the partition the profile names).
 - `Carried(port, bits)`: a certifier port carried exactly the committed crossings in the declared occupancy, so its only
   freedom was `bits` of timing advice.
 - `Entered(input, bits)`: a run input's bits entered the computation from outside the blocks or from a device in one
@@ -44,6 +44,8 @@ class Computed:
     during: Interval
     epsilon: float = 0.0
     delta: float = 0.0
+    #: the proof units of the Program's partition that the claim rests on (0 when the profile names no partition)
+    units: int = 0
 
 
 @dataclass(frozen=True)
@@ -137,7 +139,8 @@ def audit(trace: Trace, profile: Profile) -> list[Claim]:
     if commit(program, reference, trace.commitment.salts).root != trace.commitment.root:
         out += [Refused(On("part", b), "the committed values are not the Program's evaluation") for b in profile.work]
     else:
-        out += [Computed(b, profile.credit(b), plan.epoch) for b in profile.work if profile.credit(b)]
+        out += [Computed(b, profile.credit(b), plan.epoch, units=profile.units.get(b, 0)) for b in profile.work
+                if profile.credit(b)]
     opening = trace.registration
     opens = (opening is not None and profile.registered is not None
              and register(program, opening.values, opening.salts).root == profile.registered)

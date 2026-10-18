@@ -15,8 +15,10 @@ credited with, the trusted data each block consumes, the registered stores and t
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
+from typing import Any
 
 from verity.ml.circuits.program import Program
 
@@ -88,17 +90,26 @@ class Placement:
     def _gates(self) -> dict[int, list[int]]:
         return {}
 
-    def public(self, plan: Plan, ticks: dict[str, float] | None = None, weights: dict[str, float] | None = None) -> Profile:
+    def public(self, plan: Plan, ticks: dict[str, float] | None = None, weights: dict[str, float] | None = None,
+               partition: Mapping[str, Any] | None = None) -> Profile:
         """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block: the
         least block-ticks the block's declared work takes over every route at the data sheet's rates. `weights` is what an
         audit credits for one unit of each kind of work (PoUW's W_ref, a public constant of its scheme), 1 for a kind it
-        doesn't list."""
+        doesn't list. `partition` is the Program's partition into proof units, the query of its `verity/partition/v1`
+        object (`partition_object.query()`, Q_word v1 at X = 16, is the served one), which the sampled proofs draw from."""
         dc = self.datacenter
         work: dict[str, dict[str, float]] = {b.name: {} for b in dc.blocks}
         for k, w in L.work(self.program).items():
             if (b := self.block(self.device[k])) is not None:
                 for kind, n in w.items():
                     work[b][kind] = work[b].get(kind, 0.0) + n
+        units: dict[str, int] = {}
+        if partition is not None:
+            from verity.core.protocols.sampled_proofs.one_stage.partition import unit_gates
+            body = self.program.root.body
+            for lo, _hi in unit_gates(self.program, partition):
+                if (b := self.block(self.device.get(body.node_at(lo)))) is not None:
+                    units[b] = units.get(b, 0) + 1
         forced: dict[str, float] = {b.name: 0.0 for b in dc.blocks}
         for v in self.values:
             if self.source(v.node) == "trusted":
@@ -108,7 +119,7 @@ class Placement:
         stores.update({w.store.name: w.store for w in plan.wipes})
         salt, salt_out, pinned = self._custody(plan.registration, weights or {})
         return Profile(dc, plan, occupancy(self), work, forced, stores, dict(weights or {}), salt, salt_out, pinned,
-                       dict(ticks or {}), self.registration.root if self.registration else None)
+                       dict(ticks or {}), self.registration.root if self.registration else None, units)
 
     def _custody(self, registration: int, weights: dict[str, float]) -> tuple[dict[str, float], ...]:
         """For each block whose own certifier releases a salt into it: the salt's bits, the bits other than timing that
@@ -177,7 +188,8 @@ class Profile:
     (`registered`). For a block whose certifier holds a salt for it: the salt's bits (`salt`), what besides timing could
     carry it out before registration (`salt_out`, in bits), and the credit of the block's work that depends on it
     (`pinned`). For a block whose work PoUW timed: its proved bound (`ticks`, in block-ticks), which the account credits
-    in place of the per-facet loads, since a prover may route work to another facet than the honest design does."""
+    in place of the per-facet loads, since a prover may route work to another facet than the honest design does. Under a
+    partition, each block's proof units (`units`): the units whose gates run there, which its `Computed` claim rests on."""
 
     datacenter: Datacenter
     plan: Plan
@@ -191,6 +203,7 @@ class Profile:
     pinned: dict[str, float] = field(default_factory=dict)
     ticks: dict[str, float] = field(default_factory=dict)
     registered: bytes | None = None
+    units: dict[str, int] = field(default_factory=dict)
 
     def credit(self, block: str) -> float:
         """The work `block` is to be credited with: each kind's units at its weight."""

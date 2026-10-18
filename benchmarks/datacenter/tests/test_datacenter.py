@@ -7,6 +7,8 @@ import struct
 from dataclasses import replace
 
 import pytest
+from verity.core.protocols.sampled_proofs.one_stage import partition as sampled_partition
+from verity.ml.circuits import partition_object
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.ml.circuits.refs import tuple_of
@@ -87,6 +89,18 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
     h = [sum(x[i] * w1[32 * j + i] for i in range(32)) for j in range(32)]
     ref = [sum(h[i] * w2[32 * j + i] for i in range(32)) for j in range(32)]
     assert y == pytest.approx(ref, abs=0.05)
+
+
+def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_programs_partition(setup):
+    """The sampled proofs draw proof units from the Program's partition (`verity/partition/v1`), the same Program the
+    placement places: under the served query (Q_word v1 at X = 16) each linear is 32 units, one a coordinate, so each
+    stage's block rests its `Computed` claim on its own 32 of the protocol's 64."""
+    dc, p = setup
+    query = partition_object.query()
+    profile = p.public(Plan(EPOCH), partition=query)
+    assert profile.units == {"a": 32, "b": 32} and sampled_partition.units(PROGRAM, query) == 64
+    claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)
+    assert Computed("a", 1056, EPOCH, units=32) in claims and Computed("b", 1056, EPOCH, units=32) in claims
 
 
 def test_work_counts_by_kind_is_credited_at_its_weight_and_takes_time_at_its_rate():

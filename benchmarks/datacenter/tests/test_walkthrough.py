@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.gemm import GEMM_AMPERE, Gemm
+from verity.ml.circuits.partition_object import query
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -104,8 +105,8 @@ def section_6(p):
 # §7 Time, and the verifier's plan
 def section_7(p):
     plan = Plan(Interval(0, 16), wipes=[Wipe("b.gpu", 96 * GB - 8e6, Interval(0, 2))])
-    profile = p.public(plan)
-    print(profile.work, list(profile.windows))
+    profile = p.public(plan, partition=query())          # the sampled proofs' partition: Q_word v1 at X = 16
+    print(profile.work, profile.units, list(profile.windows))
     return plan, profile
 
 
