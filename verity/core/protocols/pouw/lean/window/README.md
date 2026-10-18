@@ -1,7 +1,8 @@
 # `pouw_window`: PoUW's audit window as executable Lean
 
 The port of `verity/core/protocols/pouw/window.py`, on Lean core and PoUW's commitments (`pouw_commit`: its frame-v3-sha512
-domains, C-Flock's SHA-512 and hm96, core's tagged identity). Once its properties are proven it moves, as a
+domains, C-Flock's SHA-512 and hm96, core's tagged identity), and the proof service's challenger for a live window's
+coins (`core_sampled_proofs`). Once its properties are proven it moves, as a
 pure move, to the same path under `verity/core/`; the Python keeps running until then.
 
 | module | `window.py` |
@@ -15,6 +16,7 @@ pure move, to the same path under `verity/core/`; the Python keeps running until
 | `PouwWindow.Side` | `SIDE_DOMAIN`, `OWNER`, `SIDE_INDEX_WORDS`, `side_row`, `side_index`, `side_domain`, `pad_node`, `side_levels`, `side_path` |
 | `PouwWindow.Statement` | `window_problem`, the window statement L4 on the entry rows, with the records and side indices |
 | `PouwWindow.Inputs` | `PUBLIC_INPUTS_FORMAT`, `PUBLIC_PORTS`, `M_MAX`, `session_cap`, `sessions`, `instance_ts`, `public_inputs` |
+| `PouwWindow.Rounds` | `COINS`, `MODES` (`CoinMode`), `mode`, `LIVE_SCHEME`, `SALT`, `DRAW`, `ROUND`, `live_families`, `live_epoch_reason`, `rounds_reason`, `round_key`: a live window's round coins over the proof service's challenger (`core_sampled_proofs`'s `SampledProofs.Challenger`) |
 | `PouwWindow.Difftest` | the difftest's table: one `Difftest.Fn` per ported function of `window.py` |
 
 `pouw-window-difftest` (`PouwWindow/DifftestMain.lean`) serves that table on the shared harness
