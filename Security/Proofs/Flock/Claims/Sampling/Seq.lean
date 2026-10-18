@@ -351,7 +351,7 @@ theorem zk_seq (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.
         (unitTape.iter 0 DF.Nonce DF.Rest M).Ω (tapeZ DF.Nonce DF.Rest M)
         (simLeakZ (framing c step k₀ n) DF.Nonce DF.Rest DF.S CB M))
       (fun x => ∑ j ∈ Finset.range M, eB j x) (fun x => M * g x) := by
-  refine ⟨rfl, fun l => (zkmalR_iff_at _ _ _ _ _ _ _).2 fun x => ?_⟩
+  refine ⟨rfl, fun l => (zkmalRx_iff_at _ _ _ _ _ _ _ _ _).2 fun x => ?_⟩
   by_cases hx : ∃ s, c.parse x = some s
   · exact (framing c step k₀ n).zkAt H DF.prover (Claims.Flock.R DF.parse) DF.S (fun xS => DF.V.k xS + 1) εF γF hF.2
       M x _ (hV x hx) (fun x w => Rhon H (commit c) c.parse c.partition x w ∧ leafLayer H (commit c) c.parse x w = l x)
