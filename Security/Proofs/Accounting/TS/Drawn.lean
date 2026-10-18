@@ -4,10 +4,10 @@ import Proofs.Accounting.TS.Fork
 # (I8) for a sampled window
 
 Stated after RT-I8 (note:20261018T0728Z-draft-rt-i8, decisions 114 and 119) and RT-COMPOSE r2's R2-B1
-(note:20261018T1200Z-draft-rt-compose-r2: good reads the run's modes). `ProofsSoundOfDrawn` is a `sorry` stub until
-E1(c) per unit (`UnitFixed`) has its card; `DrawnRightOff` and `DrawnBindingOfFork` don't read it and are proved, and so
-is `DrawnLayer.covers_of_cone`, the share's side of `Covers`: a share that charges each unit the run didn't pay for its
-late cone's weight covers every unit that isn't good.
+(note:20261018T1200Z-draft-rt-compose-r2: good reads the run's modes), with E1(c) per unit (`UnitFixed`) as decided
+(ASK-17 = A). `DrawnRightOff` and `DrawnBindingOfFork` don't read `UnitFixed`; `DrawnLayer.covers_of_cone` is the
+share's side of `Covers`: a share that charges each unit the run didn't pay for its late cone's weight covers every unit
+that isn't good.
 
 `DrawnRightOff`: the event is "in some round, binding fails (`MovedIn`) or some drawn unit's proof is unsound", which
 the union bound puts at `S·(δ_bind + δ_ks)`. Off it, an accepted proof opens its unit's committed values (not
@@ -286,9 +286,26 @@ theorem DrawnRightOff : Accounting.Guarantees.TS.DrawnRightOff := by
     by_contra hr
     exact hE ⟨w, Finset.mem_univ _, Or.inr ⟨i, hacc, hr⟩⟩
 
+open Classical in
 /-- (I8) for a sampled window, from `DrawnRightOff`'s pieces, the share's cover and E1(c) per unit. -/
 theorem ProofsSoundOfDrawn : Accounting.Guarantees.TS.ProofsSoundOfDrawn := by
-  sorry
+  intro K T L U J Q Pos V _ _ _ _ _ _ C B _ _ S m s P pf mode wt folded Nw δbind δks hS hsum hWR hOf hB hZ hPin hCov
+    hUF
+  obtain ⟨E, hE, hoff⟩ := DrawnRightOff C B S m s pf δbind δks hB hZ hPin
+  refine ⟨E, by simpa only [Nat.cast_one, one_mul] using hE, fun x hx hEx => ⟨?_, ?_⟩⟩
+  · exact hOf.2 x fun w i => hoff x hEx w i (hOf.1 x hx w i)
+  · have hSpos : (0 : ℝ) < S := by exact_mod_cast hS
+    have hsplit : (∑ w, ∑ j, if pf.Good mode x w j then wt w j else 0) +
+        (∑ w, ∑ j, if pf.Good mode x w j then 0 else wt w j) = S * Nw := by
+      rw [← hsum, ← Finset.sum_add_distrib]
+      refine Finset.sum_congr rfl fun w _ => ?_
+      rw [← Finset.sum_add_distrib]
+      exact Finset.sum_congr rfl fun j _ => by split_ifs <;> ring
+    calc (1 - P.game.deficiency x / S) * Nw = (S * Nw - P.game.deficiency x * Nw) / S := by
+          field_simp
+      _ ≤ (∑ w, ∑ j, if pf.Good mode x w j then wt w j else 0) / S :=
+          div_le_div_of_nonneg_right (by linarith [hCov x hx]) hSpos.le
+      _ ≤ (P.run x).fixed := (hUF hWR x hx).1
 
 /-- Binding at every position's cut from the fork form: per position (`DrawnLayer.moved_le_forked`), then the union
 over `L` and Cauchy–Schwarz. -/
