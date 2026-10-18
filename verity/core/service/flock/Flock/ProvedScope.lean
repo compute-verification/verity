@@ -176,15 +176,23 @@ def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) : V Public :=
 /-- **The most tables a `--zk` session may have**, `2^16`: ZK's tape premise holds only over a bounded table count. -/
 def zkTableCap : Nat := 65536
 
+/-- **The proof's Merkle leaves the headlines cover**: `hm96-sha512/v1` in every form, and plain SHA-512 leaves
+(`flock-leaf/sha512-unsalted`, a recursive session's inner statement, §16.16) on a statement with hidden outputs without
+`--zk`. Without `--zk` a leaf only binds its column, which either leaf does (a second column under one leaf is a SHA-512
+collision); `--zk`'s hiding needs `hm96`'s salts. -/
+def leafOk (tags : Tags) (zk : Bool) : Bool :=
+  tags.merkleLeaf == "hm96-sha512/v1" ||
+    (!zk && tags.hiddenOutputs && tags.merkleLeaf == "flock-leaf/sha512-unsalted")
+
 /-- The forms of `verify`'s statement the proof covers, each with what a statement outside it is: an hm96-sha512 row
-statement (`Stmt.setupTables`, the setup the proof models), untyped, with retained rounds and `hm96-sha512/v1` leaves, at
+statement (`Stmt.setupTables`, the setup the proof models), untyped, with retained rounds and leaves `leafOk` covers, at
 most one table without `--zk` and `zkTableCap` with it, and no public input ports (the proof's setup takes no
 `--public-inputs`). -/
 def statementRules (tags : Tags) (zk : Bool) (count : Nat) (publicInputs : Bool) : List (Bool × String) :=
   [(tags.hm96Rows, s!"{tags.name}, a statement before hm96-sha512 rows"),
    (!tags.typed, s!"{tags.name}, a typed statement"),
    (tags.retainRounds, s!"{tags.name}, a statement without retained rounds"),
-   (tags.merkleLeaf == "hm96-sha512/v1", s!"{tags.name}, a statement with {tags.merkleLeaf} leaves"),
+   (leafOk tags zk, s!"{tags.name}, a statement with {tags.merkleLeaf} leaves{if zk then " under --zk" else ""}"),
    (decide (count ≤ if zk then zkTableCap else 1),
     if zk then s!"{count} tables in a --zk session, more than {zkTableCap}"
     else s!"{count} tables in a session without --zk"),

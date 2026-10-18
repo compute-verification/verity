@@ -1,0 +1,28 @@
+# The remote bandwidth audit's verifier as executable Lean (`verity/remote-bandwidth/v0`): a window's receipt checks
+# (`RemoteAudit.verifyWindow`) and the session's bookkeeping (`RemoteAudit.Session`), held to `audit.py` by the difftest
+# (`remote-audit-difftest`). Code: Lean core and the packages below, no Mathlib and nothing of Security.
+name = "remote_audit"
+defaultTargets = ["RemoteAudit", "remote-audit-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../../service/flock"
+
+[[require]]
+name = "core_randomness"
+path = "../../../primitives/randomness"
+
+[[require]]
+name = "verity_difftest"
+path = "../../../difftest/lean"
+
+[[lean_lib]]
+name = "RemoteAudit"
+
+[[lean_exe]]
+name = "remote-audit-difftest"
+root = "RemoteAudit.DifftestMain"

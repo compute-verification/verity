@@ -15,7 +15,7 @@ import time
 from typing import Any
 
 from verity_vllm.commit.partition import word_check_refusal
-from verity_vllm.config import checkpoint_dir
+from verity_vllm.config import RowConfig, checkpoint_dir
 
 
 def load_json(path: str) -> Any:
@@ -42,7 +42,7 @@ def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
         r0 = w["requests"][0]
         lp = int(r0.get("prompt_len") or len(r0.get("prompt_token_ids") or [])); t = int(r0["max_tokens"]) - 1
         snap = "all"
-    ck = checkpoint_dir(w["model"], w["tokenizer_revision"], hf_home, checkpoints)
+    ck = checkpoint_dir(w["model"], RowConfig.of(w).engine.revision, hf_home, checkpoints)
     return {"B": int(s["batch"]), "I": int(s["max_input"]), "O": int(s["max_output"]), "LP": lp, "T": t, "snap": snap, "ck": ck}
 
 
@@ -574,13 +574,14 @@ def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     on sm_120 at TP2 for head_dim > 64: 2048 tokens in one request of max_model_len 288 for Qwen3-4B, Phi-3-mini, Mistral-7B; plain
     vLLM does the same, and passes at 288)."""
     w = json.load(open(wl)); s = w["sweep"]
-    req = w.get("engine_args_required") or {}
+    cfg = RowConfig.of(w)
+    req = cfg.engine.args
     mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
     batch = int(s["batch"])
     return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]),
             "shapes": sorted({(int(a), int(b) - 1) for a, b in zip(s["input_lengths"], s["output_caps"])}),
             "MML": mml, "MNBT": min(int(req.get("max_num_batched_tokens") or mml), batch * int(mml)),
-            "ck": checkpoint_dir(w["model"], w["tokenizer_revision"], hf_home, checkpoints) or ""}
+            "ck": checkpoint_dir(cfg.model, cfg.engine.revision, hf_home, checkpoints) or ""}
 
 
 def tp_world(wl: str) -> int:
@@ -629,6 +630,23 @@ def tp_manifest_line(d: str) -> str:
 
 def tp_manifest_complete(d: str) -> bool:
     return _field(f"{d}/manifest.json", lambda m: m.get("complete")) == "True"
+
+
+def tp_manifest_not_of_record(d: str, ck: Any) -> str:
+    """Why a TP row's `<d>/manifest.json` is not the Commit's manifest of record ("" when it is): complete, built under the query of
+    record with a partition, under the row's tap policies, recording the strict word check it passed.  The per-rank Program digests are
+    tp-commit's own check (each rank's rows against its Build), so a manifest the Build or a CPU host wrote is reused, not rebuilt on the
+    GPU host ([GLM-5.3] the rebuild is hours of CPU and ~470 GB beside the engine)."""
+    doc = load_json(f"{d}/manifest.json")
+    if not isinstance(doc, dict) or doc.get("complete") is not True:
+        return "absent or not complete"
+    q = doc.get("query") if isinstance(doc.get("query"), dict) else {}
+    if q.get("query_id") != QUERY_OF_RECORD or not isinstance(q.get("partition"), dict):
+        return f"not built under the query of record {QUERY_OF_RECORD} with a partition"
+    mismatch = policy_mismatch(q, ck)
+    if mismatch:
+        return f"disagrees with this Commit's taps on the {', '.join(mismatch)} policy"
+    return word_check_refusal(q) or ""
 
 
 def tp_check_line(m: str) -> str:

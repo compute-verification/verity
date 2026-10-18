@@ -12,9 +12,11 @@ decides each outer item alone and holds them to no order or number; here every t
 item sequence instead (`sequence`: each item's kind and `place`, one and the same in every honest session, and each
 control's the same up to its cut, its held-back candidate where those items leave in an honest session). Each transcript must
 meet its case's expectation (`EXPECT`): an honest session passes the firewall, the prover does not stop, and the contract
-accepts; a control's session is refused by the firewall (or, for `algebra`, stopped by the prover's self-check), and the contract
-refuses it for the control's own reason at the item where the firewall stopped (`firewall.gate.at`; for `algebra`, the first
-failing check). Every check's outcome is recomputed here from its affine form and the tape's pads (`c + Σ a_i h_i = 0` in
+accepts; a control's session is refused by the firewall (or, for `algebra`, stopped at its `Finish` for the rows that fail on
+its pads), and the contract refuses it for the control's own reason at the item where the firewall's check failed
+(`firewall.gate.at`; for `algebra`, the first failing check; for a worker that fails, `cut-…`, the stand-in the transcript
+records for the firewall's refusal). The transcript records the session's items up to that point,
+though the firewall goes on releasing the statement's schedule to `Finish` (live PROTOCOL.md §10.1). Every check's outcome is recomputed here from its affine form and the tape's pads (`c + Σ a_i h_i = 0` in
 GF(2^128)); the form is the verifier's replay of the masked values and the coins, on the transcript's word. Writes
 DIR/agreement.tsv and DIR/result.json; exits 1 if any transcript misses its expectation.
 """
@@ -39,12 +41,19 @@ EXPECT = {
               "lean": ("rep 0 algebraic phase round 0 frame 1: label", "not the value the statement fixes")},
     "opening": {"firewall": "FIREWALL-REFUSED: opening round 0, frame 2",
                 "lean": ("rep 0 opening round 0 frame 2: ", "not the value the firewall's opening fixes")},
-    "algebra": {"firewall": "PROVER-STOPPED: the batched constraint fails", "lean": ("the relation ", " fails")},
+    "algebra": {"firewall": "FIREWALL-REFUSED: circuit: ", "lean": ("the relation ", " fails")},
     "algebra-proof": {"firewall": "FIREWALL-REFUSED: the proof's exposed value 0",
                       "lean": ("rep 0 proof: the masked zerocheck and lincheck", "not the value the firewall's own values fixes")},
     "shape": {"firewall": "FIREWALL-REFUSED: the proof's shape",
               "lean": ("rep 0 proof: shape", "not the value the statement fixes")},
+    "cut-tree": {"firewall": "FIREWALL-REFUSED: opening round", "lean": ("rep ", "not the value the firewall's opening fixes")},
 }
+#: a worker that fails (`FC_FIREWALL_TAMPER=cut-…`): the firewall's refusal is the transcript's stand-in item, which the
+#: contract refuses as no value the firewall computes
+EXPECT |= {f"cut-{m}": {"firewall": "FIREWALL-REFUSED: the device failed: ",
+                        "lean": ("the firewall's refusal: FIREWALL-REFUSED: the device failed: ",
+                                 "not a value the public input lets the firewall fix by its own computation")}
+           for m in ("rc", "rc240", "panic", "silent", "decode")}
 
 
 def gmul(a: int, b: int) -> int:

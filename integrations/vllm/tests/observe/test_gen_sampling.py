@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity_vllm.config import RowEngine
 from verity_vllm.program.kernels import sampling_rng as R
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
@@ -93,7 +94,7 @@ def test_sampled_token_paths():
 def _adapter_fn(name: str):
     src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()
     tree = ast.parse(src)
-    ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object}
+    ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object, "RowEngine": RowEngine}
     for node in tree.body:
         if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "ACCEPTED_TOKENS":
             exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)

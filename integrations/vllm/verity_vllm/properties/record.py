@@ -37,12 +37,21 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, the installed FA2 softcap kernel launches kBlockM 64 and kBlockN fa2_kblock_n(D), MUFU ex2 / rcp are "
              "core's tables and MUFU.TANH is MufuTanh_v1 on every input, and every checked output row equals the registered "
              "AttentionSoftcap_v2, which the target binds, on every head."),
-    Property("glm53_block_fp8_capture", "verity-vllm/glm53-block-fp8-capture/v2",
+    Property("glm53_block_fp8_capture", "verity-vllm/glm53-block-fp8-capture/v3",
              "On the capture's Hopper GPU, vLLM selects CutlassFp8BlockScaledMMKernel for GLM-5.3's FP8 linears and Triton's "
              "fused_moe_kernel (TritonExperts) for its experts, every compiled expert kernel runs its dot as the step fp8_moe gives its "
              "tile (k32 e4m3 wgmma, or f16 mma.sync m16n8k16 on widened e4m3), and at GLM-5.3's shapes every output word of every launch "
-             "equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v3 at the launch's statics with that step as DOT, and every "
-             "activation quant equals Fp8GroupQuant_v1, bit for bit."),
+             "equals ScaledMmFp8Block_v1 or MoeExpertFp8BlockGemm(W)_v3 at the launch's statics with that step as DOT, every "
+             "activation quant equals Fp8GroupQuant_v1, and the experts' input quant with use_ue8m0=True (the default when DeepGEMM "
+             "is on) equals Fp8GroupQuantUe8m0_v1, bit for bit."),
+    Property("deepgemm_capture", "verity-vllm/deepgemm-capture/v2",
+             "On the capture's cc 9.0, 132-SM GPU, vLLM selects FlashInferFp8DeepGEMMDynamicBlockScaledKernel for both served "
+             "models' FP8 linears, M < 32 takes FlashInfer's branch and M >= 32 DeepGEMM's, DeepGEMM JIT-builds only the 1d2d "
+             "GEMM (Normal and Batched, bf16, identity epilogue) at exactly the launch configurations kernels.deepgemm_schedule "
+             "predicts for the swept batches up to 1024, and at the models' TP8 shapes every compared output word equals "
+             "FlashInferFp8Linear_v1, DeepGemmFp8Linear_v1 or, for the o-projection einsum (wo_a), ScaledMmFp8BlockGrouped_v1, "
+             "every DeepGEMM activation quant Fp8GroupQuantUe8m0_v1, and every processed weight block outside requant_band its "
+             "twin's, bit for bit."),
     Property("glm53_tp8_allreduce_capture", "verity-vllm/glm53-tp8-allreduce-capture/v3",
              "On the capture's 8 Hopper GPUs at the record's served setting (served.setting: vLLM's defaults, or its custom "
              "all-reduce off), each set of rank processes holding that setting's communicators, GLM-5.3's fused_allreduce_rms_norm "
@@ -56,19 +65,34 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "for bit, on every rank.  Apart from that verdict, h7168.ok says the same at vLLM's defaults of 7168-wide "
              "tensor_model_parallel_all_reduce (the hidden-7168 pass): FlashInfer's to 36 tokens, multimem past it at its own probe's "
              "trees and FTZ."),
-    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v3",
-             "On the capture device (cc 9.0, 132 SMs), the hidden-6144/N-256 and hidden-7168/N-384 MoE gates (GateLinear) run "
-             "cuteDSL ll_bf16_gemm on the kernel the cc 9.0 dispatch table names at M <= 16 and cuBLAS past it, and under the split-K-off "
-             "cuBLAS switch every f32 gate word equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1 or "
-             "GemmF32Out_v1, every hidden-7168 compressor word GemmF32Out_v1, every lm_head-shard and indexer-projection word "
-             "core's Gemm_v2, and every hidden-6144 K/N = 192/512 or 512/256 q_nope / v absorb word BatchedGemm_v1, bit for bit."),
+    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v5",
+             "On the capture's Hopper GPU, the two served workloads' MoE gates (GateLinear) run cuteDSL ll_bf16_gemm on the "
+             "kernel's registered dispatch at M <= 16 and cuBLAS past it, and under vLLM's default cuBLAS route every f32 gate word "
+             "equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1, GemmF32Out_v1 or "
+             "CublasSplitKGemmF32Out_v1 at the captured split count, every recorded compressor word the selected f32-output "
+             "form, every lm_head-shard and indexer-projection word the selected core or split-K bf16-output form, and every "
+             "GLM-5.3 q_nope / v absorb word BatchedGemm_v1, bit for bit; past M 256 the same holds at the first decode batch of "
+             "each model the scan of 256 to 1024 reads out of cuBLAS's words (a fitted split count or the serial chain, every "
+             "regime one of them) and at 1024."),
     Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v2",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v3, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
+             "where FA3 splits a row's keys, SparseMlaHeadSplit_v1 at its split count in the launch (launch_num_splits) in its place; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
-    Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v2",
+    Property("glm53_fa3_prefill_capture", "verity-vllm/glm53-fa3-prefill-capture/v1",
+             "On the capture's Hopper GPU, vLLM selects FA3 for GLM-5.3's dense MHA prefill at head dim 256, MUFU ex2 / rcp are core's "
+             "tables, every launch runs FlashAttnFwdSm90 at TileShape 128x80x256 with the Split mainloop and FlashAttnFwdCombine "
+             "exactly where fa3_model.split_plan splits it, and every output row of a launch at num_splits 1, and of every served "
+             "sequence the plan runs as one split, equals Attention_v4{T,NH=8,KVH=8,D=256,BN=80,...}, which the target binds, bit for "
+             "bit."),
+    Property("glm53_fused_rmsnorm_capture", "verity-vllm/glm53-fused-rmsnorm-capture/v1",
+             "On the capture's Hopper GPU, vLLM runs one specialisation of _fused_norm_rope_kernel, its code the PTX DsaRMSNorm_v1 was "
+             "read from, and every q_c and kv_c word of GLM-5.3's MLA RMSNorms (N 2048 and 512, eps 1e-5) on served and on probe rows "
+             "equals DsaRMSNorm_v1{N,EPS=1e-05}, bit for bit, the MLA cache holding the kv_c words, while each competing model "
+             "(RMSNormTriton_v1's reduction and epilogue among them) is refuted."),
+    Property("dsv4_marlin_capture", "verity-vllm/dsv4-marlin-capture/v3",
              "On the capture's Hopper GPU and driver (the capture map's target.driver), vLLM selects MARLIN (MarlinExperts) for "
              "the 384-expert TP8 row's MXFP4 experts at bf16 activations and defaults the LLM entrypoint's max_num_seqs to 1024, "
              "each launch's kernel (its thread config and blocks per SM, profiled) is the one served at its decode batch and the "
@@ -76,8 +100,11 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "of the moe block edges, to 1024), each served kernel's SASS is the "
              "driver's JIT of its compute_80 PTX that the record names by sha256, at the profiled registers and with no f32 "
              "multiply, and every output word of every launch, and of every accepted forced config on an input whose summation "
-             "orders show, equals MarlinMoeExpertGemm_v1 (w13) or MarlinMoeExpertGemmW_v1 (w2) at the launch's statics, bit for "
-             "bit."),
+             "orders show, equals MarlinMoeExpertGemm_v1 (w13) or MarlinMoeExpertGemmW_v1 (w2) at the launch's statics and its "
+             "run's recorded (pair -> moe block, expert) assignment, bit for bit; a launch replayed at its recorded call writes "
+             "the same words, and the record's two runs agree on every pair their align draws placed in the same moe block (the "
+             "within-expert placement of vLLM's moe_align_block_size is atomic-order, and a moved pair's words follow its own "
+             "block's k-slice schedule, which the Programs take as input)."),
     Property("dsv4_indexer_capture", "verity-vllm/dsv4-indexer-capture/v1",
              "On the capture's Hopper GPU, from the vLLM sources the Definitions were read from, vLLM selects the FP8 indexer cache, "
              "the one-stage head-128 compressor and f32 o-projection scales for the DSV4 indexer row, and at the row's TP8 statics "
@@ -90,9 +117,9 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "counts, RSQ, EX2 and expf are core's words, tf32_hc_prenorm_gemm's words on the probe are HopperTf32WgmmaDot8_v1's "
              "candidate step alone (B rounded RNE to TF32, the squared sum's GPU FMUL/FFMA/FADD lo contraction), and at the served "
              "statics (4 streams, hidden 7168, 20 Sinkhorn iterations) every word of every compared launch of the fused post + pre "
-             "(TileLang's FP32 path at <= 16 tokens, DeepGEMM's TF32 path above), the layer-0 broadcast pre and hc_head equals "
-             "mhc_twin, and the evaluated pieces (MhcFusedSplit_v1, MhcPost_v1, MhcPrenormTf32_v1, MhcPreBigFuse(Broadcast)_v1, "
-             "HcHead_v1) equal the kernel's words, bit for bit."),
+             "(TileLang's FP32 path at <= 16 tokens, DeepGEMM's TF32 path above, every split-count regime to 1024 tokens), the "
+             "layer-0 broadcast pre (likewise to 1024) and hc_head equals mhc_twin, and the evaluated pieces (MhcFusedSplit_v1, "
+             "MhcPost_v1, MhcPrenormTf32_v1, MhcPreBigFuse(Broadcast)_v1, HcHead_v1) equal the kernel's words, bit for bit."),
     Property("glm53_cuda_rmsnorm_capture", "verity-vllm/glm53-cuda-rmsnorm-capture/v1",
              "On the capture's cc 9.0 GPU, vLLM's default non-batch-invariant BF16 rms_norm and fused_add_rms_norm launch their pinned "
              "width-8 paths and block sizes at hidden sizes 6144 and 7168, and every output and residual word equals the "
@@ -113,6 +140,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, MUFU ex2 / rcp are core's tables on every input, and vLLM's fused sigmoid noaux_tc router "
              "(_moe_C.grouped_topk, 256 experts, top-8, renormalized, x2.5) returns through its block and its warp kernel exactly the "
              "ids and weights of MoeRouterSigmoidBias_v1 for that kernel on every captured row and every logit whose sigmoid reads MUFU."),
+    Property("glm53_fa3_split_capture", "verity-vllm/glm53-fa3-split-capture/v1",
+             "On the capture's Hopper GPU, at GLM-5.3's TP8 statics, every compared output word of vLLM's FA3 sparse MLA decode "
+             "(FLASH_ATTN_MLA_SPARSE without num_splits, as vLLM calls it, and with an explicit one) equals SparseMlaHeadSplit_v1 at "
+             "the token's valid count and the split count launch_num_splits derives from the batch and the SM count, bit for bit; "
+             "lg2.approx.ftz.f32 equals MufuLg2Ftz_v1 on every word of the compared exponents and the sweep but the powers of two "
+             "below 1, and ex2 / rcp.approx.ftz.f32 are core's tables on every input."),
     Property("dsv4_flashmla_capture", "verity-vllm/dsv4-flashmla-capture/v1",
              "On the capture's Hopper GPU, vLLM selects the FlashMLA sparse decode and prefill it vendors from FlashMLA 6bc49418 "
              "and the CuTe K-cache gather for the DSV4 row's MLA, its planner's metadata is get_mla_metadata_kernel's, and at the "

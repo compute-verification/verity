@@ -20,6 +20,10 @@
 # then KV_SCRIPT (default kv_bench.py) with
 # KV_ARGS; SANITIZE=1 runs KV_SCRIPT's --sanitize smoke under compute-sanitizer's memcheck, racecheck and synccheck,
 # and SANITIZE=2 runs KV_SCRIPT after it if every tool passed. KV_NCU=1 profiles KV_SCRIPT --ncu instead of timing it.
+# KV=1 under the queue, kv.cu's gates alone (the bound key's among them):
+#   research run --queue --on vy-nebius-2 --gpus 1 --max-min 20 --project verity --source . --cwd source \
+#     --campaign resource-accounting --env QUEUED=1 --env KV=1 --env KV_FIELDS='512 1024m' \
+#     --env KV_ARGS='--gates-only --ks 2,3' -- bash benchmarks/word_codec/run.sh
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -81,11 +85,13 @@ if [ "${KV:-0}" = 1 ]; then
       exit 0' _ "$NCU_BIN" "$O" "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" ${KV_ARGS:-}
     exit $?
   fi
-  # KV_REPEAT=N (default 1) runs KV_SCRIPT N times in one lease, each its own process, writing under $O/repI
+  # KV_REPEAT=N (default 1) runs KV_SCRIPT N times in one lease, each its own process, writing under $O/repI; under
+  # `research run --queue` (QUEUED=1) the GPU is leased around the whole job and gpu-lease is skipped
   if [ "${KV_REPEAT:-1}" = 1 ]; then
+    LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
+    [ "${QUEUED:-0}" = 1 ] && LEASE=()
     # shellcheck disable=SC2086
-    gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- \
-      "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" --out "$O" ${KV_ARGS:-}
+    "${LEASE[@]}" "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" --out "$O" ${KV_ARGS:-}
     exit $?
   fi
   # shellcheck disable=SC2086,SC2016
