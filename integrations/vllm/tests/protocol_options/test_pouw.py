@@ -76,6 +76,10 @@ def test_schemes_are_the_protocol_packages_and_only_ncp_and_pearl_c_sm120_are_ex
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter
     assert "executor runs" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
+    # the EPS1 scheme has a circuit here but is a compile pass over the served Program, refused until §4 step 4 wires it
+    eps1 = _serve("pouw:eps1-sm120-h1fx1")
+    assert "compile pass" in pouw.refusals("eps1-sm120-h1fx1", eps1)[0]
+    assert not pouw.requires_build("eps1-sm120-h1fx1", eps1) and not pouw.keeps_weight_copy("eps1-sm120-h1fx1", eps1)
 
 
 def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_sampled_proofs():

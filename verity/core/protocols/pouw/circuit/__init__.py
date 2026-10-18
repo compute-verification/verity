@@ -1,5 +1,7 @@
 """`ncp-v2`: NCP-INT's noised GEMM as a `verity.ml.circuits` Program, verified by sampled proofs
-(`PROTOCOL.md` §`ncp-v2`).
+(`PROTOCOL.md` §`ncp-v2`).  `eps1-sm120-h1fx1`: the first EPS1 design as a scheme (decision 102), a compile pass that
+adds a seed, public noise, a committed receipt and one spot check around a matmul that keeps serving its exact product
+(`eps1`, `COMPILE_PASS`).
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
 * `boolean`: the six of them `pc4`'s and `pc8`'s row units call, and the four Keccak words their hiding tiles' digest calls,
@@ -21,10 +23,11 @@
 * `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
   piece fits C-Flock's block.
 
-`traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
-is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
-and the draw layout; None for any other scheme, which stays refused beside sampled proofs.  The verifier builds these
-Programs itself, from (scheme, m, k, n) and its own anchors, and never takes a prover's descriptor: `Traced.check_descriptor`
+`traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a native-executor
+scheme (ncp-v2) the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served
+outputs and the draw layout (a `Traced`); for a compile-pass scheme (`COMPILE_PASS`: eps1) the served arm, the spot check
+and the work table (an `eps1.Eps1Traced`); None for any other scheme, which stays refused beside sampled proofs.  The verifier
+builds these itself, from (scheme, m, k, n) and its own anchors, and never takes a prover's descriptor: `Traced.check_descriptor`
 compares an offered one's digest with its own (X-SPC-73).
 """
 from __future__ import annotations
@@ -32,8 +35,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-#: the schemes that have a circuit here, each with the permutation P it pins (as `ncp-v1` and `ncp-v1-shift24` do)
-SCHEMES = {"ncp-v2": "word", "ncp-v2-shift24": "shift24"}
+from . import eps1
+
+#: the schemes that have a circuit here, each with the kind it pins: ncp-v2's permutation P (as `ncp-v1` and
+#: `ncp-v1-shift24` do), and the EPS1 designs' silicon target (`eps1`, decision 102's table)
+SCHEMES = {"ncp-v2": "word", "ncp-v2-shift24": "shift24", eps1.SCHEME: eps1.KIND}
+
+#: the circuit schemes that are a compile pass over the served Program (decision 101/102, POUW-SPEC §4): PoUW adds a
+#: per-call seed, the public noise it derives, a committed receipt and one spot check around a matmul that keeps serving
+#: its exact product, instead of computing the whole call in gates as ncp-v2 does.  Their `traced_as` is an
+#: `eps1.Eps1Traced` (no weight Program, no digest or key units, an empty closure), and the vLLM adapter that serves the
+#: compiled Program is §4 step-4 work, owned jointly with circuits and vllm, not this package's native executor.
+COMPILE_PASS = frozenset({eps1.SCHEME})
 
 
 #: a call's inputs that are its weight Program's outputs, in that Program's output order
@@ -158,12 +171,16 @@ class Traced:
         return plan.layout(self.shape, self.kind)
 
 
-def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
+def traced_as(scheme: str, m: int, k: int, n: int):
     """The circuit sampled proofs traces for one PoUW linear of shape m × k → n under ``scheme``, or None when the scheme has
-    no circuit here. Raises `protocol.DomainError` for a shape outside the circuit (16 | m, 16 | n, 64 | k). P is the
-    scheme's, never the caller's."""
+    no circuit here.  A compile-pass scheme (`COMPILE_PASS`) returns an `eps1.Eps1Traced`, whose circuit is the served arm, the
+    spot check and the work table; a native-executor scheme (ncp-v2) returns a `Traced` with its call and weight Programs.
+    Raises `protocol.DomainError` for a shape outside the circuit (16 | m, 16 | n; 64 | k for ncp-v2, 32 | k for eps1). P is
+    the scheme's, never the caller's."""
     if scheme not in SCHEMES:
         return None
+    if scheme in COMPILE_PASS:
+        return eps1.traced_as(m, k, n)
     from . import ncp2, partition
 
     kind, shape = SCHEMES[scheme], ncp2.Shape(m, k, n)
@@ -171,4 +188,4 @@ def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
                   partition.weight_query(shape, kind))
 
 
-__all__ = ["LINKED", "SCHEMES", "Traced", "traced_as"]
+__all__ = ["COMPILE_PASS", "LINKED", "SCHEMES", "Traced", "eps1", "traced_as"]

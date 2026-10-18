@@ -427,11 +427,12 @@ def _commit(*enabled):
 
 
 def test_beside_sampled_proofs_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
-    """`verity.core.protocols.pouw.circuit` (#364) has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
-    that scheme is admitted beside sampled proofs, and every other one keeps #311's refusal, word for word.  Without sampled
-    proofs nothing changes."""
+    """`verity.core.protocols.pouw.circuit` (#364) has circuits for `ncp-v2`, `ncp-v2-shift24` and the EPS1 compile-pass scheme
+    `eps1-sm120-h1fx1`, and the adapter executes `ncp-v2` alone: that scheme is admitted beside sampled proofs, and every other
+    one keeps #311's refusal, word for word.  Without sampled proofs nothing changes."""
     from verity.core.protocols.pouw import circuit
-    assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
+    assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24", "eps1-sm120-h1fx1"} and PO.CIRCUITS["pouw"] == circuit.__name__
+    assert circuit.COMPILE_PASS == frozenset({"eps1-sm120-h1fx1"})
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
     assert PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:vllm-v1")) == ()
@@ -455,6 +456,8 @@ def test_traced_as_is_the_circuit_of_one_executed_call():
     assert t.scheme == "ncp-v2" and t.definition.name == "NcpLinear" and t.served == 16 * 16
     assert PO.traced_as("pouw:ncp-v1", 16, 64, 16) is None and PO.traced_as("pouw:pearl-fp8-v4", 16, 64, 16) is None
     assert PO.traced_as("pous:band-chain/d12/v1", 16, 64, 16) is None and PO.circuit_registry("pous") is None
+    e = PO.traced_as("pouw:eps1-sm120-h1fx1", 16, 128, 16)   # the EPS1 compile-pass scheme traces its arm and spot check
+    assert e.scheme == "eps1-sm120-h1fx1" and e.kind == "h1fx1" and e.closure == () and e.work["per_dot"] == 128
     with pytest.raises(DomainError, match="64 [|] k"):
         PO.traced_as("pouw:ncp-v2", 16, 65, 16)
 
