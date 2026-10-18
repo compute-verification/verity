@@ -37,15 +37,17 @@ def _bf16(rng, shape):
 
 
 def test_the_launch_check_reads_the_tile_the_flags_and_the_combine() -> None:
-    pinned = X.launch_geometry([PREPARE, _fwd(), _fwd()], 1)
+    pinned = X.launch_geometry([PREPARE, _fwd(), _fwd()], 1, 81)
     assert pinned["ok"] and pinned["instantiations"] == [{"stages": 2, "tile": [128, 80, 256], "headdim_v": 256,
                                                           "flags": dict(X.WANT_FLAGS, PackGQA=True, Split=False)}]
-    assert X.launch_geometry([PREPARE, _fwd(Split=True), COMBINE], 5)["ok"]
-    for names, static in (([_fwd()], 5), ([_fwd(Split=True)], 5), ([_fwd(Split=True), COMBINE], 1), ([_fwd(), COMBINE], 1),
-                          ([_fwd(tile=(128, 128, 128), dv=128)], 1), ([_fwd(IntraWGOverlap=False)], 1), ([_fwd(PagedKVNonTMA=True)], 1),
-                          ([_fwd(), _fwd(tile=(128, 64, 256))], 1), ([PREPARE], 1), ([], 1)):
-        assert not X.launch_geometry(names, static)["ok"], (names, static)
-    assert X.launch_geometry([_fwd(PackGQA=False)], 1)["ok"]           # recorded only: one query head a KV head packs nothing
+    assert X.launch_geometry([PREPARE, _fwd(Split=True), COMBINE], 5, 512)["ok"]
+    assert X.launch_geometry([PREPARE, _fwd(Is_causal=False)], 1, 1)["ok"]   # mha_fwd drops causal at max_seqlen_q 1
+    for names, static, sq in (([_fwd()], 5, 512), ([_fwd(Split=True)], 5, 512), ([_fwd(Split=True), COMBINE], 1, 81),
+                              ([_fwd(), COMBINE], 1, 81), ([_fwd(tile=(128, 128, 128), dv=128)], 1, 81), ([_fwd(IntraWGOverlap=False)], 1, 81),
+                              ([_fwd(PagedKVNonTMA=True)], 1, 81), ([_fwd(), _fwd(tile=(128, 64, 256))], 1, 81), ([PREPARE], 1, 81), ([], 1, 81),
+                              ([_fwd()], 1, 1), ([_fwd(Is_causal=False)], 1, 2)):
+        assert not X.launch_geometry(names, static, sq)["ok"], (names, static, sq)
+    assert X.launch_geometry([_fwd(PackGQA=False)], 1, 81)["ok"]       # recorded only: one query head a KV head packs nothing
 
 
 def test_the_cases_reach_every_sampled_row_and_both_served_classes() -> None:
