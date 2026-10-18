@@ -69,7 +69,8 @@ def test_an_engine_records_what_its_build_wrote_into_the_environment() -> None:
     src = inspect.getsource(build.build_engine)
     assert src.index("env0 = engine_env.snapshot()") < src.index("engine_kwargs_for(") < src.index("llm = LLM(**kw)")
     assert "engine_env.set_since(env0))" in src.split("llm = LLM(**kw)")[1].split("eng.effective")[0]
-    assert [f.name for f in dataclasses.fields(build.Engine)][-1] == "environ"
+    environ, = [f for f in dataclasses.fields(build.Engine) if f.name == "environ"]
+    assert environ.default is None
 
 
 def test_the_engine_profile_reads_this_table() -> None:
