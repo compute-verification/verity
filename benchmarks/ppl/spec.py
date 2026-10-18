@@ -71,8 +71,8 @@ def linear_step(name: str, *, phase: str = "real", seeded=False, calib=False, ch
     return _register("linear", name, phase, seeded, calib, ("linear",), check)
 
 
-def attention_step(name: str, *, phase: str = "real", seeded=False, on=ATTENTION_MATMULS, check=None):
-    return _register("attention", name, phase, seeded, False, on, check)
+def attention_step(name: str, *, phase: str = "real", seeded=False, calib=False, on=ATTENTION_MATMULS, check=None):
+    return _register("attention", name, phase, seeded, calib, on, check)
 
 
 @dataclass(frozen=True)

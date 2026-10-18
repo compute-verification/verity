@@ -39,7 +39,9 @@ each registered block freed at its values' last read), one instance of each per 
   precedes; the bridge (`bridge`) binds the rest on public data, opening no canonical row: each pass's plan length is its
   step's plan unit's public count, each pass's seed binds the units' chain of the steps before it (`units_heads`), and
   the registered blocks released after each step are its map unit's public frees. The ledger then credits each pass
-  min(n D, read_bits(s)) on `RequirementLink` (`UnitsLink`), D = 16,384 bits (a written block holds at least one value).
+  min(n D, read_bits(s)) on `RequirementLink` (`UnitsLink`), D = 16,384 bits (a written block holds at least one value),
+  the session 1 − ε of their sum, ε the share of it the wrong units the draw allows can carry (`uncertified`), its δ
+  added to the ledger's error.
 * **Check 3.** The session draws ``--samples`` receipts a window, and no block is opened: each draw goes through the
   check-3 units (`a7_check3`, `verity.ml.commitments.gates.block_check`), a receipt unit (the block's sketch receipt is
   its entry of the pass's hidden receipt leaf, and the step's certified plan row holds the block at the drawn position)
@@ -416,13 +418,17 @@ def payloads_of(store, j: int) -> bytes:
 class UnitsLink:
     """`audit.RequirementLink` on A7's units: it holds when the units' audit is accepted, every drawn unit's public and ok
     rows open, every witness row is bound to its canonical commitment, the session's check 3 is proved, and the bridge
-    holds the session to the units' public data. `mapped` holds of the chain `appends` the map units' writes make (`units_appends`), once every
-    map unit is drawn and proved (`proved`)."""
+    holds the session to the units' public data. `mapped` holds of the chain `appends` the map units' writes make
+    (`units_appends`), once every map unit is drawn and proved (`proved`). `epsilon` and `delta` are what the units' draw
+    established (`uncertified`): the most share of the linked credit the wrong units it allows can carry, at the audit's
+    delta; until they are set, the link credits nothing."""
     holds: bool
     density_bits: int
     req: RQ.Requirement
     appends: bytes | None = None
     proved: bool = False
+    epsilon: float = 1.0
+    delta: float = 0.0
 
     def read_bits(self, step: int) -> int:
         return self.req.read_bits(step)
@@ -546,13 +552,8 @@ def bound_row(template: str, r: str, i: int, a: dict, S) -> tuple[str, int] | No
         return None
     if r == "phi":
         return "map", 0
-    if r.startswith("val"):
-        k = int(r[3:])
-        return ("value", a["pos"][k]) if (a["present"] >> k) & 1 else None
-    if r.startswith("pay"):
-        c = int(r[3:])
-        return ("payload", a["first"] - S.N + c) if c < a["count"] else None
-    return None
+    kind, at = RU.map_value_leaves(S, a).get(r, (None, 0))
+    return ("value", at) if kind == "value" else ("payload", at - S.N) if kind == "block" else None
 
 
 def bindings(m: dict, canons: dict, pub_args: list[dict], S) -> dict:
@@ -1035,17 +1036,20 @@ def main() -> int:
     rrec = rs.session.record()
     mapped = link.mapped(rrec.appends)
     common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    uncert = uncertified(result, rrec, rs.view, store, req, link, common, members)
+    if uncert.get("credit_bytes"):
+        link = replace(link, epsilon=min(1.0, uncert["uncertified_bytes"] / uncert["credit_bytes"]), delta=a.delta)
     ledgers = {"store": audit.ledger(rrec, **common).to_json(),
                "store+post-seed": audit.ledger(rrec, **common, credit_post_seed=StandInPostSeed()).to_json()}
     if link.holds and mapped:
         ledgers["linked"] = audit.ledger(rrec, **common, requirement=link).to_json()
         ledgers["linked+post-seed"] = audit.ledger(rrec, **common, requirement=link, credit_post_seed=StandInPostSeed()).to_json()
-    uncert = uncertified(result, rrec, rs.view, store, req, link, common, members)
     whole = common["capacity_bytes_per_s"] * rrec.span_ns / 1e9
     summary["link"] = {"holds": link.holds, "mapped": mapped, "every_map_unit_proved": proved,
                        "appends": None if rrec.appends is None else rrec.appends.hex(),
                        "units_appends": None if link.appends is None else link.appends.hex(),
                        "units": units_ok, "session": session_ok, "check3": check3["accepted"], "bridge": br,
+                       "epsilon": link.epsilon, "delta": link.delta,
                        "density_bits": VW, "verdicts": [v.accepted for v in rs.verdicts], "uncertified": uncert,
                        "circuit_read_bytes": sum(req.read_bits(s) for s in range(req.steps)) // 8,
                        "ledgers": {k: {"gamma": v["gamma"], "timing": v["terms"]["timing"], "linked": v.get("linked"),
@@ -1095,7 +1099,7 @@ def bridge(rs, plan_m: dict, map_m: dict, steps: int) -> dict:
 def uncertified(result: dict, rrec, view: dict, store, req, link, common, members) -> dict:
     """What the sample leaves uncertified, for memory accounting's ledger: the profile's bound on wrong units of each
     template at delta, and the most credit those could carry (the passes whose plan unit is wrong, and those holding a block
-    a wrong map unit wrote), as a fraction of the session's capacity: a term to charge beside the link's cap."""
+    a wrong map unit wrote), as a fraction of the session's capacity; over the credit, it is the link's ε."""
     wrong = result.get("wrong_units")
     if not isinstance(wrong, dict):
         return {"wrong_units": wrong, "term": None}

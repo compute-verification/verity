@@ -1,7 +1,8 @@
 """The verifier's and the prover's processes over a loopback socket, the driver's reference as the prover's backend and
-a clock that advances by one tick per pass: an honest session is accepted and its γ terms computed, a prover that
-dropped blocks is rejected at its openings, a second session waits out the first's deadline, and KV pages appended and
-released mid-session (a memory map's steps) are audited, accepted when held and rejected when dropped."""
+a clock that advances by one tick per pass with both sides settled around each tick, so a session runs one schedule:
+an honest session is accepted and its γ terms computed, a prover that dropped blocks is rejected at its openings, a
+second session waits out the first's deadline, and KV pages appended and released mid-session (a memory map's steps)
+are audited, accepted when held and rejected when dropped."""
 from __future__ import annotations
 
 import os
@@ -28,27 +29,84 @@ import wire  # noqa: E402
 P512 = rcodec.Codec(rcodec.P512, 2, False)
 
 
+VERIFIER, PROVER = 0, 1
+
+
+class Counted(wire.Conn):
+    """One side's end of the loopback, stamping with the pass clock and telling it of each frame it sends and each
+    time it asks for its next: a side asking for its (n + 1)-th frame has handed on its n-th."""
+
+    def __init__(self, sock: socket.socket, clock: PassClock, side: int) -> None:
+        super().__init__(sock, clock=clock.now)
+        self.pass_clock, self.side, self.asked = clock, side, 0
+
+    def send(self, head: dict, body: bytes = b"") -> None:
+        self.pass_clock.sending(self.side, head["type"])
+        super().send(head, body)
+
+    def recv(self):
+        self.pass_clock.reading(self.side, self.asked)
+        self.asked += 1
+        return super().recv()
+
+
 class PassClock:
-    """Time is the prover's passes: one tick as each pass ends. A wait returns the inbox's next message or None once
+    """Time is the prover's passes: one tick as each pass ends, both sides settled around it. A tick waits until the
+    verifier's reader has handed on every frame the prover sent, the verifier is waiting on its clock with an empty
+    inbox (or has ended the session) and the prover's reader has handed on every frame the verifier sent, and again
+    once time has moved, so whatever either side sends in answer reaches the other at the tick it was sent, and a
+    session runs one schedule however its threads are scheduled. A wait returns the inbox's next message or None once
     the clock reaches its end, woken by either; once the prover has said its passes are done, time jumps to the wait's
     end."""
 
     def __init__(self) -> None:
-        self.t, self.done, self.inbox = 0, False, None
+        self.t, self.done, self.inbox, self.parked, self.idle_at, self.ended = 0, False, None, None, None, False
+        self.frames = threading.Condition()
+        self.sent, self.asked = [0, 0], [0, 0]
+
+    def conns(self) -> tuple[Counted, Counted]:
+        a, b = socket.socketpair()
+        return Counted(a, self, VERIFIER), Counted(b, self, PROVER)
 
     def now(self) -> int:
         return self.t
 
+    def sending(self, side: int, kind: str) -> None:
+        with self.frames:
+            self.sent[side] += 1
+        if side == VERIFIER and kind in ("session", "end"):
+            if self.inbox is None:
+                self.ended = kind == "end"
+                return
+            with self.inbox.mutex:
+                self.ended = kind == "end"
+                self.parked.notify_all()
+
+    def reading(self, side: int, n: int) -> None:
+        with self.frames:
+            self.asked[side] = n
+            self.frames.notify_all()
+
     def tick(self) -> None:
-        if self.inbox is None:
-            self.t += 1
-            return
+        self._settle()
         with self.inbox.mutex:
             self.t += 1
             self.inbox.not_empty.notify_all()
+        self._settle()
+
+    def _settle(self) -> None:
+        with self.frames:
+            self.frames.wait_for(lambda: self.inbox is not None and self.asked[VERIFIER] == self.sent[PROVER])
+        with self.inbox.mutex:
+            self.parked.wait_for(lambda: self.ended or (self.idle_at == self.t and not self.inbox._qsize()))
+        with self.frames:
+            self.frames.wait_for(lambda: self.asked[PROVER] == self.sent[VERIFIER])
 
     def wait(self, inbox: queue.Queue, until_ns):
-        self.inbox = inbox
+        if self.inbox is None:
+            with self.frames:
+                self.inbox, self.parked = inbox, threading.Condition(inbox.mutex)
+                self.frames.notify_all()
         with inbox.not_empty:
             while True:
                 if until_ns is not None and self.done:
@@ -56,9 +114,11 @@ class PassClock:
                 if until_ns is not None and self.t >= until_ns:
                     return None
                 if inbox._qsize():
-                    break
+                    return inbox._get()
+                self.idle_at = self.t
+                self.parked.notify_all()
                 inbox.not_empty.wait()
-            return inbox._get()
+                self.idle_at = None
 
     def idle(self) -> None:
         with self.inbox.mutex:
@@ -70,9 +130,12 @@ class PassClock:
 
 
 class TickingBackend(prover.CpuBackend):
-    def __init__(self, clock: PassClock, *args, tiers: dict | None = None, **kw) -> None:
+    def __init__(self, clock: PassClock, *args, tiers: dict | None = None, layout: list | None = None, **kw) -> None:
         super().__init__(*args, **kw)
-        self.clock, self.tiers = clock, tiers
+        self.clock, self.tiers, self._layout = clock, tiers, layout
+
+    def layout(self) -> list | None:
+        return self._layout
 
     def calibrate(self) -> dict:
         return {**super().calibrate(), **({"read_tiers": self.tiers} if self.tiers else {})}
@@ -85,11 +148,11 @@ class TickingBackend(prover.CpuBackend):
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
-        registry: audit.Registry | None = None, **kv):
+        registry: audit.Registry | None = None, layout: list | None = None, **kv):
     clock = PassClock()
-    a, b = socket.socketpair()
-    vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
-    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers)
+    vconn, pconn = clock.conns()
+    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
+                             layout=layout)
     p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None, **kv)
     results = []
 
@@ -125,6 +188,20 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     assert set(lg["terms"]) == set(audit.LEDGER_SOURCES) and lg["gamma"] > 0
     assert all(len(d) == 6 for d in r["draws"].values())
     assert all(w["slack_ns"] >= 0 for w in r["windows_seen"])
+
+
+def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):
+    """Each tick settles both sides, so an honest session's windows are the same at every run: window 0's boundary
+    falls at tick 20, as its 20th pass ends, and each later window starts one tick after its coin, the pass in flight
+    at the boundary discarded, so it holds 19 passes; each root reaches the verifier at the tick its pass ended, and a
+    window's draws go out as the next window's first root arrives."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), (pr,) = run("honest")
+    assert r["accepted"] and pr["passes"] == [20, 19, 19] and pr["discarded"] == 3
+    seen = r["windows_seen"]
+    assert [(w["released_ns"], w["boundary_ns"]) for w in seen] == [(0, 20), (20, 40), (40, 60)]
+    assert [w["arrivals_ns"] for w in seen] == [list(range(1, 21)), list(range(22, 41)), list(range(42, 61))]
+    assert [w["draws_sent_ns"] for w in seen[:2]] == [22, 42]
 
 
 def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(monkeypatch):
@@ -254,6 +331,91 @@ def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is
     (r,), (p,) = run("kv:2", samples=8, kv_every=4, kv_pool=8, lifetime=1)
     assert not r["accepted"] and not p["accepted"] and p["kv"]["rekeyed"] == 0
     assert r["failure"]["failure"] == "lifetime" and r["failure"]["t"] == 1
+
+
+class CarrierVerdict:
+    """A property verdict that holds, its carriers at most `carrier` bytes a window (`audit.PostSeedVerdict`)."""
+
+    def __init__(self, carrier: float, holds: bool = True) -> None:
+        self.carrier, self.holds = carrier, holds
+
+    def carrier_bytes(self, read_bytes: int) -> float:
+        return self.carrier
+
+
+def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(monkeypatch):
+    """The ledger's memory line on a kv session whose hello labels its store: 8 blocks of weights, then the KV pool's 8
+    pages, in HBM.  At a draw of every receipt the floor is 0, so each window credits the weights every pass holds,
+    less the blocks the node's squarings could rebuild in its span (none here: the clock's spans are ticks, so the
+    session runs at no squarings, and a rate is put back below); the KV the session appended is held and read but
+    credited only on the property's verdict, then less its carriers; the share and residual are of the node's HBM.
+    Unlabelled, the whole registered store is filler and no weights are credited."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
+    seen = {}
+    memory = verifier.memory
+
+    def keep(*a, **kw):
+        seen["args"] = a, kw
+        return memory(*a, **kw)
+
+    monkeypatch.setattr(verifier, "memory", keep)
+    layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
+              {"kind": "kv", "tier": "hbm", "first": 8, "blocks": 8}]
+    (r,), (p,) = run("kv:2", samples=4096, kv_every=4, kv_pool=8, layout=layout)
+    assert r["accepted"] and p["accepted"] and r["appended"] > 0
+    B, mem, pub = rcodec.BLOCK_BYTES, r["ledger"]["memory"], r["record"]["public"]
+    assert mem["labels"] and not mem["kv_credited"] and mem["hbm_bytes"] == verifier.HBM_BYTES == 8 * 96 * 2 ** 30
+    for w, posts in zip(mem["windows"], (w["post_seed"] for w in r["record"]["profile"]["windows"])):
+        assert w["floor"] == 0 == w["lost_blocks"] == w["epsilon"] and w["held"]["weights"] == 8 * B
+        assert w["held"]["kv"] == min(posts) * B and w["read"]["kv"] == sum(posts) * B and w["held"]["host"] == 0
+        assert 8 * B <= w["held"]["hbm"] == w["basis"] == w["credited"]["hbm"] <= 16 * B
+        assert w["credited"]["weights"] == 8 * B and w["credited"]["kv"] == w["credited"]["kv_read"] == 0
+    assert mem["read"]["kv"] == sum(pub["post_seed"]) * B > 0 and mem["kv_bytes"] == mem["kv_read_bytes"] == 0
+    assert mem["credited_bytes"] == min(w["credited"]["hbm"] for w in mem["windows"]) and mem["weights_bytes"] == 8 * B
+    assert mem["share"] == mem["credited_bytes"] / mem["hbm_bytes"] and mem["residual"] == 1 - mem["share"]
+    assert mem["delta"] == 2.0 ** -40 and mem["epsilon"] == 0
+
+    (record, plans, regions), kw = seen["args"]
+    assert regions == (("weights", "hbm", 0, 8), ("kv", "hbm", 8, 8))
+    span = max(w.span_ns for w in record.windows)
+    rate = record.codec.encode_squarings * 1e9 / span / 2
+    rebuilt = verifier.memory(record, plans, regions, hbm_bytes=kw["hbm_bytes"],
+                              rebuild=audit.Rebuild(record.codec, rate))
+    for w, x in zip(record.windows, rebuilt["windows"]):
+        assert x["lost_blocks"] == pytest.approx(w.span_ns / span / 2) and x["lost_blocks"] <= 0.5
+        assert x["credited"]["weights"] == pytest.approx(8 * B - x["lost_blocks"] * B)
+        assert x["epsilon"] == pytest.approx(x["lost_blocks"] * B / x["basis"])
+        assert x["credited"]["hbm"] == pytest.approx((1 - x["epsilon"]) * x["basis"])
+    whole = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), **kw)
+    carried = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(B / 2), **kw)
+    assert whole["kv_credited"] and whole["credited_bytes"] >= mem["credited_bytes"]
+    for w, c, posts in zip(whole["windows"], carried["windows"], (w.post_seed for w in record.windows)):
+        lost = w["lost_blocks"] * B
+        assert w["credited"]["kv_read"] == pytest.approx(max(0, sum(posts) * B - lost))
+        assert c["credited"]["kv_read"] == pytest.approx(max(0, sum(posts) * B - B / 2 * sum(map(bool, posts)) - lost))
+        assert w["credited"]["kv"] == pytest.approx(max(0, min(posts) * B - lost))
+    assert whole["kv_read_bytes"] > carried["kv_read_bytes"] > 0
+    with pytest.raises(ValueError, match="fails"):
+        verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0, holds=False), **kw)
+
+    bare = verifier.memory(record, plans, None, **kw)
+    assert not bare["labels"] and bare["weights_bytes"] == 0 and bare["credited_bytes"] == mem["credited_bytes"]
+
+
+@pytest.mark.parametrize("layout", [
+    [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8}],
+    [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
+     {"kind": "kv", "tier": "hbm", "first": 9, "blocks": 7}],
+    [{"kind": "code", "tier": "hbm", "first": 0, "blocks": 16}],
+    [{"kind": "kv", "tier": "nvme", "first": 0, "blocks": 16}],
+    [{"kind": "kv", "tier": "hbm", "first": 0, "blocks": 0}, {"kind": "kv", "tier": "hbm", "first": 0, "blocks": 16}],
+    {"kind": "kv", "tier": "hbm", "first": 0, "blocks": 16},
+    ["kv"],
+])
+def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
+    with pytest.raises(ValueError):
+        verifier.regions_of(layout, 16)
 
 
 def registering(registry: audit.Registry) -> tuple[str, str]:

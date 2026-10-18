@@ -81,7 +81,7 @@ def test_generated_ck64_cell_is_the_base_cell_with_a_chunking_budget():
     a, b = json.loads(base.read_text()), json.loads(ck.read_text())
     key = lambda r: (r["request_id"], r["prompt_token_ids"], r["max_tokens"], r["arrive_step"])  # noqa: E731
     assert [key(r) for r in a["requests"]] == [key(r) for r in b["requests"]], "same request ids, prompts, lengths, arrivals"
-    assert b["engine_args_required"] == {"max_num_batched_tokens": 64, "enable_chunked_prefill": True}
+    assert b["engine"]["args"] == {"max_num_batched_tokens": 64, "enable_chunked_prefill": True}
     assert b["feature_variant"] == {"chunked": 64} and b["sampling"]["variant"] == "greedy"
     assert b["expected_engine_steps"] == 17 and b["schedule_if_full_length"]["prefill_chunks"] == [[64, 64, 27]]
     assert b["expected_engine_steps"] >= a["expected_engine_steps"], "the snapshot-step range (run_config: range(expected)) must cover the run"

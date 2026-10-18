@@ -249,6 +249,31 @@ def test_each_memory_map_clause_s_negative_is_refused(case) -> None:
     assert broken(lambda s: dataclasses.replace(s, payload={**s.payload, j0: s.payload[j0] ^ (1 << 77)}))
 
 
+def test_the_value_leaves_are_the_values_each_map_row_carries(case) -> None:
+    """`map_value_leaves`, from the public row alone, names leaf i of the value commitments (written value positions[i]) for
+    each value row, whose words are that value's, and block first + c for each payload row, whose words are its payload.
+    Over the steps, every written value a later step reads is one value leaf, once; a public row past C blocks, past K
+    values or with a position past V is refused."""
+    req, rows = case.req, RU.memory_map_rows(MAP)
+    for layout, store in case.layouts.values():
+        seen = []
+        for t in range(STEPS):
+            a = map_args(case, layout, store, t)
+            words = RU.row_words(MAP, rows, a)
+            leaves = RU.map_value_leaves(MAP, {x: a[x] for x in ("first", "count", "present", "pos")})
+            for row, (kind, at) in leaves.items():
+                want = (RU._words(req.values[case.positions[at]], VW // 16) if kind == "value"
+                        else RU._words(store.payload[at], RU.BLOCK_WORDS))
+                assert words[row] == want, (t, row)
+            assert sorted(at for kind, at in leaves.values() if kind == "block") == sorted(store.written.get(t, ()))
+            seen += [at for kind, at in leaves.values() if kind == "value"]
+        assert sorted(seen) == [i for i, v in enumerate(case.positions) if req.last.get(v, -1) > req.born[v]]
+    a = map_args(case, *case.layouts["spread"], 0)
+    for bad in ({**a, "count": MAP.C + 1}, {**a, "present": 1 << MAP.K}, {**a, "pos": [MAP.V] + a["pos"][1:]}):
+        with pytest.raises(ValueError, match="a public row of at most"):
+            RU.map_value_leaves(MAP, bad)
+
+
 def test_the_rows_are_the_signature_s_params() -> None:
     """Each unit's rows cover its parameters once each, the public row first, in signature order."""
     for defn, S, rows in ((RU.PlanMatch, PLAN, RU.plan_rows(PLAN)), (RU.MemoryMapStep, MAP, RU.memory_map_rows(MAP))):

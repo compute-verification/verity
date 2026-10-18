@@ -139,6 +139,42 @@ def test_collective_bus_world_3_peer_layout_and_rank_order():
     assert ag.shape == (2, 12) and ag[0, :4].tolist() == [1.0] * 4 and ag[0, 4:8].tolist() == [10.0] * 4 and ag[0, 8:].tolist() == [100.0] * 4
 
 
+def _derive_world8_collective(monkeypatch, *, fused: bool, custom: bool):
+    torch = pytest.importorskip("torch")
+    from verity_vllm.program.frontend.derive import derive_report
+    from verity_vllm.program.frontend.export_ops import ensure_ops
+    from verity_vllm.program.frontend.rules import vllm_bindings as VB
+    from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+
+    ensure_ops()
+    monkeypatch.setitem(VB._OBSERVED, "allreduce_settings",
+                        {"custom_all_reduce": custom, "symmetric_memory": True, "flashinfer": True})
+
+    class Collective(torch.nn.Module):
+        def forward(self, *args):
+            parts = list(args[:8])
+            if fused:
+                return torch.ops.verity_tp.fused_allreduce_rms_norm(parts, args[8], args[9], 1e-5)
+            return torch.ops.verity_tp.all_reduce(parts)
+
+    rows = tuple(torch.zeros(1, 6144, dtype=torch.bfloat16) for _ in range(8))
+    inputs = rows + ((torch.zeros(1, 6144, dtype=torch.bfloat16), torch.ones(6144, dtype=torch.bfloat16)) if fused else ())
+    return derive_report(Collective(), inputs, mode="profile", profile="b1-eager-v3", rules=vllm_ruleset(),
+                         name="world8-collective", check_registry=True, rank=(8, 0))
+
+
+@pytest.mark.parametrize("fused,kind", [
+    (False, "AllReduceMnnvl_v1{WORLD=8,N=6144,SHOT=1}"),
+    (True, "AllReduceRmsNormMnnvl_v1{WORLD=8,N=6144,SHOT=1,CLUSTER=8,EPS=1e-05,FMA=True}"),
+])
+@pytest.mark.parametrize("custom", [True, False], ids=["defaults", "custom-off"])
+def test_world_8_collective_rules_bind_captured_default_and_custom_off_routes(monkeypatch, fused, kind, custom):
+    """Both captured switch settings bind through `tp_allreduce.covered`; no route is admitted merely because its shape matches."""
+    derived = _derive_world8_collective(monkeypatch, fused=fused, custom=custom)
+    assert derived.ok, derived.unsupported
+    assert [n.fn.id for n in derived.program.fn.body.nodes] == [kind]
+
+
 # --- tp_links.json: v2 schema at world N, v1 files read as v2 ----------------------------------------------------------------
 
 def test_read_tp_links_upgrades_v1_and_accepts_v2(tmp_path):
@@ -297,15 +333,83 @@ def test_collective_record_names_own_and_peer_operands_at_worlds_2_4_and_8(W, ki
 
 
 @pytest.mark.parametrize("W", [2, 4, 8])
-def test_own_partial_run_is_the_ranks_slice_at_worlds_2_4_and_8(W):
-    """A world-N all_gather's input runs are in rank order: rank r's own partial is the run holding leaf r*N, not only the first
-    (rank 0) or the last (rank W-1) run."""
+def test_own_partial_rows_are_the_ranks_part_at_worlds_2_4_and_8(W):
+    """A collective row's operand is `world` equal parts in rank order: rank r's own rows are its part's (N leaves for a per-row
+    collective, M * N for a flat one), each named by the node producing it, not only the first (rank 0) or the last (rank W-1) run."""
     from verity_vllm.check.match import rank_match as RMx
-    N = 7
-    runs = [("in", f"r{r}", 0, N) for r in range(W)]
+    N, spec = 7, lambda k: f"spec{k}"  # noqa: E731
+    runs = [("n" if r % 2 else "p", r, 0, N) for r in range(W)]
     for rank in range(W):
-        assert RMx._own_run(runs, {"rank": rank, "world": W, "N": N}) == runs[rank]
-    merged = [("in", "r0..1", 0, 2 * N)] + [("in", f"r{r}", 0, N) for r in range(2, W)]
-    assert RMx._own_run(merged, {"rank": 0, "world": W, "N": N}) == merged[0]
-    if W > 2:
-        assert RMx._own_run(merged, {"rank": 1, "world": W, "N": N}) == merged[0]
+        assert RMx._own_rows(runs, {"rank": rank, "world": W, "N": N}, spec) == ([f"spec{rank}"] if rank % 2 else ["<not-a-node>"])
+    merged = [("n", 10, 0, 2 * N)] + [("p", 1, 0, N) for r in range(2, W)]
+    assert RMx._own_rows(merged, {"rank": 0, "world": W, "N": N}, spec) == ["spec10"]
+    assert RMx._own_rows(merged, {"rank": 1, "world": W, "N": N}, spec) == ["spec10"]
+    M = 3                       # flat: part r is rank r's M rows; rank 1's rows produced by nodes 20, 21, 22, the others peers fields
+    flat = [("p", 1, 0, M * N)] + [("n", 20 + i, 0, N) for i in range(M)] + [("p", 1, M * N, (W - 1) * M * N)] if W > 2 else \
+        [("p", 1, 0, M * N)] + [("n", 20 + i, 0, N) for i in range(M)]
+    assert RMx._own_rows(flat, {"rank": 1, "world": W, "N": N}, spec) == ["spec20", "spec21", "spec22"]
+    assert RMx._own_rows(flat, {"rank": 0, "world": W, "N": N}, spec) == ["<not-a-node>"] * M
+
+
+def test_a_fused_norm_recorder_row_is_the_collective_its_path_folds_to_and_the_unfused_ones_are_the_commit_s():
+    """The recorder files each `fused_allreduce_rms_norm` call as `fused_norm.KIND` over `stack([partial, residual])`: on its unfused path
+    the fold's `all_reduce` over the [M, N] partial, on its fused path the fold's fused collective.  The provenance leg leaves the unfused
+    calls to the Commit's replay, so they count with the checked ones."""
+    from verity_vllm.check.match import rank_match as RMx
+    from verity_vllm.collectives import fused_norm as FN
+    W, steps = 3, 2
+    colls = {r: _colls(r, W, steps=steps) for r in range(W)}
+
+    def rec(r, path):
+        out = []
+        for c in colls[r]:
+            fused = c["kind"] == "all_reduce"
+            out.append({"step": c["step"], "k": c["k"], "kind": FN.KIND if fused else c["kind"], "module": c["site"],
+                        "shape": [2, 1, 8] if fused else [1, 8], **({"path": path} if fused else {}),
+                        "out_shape": [1, 8 * (W if c["kind"] == "all_gather" else 1)], "part_sha256": f"p{r}{c['step']}{c['k']}",
+                        "out_sha256": f"o{c['step']}{c['k']}"})
+        return out
+
+    common = steps * 2
+    prov = {"pass": True, "collectives_checked": common - steps, "fused_norm_unfused_left_to_commit": steps, "recorder_sha256": {str(r): f"h{r}" for r in range(W)},
+            "tensors_digested": 2 * W * common, "n_digest_mismatches": 0}
+    shas = {r: f"h{r}" for r in range(W)}
+    res = RMx.cross_rank_check(colls, recorder={r: rec(r, FN.UNFUSED) for r in range(W)}, provenance=prov, recorder_sha256=shas)
+    assert {ch["name"]: ch["pass"] for ch in res["checks"]}["recorder"] and res["verdict"] == "PASS", res["failed"]
+    fused = RMx.cross_rank_check(colls, recorder={r: rec(r, FN.FUSED) for r in range(W)})
+    fails = next(ch for ch in fused["checks"] if ch["name"] == "recorder")["fails"]
+    assert fails and all("folds as fused_allreduce_rms_norm" in f for f in fails), fails
+    short = RMx.cross_rank_check(colls, recorder={r: rec(r, FN.UNFUSED) for r in range(W)}, provenance={**prov, "fused_norm_unfused_left_to_commit": 0},
+                                 recorder_sha256=shas)
+    assert "provenance" in short["failed"]
+
+
+def test_a_flat_all_reduce_counts_one_producer_per_own_row():
+    from verity_vllm.check.match import rank_match as RMx
+    W, M = 3, 4
+    colls = {r: [dict(c, rows=M, flat=True, fields=[dict(f, rows=M) for f in c["fields"]]) for c in _colls(r, W, steps=1) if c["kind"] == "all_reduce"] for r in range(W)}
+    ok = {r: {(0, 0): ["DeepGemmFp8Linear_v1{K=2048,N=6144}"] * M} for r in range(W)}
+    assert "producer" not in RMx.cross_rank_check(colls, producers=ok)["failed"]
+    one = {r: {(0, 0): ["DeepGemmFp8Linear_v1{K=2048,N=6144}"]} for r in range(W)}
+    assert "producer" in RMx.cross_rank_check(colls, producers=one)["failed"]
+
+
+@pytest.mark.parametrize("ops,admitted", [
+    ((("MoeSum_v1{TOPK=8,H=8}", 0), ("DeepGemmFp8Linear_v1{K=2048,N=8}", 0)), True),     # GLM-5.3's MoE block: routed + shared partials
+    ((("MoeSum_v1{TOPK=8,H=8}", 0), ("FlashInferFp8Linear_v1{K=256,N=8}", 0)), True),    # the decode steps' shared expert (FlashInfer at small M)
+    ((("MoeSum_v1{TOPK=8,H=8}", 0), ("RMSNormCudaVector8_v1{N=8}", 0)), False),         # a partial plus the residual stream: no partial
+    ((("MoeSum_v1{TOPK=8,H=8}", 0), ("DeepGemmFp8Linear_v1{K=2048,N=8}", 1)), False),   # an operand of another step
+])
+def test_a_residual_add_is_a_partial_producer_only_over_partials_of_its_rank_and_step(tmp_path, ops, admitted):
+    """`ResidualAdd_v1` producing an own partial is admitted only when every operand row is an admitted producer's of the same step."""
+    from verity_vllm.check.match import rank_match as RMx
+    N, W, rank = 8, 3, 1
+    rows = [{"node": i, "step": st, "spec": sp, "operand_refs": []} for i, (sp, st) in enumerate(ops)]
+    rows.append({"node": 2, "step": 0, "spec": f"ResidualAdd_v1{{N={N}}}", "operand_refs": [[["n", 0, 0, N]], [["n", 1, 0, N]]]})
+    rows.append({"node": 3, "step": 0, "spec": f"AllReduceMnnvl_v1{{WORLD={W},N={N},SHOT=1}}", "rows": 1,
+                 "collective": {"kind": "all_reduce", "step": 0, "k": 0, "rank": rank, "world": W, "N": N},
+                 "operand_refs": [[["p", 1, 0, N], ["n", 2, 0, N], ["p", 1, N, 2 * N]]]})
+    (tmp_path / "instances.jsonl").write_text("\n".join(json.dumps(r) for r in [{"schema": "x"}] + rows) + "\n")
+    (name,) = RMx.own_producers_from_record(tmp_path / "instances.jsonl")[(0, 0)]
+    assert name.startswith(f"ResidualAdd_v1{{N={N}}}<-") and RMx._admitted(name) is admitted, name
+    assert not RMx._admitted(f"ResidualAdd_v1{{N={N}}}<-MoeSum_v1|<not-a-node>") and not RMx._admitted("ResidualAdd_v1{N=8}")

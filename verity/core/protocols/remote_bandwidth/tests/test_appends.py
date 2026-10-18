@@ -232,11 +232,14 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
 @dataclasses.dataclass(frozen=True)
 class Link:
     """A requirement link that holds or not, at `density_bits`, reading `reads[step]` bits at a step (plenty
-    otherwise), its memory-map unit's verdict `maps` on the appends it is asked about, each kept in `asked`."""
+    otherwise), its memory-map unit's verdict `maps` on the appends it is asked about, each kept in `asked`, and its
+    units' draw leaving `epsilon` of its credit unproved except with `delta` (every unit proved by default)."""
     holds: bool
     density_bits: int
     reads: dict
     maps: object = True
+    epsilon: object = 0.0
+    delta: object = 0.0
     asked: list = dataclasses.field(default_factory=list)
 
     def read_bits(self, step: int):
@@ -295,6 +298,39 @@ def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_re
     none = Link(True, 8 * 4096, {})
     audit.ledger(dataclasses.replace(rec, appends=None), **common, requirement=none)
     assert none.asked == [None]
+
+
+def test_a_link_credits_what_its_units_draw_proved_and_adds_its_delta_to_the_error(honest) -> None:
+    """The plan and memory-map units are sampled: a link whose draw leaves ε of its credit unproved, except with δ,
+    credits 1 − ε of the session's 37 linked receipts, and each window its own (23 and 14) less ε of the session's,
+    since all of the unproved share may be one window's.  Its δ adds to both readings' error, which is otherwise every
+    window's δ (or the horizon's one) and 2^-slack_log2 a pass.  ε = 1 credits nothing; an ε outside 0 … 1 or a δ
+    outside [0, 1) is refused."""
+    rec = honest[0].s.record()
+    capacity = 4096 * 10**9 / 10
+    common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    whole, b = capacity * rec.span_ns / 1e9, 4096
+    proved = audit.ledger(rec, **common, requirement=Link(True, 8 * b, {}))
+    sampled = audit.ledger(rec, **common, requirement=Link(True, 8 * b, {}, epsilon=0.25, delta=2.0 ** -30))
+    assert 1 - proved.timing == pytest.approx(37 * b / whole)
+    assert 1 - sampled.timing == pytest.approx(0.75 * 37 * b / whole)
+    for w, own in zip(sampled.windows, (23, 14)):
+        assert 1 - w.timing == pytest.approx((own - 0.25 * 37) * b / (capacity * w.span_ns / 1e9))
+    assert sampled.sample == proved.sample and sampled.counting == proved.counting
+    beside = rec.passes * 2.0 ** -audit.SLACK_LOG2
+    assert proved.error == pytest.approx(sum(w.profile.delta for w in rec.windows) + beside, rel=1e-12)
+    assert proved.error_horizon == pytest.approx(rec.windows[0].profile.delta + beside, rel=1e-12)
+    assert audit.ledger(rec, **common).error == proved.error
+    assert sampled.error - proved.error == pytest.approx(2.0 ** -30, rel=1e-9)
+    assert sampled.error_horizon - proved.error_horizon == pytest.approx(2.0 ** -30, rel=1e-9)
+    assert sampled.to_json()["error"] == {"windows": sampled.error, "horizon": sampled.error_horizon}
+    nothing = audit.ledger(rec, **common, requirement=Link(True, 8 * b, {}, epsilon=1))
+    assert nothing.timing == pytest.approx(1) and all(w.timing == pytest.approx(1) for w in nothing.windows)
+    for epsilon, delta, match in ((-0.01, 0.0, "epsilon"), (1.5, 0.0, "epsilon"), (float("nan"), 0.0, "epsilon"),
+                                  (True, 0.0, "epsilon"), ("0.1", 0.0, "epsilon"), (0.0, 1.0, "delta"),
+                                  (0.0, -1e-9, "delta"), (0.0, float("nan"), "delta"), (0.0, None, "delta")):
+        with pytest.raises(ValueError, match=match):
+            audit.ledger(rec, **common, requirement=Link(True, 8 * b, {}, epsilon=epsilon, delta=delta))
 
 
 def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = ()) -> audit.Record:

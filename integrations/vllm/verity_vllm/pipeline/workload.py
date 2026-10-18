@@ -4,7 +4,7 @@
         [--sampling greedy|stoch-t0.8-p0.95|stoch-t0.8-p1] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
         [--lengths-only] [--check] --out workloads/<row-id>.json
 
-Output = the existing request-list workload format (`verity-vllm/workload/v1`, see `workloads/workload_cov_*.json`) that
+Output = the existing request-list workload format (a row file, `config.RowConfig`, see `workloads/workload_cov_*.json`) that
 `verity_vllm.engine.vllm_adapter.load_workload` / `bench/commit_delta.py` / `zk/bench/e2e_commit_run.py` / the eager capture consume unchanged,
 plus one extra top-level key `sweep` (row id, seed, the length/cap/seed/arrival vectors, the plan) that existing loaders ignore.
 
@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import os
 import sys
 import uuid
@@ -39,12 +38,11 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.config import CHECKPOINTS, WORKLOADS
-from verity_vllm.config import option
+from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_world
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
-SCHEMA = "verity-vllm/workload/v1"
+SCHEMA = WORKLOAD_SCHEMA
 SWEEP_SCHEMA = "verity-sweep/workload/v1"
 SAMPLING = {
     "greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0},
@@ -313,14 +311,16 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
     horizon = max(int(r["arrive_step"]) + int(r["max_tokens"]) for r in reqs)
     total_prompt = sum(int(r["prompt_len"]) for r in reqs)
     doc = {
-        "schema": SCHEMA, "model": hf_repo, "case": case, "tokenizer_revision": revision, "seed": 0,
+        "schema": SCHEMA, "model": hf_repo, "case": case,
+        "engine": {"revision": revision, "vllm": VLLM,
+                   "args": {"max_num_batched_tokens": int(max(2048, total_prompt + B)), "max_model_len": int(I + O)}},
+        "seed": 0,
         "variants": variants, "seeds": list(p["sampling_seeds"]),
         "sampling": {"variant": variant, "seed": None, "n": 1},
         "serving_profile": f"sweep-B{B}" + ("-staggered" if p["arrivals"] == "staggered" else ""), "context_class": f"I{I}-O{O}",
         "length_seed": p["seed"], "prompt_seed": p["seed"], "replicate": 0,
         "length_rule": p["length_rule"],
         "expected_engine_steps": horizon,
-        "engine_args_required": {"max_num_batched_tokens": int(max(2048, total_prompt + B)), "max_model_len": int(I + O)},
         "tokenizer_note": (f"prompt_token_ids from {tok.path.name} sha256 {tok.sha256[:16]} (tokenizers, add_special_tokens=False), natural text "
                            f"from {CORPUS.name}, truncated to prompt_len; prompt_text is the decode of the ids (informational)" if tok else
                            "LENGTHS-ONLY plan: no tokenizer; prompt_token_ids absent (regenerate on a host with the model's tokenizer.json)"),
@@ -335,20 +335,14 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
     }
     doc["sweep"]["lengths_only"] = tok is None
     # [lane vllm-tp-n] a tensor-parallel row (`__tp<N>__` in the row id, N >= 2): the engine's world, the manifests' TP flags of record
-    # (#70 / #75: VLLM_BATCH_INVARIANT=1; on a SYS target, where P2P hangs, disable_custom_all_reduce and NCCL_P2P_DISABLE=1) and `sweep.tp`
+    # (#70 / #75: VLLM_BATCH_INVARIANT=1, or what a `--target` declares; on a SYS target, where P2P hangs, disable_custom_all_reduce and
+    # NCCL_P2P_DISABLE=1) and `sweep.tp`
     world = row_world(p["row_id"])
     if world > 1:
-        doc["engine_args_required"].update({"tensor_parallel_size": int(world),
-                                            "disable_custom_all_reduce": row_custom_all_reduce_off(p["row_id"])})
-        doc["env_required"] = {**row_p2p_env(p["row_id"]), "VLLM_BATCH_INVARIANT": "1"}
+        doc["engine"]["args"].update({"tensor_parallel_size": int(world), "disable_custom_all_reduce": row_custom_all_reduce_off(p["row_id"])})
+        doc["engine"]["env"] = {**row_p2p_env(p["row_id"]), "VLLM_BATCH_INVARIANT": "1"}
         doc["sweep"]["tp"] = int(world)
     return doc
-
-
-def row_world(row_id: str) -> int:
-    """The tensor-parallel world a sweep row id declares (`__tp<N>__`), 1 when absent."""
-    m = re.search(r"__tp(\d+)__", str(row_id))
-    return int(m.group(1)) if m else 1
 
 
 def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
@@ -394,8 +388,8 @@ class Options:
     out: str | None = option("--out", default=None, help="default workloads/<row-id>.json (relative to the repo)")
     target: str | None = option("--target", default=None,
                                 help="[R13 hopper] TargetProfile overrides of the row as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
-                                "to the manifest's `target` block (every GPU stage builds its engine for it; `TargetProfile.engine_args()` is merged into "
-                                "`engine_args_required`) and `sweep.execution` = the profile's execution label")
+                                "to the row's `engine.target` (every GPU stage builds its engine for it; `TargetProfile.engine_args()` is merged into "
+                                "`engine.args`, a TP row's `engine.env` takes `TargetProfile.env()`) and `sweep.execution` = the profile's execution label")
 
 
 def main(a: Options) -> int:
@@ -422,8 +416,10 @@ def main(a: Options) -> int:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         t = json.loads(a.target)
         tp = TargetProfile.from_json({**TargetProfile.default().to_json(), **t})   # validates the fields; cc / SMs come from the host at run time
-        doc["target"] = t
-        doc["engine_args_required"].update(tp.engine_args())
+        doc["engine"]["target"] = t
+        doc["engine"]["args"].update(tp.engine_args())
+        if "env" in doc["engine"]:
+            doc["engine"]["env"].update(tp.env())
         doc["sweep"]["execution"] = tp.execution_label
         exec_suffix = a.row_id.rsplit("__", 1)[-1]
         if exec_suffix != tp.execution_label:
@@ -436,6 +432,6 @@ def main(a: Options) -> int:
         assert len(set(texts)) == len(texts), "duplicate prompt token sequences"
     out = Path(a.out) if a.out else WORKLOADS / f"{a.row_id}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
+    out.write_text(json.dumps(RowConfig.of(doc).to_json(), indent=1, ensure_ascii=False) + "\n")
     print(f"{out}: {doc['note'][:220]}", file=sys.stderr)
     return 0
