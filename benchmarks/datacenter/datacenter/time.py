@@ -1,26 +1,14 @@
-"""Time: one trusted clock, intervals on it, and the events trusted devices put on it.
+"""Time: intervals on the one trusted clock.
 
-There is one physical clock: the ticks of the trusted devices (the certifiers and the challenger). Each protocol keeps
-its own logical time (a placement's engine steps, a certifier's buckets, a challenge's deadline) and maps it monotonically
-onto these ticks. A tick has a real duration, because some guarantees read lengths, not just order: a deadline is only as
-good as the work a device can do before it.
+There is one physical clock: the ticks of the trusted devices (the certifiers and the challenger), whose real duration
+is the datacenter's `Grid.tick`. Each protocol keeps its own logical time (a placement's engine steps, a certifier's
+buckets, a challenge's deadline) and maps it monotonically onto these ticks. Every claim's `during` is an interval on
+this clock. A tick has a real duration because some guarantees read lengths, not just order: a deadline is only as good
+as the work a device can do before it.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class Clock:
-    """The trusted timebase: `tick` seconds per tick."""
-
-    tick: float = 1e-3
-
-    def seconds(self, ticks: int) -> float:
-        return ticks * self.tick
-
-    def ticks(self, seconds: float) -> int:
-        return round(seconds / self.tick)
 
 
 @dataclass(frozen=True, order=True)
@@ -45,12 +33,3 @@ class Interval:
 
     def __repr__(self) -> str:
         return f"[{self.start}, {self.end})"
-
-
-@dataclass(frozen=True)
-class Wipe:
-    """A verified memory wipe of `device` during `at`: the challenger fills its memory with labels it can recompute and
-    spot-checks them before the interval ends, so state that survives the wipe fits in the device's residual."""
-
-    device: str
-    at: Interval

@@ -1,12 +1,20 @@
-"""The datacenter API, layer by layer: a traced circuit, a declared datacenter, a placement and its crossings, a run, the
-audit's claims and the account; each dishonest run refused for its own reason."""
+"""The datacenter API, layer by layer: a traced circuit, a declared datacenter, a placement and its crossings, the public
+profile, a run, the audit's claims and the account; each dishonest run refused for its own reason."""
 from __future__ import annotations
+
+from dataclasses import replace
 
 import pytest
 
-from datacenter import (Assumption, Block, Carried, Clock, Computed, Credit, Datacenter, Deviation, Device, Entered,
-                        Fleet, Held, Input, Interval, Link, Refused, Wipe, account, audit, crossings, occupancy, place,
-                        run, schedulable, trace)
+from datacenter import (FLEET_CLOSED, Assumption, Block, Carried, Computed, Credit, Datacenter, Deviation, Device,
+                        Entered, Fleet, Grid, Held, Input, Interval, Ledger, Link, On, Plan, Port, Refused, Wipe,
+                        account, audit, crossings, digest, double_credit, place, run, trace, traffic)
+from datacenter.binding import hops
+from datacenter.observe import digest as frames_digest
+
+EPOCH = Interval(0, 16)
+INPUTS = {"x": 7, "w1": 3, "w2": 5}
+HBM, RESIDUAL = 6.4e10, 8e6
 
 
 def two_layer(x, w1, w2):
@@ -15,43 +23,35 @@ def two_layer(x, w1, w2):
 
 
 def node(n: str) -> Block:
-    gpu = Device(f"{n}.gpu", "gpu", rate={"scalar": Assumption(f"{n}.gpu.rate", 1e6, "ops/s")},
-                 memory=Assumption(f"{n}.gpu.hbm", 6.4e10, "bits"), residual=Assumption(f"{n}.gpu.residual", 8e6, "bits"))
+    gpu = Device(f"{n}.gpu", "gpu", rate={"gate": Assumption(f"{n}.gpu.rate", 1e6, "gate/s")},
+                 memory=Assumption(f"{n}.gpu.hbm", HBM, "bits"), residual=Assumption(f"{n}.gpu.residual", RESIDUAL, "bits"))
     return Block(n, [gpu])
 
 
-def datacenter() -> Datacenter:
+def datacenter(tick: float = 1e-3) -> Datacenter:
     up = Assumption("uplink", 1e8, "bit/s", "declared")
-    fabric = [Device("a.cert", "certifier", trusted=True), Device("b.cert", "certifier", trusted=True),
-              Device("leaf", "switch"), Device("world", "outside")]
+    fabric = [Device("a.cert", "certifier"), Device("b.cert", "certifier"), Device("leaf", "switch"),
+              Device("challenger", "challenger"), Device("world", "outside")]
     links = [Link("a.gpu", "a.cert", up), Link("a.cert", "leaf", up), Link("leaf", "b.cert", up),
-             Link("b.cert", "b.gpu", up), Link("world", "leaf", up)]
-    return Datacenter("dc0", [node("a"), node("b")], fabric, links)
+             Link("b.cert", "b.gpu", up), Link("challenger", "leaf", up), Link("world", "leaf", up)]
+    grid = Grid(frame_bits=32, bucket=1, window=4, syncs=128, tick=Assumption("tick", tick, "s", "declared"))
+    return Datacenter("dc0", [node("a"), node("b")], fabric, links, grid)
 
 
-def site(n: str, world: bool = False) -> Datacenter:
-    """`datacenter()` with every device named `n.<name>`, the outside world only if `world`."""
-    dcx = datacenter()
-    rename = lambda s: f"{n}.{s}"  # noqa: E731
-    blocks = [Block(rename(b.name), [Device(rename(d.name), d.kind, d.rate, d.memory, d.residual) for d in b.devices])
-              for b in dcx.blocks]
-    fabric = [Device(rename(d.name), d.kind, trusted=d.trusted) for d in dcx.fabric if d.kind != "outside"]
-    links = [Link(rename(l.a), rename(l.b), l.capacity) for l in dcx.links if "world" not in (l.a, l.b)]
-    if world:
-        fabric.append(Device("world", "outside"))
-        links.append(Link("world", rename("leaf"), Assumption("isp", 1e9, "bit/s")))
-    return Datacenter(n, blocks, fabric, links)
+def refusals(claims) -> list[Refused]:
+    return [x for x in claims if isinstance(x, Refused)]
+
+
+def wipes(*devices: str) -> list[Wipe]:
+    return [Wipe(d, HBM - RESIDUAL, Interval(0, 2)) for d in devices]
 
 
 @pytest.fixture
 def setup():
-    c = trace(two_layer, x=Input(16), w1=Input(16, source="registered"), w2=Input(16, source="registered"))
+    c = trace(two_layer, x=Input(16), w1=Input(16, "registered"), w2=Input(16, "registered"))
     dc = datacenter()
-    p = place(c, dc, {"*": "a.gpu", "x": "world", "w2": "b.gpu"}, deliver="world")
+    p = place(c, dc, "a.gpu", deliver="world", x="world", w2="b.gpu")
     return c, dc, p
-
-
-INPUTS = {"x": 7, "w1": 3, "w2": 5}
 
 
 def test_a_traced_circuit_evaluates_as_python_does():
@@ -67,6 +67,19 @@ def test_a_boundary_link_without_a_certifier_breaks_coverage():
     assert datacenter().validate() == []
 
 
+def test_trusted_devices_are_the_auditors_and_place_refuses_what_isnt_there():
+    dc = datacenter()
+    assert {d for d, dev in dc.devices.items() if dev.trusted} == {"a.cert", "b.cert", "challenger"}
+    c = trace(two_layer, x=Input(16), w1=Input(16), w2=Input(16))
+    with pytest.raises(ValueError, match="isn't there"):
+        place(c, dc, "a.gpu", w3="b.gpu")
+    with pytest.raises(ValueError, match="isn't there"):
+        place(c, dc, "c.gpu")
+    z = trace(lambda x, z: x ^ z, x=Input(16), z=Input(16, "trusted"))
+    with pytest.raises(ValueError, match="trusted device"):
+        place(z, dc, "a.gpu")
+
+
 def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(setup):
     c, dc, p = setup
     assert p.paced()
@@ -75,160 +88,170 @@ def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(
     moved = {(x.value.name, x.src, x.dst) for x in crossings(p)}
     assert moved == {("x", "world", "a.gpu"), ("w2", "b.gpu", "a.gpu"), (None, "a.gpu", "world")}
     for x in crossings(p):
-        assert any(dc.certifier_of(l) for l in x.path)
+        assert any(dc.port(*h) for h in hops(x.path, x.src))
+    assert set(traffic(p)) == {Port("a.cert", "ingress"), Port("a.cert", "egress"), Port("b.cert", "egress")}
+
+
+def test_the_profile_is_what_audit_and_account_read_of_the_placement(setup):
+    c, dc, p = setup
+    profile = p.public(Plan(EPOCH))
+    assert profile.work == {"a": c.boolean_size, "b": 0}
+    assert profile.occupancy[Port("a.cert", "egress")] == {7: 1}     # the output, one frame, at the world's read tick
+    assert list(profile.windows) == [0, 1, 2, 3]
 
 
 def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
     c, dc, p = setup
-    profile = occupancy(p, frame_bits=32, bucket=1)
-    t = run(p, INPUTS, window=4, wipes=[Wipe("b.gpu", Interval(0, 2))])
-    claims = audit(t, profile, syncs=128)
-    assert not [x for x in claims if isinstance(x, Refused)]
-    assert Computed(c.boolean_size) in claims
-    assert Held("wipe:b.gpu", 6.4e10 - 8e6, Interval(0, 2)) in claims
+    plan = Plan(EPOCH, wipes=wipes("b.gpu"))
+    profile = p.public(plan)
+    claims = audit(run(p, INPUTS, plan), profile)
+    assert not refusals(claims)
+    assert Computed("a", c.boolean_size, EPOCH) in claims and not any(isinstance(x, Computed) and x.part == "b" for x in claims)
+    assert Held("labels@b.gpu", HBM - RESIDUAL, Interval(0, 2)) in claims
     assert Entered("x", 16, "outside") in claims and not any(isinstance(x, Entered) and x.input == "w1" for x in claims)
-    assert all(x.bits == 7 for x in claims if isinstance(x, Carried))
-    acc = account(claims, p, Clock(1e-3), Interval(0, 16))
+    carried = [x for x in claims if isinstance(x, Carried)]
+    assert len(carried) == len(dc.ports) * 4 and all(x.bits == 7 for x in carried)
+    acc = account(claims, profile)
     a, b = acc.blocks
-    assert acc.sound and a.credited == c.boolean_size - 0 and b.credited == 0
-    assert b.state == 8e6 and a.state == 6.4e10
-    assert acc.input_bits == {"x": 16}
+    assert acc.sound and a.credited == c.boolean_size and b.credited == 0
+    assert b.carried == RESIDUAL and a.carried == HBM                # b was wiped down to its residual
+    assert acc.input_bits == {"x": 16} and acc.located == {"labels@b.gpu": ["b.gpu"]}
 
 
-@pytest.mark.parametrize("deviation, why", [
-    (Deviation(extra={(("a.gpu", "a.cert"), 2): 1}), "occupancy differs"),
-    (Deviation(hold={(("a.gpu", "a.cert"), 7): 9}), "occupancy differs"),
-    (Deviation(failed_wipes={"b.gpu"}), "answer was wrong"),
+@pytest.mark.parametrize("deviate, why", [
+    (lambda: Deviation(extra={(Port("a.cert", "egress"), 2): 1}), "occupancy differs"),
+    (lambda: Deviation(hold={(Port("a.cert", "egress"), 7): 9}), "occupancy differs"),
+    (lambda: Deviation(down={(Port("a.cert", "egress"), 0)}), "no record"),
+    (lambda: Deviation(failed_wipes={"b.gpu"}), "spot check"),
 ])
-def test_each_deviation_is_refused_for_its_own_reason(setup, deviation, why):
+def test_each_deviation_is_refused_for_its_own_reason(setup, deviate, why):
     c, dc, p = setup
-    t = run(p, INPUTS, window=4, wipes=[Wipe("b.gpu", Interval(0, 2))], deviation=deviation)
-    refused = [x for x in audit(t, occupancy(p, 32, 1), syncs=128) if isinstance(x, Refused)]
-    assert refused and any(why in r.why for r in refused)
+    plan = Plan(EPOCH, wipes=wipes("b.gpu"))
+    refused = refusals(audit(run(p, INPUTS, plan, deviate()), p.public(plan)))
+    assert refused and all(why in r.why or "committed crossing" in r.why for r in refused), refused
 
 
 def test_a_frame_that_is_not_a_committed_crossing_is_refused_even_at_the_declared_occupancy(setup):
     c, dc, p = setup
-    t = run(p, INPUTS, window=4)
-    t.values[c.outputs[0]] ^= 1                      # the frame on the wire no longer carries the committed output
-    from datacenter.observe import _digest
-    t.records = [type(r)(r.link, r.window, r.counts, _digest([(c.outputs[0], t.values[c.outputs[0]])]), r.certifier)
-                 if r.link == ("a.gpu", "a.cert") and r.window == 1 else r for r in t.records]
-    refused = [x for x in audit(t, occupancy(p, 32, 1)) if isinstance(x, Refused)]
-    assert refused and "not a committed crossing" in refused[0].why
+    plan = Plan(EPOCH)
+    t = run(p, INPUTS, plan)
+    out, port = c.outputs[0], Port("a.cert", "egress")
+    forged = frames_digest([(out, t.values[out] ^ 1)])           # the frame on the wire isn't the committed output
+    t.records = [replace(r, digest=forged) if (r.port, r.window) == (port, 1) else r for r in t.records]
+    assert refusals(audit(t, p.public(plan))) == [Refused(On("port", "a.cert:out", Interval(4, 8)),
+                                                          "a frame is not a committed crossing")]
+
+
+def test_a_refused_window_is_charged_at_its_links_full_capacity(setup):
+    """Fail-closed: a port-window the audit refuses could have carried anything its link can, so the covert budget
+    charges it at line rate rather than dropping it."""
+    c, dc, p = setup
+    plan = Plan(EPOCH)
+    acc = account(audit(run(p, INPUTS, plan, Deviation(down={(Port("a.cert", "egress"), 0)})), p.public(plan)), p.public(plan))
+    assert not acc.sound and acc.refused_bits == pytest.approx(1e8 * 4e-3)
 
 
 def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named_premise(setup):
     """Compute's review 1: a helper holding the registered weights needs only small inputs and outputs, so crossing bytes
-    alone attribute nothing. Fresh bulk data from a trusted device that only the block receives pins the work there: a
-    helper could get it only through the block's certified egress. So does the named premise that the fleet is closed."""
+    alone attribute nothing. Fresh data from a trusted device that only the block receives pins the work there: a helper
+    could get it only through the block's certified egress. So does the named premise that the fleet is closed."""
     c, dc, p = setup
-    claims = audit(run(p, INPUTS, window=4), occupancy(p, 32, 1))
-    a = account(claims, p, Clock(1e-9), Interval(0, 16)).blocks[0]
+    profile = p.public(Plan(EPOCH))
+    claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)
+    a = account(claims, profile).blocks[0]
     assert a.credited > 0 and a.local_at_least == 0                 # no anchor: nothing is attributed
-
-    closed = account(claims, p, Clock(1e-9), Interval(0, 16), assume={"fleet-closed"}).blocks[0]
+    closed = account(claims, profile, assume=(FLEET_CLOSED,)).blocks[0]
     assert closed.local_at_least == closed.credited and "fleet-closed" in closed.assumptions
 
     def noised(x, w1, w2, z):
         h = ((x * w1) ^ z).named("h")                              # the challenger's noise z enters stage h
         return (h * w2 + x).named("y")
-    dc.fabric.append(Device("challenger", "challenger", trusted=True))
-    dc.links.append(Link("challenger", "leaf", Assumption("uplink", 1e8, "bit/s", "declared")))
-    c2 = trace(noised, x=Input(16), w1=Input(16, source="registered"), w2=Input(16, source="registered"),
-               z=Input(16, source="trusted"))
-    p2 = place(c2, dc, {"*": "a.gpu", "x": "world", "z": "challenger", "w2": "b.gpu"}, deliver="world")
-    claims2 = audit(run(p2, INPUTS | {"z": 9}, window=4), occupancy(p2, 32, 1))
-    assert not any(isinstance(x, Entered) and x.input == "z" for x in claims2)     # the verifier's coins aren't charged
-    narrow = account(claims2, p2, Clock(1e-9), Interval(0, 16)).blocks[0]          # 16 ns of egress: almost nothing out
-    wide = account(claims2, p2, Clock(1e-3), Interval(0, 16)).blocks[0]            # 16 ms: the noise can leave
+
+    c2 = trace(noised, x=Input(16), w1=Input(16, "registered"), w2=Input(16, "registered"), z=Input(16, "trusted"))
+
+    def attributed(tick: float):
+        p2 = place(c2, datacenter(tick), "a.gpu", deliver="world", x="world", z="challenger", w2="b.gpu")
+        profile2 = p2.public(Plan(EPOCH))
+        claims2 = audit(run(p2, INPUTS | {"z": 9}, Plan(EPOCH)), profile2)
+        assert not any(isinstance(x, Entered) and x.input == "z" for x in claims2)   # the verifier's coins aren't charged
+        return account(claims2, profile2).blocks[0]
+
+    narrow, wide = attributed(1e-9), attributed(1e-3)               # 16 ns of egress: almost nothing out; 16 ms: plenty
     assert narrow.forced == 16 and narrow.local_at_least > 0.85 * narrow.credited and wide.local_at_least == 0
 
 
 def test_credit_from_two_audits_on_one_device_must_fit_every_interval_per_resource():
     capacity = {("gpu0", "compute"): 10.0, ("gpu0", "read"): 10.0}
     fits = [Credit("gpu0", "compute", Interval(0, 10), 60), Credit("gpu0", "compute", Interval(5, 15), 40)]
-    assert schedulable(fits, capacity) == []
+    assert double_credit(fits, capacity) == []
     double = [Credit("gpu0", "compute", Interval(0, 10), 80), Credit("gpu0", "compute", Interval(2, 8), 40)]
-    assert schedulable(double, capacity) and schedulable(double, capacity)[0][2] == Interval(0, 10)
+    assert double_credit(double, capacity) and double_credit(double, capacity)[0][2] == Interval(0, 10)
     other_resource = [Credit("gpu0", "compute", Interval(0, 10), 80), Credit("gpu0", "read", Interval(2, 8), 40)]
-    assert schedulable(other_resource, capacity) == []
+    assert double_credit(other_resource, capacity) == []
 
 
-def test_telemetry_leaves_on_a_declared_offramp_and_is_charged_in_full(setup):
-    from datacenter import Emitted, Offramp
-    c, dc, _ = setup
-    temps = Offramp("telemetry", "b.gpu", "world", bits=64, windows=2)
-    p = place(c, dc, {"*": "a.gpu", "x": "world", "w2": "b.gpu"}, deliver="world", streams=(temps,))
-    t = run(p, INPUTS, window=4)
-    claims = audit(t, occupancy(p, 32, 1, window=4), syncs=128)
-    assert not [x for x in claims if isinstance(x, Refused)]
-    assert {x.window for x in claims if isinstance(x, Emitted)} == {0, 1}
-    acc = account(claims, p, Clock(1e-3), Interval(0, 16))
-    assert acc.offramp_bits == {"telemetry": 128}
-    undeclared = place(c, dc, {"*": "a.gpu", "x": "world", "w2": "b.gpu"}, deliver="world")
-    refused = [x for x in audit(t, occupancy(undeclared, 32, 1, window=4)) if isinstance(x, Refused)]
-    assert refused, "telemetry the developer didn't declare doesn't fit the declared occupancy"
+def test_telemetry_is_an_inside_input_delivered_out_and_charged_in_full():
+    def monitored(x, w1, w2, temperature):
+        return two_layer(x, w1, w2), temperature
+
+    c = trace(monitored, x=Input(16), w1=Input(16, "registered"), w2=Input(16, "registered"), temperature=Input(16, "inside"))
+    dc = datacenter()
+    p = place(c, dc, "a.gpu", deliver="world", x="world", w2="b.gpu", temperature="b.gpu")
+    profile = p.public(Plan(EPOCH))
+    assert Port("b.cert", "egress") in profile.occupancy
+    acc = account(audit(run(p, INPUTS | {"temperature": 45}, Plan(EPOCH)), profile), profile)
+    assert acc.sound and acc.input_bits == {"x": 16, "temperature": 16}
+    silent = place(trace(two_layer, x=Input(16), w1=Input(16, "registered"), w2=Input(16, "registered")), dc, "a.gpu",
+                   deliver="world", x="world", w2="b.gpu")
+    refused = refusals(audit(run(p, INPUTS | {"temperature": 45}, Plan(EPOCH)), silent.public(Plan(EPOCH))))
+    assert any(r.on.name == "b.cert:out" for r in refused), "telemetry the profile doesn't declare doesn't fit it"
 
 
-def test_an_image_pull_is_a_registered_stream_free_unless_its_bytes_differ(setup):
-    from datacenter import Stream
-    c, dc, _ = setup
-    image = Stream("image", "world", "a.gpu", bits=256, windows=1, digest=b"\x01" * 64)
-    p = place(c, dc, {"*": "a.gpu", "x": "world", "w2": "b.gpu"}, deliver="world", streams=(image,))
-    profile = occupancy(p, 32, 1, window=4)
-    honest = account(audit(run(p, INPUTS, window=4), profile, syncs=128), p, Clock(1e-3), Interval(0, 16))
-    assert honest.sound and honest.offramp_bits == {}
-    swapped = audit(run(p, INPUTS, window=4, deviation=Deviation(tampered={"image"})), profile, syncs=128)
-    assert any("registered digest" in r.why for r in swapped if isinstance(r, Refused))
-
-
-def test_a_window_with_no_record_fails_closed(setup):
-    """Maintenance, a failure, or a withheld record: the audit treats a missing link-window as a violation, never as
-    silence (the network-tap draft's downtime attack)."""
-    c, dc, p = setup
-    profile = occupancy(p, 32, 1, window=4)
-    t = run(p, INPUTS, window=4, deviation=Deviation(down={(("a.gpu", "a.cert"), 0)}))
-    refused = [x for x in audit(t, profile) if isinstance(x, Refused)]
-    assert refused and "no record" in refused[0].why
+def test_an_image_pull_is_a_registered_input_free_unless_its_bytes_differ():
+    image = 0xC0FFEE
+    c = trace(lambda x, image: (x * image) ^ 1, x=Input(32), image=Input(32, "registered", digest(image, 32)))
+    p = place(c, datacenter(), "a.gpu", deliver="world", x="world", image="world")
+    profile = p.public(Plan(EPOCH))
+    honest = account(audit(run(p, {"x": 7, "image": image}, Plan(EPOCH)), profile), profile)
+    assert honest.sound and honest.input_bits == {"x": 32}
+    swapped = refusals(audit(run(p, {"x": 7, "image": 0xBADC0DE}, Plan(EPOCH)), profile))
+    assert swapped == [Refused(On("input", "image"), "its bytes differ from the registered digest")]
 
 
 def test_choosing_the_profile_from_a_registered_set_costs_its_log(setup):
     c, dc, p = setup
-    claims = audit(run(p, INPUTS, window=4), occupancy(p, 32, 1, window=4), syncs=128, profiles=8)
-    acc = account(claims, p, Clock(1e-3), Interval(0, 16))
+    plan = Plan(EPOCH, profiles=8)
+    acc = account(audit(run(p, INPUTS, plan), p.public(plan)), p.public(plan))
     assert acc.advice_bits == 3 and acc.covert_bits == 3 + acc.timing_bits + 16
 
 
 def test_a_circuit_placed_across_a_fleet_crosses_the_inter_datacenter_link():
-    east, west = site("east"), site("west", world=True)
-    fleet = Fleet([east, west], [Link("east.a.cert", "west.a.cert", Assumption("wan", 1e10, "bit/s"), kind="wan")])
+    fleet = Fleet([datacenter().prefixed("east"), datacenter().prefixed("west")],
+                  [Link("east.a.cert", "west.a.cert", Assumption("wan", 1e10, "bit/s"), kind="wan")])
     assert fleet.validate() == []
-    c = trace(two_layer, x=Input(16), w1=Input(16, source="registered"), w2=Input(16, source="registered"))
-    p = place(c, fleet.merged(), {"*": "west.a.gpu", "x": "world", "w2": "east.b.gpu"}, deliver="world")
+    c = trace(two_layer, x=Input(16), w1=Input(16, "registered"), w2=Input(16, "registered"))
+    p = place(c, fleet.merged(), "west.a.gpu", deliver="world", x="world", w2="east.b.gpu")
     w2 = next(x for x in crossings(p) if x.value.name == "w2")
     assert any(l.kind == "wan" for l in w2.path)
-    claims = audit(run(p, INPUTS, window=4), occupancy(p, 32, 1, window=4), syncs=128)
-    assert not [x for x in claims if isinstance(x, Refused)]
+    profile = p.public(Plan(EPOCH))
+    assert not refusals(audit(run(p, INPUTS, Plan(EPOCH)), profile))
 
 
 def test_a_fleet_links_datacenters_only_through_certifiers():
-    ok = Fleet([site("east"), site("west")], [Link("east.a.cert", "west.a.cert", Assumption("wan", 1e9, "bit/s"), kind="wan")])
-    assert ok.validate() == []
-    bad = Fleet([site("east"), site("west")], [Link("east.a.gpu", "west.a.cert", Assumption("wan", 1e9, "bit/s"), kind="wan")])
+    east, west = datacenter().prefixed("east"), datacenter().prefixed("west")
+    wan = Assumption("wan", 1e9, "bit/s")
+    assert Fleet([east, west], [Link("east.a.cert", "west.a.cert", wan, kind="wan")]).validate() == []
+    bad = Fleet([east, west], [Link("east.a.gpu", "west.a.cert", wan, kind="wan")])
     assert any("not a certifier" in p for p in bad.validate())
-    clash = Fleet([datacenter(), datacenter()])
-    assert any("is in both" in p for p in clash.validate())
+    assert any("is in both" in p for p in Fleet([datacenter(), datacenter()]).validate())
 
 
 def test_a_ledger_adds_covert_bits_across_nights_and_wipes_bound_what_each_night_carries(setup):
-    from datacenter import Ledger
     c, dc, p = setup
-    profile = occupancy(p, 32, 1, window=4)
     ledger = Ledger()
     for night in range(3):
-        wipes = [Wipe("a.gpu", Interval(0, 2)), Wipe("b.gpu", Interval(0, 2))] if night else []
-        ledger.add(account(audit(run(p, INPUTS, window=4, wipes=wipes), profile, syncs=128), p, Clock(1e-3), Interval(0, 16)))
+        plan = Plan(EPOCH, wipes=wipes("a.gpu", "b.gpu") if night else ())
+        ledger.add(account(audit(run(p, INPUTS, plan), p.public(plan)), p.public(plan)))
     assert ledger.sound and ledger.covert_bits == 3 * ledger.epochs[0].covert_bits
     first, *wiped = ledger.carried
-    assert all(w == 2 * 8e6 for w in wiped) and first == 2 * 6.4e10
+    assert all(w == 2 * RESIDUAL for w in wiped) and first == 2 * HBM

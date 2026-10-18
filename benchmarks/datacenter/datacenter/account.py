@@ -1,37 +1,40 @@
-"""The physical layer's reading of the claims: credit, headroom, attribution and the covert budget, per block.
+"""The physical layer's reading of the claims: credit, headroom, where things were, and the covert budget, per block.
 
-`account` takes the audit's claims (logical facts about the prover system), the placement (the binding), the declared
-datacenter (named assumptions) and an epoch on the trusted clock. For each block it concludes:
+`account` reads only public things: the claims (logical facts about the prover system) and the profile (the
+placement's public properties, the declaration with its named assumptions, the verifier's plan). For each block it
+concludes:
 
-- `credited`: the work the claims prove was spent on the declared circuit there;
-- `capacity` and `headroom`: what the block's devices could do in the epoch, by their declared rates, and what the
-  audit leaves unaccounted;
+- `credited`: the work the claims prove was spent on the declared circuit there, in the audit's unit of work;
+- `capacity` and `headroom`: what the block's devices could do in the epoch at their declared rates in that unit, and
+  what the audit leaves unaccounted;
 - `outsourceable` and `local_at_least`: the work a helper off the block could have done for it, and so the credited
-  work that must have run on the block. A helper holding the registered weights needs only small inputs and outputs, so
-  crossing bytes bound nothing by themselves (compute accounting, review 1). Work is pinned to the block only by data it
-  must consume that only the block receives: a trusted device's fresh bulk data (`Input(source="trusted")`), which a
-  helper could get only through the block's certified egress, so outsourceable ≤ egress × work per forced bit. Or by a
-  named premise, `assume={"fleet-closed"}`: no undeclared compute is reachable from the block. With neither, it is
-  unbounded and nothing is attributed;
-- `reads` and `reads_local_at_least`: the reads the bandwidth audits certify for stores on the block's devices, and
-  the part that can't have come in over its boundary;
-- `state`: the bits that could survive the epoch: each device's memory less what a store it held filled (a verified
-  wipe is such a store), and never less than its residual.
+  work that must have run on the block. Crossing bytes bound nothing by themselves: a helper holding the registered
+  weights needs only small inputs and outputs. Work is pinned to the block only by data it must consume that only the
+  block receives, a trusted device's fresh data (`Input(source="trusted")`), which a helper could get only through the
+  block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the named premise `FLEET_CLOSED`. With
+  neither, it is unbounded and nothing is attributed;
+- `reads` and `reads_local_at_least`: the reads the bandwidth audits certify for stores on the block's devices, and the
+  part its boundary can't have carried in;
+- `carried`: the bits that could have been carried into the epoch: each device's memory, less what a wipe's labels
+  filled, and never less than its residual.
 
-For the whole datacenter it gives the covert budget (timing advice, inputs, off-ramps), where each answered store is
-(`located`: every device that could have held it and met the deadline), and every refused claim, which voids the
-conclusion for its link, store or window.
+For the whole datacenter it gives where each held store could have been (`located`), the covert budget (the profile's
+advice, timing advice, inputs, and every refused port-window charged at its link's full capacity: fail-closed), and the
+failure probability (the sum of the claims' deltas).
 """
 from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from .binding import Placement
-from .claims import Carried, Claim, Computed, Emitted, Entered, Held, Read, Refused, Scheduled
-from .memory import Store, answer_time, label_store
-from .physical import Datacenter
-from .time import Clock, Interval, Wipe
+from .binding import Profile
+from .claims import Carried, Claim, Computed, Entered, Held, Read, Refused, Scheduled
+from .memory import answer_time
+from .physical import Assumption, Datacenter
+from .time import Interval
+
+#: the premise that no undeclared compute is reachable from a block (compute accounting's option (a))
+FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
 
 
 @dataclass
@@ -40,11 +43,11 @@ class BlockAccount:
     credited: float
     capacity: float
     outsourceable: float
-    state: float
+    carried: float
     reads: float = 0.0
     read_ingress: float = 0.0
-    assumptions: list[str] = field(default_factory=list)
     forced: float = 0.0
+    assumptions: list[str] = field(default_factory=list)
 
     @property
     def headroom(self) -> float:
@@ -52,14 +55,12 @@ class BlockAccount:
 
     @property
     def local_at_least(self) -> float:
-        """Work that must have been done on the block itself: what the claims credit, less what a helper off the block
-        could have computed and shipped in through its certified ingress."""
+        """Work that must have run on the block itself: the credited work less what a helper could have done."""
         return max(self.credited - self.outsourceable, 0.0)
 
     @property
     def reads_local_at_least(self) -> float:
-        """Certified reads that can't have been served from off the block: the certified reads less the bits its
-        boundary could carry in during the read windows."""
+        """Certified reads that can't have been served from off the block."""
         return max(self.reads - self.read_ingress, 0.0)
 
 
@@ -69,12 +70,9 @@ class Account:
     timing_bits: float
     input_bits: dict[str, int]
     refused: list[Refused]
-    offramp_bits: dict[str, int] = field(default_factory=dict)
-    #: each held store, and every device that could have held it and still answered by its deadlines
     located: dict[str, list[str]] = field(default_factory=dict)
-    #: bits of advice in the choice of occupancy profile (NET-5's declared scheduler), once per audit
     advice_bits: float = 0.0
-    #: the probability that some claim the account relies on fails: the sum of their deltas
+    refused_bits: float = 0.0
     delta: float = 0.0
 
     @property
@@ -83,124 +81,110 @@ class Account:
 
     @property
     def covert_bits(self) -> float:
-        """Every bit the run could have carried beyond the committed computation: the profile's advice, timing advice,
-        inputs and off-ramps."""
-        return self.advice_bits + self.timing_bits + sum(self.input_bits.values()) + sum(self.offramp_bits.values())
+        """Every bit the run could have carried beyond the committed computation."""
+        return self.advice_bits + self.timing_bits + sum(self.input_bits.values()) + self.refused_bits
 
     def __repr__(self) -> str:
-        lines = [f"{'block':8} {'credited':>9} {'local ≥':>9} {'capacity':>9} {'headroom':>9} {'outsourceable':>13} "
-                 f"{'reads':>9} {'state (bits)':>12}"]
+        lines = [f"{'block':8} {'credited':>9} {'local ≥':>9} {'capacity':>9} {'headroom':>9} {'outsource':>9} "
+                 f"{'reads':>8} {'carried (bits)':>14}"]
         for b in self.blocks:
             lines.append(f"{b.block:8} {b.credited:9.3g} {b.local_at_least:9.3g} {b.capacity:9.3g} {b.headroom:9.3g} "
-                         f"{b.outsourceable:13.3g} {b.reads:9.3g} {b.state:12.3g}")
-        def listed(d: dict[str, int]) -> str:
-            return ", ".join(f"{k}: {v}" for k, v in d.items()) if 0 < len(d) <= 4 else f"{len(d)} of them" if d else "none"
-        lines.append(f"covert budget: {self.covert_bits:g} bits = {self.advice_bits:g} profile advice + {self.timing_bits:g} "
-                     f"timing advice + {sum(self.input_bits.values())} inputs ({listed(self.input_bits)}) + "
-                     f"{sum(self.offramp_bits.values())} off-ramp ({listed(self.offramp_bits)})")
+                         f"{b.outsourceable:9.3g} {b.reads:8.3g} {b.carried:14.3g}")
+        inputs = ", ".join(f"{k}: {v}" for k, v in self.input_bits.items()) if len(self.input_bits) <= 4 else \
+            f"{len(self.input_bits)} inputs"
+        lines.append(f"covert budget: {self.covert_bits:g} bits = {self.advice_bits:g} profile advice + "
+                     f"{self.timing_bits:g} timing advice + {sum(self.input_bits.values())} inputs ({inputs or 'none'})"
+                     + (f" + {self.refused_bits:.3g} on refused windows" if self.refused_bits else ""))
         for s, where in self.located.items():
             lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
-                         f"store {s}: held on one of {', '.join(where)} (not located to one device)")
+                         f"store {s}: held on one of {', '.join(where)}" if where else f"store {s}: on no declared device")
         if self.delta:
-            lines.append(f"fails with probability at most {self.delta:.3g} (the sum of the claims' deltas)")
-        lines += [f"REFUSED {r.what}: {r.why}" for r in self.refused]
+            lines.append(f"fails with probability at most {self.delta:.3g}")
+        lines += [f"REFUSED {r.on!r}: {r.why}" for r in self.refused]
         return "\n".join(lines)
 
 
-def _store(dc: Datacenter, p: Placement, name: str) -> Store:
-    if name.startswith("wipe:"):
-        return label_store(dc, Wipe(name.removeprefix("wipe:"), Interval(0, 0)))
-    return next(s for s in p.stores if s.name == name)
+def _boundary_rate(dc: Datacenter, block: str) -> float:
+    """Bits a second the block's certified boundary links carry, one direction (each link is full duplex)."""
+    return sum(float(l.capacity) for l in dc.boundary if block in
+               {getattr(dc.block_of(l.a), "name", None), getattr(dc.block_of(l.b), "name", None)})
 
 
-def _ingress(dc: Datacenter, block: str, seconds: float) -> float:
-    """Bits the block's certified boundary links can carry over `seconds`, in either direction (each link is full duplex
-    at its capacity)."""
-    return sum(float(l.capacity) * seconds for l in dc.boundary
-               if block in {getattr(dc.block_of(l.a), "name", None), getattr(dc.block_of(l.b), "name", None)})
-
-
-def account(claims: list[Claim], p: Placement, clock: Clock, epoch: Interval, op: str = "scalar",
-            assume: frozenset[str] | set[str] = frozenset()) -> Account:
-    """Read `claims` against `p`'s datacenter over `epoch`, crediting work priced in op class `op`, under the named
-    premises in `assume` (so far only "fleet-closed")."""
-    dc = p.datacenter
-    seconds = clock.seconds(epoch.length)
+def account(claims: list[Claim], profile: Profile, unit: str = "gate", assume: tuple[Assumption, ...] = ()) -> Account:
+    """Read `claims` against `profile`, crediting work in `unit` (Boolean gates here; PoUW's are MACs), under the named
+    premises in `assume`."""
+    dc, epoch = profile.datacenter, profile.plan.epoch
+    seconds = dc.grid.seconds(epoch.length)
+    inside = lambda c: getattr(c, "during", epoch) in epoch  # noqa: E731
     refused = [c for c in claims if isinstance(c, Refused)]
-    work = defaultdict(float)
-    if any(isinstance(c, Computed) for c in claims):
-        for i, g in enumerate(p.circuit.gates):
-            work[p.block(i)] += g.boolean_size
-    forced = defaultdict(float)
-    for i, g in enumerate(p.circuit.gates):
-        if g.op == "input" and g.input.source == "trusted":
-            readers = {p.block(j) for j, h in enumerate(p.circuit.gates) if i in h.operands} - {None}
-            for b in readers:
-                forced[b] += g.bits
+    refused_parts = {r.on.name for r in refused if r.on.kind == "part"}
+    refused_stores = {r.on.name for r in refused if r.on.kind == "store"}
 
-    challengers = [d.name for d in dc.devices.values() if d.kind == "challenger"]
+    credited = defaultdict(float)
+    for c in claims:
+        if isinstance(c, Computed) and inside(c) and c.part not in refused_parts:
+            credited[c.part] += c.work
+
     located: dict[str, list[str]] = {}
     filled: dict[str, float] = defaultdict(float)
     for c in claims:
-        if isinstance(c, Held) and c.at in epoch:
-            s = _store(dc, p, c.store)
-            if c.store.startswith("wipe:") or not challengers:
-                where = [s.device]
-            else:
-                where = [d.name for d in dc.devices.values() if d.memory is not None and float(d.memory) >= s.bits
-                         and answer_time(dc, clock, challengers[0], s.device, d.name, s.bits) <= clock.seconds(c.at.length)]
-            located[c.store] = where
-            if where == [s.device]:
-                filled[s.device] += c.bits
+        if isinstance(c, Held) and inside(c) and c.store not in refused_stores and c.store not in located:
+            s = profile.stores[c.store]
+            located[c.store] = [d.name for d in dc.devices.values() if d.memory is not None and float(d.memory) >= s.bits
+                                and answer_time(dc, c.by, s.device, d.name, s.bits) <= dc.grid.seconds(c.during.length)]
+            if s.content == "labels" and located[c.store] == [s.device]:
+                filled[s.device] = max(filled[s.device], s.bits)
 
-    reads: dict[str, float] = defaultdict(float)
-    read_ingress: dict[str, float] = defaultdict(float)
+    reads, read_ingress = defaultdict(float), defaultdict(float)
     for c in claims:
-        if isinstance(c, Read):
-            b = dc.block_of(_store(dc, p, c.store).device)
+        if isinstance(c, Read) and inside(c) and c.store not in refused_stores:
+            b = dc.block_of(profile.stores[c.store].device)
             if b is not None:
                 reads[b.name] += c.bits
-                read_ingress[b.name] += _ingress(dc, b.name, clock.seconds(c.window.length))
+                read_ingress[b.name] += _boundary_rate(dc, b.name) * dc.grid.seconds(c.during.length)
 
+    premises = {a.name for a in assume}
     blocks = []
     for b in dc.blocks:
-        cap = sum(float(d.rate[op]) for d in b.devices if op in d.rate) * seconds
-        state = 0.0
-        for d in b.devices:
-            if d.memory is not None:
-                floor = float(d.residual) if d.residual else 0.0
-                state += max(floor, float(d.memory) - filled[d.name])
-        names = [a.name for d in b.devices for a in [*d.rate.values(), d.memory, d.residual, d.bandwidth, d.on_chip]
+        cap = sum(float(d.rate[unit]) for d in b.devices if unit in d.rate) * seconds
+        carried = sum(max(float(d.residual) if d.residual else 0.0, float(d.memory) - filled[d.name])
+                      for d in b.devices if d.memory is not None)
+        names = [a.name for d in b.devices for a in [d.rate.get(unit), d.memory, d.residual, d.bandwidth, d.on_chip]
                  if a is not None]
-        if "fleet-closed" in assume:
+        if FLEET_CLOSED.name in premises:
             outsourceable = 0.0
-            names.append("fleet-closed")
-        elif forced[b.name]:
-            outsourceable = min(work[b.name], _ingress(dc, b.name, seconds) * work[b.name] / forced[b.name])
+            names.append(FLEET_CLOSED.name)
+        elif profile.forced[b.name]:
+            outsourceable = min(credited[b.name], _boundary_rate(dc, b.name) * seconds * credited[b.name] / profile.forced[b.name])
         else:
             outsourceable = float("inf")
-        blocks.append(BlockAccount(b.name, work[b.name], cap, outsourceable, state, reads[b.name], read_ingress[b.name],
-                                   names, forced[b.name]))
+        blocks.append(BlockAccount(b.name, credited[b.name], cap, outsourceable, carried, reads[b.name],
+                                   read_ingress[b.name], profile.forced[b.name], names))
 
-    per_window: dict[tuple[str, int], int] = {}
-    for c in claims:
-        if isinstance(c, Emitted):        # a stream crosses several certified links: count each window of it once
-            per_window[c.stream, c.window] = max(per_window.get((c.stream, c.window), 0), c.bits)
-    offramp: dict[str, int] = defaultdict(int)
-    for (stream, _), bits in per_window.items():
-        offramp[stream] += bits
-    timing = sum(c.bits for c in claims if isinstance(c, Carried))
-    inputs = {c.input: c.bits for c in claims if isinstance(c, Entered)}
-    advice = sum(c.bits for c in claims if isinstance(c, Scheduled))
-    delta = sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read)))
-    return Account(blocks, timing, inputs, refused, dict(offramp), located, advice, delta)
+    links = {repr(port): dc.link(*_ends(dc, port.certifier, port.direction)) for port in dc.ports}
+    window_seconds = dc.grid.seconds(dc.grid.bucket * dc.grid.window)
+    voided = {(r.on.name, r.on.during) for r in refused if r.on.kind == "port"}
+    refused_bits = sum(float(links[name].capacity) * window_seconds for name, _ in voided if name in links)
+    return Account(blocks,
+                   sum(c.bits for c in claims if isinstance(c, Carried) and inside(c)),
+                   {c.input: c.bits for c in claims if isinstance(c, Entered)},
+                   refused, located,
+                   sum(c.bits for c in claims if isinstance(c, Scheduled)),
+                   refused_bits,
+                   sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read))))
+
+
+def _ends(dc: Datacenter, certifier: str, direction: str) -> tuple[str, str]:
+    """The link between a certifier and the block side of its port."""
+    l = next(l for l in dc.links if certifier in (l.a, l.b) and dc.block_of(l.b if l.a == certifier else l.a) is not None)
+    return l.a, l.b
 
 
 @dataclass
 class Ledger:
     """Accounts of successive epochs (nights, say), joined. Covert bits and failure probabilities add up across epochs,
-    since an adversary with a long horizon can save them up and break out at the end. State is per epoch: what could
-    survive each epoch's end, which nightly wipes keep down to the devices' residuals."""
+    since an adversary with a long horizon can save them up and break out at the end; what each epoch could carry in is
+    per epoch, and nightly wipes keep it down to the devices' residuals."""
 
     epochs: list[Account] = field(default_factory=list)
 
@@ -222,41 +206,45 @@ class Ledger:
 
     @property
     def carried(self) -> list[float]:
-        """The bits that could survive each epoch's end, summed over blocks."""
-        return [sum(b.state for b in a.blocks) for a in self.epochs]
+        return [sum(b.carried for b in a.blocks) for a in self.epochs]
 
     def __repr__(self) -> str:
         return (f"{len(self.epochs)} epochs, {'sound' if self.sound else 'NOT sound'}: {self.covert_bits:g} covert bits in "
-                f"all, at most {max(self.carried, default=0):.3g} bits carried across any epoch boundary, "
-                f"failure probability at most {self.delta:.3g}")
+                f"all, at most {max(self.carried, default=0):.3g} bits carried into any epoch, failure probability at "
+                f"most {self.delta:.3g}")
 
 
 @dataclass(frozen=True)
 class Credit:
-    """Work `work` of `resource` (compute, bits held, bits read) an audit credits to `device` within `window`."""
+    """Work `work` of `resource` (compute, held, read) an audit credits to `unit` (a device or a block) within `during`."""
 
-    device: str
+    unit: str
     resource: str
-    window: Interval
+    during: Interval
     work: float
 
 
-def schedulable(credits: list[Credit], capacity: dict[tuple[str, str], float]) -> list[tuple[str, str, Interval, float, float]]:
-    """Every violation of the joint rule for credit from several audits: (device, resource, [a, b], credited inside,
-    capacity over b − a) wherever the work credited to windows inside [a, b] exceeds the device's capacity for that
-    resource per tick times b − a. Empty when the credits fit (Horn's preemptive test with release times and
-    deadlines), so each device's time is credited once."""
+def credits(acc: Account, epoch: Interval) -> list[Credit]:
+    """The account's compute credit as `Credit`s, one per block, for the joint rule (`double_credit`)."""
+    return [Credit(b.block, "compute", epoch, b.credited) for b in acc.blocks if b.credited]
+
+
+def double_credit(credits: list[Credit], capacity: dict[tuple[str, str], float]) -> list[tuple[str, str, Interval, float, float]]:
+    """Every interval where credit from several audits exceeds what the unit could do: (unit, resource, [a, b),
+    credited inside, capacity over b − a), wherever the work credited to windows inside [a, b) exceeds the unit's
+    capacity per tick for that resource times b − a (Horn's preemptive test with release times and deadlines). Empty
+    when each unit's time is credited once."""
     out = []
     groups = defaultdict(list)
     for c in credits:
-        groups[c.device, c.resource].append(c)
-    for (d, r), cs in groups.items():
-        starts, ends = sorted({c.window.start for c in cs}), sorted({c.window.end for c in cs})
+        groups[c.unit, c.resource].append(c)
+    for (u, r), cs in groups.items():
+        starts, ends = sorted({c.during.start for c in cs}), sorted({c.during.end for c in cs})
         for a in starts:
             for b in ends:
                 if b <= a:
                     continue
-                inside = sum(c.work for c in cs if a <= c.window.start and c.window.end <= b)
-                if inside > capacity[d, r] * (b - a):
-                    out.append((d, r, Interval(a, b), inside, capacity[d, r] * (b - a)))
+                inside = sum(c.work for c in cs if a <= c.during.start and c.during.end <= b)
+                if inside > capacity[u, r] * (b - a):
+                    out.append((u, r, Interval(a, b), inside, capacity[u, r] * (b - a)))
     return out
