@@ -147,10 +147,21 @@ theorem writerReads : sl.toDrawnLayer.WriterReads := by
   unfold DrawnLayer.WriterReads; decide
 
 theorem selectionsSourced : sl.SelectionsSourced := by
-  unfold SelectLayer.SelectionsSourced; decide
+  have h : ∀ w j, ∀ ℓ ∈ sl.gates w j, (∃ g, sl.src ℓ = some g) ∨ (sl.src ℓ = none ∧ (sl.regd ℓ).isSome) := by
+    decide
+  intro w j ℓ hℓ
+  rcases h w j ℓ hℓ with h1 | ⟨h1, h2⟩
+  · exact Or.inl h1
+  · exact Or.inr ⟨h1, Option.isSome_iff_exists.mp h2⟩
 
 theorem selectionsProved : sl.SelectionsProved := by
-  unfold SelectLayer.SelectionsProved; decide
+  have h : ∀ w j, ∀ ℓ ∈ sl.gates w j,
+      (∃ g ∈ sl.proved, sl.src ℓ = some g) ∨ (sl.src ℓ = none ∧ (sl.regd ℓ).isSome) := by
+    decide
+  intro w j ℓ hℓ
+  rcases h w j ℓ hℓ with h1 | ⟨h1, h2⟩
+  · exact Or.inl h1
+  · exact Or.inr ⟨h1, Option.isSome_iff_exists.mp h2⟩
 
 theorem certifiedOperands : sl.CertifiedOperands := by
   have h : ∀ w j, ∀ k ∈ sl.floor w j, ∃ ℓ ∈ sl.gates w j,
