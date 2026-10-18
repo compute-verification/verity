@@ -8,11 +8,14 @@ One statement per family and reading: the family's credited work is at least `1 
 headline, on one device's machine, one design's TS model on it and its floor program ♭, all exact data
 (`Definitions.Accounting.Headline`). Each is `Models.Accounting.Guarantees.Sheet`'s `SheetDIdealFloor` at that data,
 its parameters fixed (`π*`, `p`, `S`, `δ`), with every hypothesis that the data discharge gone and the rest left as
-they are: the named assumptions of `Models.Accounting.Assumptions` and the proof layer's pieces. Each is proved as
-`Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.Headline`.
+they are: the named assumptions of `Models.Accounting.Assumptions` and the proof layer's pieces. A measured reading is
+`Models.Accounting.Guarantees.TS`'s `DIdealFloor` at its data the same way, its machine the measured vector's rows.
+Each is proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.Headline`.
 
 * `Sm120SheetHeadline`: sm_120 (RTX PRO 6000) at its data sheet, H1 + fx1 at SCALAR-ROUTE's ½ floors: outside an
   event of probability at most `2^-40`, every accepted window runs at least `1 − 0.585%` of its credit.
+* `Sm120MeasuredHeadline`: sm_120 on its measured vector (VF3r-16), H1 + fx1 at SCALAR-ROUTE's `9/8` floors: outside
+  an event of probability at most `2^-40`, every accepted window runs at least `1 − 0.540%` of its credit.
 -/
 
 namespace Accounting.Guarantees.TS
@@ -40,5 +43,28 @@ def Sm120SheetHeadline : Prop :=
     pf.Pins → RightFixed Pl pf Sm120.model.Nw →
     prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 117 / 20000) ≤
       (1 / 2) ^ 40
+
+/-- **sm_120's headline on its measured vector.** On VF3r-16's machine (`Sm120Measured.machine`), H1 + fx1's TS model
+on it (`Sm120Measured.model`: the MMA forms at their committed words an instruction, `q = q_T = 9/8`, `b_T = 0`,
+`N_w = 128`) and its floor program (`Sm120Measured.flat`), at JI3s_0's certificate (`Sm120Measured.piStar`), luck
+`p = ¾` a round over `Sm120.checks = 48,000` rounds: for any window's play `Pl` and proof layer `pf` whose binding and
+soundness cost at most `2^-41` over the window, if the labelling splits, (I1) `FacetCeilings` holds on VF3r-16's rows,
+(I2)/(I4) `WordsWritten` at the model's `ω`, (I3) `ScalarRoute` at its floors, (I5) `NoSum` and (I6) FOLD-OPT hold
+on every run, the rounds' luck is at most `¾`, the play is the proofs' (`Of`), binding fails with probability at most
+`δ_bind` a round, every proof is sound up to `δ_ZK` (`SoundAt`), the relations pin every committed value (`Pins`) and
+E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted window's time is at
+least `1 − 27/5000` (`1 − 0.540%`) of the credit `T_cred = B_♭/f_max`. (I5) `SideUnits` and FILL-OPT are not
+hypotheses: the model has no side unit and no filler, so they hold at any run. -/
+def Sm120MeasuredHeadline : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty) {V : Type} {nπ : ℕ}
+    (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ),
+    (Sm120.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
+    (∀ x, FacetCeilings Sm120Measured.machine (Pl.run x).run) →
+    (∀ x, WordsWritten Sm120Measured.model (Pl.run x)) → (∀ x, ScalarRoute Sm120Measured.model (Pl.run x)) →
+    (∀ x, NoSum (Pl.run x)) → (∀ x, FoldOpt Sm120Measured.model (Pl.run x)) →
+    LuckAt (3 / 4) Pl.game → pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
+    pf.Pins → RightFixed Pl pf Sm120Measured.model.Nw →
+    prob (fun x => Pl.accepts x ∧
+      (Pl.run x).run.time / Sm120Measured.model.credit Sm120Measured.flat < 1 - 27 / 5000) ≤ (1 / 2) ^ 40
 
 end Accounting.Guarantees.TS
