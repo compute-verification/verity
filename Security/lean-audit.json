@@ -938,6 +938,15 @@
    "assumptions": [],
    "type_hash": "9339b39fc50b0ff51f167aa0adcd15f02a302f90982b000ed84626e29d05c1d3"
   },
+  "Accounting.SecurityProofs.Gates.SquaringCarryNibbles": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.SquaringUnits": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.UnitsFooling": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.HorizonSampling": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.HorizonSampling : Accounting.Guarantees.HorizonSampling"],
@@ -5676,7 +5685,10 @@
    "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
    "Accounting.SecurityProofs.Gates.ProvenWindow": "frozen (no-function): The soundness of the gate model's interval analysis (Accounting.Gates.Proven) over every circuit and input, not a property of a Lean function: property/v1's interval analysis has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function.",
-   "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port."
+   "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port.",
+   "Accounting.SecurityProofs.Gates.SquaringCarryNibbles": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from Fooling at j = 4, not a property of a Lean function.",
+   "Accounting.SecurityProofs.Gates.UnitsFooling": "frozen (no-function): A counting bound in budgeted units over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
+   "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
