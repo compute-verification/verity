@@ -158,6 +158,7 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
     out: list[list[Row]] = [[] for _ in tmpls]
     defs: list[Any] = [None] * len(tmpls)
     counts = [0] * len(tmpls)
+    seen: list[dict | None] = [None] * len(tmpls)
     for rid, inst in programs.items():
         pi = ProgramIndex(inst, program_dir=(program_dirs or {}).get(str(rid)), **(index or {}))
         for i in sorted(pi.by_i):
@@ -166,6 +167,9 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
             if not hits:
                 continue
             d = pi.describe(r)
+            if d is not None:
+                for k, _fn, _n in hits:
+                    seen[k] = seen[k] or d
             if d is None or (scope and not d["op_path"].startswith(scope)):
                 continue
             if steps is not None and not int(steps[0]) <= int(d["step"]) < int(steps[1]):
@@ -175,10 +179,12 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
             (k, fn, n), = hits
             out[k].append((str(rid), pi, r, d))
             defs[k], counts[k] = fn, counts[k] + n
-    for t, rows in zip(tmpls, out, strict=True):
+    for t, rows, d in zip(tmpls, out, seen, strict=True):
         if not rows:
             raise LookupError(f"no rows of {t} in the run's Programs" + (f" under {scope}" if scope else "")
-                              + (f" at steps {list(steps)}" if steps is not None else ""))
+                              + (f" at steps {list(steps)}" if steps is not None else "")
+                              + (f"; its rows exist outside the scope, e.g. op_path {d['op_path']} at step {d['step']} (scope.op_path_prefix "
+                                 "is the op_path's prefix, the wrapper's module prefix stripped)" if d is not None else ""))
     return out, defs, counts
 
 
