@@ -30,7 +30,7 @@ def test_every_marker_names_a_pinned_model_and_both_seeds_are_marked(marks):
     assert marks["verity_vllm/program/registry/dsa.circuit-check.py"] == marks["verity_vllm/program/registry/dsa.py"] == (GLM,)
 
 
-def test_a_models_inventory_joins_its_marked_modules(marks, tmp_path, monkeypatch):
+def test_a_models_inventory_joins_its_marked_modules(marks):
     inv = G.inventory(GLM, marks, sql=None, fetch=None)
     paths = {f["path"] for f in inv["files"]}
     assert "verity_vllm/program/frontend/rules/vllm_dsa.py" in paths and all(GLM in f["models"] for f in inv["files"])
@@ -41,13 +41,12 @@ def test_a_models_inventory_joins_its_marked_modules(marks, tmp_path, monkeypatc
     assert {m["id"] for m in inv["capture_maps"]} == {"glm-moe-dsa-eager-hopper-tp8-v0"}
     assert inv["hours"] is None and "hours" not in G.render(inv)
 
-    monkeypatch.setenv("HF_HOME", str(tmp_path))
-    dsv4 = G.inventory(DSV4, marks, sql=None, fetch=lambda repo, rev: DSV4_CONFIG.read_bytes())
+    dsv4 = G.inventory(DSV4, marks, sql=None, fetch=None)
     assert "verity_vllm/program/registry/mhc.py" in {f["path"] for f in dsv4["files"]}
     assert "deepseek-v4-eager-hopper-tp8-v0" in {m["id"] for m in dsv4["capture_maps"]}
     assert dsv4["model_type"] == "deepseek_v4"
-    assert dsv4["profile"] == {"refused": "its config.json (hf_home:snapshot): " + generic.structural_refusal(json.loads(DSV4_CONFIG.read_text()))}
-    assert "model_type 'deepseek_v4' is not in the family facts table" in G.render(dsv4)
+    assert dsv4["profile"] == {"refused": "its config.json (package:hf_configs): " + generic.structural_refusal(json.loads(DSV4_CONFIG.read_text()))}
+    assert (dsv4["family"]["arch"], dsv4["family"]["shared_with"]) == ("mhc-moe", []) and "family facts  deepseek_v4 (mhc-moe)" in G.render(dsv4)
 
 
 def test_the_config_is_the_builds_and_a_fetched_one_must_be_the_pinned_bytes(tmp_path, monkeypatch):
