@@ -27,12 +27,13 @@ The coordination API has one place, three interactions and one lifecycle.
   your ask until Daniel opens it, and then it reads every unread doorbell (`names read --as console`) and answers in your
   thread. So put the whole brief in the ask, since it can't open Linear, and card `#ask-daniel` when it can't wait for
   him to open console. A handle's holder is its
-  inbox route's holder, and the route is the only record of it: `names open --succeeds` records the successor's agent id
+  inbox route's holder, and routing reads it from the route: `names open --succeeds` records the successor's agent id
   and its working branch's suffix in the route, and routing reads them (`--as`, the owners of PRs and runs; `research msg
   handles` shows each handle's). Run `names open --as HANDLE` again on a new branch: it adds that branch's suffix. A
   second agent working under a handle (a lane that posts as it) is one its holder adds with `names open --as HANDLE
   --poster BC_ID`; it subscribes to that handle's inbox thread itself: the holder has no channel to relay to it. So a
-  handover edits nothing in the repo. One agent may hold several handles, and posts as whichever
+  handover needs no repo change; the registry's `holder` and `branch_suffixes` are a fallback for readers without the
+  routes (drive's PR owners), updated when convenient. One agent may hold several handles, and posts as whichever
   it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them, and
   Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
@@ -71,7 +72,7 @@ Only the names a post starts with ring anyone. So `send`, `reply` and `ask` refu
 its start, or writes `handle:` after its leading names, at the start of a later line or of a sentence (`@top ci: rebuild`).
 Move the name to the start (or `--to`) to ring it, or drop the `@` to mention it without a doorbell.
 
-`registry.json` (beside this file) names every handle (remit, charter, user-group id, the paths it `owns`), the
+`registry.json` (beside this file) names every handle (remit, charter, user-group id, the paths it `owns`, and a fallback holder), the
 channels and the named humans; `research msg handles` prints it, with each handle's holder from its route. `research msg owners PATH...` names who owns each path (the
 longest `owns` prefix wins), so a question about a file goes to its owner; a PR that moves files updates its owners' entries. The tool is `research msg` (`tools/research/src/research/slack.py`); every
 subcommand takes `--dry-run`, which sends nothing and prints each request it would make.
@@ -296,8 +297,8 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
 
 ## Changing the registry
 
-Add or change a handle in `registry.json` (the tests check it loads, and that it says nothing of who holds the handle:
-its holder's `names open --as HANDLE` records that in the route). Then, with a token that has `usergroups:write`:
+Add or change a handle in `registry.json` (the tests check it loads; its holder's `names open --as HANDLE` records who
+holds it in the route). Then, with a token that has `usergroups:write`:
 
 ~~~bash
 research msg groups sync            # the plan: which user groups it would create, update, re-enable, or disable (a retired name's)

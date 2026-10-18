@@ -168,6 +168,8 @@ def registry(tmp_path, monkeypatch):
     reg["humans"][0]["slack_user"] = "UDANIEL"
     for h in reg["handles"]:
         h["usergroup"] = "SINFRA" if h["handle"] == "infra" else None
+        for k in ("holder", "branch_suffixes", "posters"):   # the tests' roster is the routes', as `names open` writes it
+            h.pop(k, None)
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(reg))
     monkeypatch.setenv("RESEARCH_SLACK_REGISTRY", str(path))
@@ -188,9 +190,6 @@ def match(capsys, handle, ev) -> tuple[int, str]:
 def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
-    roster = {h["handle"]: k for h in reg["handles"] for k in ("holder", "branch_suffixes", "posters") if k in h}
-    assert not roster, (f"{roster}: who holds a handle and its branch suffixes are its inbox route's, which `research msg "
-                        "names open --as HANDLE [--succeeds] [--poster BC_ID]` writes; drop them from the registry")
     assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel"}
     assert slack.subscribers(reg, "agent-coordination") == []
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "ask-daniel") == ["infra"]
