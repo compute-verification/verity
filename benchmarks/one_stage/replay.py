@@ -10,9 +10,10 @@ run recorded.
   delta), the registration record as `commitmentOf` reads it, and the evidence as `evidenceOf` reads it (the draw, the
   proved units, the instance count, the receipt, the statement, the verdicts, the sessions and their roots, the served
   draw), each from the run's own files or the verifier's own copies (the program rebuilt from the input set the run
-  names, the domains derived again), and how each was found (`provenance`). Floats in verdicts and statements, which
-  neither side reads, are written as strings. The registered roots the record's `registered` check reads are the
-  verdicts' own, for the registration's own values (`audit.session_registered(verdicts, registration)`), on both sides.
+  names, at the population program's version the record holds, v1 or v0; the domains derived again), and how each was
+  found (`provenance`). Floats in verdicts and statements, which neither side reads, are written as strings. The
+  registered roots the record's `registered` check reads are the verdicts' own, for the registration's own values
+  (`audit.session_registered(verdicts, registration)`), on both sides.
 * **The public file.** A0's check of the verifier's own public file against the record (`matches_public`: the scheme,
   the roots, their domains and the instance count in the header of `stage/pub-<n>.bin`), the honest one and each
   recorded refusal, by the verifier of record's Lean (`one_stage.verifier.lean`) and today's Python.
@@ -102,6 +103,26 @@ def _json(value: Any) -> Any:
 
 def descriptor(program) -> dict:
     return program.desc if isinstance(program, codec.DecodedProgram) else _json(codec.encode_program(program))
+
+
+def own_population(build: Callable[[int], Any], want: str) -> Any:
+    """`build(version)`, the verifier's own population program, at the version whose program is the record's (`want`): v1,
+    the builders' default, or v0, which every run before v1 recorded (`P.POPULATION_VERSIONS`); v1's when neither is."""
+    first = None
+    for version in P.POPULATION_VERSIONS:
+        program = build(version)
+        if PO.program_sha512(program) == want:
+            return program
+        first = program if first is None else first
+    return first
+
+
+def population_version(program) -> int:
+    """The version of a population program (`TemplateInstances_vN{…}`, `TemplatePopulations_vN{…}`, built or a stored
+    descriptor decoded), by its program function's id; v1 for another program."""
+    fid = program.program_fn_id if isinstance(program, codec.DecodedProgram) else codec.descriptor_id(program.fn)
+    m = re.match(r"Template(?:Instances|Populations)_v([0-9]+)\{", fid)
+    return int(m[1]) if m else P.POPULATION_VERSIONS[0]
 
 
 def decode(desc: dict):
@@ -702,8 +723,9 @@ def a0(run: Run) -> Iterator[Case]:
     n = summary["n"]
     s, set_from = run.input_set(rec["window"].get("input_set") or "rope101")
     template = s.subcircuit.definition()
-    program = P.population_program(template, n)
-    prov: dict = {"commit": run.commit(), "set": set_from, "program": "P.population_program(set template, n)"}
+    program = own_population(lambda v: P.population_program(template, n, version=v), rec["program"])
+    prov: dict = {"commit": run.commit(), "set": set_from,
+                  "program": f"P.population_program(set template, n, version={population_version(program)})"}
     if PO.program_sha512(program) != rec["program"]:
         stored = run.programs.get(rec["program"])
         if stored is None:
@@ -747,7 +769,7 @@ def a0(run: Run) -> Iterator[Case]:
     src = f"{base}/negatives.json"
     draw = a["draw"]
     k = law["k"]
-    smaller = P.population_program(template, n - 1)
+    smaller = P.population_program(template, n - 1, version=population_version(program))
     spart = with_program(partition, smaller)
     first = rec["roots"][0]
     cases: dict[str, Callable[[dict], Case]] = {} if pc is None else {
@@ -817,10 +839,10 @@ def a0_lean(run: Run) -> Iterator[Case]:
     if s.subcircuit.id != gen["subcircuit"]:
         raise Gap(f"rope101's subcircuit is {s.subcircuit.id}, the generated set's {gen['subcircuit']}")
     template = s.subcircuit.definition()
-    program = P.population_program(template, n)
+    program = own_population(lambda v: P.population_program(template, n, version=v), rec["program"])
     prov: dict = {"commit": run.commit(), "set": f"{gen['set']} (generate.log), its subcircuit {gen['subcircuit']} from "
                                                  f"rope101's relation ({set_from})",
-                  "program": "P.population_program(set template, n)"}
+                  "program": f"P.population_program(set template, n, version={population_version(program)})"}
     if PO.program_sha512(program) != rec["program"]:
         raise Gap(f"the set's population program is {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]}")
     query = P.template_instance_query(template.id)
@@ -906,8 +928,9 @@ class A2Copies:
 def a2_copies(run: Run, base: str, rec: dict, n: int) -> A2Copies:
     s, set_from = run.input_set("rope101")
     template = s.subcircuit.definition()
-    program = P.population_program(template, n)
-    prov: dict = {"commit": run.commit(), "set": set_from, "program": "P.population_program(set template, n)"}
+    program = own_population(lambda v: P.population_program(template, n, version=v), rec["program"])
+    prov: dict = {"commit": run.commit(), "set": set_from,
+                  "program": f"P.population_program(set template, n, version={population_version(program)})"}
     if PO.program_sha512(program) != rec["program"]:
         raise Gap(f"the set's population program is {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]}")
     query = P.template_instance_query(template.id)
@@ -959,7 +982,7 @@ def a2(run: Run) -> Iterator[Case]:
     yield c
     src = f"{base}/negatives.json"
     draw = a["draw"]
-    smaller = P.population_program(v2.template, n - 1)
+    smaller = P.population_program(v2.template, n - 1, version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "public-file-b||c-byte-flipped (R4)": lambda v: c.but(
             "public-file-b||c-byte-flipped (R4)", "negative", recorded_codes(v, "registration", src),
@@ -1092,12 +1115,14 @@ def a3(run: Run) -> Iterator[Case]:
     summary = run.json(f"{base}/summary.json")
     rec = a["registration"]
     members = summary["members"]
-    prov: dict = {"commit": run.commit(), "program": "P.mixed_population_program(each member's set template, n)", "sets": {}}
+    prov: dict = {"commit": run.commit(), "sets": {}}
     mem = []
     for m in members:
         s, prov["sets"][m["set"]] = run.input_set(m["set"])
         mem.append((m["set"], s, s.subcircuit.definition(), m["n"]))
-    program = P.mixed_population_program([(d, cnt) for _, _, d, cnt in mem])
+    program = own_population(lambda v: P.mixed_population_program([(d, cnt) for _, _, d, cnt in mem], version=v),
+                             rec["program"])
+    prov["program"] = f"P.mixed_population_program(each member's set template, n, version={population_version(program)})"
     if PO.program_sha512(program) != rec["program"]:
         stored = run.programs.get(rec["program"])
         if stored is None:
@@ -1152,7 +1177,8 @@ def a3(run: Run) -> Iterator[Case]:
     union = {"law": "subset", "population": n, "k": law["k"], "units": sorted(a["draw"]["units"])}
     proved = sorted(a["proved_units"])
     bases = {name: (lo, lo + cnt) for (name, *_), (_, lo, cnt) in zip(mem, P.ranges(program, query))}
-    fewer = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt) in enumerate(mem)])
+    fewer = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt) in enumerate(mem)],
+                                       version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch": lambda v: c.but(
             "registration-partition-mismatch", "negative", recorded_codes(v, "registration", src), program=fewer,
@@ -1212,8 +1238,7 @@ def a4_copies(run: Run, base: str, summary: dict, rec: dict) -> tuple[Any, dict,
     """A4's verifier copies of `rec` under the run's layout of record (`summary.json`'s layout and members): the
     program, query, partition, served domains and leaf layer; the members and their template ids; the provenance."""
     lay, layout_from = a4_layout(run, summary["layout"])
-    prov: dict = {"commit": run.commit(), "layout": f"{summary['layout']} from {layout_from}", "sets": {},
-                  "program": "P.mixed_population_program(each layout member's set template, count)"}
+    prov: dict = {"commit": run.commit(), "layout": f"{summary['layout']} from {layout_from}", "sets": {}}
     own = run.file_sha256("inputs/set.tar")
     if own is None:
         raise Missing("inputs/set.tar")
@@ -1225,7 +1250,9 @@ def a4_copies(run: Run, base: str, summary: dict, rec: dict) -> tuple[Any, dict,
         s, prov["sets"][str(k)] = run.input_set(name)
         mem.append((k, s, s.subcircuit.definition(), int(mm["count"]), mm.get("row_map")))
     tids = [m["template"] for m in summary["members"]]
-    program = P.mixed_population_program([(d, cnt) for _, _, d, cnt, _ in mem])
+    program = own_population(lambda v: P.mixed_population_program([(d, cnt) for _, _, d, cnt, _ in mem], version=v),
+                             rec["program"])
+    prov["program"] = f"P.mixed_population_program(each layout member's set template, count, version={population_version(program)})"
     if PO.program_sha512(program) != rec["program"]:
         stored = run.programs.get(rec["program"])
         if stored is None:
@@ -1307,7 +1334,8 @@ def a4(run: Run) -> Iterator[Case]:
     n = rec["population"]
     draw = a["draw"]
     proved = sorted(a["proved_units"])
-    other = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt, _) in enumerate(mem)])
+    other = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt, _) in enumerate(mem)],
+                                       version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch (R2)": lambda v: c.but(
             "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=other,
@@ -1617,21 +1645,25 @@ def served_window(run: Run) -> Iterator[Case]:
     n0 = Wd.Work.at(levels[0], pv["grid_bits"]).n
     tiles = {"pc8.side_tile": pc8.side_tile(pv["k"], (1, 1), "sm120"),
              "pc8's hiding tile": pc8.templates(pv["k"], (1, 1), "sm120", hidden=True)["tile"]}
-    how, t = next(((h, x) for h, x in tiles.items() if PO.program_sha512(P.population_program(x, n0)) == rec["program"]),
+    def own(x):
+        return own_population(lambda v: P.population_program(x, n0, version=v), rec["program"])
+    how, t = next(((h, x) for h, x in tiles.items() if PO.program_sha512(own(x)) == rec["program"]),
                   next(iter(tiles.items())))
     era = None
-    if PO.program_sha512(P.population_program(t, n0)) != rec["program"]:
+    first = own(t)
+    version = population_version(first)
+    if PO.program_sha512(first) != rec["program"]:
         if commit is None:
             raise Gap("today's tile template does not give the record's program, and the run names no commit")
         era = era_python(era_tree(run, commit), SERVED_ZK_ERA, json.dumps(pv), json.dumps(levels))
         prov["program"] = f"the era's `served_commit.template` at {commit[:9]} (today's code has no {era['template']})"
     else:
-        prov["program"] = f"P.population_program({how} template, N at the registered level)"
+        prov["program"] = f"P.population_program({how} template, N at the registered level, version={version})"
     stubs: list[str] = []
 
     def program_at(ell: int):
         if era is None:
-            return P.population_program(t, Wd.Work.at(ell, pv["grid_bits"]).n)
+            return P.population_program(t, Wd.Work.at(ell, pv["grid_bits"]).n, version=version)
         prog, ids = decode_opaque(era["levels"][str(ell)]["program"])
         stubs.extend(x for x in ids if x not in stubs)
         return prog
@@ -1749,7 +1781,8 @@ def served_audit(run: Run) -> Iterator[Case]:
     if src is None or src.returncode != 0:
         raise Missing(f"benchmarks/pouw/served_zk/served_commit.py at {commit} (git history)")
     binding_run = "def run_of" in src.stdout
-    prov0: dict = {"commit": commit, "program": "P.population_program(pc8 tile template, the statement's tiles)",
+    prov0: dict = {"commit": commit, "program": "P.population_program(pc8 tile template, the statement's tiles, the record's "
+                                                "version)",
                    "scheme": "served_commit's `SCHEME` (v0)", "run": "the served request's binding (`run_of`)" if binding_run
                    else "the record's own window (before `run_of`)"}
     forms: dict[str, tuple[str, str]] = {}
@@ -1758,7 +1791,7 @@ def served_audit(run: Run) -> Iterator[Case]:
         c = run.json(f"out/{side}/commitment.json")
         b, (rows, n) = c["binding"], c["statement"]["tiles"]
         t = pc8.templates(b["shape"][1], (1, 1), "sm120", hidden=True)["tile"]
-        program = P.population_program(t, rows * n)
+        program = own_population(lambda v: P.population_program(t, rows * n, version=v), rec["program"])
         query = P.template_instance_query(t)
         part = P.partition(program, query)
         if run_id is None:
@@ -1826,13 +1859,20 @@ def session_digests(run: Run, session: str) -> list[str]:
                   if f["path"].startswith(f"{session}/sessions/") and f["path"].endswith("/session.json"))
 
 
-def population(members: list[tuple[Any, int]]):
-    """The population program over `(template, n)` in order, and its query, as `serving_rows.population_program` and
-    A6 build them: `TemplateInstances` and `Q_template_instance` for one template, `TemplatePopulations` and
-    `Q_template_instances` for several."""
+def population(members: list[tuple[Any, int]], version: int = P.POPULATION_VERSIONS[0]):
+    """The population program over `(template, n)` in order at `version`, and its query, as
+    `serving_rows.population_program` and A6 build them: `TemplateInstances` and `Q_template_instance` for one template,
+    `TemplatePopulations` and `Q_template_instances` for several."""
     if len(members) == 1:
-        return P.population_program(*members[0]), PO.template_instance_query(members[0][0])
-    return P.mixed_population_program(members), PO.template_instances_query([t for t, _ in members])
+        return P.population_program(*members[0], version=version), PO.template_instance_query(members[0][0])
+    return P.mixed_population_program(members, version=version), PO.template_instances_query([t for t, _ in members])
+
+
+def own_members(members: list[tuple[Any, int]], want: str):
+    """`population(members)` at the version whose program is the record's (`own_population`), and that version."""
+    program = own_population(lambda v: population(members, v)[0], want)
+    version = population_version(program)
+    return program, population(members, version)[1], version
 
 
 def sessions_evidence(run: Run, a: dict, sessions: list[tuple[str, str]]) -> tuple[int, dict, list[str]]:
@@ -1883,8 +1923,8 @@ def a5_audit(run: Run, base: str) -> Iterator[Case]:
     if any(t not in stored.defs for t in tids):
         raise Gap(f"{base}/program.json defines no template {[t for t in tids if t not in stored.defs]}")
     defs = [(stored.defs[m["template"]], m["n"]) for m in members]
-    program, query = population(defs)
-    prov: dict = {"program": f"the population program over the templates {base}/program.json defines"
+    program, query, version = own_members(defs, rec["program"])
+    prov: dict = {"program": f"the population program (v{version}) over the templates {base}/program.json defines"
                              + (f" (opaque: {stubs})" if stubs else "")}
     if PO.program_sha512(program) != rec["program"]:
         raise Gap(f"the members' population program is {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]}")
@@ -1920,7 +1960,7 @@ def a5_audit(run: Run, base: str) -> Iterator[Case]:
     src = f"{base}/negatives.json"
     n = rec["population"]
     draw, proved = a["draw"], sorted(a["proved_units"])
-    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)])
+    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)], version)
     first = members[0]["template"]
     flipped_body = bodies[first][:-1] + bytes([bodies[first][-1] ^ 1])
     cases: dict[str, Callable[[dict], Case]] = {
@@ -1963,15 +2003,15 @@ def a6(run: Run) -> Iterator[Case]:
     rec = a["registration"]
     spec = [(int(k), int(x)) for k, x in (m.split(":") for m in summary["members_spec"].split(","))]
     defs = [(bind(OG.ScaledMmS8Coordinate, K=K, **OG.GEMM_SM120_S8), n) for K, n in spec]
-    program, query = population(defs)
-    prov: dict = {"program": "P.mixed_population_program(ScaledMmS8Coordinate at each K of members_spec), today's"}
+    program, query, version = own_members(defs, rec["program"])
+    prov: dict = {"program": f"P.mixed_population_program(ScaledMmS8Coordinate at each K of members_spec, version={version}), today's"}
     if PO.program_sha512(program) != rec["program"]:
         stored, stubs = decode_opaque(run.json(f"{base}/program.json"))
         tids = [P.template_id(d) for d, _ in defs]
         if PO.program_sha512(stored) != rec["program"] or any(t not in stored.defs for t in tids):
             raise Gap(f"neither today's A6 program nor {base}/program.json is the record's {rec['program'][:16]}")
         defs = [(stored.defs[t], n) for t, (_, n) in zip(tids, defs)]
-        program, query = population(defs)
+        program, query, version = own_members(defs, rec["program"])
         prov["program"] = f"the population program over the templates {base}/program.json defines" + \
             (f" (opaque: {stubs})" if stubs else "")
     tids = [P.template_id(d) for d, _ in defs]
@@ -2013,7 +2053,7 @@ def a6(run: Run) -> Iterator[Case]:
     n_all = rec["population"]
     draw, proved = a["draw"], sorted(a["proved_units"])
     drawn = set(draw["units"])
-    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)])
+    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)], version)
     ranges = P.ranges(program, query)
     first = summary["members"][0]["name"]
     cases: dict[str, Callable[[dict], Case]] = {
@@ -2094,8 +2134,8 @@ def a7(run: Run) -> Iterator[Case]:
     sp, sm = summary["standin"]["plan_statics"], summary["standin"]["map_statics"]
     steps = int(summary["steps"])
     defs = [(bind(RU.PlanMatch, **sp), steps), (bind(RU.MemoryMapStep, **sm), steps)]
-    program, query = population(defs)
-    prov: dict = {"program": "P.mixed_population_program(PlanMatch, MemoryMapStep at summary.json's statics), today's"}
+    program, query, version = own_members(defs, rec["program"])
+    prov: dict = {"program": f"P.mixed_population_program(PlanMatch, MemoryMapStep at summary.json's statics, version={version}), today's"}
     members = sorted(summary["members"], key=lambda m: m["base"])
     if PO.program_sha512(program) != rec["program"]:
         stored, stubs = decode_opaque(run.json(f"{base}/program.json"))
@@ -2103,7 +2143,7 @@ def a7(run: Run) -> Iterator[Case]:
         if PO.program_sha512(stored) != rec["program"] or any(t not in stored.defs for t in tids):
             raise Gap(f"neither today's A7 program nor {base}/program.json is the record's {rec['program'][:16]}")
         defs = [(stored.defs[t], n) for t, (_, n) in zip(tids, defs)]
-        program, query = population(defs)
+        program, query, version = own_members(defs, rec["program"])
         prov["program"] = f"the population program over the templates {base}/program.json defines" + \
             (f" (opaque: {stubs})" if stubs else "")
     tids = [P.template_id(d) for d, _ in defs]
@@ -2145,7 +2185,7 @@ def a7(run: Run) -> Iterator[Case]:
     src = f"{base}/negatives.json"
     n_all = rec["population"]
     draw, proved = a["draw"], sorted(a["proved_units"])
-    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)])
+    fewer, _ = population([(d, cnt - (1 if i == 0 else 0)) for i, (d, cnt) in enumerate(defs)], version)
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch (R2)": lambda v: c.but(
             "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=fewer,
