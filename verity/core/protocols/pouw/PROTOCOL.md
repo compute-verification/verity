@@ -28,9 +28,13 @@ rows into, for each tile, checked values, a transcript leaf and the useful outpu
 - `checked(ctx, ops)`, `digest(ctx, noise, checked)`, `useful(ctx, noise, ops, checked)`.
 
 Operands are committed as rows along k: A is m × k and the weight B is committed as its n rows, so the product is A·Bᵀ.
-Everything else is the protocol's (`audit`), the same for every scheme.
+Everything else is the protocol's, the same for every scheme.
 
 ## Lifecycle (`audit`)
+
+Steps 1 to 4 are `audit`'s: what the served path's prover commits and its verifier reads. Steps 5 to 7, run in the clear,
+are a reference tool and not a verifier (``benchmarks/pouw/clear/clear_audit.py``): the served path is the served audit
+window, and its verifier of record is the Lean (`lean/check`).
 
 1. **Weights.** Each weight's rows are committed in a `verity.ml.commitments.merkle` tree bound to the weight id (owner −2);
    `weights_root` binds every weight root.
@@ -54,7 +58,7 @@ Everything else is the protocol's (`audit`), the same for every scheme.
      `key.uniform(W, j)` mapped to a tile by cumulative work, so t tiles are drawn independently, each with probability
      W_ref(tile)/W, a tile's work being its cells' share of its matmul's W_ref (Lean `WorkWeightedSampling`).
    - `Lottery(target)` is Pearl's mining rule, not one of the audit's sampling designs: the tiles whose digest, read
-     little-endian, is at most target·|rows|·|cols|·k. It stays in `audit`, unwired: no served path selects with it.
+     little-endian, is at most target·|rows|·|cols|·k. It stays in `clear_audit`, unwired: no served path selects with it.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
    a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
@@ -96,7 +100,7 @@ root    = MerkleTree over (value_salt, value_draw) at positions 0, 1, binding ta
 
 An unopened coin is statistically hidden (`hm96/PROTOCOL.md`); binding rests on SHA-512's collision resistance. A coin is
 opened live and once: the salt coin after the verifier recorded `weights_root`, the draw coin after it recorded what the
-draw keys (the transcript's root; Pearl-C's work sampling design adds its records' root, `pearl_c_work.draw_after`). An
+draw keys (the transcript's root; Pearl-C's work sampling design adds its records' root, `clear_work.draw_after`). An
 opening is (epoch, label, after, coin, hm96 salt, path); the verifier refuses one whose epoch or label is not the one it
 asked for, that is malformed, that does not open against the epoch's root, or whose `after` is not what it recorded
 (`coin_reason`). A second request for an opened coin is refused, so a retry never redraws. The coins are the designated
@@ -691,7 +695,7 @@ useful    U/(α_A·α_B), glue
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
     transfer. The work sampling design checks it on every credited A row of a drawn tile, over its credited columns,
-    after the tile's cap (`pearl_c_work.row_cap`), and `volunteer` gives up a row over it first.
+    after the tile's cap (`clear_work.row_cap`), and `volunteer` gives up a row over it first.
   - `pearl-c-sm120-v1-h3` is registered (the served default, `pouw_pearl_c_device`); `PearlC(hashing="h3")` on the H100
     record names `pearl-c-h100-v1-h3`. The `test-16-v1-h3` and `decode-32-v1-h3` vectors pin a call end to end, with A's
     row root and row 0's leaf, digest, seed and E_A line, and a hash of every row digest and seed. h0's verifier refuses
@@ -710,7 +714,9 @@ useful    U/(α_A·α_B), glue
     `forming_elements` is a stub that returns 0.
   - The census's aligned-spike tile at R = 300 passes the domain with 74.6% of its atom-words flagged, about 15 times the
     cap.
-- **The work sampling design** (`schemes/pearl_c_work.py`) is what the verifier credits, draws and checks.
+- **The work sampling design** is what the verifier credits, draws and checks. Its records (`Split`, `UnitRecord`,
+  `records_root`) are `schemes/pearl_c_work.py`'s, which vLLM's prover writes; its law and clear audit are a reference
+  tool, ``benchmarks/pouw/clear/clear_work.py``.
   - A weight's `Split` holds at most ⌊k/100⌋ side channels. The unit reads the kept channels zero-padded to `k_unit`,
     and credit is on the kept width, so padding earns nothing. The audit recomputes S by the pinned rule through
     `split_check`, which the model integration supplies.
@@ -769,7 +775,7 @@ useful    U/(α_A·α_B), glue
 
 The same scheme as `pearl-c-h100-v1` on another device record. The record (`Device`) is a scheme parameter: the FP8 atom
 (E4M3, k = 32), the BF16 peel step (k = 16), G (atoms per promotion), the W1 prices (`Prices`) and the domain's k bound.
-`pearl_c`, `pearl_c_debit`, `pearl_c_u` and `pearl_c_work` read them from it, and the H100's record (`H100`) is every
+`pearl_c`, `pearl_c_debit`, `pearl_c_u` and the work law (`clear_work`) read them from it, and the H100's record (`H100`) is every
 function's default, so every `pearl-c-h100-*` output and vector above is unchanged.
 
 - **The atom is the card's captured step**, `BLACKWELL_SM120_E4M3_M16N8K32`: `mma.sync` `kind::f8f6f4` m16n8k32 E4M3 as one
@@ -1001,7 +1007,7 @@ useful    U/(α_A·α_B), glue
           0.13–0.30.
 
   R1. **A row whose own F1′ per word passes ρ·(its cell credit) is uncredited.**
-      - The prover declares it (`pearl_c_work.declare` with the transcript).
+      - The prover declares it (`clear_work.declare` with the transcript).
       - The verifier checks the declaration on every drawn tile (`check_opened`): a credited row over the bound, or an
         excluded row under it that passes the per-row rules, fails the tile.
       - The row is still formed, checked and hashed.
@@ -1042,7 +1048,7 @@ useful    U/(α_A·α_B), glue
   - the weight side is `job_cost`.
 - **Registered weights** are the shared rule ("Registered weights (`registration`)"), through
   `PearlC4.check_registration`.
-- **The work sampling design** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
+- **The work sampling design** is `clear_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
 - **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that sampling design's rules,
   which every measured row needs:
   - the device's dump: A's and B's rows, its roots and its tile leaves, and the scale bytes its forming wrote;

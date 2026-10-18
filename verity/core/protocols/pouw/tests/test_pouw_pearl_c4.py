@@ -1242,7 +1242,7 @@ def test_replay_rejects(tmp_path):
 
 
 def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_path):
-    """The replay's prove declares R1's rows as the honest prover does (`pearl_c_work.declare` on the transcript): A row 5,
+    """The replay's prove declares R1's rows as the honest prover does (`clear_work.declare` on the transcript): A row 5,
     the assessor's spike row, passes the per-row rules but its own F1′ passes R1's bound, so prove excludes it and the
     verifier accepts.  Credited, as prove declared before R1 (r20261001-134930-22d2's m64-n512-k2048 unit, B row 386), it
     rejects.  prove maps R1 row by row over its workers, and two workers give the one worker's transcript."""

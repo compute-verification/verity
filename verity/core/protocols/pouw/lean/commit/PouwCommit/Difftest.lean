@@ -21,7 +21,8 @@ is not it, naming the Lean's. The kinds:
 * `salt_of`, `unverified_salt`: the epoch's salt from a coin, and `Epoch.unverified`'s from a seed;
 * `epoch_salt`, `draw_coin`: `Epoch.start`'s salt and `draw_coin`'s coin, or their refusals in their words (`{"reason"}`);
 * `key`: the audit, draw and replay keys and `draw_after`;
-* `sampled`, `pearl_draw`: `Sampled.select`'s and `pearl_c_work.draw`'s work-weighted draws over given tickets.
+* `sampled`, `pearl_draw`: the clear audit's work-weighted draws over given tickets, `Sampled.select`'s and
+  `clear_work.draw`'s (`benchmarks/pouw/clear`).
 -/
 
 namespace PouwCommit.Difftest
