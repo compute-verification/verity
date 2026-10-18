@@ -1274,7 +1274,8 @@ class RemoteSuites:
     """`touched_suites` on a node: a `research run --on auto` (`TOUCHED_ON`, the `agent-test` queue on vy-nebius-2, outside the
     check slots) of the worktree's tree (`--source`, `--cwd source`), sized ``cpus``, ``mem_gb`` and ``max_min``, whose job is
     `quick_tier.py` (sent with the run: the head checked, the store required, the run's own environment kept from the tests)
-    running `suites.py --changed BASE`, slow tests included, with `--local` where that tree's suites.py has it; its report is
+    running `suites.py --changed BASE --jobs CPUS`, slow tests included, with `--local` where that tree's suites.py has it (on 18
+    Oct the share's affinity was 48 CPUs around a 16-CPU job, and suites.py planned 43 processes); its report is
     `TOUCHED_REPORT`, its logs `TOUCHED_LOGS`.  It returns once the run is launched, with the run id `research run` printed;
     ``env`` is added to the launch's environment."""
     on: str = TOUCHED_ON
@@ -1288,7 +1289,7 @@ class RemoteSuites:
         job = Path(quick_tier.__file__)
         runner = wt / SUITES
         local = ["--local"] if runner.is_file() and '"--local"' in runner.read_text() else []
-        args = ["--head", head, "--base", base, "--", *(x for x in QUICK_TIER if x != "--quick"), *local]
+        args = ["--head", head, "--base", base, "--", *(x for x in QUICK_TIER if x != "--quick"), "--jobs", str(self.cpus), *local]
         return [sys.executable, "-m", "research", "run", "--on", self.on, "--source", str(wt), "--cwd", "source",
                 "--cpus", str(self.cpus), "--mem-gb", f"{self.mem_gb:g}", "--max-min", str(self.max_min),
                 "--send", str(job), "--require-result", "--declared-output", "out/*",
