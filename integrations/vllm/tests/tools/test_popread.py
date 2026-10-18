@@ -103,7 +103,13 @@ def test_the_chronology_marks_steps_from_one_past_the_lag_as_eos_keyed(tmp_path)
     r = PR.analyze_descriptor(desc, workload_program={"lag": {"value": 1}, "chronology": chrono})
     keyed = {f["family"]: f["eos_keyed"]["calls"] for f in r["families"]}
     assert keyed == {"I32Add_v1": 0, "GatherBf16x4_v1": 0, "Bf16Add_v1": 1}
-    assert r["eos"] == {"lag": 1, "keyed_from_step": 2, "applied": True, "why_not": None}
+    assert r["eos"] == {"lag": 1, "keyed_from_step": 2, "counted": True, "applied": True, "why_not": None}
+
+    ignored = PR.analyze_descriptor(desc, workload_program={"lag": {"value": 1}, "chronology": chrono,
+                                                            "stop_rule": {"ignore_eos": True}})
+    assert (ignored["eos"]["applied"], ignored["eos"]["why_not"]) == (False, PR.IGNORE_EOS)
+    assert ignored["summary"]["eos_keyed"]["calls"] == 1
+    assert "were EOS honored" in PR.render([dict(ignored, name="toy")])
 
     short = {"engine_steps": [{"e": 0, "members": [{"request_id": "r0", "s": 0, "nodes": [0, 5]}]}]}
     r = PR.analyze_descriptor(desc, workload_program={"chronology": short})
@@ -138,9 +144,14 @@ def test_a_plan_that_reads_the_prompts_is_value_dependent_and_one_that_reads_len
 
 
 def test_served_reads_count_each_definition_per_row_and_name_the_embedding_gather():
+    """r0 prefills 3 rows at step 0 and decodes 1 at step 1, beside r1's 2-row prefill: r0's decode row is what its EOS would key,
+    and all 3 rows of step 1 are in the batch that stop would reshape."""
     gemm = {"definition": "Gemm_v2{K=16,N=4,DOT=HopperBF16WgmmaDot16_v1}", "base": "Gemm_v2",
             "statics": {"K": 16, "N": 4, "DOT": "HopperBF16WgmmaDot16_v1"}}
-    build = {"program_digest": "toy", "workload": {"schedule": [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 2}]},
+    schedule = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 2},
+                {"request_id": "r1", "arrive": 1, "prompt_tokens": 2, "max_tokens": 1}]
+    steps = [(0, [("r0", 3)]), (1, [("r0", 1), ("r1", 2)])]
+    build = {"program_digest": "toy", "workload": {"schedule": schedule},
              "program": {"calls": [{"definition": "Embedding_v1{V=4,H=16}", "base": "Embedding_v1", "statics": {"V": 4, "H": 16},
                                     "reads": [{"value": "c00.input/ids", "width": 1}, {"weight": "emb", "shape": [4, 16]}],
                                     "writes": ["c00.embedding/buf0"]}],
@@ -148,10 +159,15 @@ def test_served_reads_count_each_definition_per_row_and_name_the_embedding_gathe
                          "logits": {"name": "logits_processor", "x": {"value": "c00.embedding/buf0", "width": 16},
                                     "w": {"weight": "lm", "shape": [4, 16]}},
                          "sampled": {"name": "s", "definition": "TokenSelect_v1{V=4}", "base": "TokenSelect_v1", "statics": {"V": 4}}},
-             "steps_plan": [{"step": s, "tokens": t, "requests": [{"request_id": "r0", "tokens": t, "attention": []}], "gemms": {},
-                             "logits": gemm} for s, t in ((0, 3), (1, 1))]}
-    fams = _by_family(PR.analyze_served(build))
+             "steps_plan": [{"step": s, "tokens": sum(t for _r, t in rs), "gemms": {}, "logits": gemm,
+                             "requests": [{"request_id": r, "tokens": t, "attention": []} for r, t in rs]} for s, rs in steps]}
+    r = PR.analyze_served(build)
+    fams = _by_family(r)
     emb = fams["Embedding_v1"]
-    assert (emb["calls"], emb["eos_keyed"]["calls"], emb["verdict"]) == (4, 1, "PUBLIC")
-    assert emb["selects"] == [{"select": "GatherBf16x4", "V": 4, "count": 64, "index": ["input:ids"]}]
-    assert (fams["Gemm_v2"]["calls"], fams["TokenSelect_v1"]["calls"]) == (2, 2)
+    assert (emb["calls"], emb["eos_keyed"]["calls"], emb["eos_step_keyed"]["calls"], emb["verdict"]) == (6, 1, 3, "PUBLIC")
+    assert emb["selects"] == [{"select": "GatherBf16x4", "V": 4, "count": 96, "index": ["input:ids"]}]
+    assert (fams["Gemm_v2"]["calls"], fams["TokenSelect_v1"]["calls"]) == (3, 3)
+    assert r["eos"]["applied"] and "Activity keyed on EOS" in PR.render([dict(r, name="toy")])
+
+    ignored = PR.analyze_served(build, ignore_eos=True)
+    assert not ignored["eos"]["applied"] and ignored["summary"]["eos_step_keyed"]["calls"] == r["summary"]["eos_step_keyed"]["calls"]

@@ -13,10 +13,11 @@ two ways, and this tool names both, per Call family:
   family or input that produces it).
 
 `--workload-program` adds the activity the stop rule keys on committed tokens: a request's steps from 1 + LAG on run only if
-no earlier token was an EOS, so their units are programmed (their reads stay public) but their activity is value-keyed.
+no earlier token was an EOS, so their units are programmed (their reads stay public) but their activity is value-keyed.  Under
+a stop rule with ignore_eos no request stops early, and the counts say what an EOS stop would key.
 
     python tools/popread.py descriptor DESCRIPTOR.json.gz [--units] [--workload-program workload_program.json] --out OUT.json
-    python tools/popread.py served BUILD.json [--units] --out OUT.json           (a served-compiled Build's P_served)
+    python tools/popread.py served BUILD.json [--units] [--ignore-eos] [--lag N] --out OUT.json   (a served-compiled P_served)
     python tools/popread.py plan WORKLOAD.json [...] --planner prefix_plan.py --out OUT.json
     python tools/popread.py table OUT.json [...] [--md OUT.md]
 """
@@ -189,7 +190,7 @@ def classify(families: dict[str, dict[str, Any]], value_bound: dict[str, str]) -
 
 def _family(name: str) -> dict[str, Any]:
     return {"family": name, "calls": 0, "gates": 0, "units": 0, "eos_keyed": {"calls": 0, "gates": 0, "units": 0},
-            "reads": {"inputs": set(), "calls": set()}, "selects": Counter()}
+            "eos_step_keyed": {"calls": 0, "gates": 0, "units": 0}, "reads": {"inputs": set(), "calls": set()}, "selects": Counter()}
 
 
 def _finish(out: dict[str, Any], families: dict[str, dict[str, Any]], value_bound: dict[str, str], have_units: bool) -> dict:
@@ -202,7 +203,7 @@ def _finish(out: dict[str, Any], families: dict[str, dict[str, Any]], value_boun
         for (kind, V, idx), c in f["selects"].items():
             sel[(kind, V)]["per_family"] += c
             sel[(kind, V)]["index"].update(idx)
-        rows.append({**{k: f[k] for k in ("family", "calls", "gates", "verdict", "value", "eos_keyed")},
+        rows.append({**{k: f[k] for k in ("family", "calls", "gates", "verdict", "value", "eos_keyed", "eos_step_keyed")},
                      "units": f["units"] if have_units else None,
                      "share_gates": f["gates"] / T["gates"] if T["gates"] else 0.0,
                      "share_units": (f["units"] / T["units"] if T["units"] else 0.0) if have_units else None,
@@ -212,7 +213,7 @@ def _finish(out: dict[str, Any], families: dict[str, dict[str, Any]], value_boun
 
     def total(pred: Callable[[dict], bool], key: str = "") -> dict[str, Any]:
         sub = [r for r in rows if pred(r)]
-        get = (lambda r, k: r["eos_keyed"][k]) if key else (lambda r, k: r[k])
+        get = (lambda r, k: r[key][k]) if key else (lambda r, k: r[k])
         o = {k: sum(get(r, k) or 0 for r in sub) for k in ("calls", "gates", "units")}
         o["share_gates"] = o["gates"] / T["gates"] if T["gates"] else 0.0
         o["share_units"] = (o["units"] / T["units"] if T["units"] else 0.0) if have_units else None
@@ -221,7 +222,8 @@ def _finish(out: dict[str, Any], families: dict[str, dict[str, Any]], value_boun
     out.update(totals=T, families=rows, summary={
         "value_dependent": total(lambda r: r["verdict"] == "VALUE-DEPENDENT"),
         "in_unit_select": total(lambda r: any(s["V"] > 2 for s in r["selects"])),
-        "eos_keyed": total(lambda r: True, "eos"),
+        "eos_keyed": total(lambda r: True, "eos_keyed"),
+        "eos_step_keyed": total(lambda r: True, "eos_step_keyed"),
     })
     return out
 
@@ -275,6 +277,7 @@ def analyze_descriptor(desc: dict[str, Any], *, units: dict[int, int] | None = N
         if step is not None and step[k] >= 1 + lag:
             for key, v in (("calls", 1), ("gates", g), ("units", u)):
                 f["eos_keyed"][key] += v
+                f["eos_step_keyed"][key] += v
         srcs = [{label[i] for _s, i in ref_parts(a["refs"], nodes)} for a in n["args"]]
         for s in srcs:
             for lab in s:
@@ -286,10 +289,20 @@ def analyze_descriptor(desc: dict[str, Any], *, units: dict[int, int] | None = N
                 idx |= srcs[s[1]] if s[0] == "p" else {f"in-call:{s[1]}"}
             kind, V = select_kind(prim)
             f["selects"][(kind, V, frozenset(idx))] += c * members(n)
+    ignore = bool(((workload_program or {}).get("stop_rule") or {}).get("ignore_eos"))
     out = {"schema": SCHEMA, "adapter": "descriptor/v1", "root": desc["root"][:160],
            "inputs": dict(Counter(input_group(x) for x in names)), "value_bound": value_bound,
-           "eos": {"lag": lag, "keyed_from_step": 1 + lag, "applied": step is not None, "why_not": None if step else why}}
+           "eos": _eos(lag, step is not None, ignore, why)}
     return _finish(out, fams, value_bound, units is not None)
+
+
+IGNORE_EOS = "the row serves with ignore_eos, so every request runs to max_tokens"
+
+
+def _eos(lag: int, counted: bool, ignore: bool, why: str | None) -> dict[str, Any]:
+    """`counted`: the keyed counts are filled (what an EOS stop would key); `applied`: the row's stop rule honors EOS, so they are."""
+    return {"lag": lag, "keyed_from_step": 1 + lag, "counted": counted, "applied": counted and not ignore,
+            "why_not": why if not counted else (IGNORE_EOS if ignore else None)}
 
 
 def _value_label(r: dict[str, Any], producer: dict[str, str]) -> str:
@@ -299,10 +312,13 @@ def _value_label(r: dict[str, Any], producer: dict[str, str]) -> str:
     return f"input:{v.split('/', 1)[1]}" if v.startswith("c00.input/") else f"call:{producer.get(v, '?')}"
 
 
-def analyze_served(build: dict[str, Any], *, units: bool = False) -> dict[str, Any]:
+def analyze_served(build: dict[str, Any], *, units: bool = False, ignore_eos: bool = False, lag: int = 0) -> dict[str, Any]:
     """A served-compiled Build's P_served: per step, each Call's Definition applied written width / its return leaves times per
-    token row, attention once per query row and layer, the logits and the sampled id once per request.  A request's rows from
-    its own step 1 on are the activity EOS keys (the plan runs every request to max_tokens)."""
+    token row, attention once per query row and layer, the logits and the sampled id once per request.  The plan runs every
+    request to max_tokens, so a request's rows from its own step 1 + LAG on are the activity an EOS stop would key
+    (`eos_keyed`), and every row of an engine step holding one of them is in a batch whose shape that stop would change
+    (`eos_step_keyed`: the step's tokens, padding, capture mode, Gemm M and attention splits).  `ignore_eos`: the row serves
+    with it (the Build doesn't record the sampling), so no stop happens and both counts are what one would key."""
     from verity.ml.circuits.codec import encode_program
     from verity.ml.circuits.cut import evaluate_definition
     from verity.ml.circuits.program import Program
@@ -330,15 +346,17 @@ def analyze_served(build: dict[str, Any], *, units: bool = False) -> dict[str, A
 
     fams: dict[str, dict[str, Any]] = {}
 
-    def add(fam: str, spec: str, statics: dict[str, Any], apps: int, reads: list[dict[str, Any]], eos_apps: int) -> None:
+    def add(fam: str, spec: str, statics: dict[str, Any], apps: int, reads: list[dict[str, Any]], eos_apps: int,
+            step_keyed: bool) -> None:
         if apps <= 0:
             return
         i, f = info(spec, statics), fams.setdefault(fam, _family(fam))
         f["calls"] += apps
         f["gates"] += apps * i["gates"]
         f["units"] += apps * i["units"]
-        for key, v in (("calls", eos_apps), ("gates", eos_apps * i["gates"]), ("units", eos_apps * i["units"])):
-            f["eos_keyed"][key] += v
+        for field, n in (("eos_keyed", eos_apps), ("eos_step_keyed", apps if step_keyed else 0)):
+            for key, v in (("calls", n), ("gates", n * i["gates"]), ("units", n * i["units"])):
+                f[field][key] += v
         labs = [_value_label(r, producer) for r in reads]
         for lab in labs:
             kind, _, what = lab.partition(":")
@@ -350,8 +368,9 @@ def analyze_served(build: dict[str, Any], *, units: bool = False) -> dict[str, A
 
     for plan in build["steps_plan"]:
         s, tokens = int(plan["step"]), int(plan["tokens"])
-        keyed = {r["request_id"]: s - arrive.get(r["request_id"], 0) >= 1 for r in plan["requests"]}
+        keyed = {r["request_id"]: s - arrive.get(r["request_id"], 0) >= 1 + lag for r in plan["requests"]}
         eos_rows = sum(int(r["tokens"]) for r in plan["requests"] if keyed[r["request_id"]])
+        any_keyed = any(keyed.values())
         for c in P["calls"]:
             if "definition" in c:
                 spec, statics = c["definition"], c["statics"]
@@ -359,22 +378,22 @@ def analyze_served(build: dict[str, Any], *, units: bool = False) -> dict[str, A
                 g = plan["gemms"][",".join(str(x) for x in c["gemm"])]
                 spec, statics = g["definition"], g["statics"]
             per_row = max(width[c["writes"][0]] // info(spec, statics)["ret"], 1)
-            add(base(spec), spec, statics, tokens * per_row, c["reads"], eos_rows * per_row)
+            add(base(spec), spec, statics, tokens * per_row, c["reads"], eos_rows * per_row, any_keyed)
         for r in plan["requests"]:
             k = keyed[r["request_id"]]
             for a in r["attention"]:
                 for att in P.get("attention") or ():
                     per = max(width[att["q"]["value"]] // info(a["definition"], a["statics"])["ret"], 1)
-                    add(base(a["definition"]), a["definition"], a["statics"], per, [att["q"], att["k"], att["v"]], per * k)
+                    add(base(a["definition"]), a["definition"], a["statics"], per, [att["q"], att["k"], att["v"]], per * k, any_keyed)
             lg, sm = plan["logits"], P["sampled"]
-            add(base(lg["definition"]), lg["definition"], lg["statics"], 1, [P["logits"]["x"], P["logits"]["w"]], int(k))
-            add(sm["base"], sm["definition"], sm["statics"], 1, [{"value": "logits"}], int(k))
+            add(base(lg["definition"]), lg["definition"], lg["statics"], 1, [P["logits"]["x"], P["logits"]["w"]], int(k), any_keyed)
+            add(sm["base"], sm["definition"], sm["statics"], 1, [{"value": "logits"}], int(k), any_keyed)
     out = {"schema": SCHEMA, "adapter": "P_served", "program_digest": build.get("program_digest"),
            "schedule": build.get("workload"), "value_bound": VALUE_BOUND,
            "inputs": {"ids": 1, "positions": 1, "weight": len({r["weight"] for c in P["calls"] for r in c["reads"] if "weight" in r})},
            "plan_inputs": "steps_plan reads the declared schedule only (arrive, prompt_tokens, max_tokens) and the dispatch "
                           "(capture sizes, max_num_seqs, split_cap, sms): no token value",
-           "eos": {"lag": 0, "keyed_from_step": 1, "applied": True, "why_not": None}}
+           "eos": _eos(lag, True, ignore_eos, None)}
     return _finish(out, fams, VALUE_BOUND, units)
 
 
@@ -429,12 +448,21 @@ def render(reports: Iterable[dict[str, Any]]) -> str:
             reads = f["verdict"] + (f" ({f['value']})" if f["value"] else "")
             out.append(f"| {f['family']} | {f['calls']:,} | {'-' if f['units'] is None else format(f['units'], ',')} | "
                        f"{_fmt(f['share_units'])} | {f['gates']:,} | {_fmt(f['share_gates'])} | {reads} | {sel} |")
-        vd, sel, eos = s["value_dependent"], s["in_unit_select"], s["eos_keyed"]
+        vd, sel = s["value_dependent"], s["in_unit_select"]
         out.append(f"\nVALUE-DEPENDENT: {_fmt(vd['share_units'])} of units, {_fmt(vd['share_gates'])} of gates. "
                    f"PUBLIC with an in-unit gather (V > 2): {_fmt(sel['share_units'])} of units, {_fmt(sel['share_gates'])} of gates. "
-                   + (f"Activity keyed on EOS (steps >= {r['eos']['keyed_from_step']}): {_fmt(eos['share_units'])} of units, "
-                      f"{_fmt(eos['share_gates'])} of gates.\n" if r["eos"]["applied"] else f"EOS: {r['eos']['why_not']}.\n"))
+                   + _render_eos(r["eos"], s) + "\n")
     return "\n".join(out)
+
+
+def _render_eos(e: dict[str, Any], s: dict[str, Any]) -> str:
+    if not e.get("counted", e.get("applied")):
+        return f"EOS: {e['why_not']}."
+    own, step = s["eos_keyed"], s.get("eos_step_keyed") or s["eos_keyed"]
+    keyed = (f"{_fmt(own['share_units'])} of units ({_fmt(own['share_gates'])} of gates) are a request's steps >= "
+             f"{e['keyed_from_step']}, and {_fmt(step['share_units'])} of units ({_fmt(step['share_gates'])} of gates) are in "
+             f"an engine step holding one")
+    return f"Activity keyed on EOS: {keyed}." if e["applied"] else f"EOS: {e['why_not']}; were EOS honored, {keyed}."
 
 
 def _bound(items: list[str]) -> dict[str, str]:
@@ -458,6 +486,8 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("served")
     s.add_argument("build")
     s.add_argument("--units", action="store_true")
+    s.add_argument("--ignore-eos", action="store_true", help="the row serves with ignore_eos (served_match does)")
+    s.add_argument("--lag", type=int, default=0, help="the engine's LAG: steps a request runs past its EOS")
     s.add_argument("--name", default=None)
     s.add_argument("--out", required=True)
     p = sub.add_parser("plan")
@@ -480,7 +510,7 @@ def main(argv: list[str] | None = None) -> int:
             r["population"] = population
         Path(a.out).write_text(json.dumps(r, indent=1, default=sorted))
     elif a.cmd == "served":
-        r = analyze_served(json.loads(Path(a.build).read_text()), units=a.units)
+        r = analyze_served(json.loads(Path(a.build).read_text()), units=a.units, ignore_eos=a.ignore_eos, lag=a.lag)
         r["name"] = a.name or a.build
         Path(a.out).write_text(json.dumps(r, indent=1, default=sorted))
     elif a.cmd == "plan":
