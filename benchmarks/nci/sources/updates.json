@@ -457,6 +457,28 @@
     ],
     "grade": "measured-small",
     "bears_on": "Rank-d/4 weights or updates cost 10-30% in perplexity at 1B; the change from init in pretraining is not captured by a low-rank factorization."
+   },
+   {
+    "id": "glentis-2025-param-efficient-survey/3",
+    "claim": "Across 60M-1B Llama models (1.4B-13.1B tokens), all methods scale with similar slopes in compute; at 1B, GaLore and Fira reach perplexity 15.57 and 15.10 against 13.97 for well-tuned full-rank (Stable-SPAM).",
+    "quote": "the final perplexity of the model primarily depends on the number of FLOPs, and is relatively independent of the specific model structures (full-rank or low-rank) that we are using.",
+    "location": "Sec. 3, Table 3 and Fig. 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.4,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: GaLore 1B / 13.1B tokens; full-rank Stable-SPAM log-perplexity interpolated in log C = 6ND between 350M and 1B; GaLore has full-rank FLOPs per token"
+     },
+     {
+      "param": "other",
+      "value": 0.52,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: Fira, same method"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Low-rank optimizer updates in pretraining cost about half of compute at 1B against a tuned full-rank baseline (more than 1 against untuned Adam)."
    }
   ]
  },

@@ -439,6 +439,34 @@
     "grade": "measured-small",
     "bears_on": "Per-FLOP m_A of FP4 is below 1; per-gate it is far above.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "castro-2025-quartet/6",
+    "claim": "Fitted on 30M models at 25x-400x tokens per parameter, Quartet's fully FP4 training (forward and backward) has parameter efficiency 0.65 and data efficiency 0.95; prior FP4 methods are far lower (LUQ-INT4 0.49/0.15, LUQ-FP4 0.01/0.07).",
+    "quote": "Overall, LUQ–INT4 is the strongest prior work; however, Quartet reaches significantly higher parameter and data efficiency, suggesting that it requires, roughly, 15% fewer parameters and 5x less data to reach the same loss.",
+    "location": "Sec. 5, Table 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.65,
+      "unit": "eff_N",
+      "condition": "Quartet, MXFP4 forward"
+     },
+     {
+      "param": "other",
+      "value": 0.95,
+      "unit": "eff_D",
+      "condition": "Quartet, MXFP4 backward"
+     },
+     {
+      "param": "other",
+      "value": 0.62,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: m = eff_N * eff_D for L = (A/(N eff_N)^a + B/(D eff_D)^b)^g + E, independent of compute"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The only fitted m that includes a 4-bit backward pass (activation gradients): 0.62 for W4A4 with FP4 gradients."
    }
   ]
  },
@@ -1303,6 +1331,28 @@
     "quantities": [],
     "grade": "measured-small",
     "bears_on": "Benchmark parity at 1.58 bits (kaushal-2024-spectra/1) hides a loss gap on the training distribution, which is what a reference training circuit must reproduce."
+   },
+   {
+    "id": "kaushal-2024-spectra/4",
+    "claim": "At 300B tokens, loss vs parameters fits L = 185/N^0.26 + 1.76 for ternary (TriLM) and 159/N^0.26 + 1.67 for FloatLM (N raw); TriLM 3.9B matches FloatLM 1.1B in validation loss.",
+    "quote": "Notably, TriLM 3.9B validation error matches with FloatLMs 1.1B, which is nearly 1.7 times larger in terms of effective bit size.",
+    "location": "Appendix (scaling of TriLM and FloatLM), Fig. 9",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.32,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: FloatLM N' = 1.25B matches TriLM 3.9B under the two fitted laws at fixed D = 300B tokens, so m = N'/N; not compute-optimal (77 tokens/parameter)"
+     },
+     {
+      "param": "other",
+      "value": 0.09,
+      "unit": "loss (difference of fitted floors)",
+      "condition": "1.76 - 1.67: m -> 0 as N grows at fixed D"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Ternary weights cost about two thirds of compute at 4B scale; the floor gap makes the penalty grow with N, opposite to the trend BitNet reports."
    }
   ]
  },
@@ -1456,6 +1506,102 @@
     "grade": "measured-small",
     "bears_on": "Low precision lowers bits per value at near-constant m_A.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "kumar-2024-precision-scaling/6",
+    "claim": "The precision law multiplies the parameter count by one saturating factor per tensor, fitted with offsets: N_eff = N * prod_x (1 - exp(n_x - P_x/gamma_x)) with gamma_w = 2.6745, n_w = 0.3037, gamma_a = 2.2102, n_a = 1.4072, gamma_kv = 0.9578, n_kv = 2.4185, inside L = A N_eff^-alpha + B D^-beta + E (A = 4.299e3, alpha = beta = 0.4965, B = 1.806e4, E = 2.7648); integer quantization, 3-12 bits, 30M-220M parameters, 1.5B-26B tokens.",
+    "quote": "Neff (P ) = N (1 − e−Pw /γw )(1 − e−Pa /γa )(1 − e−Pkv /γkv )",
+    "location": "Sec. 4, Eq. 4; Table 2 (appendix) for the fitted constants and offsets n",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.6745,
+      "unit": "gamma_w (bits)",
+      "condition": "Table 2"
+     },
+     {
+      "param": "other",
+      "value": 0.3037,
+      "unit": "n_w (offset)",
+      "condition": "Table 2"
+     },
+     {
+      "param": "other",
+      "value": 2.2102,
+      "unit": "gamma_a (bits)",
+      "condition": "Table 2"
+     },
+     {
+      "param": "other",
+      "value": 1.4072,
+      "unit": "n_a (offset)",
+      "condition": "Table 2"
+     },
+     {
+      "param": "other",
+      "value": 0.9578,
+      "unit": "gamma_kv (bits)",
+      "condition": "Table 2"
+     },
+     {
+      "param": "other",
+      "value": 2.4185,
+      "unit": "n_kv (offset)",
+      "condition": "Table 2"
+     },
+     {
+      "param": "other",
+      "value": 0.23,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: W4A4 (KV at 16), normalized to the law's own 16-bit value; m = N_eff/N for any law of this form"
+     },
+     {
+      "param": "other",
+      "value": 0.84,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: W8A8 (KV at 16)"
+     },
+     {
+      "param": "other",
+      "value": 0.7,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: W4A16"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The pessimistic bound on the m grid: naive integer quantization with per-tensor activation scales makes 4-bit activations cost two thirds of compute; later quantizers (QuEST, Quartet) recover most of it."
+   },
+   {
+    "id": "kumar-2024-precision-scaling/7",
+    "claim": "Activations or KV cache at 3 bits or fewer diverge while 3-bit weights train, possibly because activations are quantized per tensor and weights per channel.",
+    "quote": "We find that training runs with Pa ≤ 3 or Pkv ≤ 3 are not numerically stable, and often diverge, while Pw = 3 is still well behaved. In particular, we find activations are more sensitive, though this could be because we quantize activations per-tensor and weights-per channel, rather than activations being inherently more sensitive.",
+    "location": "Appendix, 'Are Weights, Activations, and KV Cache Equally Sensitive?'",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 3,
+      "unit": "bits",
+      "condition": "highest activation precision at which runs diverged (per-tensor integer, forward only)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The law's activation factor goes negative below about 2 bits (offset n_a = 1.41); it gives no m for b_a <= 3."
+   },
+   {
+    "id": "kumar-2024-precision-scaling/8",
+    "claim": "Only the forward pass is quantized: backward activation gradients and weight gradients stay in high precision.",
+    "quote": "We quantize only the forward pass in this work, to ensure fair comparison between quantization-aware-training (weights only) and low-precision training (weights, activations, KV cache).",
+    "location": "Appendix D (quantization implementation)",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 16,
+      "unit": "bits",
+      "condition": "backward pass, all runs"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Kumar's m prices forward reads only; boundary traffic in the backward pass is uncompressed."
    }
   ]
  },
@@ -2755,6 +2901,74 @@
     ],
     "grade": "measured-small",
     "bears_on": "Ternary matmuls do not saturate at high tokens per parameter at 3B, against the trend in chen-2025-qat-scaling-law/1."
+   },
+   {
+    "id": "vaidhya-2025-spectra-1-1/3",
+    "claim": "Ternary-weight (TriLM) pretraining fits L = 2.19 + 4.73/N^0.32 + 5.18/D^0.81 (N in millions, D in billions) over 99M-1.1B parameters and 20B-150B tokens; the token term decays much faster than the parameter term.",
+    "quote": "From Equation 2, we observe that increasing the number of tokens lowers the validation loss more effectively than increasing the number of parameters. This suggests that TriLM remains effective at high training token-to-parameter ratios.",
+    "location": "Sec. 2.2, Eq. 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.19,
+      "unit": "E (loss units)",
+      "condition": "TriLM law"
+     },
+     {
+      "param": "other",
+      "value": 0.32,
+      "unit": "alpha (exponent)",
+      "condition": "TriLM law, N in millions"
+     },
+     {
+      "param": "other",
+      "value": 0.81,
+      "unit": "beta (exponent)",
+      "condition": "TriLM law, D in billions"
+     },
+     {
+      "param": "other",
+      "value": 1100000000.0,
+      "unit": "parameters",
+      "condition": "largest TriLM in the fit"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The only fitted law for ternary-weight pretraining; its higher floor and flatter N exponent make ternary m fall fast with compute."
+   },
+   {
+    "id": "vaidhya-2025-spectra-1-1/4",
+    "claim": "The 16-bit reference (FloatLM) fits L = 2.17 + 7.86/N^0.56 + 3.42/D^0.53; the two laws differ in floor and exponents, not by a constant parameter efficiency.",
+    "quote": "First, the constant term and the coefficients are markedly different for ternary and float LMs, indicating that these terms might be dependent on the level of quantization.",
+    "location": "Appendix C.1, Eq. 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.17,
+      "unit": "E (loss units)",
+      "condition": "FloatLM law"
+     },
+     {
+      "param": "other",
+      "value": 0.56,
+      "unit": "alpha (exponent)",
+      "condition": "FloatLM law"
+     },
+     {
+      "param": "other",
+      "value": 0.23,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: ternary weights vs FloatLM law at C = 6 x 1.1B x 150B = 1e21 FLOP, both N/D re-optimized (edge of the fit)"
+     },
+     {
+      "param": "other",
+      "value": 0.02,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: same at C = 1e25 FLOP; extrapolated, driven by the 0.02 floor gap; the paper lists the FloatLM grid as 990M-11000M, likely a 10x typo of the TriLM grid"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Ternary m is about 0.2-0.3 inside the fit; any 1e25 number from this pair of laws is an extrapolation of a 0.02 difference in irreducible loss and should not be used."
    }
   ]
  },
@@ -2802,6 +3016,74 @@
     ],
     "grade": "measured-small",
     "bears_on": "Under a memory budget the best trade is 2-bit weights in more parameters: a low-end b_w for matmuls in small-scale pretraining."
+   },
+   {
+    "id": "panferov-2025-quest/3",
+    "claim": "Fitting L = A/(N eff(P))^alpha + B/D^beta + E with weights and activations both at P bits gives parameter efficiencies eff = 0.02, 0.16, 0.43, 0.70, 1.02 at P = 1, 2, 3, 4, 8 for QuEST (LSQ: 0.02, 0.12, 0.32, 0.56, 0.87).",
+    "quote": "Table 2. Fitted scaling-law parameter efficiencies eff(P ).",
+    "location": "scaling-law results, Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.7,
+      "unit": "eff (= m)",
+      "condition": "W4A4 QuEST, forward-pass QAT"
+     },
+     {
+      "param": "other",
+      "value": 0.43,
+      "unit": "eff (= m)",
+      "condition": "W3A3 QuEST"
+     },
+     {
+      "param": "other",
+      "value": 0.16,
+      "unit": "eff (= m)",
+      "condition": "W2A2 QuEST"
+     },
+     {
+      "param": "other",
+      "value": 0.02,
+      "unit": "eff (= m)",
+      "condition": "W1A1 QuEST"
+     },
+     {
+      "param": "other",
+      "value": 1.02,
+      "unit": "eff (= m)",
+      "condition": "W8A8 QuEST"
+     },
+     {
+      "param": "other",
+      "value": 0.56,
+      "unit": "eff (= m)",
+      "condition": "W4A4 LSQ"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Same lab and form as the unified-law matrix, but lower on the diagonal (W2A2 0.16 vs 0.30, W1A1 0.02 vs 0.09): the quantizer moves m by up to 4x below 3 bits, and 8 bits is lossless."
+   },
+   {
+    "id": "panferov-2025-quest/4",
+    "claim": "The fits are quantization-aware training: forward weights and activations quantized, backward pass in full precision, on 30M-800M models (up to 1.6B on 160B tokens) at 100 tokens per parameter.",
+    "quote": "trained from scratch with low-precision weights and activations on the forward pass, but with a full-precision backward pass",
+    "location": "Sec. 1 (QAT definition); experimental setup (30, 50, 100, 200, 430, 800M; up to 1.6B parameters on up to 160B tokens)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 800000000.0,
+      "unit": "non-embedding parameters",
+      "condition": "largest model in the law fit; 1.6B shown in Fig. 1"
+     },
+     {
+      "param": "b_a.activation",
+      "value": 16,
+      "unit": "bits",
+      "condition": "backward pass (activation gradients) kept in full precision"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "eff(P) prices compressed forward reads only; a boundary in the backward pass (activation gradients between blocks) stays 16-bit in these runs."
    }
   ]
  },
@@ -2905,6 +3187,120 @@
     "quantities": [],
     "grade": "measured-small",
     "bears_on": "At high tokens per parameter b_w, not b_a, becomes the binding precision in low-bit training."
+   },
+   {
+    "id": "chen-2025-qat-scaling-law/3",
+    "claim": "W4A4 quantization-aware pretraining follows a Chinchilla law plus an additive penalty delta = k * D^gD * log2(G)^gG / N^gN, which grows with tokens D and group size G and shrinks with parameters N; fitted W4A4 constants k = 0.1582, gN = 0.2186, gD = 0.0745, gG = 0.7779 (N, D raw counts).",
+    "quote": "where k, γN , γD and γG > 0 are fitted parameters. We incorporate a logarithmic term for G, as G = 1 (no quantization) yields δp = 0. The magnitudes of γN , γD and γG reflect the sensitivity of the quantization error δp to N , D and G, respectively. The formula indicates that δp increases with D and G but decreases with N .",
+    "location": "Sec. 4.2, Eq. 5 and Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.1582,
+      "unit": "k (loss units)",
+      "condition": "delta_W4A4 coefficient, Table 1"
+     },
+     {
+      "param": "other",
+      "value": 0.2186,
+      "unit": "gamma_N (exponent)",
+      "condition": "delta_W4A4, Table 1"
+     },
+     {
+      "param": "other",
+      "value": 0.0745,
+      "unit": "gamma_D (exponent)",
+      "condition": "delta_W4A4, Table 1"
+     },
+     {
+      "param": "other",
+      "value": 0.7779,
+      "unit": "gamma_G (exponent)",
+      "condition": "delta_W4A4, Table 1"
+     },
+     {
+      "param": "other",
+      "value": 0.56,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: W4A4 INT4, G = 32, Table 1 law at C = 1e25 FLOP with N/D re-optimized, against the same law's BF16 frontier; extrapolated ~3e4x past the largest fit (595M x 100B = 3.6e20 FLOP), where the same computation gives 0.77"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Under this law 4-bit weights and activations cost about half the compute at 1e25 FLOP, and the penalty keeps growing with scale (m 0.75 at 1e21, 0.45 at 1e27), unlike the effective-parameter laws where m is scale-free."
+   },
+   {
+    "id": "chen-2025-qat-scaling-law/4",
+    "claim": "The Chinchilla terms the QAT penalty is added to were fitted on 74M-595M models at 10B-100B tokens (E = 1.9279, A = 237.7042, alpha = 0.3022, B = 596.2490, beta = 0.3022), with 973M models at 100B and 200B tokens held out for validation.",
+    "quote": "Our experiments systematically explore LLM pretraining across parameter sizes N ∈ {74, 145, 297, 595} million and training token numbers D ∈ {10, 20, 50, 100} billion tokens. For validation purpose, we also train models with 973M parameters on 100 and 200 billion tokens to verify the extrapolation reliability of our scaling law when increasing both model and dataset size.",
+    "location": "Sec. 4.1 (Training Setup) and Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.9279,
+      "unit": "E (loss units)",
+      "condition": "Chinchilla term, Table 1"
+     },
+     {
+      "param": "other",
+      "value": 237.7042,
+      "unit": "A",
+      "condition": "Chinchilla term, Table 1"
+     },
+     {
+      "param": "other",
+      "value": 0.3022,
+      "unit": "alpha = beta (exponent)",
+      "condition": "Chinchilla term, Table 1"
+     },
+     {
+      "param": "other",
+      "value": 596.249,
+      "unit": "B",
+      "condition": "Chinchilla term, Table 1"
+     },
+     {
+      "param": "other",
+      "value": 973000000.0,
+      "unit": "parameters",
+      "condition": "largest validation model, 100B and 200B tokens"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Fixes the fit range of the only law with separate weight and activation 4-bit penalties: every 1e25 cell is extrapolated by four orders of magnitude in compute."
+   },
+   {
+    "id": "chen-2025-qat-scaling-law/5",
+    "claim": "Weight and activation 4-bit penalties are fitted separately (W4A16, W16A4); activation error at the FC2 input dominates W4A4 at the fitted scale, but weight error grows faster with tokens and eventually exceeds it.",
+    "quote": "Specifically, weight quantization error increases more rapidly with more training tokens. Further analysis shows that the activation quantization error in the FC2 layer, caused by outliers, is the primary bottleneck of W4A4 QAT quantization error.",
+    "location": "abstract; Table 1 (delta_W4A16, delta_W16A4)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.2522,
+      "unit": "k (loss units)",
+      "condition": "delta_W4A16, Table 1; gN 0.3589, gD 0.1610, gG 0.3533"
+     },
+     {
+      "param": "other",
+      "value": 0.1004,
+      "unit": "k (loss units)",
+      "condition": "delta_W16A4, Table 1; gN 0.1816, gD 0.0331, gG 0.9812"
+     },
+     {
+      "param": "other",
+      "value": 0.86,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: W4A16 (weights only), G = 32, C = 1e25 FLOP, N/D re-optimized; extrapolated"
+     },
+     {
+      "param": "other",
+      "value": 0.66,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: W16A4 (activations only), G = 32, C = 1e25 FLOP, N/D re-optimized; extrapolated"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Activations cost more than weights at 4 bits (m 0.66 vs 0.86 at 1e25 FLOP); the separately fitted W4A4 value 0.56 is close to their product 0.57, consistent with the unified law's factorization."
    }
   ]
  },
@@ -2928,6 +3324,44 @@
     "quantities": [],
     "grade": "measured-small",
     "bears_on": "The cheapest way to reach a low-bit model reads full-precision weights for part of training; that part shrinks as compute grows."
+   },
+   {
+    "id": "dremov-2025-compute-optimal-qat/2",
+    "claim": "Chen et al.'s additive QAT penalty grows without bound in tokens, so it predicts infinite loss as D -> infinity; a weight-QAT law that stays bounded is fitted instead (86M-2.2B, 1-6 bits).",
+    "quote": "the QAT penalty overtakes the Chinchilla loss term at some point with the growth of token count, which causes the limit of the whole expression to approach infinity as Dtotal → ∞.",
+    "location": "Sec. 3.2 (Loss Scaling Law)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2200000000.0,
+      "unit": "parameters",
+      "condition": "largest model in the study"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Chen's 1e25 extrapolation (m 0.56 at W4A4) is an artefact-prone upper bound on the penalty growth; additive laws should not be pushed four decades past their fit."
+   },
+   {
+    "id": "dremov-2025-compute-optimal-qat/3",
+    "claim": "With a full-precision phase followed by weight QAT (ParetoQ quantizers), 4- and 6-bit weights reach nearly full-precision quality at equal total tokens; 1- and 2-bit drop measurably.",
+    "quote": "Specifically, our 4- and 6-bit setups achieve quality close to that of the full-precision model for the same total token count, and the drop in quality for 1- and 2-bit is reasonable.",
+    "location": "Sec. 3; Appendix P; fitted law in Fig. 8 (L = 1.598 + 2477.0/Dtotal^0.4089 + 57.64/N^0.2148 + 0.4297 * 2^(-1.41 B) + ...)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.598,
+      "unit": "loss (irreducible term)",
+      "condition": "Fig. 8 fitted law"
+     },
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "bits per weight",
+      "condition": "lowest width 'close to' full precision at equal total tokens"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Weight-only compression to 4 bits costs little compute when most training runs in full precision first; m for b_w = 4 at b_a = 16 is near 1 in that schedule (but the full-precision phase reads 16-bit weights)."
    }
   ]
  },

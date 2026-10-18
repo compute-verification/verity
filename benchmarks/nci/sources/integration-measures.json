@@ -121,5 +121,464 @@
     "from_review": "theory"
    }
   ]
+ },
+ {
+  "id": "panferov-2025-unified-compressed",
+  "title": "Unified Scaling Laws for Compressed Representations",
+  "authors": "Andrei Panferov, Alexandra Volkova, Ionut-Vlad Modoranu, Vage Egiazarian, Mher Safaryan, Dan Alistarh",
+  "year": 2025,
+  "venue": "arXiv 2506.01863 (ISTA)",
+  "url": "https://arxiv.org/abs/2506.01863",
+  "topics": [
+   "integration-measures",
+   "weights",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "panferov-2025-unified-compressed/1",
+    "claim": "Compressed pretraining follows Loss = A (N rho(R))^-alpha + B D^-beta + E, where rho(R) is the representation's capacity. Under this form a compressed run at compute C reaches the loss of a full-precision run at compute rho * C (substitute N' = rho N), so the FLOP-equivalent multiplier is m = rho at every compute budget and allocation.",
+    "quote": "Through extensive experimentation, we identify this law to be of the form Loss(N, D) ∼ A · (N · ρ(R))−α + B · D−β + E,",
+    "location": "Sec. 1, Eq. 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The cleanest model of m(b_w, b_a): a single capacity number per representation, compute-independent, so the 1e25 value equals the small-scale fit if the form holds."
+   },
+   {
+    "id": "panferov-2025-unified-compressed/2",
+    "claim": "Fitted capacity for independent weight x activation quantization (rows weights, columns activations at 1/2/3/4/16 bits): W1 0.09/0.15/0.19/0.20/0.21; W2 0.15/0.30/0.40/0.45/0.45; W3 0.19/0.42/0.62/0.70/0.74; W4 0.20/0.46/0.72/0.85/0.90; W16 0.21/0.48/0.76/0.91/1.00.",
+    "quote": "Figure 6: Representation capacity coefficients for independent quantization of weights and activations. Element-wise ρ fitting error is not greater than 5 · 10−3 .",
+    "location": "Appendix B, Figure 6 (True ρ matrix)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.85,
+      "unit": "rho (= m)",
+      "condition": "W4A4, forward-pass QAT"
+     },
+     {
+      "param": "other",
+      "value": 0.9,
+      "unit": "rho (= m)",
+      "condition": "W4A16 (weights only)"
+     },
+     {
+      "param": "other",
+      "value": 0.91,
+      "unit": "rho (= m)",
+      "condition": "W16A4 (activations only)"
+     },
+     {
+      "param": "other",
+      "value": 0.62,
+      "unit": "rho (= m)",
+      "condition": "W3A3"
+     },
+     {
+      "param": "other",
+      "value": 0.3,
+      "unit": "rho (= m)",
+      "condition": "W2A2"
+     },
+     {
+      "param": "other",
+      "value": 0.45,
+      "unit": "rho (= m)",
+      "condition": "W2A16"
+     },
+     {
+      "param": "other",
+      "value": 0.48,
+      "unit": "rho (= m)",
+      "condition": "W16A2"
+     },
+     {
+      "param": "other",
+      "value": 0.09,
+      "unit": "rho (= m)",
+      "condition": "W1A1"
+     },
+     {
+      "param": "other",
+      "value": 0.21,
+      "unit": "rho (= m)",
+      "condition": "W1A16 and W16A1"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Central grid for m(b_w, b_a): 4-bit weights and activations cost 15% of compute, 2-bit 70%, 1-bit 91%; ternary (1.58) is not measured and interpolates to about 0.35 for weights alone."
+   },
+   {
+    "id": "panferov-2025-unified-compressed/3",
+    "claim": "The fits use 30M-200M models at 100 tokens per parameter, with a per-layer uniform quantizer and the QuEST gradient estimator, 1 to 8 bits, on weights, activations or both.",
+    "quote": "For quantization we employ the gradient estimator of [25], a per-layer uniform quantizer with static scaling factors and gradient masking. Quantization levels range from 1-bit to 8-bit precision. We consider configurations with quantized weights only, activations only, and both simultaneously.",
+    "location": "Setting for Experimental Validation (p. 3)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 200000000.0,
+      "unit": "non-embedding parameters",
+      "condition": "largest model in the fits"
+     },
+     {
+      "param": "other",
+      "value": 100,
+      "unit": "tokens per parameter",
+      "condition": "all fits (data-rich regime)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Every cell of the grid is a 200M-parameter measurement; the 1e25 value rests on m being scale-free, which Chen and Sun's additive laws dispute."
+   },
+   {
+    "id": "panferov-2025-unified-compressed/4",
+    "claim": "Capacities of weight quantization, weight sparsity and activation quantization multiply, except in the extreme 2-bit regime where the product misfits (rho <~ 0.1).",
+    "quote": "Our results indicate that the representation capacity with weight sparsity sw and quantization bitwidth qw , and activation sparsity qa follows ρ(Rqw ,sw ,qa ) = ρ(Rqw ) · ρ(Rsw ) · ρ(Rqa ).",
+    "location": "factorization results, item 3 (p. 6); Appendix B",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.01,
+      "unit": "absolute error of the product approximation (order)",
+      "condition": "outside 2-bit quantization"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Lets m(b_w, b_a) be written as m_w(b_w) * m_a(b_a) away from 2 bits; at 2 bits and below the measured matrix, not the product, is the estimate."
+   }
+  ]
+ },
+ {
+  "id": "sun-2025-fp-quant-scaling",
+  "title": "Scaling Laws for Floating-Point Quantization Training",
+  "authors": "Xingwu Sun, Shuaipeng Li, Ruobing Xie, Weidong Han, Kan Wu, Zhen Yang, Yixing Li, An Wang, Shuai Li, Jinbao Xue, Yu Cheng, Yangyu Tao, Zhanhui Kang, Chengzhong Xu, Di Wang, Jie Jiang",
+  "year": 2025,
+  "venue": "ICML 2025 (arXiv 2501.02423, Tencent Hunyuan)",
+  "url": "https://arxiv.org/abs/2501.02423",
+  "topics": [
+   "integration-measures",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sun-2025-fp-quant-scaling/1",
+    "claim": "Floating-point quantized training follows L = n/N^alpha + d/D^beta + eps + (D^beta/N^alpha) * log2(B) / (gamma (E+0.5)^delta (M+0.5)^nu) with n = 69.2343, alpha = 0.2368, d = 68973.0621, beta = 0.5162, eps = 1.9061, gamma = 11334.5197, delta = 3.1926, nu = 2.9543 (E exponent bits, M mantissa bits, B scaling block size), fitted on 366 runs at 41M-679M parameters and 10B-100B tokens.",
+    "quote": "The last factor could be regarded as the additional negative impact deriving from low precision training,",
+    "location": "Sec. 4.1 (Eq. 26 and Table 2 in the appendix); Sec. 3.2 for the 366 runs",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.5162,
+      "unit": "beta (exponent)",
+      "condition": "Table 2; the penalty grows as D^0.5162 / N^0.2368"
+     },
+     {
+      "param": "other",
+      "value": 11334.5197,
+      "unit": "gamma",
+      "condition": "Table 2"
+     },
+     {
+      "param": "other",
+      "value": 0.48,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: FP4 E2M1 weights, B = 128, C = 1e25 FLOP, N/D re-optimized, against the same law with no penalty; extrapolated (fit <= 679M x 100B); 0.81 at 1e21, 0.28 at 1e27"
+     },
+     {
+      "param": "other",
+      "value": 0.99,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: FP8 E4M3 weights, B = 128, C = 1e25 FLOP; extrapolated"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A second additive law in which FP4 weights lose a growing share of compute with scale (half at 1e25) while FP8 stays lossless."
+   },
+   {
+    "id": "sun-2025-fp-quant-scaling/2",
+    "claim": "The law's quantized tensors are the forward weight, the backward weight and the stored activation for the weight gradient (P2, P4, P6); forward activations and output gradients stay in high precision because quantizing them (P1, P3, P5) cost much more loss.",
+    "quote": "To balance efficiency and effectiveness, we’ve selected P2, P4, and P6 for quantization.",
+    "location": "Sec. 3.4 (Optimized Quantization Target), Fig. 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "% loss increase",
+      "condition": "quantizing P5 (dY2, the gradient input to the weight-gradient GEMM) at FP3, 'up to 2%'"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Maps to the b_a = 16 column only: the law says nothing about compressing forward activations or the activation gradients that cross block boundaries."
+   },
+   {
+    "id": "sun-2025-fp-quant-scaling/3",
+    "claim": "Low-precision training has a critical data size past which more tokens raise the loss: for a 1B model 1730T tokens in BF16, 27T in FP8 E4M3 and 0.4T in FP4 E2M1.",
+    "quote": "Conversely, when the same model is trained with FP8-E4M3, the Dcrit value swiftly diminishes to 27T, and with FP4-E2M1, it further plummets to 0.4T.",
+    "location": "Sec. 4.3 (Implication-2: Critical Data Size)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 400000000000.0,
+      "unit": "tokens (critical data size)",
+      "condition": "1B model, FP4 E2M1 weights"
+     },
+     {
+      "param": "other",
+      "value": 27000000000000.0,
+      "unit": "tokens (critical data size)",
+      "condition": "1B model, FP8 E4M3 weights"
+     },
+     {
+      "param": "other",
+      "value": 1730000000000000.0,
+      "unit": "tokens (critical data size)",
+      "condition": "1B model, BF16"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Caps the over-training an FP4-weight attacker can use: a small FP4 model cannot buy back its capacity loss with more data."
+   }
+  ]
+ },
+ {
+  "id": "song-2023-optimuscc",
+  "title": "Optimus-CC: Efficient Large NLP Model Training with 3D Parallelism Aware Communication Compression",
+  "authors": "Jaeyong Song, Jinkyu Yim, Jaewon Jung, Hongsun Jang, Hyung-Jin Kim, Youngsok Kim, Jinho Lee",
+  "year": 2023,
+  "venue": "ASPLOS 2023 (arXiv 2301.09830)",
+  "url": "https://arxiv.org/abs/2301.09830",
+  "topics": [
+   "integration-measures",
+   "activations",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "song-2023-optimuscc/1",
+    "claim": "Low-rank (rank-16, about 10x) compression of the activation gradients sent backward between pipeline stages leaves GPT-8.3B and GPT-2.5B validation perplexity unchanged after 230K iterations on 128 GPUs.",
+    "quote": "For both the 8.3B and 2.5B models, CB and CB+FE show comparable accuracy on the baseline (no compression) model.",
+    "location": "evaluation, Table 2 (8.3B: 8.10 baseline, 8.10 CB; 2.5B: 9.31, 9.31) and its discussion",
+    "quantities": [
+     {
+      "param": "activation.compression_ratio",
+      "value": 10,
+      "unit": "x",
+      "condition": "rank-16 PowerSGD-style compression of backward inter-stage activation gradients, epilogue-only; forward activations uncompressed"
+     },
+     {
+      "param": "other",
+      "value": 0.0,
+      "unit": "validation perplexity gap",
+      "condition": "GPT-8.3B, compressed backpropagation vs baseline, 230K iterations"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Backward pipeline-boundary traffic tolerates ~10x compression at 8B scale with m ~ 1, but only in the partial form described in the next finding."
+   },
+   {
+    "id": "song-2023-optimuscc/2",
+    "claim": "The compression applies only to the epilogue (the backward inter-stage sends on the critical path, not hidden by compute), because compressing all backward inter-stage traffic diverged; forward traffic is not compressed.",
+    "quote": "Epilogue-only compression was applied to all the cases because CB without epilogue-only compression diverged.",
+    "location": "'Analysis of Compressed Backpropagation', Table 4; 'Epilogue-Only Compression'",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 78.57,
+      "unit": "% of backward inter-stage communication removed",
+      "condition": "compressed backpropagation, Fig. 10"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "There is no at-scale evidence that every block boundary's activation gradient can be compressed ~10x without loss: the full version diverged; b_a for the backward boundary stays near 16 bits for most of the traffic."
+   },
+   {
+    "id": "song-2023-optimuscc/3",
+    "claim": "Low-rank compression of the forward activations sent between pipeline stages diverged even at a very low compression rate, with the same lazy error propagation that made the backward compression work.",
+    "quote": "However, in our experiments, compressing the forward inter-stage activation yielded divergence in the model, even with a very low compression rate.",
+    "location": "lazy error propagation analysis, after Eqs. 13-14",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 16,
+      "unit": "bits",
+      "condition": "forward inter-stage activations, left uncompressed after compression diverged; GPT-2.5B/8.3B setting"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The forward pipeline boundary had m = 0 (divergence) under low-rank compression; no at-scale method in this source lowers forward b_a below 16 bits at a pipeline boundary."
+   }
+  ]
+ },
+ {
+  "id": "peng-2023-fp8-lm",
+  "title": "FP8-LM: Training FP8 Large Language Models",
+  "authors": "Houwen Peng, Kan Wu, Yixuan Wei, Guoshuai Zhao, Yuxiang Yang, Ze Liu, Yifan Xiong, Ziyue Yang, Bolin Ni, Jingcheng Hu, Ruihang Li, Miaosen Zhang, Chen Li, Jia Ning, Ruizhe Wang, Zheng Zhang, Shuguang Liu, Joe Chau, Han Hu, Peng Cheng",
+  "year": 2023,
+  "venue": "arXiv 2310.18313 (Microsoft)",
+  "url": "https://arxiv.org/abs/2310.18313",
+  "topics": [
+   "integration-measures",
+   "weights",
+   "activations",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "peng-2023-fp8-lm/1",
+    "claim": "FP8 mixed-precision pretraining (FP8 GEMMs, gradients, first Adam moment and communication) tracks the BF16 loss curve at 7B and 13B (100B tokens) and 175B (40B tokens) with unchanged hyper-parameters.",
+    "quote": "As shown in Fig. 4, the loss curves almost overlap with each other. The results unequivocally demonstrate that the proposed FP8 mixed-precision scheme can achieve equivalent performance to the prevalent higher-precision BF16 scheme",
+    "location": "Sec. 3.2, Fig. 4; Table 1 (tokens)",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "FP8 activations and activation communication, GPT-175B, 40B tokens"
+     },
+     {
+      "param": "other",
+      "value": 1.0,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: overlapping loss curves at equal tokens, GPT-7B/13B/175B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Pins m(8, 8) = 1 at scale: the 8-bit row and column of the grid cost nothing."
+   },
+   {
+    "id": "peng-2023-fp8-lm/2",
+    "claim": "FP8 training still keeps master weights in FP16 with tensor scaling (or FP32) and the second Adam moment in 16 bits, because weight updates can be too small or large for 8 bits.",
+    "quote": "In the implementation, the master weights have two viable options: utilizing either FP32 full-precision or FP16 with tensor scaling.",
+    "location": "Sec. 2.2 (FP8 Optimizer)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 16,
+      "unit": "bits per master-weight entry",
+      "condition": "FP8-LM default (FP16 with tensor scaling)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Even at 8 bits the update path reads 16-bit weights; low-precision training lowers forward b_w, not the update read."
+   },
+   {
+    "id": "peng-2023-fp8-lm/3",
+    "claim": "FP8-LM runs the sequence/tensor-parallel boundary g (forward all-gather of activations, backward reduce-scatter of activation-gradients) in FP8; the forward reduce-scatter of partial sums (g-bar) is not stated as FP8.",
+    "quote": "g is all-gather in forward pass and reduce-scatter in backward pass, while g¯ is reduce-scatter in forward pass and all-gather in backward pass. The gather-reduce operation g between sequence parallel and tensor parallel is executed utilizing FP8 low-precision activation, thus saving half communication costs.",
+    "location": "Section 2.3; Figure 2",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits per entry",
+      "condition": "TP/SP boundary g in FP8 with per-tensor scaling: forward all-gathered activations and backward reduce-scattered activation-gradient partial sums; GPT 7B and 13B on 100B tokens, 175B on 40B tokens; loss curves overlap BF16"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "8-bit TP boundary traffic at 7-175B, but the forward partial-sum reduction stays in high precision.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "hernandez-cano-2025-fp8-gemm",
+  "title": "Towards Fully FP8 GEMM LLM Training at Scale",
+  "authors": "Alejandro Hernández-Cano, Dhia Garbaya, Imanol Schlag, Martin Jaggi",
+  "year": 2025,
+  "venue": "arXiv 2505.20524 (EPFL, ETHZ)",
+  "url": "https://arxiv.org/abs/2505.20524",
+  "topics": [
+   "integration-measures",
+   "weights",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hernandez-cano-2025-fp8-gemm/1",
+    "claim": "With every GEMM inside the transformer blocks in FP8, attention included, forward and backward, the FOG architectures match the BF16 Llama3 loss at 8B parameters on 20B tokens and at 1.5B on 125B tokens (continued to 450B), while running 35-43% faster.",
+    "quote": "Finally, we scale the model size to 8B and train for 20B tokens. We show the divergence of other architectures with FP8DPA while FOG variants converge and match the baseline Llama3 BF16 loss, while being 35-43% faster.",
+    "location": "Sec. 5 (experimental setup); Fig. 6",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits",
+      "condition": "FP8 inputs to every GEMM in the block, attention included, forward and backward (delayed scaling)"
+     },
+     {
+      "param": "other",
+      "value": 1.0,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: equal loss at equal tokens, 8B / 20B tokens and 1.5B / 125B tokens"
+     },
+     {
+      "param": "other",
+      "value": 15,
+      "unit": "x Chinchilla-optimal tokens",
+      "condition": "longest data regime tested"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Pins m(8, 8) = 1 at 8B, including the attention GEMMs that Kumar-style laws leave at 16 bits."
+   },
+   {
+    "id": "hernandez-cano-2025-fp8-gemm/2",
+    "claim": "The same FP8 recipe diverges on the standard architectures (Llama3, OLMo2, OP, SmoothSwiGLU) at 390M, 1.5B and 8B; m(8, 8) = 1 needs an outlier-guarded architecture.",
+    "quote": "This experiment displays the unsuitability of existing architectures for FP8DPA training, as all of them diverge.",
+    "location": "Sec. 5.1 (FP8 stability), Fig. 6",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 8000000000.0,
+      "unit": "parameters",
+      "condition": "largest scale at which the standard Llama3 architecture diverged with FP8 attention"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Low-rate training is an architecture choice, not a drop-in: the attacker's circuit differs from the reference beyond its number formats, which the containment check must allow for."
+   }
+  ]
+ },
+ {
+  "id": "huh-2024-lora-the-explorer",
+  "title": "Training Neural Networks from Scratch with Parallel Low-Rank Adapters",
+  "authors": "Minyoung Huh, Brian Cheung, Jeremy Bernstein, Phillip Isola, Pulkit Agrawal",
+  "year": 2024,
+  "venue": "arXiv 2402.16828 (MIT)",
+  "url": "https://arxiv.org/abs/2402.16828",
+  "topics": [
+   "integration-measures",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "huh-2024-lora-the-explorer/1",
+    "claim": "Training from scratch with parallel low-rank adapters merged into the weights (LTE) matches standard training but needs 40% more training samples to converge than data-parallel training on 8 GPUs.",
+    "quote": "Although our method extends the training samples required for convergence by 40%, we can fit models that are 3× bigger with roughly half the bandwidth.",
+    "location": "Sec. 1 (contributions), Sec. 4.5 (resource comparison with DDP)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.4,
+      "unit": "x training samples to converge",
+      "condition": "LTE vs DDP, ViT-S, 8 GPUs"
+     },
+     {
+      "param": "other",
+      "value": 0.71,
+      "unit": "FLOP-equivalent multiplier m (BF16 compute to reach the same loss / compressed-run compute)",
+      "condition": "derived: 1 / 1.4, same model and per-sample compute"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The one compute-equivalent figure for low-rank weight updates in from-scratch training: m ~ 0.7 at vision scale, for updates that cross a node boundary at low rank."
+   }
+  ]
  }
 ]

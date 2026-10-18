@@ -322,7 +322,8 @@
      "obeidi-2026-heterogeneous/1",
      "ramasinghe-2025-protocolmodels/5",
      "rudakov-2024-mp-compression/1",
-     "bian-2023-compressing-activations/6"
+     "bian-2023-compressing-activations/6",
+     "song-2023-optimuscc/3"
     ]
    },
    {
@@ -366,7 +367,9 @@
      "nvidia-2025-nemotron-h/1",
      "inclusionai-2025-ling2/1",
      "rudakov-2024-mp-compression/1",
-     "he-2025-tahquant/3"
+     "he-2025-tahquant/3",
+     "song-2023-optimuscc/1",
+     "song-2023-optimuscc/3"
     ]
    },
    {
@@ -389,7 +392,8 @@
      "li-2024-flashcomm/1",
      "nvidia-2025-nvfp4/5",
      "deepseekai-2024-deepseek-v3/3",
-     "wang-2023-zeropp/3"
+     "wang-2023-zeropp/3",
+     "peng-2023-fp8-lm/3"
     ]
    }
   ]
@@ -547,6 +551,93 @@
      "lin-2023-urial/1",
      "zhang-2025-ace/2",
      "agarwal-2024-many-shot-icl/2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "train.compute_multiplier",
+  "symbol": "m",
+  "unit": "x (FLOP-equivalent)",
+  "meaning": "Compute a BF16 run needs to reach the loss of a pretraining run at rates (b_w, b_a), divided by that run's compute (FLOPs = 6ND, MACs counted once whatever their precision). 1 for BF16; below 1 when compressed training needs more compute. Pretraining efficiency under the policy is max m / rho.",
+  "estimates": [
+   {
+    "id": "train.compute_multiplier/w8a8",
+    "context": "FP8 weights and activations in every block GEMM, forward and backward; master weights FP16/FP32",
+    "low": 0.95,
+    "central": 1.0,
+    "high": 1.0,
+    "confidence": "high",
+    "merge": "Equal loss at equal tokens at 7B-175B (FP8-LM) and 8B (all GEMMs incl. attention, FOG); 56B on 20T tokens in FP8 (Nemotron-H). Low allows for the architecture changes FP8 attention needs.",
+    "evidence": [
+     "peng-2023-fp8-lm/1",
+     "hernandez-cano-2025-fp8-gemm/1",
+     "hernandez-cano-2025-fp8-gemm/2",
+     "nvidia-2025-nemotron-h/1",
+     "sun-2025-fp-quant-scaling/1"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/w4a4",
+    "context": "4-bit weights and activations in the linear-layer GEMMs (forward; NVFP4 and Quartet also the backward GEMMs), at a Chinchilla-optimal 1e25 FLOP",
+    "low": 0.55,
+    "central": 0.75,
+    "high": 0.9,
+    "confidence": "medium",
+    "merge": "Central: the unified-law capacity 0.85 (forward-only QAT, 200M, m = rho under its effective-parameter form) and the at-scale NVFP4 anchors, 0.72-0.79 derived from <0.4% and <0.6% loss gaps at 55B and 8B active (Hoffmann law, tokens-equivalent at fixed N; these are lower bounds). Low: Quartet's fwd+bwd FP4 0.62 and Chen's additive law extrapolated to 1e25 (0.56). The 12B NVFP4 run at 830 tokens/parameter (1.5% gap, m ~ 0.38) and Kumar's naive integer quantizer (0.23) are excluded as over-trained and superseded. High: the unified-law single-tensor 4-bit values (0.90, 0.91).",
+    "evidence": [
+     "panferov-2025-unified-compressed/2",
+     "panferov-2025-unified-compressed/4",
+     "nvidia-2026-nemotron3-ultra/2",
+     "nvidia-2025-nemotron3-whitepaper/1",
+     "nvidia-2025-nvfp4/7",
+     "castro-2025-quartet/5"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/w4-weights",
+    "context": "4-bit forward weights, 16-bit activations, 1e25 FLOP",
+    "low": 0.5,
+    "central": 0.85,
+    "high": 0.95,
+    "confidence": "medium",
+    "merge": "Central: unified-law W4A16 0.90 and Chen W4A16 0.86 at 1e25 (extrapolated). Low: Sun's FP4 E2M1 weight law extrapolated to 1e25 (0.48; 0.81 at 1e21), whose penalty grows as D^0.52/N^0.24. High: a full-precision phase then weight QAT is near-lossless at 4 bits (Dremov).",
+    "evidence": [
+     "panferov-2025-unified-compressed/2",
+     "sun-2025-fp-quant-scaling/1",
+     "sun-2025-fp-quant-scaling/3",
+     "chen-2025-qat-scaling-law/2"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/ternary-weights",
+    "context": "ternary (1.58-bit) forward weights, 8-16-bit activations, latent weights high precision",
+    "low": 0.15,
+    "central": 0.3,
+    "high": 0.45,
+    "confidence": "low",
+    "merge": "Central: unified-law capacity interpolated at 0.58 of the way from 1 to 2 bits (Gaussian MSE), 0.35; Spectra's fixed-300B-token laws give 0.32 at 3.9B; Spectra 1.1's two laws give 0.23 at 1e21 FLOP. Low: Spectra 1.1 extrapolated past 1e22 collapses (0.02 at 1e25) on a 0.02 floor gap, discounted. High: BitNet's gap narrows with N.",
+    "evidence": [
+     "panferov-2025-unified-compressed/2",
+     "vaidhya-2025-spectra-1-1/1",
+     "kaushal-2024-spectra/1",
+     "kaushal-2024-spectra/2",
+     "wang-2023-bitnet/1"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/low-rank-updates",
+    "context": "full-rank weights trained through low-rank optimizer updates or merged low-rank adapters (GaLore, Fira, LTE), from scratch",
+    "low": 0.4,
+    "central": 0.6,
+    "high": 1.0,
+    "confidence": "low",
+    "merge": "Low: GaLore at 1B vs tuned full-rank, 0.40 derived from perplexity-vs-FLOPs (Glentis Table 3). Central: LTE needs 40% more samples (0.71, ViT-S) and Fira 0.52 at 1B. High: GaLore 2 matches full-rank at 7B on 500B tokens.",
+    "evidence": [
+     "huh-2024-lora-the-explorer/1",
+     "glentis-2025-param-efficient-survey/1",
+     "su-2025-galore2/1",
+     "lialin-2023-relora/2"
     ]
    }
   ]
