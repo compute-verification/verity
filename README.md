@@ -91,7 +91,7 @@ Every accounting protocol (PoUW, PoUS, network accounting) uses one proof servic
 
 Compute, memory and network accounting form one layer, on one device graph and the verifier's clock. The graph's blocks (a node to start) are spatial units, the machines behind network certifiers. Inside a node are memory's tiers: each GPU's HBM and PCIe link, host DRAM, the NICs. Each resource has four layers (Glossary):
 
-- **Compute.** PoUW certifies right words. A block did the right words that left through its certifiers, less its ingress bytes times the work an output byte stands for. A GPU hidden in a block is a named assumption.
+- **Compute.** PoUW certifies right words. Attribution credits a block with those that left through its certifiers, less its ingress bytes times the work an output byte stands for. A GPU hidden in a block is a named assumption.
 - **Memory.** The bandwidth audits certify bits read, and PoUS bits held. The memory challenger's deadlines place reads on the verifier's clock, and data-sheet rates place them in a tier.
 - **Network.** It certifies no work. Its certifiers bound what crosses a block's boundary, and attribution reads that.
 
