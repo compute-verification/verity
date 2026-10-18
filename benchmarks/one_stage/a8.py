@@ -203,7 +203,7 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None):
                     return np.array([int(t) & 0xFFFFFFFF for t in toks[lo:hi]], dtype=np.uint64)
                 raise LookupError(f"parameter {name!r}: another rank's values, which this slice does not hold")
             if space == "n":
-                return producer_words(self.by_node.get(idx), store, lo, hi, idx)
+                return producer_words(self.by_node.get(idx), store, lo, hi, idx, write_events(self.r))
             return super().of_run(space, idx, lo, hi)
 
     return res, store, weights, A8Values(res, store, None), round(time.time() - t0, 1)
@@ -258,9 +258,11 @@ def view_words(store, s, view, m: dict, role: str, k: int) -> np.ndarray:
     return w[el - base]
 
 
-def producer_words(m: dict | None, store, lo: int, hi: int, idx: int) -> np.ndarray:
+def producer_words(m: dict | None, store, lo: int, hi: int, idx: int, writes: dict[int, list[int]] | None = None) -> np.ndarray:
     """Return leaves [lo, hi) of the Call ``m`` from its output snapshots, its views aligned to its trailing return components
-    (as `call_twin`); a Call without parameters is evaluated."""
+    (as `call_twin`); a Call without parameters is evaluated. With ``writes`` (`write_events`), each view is read from its
+    allocation's last snapshot before the next Call writes it (what a reader without its own snapshot read: the DSA top-k's
+    logits), else from the one at the Call's event."""
     from verity_vllm.check.fold_compare import _component_ranges
     if m is None:
         raise LookupError(f"node {idx} has no instance record")
@@ -276,7 +278,8 @@ def producer_words(m: dict | None, store, lo: int, hi: int, idx: int) -> np.ndar
         view = views[k - first] if k >= first else None
         if view is None:
             raise LookupError(f"node {idx} ({m['name']}) component {k}: no output view")
-        s = store.find(view, at=m["event"])
+        later = later_snapshots(store, view, m["event"], writes) if writes is not None else []
+        s = later[-1] if later else store.find(view, at=m["event"])
         if s is None:
             raise LookupError(f"node {idx} ({m['name']}): no snapshot of event {m['event']} covers {view!r}")
         out.append(view_words(store, s, view, m, "out", k)[max(lo, clo) - clo:min(hi, chi) - clo])
@@ -289,8 +292,9 @@ def producer_words(m: dict | None, store, lo: int, hi: int, idx: int) -> np.ndar
 def operands(res, store, vals, m: dict, first: str = "snapshot") -> list[np.ndarray]:
     """Each operand's words from one of two sources, ``first`` and the other as fallback: the operand view's snapshot the
     capture took at the Call (the latest before it, for an in-place Call), or provenance (weights, prompt, the producing Call's
-    output snapshot). Neither is right everywhere: the router reads its logits after a reduction the fold's producer (the
-    split-K gate) does not show, so only the snapshot holds them; a view's latest snapshot can predate its producer's write."""
+    output snapshot). Neither is right everywhere: a producer's snapshot at its own event can predate its write (the router's
+    logits, which the gate GEMM writes later), so only the reader's snapshot holds them; a view's latest snapshot can predate
+    its producer's write."""
     from verity_vllm.check.fold_compare import _in_place
     node = res.body.nodes[m["node"]]
     out = []
@@ -314,15 +318,36 @@ def operands(res, store, vals, m: dict, first: str = "snapshot") -> list[np.ndar
     return out
 
 
-def call_twin(store, m: dict, got: list) -> dict:
+def write_events(res) -> dict[int, list[int]]:
+    """Each allocation's writing Calls' events (an output view's), ascending."""
+    if not hasattr(res, "_a8_writes"):
+        w: dict[int, set[int]] = {}
+        for m in res.instances:
+            for v in m["output_views"]:
+                if v is not None:
+                    w.setdefault(v.alloc, set()).add(m["event"])
+        res._a8_writes = {a: sorted(e) for a, e in w.items()}
+    return res._a8_writes
+
+
+def later_snapshots(store, view, event: int, writes: dict[int, list[int]]) -> list:
+    """The snapshots covering ``view`` after ``event`` and before the next Call that writes its allocation, in event order."""
+    nxt = next((e for e in writes.get(view.alloc, []) if e > event), None)
+    return [s for s in store.by_alloc.get(view.alloc, []) if s.event > event and (nxt is None or s.event < nxt) and store.covers(s, view)]
+
+
+def call_twin(store, m: dict, got: list, writes: dict[int, list[int]] | None = None) -> dict:
     """The evaluated Call's returns against the capture's output snapshots, on the returns evaluated. The capture has a view
     per kernel output; a Definition that also returns intermediates ahead of them (DeepGEMM's quantized input and scales)
-    has fewer views than return components, and the views are its trailing components."""
+    has fewer views than return components, and the views are its trailing components. Some kernels' writes land after their
+    own event's snapshot (the MoE router's gate GEMM; the DSA indexer's logits, which hold them only at the top-k's event):
+    with ``writes`` (`write_events`), a component that disagrees there is held to the first later snapshot of its allocation,
+    before any other Call writes it, that holds it (``late``, its event)."""
     from verity_vllm.check.fold_compare import _component_ranges
     comps, views = _component_ranges(m), m["output_views"]
     if len(views) > len(comps):
         return {"compared": 0, "agree": False, "why": f"{len(views)} output views for {len(comps)} return components"}
-    compared, diff, held = 0, [], []
+    compared, diff, held, late = 0, [], [], {}
     for k, ((clo, chi), view) in enumerate(zip(comps[len(comps) - len(views):], views), start=len(comps) - len(views)):
         if view is None:
             continue
@@ -331,17 +356,22 @@ def call_twin(store, m: dict, got: list) -> dict:
         s = store.find(view, at=m["event"])
         if s is None:
             continue
-        want = view_words(store, s, view, m, "out", k)
         held.append(k)
-        for i in range(clo, chi):
-            if got[i] is not None:
-                compared += 1
-                if int(got[i]) != int(want[i - clo]):
-                    diff.append(i)
+        idx = [i for i in range(clo, chi) if got[i] is not None]
+        def bad(snap, view=view, k=k, clo=clo, idx=idx):
+            want = view_words(store, snap, view, m, "out", k)
+            return [i for i in idx if int(got[i]) != int(want[i - clo])]
+        d = bad(s)
+        if d and writes is not None:
+            s2 = next((x for x in later_snapshots(store, view, m["event"], writes) if not bad(x)), None)
+            if s2 is not None:
+                d, late[k] = [], s2.event
+        compared += len(idx)
+        diff += d
     if not held:
         return {"compared": 0, "agree": None, "why": "no output snapshot"}
     return {"compared": compared, "of": len(got), "components": held, "of_components": len(comps),
-            "agree": (not diff) if compared else None, "first_diff": diff[:4]}
+            "agree": (not diff) if compared else None, "first_diff": diff[:4], **({"late": late} if late else {})}
 
 
 def find_units(circuit, unit, n: int) -> list:
@@ -495,7 +525,7 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
             return {"staged": False, "why": f"{unit.id}: the parameters' bits are not whole u16 words"}
         n_want = a.per_kind - (len(acc["in"]) if acc else 0)
         ev = evaluate_units(spec, unit, args, n_want, a.full_gates)
-        twin = {**call_twin(store, m, ev.pop("call_out")), "operands": "snapshot"}
+        twin = {**call_twin(store, m, ev.pop("call_out"), write_events(res)), "operands": "snapshot"}
         if twin["agree"] is False:
             try:
                 alt = operands(res, store, vals, m, first="provenance")
@@ -503,7 +533,7 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
                 alt = args
             if any(not np.array_equal(x, y) for x, y in zip(alt, args)):
                 ev2 = evaluate_units(spec, unit, alt, n_want, a.full_gates)
-                twin2 = {**call_twin(store, m, ev2.pop("call_out")), "operands": "provenance"}
+                twin2 = {**call_twin(store, m, ev2.pop("call_out"), write_events(res)), "operands": "provenance"}
                 if twin2["agree"] is not False:
                     ev, twin = ev2, twin2
         if twin["agree"] is False:
