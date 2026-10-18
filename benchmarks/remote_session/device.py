@@ -1354,7 +1354,7 @@ class Device:
             for i in range(2):
                 prev, kept[t, i] = small.run_chain(i)
                 now[0] += 1
-                if session.receive(t, i, prev) is not None:
+                if session.receive(t, i, prev, step=2 * t + i) is not None:
                     return {"accepted": False, "failure": session.failed.failure}
             coin = session.boundary()
             now[0] += 1

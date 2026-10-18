@@ -212,6 +212,8 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     pub = honest["record"]["public"]
     assert (pub["appended"], pub["released"]) == (honest["appended"], honest["released"])
     assert sum(pub["post_seed"]) == sum(kv["pass_appended"]) > 0
+    steps = [s for w in honest["record"]["profile"]["windows"] for s in w["steps"]]
+    assert len(steps) == sum(pub["passes"]) and all(a < b for a, b in zip(steps, steps[1:]))
     lg = honest["ledger"]
     assert lg["inputs"]["post_seed_receipts"] == sum(pub["post_seed"]) and not lg["inputs"]["post_seed_credited"]
     reads = lg["inputs"]["reads_bytes"]
@@ -224,9 +226,10 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
 
 
 def test_a_root_message_is_applied_in_order_and_a_plan_holding_a_released_block_is_rejected():
-    """`Verifier.root`: a message's appends, then its releases, then its root with its plan change; a plan that still
-    holds a block the message released, or one appended by no message, is the session's `plan` rejection, and a
-    message the session cannot read is malformed."""
+    """`Verifier.root`: a message's appends, then its releases, then its root with its plan change and its step; a plan
+    that still holds a block the message released, or one appended by no message, is the session's `plan` rejection,
+    a root with no step or one not above the last pass's is its `step` rejection, and a message the session cannot
+    read is malformed."""
     reg = audit.register(os.urandom(32), b"test-node", 8, bytes(64), P512)
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows)
 
@@ -241,9 +244,19 @@ def test_a_root_message_is_applied_in_order_and_a_plan_holding_a_released_block_
     root = (b"\7" * 64).hex()
     s = session()
     msg = {"t": 0, "i": 0, "root": root, "appends": [[root, 2]], "released": [[3, 1]],
-           "change": [[[8, 2]], [[3, 1]]]}
+           "change": [[[8, 2]], [[3, 1]]], "step": 5}
     assert verifier.Verifier.root(s, msg) is None
     assert [p.runs for p in s.windows[0].plans] == [((0, 3), (4, 6))] and s.released == 1 and s.extent == 10
+    assert s.windows[0].steps == [5]
+    assert verifier.Verifier.root(s, {"t": 0, "i": 1, "root": root, "change": [[], []], "step": 9}) is None
+    for step in (5, 4):
+        s = session()
+        assert verifier.Verifier.root(s, msg) is None
+        v = verifier.Verifier.root(s, {"t": 0, "i": 1, "root": root, "change": [[], []], "step": step})
+        assert v is not None and v.failure == "step"
+    s = session()
+    v = verifier.Verifier.root(s, {k: x for k, x in msg.items() if k != "step"})
+    assert v is not None and v.failure == "step"
     s = session()
     v = verifier.Verifier.root(s, {**msg, "change": [[[8, 2]], []]})
     assert v is not None and v.failure == "plan"
