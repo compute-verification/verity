@@ -739,14 +739,19 @@ def _lab(args) -> dict:
 
 
 def _circuit_check(args) -> dict:
+    """circuit-check's checks on DEMO's two Definitions, with the CLI's options and pins. The window's C-Flock lowering
+    is its parts' (N3Match's here, Sha512Compress's and LmsEqual's in their own entries): lowered whole it would carry
+    the SHA-512 compression that `checks.UNLOWERED` records as not fitting in 64 GiB, a family check a composite that
+    calls it doesn't inherit. The unit is a Program of its own, never a served Program's Call, so the partition
+    invariant doesn't apply (`as_call=False`, which also spares building the CLI's whole catalog to find that out)."""
     from circuit_check import checks as CK
 
     opts = CK.Options()
     entries = []
-    for target in (bind(N3Match, LAYOUT=DEMO), unit(DEMO)):
+    for target, whole in ((bind(N3Match, LAYOUT=DEMO), True), (unit(DEMO), False)):
         t0 = time.time()
         try:
-            r = CK.check_definition(target, opts, pins={})
+            r = CK.check_definition(target, opts, lower_whole=whole, as_call=False)
         except Exception as e:  # noqa: BLE001  (a target the checks can't run on is a failure by name, as the CLI's)
             r = {"definition": target.id, "failures": [{"name": f"error/raised {target.id}: {type(e).__name__}: {e}"}],
                  "warnings": []}
