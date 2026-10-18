@@ -10,6 +10,9 @@ Notes are records, never messages.
 
   research msg send --as NAME [--to @A @B ...] [--thread TS] [--kind WORD] [--quiet] [--urgent] (--text T | --file PATH)
                     [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
+  research msg ask --as NAME --to @OWNER (--text T | --file PATH) [--urgent]   # an issue in OWNER's Linear team, its tag and doorbell
+  research msg ask --as NAME --to @daniel --kind K --question Q --why W --option V=L... --recommend V --default V --deadline D
+                   --page FILE.md --area AREA                      # Daniel's: the ask's page and card, as `ask-daniel --page`
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
@@ -1378,7 +1381,27 @@ def _route(ns: argparse.Namespace, reg: dict, ch: str) -> tuple[dict, Routes | N
     return (reg, routes_of(ns)) if ch == channel_id_for(reg, FRONT_DOOR) else None
 
 
+CARD_FLAGS = ("--kind", "--question", "--why", "--option", "--recommend", "--default", "--deadline", "--page", "--area")
+
+
+def ask_daniel_page(ns: argparse.Namespace, reg: dict) -> int:
+    """`ask --to @daniel`: the ask's page in the Asks for Daniel database and its #ask-daniel card, as `ask-daniel --page`
+    makes them, so the one `ask` verb files every ask in its target's store (a handle's Linear team, or Daniel's database)."""
+    if ns.text is not None or ns.file is not None:
+        raise SlackError(f"ask --to @{ns.to.lstrip('@')} is a page: give its Markdown as --page FILE.md (the template in "
+                         f"{SKILL_ASKING}), not --text or --file")
+    if ns.urgent:
+        raise SlackError("a card has no --urgent: --kind blocking is for what can't proceed without him")
+    if missing := [f for f in CARD_FLAGS if not getattr(ns, f[2:])]:
+        raise SlackError(f"ask --to @{ns.to.lstrip('@')} is a page in the Asks for Daniel database and a card in #{ASK_CHANNEL} "
+                         f"({SKILL_ASKING}): it needs {', '.join(missing)}; a page made with the Notion MCP goes out with "
+                         f"`ask-daniel --link`")
+    return cmd_ask_daniel(ns, reg)
+
+
 def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
+    if human_entry(reg, ns.to):
+        return ask_daniel_page(ns, reg)
     h, owner = acting_as(ns, reg, ns.handle), name_entry(ns, reg, ns.to)
     if owner["handle"] == h["handle"]:
         raise SlackError("an ask goes to another handle")
@@ -2758,9 +2781,27 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--declined", default=None, metavar="WHY")
     p.add_argument("--link", default=None, metavar="URL", help="the result: a PR, file or art: id")
     p.add_argument("--note", default=None)
-    p = cmd("ask", "1:1: tag one handle or name in #agent-coordination, and ring its doorbell", as_=True, body=True)
+    def card_flags(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--agent-url", default=None, help="the asking agent's link on the card (default $RESEARCH_AGENT_URL)")
+        p.add_argument("--kind", choices=KINDS, default=None, help="blocking waits for Daniel; default proceeds at the deadline unless he objects")
+        p.add_argument("--question", default=None, help="one line")
+        p.add_argument("--why", default=None, help="why it matters")
+        p.add_argument("--option", action="append", default=[], metavar="VALUE=LABEL", help=f"{OPTIONS_MIN} to {OPTIONS_MAX} of them")
+        p.add_argument("--recommend", default=None, metavar="VALUE")
+        p.add_argument("--default", default=None, metavar="VALUE")
+        p.add_argument("--deadline", default=None, help="`3:00 PM` (today, Pacific) or an ISO time with its zone")
+        p.add_argument("--page", default=None, metavar="FILE.md",
+                       help=f"the ask's page as Notion-flavored Markdown, LaTeX in $`...`$ and $$ blocks, written to the template in "
+                            f"{SKILL_ASKING}: created in the database (needs $NOTION_API_KEY), and the card links it")
+        p.add_argument("--area", default=None, choices=AREAS, metavar="AREA", help=f"--page: one of {', '.join(AREAS)}")
+
+    p = cmd("ask", "1:1: an issue in the owner's Linear team, tagged in #agent-coordination with its doorbell; to @daniel, "
+                   "the ask's page in the Asks for Daniel database and its #ask-daniel card (the card flags, as ask-daniel --page)",
+            as_=True, body=True)
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
+    card_flags(p)
+    p.set_defaults(verb=None, id=None, link=None, wait=False, every=WAIT_EVERY_S, json=False)
     p = cmd("linear", "Linear issues: `check` (what the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` "
                       "(by name; " + LINEAR_STATES + "), `comment ISSUE TEXT --as HANDLE`, `list TEAM [--state S]` (open by default)")
     p.add_argument("verb", choices=("check", "state", "comment", "list"))
@@ -2834,18 +2875,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("id", nargs="?", metavar="ID", help="the card's id, as posting it printed")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
                    help="the asking coordinator's handle (workers ask through theirs); pages: only this lane's")
-    p.add_argument("--agent-url", default=None, help="the asking agent's link on the card (default $RESEARCH_AGENT_URL)")
-    p.add_argument("--kind", choices=KINDS, default=None, help="blocking waits for Daniel; default proceeds at the deadline unless he objects")
-    p.add_argument("--question", default=None, help="one line")
-    p.add_argument("--why", default=None, help="why it matters")
-    p.add_argument("--option", action="append", default=[], metavar="VALUE=LABEL", help=f"{OPTIONS_MIN} to {OPTIONS_MAX} of them")
-    p.add_argument("--recommend", default=None, metavar="VALUE")
-    p.add_argument("--default", default=None, metavar="VALUE")
-    p.add_argument("--deadline", default=None, help="`3:00 PM` (today, Pacific) or an ISO time with its zone")
-    p.add_argument("--page", default=None, metavar="FILE.md",
-                   help=f"the ask's page as Notion-flavored Markdown, LaTeX in $`...`$ and $$ blocks, written to the template in "
-                        f"{SKILL_ASKING}: created in the database (needs $NOTION_API_KEY), and the card links it")
-    p.add_argument("--area", default=None, choices=AREAS, metavar="AREA", help=f"--page: one of {', '.join(AREAS)}")
+    card_flags(p)
     p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
     p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
     p.add_argument("--wait", action="store_true", help="poll until the card is decided (or overdue); exit 0 once decided")

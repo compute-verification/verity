@@ -1279,6 +1279,47 @@ def test_pages_lists_the_lanes_recent_asks_with_status_decision_and_newest_comme
     assert rc == 0 and json.loads(out)[0]["decision"] == "Option B, and restate gamma"
 
 
+@pytest.mark.parametrize("to", ["@daniel", "daniel"])
+def test_ask_to_daniel_makes_his_page_and_card_as_ask_daniel_page_does(route, notion, fake, registry, tmp_path, capsys, to):
+    """One `ask` verb whose target picks the store: a handle's Linear team, or the Asks for Daniel database."""
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD)
+    rc, out, err = run(capsys, "ask", "--to", to, *card_argv("--page", str(page), "--area", "Process", link=None)[1:])
+    assert rc == 0 and out.split()[0] == "42" and "page https://app.notion.com/p/p1" in err
+    via_ask = (list(notion.requests), list(route.requests))
+    notion.requests.clear()
+    route.requests.clear()
+    assert run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))[0] == 0
+    assert via_ask == (notion.requests, route.requests) and [r[:2] for r in notion.requests] == [("POST", "/v1/pages"), ("PATCH", "/v1/pages/p-1")]
+    assert COORD not in fake.messages                                  # no tag in #agent-coordination, and no Linear issue
+
+
+def test_ask_to_daniel_names_exactly_the_flags_it_lacks_and_sends_nothing(route, notion, fake, registry, tmp_path, capsys):
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD)
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@daniel", "--question", "Adopt it?", "--page", str(page))
+    assert rc == 2 and "it needs --kind, --why, --option, --recommend, --default, --deadline, --area;" in err
+    assert "asking-daniel/SKILL.md" in err and "`ask-daniel --link`" in err
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "daniel")
+    assert rc == 2 and "it needs --kind, --question, --why, --option, --recommend, --default, --deadline, --page, --area;" in err
+    full = card_argv("--page", str(page), "--area", "Process", link=None)[1:]
+    rc, _, err = run(capsys, "ask", "--to", "@daniel", *full, "--text", "the brief")
+    assert rc == 2 and "give its Markdown as --page FILE.md" in err
+    rc, _, err = run(capsys, "ask", "--to", "@daniel", *full, "--urgent")
+    assert rc == 2 and "--kind blocking" in err
+    rc, _, err = run(capsys, "ask", "--to", "@daniel", *full, "--deadline", "1:00 PM")
+    assert rc == 2 and "has passed" in err                             # then the card's own checks, as ask-daniel makes them
+    assert not notion.requests and not route.requests and not fake.calls
+
+
+def test_ask_to_daniels_dry_run_prints_the_page_and_the_card_and_sends_nothing(route, notion, fake, registry, tmp_path, capsys):
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD)
+    rc, out, err = run(capsys, "ask", "--to", "@daniel", *card_argv("--page", str(page), "--area", "Process", "--dry-run", link=None)[1:])
+    assert rc == 0 and not out and f"dry-run: POST {slack.NOTION_API}/pages" in err and f"dry-run: POST {slack.ASK_DANIEL}" in err
+    assert not notion.requests and not route.requests and not fake.calls
+
+
 # ---- routing: `@name` at the start of a post rings that name's doorbell ---------------------------------------------------------------
 
 VECTORS = Path(__file__).with_name("slack_routing_vectors.json")
