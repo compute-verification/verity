@@ -5,14 +5,15 @@
 #   bash benchmarks/hash/loop/iterate.sh N "one-line hypothesis"            # all three GPUs
 #   MACHINES="vy-dc-b200" bash benchmarks/hash/loop/iterate.sh N "..."      # a subset (a rerun after a preemption)
 #
-# ARMS, ARM_NAMES (bench arm=loop arm, for an arm collect.py doesn't name) and REPS pass through to job.sh. The launches return
+# ARMS, ARM_NAMES (bench arm=loop arm, for an arm collect.py doesn't name) and REPS pass through to job.sh; SWEEP=what-if labels a
+# what-if run (an arm that doesn't serve; N then names it, e.g. what-if-a). The launches return
 # at once; this script then waits on each run (`--wait`). If this VM stops waiting, the runs go on: label them later with
 # `python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis "..."`.
 set -uo pipefail
 SELF=$0
 # one function, parsed whole before it runs: editing this file while an iteration waits cannot change what it does
 main() {
-[ $# -ge 2 ] || { sed -n '2,11p' "$SELF"; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,12p' "$SELF"; exit 2; }
 N=$1 HYP=$2
 cd "$(git rev-parse --show-toplevel)"
 BRANCH=$(git rev-parse --abbrev-ref HEAD) HEAD_SHA=$(git rev-parse HEAD)
@@ -53,7 +54,7 @@ for f in "$LOGS"/*.log; do
   tail -1 "$f"
   [ -n "$r" ] && runs+=("$r")
 done
-python3 benchmarks/hash/loop/label.py "${runs[@]}" --row "$N" --hypothesis "$HYP" --branch "$BRANCH"
+python3 benchmarks/hash/loop/label.py "${runs[@]}" --row "$N" --hypothesis "$HYP" --branch "$BRANCH" --sweep "${SWEEP:-iteration}"
 echo "iteration $N at $BRANCH@$HEAD_SHA: ${runs[*]}"
 }
 main "$@"
