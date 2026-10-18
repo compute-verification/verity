@@ -134,18 +134,20 @@ def _lams(root: Shape, n: int, objective: Objective, grid: int) -> list[float]:
 
 
 def _geo(a: float, b: float, f: float) -> float:
-    return a * (b / a) ** f if a > 0 and b > 0 else (a if f < 0.5 else b)
+    return a * (b / a) ** f
 
 
 def _between(parent: Shape, child: Shape, count: int, split: int) -> Shape:
-    """A unit of 1/`split` of `parent`, each of its features log-linear between the parent's (split 1) and the child's
-    (split `count`); a row only the child opens (its incoming accumulator, say) is opened whole."""
-    f = log(split) / log(count)
+    """A unit of 1/`split` of `parent`: its ANDs, rows and cap log-linear between the parent's (split 1) and the child's
+    (split `count`), a row only the child opens (its incoming accumulator, say) opened whole, and its commitment the
+    parent's plus the share 1 - 1/split of the boundaries the child's cut adds."""
+    f, b = log(split) / log(count), (1 - 1 / split) / (1 - 1 / count)
     rows = tuple(round(_geo(p, c, f)) if p and c else c for p, c in zip_longest(parent.rows, child.rows, fillvalue=0)
                  if c)
     return Shape(f"{parent.id}/{split}", round(_geo(parent.ands, child.ands, f)), parent.work // split,
-                 child.out_bits, child.out_gates, rows, round(_geo(parent.commit_bits, child.commit_bits, f)),
-                 _geo(parent.commit_rows, child.commit_rows, f), parent.influence // split,
+                 child.out_bits, child.out_gates, rows,
+                 round(parent.commit_bits + b * (child.commit_bits - parent.commit_bits)),
+                 parent.commit_rows + b * (child.commit_rows - parent.commit_rows), parent.influence // split,
                  max(1, round(_geo(parent.cap, child.cap, f))))
 
 
@@ -169,6 +171,14 @@ def _pressure(prog: _Program, s: Shape, n: int, threshold: float, out: list[Pres
                 out.append(Pressure("boundary", s.id, child.id, prog.lam, g, 1 - price / best))
         for child, count in parts:
             _pressure(prog, child, n * count, threshold, out, seen)
+
+
+def pressure(op: str, root: Shape, n: int, costs: CostModel, objective: Objective, lam: float, *,
+             replay: tuple[str, int] | None = None, threshold: float = 0.1) -> list[Pressure]:
+    """The hints at one density `lam` (a plan's), each saving more than `threshold`."""
+    out: list[Pressure] = []
+    _pressure(_Program(op, costs, objective, lam, replay), root, n, threshold, out, set())
+    return _strongest(out)
 
 
 def cuts(op: str, root: Shape, n: int, costs: CostModel, objective: Objective, *, grid: int = 41,
@@ -249,4 +259,4 @@ def shape_of(defn, pieces: Mapping[str, int], *, work: Mapping[str, int] | None 
     return walk(defn)
 
 
-__all__ = ["Pressure", "Shape", "cuts", "shape_of"]
+__all__ = ["Pressure", "Shape", "cuts", "pressure", "shape_of"]

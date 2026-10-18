@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from math import ceil, exp, lgamma, log, log1p
+from math import ceil, exp, expm1, fsum, inf, lgamma, log, log1p
 
 from verity.ml.circuits.cut import fits
 from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
@@ -202,18 +202,29 @@ class Plan:
     certificate: Certificate | None = field(default=None, compare=False)
 
 
-def _miss(n: int, m: int, k: int) -> float:
-    """C(n - m, k) / C(n, k): a uniform k-subset of n misses m given units.  Past 2^25 units `lgamma`'s differences lose
-    their digits, so it is the product prod_{i < t} (1 - s / (n - i)) over t = min(m, k), s = max(m, k), by its midpoint;
-    either is within about 1e-7 relative there."""
+def _log_miss(n: int, m: int, k: int) -> float:
+    """log C(n - m, k) / C(n, k), that a uniform k-subset of n misses m given units: the product
+    prod_{i < t} (1 - s / (n - i)) over t = min(m, k), s = max(m, k), summed when t is small, by `lgamma` up to 2^25 units
+    and past that, where `lgamma`'s differences lose their digits, by its midpoint (either within about 1e-7 relative)."""
     if k > n - m:
-        return 0.0
+        return -inf
     if m == 0 or k == 0:
-        return 1.0
-    if n <= 1 << 25:
-        return exp(lgamma(n - m + 1) - lgamma(n - m - k + 1) - lgamma(n + 1) + lgamma(n - k + 1))
+        return 0.0
     t, s = min(m, k), max(m, k)
-    return exp(t * log1p(-s / (n - (t - 1) / 2)))
+    if t <= 64:
+        return fsum(log1p(-s / (n - i)) for i in range(t))
+    if n <= 1 << 25:
+        return lgamma(n - m + 1) - lgamma(n - m - k + 1) - lgamma(n + 1) + lgamma(n - k + 1)
+    return t * log1p(-s / (n - (t - 1) / 2))
+
+
+def _miss(n: int, m: int, k: int) -> float:
+    return exp(_log_miss(n, m, k))
+
+
+def _hit(n: int, m: int, k: int) -> float:
+    """1 - `_miss`, its digits kept when the draw is sparse."""
+    return -expm1(_log_miss(n, m, k))
 
 
 def touched(n: int, c: int, k: int) -> float:
@@ -222,7 +233,7 @@ def touched(n: int, c: int, k: int) -> float:
     if k <= 0:
         return 0.0
     whole, rest = divmod(n, c)
-    return whole * (1 - _miss(n, c, k)) + (1 - _miss(n, rest, k) if rest else 0.0)
+    return whole * _hit(n, c, k) + (_hit(n, rest, k) if rest else 0.0)
 
 
 def _statement_sizes(cap: int, units: int) -> list[int]:
@@ -255,13 +266,13 @@ def replay_cost(sizes: Mapping[str, int], chosen: Sequence[Candidate], costs: Co
     for name in sorted({c.replay for c in chosen if c.replay}):
         if name not in costs.replay:
             raise KeyError(f"the cost model has no replay domain {name!r}")
-        dom, miss = costs.replay[name], 1.0
+        dom, log_miss = costs.replay[name], 0.0
         for c in chosen:
             if c.replay == name:
                 if c.units != dom.units * c.per_replay:
                     raise ValueError(f"{c.template!r}: {c.units} units are not {dom.units} replay units of {c.per_replay}")
-                miss *= _miss(c.units, c.per_replay, sizes[c.template])
-        total += dom.units * (1 - miss) * dom.cost
+                log_miss += _log_miss(c.units, c.per_replay, sizes[c.template])
+        total += dom.units * -expm1(log_miss) * dom.cost
     return total
 
 

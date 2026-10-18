@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.candidates import Shape, _lams, _Program, cuts, shape_of
+from verity.core.protocols.sampled_proofs.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
 from verity.core.protocols.sampled_proofs.optimize import CostModel, Objective, frontier
 
 STEP = Shape("Step", 4190, 32, 32, rows=(32, 32, 4, 4), commit_bits=32, cap=4096)
@@ -55,6 +55,8 @@ def test_boundary_pressure_names_the_unit_between_two_definitions():
     assert set(alts.values()) == {(("Dot{K=1024}", N),), (("Step", 32 * N),)}
     (h,) = hints
     assert (h.kind, h.node, h.child, h.split) == ("boundary", "Dot{K=1024}", "Step", 8) and h.saving > 0.2
+    assert pressure("dot", dot, N, CostModel(per_and=1e-10, commit_per_bit=1.1e-10), OBJECTIVE, h.lam) == [h]
+    assert pressure("dot", dot, N, CostModel(per_and=1e-10, commit_per_bit=1.1e-10), OBJECTIVE, h.lam * 1e-6) == []
 
 
 def test_shape_of_reads_a_definitions_body():

@@ -13,7 +13,7 @@ import pytest
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, CostModel, Objective, ReplayDomain, TemplateCost,
-                                                           _miss, certify, density_bound, for_budget, for_target, frontier,
+                                                           _hit, _miss, certify, density_bound, for_budget, for_target, frontier,
                                                            needs_benchmark, perturb, replay_cost, row_ands,
                                                            sensitivity, template_cost, touched, work_law)
 
@@ -286,3 +286,14 @@ def test_miss_holds_its_digits_on_huge_populations():
         for m, k in ((1, 1), (4096, 27_713), (10 ** 6, 100), (64, 10 ** 6)):
             t, s = min(m, k), max(m, k)
             assert _miss(n, m, k) == pytest.approx(exp(fsum(log1p(-s / (n - i)) for i in range(t))), rel=1e-6)
+
+
+def test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_units():
+    """At 10^17 units the miss probability of a single draw rounds to 1: what it touches is kept as 1 - miss directly."""
+    n = 10 ** 17
+    assert touched(n, 4, 1) == pytest.approx(1.0, rel=1e-12)
+    assert touched(n, 1024, 30_000) == pytest.approx(30_000, rel=1e-6)
+    assert _hit(n, 3, 2) == pytest.approx(6 / n, rel=1e-9)
+    a = Candidate("x", "A", n, 1, 16, replay="layer", per_replay=10 ** 6)
+    costs = CostModel(per_and=1.0, replay={"layer": ReplayDomain(n // 10 ** 6, 2.0)})
+    assert replay_cost({"A": 1000}, [a], costs) == pytest.approx(2000.0, rel=1e-6)
