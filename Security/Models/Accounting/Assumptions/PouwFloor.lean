@@ -43,8 +43,8 @@ blocks right at every coin force the block's own credits outside `m` to at least
 It is A3 with the help that is the same at every salt free (pre-salt precomputation, the weights, prompts and
 activations that don't depend on the salt) and the rest counted as `k` bits of advice: one fixed outside behaviour per
 value of the advice, each a strategy whose help doesn't depend on the salt, so the floor at `δ` for each and a union
-bound give `2^k · δ`. At `k = 0` it is the floor with every coin-independent crossing free, which `PouwFloorOff` at
-`help = 0` is a case of only when nothing crosses. An open conjecture, not under `shape.premises`. -/
+bound give `2^k · δ`. At `k = 0` it frees every crossing that is the same at every salt, where `PouwFloorOff` without
+its `ρ` term frees none. An open conjecture, not under `shape.premises`. -/
 def PouwFloorAdvice {Ωs Ωd : Type} [Fintype Ωs] [Fintype Ωd] {L : Type*} [LinearOrder L] [Fintype L]
     (S : Ωs × Ωd → Actual.Run L) (P : Verdict (Ωs × Ωd) L) (X cert : Finset L) (π : ∀ r, Fin (S r).A.N → ℕ)
     (m : ∀ r, Finset (Fin (S r).A.N)) (Wb Nmin k : ℕ) (δ : ℝ) : Prop :=

@@ -22,6 +22,11 @@ outsourcing term is the outside's advice about the window's salt (`Attribution.a
 It replaces `PouwLocalOff`'s isolation (help 0) with custody: a serving block takes in prompts, activations and
 anything else that doesn't depend on the salt, and the statement charges none of it.
 
+Placement is the actual circuit's: the statement quantifies over every strategy, since a prover that passes PoUW need
+not run the declared circuit as placed. A declared placement (`Accounting.Requirement.Placement`, #2399) enters
+through its run (`Placement.actual`, a strategy constant in the coins) and through the block: each spatial unit has its
+own salt and its own verdict, whose blocks are the PoUW units the placement puts at the unit's leaves.
+
 Not proved. The intended proof: B4Covered on each draw's strategy `fun s => S (s, d)` (the four premises restrict to
 it), then `EgressAdvice` for `OutsideAdvice` at `advice`, then `PouwFloorAdvice` and the union bound of
 `Accounting.SecurityProofs.PouwLocalOff`. Listed under `shape.frozen` as `unstated` until it is.
