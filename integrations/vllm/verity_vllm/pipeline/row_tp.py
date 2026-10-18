@@ -50,6 +50,7 @@ from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
+from verity_vllm.pipeline import store_data as SD
 from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
 
 TP_UTIL = "0.6"
@@ -225,11 +226,10 @@ class TpRow(Row):
         ``build.construction``."""
         self.aot = CR.aot_of(self.row) if self.cb.build_construction == "record" else None
         if self.aot is not None and not (aot_dir := self.cb.aot_trace):
-            from verity_vllm import records
             aot_dir = f"{self.d}/aot_trace"
             dirs = tuple(f"build/rank{r}/{n}/" for r in range(self.W) for n in ["build_step", *(f"build_request_LP{lp}_T{t}" for lp, t in self.shapes)])
             try:
-                records.fetch(self.aot["trace"], Path(aot_dir), [p for p in records.listing(self.aot["trace"]) if p.startswith(dirs)])
+                SD.fetch(self.aot["trace"], Path(aot_dir), [p for p in SD.listing(self.aot["trace"]) if p.startswith(dirs)])
             except RuntimeError as e:
                 self.verdict("build", "FAIL", f"rc=1 the AOT Build's trace {self.aot['trace']} did not fetch ({e}); --aot-trace DIR gives it")
                 self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
