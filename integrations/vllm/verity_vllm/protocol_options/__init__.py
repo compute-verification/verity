@@ -345,10 +345,10 @@ def commit_context(profile: Any, *, world: int = 1, settings: Any = None) -> Con
 
 def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[str, ...] | None:
     """A row's protocol set, checked before any stage runs (the fail-closed point of single-GPU and TP rows alike): the
-    ``PROTOCOLS`` knob, else the workload target's ``protocols``; None for sampled proofs alone, the row as it has always
+    ``PROTOCOLS`` knob, else the workload's ``engine.target.protocols``; None for sampled proofs alone, the row as it has always
     run.  Either is the whole set, sampled proofs included.  `Refused` names every refusal: a set without sampled proofs,
     a knob that contradicts the target, and every refusal of the set at the Commit (a TP row, an adapter not on this tree)."""
-    enabled, declared = parse(knob), parse((workload.get("target") or {}).get("protocols"))
+    enabled, declared = parse(knob), parse((config.RowEngine.of(workload).target or {}).get("protocols"))
     if enabled and declared and enabled != declared:
         raise Refused([f"PROTOCOLS {list(enabled)} contradicts the workload target's protocols {list(declared)}"])
     enabled = enabled or declared

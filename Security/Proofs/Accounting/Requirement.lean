@@ -77,6 +77,17 @@ theorem RequirementHeld : Accounting.Guarantees.RequirementHeld := by
   intro G _ W e ℓ s B t H ⟨hres, hpack, _⟩
   exact bits_le_bitsAt_add W ℓ H (fun v hv => hres ▸ Finset.mem_image_of_mem _ hv) hpack
 
+theorem RequirementHeldLive : Accounting.Guarantees.RequirementHeldLive := by
+  intro G _ W e ℓ s B t H ⟨hres, _, _⟩
+  have hmaps : ∀ v ∈ (live W e t).filter (fun v => ℓ.block v ∉ H), ℓ.block v ∈ s.resident t \ H := fun v hv =>
+    Finset.mem_sdiff.mpr ⟨hres ▸ Finset.mem_image_of_mem _ (Finset.mem_filter.mp hv).1, (Finset.mem_filter.mp hv).2⟩
+  rw [liveBits, bits, ← Finset.sum_filter_add_sum_filter_not (live W e t) (fun v => ℓ.block v ∈ H),
+    ← Finset.sum_fiberwise_of_maps_to hmaps]
+  refine congrArg _ (Finset.sum_congr rfl fun j hj => ?_)
+  have hjH : j ∉ H := (Finset.mem_sdiff.mp hj).2
+  rw [liveIn, bitsIn, bits, Finset.filter_filter]
+  exact Finset.sum_congr (Finset.filter_congr fun v _ => ⟨fun h => h.2, fun h => ⟨h ▸ hjH, h⟩⟩) fun _ _ => rfl
+
 theorem RequirementDense : Accounting.Guarantees.RequirementDense := by
   intro G _ W e ℓ s B t D ⟨hres, _, _⟩ hD
   have hmaps : ∀ v ∈ live W e t, ℓ.block v ∈ s.resident t := fun v hv => hres ▸ Finset.mem_image_of_mem _ hv

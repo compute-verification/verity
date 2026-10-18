@@ -36,14 +36,14 @@ def test_60_shape_hopper_build_for_an_l40s_row_fails_by_name():
 
 
 def test_declared_target_of_another_family_fails_before_build():
-    wl = {"target": {"compute_capability": [9, 0], "num_sms": 132, "flash_attn_version": 3}}
+    wl = {"engine": {"target": {"compute_capability": [9, 0], "num_sms": 132, "flash_attn_version": 3}}}
     rec = tf.check(ROW_L40S, wl, ["build"], want_device=False)
     assert rec["verdict"] == "FAIL" and rec["fail_class"] == "PRECHECK_FAIL_TARGET_FAMILY"
     assert rec["declared"] == [9, 0] and [m["fact"] for m in rec["mismatches"]] == ["declared"]
 
 
 def test_matching_declared_target_and_matching_build_pass():
-    wl = {"target": {"compute_capability": [8, 9], "num_sms": 142}}
+    wl = {"engine": {"target": {"compute_capability": [8, 9], "num_sms": 142}}}
     bs = {"step": {"target": {"compute_capability": [8, 9]}}}
     rec = tf.check(ROW_L40S, wl, ["build"], want_device=False, build_summary=bs)
     assert rec["verdict"] == "PASS" and rec["ok"] and rec["fail_class"] is None and rec["mismatches"] == []
@@ -62,7 +62,7 @@ def test_pod_device_of_another_family_fails_for_a_gpu_stage(monkeypatch):
 def test_device_target_build_reads_the_pod_device_declared_target_build_does_not(monkeypatch):
     monkeypatch.setattr(tf, "device_cc", lambda: ((9, 0), "test"))
     assert tf.check(ROW_L40S, {"sweep": {}}, ["build"])["verdict"] == "FAIL"          # target=device -> the Build would be Hopper
-    wl = {"target": {"compute_capability": [8, 9]}}
+    wl = {"engine": {"target": {"compute_capability": [8, 9]}}}
     assert tf.check(ROW_L40S, wl, ["build"])["verdict"] == "PASS"                       # declared L40S target on a Hopper host: Build is portable
 
 
@@ -77,7 +77,7 @@ def test_rtxpro6000_rows_are_the_cc_12_0_family(monkeypatch):
     assert tf.row_family(row) == ("rtxpro6000", (12, 0))
     monkeypatch.setattr(tf, "device_cc", lambda: ((12, 0), "test"))
     bs = {"step": {"target": {"compute_capability": [12, 0], "num_sms": 188}}}
-    assert tf.check(row, {"target": {"compute_capability": [12, 0]}}, ["build", "match", "commit"], build_summary=bs)["verdict"] == "PASS"
+    assert tf.check(row, {"engine": {"target": {"compute_capability": [12, 0]}}}, ["build", "match", "commit"], build_summary=bs)["verdict"] == "PASS"
     assert tf.check(ROW_L40S, {"sweep": {}}, ["match"])["mismatches"][0]["why"].startswith("pod device 12.0 != row family 8.9")
     monkeypatch.setattr(tf, "device_cc", lambda: ((8, 9), "test"))
     assert tf.check(row, {"sweep": {}}, ["match"])["verdict"] == "FAIL"

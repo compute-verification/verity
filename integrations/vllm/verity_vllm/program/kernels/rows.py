@@ -17,7 +17,6 @@ from __future__ import annotations
 import collections
 import hashlib
 import json
-import re
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, Callable, Sequence
@@ -25,7 +24,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
-from verity_vllm.program.kernels.kernel_registry import Declined, register
+from verity_vllm.program.kernels.kernel_registry import Declined, prim_static, register
 from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
 from verity_vllm.program.kernels import value_rows as VR
 
@@ -167,23 +166,6 @@ EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANC
 
 GEMM_CHUNK = 4096                       # Gemm coordinates evaluated per vectorised k16 chain (bounds the int64 temporaries to ~0.5 GB)
 SAMPLED_MEMBER = "sampled_token_ids"
-
-_DOT_STATIC_FN = re.compile(r'^\{"fn":"([A-Za-z0-9_]+)"\}$')
-
-
-def prim_static(statics: dict[str, Any], key: str, family: str) -> str:
-    """[R17 dense, ruling R17-3] A function-valued static (`DOT` of `Gemm_v2{K,N,DOT}` / `Attention_v2{..., DOT, INV}`, `INV` of the latter)
-    -> the registered primitive id.  The spec text renders it as `DOT={"fn":"HopperBF16WgmmaDot16_v1"}` (verity.ml.circuits.codec._spec_id); a bare
-    `<Name>_v<k>` id is accepted too.  Anything else is unresolved BY NAME: the evaluator never guesses the architecture from the target."""
-    v = statics.get(key, "")
-    raw = str(getattr(v, "id", v) or "")
-    m = _DOT_STATIC_FN.match(raw)
-    if m:
-        return m.group(1)
-    if re.match(r"^[A-Za-z0-9]+_v\d+$", raw):
-        return raw
-    raise Declined(f"{family} {key} static {raw!r} does not name a registered primitive")
-
 
 def gemm_dot_prim(statics: dict[str, Any]) -> str:
     """The DOT static of a `Gemm_v2{K,N,DOT}` row -> the registered k16 primitive id (see `prim_static`)."""
@@ -779,7 +761,7 @@ _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
-from verity_vllm.program.kernels import act_rows, softcap_rows  # noqa: E402  -- SiluMul_v2's row, AttentionSoftcap_v2's head twin
+from verity_vllm.program.kernels import act_rows, batched_gemm_rows, deepgemm_rows, dsa_norm_rows, softcap_rows  # noqa: E402
 
 
 def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
@@ -788,10 +770,12 @@ def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dic
     return softcap_rows.attention_softcap(f64_statics(statics), ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
 
 
-EVALUATORS |= {m.FAMILY: m.EVALUATOR for m in (softcap_rows, act_rows)}
-_row(softcap_rows.FAMILY, attention_softcap, ("out",), check_targets=softcap_rows.check_targets)
-_row(act_rows.FAMILY, act_rows.silu_mul_expf, ("out",), check_targets=act_rows.check_targets)
-
+EVALUATORS |= {m.FAMILY: m.EVALUATOR for m in (softcap_rows, act_rows, dsa_norm_rows, batched_gemm_rows)}
+for m, fn in ((softcap_rows, attention_softcap), (act_rows, act_rows.silu_mul_expf), (dsa_norm_rows, dsa_norm_rows.row),
+              (batched_gemm_rows, batched_gemm_rows.batched_gemm)):
+    _row(m.FAMILY, fn, ("out",), check_targets=m.check_targets)
+EVALUATOR_PROVENANCE[batched_gemm_rows.FAMILY] = batched_gemm_rows.PROVENANCE
+deepgemm_rows.register_rows(EVALUATORS, _row)
 from verity_vllm.program.kernels import ir_rows  # noqa: E402
 
 for _f in ir_rows.FAMILIES:
