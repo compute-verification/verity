@@ -237,6 +237,42 @@ def test_the_builds_modules_are_the_expected_identities():
     assert src.expected_modules() == ["c00.input", "c00.mm", "c01.attention", "logits_processor", "runner.sampler"]
 
 
+def _tuner(path, compiled: list[int], launched: list[int]):
+    from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+
+    def cfg(r0):
+        return SimpleNamespace(kwargs={"XBLOCK": 2, "R0_BLOCK": r0}, num_warps=2, num_stages=1)
+
+    t = object.__new__(CachingAutotuner)
+    t.filename, t.compile_results = str(path), [SimpleNamespace(config=cfg(r)) for r in compiled]
+    t.launchers = [SimpleNamespace(config=cfg(r)) for r in launched]
+    return t
+
+
+def test_launch_configs_reads_every_autotuner_of_a_kernel_frozen_heap_included(tmp_path):
+    """The autotuner a wrapper runs need not be any module's global, and vLLM freezes the heap after capture: every live autotuner
+    counts, keyed by its kernel module's text, and the heap is frozen again afterwards."""
+    import gc
+    import hashlib
+
+    one, two = tmp_path / "one.py", tmp_path / "two.py"
+    one.write_text("def KERNEL(): pass\n")
+    two.write_text("def OTHER(): pass\n")
+    held = [_tuner(one, [128, 64], [128, 64]), _tuner(one, [128, 64], [128]), _tuner(two, [128], [128]), _tuner(two, [128, 64], [64])]
+    gc.freeze()
+    try:
+        got = S.ServedCompiledSource.launch_configs()
+        assert gc.get_freeze_count() > 0
+    finally:
+        gc.unfreeze()
+    a, b = (got[hashlib.sha256(p.read_bytes()).hexdigest()] for p in (one, two))
+    won = {"kwargs": {"XBLOCK": 2, "R0_BLOCK": 128}, "num_warps": 2, "num_stages": 1}
+    lost = {**won, "kwargs": {"XBLOCK": 2, "R0_BLOCK": 64}}
+    assert a == {"candidates": [won, lost], "executed": [won], "autotuners": 2}
+    assert b == {"candidates": [won, lost], "executed": [won, lost], "autotuners": 2}
+    del held
+
+
 class _Meta(SimpleNamespace):
     pass
 

@@ -504,7 +504,7 @@ class ServedCompiledSource:
         if frozen:                      # vLLM freezes the heap after capture, and get_objects skips what is frozen
             gc.unfreeze()
         try:
-            tuners = [o for o in gc.get_objects() if isinstance(o, CachingAutotuner)]
+            tuners = [o for o in gc.get_objects() if issubclass(type(o), CachingAutotuner)]
         finally:
             if frozen:
                 gc.freeze()
