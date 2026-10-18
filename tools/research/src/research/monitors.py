@@ -445,6 +445,7 @@ def stalls_n1(ctx: Ctx) -> list[Finding]:
 # ---- the held-idle panel (node 1's held-idle-hourly.jsonl, which verity-console.service writes) ---------------------------------
 
 HELD_IDLE = "/workspace/usage/held-idle-hourly.jsonl"
+HELD_IDLE_PANEL = "/workspace/research/console/outbox/held-idle-hourly.json"   # verity_console.py's last published copy
 HELD_IDLE_RECENT_S = 86400      # well inside EVENTS_KEEP_S, so an hour the state has forgotten is never posted again
 
 
@@ -497,9 +498,15 @@ def held_idle(ctx: Ctx) -> list[Finding]:
 
 
 def held_idle_stale(ctx: Ctx) -> list[Finding]:
-    """No completed hour in node 1's held-idle-hourly.jsonl for 70 minutes: the held-idle panel has stopped."""
+    """Neither a completed hour in node 1's held-idle-hourly.jsonl nor a published held-idle panel for 70 minutes: the panel
+    has stopped. An hour in which no GPU was held adds no line to the jsonl, so an idle node is told from a stopped panel by
+    the panel's own `updated_at` (17 Oct 09:13Z: node 1 held no GPU from 08:00Z and this fired while the panel ran)."""
     ends = [e for e in map(_hour_end, _held_rows(ctx)) if e is not None]
-    late = ctx.now - max(ends, default=3600)
+    try:
+        published = epoch(json.loads(ctx.path(HELD_IDLE_PANEL).read_text())["updated_at"])
+    except (OSError, ValueError, KeyError, TypeError):
+        published = 0.0
+    late = ctx.now - max(*ends, published, 3600)
     if late <= 70 * 60:
         return []
     last = f"the newest completed hour in it is {iso(max(ends) - 3600)[11:16]}Z" if ends else "it has no hour at all"
@@ -1139,7 +1146,7 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
 # ---- failed checks (relay-side: GitHub and the Slack registry name each PR's lane) ---------------------------------------------
 
 MERGE_THREAD = "1790957906.278529"      # #agent-coordination's merge thread, where the lander and the lanes follow the trains
-LANDER = "old-circuits-and-proofs"
+LANDER = "ci"
 REPO_SLUG = "compute-verification/verity"
 # Node 2 too without N2_GUARD: its check slots run whole checks at any time, so one niced read of their run files a minute is
 # nothing they don't already bear (and its guard refuses everything while its fill runner is stopped)

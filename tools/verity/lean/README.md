@@ -70,7 +70,9 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
 - the guarantees say what their records say, and each names its owner (below);
 - with a `verifier` section, nothing the verifier's `entries` reach is `@[implemented_by]` or `@[extern]` outside `allow`,
-  and they reach the `hash` namespace only through `stop` (`verifier_failures`);
+  and they reach the `hash` namespace only through `stop` (`verifier_failures`). The walk follows definitions' values,
+  `implemented_by` targets and `@[csimp]` replacements, the code compiled in place of a constant; a csimp rewrite itself
+  is a theorem the replay checks, so it is listed (`csimp` in the facts) and not refused;
 - with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its
   witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stated `¬ C …` past its `∀`
   and `∃` binders with the claim `C` at the head, and guarantees `meets`, one per deployed record, that state the claim's
@@ -93,6 +95,13 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 `--build` builds in `sandbox.sh` where `unshare` and unprivileged user namespaces are available: new user, mount, network
 and PID namespaces, everything read-only but the build's `.lake` directories, no network, and nothing outliving the build.
 The audit says when it had to build without one; the `compile-time` check then stands in for the sandbox.
+
+A package that pins ArkLib (`Security/Proofs`, and `Security`, which audits it beside itself) is refused, exit 2, on a
+machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgroup), by `check.py` and the fast path
+alike; the refusal prints the fast path's `research run --on vy-nebius-1 …` line. `VERITY_LEAN_MEM_FLOOR_GIB` sets
+another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`, so the build of a package that pins Mathlib
+or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, read where
+`/proc/self/cgroup` puts the process, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of

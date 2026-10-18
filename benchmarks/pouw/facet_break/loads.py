@@ -12,10 +12,17 @@ every SASS opcode of class k (warp instructions/SM/clk), divided by 4 (SMSPs an 
 maps a SASS opcode to its census class. Only opcodes whose class is certain are counted, so a reported load is a lower
 bound and a reported violation is real.
 
+`--full` counts the rest of a single-loop program's timed loop too (the loop its run's gate verdict names, read from the
+run's `sass/` listings): each instruction the gate didn't pin runs once an iteration, at a pinned instruction's rate, in
+its census class, or on `issue` alone when it has none (BRA, ISETP, NOP). The machine model's `Run.n` counts every
+executed instruction, so the full load is the one a row must hold; it is still a lower bound (an unclassed instruction
+loads only `issue`).
+
   python loads.py loads OUT/rows.jsonl... [--epoch E] [--probe NAME] [--top N]   # each program's heaviest facets
   python loads.py summary OUT/rows.jsonl... [--epoch E] [--margin 0] [--json]    # every violation (load > 1 + margin)
   python loads.py refit OUT/rows.jsonl... --row R [--epoch E]                    # the refit line a violation needs
   python loads.py table OUT/rows.jsonl... [--epoch E]                            # every program's loads, a JSON line each
+  python loads.py summary OUT/rows.jsonl... --full                               # with every loop instruction counted
 
 `--generic` loads every MMA form through the generic `MMA` lines where its own kind has none (advisory). The generator of
 the programs is `generate.py`, the batch `run.sh`.
@@ -26,19 +33,21 @@ import argparse
 import json
 import re
 import sys
+from fnmatch import fnmatchcase
+from itertools import combinations
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 MM = HERE.parent / "machine_model"
 sys.path.insert(0, str(MM))
 
-from verity_machine_model.model import census, model, rows as mm_rows  # noqa: E402
+from verity_machine_model.model import census, model  # noqa: E402
 
 SMSPS = 4
 
-#: a SASS opcode (the dotted name, no guard) to its census class. The MMA forms map to their own kind (for the JI3n rows,
-#: each form's own coefficient); every MMA form also loads the generic-pipe rows through `MMA` (see `mma_kind`). The order
-#: matters: the first matching rule wins.
+#: a SASS opcode (the dotted name, no guard) to its census class. The MMA forms map to their own kind (for the joint
+#: issue rows, each form's own coefficient); every MMA form also loads the generic-pipe rows through `MMA` (see
+#: `mma_kind`). The order matters: the first matching rule wins.
 CLASS_RULES: list[tuple[str, str]] = [
     # tensor forms (the exact mma.sync SASS)
     (r"IMMA\.16832", "IMMA16832"), (r"IMMA\.16816", "IMMA16816"), (r"IMMA\.8816|IMMA\.1688", "IMMA8816"),
@@ -47,11 +56,30 @@ CLASS_RULES: list[tuple[str, str]] = [
     (r"HMMA\.SP\.16832", "HMMASP16832"), (r"HMMA\.1688", "HMMA1688T"), (r"HMMA\.1684", "HMMA1684T"),
     (r"QMMA\.SF\.16832", "QMMASF16832"), (r"QMMA\.SP\.16864", "QMMASP16864"), (r"QMMA\.16832", "QMMA16832"),
     (r"OMMA\.SF\.16864|OMMA", "OMMASF16864"),
-    # loads (the table routes'); LDS.64, LDS.U8/U16, LDG.E.64 and LDG.E.U8 have no census kind: `unpriced`
-    (r"^LDS$", "LDS32"), (r"^LDS\.128$", "LDS128"),
-    (r"^LDG\.E(\.CONSTANT)?$", "LDG32"), (r"^LDG\.E\.128(\.CONSTANT)?$", "LDG128"),
+    # loads (the table routes'): a sub-word load is its word's class (floors.csv); the 64- and 256-bit and the
+    # L1-skipping (.NA, .STRONG.GPU) loads are classes from VF3q-16, `unpriced` at an epoch without their lines
+    (r"^LDS(\.[US](8|16))?$", "LDS32"), (r"^LDS\.64$", "LDS64"), (r"^LDS\.128$", "LDS128"),
+    (r"^LDG\.E\.NA\.128$", "LDG128NA"), (r"^LDG\.E\.128\.STRONG\.GPU$", "LDG128CG"),
+    (r"^LDG\.E\.ENL2\.256\.STRONG\.GPU$", "LDG256CG"), (r"^LDG\.E\.ENL2\.256(\.CONSTANT)?$", "LDG256"),
+    (r"^LDG\.E(\.[US](8|16))?(\.CONSTANT)?$", "LDG32"), (r"^LDG\.E\.64(\.CONSTANT)?$", "LDG64"),
+    (r"^LDG\.E\.128(\.CONSTANT)?$", "LDG128"),
+    # the side units (floors.csv's RED*, ATOM*, LDSM*, STSM*): a reduction's width is its class, an L2 select op
+    # (min, max, and, or, xor) its own; ATOM.E is ATOME32 whatever its window, since SASS doesn't show a peer CTA's
+    (r"^REDG\.E\.ADD\.[A-Z0-9_]+x4\b", "REDV"), (r"^REDG\.E\.ADD\.64(\.|$)", "RED64"), (r"^REDG\.E\.ADD(\.STRONG|$)", "RED32"),
+    (r"^REDG\.E\.(MIN|MAX|AND|OR|XOR)\b.*\.64(\.|$)", "REDG64"), (r"^REDG\.E\.(MIN|MAX|AND|OR|XOR)\b", "REDG32"),
+    (r"^ATOMG\.E\..*\.64(\.|$)", "ATOMG64"), (r"^ATOMG\.E\.", "ATOMG32"),
+    (r"^ATOMS\..*\.64$", "ATOMS64"), (r"^ATOMS\.", "ATOMS32"),
+    (r"^ATOM\.E\..*\.64(\.|$)", "ATOME64"), (r"^ATOM\.E\.", "ATOME32"),
+    (r"^STS\.128$", "STS128"), (r"^LDGSTS\.E\.BYPASS\.128$", "LDGSTS16"),
+    (r"^LDSM\.16\.M88$", "LDSM_X1"), (r"^LDSM\.16\.M88\.2$", "LDSM_X2"), (r"^LDSM\.16\.M88\.4$", "LDSM_X4"),
+    (r"^LDSM\.16\.MT88$", "LDSM_X1T"), (r"^LDSM\.16\.MT88\.2$", "LDSM_X2T"), (r"^LDSM\.16\.MT88\.4$", "LDSM_X4T"),
+    (r"^LDSM\.8\.MT1616$", "LDSM8T_X1"), (r"^LDSM\.8\.MT1616\.2$", "LDSM8T_X2"),
+    (r"^STSM\.16\.M88$", "STSM_X1"), (r"^STSM\.16\.M88\.2$", "STSM_X2"), (r"^STSM\.16\.M88\.4$", "STSM_X4"),
+    (r"^STSM\.16\.MT88$", "STSM_X1T"), (r"^STSM\.16\.MT88\.2$", "STSM_X2T"), (r"^STSM\.16\.MT88\.4$", "STSM_X4T"),
+    (r"^STSM\.8\.MT1616$", "STSM8T_X1"), (r"^STSM\.8\.MT1616\.2$", "STSM8T_X2"), (r"^STSM\.8\.MT1616\.4$", "STSM8T_X4"),
     # scalar / CUDA lane classes (floors.csv and census share these names)
     (r"IMAD\.WIDE", "IMADW"), (r"IADD\.64", "ALU64"), (r"DFMA|DADD", "W2"), (r"DMUL", "DMUL"),
+    (r"^IDP\.", "IMAD"),  # IDP.4A: the IMAD pipe's (rows.csv's I, the dp4a design's IMAD lanes)
     (r"IMAD|IMUL|IADD3|IADD|LEA\b|LEA\.HI", "ALU_OR_IMAD"),  # resolved below
     (r"LOP3|SHF\b|SHF\.|PRMT|LOP\b", "ALU"),
     (r"HFMA2", "HFMA2"), (r"HADD2|HMUL2", "HFMA2"),
@@ -69,16 +97,25 @@ _IMAD = re.compile(r"\bIMAD\b|\bIMUL\b")
 _ALU = re.compile(r"\bIADD3\b|\bIADD\b|\bLOP3\b|\bLOP\b|\bSHF\b|\bPRMT\b|\bLEA\b")
 
 
+#: a uniform-datapath instruction (`opcode_probe/eps1.py`'s UNIFORM): census class UNI, or UNI64 when it writes a UR pair
+#: (UIADD3.64, UMOV.64, UIMAD.WIDE, LDCU.64), ahead of the vector rules that would match ULOP3, USHF, UPRMT or USEL by
+#: their suffix
+UNIFORM = re.compile(r"U[A-Z].*|LDCU|R2UR|S2UR|CS2UR|VOTEU")
+UR_PAIR = re.compile(r"\.(64|WIDE)\b")
+
+
 def class_of(opcode: str) -> str | None:
     """The census class of a dotted SASS opcode (`IMMA.16832.S8.S8`, `LOP3.LUT`, `SHFL.BFLY`), or None when not certain."""
     op = opcode.split("@")[-1].strip()
     base = op.split(".")[0]
+    if UNIFORM.fullmatch(base):
+        return "UNI64" if UR_PAIR.search(op) else "UNI"
     for pat, kind in CLASS_RULES:
         if re.search(pat, op):
             if kind == "ALU_OR_IMAD":
                 return "IMAD" if _IMAD.search(op) else "ALU" if _ALU.search(op) else None
             return kind
-    if base in ("MOV", "UMOV"):
+    if base == "MOV":
         return "NOROW"
     return None
 
@@ -86,8 +123,9 @@ def class_of(opcode: str) -> str | None:
 MMA_FORMS = frozenset({"IMMA16832", "IMMA16816", "IMMA8816", "IMMASP16864", "IMMASP16832", "HMMA16816F16", "HMMA16816",
                        "HMMASP16832", "HMMA1688T", "HMMA1684T", "QMMASF16832", "QMMASP16864", "QMMA16832",
                        "OMMASF16864"})
-#: the three joint issue rows a MMA form is priced on by its own kind; on every other row it loads through generic `MMA`
-JI3N = ("JI3n_0", "JI3n_1", "JI3n_2")
+#: the joint issue rows (JI3n_0..2, JI3o_0..2, …), where a MMA form is priced by its own kind; on every other row it
+#: loads through generic `MMA`
+JI_ROW = re.compile(r"^JI\d")
 
 
 #: a TLD's class is its width (the registers it writes), which its operands show and its opcode doesn't: a generated
@@ -95,13 +133,29 @@ JI3N = ("JI3n_0", "JI3n_1", "JI3n_2")
 TLD_BY_NAME = {"tld1": "TLD1", "tld2": "TLD2", "tld4": "TLD4w", "tld4n": "TLD4w"}
 _TLD_NAME = re.compile(r"_(tld4n|tld4|tld2|tld1)_")
 
+#: side.cu counts its side unit by a wildcard (`REDG*`, `UBLKRED*`), so its unit's name (`hs_red64`, `sa_red64`) is the
+#: class; a unit missing here (a 4 KB bulk op is several TMAred512) stays unclassed
+SIDE_BY_NAME = {"red32": {"REDG*": "RED32"}, "red64": {"REDG*": "RED64"}, "redv4": {"REDG*": "REDV"},
+                "redv4h": {"REDG*": "REDV"}, "redblk": {"REDG*": "RED32"}, "atomg32": {"ATOMG*": "ATOMG32"},
+                "atomgd": {"ATOMG*": "ATOMG32"}, "ldgsts": {"LDGSTS*": "LDGSTS16"},
+                "blkred512": {"UBLKRED*": "TMAred512"}, "blkcp4k": {"UBLKCP*": "UBLKCP4K"},
+                "dsm_red": {"ATOM*": "ATOME32P"}, "dsm_st4": {"ST*": "DSMST4P"},
+                **{t: {"TLD*": "TLD1"} for t in ("tld1", "tld1c", "tld1d", "tld1cd", "tld1w", "tld1cw")},
+                **{t: {"TEX*": "TEXBIL"} for t in ("texbil", "texc", "texd", "texr", "texw")}}
+_SIDE_NAME = re.compile(r"^(?:hs|sa)_(\w+)$")
+
+
+def side_class(probe: str, pat: str) -> str | None:
+    m = _SIDE_NAME.match(probe or "")
+    return SIDE_BY_NAME.get(m.group(1), {}).get(pat) if m else None
+
 
 def rates_by_class(row: dict) -> dict[str, float]:
     """x_k a SMSP-cycle for each census class k the probe's loops touched (its `rates`, keyed `loop:pattern`)."""
     out: dict[str, float] = {}
     for key, rate in row["rates"].items():
         pat = key.split(":", 1)[1]
-        k = class_of(pat)
+        k = side_class(row.get("probe"), pat) or class_of(pat)
         if k is None and pat.startswith("TLD") and (t := _TLD_NAME.search(row.get("probe") or "")):
             k = TLD_BY_NAME[t.group(1)]
         if k is not None:
@@ -109,13 +163,15 @@ def rates_by_class(row: dict) -> dict[str, float]:
     return out
 
 
-def unpriced(row: dict) -> dict[str, float]:
-    """The program's load opcodes that have no census class, x a SMSP-cycle: Π prices them at 0."""
+def unpriced(row: dict, c: dict | None = None) -> dict[str, float]:
+    """The program's load opcodes with no census class, or (given the epoch's census `c`) a class without lines there,
+    x a SMSP-cycle: Π prices them at 0."""
     out: dict[str, float] = {}
     for key, rate in (row.get("rates") or {}).items():
         pat = key.split(":", 1)[1]
         named_tld = pat.startswith("TLD") and _TLD_NAME.search(row.get("probe") or "")
-        if pat.split(".")[0] in ("LDS", "LDG", "TLD") and class_of(pat) is None and not named_tld:
+        k = class_of(pat)
+        if pat.split(".")[0] in ("LDS", "LDG", "TLD") and not named_tld and (k is None or (c is not None and k not in c)):
             out[pat] = out.get(pat, 0.0) + rate / SMSPS
     return out
 
@@ -148,7 +204,7 @@ def l2_bytes_per_s(row: dict) -> float:
 
 
 #: the form the generic `MMA` lines were measured with (the honest kernel's mma.sync): it loads every row its own kind has
-#: no line on through `MMA`. Every other form is its own kind with lines on M, issue and JI3n only, so the model prices it
+#: no line on through `MMA`. Every other form is its own kind with lines on M, issue and the joint issue rows only, so the model prices it
 #: at 0 on the rest; `generic=True` loads it through `MMA` there too (advisory: a form's missing line can't be violated).
 MMA_MEASURED_WITH = "IMMA16832"
 
@@ -162,7 +218,7 @@ def facet_loads(x: dict[str, float], c: dict[str, dict[str, float]], cycle_u: fl
         per_cycle = {r: u / cycle_u for r, u in c.get(k, {}).items()}
         if k in MMA_FORMS and (generic or k == MMA_MEASURED_WITH):
             for r, u in c.get("MMA", {}).items():
-                if r not in per_cycle and r not in JI3N:
+                if r not in per_cycle and not JI_ROW.match(r):
                     per_cycle[r] = u / cycle_u
         coeff[k] = per_cycle
     load: dict[str, float] = {}
@@ -175,11 +231,14 @@ def facet_loads(x: dict[str, float], c: dict[str, dict[str, float]], cycle_u: fl
 def program(row: dict, c, cycle_u: float, generic: bool = False, l2: float | None = None) -> dict:
     x = row["x"] if "x" in row else rates_by_class(row)
     load = facet_loads(x, c, cycle_u, generic)
+    if row.get("x_issue") and "issue" in load:
+        load["issue"] += row["x_issue"]
     bps = l2_bytes_per_s(row)
     if l2 and bps > 0:
         load[L2_ROW] = bps / l2
     return {"probe": row.get("probe"), "run": row.get("run"), "sass": (row.get("sass_sha256") or "")[:16],
-            "sm_mhz": row.get("sm_mhz"), "tags": row.get("tags", []), "x": x, "load": load, "l2_bps": bps}
+            "sm_mhz": row.get("sm_mhz"), "tags": row.get("tags", []), "x": x, "load": load, "l2_bps": bps,
+            "full": "x_issue" in row}
 
 
 #: tensor_kinds (EPS1 TENSOR M1, `cursor/eps1-tensor-ea24`): each form name's census kind, and each mode's lane op split
@@ -217,17 +276,67 @@ def from_tensor_kinds(d: dict, run: str, mixed_lane: str = "iadd3_ffma") -> dict
     return {"probe": name, "run": run, "x": x, "sm_mhz": d.get("mhz"), "tags": []}
 
 
-def load_rows(paths: list[Path]) -> list[dict]:
-    """Every program in the given files: an opcode probe's `rows.jsonl` (rates by SASS pattern) or tensor_kinds.jsonl."""
+#: a cuobjdump listing's function header, and an instruction's address and dotted opcode (past any guard predicate)
+_SASS_FUNC = re.compile(r"\n\s*Function : (\S+)\n")
+_SASS_INS = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)")
+
+
+def gate_loops(out: Path) -> dict[str, list[str]]:
+    """Each gated program's timed loop (its gate verdict's loop 0, from `gate-build.json` or `gate.json` in the run's
+    `out/`) as the opcodes of its instructions in `out/sass/`'s listings; empty when the run kept neither."""
+    gate = next((g for g in (out / "gate-build.json", out / "gate.json") if g.exists()), None)
+    if gate is None or not (out / "sass").is_dir():
+        return {}
+    bodies: dict[str, str] = {}
+    for s in sorted((out / "sass").glob("*.sass")):
+        parts = _SASS_FUNC.split("\n" + s.read_text())
+        bodies |= dict(zip(parts[1::2], parts[2::2]))
+    loops = {}
+    for v in json.loads(gate.read_text())["verdicts"]:
+        ver = v.get("verdict") or {}
+        body = bodies.get(ver.get("kernel") or v.get("probe"))
+        if v.get("passed") and ver.get("loops") and body is not None:
+            lo, hi = int(ver["loops"][0]["head"], 16), int(ver["loops"][0]["tail"], 16)
+            loops[v["probe"]] = [m.group(2) for m in _SASS_INS.finditer(body) if lo <= int(m.group(1), 16) <= hi]
+    return loops
+
+
+def full_x(row: dict, loop: list[str]) -> tuple[dict[str, float], float] | None:
+    """The program's x with every instruction of its timed loop counted, and the x of the loop's instructions with no
+    census class (one `issue` cycle each, on no other row). A loop instruction runs once an iteration, so one the gate
+    didn't pin runs at the pinned instructions' rate over their number in the loop. None for a program timed over more
+    than one loop, or whose listed loop holds none of its pinned opcodes."""
+    rates = row.get("rates") or {}
+    if not rates or any(k.split(":", 1)[0] != "0" for k in rates):
+        return None
+    pats = [k.split(":", 1)[1] for k in rates]
+    free = [op for op in loop if not any(fnmatchcase(op, p) for p in pats)]
+    if len(free) == len(loop):
+        return None
+    per = sum(rates.values()) / SMSPS / (len(loop) - len(free))
+    x, other = rates_by_class(row), 0.0
+    for op in free:
+        if (k := class_of(op)) is None:
+            other += per
+        else:
+            x[k] = x.get(k, 0.0) + per
+    return x, other
+
+
+def load_rows(paths: list[Path], full: bool = False) -> list[dict]:
+    """Every program in the given files: an opcode probe's `rows.jsonl` (rates by SASS pattern) or tensor_kinds.jsonl.
+    With `full`, a single-loop program whose run kept its gate verdicts and listings takes `full_x`'s x."""
     out = []
     for p in paths:
         run = next((s for s in p.parts if s.startswith("r20")), "")
         recs = [json.loads(ln) for ln in p.read_text().splitlines() if ln.strip()]
         mixed = "iadd3_32" if any(d.get("mode") == "opalone" and d.get("form") == "iadd3_32" for d in recs) \
             else "iadd3_ffma"
+        loops = gate_loops(p.parent) if full else {}
         for d in recs:
             if d.get("rates"):
-                out.append(d)
+                f = full_x(d, loops[d["probe"]]) if d.get("probe") in loops else None
+                out.append(d if f is None else {**d, "x": f[0], "x_issue": f[1]})
             elif (t := from_tensor_kinds(d, run, mixed)) is not None:
                 out.append(t)
     return out
@@ -247,7 +356,7 @@ def cmd_loads(a) -> int:
     m = model()
     epoch = a.epoch or m.current
     c = census(m, epoch)
-    for row in load_rows(a.rows):
+    for row in load_rows(a.rows, a.full):
         p = program(row, c, m.cycle_u, a.generic, a.l2)
         top = sorted(p["load"].items(), key=lambda t: -t[1])[: a.top]
         if a.probe and p["probe"] != a.probe:
@@ -264,11 +373,11 @@ def cmd_table(a) -> int:
     epoch = a.epoch or m.current
     c = census(m, epoch)
     vrows = in_vector(epoch)
-    for row in load_rows(a.rows):
+    for row in load_rows(a.rows, a.full):
         p = program(row, c, m.cycle_u, a.generic, a.l2)
         top = max(p["load"].items(), key=lambda t: t[1]) if p["load"] else ("", 0.0)
         print(json.dumps({"epoch": epoch, **p, "max_row": top[0], "max_load": top[1], "max_in_vector": top[0] in vrows,
-                          "load": {r: round(v, 6) for r, v in sorted(p["load"].items())}, "unpriced": unpriced(row)}))
+                          "load": {r: round(v, 6) for r, v in sorted(p["load"].items())}, "unpriced": unpriced(row, c)}))
     return 0
 
 
@@ -277,9 +386,8 @@ def cmd_summary(a) -> int:
     epoch = a.epoch or m.current
     c = census(m, epoch)
     vrows = in_vector(epoch)
-    rowinfo = mm_rows()
     viol = []
-    for row in load_rows(a.rows):
+    for row in load_rows(a.rows, a.full):
         p = program(row, c, m.cycle_u, a.generic, a.l2)
         for r, v in p["load"].items():
             if v > 1 + a.margin:
@@ -290,11 +398,11 @@ def cmd_summary(a) -> int:
     if a.json:
         print(json.dumps(viol, indent=1))
         return 1 if viol else 0
-    rows = load_rows(a.rows)
+    rows = load_rows(a.rows, a.full)
     print(f"epoch {epoch}: {len(rows)} programs, margin {a.margin}")
     free: dict[str, tuple[float, str]] = {}
     for row in rows:
-        for pat, x in unpriced(row).items():
+        for pat, x in unpriced(row, c).items():
             if x > free.get(pat, (0.0, ""))[0]:
                 free[pat] = (x, f"{row.get('probe')} @ {row.get('run')}")
     for pat, (x, by) in sorted(free.items()):
@@ -330,7 +438,7 @@ def cmd_refit(a) -> int:
     m = model()
     epoch = a.epoch or m.current
     c = census(m, epoch)
-    progs = [program(row, c, m.cycle_u, a.generic, a.l2) for row in load_rows(a.rows)]
+    progs = [program(row, c, m.cycle_u, a.generic, a.l2) for row in load_rows(a.rows, a.full)]
     hits = [p for p in progs if a.row in p["load"]]
     if not hits:
         print(f"no program loads {a.row}", file=sys.stderr)
@@ -357,10 +465,10 @@ def cmd_refit(a) -> int:
         cf = None
     if cf and others:
         # one tensor axis (the form) and one vector axis: each other class weighted by its coefficient over the row's
-        # commonest one, so a row over MMA and one class (R1, KALU*) is that class, and JI3n's vector instructions sum
+        # commonest one, so a row over MMA and one class (R1, KALU*) is that class, and the joint issue rows' vector instructions sum
         sys.path.insert(0, str(HERE.parent / "opcode_probe"))
         from eps1 import facets
-        cref = max(set(c[k][a.row] for k in others), key=lambda u: sum(c[k][a.row] == u for k in others))
+        cref = max({c[k][a.row] for k in others}, key=lambda u: sum(c[k][a.row] == u for k in others))
         X = others[0] if len(others) == 1 else "V"
         pts = []
         on_row = set(support) | ({MMA_MEASURED_WITH} if "MMA" in support else set())
@@ -391,15 +499,158 @@ def cmd_refit(a) -> int:
     return 0
 
 
+def polygon(lines: list[tuple[float, float]], s: float, label: str) -> list[tuple[float, float, str]]:
+    """The vertices of {(m, x) >= 0 : a·m + b·x <= 1 for each line (a, b)} but the origin, scaled by s: the points a
+    published family was fitted through (a published facet sits at s on its points), both axis ends included."""
+    cand = [(1 / max(a for a, _ in lines), 0.0), (0.0, 1 / max(b for _, b in lines))]
+    for (a1, b1), (a2, b2) in combinations(lines, 2):
+        det = a1 * b2 - a2 * b1
+        if abs(det) > 1e-12 and (m := (b2 - b1) / det) >= 0 and (x := (a1 - a2) / det) >= 0:
+            cand.append((m, x))
+    return [(s * m, s * x, f"{label}:vertex") for m, x in cand if all(a * m + b * x <= 1 + 1e-9 for a, b in lines)]
+
+
+def _close(m, epoch: str, rows: list[str]) -> list[str]:
+    """Each live census line on the given rows, to close at `epoch` (its `until`), by the file it is in."""
+    from verity_machine_model.model import entries, holds
+    return [f"close: census/{e.since or m.epochs[0]}.csv {e.kind},{e.row} until {epoch}"
+            for e in entries(m) if e.row in rows and holds(m, e.since, e.until, epoch)]
+
+
+def cmd_family(a) -> int:
+    """A beaten family of joint rows refitted as one (the VF3m-16 rule, `eps1.py facets --prior`): the upper hull of the
+    old rows' vertices and every measured program, at the margin. Over an axis class (`--axis`, default MMA: the generic
+    lines, which IMMA16832 takes, and with `--all-forms` every form) and one class (`--kind`); or, with `--forms`, the
+    joint issue rows: each MMA form its own
+    axis beside the rows' vector classes summed by their coefficients (so `V` is a vector instruction), each form's hull
+    taken alone, and every new row at a vector coefficient one of those hulls has, each form at the most it can carry
+    there. `--emit EPOCH` prints the rows.csv and census/EPOCH.csv lines and the old lines to close."""
+    m = model()
+    epoch = a.epoch or m.current
+    c = census(m, epoch)
+    cu, s = m.cycle_u, 1 - a.margin
+    progs = [program(row, c, cu, a.generic, a.l2) for row in load_rows(a.rows, a.full)]
+    rows = a.family
+    on = {k for k in c if any(r in c[k] for r in rows)}
+    sys.path.insert(0, str(HERE.parent / "opcode_probe"))
+    from eps1 import facets
+    runs = a.runs or " ".join(sorted({p["run"] for p in progs if p["run"]}))
+    if not a.forms:
+        axis = ({"MMA", MMA_MEASURED_WITH} | (MMA_FORMS if a.all_forms else set())) if a.axis == "MMA" else {a.axis}
+        lines = [(c.get(a.axis, {}).get(r, 0.0) / cu, c.get(a.kind, {}).get(r, 0.0) / cu) for r in rows]
+        pts = polygon(lines, s, "+".join(rows))
+        n = 0
+        for p in progs:
+            if any(v > 0 and k in on and k not in axis and k != a.kind for k, v in p["x"].items()):
+                continue
+            mm, xx = sum(v for k, v in p["x"].items() if k in axis), p["x"].get(a.kind, 0.0)
+            if mm > 0 or xx > 0:
+                pts.append((mm, xx, f"{p['probe']}@{p['run']}"))
+                n += 1
+        fs = facets(pts, a.margin)
+        print(f"{'+'.join(rows)}: {n} programs and {len(pts) - n} vertices; the refit ({a.axis}, {a.kind}) "
+              f"SMSP-cycles:")
+        for i, f in enumerate(fs):
+            tight = " and ".join(t.split("@")[0] for t in f["tight"])
+            print(f"  {a.name}{i}: {a.axis} {f['MMA']:.3f} + {a.kind} {f['X']:.3f} (tight at {tight})")
+            if a.emit:
+                desc = (f"{a.axis} {f['MMA']:.3f} + {a.kind} {f['X']:.3f} SMSP-cycles (FACET-BREAK: the upper hull of "
+                        f"{'+'.join(rows)}'s vertices and {n} measured programs, 2% noise margin; tight at {tight})")
+                print(f'rows.csv: {a.name}{i},joint,{runs},"{desc}"')
+                for k, v in ((a.axis, f["MMA"]), (a.kind, f["X"])):
+                    if v > 0:
+                        print(f"census/{a.emit}.csv: {k},{a.name}{i},,,{v:.9g},,{a.emit},,{a.cite or runs}")
+        if a.emit:
+            print("\n".join(_close(m, epoch, rows)))
+        return 0
+    forms = sorted(k for k in on if k in MMA_FORMS)
+    others = sorted(k for k in on if k not in MMA_FORMS and k != "MMA")
+    cref = {r: max({c[k][r] for k in others if r in c[k]}, key=lambda u: sum(c[k].get(r) == u for k in others))
+            for r in rows}
+    w = {k: c[k][rows[0]] / cref[rows[0]] for k in others}
+    if any(abs(c[k].get(r, 0.0) / cref[r] - w[k]) > 1e-6 for k in others for r in rows):
+        print("--forms: a vector class's share of the row's coefficient differs between the rows", file=sys.stderr)
+        return 1
+
+    def V(p: dict) -> float:
+        return sum(w[k] * v for k, v in p["x"].items() if k in w)
+
+    hulls, vs = {}, []
+    for f in forms:
+        pts = polygon([(c[f][r] / cu, cref[r] / cu) for r in rows], s, f"{f}")
+        n = 0
+        for p in progs:
+            if any(v > 0 and k in MMA_FORMS | {"MMA"} and k != f for k, v in p["x"].items()):
+                continue
+            mm, vv = p["x"].get(f, 0.0), V(p)
+            if mm > 0 or vv > 0:
+                pts.append((mm, vv, f"{p['probe']}@{p['run']}"))
+                n += 1
+        hulls[f] = pts
+        for g in facets(pts, a.margin):
+            if g["MMA"] > 0 and g["X"] > 0:
+                vs.append((g["X"], f, " and ".join(t.split("@")[0] for t in g["tight"]), n))
+    vs.sort(key=lambda t: -t[0])
+    merged = []
+    for t in vs:
+        if not merged or merged[-1][0][0] - t[0] > 0.002 * vs[0][0]:
+            merged.append([t])
+        else:
+            merged[-1].append(t)
+
+    def carry(f: str, v: float) -> float:
+        return min((s - v * p[1]) / p[0] for p in hulls[f] if p[0] > 0)
+
+    old = {r: ({f: c[f][r] / cu for f in forms}, cref[r] / cu) for r in rows}
+    print(f"{'+'.join(rows)}: {len(forms)} forms, V = {len(others)} vector classes (UNI at "
+          f"{w.get('UNI', 0):.4f}); each row's vector coefficient and its forms' SMSP-cycles:")
+    i, close = 0, []
+    for grp in merged:
+        v = grp[0][0]
+        mf = {f: carry(f, v) for f in forms}
+        same = next((r for r, (of, ov) in old.items() if abs(ov - v) <= 0.002 * ov and
+                     all(abs(mf[f] - of[f]) <= 0.002 * of[f] for f in forms)), None)
+        why = "; ".join(f"{f} tight at {t}" for _, f, t, _ in grp if t.count(":vertex") < 2) or "the old rows' vertices"
+        if same:
+            print(f"  keep {same}: V {v:.4f} ({why})")
+            continue
+        name = f"{a.name}{i}"
+        i += 1
+        print(f"  {name}: V {v:.4f}, MMA {min(mf.values()):.3f}; " +
+              ", ".join(f"{f} {mf[f]:.3f}" for f in forms) + f" ({why})")
+        if a.emit:
+            desc = (f"MMA {min(mf.values()):.3f} + every other vector-pipe warp instruction {v:.3f} SMSP-cycles "
+                    f"(FACET-BREAK: each MMA form's upper hull of {'+'.join(rows)}'s vertices and the measured "
+                    f"programs, 2% noise margin, each form at the most it carries beside V {v:.3f}; MMA is every "
+                    f"form's least, each form its own kind; {why})")
+            print(f'rows.csv: {name},joint,{runs},"{desc}"')
+            for f in forms:
+                print(f"census/{a.emit}.csv: {f},{name},,,{mf[f]:.9g},,{a.emit},,{a.cite or runs}")
+            print(f"census/{a.emit}.csv: MMA,{name},,,{min(mf.values()):.9g},,{a.emit},,{a.cite or runs}")
+            for k in others:
+                print(f"census/{a.emit}.csv: {k},{name},,,{w[k] * v:.9g},,{a.emit},,{a.cite or runs}")
+    for r in rows:
+        of, ov = old[r]
+        if any(p[0] * of[f] + p[1] * ov > 1 + 1e-9 for f in forms for p in hulls[f] if ":vertex" not in p[2]):
+            close.append(r)
+    print(f"beaten (to close): {' '.join(close) or 'none'}")
+    if a.emit:
+        print("\n".join(_close(m, epoch, close)))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("loads", "summary", "refit", "table"):
+    for name in ("loads", "summary", "refit", "table", "family"):
         s = sub.add_parser(name)
         s.add_argument("rows", type=Path, nargs="+")
         s.add_argument("--epoch")
         s.add_argument("--generic", action="store_true",
                        help="load every MMA form through MMA's lines where it has none (advisory, not the model)")
+        s.add_argument("--full", action="store_true",
+                       help="count every instruction of a single-loop program's timed loop (from its run's gate "
+                            "verdicts and sass/), not only the gate's pinned opcodes")
         s.add_argument("--l2", type=float, default=l2_default(),
                        help="the L2 facet, read bytes a second (default: machine_model/data/table.toml's l2; none: "
                             "no L2tbl row)")
@@ -412,9 +663,24 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["refit"].add_argument("--row", required=True)
     sub.choices["refit"].add_argument("--margin", type=float, default=0.02)
     sub.choices["refit"].add_argument("--form", help="the MMA form on the tensor axis (default: the worst program's)")
+    fam = sub.choices["family"]
+    fam.add_argument("--family", nargs="+", required=True, help="the rows refitted as one (R1 KFFMA0; KALU0 ... KALU3)")
+    fam.add_argument("--name", required=True, help="the new rows' prefix (EFFMA: EFFMA0, EFFMA1, ...)")
+    fam.add_argument("--axis", default="MMA")
+    fam.add_argument("--kind")
+    fam.add_argument("--forms", action="store_true", help="the joint issue rows: each MMA form its own axis")
+    fam.add_argument("--all-forms", action="store_true",
+                     help="every MMA form on the generic MMA axis (ε prices a form without lines of its own there)")
+    fam.add_argument("--margin", type=float, default=0.02)
+    fam.add_argument("--emit", metavar="EPOCH", help="print the rows.csv and census lines for EPOCH")
+    fam.add_argument("--runs", help="the new rows' runs in rows.csv (default: every run read)")
+    fam.add_argument("--cite", help="the census lines' runs (default --runs; @NAME cites runs.toml)")
     a = p.parse_args(argv)
+    if a.cmd == "family" and not a.forms and not a.kind:
+        p.error("family: --kind, or --forms")
     sys.path.insert(0, str(HERE))
-    return {"loads": cmd_loads, "summary": cmd_summary, "refit": cmd_refit, "table": cmd_table}[a.cmd](a)
+    return {"loads": cmd_loads, "summary": cmd_summary, "refit": cmd_refit, "table": cmd_table,
+            "family": cmd_family}[a.cmd](a)
 
 
 if __name__ == "__main__":

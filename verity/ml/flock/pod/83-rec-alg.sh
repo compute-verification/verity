@@ -9,8 +9,9 @@
 # Outputs under out/: host.txt, stage.json, time-stage.txt, honest/ and forged/ (time-prove.txt, prove.txt/.err, serve.log,
 # lean.log, time-lean.txt, replay.txt, sizes.txt), summary.json.
 # Lean checks each statement's v against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement
-# REC_STMT and INNER's session, the one the verifier served, for the forged statement too.
-# env: INNER=DIR (required: claims.json, session/)  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh)  REC_STMT=DIR (the inner
+# REC_STMT and INNER's session, the one the verifier served, for the forged statement too, with the coin server's
+# transcript of it, INNER/public.json, whose link points the record's are held to (RecVStar.innerLink).
+# env: INNER=DIR (required: claims.json, public.json, session/)  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh)  REC_STMT=DIR (the inner
 #      statement: circuit.txt, pub-N.bin and the verity/partition/v1 object it binds, partition.json; default INNER/stage)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -30,7 +31,7 @@ echo "stage exit $?"
 wait $LP
 REC_STMT=${REC_STMT:-$INNER/stage}; REC_PUB=($REC_STMT/pub-*.bin)
 REC_INNER=(--rec-inner-circuit $REC_STMT/circuit.txt --rec-inner-public ${REC_PUB[0]} --rec-inner-partition $REC_STMT/partition.json
-  --rec-inner-session $INNER/session)
+  --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json)
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 

@@ -447,6 +447,40 @@ def test_a_tp2_config_run_missing_a_rank_is_not_pass(tmp_path):
     assert rec["replay"]["ok"] is False and rec["outcome"] == "FAIL"
 
 
+MANIFEST_OF_RECORD = "art:" + "6" * 64
+
+
+@pytest.mark.parametrize("line,programs_ok,manifest,ok,superseded", [
+    ("build FAIL 2026-10-15T19:12:49Z rc=1 manifest_rc=137", True, MANIFEST_OF_RECORD, True, True),
+    ("build FAIL 2026-10-15T19:12:49Z rc=1 manifest_rc=137", True, None, False, False),
+    ("build FAIL 2026-10-15T19:12:49Z rc=1", True, MANIFEST_OF_RECORD, False, False),
+    ("build FAIL 2026-10-15T19:12:49Z rc=1 manifest_rc=137", False, MANIFEST_OF_RECORD, False, False),
+    ("build PASS 2026-10-15T19:12:49Z rc=0 manifest_rc=0", True, None, True, False),
+])
+def test_a_build_whose_in_stage_manifest_alone_failed_passes_only_superseded_by_the_manifest_of_record(
+        tmp_path, line, programs_ok, manifest, ok, superseded):
+    d = _tp_row_dir(tmp_path)
+    (d / "stages.txt").write_text(f"precheck PASS 2026-10-15T18:00:00Z rc=0\n{line}\ncommit PASS 2026-10-16T23:26:33Z rc=0\n")
+    if not programs_ok:
+        bs = json.loads((d / "build_summary.json").read_text())
+        bs["ranks"]["rank1"]["build_step"]["ok"] = False
+        (d / "build_summary.json").write_text(json.dumps(bs))
+    rec = CR.record(d, ROW_TP2, evidence={"manifest": manifest})
+    st = rec["build"]["stage"]
+    assert rec["build"]["ok"] is ok and rec["outcome"] == ("PASS" if ok else "FAIL")
+    assert st["status"] == line.split()[1] and st.get("superseded_by") == (manifest if superseded else None)
+    assert {s: v["status"] for s, v in rec["stages"].items()} == {"precheck": "PASS", "build": line.split()[1], "commit": "PASS"}
+    if not ok:
+        stranded = programs_ok and "manifest_rc=137" in line
+        assert rec["why"] == ("build FAIL: the in-stage manifest exited 137 and no manifest of record supersedes it (evidence.manifest)"
+                              if stranded else "build FAIL")
+
+
+def test_a_row_dir_without_a_build_verdict_keeps_the_programs_verdict(tmp_path):
+    rec = CR.record(_tp_row_dir(tmp_path), ROW_TP2)
+    assert rec["build"]["stage"] is None and rec["stages"] == {} and rec["outcome"] == "PASS"
+
+
 def test_the_record_s_slowdown_is_instrumented_over_control_per_phase(tmp_path):
     d = _row_dir(tmp_path)
     assert CR.record(d, ROW)["timing"]["slowdown"] is None, "no control arm: no baseline, no slowdown"

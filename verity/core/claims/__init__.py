@@ -244,6 +244,83 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
           "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
           "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
+    # EPS1's tensor–scalar model (Security/Models/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
+    # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
+    # (Security/Models/Accounting/Assumptions/Stages.lean)
+    Entry("accounting-ts-facet-ceilings", "assumption",
+          "Measured facets are ceilings for the stated device (sm_120 RTX PRO 6000, VF3p-16 on VF3o-16): every program "
+          "path, on every data value, launch configuration and SM clock up to f_max, loads each SM-clocked facet by at "
+          "most its cycles and each fixed-clock facet by at most f_max times its time", "TS facet ceilings", "measured"),
+    Entry("accounting-ts-words-written", "assumption",
+          "An instruction of an MMA kind or a uniform class writes at most ω words (128 for m16n8, 64 for m8n8k16, 1 for "
+          "a uniform instruction), so the owned right words it heads are at most ω per instruction",
+          "TS words per instruction", "measured"),
+    Entry("accounting-ts-scalar-route", "assumption",
+          "SCALAR-ROUTE at a per-instruction cap κ (every ALU instruction creates at most κ incidences): every right "
+          "fresh gather-free vector-headed committed word costs at least 2.03 lane-instructions net of the fold and of "
+          "operand delivery (for κ < 27.2 a slot), and one whose production reads a data-dependent load at least 1.22 "
+          "lane-instructions (for κ ≤ 128) and 32(28 − 1.03κ)/(c_L − κ) bytes read from its memory level, 3.0 at κ = 8 "
+          "(QSTAR's joint statement, from class P and the cap κ; no cap is proved, and ISA-CAP's 32/7 is false)",
+          "SCALAR-ROUTE", "conjectured"),
+    Entry("accounting-ts-side-units", "assumption",
+          "A side unit's committed words cost at least its measured per-word vector", "TS side units", "measured"),
+    Entry("accounting-ts-nosum", "assumption",
+          "NOSUM: on the stated device no unit outside the route menu heads a fresh committed word", "NOSUM",
+          "measured"),
+    # The data-sheet axioms A1–A7 (Security/Models/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
+    # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
+    Entry("accounting-sheet-clock", "assumption",
+          "A1 CLOCK: the SM clock never exceeds the data sheet's maximum boost clock", "A1 clock (data sheet)",
+          "measured"),
+    Entry("accounting-sheet-dispatch", "assumption",
+          "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
+          "instructions included (A2u, which no vendor document states)", "A2 dispatch (whitepapers)", "measured"),
+    Entry("accounting-sheet-tensor", "assumption",
+          "A3 TENSOR: the tensor cores do at most the data sheet's dense MACs per SM clock for each operand type",
+          "A3 tensor (data sheet)", "measured"),
+    Entry("accounting-sheet-pipe", "assumption",
+          "A4 PIPE: the instruction classes Nsight Compute puts on one pipe share that pipe's CUDA Programming Guide "
+          "throughput", "A4 pipe (Programming Guide)", "measured"),
+    Entry("accounting-sheet-smem", "assumption",
+          "A5 SMEM: shared memory serves one request per SM clock, its distinct banks together (32 banks × 4 B = 128 "
+          "B), loads and stores together, so each shared-memory instruction holds one request whatever its width",
+          "A5 shared memory (Programming Guide)", "measured"),
+    Entry("accounting-sheet-words", "assumption",
+          "A6 WORDS: an instruction writes at most its destination registers' 32-bit words (its PTX fragment; two a "
+          "lane for a lane instruction)", "A6 words (PTX ISA)", "measured"),
+    Entry("accounting-sheet-semantics", "assumption",
+          "A7 SEMANTICS: each instruction computes the function its ISA defines and writes nothing else, so no unit "
+          "outside the route menu heads a fresh committed word and a side unit's words cost its per-word vector",
+          "A7 semantics (PTX ISA)", "measured"),
+    Entry("accounting-ts-fold-opt", "assumption",
+          "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π), for every "
+          "certificate π", "FOLD-OPT", "conjectured"),
+    Entry("accounting-ts-fill-opt", "assumption",
+          "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
+          "certificate π", "FILL-OPT", "conjectured"),
+    Entry("accounting-ts-fan-in", "assumption",
+          "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, by its register operands as "
+          "SASS gives them on sm_80, sm_89, sm_90, sm_100 and sm_120 (LOP3, IADD3, IMAD, IDP.4A, FFMA: 2 a lane, 64 a "
+          "warp instruction), memory a node each access reads (a load 1 a lane; STS.128 and STSM.x4 5 a lane, 160 a "
+          "warp instruction)", "TS fan-in", "measured"),
+    Entry("accounting-ts-luck", "assumption",
+          "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
+          "most p", "TS luck at p", "proven"),
+    Entry("accounting-ts-stage-luck", "assumption",
+          "(L) at p under per-stage coins: in every round, at every stage, whatever the past, a unit of the stage that "
+          "the cheater skips passes its proof with probability at most p over the stage's coin",
+          "TS stage luck at p", "proven"),
+    Entry("accounting-ts-proofs-sound", "assumption",
+          "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
+          "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
+          "round's share", "TS proofs sound", "standard"),
+    Entry("accounting-ts-lin-steer", "assumption",
+          "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
+          "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
+          "LIN-STEER", "conjectured"),
+    Entry("accounting-ts-right-fixed", "assumption",
+          "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
+          "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
 )}
 
 

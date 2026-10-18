@@ -27,8 +27,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("MhcFusedSplit_v2", lambda: bind(BM.MhcFusedSplitV2, HC=2, N=2, OUT=8, TH=2)),
         ("MhcPrenormTf32Split_v2", lambda: bind(BM.MhcPrenormTf32SplitV2, K=64, OUT=1)),
         ("MhcPrenormTf32_v2", lambda: bind(BM.MhcPrenormTf32V2, K=128, NS=2, OUT=1)),
-        # The served compositions are HC=4,H=7168 with NS in {8,26,28,44,66,112}; these bindings retain every Call family at
-        # the smallest whole TF32 blocks.  The residual broadcast is wiring-only (served HC=4,H=7168).
+        # The served compositions are HC=4,H=7168 with NS in {8,9,10,11,12,13,14,16,18,22,26,28,33,44,66,112} (every
+        # split-count regime to the 1024-token envelope); these bindings retain every Call family at the smallest whole
+        # TF32 blocks.  The residual broadcast is wiring-only (served HC=4,H=7168).
         ("MhcPostPreTf32_v2", lambda: bind(BM.MhcPostPreTf32V2, HC=2, H=32, NS=1, TN=2, REPEAT=2, **e)),
         ("MhcResidualBroadcast_v2", lambda: bind(BM.MhcResidualBroadcastV2, HC=2, H=8)),
         ("MhcPreBroadcast_v2", lambda: bind(BM.MhcPreBroadcastV2, HC=2, H=64, NS=1, TN=4, REPEAT=2, **e)),

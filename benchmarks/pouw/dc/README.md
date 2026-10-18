@@ -7,21 +7,32 @@ there; the rates and the GEMM's exactness need the GPU (`run.sh`).
 
 | File | What |
 |---|---|
-| `probes/sm90_wgmma.cu` | M3: wgmma alone (s8 m64nNk32 for N = 8, 16, 32, 64, 128, 192, 256, SS and RS, u8×s8, E4M3 N 128/256, E5M2, F16, BF16 N 128/256, TF32, b1 AND.POPC; wait_group 0 and 1; zero-data twins), wgmma s8 n256 beside a lane (warp-specialized `wgspec_` and interleaved `wgmix_`: mix, IMAD, LOP3, SHFL, duo; `wgU_`: the lanes or mma.sync run until the wgmma ends), mma.sync s8 k16/k32, F16, BF16, TF32, b1, E4M3 |
-| `probes/sm100_tcgen05.cu` | M4: tcgen05.mma kind::i8 M 64/128 × N 32–256, f8f6f4 E4M3 N 128/256, f16 BF16 (one thread issues, 4 a loop, into TMEM); tcgen05.ld 32x32b.x{1,4,16,32,64,128}, 16x64b.x16, 16x128b.x8, 16x256b.x4 alone; tcgen05.ld, mma.sync and lanes beside the saturated MMA, block-timed and exact (`ldU_`, `mmaU_`, `syncU_`, `tclaneU_`: one role fixed, the other until it ends) |
-| `probes/scalar.cu` | Every family: IADD3, LOP3, IMAD, FFMA, SHF, LEA.HI, SHFL, mix and duo alone, and the pairs that assign them to pipes (M3's INT32-pipe question, M4d) |
+| `probes/sm90_wgmma.cu` | M3: wgmma alone (s8 m64nNk32 for N = 8, 16, 32, 64, 128, 192, 256, SS and RS, u8×s8, E4M3 N 128/256, E5M2, F16, BF16 N 128/256, TF32, b1 AND.POPC; wait_group 0 and 1; zero-data twins), wgmma s8 n256 beside a lane (warp-specialized `wgspec_` and interleaved `wgmix_`: mix, IMAD, LOP3, SHFL, redux, reduce, duo; `wgU_`: the lanes or mma.sync run until the wgmma ends), mma.sync s8 k16/k32, F16, BF16, TF32, b1, E4M3; `wgli_` the honest LI loop beside the wgmma with no checkpoint, with LI-CP-W's redux and with its reduce, and `wgli_fill` the redux loop with ffill's filler |
+| `ffill.cuh`, `ffill.cu`, `ffill_ref.py`, `ffill.sh` | ffill, the H200's FFMA filler (`dither-2s-licpw-redux-l32`'s `[filler]`): an IMAD and two `fma.rn.f32` on 3 of a thread's 128 accumulator words a MMA, two chains from the round's coins. `ffill_ref.py` is the receipt in exact arithmetic (F32FmaV2, rounded once) and checks `ffill.cu`'s dumps (`fma`: specials, subnormals, ties and seeded cases; `chain`: the kernel's chains); `ffill.sh` is the H200 job: build, SASS check (no `.FTZ`, the chain an IMAD and two FFMA a step), conformance, and the probes for `wgli_fill` against `wgli_redux` |
+| `probes/sm100_tcgen05.cu` | M4: tcgen05.mma kind::i8 M 64/128 × N 32–256, f8f6f4 E4M3 N 128/256, f16 BF16 (one thread issues, 4 a loop, into TMEM); tcgen05.ld 32x32b.x{1,4,16,32,64,128}, 16x64b.x16, 16x128b.x8, 16x256b.x4 alone; tcgen05.ld, mma.sync and lanes (mix, IMAD, duo, redux, reduce) beside the saturated MMA, block-timed and exact (`ldU_`, `mmaU_`, `syncU_`, `tclaneU_`: one role fixed, the other until it ends); `tcliU_` the honest LI loop (TMEM load then LI fold a segment) with no checkpoint, with LI-CP-W's redux reduction, and with its 5-shuffle fallback, so the ratio is what the checkpoint costs the latency-bound loop |
+| `probes/scalar.cu` | Every family: IADD3, LOP3, IMAD, FFMA, SHF, LEA.HI, SHFL, mix, duo, redux (one `redux.sync.xor.b32`) and reduce (the same by 5 butterfly shuffles + 5 XORs) alone, and the pairs that assign them to pipes (M3's INT32-pipe question, M4d). redux/reduce are LI-CP-W's per-segment checkpoint reduction |
 | `probes/lanes.cuh` | The lane ops all three share |
 | `dc.cuh` | The K-major no-swizzle operand layout and its descriptors (wgmma and tcgen05), the instruction descriptor, mbarrier and tcgen05 wrappers, and duo (floored_gemm's) |
 | `gen_wgmma.py`, `wgmma.cuh` | The wgmma wrappers (up to 128 accumulator registers an operand list), generated |
 | `dgemm.cu` | The honest Dither GEMM, s8 C = X Wᵀ with every 32-step s32 prefix word folded by duo (3 ops a word): `dg90` (wgmma m64n128k32, accumulators in registers) and `dg100` (tcgen05.mma 128×256×32 into TMEM, tcgen05.ld to registers). Modes `cpuref`, `gate` (0xA5 poisoning, no-write control, a mismatch rerun with LBO/SBO exchanged) and `bench` (fold, no fold, cuBLASLt int8) |
-| `dgemm_ref.py` | The receipt's numpy twin: C and every receipt word from X, W and the seed |
+| `dgemm_ref.py` | The receipt's numpy twin: C and every receipt word from X, W and the seed, at meta.json's commit spacing L |
+| `pgemm.cu` | The honest Dither GEMM on sm_100a, pipelined: one CTA a SM holds a 128 × 512 block as NB = 2 or 4 TMEM tiles in flight (all 512 columns); MMA warps (one, or one a tile: MI) issue lm tcgen05.mma kind::i8 into a tile and tcgen05.commit to its full barrier; LW loader warpgroups wait on it, tcgen05.ld 32x32b.x32 the rows, hand the tile back on its empty barrier after the last load and fold with duo; L = 32 lm. Arms: 0 pipeline (loaders hand back only), 1 TMEM stage (load, no fold), 2 honest, 3 MMA self-wait (no loaders). Operands are resident (K-periodic inputs), so the rate leaves out operand streaming. Modes `gate` (MODE 2, 0xA5 poison, host reference, dumps for `dgemm_ref.py`) and `rate` |
+| `pipe.py`, `pipe.sh` | pgemm's job and its analysis: the build gate (no spill, launchable registers, UTCIMMA and LDTM.x32 present), the rate per arm and spacing against ρ_T5, the honest loader's issue a word from SASS, q*, ε_tensor at L = 32, and `agree` for a repeat |
 | `fp8acc.cu` | M4e for E4M3 (sm_100a): emu8's k3 and k4 limb planes through tcgen05.mma kind::f8f6f4 from TMEM preloaded with the binade constants, on five adversarial operand classes; counts accumulators that differ from the exact C + T and k32 words that differ from the s8 dot product. `selftest` runs the same checks with ideal accumulators on the CPU (all exact) |
 | `analyze.py` | rows.jsonl → slots a SM a clock, every loop's issue rate, a (issue cycles a tensor instruction takes from the lane beside it), M3's and M4's pass lines, sm_100's TMEM model (honest at L = 32, the L that saturates the tensor, the two-stage LP's ε), the fold's words a clock; `agree A B` checks a repeat |
 | `census.py` | Runs → machine_model's census lines, a device directory a family (`../machine_model/data/devices/sm_90/`, `sm_100/`: census.csv and rows.csv), and the tables: T1 a form, ε_tensor at L = 32, the joint issue rows, q*, L_bal |
 | `run.sh` | The job for one family (below); `DC_BUILD_ONLY=1` builds and gates without a GPU |
+| `probes/uniform.cuh`, `probes/sm90_uniform.cu`, `probes/sm100_uniform.cu`, `probes/sm90_issue.cu`, `probes/sm100_issue.cu`, `probes/sm90_sat.cu`, `probes/sm100_sat.cu` | The uniform datapath: 8 warp-uniform chains of UIMAD + ULOP3, ULOP3, UIADD3 + ULOP3, USHF (funnel shift), UPRMT and ULEA/USHF alone (`uz_`), and beside the honest step (8 IMMA m16n8k32 + duo reading the accumulators: `uh_`), beside it with 64 FFMA (`ug_`) or 32 LOP3 (`ul_`), beside 32 IMMA a fold (`um_`), beside it with 256 FFMA (`ub_`, the `issue` tables), and beside issue-saturated streams (the `sat` tables: the honest step with FFMA or FADD, IADD3 and LOP3 on independent accumulators, `us_`, `uv_`, `uw_`, `ux_`, at 16 to 128 uniform instructions an iteration); each family's table pins every loop's opcodes as the gate saw them, since ptxas keeps the chains uniform only beside an MMA whose accumulators the lanes read (FACET-BREAK) |
+| `probes/sm100_ldtm.cu`, `ldtm.py` | TMEM-EXTRACT's price: tcgen05.ld.32x32b.x128 (LDTM.x128, 4096 words a warp instruction) at 1 to 16 an iteration beside uniform.cuh's issue-saturated streams (`l`: the honest step and UVec, K ≤ 2; `n`: UVec alone, 8 stream warps of 288 threads) and beside a saturated tcgen05.mma (`m`: `n` with warp 8 issuing UTCIMMA 128x256x32 until the stream ends); `ldtm.py analyze` prices the load as the least slowdown it adds to a stream that issues at least 0.95, less 2%, with every other added instruction (the wait's NOP, the next address's R2UR and LOP3) charged a slot first, and `tables` rewrites the probe table from the gate's JSON; `uni.sh` runs it under `UNI_TABLES=ldtm` |
+| `probes/uchain.cuh`, `probes/sm90_async.cu`, `probes/sm100_async.cu` | The same 8 warp-uniform chains (now in `uchain.cuh`, shared with `uniform.cuh`) beside a *saturated async* tensor op (RT-ISA round 2 WATCH): on sm_90a, 4 wgmma s8 m64n256k32 a group, bare (`uwg_`), with an in-loop accumulator fold (`uwgf_`), and with the honest mma.sync step (`uwgh_`); on sm_100a, 4 tcgen05.mma i8 128×256×32 a group from one warp, bare (`utc_`) and with the honest step (`utch_`). K sweeps 0, 32, 64, 128; each loop's full SASS is pinned, so a chain that moves off its datapath refuses (`UNI_TABLES=async`) |
+| `probes/imad_forms.cuh`, `probes/sm90_imad.cu`, `probes/sm100_imad.cu` | The IMAD forms of duo's ALU work: IMAD.HI.U32 alone, beside duo against IMAD and LOP3, and duo with its LEA.HI as IMAD.HI + IMAD on every word (`f_duoi`) and on one in three (`f_duom`) |
+| `uni.sh`, `uniform.py` | Their job for one family and its analysis: UP (the uniform pipe), UNI's lines (UP; an issue slot on the issue rows; no other row, each row's limit recorded), every facet checked at every point, and the IMAD forms; `census --write` puts UNI's lines in the device directory, which census.py's `--write` keeps |
 
-The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop and against dgemm.cu's host
-reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form). A probe's rate is
+The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
+dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
+pipe.py's SASS profile and q*, uniform.py's tables, fit and writer) and `../tests/test_ffill.py` (ffill's reference
+against the integer FP32 pipe, its coins, chains and pinned receipts, its dump checks, the header's host build, the
+design that prices it). A probe's rate is
 opcode_probe's: warp instructions a SM a clock, timed only after its SASS gate, its poisoned sink and its no-write
 control pass (`../opcode_probe/README.md`).
 
@@ -31,12 +42,21 @@ control pass (`../opcode_probe/README.md`).
 research run --on vy-dc-h200 --project verity --campaign cmp-13 --source /workspace --cwd source --custody-ttl 12h \
   --timeout 60m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90
 research run --on vy-dc-b200 ... -- bash benchmarks/pouw/dc/run.sh sm100
+research run --on vy-dc-b200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
 python3 benchmarks/pouw/dc/analyze.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
+python3 benchmarks/pouw/dc/pipe.py analyze ~/.research/runs/RUN/out --census SM100_RUN_OUT...
+python3 benchmarks/pouw/dc/pipe.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
 python3 benchmarks/pouw/dc/census.py sm90 ~/.research/runs/RUN/out... --write benchmarks/pouw/machine_model/data/devices/sm_90
+research run --on vy-dc-b200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
+research run --on vy-dc-b200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
+research run --on vy-dc-b200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/pouw/dc/uni.sh sm100  # LDTM.x128's price
+research run --on vy-dc-b200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
+python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/SAT_RUN/out... --write
+research run --on vy-dc-h200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
 ~~~
 
 The node needs CUDA 13.0 (`/usr/local/cuda-13.0`, driver ≥ 580). Each run builds and SASS-gates everything before it
-touches the GPU (91 gates on sm_90a, 68 on sm_100a), then under one lease: the GEMM gate at three shapes (each dump
+touches the GPU (103 gates on sm_90a, 68 on sm_100a), then under one lease: the GEMM gate at three shapes (each dump
 rechecked by `dgemm_ref.py`), the bench only if all three are exact, fp8acc (sm100), the probes with nvidia-smi sampled
 every 200 ms, and `analyze.py` (`verdict.json`). A run is about 6 minutes on the GPU.
 
@@ -57,19 +77,97 @@ MHz, B200 1965 MHz.
   other instruction 0.98 SMSP-cycles, and the IMAD and ALU pipes' facets cost the IGMMA about 63 too.
 - **sm_100 (M4 fails: the TMEM load binds).** tcgen05.mma i8, f8 and f16 write 256.05 slots/SM/clk at M = 128, N ≥ 128
   (M = 64: 128); mma.sync 64.0, on the same pipe. tcgen05.ld alone reaches 244.5 words/SM/clk (x128; x32 242.7), 233.3
-  beside the saturated MMA. Honest at L = 32 loads every slot it writes and balances at 0.914 of ρ_T5 (234.1 words/SM/
-  clk); the tensor saturates from L = 64; the two-stage LP gives ε_tensor ≤ 2.3% at L = 32. A tcgen05.mma costs one
-  issue slot (UTCIMMA 1.09 + other 0.98), so lanes beside it keep their rates.
-- **q*** (the issue facet's tensor coefficient over the words a lane gets): sm_90 0.49, sm_100 0.001 (0.047 with the
-  tcgen05.ld.x32 issue that brings the words to registers), against sm_120's 2.03. The fold binds at L = 32 on both
-  (duo 31.3 and 31.5 words/SM/clk alone: L_bal 131 and 260).
+  beside the saturated MMA. On load bandwidth alone, honest at L = 32 would balance at 0.914 of ρ_T5 (234.1 words/SM/
+  clk; the two-stage LP's ε_tensor ≤ 2.3%), but the pipelined kernel below measures 0.489: at L = 32 the TMEM round
+  trip binds, not the load. A tcgen05.mma costs one issue slot (UTCIMMA 1.09 + other 0.98), so lanes beside it keep
+  their rates.
+- **q*** (the issue facet's tensor coefficient over the words a lane gets): sm_90 0.49, sm_100 0.001 (0.032 with the
+  tcgen05.ld.x32 that bring the words to registers; ptxas emits no instruction for tcgen05.wait::ld), against sm_120's
+  2.03. The fold binds at L = 32 on both (duo 31.3 and 31.5 words/SM/clk alone: L_bal 131 and 260).
+
+## The pipelined honest GEMM on sm_100 (`pgemm.cu`, 1× B200)
+
+Runs r20261017-082803-be14 and its repeat r20261017-082819-a9cd (70f2e417c; 152 rate points, all within 2%, worst
+1.0064). All 32 gates are exact in both: (NB, LW) in (2, 1), (2, 2), (4, 1), (4, 2), one MMA warp or one a tile, at L = 32
+and 64, on 128 × 512 × 256 and 256 × 1024 × 1024, each dump rechecked by `dgemm_ref.py`. Rates are slots/SM/clk (each
+point's best configuration; committed words = slots / lm), clock64 a CTA on 148 CTAs:
+
+| L | honest (fold) | TMEM stage | pipeline | MMA self-wait |
+|---|---|---|---|---|
+| 32 | 29.6 (0.116 ρ_T5) | 125.3 (0.489) | 147.6 (0.576) | 149.9 (0.585) |
+| 64 | 58.1 (0.227), 29.1 words | 218.3 (0.853), 109.2 words | 255.8 (0.999) | 180.5 (0.705) |
+| 128 | 114.9 (0.449), 28.7 words | 255.9 (1.000) | 256.0 | 234.3 |
+| 256 | 230.1 (0.899), 28.8 words | 256.3 (1.000) | 256.1 | 255.7 |
+
+- **The fold sets honest's rate at every spacing**: 29.6, 29.1, 28.7 and 28.8 committed words/SM/clk at L = 32 … 256
+  (duo alone 31.5). Its loader issues 3.03 lane instructions a word (ALU 1.94, IMAD 0.98, LDTM.x32 1/32), so at L = 32
+  it fills the ALU pipe to 0.90, the IMAD pipe to 0.45 and the SM's issue to 0.69. The MMA's share is 0.001 SMSP-cycles
+  a lane-word. q* is 0.0011 (MMA only) and 0.032 (with the loads) at L = 32, and 0.0021 and 0.033 at L = 64.
+- **At L = 32 the TMEM round trip binds the tensor.** Each running sum must leave TMEM before the next k-step lands on
+  it, so no more than TMEM's 65,536 words are in flight. The tile's round trip (MMA, commit, loaders, hand-back) is at
+  least 437 clocks in these kernels, which caps the tensor at 0.585 of ρ_T5 even with no reads (self-wait). One MMA warp
+  issuing for every tile serializes the commits (at most 0.36 at L = 32), so a tile needs its own issuer. Four tiles of
+  128 columns take as long a round trip as two of 256.
+- **ε_tensor at L = 32**, honest's TMEM stage at 0.489 of ρ_T5: T1 gives 51.1%. TENSOR's two-stage LP (mma.sync fills
+  the shared pipe's slack) gives 47.7% against an adversary at the probes' bandwidth balance (0.914) and 29.0% against one
+  held to the same round trip (0.585). The 2.3% above assumed load bandwidth alone.
+- **The commit spacing need not be 64.** At L = 64 the TMEM stage commits 109.2 words/SM/clk, 0.426 of ρ_T5, so T1 gives
+  57.4% against 51.1% at L = 32 (even a TMEM stage at ρ_T5 would give 50% at L = 64), and the fold-bound honest kernel
+  is no faster (29.1 against 29.6 words/SM/clk). L = 32 stays sm_100's spacing.
 
 Not covered yet: sparse wgmma and tcgen05 (metadata operands), the N sweep for the FP kinds (s8 only), cta_group::2 (a
 CTA pair), M4e beyond fp8acc's binade question (kind::f16/tf32/f8f6f4 accumulation against the silicon models in
 general), lanes beside wgmma with more than one lane warp a SMSP (`wgU_` reaches only 0.3–0.4 of alone, under the
-block-timed points the sm_90 facets rest on), and the pipelined (TMA, multi-stage) GEMMs whose receipts must equal these
-kernels'. On sm_90 CUDA 13.0 has no native FP8 or s4 mma.sync: e4m3 m16n8k32 is 2 HMMA.16816.F32 + 4 FADD (timed as
+block-timed points the sm_90 facets rest on), operand streaming (TMA) in `pgemm.cu`, and a pipelined sm_90 GEMM. On sm_90 CUDA 13.0 has no native FP8 or s4 mma.sync: e4m3 m16n8k32 is 2 HMMA.16816.F32 + 4 FADD (timed as
 that), s4 m16n8k64 a CALL (not timed).
+
+## The uniform datapath and the IMAD forms (`uni.sh`, 1× H200, 1× B200)
+
+Runs r20261017-095350-02ff, -103944-a0bf, -112709-e43e, -113207-6aa4 and -113541-675b (H200), and
+r20261017-095350-0a80, -103944-35c5, -112709-ec87, -113207-4cb8 and -113541-9d33 (B200), 115 gates each, all passing:
+every uniform chain stays uniform alone and beside the honest step, FFMA, LOP3, the MMA-heavy stream and every
+issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
+
+- **UP: one uniform instruction every 2 SMSP-cycles on both** (0.500 a SMSP-cycle for ULOP3, UIADD3, USHF, UPRMT, UIMAD
+  and ULEA alike; 1.957 and 1.961 SMSP-cycles with the 2% margin on sm_100 and sm_90).
+- **Beside the honest step the uniform pipe runs nearly free**: up to 0.48 (B200) and 0.46 (H200) uniform instructions
+  a SMSP-cycle beside the step and its lanes, and no point has issue (vector plus uniform) above 0.94. No point loads
+  a lane pipe or the tensor pipe to its limit beside the chains (the honest step is latency-bound; the MMA-heavy
+  stream reaches 0.74 of M on the B200 and 0.61 on the H200, with mma.sync, not tcgen05 or wgmma), so UNI holds UP
+  and its issue price, and no other row.
+- **A uniform instruction costs 0.92 (B200) and 0.98 (H200) of an issue slot**, its least slowdown beside an
+  issue-saturated stream, less 2%. The streams beside the honest step and the `ub_` stream leave 6–28% of issue idle,
+  and their slack absorbs the chains (0.10 to 1.08 a uniform instruction). The `sat` streams don't: on the B200 `uv_`,
+  `uw_` and `ux_` issue 0.958, 0.976 and 0.981 of their slots without chains, and each uniform instruction added slows
+  them 0.94 to 1.03 SMSP-cycles (least 0.943, `uv_64x`). On the H200 only `ux_` (FADD by an immediate: one register
+  read) reaches 0.974; FFMA streams stop at 0.92–0.93, where the chains slow them by −0.13 to 0.85. Beside `ux_` each
+  uniform instruction costs 1.00 to 1.12 (least 1.003, `ux_128x`). Every count is the loop's full SASS, not the table's
+  eight opcodes. The joint issue rows scale the price as they scale the ALU's slot (JI100_0 0.906, JI90_0 0.965).
+- **Beside a saturated async tensor op a co-located chain is essentially free** (RT-ISA round 2 WATCH,
+  note:20261017T1834Z-draft-rt-isa). The placement is pinned (`probes/sm90_async.cu`, `sm100_async.cu`,
+  `UNI_TABLES=async`): ptxas 13.0 keeps a uniform chain on the uniform datapath beside a saturated **tcgen05.mma** (the
+  honest kernel issues the whole 128×256 tile from one warp, a uniform context, so even the bare `utc` is uniform beside
+  UTCIMMA), but lowers it to the vector lanes beside a saturated **wgmma** unless the honest mma.sync is in the loop
+  (`uwg`/`uwgf` land on IMAD/LOP3; only `uwgh`, the already-priced F_M structure, stays on UIMAD/ULOP3). Measured on
+  silicon (H200 `r20261017-204843-4803`, B200 `r20261017-205856-aae0`), the bare chain's K-sweep is flat: the async
+  group's cycles a iteration don't grow with the chain (H200 `uwg` 0.0002, B200 `utc` 0.0009 SMSP-cycles a instruction),
+  because the chain fills the async op's idle issue slots (the 4 wgmma / 4 tcgen05 hold the SMSP ~1024 / ~512 cycles,
+  far more than the K ≤ 128 the sweep adds; a realistic word adds only a handful). So the dual-issue the WATCH feared is
+  real: the true uniform-beside-async price is near zero, and the census joint rows (JI90_0 0.965, JI100_0 0.906) are
+  *optimistic* — the conservative treatment prices the uniform-beside-async route free. That treatment moves no headline
+  (`eps`, `credit floor`, `operands free`, q* 1.22, `dither-2s-li-l32`): H200 rises 0.131% → 0.198%, and the B200 stays
+  0.905% (its headline binds the issue row, which sits above the async joint row, so the async price can't move it); the
+  B200 breaches 1% only if the issue ceiling *itself* is discounted below ~0.012 of a slot, an >80× discount decision 84
+  precludes.
+- **The IMAD form of duo's LEA.HI is slower on both.** IMAD.HI.U32 costs 4.19 (B200) and 4.18 (H200) SMSP-cycles,
+  twice an IMAD, so rotl(u, r) + y′ as IMAD.HI + IMAD costs about 6 cycles of the IMAD pipe against LEA.HI's 2 of
+  the ALU's. Duo with 29% (B200) and 33% (H200) of its LEA.HI in that form takes 17% and 21% longer a word than duo.
+- **ε** (`machine-model eps --credit floor --operands floor --q 2.03`, Dither-1S / 2S / C): the B200 at L = 32 is
+  1.200 / 0.701 / 0.658% (0.6% of words on the uniform route; π* JPA100_0 0.974, issue 0.026), at L = 64 1.836 / 0.834
+  / 0.752%. Without the uniform route it was 0.721 / 0.222 / 0.179% and 1.474 / 0.472 / 0.390%; with a full issue slot
+  1.155 / 0.656 / 0.613% and 1.791 / 0.789 / 0.707%. The H200 doesn't move (5.013 / 4.514 / 4.471% at L = 32, 10.440 /
+  9.438 / 9.356% at L = 64): its binding joint issue row JI90_0 charges a uniform instruction 0.965, which closes the
+  route.
 
 ## B300 (sm_103a)
 

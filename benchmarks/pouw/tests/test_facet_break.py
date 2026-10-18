@@ -1,6 +1,7 @@
 """facet_break: SASS opcodes to census classes, a program's load on every facet (IMMA.16832 through the generic MMA lines,
 every other form only through its own), the R1 and KFFMA0 violation TENSOR's interleaved points make at VF3n-16, the hull
-refit, the L2 facet (only loads that skip L1 count), and the generator's grid (seeded, unique names, exact SASS counts).
+refit and the family refit (`family`, `--forms`), the L2 facet (only loads that skip L1 count), the full count (`--full`:
+every instruction of the gate's loop), and the generator's grid (seeded, unique names, exact SASS counts).
 `test_grid_slice_builds_and_gates` builds a
 slice of the grid with nvcc and gates it; it skips without nvcc and nvdisasm.
 """
@@ -60,26 +61,64 @@ def test_class_of():
             "IADD3": "ALU", "LOP3.LUT": "ALU", "SHF.*": "ALU", "IADD.64": "ALU64", "SEL": "SEL", "FFMA": "FFMA",
             "FMUL": "FFMA", "HFMA2*": "HFMA2", "*MNMX*": "VIMNMX", "DMUL": "DMUL", "DFMA": "W2", "MUFU.EX2": "XU",
             "POPC": "XU", "SHFL.BFLY": "SHFL", "MOV": "NOROW", "NOP": None, "LDS": "LDS32", "LDS.128": "LDS128",
-            "LDG.E": "LDG32", "LDG.E.CONSTANT": "LDG32", "LDG.E.128": "LDG128", "LDS.64": None, "LDS.U8": None,
-            "LDG.E.64": None, "TLD.LZ": None, "LDG.E.ENL2.256": None, "LDG.E.NA.128": None}
+            "LDG.E": "LDG32", "LDG.E.CONSTANT": "LDG32", "LDG.E.128": "LDG128", "LDS.64": "LDS64", "LDS.U8": "LDS32",
+            "LDG.E.64": "LDG64", "TLD.LZ": None, "LDG.E.ENL2.256": "LDG256", "LDG.E.NA.128": "LDG128NA",
+            "LDG.E.128.STRONG.GPU": "LDG128CG", "LDG.E.ENL2.256.STRONG.GPU": "LDG256CG", "ULOP3.LUT": "UNI",
+            "USHF.L.U32": "UNI", "UPRMT": "UNI", "USEL": "UNI", "UIADD3": "UNI", "UMOV": "UNI", "LDCU": "UNI",
+            "R2UR": "UNI", "UIADD3.64": "UNI64", "UMOV.64": "UNI64", "UIMAD.WIDE.U32": "UNI64", "LDCU.64": "UNI64",
+            "REDG.E.ADD.STRONG.GPU": "RED32", "REDG.E.ADD.64.STRONG.GPU": "RED64",
+            "REDG.E.ADD.F32x4.FTZ.RN.STRONG.GPU": "REDV", "REDG.E.ADD.F32.FTZ.RN.STRONG.GPU": None,
+            "REDG.E.MAX.STRONG.GPU": "REDG32", "REDG.E.XOR.64.STRONG.GPU": "REDG64",
+            "ATOMG.E.ADD.STRONG.GPU": "ATOMG32", "ATOMG.E.CAS.64.STRONG.GPU": "ATOMG64", "ATOMS.ADD": "ATOMS32",
+            "ATOMS.CAST.SPIN.64": "ATOMS64", "ATOM.E.ADD.STRONG.GPU": "ATOME32", "ATOM.E.EXCH.64.STRONG.GPU": "ATOME64",
+            "STS.128": "STS128", "STS": None, "LDGSTS.E.BYPASS.128": "LDGSTS16", "LDSM.16.M88": "LDSM_X1",
+            "LDSM.16.MT88.4": "LDSM_X4T", "LDSM.8.MT1616.2": "LDSM8T_X2", "STSM.16.M88.2": "STSM_X2",
+            "STSM.8.MT1616.4": "STSM8T_X4"}
     assert {op: loads.class_of(op) for op in want} == want
 
 
-def test_a_tld_takes_its_width_from_the_program_and_unpriced_loads_are_listed():
+def test_a_side_unit_counted_by_wildcard_takes_its_class_from_its_name():
+    row = {"probe": "hs_red64", "rates": {"0:IMMA.16832.S8.S8": 0.4, "1:REDG*": 0.08}}
+    assert loads.rates_by_class(row) == pytest.approx({"IMMA16832": 0.1, "RED64": 0.02})
+    assert loads.rates_by_class({"probe": "sa_blkred512", "rates": {"0:UBLKRED*": 0.04}}) == {"TMAred512": 0.01}
+    assert loads.rates_by_class({"probe": "sa_blkred4k", "rates": {"0:UBLKRED*": 0.04}}) == {"UNI": 0.01}
+
+
+def test_a_tld_takes_its_width_from_the_program_and_unpriced_loads_are_listed(census):
+    c, _ = census
     row = {"probe": "lm_i16832_tld4n_line_q8_w16", "rates": {"0:IMMA.16832.S8.S8": 0.2, "0:TLD.LZ": 0.4}}
     assert loads.rates_by_class(row) == pytest.approx({"IMMA16832": 0.05, "TLD4w": 0.1})
-    assert loads.unpriced(row) == {}
+    assert loads.unpriced(row, c) == {}
     row = {"probe": "ld_lds32_lds64_r2_line_q16_w32", "rates": {"0:LDS": 0.4, "0:LDS.64": 0.4}}
-    assert loads.rates_by_class(row) == pytest.approx({"LDS32": 0.1})
-    assert loads.unpriced(row) == pytest.approx({"LDS.64": 0.1})
+    assert loads.rates_by_class(row) == pytest.approx({"LDS32": 0.1, "LDS64": 0.1})
+    assert loads.unpriced(row) == {}
+    assert loads.unpriced(row, c) == pytest.approx({"LDS.64": 0.1})
     assert loads.unpriced({"probe": "side_tld", "rates": {"0:TLD.LZ": 0.4}}) == pytest.approx({"TLD.LZ": 0.1})
 
 
 def test_fine_grid_sweeps_the_near_frontier_and_the_ji3n_0_form():
     names = [g["name"] for g in gen.grid(0, 0, family="fine")]
-    assert len(set(names)) == len(names) == 968
+    assert len(set(names)) == len(names) == 1346
     assert {"mx_h16816f16_ffma_q128_p0_w16", "mx_i16832_imad_q34_p0_w16", "mx_i16832_ffma_q192_p0_w32",
             "mx_i16832_dfma_q1_p1_w16"} <= set(names)
+
+
+def test_rt_families_are_unique_and_hold_the_programs_that_broke_ji3s_and_ji3t():
+    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192, "rt7": 144, "rt8": 377}
+    names = {f: [g["name"] for g in gen.grid(0, 0, family=f)] for f in sizes}
+    assert {f: len(set(n)) for f, n in names.items()} == {f: len(n) for f, n in names.items()} == sizes
+    assert "jm_i16832_fmuli_q120_p0_a3u20_w8" in names["rt4"]
+    assert "jm_isp16864_fmuli_q128_p0_a2u16_w8" in names["rt5"]
+    assert {"jx_i16832_isp16864_fmuli_q128_a1u20_w8", "jx_i16832_osf16864_none_q0_a8u4_w8", "al_mufu_popc_w16",
+            "jm_isp16864_fmuli_q128_p0_a2u20_w8_k3"} <= set(names["rt8"])
+
+
+def test_two_forms_take_their_accumulators_and_unroll_and_keep_the_ji_names():
+    g = gen._jx("i16832", "isp16864", "fmuli", 128, 2, na=1, u=20)
+    assert gen.expect_of(g) == ("IMMA.16832.S8.S8=80,IMMA.SP.16864.S8.S8=80,FMUL=2560", "", 0)
+    assert "FB_JMIX2(jx_i16832_isp16864_fmuli_q128_a1u20_w8, I16832, ISP16864, 1, 20, L_FMULI, L_NONE, L_NONE, 128, 256)" \
+        in gen.emit_cu([g | {"name": gen.name_of(g)}])
+    assert gen.name_of(gen._jx("i16832", "h1688t", ("fmuli", "axi"), 96, 4)) == "jx_i16832_h1688t_fmuli_axi_q96_w16"
 
 
 def test_mem_grid_is_seeded_unique_and_counts_each_slot():
@@ -94,7 +133,7 @@ def test_mem_grid_is_seeded_unique_and_counts_each_slot():
     assert not any("ldg256" in g["name"] for g in gen.grid(2, 120, family="mem"))
 
 
-def test_the_l2_facet_counts_only_the_bytes_of_loads_that_skip_l1(tmp_path, capsys):
+def test_the_l2_facet_counts_only_the_bytes_of_loads_that_skip_l1(tmp_path, census, capsys):
     a = gen.grid(4, 10, family="l2")
     assert a == gen.grid(4, 10, family="l2") and len({g["name"] for g in a}) == len(a)
     g = next(g for g in a if g["name"] == "l2_g256cg_scat_q16_w32")
@@ -106,7 +145,7 @@ def test_the_l2_facet_counts_only_the_bytes_of_loads_that_skip_l1(tmp_path, caps
     assert loads.l2_bytes_per_s(row) == pytest.approx(bps)
     assert loads.program(row, {}, 300.0, l2=bps / 1.1)["load"][loads.L2_ROW] == pytest.approx(1.1)
     assert loads.L2_ROW not in loads.program(row, {}, 300.0)["load"]
-    assert set(loads.unpriced(row)) == {"LDG.E.NA.128", "LDG.E.ENL2.256.STRONG.GPU"}
+    assert set(loads.unpriced(row, census[0])) == {"LDG.E.NA.128", "LDG.E.ENL2.256.STRONG.GPU"}
     p = tmp_path / "rows.jsonl"
     p.write_text(json.dumps(row) + "\n")
     assert loads.main(["summary", str(p), "--epoch", EPOCH, "--l2", str(bps / 1.1)]) == 1
@@ -149,12 +188,78 @@ def test_refit_is_the_hull_at_the_margin(tmp_path, capsys):
     assert any("mixu:imma_s8_m16n8k32" in ln for ln in facets)
 
 
+def test_family_refits_beaten_rows_as_one_hull_and_closes_them(tmp_path, capsys):
+    """R1 and KFFMA0 as one family (VF3q-16's EFFMA): the upper hull of their vertices and the measured programs at the
+    margin, each new row's lines at the new epoch, and every old line closed at the base epoch."""
+    path = _records(tmp_path, MIXU_R32, ALONE, FFMA)
+    assert loads.main(["family", str(path), "--family", "R1", "KFFMA0", "--name", "EFFMA", "--kind", "FFMA",
+                       "--epoch", EPOCH, "--emit", "VF3q-16"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    new = {tuple(ln.split(": ", 1)[1].split(",")[:2]): float(ln.split(",")[4]) for ln in out
+           if ln.startswith("census/VF3q-16.csv: ")}
+    assert new == pytest.approx({("MMA", "EFFMA0"): 14.8965878, ("FFMA", "EFFMA0"): 1.02417307,
+                                 ("MMA", "EFFMA1"): 15.7425815, ("FFMA", "EFFMA1"): 0.601176252})
+    mixu = 0.0578344 * new["MMA", "EFFMA0"] + 0.1156688 * new["FFMA", "EFFMA0"]
+    assert mixu == pytest.approx(0.98, abs=1e-5)
+    assert sum(ln.startswith("rows.csv: EFFMA") for ln in out) == 2
+    assert {ln.split()[2] for ln in out if ln.startswith("close: ")} == {"MMA,R1", "FFMA,R1", "MMA,KFFMA0", "FFMA,KFFMA0"}
+    assert all(ln.endswith(f"until {EPOCH}") for ln in out if ln.startswith("close: "))
+
+
+def test_family_forms_lowers_only_the_beaten_form_and_generic_mma_is_its_least(tmp_path, census, capsys):
+    """`family --forms` (VF3q-16's JI3q rows): a HMMA.16816.F16 + FFMA point above JI3n_0 lowers that form's coefficient
+    on the row at JI3n_0's vector coefficient until the point sits at the margin; every other form keeps its own, and
+    the generic MMA lines take the least form's."""
+    c, cu = census
+    d = tmp_path / "r20261017-060543-cc28" / "out"
+    d.mkdir(parents=True)
+    p = d / "rows.jsonl"
+    p.write_text(json.dumps({"probe": "mx_h16816f16_ffma_q64_p0_w16",
+                             "rates": {"0:HMMA.16816.F16": 0.32, "0:FFMA": 2.0}}) + "\n")
+    assert loads.main(["family", str(p), "--family", "JI3n_0", "JI3n_1", "JI3n_2", "--name", "JI3t_", "--forms",
+                       "--epoch", EPOCH, "--emit", "VF3q-16"]) == 0
+    new = {tuple(ln.split(": ", 1)[1].split(",")[:2]): float(ln.split(",")[4])
+           for ln in capsys.readouterr().out.splitlines() if ln.startswith("census/VF3q-16.csv: ")}
+    assert new["FFMA", "JI3t_0"] == pytest.approx(c["FFMA"]["JI3n_0"] / cu)
+    assert 0.08 * new["HMMA16816F16", "JI3t_0"] + 0.5 * new["FFMA", "JI3t_0"] == pytest.approx(0.98)
+    assert new["IMMA16832", "JI3t_0"] == pytest.approx(c["IMMA16832"]["JI3n_0"] / cu)
+    assert new["MMA", "JI3t_0"] == min(v for (k, r), v in new.items() if r == "JI3t_0" and k in loads.MMA_FORMS)
+
+
 def test_old_first_tensor_kinds_build_lane_is_iadd3_alone(tmp_path):
     rec = MIXU_R32 | {"mode": "spec", "op_warps": 8}
     path = _records(tmp_path, rec, {"mode": "opalone", "form": "iadd3_32", "cyc_med": 1, "mmas_per_sm": 0,
                                     "ops_per_sm": 1, "mma_warps": 0, "op_warps": 32})
     x = loads.load_rows([path])[0]["x"]
     assert set(x) == {"IMMA16832", "ALU"}
+
+
+def test_full_counts_every_instruction_of_the_gates_loop_and_unclassed_ones_on_issue_alone(tmp_path, census):
+    c, cu = census
+    out = tmp_path / "r20261017-214111-18e4" / "out"
+    (out / "sass").mkdir(parents=True)
+    body = (["IMAD R0, R1, R2, RZ", "MOV R4, RZ"] + ["IMMA.16832.S8.S8 R8, R12, R16, R8"] * 2
+            + ["FMUL R20, R20, R21"] * 6
+            + ["@!P0 MOV R5, R4", "IADD3 R6, R6, 0x1, RZ", "ISETP.NE.AND P0, PT, R6, R7, PT", "BRA 0x0020", "EXIT"])
+    sass = "\n\tcode for sm_120\n\t\tFunction : jm_t\n" + "".join(
+        f"        /*{16 * i:04x}*/                   {ins} ;      /* 0x000fe20000000f00 */\n"
+        for i, ins in enumerate(body))
+    (out / "sass" / "fb_000.sass").write_text(sass + "\t\tFunction : jm_u\n")
+    loop = {"head": "0x0020", "tail": "0x00d0", "counts": {"IMMA.16832.S8.S8": 2, "FMUL": 6}}
+    (out / "gate-build.json").write_text(json.dumps({"verdicts": [
+        {"probe": p, "passed": True, "verdict": {"kernel": p, "loops": [loop]}} for p in ("jm_t", "jm_u")]}))
+    one = {"probe": "jm_t", "rates": {"0:IMMA.16832.S8.S8": 0.2, "0:FMUL": 0.6}}
+    two = {"probe": "jm_u", "rates": {"0:IMMA.16832.S8.S8": 0.2, "1:FMUL": 0.6}}
+    p = out / "rows.jsonl"
+    p.write_text("".join(json.dumps(r) + "\n" for r in (one, two)))
+    want = ["IMMA.16832.S8.S8"] * 2 + ["FMUL"] * 6 + ["MOV", "IADD3", "ISETP.NE.AND", "BRA"]
+    assert loads.gate_loops(out)["jm_t"] == want
+    full, other = loads.load_rows([p], full=True)
+    assert full["x"] == pytest.approx({"IMMA16832": 0.05, "FFMA": 0.15, "NOROW": 0.025, "ALU": 0.025})
+    assert full["x_issue"] == pytest.approx(0.05)
+    assert "x" not in other
+    counted = loads.program(one, c, cu)["load"]["issue"]
+    assert loads.program(full, c, cu)["load"]["issue"] == pytest.approx(counted + 0.1) and counted == pytest.approx(0.2)
 
 
 def test_grid_is_seeded_unique_and_pinned():

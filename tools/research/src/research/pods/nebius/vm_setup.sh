@@ -54,12 +54,35 @@ done
 
 echo 'd /run/gpu-lease 1777 root root -' > /etc/tmpfiles.d/gpu-lease.conf
 systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
+# gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote, INF-55).
+# The cluster's nodes say otherwise in /etc/vy/direct-gpus (cluster_up.sh), which the runner reads first.
+# vy-gpu-adopt holds the lease of a GPU some process uses without one, until it exits, and logs it (gpu_adopt.py).
+install -d -m 755 /etc/vy
+if nvidia-smi -L 2> /dev/null | grep -q '^GPU ' && [ ! -e /etc/vy/direct-gpus ]; then
+  touch /etc/vy/gpu-lease-host
+  install -D -o "$U" -g "$U" -m 755 /usr/local/share/vy/gpu_adopt.py /workspace/verity-guest/bin/gpu_adopt.py
+  cat > /etc/systemd/system/vy-gpu-adopt.service <<EOF
+[Unit]
+Description=hold the gpu-lease lease of a GPU a process uses without one, until it exits (gpu_adopt.py)
+After=local-fs.target
+
+[Service]
+User=$U
+ExecStart=/usr/bin/python3 /workspace/verity-guest/bin/gpu_adopt.py loop
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 # python3-numpy: `python3 tools/verity/lean/check.py --update` runs PoUW's vector generators, which import numpy, under that
-# python3 (node 2 and cpu-1 lacked it, 11 Oct)
-apt-get install -y -q git rsync fio jq python3-venv python3-numpy util-linux ripgrep
+# python3 (node 2 and cpu-1 lacked it, 11 Oct). python3.12-dev and build-essential: Triton compiles cuda_utils.c against
+# Python.h at a vLLM engine's first start (vy-glm53-eu 16 Oct and vy-glm53-eu2 17 Oct lacked it; circuits)
+apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev build-essential util-linux ripgrep
 UV_VERSION=0.12.20        # tools/verity/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
 [ "$(uv --version 2> /dev/null | cut -d' ' -f2)" = "$UV_VERSION" ] \
   || curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
@@ -165,6 +188,7 @@ EOF
 systemctl daemon-reload
 systemctl enable --now vy-lease.service
 systemctl enable --now vy-deadline.timer
+[ ! -e /etc/systemd/system/vy-gpu-adopt.service ] || systemctl enable --now vy-gpu-adopt.service
 [ "${VY_LOCK_CLOCKS:-1}" = 0 ] || systemctl enable --now vy-clocks.service   # the clocks are the RTX PRO 6000's
 
 nvidia-smi -pm 1 > /dev/null 2>&1 || log "nvidia-smi -pm 1 refused (persistence mode stays off)"

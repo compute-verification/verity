@@ -385,6 +385,74 @@ def tree_identical(repo: Path, commit: str) -> bool:
     return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
 
 
+#: a Lake package's lock, which a train's check may regenerate (`check.py --regenerate`, the report's `regenerated`)
+LOCK = "lean-audit.json"
+
+
+def _run_files(store, run_id: str) -> str | None:
+    out = (store.get_attempt(run_id) or {}).get("outputs") or {}
+    return out.get("run_files") or out.get("run_record")
+
+
+def _under_run(path: str) -> str:
+    """A path the Lean check's report names, as a path among the run's files (`lean-audit/...`)."""
+    if "/lean-audit/" in path:
+        return "lean-audit/" + path.split("/lean-audit/", 1)[1]
+    return path if path.startswith("lean-audit/") else f"lean-audit/{path}"
+
+
+def regenerated_records(store, run_id: str, dest: Path | None = None) -> dict[str, tuple[str, Path | None]]:
+    """{package: (sha256 of its regenerated lock, the fetched file under ``dest`` or None)} of a check that passed its Lean
+    check by regenerating records (the report's `regenerated`); empty when it regenerated none or its files aren't in the store."""
+    if not (art := _run_files(store, run_id)):
+        return {}
+    try:
+        rows = {f["path"]: f["sha256"] for f in store.listing(art)}
+    except Exception:  # noqa: BLE001  (no listing: nothing to vouch for)
+        return {}
+    if "lean-audit/audit.json" not in rows:
+        return {}
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            audit = json.loads((store.fetch(art, Path(d), paths=["lean-audit/audit.json"]) / "lean-audit" / "audit.json").read_text())
+        except (OSError, ValueError):
+            return {}
+    want = {pkg: _under_run(str(p)) for pkg, p in (audit.get("regenerated") or {}).items()}
+    if not want or any(p not in rows for p in want.values()):
+        return {}
+    got = store.fetch(art, dest, paths=sorted(want.values())) if dest is not None else None
+    return {pkg: (rows[p], (got / p) if got is not None else None) for pkg, p in want.items()}
+
+
+def _blob_sha256(repo: Path, commit: str, path: str) -> str:
+    import hashlib  # noqa: PLC0415
+
+    r = subprocess.run(["git", "-C", str(repo), "cat-file", "blob", f"{commit}:{path}"], capture_output=True)
+    return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else ""
+
+
+def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
+                       maps=None) -> str | None:
+    """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
+    packages' locks, names exactly those in its `Regenerated:` trailer, and each is byte for byte the lock that attempt
+    regenerated for its package, so the tree that lands is the one that check audited (CI-64)."""
+    parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
+    if len(parents) != 1:
+        return None
+    parent = parents[0]
+    files = _git(repo, "diff", "--name-only", "--no-renames", parent, commit).stdout.split()
+    said = {f.strip() for f in _git(repo, "log", "-1", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)",
+                                     commit).stdout.replace("\n", ",").split(",") if f.strip()}
+    if not files or set(files) != said or not all(os.path.basename(f) == LOCK for f in files):
+        return None
+    tree = _git(repo, "rev-parse", f"{parent}^{{tree}}").stdout.strip()
+    for rid in passing(store, parent, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo):
+        recs = regenerated_records(store, rid)
+        if all(recs.get(os.path.dirname(f) or ".", ("",))[0] == _blob_sha256(repo, commit, f) for f in files):
+            return rid
+    return None
+
+
 def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin") -> tuple[str, str]:
     """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise, including a pull request it
     merges whose head on ``remote`` moved, or that is stacked on one neither on ``into`` nor below it (`unstacked`)."""
@@ -412,6 +480,8 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
     kinds, command = produced(repo, tool), declared_command(repo, tool)
     ids = passing(store, commit, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
+    if not ids and (via := regenerated_parent(repo, commit, store, tool=tool, kinds=kinds, command=command, maps=maps)):
+        ids = [via]
     if not ids:
         rows = store.index.sql("SELECT id, state, rc, source_dirty FROM attempts WHERE tool = ? AND source_commit = ?", (tool, commit))
         why = {r[0]: refused(store, r[0], kinds, tool, commit, command, repo) for r in rows if r[1] == "done" and r[2] == 0 and not r[3]}
@@ -449,7 +519,8 @@ printf '%s\\n' "$lines" | PYTHONPATH={src} exec {python} -m research merge --gua
 def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", tool: str = "check") -> list[str]:
     """The tips a push (git's pre-push lines: `local_ref local_sha remote_ref remote_sha`) would move ``into`` to without a
     passing ``tool`` attempt of their tree, the merge gate's rule: the tip's own attempt (a `--train` fast-forward), or, as a
-    `research merge` commit has, its merged parent's when the two trees are equal."""
+    `research merge` commit has, its merged parent's when the two trees are equal, or, for a commit of the locks a train's
+    check regenerated, that check (`regenerated_parent`)."""
     bad = []
     kinds, command = produced(repo, tool), declared_command(repo, tool)
     for line in lines:
@@ -460,7 +531,8 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
         tree = _git(repo, "rev-parse", f"{tip}^{{tree}}").stdout.strip()
         parents = _git(repo, "rev-list", "--parents", "-n", "1", tip).stdout.split()[1:]
         if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree
-                   and passing(store, x, tool, kinds=kinds, command=command, tree=tree, repo=repo) for x in [tip, *parents[1:]]):
+                   and passing(store, x, tool, kinds=kinds, command=command, tree=tree, repo=repo) for x in [tip, *parents[1:]]) \
+                and not regenerated_parent(repo, tip, store, tool=tool, kinds=kinds, command=command):
             bad.append(tip)
     return bad
 
@@ -1110,9 +1182,74 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
                      check=False)
             if r.returncode:
                 log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
+    # a PR GitHub marked merged itself (its head reached `into` by drive's landing) leaves its branch too (17 Oct: 2,119 of the
+    # repository's 3,543 branches were already on main)
+    merged = json.loads(gh("pr", "list", "--state", "merged", "--limit", "200", "--json", "number,headRefName,headRefOid"))
+    # only a branch still at the merged head: a lease on a branch already gone fails as "stale info" (17 Oct: 58 a tick)
+    heads = {ref.removeprefix("refs/heads/"): sha for sha, ref in (
+        line.split() for line in _git(repo, "ls-remote", "--heads", remote).stdout.splitlines())}
+    for p in merged:
+        head = p["headRefName"]
+        if head in used or head in KEEP_BRANCHES or heads.get(head) != p["headRefOid"] or not on(p["headRefOid"]):
+            continue
+        log(f"research merge: {verb}delete {remote}'s branch {head} (merged #{p['number']}'s head, on {into})")
+        if not dry_run:
+            r = _git(repo, "push", "-q", f"--force-with-lease=refs/heads/{head}:{p['headRefOid']}", remote, f":refs/heads/{head}",
+                     check=False)
+            if r.returncode and "remote ref does not exist" not in (r.stderr or ""):
+                log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
     if not done and not moved:
         log(f"research merge: no open pull request is on {remote}/{into} ({tip[:12]}) or based on a branch that is")
     return [p["number"] for p in done], [p["number"] for p in moved]
+
+
+#: branches no sweep touches: the trunk, drive's train branch and its shadow
+KEEP_BRANCHES = frozenset({"main", "next", "queue-shadow"})
+#: a lead's run branch (`cursor/verity-<lead>-XXXX`), which its agent pushes to again
+RUN_BRANCH_RE = re.compile(r"cursor/verity-[a-z0-9-]+-[0-9a-f]{4}")
+MERGED_IDLE_S, UNMERGED_IDLE_S = 86400, 3 * 86400
+
+
+def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: float | None = None, dry_run: bool = False,
+                   gh=None, log=print, chunk: int = 100) -> tuple[int, int]:
+    """The branch sweep (CI-48, 17 Oct, after Daniel asked why the repository had 4,000 branches): delete each branch whose tip
+    is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
+    `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
+    run branches (`RUN_BRANCH_RE`) and every branch an open PR uses as its head or base.  Each push leases the tip it saw, so a
+    branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
+    gh = gh or (lambda *a: _gh_cli(repo, *a))
+    now = time.time() if now is None else now
+    _git(repo, "fetch", "-q", "--prune", remote, f"+refs/heads/*:refs/sweep/{remote}/*")
+    tip = _git(repo, "rev-parse", f"refs/sweep/{remote}/{into}").stdout.strip()
+    prs = json.loads(gh("pr", "list", "--state", "open", "--limit", "1000", "--json", "headRefName,baseRefName"))
+    used = {p["headRefName"] for p in prs} | {p["baseRefName"] for p in prs}
+    rows = _git(repo, "for-each-ref", "--format=%(refname:lstrip=3) %(objectname) %(committerdate:unix)",
+                f"refs/sweep/{remote}/").stdout.splitlines()
+    delete, archive = [], []
+    for name, sha, when in (r.split() for r in rows):
+        if name in KEEP_BRANCHES or name in used or RUN_BRANCH_RE.fullmatch(name):
+            continue
+        idle = now - int(when)
+        if _git(repo, "merge-base", "--is-ancestor", sha, tip, check=False).returncode == 0:
+            if idle > MERGED_IDLE_S:
+                delete.append((name, sha))
+        elif idle > UNMERGED_IDLE_S:
+            archive.append((name, sha))
+    verb = "would " if dry_run else ""
+    log(f"research merge: {verb}delete {len(delete)} branch(es) on {into} a day idle, {verb}archive {len(archive)} unmerged "
+        f"branch(es) three days idle to refs/archive/heads/")
+    if not dry_run:
+        for i in range(0, len(delete), chunk):
+            part = delete[i:i + chunk]
+            _git(repo, "push", "-q", *(f"--force-with-lease=refs/heads/{n}:{s}" for n, s in part), remote,
+                 *(f":refs/heads/{n}" for n, _ in part), check=False)
+        for i in range(0, len(archive), chunk):
+            part = archive[i:i + chunk]
+            _git(repo, "push", "-q", "--atomic", *(f"--force-with-lease=refs/heads/{n}:{s}" for n, s in part), remote,
+                 *(f"{s}:refs/archive/heads/{n}" for n, s in part), *(f":refs/heads/{n}" for n, _ in part), check=False)
+    for line in _git(repo, "for-each-ref", "--format=%(refname)", f"refs/sweep/{remote}/").stdout.split():
+        _git(repo, "update-ref", "-d", line, check=False)
+    return len(delete), len(archive)
 
 
 def _sweep_after(repo: Path, into: str, remote: str) -> None:

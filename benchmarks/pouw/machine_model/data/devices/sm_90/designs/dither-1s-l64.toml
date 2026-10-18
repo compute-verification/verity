@@ -1,0 +1,51 @@
+# Dither-1S at L = 64 on the H200 (sm_90): one-sided dither, duo receipts on every committed word, the linears' peel.
+# The noise, ε_skip and ε_mand are sm_120's design's (data/designs/); honest, its operand floor and the baseline are
+# the H200's. Every Dither noise has the same floor here: no operand passes through a register.
+name = "dither-1s-l64"
+title = "Dither-1S, L = 64"
+summary = "Dither-1S on the H200 at L = 64: one-sided dither, duo receipts on every committed word, the linears' peel"
+honest = "dc90-l64"
+L = 64
+work = 1.0
+sums = "vfold"
+
+[noise]
+linears = "one-sided"
+lm_head = "clean"
+qk = "one-sided"
+pv = "peel"
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { IGMMA_S8_N256 = 0.0 }
+source = "wgmma reads both operands from shared memory by descriptor (TMA fills it), so delivery costs no warp instruction a MMA; the warpgroup fences and commit groups are left out, so it is a lower bound"
+
+[fold]
+name = "duo"
+ALU = 2
+IMAD = 1
+
+[skip.served]
+eps = 0.219
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 9.799 SMSP-cycles a 4096-MAC MMA on DC-90; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 32K decode: the linears' one-sided strip 0.855%; QKᵀ's one-sided strip 20.8%; P·V's peel 0.187%: its tail 0.130%, the sums DG, S and X(0) 0.0483%, the served epilogue 0.00914%. With P·V's served output checked it is 21.9% (8B) / 16.6% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle; a one-sided strip's 2L executed products at ♭'s price a MAC, on sm_120's instruction counts for the same kernel source, on this device's Π; the clean lm_head skips nothing, its words are ♭'s (note:20261017T0320Z-draft-eps1-calc Round 10)"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: duo at 3 lane instructions a word is the cheapest implementation of the fold (FOLD)"
+
+[clock]
+eps = 0.0
+source = "f_H unmeasured on the H200 (EPS1 DC measured f_max = 1980 MHz at default clocks, 06:01Z): 0 here, so γ with the clock gap is γ, a lower bound"
+
+[luck]
+delta = 4.547473508864641e-13
+p = 0.75
+checks = 48000
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 16 }
+source = "dp4a at 16 IDP4A a word at L = 64, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
+
+[routes]
+lanes = true

@@ -1,8 +1,14 @@
 import argparse
+import json
+import re
 
 import pytest
 
+import models
+import report
 import run
+import spec
+import tables
 import windows
 
 
@@ -43,6 +49,23 @@ def test_70b_leases_two_gpus_and_never_more():
         submit(gpus=3)
 
 
-def test_readme_with_replaces_only_the_baseline():
-    text = "a\n<!-- baseline -->\nold\n<!-- /baseline -->\nb\n"
-    assert run.readme_with("new", text) == "a\n<!-- baseline -->\nnew\n<!-- /baseline -->\nb\n"
+def test_the_readme_holds_no_table():
+    text = run.README.read_text()
+    found = [f"README.md:{i}: {line}" for i, line in enumerate(text.splitlines(), 1)
+             if re.match(r"\s*\|.*\|\s*$", line)]
+    assert not found, ("a table belongs in `run.py tables` (tables.py, one section a table, read from the code and "
+                       "data it describes), and the README says which section prints it:\n" + "\n".join(found))
+    assert "run.py tables" in text
+
+
+def test_tables_render_the_registry_the_specs_and_the_lock(capsys):
+    out = tables.render()
+    steps = spec.catalogue()
+    assert all(f"| `{k}(" in out for k in steps) and all(v["source"] for v in steps.values())
+    assert all(f"| `{p.stem}` |" in out for p in spec.SPECS.glob("*.toml"))
+    assert all(f"| `{m}` |" in out for m in models.MODELS)
+    assert report.baseline_table(json.loads(run.BASELINE.read_text())) in out
+    assert run.main(["tables", "windows"]) == 0
+    assert re.findall(r"^## (.*)", capsys.readouterr().out, re.M) == ["The window lists"]
+    with pytest.raises(SystemExit, match="no section nope"):
+        run.main(["tables", "nope"])

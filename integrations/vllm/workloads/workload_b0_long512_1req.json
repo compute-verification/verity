@@ -1,8 +1,12 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "HuggingFaceTB/SmolLM2-135M",
- "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
  "case": "B0",
+ "engine": {
+  "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+  "vllm": "d9105ea80",
+  "args": {}
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -544,6 +548,5 @@
    "origin": "TEXTS[0][0:512]"
   }
  ],
- "engine_args_required": {},
  "note": "GEN batch: one 512-token prompt (32 KV blocks; FA2 T up to 519), max_tokens 8.  The paragraph corpus from TEXTS[0]."
 }
