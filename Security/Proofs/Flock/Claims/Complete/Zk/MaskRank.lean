@@ -365,8 +365,10 @@ theorem maskWords_ge {st : Flock.Stmt} (h : Flock.Zk.shapeOk st = .ok ()) :
     rw [pow_add] at hle
     split at h
     · cases h
-    · rename_i hge
-      simp only [Flock.Zk.RANK_POINTS, Flock.Zk.RANK_SLACK] at hge
-      omega
+    · split at h
+      · cases h
+      · rename_i hge
+        simp only [Flock.Zk.RANK_POINTS, Flock.Zk.RANK_SLACK] at hge
+        omega
 
 end FlockComplete.MaskRank
