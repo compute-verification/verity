@@ -16,7 +16,11 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   return's interval follows from its operands' (an exact step's sum) declares `Ports(transfer=f)` instead: `f(*operands)`
   maps each operand's interval (None when it has none; `as_reading` reads it signed or unsigned) to its return's, or None,
   and the Build gives each instance's return that interval. So a composite over such steps declares, and is held to, the
-  interval its operands' bounds prove (the s8 chain's words, which a limb split's bound reads).
+  interval its operands' bounds prove (the s8 chain's words, which a limb split's bound reads). A bound is never taken on
+  trust: it holds by its operand's width, its producer's interval, or a range-check Definition's declared one, so a program
+  function's parameter (a run input, registered, a coin or a weight) declares no bound narrower than its width
+  (`E_PORT_BOUND`): an input narrower than its type is read through a range check whose `Out(interval)` is the bound. Only
+  a `harness` takes the bounds of the Definition it evaluates on its inputs, as preconditions of the run it evaluates.
 * **Sinks.** `Out(sink=True)` (a receipt fold's output) reaches only a receipt port (`In(receipt=True)`) or the program's
   outputs. A primitive reading a sink at any other port is refused (`E_PORT_SINK`). A sink passed to a composite is a sink in
   its body, and a composite that returns one declares it. A Definition with a receipt port returns only sinks.
@@ -41,8 +45,8 @@ Facts flow down every call and up through declarations. A parameter's facts, in 
 instances of its operands' facts, so a bound sees its operand's producer through any number of calls. A Definition's output
 carries what its `Out` declares (a primitive's with a transfer, the interval it gives from that instance's operands; a scanned
 one's, none), and the check holds a composite's body to it. `facts(root)` gives every leaf's facts (its interval: the
-producer's, or an input's declared bound, read at the leaf's width by `reading`; its origin; whether it is a sink; its word
-type) to the census and the property.
+producer's, or an input's declared bound (its width's, but in a harness), read at the leaf's width by `reading`; its origin;
+whether it is a sink; its word type) to the census and the property.
 """
 
 from __future__ import annotations
@@ -443,7 +447,8 @@ def forward(fn: Any) -> Ports | None:
 def harness(defn: Any) -> Any:
     """Mark `defn` (a program function's `CompositeDefinition`) a harness: the wrapper of a one-Call Program that evaluates a
     Definition on arbitrary operands (`evaluation.standalone_call`, `cut.call_scope`). A harness's inputs may feed a kind=static
-    port, each taken as a constant of the run it evaluates; no other Program's (nor a decoded one's) may."""
+    port, each taken as a constant of the run it evaluates, and declare a bound narrower than their width, each a precondition
+    of that run; no other Program's (nor a decoded one's) may."""
     defn.harness = True
     return defn
 
@@ -455,14 +460,15 @@ def _is_harness(fn: Any) -> bool:
 def root_ports(fn: Any, input_colls: Sequence[Coll], registered: Sequence[bool], nodes: Sequence[Type]) -> PortTypes | None:
     """A root's port types: its input nodes (of output types `nodes`, referenced by `input_colls` per parameter) take the
     program function's parameter ports, its return the function's return ports. A coin is drawn per run, so a coin parameter is
-    never registered; a parameter is an input, so never static (but in a `harness`)."""
+    never registered; a parameter is an input, so never static and never bounded narrower than its width (but in a
+    `harness`)."""
     pt = port_types(fn)
     if pt is None:
         return None
     params, ret = fn.signature()
     runs: dict[int, list] = {}
     for (name, _t), rs, coll, reg in zip(params, pt.params, input_colls, registered):
-        for lo, hi, p, _w in rs:
+        for lo, hi, p, w in rs:
             if p.kind == "static" and not _is_harness(fn):
                 raise PortError("E_PORT_KIND", f"program function {fn.id}: parameter {name!r} is kind=static, but a program "
                                 f"function's parameters are inputs and a static is a constant: make it a static of the "
@@ -470,6 +476,12 @@ def root_ports(fn: Any, input_colls: Sequence[Coll], registered: Sequence[bool],
             if p.kind == "coin" and reg:
                 raise PortError("E_PORT_KIND", f"program function {fn.id}: parameter {name!r} is kind=coin, so it is drawn "
                                 f"per run and never registered")
+            if p.bound is not None and not full(p.bound, w) and not _is_harness(fn):
+                raise PortError("E_PORT_BOUND", f"program function {fn.id}: parameter {name!r} leaves [{lo}, {hi}) declare the "
+                                f"bound [{p.bound[0]}, {p.bound[1]}], narrower than Value<{w}>, but a run input's bound is "
+                                f"never taken on trust: read the input through a range-check Definition (a primitive whose "
+                                f"declared Out(interval) is the bound, which circuit-check tests) and declare the bound on "
+                                f"the readers of its output, or drop it")
             for _s, k, a, b in ref_runs(coll.refs.slice(lo, hi)):
                 runs.setdefault(k, []).append((a, b, p))
     root = f"Root[{fn.id}]"
@@ -924,7 +936,7 @@ def _input_facts(root: Any, k: int, node: Any, runs: list, harness: bool, theta:
     reg = is_registered(node.fn)
     base = fact(origin=("theta",) if theta else ("registered",) if reg else ("input",))
     B, pos = _Build(), 0
-    for lo, hi, p, _w in runs:
+    for lo, hi, p, w in runs:
         if p.kind == "static" and not harness:
             raise PortError("E_PORT_KIND", f"{root.id} input node {k}: an input is never kind=static (only a harness's)")
         if p.kind == "coin" and reg:
@@ -935,6 +947,10 @@ def _input_facts(root: Any, k: int, node: Any, runs: list, harness: bool, theta:
                             f"take it in a parameter the Program doesn't mark theta")
         if hi > node.out.leaves:
             raise _decl(f"{root.id} input node {k}: ports type leaves [{lo}, {hi}) of {node.out.leaves}")
+        if p.bound is not None and not full(p.bound, w) and not harness:
+            raise PortError("E_PORT_BOUND", f"{root.id} input node {k}: leaves [{lo}, {hi}) declare the bound [{p.bound[0]}, "
+                            f"{p.bound[1]}], narrower than Value<{w}>, but an input's bound is never taken on trust (only a "
+                            f"harness's): a range-check Definition narrows it")
         B.add(lo - pos, base)
         B.add(hi - lo, fact(p.bound, (p.kind,) if p.kind != "value" else base.origin, False, p.word))
         pos = hi

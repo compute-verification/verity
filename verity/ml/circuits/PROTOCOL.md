@@ -573,7 +573,7 @@ input nodes they lower to, ascending. It is outside both digests, so it binds no
 differently for being a weight checks it against the weights' commitment. The decoder doesn't read it. `ports.facts` does, on
 a built or a decoded Program, and refuses (`E_PORT_DECL`) a list that names anything but the root's input nodes.
 
-An input leaf's interval and word are its port's `bound` and `word`. A constant's interval is its value: its encoding, read as
+An input leaf's interval and word are its port's `bound` (a full one: `E_PORT_BOUND`) and `word`. A constant's interval is its value: its encoding, read as
 signed when its top bit is set and `w > 1` (none for a constant that reads a table). A node's output leaves carry what its
 callee's `ret` ports declare, nothing else, whether the callee is a primitive or a composite; a primitive with a transfer
 gives them the interval its transfer gives from that node's operands (each operand's interval the hull of its leaves', none
@@ -592,7 +592,11 @@ as declared, so a composite over exact steps declares the intervals its operands
 **The rules.** `program.Program` and `decode_program` refuse a Program, with `ports.PortError` and its code, when:
 
 - **`E_PORT_BOUND`**: a node's operand leaf at a port with `bound` `[a, b]` has an interval not within `[a, b]`, or none,
-  unless `[a, b]` is full.
+  unless `[a, b]` is full; or an input node's port has a `bound` that is not full. A bound is never taken on trust: it holds
+  by its operand's width, its producer's interval, or the declared interval of a range-check Definition the input is read
+  through (a primitive whose `interval` circuit-check tests). So an input narrower than its type, whatever its binding time
+  or kind, gets its bound only through such a range check. (A harness, `ports.harness`, gives its inputs the bounds of the
+  Definition it evaluates, as preconditions of the run, and is never decoded.)
 - **`E_PORT_INTERVAL`**: a composite's declared `interval` does not contain the interval of what its body returns there. A
   primitive's is a fact about its evaluator, which circuit-check tests (its `ports` check).
 - **`E_PORT_SINK`**: a primitive node reads a sink at a port without `receipt`, or a composite other than the root returns a
@@ -616,7 +620,8 @@ as declared, so a composite over exact steps declares the intervals its operands
 `ports.facts(root)` gives every leaf's fact to the census and the stacking property. A Program in which no Definition declares
 ports is refused by none of the rules, and nothing is computed for it (`ports.check` returns None).
 
-Vectors: `verity/ml/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; a chain of exact
-steps declaring its words' intervals and a limb split's bound on them; an explicit limb split with its carries; a word read at
+Vectors: `verity/ml/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; an input's bound
+narrower than its type refused, and narrowed by a range check instead; a chain of exact steps declaring its words' intervals
+and a limb split's bound on them; an explicit limb split with its carries; a word read at
 another width (`E_REINTERPRET`), built and in a tampered descriptor; tampered descriptors; the canonical form; and a pinned
 digest of one typed descriptor.

@@ -173,13 +173,34 @@ def test_a_full_bound_assumes_nothing():
     Program(comp("PortsTestFull", [("x", V16)], V16, lambda B, S, x: B.call(AnyBound, B.call(Add16, x, x))))
 
 
-def test_an_input_bound_is_the_inputs_interval():
-    ports = Ports(params={"x": In(bound=(-128, 127))})
-    f = comp("PortsTestInB", [("x", V16)], V32, lambda B, S, x: B.call(Mul, x, x), ports=ports)
-    prog = Program(f)
-    desc, dec = roundtrip(prog)
-    assert desc["definitions"][desc["root"]]["ports"] == {"inputs": [[0, 0, 1, {"bound": [-128, 127]}]]}
-    assert P.facts(dec.root).node(0).one == P.fact((-128, 127), ("input",))
+def test_an_input_bound_narrower_than_its_type_is_refused():
+    """A declared bound is never taken on trust: a program function's parameter declaring one narrower than its type is refused,
+    built and decoded, whatever its binding time or kind. A full bound assumes nothing; a range check narrows the input instead;
+    a harness takes the bounds of the Definition it evaluates, and is never decoded."""
+    trusted = comp("PortsTestInB", [("x", V16)], V32, lambda B, S, x: B.call(Mul, x, x), ports=Ports(params={"x": In(bound=(-128, 127))}))
+    for kw in ({}, {"registered": ("x",)}, {"theta": ("x",)}):
+        refused("E_PORT_BOUND", lambda: Program(trusted, **kw), "program function PortsTestInB_v1: parameter 'x' leaves [0, 1) "
+                "declare the bound [-128, 127], narrower than Value<16>, but a run input's bound is never taken on trust",
+                "range-check Definition")
+    coin = comp("PortsTestInCoinB", [("key", V32)], V8, lambda B, S, key: B.call(Noise, key, B.call(Tag)),
+                ports=Ports(params={"key": In(bound=(0, 255), kind="coin")}))
+    refused("E_PORT_BOUND", lambda: Program(coin), "parameter 'key' leaves [0, 1) declare the bound [0, 255], narrower than Value<32>")
+    full = comp("PortsTestInFull", [("x", V16)], V16, lambda B, S, x: B.call(AnyBound, x), ports=Ports(params={"x": In(bound=(-32768, 32767))}))
+    desc, dec = roundtrip(Program(full))
+    assert desc["definitions"][desc["root"]]["ports"] == {"inputs": [[0, 0, 1, {"bound": [-32768, 32767]}]]}
+    assert P.facts(dec.root).node(0).one == P.fact((-32768, 32767), ("input",))
+    tampered = copy.deepcopy(desc)
+    tampered["definitions"][desc["root"]]["ports"]["inputs"][0][3]["bound"] = [-128, 127]
+    refused("E_PORT_BOUND", lambda: decode_program(tampered, REGISTRY), "input node 0: leaves [0, 1) declare the bound "
+            "[-128, 127], narrower than Value<16>, but an input's bound is never taken on trust")
+    checked = Program(comp("PortsTestInRange", [("x", V16)], V32, lambda B, S, x: B.call(Mul, B.call(Quant, x), B.call(Quant, x))))
+    _desc, dec = roundtrip(checked)
+    F = P.facts(dec.root)
+    assert F.node(0).one == P.fact(None, ("input",)) and F.node(1).one.interval == (-128, 127)
+    prog, _call = standalone_call(bind(trusted))
+    assert P.facts(prog.root).node(0).one == P.fact((-128, 127), ("input",))
+    assert evaluate(bind(trusted), (-5) & 0xFFFF) == (25,)
+    refused("E_PORT_BOUND", lambda: decode_program(encode_program(prog), REGISTRY), "only a harness's")
 
 
 def test_intervals_flow_down_through_calls_joined_over_instances():
@@ -270,9 +291,21 @@ def chain(name: str, ivs=None, acc_param: bool = False) -> CompositeDefinition:
     return comp(name, params, Array(2, V32), body, ports=Ports(params={"a": S8, "b": S8}, ret=ret))
 
 
+@primitive("PortsTestRange7", 1, (("x", V16),), V16, ports=Ports(ret=Out(interval=(-7, 7))))
+def Range7(x):
+    """A range check: its operand clamped to [-7, 7], the interval it declares."""
+    return max(-7, min(7, _s(x, 16))) & 0xFFFF
+
+
+@primitive("PortsTestRangeNeg3", 1, (("x", V16),), V16, ports=Ports(ret=Out(interval=(-3, 0))))
+def RangeNeg3(x):
+    """A range check: its operand clamped to [-3, 0]."""
+    return max(-3, min(0, _s(x, 16))) & 0xFFFF
+
+
 def test_a_transfer_gives_each_instance_its_operands_interval():
     """An exact step's return carries the interval its transfer gives from that instance's operands: the chain's words from
-    s8 operands, and narrower ones from narrower inputs; a constant's interval is its value."""
+    s8 operands, and narrower ones from inputs range checks narrow; a constant's interval is its value."""
     f = comp("PortsTestChainUse", [("x", Array(8, V16))], Array(2, V32),
              lambda B, S, x: B.call(chain("PortsTestChainT"), B.batch(Quant, x, axes=(0,)), B.batch(Quant, x, axes=(0,))))
     prog = Program(f)
@@ -283,8 +316,8 @@ def test_a_transfer_gives_each_instance_its_operands_interval():
     assert desc["definitions"]["PortsTestDot4_v1"]["ports"] == {
         "params": [[1, 0, 4, {"bound": [-128, 127]}], [2, 0, 4, {"bound": [-128, 127]}]], "transfer": True}
     narrow = comp("PortsTestChainNarrow", [("a", Array(8, V16)), ("b", Array(8, V16))], V32,
-                  lambda B, S, a, b: B.call(Dot4, B.call(Zero32), a[0:4], b[0:4]),
-                  ports=Ports(params={"a": In(bound=(-7, 7)), "b": In(bound=(-3, 0))}))
+                  lambda B, S, a, b: B.call(Dot4, B.call(Zero32), B.batch(Range7, a[0:4], axes=(0,)),
+                                            B.batch(RangeNeg3, b[0:4], axes=(0,))))
     root = Program(narrow).root
     fn = P.facts(root)
     k_zero, k_dot = (next(k for k, n in enumerate(root.body.nodes) if n.fn is p) for p in (Zero32, Dot4))
