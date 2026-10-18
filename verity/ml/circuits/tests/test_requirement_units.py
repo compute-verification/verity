@@ -142,15 +142,17 @@ def test_the_toy_is_what_the_units_cover(case) -> None:
     assert max(len(R.read_blocks(req, layout, t)) for t in range(STEPS)) <= PLAN.P
 
 
-def test_each_step_s_honest_plan_and_map_are_accepted(case) -> None:
-    """Under either layout, every step's plan unit (its plan the blocks the step reads) and memory-map unit return 1, as their
-    references do."""
-    plans, maps = [], []
-    for layout, store in case.layouts.values():
-        for t in range(STEPS):
-            plans.append(plan_args(case, layout, t, R.read_blocks(case.req, layout, t)))
-            maps.append(map_args(case, layout, store, t))
+def test_each_step_s_honest_plan_is_accepted(case) -> None:
+    """Under either layout, every step's plan unit (its plan the blocks the step reads) returns 1, as its reference does."""
+    plans = [plan_args(case, layout, t, R.read_blocks(case.req, layout, t)) for layout, _store in case.layouts.values()
+             for t in range(STEPS)]
     assert evaluate(case.plan, PLAN, plans) == [ref_plan(a) for a in plans] == [1] * len(plans)
+
+
+@pytest.mark.slow
+def test_each_step_s_honest_memory_map_is_accepted(case) -> None:
+    """Under either layout, every step's memory-map unit returns 1, as its reference does."""
+    maps = [map_args(case, layout, store, t) for layout, store in case.layouts.values() for t in range(STEPS)]
     assert evaluate(case.map, MAP, maps) == [ref_map(a) for a in maps] == [1] * len(maps)
 
 
@@ -184,6 +186,7 @@ def _phi(a, j, write=None, free=None):
     return {**a, "phi": phi}
 
 
+@pytest.mark.slow
 def test_each_memory_map_clause_s_negative_is_refused(case) -> None:
     """A payload that doesn't carry its value, a free after its values' last read (late) or before it (early), a write at
     another step, a block written empty, nonzero bits in an empty slot, two values in one slot, a value outside the step's
