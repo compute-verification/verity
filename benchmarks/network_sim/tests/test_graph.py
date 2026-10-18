@@ -42,16 +42,23 @@ def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie
     assert [(e.a, e.b) for e in dc.links if "n.nic0" in (e.a, e.b)] == [("n.nic0", "n.pcie1")]
     assert [(e.a, e.b) for e in route(dc, "n.gpu0", "n.nic0")] == [
         ("n.gpu0", "n.pcie0"), ("n.pcie0", "n.cpu0"), ("n.cpu0", "n.cpu1"), ("n.pcie1", "n.cpu1"), ("n.nic0", "n.pcie1")]
+    assert all(e.latency is None and e.delay == 0.0 for e in dc.links)  # not measured: a delay that claims nothing
 
 
 def test_leaf_spine_puts_each_node_behind_its_certifier(g):
+    from datacenter import Grid, Port
+
     dc = g.check(g.leaf_spine(2))
     assert [b.name for b in dc.blocks] == ["b0", "b1"]
     assert [(d.name, d.kind, d.trusted) for d in dc.fabric] == [
         ("leaf0", "switch", False), ("b0.cert", "certifier", True), ("b1.cert", "certifier", True),
         ("ext0", "outside", False)]
     assert [(e.a, e.b) for e in dc.boundary] == [("b0.nic0", "b0.cert"), ("b1.nic0", "b1.cert")]
-    assert [dc.certifier_of(e).name for e in dc.boundary] == ["b0.cert", "b1.cert"]
+    assert [repr(p) for p in dc.ports] == ["b0.cert:in", "b0.cert:out", "b1.cert:in", "b1.cert:out"]
+    assert dc.port("b0.nic0", "b0.cert") == Port("b0.cert", "egress") and dc.port("b0.cert", "b0.nic0").direction == "ingress"
+    assert {(e.latency.name, e.latency.value) for e in dc.links if e.latency} == {
+        ("fabric/uplink-latency", 1e-6), ("fabric/hop-latency", 2e-6)}
+    assert dc.grid == Grid() and g.leaf_spine(1, grid=Grid(window=60)).grid.window == 60
     wide = g.check(g.leaf_spine(4, leaves=2, spines=3, outside=2))
     trunks = sorted((e.a, e.b) for e in wide.links if e.b.startswith("spine"))
     assert trunks == [(f"leaf{j}", f"spine{k}") for j in range(2) for k in range(3)]
@@ -74,7 +81,7 @@ def test_a_path_around_a_certifier_breaks_coverage_and_no_export_takes_it(g):
 def test_the_capacities_are_memory_accountings(g):
     """The node states remote bandwidth's per-device constants: one GPU's, and each of the host's two sockets' halves.
     What isn't measured yet is infinite, so a reading that takes it as an upper bound concludes nothing from it."""
-    from datacenter.memory import read_time
+    from datacenter import serve_time
     from verity.core.protocols.remote_bandwidth import timing
 
     dc = g.leaf_spine(1)
@@ -89,11 +96,12 @@ def test_the_capacities_are_memory_accountings(g):
     assert g.pending(dc) == ["host-dram/socket-capacity", "pcie/gpu", "pcie/nic", "pcie/socket-aggregate",
                              "rtx-pro-6000/cuda-ops", "socket/inter-socket"]
     named = [a for d in dc.devices.values() for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip] if a]
-    named += [e.capacity for e in dc.links]
+    named += [a for e in dc.links for a in (e.capacity, e.latency) if a] + [dc.grid.tick]
     assert all(a.name and a.source in ("datasheet", "measured", "declared") for a in named)
     assert all(a == b for a in named for b in named if a.name == b.name)  # one name, one record
     bits = 8e9
-    assert read_time(dc, "b0.gpu0", "b0.cpu0", bits) == bits / cpu.bandwidth.value  # the pending PCIe path costs nothing
+    # a store registered on a GPU but kept in host DRAM: the pending PCIe path costs nothing, only the host's read
+    assert serve_time(dc, "b0.gpu0", "b0.cpu0", bits) == bits / cpu.bandwidth.value
 
 
 def walk(plan, src: str, dst: str) -> str | None:

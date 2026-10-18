@@ -37,7 +37,7 @@ DATACENTER = str(Path(__file__).resolve().parents[1] / "datacenter")
 if DATACENTER not in sys.path:
     sys.path.insert(0, DATACENTER)
 
-from datacenter import Assumption, Block, Datacenter, Device, Link  # noqa: E402
+from datacenter import Assumption, Block, Datacenter, Device, Grid, Link  # noqa: E402
 
 NETNS_PREFIX = "na-"
 INF = math.inf
@@ -62,51 +62,55 @@ SOCKET_LINK = Assumption("socket/inter-socket", INF, "bit/s", "measured")
 
 
 def rtx_node(name: str = "node") -> Datacenter:
-    """One node, a datacenter of one block named `name` and no fabric. A link inside it has latency 0 until one is
-    measured, the bound that claims nothing for a path's delay."""
+    """One node, a datacenter of one block named `name` and no fabric. A link inside it has no latency until one is
+    measured: a delay of 0, the bound that claims nothing for a path's delay."""
     devices, links = [], []
     for s in range(2):
         cpu = Device(f"{name}.cpu{s}", "cpu", memory=HOST_DRAM, bandwidth=HOST_READ, on_chip=HOST_CHIP)
         rc = Device(f"{name}.pcie{s}", "switch")
         devices += [cpu, rc]
-        links.append(Link(rc.name, cpu.name, PCIE_SOCKET, 0.0, "pcie"))
+        links.append(Link(rc.name, cpu.name, PCIE_SOCKET, kind="pcie"))
         for k in range(4 * s, 4 * s + 4):
             gpu = Device(f"{name}.gpu{k}", "gpu", rate=dict(GPU_RATE), memory=GPU_MEMORY, bandwidth=GPU_READ,
                          on_chip=S_CHIP)
             devices.append(gpu)
-            links.append(Link(gpu.name, rc.name, PCIE_GPU, 0.0, "pcie"))
+            links.append(Link(gpu.name, rc.name, PCIE_GPU, kind="pcie"))
     nic = Device(f"{name}.nic0", "nic")
     devices.append(nic)
-    links += [Link(nic.name, f"{name}.pcie1", PCIE_NIC, 0.0, "pcie"),
-              Link(f"{name}.cpu0", f"{name}.cpu1", SOCKET_LINK, 0.0, "upi")]
+    links += [Link(nic.name, f"{name}.pcie1", PCIE_NIC, kind="pcie"),
+              Link(f"{name}.cpu0", f"{name}.cpu1", SOCKET_LINK, kind="upi")]
     return Datacenter(name, [Block(name, devices)], [], links)
 
 
 def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: int = 1, uplink_gbps: int = 400,
-               spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6) -> Datacenter:
+               spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
+               grid: Grid | None = None) -> Datacenter:
     """`blocks` nodes (`rtx_node`, named b0, b1, …) behind a leaf-spine fabric: each node's NIC to its certifier
-    (`bI.cert`, trusted), the certifier to a leaf switch (round-robin over `leaves`), every leaf to every spine, and
-    `outside` hosts outside every block (`extC`, kind `outside`) on the leaves too. With one leaf, `spines` may be 0.
-    Latencies are one way, in seconds: `uplink_latency` from a NIC to its certifier, `fabric_latency` a fabric hop."""
+    (`bI.cert`), the certifier to a leaf switch (round-robin over `leaves`), every leaf to every spine, and `outside`
+    hosts outside every block (`extC`, kind `outside`) on the leaves too. With one leaf, `spines` may be 0. Latencies
+    are one way, in seconds: `uplink_latency` from a NIC to its certifier, `fabric_latency` a fabric hop. `grid` is the
+    certifiers' (`datacenter.Grid`'s default when None)."""
     if blocks < 1 or leaves < 1 or (leaves > 1 and spines < 1):
         raise ValueError("at least one block and one leaf, and spines to join more than one leaf")
     up = Assumption("fabric/uplink", uplink_gbps * 1_000_000_000, "bit/s", "declared")
     trunk = Assumption("fabric/spine", spine_gbps * 1_000_000_000, "bit/s", "declared")
+    nic_hop = Assumption("fabric/uplink-latency", uplink_latency, "s", "declared")
+    hop = Assumption("fabric/hop-latency", fabric_latency, "s", "declared")
     switches = [Device(f"leaf{j}", "switch") for j in range(leaves)]
     nodes, certs, links = [], [], []
     for i in range(blocks):
         node = rtx_node(f"b{i}")
-        cert = Device(f"b{i}.cert", "certifier", trusted=True)
+        cert = Device(f"b{i}.cert", "certifier")
         nodes += node.blocks
         certs.append(cert)
         links += node.links
-        links += [Link(f"b{i}.nic0", cert.name, up, uplink_latency, "ethernet"),
-                  Link(cert.name, switches[i % leaves].name, up, fabric_latency, "ethernet")]
+        links += [Link(f"b{i}.nic0", cert.name, up, nic_hop, "ethernet"),
+                  Link(cert.name, switches[i % leaves].name, up, hop, "ethernet")]
     tops = [Device(f"spine{k}", "switch") for k in range(spines)]
-    links += [Link(sw.name, sp.name, trunk, fabric_latency, "ethernet") for sp in tops for sw in switches]
+    links += [Link(sw.name, sp.name, trunk, hop, "ethernet") for sp in tops for sw in switches]
     hosts = [Device(f"ext{c}", "outside") for c in range(outside)]
-    links += [Link(x.name, switches[c % leaves].name, up, fabric_latency, "ethernet") for c, x in enumerate(hosts)]
-    return Datacenter(f"leaf-spine-{blocks}", nodes, switches + certs + tops + hosts, links)
+    links += [Link(x.name, switches[c % leaves].name, up, hop, "ethernet") for c, x in enumerate(hosts)]
+    return Datacenter(f"leaf-spine-{blocks}", nodes, switches + certs + tops + hosts, links, grid or Grid())
 
 
 def check(dc: Datacenter) -> Datacenter:
@@ -230,7 +234,7 @@ def _us(seconds: float) -> str:
 
 
 def _netem(e: Link, jitter: float) -> tuple[str, ...]:
-    out = ["delay", _us(e.latency)] + ([_us(jitter)] if jitter else [])
+    out = ["delay", _us(e.delay)] + ([_us(jitter)] if jitter else [])
     if math.isfinite(float(e.capacity)):
         out += ["rate", f"{int(float(e.capacity))}bit"]
     return tuple(out)
@@ -306,7 +310,7 @@ def shadow_gml(dc: Datacenter, jitter: float = 0.0) -> str:
         lines.append("  ]")
     for e, a, b in links:
         lines += ["  edge [", f"    source {ids[a]}", f"    target {ids[b]}", f'    label "{e.a}-{e.b}"',
-                  f'    latency "{round(e.latency * 1e9)} ns"', f'    jitter "{round(jitter * 1e9)} ns"',
+                  f'    latency "{round(e.delay * 1e9)} ns"', f'    jitter "{round(jitter * 1e9)} ns"',
                   "    packet_loss 0.0", "  ]"]
     lines.append("]")
     return "\n".join(lines) + "\n"
