@@ -1,5 +1,5 @@
 """Port types (PROTOCOL.md §12): what a Definition declares about the values it takes and returns beyond their widths, and the
-four rules a Program is held to when it is built (`program.Program`) and when its descriptor is decoded (`codec.decode_program`).
+rules a Program is held to when it is built (`program.Program`) and when its descriptor is decoded (`codec.decode_program`).
 
 A Definition declares `Ports(params={name: tree}, ret=tree)`. A tree is an `In` (on a parameter) or an `Out` (on the return),
 which types every leaf below it; a tuple of trees, one per field of a `Tuple` or `Record`; a dict of trees by `Record` field
@@ -29,6 +29,15 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   (pre-seed) words may be read as another (`E_PORT_WORD`). Splitting a runtime word into limbs is a Definition of its own,
   which reads the word as its producer's type. A composite keeps the type of each word it returns (it declares it) and never
   fixes one.
+* **Coin flow.** A primitive with a coin port is a noise primitive when its return isn't all sinks (it derives noise, or
+  adds it to an operand it takes) and a receipt fold when it is (the coin is its key). A coin reaches only such a coin
+  port: a primitive reading a coin at any other port is refused, and so is a Definition returning one, the root included
+  (`E_COIN_FLOW`), since past a return it would be a computed value that no rule follows.
+* **One use.** A coin a noise primitive reads is read once in the flattened Program, by that instance alone: no second
+  noise and no receipt key from it. Each leaf a noise primitive returns, its noise, is read at most once (by one operand
+  of one instance, or once by the outputs): no two copies, and no noise shared across rows, matmuls, batch members or
+  scan steps (`E_COIN_REUSE`). A coin only receipt folds read may key any number of them. With coin flow, each noise's
+  coins reach nothing but its one reader's forward cone (`Accounting.Guarantees.CoinFlow` in `Security/`).
 
 Facts flow down every call and up through declarations. A parameter's facts, in a Definition's body, are the join over all its
 instances of its operands' facts, so a bound sees its operand's producer through any number of calls. A Definition's output
@@ -60,7 +69,7 @@ MIXED = "*"  # the word type of a leaf whose instances carry different ones
 
 class PortError(ValueError):
     """A refusal by the port rules. `code` is its name: `E_PORT_DECL` (a malformed declaration), `E_PORT_BOUND`,
-    `E_PORT_INTERVAL`, `E_PORT_SINK`, `E_PORT_KIND` or `E_PORT_WORD`."""
+    `E_PORT_INTERVAL`, `E_PORT_SINK`, `E_PORT_KIND`, `E_PORT_WORD`, `E_COIN_FLOW` or `E_COIN_REUSE`."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(f"{code}: {message}")
@@ -740,8 +749,20 @@ def _origin(f: Fact) -> str:
     return " or ".join(names[o] for o in ORIGINS if o in f.origin)
 
 
+def _has_coin(r: Runs) -> bool:
+    return any("coin" in f.origin for f in r.facts)
+
+
 def _check_operand(at: Callable[[], str], pname: str, runs: Sequence[Run], F: Runs, primitive: bool) -> None:
-    """Rules 2-5 on one operand: its leaves' facts `F` against the parameter's typed runs."""
+    """Rules 2-5 and coin flow on one operand: its leaves' facts `F` against the parameter's typed runs."""
+    if primitive and _has_coin(F):
+        coin_ports = [(lo, hi) for lo, hi, p, _w in runs if p.kind == "coin"]
+        for a, b, f in F.segments():
+            leaf = _covered(coin_ports, a, b) if "coin" in f.origin else None
+            if leaf is not None:
+                raise PortError("E_COIN_FLOW", f"{at()} parameter {pname!r} leaf {leaf}: reads a coin, which reaches only "
+                                f"the coin port (In(kind='coin')) of a noise primitive or a receipt fold; any other reader "
+                                f"could re-derive the noise and cancel it")
     if primitive and F.has_sink:
         receipts = [(lo, hi) for lo, hi, p, _w in runs if p.receipt]
         for a, b, f in F.segments():
@@ -775,6 +796,11 @@ def _check_ret(sp: Any, pt: PortTypes | None, R: Runs, root: bool) -> None:
     """A composite's return against its declared `Out`: declared intervals and word types hold of what its body returns, and
     every sink and word type it returns is declared (a root returns them freely: its outputs are the receipt)."""
     fid = sp.id
+    for a, _b, f in R.segments():
+        if "coin" in f.origin:
+            where = "the program's outputs" if root else "its return, past which it is a computed value"
+            raise PortError("E_COIN_FLOW", f"{fid} returns a coin at return leaf {a}: a coin reaches only the coin port "
+                            f"(In(kind='coin')) of a noise primitive or a receipt fold, never {where}")
     outs = pt.ret if pt is not None else ()
     for lo, hi, o, w in outs:
         for a, _b, f in R.segments(lo, hi):
@@ -983,16 +1009,18 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
             env[("p", i)] = _receive(r, pt.params[i]) if pt is not None else r
         params_out[id(sp)] = (sp, tuple(exposed))
         sinks = any(r.has_sink for r in env.values())
+        coins = any(_has_coin(r) for r in env.values())
         for k, node in enumerate(body.nodes):
             fn = node.fn
             prim = isinstance(fn, PrimitiveDefinition)
             if prim and is_input(fn):
                 env[("n", k)] = _input_facts(sp, k, node, inputs.get(k, []), harness_)
+                coins = coins or _has_coin(env[("n", k)])
                 continue
             fpt = port_types(fn)
             fparams, fret = fn.signature()
             transfer = prim and fpt is not None and fpt.transfer is not None and node.form != "scan"
-            need = not prim or sinks or transfer or (fpt is not None and any(fpt.params))
+            need = not prim or sinks or coins or transfer or (fpt is not None and any(fpt.params))
             ops: list[Runs] = []
             if need:
                 if node.form == "scan":
@@ -1029,11 +1057,227 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
                 out = _cat(carry, _repeat(_slice(out, c, len(out)), node.n))
             env[("n", k)] = out
             sinks = sinks or out.has_sink
+            coins = coins or _has_coin(out)
         R = gather(body.ret, env)
         _check_ret(sp, pt, R, sp is root)
         if sp is root:
             root_env, root_ret = env, R
+    if any(p.kind == "coin" for _k, _lo, _hi, p, _w in (rpt.inputs if rpt is not None else ())):
+        _Uses(root, rpt).check()
     return Facts(root, typed, root_env, root_ret, params_out)
+
+
+# --- one use -------------------------------------------------------------------------------------------------------------------
+
+_NOISE, _FOLD, _OTHER = 0, 1, 2
+
+
+def _coin_role(fn: Any) -> int | None:
+    """`_NOISE` for a noise primitive (a coin port, a return not all sinks), `_FOLD` for a receipt fold (a coin port, a
+    return of sinks), None for a primitive without a coin port."""
+    pt = port_types(fn)
+    if pt is None or not any(p.kind == "coin" for rs in pt.params for _lo, _hi, p, _w in rs):
+        return None
+    _, ret = fn.signature()
+    return _FOLD if _covered([(lo, hi) for lo, hi, o, _w in pt.ret if o.sink], 0, ret.leaves) is None else _NOISE
+
+
+def _spaces(r: Refs, out: set) -> None:
+    if isinstance(r, Concat):
+        for p in r.parts:
+            _spaces(p, out)
+    elif isinstance(r, Explicit):
+        out.update((s, i) for s, i, _leaf in r.items)
+    elif r.count:
+        out.add((r.space, r.idx))  # type: ignore[attr-defined]
+
+
+class _Summary:
+    """One activation of a composite whose parameters' tracked leaves are `pattern`: `reads[(i, leaf)]`, how often parameter
+    i's leaf is read by a noise primitive, a receipt fold and any other primitive, with the first readers; `ret[j]`, what
+    return leaf j is: ("p", i, leaf), that parameter leaf, or ("c", inst, leaf, count, readers), noise made inside and read
+    there `count` times."""
+
+    __slots__ = ("reads", "ret")
+
+    def __init__(self, reads: dict, ret: dict) -> None:
+        self.reads, self.ret = reads, ret
+
+
+class _Uses:
+    """The one-use rule over the flattened Program: each tracked leaf (a root coin, ("coin", node, leaf), or a noise
+    primitive instance's output, ("c", inst, leaf)) is counted at every primitive operand that reads it, once per member,
+    step and instance, through every call. A composite's activation is summarized once per pattern of tracked parameter
+    leaves, so a batch or scan of one body costs one simulation and a count per tracked leaf per member."""
+
+    def __init__(self, root: Any, rpt: PortTypes) -> None:
+        self.root, self.rpt = root, rpt
+        self.memo: dict[tuple, _Summary] = {}
+        self.coins: dict[tuple, list] = {}
+        self.made: dict[tuple, list] = {}
+        self.labels: list[str] = []
+        self.keys: dict[int, tuple[dict, list]] = {}
+
+    def check(self) -> None:
+        self._simulate(self.root, ())
+
+    def _new(self, label: str) -> int:
+        self.labels.append(label)
+        return len(self.labels) - 1
+
+    def _sorted(self, d: dict) -> list:
+        hit = self.keys.get(id(d))
+        if hit is None or hit[0] is not d:
+            hit = self.keys[id(d)] = (d, sorted(d))
+        return hit[1]
+
+    def _gather(self, refs: Refs, env: dict) -> dict:
+        spaces: set = set()
+        _spaces(refs, spaces)
+        if not any(env.get(s) for s in spaces):
+            return {}
+        out, pos = {}, 0
+        for s, i, lo, hi in ref_runs(refs):
+            d = env.get((s, i))
+            if d:
+                keys = self._sorted(d)
+                for leaf in keys[bisect.bisect_left(keys, lo):bisect.bisect_left(keys, hi)]:
+                    out[pos + leaf - lo] = d[leaf]
+            pos += hi - lo
+        return out
+
+    def _read(self, s: tuple, role: int, n: int, at: list, reads: dict) -> None:
+        if s[0] == "p":
+            e = reads.setdefault((s[1], s[2]), [0, 0, 0, []])
+        elif s[0] == "coin":
+            e = self.coins.setdefault(s, [0, 0, 0, []])
+        else:
+            e = self.made[(s[1], s[2])]
+        e[role] += n
+        e[3].extend(at[:2 - len(e[3])])
+        if s[0] == "coin" and (e[_NOISE] or e[_OTHER]) and sum(e[:3]) > 1:
+            raise PortError("E_COIN_REUSE", f"{self.root.id} input node {s[1]} leaf {s[2]}: a coin that a noise primitive "
+                            f"reads is read once, by that instance alone, but it is read {sum(e[:3])} times (first by "
+                            f"{'; then by '.join(e[3])}): a second noise or a receipt key from a noise bit's coin puts the "
+                            f"bit in the cheater's view. Draw a coin of its own for each noise and for the receipt keys")
+        if s[0] == "c" and e[0] + e[1] + e[2] > 1:
+            raise PortError("E_COIN_REUSE", f"{self.labels[s[1]]} return leaf {s[2]}: noise is the noise of one operand of one "
+                            f"instance and is read at most once, but it is read {sum(e[:3])} times (first by "
+                            f"{'; then by '.join(e[3])}): two copies of one noise cancel, and noise shared across rows, "
+                            f"matmuls, batch members or scan steps is fresh for none of them. Draw fresh coins for each use")
+
+    def _apply(self, fn: Any, args: list, at: str, reads: dict) -> dict:
+        """One instance of `fn` (a primitive or a composite) on arguments whose tracked leaves are `args` ({leaf: source}
+        per parameter): count its reads, and give its return's tracked leaves."""
+        from .defs import PrimitiveDefinition
+
+        if isinstance(fn, PrimitiveDefinition):
+            role = _coin_role(fn)
+            for d in args:
+                for s in d.values():
+                    self._read(s, _OTHER if role is None else role, 1, [at], reads)
+            if role != _NOISE:
+                return {}
+            inst = self._new(at)
+            leaves = fn.signature()[1].leaves
+            for j in range(leaves):
+                self.made[(inst, j)] = [0, 0, 0, []]
+            return {j: ("c", inst, j) for j in range(leaves)}
+        pattern = tuple(tuple(sorted(d)) for d in args)
+        S = self.memo.get((id(fn), pattern))
+        if S is None:
+            S = self.memo[(id(fn), pattern)] = self._simulate(fn, pattern)
+        for (i, leaf), e in S.reads.items():
+            for role in (_NOISE, _FOLD, _OTHER):
+                if e[role]:
+                    self._read(args[i][leaf], role, e[role], [f"{at}: {w}" for w in e[3]], reads)
+        out, fresh = {}, {}
+        for j, r in S.ret.items():
+            if r[0] == "p":
+                out[j] = args[r[1]][r[2]]
+                continue
+            inst = fresh.get(r[1])
+            if inst is None:
+                inst = fresh[r[1]] = self._new(f"{at}: {self.labels[r[1]]}")
+            self.made[(inst, r[2])] = [r[3], 0, 0, [f"{at}: {w}" for w in r[4]]]
+            out[j] = ("c", inst, r[2])
+        return out
+
+    def _members(self, d: dict, t: Type, ax: int, n: int) -> list[dict]:
+        """Tracked leaves {leaf: source} of an argument of type `t`, split into its `n` members along axis `ax`."""
+        out: list[dict] = [{} for _ in range(n)]
+        if not d:
+            return out
+        if ax == 0:
+            L = t.leaves // n
+            for p, s in d.items():
+                out[p // L][p % L] = s
+            return out
+        keys, pos = self._sorted(d), Coll(t, Affine("a", 0, 0, t.leaves))
+        for m in range(n):
+            q = 0
+            for _s, _i, lo, hi in ref_runs(pos.take(ax, m).refs):
+                for p in keys[bisect.bisect_left(keys, lo):bisect.bisect_left(keys, hi)]:
+                    out[m][q + p - lo] = d[p]
+                q += hi - lo
+        return out
+
+    def _simulate(self, sp: Any, pattern: tuple) -> _Summary:
+        from .program import is_input
+
+        root = sp is self.root
+        env: dict[tuple[str, int], dict] = {("p", i): {leaf: ("p", i, leaf) for leaf in leaves} for i, leaves in enumerate(pattern)}
+        if root:
+            for k, lo, hi, p, _w in self.rpt.inputs:
+                if p.kind == "coin":
+                    env.setdefault(("n", k), {}).update({leaf: ("coin", k, leaf) for leaf in range(lo, hi)})
+        reads: dict = {}
+        for k, node in enumerate(sp.body.nodes):
+            fn = node.fn
+            if is_input(fn):
+                continue
+            tracked = [self._gather(a.refs, env) for a in node.args]
+            if not any(tracked):
+                continue
+            at = f"{sp.id} node {k} ({node.form} {fn.id})"
+            _, fret = fn.signature()
+            out: dict = {}
+            if node.form == "batch":
+                R = fret.leaves
+                split = [[d] * node.n if ax is None else self._members(d, a.type, ax, node.n)
+                         for d, a, ax in zip(tracked, node.args, node.axes)]
+                for m in range(node.n):
+                    args = [ms[m] for ms in split]
+                    if any(args):
+                        out.update({m * R + j: s for j, s in self._apply(fn, args, f"{at} member {m}", reads).items()})
+            elif node.form == "scan":
+                c = fret.fields[0].leaves
+                ys = fret.leaves - c
+                carry, shared = tracked[0], tracked[1 + node.n_xs:]
+                xs = [self._members(d, a.type, 0, node.n) for d, a in zip(tracked[1:1 + node.n_xs], node.args[1:1 + node.n_xs])]
+                last = max((i for ms in xs for i, d in enumerate(ms) if d), default=-1)
+                for i in range(node.n):
+                    if not carry and not any(shared) and i > last:
+                        break
+                    args = [carry] + [ms[i] for ms in xs] + list(shared)
+                    got = self._apply(fn, args, f"{at} step {i}", reads) if any(args) else {}
+                    carry = {q: s for q, s in got.items() if q < c}
+                    out.update({c + i * ys + q - c: s for q, s in got.items() if q >= c})
+                out.update(carry)
+            else:
+                out = self._apply(fn, tracked, at, reads)
+            env[("n", k)] = out
+        R = self._gather(sp.body.ret, env)
+        ret: dict = {}
+        for j, s in R.items():
+            if root:
+                self._read(s, _OTHER, 1, [f"{sp.id}'s outputs"], reads)
+            elif s[0] == "p":
+                ret[j] = s
+            else:
+                e = self.made[(s[1], s[2])]
+                ret[j] = ("c", s[1], s[2], sum(e[:3]), tuple(e[3]))
+        return _Summary(reads, ret)
 
 
 def check(root: Any) -> Facts | None:

@@ -592,11 +592,22 @@ as declared, so a composite over exact steps declares the intervals its operands
   does not declare, or a mixed one. So a runtime word is read only as the type its producer fixed. Only inputs, constants and
   registered (pre-seed) words are reinterpreted, and a limb split of a runtime word is a Definition of its own that reads the
   word as its producer's type.
+- **`E_COIN_FLOW`** (coin flow): a primitive node reads a leaf of origin `coin` at a port that is not `"kind": "coin"`, or a
+  Definition, the root included, returns one. A primitive with a coin port is a *noise primitive* when its return is not all
+  sinks (it derives noise, or adds it to an operand it takes) and a *receipt fold* when it is (the coin is its key). So a coin
+  reaches only the coin port of a noise primitive or a receipt fold, never any other node, directly or through a return.
+- **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
+  of origin `coin` that a noise primitive reads is read more than once, by it or by anything else; or a leaf a noise
+  primitive returns is read more than once, the Program's outputs counting as one read. So each coin bit feeds one noise of
+  one instance, no receipt key shares a noise bit's coin, and no noise has two copies or is shared across rows, matmuls,
+  batch members or scan steps. A coin only receipt folds read may key any number of them. With coin flow this gives the
+  view independence of `Accounting.Guarantees.CoinFlow` (`Security/`): every value outside a noise's forward cone is a
+  function of the coins it does not read.
 - **`E_PORT_DECL`**: the `ports` are malformed or not canonical, or a transfer gives no interval of its return's width.
 
 `ports.facts(root)` gives every leaf's fact to the census and the stacking property. A Program in which no Definition declares
 ports is refused by none of the rules, and nothing is computed for it (`ports.check` returns None).
 
 Vectors: `verity/ml/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; a chain of exact
-steps declaring its words' intervals and a limb split's bound on them; tampered descriptors; the canonical form; and a pinned
-digest of one typed descriptor.
+steps declaring its words' intervals and a limb split's bound on them; the coin rules through calls, batches and scans;
+tampered descriptors; the canonical form; and a pinned digest of one typed descriptor.

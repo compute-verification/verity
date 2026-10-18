@@ -1,4 +1,4 @@
-"""Port types (PROTOCOL.md §12, `verity.ml.circuits.ports`): each of the four rules accepts what it should and refuses, by name,
+"""Port types (PROTOCOL.md §12, `verity.ml.circuits.ports`): each rule accepts what it should and refuses, by name,
 what it must, in a built Program and in a decoded descriptor; an undeclared Definition's entry and digest are what they were."""
 
 from __future__ import annotations
@@ -80,6 +80,24 @@ def Tag():
 def Noise(key, tag):
     """A noise derivation: a coin and a static only."""
     return hashlib.sha512(key.to_bytes(4, "big") + bytes([tag])).digest()[0]
+
+
+@primitive("PortsTestDither", 1, (("x", V8), ("key", V32)), V8, ports=Ports(params={"key": In(kind="coin")}))
+def Dither(x, key):
+    """A noise injection: adds a coin's bit to the operand it takes."""
+    return (x + (key & 1)) & 0xFF
+
+
+@primitive("PortsTestKeyFold", 1, (("x", V32), ("key", V32)), V32,
+           ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
+def KeyFold(x, key):
+    """A receipt fold keyed by a coin."""
+    return ((x ^ key) * 0x9E3779B1) & 0xFFFFFFFF
+
+
+@primitive("PortsTestAdd8", 1, (("a", V8), ("b", V8)), V8)
+def Add8(a, b):
+    return (a + b) & 0xFF
 
 
 @primitive("PortsTestAcc", 1, (("a", V32),), V32, ports=Ports(ret=Out(word="s32")))
@@ -409,7 +427,8 @@ def test_the_noise_derivation_takes_a_coin_and_statics():
 def test_the_noise_derivation_refuses_anything_else():
     plain = comp("PortsTestNoiseIn", [("key", V32)], V8, lambda B, S, key: B.call(Noise, key, B.call(Tag)))
     refused("E_PORT_KIND", lambda: Program(plain), "parameter 'key' leaf 0: takes kind=coin", "but reads a run input")
-    mixed = comp("PortsTestNoiseGate", [("key", V32)], V8, lambda B, S, key: B.call(Noise, B.call(Add32, key, key), B.call(Tag)), ports=COIN)
+    mixed = comp("PortsTestNoiseGate", [("key", V32), ("x", V32)], V8,
+                 lambda B, S, key, x: B.call(Noise, B.call(Add32, x, x), B.call(Tag)), ports=COIN)
     refused("E_PORT_KIND", lambda: Program(mixed), "but reads a computed value")
     tag_in = comp("PortsTestNoiseTag", [("key", V32), ("t", V8)], V8, lambda B, S, key, t: B.call(Noise, key, t), ports=COIN)
     refused("E_PORT_KIND", lambda: Program(tag_in), "parameter 'tag' leaf 0: takes kind=static, a constant, but reads a run input")
@@ -457,6 +476,117 @@ def test_a_composite_keeps_the_words_it_returns():
     fix = comp("PortsTestFix", [("x", V32)], V32, lambda B, S, x: B.call(Acc, x), ports=Ports(ret=Out(word="s8x4")))
     refused("E_PORT_WORD", lambda: Program(comp("PortsTestFixUse", [("x", V32)], V32, lambda B, S, x: B.call(fix, x))),
             "a composite keeps the type its words' producer fixed, and never fixes one")
+
+
+# --- rules 6 and 7: coin flow and one use -------------------------------------------------------------------------------------
+
+KEY_X = [("key", V32), ("x", V8)]
+KEYS = Ports(params={"keys": In(kind="coin")})
+
+
+def test_a_coin_reaches_only_a_coin_port():
+    derive = comp("PortsTestCoinDerive", KEY_X, V8, lambda B, S, key, x: B.call(Add8, x, B.call(Noise, key, B.call(Tag))), ports=COIN)
+    roundtrip(Program(derive))
+    inject = comp("PortsTestCoinInject", KEY_X, V8, lambda B, S, key, x: B.call(Dither, x, key), ports=COIN)
+    roundtrip(Program(inject))
+    keyed = comp("PortsTestCoinKeyed", [("key", V32), ("x", V32)], V32, lambda B, S, key, x: B.call(KeyFold, x, key), ports=COIN)
+    roundtrip(Program(keyed))
+    direct = comp("PortsTestCoinAdd", [("key", V32), ("x", V32)], V32, lambda B, S, key, x: B.call(Add32, key, x), ports=COIN)
+    refused("E_COIN_FLOW", lambda: Program(direct), "(primitive PortsTestAdd32_v1) parameter 'a' leaf 0: reads a coin",
+            "re-derive the noise")
+    unwind = comp("PortsTestCoinUnwind", KEY_X, V8,
+                  lambda B, S, key, x: B.call(Add8, B.call(Dither, x, key), B.call(Noise, B.call(Add32, key, key), B.call(Tag))),
+                  ports=COIN)
+    refused("E_COIN_FLOW", lambda: Program(unwind), "PortsTestAdd32_v1) parameter 'a' leaf 0: reads a coin")
+    inner = comp("PortsTestCoinChainIn", [("k", V32)], V32, lambda B, S, k: B.call(Add32, k, k))
+    refused("E_COIN_FLOW", lambda: Program(comp("PortsTestCoinChain", [("key", V32)], V32, lambda B, S, key: B.call(inner, key), ports=COIN)),
+            "PortsTestCoinChainIn_v1 node 0", "reads a coin")
+
+
+def test_a_coin_never_leaves_through_a_return():
+    passing = comp("PortsTestCoinPass", [("k", V32)], V32, lambda B, S, k: k)
+    refused("E_COIN_FLOW", lambda: Program(comp("PortsTestCoinLaunder", [("key", V32), ("x", V32)], V32,
+                                                lambda B, S, key, x: B.call(Add32, B.call(passing, key), x), ports=COIN)),
+            "PortsTestCoinPass_v1 returns a coin at return leaf 0", "never its return")
+    refused("E_COIN_FLOW", lambda: Program(comp("PortsTestCoinOut", [("key", V32)], V32, lambda B, S, key: key, ports=COIN)),
+            "returns a coin at return leaf 0", "never the program's outputs")
+
+
+def test_a_noise_coin_is_read_once():
+    def twice(B, S, key, x):
+        return B.call(Add8, B.call(Dither, x, key), B.call(Noise, key, B.call(Tag)))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestCoinTwice", KEY_X, V8, twice, ports=COIN)),
+            "input node 0 leaf 0: a coin that a noise primitive reads is read once", "read 2 times",
+            "PortsTestDither_v1", "PortsTestNoise_v1")
+
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestCoinKeyNoise", [("key", V32), ("x", V8), ("y", V32)], TupleT(V8, V32),
+                                                lambda B, S, key, x, y: tuple_of(B.call(Dither, x, key), B.call(KeyFold, y, key)),
+                                                ports=COIN)),
+            "a receipt key from a noise bit's coin", "PortsTestDither_v1", "PortsTestKeyFold_v1")
+    block = comp("PortsTestCoinBlock", KEY_X, V8, lambda B, S, key, x: B.call(Dither, x, key))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestCoinCalls", KEY_X, V8,
+                                                lambda B, S, key, x: B.call(Add8, B.call(block, key, x), B.call(block, key, x)),
+                                                ports=COIN)), "read 2 times", "PortsTestCoinBlock_v1 node 0")
+    shared = comp("PortsTestCoinBatchShared", [("key", V32), ("x", Array(2, V8))], Array(2, V8),
+                  lambda B, S, key, x: B.batch(Dither, x, key, axes=(0, None)), ports=COIN)
+    refused("E_COIN_REUSE", lambda: Program(shared), "member 0", "member 1")
+    step = comp("PortsTestCoinStep", [("c", V8), ("x", V8), ("key", V32)], TupleT(V8, V8),
+                lambda B, S, c, x, key: tuple_of(B.call(Add8, c, x), B.call(Dither, x, key)))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestCoinScan", [("key", V32), ("x", Array(3, V8))], TupleT(V8, Array(3, V8)),
+                                                lambda B, S, key, x: B.scan(step, x[0], xs=(x,), shared=(key,)), ports=COIN)),
+            "step 0", "step 1")
+    own = comp("PortsTestCoinOwn", [("keys", Array(2, V32)), ("x", Array(2, V8))], Array(2, V8),
+               lambda B, S, keys, x: B.batch(Dither, x, keys, axes=(0, 0)), ports=KEYS)
+    roundtrip(Program(own))
+    roundtrip(Program(comp("PortsTestCoinScanOwn", [("keys", Array(3, V32)), ("x", Array(3, V8))], TupleT(V8, Array(3, V8)),
+                           lambda B, S, keys, x: B.scan(step, x[0], xs=(x, keys)), ports=KEYS)))
+
+
+def test_a_receipt_key_may_key_many_folds():
+    many = comp("PortsTestCoinKeys", [("key", V32), ("x", Array(3, V32))], TupleT(Array(3, V32), V32),
+                lambda B, S, key, x: tuple_of(B.batch(KeyFold, x, key, axes=(0, None)), B.call(KeyFold, x[0], key)), ports=COIN)
+    roundtrip(Program(many))
+    split = comp("PortsTestCoinSplit", [("keys", Array(2, V32)), ("x", V8), ("y", V32)], TupleT(V8, V32),
+                 lambda B, S, keys, x, y: tuple_of(B.call(Dither, x, keys[0]), B.call(KeyFold, y, keys[1])), ports=KEYS)
+    roundtrip(Program(split))
+
+
+def test_noise_is_read_at_most_once():
+    def copies(B, S, key, x):
+        n = B.call(Noise, key, B.call(Tag))
+        return tuple_of(B.call(Add8, x, n), B.call(Add8, x, n))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestNoiseCopies", KEY_X, TupleT(V8, V8), copies, ports=COIN)),
+            "PortsTestNoise_v1) return leaf 0: noise is the noise of one operand of one instance", "read 2 times")
+    made = comp("PortsTestNoiseMade", [("key", V32)], V8, lambda B, S, key: B.call(Noise, key, B.call(Tag)))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestNoiseReturned", KEY_X, V8,
+                                                lambda B, S, key, x: (lambda n: B.call(Add8, n, n))(B.call(made, key)), ports=COIN)),
+            "read 2 times")
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestNoiseRows", [("key", V32), ("x", Array(2, V8))], Array(2, V8),
+                                                lambda B, S, key, x: B.batch(Add8, x, B.call(made, key), axes=(0, None)),
+                                                ports=COIN)), "member 0", "member 1")
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestNoiseOperands", KEY_X, TupleT(V8, V8),
+                                                lambda B, S, key, x: (lambda d: tuple_of(B.call(Add8, d, x), d))(B.call(Dither, x, key)),
+                                                ports=COIN)), "PortsTestDither_v1) return leaf 0", "outputs")
+
+    def downstream(B, S, key, x):
+        y = B.call(Add8, B.call(Dither, x, key), x)
+        return tuple_of(B.call(Add8, y, y), y)
+    roundtrip(Program(comp("PortsTestNoiseOnce", KEY_X, TupleT(V8, V8), downstream, ports=COIN)))
+    passed = comp("PortsTestNoisePassed", [("n", V8), ("x", V8)], TupleT(V8, V8), lambda B, S, n, x: tuple_of(n, B.call(Add8, x, x)))
+    roundtrip(Program(comp("PortsTestNoiseThrough", KEY_X, V8,
+                           lambda B, S, key, x: B.call(Add8, B.call(passed, B.call(made, key), x)[0], x), ports=COIN)))
+    refused("E_COIN_REUSE", lambda: Program(comp("PortsTestNoiseThroughTwice", KEY_X, V8,
+                                                lambda B, S, key, x: (lambda r: B.call(Add8, r[0], r[0]))(B.call(passed, B.call(made, key), x)),
+                                                ports=COIN)), "PortsTestNoiseMade_v1 node 1")
+
+
+def test_the_decoder_holds_a_descriptor_to_the_coin_rules():
+    desc = encode_program(Program(comp("PortsTestNoiseDecoded", KEY_X, TupleT(V8, V8),
+                                       lambda B, S, key, x: tuple_of(B.call(Dither, x, key), x), ports=COIN)))
+    dup = copy.deepcopy(desc)
+    ret = dup["definitions"][desc["root"]]["body"]["ret"]["concat"]
+    ret[1] = ret[0]
+    refused("E_COIN_REUSE", lambda: decode_program(dup, REGISTRY), "PortsTestDither_v1) return leaf 0", "read 2 times")
 
 
 # --- the descriptor -----------------------------------------------------------------------------------------------------------
