@@ -31,11 +31,12 @@ The logical layer:
   matmul of one shape are different kinds.
 * `unitGates`, `unitWords`, `Declared.roundOf`, `Declared.stageOf`, `Declared.kindOf`: a unit's gates and words, its
   round, its stage counted from the last round (as `SplitStages` counts) and its words' kind (none for glue).
-* `coinMark`, `Declared.firstRead`, `Declared.cutOf`, `Declared.Late`, `Declared.Reaches`: each value's cut, computed
-  from the IR (W1): a registered input before the first coin, a run input (decode feedback among them) before its first
-  reader's round's coin, and every other value (glue, the KV cache) with its writing gate's round, before that round's
-  coin or, when it depends on it, after; a read is late when its operand's cut is past the reader's coin; a unit
-  reaches another along late reads, through any gate.
+* `coinMark`, `Declared.firstRead`, `Declared.cutOf`, `Declared.Late`, `Declared.UnitLate`, `Declared.Reaches`: each
+  value's cut, computed from the IR (W1): a registered input before the first coin, a run input (decode feedback among
+  them) before its first reader's round's coin, and every other value (glue, the KV cache) with its writing gate's
+  round, before that round's coin or, when it depends on it, after; a read is late when its operand's cut is past the
+  reader's coin; a unit writes another late when one of its gates is read late by one of the other's, and its late cone
+  is closed under that per unit, as #2466's `DrawnLayer.Late` is.
 * `LuckForm`, `Scheme`, `Scheme.LuckProved`, `Scheme.foldLuck`: per kind, the floor its template's noise proves at the
   worst operands (decision 109: `0` where its noise proves none), whether it is credited, its skip pattern's span, the
   form of its template's proved operand luck, and the three lucks the window is held to: (H-μ)'s point mass `μ`, the
@@ -45,13 +46,15 @@ The logical layer:
   parameter), its floor `♭ = Σ_words ♭_{kind}` and its words per kind.
 * `tileWords`, `tileWeight`, `tileStage`, `tileKind`, `tileLuck`, `tileLuck0`: the service's `N_p` grid-padded tiles
   (`verity/core/protocols/pouw/window.py`): unit `t` for `t < units`, and fillers of no words past them.
-* `tileCone`, `shareCone`, `zeroCone`, `kindF`: a tile's late cone's weight (decision 119), its share weight (its cone
-  when it carries words), the cone weight on tiles of no words (W4), and `F` per kind: the most tiles one late cone of
-  a kind holds (`1` for a whole coordinate, `K/2048` for K-chunks of 2048).
-* `Mode`, `SplitStages`, `modeAt`, `sameAt`, `SplitStages.LuckAt`, `EveryStage`, `share`, `stageShare`: a window's
-  stages, one a round, with a unit paid, folded (its product skipped and its committed words folded) or whole (product
-  and fold skipped), each stage's tiles' deficient words right or not (`right`) and their checked values honest or not
-  (`same`, which a receipt-lucky skipped tile meets).
+* `tileCone`, `shareCone`, `zeroCone`, `kindF`: a tile's late cone's weight (decision 119), which the service's share
+  charges a skipped tile, its detected weight (its cone when it carries words), the cone weight on tiles of no words
+  (W4), and `F` per kind: the most tiles one late cone of a kind holds (`1` for a whole coordinate, `K/2048` for
+  K-chunks of 2048).
+* `SplitStages`, `modeAt`, `sameAt`, `SplitStages.LuckAt`, `EveryStage`, `share`, `stageShare`, `tileMode`: a window's
+  stages, one a round, with a unit's mode #2466's `Accounting.TS.Mode` (paid; folded, its product skipped and its
+  committed words folded; or whole, product and fold skipped), each stage's tiles' deficient words right or not
+  (`right`) and their checked values honest or not (`same`, which a receipt-lucky skipped tile meets); and the modes as
+  the window's proofs read them, which `DrawnLayer.Good` and `UnitFixed` take.
 * `tileGame`, `PerTile`: a tile's stage as the ideal game split at the receipt (`ReceiptGame`), in each skipped mode,
   and a claim of every credited tile at its stage, whatever the past: what #2482's `OperandHMu` and `ReceiptLuckAt` and
   `Assumptions.Compose.GuessLuckAt` are taken of.
@@ -59,8 +62,9 @@ The logical layer:
   then the service's one uniform `K`-subset (`Pouw.Window.subsetDraw`, its `Equiv.Perm`) and the proofs' coins `Ξ`.
   Its share is `a·(folded weight) + b·(whole weight)` at the weights it is given, and it passes when every drawn tile's
   checked value is honest.
-* `StageCuts`, `StageCoins`: the window's proofs (`Accounting.TS.DrawnLayer` over the IR's gates as positions) bind
-  each position at its IR cut, and each tile's noise reads its round's coin (W2).
+* `StageCuts`, `StageCoins`, `StageSlots`: the window's proofs (`Accounting.TS.DrawnLayer` over the IR's gates as
+  positions) bind each position at its IR cut, each tile's noise reads its round's coin (W2), and each tile's slots and
+  each position's writer are the IR's, so the layer's late cones are the IR's.
 * `SplitRate`: the per-stage condition from which a rate `Λ` bounds the window's saving per unit of detection.
 * `Scope`, `rOf`, `WorkAt`: the logical parameters' ranges, the logical layer's bound `Λ·ln(1/δ_s) + max(a, b)·D₀` with
   `D₀` the cone weight on tiles of no words, and its conclusion on an accepted run: all but a share `d` of the
@@ -209,10 +213,14 @@ it is no edge. -/
 def Declared.Late {ι : Type} (Cd : Declared ι) (i j : ℕ) : Prop :=
   (Cd.dag[j]?).any (fun g => g.args.contains i) = true ∧ Cd.round (Cd.call j) < Cd.cutOf i
 
-/-- **Unit `u'` is in unit `u`'s late cone**: a gate of `u'` is reached from a gate of `u` along late reads
-(`Declared.Late`, transitively, through gates of any unit); `u` itself when it has a gate. -/
-def Declared.Reaches {ι : Type} (Cd : Declared ι) (u u' : ℕ) : Prop :=
-  ∃ i j, i < Cd.dag.length ∧ Cd.unit i = u ∧ Cd.unit j = u' ∧ Relation.ReflTransGen Cd.Late i j
+/-- **Unit `u` writes unit `v` a value after `v`'s coin**: a gate of `v` reads a gate of `u` late (`Declared.Late`). -/
+def Declared.UnitLate {ι : Type} (Cd : Declared ι) (u v : ℕ) : Prop :=
+  ∃ i j, i < Cd.dag.length ∧ Cd.unit i = u ∧ Cd.unit j = v ∧ Cd.Late i j
+
+/-- **Unit `u'` is in unit `u`'s late cone** (decision 119): `u` itself, and every unit reached from it along late
+writes (`Declared.UnitLate`, transitively). It is closed per unit, as `Accounting.TS.DrawnLayer.Late` is: a skipped unit
+can leave every gate of it wrong, so a late read of any one of them reaches the reader's whole unit. -/
+def Declared.Reaches {ι : Type} (Cd : Declared ι) : ℕ → ℕ → Prop := Relation.ReflTransGen Cd.UnitLate
 
 /-! ## Schemes: floors and luck per kind -/
 
@@ -313,12 +321,14 @@ noncomputable def tileLuck0 {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np
 
 open Classical in
 /-- **A tile's late cone's weight** (decision 119), from the IR: the weights of the tiles its unit reaches along late
-reads (`Declared.Reaches`), itself included. A skipped tile can leave every word of its cone adaptive, and no other. -/
+writes (`Declared.Reaches`), itself included. A skipped tile can leave every word of its cone adaptive, and no other;
+the service's share charges each skipped tile this (`serviceGame` in `CircuitWork`). -/
 noncomputable def tileCone {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (t : Fin Np) : ℝ :=
   ∑ t' : Fin Np, if Cd.Reaches t.val t'.val then tileWeight Sc Cd Np t' else 0
 
-/-- **A tile's share weight**: its late cone's weight when it carries words, and `0` for a tile of no words, whose
-skip no luck bounds (`zeroCone` charges it). -/
+/-- **A tile's detected weight**: its late cone's weight when it carries words, and `0` for a tile of no words, whose
+skip no luck bounds. The service's rate is computed at these weights (`CircuitWork`'s `ρ`, stage share and luck
+premises), and the cones of tiles of no words, which no draw detects, are `zeroCone`. -/
 noncomputable def shareCone {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (t : Fin Np) : ℝ :=
   if tileWords Sc Cd Np t = 0 then 0 else tileCone Sc Cd Np t
 
@@ -339,19 +349,11 @@ noncomputable def kindF {ι : Type} (Cd : Declared ι) (Np : ℕ) (k : Kind) : �
 
 /-! ## The window: stages, one a round, with B1's split, and the service's draw -/
 
-/-- A unit's mode in a cheater's run: paid; folded (its product skipped, its committed words folded); or whole (its
-product and its fold skipped). -/
-inductive Mode
-  | paid
-  | folded
-  | whole
-  deriving DecidableEq
-
-/-- **A window's stages, one a round**: per stage, each unit's mode, whether its deficient words are all right
-(`right`) and whether its checked values (the values its proof pins: a warp checkpoint, a fold state) are the honest
-ones (`same`), as functions of the stage's coin `C` (the stage's outputs are committed after it is released), then the
-rest of the window, which may depend on it. A unit belongs to one stage, `stg u`, counted from the last (stage `0`). A
-skipped unit whose receipt is lucky is `same` with wrong words. -/
+/-- **A window's stages, one a round**: per stage, each unit's mode (`Accounting.TS.Mode`: paid, folded or whole),
+whether its deficient words are all right (`right`) and whether its checked values (the values its proof pins: a warp
+checkpoint, a fold state) are the honest ones (`same`), as functions of the stage's coin `C` (the stage's outputs are
+committed after it is released), then the rest of the window, which may depend on it. A unit belongs to one stage,
+`stg u`, counted from the last (stage `0`). A skipped unit whose receipt is lucky is `same` with wrong words. -/
 inductive SplitStages (C V : Type) : ℕ → Type
   | done : SplitStages C V 0
   | stage {m : ℕ} (mode : C → V → Mode) (right same : C → V → Prop) (next : C → SplitStages C V m) :
@@ -395,6 +397,13 @@ noncomputable def share [Fintype V] {M : ℕ} (stg : V → ℕ) (W : SplitStages
   ∑ u, if W.modeAt stg x u = s then w u else 0
 
 end SplitStages
+
+/-- **The run's modes as the window's proofs read them**: on a path of the window's one service round, tile `u`'s mode
+is its stage's along the rounds' coins. `Accounting.TS.DrawnLayer.Good` and `Accounting.Assumptions.TS.UnitFixed`
+read these. -/
+def tileMode {ι C B : Type} {Np : ℕ} (Cd : Declared ι) (W : SplitStages C (Fin Np) Cd.rounds)
+    (x : Paths (Paths C Cd.rounds × B) 1) (u : Fin 1 × Fin Np) : Mode :=
+  W.modeAt (tileStage Cd Np) (coinAt x 0).1 u.2
 
 /-- **Tile `t`'s stage in mode `s`, split at the receipt** (`ReceiptGame`, one round on the stage's coin): its share is
 `1` where the tile is in mode `s` and `0` elsewhere, it passes where its checked values are honest (`same`, so it is
@@ -442,6 +451,17 @@ the cones are computed at the coin each tile's noise really reads, and the proof
 def StageCoins {ι C B Q V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLayer C B 1 Cd.rounds s (Fin N) Q ℕ V) :
     Prop :=
   ∀ t : Fin N, ((pf.coin 0 t : Fin Cd.rounds) : ℕ) = Cd.roundOf t.val
+
+/-- **Each tile's slots and each position's writer are the IR's**: a position with a writer is a gate of the writer's
+unit, and each slot of tile `t` is one of `t`'s own gates (its outputs, `DrawnLayer.WriterReads`) or an operand of one
+of them. Protocol structure, as `StageCuts` is. With `StageCuts` and `StageCoins` it puts the layer's late cones
+(`DrawnLayer.Late`) inside the IR's (`Declared.Reaches`), so a share charging each skipped tile its `tileCone` covers
+every tile that isn't good (`ServiceCovers`). -/
+def StageSlots {ι C B Q V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLayer C B 1 Cd.rounds s (Fin N) Q ℕ V) :
+    Prop :=
+  (∀ ℓ u, pf.src ℓ = some u → ℓ < Cd.dag.length ∧ Cd.unit ℓ = u.2.val) ∧
+    ∀ (t : Fin N) (k : Q), Cd.unit (pf.pos 0 t k) = t.val ∨
+      ∃ j, Cd.unit j = t.val ∧ (Cd.dag[j]?).any (fun g => g.args.contains (pf.pos 0 t k)) = true
 
 /-- **The per-stage rate condition** for `K` draws at weight bound `ρ` (each tile is at least `ρ` times its work share
 of the `N` tiles), luck `p` folded and `p0` whole, costs `a` and `b` per unit of share and stage shares at most
