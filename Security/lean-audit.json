@@ -4011,6 +4011,9 @@
    "assumptions": [],
    "type_hash": "5285cb8cbec9dd6a634d4653607b825be7d9eea4c260b93e29cb3fad67b09cee"
   },
+  "Pouw.SecurityProofs.Eps1.ClassPSlots": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Eps1.WordLocalGeneral": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Eps1.WordLocalGeneral : Pouw.Guarantees.Eps1.WordLocalGeneral"],
@@ -5666,6 +5669,7 @@
    "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
+   "Pouw.SecurityProofs.Eps1.ClassPSlots": "frozen (no-function): Theorem C's count of EPS1-QSTAR over issue slots, over every class-P M3 program with its writers' creations a parameter (w), not a Lean function.",
    "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
    "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
    "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code.",
