@@ -55,7 +55,8 @@ refused with 409 agent_busy is recorded and counts as the hour's (zombie CREATIN
 Each finding is a line of JSON in `--log`; each sweep ends by replacing `status.json` beside it atomically, in the schema
 `verity/agent-watch-status/v1` (`snapshot`: its time `t`, `poll_s`, and per agent read its id, the run the watch judges,
 statuses, watch state, since and restart count, in categories only), so a reader can tell a quiet watch from a dead one; a
-sweep that fails leaves the last one. `state.json` beside it keeps what must outlive a restart (the watch restarts on every
+sweep that fails leaves the last one. With `$AGENT_WATCH_PG_URL` set, the same bytes then go to Neon's
+`store_private.agent_watch_status` (`Publisher`, through `psql`; the newest `STATUS_ROWS` kept), for readers off the pod. `state.json` beside it keeps what must outlive a restart (the watch restarts on every
 deploy): when it last cancelled or restarted each agent, and recorded it ready to wake, the restart counts, the continue runs still to start and the runs
 already recorded. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack credential, so
 infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
@@ -70,6 +71,7 @@ import fcntl
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import threading
@@ -274,8 +276,8 @@ def lock(path: Path) -> IO | None:
 
 class Watch:
     def __init__(self, api, log: Path, clock: Callable[[], float] = time.time, registry: Path | None = None,
-                 routes: Path | None = None, wake: bool = False):
-        self.api, self.log, self.clock, self.wake = api, log, clock, wake
+                 routes: Path | None = None, wake: bool = False, publish: Callable[[bytes, float], None] | None = None):
+        self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
         self.registry, self.routes = registry, routes
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
         self.runs: dict[str, Run] = {}
@@ -635,7 +637,9 @@ class Watch:
                 if r.ended:
                     self.runs.pop(r.run, None)
         with self.lock:
-            write_atomic(self.log.with_name("status.json"), status_bytes(snapshot(self, judged, t)))
+            write_atomic(self.log.with_name("status.json"), body := status_bytes(snapshot(self, judged, t)))
+        if self.publish:
+            self.publish(body, t)
 
 
 def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
@@ -689,6 +693,54 @@ def write_atomic(path: Path, data: bytes) -> None:
         os.close(dfd)
 
 
+STATUS_TABLE = "store_private.agent_watch_status"
+STATUS_ROWS = 60                # the newest sweeps kept: an hour at POLL_S
+PUBLISH_DDL = f"CREATE TABLE IF NOT EXISTS {STATUS_TABLE} (t timestamptz PRIMARY KEY, body text NOT NULL);\n"
+
+
+def pg_env(url: str) -> dict[str, str]:
+    """libpq's environment for a `postgresql://user:password@host/db?sslmode=...` URL, so the URL never sits on a command line
+    (`research.store.bucket_index.pg_env`, which this file, run alone on the pod, can't import)."""
+    u = urllib.parse.urlsplit(url)
+    query = urllib.parse.parse_qs(u.query)
+    if u.scheme not in ("postgres", "postgresql") or not (u.hostname or query.get("host")):
+        raise ValueError(f"not a postgres URL with a host (scheme {u.scheme!r})")
+    env = {"PGHOST": u.hostname or "", "PGPORT": str(u.port or 5432), "PGDATABASE": urllib.parse.unquote(u.path.lstrip("/")),
+           "PGUSER": urllib.parse.unquote(u.username or ""), "PGPASSWORD": urllib.parse.unquote(u.password or "")}
+    for key, var in (("host", "PGHOST"), ("sslmode", "PGSSLMODE"), ("channel_binding", "PGCHANNELBINDING"), ("options", "PGOPTIONS"),
+                     ("connect_timeout", "PGCONNECT_TIMEOUT")):
+        if v := query.get(key):
+            env[var] = v[-1]
+    return {k: v for k, v in env.items() if v}
+
+
+class Publisher:
+    """Each sweep's `status.json` bytes upserted into Neon's `STATUS_TABLE` (by its `t`), keeping the newest `STATUS_ROWS`,
+    through `psql` in one transaction. The table is created on first use. A failure is printed at most once an hour and never
+    stops a sweep; the next sweep publishes its own snapshot."""
+
+    def __init__(self, url: str, psql: str = "psql"):
+        self.url, self.psql, self.created, self.said = url, psql, False, -RECANCEL_S
+
+    def __call__(self, body: bytes, t: float) -> None:
+        lit = "'" + body.decode().replace("'", "''") + "'"
+        script = ((PUBLISH_DDL if not self.created else "")
+                  + f"INSERT INTO {STATUS_TABLE} (t, body) VALUES ('{iso(t)}', {lit}) ON CONFLICT (t) DO UPDATE SET body = "
+                    f"EXCLUDED.body;\nDELETE FROM {STATUS_TABLE} WHERE t NOT IN (SELECT t FROM {STATUS_TABLE} ORDER BY t DESC "
+                    f"LIMIT {STATUS_ROWS});\n")
+        try:
+            r = subprocess.run([self.psql, "-X", "-q", "-1", "-v", "ON_ERROR_STOP=1", "-f", "-"], input=script,
+                               env={**os.environ, **pg_env(self.url)}, capture_output=True, text=True, timeout=60)
+            if r.returncode != 0:
+                raise RuntimeError(f"psql exited {r.returncode}: {r.stderr.strip()[-500:]}")
+            self.created = True
+        except Exception as e:  # noqa: BLE001 (a failed publish never stops a sweep)
+            if t - self.said >= RECANCEL_S:
+                self.said = t
+                print(f"{iso(t)} status not published to {STATUS_TABLE} (said at most once an hour): {type(e).__name__}: {e}",
+                      file=sys.stderr, flush=True)
+
+
 def pump(watch: Watch, r: Run) -> None:
     """Feed the run's stream to the watch until the run ends or the watch stops following it; then the next sweep may follow
     it again."""
@@ -734,7 +786,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"dry-run: POST {path} {json.dumps(body)}", file=sys.stderr, flush=True)
             return {"run": {"id": "dry-run"}}
         api.post = post
-    watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, wake=ns.wake)
+    publish = None
+    if url := os.environ.get("AGENT_WATCH_PG_URL"):
+        publish = Publisher(url) if not ns.dry_run else (
+            lambda body, t: print(f"dry-run: would publish {len(body)} bytes to {STATUS_TABLE}", file=sys.stderr, flush=True))
+    watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, wake=ns.wake, publish=publish)
     if ns.once:
         watch.sweep(lambda r: None)
         return 0

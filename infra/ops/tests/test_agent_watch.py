@@ -806,6 +806,84 @@ def test_status_carries_no_prompt_error_text_name_branch_slack_or_key(tmp_path):
         assert bit not in raw, bit
 
 
+PSQL = """#!/bin/sh
+n=$(ls "$PSQL_OUT" | grep -c 'sql$')
+cat > "$PSQL_OUT/$n.sql"
+printf '%s\\n' "$*" > "$PSQL_OUT/$n.args"
+[ -n "$PGPASSWORD" ] && [ "$PGHOST" = db.example ] && [ "$PGSSLMODE" = require ] && echo env-ok >> "$PSQL_OUT/$n.args"
+[ -f "$PSQL_OUT/../fail" ] && { echo 'psql: error: connection refused' >&2; exit 2; }
+exit 0
+"""
+PG_URL = "postgresql://watch:dummy-not-a-secret@db.example/store?sslmode=require"
+
+
+@pytest.fixture
+def psql(tmp_path, monkeypatch):
+    """A fake `psql` first on PATH: each call's script as `out/N.sql`, its argv (and whether libpq's env was set) as `N.args`;
+    it fails while `fail` exists."""
+    bin_, out = tmp_path / "bin", tmp_path / "psql-out"
+    bin_.mkdir()
+    out.mkdir()
+    (bin_ / "psql").write_text(PSQL)
+    (bin_ / "psql").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}:{W.os.environ['PATH']}")
+    monkeypatch.setenv("PSQL_OUT", str(out))
+    return out
+
+
+def calls(out):
+    return [((out / f"{i}.sql").read_text(), (out / f"{i}.args").read_text()) for i in range(len(list(out.glob("*.sql"))))]
+
+
+def test_each_sweeps_status_bytes_go_to_neon_the_table_created_once(tmp_path, psql):
+    api, clock = FakeApi([{"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "RUNNING"}}), Clock()
+    w = W.Watch(api, tmp_path / "events.jsonl", clock, publish=W.Publisher(PG_URL))
+    sent = []
+    for _ in range(2):
+        w.sweep(lambda r: None)
+        sent.append((tmp_path / "status.json").read_bytes())
+        clock.t += 60
+    (first, args), (second, _) = calls(psql)
+    assert first.startswith(W.PUBLISH_DDL) and "CREATE" not in second
+    for script, body, t in ((first, sent[0], clock.t - 120), (second, sent[1], clock.t - 60)):
+        assert f"VALUES ('{W.iso(t)}', '{body.decode()}') ON CONFLICT (t) DO UPDATE" in script, "the exact v1 bytes, by t"
+        assert f"ORDER BY t DESC LIMIT {W.STATUS_ROWS})" in script
+    assert "-1" in args.split() and "env-ok" in args and "dummy-not-a-secret" not in args, "the URL only in libpq's env"
+
+
+def test_a_quote_in_the_status_is_doubled(monkeypatch):
+    seen = []
+    monkeypatch.setattr(W.subprocess, "run", lambda argv, input, **k: seen.append(input) or W.subprocess.CompletedProcess(argv, 0))
+    W.Publisher(PG_URL)(b'{"x":"it\'s"}\n', 0.0)
+    assert "'{\"x\":\"it''s\"}\n')" in seen[0]
+
+
+def test_a_failed_publish_is_said_once_an_hour_and_never_stops_a_sweep(tmp_path, psql, capsys):
+    (tmp_path / "fail").touch()
+    api, clock = FakeApi([{"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "RUNNING"}}), Clock()
+    w = W.Watch(api, tmp_path / "events.jsonl", clock, publish=W.Publisher(PG_URL))
+    for _ in range(61):
+        w.sweep(lambda r: None)
+        assert status(tmp_path)["bc-a"]["watch_state"] == "followed"
+        clock.t += 60
+    said = [ln for ln in capsys.readouterr().err.splitlines() if "not published" in ln]
+    assert len(said) == 2 and "connection refused" in said[0] and "dummy-not-a-secret" not in "".join(said)
+    assert all(s.startswith(W.PUBLISH_DDL) for s, _ in calls(psql)), "the table is created until a publish succeeds"
+    (tmp_path / "fail").unlink()
+    w.sweep(lambda r: None)
+    w.sweep(lambda r: None)
+    assert [s.startswith(W.PUBLISH_DDL) for s, _ in calls(psql)[-2:]] == [True, False]
+
+
+def test_no_psql_or_a_bad_url_is_said_and_the_sweep_goes_on(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PATH", str(tmp_path))
+    api, clock = FakeApi([{"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "RUNNING"}}), Clock()
+    for url in (PG_URL, "mysql://x@y/z"):
+        W.Watch(api, tmp_path / "events.jsonl", clock, publish=W.Publisher(url)).sweep(lambda r: None)
+    err = capsys.readouterr().err
+    assert "FileNotFoundError" in err and "ValueError: not a postgres URL" in err and (tmp_path / "status.json").exists()
+
+
 T0 = W.epoch("2026-10-18T20:00:00Z")
 CO, LANE, OLD, NEW = (f"bc-{c * 8}-{c * 4}-{c * 4}-{c * 4}-{c * 12}" for c in "cbde")
 FINISHED = {"status": "FINISHED", "createdAt": "2026-10-18T19:10:00Z", "updatedAt": "2026-10-18T19:20:00Z"}
