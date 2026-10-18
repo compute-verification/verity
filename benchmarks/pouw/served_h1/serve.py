@@ -1,25 +1,30 @@
-"""A served H1 + fx1 window (`eps1-sm120-h1fx1`) on vLLM's int8-exact row, one process on one GPU.
+"""A served H1 + fx1 window (`eps1-sm120-h1fx1`) on vLLM's int8-exact row, one process on one GPU, through vllm's PoUW option
+(``pouw:eps1-sm120-h1fx1``, `verity_vllm.protocol_options.pouw_h1`).
 
-The receipts bind extra work beside cuBLASLt's served y, not the served kernel's: after each int8-exact linear of a prefill,
-`receipts.call_receipts` computes `h1tile`'s unit on the GPU on the served A (the `verity_int8::row_quant` output the
-linear's `int8_ops.linear` returned) and the served weight B, for every full 32 × 32 tile.  Decode calls (M < 32), a call's
-rows past its last full 32-row block, attention and lm_head are not covered.
+The receipts bind extra work beside cuBLASLt's served y, not the served kernel's.  The option records every int8-exact
+linear call as a `pouw_h1.Call`: its positions (a running base, the call's units row block by row block over its grid padded
+to 32 x 32 tiles, compile's unit order), its seed group's roots (root(A) over the call's s8 rows, root(B) its layer's weight
+root; vllm's stand-ins, `pouw_h1.ROOTS`) and the epoch's 64-byte salt (`pouw_h1.program_salt`).  On each prefill call
+(M >= 32) this script computes `h1tile`'s unit on the GPU (`receipts.call_receipts`) for every unit of that grid, on the served
+A (the `verity_int8::row_quant` output the linear's `int8_ops.linear` returned, held equal to the rows the option recorded) and
+the served weight B; the last row block's pad rows are zero, as the Program's are.  Decode calls (M < 32), attention and
+lm_head are not covered.
 
-In order, into OUT (`record.json` throughout, `manifest.json` at the end):
+In order, into OUT (`record.json` throughout, `manifest.json` at the end, the option's `pouw-h1-calls.json`):
 
   timing    `noise.cu` over a call's per-unit noise (seed_j's blocks and σ_R's key blocks) against `torch._int_mm` of the same
             call, CUDA events (`timing`), at K = 4096 and 14336
   engine    the int8 pin and `engine.build.build_engine(target=from_device() + int8_exact)`, eager, prefix caching off
-  weights   every int8 linear's B table (`commit`: one hm96-sha512/row/v2 leaf per output row), one root per weight tensor; the
-            weights' root; the fraction of weights that W' = B + c + U mod 2^8 wraps, per layer (`wrap`)
-  coin      the salt coin of a `pouw.coins.Challenger` epoch, opened after the weights' root; the 64-byte salt
-  serve     the prompts generated with the side computation hooked into every int8 linear: each prefill call's A table (AROW's
-            leaf: K s8 bytes then s_a as f32, hm96-sha512/row-seg/v1), its units at positions base + u, their receipts
-  reference the same prompts again with no hook: the token ids must be the served run's
-  receipts  one receipt tree per call (one hm96-sha512/row-seg/v1 leaf per unit)
+  wrap      the fraction of weights that W' = B + c + U mod 2^8 wraps, per layer and site (`wrap_counts`)
+  reference the prompts generated with no option installed
+  install   the option: every layer's root(B), the weights' root, the challenger's salt coin opened after it, the salt
+  serve     the prompts again with the option, and the receipts computed inside its `record` for every prefill call; the
+            token ids must be the reference's
+  receipts  one receipt tree per covered call (one hm96-sha512/row-seg/v1 leaf per unit, `commit`)
   gate      drawn units of each site against `h1tile.reference` (receipt) and the served integer product (z); controls: the
-            unit at the next position, a receipt with one bit flipped and a tampered A row against their roots
-  prover    the prover's data (the salt key, each call's A rows and receipts) into the store (`research data put`)
+            unit at the next position, a receipt with one bit flipped, root(A) and root(B) rebuilt, a tampered A row and B row
+  prover    the prover's data (the option's A salt key, the receipt key, each covered call's A rows, scales and receipts) into
+            the store (`research data put`)
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting
@@ -48,10 +53,8 @@ import commit as CM  # noqa: E402
 SCHEMA = "verity/pouw-h1-pass/v1"
 RECORD = "verity/pouw-served-h1/record/v1"
 SCHEME = "eps1-sm120-h1fx1"
-WEIGHTS_TAG = b"verity/pouw/served-h1/weights/v0\0"
-SALT_BYTES = 64
 FRAMING = "the receipts bind extra work beside cuBLASLt's served y, not the served kernel's"
-NOT_COVERED = ["decode calls (M < 32)", "a call's rows past its last full 32-row block", "attention (QKᵀ, P·V)", "lm_head"]
+NOT_COVERED = ["decode calls (M < 32)", "attention (QKᵀ, P·V)", "lm_head"]
 LONG = ("In the early morning light, the old lighthouse keeper climbed the spiral staircase one last time, counting each of "
         "the two hundred and twelve steps as he had done every day for forty years, and when he reached the lamp room he "
         "paused to look out over the grey water toward the harbor where")
@@ -151,7 +154,7 @@ def wrap_counts(mods: dict) -> dict:
         d["abs_gt_63"] += int(big)
         d["expected_wrapped"] += float((h * p).sum())
         d["sites"][site] = {"weights": int(tot), "frac_abs_gt_63": round(big / tot, 6),
-                            "frac_expected_wrapped": round(float((h * p).sum()) / tot, 6), "abs_max": int(m.weight.abs().max())}
+                            "frac_expected_wrapped": round(float((h * p).sum()) / tot, 6), "abs_max": int(m.weight.to(torch.int16).abs().max())}
     for d in per_layer.values():
         d["frac_abs_gt_63"] = round(d["abs_gt_63"] / d["weights"], 6)
         d["frac_expected_wrapped"] = round(d["expected_wrapped"] / d["weights"], 6)
@@ -163,29 +166,14 @@ def wrap_counts(mods: dict) -> dict:
             "layers": {str(k): v for k, v in sorted(per_layer.items())}}
 
 
-def b_tables(pool, mods: dict, window: str, key: bytes, chunk: int = 2048) -> tuple[dict, dict]:
-    """Every weight's B table root, and its rows (n, K + 4) uint8 on the host."""
-    rows, tasks, meta = {}, [], {}
-    for name, m in mods.items():
-        q = m.weight.cpu().numpy()
-        s = m.weight_scale.reshape(-1).cpu().numpy()
-        rows[name] = CM.s8_rows(q, s)
-        n, k = q.shape
-        fields = {"window": window, "module": name, "n": n, "k": k, "schema": CM.SCHEMA["b"]}
-        dom = CM.domain("b", fields, n)
-        meta[name] = {"dom": dom, "fields": fields, "n": n, "k": k}
-        for at in range(0, n, chunk):
-            tasks.append((name, at, (dom.binding, n, "b", key, f"b/{name}", at, rows[name][at:at + chunk])))
-    out = pool.map(CM.leaves, [t[2] for t in tasks], chunksize=1)
-    got: dict[str, list[bytes]] = {name: [] for name in mods}
-    for (name, at, _), leaves in zip(tasks, out):
-        got[name] += CM.split(leaves)
-    roots = {}
-    for name, mt in meta.items():
-        lv = CM.levels(mt["dom"], got[name])
-        roots[name] = {"root_b": lv[-1][0].hex(), "domain": mt["dom"].domain_id.hex(), "n": mt["n"], "k": mt["k"],
-                       "schema": CM.SCHEMA["b"], "fields": mt["fields"]}
-    return roots, rows
+def padded(t, rows: int):
+    """`t` [m, k] with zero rows appended up to `rows`."""
+    import torch
+    if t.shape[0] == rows:
+        return t
+    out = torch.zeros(rows, t.shape[1], dtype=t.dtype, device=t.device)
+    out[:t.shape[0]] = t
+    return out
 
 
 # -- the run ------------------------------------------------------------------------------------------------------------
@@ -211,10 +199,14 @@ def run(a: argparse.Namespace) -> dict:
                                                                        RC.noise_blocks_cpu(probe, 40)))})
 
     from tests.engine import int8_exact_gpu as G
+    from verity.core.protocols.pouw.coins import Challenger
+    from verity_vllm import protocol_options as PO
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.engine import int8_ops
     from verity_vllm.engine.build import build_engine, target_mismatches
     from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options import pouw_h1 as PH
 
     target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
     prompts = G.PROMPTS + [LONG]
@@ -228,97 +220,98 @@ def run(a: argparse.Namespace) -> dict:
                         "enforce_eager": eng.kwargs.get("enforce_eager"), "prefix_caching": eng.kwargs.get("enable_prefix_caching"),
                         "int8_exact": a.int8_exact, "target": target.to_json(), "effective": eng.effective})
 
-    mods = {n: m for n, m in eng.model.named_modules()
-            if type(getattr(m, "quant_method", None)).__name__ == "Int8PlainLinearMethod"}
-    window = (os.environ.get("RESEARCH_RUN_ID") or "local") + "/" + os.urandom(8).hex()
-    key = os.urandom(64)
-    rec.step("wrap", wrap_counts(mods))
+    layers = PH.layers(eng.model, pouw.linear_types())
+    ids = {id(m): w for w, m in enumerate(layers)}
+    names = {ids[id(m)]: n for n, m in eng.model.named_modules() if id(m) in ids}
+    rec.step("wrap", wrap_counts({names[w]: m for w, m in enumerate(layers)}))
+
+    reference = G.generate(eng.llm, prompts, a.max_tokens)
+    rec.step("reference", {"requests": len(reference), "tokens": sum(len(r["token_ids"]) for r in reference)})
+
+    option = f"pouw:{PH.SCHEME}"
+    ctx = PO.Context(stage="serve", enabled=(option,), settings={"pouw": {"coins": Challenger(a.epoch), "retain_steps": 0,
+                                                                         "transcript_dir": str(out)}})
     t0 = time.perf_counter()
-    weights, b_rows = b_tables(pool, mods, window, key)
-    weights_root = hashlib.sha512(WEIGHTS_TAG + b"".join(bytes.fromhex(weights[n]["root_b"]) for n in mods)).digest()
-    rec.step("weights", {"tensors": len(weights), "rows": sum(w["n"] for w in weights.values()),
-                         "weights_root": weights_root.hex(), "s": round(time.perf_counter() - t0, 1)})
+    comp = PO.install(eng.model, ctx)
+    h1 = pouw.h1_run(option)
+    rec.step("install", {"s": round(time.perf_counter() - t0, 1), "option": option, "salt": h1.salt.hex(),
+                         "salt_bytes": len(h1.salt), "weights_root": h1.commits.get("weights_root"),
+                         "coins": h1.commits.get("coins"), "salt_opening": h1.commits.get("salt_opening"),
+                         "weight_roots": {names[w]: r.hex() for w, r in sorted(h1.weight_roots.items())}, "roots": PH.ROOTS})
 
-    from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN
-    from verity.core.protocols.pouw.coins import Challenger as Coins
-    from verity.ml.randomness import derive
-    coins = Coins(a.epoch)
-    opening = coins.open("salt", weights_root)
-    salt = derive(opening.coin, EPOCH_SALT_DOMAIN, {"epoch": a.epoch, "coins": coins.commitment.root,
-                                                    "weights": weights_root}).stream("salt", SALT_BYTES)
-    rec.step("coin", {"commitment": coins.commitment.to_json(), "salt": salt.hex()})
-
-    by_ptr = {m.weight.data_ptr(): n for n, m in mods.items()}
-    st = {"on": True, "base": 0}
+    window = os.environ.get("RESEARCH_RUN_ID") or "local"
+    key = os.urandom(64)
+    st = {"on": True}
+    stash: dict[int, tuple] = {}
     calls: list[dict] = []
     data: list[dict] = []
-    decode = {"calls": 0, "rows": 0}
-    partial = {"rows": 0}
-    requant_bad = [0]
-    orig = int8_ops.linear
+    decode = {"calls": 0, "rows": 0, "units_positioned": 0}
+    a_check = {"equal": 0, "mismatch": 0, "untapped": 0}
+    orig_linear, orig_record = int8_ops.linear, h1.record
 
-    def side(name: str, x2, xq, s_a, w, s_w) -> None:
-        xq2, s2 = E.quantize_rows(x2)
-        requant_bad[0] += not (torch.equal(xq2, xq) and torch.equal(s2, s_a))
-        m, k = xq.shape
-        n = w.shape[0]
-        if m < RC.R:
-            decode["calls"] += 1
-            decode["rows"] += m
-            return
-        i = len(calls)
-        layer, site = site_of(name)
-        rows = CM.s8_rows(xq.cpu().numpy(), s_a.cpu().numpy())
-        fields = {"window": window, "call": i, "module": name, "m": m, "k": k, "schema": CM.SCHEMA["a"]}
-        dom = CM.domain("a", fields, m)
-        lv = CM.levels(dom, [CM.leaf(dom, "a", key, f"a/{i}", r, bytes(row))[0] for r, row in enumerate(rows)])
-        root_a, root_b = lv[-1][0], bytes.fromhex(weights[name]["root_b"])
-        torch.cuda.synchronize()
-        t = time.perf_counter()
-        rc = RC.call_receipts(RC.Call(xq, w), salt, st["base"], root_a, root_b, cubin)
-        torch.cuda.synchronize()
-        units = rc.shape[0]
-        calls.append({"call": i, "module": name, "layer": layer, "site": site, "m": m, "k": k, "n": n, "root_a": root_a.hex(),
-                      "a_domain": dom.domain_id.hex(), "a_fields": fields, "a_schema": CM.SCHEMA["a"], "root_b": root_b.hex(),
-                      "base": st["base"], "units": units, "rows_covered": RC.R * (m // RC.R), "receipt_words": int(rc.shape[1]),
-                      "receipts_s": round(time.perf_counter() - t, 3),
-                      "x_wrap_entries": int((xq == 127).sum())})
-        partial["rows"] += m % RC.R
-        data.append({"a_rows": rows, "receipts": rc, "xq": xq.clone(), "w": name})
-        st["base"] += units
-
-    def hooked(x2, w, s_w):
-        xq, s_a, y = orig(x2, w, s_w)
-        name = by_ptr.get(w.data_ptr())
-        if st["on"] and name is not None:
-            side(name, x2, xq, s_a, w, s_w)
+    def tap(x2, w, s_w):
+        xq, s_a, y = orig_linear(x2, w, s_w)
+        if st["on"]:
+            stash[w.data_ptr()] = (xq, s_a)
         return xq, s_a, y
 
-    int8_ops.linear = hooked
+    def record(w: int, xq, sa, n: int, y=None):
+        call = orig_record(w, xq, sa, n, y)
+        lin = layers[w]
+        served = stash.pop(lin.weight.data_ptr(), None)
+        if served is None:
+            a_check["untapped"] += 1
+            return call
+        same = (np.array_equal(served[0].cpu().numpy(), xq)
+                and np.array_equal(served[1].reshape(-1).cpu().numpy(), np.asarray(sa).reshape(-1)))
+        a_check["equal" if same else "mismatch"] += 1
+        if call.m < RC.R:
+            decode["calls"] += 1
+            decode["rows"] += call.m
+            decode["units_positioned"] += call.units
+            return call
+        name = names[w]
+        layer, site = site_of(name)
+        mp_, np_ = PH.padded(call.m, call.n)
+        torch.cuda.synchronize()
+        t = time.perf_counter()
+        rc = RC.call_receipts(RC.Call(padded(served[0], mp_), padded(lin.weight, np_)), h1.salt, call.base, *call.roots, cubin)
+        torch.cuda.synchronize()
+        calls.append({"index": call.index, "module": name, "layer": layer, "site": site, "linear": w, "m": call.m,
+                      "k": call.k, "n": call.n, "padded": [mp_, np_], "base": call.base, "units": int(rc.shape[0]),
+                      "units_match_option": int(rc.shape[0]) == call.units, "root_a": call.roots[0].hex(),
+                      "root_b": call.roots[1].hex(), "receipt_words": int(rc.shape[1]),
+                      "receipts_s": round(time.perf_counter() - t, 3), "a_served_equal": same,
+                      "x_at_127": int((served[0] == 127).sum())})
+        data.append({"xq": np.asarray(xq), "sa": np.asarray(sa).reshape(-1), "receipts": rc})
+        return call
+
+    int8_ops.linear, h1.record = tap, record
     t0 = time.perf_counter()
     try:
         served = G.generate(eng.llm, prompts, a.max_tokens)
     finally:
-        int8_ops.linear = orig
+        int8_ops.linear = orig_linear
         st["on"] = False
     serve_s = time.perf_counter() - t0
-    rec.step("serve", {"calls": len(calls), "units": st["base"], "s": round(serve_s, 1), "decode_uncovered": decode,
-                       "partial_rows_uncovered": partial["rows"], "a_requantized_mismatch": requant_bad[0],
-                       "receipts_s": round(sum(c["receipts_s"] for c in calls), 1),
-                       "prefill_m": sorted({c["m"] for c in calls})})
-    reference = G.generate(eng.llm, prompts, a.max_tokens)
+    rec.step("serve", {"calls_recorded": len(h1.calls), "units_positioned": h1.next_base, "calls_covered": len(calls),
+                       "units_covered": sum(c["units"] for c in calls), "s": round(serve_s, 1), "decode_uncovered": decode,
+                       "a_served_vs_recorded": a_check, "receipts_s": round(sum(c["receipts_s"] for c in calls), 1),
+                       "prefill_m": sorted({c["m"] for c in calls}),
+                       "units_match_option": all(c["units_match_option"] for c in calls),
+                       "consecutive": [c.base for c in h1.calls] == [0, *np.cumsum([c.units for c in h1.calls])[:-1].tolist()]})
     equal = [s["token_ids"] == r["token_ids"] for s, r in zip(served, reference)]
     rec.step("tokens", {"equal": all(equal), "per_prompt": equal, "served": served, "reference": reference})
 
     t0 = time.perf_counter()
     rtasks = []
     for c, d in zip(calls, data):
-        fields = {"window": window, "call": c["call"], "module": c["module"], "units": c["units"],
-                  "words": c["receipt_words"], "schema": CM.SCHEMA["r"]}
-        dom = CM.domain("r", fields, c["units"])
-        c.update(receipt_domain=dom.domain_id.hex(), receipt_fields=fields, receipt_schema=CM.SCHEMA["r"])
+        fields = {"window": window, "call": c["index"], "module": c["module"], "base": c["base"], "units": c["units"],
+                  "words": c["receipt_words"], "schema": CM.SCHEMA}
+        dom = CM.domain(fields, c["units"])
+        c.update(receipt_domain=dom.domain_id.hex(), receipt_fields=fields, receipt_schema=CM.SCHEMA)
         rtasks.append((dom, CM.receipt_rows(d["receipts"])))
-    rl = pool.map(CM.leaves, [(dom.binding, dom.count, "r", key, f"r/{c['call']}", 0, rows)
+    rl = pool.map(CM.leaves, [(dom.binding, dom.count, key, f"r/{c['index']}", 0, rows)
                               for c, (dom, rows) in zip(calls, rtasks)], chunksize=1)
     levels = []
     for c, (dom, _), leaves in zip(calls, rtasks, rl):
@@ -328,39 +321,42 @@ def run(a: argparse.Namespace) -> dict:
     rec.step("receipt_trees", {"calls": len(calls), "leaves": sum(c["units"] for c in calls),
                                "s": round(time.perf_counter() - t0, 1)})
 
-    rec.step("gate", gate(a, calls, data, levels, b_rows, mods, salt, key, E))
+    rec.step("gate", gate(a, calls, data, levels, layers, h1, key, E, PH))
+    comp.close()
 
     manifest = {"schema": SCHEMA, "scheme": SCHEME, "tile": [RC.R, RC.C_], "framing": FRAMING, "not_covered": NOT_COVERED,
-                "window": window, "model": rec.doc["steps"]["engine"]["pin"], "epoch": a.epoch,
-                "coins": coins.commitment.to_json(), "salt_opening": opening.to_json(), "salt": salt.hex(),
-                "salt_rule": "derive(coin, EPOCH_SALT_DOMAIN, {epoch, coins: the commitment's root, weights: the weights' root})"
-                             ".stream('salt', 64), the coin opened after the weights' root (core_check's 32-byte rule at 64)",
-                "weights_rule": "SHA-512(WEIGHTS_TAG || each weight's root_b in the order of `weights`)",
-                "weights_tag": WEIGHTS_TAG.hex(), "weights_root": weights_root.hex(),
-                "weights": [{"module": n, **{k: v for k, v in w.items() if k != "fields"}, "fields": w["fields"]}
-                            for n, w in weights.items()],
-                "positions": "position = base + u: calls in serving order, a call's units by row block then column block "
-                             "(unit u = rows 32 (u // (N / 32)) .., columns 32 (u % (N / 32)) ..)",
-                "leaves": {"a": "token row i: K s8 bytes then s_a[i] f32 LE, hm96-sha512/row-seg/v1 (AROW's)",
-                           "b": "output row j: K s8 bytes then s_w[j] f32 LE, hm96-sha512/row/v2",
-                           "r": "unit u: its receipt's 2 (KS + m) u32 words LE (per set y then z), hm96-sha512/row-seg/v1",
-                           "domains": "identity_digest_sha512('verity/pouw/served-h1/<a-table|b-table|receipts>/v0', "
-                                      "fields), owner -1, ranks 0 .. count - 1",
-                           "salts": "SHA-512(SALT_TAG || key || u32be len(label) || label || u64be i || u8 c), c = 0..2: "
-                                    "labels a/<call>, b/<module>, r/<call>; the key is the prover's"},
-                "calls": calls, "units": st["base"],
+                "window": window, "model": rec.doc["steps"]["engine"]["pin"], "epoch": a.epoch, "option": option,
+                "commitment": h1.commits, "calls_file": PH.CALLS_FILE, "calls_record": PH.RECORD,
+                "salt": h1.salt.hex(),
+                "salt_rule": "pouw_h1.program_salt: SHA-512(b'verity/pouw/h1/program-salt/v1\\0' || the epoch's 32-byte salt), "
+                             "the epoch's salt audit.Epoch.start's from the challenger's salt coin opened after the weights' "
+                             "root (pouw.weights_root over every layer's pouw_h1.weight_root)",
+                "roots": PH.ROOTS,
+                "positions": "the option's: call c's units at base_c + u, u row block by row block over its grid padded to "
+                             "32 x 32 tiles (compile's unit order; unit u = rows 32 (u // (N' / 32)) .., weight rows "
+                             "32 (u % (N' / 32)) .., N' the padded N)",
+                "covered": "every unit of each call with M >= 32 (the last row block's pad rows zero, as the Program's)",
+                "leaves": {"r": "unit u: its receipt's 2 (KS + m) u32 words LE (per set y then z), hm96-sha512/row-seg/v1, one "
+                                "frame-v3-sha512 tree a covered call",
+                           "domain": "identity_digest_sha512('verity/pouw/served-h1/receipts/v0', receipt_fields), owner -1, "
+                                     "ranks 0 .. units - 1",
+                           "salts": "SHA-512(SALT_TAG || key || u32be len(label) || label || u64be u || u8 c), c = 0..2, "
+                                    "label r/<call index>; the key is the prover's"},
+                "calls": calls, "units_covered": sum(c["units"] for c in calls), "units_positioned": h1.next_base,
                 "tokens_equal": all(equal)}
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
-    rec.step("prover", prover(a, out, key, calls, data))
-    rec.doc["ok"] = bool(all(equal) and not requant_bad[0] and calls and rec.doc["steps"]["gate"]["ok"])
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
+    rec.step("prover", prover(a, out, key, h1, calls, data))
+    s = rec.doc["steps"]["serve"]
+    rec.doc["ok"] = bool(all(equal) and calls and not a_check["mismatch"] and not a_check["untapped"]
+                         and s["units_match_option"] and s["consecutive"] and rec.doc["steps"]["gate"]["ok"])
     rec.save()
     pool.close()
-    print(f"SERVED-H1 {'OK' if rec.doc['ok'] else 'FAIL'} calls={len(calls)} units={st['base']} tokens_equal={all(equal)} "
-          f"gate={rec.doc['steps']['gate']['ok']}", flush=True)
+    print(f"SERVED-H1 {'OK' if rec.doc['ok'] else 'FAIL'} calls={len(calls)} units={manifest['units_covered']} "
+          f"tokens_equal={all(equal)} gate={rec.doc['steps']['gate']['ok']}", flush=True)
     return rec.doc
 
 
-def gate(a, calls: list[dict], data: list[dict], levels: list, b_rows: dict, mods: dict, salt: bytes, key: bytes, E) -> dict:
+def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1, key: bytes, E, PH) -> dict:
     """Drawn units against `h1tile.reference`, and the controls."""
     import torch
     import receipts as RC
@@ -372,38 +368,45 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, b_rows: dict, mod
         for _ in range(a.gate_per_site if site != "down_proj" else max(1, a.gate_per_site // 2)):
             if cs:
                 c = rng.choice(cs)
-                picks.append((c["call"], rng.randrange(c["units"])))
-    units, ok = [], True
+                picks.append((calls.index(c), rng.randrange(c["units"])))
+    units, ok, b_roots = [], True, {}
     for i, u in picks:
         c, d = calls[i], data[i]
-        b = torch.from_numpy(b_rows[c["module"]][:, :c["k"]].copy().view(np.int8))
-        call = RC.Call(d["xq"].cpu(), b)
+        weight = layers[c["linear"]].weight
+        mp_, np_ = c["padded"]
+        xq = padded(torch.from_numpy(d["xq"]), mp_)
+        call = RC.Call(xq, padded(weight.cpu(), np_))
         root_a, root_b = bytes.fromhex(c["root_a"]), bytes.fromhex(c["root_b"])
-        z, want = RC.reference(call, salt, c["base"], root_a, root_b, u)
+        z, want = RC.reference(call, h1.salt, c["base"], root_a, root_b, u)
         got = [int(v) for v in d["receipts"][u]]
         ri, cj = call.units[u]
-        y = E.int_mm(d["xq"][32 * ri:32 * ri + 32], mods[c["module"]].weight[32 * cj:32 * cj + 32]).cpu().to(torch.int64)
+        y = E.int_mm(xq[32 * ri:32 * ri + 32].cuda(), padded(weight, np_)[32 * cj:32 * cj + 32]).cpu().to(torch.int64)
         z_ok = [v & 0xFFFFFFFF for v in y.flatten().tolist()] == z
-        nxt = RC.reference(call, salt, c["base"] + 1, root_a, root_b, u)[1]
-        dom = CM.domain("r", c["receipt_fields"], c["units"])
+        nxt = RC.reference(call, h1.salt, c["base"] + 1, root_a, root_b, u)[1]
+        dom = CM.domain(c["receipt_fields"], c["units"])
         root_r = bytes.fromhex(c["receipt_root"])
         rows = CM.receipt_rows(d["receipts"][u:u + 1])[0]
-        leaf = CM.leaf(dom, "r", key, f"r/{i}", u, bytes(rows))[0]
+        leaf = CM.leaf(dom, key, f"r/{c['index']}", u, bytes(rows))[0]
         sibs = CM.path(levels[i], u)
         flipped = bytearray(rows)
         flipped[rng.randrange(len(flipped))] ^= 1 << rng.randrange(8)
-        leaf_f = CM.leaf(dom, "r", key, f"r/{i}", u, bytes(flipped))[0]
-        a_dom = CM.domain("a", c["a_fields"], c["m"])
-        row = bytearray(d["a_rows"][32 * ri])
-        row[rng.randrange(c["k"])] ^= 1
-        a_leaf_t = CM.leaf(a_dom, "a", key, f"a/{i}", 32 * ri, bytes(row))[0]
-        a_lv = CM.levels(a_dom, [CM.leaf(a_dom, "a", key, f"a/{i}", r, bytes(x))[0] for r, x in enumerate(d["a_rows"])])
-        r = {"call": i, "module": c["module"], "k": c["k"], "unit": u, "position": c["base"] + u,
+        leaf_f = CM.leaf(dom, key, f"r/{c['index']}", u, bytes(flipped))[0]
+        a_rows = d["xq"].copy()
+        a_rebuilt = PH.activation_root(h1.salt, c["index"], a_rows, h1.salt_key)
+        a_rows[min(32 * ri, c["m"] - 1), rng.randrange(c["k"])] ^= 1
+        a_tampered = PH.activation_root(h1.salt, c["index"], a_rows, h1.salt_key)
+        if c["linear"] not in b_roots:
+            b_rows = weight.cpu().numpy()
+            rebuilt = PH.weight_root(c["linear"], b_rows)
+            b_rows[rng.randrange(c["n"]), rng.randrange(c["k"])] ^= 1
+            b_roots[c["linear"]] = (rebuilt, PH.weight_root(c["linear"], b_rows))
+        r = {"call": c["index"], "module": c["module"], "k": c["k"], "unit": u, "position": c["base"] + u,
              "receipt_equal_reference": got == want, "z_equal_served_product": z_ok,
              "next_position_differs": nxt != got, "receipt_opens": CM.verify(dom, root_r, u, leaf, sibs),
              "flipped_receipt_refused": not CM.verify(dom, root_r, u, leaf_f, sibs),
-             "a_root_rebuilt": a_lv[-1][0] == root_a,
-             "tampered_a_row_refused": not CM.verify(a_dom, root_a, 32 * ri, a_leaf_t, CM.path(a_lv, 32 * ri))}
+             "a_root_rebuilt": a_rebuilt == root_a, "tampered_a_row_changes_root": a_tampered != root_a,
+             "b_root_rebuilt": b_roots[c["linear"]][0] == root_b,
+             "tampered_b_row_changes_root": b_roots[c["linear"]][1] != root_b}
         r["ok"] = all(v for k_, v in r.items() if isinstance(v, bool))
         ok &= r["ok"]
         units.append(r)
@@ -411,22 +414,28 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, b_rows: dict, mod
     return {"ok": bool(ok and units), "units": units}
 
 
-def prover(a, out: Path, key: bytes, calls: list[dict], data: list[dict]) -> dict:
-    """The prover's data: the salt key, each call's A rows and receipts, into the store (or OUT when the store refuses)."""
+def prover(a, out: Path, key: bytes, h1, calls: list[dict], data: list[dict]) -> dict:
+    """The prover's data: the option's A salt key, the receipt key, each covered call's A rows, scales and receipts, into the
+    store (or OUT when the store refuses)."""
     with tempfile.TemporaryDirectory(dir=a.scratch) as td:
         p = Path(td) / "prover"
         p.mkdir()
-        (p / "prover.json").write_text(json.dumps({"key": key.hex(), "calls": len(calls)}) + "\n")
+        (p / "prover.json").write_text(json.dumps({"a_salt_key": h1.salt_key.hex(), "receipt_key": key.hex(),
+                                                   "calls": [c["index"] for c in calls]}) + "\n")
         for c, d in zip(calls, data):
-            np.savez(p / f"call{c['call']:04d}.npz", a_rows=d["a_rows"], receipts=d["receipts"])
+            np.savez(p / f"call{c['index']:05d}.npz", xq=d["xq"], sa=d["sa"], receipts=d["receipts"])
         tar = Path(td) / "prover.tar"
         with tarfile.open(tar, "w") as t:
             t.add(p, arcname="prover")
         size = tar.stat().st_size
-        sha = hashlib.sha256(tar.read_bytes()).hexdigest()
+        h = hashlib.sha256()
+        with tar.open("rb") as f:
+            for blk in iter(lambda: f.read(1 << 24), b""):
+                h.update(blk)
         r = subprocess.run(["research", "data", "put", "--kind", "pouw-h1-prover", "--file", str(tar), "--preserve"],
                            capture_output=True, text=True)
-        doc = {"bytes": size, "sha256": sha, "put_rc": r.returncode, "put_out": r.stdout[-800:], "put_err": r.stderr[-800:]}
+        doc = {"bytes": size, "sha256": h.hexdigest(), "put_rc": r.returncode, "put_out": r.stdout[-800:],
+               "put_err": r.stderr[-800:]}
         if r.returncode:
             (out / "prover").mkdir(exist_ok=True)
             os.replace(tar, out / "prover" / "prover.tar")
