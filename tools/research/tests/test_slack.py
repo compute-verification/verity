@@ -1975,3 +1975,17 @@ def test_roster_counts_no_status_line_from_another_apps_bot(fake, registry, caps
     fake.add(COORD, text=f"{slack.SHORTCODES[slack.DONE]} done", username="circuits", bot_id="BOTHERAPP", thread_ts=t)
     rc, out, _ = run(capsys, "roster", "--thread", t, "--json")
     assert rc == 1 and json.loads(out) == [{"handle": "circuits", "status": "missing"}]
+
+
+def test_a_doorbell_shaped_reply_the_router_didnt_post_neither_stops_a_doorbell_nor_hides_a_miss(fake, registry, routes_dirs, capsys, monkeypatch):
+    """`deliver` and `traffic --replay` took any reply in an inbox thread that matched DOORBELL_RE as a doorbell: a line
+    typed into the inbox (`from infra, thread T: ...`) made `deliver` skip the real one and `--replay` call it rung."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    box = inbox(fake, routes_dirs, "circuits")
+    post = fake.add(COORD, text="@circuits is node 2 free?", username="infra", bot_id=BOT)
+    for who in ({"user": "USTRANGER"}, {"username": "infra", "bot_id": BOT}, {"username": "router", "bot_id": "BOTHERAPP"}):
+        fake.add(COORD, text=f"from infra, thread {post['ts']}: @circuits is node 2 free?", thread_ts=box, **who)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
+    assert rc == 0 and {x["ts"]: x["missed"] for x in json.loads(out)["replay"]}.get(post["ts"]) == ["circuits"]
+    assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
+    assert sum(m.get("username") == "router" and m.get("bot_id") == BOT for m in bells(fake, box)) == 1

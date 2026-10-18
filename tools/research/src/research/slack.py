@@ -1023,6 +1023,12 @@ def doorbell(author: str, thread: str, ts: str, text: str, urgent: bool = False)
     return f"from {author}{' (URGENT)' if urgent else ''}, {where}: {body}"
 
 
+def is_doorbell(m: dict, reg: dict) -> bool:
+    """A reply in an inbox thread that the router posted on Verity's bot.  Anything else there, a line someone typed or
+    another app's bot, is no doorbell however it reads."""
+    return m.get("username") == "router" and ours(m, reg)
+
+
 def _from(text: str, author: str) -> bool:
     if m := DOORBELL_RE.match(text):
         return m[1] == author or (m[1] == "router" and f": paused @{author} " in text)
@@ -1117,7 +1123,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
             continue
         try:
             rung = api.call("conversations.replies", channel=ch, ts=r["inbox_ts"], oldest=f"{now - 3600:.6f}", limit=PAGE).get("messages", [])
-            rung = [m for m in rung if m.get("ts") != r["inbox_ts"]]
+            rung = [m for m in rung if m.get("ts") != r["inbox_ts"] and is_doorbell(m, reg)]
             if any(_rang(m.get("text") or "", msg.get("ts") or "", link) for m in rung):
                 continue
             n = sum(_mentions_thread(m.get("text") or "", src) and _from(m.get("text") or "", author) for m in rung)
@@ -1833,7 +1839,7 @@ def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=Non
     rang: dict[str, set[str]] = {}
     for its, name in by_inbox.items():
         for m in api.paged("conversations.replies", "messages", channel=ch, ts=its, oldest=f"{since:.6f}"):
-            if m.get("ts") != its and (d := DOORBELL_RE.match(m.get("text") or "")):
+            if m.get("ts") != its and is_doorbell(m, reg) and (d := DOORBELL_RE.match(m.get("text") or "")):
                 rang.setdefault(d[4] or d[3], set()).add(name)
     posts = [(m, root) for m, root in posts if (root or m)["ts"] not in inboxes and m["ts"] not in inboxes]
     humans = {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
@@ -2000,7 +2006,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             continue                                                 # a renamed name forwards into its successor's inbox
         counted.add(r["inbox_ts"])
         bells = [m for m in api.paged("conversations.replies", "messages", channel=r.get("channel") or ch, ts=r["inbox_ts"],
-                                      oldest=f"{since:.6f}") if m.get("ts") != r["inbox_ts"] and m.get("username") == "router"]
+                                      oldest=f"{since:.6f}") if m.get("ts") != r["inbox_ts"] and is_doorbell(m, reg)]
         hours: dict[int, int] = {}
         for m in bells:
             hours[int(float(m["ts"]) // 3600)] = hours.get(int(float(m["ts"]) // 3600), 0) + 1
