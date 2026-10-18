@@ -31,7 +31,6 @@ paths can be compared identity set by identity set.
 from __future__ import annotations
 
 import collections
-import gzip
 import json
 import os
 import re
@@ -245,13 +244,9 @@ class ComponentProgram:
         """The component at `derived_dir`: its `instances.json.gz`, with the Build's correspondence record when the dir carries one
         (`runtime_correspondence.read_program_dir`: result.json `correspondence_digest` + descriptor annotation), else the v1 reading."""
         from verity_vllm.correspondence.runtime import read_program_dir
-        from verity_vllm.program.compact import expanded_file_args
-        with gzip.open(os.path.join(derived_dir, "instances.json.gz"), "rt") as f:
-            inst = json.load(f)
-        for r in inst.get("rows") or ():   # a v2 file's argument progressions -> the v1 per-leaf run lists (`producers` reads "n" runs)
-            a = r.get("args")
-            if a:
-                r["args"] = expanded_file_args(a)
+        from verity_vllm.program.instances_file import read_instances
+        # a v2 file's argument progressions -> the v1 per-leaf run lists (`producers` reads "n" runs)
+        inst = read_instances(os.path.join(derived_dir, "instances.json.gz"))
         table, digest, problem = read_program_dir(derived_dir)
         return cls(inst, DescriptorCorrespondence(inst, attention_paths=attention_paths, table=table, digest=digest, problem=problem))
 

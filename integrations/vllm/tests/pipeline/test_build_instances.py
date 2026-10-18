@@ -13,6 +13,7 @@ import zlib
 import pytest
 
 from verity_vllm.pipeline.build import _instance_rows, _write_instances, _write_instances_file
+from verity_vllm.program.instances_file import write_instances_file
 
 HEAD = {"schema": "cb-a/instance-sequence/v1", "digest": "d" * 64, "correspondence_digest": None, "params": [["prompt", "Array<8,Value<32>>"]]}
 ROWS = [{"i": k, "spec": "Gemm_v1{K=64,N=8}", "form": "call", "name": f"model.layers.0.q_proj/mm\u00e9[{k}]",
@@ -40,7 +41,7 @@ def test_the_instance_file_is_that_text_gzipped(tmp_path, rows):
 def test_the_parallel_gzip_is_one_member_of_the_text(tmp_path, block, threads):
     """Blocks of any size, compressed on any number of threads, inflate to the text, as one gzip member (a reader that stops at the
     first member reads it all) whose bytes depend on the text only."""
-    from verity_vllm.pipeline.instances_file import ParallelGzip
+    from verity_vllm.program.instances_file import ParallelGzip
     text = json.dumps({**HEAD, "rows": ROWS})
     for body in (text, ""):
         paths = [tmp_path / f"a{block}.gz", tmp_path / f"b{block}.gz"]
@@ -117,7 +118,7 @@ def _attention_program(seed: int):
 def test_a_programs_rows_written_from_its_logs_are_the_json_dumps_text(tmp_path, seed):
     """`write_program_instances` writes each log cut as its log's items so far plus its own, and the file's text is the one the
     row dicts give (`instance_rows` through `json.dumps`), cut by cut, whatever the cut's tail and whether it is shorter."""
-    from verity_vllm.pipeline.instances_file import RowTexts, instance_rows, write_program_instances
+    from verity_vllm.program.instances_file import RowTexts, instance_rows, write_program_instances
     program = _attention_program(seed)
     rows = list(instance_rows(program))
     texts = RowTexts()
@@ -126,6 +127,86 @@ def test_a_programs_rows_written_from_its_logs_are_the_json_dumps_text(tmp_path,
     p = tmp_path / "instances.json.gz"
     write_program_instances(str(p), head, program, block=4096, threads=2)
     assert gzip.decompress(p.read_bytes()).decode() == json.dumps({**head, "rows": rows})
+    _read_as_json_load(p)
+
+
+def _read_as_json_load(p, **dump) -> None:
+    from verity_vllm.program.compact import expanded_file_args
+    from verity_vllm.program.instances_file import read_instances
+    with gzip.open(p, "rt") as f:
+        want = json.load(f)
+    assert read_instances(str(p), expand=False) == want
+    for r in want.get("rows") or ():
+        if isinstance(r, dict) and r.get("args"):
+            r["args"] = expanded_file_args(r["args"])
+    assert read_instances(str(p)) == want
+
+
+def _attention_rows(n: int, heads: int = 2) -> list[dict]:
+    """Rows shaped like a dense attention prefill's: per row and head a key operand of the rows so far (one count-2 "N" item a row)
+    and a value operand of one progression, beside a weight read."""
+    rows = []
+    for t in range(n):
+        for h in range(heads):
+            rows.append({"i": len(rows), "spec": f"Attention_v4{{T={t + 1}}}", "form": "call", "name": f"layers.0.attn/h{h}[{t}]",
+                         "args": [[["n", 10_000 + t, 64 * h, 64 * h + 64]],
+                                  [["N", 1000 + 7 * s, 64 * h, 64 * h + 64, 3, 0, 0, 2] for s in range(t + 1)],
+                                  [["N", 5000, 64 * h, 64 * h + 64, 7, 0, 0, t + 1]] if t else [["n", 5000, 64 * h, 64 * h + 64]],
+                                  [["p", 3, 4096 * h, 4096 * h + 4096]]]})
+    return rows
+
+
+@pytest.mark.parametrize("chunk", [1, 5, 64, 1 << 22])
+def test_read_instances_is_json_load_of_the_file_whatever_its_chunks(tmp_path, monkeypatch, chunk):
+    """`read_instances` is `json.load` (and, expanding, `expanded_file_args` of each row's arguments) of any instance-sequence text:
+    pretty-printed or not, keys after the rows, a key named "rows" inside the header, numbers cut by a chunk boundary."""
+    from verity_vllm.program import instances_file
+    monkeypatch.setattr(instances_file, "_CHUNK", chunk)
+    rows = _attention_rows(6) + ROWS[:5] + [{"i": 99, "args": []}, {"i": 100}]
+    docs = [{**HEAD, "rows": rows}, {**HEAD, "rows": []}, {"rows": rows[:3], "after": [1.5, 1234567, None, True], "z": "rows"},
+            {"params": [["rows", "Array<2,Value<8>>"]], "rows": rows[:2], "rows_n": 2}, {}]
+    for k, doc in enumerate(docs):
+        for dump in ({}, {"indent": 1}, {"separators": (",", ":")}):
+            p = tmp_path / f"d{k}.json.gz"
+            p.write_bytes(gzip.compress(json.dumps(doc, **dump).encode()))
+            _read_as_json_load(p)
+            q = tmp_path / f"d{k}.json"
+            q.write_text(json.dumps(doc, **dump) + "\n")
+            _read_as_json_load_plain(q)
+
+
+def _read_as_json_load_plain(q) -> None:
+    from verity_vllm.program.instances_file import read_instances
+    assert read_instances(str(q), expand=False) == json.loads(q.read_text())
+
+
+def test_read_instances_shares_equal_items_and_holds_a_fraction_of_json_loads_memory(tmp_path):
+    """Equal argument items are one list, so a causal attention's rows (each key operand the row before's plus one item) hold each
+    item once: at 192 rows of 2 heads json.load's document is about 7 times the shared one, and the ratio grows with the rows (the
+    GLM-5.3 B8 rank's 8 request Programs measured 56 times their gz size, 139.5 GB, under json.load)."""
+    import tracemalloc
+
+    from verity_vllm.program.instances_file import read_instances
+    p = tmp_path / "instances.json.gz"
+    write_instances_file(str(p), HEAD, _attention_rows(192))
+    doc = read_instances(str(p), expand=False)
+    keys = [r["args"][1] for r in doc["rows"]]
+    assert all(a[0] is b[0] for a, b in zip(keys, keys[2:]))
+
+    def held(load):
+        tracemalloc.start()
+        d = load()
+        size = tracemalloc.get_traced_memory()[0]
+        tracemalloc.stop()
+        assert d["rows"]
+        return size
+
+    def plain():
+        with gzip.open(p, "rt") as f:
+            return json.load(f)
+
+    shared, whole = held(lambda: read_instances(str(p), expand=False)), held(plain)
+    assert whole > 5 * shared, (whole, shared)
 
 
 def _scattered_program():

@@ -11,17 +11,21 @@ contract: `json.dumps({**head, "rows": list(instance_rows(program))})`, whatever
   is O(rows) per operand and O(rows^2) per head (GLM-5.3 TP8 at 2048 input tokens: 1.3e9 items, 60 GB of text, 4 h single-threaded).
 
 The text is compressed by `ParallelGzip`: one gzip member whose deflate blocks are compressed on threads.
+
+`read_instances(path)` reads the whole document back, as `json.load` does, with equal argument items sharing one list (the rows
+are a few times the file instead of 56 times).  `query.program_view.iter_instance_rows` streams the rows one at a time.
 """
 
 from __future__ import annotations
 
 import collections
+import gzip
 import json
 import os
 import struct
 import zlib
 from concurrent.futures import ThreadPoolExecutor
-from typing import Iterator
+from typing import Any, Iterator
 
 #: `instances.json.gz`'s gzip level.  A long context's text is mostly the attention Calls' key and value runs (B1 4096/512: 8.6 GB),
 #: which level 6 compresses in under a third of level 9's CPU time, 2% larger, and which inflates as fast at either level.
@@ -218,3 +222,133 @@ class ParallelGzip:
         else:
             self.pool.shutdown(cancel_futures=True)
             self.f.close()
+
+
+_CHUNK = 1 << 22
+
+
+def _open_text(path: str):
+    return gzip.open(path, "rt", encoding="utf-8") if path.endswith(".gz") else open(path, encoding="utf-8")
+
+
+class _Text:
+    """A text file read `_CHUNK` at a time, for decoding one JSON value after another out of it."""
+
+    __slots__ = ("f", "buf", "pos", "eof")
+
+    def __init__(self, f) -> None:
+        self.f, self.buf, self.pos, self.eof = f, "", 0, False
+
+    def _more(self) -> None:
+        more = self.f.read(max(_CHUNK, len(self.buf) - self.pos))   # a value longer than a chunk: double, so it is decoded O(1) times
+        self.eof = not more
+        self.buf, self.pos = self.buf[self.pos:] + more, 0
+
+    def peek(self) -> str:
+        """The next character that is not JSON whitespace ("" at the end), not consumed."""
+        while True:
+            buf, pos = self.buf, self.pos
+            while pos < len(buf) and buf[pos] in " \t\n\r":
+                pos += 1
+            self.pos = pos
+            if pos < len(buf) or self.eof:
+                return buf[pos] if pos < len(buf) else ""
+            self._more()
+
+    def take(self, c: str) -> None:
+        if self.peek() != c:
+            raise json.JSONDecodeError(f"expected {c!r}", self.buf, self.pos)
+        self.pos += 1
+
+    def value(self, dec: json.JSONDecoder) -> Any:
+        self.peek()
+        while True:
+            try:
+                obj, end = dec.raw_decode(self.buf, self.pos)
+                if end < len(self.buf) or self.eof:   # a number at the end of the buffer may go on in the next chunk
+                    self.pos = end
+                    if end > _CHUNK:
+                        self.buf, self.pos = self.buf[end:], 0
+                    return obj
+            except json.JSONDecodeError:
+                if self.eof:
+                    raise
+            self._more()
+
+
+def read_instances(path: str, *, expand: bool = True) -> dict[str, Any]:
+    """`json.load` of an instance-sequence file, the same document (with `expand`, each row's arguments `compact.expanded_file_args`),
+    decoded a row at a time with every argument item that equals one already read being that item's list: a causal attention's key
+    operand repeats the call before's items, so decoded one list per occurrence the rows were 56 times the file (GLM-5.3 TP8 B8 I256,
+    8 request Programs of 2.5 GB: 139.5 GB).  The rows' keys, specs and forms are shared the same way.  A reader must not modify an
+    item in place: equal items are one list."""
+    from verity_vllm.program.compact import _FILE_SPACES, runs_from_file_items
+    items: dict[tuple, list] = {}
+    strs: dict[str, str] = {}
+
+    def item(it):
+        try:
+            return items.setdefault(tuple(it), it)
+        except TypeError:                     # an item that is not a flat list of scalars: as decoded
+            return it
+
+    def run(t):
+        got = items.get(t)
+        if got is None:
+            got = items[t] = list(t)
+        return got
+
+    def operand(a):
+        if not isinstance(a, list):
+            return a
+        if expand and any(len(it) == 8 and it[0] in _FILE_SPACES for it in a if isinstance(it, list)):
+            return [run(t) for t in runs_from_file_items(a)]
+        return [item(it) if isinstance(it, list) else it for it in a]
+
+    def row(r):
+        if not isinstance(r, dict):
+            return r
+        out = {}
+        for k, v in r.items():
+            k = strs.setdefault(k, k)
+            if k == "args" and isinstance(v, list):
+                v = [operand(a) for a in v]
+            elif k in ("spec", "form") and isinstance(v, str):
+                v = strs.setdefault(v, v)
+            out[k] = v
+        return out
+
+    dec = json.JSONDecoder()
+    doc: dict[str, Any] = {}
+    with _open_text(path) as f:
+        t = _Text(f)
+        t.take("{")
+        if t.peek() == "}":
+            t.pos += 1
+        else:
+            while True:
+                key = t.value(dec)
+                if not isinstance(key, str):
+                    raise json.JSONDecodeError("expected a key", t.buf, t.pos)
+                t.take(":")
+                if key == "rows" and t.peek() == "[":
+                    t.pos += 1
+                    rows = doc[key] = []
+                    if t.peek() == "]":
+                        t.pos += 1
+                    else:
+                        while True:
+                            rows.append(row(t.value(dec)))
+                            if t.peek() == "]":
+                                t.pos += 1
+                                break
+                            t.take(",")
+                else:
+                    doc[key] = t.value(dec)
+                if t.peek() == "}":
+                    t.pos += 1
+                    break
+                t.take(",")
+        if t.peek():
+            raise json.JSONDecodeError("Extra data", t.buf, t.pos)
+    return doc

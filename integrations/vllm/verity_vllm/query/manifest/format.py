@@ -14,11 +14,10 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
                         `RegistryUnavailable` (the environment fault a manifest build refuses under)
 
 Which Values are required is the query's: `verity_vllm.query` (`required.QUERY_OF_RECORD`, Q_word v1 since the re-baseline; TP rank Programs
-too, with its TP-04 policy).  Dependency-free (json/gzip/hashlib).
+too, with its TP-04 policy).  Dependency-free (json/hashlib) but for `load_program`, which reads through `program.instances_file`.
 """
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
 import os
@@ -363,14 +362,10 @@ def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int, ms: bool = False)
 
 def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     """The Program dir's instances, result and artifact.  `expand=False` keeps a v2 row's argument progressions as stored, for a reader
-    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`)."""
-    from verity_vllm.program.compact import expanded_file_args
-    with gzip.open(os.path.join(program_dir, "instances.json.gz"), "rt") as f:
-        inst = json.load(f)
-    for r in (inst.get("rows") or ()) if expand else ():   # a v2 file's argument progressions -> the v1 per-leaf run lists
-        a = r.get("args")
-        if a:
-            r["args"] = expanded_file_args(a)
+    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`).  Equal argument items are one list
+    (`instances_file.read_instances`): read them, never modify them in place."""
+    from verity_vllm.program.instances_file import read_instances
+    inst = read_instances(os.path.join(program_dir, "instances.json.gz"), expand=expand)
     res = json.load(open(os.path.join(program_dir, "result.json")))
     art = None
     p = os.path.join(program_dir, "artifact.json")

@@ -27,7 +27,7 @@ from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
-from verity_vllm.pipeline.instances_file import INSTANCES_GZ_LEVEL, instance_rows, write_instances, write_instances_file, write_program_instances  # noqa: F401 (INSTANCES_GZ_LEVEL read through here)
+from verity_vllm.program.instances_file import INSTANCES_GZ_LEVEL, instance_rows, write_instances, write_instances_file, write_program_instances  # noqa: F401 (INSTANCES_GZ_LEVEL read through here)
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
 
 
