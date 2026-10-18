@@ -6,8 +6,8 @@
 //     hash_after_block, salt_prf, salt_digest, the nibble-table mask, the leaf, the level kernels and the host builder;
 //   * sharaw.cu (hash, cursor/verity-hash-15ad 4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
 //     sr_data), with commit_gpu's tree schedule (a level a launch while a level is wider than 512 nodes, then one block for
-//     the rest); sr_data's fold and climb (k_leaf_fold) with compress_compact / node_rt; sr_leaf4 (k_leaf_spec) with
-//     mask_roll;
+//     the rest); sr_data's fold and climb (k_leaf_fold), its nodes by length or (sm_100) through compress_compact /
+//     node_rt; sr_leaf4 (k_leaf_spec) with mask_roll;
 //   * hash_fast.cuh (benchmarks/pouw/pearl_c_sm120): row-seg's segments a thread from their header's state, then a fold a unit.
 #include <cuda_runtime.h>
 
@@ -871,7 +871,8 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
 // The data phase from the rows over the whole tree, its levels folded in (sharaw's sr_data): a CTA's cnt = min(width, THREADS)
 // leaves (the salt phase's pads past n), their subtree through shared memory, then thread 0 climbs while its CTA is the second
 // of two siblings to finish. ctr: a count a node above the CTAs' level (level L + 1's first), zeroed by the salt phase.
-template <int SX>
+// COMPACT: the nodes through node_rt<true> (one compression body), else node (one a length of the index).
+template <int SX, bool COMPACT>
 __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
     k_leaf_fold(const __grid_constant__ LeafK K, const __grid_constant__ NodeK N, const uint8_t* __restrict__ rows, u64 stride,
                 u64 n, u64 width, int depth, const u64* __restrict__ rec, uint8_t* levels, uint8_t* __restrict__ bc, u32* ctr) {
@@ -900,7 +901,10 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
     __syncthreads();
     const u32 m = cnt >> l;
     u64 r[8];
-    if (t < m) node_rt<true>(N, l - 1, (u64)blockIdx.x * m + t, sm + 16 * t, sm + 16 * t + 8, r);
+    if (t < m) {
+      if constexpr (COMPACT) node_rt<true>(N, l - 1, (u64)blockIdx.x * m + t, sm + 16 * t, sm + 16 * t + 8, r);
+      else node(N, l - 1, (u64)blockIdx.x * m + t, sm + 16 * t, sm + 16 * t + 8, r);
+    }
     __syncthreads();
     if (t < m) {
       cpy8(sm + 8 * t, r);
@@ -922,7 +926,8 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
     const bool right = idx & 1;
 #pragma unroll
     for (int k = 0; k < 8; ++k) { a[k] = right ? sib[k] : cur[k]; b[k] = right ? cur[k] : sib[k]; }
-    node_rt<true>(N, l, p, a, b, r);
+    if constexpr (COMPACT) node_rt<true>(N, l, p, a, b, r);
+    else node(N, l, p, a, b, r);
     off += width >> l;
     st_be(levels + 64 * (off + p), r, 8);
     cpy8(cur, r);
@@ -1025,22 +1030,27 @@ __global__ void __launch_bounds__(2 * SPEC_R, 2)
 }
 u64 spec_ctrs(u64 width) { return width > 32 ? width / 32 - 1 : 0; }
 
-// AUTO's form for a small commit on the current device: SPEC on sm_90 (H200 at 34,737 rows: sharaw's v4 0.80 ms, FOLD 1.00),
-// FOLD elsewhere (B200: FOLD 0.55 ms, v4 0.72). The compute capability is read once a device; reading it enqueues nothing.
-int small_form() {
+// The current device's compute capability major, read once a device (reading it enqueues nothing); -1 if unknown.
+int device_major() {
   static int major[64];
   int dev = 0;
-  if (cudaGetDevice(&dev) != cudaSuccess || dev < 0 || dev >= 64) return VC_FORM_FOLD;
+  if (cudaGetDevice(&dev) != cudaSuccess || dev < 0 || dev >= 64) return -1;
   if (!major[dev]) {
     int m = 0;
     major[dev] = cudaDeviceGetAttribute(&m, cudaDevAttrComputeCapabilityMajor, dev) == cudaSuccess && m ? m : -1;
   }
-  return major[dev] == 9 ? VC_FORM_SPEC : VC_FORM_FOLD;
+  return major[dev];
 }
-// AUTO's one- or two-launch form (small_form) up to this many rows, SPLIT above. Those save SPLIT's tree launches, a fixed
-// cost, but idle through their subtree's barriers, a cost a row: B200 crosses over near 44,000 rows (FOLD 5% faster at 34,737,
-// SPLIT 8% at 65,536), and H200 by 65,536 too.
-constexpr u64 SMALL_MAX_ROWS = 40000;
+// AUTO's form for n rows on the current device, from bench/'s 4 KiB rows. Up to 40,000 rows a one- or two-launch form, which
+// saves SPLIT's tree launches (a fixed cost) but idles through its subtree's barriers (a cost a row): SPEC on sm_90 (H200 at
+// 34,737 rows: sharaw's v4 0.80 ms, FOLD 1.00), FOLD elsewhere (B200: FOLD 0.556, SPEC 0.760; SPLIT 8% faster at 65,536).
+// Above, SPEC on sm_120 up to 200,000 rows (RTX PRO 6000 at 65,536: SPEC 0.748, FUSED 0.825, SPLIT 0.883, FOLD 0.979), else
+// SPLIT.
+int auto_form(u64 n) {
+  const int m = device_major();
+  if (n <= 40000) return m == 9 ? VC_FORM_SPEC : VC_FORM_FOLD;
+  return m == 12 && n <= 200000 ? VC_FORM_SPEC : VC_FORM_SPLIT;
+}
 
 // Both phases a thread (native_rows' rows_leaf_kernel): the mask from the nibble table through L1.
 template <int SX, bool ROWS>
@@ -1659,7 +1669,7 @@ int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* r
   if (form < VC_FORM_AUTO || form > VC_FORM_SPEC) return -1;
   if (!n) return vc_tree_launch(plan, levels, 0, st);
   const u64 width = vc_tree_width(n);
-  if (form == VC_FORM_AUTO) form = n <= SMALL_MAX_ROWS ? small_form() : VC_FORM_SPLIT;
+  if (form == VC_FORM_AUTO) form = auto_form(n);
   if (form == VC_FORM_SPEC) {
     if (!tables || !scratch) return -1;
     const auto t = static_cast<const uint8_t*>(tables);
@@ -1684,13 +1694,16 @@ int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* r
     const int depth = depth_of(n);
     if (p->leaf.sx) {
       k_salt8<4><<<blocks(width, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, 0, width, n, r, levels, ctr, nc);
-      if (int e = rc()) return e;
-      k_leaf_fold<4><<<(unsigned)(width / cnt), cnt, 0, st>>>(p->leaf, p->node, rows, stride, n, width, depth, r, levels, bc, ctr);
     } else {
       k_salt8<0><<<blocks(width, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, 0, width, n, r, levels, ctr, nc);
-      if (int e = rc()) return e;
-      k_leaf_fold<0><<<(unsigned)(width / cnt), cnt, 0, st>>>(p->leaf, p->node, rows, stride, n, width, depth, r, levels, bc, ctr);
     }
+    if (int e = rc()) return e;
+    // the compact node on sm_100 only: at 34,737 rows sharaw's v1 (by length) against v1n (compact) is 0.563 vs 0.555 ms on
+    // B200, 0.502 vs 0.520 on RTX PRO 6000 and 0.877 vs 0.973 on H200
+    const bool compact = device_major() == 10;
+    const auto fold = p->leaf.sx ? (compact ? k_leaf_fold<4, true> : k_leaf_fold<4, false>)
+                                 : (compact ? k_leaf_fold<0, true> : k_leaf_fold<0, false>);
+    fold<<<(unsigned)(width / cnt), cnt, 0, st>>>(p->leaf, p->node, rows, stride, n, width, depth, r, levels, bc, ctr);
     return rc();
   }
   int e;
