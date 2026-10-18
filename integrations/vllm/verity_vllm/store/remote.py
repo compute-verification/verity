@@ -158,13 +158,16 @@ class Serving:
         self.landed.append(self.step)
 
     def deferral(self) -> dict[str, Any]:
-        """The appends made, those whose encodes landed, and how many steps after its append's each landed (its
-        blocks resident from the step after that)."""
+        """The appends made, those whose encodes landed, how many steps after its append's each landed (its blocks
+        resident from the step after that), and each append's ``[step made, step landed (None: not yet), first,
+        count]``: public structure, as the verifier sees each append between the roots that name their steps."""
         late: dict[int, int] = {}
         for m, w in zip(self.made, self.landed):
             late[w - m] = late.get(w - m, 0) + 1
+        landed = self.landed + [None] * (len(self.made) - len(self.landed))
         return {"appends": len(self.made), "encoded": len(self.landed), "steps_late": dict(sorted(late.items())),
-                "waiting": self.map.waiting if self.store.memory_map is self.map else None}
+                "waiting": self.map.waiting if self.store.memory_map is self.map else None,
+                "encodes": [[m, w, a.first, a.count] for m, w, a in zip(self.made, landed, self.appends)]}
 
     def plan(self) -> rb.Plan:
         out: list[list[int]] = []
