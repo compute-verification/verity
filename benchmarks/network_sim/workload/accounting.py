@@ -28,7 +28,7 @@ import argparse
 from collections import Counter
 
 import datacenter as D
-from datacenter.logical import binding, gates
+from datacenter.logical import binding, gates, layout
 from verity.ml.circuits.program import REGISTRATION, RUN
 
 from . import model as M
@@ -40,9 +40,18 @@ PREMISES = {D.FLEET_CLOSED.name: D.FLEET_CLOSED}
 
 
 def parameters(model, seed: int) -> dict[str, list[int]]:
-    """Each parameter's words in leaf order."""
-    t = model.inputs(seed)
-    return {name: [t[g] for g in model.input_gates(pi)] for pi, name in enumerate(model.params)}
+    """Each parameter's words, one per element (`datacenter.logical.layout`: a Boolean element's bits, or a word leaf)."""
+    t, out = model.inputs(seed), {}
+    for pi, ((name, pt), _) in enumerate(zip(model.program.fn.signature()[0], model.params)):
+        leaves, words = iter(t[g] for g in model.input_gates(pi)), []
+        for widths in layout(pt):
+            word, at = 0, 0
+            for w in widths:
+                word |= next(leaves) << at
+                at += w
+            words.append(word)
+        out[name] = words
+    return out
 
 
 def split(model, seed: int) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
