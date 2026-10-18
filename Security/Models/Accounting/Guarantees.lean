@@ -32,6 +32,7 @@ import Models.Accounting.Guarantees.TS.Receipt
 import Models.Accounting.Guarantees.TS.FoldFanIn
 import Models.Accounting.Guarantees.TS.Stages
 import Models.Accounting.Guarantees.TS.Steer
+import Models.Accounting.Guarantees.TS.Grind
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
 audit's guarantees as a joint run's compute and bandwidth guarantees, a state-bounded game's soundness as its capacity
@@ -42,5 +43,5 @@ composed guarantee for the remote bandwidth audit as deployed and its deployed i
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, localization, composition and fit, the obligations B1, B2 and B4, the tag and sketch
 guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′ for a persistent pattern, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
-receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an isolated node,
+receipt's sketch must exchange, the grinding premium under hashed seeds and the deployed tile's moment, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an isolated node,
 and a declared circuit's live and read bits from the blocks the audit credits. -/

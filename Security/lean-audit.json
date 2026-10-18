@@ -1599,6 +1599,11 @@
    "assumptions": [],
    "type_hash": "68c23f457c775415f32b574d381b81d927a6521c56667cc92a4a6b4a19042459"
   },
+  "Accounting.SecurityProofs.TS.ExchangeTail": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.ExchangeTail : Accounting.Guarantees.TS.ExchangeTail"],
+   "assumptions": []
+  },
   "Accounting.SecurityProofs.TS.FanInCount": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.FanInCount : Accounting.Guarantees.TS.FanInCount"],
@@ -1634,6 +1639,26 @@
    "signature": ["Accounting.SecurityProofs.TS.Fx1FoldFanIn : Accounting.Guarantees.TS.Fx1FoldFanIn"],
    "assumptions": [],
    "type_hash": "b4fc50d2775376891a7b633d358b9f2376a08409a8b43647215595f1e2731dad"
+  },
+  "Accounting.SecurityProofs.TS.GrindMass": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindMass : Accounting.Guarantees.TS.GrindMass"],
+   "assumptions": []
+  },
+  "Accounting.SecurityProofs.TS.GrindPremium": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindPremium : Accounting.Guarantees.TS.GrindPremium"],
+   "assumptions": []
+  },
+  "Accounting.SecurityProofs.TS.GrindPremiumAt": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindPremiumAt : Accounting.Guarantees.TS.GrindPremiumAt"],
+   "assumptions": []
+  },
+  "Accounting.SecurityProofs.TS.GrindTail": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindTail : Accounting.Guarantees.TS.GrindTail"],
+   "assumptions": []
   },
   "Accounting.SecurityProofs.TS.GrindUnion": {
    "owner": "@compute-accounting",
@@ -1683,6 +1708,11 @@
    "assumptions": [],
    "type_hash": "d843adb387677d7f782ea44db601e82ebfecf578d72fbe57b4598a2dad87c6e3"
   },
+  "Accounting.SecurityProofs.TS.LuckMoment": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LuckMoment : Accounting.Guarantees.TS.LuckMoment"],
+   "assumptions": []
+  },
   "Accounting.SecurityProofs.TS.LuckOfReceipt": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.LuckOfReceipt : Accounting.Guarantees.TS.LuckOfReceipt"],
@@ -1700,6 +1730,11 @@
    "signature": ["Accounting.SecurityProofs.TS.OutputCount : Accounting.Guarantees.TS.OutputCount"],
    "assumptions": [],
    "type_hash": "f63122b9d09208627838844f85921930911249f025c810b9936cfc84542bef96"
+  },
+  "Accounting.SecurityProofs.TS.PrivateMoment": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.PrivateMoment : Accounting.Guarantees.TS.PrivateMoment"],
+   "assumptions": []
   },
   "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": {
    "owner": "@compute-accounting",
@@ -1766,6 +1801,11 @@
    "signature": ["Accounting.SecurityProofs.TS.ThinFoldInjective : Accounting.Guarantees.TS.ThinFoldInjective"],
    "assumptions": [],
    "type_hash": "05c11dc008c2a2607af95ee24298aeb442207dd73f0dc17980a992372e1e94ef"
+  },
+  "Accounting.SecurityProofs.TS.TileLuck": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.TileLuck : Accounting.Guarantees.TS.TileLuck"],
+   "assumptions": []
   },
   "Accounting.SecurityProofs.TS.TimeBound": {
    "owner": "@compute-accounting",
@@ -5988,7 +6028,15 @@
    "Accounting.SecurityProofs.Gates.UnitsFooling": "frozen (no-function): A counting bound in budgeted units over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function.",
    "Accounting.SecurityProofs.HMu.LemmaB": "lemma: Lemma B of the receipt-aggregate binding note (decisions 22 and 48), receipt luck at most Z*mu times the deficiency under (H-mu+) taken as a hypothesis (SkipRound.HMuPlus, a definition, not a named assumption); ReceiptLuckOfCoins and ReceiptLuckOfCoin are what it is for.",
-   "Accounting.SecurityProofs.HMu.PersistentOneWord": "lemma: Lemma B' for a persistent pattern with one word before the checkpoint, a fold's checkpoint state injective in the skipped value from the step's injectivity in state and word and the pattern's positions, taken as hypotheses; it gives SkipRound.Inj with Z = 1."
+   "Accounting.SecurityProofs.HMu.PersistentOneWord": "lemma: Lemma B' for a persistent pattern with one word before the checkpoint, a fold's checkpoint state injective in the skipped value from the step's injectivity in state and word and the pattern's positions, taken as hypotheses; it gives SkipRound.Inj with Z = 1.",
+   "Accounting.SecurityProofs.TS.ExchangeTail": "lemma: the Chernoff tail M e^{-theta pi} of a gain whose exponential moment at rate theta is at most M (a hypothesis), one query; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindTail": "lemma: the union T tau over T random-oracle queries, each query's bad event of probability at most tau over its own answer with every other answer fixed (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindPremium": "lemma: the grinding premium T M e^{-theta pi} + delta_b over T random-oracle queries, each query's gain of moment at most M over its own answer (a hypothesis), the commitment's binding break delta_b a parameter; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindPremiumAt": "lemma: GrindPremium at pi* = ln(T M / delta) / theta, the premium priced into epsilon outside delta + delta_b; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindMass": "lemma: the expectation form, the T queries' exponential moments summing to at most T M in mean under GrindPremium's per-query moment (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckMoment": "lemma: one unit's exponential moment p e^{theta w} + (1 - p) e^{-kappa theta w} at exchange rate kappa, its luck at most p (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.PrivateMoment": "lemma: exponential moments multiply over private coins whatever the shared ones (Fubini), each bound a hypothesis; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.TileLuck": "lemma: the deployed tile's exponential moment at most M, n columns sharing coins and r units a column, each unit's dead mass q and alive luck p hypotheses (AM-GM over the columns and over each column's units); not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
