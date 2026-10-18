@@ -29,7 +29,8 @@ SALT = hashlib.sha512(b"salt").digest()
 
 
 class Int8Arm:
-    """A stand-in for `engine.int8_vllm.Int8PlainLinearMethod`: the plain arm's linear, counting its calls."""
+    """A stand-in for `engine.int8_vllm.Int8PlainLinearMethod`: the plain arm's linear, counting its calls, handing its values
+    to ``observe`` after both ops."""
 
     int8_arm = E.ARM
 
@@ -38,7 +39,13 @@ class Int8Arm:
 
     def apply(self, layer, x, bias=None):
         self.calls += 1
-        return E.plain_linear(x, layer.weight, layer.weight_scale)
+        xq, s_a = E.quantize_rows(x)
+        y = E.dequantize(E.int_mm(xq, layer.weight), s_a, layer.weight_scale)
+        self.observe(layer, xq, s_a, y)
+        return y
+
+    def observe(self, layer, xq, s_a, y):
+        pass
 
 
 class Linear:
@@ -98,19 +105,59 @@ def test_the_served_outputs_are_the_real_cells():
     assert [(lo, hi) for _s, _i, lo, hi in runs(fn.body.ret)] == want
 
 
-def test_calls_take_consecutive_positions_and_seeds_of_their_own_roots():
+def _tap(rng, m, n):
+    a = torch.from_numpy(rng.integers(-127, 128, (m, K), dtype=np.int8))
+    w = torch.from_numpy(rng.integers(-127, 128, (n, K), dtype=np.int8))
+    return a, torch.ones(m), w, torch.ones(n, 1)
+
+
+def test_calls_take_consecutive_positions_and_count_steps_at_linear_0():
+    """Calls take consecutive positions; a step begins at linear 0; given each call's (root(A), root(B)), its units' seeds are
+    distinct from every other call's."""
     rng = np.random.default_rng(3)
-    run = PH.H1Run("t", SALT, {0: b"\x01" * 64, 1: b"\x02" * 64}, {0: "q", 1: "o"})
-    calls = [run.record(w, rng.integers(-127, 128, (m, K), dtype=np.int8), np.ones(m, np.float32), n)
-             for w, (_k, n, m) in zip((0, 1, 0), SHAPES)]
-    assert [c.base for c in calls] == [0, 1, 2] and run.next_base == 6 and run.commits["units"] == 6
-    seeds = [s for c in calls for s in c.compiled().seeds(SALT, [c.roots], c.base)]
+    run = PH.H1Run("t", SALT, {0: "q", 1: "o"})
+    calls = [run.record(w, *_tap(rng, m, n)) for w, (_k, n, m) in zip((0, 1, 0), SHAPES)]
+    assert [(c.base, c.step, c.layer, c.module) for c in calls] == [(0, 0, 0, "q"), (1, 0, 1, "o"), (2, 1, 0, "q")]
+    assert run.next_base == 6 and run.commits["units"] == 6 and run.commits["steps"] == 2
+    roots = [(bytes([c.index + 1]) * 64, bytes([c.layer + 9]) * 64) for c in calls]
+    seeds = [s for c, r in zip(calls, roots) for s in c.compiled().seeds(SALT, [r], c.base)]
     assert len(seeds) == len(set(seeds)) == 6
-    salt, positions, roots = calls[2].inputs(SALT)
+    salt, positions, leaves = calls[2].inputs(SALT, roots[2])
     assert salt == SD.leaves(SALT, True) and len(positions) == 4 * SD.POS_BITS.leaves
-    assert roots == SD.leaves(calls[2].roots[0] + b"\x01" * 64, True)
-    assert calls[0].roots[0] != calls[2].roots[0]
+    assert leaves == SD.leaves(roots[2][0] + roots[2][1], True)
     assert set(run.check()) == {"1x64x32", "5x64x32", "33x64x40"}
+
+
+def test_listeners_get_the_served_tensors_and_bind_the_calls_roots():
+    """A listener gets each call with the very tensors the arm served (A row i is AROW leaf i of the call's (step, layer)
+    table), and what it returns is in the manifest and the calls root; `bind_all` reads the roots back."""
+    rng = np.random.default_rng(4)
+    run = PH.H1Run("t", SALT, {0: "q"})
+    seen = []
+
+    def listener(call, a, s_a, weight, weight_scale):
+        seen.append((call, a, s_a, weight, weight_scale))
+        return {"root_a": bytes([call.index]).hex() * 64, "root_b": "ab" * 64} if call.index else None
+
+    run.listen(listener)
+    taps = [_tap(rng, m, n) for _k, n, m in SHAPES[:2]]
+    calls = [run.record(0, *t) for t in taps]
+    assert [s[0] for s in seen] == calls and all(s[1] is t[0] and s[3] is t[2] for s, t in zip(seen, taps))
+    manifest = run.manifest()
+    assert "bound" not in manifest[0] and manifest[1]["bound"]["root_b"] == "ab" * 64
+    assert manifest[1]["leaves"] == [0, 5] and manifest[1]["step"] == 1
+    assert PH.bind_all(calls, run.bound) == [None, (b"\x01" * 64, b"\xab" * 64)]
+    before = run.calls_root()
+    run.bound[1] = {**run.bound[1], "root_b": "cd" * 64}
+    assert run.calls_root() != before
+
+
+def test_units_are_in_row_block_then_column_block_order():
+    """Unit u of a call covers row block u // (N' / 32) and column block u % (N' / 32), so position base + u names a tile."""
+    c = PH.compiled(K, 40, 33)
+    blocks = [(u.rows[0] // 32, u.cols[0] // 32) for u in c.units]
+    assert blocks == [(0, 0), (0, 1), (1, 0), (1, 1)]
+    assert all(list(u.rows) == list(range(u.rows[0], u.rows[0] + 32)) for u in c.units)
 
 
 def test_z_is_the_exact_product_on_each_units_cells():
@@ -118,7 +165,7 @@ def test_z_is_the_exact_product_on_each_units_cells():
     xq = rng.integers(-127, 128, (33, K), dtype=np.int8)
     w = rng.integers(-127, 128, (40, K), dtype=np.int8)
     y = xq.astype(np.int64) @ w.astype(np.int64).T
-    call = PH.Call(0, 0, "q", 33, K, 40, 0, (b"\x00" * 64, b"\x00" * 64))
+    call = PH.Call(0, 0, 0, "q", 33, K, 40, 0)
     full = np.zeros((64, 64), np.int64)
     full[:33, :40] = y
     for n, u in enumerate(call.compiled().units):
@@ -138,8 +185,8 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
 
 
 def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
-    """Installed on int8_exact layers, each apply serves the arm's own y bit for bit and records the call: its s8 rows' root,
-    its weight's root and its positions; the record compiles at every served shape."""
+    """Installed on int8_exact layers, each apply serves the arm's own y bit for bit and the option's observe records the call
+    (its layer, shape, step and positions) with its exact Y retained; the record compiles at every served shape."""
     model = Model(Linear(32, 1), Linear(40, 2))
     ctx = PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": {"coins": Challenger(0), "transcript_dir": str(tmp_path),
                                                                               "retain_steps": 2}})
@@ -153,7 +200,7 @@ def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
         run = pouw.h1_run(_entry())
         assert [(c.layer, c.m, c.n, c.base) for c in run.calls] == [(0, 1, 32, 0), (1, 5, 40, 1), (0, 33, 32, 3)]
         assert [layer.quant_method.calls for layer in model.layers] == [2, 1]
-        assert {c.roots[1] for c in run.calls if c.layer == 0} == {PH.weight_root(0, model.layers[0].weight.numpy())}
+        assert [c.step for c in run.calls] == [0, 0, 1]
         index, xq, _sa, z = run.retained[-1]
         assert index == 2 and len(run.retained) == 2
         assert np.array_equal(z, xq.astype(np.int64) @ model.layers[0].weight.numpy().astype(np.int64).T)

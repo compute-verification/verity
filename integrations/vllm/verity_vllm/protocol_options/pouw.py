@@ -687,7 +687,8 @@ def h1_run(entry: str) -> PH.H1Run | None:
 
 def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     """H1 on the int8_exact arm: the epoch's salt from the challenger's salt coin after the weights' root, as every scheme's,
-    and each layer's ``apply`` the arm's own with its call recorded (`pouw_h1.served`)."""
+    and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners (`pouw_h1.observer`).
+    The served values are the arm's, untouched."""
     layers = PH.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -695,14 +696,14 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
                               ((int(w), s) for w, s in committed["shapes"].items())))
     commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
     salt = Epoch.start(declared, roots, commitment, opening).salt
-    run = PH.H1Run(entry, PH.program_salt(salt), roots, {w: f"linear {w}" for w in roots} | _named(target.model, layers),
+    run = PH.H1Run(entry, PH.program_salt(salt), {w: f"linear {w}" for w in roots} | _named(target.model, layers),
                    retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
                    commit=target.context.stage != "capture")
     run.commits.update(weights_root=weights_root(roots).hex(), coins=commitment.to_json(), salt_opening=opening.to_json())
     _H1_RUNS[entry] = run
     h = target.hooks(entry)
     for w, layer in enumerate(layers):
-        h.wrap(layer.quant_method, "apply", lambda orig, w=w: PH.served(run, w, orig))
+        h.wrap(layer.quant_method, "observe", lambda orig, w=w: PH.observer(run, w, orig))
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish)
 
 

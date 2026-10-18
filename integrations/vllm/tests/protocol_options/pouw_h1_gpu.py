@@ -10,7 +10,9 @@ One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw
             only full 32 x 32 grid tiles.
   z         the last retained calls' exact Y (`engine.int8_exact.int_mm` on the GPU) against the s8 product on the host, and
             a unit's z (`Call.z`) against its cells.
-  roots     each call's root(B) is its layer's weight root (`pouw_h1.weight_root`), and no two calls share a root(A).
+  hook      a listener (`H1Run.listen`) gets every call with the served tensors on the GPU: A int8 [m, k] and s_a f32 [m]
+            (the Commit's ``Int8RowQuant_v1`` /0 and /1), the layer's own int8 weight and scales; what it returns is in the
+            manifest; steps begin at linear 0, and every step's calls run over the same layers in order.
 """
 from __future__ import annotations
 
@@ -69,16 +71,32 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     comp = PO.install(eng.model, ctx)
     doc["install_s"] = round(time.monotonic() - t0, 1)
     h1 = pouw.h1_run(entry_name)
+    layers = PH.layers(eng.model, pouw.linear_types())
+    seen: list[str] = []
+
+    def listener(call: Any, a_: Any, s_a: Any, weight: Any, weight_scale: Any) -> dict[str, Any]:
+        ok = (a_.is_cuda and a_.dtype == torch.int8 and tuple(a_.shape) == (call.m, call.k) and s_a.dtype == torch.float32
+              and tuple(s_a.shape) == (call.m,) and weight is layers[call.layer].weight
+              and weight_scale is layers[call.layer].weight_scale)
+        if not ok:
+            seen.append(f"{call.index}: {a_.device} {a_.dtype} {tuple(a_.shape)} {s_a.dtype} {tuple(s_a.shape)}")
+        return {"listener": "pouw_h1_gpu"}
+
+    h1.listen(listener)
     try:
         t0 = time.monotonic()
         with_h1 = serve()
         doc["serve_s"] = round(time.monotonic() - t0, 1)
         doc["served"] = {"same_tokens": with_h1 == plain, "requests": len(plain), "tokens": sum(map(len, plain))}
 
-        layers = PH.layers(eng.model, pouw.linear_types())
-        bad_b = [c.index for c in h1.calls if c.roots[1] != h1.weight_roots[c.layer]]
-        roots_a = [c.roots[0] for c in h1.calls]
-        doc["roots"] = {"root_b_is_the_layers": not bad_b, "distinct_root_a": len(set(roots_a)) == len(roots_a), "kind": PH.ROOTS}
+        steps: dict[int, list[int]] = {}
+        for c in h1.calls:
+            steps.setdefault(c.step, []).append(c.layer)
+        manifest = h1.manifest()
+        doc["hook"] = {"bad": seen[:20], "bound": all(r.get("bound") == {"listener": "pouw_h1_gpu"} for r in manifest),
+                       "steps": len(steps), "steps_in_layer_order": all(v == list(range(len(layers))) for v in steps.values()),
+                       "leaves": all(r["leaves"] == [0, r["shape"][0]] for r in manifest)}
+        print(f"[h1] hook {json.dumps(doc['hook'])}", flush=True)
         bases = [c.base for c in h1.calls]
         doc["calls"] = {"count": len(h1.calls), "units": h1.next_base, "consecutive": bases == [0, *np.cumsum([c.units for c in h1.calls])[:-1].tolist()],
                         "shapes": h1.details["shapes"], "padded_rows": h1.details["padded_rows"]}
@@ -108,7 +126,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     finally:
         comp.close()
     doc["commitment"] = comp.installed[0].commitment()
-    doc["ok"] = bool(doc["served"]["same_tokens"] and doc["roots"]["root_b_is_the_layers"] and doc["roots"]["distinct_root_a"]
+    doc["ok"] = bool(doc["served"]["same_tokens"] and not doc["hook"]["bad"] and doc["hook"]["bound"]
+                     and doc["hook"]["steps_in_layer_order"] and doc["hook"]["leaves"]
                      and doc["calls"]["consecutive"] and doc["calls"]["count"] > 0 and zs and all(z["y_exact"] and z["unit0_z"] for z in zs)
                      and doc["compile_ok"] and doc["engine"]["enforce_eager"] is not False)
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
