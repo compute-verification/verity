@@ -139,4 +139,59 @@ def ChangedReadsDistinct : Prop :=
   ∀ (pl : Plan) (added removed : Array (Int × Int)) (blocks : Nat) (pl' : Plan),
     pl.changed added removed blocks = some pl' → ReadsDistinct pl' blocks
 
+/-! ## The session -/
+
+/-- The chain over the appends `as` in order, `Session.append`'s `head`: `appendHead` folded from `none`. -/
+def chainOf (as : Array Append) : Option ByteArray :=
+  as.foldl (fun h a => some (appendHead h a.first a.count a.root)) none
+
+/-- An accepted session has every window, each with at least `min_passes` passes (`close` refuses fewer with `few`). -/
+def AcceptedMinPasses : Prop :=
+  ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
+    s.outcome = some "accepted" →
+      s.windows.size = params.windows ∧ ∀ t (ht : t < s.windows.size), params.minPasses ≤ s.windows[t].roots.size
+
+/-- Every pass the verifier records is bound to one plan, one step and one append chain head, and the steps, read in
+the order the passes arrive (window, then pass), strictly increase and stay below `2^64` (`receive`'s `step`). -/
+def PassesStepped : Prop :=
+  ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
+      (∀ t (ht : t < s.windows.size), s.windows[t].plans.size = s.windows[t].roots.size ∧
+        s.windows[t].steps.size = s.windows[t].roots.size ∧ s.windows[t].heads.size = s.windows[t].roots.size ∧
+        ∀ i (hi : i < s.windows[t].steps.size), s.windows[t].steps[i] < Session.STEP_LIMIT) ∧
+      ∀ t₁ t₂ (h₁ : t₁ < s.windows.size) (h₂ : t₂ < s.windows.size) i₁ i₂ (hi₁ : i₁ < s.windows[t₁].steps.size)
+        (hi₂ : i₂ < s.windows[t₂].steps.size), (t₁ < t₂ ∨ (t₁ = t₂ ∧ i₁ < i₂)) →
+          s.windows[t₁].steps[i₁] < s.windows[t₂].steps[i₂]
+
+/-- Every pass the verifier records reads distinct blocks of the store as it stands (registered and appended). -/
+def PassesReadDistinct : Prop :=
+  ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
+      ∀ t (ht : t < s.windows.size) i (hi : i < s.windows[t].plans.size),
+        ReadsDistinct s.windows[t].plans[i] s.extent
+
+/-- The appends are the store's next indices in order (append `k` starts where the one before it ends, the first at
+`N`, and the store ends at the last), and append `k` answered with the `k`-th append coin, each drawn once. -/
+def AppendsInOrder : Prop :=
+  ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
+      s.extent = reg.blocks + (s.appends.toList.map (·.count)).sum ∧
+      (∀ k (hk : k < s.appends.size), s.appends[k].first = reg.blocks + ((s.appends.toList.take k).map (·.count)).sum) ∧
+      s.appends.size ≤ appendCoins.size ∧ ∀ k (hk : k < s.appends.size), s.appends[k].coin = appendCoins[k]!
+
+/-- The session's head is the chain over its appends, and every pass is bound to the chain over the appends received
+before it, a prefix of them: so its seed, `seed(challenge, i, chained(previous root, head))`, binds them. -/
+def PassesChained : Prop :=
+  ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
+      s.head = chainOf s.appends ∧
+      ∀ t (ht : t < s.windows.size) i (hi : i < s.windows[t].heads.size),
+        ∃ m, m ≤ s.appends.size ∧ s.windows[t].heads[i] = chainOf (s.appends.extract 0 m)
+
 end Properties.RemoteAudit
