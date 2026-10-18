@@ -82,7 +82,7 @@ def _put(path: Path, doc: Mapping[str, Any]) -> None:
 def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
     """Write Build dir ``d``'s `CENSUS` and `KV_ROWS` for its request Program ``program`` (``digest``), the census read back when
     one beside it already names the Program; a Program with no KV a memory map lays out gets the reason in place of its rows."""
-    d, t0 = Path(d), time.perf_counter()
+    d = Path(d)
     c = _read(d / CENSUS, digest)
     if c is None:
         c = MM.census_of(program, digest)
@@ -93,7 +93,7 @@ def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
     except ValueError as e:
         doc["refused"] = str(e)
     _put(d / KV_ROWS, doc)
-    return {"census": c["digest"], "kv_rows": "refused" not in doc, "seconds": round(time.perf_counter() - t0, 2)}
+    return {"census": c["digest"], "kv_rows": "refused" not in doc}
 
 
 def of_build(d: str | Path, digest: str) -> MM.Rows:
