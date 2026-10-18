@@ -44,7 +44,12 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
-from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, row_leaf, sha512_row_prefix
+from verity.ml.commitments.rowleaf import (
+    ROLE_X,
+    SCHEMA_HM96_SHA512_ROW,
+    row_leaf,
+    sha512_row_prefix,
+)
 
 from .hiding import HidingLeaves
 from .serving_rows import SCHEME, _copy_update, _Frame, _part, chacha20
@@ -110,7 +115,7 @@ def fold_range(domain: CommitmentDomain, digests: Sequence[bytes], leaves: int, 
     """The root over the leaf digests of ranks ``[lo, lo + len(digests))`` and their boundary siblings (`StepRecord.range_path`'s shape)."""
     if not 0 <= lo < lo + len(digests) <= leaves or len(path) != merkle_depth(leaves):
         raise ValueError("the range or its path does not fit the tree")
-    level, lo, hi = list(digests), lo, lo + len(digests)
+    level, hi = list(digests), lo + len(digests)
     for d, (left, right) in enumerate(path):
         if (left is not None) != bool(lo % 2) or (right is not None) != bool(hi % 2):
             raise ValueError(f"level {d}: siblings do not match the range [{lo}, {hi})")
@@ -232,6 +237,8 @@ class StepRecord:
     levels: Sequence[Any]                        # (nodes, 64) per level, leaves first; [] for an empty step or a public-only record
     key: bytes | None = field(default=None, repr=False)
     root: bytes = b""
+    #: without a key, the salts a store kept (a slim dump's): ``salt_of(lo, hi)``
+    salt_of: Callable[[int, int], bytes] | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if not self.root:
@@ -242,9 +249,11 @@ class StepRecord:
         return step_domain(self.binding, self.leaves)
 
     def salt(self, lo: int, hi: int) -> bytes:
-        if self.key is None:
-            raise ValueError(f"step {self.step}: a public record holds no salts")
-        return salts(self.key, self.step, lo, hi)
+        if self.key is not None:
+            return salts(self.key, self.step, lo, hi)
+        if self.salt_of is not None:
+            return self.salt_of(lo, hi)
+        raise ValueError(f"step {self.step}: a public record holds no salts")
 
     def path(self, index: int) -> tuple[bytes, ...]:
         return tuple(bytes(self.levels[d][(index >> d) ^ 1]) for d in range(len(self.levels) - 1))

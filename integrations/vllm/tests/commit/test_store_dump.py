@@ -133,3 +133,107 @@ def test_touching_a_read_records_what_the_verified_read_opens():
     with SD.touched(com) as touched:
         SD.touch(com, reads + [(0, "no.such.member", 0, 4)])
     assert touched.ranges == verified.ranges and touched.nodes == verified.nodes and touched.ranges[2]
+
+
+# --- a run of record (`commit.record`) ------------------------------------------------------------------------------------
+
+def test_a_dumped_run_of_record_reads_every_member_against_its_sha512_root(tmp_path):
+    com, rc = commit_steps(STEPS, of_record=True)
+    assert len(rc.run_root) == 64 and rc.run_root == com.record.root
+    SD.dump(com, rc, tmp_path)
+    store, run = SD.load(tmp_path)
+    assert run.run_root == rc.run_root and run.record.root == rc.run_root and store.record is run.record
+    want, got = _reads(OC.OpenedReader(com, rc)), _reads(OC.OpenedReader(store, run))
+    assert got == want and all(v for v in got.values())
+    doc = (tmp_path / "store.json").read_text()
+    assert com.record.steps[0].key.hex() not in doc, "the salt key is a file of its own, not in the store's document"
+
+
+def test_a_flipped_byte_of_a_dumped_run_of_record_does_not_verify(tmp_path):
+    com, rc = commit_steps(STEPS, of_record=True)
+    SD.dump(com, rc, tmp_path)
+    raw = tmp_path / "raw" / "s0.bin"
+    b = bytearray(raw.read_bytes())
+    b[1300] ^= 1
+    raw.write_bytes(bytes(b))
+    rd = OC.OpenedReader(*SD.load(tmp_path))
+    assert rd(0, "model.embed_tokens", 0, 64) == (bytes(range(256)) * 5)[:64]
+    with pytest.raises(OV.OpeningNotVerified, match="qkv_proj"):
+        rd(0, "model.layers.0.self_attn.qkv_proj", 0, 100)
+
+
+def test_a_dumped_run_of_record_with_another_salt_key_or_node_verifies_nothing(tmp_path):
+    com, rc = commit_steps(STEPS, of_record=True)
+    SD.dump(com, rc, tmp_path)
+    (tmp_path / "record" / "salt_key").write_bytes(bytes(32))
+    with pytest.raises(OV.OpeningNotVerified):
+        OC.OpenedReader(*SD.load(tmp_path))(1, "runner.sampler", 0, 4)
+    SD.dump(com, rc, tmp_path)
+    lv = tmp_path / "record" / "s0.bin"
+    b = bytearray(lv.read_bytes())
+    b[64 * 1] ^= 1                                                   # leaf 1 of step 0's record tree: leaf 0's sibling
+    lv.write_bytes(bytes(b))
+    store, run = SD.load(tmp_path)
+    with pytest.raises(OV.OpeningNotVerified):
+        OC.OpenedReader(store, run)(0, "model.embed_tokens", 0, com.chunk)
+
+
+def test_a_dumped_record_must_be_the_runs_root_of_record(tmp_path):
+    import json
+    com, rc = commit_steps(STEPS, of_record=True)
+    SD.dump(com, rc, tmp_path)
+    doc = json.loads((tmp_path / "store.json").read_text())
+    doc["run_root"] = bytes(64).hex()
+    (tmp_path / "store.json").write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="not the run's root of record"):
+        SD.load(tmp_path)
+    del doc["record"]
+    (tmp_path / "store.json").write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="64-byte run root with no record"):
+        SD.load(tmp_path)
+
+
+def test_a_slim_dump_of_a_run_of_record_holds_only_the_opened_nodes_and_salts(tmp_path):
+    com, rc = commit_steps(STEPS, of_record=True)
+    with SD.touched(com) as t:
+        want = OC.OpenedReader(com, rc)(0, "model.layers.0.self_attn.qkv_proj", 10, 20)
+    assert t.record_nodes[0] and t.record_salts[0] and not t.nodes[0], "a run of record opens the record's tree, not vllm-v1's"
+    SD.dump(com, rc, tmp_path / "slim", touched=t)
+    assert not (tmp_path / "slim" / "record" / "salt_key").exists()
+    store, run = SD.load(tmp_path / "slim")
+    rd = OC.OpenedReader(store, run)
+    assert rd(0, "model.layers.0.self_attn.qkv_proj", 10, 20) == want == b"\x07" * 10
+    assert rd(2, "model.layers.0.mlp.down_proj", 0, 100) is None
+    full, frun = SD.load(_full(com, rc, tmp_path))
+    with SD.touched(full) as t2:
+        OC.OpenedReader(full, frun)(1, "runner.sampler", 0, 4)
+    SD.dump(full, frun, tmp_path / "slim2", touched=t2)
+    assert OC.OpenedReader(*SD.load(tmp_path / "slim2"))(1, "runner.sampler", 0, 4) == b"\x01\x02\x03\x04"
+
+
+def test_a_slim_dumped_record_refuses_a_salt_it_did_not_keep(tmp_path):
+    com, rc = commit_steps(STEPS, of_record=True)
+    with SD.touched(com) as t:
+        OC.OpenedReader(com, rc)(1, "runner.sampler", 0, 4)
+    SD.dump(com, rc, tmp_path, touched=t)
+    store, _run = SD.load(tmp_path)
+    with pytest.raises(KeyError, match="salts of leaves"):
+        store.record.steps[2].salt(0, 1)
+
+
+def test_touching_a_run_of_record_records_what_the_verified_read_opens():
+    com, rc = commit_steps(STEPS, of_record=True)
+    reads = [(0, "model.layers.0.self_attn.qkv_proj", 10, 20), (2, "model.layers.0.mlp.down_proj", 900, 2500)]
+    with SD.touched(com) as verified:
+        rd = OC.OpenedReader(com, rc)
+        for r in reads:
+            rd(*r)
+    with SD.touched(com) as touched:
+        SD.touch(com, reads)
+    assert (touched.ranges, touched.record_nodes, touched.record_salts) == (verified.ranges, verified.record_nodes, verified.record_salts)
+    assert com.record.steps[0].__class__.__name__ == "StepRecord", "touched() restores the committer's record"
+
+
+def _full(com, rc, tmp_path):
+    SD.dump(com, rc, tmp_path / "full")
+    return tmp_path / "full"
