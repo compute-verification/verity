@@ -16,7 +16,8 @@ committed word of `A · F` in `r` multiply-adds instead of `C`, `k · r / C` a c
 * `test_every_scheme_is_scoped`: every registered scheme is in scope or excluded with its reason, so a new scheme can't
   enter the registry with the conjecture silently claimed for it;
 * `test_every_compile_scheme_is_scoped`: the same for the compile pass's registry (`circuit.compile.SCHEMES`, with its
-  built-in schemes imported), where the compile pass is on the tree, so an unclassified EPS1 scheme fails it;
+  built-in schemes imported, as the tree registers it: read in a fresh interpreter, without the compile pass's test
+  stand-ins), so an unclassified EPS1 scheme fails it;
 * `test_compile_schemes_fill_their_noise_space`: H1 (`eps1-sm120-h1fx1`, `circuit.h1tile`) is in scope through its
   coin × coin blocks, the dither bit `b` on each entry of `X = A + b` against the coin bit `c` and the keyed word `U` of
   `W' = B + c + U`; read off `h1tile.noise`, its noise fills its noise space, where the scheme is registered;
@@ -39,9 +40,13 @@ The rank is checked at `k = 64`, where the noise's derivation is the same as at 
 entry)."""
 from __future__ import annotations
 
+import functools
 import hashlib
 import importlib
 import importlib.util
+import json
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -117,15 +122,18 @@ def tile_noise(name: str, salt: bytes) -> list[int]:
     return [v for row in ops.x for v in row[:K]] + [v for col in ops.y for v in col[:K]]
 
 
-def compile_registry() -> dict | None:
-    """The compile pass's registry (`circuit.compile.SCHEMES`) with its built-in schemes imported, or `None` on a tree
-    without the compile pass."""
+@functools.cache
+def compile_registry() -> frozenset[str] | None:
+    """The names the tree registers in the compile pass's registry (`circuit.compile.SCHEMES` once its `BUILTIN` modules
+    are imported), or `None` on a tree without the compile pass. Read in a fresh interpreter: the compile pass's own tests
+    register stand-in schemes (`compile-test-*`) into the registry of whatever process imports them."""
     if importlib.util.find_spec(f"{CIRCUIT}.compile") is None:
         return None
-    C = importlib.import_module(f"{CIRCUIT}.compile")
-    for m in C.BUILTIN:
-        importlib.import_module(f"{CIRCUIT}.{m}")
-    return dict(C.SCHEMES)
+    code = (f"import importlib, json; C = importlib.import_module('{CIRCUIT}.compile'); "
+            f"[importlib.import_module('{CIRCUIT}.' + m) for m in C.BUILTIN]; print(json.dumps(sorted(C.SCHEMES)))")
+    r = subprocess.run([sys.executable, "-P", "-c", code], capture_output=True, text=True)
+    assert r.returncode == 0, f"reading circuit.compile.SCHEMES failed:\n{r.stderr}"
+    return frozenset(json.loads(r.stdout))
 
 
 def signed8(u: int) -> int:
