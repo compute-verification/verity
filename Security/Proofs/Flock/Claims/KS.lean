@@ -456,5 +456,8 @@ accepting runs whose live outcomes decode to that collide in their logs (`FlockD
 (`ZkAlign`: `FlockDeploy.KS.ZkSlotAlign`, `FlockDeploy.KS.zkForkAlign_of_slot`, `FlockDeploy.KS.zk_KS_of_slot`), since
 pushing a table's answer does not change a fork (`FlockSoundness.Discharge.ZkLink.forkC_pushStrat`). A masked rep
 meets each cap's slot after a count fixed by the statement and the schedule (`RepDistZ`:
-`FlockSoundness.Discharge.ZkLink.dist_lockRepZ`), plain's past level 0's lane rounds and extra draws. `τ` has no such
-split: the dead branches' `τ` opening `(0, default)` opens under some commitments. -/
+`FlockSoundness.Discharge.ZkLink.dist_lockRepZ`), plain's past level 0's lane rounds and extra draws. The reps after
+it in the session are not: a rep whose opening rejects skips Ligerito (`restZC`, `PendL.reject`), so rep 1 and the
+later tables start after fewer coins on that run, where `advRSZ`'s event, which does not read acceptance, can still
+hold. `τ` has no such split either: the dead branches' `τ` opening `(0, default)` opens under some commitments, and a
+rep's own rejected opening brings its `τ` early. -/
