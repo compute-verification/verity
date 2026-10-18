@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import random
 import shutil
 import stat
@@ -896,3 +897,29 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
         op = json.loads((out / "opening.json").read_text())
         assert SC.check(params, rec, draw, t, (out / "pub.bin").read_bytes(), op) is None, t
     assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not os.environ.get("SZ_PARITY_E2E"),
+                    reason="SZ_PARITY_E2E unset: the parity needs the flock/Lean builds and a served window on the node")
+def test_fan_out_verdicts_match_the_serial_loop(tmp_path):
+    """served_zk/job.sh's parallel fan-out over the drawn units (SZ_JOBS=4) gives the same verdicts as the serial loop
+    (SZ_JOBS=1): the same drawn units (pinned ε, δ, calls and coin state) and the same open/Lean/control/filler/foreign/
+    shape/replay checks, each still refused or accepted as before.  Opt in with SZ_PARITY_E2E on a node that has the served
+    window ($WORK/passes/$SERVED_RUN) and the flock/Lean builds ($HZ_CACHE); it runs the whole pipeline twice over a tiny
+    window (ε=1/8, δ=1/2, K'=6), a few minutes each.  The realistic-parameter audits run this fan-out at scale."""
+    root = Path(__file__).resolve().parents[3]
+    base = {**os.environ, "HZ_JOB": "benchmarks/pouw/served_zk/job.sh", "SZ_EPS": "1/8", "SZ_DELTA": "1/2",
+            "SZ_CALL_LIST": os.environ.get("SZ_CALL_LIST", "77 225"), "SERVED_RUN": os.environ["SERVED_RUN"],
+            "HZ_MEM_GB": os.environ.get("HZ_MEM_GB", "120")}
+    checks = {}
+    for jobs in ("1", "4"):
+        rundir = tmp_path / f"jobs{jobs}"
+        (rundir / "out").mkdir(parents=True)
+        r = subprocess.run(["bash", "benchmarks/pouw/hidden_zk/job.sh"], cwd=root, text=True, capture_output=True,
+                           timeout=3600, env={**base, "SZ_JOBS": jobs, "RESEARCH_RUN_DIR": str(rundir)})
+        summary = rundir / "out" / "summary.json"
+        assert r.returncode == 0 and summary.is_file(), f"SZ_JOBS={jobs} failed:\n{r.stdout[-3000:]}\n{r.stderr[-2000:]}"
+        checks[jobs] = {k: v["verdict"] for k, v in json.loads(summary.read_text())["checks"].items()}
+    assert checks["1"] == checks["4"], f"the fan-out's verdicts differ from the serial loop's: {checks}"
+    assert checks["1"] and all(v == "ACCEPT" for k, v in checks["1"].items() if k.startswith(("open-u", "lean-u")))
