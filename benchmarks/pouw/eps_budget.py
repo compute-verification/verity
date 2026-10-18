@@ -21,22 +21,25 @@ products and honest seconds, with γ (`products`, `parts`, `summary`, `skip_tabl
 vector work that only the served output needs is priced in CHECKED-STRIP's tensor–scalar model (`TS_EPS`, `pv_ts`), and
 `pv_block_table` prices P·V's block size for the designs whose P·V is `pv`. The peel's P·V is priced at BC-KERNEL r2's
 measured kernel (apv_l7qs): its tail a strip product, its sums and its served epilogue. Under the floor credit
-(Corollary D3, SPEC §2.9; `floor_skip`) ε_skip is the skippable work at its model price over the floor program's bound
-B_♭, and honest's time above those prices is γ's. A design's ε_skip (`design_skip`) is the most over the models,
-contexts and phases, under the floor credit for a design with a ♭ price (`floor_mma`); the registry's `[skip]` is that
-number (test_eps_budget holds them equal).
+(Corollary D3, SPEC §2.9; `floor_skip`) ε_skip is the skippable work at its device's issue-model price over the floor
+program's bound B_♭, with ♭ priced on the device's own Π (`prices`), and honest's time above those prices is γ's. A
+design's ε_skip (`design_skip`) is the most over the models, contexts and phases under the floor credit, on sm_120 and
+on every device of the machine model (`device_table`); each registry's `[skip]` is that number (test_eps_budget holds
+them equal).
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import itertools
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
-from verity_machine_model.eps import PRODUCTS, Design, design, designs
+from verity_machine_model.eps import PRODUCTS, Design, design, designs, honest, machine, setup
+from verity_machine_model.model import DATA, device, devices
 
 L = 32                      # transcript stride and the low-rank noise's rank
 CONTEXTS = (2048, 8192, 32768)
@@ -85,6 +88,7 @@ RATES = {
     # them goes to γ, which the measured prices above still feed
     "c_tail_pv": 1.57 * 21.47 / 4096,   # a strip product: BC-KERNEL r2's issue model, 1.57 mainloop MACs at apv's issue
                                         # bound (JI3n_0, 21.47 a MMA); a served-checked cheater pays its ¼, the 4th IMMA
+    "apv_tail_macs": 1.57,   # the same mainloop MACs a strip product, on a device with no apv kernel at ♭'s price a MAC
     "c_vsum": 35 / 32,       # an entry: vsum's 35 per-thread instructions an entry (BC-KERNEL r2), a warp's a cycle
     "c_apv_serve": 4.4 / 128,  # a cell: the served f's 4.4 warp instructions a 128-cell tile
     "t_quant": 0.56e-12,     # s an element, plain activation quantizer (COMMIT-GPU r5: +23 ms at 8 x 4K, 40.8 G elements)
@@ -317,6 +321,7 @@ def ts_best(hon: tuple, cheat: tuple, routes: list) -> tuple[float, float]:
     return ts_time(*hon), float(np.max([a * mm + b * ops for a, b in TS_FACETS], axis=0).min())
 
 
+@functools.lru_cache(maxsize=None)
 def pv_ts(name: str, ctx: int, block: int, sink: bool = True, fold: float = TS_FOLD,
           x: float = X_BITSLICED) -> tuple[float, float]:
     """pv's P V in a prefill of ctx tokens with P in blocks of `block` keys (0: one block): (ε_skip with the served
@@ -390,52 +395,119 @@ def decode_dram(name: str, ctx: int, rates: dict = RATES) -> float:
     return max(decode_step(name, ctx, rates)["step"] - gemm, 0) / gemm
 
 
-#: The floor program ♭'s time a ♭ MMA (an IMMA16832's 128 words), SMSP-cycles at f_max, by design: `machine-model eps
-#: --credit floor --operands floor --vector VF3q-16` with per-form classes (#2268 at b25b37579), on co-dither's machine
-#: terms (φ_del 1/39, duo, L = 32) for H1 and dither-two-sided's (0.20) for Dither-2S
-#: (note:20261017T0320Z-draft-eps1-calc Round 6). A design with a price here (`floor_mma`) quotes ε_skip under the floor
-#: credit (`floor_skip`); the rest by honest time.
-FLOOR_MMA = {"dither-c-peel": 19.049, "dither-2s": 19.183}
 #: ♭'s committed words a transcript product, by leaf where it isn't one: cohalf's QKᵀ commits 5 words for every 4
 FLOOR_WORDS = {"cohalf": 1.25}
+#: Adopted P·V's tail stage a 128-cell tile at L = 32 (66 strip products a cell), warp instructions by class, BC-KERNEL
+#: r2's exact ncu counts on sm_120 (checked_strip's APV_TAIL_OPS): its 4 IMMAs (the 4th, 64·S_diag, only the served
+#: output needs), the 256·Y1 combine's 4 IMADs and the other 11.5 (LDGs, NOPs, an LDSM, control), priced as ALU's.
+APV_TAIL = {"IMMA": 4, "IMAD": 4.0, "ALU": 11.5}
+#: mma.sync m16n8k32's census class: sm_120, sm_80 and sm_89 name it IMMA16832, sm_90 and sm_100 IMMA16832_S8
+IMMA16832 = ("IMMA16832", "IMMA16832_S8")
+#: The TS model's cheater SMSP-cycles a transcript MMA (4096 MACs) of a checked leaf's component (`ts_tile`): co32c
+#: does every MMA and folds every word (4·TS_FOLD warp instructions a MMA's 128 words); cohalf at k = 128 does 4
+#: transcript and 2 strip MMAs and folds 5 word groups. TS_EPS of it is the TS model's gap between honest and the
+#: cheater: that many vector warp instructions where JI3e_0 binds (co32c; cohalf's gap also holds sm_120's bit-sliced
+#: routes, more than its 2k/n residue-sum adds). A vector warp instruction in a mix of pipes is one SMSP-cycle on every
+#: device's issue row, so the gap is each device's price of that work.
+TS_CHEAT = {"co32c": ts_time(1, 4 * TS_FOLD), "cohalf": ts_time(6, 5 * 4 * TS_FOLD) / 4}
 
 
-def floor_mma(d: Design) -> float | None:
-    """♭'s price a MMA for `d`: its own, or its nearest base's while the noise is the same. Such a variant has the same
-    words and skippable work and only adds machine work (a filler), so its base's price under-counts its B_♭."""
-    while d.name not in FLOOR_MMA and d.base and design(d.base).noise == d.noise:
-        d = design(d.base)
-    return FLOOR_MMA.get(d.name)
+@dataclass(frozen=True)
+class Prices:
+    """A design's floor-credit prices on a device's Π, SMSP-cycles: ♭ a 4096-MAC MMA, and adopted P·V's tail a strip
+    product as Π prices BC-KERNEL r2's instruction counts (APV_TAIL), whole and without the 4th IMMA."""
+    vector: str
+    mma: float
+    tail: float
+    tail_checked: float
 
 
-def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES) -> tuple[float, dict, dict]:
-    """Corollary D3's prefill ε_skip pieces (SPEC §2.9, note:20261017T0324Z-draft-eps1-spec), SMSP-cycles a token-layer:
-    (♭'s committed words, the skippable work n^s_♭ by component with every served output free, the same with P·V's
-    served output checked). The words are `floor_mma` a ♭ MMA on the transcript products (k a word, QKᵀ at FLOOR_WORDS,
-    P·V on the exact causal triangle); each skippable piece is at its model price: the peel's tail (`c_tail_pv`, ¼ of it
-    the 4th IMMA a served-checked cheater pays), its sums (`c_vsum`) and served epilogue (`c_apv_serve`), and a TS
-    leaf's `TS_EPS` share of ♭'s component. B_♭ is the words plus the reading's n^s_♭; the non-GEMM kernels are left
-    out of it, as D3's n_♭ leaves them."""
+def priced(d: Design, data: Path = DATA) -> Design:
+    """The design whose ♭ and L price `d`'s ε_skip: its nearest base while the base has the same noise and an L at
+    least d's. Such a variant adds machine work (dither-2s-fill's filler) or halves L (co-dither-l16), so its base's
+    ε_skip is the larger: ♭ only grows with the variant's work, and a strip's share doesn't grow as L halves."""
+    while d.base and (b := design(d.base, data)).noise == d.noise and b.L >= d.L:
+        d = b
+    return d
+
+
+@functools.lru_cache(maxsize=None)
+def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
+    """`name`'s prices on `data`'s device at `vector` (its current vector by default), as `priced` names. ♭ is
+    `machine-model eps --credit floor --operands floor`'s credited program, a committed word's time × 4096 / L: the
+    tensor route at the noise's φ_del, the fold, the fillers and the baseline program, with no overhead (SPEC §0.7a)."""
+    d = priced(design(name, data), data)
+    pi = machine(vector, data)
+    imma = next(k for k in IMMA16832 if k in pi.c)
+    tile = 128 * 2 * (32 + 1)
+    four = {(imma if k == "IMMA" else k): v for k, v in APV_TAIL.items()}
+    top = lambda n: max(pi.load(n).values())
+    return Prices(pi.vector, setup(d, pi, data, "floor", "floor").baseline.T * 4096 / d.L, top(four) / tile,
+                  top({**four, imma: APV_TAIL["IMMA"] - 1}) / tile)
+
+
+def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path = DATA, vector: str = "",
+               phase: str = "prefill") -> tuple[float, dict, dict]:
+    """Corollary D3's ε_skip pieces (SPEC §2.9, note:20261017T0324Z-draft-eps1-spec), SMSP-cycles a token-layer on
+    `data`'s device: (♭'s committed words, the skippable work n^s_♭ by component with every served output free, the
+    same with P·V's served output checked). The words are `prices` ♭ a MMA on the transcript products (k a word, QKᵀ at
+    FLOOR_WORDS, P·V on the exact causal triangle in prefill, ctx keys in decode); a clean product's words are ♭'s too.
+    Each skippable piece is the device's issue model's price of that work:
+
+    - the peel's tail, a strip product at its mainloop MACs' price (`c_tail_pv`, apv's measured issue bound on sm_120;
+      `apv_tail_macs` of ♭'s MACs elsewhere) or at Π's price of its instructions (`prices`), whichever is more; ¼ of
+      the mainloop part and the 4th IMMA a served-checked cheater pays. Its sums (`c_vsum`) and served epilogue
+      (`c_apv_serve`) are vector instructions at one an issue cycle;
+    - a one-sided strip, its 2L executed products at ♭'s price a MAC;
+    - a TS leaf's skippable vector work, prefill only: TS_EPS of TS_CHEAT (co32c, cohalf), and pv's gap `pv_ts` at
+      16 cycles a plain MMA times its γ.
+
+    Off sm_120 every count is sm_120's for the same kernel source. B_♭ is the words plus the reading's n^s_♭; the
+    non-GEMM kernels are left out of it, as D3's n_♭ leaves them. Decode's ♭ is compute alone (its DRAM-bound time is
+    longer), an upper bound on ε_skip there."""
     s, r = MODELS[name], rates
-    keys = (ctx + 1) / 2
-    products_ = {"linears": sum(k * n for _, k, n in s.linears), "lm_head": s.vocab / s.layers / ctx * s.h,
-                 "QKᵀ": s.heads * keys * s.d * FLOOR_WORDS.get(d.noise["qk"], 1.0), "P·V": s.heads * s.d * keys}
-    price = floor_mma(d)
-    if price is None:
-        raise ValueError(f"{d.name} has no ♭ price: add it to FLOOR_MMA")
-    flat = {c: v * price / 4096 for c, v in products_.items()}
+    p = prices(d.name, data, vector)
+    L_ = priced(d, data).L
+    keys = (ctx + 1) / 2 if phase == "prefill" else ctx
+    lm_head = s.vocab / s.layers / (ctx if phase == "prefill" else 1)
+    outs = {"linears": sum(n for _, _, n in s.linears), "lm_head": lm_head, "QKᵀ": s.heads * keys, "P·V": s.heads * s.d}
+    products_ = {"linears": sum(k * n for _, k, n in s.linears), "lm_head": outs["lm_head"] * s.h,
+                 "QKᵀ": outs["QKᵀ"] * s.d * FLOOR_WORDS.get(d.noise["qk"], 1.0), "P·V": outs["P·V"] * keys}
+    flat = {c: v * p.mma / 4096 for c, v in products_.items()}
+    main = r["c_tail_pv"] if data == DATA else r["apv_tail_macs"] * p.mma / 4096
+    tail, tail_chk = max(main, p.tail), max(0.75 * main, p.tail_checked)
     free, chk = {}, {}
-    for comp, b in flat.items():
+    for comp in flat:
         leaf = d.noise[COMP[comp]]
         if comp == "P·V" and leaf == "peel":
-            tail, sums = s.heads * s.d * 2 * (L + 1) * r["c_tail_pv"], r["c_vsum"] * s.kv * s.d
-            free[comp], chk[comp] = tail + sums + r["c_apv_serve"] * s.heads * s.d, 0.75 * tail + sums
-        elif leaf in TS_EPS:
-            e = TS_EPS[leaf][name][comp]
-            free[comp] = chk[comp] = b * e / (1 + e)
-        elif leaf != "two-sided":
+            strip, sums = outs[comp] * 2 * (L_ + 1), r["c_vsum"] * s.kv * s.d
+            free[comp] = strip * tail + sums + r["c_apv_serve"] * s.heads * s.d
+            chk[comp] = strip * tail_chk + sums
+        elif leaf == "one-sided":
+            free[comp] = chk[comp] = outs[comp] * 2 * L_ * p.mma / 4096
+        elif leaf in TS_CHEAT or leaf == "pv":
+            if phase != "prefill":
+                continue
+            if leaf == "pv":
+                e, g = pv_ts(name, ctx, 0)
+                gap = 16 * g * e / (1 + e)
+            elif comp not in TS_EPS[leaf][name]:
+                raise ValueError(f"no tensor–scalar price for {leaf} on {comp}: add it to TS_EPS")
+            else:
+                gap = TS_EPS[leaf][name][comp] * TS_CHEAT[leaf]
+            free[comp] = chk[comp] = products_[comp] * gap / 4096
+        elif leaf not in ("two-sided", "clean"):
             raise ValueError(f"no floor price for {leaf} on {comp}: add it to floor_skip")
     return sum(flat.values()), free, chk
+
+
+def floor_eps(name: str, ctx: int, phase: str, d: Design, rates: dict = RATES, checked: bool = False,
+              data: Path = DATA, vector: str = "") -> tuple[float, dict]:
+    """Corollary D3's ε_skip = n^s_♭ / B_♭ (`floor_skip`), with each component's piece over the same B_♭."""
+    words, free, chk = floor_skip(name, ctx, d, rates, data, vector, phase)
+    pieces = chk if checked else free
+    bound = words + sum(pieces.values())
+    return sum(pieces.values()) / bound, {c: v / bound for c, v in pieces.items()}
 
 
 @dataclass
@@ -444,19 +516,19 @@ class Summary:
     ctx: int
     phase: str
     design: str
-    eps_mac: float
+    eps_mac: float | None        # None off sm_120, where `parts`' honest-time model isn't the device's
     eps_time: float
-    gamma: float
+    gamma: float | None
     rows: list
     credit: str = "honest"
 
 
 def summary(name: str, ctx: int, phase: str, d: Design, rates: dict = RATES, block: int = 0,
-            checked: bool = False, credit: str = "honest") -> Summary:
+            checked: bool = False, credit: str = "honest", vector: str = "") -> Summary:
     """ε_skip = skippable / (honest - skippable), by int8 products and by honest seconds, whole and per component (each
-    component's skippable share over the same whole denominator); γ = honest / plain int8 time. With credit "floor"
-    (prefill), eps_time is Corollary D3's instead: the skippable work at its model price over ♭'s bound B_♭
-    (`floor_skip`); honest's time above it is γ's."""
+    component's skippable share over the same whole denominator); γ = honest / plain int8 time. With credit "floor",
+    eps_time is Corollary D3's instead (`floor_eps` on sm_120 at `vector`): the skippable work at its model price over
+    ♭'s bound B_♭; honest's time above it is γ's."""
     ps = parts(name, ctx, phase, d.noise, rates, block, checked)
     macs, secs = sum(p.macs for p in ps), sum(p.seconds for p in ps)
     skip_m, skip_t = sum(p.macs_skip for p in ps), sum(p.seconds_skip for p in ps)
@@ -465,14 +537,9 @@ def summary(name: str, ctx: int, phase: str, d: Design, rates: dict = RATES, blo
             for p in ps]
     eps_time = skip_t / (secs - skip_t)
     if credit == "floor":
-        if phase != "prefill":
-            raise ValueError("the floor credit is priced for prefill only: decode's ♭ is DRAM-bound (`decode_dram`)")
-        words, free, chk = floor_skip(name, ctx, d, rates)
-        pieces = chk if checked else free
-        bound = words + sum(pieces.values())
+        eps_time, split = floor_eps(name, ctx, phase, d, rates, checked, vector=vector)
         for row in rows:
-            row["eps_time"] = pieces.get(row["component"], 0.0) / bound
-        eps_time = sum(pieces.values()) / bound
+            row["eps_time"] = split.get(row["component"], 0.0)
     if phase == "decode":
         gemm = sum(p.seconds for p in ps if p.component in COMP)
         gamma = decode_gamma(name, ctx, gemm, rates)
@@ -488,14 +555,18 @@ def decode_gamma(name: str, ctx: int, gemm: float, rates: dict = RATES) -> float
     return (st["step"] + max(gemm - st["gemm_dram"], 0) + rates["decode_commit"] * st["step"]) / st["step"]
 
 
-def design_skip(d: Design, rates: dict = RATES) -> Summary:
-    """A design's ε_skip, the number its `[skip]` in the registry records: the most, over MODELS, CONTEXTS and PHASES,
-    of the whole-model ε_skip (P in one block, every served output free), with the cell it is at. A design with a ♭
-    price (`floor_mma`) is quoted under the floor credit in prefill and by its products' compute in decode; the rest by
-    honest time."""
-    credit = "honest" if floor_mma(d) is None else "floor"
-    return max((summary(m, c, ph, d, rates, credit=credit if ph == "prefill" else "honest")
-                for m in MODELS for c in CONTEXTS for ph in PHASES), key=lambda q: q.eps_time)
+def design_skip(d: Design, rates: dict = RATES, data: Path = DATA, vector: str = "") -> Summary:
+    """A design's ε_skip, the number its `[skip]` in the registry (sm_120's, or `data`'s device's) records: the most,
+    over MODELS, CONTEXTS and PHASES, of Corollary D3's whole-model ε_skip (`floor_eps`: P in one block, every served
+    output free, ♭ on the device's current vector unless `vector`), with the cell it is at. Off sm_120 the cell has no
+    MAC-weighted figure or γ: `parts`' honest-time model is sm_120's."""
+    if data == DATA:
+        cells = (summary(m, c, ph, d, rates, credit="floor", vector=vector) for m in MODELS for c in CONTEXTS
+                 for ph in PHASES)
+    else:
+        cells = (Summary(m, c, ph, d.name, None, floor_eps(m, c, ph, d, rates, data=data, vector=vector)[0], None, [],
+                         "floor") for m in MODELS for c in CONTEXTS for ph in PHASES)
+    return max(cells, key=lambda q: q.eps_time)
 
 
 def skip_table(ds: list[Design], rates: dict = RATES) -> str:
@@ -531,14 +602,35 @@ def component_table(name: str, ctx: int, phase: str, ds: list[Design], rates: di
 
 def design_table(skips: dict[str, Summary], ds: list[Design]) -> str:
     lines = ["Each design's ε_skip (`design_skip`, its registry `[skip]`): the most over the models, contexts and "
-             "phases, under the floor credit where the design has a ♭ price, else by honest time", "",
+             "phases under the floor credit (Corollary D3)", "",
              "| design | noise (linears, lm_head, QKᵀ, P·V) | ε_skip | credit | at | γ there |",
              "|---|---|---:|---|---|---:|"]
     for d in ds:
         q = skips[d.name]
         noise = ", ".join(d.noise[p] for p in PRODUCTS)
-        lines.append(f"| {d.name} ({d.title}) | {noise} | {100 * q.eps_time:.3g}% | {q.credit} | {q.model} "
+        lines.append(f"| {d.name} ({d.title}) | {noise} | {100 * q.eps_time:#.3g}% | {q.credit} | {q.model} "
                      f"{q.ctx // 1024}K {q.phase} | {q.gamma:.2f} |")
+    return "\n".join(lines)
+
+
+def device_table(data: Path = DATA, vector: str = "", rates: dict = RATES) -> str:
+    """Each of a device's designs under the floor credit: ♭'s price and prefill's ε_skip at every model and context,
+    served free / served checked, beside `design_skip`'s number (decode included) and its cell."""
+    ds = [design(n, data) for n in designs(data)]
+    vec = prices(ds[0].name, data, vector).vector
+    cells = [(m, c) for m in MODELS for c in CONTEXTS]
+    lines = [f"{data.name if data != DATA else 'sm_120'} on {vec}: ε_skip under the floor credit, prefill, served free "
+             "/ served checked", "",
+             "| design | L | ♭ a MMA | " + " | ".join(f"{m.removeprefix('llama-3.1-')} {c // 1024}K" for m, c in cells)
+             + " | ε_skip | at |", "|---|---:|---:|" + "---:|" * len(cells) + "---:|---|"]
+    for d in ds:
+        row = [f"{100 * floor_eps(m, c, 'prefill', d, rates, k, data, vector)[0]:.3f}" for m, c in cells
+               for k in (False, True)]
+        q = design_skip(d, rates, data, vector)
+        at = f"{q.model.removeprefix('llama-3.1-')} {q.ctx // 1024}K {q.phase}"
+        lines.append(f"| {d.name} | {d.L} | {prices(d.name, data, vector).mma:.3f} | "
+                     + " | ".join(f"{a} / {b}" for a, b in zip(row[::2], row[1::2]))
+                     + f" | {100 * q.eps_time:#.3g}% | {at} |")
     return "\n".join(lines)
 
 
@@ -550,7 +642,8 @@ def main(argv: list[str] | None = None) -> int:
     ds = [design(n) for n in designs()]
     skips = {d.name: design_skip(d) for d in ds}
     pvs = pv_block_points()
-    text = "\n".join([design_table(skips, ds), "", skip_table(ds), "",
+    text = "\n".join([design_table(skips, ds), "", *(device_table(device(n)) + "\n" for n in devices()),
+                      skip_table(ds), "",
                       *(component_table(m, c, ph, ds) + "\n" for m in MODELS for c in (2048, 32768) for ph in PHASES),
                       pv_block_table(pvs), "",
                       "Decode's zero-weight instance saves, on DRAM, this multiple of its transcripts' compute: "
