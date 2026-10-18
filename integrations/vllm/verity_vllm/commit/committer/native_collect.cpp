@@ -50,6 +50,10 @@ extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, co
 extern "C" int verity_rows_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
                                          const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
                                          uint8_t* hs, uint64_t max_blocks, cudaStream_t st);
+extern "C" int verity_rows_leaves_form();
+extern "C" int verity_rows_leaves_sf_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
+                                            const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
+                                            uint8_t* hs, uint8_t* scratch, uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_out, int level, uint64_t first_index,
                                         uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
@@ -1796,12 +1800,24 @@ struct StepHasher {
       leaves = at::empty({m, 64}, opt);
       bc = want_bc ? at::empty({m, 128}, opt) : at::empty({0}, opt);
       hs = want_h ? at::empty({m, 64}, opt) : at::empty({0}, opt);
-      int lrc = rs.leaves_fn(rs.params.data(), reinterpret_cast<const uint8_t*>(rows.data_ptr()), static_cast<uint64_t>(stride),
-                                          static_cast<uint64_t>(n_rows), salts.defined() ? reinterpret_cast<const uint8_t*>(salts.data_ptr()) : nullptr,
-                                          reinterpret_cast<const uint8_t*>(tn.data_ptr()), static_cast<uint64_t>(first), static_cast<uint64_t>(m),
-                                          static_cast<uint64_t>(n_total), reinterpret_cast<uint8_t*>(leaves.data_ptr()),
-                                          want_bc ? reinterpret_cast<uint8_t*>(bc.data_ptr()) : nullptr, want_h ? reinterpret_cast<uint8_t*>(hs.data_ptr()) : nullptr,
-                                          static_cast<uint64_t>(rs.max_blocks), st);
+      const auto* rows_p = reinterpret_cast<const uint8_t*>(rows.data_ptr());
+      const uint8_t* salts_p = salts.defined() ? reinterpret_cast<const uint8_t*>(salts.data_ptr()) : nullptr;
+      const auto* tn_p = reinterpret_cast<const uint8_t*>(tn.data_ptr());
+      auto* out_p = reinterpret_cast<uint8_t*>(leaves.data_ptr());
+      uint8_t* bc_p = want_bc ? reinterpret_cast<uint8_t*>(bc.data_ptr()) : nullptr;
+      uint8_t* hs_p = want_h ? reinterpret_cast<uint8_t*>(hs.data_ptr()) : nullptr;
+      int lrc;
+      if (rs.hash == "sha512") {
+        const int form = verity_rows_leaves_form();
+        if (form < 0) throw std::runtime_error("rows_leaves: VERITY_ROWS_FORM is fused, split or unset");
+        at::Tensor sf = at::empty({form == 2 ? m * 192 : 0}, opt);
+        lrc = verity_rows_leaves_sf_launch(rs.params.data(), rows_p, static_cast<uint64_t>(stride), static_cast<uint64_t>(n_rows), salts_p, tn_p,
+                                           static_cast<uint64_t>(first), static_cast<uint64_t>(m), static_cast<uint64_t>(n_total), out_p, bc_p, hs_p,
+                                           form == 2 ? reinterpret_cast<uint8_t*>(sf.data_ptr()) : nullptr, static_cast<uint64_t>(rs.max_blocks), st);
+      } else {
+        lrc = rs.leaves_fn(rs.params.data(), rows_p, static_cast<uint64_t>(stride), static_cast<uint64_t>(n_rows), salts_p, tn_p, static_cast<uint64_t>(first),
+                           static_cast<uint64_t>(m), static_cast<uint64_t>(n_total), out_p, bc_p, hs_p, static_cast<uint64_t>(rs.max_blocks), st);
+      }
       if (lrc != 0) throw std::runtime_error(std::string("rows_leaves: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
     }
     return py::make_tuple(leaves, bc, hs);

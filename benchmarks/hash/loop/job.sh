@@ -6,7 +6,8 @@
 # Env: ROW (the iteration), HYP (its hypothesis), ARMS (default below), REPS (3), WORK, VERITY_BENCH_VENV,
 # NATIVE_COLLECT_BUILD, HF_HOME (the node's, as iterate.sh's tables set them), LEASE (gpu-lease's flags, default "--max-min 75"),
 # CHECK_TESTS (the committer's GPU byte-identity tests and check_b3.py, the BLAKE3 arm against the hash lane's hm96 reference, run in
-# the lease before timing; a failure is exit 7 and no timing; empty skips them).
+# the lease before timing, once in each rows-sha512 leaf form, VERITY_ROWS_FORM=fused and split; a failure is exit 7 and no timing;
+# empty skips them).  The timed arms run the device's own form (native_rows.cu, verity_rows_leaves_form).
 # The BLAKE3 sibling arm (served-commit-rows-blake3, arms.py) runs through a copy of circuits' prof.sh with its one case line added;
 # prof.sh itself is circuits' and is not edited.
 # On a dc VM the GPU is held only for the timed bench; a queued job (vy-nebius-2) already runs inside the queue's lease, which
@@ -27,9 +28,11 @@ grep -q "hash.loop.arms" "$PROF" || { echo "prof.sh has no served-commit-rows ca
 export PROF
 bench='
   if [ -n "$CHECK_TESTS" ]; then
-    OUT="$OUT/check" TESTS="$CHECK_TESTS" bash benchmarks/served_commit/gpu_tests.sh > "$OUT/check.log" 2>&1
-    tail -3 "$OUT/check.log"
-    grep -q "^pytest rc 0$" "$OUT/check.log" || { echo "byte-identity tests failed ($OUT/check.log): not timed"; exit 7; }
+    for form in fused split; do
+      VERITY_ROWS_FORM=$form OUT="$OUT/check-$form" TESTS="$CHECK_TESTS" bash benchmarks/served_commit/gpu_tests.sh > "$OUT/check-$form.log" 2>&1
+      tail -3 "$OUT/check-$form.log"
+      grep -q "^pytest rc 0$" "$OUT/check-$form.log" || { echo "byte-identity tests failed in the $form form ($OUT/check-$form.log): not timed"; exit 7; }
+    done
   fi
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.before.csv"
