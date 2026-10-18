@@ -27,7 +27,7 @@ from verity.ml.commitments.merkle import MerkleTree, merkle_depth
 FIELD = dict(BYTES=4096, ROWS=16, LEAF=16, P=40, DR=2, DP=3, DV=3)
 P512 = SimpleNamespace(N=512, C=569, K=2, MASKED=0, **FIELD)
 P1024 = SimpleNamespace(N=1024, C=105, K=3, MASKED=1, **FIELD)
-TOY = SimpleNamespace(N=32, C=5, K=2, MASKED=0, BYTES=64, ROWS=2, LEAF=3, P=6, DR=1, DP=2, DV=1)
+TOY = SimpleNamespace(N=32, C=5, K=2, MASKED=0, BYTES=64, ROWS=2, LEAF=3, P=20, DR=1, DP=2, DV=1)
 TOY_MASKED = SimpleNamespace(**{**vars(TOY), "MASKED": 1})
 #: (part, its statics) -> (And, Xor, Not) gates of its traced circuit
 PARTS = {
@@ -166,7 +166,7 @@ def _cases(rng: random.Random, S, encode) -> list[tuple[str, SimpleNamespace, di
                  "another receipt of the leaf altered": (dict(a, leaf=_flip(a["leaf"], 32 * ((k + 1) % S_.LEAF))),
                                                          "receipt-path" if S_.LEAF > 1 else "receipt-path"),
                  "receipt leaf's salt": (dict(a, salts=_flip(a["salts"], 5)), "receipt-path"),
-                 "receipt path": (dict(a, rpath=_flip(a["rpath"], 7)), "receipt-path"),
+                 "receipt path": (dict(a, rpath=_flip(a["rpath"], 7)), "receipt-path" if a["rdepth"][0] else None),
                  "receipt tree deeper than its path": (dict(a, rdepth=[S.DR + 1]), "receipt-path"),
                  "plan without j at pos": (dict(a, plan=_flip(a["plan"], o.pos)), "receipt-path"),
                  "payload's salt": (dict(a, salts=_flip(a["salts"], 96 + 5)), "payload-path"),
@@ -177,7 +177,7 @@ def _cases(rng: random.Random, S, encode) -> list[tuple[str, SimpleNamespace, di
         if bound:
             cases["wrong coin"] = (dict(a, coin=_flip(a["coin"], 7)), "codec")
             cases["unbound"] = (dict(a, bound=[0]), "codec")
-            cases["value path"] = (dict(a, vpath=_flip(a["vpath"], 3)), "payload-path")
+            cases["value path"] = (dict(a, vpath=_flip(a["vpath"], 3)), "payload-path" if a["vdepth"][0] else None)
             cases["value at another position"] = (dict(a, vrank=[a["vrank"][0] ^ 1, 0]), "payload-path")
         else:
             cases["bound"] = (dict(a, bound=[1]), "codec")
