@@ -22,8 +22,10 @@ from dataclasses import dataclass, field
 from typing import Callable, Literal
 
 #: where an input's bits come from: the outside world (requests), the datacenter itself (telemetry, clocks, sensors),
-#: or a registered artifact whose digest is declared before the run (weights, an image)
-Source = Literal["outside", "inside", "registered"]
+#: a registered artifact whose digest is declared before the run (weights, an image), or a trusted device's fresh bulk
+#: data that only its block receives (the challenger's noise): verifier coins, which force the work to happen where they
+#: arrive
+Source = Literal["outside", "inside", "registered", "trusted"]
 
 #: word operations and the Boolean gates each costs at width w (ripple-carry add, schoolbook multiply)
 BASIS: dict[str, Callable[[int], int]] = {
@@ -42,7 +44,7 @@ BASIS: dict[str, Callable[[int], int]] = {
 class Input:
     """An input: `bits` bits the circuit doesn't determine. Every input is charged: the accounting layer counts each
     input's bits as information entering the computation, unless its `source` is `registered` (its bytes are fixed by a
-    digest declared before the run)."""
+    digest declared before the run) or `trusted` (a trusted device's fresh data: the verifier's coins)."""
 
     bits: int
     source: Source = "outside"

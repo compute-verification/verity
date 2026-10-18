@@ -5,7 +5,8 @@ declarations (the circuit, the occupancy profile, the sync set, each challenge's
 capacity or names a device as the place something happened: that is the physical layer's job. Its output is a list of
 claims about the prover *system*, each a fact a proof would establish:
 
-- `Computed`: the committed values are the circuit's evaluation (here by re-execution; in Verity, sampled proofs at ε).
+- `Computed`: the committed values are the circuit's evaluation (here by re-execution; in Verity, sampled proofs at ε
+  and δ).
 - `Carried`: a boundary link-window carried the committed crossings and nothing else, so its only freedom was timing
   advice, at most `bits`.
 - `Entered`: an input's bits entered the computation.
@@ -21,7 +22,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from .binding import crossings, occupancy
+from .binding import occupancy, traffic
 from .logical import commit
 from .observe import Trace, _digest
 from .time import Interval
@@ -29,8 +30,13 @@ from .time import Interval
 
 @dataclass(frozen=True)
 class Computed:
-    gates: int
+    """The committed values are the circuit's evaluation: `work` units of it (here Boolean gates; PoUW's are MACs at
+    window.py's grid), all but a share `epsilon` of it right, except with probability `delta`, within `window`."""
+
+    work: float
     epsilon: float = 0.0
+    delta: float = 0.0
+    window: Interval | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +81,7 @@ class Held:
     bits: float
     at: Interval
     epsilon: float = 0.0
+    delta: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -86,6 +93,8 @@ class Read:
     window: Interval
     bits: float
     credited: float
+    epsilon: float = 0.0
+    delta: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -110,37 +119,37 @@ def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: i
     else:
         out.append(Computed(c.boolean_size))
     expected: dict[tuple[tuple[str, str], int], list[tuple[int, int]]] = {}
-    boundary = {(l.a, l.b) for l in p.datacenter.boundary}
-    for x in crossings(p):
-        for l in x.path:
-            if (l.a, l.b) in boundary:
-                w = p.tick(x.value) // trace.bucket // trace.window
-                expected.setdefault(((l.a, l.b), w), []).append((x.value.id, reference[x.value.id]))
+    for hop, row in traffic(p, trace.frame_bits, trace.bucket, trace.window).items():
+        for b, slot in row.items():
+            expected.setdefault((hop, b // trace.window), []).extend((v.id, reference[v.id]) for v in slot.values)
     if profiles > 1:
         out.append(Scheduled(profiles, math.log2(profiles)))
     horizon = max((b for row in profile.values() for b in row), default=0) // trace.window + 1
     have = {(r.link, r.window) for r in trace.records}
-    for link in sorted(boundary):
+    for link in sorted(profile):
         for w in range(horizon):
             if (link, w) not in have:
                 out.append(Refused(f"link {link} window {w}", "no record: the certifier was down or its record was withheld"))
     declared_streams = {s.name: s for s in p.streams}
     for r in trace.records:
+        where = f"link {r.link} window {r.window}"
         declared = tuple(profile.get(r.link, {}).get(r.window * trace.window + t, 0) for t in range(trace.window))
+        problems = []
         if r.counts != declared:
-            out.append(Refused(f"link {r.link} window {r.window}", "occupancy differs from the declared profile"))
-        elif r.digest != _digest(expected.get((r.link, r.window), [])):
-            out.append(Refused(f"link {r.link} window {r.window}", "a frame is not a committed crossing"))
-        else:
-            out.append(Carried(r.link, r.window, math.log2(syncs)))
-            for name, n, ok in r.streams:
-                if not declared_streams[name].registered:
-                    out.append(Emitted(name, r.link, r.window, n * trace.frame_bits))
-                elif not ok:
-                    out.append(Refused(f"stream {name} on {r.link} window {r.window}", "its bytes differ from the registered digest"))
+            problems.append(Refused(where, "occupancy differs from the declared profile"))
+        if r.digest != _digest(expected.get((r.link, r.window), [])):
+            problems.append(Refused(where, "a frame is not a committed crossing"))
+        problems += [Refused(f"stream {name} on {r.link} window {r.window}", "its bytes differ from the registered digest")
+                     for name, _, ok in r.streams if declared_streams[name].registered and not ok]
+        if problems:
+            out += problems
+            continue
+        out.append(Carried(r.link, r.window, math.log2(syncs)))
+        out += [Emitted(name, r.link, r.window, n * trace.frame_bits)
+                for name, n, _ in r.streams if not declared_streams[name].registered]
     for v in c.inputs:
         spec = c.gates[v.id].input
-        if spec.source != "registered":
+        if spec.source not in ("registered", "trusted"):
             out.append(Entered(v.name, spec.bits, spec.source))
     stores = {s.name: s for s in trace.stores}
     for r in trace.challenges:

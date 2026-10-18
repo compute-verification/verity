@@ -109,12 +109,14 @@ def place(circuit: Circuit, datacenter: Datacenter, where: dict[str, str], ticks
 @dataclass(frozen=True)
 class Crossing:
     """Value `value` leaves `src` (a device of one block) for `dst` (a device of another) along `path`, a list of links
-    whose first and last cross the two blocks' boundaries."""
+    whose first and last cross the two blocks' boundaries. `at` is the tick it is read at: the reader's (Lean's `readOn`),
+    when it must have arrived."""
 
     value: Value
     src: str
     dst: str
     path: tuple[Link, ...]
+    at: int = 0
 
 
 def route(datacenter: Datacenter, src: str, dst: str) -> tuple[Link, ...]:
@@ -142,35 +144,71 @@ def route(datacenter: Datacenter, src: str, dst: str) -> tuple[Link, ...]:
     return tuple(reversed(path))
 
 
+def hops(path: tuple[Link, ...], src: str) -> list[tuple[str, str]]:
+    """The links of `path` as directed hops (from, to), walking from `src`: a certifier keeps each direction's grid
+    apart, egress from ingress."""
+    out, here = [], src
+    for l in path:
+        there = l.b if l.a == here else l.a
+        out.append((here, there))
+        here = there
+    return out
+
+
 def crossings(p: Placement) -> list[Crossing]:
-    """Every (value, reader block) pair where a value is read in a block other than its own, once each."""
-    out, seen = [], set()
-    reads = [(j, p.leaf[i]) for i, g in enumerate(p.circuit.gates) for j in g.operands]
-    reads += [(j, p.deliver) for j in p.circuit.outputs] if p.deliver else []
-    for j, dst in reads:
+    """Every (value, reader device) pair where a value is read in a block other than its own, once each, at its first
+    read."""
+    first: dict[tuple[int, str], int] = {}
+    for i, g in enumerate(p.circuit.gates):
+        for j in g.operands:
+            key = (j, p.leaf[i])
+            first[key] = min(first.get(key, p.tick(i)), p.tick(i))
+    if p.deliver:
+        for j in p.circuit.outputs:
+            ticks = p.ticks[p.deliver]
+            first.setdefault((j, p.deliver), ticks[min(p.step[j] + 1, len(ticks) - 1)])
+    out = []
+    for (j, dst), at in first.items():
         src = p.leaf[j]
-        if p.datacenter.block_of(src) is not p.datacenter.block_of(dst) and (j, dst) not in seen:
-            seen.add((j, dst))
-            out.append(Crossing(p.circuit.value(j), src, dst, route(p.datacenter, src, dst)))
+        if p.datacenter.block_of(src) is not p.datacenter.block_of(dst):
+            out.append(Crossing(p.circuit.value(j), src, dst, route(p.datacenter, src, dst), at))
+    return out
+
+
+@dataclass
+class Slot:
+    """What an honest run puts on one directed boundary link in one bucket: committed crossings, packed together into
+    frames, and frames of declared streams."""
+
+    values: list[Value] = field(default_factory=list)
+    streams: dict[str, int] = field(default_factory=dict)
+
+    def frames(self, frame_bits: int) -> int:
+        return -(-sum(v.bits for v in self.values) // frame_bits) + sum(self.streams.values())
+
+
+def traffic(p: Placement, frame_bits: int, bucket: int, window: int) -> dict[tuple[str, str], dict[int, Slot]]:
+    """The honest run's traffic on each directed boundary link (from, to), bucket by bucket: each crossing in the
+    bucket of its read tick, each stream's frames at the first bucket of each of its windows."""
+    boundary = {frozenset((l.a, l.b)) for l in p.datacenter.boundary}
+    out: dict[tuple[str, str], dict[int, Slot]] = {}
+
+    def slot(hop: tuple[str, str], b: int) -> Slot | None:
+        return out.setdefault(hop, {}).setdefault(b, Slot()) if frozenset(hop) in boundary else None
+
+    for x in crossings(p):
+        for hop in hops(x.path, x.src):
+            if (s := slot(hop, x.at // bucket)) is not None:
+                s.values.append(x.value)
+    for o in p.streams:
+        for w in range(o.windows):
+            for hop in hops(route(p.datacenter, o.src, o.dst), o.src):
+                if (s := slot(hop, w * window)) is not None:
+                    s.streams[o.name] = -(-o.bits // frame_bits)
     return out
 
 
 def occupancy(p: Placement, frame_bits: int, bucket: int, window: int = 8) -> dict[tuple[str, str], dict[int, int]]:
-    """The public occupancy profile: for each boundary link (by its ends) and each bucket of `bucket` ticks, the number
-    of frames of `frame_bits` the honest run puts on it. A crossing's frames leave at its value's tick; a stream's at the
-    first bucket of each of its windows."""
-    boundary = {(l.a, l.b) for l in p.datacenter.boundary}
-    out: dict[tuple[str, str], dict[int, int]] = {}
-
-    def put(path: tuple[Link, ...], b: int, frames: int) -> None:
-        for l in path:
-            if (l.a, l.b) in boundary:
-                row = out.setdefault((l.a, l.b), {})
-                row[b] = row.get(b, 0) + frames
-
-    for x in crossings(p):
-        put(x.path, p.tick(x.value) // bucket, -(-x.value.bits // frame_bits))
-    for o in p.streams:
-        for w in range(o.windows):
-            put(route(p.datacenter, o.src, o.dst), w * window, -(-o.bits // frame_bits))
-    return out
+    """The public occupancy profile: for each directed boundary link and each bucket of `bucket` ticks, the number of
+    frames of `frame_bits` the honest run puts on it (`traffic`, packed)."""
+    return {hop: {b: s.frames(frame_bits) for b, s in row.items()} for hop, row in traffic(p, frame_bits, bucket, window).items()}

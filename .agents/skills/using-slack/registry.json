@@ -227,6 +227,7 @@
         "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
+        "benchmarks/datacenter/",
         "benchmarks/network_sim/"
       ],
       "branch_suffixes": [
