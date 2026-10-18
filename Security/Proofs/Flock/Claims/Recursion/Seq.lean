@@ -220,7 +220,7 @@ theorem zkmalRx (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [No
       u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
         RF (xsOf IV b x j u) (wit w (pre t₀) (u.take (IV.k (xIOf x))) j))
     (he0 : ∀ j x, 0 ≤ eB j x) (hg : ∀ x, 0 ≤ g x) :
-    Claims.ZKMal.ZKmalRx (fun x => (T₀.iter 0 NB ΩB (nS x)).N) (fun x => (T₀.iter 0 NB ΩB (nS x)).Ω) H (kM IV b)
+    Claims.ZKmalRx (fun x => (T₀.iter 0 NB ΩB (nS x)).N) (fun x => (T₀.iter 0 NB ΩB (nS x)).Ω) H (kM IV b)
       (fun w x => (refPM IV b pre wit PS w).comap (Layout.flatten T₀ 0 NB ΩB (nS x))) RA (simM IV b T₀ NB ΩB S₀ SO)
       (fun x => ε₀ x + ∑ j ∈ Finset.range (nS x), eB j x) (fun x => nS x * g x) := fun x =>
   zkAt IV b H T₀ pre wit PS RA RF S₀ SO x (ε₀ x) (g x) (fun j => eB j x) (h₀ x) (hS x) (hW x) (fun j _ => he0 j x)

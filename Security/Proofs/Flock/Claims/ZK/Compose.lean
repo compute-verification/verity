@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.ZK.Interact
 import Proofs.Flock.Claims.ZK.Rewind
+import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Sequential composition of `ZKmalR`
@@ -917,16 +918,10 @@ theorem zkmalR_iter_const {WA WB NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fint
 
 /-! ## Statement-indexed tapes -/
 
-/-- **`ZKmalR` on statement-indexed tapes** (proposed for `Definitions/`): the prover at `x` runs on `N x × Ω x`, so
-its tape may grow with the statement. `ZKmalR` is its constant case (`zkmalRx_const`). -/
-def ZKmalRx {W : Type} (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
-    [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x)) (R : Rel W)
-    (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
-  ∀ x, ZKmalAt H (k x) (fun w => P w x) (R x) x (S.C x) (S.prog x) (εzk x) (γ x)
-
-theorem zkmalRx_const {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
-    (k : Msg → ℕ) (P : W → Prover (N × Ω)) (R : Rel W) (S : Simulator) (εzk γ : Msg → ℝ) :
-    ZKmalRx (fun _ => N) (fun _ => Ω) H k (fun w _ => P w) R S εzk γ ↔ ZKmalR H k P R S εzk γ :=
+theorem zkmalRx_iff_at {W : Type} (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]
+    [∀ x, Fintype (Ω x)] [∀ x, Nonempty (Ω x)] (H : Msg → Msg) (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x))
+    (R : Rel W) (S : Simulator) (εzk γ : Msg → ℝ) :
+    ZKmalRx N Ω H k P R S εzk γ ↔ ∀ x, ZKmalAt H (k x) (fun w => P w x) (R x) x (S.C x) (S.prog x) (εzk x) (γ x) :=
   Iff.rfl
 
 /-- The simulator of `m x + 1` sessions at each `x`, on `x`'s tapes. -/

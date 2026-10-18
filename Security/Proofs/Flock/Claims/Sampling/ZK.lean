@@ -1,11 +1,12 @@
 import Proofs.Flock.Claims.ZK.Hypotheses
 import Proofs.Flock.Claims.Sampling.Deployed
+import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Sampling's zero knowledge from a committed-coin protocol
 
-`Claims.Sampling.ZK` is `ZKmalR` at the sampled verifier's rounds, of the masked record's reference prover and at its
-simulator, on the honest pairs whose published leaf layer is `l x`, with the simulator given `l x`. Its binding term is
+`Claims.Sampling.ZK` is `ZKmalRx` at the sampled verifier's rounds, `ZKmalR` at a record masked at one tape
+(`zkmalRx_const_of`), of the masked record's reference prover and at its simulator, on the honest pairs whose published leaf layer is `l x`, with the simulator given `l x`. Its binding term is
 `γ` times `Fork` of the sampled prover's own two runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled
 protocol itself, with every coin it draws (the selection's and each checked unit's session's) committed at its `Hello`.
 Flock's zero knowledge at each session does not compose to it: a hybrid over the sessions charges each session's `Fork`
@@ -86,7 +87,8 @@ theorem zk_mask_of_zkAt {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Non
     (hP : ∀ w x (hist : List (Msg × Msg)) ω, hist.length < D.V.k x →
       ((D.P w).next x hist (tapeOf ω)).eval H = ((P w).next x hist ω).eval H)
     (h : ZKAt H D P S εzk γ) : ZK H (D.mask N Ω tapeOf S) εzk γ :=
-  ⟨h.1, fun l => zkmalR_congr_eq (fun w x hist ω hh => (hP w x hist ω hh).symm) (h.2 l)⟩
+  ⟨h.1, fun l => (zkmalRx_const_of H D.V.k (D.mask N Ω tapeOf S).prover [] (fun _ _ => rfl) _ _ εzk γ).2
+    (zkmalR_congr_eq (fun w x hist ω hh => (hP w x hist ω hh).symm) (h.2 l))⟩
 
 /-- **Sampling's zero knowledge from a committed-coin protocol with leakage**, through `S_Flock` with `N` rewinds:
 `ZKAt` at `P = L.G.prover`, at `ε_zk = 1/(N+1) + δ_A + N·δ_B` and `γ = N`, when the sampled verifier's rounds are the
