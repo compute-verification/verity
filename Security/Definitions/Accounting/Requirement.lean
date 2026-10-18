@@ -7,18 +7,18 @@ import Definitions.Accounting.Device
 What a declared circuit `W` needs of a device's memory, read from its wiring and its schedule (the IR, never a kernel):
 the values its execution keeps live when each step begins (`live`) and the values each step reads (`reads`), in bits,
 in all, by block of the store and over a window; the live values in complete blocks, which the audit credits
-(`credited`); and when the audit's store and plans are `W`'s, block for block (`StoreMatches`, `PlanMatches`), so that
+(`credited`); and when the audit's store and plans hold `W`'s credited blocks (`StoreMatches`, `PlanMatches`), so that
 what the audit credits counts toward this requirement. Placed on devices
 (`Placement`), the execution's gates are also what PoUW credits and the bits they read from other devices
 (`region`, `ingress`, `work`; `Definitions/Accounting/Requirement/Placed.lean` makes it an actual run).
 
 A step is always an **engine step**: the engine's `s`-th step (a request's step `s` being its arrival step plus `s`),
 never a device tick. The ticks a step spans on each device are the placement's (`Placement.ticks`), and a window
-(`Window`) here is a run of engine steps, its `ticks` those steps.
+(`Window`) here is a run of engine steps (`Window.steps`), never of ticks.
 
 * **Wiring.** `W`'s values are its gates in the IR's canonical layout (`verity/ml/circuits/PROTOCOL.md` §6), each a
-  `Value<w>` leaf of `width` bits. A value is registered (a `RegisteredInput`: the weights), a run input (an `Input`: a
-  request's tokens) or a gate's output. A gate's operands are `ops` (`layout.Circuit.gate(i).operands`). The operands it
+  `Value<w>` leaf of `width` bits. A value is registered (a `RegisteredInput`: the weights), a run input (an `Input` not
+  bound by registration: a request's tokens, `inputs`) or a gate's output. A gate's operands are `ops` (`layout.Circuit.gate(i).operands`). The operands it
   uses when the circuit's values are `x` are `uses x`: all of `ops`, except that a gather uses its index and the one
   word it selects (an embedding's row), not its whole column.
 * **Execution.** A scheduled execution is the values it produces (`ran`: the executed prefix, a request's rows up to
@@ -27,8 +27,9 @@ never a device tick. The ticks a step spans on each device are the placement's (
 * **Placement.** A placed execution also says at which device each value is produced or, an input, stored (`leaf`: a
   leaf of the actual circuit's tree of locations, `Accounting.Placed`, the device, never an SM, an SMSP or a unit), and
   at which tick each device begins each engine step (`ticks`). A value is placed at the tick its device begins its step
-  (`Placement.tick`): within a step the schedule has no order, so a window of ticks whose ends begin steps on every
-  device of a location sees whole steps (`stepRegion`).
+  (`Placement.tick`): within a step the schedule has no order, so a window of ticks is bounded by the whole steps
+  (`stepRegion`) that begin inside it on every device of a location, and by those whose span covers it. A run input is
+  an input gate wherever it is placed: it arrives over a side channel, and is no device's work.
 * **Live.** A value is live when step `s` begins if it was produced before `s` (or registered) and is an operand of a
   gate the execution runs at step `s` or later: the boundary values `out(S_<s) ∩ in(S_≥s)` of
   `verity/ml/circuits/boundary.py`, for `S_<s` the gates of the steps before `s`. A value no later gate reads is not
@@ -49,14 +50,23 @@ never a device tick. The ticks a step spans on each device are the placement's (
 * **Credited.** A block is complete when step `s` begins once every value the layout places in it was produced before
   `s` (`incomplete`); a block of registered values is complete from the start. A partly written block is in no record,
   so a live value in an incomplete block (a sequence's KV page that later steps fill) is in no resident block, and the
-  audit credits only the live values in complete blocks (`credited`). For the registered values the link is an
-  equality, and for KV it is `⊆`: every resident block holds live values of `W`, but not every live value is in one.
-  The share it leaves out is a block per sequence, layer and plane when the layout fills each one's pages in turn
-  (`OneBlockEach`).
+  audit credits only the live values in complete blocks (`credited`). The link is one-sided: every block holding a
+  credited value is resident (`StoreMatches`), and every complete block a step reads is in its pass's plan
+  (`PlanMatches`), but other blocks may be resident or planned too (filler, dead or another workload's), and they hold
+  none of `W`'s credited values. The share left out is a block per sequence, layer and plane when the layout fills each
+  one's pages in turn (`OneBlockEach`).
 
-Bits, as `Device.lean` counts them: a value's bytes are its bits / 8, and the deployed store's block is `B = 32768` bits
+Bits, as `Device.lean` counts them: a value's bytes are its bits / 8, and the deployed store's block is `b = 32768` bits
 (4,096 bytes).
 -/
+
+namespace Accounting
+
+/-- **The engine steps of window `w`**: a window of the requirement is a run of engine steps, never of a device's ticks
+(`Requirement.Placement.ticks`). -/
+def Window.steps (w : Window) : Finset ℕ := Finset.Ico w.start (w.start + w.len)
+
+end Accounting
 
 namespace Accounting.Requirement
 
@@ -66,6 +76,8 @@ structure Wiring (G : Type) where
   width : G → ℕ
   /-- the registration's values (`RegisteredInput`): the weights -/
   registered : Finset G
+  /-- the run's inputs (an `Input` not bound by registration): a request's tokens, input gates wherever they're placed -/
+  inputs : Finset G
   /-- a gate's operands, the values its Definition reads; none for an input -/
   ops : G → Finset G
   /-- the operands gate `g` uses when the circuit's values are `x`: `ops g`, except a gather's index and the word it
@@ -93,8 +105,11 @@ structure Placement (L G : Type) extends Execution G where
 /-- The tick at which a value is placed: the one at which its device begins its engine step (`Accounting.Placed.t`). -/
 def Placement.tick {L G : Type} (p : Placement L G) (v : G) : ℕ := p.ticks (p.leaf v) (p.step v)
 
-/-- Each device begins its engine steps at strictly increasing ticks. -/
-def Placement.Paced {L G : Type} (p : Placement L G) : Prop := ∀ x, StrictMono (p.ticks x)
+/-- Each device of `X` begins its engine steps at strictly increasing ticks. -/
+def Placement.Paced {L G : Type} (p : Placement L G) (X : Finset L) : Prop := ∀ x ∈ X, StrictMono (p.ticks x)
+
+/-- **`W`'s wiring is topological**: a gate's operands come before it (the IR's canonical order, §6). -/
+def Wiring.Topological {G : Type} [LT G] (W : Wiring G) : Prop := ∀ g, ∀ v ∈ W.ops g, v < g
 
 variable {G : Type} [DecidableEq G]
 
@@ -130,10 +145,10 @@ def readBits (s : ℕ) : ℕ := bits W (reads W e s)
 
 /-- The bits `W` holds over the engine steps of window `w`, in bit-steps: its live bits as each step begins, summed (as
 `Schedule.held` counts bit-ticks). -/
-def held (w : Window) : ℕ := ∑ s ∈ w.ticks, liveBits W e s
+def held (w : Window) : ℕ := ∑ s ∈ w.steps, liveBits W e s
 
 /-- The bits `W` reads over the engine steps of window `w` (as `Schedule.read` counts them). -/
-def read (w : Window) : ℕ := ∑ s ∈ w.ticks, readBits W e s
+def read (w : Window) : ℕ := ∑ s ∈ w.steps, readBits W e s
 
 end Values
 
@@ -143,15 +158,15 @@ variable {L : Type} (W : Wiring G) (p : Placement L G)
 
 open Classical in
 /-- **`W`'s region** `W[X, I]` (`Accounting.Placed.region`): the gates the execution runs on the devices `X` at the
-ticks `I`, the values it produces but the registered ones. -/
+ticks `I`, the values it produces but the registered ones and the run's inputs. -/
 noncomputable def region (X : Finset L) (I : Set ℕ) : Finset G :=
-  p.ran.filter fun g => g ∉ W.registered ∧ p.leaf g ∈ X ∧ p.tick g ∈ I
+  p.ran.filter fun g => g ∉ W.registered ∧ g ∉ W.inputs ∧ p.leaf g ∈ X ∧ p.tick g ∈ I
 
 open Classical in
 /-- **`W`'s gates on `X` over the engine steps of window `w`**: those the execution runs on the devices `X` at a step of
-`w`, the region of the ticks those steps span when every device of `X` begins them together. -/
+`w`, the registered values and the run's inputs aside. -/
 noncomputable def stepRegion (X : Finset L) (w : Window) : Finset G :=
-  p.ran.filter fun g => g ∉ W.registered ∧ p.leaf g ∈ X ∧ p.step g ∈ w.ticks
+  p.ran.filter fun g => g ∉ W.registered ∧ g ∉ W.inputs ∧ p.leaf g ∈ X ∧ p.step g ∈ w.steps
 
 /-- `in(S)` (`Verity.Circuit.into`): the values outside `S` that a gate of `S` uses. -/
 def into (S : Finset G) : Finset G := S.biUnion (W.uses p.value) \ S
@@ -201,11 +216,11 @@ def readBlocks (s : ℕ) : Finset ℕ := blocks ℓ (reads W e s)
 def readIn (s j : ℕ) : ℕ := bitsIn W ℓ (reads W e s) j
 
 /-- The bits `W` reads from block `j` over the engine steps of window `w`. -/
-def readOf (w : Window) (j : ℕ) : ℕ := ∑ s ∈ w.ticks, readIn W e ℓ s j
+def readOf (w : Window) (j : ℕ) : ℕ := ∑ s ∈ w.steps, readIn W e ℓ s j
 
-/-- `ℓ` packs the values `S` into blocks of `B` bits: each lies within its block, and two in one block don't overlap. -/
-def Packs (B : ℕ) (S : Finset G) : Prop :=
-  ∀ u ∈ S, ℓ.offset u + W.width u ≤ B ∧
+/-- `ℓ` packs the values `S` into blocks of `b` bits: each lies within its block, and two in one block don't overlap. -/
+def Packs (b : ℕ) (S : Finset G) : Prop :=
+  ∀ u ∈ S, ℓ.offset u + W.width u ≤ b ∧
     ∀ v ∈ S, u ≠ v → ℓ.block u = ℓ.block v →
       ℓ.offset u + W.width u ≤ ℓ.offset v ∨ ℓ.offset v + W.width v ≤ ℓ.offset u
 
@@ -266,19 +281,19 @@ variable (W : Wiring G) (e : Execution G) (ℓ : Layout G)
 def Carries (σ : Store) (S : Finset G) : Prop :=
   ∀ v ∈ S, σ.payload (ℓ.block v) / 2 ^ ℓ.offset v % 2 ^ W.width v = e.value v
 
-/-- **The store is `W`'s when step `s` begins**: its resident blocks are the blocks of the live values the audit
-credits, block for block (no block holding none of them is resident, and every complete block holding a live value
-is), the layout packs the live values into blocks of `B` bits, and each credited value is in its block's payload. A
-registered block is resident exactly while it holds a live value; a live value in an incomplete block is in no
-resident block. -/
-def StoreMatches (σ : Store) (B s : ℕ) : Prop :=
-  σ.resident s = blocks ℓ (credited W e ℓ s) ∧ Packs W ℓ B (live W e s) ∧ Carries W e ℓ σ (credited W e ℓ s)
+/-- **The store holds `W`'s credited values when step `s` begins**: every block holding a live value the audit credits
+is resident, the layout packs the live values into blocks of `b` bits, and each credited value is in its block's
+payload. Other blocks may be resident too, and hold none of `W`'s credited values: the registered store's filler (a KV
+pool's pages, resident until a write first reaches them), a block whose values are all dead, or another workload's. A
+live value in an incomplete block is in no record, so no audit credits it. -/
+def StoreMatches (σ : Store) (b s : ℕ) : Prop :=
+  blocks ℓ (credited W e ℓ s) ⊆ σ.resident s ∧ Packs W ℓ b (live W e s) ∧ Carries W e ℓ σ (credited W e ℓ s)
 
-/-- **Step `s`'s plan is `W`'s reads**: the blocks the audit's pass bound to step `s` reads are the complete blocks `W`
-reads at step `s` (each receipted block is one `W` reads then, and every complete block `W` reads then is receipted),
-and the layout packs the values read into blocks of `B` bits. -/
-def PlanMatches (plan : Finset ℕ) (B s : ℕ) : Prop :=
-  plan = blocks ℓ (creditedReads W e ℓ s) ∧ Packs W ℓ B (reads W e s)
+/-- **Step `s`'s plan covers `W`'s reads**: the blocks the audit's pass bound to step `s` reads include every complete
+block `W` reads at step `s`, and the layout packs the values read into blocks of `b` bits. The plan may hold other blocks
+too (a deployed plan is topped up with filler reads), and those hold none of `W`'s reads. -/
+def PlanMatches (plan : Finset ℕ) (b s : ℕ) : Prop :=
+  blocks ℓ (creditedReads W e ℓ s) ⊆ plan ∧ Packs W ℓ b (reads W e s)
 
 end Link
 

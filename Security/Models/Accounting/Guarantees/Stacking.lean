@@ -29,7 +29,7 @@ contents are a circuit's values, which depend on the encodings only through the 
   Its store is one for the session, made by the same rule.
 * `StackedRequirementSketchDeployed` and `StackedRequirementRelay`: the same sessions, with the shortfall read against a
   declared circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) instead of the store: when the memory
-  map and every pass's plan are `W`'s at each step the passes are bound to (`Requirement.StoreMatches`,
+  map and every pass's plan hold `W`'s credited blocks at each step the passes are bound to (`Requirement.StoreMatches`,
   `Requirement.PlanMatches`), an accepted session read at least `(1 − γ)` of the live bits the audit credits over
   those steps (`Requirement.creditedBits`: `W`'s live values in complete blocks) and of the bits `W` reads from
   complete blocks (`Requirement.creditedReadBits`).
@@ -252,10 +252,12 @@ def StackedSessionConservationRelay : Prop :=
 requirement.** `StackedSessionConservationSketchDeployed`'s session, hypotheses and bound, with the session's shortfall
 measured against a declared circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) over a window `win`
 of engine steps. The window has at most `n·P` steps, one for each pass the session's passes are bound to (a pass names
-the step whose reads it covers, #2378). At each of its steps the memory map `mm` is `W`'s (`Requirement.StoreMatches`:
-its resident blocks are the blocks of the live values the audit credits, `W`'s live values in complete blocks, packed
-in 4 KiB tiles, each credited value in its block's payload) with at most `N` blocks resident, and the plan of the pass
-bound to it is `W`'s reads from complete blocks (`Requirement.PlanMatches`), of at most `N` blocks. The probability that
+the step whose reads it covers, #2378). At each of its steps the memory map `mm` holds `W`'s credited blocks
+(`Requirement.StoreMatches`: every block holding a live value the audit credits, `W`'s live values in complete blocks,
+is resident, the live values are packed in 4 KiB tiles, and each credited value is in its block's payload) with at most
+`N` blocks resident, and the plan of the pass bound to it covers `W`'s reads from complete blocks
+(`Requirement.PlanMatches`), of at most `N` blocks. Other blocks may be resident or planned (filler, dead values,
+another workload's), and they earn `W` nothing. The probability that
 every opening passes while the session's reads fall short of `(1 − γ)` of the credited live bits over the window's
 steps (`Requirement.creditedBits`, summed: bit-steps) or of the bits `W` reads from complete blocks over them
 (`Requirement.creditedReadBits`), at
@@ -267,21 +269,22 @@ is at most the stacked guarantee's bound:
   `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96 + (n·P)·δ`.
 
 **The reading.** The audit's shortfall is stated against the store's `n·P·N·32768` bits. When the store and the plans
-are `W`'s, `W`'s credited requirement over the bound steps is at most that, since a resident block holds at most its
-32768 bits of `W`'s credited live values (`RequirementHeld`, with no block held) and a planned block at most its bits of
-`W`'s reads (`RequirementMoved`). So an accepted session read at least `(1 − γ)` of the live bits the audit credits and
-of the bits `W` reads from complete blocks, counted in bits; `RequirementUncredited` and `RequirementUnplanned` bound
-what a block still being written leaves out. Each pass reads its own store, the plan's blocks resident going into its step, made from the coins
-before it; that its tiles are the memory map's blocks, so that the bits read are `W`'s, is the binding's
-(`remote_bandwidth`'s Replay and #2378), and is not in this game.
+hold `W`'s credited blocks, `W`'s credited requirement over the bound steps is at most that, since a resident block
+holds at most its 32768 bits of `W`'s credited live values (`RequirementHeld`, with no block held) and a planned block
+at most its bits of `W`'s reads (`RequirementMoved`). So an accepted session read at least `(1 − γ)` of the live bits
+the audit credits and of the bits `W` reads from complete blocks, counted in bits; `RequirementUncredited` and
+`RequirementUnplanned` bound what a block still being written leaves out. Each pass reads its own store, the plan's
+blocks resident going into its step, made from the coins before it; that its tiles are the memory map's blocks, so
+that the bits read are `W`'s, is the binding's (`remote_bandwidth`'s Replay and #2378), and is not in this game.
 
 **The memory map and the append coin.** With `mm`, the execution `e` and the layout `ℓ` fixed before the seed, as the
-statement takes them, which blocks are resident at each step, their indices and their order are `W`'s: frees, re-key
-indices, append order and dummy appends are no choice (a dummy block is resident but holds no live value, which
-`StoreMatches` refuses). What `StoreMatches` leaves free, the payload bits outside live values (padding, dead values)
-and the run inputs, is an append's choice, fixed when its root commits the digests and before its coin, so it pays
-for no advice. What stays outside the game is `StackedSessionConservationSketchDeployed`'s: a layout steered by
-encodings after their coins, and a node's re-registrations.
+statement takes them, which blocks are resident at each step, their indices and their order are fixed with `mm`: frees,
+re-key indices, append order and filler blocks are no choice after the seed (a filler or dead block may be resident,
+and earns `W` nothing, since `StoreMatches` credits only the blocks of credited values). What `StoreMatches` leaves
+free, the payload bits outside credited values (padding, dead values, the blocks holding none) and the run inputs, is
+an append's choice, fixed when its root commits the digests and before its coin, so it pays for no advice. What stays
+outside the game is `StackedSessionConservationSketchDeployed`'s: a layout steered by encodings after their coins, and
+a node's re-registrations.
 
 Proof: `Accounting.SecurityProofs.StackedRequirementSketchDeployed`, from
 `Accounting.SecurityProofs.StackedSessionConservationSketchDeployed`, with `W`'s credited live and read bits at most the
@@ -311,7 +314,7 @@ def StackedRequirementSketchDeployed : Prop :=
       ∀ Es, K.provenance.inputs Es ≤ 8 * Rin * life ∧
         K.provenance.gates (encodeBitsCost Gates.p1024 3 B εnum εden) Es ≤ (cρ * reads * life : ℕ)) →
     win.len ≤ n * P →
-    (∀ t ∈ win.ticks, Requirement.StoreMatches W e ℓ mm 32768 t ∧ (mm.resident t).card ≤ N ∧
+    (∀ t ∈ win.steps, Requirement.StoreMatches W e ℓ mm 32768 t ∧ (mm.resident t).card ≤ N ∧
       Requirement.PlanMatches W e ℓ (plan t) 32768 t ∧ (plan t).card ≤ N) →
     let C := 8 * Rin * life + 1024 * (cρ * reads * life) / E
     let γ := 0.0015 + RateSketch.gammaSketch N 128 ρ S L (X + C)
@@ -319,19 +322,20 @@ def StackedRequirementSketchDeployed : Prop :=
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctOn
         (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w) (x.2 w).1 (x.2 w).2.1) ∧
         ((((∑ w, (A.win w x.2).readsOn (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w)
-              (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) < (1 - γ) * (∑ t ∈ win.ticks, Requirement.creditedBits W e ℓ t : ℕ) ∨
+              (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) < (1 - γ) * (∑ t ∈ win.steps, Requirement.creditedBits W e ℓ t : ℕ) ∨
           (((∑ w, (A.win w x.2).readsOn (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w)
               (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
-            (1 - γ) * (∑ t ∈ win.ticks, Requirement.creditedReadBits W e ℓ t : ℕ)))
+            (1 - γ) * (∑ t ∈ win.steps, Requirement.creditedReadBits W e ℓ t : ℕ)))
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
 
 /-- **The stacked remote audit with relaying side sources, read against a declared circuit's requirement.**
 `StackedSessionConservationRelay`'s session, hypotheses and bound, with the session's tier reads measured against a
 declared circuit `W`'s requirement over a window `win` of at most `n·P` engine steps, as in
-`StackedRequirementSketchDeployed`: at each step the memory map `mm` is `W`'s (`Requirement.StoreMatches`, in blocks of
-`b` bits) with at most `N` blocks resident, and the plan of the pass bound to it is `W`'s reads from complete blocks
-(`Requirement.PlanMatches`), of at most `N` blocks. For every `m`, the probability that every opening passes while the
+`StackedRequirementSketchDeployed`: at each step the memory map `mm` holds `W`'s credited blocks
+(`Requirement.StoreMatches`, in blocks of `b` bits) with at most `N` blocks resident, and the plan of the pass bound to
+it covers `W`'s reads from complete blocks (`Requirement.PlanMatches`), of at most `N` blocks. For every `m`, the
+probability that every opening passes while the
 session's tier reads fall short of `(1 − γ)` of the live bits the audit credits over the window's steps
 (`Requirement.creditedBits`, summed) or of the bits `W` reads from complete blocks over them
 (`Requirement.creditedReadBits`), at
@@ -343,7 +347,8 @@ is at most the stacked relay bound:
   `(1 − d̄)^(d·n) + (1 − d_w/n)^(d·n) + n·P·G·(C(N, m)·2^(L + C)/2^(h·m) + 2^q/2^λ) + δ`.
 
 **The reading.** As in `StackedRequirementSketchDeployed`: `W`'s credited requirement over the bound steps is at most
-the store's `n·P·N·b` bits when the store and the plans are `W`'s (`RequirementHeld`, `RequirementMoved`), so an
+the store's `n·P·N·b` bits when the store and the plans hold `W`'s credited blocks (`RequirementHeld`,
+`RequirementMoved`), so an
 accepted session's tier reads are at least `(1 − γ)` of the live bits the audit credits and of the bits `W` reads from
 complete blocks. The store is one for the session, as in
 `StackedSessionConservationRelay`: blocks written during a session are planned only from the next. What
@@ -376,16 +381,16 @@ def StackedRequirementRelay : Prop :=
       ∀ Es R O, K.inputs Es R O ≤ 8 * Rin * life ∧
         K.gates (encodeBitsCost Fc k B εnum εden) Es R O ≤ (cρ * reads * life : ℕ)) →
     win.len ≤ n * P →
-    (∀ t ∈ win.ticks, Requirement.StoreMatches W e ℓ mm b t ∧ (mm.resident t).card ≤ N ∧
+    (∀ t ∈ win.steps, Requirement.StoreMatches W e ℓ mm b t ∧ (mm.resident t).card ≤ N ∧
       Requirement.PlanMatches W e ℓ (plan t) b t ∧ (plan t).card ≤ N) →
     let C := 8 * Rin * life + 8 * Fc.bytes * (cρ * reads * life) / E
     let γ := dbar + Rate.Deployed.gammaPass N b ρ S (L + C) (lam + m * b) rounds cRoot F
     pr (fun x : (Ω × (Fin T → Ca)) × (Fin n → Rate.WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (appendCoinBlocks enc choose slot x.1) (x.2 w).1) ∧
           ((((∑ w, (A.win w x.2).reads tier (appendCoinBlocks enc choose slot x.1) (x.2 w).1 : ℕ)) : ℝ) <
-              (1 - γ) * (∑ t ∈ win.ticks, Requirement.creditedBits W e ℓ t : ℕ) ∨
+              (1 - γ) * (∑ t ∈ win.steps, Requirement.creditedBits W e ℓ t : ℕ) ∨
             (((∑ w, (A.win w x.2).reads tier (appendCoinBlocks enc choose slot x.1) (x.2 w).1 : ℕ)) : ℝ) <
-              (1 - γ) * (∑ t ∈ win.ticks, Requirement.creditedReadBits W e ℓ t : ℕ)))
+              (1 - γ) * (∑ t ∈ win.steps, Requirement.creditedReadBits W e ℓ t : ℕ)))
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
         (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ (L + C) / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + δ
 

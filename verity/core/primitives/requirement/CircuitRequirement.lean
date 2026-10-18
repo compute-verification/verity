@@ -24,11 +24,10 @@ namespace CircuitRequirement
 /-- The members of `l`, each once, ascending. -/
 def distinct (l : List Nat) : List Nat := (Std.HashSet.ofList l).toList.mergeSort
 
-/-- The same members, either way round. -/
-def sameSet (a b : List Nat) : Bool :=
-  let ha := Std.HashSet.ofList a
+/-- Every member of `a` is one of `b`. -/
+def subsetOf (a b : List Nat) : Bool :=
   let hb := Std.HashSet.ofList b
-  a.all hb.contains && b.all ha.contains
+  a.all hb.contains
 
 /-- A declared circuit's wiring, one scheduled execution of it and a layout of its values, value by value. -/
 structure Instance where
@@ -36,6 +35,8 @@ structure Instance where
   width : Array Nat
   /-- the registered values (`Wiring.registered`) -/
   registered : List Nat
+  /-- the run's inputs (`Wiring.inputs`): a request's tokens, an input gate wherever it is placed -/
+  inputs : List Nat
   /-- each gate's operands (`Wiring.ops`) -/
   ops : Array (List Nat)
   /-- the operands each gate uses at this execution's values (`Wiring.uses` at `Execution.value`) -/
@@ -105,6 +106,9 @@ def ran : List Nat :=
   let reg := Std.HashSet.ofList i.registered
   (List.range i.width.size).filter fun v => reg.contains v || (i.step.getD v none).isSome
 
+/-- `Wiring.Topological`: each gate's operands come before it. -/
+def topological : Bool := (List.range i.ops.size).all fun g => (i.opsOf g).all (· < g)
+
 /-- `Execution.Follows`. -/
 def follows : Bool :=
   let reg := Std.HashSet.ofList i.registered
@@ -158,9 +162,9 @@ def apart : List Nat → Bool
   | u :: tl@(v :: _) => (decide (i.blockOf u ≠ i.blockOf v) || decide (i.endOf u ≤ i.offsetOf v)) && apart tl
   | _ => true
 
-/-- `Packs B S`: each value lies within its block of `B` bits, and two in one block don't overlap. -/
-def packs (B : Nat) (S : List Nat) : Bool :=
-  S.all (fun v => decide (i.endOf v ≤ B)) && i.apart (S.mergeSort i.before)
+/-- `Packs b S`: each value lies within its block of `b` bits, and two in one block don't overlap. -/
+def packs (b : Nat) (S : List Nat) : Bool :=
+  S.all (fun v => decide (i.endOf v ≤ b)) && i.apart (S.mergeSort i.before)
 
 /-- `Carries s S`: each value of `S` is its block's payload from its offset. -/
 def carries (s : Store) (S : List Nat) : Bool :=
@@ -185,31 +189,38 @@ def creditedReads (t : Nat) : List Nat := i.complete (i.reads t) t
 def creditedBits (t : Nat) : Nat := i.bits (i.credited t)
 def creditedReadBits (t : Nat) : Nat := i.bits (i.creditedReads t)
 
-/-- `StoreMatches s B t`. -/
-def storeMatches (s : Store) (B t : Nat) : Bool :=
+/-- `StoreMatches s b t`: the credited blocks are resident, and other blocks may be. -/
+def storeMatches (s : Store) (b t : Nat) : Bool :=
   let C := i.credited t
-  sameSet (s.resident t) (i.blocks C) && i.packs B (i.live t) && i.carries s C
+  subsetOf (i.blocks C) (s.resident t) && i.packs b (i.live t) && i.carries s C
 
-/-- `PlanMatches plan B t`. -/
-def planMatches (plan : List Nat) (B t : Nat) : Bool :=
-  sameSet plan (i.blocks (i.creditedReads t)) && i.packs B (i.reads t)
+/-- `PlanMatches plan b t`: the plan holds the complete blocks step `t` reads, and may hold others. -/
+def planMatches (plan : List Nat) (b t : Nat) : Bool :=
+  subsetOf (i.blocks (i.creditedReads t)) plan && i.packs b (i.reads t)
 
 /-- `Placement.tick`: the tick at which a value's device begins its engine step. -/
 def tick (p : Placement) (v : Nat) : Nat := p.ticksOf (p.leafOf v) (i.stepOf v)
 
-/-- `region X [lo, hi)`: the values the execution produces but the registered ones, on the devices `X` at a tick of
-`[lo, hi)`. -/
-def region (p : Placement) (X : List Nat) (lo hi : Nat) : List Nat :=
+/-- The gates the execution computes: the values it produces but the registered ones and the run's inputs. -/
+def computed : List Nat :=
   let reg := Std.HashSet.ofList i.registered
+  let inp := Std.HashSet.ofList i.inputs
+  i.ran.filter fun g => !reg.contains g && !inp.contains g
+
+/-- Whether `p` places the execution: a device for every value it produces, and a tick at its step on its device for
+every gate it computes. A placement that doesn't would read device 0 or tick 0 for it, and credit it silently. -/
+def places (p : Placement) : Bool :=
+  i.ran.all (· < p.leaf.size) && i.computed.all fun g => decide (i.stepOf g < (p.ticks.getD (p.leafOf g) #[]).size)
+
+/-- `region X [lo, hi)`: the gates the execution computes on the devices `X` at a tick of `[lo, hi)`. -/
+def region (p : Placement) (X : List Nat) (lo hi : Nat) : List Nat :=
   let xs := Std.HashSet.ofList X
-  i.ran.filter fun g => !reg.contains g && xs.contains (p.leafOf g) && decide (lo ≤ i.tick p g) && decide (i.tick p g < hi)
+  i.computed.filter fun g => xs.contains (p.leafOf g) && decide (lo ≤ i.tick p g) && decide (i.tick p g < hi)
 
 /-- `stepRegion X w`: the same at the engine steps `[start, start + len)`. -/
 def stepRegion (p : Placement) (X : List Nat) (start len : Nat) : List Nat :=
-  let reg := Std.HashSet.ofList i.registered
   let xs := Std.HashSet.ofList X
-  i.ran.filter fun g =>
-    !reg.contains g && xs.contains (p.leafOf g) && decide (start ≤ i.stepOf g) && decide (i.stepOf g < start + len)
+  i.computed.filter fun g => xs.contains (p.leafOf g) && decide (start ≤ i.stepOf g) && decide (i.stepOf g < start + len)
 
 /-- `into S`: the values outside `S` that a gate of `S` uses. -/
 def into (S : List Nat) : List Nat :=
@@ -224,8 +235,8 @@ def ingress (p : Placement) (X : List Nat) (lo hi : Nat) : Nat :=
 /-- `work π R` at the pricing `price`, a value's price read as 0 past its end. -/
 def work (price : Array Nat) (R : List Nat) : Nat := (R.map fun g => price.getD g 0).sum
 
-/-- PoUW's credits over the placed execution (`PouwWork.credits`, by `RequirementCredits`): the work of the region less
-the marked values. -/
+/-- The work of the region less the marked values: PoUW's credits over the placed execution, by `RequirementCredits`,
+for the wiring over `Fin n` with these values. -/
 def credits (p : Placement) (price : Array Nat) (X marked : List Nat) (lo hi : Nat) : Nat :=
   let m := Std.HashSet.ofList marked
   work price ((i.region p X lo hi).filter fun g => !m.contains g)

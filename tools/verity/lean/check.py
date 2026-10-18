@@ -236,6 +236,50 @@ def cores() -> int:
     return n
 
 
+#: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
+#: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
+MEM_FLOOR_GIB = 24
+#: where a machine below the floor runs it instead
+ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
+           "python3 tools/verity/lean/lean_changed.py --records {pkg}")
+
+
+def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
+    """The memory this process may use, swap included: the machine's, bounded by its cgroup's limits."""
+    info = {}
+    for line in (proc / "meminfo").read_text().splitlines():
+        k, _, v = line.partition(":")
+        info[k] = int(v.split()[0]) * 1024 if v.split() else 0
+
+    def limit(name: str) -> int | None:
+        try:
+            v = (cgroup / name).read_text().strip()
+            return None if v == "max" else int(v)
+        except (OSError, ValueError):
+            return None
+    ram, swap = info.get("MemTotal", 0), info.get("SwapTotal", 0)
+    ram = ram if (m := limit("memory.max")) is None else min(ram, m)
+    swap = swap if (s := limit("memory.swap.max")) is None else min(swap, s)
+    return (ram + swap) / 2**30
+
+
+def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
+    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor."""
+    try:
+        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", MEM_FLOOR_GIB))
+    except ValueError:
+        floor = MEM_FLOOR_GIB
+    heavy = [p for p in pkgs if (m := p / "lake-manifest.json").is_file()
+             and any(d.get("name") == "Arklib" for d in json.loads(m.read_text()).get("packages", []))]
+    if not heavy or have_gib >= floor:
+        return None
+    rel = lambda p: os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
+    return (f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB, and this machine has "
+            f"{have_gib:.0f} GiB (memory and swap, within its cgroup): run it on a node, "
+            f"`{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set VERITY_LEAN_MEM_FLOOR_GIB=0 to "
+            f"try here anyway")
+
+
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
 
@@ -1095,7 +1139,8 @@ def verifier_failures(rule: dict | None, found: dict | None) -> list[str]:
     `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
     no proof sees, so one fails unless `allow` names it (a name, or a name prefix; `module:M` for every constant of a module
     under `M`), and the entries reach the `hash` namespace only through `stop`, so the verifier hashes through its
-    parameter (Daniel's checks (a) and (b), LEAN-18)."""
+    parameter (Daniel's checks (a) and (b), LEAN-18). The walk follows `@[csimp]` replacements, so the code compiled in
+    place of a constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
     if not rule:
         return []
     if found is None:
@@ -2448,6 +2493,9 @@ def main(argv: list[str]) -> int:
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
+    if why := memory_refusal(pkgs, memory_gib()):
+        print(f"check.py: {why}", file=sys.stderr, flush=True)
+        return 2
     try:
         if a.build:
             lean_slot(a.repo.resolve())                 # its descriptor stays open, and the slot held, until this process exits

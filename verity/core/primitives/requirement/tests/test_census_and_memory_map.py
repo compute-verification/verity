@@ -20,10 +20,11 @@ decode step) from step 1 or 3.
 
 memory-map/v1 writes a block once complete, so a page's first rows are live but in no block until its last is born: the
 audit credits only the live rows in complete blocks, and `StoreMatches` and `PlanMatches` hold exactly at the steps where
-every credited row is in a block the map holds and every block it holds has a credited row. A row's group is its request,
-layer and plane, and the rows the audit doesn't credit lie in one block per group (`OneBlockEach`). With each block freed
-in the record of its rows' last read, the link holds at every step; the builder frees a block one record later, which
-21:52Z reads as one step late, so its own record fails the link until it frees at the last read.
+every credited row is in a block the map holds; a block with no credited row may be held too, and earns W nothing. A
+row's group is its request, layer and plane, and the rows the audit doesn't credit lie in one block per group
+(`OneBlockEach`). The builder frees each block in the record of its rows' last read and leaves out a block no step reads
+while it is resident (`test_a_block_its_last_read_completes_is_in_no_record`): the link holds at every step, and the
+map holds no block with every row dead, which the tests check beside the link.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ import pytest
 import verity_difftest as D
 from test_requirement_difftest import PORT, _lean, encode, rmsnorm, serve, toy_decoder
 from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import Replay, Step
+from verity.core.protocols.remote_bandwidth.memory_map import Replay
 from verity.ml.circuits import requirement as R
 from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.program import REGISTRATION, Program, is_input
@@ -85,7 +86,8 @@ def census_execution(c: dict, schedule: R.Schedule, upper: bool) -> R.Execution:
         width[g], step[g] = 0, s
         ops[g] = tuple(sorted(reads.get(k, set()) | selects.get(k, set())))
         uses[g] = frozenset(reads.get(k, set()) | (selects.get(k, set()) if upper else set()))
-    return R.Execution(width, registered, step, ops, uses, {})
+    inputs = frozenset(x for x, j in enumerate(vals["producer"]) if j < I and x not in registered and x in step)
+    return R.Execution(width, registered, step, ops, uses, {}, inputs=inputs)
 
 
 def census_case(c: dict, schedule: R.Schedule, block_bits: int, upper: bool) -> dict:
@@ -171,7 +173,8 @@ def requests() -> dict[str, Program]:
 
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": WIDE},
               target={"compute_capability": [12, 0], "num_sms": 188}, workload={"requests": []})
-    return {"r0": build_program(phi, "request", LP=4, T=5).program, "r1": build_program(phi, "request", LP=4, T=1).program}
+    return {"r0": build_program(phi, "request", LP=4, T=5).program, "r1": build_program(phi, "request", LP=4, T=1).program,
+            "r1_page": build_program(phi, "request", LP=4, T=4).program}
 
 
 def row_reads(program: Program):
@@ -191,32 +194,37 @@ def row_reads(program: Program):
     return of
 
 
-def at_last_read(steps: list[Step], last: dict[tuple[int, int], int], end: int) -> list[Step]:
-    """The builder's record with each block it writes freed in the record of its rows' last read instead (21:52Z),
-    `last[step written, slot]` from the rows themselves; a free at the session's end or later is in no record."""
-    freed: dict[int, list[int]] = {}
-    for s in steps:
-        for w in s.written:
-            if (f := last[s.step, w.slot]) < end:
-                freed.setdefault(f, []).append(w.slot)
-    written = {s.step: s.written for s in steps if s.written}
-    return [Step(t, tuple(sorted(freed.get(t, ()))), written.get(t, ())) for t in sorted(freed.keys() | written.keys())]
+def first_need(rows: dict, arrive: dict[str, int]) -> dict[str, list[int]]:
+    """Each request's pages as an engine hands them out, from page 1 in the order the session first needs them (a page's
+    first row's step, then its request), through `MM.tables` from the slot mapping they give, as the Commit reads them."""
+    from verity_vllm.commit import memory_map as MM
+
+    need = sorted((arrive[r] + rs.layers[0][0][q].born, r, q // BLOCK_SIZE)
+                  for r, rs in rows.items() for q in range(0, rs.positions, BLOCK_SIZE))
+    pages: dict[str, list[int]] = {r: [] for r in rows}
+    for page, (_, r, _) in enumerate(need, start=1):
+        pages[r].append(page)
+
+    def slots(r: str, step: int) -> list[int]:
+        return [pages[r][q // BLOCK_SIZE] * BLOCK_SIZE + q % BLOCK_SIZE
+                for q, x in enumerate(rows[r].layers[0][0]) if arrive[r] + x.born == step]
+
+    return MM.tables(rows, arrive, slots, BLOCK_SIZE)
 
 
-def map_case(requests: dict[str, Program], arrive: dict[str, int], on_time: bool) -> tuple[dict, dict]:
-    """The session's KV under the builder's record (`on_time`: with its frees recomputed by `at_last_read`) as an
-    instance, and what the test reads beside it: each row value's request, layer, plane and `MM.Row`, each value's
-    block, and the blocks the replayed map holds at each step."""
+def map_case(requests: dict[str, Program], arrive: dict[str, int]) -> tuple[dict, dict]:
+    """The session's KV under the builder's record as an instance, and what the test reads beside it: each row value's
+    request, layer, plane and `MM.Row`, each value's block, and the blocks the replayed map holds at each step."""
     from verity_vllm.commit import memory_map as MM
     from verity_vllm.store.interface import PageLayout
     from verity_vllm.store.registry import _page_blocks
 
     rows = {r: MM.rows(p) for r, p in requests.items()}
-    head, steps = MM.record(rows, arrive, _payload, bytes(range(64)), MM.Layout(block_size=BLOCK_SIZE))
+    tables = first_need(rows, arrive)
+    head, steps = MM.record(rows, arrive, _payload, bytes(range(64)), MM.Layout(block_size=BLOCK_SIZE), tables)
     end = max(arrive[r] + rs.steps for r, rs in rows.items())
     assert all(s.step < end for s in steps)
     (sb,) = {rs.row_bytes for rs in rows.values()}
-    tables = MM.tables_of(rows, arrive, BLOCK_SIZE)
     ids, lo, hi = _page_blocks(PageLayout(1 + max(max(t) for t in tables.values()), BLOCK_SIZE, sb), codec.BLOCK_BYTES)
     per_plane, region = ids.shape[1] // 2, int(ids.max()) + 1
     # each block of a page: its request, layer, plane, rows, slot, its first byte in its rows, and whether it is whole
@@ -226,9 +234,6 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], on_time: bool
              for plane, i in [divmod(c, per_plane)]
              for p0, p1 in [(q * BLOCK_SIZE + int(lo[c]), q * BLOCK_SIZE + int(hi[c]))]
              for layer, kv in enumerate(rs.layers)]
-    if on_time:
-        steps = at_last_read(steps, {(arrive[r] + max(x.born for x in got), slot): arrive[r] + max(x.last for x in got)
-                                     for r, _, _, got, slot, _, whole in pages if whole}, end)
     by, slots = {s.step: s for s in steps}, {x for s in steps for x in (*s.freed, *(w.slot for w in s.written))}
     replay, written, freed, index, held = Replay(head), {}, {}, {}, []
     for t in range(end):
@@ -275,8 +280,8 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], on_time: bool
 def _verdicts(out: dict, session: dict) -> tuple[dict[int, set[int]], dict[int, set[int]]]:
     """Read off `MM.rows` and the replayed map beside Lean: the live rows, those in complete blocks (every row of the
     block born before the step), which are Lean's credited ones, and the verdict `StoreMatches` and `PlanMatches` both
-    give, that every block the map holds has a credited row and every credited row is in one. Returns the live rows in
-    incomplete blocks and the blocks held with no credited row, by step."""
+    give, that every credited row is in a block the map holds (a block with none may be held too, and earns W nothing).
+    Returns the live rows in incomplete blocks and the blocks held with no credited row, by step."""
     rows, block, held, arrive = session["rows"], session["block"], session["held"], session["arrive"]
     born = lambda v: arrive[rows[v][0]] + rows[v][3].born  # noqa: E731
     live = lambda t: {v for v, (r, _, _, x) in rows.items() if born(v) < t <= arrive[r] + x.last}  # noqa: E731
@@ -290,7 +295,7 @@ def _verdicts(out: dict, session: dict) -> tuple[dict[int, set[int]], dict[int, 
         uncredited[t] = live(t) - credited
         dead[t] = {j for j in held[t] if not any(block[v] == j for v in credited)}
         missing = {v for v in credited if block[v] not in held[t]}
-        assert s["store_matches"] == s["plan_matches"] == (not missing and not dead[t])
+        assert s["store_matches"] == s["plan_matches"] == (not missing)
     return uncredited, dead
 
 
@@ -309,30 +314,31 @@ def _one_block_each(out: dict, session: dict, uncredited: dict[int, set[int]]) -
 
 @pytest.mark.parametrize("r1", [1, 3])
 def test_the_memory_map(r1, requests, server):
-    """With each block freed in the record of its rows' last read, the store and plans are W's at every step. r0's second
-    page (positions 4 to 7, born at steps 1 to 4) is written at step 4, so its first rows are live from step 2 in a block
-    still being written, through step 4: those are the only rows the audit doesn't credit, a block per layer and plane."""
-    value, session = map_case(requests, {"r0": 0, "r1": r1}, on_time=True)
+    """The builder's record, each block freed in the record of its rows' last read: the store and plans are W's at every
+    step, and the map holds no block with every row dead. r0's second page (positions 4 to 7, born at steps 1 to 4) is
+    written at step 4, so its first rows are live from step 2 in a block still being written, through step 4: those are
+    the only rows the audit doesn't credit, a block per layer and plane."""
+    value, session = map_case({r: requests[r] for r in ("r0", "r1")}, {"r0": 0, "r1": r1})
     out = _lean(value, server)
     assert out is not None
     uncredited, dead = _verdicts(out, session)
-    assert all(s["store_matches"] and s["plan_matches"] for s in out["steps"]) and not any(dead.values())
+    late = {t: sorted(js) for t, js in dead.items() if js}
+    assert all(s["store_matches"] and s["plan_matches"] for s in out["steps"]) and not late, late
     assert {t for t, vs in uncredited.items() if vs} == {2, 3, 4}
     assert {(session["rows"][v][0], session["rows"][v][3].born) for vs in uncredited.values() for v in vs} == \
         {("r0", 1), ("r0", 2), ("r0", 3)}
     _one_block_each(out, session, uncredited)
 
 
-@pytest.mark.parametrize("r1", [1, 3])
-def test_the_builder_frees_in_the_record_of_the_last_read(r1, requests, server):
-    """The builder's own record, held to 21:52Z: a block is freed in the record of the step of its rows' last read.
-    `verity_vllm.commit.memory_map.record` frees it one record later, so the map holds r1's first page a step with every
-    row dead (step 3, or 5 with r1 from step 3), and this fails until the builder frees at the last read."""
-    value, session = map_case(requests, {"r0": 0, "r1": r1}, on_time=False)
+def test_a_block_its_last_read_completes_is_in_no_record(requests, server):
+    """A request ending on a page boundary while another runs on: r1 (a prefill of 4 and 4 decode steps) from step 0 completes
+    its second page at its last step, 4, which also reads it last. Its rows were live only while the page was incomplete,
+    so no step reads the block while it is resident, and it is in no record (memory-map/v1's ruling of 18 Oct, 02:29Z):
+    the link holds at every step, and the map holds no block with every row dead."""
+    value, session = map_case({"r0": requests["r0"], "r1": requests["r1_page"]}, {"r0": 0, "r1": 0})
     out = _lean(value, server)
     assert out is not None
     uncredited, dead = _verdicts(out, session)
     _one_block_each(out, session, uncredited)
     late = {t: sorted(js) for t, js in dead.items() if js}
-    assert all(s["store_matches"] and s["plan_matches"] for s in out["steps"]), \
-        f"the map holds blocks with every row dead (by step: {late}): the builder frees a block one record after its last read"
+    assert all(s["store_matches"] and s["plan_matches"] for s in out["steps"]) and not late, late

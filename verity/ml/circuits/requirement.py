@@ -37,7 +37,8 @@ gates read it.
 A block is complete when step `t` begins once every value a layout places in it was produced before `t` (`incomplete`),
 and the audit credits the live values in complete blocks (`credited`, `credited_reads`): memory-map/v1 writes a block
 once, complete, so a KV block later steps fill is in no record yet. `store_matches` asks for the blocks of the credited
-values resident, block for block, which is an equality for the registered store and `⊆` for KV.
+values resident, and `plan_matches` for the complete blocks a step reads planned. Other blocks may be resident or
+planned (filler, dead or another workload's): they hold none of the credited values.
 
 `pack` places the values that are ever live in blocks of `block_bits`: the registered ones in canonical order from store
 index 0 (the registered store), then each step's newly live values in fresh blocks after them (the memory map's appends),
@@ -106,8 +107,10 @@ class Execution:
     """A circuit's wiring and one execution of it, value by value, as `Accounting.Requirement`'s `Wiring` and `Execution`
     hold them: each value's width, the registered values, the engine step of each other value the execution produces (a
     run input's is its arrival), the operands of each gate it runs (`ops`), those the gate uses (`uses`) and, a gather
-    whose selection the run's values didn't resolve, the operands it may select (`upper`, its candidates), and the run's
-    values where known. It produces the registered values and those with a step (`ran`)."""
+    whose selection the run's values didn't resolve, the operands it may select (`upper`, its candidates), the run's
+    values where known, and the run's inputs (`inputs`: an `Input` not bound by registration, a request's tokens). It
+    produces the registered values and those with a step (`ran`), and computes those but the registered values and the
+    run's inputs (`computed`)."""
 
     width: Mapping[int, int]
     registered: frozenset[int]
@@ -116,14 +119,23 @@ class Execution:
     uses: Mapping[int, frozenset[int]]
     values: Mapping[int, int]
     upper: Mapping[int, frozenset[int]] = field(default_factory=dict)
+    inputs: frozenset[int] = frozenset()
 
     @property
     def ran(self) -> frozenset[int]:
         return self.registered | frozenset(self.step)
 
+    @property
+    def computed(self) -> frozenset[int]:
+        return self.ran - self.registered - self.inputs
+
     def step_of(self, g: int) -> int:
         """A produced value's engine step; a registered one's is 0, which nothing reads (it is there before step 0)."""
         return self.step.get(g, 0)
+
+    def topological(self) -> bool:
+        """`Wiring.Topological`: each gate's operands come before it, as `RequirementHelp` needs of PoUW's help."""
+        return all(v < g for g, vs in self.ops.items() for v in vs)
 
     def follows(self) -> bool:
         """`Execution.Follows`: each gate the execution runs uses (or may select) only its operands, which it produced too,
@@ -137,26 +149,38 @@ class Execution:
 @dataclass(frozen=True)
 class Placement:
     """An execution placed on devices, as `Accounting.Requirement.Placement` holds it: each value's device (`leaf`, the
-    device, never an SM, an SMSP or a unit; 0 where unnamed), and the tick at which each device begins each engine step
-    (`ticks`, device by device; 0 past its end). A value is placed at the tick its device begins its step (`tick`), and
-    PoUW's credits and help over the placed execution are `credits` and `ingress` (`RequirementCredits`,
-    `RequirementHelp`)."""
+    device, never an SM, an SMSP or a unit), and the tick at which each device begins each engine step (`ticks`, device by
+    device). A value is placed at the tick its device begins its step (`tick`). PoUW's credits and help over the placed
+    execution, when the node runs it as placed, are `credits` and `ingress` (`RequirementCredits`, and `RequirementHelp`
+    in a topological wiring, `RequirementHelpBound` in any). A run input is an input gate wherever it is placed, in no
+    region. Each of these refuses a placement that doesn't place the execution (`places`), whose defaults would credit
+    silently."""
 
     leaf: Mapping[int, int]
     ticks: Mapping[int, Sequence[int]]
 
+    def places(self, ex: Execution) -> bool:
+        """A device for every value `ex` produces, and a tick at its step on its device for every gate it computes."""
+        return (all(v in self.leaf for v in ex.ran)
+                and all(ex.step_of(g) < len(self.ticks.get(self.leaf[g], ())) for g in ex.computed))
+
+    def _placed(self, ex: Execution) -> None:
+        if not self.places(ex):
+            raise ValueError("the placement doesn't place the execution: a value it produces has no device, or a gate it "
+                             "computes no tick at its step on its device")
+
     def tick(self, ex: Execution, v: int) -> int:
-        ts, s = self.ticks.get(self.leaf.get(v, 0), ()), ex.step_of(v)
-        return ts[s] if s < len(ts) else 0
+        return self.ticks[self.leaf[v]][ex.step_of(v)]
 
     def region(self, ex: Execution, devices, lo: int, hi: int) -> frozenset[int]:
-        """`region X [lo, hi)`: the values `ex` produces but the registered ones, on `devices` at a tick of `[lo, hi)`."""
-        return frozenset(g for g in ex.ran - ex.registered if self.leaf.get(g, 0) in devices and lo <= self.tick(ex, g) < hi)
+        """`region X [lo, hi)`: the gates `ex` computes on `devices` at a tick of `[lo, hi)`."""
+        self._placed(ex)
+        return frozenset(g for g in ex.computed if self.leaf[g] in devices and lo <= self.tick(ex, g) < hi)
 
     def step_region(self, ex: Execution, devices, start: int, length: int) -> frozenset[int]:
         """`stepRegion X w`: the same at the engine steps `[start, start + length)`."""
-        return frozenset(g for g in ex.ran - ex.registered
-                         if self.leaf.get(g, 0) in devices and start <= ex.step_of(g) < start + length)
+        self._placed(ex)
+        return frozenset(g for g in ex.computed if self.leaf[g] in devices and start <= ex.step_of(g) < start + length)
 
     def ingress(self, ex: Execution, devices, lo: int, hi: int) -> int:
         """`ingress X [lo, hi)`: the bits of the values placed outside `devices` that the region uses."""
@@ -295,7 +319,7 @@ def execution(program: Program, schedule: Schedule, inputs: Mapping[int, int] | 
             if inputs is not None:
                 values[i] = g.prim.evaluate(*(values[o] for o in g.operands))
     return Execution(width, frozenset(registered), {**step, **arrival}, ops, uses, values if inputs is not None else {},
-                     upper)
+                     upper, frozenset(arrival))
 
 
 def requirement(program: Program, schedule: Schedule, inputs: Mapping[int, int] | None = None) -> Requirement:
@@ -472,14 +496,15 @@ def credited_reads(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
 
 
 def store_matches(req: Requirement, layout: Layout, store: Store, block_bits: int, t: int) -> bool:
-    """`StoreMatches`: the resident blocks are the credited values' blocks, the live values are packed, and each
-    credited value is in its block's payload (checked where the values are known)."""
+    """`StoreMatches`: the credited values' blocks are resident (other blocks may be: filler, dead, another workload's),
+    the live values are packed, and each credited value is in its block's payload (checked where the values are known)."""
     live, cred = req.live(t), credited(req, layout, t)
-    return (store.resident(t) == layout.blocks(cred) and layout.packs(req, block_bits, live)
+    return (layout.blocks(cred) <= store.resident(t) and layout.packs(req, block_bits, live)
             and (not req.values or layout.carries(req, store, cred)))
 
 
 def plan_matches(req: Requirement, layout: Layout, plan, block_bits: int, t: int) -> bool:
-    """`PlanMatches`: the plan is the complete blocks step `t` reads, and the values read are packed."""
-    return (frozenset(plan) == layout.blocks(credited_reads(req, layout, t))
+    """`PlanMatches`: the plan holds the complete blocks step `t` reads (and may hold filler), and the values read are
+    packed."""
+    return (layout.blocks(credited_reads(req, layout, t)) <= frozenset(plan)
             and layout.packs(req, block_bits, req.reads(t)))
