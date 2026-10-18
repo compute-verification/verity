@@ -4,8 +4,10 @@ and decode step). Writes `$RESEARCH_RUN_DIR/result.json` (research/result/v0.1);
 one result artifact holds every arm, and plot.py reads them back from the evidence store.
 
     python3 benchmarks/hash/loop/collect.py OUT [--reps 3] [--row N] [--hypothesis TEXT] [--bench-rc RC] [--result PATH]
+                                                [--arm-names bench-arm=arm,...]
 
-Measures (arm = stock | sha512 | blake3; stock's step times are stock-prof's, the same engine with the NVTX ranges only):
+An arm's name is ARM's for the bench arm, or --arm-names' ($ARM_NAMES; a new arm such as commit+pouw needs only that), else the
+bench arm's own id. Measures (stock's step times are stock-prof's, the same engine with the NVTX ranges only):
   tpot_overhead_pct        100 (TPOT_arm / TPOT_stock - 1), the harness's interleaved ratio (headline)
   throughput_overhead_pct  100 (1 - tokens/s_arm / tokens/s_stock), the share of stock's throughput lost (headline)
   ttft_overhead_pct        100 (TTFT_arm / TTFT_stock - 1)
@@ -27,6 +29,8 @@ import sys
 from pathlib import Path
 
 ARM = {"stock": "stock", "stock-prof": "stock", "served-commit-rows": "sha512", "served-commit-rows-blake3": "blake3"}
+for _kv in filter(None, os.environ.get("ARM_NAMES", "").split(",")):
+    ARM[_kv.split("=", 1)[0]] = _kv.split("=", 1)[1]
 RATIOS = (("tpot_overhead_pct", "time_per_output_token_s", 1), ("throughput_overhead_pct", "tokens_per_s", -1),
           ("ttft_overhead_pct", "time_to_first_token_s", 1))
 
@@ -80,7 +84,9 @@ def main() -> int:
     ap.add_argument("--hypothesis", default="")
     ap.add_argument("--bench-rc", type=int, default=0)
     ap.add_argument("--result", type=Path, default=None)
+    ap.add_argument("--arm-names", default="")
     a = ap.parse_args()
+    ARM.update(kv.split("=", 1) for kv in filter(None, a.arm_names.split(",")))
     run_dir = Path(os.environ.get("RESEARCH_RUN_DIR", a.out.parent))
     res_path = a.out / "bench" / "result.json"
     meas: list[dict] = []

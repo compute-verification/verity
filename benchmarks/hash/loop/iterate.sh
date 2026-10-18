@@ -5,10 +5,11 @@
 #   bash benchmarks/hash/loop/iterate.sh N "one-line hypothesis"            # all three GPUs
 #   MACHINES="vy-dc-b200" bash benchmarks/hash/loop/iterate.sh N "..."      # a subset (a rerun after a preemption)
 #
-# ARMS and REPS pass through to job.sh. The launches return at once; this script then waits on each run (`--wait`). If this
-# VM stops waiting, the runs go on: label them later with `python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis "..."`.
+# ARMS, ARM_NAMES (bench arm=loop arm, for an arm collect.py doesn't name) and REPS pass through to job.sh. The launches return
+# at once; this script then waits on each run (`--wait`). If this VM stops waiting, the runs go on: label them later with
+# `python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis "..."`.
 set -uo pipefail
-[ $# -ge 2 ] || { sed -n '2,8p' "$0"; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,11p' "$0"; exit 2; }
 N=$1 HYP=$2
 cd "$(git rev-parse --show-toplevel)"
 BRANCH=$(git rev-parse --abbrev-ref HEAD) HEAD_SHA=$(git rev-parse HEAD)
@@ -28,13 +29,16 @@ declare -A LAUNCH=(
   [vy-dc-b200]="--mem-gb 64"
   [vy-nebius-2]="--queue --gpus 1 --gpu-model rtx-pro-6000 --cpus 16 --mem-gb 64 --max-min 75 --preemptible"
 )
+QUESTION="hash-loop: what each committer change does to served commit overhead (TPOT, throughput) per GPU and hash"
 LOGS=$(mktemp -d)
 for m in ${MACHINES:-vy-dc-h200 vy-dc-b200 vy-nebius-2}; do
   envs=()
   for kv in ${ENVS[$m]}; do envs+=(--env "$kv"); done
   [ -n "${ARMS:-}" ] && envs+=(--env "ARMS=$ARMS")
   [ -n "${REPS:-}" ] && envs+=(--env "REPS=$REPS")
+  [ -n "${ARM_NAMES:-}" ] && envs+=(--env "ARM_NAMES=$ARM_NAMES")
   read -r -a launch <<< "${LAUNCH[$m]}"
+  [[ " ${launch[*]} " == *" --queue "* ]] && launch+=(--question "$QUESTION")
   research run --on "$m" --project verity --campaign hash-loop --source . --cwd source --timeout 7200 --wait "${launch[@]}" \
     "${envs[@]}" --env "ROW=$N" --env "HYP=$HYP" -- bash benchmarks/hash/loop/job.sh > "$LOGS/$m.log" 2>&1 &
 done

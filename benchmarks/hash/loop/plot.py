@@ -20,7 +20,7 @@ from pathlib import Path
 
 MEASURES = ("tpot_overhead_pct", "throughput_overhead_pct", "prefill_step_ms", "decode_step_ms", "prefill_hash_gpu_ms",
             "decode_hash_gpu_ms", "prefill_serve_rise_pct", "decode_serve_rise_pct")
-ARMS = ("stock", "sha512", "blake3")
+ARMS = ("stock", "sha512", "blake3")   # their order in the table; plot.py draws every arm it finds
 HEADLINE = ("tpot_overhead_pct", "throughput_overhead_pct")
 
 
@@ -53,7 +53,7 @@ def series(results: list[dict], measure: str) -> dict[tuple[str, str], list[tupl
     acc: dict[tuple[str, str, int], list[float]] = defaultdict(list)
     for r in results:
         for (arm, name), v in r["measures"].items():
-            if name == measure and arm in ARMS:
+            if name == measure:
                 acc[(r["hardware"], arm, r["row"])].append(float(v))
     out: dict[tuple[str, str], list[tuple[int, float, list[float]]]] = defaultdict(list)
     for (hw, arm, row), vs in sorted(acc.items()):
@@ -68,7 +68,7 @@ def table(results: list[dict]) -> str:
     for r in results:
         by[(r["row"], r["hardware"])].append(r)
     for (row, hw), rs in sorted(by.items()):
-        for arm in ARMS[1:]:
+        for arm in [*ARMS[1:], *sorted({a for x in rs for a, _ in x["measures"]} - set(ARMS))]:
             vals = [[x["measures"].get((arm, k)) for x in rs] for k in (*HEADLINE, "prefill_hash_gpu_ms", "decode_hash_gpu_ms")]
             if not any(v is not None for v in vals[0]):
                 continue
@@ -107,7 +107,8 @@ def main() -> int:
         dump[measure] = {f"{hw}/{arm}": [(row, mean) for row, mean, _ in pts] for (hw, arm), pts in ser.items()}
         for (hw, arm), pts in sorted(ser.items()):
             xs, ys = [p[0] for p in pts], [p[1] for p in pts]
-            ax.plot(xs, ys, styles.get(arm, "-"), marker=markers.get(arm, "o"), color=colors.get(hw), label=f"{hw} {arm}")
+            style = styles.get(arm, "--" if "blake3" in arm else "-.")
+            ax.plot(xs, ys, style, marker=markers.get(arm, "D"), color=colors.get(hw), label=f"{hw} {arm}")
             for row, _, vs in pts:
                 if len(vs) > 1:
                     ax.scatter([row] * len(vs), vs, s=8, color=colors.get(hw), alpha=0.4)
