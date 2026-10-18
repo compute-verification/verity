@@ -37,8 +37,8 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
   extraction, limb split and word reinterpretation), a comparison, selection or 1-bit logic op, a gather, a receipt
   fold's step, and a neutral gate (a lane instruction whose class is its own, in no cap). A budgeted gate is any
   function of its operands (`budgeted`), the most a cheater could ask of a primitive, except a gather, which selects a
-  word of its column by its index (`gather`). The registry's primitives map to exactly one class each
-  (`Gates/Registry.lean`); an unlisted primitive is refused, so it has no `Op`.
+  word of its column by its index, or a table read's by its index's low bits (`gather`). The registry's primitives map
+  to exactly one class each (`Gates/Registry.lean`); an unlisted primitive is refused, so it has no `Op`.
 * **The window.** On an input, every gate's exact value lies in its declared interval, and every s8-family step's
   operands lie in their formats and its exact sum in s32, so no accumulator clamps or wraps (`InWindow`). The property
   proves it for the free gates and the gathers by interval analysis over the whole DAG from the declared intervals of
@@ -50,9 +50,10 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
   relates the two arms).
 * **Units** (property/v1's count, `units`). A budgeted gate is one unit when it reads a value that depends on a run or
   coin input (`dynamic`), and none otherwise: a gate of constants and registered values computes the same value at
-  registration. A gather whose index depends on one is the index bits no earlier gather of that index paid (fresh index
-  bits, `⌈log₂ (V + 1)⌉` for a column of `V` words and the `0` outside it, so a one-word column's `[i ≤ 0]` pays as a
-  comparison does), and one more when its column holds such a value too: a selection among run-time values is a
+  registration. A gather whose index depends on one is the index bits no earlier gather of that index and kind paid
+  (fresh index bits, `⌈log₂ (V + 1)⌉` for a column of `V` words and the `0` outside it, so a one-word column's
+  `[i ≤ 0]` pays as a comparison does, and `n` for a table read of the index's low `n` bits; property/v1's `range` and
+  `low` kinds), and one more when its column holds such a value too: a selection among run-time values is a
   `V`-way select. Without that unit a tree of gathers that share indices, over constant leaves, would compute any
   function of `b` index bits for `b` units. A gather at a fixed index is wiring.
 * **Cost.** The census (`census`) counts the units of a set of steps by class, the s8 family's MACs (served and tail
@@ -132,8 +133,9 @@ inductive Op (ι : Type)
   /-- an s8-family step's coordinate: operands `C :: a_1 … a_k ++ b_1 … b_k`, `C + Σ a_i·b_i`, then clamped
   (`satfinite`) or wrapped to s32 -/
   | mma (a b : Int8Fmt) (k : ℕ) (satfinite : Bool)
-  /-- a gather: operands `idx :: column`, the column's word at `idx` (0 outside it) -/
-  | gather
+  /-- a gather: operands `idx :: column`, the column's word at `idx` (0 outside it), or for a table read
+  (`low = some n`) at `idx`'s low `n` bits -/
+  | gather (low : Option ℕ)
   /-- a budgeted primitive of class `cls`: any function of its operands -/
   | budgeted (cls : Budget) (f : List ℤ → ℤ)
 
@@ -153,13 +155,19 @@ def le : Op ι := budgeted .compareSelect fun v => if v.headD 0 ≤ v.tail.headD
 /-- `c ≠ 0 ? a : b`, a selection. -/
 def select : Op ι := budgeted .compareSelect fun v => if v.headD 0 ≠ 0 then v.tail.headD 0 else v.tail.tail.headD 0
 
+/-- The column position a gather reads at index `z`: `z` itself, or for a table read of `n` bits its low `n` bits
+(two's complement's, `z mod 2^n`). -/
+def gatherAt : Option ℕ → ℤ → ℕ
+  | none, z => z.toNat
+  | some n, z => (z % 2 ^ n).toNat
+
 /-- The exact value of an operation on operands `v`, before an s8-family step's clamp or wrap. -/
 def raw : Op ι → (ι → ℤ) → List ℤ → ℤ
   | input _ i, x, _ => x i
   | const c, _, _ => c
   | affine c₀ cs, _, v => c₀ + (List.zipWith (· * ·) cs v).sum
   | mma _ _ k _, _, v => v.headD 0 + dot k v.tail
-  | gather, _, v => v.tail.getD (v.headD 0).toNat 0
+  | gather low, _, v => v.tail.getD (gatherAt low (v.headD 0)) 0
   | budgeted _ f, _, v => f v
 
 /-- The value an operation produces from its exact value: an s8-family step clamps or wraps it, every other passes
@@ -172,20 +180,21 @@ def out : Op ι → ℤ → ℤ
 /-- An operation whose value the counting bounds charge: a run input or a budgeted gate. -/
 def charged : Op ι → Bool
   | input .run _ => true
-  | gather => true
+  | gather _ => true
   | budgeted _ _ => true
   | _ => false
 
 /-- Its budgeted class, if any. -/
 def budget : Op ι → Option Budget
-  | gather => some .gather
+  | gather _ => some .gather
   | budgeted cls _ => some cls
   | _ => none
 
-/-- A gather. -/
-def isGather : Op ι → Bool
-  | gather => true
-  | _ => false
+/-- A gather's kind, property/v1's kind of its index bits: `true` for a table read of its index's low bits (`low`),
+`false` for a read at its index (`range`); `none` for any other operation. -/
+def gatherKind : Op ι → Option Bool
+  | gather low => some low.isSome
+  | _ => none
 
 /-- An s8-family step's operands are `C` and `2k` words in their formats; other operations ask nothing. -/
 def OperandsOk : Op ι → List ℤ → Prop
@@ -202,7 +211,7 @@ def IsMma : Op ι → Prop
 /-- An operation whose interval the property derives from its operands', never its declaration: the free ones (a
 constant, an affine map, an s8-family step) and a gather, whose value is a word of its column or 0. -/
 def IsDerived : Op ι → Prop
-  | const _ | affine .. | mma .. | gather => True
+  | const _ | affine .. | mma .. | gather _ => True
   | _ => False
 
 end Op
@@ -284,8 +293,12 @@ variable {ι : Type} (g : Gate ι)
 def role : Role := roleOf g.prim g.site
 
 /-- A gather's index bits: `⌈log₂ (V + 1)⌉` for its column of `V` words, the bits that tell its `V + 1` outcomes apart:
-a word of the column, or `0` for an index outside it. A one-word column is a comparison (`[i ≤ 0]`), one bit. -/
-def indexBits : ℕ := Nat.clog 2 g.args.length
+a word of the column, or `0` for an index outside it. A one-word column is a comparison (`[i ≤ 0]`), one bit. A table
+read of its index's low `n` bits reads `n`, which tell its `2^n` positions apart (property/v1's `low` kind). -/
+def indexBits : ℕ :=
+  match g.op with
+  | .gather (some n) => n
+  | _ => Nat.clog 2 g.args.length
 
 /-- The gate's operand values, read from the values `vs` of the gates before it. -/
 def operands (vs : List ℤ) : List ℤ := g.args.map fun j => vs.getD j 0
@@ -381,7 +394,7 @@ def Gate.derive (g : Gate ι) (ivs : List Iv) : Iv :=
   | .affine c₀ cs => (List.zipWith Iv.scale cs a).foldl Iv.add (c₀, c₀)
   | .mma _ _ k _ =>
       (List.zipWith Iv.mul (a.tail.take k) (a.tail.drop k)).foldl Iv.add (a.headD (0, 0))
-  | .gather => a.tail.foldl Iv.join (0, 0)
+  | .gather _ => a.tail.foldl Iv.join (0, 0)
   | _ => (g.lo, g.hi)
 
 /-- The derived intervals of a circuit's gates, in order. -/
@@ -442,9 +455,10 @@ def dynamic (C : Dag ι) : List Bool :=
 
 /-- **Gate `i`'s units** (property/v1's count). A budgeted gate is one unit when it reads a value that depends on a run
 or coin input, and none when it doesn't (it computes the same value at registration). A gather whose index depends on
-one is the index bits no earlier gather of that index paid (fresh index bits), and one more when its column holds
-such a value: a `V`-way selection among run-time values, without which a tree of gathers sharing indices would
-select among `2^b` constants for `b` units. A gather at a fixed index is wiring, and every other gate is free. -/
+one is the index bits no earlier gather of that index and kind paid (fresh index bits, per index and kind as
+property/v1 keys them), and one more when its column holds such a value: a `V`-way selection among run-time values,
+without which a tree of gathers sharing indices would select among `2^b` constants for `b` units. A gather at a fixed
+index is wiring, and every other gate is free. -/
 def units (C : Dag ι) (i : ℕ) : ℕ :=
   let dyn := fun j => (dynamic C).getD j false
   match C[i]? with
@@ -452,10 +466,11 @@ def units (C : Dag ι) (i : ℕ) : ℕ :=
   | some g =>
     match g.op, g.args with
     | .budgeted _ _, args => if args.any dyn then 1 else 0
-    | .gather, j :: col =>
+    | .gather low, j :: col =>
         if dyn j then
-          (g.indexBits - (((C.take i).filter fun h => h.op.isGather && h.args.head? == some j).map
-            Gate.indexBits).foldl max 0) + (if col.any dyn then 1 else 0)
+          (g.indexBits - (((C.take i).filter fun h =>
+              h.op.gatherKind == some low.isSome && h.args.head? == some j).map Gate.indexBits).foldl max 0) +
+            (if col.any dyn then 1 else 0)
         else 0
     | _, _ => 0
 

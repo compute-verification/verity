@@ -21,8 +21,9 @@ induction over the gates (every free gate is 2-adically triangular in its window
 charged gates' joint values; `SquaringCarry` from it at `j = 1` on the sparse family, whose squares have no carries
 between bytes; `SquaringCarryNibbles` from it at `j = 4` on the nibble family, whose squares first differ two bytes
 above their first differing nibble (`a² − a'² = (a − a')(a + a')`); `UnitsFooling` by the same induction, the
-trace being each dynamic run input's and budgeted gate's value and each dynamic index's class at its gathers' most
-index bits, which the fresh index bits pay for; `SquaringUnits` from it on the nibble family; `EncodeBudget` and
+trace being each dynamic run input's and budgeted gate's value and each dynamic index's two classes, `min(v, 2^b − 1)`
+at the most index bits `b` its gathers read and `v mod 2^b'` at the most `b'` its table reads read, which the fresh
+index bits of each kind pay for; `SquaringUnits` from it on the nibble family; `EncodeBudget` and
 `EncodeCost` from `EncodeChainHardness` by summing the census's units over the
 windows and classes; `RhoPairs` from Fermat's little theorem (`s² = x · x^((p−1)/2) = ±x`).
 -/
@@ -141,7 +142,7 @@ lemma value_congr {m : ℤ} (g : Gate ι) (x x' : ι → ℤ) (vs vs' : List ℤ
     | cons j u =>
       simp only [List.map_cons, List.headD_cons, List.tail_cons, ← List.map_take, ← List.map_drop]
       exact (hv j).add (sum_zipWith_congr _ _ hv _ _)
-  | gather => rw [hop] at hc; simp [Op.charged] at hc
+  | gather _ => rw [hop] at hc; simp [Op.charged] at hc
   | budgeted cls f => rw [hop] at hc; simp [Op.charged] at hc
 
 /-- Two inputs on which `C` is in its window, that agree mod `m` in every registered and coin input, and on which
@@ -259,7 +260,7 @@ lemma derive_holds (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ
     | cons j u =>
       simp only [List.map_cons, List.headD_cons, List.tail_cons, ← List.map_take, ← List.map_drop]
       exact holds_mul_sum _ _ hinv _ _ _ _ (hinv j)
-  | gather =>
+  | gather low =>
     simp only [Op.raw]
     generalize g.args = u
     cases u with
@@ -267,7 +268,7 @@ lemma derive_holds (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ
     | cons j u =>
       simp only [List.map_cons, List.headD_cons, List.tail_cons]
       refine holds_foldl_join _ _ _ ?_
-      generalize (vs.getD j 0).toNat = k
+      generalize Op.gatherAt low (vs.getD j 0) = k
       rcases Nat.lt_or_ge k u.length with hk | hk
       · refine .inr ⟨_, List.mem_map.mpr ⟨_, List.getElem_mem hk, rfl⟩, ?_⟩
         rw [List.getD_eq_getElem (u.map fun c => vs.getD c 0) 0 (by simpa using hk), List.getElem_map]
@@ -816,8 +817,11 @@ lemma units_of_budget_none (C : Dag ι) (i : ℕ) (g : Gate ι) (hg : C[i]? = so
   simp only [units, hg]
   split <;> simp_all [Op.budget]
 
-/-- A gather's outcomes, its column's `V` words and the `0` outside it, fit its index bits. -/
-lemma indexBits_outcomes (g : Gate ι) : g.args.length ≤ 2 ^ g.indexBits := Nat.le_pow_clog (by norm_num) _
+/-- A gather's outcomes at its index, its column's `V` words and the `0` outside it, fit its index bits. -/
+lemma indexBits_outcomes (g : Gate ι) (hg : g.op = .gather none) : g.args.length ≤ 2 ^ g.indexBits := by
+  unfold Gate.indexBits
+  rw [hg]
+  exact Nat.le_pow_clog (by norm_num) _
 
 /-- Summing the census's units over the windows and classes: each gate's units are in its window's census, under its
 class. -/
@@ -867,9 +871,9 @@ theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
 /-- Gate `i` depends on a run or coin input. -/
 abbrev dynAt (C : Dag ι) (i : ℕ) : Bool := (dynamic C).getD i false
 
-/-- The most index bits a gather of index `j` in `C` reads. -/
-def maxIdx (C : Dag ι) (j : ℕ) : ℕ :=
-  ((C.filter fun h => h.op.isGather && h.args.head? == some j).map Gate.indexBits).foldl max 0
+/-- The most index bits a gather of index `j` and kind `k` in `C` reads. -/
+def maxIdx (C : Dag ι) (k : Bool) (j : ℕ) : ℕ :=
+  ((C.filter fun h => h.op.gatherKind == some k && h.args.head? == some j).map Gate.indexBits).foldl max 0
 
 /-- `dynamic`'s step at a gate, from the flags of the gates before it. -/
 def dynStep (ds : List Bool) (g : Gate ι) : Bool :=
@@ -890,10 +894,10 @@ def isBudg (g : Gate ι) : Bool :=
   | .budgeted _ _ => true
   | _ => false
 
-/-- The fresh index bits a gather at `i` pays when its index depends on a run or coin input. -/
-def freshAt (C : Dag ι) (i : ℕ) (g : Gate ι) : ℕ :=
+/-- The fresh index bits a gather of kind `k` at `i` pays when its index depends on a run or coin input. -/
+def freshAt (C : Dag ι) (k : Bool) (i : ℕ) (g : Gate ι) : ℕ :=
   match g.op, g.args with
-  | .gather, j :: _ => if dynAt C j then g.indexBits - maxIdx (C.take i) j else 0
+  | .gather low, j :: _ => if low.isSome = k ∧ dynAt C j = true then g.indexBits - maxIdx (C.take i) k j else 0
   | _, _ => 0
 
 lemma dynamic_eq (C : Dag ι) : dynamic C = C.foldl (fun ds g => ds ++ [dynStep ds g]) [] := rfl
@@ -1008,21 +1012,23 @@ lemma le_foldl_max (l : List ℕ) : ∀ b : ℕ, b ≤ l.foldl max b ∧ ∀ a �
     obtain ⟨h1, h2⟩ := ih (max b y)
     exact ⟨le_trans (le_max_left _ _) h1, le_trans (le_max_right _ _) h1, h2⟩
 
-lemma indexBits_le_maxIdx (C : Dag ι) (n : ℕ) (h : n < C.length) (j : ℕ) (col : List ℕ) (hop : C[n].op = .gather)
-    (hargs : C[n].args = j :: col) : C[n].indexBits ≤ maxIdx C j :=
+lemma indexBits_le_maxIdx (C : Dag ι) (n : ℕ) (h : n < C.length) (low : Option ℕ) (j : ℕ) (col : List ℕ)
+    (hop : C[n].op = .gather low) (hargs : C[n].args = j :: col) : C[n].indexBits ≤ maxIdx C low.isSome j :=
   (le_foldl_max _ 0).2 _ (List.mem_map.mpr ⟨C[n], List.mem_filter.mpr ⟨List.getElem_mem h,
-    by simp [hop, hargs, Op.isGather]⟩, rfl⟩)
+    by simp [hop, hargs, Op.gatherKind]⟩, rfl⟩)
 
 /-- Two inputs on which `C` is in its window, that agree in every registered input and mod `m` in every coin input,
 on which each run input and each budgeted gate but a gather that depends on a run or coin input takes one value, and
-each gate that does takes one class `min(v, 2^b − 1)` at the most index bits `b` a gather of it reads: every gate's
-values agree mod `m`, and those of the gates that depend on no run or coin input agree. -/
+each gate that does takes one class `min(v, 2^b − 1)` at the most index bits `b` a gather of it reads at its index,
+and one class `v mod 2^b'` at the most `b'` a table read of it reads: every gate's values agree mod `m`, and those of
+the gates that depend on no run or coin input agree. -/
 lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWindow C x) (hw' : InWindow C x')
     (hreg : ∀ i, (∃ g ∈ C, g.op = .input .registered i) → x i = x' i)
     (hcoin : ∀ i, (∃ g ∈ C, g.op = .input .coin i) → x i ≡ x' i [ZMOD m])
     (htr : ∀ i (h : i < C.length), traced C[i] = true → dynAt C i = true → val C x i = val C x' i)
     (hidx : ∀ i, i < C.length → dynAt C i = true →
-      min (val C x i).toNat (2 ^ maxIdx C i - 1) = min (val C x' i).toNat (2 ^ maxIdx C i - 1)) :
+      min (val C x i).toNat (2 ^ maxIdx C false i - 1) = min (val C x' i).toNat (2 ^ maxIdx C false i - 1) ∧
+        val C x i % 2 ^ maxIdx C true i = val C x' i % 2 ^ maxIdx C true i) :
     ∀ n, n ≤ C.length → ∀ o, (values (C.take n) x).getD o 0 ≡ (values (C.take n) x').getD o 0 [ZMOD m] ∧
       ((o < n → dynAt C o = false) → (values (C.take n) x).getD o 0 = (values (C.take n) x').getD o 0) := by
   intro n
@@ -1091,7 +1097,7 @@ lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWind
             rw [← hval, ← hval']
             exact htr o hn' (by simp [traced, hop]) hd
           · exact .inl (value_eq_of_operands _ x x' _ _ hni (hargs hni (by simpa using hd)))
-        | gather =>
+        | gather low =>
           have hni : ∀ b i, C[o].op ≠ .input b i := by intro b i; rw [hop]; simp
           by_cases hd : dynAt C o = true
           · right
@@ -1103,18 +1109,41 @@ lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWind
             | nil => simp [Op.raw, Int.ModEq.refl]
             | cons j col =>
               simp only [Op.raw, List.map_cons, List.headD_cons, List.tail_cons]
-              have hK : col.length ≤ 2 ^ maxIdx C j - 1 := by
-                have h1 := indexBits_outcomes C[o]
-                have h2 := Nat.pow_le_pow_right (by norm_num : 0 < 2) (indexBits_le_maxIdx C o hn' j col hop hga)
-                rw [hga, List.length_cons] at h1
-                omega
-              refine getD_map_congr col _ _ hv _ _ _ hK ?_
-              by_cases hj : j < o ∧ dynAt C j = true
-              · have hjL : j < C.length := by omega
-                rw [getD_values_take C x j hjL o hj.1 hn'.le, getD_values_take C x' j hjL o hj.1 hn'.le,
-                  ← val_eq C x j hjL, ← val_eq C x' j hjL]
-                exact hidx j hjL hj.2
-              · rw [he j fun hjo => by simpa [hjo] using hj]
+              have hbits := indexBits_le_maxIdx C o hn' low j col hop hga
+              have hjv : (j < C.length ∧ dynAt C j = true ∧ (values (C.take o) x).getD j 0 = val C x j ∧
+                  (values (C.take o) x').getD j 0 = val C x' j) ∨
+                  (values (C.take o) x).getD j 0 = (values (C.take o) x').getD j 0 := by
+                by_cases hj : j < o ∧ dynAt C j = true
+                · have hjL : j < C.length := by omega
+                  exact .inl ⟨hjL, hj.2, by rw [getD_values_take C x j hjL o hj.1 hn'.le, val_eq C x j hjL],
+                    by rw [getD_values_take C x' j hjL o hj.1 hn'.le, val_eq C x' j hjL]⟩
+                · exact .inr (he j fun hjo => by simpa [hjo] using hj)
+              cases low with
+              | none =>
+                have hK : col.length ≤ 2 ^ maxIdx C false j - 1 := by
+                  have h1 := indexBits_outcomes C[o] hop
+                  have h2 := Nat.pow_le_pow_right (by norm_num : 0 < 2) hbits
+                  rw [hga, List.length_cons] at h1
+                  simp only [Option.isSome_none] at h2
+                  omega
+                refine getD_map_congr col _ _ hv _ _ _ hK ?_
+                rcases hjv with ⟨hjL, hjd, h1, h2⟩ | h
+                · simp only [Op.gatherAt]
+                  rw [h1, h2]
+                  exact (hidx j hjL hjd).1
+                · rw [h]
+              | some nb =>
+                refine getD_map_congr col _ _ hv col.length _ _ le_rfl ?_
+                congr 1
+                simp only [Op.gatherAt]
+                rcases hjv with ⟨hjL, hjd, h1, h2⟩ | h
+                · have hnb : nb ≤ maxIdx C true j := by
+                    have : C[o].indexBits = nb := by unfold Gate.indexBits; rw [hop]
+                    simpa [this] using hbits
+                  have hdvd : (2 : ℤ) ^ nb ∣ 2 ^ maxIdx C true j := pow_dvd_pow 2 hnb
+                  rw [h1, h2, ← Int.emod_emod_of_dvd (val C x j) hdvd, ← Int.emod_emod_of_dvd (val C x' j) hdvd,
+                    (hidx j hjL hjd).2]
+                · rw [h]
           · exact .inl (value_eq_of_operands _ x x' _ _ hni (hargs hni (by simpa using hd)))
       rcases key with hk | ⟨hd, hk⟩
       · exact ⟨by unfold Int.ModEq; rw [hk], fun _ => hk⟩
@@ -1125,9 +1154,11 @@ lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWind
       rw [hk]
       simp [Int.ModEq.refl]
 
-/-- Each gate's units are at least its unit as a budgeted gate but a gather and its fresh index bits as a gather. -/
+/-- Each gate's units are at least its unit as a budgeted gate but a gather and its fresh index bits as a gather of
+either kind. -/
 lemma units_ge (C : Dag ι) (i : ℕ) (h : i < C.length) :
-    (if (isBudg C[i] && dynAt C i) = true then 1 else 0) + freshAt C i C[i] ≤ units C i := by
+    (if (isBudg C[i] && dynAt C i) = true then 1 else 0) + (freshAt C false i C[i] + freshAt C true i C[i]) ≤
+      units C i := by
   have hg : C[i]? = some C[i] := List.getElem?_eq_getElem h
   have hd := any_dyn C i h
   simp only [units, hg]
@@ -1136,26 +1167,28 @@ lemma units_ge (C : Dag ι) (i : ℕ) (h : i < C.length) :
     simp only [isBudg, freshAt, hop, Bool.true_and, add_zero]
     have := hd (by intro b k; rw [hop]; simp)
     split_ifs <;> simp_all
-  | gather =>
+  | gather low =>
     cases hargs : C[i].args with
     | nil => simp [isBudg, freshAt, hop, hargs]
     | cons j col =>
       simp only [isBudg, freshAt, hop, hargs, maxIdx, dynAt, Bool.false_and, Bool.false_eq_true, ↓reduceIte, zero_add]
-      split_ifs <;> omega
+      cases low <;> simp only [Option.isSome_none, Option.isSome_some, true_and, false_and, Bool.false_eq_true,
+        Bool.true_eq_false, ↓reduceIte, zero_add, add_zero] <;> split_ifs <;> omega
   | _ => simp [isBudg, freshAt, hop]
 
-lemma maxIdx_take_succ (C : Dag ι) (n : ℕ) (h : n < C.length) (j : ℕ) :
-    maxIdx (C.take (n + 1)) j = max (maxIdx (C.take n) j)
-      (if (C[n].op.isGather && C[n].args.head? == some j) = true then C[n].indexBits else 0) := by
+lemma maxIdx_take_succ (C : Dag ι) (n : ℕ) (h : n < C.length) (k : Bool) (j : ℕ) :
+    maxIdx (C.take (n + 1)) k j = max (maxIdx (C.take n) k j)
+      (if (C[n].op.gatherKind == some k && C[n].args.head? == some j) = true then C[n].indexBits else 0) := by
   unfold maxIdx
   rw [List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some, List.filter_append, List.map_append,
     List.foldl_append]
   split_ifs with hp <;> simp [hp]
 
-/-- The fresh index bits telescope: over the gathers of each index, they sum to the most that index's gathers read. -/
-lemma sum_freshAt (C : Dag ι) : ∀ n, n ≤ C.length →
-    ∑ i ∈ Finset.range n, (if h : i < C.length then freshAt C i C[i] else 0) =
-      ∑ j ∈ Finset.range C.length, if dynAt C j = true then maxIdx (C.take n) j else 0 := by
+/-- The fresh index bits telescope: over the gathers of each index and kind, they sum to the most that index's
+gathers of that kind read. -/
+lemma sum_freshAt (C : Dag ι) (k : Bool) : ∀ n, n ≤ C.length →
+    ∑ i ∈ Finset.range n, (if h : i < C.length then freshAt C k i C[i] else 0) =
+      ∑ j ∈ Finset.range C.length, if dynAt C j = true then maxIdx (C.take n) k j else 0 := by
   intro n
   induction n with
   | zero => intro _; simp [maxIdx]
@@ -1164,48 +1197,54 @@ lemma sum_freshAt (C : Dag ι) : ∀ n, n ≤ C.length →
     have hnL : n < C.length := hn
     rw [Finset.sum_range_succ, ih (by omega), dite_eq_left hnL]
     simp only [maxIdx_take_succ C n hnL]
-    have hsplit : ∀ j, (if dynAt C j = true then max (maxIdx (C.take n) j)
-        (if (C[n].op.isGather && C[n].args.head? == some j) = true then C[n].indexBits else 0) else 0) =
-        (if dynAt C j = true then maxIdx (C.take n) j else 0) +
+    have hsplit : ∀ j, (if dynAt C j = true then max (maxIdx (C.take n) k j)
+        (if (C[n].op.gatherKind == some k && C[n].args.head? == some j) = true then C[n].indexBits else 0) else 0) =
+        (if dynAt C j = true then maxIdx (C.take n) k j else 0) +
         (if dynAt C j = true then
-          (if (C[n].op.isGather && C[n].args.head? == some j) = true then
-            C[n].indexBits - maxIdx (C.take n) j else 0) else 0) := by
+          (if (C[n].op.gatherKind == some k && C[n].args.head? == some j) = true then
+            C[n].indexBits - maxIdx (C.take n) k j else 0) else 0) := by
       intro j
       split_ifs <;> omega
     simp only [hsplit, Finset.sum_add_distrib]
     congr 1
     unfold freshAt
     cases hop : C[n].op with
-    | gather =>
+    | gather low =>
       cases hargs : C[n].args with
-      | nil => simp [Op.isGather]
+      | nil => simp [Op.gatherKind]
       | cons j0 col =>
-        simp only [Op.isGather, Bool.true_and, List.head?_cons, Option.some_beq_some, beq_iff_eq]
-        rw [Finset.sum_congr rfl fun j _ => (show (if dynAt C j = true then
-          (if j0 = j then C[n].indexBits - maxIdx (C.take n) j else 0) else 0) =
-          if j0 = j then (if dynAt C j = true then C[n].indexBits - maxIdx (C.take n) j else 0) else 0 by
-            split_ifs <;> rfl), Finset.sum_ite_eq]
-        by_cases hd : dynAt C j0 = true
-        · rw [ite_eq_left (Finset.mem_range.mpr (lt_of_dynAt C j0 hd))]
-        · simp only [hd, Bool.false_eq_true, ↓reduceIte, ite_self]
-    | _ => simp [Op.isGather]
+        simp only [Op.gatherKind, List.head?_cons, Option.some_beq_some, beq_iff_eq, Bool.and_eq_true]
+        by_cases hk : low.isSome = k
+        · simp only [hk, true_and]
+          rw [Finset.sum_congr rfl fun j _ => (show (if dynAt C j = true then
+            (if j0 = j then C[n].indexBits - maxIdx (C.take n) k j else 0) else 0) =
+            if j0 = j then (if dynAt C j = true then C[n].indexBits - maxIdx (C.take n) k j else 0) else 0 by
+              split_ifs <;> rfl), Finset.sum_ite_eq]
+          by_cases hd : dynAt C j0 = true
+          · rw [ite_eq_left (Finset.mem_range.mpr (lt_of_dynAt C j0 hd))]
+          · simp only [hd, Bool.false_eq_true, ↓reduceIte, ite_self]
+        · simp [hk]
+    | _ => simp [Op.gatherKind]
 
 theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
   intro ι κ C F x j w out hw1 hsize hwin hreg hcoin hdist
   classical
-  let T : κ → Fin C.length → ℤ × ℕ := fun s i =>
+  let T : κ → Fin C.length → ℤ × ℕ × ℤ := fun s i =>
     (if (traced C[i.1] && dynAt C i.1) = true then val C (x s) i.1 else 0,
-      if dynAt C i.1 = true then min (val C (x s) i.1).toNat (2 ^ maxIdx C i.1 - 1) else 0)
+      if dynAt C i.1 = true then min (val C (x s) i.1).toNat (2 ^ maxIdx C false i.1 - 1) else 0,
+      if dynAt C i.1 = true then val C (x s) i.1 % 2 ^ maxIdx C true i.1 else 0)
   let A : Fin C.length → Finset ℤ := fun i =>
     if (traced C[i.1] && dynAt C i.1) = true then Finset.Icc C[i.1].lo C[i.1].hi else {0}
   let B : Fin C.length → Finset ℕ := fun i =>
-    if dynAt C i.1 = true then Finset.range (2 ^ maxIdx C i.1) else {0}
-  have hmaps : Set.MapsTo T F (Fintype.piFinset fun i => A i ×ˢ B i) := by
+    if dynAt C i.1 = true then Finset.range (2 ^ maxIdx C false i.1) else {0}
+  let D : Fin C.length → Finset ℤ := fun i =>
+    if dynAt C i.1 = true then Finset.Ico 0 (2 ^ maxIdx C true i.1) else {0}
+  have hmaps : Set.MapsTo T F (Fintype.piFinset fun i => A i ×ˢ (B i ×ˢ D i)) := by
     intro s hs
     simp only [Finset.mem_coe] at hs
     simp only [Finset.mem_coe, Fintype.mem_piFinset, Finset.mem_product]
     intro i
-    constructor
+    refine ⟨?_, ?_, ?_⟩
     · simp only [T, A]
       split_ifs
       · have hok := hwin s hs i.1 i.2
@@ -1215,9 +1254,14 @@ theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
     · simp only [T, B]
       split_ifs
       · rw [Finset.mem_range]
-        have : 0 < 2 ^ maxIdx C i.1 := by positivity
-        generalize 2 ^ maxIdx C i.1 = P at *
+        have : 0 < 2 ^ maxIdx C false i.1 := by positivity
+        generalize 2 ^ maxIdx C false i.1 = P at *
         omega
+      · simp
+    · simp only [T, D]
+      split_ifs
+      · rw [Finset.mem_Ico]
+        exact ⟨Int.emod_nonneg _ (by positivity), Int.emod_lt_of_pos _ (by positivity)⟩
       · simp
   have hinj : Set.InjOn T F := by
     intro s hs s' hs' hT
@@ -1234,9 +1278,11 @@ theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
         simp only [T] at this
         rwa [ite_eq_left hc, ite_eq_left hc] at this)
       (fun i h hd => by
-        have := congrArg Prod.snd (hcomp i h)
-        simp only [T] at this
-        rwa [ite_eq_left hd, ite_eq_left hd] at this)
+        have h2 := congrArg (fun t => t.2.1) (hcomp i h)
+        have h3 := congrArg (fun t => t.2.2) (hcomp i h)
+        simp only [T] at h2 h3
+        rw [ite_eq_left hd, ite_eq_left hd] at h2 h3
+        exact ⟨h2, h3⟩)
       C.length le_rfl o
     rw [List.take_length] at h
     exact h.1
@@ -1263,30 +1309,39 @@ theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
       | _ => simp [traced, hop] at ht
     · simp only [Finset.card_singleton]; exact Nat.one_le_two_pow
     · simp only [Finset.card_singleton]; exact Nat.one_le_two_pow
-  have hB : ∀ i : Fin C.length, (B i).card = 2 ^ (if dynAt C i.1 = true then maxIdx C i.1 else 0) := by
+  have hB : ∀ i : Fin C.length, (B i).card = 2 ^ (if dynAt C i.1 = true then maxIdx C false i.1 else 0) := by
     intro i
     simp only [B]
     split_ifs <;> simp
+  have hD : ∀ i : Fin C.length, (D i).card = 2 ^ (if dynAt C i.1 = true then maxIdx C true i.1 else 0) := by
+    intro i
+    simp only [D]
+    split_ifs
+    · rw [Int.card_Ico, sub_zero, ← Nat.cast_ofNat, ← Nat.cast_pow, Int.toNat_natCast]
+    · simp
   have hunits : ∑ i : Fin C.length, (if (isBudg C[i.1] && dynAt C i.1) = true then 1 else 0) +
-      ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C i.1 else 0) ≤ budgeted C := by
-    have hf := sum_freshAt C C.length le_rfl
-    rw [List.take_length, ← Fin.sum_univ_eq_sum_range, ← Fin.sum_univ_eq_sum_range] at hf
-    simp only [Fin.is_lt, dite_true] at hf
-    rw [← hf, ← Finset.sum_add_distrib, budgeted, ← Fin.sum_univ_eq_sum_range]
+      (∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C false i.1 else 0) +
+        ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C true i.1 else 0)) ≤ budgeted C := by
+    have hf0 := sum_freshAt C false C.length le_rfl
+    have hf1 := sum_freshAt C true C.length le_rfl
+    rw [List.take_length, ← Fin.sum_univ_eq_sum_range, ← Fin.sum_univ_eq_sum_range] at hf0 hf1
+    simp only [Fin.is_lt, dite_true] at hf0 hf1
+    rw [← hf0, ← hf1, ← Finset.sum_add_distrib, ← Finset.sum_add_distrib, budgeted, ← Fin.sum_univ_eq_sum_range]
     exact Finset.sum_le_sum fun i _ => units_ge C i.1 i.2
   have hrun : ∑ i : Fin C.length, C[i.1].inputBits .run = runBits C := by
     rw [runBits, ← Fin.sum_univ_fun_getElem C (Gate.inputBits .run)]
-  calc F.card ≤ (Fintype.piFinset fun i => A i ×ˢ B i).card := Finset.card_le_card_of_injOn T hmaps hinj
-    _ = (∏ i, (A i).card) * ∏ i, (B i).card := by
-      rw [Fintype.card_piFinset, ← Finset.prod_mul_distrib]
+  calc F.card ≤ (Fintype.piFinset fun i => A i ×ˢ (B i ×ˢ D i)).card := Finset.card_le_card_of_injOn T hmaps hinj
+    _ = (∏ i, (A i).card) * ((∏ i, (B i).card) * ∏ i, (D i).card) := by
+      rw [Fintype.card_piFinset, ← Finset.prod_mul_distrib, ← Finset.prod_mul_distrib]
       simp [Finset.card_product]
     _ ≤ (∏ i : Fin C.length,
           2 ^ (C[i.1].inputBits .run + if (isBudg C[i.1] && dynAt C i.1) = true then w else 0)) *
-        ∏ i : Fin C.length, 2 ^ (if dynAt C i.1 = true then maxIdx C i.1 else 0) := by
+        ((∏ i : Fin C.length, 2 ^ (if dynAt C i.1 = true then maxIdx C false i.1 else 0)) *
+          ∏ i : Fin C.length, 2 ^ (if dynAt C i.1 = true then maxIdx C true i.1 else 0)) := by
       apply Nat.mul_le_mul (Finset.prod_le_prod fun i _ => hA i)
-      rw [Finset.prod_congr rfl fun i _ => hB i]
+      rw [Finset.prod_congr rfl fun i _ => hB i, Finset.prod_congr rfl fun i _ => hD i]
     _ ≤ 2 ^ (runBits C + w * budgeted C) := by
-      rw [Finset.prod_pow_eq_pow_sum, Finset.prod_pow_eq_pow_sum, ← pow_add]
+      rw [Finset.prod_pow_eq_pow_sum, Finset.prod_pow_eq_pow_sum, Finset.prod_pow_eq_pow_sum, ← pow_add, ← pow_add]
       apply Nat.pow_le_pow_right (by norm_num)
       rw [Finset.sum_add_distrib, hrun]
       have hw : ∑ i : Fin C.length, (if (isBudg C[i.1] && dynAt C i.1) = true then w else 0) =
@@ -1295,9 +1350,10 @@ theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
         exact Finset.sum_congr rfl fun i _ => by split_ifs <;> simp
       rw [hw]
       generalize ∑ i : Fin C.length, (if (isBudg C[i.1] && dynAt C i.1) = true then 1 else 0) = NB at hunits ⊢
-      generalize ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C i.1 else 0) = MI at hunits ⊢
-      have h1 : MI ≤ w * MI := Nat.le_mul_of_pos_left MI hw1
-      have h2 : w * (NB + MI) ≤ w * budgeted C := Nat.mul_le_mul_left w hunits
+      generalize ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C false i.1 else 0) = M0 at hunits ⊢
+      generalize ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C true i.1 else 0) = M1 at hunits ⊢
+      have h1 : M0 + M1 ≤ w * (M0 + M1) := Nat.le_mul_of_pos_left _ hw1
+      have h2 : w * (NB + (M0 + M1)) ≤ w * budgeted C := Nat.mul_le_mul_left w hunits
       rw [mul_add] at h2
       omega
 

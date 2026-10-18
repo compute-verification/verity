@@ -33,7 +33,8 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
 * `UnitsFooling`: `Fooling` in units. With registered inputs fixed and each budgeted gate but a gather declaring at
   most `2^w` values, `|F| ≤ 2^(runBits C + w · budgeted C)`: a gate that reads only registered values is one value on
   all of `F`, a budgeted one that reads a run or coin value is a unit of `w` bits, and a gather's value is fixed by its
-  index's class among its column's words and the `0` outside it, which its index's fresh bits count.
+  index's class among its column's words and the `0` outside it (a table read's, by its index's low bits), which its
+  index's fresh bits of that kind count.
 * `SquaringUnits`: the two together. A circuit that squares the nibble family, its registered inputs fixed and its
   coin inputs `a`'s bytes, has `4s ≤ runBits C + w · budgeted C`: at p1024 with no run input, 8 units at `w = 33` (or
   `w = 32`, s32's window), 32 were each budgeted gate a byte (`w = 8`).
@@ -110,7 +111,7 @@ values (`w ≥ 1`), and a set `F` of inputs on each of which `C` is in its windo
 agree pairwise mod `2^j` in every coin input, and pairwise differ mod `2^j` in some output gate of `out`:
 `|F| ≤ 2^(runBits C + w · budgeted C)`. A budgeted gate that reads a run or coin value carries its value's `w` bits
 for its unit; a gather's units carry its index's outcomes, the fresh index bits of `Gate.indexBits`, shared by the
-gathers of one index; every other gate is free or reads only registered values. -/
+gathers of one index and kind; every other gate is free or reads only registered values. -/
 def UnitsFooling : Prop :=
   ∀ {ι κ : Type} (C : Dag ι) (F : Finset κ) (x : κ → ι → ℤ) (j w : ℕ) (out : List ℕ),
     1 ≤ w → (∀ g ∈ C, ∀ cls f, g.op = .budgeted cls f → g.size ≤ 2 ^ w) →

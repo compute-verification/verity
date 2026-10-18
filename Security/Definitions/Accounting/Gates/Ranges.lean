@@ -121,6 +121,6 @@ def dither (lo : ℤ) (w m : ℕ) (v : ℚ) (R : Fin (2 * m + 2)) : ℤ := clamp
 def hull0 (T : List ℤ) : Iv := (T.foldr min 0, T.foldr max 0)
 
 /-- The LUT softmax's element: a floor, a min and an 8-bit gather (the model's `Op.gather`) into the table `T`. -/
-def lutSoftmax (T : List ℤ) (d : ℚ) : ℤ := (Op.gather : Op Unit).raw (fun _ => 0) (min ⌊d⌋ 255 :: T)
+def lutSoftmax (T : List ℤ) (d : ℚ) : ℤ := (Op.gather none : Op Unit).raw (fun _ => 0) (min ⌊d⌋ 255 :: T)
 
 end Accounting.Gates
