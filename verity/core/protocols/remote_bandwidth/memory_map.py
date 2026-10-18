@@ -14,7 +14,8 @@ slot         4,096 bytes of the node's memory, named by the registered block it 
 j            the store index the writer gave the block: the store's next fresh one, N plus every block written before
               in the session, in record order
 d_j          codec.digest(payload_j), the sha512/row/v2 digest of the block's 4,096-byte payload, 64 bytes: the device
-              encodes the payload under its bound key (codec.binding(d_j, j, key)) at index j
+              encodes the payload under its bound key (codec.binding(d_j, j, key, c_a)) at index j, once the verifier
+              has sent its append's coin c_a
 ~~~
 
 A write puts block j in its slot and releases the block the slot held, if it was live: the write overwrote it.  A
@@ -32,13 +33,15 @@ still filling is not in the record until the step that completes it (the prover-
 Lifetime.  No plan holds a written block L windows or more after the window its append joined (`audit.Params.lifetime`,
 an hour at the stated window), so every block written leaves the credited store within L.  A block the writer keeps
 longer (a prefix cache's) is re-keyed: written again in its own slot with the same `d_j` at the store's next fresh
-index, which releases its old index and gives it a fresh bound key, so the device encodes it anew.
+index, which releases its old index and gives it a fresh bound key under a fresh coin, so the device encodes it anew.
 
 The record is the prover's: `d_j` is a hash of user data, a witness, never public (AGENTS.md's zero-knowledge rule).
 The prover's audit side (`Replay`) commits each step's digests in an append tree (`audit.append_tree`, under fresh
 salts) and sends its root and size (`Session.append`), and the released blocks' indices as runs (`Session.release`); the
-verifier sees those and the plans, never the record.  The appends of a step are sent before the root of any pass
-whose plan holds them, and that pass's seed binds them (`audit.chained`), so it is computed after they are sent.
+verifier sees those and the plans, never the record.  The verifier replies to each append with its coin, and the
+device encodes the step's blocks under it after it arrives and before the next step's reads.  The appends of a step
+are sent before the root of any pass whose plan holds them, and that pass's seed binds them (`audit.chained`), so it
+is computed after they are sent.
 That the session's appends, re-keys and frees are this record's, in its order and at its steps, is the memory-map
 unit's to prove against the record's append chain (`audit.Record.appends`, `RequirementLink.mapped`, `PROTOCOL.md` §8
 "The memory map's choices"): frees, re-keys and append order chosen after the seed would otherwise be advice.

@@ -38,7 +38,7 @@ def relayed(page: bytes, seed: bytes) -> tuple[bytes, ...]:
 def relay(r: Run, page_seed: bytes, plan: Plan) -> audit.Pass:
     """Pass 1 over the registered blocks and the page at N, its registered receipts relayed from the page and the
     page's own receipt honest, all under `page_seed`."""
-    page = codec.decode(r.store.blocks[N], N, r.store.registration.key, r.store.appends[0].digests[0])
+    page = codec.decode(r.store.blocks[N], N, r.store.registration.key, r.store.appends[0].digests[0], r.coins[N])
     ys = relayed(page, page_seed) + (receipts.SketchReceipter(page_seed)(N, r.store.blocks[N]),)
     leaf = Entropy(b"pass 1 salts")
     leaf_salts = tuple(leaf(receipts.SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
@@ -63,7 +63,7 @@ def test_a_page_appended_after_a_pass_s_seed_relays_none_of_its_receipts() -> No
 
     bound = receipts.seed(coin, 1, audit.chained(root0, r.head))
     assert r.head == r.store.head and bound != unbound
-    page = codec.decode(r.store.blocks[N], N, r.store.registration.key, a.digests[0])
+    page = codec.decode(r.store.blocks[N], N, r.store.registration.key, a.digests[0], r.coins[N])
     assert not set(relayed(page, bound)) & set(r.prover.pass_under(0, 1, bound, plan).receipts)
 
     cheat = copy.deepcopy(r)

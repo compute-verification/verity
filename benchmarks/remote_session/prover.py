@@ -23,12 +23,14 @@ kvdrop:P        kv:P, but the appended pages are not held: each pass's receipts 
                 opening of one carries the true page, as skip's do
 ~~~
 
-With a serving trace, each root's message carries what changed since the last root sent, in the order the verifier
-applies it: the appends' tree roots and sizes (`Session.append`), then the blocks released as runs
-(`Session.release`), then the pass's plan as a change from the last one sent (`Session.receive(..., change=...)`).
-A pass discarded at a boundary sends nothing, and the next root sent carries its changes too.  A pass's seed binds
-every append sent before its root (`audit.chained`), so a backend that appends takes the chain over its appends when
-the pass is launched (`audit.Store.head`), every one of which goes out with that pass's root or before it.
+With a serving trace, the appends a pass's step made go out after the root before it and before the pass is computed,
+each its own message (its tree's root and size, `Session.append`) answered with its coin, under which the backend
+encodes its blocks (`audit.Store.encode`); then the root's message carries the blocks released since the last root
+sent, as runs (`Session.release`), and the pass's plan as a change from the last one sent (`Session.receive(...,
+change=...)`).  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
+takes the chain over its appends when the pass is launched (`audit.Store.head`).  A pass whose appends went out is
+sent, never dropped at a boundary, since a coin no root follows rejects the session; one dropped before its appends
+went out sends nothing, and the next pass sends its appends and changes too.
 
 Every root's message names the step its pass covers (`Session.receive(..., step=...)`, PROTOCOL.md §8 "The pass and
 its step"): the backend's `step_of(ticket)` if it has one, which a serving backend takes from its engine, and otherwise
@@ -85,6 +87,7 @@ class _Pass:
     discard: bool = False
     plan: rb.Plan | None = None
     upto: tuple[int, int] = (0, 0)
+    flushed: bool = False
 
 
 def hits(dropped: np.ndarray, positions) -> np.ndarray:
@@ -135,8 +138,9 @@ class ServingTrace:
     the `pages // 2` slots after its last write, so a later write lands in a slot holding nothing.  A block written in
     window a is stale from window a + `lifetime` (`audit.Params.lifetime`), and the step before a pass of a window
     that would hold a stale block re-keys it: writes its payload again in its slot, at the store's next fresh index.
-    `memory_map.Replay` turns each step into the audit's append, which the backend's store encodes under the pages'
-    bound keys, and its release; `plan` is every live block in store order."""
+    `memory_map.Replay` turns each step into the audit's append, which the backend's store commits and, once the
+    verifier's coin for it arrives, encodes under the pages' bound keys, and its release; `plan` is every live block in
+    store order."""
 
     def __init__(self, backend, registration: audit.Registration, pages: int, pool: int, rng: random.Random,
                  lifetime: int = audit.LIFETIME) -> None:
@@ -151,7 +155,7 @@ class ServingTrace:
         self.steps, self.cursor, self.rekeyed = 0, 0, 0
         self.live = set(range(N))
         self.held: dict[int, tuple[int, bytes]] = {}
-        self.appends: list[tuple[bytes, int]] = []
+        self.appends: list[audit.Append] = []
         self.released: list[int] = []
         self.appended: list[int] = []
 
@@ -182,7 +186,7 @@ class ServingTrace:
         a = self.backend.append(payloads, [self.rng.randbytes(rb.SALT_BYTES) for _ in payloads])
         if a.first != change.first or a.digests != change.digests:
             raise AssertionError("the store's append is not the memory map's")
-        self.appends.append((a.root, a.count))
+        self.appends.append(a)
         self.appended.extend(range(a.first, a.first + a.count))
         gone = [j for f, c in change.released for j in range(f, f + c)]
         self.released.extend(gone)
@@ -197,7 +201,8 @@ class ServingTrace:
 class CpuBackend:
     """The driver's reference as a backend: a store of `blocks` random payload blocks under the registration's codec,
     every pass `receipts.receipter` over its plan's blocks (every registered block unless the pass names a plan), its
-    tree `receipts.tree`, salts from `entropy`; blocks appended after the codec seed (`append`) are the session's."""
+    tree `receipts.tree`, salts from `entropy`; blocks appended after the codec seed (`append`, committed, then
+    `encode_append` under the append's coin) are the session's."""
 
     def __init__(self, blocks: int, rng: random.Random, read_bytes_per_s: float = 1e12) -> None:
         self.blocks, self.rng, self.read_bytes_per_s = blocks, rng, read_bytes_per_s
@@ -218,9 +223,13 @@ class CpuBackend:
         """A session's appends start again from N."""
         del self.store.blocks[self.blocks:]
         self.store.appends.clear()
+        self.store.pending.clear()
 
     def append(self, payloads, salts) -> audit.Append:
         return self.store.append(payloads, salts)
+
+    def encode_append(self, first: int, coin: bytes) -> None:
+        self.store.encode(first, coin)
 
     def calibrate(self) -> dict:
         return {"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": self.read_bytes_per_s}
@@ -410,7 +419,7 @@ class ProverSide:
 
         backend, clock = self.backend, self.conn.clock
         step_of = getattr(backend, "step_of", None)
-        launched, sent_plan, sent_upto = 0, rb.Plan.whole(N), (0, 0)
+        launched, sent_plan, sent_released, sent_appends = 0, rb.Plan.whole(N), 0, 0
 
         def launch(t: int, i: int, after, start: int | None) -> _Pass:
             """Pass i of window t; with a serving trace, after the trace's step if one falls due, over every live
@@ -435,31 +444,56 @@ class ProverSide:
         passes, last, nxt, stopping, ended, discarded = [], None, 1, False, None, 0
 
         def send(x: _Pass, root: bytes, handle, seen: int) -> None:
-            nonlocal sent_plan, sent_upto
+            nonlocal sent_plan, sent_released
             with self.lock:
                 self.kept[(x.t, x.i)] = handle
             msg = {"type": "root", "t": x.t, "i": x.i, "root": root.hex(), "step": x.step}
             if x.plan is not None:
-                (a0, r0), (a1, r1) = sent_upto, x.upto
-                if a1 > a0:
-                    msg["appends"] = [[r.hex(), c] for r, c in trace.appends[a0:a1]]
-                if r1 > r0:
-                    msg["released"] = [list(r) for r in runs_of(sorted(trace.released[r0:r1]))]
+                if x.upto[1] > sent_released:
+                    msg["released"] = [list(r) for r in runs_of(sorted(trace.released[sent_released:x.upto[1]]))]
                 msg["change"] = [[list(r) for r in side] for side in plan_change(sent_plan, x.plan)]
                 self.plans[(x.t, x.i)] = x.plan
-                sent_plan, sent_upto = x.plan, x.upto
+                sent_plan, sent_released = x.plan, x.upto[1]
             self.conn.send(msg)
             passes.append((x.t, x.i, x.start, seen, clock()))
+
+        def flush(x: _Pass) -> dict | None:
+            """x's appends not yet sent, each sent and answered with its coin, under which the backend encodes its
+            blocks: None, or the session's `end` if it came first."""
+            nonlocal sent_appends
+            for a in trace.appends[sent_appends:x.upto[0]]:
+                self.conn.send({"type": "append", "root": a.root.hex(), "count": a.count})
+                sent_appends, x.flushed = sent_appends + 1, True
+                reply = self._appended(pending)
+                if reply["type"] == "end":
+                    return reply
+                if reply["first"] != a.first:
+                    raise ValueError(f"the verifier placed the append from block {a.first} at {reply['first']}")
+                backend.encode_append(a.first, bytes.fromhex(reply["coin"]))
+            return None
 
         while inflight:
             if not stopping and len(inflight) < 2:
                 inflight.append(launch(t, nxt, inflight[-1].ticket, None))
                 nxt += 1
             x = inflight.popleft()
-            root, handle = backend.wait(x.ticket)
-            seen = clock()
-            if inflight:
-                inflight[0].start = seen
+            unsent = x.plan is not None and x.upto[0] > sent_appends
+            if unsent and not x.discard:
+                self._drain(pending)
+                if not pending or (pending[0][0]["type"] != "end" and pending[0][2] >= x.start):
+                    if (gone := flush(x)) is not None:
+                        ended, stopping = gone, True
+                        discarded += 1 + len(inflight)
+                        break
+                    unsent = False
+            if unsent:
+                if inflight:
+                    inflight[0].start = clock()
+            else:
+                root, handle = backend.wait(x.ticket)
+                seen = clock()
+                if inflight:
+                    inflight[0].start = seen
             self._drain(pending)
             if x.discard:
                 discarded += 1
@@ -475,7 +509,7 @@ class ProverSide:
                 ended, stopping = msg, True
                 discarded += 1
                 continue
-            if stamp < x.start:
+            if stamp < x.start and not x.flushed:
                 discarded += 1
             else:
                 send(x, root, handle, seen)
@@ -516,10 +550,26 @@ class ProverSide:
             out["kv"] = {"pages": trace.pages, "every": self.kv_every, "pool_slots": len(trace.slots),
                          "steps": trace.steps, "rekeyed": trace.rekeyed, "lifetime": trace.lifetime,
                          "appended": len(trace.appended), "released": len(trace.released),
-                         "sent_appended": sum(c for _, c in trace.appends[:sent_upto[0]]), "sent_released": sent_upto[1],
+                         "sent_appended": sum(a.count for a in trace.appends[:sent_appends]),
+                         "sent_released": sent_released,
                          "pass_blocks": [p.length for p in sent],
                          "pass_appended": [sum(max(0, f + c - max(f, N)) for f, c in p.runs) for p in sent]}
         return out
+
+    def _appended(self, pending: deque) -> dict:
+        """The verifier's reply to the append just sent, `appended`, or the session's `end` if it came first; the
+        boundary messages that arrive before it go to `pending`, in order."""
+        while True:
+            item = self.inbox.get()
+            kind = item[0]["type"]
+            if kind in ("lost", "bye"):
+                raise wire.Closed(item[0].get("why", "bye"))
+            if kind == "appended":
+                return item[0]
+            if kind in BOUNDARIES:
+                pending.append(item)
+                if kind == "end":
+                    return item[0]
 
     def _drain(self, pending: deque) -> None:
         """Move the boundary messages that have arrived into `pending`, in order."""

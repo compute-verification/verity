@@ -11,9 +11,10 @@ One connection serves one registration and then `--sessions` sessions over it, e
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
    (`--lifetime`, windows, sent with the session so the prover re-keys in time); the coin commitment sent first, then
-   σ_0, a boundary message every window, each root fed to `Session.receive` stamped with the time its last byte was
-   read (with the appends and releases its message carries first, its plan as a change when it carries one, and the
-   step its pass covers: `Verifier.root`), each window closed (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
+   σ_0, a boundary message every window, each append answered with its coin (`Verifier.append`), each root fed to
+   `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, its
+   plan as a change when it carries one, and the step its pass covers: `Verifier.root`), each window closed
+   (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
    verdict as `Session.verify`'s) or by `Session.verify` on a thread of the verifier's, so a window's checks run while
    the next window's passes arrive; once every window is accepted the record (`Session.record`) and its γ terms
@@ -155,7 +156,7 @@ class Verifier:
                 return head, body, stamp
             if head["type"] == "lost":
                 raise wire.Closed(head["why"])
-            if head["type"] not in ("root", "openings", "closed", "verdict"):
+            if head["type"] not in ("root", "append", "openings", "closed", "verdict"):
                 self.log(f"verifier: skipped a {head['type']} while waiting for {kind}")
 
     def register(self) -> tuple[audit.Registration, dict]:
@@ -280,6 +281,19 @@ class Verifier:
                 while drawn < t and failure is None:
                     close(drawn)
                     drawn += 1
+            elif kind == "append":
+                try:
+                    got = self.append(session, head)
+                except audit.SessionError:
+                    failure = failed()
+                    break
+                except (TypeError, ValueError, KeyError):
+                    failure = {"t": session.filling, "failure": "malformed", "at": None}
+                    break
+                if isinstance(got, audit.Verdict):
+                    failure = {"t": got.window, "failure": got.failure, "at": got.at}
+                    break
+                self.conn.send(got)
             elif kind == "openings" and self.checks is not None:
                 c = checking.get(t := head["t"])
                 if c is None:
@@ -366,14 +380,24 @@ class Verifier:
         return out
 
     @staticmethod
+    def append(session: audit.Session, head: dict) -> dict | audit.Verdict:
+        """An append's message to the session (`Session.append`), `{"type": "append", "root": hex, "count": n}`: the
+        reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, drawn now, or the
+        rejection."""
+        got = session.append(bytes.fromhex(head["root"]), head["count"])
+        if isinstance(got, audit.Verdict):
+            return got
+        first, coin = got
+        return {"type": "appended", "first": first, "coin": coin.hex()}
+
+    @staticmethod
     def root(session: audit.Session, head: dict) -> audit.Verdict | None:
-        """A root's message to the session in the order the prover sends it: its appends (`Session.append`), then the
-        blocks it releases (`Session.release`), then the root with its plan, a change from the last plan if it carries
-        one and the registered store otherwise, and its step (`Session.receive`).  The first rejection, if any."""
-        for root, count in head.get("appends", ()):
-            got = session.append(bytes.fromhex(root), count)
-            if isinstance(got, audit.Verdict):
-                return got
+        """A root's message to the session in the order the prover sends it: the blocks it releases
+        (`Session.release`), then the root with its plan, a change from the last plan if it carries one and the
+        registered store otherwise, and its step (`Session.receive`).  The first rejection, if any.  Appends come as
+        messages of their own (`append`), each answered with its coin: a root's message carrying any is malformed."""
+        if "appends" in head:
+            raise ValueError("an append is a message of its own, answered with its coin")
         if head.get("released") and (v := session.release([tuple(r) for r in head["released"]])) is not None:
             return v
         change = head.get("change")

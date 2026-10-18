@@ -65,7 +65,7 @@ def registered() -> audit.Store:
 def store() -> audit.Store:
     """A store of N registered blocks under p512/k2 with no appends yet, its own to append to."""
     out = copy.copy(registered())
-    out.blocks, out.appends = list(out.blocks), []
+    out.blocks, out.appends, out.pending = list(out.blocks), [], {}
     return out
 
 
@@ -75,9 +75,9 @@ def pages(first: int, count: int) -> list[bytes]:
 
 class Run:
     """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
-    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each pass's
-    seed binding every append it sent before the pass's root (`head`).  With a `registry`, the session is its next
-    over the store's registration."""
+    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
+    under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
+    before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
                  samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None) -> None:
@@ -96,11 +96,16 @@ class Run:
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None
         self.passes: dict[tuple[int, int], audit.Pass] = {}
+        self.coins: dict[int, bytes] = {}
 
     def commit(self, root: bytes, count: int) -> int:
-        """An append's root sent (`Session.append`): the index the verifier assigns."""
-        first = self.s.append(root, count)
+        """An append's root sent (`Session.append`): the index the verifier assigns, its coin kept and, if the store
+        awaits that append's coin, its blocks encoded under it."""
+        first, coin = self.s.append(root, count)
+        self.coins[first] = coin
         self.head = audit.append_head(self.head, first, count, root)
+        if first in self.store.pending:
+            self.store.encode(first, coin)
         return first
 
     def append(self, count: int) -> audit.Append:
@@ -185,7 +190,9 @@ def test_an_honest_session_over_appended_and_released_pages_is_accepted(honest) 
     assert ps.plan.block(9) == 9 and o.digest == codec.digest(pages(9, 1)[0]) and len(o.digest) == 64
     assert registered.digest == b""
     assert o.size == registered.size + 64 + 64 * (len(o.payload_path) - len(registered.payload_path))
-    assert r.store.blocks[9] == codec.encode(pages(9, 1)[0], 9, r.store.registration.key, bound=True)
+    k = r.store.registration.key
+    assert r.store.blocks[9] == codec.encode(pages(9, 1)[0], 9, k, bound=True, coin=r.coins[8])
+    assert r.store.blocks[9] != codec.encode(pages(9, 1)[0], 9, k, bound=True)
 
 
 def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(honest) -> None:
@@ -458,14 +465,28 @@ def test_a_malformed_append_or_release_rejects_the_session() -> None:
 
 
 def test_a_store_appends_at_fresh_indices_under_bound_keys() -> None:
+    """An append commits its blocks' digests and leaves them unencoded until its coin arrives (`Store.encode`), which
+    encodes them once: a second coin for it, or a coin for no pending append, is refused, and a malformed coin
+    leaves it pending."""
     st = store()
     a = st.append(pages(N, 2), salts(b"a", 2))
     b = st.append(pages(N + 2, 1), salts(b"b", 1))
     assert (a.first, a.count, b.first, b.count, st.extent) == (N, 2, N + 2, 1, N + 3)
+    assert st.blocks[N:] == [None] * 3 and set(st.pending) == {N, N + 2}
+    ca, cb = (hashlib.sha512(label).digest()[:codec.COIN_BYTES] for label in (b"coin a", b"coin b"))
+    with pytest.raises(ValueError, match="32 bytes"):
+        st.encode(N, ca[:31])
+    assert set(st.pending) == {N, N + 2}
+    st.encode(N, ca)
+    st.encode(N + 2, cb)
+    for first in (N, N + 1, N + 2):
+        with pytest.raises(ValueError, match="awaits its coin"):
+            st.encode(first, ca)
     k = st.registration.key
-    for j in range(N, N + 3):
+    for j, coin in ((N, ca), (N + 1, ca), (N + 2, cb)):
         salt, path, d = st.committed(j)
-        assert d == codec.digest(pages(j, 1)[0]) and codec.decode(st.blocks[j], j, k, d) == pages(j, 1)[0]
+        assert d == codec.digest(pages(j, 1)[0]) and codec.decode(st.blocks[j], j, k, d, coin) == pages(j, 1)[0]
+        assert codec.decode(st.blocks[j], j, k, d) is None
     assert st.committed(N + 2)[1] == () and st.committed(0)[2] == b""
     assert a.tree.open(N + 1).value == receipts.hidden(pages(N + 1, 1)[0], a.salts[1])
     with pytest.raises(ValueError, match="salt per payload"):
