@@ -20,10 +20,12 @@ runs the same runner as its pytest step.
 
 Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` queues an `agent-test` job
 (4 CPUs, 16 GiB, 60 min) outside the check slots. Give it `--cwd source`, so the job runs in the shipped tree rather than
-its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment.
+its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment. It returns
+once the job starts, and `research status RUN` checks back on it. `--wait` blocks until the job ends, so give it only
+to a run that ends within about 20 minutes (AGENTS.md "Lanes": no step waits long).
 
 ~~~sh
-R="research run --on auto --cwd source --wait -- bash -lc"
+R="research run --on auto --cwd source -- bash -lc"
 S="uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py"
 $R "$S"                         # every suite whose inputs changed since it last passed there
 $R "$S flock verity"            # these suites (a package name, a directory, or a unique part of one)

@@ -92,8 +92,9 @@ requires, `verity check tests|lean|circuits` runs only those parts, and `verity 
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
-research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
-research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the merge check; --record: an Attempt
+research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
+research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the merge check; --record: an Attempt
+research status RUN  # check back on a run (`research run` returns once it starts); --wait: only a run under 20 min
 ~~~
 
 ## Design rules

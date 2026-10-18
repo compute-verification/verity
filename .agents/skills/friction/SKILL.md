@@ -417,14 +417,12 @@ Newest first. Each is Daniel's unless it names the coordinator.
   circuit accepting implies the verifier of record accepts; completeness stays a test.
 - 2026-10-05 (rewritten 8 Oct): a lead resumes or re-dispatches a turn cut off by a console drop or a provider outage on
   its own judgment, and tells its coordinator.
-- 2026-10-05 (1:27 PM PDT): a coordinator never loses contact with a worker it launched. Nothing reaches a running agent:
-  a `Task` resume is refused, another agent's `SendToAgent` refuses it ("not a worker of this coordinator") and its
-  dashboard follow-up box is disabled. So the Lean move lead went 85 minutes unreachable. Every brief therefore names an
-  inbox branch, `cursor/inbox-<first 8 of the worker's id>-<launcher's suffix>`, and the worker runs `git fetch` on it
-  at every checkpoint (at least every 20 minutes, contract §3), acting on each new commit message. The launcher writes
-  there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
-  and only if that brings no answer does the launcher start a parallel lane. A worker that is IDLE in
-  `list-cloud-agents` with no result delivered was stopped: report it to your coordinator, don't resume it.
+- 2026-10-05 (1:27 PM PDT), superseded on 18 Oct by AGENTS.md's agent norms ("Lanes"): when nothing reached a running
+  agent, every brief named an inbox branch the worker fetched at each checkpoint (at least every 20 minutes), a worker
+  silent for 30 minutes got one inbox message before a parallel lane started, and an IDLE worker with no result was
+  never resumed. Now the agent watch catches a stalled or stopped agent, a worker writes a checkpoint note before long
+  work and every 3 to 4 hours, and one resumed twice is relaunched fresh from its last note. What stands: a coordinator
+  never loses contact with a worker it launched (`inbox.py` reaches one on its VM).
 - 2026-10-05 (8:53 AM PDT), superseded: `main` kept `tools/verity/lean/check.py` and each package's `lean-audit.json`
   under their names (`f507299a4`), so no rename is pending. What stands: the Lean audit is the Lean check.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every

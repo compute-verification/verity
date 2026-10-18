@@ -41,8 +41,8 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
   `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. Copy, never symlink, because Lake
   rewrites `.olean` files in place. After the copy, `lake build` compiles only the package's own modules.
-- **A reviewer or red-team subagent works in its own worktree**, under AGENTS.md's checkout rule (Lanes): a checkout in
-  another agent's tree switches that agent's files under it.
+- **A reviewer or red-team subagent is a cloud worker** (AGENTS.md "Lanes"), so it works in its own checkout: a checkout
+  in another agent's tree switches that agent's files under it.
 
 ## Build, iterate, check
 
