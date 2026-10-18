@@ -196,40 +196,17 @@ theorem hm96_node {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (
   cases hr
   exact h64 _
 
-theorem plain_ops (h : ByteArray → ByteArray) :
-    (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").opsWith (Hashes.ofSha512 h : Hashes V) =
-      MerkleOps.sha512With (Hashes.ofSha512 h) := rfl
-
-theorem plain_leaf {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (row : Array F128) (salt : ByteArray)
-    {r : ByteArray} (hr : (MerkleOps.sha512With (Hashes.ofSha512 h : Hashes V)).leaf row salt = .ok r) :
-    r.size = 64 := by
-  cases hr
-  exact h64 _
-
-theorem plain_node {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (a b : ByteArray) {r : ByteArray}
-    (hr : (MerkleOps.sha512With (Hashes.ofSha512 h : Hashes V)).node a b = .ok r) : r.size = 64 := by
-  cases hr
-  exact h64 _
-
-/-- **A level's cap under `hm96-sha512/v1` or plain SHA-512 leaves**, for a SHA-512 of 64-byte outputs: at most `2^d`
-digests of 64 bytes. -/
+/-- **A level's cap under `hm96-sha512/v1`**, for a SHA-512 of 64-byte outputs: at most `2^d` digests of 64 bytes. -/
 theorem commitP_cap {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (lv : Level) (g : Array F128)
-    (salt : ℕ → ByteArray) {c : Commit} {ms : MerkleScheme}
-    (hms : ms = MerkleScheme.hm96Sha512 ∨ ms = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
-    (hc : (commitP (Hashes.ofSha512 h) ms lv g salt : V Commit) = .ok c) :
+    (salt : ℕ → ByteArray) {c : Commit}
+    (hc : (commitP (Hashes.ofSha512 h) MerkleScheme.hm96Sha512 lv g salt : V Commit) = .ok c) :
     c.cap.size ≤ 2 ^ lv.d ∧ ∀ b ∈ c.cap, b.size = 64 := by
-  have hw : (∀ row y r, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).leaf row y = .ok r → r.size = 64) ∧
-      ∀ a b r, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).node a b = .ok r → r.size = 64 := by
-    rcases hms with rfl | rfl
-    · rw [hm96_ops]
-      exact ⟨fun row y _ hr => hm96_leaf h64 row y hr, fun a b _ hr => hm96_node h64 a b hr⟩
-    · rw [plain_ops]
-      exact ⟨fun row y _ hr => plain_leaf h64 row y hr, fun a b _ hr => plain_node h64 a b hr⟩
   unfold commitP at hc
+  rw [hm96_ops] at hc
   obtain ⟨leaves, hl, hc⟩ := except_ok_bind hc
   obtain ⟨s, hs, hc⟩ := except_ok_bind hc
   cases hc
-  have hL := mapM_sized (fun _ _ hr => hw.1 _ _ _ hr) hl
+  have hL := mapM_sized (fun _ _ hr => hm96_leaf h64 _ _ hr) hl
   rw [Array.size_range] at hL
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hs
   refine except_forIn_inv (fun s : Array (Array ByteArray) × Array ByteArray => s.2.size ≤ 2 ^ lv.d ∧
@@ -237,7 +214,7 @@ theorem commitP_cap {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64)
   rintro - ⟨layers, cur⟩ r ⟨h1, -⟩ hr
   obtain ⟨cur', hc', hr⟩ := except_ok_bind hr
   cases hr
-  have hN := mapM_sized (fun _ _ hr => hw.2 _ _ _ hr) hc'
+  have hN := mapM_sized (fun _ _ hr => hm96_node h64 _ _ hr) hc'
   rw [Array.size_range] at hN
   exact ⟨hN.1.trans_le ((Nat.div_le_self _ _).trans h1), hN.2⟩
 
@@ -270,11 +247,9 @@ theorem fast100_d0 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : (sch.
   · rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at h
     cases h
 
-/-- **The case's statement is one table, and commits with the scope check's leaf scheme**: `hm96-sha512/v1`, or plain
-SHA-512 leaves under hidden outputs. -/
-theorem Case.leaf {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
-    ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧
-      (st.merkle = MerkleScheme.hm96Sha512 ∨ st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") := by
+/-- **The case's statement is one table, and commits with `hm96-sha512/v1`**: the scope check's leaf scheme. -/
+theorem Case.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
+    ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ st.merkle = MerkleScheme.hm96Sha512 := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployPlain rel) rel (readOf false) rfl
     (fun _ _ h => readOf_zk h) c.x).1 c.scope
   have hi := (setupOf_some c.setup).1
@@ -295,22 +270,21 @@ theorem Case.leaf {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Rea
     rw [hpi] at this
     exact this
   have hl := (FlockSoundness.Discharge.FailClosed.check_ok hc').1.2.2.2.1
-  have hcount : p.I.count ≤ 1 := by simpa [hzk] using hR.2.2.2.2.1
+  have hcount : p.I.count ≤ 1 := by
+    rcases hR.2.2.2.2.1 with h | h
+    · rw [hzk] at h; cases h
+    · exact h
   have hset := Ins.setup_read (setupOf_some c.setup).2
   rw [← ht] at hset
   unfold Readable.Read.setup at hset
   rw [hpi] at hset
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hset with ⟨-, st, hst, hsp, hsts⟩ | ⟨hc1, -⟩
   · refine ⟨st, hsts, hsp, ?_⟩
-    rcases hl with hl | ⟨-, hh, hl⟩
-    · left
-      cases hh : p.tags.hiddenOutputs
-      · exact FlockSoundness.Discharge.Exec.setupH_hm96 hl
-          ((FlockSoundness.Discharge.HiddenExec.setupOne_public hh).symm.trans hst)
-      · exact FlockSoundness.Discharge.HiddenExec.setupHidden_hm96 hl
-          ((FlockSoundness.Discharge.HiddenExec.setupOne_hidden hh).symm.trans hst)
-    · exact Or.inr (FlockSoundness.Discharge.HiddenExec.setupHidden_plain hl
-        ((FlockSoundness.Discharge.HiddenExec.setupOne_hidden hh).symm.trans hst))
+    cases hh : p.tags.hiddenOutputs
+    · exact FlockSoundness.Discharge.Exec.setupH_hm96 hl
+        ((FlockSoundness.Discharge.HiddenExec.setupOne_public hh).symm.trans hst)
+    · exact FlockSoundness.Discharge.HiddenExec.setupHidden_hm96 hl
+        ((FlockSoundness.Discharge.HiddenExec.setupOne_hidden hh).symm.trans hst)
   · omega
 
 /-- One table's schedules: its fast100 schedule. -/
@@ -341,7 +315,7 @@ theorem linkFirst_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).length
   have h64 : ∀ b, (Claims.hOf H b).size = 64 := fun b => by
     simp [Claims.hOf, Claims.ofMsg, ByteArray.size, hH]
   obtain ⟨schs, cms, hs, hc, hh⟩ := sessionS_link o.ran
-  obtain ⟨st, hsts, -, hms⟩ := o.leaf
+  obtain ⟨st, hsts, -, hms⟩ := o.hm96
   have htabs : tabsOf o.sts = #[Setup.ofCircuit st] := by rw [hsts]; simp [tabsOf]
   rw [htabs] at hs
   obtain ⟨sch, hf, rfl⟩ := schedsP_one hs
@@ -358,8 +332,8 @@ theorem linkFirst_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).length
     have hj0 : j = 0 := by omega
     have hcj := hcall j hj
     subst hj0
-    simp only [List.getElem!_toArray, List.getElem!_cons_zero, Setup.ofCircuit] at hcj
-    obtain ⟨hcap, hcap64⟩ := commitP_cap h64 _ _ _ hms hcj
+    simp only [List.getElem!_toArray, List.getElem!_cons_zero, Setup.ofCircuit, hms] at hcj
+    obtain ⟨hcap, hcap64⟩ := commitP_cap h64 _ _ _ hcj
     rw [flat_size hcap64]
     have hd := fast100_d0 hf
     calc 64 * cms[0].cap.size ≤ 64 * 2 ^ 56 :=

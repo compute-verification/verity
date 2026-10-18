@@ -279,7 +279,7 @@ theorem fast100_levels {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : 2
 theorem sendCount_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     SendCount H rel := by
   intro o
-  obtain ⟨st, hsts, hspec, -⟩ := o.leaf
+  obtain ⟨st, hsts, hspec, -⟩ := o.hm96
   have htabs : tabsOf o.sts = #[Setup.ofCircuit st] := by rw [hsts]; simp [tabsOf]
   have h1 : o.spec.tables.size = 1 := by rw [hspec]; rfl
   have hP : sendsC.P (sessionP (asksS o.resp) (Hashes.ofSha512 (Claims.hOf H)) o.spec (tabsOf o.sts)
