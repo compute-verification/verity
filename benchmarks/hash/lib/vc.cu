@@ -762,14 +762,14 @@ template <bool SH> DEV void ld_dig(const u64* p, u64* d, int n) {
 template <bool SH> DEV void seg_fold(const u64* qst, const u64* dig, u32 s, uint8_t* out) {
   u64 st[8], w[16];
   cpy8(st, qst);
-  u32 j = 0;
+  const int pairs = (int)(s / 2);
 #pragma unroll 1
-  for (; j + 1 < s; j += 2) {
-    ld_dig<SH>(dig + 8 * j, w, 16);
+  for (int k = 0; k < pairs; ++k) {
+    ld_dig<SH>(dig + 16 * k, w, 16);
     sha::compress(st, w);
   }
-  if (j < s) {
-    ld_dig<SH>(dig + 8 * j, w, 8);
+  if (s & 1) {
+    ld_dig<SH>(dig + 16 * pairs, w, 8);
 #pragma unroll
     for (int t = 8; t < 16; ++t) w[t] = 0;
     w[8] = 0x8000000000000000ull;
