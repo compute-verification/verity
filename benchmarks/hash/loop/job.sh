@@ -8,8 +8,8 @@
 # CHECK_TESTS (the committer's GPU byte-identity tests and check_b3.py, the BLAKE3 arm against the hash lane's hm96 reference, run in
 # the lease before timing, once in each rows-sha512 leaf form, VERITY_ROWS_FORM=fused and split; a failure is exit 7 and no timing;
 # empty skips them).  The timed arms run the device's own form (native_rows.cu, verity_rows_leaves_form).
-# The BLAKE3 sibling arm (served-commit-rows-blake3, arms.py) runs through a copy of circuits' prof.sh with its one case line added;
-# prof.sh itself is circuits' and is not edited.
+# The loop's arms (arms.py: the BLAKE3 sibling served-commit-rows-blake3, what-if served-commit-rows-whatif-q) run through a copy
+# of circuits' prof.sh with their case lines added; prof.sh itself is circuits' and is not edited.
 # On a dc VM the GPU is held only for the timed bench; a queued job (vy-nebius-2) already runs inside the queue's lease, which
 # it reuses.
 set -uo pipefail
@@ -23,8 +23,10 @@ print(snapshot_download('Qwen/Qwen3-8B', revision='b968826d9c46dd6066d109eabc625
       allow_patterns=['*.json', '*.safetensors', '*.txt', '*.model', '*.py'], cache_dir='$HF_HOME/hub'))" || exit 8
 export CHECK_TESTS=${CHECK_TESTS-integrations/vllm/tests/commit/test_rows_cuda.py integrations/vllm/tests/commit/test_windowed_rows_sha512.py benchmarks/hash/loop/check_b3.py benchmarks/hash/loop/check_hfirst.py}
 PROF=$(mktemp -d)/prof.sh
-sed '/^    served-commit-rows) /i\    served-commit-rows-blake3) mods+=(--arm-module hash.loop.arms:SERVED_COMMIT_ROWS_BLAKE3);;' benchmarks/served_commit/prof.sh > "$PROF"
-grep -q "hash.loop.arms" "$PROF" || { echo "prof.sh has no served-commit-rows case line to add the BLAKE3 arm beside"; exit 9; }
+sed -e '/^    served-commit-rows) /i\    served-commit-rows-blake3) mods+=(--arm-module hash.loop.arms:SERVED_COMMIT_ROWS_BLAKE3);;' \
+    -e '/^    served-commit-rows) /i\    served-commit-rows-whatif-q) mods+=(--arm-module hash.loop.arms:SERVED_COMMIT_ROWS_WHATIF_Q);;' \
+    benchmarks/served_commit/prof.sh > "$PROF"
+grep -q "hash.loop.arms" "$PROF" || { echo "prof.sh has no served-commit-rows case line to add the loop's arms beside"; exit 9; }
 export PROF
 bench='
   if [ -n "$CHECK_TESTS" ]; then
