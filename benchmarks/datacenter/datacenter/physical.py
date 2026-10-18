@@ -41,6 +41,8 @@ class Device:
     memory: Assumption | None = None
     residual: Assumption | None = None
     trusted: bool = False
+    #: bits per second the device reads from its own memory
+    bandwidth: Assumption | None = None
 
     def __repr__(self) -> str:
         return f"{self.kind}:{self.name}"
@@ -121,7 +123,7 @@ class Datacenter:
         """Every named premise the declaration makes, once each."""
         out: dict[str, Assumption] = {}
         for d in self.devices.values():
-            for a in [*d.rate.values(), d.memory, d.residual]:
+            for a in [*d.rate.values(), d.memory, d.residual, d.bandwidth]:
                 if a is not None:
                     out[a.name] = a
         for l in self.links:

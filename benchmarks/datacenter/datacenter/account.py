@@ -23,7 +23,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from .binding import Placement
-from .claims import Carried, Claim, Computed, Emitted, Entered, Erased, Refused
+from .claims import Answered, Carried, Claim, Computed, Emitted, Entered, Erased, Refused
+from .memory import answer_time
 from .time import Clock, Interval
 
 
@@ -48,6 +49,8 @@ class Account:
     input_bits: dict[str, int]
     refused: list[Refused]
     offramp_bits: dict[str, int] = field(default_factory=dict)
+    #: each answered store, and every device that could have held it and still answered in time
+    located: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def covert_bits(self) -> float:
@@ -66,6 +69,9 @@ class Account:
         lines.append(f"covert budget: {self.covert_bits:g} bits = {self.timing_bits:g} timing advice + "
                      f"{sum(self.input_bits.values())} inputs ({', '.join(f'{k}: {v}' for k, v in self.input_bits.items()) or 'none'}) + "
                      f"{sum(self.offramp_bits.values())} off-ramp ({', '.join(f'{k}: {v}' for k, v in self.offramp_bits.items()) or 'none'})")
+        for s, where in self.located.items():
+            lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
+                         f"store {s}: held on one of {', '.join(where)} (not located to one device)")
         lines += [f"REFUSED {r.what}: {r.why}" for r in self.refused]
         return "\n".join(lines)
 
@@ -100,7 +106,16 @@ def account(claims: list[Claim], p: Placement, clock: Clock, epoch: Interval, op
     offramp: dict[str, int] = defaultdict(int)
     for (stream, _), bits in per_window.items():
         offramp[stream] += bits
-    return Account(blocks, timing, inputs, refused, dict(offramp))
+    located = {}
+    stores = {s.name: s for s in p.stores}
+    challengers = [d.name for d in dc.devices.values() if d.kind == "challenger"]
+    for c in claims:
+        if isinstance(c, Answered) and challengers:
+            s = stores[c.store]
+            located[s.name] = [d.name for d in dc.devices.values()
+                               if d.memory is not None and float(d.memory) >= s.bits
+                               and answer_time(dc, clock, challengers[0], s.device, d.name, s.bits) <= clock.seconds(c.ticks)]
+    return Account(blocks, timing, inputs, refused, dict(offramp), located)
 
 
 @dataclass(frozen=True)

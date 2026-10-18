@@ -7,14 +7,15 @@ circuit onto the hardware, and `observe` runs it and records what the trusted de
 """
 from .account import Account, Credit, account, feasible
 from .binding import Crossing, Offramp, Placement, crossings, occupancy, place, route
-from .claims import Carried, Computed, Emitted, Entered, Erased, Refused, audit
+from .claims import Answered, Carried, Computed, Emitted, Entered, Erased, Refused, audit
 from .logical import Circuit, Commitment, Input, Value, commit, name, trace
+from .memory import Challenge, Store, answer_time
 from .observe import Deviation, Record, Trace, run
 from .physical import Assumption, Block, Datacenter, Device, Fleet, Link
 from .time import Clock, Interval, Wipe
 
 __all__ = [
-    "Account", "Assumption", "Block", "Carried", "Circuit", "Clock", "Commitment", "Computed", "Credit", "Crossing",
+    "Account", "Answered", "Assumption", "Block", "Carried", "Challenge", "Circuit", "Store", "answer_time", "Clock", "Commitment", "Computed", "Credit", "Crossing",
     "Datacenter", "Deviation", "Device", "Emitted", "Entered", "Erased", "Fleet", "Input", "Interval", "Link", "Offramp",
     "Placement", "Record",
     "Refused", "Trace", "Value", "Wipe", "account", "audit", "commit", "crossings", "feasible", "name", "occupancy",

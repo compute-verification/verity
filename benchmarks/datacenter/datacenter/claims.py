@@ -10,6 +10,7 @@ physical layer's job. Its output is a list of claims about the prover *system*, 
 - `Entered`: an input's bits entered the computation.
 - `Emitted`: a declared off-ramp (telemetry) carried bits the circuit doesn't explain.
 - `Erased`: a device's memory was overwritten and checked during an interval.
+- `Answered`: a challenge to a registered store came back right, within so many ticks.
 - `Refused`: something didn't check, and which window or device it was.
 """
 from __future__ import annotations
@@ -60,12 +61,23 @@ class Erased:
 
 
 @dataclass(frozen=True)
+class Answered:
+    """A challenge to a registered store was answered correctly within `ticks` of being asked: its deadline, which is
+    public protocol structure. The exact latency is the challenger's observation and stays witness. The claim says
+    nothing about where the bits were: that is the physical layer's reading of `ticks`."""
+
+    store: str
+    at: int
+    ticks: int
+
+
+@dataclass(frozen=True)
 class Refused:
     what: str
     why: str
 
 
-Claim = Computed | Carried | Entered | Emitted | Erased | Refused
+Claim = Computed | Carried | Entered | Emitted | Erased | Answered | Refused
 
 
 def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: int = 1) -> list[Claim]:
@@ -101,6 +113,15 @@ def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: i
             out.append(Entered(v.name, spec.bits, spec.source))
     for w in trace.wipes:
         out.append(Erased(w.wipe.device, w.wipe.at) if w.passed else Refused(f"wipe of {w.wipe.device}", "a spot check failed"))
+    for r in trace.challenges:
+        took = r.answered - r.challenge.at
+        if not r.correct:
+            out.append(Refused(f"challenge to {r.challenge.store} at {r.challenge.at}", "the answer was wrong"))
+        elif took > r.challenge.deadline:
+            out.append(Refused(f"challenge to {r.challenge.store} at {r.challenge.at}",
+                               f"answered after {took} ticks, past its deadline of {r.challenge.deadline}"))
+        else:
+            out.append(Answered(r.challenge.store, r.challenge.at, r.challenge.deadline))
     return out
 
 

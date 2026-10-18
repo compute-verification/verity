@@ -13,9 +13,12 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 
+import math
+
 from .binding import Placement, crossings, route
 from .logical import Commitment, commit
-from .time import Interval, Wipe
+from .memory import Challenge, answer_time
+from .time import Clock, Interval, Wipe
 
 
 @dataclass(frozen=True)
@@ -39,14 +42,25 @@ class WipeRecord:
     passed: bool
 
 
+@dataclass(frozen=True)
+class ChallengeRecord:
+    """The challenger's record of a challenge: the tick its answer arrived, and whether the answer was right."""
+
+    challenge: Challenge
+    answered: int
+    correct: bool = True
+
+
 @dataclass
 class Deviation:
     """How a dishonest run departs from the honest one: `extra[(link, bucket)]` frames of covert content added on a
-    boundary link, `hold[(link, bucket)] = bucket'` moving a bucket's frames later, and wipes that fail."""
+    boundary link, `hold[(link, bucket)] = bucket'` moving a bucket's frames later, wipes that fail, and stores kept on
+    another device than the registered one (`moved[store] = device`)."""
 
     extra: dict[tuple[tuple[str, str], int], int] = field(default_factory=dict)
     hold: dict[tuple[tuple[str, str], int], int] = field(default_factory=dict)
     failed_wipes: set[str] = field(default_factory=set)
+    moved: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -64,6 +78,8 @@ class Trace:
     frame_bits: int
     bucket: int
     window: int
+    challenges: list[ChallengeRecord] = field(default_factory=list)
+    clock: Clock = field(default_factory=Clock)
 
 
 def _digest(frames: list[tuple[int, int]]) -> bytes:
@@ -74,9 +90,11 @@ def _digest(frames: list[tuple[int, int]]) -> bytes:
 
 
 def run(p: Placement, inputs: dict[str, int], *, frame_bits: int = 32, bucket: int = 1, window: int = 8,
-        wipes: list[Wipe] | None = None, deviation: Deviation | None = None) -> Trace:
+        wipes: list[Wipe] | None = None, challenges: list[Challenge] | None = None, clock: Clock | None = None,
+        deviation: Deviation | None = None) -> Trace:
     """Execute placement `p` on `inputs`, recording every boundary link in windows of `window` buckets of `bucket`
-    ticks."""
+    ticks, each wipe, and each challenge to a registered store, answered from wherever its bits really are."""
+    clock = clock or Clock()
     dev = deviation or Deviation()
     values = p.circuit.evaluate(inputs)
     commitment, salt = commit([values[i] for i in range(len(values))], [g.bits for g in p.circuit.gates])
@@ -113,4 +131,11 @@ def run(p: Placement, inputs: dict[str, int], *, frame_bits: int = 32, bucket: i
             records.append(Record(key, w, cs, _digest(content.get((key, w), [])), cert.name if cert else "?",
                                   tuple(sorted(offramp.get((key, w), {}).items()))))
     wipe_records = [WipeRecord(w, w.device not in dev.failed_wipes) for w in (wipes or [])]
-    return Trace(p, commitment, values, salt, records, wipe_records, dict(inputs), frame_bits, bucket, window)
+    stores = {s.name: s for s in p.stores}
+    answers = []
+    for ch in challenges or []:
+        s = stores[ch.store]
+        seconds = answer_time(p.datacenter, clock, ch.challenger, s.device, dev.moved.get(s.name, s.device), s.bits)
+        answers.append(ChallengeRecord(ch, ch.at + math.ceil(seconds / clock.tick - 1e-9)))
+    return Trace(p, commitment, values, salt, records, wipe_records, dict(inputs), frame_bits, bucket, window, answers,
+                 clock)

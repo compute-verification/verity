@@ -43,6 +43,8 @@ class Placement:
     deliver: str | None = None
     #: declared streams of unexplained data (telemetry), charged in full
     offramps: tuple[Offramp, ...] = ()
+    #: registered state, each on the device the developer says holds it
+    stores: tuple = ()
 
     def tick(self, v: Value | int) -> int:
         i = v.id if isinstance(v, Value) else v
@@ -58,7 +60,8 @@ class Placement:
 
 
 def place(circuit: Circuit, datacenter: Datacenter, where: dict[str, str], ticks_per_step: int = 1,
-          transfer_steps: int = 2, deliver: str | None = None, offramps: tuple[Offramp, ...] = ()) -> Placement:
+          transfer_steps: int = 2, deliver: str | None = None, offramps: tuple[Offramp, ...] = (),
+          stores: tuple = ()) -> Placement:
     """Place `circuit` on `datacenter`: `where` maps a value name (or `*`, the default) to a device; an unnamed value is
     computed where it is needed, on the device of its first reader that sits in a block (else the default). Each
     value's step is one past its operands' (plus `transfer_steps` when an operand crosses a block), and each device's
@@ -80,7 +83,7 @@ def place(circuit: Circuit, datacenter: Datacenter, where: dict[str, str], ticks
     horizon = max(step.values(), default=0) + 1 + transfer_steps
     devices = set(leaf.values()) | ({deliver} if deliver else set())
     ticks = {d: [s * ticks_per_step for s in range(horizon)] for d in devices}
-    return Placement(circuit, datacenter, leaf, step, ticks, deliver, tuple(offramps))
+    return Placement(circuit, datacenter, leaf, step, ticks, deliver, tuple(offramps), tuple(stores))
 
 
 @dataclass(frozen=True)
