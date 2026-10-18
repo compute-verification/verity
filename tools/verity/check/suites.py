@@ -1681,7 +1681,7 @@ def on_agent_vm() -> bool:
 
 
 #: how an agent VM's suites run instead: an `agent-test` job on a node from this checkout's commit (`research run --on auto`)
-REMOTE = ("research", "run", "--on", "auto", "--wait", "--cpus", "16", "--mem-gb", "64", "--max-min", "180")
+REMOTE = ("research", "run", "--on", "auto", "--wait", "--cwd", "source", "--cpus", "16", "--mem-gb", "64", "--max-min", "180")
 #: what stays here on an agent VM: reading the cache, and output a caller reads from this machine's disk
 LOCAL_ONLY = ("--list", "--explain", "--json", "--logs", "-h", "--help")
 

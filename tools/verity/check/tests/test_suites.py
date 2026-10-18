@@ -1590,7 +1590,7 @@ def test_on_an_agent_vm_the_suites_run_on_a_node_from_the_commit(monkeypatch, tm
     monkeypatch.setenv("CURSOR_AGENT", "1")
     assert S.on_agent_vm()
     assert S.main(["research", "--quick"]) == 0
-    assert calls[-1][3:8] == ["research", "run", "--on", "auto", "--wait"] and calls[-1][-3:] == ["--local", "research", "--quick"]
+    assert calls[-1][3:10] == ["research", "run", "--on", "auto", "--wait", "--cwd", "source"] and calls[-1][-3:] == ["--local", "research", "--quick"]
     status["out"] = " M tools/x.py\n"
     assert S.main(["research"]) == 2 and "uncommitted changes" in capsys.readouterr().err
     for k, v in (("RESEARCH_RUN_DIR", "/r"), ("AGENT_GUARD_LOCAL_OK", "1")):
