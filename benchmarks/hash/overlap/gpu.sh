@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# overlap on one leased GPU (cwd = the source tree's root). Outside a lease: the build (GEMMS=none, or sm90 / sm100 with
+# overlap on one leased GPU (cwd = the source tree's root). Outside a lease: the build (GEMM_CFGS: CUTLASS configurations, with
 # CUTLASS fetched at CUTLASS_TAG into scratch) and reference.py's parameter files. Lease 1: `overlap dump`, every hash
 # variant's levels beside a running GEMM, device-compared with commit_gpu's Committer. Then reference.py verify on every
 # dump (verity.ml.commitments), and only if every dump verifies, lease 2: `overlap bench`. PROF=1: lease 3, an nsys trace
@@ -7,7 +7,7 @@
 #
 #   research run --on vy-dc-b200 --project verity --campaign hash --source . --cwd source \
 #     --env GPU_LEASE_WHO=hash-prefill-overlap -- bash benchmarks/hash/overlap/gpu.sh
-# REPS (default 9); GEMMS; LEASE_ARGS (e.g. --preemptible on vy-nebius-2); PROF (default 1)
+# REPS (default 9); GEMM_CFGS; LEASE_ARGS (e.g. --preemptible on vy-nebius-2); PROF (default 1)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda/bin:$PATH PYTHONPATH=.
@@ -18,11 +18,10 @@ trap 'rm -rf "$W"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 cc=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i 0 | head -1 | tr -d .)
 GEN="-gencode arch=compute_${cc}a,code=sm_${cc}a"
-GEMMS=${GEMMS:-none}
 CUTLASS_TAG=${CUTLASS_TAG:-v4.2.1}
-echo "arch $cc gemms $GEMMS" > "$O/rc.txt"
+echo "arch $cc gemms ${GEMM_CFGS:-none}" > "$O/rc.txt"
 INC=""
-if [ "$GEMMS" != none ]; then
+if [ -n "${GEMM_CFGS:-}" ]; then
   git clone -q --depth 1 --branch "$CUTLASS_TAG" https://github.com/NVIDIA/cutlass.git "$W/cutlass" 2> "$O/cutlass-clone.err"
   git -C "$W/cutlass" rev-parse HEAD > "$O/cutlass.txt"
   bash $D/patch_cutlass.sh "$W/cutlass" >> "$O/cutlass.txt" 2>&1
@@ -32,11 +31,23 @@ mkdir -p "$W/p"
 for n in 5120 7680 11520 15360; do
   python3 benchmarks/pouw/commit_gpu/reference.py params "$W/p/p-$n.bin" $n 32768 --ks-seed 11 || echo "params $n failed" >> "$O/rc.txt"
 done
+# GEMM_CFGS: NAME:ARCH:KIND:TM:TN:TK:CM:CN:STAGES:MAXNREG:LOADR:MMAR, space-separated (gemm_cutlass.cu; 0 = the default)
 # shellcheck disable=SC2086
-nvcc -O3 -std=c++17 $GEN -Xptxas -v $INC -c -o "$W/gemms.o" $D/gemms_$GEMMS.cu ${GEMM_FLAGS:-} > "$O/build-gemms.log" 2>&1
-echo "build gemms rc $?" >> "$O/rc.txt"
+nvcc -O3 -std=c++17 $GEN -c -o "$W/gemms.o" $D/gemms.cu > "$O/build-gemms.log" 2>&1
+objs=("$W/gemms.o")
+for cfg in ${GEMM_CFGS:-}; do
+  IFS=: read -r nm ar kd tm tn tk cm cn sg mx lr mr <<< "$cfg"
+  defs=(-DOV_NAME="\"$nm\"" -DOV_ARCH="$ar" -DOV_KIND="$kd" -DOV_TM="$tm" -DOV_TN="$tn" -DOV_TK="$tk" -DOV_CM="$cm" -DOV_CN="$cn" -DOV_STAGES="$sg")
+  [ "$mx" != 0 ] && defs+=(-DOV_MAXNREG="$mx")
+  [ "$lr" != 0 ] && defs+=(-DOV_LOADR_V="$lr" -DOV_MMAR_V="$mr")
+  # shellcheck disable=SC2086
+  (nvcc -O3 -std=c++17 $GEN -Xptxas -v $INC "${defs[@]}" -c -o "$W/g-$nm.o" $D/gemm_cutlass.cu > "$O/build-g-$nm.log" 2>&1
+   echo "build $nm rc $?" >> "$O/rc.txt") &
+done
+wait
+for cfg in ${GEMM_CFGS:-}; do nm=${cfg%%:*}; [ -f "$W/g-$nm.o" ] && objs+=("$W/g-$nm.o"); done
 # shellcheck disable=SC2086
-nvcc -O3 -std=c++17 $GEN -Xptxas -v -o "$W/overlap" $D/overlap.cu "$W/gemms.o" -lcublasLt -lnvidia-ml $INC > "$O/build.log" 2>&1
+nvcc -O3 -std=c++17 $GEN -Xptxas -v -o "$W/overlap" $D/overlap.cu "${objs[@]}" -lcublasLt -lnvidia-ml $INC > "$O/build.log" 2>&1
 echo "build rc $?" >> "$O/rc.txt"
 cat "$O/rc.txt"
 [ -x "$W/overlap" ] || { tail -30 "$O/build-gemms.log" "$O/build.log"; exit 1; }
