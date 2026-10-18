@@ -37,8 +37,10 @@ from typing import Any
 
 #: arm -> (row bytes, per-layer acquisition)
 ARMS = {"rows": (256, False), "rows-4k": (4096, False), "rows-layer": (256, True), "rows-layer-4k": (4096, True)}
-#: the modules a per-layer unit keeps of the committer's selection: the embedding (its ids and output), the final norm, the logits
+#: the modules a per-layer unit keeps of the committer's selection: the embedding (its ids and output), the final norm, the logits, and
+#: the sampler where the runner has one as a module (the sampled ids come from the committer's `runner.sample` wrap either way)
 UNIT_MODULES = ("model.embed_tokens", "model.norm", "logits_processor", "runner.sampler")
+UNIT_REQUIRED = UNIT_MODULES[:3]
 ROOT_BYTES = 64
 
 
@@ -130,7 +132,7 @@ def per_layer(com: Any, model: Any) -> dict[str, Any]:
     source with only the cache rows each attention layer writes, and `LayerStreamSource`."""
     from verity_vllm.acquire.sources import attention_source as AS
 
-    missing = sorted(set(UNIT_MODULES) - {n for n, _m in com._modules})
+    missing = sorted(set(UNIT_REQUIRED) - {n for n, _m in com._modules})
     attn = [s for s in com.sources if isinstance(s, AS.AttentionSource)]
     if missing or not attn:
         raise RuntimeError(f"per-layer arm: the committer selects no {missing} or has no attention source ({len(attn)})")
