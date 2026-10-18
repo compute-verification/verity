@@ -24,7 +24,7 @@ by a random bit (`active_replay.adversary_writes`); `late`, which holds a sessio
 `extra`, honest but for one more event, at a position the Program doesn't have. Each block is audited twice: by the
 certifier's reference verifier, `audit.Audit`, on the raw and committed records (`active_replay.audit_configuration`),
 and by the accounting layer's record check, `datacenter.check_records`, on the records as `datacenter.observe.Record`s
-against the ones the Program declares (`records`). For that check the declaration's grid is the certifiers' calibrated parameters (`records.grid`),
+against the ones the Program declares (`records`). For that check the declaration's cadence is the certifiers' calibrated parameters (`records.cadence`),
 whatever it declared. A non-honest block's wire is compared with an honest block's of the same run
 (`active_replay.against_honest`).
 
@@ -327,7 +327,7 @@ def run(args) -> None:
     doc = trace()
     report = calibration.calibrate(doc)
     setup = ar.Setup(report)
-    dc = dataclasses.replace(dc, grid=records.grid(setup))
+    dc = dataclasses.replace(dc, cadence=records.cadence(setup))
     honest = ar.plan_configuration(doc["configurations"][0], setup)
     params = ar.wire_params(setup)
     (out / "report.json").write_text(json.dumps(report))
@@ -371,14 +371,14 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
     """Each block's audit by the certifier's verifier and by the accounting layer's record check, its timing, and its
     wire against an honest block's."""
     setup = ar.Setup(report)
-    summary = {"declaration": dc.name, "grid": {k: v for k, v in vars(dc.grid).items() if k != "tick"}, "blocks": {}}
+    summary = {"declaration": dc.name, "cadence": {k: v for k, v in vars(dc.cadence).items() if k != "tick"}, "blocks": {}}
     honest = next((b for b, s in strategies.items() if s == "honest"), None)
     for b, strategy in strategies.items():
         a = ar.audit_configuration(plans[b], report, out / b, audit=Audit)
         (out / b / "audit.json").write_text(json.dumps(a))
         rows = [(r["link"], r["window"], r["raw"], r["committed"]) for r in a["rows"]]
         published = records.published(out / b, setup, dc, b)
-        claims = check_records(published, records.declared(honest_plan, setup, dc, b), dc.grid)
+        claims = check_records(published, records.declared(honest_plan, setup, dc, b), dc.cadence)
         (out / b / "records.json").write_text(json.dumps([records.to_json(r) for r in published]))
         refused = [f"{c.on}: {c.why}" for c in claims if isinstance(c, Refused)]
         c = a["comparisons"]

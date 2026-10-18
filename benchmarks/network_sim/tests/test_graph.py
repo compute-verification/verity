@@ -46,7 +46,7 @@ def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie
 
 
 def test_leaf_spine_puts_each_node_behind_its_certifier(g):
-    from datacenter import Grid, Port
+    from datacenter import Cadence, Port
 
     dc = g.check(g.leaf_spine(2))
     assert [b.name for b in dc.blocks] == ["b0", "b1"]
@@ -58,7 +58,7 @@ def test_leaf_spine_puts_each_node_behind_its_certifier(g):
     assert dc.port("b0.nic0", "b0.cert") == Port("b0.cert", "egress") and dc.port("b0.cert", "b0.nic0").direction == "ingress"
     assert {(e.latency.name, e.latency.value) for e in dc.links if e.latency} == {
         ("fabric/uplink-latency", 1e-6), ("fabric/hop-latency", 2e-6)}
-    assert dc.grid == Grid() and g.leaf_spine(1, grid=Grid(window=60)).grid.window == 60
+    assert dc.cadence == Cadence() and g.leaf_spine(1, cadence=Cadence(buckets=60)).cadence.buckets == 60
     wide = g.check(g.leaf_spine(4, leaves=2, spines=3, outside=2))
     trunks = sorted((e.a, e.b) for e in wide.links if e.b.startswith("spine"))
     assert trunks == [(f"leaf{j}", f"spine{k}") for j in range(2) for k in range(3)]
@@ -96,7 +96,7 @@ def test_the_capacities_are_memory_accountings(g):
     assert g.pending(dc) == ["host-dram/socket-capacity", "pcie/gpu", "pcie/nic", "pcie/socket-aggregate",
                              "rtx-pro-6000/cuda-ops", "socket/inter-socket"]
     named = [a for d in dc.devices.values() for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip] if a]
-    named += [a for e in dc.links for a in (e.capacity, e.latency) if a] + [dc.grid.tick]
+    named += [a for e in dc.links for a in (e.capacity, e.latency) if a] + [dc.cadence.tick]
     assert all(a.name and a.source in ("datasheet", "measured", "declared") for a in named)
     assert all(a == b for a in named for b in named if a.name == b.name)  # one name, one record
     bits = 8e9

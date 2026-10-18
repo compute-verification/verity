@@ -6,7 +6,7 @@ in order, and `python tests/test_walkthrough.py` prints what the guide prints.
 from __future__ import annotations
 
 from datacenter import (FLEET_CLOSED, Assumption, Block, Carried, Challenge, Credit, Datacenter, Deviation, Device, Fleet,
-                        Grid, Input, Interval, Ledger, Link, Maintenance, Plan, Port, Reads, Refused, Store, Wipe, account, audit,
+                        Cadence, Input, Interval, Ledger, Link, Maintenance, Plan, Port, Reads, Refused, Store, Wipe, account, audit,
                         commit, crossings, digest, double_credit, occupancy, place, run, trace)
 from datacenter.examples import GB
 
@@ -61,7 +61,8 @@ def section_4():
         links=[Link("a.gpu", "a.cert", up), Link("a.cert", "leaf", up),
                Link("b.gpu", "b.cert", up), Link("b.cert", "leaf", up),
                Link("challenger", "leaf", up), Link("world", "leaf", up)],
-        grid=Grid(frame_bits=32, bucket=1, window=4, syncs=128, tick=Assumption("tick", 1e-3, "s", "declared")))
+        cadence=Cadence(frame_bits=32, bucket_ticks=1, buckets=4, jitter_classes=128,
+                        tick=Assumption("tick", 1e-3, "s", "declared")))
     print(dc.validate())
     dc.links.append(Link("a.gpu", "leaf", up))
     print(dc.validate())
@@ -139,7 +140,7 @@ def section_11():
                       [Link("a.gpu", "a.dram", Assumption("pcie5x16", 64e9 * 8, "bit/s"), kind="pcie"),
                        Link("a.gpu", "a.cert", net, us), Link("a.cert", "leaf", net, us),
                        Link("challenger", "leaf", net, us), Link("world", "leaf", net, us)],
-                      Grid(window=4, tick=Assumption("tick", 1e-4, "s", "declared")))
+                      Cadence(buckets=4, tick=Assumption("tick", 1e-4, "s", "declared")))
     kv = Store("kv", 1 * GB, "a.gpu")
     q = place(trace(lambda x: x ^ 1, x=Input(8)), node, "a.gpu", deliver="world", stores=(kv,), x="world")
     for deadline in (8, 300):

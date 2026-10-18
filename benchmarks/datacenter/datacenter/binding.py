@@ -1,6 +1,6 @@
 """The bridge between the layers: a placement of a circuit onto a datacenter, what it implies, and what of it is public.
 
-A `Placement` mirrors Lean's `Accounting.Placed` and `Accounting.Requirement.Placement` (#2386): each value has the
+A `Placement` mirrors Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399): each value has the
 device it is produced on (`leaf`), the engine step it is produced at (`step`) and a cell of that device (`cell`, one
 value a cell a step), and each device maps its steps onto ticks of the trusted clock (`ticks`, strictly increasing).
 The placement is private and committed. A crossing is a value produced in one block and read in another; crossings are
@@ -83,8 +83,7 @@ class Profile:
     @property
     def windows(self) -> range:
         """The record windows of the epoch: every port must have a record for each."""
-        g, e = self.datacenter.grid, self.plan.epoch
-        per = g.bucket * g.window
+        per, e = self.datacenter.cadence.window_ticks, self.plan.epoch
         return range(e.start // per, -(-e.end // per))
 
 
@@ -200,7 +199,7 @@ def traffic(p: Placement) -> dict[Port, dict[int, list[Value]]]:
     """The honest run's traffic at each certifier port, bucket by bucket: the crossing values it carries, each in the
     bucket of its read tick."""
     out: dict[Port, dict[int, list[Value]]] = {}
-    bucket = p.datacenter.grid.bucket
+    bucket = p.datacenter.cadence.bucket_ticks
     for x in crossings(p):
         for hop in hops(x.path, x.src):
             if (port := p.datacenter.port(*hop)) is not None:
@@ -215,5 +214,5 @@ def frames(values: list[Value], frame_bits: int) -> int:
 
 def occupancy(p: Placement) -> dict[Port, dict[int, int]]:
     """The public occupancy profile: for each certifier port and each bucket, the frames the honest run shows there."""
-    fb = p.datacenter.grid.frame_bits
+    fb = p.datacenter.cadence.frame_bits
     return {port: {b: frames(vs, fb) for b, vs in row.items()} for port, row in traffic(p).items()}

@@ -8,7 +8,7 @@ RTX PRO 6000 GPUs, each on its own PCIe root port, in two NUMA groups of four, w
 """
 from __future__ import annotations
 
-from .physical import Assumption, Block, Datacenter, Device, Grid, Link
+from .physical import Assumption, Block, Cadence, Datacenter, Device, Link
 
 GB = 8e9
 TB = 8e12
@@ -61,7 +61,7 @@ def with_dpu(node: Block) -> Block:
     return Block(n, [*node.devices, dpu, bmc])
 
 
-def rack(nodes: int = 2, gpus: int = 8, dpus: bool = True, uplink: float = 400e9, grid: Grid | None = None) -> Datacenter:
+def rack(nodes: int = 2, gpus: int = 8, dpus: bool = True, uplink: float = 400e9, cadence: Cadence | None = None) -> Datacenter:
     """`nodes` nodes, each behind its own certifier on a leaf switch, with an off-node challenger and the outside world.
     A node's NIC (or its DPU, when it has one) is its only way out, through its certifier."""
     up = _a("uplink", uplink, "bit/s", "declared")
@@ -81,5 +81,6 @@ def rack(nodes: int = 2, gpus: int = 8, dpus: bool = True, uplink: float = 400e9
     fabric = [Device(f"n{k}.cert", "certifier") for k in range(nodes)]
     fabric += [Device("leaf", "switch"), Device("challenger", "challenger"), Device("world", "outside")]
     links += [Link("challenger", "leaf", up, US), Link("world", "leaf", up, _a("wan_latency", 1e-3, "s", "declared"), "wan")]
-    return Datacenter("rack", blocks, fabric, links, grid or Grid(frame_bits=32, bucket=1, window=4, syncs=128,
-                                                                  tick=_a("tick", 1e-4, "s", "declared")))
+    return Datacenter("rack", blocks, fabric, links,
+                      cadence or Cadence(frame_bits=32, bucket_ticks=1, buckets=4, jitter_classes=128,
+                                         tick=_a("tick", 1e-4, "s", "declared")))
