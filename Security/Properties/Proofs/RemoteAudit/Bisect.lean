@@ -128,6 +128,16 @@ theorem prefixSums_fold {β : Type} (g : β → Nat) (xs : Array β) :
   simp only [List.size_toArray, List.length_nil, Nat.zero_add] at this
   simpa [List.map_take] using this
 
+theorem back_getD_of_prefix {ends : Array Nat} {l : List Nat} (h : PrefixSums ends l) : ends.back?.getD 0 = l.sum := by
+  have hs := h.1
+  rcases Nat.eq_zero_or_pos l.length with h0 | h0
+  · rw [Array.back?_eq_none_iff.2 (Array.size_eq_zero_iff.1 (by omega)), List.length_eq_zero_iff.1 h0]
+    rfl
+  · rw [Array.back?_eq_getElem?, Array.getElem?_eq_getElem (by omega)]
+    simp only [Option.getD_some]
+    rw [← getElem!_pos ends (ends.size - 1) (by omega), h.2 (ends.size - 1) (by omega),
+      show ends.size - 1 + 1 = l.length by omega, List.take_length]
+
 theorem sum_take_mono (l : List Nat) (a b : Nat) (h : a ≤ b) : (l.take a).sum ≤ (l.take b).sum := by
   obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_le h
   rw [List.take_add, List.sum_append]

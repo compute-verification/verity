@@ -243,15 +243,7 @@ theorem drawIsSubset : DrawIsSubset := by
   simp only [List.map_id'] at hP
   generalize (lengths.foldl (fun (acc : Array Nat × Nat) n => (acc.1.push (acc.2 + n), acc.2 + n)) (#[], 0)).1 = ends
     at h hP
-  have hes : ends.size = lengths.size := by rw [hP.1]; simp
-  have htotal : ends.back?.getD 0 = lengths.toList.sum := by
-    rcases Nat.eq_zero_or_pos lengths.size with h0 | h0
-    · rw [Array.back?_eq_none_iff.2 (Array.size_eq_zero_iff.1 (by omega))]
-      simp [Array.size_eq_zero_iff.1 h0]
-    · rw [Array.back?_eq_getElem?, Array.getElem?_eq_getElem (by omega)]
-      simp only [Option.getD_some]
-      rw [← getElem!_pos ends (ends.size - 1) (by omega), hP.2 (ends.size - 1) (by simp; omega)]
-      rw [show ends.size - 1 + 1 = lengths.toList.length by simp; omega, List.take_length]
+  have htotal := back_getD_of_prefix hP
   rw [htotal] at h
   cases hu : subsetExact (openingsKey registration t coin) (min samples lengths.toList.sum) lengths.toList.sum
     [.str "openings"] with
