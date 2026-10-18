@@ -40,8 +40,8 @@ declared circuit `Wc`'s over at most `life` of the audit `Aud`'s windows (`Accou
 
 *The circuit.* `Wc` is in the restricted class (`Gates.Restricted B`) and passes the stacking property at the caps
 `caps` on `Aud` (`Gates.Property`): in each window its budgeted units are within `c = caps.total` a byte `Aud`
-certifies, and its run inputs within `R_in = caps.runBytes` bytes. A window certifies at most its passes' stores,
-`P·N·4096` bytes.
+certifies, and its run inputs within that window's `R_in,v = caps.runBytes v` bytes. A window certifies at most its
+passes' stores, `P·N·4096` bytes.
 
 *The requirement.* The prover chooses everything on `W`'s side after every coin: the placed execution `p x` (each
 value's device `leaf` and the tick `ticks d s` at which device `d` begins engine step `s`), the layout of values in
@@ -64,7 +64,9 @@ credit is the larger of `W`'s credited live bits in those blocks (held) and the 
 
 *The bound.* With
 
-  `C = 8·life·R_in + ⌈1024·life·c·P·N·4096/E⌉`, the carriers' bits a pass,
+  `R_life = max_I Σ_{v∈I} R_in,v` over the sets `I` of at most `life` of `Aud`'s windows, the run-input bytes the
+  caps allow a carrier's life,
+  `C = 8·R_life + ⌈1024·life·c·P·N·4096/E⌉`, the carriers' bits a pass,
   `γ = (S + (L_r·τ − ρ·256) + X_r·τ + C + k·32768)/(N·32768)`,
 
 the probability that every opening passes while the passes' distinct sectors read from their tiles of `W` fall short of
@@ -96,7 +98,7 @@ boundary, are attribution's (`certifier-coverage`, `trusted-nebius-host` and the
 node that registers `R` times pays `δ_G` once a registration.
 
 Proof (to come, as `Accounting.SecurityProofs.DeclaredCircuitRequirement`): each carrier's inputs are at most
-`8·life·R_in` and its encodes at most `life·c·P·N·4096` units (`OfCircuit` with the property), so every pass rebuilds
+`8·R_life` and its encodes at most `life·c·P·N·4096` units (`OfCircuit` with the property), so every pass rebuilds
 at most `X_r·τ + C` bits; an unpaid window at slack `k` tiles a pass has a rank-poor sign matrix, a guessed tag (at
 every store), or a pass with `k + 1` correct digests of unobtained sectors; `KeyBinding` at the whole layout, with a
 union over the `2^a` layouts inside the uniform store, bounds that pass at `2^a·(q_r·τ/2^96)^(k+1) + δ`; and a pass's
@@ -141,7 +143,9 @@ def DeclaredCircuitRequirement : Prop :=
           (Requirement.reads W e (bind x w j) \ Requirement.creditedReads W e (ℓ x) (bind x w j)) ∧
         Set.InjOn (addr x) ↑(plan x w j) ∧
         ∀ b ∈ plan x w j, addr x b ∈ Set.range (layout (RateSketch.SketchPrefix.of x.2 w j) x.1)) →
-    let C := 8 * life * caps.runBytes + ⌈(1024 * life * (P * N * 4096) : ℚ) * caps.total / E⌉₊
+    let Rlife := ((Finset.range Aud.windows).powerset.filter fun I => I.card ≤ life).sup
+      fun I => ∑ v ∈ I, caps.runBytes v
+    let C := 8 * Rlife + ⌈(1024 * life * (P * N * 4096) : ℚ) * caps.total / E⌉₊
     let γ := RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768)
     let credit := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (t : ℕ) =>
       let e := (p x).toExecution
