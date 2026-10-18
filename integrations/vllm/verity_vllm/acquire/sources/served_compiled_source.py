@@ -172,6 +172,7 @@ class ServedCompiledSource:
         self.stale: dict[int, torch.Tensor] = {}
         self.inputs: dict[int, list[tuple[int, str]]] = {}
         self.logits_name = "logits_processor"
+        self.modules: list[str] = []
         self.errors: list[str] = []
         self.stats: dict[str, Any] = {}
         self.stats_reset_step_counters()
@@ -434,8 +435,14 @@ class ServedCompiledSource:
         committer.attach_source(self)
         committer.external_acquisition = True
 
+    def use_build(self, build: dict[str, Any]) -> None:
+        """The served Build of record (`acquire.served`): the modules of the values it names are the identities every committed step
+        must cover (X-03, `identity_check`)."""
+        p = build["program"]
+        self.modules = sorted({n.split("/", 1)[0] for n in [*p["values"], p["logits"]["name"], p["sampled"]["name"]]})
+
     def expected_modules(self) -> list[str]:
-        return []
+        return list(self.modules)
 
     def extra_step_bytes(self, envelope: dict[str, Any], model: Any) -> dict[str, int]:  # noqa: ARG002
         """What a step adds to the committer's staging bound (`size_arena`), read from the slots the captures allocated: bytes per token

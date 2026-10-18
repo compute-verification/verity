@@ -228,6 +228,15 @@ def test_extra_step_bytes_reads_the_captured_slots(monkeypatch):
     assert got == {"per_token_bytes": row, "per_step_bytes": 3 * WIDTH * 4, "tensors_per_step": 2 + 3 * 2 + 2}
 
 
+def test_the_builds_modules_are_the_expected_identities():
+    src = S.ServedCompiledSource()
+    assert src.expected_modules() == []
+    src.use_build({"program": {"values": {"c00.input/ids": {}, "c00.input/positions": {}, "c00.mm/buf2": {}, "c00.mm/buf3": {},
+                                          "c01.attention/layers.0.attn": {}},
+                               "logits": {"name": "logits_processor"}, "sampled": {"name": "runner.sampler/sampled_token_ids"}}})
+    assert src.expected_modules() == ["c00.input", "c00.mm", "c01.attention", "logits_processor", "runner.sampler"]
+
+
 class _Meta(SimpleNamespace):
     pass
 
