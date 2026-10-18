@@ -11,15 +11,18 @@ at the statement's leaf. This file states what the recursion needs of an inner s
 follows from it.
 
 * **`PlainLeavesAdmitted rel`**: some inner statement passes every check the reader makes of it (it decodes, its
-  partition reads, `RecVStar.innerOf` sets it up and `innerOk` passes), is in Flock's scope, where Flock's soundness
-  headline holds (`Claims.Flock.Scope`), is true (`Claims.Flock.R`), and has Flock's completeness error below 1
-  (`FlockComplete.δc`: a drawn session).
+  partition reads, `RecVStar.innerOf` sets it up and `innerOk` passes), carries a draw and is small enough that Flock's
+  completeness error is below 1 (`FlockComplete.δc_sha512_lt_one`), is in Flock's scope, where Flock's soundness
+  headline holds (`Claims.Flock.Scope`), and is true (`Claims.Flock.R`): facts about one concrete inner statement,
+  which #2468's run measured.
 * **`Decomp` at the checked reader** (`decomp_checked_iff`): at every statement the reader parses, the inner statement
   passes Flock's statement check (`parse_innerOk`), so the cut `decomp_deployed_iff` asks of the parts is the inner
   run's conditions (`InnerRun`, `RunCut`: the link and last messages, the verdict, the record's statement and draw, the
   custody) and the inner statement's draw (`InnerDrawn`), the one condition of `FlockDeploy.checks` the reader leaves
-  out (`checks_iff`). The recursion's inner session holds no draw (`rec_live.py` records `unit_draw: None`), so a reader
-  that required it would refuse every honest statement.
+  out (`checks_iff`). Since #2468 the recursion's inner session carries the verifier's full stratified draw, so a reader
+  that required the inner statement's draw would refuse no honest statement; neither the deployed reader
+  (`RecSetup.innerScope`) nor `readX` asks for it yet, and check 5 (`RecCoins.Inner.load`) reads a record without a draw
+  as before, so `InnerDrawn` stays a premise.
 * **The inner acceptance is satisfiable under the Prop** (`admitted_acc`): Flock's completeness at a true in-scope
   statement whose error is below 1 gives an accepted run of its prover (`exists_of_pr_pos`), whose own messages replayed
   are accepted (`run_replay_out`), so `InnerAccSha` holds at some coins and messages (`innerAccSha_of_complete`). At
@@ -130,23 +133,28 @@ theorem parse_innerOk {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = so
 
 /-! ## Flock's admission of plain leaves -/
 
-/-- **Flock admits a plain-leaves statement of the inner shape** (what #2411 makes possible): some inner statement passes every check the checked reader makes of it (it
-decodes, its partition reads, the inner setup at the recursion's inner tags accepts it, `RecVStar.innerOf`, and Flock's
-plain verifier sets it up and its statement check passes, `innerOk`), is in Flock's scope, where its soundness headline
-holds (`Claims.Flock.Scope`), is true (`Claims.Flock.R`), and has Flock's completeness error below 1 there
-(`FlockComplete.δc`, which asks for a drawn session). Only an inner statement whose public file holds each instance's
-own rows can be one: without `--zk` Flock's statement check refuses a shared-row public file (`ProvedScope.sharedRowsOk`),
-which `RecVStar.innerOf` sets up. -/
+/-- **Flock admits a plain-leaves statement of the inner shape** (what #2411 and #2468 make possible): some inner
+statement passes every check the checked reader makes of it (it decodes, its partition reads, the inner setup at the
+recursion's inner tags accepts it, `RecVStar.innerOf`, and Flock's plain verifier sets it up and its statement check
+passes, `innerOk`), carries a draw, is under `2^56` bytes with fewer than `2^128` zerocheck outer coins (so Flock's
+completeness error is below 1 there, `FlockComplete.δc_sha512_lt_one`), is in Flock's scope, where its soundness
+headline holds (`Claims.Flock.Scope`), and is true (`Claims.Flock.R`). Every conjunct is a fact about one concrete inner
+statement and its witness: #2468's inner session is one, as its run `r20261018-053343-99cf` measured (Lean `verify`
+without `--zk` accepts it, its record holding the full stratified draw), and none is proved here. Only an inner
+statement whose public file holds each instance's own rows can be one: without `--zk` Flock's statement check refuses a
+shared-row public file (`ProvedScope.sharedRowsOk`), which `RecVStar.innerOf` sets up. -/
 def PlainLeavesAdmitted (rel : Flock.Readable.Parsed → Flock.Readable.Relation) : Prop :=
   ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner)
-    (w : Claims.Flock.Wit),
+    (w : Claims.Flock.Wit) (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
     FlockDeploy.decode inner = some ri ∧ (ri.partition.mapM (FlockDeploy.jsonOf "partition")).toOption = some partition ∧
-      Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧ innerOk inner = .ok () ∧
-      Claims.Flock.Scope (FlockDeploy.deployPlain rel) inner ∧
-      Claims.Flock.R (FlockDeploy.deployPlain rel).parse inner w ∧ FlockComplete.δc FlockDeploy.sha512 inner < 1
+      Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧
+      FlockDeploy.setupOf false inner = some (s, spec, sts) ∧ s.read.check = .ok () ∧ s.read.draw.isSome = true ∧
+      inner.length < 2 ^ 56 ∧ (FlockComplete.outerSlots inner).length < 2 ^ 128 ∧
+      Claims.Flock.Scope (FlockDeploy.deployPlain rel) inner ∧ Claims.Flock.R (FlockDeploy.deployPlain rel).parse inner w
 
 /-- **Under the Prop, the inner verifier's acceptance is satisfiable at an inner statement the checked reader
-admits**, wherever Flock's honest prover is complete (`innerAccSha_of_complete`). -/
+admits**, wherever Flock's honest prover is complete (`innerAccSha_of_complete`, at `δc < 1` from the draw and the
+sizes, `FlockComplete.δc_sha512_lt_one`). -/
 theorem admitted_acc {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (hA : PlainLeavesAdmitted rel)
     (hC : Claims.Flock.Complete FlockDeploy.sha512 (FlockDeploy.deployPlain rel) FlockComplete.honestP
       (FlockComplete.δc FlockDeploy.sha512)) :
@@ -154,8 +162,9 @@ theorem admitted_acc {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (
       FlockDeploy.decode inner = some ri ∧ (ri.partition.mapM (FlockDeploy.jsonOf "partition")).toOption = some partition ∧
         Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧ innerOk inner = .ok () ∧
         ∃ (c : ℕ → Coin) (ms : List Msg), InnerAccSha inner c ms := by
-  obtain ⟨inner, ri, partition, dims, w, hri, hpa, hdims, hok, hS, hR, hδ⟩ := hA
-  exact ⟨inner, ri, partition, dims, hri, hpa, hdims, hok, innerAccSha_of_complete hC hS hR hδ⟩
+  obtain ⟨inner, ri, partition, dims, w, s, spec, sts, hri, hpa, hdims, hs, hck, hd, hl, hε, hS, hR⟩ := hA
+  exact ⟨inner, ri, partition, dims, hri, hpa, hdims, innerOk_iff.2 ⟨s, spec, sts, hs, hck⟩,
+    innerAccSha_of_complete hC hS hR (FlockComplete.δc_sha512_lt_one hs hd hl hε)⟩
 
 /-- **`admitted_acc` at `Readable.relation`**, where Flock's completeness is `FlockComplete.Replay.complete_plain`, under its
 hypotheses. -/
@@ -266,8 +275,8 @@ def RunCut (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ 
 
 /-- **The inner statement is drawn wherever the parts' inner checks all hold** (a fact about the run): at a statement
 the reader parses, of the shape, where some coins and inner messages pass every part's inner check, Flock's plain
-verifier reads a draw off the inner statement. The reader does not require it: the recursion's inner session holds
-none. -/
+verifier reads a draw off the inner statement. The reader does not require it yet, though since #2468 the honest inner
+session carries the full stratified draw. -/
 def InnerDrawn (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     (∀ s < nS x, chk s x c ms) →
