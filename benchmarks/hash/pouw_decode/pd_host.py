@@ -18,7 +18,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 SRC = open(os.path.join(HERE, "pd.cuh")).read()
 #: pd.cuh's PD_VARIANT_LIST: the variants built, a launch each (bits PD_ROUNDS 1, PD_ROLLED 2, PD_CALL 4, PD_PREFETCH 8,
-#: PD_PAIR 16, PD_STAMP 32, PD_WHOLE 64, PD_GROUP 128, PD_LOOP 256)
+#: PD_PAIR 16, PD_STAMP 32, PD_WHOLE 64, PD_GROUP 128, PD_LOOP 256, PD_LATE 512, PD_INSEG 1024)
 VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SRC).group(1)))
 PD_PAIR, PD_STAMP, PD_WHOLE, PD_GROUP = 16, 32, 64, 128
 #: PD_STAMP's stamps (p13): PD_SLOTS (global timer ns, SM clock) pairs a row, a row per pd_commit CTA and the tail's after
@@ -33,7 +33,7 @@ PAIR_SMEM = 2 * 8 * int(re.search(r"PD_PAIR_WORDS = (\d+)", SRC).group(1))
 #: PD_GROUP's tiles a CTA (pd.cuh's PD_G)
 GROUP = int(re.search(r"PD_G = (\d+)", SRC).group(1))
 #: the variants of the schedules with side lanes (pd_deferred_V, pd_side_tree_V); every variant gets pd_serial_V
-SIDE = tuple(int(x) for x in os.environ.get("PD_SIDE", "19,83,211,339,467").split(","))
+SIDE = tuple(int(x) for x in os.environ.get("PD_SIDE", "19,211,339,467,851,979,1875,2003").split(","))
 assert set(SIDE) <= set(VARIANTS), (SIDE, VARIANTS)
 # CUfunction_attribute: SHARED_SIZE_BYTES, MAX_DYNAMIC_SHARED_SIZE_BYTES; CUdevice_attribute: the per-block opt-in maximum
 SHARED_SIZE, MAX_DYNAMIC_SHARED, MAX_SHARED_OPTIN = 1, 8, 97

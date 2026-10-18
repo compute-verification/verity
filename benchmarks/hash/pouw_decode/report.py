@@ -49,8 +49,9 @@ def stamps(r: dict, shape: dict | None, mhz: float) -> None:
     m16, k = r["m16"], (shape or {}).get("k", 0)
     s, levels = k // 256, max(m16 - 1, 0).bit_length()
     me = rows[cta]
-    chain = [("segments", me["PS_SEGS"], 9), ("the other warps (salt, frame leaf, pads)", me["PS_SYNC1"], 0),
-             ("fold", me["PS_FOLD"], s // 2 + 1 if k else None), ("barrier", me["PS_SYNC2"], 0),
+    chain = [("segments", me["PS_SEGS"], 9), ("the other warps (salt, frame leaf, pads; PD_LATE: none)", me["PS_SYNC1"], 0),
+             ("fold", me["PS_FOLD"], s // 2 + 1 if k else None),
+             ("barrier (PD_LATE: the salt, frame leaf and templates past the fold)", me["PS_SYNC2"], 0),
              ("leaf and counter", me["PS_LEAF"], 3), ("to the tail", tail["PT_START"], 0)]
     chain += [(f"level {lv + 1}", tail[f"PT_LEVEL{lv}"], 2) for lv in range(levels)]
     chain += [("seed_A and line_a", tail["PT_SEED_A"], 3), ("filler lines", tail["PT_FILLERS"], 1)]
@@ -69,6 +70,10 @@ def stamps(r: dict, shape: dict | None, mhz: float) -> None:
         at, n_all = c, n_all + (n or 0)
         print(f"| {what} | {us:.1f} | {n if n is not None else '?'} | {us / n:.2f} |" if n else f"| {what} | {us:.1f} | 0 | |")
     print(f"| total | {total:.1f} | {n_all} | {total / n_all:.2f} |" if n_all else "")
+    t0 = me["PS_START"][1]
+    print("the tail CTA's helpers end (µs from its start): " + ", ".join(
+        f"{what} {(me[slot][1] - t0) / mhz:.1f}" for what, slot in (("salt", "PS_SALT"), ("frame leaf and pads", "PS_FRAME"),
+                                                                   ("segments", "PS_SEGS"), ("fold", "PS_FOLD"))))
 
 
 def report(d: str) -> None:

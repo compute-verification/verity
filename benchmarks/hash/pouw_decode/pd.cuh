@@ -30,7 +30,10 @@
 // PD_GROUP, pd_tiles with PD_G tiles a CTA and their folds paired together on one warp; PD_LOOP (with PD_PAIR), the
 // hm96 leaf and frame leaf, a seed and its line key, and a node's two blocks each one paired site in a rolled loop, and
 // the producer one called copy (`pd_serve`), since each inlined paired site is about 7 KB (the producer's 23 KB) fetched
-// cold on the CTA's SM, and the last CTA's tail runs each of its sites once.
+// cold on the CTA's SM, and the last CTA's tail runs each of its sites once; PD_LATE (with PD_PAIR), pd_commit's salt,
+// templates and frame leaf with its pads during the fold, a warp each (1, 2, 3), rather than beside the segments, whose
+// pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers; PD_INSEG (with PD_LOOP), the
+// segments' producer inlined, the tail's alone called.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  pd_host.cpp builds this file for the host tests.
@@ -61,8 +64,8 @@ inline uint32_t pd_smid() { return 0; }
 #endif
 
 constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_STAMP = 32, PD_WHOLE = 64,
-              PD_GROUP = 128, PD_LOOP = 256;
-#define PD_VARIANT_LIST(X) X(19) X(51) X(83) X(211) X(307) X(339) X(467)
+              PD_GROUP = 128, PD_LOOP = 256, PD_LATE = 512, PD_INSEG = 1024;
+#define PD_VARIANT_LIST(X) X(19) X(211) X(307) X(339) X(467) X(819) X(851) X(979) X(1843) X(1875) X(2003)
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
 enum { PD_SEED_A = 0, PD_NOISE_LINE = 1, PD_LINE = 2 };
@@ -315,6 +318,9 @@ DEV void pd_pserve(int pi) {
 __device__ __noinline__ void pd_pserve_call(int pi) { pd_pserve(pi); }
 template <int V> DEV void pd_serve(int pi) {
   if constexpr ((V & PD_LOOP) != 0) pd_pserve_call(pi); else pd_pserve(pi);
+}
+template <int V> DEV void pd_serve_segs(int pi) {
+  if constexpr ((V & PD_INSEG) != 0) pd_pserve(pi); else pd_serve<V>(pi);
 }
 DEV void pd_pstop() {   // the consumer warp: its producer returns
   const int pi = threadIdx.x >= 32;
@@ -834,7 +840,8 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
 // pd_commit_V: a CTA a row r < i0, 32 (cw + 2) threads, cw = ceil(s / 32) (s = k / 256), or with PD_PAIR 32 (2 cw + 2) and
 // PD_PAIR_SMEM bytes of dynamic shared memory (s <= 64).  The segments' warps (cw, or with PD_PAIR cw consumers then cw
 // producers), the salt's, then the templates', frame leaf's and pads'.  With PD_PAIR the row's leaf chain is pair 0's (warps
-// 0 and cw) and its seed chain pair 1's (warps 1 and cw + 1, or at cw = 1 warps 2 and 3).  p0 A's rows (FP32, k words each), p1 row
+// 0 and cw) and its seed chain pair 1's (warps 1 and cw + 1, or at cw = 1 warps 2 and 3); with PD_LATE the salt, the
+// templates and the frame leaf run while warp 0 folds, on warps 1, 2 and 3.  p0 A's rows (FP32, k words each), p1 row
 // digests out (64 B a row), p2 A's tree (level 0, then each level above), p3 row seeds out (32 B a row), p4 their line keys
 // out, p5 the unit block (salt ‖ root_B ‖ u64 LE index), p6 dom_a (64 B), p7 the prover's salt key, p8 the hm96 constants,
 // p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out, p12 E_A's codes
@@ -848,7 +855,9 @@ template <int V> DEV void pd_commit_t(const Args a) {
   __shared__ uint32_t ys[48], lk[8];
   __shared__ int last;
   static_assert(PD_KW_BLOCKS * 80 >= PD_NODES && PD_KW_BLOCKS * 80 >= 96 * PD_MAX_LEVELS, "kw holds the builders and the levels");
-  constexpr bool PAIR = (V & PD_PAIR) != 0;
+  constexpr bool PAIR = (V & PD_PAIR) != 0, LATE = (V & PD_LATE) != 0;
+  static_assert(!LATE || PAIR, "PD_LATE's helpers are warps 1-3, which PD_PAIR's 2 cw + 2 warps always have");
+  static_assert(!LATE || PD_PAIR_WORDS >= 96 * PD_MAX_LEVELS, "PD_LATE's builders fit in pair 0's buffer");
   const int count = a.i[0], k = a.i[1], s = k / 256, cw = (s + 31) / 32, sw = PAIR ? 2 * cw : cw;
   const int c1 = cw >= 2 ? 1 : 2, p1 = cw >= 2 ? cw + 1 : 3;
   const int r = blockIdx.x, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
@@ -858,6 +867,33 @@ template <int V> DEV void pd_commit_t(const Args a) {
   const uint64_t dom = a.p[6], scratch = a.p[9], tree = a.p[2], sb = a.p[13];
   const uint32_t* unit = reinterpret_cast<const uint32_t*>(a.p[5]);
   const uint64_t index = (uint64_t)unit[24] | (uint64_t)unit[25] << 32;
+  auto salt = [&] {                                 // the row's hm96 salt, by a whole warp
+    pd_hm_salt<V>(a.p[7], index, (uint64_t)r, a.p[8], ys, lane, mk, cc);
+    if (lane == 0) pd_stamp<V>(sb, r, PS_SALT);
+  };
+  auto templates = [&](int l, uint64_t* buf) {      // level l's node template (l < levels), its builder at buf + 96 l
+    if (a.i[2] == 0 && l >= 0 && l < levels) pd_level_template<V>(dom, l, tm + PD_TM * l, buf + 96 * l);
+  };
+  auto frame = [&] {                                // the frame leaf's first block and this CTA's pads, by one thread
+    for (int t = 0; t < 32; t++) ftw[t] = 0;
+    WMsg m{ftw, 0};
+    wm_frame(m, "leaf", 4, dom);
+    wm_uint(m, (uint64_t)r);
+    wm_uint(m, (uint64_t)r);
+    wm_be(m, 22, 8);
+    for (int j = 0; j < 22; j++) wm_byte(m, HM96_SCHEMA[j]);
+    const int at = wm_slot64(m);
+    if (wm_finish(m) != 2 || at - 128 != PD_LEAF_AT) __trap();
+    uint64_t st[8], w[16];
+#pragma unroll
+    for (int q = 0; q < 16; q++) w[q] = ftw[q];
+    rs_iv(st);
+    pd_cmp<V>(st, w);
+#pragma unroll
+    for (int q = 0; q < 8; q++) ftm[q] = st[q];
+    for (int p = count + r; p < width; p += count) pd_pad<V>(dom, (uint64_t)p, tree, hbuf);
+    pd_stamp<V>(sb, r, PS_FRAME);
+  };
   if (tid == 0) pd_stamp<V>(sb, r, PS_START);
   if (PAIR && warp < sw) {                          // the row's segments, paired: lane tid's segment (a stand-in past s)
     if (warp < cw) {
@@ -893,8 +929,9 @@ template <int V> DEV void pd_commit_t(const Args a) {
       if (tid == 0) pd_stamp<V>(sb, r, PS_SEGS);
       pd_pstop();
     } else {
-      pd_serve<V>(warp - cw);
+      pd_serve_segs<V>(warp - cw);
     }
+  } else if (LATE) {
   } else if (warp < sw) {                           // the row's segments
     if (tid < s) {
       uint64_t st[8], w[16];
@@ -914,34 +951,16 @@ template <int V> DEV void pd_commit_t(const Args a) {
       for (int q = 0; q < 8; q++) dig[8 * tid + q] = st[q];
       if (tid == 0) pd_stamp<V>(sb, r, PS_SEGS);
     }
-  } else if (warp == sw) {                          // the row's hm96 salt
-    pd_hm_salt<V>(a.p[7], index, (uint64_t)r, a.p[8], ys, lane, mk, cc);
-    if (lane == 0) pd_stamp<V>(sb, r, PS_SALT);
-  } else if (lane > 0) {                            // the levels' node templates, a lane a level
-    if (a.i[2] == 0 && lane <= levels) pd_level_template<V>(dom, lane - 1, tm + PD_TM * (lane - 1), kw + 96 * (lane - 1));
-  } else {                                          // the frame leaf's first block and this CTA's pads
-    for (int t = 0; t < 32; t++) ftw[t] = 0;
-    WMsg m{ftw, 0};
-    wm_frame(m, "leaf", 4, dom);
-    wm_uint(m, (uint64_t)r);
-    wm_uint(m, (uint64_t)r);
-    wm_be(m, 22, 8);
-    for (int j = 0; j < 22; j++) wm_byte(m, HM96_SCHEMA[j]);
-    const int at = wm_slot64(m);
-    if (wm_finish(m) != 2 || at - 128 != PD_LEAF_AT) __trap();
-    uint64_t st[8], w[16];
-#pragma unroll
-    for (int q = 0; q < 16; q++) w[q] = ftw[q];
-    rs_iv(st);
-    pd_cmp<V>(st, w);
-#pragma unroll
-    for (int q = 0; q < 8; q++) ftm[q] = st[q];
-    for (int p = count + r; p < width; p += count) pd_pad<V>(dom, (uint64_t)p, tree, hbuf);
-    pd_stamp<V>(sb, r, PS_FRAME);
+  } else if (warp == sw) {
+    salt();
+  } else if (lane > 0) {                            // a lane a level, beside the frame leaf's lane
+    templates(lane - 1, kw);
+  } else {
+    frame();
   }
   __syncthreads();
   if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC1);
-  if (warp == 0) {                                  // the row digest
+  if (warp == 0) {                                  // the row digest (kw its schedules)
     uint64_t st[8];
     pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
     if (lane == 0) {
@@ -950,6 +969,12 @@ template <int V> DEV void pd_commit_t(const Args a) {
       for (int q = 0; q < 8; q++) xr[q] = st[q];
       pd_stamp<V>(sb, r, PS_FOLD);
     }
+  } else if (LATE && warp == 1) {
+    salt();
+  } else if (LATE && warp == 2) {                   // a lane a level; the pairs' buffers are idle until the leaf
+    templates(lane, pd_dyn());
+  } else if (LATE && warp == 3 && lane == 0) {
+    frame();
   }
   __syncthreads();
   if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC2);
