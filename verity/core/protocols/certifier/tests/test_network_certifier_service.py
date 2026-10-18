@@ -12,8 +12,12 @@ from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direct
                                                                           RecordHead, parameters_digest)
 from verity.core.protocols.certifier.grid import Certifier, Record
 from verity.core.protocols.certifier.schedule import SyncSet, run_shaper
-from verity.core.protocols.certifier.service import (OUTPUTS, PUBLIC, UNIT, VALUE, LinkWindows,
-                                                                      encode)
+from verity.ml.commitments import hm96
+from verity.ml.commitments.gates.frame_v3 import root_ref
+from verity.ml.commitments.merkle import tree_levels
+from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.core.protocols.certifier.service import (HEADS, OUTPUTS, PUBLIC, SCHEMA, UNIT, VALUE, LinkWindows,
+                                                                      encode, rows)
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
 
@@ -23,7 +27,7 @@ import signers
 LINK = "responses"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 DELTA = 2.0 ** -40
-SALTS = [(bytes([2 * w + 1]) * 192, bytes([2 * w + 2]) * 192) for w in range(3)]
+SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(3)]
 
 
 class Clock:
@@ -121,7 +125,7 @@ def test_the_domain_is_one_stages_served_domain(tmp_path):
     lw = Run(tmp_path).lw
     part = P.partition(P.population_program(UNIT, 1), lw.spec.check.query)
     for w in range(3):
-        want = R.served_domain(part["program"], P.digest(part), VALUE, "hm96-sha512/row/v2", 2, f"r-network-test/{LINK}/{w}")
+        want = R.served_domain(part["program"], P.digest(part), VALUE, "hm96-sha512/row/v2", 4, f"r-network-test/{LINK}/{w}")
         assert lw.ports(w)[VALUE]["domain"] == want
     assert lw.ports(0) != lw.ports(1)
 
@@ -272,7 +276,7 @@ def test_the_outcome_binds_the_registered_root(tmp_path):
     and the outcome is a reject. Accepted outcomes under two salts are two records."""
     run = Run(tmp_path)
     registered = run.honest(0)
-    other = replace(registered, salts=(SALTS[2][0], SALTS[2][1]))
+    other = replace(registered, salts=SALTS[2])
     assert run.lw.root(other) != run.lw.root(registered)
     out = run.round(registered, delivered=other)
     assert reject(out)
@@ -305,5 +309,41 @@ def test_the_opening_must_be_the_registered_link_windows(tmp_path):
     draw = run.stream.select(run.register(opening))
     with pytest.raises(ValueError, match="link-window"):
         run.lw.verify(run.honest(1), draw, FRAMES, SYNCS)
-    with pytest.raises(ValueError, match="salts"):
-        run.lw.commit(0, *opening.records, salts=(SALTS[0][0], SALTS[0][0]))
+    for salts in ((SALTS[0][0],) * 4, SALTS[0][:2]):
+        with pytest.raises(ValueError, match="salts"):
+            run.lw.commit(0, *opening.records, salts=salts)
+
+
+def test_a_head_leaf_opens_from_the_head_alone(tmp_path):
+    """Leaves 2 and 3 are the heads' hiding leaves: a proof that holds a head, its salt and two siblings reaches the
+    root without the certificate, hashing the head in at most three compressions after the row prefix's block."""
+    run = Run(tmp_path)
+    opening = run.honest(0)
+    dom, key = run.lw.domain(0), hm96.SHA512.default_key
+    levels = tree_levels(dom, run.lw.leaves(opening))
+    assert rows(opening.records)[:2] == [encode(r) for r in opening.records]
+    for i, rec in enumerate(opening.records):
+        head, salt = rec.head.encode(), opening.salts[HEADS + i]
+        assert -(-(len(head) + 17) // 128) <= 3
+        bc = hm96.SHA512.commit_string(key, sha512_row_v2_digest(head, 8 * len(head)), salt)
+        leaf = hm96.SHA512.tree_leaf(key, bc)
+        path = [level[((HEADS + i) >> k) ^ 1] for k, level in enumerate(levels[:-1])]
+        assert root_ref(dom.domain_id, SCHEMA, leaf, HEADS + i, path).hex() == run.lw.root(opening)
+
+
+def test_a_head_leaf_that_isnt_its_records_head_is_a_reject(tmp_path):
+    """A root whose egress head leaf holds another window's head: no opening of the records reproduces it, so the
+    link-window is rejected though both certificates verify."""
+    run = Run(tmp_path)
+    opening = run.honest(0)
+    other = run.honest(1).records[0].head.encode()
+    leaves = run.lw.leaves(opening)
+    dom, key = run.lw.domain(0), hm96.SHA512.default_key
+    bc = hm96.SHA512.commit_string(key, sha512_row_v2_digest(other, 8 * len(other)), opening.salts[HEADS])
+    leaves[HEADS] = row_leaf(dom, HEADS, hm96.SHA512.tree_leaf(key, bc), SCHEMA)
+    rec = run.lw.registration(opening)
+    rec = {**rec, "roots": [{**rec["roots"][0], "root": tree_levels(dom, leaves)[-1][0].hex()}]}
+    reg = run.lw.register(run.stream, rec)
+    draw = run.stream.select(reg)
+    assert run.stream.deliver(draw, [run.lw.session(opening, draw)]) is None
+    assert reject(run.lw.outcome(run.stream, draw, opening, FRAMES, SYNCS))
