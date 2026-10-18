@@ -62,7 +62,8 @@ theorem op₀Z_some {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ} {H :
   unfold op₀Z at h
   obtain ⟨y, hy, rfl⟩ := Option.map_eq_some_iff.1 h
   obtain ⟨hm, hd⟩ := List.mem_filter.1 (List.mem_of_mem_head? hy)
-  exact ⟨y, hm, (of_decide_eq_true hd).1, rfl⟩
+  rw [decide_eq_true_eq] at hd
+  exact ⟨y, hm, hd.1, rfl⟩
 
 /-- **The live fork after `j` coins is the deployed runs' fork at round `j`**: two runs at coins sharing their first
 `j` (`Claims.forkCoins`). -/
