@@ -14,13 +14,14 @@ page      `block_size` slots in each layer as the engine lays them out (`page_of
           being page 0
 block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `firsts[layer] + ids[page, c]` (the `Store`'s
           numbering: a KV pool of one region per layer)
-written   a block whose rows are all born, at the step of the last; a block with a row no step writes is in no step (it
-          stays dirty)
-freed     a written block in the record of its rows' last read's step (a step's record, its frees then its writes, takes
-          effect after the step's reads: remote_bandwidth's convention, #2378); a block whose last read is the step that
-          completes it is freed the step after, and one past the session's last step is in no step.  And a slot's
-          registered block (a KV page's filler) at the step a write first reaches it without completing it: its bytes are
-          no longer that block's, and the block being written is uncredited until it is complete (the `Store`'s dirty)
+written   a block whose rows are all born, at the step of the last, if a later step reads it: a step's record, its frees
+          then its writes, takes effect after the step's reads (remote_bandwidth's convention, #2378), so a block whose
+          last read is the step that completes it is never read while resident and is in no record; nor is a block with a
+          row no step writes (it stays dirty)
+freed     a written block in the record of its rows' last read's step.  And a slot's registered block (a KV page's filler,
+          registered before the seed) at the step a write first reaches it, unless that step's record writes the slot: its
+          bytes are no longer that block's, and a block not yet written is uncredited (the `Store`'s dirty).  A page's
+          untouched blocks stay held, counting against capacity, until then: a request's end frees only the blocks it wrote
 j         N plus every block written before it, a step's blocks by slot
 d_j       `codec.digest` of the block's payload: its rows' served words in slot order, each word little-endian
 step      the engine's: request r's step s is `arrive[r] + s`
@@ -287,7 +288,6 @@ def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Cal
     request's rows in it are still read is refused."""
     pool = _pool(requests, layout, tables)
     ids, lo, hi, sb, pages, bs = pool.ids, pool.lo, pool.hi, pool.row_bytes, pool.pages, layout.block_size
-    end = max(arrive[r] + rs.steps for r, rs in requests.items())
     freed: dict[int, list[int]] = {}
     written: dict[int, list[tuple[int, bytes]]] = {}
     #: each slot's blocks: the step a write first reaches it, the step completing it (None: it stays dirty), its rows' last
@@ -319,13 +319,13 @@ def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Cal
         for n, (reach, w, last, d) in enumerate(sorted(us, key=lambda u: u[0])):
             if reach <= held:
                 raise ValueError(f"slot {slot} is written at step {reach} while a request's rows in it are read to step {held}")
-            if n == 0 and (w is None or reach < w):
+            kept = w is not None and w < last
+            if n == 0 and not (kept and reach == w):
                 freed.setdefault(reach, []).append(slot)
             held = last
-            if w is not None:
+            if kept:
                 written.setdefault(w, []).append((slot, d))
-                if (f := max(last, w + 1)) < end:
-                    freed.setdefault(f, []).append(slot)
+                freed.setdefault(last, []).append(slot)
     steps, j = [], layout.blocks if layout.blocks is not None else len(pool.firsts) * pool.region
     head = Header(registration, j)
     for s in sorted(set(freed) | set(written)):
