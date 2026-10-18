@@ -16,7 +16,9 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   (`glm53_bf16_gemm_capture_gpu.scan_routes`), in which `fit_cublas_split_k` names the split counts whose route computes a
   launch's observed words exactly, so the split count is read out of the words (Kineto reports grid.z = 1 for these launches,
   so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device pin's (`pinned_routes`,
-  `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.
+  `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.  The routes hold
+  under the scan's conditions only (`ROUTE_CONDITIONS`): `route_departures` names how a serving process's facts differ, which a
+  TP Commit's verdict refuses for a rank that binds a `ROUTE_FAMILIES` family (`pipeline.tp.c2.route_pin_gate`).
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
@@ -52,6 +54,27 @@ DEFAULT_LL_BF16_FMA = 1
 #: chain), as the capture's decode-batch scan (run `run`) mapped them
 CUBLAS_ROUTES = json.loads(Path(__file__).with_name("cublas_routes.json").read_text())
 _ROUTES = {(p, int(k), int(n)): runs for (p, k, n), runs in ((key.split(), v) for key, v in CUBLAS_ROUTES["routes"].items())}
+#: what the scan's process ran on and under, as `glm53_bf16_gemm_capture_gpu.switch` read it (its device beside): the device, torch,
+#: the cuBLAS it mapped, its reduced-precision flags, preferred backend and workspace variables.  cuBLAS picks a route from these
+#: and the launch's shape, so the routes are a serving process's own only when its facts of record (`cublas` in
+#: `check.replay.driver.engine_facts_of_record`) are these
+ROUTE_CONDITIONS: dict[str, Any] = CUBLAS_ROUTES["conditions"]
+#: the families a Program binds only at a route of the pin (`vllm_bindings.bf16_gemm`, the fold, the predictor); `Gemm_v2` is bound
+#: at the pin's non-split linear routes too, but also by every other rule, so its presence does not say the pin was read
+ROUTE_FAMILIES = ("CublasSplitKGemm_v1", "CublasSplitKGemmF32Out_v1", "GemmF32Out_v1")
+
+
+def route_departures(engine: dict[str, Any] | None) -> list[str]:
+    """Each way a serving process's facts of record (`engine_facts_of_record`) are not `ROUTE_CONDITIONS`, by name: a fact recorded
+    otherwise, or not recorded (a fact the process could not read is recorded as 'unavailable: <why>', which no condition is);
+    [] when it ran under them."""
+    seen = (engine or {}).get("cublas")
+    if not isinstance(seen, dict):
+        return [f"no cuBLAS facts recorded (engine_of_record.cublas; the pin's: {ROUTE_CONDITIONS})"]
+    env = seen.get("env") if isinstance(seen.get("env"), dict) else {}
+    pairs = [(k, seen.get(k, KeyError), w) for k, w in ROUTE_CONDITIONS.items() if k != "env"]
+    pairs += [(v, env.get(v, KeyError), w) for v, w in ROUTE_CONDITIONS["env"].items()]
+    return [f"{k} not recorded (pin: {w!r})" if got is KeyError else f"{k} {got!r} (pin: {w!r})" for k, got, w in pairs if got != w]
 
 
 def _route_run(phase: str, M: int, K: int, N: int) -> list | None:
