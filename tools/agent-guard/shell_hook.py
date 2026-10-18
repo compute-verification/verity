@@ -13,11 +13,13 @@ printed the Nebius key's lines again).
 token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
 `grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
 
-It also refuses a heavy local command (pytest, the check's suites, `verity check`, `lake build|env|exe`, `cargo build|test|run|check`,
-nvcc) while the VM has less than $AGENT_GUARD_MIN_AVAIL (default 0.25) of its memory available (MemAvailable, or its cgroup's
-limit less its use when that is less): on a VM several agents share, one more such job is how the kernel OOM-kills another
-agent's processes (circuits' coordinator VM, 15 and 18 Oct). The same command through `research run --on NODE`, or over ssh,
-runs elsewhere and passes; `AGENT_GUARD_LOW_MEM_OK=1` anywhere in the command passes it too.
+Builds and tests run on our nodes, not on agent VMs (every handle, at Daniel's request, 18 Oct: three OOM kills that day each
+took down every worker on a shared VM). So it refuses, always, a local pytest that names no test file or `-k` selection,
+`lake build|exe`, `cargo build|test|run|check`, nvcc and `circuit-check --all`, pointing to `research run --on auto`; and while
+the VM has less than $AGENT_GUARD_MIN_AVAIL (default 0.25) of its memory available (MemAvailable, or its cgroup's limit less its
+use when that is less) it also refuses the lighter ones: a pytest of named files, `lake env`, the check's suites and `verity
+check`. The same command through `research run`, or over ssh, runs elsewhere and passes; `AGENT_GUARD_LOCAL_OK=1` anywhere in
+the command passes it too.
 
 It also carries messages to running agents, the one channel that reaches a subagent mid-run (`inbox.py send AGENT_ID`).
 A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next allowed
@@ -219,44 +221,50 @@ def refused_text(text: str) -> bool:
         return bool(FALLBACK.search(text))
 
 
-HEAVY_PROGRAMS = {"pytest": None, "py.test": None, "nvcc": None, "suites.py": None, "lake": {"build", "env", "exe"},
-                  "cargo": {"build", "test", "run", "check"}, "verity": {"check"}}
+ALWAYS, PRESSURE = 2, 1
+#: program -> {first argument: weight} (None: any): ALWAYS is refused locally, PRESSURE only while memory is short
+HEAVY_PROGRAMS = {"nvcc": {None: ALWAYS}, "suites.py": {None: PRESSURE}, "check.py": {None: PRESSURE},
+                  "lake": {"build": ALWAYS, "exe": ALWAYS, "env": PRESSURE}, "verity": {"check": PRESSURE},
+                  "cargo": {"build": ALWAYS, "test": ALWAYS, "run": ALWAYS, "check": ALWAYS}}
 UV_RUN_VALUED = {"--extra", "--with", "--package", "-p", "--python", "--directory", "--project", "--group", "--env-file", "--index"}
-LOW_MEM_OK = "AGENT_GUARD_LOW_MEM_OK=1"
+LOCAL_OK = "AGENT_GUARD_LOCAL_OK=1"
 
 
-def heavy_words(words: list[str]) -> bool:
-    """Whether one simple command runs a heavy program here, seen through `uv run [OPTS]`, `python -m MOD` and `python SCRIPT`."""
+def weight_words(words: list[str]) -> int:
+    """How heavy one simple command is here (0, PRESSURE or ALWAYS), seen through `uv run [OPTS]`, `python -m MOD` and `python
+    SCRIPT`. A pytest naming test files or a `-k` selection is PRESSURE, any other ALWAYS; `circuit-check --all` is ALWAYS."""
     words = unwrap(strip_redirections(words))
     while words and re.fullmatch(r"\w+=.*", words[0]):
         words = words[1:]
     if not words:
-        return False
-    prog = os.path.basename(words[0])
-    if prog == "uv" and words[1:2] == ["run"]:
-        rest, i = words[2:], 0
+        return 0
+    prog, args = os.path.basename(words[0]), words[1:]
+    if prog == "uv" and args[:1] == ["run"]:
+        rest, i = args[1:], 0
         while i < len(rest) and rest[i].startswith("-"):
             i += 2 if rest[i] in UV_RUN_VALUED else 1
-        return heavy_words(rest[i:])
+        return weight_words(rest[i:])
     if re.fullmatch(r"python[\d.]*", prog):
-        args = words[1:]
         if args[:1] == ["-m"]:
-            return heavy_words(args[1:])
+            return weight_words(args[1:])
         script = next((a for a in args if not a.startswith("-")), None)
-        return script is not None and heavy_words([script, *args[args.index(script) + 1:]])
-    if prog not in HEAVY_PROGRAMS:
-        return False
-    subs = HEAVY_PROGRAMS[prog]
-    return subs is None or bool(set(words[1:2]) & subs)
+        return weight_words([script, *args[args.index(script) + 1:]]) if script is not None else 0
+    if prog in ("pytest", "py.test"):
+        named = any(a.endswith(".py") or "::" in a for a in args) or "-k" in args
+        return PRESSURE if named else ALWAYS
+    if prog == "circuit-check":
+        return ALWAYS if "--all" in args else PRESSURE
+    table = HEAVY_PROGRAMS.get(prog) or {}
+    return table.get(None) or table.get(args[0] if args else "", 0)
 
 
-def heavy(text: str) -> bool:
-    """Whether a simple command of `text` runs heavy work on this VM: a command through `research run` or over ssh runs elsewhere."""
+def weight(text: str) -> int:
+    """The heaviest simple command of `text` run on this VM: a command through `research run` or over ssh runs elsewhere."""
     try:
         commands = words_of(text)
     except ValueError:
-        return False
-    return any(heavy_words(words) for words, _ in commands)
+        return 0
+    return max((weight_words(words) for words, _ in commands), default=0)
 
 
 def available() -> tuple[float, float] | None:
@@ -278,17 +286,24 @@ def available() -> tuple[float, float] | None:
     return avail, total
 
 
-def low_memory_reason(command: str) -> str | None:
-    if LOW_MEM_OK in command or not heavy(command):
+def local_work_reason(command: str) -> str | None:
+    """Why this command may not run on this VM, or None."""
+    w = 0 if LOCAL_OK in command else weight(command)
+    remote = (f"Run it on a node: `research run --on auto -- CMD` (the queue, from this checkout: 4 CPUs, 16 GB, 60 min unless "
+              f"--cpus, --mem-gb or --timeout say otherwise; add --wait to block until it ends). For a small local run you know "
+              f"fits, put {LOCAL_OK} in the command.")
+    if w == ALWAYS:
+        return ("builds and tests run on our nodes, not on an agent VM (every handle, at Daniel's request, 18 Oct: OOM kills on "
+                "shared VMs took down every worker on them). A pytest of named test files or a `-k` selection, or `lake env lean` "
+                "on one file, still runs here while memory allows. " + remote)
+    if w != PRESSURE:
         return None
     mem = available()
     floor = float(os.environ.get("AGENT_GUARD_MIN_AVAIL", "0.25"))
     if mem is None or mem[0] >= floor * mem[1]:
         return None
     return (f"this VM has {mem[0] / 2**30:.1f} GiB of {mem[1] / 2**30:.1f} GiB available (under {floor:.0%}), and this command runs "
-            f"heavy work here: on a VM other agents share, the kernel would OOM-kill some agent's processes. Run it on a CPU node "
-            f"(`research run --on vy-nebius-cpu-1 --pool research --source . --mem-gb G -- CMD`, or your lane's pool), or wait "
-            f"for memory; for a small run you know fits, put {LOW_MEM_OK} in the command.")
+            f"tests or a build here: on a VM other agents share, the kernel would OOM-kill some agent's processes. " + remote)
 
 
 def delivery(conversation: str) -> str | None:
@@ -324,8 +339,8 @@ def main() -> int:
     except Exception:                                   # a bug here must not allow what the fallback would refuse
         deny = bool(FALLBACK.search(command) or ENVIRON.search(command))
     try:
-        low = None if deny else low_memory_reason(command)
-    except Exception:                                   # a bug in the memory gate must not stop every command
+        low = None if deny else local_work_reason(command)
+    except Exception:                                   # a bug in the local-work gate must not stop every command
         low = None
     if deny or low:
         reason = REASON if deny else low

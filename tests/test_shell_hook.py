@@ -104,7 +104,7 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "declare -f my_function",
     "declare -A table",
     "local x=1",
-    "uv run --env-file .env pytest",
+    "uv run --env-file .env pytest tests/test_x.py",
     "python -m venv env && source env/bin/activate",
     "cat .env.example",
     "git commit -m 'never use env | cut, use compgen -e'",
@@ -154,31 +154,41 @@ def test_the_refusal_tells_the_agent_how_to_list_names_and_input_that_is_not_jso
     assert json.loads(out)["permission"] == "deny"
 
 
-def test_heavy_local_work_is_refused_while_the_vm_is_short_of_memory_and_passes_elsewhere(tmp_path):
-    """INF-55 g: nine workers on circuits' 15 GB coordinator VM ran their suites and builds there, and the kernel OOM-killed four
-    of their processes (18 Oct). Under a quarter of the memory available, a heavy command run here is refused with what to do;
-    the same command through `research run --on`, over ssh, or with AGENT_GUARD_LOW_MEM_OK=1 passes, as does light work."""
+def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_it_is_short_of_memory(tmp_path):
+    """Remote by default (every handle, at Daniel's request, 18 Oct): OOM kills on shared agent VMs took down every worker on them.
+    A broad pytest, `lake build`, cargo, nvcc and `circuit-check --all` are refused here always, pointing to `research run --on
+    auto`; a pytest of named files, `lake env`, the suites and `verity check` only under a quarter of the memory available. Through
+    `research run`, over ssh, or with AGENT_GUARD_LOCAL_OK=1 any passes, as does work that is neither."""
     meminfo = tmp_path / "meminfo"
     cgroup = tmp_path / "cg"
     cgroup.mkdir()
     (cgroup / "memory.max").write_text("max\n")
-    low = {"AGENT_GUARD_MEMINFO": str(meminfo), "AGENT_GUARD_MIN_AVAIL": "0.25", "AGENT_GUARD_CGROUP": str(cgroup)}
-    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    2000000 kB\n")
-    for command in ("uv run pytest -q tests/", "cd tools/research && python -m pytest -x", "uv run tools/verity/check/suites.py --quick",
-                    "uv run --extra torch-cpu verity check", "lake build Security", "cd Security && lake env lean X.lean",
-                    "cargo test --release", "timeout 600 /workspace/.venv/bin/python -m pytest tests/test_x.py"):
-        out = answer(command, **low)
-        assert out["permission"] == "deny", command
-        assert "1.9 GiB of 15.3 GiB available" in out["agent_message"] and "research run --on" in out["agent_message"]
-    for command in ("research run --on vy-nebius-cpu-1 --pool research --source . -- uv run pytest -q",
-                    "uv run research run --on m --source . -- lake build", "ssh n1 'cd /w && pytest'", "git status",
-                    "AGENT_GUARD_LOW_MEM_OK=1 uv run pytest -q tests/test_one.py", "rg pytest tools/", "ls"):
-        assert verdict(command, **low) == "allow", command
+    gate = {"AGENT_GUARD_MEMINFO": str(meminfo), "AGENT_GUARD_MIN_AVAIL": "0.25", "AGENT_GUARD_CGROUP": str(cgroup)}
+    always = ("uv run pytest -q tests/", "cd tools/research && python -m pytest -x", "lake build Security", "cargo test --release",
+              "uv run circuit-check --all", "nvcc -O3 k.cu", "timeout 600 /workspace/.venv/bin/python -m pytest")
+    light = ("uv run pytest -q tests/test_x.py", "python -m pytest tests/test_x.py::test_y", "pytest -k mem tools/research/tests",
+             "uv run tools/verity/check/suites.py --quick", "uv run --extra torch-cpu verity check",
+             "cd Security && lake env lean X.lean")
+    passes = ("research run --on auto -- uv run pytest -q", "uv run research run --on m --source . -- lake build",
+              "ssh n1 'cd /w && pytest'", "git status", "AGENT_GUARD_LOCAL_OK=1 uv run pytest -q tests/", "rg pytest tools/", "ls")
     meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
-    assert verdict("uv run pytest -q tests/", **low) == "allow"
+    for command in always:
+        out = answer(command, **gate)
+        assert out["permission"] == "deny", command
+        assert "research run --on auto" in out["agent_message"] and "AGENT_GUARD_LOCAL_OK=1" in out["agent_message"]
+    for command in light + passes:
+        assert verdict(command, **gate) == "allow", command
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    2000000 kB\n")
+    for command in light:
+        out = answer(command, **gate)
+        assert out["permission"] == "deny", command
+        assert "1.9 GiB of 15.3 GiB available" in out["agent_message"] and "research run --on auto" in out["agent_message"]
+    for command in passes:
+        assert verdict(command, **gate) == "allow", command
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
     (cgroup / "memory.max").write_text(f"{8 * 2**30}\n")         # a cgroup limit tighter than the VM: its headroom counts
     (cgroup / "memory.current").write_text(f"{7 * 2**30}\n")
-    assert verdict("uv run pytest -q tests/", **low) == "deny"
+    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "deny"
 
 
 INBOX_TOOL = ROOT / "tools/agent-guard/inbox.py"
