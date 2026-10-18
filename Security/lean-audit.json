@@ -2988,11 +2988,11 @@
     "Claims.Witness.Recursion.KSBound_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
     "  (H : Claims.Msg → Claims.Msg) :",
     "  Not",
-    "    (Claims.Recursion.KSBound H (fun x => Claims.Witness.Recursion.ksR Coin) (Claims.Witness.Recursion.ksB Coin)",
+    "    (Claims.Recursion.KSBound H (Claims.Witness.Recursion.ksRAt Coin) (Claims.Witness.Recursion.ksB Coin)",
     "      (Claims.Witness.Flock.ksD Coin))"
    ],
    "assumptions": [],
-   "type_hash": "2dd155509580dbc75bc6bdb4fc2b545cb5465452f20ad035f5f08b064fdcde26"
+   "type_hash": "812aba7e3a39352f282018448631261f71212eb564aae21e05e6232c04a69c4c"
   },
   "Claims.Witness.Recursion.KSBound_meets": {
    "owner": "@proofs",
@@ -3037,11 +3037,11 @@
     "Claims.Witness.Recursion.KSPrivBound_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
     "  (H : Claims.Msg → Claims.Msg) :",
     "  Not",
-    "    (Claims.Recursion.KSPrivBound H (fun x => Claims.Witness.Recursion.ksR Coin) (Claims.Witness.Recursion.ksB Coin)",
+    "    (Claims.Recursion.KSPrivBound H (Claims.Witness.Recursion.ksRAt Coin) (Claims.Witness.Recursion.ksB Coin)",
     "      (Claims.Witness.Flock.ksD Coin))"
    ],
    "assumptions": [],
-   "type_hash": "b69b5d1b7187c91fa83ecfa8c6b7f628328569b01682e8809cf7a5a512711424"
+   "type_hash": "ae5c51cbe85b1ad2ff9dce3f6712b8eb8862cb73c8bacb5ab0688017ef1c3442"
   },
   "Claims.Witness.Recursion.KSPrivBound_meets": {
    "owner": "@proofs",
@@ -9879,7 +9879,7 @@
    ]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "d9d1d85e1227169e7afebe1c29467e673c782cda3e1979751144d80f99b9e6e4",
+   "digest": "31c93955acebe0e5f8ef48a01640a17b2d892b73f8f833155d27df1efd795b0b",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
@@ -9889,7 +9889,7 @@
     "Claims.Recursion.Bound.Binds": "2ee03ed4a887a97066a0177b12207460142f7ce938fefbbfbfb929bc0ec82118",
     "Claims.Recursion.Bound.DE": "327f27b2237460428939b9e3f6b6ad7d5668817d2ad47b04705847e64eeede2f",
     "Claims.Recursion.Bound.IVStar": "137185c636e2d70008f163623204e09d545ee6f84b00bef985d3b712a748a51a",
-    "Claims.Recursion.Bound.LastBinds": "85747409cb8ee43a212071c7700c3e92db2372fb5cc37c6eff681073b70fd908",
+    "Claims.Recursion.Bound.LastBinds": "5167cb9e4d264b017e58940bf2d6c97f379eb03198c659d263b53d25a0a1ac7d",
     "Claims.Recursion.Bound.PlainKSAbort": "f47c0563127f50809311f993df9976a067d626327d299d7e006aca87de994f34",
     "Claims.Recursion.Bound.WeightCovers": "98f13a0569a184852aaf63eddc5ab60fc4727824b019d3f5a250948263cc0b3e",
     "Claims.Recursion.Bound.agrees": "982e8be0c9ef0c131c539dc4a724e86617d1e608837aaef142f82b4e630ff3f6",
@@ -9969,10 +9969,10 @@
     "Claims.Recursion.Inner.γ": "7bd3c240361fc3143125ac501ac67173d0e3fbf912e0f8e5937ab5c5caccbb1b",
     "Claims.Recursion.Inner.κ": "8724a4a0cc99567c32a2e0e4de422fb97b002c657ad75ae5d63e08e11f0b8977",
     "Claims.Recursion.KS": "b13703cf55a8b9959c393cdd5374d40fc468d10bf96f6081db37e9a00c952be1",
-    "Claims.Recursion.KSBound": "ec8f0958e2216dd102e97d597af447c5978053252f8552d8d5851309941a17a4",
+    "Claims.Recursion.KSBound": "25a87116a265566b1a76d299f42984840a036c109e3739a88e8e245ffbd59dd9",
     "Claims.Recursion.KSFlock": "a74e351886ff9ffb4fb1ac7964323fc0cfcb3c48a9b6647142dedcbab376b727",
     "Claims.Recursion.KSPriv": "649729e7db98a5f859040492bea461b2c6a7c4445eab04523905a2549c35122a",
-    "Claims.Recursion.KSPrivBound": "2430c5939efd85c27023f4208af82fb2d8529dcca969d9977aec12ed06859715",
+    "Claims.Recursion.KSPrivBound": "6265f3856ba99ce501436d605e9d07dc5c459e1c827b7e33d8622ca71395e2c3",
     "Claims.Recursion.NI": "334246b6e9ef4802ecd06c2db3aae3a494077be7e57915e2dffa67f1e25133ef",
     "Claims.Recursion.Nontrivial": "8254008bbfe450d7f4237a68ccea9f9c212e6da8e88ac858f451dd2a6cf8d5df",
     "Claims.Recursion.Nums": "4ca40866293e472589b75de5ef556de799b5818fd7e885ac0f246bdf40b31879",
@@ -9996,6 +9996,8 @@
     "Claims.Recursion.PrBe": "6f93e9bd64f6ba1cc67e0cc8223bf3b08eacb8fda204497a8f1044673d7ebaba",
     "Claims.Recursion.R": "430094b2e8a2a403813a1ba292d8d1eeafdc9136d7b945c8e5018644c3a5ddf1",
     "Claims.Recursion.RPriv": "dc62ecaea7236ec7992258477c1660d47149260edbf84574e9997d7d6b322511",
+    "Claims.Recursion.RecAt": "3116a5d45a5f75d23879204c2eedbac727e9bb580211f8c061f805a4ec803bd4",
+    "Claims.Recursion.RecAt.record": "50bb8d9e90f73278e6e9e20dd80ca68135eccaaf2ee74fd9eadfdd47c639e83b",
     "Claims.Recursion.Scope": "c60746741c7a89a0ef7e56a5982f68ad97da91e1bbb2038a7de4f87ec05dcfd6",
     "Claims.Recursion.ScopeMatches": "12159a1f946bf3cd1cbc2acaaa30cbd0288b8be013f7551df5037e14603b72c5",
     "Claims.Recursion.Sim": "23d324e55d9b3473d5628e35630b2ec1c6b54466579356baffb2b889e8687c48",
@@ -20803,9 +20805,9 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Models.Flock.Guarantees.RecursionClaims": {
-   "digest": "bf9b3989e0e3e71a8dbb8b47a1619c56a85738e64d85e9294682ff4e0cc53b36",
+   "digest": "1bf47b9ffcfdc51e2bef4edcced226b7b405b19dad9cafd08c1020876be99717",
    "definitions": {
-    "Flock.Guarantees.RecursionClaimsStated": "edb1662be34e7ccbdc9ecd803e9b291979cbc94392a688b5e0834a0b24ce04b3"
+    "Flock.Guarantees.RecursionClaimsStated": "ef45178b3d00c46f27353e9c81defc6e0b6112bdf49ab618177592b9cf11ca2c"
    },
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
