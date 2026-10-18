@@ -87,13 +87,15 @@ def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
     if c is None:
         c = MM.census_of(program, digest)
         _put(d / CENSUS, c)
+        print(f"[census] request Program {digest[:16]}: {len(c['values']['producer'])} values in {time.perf_counter() - t0:.2f} s",
+              flush=True)
     doc: dict[str, Any] = {"schema": KV_ROWS_SCHEMA, "program": digest, "census": c["digest"]}
     try:
         doc.update(MM.rows_doc(MM.rows(program, c)))
     except ValueError as e:
         doc["refused"] = str(e)
     _put(d / KV_ROWS, doc)
-    return {"census": c["digest"], "kv_rows": "refused" not in doc, "seconds": round(time.perf_counter() - t0, 2)}
+    return {"census": c["digest"], "kv_rows": "refused" not in doc}
 
 
 def of_build(d: str | Path, digest: str) -> MM.Rows:
