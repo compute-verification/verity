@@ -152,6 +152,9 @@ def _relative_spec(source: str | Path, root: Path) -> str:
 
 
 QUEUE_KINDS = {1: "vllm-bench-1gpu", 8: "vllm-bench-8gpu"}
+# A point writes its records, out/ and what its setup builds (a few MB; the venv and model cache are shared). The
+# queue's default 20 GB request would hold every point once the node's disk nears research disk-hold's 80%.
+POINT_DISK_GB = 5
 
 
 def queue_kind(gpu_count: int) -> str:
@@ -196,6 +199,7 @@ def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: P
         "--campaign", "vllm-bench",
         "--gpus", str(spec.preset.gpu_count),
         "--gpu-model", spec.preset.gpu_id,
+        "--disk-gb", str(POINT_DISK_GB),
         "--cwd", "source",
         "--require-result",
         "--tool", "verity_bench.tool:VLLM_BENCH_POINT",

@@ -178,6 +178,7 @@ def test_plan_marks_passing_points_and_dispatches_one_recorded_run_for_each_miss
     assert "--preemptible" in command[:command.index("--")]
     assert command[command.index("--gpus") + 1] == "1"
     assert command[command.index("--gpu-model") + 1] == "rtx-pro-6000"
+    assert command[command.index("--disk-gb") + 1] == str(jobs.POINT_DISK_GB)
     assert command[command.index("--") + 1:][:2] == ["bash", "benchmarks/harness/run_point.sh"]
     assert (root / "benchmarks/harness/run_point.sh").is_file()
     assert command[command.index("--point") + 1] == "b32-p512-mixed"
