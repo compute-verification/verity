@@ -139,10 +139,11 @@ def LutIndex(d: int, a: int) -> int:
     return min((max(_s32(d), 0) * (a & 0xFFFFFFFF)) >> 32, LUT_SIZE - 1)
 
 
-@primitive("Exp2Lut127", 1, [("t", V8)], I32, conformance=_CONF)
+@primitive("Exp2Lut127", 1, [("t", V8)], I32, conformance=_CONF, tables=(("exp2_lut127", "registered"),))
 def Exp2Lut127(t: int) -> int:
     """The LUT softmax's gather (`engine.int8_attention.lut_e`'s ``LUT[t]``): LUT[t] = rint(127 2^(-t/16)) for the unsigned byte t,
-    a 256-entry table whose entries are in [0, 127], as a 32-bit word."""
+    a 256-entry table whose entries are in [0, 127], as a 32-bit word.  The table is fattn's, not the library's, so the primitive
+    holds it as the program's registered `exp2_lut127` (`verity.ml.circuits.operations.program_data` lists it)."""
     return LUT[t & 0xFF]
 
 
