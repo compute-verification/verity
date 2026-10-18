@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Cursor's `preToolUse` hook for the Task tool (`.cursor/hooks.json`, matcher `Task`): a coordinator runs its workers as cloud
-agents, not as local subagents on its own VM.
+"""Cursor's `preToolUse` hook for the Task tool (`.cursor/hooks.json`, matcher `Task`): a coordinator never waits on a local
+worker in the foreground.
 
-Slack, Linear and timer events reach an agent only while its turn is free, and a local subagent, in the background or not, keeps
-its parent's turn open until it ends: on 18 Oct the proofs coordinator heard nothing for ten hours while six local workers ran
-(note:proofs/20261018T1550Z-friction-coordinator-turn-held-by-local-subagents). So for an agent that holds a handle (its id is
-in a `holder` of the Slack registry, `.agents/skills/using-slack/registry.json`) it refuses a Task call unless the call sets
-`environment: cloud`, or asks for one of the short read-only lookups in `LOOKUPS` in the foreground. Every other agent's Task
-calls pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout; an input it can't read passes. Each
+Slack, Linear and timer events reach an agent only while its turn is free, and a foreground subagent holds its parent's turn
+until it ends; one in the background doesn't. Local workers also share the coordinator's VM, where one OOM kills them all
+(note:proofs/20261018T1550Z-friction-coordinator-turn-held-by-local-subagents, rule 1: cloud workers where the Task tool offers
+them, background always). So for an agent that holds a handle (its id is in a `holder` of the Slack registry,
+`.agents/skills/using-slack/registry.json`) it refuses a local Task call in the foreground, unless it is one of the short
+read-only lookups in `LOOKUPS`. Cloud and background calls pass, and so does every other agent's. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout; an input it can't read passes. Each
 verdict is appended to $AGENT_GUARD_TASK_LOG (default /tmp/agent-guard-task.jsonl) with the call's environment, subagent type
 and background flag, never its prompt.
 """
@@ -38,15 +38,13 @@ def reason(event: dict) -> str | None:
     args = event.get("tool_input")
     if handle is None or not isinstance(args, dict):
         return None
-    if args.get("environment") == "cloud":
+    if args.get("environment") == "cloud" or args.get("run_in_background") or args.get("subagent_type") in LOOKUPS:
         return None
-    if args.get("subagent_type") in LOOKUPS and not args.get("run_in_background"):
-        return None
-    return (f"Refused by tools/agent-guard/task_hook.py: you hold @{handle}, and a local subagent keeps your turn open until it "
-            "ends, so no Slack, Linear or timer event reaches you meanwhile (proofs heard nothing for ten hours on 18 Oct). Run "
-            "the worker as a cloud agent (Task with environment: \"cloud\"; it gets its own VM and branch) or as a detached "
-            "`research run`, then end your turn. Short read-only lookups in the foreground still run locally: "
-            f"{', '.join(sorted(LOOKUPS))}.")
+    return (f"Refused by tools/agent-guard/task_hook.py: you hold @{handle}, and a foreground subagent holds your turn until it "
+            "ends, so no Slack, Linear or timer event reaches you meanwhile. Run the worker as a cloud agent (Task with "
+            "environment: \"cloud\"; its own VM, so an OOM there can't take yours) where your Task tool offers it, else with "
+            "run_in_background: true, or as a detached `research run`; then end your turn. Short read-only lookups run in the "
+            f"foreground: {', '.join(sorted(LOOKUPS))}.")
 
 
 def main() -> int:

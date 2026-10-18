@@ -1,5 +1,5 @@
-"""`.cursor/hooks.json`'s Task hook keeps coordinators' workers off their own VMs: a local subagent holds its parent's turn open,
-and on 18 Oct the proofs coordinator heard nothing for ten hours while six ran (proofs' incident note, 15:50Z)."""
+"""`.cursor/hooks.json`'s Task hook keeps a coordinator from waiting on a local worker in the foreground, which holds its turn
+(and so every Slack, Linear and timer event) until the worker ends (proofs' rule 1, 18 Oct)."""
 import json
 import os
 import subprocess
@@ -30,22 +30,23 @@ def test_cursor_runs_the_hook_before_every_task_call():
 
 
 @pytest.mark.parametrize("tool_input", [
-    {"subagent_type": "generalPurpose", "prompt": "x", "run_in_background": True},
     {"subagent_type": "generalPurpose", "prompt": "x"},
-    {"subagent_type": "generalPurpose", "prompt": "x", "environment": "local"},
-    {"subagent_type": "explore", "prompt": "x", "run_in_background": True},
+    {"subagent_type": "generalPurpose", "prompt": "x", "environment": "local", "run_in_background": False},
     {"subagent_type": "best-of-n-runner", "prompt": "x"},
+    {"subagent_type": "debug", "prompt": "x"},
 ])
-def test_a_coordinators_local_worker_is_refused_with_the_way_to_run_it(tmp_path, tool_input):
+def test_a_coordinators_local_worker_in_the_foreground_is_refused_with_the_way_to_run_it(tmp_path, tool_input):
     a = answer(tmp_path, HOLDER, tool_input)
     assert a["permission"] == "deny" and "@proofs" in a["agent_message"] and 'environment: "cloud"' in a["agent_message"]
+    assert "run_in_background: true" in a["agent_message"]
 
 
 @pytest.mark.parametrize("conversation_id,tool_input", [
-    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud", "run_in_background": True}),
+    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud"}),
+    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "run_in_background": True}),
     (HOLDER, {"subagent_type": "explore", "prompt": "x"}),
     (HOLDER, {"subagent_type": "cursor-guide", "prompt": "x", "run_in_background": False}),
-    (WORKER, {"subagent_type": "generalPurpose", "prompt": "x", "run_in_background": True}),
+    (WORKER, {"subagent_type": "generalPurpose", "prompt": "x"}),
     (None, {"subagent_type": "generalPurpose", "prompt": "x"}),
     (HOLDER, "not an object"),
 ])
@@ -54,7 +55,7 @@ def test_cloud_workers_foreground_lookups_and_other_agents_pass(tmp_path, conver
 
 
 def test_each_verdict_is_logged_without_the_prompt(tmp_path):
-    answer(tmp_path, HOLDER, {"subagent_type": "generalPurpose", "prompt": "a secret plan", "run_in_background": True})
+    answer(tmp_path, HOLDER, {"subagent_type": "generalPurpose", "prompt": "a secret plan", "run_in_background": False})
     (rec,) = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
     assert rec == {"conversation_id": HOLDER, "deny": True, "input_keys": ["prompt", "run_in_background", "subagent_type"],
-                   "environment": None, "subagent_type": "generalPurpose", "run_in_background": True}
+                   "environment": None, "subagent_type": "generalPurpose", "run_in_background": False}
