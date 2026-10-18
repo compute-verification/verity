@@ -40,7 +40,8 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     w = rec["window"]
     assert (win["population"], rec["format"], w["kind"], w["run"]) == (heads, R.FORMAT, "stand-in", c["run_root"])
     man = RB.open_bundle(RB.path(c["out"], 1))["manifest_sha256"]
-    assert w["of"] == {"commitment": "vllm-v1", "run_root": c["run_root"], "bundle_manifest_sha256": man, "rows": DRW.ROWS}
+    assert w["of"] == {"commitment": DRW.RECORD, "run_root": c["run_root"], "bundle_manifest_sha256": man, "rows": DRW.ROWS}
+    assert len(bytes.fromhex(c["run_root"])) == 64, "the window is bound to the run root of record (commit.record)"
     assert w["link"] == DRW.LINK and w["committer"]["from"] == "replay bundle" and w["row"] == "rope-d64-cpu"
 
     # the verifier's own copies: its population program, the run root of record, the public body it holds

@@ -3,10 +3,12 @@ bundle opened against the Commit's record as the CPU replay opens it (manifest s
 record), the weights opened against the committed weights root, and the window `pipeline.serving_rows.after_commit` writes, the same
 window the in-Commit hook writes, into ``O``.  A slim bundle holds the replay's picks only, not the population: refused.
 
-The window is a ``stand-in`` (core's ``registration.KINDS``), not ``served``: serving's commitment is the vllm-v1 roots, and these rows
-are committed afterwards from the bundle, so their roots are a fresh commitment whose link to serving's is provenance (`stand_in`:
-``of`` the record's vllm-v1 run root, the bundle's manifest digest and this command, and ``link``).  It becomes ``served`` once
-serving's record is itself ``frame-v3-sha512`` / ``hm96-sha512``, or once the circuit opens the vllm-v1 SHA-256 leaves."""
+The window is a ``stand-in`` (core's ``registration.KINDS``), not ``served``: serving's commitment is the run's root of record
+(`commit.record`: ``frame-v3-sha512`` trees of ``hm96-sha512`` rows, one per committer leaf; a run recorded before it, its vllm-v1
+roots), and these rows are committed afterwards from the bundle, so their roots are a fresh commitment whose link to serving's is
+provenance (`stand_in`: ``of`` the record's run root, the bundle's manifest digest and this command, and ``link``).  It becomes
+``served`` once the window's units are read from the record's own rows (its trees the registered roots), so that no fresh commitment
+stands between them."""
 from __future__ import annotations
 
 import dataclasses
@@ -18,6 +20,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.check.replay.index import ProgramIndex
+from verity_vllm.commit import record as REC
 from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import cpu_replay as CPU
@@ -25,14 +28,17 @@ from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
 
 ROWS = "verity-vllm serving-rows: replay bundle -> rows"
-LINK = ("provenance, not proof: verity-vllm serving-rows opened the sealed replay bundle against the record's vllm-v1 roots and "
-        "committed these rows from it; no circuit opens the vllm-v1 leaves")
+#: what a run root of record names as serving's commitment: the record's format (64-byte roots), a recorded run's vllm-v1
+RECORD = REC.FORMAT
+LINK = ("provenance, not proof: verity-vllm serving-rows opened the sealed replay bundle against the record's roots and committed "
+        "these rows from it; no circuit reads the record's rows")
 
 
 def stand_in(run_root: str, bundle_manifest_sha256: str) -> dict[str, Any]:
-    """The window's link to serving's commitment: ``of`` the vllm-v1 run root, the bundle's manifest digest and the command that
-    turned the bundle into rows, and ``link``."""
-    return {"of": {"commitment": "vllm-v1", "run_root": run_root, "bundle_manifest_sha256": bundle_manifest_sha256, "rows": ROWS},
+    """The window's link to serving's commitment: ``of`` the run root of record (and which commitment it is), the bundle's manifest
+    digest and the command that turned the bundle into rows, and ``link``."""
+    commitment = RECORD if len(run_root) == 2 * REC.NODE else REC.LEGACY_SCHEME
+    return {"of": {"commitment": commitment, "run_root": run_root, "bundle_manifest_sha256": bundle_manifest_sha256, "rows": ROWS},
             "link": LINK}
 
 

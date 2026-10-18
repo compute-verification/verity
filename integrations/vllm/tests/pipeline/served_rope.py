@@ -1,6 +1,6 @@
 """A deferred Commit served on CPU, for the serving rows' tests and the one-stage audit's end-to-end run (`benchmarks/one_stage/a5.py`):
 a Program with RoPE_v1 rows (D=64) executed honestly by the sampled replay's world (`tests.check.test_sampled_replay`), its members
-committed by the production CPU committer and sealed into a replay bundle with its registered weights, beside the Commit's record
+committed by the production CPU committer under its root of record (`commit.record`) and sealed into a replay bundle with its registered weights, beside the Commit's record
 (``runs.jsonl``, ``verdict.json``, the binding map) and the row dir of its Program of record.
 
     python -m tests.pipeline.served_rope OUT        (from integrations/vllm)
@@ -17,6 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from verity_vllm.check.replay.index import ProgramIndex
+from verity_vllm.commit import challenge as CH
 from verity_vllm.commit import scheme
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
@@ -47,7 +48,8 @@ def commit(root: Path) -> dict:
         prompts = {"r0": [1, 2], "r1": [5, 3]}
         world = T.Honest(inst, woff, w, prompts)
         bmap, _ = world.bmap_and_reader()
-        com, rc = commit_members(dict(sorted(world.store.items())))
+        com, rc = commit_members(dict(sorted(world.store.items())), of_record=True)
+        CH.draw_live(rc)
     finally:
         T.DH = dh
 
@@ -75,7 +77,8 @@ def commit(root: Path) -> dict:
     (out / "binding_map_p1.json").write_text(json.dumps(bmap))
     sr, lk = RB.deferred_records(RB.path(out, 1))
     row = {"pair": 1, "arm": "instrumented", "commit": {"run_root": rc.run_root.hex(), "commit_pass": None, "sampled_replay": sr,
-                                                        "boundary_linkage": lk, "weight_registration": {"root": wroot}}}
+                                                        "boundary_linkage": lk, "weight_registration": {"root": wroot},
+                                                        "extra": {k: rc.extra[k] for k in ("challenge", "committer_root", "record")}}}
     reqs = [{"request_id": rid, "index": k, "prompt_token_ids": pr, "max_tokens": 3, "arrive_step": 0} for k, (rid, pr) in enumerate(prompts.items())]
     ctx = {"pair": 1, "run_root": rc.run_root.hex(), "requests": reqs, "sampling": {"max_tokens": 3}, "code": "test",
            "args": {"program_dir": "/served/build_request", "programs_root": None, "program_digest": inst["digest"],
