@@ -406,7 +406,7 @@ mod tests {
             nets: nets.into_iter().map(|n| ("net".to_string(), n)).collect(), ranges: vec![], ports: vec![], n_in: 0,
             out_words: vec![], out_row_ports: vec![], g: 1, k_log: 0, upv: per_vu[0], unit_net: 0, leaves_in: vec![],
             leaves_out: vec![], public_inputs: vec![], leaves_public: vec![], rows: vec![], sha_net: k, hm_net: k + 1, out_net: 0,
-            out_ports: vec![], leaf_cuts_of: vec![], leaf_cuts, dummy_bc: vec![], dummy_outputs: vec![],
+            out_ports: vec![], out_slotted: false, leaf_cuts_of: vec![], leaf_cuts, dummy_bc: vec![], dummy_outputs: vec![],
             leaf_scheme: serde_json::Value::Null, per_vu,
             wires: wires.iter().map(|&(a, b, c, d, e, f)| Wire { dst: (a, b, c), src: (d, e, f) }).collect(),
             lookups: lookups.into_iter().collect(), typed: None,
@@ -500,6 +500,21 @@ mod tests {
         assert_eq!(circuit_why(&tail(), true), None);
         assert_eq!(circuit_why(&rms(0), false).as_deref(), Some("a unit reading 2 input groups"));
         assert_eq!(circuit_why(&tail(), false).as_deref(), Some("a circuit whose outputs a tail stage computes (META out_net)"));
+        assert!(wires_acyclic(&slotted()) && wires_feed(&slotted()));
+        assert_eq!(circuit_why(&slotted(), true), None);
+    }
+
+    /// Lean's `slotted`: a repeated last stage, two units each wiring its own slot of a stage of two 16-bit output ports,
+    /// the stage's slots returning the output words (`out_net_ports` of `[slot, port]` pairs).
+    fn slotted() -> Composite {
+        let one = || vec![Group { col: 0, words: 1, bits: vec![1] }];
+        let stage = wnet(one(), 1, vec![16, 16], vec![(vec![0], vec![0]); 32]);
+        let mut c = circ(vec![wnet(one(), 1, vec![1], vec![(vec![0], vec![0])]), stage], vec![2, 2],
+                         &[(1, 0, 0, 0, 0, 0), (1, 1, 0, 0, 1, 0)], vec![], vec![]);
+        c.out_net = 1;
+        c.out_ports = vec![(0, 0), (1, 0)];
+        c.out_slotted = true;
+        c
     }
 
     #[test]

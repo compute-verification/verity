@@ -315,11 +315,13 @@ def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp
     assert "closed" in capsys.readouterr().out
 
 
-def test_a_root_message_is_applied_in_order_and_a_plan_holding_a_released_block_is_rejected():
-    """`Verifier.root`: a message's appends, then its releases, then its root with its plan change and its step; a plan
-    that still holds a block the message released, or one appended by no message, is the session's `plan` rejection,
-    a root with no step or one not above the last pass's is its `step` rejection, and a message the session cannot
-    read is malformed."""
+def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_order():
+    """`Verifier.append` answers an append's message with its first index and its coin, drawn then, once: the same
+    root sent again draws none and is the session's `coin` rejection.  `Verifier.root`: a message's releases, then
+    its root with its plan change and its step; a plan that still holds a block the message released, or one
+    appended by no message, is the session's `plan` rejection, a root with no step or one not above the last pass's
+    is its `step` rejection, and a message the session cannot read, a root's carrying appends among them, is
+    malformed."""
     reg = audit.register(os.urandom(32), b"test-node", 8, bytes(64), P512)
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows)
 
@@ -331,30 +333,41 @@ def test_a_root_message_is_applied_in_order_and_a_plan_holding_a_released_block_
         s.start()
         return s
 
+    def appended(s):
+        return verifier.Verifier.append(s, {"type": "append", "root": root, "count": 2})
+
     root = (b"\7" * 64).hex()
     s = session()
-    msg = {"t": 0, "i": 0, "root": root, "appends": [[root, 2]], "released": [[3, 1]],
-           "change": [[[8, 2]], [[3, 1]]], "step": 5}
+    reply = appended(s)
+    assert set(reply) == {"type", "first", "coin"} and (reply["type"], reply["first"]) == ("appended", 8)
+    assert bytes.fromhex(reply["coin"]) == s._appends[0][3] and len(reply["coin"]) == 64
+    msg = {"t": 0, "i": 0, "root": root, "released": [[3, 1]], "change": [[[8, 2]], [[3, 1]]], "step": 5}
     assert verifier.Verifier.root(s, msg) is None
     assert [p.runs for p in s.windows[0].plans] == [((0, 3), (4, 6))] and s.released == 1 and s.extent == 10
     assert s.windows[0].steps == [5]
     assert verifier.Verifier.root(s, {"t": 0, "i": 1, "root": root, "change": [[], []], "step": 9}) is None
+    assert appended(s) == audit.Verdict(0, False, "coin") and s.challenger.appends == 1
     for step in (5, 4):
         s = session()
+        appended(s)
         assert verifier.Verifier.root(s, msg) is None
         v = verifier.Verifier.root(s, {"t": 0, "i": 1, "root": root, "change": [[], []], "step": step})
         assert v is not None and v.failure == "step"
     s = session()
+    appended(s)
     v = verifier.Verifier.root(s, {k: x for k, x in msg.items() if k != "step"})
     assert v is not None and v.failure == "step"
     s = session()
+    appended(s)
     v = verifier.Verifier.root(s, {**msg, "change": [[[8, 2]], []]})
     assert v is not None and v.failure == "plan"
     s = session()
-    v = verifier.Verifier.root(s, {**msg, "appends": [], "released": []})
+    v = verifier.Verifier.root(s, {**msg, "released": []})
     assert v is not None and v.failure == "plan"
     with pytest.raises(ValueError):
-        verifier.Verifier.root(session(), {**msg, "appends": [["zz", 2]]})
+        verifier.Verifier.append(session(), {"type": "append", "root": "zz", "count": 2})
+    with pytest.raises(ValueError, match="message of its own"):
+        verifier.Verifier.root(session(), {**msg, "appends": [[root, 2]]})
 
 
 def test_a_kv_plan_needs_its_pages_a_step():
