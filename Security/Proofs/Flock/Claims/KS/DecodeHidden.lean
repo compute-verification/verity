@@ -72,7 +72,7 @@ theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inpu
   obtain ⟨hd, hprf, hrec⟩ := recordsLive_wrP1 (Reg := Reg) (mPts := mPts) I dj S R (oneOf o) hacc
   obtain ⟨hSD, hmPts⟩ := hS
   obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsI ht hc hh hc1 dj x₀ hacc hd hSD hmPts
-  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsH hh hrr hl hc1 hacc
+  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsH hh hrr (Or.inl hl) hc1 hacc
   rw [hd] at hst
   obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
   obtain ⟨hroot, hpts, hstreams⟩ := hrec spec #[st] sess hsu hdec
@@ -81,10 +81,11 @@ theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inpu
   have hm : 13 ≤ st.m := by have := exec_fast100_ge hf; omega
   have hms : st.merkle = MerkleScheme.hm96Sha512 := setupHidden_hm96 hl hst
   obtain ⟨pend, hreps, hv⟩ := hk hwf hr hm
+  rw [hl, leafOfId_hm96] at hv
   have hn : ∀ (q : ℕ) (pts : Fin 2 → Fin q → 𝔽),
       (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL q pts).length = 2 * st.regions.size := by
     intro q pts
-    rw [extraClaims_length]
+    rw [DecodeZL.extraClaims_length]
     simp [stmtOf, regionsOf]
   obtain ⟨s₀, p₀, -, hs₀, hp₀, hpl₀, -⟩ := hreps 0
   obtain ⟨s₁, p₁, -, hs₁, hp₁, hpl₁, -⟩ := hreps 1
@@ -138,7 +139,7 @@ theorem decodesTable_wrP_scH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inpu
     dsimp only
     congr 1
     unfold nX
-    rw [extraClaims_length, hS']
+    rw [DecodeZL.extraClaims_length, hS']
     simp [stmtOf, regionsOf]
   have e₀ : (oneOf o).rootB = rootB₀[0]! := hr₀
   rw [hopn, e₀, hsch]
