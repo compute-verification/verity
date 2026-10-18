@@ -41,11 +41,13 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
   (`Gates/Registry.lean`); an unlisted primitive is refused, so it has no `Op`.
 * **The window.** On an input, every gate's exact value lies in its declared interval, and every s8-family step's
   operands lie in their formats and its exact sum in s32, so no accumulator clamps or wraps (`InWindow`). The property
-  proves it for the free gates by interval analysis over the whole DAG from the declared intervals of inputs and
-  budgeted gates (`Proven`), never from a free gate's declaration, and proves each affine map's declared interval
-  within s32, where `I32Add` and `I32Sub` are exact; so on an input on which the inputs and budgeted gates hold their
-  declared intervals (`DeclaredHold`), the circuit is in its window, where an s8-family step's clamp and wrap agree
-  (`Gate.Reclamped` relates the two arms).
+  proves it for the free gates and the gathers by interval analysis over the whole DAG from the declared intervals of
+  inputs and budgeted gates but gathers (`Proven`), never from a free gate's or a gather's declaration (a gather's
+  value is a word of its column or 0, so its interval is the hull of its column's and 0: a gather at a fixed index
+  can't re-declare a wide value narrow), and proves each affine map's declared interval within s32, where `I32Add`
+  and `I32Sub` are exact; so on an input on which the inputs and those budgeted gates hold their declared intervals
+  (`DeclaredHold`), the circuit is in its window, where an s8-family step's clamp and wrap agree (`Gate.Reclamped`
+  relates the two arms).
 * **Units** (property/v1's count, `units`). A budgeted gate is one unit when it reads a value that depends on a run or
   coin input (`dynamic`), and none otherwise: a gate of constants and registered values computes the same value at
   registration. A gather whose index depends on one is the index bits no earlier gather of that index paid (fresh index
@@ -197,9 +199,10 @@ def IsMma : Op ι → Prop
   | mma .. => True
   | _ => False
 
-/-- A free operation whose interval the property derives: a constant, an affine map, an s8-family step. -/
+/-- An operation whose interval the property derives from its operands', never its declaration: the free ones (a
+constant, an affine map, an s8-family step) and a gather, whose value is a word of its column or 0. -/
 def IsDerived : Op ι → Prop
-  | const _ | affine .. | mma .. => True
+  | const _ | affine .. | mma .. | gather => True
   | _ => False
 
 end Op
@@ -365,8 +368,12 @@ def Iv.mul (a b : Iv) : Iv :=
 /-- `[a] ⊆ [lo, hi]`. -/
 def Iv.Within (a : Iv) (lo hi : ℤ) : Prop := lo ≤ a.1 ∧ a.2 ≤ hi
 
+/-- The hull of `[a]` and `[b]`. -/
+def Iv.join (a b : Iv) : Iv := (min a.1 b.1, max a.2 b.2)
+
 /-- The interval a gate's value is derived to lie in, from its operands' derived intervals `ivs`: a constant's own
-value, an affine map's or an s8-family step's image, and every other gate's declared interval. -/
+value, an affine map's or an s8-family step's image, a gather's hull of its column's intervals and 0 (its value
+outside the column), and every other gate's declared interval. -/
 def Gate.derive (g : Gate ι) (ivs : List Iv) : Iv :=
   let a := g.args.map fun j => ivs.getD j (0, 0)
   match g.op with
@@ -374,15 +381,16 @@ def Gate.derive (g : Gate ι) (ivs : List Iv) : Iv :=
   | .affine c₀ cs => (List.zipWith Iv.scale cs a).foldl Iv.add (c₀, c₀)
   | .mma _ _ k _ =>
       (List.zipWith Iv.mul (a.tail.take k) (a.tail.drop k)).foldl Iv.add (a.headD (0, 0))
+  | .gather => a.tail.foldl Iv.join (0, 0)
   | _ => (g.lo, g.hi)
 
 /-- The derived intervals of a circuit's gates, in order. -/
 def intervals (C : Dag ι) : List Iv := C.foldl (fun ivs g => ivs ++ [g.derive ivs]) []
 
-/-- **The window, proven** (property/v1's interval analysis over the whole DAG): every constant, affine map and
-s8-family step has its derived interval within its declared one, every affine map its declared interval within s32
-(where `I32Add` and `I32Sub` don't wrap), and every s8-family step its operands' derived intervals within their
-formats and its declared interval within s32. -/
+/-- **The window, proven** (property/v1's interval analysis over the whole DAG): every constant, affine map,
+s8-family step and gather has its derived interval within its declared one, every affine map its declared interval
+within s32 (where `I32Add` and `I32Sub` don't wrap), and every s8-family step its operands' derived intervals within
+their formats and its declared interval within s32. -/
 def Proven (C : Dag ι) : Prop :=
   ∀ i (h : i < C.length),
     let g := C[i]
@@ -394,8 +402,8 @@ def Proven (C : Dag ι) : Prop :=
           (∀ j ∈ g.args.tail.take k, (ivs.getD j (0, 0)).Within fa.lo fa.hi) ∧
           ∀ j ∈ g.args.tail.drop k, (ivs.getD j (0, 0)).Within fb.lo fb.hi
 
-/-- Every input and budgeted gate's value lies in its declared interval on input `x`: what a primitive's output type
-guarantees, and a run input's. -/
+/-- Every input's and budgeted gate's but a gather's value lies in its declared interval on input `x`: what a
+primitive's output type guarantees, and a run input's. -/
 def DeclaredHold (C : Dag ι) (x : ι → ℤ) : Prop :=
   ∀ i (h : i < C.length), ¬ C[i].op.IsDerived →
     C[i].lo ≤ C[i].raw x (values (C.take i) x) ∧ C[i].raw x (values (C.take i) x) ≤ C[i].hi
