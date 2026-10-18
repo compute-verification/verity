@@ -28,7 +28,8 @@ HOLDERS = {a: h["handle"] for h in REG.get("handles") or []
 SAY = {"held": "was held after a finished tool call since {since} ({minutes} min); the watch {action}",
        "held_again": "was held again since {since} ({minutes} min), within an hour of the last restart: left for a person",
        "long_call": "has had a tool call running since {since} (45+ min); not cancelled",
-       "crashed": "ended in ERROR"}
+       "crashed": "ended in ERROR",
+       "stuck": "has a run in {status} since {since} ({minutes} min) and starts no other; not cancelled (the API refuses it)"}
 
 
 def log(msg: str) -> None:

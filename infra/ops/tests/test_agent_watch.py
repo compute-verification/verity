@@ -114,6 +114,23 @@ def test_an_unreadable_run_is_recorded_once_and_the_sweep_goes_on(tmp_path):
     assert [(r["kind"], r["status"]) for r in records(tmp_path)] == [("unreadable", "HTTP 400")]
 
 
+def test_a_run_stuck_in_creating_or_background_work_is_recorded_once_never_cancelled(tmp_path):
+    """18 Oct: circuits' latest runs sat in CREATING and WAITING_FOR_BACKGROUND_WORK from 09:49Z."""
+    clock = Clock(W.epoch("2026-10-18T18:10:00Z"))
+    api = FakeApi([{"id": "bc-c", "name": "circuits", "status": "ACTIVE", "latestRunId": "run-c"},
+                   {"id": "bc-b", "status": "ACTIVE", "latestRunId": "run-b"},
+                   {"id": "bc-n", "status": "ACTIVE", "latestRunId": "run-n"}],
+                  {"run-c": {"status": "CREATING", "createdAt": "2026-10-18T09:49:50.225Z", "updatedAt": "2026-10-18T09:49:50.225Z"},
+                   "run-b": {"status": "WAITING_FOR_BACKGROUND_WORK", "updatedAt": "2026-10-18T17:50:00.000Z"},
+                   "run-n": {"status": "CREATING", "updatedAt": "2026-10-18T18:05:00.000Z"}})
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.sweep(started.append)
+    w.sweep(started.append)
+    assert started == [] and api.posts == []
+    assert [(r["kind"], r["agent"], r["status"], r["minutes"]) for r in records(tmp_path)] == [
+        ("stuck", "bc-c", "CREATING", 500)], "background work 20 min and CREATING 5 min are not yet stuck"
+
+
 def test_a_crashed_run_is_recorded_once(tmp_path):
     api, clock, w, started = setup(tmp_path, status="ERROR")
     w.sweep(started.append)

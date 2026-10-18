@@ -15,7 +15,9 @@ a heartbeat counts as nothing. A run is
   legitimate);
 - **crashed** when the run ended in ERROR (recorded).
 
-Only RUNNING is judged. WAITING_FOR_BACKGROUND_WORK (an agent waiting on its background workers) is not held. An agent whose latest
+Only RUNNING is followed. A latest run left in CREATING for 10 min, or in WAITING_FOR_BACKGROUND_WORK (an agent waiting on its
+background workers) for 30 min, by the API's own `updatedAt`, is recorded once as **stuck** and never cancelled: on 18 Oct circuits'
+sat so from 09:49Z while every newer run was cancelled on arrival, and neither cancelling nor a new run moved it. An agent whose latest
 run the runs endpoint won't read (a goal run's `run-goal-...` id gets 400) is recorded once as unreadable and skipped.
 
 Each finding is a line of JSON in `--log`; each sweep overwrites `status.json` beside it (its time, the ACTIVE agents, the runs it
@@ -26,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import calendar
 import json
 import os
 import sys
@@ -44,12 +47,23 @@ HELD_S = 15 * 60
 LONG_CALL_S = 45 * 60
 RECANCEL_S = 3600
 TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
+# a latest run left this long in a non-terminal state that isn't RUNNING (18 Oct: circuits' runs sat in CREATING from 09:49Z and
+# in WAITING_FOR_BACKGROUND_WORK from 09:49Z, and every later run was cancelled on arrival); recorded, never cancelled
+STUCK = {"CREATING": 10 * 60, "WAITING_FOR_BACKGROUND_WORK": 30 * 60}
 CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothing for {mins} min after a finished tool call, and "
             "cancelled it). Read your inbox and carry on from where you stopped.")
 
 
 def iso(t: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+
+
+def epoch(s: str | None) -> float | None:
+    """The API's ISO time (2026-10-18T09:49:50.225Z) in epoch seconds; None when it doesn't parse."""
+    try:
+        return calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%dT%H:%M:%S"))
+    except (ValueError, TypeError):
+        return None
 
 
 class Api:
@@ -213,11 +227,18 @@ class Watch:
                     self.crashed.add(run)
                     self.record("unreadable", Run(a["id"], run, a.get("name") or ""), status=f"HTTP {e.code}")
                 continue
-            if info.get("status") == "RUNNING":
+            status = info.get("status")
+            if status == "RUNNING":
                 r = Run(a["id"], run, a.get("name") or "", last_t=t)
                 with self.lock:
                     self.runs[run] = r
                 start_stream(r)
+            elif status in STUCK and run not in self.crashed:
+                since = epoch(info.get("updatedAt") or info.get("createdAt"))
+                if since is not None and t - since >= STUCK[status]:
+                    self.crashed.add(run)
+                    self.record("stuck", Run(a["id"], run, a.get("name") or ""), status=status, since=iso(since),
+                                minutes=int((t - since) // 60))
             elif info.get("status") == "ERROR" and run not in self.crashed:
                 self.crashed.add(run)
                 self.record("crashed", Run(a["id"], run, a.get("name") or ""), status="ERROR")
