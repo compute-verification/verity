@@ -376,6 +376,51 @@ def test_prefetch_memos_the_rules_the_check_computes_in_place():
     assert r["families"] == ["AttentionHead_v3", "Attention_v3", "EmbeddingShard_v1", "RMSNormTriton_v1"] and r["n"] == 4 and r["same"], r
 
 
+#: the probe's specs prefetched under a budget no cut fits, each cut counted in its worker while it runs, then without one
+PREFETCH_BUDGET_PROBE = """
+import json, multiprocessing
+from verity_vllm.query import word as W
+specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}"]
+live, most = multiprocessing.Value("i", 0), multiprocessing.Value("i", 0)
+cut = W._rule_of_pending
+
+
+def counted(i):
+    with live.get_lock():
+        live.value += 1
+        most.value = max(most.value, live.value)
+    try:
+        return cut(i)
+    finally:
+        with live.get_lock():
+            live.value -= 1
+
+
+W._rule_of_pending = counted
+key = tuple(sorted(W.gate_limits(None).items()))
+n = [W.prefetch(specs, jobs=4, budget=1)]
+budgeted, at_once = W._RULES.pop(key, {}), most.value
+n.append(W.prefetch(specs, jobs=4))
+free = W._RULES.get(key, {})
+print(json.dumps({"fork": "fork" in multiprocessing.get_all_start_methods(), "n": n, "at_once": at_once,
+                  "same": list(budgeted.items()) == list(free.items())}))
+"""
+
+
+def test_prefetch_under_a_memory_budget_runs_only_the_cuts_that_fit_and_memos_the_same_rules():
+    """`word.prefetch(budget=...)`: the cuts in flight are those whose estimated peaks fit the budget, and one over it runs alone, so
+    under a budget no cut fits the three bodies cut as a whole run one at a time; the rules memoed, and their order, are those of a
+    prefetch without a budget."""
+    import json
+    import subprocess
+    import sys
+    r = json.loads(subprocess.run([sys.executable, "-c", PREFETCH_BUDGET_PROBE], capture_output=True, text=True, check=True).stdout)
+    if not r["fork"]:
+        assert r["n"] == [0, 0]
+        return
+    assert r["n"] == [4, 4] and r["at_once"] == 1 and r["same"], r
+
+
 @pytest.mark.slow
 def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp_path):
     """`--jobs`: the word check's rules prefetched and the components built in forked processes (`manifest.build_components`) give the
