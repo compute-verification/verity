@@ -8,7 +8,8 @@ The target's identity is verified from /proc (starttime ticks + comm) and record
 --expect-starttime is NOT signalled (a recycled pid is not the job), nor a group that fails --expect-nonempty or --expect-run-dir (no member
 whose environment names RESEARCH_RUN_DIR=D, which the runner exports to its workload: a pgid a stale status.json names may be another job's
 group by now).  Logging never blocks the signal: a marker write failure is reported on stderr and the signal is still delivered; the fallback
-file is the safety controller's own scoped record when no attempt dir is reachable.
+file is the safety controller's own scoped record when no attempt dir is reachable.  With --expect-run-dir a delivered group signal also
+reaches the run's workers outside the group (setsid ones whose environment names D, never the leader's ancestors: `run_dir_strays`).
 """
 from __future__ import annotations
 
@@ -61,6 +62,26 @@ def run_dir_of(pid: int) -> str | None:
         if kv.startswith(b"RESEARCH_RUN_DIR="):
             return kv.split(b"=", 1)[1].decode(errors="replace")
     return None
+
+
+def run_dir_strays(pgid: int, want: str) -> list[dict[str, Any]]:
+    """Processes outside group `pgid` whose environment names RESEARCH_RUN_DIR=`want`: workers that left the workload's group with
+    setsid (vLLM's TP workers, circuit_check's pool; INF-48, INF-53), which the group's signal misses. The group leader's ancestors
+    (the runner, which records the exit and publishes custody) and this process are never among them."""
+    keep, pid = {os.getpid(), os.getppid()}, pgid
+    while pid > 1 and (st := stat_fields(pid)) is not None:
+        keep.add(pid)
+        pid = st["ppid"]
+    out = []
+    try:
+        for x in os.listdir("/proc"):
+            if x.isdigit() and int(x) not in keep:
+                st = stat_fields(int(x))
+                if st and st["pgrp"] != pgid and run_dir_of(st["pid"]) == want:
+                    out.append({"pid": st["pid"], "comm": st["comm"], "pgrp": st["pgrp"]})
+    except OSError:
+        pass
+    return out
 
 
 def write_marker(path: Path, rec: dict[str, Any]) -> tuple[bool, str | None]:
@@ -135,6 +156,17 @@ def cancel(a: argparse.Namespace) -> int:
     except OSError as e:
         result.update(delivered=False, errno=e.errno, reason=e.strerror)
         rc = 4
+    if a.target_pgid is not None and a.expect_run_dir is not None:
+        strays = run_dir_strays(a.target_pgid, str(Path(a.expect_run_dir).resolve()))
+        hit = 0
+        for s in strays:
+            try:
+                os.kill(s["pid"], a.signal)
+                hit += 1
+            except OSError:
+                pass
+        if strays:
+            result.update(strays=strays[:MEMBERS_KEPT], strays_total=len(strays), strays_signalled=hit)
     if a.confirm_exit_s and a.target_pid is not None and result.get("delivered"):
         t_end = time.monotonic() + a.confirm_exit_s
         gone = False

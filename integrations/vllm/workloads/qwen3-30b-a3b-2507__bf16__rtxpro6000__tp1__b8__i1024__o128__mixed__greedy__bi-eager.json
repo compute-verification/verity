@@ -1,8 +1,22 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen3-30B-A3B-Instruct-2507",
  "case": "QWEN3_30B_A3B_2507",
- "tokenizer_revision": "0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe",
+ "engine": {
+  "revision": "0d7cf23991f47feeb3a57ecb4c9cee8ea4a17bfe",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 3683,
+   "max_model_len": 1152
+  },
+  "target": {
+   "compute_capability": [
+    12,
+    0
+   ],
+   "num_sms": 188
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,10 +42,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 128,
- "engine_args_required": {
-  "max_num_batched_tokens": 3683,
-  "max_model_len": 1152
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 aeb13307a71acd8f (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   9,
@@ -3961,12 +3971,5 @@
   "lengths_only": false,
   "execution": "bi-eager"
  },
- "note": "R12 sweep qwen3-30b-a3b-2507__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager: B=8 I<=1024 O<=128 greedy arrivals=none; prompt lens [411, 81, 9, 193, 703, 369, 885, 1024], caps [79, 93, 2, 3, 109, 43, 5, 128], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.",
- "target": {
-  "compute_capability": [
-   12,
-   0
-  ],
-  "num_sms": 188
- }
+ "note": "R12 sweep qwen3-30b-a3b-2507__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager: B=8 I<=1024 O<=128 greedy arrivals=none; prompt lens [411, 81, 9, 193, 703, 369, 885, 1024], caps [79, 93, 2, 3, 109, 43, 5, 128], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
 }

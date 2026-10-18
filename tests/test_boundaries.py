@@ -1,4 +1,4 @@
-"""The dependency rules (README "Development") as import-boundary checks over ``verity/``, and the one over ``infra/``.
+"""The dependency rules (DESIGN.md "Development") as import-boundary checks over ``verity/``, and the one over ``infra/``.
 
     ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and core.claims import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits;

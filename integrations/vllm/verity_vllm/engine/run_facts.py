@@ -65,7 +65,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         if engine.kwargs.get("max_num_batched_tokens") is not None:
             manifest["engine_kwargs"]["max_num_batched_tokens"] = engine.kwargs["max_num_batched_tokens"]
         # [r8 E-cleanup, fp16 M12] the served dtype: `build_manifest` hard-codes "bfloat16"; when the harness passed an explicit
-        # `dtype` to LLM(**kw) (a workload's `engine_args_required.dtype`, e.g. float16) the manifest must say so -- a served-fp16
+        # `dtype` to LLM(**kw) (a row's `engine.args.dtype`, e.g. float16) the manifest must say so -- a served-fp16
         # record labelled bf16 is mislabelled evidence.  Runs without the kwarg are byte-identical (same profile id as before).
         if engine.kwargs.get("dtype") not in (None, "auto"):
             manifest["dtype"] = str(engine.kwargs["dtype"])
@@ -85,6 +85,9 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         if engine.target is not None and engine.target.moe_backend is not None:
             from verity_vllm.program.frontend.target_profile import moe_experts_class_of
             manifest["backends"]["moe_experts_class"] = moe_experts_class_of(engine.model)
+        if getattr(engine.target, "int8_exact", None) is not None:
+            from verity_vllm.program.frontend.target_profile import int8_exact_of
+            manifest["backends"]["int8_exact"] = int8_exact_of(engine.model)
         # the MoE gates' cuteDSL ll_bf16_gemm tier (M <= 16), which leaves no torch op behind: written only when a gate took it, so
         # every record without such a gate keeps its profile id
         if moe_gate_ll_bf16_gemm_of(engine.model):

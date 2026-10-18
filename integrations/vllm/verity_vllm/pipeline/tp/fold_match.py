@@ -45,6 +45,11 @@ def _run(cmd: list[str], log: Path, timeout: int | None = None) -> int:
             return 124
 
 
+def _run_unless(reuse: bool, out: Path, cmd: list[str], log: Path, timeout: int | None) -> int:
+    """`_run`, except under --reuse-legs a leg whose document `out` is already written is kept (rc 0)."""
+    return 0 if reuse and out.is_file() and out.stat().st_size else _run(cmd, log, timeout)
+
+
 def _load(p: Path) -> dict | None:
     try:
         return json.loads(p.read_text())
@@ -69,11 +74,12 @@ def _link(dst: Path, src: Path) -> None:
     dst.symlink_to(os.path.relpath(src, dst.parent))
 
 
-def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None) -> dict:
+def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None, reuse: bool = False) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    rc = _run([py, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(log), "--profile", profile,
-               "--out", str(out / "fold_summary.json"), "--persist-dir", str(out)], out / "fold.log", timeout)
+    done = reuse and all((out / f).exists() for f in ("fold_summary.json", "program.json", "instances.jsonl"))
+    rc = 0 if done else _run([py, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(log), "--profile", profile,
+                              "--out", str(out / "fold_summary.json"), "--persist-dir", str(out)], out / "fold.log", timeout)
     fs = _load(out / "fold_summary.json") or {}
     ok = rc == 0 and (out / "program.json").exists() and (out / "instances.jsonl").exists() and int(fs.get("errors") or 0) == 0 and \
         int(fs.get("unresolved") or 0) == 0
@@ -84,7 +90,7 @@ def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None) 
             "max_rss_gb": fs.get("max_rss_gb")}
 
 
-def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], within: str, timeout: int | None) -> dict:
+def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], within: str, timeout: int | None, reuse: bool = False) -> dict:
     """The TP1 verdict rule of row_pod.sh: B1 cb_a.compare (canonical-equal, same steps, no differing operand); B>1 batch_decomp X-09."""
     t0 = time.time()
     if derived:
@@ -102,22 +108,29 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
                 "unattributed": (dec.get("attribution") or {}).get("unattributed"), "xreq": dec.get("xreq_total"), "missing_derived": dec.get("missing_derived"),
                 "per_request": [{"request_id": r.get("request_id"), "LP": r.get("LP"), "T": r.get("T"), "derived": r.get("derived"),
                                  "canonical_equal": r.get("canonical_equal"), "steps": r.get("steps")} for r in reqs]}
-    rc = _run([py, "-m", "verity_vllm.pipeline.cli", "program-compare", "--a", str(build), "--b", str(rank_dir), "--out", str(rank_dir / "match_compare.json")],
-              rank_dir / "match_compare.log", timeout)
+    rc = _run_unless(reuse, rank_dir / "match_compare.json", [py, "-m", "verity_vllm.pipeline.cli", "program-compare", "--a", str(build), "--b", str(rank_dir),
+                     "--out", str(rank_dir / "match_compare.json"), "--operands", "progressions"], rank_dir / "match_compare.log", timeout)
     doc = _load(rank_dir / "match_compare.json") or {}
     cmp = doc.get("compare") or {}            # cb-a/compare/v1: the step comparison sits under `compare` (row_pod reads the same field)
     tot = cmp.get("totals") or {}
     sa, sb = (cmp.get("a") or {}).get("steps"), (cmp.get("b") or {}).get("steps")
     canon = (cmp.get("canonical_sha256") or {}).get("equal")
-    ok = rc == 0 and canon is True and sa == sb and int(tot.get("operands_different", 0) or 0) == 0
+    dag_doc = None
+    if canon is not True and within == "dag" and rc == 0:     # the within-step criterion of record (COORD M-0177): a step order may differ
+        _run_unless(reuse, rank_dir / "match_dag.json", [py, "-m", "verity_vllm.pipeline.cli", "program-dag", "--a", str(build), "--b", str(rank_dir),
+                    "--out", str(rank_dir / "match_dag.json")], rank_dir / "match_dag.log", timeout)
+        dag_doc = _load(rank_dir / "match_dag.json")
+    dag = (dag_doc or {}).get("equal") is True
+    ok = rc == 0 and (canon is True or dag) and sa == sb and int(tot.get("operands_different", 0) or 0) == 0
     return {"comparator": "cb_a.compare", "rc": rc, "seconds": round(time.time() - t0, 1),
-            "verdict": "PASS" if ok else f"FAIL canonical_equal={canon} steps={sa}/{sb} operands_different={tot.get('operands_different')} rc={rc}",
-            "canonical_equal": canon, "steps": [sa, sb], "totals": tot, "histogram_diff_T_normalised": len(doc.get("histogram_diff_T_normalised") or {}), "first_diff": (cmp.get("first_differences") or cmp.get("diffs") or [None])[0]}
+            "verdict": "PASS" if ok else f"FAIL canonical_equal={canon} dag_multiset_equal={dag} steps={sa}/{sb} operands_different={tot.get('operands_different')} rc={rc}",
+            "criterion": "sequence" if canon is True else "dag-multiset over the live cone (within-step criterion of record, COORD M-0177)",
+            "dag_multiset": dag_doc, "canonical_equal": canon, "steps": [sa, sb], "totals": tot, "histogram_diff_T_normalised": len(doc.get("histogram_diff_T_normalised") or {}), "first_diff": (cmp.get("first_differences") or cmp.get("diffs") or [None])[0]}
 
 
-def global_match_rank(py: str, rank_dir: Path, gprog: Path, workload: Path, within: str, timeout: int | None) -> dict:
+def global_match_rank(py: str, rank_dir: Path, gprog: Path, workload: Path, within: str, timeout: int | None, reuse: bool = False) -> dict:
     t0 = time.time()
-    rc = _run([py, "-m", "verity_vllm.pipeline.cli", "global-match", "--gprog", str(gprog), "--workload", str(workload), "--oracle", str(rank_dir),
+    rc = _run_unless(reuse, rank_dir / "global_match.json", [py, "-m", "verity_vllm.pipeline.cli", "global-match", "--gprog", str(gprog), "--workload", str(workload), "--oracle", str(rank_dir),
                "--out", str(rank_dir / "global_match.json"), "--within-step", within], rank_dir / "global_match.log", timeout)
     G = _load(rank_dir / "global_match.json") or {}
     return {"rc": rc, "seconds": round(time.time() - t0, 1), "verdict": G.get("verdict") if G else {124: "TIMEOUT"}.get(rc, f"rc={rc}"),
@@ -176,6 +189,10 @@ class Options:
     world: int = option("--world", type=int, default=2)
     rank_workers: int = option("--rank-workers", type=int, default=0,
                                help="ranks whose fold/compare/GM-01 legs run concurrently (0 = all ranks; each leg is its own subprocess: B8 1024/128 fold 26 GB + GM-01 14 GB per rank)")
+    reuse_fold: bool = option("--reuse-fold", action="store_true", default=False,
+                              help="keep a rank's persisted fold (fold_summary.json, program.json, instances.jsonl under --out) and run only its compare and GM-01 legs")
+    reuse_legs: bool = option("--reuse-legs", action="store_true", default=False,
+                              help="also keep a rank's written compare / DAG / GM-01 documents under --out, so only the missing legs and the cross-rank leg run")
 
 
 def main(a: Options) -> int:
@@ -224,7 +241,7 @@ def main(a: Options) -> int:
         _link(rd / "capture" / "log.jsonl.gz", log)        # the TP1 Match dir layout the comparators read (<oracle>/capture/log.jsonl.gz, tokens.json)
         if (cap / "tokens.json").exists():
             _link(rd / "capture" / "tokens.json", cap / "tokens.json")
-        pr["fold"] = fold_rank(a.python, log, a.profile, rd, a.timeout)
+        pr["fold"] = fold_rank(a.python, log, a.profile, rd, a.timeout, a.reuse_fold)
         print(f"[tp2foldmatch] rank {r} fold: ok={pr['fold']['ok']} rc={pr['fold']['rc']} instances={pr['fold']['n_instances']} steps={pr['fold']['n_steps']} "
               f"errors={pr['fold']['errors']} unresolved={pr['fold']['unresolved']} unsupported={pr['fold']['unsupported']} collectives={pr['fold']['collectives']} "
               f"{pr['fold']['collectives_by_kind']} tp={pr['fold']['tp']} {pr['fold']['seconds']}s", flush=True)
@@ -235,7 +252,7 @@ def main(a: Options) -> int:
         tp = pr["fold"].get("tp") or {}
         if int(tp.get("rank", -1)) != r or int(tp.get("world", 0)) != a.world:
             problems.append(f"rank {r}: the log's RunHeader.notes.tp2 states rank {tp.get('rank')} / world {tp.get('world')} (swapped or mislabelled rank)")
-        pr["compare"] = compare_rank(a.python, rd, builds[r], derived[r], a.within_step, a.timeout)
+        pr["compare"] = compare_rank(a.python, rd, builds[r], derived[r], a.within_step, a.timeout, a.reuse_legs)
         print(f"[tp2foldmatch] rank {r} compare ({pr['compare']['comparator']}): {pr['compare']['verdict']} {pr['compare']['seconds']}s", flush=True)
         if pr["compare"]["verdict"] != "PASS":
             problems.append(f"rank {r}: compare {pr['compare']['verdict']}")
@@ -246,7 +263,7 @@ def main(a: Options) -> int:
             if not a.workload:
                 problems.append("--gprog given without --workload")
             else:
-                pr["global_match"] = global_match_rank(a.python, rd, Path(gprog[r]), Path(a.workload), a.within_step, a.timeout)
+                pr["global_match"] = global_match_rank(a.python, rd, Path(gprog[r]), Path(a.workload), a.within_step, a.timeout, a.reuse_legs)
                 print(f"[tp2foldmatch] rank {r} GM-01: {pr['global_match']['verdict']} failed={pr['global_match']['failed_checks']} "
                       f"concurrency={pr['global_match']['achieved_concurrency']} {pr['global_match']['seconds']}s", flush=True)
                 if not pr["global_match"]["ok"]:

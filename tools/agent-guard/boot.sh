@@ -11,7 +11,7 @@
 # early in the session, so the file comes before the fetch, and until DEST's copy is there every command is refused. Then it
 # copies origin/main's `tools/agent-guard` to DEST (default /opt/agent-guard), or keeps an earlier copy when origin/main can't
 # be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
-# /usr/bin); the hook stays in place if that refuses.
+# /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py).
 set -euo pipefail
 ws=${1:-/workspace}
 dest=${AGENT_GUARD_DEST:-/opt/agent-guard}
@@ -56,4 +56,7 @@ case $verdict in
 esac
 if [ -z "${AGENT_GUARD_SKIP_INSTALL:-}" ]; then
   bash "$dest/install.sh" || echo "agent-guard: install.sh failed or refused (above); the shell hook is in place" >&2
+  # the VM's OOM recorder: one per VM (it holds its lock; a second exits), so a reboot or a second boot.sh is harmless
+  setsid nohup python3 "$dest/oom_watch.py" loop >> /tmp/agent-oom-watch.log 2>&1 < /dev/null &
+  echo "agent-guard: OOM recorder started ($dest/oom_watch.py, records in ~/.research/agent-oom.jsonl)"
 fi

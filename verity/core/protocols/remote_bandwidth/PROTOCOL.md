@@ -12,7 +12,10 @@ The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (s
 `codec.py` (the store's encoding), `memory_map.py` (serving's record of the KV blocks it wrote and freed, the audit's
 input from serving) and `timing.py` (the honest schedule, and where the sketch's bound is read). Every byte format below is pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
-checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8).
+checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8). The verifier's
+side is also Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
+`RemoteAudit.Session`, the session's bookkeeping call for call), held to `audit.py` by `lean/tests/`' difftest, which
+compares every event's result, the outcome and the record. It refuses a registration that binds PoUW's tiles.
 
 ## 1. What an accepted session certifies
 
@@ -381,18 +384,26 @@ So each block's index, and with \(d_j\) and \(c_a\) its bound key and its encodi
 plan holds it: a plan received before the append that commits one of its blocks rejects with `plan`. Only then does
 the prover encode the append's blocks, each under its bound key \(b_j(c_a)\), keeping \(d_j\) beside it
 (`Store.append` commits, `Store.encode` encodes under the coin). The timing follows the free convention (§8, "The
-pass and its step"): a block written at step \(s\) is appended after the root of the pass before \(s + 1\), encoded
-after its coin arrives, and read from step \(s + 1\)'s pass on, so the append goes out after that root and before
-pass \(s + 1\)'s reads, and the pass's seed binds it (below). Each coin is live and drawn once: the challenger commits
-none ahead, a retry never redraws one, and an append whose coin is never used is a failure in the record. A coin is
-used once a root follows its append, the append then joining that root's window (the lifetime cap, below). The
-rejections are `coin`: an append whose root was sent before (a retry; no coin is drawn), an append after the last
-window's roots are final (no root can follow it; no coin is drawn), and, at the last window's close, an append no root
-followed (`Session.close`). A block the prover stops holding is released (`Session.release`, runs of the store), and a
-plan received after its release that holds it rejects with `plan`; its receipts from earlier passes can still be
-drawn, so the prover keeps it until its windows are drawn. An append that is malformed or would take the store past its
-codec's `max_blocks` rejects with `append`, and a release of a block outside the store or released already with
-`release`. Appends are a session's: the next session over the store starts again from \(N\) (§8).
+pass and its step"), with residency deferred to the encode, so the coin's round trip is off serving's critical path.
+A block completed at step \(s\) is appended once it is complete, and stays plaintext in its slot, which serving reads
+in the clear, until its coin arrives and the device encodes it in place. Its write is recorded at the step before the
+first step \(t\) whose reads see it encoded, at \(t - 1\) (at \(s\) itself when the coin is back before step
+\(s + 1\)'s reads), so it is resident, and planned, from pass \(t\) on. Until then it is in no record and uncredited,
+as a partly written block is (memory-map/v1, `memory_map.py`). The append therefore goes out before the record writes
+the block, the root of every pass whose plan holds the block follows the append, and that pass's seed binds it
+(below). The record's step follows from the encode, and moving it gains nothing: recorded later, the block's encoded
+reads go uncredited; recorded earlier, a plan holds bytes that are not its encoding, and their receipts fail. The
+convention is unchanged: step \(t - 1\)'s record takes effect after that step's reads. Each coin is live and drawn
+once: the challenger commits none ahead, a retry never redraws one, and an append whose coin is never used is a
+failure in the record. A coin is used once a root follows its append, the append then joining that root's window
+(the lifetime cap, below). The rejections are `coin`: an append whose root was sent before (a retry; no coin is
+drawn), an append after the last window's roots are final (no root can follow it; no coin is drawn), and, at the last
+window's close, an append no root followed (`Session.close`). A block the prover stops holding is released
+(`Session.release`, runs of the store), and a plan received after its release that holds it rejects with `plan`; its
+receipts from earlier passes can still be drawn, so the prover keeps it until its windows are drawn. An append that is
+malformed or would take the store past its codec's `max_blocks` rejects with `append`, and a release of a block
+outside the store or released already with `release`. Appends are a session's: the next session over the store starts
+again from \(N\) (§8).
 
 **No block appended after a pass's seed is in that pass's plan.** A pass's seed binds every append received before
 its root (`prev_(t,i)` above), so every block its plan can hold, which must be appended before its root, was
@@ -779,14 +790,37 @@ and each window's, from it plus the node's capacities.
 ## 8. What deployment changes, and what is open
 
 - **Zero knowledge.** Every protocol is zero-knowledge, with no clear mode, and an opened block decodes to a KV page,
-  which is user data. Deployed, each opening is a proof unit the proof service proves in zero knowledge, and the
-  verifier sees only its result. The unit's statement is §6's checks 2, 3 and 5 (and 4 under a registration that binds
-  \(z\)), with the opening's fields as witness and
-  public inputs the pass's root, its seed, its plan's digest, \(p\), \(j\), the payload root and the registration (and,
-  for an appended block, its append's root and coin \(c_a\), a verifier's coin). The
-  clear checks here are the specification of what each unit proves. The formats already hide: payload blocks and
-  receipt leaves are `hm96-sha512/row/v2` leaves under fresh salts, and the coins are hm96 leaves until released, so the
-  formats don't change when the openings move into proofs.
+  which is user data. §6's openings reveal it, so the clear checks are only the specification of what each unit
+  proves. Deployed, each drawn receipt is one proof unit that the proof service proves in zero knowledge, and the
+  verifier sees only its verdict. The unit is §6's checks 1–3 and 5 on one opening (and 4 under a registration that
+  binds \(z\)), plus the link from the block's payload to the circuit's committed values:
+  - *Public*, each of the four kinds the rules allow (protocol structure, outputs, the verifier's coins and draws,
+    hiding commitments): the registration (its digest, \(N\), \(b\), the codec and the receipt kind); the draw
+    (window \(t\), pass \(i\), the position in the pass, and \(L_{t,i}\)); the pass's root \(\text{root}_{(t,i)}\)
+    and the root received before it; the pass's seed \(\text{seed}_{(t,i)}\), from \(\sigma_t\), \(i\) and that
+    root; the plan's commitment (v0's plan digest); the payload root; for an appended block, its append's root and
+    coin \(c_a\); and the roots of the circuit's value commitments.
+  - *Witness*: the block \(E_j\), its payload \(\text{payload}_j\) and digest \(d_j\), the index \(j\), the receipt
+    leaf's receipts, and every salt and path: the receipt leaf's, the payload leaf's, the plan's at the position, and
+    the value leaves'.
+  - *What it proves.* Check 1 is the unit's shape: each witness fills its port's fixed size, and the position is the
+    draw's. Check 2: the receipt leaf, under the seed, the plan and the leaf's salt, has its path to the pass's root,
+    and \(j\) is the plan's entry at the position. Check 3: every word of \(E_j\) is below \(p\), and \(E_j\) decodes
+    to \(\text{payload}_j\), under the seed's key for a registered block and under \(b_j(c_a)\) for an appended one,
+    with \(d_j = \text{sha512/row/v2}(\text{payload}_j)\) and the payload leaf on its path, at \(j\), to the payload
+    root or to the append's root. Check 5: the receipt at the position, recomputed from \(j\) and \(E_j\) (and \(z\)
+    if bound) under the registration's kind, is the leaf's. And for an appended block, \(\text{payload}_j\) is the
+    committed KV values the circuit wrote to block \(j\), under the layout: each of those values opens under its
+    value commitment's root (the vLLM Commit's hiding leaves). So the receipted block is the circuit's KV, not bytes
+    the prover chose.
+  - *Output*: the unit's verdict, accepted or §6's failure name, within the 16-bit output limit. The record and
+    `ledger` read only verdicts, and nothing an opening carries leaves the unit.
+
+  The formats already hide: payload blocks and receipt leaves are `hm96-sha512/row/v2` leaves under fresh salts, and
+  the coins are hm96 leaves until released, so the formats don't change when the openings move into proofs. A public
+  \(c_a\) and append root say which append the drawn block belongs to, but not its index or its contents. Open: the
+  units' circuits; the plan's commitment in place of v0's clear plan ("What the plan shows", below); and the layout
+  of the value commitments, which says which value leaves a block's payload bytes are.
 - **Where \(z\) comes from,** under a registration that binds it. \(z\) comes from Pearl-C's k-slice accumulators,
   inside Pearl-C's domain, with Pearl-C's noise for the pass derived from the pass's seed. That gives \(|z|/|E| = 4m/k_s\), at least 1 for batch
   \(\ge k_s/4\), where the tile's final output would give \(4m/k\) (1/16 at batch 64). All-zero weights needn't be
@@ -820,13 +854,13 @@ and each window's, from it plus the node's capacities.
   blocks the circuit reads at \(s\), `readBlocks s` (`PlanMatches`). For a store that holds only what the circuit
   keeps live, that is the store resident when \(s\) begins (`Store.resident s`, under `StoreMatches`): the blocks
   registered or written at a step before \(s\), less those freed or overwritten at one. So a step's memory-map record
-  takes effect after the step's reads: its writes are of values the step produced, and its frees are of blocks whose
-  values the step read last. A writer therefore records a free at the step of its values' last read, not at the next
-  write's. The prover's audit side gives each pass its plan's change at its step (`Replay.take(s)`). It refuses a pass
-  at a step whose record it has applied, or before the last pass's, and a record of a step before the last pass's
-  (`memory_map.py`). The step is public structure, and the map and the plan are witness. Because the steps strictly
-  increase, a step has at most one pass, so its reads are credited at most once; a step with no pass is credited
-  nothing. Open:
+  takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step did and the
+  device has since encoded (deferred residency, §4), and its frees are of blocks whose values the step read last. A
+  writer therefore records a free at the step of its values' last read, not at the next write's. The prover's audit
+  side gives each pass its plan's change at its step (`Replay.take(s)`). It refuses a pass at a step whose record it
+  has applied, or before the last pass's, and a record of a step before the last pass's (`memory_map.py`). The step
+  is public structure, and the map and the plan are witness. Because the steps strictly increase, a step has at most
+  one pass, so its reads are credited at most once; a step with no pass is credited nothing. Open:
   - *The plan's check.* That a pass's plan is the circuit's reads at its step, block for block, is the plan's proof
     unit's to check, inside zero knowledge, against the prover's memory map and the circuit's requirement (I4). The
     verifier here checks only that each pass names a step above the last.
@@ -840,7 +874,14 @@ and each window's, from it plus the node's capacities.
   session's appends (`mapped`, below). On it, a pass's credit is its credited
   receipts at \(D\) bits each, at most the circuit's read bits at the pass's step, and the ledger says it is linked
   (`Ledger.linked`); without it, the credit is the store's, flagged as such. The checks behind the link belong to the
-  units named below, and the ledger takes them as given.
+  units named below, and the ledger takes them as given. Those units are sampled, so the link carries what their draw
+  established: \(\varepsilon\), the most share of the linked credit the units it leaves unproved can carry (the
+  passes whose plan unit is wrong and those holding a block a wrong memory-map unit wrote), except with
+  probability \(\delta\). The session is credited \((1 - \varepsilon)\sum_\text{passes} \min(nD, r_s)\), a window
+  its own sum less \(\varepsilon\) of the session's (the unproved share may all be one window's), and \(\delta\) adds
+  to the ledger's error (`Ledger.error`, `error_horizon`). That \(\varepsilon\) bounds the unproved credit, not only
+  the share of units drawn wrong, is the link's to establish: a wrong unit at a heavy step carries more than its
+  share.
   - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
     gather's unselected rows, requests absent from the step's batch, unrouted experts. Their receipts are capped at
     the circuit's reads at the pass's step (`read_bits`, `requirement.Requirement.read_bits`). That each receipted
@@ -870,8 +911,9 @@ and each window's, from it plus the node's capacities.
     choices because W's memory map fixes them: memory-map/v1's frees and writes are functions of the served
     steps, fixed before the coins. That the session's appends, releases and plans are that map's is the memory-map
     unit's to prove (proofs', I4), inside zero knowledge, and the audit relies on it for exactly this:
-    1. every append is a write of the map, of a value produced at the write's step, appended at or after that step
-       and before any plan holds it (§4 checks the latter);
+    1. every append is a write of the map, of a block completed at the write's step or before it (§4's deferred
+       residency records the write at the step before the block's first encoded read), appended once complete and
+       before any plan holds it (§4 checks the latter);
     2. the appends are in the map's order, each at the index the verifier gave it (the store's next fresh one), and
        the map has no write the session doesn't append and no append it doesn't write, so there are no dummy appends;
     3. a re-key (a release and the payload appended again, §4's lifetime cap) is the map's, at the cap, of the same
@@ -905,10 +947,12 @@ and each window's, from it plus the node's capacities.
     Carrying appends over needs the next session to take the previous one's append roots and releases as its
     starting store.
   - *The device side.* A KV page's index is the store's next fresh one, not \(\text{slot} \cdot \text{LAYERS} +
-    \text{layer}\): serving records each block it completes, with its slot, the index it gave it and its \(d_j\), and
-    each slot it frees, step by step (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its
-    slot held, and vLLM's `kv_free` is a free, recorded at its values' last read, so the store's filler plan leaves the
-    released blocks out), and the prover's audit side turns the record into appends, releases and plan changes (`Replay`). The record is the prover's: \(d_j\) is witness, and the
+    \text{layer}\): serving records each block it completes, once the device has encoded it (§4's deferred
+    residency), with its slot, the index it gave it and its \(d_j\), and each slot it frees, step by step
+    (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its slot held, and vLLM's `kv_free`
+    is a free, recorded at its values' last read, so the store's filler plan leaves the released blocks out), and the
+    prover's audit side turns the record into appends, releases and plan changes (`Replay`; deferred, a step's
+    appended blocks are those of appends already sent). The record is the prover's: \(d_j\) is witness, and the
     verifier sees only the append roots, the releases and the plans; `benchmarks/remote_session` carries them over
     the wire: each append its own message, answered with its coin (§4), sent after the root before the pass that
     first reads it and before that pass's reads, its blocks encoded once the coin arrives; then each root's message

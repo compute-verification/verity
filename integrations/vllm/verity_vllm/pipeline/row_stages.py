@@ -567,6 +567,8 @@ class SingleRow(Row):
             cmd += ["--vu-export-dir", self.vu_export_dir()]
         if ck.serving_rows:
             cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
+        if ck.remote_verifier:
+            cmd += ["--remote-verifier", ck.remote_verifier]
         return cmd + R.tap_source_args(taps, self.env)
 
     def vu_export_dir(self) -> str:
@@ -658,7 +660,7 @@ class SingleRow(Row):
                 self.tl(f"{stage}.weights_of_record", "end", ("rc", 1))
                 self.log(f"WARNING weights of record not derived (see weights_of_record.log): {last}")
         elif not os.path.isfile(wor):
-            self.log(f"WARNING weights of record NOT derived: no local checkpoint dir for the workload's (model, tokenizer_revision) (CK='{ck}'; "
+            self.log(f"WARNING weights of record NOT derived: no local checkpoint dir for the workload's (model, engine.revision) (CK='{ck}'; "
                      "checkpoints.json local_path / HF hub snapshot absent on this pod) -- the Commit will FAIL 'weights unpinned (MAN-09)' by name")
             self.tl(f"{stage}.weights_of_record", "mark", ("reused", "false"), ("derived", "false"))
         else:
@@ -703,7 +705,7 @@ class SingleRow(Row):
             if served:
                 self.log(f"B=1 EOS-stopped request ({served}, match_shape.json): Program of record at Commit = the CAP-shape build_request; the positions "
                          "past the executed prefix are classified not-executed by rule, not cut from the population (the Match-side served-shape comparison stands)")
-        man = self.manifest_of_record()
+        man = self.man = self.manifest_of_record()
         taps = R.applicable_taps(man, ck) if man else []
         why = R.missing_tap_build(taps, self.env)
         if why:
@@ -745,8 +747,8 @@ class SingleRow(Row):
         if self.config_run:
             self.replay_pending = RC.commit_verdict(self, rck, wall)
             return
-        if rck == 0 and man:
-            self.manifest_verify(man)
+        if rck == 0 and self.man:
+            self.manifest_verify(self.man)
         self.tl("closure.verdict", "start")
         with open(f"{d}/row.log", "a") as f:
             r = subprocess.run(self.cli("verdict", "from-record", d, "--rc", str(rck)), stdout=subprocess.PIPE, stderr=f, text=True,
