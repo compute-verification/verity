@@ -12,9 +12,9 @@ the inner verifier.
 * **The deployed readers** (`Layout.msgs`, `Layout.calls`): the outer witnesses are V*'s parts' hidden values, one
   witness per part, in order. V*'s circuits are fixed by the compiled statement (its inner shape and the verifier's
   bindings), so the statement fixes where each part holds what the readers read (`Layout`): inner round `i`'s message
-  as part `s` holds it (`Layout.held`), and each SHA-512 evaluation part `s` computes. The inner view's messages are
-  each round's message off the first part that holds it (`Layout.msgs`); the recorded calls are each part's
-  evaluations (`Layout.calls`). These have the types of `deployRec`'s `Readers` fields (`Recursion/Deploy.lean`), so
+  as part `s` holds it (`Layout.held`), and each SHA-512 evaluation part `s` computes, a constant prefix then hidden
+  values. The inner view's messages are each round's message off the first part that holds it (`Layout.msgs`); the
+  recorded calls are each part's evaluations (`Layout.calls`). These have the types of `deployRec`'s `Readers` fields (`Recursion/Deploy.lean`), so
   `deployRec` at `⟨L.msgs, L.calls⟩` reads through them (`ReadsThrough`) by its definition.
 * **The named facts**, at an inner check `chk s` per part, read at the coins a V* statement shows (`shows`) on a list
   of inner messages:
@@ -93,12 +93,13 @@ def readAt (w : Flock.Wit) (ps : List ℕ) : Msg := bytesOf (ps.map fun p => w.h
 
 /-- **Where V\*'s parts hold what the readers read**, fixed by the compiled statement `x`: the inner rounds' count
 (`rounds x`), the hidden values at which part `s` holds inner round `i`'s message, its bits in order (`msgAt x s i`,
-`none` where the part holds none), and those of each SHA-512 evaluation part `s` computes, its input's bits and its
-output's (`shaAt x s`). -/
+`none` where the part holds none), and each SHA-512 evaluation part `s` computes (`shaAt x s`): the constant bytes
+its input starts with (a domain prefix the circuit fixes, such as a row's or the salt's), then the hidden values of the
+rest of its input's bits, and those of its output's. -/
 structure Layout where
   rounds : Msg → ℕ
   msgAt : Msg → ℕ → ℕ → Option (List ℕ)
-  shaAt : Msg → ℕ → List (List ℕ × List ℕ)
+  shaAt : Msg → ℕ → List (Msg × List ℕ × List ℕ)
 
 /-- Inner round `i`'s message as part `s` holds it, off its witness `w`. -/
 def Layout.held (L : Layout) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ) : Option Msg := (L.msgAt x s i).map (readAt w)
@@ -111,10 +112,10 @@ def Layout.msg (L : Layout) (x : Msg) (ws : List Flock.Wit) (i : ℕ) : Msg :=
 holds it. -/
 def Layout.msgs (L : Layout) (x : Msg) (ws : List Flock.Wit) : List Msg := (List.range (L.rounds x)).map (L.msg x ws)
 
-/-- **The deployed readers' calls**: part `s`'s SHA-512 evaluations off its witness `w`, each its input and its output
-read at their hidden values. -/
+/-- **The deployed readers' calls**: part `s`'s SHA-512 evaluations off its witness `w`, each its input (its constant
+prefix, then the bytes at its hidden values) and its output read at their hidden values. -/
 def Layout.calls (L : Layout) (x : Msg) (s : ℕ) (w : Flock.Wit) : List (Msg × Msg) :=
-  (L.shaAt x s).map fun p => (readAt w p.1, readAt w p.2)
+  (L.shaAt x s).map fun p => (p.1 ++ readAt w p.2.1, readAt w p.2.2)
 
 /-- A message one part holds is the readers' message at that round, when every part that holds the round holds the
 same message. -/
