@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
+import statistics
 import subprocess
 import sys
 import tomllib
@@ -29,14 +31,16 @@ from verity_bench.vllm.presets import (
     resolve_spec,
     served,
 )
-from verity_bench.vllm.result import IdentityMismatch, judge, validate
+from verity_bench.vllm.result import IdentityMismatch, identity_mismatches, judge, validate
 from verity_bench.vllm.runner import ResidentCapacityError, run_benchmark
 from verity_bench.vllm.table import render
 
 
 class FakeEngine:
-    def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=None):
+    def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=458_752, timed_digest=None,
+                 drift=0.0):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
+        self.timed_digest, self.drift = timed_digest, drift
         self.identity = {
             "vllm_version": "0.fake+gd9105ea80",
             "kernel_digest": f"digest-{arm.id}",
@@ -58,11 +62,14 @@ class FakeEngine:
 
     def measure(self, point):
         rep = sum(e[:2] == ("measure", self.arm.id) for e in self.events)
+        # GPU-wide drift: each timed run, of any arm, is `drift` slower than the one before it.
+        slower = 1 + self.drift * sum(e[0] == "measure" for e in self.events)
         self.events.append(("measure", self.arm.id, point.id))
         scale = 1.0 if self.arm.id == "stock-fp8" else 2.0
         return {
+            "token_digest": self.timed_digest or ("bad" if self.bad_tokens else "good"),
             "metrics": {
-                "time_per_output_token_s": scale * (rep + 1),
+                "time_per_output_token_s": scale * slower if self.drift else scale * (rep + 1),
                 "time_to_first_token_s": scale * 2,
                 "tokens_per_s": 100 / scale,
                 "peak_gpu_memory_bytes": 1000 * scale,
@@ -76,22 +83,28 @@ class FakeEngine:
 
 
 class FakeFactory:
-    def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None):
+    def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None, timed_digest=None,
+                 drift=0.0, kv_after_gate=None):
         self.events = []
         self.resident_failure = resident_failure
         self.failed = False
         self.gate_ok = gate_ok
         self.bad_tokens = bad_tokens
         self.kv_tokens = kv_tokens or {}
+        self.timed_digest = timed_digest or {}
+        self.drift = drift
+        self.kv_after_gate = kv_after_gate or {}
 
     def create(self, arm, preset, *, resident):
         self.events.append(("create", arm.id, resident))
         if resident and arm.id == self.resident_failure and not self.failed:
             self.failed = True
             raise ResidentCapacityError(f"{arm.id} does not fit")
+        gated = any(e[:2] == ("gate", arm.id) for e in self.events)
+        kv = self.kv_after_gate.get(arm.id) if gated and arm.id in self.kv_after_gate else self.kv_tokens.get(arm.id, 458_752)
         return FakeEngine(arm, self.events, gate_ok=self.gate_ok,
                           bad_tokens=arm.id == self.bad_tokens,
-                          kv_tokens=self.kv_tokens.get(arm.id))
+                          kv_tokens=kv, timed_digest=self.timed_digest.get(arm.id), drift=self.drift)
 
 
 def inputs():
@@ -408,7 +421,7 @@ def test_resident_failure_falls_back_to_alternating_blocks():
     assert doc["execution"]["interleave"] == "blocks"
     assert "does not fit" in doc["execution"]["resident_failure"]
     measured = [e[1] for e in factory.events if e[0] == "measure"]
-    assert measured == ["stock-fp8", "stock-fp8", "candidate", "candidate", "stock-fp8", "candidate"]
+    assert measured == ["stock-fp8", "stock-fp8", "candidate", "candidate", "candidate", "stock-fp8"]
     assert all(doc["points"][0]["arms"][a.id]["metrics"]["time_per_output_token_s"]["n"] == 3 for a in arms)
 
 
@@ -526,6 +539,245 @@ def test_the_decode_metric_is_reported_only_where_every_rep_has_it():
     assert "decode_time_per_token_s" not in row["arms"]["candidate"]["metrics"]
     doc["points"] = [row]
     assert "decode time / token" not in render(doc)
+
+
+THREE_ARMS = (Arm("stock-fp8", precision="fp8"), Arm("a", control="stock-fp8"), Arm("b", control="stock-fp8"))
+
+
+def bench(factory=None, *, arms=None, reps=2, points=None):
+    preset, default_points, default_arms = inputs()
+    return run_benchmark(preset, arms or default_arms, points or default_points, sweep="quick", reps=reps,
+                         factory=factory or FakeFactory(), git_commit="abc")
+
+
+@pytest.mark.parametrize("resident_failure", [None, "a"])
+def test_drift_over_the_run_cancels_in_every_arms_mean_over_even_reps(resident_failure):
+    """Red team, attack 1: each timed run is 1% slower than the one before (clocks, heat). Every arm's mean timed
+    position is the same, so the means keep the arms' true 2x in either mode, and the paired ratios stay within the
+    drift's second-order residue; blocks used to repeat its first cycle's order in the second, so the baseline always
+    ran first and the last arm read 2.08x."""
+
+    doc = bench(FakeFactory(drift=0.01, resident_failure=resident_failure), arms=THREE_ARMS, reps=4)
+    assert doc["execution"]["interleave"] == ("blocks" if resident_failure else "resident")
+    tpot = {a: doc["points"][0]["arms"][a]["metrics"]["time_per_output_token_s"] for a in ("stock-fp8", "a", "b")}
+    for arm in ("a", "b"):
+        assert tpot[arm]["mean"] / tpot["stock-fp8"]["mean"] == pytest.approx(2)
+        assert tpot[arm]["ratio_to_stock"]["mean"] == pytest.approx(2, rel=0.005)
+
+
+def test_a_block_engine_unlike_the_gated_one_fails_engine_identity_and_times_nothing_more():
+    """Red team, attacks 1 and 3: in blocks the gate's engine and the timed engines are different lifetimes, and the
+    identity recorded the gated one's KV pool, so a timed engine with another pool went unnoticed."""
+
+    factory = FakeFactory(resident_failure="candidate", kv_after_gate={"candidate": 491_376})
+    doc = bench(factory)
+    [gate] = [g for g in doc["gates"] if g["kind"] == "engine-identity" and not g["passed"]]
+    assert gate["arm"] == "candidate" and gate["differs"] == {"kv_cache_tokens": [458_752, 491_376]}
+    assert doc["points"] == [] and not any(e[:2] == ("measure", "candidate") for e in factory.events)
+
+
+def test_decode_time_charges_a_step_to_the_forward_it_waited_on_and_refuses_unseen_device_work():
+    """Red team, attack 2: under async scheduling (output lag 1) a step's host time holds the previous forward's device
+    time, so a decode-only step after a prefill carried the prefill: 1.1 s over 16 tokens instead of 0.4 s. Device
+    work still running after the last step means the host steps missed it, and the metric is dropped."""
+
+    from verity_bench.vllm.runner import decode_time_per_token
+
+    steps = [
+        {"forward": True, "s": 0.05, "prefill_tokens": 512, "decode_tokens": 0},
+        {"forward": True, "s": 0.9, "prefill_tokens": 0, "decode_tokens": 8},
+        {"forward": True, "s": 0.2, "prefill_tokens": 0, "decode_tokens": 8},
+        {"forward": False, "s": 0.2, "prefill_tokens": 0, "decode_tokens": 0},
+    ]
+    assert decode_time_per_token(steps) == pytest.approx(1.1 / 16)
+    assert decode_time_per_token(steps, output_lag=1) == pytest.approx(0.4 / 16)
+    assert decode_time_per_token(steps, output_lag=1, device_tail_s=0.001) == pytest.approx(0.4 / 16)
+    assert decode_time_per_token(steps, output_lag=1, device_tail_s=0.01) is None
+
+
+def test_validate_refuses_dropped_reordered_or_edited_reps():
+    """Red team, attack 3: a result's points are recomputed from its reps, so a caller can't drop a slow rep, reorder,
+    edit a mean or change `reps` and still have `judge` accept it."""
+
+    doc = bench(reps=3)
+    validate(doc)
+    row = doc["points"][0]["arms"]["candidate"]
+    reps = row["reps"]
+    for forged in (
+        {**row, "reps": reps[:2]},
+        {**row, "reps": [reps[1], reps[0], reps[2]]},
+        {**row, "metrics": {**row["metrics"], "tokens_per_s": {**row["metrics"]["tokens_per_s"], "mean": 99.0}}},
+    ):
+        bad = {**doc, "points": [{**doc["points"][0], "arms": {**doc["points"][0]["arms"], "candidate": forged}}]}
+        with pytest.raises(ValueError):
+            validate(bad)
+    with pytest.raises(ValueError, match="reps"):
+        validate({**doc, "execution": {**doc["execution"], "reps": 2}})
+    with pytest.raises(IdentityMismatch, match="reps"):
+        judge(doc, bench(reps=2))
+    with pytest.raises(IdentityMismatch, match="interleave"):
+        judge(doc, bench(FakeFactory(resident_failure="candidate"), reps=3))
+
+
+def test_an_allow_hides_only_the_paths_it_names_and_judge_lists_what_it_hid():
+    """Red team, attack 3: `--allow precision` used to match every leaf named precision (each arm's as well as the
+    preset's), and `--allow id` every arm id."""
+
+    doc = bench()
+    arms = [dict(a) for a in doc["identity"]["arms"]]
+    arms[1].update(id="other", precision="int4", kernel_digest="digest-x")
+    other = {**doc, "identity": {**doc["identity"], "arms": arms}}
+    for allow in (("id",), ("precision",), ("kernel_digest",)):
+        assert identity_mismatches(doc, other, allow)
+    digest_only = {**doc, "identity": {**doc["identity"], "arms": [arms[0], {**doc["identity"]["arms"][1],
+                                                                              "kernel_digest": "digest-x"}]}}
+    verdict = judge(doc, digest_only, ("arms[*].kernel_digest",))
+    assert verdict["differences"] == {"arms[1].kernel_digest": ["digest-candidate", "digest-x"]}
+
+
+def test_table_merges_one_specs_point_results_only_when_their_identities_agree(tmp_path):
+    """Red team, attack 3: a dispatched spec runs each point as its own run, so a sweep's table is assembled from
+    several results; `verity-bench table` refuses results whose identities differ anywhere but the point's own."""
+
+    from verity_bench.cli import main
+    from verity_bench.vllm.result import merge
+
+    preset, (p32,), arms = inputs()
+    p8 = replace(p32, batch=8)
+
+    def point(p, identity, **kw):
+        return run_benchmark(preset, arms, (p,), sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc",
+                             config_identity={"point_identity": identity, **kw})
+
+    merged = merge([point(p8, "i8"), point(p32, "i32")])
+    assert [p["point"]["id"] for p in merged["points"]] == ["b8-p512-mixed", "b32-p512-mixed"]
+    assert merged["identity"]["config"]["point_identity"] == ["i8", "i32"]
+    with pytest.raises(IdentityMismatch, match="uv_lock_sha256"):
+        merge([point(p8, "i8", uv_lock_sha256="a"), point(p32, "i32", uv_lock_sha256="b")])
+    with pytest.raises(ValueError, match="two results"):
+        merge([point(p32, "i32"), point(p32, "i32")])
+    files = []
+    for i, doc in enumerate((point(p8, "i8"), point(p32, "i32"))):
+        files.append(tmp_path / f"{i}.json")
+        files[-1].write_text(json.dumps(doc))
+    assert main(["table", *map(str, files), "--out", str(tmp_path / "merged.json")]) == 0
+    validate(json.loads((tmp_path / "merged.json").read_text()))
+
+
+def test_an_arm_cannot_be_its_own_control():
+    """Red team, attack 4: its greedy gate would compare it with itself and always pass."""
+
+    with pytest.raises(ValueError, match="own control"):
+        bench(arms=(Arm("stock-fp8", precision="fp8"), Arm("candidate", control="candidate")))
+
+
+@pytest.mark.parametrize("kv_tokens", [{"candidate": None}, {"stock-fp8": None}, {"stock-fp8": None, "candidate": None}])
+def test_an_unreported_kv_pool_fails_the_gate(kv_tokens):
+    """Red team, attack 4: the kv-pool gate used to be skipped when either engine didn't report its pool."""
+
+    doc = bench(FakeFactory(kv_tokens=kv_tokens))
+    [gate] = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
+    assert not gate["passed"] and "unchecked" in gate["detail"] and doc["points"] == []
+
+
+def test_an_arm_whose_timed_tokens_differ_from_its_controls_keeps_no_points():
+    """Red team, attack 4: the greedy gate ran before timing only, so an arm could pass it and compute something else
+    in its timed reps."""
+
+    doc = bench(FakeFactory(timed_digest={"candidate": "other"}))
+    [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens"]
+    assert not gate["passed"] and gate["reps"] == [0, 1] and doc["points"] == []
+    validate(doc)
+    good = bench()
+    with pytest.raises(ValueError, match="lacks gates"):
+        validate({**good, "gates": [g for g in good["gates"] if g["kind"] != "greedy-tokens"]})
+
+
+def test_intervals_use_the_t_quantile_for_n_and_ratios_refuse_a_zero_or_missing_baseline_rep():
+    """Red team, attack 5: from n = 12 the interval used 1.96 instead of t (11 df: 2.201), too narrow; a zero baseline
+    rep was dropped from the ratio, which then averaged the other reps; n = 1 rendered like a measured interval."""
+
+    from verity_bench.vllm.runner import _aggregate, _summary
+
+    assert _summary([1.0])["n"] == 1 and "ci95" not in _summary([1.0])
+    assert _summary([1.0, 3.0])["ci95"] == pytest.approx([2 - 12.706, 2 + 12.706])
+    assert _summary([1.0, 2.0, 3.0])["ci95"] == pytest.approx([2 - 4.303 / 3**0.5, 2 + 4.303 / 3**0.5])
+    values = [float(i % 2) for i in range(12)]
+    half = 2.201 * statistics.stdev(values) / 12**0.5
+    assert _summary(values)["ci95"] == pytest.approx([0.5 - half, 0.5 + half])
+
+    arms = (Arm("stock"), Arm("candidate", control="stock"))
+    point = expand_sweep("quick")[0]
+
+    def rep(i, tpot):
+        return {"rep": i, "metrics": {"time_per_output_token_s": tpot, "time_to_first_token_s": 0.1,
+                                      "tokens_per_s": 1.0, "peak_gpu_memory_bytes": 1.0}}
+
+    samples = {("stock", point.id): [rep(0, 0.0), rep(1, 1.0)], ("candidate", point.id): [rep(0, 2.0), rep(1, 9.0)]}
+    [row] = _aggregate(arms, (point,), "stock", samples)
+    assert row["arms"]["candidate"]["metrics"]["time_per_output_token_s"]["ratio_to_stock"] == {"mean": None, "n": 0}
+    doc = {"baseline": "stock", "identity": {"arms": [{"id": "stock"}, {"id": "candidate", "control": "stock"}]},
+           "points": [row]}
+    assert "| time / output token | — | — |" in render(doc)
+    with pytest.raises(ValueError, match="same reps"):
+        _aggregate(arms, (point,), "stock", {**samples, ("stock", point.id): [rep(0, 1.0)]})
+    assert "2.000× (n=1)" in render(bench(reps=1))
+
+
+def test_resume_counts_only_a_clean_exited_passing_run_of_the_same_identity_and_commit(tmp_path):
+    """Red team, attacks 6 and 7: validation comes from result.json alone, so a run killed after writing it (rc 143,
+    preempted) read as passed, and so did a run from a dirty tree, whose code its commit doesn't name."""
+
+    import sqlite3
+
+    from research.store.index import SCHEMA
+
+    db = sqlite3.connect(tmp_path / "index.sqlite")
+    db.executescript(SCHEMA)
+    ident, commit = "f" * 64, "a" * 40
+    rows = [("passed-clean", "vllm_bench_point", "passed", 0, commit, 0, ident, "2026-10-18T01"),
+            ("preempted", "vllm_bench_point", "passed", 143, commit, 0, ident, "2026-10-18T02"),
+            ("dirty", "vllm_bench_point", "passed", 0, commit, 1, ident, "2026-10-18T03"),
+            ("failed", "vllm_bench_point", "failed", 3, commit, 0, ident, "2026-10-18T04"),
+            ("other-commit", "vllm_bench_point", "passed", 0, "b" * 40, 0, ident, "2026-10-18T05"),
+            ("other-point", "vllm_bench_point", "passed", 0, commit, 0, "e" * 64, "2026-10-18T06"),
+            ("other-tool", "something_else", "passed", 0, commit, 0, ident, "2026-10-18T07")]
+    for rid, tool, validation, rc, src, dirty, key, start in rows:
+        db.execute("INSERT INTO attempts (id, tool, validation, rc, source_commit, source_dirty, start_utc) "
+                   "VALUES (?,?,?,?,?,?,?)", (rid, tool, validation, rc, src, dirty, start))
+        db.execute("INSERT INTO attempt_params VALUES (?, 'identity', ?)", (rid, key))
+    assert db.execute(jobs.PASS_QUERY.format(identity=ident, commit=commit)).fetchall() == [("passed-clean",)]
+
+    root = Path(__file__).resolve().parents[3]
+    spec = resolve_spec("llama31-8b-fp8-1gpu")
+    pins = jobs.toolchain(root, spec, commit=commit)
+    point = expand_sweep("quick")[0]
+    identity = jobs.point_identity(spec.config_sha256, pins, point)
+    assert identity != jobs.point_identity(spec.config_sha256, replace(pins, vllm_pin="0" * 40), point)
+    assert identity != jobs.point_identity("0" * 64, pins, point)
+
+
+def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tmp_path, monkeypatch):
+    """Red team, attack 7: a preempted point reruns whole; if it reran in its run directory and died before writing a
+    new result.json, the earlier attempt's verdict would stand beside the new attempt's half-written files."""
+
+    import verity_bench.cli as cli
+
+    root = Path(__file__).resolve().parents[3]
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    item = plan.points[0]
+    (tmp_path / "result.json").write_text('{"validation": {"status": "passed"}}')
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
+    monkeypatch.chdir(root)
+
+    def preempted(*args, **kwargs):
+        raise RuntimeError("preempted")
+
+    monkeypatch.setattr(cli, "run_benchmark", preempted)
+    with pytest.raises(RuntimeError, match="preempted"):
+        cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id, "--identity", item.identity])
+    assert not (tmp_path / "result.json").exists()
 
 
 def test_the_readme_states_the_contract_the_code_keeps():

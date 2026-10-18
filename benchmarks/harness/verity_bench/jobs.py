@@ -16,10 +16,13 @@ from verity_config import dumps, sha256, value
 
 from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, resolve_spec
 
+# Validation comes from result.json alone, so a run killed after writing it would read as passed; rc 0 rules that out,
+# and a run from a dirty tree ran code its commit doesn't name.
 PASS_QUERY = """
 SELECT id
 FROM attempts
-WHERE validation = 'passed' AND source_commit = '{commit}'
+WHERE tool = 'vllm_bench_point' AND validation = 'passed' AND rc = 0 AND source_dirty IS NOT 1
+  AND source_commit = '{commit}'
   AND EXISTS (
     SELECT 1 FROM attempt_params
     WHERE attempt = attempts.id AND key = 'identity' AND value = '{identity}'

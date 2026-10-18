@@ -51,6 +51,9 @@ def _point(args: Any) -> int:
         raise ValueError(f"point {args.point!r} is not in spec {args.spec!r}")
     if item.identity != args.identity:
         raise ValueError(f"point identity changed: expected {item.identity}, invocation named {args.identity}")
+    run_dir = Path(os.environ.get("RESEARCH_RUN_DIR", ".")).resolve()
+    # A requeued (preempted) point reruns in its run directory: an earlier attempt's verdict must not outlive it.
+    (run_dir / "result.json").unlink(missing_ok=True)
     spec = plan.spec
     jobs.check_point_environment(spec, os.environ)
     preset, eager = served(spec.preset, spec.eager)
@@ -69,7 +72,6 @@ def _point(args: Any) -> int:
             "uv_lock_sha256": plan.toolchain.uv_lock_sha256,
         },
     )
-    run_dir = Path(os.environ.get("RESEARCH_RUN_DIR", ".")).resolve()
     out = Path(os.environ.get("OUT", run_dir / "out")).resolve()
     out.mkdir(parents=True, exist_ok=True)
     write(doc, out / "benchmark.json")
@@ -103,6 +105,14 @@ def _point(args: Any) -> int:
     return 0 if passed else 3
 
 
+def _table(args: Any) -> int:
+    doc = result.merge([json.loads(path.read_text()) for path in args.results])
+    if args.out is not None:
+        write(doc, args.out)
+    print(render(doc), end="")
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="verity-bench")
     commands = parser.add_subparsers(dest="command", required=True, metavar="BACKEND")
@@ -126,6 +136,11 @@ def _parser() -> argparse.ArgumentParser:
     compare = commands.add_parser("compare", help="compare results only when their identities agree")
     result.add_judge_arguments(compare)
     compare.set_defaults(run=result.run_judge, command_parser=compare)
+
+    table = commands.add_parser("table", help="one table from one spec's per-point results, when their identities agree")
+    table.add_argument("results", type=Path, nargs="+")
+    table.add_argument("--out", type=Path, default=None, help="also write the merged result here")
+    table.set_defaults(run=_table, command_parser=table)
 
     point = commands.add_parser("_vllm-point", help=argparse.SUPPRESS)
     point.add_argument("--spec", required=True)
