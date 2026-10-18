@@ -9,6 +9,7 @@ import importlib.util
 import json
 import re
 import sys
+import tomllib
 from pathlib import Path
 
 import numpy as np
@@ -193,14 +194,24 @@ def _sm90_run(d: Path, sync_rate: float) -> Path:
     return d
 
 
-def _census_tables(census, lines, rows):
+def _census_tables(census, lines, rows, epochs=("",), unloaded=frozenset()):
+    """Each row's u for each class, the latest line's; two lines for one class and row never hold at one epoch, a line
+    holding from its `since` through its `until` (machine_model's `holds`). Every row has a line but `unloaded`."""
     by_row: dict[str, dict[str, float]] = {}
+    held: dict[tuple[str, str], set[str]] = {}
     for ln in lines:
-        assert (ln["kind"] not in by_row.get(ln["row"], {})), f"two lines for {ln['kind']} on {ln['row']}"
+        lo = epochs.index(ln["since"]) if ln.get("since") else 0
+        hi = epochs.index(ln["until"]) if ln.get("until") else len(epochs) - 1
+        at, seen = set(epochs[lo:hi + 1]), held.setdefault((ln["kind"], ln["row"]), set())
+        assert at and not at & seen, f"two lines for {ln['kind']} on {ln['row']} at {sorted(at & seen)}"
+        seen |= at
         by_row.setdefault(ln["row"], {})[ln["kind"]] = census.rowsmod.u_of(
             census.rowsmod.CYCLE_U, ln["rate"], ln["noise"], ln["cycles"], ln["u"])
-    assert set(by_row) == {r["row"] for r in rows}
+    assert set(by_row) == {r["row"] for r in rows} - unloaded
     return by_row
+
+
+UNLOADED = {"TMAB"}   # TMA bulk-async: measured beside the MMA, and no class of the model runs on it
 
 
 def test_census_sm90_rows(tmp_path):
@@ -230,8 +241,9 @@ def test_census_sm90_rows(tmp_path):
 
 def test_device_census_is_well_formed():
     """Every device directory's lines are lines machine_model reads (one of rate, cycles and u), each on a row rows.csv
-    states, once a row, naming its runs; a `datasheet` row and its lines name the note that cites the vendor document
-    instead, since no run measured them."""
+    states, once a row at each of its model.toml's epochs, naming its runs, and every row but `UNLOADED` loaded by a
+    line; a `datasheet` row and its lines name the note that cites the vendor document instead, since no run measured
+    them."""
     census = _load("census")
     note = re.compile(r"note:\d{8}T\d{4}Z-[a-z0-9-]+")
     devices = DC.parent / "machine_model" / "data" / "devices"
@@ -242,7 +254,8 @@ def test_device_census_is_well_formed():
         with open(d / "rows.csv", newline="") as f:
             rows = list(csv.DictReader(f))
         assert tuple(lines[0]) == census.rowsmod.CENSUS_COLUMNS
-        by_row = _census_tables(census, lines, rows)
+        epochs = tuple(tomllib.loads((d / "model.toml").read_text())["epochs"])
+        by_row = _census_tables(census, lines, rows, epochs, UNLOADED)
         assert {"issue", "M", "A", "I", "SHFL"} <= set(by_row), d
         sheet = {r["row"] for r in rows if r["status"] == "datasheet"}
         for ln in lines + rows:
