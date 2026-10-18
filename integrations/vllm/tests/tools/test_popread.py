@@ -97,13 +97,16 @@ def test_a_selection_inside_a_composite_names_the_call_its_index_comes_from(tmp_
 
 
 def test_the_chronology_marks_steps_from_one_past_the_lag_as_eos_keyed(tmp_path):
+    """The chronology's ranges count the Calls after the root's Input batches, so the toy's 3 Calls are nodes 0..2."""
     desc = PR.load(_toy(tmp_path))
     chrono = {"engine_steps": [{"e": s, "members": [{"request_id": "r0", "s": s, "nodes": span}]}
-                               for s, span in enumerate(([0, 4], [4, 5], [5, 6]))]}
+                               for s, span in enumerate(([0, 1], [1, 2], [2, 3]))]}
     r = PR.analyze_descriptor(desc, workload_program={"lag": {"value": 1}, "chronology": chrono})
     keyed = {f["family"]: f["eos_keyed"]["calls"] for f in r["families"]}
     assert keyed == {"I32Add_v1": 0, "GatherBf16x4_v1": 0, "Bf16Add_v1": 1}
     assert r["eos"] == {"lag": 1, "keyed_from_step": 2, "counted": True, "applied": True, "why_not": None}
+    assert [(b["s"], b["calls"], b["families"]) for b in r["by_step"]] == [
+        (0, 1, {"I32Add_v1": 1}), (1, 1, {"GatherBf16x4_v1": 1}), (2, 1, {"Bf16Add_v1": 1})]
 
     ignored = PR.analyze_descriptor(desc, workload_program={"lag": {"value": 1}, "chronology": chrono,
                                                             "stop_rule": {"ignore_eos": True}})
@@ -111,9 +114,9 @@ def test_the_chronology_marks_steps_from_one_past_the_lag_as_eos_keyed(tmp_path)
     assert ignored["summary"]["eos_keyed"]["calls"] == 1
     assert "were EOS honored" in PR.render([dict(ignored, name="toy")])
 
-    short = {"engine_steps": [{"e": 0, "members": [{"request_id": "r0", "s": 0, "nodes": [0, 5]}]}]}
+    short = {"engine_steps": [{"e": 0, "members": [{"request_id": "r0", "s": 0, "nodes": [0, 2]}]}]}
     r = PR.analyze_descriptor(desc, workload_program={"chronology": short})
-    assert not r["eos"]["applied"] and "end at 5, not this Program's 6" in r["eos"]["why_not"]
+    assert not r["eos"]["applied"] and "end at 2, not this Program's 3 Calls" in r["eos"]["why_not"]
 
 
 def _prefix_planner(w: dict) -> list[int]:

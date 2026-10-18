@@ -228,17 +228,17 @@ def _finish(out: dict[str, Any], families: dict[str, dict[str, Any]], value_boun
     return out
 
 
-def step_of_nodes(wp: dict[str, Any], n_nodes: int) -> tuple[list[int] | None, int, str | None]:
-    """Root node -> its request-relative step, from a workload Program's chronology, and LAG; None when the ranges don't tile
-    this Program's root body (another component's)."""
+def step_of_calls(wp: dict[str, Any], n_calls: int) -> tuple[list[int] | None, int, str | None]:
+    """Call ordinal -> its request-relative step, from a workload Program's chronology, whose node ranges index the request
+    body's nodes after its Input batches (`program.workload`), and LAG; None when the ranges don't tile this Program's Calls."""
     ch, lag = wp.get("chronology") or {}, int((wp.get("lag") or {}).get("value") or 0)
     spans = [(m["nodes"][0], m["nodes"][1], int(m["s"])) for e in ch.get("engine_steps") or () for m in e["members"]]
     if len({m["request_id"] for e in ch.get("engine_steps") or () for m in e["members"]}) != 1:
         return None, lag, "the chronology has several requests: per-request steps need the component's own ranges"
     end = max((hi for _lo, hi, _s in spans), default=0)
-    if end != n_nodes:
-        return None, lag, f"the chronology's node ranges end at {end}, not this Program's {n_nodes} root nodes"
-    step = [0] * n_nodes
+    if end != n_calls:
+        return None, lag, f"the chronology's node ranges end at {end}, not this Program's {n_calls} Calls"
+    step = [0] * n_calls
     for lo, hi, s in spans:
         step[lo:hi] = [s] * (hi - lo)
     return step, lag, None
@@ -263,18 +263,26 @@ def analyze_descriptor(desc: dict[str, Any], *, units: dict[int, int] | None = N
     it = iter(names)
     for k, n in enumerate(nodes):
         label.append(f"input:{input_group(next(it))}" if is_in[k] else f"call:{base(W.callee(n))}")
-    step, lag, why = step_of_nodes(workload_program, len(nodes)) if workload_program else (None, 0, "no workload Program given")
+    n_calls = len(nodes) - sum(is_in)
+    step, lag, why = step_of_calls(workload_program, n_calls) if workload_program else (None, 0, "no workload Program given")
     fams: dict[str, dict[str, Any]] = {}
+    by_step: dict[int, dict[str, Any]] = {}
+    ordinal = -1
     for k, n in enumerate(nodes):
         if is_in[k]:
             continue
+        ordinal += 1
         fid = W.callee(n)
         f = fams.setdefault(base(fid), _family(base(fid)))
         g, u = W.gates(fid) * members(n), (units or {}).get(k, 0)
         f["calls"] += 1
         f["gates"] += g
         f["units"] += u
-        if step is not None and step[k] >= 1 + lag:
+        if step is not None:
+            b = by_step.setdefault(step[ordinal], {"s": step[ordinal], "calls": 0, "gates": 0, "units": 0, "families": Counter()})
+            b["calls"], b["gates"], b["units"] = b["calls"] + 1, b["gates"] + g, b["units"] + u
+            b["families"][base(fid)] += u if units is not None else g
+        if step is not None and step[ordinal] >= 1 + lag:
             for key, v in (("calls", 1), ("gates", g), ("units", u)):
                 f["eos_keyed"][key] += v
                 f["eos_step_keyed"][key] += v
@@ -292,7 +300,9 @@ def analyze_descriptor(desc: dict[str, Any], *, units: dict[int, int] | None = N
     ignore = bool(((workload_program or {}).get("stop_rule") or {}).get("ignore_eos"))
     out = {"schema": SCHEMA, "adapter": "descriptor/v1", "root": desc["root"][:160],
            "inputs": dict(Counter(input_group(x) for x in names)), "value_bound": value_bound,
-           "eos": _eos(lag, step is not None, ignore, why)}
+           "eos": _eos(lag, step is not None, ignore, why),
+           "by_step": [dict(b, families=dict(b["families"]), per_family="units" if units is not None else "gates")
+                       for _s, b in sorted(by_step.items())]}
     return _finish(out, fams, value_bound, units is not None)
 
 
