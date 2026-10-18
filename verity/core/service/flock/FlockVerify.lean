@@ -434,6 +434,17 @@ def recTranscriptInput (args : List String) (record : Option String)
     | some g => try pure (Except.ok (some (← IO.FS.readFile g))) catch e => pure (Except.error s!"rec inner registration: {e}")
   return some <$> RecSetup.commits inner t r bound record
 
+/-- `--rec-inner-transcript F` with the inner session's record `record`: the circuit table's `root_B`, each rep's later
+tops and the link points as the coin server recorded them, the record's link points held to the coin server's
+(`RecVStar.innerLink`); none without the transcript or the record (`recTranscriptInput` refuses the one without the
+other). -/
+def recLinkInput (args : List String) (record : Option String) : IO (Except String (Option RecVStar.InnerLink)) := do
+  let (some f, some record) := (argOf args "--rec-inner-transcript", record) | return .ok none
+  let t ← try pure (← IO.FS.readFile f) catch e => return .error s!"rec inner transcript: {e}"
+  match Lean.Json.parse t with
+  | .ok j => return some <$> RecVStar.innerLink j record
+  | .error e => return .error s!"rec inner transcript: not JSON: {e}"
+
 /-- `--sparse NU,ELL,S_LOG,T_LOG`: the bucket's RecSparse shape, the verifier's own word for candidate 3's sparse phase. -/
 def sparseInput (args : List String) : Except String (Option RecSparse.Shape) :=
   match argOf args "--sparse" with
@@ -488,8 +499,10 @@ def recCoinsCmd (args : List String) : IO UInt32 := do
 
 /-- `rec-transcript --rec-inner-transcript F --rec-inner-session DIR [--rec-inner F]`: what `verify` holds of the inner
 session's transcript (`RecVStar.innerCommits`), as one `RECTRANSCRIPT` line: each rep's message rounds, and each stream's
-message rounds and its tops' node counts by level; with `--rec-inner`, that the verifier's inner shape covers it
-(`RecVStar.checkCovers`, as `verify` checks it); exit 1 when the transcript is refused. -/
+message rounds and its tops' node counts by level; the circuit table's tops and the link points, the record's held to the
+coin server's (`RecVStar.innerLink`); with `--rec-inner`, that the verifier's inner shape covers it
+(`RecVStar.checkCovers`) and puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`), as `verify`
+checks them; exit 1 when the transcript is refused. -/
 def recTranscriptOfSession (args : List String) (bound : Except String (Option String × Option RecVStar.StackedShape))
     (inner : Option RecVStar.Inner) : IO (Except String (Option RecVStar.InnerCommits)) := do
   let some dir := argOf args "--rec-inner-session"
@@ -497,6 +510,13 @@ def recTranscriptOfSession (args : List String) (bound : Except String (Option S
   let record ← try pure (← IO.FS.readFile (dir ++ "/session.json"))
     catch e => return .error s!"rec inner session: {e}"
   recTranscriptInput args (some record) bound inner
+
+/-- `recLinkInput` at the inner session's record in `--rec-inner-session DIR`. -/
+def recLinkOfSession (args : List String) : IO (Except String (Option RecVStar.InnerLink)) := do
+  let some dir := argOf args "--rec-inner-session" | return .ok none
+  let record ← try pure (← IO.FS.readFile (dir ++ "/session.json"))
+    catch e => return .error s!"rec inner session: {e}"
+  recLinkInput args (some record)
 
 def recTranscriptCmd (args : List String) : IO UInt32 := do
   let some _ := argOf args "--rec-inner-session"
@@ -510,6 +530,12 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
   | .ok (some ic) =>
     if let some i := inner then
       if let .error e := RecVStar.checkCovers i ic then IO.eprintln e; return 1
+    match ← recLinkOfSession args with
+    | .ok (some lk) =>
+      if let some i := inner then
+        if let .error e := RecVStar.checkLinkRounds i lk then IO.eprintln e; return 1
+    | .ok none => pure ()
+    | .error e => IO.eprintln e; return 1
     let n := fun (xs : Array (Nat × ByteArray)) => Lean.toJson xs.size
     IO.println s!"RECTRANSCRIPT {(Lean.Json.mkObj [("reps", .arr (ic.reps.map n)),
       ("streams", .arr (ic.streams.map fun s => Lean.Json.mkObj [("stream", .str s.name), ("commits", n s.commits),
@@ -623,7 +649,11 @@ statement and session its coefficients are checked against (`RecCoins.check`; or
 of what that check reads of them, `--rec-inner-coins`), and a statement reading a `rec-c<k>` the
 coin server's record of the inner session whose `c_k` its rows must be (`--rec-inner-transcript`,
 `RecVStar.checkPubRows`), and one of V*'s parts the verifier's record of V*'s shared rows, which its row ports must be
-(`--rec-rows`, `RecVStar.checkRows`). At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
+(`--rec-rows`, `RecVStar.checkRows`). A V* statement whose check 5 reads the link points (a `rec-open/…`,
+`rec-residuals/…` or `rec-sparse/…` unit) needs the inner transcript, whose link points the inner session's record must
+hold (`RecVStar.innerLink`); a circuit-table level's `out` reads `rec-top-L<l>` at each opening's node (`RecCoins.checkLink`)
+and its rows are the tops the coin server recorded (`RecVStar.checkTopRows`), whose rounds and sizes are the inner
+shape's schedule's (`RecVStar.checkLinkRounds`). At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
 needs the inner statement's files, on which its setup first checks check 5's sparse refusals (`RecCoins.checkAtC3`), and
 the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`).
 Each DIR holds `session.json`
@@ -631,8 +661,8 @@ and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; o
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
 soundness proof does not cover (`ProvedScope.check`, then its tables' `m`, `ProvedScope.sizesOk`, §16.15) is refused, and
-so is a session without a draw, and under `--rec-inner` a session whose draw is not every unit of its population
-(`RecSetup.fullDraw`), all after
+so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, and a
+session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), all after
 every check has passed (so the reason is the refusal only when nothing else fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
@@ -701,6 +731,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let recCommits ← match ← recTranscriptInput args (recCoins.map (·.record)) recBound recInner with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
+  let recLink ← match ← recLinkInput args (recCoins.map (·.record)) with
+    | .ok l => pure l
+    | .error e => IO.eprintln e; return 2
   let recRows ← match ← registeredInput args "--rec-rows" "rec rows" with
     | .ok r => pure r
     | .error e => IO.eprintln e; return 2
@@ -729,6 +762,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
         r.2.forM (RecCoins.check · registered (RecCoins.Source.atC3 recCoins recInner recCommits)
           (RecSetup.c3 recInner recCommits))
         r.2.forM (RecVStar.checkPubRows · registered recCommits (recInner.bind (·.sparse)))
+        if let (some i, some lk) := (recInner, recLink) then RecVStar.checkLinkRounds i lk
+        r.2.forM (RecVStar.checkTopRows · registered recLink)
+        r.2.forM (RecCoins.checkLink · registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink)
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
@@ -772,11 +808,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
       let (spec, tabs, _) ← st
       if zk then Zk.verify spec tabs record proofs else verify spec tabs record proofs
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
-      -- tables' sizes), then a draw-less session's, then a V* session's short of every unit
+      -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
+      -- short of every unit
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk draw
-      RecSetup.fullDraw recInner draw record
+      RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
@@ -795,10 +832,14 @@ def verifyCmd (args : List String) : IO UInt32 := do
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. With
 `--rec-inner F`, the statement must be one of V*'s at that inner shape, statement `--rec-part J` of them under the
 verifier's own `--rec-bindings F` (`RecVStar.checkStmt`). With `--rec-inner-transcript F --rec-inner-session DIR`, its
-rows at what the inner transcript fixes are the `b ‖ c` the verifier holds (`RecVStar.checkPubRows`, as `verify` sets up).
+rows at what the inner transcript fixes are the `b ‖ c` the verifier holds (`RecVStar.checkPubRows`, as `verify` sets up),
+and its rows of the circuit table's tops the coin server's (`RecVStar.checkTopRows`, `RecVStar.innerLink`, which holds the
+record's link points to the coin server's).
 Its verifier-registered values are checked against the verifier's coins (`RecCoins.check`) when it holds what that check
 reads: the inner statement and session (`--rec-inner-public` and its three, or `--rec-inner-coins`), or for R's levels and
-opening the inner transcript and the verifier's inner shape alone. At candidate 3's inner shape (`--rec-inner` naming a
+opening the inner transcript and the verifier's inner shape alone; with the inner statement and session, a statement
+whose check 5 reads the link points needs the inner transcript, and a circuit-table level's `out` reads the coin server's
+tops (`RecCoins.checkLink`). At candidate 3's inner shape (`--rec-inner` naming a
 RecSparse shape), every statement needs the inner statement's files, whose sparse range is checked first
 (`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
 def statementCmd (args : List String) : IO UInt32 := do
@@ -844,6 +885,9 @@ def statementCmd (args : List String) : IO UInt32 := do
   let recCommits ← match ← recTranscriptOfSession args recBound recInner with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
+  let recLink ← match ← recLinkOfSession args with
+    | .ok l => pure l
+    | .error e => IO.eprintln e; return 2
   let recCoins ← if (argOf args "--rec-inner-public").isSome || (argOf args "--rec-inner-coins").isSome then
       match ← RecCoins.filesInput args with
       | .ok f => pure f
@@ -858,9 +902,12 @@ def statementCmd (args : List String) : IO UInt32 := do
         RecSetup.checks recInner recCommits stmtTags tables #[st] circuitB partition program registered recPart
           recBindings recRows
       if recCommits.isSome then RecVStar.checkPubRows st registered recCommits (recInner.bind (·.sparse))
+      if let (some i, some lk) := (recInner, recLink) then RecVStar.checkLinkRounds i lk
+      if recLink.isSome then RecVStar.checkTopRows st registered recLink
       let u := st.c.unit.name
       if recCoins.isSome || (c3.isSome && ((RecCoins.stackedParams u).isSome || (RecOpening.params u).isSome)) then
         RecCoins.check st registered (RecCoins.Source.atC3 recCoins recInner recCommits) c3
+      if recCoins.isSome then RecCoins.checkLink st registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
