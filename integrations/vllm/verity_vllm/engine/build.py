@@ -50,19 +50,21 @@ class Engine:
 EXECUTION_ENFORCE_EAGER: dict[str, bool] = served.ENFORCE_EAGER
 
 
-def execution_label_of(enforce_eager: bool | None) -> str | None:
-    """The row-id execution label the EFFECTIVE engine realises: eager -> 'bi-eager', compiled -> 'bi-compiled' (None when unknown)."""
-    if enforce_eager is None:
+def execution_label_of(enforce_eager: bool | None, batch_invariant: bool | None = True) -> str | None:
+    """The row-id execution label an engine realises: 'eager' or 'compiled', 'bi-' prefixed when batch invariant (None when either is
+    unknown)."""
+    if enforce_eager is None or batch_invariant is None:
         return None
-    return "bi-eager" if bool(enforce_eager) else "bi-compiled"
+    return ("bi-" if batch_invariant else "") + ("eager" if bool(enforce_eager) else "compiled")
 
 
 def effective_execution_doc(llm: Any, model: Any = None) -> dict:
     """[R15 EXEC-02] What the built engine actually executes, read back from `llm.llm_engine.vllm_config` (not from the kwargs the harness
     asked for): eager/compiled (`enforce_eager`, compilation mode, cudagraph mode, custom ops, optimisation level), the KV/scheduler facts
     that condition a Program's applicability (prefix caching, chunked prefill, max_num_batched_tokens, max_num_seqs, max_model_len), dtype,
-    and the attention implementation the layers carry.  `execution_label` is derived from the effective `enforce_eager` so the finalizer can
-    compare it with the row id / the Program's declared applicability (COORD M-0063 (3)).  Every field is read; unreadable ones are None."""
+    and the attention implementation the layers carry.  `execution_label` is derived from the effective `enforce_eager` and batch invariance
+    so the finalizer can compare it with the row id / the Program's declared applicability (COORD M-0063 (3)).  Every field is read;
+    unreadable ones are None."""
     doc: dict[str, Any] = {}
     try:
         from verity_vllm.engine import engine_profile as prof
@@ -81,6 +83,8 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
         doc["block_size"] = int(getattr(cc, "block_size")) if getattr(cc, "block_size", None) is not None else None
         doc["gpu_memory_utilization"] = float(getattr(cc, "gpu_memory_utilization")) if getattr(cc, "gpu_memory_utilization", None) is not None else None
         doc["async_scheduling"] = resolved_async_scheduling(llm)      # [R16 sys int-3] resolved, not the CLI default (M-0213)
+        import vllm.envs as envs
+        doc["batch_invariant"] = bool(envs.VLLM_BATCH_INVARIANT)
     except Exception as e:  # noqa: BLE001
         doc["config_error"] = repr(e)[:200]
     if model is not None:
@@ -88,7 +92,7 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
             doc["flash_attn_version"] = observed_flash_attn_version(model)
         except Exception:  # noqa: BLE001
             doc["flash_attn_version"] = None
-    doc["execution_label"] = execution_label_of(doc.get("enforce_eager"))
+    doc["execution_label"] = execution_label_of(doc.get("enforce_eager"), doc.get("batch_invariant"))
     return doc
 
 

@@ -214,7 +214,9 @@ Supported keyword options:
 | `max_num_batched_tokens` | vLLM's | tokens per scheduler step |
 | `max_model_len` | the pin's | context length |
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
+| `kv_cache_memory_bytes` | vLLM's sizing | the KV cache's size in bytes, in place of sizing it from free memory |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
+| `execution` | `bi-eager`, or `bi-compiled` with `enforce_eager` False | the execution label (`engine.served.EXECUTIONS`), which sets batch invariance and `enforce_eager`; `compiled` is vLLM's serving defaults |
 | `dtype` | the profile's | served dtype override |
 | `quantization` | the checkpoint's | vLLM quantization override, such as `"fp8"` |
 | `compilation_config` | vLLM's | compilation and CUDA-graph settings |
@@ -246,9 +248,9 @@ else replaces an attribute on a vLLM, torch or Triton object.
   `commit_weights` (the contract is `protocol_options/interface.py`).  It finds its sites by type, never by module name,
   and patches only through `target.hooks(entry)`.  Its protocol logic stays in its `verity.core.protocols` package.
 - *A benchmark arm or experiment* patches only through a `Hooks` tagged by its id (`bench:<arm>`).  The harness
-  (`verity_bench.vllm.runner`, benchmarks') calls its `install` before the engine is built and its `ready` once
-  `llm.vllm` and `llm.model` exist; it refuses an arm whose `install` added a live entry outside its tag, and uninstalls
-  the arm's hooks when the engine closes.
+  (`verity_bench.vllm.runner`, benchmarks') calls its `install` before the engine is built, its `ready` once
+  `llm.vllm` and `llm.model` exist, and its `begin_run` and `end_run` around every run; it refuses an arm whose
+  `install` added a live entry outside its tag, and uninstalls the arm's hooks when the engine closes.
 
 **Order.**  At each site the nesting is `protocol_options.SITES`, outermost first: at `LinearBase.quant_method.apply`,
 POUS wraps PoUW, which executes (a site has at most one executor, `EXECUTES`).  Sampled proofs commits at module

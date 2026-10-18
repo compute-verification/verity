@@ -7,6 +7,7 @@
   "Flock.Test.FullDraw",
   "Flock.Test.Sha512",
   "Flock.Test.InnerStreams",
+  "Flock.Test.InnerLink",
   "Flock.Test.RecCoins",
   "Flock.Test.RecOpen",
   "Flock.Test.RecOpening",
@@ -18,6 +19,7 @@
   "Flock.Test.Part",
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
+  "Flock.Test.PlainLeaves",
   "Flock.Test.Wires",
   "Flock.Test.TableCap",
   "VStar"
