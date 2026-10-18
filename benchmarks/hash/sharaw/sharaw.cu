@@ -268,6 +268,44 @@ DEV void f_second3(u64 pos, const u64* h, u64* out) { SR_BY_LEN(pos, f_second_nb
 DEV void pad3(u64 rank, u64* out) { SR_BY_LEN(rank, pad_nb3, rank, out) }
 DEV void node3(int level, u64 index, const u64* L, const u64* R, u64* out) { SR_BY_LEN(index, node_ni3, level, index, L, R, out) }
 
+// mask_smem with its loop over r rolled: unrolled, the product is ~8,000 instructions of straight-line code, which a warp
+// streams through the instruction cache while its neighbours run a compression. Byte 16 q + r of y is byte r of chunk q;
+// A_r's shift down r bytes is a word shift of r >> 2 (as two conditional static shifts) and a funnel shift of 8 (r & 3).
+DEV void mask_roll(const uint4* T, const u64* Y, u32* m) {
+#pragma unroll
+  for (int w = 0; w < 16; ++w) m[w] = 0;
+#pragma unroll 1
+  for (int r = 0; r < 16; ++r) {
+    u32 A[20];
+#pragma unroll
+    for (int i = 0; i < 20; ++i) A[i] = 0;
+    const int sh = 56 - 8 * (r & 7);
+#pragma unroll
+    for (int q = 0; q < 12; ++q) {
+      const u64 wq = r < 8 ? Y[2 * q] : Y[2 * q + 1];
+      const u32 v = (u32)(wq >> sh) & 0xFFu;
+      const uint4* lo = T + 16 * q + (v & 15u);
+      const uint4* hi = T + 256 + 16 * q + (v >> 4);
+#pragma unroll
+      for (int i = 0; i < 5; ++i) {
+        const uint4 u = lo[16 * i], w = hi[16 * i];
+        A[4 * i] ^= u.x ^ w.x; A[4 * i + 1] ^= u.y ^ w.y; A[4 * i + 2] ^= u.z ^ w.z; A[4 * i + 3] ^= u.w ^ w.w;
+      }
+    }
+    if (r & 4) {
+#pragma unroll
+      for (int k = 0; k < 19; ++k) A[k] = A[k + 1];
+    }
+    if (r & 8) {
+#pragma unroll
+      for (int k = 0; k < 18; ++k) A[k] = A[k + 2];
+    }
+    const u32 s = 8 * (r & 3);
+#pragma unroll
+    for (int w = 0; w < 16; ++w) m[w] ^= __funnelshift_r(A[w], A[w + 1], s);
+  }
+}
+
 DEV void salt3(u64 pos, const uint4* T, u64* my, u64* c) {
   u64 Y[24];
   u32 m[16];
@@ -284,7 +322,7 @@ DEV void salt3(u64 pos, const uint4* T, u64* my, u64* c) {
 #pragma unroll
     for (int i = 0; i < 8; ++i) Y[8 * r + i] = s[i];
   }
-  mask_smem(T, Y, m);
+  mask_roll(T, Y, m);
   u64 w[16];
   cpy8(c, C.mid_salt);
 #pragma unroll
@@ -484,6 +522,27 @@ __global__ void __launch_bounds__(TPB, MINB)
   if constexpr (FOLD) fold_climb<true>(o, pos, 0, width, depth, levels, ctr);
 }
 
+// v3s's salt kernel: sr_salt with v3's single compression body and the rolled mask
+__global__ void __launch_bounds__(128) sr_salt3(const uint4* __restrict__ Tn, u64 n, u64 width, u64* __restrict__ S,
+                                                u64* __restrict__ F, u64* __restrict__ lv0) {
+  __shared__ uint4 T[512];
+  for (int i = threadIdx.x; i < 512; i += blockDim.x) T[i] = Tn[i];
+  __syncthreads();
+  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  u64 o[8];
+  if (pos < n) {
+    u64 my[8], c[8];
+    salt3(pos, T, my, c);
+    st8(S + 16 * pos, my);
+    st8(S + 16 * pos + 8, c);
+    f_first3(pos, o);
+    st8(F + 8 * pos, o);
+  } else if (pos < width) {
+    pad3(pos, o);
+    st8(lv0 + 8 * pos, o);
+  }
+}
+
 // v3s: v1's split (sr_salt ahead, nothing of it on the data's path) with v3's data kernel: S[pos] and F[pos] from the salt
 // kernel, the pads already in level 0
 template <bool FOLD>
@@ -589,7 +648,7 @@ struct Mine {
     };
     const u32 cnt = (u32)std::min<u64>(width, 256);
     if constexpr (ORDER == 3) {   // v3s: the salt kernel, then the data kernel
-      salts(st);
+      sr_salt3<<<(unsigned)((width + 127) / 128), 128, 0, st>>>(Tn, n, width, S, F, levels);
       sr_data3<FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, n, width, depth, S, F, levels, ctr, bc);
     } else if constexpr (U) sr_leaf3<256, 2, ORDER, FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
     else sr_leaf<256, 2, ORDER, FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
@@ -851,14 +910,10 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   const u64 MINW = 4096;   // a K = 3 launch only while it has at least this many threads
 #define V2(NAME, ORDER, FOLD, SUBS, U) \
   arms.push_back({NAME, true, [&](cudaStream_t s) { me.v2<ORDER, FOLD, U>(src, s, SUBS, MINW); }, comps})
-  V2("v2_salt_s2", 0, false, 2, false);
   V2("v3_salt_s2", 0, false, 2, true);
   V2("v3_par_s2", 2, false, 2, true);
-  V2("v3_row_s2", 1, false, 2, true);
-  V2("v3_salt_s1", 0, false, 1, true);
-  V2("v3_salt_fold", 0, true, 0, true);
-  V2("v3_par_fold", 2, true, 0, true);
   V2("v3s_s2", 3, false, 2, true);
+  V2("v3s_s1", 3, false, 1, true);
   V2("v3s_fold", 3, true, 0, true);
   arms.push_back({"v4_64", true, [&](cudaStream_t s) { me.v4<128>(src, s); }, comps});
   arms.push_back({"v4_32", true, [&](cudaStream_t s) { me.v4<64>(src, s); }, comps});
@@ -871,6 +926,7 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   // diagnostic forms of this file's committer (timing only)
   std::vector<Arm> diags = {
       {"salt_only", false, [&](cudaStream_t s) { me.salts<true>(s); }, c_salt},
+      {"salt3_only", false, [&](cudaStream_t s) { sr::sr_salt3<<<(unsigned)((width + 127) / 128), 128, 0, s>>>(me.Tn, n, width, me.S, me.F, me.levels); }, c_salt},
       {"salt_nomask", false, [&](cudaStream_t s) { me.salts<false>(s); }, c_salt},
       {"data_only", false, [&](cudaStream_t s) { me.data<256, 2, false>(src, s); }, comps - c_salt},
       {"data_noload", false, [&](cudaStream_t s) { me.data<256, 2, false, sr::NOLOAD>(src, s); }, comps - c_salt},
