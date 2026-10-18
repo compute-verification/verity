@@ -19,6 +19,8 @@ instruction any fixed function of at most three earlier words.
 * `ClassP`: every instruction is an output writer, a free word, or a mixed-radix tuple of fields
   `φ = β·T_{ℓ−1}[i,j] + Σ_{p∈E} R[i, 32ℓ+p]·U[j,p]` with `M_{k+1} ≥ M_k·|range_k|` and `Π_k |range_k| ≤ 2^32`, a field
   with a prefix taking it from an input that holds it (Theorem C's class).
+* `Creates`: an instruction creates an incidence `(τ, p)` it holds and none of its instruction arguments holds
+  (Theorem C's count).
 -/
 
 namespace Pouw.Eps1
@@ -195,5 +197,16 @@ def ClassP {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : Prog (Dither m Lseg) (
       (∀ R U, ColsValid U → ∀ v, P.prog.IsRun (P.inputs R U) v → v t = π.word R U) ∧
       ∀ f ∈ π.fields, f.1.β = true → 0 < f.1.τ.1.val → ∃ j s, P.prog.arg t j = .inr s ∧
         ∀ l, l < f.1.τ.1 → ∀ p, Holds P pk (M3.earlier t s) (l, f.1.τ.2) p
+
+/-- Instruction `t` **creates** the incidence `(τ, p)`: it holds it and no argument that is an instruction holds it.
+Walking back from `τ`'s writer through arguments that hold `(τ, p)` ends at an instruction that creates it. -/
+def Creates {m n Lseg : ℕ} {FR FU : Type} {G : ℕ} (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+    (pk : Fin G → Option (Packing m n Lseg)) (t : Fin G) (τ : Tau m n Lseg) (p : Fin 32) : Prop :=
+  Holds P pk t τ p ∧ ∀ j s, P.prog.arg t j = .inr s → ¬ Holds P pk (M3.earlier t s) τ p
+
+/-- The number of incidences instruction `t` creates. -/
+noncomputable def created {m n Lseg : ℕ} {FR FU : Type} {G : ℕ}
+    (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G) (pk : Fin G → Option (Packing m n Lseg)) (t : Fin G) : ℕ :=
+  {x : Tau m n Lseg × Fin 32 | Creates P pk t x.1 x.2}.ncard
 
 end Pouw.Eps1

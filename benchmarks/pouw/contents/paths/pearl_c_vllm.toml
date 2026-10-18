@@ -1,0 +1,4 @@
+order = 130
+path = "`pearl_c_vllm/`"
+runs_on = "RTX PRO 6000"
+what = "Pearl-C on every linear of a served vLLM model: `e2e.py` (gates, timing against stock FP8, retained passes, smoke), `window.sh` (the timed window), `verify.sh` (the reference replay), and the `verity-bench` arm (`bench_arm.py`)"

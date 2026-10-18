@@ -23,12 +23,11 @@ namespace Hash.Guarantees
 served row leaf (`RowLeaf.accepts`: a frame-v3 tree over the verifier's domain, its frame leaf binding the domain id,
 rank, position and the schema `hm96-sha512/row-seg/v1`, its nodes their level and index; the hm96-sha512 leaf under the
 verifier's key, bound through `H(key)` in its prefix; the `sha512/row-seg/v1` digest binding the row's bit length and
-each segment's; every part length-framed), carry the same row, or two different messages that `H` hashed in the two
-checks have one digest, or two different messages that `G` hashed in the two row digests have one digest.
+each segment's; every part length-framed or fixed-width), carry the same row, or two different messages that `H` hashed
+in the two checks have one digest, or two different messages that `G` hashed in the two row digests have one digest.
 
 The instance of record is `H = G = SHA-512`, where the last two disjuncts together are a SHA-512 collision among the
-inputs the two openings hashed. Read at `G = BLAKE3` (64-byte output, over this layout), the last disjunct is the
-`cr/blake3` form, if BLAKE3 became the inner digest. -/
+inputs the two openings hashed. The statement holds for any 64-byte `H` and `G`. -/
 def RowBinding : Prop :=
   ∀ (H G : Msg → Digest) (V : RowLeaf.Verifier) (root : Digest) (rank : ℕ) (o₁ o₂ : RowLeaf.Opening),
     RowLeaf.accepts H G V root rank o₁ → RowLeaf.accepts H G V root rank o₂ →

@@ -1,7 +1,7 @@
 # Verity
 
 Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `README.md` has the architecture and the Glossary, whose terms
+compute, memory and network accounting from those proofs. `DESIGN.md` has the architecture and the Glossary, whose terms
 code, docs and output use. This file states what is true on `main` now: what each directory is, the design rules, and how
 work lands. Each package's contents are in its own README and docstrings. Your checkout, and this file in your prompt, can
 be older than `main` (a cloud VM boots from a snapshot), so when they differ, `git show origin/main:AGENTS.md` wins.
@@ -55,7 +55,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).
   - `research`: the run recorder and the run-store client: runs, the evidence store, Slack, pods and deploys. It imports
     nothing from Verity.
-  - `agent-guard`: the VM's secret guard.
+  - `agent-guard`: the VM's secret guard, its OOM recorder, and the hook that keeps builds and tests off agent VMs (`research run --on auto` runs them on a node).
   - `move`: layout moves.
 - `infra/`: our machines.
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
@@ -92,8 +92,8 @@ requires, `verity check tests|lean|circuits` runs only those parts, and `verity 
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
-uv run tools/verity/check/suites.py       # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run --extra torch-cpu verity check     # the check a merge requires; --record publishes it as an Attempt
+research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
+research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the merge check; --record: an Attempt
 ~~~
 
 ## Design rules
@@ -126,10 +126,16 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
     - Duo receipts, PoUW's per-step receipts: keyed u32 mul/xor/rotl folds over committed accumulator words. They
       bind under the named premise H-μ⁺, which is the premise ledger's row R1
       (`note:20261016T0219Z-report-premise-ledger`) and not yet in a lock.
-- **Live coins only.** Fiat–Shamir is out. The one exception is the remote bandwidth audit's pass seeds inside a
-  window, derived from the window's live challenge and the previous pass's root (Daniel, 12 Oct). There are no
-  retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the firewall one at a
-  time.
+- **Live coins only.** Fiat–Shamir is out, with two exceptions, each at a rate where live coins are impractical:
+  - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
+    pass's root (Daniel, 12 Oct);
+  - PoUW's per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the
+    epoch's live salt and the operands' committed roots, which a drawn unit's proof derives along with its own noise.
+    Grinding is a term of the guarantee: a steer that needs m noised coordinates succeeds with probability at most
+    μ^m a try (Daniel, 18 Oct).
+
+  There are no retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the
+  firewall one at a time.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
   witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
@@ -147,10 +153,15 @@ pytest-xdist workers), cached by input. The repository's own suite (`tests/`) ho
 testing skill, `.agents/skills/testing/SKILL.md`, says how to run them, what a suite may read (`[tool.verity.tests]
 inputs`), and the rules for slow tests, fixtures and dummy credentials.
 
-Heavy work runs on a node, never on an agent VM (16 GB, shared by every agent on it): circuit-check (24 GB a
-process), a Lean build of `Security/Proofs` (ArkLib), and the circuit_check and vLLM suites. Run them with `research run
---on vy-nebius-1 --project verity --source . --cwd source -- …` (the writing-runs skill), or through the quick tier
-(`research queue ready N --on vy-nebius-1`).
+An agent VM does no work beyond editing (Daniel, 18 Oct): it is 16 GB, shared by every agent on it, and one
+out-of-memory kill takes all of them down. Locally, run only git (`git merge-tree` included), reading and editing,
+messaging and the notes, one named test file or `-k` selection of under about a minute and 1 GB, `lake env lean` on one
+file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
+remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
+60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots: every suite (`suites.py`),
+`verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
+and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
+`AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
 
 No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
@@ -231,7 +242,8 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
     (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/core/protocols/pous/lean/`) and
     the certifier program (`verity/core/protocols/certifier/lean/`, `NetworkCertifier`, with its
-    difftest) and the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest).
+    difftest), the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest) and the remote
+    bandwidth audit's verifier (`verity/core/protocols/remote_bandwidth/lean/`, `RemoteAudit`, with its difftest).
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
@@ -254,7 +266,7 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
   - an assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name in the
     lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
-- **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
+- **The lock.** A guarantee (DESIGN.md "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.
   - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
     waits on it.
@@ -273,7 +285,7 @@ abstractions or procedures. Enforce deterministic requirements in code, with the
 in prose. Remove obsolete rules and machinery rather than accumulating them.
 
 **A decision rolls out in the change that records it.** When Daniel rules, or a PR retires a term, a path or a procedure,
-that PR rewrites every place that states the old way: `git grep` the old phrase across this file, the README and its
+that PR rewrites every place that states the old way: `git grep` the old phrase across this file, DESIGN.md and its
 Glossary, the skills, READMEs, docstrings and CLI help. When code has to change first, the ruling's relay names the
 owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
 it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
@@ -360,6 +372,9 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   lead proposed and Daniel approved.
 - **Push your branch after every commit** (never `main`, never `--force`). A push to a PR in a train being checked waits
   for that train to end (Checking and merging). Only drive and the lander move `main`.
+- **Work in a checkout no other agent uses:** your own VM, or your own `git worktree add` (with its own venv) on a shared
+  VM, removed when your task ends. Never check out or switch a branch in a tree another agent uses, and push only to
+  branches you created or were handed.
 - **Landing is drive's.** Push your PR, mark it ready and go back to research; you hear back only if your PR fails. A
   lane works on at most two open PRs; one whose head is on `next` (queued or in a running check) doesn't count until
   its check fails.

@@ -8,9 +8,22 @@ circuit (small Programs, `layout.Circuit`'s explicit limit), which the Lean defi
 
 A gate's operands are `layout.Circuit.gate(i).operands`. It uses all of them, except that a primitive with an
 `evaluate_lazy` (a gather: its index and the word it selects) uses the operands its evaluator fetches, which takes the
-run's values (`inputs`, as `evaluate.py`'s transcript holds them). `live(t)` is `boundary.py`'s `out(S_<t) ∩ in(S_≥t)`
-for `S_<t` the gates of the steps before `t`, and `reads(t)` without a lazy primitive is `in(S_t)` less the run inputs
-that arrive at `t`; `tests/test_requirement.py` holds both to `boundary.out_gates` and `boundary.in_gates`.
+run's values (`inputs`, as `evaluate.py`'s transcript holds them). Without them `requirement` refuses a gather, and
+`upper_bound` counts its whole column: an upper bound on what a step reads, which over-counts reads, so it is never
+credited as the requirement. `live(t)` is `boundary.py`'s `out(S_<t) ∩ in(S_≥t)` for `S_<t` the gates of the steps
+before `t`, and `upper_bound`'s `reads(t)` is `in(S_t)` less the run inputs that arrive at `t`;
+`tests/test_requirement.py` holds both to `boundary.out_gates` and `boundary.in_gates`.
+
+`execution` is the gate pass: `Accounting.Requirement`'s `Wiring` and `Execution` gate by gate (an `Execution`: widths,
+the registered values, each produced value's step, each gate's operands and those it uses, the run's values), and
+`Requirement.of` derives each value's birth and last read from it. `verity/core/primitives/requirement/` holds
+`Requirement.of`, `pack`, `store_matches` and `plan_matches` to the Lean definitions on `Execution`s by difftest.
+
+`from_census` is the same requirement at any scale, from a census (`census.census`) in place of the gates: a value is a
+census value (a run of a root node's output leaves read alike), and a schedule's steps are whole root Calls. A census
+holds no run values, so a gather's candidates (the census's `selects`) stay unresolved (`upper`): `reads(t)` refuses a
+step whose candidates from before `t` aren't otherwise read, since an upper bound would over-credit the audit, and
+`reads_upper(t)` counts them. `tests/test_requirement.py` holds it to `upper_bound` gate by gate.
 
 A schedule is the root gate ranges each step runs: a Program's root Calls split at their first Calls (`Schedule.by_calls`,
 the census's steps), or a WorkloadProgram's request calls, request r's step s (its call's first gate plus
@@ -27,9 +40,12 @@ each block written at its values' step and freed at their last read. That is the
 from __future__ import annotations
 
 import bisect
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from itertools import accumulate, chain
 from typing import Mapping, Sequence
 
+from .census import SCHEMA as CENSUS, step_of as census_step
+from .layout import resolve
 from .program import REGISTRATION, Program, is_input
 
 #: the deployed store's block: 4,096 bytes
@@ -67,6 +83,45 @@ class Schedule:
         i = bisect.bisect_right(self._los, g) - 1  # type: ignore[attr-defined]
         return self.ranges[i][2] if i >= 0 and g < self.ranges[i][1] else None
 
+    def call_step(self, lo: int, hi: int) -> int | None:
+        """The step that runs all of root gates `[lo, hi)` (a root Call), or None if no step runs any; refused if they're split."""
+        s = self.step_of(lo)
+        los = self._los  # type: ignore[attr-defined]
+        if s != self.step_of(hi - 1) or bisect.bisect_right(los, hi - 1) != bisect.bisect_right(los, lo):
+            raise ValueError(f"the schedule splits root gates [{lo}, {hi}), a Call the census path takes whole")
+        return s
+
+
+@dataclass(frozen=True)
+class Execution:
+    """A circuit's wiring and one execution of it, value by value, as `Accounting.Requirement`'s `Wiring` and `Execution`
+    hold them: each value's width, the registered values, the step of each other value the execution produces (a run
+    input's is its arrival), the operands of each gate it runs (`ops`) and those the gate uses (`uses`), and the run's
+    values where known. It produces the registered values and those with a step (`ran`)."""
+
+    width: Mapping[int, int]
+    registered: frozenset[int]
+    step: Mapping[int, int]
+    ops: Mapping[int, tuple[int, ...]]
+    uses: Mapping[int, frozenset[int]]
+    values: Mapping[int, int]
+
+    @property
+    def ran(self) -> frozenset[int]:
+        return self.registered | frozenset(self.step)
+
+    def step_of(self, g: int) -> int:
+        """A produced value's step; a registered one's is 0, which nothing reads (it is there before step 0)."""
+        return self.step.get(g, 0)
+
+    def follows(self) -> bool:
+        """`Execution.Follows`: each gate the execution runs uses only its operands, which it produced too, at no later step
+        unless registered."""
+        ran = self.ran
+        return all(self.uses.get(g, frozenset()) <= frozenset(self.ops.get(g, ()))
+                   and all(v in ran and (v in self.registered or self.step_of(v) <= self.step_of(g)) for v in self.ops.get(g, ()))
+                   for g in ran)
+
 
 @dataclass(frozen=True)
 class Requirement:
@@ -81,12 +136,44 @@ class Requirement:
     uses: Mapping[int, frozenset[int]]
     steps: int
     values: Mapping[int, int]
+    #: per step, the candidates of its gathers whose selection no run values resolve (`from_census`'s)
+    upper: Mapping[int, frozenset[int]] = field(default_factory=dict)
+
+    @classmethod
+    def of(cls, ex: Execution) -> "Requirement":
+        """The requirement of an execution that follows its wiring; `ValueError` for one that doesn't."""
+        if not ex.follows():
+            raise ValueError("not an execution of its wiring (`Execution.Follows`): a gate it runs has an operand it didn't "
+                             "produce or produced later, or uses a value that isn't its operand")
+        born = {v: -1 if v in ex.registered else ex.step[v] for v in ex.ran}
+        last: dict[int, int] = {}
+        uses: dict[int, set[int]] = {}
+        for g in ex.ran:
+            s = ex.step_of(g)
+            for v in ex.ops.get(g, ()):
+                last[v] = max(last.get(v, s), s)
+            if ex.uses.get(g):
+                uses.setdefault(s, set()).update(ex.uses[g])
+        return cls(ex.width, ex.registered, born, last, {s: frozenset(u) for s, u in uses.items()},
+                   1 + max(ex.step.values(), default=-1), ex.values)
 
     def live(self, t: int) -> frozenset[int]:
         return frozenset(v for v, b in self.born.items() if b < t <= self.last.get(v, -1))
 
+    def resolved(self, t: int) -> bool:
+        """Every candidate from before step `t` that it may select is read anyway, so its reads are known."""
+        used = self.uses.get(t, frozenset())
+        return all(v in used or self.born[v] >= t for v in self.upper.get(t, ()))
+
     def reads(self, t: int) -> frozenset[int]:
+        if not self.resolved(t):
+            raise ValueError(f"step {t} selects among values from before it that the run's values don't resolve: "
+                             "reads_upper bounds its reads, for planning only")
         return frozenset(v for v in self.uses.get(t, ()) if self.born[v] < t)
+
+    def reads_upper(self, t: int) -> frozenset[int]:
+        """`reads(t)` with every unresolved candidate: an upper bound, which would over-credit the audit."""
+        return frozenset(v for v in chain(self.uses.get(t, ()), self.upper.get(t, ())) if self.born[v] < t)
 
     def bits(self, values) -> int:
         return sum(self.width[v] for v in values)
@@ -97,6 +184,9 @@ class Requirement:
     def read_bits(self, t: int) -> int:
         return self.bits(self.reads(t))
 
+    def read_bits_upper(self, t: int) -> int:
+        return self.bits(self.reads_upper(t))
+
     def held(self, start: int, length: int) -> int:
         """Bit-steps held over the window's steps, as `Requirement.held` counts them."""
         return sum(self.live_bits(t) for t in range(start, start + length))
@@ -105,21 +195,26 @@ class Requirement:
         return sum(self.read_bits(t) for t in range(start, start + length))
 
     def to_json(self) -> dict:
+        """`read_bits` where every step's reads are known, else `read_bits_upper`."""
+        exact = all(self.resolved(t) for t in range(self.steps))
+        key, read_bits = ("read_bits", self.read_bits) if exact else ("read_bits_upper", self.read_bits_upper)
         return {"steps": self.steps, "live_bits": [self.live_bits(t) for t in range(self.steps)],
-                "read_bits": [self.read_bits(t) for t in range(self.steps)],
+                key: [read_bits(t) for t in range(self.steps)],
                 "registered_bits": self.bits(v for v in self.registered if v in self.last)}
 
 
-def requirement(program: Program, schedule: Schedule, inputs: Mapping[int, int] | None = None) -> Requirement:
-    """The requirement of `program` run on `schedule`. `inputs`: each input gate's value, for the operands a lazy primitive
-    uses; without them a gate uses all its operands."""
+def execution(program: Program, schedule: Schedule, inputs: Mapping[int, int] | None = None, *,
+              whole_columns: bool = False) -> Execution:
+    """`program` run on `schedule`, gate by gate. `inputs`: each input gate's value, for the operands a gather uses (and
+    the values a store's payload carries). Without them a gather is refused, unless `whole_columns` counts its every
+    operand as used (`upper_bound`)."""
     circuit = program.circuit
     width: dict[int, int] = {}
     registered: set[int] = set()
-    born: dict[int, int] = {}
-    first: dict[int, int] = {}
-    last: dict[int, int] = {}
-    uses: dict[int, set[int]] = {}
+    step: dict[int, int] = {}
+    arrival: dict[int, int] = {}
+    ops: dict[int, tuple[int, ...]] = {}
+    uses: dict[int, frozenset[int]] = {}
     values: dict[int, int] = dict(inputs or {})
     for i in range(circuit.size):
         g = circuit.gate(i)
@@ -127,32 +222,102 @@ def requirement(program: Program, schedule: Schedule, inputs: Mapping[int, int] 
             width[i] = g.prim.ret.w
             if g.prim.binding == REGISTRATION:
                 registered.add(i)
-                born[i] = -1
             continue
         s = schedule.step_of(i)
         if s is None:
             continue
-        width[i], born[i] = g.prim.ret.w, s
-        ops = g.operands
-        for v in ops:
-            first[v] = min(first.get(v, s), s)
-            last[v] = max(last.get(v, s), s)
+        width[i], step[i], ops[i] = g.prim.ret.w, s, tuple(g.operands)
+        for v in g.operands:
+            if v < program.input_gates and v not in registered:
+                arrival[v] = min(arrival.get(v, s), s)
         lazy = getattr(g.prim, "evaluate_lazy", None)
-        if inputs is None:
-            used = set(ops)
-        elif lazy is not None:
-            used = set()
-            values[i] = lazy(lambda j, _o=ops: (used.add(_o[j]), values[_o[j]])[1])
+        if lazy is not None and inputs is None and not whole_columns:
+            raise ValueError(f"gate {i} is a gather: it uses only the operands its evaluator fetches, which takes the run's "
+                             f"inputs; pass them, or take `upper_bound`, which counts its whole column")
+        if inputs is None or lazy is None:
+            uses[i] = frozenset(g.operands)
+            if inputs is not None:
+                values[i] = g.prim.evaluate(*(values[o] for o in g.operands))
         else:
-            used = set(ops)
-            values[i] = g.prim.evaluate(*(values[o] for o in ops))
-        uses.setdefault(s, set()).update(used)
-    for v in width:
-        if v not in born and v in first:
-            born[v] = first[v]
+            used: set[int] = set()
+            values[i] = lazy(lambda j, _o=g.operands: (used.add(_o[j]), values[_o[j]])[1])
+            uses[i] = frozenset(used)
+    return Execution(width, frozenset(registered), {**step, **arrival}, ops, uses, values if inputs is not None else {})
+
+
+def requirement(program: Program, schedule: Schedule, inputs: Mapping[int, int] | None = None) -> Requirement:
+    """The requirement of `program` run on `schedule`. `inputs`: each input gate's value; a Program with a gather needs
+    them."""
+    return Requirement.of(execution(program, schedule, inputs))
+
+
+def upper_bound(program: Program, schedule: Schedule) -> Requirement:
+    """An upper bound on `program`'s requirement on `schedule` without the run's inputs: a gather uses its whole column.
+    Its reads over-count a step's, so it is never credited as the requirement."""
+    return Requirement.of(execution(program, schedule, whole_columns=True))
+
+
+def census_offsets(c: Mapping) -> list[int]:
+    """Each root node's first gate in a census (and the gate count after the last), as `program.root.body.offsets`."""
+    classes, callees = c["classes"], c["callees"]
+    return [0, *accumulate(n * classes[callees[k]]["gates"] for k, n in zip(c["nodes"]["callee"], c["nodes"]["n"]))]
+
+
+def census_gates(program: Program, c: Mapping, values) -> frozenset[int]:
+    """The gates of census values (their producers' output leaves): `from_census`'s keys as `requirement`'s."""
+    scope, v = program.circuit.root_scope, c["values"]
+    return frozenset(resolve(scope, ("n", v["producer"][x], t)) for x in values for t in range(v["lo"][x], v["hi"][x]))
+
+
+def census_schedule(c: Mapping) -> Schedule:
+    """A census's own steps (its `ends`) as a schedule of root gate ranges."""
+    off, step = census_offsets(c), census_step(c)
+    return Schedule(tuple((off[k], off[k + 1], step(k)) for k in range(c["inputs"], len(off) - 1) if off[k] < off[k + 1]))
+
+
+def from_census(c: Mapping, schedule: Schedule | None = None) -> Requirement:
+    """The requirement of a census's Program run on `schedule` (by default the census's steps), keyed by census value: a
+    value's producer and readers are root nodes, so each step must take a root Call whole. With no run values in a census,
+    a selection's candidates (the census's `selects`) are unresolved, and `reads` refuses the steps they leave open."""
+    if c.get("schema") != CENSUS:
+        raise ValueError(f"from_census reads a {CENSUS}, not {c.get('schema')!r}")
+    if c["approximate"]:
+        raise ValueError("an approximate census's reads are a superset of its Program's: their requirement would over-credit")
+    schedule = census_schedule(c) if schedule is None else schedule
+    I, off = c["inputs"], census_offsets(c)
+    step = [None] * I + [schedule.call_step(off[k], off[k + 1]) if off[k] < off[k + 1] else None for k in range(I, len(off) - 1)]
+    binding = [c["classes"][c["callees"][k]]["binding"] for k in c["nodes"]["callee"][:I]]
+    pools: dict[int, set[int]] = {}
+    upper: dict[int, set[int]] = {}
+    for k, vs in zip(c["selects"]["call"], c["selects"]["values"]):
+        if step[k] is not None:
+            upper.setdefault(step[k], set()).update(vs)
+            for v in vs:
+                pools.setdefault(v, set()).add(step[k])
+    vals = c["values"]
+    width = dict(enumerate(vals["bits"]))
+    registered: set[int] = set()
+    born: dict[int, int] = {}
+    last: dict[int, int] = {}
+    uses: dict[int, set[int]] = {}
+    for v, (j, rs) in enumerate(zip(vals["producer"], vals["reads"])):
+        read = {step[k] for k in rs} - {None}
+        for s in read:
+            uses.setdefault(s, set()).add(v)
+        touched = read | pools.get(v, set())
+        if touched:
+            last[v] = max(touched)
+        if j >= I:
+            if step[j] is not None:
+                born[v] = step[j]
+        elif binding[j] == REGISTRATION:
+            registered.add(v)
+            born[v] = -1
+        elif touched:
+            born[v] = min(touched)
     steps = 1 + max((s for _, _, s in schedule.ranges), default=-1)
-    return Requirement(width, frozenset(registered), born, last, {s: frozenset(u) for s, u in uses.items()}, steps,
-                       values if inputs is not None else {})
+    return Requirement(width, frozenset(registered), born, last, {s: frozenset(u) for s, u in uses.items()}, steps, {},
+                       {s: frozenset(u) for s, u in upper.items()})
 
 
 @dataclass(frozen=True)
@@ -198,7 +363,9 @@ class Layout:
         return all(a[1] <= b[0] for ivs in by_block.values() for a, b in zip(sorted(ivs), sorted(ivs)[1:]))
 
     def carries(self, req: Requirement, store: Store, values) -> bool:
-        return all((store.payload[self.block[v]] >> self.offset[v]) % (1 << req.width[v]) == req.values[v] for v in values)
+        """Each value is its block's payload at its offset (a block with no payload is zeros, as `Store.payload` reads)."""
+        return all((store.payload.get(self.block[v], 0) >> self.offset[v]) % (1 << req.width[v]) == req.values[v]
+                   for v in values)
 
 
 def pack(req: Requirement, block_bits: int = BLOCK_BITS) -> tuple[Layout, Store]:
