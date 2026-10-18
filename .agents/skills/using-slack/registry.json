@@ -12,10 +12,7 @@
     "agent-coordination": {
       "id": "C0C5RCXL66N",
       "purpose": "Everything between handle holders: asks (tag one handle), announcements (tag some, or none for all), their threads.",
-      "subscribers": [
-        "old-accounting",
-        "old-circuits-and-proofs"
-      ],
+      "subscribers": [],
       "routed_by": "each sender: `research msg` rings the addressed handles' inbox threads (routes.d), and every holder subscribes to its own inbox thread; no agent forwards"
     },
     "agent-alerts": {
@@ -194,6 +191,7 @@
         "benchmarks/link_pricing/",
         "benchmarks/overhead_frontier/",
         "benchmarks/pous/",
+        "benchmarks/property_redteam/",
         "benchmarks/rate_redteam/",
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
@@ -359,21 +357,6 @@
         "47e4",
         "6193"
       ]
-    },
-    {
-      "handle": "old-accounting",
-      "holder": "the old pous coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
-      "remit": "Advising its successor, the accounting coordinator: handing off to it and relaying the old pous workers' results.",
-      "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-accounting",
-      "usergroup": "S0C5WBQ3A76"
-    },
-    {
-      "handle": "old-circuits-and-proofs",
-      "holder": "the lander: the research coordinator (bc-8ece7cde-78d8-5ed9-84b0-a0a81b19f628), which runs the merge trains",
-      "remit": "The lander: runs the merge trains, and advises @circuits and @proofs, its successors.",
-      "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-circuits, note:20260930T1955Z-handoff-from-infra-slack-advisor-proofs",
-      "usergroup": "S0C5MCG1A2Z",
-      "linear": "LAND"
     }
   ]
 }
