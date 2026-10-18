@@ -78,10 +78,10 @@ class Run:
     prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
-                 samples: int = 10**6) -> None:
+                 samples: int = 10**6, lifetime: int = audit.LIFETIME) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
-                        window_ns=10, codec=reg.codec)
+                        window_ns=10, codec=reg.codec, lifetime=lifetime)
         self.clock = Clock()
         self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
                          not_before_ns=0, clock=self.clock)
@@ -319,6 +319,48 @@ def test_a_plan_holding_a_block_not_appended_or_released_is_refused() -> None:
 
     r = Run(store())
     assert r.s.receive(0, 0, bytes(64), ((0, N),), change=((), ()), step=0).failure == "plan"
+
+
+def two_windows_under_a_lifetime_of_two() -> Run:
+    """L = 2.  Pages 8 and 9 appended before window 0's first root, which they join, and read; page 10 appended after
+    window 0's roots but before window 1's first, which it joins, and read."""
+    r = Run(store(), windows=4, lifetime=2)
+    r.append(2)
+    assert r.run(change=(((N, 2),), ())) is None
+    r.boundary()
+    r.append(1)
+    assert r.run(change=(((N + 2, 1),), ())) is None
+    r.boundary()
+    return r
+
+
+def test_an_appended_block_leaves_every_plan_within_the_lifetime_unless_re_keyed() -> None:
+    """Window 2's plan may not hold pages 8 and 9, which joined window 0 (`lifetime`).  Re-keyed instead (released,
+    and their payloads appended again at 11 and 12, under fresh bound keys) they are read in windows 2 and 3, and page
+    10, which joined window 1, in window 2 but not 3: every receipt opens and the session is accepted, its record
+    naming L."""
+    r = two_windows_under_a_lifetime_of_two()
+    v = r.run(change=((), ()))
+    assert v is not None and v.failure == "lifetime" and v.window == 2
+
+    r = two_windows_under_a_lifetime_of_two()
+    a = r.store.append(pages(N, 2), salts(b"re-keyed", 2))
+    assert r.s.append(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
+    assert r.run(change=(((N + 3, 2),), ((N, 2),))) is None
+    r.boundary()
+    v = copy.deepcopy(r).run(change=((), ()))
+    assert v is not None and v.failure == "lifetime" and v.window == 3
+    assert r.s.release(((N + 2, 1),)) is None
+    assert r.run(change=((), ((N + 2, 1),))) is None
+    r.boundary()
+    assert r.store.blocks[N + 3] != r.store.blocks[N] and r.store.committed(N + 3)[2] == codec.digest(pages(N, 1)[0])
+    assert [v.accepted for v in r.finish()] == [True] * 4
+    rec = r.s.record()
+    assert [w.post_seed for w in rec.windows] == [(2,), (3,), (3,), (2,)]
+    assert rec.lifetime == 2 and rec.public()["lifetime"] == 2
+    for bad in (0, -1, True, 1.0):
+        with pytest.raises(ValueError, match="lifetime"):
+            Params(blocks=N, deadline_ns=1, windows=1, lifetime=bad)
 
 
 def test_a_malformed_append_or_release_rejects_the_session() -> None:
