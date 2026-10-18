@@ -10,6 +10,13 @@ import pytest
 from circuit_check import cli
 
 
+@pytest.fixture(autouse=True)
+def _outside_a_check_slot(monkeypatch):
+    """Each test starts outside a check slot, whose CHECK_SLOT_MEM_GB (slot.py) would otherwise be the budget `budget_gb` and
+    `auto_jobs` read."""
+    monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
+
+
 def test_every_item_is_yielded_once():
     assert sorted(v for _, v, _, _ in cli.parallel(abs, [-1, -2, -3], jobs=2)) == [1, 2, 3]
 
