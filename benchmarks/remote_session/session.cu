@@ -14,6 +14,9 @@
 //                    hc read over P2P, the root then written to each GPU's root ring (`rs_top`)
 //   subtrees         the levels below h0 and the receipts of the subtrees a window's openings fall in, recomputed from
 //                    a shard under the pass's constants (`rs_subtrees`)
+//   in place         a store where its tensors hold it (vLLM's weights and KV pages, `device.InPlace`): a plan's
+//                    positions mapped to their blocks' device addresses and store indices (`rs_map`), then their
+//                    receipts read through the map (`rs_mapped_receipts`), whose leaves and levels are reader.cu's
 //
 // A store spans the visible GPUs, a contiguous shard of whole chunks on each, and the receipt tree is the one over the
 // whole store in block order (`receipts.tree`): every position, leaf and node index is the store's. One library serves
@@ -133,10 +136,12 @@ __global__ void __launch_bounds__(128) pack16_kernel(const int8_t *__restrict__ 
   pk[q] = w;
 }
 
-// The receipts of the warp's 32 blocks b0 … b0 + 31 (of n, block 0 at data, position j0 + b) into ys, S the warp's
-// staging (32 · SK_ROWS int32) and sg the packed signs in shared memory.
-__device__ __forceinline__ void sk16_tile(const uint4 *__restrict__ data, u64 j0, u64 n, u64 b0, const u32 *sg, int *S,
-                                          u64 *__restrict__ ys, int lane) {
+// The receipts of the warp's 32 positions b0 … b0 + 31 (of n) into ys, S the warp's staging (32 · SK_ROWS int32) and sg
+// the packed signs in shared memory: load(d, p) puts lane (g, t)'s 16 bytes at p of the tile's blocks 16 mt + g (+ 8
+// for hi) in d[mt][hi], zero past the blocks (sk64_load's), and index(q) is position q's store index.
+template <class Load, class Index>
+__device__ __forceinline__ void sk16_tile_of(Load load, Index index, u64 n, u64 b0, const u32 *sg, int *S,
+                                             u64 *__restrict__ ys, int lane) {
   const int g = lane >> 2, t = lane & 3;
   int acc[2][2][4];
 #pragma unroll
@@ -144,10 +149,10 @@ __device__ __forceinline__ void sk16_tile(const uint4 *__restrict__ data, u64 j0
 #pragma unroll
     for (int nt = 0; nt < 2; ++nt) acc[mt][nt][0] = acc[mt][nt][1] = acc[mt][nt][2] = acc[mt][nt][3] = 0;
   uint4 cur[2][2], nxt[2][2];
-  sk64_load<false, 2>(cur, data, nullptr, b0, n, 0, g, t);
+  load(cur, 0);
 #pragma unroll 1
   for (int p = 0; p < SK16_P; ++p) {
-    if (p + 1 < SK16_P) sk64_load<false, 2>(nxt, data, nullptr, b0, n, p + 1, g, t);
+    if (p + 1 < SK16_P) load(nxt, p + 1);
     const u32 w = sg[p * 32 + lane];
 #pragma unroll
     for (int nt = 0; nt < 2; ++nt) {
@@ -179,7 +184,7 @@ __device__ __forceinline__ void sk16_tile(const uint4 *__restrict__ data, u64 j0
     u64 w[16], s[8];
 #pragma unroll
     for (int i = 0; i < 16; ++i) w[i] = 0;
-    w[0] = j0 + q;
+    w[0] = index(q);
 #pragma unroll
     for (int i = 0; i < 4; ++i) {
       const uint4 v = V[i];
@@ -193,6 +198,36 @@ __device__ __forceinline__ void sk16_tile(const uint4 *__restrict__ data, u64 j0
     for (int i = 0; i < 8; ++i) ys[8 * q + i] = s[i];
   }
   __syncwarp();
+}
+
+// The receipts of the warp's 32 blocks b0 … b0 + 31 (of n, block 0 at data, position j0 + b) into ys, S the warp's
+// staging (32 · SK_ROWS int32) and sg the packed signs in shared memory.
+__device__ __forceinline__ void sk16_tile(const uint4 *__restrict__ data, u64 j0, u64 n, u64 b0, const u32 *sg, int *S,
+                                          u64 *__restrict__ ys, int lane) {
+  const int g = lane >> 2, t = lane & 3;
+  sk16_tile_of([&](uint4 (&d)[2][2], int p) { sk64_load<false, 2>(d, data, nullptr, b0, n, p, g, t); },
+               [&](u64 q) { return j0 + q; }, n, b0, sg, S, ys, lane);
+}
+
+// sk16_tile over positions b0 … b0 + 31 of n, position q's block read at addrs[q] and hashed at store index js[q]
+// (`map_kernel`): lane q loads position b0 + q's address, and lane (g, t) takes its blocks' from lanes 16 mt + 8 hi + g.
+__device__ __forceinline__ void sk16_mapped_tile(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
+                                                 u64 b0, const u32 *sg, int *S, u64 *__restrict__ ys, int lane) {
+  const int g = lane >> 2, t = lane & 3;
+  const u64 q = b0 + lane, mine = q < n ? __ldg(addrs + q) : 0;
+  const uint4 *at[2][2];
+#pragma unroll
+  for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+    for (int hi = 0; hi < 2; ++hi)
+      at[mt][hi] = reinterpret_cast<const uint4 *>(__shfl_sync(~0u, mine, 16 * mt + 8 * hi + g));
+  sk16_tile_of([&](uint4 (&d)[2][2], int p) {
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+      for (int hi = 0; hi < 2; ++hi)
+        d[mt][hi] = at[mt][hi] ? ld_l2_256(at[mt][hi] + 4 * p + t) : make_uint4(0, 0, 0, 0);
+  }, [&](u64 x) { return __ldg(js + x); }, n, b0, sg, S, ys, lane);
 }
 
 __device__ __forceinline__ void sk16_prologue(u32 *sg, const u32 *__restrict__ pk) {
@@ -324,6 +359,68 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_receipts_kernel(c
   const u64 tiles = (n + 31) / 32;
   for (u64 tile = blockIdx.x * (u64)SK16_WARPS + warp; tile < tiles; tile += (u64)gridDim.x * SK16_WARPS)
     sk16_tile(data, j0, n, tile * 32, sg, st[warp], ys, lane);
+}
+
+// A store where its tensors hold it (`device.InPlace`): region r is store blocks first … first + blocks − 1, block b
+// at addr + 4096 b, or, paged (plane_blocks > 0), in plane q = b / plane_blocks of its pages (page q / planes, plane
+// q mod planes) at addr + page · page_stride + plane · plane_stride, 4096 (b mod plane_blocks) bytes in: vLLM's
+// PagedBacking.where. Regions are in store order.
+struct MapRegion {
+  u64 first, blocks, addr, plane_blocks, planes, page_stride, plane_stride;
+};
+static_assert(sizeof(MapRegion) == 56, "a region is 7 words");
+
+// Position p's device address and its store index j, plan[p]: the plan's runs as (first, position) pairs in position
+// order, the first at position 0.
+__global__ void __launch_bounds__(128) map_kernel(const u64 *__restrict__ runs, u64 nruns,
+                                                  const MapRegion *__restrict__ regions, int nregions, u64 n,
+                                                  u64 *__restrict__ addrs, u64 *__restrict__ js) {
+  const u64 p = blockIdx.x * (u64)blockDim.x + threadIdx.x;
+  if (p >= n) return;
+  u64 lo = 0, hi = nruns;
+  while (hi - lo > 1) {
+    const u64 m = (lo + hi) / 2;
+    if (__ldg(runs + 2 * m + 1) <= p) lo = m;
+    else hi = m;
+  }
+  const u64 j = __ldg(runs + 2 * lo) + p - __ldg(runs + 2 * lo + 1);
+  int a = 0, b = nregions;
+  while (b - a > 1) {
+    const int m = (a + b) / 2;
+    if (regions[m].first <= j) a = m;
+    else b = m;
+  }
+  const MapRegion r = regions[a];
+  const u64 x = j - r.first, q = r.plane_blocks ? x / r.plane_blocks : 0;
+  addrs[p] = r.plane_blocks ? r.addr + q / r.planes * r.page_stride + q % r.planes * r.plane_stride +
+                                  x % r.plane_blocks * BLOCK
+                            : r.addr + x * BLOCK;
+  js[p] = j;
+}
+
+__global__ void __launch_bounds__(32 * SK16_WARPS, 2) mapped16_receipts_kernel(const u64 *__restrict__ addrs,
+                                                                               const u64 *__restrict__ js, u64 n,
+                                                                               const u32 *__restrict__ pk,
+                                                                               u64 *__restrict__ ys) {
+  __shared__ u32 sg[SK16_PACK];
+  __shared__ __align__(16) int st[SK16_WARPS][32 * SK_ROWS];
+  sk16_prologue(sg, pk);
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  const u64 tiles = (n + 31) / 32;
+  for (u64 tile = blockIdx.x * (u64)SK16_WARPS + warp; tile < tiles; tile += (u64)gridDim.x * SK16_WARPS)
+    sk16_mapped_tile(addrs, js, n, tile * 32, sg, st[warp], ys, lane);
+}
+
+// reader.cu's read_kernel through the map: every byte of positions 0 … n − 1 once, where addrs puts it.
+__global__ void __launch_bounds__(256) mapped_read_kernel(const u64 *__restrict__ addrs, u64 n,
+                                                          unsigned long long *xr) {
+  constexpr u64 PER = BLOCK / 16;
+  u32 acc = 0;
+  for (u64 i = blockIdx.x * (u64)blockDim.x + threadIdx.x; i < n * PER; i += (u64)gridDim.x * blockDim.x) {
+    const uint4 v = __ldcs(reinterpret_cast<const uint4 *>(__ldg(addrs + i / PER)) + i % PER);
+    acc ^= v.x ^ v.y ^ v.z ^ v.w;
+  }
+  if (acc == 0x9e3779b9u) atomicXor(xr, 1ull);
 }
 
 // Tile `tile` of a shard's pass (its 32 blocks' receipts into ys, S the warp's staging, base the shard's first store
@@ -634,20 +731,28 @@ int rs_gather64(const uint64_t *addrs, uint64_t n, uint64_t *out, cudaStream_t s
   return cudaGetLastError() ? 4 : 0;
 }
 
+// A receipts grid over n blocks: ctas CTAs of kernel k, or with ctas 0 as many as are resident at once, and no more
+// than the blocks fill.
+static int receipts_grid(const void *k, uint64_t n, int ctas, unsigned *g) {
+  if (!ctas) {
+    int dev, sms, per;
+    if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, k, 32 * SK16_WARPS, 0))
+      return 4;
+    ctas = sms * per;
+  }
+  const uint64_t most = (n + 32 * SK16_WARPS - 1) / (32 * SK16_WARPS);
+  *g = (unsigned)(most < (uint64_t)ctas ? most : (uint64_t)ctas);
+  return 0;
+}
+
 // Receipts of blocks j0 … j0 + n − 1 (data, block j0's first) into ys under the signs packed in pk (`rs_pack16`), on
 // ctas CTAs (0: as many as are resident at once).
 static int sketch16_receipts(const void *data, uint64_t j0, uint64_t n, const uint32_t *pk, uint64_t *ys, int ctas,
                              cudaStream_t s) {
   if (!data || !pk || !ys || n < 1 || ctas < 0) return 1;
-  if (!ctas) {
-    int dev, sms, per;
-    if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
-        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, sketch16_receipts_kernel, 32 * SK16_WARPS, 0))
-      return 4;
-    ctas = sms * per;
-  }
-  const uint64_t most = (n + 32 * SK16_WARPS - 1) / (32 * SK16_WARPS);
-  const unsigned g = (unsigned)(most < (uint64_t)ctas ? most : (uint64_t)ctas);
+  unsigned g;
+  if (receipts_grid((const void *)sketch16_receipts_kernel, n, ctas, &g)) return 4;
   sketch16_receipts_kernel<<<g, 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, j0, n, pk, ys);
   return cudaGetLastError() ? 4 : 0;
 }
@@ -757,6 +862,35 @@ int rs_chain_prepare(unsigned i, const uint64_t *previous, uint8_t *seed, uint32
 int rs_sketch16_receipts(const void *data, uint64_t j0, uint64_t n, const uint32_t *pk, uint64_t *ys, int ctas,
                          cudaStream_t s) {
   return sketch16_receipts(data, j0, n, pk, ys, ctas, s);
+}
+
+// A plan of n positions mapped to the store where its tensors hold it (`map_kernel`): each position's device address
+// into addrs and its store index into js. runs is the plan's nruns (first, position) pairs in position order, the
+// first at position 0, and regions nregions MapRegions (7 words each) in store order, covering every block the runs
+// name; all on the device.
+int rs_map(const uint64_t *runs, uint64_t nruns, const uint64_t *regions, int nregions, uint64_t n, uint64_t *addrs,
+           uint64_t *js, cudaStream_t s) {
+  if (!runs || !regions || !addrs || !js || nruns < 1 || nregions < 1 || n < 1) return 1;
+  map_kernel<<<grid(n, 128), 128, 0, s>>>(runs, nruns, reinterpret_cast<const MapRegion *>(regions), nregions, n,
+                                          addrs, js);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// rs_sketch16_receipts over n positions, each read where rs_map's addrs puts it and hashed at its js.
+int rs_mapped_receipts(const uint64_t *addrs, const uint64_t *js, uint64_t n, const uint32_t *pk, uint64_t *ys,
+                       int ctas, cudaStream_t s) {
+  if (!addrs || !js || !pk || !ys || n < 1 || ctas < 0) return 1;
+  unsigned g;
+  if (receipts_grid((const void *)mapped16_receipts_kernel, n, ctas, &g)) return 4;
+  mapped16_receipts_kernel<<<g, 32 * SK16_WARPS, 0, s>>>(addrs, js, n, pk, ys);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// rb_read through rs_map's addrs: n positions' bytes, on blocks CTAs.
+int rs_mapped_read(const uint64_t *addrs, uint64_t n, unsigned long long *xr, int blocks, cudaStream_t s) {
+  if (!addrs || !xr || n < 1 || blocks < 1) return 1;
+  mapped_read_kernel<<<blocks, 256, 0, s>>>(addrs, n, xr);
+  return cudaGetLastError() ? 4 : 0;
 }
 
 static int log2_exact(uint64_t n) {
