@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """pd.cuh on the host (pd_host.cpp's build), held byte for byte to Pearl-C's own kernels built beside it (s512_row_segs and
 s512_folds, hm_leaves, s512_frame_leaves, s512_pads, s512_tree_small, s512_seeds, s512_tile_segs) and to the Python
-references (refs.py), at row counts with and without pads and segment counts odd and even, in every variant (pd.cuh's
-PD_VARIANT_LIST) and both pd_commit modes; every pd output starts poisoned.  pd_probe's variants are held to each other.
-Exit 1 on any difference.
+references (refs.py; E_A's lines against Python alone), at row counts with and without pads and filler rows and segment
+counts odd and even, in every variant (pd.cuh's PD_VARIANT_LIST) and both pd_commit modes; every pd output starts poisoned.
+pd_probe's variants are held to each other.  Exit 1 on any difference.
 
   python3 host_test.py [SO]   (default: builds pd_host.so with g++ into a temporary directory)
 """
@@ -68,6 +68,11 @@ def pow2(n: int) -> int:
     return 1 << max(n - 1, 0).bit_length()
 
 
+def lines_of(m16: int) -> int:
+    """E_A's lines at m16 rows: the call's rows, filler rows up to a multiple of 64 (run.py's BM_D)."""
+    return -(-m16 // 64) * 64
+
+
 def keys(m16: int) -> dict[str, bytes]:
     shake = lambda tag, n: hashlib.shake_256(f"pouw-decode/host/{tag}".encode()).digest(n)  # noqa: E731
     salt, root_b = shake("salt", 32), shake("root_b", 64)
@@ -97,16 +102,19 @@ def reference_commit(h: Host, x, m16: int, k: int, kb, dom, hm) -> dict[str, byt
 
 
 def pd_commit(h: Host, x, m16: int, k: int, kb, dom, hm, mode: int, variant: int) -> dict[str, bytes]:
-    s, width = k // 256, pow2(m16)
+    s, width, lines = k // 256, pow2(m16), lines_of(m16)
     out = {"rowdig_a": h.buf(64 * m16, POISON), "tree_a": h.buf(64 * (2 * width - 1), POISON), "seeds_a": h.buf(32 * m16, POISON),
-           "lkeys_a": h.buf(32 * m16, POISON), "seed_a": h.buf(32, POISON), "line_a": h.buf(32, POISON)}
+           "lkeys_a": h.buf(32 * m16, POISON), "seed_a": h.buf(32, POISON), "line_a": h.buf(32, POISON),
+           "ea_codes": h.buf(32 * lines, POISON)}
     scratch = h.buf(16)
     unit, sk = h.buf(kb["unit"]), h.buf(kb["salt_key"])
     b = out
-    p = (x, b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], unit, dom, sk, hm, scratch, b["seed_a"], b["line_a"])
-    h.run(f"pd_commit_{variant}", m16, 32 * (-(-s // 32) + 2), p=p, i=(m16, k, mode))
+    p = (x, b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], unit, dom, sk, hm, scratch, b["seed_a"], b["line_a"],
+         b["ea_codes"])
+    h.run(f"pd_commit_{variant}", m16, 32 * (-(-s // 32) + 2), p=p, i=(m16, k, mode, lines))
     if mode == 1:
-        h.run(f"pd_tree_{variant}", 1, 128, p=(0, 0, b["tree_a"], 0, 0, unit, dom, 0, 0, 0, b["seed_a"], b["line_a"]), i=(m16,))
+        h.run(f"pd_tree_{variant}", 1, 128, p=(0, 0, b["tree_a"], 0, 0, unit, dom, 0, 0, 0, b["seed_a"], b["line_a"],
+                                              b["ea_codes"]), i=(m16, 0, 0, lines))
     if int.from_bytes(scratch[:4].tobytes(), "little"):
         raise RuntimeError("pd_commit left its counter set")
     return {name: v.tobytes()[:len(v) if name not in ("seed_a", "line_a") else 32] for name, v in out.items()}
@@ -128,7 +136,7 @@ def main(argv: list[str]) -> int:
         kb = keys(m16)
         rows = rng.standard_normal((m16, k), dtype=np.float32)
         x = h.buf(rows.tobytes())
-        py = refs.commit([rows[r].tobytes() for r in range(m16)], kb["salt"], kb["root_b"], kb["salt_key"], INDEX)
+        py = refs.commit([rows[r].tobytes() for r in range(m16)], kb["salt"], kb["root_b"], kb["salt_key"], INDEX, lines_of(m16))
         dom = h.buf(py["dom_a"])
         ref = reference_commit(h, x, m16, k, kb, dom, hm)
         for name, want in ref.items():
@@ -136,7 +144,7 @@ def main(argv: list[str]) -> int:
                 fails.append(e)
         for mode, variant in ((m, v) for m in (0, 1) for v in VARIANTS):
             got = pd_commit(h, x, m16, k, kb, dom, hm, mode, variant)
-            for name, want in ref.items():
+            for name, want in [*ref.items(), ("ea_codes", py["ea_codes"])]:
                 cases += 1
                 if (e := diff(f"m16={m16} k={k} mode {mode} variant {variant} {name}", got[name], want)):
                     fails.append(e)

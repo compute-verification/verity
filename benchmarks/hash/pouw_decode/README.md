@@ -8,8 +8,9 @@ served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/p
 - `pd.cuh` (`pd.cu`): the launches.
   - `pd_commit` makes A's commitment in one launch, one CTA per row. In parallel it hashes the row's segments, its hm96
     salt (across a warp), its frame leaf's first block and the tree's node templates. It then folds the row digest, makes
-    the hm96 leaf, the frame leaf, the row seed and the line key. In mode 0 the last CTA to finish also builds the tree's
-    levels (kept in shared memory), seed_A and line_a.
+    the hm96 leaf, the frame leaf, the row seed, its line key and the row's E_A line (the served call's `lines_ea`). In
+    mode 0 the last CTA to finish also builds the tree's levels (kept in shared memory), seed_A, line_a and E_A's filler
+    lines.
   - `pd_tree` is mode 0's tail as a launch of its own, for a side lane.
   - `pd_tiles` makes the tile leaves, one CTA per tile.
   - `pd_probe` measures one warp's cycles per compression, warm and on its code's first fetch.
@@ -21,8 +22,8 @@ served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/p
     is about 3,500 instructions (56 KB), and a call's serial compressions are each at a site of their own, so inlined
     they are each fetched cold.
 - `pd_host.cpp`: the same source run on the CPU (`pd_run`), with Pearl-C's own hash kernels, for `host_test.py`.
-- `refs.py`: the Python references (`pearl_c.row_digest`, `row_seed`, `unit_seed_a`, `line_key` and `leaf`, and
-  `audit.HM96`'s tree).
+- `refs.py`: the Python references (`pearl_c.row_digest`, `row_seed`, `unit_seed_a`, `line_key`, `sample_line` and
+  `leaf`, and `audit.HM96`'s tree).
 - `host_test.py`: pd's launches against Pearl-C's kernels and the Python references on the CPU: pads, odd segment counts,
   both modes and every variant, every output poisoned first.
 - `bench.py`: per Llama-3.1-8B linear and decode's m16, on the GPU:

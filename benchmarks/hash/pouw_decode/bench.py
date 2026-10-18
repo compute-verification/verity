@@ -10,7 +10,7 @@ Per shape:
    byte for byte with the reference launches' (row digests, A's tree, seed_A, line_a, the row seeds and line keys, E_A's
    codes, the tile leaves), and the row digests, A's root, seed_A, line_a, the row seeds and a sample of tile leaves with
    the Python references (`pearl_c.row_digest`, `audit.HM96`'s tree, `pearl_c.unit_seed_a`, `pearl_c.row_seed`,
-   `pearl_c.line_key`, `pearl_c.leaf`).  A no-write control: pd's launches on a zero-row call leave the poison.  A shape is
+   `pearl_c.line_key`, `pearl_c.sample_line` for E_A's codes, `pearl_c.leaf`).  A no-write control: pd's launches on a zero-row call leave the poison.  A shape is
    timed only if every comparison passes.
 3. Graphs of CHAIN consecutive calls of the shape (a ring of 2 buffer sets, as the served path rotates what a side lane
    touches), one per schedule (`SCHEDULES`), timed interleaved rep by rep, the order rotating, with NVML's SM clock each rep.
@@ -202,13 +202,14 @@ def real_keys(m16: int) -> dict[str, bytes]:
 #: pd's (`pd_commit` mode 0; mode 1 as `pd_commit/rows`)
 def depths(m16: int, k: int) -> dict[str, list[tuple[str, int]]]:
     s, levels, r = k // 256, R.depth(m16), min(64, m16)
-    rows = 9 + s // 2 + 1 + 3                      # segments, the fold, the hm96 leaf (2) and the frame leaf's last block
+    rows = 9 + s // 2 + 1 + 4                      # segments, the fold, then the row's seed (2), line key and E_A line
+    fill = int(m16 % R.BM_D != 0)                  # E_A's filler lines, after line_a
     return {"rowdig_a": [("s512_row_segs", 9), ("s512_folds", s // 2 + 1)],
             "hash_rows_a": [("hm_leaves", 4), ("s512_frame_leaves", 2)],
             "tree_a": [("s512_tree_small", 3 * levels)],
             "seed_a": [("s512_seeds", 5)], "seeds_a": [("s512_seeds", 5)], "lines_ea": [("lines", 2)],
             "hash_leaf": [("s512_tile_segs", 9), ("s512_folds", r // 4 + 1)],
-            "pd": [("pd_commit", rows + 2 * levels + 3), ("pd_commit/rows", rows), ("pd_tree", 2 * levels + 4),
+            "pd": [("pd_commit", rows + 2 * levels + 3 + fill), ("pd_commit/rows", rows), ("pd_tree", 2 * levels + 4 + fill),
                    ("pd_tiles", 9 + r // 4 + 1)]}
 
 
@@ -293,8 +294,9 @@ class Shape:
         out = {"ref_serial": serial(hashing), "ref_nohash": serial(plain),
                "ref_deferred": deferred(lambda j: self.ref(j, commit + main_rest), lambda j: self.ref(j, ["hash_leaf"]))}
         if self.pd is not None:
-            from pd_host import SIDE, VARIANTS
+            from pd_host import PD_STEPS, SIDE, VARIANTS
             P_ = self.pdc
+            pd_rest = [x for x in hashing if x not in PD_STEPS]   # the call's hashing steps pd's launches don't do
 
             def side_tree(v):
                 # A's tree and seed_A on the tree lane beside forming and the GEMM: no byte changes when every row of the
@@ -307,7 +309,7 @@ class Shape:
                     lanes.wait(lanes.tree, e)
                     lanes.on(lanes.tree, P_[j].tree(v))
                     t = lanes.mark(lanes.tree)
-                    lanes.on(lanes.main, self.ref(j, main_rest))
+                    lanes.on(lanes.main, self.ref(j, pd_rest))
                     e = lanes.mark(lanes.main)
                     lanes.wait(lanes.tile, e)
                     lanes.on(lanes.tile, P_[j].tiles(v))
@@ -316,9 +318,9 @@ class Shape:
                 return chain(call)
 
             for v in VARIANTS:
-                out[f"pd_serial_{v}"] = serial(None, lambda j, v=v: P_[j].commit(v) + self.ref(j, main_rest) + P_[j].tiles(v))
+                out[f"pd_serial_{v}"] = serial(None, lambda j, v=v: P_[j].commit(v) + self.ref(j, pd_rest) + P_[j].tiles(v))
             for v in SIDE:
-                out[f"pd_deferred_{v}"] = deferred(lambda j, v=v: P_[j].commit(v) + self.ref(j, main_rest),
+                out[f"pd_deferred_{v}"] = deferred(lambda j, v=v: P_[j].commit(v) + self.ref(j, pd_rest),
                                                    lambda j, v=v: P_[j].tiles(v))
                 out[f"pd_side_tree_{v}" if self.mp == self.m16 else f"pd_side_tree_{v}_proposal"] = side_tree(v)
         return out

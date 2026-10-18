@@ -6,11 +6,11 @@
 //   (ChaCha20, the byte-table mask M·y over the warp's lanes, and c = SHA-512(salt prefix ‖ y)), the other its frame leaf's
 //   first block, its share of the pads, and a lane a level the tree's node templates (below 256 a node's first block is
 //   (dom_a, level) alone and the rest differs in the index byte).  Then thread 0 folds the row digest (`pd_fold`) and makes
-//   the hm96 leaf and frame leaf (3 compressions), while another warp makes the row's seed and line key from the labels'
-//   midstates (PD_LABELS; 3 compressions).  The last CTA to finish (a counter in scratch, reset by that CTA) builds the
-//   tree's levels, 2 compressions a level, each level's states kept in shared memory for the next, then seed_A and line_a
-//   (3).  Mode 1 stops after level 0, and pd_tree builds the rest: the tree and seed_A on a lane of their own when nothing
-//   in the call reads line_a.
+//   the hm96 leaf and frame leaf (3 compressions), while another warp makes the row's seed, line key and E_A line from the
+//   labels' midstates (PD_LABELS; 4 compressions).  The last CTA to finish (a counter in scratch, reset by that CTA) builds
+//   the tree's levels, 2 compressions a level, each level's states kept in shared memory for the next, then seed_A and
+//   line_a (3) and E_A's filler lines (1, a thread a line).  Mode 1 stops after level 0 and the rows' lines, and pd_tree
+//   builds the rest: the tree and seed_A on a lane of their own when nothing in the call reads line_a.
 // * pd_tiles, one launch for the tile leaves: a warp a tile, a lane a segment, then the fold (`pd_fold`).
 //
 // Every launch is built once per variant (PD_VARIANT_LIST: pd_commit_V, pd_tree_V, pd_tiles_V, pd_probe_V), each with its
@@ -29,7 +29,11 @@
 #include "../../pouw/pearl_c_sm120/hash_fast.cuh"
 
 #ifndef PD_HOST
+#include <cuda_bf16.h>
+#include <cuda_fp8.h>
 #define PD_LDCG(p) __ldcg(p)
+DEV uint16_t pd_f2bf(float f) { return __bfloat16_as_ushort(__float2bfloat16_rn(f)); }   // pearl_c_sm120.cu's f2bf
+DEV uint8_t pd_e4m3(float f) { return (uint8_t)__nv_cvt_float_to_fp8(f, __NV_SATFINITE, __NV_E4M3); }   // its e4m3
 #else
 #define PD_LDCG(p) (*(p))
 #endif
@@ -38,8 +42,8 @@ constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8;
 #define PD_VARIANT_LIST(X) X(1) X(3) X(5) X(7) X(13) X(15)
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
-enum { PD_SEED_A = 0, PD_NOISE_LINE = 1 };
-__device__ uint64_t PD_LABELS[2][8];   // the states after the seed-A and noise-line label blocks
+enum { PD_SEED_A = 0, PD_NOISE_LINE = 1, PD_LINE = 2 };
+__device__ uint64_t PD_LABELS[3][8];   // the states after the seed-A, noise-line and line label blocks
 
 // ---------------------------------------------------------------- the message builder
 struct WMsg {
@@ -353,6 +357,59 @@ template <int V> DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint6
   s512_out32(st, key);
 }
 
+// ---------------------------------------------------------------- E_A's lines
+// pearl_c_sm120.cu's `lines` at E_A's side 0, factor 0 and norm 256 (its NORM_256): H_line(key ‖ 0 ‖ 0 ‖ line u32 LE) from
+// the label's midstate, then the line rule's codes, with that file's BF16 and FP8 helpers
+constexpr uint16_t PD_NORM_E = 0x4600;
+DEV uint32_t pd_isqrt(uint32_t v) {
+  uint32_t r = (uint32_t)sqrt((double)v);
+  while ((uint64_t)r * r > v) r--;
+  while ((uint64_t)(r + 1) * (r + 1) <= v) r++;
+  return r;
+}
+DEV float pd_bf2f(uint32_t b) { return __uint_as_float((b & 0xFFFFu) << 16); }
+DEV uint16_t pd_bmul(uint16_t a, uint16_t b) { return pd_f2bf(__fmul_rn(pd_bf2f(a), pd_bf2f(b))); }
+DEV uint16_t pd_bdiv(uint16_t a, uint16_t b) { return pd_f2bf(__fdiv_rn(pd_bf2f(a), pd_bf2f(b))); }
+template <int V> DEV void pd_line(const uint32_t* key, uint32_t line, uint64_t out) {
+  uint64_t st[8], w[16];
+#pragma unroll
+  for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_LINE][t];
+#pragma unroll
+  for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(key[2 * i], key[2 * i + 1]) : 0;
+  w[4] = (uint64_t)(line & 0xFF) << 40 | (uint64_t)(line >> 8 & 0xFF) << 32 | (uint64_t)(line >> 16 & 0xFF) << 24 |
+         (uint64_t)(line >> 24) << 16 | 0x80ull << 8;
+  w[15] = 8 * (128 + 38);
+  pd_cmp<V>(st, w);
+  uint32_t h[8];
+  s512_out32(st, h);
+  int xs[32];
+  uint32_t sumsq = 0;
+#pragma unroll
+  for (int j = 0; j < 32; j++) {
+    const uint32_t b = (h[j / 4] >> (8 * (j % 4))) & 0xFF;
+    xs[j] = (b >> 7 ? -1 : 1) * (int)((b & 0x7F) + 1);
+    sumsq += xs[j] * xs[j];
+  }
+  const uint16_t scale = pd_bdiv(PD_NORM_E, pd_f2bf((float)pd_isqrt(sumsq * 1024)));
+  uint32_t c[8];
+#pragma unroll
+  for (int i = 0; i < 8; i++) {
+    c[i] = 0;
+#pragma unroll
+    for (int j = 0; j < 4; j++) c[i] |= (uint32_t)pd_e4m3(pd_bf2f(pd_bmul(pd_f2bf((float)xs[4 * i + j]), scale))) << (8 * j);
+  }
+  uint4* o = reinterpret_cast<uint4*>(out);
+  o[0] = make_uint4(c[0], c[1], c[2], c[3]);
+  o[1] = make_uint4(c[4], c[5], c[6], c[7]);
+}
+// E_A's filler lines t in [count, lines), line t under line_a (key, shared), by the CTA's threads, into ea (32 B a line)
+template <int V> DEV void pd_fillers(const uint32_t* key, int count, int lines, uint64_t ea) {
+  uint32_t k[8];
+#pragma unroll
+  for (int q = 0; q < 8; q++) k[q] = key[q];
+  for (int t = count + (int)threadIdx.x; t < lines; t += blockDim.x) pd_line<V>(k, (uint32_t)t, ea + 32ull * t);
+}
+
 // ---------------------------------------------------------------- the tree's messages
 constexpr int PD_MAX_ROWS = 256, PD_MAX_LEVELS = 8;   // width <= 256: every level and index below 256
 constexpr int PD_KW_BLOCKS = 33;   // pd_commit's rounds-only fold: s / 2 + 1 <= 33 blocks (k <= 16384)
@@ -443,22 +500,25 @@ template <int V> DEV void pd_levels(const uint64_t* tm, uint64_t tree, int width
     }
   }
 }
-template <int V> DEV void pd_seed_a(uint64_t unit, const uint64_t* root, uint64_t seed_a, uint64_t line_a) {
+// seed_A and line_a from the root's state; line_a's words also into lk (shared, for pd_fillers)
+template <int V> DEV void pd_seed_a(uint64_t unit, const uint64_t* root, uint64_t seed_a, uint64_t line_a, uint32_t* lk) {
   const uint32_t* u = reinterpret_cast<const uint32_t*>(unit);
   const uint64_t index = (uint64_t)u[24] | (uint64_t)u[25] << 32;
   uint32_t seed[8], key[8];
   pd_seed<V>(u, root, index, seed, key);
   store_cv(seed_a, seed);
   store_cv(line_a, key);
+#pragma unroll
+  for (int q = 0; q < 8; q++) lk[q] = key[q];
 }
 
 // ---------------------------------------------------------------- the launches
 // pd_heads: the label midstates (once per module, after s512_heads)
 extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
   const int t = threadIdx.x;
-  if (t < 2) {
+  if (t < 3) {
     uint64_t st[8];
-    s512_label(st, t == 0 ? S512_SEED_A : S512_NOISE_LINE);
+    s512_label(st, t == PD_SEED_A ? S512_SEED_A : t == PD_NOISE_LINE ? S512_NOISE_LINE : S512_LINE);
 #pragma unroll
     for (int q = 0; q < 8; q++) PD_LABELS[t][q] = st[q];
   }
@@ -467,13 +527,15 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
 // pd_commit_V: a CTA a row r < i0, 32 (ceil(s / 32) + 2) threads (s = k / 256).  p0 A's rows (FP32, k words each), p1 row
 // digests out (64 B a row), p2 A's tree (level 0, then each level above), p3 row seeds out (32 B a row), p4 their line keys
 // out, p5 the unit block (salt ‖ root_B ‖ u64 LE index), p6 dom_a (64 B), p7 the prover's salt key, p8 the hm96 constants,
-// p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out; i0 rows (at most
-// PD_MAX_ROWS), i1 k, i2 mode (0: the tree and seed_A too, 1: level 0 only)
+// p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out, p12 E_A's codes
+// out (32 B a line: row r's line under its own line key, then the filler lines under line_a) or 0; i0 rows (at most
+// PD_MAX_ROWS), i1 k, i2 mode (0: the tree, seed_A and the filler lines too, 1: level 0 and the rows' lines only), i3 E_A's
+// lines (rows and filler rows)
 template <int V> DEV void pd_commit_t(const Args a) {
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
   __shared__ uint64_t kw[PD_KW_BLOCKS * 80];   // the fold's schedules; before it the templates' builders, after it the levels
-  __shared__ uint32_t ys[48];
+  __shared__ uint32_t ys[48], lk[8];
   __shared__ int last;
   static_assert(PD_KW_BLOCKS * 80 >= PD_NODES && PD_KW_BLOCKS * 80 >= 96 * PD_MAX_LEVELS, "kw holds the builders and the levels");
   const int count = a.i[0], k = a.i[1], s = k / 256, cw = (s + 31) / 32;
@@ -550,7 +612,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
     for (int q = 0; q < 8; q++) lt[q] = ftm[q];
     pd_cmp<V>(lt, w);
     s512_store(tree + 64ull * r, lt, 8);
-  } else if (tid == 32 * cw) {                      // the row's seed and line key
+  } else if (tid == 32 * cw) {                      // the row's seed, line key and E_A line
     uint64_t x[8];
     uint32_t seed[8], key[8];
 #pragma unroll
@@ -558,6 +620,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
     pd_seed<V>(unit, x, index << 32 | (uint64_t)r, seed, key);
     store_cv(a.p[3] + 32ull * r, seed);
     store_cv(a.p[4] + 32ull * r, key);
+    if (a.p[12]) pd_line<V>(key, 0, a.p[12] + 32ull * r);
   }
   if (a.i[2] == 1) return;
   __threadfence();
@@ -571,16 +634,20 @@ template <int V> DEV void pd_commit_t(const Args a) {
     uint64_t rt[8];
 #pragma unroll
     for (int q = 0; q < 8; q++) rt[q] = root[q];
-    pd_seed_a<V>(a.p[5], rt, a.p[10], a.p[11]);
+    pd_seed_a<V>(a.p[5], rt, a.p[10], a.p[11], lk);
     *reinterpret_cast<unsigned*>(scratch) = 0;
   }
+  if (!a.p[12]) return;
+  __syncthreads();
+  pd_fillers<V>(lk, count, a.i[3], a.p[12]);
 }
 
 // pd_tree_V: pd_commit's mode 0 tail after its mode 1, one CTA of 128 threads: the levels' templates (a thread a level), the
-// levels above level 0, then seed_A and line_a.  p2 the tree, p5 the unit block, p6 dom_a, p10 seed_A out, p11 line_a out;
-// i0 rows
+// levels above level 0, then seed_A, line_a and E_A's filler lines.  p2 the tree, p5 the unit block, p6 dom_a, p10 seed_A
+// out, p11 line_a out, p12 E_A's codes or 0; i0 rows, i3 E_A's lines
 template <int V> DEV void pd_tree_t(const Args a) {
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM], nodes[PD_NODES], root[8];
+  __shared__ uint32_t lk[8];
   const int count = a.i[0];
   const int width = count <= 1 ? 1 : 1 << (32 - __clz(count - 1)), levels = 31 - __clz(width);
   if (count > PD_MAX_ROWS) __trap();
@@ -591,8 +658,11 @@ template <int V> DEV void pd_tree_t(const Args a) {
     uint64_t rt[8];
 #pragma unroll
     for (int q = 0; q < 8; q++) rt[q] = root[q];
-    pd_seed_a<V>(a.p[5], rt, a.p[10], a.p[11]);
+    pd_seed_a<V>(a.p[5], rt, a.p[10], a.p[11], lk);
   }
+  if (!a.p[12]) return;
+  __syncthreads();
+  pd_fillers<V>(lk, count, a.i[3], a.p[12]);
 }
 
 // pd_tiles_V: the tile leaves (s512_tile_leaves' bytes), a CTA of 32 threads a tile (row-major; a last row block of R = 16,

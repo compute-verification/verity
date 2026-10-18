@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <atomic>
 #include <barrier>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -48,6 +49,35 @@ static int __clz(int x) { return x ? __builtin_clz((unsigned)x) : 32; }
 static int __clzll(long long x) { return x ? __builtin_clzll((unsigned long long)x) : 64; }
 struct uint4 { uint32_t x, y, z, w; };
 static uint4 make_uint4(uint32_t x, uint32_t y, uint32_t z, uint32_t w) { return {x, y, z, w}; }
+static float __uint_as_float(uint32_t u) {
+  float f;
+  std::memcpy(&f, &u, 4);
+  return f;
+}
+static float __fmul_rn(float a, float b) { return a * b; }   // x86-64's SSE: IEEE single, nearest-even
+static float __fdiv_rn(float a, float b) { return a / b; }
+static uint16_t pd_f2bf(float f) {   // __float2bfloat16_rn: nearest-even, NaN quieted
+  uint32_t u;
+  std::memcpy(&u, &f, 4);
+  if ((u & 0x7FFFFFFFu) > 0x7F800000u) return (uint16_t)((u >> 16) | 0x40);
+  return (uint16_t)((u + 0x7FFFu + ((u >> 16) & 1)) >> 16);
+}
+static uint8_t pd_e4m3(float f) {   // __nv_cvt_float_to_fp8(f, __NV_SATFINITE, __NV_E4M3): nearest-even, saturating to 448
+  const uint8_t sign = std::signbit(f) ? 0x80 : 0;
+  const double a = std::fabs((double)f);
+  if (std::isnan(f)) return 0x7F;
+  if (a >= 448.0) return sign | 0x7E;
+  if (a == 0.0) return sign;
+  int e;
+  std::frexp(a, &e);
+  const int E = e - 1;                                  // a = 1.m · 2^E
+  if (E < -6) return sign | (uint8_t)std::nearbyint(std::ldexp(a, 9));   // subnormal: m · 2^-9 (8 is the least normal)
+  double q = std::nearbyint(std::ldexp(a, 3 - E));     // in [8, 16]
+  int ex = E;
+  if (q == 16.0) { q = 8.0; ex++; }
+  const int code = (ex + 7) << 3 | ((int)q - 8);
+  return sign | (uint8_t)std::min(code, 0x7E);
+}
 
 #include "pd.cuh"
 
