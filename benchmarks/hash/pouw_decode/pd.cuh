@@ -23,7 +23,8 @@
 // fetched cold costs about as much again as the compression); PD_PREFETCH, a segment's 8 lines prefetched into L1 before its
 // first block; PD_PAIR, every serial compression of the critical path paired (`pd_pcmp`): a producer warp computes its
 // message schedule a chunk ahead while the consumer warp runs the rounds (the schedule is a third of a compression's
-// cycles on its thread), the segments' consumers loading each next block during the current one; PD_GROUP, pd_tiles
+// cycles on its thread), the segments' consumers loading each next block during the current one; PD_STAMP, the global
+// timer and the SM's clock at each phase's end of pd_commit and pd_tree into p13 (`pd_stamp`); PD_GROUP, pd_tiles
 // with PD_G tiles a CTA and their folds paired together on one warp.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
@@ -38,12 +39,24 @@
 #define PD_LDCG(p) __ldcg(p)
 DEV uint16_t pd_f2bf(float f) { return __bfloat16_as_ushort(__float2bfloat16_rn(f)); }   // pearl_c_sm120.cu's f2bf
 DEV uint8_t pd_e4m3(float f) { return (uint8_t)__nv_cvt_float_to_fp8(f, __NV_SATFINITE, __NV_E4M3); }   // its e4m3
+DEV uint64_t pd_gtimer() {
+  uint64_t g;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(g));
+  return g;
+}
+DEV uint32_t pd_smid() {
+  uint32_t s;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(s));
+  return s;
+}
 #else
 #define PD_LDCG(p) (*(p))
+inline uint64_t pd_gtimer() { return (uint64_t)clock64(); }
+inline uint32_t pd_smid() { return 0; }
 #endif
 
-constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_GROUP = 128;
-#define PD_VARIANT_LIST(X) X(1) X(3) X(19) X(147)
+constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_STAMP = 32, PD_GROUP = 128;
+#define PD_VARIANT_LIST(X) X(1) X(3) X(19) X(51) X(147)
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
 enum { PD_SEED_A = 0, PD_NOISE_LINE = 1, PD_LINE = 2 };
@@ -523,6 +536,23 @@ constexpr int PD_MAX_ROWS = 256, PD_MAX_LEVELS = 8;   // width <= 256: every lev
 constexpr int PD_KW_BLOCKS = 33;   // pd_commit's rounds-only fold: s / 2 + 1 <= 33 blocks (k <= 16384)
 constexpr int PD_TM = 40;          // a level's node template, in words
 constexpr int PD_NODES = 128 * 8 + 64 * 8;   // pd_levels' shared node states: level 1 (at most 128 nodes), then 64, 32, ...
+// PD_STAMP: with p13 nonzero, (global timer ns, SM clock) at slot `slot` of stamp row `row`, PD_SLOTS a row: pd_commit's
+// CTA r at row r (PS_*), the tail (pd_commit's last CTA or pd_tree) at row i0 (PT_*: PT_LEVEL + l after level l + 1 is
+// built, PT_ROW holding (r, SM id))
+constexpr int PD_SLOTS = 16;
+enum { PS_START, PS_SEGS, PS_SALT, PS_FRAME, PS_SYNC1, PS_FOLD, PS_SYNC2, PS_LEAF, PS_SEED };
+enum { PT_START = 0, PT_LEVEL = 1, PT_SEED_A = PT_LEVEL + PD_MAX_LEVELS, PT_FILLERS, PT_ENTRY, PT_ROW = PD_SLOTS - 1 };
+template <int V> DEV void pd_stamp_at(uint64_t buf, int row, int slot, uint64_t x, uint64_t y) {
+  if constexpr ((V & PD_STAMP) != 0) {
+    if (!buf) return;
+    uint64_t* s = reinterpret_cast<uint64_t*>(buf) + 2 * (PD_SLOTS * row + slot);
+    s[0] = x;
+    s[1] = y;
+  }
+}
+template <int V> DEV void pd_stamp(uint64_t buf, int row, int slot) {
+  if constexpr ((V & PD_STAMP) != 0) pd_stamp_at<V>(buf, row, slot, pd_gtimer(), (uint64_t)clock64());
+}
 // node (level, i)'s message (48 words: 3 blocks), its children zero
 DEV void pd_node_msg(uint64_t dom, int level, int i, uint64_t* buf) {
   for (int t = 0; t < 48; t++) buf[t] = 0;
@@ -574,8 +604,10 @@ template <int V, int P = 0> DEV void pd_node(const uint64_t* tm, int i, const ui
 }
 // the levels above level 0 of a tree of `width` leaves at `tree` (level 0 written, by any CTA), by the CTA's threads or (P)
 // the two pairs' consumers: level l from the templates tm (shared, PD_TM words a level), each level's states kept in shared
-// `nodes` (PD_NODES words) for the next, and stored; out the root's state on thread 0
-template <int V, int P = 0> DEV void pd_levels(const uint64_t* tm, uint64_t tree, int width, uint64_t* nodes, uint64_t* root) {
+// `nodes` (PD_NODES words) for the next, and stored; out the root's state on thread 0.  PD_STAMP: each level at stamp row
+// srow of sb
+template <int V, int P = 0>
+DEV void pd_levels(const uint64_t* tm, uint64_t tree, int width, uint64_t* nodes, uint64_t* root, uint64_t sb, int srow) {
   uint64_t base = tree, l[8], r[8], st[8];
   const uint64_t* below = nullptr;
   uint64_t* out = nodes;
@@ -602,6 +634,7 @@ template <int V, int P = 0> DEV void pd_levels(const uint64_t* tm, uint64_t tree
       }
     }
     if constexpr (P != 0) pd_bar_sync(PD_CONSUMERS, 64); else __syncthreads();
+    if (threadIdx.x == 0) pd_stamp<V>(sb, srow, PT_LEVEL + level);
     below = out;
     out = out == nodes ? nodes + 128 * 8 : nodes;
     base = above;
@@ -670,14 +703,15 @@ template <int V>
 DEV void pd_tail(const Args& a, const uint64_t* tm, int count, int width, uint64_t* nodes, uint64_t* root, uint32_t* lk,
                  int pw0, int c1, int p1, uint64_t scratch) {
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
-  const uint64_t tree = a.p[2], ea = a.p[12];
+  const uint64_t tree = a.p[2], ea = a.p[12], sb = a.p[13];
+  if (threadIdx.x == 0) pd_stamp<V>(sb, count, PT_START);
   if constexpr ((V & PD_PAIR) != 0) {
     if (warp == pw0 || warp == p1) {
       pd_pserve(warp == p1);
       return;
     }
     if (warp != 0 && warp != c1) return;
-    pd_levels<V, 1>(tm, tree, width, nodes, root);
+    pd_levels<V, 1>(tm, tree, width, nodes, root, sb, count);
     if (warp == 0) {
       __syncwarp();
       uint64_t rt[8];
@@ -685,24 +719,28 @@ DEV void pd_tail(const Args& a, const uint64_t* tm, int count, int width, uint64
       for (int q = 0; q < 8; q++) rt[q] = root[q];
       pd_seed_a<V, 1>(a.p[5], rt, a.p[10], a.p[11], lk, lane == 0);
       if (lane == 0 && scratch) *reinterpret_cast<unsigned*>(scratch) = 0;
+      if (lane == 0) pd_stamp<V>(sb, count, PT_SEED_A);
     }
     if (ea) {
       pd_bar_sync(PD_CONSUMERS, 64);
       pd_fillers<V, 1>(lk, count, a.i[3], ea);
     }
     pd_pstop();
+    if (threadIdx.x == 0) pd_stamp<V>(sb, count, PT_FILLERS);
   } else {
-    pd_levels<V>(tm, tree, width, nodes, root);
+    pd_levels<V>(tm, tree, width, nodes, root, sb, count);
     if (threadIdx.x == 0) {
       uint64_t rt[8];
 #pragma unroll
       for (int q = 0; q < 8; q++) rt[q] = root[q];
       pd_seed_a<V>(a.p[5], rt, a.p[10], a.p[11], lk);
       if (scratch) *reinterpret_cast<unsigned*>(scratch) = 0;
+      pd_stamp<V>(sb, count, PT_SEED_A);
     }
     if (!ea) return;
     __syncthreads();
     pd_fillers<V>(lk, count, a.i[3], ea);
+    if (threadIdx.x == 0) pd_stamp<V>(sb, count, PT_FILLERS);
   }
 }
 
@@ -727,7 +765,7 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
 // p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out, p12 E_A's codes
 // out (32 B a line: row r's line under its own line key, then the filler lines under line_a) or 0; i0 rows (at most
 // PD_MAX_ROWS), i1 k, i2 mode (0: the tree, seed_A and the filler lines too, 1: level 0 and the rows' lines only), i3 E_A's
-// lines (rows and filler rows)
+// lines (rows and filler rows); PD_STAMP: p13 the stamps or 0
 template <int V> DEV void pd_commit_t(const Args a) {
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
@@ -742,9 +780,10 @@ template <int V> DEV void pd_commit_t(const Args a) {
   const int width = count <= 1 ? 1 : 1 << (32 - __clz(count - 1)), levels = 31 - __clz(width);
   if (count > PD_MAX_ROWS || ((V & PD_ROUNDS) && s / 2 + 1 > PD_KW_BLOCKS)) __trap();
   if (PAIR && (cw > 2 || pd_dyn_bytes() < (uint32_t)PD_PAIR_SMEM)) __trap();
-  const uint64_t dom = a.p[6], scratch = a.p[9], tree = a.p[2];
+  const uint64_t dom = a.p[6], scratch = a.p[9], tree = a.p[2], sb = a.p[13];
   const uint32_t* unit = reinterpret_cast<const uint32_t*>(a.p[5]);
   const uint64_t index = (uint64_t)unit[24] | (uint64_t)unit[25] << 32;
+  if (tid == 0) pd_stamp<V>(sb, r, PS_START);
   if (PAIR && warp < sw) {                          // the row's segments, paired: lane tid's segment (a stand-in past s)
     if (warp < cw) {
       const bool on = tid < s;
@@ -776,6 +815,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
 #pragma unroll
         for (int q = 0; q < 8; q++) dig[8 * tid + q] = st[q];
       }
+      if (tid == 0) pd_stamp<V>(sb, r, PS_SEGS);
       pd_pstop();
     } else {
       pd_pserve(warp - cw);
@@ -797,9 +837,11 @@ template <int V> DEV void pd_commit_t(const Args a) {
       pd_padc<V>(st, 128 + RS_SEG);
 #pragma unroll
       for (int q = 0; q < 8; q++) dig[8 * tid + q] = st[q];
+      if (tid == 0) pd_stamp<V>(sb, r, PS_SEGS);
     }
   } else if (warp == sw) {                          // the row's hm96 salt
     pd_hm_salt<V>(a.p[7], index, (uint64_t)r, a.p[8], ys, lane, mk, cc);
+    if (lane == 0) pd_stamp<V>(sb, r, PS_SALT);
   } else if (lane > 0) {                            // the levels' node templates, a lane a level
     if (a.i[2] == 0 && lane <= levels) pd_level_template<V>(dom, lane - 1, tm + PD_TM * (lane - 1), kw + 96 * (lane - 1));
   } else {                                          // the frame leaf's first block and this CTA's pads
@@ -820,8 +862,10 @@ template <int V> DEV void pd_commit_t(const Args a) {
 #pragma unroll
     for (int q = 0; q < 8; q++) ftm[q] = st[q];
     for (int p = count + r; p < width; p += count) pd_pad<V>(dom, (uint64_t)p, tree, hbuf);
+    pd_stamp<V>(sb, r, PS_FRAME);
   }
   __syncthreads();
+  if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC1);
   if (warp == 0) {                                  // the row digest
     uint64_t st[8];
     pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
@@ -829,9 +873,11 @@ template <int V> DEV void pd_commit_t(const Args a) {
       s512_store(a.p[1] + 64ull * r, st, 8);
 #pragma unroll
       for (int q = 0; q < 8; q++) xr[q] = st[q];
+      pd_stamp<V>(sb, r, PS_FOLD);
     }
   }
   __syncthreads();
+  if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC2);
   if constexpr (PAIR) {
     // the tail reads level 0 alone, so pair 0 takes the counter after the leaf and the last CTA's tail starts while pair 1
     // still runs the seed chain, which learns the verdict on PD_LAST (warp 0 arriving, c1 and p1 waiting)
@@ -845,6 +891,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
           __threadfence();
           last = atomicAdd(reinterpret_cast<unsigned*>(scratch), 1u) == (unsigned)count - 1;
         }
+        pd_stamp<V>(sb, r, PS_LEAF);
       }
       __syncwarp();
       const bool tail = !rows && last;
@@ -856,6 +903,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
     } else if (warp == c1 || warp == p1) {          // the row's seed, line key and E_A line
       if (warp == c1) {
         pd_row_seed<V, 1>(a, unit, index, r, xr, lane == 0);
+        if (lane == 0) pd_stamp<V>(sb, r, PS_SEED);
         pd_pstop();
       } else {
         pd_pserve(1);
@@ -868,14 +916,17 @@ template <int V> DEV void pd_commit_t(const Args a) {
       return;
     }
     __threadfence();
+    if (tid == 0) pd_stamp_at<V>(sb, count, PT_ROW, (uint64_t)r, pd_smid());
     pd_tail<V>(a, tm, count, width, kw, root, lk, cw, c1, p1, scratch);
     return;
   } else if (tid == 0) {
     uint64_t lt[8];
     pd_row_leaf<V>(a.p[8], xr, mk, cc, ftw, ftm, lt);
     s512_store(tree + 64ull * r, lt, 8);
+    pd_stamp<V>(sb, r, PS_LEAF);
   } else if (tid == 32 * cw) {
     pd_row_seed<V>(a, unit, index, r, xr, true);
+    pd_stamp<V>(sb, r, PS_SEED);
   }
   if (a.i[2] == 1) return;
   __threadfence();
@@ -884,19 +935,21 @@ template <int V> DEV void pd_commit_t(const Args a) {
   __syncthreads();
   if (!last) return;
   __threadfence();
+  if (tid == 0) pd_stamp_at<V>(sb, count, PT_ROW, (uint64_t)r, pd_smid());
   pd_tail<V>(a, tm, count, width, kw, root, lk, cw, c1, p1, scratch);
 }
 
 // pd_tree_V: pd_commit's mode 0 tail after its mode 1, one CTA of 128 threads: the levels' templates (a thread a level), the
 // levels above level 0, then seed_A, line_a and E_A's filler lines (with PD_PAIR pairs 0 and 1 warps 0, 1 and 2, 3, and
 // PD_PAIR_SMEM bytes of dynamic shared memory).  p2 the tree, p5 the unit block, p6 dom_a, p10 seed_A out, p11 line_a out,
-// p12 E_A's codes or 0; i0 rows, i3 E_A's lines
+// p12 E_A's codes or 0, p13 (PD_STAMP) the stamps or 0; i0 rows, i3 E_A's lines
 template <int V> DEV void pd_tree_t(const Args a) {
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM], nodes[PD_NODES], root[8];
   __shared__ uint32_t lk[8];
   const int count = a.i[0];
   const int width = count <= 1 ? 1 : 1 << (32 - __clz(count - 1)), levels = 31 - __clz(width);
   if (count > PD_MAX_ROWS || ((V & PD_PAIR) && (blockDim.x != 128 || pd_dyn_bytes() < (uint32_t)PD_PAIR_SMEM))) __trap();
+  if (threadIdx.x == 0) pd_stamp<V>(a.p[13], count, PT_ENTRY);
   if ((int)threadIdx.x < levels) pd_level_template<V>(a.p[6], threadIdx.x, tm + PD_TM * threadIdx.x, nodes + 96 * threadIdx.x);
   __syncthreads();
   pd_tail<V>(a, tm, count, width, nodes, root, lk, 1, 2, 3, 0);

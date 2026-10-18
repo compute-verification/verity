@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import statistics
 import sys
 
 STEP_SHARE = 0.51
@@ -35,6 +36,39 @@ def best(hashing: dict) -> tuple[str, float]:
     keys = [k for k in hashing if k.startswith("pd") and not k.endswith("_proposal")]
     k = min(keys, key=hashing.get)
     return k, hashing[k]
+
+
+def stamps(r: dict, shape: dict | None, mhz: float) -> None:
+    """A PD_STAMP record: the tail CTA's chain, phase by phase from its own SM clock (the rows' phases, then the tail's), with
+    each phase's serial compressions and µs a compression; and from the global timer, how far apart the rows start and
+    finish their leaves."""
+    rows, tail, (cta, sm) = r["rows"], r["tail"], r["tail_cta"]
+    if not rows or not rows[cta]["PS_START"][0] or not tail["PT_START"][0]:
+        print(f"\nstamps {r['shape']}/m{r['m16']} v{r['variant']}: none written")
+        return
+    m16, k = r["m16"], (shape or {}).get("k", 0)
+    s, levels = k // 256, max(m16 - 1, 0).bit_length()
+    me = rows[cta]
+    chain = [("segments", me["PS_SEGS"], 9), ("the other warps (salt, frame leaf, pads)", me["PS_SYNC1"], 0),
+             ("fold", me["PS_FOLD"], s // 2 + 1 if k else None), ("barrier", me["PS_SYNC2"], 0),
+             ("leaf and counter", me["PS_LEAF"], 3), ("to the tail", tail["PT_START"], 0)]
+    chain += [(f"level {lv + 1}", tail[f"PT_LEVEL{lv}"], 2) for lv in range(levels)]
+    chain += [("seed_A and line_a", tail["PT_SEED_A"], 3), ("filler lines", tail["PT_FILLERS"], 1)]
+    g0 = min(x["PS_START"][0] for x in rows if x["PS_START"][0])
+    leaf = [x["PS_LEAF"][0] - g0 for x in rows if x["PS_LEAF"][0]]
+    total = (chain[-1][1][1] - me["PS_START"][1]) / mhz
+    print(f"\nstamps {r['shape']}/m{m16} {r['schedule']}: the tail on row {cta}'s CTA (SM {sm}), {total:.1f} µs from its start "
+          f"(SM clock at {mhz:.0f} MHz); rows start within {(max(x['PS_START'][0] for x in rows) - g0) / 1e3:.2f} µs and "
+          f"finish their leaves {min(leaf) / 1e3:.1f}-{max(leaf) / 1e3:.1f} µs after the first start (global timer)")
+    print("| phase | µs | compressions | µs a compression |\n|---|---|---|---|")
+    at, n_all = me["PS_START"][1], 0
+    for what, (g, c), n in chain:
+        if not c:
+            continue
+        us = (c - at) / mhz
+        at, n_all = c, n_all + (n or 0)
+        print(f"| {what} | {us:.1f} | {n if n is not None else '?'} | {us / n:.2f} |" if n else f"| {what} | {us:.1f} | 0 | |")
+    print(f"| total | {total:.1f} | {n_all} | {total / n_all:.2f} |" if n_all else "")
 
 
 def report(d: str) -> None:
@@ -85,6 +119,9 @@ def report(d: str) -> None:
         for r in timing:
             h = r["hashing_us_per_call"]
             print(f"| {r['shape']} | {r['m16']} | " + " | ".join(f"{h[k]:.1f}" for k in serial) + " |")
+    shapes = {(r["shape"], r["m16"]): r for r in recs if r["kind"] == "shape"}
+    for r in (x for x in recs if x["kind"] == "stamps"):
+        stamps(r, shapes.get((r["shape"], r["m16"])), statistics.median(mhz))
     tp = os.path.join(d, "trace.json")
     if not os.path.exists(tp):
         return

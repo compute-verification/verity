@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <barrier>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -43,7 +44,9 @@ static void pd_bar_sync(int id, int n) { pd_named(id, n).arrive_and_wait(); }
 static void pd_bar_arrive(int id, int n) { (void)pd_named(id, n).arrive(); }
 static void __threadfence() { std::atomic_thread_fence(std::memory_order_seq_cst); }
 static void __trap() { std::fprintf(stderr, "__trap\n"); std::abort(); }
-static long long clock64() { return 0; }
+static long long clock64() {   // monotonic, so the stamps' order is checked on the host
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 static unsigned atomicAdd(unsigned* p, unsigned v) { return std::atomic_ref<unsigned>(*p).fetch_add(v); }
 static uint32_t __funnelshift_l(uint32_t lo, uint32_t hi, uint32_t s) {
   return (uint32_t)(((((uint64_t)hi << 32) | lo) << (s & 31)) >> 32);

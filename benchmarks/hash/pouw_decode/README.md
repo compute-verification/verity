@@ -10,7 +10,8 @@ served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/p
     salt (across a warp), its frame leaf's first block and the tree's node templates. It then folds the row digest, makes
     the hm96 leaf, the frame leaf, the row seed, its line key and the row's E_A line (the served call's `lines_ea`). In
     mode 0 the last CTA to finish also builds the tree's levels (kept in shared memory), seed_A, line_a and E_A's filler
-    lines.
+    lines. Paired, a CTA counts itself finished once its leaf is made, so the last CTA's tail starts while its row seed
+    chain, which is a compression longer than the leaf and which the tail doesn't read, is still running.
   - `pd_tree` is mode 0's tail as a launch of its own, for a side lane.
   - `pd_tiles` makes the tile leaves, one CTA per tile.
   - `pd_probe` measures one warp's cycles per compression, warm and on its code's first fetch.
@@ -20,7 +21,9 @@ served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/p
     `PD_CALL` (4), one copy of each compression per kernel, called from every site instead of inlined at each;
     `PD_PREFETCH` (8), each segment's lines prefetched into L1 before its first block; `PD_PAIR` (16), every serial
     compression on the critical path paired, a producer warp computing its message schedule's round inputs a chunk ahead
-    while the consumer warp runs the rounds (named barriers, 48 KB of dynamic shared memory); `PD_GROUP` (128, with
+    while the consumer warp runs the rounds (named barriers, 48 KB of dynamic shared memory); `PD_STAMP` (32; variant
+    51 is 19 with it), the global timer and the SM clock at each phase's end of `pd_commit` and `pd_tree`, written to
+    p13; `PD_GROUP` (128, with
     `PD_PAIR`), `pd_tiles` with four tiles a CTA, their folds together on one warp's lanes, paired, so a fold's lone
     lane no longer holds a warp's issue slots for its 9 or 17 compressions. Pearl-C's unrolled
     compression is about 3,500 instructions (56 KB), and a call's serial compressions are each at a site of their own,
@@ -35,13 +38,15 @@ served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/p
     stray-write control;
   - every captured schedule's own bytes (`graph_check`);
   - graphs of 8 calls per schedule, timed interleaved rep by rep with the SM clock;
+  - for a `PD_STAMP` variant, its serial graph once more and the last call's stamps (`stamps` records), which
+    `report.py` turns into the tail CTA's phases: microseconds per phase and per compression;
   - `--trace` for nsys.
 - `pd_host.py`: pd's launches on a `run.Pipeline`'s buffers, and the checks.
 - `trace.py`: the nsys trace per call and launch: duration, idle gap, overlap, grid, depth and lane.
 - `report.py`: a run's tables: hashing per call before and after, the per-launch critical path, the projected decode
   step.
-- `run.sh`: all of the above on a node, outputs under `$OUT`; with `NCU=` a launch name, bench.py under ncu instead of
-  the timing and the trace.
+- `run.sh`: all of the above on a node, outputs under `$OUT`; with `NCU=` a regex of launch names, bench.py at one
+  shape under ncu too, in the same lease after the timing and the trace.
 
 ~~~bash
 research run --on vy-nebius-2 --project verity --campaign hash-loop --source . --cwd source \

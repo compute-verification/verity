@@ -30,6 +30,7 @@ FLAGS=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxa
 "$CUDA/bin/cuobjdump" -sass "$SCR/pd.cubin" > "$SCR/pd.sass"
 "$CUDA/bin/cuobjdump" -sass -fun pd_probe_3 "$SCR/pd.cubin" > "$OUT/pd_probe_3.sass"   # the rolled body, inlined
 "$CUDA/bin/cuobjdump" -sass -fun pd_probe_19 "$SCR/pd.cubin" > "$OUT/pd_probe_19.sass"   # and the paired consumer's
+"$CUDA/bin/cuobjdump" -sass -fun pd_commit_19 "$SCR/pd.cubin" > "$OUT/pd_commit_19.sass"
 python3 - "$SCR/pd.sass" > "$OUT/sass_ops.txt" <<'EOF'
 import collections, re, sys
 fn, ops = None, {}

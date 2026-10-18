@@ -18,9 +18,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 SRC = open(os.path.join(HERE, "pd.cuh")).read()
 #: pd.cuh's PD_VARIANT_LIST: the variants built, a launch each (bits PD_ROUNDS 1, PD_ROLLED 2, PD_CALL 4, PD_PREFETCH 8,
-#: PD_PAIR 16, PD_GROUP 128)
+#: PD_PAIR 16, PD_STAMP 32, PD_GROUP 128)
 VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SRC).group(1)))
-PD_PAIR, PD_GROUP = 16, 128
+PD_PAIR, PD_STAMP, PD_GROUP = 16, 32, 128
+#: PD_STAMP's stamps (p13): PD_SLOTS (global timer ns, SM clock) pairs a row, a row per pd_commit CTA and the tail's after
+#: them; a row's slots PS_* and the tail's PT_* (pd.cuh's enums)
+SLOTS, MAX_LEVELS, MAX_ROWS = (int(re.search(rf"{x} = (\d+)", SRC).group(1)) for x in ("PD_SLOTS", "PD_MAX_LEVELS", "PD_MAX_ROWS"))
+PS = re.search(r"enum \{ (PS_START[^}]*) \}", SRC).group(1).replace(" ", "").split(",")
+PT = {"PT_START": 0, **{f"PT_LEVEL{x}": 1 + x for x in range(MAX_LEVELS)}, "PT_SEED_A": 1 + MAX_LEVELS,
+      "PT_FILLERS": 2 + MAX_LEVELS, "PT_ENTRY": 3 + MAX_LEVELS}
+PT_ROW = SLOTS - 1
 #: a PD_PAIR launch's dynamic shared memory (pd.cuh's PD_PAIR_SMEM: two pairs of PD_PAIR_WORDS words)
 PAIR_SMEM = 2 * 8 * int(re.search(r"PD_PAIR_WORDS = (\d+)", SRC).group(1))
 #: PD_GROUP's tiles a CTA (pd.cuh's PD_G)
@@ -73,6 +80,21 @@ class PdCall:
         self.pd, self.p, self.keys = pd, pipe, keys
         self.m, self.k, self.n, self.s, self.lines = pipe.m_real, pipe.k, pipe.n, pipe.k // 256, pipe.m
         self.scratch = pd.alloc(16)
+        self.stamp_bytes = 16 * SLOTS * (MAX_ROWS + 1)
+        self.stamps = pd.alloc(self.stamp_bytes)
+        self.clear_stamps()
+
+    def clear_stamps(self) -> None:
+        self.pd.ck("cuMemsetD8_v2", R.u64(self.stamps), 0, self.stamp_bytes)
+
+    def read_stamps(self) -> dict:
+        """PD_STAMP's stamps of the last pd_commit (and pd_tree) on these buffers: each row's PS_* and the tail's PT_* as
+        [global timer ns, SM clock] (zero where none was written), and the tail's CTA (its row and SM)."""
+        raw = self.pd.read(self.stamps, 16 * SLOTS * (self.m + 1))
+        w = [int.from_bytes(raw[8 * j:8 * j + 8], "little") for j in range(len(raw) // 8)]
+        at = lambda row, slot: w[2 * (SLOTS * row + slot):2 * (SLOTS * row + slot) + 2]  # noqa: E731
+        return {"rows": [{n: at(r, i) for i, n in enumerate(PS)} for r in range(self.m)],
+                "tail": {n: at(self.m, i) for n, i in PT.items()}, "tail_cta": at(self.m, PT_ROW)}
 
     def block(self, v: int) -> int:
         """pd_commit_V's threads: the segments' warps (doubled with PD_PAIR: consumers, then producers) and two more."""
@@ -81,7 +103,7 @@ class PdCall:
     def _p(self) -> tuple:
         b, kk = self.p.b, self.keys
         return (b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"], kk["hm"],
-                self.scratch, b["seed_a"], b["line_a"], b["ea_codes"])
+                self.scratch, b["seed_a"], b["line_a"], b["ea_codes"], self.stamps)
 
     def _commit(self, v: int, mode: int) -> list:
         return [lambda: self.pd.launch(f"pd_commit_{v}", self.m, self.block(v), smem(v), p=self._p(),
@@ -96,7 +118,8 @@ class PdCall:
     def tree(self, v: int) -> list:
         b, kk = self.p.b, self.keys
         return [lambda: self.pd.launch(f"pd_tree_{v}", 1, 128, smem(v), p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0,
-                                                                          0, b["seed_a"], b["line_a"], b["ea_codes"]),
+                                                                          0, b["seed_a"], b["line_a"], b["ea_codes"],
+                                                                          self.stamps),
                                        i=(self.m, 0, 0, self.lines))]
 
     def tiles(self, v: int) -> list:
@@ -106,6 +129,7 @@ class PdCall:
 
     def free(self) -> None:
         self.pd.free(self.scratch)
+        self.pd.free(self.stamps)
 
 
 def _read(dev, pipe, name: str) -> bytes:

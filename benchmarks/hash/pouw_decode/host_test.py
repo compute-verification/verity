@@ -25,12 +25,17 @@ sys.path.insert(0, HERE)
 import refs  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_kernel_constants  # noqa: E402
 
-RS_MAX_SEGS, POISON, INDEX, PD_PAIR, PD_GROUP = 128, 0xA5, 5, 16, 128
+RS_MAX_SEGS, POISON, INDEX, PD_PAIR, PD_STAMP, PD_GROUP = 128, 0xA5, 5, 16, 32, 128
 SRC = open(os.path.join(HERE, "pd.cuh")).read()
 #: pd.cuh's PD_VARIANT_LIST, a launch each
 VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SRC).group(1)))
 #: PD_GROUP's tiles a CTA (pd.cuh's PD_G)
 GROUP = int(re.search(r"PD_G = (\d+)", SRC).group(1))
+#: PD_STAMP's stamps: PD_SLOTS (timer, clock) pairs a row; a row's slots PS_* and the tail's PT_* (pd.cuh's enums)
+SLOTS, MAX_LEVELS = (int(re.search(rf"{x} = (\d+)", SRC).group(1)) for x in ("PD_SLOTS", "PD_MAX_LEVELS"))
+PS = dict(zip(re.search(r"enum \{ (PS_START[^}]*) \}", SRC).group(1).replace(" ", "").split(","), range(16)))
+PT = {"PT_START": 0, "PT_LEVEL": 1, "PT_SEED_A": 1 + MAX_LEVELS, "PT_FILLERS": 2 + MAX_LEVELS, "PT_ENTRY": 3 + MAX_LEVELS,
+      "PT_ROW": SLOTS - 1}
 
 
 class Args(C.Structure):
@@ -104,23 +109,48 @@ def reference_commit(h: Host, x, m16: int, k: int, kb, dom, hm) -> dict[str, byt
             "line_a": line_a.tobytes()[:32], "seeds_a": seeds.tobytes()[:32 * m16], "lkeys_a": lkeys.tobytes()[:32 * m16]}
 
 
-def pd_commit(h: Host, x, m16: int, k: int, kb, dom, hm, mode: int, variant: int) -> dict[str, bytes]:
+def pd_commit(h: Host, x, m16: int, k: int, kb, dom, hm, mode: int, variant: int) -> tuple[dict[str, bytes], np.ndarray]:
+    """pd's commitment (mode 1: then pd_tree) and its stamps buffer (p13, zero before)."""
     s, width, lines = k // 256, pow2(m16), lines_of(m16)
     out = {"rowdig_a": h.buf(64 * m16, POISON), "tree_a": h.buf(64 * (2 * width - 1), POISON), "seeds_a": h.buf(32 * m16, POISON),
            "lkeys_a": h.buf(32 * m16, POISON), "seed_a": h.buf(32, POISON), "line_a": h.buf(32, POISON),
            "ea_codes": h.buf(32 * lines, POISON)}
-    scratch = h.buf(16)
+    scratch, stamps = h.buf(16), h.buf(16 * SLOTS * (m16 + 1))
     unit, sk = h.buf(kb["unit"]), h.buf(kb["salt_key"])
     b = out
     p = (x, b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], unit, dom, sk, hm, scratch, b["seed_a"], b["line_a"],
-         b["ea_codes"])
+         b["ea_codes"], stamps)
     h.run(f"pd_commit_{variant}", m16, 32 * (-(-s // 32) * (2 if variant & PD_PAIR else 1) + 2), p=p, i=(m16, k, mode, lines))
     if mode == 1:
         h.run(f"pd_tree_{variant}", 1, 128, p=(0, 0, b["tree_a"], 0, 0, unit, dom, 0, 0, 0, b["seed_a"], b["line_a"],
-                                              b["ea_codes"]), i=(m16, 0, 0, lines))
+                                              b["ea_codes"], stamps), i=(m16, 0, 0, lines))
     if int.from_bytes(scratch[:4].tobytes(), "little"):
         raise RuntimeError("pd_commit left its counter set")
-    return {name: v.tobytes()[:len(v) if name not in ("seed_a", "line_a") else 32] for name, v in out.items()}
+    return {name: v.tobytes()[:len(v) if name not in ("seed_a", "line_a") else 32] for name, v in out.items()}, stamps
+
+
+def stamp_errors(stamps: np.ndarray, m16: int, mode: int, variant: int) -> list[str]:
+    """PD_STAMP's stamps: every phase of every row and of the tail written, each after the phases it follows (a row's tail
+    after every row's leaf); without PD_STAMP, none."""
+    if not variant & PD_STAMP:
+        return [] if not stamps.any() else ["stamps written without PD_STAMP"]
+    st = stamps.view(np.uint64).reshape(m16 + 1, SLOTS, 2)
+    g, errs = st[:, :, 0].astype(np.int64), []
+    for r in range(m16):
+        x = {n: g[r, i] for n, i in PS.items()}
+        order = [x["PS_START"], x["PS_SEGS"], x["PS_SYNC1"], x["PS_FOLD"], x["PS_SYNC2"], x["PS_LEAF"]]
+        if not (all(0 < a <= b for a, b in zip(order, order[1:])) and 0 < x["PS_SALT"] <= x["PS_SYNC1"]
+                and 0 < x["PS_FRAME"] <= x["PS_SYNC1"] and x["PS_SYNC2"] <= x["PS_SEED"]):
+            errs.append(f"row {r}'s stamps out of order: {x}")
+    t = g[m16]
+    levels = pow2(m16).bit_length() - 1
+    chain = ([t[PT["PT_ENTRY"]]] if mode == 1 else []) + [t[PT["PT_START"]], *(t[PT["PT_LEVEL"] + lv] for lv in range(levels)),
+                                                           t[PT["PT_SEED_A"]], t[PT["PT_FILLERS"]]]
+    if not all(0 < a <= b for a, b in zip(chain, chain[1:])):
+        errs.append(f"the tail's stamps out of order: {chain}")
+    if mode == 0 and (t[PT["PT_START"]] < g[:m16, PS["PS_LEAF"]].max() or not 0 <= st[m16, PT["PT_ROW"], 0] < m16):
+        errs.append(f"the tail starts before a row's leaf, or its row {st[m16, PT['PT_ROW'], 0]} is out of range")
+    return errs
 
 
 def diff(name: str, got: bytes, want: bytes) -> str | None:
@@ -146,11 +176,13 @@ def main(argv: list[str]) -> int:
             if (e := diff(f"m16={m16} k={k} reference {name} vs Python", want, py[name])):
                 fails.append(e)
         for mode, variant in ((m, v) for m in (0, 1) for v in VARIANTS):
-            got = pd_commit(h, x, m16, k, kb, dom, hm, mode, variant)
+            got, stamps = pd_commit(h, x, m16, k, kb, dom, hm, mode, variant)
             for name, want in [*ref.items(), ("ea_codes", py["ea_codes"])]:
                 cases += 1
                 if (e := diff(f"m16={m16} k={k} mode {mode} variant {variant} {name}", got[name], want)):
                     fails.append(e)
+            cases += 1
+            fails += [f"m16={m16} k={k} mode {mode} variant {variant}: {e}" for e in stamp_errors(stamps, m16, mode, variant)]
         print(f"commit m16={m16} k={k}: done, {len(fails)} failures so far", flush=True)
     for rows_, cols in ((32, 128), (48, 128), (64, 192), (128, 128), (16, 64), (80, 384)):
         c = rng.integers(0, 1 << 32, (rows_, cols), dtype=np.uint32)

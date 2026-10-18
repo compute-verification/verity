@@ -14,7 +14,9 @@ Per shape:
    timed only if every comparison passes.
 3. Graphs of CHAIN consecutive calls of the shape (a ring of 2 buffer sets, as the served path rotates what a side lane
    touches), one per schedule (`SCHEDULES`), timed interleaved rep by rep, the order rotating, with NVML's SM clock each rep.
-4. With --trace: each graph launched TRACE times for nsys (--cuda-graph-trace=node); `trace.py` reads the kernels back.
+4. With a PD_STAMP variant: its serial graph once more, and the last call's pd_commit stamps (each row's and the tail's
+   phase ends, global timer and SM clock).
+5. With --trace: each graph launched TRACE times for nsys (--cuda-graph-trace=node); `trace.py` reads the kernels back.
 
 One JSON object per line into OUT/bench.jsonl.
 
@@ -199,17 +201,18 @@ def real_keys(m16: int) -> dict[str, bytes]:
 # ---- the shapes -----------------------------------------------------------------------------------------------------
 
 #: each launch's serial SHA-512 compressions (its depth: the longest one-thread chain), by step, at (m16, k): Pearl-C's, then
-#: pd's (`pd_commit` mode 0; mode 1 as `pd_commit/rows`)
+#: pd's (`pd_commit` mode 0, PD_PAIR's: its tail after the row's leaf, one more without PD_PAIR; mode 1 as `pd_commit/rows`)
 def depths(m16: int, k: int) -> dict[str, list[tuple[str, int]]]:
     s, levels, r = k // 256, R.depth(m16), min(64, m16)
     rows = 9 + s // 2 + 1 + 4                      # segments, the fold, then the row's seed (2), line key and E_A line
+    leaf = 9 + s // 2 + 1 + 3                      # segments, the fold, then the hm96 leaf (2) and the frame leaf
     fill = int(m16 % R.BM_D != 0)                  # E_A's filler lines, after line_a
     return {"rowdig_a": [("s512_row_segs", 9), ("s512_folds", s // 2 + 1)],
             "hash_rows_a": [("hm_leaves", 4), ("s512_frame_leaves", 2)],
             "tree_a": [("s512_tree_small", 3 * levels)],
             "seed_a": [("s512_seeds", 5)], "seeds_a": [("s512_seeds", 5)], "lines_ea": [("lines", 2)],
             "hash_leaf": [("s512_tile_segs", 9), ("s512_folds", r // 4 + 1)],
-            "pd": [("pd_commit", rows + 2 * levels + 3 + fill), ("pd_commit/rows", rows), ("pd_tree", 2 * levels + 4 + fill),
+            "pd": [("pd_commit", leaf + 2 * levels + 3 + fill), ("pd_commit/rows", rows), ("pd_tree", 2 * levels + 4 + fill),
                    ("pd_tiles", 9 + r // 4 + 1)]}
 
 
@@ -362,6 +365,15 @@ def run_shape(dev, pd, lanes, nv, out, name, m16, n, k, reps, trace):
                    "us_per_call_median": per_call,
                    "hashing_us_per_call": {key: round(v - per_call["ref_nohash"], 2) for key, v in per_call.items()},
                    "sm_mhz": t["sm_mhz"], "ms": t["ms"]})
+        from pd_host import PD_STAMP, VARIANTS
+        for v in (x for x in VARIANTS if x & PD_STAMP and f"pd_serial_{x}" in graphs):
+            # the serial graph once more, its stamps cleared: the last call's pd_commit (ring set (CHAIN - 1) % 2)
+            for c in sh.pdc:
+                c.clear_stamps()
+            dev.sync()
+            lanes.run(graphs[f"pd_serial_{v}"])
+            emit(out, {"kind": "stamps", "shape": name, "m16": m16, "variant": v, "schedule": f"pd_serial_{v}",
+                       "clk": nv.read(), **sh.pdc[(CHAIN - 1) % 2].read_stamps()})
     else:
         order = []
         for _ in range(TRACE):
