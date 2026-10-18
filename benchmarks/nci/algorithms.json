@@ -577,49 +577,72 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "The one scale-dependent architecture multiplier; the reference already contains it. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Sequential recurrence: a block boundary in time carries the recurrent state; no attention.",
+  "notes": "The one scale-dependent architecture multiplier; the reference already contains it. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Sequential recurrence: a block boundary in time carries the recurrent state; no attention. Standardized to compute at equal held-out loss (confidence medium); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
      "gundlach-2025-origin/9"
     ],
-    "metric": "compute to loss threshold vs modern Transformer",
-    "compute_range_flop": null,
-    "multiplier": 0.038461538461538464,
+    "metric": "compute to equal held-out loss vs modern Transformer (E=1.9 subtracted)",
+    "compute_range_flop": [
+     1000000000000000.0,
+     1e+18
+    ],
+    "multiplier": 0.0385,
     "trend": "exponent-change",
     "exponent_change": null,
-    "note": "6.28x worse at loss 5.3, 26x worse at loss 4.4: the gap widens as loss falls."
+    "note": "Measured: 6.28x at loss 5.3, 26x at 4.4."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/13",
+     "gundlach-2025-origin/15"
+    ],
+    "metric": "same, from Gundlach's fitted exponents",
+    "compute_range_flop": [
+     1.3e+22,
+     1.3e+22
+    ],
+    "multiplier": 0.00138,
+    "trend": "exponent-change",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION by the authors: 725x at 1.3e22; 6x at 1e15 and more than 100x at 1e23."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/13",
+     "gundlach-2025-origin/15",
+     "ho-2026-least-understood/4"
+    ],
+    "metric": "same, gap proportional to C^0.15-0.29 through the quoted points",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 0.00039,
+    "trend": "exponent-change",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: gap 140-2,600x at 1e24 and 290-9,900x at 1e26; experiments stop at 1e18."
    },
    {
     "evidence": [
      "ho-2024-algorithmic-progress/2"
     ],
-    "metric": "compute-equivalent gain of the Transformer",
+    "metric": "compute-equivalent gain of the Transformer (observational)",
     "compute_range_flop": null,
-    "multiplier": 0.1388888888888889,
+    "multiplier": 0.139,
     "trend": "exponent-change",
     "exponent_change": null,
-    "note": "Transformer CEG 7.2x (CI 3.3-45.7x) at frontier budgets."
-   },
-   {
-    "evidence": [
-     "kaplan-2020-scaling-laws/1"
-    ],
-    "metric": "per-token loss by context position",
-    "compute_range_flop": null,
-    "multiplier": null,
-    "trend": "exponent-change",
-    "exponent_change": null,
-    "note": "LSTMs match on early tokens and fall behind on late ones."
+    "note": "7.2x (CI 3.3-45.7x)."
    }
   ],
   "multiplier": {
-   "value": 0.038461538461538464,
+   "value": 0.0385,
    "trend": "exponent-change",
    "evidence": [
     "gundlach-2025-origin/9"
    ],
-   "metric": "compute to loss threshold vs modern Transformer"
+   "metric": "compute to equal held-out loss vs modern Transformer, measured up to 1e18 FLOP"
   },
   "confidence": "high",
   "convention": "as-published"
@@ -650,51 +673,73 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "Each tweak is small and scale-invariant; they do not multiply (see the bundle). Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "notes": "Each tweak is small and scale-invariant; they do not multiply (see the bundle). Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence medium); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
-     "gundlach-2025-origin/2",
-     "shazeer-2020-glu/1"
+     "gundlach-2025-origin/2"
     ],
-    "metric": "CEG, SwiGLU vs GeLU",
-    "compute_range_flop": null,
+    "metric": "CEG at equal held-out loss, SwiGLU vs GeLU, 3.6M params",
+    "compute_range_flop": [
+     1000000000000000.0,
+     1e+17
+    ],
     "multiplier": 1.17,
     "trend": "constant",
     "exponent_change": null,
-    "note": "3.6M-parameter ablation."
+    "note": "Measured."
    },
    {
     "evidence": [
      "gundlach-2025-origin/3"
     ],
-    "metric": "CEG, RoPE vs sinusoidal",
-    "compute_range_flop": null,
+    "metric": "same, RoPE vs sinusoidal",
+    "compute_range_flop": [
+     1000000000000000.0,
+     1e+17
+    ],
     "multiplier": 1.44,
     "trend": "constant",
     "exponent_change": null,
-    "note": "3.6M-parameter ablation."
+    "note": "Measured."
    },
    {
     "evidence": [
      "gundlach-2025-origin/5"
     ],
-    "metric": "CEG, pre-RMSNorm vs post-RMSNorm",
-    "compute_range_flop": null,
+    "metric": "same, pre-RMSNorm vs post-RMSNorm (1.09x vs pre-LayerNorm)",
+    "compute_range_flop": [
+     1000000000000000.0,
+     1e+17
+    ],
     "multiplier": 1.87,
     "trend": "constant",
     "exponent_change": null,
-    "note": "1.09x vs pre-LayerNorm."
+    "note": "Measured."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/11",
+     "ho-2026-least-understood/4"
+    ],
+    "metric": "same, assumed scale-invariant",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 1.17,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: holds only if the near-identical exponents measured up to 1e18 persist 6-8 orders higher."
    }
   ],
   "multiplier": {
    "value": 1.17,
    "trend": "constant",
    "evidence": [
-    "gundlach-2025-origin/2",
-    "shazeer-2020-glu/1"
+    "gundlach-2025-origin/2"
    ],
-   "metric": "CEG, SwiGLU vs GeLU"
+   "metric": "CEG at equal held-out loss, SwiGLU vs GeLU, 3.6M params"
   },
   "confidence": "medium",
   "convention": "as-published"
@@ -726,41 +771,48 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "Stacked tweaks are sub-multiplicative; summing their log m_A overstates C_eff. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "notes": "Stacked tweaks are sub-multiplicative; summing their log m_A overstates C_eff. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence medium); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
      "gundlach-2025-origin/7",
      "gundlach-2025-origin/11"
     ],
-    "metric": "CEG, modern vs retro Transformer",
-    "compute_range_flop": null,
+    "metric": "CEG at equal held-out loss, modern vs retro Transformer (measured composite)",
+    "compute_range_flop": [
+     1000000000000000.0,
+     1e+18
+    ],
     "multiplier": 1.33,
     "trend": "constant",
     "exponent_change": null,
-    "note": "Ablations multiply to 3.43x but the measured composite is 1.33x."
+    "note": "Ablations multiply to 3.43x; the measured composite is 1.33x."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/13",
+     "gundlach-2025-origin/16"
+    ],
+    "metric": "scale-invariant innovations at the 2023 frontier (experiment plus literature)",
+    "compute_range_flop": [
+     1.3e+22,
+     1.3e+22
+    ],
+    "multiplier": 2.6,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "A constant 2x against dense Transformers means 0% growth per year."
    },
    {
     "evidence": [
      "sanderson-2025-compute-paths/1"
     ],
-    "metric": "combined CEG of compute-independent changes, nanoGPT",
+    "metric": "combined CEG, nanoGPT",
     "compute_range_flop": null,
     "multiplier": 3.5,
     "trend": "constant",
     "exponent_change": null,
-    "note": "Upper end of measured bundles."
-   },
-   {
-    "evidence": [
-     "narang-2021-transformer-modifications/1"
-    ],
-    "metric": "downstream quality across implementations",
-    "compute_range_flop": null,
-    "multiplier": null,
-    "trend": "constant",
-    "exponent_change": null,
-    "note": "Most single modifications do not transfer."
+    "note": "Upper end."
    }
   ],
   "multiplier": {
@@ -770,7 +822,7 @@
     "gundlach-2025-origin/7",
     "gundlach-2025-origin/11"
    ],
-   "metric": "CEG, modern vs retro Transformer"
+   "metric": "CEG at equal held-out loss, measured composite; 1.33-2.6x at 1e24-1e26 if constant (EXTRAPOLATION)"
   },
   "confidence": "medium",
   "convention": "as-published"
@@ -800,38 +852,73 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "Baseline predates SwiGLU/RoPE; the gain over a modern baseline is unmeasured. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "notes": "Baseline predates SwiGLU/RoPE; the gain over a modern baseline is unmeasured. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence low); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
+   {
+    "evidence": [
+     "so-2021-primer/4"
+    ],
+    "metric": "compute to vanilla Transformer's final held-out perplexity, LM1B, 35M, library-default hyperparameters",
+    "compute_range_flop": null,
+    "multiplier": 2.12,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "2.12 / 2.13 / 1.72 across three library and hardware setups."
+   },
+   {
+    "evidence": [
+     "so-2021-primer/4"
+    ],
+    "metric": "same, Primer over Transformer++ (derived ratio)",
+    "compute_range_flop": null,
+    "multiplier": 1.38,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Derived: 1.29-1.55."
+   },
+   {
+    "evidence": [
+     "so-2021-primer/3",
+     "so-2021-primer/1"
+    ],
+    "metric": "loss vs compute, C4, 20M-1.9B",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Parallel lines mean a constant reduction factor; only absolute savings grow."
+   },
    {
     "evidence": [
      "so-2021-primer/2"
     ],
-    "metric": "compute to equal one-shot performance, 1.9B",
+    "metric": "FLAGGED downstream: compute to equal one-shot, 1.9B",
     "compute_range_flop": null,
     "multiplier": 3.0,
-    "trend": "grows-with-scale",
+    "trend": "unknown",
     "exponent_change": null,
-    "note": "Against a 2021 Transformer; 4x against original T5 at 500M."
+    "note": "Not held-out loss."
    },
    {
     "evidence": [
-     "so-2021-primer/1"
+     "so-2021-primer/5"
     ],
-    "metric": "loss at optimal model size",
+    "metric": "masked LM",
     "compute_range_flop": null,
     "multiplier": null,
-    "trend": "grows-with-scale",
+    "trend": "unknown",
     "exponent_change": null,
-    "note": "Gains grow as a power law in compute."
+    "note": "Not obviously better than Transformer++."
    }
   ],
   "multiplier": {
-   "value": 3.0,
-   "trend": "grows-with-scale",
+   "value": 1.3,
+   "trend": "constant",
    "evidence": [
-    "so-2021-primer/2"
+    "so-2021-primer/4",
+    "so-2021-primer/3"
    ],
-   "metric": "compute to equal one-shot performance, 1.9B"
+   "metric": "compute at equal held-out perplexity vs Transformer++ (derived), constant to 1e24-1e26 (EXTRAPOLATION)"
   },
   "confidence": "low",
   "convention": "as-published"
@@ -1926,13 +2013,13 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "Part of the reference recipe; listed because it is the second scale-dependent gain. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "notes": "Part of the reference recipe; listed because it is the second scale-dependent gain. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence high); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
      "gundlach-2025-origin/10"
     ],
-    "metric": "CEG of Chinchilla over Kaplan allocation",
+    "metric": "CEG of Chinchilla over Kaplan allocation (analytic, Chinchilla law)",
     "compute_range_flop": [
      1e+16,
      1e+24
@@ -1940,30 +2027,89 @@
     "multiplier": 10,
     "trend": "grows-with-scale",
     "exponent_change": null,
-    "note": "Below 10x over 1e16-1e24; grows with C."
+    "note": "Below 10x over 1e16-1e24."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/13"
+    ],
+    "metric": "same",
+    "compute_range_flop": [
+     1.3e+22,
+     1.3e+22
+    ],
+    "multiplier": 3.7,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "3.67x here and 9.4x at 2e23."
+   },
+   {
+    "evidence": [
+     "ho-2024-algorithmic-progress/4"
+    ],
+    "metric": "compute-equivalent multiplier, Chinchilla over Kaplan",
+    "compute_range_flop": [
+     1e+21,
+     2.5e+24
+    ],
+    "multiplier": 4,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "1.75x at GPT-2 scale, 4x at PaLM scale."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/17",
+     "besiroglu-2024-chinchilla-replication/2"
+    ],
+    "metric": "same, Appendix B closed form recomputed",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 17.5,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: 17.5 / 46 / 129x at 1e24 / 1e25 / 1e26 with Chinchilla constants; 7.8 / 17 / 39x with the Besiroglu refit. The Kaplan arm is a counterfactual nobody trains."
    },
    {
     "evidence": [
      "hoffmann-2022-chinchilla/1",
      "kaplan-2020-scaling-laws/2",
-     "besiroglu-2024-chinchilla-replication/1",
-     "porian-2024-resolving-discrepancies/1"
+     "pearce-2024-reconciling/1",
+     "bi-2024-deepseek-llm/1"
     ],
     "metric": "optimal N(C) exponent",
     "compute_range_flop": null,
     "multiplier": null,
     "trend": "exponent-change",
     "exponent_change": null,
-    "note": "0.73 -> 0.5; the discrepancy came from last-layer cost, warmup and optimizer tuning."
+    "note": "0.73 vs 0.5, explained by non-embedding counts at small scale; 0.45-0.58 depending on data quality."
+   },
+   {
+    "evidence": [
+     "gadre-2024-overtraining/1",
+     "sardana-2023-beyond-chinchilla/1"
+    ],
+    "metric": "compute at equal held-out loss, 200 tokens per parameter vs optimal (derived, Besiroglu law)",
+    "compute_range_flop": [
+     1e+20,
+     1e+26
+    ],
+    "multiplier": 0.61,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "0.67 to 0.58 at 200 t/p; 0.83 to 0.75 at 100 t/p. Over-training is a constant penalty."
    }
   ],
   "multiplier": {
    "value": 10,
    "trend": "grows-with-scale",
    "evidence": [
-    "gundlach-2025-origin/10"
+    "gundlach-2025-origin/10",
+    "gundlach-2025-origin/13"
    ],
-   "metric": "CEG of Chinchilla over Kaplan allocation"
+   "metric": "CEG over Kaplan allocation near 2e23 FLOP; 1 against the reference by construction"
   },
   "confidence": "high",
   "convention": "as-published"
@@ -2047,25 +2193,25 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "Among the largest constant m_A; no change to NCI state. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "notes": "Among the largest constant m_A; no change to NCI state. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence low); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
      "penedo-2024-fineweb/1",
      "penedo-2024-fineweb/2"
     ],
-    "metric": "tokens to equal MMLU, 1.71B models",
+    "metric": "FLAGGED downstream: tokens to equal MMLU, 1.71B",
     "compute_range_flop": null,
     "multiplier": 10,
     "trend": "unknown",
     "exponent_change": null,
-    "note": "Benchmark-specific; loss-based gains are smaller."
+    "note": "Benchmark-targeted."
    },
    {
     "evidence": [
      "li-2024-dclm/1"
     ],
-    "metric": "compute to equal 53-task average, 7B",
+    "metric": "FLAGGED downstream: compute to equal 53-task average, 7B, vs Llama 3 8B",
     "compute_range_flop": [
      1.1e+23,
      1.1e+23
@@ -2073,16 +2219,51 @@
     "multiplier": 6.6,
     "trend": "unknown",
     "exponent_change": null,
-    "note": "vs Llama 3 8B (other differences confound); 1.7x vs MAP-Neo."
+    "note": "Confounded by other differences."
+   },
+   {
+    "evidence": [
+     "penedo-2024-fineweb/3"
+    ],
+    "metric": "held-out perplexity on Paloma domains at equal compute, FineWeb-Edu vs FineWeb, 1.71B",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Worse on broad web text (common-crawl +0.235 nats per token, reddit); better on Wikipedia, pes2o and code."
+   },
+   {
+    "evidence": [
+     "goyal-2024-data-filtering-compute/1"
+    ],
+    "metric": "FLAGGED vision-language: CLIP accuracy vs compute",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Aggressive filtering loses once the filtered pool repeats."
+   },
+   {
+    "evidence": [
+     "lourie-2025-unreliable/2",
+     "magnusson-2023-paloma/1"
+    ],
+    "metric": "choice of held-out corpus",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "The validation set can flip which data recipe wins."
    }
   ],
   "multiplier": {
-   "value": 6.6,
+   "value": 1.0,
    "trend": "unknown",
    "evidence": [
-    "li-2024-dclm/1"
+    "penedo-2024-fineweb/3",
+    "lourie-2025-unreliable/2"
    ],
-   "metric": "compute to equal 53-task average, 7B"
+   "metric": "compute at equal broad held-out loss: no positive evidence; as-published downstream 6.6-10x if benchmarks are the yardstick"
   },
   "confidence": "medium",
   "convention": "as-published"
@@ -2238,18 +2419,40 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A 1.2-2.6 against weak default mixtures. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "notes": "m_A 1.2-2.6 against weak default mixtures. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence low); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
      "xie-2023-doremi/1"
     ],
-    "metric": "steps to baseline accuracy, 8B",
+    "metric": "FLAGGED downstream: steps to baseline accuracy, 8B; baseline is the Pile's untuned default weights",
     "compute_range_flop": null,
     "multiplier": 2.6,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Proxy compute excluded."
+   },
+   {
+    "evidence": [
+     "xie-2023-doremi/2"
+    ],
+    "metric": "held-out per-domain Pile log-perplexity, 8B, equal steps",
+    "compute_range_flop": null,
+    "multiplier": null,
     "trend": "unknown",
     "exponent_change": null,
-    "note": "Against The Pile's default weights."
+    "note": "Improves all domains; magnitude given only in Figure 4."
+   },
+   {
+    "evidence": [
+     "xie-2023-doremi/3"
+    ],
+    "metric": "FLAGGED downstream: steps to baseline, 280M-1B, same-size proxy",
+    "compute_range_flop": null,
+    "multiplier": 4,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Does not shrink across 280M-1B."
    },
    {
     "evidence": [
@@ -2260,16 +2463,17 @@
     "multiplier": 1.4,
     "trend": "shrinks-with-scale",
     "exponent_change": null,
-    "note": "18-45% fewer steps early; gains fade late in training."
+    "note": "Unchanged."
    }
   ],
   "multiplier": {
    "value": 2.6,
-   "trend": "unknown",
+   "trend": "constant",
    "evidence": [
-    "xie-2023-doremi/1"
+    "xie-2023-doremi/1",
+    "xie-2023-doremi/2"
    ],
-   "metric": "steps to baseline accuracy, 8B"
+   "metric": "steps to equal downstream accuracy (not converted); held-out Pile loss also improves, magnitude unreported in text"
   },
   "confidence": "medium",
   "convention": "as-published"
@@ -2410,16 +2614,40 @@
     "trend": "unknown",
     "exponent_change": null,
     "note": "Collapse bound."
+   },
+   {
+    "evidence": [
+     "maini-2024-wrap/2"
+    ],
+    "metric": "held-out Pile perplexity at equal training compute, 1.3B, C4-only baseline",
+    "compute_range_flop": [
+     1.2e+21,
+     2.3e+21
+    ],
+    "multiplier": 2.4,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Derived: more than 10% lower perplexity is about 0.105 nats, about 2.4x via the Besiroglu law (illustrative); the narrow baseline means part of the gain is domain coverage."
+   },
+   {
+    "evidence": [
+     "ho-2026-least-understood/5"
+    ],
+    "metric": "accounting",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Generator compute must be counted, or m is bounded only by the generator; under the policy a registered generator is free."
    }
   ],
   "multiplier": {
-   "value": 2,
+   "value": 2.4,
    "trend": "unknown",
    "evidence": [
-    "nguyen-2025-rewire/1",
-    "su-2024-nemotron-cc/1"
+    "maini-2024-wrap/2"
    ],
-   "metric": "unique-data-equivalent at equal training tokens, downstream (a data multiplier where unique data binds)"
+   "metric": "compute at equal held-out Pile loss vs C4-only (derived), generator compute excluded (a registered generator is free under the policy)"
   },
   "confidence": "medium",
   "convention": "as-published"
@@ -2538,13 +2766,13 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A about 2 on downstream metrics at frontier scale. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "notes": "m_A about 2 on downstream metrics at frontier scale. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence low); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
      "tay-2022-ul2r/1"
     ],
-    "metric": "compute to equal downstream performance, PaLM 540B",
+    "metric": "FLAGGED downstream: compute to equal few-shot performance, PaLM 540B",
     "compute_range_flop": [
      2.5e+24,
      2.5e+24
@@ -2552,7 +2780,18 @@
     "multiplier": 2,
     "trend": "unknown",
     "exponent_change": null,
-    "note": "0.1% extra compute."
+    "note": "The only in-scope gain measured at frontier scale."
+   },
+   {
+    "evidence": [
+     "tay-2022-ul2r/2"
+    ],
+    "metric": "held-out causal LM loss",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Losses not comparable; no held-out-loss measure exists."
    }
   ],
   "multiplier": {
@@ -2561,7 +2800,7 @@
    "evidence": [
     "tay-2022-ul2r/1"
    ],
-   "metric": "compute to equal downstream performance, PaLM 540B"
+   "metric": "FLAGGED downstream, not convertible to loss; standardized m unmeasured"
   },
   "confidence": "medium",
   "convention": "as-published"
@@ -2718,18 +2957,36 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A about 1.1 near 1B and shrinking. Traits as published (from the scaling corpus): state at its stored precision, 64 bits per updated parameter. fp32 weights + momentum; the orthonormalization reads whole matrices.",
+  "notes": "m_A about 1.1 near 1B and shrinking. Traits as published (from the scaling corpus): state at its stored precision, 64 bits per updated parameter. fp32 weights + momentum; the orthonormalization reads whole matrices. Standardized to compute at equal held-out loss (confidence medium); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
-     "liu-2025-muon-scalable/1"
+     "liu-2025-muon-scalable/1",
+     "liu-2025-muon-scalable/3"
     ],
-    "metric": "training FLOPs to equal loss",
-    "compute_range_flop": null,
+    "metric": "training FLOPs to equal validation loss, compute-optimal; AdamW grid-searched",
+    "compute_range_flop": [
+     2.1e+19,
+     3.5e+20
+    ],
     "multiplier": 1.92,
-    "trend": "unknown",
+    "trend": "shrinks-with-scale",
     "exponent_change": null,
-    "note": "Claimed."
+    "note": "Muon reuses AdamW's hyperparameters."
+   },
+   {
+    "evidence": [
+     "liu-2025-muon-scalable/2"
+    ],
+    "metric": "same, from fitted laws 2.506C^-0.052 vs 2.608C^-0.054",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 1.36,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: m proportional to C^-0.037: 1.36 / 1.25 / 1.15 at 1e24 / 1e25 / 1e26."
    },
    {
     "evidence": [
@@ -2740,7 +2997,7 @@
     "multiplier": 1.15,
     "trend": "constant",
     "exponent_change": null,
-    "note": "Grows with batch size."
+    "note": "Unchanged."
    },
    {
     "evidence": [
@@ -2756,7 +3013,22 @@
     "multiplier": 1.1,
     "trend": "shrinks-with-scale",
     "exponent_change": null,
-    "note": "1.4x at 0.1B to 1.1x at 1.2B; predicted below 1 at 7B, 1x Chinchilla."
+    "note": "1.4x to 1.1x."
+   },
+   {
+    "evidence": [
+     "wen-2025-fantastic-optimizers/1",
+     "wen-2025-fantastic-optimizers/4"
+    ],
+    "metric": "same, log-linear in C",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 1.0,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: crosses 1 near 2e22; floored at 1."
    }
   ],
   "multiplier": {
@@ -2765,9 +3037,9 @@
    "evidence": [
     "wen-2025-fantastic-optimizers/1",
     "wen-2025-fantastic-optimizers/4",
-    "wen-2025-fantastic-optimizers/7"
+    "liu-2025-muon-scalable/2"
    ],
-   "metric": "speedup vs tuned AdamW"
+   "metric": "compute at equal held-out loss vs tuned AdamW; 1.0-1.36 at 1e24-1e26 (EXTRAPOLATION)"
   },
   "confidence": "high",
   "convention": "as-published"
@@ -2801,7 +3073,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A 1.2-1.3 below 1B, shrinking with scale. Traits as published (from the scaling corpus): state at its stored precision, 2.5 bits per updated parameter. AdamW state plus Kronecker factors and eigenbases (SOAP); Sophia keeps two diagonal words like Adam.",
+  "notes": "m_A 1.2-1.3 below 1B, shrinking with scale. Traits as published (from the scaling corpus): state at its stored precision, 2.5 bits per updated parameter. AdamW state plus Kronecker factors and eigenbases (SOAP); Sophia keeps two diagonal words like Adam. Standardized to compute at equal held-out loss (confidence medium); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
@@ -2812,29 +3084,33 @@
     "multiplier": 1.25,
     "trend": "shrinks-with-scale",
     "exponent_change": null,
-    "note": "SOAP 1.2-1.3x (claimed 1.4x)."
+    "note": "SOAP 1.2-1.3x."
    },
    {
     "evidence": [
-     "vyas-2024-soap/1"
+     "wen-2025-fantastic-optimizers/1",
+     "wen-2025-fantastic-optimizers/6"
     ],
-    "metric": "iterations to equal loss, large batch",
-    "compute_range_flop": null,
-    "multiplier": 1.67,
-    "trend": "unknown",
+    "metric": "same, log-linear in C",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 1.0,
+    "trend": "shrinks-with-scale",
     "exponent_change": null,
-    "note": "Claimed."
+    "note": "EXTRAPOLATION: reaches about 1 by 1e22."
    },
    {
     "evidence": [
      "kasimbeg-2025-algoperf/1"
     ],
-    "metric": "wall-clock vs NadamW, AlgoPerf",
+    "metric": "wall-clock vs NadamW",
     "compute_range_flop": null,
     "multiplier": 1.28,
     "trend": "constant",
     "exponent_change": null,
-    "note": "Distributed Shampoo, eight workloads."
+    "note": "Unchanged."
    },
    {
     "evidence": [
@@ -2847,7 +3123,7 @@
     "multiplier": 1.0,
     "trend": "grows-with-scale",
     "exponent_change": null,
-    "note": "Sophia's 2x claim falls to about 1 against tuned baselines: below AdamW at small compute, slightly above at larger size or data (Wen)."
+    "note": "Unchanged."
    }
   ],
   "multiplier": {
@@ -2856,7 +3132,7 @@
    "evidence": [
     "wen-2025-fantastic-optimizers/6"
    ],
-   "metric": "speedup vs tuned AdamW, 300-520M"
+   "metric": "speedup vs tuned AdamW, 300-520M; about 1.0 at 1e24-1e26 (EXTRAPOLATION)"
   },
   "confidence": "high",
   "convention": "as-published"
