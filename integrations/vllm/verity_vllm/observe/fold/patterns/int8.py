@@ -18,7 +18,6 @@ The K scales are the run header's (`RunHeader.profile["backends"]["int8_k_scales
 """
 from __future__ import annotations
 
-import dataclasses
 import math
 from dataclasses import dataclass
 
@@ -28,9 +27,9 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, is_row_major
 from verity_vllm.observe.fold.patterns.kv_cache import _kv_moves, kv_layer_of, kv_slots
 from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, op_name, op_parts
-from verity_vllm.observe.fold.patterns.resolutions import _group_compute, attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
 from verity_vllm.observe.fold.patterns.transparent import find_descendants, scope_transparents
-from verity_vllm.observe.fold.resolver import Compute, Const, GatherMany, PerRow, Resolution, Shared, StepContext, Unsupported
+from verity_vllm.observe.fold.resolver import Compute, Const, GatherMany, Group, PerRow, Resolution, Shared, StepContext, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 
 LIBRARY = "verity_int8"
@@ -140,7 +139,8 @@ class Int8AttentionScope:
     writes (K', V', s_v, f32(V'(0))) per KV head; its window_rows reads them and a row slice of the scope's query (its window's last
     rows), and its result is copied into the same rows of the scope's output.  Per request: one `Int8KvQuant_v1{s,D}` per KV head
     g, then one `Int8LutAttentionRow_v1{D,pos+1,SCALE}` per (row, head) in row then head order, each reading its KV head's K scale
-    as a Const32 -- the order `vllm_bindings.int8.Int8UnifiedAttentionRule` emits."""
+    as a Const32 -- the order `vllm_bindings.int8.Int8UnifiedAttentionRule` emits.  A `Group` over the scope: each Int8KvQuant_v1
+    claims its kv_quant call, whose results the Match capture snapshots under that call's event, not the scope's."""
 
     name: str = "int8.window_attention"
 
@@ -223,7 +223,7 @@ class Int8AttentionScope:
             fkv = bind(int8_exact.Int8KvQuant, S=s, D=D)
             for g in range(G):
                 computes.append(Compute(fkv, 1, (GatherMany(head(kcs, g), (slots,)), GatherMany(head(vcs, g), (slots,)), Const(32, kbits[g], "k_scale")),
-                                        (Shared(_slab(kq, g)), Shared(_slab(vq, g)), Shared(_slab(sv, g)), Shared(_slab(v0, g))), (),
+                                        (Shared(_slab(kq, g)), Shared(_slab(vq, g)), Shared(_slab(sv, g)), Shared(_slab(v0, g))), (kvn.id,),
                                         hint=f"{hint}/kv_quant", kernels=("elementwise_kernel", "reduce_kernel"), attribution=(rows[-1],),
                                         pattern=self.name))
             for i in range(n):
@@ -236,8 +236,7 @@ class Int8AttentionScope:
                                                     Shared(_keys(vq, g, p)), Shared(_slab(sv, g)), Shared(_slab(v0, g))), (Shared(_slab(di, hd)),), (),
                                             hint=hint, kernels=("_int_mm", "elementwise_kernel", "reduce_kernel"), attribution=(rows[i],),
                                             pattern=self.name))
-        primary = dataclasses.replace(computes[0], consumed=tuple(sorted(node.ids())))
-        return _group_compute(primary, before=tuple(before), also=tuple(computes[1:]))
+        return Group((*before, *computes), tuple(sorted(node.ids())), hint=hint, pattern=self.name)
 
 
 def _out0(node: TreeNode) -> ViewDesc | None:

@@ -10,7 +10,7 @@ from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import profile_for_case
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8RowQuant, Int8ScaledMm
-from verity_vllm.observe.fold.resolver import Compute, Const, GatherMany, PerRow, Shared, StepContext, Unsupported, spec_label
+from verity_vllm.observe.fold.resolver import Compute, Const, GatherMany, Group, PerRow, Shared, StepContext, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
 from verity_vllm.program import model as analytic
 
@@ -175,13 +175,16 @@ def test_int8_attention_resolves_kv_quant_per_kv_head_then_a_row_per_row_and_hea
     rows = [("r0", 0), ("r0", 1), ("r0", 2), ("r1", 5)]
     ctx = _ctx(rows, {"r0": 3, "r1": 6}, {"r0": [2], "r1": [5]})
     r = Int8AttentionScope().match(_attention(4, [(0, 3, 3, A_T0), (3, 1, 6, A_T1)]), ctx)
-    assert isinstance(r, Compute), r
-    computes = [r, *r.also]
+    assert isinstance(r, Group), r
+    computes = list(r.parts)
     sc = D ** -0.5
     kvq = lambda s: [f"Int8KvQuant_v1{{S={s},D={D}}}"] * G  # noqa: E731
     row = lambda p: [f"Int8LutAttentionRow_v1{{D={D},S={p},SCALE={sc}}}"] * H  # noqa: E731
     assert [spec_label(c.spec) for c in computes] == kvq(3) + row(1) + row(2) + row(3) + kvq(6) + row(6)
     assert all(c.rows == 1 for c in computes) and set(r.consumed) == set(range(1, 8))
+    # each KV quantization is stamped at its own kv_quant call (where the capture snapshots its results), the rows at the scope
+    assert [c.consumed for c in computes if spec_label(c.spec).startswith("Int8KvQuant")] == [(2,)] * G + [(5,)] * G
+    assert {c.consumed for c in computes if spec_label(c.spec).startswith("Int8LutAttentionRow")} == {()}
     k1 = computes[1]                              # r0's KV head 1: its slots of head 1 in the caches, its K scale, kv_quant's head-1 slabs
     assert k1.operands[0].indices == ((32, 33, 34),) and k1.operands[0].view.offset == 2 * D and k1.operands[0].view.shape == (NB * BS, D)
     assert k1.operands[1].view.offset == 3 * D and k1.operands[2] == Const(32, KBITS[1], "k_scale")
