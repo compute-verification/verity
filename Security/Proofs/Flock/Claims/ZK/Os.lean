@@ -52,18 +52,18 @@ end OsTape
 /-- **A3's bytes, decoded one for one, beside independent randomness, are a uniform tape**: in an experiment on `Ω × A`
 whose `Ω` is a byte source that meets A3, an event of the tape `e` decodes from it and of the rest has the probability it
 has at a uniform tape. -/
-theorem Pr_os_prod {Ω Y A : Type} [Fintype Ω] [Fintype Y] [Fintype A] {m : ℕ} {Ls : Fin m → ℕ}
+theorem Pr_os_prod {Ω Tp A : Type} [Fintype Ω] [Fintype Tp] [Fintype A] {m : ℕ} {Ls : Fin m → ℕ}
     {src : Ω → (i : Fin m) → Fin (Ls i) → Fin 256} (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Ls src)
-    (e : ((i : Fin m) → Fin (Ls i) → Fin 256) ≃ Y) (E : Y × A → Prop) :
+    (e : ((i : Fin m) → Fin (Ls i) → Fin 256) ≃ Tp) (E : Tp × A → Prop) :
     Pr (fun ω : Ω × A => E (e (src ω.1), ω.2)) = Pr E := by
   rw [Sampling.Pr_eq_toReal_prCoin, Sampling.Pr_eq_toReal_prCoin]
   congr 1
   calc FlockSoundness.Game.prCoin (fun ω : Ω × A => E (e (src ω.1), ω.2))
       = FlockSoundness.Game.prCoin (fun p : A × Ω => E (e (src p.2), p.1)) :=
         (FlockSoundness.ZK.prCoin_congr_equiv (Equiv.prodComm A Ω) fun ω : Ω × A => E (e (src ω.1), ω.2)).symm
-    _ = FlockSoundness.Game.prCoin (fun p : A × Y => E (p.2, p.1)) :=
+    _ = FlockSoundness.Game.prCoin (fun p : A × Tp => E (p.2, p.1)) :=
         ZkView.prCoin_os_prod hA3 e fun a y => E (y, a)
-    _ = FlockSoundness.Game.prCoin E := FlockSoundness.ZK.prCoin_congr_equiv (Equiv.prodComm A Y) E
+    _ = FlockSoundness.Game.prCoin E := FlockSoundness.ZK.prCoin_congr_equiv (Equiv.prodComm A Tp) E
 
 /-- **`ZkServer.zk_deferred` at the operating system's bytes**: the server's tape the bytes of a source that meets A3,
 read one for one (`O.e`), the bound unchanged. -/
