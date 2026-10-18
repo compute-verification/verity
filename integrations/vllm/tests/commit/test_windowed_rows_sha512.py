@@ -83,6 +83,52 @@ def test_learning_and_hit_runs_commit_step_rows_roots(monkeypatch, retain_levels
         com.close()
 
 
+class _SlotRunner(WR._Runner):
+    """A replayed graph's step: the per-token tensors land in persistent slots (the captured copies) and are staged from them in one
+    `stage_slot_plan` call and flushed (the source's drain); the rest are acquired one by one, as the logits and the sampled tokens are."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.slots: list[torch.Tensor] = []
+        self.handle = -1
+
+    def execute_model(self, scheduler_output, *a, **kw):
+        com, n = self.committer, scheduler_output.total_num_scheduled_tokens
+        per_token = [(nm, t) for nm, t in self.tensors if t.is_contiguous() and t.shape[0] == n and not nm.startswith(("logits", "runner."))]
+        if self.handle < 0:
+            self.slots = [torch.empty((8, *t.shape[1:]), dtype=t.dtype, device=t.device) for _nm, t in per_token]
+            self.handle = com.slot_plan([nm for nm, _t in per_token], self.slots, [1] * len(per_token))
+        for slot, (_nm, t) in zip(self.slots, per_token):
+            slot[:n].copy_(t)
+        com.stage_slot_plan(self.handle, n, n)
+        com._nc.flush()
+        for nm, t in self.tensors:
+            if all(nm != p for p, _t in per_token):
+                com._acquire(nm, t, com._cur)
+
+
+def test_side_stream_drain_commits_step_rows_roots(monkeypatch):
+    """A replayed step's slots gathered on the side stream (VERITY_DRAIN_SIDE, on by default), the serving stream joining it before its
+    next flush, window mark and step end, and the next step rewriting the slots on the serving stream: the same roots as one
+    acquisition per tensor in the same order; with VERITY_DRAIN_SIDE=0, the same roots with every flush on the serving stream."""
+    for side in (True, False):
+        monkeypatch.setenv("VERITY_DRAIN_SIDE", "1" if side else "0")
+        com = committer(monkeypatch, retain_levels=False)
+        runner = _SlotRunner()
+        runner.committer, com.runner = com, runner
+        try:
+            for rc in (WR.run(com, SCHED), WR.run(com, SCHED)):
+                keys, roots = com.row_keys, [s.root for s in rc.steps]
+                for i, kv in enumerate(SCHED):
+                    ts = WR.step_tensors(kv)
+                    first = [(nm, t) for nm, t in ts if t.is_contiguous() and t.shape[0] == len(kv) and not nm.startswith(("logits", "runner."))]
+                    order = first + [(nm, t) for nm, t in ts if all(nm != p for p, _t in first)]
+                    assert roots[i] == rows_root(i, order, keys[i]), (side, i)
+                assert rc.extra["native_collect"]["gather_side_flushes"] == (len(SCHED) if side else 0)
+        finally:
+            com.close()
+
+
 def test_capped_runs_commit_step_rows_roots(monkeypatch):
     """VERITY_ROWS_CAP_BLOCKS's policy on the worker (each window capped while the ring has room; test_rows_cuda splits launches)."""
     com = committer(monkeypatch)

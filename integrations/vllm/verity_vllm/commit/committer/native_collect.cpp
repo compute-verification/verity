@@ -23,6 +23,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <thread>
 #include <unistd.h>
@@ -315,10 +316,12 @@ struct Collector {
     return win_ptrs[sw->slots[static_cast<size_t>(off / win_bytes)]] + (off % win_bytes);
   }
 
-  // record the complete-events of the windows whose bytes are all covered by ISSUED copies (logical end `upto`); serving thread, compute stream
-  void mark_windows(int64_t upto) {
+  // record the complete-events of the windows whose bytes are all covered by ISSUED copies (logical end `upto`); serving thread, compute
+  // stream (or the side stream, from a side flush)
+  void mark_windows(int64_t upto, cudaStream_t side = nullptr) {
     if (!windowed || !sw) return;
-    cudaStream_t s = c10::cuda::getCurrentCUDAStream().stream();
+    if (!side) join_side();
+    cudaStream_t s = side ? side : c10::cuda::getCurrentCUDAStream().stream();
     const int64_t done_w = upto / win_bytes;                          // windows [0, done_w) are fully written
     if (win_marked >= done_w || win_marked >= static_cast<int64_t>(sw->slots.size())) return;
     std::lock_guard<std::mutex> g(win_mu);
@@ -523,6 +526,7 @@ struct Collector {
     step_issue_s = 0.0;
     step_flushes = 0;
     step_win_waits = 0; step_win_wait_s = 0.0;
+    side_next = false;
   }
 
   // A non-contiguous tensor whose memory is a set of equally spaced contiguous rows (e.g. RoPE's q/k views into the qkv buffer:
@@ -569,6 +573,7 @@ struct Collector {
   }
 
   inline void issue(int64_t off, int64_t gap, const at::Tensor& t, int64_t nb, bool skip_copy) {
+    join_side();
     cudaStream_t s = c10::cuda::getCurrentCUDAStream().stream();   // the PRODUCER's stream (same thread, same stream as the kernel that made `src`)
     ensure_windows(off + nb);                                        // (no-op unless windowed; may block for the worker)
     double t0 = now_s();
@@ -653,6 +658,7 @@ struct Collector {
   py::tuple end_step() {
     if (!active) throw std::runtime_error("end_step without begin_step");
     if (ring_pos != staged_from) throw std::runtime_error("end_step with staged copies not flushed");
+    join_side();
     active = false;
     if (windowed && sw) {
       // the last (partial) window: one event after everything issued this step
@@ -723,12 +729,13 @@ struct Collector {
     d["plans_dropped"] = plans.dropped(); d["plans_pending_emptied_step"] = plans.pending_emptied_step();
     d["strided_2d"] = tot_strided; d["contiguous_fallback"] = tot_fallback; d["flushes"] = tot_flushes; d["staged"] = tot_staged;
     d["gather_blocks"] = tot_blocks; d["auto_blocks"] = auto_blocks;
+    d["gather_side_flushes"] = tot_side_flushes; d["drain_side"] = side_drain;
     d["expected"] = tot_expected; d["committed"] = tot_committed;
     d["window_waits"] = win_waits; d["window_wait_s"] = win_wait_s; d["windowed"] = windowed;
     return d;
   }
 
-  void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_expected = tot_committed = 0; }
+  void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_side_flushes = 0; tot_expected = tot_committed = 0; }
   void clear_plans() { plans.clear(); plan = nullptr; }
   void end_run() {             // the committer's reset between runs: the run totals, and the plans the run that ended did not use (freed by
     reset_stats();             // the next run's steps, native_plans.h)
@@ -760,6 +767,7 @@ struct Collector {
     ring_dev = reinterpret_cast<GatherDesc*>(d);
     ring_cap = capacity;
     ring_pos = staged_from = 0;
+    if (const char* e = std::getenv("VERITY_DRAIN_SIDE")) side_drain = std::string(e) != "0";
   }
 
   inline void push_one(const char* src, char* dst, int64_t nb, int64_t width, int64_t pitch, int64_t skip) {
@@ -866,16 +874,49 @@ struct Collector {
     return off;
   }
 
+  // A replayed graph's slots (`stage_slot_plan`, slots only: nothing held, whose storage the allocator could hand to the serving stream)
+  // are gathered on a side stream, so the serving stream's next kernels (the logits GEMM, the sampler) need not wait for the copy. The
+  // serving stream joins it (`join_side`) before its next copy, window mark or step end: a window it completes holds this gather's
+  // bytes, and the next replay rewrites the slots. VERITY_DRAIN_SIDE=0, read at enable_gather, keeps every flush on the serving stream.
+  bool side_drain = true, side_next = false, side_pending = false;
+  cudaStream_t side_s = nullptr;
+  cudaEvent_t side_fork = nullptr, side_done = nullptr;
+  int64_t tot_side_flushes = 0;
+
+  void join_side() {
+    if (!side_pending) return;
+    side_pending = false;
+    cudaError_t rc = cudaStreamWaitEvent(c10::cuda::getCurrentCUDAStream().stream(), side_done, 0);
+    if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaStreamWaitEvent(side drain): ") + cudaGetErrorString(rc));
+  }
+
+  cudaStream_t fork_side(cudaStream_t cur) {
+    if (!side_s) {
+      cudaError_t rc = cudaStreamCreateWithFlags(&side_s, cudaStreamNonBlocking);
+      if (rc == cudaSuccess) rc = cudaEventCreateWithFlags(&side_fork, cudaEventDisableTiming);
+      if (rc == cudaSuccess) rc = cudaEventCreateWithFlags(&side_done, cudaEventDisableTiming);
+      if (rc != cudaSuccess) throw std::runtime_error(std::string("side drain stream: ") + cudaGetErrorString(rc));
+    }
+    cudaError_t rc = cudaEventRecord(side_fork, cur);
+    if (rc == cudaSuccess) rc = cudaStreamWaitEvent(side_s, side_fork, 0);
+    if (rc != cudaSuccess) throw std::runtime_error(std::string("side drain fork: ") + cudaGetErrorString(rc));
+    return side_s;
+  }
+
   void flush() {
     const int64_t n = ring_pos - staged_from;
+    const bool side = side_next && windowed && held.empty();
+    side_next = false;
     if (n <= 0) return;
     if (!ring) throw std::runtime_error("gather not enabled");
-    cudaStream_t s = c10::cuda::getCurrentCUDAStream().stream();
+    if (!side) join_side();
+    cudaStream_t cur = c10::cuda::getCurrentCUDAStream().stream();
+    cudaStream_t s = side ? fork_side(cur) : cur;
     double t0 = now_s();
+    const int64_t start = staged_from % ring_cap;
     const int bpd = blocks_for_window();
     win_max_nb = 0;
     tot_blocks += static_cast<int64_t>(bpd) * n;
-    const int64_t start = staged_from % ring_cap;
     if (start + n <= ring_cap) {
       int rc = verity_gather_launch(ring_dev + start, static_cast<int>(n), bpd, s);
       if (rc != 0) throw std::runtime_error(std::string("gather launch: ") + cudaGetErrorString(static_cast<cudaError_t>(rc)));
@@ -889,7 +930,12 @@ struct Collector {
     staged_from = ring_pos;
     held.clear();                       // the reads are enqueued in stream order before any later kernel on this stream
     ++step_flushes; ++tot_flushes;
-    if (windowed) mark_windows(pushed_end);    // every window fully behind the pushed frontier is now in flushed copies
+    if (windowed) mark_windows(pushed_end, side ? s : nullptr);   // every window fully behind the pushed frontier is now in flushed copies
+    if (!side) return;
+    const cudaError_t rc = cudaEventRecord(side_done, s);
+    if (rc != cudaSuccess) throw std::runtime_error(std::string("side drain done: ") + cudaGetErrorString(rc));
+    side_pending = true;
+    ++tot_side_flushes;
   }
 
   // ------------------------------------------------------------------ R11 collector v2: native hook bodies (no Python frames per producer)
@@ -947,6 +993,7 @@ struct Collector {
         put(p.ids[i], s.narrow(0, 0, rows));                                      // as slot[:rows]
       }
     }
+    side_next = side_drain && fast;
     return static_cast<int64_t>(p.slots.size());
   }
   void clear_slot_plans() { slot_plans.clear(); }
@@ -2057,6 +2104,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readwrite("slot_fast", &Collector::slot_fast)
       .def_readwrite("auto_blocks", &Collector::auto_blocks)
       .def_readwrite("auto_bytes_per_block", &Collector::auto_bytes_per_block)
+      .def_readwrite("drain_side", &Collector::side_drain)
       .def("drain_errors", &Collector::drain_errors)
       .def_readonly("active", &Collector::active)
       .def_readonly("learning", &Collector::learning);
