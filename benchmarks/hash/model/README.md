@@ -37,6 +37,8 @@ get under the target, and if not, the gap and the prefill rate that would close 
   for SHA-512 at 75.6 MB and applied to BLAKE3 too). Prefill isn't overlapped.
 - `--hm96 GPU/COLUMN/MODE=PREFILL[,DECODE]` replaces a fused row's rates. One number replaces the prefill rate; two replace
   both.
+- `--fused-bytes PREFILL,DECODE` replaces the fused rows' bytes a step (logits included), to price a Commit that keeps fewer
+  values at the same units; the decode rate follows the new window. `benchmarks/hash/bytes/` prices each candidate this way.
 - The 256 B row is served rows-sha512 as measured (`SERVED_256`, hashing GPU ms per step), which runs with the salts on the
   step. Its "pre" value removes the salt's 5 of 14 compressions. The other columns are not measured at 256 B ("n.m.").
 
