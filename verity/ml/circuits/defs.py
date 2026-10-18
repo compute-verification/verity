@@ -20,6 +20,7 @@ import bisect
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
+from .ports import bind_ports
 from .refs import Affine, Coll, Explicit, Refs, concat
 from .types import Array, Tuple as TupleT, Type, Value, remove_axis
 
@@ -67,7 +68,7 @@ TABLE_KINDS = ("library", "registered")
 class PrimitiveDefinition(FunctionDefinition):
     """`tables`: every table the primitive's definition reads by index (its evaluator, or the circuit that proves it), as
     ``(name, kind)`` with a kind of `TABLE_KINDS`. Such a table is no gate of the program, so only its declaration shows it
-    (`constants.program_data`)."""
+    (`constants.program_data`). `ports`: its port types (`ports.Ports`, PROTOCOL.md §12), None when it declares none."""
 
     name: str
     version: int
@@ -78,6 +79,7 @@ class PrimitiveDefinition(FunctionDefinition):
     conformance: str = "not-yet-established"  # exact-model-tested | model-untested | not-yet-established
     register: bool = True
     tables: tuple[tuple[str, str], ...] = ()
+    ports: Any = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.ret, Value):
@@ -87,6 +89,7 @@ class PrimitiveDefinition(FunctionDefinition):
         bad = [k for _n, k in self.tables if k not in TABLE_KINDS]
         if bad:
             raise ValueError(f"{self.id}: a table is a {' or '.join(TABLE_KINDS)} table, not {bad}")
+        self.port_types = bind_ports(self.id, self.params, self.ret, self.ports, primitive=True)
         if self.register:
             REGISTRY.add(self)
 
@@ -117,7 +120,8 @@ class PrimitiveDefinition(FunctionDefinition):
 class CompositeDefinition(FunctionDefinition):
     """`signature(S)` -> (params, ret); `body(B, S, *args)` -> Coll of type ret. `S` is a namespace over the
     statics (attribute access). Statics with default `None` must be bound before use. `refuse(bindings)`, given the
-    statics bound so far, says why `bind` refuses them (a binding the body does not cover), or returns None."""
+    statics bound so far, says why `bind` refuses them (a binding the body does not cover), or returns None. `ports`: its
+    port types (`ports.Ports`, PROTOCOL.md §12), or a function of `S` giving them; None when it declares none."""
 
     name: str
     version: int
@@ -128,6 +132,7 @@ class CompositeDefinition(FunctionDefinition):
     conformance: str = "not-yet-established"
     register: bool = True
     refuse: Callable[[dict], str | None] | None = field(default=None, repr=False)
+    ports: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         self.statics = tuple(self.statics)
@@ -184,7 +189,7 @@ def same_definition(a: "FunctionDefinition", b: "FunctionDefinition") -> bool:
     if type(a) is not type(b) or a.id != b.id:
         return False
     if isinstance(a, PrimitiveDefinition):
-        return a.params == b.params and a.ret == b.ret
+        return a.params == b.params and a.ret == b.ret and a.port_types == b.port_types
     if isinstance(a, CompositeDefinition):
         if a.statics != b.statics:
             return False
@@ -291,6 +296,9 @@ class Body:
         return k
 
 
+_UNBOUND = object()
+
+
 class SpecializedDefinition(FunctionDefinition):
     """A composite definition with (some) statics bound. Fully-bound specializations have a cached body."""
 
@@ -299,6 +307,7 @@ class SpecializedDefinition(FunctionDefinition):
         self.bindings = dict(bindings)
         self.key = key
         self._body: Body | None = None
+        self._port_types: Any = _UNBOUND
 
     @property
     def name(self) -> str:
@@ -360,6 +369,19 @@ class SpecializedDefinition(FunctionDefinition):
 
     def set_body(self, body: Body) -> None:  # used by the decoder
         self._body = body
+
+    @property
+    def port_types(self) -> Any:
+        """Its declared ports bound to its signature (`ports.PortTypes`), None when it declares none."""
+        if self._port_types is _UNBOUND:
+            decl = self.defn.ports
+            if callable(decl):
+                decl = decl(self.S())
+            self._port_types = None if decl is None else bind_ports(self.id, *self.signature(), decl)
+        return self._port_types
+
+    def set_port_types(self, pt: Any) -> None:  # used by the decoder and the lowering
+        self._port_types = pt
 
     def intrinsic(self) -> "IntrinsicSummary":
         """Intrinsic summary (IR §D.1): facts reusable for every instance of this specialization — gate
@@ -533,23 +555,24 @@ class Builder:
 
 
 def primitive(name: str, version: int, params: Sequence[tuple[str, Type]], ret: Value, doc: str = "",
-              conformance: str = "not-yet-established", tables: Sequence[tuple[str, str]] = ()):
+              conformance: str = "not-yet-established", tables: Sequence[tuple[str, str]] = (), ports: Any = None):
     """Decorator: register a one-output primitive with a total evaluator on encodings."""
 
     def deco(fn: Callable[..., int]) -> PrimitiveDefinition:
         return PrimitiveDefinition(name, version, tuple(params), ret, fn, doc=doc or (fn.__doc__ or ""), conformance=conformance,
-                                   tables=tuple(tables))
+                                   tables=tuple(tables), ports=ports)
 
     return deco
 
 
 def composite(name: str, version: int, statics: Sequence[str], signature, doc: str = "",
-              conformance: str = "not-yet-established", refuse: Callable[[dict], str | None] | None = None):
+              conformance: str = "not-yet-established", refuse: Callable[[dict], str | None] | None = None,
+              ports: Any = None):
     """Decorator: register a composite; the decorated function is the body builder `(B, S, *args) -> Coll`."""
 
     def deco(fn: Callable[..., Coll]) -> CompositeDefinition:
         return CompositeDefinition(name, version, tuple(statics), signature, fn, doc=doc or (fn.__doc__ or ""),
-                            conformance=conformance, refuse=refuse)
+                            conformance=conformance, refuse=refuse, ports=ports)
 
     return deco
 
