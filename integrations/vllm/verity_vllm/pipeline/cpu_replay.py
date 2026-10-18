@@ -17,7 +17,8 @@ Exit 0 PASS, 3 FAIL, 2 refused (a bundle that is not this record's, or a pick to
 
 Before the record is rewritten, the decided replay leaves its SLIM KEEP beside the bundle, `<out>/replay_slim_p<pair>/` (`keep`): what a
 later replay of the same picks reads, so the bundle can go and the Commit can still be replayed on CPU, under other Definition bodies,
-without serving again (the sample is seeded from the run root, so it draws the same picks):
+without serving again (the sample is drawn from the run's recorded live key over a root of record, from the run root over a recorded
+``vllm-v1`` root, so it draws the same picks):
 
     store/            the bundle's store, slim (`commit.store_dump`, `touched=`): only the byte ranges and Merkle nodes the replay and the
                       linkage opened, folding to the run root
@@ -259,6 +260,8 @@ def of_record(b: dict[str, Any], out: Path, *, awaiting: bool = True) -> tuple[l
     if not bm.is_file() or _sha256(bm) != b["manifest"]["files"]["binding_map.json"]["sha256"]:
         raise Refused(f"{bm} is not the bundle's binding map")
     run.weight_registration = c.get("weight_registration")
+    if (c.get("extra") or {}).get("challenge"):
+        run.extra["challenge"] = c["extra"]["challenge"]
     return rows, row, verdict, store, run
 
 

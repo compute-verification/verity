@@ -11,6 +11,7 @@ from typing import Any
 from verity_vllm.check.commit_rules import _d, _first, _int, _is_row_procedure, _leak, _linkage_of, _mk, _oracle_of, _replay_of
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, PASS, CheckResult
+from verity_vllm.commit import challenge as CH
 from verity_vllm.query.manifest.format import is_token_select
 
 _POPULATION_GAP_CLASSES = ("plane-fed", "interior-composed-v2")     # the MAN-06f / MAN-06g population moves (rev-cb M-0751 (b))
@@ -256,18 +257,27 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
             f"({', '.join(cls)}{'; ' + ', '.join(tags) if tags else ''}): {reasons}" + (f"; {sel_note}" if sel_note else "")), None
 
 
-def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | None, str]:
+def _replay_seed_of_record(sr: dict, run_root_hex: str | None, challenge: dict | None = None, *,
+                           measurement: bool = False) -> tuple[bool | None, str]:
     """[R16 rev F-r16-23 / M-0579] Is the sampled replay's SEED post-commitment?  The replay's adversarial meaning (C3: the picks are unknown
     before the bytes are committed) rests on the seed's form (`sample.seed_form`, `replay_codes.seed_form`).  This reads it as a FACT: the
     root form is recomputed from the record's run root (sample.seed == int.from_bytes(run_root[:8])); the verifier-challenge form is
     post-commitment by construction (sha256(challenge|root)); a `--replay-seed` seed is PROVER-CHOSEN before the run -> a MECHANISM run,
-    not a C2 of record.  Returns (True, how) / (False, why) / (None, why) when the record carries no seed source (legacy: not graded here)."""
+    not a C2 of record.  The live-key form (a run of record) is post-commitment when the sample's key is the live key the run drew after
+    its 64-byte root (``challenge``: the commit's ``extra.challenge``, `challenge.draw_live`) and the service challenger's
+    (`challenge.attested_reason`); a key handed to the prover's process, or its own, draws a measurement sample.  The root and challenge
+    forms read runs recorded before the record; a ``measurement`` run (``--root-of-record vllm-v1``, after it) has none of record, since a
+    draw a root fixes is grindable.  Returns (True, how) / (False, why) / (None, why) when the record carries no seed source (legacy: not
+    graded here)."""
     smp = sr.get("sample") if isinstance(sr.get("sample"), dict) else {}
     src = str(sr.get("seed_source") if sr.get("seed_source") is not None else smp.get("seed_source"))
     seed = sr.get("seed") if sr.get("seed") is not None else smp.get("seed")
     form = RC.seed_form(sr)
     if form is None:
         return None, "sampled replay seed source absent from the record"
+    if measurement and form in ("run-root", "challenge"):
+        return False, (f"sampled replay seed form {form} on a --root-of-record vllm-v1 run: a draw its root fixes is grindable "
+                       "(the prover recommits), a measurement sample, not a C2 of record")
     if form == "prover-chosen":
         return False, "sampled replay seed prover-chosen (--replay-seed): the picks were knowable before commitment -- a mechanism run, not a C2 of record"
     if form == "run-root":
@@ -300,7 +310,25 @@ def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | N
         if src != RC.challenge_seed_source(str(chal)):
             return False, f"sampled replay seed source text does not name the recorded challenge ({str(chal)[:16]!r})"
         return True, "seed == sha256(challenge|run_root)[:8] (recomputed from the recorded challenge)"
+    if form == "live-key":
+        ch = challenge if isinstance(challenge, dict) else {}
+        if not run_root_hex or len(str(run_root_hex)) != 128:
+            return False, f"sampled replay seed form live-key over run root {str(run_root_hex)[:16]}..., which is not a 64-byte root of record"
+        if not ch.get("key") or ch.get("after_run_root") != run_root_hex:
+            return False, "sampled replay seed form live-key but the commit records no live key drawn after its root (extra.challenge)"
+        if smp.get("challenge") != ch["key"]:
+            return False, "sampled replay seed form live-key but the sample's key (sample.challenge) is not the live key the commit drew"
+        why = CH.attested_reason(ch)
+        if why is not None:
+            return False, f"sampled replay drawn from a live key after the root of record, but {why}: a measurement sample, not a C2 of record"
+        return True, "sample drawn from the service challenger's live key after the root of record (challenge.replay_key)"
     return False, f"sampled replay seed source {src!r} is not a post-commitment form (run root / verifier challenge)"
+
+
+def _commit_seed_of_record(sr: dict, commit: dict) -> tuple[bool | None, str]:
+    """`_replay_seed_of_record` over a commit record: its run root, its live challenge, and whether it is a measurement run."""
+    extra = commit.get("extra") or {}
+    return _replay_seed_of_record(sr, commit.get("run_root"), extra.get("challenge"), measurement=extra.get("root_of_record") == "vllm-v1")
 
 
 def _partial_replay_named_gap(sr: dict | None, oc: dict | None) -> tuple[str | None, str | None]:
@@ -418,7 +446,7 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
             "A post-commitment stratified sample of required values replays exactly (bit-for-bit) from the committed bytes under the Program's registered relations.",
             ["sampled_replay.result", "sampled_replay.grade", "sampled_replay.why", "sampled_replay.sample", "sampled_replay_p*.json", "replay_cache"])
     C_SEED = ("local_replay/seed_of_record", "F-r16-23 / M-0579",
-              "The replay's seed is post-commitment as a FACT: recomputed from the run root (or the recorded verifier challenge), never prover-chosen.",
+              "The replay's seed is post-commitment as a FACT: over a root of record, the service challenger's live key after the root; over a recorded vllm-v1 root, recomputed from the run root (or the recorded verifier challenge); never prover-chosen.",
               ["sampled_replay.sample.seed", "sampled_replay.sample.seed_source", "sampled_replay.sample.challenge"])
     C_GAP = ("local_replay/population_gaps", "COORD M-0721 (1) / F-r16-02 / F-r16-07 / F-r16-20",
              "Every VU the replay left unevaluated is named under a class form (B) covers, and form (B) is complete over the values where it must stand in; plane-fed VUs never pass by name.",
@@ -473,7 +501,7 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
         _oc = oc
         mech = False
         if isinstance(sr, dict) and sr.get("result") is not False:
-            sok, swhy = _replay_seed_of_record(sr, commit.get("run_root"))
+            sok, swhy = _commit_seed_of_record(sr, commit)
             if sok is False:
                 missing_b = _form_b_complete_over_values(_oc)
                 if missing_b is not None:

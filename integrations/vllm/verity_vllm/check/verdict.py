@@ -400,7 +400,7 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
         # are graded by the finalizer (report), not here.
         _mech = False
         if isinstance(sr, dict) and sr.get("result") is not False:
-            _sok, _swhy = C2._replay_seed_of_record(sr, commit.get("run_root"))
+            _sok, _swhy = C2._commit_seed_of_record(sr, commit)
             if _sok is False:
                 _missing_b = C2._form_b_complete_over_values(_oc)
                 if _missing_b is not None:

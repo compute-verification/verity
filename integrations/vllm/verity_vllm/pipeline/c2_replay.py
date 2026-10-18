@@ -117,6 +117,8 @@ def cache_key(s: Site) -> str | None:
     try:
         if getattr(args, "replay_seed", None) is not None:
             _ks: Any = int(args.replay_seed)
+        elif CH.of_record(bytes(rc.run_root)):
+            _ks = "live-key:" + CH.source_of(rc).hex()
         elif getattr(args, "replay_challenge", None):
             _ks = CH.challenge_seed(str(args.replay_challenge), rc.run_root)
         else:
@@ -239,18 +241,31 @@ def arrivals(s: Any, rl: dict[str, str]) -> tuple[dict[str, int], bool]:
 
 
 def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
-    """[O6] the seed is not prover-choosable in advance: derived from the run root AFTER commitment unless a targeted seed is given."""
+    """[O6] the seed is not prover-choosable in advance: derived from the run root AFTER commitment unless a targeted seed is given.  A
+    run of record (`commit.record`) draws its sample from the live key it drew after its root (`live_key_of`): the form ``live-key``,
+    the key on the record as ``sample.challenge``."""
     from verity_vllm.check.replay import driver as SR, replay_codes as RC
 
     _seed_chal = None
     if getattr(args, "replay_seed", None) is not None:
         _seed, _seed_src, _seed_form = int(args.replay_seed), RC.PROVER_SEED_SOURCE, "prover-chosen"
+    elif CH.of_record(bytes(rc.run_root)):
+        if getattr(args, "replay_challenge", None):
+            raise ValueError("--replay-challenge draws over a vllm-v1 root; a run of record takes the auditor's key as --challenge-key")
+        _seed, _seed_src, _seed_form, _seed_chal = 0, RC.LIVE_KEY_SOURCE, "live-key", CH.source_of(rc).hex()
     elif getattr(args, "replay_challenge", None):
         (_seed, _seed_src), _seed_form = SR.challenge_seed(str(args.replay_challenge), rc.run_root), "challenge"
         _seed_chal = str(args.replay_challenge)            # [rev M-0600] the full challenge goes on the record (sample.challenge)
     else:
         _seed, _seed_src, _seed_form = CH.root_seed(rc.run_root), RC.ROOT_SEED_SOURCE, "run-root"
     return _seed, _seed_src, _seed_form, _seed_chal
+
+
+def live_key_of(args: Any, rc: Any) -> Any:
+    """The replay sample's key over a run of record (`challenge.replay_key` from its live source), else None (the seed draws)."""
+    if getattr(args, "replay_seed", None) is not None or not CH.of_record(bytes(rc.run_root)):
+        return None
+    return CH.replay_key(CH.source_of(rc), bytes(rc.run_root))
 
 
 def draw_of(args: Any) -> str:
@@ -384,7 +399,7 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
     lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=facts["embed_op_path"], splits_of_record=_spr, eos_of_record=_eos, eos_lag_rows=_lag)
     _sr_kw, _ep_facts = executed_prefix_kw(s, _epr_r, lk, _arr, _rl)
     _kw = dict(arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
-               seed_challenge=_seed_chal,
+               seed_challenge=_seed_chal, challenge_key=live_key_of(args, rc),
                max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
                replay_draw=draw_of(args), workers=getattr(args, "replay_workers", None), retention=_retention,
                ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
@@ -395,7 +410,8 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
     if planner is not None:
         t0 = time.perf_counter()
         got = planner.plan({"binding_map": str(s.out / f"binding_map_p{pair}.json"), "arrivals": _arr, "seed": _seed, "seed_source": _seed_src,
-                            "seed_challenge": _seed_chal, "sr_kw": _sr_kw})
+                            "seed_challenge": _seed_chal, "sr_kw": _sr_kw, "run_root": bytes(rc.run_root).hex(),
+                            "live_key": None if _kw["challenge_key"] is None else _seed_chal})
         t1 = time.perf_counter()
         SD.touch(s.com, got["reads"])
         return got["plan"] | {"prepare_s": facts.get("prepare_s"), "reads": len(got["reads"]), "draw_s": round(t1 - t0, 3),

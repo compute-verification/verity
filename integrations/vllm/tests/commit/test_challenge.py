@@ -129,7 +129,7 @@ def test_a_run_of_record_draws_only_from_its_live_source():
     with pytest.raises(ValueError, match="no live key"):
         CH.positions_of(run, 8)
     key = CH.draw_live(run, AUDITOR_KEY.hex())
-    assert key == AUDITOR_KEY and run.extra["challenge"] == {"key": AUDITOR_KEY.hex(), "origin": "auditor", "after_run_root": RECORD_ROOT.hex()}
+    assert key == AUDITOR_KEY and run.extra["challenge"] == {"key": AUDITOR_KEY.hex(), "origin": "unattested", "after_run_root": RECORD_ROOT.hex()}
     want = derive(AUDITOR_KEY, CH.POSITIONS_DOMAIN, {"run_root": RECORD_ROOT, "salt": b"p", "layout": "5,0,9,3"})
     cum = [5, 5, 14, 17]
     got = CH.positions_of(run, 40, b"p")
@@ -145,7 +145,39 @@ def test_own_coins_are_fresh_and_bound_to_the_root_they_follow():
     with pytest.raises(ValueError, match="no live key"):
         CH.positions_of(a, 2)
     with pytest.raises(ValueError, match="at least 16 bytes"):
-        CH.live_source("00" * 8)
+        CH.key_challenger("00" * 8)
+
+
+def test_the_openings_take_their_challenge_from_a_challenger_seam_and_only_the_service_challengers_is_of_record(monkeypatch):
+    """`draw_live` asks a `Challenger` (root in, `LiveChallenge` out); positions are a function of the root and that challenge alone.
+    A key handed in or the run's own bytes are never attested; the service challenger's is, once `ATTEST` accepts its provenance."""
+    asked = []
+
+    def service(root: bytes) -> CH.LiveChallenge:
+        asked.append(root)
+        return CH.LiveChallenge(AUDITOR_KEY, root, CH.ATTESTED, {"opening": "stand-in"})
+
+    run = _Run(RECORD_ROOT, [6, 6])
+    assert CH.draw_live(run, service) == AUDITOR_KEY and asked == [RECORD_ROOT]
+    assert run.extra["challenge"]["provenance"] == {"opening": "stand-in"}
+    assert CH.positions_of(run, 5) == CH.record_positions(RECORD_ROOT, [6, 6], 5, source=AUDITOR_KEY)
+    assert "is plugged in yet" in CH.attested_reason(run.extra["challenge"])
+    monkeypatch.setattr(CH, "ATTEST", lambda ch: None if ch.get("provenance") else "no opening")
+    assert CH.attested_reason(run.extra["challenge"]) is None
+    for given in (AUDITOR_KEY.hex(), None):
+        other = _Run(RECORD_ROOT, [6, 6])
+        CH.draw_live(other, given)
+        assert "not the service challenger's" in CH.attested_reason(other.extra["challenge"])
+    with pytest.raises(ValueError, match="not a live challenge after its root"):
+        CH.draw_live(_Run(RECORD_ROOT, [1]), lambda root: CH.LiveChallenge(AUDITOR_KEY, bytes(64), CH.ATTESTED))
+
+
+def test_reference_rows_from_a_live_key_are_a_subset_of_the_pending_rows():
+    got = CH.reference_rows(AUDITOR_KEY, 120, 30, 8)
+    assert got == sorted(derive(AUDITOR_KEY, CH.REFERENCE_ROWS_DOMAIN, {"rows_total": 120, "pending": 30}).subset(8, 30, "rows"))
+    assert len(set(got)) == 8 and all(0 <= r < 30 for r in got)
+    assert CH.reference_rows(AUDITOR_KEY, 120, 3, 8) == [0, 1, 2]
+    assert CH.reference_rows(b"another auditor key", 120, 30, 8) != got
 
 
 def test_a_recorded_vllm_v1_run_reads_the_legacy_draws():

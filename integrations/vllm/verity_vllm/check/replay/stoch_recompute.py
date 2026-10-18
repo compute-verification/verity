@@ -400,7 +400,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
 
 def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = None, workload: str | Path | None = None,
                   jobs: int | None = None, build_dir: str | Path | None = None, evaluator: str = "lane",
-                  reference_rows: int = 0) -> dict:
+                  reference_rows: int = 0, challenge_key: str | None = None) -> dict:
     from verity_vllm.program.kernels import sampling_rng as R
     from verity_vllm.check.fold_compare import SnapshotStore
     from verity_vllm.properties.admission import evaluate_spec
@@ -608,12 +608,17 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
                        "seconds": 0.0}
     if evaluator != "lane" and reference_rows and pending:
         from verity_vllm.commit import challenge as CH
-        pick = sorted(CH.stream(CH.reference_rows_seed(sampled_rows_total, len(pending))).sample(range(len(pending)), min(int(reference_rows), len(pending))))
+        if challenge_key:
+            pick = CH.reference_rows(bytes.fromhex(challenge_key), sampled_rows_total, len(pending), int(reference_rows))
+            selection = f"drawn from the live key over the value-checked rows ({CH.REFERENCE_ROWS_DOMAIN})"
+        else:
+            pick = sorted(CH.stream(CH.reference_rows_seed(sampled_rows_total, len(pending))).sample(range(len(pending)), min(int(reference_rows), len(pending))))
+            selection = ("seeded sample over the value-checked rows (seed = sampled_rows_total x 7919 + rows pending; no live key): "
+                         "extra coverage, never a sample")
         t_ref = time.time()
         ref_results = _evaluate_all([pending[k][1] for k in pick], jobs, "lane")
         ref_check.update(reference_evaluator="lane", rows_requested=int(reference_rows), rows_checked=len(pick), seconds=round(time.time() - t_ref, 1),
-                         rows=[{"step": rows[pending[k][0]]["step"], "row": rows[pending[k][0]]["row"]} for k in pick],
-                         selection="seeded sample over the value-checked rows (seed = sampled_rows_total x 7919 + rows pending)")
+                         rows=[{"step": rows[pending[k][0]]["step"], "row": rows[pending[k][0]]["row"]} for k in pick], selection=selection)
         for k, (rtok, rmasked, rsecs) in zip(pick, ref_results):
             tok, masked_rec, _ = results[k]
             rec = rows[pending[k][0]]
@@ -728,12 +733,15 @@ class Options:
     reference_rows: int = option("--reference-rows", type=int, env="STOCH_REFERENCE_ROWS", default=8,
                                  help="under --evaluator rows: this many value-checked rows ALSO go through the lane walk; token + masked row must agree "
                                  "word for word or the verdict is FAIL by name (default 8; env STOCH_REFERENCE_ROWS)")
+    challenge_key: str | None = option("--challenge-key", env="VERITY_CHALLENGE_KEY", default=None,
+                                       help="a live key (hex) the reference rows are drawn from (challenge.reference_rows); without one they "
+                                       "are a fixed seeded pick, extra coverage only")
 
 
 def main(a: Options) -> int:
     run = Path(a.run)
     rep = recompute_run(run / "capture" / "log.jsonl.gz", run / "capture", a.max_rows, workload=a.workload, jobs=a.jobs, build_dir=a.build,
-                        evaluator=a.evaluator, reference_rows=a.reference_rows)
+                        evaluator=a.evaluator, reference_rows=a.reference_rows, challenge_key=a.challenge_key)
     out = Path(a.out) if a.out else run / "stoch_recompute.json"
     out.write_text(json.dumps(rep, indent=1, default=str))
     s = rep["summary"]

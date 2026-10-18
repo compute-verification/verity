@@ -29,11 +29,12 @@ NOT_YET = {
     "AttentionHead_v1": "consumes the request's K/V history across steps (state-linked replay, v2)",
 }
 
-#: how the sample seed was chosen: after commitment from the run root, from a verifier challenge bound to the run root, or by the prover
-#: before the run (`--replay-seed`)
-SEED_FORMS = ("run-root", "challenge", "prover-chosen")
+#: how the sample seed was chosen: after commitment from the run root, from a verifier challenge bound to the run root, by the prover
+#: before the run (`--replay-seed`), or (a run of record, `commit.record`) from the live key drawn after its root (`challenge.replay_key`)
+SEED_FORMS = ("run-root", "challenge", "prover-chosen", "live-key")
 ROOT_SEED_SOURCE = "run root (first 8 bytes, after commitment)"
 PROVER_SEED_SOURCE = "--replay-seed (targeted)"
+LIVE_KEY_SOURCE = "live key drawn after the root of record (challenge.replay_key(key, run_root); sample.challenge = the key)"
 _CHALLENGE_SEED_PREFIX = "verifier challenge "
 _NO_EVALUATOR_PREFIX = "no registered evaluator for "
 
@@ -106,6 +107,8 @@ def seed_form(sr: dict) -> str | None:
         return "prover-chosen"
     if src == ROOT_SEED_SOURCE:
         return "run-root"
+    if src == LIVE_KEY_SOURCE:
+        return "live-key"
     if src.startswith(_CHALLENGE_SEED_PREFIX):
         return "challenge"
     return "unknown"

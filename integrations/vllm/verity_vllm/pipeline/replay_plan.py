@@ -84,6 +84,7 @@ def serve(conn: Connection) -> None:
 
 def _serve(conn: Connection, args: Any) -> None:
     from verity_vllm.check.replay import driver as SR
+    from verity_vllm.commit import challenge as CH
     from verity_vllm.commit.partition import require_partition
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import c2_replay as C2
@@ -112,6 +113,7 @@ def _serve(conn: Connection, args: Any) -> None:
 
     sr = SR.sampled_replay(progs, json.loads(Path(f["binding_map"]).read_text()), committed, None, arrivals=f["arrivals"], per_stratum=int(args.replay_per_stratum),
                            seed=f["seed"], seed_source=f["seed_source"], seed_challenge=f["seed_challenge"], max_evaluate=int(args.replay_max),
+                           challenge_key=CH.replay_key(bytes.fromhex(f["live_key"]), bytes.fromhex(f["run_root"])) if f.get("live_key") else None,
                            targets=list(args.replay_target or []), replay_k=args.replay_k, replay_draw=C2.draw_of(args), ring_slots=ring, manifest=q, program_dirs=dirs, plan=True,
                            memo=memo, **f["sr_kw"])
     conn.send({"reads": list(dict.fromkeys(reads)), "plan": sr | {"reads_made": len(reads)}})

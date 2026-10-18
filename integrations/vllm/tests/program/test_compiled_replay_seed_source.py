@@ -1,7 +1,7 @@
 """[R16 compiled, coord ruling 41 / rev F-r16-23] the compiled check's sampled-replay seed is POST-COMMITMENT AS A FACT.
 
-commit_delta draws the CompiledKernelCheck's random steps from the run root: seed = int(run_root.hex()[:8], 16) (first 4 bytes), and
-records that form on value_correspondence.compiled_check.seed_source (COMPILED_REPLAY_SEED_SOURCE).  The finalizer recomputes the seed from
+commit_delta draws the CompiledKernelCheck's random steps from a recorded vllm-v1 run root: seed = int(run_root.hex()[:8], 16) (first 4
+bytes), and from the live key over a root of record (COMPILED_RECORD_SEED_SOURCE, `challenge.kernel_seed_of`); it records that form on value_correspondence.compiled_check.seed_source (COMPILED_REPLAY_SEED_SOURCE).  The finalizer recomputes the seed from
 the same runs.jsonl's run_root and refuses any other value.  Torch-free: the constant and the call site are read from the source text (the
 module imports torch/vllm), and the rule is exercised on the R16 records of this lane when present.
 """
@@ -25,8 +25,9 @@ def test_the_constant_names_the_form_and_the_call_site_uses_both() -> None:
     src = SRC.read_text()
     m = re.search(r'^COMPILED_REPLAY_SEED_SOURCE = "(.*)"$', src, re.M)
     assert m and m.group(1) == FORM
-    call = re.search(r"CompiledKernelCheck\(com, eng\.model, _toks, seed=CH\.kernel_check_seed\(rc\.run_root\),.*?seed_source=COMPILED_REPLAY_SEED_SOURCE\)", src, re.S)
-    assert call, "the compiled check must be seeded from the run root AND record the form"
+    call = re.search(r"CompiledKernelCheck\(com, eng\.model, _toks, seed=CH\.kernel_seed_of\(rc\),.*?"
+                     r"seed_source=COMPILED_RECORD_SEED_SOURCE if CH\.of_record\(rc\.run_root\) else COMPILED_REPLAY_SEED_SOURCE\)", src, re.S)
+    assert call, "the compiled check must be seeded after the run root (its live key over a root of record) AND record the form"
     from verity_vllm.commit import challenge as CH
     root = "1491" + "ab" * 30
     assert CH.kernel_check_seed(bytes.fromhex(root)) == seed_of_record(root)
