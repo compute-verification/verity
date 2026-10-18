@@ -57,7 +57,7 @@ def _engine_main(args) -> None:
     prof.apply_env()
     from vllm import LLM
 
-    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.engine import served, vllm_adapter as va
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.engine.rank_worker import EXTENSION
 
@@ -65,7 +65,7 @@ def _engine_main(args) -> None:
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, None)
     case = va.case_of(wl, args.case)
-    env_flags = prof.apply_env()
+    env_flags = {**prof.apply_env(), **served.apply(wl["execution"])}
     cp = prof.checkpoint_for(case, args.checkpoints)
     kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
     kw["enable_prefix_caching"] = False

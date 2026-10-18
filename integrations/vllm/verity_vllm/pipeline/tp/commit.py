@@ -36,6 +36,7 @@ from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import group, option
+from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import config_run as TPC
@@ -231,6 +232,7 @@ def main(args: Options) -> int:
     from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.partition import require_partition
     from verity_vllm import protocol_options as PO
+    from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS, condition_on_witnesses
     if args.world is not None:
         args.tp = int(args.world)
     if args.replay_deferred and (not args.required_manifest or args.no_sampled_replay):
@@ -256,7 +258,7 @@ def main(args: Options) -> int:
     wl = va.load_workload(args.workload, None)
     TPL.acquire()             # a leased Commit's GPUs, all at once, to its last run's finalize (pipeline.tp.lease); the target reads the device
     target = PO.commit_guard(va.target_of_workload(wl), world=args.tp, installs=False)      # exit 3 when the target declares protocols
-    target_env, target_kw = TT.apply(target)      # as `tp-capture` applies it, and every rank's engine checked against it (`tp.target`)
+    target_env, target_kw = TT.apply(target, wl["execution"])    # as `tp-capture` applies it, and every rank's engine checked against it (`tp.target`)
     case = va.case_of(wl, args.case)
     env_flags = {**prof.apply_env(), **target_env}
     cp = prof.checkpoint_for(case, args.checkpoints)
@@ -267,10 +269,11 @@ def main(args: Options) -> int:
     print(f"[tp2commit] tp={args.tp} case={case} committer={args.committer} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
     llm, build_s, topo = PH.engine(lambda: LLM(**kw), args.tp, args.rpc_timeout, model=cp["repo"], enforce_eager=kw.get("enforce_eager"), case=case, max_num_seqs=args.max_num_seqs)
     TT.require_ranks(llm, target, args.rpc_timeout)
+    served = SV.require(llm, wl, target, out, args.rpc_timeout)
     eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case, target=target)
     world = len(topo)
     versions = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
-                "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")}, "target": TT.as_json(target),
+                "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")}, "target": TT.as_json(target), "served": served,
                 "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT", "HIDDEN_GPU"))},
                 "env_required": {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}, "ranks": topo, "root_combination": "tp_run_root = SHA-256(tag || u32 world || (u32 rank || root_rank)...)",
                 "root_tag": TP_ROOT_TAG.decode(), "layout_version_per_rank": "chunk-leaf-v1 (unchanged)", "required_classes": list(required_classes),
@@ -381,7 +384,7 @@ def main(args: Options) -> int:
                                           "tp_relabel": relabel, "tp_partials_omit_rank": args.omit_rank_partials,
                                           "match_tokens": match_tokens, "tp_swap_requests": swap_requests, "match_capture_dir": match_capture_dir, "replay": replay_cfg,
                                           "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources),
-                                          "weights_as_loaded": weights_as_loaded(weights_pin_cfg),
+                                          "weights_as_loaded": weights_as_loaded(weights_pin_cfg), "post_load_tensors": WR.post_load_tensors(builds),
                                           "tp_partials_flip_site": ({args.flip_partial.split(":", 1)[0]: args.flip_partial.split(":", 1)[1]} if args.flip_partial else None),
                                           "tp_partials_omit_site": ({args.omit_partial_site.split(":", 1)[0]: args.omit_partial_site.split(":", 1)[1]} if args.omit_partial_site else None),
                                           "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}})
@@ -456,11 +459,14 @@ def main(args: Options) -> int:
                         bundles_of[pair] = {int(f["rank"]): (f.get("sampled_replay") or {}).pop("bundle", None) for f in fin}
             if arm != "control":
                 if match_capture_dir is not None:
-                    print("[tp2commit] match oracle (tp partials vs capture): " + "; ".join(
-                        f"rank {f['rank']} {(f.get('match_oracle') or {}).get('verdict')} steps {(f.get('match_oracle') or {}).get('steps_compared')} tensors {(f.get('match_oracle') or {}).get('tensors')} "
-                        f"equal {(f.get('match_oracle') or {}).get('equal')} mismatch {(f.get('match_oracle') or {}).get('mismatch_n')} missing {(f.get('match_oracle') or {}).get('missing_n')} "
-                        f"not_in_oracle {(f.get('match_oracle') or {}).get('not_in_oracle_n')} {(f.get('match_oracle') or {}).get('by_member')} {(f.get('match_oracle') or {}).get('error') or ''}"
-                        for f in sorted(fin, key=lambda f: f["rank"])), flush=True)
+                    differs = condition_on_witnesses({int(f["rank"]): f.get("match_oracle") for f in fin})
+                    print(f"[tp2commit] match oracle (tp partials vs capture), {len(differs)} differing MoE align witness(es)"
+                          + (f", first rank {differs[0]['rank']} step {differs[0]['step']} k {differs[0]['k']} {differs[0]['module']}" if differs else "") + ": " + "; ".join(
+                        f"rank {f['rank']} {mo.get('verdict')} steps {mo.get('steps_compared')} tensors {mo.get('tensors')} compared {mo.get('compared')} "
+                        f"equal {mo.get('equal')} exempt {mo.get('exempt')} mismatch {mo.get('mismatch_n')} missing {mo.get('missing_n')} "
+                        f"not_in_oracle {mo.get('not_in_oracle_n')} witnesses equal {(mo.get('witnesses') or {}).get('equal')} unpaired {(mo.get('witnesses') or {}).get('unpaired_n')} "
+                        f"{mo.get('by_member')} {mo.get('error') or ''}"
+                        for f in sorted(fin, key=lambda f: f["rank"]) for mo in [f.get("match_oracle") or {}]), flush=True)
                 if replay_cfg is not None:
                     for f in sorted(fin, key=lambda f: f["rank"]):
                         srr = ((f.get("sampled_replay") or {}).get("sampled_replay") or {})
@@ -548,10 +554,7 @@ def main(args: Options) -> int:
                         mo = f.get("match_oracle")
                         cblock["match_oracle"] = mo
                         if match_capture_dir is not None and (mo is None or mo.get("verdict") != "PASS"):
-                            why_ = (f"match oracle (tp partials vs tp2_match capture): {(mo or {}).get('why') or (mo or {}).get('error') or 'not run'}"
-                                    if not mo or not mo.get("tensors") else
-                                    f"match oracle: {mo.get('mismatch_n')} mismatching / {mo.get('missing_n')} missing in commit / {mo.get('not_in_oracle_n')} committed not in oracle "
-                                    f"of {mo.get('tensors')} tensors (first: {(mo.get('mismatches') or mo.get('missing_in_commit') or mo.get('committed_not_in_oracle') or [None])[0]})")
+                            why_ = f"match oracle (tp partials vs tp2_match capture): {(mo or {}).get('why') or (mo or {}).get('error') or 'not run'}"
                             ok, why = False, (f"{why}; also: {why_}" if not ok and why else why_)
                         ok, why = C2.c2_and_pin_gates(cblock, f, ok, why, rank=rk, replay_on=replay_cfg is not None, required=args.required_manifest is not None,
                                                    bundle=RB.path(out, pair, rank=rk).name)
@@ -849,7 +852,7 @@ def main(args: Options) -> int:
                                                                "per_rank": {r_: {k2: (c.get("attribution") or {}).get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "why")}
                                                                             for r_, c in C2.last_per_rank(rows).items()}}),
             # [coord M-0481 form (B), TP family] committed TP partials / MoE received outputs vs the Match capture's stored collectives, per rank
-            "match_oracle": (None if match_capture_dir is None else {r_: {k2: (c.get("match_oracle") or {}).get(k2) for k2 in ("verdict", "steps_compared", "tensors", "equal", "mismatch_n", "missing_n", "not_in_oracle_n", "by_member", "why", "error")}
+            "match_oracle": (None if match_capture_dir is None else {r_: {k2: (c.get("match_oracle") or {}).get(k2) for k2 in TPS_SUMMARY_KEYS}
                                                                      for r_, c in C2.last_per_rank(rows).items()}),
             "oracle_compare": C2.oracle_compare_component(rows, versions, man_doc),
             # [TP-08 / MAN-06 form (A) per rank] the C2 of record, folded over ranks and pairs (full records in finalize_pair<k>.json)
@@ -863,7 +866,7 @@ def main(args: Options) -> int:
             "weights_pin": {k: wp_comp.get(k) for k in ("result", "per_rank", "why", "checkpoint_dir")},
             "required_manifest": (None if man_doc is None else {"path": args.required_manifest, "manifest_digest": man_doc.get("manifest_digest"),
                                                                 "identities": (man_doc.get("populations") or {}).get("identities"), "program_digest_per_rank": man_doc.get("program_digest_per_rank")}),
-            "negatives": versions["negatives"],
+            "negatives": versions["negatives"], "served": versions["served"],
             "pass": all_pass and all(r["tokens_equal_ref"] for r in rows), "required_classes": list(required_classes)}
     if args.only_arm:
         summ.update(TPC.only_arm_summary(args.only_arm, rows, trt, summ["commit_pass"]))

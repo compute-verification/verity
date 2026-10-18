@@ -45,6 +45,8 @@ first butterfly level is contracted, as above, so BLOCK is at least two elements
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import numpy as np
 
 from verity.ml.circuits.defs import composite

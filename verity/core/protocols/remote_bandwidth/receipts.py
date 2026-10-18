@@ -56,6 +56,7 @@ that one read of a block serves at most one receipt of the pass; a plan that rep
 the tree's, not necessarily the reads': listed in store order, a plan is one run per contiguous range it reads.
 `Plan.from_array` takes the runs as an (R, 2) numpy array, as a store holds them, and checks and encodes them in numpy
 (`verity.ml.kernels.plans`: a protocol imports no third-party package); the suite holds it to `Plan` on the same rows.
+`Plan.changed` is the next pass's plan from its change, the blocks it adds and removes, in store order.
 """
 
 from __future__ import annotations
@@ -195,6 +196,47 @@ class Plan:
             else:
                 runs.append((j, 1))
         return cls(tuple(runs), blocks)
+
+    def changed(self, added: Sequence[tuple[int, int]], removed: Sequence[tuple[int, int]], blocks: int) -> Plan:
+        """The next pass's plan from its change, the form a plan travels in (PROTOCOL.md §8): this plan's blocks less
+        `removed`, each of which it holds, plus `added`, none of which it then holds, in store order, in a store of
+        `blocks` blocks, at least this plan's.  `added` and `removed` are runs (first, count) in any order, disjoint,
+        or empty.  Refused (ValueError) otherwise, or if no block is left."""
+        if type(blocks) is not int or blocks < self.blocks:
+            raise ValueError("a plan's store only grows")
+
+        def spans(runs: Sequence[tuple[int, int]], name: str) -> list[tuple[int, int]]:
+            if not isinstance(runs, Sequence) or any(
+                    type(r) is not tuple or len(r) != 2 or any(type(x) is not int for x in r) or r[0] < 0 or r[1] < 1
+                    or r[0] + r[1] > blocks for r in runs):
+                raise ValueError(f"{name} is runs (first, count) with count ≥ 1, inside the store")
+            out = sorted((f, f + c) for f, c in runs)
+            if any(a[1] > b[0] for a, b in zip(out, out[1:])):
+                raise ValueError(f"{name} is disjoint runs")
+            return out
+
+        kept, gone = [], iter(spans(removed, "a change's removed blocks"))
+        r = next(gone, None)
+        for a, b in sorted((f, f + c) for f, c in self.runs):
+            while r is not None and r[0] < b:
+                if r[0] < a or r[1] > b:
+                    raise ValueError("a change removes a block its plan does not hold")
+                if r[0] > a:
+                    kept.append((a, r[0]))
+                a, r = r[1], next(gone, None)
+            if a < b:
+                kept.append((a, b))
+        if r is not None:
+            raise ValueError("a change removes a block its plan does not hold")
+        out: list[tuple[int, int]] = []
+        for a, b in sorted(kept + spans(added, "a change's added blocks")):
+            if out and a < out[-1][1]:
+                raise ValueError("a change adds a block its plan holds")
+            if out and a == out[-1][1]:
+                out[-1] = (out[-1][0], b)
+            else:
+                out.append((a, b))
+        return Plan(tuple((a, b - a) for a, b in out), blocks)
 
     @property
     def length(self) -> int:
@@ -431,7 +473,12 @@ def domain(seed: bytes, plan: Plan) -> CommitmentDomain:
 def hidden(row: bytes, salt: bytes) -> bytes:
     """`row`'s committed value as an hm96-sha512/row/v2 leaf: the hm96-sha512 leaf over its sha512/row/v2 digest under
     `salt` (a receipt leaf's receipts, or a payload block)."""
-    return HM96.tree_leaf(KEY, HM96.commit_string(KEY, sha512_row_v2_digest(row, 8 * len(row)), salt))
+    return hidden_digest(sha512_row_v2_digest(row, 8 * len(row)), salt)
+
+
+def hidden_digest(x: bytes, salt: bytes) -> bytes:
+    """`hidden` of a row from its sha512/row/v2 digest `x` alone (a payload block's `d_j`)."""
+    return HM96.tree_leaf(KEY, HM96.commit_string(KEY, x, salt))
 
 
 def tree(seed: bytes, plan: Plan, ys: Sequence[bytes], salts: Sequence[bytes]) -> MerkleTree:

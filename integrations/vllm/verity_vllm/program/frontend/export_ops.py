@@ -114,7 +114,8 @@ def ensure_ops() -> None:
 @dataclass
 class CollectiveBus:
     """The collectives of one rank's forward, in call order.  `mode`: `probe` (record; no peers) or `trace` (consume peers, emit ops).
-    It also hands out the rank Program's one other input a kernel reads mid-forward, the `schedule` witness (`schedule_key`)."""
+    It also hands out the rank Program's one other input a kernel reads mid-forward, the `schedule` (`schedule_key`, and at a launch
+    shared with other requests `launch_schedule`)."""
     rank: int
     world: int
     mode: str = "probe"
@@ -190,17 +191,29 @@ class CollectiveBus:
     def schedule_key(self, ids: torch.Tensor) -> torch.Tensor:
         """The next `moe_align_block_size` call's key per pair (`registry.marlin_moe.MoeAlignRanks`), shaped as its router `ids`:
         the next `ids.numel()` words of the `schedule` input, which the run's GPU sorted positions fill; recorded in probe mode."""
-        shape, n = tuple(ids.shape), ids.numel()
+        return self._schedule_words(ids, ids.numel(), {}).view(tuple(ids.shape))
+
+    def launch_schedule(self, ids: torch.Tensor, **launch) -> tuple[torch.Tensor, torch.Tensor]:
+        """At a launch that also routes other requests' tokens, the next `moe_align_block_size` call's (blk, par) as that launch
+        computed them: the next `ids.numel() + 1` words of the `schedule` input, each pair's moe block then the launch's block count,
+        which the workload Program links to the launch's unit (`MoeAlignRanks` then `MoeAlignBlocks` over every request's pairs).
+        `launch` (the request step, the launch's tokens, its experts and moe block) is recorded with the call."""
+        words = self._schedule_words(ids, ids.numel() + 1, {"form": "linked", "words": ids.numel() + 1, **launch})
+        return words[:-1], words[-1:]
+
+    def _schedule_words(self, ids: torch.Tensor, n: int, form: dict) -> torch.Tensor:
+        """The next align call's `n` words of the `schedule` input: recorded in probe mode, sliced in trace mode."""
+        shape = list(ids.shape)
         if self.mode == "probe":
-            off = sum(r["pairs"] for r in self.schedule_record)
-            self.schedule_record.append({"k": len(self.schedule_record), "shape": list(shape), "pairs": n, "offset": off})
-            return torch.empty(shape, dtype=torch.int32, device=ids.device)
+            off = sum(schedule_words(r) for r in self.schedule_record)
+            self.schedule_record.append({"k": len(self.schedule_record), "shape": shape, "pairs": ids.numel(), "offset": off, **form})
+            return torch.empty(n, dtype=torch.int32, device=ids.device)
         k = self.schedule_cursor
         self.schedule_cursor += 1
-        if self.schedule is None or k >= len(self.schedule_record) or self.schedule_record[k]["shape"] != list(shape):
-            raise RuntimeError(f"align call #{k} {shape} is not the probe's ({len(self.schedule_record)} calls recorded)")
-        off = self.schedule_record[k]["offset"]
-        return self.schedule[off:off + n].view(shape)
+        rec = self.schedule_record[k] if k < len(self.schedule_record) else None
+        if self.schedule is None or rec is None or rec["shape"] != shape or schedule_words(rec) != n:
+            raise RuntimeError(f"align call #{k} {tuple(shape)} ({n} words) is not the probe's ({len(self.schedule_record)} calls recorded)")
+        return self.schedule[rec["offset"]:rec["offset"] + n]
 
     def example_peers(self, device: str = "meta") -> tuple[torch.Tensor, ...]:
         """One example peer tensor per (collective k, peer rank j) in flat order `k*(world-1) + j`."""
@@ -208,13 +221,19 @@ class CollectiveBus:
                      for r in self.record for _j in range(self.world - 1))
 
     def example_schedule(self, device: str = "meta") -> torch.Tensor:
-        return torch.empty(sum(r["pairs"] for r in self.schedule_record), dtype=torch.int32, device=device)
+        return torch.empty(sum(schedule_words(r) for r in self.schedule_record), dtype=torch.int32, device=device)
 
     def reset(self, mode: str, peers: list[torch.Tensor] | None = None, schedule: torch.Tensor | None = None) -> None:
         self.mode, self.cursor, self.schedule_cursor = mode, 0, 0
         self.peers, self.schedule = list(peers or []), schedule
         if mode == "probe":
             self.record, self.schedule_record = [], []
+
+
+def schedule_words(rec: dict) -> int:
+    """The `schedule` words an align call's record takes: its keys, one per pair, or at a shared launch (`form` "linked") its
+    pairs' blocks and the launch's block count."""
+    return rec.get("words", rec["pairs"])
 
 
 class TPStub:
@@ -321,4 +340,4 @@ def rank_embedding_shards(model: torch.nn.Module, rank: int) -> list[dict]:
 
 
 __all__ = ["ensure_ops", "CollectiveBus", "TPStub", "tp_group_override", "bind_vocab_parallel_embeddings", "embedding_shard_of",
-           "rank_embedding_shards", "vocab_parallel_embeddings"]
+           "rank_embedding_shards", "schedule_words", "vocab_parallel_embeddings"]

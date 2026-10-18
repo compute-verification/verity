@@ -166,6 +166,25 @@ def swap_label(label: str, sw: dict | None, step: int | None) -> str:
     return label
 
 
+def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
+    """The tensors the loader's post-load hook keeps as plain attributes (DeepSeek-V4's `hc_attn_fn_broadcast`), registered as Parameters
+    under the same names, as the rank's Build registers them (`loader_parity.post_load_tensors_as_the_loader_does`): the weights the rank
+    registers, pins and replays, and the Match capture's roots, are its `named_parameters`.  The forward reads the same tensor."""
+    import torch
+    mods = dict(model.named_modules())
+    for n in names:
+        mname, _, attr = n.rpartition(".")
+        parent = mods.get(mname)
+        v = getattr(parent, attr, None)
+        if isinstance(v, torch.nn.Parameter):
+            continue
+        if not isinstance(v, torch.Tensor):
+            raise TypeError(f"the Build registers the post-load tensor {n!r} as a Parameter; the served model holds no tensor there")
+        delattr(parent, attr)
+        parent.register_parameter(attr, torch.nn.Parameter(v, requires_grad=False))
+    return names
+
+
 class TP2CaptureWorkerExtension:
     """Mixed into vLLM's Worker (`worker_extension_cls`); `self` is the Worker of one rank."""
 
@@ -198,7 +217,8 @@ class TP2CaptureWorkerExtension:
     def tp2_install(self, *, out_dir: str, workload: dict, case: str, cp: dict, engine_kwargs: dict, env_flags: dict,
                     snapshot_steps: list[int], snapshot_max_bytes: int, adapter_revision: str, wheel_sha256: str | None,
                     vllm_commit: str | None, reenter: bool = True, triton: bool = True, module_hooks: bool = True,
-                    weights_verified: bool = False, argv: list[str] | None = None, target: Any = None) -> dict[str, Any]:
+                    weights_verified: bool = False, argv: list[str] | None = None, target: Any = None,
+                    post_load_tensors: dict[str, list[str]] | None = None) -> dict[str, Any]:
         import torch
 
         from verity_vllm.engine import vllm_adapter as va
@@ -211,6 +231,7 @@ class TP2CaptureWorkerExtension:
         rank_dir.mkdir(parents=True, exist_ok=True)
         runner = self.model_runner
         model = runner.get_model()
+        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
         engine = va.Engine(llm=_LLMShim(self), runner=runner, model=model, cp=dict(cp), kwargs=dict(engine_kwargs),
                            env_flags=dict(env_flags), build_s=0.0, case=case, target=target)
         header = va.make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
@@ -250,7 +271,7 @@ class TP2CaptureWorkerExtension:
         log(f"observer installed: {len(cap.roots)} roots, profile_id={header.profile_id} (adapter {pid_adapter}), log={log_path}, "
             f"snapshots={sorted(snapshot_steps)[:4]}{'...' if len(snapshot_steps) > 4 else ''}, cos_sin={cs}")
         return _jsonable({"rank": rank, "world_size": world, "pid": os.getpid(), "roots": len(cap.roots), "profile_id": header.profile_id,
-                          "profile_id_adapter": pid_adapter, "log": str(log_path), "rank_dir": str(rank_dir),
+                          "profile_id_adapter": pid_adapter, "log": str(log_path), "rank_dir": str(rank_dir), "post_load_tensors": post_load,
                           "reenter_impls": header.notes.get("reenter_impls"), "cos_sin": str(cs) if cs else None,
                           "root_names_head": [r.name for r in cap.roots[:6]], "root_shapes_head": [list(r.view.shape) for r in cap.roots[:6]]})
 
@@ -445,8 +466,9 @@ class TP2CaptureWorkerExtension:
         belongs to — the logits all-gather runs after the forward, before the next), `k` (index within the step), kind, the calling
         module (path + class), the partial's shape/dtype and sha256, the received output's sha256; the partial and the output
         tensors of steps < `store_steps` are saved (`coll.rank<r>.step<S>.pt`) for the offline cross-rank provenance check
-        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  Same wrapping seam as
-        `tp2_sem_install` (module-global collective names); the run's computation is unchanged."""
+        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact); each Marlin MoE align call's
+        schedule witness, at its position among the step's collectives, goes to `align.rank<r>.jsonl` (`moe_align_source.CaptureWitness`).
+        Same wrapping seam as `tp2_sem_install` (module-global collective names); the run's computation is unchanged."""
         import hashlib
 
         import torch
@@ -478,6 +500,8 @@ class TP2CaptureWorkerExtension:
             flush_step()
             st["step"] += 1
             st["k"] = 0
+            if st["witness"] is not None:
+                st["witness"].step(st["step"])
 
         def observer_rec() -> Any:
             """[R17 tp D90] the aten observer of `tp2_install`, when this rank runs BOTH (one engine run = one fold + one recorder): the
@@ -526,6 +550,9 @@ class TP2CaptureWorkerExtension:
                 st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
         for mod, attr in FN.targets(model):      # [VLLM-12] DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
             st["hooks"].wrap(mod, attr, lambda orig: FN.recording(orig, model, st, coll_wrap, lambda: FN.silenced(observer_rec())))
+        # the MoE align schedule each MoE layer ran under, the witness the match oracle conditions on (`moe_align_source.CaptureWitness`)
+        from verity_vllm.acquire.sources.moe_align_source import capture_witness
+        st["witness"] = capture_witness(model, rank, lambda: st["k"], lambda: FN.silenced(observer_rec()))
 
         # [R15 rev-cb T6-1, mirrored on the Match side] `cur` is a stack: a collective issued by an outer module after a nested hooked module
         # returned is attributed to the OUTER module; a fused-MoE runner nested under a hooked fused-MoE wrapper is NOT hooked, so the
@@ -575,13 +602,15 @@ class TP2CaptureWorkerExtension:
         for h in st["handles"]:
             h.remove()
         st["hooks"].uninstall()
+        witness = st["witness"].close(st["out"]) if st["witness"] is not None else None
         with (st["out"] / f"coll.rank{st['rank']}.jsonl").open("w") as f:
             for r in st["records"]:
                 f.write(json.dumps(r) + "\n")
         by_kind: dict[str, int] = {}
         for r in st["records"]:
             by_kind[r["kind"]] = by_kind.get(r["kind"], 0) + 1
-        return _jsonable({"rank": st["rank"], "n_steps": st["step"] + 1, "n_collectives": len(st["records"]), "by_kind": by_kind, "n_stored_steps": st["n_stored"]})
+        return _jsonable({"rank": st["rank"], "n_steps": st["step"] + 1, "n_collectives": len(st["records"]), "by_kind": by_kind, "n_stored_steps": st["n_stored"],
+                          "witness": witness})
 
     # ------------------------------------------------------------------ R13 P4 step 4: rank-aware commitment (the collector in every rank)
 
@@ -593,7 +622,8 @@ class TP2CaptureWorkerExtension:
                         request_ids: dict[str, str] | None = None, match_tokens: dict[str, list[int]] | None = None,
                         tp_swap_requests: dict | None = None, match_capture_dir: str | None = None, replay: dict | None = None,
                         weights_pin: dict | None = None, flip_weight: dict | None = None, tp_partials_flip_site: dict | None = None,
-                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None) -> dict[str, Any]:
+                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None,
+                        post_load_tensors: dict[str, list[str]] | None = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
         the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
@@ -605,10 +635,11 @@ class TP2CaptureWorkerExtension:
         rank = int(facts["tp"]["rank"])
         runner = self.model_runner
         model = runner.get_model()
+        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
         eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
         args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
-        res: dict[str, Any] = {"rank": rank, "committer": com.name}
+        res: dict[str, Any] = {"rank": rank, "committer": com.name, "post_load_tensors": post_load}
         from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, attention_hidden, make_hidden_source
         man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
         if (res.setdefault("attention_hidden", attention_hidden(man, model))["family"] and hidden_so):   # MLA / DSA: no hidden class, no FA2 source
@@ -619,10 +650,11 @@ class TP2CaptureWorkerExtension:
         # moe_block_stream), attached exactly as commit_delta's `--moe-source auto` does: when the rank's model has MoE-runner modules.
         # Without it a TP MoE row's Commit binds no `moe/L<n>` plane (Qwen3-30B-A3B TP2 B2: 37 440 of 132 708 required identities per
         # rank unbound, coverage FAIL) -- the manifest requires the six planes per rank at shard widths, and this rank's kernel sees them.
+        # A manifest that names no plane is bound at the block's Calls (`moe_source`: `at_calls`).
         try:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
-            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1))
+            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1), manifest=man)
             if msrc.layers:
                 com.attach_source(msrc)
                 res["moe_source"] = {"layers": len(msrc.layers), "tensors_per_layer": msrc.stats.get("tensors_per_layer"),

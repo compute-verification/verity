@@ -13,8 +13,11 @@ of its `moe_align_block_size` and its two `ops.moe_wna16_marlin_gemm` launches (
 The launch's thread config (TK, TN) and its GRID, 132 SMs times the blocks per SM, are ops.cu's choice from the registers the driver
 gave the JIT'd kernel, which no host code sees: `MARLIN_SERVED` is the config the H200 capture saw each launch run at each decode
 batch it swept, and a batch it did not sweep takes the config ops.cu's rule gives under every per-config limit consistent with the
-sweep at its moe block (`marlin_moe_rows.served_config`), and refuses where those differ.  A role the vocabulary lacks refuses by
-name.
+sweep at its moe block (`marlin_moe_rows.served_config`), and refuses where those differ.  The moe block and the config are read at
+the launch's token count (`launch_tokens_of`).  At a launch that also routes other requests' tokens `moe_align_block_size` sorts
+every pair of the launch, so this request's blocks and the launch's block count, which place its pairs in Marlin's split-K
+partition, read their routing: the leaf takes them from the `schedule` input there (`CollectiveBus.launch_schedule`, linked to the
+workload Program's launch unit), and an align call at such a launch is refused.  A role the vocabulary lacks refuses by name.
 """
 
 from __future__ import annotations
@@ -27,12 +30,14 @@ from verity.ml.circuits.refs import array_of
 from verity.ml.circuits.types import Array
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.program.registry import marlin_moe as MM
 from verity_vllm.program.registry.prims import F32 as F32_WORD, I32 as I32_WORD
+
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 BF16, F32, I32, U8 = torch.bfloat16, torch.float32, torch.int32, torch.uint8
 
@@ -55,8 +60,8 @@ MARLIN_TARGET = ((9, 0), 132)
 
 
 def served_config(E: int, TOPK: int, K: int, N: int, top_k: int, M: int, target=None) -> tuple[int, int, int] | str:
-    """The (TK, TN, GRID) a launch of N columns over K, top_k, runs at for M tokens routed top TOPK of E on `target` (the active
-    target profile when None), or a refusal."""
+    """The (TK, TN, GRID) a launch of N columns over K, top_k, runs at for M tokens routed top TOPK of E on `target` (default the
+    active target profile), or a refusal."""
     target = target or active_target_profile()
     if (tuple(target.compute_capability), target.num_sms) != MARLIN_TARGET:
         return (f"numerics_unregistered: the Marlin configs are the capture's target's (cc {MARLIN_TARGET[0]}, {MARLIN_TARGET[1]} SMs); "
@@ -78,7 +83,8 @@ class MarlinMoeAlignRule(OpRule):
     modes = frozenset({"profile"})
     info = RuleInfo("MarlinMoeAlign[vllm-marlin-moe]", 2, "op-binding", applies_to="vllm_iface.marlin_moe_align",
                     preconditions=("topk_ids and key are i32 values of one shape [M, TOPK]",
-                                   "num_experts and moe_block_size are static positive ints"),
+                                   "num_experts and moe_block_size are static positive ints",
+                                   "the launch routes this request's M tokens only"),
                     evidence_domain="structural; numerics: MoeAlignRanks_v1, MoeAlignBlocks_v1 (registry.marlin_moe)")
 
     def targets(self):
@@ -95,6 +101,11 @@ class MarlinMoeAlignRule(OpRule):
         E, BM = a["num_experts"], a["moe_block_size"]
         if not (isinstance(E, int) and isinstance(BM, int) and E > 0 and BM > 0):
             return f"num_experts={E!r} moe_block_size={BM!r} are not static positive ints"
+        M = shape(ctx, a["topk_ids"])[0]
+        if (L := launch_tokens_of(node, M)) != M:
+            return (f"numerics_unregistered: the launch routes {L} tokens, {L - M} of them other requests': moe_align_block_size sorts "
+                    f"every pair of the launch, so this request's blocks and the launch's block count read their routing, which the "
+                    f"leaf takes from the schedule input (CollectiveBus.launch_schedule)")
         return True
 
     def emit(self, node, ctx):
@@ -116,12 +127,13 @@ class MarlinMoeGemmRule(OpRule):
     at the config `served_config` gives; the node is the [M * TOPK, N] rows."""
     modes = frozenset({"profile"})
     info = RuleInfo("MarlinMoeGemm[vllm-marlin-moe]", 1, "op-binding", applies_to="vllm_iface.marlin_moe_mxfp4_gemm",
-                    preconditions=("topk_ids an i32 value [M, TOPK]; blk an i32 value [M * TOPK] and par [1] (marlin_moe_align's)",
+                    preconditions=("topk_ids an i32 value [M, TOPK]; blk an i32 value [M * TOPK] and par [1] (marlin_moe_align's, or "
+                                   "the schedule input's linked words at a shared launch)",
                                    "w13: top_k == TOPK, mul_topk_weights False, x a bf16 value [M, K]; w2: top_k 1, mul_topk_weights True, "
                                    "x a bf16 value [M * TOPK, K], topk_weights an f32 value [M, TOPK]",
                                    "w a u8 value [E, N, K / 2] and w_scale a u8 value [E, N, K / 32] (the e8m0 bytes Mxfp4MoEMethod holds)",
-                                   "the capture gives the launch's config at M tokens (MARLIN_SERVED) and moe_block_size is "
-                                   "fused_marlin_moe's at M"),
+                                   "the capture gives the launch's config at its tokens (MARLIN_SERVED) and moe_block_size is "
+                                   "fused_marlin_moe's there"),
                     evidence_domain="structural; numerics: MarlinMoeExpertGemm_v1 / MarlinMoeExpertGemmW_v1 (registry.marlin_moe; the "
                                     "capture tests/properties/dsv4_marlin_capture_gpu.py)")
 
@@ -151,9 +163,10 @@ class MarlinMoeGemmRule(OpRule):
         if (r := _value(ctx, a["w_scale"], U8, (E, N, K // MM.GROUP), "w_scale") or _value(ctx, a["blk"], I32, (P,), "blk")
                 or _value(ctx, a["par"], I32, (1,), "par") or (mul and _value(ctx, a["topk_weights"], F32, (M, TOPK), "topk_weights"))):
             return r
-        if BM != MR.moe_block(M, TOPK, E):
-            return f"moe_block_size {BM!r} is not fused_marlin_moe's at {M} tokens over {E} experts ({MR.moe_block(M, TOPK, E)})"
-        cfg = served_config(E, TOPK, K, N, top_k, M)
+        L = launch_tokens_of(node, M)
+        if BM != MR.moe_block(L, TOPK, E):
+            return f"moe_block_size {BM!r} is not fused_marlin_moe's at {L} tokens over {E} experts ({MR.moe_block(L, TOPK, E)})"
+        cfg = served_config(E, TOPK, K, N, top_k, L)
         if isinstance(cfg, str):
             return cfg
         try:
@@ -168,7 +181,7 @@ class MarlinMoeGemmRule(OpRule):
         P, top_k, mul = M * TOPK, a["top_k"], a["mul_topk_weights"]
         K = shape(ctx, a["x"])[1]
         E, N, _ = shape(ctx, a["w"])
-        TK, TN, GRID = served_config(E, TOPK, K, N, top_k, M)
+        TK, TN, GRID = served_config(E, TOPK, K, N, top_k, launch_tokens_of(node, M))
         S = {"E": E, "K": K, "N": N, "TK": TK, "TN": TN, "GRID": GRID}
         fn = ctx.kind(self._role(a), node, **S, DOT=MM.DOT)
         x, _ = rows_of(ctx.coll(a["x"]))

@@ -8,6 +8,8 @@ unsupported rather than being interpreted as a non-split launch.  Every route an
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import torch
 
 from verity.ml.circuits.refs import Coll
@@ -172,6 +174,19 @@ def _f32out_phase(K: int, N: int) -> str:
     return "f32out" if f"f32out {K} {N}" in bf16_gemm_check.CUBLAS_ROUTES["routes"] else "router"
 
 
+def f32out_route(M: int, K: int, N: int) -> tuple[str, str, dict[str, int]] | str:
+    """``aten.mm.dtype(x [M,K], W.T, float32)`` at M launch tokens: its route family (`_f32out_phase`), the role it binds and the
+    route's statics, or why vLLM runs no captured cuBLAS route there."""
+    phase = _f32out_phase(K, N)
+    kernel, _ = bf16_gemm_check.dispatch_sm90(M, K, N)
+    if phase == "router" and kernel != "cublas":
+        return f"vLLM dispatches the {kernel} tier at M={M}, K={K}, N={N}, not aten.mm.dtype"
+    route = bf16_gemm_check.default_cublas_route(phase, M, K, N)
+    if route is None:
+        return f"no captured vLLM-default cuBLAS {phase} route for M={M}, K={K}, N={N}"
+    return phase, "cublas_splitk_gemm_f32out" if route[0] == "splitk" else "cublas_gemm_f32out", route[1]
+
+
 class CublasRouterRule(OpRule):
     modes = frozenset({"profile"})
     info = RuleInfo(
@@ -208,16 +223,11 @@ class CublasRouterRule(OpRule):
             return f"output {ys}, not {(rows_n, N)}"
         if _strides(x) != (K, 1) or _strides(wt) != (1, K) or _strides(node) != (N, 1):
             return f"noncanonical strides x={_strides(x)}, W.T={_strides(wt)}, output={_strides(node)}"
-        phase, M = _f32out_phase(K, N), launch_tokens_of(node, rows_n)
-        kernel, _ = bf16_gemm_check.dispatch_sm90(M, K, N)
-        if phase == "router" and kernel != "cublas":
-            return f"vLLM dispatches the {kernel} tier at M={M}, K={K}, N={N}, not aten.mm.dtype"
-        route = bf16_gemm_check.default_cublas_route(phase, M, K, N)
-        if route is None:
-            return f"no captured vLLM-default cuBLAS {phase} route for M={M}, K={K}, N={N}"
-        role = "cublas_splitk_gemm_f32out" if route[0] == "splitk" else "cublas_gemm_f32out"
-        if not ctx.vocab.has(role):
-            return f"the vocabulary has no {role}"
+        route = f32out_route(launch_tokens_of(node, rows_n), K, N)
+        if isinstance(route, str):
+            return route
+        if not ctx.vocab.has(route[1]):
+            return f"the vocabulary has no {route[1]}"
         return True
 
     def emit(self, node, ctx):
@@ -226,10 +236,9 @@ class CublasRouterRule(OpRule):
         x, wt = node.args[:2]
         rows_n, K = shape(ctx, x)
         M, N = launch_tokens_of(node, rows_n), shape(ctx, wt)[1]
-        phase = _f32out_phase(K, N)
-        kernel, statics = bf16_gemm_check.default_cublas_route(phase, M, K, N)
+        phase, role, statics = f32out_route(M, K, N)
+        kernel = "splitk" if role == "cublas_splitk_gemm_f32out" else "non_split"
         DOT = targets.tensor_core_dot(active_target_profile())
-        role = "cublas_splitk_gemm_f32out" if kernel == "splitk" else "cublas_gemm_f32out"
         fn = ctx.kind(role, node, K=K, N=N, DOT=DOT, **statics)
         rows, lead = rows_of(ctx.coll(x))
         w = _untransposed(ctx, wt, K, N, ctx.hint_name(node) + "/W")
@@ -247,4 +256,4 @@ class CublasRouterRule(OpRule):
         )
 
 
-__all__ = ["CublasLinearRule", "CublasRouterRule", "LlBf16GemmRule"]
+__all__ = ["CublasLinearRule", "CublasRouterRule", "LlBf16GemmRule", "f32out_route"]

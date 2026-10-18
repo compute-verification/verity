@@ -10,6 +10,8 @@
 The capture (`tests/properties/dsv4_mhc_capture_gpu.py`) checks the twin against the H200."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import itertools
 
 import numpy as np

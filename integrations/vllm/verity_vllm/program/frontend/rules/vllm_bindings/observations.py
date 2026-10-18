@@ -116,6 +116,12 @@ def traced_launch_tokens(own: int) -> int:
     return T.launch_tokens(own, step, active_launch_context(), sampled=rows == "sampled")
 
 
+def traced_launch_step() -> int | None:
+    """The request step being traced (`launch_region`), None outside one."""
+    region = _OBSERVED["launch_region"]
+    return None if region is None else region[0]
+
+
 def _launch_of(node, read):
     """`read(step, sampled)` at the node's `launch_region` tag.  A node without a tag, or a declaration that does not hold this
     request, is refused: the launch its kernel choice reads is unknown."""
@@ -138,6 +144,15 @@ def launch_tokens_of(node, own: int) -> int:
         return int(own)
     from verity_vllm.program.frontend import targets as T
     return _launch_of(node, lambda step, sampled: T.launch_tokens(own, step, active_launch_context(), sampled=sampled))
+
+
+def launch_sequences_of(node) -> list[tuple[int, int]] | None:
+    """The sequences of the launch a node runs in, (rows, start) in the declared batch's order (`targets.launch_sequences` at the
+    node's `launch_region` tag), for a kernel choice that reads each sequence; None without a declared batch."""
+    if not launch_batch_declared():
+        return None
+    from verity_vllm.program.frontend import targets as T
+    return _launch_of(node, lambda step, _sampled: T.launch_sequences(step, active_launch_context()))
 
 
 def launch_keys_of(node, own: list[int]) -> list[int]:

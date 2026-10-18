@@ -38,6 +38,8 @@ word Definitions' cuts are n 1-bit words.
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition, word_of

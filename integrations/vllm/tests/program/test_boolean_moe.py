@@ -9,6 +9,8 @@ launches on the kernel tests' rows. They are pinned by gate count and program di
 check."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import itertools
 import json
 

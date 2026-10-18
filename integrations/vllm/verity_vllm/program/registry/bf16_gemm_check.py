@@ -22,6 +22,8 @@ an operand's.
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
+
 import json
 from pathlib import Path
 

@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_target
+from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
@@ -148,7 +149,7 @@ class Row:
         env = dict(self.env.environ)
         env.update({"VERITY_TREE": self.tree, "VERITY_CORE": core_s, "VERITY_RESEARCH": research_s,
                     "PYTHONPATH": f".:{core_s}:{research_s}", "HF_HOME": self.env.hf_home, "HF_HUB_OFFLINE": "1",
-                    "VLLM_BATCH_INVARIANT": "1", "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
+                    **served.execution_env(self.execution()), "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
         env.update(pins)
         jit_cache(env, self.tree, lambda: jit_key(self.py, env["CUDA_HOME"], self.row, self.tree) if self.bi_eager() else None)
         if GL.leased(env):
@@ -176,15 +177,19 @@ class Row:
                                              "does not model it (global_program.MODELLED_ENGINE), so the record would name a serve it never ran")
             raise Stop(3)
 
-    def bi_eager(self) -> bool:
-        """The row's execution is ``bi-eager``, the only one the template gives JIT caches: its workload's ``execution`` (or
-        ``sweep.execution``), else its id's last token.  A compiled row records cubins its Triton cache holds
-        (`code_identity.loaded_code_objects`), so it never shares one."""
+    def execution(self) -> str | None:
+        """The row's execution label: its workload's ``execution`` (or ``sweep.execution``), else its id's last token; None without
+        a workload file."""
         doc = _read_json(self.path(self.wl))
         if not isinstance(doc, dict):
-            return False
+            return None
         sw = doc.get("sweep") if isinstance(doc.get("sweep"), dict) else {}
-        return (doc.get("execution") or sw.get("execution") or row_execution(self.row)) == "bi-eager"
+        return doc.get("execution") or sw.get("execution") or row_execution(self.row)
+
+    def bi_eager(self) -> bool:
+        """The row's execution is ``bi-eager``, the only one the template gives JIT caches.  A compiled row records cubins its Triton
+        cache holds (`code_identity.loaded_code_objects`), so it never shares one."""
+        return self.execution() == "bi-eager"
 
     def export_commit(self) -> str:
         """The shipped tree's commit (``EXPORT.json``), "" when absent."""

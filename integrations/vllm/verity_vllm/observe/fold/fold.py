@@ -81,6 +81,7 @@ Implementation notes (L4)
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import re
@@ -131,6 +132,7 @@ from verity_vllm.observe.fold.resolver import (
     Operand,
     Param,
     PerRow,
+    Pieces,
     Profile,
     ResolutionReport,
     Shared,
@@ -138,6 +140,11 @@ from verity_vllm.observe.fold.resolver import (
     Supplied,
     Transparent,
     Unsupported,
+    WeightField,
+    Witness,
+    external_buffers,
+    operand_rows,
+    operand_view,
     parts_of,
     resolve_step,
     spec_label,
@@ -145,7 +152,8 @@ from verity_vllm.observe.fold.resolver import (
 from verity_vllm.observe.fold.summary import REFERENCE_INTEGRITY_RULE, summarize  # noqa: F401  (re-exported: fold_compare, tests)
 from verity_vllm.observe.fold.supplied import SuppliedInputs
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
-from verity_vllm.observe.fold.views import row_view, rows_view
+from verity_vllm.observe.fold.views import row_view, same_element
+from verity_vllm.observe.fold.witnesses import WitnessInputs
 
 I32 = Value(32)
 
@@ -195,6 +203,8 @@ class FoldResult:
     tp: dict | None = None
     collectives: list[dict] = field(default_factory=list)
     peers_layout: list[dict] = field(default_factory=list)
+    #: the witness parameters (`WitnessInputs.layout`): parameter index, request, witness name and the leaf range each read took
+    witness_layout: list[dict] = field(default_factory=list)
     #: a `registered_values` profile's supplied inputs (`_Fold.supplied`): the registered `values` and each request's `run_<i>`,
     #: every field's name, width, bits and leaf offset; empty otherwise
     supplied: dict = field(default_factory=dict)
@@ -240,6 +250,13 @@ def config_for_weights(config: dict) -> dict:
     return C
 
 
+def weights_type_of(profile: Any, config: dict) -> Record:
+    """The fold's `weights` Record: the profile's own when it states one (`Profile.weights_type`), else `analytic.weights_type`
+    over the configuration (`b1.weights_type(C)`, + `lm_head` when untied; b1.py is frozen)."""
+    own = getattr(profile, "weights_type", None)
+    return own if own is not None else analytic.weights_type(config_for_weights(config))
+
+
 _LAYER_RE = re.compile(r"layers\.(\d+)")
 
 
@@ -281,6 +298,7 @@ class _Fold:
         self.notes: list[str] = []
         self.errors: list[dict] = []
         self.roots_by_alloc: dict[int, list[Root]] = {}
+        self.buffers: dict[str, ViewDesc] = {}
         self.instances: list[dict] = []
         self.accesses: list[dict] = []
         self.steps: list[dict] = []
@@ -303,6 +321,7 @@ class _Fold:
         self.peers_param: dict[int, int] = {}
         self.peers_fields: dict[int, list[dict]] = {}
         self.peers_leaves: dict[int, int] = {}
+        self.witness_inputs = WitnessInputs()   # `Profile.witnesses`
         self.supplied_inputs = SuppliedInputs()   # a `registered_values` profile's run and registered values
         self.collectives: list[dict] = []
         self.cur_coll_k: int = 0
@@ -322,6 +341,7 @@ class _Fold:
         self.cur_start: StepStart | None = None
         self.cur_resolution: int = -1
         self.cur_event: int = -1
+        self.shared_consts: tuple[int, dict[tuple[int, int], Coll]] = (-1, {})
         self.ended = False
 
     # -- driver --------------------------------------------------------------------------
@@ -349,6 +369,7 @@ class _Fold:
             self._root(ev)
         elif isinstance(ev, Note):
             self.notes.append(f"log note: {ev.text}")
+            self.buffers.update(external_buffers(ev, self.mem.device))
         elif isinstance(ev, RunEnd):
             self.ended = True
         elif isinstance(ev, (DispatchEnter, DispatchExit, TritonLaunch)):
@@ -369,8 +390,7 @@ class _Fold:
         if not cfg:
             cfg = dict((h.model or {}).get("config") or {})
         self.config = cfg
-        C = config_for_weights(cfg)
-        self.weights_type = analytic.weights_type(C)      # b1.weights_type(C) (+ `lm_head` when untied; b1.py is frozen)
+        self.weights_type = weights_type_of(self.profile, cfg)
         reqs = list((h.workload or {}).get("requests") or [])
         if not reqs:
             raise FoldError("RunHeader.workload has no requests")
@@ -425,6 +445,8 @@ class _Fold:
                 self.peers_fields[i] = []
                 self.peers_leaves[i] = 0
                 params.append(("peers" if len(reqs) == 1 else f"peers_{i}", Record()))   # placeholder type: fields finalised at _finish
+        self.witness_inputs.declare(params, tuple(getattr(self.profile, "witnesses", ())), len(reqs),
+                                    tuple(getattr(self.profile, "launch_witnesses", ())))
         if getattr(self.profile, "registered_values", False):
             self.supplied_inputs.declare(params, len(reqs))
         params.append(("weights", self.weights_type))
@@ -516,7 +538,7 @@ class _Fold:
                 self._root(ev)
             elif isinstance(ev, Note):
                 self.notes.append(f"step {start.step} note: {ev.text}")
-        ctx = StepContext(self.header, start, se.sample, se.links, self.roots_by_alloc, self.config, self.profile)
+        ctx = StepContext(self.header, start, se.sample, se.links, self.roots_by_alloc, self.config, self.profile, buffers=self.buffers)
         self._write_tokens(start, se.links)
         resolutions = resolve_step(se, ctx)
         x01 = ctx.scratch.get(X01_SCRATCH_KEY)
@@ -718,7 +740,7 @@ class _Fold:
         if len(c.operands) != len(params):
             raise FoldError(f"{spec_label(c.spec)}: {len(c.operands)} operands for {len(params)} parameters ({c.hint})")
         for k, op in enumerate(c.operands):
-            n = _operand_capacity(op)
+            n = operand_rows(op)
             if n is not None and n < c.rows:
                 raise FoldError(f"{spec_label(c.spec)}: operand {k} {type(op).__name__} covers {n} rows, the compute has {c.rows}")
         shared: dict[int, Coll] = {}
@@ -731,6 +753,7 @@ class _Fold:
             # checks the identity and the failing part drops its prep (see _parts).
             self._coll_prep[id(c)] = (c, next(iter(coll_prep.values())))
         rows: list[list[Coll]] = []
+        pieces: dict[ViewDesc, Refs] = {}   # a view several rows' pieces read is read once: every read of a Compute precedes its writes
         for i in range(c.rows):
             colls: list[Coll] = []
             for k, (op, (pname, ptype)) in enumerate(zip(c.operands, params)):
@@ -746,19 +769,55 @@ class _Fold:
                     if k not in shared:
                         shared[k] = self._const(op, ptype, c, pname)
                     colls.append(shared[k])
+                elif isinstance(op, Pieces):
+                    colls.append(self._pieces(op, i, ptype, c, pname, pieces))
                 elif isinstance(op, Param):
                     colls.append(self._param(op, i, ptype, c, pname))
                 elif isinstance(op, Supplied):
                     colls.append(Coll(ptype, self.supplied_inputs.leaf(op, ptype, f"{spec_label(c.spec)}.{pname}", self.req_index, FoldError)))
+                elif isinstance(op, WeightField):
+                    if k not in shared:
+                        shared[k] = self._weight_field(op, ptype, f"{spec_label(c.spec)}.{pname}")
+                    colls.append(shared[k])
+                elif isinstance(op, Witness):
+                    colls.append(self._witness(op, i, ptype, c, pname))
                 else:
                     colls.append(self._wrap(ptype, self._read_operand(op, i), op.view, f"{spec_label(c.spec)}.{pname}[row {i}]"))
             rows.append(colls)
         return rows
 
+    def _pieces(self, op: Pieces, i: int, ptype: Type, c: Compute, pname: str, read: dict[ViewDesc, Refs]) -> Coll:
+        """Row i of a `Pieces` operand: its views' refs (`read`: the views the Compute has read) and its constants' copies, concatenated in
+        order."""
+        what, w, parts = f"{spec_label(c.spec)}.{pname}[row {i}]", _width_of(ptype), []
+        for piece in op.rows[i]:
+            if isinstance(piece, Const):
+                if int(piece.width) != w or not piece.shared:
+                    raise FoldError(f"{what}: a piece's Const{piece.width} is not a shared constant of the parameter's {w}-bit leaves")
+                parts += [self._const(piece, Value(w), c, pname).refs] * int(piece.count)
+            else:
+                self._check_width(ptype, piece, what)
+                if piece not in read:
+                    read[piece] = self._mem("read", self.mem.read, piece)
+                    self._journal("read", piece, read[piece], what=f"piece of row {i}")
+                parts.append(read[piece])
+        refs = concat(parts)
+        if refs.count != ptype.leaves:
+            raise FoldError(f"{what}: {refs.count} refs, the parameter type {ptype!r} has {ptype.leaves} leaves")
+        return Coll(ptype, refs)
+
     def _const(self, op: Const, ptype: Type, c: Compute, pname: str) -> Coll:
-        """[R15 stoch] Emit the constant's primitive instance and return its output (typed `Value<W>`)."""
+        """[R15 stoch] Emit the constant's primitive instance and return its output (typed `Value<W>`); a `shared` constant once per
+        value in the resolution."""
         if ptype != Value(int(op.width)):
             raise FoldError(f"{spec_label(c.spec)}.{pname}: Const{op.width} for a parameter of type {ptype!r}")
+        if op.shared:
+            if self.shared_consts[0] != self.cur_resolution:
+                self.shared_consts = (self.cur_resolution, {})
+            cache, key = self.shared_consts[1], (int(op.width), int(op.bits), c.launch)
+            if key not in cache:
+                cache[key] = self._const(dataclasses.replace(op, shared=False), ptype, c, pname)
+            return cache[key]
         prim = b1.const(int(op.width), int(op.bits))
         tail = op.name or pname
         rp = self._attribution(c, 0)
@@ -769,7 +828,8 @@ class _Fold:
         self.instances.append({"step": self.cur_step, "event": event, "resolution": self.cur_resolution, "node": k, "spec": prim.id,
                                "row": 0, "rows": 1, "name": name, "hint": f"{c.hint}: {tail}", "request": rp[0] if rp else None,
                                "position": rp[1] if rp else None, "pattern": c.pattern, "operand_views": [], "output_views": [],
-                               "const": {"width": int(op.width), "bits": f"0x{int(op.bits):0{int(op.width) // 4}x}"}})
+                               "const": {"width": int(op.width), "bits": f"0x{int(op.bits):0{int(op.width) // 4}x}"},
+                               **({"launch": c.launch} if c.launch else {})})
         return out
 
     def _param(self, op: Param, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
@@ -786,6 +846,23 @@ class _Fold:
         if leaf.type != ptype:
             raise FoldError(f"{spec_label(c.spec)}.{pname}[row {i}]: seed parameter is {leaf.type!r}, the parameter wants {ptype!r}")
         return leaf
+
+    def _weight_field(self, op: WeightField, ptype: Type, what: str) -> Coll:
+        """The weights Record's field at `op.path`, whole: the parameter's leaves, no memory read."""
+        coll = self.weights_coll
+        try:
+            for k in op.path:
+                coll = coll[k]
+        except (KeyError, IndexError, TypeError, AttributeError) as e:
+            raise FoldError(f"{what}: weight field path {op.path!r} is not in the weights Record: {e}") from None
+        if coll.type.leaves != ptype.leaves or _width_of(coll.type) != _width_of(ptype):
+            raise FoldError(f"{what}: field {op.path!r} is {coll.type!r}, the parameter wants {ptype!r}")
+        return Coll(ptype, coll.refs)
+
+    def _witness(self, op: Witness, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
+        """Row i's next leaves of its request's `op.name` witness parameter (`WitnessInputs.leaves`)."""
+        read = {"step": self.cur_step, "event": min(c.consumed) if c.consumed else self.cur_event, "spec": spec_label(c.spec), "hint": c.hint}
+        return Coll(ptype, self.witness_inputs.leaves(op, i, ptype, f"{spec_label(c.spec)}.{pname}[row {i}]", self.req_index, read, FoldError))
 
     # [R17 D90] collectives ------------------------------------------------------------------------------
 
@@ -881,8 +958,8 @@ class _Fold:
                     # [R13 X-09 M-BATCH-DECOMP] the row's request (and position) when the Compute identifies its rows -- the same rule as
                     # `_name`'s `t=<pos>`; None when the row count identifies nothing (the comparator then attributes by data flow)
                     "request": req_pos[0] if req_pos else None, "position": req_pos[1] if req_pos else None,
-                    "pattern": c.pattern, "operand_views": [_row_operand_view(op, i) for op in c.operands],
-                    "output_views": []}
+                    "pattern": c.pattern, "operand_views": [operand_view(op, i) for op in c.operands],
+                    "output_views": [], **({"launch": c.launch} if c.launch else {})}
             if getattr(c, "roots", ()):
                 meta["operand_roots"] = list(c.roots)     # [R15 fp8] per-operand weight names (multi-weight Computes)
             held = self._coll_prep.get(id(c))
@@ -906,7 +983,7 @@ class _Fold:
                 part = out[k] if isinstance(ret, TupleT) else out
                 self._write_operand(op, i, part.refs, part.type, f"{spec_label(c.spec)} output {k} row {i}",
                                     token=(part.type == I32))
-                meta["output_views"].append(_row_operand_view(op, i))
+                meta["output_views"].append(operand_view(op, i))
 
     # Transparent move ----------------------------------------------------------------------------
 
@@ -914,7 +991,7 @@ class _Fold:
         if t.src is None or t.dst is None:
             raise FoldError(f"move without src/dst ({t.hint})")
         for op in (t.src, t.dst):
-            n = _operand_capacity(op)
+            n = operand_rows(op)
             if n is not None and n < t.rows:
                 raise FoldError(f"move: {type(op).__name__} covers {n} rows, the move has {t.rows}")
         if t.src.view.bits != t.dst.view.bits:
@@ -963,7 +1040,9 @@ class _Fold:
                 self._mem("write", self.mem.write, v, part)
                 self._journal("write", v, part, what=what)
             return
-        view = _row_operand_view(op, i)
+        view = operand_view(op, i)
+        if view is None:
+            raise FoldError(f"{what}: a {type(op).__name__} operand is no output")
         if refs.count != view.numel:
             raise FoldError(f"{what}: {refs.count} refs for a view of {view.numel} elements ({view!r})")
         if t is not None:
@@ -996,7 +1075,10 @@ class _Fold:
     # naming ----------------------------------------------------------------------------------------
 
     def _attribution(self, c: Compute, i: int) -> tuple[str, int] | None:
-        """(request_id, position) of row `i`: the pattern's attribution, else the step's token rows / logits rows by row count."""
+        """(request_id, position) of row `i`: the pattern's attribution, else the step's token rows / logits rows by row count; none for
+        a launch's unit."""
+        if c.launch:
+            return None
         start = self.cur_start
         if c.attribution and i < len(c.attribution):
             return (str(c.attribution[i][0]), int(c.attribution[i][1]))
@@ -1108,7 +1190,7 @@ class _Fold:
         for m in reversed(self.instances):
             if m["step"] != step:
                 break
-            if view is not None and any(ov is not None and _same_element(ov, view) for ov in m.get("output_views", ())):
+            if view is not None and any(ov is not None and same_element(ov, view) for ov in m.get("output_views", ())):
                 return Affine("n", m["node"], 0, 1)
             if SE.is_sampling_event(m["spec"]) and m["row"] == row:    # the ONE sampling-event vocabulary (verity_vllm.program.sampling_event)
                 return Affine("n", m["node"], 0, 1)
@@ -1159,6 +1241,12 @@ class _Fold:
                 params[pidx] = (params[pidx][0], Record(*[(f["name"], f["type"]) for f in flds]))
             self.params = tuple(params)
             self.B.params = self.params
+        self.params, empty = self.witness_inputs.finalise(self.params, self.requests)
+        self.B.params = self.params
+        for msg, detail in empty:
+            if self.strict:
+                raise FoldError(msg)
+            self._problem("WitnessEmpty", msg, detail)
         if self.supplied_inputs:
             if not self.supplied_inputs.fields["values"]:
                 msg = "registered_values profile: no Definition read a program value; the `values` parameter would be empty"
@@ -1198,8 +1286,9 @@ class _Fold:
                           memory=mem, notes=self.notes, body=body, steps=self.steps, errors=self.errors, timings=self.timings,
                           sampled=sampled, discarded=discarded, refed=list(self.refed), weights_type=self.weights_type, params=self.params,
                           requests=list(self.requests), accesses=self.accesses, tp=dict(self.tp) if self.tp else None,
-                          collectives=list(self.collectives), peers_layout=self._peers_layout(), descriptor=descriptor,
-                          supplied=self.supplied_inputs.layout(self.params, self.requests, program))
+                          collectives=list(self.collectives), peers_layout=self._peers_layout(),
+                          witness_layout=self.witness_inputs.layout(self.params, self.requests),
+                          descriptor=descriptor, supplied=self.supplied_inputs.layout(self.params, self.requests, program))
 
     def _peers_layout(self) -> list[dict]:
         """[R17 D90] The `peers_<i>` parameters as the record states them: parameter index, request, and every field (name, step, k, kind,
@@ -1211,48 +1300,6 @@ class _Fold:
                         "request_index": ri, "leaves": self.peers_leaves[ri],
                         "fields": [{k: v for k, v in f.items() if k != "type"} for f in self.peers_fields[ri]]})
         return out
-
-
-# ---------------------------------------------------------------------------------------------------------
-# operand geometry helpers
-# ---------------------------------------------------------------------------------------------------------
-
-
-def _operand_capacity(op: Operand) -> int | None:
-    """How many rows an operand can serve (None for Shared / Const)."""
-    if isinstance(op, PerRow):
-        return op.view.shape[0] if op.view.shape else 1
-    if isinstance(op, Collective):          # [R17 D90] one row per own-partial row
-        return 1 if op.flat or not op.own.shape else op.own.shape[0]
-    if isinstance(op, (Gather, GatherMany)):
-        return len(op.indices)
-    if isinstance(op, Param):
-        return len(op.keys)
-    return None
-
-
-def _same_element(a: ViewDesc, b: ViewDesc) -> bool:
-    """Both views are one element of the same allocation at the same storage offset (same element width)."""
-    return a.alloc == b.alloc and a.numel == 1 and b.numel == 1 and a.offset == b.offset and a.itemsize == b.itemsize
-
-
-def _row_operand_view(op: Operand, i: int) -> ViewDesc | None:
-    if isinstance(op, (Const, Param, Supplied)):
-        return None          # [R15 stoch] no device view: a Program constant / a declared parameter
-    if isinstance(op, Shared):
-        return op.view
-    if isinstance(op, PerRow):
-        return row_view(op.view, i)
-    if isinstance(op, Collective):          # [R17 D90] the device view is the OWN partial row; the peer part has none (a parameter)
-        return op.own if op.flat else row_view(op.own, i)
-    if isinstance(op, Gather):
-        return row_view(op.view, op.indices[i])
-    if isinstance(op, GatherMany):   # the gathered rows when they are one ascending run (KV slots of one block range), else the table
-        idxs = list(op.indices[i])
-        if idxs and all(idxs[j + 1] == idxs[j] + 1 for j in range(len(idxs) - 1)):
-            return rows_view(op.view, idxs[0], idxs[-1] + 1)
-        return op.view
-    raise FoldError(f"unknown operand {type(op).__name__}")
 
 
 def instance_nodes(result: FoldResult, *, spec_prefix: str | None = None, step: int | None = None, layer: int | None = None,

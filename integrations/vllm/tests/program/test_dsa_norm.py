@@ -7,6 +7,8 @@ kind of model from its PTX, every masked lane's +0 summed, and `DsaRMSNorm_v1` a
 agreement with these word views is circuit-check's (`boolean_dsa_norm.circuit-check.py`)."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import numpy as np
 import pytest
 

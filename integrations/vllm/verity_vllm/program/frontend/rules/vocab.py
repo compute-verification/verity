@@ -483,6 +483,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsv4_qnorm_rope_kv_insert": lambda NH, NHP, DN, DR, QB, EPS:
                ir_bind(_dsv4_qnorm.Dsv4QNormRopeKvInsert, NH=NH, NHP=NHP, DN=DN, DR=DR, QB=QB, EPS=EPS),
            "dsv4_compressor_score": lambda W: ir_bind(_dsv4_indexer.Dsv4CompressorScore, W=W),
+           "dsv4_indexer_compress": lambda D, ROPE, EPS: ir_bind(_dsv4_indexer.Dsv4IndexerCompress, D=D, ROPE=ROPE, EPS=EPS),
            "dsv4_compress_c4": lambda ROWS, D, QB, EPS: ir_bind(_dsv4_compressor.Dsv4MlaCompressC4, ROWS=ROWS, D=D, QB=QB, EPS=EPS),
            "dsv4_compress_c128": lambda W, R, D, QB, EPS:
                ir_bind(_dsv4_compressor.Dsv4MlaCompressC128, W=W, R=R, D=D, QB=QB, EPS=EPS),
@@ -613,6 +614,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsv4_qnorm_rope_kv_insert": "Dsv4QNormRopeKvInsert_v1{NH,NHP,DN,DR,QB,EPS}: the sparse MLA's query norm, RoPE and "
                                         "fp8_ds_mla window row, one token",
            "dsv4_compressor_score": "Dsv4CompressorScore_v1{W}: save_partial_states' score row plus ape[pos % ratio]",
+           "dsv4_indexer_compress": "Dsv4IndexerCompress_v1{D,ROPE,EPS}: the indexer compressor's index-key cache entry at a window's "
+                                    "end, from its 8 state rows",
            "dsv4_compress_c4": "Dsv4MlaCompressC4_v1{ROWS,D,QB,EPS}: the ratio-4 compressor's row at a window's end (CuTe DSL)",
            "dsv4_compress_c128": "Dsv4MlaCompressC128_v1{W,R,D,QB,EPS}: the ratio-128 compressor's row at a window's end (CuTe DSL)",
            "flashmla_decode": "FlashMlaDecode_v1{NH,SPLITS,NW,DN,DR,QT,BN,DOT,SCALE}: FlashMLA's sparse fp8 decode of one token over "

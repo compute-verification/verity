@@ -16,12 +16,21 @@ the layer.  The rank Program's `schedule` input, the key `MoeAlignRanks_v1` read
 (`check.replay.evaluate`): any key that orders each expert's pairs gives ranks of the kernel's form, and the rank orders them as the
 GPU did.  An `expert_map` (expert parallelism) is refused.  Each value is committed as the 32-bit words of its i32 tensor, a float32
 view (`call_boundary_plan.WORD_DTYPES` "f32").
+
+The same members are the schedule witness of the Match capture (`CaptureWitness`, `align.rank<r>.jsonl`): the match oracle compares a
+committed collective with the capture's only where every witness in its dependency cone is equal in both runs
+(`oracle_witness`).
 """
 from __future__ import annotations
 
-from typing import Any, Mapping
+import contextlib
+import json
+import types
+from pathlib import Path
+from typing import Any, Callable, Mapping
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
+from verity_vllm.acquire.sources.oracle_witness import MEMBERS, digest, witness_file
 from verity_vllm.acquire.sources.moe_source import moe_layers_of
 from verity_vllm.engine import hooks
 from verity_vllm.query.manifest.bind import Port
@@ -29,7 +38,6 @@ from verity_vllm.query.manifest.bind import Port
 MARLIN_MODULE = "vllm.model_executor.layers.fused_moe.experts.marlin_moe"
 ALIGN = "moe_align_block_size"
 RANKS, BLOCKS = "MoeAlignRanks_v1", "MoeAlignBlocks_v1"
-MEMBERS = ("align.rank", "align.start", "align.blk", "align.par")
 #: `bind.Binder`'s declared labels: the ranks are the experts module's MoeAlignRanks_v1 ports, the blocks its MoeAlignBlocks_v1 call boundary's
 PORTS = {MEMBERS[0]: Port(frozenset({RANKS}), "0"), MEMBERS[1]: Port(frozenset({RANKS}), "1"),
          MEMBERS[2]: Port(frozenset({BLOCKS}), "0", call_boundary=True), MEMBERS[3]: Port(frozenset({BLOCKS}), "1", call_boundary=True)}
@@ -98,10 +106,10 @@ def align_values(topk_ids: Any, sorted_ids: Any, expert_ids: Any, num_post_padde
 class MoeAlignSource:
     short_name = "moe_align"
 
-    def __init__(self, committer: Any, model: Any) -> None:
+    def __init__(self, committer: Any, model: Any, quiet: Callable[[], Any] = contextlib.nullcontext) -> None:
         import torch
 
-        self.torch, self.c = torch, committer
+        self.torch, self.c, self.quiet = torch, committer, quiet
         self.layers = moe_layers_of(model)
         if not self.layers:
             raise ValueError("moe align: the model has no MoE module")
@@ -167,7 +175,8 @@ class MoeAlignSource:
             out = orig(topk_ids, block_size, num_experts, expert_map, *a, **k)
             job = getattr(me.c, "_cur", None)
             if job is not None:
-                me.bind(topk_ids, int(block_size), int(num_experts), expert_map, out, job)
+                with me.quiet():
+                    me.bind(topk_ids, int(block_size), int(num_experts), expert_map, out, job)
             return out
 
         return moe_align_block_size
@@ -216,5 +225,52 @@ def attach(com: Any, model: Any, manifest: Mapping[str, Any] | None) -> MoeAlign
     return src
 
 
-__all__ = ["MoeAlignSource", "align_values", "manifest_names_it", "claims", "attach", "MEMBERS", "PORTS", "RANKS", "BLOCKS",
-           "MARLIN_MODULE", "ALIGN"]
+class CaptureWitness:
+    """The witness the Commit commits, recorded by the Match capture (`rank_worker.tp2_coll_install`): `MoeAlignSource` hands each
+    call's members to this object in place of a committer, and each is one row (step, k, module, member, sha256) of
+    `align.rank<r>.jsonl`, k the number of collectives the rank had issued in the step before the call (``position``).  ``quiet``
+    hides the source's own device work from the run's aten observer."""
+
+    def __init__(self, model: Any, rank: int, position: Callable[[], int], quiet: Callable[[], Any]) -> None:
+        self.rank, self.position, self.quiet = rank, position, quiet
+        self.errors: list[str] = []
+        self.rows: list[dict[str, Any]] = []
+        self._cur: Any = None
+        self.src = MoeAlignSource(self, model, quiet=quiet)
+
+    def _acquire(self, name: str, v: Any, job: Any) -> None:
+        op, member = name.rsplit("/", 1)
+        self.rows.append({"rank": self.rank, "step": int(job.step), "k": int(self.position()), "module": op, "member": member,
+                          "sha256": digest(v.detach().cpu().contiguous().numpy().tobytes())})
+
+    def step(self, step: int) -> None:
+        """Model forward ``step`` begins: the previous step's kernel verdicts are read."""
+        self._end()
+        self.src.on_step_begin()
+        self._cur = types.SimpleNamespace(step=step)
+
+    def _end(self) -> None:
+        if self._cur is not None:
+            with self.quiet():
+                self.src.on_step_end(self._cur)
+
+    def close(self, out: Path) -> dict[str, Any]:
+        self._end()
+        self.src.uninstall()
+        with (out / witness_file(self.rank)).open("w") as f:
+            for r in self.rows:
+                f.write(json.dumps(r) + "\n")
+        return {"calls": self.src.stats["calls"], "rows": len(self.rows), "errors_n": len(self.errors), "errors": self.errors[:4]}
+
+
+def capture_witness(model: Any, rank: int, position: Callable[[], int], quiet: Callable[[], Any]) -> CaptureWitness | None:
+    """The installed `CaptureWitness` of a model with an MoE module; None for a dense model."""
+    if not moe_layers_of(model):
+        return None
+    w = CaptureWitness(model, rank, position, quiet)
+    w.src.install()
+    return w
+
+
+__all__ = ["MoeAlignSource", "CaptureWitness", "align_values", "manifest_names_it", "claims", "attach", "capture_witness", "MEMBERS", "PORTS",
+           "RANKS", "BLOCKS", "MARLIN_MODULE", "ALIGN"]

@@ -2,7 +2,7 @@
 
 * `export_compat.cuda_streams_inert`: the aux streams and events DeepSeek-V4 makes in `__init__` (no driver on a GPU-free Build
   host) are inert, and a forward that overlaps on them exports its functions in the order the engine launches them;
-* `vllm_meta.post_load_tensors_as_the_loader_does`: a tensor the model-level post-load hook makes (`hc_attn_fn_broadcast`) is a
+* `loader_parity.post_load_tensors_as_the_loader_does`: a tensor the model-level post-load hook makes (`hc_attn_fn_broadcast`) is a
   Parameter under its served name;
 * `export_compat.registered_op_bodies_as_ops`: the decoder layer calls the Python bodies of vLLM's mHC ops, which export as the ops;
 * `export_compat.mhc_pre_broadcast_leaf`: layer 0's broadcast pre, which vLLM does not register, exports as the leaf op;
@@ -10,15 +10,17 @@
 * `export_compat.deep_gemm_fp8_einsum_leaf`: the o-projection's DeepGEMM einsum exports as the leaf op;
 * `marlin_moe_leaf.mxfp4_marlin_moe_leaf`: the MXFP4 Marlin MoE exports as its steps, its two expert GEMMs as the leaf op;
 * `rules/vllm_mhc.py`: the four mHC ops derive per token at the dispatch's own split counts, word for word the numpy twin's
-  (`kernels.mhc_twin`) on the FMA path and the TF32 path, and what the Definitions do not take refuses by name;
+  (`kernels.mhc_twin`) on the FMA path and the TF32 path, under a declared launch batch at its token count, and what the
+  Definitions do not take refuses by name;
 * `CublasRouterRule`: a direct `torch.mm(x, W.T, out_dtype=float32)` binds the captured f32-output route;
 * `FusedQKvRmsNormRule`: the launch of `_fused_q_kv_rmsnorm_kernel` derives per token word for word its PTX's (`test_dsa_norm`), and
   another kernel body, a block of one element a thread or a stride outside the PTX's specialization refuses;
 * `rules/vllm_dsv4.py`: the insert and the compressor state derive per token word for word the numpy twin's
   (`kernels.dsv4_qnorm_insert_twin`, FlashMLA's `fadd`), and statics the Definitions do not take or positions the tables do not
   hold refuse by name; the sparse attention over a request's prefill and decodes, at ratios 4, 128 and 1, derives word for word
-  the twins' composition over its histories (the compressors, FlashMLA's gather and prefill, its decode at the planner's splits),
-  and a geometry, head padding, selection, history or target the Definitions do not take refuses by name; the o-projection
+  the twins' composition over its histories (the compressors, FlashMLA's gather and prefill, its decode at the planner's splits,
+  under a declared launch batch among the launch's decodes), and a geometry, head padding, selection, history, target or launch
+  the Definitions do not take refuses by name; the o-projection
   input's inverse RoPE and quantisation derives per token and head word for word the reference (`test_dsv4_indexer.head`) in
   the wrapper's [T, G, ...] layout, and another scale layout, clamp, rotary split or target refuses by name;
 * `DeepGemmFp8EinsumRule`: the o-projection's `fp8_einsum` over that quant's words and scales derives per token word for word the
@@ -31,8 +33,8 @@
   (`dsv4_moe_capture_gpu.router_twin`), and another kernel body or specialization refuses by name;
 * `rules/vllm_marlin_moe.py`: the Marlin MoE's align derives as `moe_align_block_size` with each expert's pairs in key order, and
   its two expert GEMMs per pair word for word the twin (`kernels.marlin_moe_rows.launch`) at the config the capture gives, and
-  a batch, block or shape the capture does not give refuses by name;
-* `vllm_meta.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
+  a batch, block or shape the capture does not give, or a launch that also routes other requests' tokens, refuses by name;
+* `loader_parity.fp8_block_weights_as_the_loader_does`: UE8M0 block scales are f32 and an `is_bmm` layer is grouped, as the loader
   leaves them."""
 from __future__ import annotations
 
@@ -43,16 +45,19 @@ import types
 import numpy as np
 import pytest
 import torch
+import torch.fx.traceback as fxt
 import torch.nn as nn
 from torch._library.infer_schema import infer_schema
 
 from verity_vllm.program.frontend import marlin_moe_leaf as mml
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.export_compat import (InertEvent, InertStream, cuda_streams_inert, deep_gemm_fp8_einsum_leaf,
                                                         mhc_pre_broadcast_leaf, registered_op_bodies_as_ops)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsv4, vllm_marlin_moe, vllm_mhc
+from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
 from verity_vllm.program.frontend.rules.triton_iface import triton_launch
@@ -60,8 +65,8 @@ from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.export_ops import CollectiveBus, TPStub
-from verity_vllm.program.frontend.vllm_meta import (ScheduledWithPeers, fp8_block_weights_as_the_loader_does,
-                                                    post_load_tensors_as_the_loader_does, with_peers)
+from verity_vllm.program.frontend.loader_parity import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
+from verity_vllm.program.frontend.vllm_meta import ScheduledWithPeers, with_peers
 from verity_vllm.program.kernels import deepgemm_twins as DT
 from verity_vllm.program.kernels import dsv4_compressor_twin as DC
 from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as TQ
@@ -70,6 +75,7 @@ from verity_vllm.program.kernels import flashmla_twin as FT
 from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.program.kernels import mhc_twin as W
 from verity_vllm.program.kernels.serve3_reference import materialize
+from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry import hopper
 from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
@@ -465,6 +471,24 @@ def _run(rep, model: nn.Module, inputs) -> list[int]:
     return [int(t[g]) for g in rep.program.circuit.root_outputs()]
 
 
+class _Launched(nn.Module):
+    """``model`` traced as request step 0 of the declared launch batch ``batch`` (`observations.launch_region`)."""
+
+    def __init__(self, model: nn.Module, batch: list) -> None:
+        super().__init__()
+        self.model = model
+        VB.observe_launch_context(TG.parse_launch_context({"batch": batch}))
+
+    def forward(self, *xs):
+        with OB.launch_region(0, "tokens"):
+            return self.model(*xs)
+
+
+def _derive_launched(derive, model: nn.Module, inputs):
+    with fxt.preserve_node_meta():
+        return derive(model, inputs)
+
+
 class _Hyper(nn.Module):
     """`DeepseekV4Model`'s mHC calls on HC = 2 streams of H = 64: layer 0's broadcast pre, the next sublayer's fused post + pre
     (the sublayer itself the identity), the last post and the head.  The calls pass split counts the dispatch does not run."""
@@ -489,15 +513,16 @@ class _Hyper(nn.Module):
         return iface.hc_head_fused_kernel_tilelang(streams, self.head_fn, self.head_scale, self.head_base, EPS, EPS)
 
 
-def _twin(model: _Hyper, x: np.ndarray, NS: int, NS0: int) -> list[int]:
-    """The model's output as the twin composes the kernels at T tokens: the FMA path at most 16 tokens, the TF32 path above."""
+def _twin(model: _Hyper, x: np.ndarray, NS: int, NS0: int, M: int | None = None) -> list[int]:
+    """The model's output as the twin composes the kernels at T tokens in a launch of M (T without one): the FMA path at most 16
+    tokens, the TF32 path above."""
     u = lambda t: np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
     m = {k: u(v) for k, v in model.named_parameters()}
     TN, TH, TH_HEAD = GEOMETRY["TN"], GEOMETRY["TH"], GEOMETRY["TH_HEAD"]
     h, post, comb = W.pre_broadcast(x, m["fn0_broadcast"], m["scale0"], m["base0"], m["norm0"], NS0, TN, REPEAT, EPS, EPS)
     streams = np.broadcast_to(x[:, None, :], (len(x), HC, HID))
     args = (m["fn1"], m["scale1"], m["base1"], m["norm1"])
-    if len(x) <= vllm_mhc.SMALL_FMA_TOKENS:
+    if (M or len(x)) <= vllm_mhc.SMALL_FMA_TOKENS:
         streams, h, post, comb = W.fused_post_pre(h, streams, post, comb, *args, NS, TH, TN, REPEAT, EPS, EPS)
     else:
         streams, h, post, comb = W.post_pre_tf32(h, streams, post, comb, *args, NS, TN, REPEAT, EPS, EPS)
@@ -527,6 +552,21 @@ def test_the_mhc_ops_derive_per_token_at_the_dispatchs_splits_word_for_word_the_
     roles = rep.provenance["weight_roles"]
     assert (roles["fn0_broadcast"]["role"], roles["fn1"]["role"], roles["head_fn"]["role"]) == ("mhc.fn_broadcast", "mhc.fn", "hc_head.fn")
     assert _run(rep, model, (_tensor(x),)) == _twin(model, x, NS, NS0)
+
+
+@pytest.mark.parametrize("batch, path, NS, NS0", [([[1, 40]], "mhc_fused_post_pre", 8, 1), ([[1, 40], [16, 0]], "mhc_post_pre_tf32", 1, 1)])
+def test_the_mhc_ops_take_their_path_and_splits_at_the_launchs_tokens(batch, path, NS, NS0, served):
+    """A decode token alone runs the FMA path; beside a 16-row prefill its launch has 17 tokens and runs the TF32 path."""
+    rng = np.random.default_rng(1)
+    model, x = _Hyper(rng), W.bf16(_f32(rng, 1, HID, sd=2.0))
+    launched = _Launched(model, [batch])
+    rep = _derive_launched(_derive_mhc, launched, (_tensor(x),))
+    assert rep.program is not None, rep.unsupported
+    apps = {a["rule"]: a["preconditions_checked"] for a in rep.provenance["applications"]}
+    assert apps["MhcPreBroadcast[vllm-dsv4]_v1"]["NS"] == NS0 and apps["MhcFusedPostPre[vllm-dsv4]_v1"]["NS"] == NS
+    fused = {k: v for k, v in apps["MhcFusedPostPre[vllm-dsv4]_v1"].items() if k != "T"}
+    assert PROFILE_B1_EAGER_V3.kind(path, **fused).id in {n.fn.id for n in rep.program.fn.body.nodes}
+    assert _run(rep, launched, (_tensor(x),)) == _twin(model, x, NS, NS0, M=sum(n for n, _ in batch))
 
 
 @pytest.mark.parametrize("over, refusal", [
@@ -564,8 +604,9 @@ def test_a_direct_f32_output_mm_binds_the_captured_f32out_route(served):
     want = PROFILE_B1_EAGER_V3.kind("cublas_splitk_gemm_f32out", K=7168, N=1024, SPLIT_K=5, DOT=hopper.HopperBF16WgmmaDot16).id
     assert [n.fn.id for n in rep.program.fn.body.nodes] == [want] * 4
     assert rep.provenance["weight_roles"]["weight"]["role"] == "linear.weight"
-    rep = _derive_mhc(_F32Out(), (torch.empty(8, 7168, dtype=torch.bfloat16, device="meta"),))
-    assert "no captured vLLM-default cuBLAS f32out route for M=8, K=7168, N=1024" in rep.unsupported.hint
+    M = BC.CUBLAS_ROUTES["m_max"] + 1
+    rep = _derive_mhc(_F32Out(), (torch.empty(M, 7168, dtype=torch.bfloat16, device="meta"),))
+    assert f"no captured vLLM-default cuBLAS f32out route for M={M}, K=7168, N=1024" in rep.unsupported.hint
     rep = _derive_mhc(_F32Out(2048), (torch.empty(256, 7168, dtype=torch.bfloat16, device="meta"),))
     assert rep.program is not None, rep.unsupported
     want = PROFILE_B1_EAGER_V3.kind("cublas_gemm_f32out", K=7168, N=2048, DOT=hopper.HopperBF16WgmmaDot16).id
@@ -692,11 +733,12 @@ class _SparseAttn(nn.Module):
             q, kv = call[-2:]
             positions = torch.arange(p0, p0 + q.shape[0], dtype=torch.int64)
             p0 += q.shape[0] + self.skip
-            state = iface.dsv4_compressor_state(call[0], positions, self.ape) if self.ratio > 1 else (None, None)
-            qp, nope, scale, rope = iface.dsv4_qnorm_rope_kv_insert(q, kv, positions, self.cos_sin_cache, self.NHP, EPS, SPARSE_DR)
-            outs.append(iface.dsv4_sparse_attn(qp, nope, scale, rope, positions, self.cos_sin_cache, self.attn_sink, *state,
-                                               self.norm_weight if self.ratio > 1 else None, "layers.0.attn", 2, self.ratio,
-                                               self.window, self.topk, SPARSE_SCALE, EPS))
+            with OB.launch_region(len(outs), "tokens"):
+                state = iface.dsv4_compressor_state(call[0], positions, self.ape) if self.ratio > 1 else (None, None)
+                qp, nope, scale, rope = iface.dsv4_qnorm_rope_kv_insert(q, kv, positions, self.cos_sin_cache, self.NHP, EPS, SPARSE_DR)
+                outs.append(iface.dsv4_sparse_attn(qp, nope, scale, rope, positions, self.cos_sin_cache, self.attn_sink, *state,
+                                                   self.norm_weight if self.ratio > 1 else None, "layers.0.attn", 2, self.ratio,
+                                                   self.window, self.topk, SPARSE_SCALE, EPS))
         return tuple(outs)
 
 
@@ -706,8 +748,9 @@ def _sparse_inputs(rng, model: _SparseAttn) -> list[np.ndarray]:
                                                          lambda T: W.bf16(_f32(rng, T, SPARSE_D))]]
 
 
-def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray]) -> list[int]:
-    """The layer's outputs as the twins compose the kernels over its window, state and compressed histories from position P."""
+def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray], launch: dict | None = None) -> list[int]:
+    """The layer's outputs as the twins compose the kernels over its window, state and compressed histories from position P; the
+    decode at position p planned among the (window, compressed) lengths and at the index `launch[p]` gives, else alone."""
     u = lambda t: np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
     m = {k: u(v) for k, v in model.named_parameters()}
     ratio, window, cs, sink = model.ratio, model.window, m["cos_sin_cache"], m["attn_sink"][:2]
@@ -740,10 +783,11 @@ def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray]) -> list[int]:
                 NW, N = FT.request_blocks(swa, nc, BN)
                 rows = win[w0:w0 + swa] + win[w0:w0 + 1] * (NW - swa) + comp[:nc] + win[w0:w0 + 1] * (N - NW - nc)
                 idx = words([0] * swa + [-1] * (NW - swa) + [0] * nc + [-1] * (N - NW - nc))
-                metas, ns = FT.sched_meta([swa], [nc] if ratio > 1 else None, topk=window, extra_topk=int(ratio > 1),
-                                          parts=FT.num_sm_parts(model.NHP), block_size_n=BN)
+                lens, req = (launch or {}).get(p, ([(swa, nc)], 0))
+                metas, ns = FT.sched_meta([w for w, _ in lens], [c for _, c in lens] if ratio > 1 else None, topk=window,
+                                          extra_topk=int(ratio > 1), parts=FT.num_sm_parts(model.NHP), block_size_n=BN)
                 outs.append(FT.decode(qp[i, :2], *stack(rows), idx, [swa] + ([nc] if N > NW else []), sink,
-                                      SPLITS=FT.request_splits(metas, ns, 0, N // BN), NW=NW, QT=QB, BN=BN, SCALE=SPARSE_SCALE))
+                                      SPLITS=FT.request_splits(metas, ns, req, N // BN), NW=NW, QT=QB, BN=BN, SCALE=SPARSE_SCALE))
             else:
                 rows = comp[:nc] + win[w0:p - P + 1]
                 n, N = len(rows), -(-len(rows) // (2 * BN)) * 2 * BN
@@ -801,6 +845,43 @@ def test_a_sparse_attention_beyond_the_definitions_refuses_by_name(over, refusal
         VB.observe_target_profile(over["target"])
     model = _SparseAttn(rng, 4, 28, over.get("calls", (30,)), **{k: v for k, v in over.items() if k in ("NHP", "topk", "p0", "skip")})
     rep = _derive_mhc(model, tuple(map(_tensor, _sparse_inputs(rng, model))))
+    assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
+
+def _decode_splits(lens: list[tuple[int, int]], req: int, window: int) -> tuple[int, ...]:
+    metas, ns = FT.sched_meta([w for w, _ in lens], [c for _, c in lens], topk=window, extra_topk=1, parts=FT.num_sm_parts(64),
+                              block_size_n=SPARSE_BN)
+    return FT.request_splits(metas, ns, req, sum(-(-n // SPARSE_BN) for n in lens[req]))
+
+
+def test_a_decode_takes_its_splits_among_the_launchs_decodes(flashmla_small):
+    """FlashMLA plans a step's decodes together: the request's decode at position 30, second of 31 decodes beside a prefill, takes
+    the splits of its index among their lengths, which differ from its splits alone and from those of the first decode."""
+    rng = np.random.default_rng(4)
+    model = _SparseAttn(rng, 4, 28, (30, 1))
+    xs = _sparse_inputs(rng, model)
+    decodes = [1500, 30] + [1500] * 29
+    VB.observe_launch_context(TG.parse_launch_context({"batch": [[[30, 0]], [[1, q] for q in decodes] + [[12, 0]]]}))
+    rep = _derive_launched(_derive_mhc, model, tuple(map(_tensor, xs)))
+    assert rep.program is not None, rep.unsupported
+    lens = [(min(q + 1, 28), (q + 1) // 4) for q in decodes]
+    (app,) = [a["preconditions_checked"] for a in rep.provenance["applications"]
+              if a["rule"] == "Dsv4SparseAttn[vllm-dsv4]_v1" and a["preconditions_checked"]["path"] == "decode"]
+    assert tuple(app["SPLITS"]) == _decode_splits(lens, 1, 28) == (0, 1, 3)
+    assert _decode_splits(lens[1:2], 0, 28) == (0, 1, 2, 3) and _decode_splits([lens[1], lens[0], *lens[2:]], 0, 28) == (0, 3)
+    assert _run(rep, model, tuple(map(_tensor, xs))) == _sparse_twin(model, xs, {30: (lens, 1)})
+
+
+@pytest.mark.parametrize("p0, decodes, refusal", [
+    (0, [30, 30], "the declared launch batch holds 2 decodes at position 30, not one"),
+    (0, [12], "the declared launch batch holds 0 decodes at position 30, not one"),
+    (5, [30, 9], "the decode at position 30 reads (26, 6) (window, compressed) rows, not the (28, 7) of a sequence from position 0"),
+])
+def test_a_decode_the_launch_does_not_name_refuses(p0, decodes, refusal, flashmla_small):
+    rng = np.random.default_rng(4)
+    model = _SparseAttn(rng, 4, 28, (30 - p0, 1), p0=p0)
+    VB.observe_launch_context(TG.parse_launch_context({"batch": [[[30 - p0, p0]], [[1, q] for q in decodes]]}))
+    rep = _derive_launched(_derive_mhc, model, tuple(map(_tensor, _sparse_inputs(rng, model))))
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
 
 
@@ -1120,6 +1201,77 @@ def test_a_marlin_launch_the_capture_does_not_give_refuses_by_name(block_m, swee
     rng = np.random.default_rng(11)
     rep, _ = _derive_marlin(_MarlinLaunches(rng, block_m=block_m), _marlin_inputs(rng), monkeypatch, sweep)
     assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
+
+@pytest.mark.parametrize("batch, refusal", [([[MARLIN_M, 0]], None),
+                                            ([[MARLIN_M, 0], [1, 9]], "the launch routes 4 tokens, 1 of them other requests'")])
+def test_a_marlin_launch_that_routes_other_requests_tokens_refuses(batch, refusal, served, monkeypatch):
+    """Alone in its launch the request's MoE derives as before; beside another request's token the align sorts that token's pairs
+    too, which no input of this Program holds, so an align call there is refused (the leaf takes the launch's blocks instead)."""
+    rng = np.random.default_rng(11)
+    model = _Launched(_MarlinLaunches(rng), [batch])
+    rep, _ = _derive_launched(lambda m, xs: _derive_marlin(m, xs, monkeypatch), model, _marlin_inputs(rng))
+    if refusal is None:
+        assert rep.program is not None, rep.unsupported
+    else:
+        assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
+
+
+def _placeholder_of(n):
+    while n.op != "placeholder":
+        n = n.args[0]
+    return n
+
+
+def test_at_a_launch_shared_with_another_request_the_marlin_moe_reads_its_blocks_from_the_schedule(marlin_site, served):
+    """Beside another request's token the launch sorts both requests' pairs at the launch's moe block: the leaf runs no align of its
+    own, and both GEMMs read the pairs' blocks and the launch's block count, the next words of the `schedule` input."""
+    bus = sys.modules[mml._PARALLEL_STATE]._TP.bus
+    model = _Launched(_Routed(_MarlinMoe(marlin_site)), [[[3, 0], [1, 9]]])
+    with fxt.preserve_node_meta(), mml.mxfp4_marlin_moe_leaf(model):
+        torch.export.export(model, _prompt(), strict=False)
+        assert bus.schedule_record == [{"k": 0, "shape": [3, 2], "pairs": 6, "offset": 0, "form": "linked", "words": 7, "step": 0,
+                                        "launch_tokens": 4, "E": 4, "BM": 8}]
+        wrapped, inputs = with_peers(model, _prompt(), bus)
+        ep = torch.export.export(wrapped, inputs, strict=False)
+    assert isinstance(wrapped, ScheduledWithPeers) and [tuple(t.shape) for t in inputs] == [(3, 64), (7,)]
+    _, schedule = [n for n in ep.graph.nodes if n.op == "placeholder" and n.name in ep.graph_signature.user_inputs]
+    assert not [n for n in ep.graph.nodes if str(n.target) == "vllm_iface.marlin_moe_align.default"]
+    gemms = [n for n in ep.graph.nodes if str(n.target) == "vllm_iface.marlin_moe_mxfp4_gemm.default"]
+    blk, par = gemms[0].args[4:6]
+    assert [n.args[4:6] for n in gemms] == [(blk, par)] * 2 and _placeholder_of(blk) is _placeholder_of(par) is schedule
+    assert [tuple(n.meta["val"].shape) for n in (blk, par, *gemms)] == [(6,), (1,), (6, 64), (6, 64)] and [n.args[7] for n in gemms] == [8, 8]
+
+
+class _MarlinLinked(_MarlinLaunches):
+    """`_MarlinLaunches` at a launch shared with another request: the pairs' blocks and the launch's block count are the `schedule`
+    words `CollectiveBus.launch_schedule` hands out."""
+
+    def forward(self, x, ids, linked, weights, act):
+        blk, par = linked[:-1], linked[-1:]
+        up = iface.marlin_moe_mxfp4_gemm(x, self.w13, self.s13, ids, blk, par, weights, self.block_m, MARLIN_TOPK, False)
+        down = iface.marlin_moe_mxfp4_gemm(act, self.w2, self.s2, ids, blk, par, weights, self.block_m, 1, True)
+        return up, down
+
+
+def test_at_a_shared_launch_the_expert_gemms_derive_over_the_launchs_schedule_word_for_word_the_twin(served, monkeypatch):
+    """The GEMMs of a request whose launch also sorted another request's token, over its pairs' blocks and that launch's block count:
+    at the launch's config (4 tokens), word for word the twin at the launch's schedule."""
+    rng = np.random.default_rng(11)
+    x, ids, key, g, act = _marlin_inputs(rng)
+    P, other = MARLIN_M * MARLIN_TOPK, rng.permutation(MARLIN_E)[:MARLIN_TOPK].astype(np.int32)
+    blk, par = _align(np.concatenate([ids.reshape(-1), other]), rng.permutation(P + MARLIN_TOPK), MARLIN_E, 8)
+    model = _Launched(_MarlinLinked(rng), [[[MARLIN_M, 0], [1, 9]]])
+    sweep = {k: {MARLIN_M + 1: c[MARLIN_M]} for k, c in MARLIN_SMALL.items()}
+    xs = (x, ids, np.append(blk[:P], par).astype(np.int32), g, act)
+    rep, inputs = _derive_launched(lambda m, a: _derive_marlin(m, a, monkeypatch, sweep), model, xs)
+    assert rep.program is not None, rep.unsupported
+    gemms = [a for a in rep.provenance["applications"] if a["rule"] == "MarlinMoeGemm[vllm-marlin-moe]_v1"]
+    assert len(gemms) == 2 and not [a for a in rep.provenance["applications"] if a["rule"].startswith("MarlinMoeAlign")]
+    m, e, pair = model.model, ids.reshape(-1), np.arange(P)
+    up = MR.launch(x[pair // MARLIN_TOPK], blk[:P], par, e, m.codes13, m.bytes13, np.arange(2 * MARLIN_I), TK=64, TN=128, GRID=132)
+    down = MR.launch(act, blk[:P], par, e, m.codes2, m.bytes2, np.arange(MARLIN_H), TK=64, TN=128, GRID=264, g=g.reshape(-1))
+    assert _run(rep, model, inputs) == up.reshape(-1).tolist() + down.reshape(-1).tolist()
 
 
 class _Fp8Linear(nn.Module):

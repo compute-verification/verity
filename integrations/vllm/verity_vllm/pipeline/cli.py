@@ -54,6 +54,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "gemm-correspondence": ("verity_vllm.program.kernels.gemm_target_correspondence", "a target's bf16 linear vs its registered GEMM Definition"),
     "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
+    "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
     "golden": ("verity_vllm.properties.golden", "golden corpus check"),
     "hidden-gpu": ("verity_vllm.commit.committer.hidden_gpu_src.hidden_gpu", "GPU commitment tree: check, bench, commit"),
     "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
@@ -83,7 +84,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
     "protected": ("verity_vllm.properties.protected", "protected-path diff check"),
     "quarantine-lint": ("verity_vllm.properties.quarantine_lint", "quarantine registry lint"),
-    "records": ("verity_vllm.records", "the circuit database: a row's record and its Programs, by row id (publish, capture, show, programs, fetch, switch)"),
+    "records": ("verity_vllm.records", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
+                            "switch), and a checkpoint's staging (staged)"),
     "rejudge": ("verity_vllm.pipeline.tp.rejudge", "recompute a finished TP Commit's GPU-free gates from its saved outputs"),
     "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
     "router-tap-build": ("verity_vllm.acquire.router_tap_src.build_ext", "build or check the router-softmax tap's CUDA op"),
