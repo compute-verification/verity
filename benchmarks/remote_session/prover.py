@@ -16,8 +16,9 @@ skip:F          a fraction F of the blocks dropped from the store before the ses
                 zeroed where they were): each pass's receipts for them are of what is there, so wrong, and an opening
                 of one carries the true block, as rebuilding it from its payload after the roots would give
 kv:P            honest, beside a serving node's KV writes (`ServingTrace`): before every --kv-every'th pass but the
-                session's first, a memory-map/v1 step writes P pages and releases the blocks they overwrite or free;
-                every pass reads every live block, registered and appended
+                session's first, a memory-map/v1 step writes P pages and releases the blocks they overwrite or free,
+                and a step re-keys each block before a pass of the window the session's lifetime cap L makes it stale
+                in; every pass reads every live block, registered and appended
 kvdrop:P        kv:P, but the appended pages are not held: each pass's receipts for them are of zeros, and an
                 opening of one carries the true page, as skip's do
 ~~~
@@ -129,35 +130,53 @@ class ServingTrace:
     """A serving node's KV writes beside its registered store, as memory-map/v1 steps (`memory_map`).  Step s writes
     `pages` blocks of fresh payloads round-robin over a pool of slots: the store's last `pool` registered blocks (a KV
     pool's pages, registered as filler) and `pool // 4` slots of memory outside the store.  Every third step first frees
-    the `pages // 2` slots after its last write, so a later write lands in a slot holding nothing.  `memory_map.Replay`
-    turns each step into the audit's append, which the backend's store encodes under the pages' bound keys, and its
-    release; `plan` is every live block in store order."""
+    the `pages // 2` slots after its last write, so a later write lands in a slot holding nothing.  A block written in
+    window a is stale from window a + `lifetime` (`audit.Params.lifetime`), and the step before a pass of a window
+    that would hold a stale block re-keys it: writes its payload again in its slot, at the store's next fresh index.
+    `memory_map.Replay` turns each step into the audit's append, which the backend's store encodes under the pages'
+    bound keys, and its release; `plan` is every live block in store order."""
 
-    def __init__(self, backend, registration: audit.Registration, pages: int, pool: int, rng: random.Random) -> None:
+    def __init__(self, backend, registration: audit.Registration, pages: int, pool: int, rng: random.Random,
+                 lifetime: int = audit.LIFETIME) -> None:
         N = registration.blocks
         pool = max(1, min(pool, N))
         self.slots = list(range(N - pool, N)) + list(range(N, N + max(1, pool // 4)))
         if pages + pages // 2 > len(self.slots):
             raise ValueError(f"a step of {pages} pages frees and writes more than the pool's {len(self.slots)} slots")
         self.backend, self.registration, self.pages, self.rng = backend, registration, pages, rng
+        self.lifetime = lifetime
         self.replay = memory_map.Replay(memory_map.Header(registration.digest, N), registration)
-        self.steps, self.cursor = 0, 0
+        self.steps, self.cursor, self.rekeyed = 0, 0, 0
         self.live = set(range(N))
+        self.held: dict[int, tuple[int, bytes]] = {}
         self.appends: list[tuple[bytes, int]] = []
         self.released: list[int] = []
         self.appended: list[int] = []
 
-    def step(self, s: int) -> memory_map.Change:
-        """The trace's next write, recorded as memory-map step `s`."""
-        n, k = len(self.slots), (self.pages // 2 if self.steps % 3 == 2 else 0)
-        freed = [s for s in (self.slots[(self.cursor + u) % n] for u in range(k)) if self.replay.holds(s) is not None]
-        slots = [self.slots[(self.cursor + k + u) % n] for u in range(self.pages)]
-        self.cursor = (self.cursor + k + self.pages) % n
+    def stale(self, window: int) -> list[int]:
+        """The slots holding a block written `lifetime` windows or more before `window`, by its index."""
+        old = [x for x, (a, _) in self.held.items() if a <= window - self.lifetime]
+        return sorted(old, key=self.replay.holds)
+
+    def step(self, s: int, window: int, pages: bool = True) -> memory_map.Change:
+        """The trace's next step in `window`, recorded as memory-map step `s`: its `pages` writes if `pages`, and the
+        stale blocks' re-keys."""
+        n, k = len(self.slots), (self.pages // 2 if pages and self.steps % 3 == 2 else 0)
+        freed = [x for x in (self.slots[(self.cursor + u) % n] for u in range(k)) if self.replay.holds(x) is not None]
+        slots = [self.slots[(self.cursor + k + u) % n] for u in range(self.pages)] if pages else []
+        if pages:
+            self.cursor = (self.cursor + k + self.pages) % n
+            self.steps += 1
         payloads = [payload(self.rng) for _ in slots]
+        rekey = [x for x in self.stale(window) if x not in slots and x not in freed]
+        slots, payloads = slots + rekey, payloads + [self.held[x][1] for x in rekey]
+        self.rekeyed += len(rekey)
         first = self.replay.extent
-        written = tuple(memory_map.Written(s, first + u, rcodec.digest(m)) for u, (s, m) in enumerate(zip(slots, payloads)))
+        written = tuple(memory_map.Written(x, first + u, rcodec.digest(m)) for u, (x, m) in enumerate(zip(slots, payloads)))
         change = self.replay.apply(memory_map.Step(s, tuple(freed), written))
-        self.steps += 1
+        for x in freed:
+            self.held.pop(x, None)
+        self.held.update((x, (window, m)) for x, m in zip(slots, payloads))
         a = self.backend.append(payloads, [self.rng.randbytes(rb.SALT_BYTES) for _ in payloads])
         if a.first != change.first or a.digests != change.digests:
             raise AssertionError("the store's append is not the memory map's")
@@ -360,7 +379,7 @@ class ProverSide:
             if not hasattr(self.backend, "append"):
                 raise ValueError(f"a {mode} session needs a backend that appends blocks after the codec seed (--cpu)")
             trace = ServingTrace(self.backend, self.registration, int(fraction), self.kv_pool,
-                                 random.Random(self.rng.getrandbits(64)))
+                                 random.Random(self.rng.getrandbits(64)), head.get("lifetime", audit.LIFETIME))
         if mode == "skip":
             pick = np.random.default_rng(self.rng.getrandbits(64))
             dropped = np.sort(pick.choice(N, size=round(fraction * N), replace=False)).astype(np.int64)
@@ -398,8 +417,9 @@ class ProverSide:
             if trace is None:
                 ticket = backend.launch(i, after)
                 return _Pass(t, i, ticket, start, step=step_of(ticket) if step_of is not None else n)
-            if n > 0 and n % self.kv_every == 0:
-                trace.step(n - 1)
+            due = n > 0 and n % self.kv_every == 0
+            if due or (n > 0 and trace.stale(t)):
+                trace.step(n - 1, t, due)
                 if mode == "kvdrop":
                     backend.arm(trace.appended)
             plan = trace.plan()
@@ -491,7 +511,8 @@ class ProverSide:
         if trace is not None:
             sent = [self.plans[tt, i] for tt, i, *_ in passes]
             out["kv"] = {"pages": trace.pages, "every": self.kv_every, "pool_slots": len(trace.slots),
-                         "steps": trace.steps, "appended": len(trace.appended), "released": len(trace.released),
+                         "steps": trace.steps, "rekeyed": trace.rekeyed, "lifetime": trace.lifetime,
+                         "appended": len(trace.appended), "released": len(trace.released),
                          "sent_appended": sum(c for _, c in trace.appends[:sent_upto[0]]), "sent_released": sent_upto[1],
                          "pass_blocks": [p.length for p in sent],
                          "pass_appended": [sum(max(0, f + c - max(f, N)) for f, c in p.runs) for p in sent]}

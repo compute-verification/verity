@@ -18,11 +18,17 @@ d_j          codec.digest(payload_j), the sha512/row/v2 digest of the block's 4,
 ~~~
 
 A write puts block j in its slot and releases the block the slot held, if it was live: the write overwrote it.  A
-free releases the slot's block and leaves the slot not live, its memory out of the store, until a write; a slot whose
-bytes stay as they were (vLLM's `kv_free`, which returns pages to filler with their last record) is not freed, and its
-block stays live until a write overwrites it.  A step's frees apply before its writes; a step frees a slot at most
-once, only a live one, and writes a slot at most once.  A block is written once, complete: a KV block the step's tokens
-are still filling is not in the record until the step that completes it (the prover-side registry's dirty blocks).
+free releases the slot's block and leaves the slot not live, its memory out of the store, until a write.  vLLM's
+`kv_free` is a free, though the pages' bytes stay as they were: a block left live after its values' last read would be
+credited past the circuit's use of it and past the lifetime cap, so the writer records the free, and the store's
+filler plan leaves the released blocks out.  A step's frees apply before its writes; a step frees a slot at most once,
+only a live one, and writes a slot at most once.  A block is written once, complete: a KV block the step's tokens are
+still filling is not in the record until the step that completes it (the prover-side registry's dirty blocks).
+
+Lifetime.  No plan holds a written block L windows or more after the window its append joined (`audit.Params.lifetime`,
+an hour at the stated window), so every block written leaves the credited store within L.  A block the writer keeps
+longer (a prefix cache's) is re-keyed: written again in its own slot with the same `d_j` at the store's next fresh
+index, which releases its old index and gives it a fresh bound key, so the device encodes it anew.
 
 The record is the prover's: `d_j` is a hash of user data, a witness, never public (AGENTS.md's zero-knowledge rule).
 The prover's audit side (`Replay`) commits each step's digests in an append tree (`audit.append_tree`, under fresh
