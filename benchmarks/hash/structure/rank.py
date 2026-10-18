@@ -9,8 +9,9 @@ data phase separate or fused) is priced from this lane's measurements at step sc
 - leaves: B over the separate data phase's leaf rate at L (gate_up, M 4096, `gs`'s second part);
 - salts: B / L leaves at the salt phase's per-leaf cost at 1M leaves (`chacha` run: PRF y, or ChaCha20 y);
 - tree: the a-ary tree's time at 1M leaves, scaled by B / L / 2^20;
-- fusion: leaves scaled by the measured fused kernel's leaf cost over the separate pass's (gate_up, 2 KiB), or by
-  1 - the pipe probe's overlap for the ceiling row.
+- fusion: the GEMM outputs' share of the leaves (54% of the per-Call bytes) scaled by what the fused arm adds over the
+  GEMM alone, over the separate leaves' time (`fuse diag`, gate_up, 2 KiB), or by 1 - the pipe probe's overlap for the
+  ceiling row.
 
 Step time = stock serving + hashing on the critical path (circuits' records show no overlap at B32: the GPU is busy).
 Stock serving and the step's bytes are H200 records: 57 ms and 13.49 GB a prefill step (r20261018-031955-d2b3, via
@@ -27,6 +28,8 @@ SERVE_H200_MS = 57.0
 STEP_BYTES = 13.49e9                     # per Call, a prefill step (d2b3 layouts)
 SERVED_HASH_H200_MS = 174.0 + 52.9        # today's rows-sha512 at 256 B rows: leaves + tree a prefill step (d2b3)
 UNIT = {"per Call": 1.0, "per block": 36_864 / 145_180, "per layer": 20_480 / 145_180}   # B / token / layer ratios
+# fusion reaches only what a GEMM produces: qkv, o_proj, gate_up and down's outputs, of the 145,180 B (circuits' layout_bytes)
+GEMM_SHARE = (12_288 + 8_192 + 49_152 + 8_192) / 145_180
 PREFILL = {(6144, 4096), (4096, 4096), (24576, 4096), (4096, 12288)}
 
 
@@ -68,6 +71,10 @@ def collect(outs: list[Path]) -> dict[str, dict]:
             if c["leaves"] == 1 << 20:
                 g.setdefault(short(c["gpu"]), {"leaf": {}, "lt": {}, "run": {}})["salt"] = {
                     "prf": c["salt_phase_prf_ms"] / c["leaves"], "chacha": c["salt_phase_given_ms"] / c["leaves"], "run": run}
+        for r in lines(o / "diag.jsonl"):
+            x = r["diag"]
+            if (x["m"], x["n"], x["k"], x["r"]) == (4096, 24576, 4096, 64) and "p4" in x:
+                g.setdefault(short(x["gpu"]), {"leaf": {}, "lt": {}, "run": {}})["diag"] = x | {"run": run}
         for r in lines(o / "probe.jsonl"):
             p = r["probe"]
             d = g.setdefault(short(p["gpu"]), {"leaf": {}, "lt": {}, "run": {}})
@@ -83,7 +90,7 @@ def hash_ms(d: dict, unit: str = "per Call", leaf: int = 2048, salts: str = "prf
     b = STEP_BYTES * UNIT[unit]
     n = b / leaf
     s = 0.0 if salts == "off" else n * d["salt"][salts]
-    return b / d["leaf"][leaf]["rate"] * rho + s + d["tree"][arity] * n / (1 << 20)
+    return b / d["leaf"][leaf]["rate"] * (1 - GEMM_SHARE * (1 - rho)) + s + d["tree"][arity] * n / (1 << 20)
 
 
 def ceiling(d: dict) -> tuple[float, dict] | None:
@@ -122,7 +129,12 @@ def table(g: dict[str, dict]) -> str:
             lev.append((f"tree: binary -> {a}-ary", r0, hash_ms(d, arity=a), runs))
         for u in ("per block", "per layer"):
             lev.append((f"bytes: per Call -> {u}", r0, hash_ms(d, unit=u), runs))
-        if "fuse" in d:
+        if "diag" in d:
+            dg = d["diag"]
+            for arms, what in ((("p4", "p8"), "a persistent hash kernel beside the GEMM"), (("f4", "f8"), "hash warps in the GEMM's CTA")):
+                a = min(arms, key=lambda k: dg[k])
+                lev.append((f"fusion: {what} (measured, {a})", r0, hash_ms(d, rho=(dg[a] - dg["g"]) / dg["sep"]), dg["run"]))
+        elif "fuse" in d:
             f = d["fuse"]
             lev.append((f"fusion: leaves in the GEMM's CTA (measured, {f['arm']})", r0, hash_ms(d, rho=f["rho"]), f["run"]))
         c = ceiling(d)
