@@ -26,6 +26,7 @@ from typing import Any, Callable, Protocol, runtime_checkable
 
 from verity_vllm.observe.events import Note, Root, RunHeader, SampleEnd, StepLink, StepStart, ViewDesc
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode
+from verity_vllm.observe.fold.views import row_view, rows_view
 
 # ---------------------------------------------------------------------------------------------------------
 # operands: how row i of an instance reads / writes physical views
@@ -163,16 +164,38 @@ def scratch_view(near: ViewDesc, event: int, k: int, n: int) -> ViewDesc:
 
 
 def operand_rows(op: Operand) -> int | None:
+    """How many rows an operand can serve (None for one every row shares)."""
     if isinstance(op, (Param, Witness)):
         return len(op.keys)
     if isinstance(op, Pieces):
         return len(op.rows)
-    if isinstance(op, (PerRow, Collective)):
-        view = op.view if isinstance(op, PerRow) else op.own
-        return view.shape[0] if view.shape else 1
+    if isinstance(op, PerRow):
+        return op.view.shape[0] if op.view.shape else 1
+    if isinstance(op, Collective):          # [R17 D90] one row per own-partial row
+        return 1 if op.flat or not op.own.shape else op.own.shape[0]
     if isinstance(op, (Gather, GatherMany)):
         return len(op.indices)
     return None
+
+
+def operand_view(op: Operand, i: int) -> ViewDesc | None:
+    """Row i's device view of an operand; None for a Program constant, a declared parameter or several pieces."""
+    if isinstance(op, (Const, Param, Supplied, Pieces, WeightField, Witness)):
+        return None
+    if isinstance(op, Shared):
+        return op.view
+    if isinstance(op, PerRow):
+        return row_view(op.view, i)
+    if isinstance(op, Collective):          # [R17 D90] the device view is the OWN partial row; the peer part has none (a parameter)
+        return op.own if op.flat else row_view(op.own, i)
+    if isinstance(op, Gather):
+        return row_view(op.view, op.indices[i])
+    if isinstance(op, GatherMany):   # the gathered rows when they are one ascending run (KV slots of one block range), else the table
+        idxs = list(op.indices[i])
+        if idxs and all(idxs[j + 1] == idxs[j] + 1 for j in range(len(idxs) - 1)):
+            return rows_view(op.view, idxs[0], idxs[-1] + 1)
+        return op.view
+    raise TypeError(f"unknown operand {type(op).__name__}")
 
 
 # ---------------------------------------------------------------------------------------------------------
