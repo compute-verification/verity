@@ -1,0 +1,34 @@
+{
+ "definitions": {
+  "BlockDecodeCheck_v1{N=32,C=5,K=2,MASKED=1,BYTES=64,WORDS=4}": {
+   "and": 269152
+  },
+  "BlockReceiptCheck_v1{ROWS=2,LEAF=3,P=4,BYTES=64}": {
+   "and": 81931
+  },
+  "CodecBinding_v1{N=512,C=569}": {
+   "and": 158365
+  },
+  "CodecLess_v1{N=512,C=569}": {
+   "and": 638
+  },
+  "CodecMatch_v1{N=512}": {
+   "and": 512
+  },
+  "CodecModAdd_v1{N=512,C=569}": {
+   "and": 2301
+  },
+  "CodecPick_v1{N=512,WORDS=16,SLICES=4}": {
+   "and": 32795
+  },
+  "CodecRound_v1{N=512,C=569,MASK=0}": {
+   "and": 158233
+  },
+  "LeafMatch_v1{LEAF=16,P=8}": {
+   "and": 9025
+  },
+  "SketchRow_v1{BYTES=4096}": {
+   "and": 56605
+  }
+ }
+}
