@@ -353,7 +353,10 @@ follows these rules:
   take the directory.
 - To price a design on the device, it gains the rest of `data/`'s files, and `--device sm_NN` (or `--data DIR`) reads
   it:
-  - `model.toml`: its epoch, its vector and its CUDA lane classes. The constants only `solve` reads stay out.
+  - `model.toml`: its epoch, its vector and its CUDA lane classes, and optionally `uniform_forms`, the lane classes
+    with a uniform-datapath form: a filler whose mix has another class has no uniform route (sm_90's datapath is
+    integer only, so an FFMA filler stays on lanes). Without it every filler may move there. The constants only
+    `solve` reads stay out.
   - `vectors/NAME.toml`: its rows.
   - `honest/`: its honest kernel at each L. `[mma] class` names the MMA's census class (sm_120's is `MMA`).
   - `designs.toml` and `designs/`: each design at each L, read on the device's `designs.toml` (the proof unit and the
