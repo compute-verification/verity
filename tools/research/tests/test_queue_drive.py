@@ -915,3 +915,23 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     h.clock += BRANCH_SWEEP_S + 1
     h.tick()
     assert len(calls) == 2
+
+
+def test_a_failure_ejects_no_pr_that_a_running_train_below_it_still_checks(world, monkeypatch, tmp_path):
+    """18 Oct 01:55Z: 2671bd's test_dc failure fell back to the suite's inputs and ejected 13 PRs, #2348 and others among them
+    from the 15-PR train below it, which was 11 steps in and lands only if none of its PRs leaves: its check was cancelled.  A
+    PR the lower train covers is left to that train's own check."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    world.gh.put(1, world.change({"pkg/data.json": "1\n"}))
+    world.gh.put(2, world.change({"pkg/other.py": "2\n"}))
+    h.tick()
+    low, tip = h.q.chain()[0].commit, _tip(world)
+    assert [c for c, *_ in h.launched] == [low, tip]
+    _check(world, monkeypatch, tip, ("false",))
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "#1" not in h.posts[0].split("Ejected")[1], h.posts
+    h.tick()
+    (kept,) = h.d.q.load_state()["drive"]["launched"][low]["ids"]
+    assert [m.pr for m in h.q.chain()] == [1] and h.q.chain()[0].commit == low and kept not in h.cancelled
