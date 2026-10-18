@@ -76,7 +76,7 @@ def main() -> int:
         if a.phases is not None and pi not in a.phases:
             continue
         t0, t1 = ph["t0"], ph["t1"]
-        warm = min(a.warmup, (t1 - t0) / 3)
+        warm = min(a.warmup * s, (t1 - t0) / 3)
         sel = (ev["t"] >= t0) & (ev["t"] <= t1)
         sub = {k: v[sel] for k, v in ev.items()}
         r = lifetimes.analyze(sub, steps, t1, serve["block_bytes"], t_start=t0 + warm,
