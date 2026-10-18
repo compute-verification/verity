@@ -921,10 +921,8 @@ GPU_WAIT_MIN = 120
 THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 
 
-#: `--on auto`'s shape for what it doesn't declare, its kind's (infra/cluster/kinds/infra.toml): an agent's suite or build, which
-#: belongs on a node, not its VM (18 Oct)
+#: `--on auto`'s shape for what it doesn't declare: an agent's suite or build, which belongs on a node, not its VM (18 Oct)
 AUTO_SHAPE = {"cpus": 4, "mem_gb": 16.0, "max_min": 60}
-AUTO_KIND = "agent-test"
 AUTO_PROJECT = "verity"
 
 
@@ -941,8 +939,6 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
         ns.source = top.stdout.strip()
     ns.queue, ns.on = True, None
     ns.project = ns.project or AUTO_PROJECT
-    if ns.queue_kind == "adhoc":
-        ns.queue_kind = AUTO_KIND
     ns.cpus = AUTO_SHAPE["cpus"] if ns.cpus is None else ns.cpus
     ns.mem_gb = AUTO_SHAPE["mem_gb"] if ns.mem_gb is None else ns.mem_gb
     if ns.max_min is None and remote.flag_value(harness_opts, "--timeout") is None:

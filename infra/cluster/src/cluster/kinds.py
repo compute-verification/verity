@@ -23,7 +23,6 @@ from pathlib import Path
 
 SHAPES: dict[str, dict[str, int | bool]] = {
     "cpu-s": {"gpus": 0, "cpus": 2, "memory_gib": 8},
-    "cpu-test": {"gpus": 0, "cpus": 4, "memory_gib": 16},     # an agent's suite or build (`research run --on auto`, 18 Oct)
     "cpu-m": {"gpus": 0, "cpus": 8, "memory_gib": 32},
     "cpu-l": {"gpus": 0, "cpus": 32, "memory_gib": 128},
     "cpu-xl": {"gpus": 0, "cpus": 32, "memory_gib": 280},      # a whole Security Lean build (~260 GB peak, lean 16 Oct)
