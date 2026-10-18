@@ -1356,7 +1356,7 @@ def acting_as(ns: argparse.Namespace, reg: dict, name: str) -> dict:
 
 
 def _route(ns: argparse.Namespace, reg: dict, ch: str) -> tuple[dict, Routes | None] | None:
-    return (reg, routes_of(ns)) if ch == channel_id_for(reg, FRONT_DOOR) and not getattr(ns, "no_route", False) else None
+    return (reg, routes_of(ns)) if ch == channel_id_for(reg, FRONT_DOOR) else None
 
 
 def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
@@ -2570,7 +2570,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("ask", "1:1: tag one handle or name in #agent-coordination, and ring its doorbell", as_=True, body=True, url=True)
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
-    p.add_argument("--linear", action="store_true", help="also file it as an issue in the owner's Linear team, linked from the post")
     p = cmd("linear", "Linear issues: `check` (what the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` "
                       "(by name; " + LINEAR_STATES + "), `comment ISSUE TEXT --as HANDLE`, `list TEAM [--state S]` (open by default)")
     p.add_argument("verb", choices=("check", "state", "comment", "list"))
