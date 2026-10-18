@@ -209,6 +209,10 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-17 (6:28 PM PDT): a guarantee goes statement first, then red team, then a card to Daniel for each new premise,
+  then the proof, in that order. Memory accounting's stacking guarantee was restated four times, and its cards updated
+  three times, because the red team read it after its proofs. Freeze the statement (above), have a red team attack it
+  and its premises, card what it rests on, and only then prove it, so a finding costs a restatement and not a reproof.
 - 2026-10-08 (5:59 PM PDT): a named conjecture can be a premise, in a section of the list of its own, and a claim that
   rests on one is listed as conditional, apart from the rest. Sort first: a statement that models how a specific device
   computes, such as `TTOutPearlC` (falsified by what the hardware does, and dependent on G), is an assumption about the
