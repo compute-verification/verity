@@ -681,6 +681,23 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
     assert A.build_threads(heavy, env, have_gib=4) == 1
     assert A.build_threads(light, env, have_gib=4) is None
     assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "3"}, have_gib=4) is None, "an explicit setting wins"
+    assert A.replay_threads(heavy, env, have_gib=64) == min(A.cores(), 64 // A.REPLAY_GIB_PER_THREAD)
+    assert A.replay_threads(light, env, have_gib=4) is None
+
+
+def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(tmp_path):
+    """A whole-Security audit holds the proving package's facts beside the replay (30–50 GiB in r20261018-175656-1c85), so
+    auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and the package alone the build's
+    floor."""
+    proofs, spec = tmp_path / "Proofs", tmp_path / "Spec"
+    for p in (proofs, spec):
+        p.mkdir()
+    (proofs / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "Arklib"}]}))
+    (spec / A.POLICY).write_text(json.dumps({"roots": ["S"], "proved_in": ["../Proofs"]}))
+    assert A.memory_refusal([proofs], 32) is None
+    why = A.memory_refusal([spec, proofs], 32)
+    assert why and f"under the {A.SPEC_FLOOR_GIB} GiB floor" in why and "facts for every guarantee it proves" in why
+    assert A.memory_refusal([spec, proofs], A.SPEC_FLOOR_GIB) is None
 
 
 PLUGGED = '''name = "Dep"
