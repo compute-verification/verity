@@ -1,16 +1,18 @@
-"""The mock datacenter: the device graph's netns plan stood up on one Linux host, with the real network certifier on each
-block's uplink, then the audit of what each certifier published.
+"""The mock datacenter: a `datacenter.Datacenter` declaration stood up on one Linux host as network namespaces, with the
+real network certifier on each block's uplink, then the audit of what each certifier published.
 
-`up` creates the namespaces of `graph.netns_plan(graph.leaf_spine(...))`, all named `na-*`: by default four blocks (each
-standing in for a node of 8 GPUs), a certifier on each block's uplink, two leaf switches joined by a spine, and one host
-outside every block, with netem on the fabric links. `down` stops every process in an `na-` namespace and deletes the
-namespaces, and their veths with them; the root namespace never holds a veth. `status` lists them and checks what can
-reach what. All three run `ip` through `sudo -n`.
+The declaration is `graph.leaf_spine`'s by default: four blocks (each a measured node of 8 GPUs, `graph.rtx_node`), a
+certifier on each block's uplink, two leaf switches joined by a spine, and one host outside every block. Any other
+declaration whose blocks each have one uplink, to a certifier, and which has a device of kind `outside`, works too
+(`--declaration FILE.py:NAME`, a `Datacenter` or a function returning one). `up` creates the namespaces of its netns
+plan (`graph.netns_plan`), all named `na-*`, with netem on the fabric links. `down` stops every process in an `na-`
+namespace and deletes the namespaces, and their veths with them; the root namespace never holds a veth. `status` lists
+them and checks what can reach what. All three run `ip` through `sudo -n`.
 
-`run` runs one configuration on every block at once, each block with its own strategy (by default b0 `honest`, b1 `bits`,
-b2 `late`, b3 `extra`; `--block b1=late` sets one). For each block, three processes, each in its own namespace as the
-invoking user (`sudo ip netns exec NS setpriv ...`), on the host's monotonic clock from one origin, built from
-`benchmarks/network_traces/active_replay.py`'s classes and the certifier's own, unmodified:
+`run` runs one configuration on every block at once, each block with its own strategy (by default the blocks take
+`honest`, `bits`, `late` and `extra` in turn; `--block b1=late` sets one). For each block, three processes, each in its
+own namespace as the invoking user (`sudo ip netns exec NS setpriv ...`), on the host's monotonic clock from one origin,
+built from `benchmarks/network_traces/active_replay.py`'s classes and the certifier's own, unmodified:
 - **the server** (`active_replay.Server`) inside the block, on its uplink's address;
 - **the proxy** (`verity.core.protocols.certifier.active.Proxy`) in the block's certifier namespace, its link on the
   certifier's fabric address and its upstream the block's server;
@@ -19,9 +21,11 @@ invoking user (`sudo ip netns exec NS setpriv ...`), on the host's monotonic clo
 The configuration is `test_active_replay`'s synthetic trace, three windows of 60 buckets of 100 ms, calibrated by the
 library. A block's strategy is its server's: `honest`; `bits`, which writes each session's frames all at once or spread out
 by a random bit (`active_replay.adversary_writes`); `late`, which holds a session in window 0 past every sync; or
-`extra`, honest but for one more event, at a position the Program doesn't have. The audit is
-`active_replay.audit_configuration` with the reference verifier, `audit.Audit`, on the raw and committed records, and a
-non-honest block's wire is compared with an honest block's of the same run (`active_replay.against_honest`).
+`extra`, honest but for one more event, at a position the Program doesn't have. Each block is audited twice: by the
+certifier's reference verifier, `audit.Audit`, on the raw and committed records (`active_replay.audit_configuration`),
+and by the accounting layer's record check on the records as `datacenter.observe.Record`s against the ones the Program
+declares (`records`). A non-honest block's wire is compared with an honest block's of the same run
+(`active_replay.against_honest`).
 
     python mockdc.py up | status | down
     python mockdc.py run --out DIR [--block b0=honest --block b1=late ...]
@@ -31,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib.util
 import json
 import os
 import subprocess
@@ -41,11 +46,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-PATHS = [str(HERE), str(ROOT / "benchmarks" / "network_traces"), str(ROOT)]
+PATHS = [str(HERE), str(ROOT / "benchmarks" / "network_traces"), str(ROOT / "benchmarks" / "datacenter"), str(ROOT)]
 sys.path[:0] = PATHS
 
 import active_replay as ar  # noqa: E402
 import graph  # noqa: E402
+import records  # noqa: E402
+from datacenter import Carried, Datacenter, Refused  # noqa: E402
 from verity.core.protocols.certifier import calibration  # noqa: E402
 from verity.core.protocols.certifier.active import Proxy  # noqa: E402
 from verity.core.protocols.certifier.audit import Audit  # noqa: E402
@@ -54,12 +61,33 @@ T = 60
 SERVER_PORT, LINK_PORT = 8000, 9000
 STARTUP_S = 3.0
 STRATEGIES = ("honest", "bits", "late", "extra")
-RESHAPE = "bring the lab up in this shape (`mockdc.py down`, then `up` with the same --blocks, --leaves and --spines)"
+RESHAPE = "bring the lab up in this shape (`mockdc.py down`, then `up` with the same declaration and options)"
 
 
-def lab(args) -> graph.Hardware:
-    return graph.leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines, fabric_ell_ns=args.fabric_ell_us * 1000,
-                            fabric_jitter_ns=args.fabric_jitter_us * 1000).check()
+def lab(args) -> Datacenter:
+    if args.declaration:
+        path, _, name = args.declaration.rpartition(":")
+        spec = importlib.util.spec_from_file_location("declaration", path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        dc = getattr(module, name)
+        dc = dc() if callable(dc) else dc
+    else:
+        dc = graph.leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines,
+                              fabric_latency=args.fabric_latency_us / 1e6)
+    graph.check(dc)
+    if not any(d.kind == "outside" for d in dc.fabric):
+        raise SystemExit(f"{dc.name} has no device of kind `outside` to run the peer on")
+    return dc
+
+
+def plan_of(args, dc: Datacenter) -> graph.NetnsPlan:
+    return graph.netns_plan(dc, jitter=args.fabric_jitter_us / 1e6)
+
+
+def outside(dc: Datacenter) -> str:
+    return next(d.name for d in dc.fabric if d.kind == "outside")
 
 
 def sudo(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
@@ -91,7 +119,7 @@ def differences(plan: graph.NetnsPlan) -> list[str]:
 def up(args) -> None:
     if existing := namespaces():
         raise SystemExit(f"{' '.join(existing)} exist: run `mockdc.py down` first")
-    plan = graph.netns_plan(lab(args))
+    plan = plan_of(args, lab(args))
     for cmd in plan.up():
         r = sudo(cmd, check=False)
         if r.returncode:
@@ -117,19 +145,21 @@ def status(args) -> None:
     """Each namespace's interfaces and netem, then reachability: the outside host reaches each certifier and no block,
     a certifier reaches its block, and a block reaches nothing, its certifier included, since the certifier's guard
     drops whatever the block opens."""
-    plan = graph.netns_plan(lab(args))
+    dc = lab(args)
+    plan = plan_of(args, dc)
     for n in plan.namespaces:
         ifs = ", ".join(f"{i.name} {i.address} -> {i.peer[0]}" + (f" [netem {' '.join(i.netem)}]" if i.netem else "")
                         for i in n.interfaces)
         print(f"{n.name:12} {n.role:9} forward={int(n.forward)}  {ifs}")
     if diff := differences(plan):
         raise SystemExit(f"{'; '.join(diff)}: {RESHAPE}")
+    ext = outside(dc)
+    ext_address = plan.namespace(ext).interfaces[0].address.split("/")[0]
     checks = []
-    for b in sorted(lab(args).blocks()):
-        cert = f"{b}.cert"
-        checks += [("ext0", plan.address(cert, f"{cert}.fabric"), True), ("ext0", plan.address(b, f"{b}.uplink"), False),
-                   (cert, plan.address(b, f"{b}.uplink"), True), (b, plan.address(cert, f"{b}.uplink"), False),
-                   (b, plan.address("ext0", "ext0.fabric"), False)]
+    for b in (b.name for b in dc.blocks):
+        _, cert = records.uplink(dc, b)
+        checks += [(ext, plan.fabric_address(cert), True), (ext, plan.address(b, cert), False),
+                   (cert, plan.address(b, cert), True), (b, plan.address(cert, b), False), (b, ext_address, False)]
     bad = 0
     for src, dst, want in checks:
         got = sudo(["ip", "netns", "exec", graph.netns_name(src), "ping", "-c1", "-W1", dst], check=False).returncode == 0
@@ -281,14 +311,15 @@ class Process:
 
 
 def run(args) -> None:
-    hw = lab(args)
-    plan_ns = graph.netns_plan(hw)
+    dc = lab(args)
+    plan_ns = plan_of(args, dc)
     if diff := differences(plan_ns):
         raise SystemExit(f"{'; '.join(diff)}: {RESHAPE}")
+    blocks = [b.name for b in dc.blocks]
     strategies = ({b.split("=")[0]: b.split("=")[1] for b in args.block} if args.block else
-                  {b: STRATEGIES[int(b[1:]) % len(STRATEGIES)] for b in hw.blocks()})
-    if bad := {b: s for b, s in strategies.items() if b not in hw.blocks() or s not in STRATEGIES}:
-        raise SystemExit(f"{bad}: a block of {sorted(hw.blocks())} and a strategy of {STRATEGIES}")
+                  {b: STRATEGIES[k % len(STRATEGIES)] for k, b in enumerate(blocks)})
+    if bad := {b: s for b, s in strategies.items() if b not in blocks or s not in STRATEGIES}:
+        raise SystemExit(f"{bad}: a block of {blocks} and a strategy of {STRATEGIES}")
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     doc = trace()
@@ -297,21 +328,21 @@ def run(args) -> None:
     honest = ar.plan_configuration(doc["configurations"][0], setup)
     params = ar.wire_params(setup)
     (out / "report.json").write_text(json.dumps(report))
+    ext = graph.netns_name(outside(dc))
     plans, procs = {}, {}
     for b, strategy in strategies.items():
         d = out / b
         d.mkdir(exist_ok=True)
         plans[b] = strategy_plan(honest, setup, strategy)
         (d / "plan.json").write_text(json.dumps(plans[b]))
-        cert = f"{b}.cert"
+        _, cert = records.uplink(dc, b)
         common = {"plan": plans[b], "params": params, "out": str(d)}
-        server = Process(graph.netns_name(b), "server", common | {"host": plan_ns.address(b, f"{b}.uplink")})
+        server = Process(graph.netns_name(b), "server", common | {"host": plan_ns.address(b, cert)})
         server.ready()
-        proxy = Process(graph.netns_name(cert), "proxy",
-                        common | {"report": report, "host": plan_ns.address(cert, f"{cert}.fabric"),
-                                  "upstream": plan_ns.address(b, f"{b}.uplink")})
+        proxy = Process(graph.netns_name(cert), "proxy", common | {"report": report, "host": plan_ns.fabric_address(cert),
+                                                                   "upstream": plan_ns.address(b, cert)})
         proxy.ready()
-        peer = Process(graph.netns_name("ext0"), "peer", common | {"link": plan_ns.address(cert, f"{cert}.fabric")})
+        peer = Process(ext, "peer", common | {"link": plan_ns.fabric_address(cert)})
         peer.ready()
         procs[b] = (server, proxy, peer)
     origin = time.monotonic() + STARTUP_S
@@ -326,22 +357,33 @@ def run(args) -> None:
         codes[b]["server"] = server.wait()
         (out / b / "processes.json").write_text(json.dumps({"exit": codes[b], "origin": origin, "clock": "real",
                                                             "namespaces": [p.name for p in (server, proxy, peer)]}))
-    summary = audit(out, plans, report, strategies)
+    summary = audit(out, dc, honest, plans, report, strategies)
     summary["exit"] = codes
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     if any(any(c.values()) for c in codes.values()):
         raise SystemExit("a process failed: see its log")
 
 
-def audit(out: Path, plans: dict, report: dict, strategies: dict) -> dict:
-    summary = {"blocks": {}}
+def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dict, strategies: dict) -> dict:
+    """Each block's audit by the certifier's verifier and by the accounting layer's record check, its timing, and its
+    wire against an honest block's."""
+    setup = ar.Setup(report)
+    syncs = len(setup.sync_set.deltas) * len(setup.sync_set.rhos)
+    summary = {"declaration": dc.name, "blocks": {}}
     honest = next((b for b, s in strategies.items() if s == "honest"), None)
     for b, strategy in strategies.items():
         a = ar.audit_configuration(plans[b], report, out / b, audit=Audit)
         (out / b / "audit.json").write_text(json.dumps(a))
         rows = [(r["link"], r["window"], r["raw"], r["committed"]) for r in a["rows"]]
+        published = records.published(out / b, setup, dc, b)
+        claims = records.audit(published, records.declared(honest_plan, setup, dc, b), syncs)
+        (out / b / "records.json").write_text(json.dumps([records.to_json(r) for r in published]))
+        refused = [f"{c.what}: {c.why}" for c in claims if isinstance(c, Refused)]
         c = a["comparisons"]
         entry = {"strategy": strategy, "accepted": all(r[2] is None and r[3] is None for r in rows), "verdicts": rows,
+                 "datacenter": {"accepted": not refused, "refused": refused,
+                                "carried": sum(isinstance(x, Carried) for x in claims),
+                                "advice_bits": sum(x.bits for x in claims if isinstance(x, Carried))},
                  "records_are_run_shapers": c["records_are_run_shapers"], "wire_is_the_records": c["wire_is_the_records"],
                  "released_not_the_programs": c["released_not_the_programs"],
                  "slack_ms": a["timing"]["slack_ms"],
@@ -352,9 +394,12 @@ def audit(out: Path, plans: dict, report: dict, strategies: dict) -> dict:
             entry["against_honest"] = ar.against_honest(out / b, out / honest)
         summary["blocks"][b] = entry
         failed = [f"{link}[{w}] {raw or committed}" for link, w, raw, committed in rows if raw or committed]
-        print(f"{b} {strategy:6} {'ACCEPTED' if entry['accepted'] else 'REFUSED'}"
-              f"{': ' + ', '.join(failed) if failed else ''}"
-              f"{'; wire is honest block ' + honest + chr(39) + 's: ' + str(entry['against_honest']['wire_is_honests']) if 'against_honest' in entry else ''}")
+        line = f"{b} {strategy:6} certifier audit {'ACCEPTED' if entry['accepted'] else 'REFUSED'}"
+        line += f" ({', '.join(failed)})" if failed else ""
+        line += "; datacenter records " + ("ACCEPTED" if not refused else f"REFUSED ({'; '.join(refused)})")
+        if "against_honest" in entry:
+            line += f"; wire is {honest}'s: {entry['against_honest']['wire_is_honests']}"
+        print(line)
     return summary
 
 
@@ -364,15 +409,17 @@ def main(argv: list[str] | None = None) -> int:
     for name, fn in (("up", up), ("down", down), ("status", status), ("run", run)):
         p = sub.add_parser(name)
         p.set_defaults(fn=fn)
+        p.add_argument("--declaration", metavar="FILE.py:NAME", help="a Datacenter, or a function returning one, "
+                       "instead of graph.leaf_spine's (which --blocks, --leaves, --spines and --fabric-latency-us shape)")
         p.add_argument("--blocks", type=int, default=4)
         p.add_argument("--leaves", type=int, default=2)
         p.add_argument("--spines", type=int, default=1)
-        p.add_argument("--fabric-ell-us", type=int, default=2_000, help="each fabric hop's latency")
+        p.add_argument("--fabric-latency-us", type=int, default=2_000, help="each fabric hop's latency")
         p.add_argument("--fabric-jitter-us", type=int, default=500, help="each fabric hop's delay jitter")
         if name == "run":
             p.add_argument("--out", required=True)
             p.add_argument("--block", action="append", default=[], metavar="BLOCK=STRATEGY",
-                           help=f"a block's server strategy, one of {STRATEGIES} (default: block i runs the i-th)")
+                           help=f"a block's server strategy, one of {STRATEGIES} (default: the blocks take them in turn)")
     r = sub.add_parser("role")
     r.set_defaults(fn=role)
     r.add_argument("name", choices=sorted(ROLES))
