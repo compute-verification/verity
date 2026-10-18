@@ -572,6 +572,25 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
                                                                                                 "guarded_max"]
 
 
+def test_a_passing_commit_verifies_the_manifest_it_ran_over(tmp_path, monkeypatch):
+    """`commit` read `commit_prepare`'s local manifest once the two were split: every passing single-GPU Commit raised NameError
+    before its manifest check and verdict (r20261017-204707-7b27, Llama-3.2-1B B1)."""
+    r, man, verified = _row(tmp_path), _tap_manifest(tmp_path / "manifest.json"), []
+    (tmp_path / "tap.so").write_bytes(b"")
+    r.hidden_so, r.B, r.I, r.O = str(tmp_path / "tap.so"), 1, 256, 32
+
+    def verify(m: str) -> None:
+        verified.append(m)
+        raise Stop(0)
+    monkeypatch.setattr(r, "manifest_of_record", lambda stage="commit": man)
+    monkeypatch.setattr(r, "gpu_exclusive", lambda what: None)
+    monkeypatch.setattr(r, "run_gpu", lambda *a: 0)
+    monkeypatch.setattr(r, "manifest_verify", verify)
+    with pytest.raises(Stop):
+        r.commit()
+    assert verified == [man]
+
+
 PD = "p" * 64
 
 
