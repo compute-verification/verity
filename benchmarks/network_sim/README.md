@@ -42,7 +42,7 @@ vy-nebius-cpu-2 (its system `python3` has numpy), not on an agent VM. Every comm
 ~~~sh
 python3 benchmarks/network_sim/mockdc.py up       # create the namespaces, then `status`
 python3 benchmarks/network_sim/mockdc.py status   # list them, and check what reaches what
-python3 benchmarks/network_sim/mockdc.py run --out DIR [--block b1=late ...]
+python3 benchmarks/network_sim/mockdc.py run --out DIR [--salt] [--block b1=late ...]
 python3 benchmarks/network_sim/mockdc.py down     # stop their processes, and delete every na-* namespace and veth
 ~~~
 
@@ -83,6 +83,17 @@ latest tick was 4.2 ms late against the proxy's 25 ms slack. Each bucket reached
 from the blocks on `na-leaf0`, and about 9.8 ms after it from those behind the spine. The earlier runs gave the same
 certifier verdicts: `r20261018-065536-38c4`, before the declarations, and `r20261018-071731-392a`, on the first
 `datacenter` API.
+
+### With the salt
+
+`run --salt` turns each certifier's per-window salt on (`Proxy(salt=active.fresh_salt)`, the certifier's
+`PROTOCOL.md`): at each window's first bucket the ingress side puts one salt frame, which carries the window and the
+salt's commitment, in the block's ingress record, and sends the salt itself to the block's server on a connection of
+its own. Once a block's run is over, `run` makes the verifier's "reveal" call to its proxy and keeps the salts in
+`DIR/b0/salts.json`. The record check declares each ingress window with its salt frame first, and the certifier's audit
+(`active_replay.audit_salt`) reads each commitment against the revealed salt and counts the salt frames in each
+ingress window and in egress. The salt takes one of the ingress side's frames in each window's first bucket, so a
+request enqueued in that bucket can go out a bucket later.
 
 ## Limits
 

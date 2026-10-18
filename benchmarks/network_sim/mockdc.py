@@ -29,8 +29,15 @@ against the ones the Program declares (`records`). For that check the declaratio
 whatever it declared. A non-honest block's wire is compared with an honest block's of the same run
 (`active_replay.against_honest`).
 
+With `--salt`, each certifier's per-window salt is on (`Proxy(salt=active.fresh_salt)`): its ingress side puts one salt
+frame a window in the block's ingress record and sends the salt to the block's server on a connection of its own. Once
+a block's run is over, `run` makes the verifier's "reveal" call to its proxy and keeps the salts in `<block>/salts.json`.
+The record check declares the ingress records with them, and the certifier's audit reads each salt's commitment
+against them and says where the salt frames went (`active_replay.audit_salt`): one in each ingress window, none in
+egress.
+
     python mockdc.py up | status | down
-    python mockdc.py run --out DIR [--block b0=honest --block b1=late ...]
+    python mockdc.py run --out DIR [--salt] [--block b0=honest --block b1=late ...]
 """
 
 from __future__ import annotations
@@ -230,7 +237,8 @@ ROLES = {
     "server": lambda cfg, pipe: ar._server(cfg["plan"], cfg["params"], pipe, Path(cfg["out"]), cfg["host"],
                                            SERVER_PORT),
     "proxy": lambda cfg, pipe: ar._proxy(cfg["plan"], ar.Setup(cfg["report"]), (cfg["upstream"], SERVER_PORT), pipe,
-                                         Path(cfg["out"]), host=cfg["host"], port=LINK_PORT),
+                                         Path(cfg["out"]), host=cfg["host"], port=LINK_PORT,
+                                         salt=cfg.get("salt", False)),
     "peer": lambda cfg, pipe: ar._peer(cfg["plan"], cfg["params"], LINK_PORT, pipe, Path(cfg["out"]), cfg["link"]),
 }
 
@@ -263,6 +271,13 @@ class Process:
     def send(self, line: str) -> None:
         self.proc.stdin.write(line + "\n")
         self.proc.stdin.flush()
+
+    def reveal(self) -> dict | None:
+        """A salted proxy's answer to the verifier's "reveal" call once its run is over: every window's salt, or None
+        if it exited without one."""
+        self.send(json.dumps("reveal"))
+        line = self.proc.stdout.readline()
+        return json.loads(line)["sent"] if line else None
 
     def wait(self) -> int:
         code = self.proc.wait()
@@ -302,7 +317,8 @@ def run(args) -> None:
         server = Process(graph.netns_name(b), "server", common | {"host": plan_ns.address(b, cert)})
         server.ready()
         proxy = Process(graph.netns_name(cert), "proxy", common | {"report": report, "host": plan_ns.fabric_address(cert),
-                                                                   "upstream": plan_ns.address(b, cert)})
+                                                                   "upstream": plan_ns.address(b, cert),
+                                                                   "salt": args.salt})
         proxy.ready()
         peer = Process(ext, "peer", common | {"link": plan_ns.fabric_address(cert)})
         peer.ready()
@@ -311,24 +327,30 @@ def run(args) -> None:
     for ps in procs.values():
         for p in ps:
             p.send(repr(origin))
-    print(f"running {strategies} from origin {origin:.3f}, {honest['windows']} windows of {T} buckets")
+    print(f"running {strategies} from origin {origin:.3f}, {honest['windows']} windows of {T} buckets"
+          + (", the certifiers' salt on" if args.salt else ""))
     codes = {}
     for b, (server, proxy, peer) in procs.items():
+        if args.salt and (salts := proxy.reveal()) is not None:
+            (out / b / "salts.json").write_text(json.dumps(salts))
         codes[b] = {"proxy": proxy.wait(), "peer": peer.wait()}
         server.send(json.dumps("stop"))
         codes[b]["server"] = server.wait()
         (out / b / "processes.json").write_text(json.dumps({"exit": codes[b], "origin": origin, "clock": "real",
                                                             "namespaces": [p.name for p in (server, proxy, peer)]}))
-    summary = audit(out, dc, honest, plans, report, strategies)
+    summary = audit(out, dc, honest, plans, report, strategies, args.salt)
     summary["exit"] = codes
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     if any(any(c.values()) for c in codes.values()):
         raise SystemExit("a process failed: see its log")
 
 
-def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dict, strategies: dict) -> dict:
+def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dict, strategies: dict,
+          salt: bool = False) -> dict:
     """Each block's audit by the certifier's verifier and by the accounting layer's record check, its timing, and its
-    wire against an honest block's."""
+    wire against an honest block's. With `salt`, each block's records are declared with the salts its proxy revealed
+    (none if it revealed none, which the record check then refuses), and the certifier's audit reads each salt's
+    commitment (`active_replay.audit_salt`)."""
     setup = ar.Setup(report)
     summary = {"declaration": dc.name, "cadence": {k: v for k, v in vars(dc.cadence).items() if k != "tick"}, "blocks": {}}
     honest = next((b for b, s in strategies.items() if s == "honest"), None)
@@ -337,7 +359,10 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
         (out / b / "audit.json").write_text(json.dumps(a))
         rows = [(r["link"], r["window"], r["raw"], r["committed"]) for r in a["rows"]]
         published = records.published(out / b, setup, dc, b)
-        claims = check_records(published, records.declared(honest_plan, setup, dc, b), dc.cadence)
+        path = out / b / "salts.json"
+        salts = {int(w): bytes.fromhex(s) for w, s in json.loads(path.read_text()).items()} if salt and path.exists() \
+            else None
+        claims = check_records(published, records.declared(honest_plan, setup, dc, b, salts), dc.cadence)
         (out / b / "records.json").write_text(json.dumps([records.to_json(r) for r in published]))
         refused = [f"{c.on}: {c.why}" for c in claims if isinstance(c, Refused)]
         c = a["comparisons"]
@@ -351,6 +376,8 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
                  "tick_late_ms_max": {k: v.get("max") for k, v in a["timing"]["tick_late_ms"].items()},
                  "ticks_over_slack": {k: v["over_slack"] for k, v in a["timing"]["tick_late_ms"].items()},
                  "wire_bucket_lag_ms": a["timing"]["wire_bucket_lag_ms"]}
+        if salt:
+            entry["salt"] = a.get("salt")
         if honest is not None and b != honest:
             entry["against_honest"] = ar.against_honest(out / b, out / honest)
         summary["blocks"][b] = entry
@@ -360,6 +387,11 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
         line += "; datacenter records " + ("ACCEPTED" if not refused else f"REFUSED ({'; '.join(refused)})")
         if "against_honest" in entry:
             line += f"; wire is {honest}'s: {entry['against_honest']['wire_is_honests']}"
+        if salt:
+            s = entry["salt"]
+            line += "; salt: none revealed" if s is None else (
+                f"; salt frames ingress {s['ingress_salt_frames']} egress {s['egress_salt_frames']}, commitments "
+                f"{'ACCEPTED' if s['accepted'] else 'REFUSED'}, block received {s['block_received']}")
         print(line)
     return summary
 
@@ -381,6 +413,7 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--out", required=True)
             p.add_argument("--block", action="append", default=[], metavar="BLOCK=STRATEGY",
                            help=f"a block's server strategy, one of {STRATEGIES} (default: the blocks take them in turn)")
+            p.add_argument("--salt", action="store_true", help="turn each certifier's per-window salt on")
     r = sub.add_parser("role")
     r.set_defaults(fn=role)
     r.add_argument("name", choices=sorted(ROLES))

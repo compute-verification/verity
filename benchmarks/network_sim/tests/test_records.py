@@ -101,3 +101,36 @@ def test_on_an_injected_clock_honest_publishes_the_declared_records_and_cheating
     missing = check_records([], declared, dc.cadence)
     assert {c.why for c in missing} == {"no record: the certifier was down or its record was withheld"}
     assert len(missing) == len(declared)
+
+
+def test_a_salted_block_publishes_the_records_declared_with_its_revealed_salts(m, setup, tmp_path, capsys):
+    """With the certifier's salt on, each ingress window holds one more frame, its first bucket's, and egress is the
+    unsalted declaration's. The records declared with the salts the proxy revealed are what it published, and
+    `mockdc.audit` accepts the block on both audits and reads every commitment; declared without them, the ingress
+    windows are refused."""
+    from datacenter import Refused, check_records
+
+    report, s = setup
+    honest = m.ar.plan_configuration(m.trace()["configurations"][0], s)
+    dc = m.leaf_spine(1, cadence=m.records.cadence(s))
+    assert m.ar.run_virtual(honest, report, tmp_path / "b0", salt=True) == {"server": 0, "proxy": 0, "peer": 0}
+    salts = {int(w): bytes.fromhex(x) for w, x in m.json.loads((tmp_path / "b0" / "salts.json").read_text()).items()}
+    published = {(r.port, r.window): r for r in m.records.published(tmp_path / "b0", s, dc, "b0")}
+    salted, plain = m.records.declared(honest, s, dc, "b0", salts), m.records.declared(honest, s, dc, "b0")
+    assert published == salted
+    for (port, w), r in salted.items():
+        if port.direction == "egress":
+            assert r == plain[port, w]
+        else:
+            assert r.counts[0] == plain[port, w].counts[0] + 1 and r.counts[1:] == plain[port, w].counts[1:]
+    both = ["occupancy differs from the declared profile", "a frame is not a committed crossing"]
+    assert [(repr(c.on), c.why) for c in check_records(list(published.values()), plain, dc.cadence)
+            if isinstance(c, Refused)] == \
+        [(f"port b0.cert:in [{w * 6000}, {(w + 1) * 6000})", why) for w in range(honest["windows"]) for why in both]
+
+    summary = m.audit(tmp_path, dc, honest, {"b0": honest}, report, {"b0": "honest"}, salt=True)
+    entry = summary["blocks"]["b0"]
+    assert entry["accepted"] and entry["datacenter"]["accepted"]
+    assert entry["salt"] == {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1],
+                             "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}
+    assert "salt frames ingress [1, 1, 1] egress 0, commitments ACCEPTED, block received True" in capsys.readouterr().out

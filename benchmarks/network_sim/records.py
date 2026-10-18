@@ -5,7 +5,8 @@ Each certifier record (`verity.core.protocols.certifier.grid.Record`: one link-w
 window, the real frames in each bucket (the grid's occupancy) and a SHA-512 digest of the status and the real frames in
 order. `published` reads a block's from a lab run's directory. `declared` gives the ones the Program says an honest run
 publishes, by port and window: egress, the reference shaper on the Program's frames at the declared syncs; ingress, the
-certifier's bucketer on the plan's requests, each at its arrival bucket. `cadence` is the certifiers' parameters as a
+certifier's bucketer on the plan's requests, each at its arrival bucket, behind each window's salt frame when the salt
+is on. `cadence` is the certifiers' parameters as a
 `datacenter.Cadence`. `datacenter.check_records(published, declared, cadence)` is the audit.
 """
 
@@ -25,6 +26,7 @@ for _p in (str(HERE), str(HERE.parent / "network_traces")):
 import active_replay as ar  # noqa: E402
 import graph  # noqa: E402, F401  (puts `datacenter` on the path)
 from datacenter import Cadence, Datacenter, Port, Record  # noqa: E402
+from verity.core.protocols.certifier import active  # noqa: E402
 from verity.core.protocols.certifier import grid as cgrid  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync, run_shaper  # noqa: E402
 
@@ -87,8 +89,11 @@ def published(run: Path, setup: ar.Setup, dc: Datacenter, block: str) -> list[Re
     return out
 
 
-def declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str) -> dict[tuple[Port, int], Record]:
-    """The records an honest run of `plan` publishes, from the plan alone, by port and window."""
+def declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str,
+             salts: dict[int, bytes] | None = None) -> dict[tuple[Port, int], Record]:
+    """The records an honest run of `plan` publishes, from the plan alone, by port and window. With `salts`, the ones
+    the certifier's salt was on for, each window's salt as `Proxy.reveal` gives it: the ingress certifier enqueues the
+    salt's frame at each window's first bucket, ahead of that bucket's arrivals."""
     by = ports(dc, block, setup)
     e, i = setup.egress_params, setup.ingress_params
     release = {int(k): v for k, v in plan["model_release"].items()}
@@ -102,6 +107,9 @@ def declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str) -> dict[tu
         arrivals[q["enqueue"]] += [data[k : k + peer.B] for k in range(0, len(data), peer.B)]
     bucketer = cgrid.Certifier(setup.ingress_link, i)
     for t in range(plan["windows"] * i.buckets):
+        if salts is not None and t % i.buckets == 0:
+            w = t // i.buckets
+            bucketer.enqueue(active.salt_frame(w, active.salt_commitment(salts[w]), i.frame_bytes))
         for f in arrivals.get(t, []):
             bucketer.enqueue(f)
         bucketer.tick()
