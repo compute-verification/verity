@@ -262,13 +262,15 @@ def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], 
         if not b.credited:
             continue
         local = b.local_at_least / b.credited
-        timed = {"compute": profile.ticks[b.block]} if b.block in profile.ticks else {
+        proved = b.block in profile.ticks
+        timed = {"compute": profile.ticks[b.block]} if proved else {
             f"compute:{f}": share * epoch.length for f, share in b.loads.items()}
+        basis = "proved" if proved else "honest-routing"
         for resource, ticks in timed.items():
             if local:
-                out.append(Credit(b.block, resource, epoch, ticks * local, b.anchor))
+                out.append(Credit(b.block, resource, epoch, ticks * local, b.anchor, basis))
             if local < 1:
-                out.append(Credit(fleet, resource, epoch, ticks * (1 - local)))
+                out.append(Credit(fleet, resource, epoch, ticks * (1 - local), None, basis))
     for c in claims:
         if isinstance(c, (Read, Held)) and inside(c) and c.store not in refused_stores:
             out.append(Credit(stores[c.store].device, "read", c.during, c.bits) if isinstance(c, Read) else
@@ -340,6 +342,9 @@ class Credit:
     work: float
     #: what places it on the unit, for a block's compute (its attribution anchor)
     grade: str | None = None
+    #: for compute, what the time rests on: "proved" (PoUW's bound over every route) or "honest-routing" (each kind on
+    #: its named facet at the declared rates, which no audit proves)
+    basis: str | None = None
 
 
 def capacity(dc: Datacenter) -> dict[tuple[str, str], float]:

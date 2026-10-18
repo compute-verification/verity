@@ -302,8 +302,9 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     pouw = account(audit(run(p, INPUTS, night), timed), timed, assume=(FLEET_CLOSED,))
     a = pouw.blocks[0]
     assert pouw.sound and a.busy == 2.0 / 16
-    assert [(x.unit, x.resource, x.work, x.grade) for x in pouw.credits if x.resource.startswith("compute")] == [
-        ("a", "compute", 2.0, "fleet-closed")]
+    assert [(x.unit, x.resource, x.work, x.grade, x.basis) for x in pouw.credits if x.resource.startswith("compute")] == [
+        ("a", "compute", 2.0, "fleet-closed", "proved")]
+    assert {x.basis for x in closed.credits if x.resource.startswith("compute")} == {"honest-routing"}
     overlap = Ledger([pouw, pouw]).joint()                      # 4 block-ticks fit in 16, but the windows overlap
     assert ("a", "compute", EPOCH, 4.0, 0.0) in overlap and not any(r == "compute" and v > 0 for _, r, _, _, v in overlap)
     twice = Ledger().add(honest).add(honest)
