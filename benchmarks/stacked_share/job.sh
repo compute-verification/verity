@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# The exact-int8 Llama-3.1-8B request Program (LP=256, T=31, the row's shape) built on one GPU, then units.py on it, as served
-# and modeled at 70B TP8 (llama31-70b-tp8.json). Keeps the descriptor, the Build's result and both units documents in $OUT.
-# DESCRIPTOR=PATH skips the Build (no GPU) and reads that one.
+# The exact-int8 Llama-3.1-8B request Program (LP=256, T=31, the row's shape), then units.py on it, as served and modeled at
+# 70B TP8 (llama31-70b-tp8.json). Keeps the descriptor, the Build's result and both units documents in $OUT. The Build needs
+# no GPU: it traces on the meta device at the explicit TARGET, and gives the row's own request Program (digest 8c683b2a...,
+# row run r20261018-031111-8828). DESCRIPTOR=PATH skips the Build and reads that one.
 #
-#   research run --queue --on vy-nebius-1 --gpus 1 --cpus 16 --mem-gb 96 --max-min 90 --source . --project verity \
+#   research run --queue --cpus 4 --mem-gb 32 --max-min 240 --source . --project verity \
 #     --cwd clone/integrations/vllm -- bash ../../benchmarks/stacked_share/job.sh
 set -euo pipefail
 export PY=/workspace/jobs/venv312/bin/python3 PYTHONPATH=.:../..:../../tools/research/src HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
