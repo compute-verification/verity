@@ -1165,7 +1165,9 @@ class NativeCollectCommitter(NativeHostCommitter):
                 "backpressure": "block-until-slot-free (no drop)", "slot_wait_timeout_s": float(self._nc.win_wait_timeout_s),
                 "dead_watchdog": {"grace_s": grace, "marker": marker or None, "rc": 3},
                 "layout": "chunk-leaf-v2" if self.layout_v2 else "chunk-leaf-v1",
-                "in_place_hashing": "all steps (v2)" if self.layout_v2 else "hit-plan steps only (v1 binds the step length into every leaf); learning steps re-upload from host"}
+                "in_place_hashing": "all steps (v2)" if self.layout_v2 else
+                ("hit-plan steps whole; learning steps keeping no bytes to each row's h in place, leaves from h at step end; others re-upload from host"
+                 if self.rows else "hit-plan steps only (v1 binds the step length into every leaf); learning steps re-upload from host")}
         memtrace("window ring allocated")
         self.window_info = info
         return info
@@ -1382,6 +1384,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         bounded = self.bounded and not self.layout_v2
         learning = plan_used < 0
         learn_only = bounded and learning and self.learn_only
+        # rows on a learning step that keeps no bytes: a leaf's h needs only the step's salt key, so each window is hashed in place to its
+        # h (1/64 of its bytes, kept on the device) and released with no host copy; its leaves follow from them once the step's length,
+        # and so its frame domain, is known (rows_frame) -- the same leaves as the re-upload below, which only the other steps take
+        hfirst = rows and learning and self.retain == "none" and not learn_only
+        hwins: list[tuple[int, Any]] = []
+        rs_h = self._row_step(job.step, 1, ks) if hfirst else None
         tblocks: list[tuple[int, Any, Any, int]] = []                           # bounded learning: (k, block, view, bytes) re-hash source
         tbytes = 0
         discard = False
@@ -1438,7 +1446,11 @@ class NativeCollectCommitter(NativeHostCommitter):
                     st[used_k:padded_k].zero_()
                 hv = None
                 keep_win = self.retain == "host" or (keep_set is not None and (job.step, k) in keep_set)
-                if bounded and not fault_lifetime:
+                if hfirst:
+                    if padded_k:
+                        rs_h.max_blocks = self.rows_cap_blocks if self.rows_cap_blocks and nc.free_slots() >= self.rows_cap_free else 0
+                        hwins.append((k, H.rows_h(rs_h, st, padded_k, k << j, tn, side.cuda_stream)[0]))
+                elif bounded and not fault_lifetime:
                     if learning:
                         # learning step: the window is copied to a TRANSIENT block (re-hash source; given back after) while the budget
                         # holds; over budget a learn-only pass drops everything copied so far and just consumes the ring (the plan is
@@ -1607,7 +1619,16 @@ class NativeCollectCommitter(NativeHostCommitter):
                     state["views"][L][:n_copy].copy_(old["views"][L][:n_copy])
             state["tops"] = old["tops"]
             self._win_relayouts = getattr(self, "_win_relayouts", 0) + 1
-        if rehash:
+        if rehash and hfirst:
+            state.clear()
+            begin_tree(padded // C)
+            with torch.inference_mode(), torch.cuda.stream(side):
+                for kk, hs_k in hwins:
+                    first = kk << j
+                    absorb(kk, H.rows_frame(state["rs"], hs_k, first, min(1 << j, state["width"] - first), state["n_total"], side.cuda_stream))
+            hwins = []
+            self._win_hfirst_steps = getattr(self, "_win_hfirst_steps", 0) + 1
+        elif rehash:
             # v1: the step length was unknown (learning step) or the plan changed mid-step -> hash from the host windows with the real length
             if not host_wins:
                 raise RuntimeError("windowed absorb (layout v1): the plan changed mid-step and no host copy exists to re-hash from")
@@ -1853,6 +1874,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         rc.extra["committed_tensors"] = int(st.get("committed", 0)) + int(self._py_committed)
         rc.extra["windows"] = {**dict(self._nc.window_stats()), **getattr(self, "window_info", {}),
                                "reupload_bytes": getattr(self, "_win_reupload_bytes", 0),
+                               "hfirst_steps": getattr(self, "_win_hfirst_steps", 0),
                                "relayouts": getattr(self, "_win_relayouts", 0),
                                "fault_lifetime_windows": getattr(self, "_fault_lifetime_windows", 0)}    # >0 only under VERITY_FAULT=release_before_keep
         # [R17 fp8] bounded staging record: what the flag did this run (a learned-only step = a warm-up-only outcome; on a record run the
@@ -1890,6 +1912,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.excluded_bytes = 0
         self.plan_mismatches = 0
         self._win_reupload_bytes = 0    # windowed: per-run counters of finalize's extra["windows"]
+        self._win_hfirst_steps = 0
         self._win_relayouts = 0
         self._oar_deferred = []         # picks the in-run stages could not open from host (excluded families) -> openings_after_release
         for src in self.sources:

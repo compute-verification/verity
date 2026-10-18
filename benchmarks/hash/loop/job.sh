@@ -21,7 +21,7 @@ HF_HOME=${HF_HOME:-/workspace/hf} "$PY" -c "
 from huggingface_hub import snapshot_download
 print(snapshot_download('Qwen/Qwen3-8B', revision='b968826d9c46dd6066d109eabc6255188de91218',
       allow_patterns=['*.json', '*.safetensors', '*.txt', '*.model', '*.py'], cache_dir='$HF_HOME/hub'))" || exit 8
-export CHECK_TESTS=${CHECK_TESTS-integrations/vllm/tests/commit/test_rows_cuda.py integrations/vllm/tests/commit/test_windowed_rows_sha512.py benchmarks/hash/loop/check_b3.py}
+export CHECK_TESTS=${CHECK_TESTS-integrations/vllm/tests/commit/test_rows_cuda.py integrations/vllm/tests/commit/test_windowed_rows_sha512.py benchmarks/hash/loop/check_b3.py benchmarks/hash/loop/check_hfirst.py}
 PROF=$(mktemp -d)/prof.sh
 sed '/^    served-commit-rows) /i\    served-commit-rows-blake3) mods+=(--arm-module hash.loop.arms:SERVED_COMMIT_ROWS_BLAKE3);;' benchmarks/served_commit/prof.sh > "$PROF"
 grep -q "hash.loop.arms" "$PROF" || { echo "prof.sh has no served-commit-rows case line to add the BLAKE3 arm beside"; exit 9; }

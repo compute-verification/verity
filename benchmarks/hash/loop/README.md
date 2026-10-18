@@ -18,8 +18,8 @@ label=hypothesis, source=branch@commit, hardware=GPU. A run's result (`result.js
 arm's measures, each measurement naming its `arm` (stock, sha512, blake3). The verdict on an iteration is a label too:
 `python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis "..." --outcome kept|dropped --reason "..."`.
 
-- `job.sh`: the workload on one GPU: the model check, then in the lease the committer's GPU byte-identity tests and `check_b3.py`
-  once in each rows-sha512 leaf form (`VERITY_ROWS_FORM=fused` and `split`, `native_rows.cu`; the timed arms run the device's
+- `job.sh`: the workload on one GPU: the model check, then in the lease the committer's GPU byte-identity tests, `check_b3.py` and
+  `check_hfirst.py` (a learning step's two-half leaves, `rows_h` then `rows_frame`, are `rows_leaves`' bytes) once in each rows-sha512 leaf form (`VERITY_ROWS_FORM=fused` and `split`, `native_rows.cu`; the timed arms run the device's
   own: fused on sm_120, split elsewhere; a failure is no timing), `prof.sh` under `gpu-lease 1 --wait` (the node's lease flags, timeouts inside the lease), the SM
   clocks read before and after, then `collect.py`.
 - The BLAKE3 sibling arm (`served-commit-rows-blake3`, `arms.py`): circuits' rows arm under the committer's research scheme

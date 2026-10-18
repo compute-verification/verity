@@ -286,6 +286,8 @@ DEV void hm96_mask(const uint8_t* T, const u32* Y, u32* mk) {
 }
 
 // native_rows.cu's rows_leaf_kernel: b || c (64 bytes) into a 128-byte slot of bc, h and the leaf into 64-byte slots; salts 128 B a row.
+// H_ONLY: h alone, for the data positions (native_rows.cu's rows_leaf_sf_kernel<true>).
+template <bool H_ONLY>
 __global__ void __launch_bounds__(THREADS)
     rows_leaf_b3_kernel(const __grid_constant__ B3K K, const uint8_t* __restrict__ rows, u64 stride, u64 n_rows,
                         const uint8_t* __restrict__ salts, const uint8_t* __restrict__ T, u64 first, u64 m, u64 n_total,
@@ -318,9 +320,27 @@ __global__ void __launch_bounds__(THREADS)
     cpy8(h, K.mid_leaf);
     b3c(h, B, 0, 64, B3_KEYED | B3_END | B3_ROOT, h);
     if (hs) st_slot(hs + 64 * i, h);
+    if constexpr (H_ONLY) return;
     frame_leaf(K, pos, h, o);
   } else {
+    if constexpr (H_ONLY) return;
     pad(K, pos, o);
+  }
+  st_slot(out + 64 * i, o);
+}
+
+// native_rows.cu's rows_leaf_frame_kernel: leaves from the h slots of the nd data positions, pads after.
+__global__ void __launch_bounds__(THREADS) rows_leaf_frame_b3_kernel(const __grid_constant__ B3K K, const uint8_t* __restrict__ hs, u64 first, u64 m,
+                                                                u64 nd, uint8_t* __restrict__ out) {
+  const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= m) return;
+  u32 o[8];
+  if (i < nd) {
+    u32 h[8];
+    ld8(hs + 64 * i, h);
+    frame_leaf(K, first + i, h, o);
+  } else {
+    pad(K, first + i, o);
   }
   st_slot(out + 64 * i, o);
 }
@@ -435,7 +455,8 @@ static int rows_b3_kernel_attributes() {
   if (const cudaError_t rc = cudaGetDevice(&dev)) return static_cast<int>(rc);
   if (dev < 0 || dev >= 64) return static_cast<int>(cudaErrorInvalidDevice);
   if (done[dev]) return 0;
-  for (const void* f : {reinterpret_cast<const void*>(rows_leaf_b3_kernel), reinterpret_cast<const void*>(rows_level_b3_kernel),
+  for (const void* f : {reinterpret_cast<const void*>(rows_leaf_b3_kernel<false>), reinterpret_cast<const void*>(rows_leaf_b3_kernel<true>),
+                        reinterpret_cast<const void*>(rows_leaf_frame_b3_kernel), reinterpret_cast<const void*>(rows_level_b3_kernel),
                         reinterpret_cast<const void*>(rows_levels_b3_kernel)})
     if (const cudaError_t rc = cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared))
       return static_cast<int>(rc);
@@ -451,9 +472,43 @@ extern "C" int verity_rows_b3_leaves_launch(const void* params, const uint8_t* r
   const u64 chunk = max_blocks ? max_blocks * THREADS : m;
   for (u64 c = 0; c < m; c += chunk) {
     const u64 mc = m - c < chunk ? m - c : chunk;
-    rows_leaf_b3_kernel<<<static_cast<unsigned>((mc + THREADS - 1) / THREADS), THREADS, 0, st>>>(
+    rows_leaf_b3_kernel<false><<<static_cast<unsigned>((mc + THREADS - 1) / THREADS), THREADS, 0, st>>>(
         *p, c < n_rows ? rows + c * stride : rows, stride, c < n_rows ? n_rows - c : 0, salts && c < n_rows ? salts + SALT * c : salts, tn,
         first + c, mc, n_total, out + 64 * c, bc ? bc + 128 * c : bc, hs ? hs + 64 * c : hs);
+    if (const cudaError_t rc = cudaGetLastError()) return static_cast<int>(rc);
+  }
+  return 0;
+}
+
+// native_rows.cu's verity_rows_h_launch (scratch unused).
+extern "C" int verity_rows_b3_h_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
+                                       const uint8_t* tn, uint64_t first, uint8_t* hs, uint8_t* bc, uint8_t*, uint64_t max_blocks, cudaStream_t st) {
+  if (!hs) return static_cast<int>(cudaErrorInvalidValue);
+  if (const int rc = rows_b3_kernel_attributes()) return rc;
+  const B3K* p = static_cast<const B3K*>(params);
+  const u64 chunk = max_blocks ? max_blocks * THREADS : n_rows;
+  for (u64 c = 0; c < n_rows; c += chunk) {
+    const u64 mc = n_rows - c < chunk ? n_rows - c : chunk;
+    rows_leaf_b3_kernel<true><<<static_cast<unsigned>((mc + THREADS - 1) / THREADS), THREADS, 0, st>>>(
+        *p, rows + c * stride, stride, mc, salts ? salts + SALT * c : salts, tn, first + c, mc, first + n_rows, nullptr, bc ? bc + 128 * c : bc,
+        hs + 64 * c);
+    if (const cudaError_t rc = cudaGetLastError()) return static_cast<int>(rc);
+  }
+  return 0;
+}
+
+// native_rows.cu's verity_rows_frame_launch.
+extern "C" int verity_rows_b3_frame_launch(const void* params, const uint8_t* hs, uint64_t n_h, uint64_t first, uint64_t m, uint64_t n_total,
+                                           uint8_t* out, uint64_t max_blocks, cudaStream_t st) {
+  if (const int rc = rows_b3_kernel_attributes()) return rc;
+  const B3K* p = static_cast<const B3K*>(params);
+  u64 nd = n_total > first ? n_total - first : 0;
+  nd = nd < n_h ? nd : n_h;
+  const u64 chunk = max_blocks ? max_blocks * THREADS : m;
+  for (u64 c = 0; c < m; c += chunk) {
+    const u64 mc = m - c < chunk ? m - c : chunk;
+    rows_leaf_frame_b3_kernel<<<static_cast<unsigned>((mc + THREADS - 1) / THREADS), THREADS, 0, st>>>(*p, c < nd ? hs + 64 * c : hs, first + c, mc,
+                                                                                                  c < nd ? nd - c : 0, out + 64 * c);
     if (const cudaError_t rc = cudaGetLastError()) return static_cast<int>(rc);
   }
   return 0;

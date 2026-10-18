@@ -54,6 +54,11 @@ extern "C" int verity_rows_leaves_form();
 extern "C" int verity_rows_leaves_sf_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
                                             const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
                                             uint8_t* hs, uint8_t* scratch, uint64_t max_blocks, cudaStream_t st);
+extern "C" int verity_rows_h_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
+                                    const uint8_t* tn, uint64_t first, uint8_t* hs, uint8_t* bc, uint8_t* scratch, uint64_t max_blocks,
+                                    cudaStream_t st);
+extern "C" int verity_rows_frame_launch(const void* params, const uint8_t* hs, uint64_t n_h, uint64_t first, uint64_t m, uint64_t n_total,
+                                        uint8_t* out, uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_out, int level, uint64_t first_index,
                                         uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
@@ -65,6 +70,11 @@ extern "C" int verity_rows_b3_build(const uint8_t* hash_key, const uint8_t* doma
 extern "C" int verity_rows_b3_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
                                             const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
                                             uint8_t* hs, uint64_t max_blocks, cudaStream_t st);
+extern "C" int verity_rows_b3_h_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
+                                       const uint8_t* tn, uint64_t first, uint8_t* hs, uint8_t* bc, uint8_t* scratch, uint64_t max_blocks,
+                                       cudaStream_t st);
+extern "C" int verity_rows_b3_frame_launch(const void* params, const uint8_t* hs, uint64_t n_h, uint64_t first, uint64_t m, uint64_t n_total,
+                                           uint8_t* out, uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_b3_level_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_out, int level,
                                            uint64_t first_index, uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_b3_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
@@ -1507,6 +1517,8 @@ struct RowStep {
   decltype(&verity_rows_leaves_launch) leaves_fn = verity_rows_leaves_launch;
   RowsLevelFn level_fn = verity_rows_level_launch;
   RowsLevelsFn levels_fn = verity_rows_levels_launch;
+  decltype(&verity_rows_h_launch) h_fn = verity_rows_h_launch;
+  decltype(&verity_rows_frame_launch) frame_fn = verity_rows_frame_launch;
   RowStep(const py::bytes& domain_id, const py::bytes& ks, const py::bytes& row_prefix, const py::bytes& salt_prefix, const py::bytes& leaf_prefix,
           const std::string& schema, int64_t row_bytes_, const std::string& hash_ = "sha512", const py::bytes& hash_key = py::bytes())
       : row_bytes(row_bytes_), hash(hash_) {
@@ -1520,6 +1532,8 @@ struct RowStep {
       leaves_fn = verity_rows_b3_leaves_launch;
       level_fn = verity_rows_b3_level_launch;
       levels_fn = verity_rows_b3_levels_launch;
+      h_fn = verity_rows_b3_h_launch;
+      frame_fn = verity_rows_b3_frame_launch;
       params.resize(static_cast<size_t>(verity_rows_b3_params_bytes()));
       if (verity_rows_b3_build(reinterpret_cast<const uint8_t*>(hk.data()), reinterpret_cast<const uint8_t*>(did.data()), reinterpret_cast<const uint8_t*>(k.data()),
                                reinterpret_cast<const uint8_t*>(p.data()), reinterpret_cast<const uint8_t*>(sp.data()), reinterpret_cast<const uint8_t*>(lp.data()),
@@ -1823,6 +1837,64 @@ struct StepHasher {
     return py::make_tuple(leaves, bc, hs);
   }
 
+  // rows_leaves in two halves, for a step whose length (and so whose frame domain) is not known while its rows are: rows_h hashes the
+  // data positions first .. first + nbytes / stride - 1 to their h (and b || c when want_bc), which needs only the step's salt key (rs
+  // may be any domain's RowStep), and rows_frame turns them into the leaves once the step's RowStep is known.  -> (h [n_rows, 64],
+  // b || c [n_rows, 128] or empty)
+  py::tuple rows_h(const RowStep& rs, at::Tensor rows, int64_t nbytes, int64_t first, at::Tensor tn, int64_t stream_ptr, int64_t stride = 0,
+                   std::optional<at::Tensor> salts_given = std::nullopt, bool want_bc = false) {
+    const at::Tensor salts = salts_given.has_value() ? *salts_given : at::Tensor();
+    if (stride == 0) stride = rs.row_bytes;
+    if (!rows.is_cuda() || rows.scalar_type() != at::kByte || !rows.is_contiguous()) throw std::runtime_error("rows_h: rows must be a contiguous CUDA uint8 tensor");
+    if (stride % 16 || stride < (rs.row_bytes + 15) / 16 * 16 || reinterpret_cast<uintptr_t>(rows.data_ptr()) % 16)
+      throw std::runtime_error("rows_h: rows 16-byte aligned at a stride of whole 16-byte loads covering the row");
+    if (nbytes < 0 || nbytes > rows.numel() || nbytes % stride) throw std::runtime_error("rows_h: nbytes must be a stride multiple within rows");
+    if (!tn.is_cuda() || tn.scalar_type() != at::kByte || !tn.is_contiguous() || tn.numel() != rs.tn_bytes)
+      throw std::runtime_error("rows_h: tn must be the step's CUDA mask table (" + std::to_string(rs.tn_bytes) + " bytes)");
+    const int64_t n_rows = nbytes / stride;
+    if (first < 0 || first + n_rows > (int64_t(1) << 32)) throw std::runtime_error("rows_h: positions below 2^32");
+    if (salts.defined() && (!salts.is_cuda() || salts.scalar_type() != at::kByte || !salts.is_contiguous() || salts.numel() < n_rows * rs.salt_bytes))
+      throw std::runtime_error("rows_h: salts must be a contiguous CUDA uint8 tensor of " + std::to_string(rs.salt_bytes) + " bytes per row");
+    at::Tensor hs, bc;
+    {
+      py::gil_scoped_release nogil;
+      c10::InferenceMode inf;
+      cudaStream_t st = reinterpret_cast<cudaStream_t>(stream_ptr);
+      c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, rows.device().index());
+      c10::cuda::CUDAStreamGuard g(cs);
+      const auto opt = at::TensorOptions().dtype(at::kByte).device(rows.device());
+      hs = at::empty({n_rows, 64}, opt);
+      bc = want_bc ? at::empty({n_rows, 128}, opt) : at::empty({0}, opt);
+      at::Tensor sf = at::empty({rs.hash == "sha512" ? n_rows * 192 : 0}, opt);
+      const int lrc = rs.h_fn(rs.params.data(), reinterpret_cast<const uint8_t*>(rows.data_ptr()), static_cast<uint64_t>(stride), static_cast<uint64_t>(n_rows),
+                              salts.defined() ? reinterpret_cast<const uint8_t*>(salts.data_ptr()) : nullptr, reinterpret_cast<const uint8_t*>(tn.data_ptr()),
+                              static_cast<uint64_t>(first), reinterpret_cast<uint8_t*>(hs.data_ptr()), want_bc ? reinterpret_cast<uint8_t*>(bc.data_ptr()) : nullptr,
+                              reinterpret_cast<uint8_t*>(sf.data_ptr()), static_cast<uint64_t>(rs.max_blocks), st);
+      if (lrc != 0) throw std::runtime_error(std::string("rows_h: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+    }
+    return py::make_tuple(hs, bc);
+  }
+
+  // The leaves of positions first .. first + m - 1 of a step of n_total leaves from rows_h's h of its positions first .. first + len(hs) - 1
+  // (a pad at every position >= n_total).  -> leaves [m, 64] uint8, rows_leaves' bytes
+  at::Tensor rows_frame(const RowStep& rs, at::Tensor hs, int64_t first, int64_t m, int64_t n_total, int64_t stream_ptr) {
+    if (!hs.is_cuda() || hs.scalar_type() != at::kByte || !hs.is_contiguous() || (hs.numel() && (hs.dim() != 2 || hs.size(1) != 64)))
+      throw std::runtime_error("rows_frame: hs must be a contiguous CUDA uint8 [n, 64]");
+    if (first < 0 || m < 0 || n_total < 0 || first + m > (int64_t(1) << 32)) throw std::runtime_error("rows_frame: positions below 2^32");
+    const int64_t n_h = hs.numel() ? hs.size(0) : 0;
+    py::gil_scoped_release nogil;
+    c10::InferenceMode inf;
+    cudaStream_t st = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, hs.device().index());
+    c10::cuda::CUDAStreamGuard g(cs);
+    at::Tensor leaves = at::empty({m, 64}, at::TensorOptions().dtype(at::kByte).device(hs.device()));
+    const int lrc = rs.frame_fn(rs.params.data(), reinterpret_cast<const uint8_t*>(hs.data_ptr()), static_cast<uint64_t>(n_h), static_cast<uint64_t>(first),
+                                static_cast<uint64_t>(m), static_cast<uint64_t>(n_total), reinterpret_cast<uint8_t*>(leaves.data_ptr()),
+                                static_cast<uint64_t>(rs.max_blocks), st);
+    if (lrc != 0) throw std::runtime_error(std::string("rows_frame: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+    return leaves;
+  }
+
   // rows-sha512 absorb: levels 0 .. n_levels-1 of one window's subtree from its leaves (positions first .. first + m - 1, m a power of two
   // and first a multiple of m, so every pair is inside the window), each level copied D2H into host_dsts[L] when they are given (one event
   // sync at the end); with none, the levels stay on the device and nothing syncs.  -> the top level (device)
@@ -1925,6 +1997,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
            py::arg("side_stream_ptr"), py::arg("step_event_ptr"), py::arg("keep_mode") = 0, py::arg("keep_dst") = at::Tensor(), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor())
       .def("rows_leaves", &StepHasher::rows_leaves, py::arg("rs"), py::arg("rows"), py::arg("nbytes"), py::arg("first"), py::arg("m"), py::arg("n_total"),
            py::arg("tn"), py::arg("stream_ptr"), py::arg("stride") = 0, py::arg("salts") = py::none(), py::arg("want_bc") = false, py::arg("want_h") = false)
+      .def("rows_h", &StepHasher::rows_h, py::arg("rs"), py::arg("rows"), py::arg("nbytes"), py::arg("first"), py::arg("tn"), py::arg("stream_ptr"),
+           py::arg("stride") = 0, py::arg("salts") = py::none(), py::arg("want_bc") = false)
+      .def("rows_frame", &StepHasher::rows_frame, py::arg("rs"), py::arg("hs"), py::arg("first"), py::arg("m"), py::arg("n_total"), py::arg("stream_ptr"))
       .def("rows_tree_window", &StepHasher::rows_tree_window, py::arg("rs"), py::arg("leaves"), py::arg("n_levels"), py::arg("first"), py::arg("stream_ptr"),
            py::arg("host_dsts"))
       .def("rows_tree", &StepHasher::rows_tree, py::arg("rs"), py::arg("nodes"), py::arg("level0"), py::arg("stream_ptr"), py::arg("levels_host") = false,
