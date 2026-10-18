@@ -102,7 +102,9 @@ def test_bounded_record_run_commits_step_rows_roots(monkeypatch):
     try:
         com.learn_only = True
         warm = WR.run(com, SCHED)
-        assert len(warm.extra["bounded_staging"]["learned_only_steps"]) == len(SCHED)
+        assert not warm.extra["bounded_staging"]["learned_only_steps"] and com._win_hfirst_steps == len(SCHED), \
+            "learning steps that keep no bytes copy nothing to host, so even over the budget they are committed, not discarded"
+        check_run(warm, com.row_keys)
         com.learn_only = False
         rec = WR.run(com, SCHED)
         bs = rec.extra["bounded_staging"]

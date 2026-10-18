@@ -1386,8 +1386,9 @@ class NativeCollectCommitter(NativeHostCommitter):
         learn_only = bounded and learning and self.learn_only
         # rows on a learning step that keeps no bytes: a leaf's h needs only the step's salt key, so each window is hashed in place to its
         # h (1/64 of its bytes, kept on the device) and released with no host copy; its leaves follow from them once the step's length,
-        # and so its frame domain, is known (rows_frame) -- the same leaves as the re-upload below, which only the other steps take
-        hfirst = rows and learning and self.retain == "none" and not learn_only
+        # and so its frame domain, is known (rows_frame) -- the same leaves as the re-upload below, which only the other steps take.  With
+        # no host copy there is no transient budget to exceed, so a bounded learn-only pass commits such a step instead of discarding it
+        hfirst = rows and learning and self.retain == "none"
         hwins: list[tuple[int, Any]] = []
         rs_h = self._row_step(job.step, 1, ks) if hfirst else None
         tblocks: list[tuple[int, Any, Any, int]] = []                           # bounded learning: (k, block, view, bytes) re-hash source
