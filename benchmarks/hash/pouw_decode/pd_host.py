@@ -16,16 +16,21 @@ POISON = 0xA5
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def variants() -> tuple[int, ...]:
-    """pd.cuh's PD_VARIANT_LIST: the variants built, a launch each (bits PD_ROUNDS 1, PD_ROLLED 2, PD_CALL 4, PD_PREFETCH 8)."""
-    src = open(os.path.join(HERE, "pd.cuh")).read()
-    return tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", src).group(1)))
-
-
-VARIANTS = variants()
+SRC = open(os.path.join(HERE, "pd.cuh")).read()
+#: pd.cuh's PD_VARIANT_LIST: the variants built, a launch each (bits PD_ROUNDS 1, PD_ROLLED 2, PD_CALL 4, PD_PREFETCH 8,
+#: PD_PAIR 16)
+VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SRC).group(1)))
+PD_PAIR = 16
+#: a PD_PAIR launch's dynamic shared memory (pd.cuh's PD_PAIR_SMEM: two pairs of PD_PAIR_WORDS words)
+PAIR_SMEM = 2 * 8 * int(re.search(r"PD_PAIR_WORDS = (\d+)", SRC).group(1))
 #: the variants of the schedules with side lanes (pd_deferred_V, pd_side_tree_V); every variant gets pd_serial_V
-SIDE = tuple(int(x) for x in os.environ.get("PD_SIDE", "7,15").split(","))
+SIDE = tuple(int(x) for x in os.environ.get("PD_SIDE", "3,19,23").split(","))
 assert set(SIDE) <= set(VARIANTS), (SIDE, VARIANTS)
+MAX_DYNAMIC_SHARED = 8   # CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES
+
+
+def smem(v: int) -> int:
+    return PAIR_SMEM if v & PD_PAIR else 0
 COMMIT = ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a")
 #: the served steps pd's launches do: A's commitment, E_A's lines, the tile leaves
 LINES = "lines_ea"
@@ -38,9 +43,14 @@ COMMITMENT = ("rowdig_a", "tree_a", "seed_a", "line_a", "seeds_a", "lkeys_a")
 
 
 def setup(pd) -> None:
+    """The module's tables, and each PD_PAIR launch's dynamic shared memory allowed past the default 48 KB with its static."""
     pd.launch("s512_heads", R.cdiv(R.RS_MAX_SEGS * (R.RS_MAX_SEGS + 1) // 2 + R.RS_MAX_SEGS + 1, 128), 128)
     pd.launch("pd_heads", 1, 32)
     pd.sync()
+    for v in VARIANTS:
+        if v & PD_PAIR:
+            for f in ("pd_commit", "pd_tree", "pd_probe"):
+                pd.ck("cuFuncSetAttribute", pd.fn(f"{f}_{v}"), MAX_DYNAMIC_SHARED, PAIR_SMEM)
 
 
 class PdCall:
@@ -52,23 +62,31 @@ class PdCall:
         self.pd, self.p, self.keys = pd, pipe, keys
         self.m, self.k, self.n, self.s, self.lines = pipe.m_real, pipe.k, pipe.n, pipe.k // 256, pipe.m
         self.scratch = pd.alloc(16)
-        self.block = 32 * (R.cdiv(self.s, 32) + 2)
+
+    def block(self, v: int) -> int:
+        """pd_commit_V's threads: the segments' warps (doubled with PD_PAIR: consumers, then producers) and two more."""
+        return 32 * (R.cdiv(self.s, 32) * (2 if v & PD_PAIR else 1) + 2)
 
     def _p(self) -> tuple:
         b, kk = self.p.b, self.keys
         return (b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"], kk["hm"],
                 self.scratch, b["seed_a"], b["line_a"], b["ea_codes"])
 
+    def _commit(self, v: int, mode: int) -> list:
+        return [lambda: self.pd.launch(f"pd_commit_{v}", self.m, self.block(v), smem(v), p=self._p(),
+                                       i=(self.m, self.k, mode, self.lines))]
+
     def commit(self, v: int) -> list:
-        return [lambda: self.pd.launch(f"pd_commit_{v}", self.m, self.block, p=self._p(), i=(self.m, self.k, 0, self.lines))]
+        return self._commit(v, 0)
 
     def rows(self, v: int) -> list:
-        return [lambda: self.pd.launch(f"pd_commit_{v}", self.m, self.block, p=self._p(), i=(self.m, self.k, 1, self.lines))]
+        return self._commit(v, 1)
 
     def tree(self, v: int) -> list:
         b, kk = self.p.b, self.keys
-        return [lambda: self.pd.launch(f"pd_tree_{v}", 1, 128, p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0,
-                                                                 b["seed_a"], b["line_a"], b["ea_codes"]), i=(self.m, 0, 0, self.lines))]
+        return [lambda: self.pd.launch(f"pd_tree_{v}", 1, 128, smem(v), p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0,
+                                                                          0, b["seed_a"], b["line_a"], b["ea_codes"]),
+                                       i=(self.m, 0, 0, self.lines))]
 
     def tiles(self, v: int) -> list:
         b = self.p.b

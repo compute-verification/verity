@@ -1,6 +1,7 @@
 // pd.cuh and the hash_h3.cuh / hash_fast.cuh kernels built for the host (host_test.py): the CUDA builtins they use, and
-// `pd_run`, which runs a 1-D grid's CTAs in order, a CTA's threads as host threads under one barrier (__syncthreads) and a
-// barrier per warp (__syncwarp).  Buffers are host memory: Args' pointers are host addresses.
+// `pd_run`, which runs a 1-D grid's CTAs in order, a CTA's threads as host threads under one barrier (__syncthreads), a
+// barrier per warp (__syncwarp) and the named barriers (pd_bar_sync / pd_bar_arrive, each made at its first use with its
+// thread count).  Buffers are host memory: Args' pointers are host addresses.
 //   g++ -O2 -std=c++20 -pthread -shared -fPIC -o pd_host.so pd_host.cpp
 #include <algorithm>
 #include <atomic>
@@ -11,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -30,6 +32,15 @@ static std::barrier<>* g_barrier;
 static std::vector<std::unique_ptr<std::barrier<>>> g_warps;
 static void __syncthreads() { g_barrier->arrive_and_wait(); }
 static void __syncwarp() { g_warps[threadIdx.x / 32]->arrive_and_wait(); }
+static std::mutex g_named_mu;
+static std::unique_ptr<std::barrier<>> g_named[16];
+static std::barrier<>& pd_named(int id, int n) {
+  std::lock_guard<std::mutex> lock(g_named_mu);
+  if (!g_named[id]) g_named[id] = std::make_unique<std::barrier<>>(n);
+  return *g_named[id];
+}
+static void pd_bar_sync(int id, int n) { pd_named(id, n).arrive_and_wait(); }
+static void pd_bar_arrive(int id, int n) { (void)pd_named(id, n).arrive(); }
 static void __threadfence() { std::atomic_thread_fence(std::memory_order_seq_cst); }
 static void __trap() { std::fprintf(stderr, "__trap\n"); std::abort(); }
 static long long clock64() { return 0; }
@@ -112,6 +123,7 @@ extern "C" int pd_run(const char* name, int grid, int block, const Args* a) {
         k->fn(*a);
       });
     for (auto& t : ts) t.join();
+    for (auto& n : g_named) n.reset();
   }
   return 0;
 }

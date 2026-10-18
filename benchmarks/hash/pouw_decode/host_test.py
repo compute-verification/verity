@@ -2,8 +2,9 @@
 """pd.cuh on the host (pd_host.cpp's build), held byte for byte to Pearl-C's own kernels built beside it (s512_row_segs and
 s512_folds, hm_leaves, s512_frame_leaves, s512_pads, s512_tree_small, s512_seeds, s512_tile_segs) and to the Python
 references (refs.py; E_A's lines against Python alone), at row counts with and without pads and filler rows and segment
-counts odd and even, in every variant (pd.cuh's PD_VARIANT_LIST) and both pd_commit modes; every pd output starts poisoned.
-pd_probe's variants are held to each other.  Exit 1 on any difference.
+counts odd and even and one or two segment warps, in every variant (pd.cuh's PD_VARIANT_LIST) and both pd_commit modes;
+every pd output starts poisoned.  pd_probe's variants are held to each other, and its paired chain to its compressions'.
+Exit 1 on any difference.
 
   python3 host_test.py [SO]   (default: builds pd_host.so with g++ into a temporary directory)
 """
@@ -24,7 +25,7 @@ sys.path.insert(0, HERE)
 import refs  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_kernel_constants  # noqa: E402
 
-RS_MAX_SEGS, POISON, INDEX = 128, 0xA5, 5
+RS_MAX_SEGS, POISON, INDEX, PD_PAIR = 128, 0xA5, 5, 16
 #: pd.cuh's PD_VARIANT_LIST, a launch each
 VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)",
                                                                        open(os.path.join(HERE, "pd.cuh")).read()).group(1)))
@@ -111,7 +112,7 @@ def pd_commit(h: Host, x, m16: int, k: int, kb, dom, hm, mode: int, variant: int
     b = out
     p = (x, b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], unit, dom, sk, hm, scratch, b["seed_a"], b["line_a"],
          b["ea_codes"])
-    h.run(f"pd_commit_{variant}", m16, 32 * (-(-s // 32) + 2), p=p, i=(m16, k, mode, lines))
+    h.run(f"pd_commit_{variant}", m16, 32 * (-(-s // 32) * (2 if variant & PD_PAIR else 1) + 2), p=p, i=(m16, k, mode, lines))
     if mode == 1:
         h.run(f"pd_tree_{variant}", 1, 128, p=(0, 0, b["tree_a"], 0, 0, unit, dom, 0, 0, 0, b["seed_a"], b["line_a"],
                                               b["ea_codes"]), i=(m16, 0, 0, lines))
@@ -132,7 +133,7 @@ def main(argv: list[str]) -> int:
     hm = h.buf(hm96_kernel_constants())
     rng = np.random.default_rng(7)
     fails, cases = [], 0
-    for m16, k in ((32, 4096), (48, 1280), (128, 1024), (16, 2048), (1, 1024)):
+    for m16, k in ((32, 4096), (48, 1280), (128, 1024), (16, 2048), (1, 1024), (3, 9216)):
         kb = keys(m16)
         rows = rng.standard_normal((m16, k), dtype=np.float32)
         x = h.buf(rows.tobytes())
@@ -169,15 +170,21 @@ def main(argv: list[str]) -> int:
                 fails.append(e)
         print(f"tiles {rows_}x{cols}: done, {len(fails)} failures so far", flush=True)
     for n in (1, 3):
-        for form, what in ((0, "compression"), (1, "rounds alone")):
+        chained = {}
+        for form, what in ((0, "compression"), (1, "rounds alone"), (2, "paired")):
             st = {}
             for v in VARIANTS:
                 out = h.buf(9 * 8, POISON)
-                h.run(f"pd_probe_{v}", 1, 32, p=(out,), i=(n, form))
+                h.run(f"pd_probe_{v}", 1, 64 if form == 2 else 32, p=(out,), i=(n, form))
                 st[v] = out.tobytes()[8:72]
             cases += 1
             if len(set(st.values())) != 1 or bytes([POISON]) * 64 in st.values():
                 fails.append(f"probe n={n} {what}: the variants' final states differ or stayed poisoned")
+            if form != 1:
+                chained[what] = st[VARIANTS[0]]
+        cases += 1
+        if len(set(chained.values())) != 1:
+            fails.append(f"probe n={n}: the paired chain differs from the compression's")
     print(f"probe: done, {len(fails)} failures so far", flush=True)
     for f in fails:
         print("FAIL", f)

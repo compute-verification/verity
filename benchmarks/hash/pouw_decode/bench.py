@@ -381,22 +381,26 @@ def run_shape(dev, pd, lanes, nv, out, name, m16, n, k, reps, trace):
         dev.free(p_)
 
 
-#: pd_probe's forms (i1), and the variants probed (the prefetch bit changes no compression)
-PROBE_FORMS, PROBE_VARIANTS = {0: "compress", 1: "rounds"}, (1, 3, 5, 7)
+#: pd_probe's forms (i1): the paired form (two warps) in the PD_PAIR variants alone
+PROBE_FORMS = {0: "compress", 1: "rounds", 2: "paired"}
 
 
 def probe(pd, nv, out) -> None:
-    """One warp's cycles per chained compression (pd_probe_V) in each probed variant and form, at 1, 16 and 256 chained
+    """One warp's cycles per chained compression (pd_probe_V) in each variant and form, at 1, 16 and 256 chained
     compressions, each launched twice: the first launch's cycles (at n = 1 the code's first fetch since the module loaded)
     and the second's; and whether every variant's final state is the same."""
+    from pd_host import PD_PAIR, PAIR_SMEM, VARIANTS
     buf = pd.alloc(9 * 8)
     for n in (1, 16, 256):
         for form, fname in PROBE_FORMS.items():
             st = {}
-            for v in PROBE_VARIANTS:
+            for v in (x for x in VARIANTS if form != 2 or x & PD_PAIR):
                 cyc = []
                 for _ in range(2):
-                    pd.launch(f"pd_probe_{v}", 1, 32, p=(buf,), i=(n, form))
+                    if form == 2:
+                        pd.launch(f"pd_probe_{v}", 1, 64, PAIR_SMEM, p=(buf,), i=(n, form))
+                    else:
+                        pd.launch(f"pd_probe_{v}", 1, 32, p=(buf,), i=(n, form))
                     pd.sync()
                     raw = pd.read(buf, 9 * 8)
                     cyc.append(int.from_bytes(raw[:8], "little"))
