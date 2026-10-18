@@ -70,11 +70,11 @@ theorem zk_setupOne_range {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tbl
   · exact ⟨(Discharge.Hidden.setupHidden_spec' h).inRange, (Discharge.Hidden.setupHidden_wf h).2⟩
   · exact ⟨FlockVBridge.Family.setupH_inRange h, (Refine.setupH_wf h).2⟩
 
-/-- **A masked statement in scope has link points of at most 64 coordinates**, so its two link points fit a live
-coin: table 0's range check and regions, whose link points are the session's. -/
-theorem zk_mPts_le {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+/-- **A masked statement in scope has link points of between 1 and 64 coordinates**, so its two link points fit a
+live coin: table 0's range check and regions, whose link points are the session's. -/
+theorem zk_mPts {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) : 2 * spec.mPts ≤ 65536 := by
+    (hset : setupOf true x = some (ins, spec, sts)) : 2 * spec.mPts ≤ 65536 ∧ 1 ≤ spec.mPts := by
   obtain ⟨p, hp, rfl, -, -, -⟩ := parsed_of_parse hs
   obtain ⟨hpst, hpr, hsr⟩ := parseBytes_setup hp hset
   subst hpst
@@ -91,7 +91,13 @@ theorem zk_mPts_le {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Rea
   have h64 := ((checkInRange_ok _ _ _).1 hr).2.2
   have hm := hwf.mPts
   unfold PT_LOCAL at h64 hm
-  omega
+  exact ⟨by omega, by omega⟩
+
+/-- **A masked statement in scope has link points of at most 64 coordinates** (`zk_mPts`). -/
+theorem zk_mPts_le {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) : 2 * spec.mPts ≤ 65536 :=
+  (zk_mPts hs hin hset).1
 
 /-! ## The fork rounds -/
 
@@ -674,7 +680,7 @@ def ZkSimForkLe (x : Claims.Msg) : Prop :=
           (zkRd hset h0 L hz hk hlay j i).val
 
 /-- **A self-clash at an accepting run's view is a column clash or a collision**: at every masked statement in scope
-that sets up, at a draw `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
+that sets up, at its draw `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
 at which `V true` accepts `P` deciding a record, a decoded self-clash of table `j` at the record's live outcome
 (`LiveSelfClashZ` at `viewOf`) gives two different columns the run's reps open at one position of some table, or a
 collision among the run's verifier calls. -/
@@ -685,8 +691,8 @@ def ZkViewClash (x : Claims.Msg) : Prop :=
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    (d : Lean.Json) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (j : ℕ) (_ : j < (tables true x).length)
-    (C : Fin (wordLenJ true x j) → List 𝔽), (∀ p, wideJ true x j (C p)) →
+    (d : Lean.Json) (_ : ins.read.draw = some d) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
+    (_ : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽), (∀ p, wideJ true x j (C p)) →
     ∀ r : Fin ((V true).k x) → Coin, (Claims.run sha512 P (V true) x ω r).out = .acc →
     ∀ s' spec' sts' link c₁ mids f,
       act true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
@@ -762,8 +768,8 @@ theorem zkSimWJ_of_parts {x : Claims.Msg} (hrun : ZkSimRunAt x) (habort : ZkSimA
   obtain ⟨s', spec', sts', link, c₁, mids, f, hact, -⟩ := acc_decide hacc
   have hv := hrun s hs hin ins spec sts hset h0 L hz hk hlay Ω P ω u r' hacc s' spec' sts' link c₁ mids f hact
   rw [hv] at hp
-  exact ⟨hacc, hclash s hs hin ins spec sts hset h0 L hz hk hlay d Ω P ω j hj C hC _ hacc s' spec' sts' link c₁ mids
-    f hact hp⟩
+  exact ⟨hacc, hclash s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC _ hacc s' spec' sts' link c₁
+    mids f hact hp⟩
 
 /-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
 the masked simulator's lockstep, abort, fork bounds and view clashes at the statements some run accepts

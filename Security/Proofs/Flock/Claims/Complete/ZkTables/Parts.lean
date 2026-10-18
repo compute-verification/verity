@@ -10,10 +10,11 @@ level 0's masked Ligerito, stated once over `ligeritoPZk` and `Zk.ligeritoWith` 
 `Lanes`, `Verifier`), and the rest, which the plain proofs and the closed forms of the masked PIOP cover: what each
 T-Prop asks beyond `Level0` (`ShapeRest`, `RunsRest`, `LigeritoRest`, `InnerRest`). `LigeritoRest` and `InnerRest`
 hold (`ligeritoRest`, `innerRest`, from `View.view`), so `complete_jsonT_of_parts` composes `Level0`'s four with
-`ShapeRest` and `RunsRest`.
+`ShapeRest` and `RunsRest`, which hold too (`ShapeGo.shapeRest`, `RunsGo.runsRest`; `complete_jsonT_of_level0`).
 
-The mask-rank bound and the prover's rank refusal enter none of the four: the masked prover `repPZk` has no rank
-refusal, so its error is `BadZk`'s, which `δc` already counts.
+The prover's rank refusal (`rankCheckP`) enters `RunsRest` only: a rep returns where `ProverRunsT`'s `MaskRankT`
+holds, and `complete_jsonT` takes the mask-rank bound at the verifier's coins (`MaskRank.MaskRankBound`) for the
+other side, that a good case's coins pass the check.
 -/
 
 namespace FlockComplete.ZkTables
@@ -46,9 +47,9 @@ end Rest
 open FlockComplete.Replay in
 /-- **`LigeritoT` from level 0's verifier premise** (`view`). -/
 theorem ligeritoRest (H : Claims.Msg → Claims.Msg) : LigeritoRest H := by
-  intro hV h64 st tr hT ω i d k r v cm pts e rep ic hin hrep l p t' l' _ _ hgo R hAg q hq sw hsw
+  intro hV h64 st tr hT ω i d k r v cm pts e rep ic hin hrep prior ws l p t' l' _ _ hgo R hAg q hq sw hsw
   obtain ⟨_, _, _, _, _, h, -⟩ :=
-    view hV h64 st tr hT ω i d r v cm pts e rep ic hin hrep l p t' l' hgo R hAg q hq sw hsw
+    view hV h64 st tr hT ω i d r v cm pts e rep ic hin hrep prior ws l p t' l' hgo R hAg q hq sw hsw
   exact ⟨_, h⟩
 
 open FlockComplete.Replay in
@@ -56,9 +57,10 @@ open FlockComplete.Replay in
 returned on (`view`), so its batched constraint held at its coins (`innerP_ret`), which is what the verifier's inner
 check needs (`verifyInnerWith_of'`). -/
 theorem innerRest (H : Claims.Msg → Claims.Msg) : InnerRest H := by
-  intro hV h64 st tr hT ω i d k r v cm pts e rep ic hin hrep l p t' l' _ _ hgo R hAg q hq sw hsw lg hlg lanes hlanes
+  intro hV h64 st tr hT ω i d k r v cm pts e rep ic hin hrep prior ws l p t' l' _ _ hgo R hAg q hq sw hsw lg hlg lanes
+    hlanes
   obtain ⟨rec, tI, lI, rp, lgc, hLg, htk, hlgc, hq1, hinn⟩ :=
-    view hV h64 st tr hT ω i d r v cm pts e rep ic hin hrep l p t' l' hgo R hAg q hq sw hsw
+    view hV h64 st tr hT ω i d r v cm pts e rep ic hin hrep prior ws l p t' l' hgo R hAg q hq sw hsw
   obtain rfl : lg = (rec, ⟨R, tI.k, tI.pending⟩) := Except.ok.inj (hlg.symm.trans hLg)
   obtain rfl : lanes = lgc := Except.ok.inj (hlanes.symm.trans hlgc)
   rw [hq1]
@@ -68,13 +70,13 @@ theorem innerRest (H : Claims.Msg → Claims.Msg) : InnerRest H := by
   exact ⟨_, verifyInnerWith_of' (Claims.hOf H) (JsonRT.hOf_size h64) _ ω i rep (ω.innerSalt i rep) hin.innerCommit _ _
     hz hb tI htk (hAg.mono (Nat.zero_le _))⟩
 
-/-- **Masked completeness from its parts**: `complete_jsonT` from level 0's four premises (`Level0`) and the rest of
-`RepShapedT` and `ProverRunsT`; `LigeritoT` and `InnerT` follow from `Level0.Verifier` (`ligeritoRest`,
-`innerRest`). -/
+/-- **Masked completeness from its parts**: `complete_jsonT` from level 0's four premises (`Level0`), the rest of
+`RepShapedT` and `ProverRunsT`, and the mask-rank bound; `LigeritoT` and `InnerT` follow from `Level0.Verifier`
+(`ligeritoRest`, `innerRest`). -/
 theorem complete_jsonT_of_parts (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
     (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier)
-    (gS : ShapeRest H) (gR : RunsRest H) :
+    (gS : ShapeRest H) (gR : RunsRest H) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT H S (gS h1) (gR h0 h2 h3) (ligeritoRest H h3) (innerRest H h3)
+  complete_jsonT H S (gS h1) (gR h0 h2 h3) (ligeritoRest H h3) (innerRest H h3) hMR
 
 end FlockComplete.ZkTables

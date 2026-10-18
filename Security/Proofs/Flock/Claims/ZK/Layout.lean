@@ -23,6 +23,8 @@ and `(c + m)·g`.
   session's zero knowledge and relation are needed only at those.
 * `Layout.iterSimG_seq_congr`, `Layout.start_congr`: the simulator and the sessions' starts read no witness, so a
   simulator built at the parts alone is the composition's at every witness map.
+* `progOf`: a session simulator's program on a slot's own coin type, through a bijection with its coins at the
+  slot's statement (`progOf_of`).
 -/
 
 namespace Claims.ZKMal
@@ -282,5 +284,18 @@ theorem zkmalAt_layout {W WS NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype 
     S₀ CB progB go ε₀ γ₀ g eB m h₀ hB hR hgo (fun _ _ => rfl) hγ₀ he0 hg
   exact h.of_equiv _ (Equiv.refl _) (Equiv.refl _) fun w hist ω =>
     (Layout.iterProver_flat T₀ c NB ΩB L P₀ PS m w x hist ω).symm
+
+open Classical in
+/-- **A simulator's program on coins of another type**: `S`'s at `xS` through a bijection, where there is one. -/
+noncomputable def progOf (S : Simulator) (C : Type) (xS : Msg) (c : C) : SP (List (Msg × Out)) :=
+  if h : Nonempty (C ≃ S.C xS) then S.prog xS (h.some c) else .ret []
+
+theorem progOf_of {S : Simulator} {C : Type} {xS : Msg} (h : Nonempty (C ≃ S.C xS)) :
+    progOf S C xS = fun c => S.prog xS (h.some c) := by
+  funext c
+  unfold progOf
+  split
+  · rfl
+  · contradiction
 
 end Claims.ZKMal

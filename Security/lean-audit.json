@@ -1974,11 +1974,11 @@
     "Claims.Flock.Complete_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (H : Claims.Msg → Claims.Msg)",
     "  {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}",
     "  (hin : FlockDeploy.ZkIn x s spec sts) (hready : Eq (FlockComplete.readyZk H x) Bool.true) :",
-    "  And (Real.instLE.le ((FlockDeploy.deployZk rel).δc H x) (instHDiv.hDiv 50 (instHPow.hPow 2 128)))",
+    "  And (Real.instLE.le ((FlockDeploy.deployZk rel).δc H x) (instHDiv.hDiv 190 (instHPow.hPow 2 128)))",
     "    (Real.instLT.lt ((FlockDeploy.deployZk rel).δc H x) 1)"
    ],
    "assumptions": [],
-   "type_hash": "64e8fdd77513f3e46276e8072000748f33543d2ec9fba13227fba9f760356865"
+   "type_hash": "7d5e5c4088b095325347bdd5c44f122973e16e38fce9079b81a998442484bcca"
   },
   "Claims.Flock.Efficient_fails": {
    "owner": "@proofs",

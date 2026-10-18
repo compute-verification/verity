@@ -1,5 +1,7 @@
 import Proofs.Flock.Claims.Recursion.DeployReg
 import Proofs.Flock.Claims.Recursion.DeployScopeRuns
+import Proofs.Flock.Claims.Recursion.DeployLayout
+import Proofs.Flock.Claims.Recursion.InnerLeaf
 
 /-!
 # V*'s cross-part facts at `deployRec`
@@ -33,11 +35,23 @@ appeal to V*'s circuits, at every shape.
   inner statement's scope check and refuse it without a draw, and neither `readX` nor V*'s setup does. So at a compiled
   statement whose inner statement fails either, `Decomp` holds only where no coins and inner messages pass all the
   parts' checks.
+* **Every parsed statement's inner statement fails Flock's statement check** (`inner_check_refused`): `readX` sets the
+  inner circuit file up at the inner tags (`RecVStar.innerOf`), whose leaves are plain (§16.16), and
+  `ProvedScope.check` passes only `hm96-sha512/v1` leaves, read off the same META line (`InnerLeaf.lean`). So Flock's
+  deployed verifier accepts no inner replay at a parsed statement (`inner_run_refused`), `Decomp` holds exactly where no
+  coins and inner messages pass every part's check (`decomp_deployed_unsat`), and no statement is in the recursion's
+  scope (`scope_empty`). A reader that required the check would refuse every statement it reads now.
 * **`LogDecomp` over Flock's deployed verifier asks the parts for its setup's calls** (`logDecomp_setup`,
   `logDecomp_deployed_setup`): every decision runs the inner statement's setup over `OC` first, on public data (the
   inner circuit file's bytes, its sigma's), so with `PartLogs` some part's SHA-512 gadgets would have to record each of
   them. With those calls admitted as public (`LogDecompPub`), it is the verdict's calls alone that must be the parts'
   (`VerdictCut`, `logDecompPub_of_cut`).
+* **At the registered ports' layout** (`layoutOf`, `DeployLayout.lean`): `Staged` needs only `b.tr x` injective
+  (`staged_layoutOf`), since the layout spans exactly the inner verifier's rounds. `Held` holds exactly at a shape no
+  compiled statement parses at (`held_layoutOf_iff`). The layout records no call, so `PartLogs` leaves each part no
+  inner call at its own points (`partLogs_layoutOf_nil`), and with `LogDecomp` the inner setup makes none at an
+  accepted inner replay there (`setupLog_nil_layoutOf`), off a collision among the V* setup's own evaluations. The
+  inner setup always hashes (its digest and sigma), so off such a collision no inner replay at the parts' points accepts.
 -/
 
 namespace RecDeploy
@@ -808,5 +822,175 @@ theorem logDecomp_deployed_setup (rel : Flock.Readable.Parsed → Flock.Readable
       ∀ e ∈ ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval FlockDeploy.sha512).2,
         ∃ p < nS x, e ∈ logs p x c ms :=
   logDecomp_setup hLD hst hf c ms hacc
+
+/-! ## At the registered ports' layout -/
+
+/-- **`Staged` at `layoutOf`**, at every shape, wherever the coin server's transcript determines the rounds: the layout
+spans exactly the inner verifier's rounds. -/
+theorem staged_layoutOf (H : Msg → Msg) (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
+    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
+    (shape : Claims.Recursion.Form → Prop)
+    (htr : ∀ x st, parse x = some st → shape st.form → Function.Injective (b.tr x)) :
+    Claims.Recursion.VStar.Staged H (deployRec (FlockDeploy.V false) ivScope b.atPorts)
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) layoutOf shape (showsTr b.atPorts)
+      (cmtTr b.atPorts) :=
+  staged_deployRec H (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) ivScope b.atPorts layoutOf
+    shape htr fun _ _ _ _ => le_rfl
+
+/-- **`Held` at `layoutOf` holds exactly at a shape no compiled statement parses at** (`not_held_layoutOf`): no part
+holds the link message. -/
+theorem held_layoutOf_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
+    (shape : Claims.Recursion.Form → Prop) :
+    Claims.Recursion.VStar.Held D I layoutOf shape ↔ ∀ x st, D.parse x = some st → ¬ shape st.form :=
+  ⟨not_held_layoutOf, fun h x st hst hf => absurd hf (h x st hst)⟩
+
+/-- **`PartLogs` at `layoutOf` leaves the part no inner calls**: the layout records none, so wherever the part's outer
+relation holds at a V* statement showing the coins, its inner check makes no call on messages agreeing with what it
+holds, or the V* setup's own evaluations at that statement collide. -/
+theorem partLogs_layoutOf_nil {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
+    {DO : Claims.Flock.Deploy Coin Col T} {shape : Claims.Recursion.Form → Prop}
+    {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {s : ℕ}
+    (hP : Claims.Recursion.VStar.PartLogs H D DO layoutOf shape shows logs s) {x : Msg} {st : Claims.Recursion.Stmt}
+    (hst : D.parse x = some st) (hf : shape st.form) {xO : Msg} {w : Claims.Flock.Wit}
+    (hchk : Claims.Flock.check DO.parse xO w = true) {c : ℕ → Coin} (hc : shows s x xO c) {ms : List Msg}
+    (hms : ∀ i < layoutOf.rounds x, ∀ m, layoutOf.held x s w i = some m → ms.getD i [] = m) :
+    logs s x c ms = [] ∨ Claims.Recursion.SetupColl H D xO [] := by
+  have hnil : layoutOf.calls x s w = [] := rfl
+  rcases hP x st hst hf xO w hchk (by simp [hnil]) with h | h | h
+  · exact Or.inl (List.eq_nil_iff_forall_not_mem.2 fun e he => by simpa [hnil] using h c hc ms hms e he)
+  · simp [hnil, Claims.findColl] at h
+  · exact Or.inr (hnil ▸ h)
+
+/-- **`LogDecomp` with `PartLogs` at `layoutOf` leaves the inner setup no calls**: at an accepted inner replay at coins
+each part's V* statement shows, on messages agreeing with what each part holds, every call of the inner statement's
+setup is some part's inner check's (`logDecomp_setup`), and those are none (`partLogs_layoutOf_nil`), off a collision
+among some part's V* setup evaluations. -/
+theorem setupLog_nil_layoutOf {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
+    {DO : Claims.Flock.Deploy Coin Col T} {shape : Claims.Recursion.Form → Prop}
+    {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
+    (hLD : Claims.Recursion.VStar.LogDecomp H D (FlockDeploy.V false) shape logs)
+    (hP : ∀ s, Claims.Recursion.VStar.PartLogs H D DO layoutOf shape shows logs s) {x : Msg}
+    {st : Claims.Recursion.Stmt} (hst : D.parse x = some st) (hf : shape st.form) (c : ℕ → Coin) (ms : List Msg)
+    (hacc : (run H (replay ms) (FlockDeploy.V false) (Claims.Recursion.xI D x) () fun i => c i.val).out = .acc)
+    (hparts : ∀ p < D.nS x, ∃ (xO : Msg) (w : Claims.Flock.Wit), Claims.Flock.check DO.parse xO w = true ∧
+      shows p x xO c ∧ ∀ i < layoutOf.rounds x, ∀ m, layoutOf.held x p w i = some m → ms.getD i [] = m) :
+    innerSetupLog false H (Claims.Recursion.xI D x) = [] ∨
+      ∃ p < D.nS x, ∃ xO, Claims.Recursion.SetupColl H D xO [] := by
+  by_cases hcoll : ∃ p < D.nS x, ∃ xO, Claims.Recursion.SetupColl H D xO []
+  · exact Or.inr hcoll
+  left
+  obtain ⟨s, spec, sts, hs, hlog⟩ := logDecomp_setup hLD hst hf c ms hacc
+  unfold innerSetupLog
+  rw [hs]
+  refine List.eq_nil_iff_forall_not_mem.2 fun e he => ?_
+  obtain ⟨p, hp, hep⟩ := hlog e he
+  obtain ⟨xO, w, hchk, hc, hms⟩ := hparts p hp
+  rcases partLogs_layoutOf_nil (hP p) hst hf hchk hc hms with h | h
+  · rw [h] at hep
+    exact List.not_mem_nil hep
+  · exact hcoll ⟨p, hp, xO, h⟩
+
+/-! ## The inner statement fails Flock's statement check -/
+
+/-- What `readX` read of the inner statement: its decoding, and its circuit file set up at the inner tags
+(`RecVStar.innerOf`). -/
+theorem readX_inner {x : Msg} {r : XR} (h : readX x = some r) :
+    FlockDeploy.decode r.w.inner = some r.innerRaw ∧
+      Flock.RecVStar.innerOf r.innerRaw.circuit r.innerRaw.publicFile r.partition r.innerRaw.program = .ok r.dims := by
+  unfold readX at h
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+  obtain ⟨w, -, ri, hri, sh, -, pa, -, dims, hdims, vs, -, h⟩ := h
+  split_ifs at h with hl
+  · simp at h
+  have h' : (⟨w, ri, pa, sh, dims⟩ : XR) = r := by simpa using h
+  subst h'
+  exact ⟨hri, toOption_eq_some hdims⟩
+
+/-- A statement `parse` accepts is read by `readX`, and its inner bytes are the reading's. -/
+theorem readX_of_parse {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) :
+    ∃ r, readX x = some r ∧ xIOf x = r.w.inner := by
+  have hx : xIOf x = st.inner := by unfold xIOf; rw [hst]; rfl
+  obtain ⟨r', hr', rfl⟩ := Option.map_eq_some_iff.1 hst
+  obtain ⟨hd, -⟩ := Option.filter_eq_some_iff.1 hr'
+  obtain ⟨r, hr, rfl⟩ := Option.map_eq_some_iff.1 hd
+  exact ⟨r, hr, hx⟩
+
+theorem ins_circuitFile {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
+    s.read.I.circuitFile = w.circuit := by
+  unfold FlockDeploy.Raw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; rfl)
+
+/-- **The inner statement of every statement the reader parses fails Flock's statement check**: `readX` sets the inner
+circuit file up at the inner tags (`RecVStar.innerOf`), whose leaves are plain, and `ProvedScope.check` passes only
+`hm96-sha512/v1` leaves (`InnerLeaf.check_refused_of_innerOf`), whatever `--statement` the inner statement names. -/
+theorem inner_check_refused {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) {s : FlockDeploy.Ins}
+    (hs : FlockDeploy.insOf false (xIOf x) = some s) : s.read.check ≠ .ok () := by
+  obtain ⟨r, hr, hx⟩ := readX_of_parse hst
+  obtain ⟨hri, hdims⟩ := readX_inner hr
+  rw [hx] at hs
+  unfold FlockDeploy.insOf at hs
+  obtain ⟨w, hw, hs⟩ := Option.bind_eq_some_iff.1 hs
+  rw [hri] at hw
+  obtain rfl := Option.some.inj hw
+  split_ifs at hs with hz
+  · cases hs
+  change r.innerRaw.ins.toOption = some s at hs
+  have hcf := ins_circuitFile (toOption_eq_some hs)
+  intro hc
+  unfold Flock.Readable.Read.check at hc
+  rw [hcf] at hc
+  exact FlockSoundness.Discharge.InnerLeaf.check_refused_of_innerOf hdims hc
+
+/-- **`InnerAcc`'s public checks fail at every parsed statement** (`innerAcc_public`'s conclusion): the inner statement
+fails Flock's statement check (`inner_check_refused`). -/
+theorem inner_out {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) :
+    ¬ ∃ s spec sts, FlockDeploy.setupOf false (xIOf x) = some (s, spec, sts) ∧ s.read.check = .ok () ∧
+      ∃ d, s.read.draw = some d :=
+  fun ⟨_, _, _, hs, hc, _⟩ => inner_check_refused hst (FlockDeploy.setupOf_some hs).1 hc
+
+/-- **Flock's deployed verifier accepts no replayed inner run at a parsed statement**: its checks would pass the inner
+statement's statement check (`innerAcc_of_run`, `innerAcc_public`), which fails there (`inner_out`). -/
+theorem inner_run_refused (H : Msg → Msg) {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+    (c : ℕ → Coin) (ms : List Msg) :
+    (run H (replay ms) (FlockDeploy.V false) (xIOf x) () fun i => c i.val).out ≠ .acc :=
+  fun h => inner_out hst (innerAcc_public (innerAcc_of_run H _ c ms h))
+
+/-- **`Decomp` at the deployed recursion holds exactly where the parts' inner checks never all pass**, at every shape:
+at every compiled statement of the shape, Flock's deployed verifier accepts no inner replay (`inner_run_refused`), so
+`Decomp` asks that no coins and inner messages pass every part's check (`decomp_public`), and that suffices
+(`decomp_deployed_iff`). -/
+theorem decomp_deployed_unsat (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
+    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
+    (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) :
+    Claims.Recursion.VStar.Decomp FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
+        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI).V shape chk ↔
+      ∀ (x : Msg) (st : Claims.Recursion.Stmt), (deployRec (FlockDeploy.V false) ivScope b).parse x = some st →
+        shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg), ¬ ∀ s < nS x, chk s x c ms :=
+  ⟨fun hD _ _ hst hf c ms => decomp_public hD hst hf (inner_out hst) c ms,
+    fun h => (decomp_deployed_iff rel decI ivScope b shape chk).2 fun x st hst hf c ms hall =>
+      absurd hall (h x st hst hf c ms)⟩
+
+/-- **No statement is in the deployed recursion's scope**: its scope asks the inner statement to be in the inner Flock's
+(`Claims.Flock.Scope`), which is the parsed statement passing `Parsed.scope` (`Readable.scope_iff`), whose first check is
+Flock's statement check, and that fails at the inner statement of every statement the reader parses
+(`inner_check_refused`). -/
+theorem scope_empty (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
+    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
+    (x : Msg) :
+    ¬ Claims.Recursion.Scope (deployRec (FlockDeploy.V false) ivScope b)
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) x := by
+  rintro ⟨st, hst, hI, -⟩
+  have hx : xIOf x = st.inner := by unfold xIOf; rw [show parse x = some st from hst]; rfl
+  obtain ⟨p, hp, hsc⟩ := (Flock.Readable.scope_iff (FlockDeploy.deployPlain rel) rel (FlockDeploy.readOf false) rfl
+    (fun _ _ h => FlockDeploy.readOf_zk h) st.inner).1 hI
+  unfold Flock.Readable.parseBytes at hp
+  obtain ⟨rd, hrd, hrp⟩ := Option.bind_eq_some_iff.1 hp
+  obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.1 hrd
+  obtain ⟨_, hc, -⟩ := FlockSoundness.Refine.ebind_ok hsc
+  rw [Flock.Readable.toRead_of_parse hrp] at hc
+  rw [← hx] at hs
+  exact inner_check_refused hst hs hc
 
 end RecDeploy

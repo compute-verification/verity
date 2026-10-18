@@ -28,18 +28,19 @@ open Lean (Json JsonNumber)
 
 /-- Table `i`'s rep `rep`'s masked proof file `b` and stream `rs`: at the table's extra claims `e` at the points `pts`,
 `b` encodes, at the rep's shape, a masked proof the rep returned on the table's trace, its packed table, its masked
-level-0 commitment, and the tape's pads, committed, from `n` sends, ending at the rounds `rs`. -/
+level-0 commitment, and the tape's pads, committed, from `n` sends, ending at the rounds `rs`, its rank check over
+the table's `words` at some earlier claim points. -/
 def RepFileJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup)
-    (schs : Array (Schedule × ℕ)) (cms : Array Commit) (trs : Array Trace) (tape : TapeZk) (pts : Array (Array F128))
-    (n i rep : ℕ) (rs : Array Round) (b : ByteArray) : Prop :=
-  ∃ e p ic l t' l', tabs[i]!.extra pts = .ok e ∧
+    (words : Array (List ℕ)) (schs : Array (Schedule × ℕ)) (cms : Array Commit) (trs : Array Trace) (tape : TapeZk)
+    (pts : Array (Array F128)) (n i rep : ℕ) (rs : Array Round) (b : ByteArray) : Prop :=
+  ∃ e p ic l t' l' prior, tabs[i]!.extra pts = .ok e ∧
     innerCommitP (Hashes.ofSha512 h : Hashes V)
       (padsOf tape i rep (Zk.PadLayout.new tabs[i]!.m tabs[i]!.kLog schs[i]!.1.k0)) (tape.innerSalt i rep) = .ok ic ∧
     b = FlockSoundness.Discharge.ZkView.encZk (shapeZk tabs[i]! schs[i]!.1 e.size) p ∧ rs = t'.rounds ∧
     l.size = n ∧ ((repPZk (asksS resp) (Hashes.ofSha512 h) tabs[i]! schs[i]!.1 schs[i]!.2 rep
       (spec.domain spec.tables[i]! rep).toUTF8 trs[i]! (packed trs[i]! tabs[i]!.m) cms[i]! e
       (padsOf tape i rep (Zk.PadLayout.new tabs[i]!.m tabs[i]!.kLog schs[i]!.1.k0)) ic (tape.extra i)
-      (tape.lanePad i) (tape.salt i rep) (tape.nonce i rep)).run
+      (tape.lanePad i) (tape.salt i rep) (tape.nonce i rep) prior words[i]!).run
       (Transcript.init #[] (spec.domain spec.tables[i]! rep).toUTF8)).go l = (.ok (p, t'), l')
 
 /-- **The masked session's proof files and streams**, at any number of tables: each table's `--zk` schedule and masked
@@ -48,13 +49,16 @@ stream; the sends are the link of the caps, then the streams' rounds in order; a
 table `j / 2`'s rep `j % 2`'s (`RepFileJ`). -/
 theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
     {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Json.parse spec.hello = .ok own)
-    {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (trs : Array Trace) (tape : TapeZk)
-    (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+    {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))
+    (trs : Array Trace) (tape : TapeZk)
+    (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v →
+      ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
-        lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
+        lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
     (hst : ∀ a ∈ spec.repStreams, a.1 < tabs.size) {r : String × Array ByteArray} {bodies : Array Claims.Msg}
-    (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs trs tape).go #[] = (.ok r, bodies)) :
+    (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs words trs tape).go #[] =
+      (.ok r, bodies)) :
     ∃ schs cms streams, (∀ i < tabs.size, Zk.schedule tabs[i]!.m = .ok schs[i]! ∧
         commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) tabs[i]!.merkle (schs[i]!.1.levels.getD 0 default)
           schs[i]!.2 (packed trs[i]! tabs[i]!.m) (tape.extra i) (tape.lanePad i) (tape.salt i 0 0) = .ok cms[i]!) ∧
@@ -65,7 +69,7 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
       (∃ bs, bodies.toList = linkBody (cms.map fun c => flat c.cap).toList (tabs.map fun _ => ByteArray.empty).toList ::
         bs ∧ Recs resp 1 (streams.toList.flatMap Array.toList) bs) ∧
       r.2.size = spec.repStreams.size ∧ ∀ j (hj : j < r.2.size),
-        RepFileJ resp (Claims.hOf H) spec tabs schs cms trs tape (ptsOf spec (coinOf (resp 0)))
+        RepFileJ resp (Claims.hOf H) spec tabs words schs cms trs tape (ptsOf spec (coinOf (resp 0)))
           (1 + ((streams.toList.take j).flatMap Array.toList).length) (j / 2) (j % 2) streams[j]! r.2[j] := by
   unfold sessionPZk at hrun
   obtain ⟨schs, l1, hA, hrun⟩ := go_bind_ok hrun
@@ -107,7 +111,7 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
   obtain ⟨⟨ss, ps⟩, l₄, hF, hrun⟩ := go_bind_ok hrun
   have hinv := forIn_array_idx _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
       b.1.size = k ∧ b.2.size = k ∧ (∀ rs ∈ b.1, RoundsOk rs) ∧
-        (∀ j (hj : j < b.2.size), RepFileJ resp (Claims.hOf H) spec tabs schs cms trs tape
+        (∀ j (hj : j < b.2.size), RepFileJ resp (Claims.hOf H) spec tabs words schs cms trs tape
           (ptsOf spec (coinOf (resp 0))) (1 + ((b.1.toList.take j).flatMap Array.toList).length) (j / 2) (j % 2)
           b.1[j]! b.2[j]) ∧
       ∃ bs, l.toList = linkBody (cms.map fun c => flat c.cap).toList (tabs.map fun _ => ByteArray.empty).toList ::
@@ -142,8 +146,8 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
     obtain ⟨rfl, rfl⟩ := e
     have hex' : tabs[k / 2]!.extra (ptsOf spec (coinOf (resp 0))) = .ok extras := by simpa [ptsOf] using hex
     have hok := Ret.go (hR tabs[k / 2]! (by rw [getElem!_pos tabs _ hi]; exact Array.getElem_mem hi) _
-      (hv _ hi) _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
-    obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
+      (hv _ hi) _ _ _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
+    obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
     dsimp only at h₁ h₂ h₄
     have hsz : l.size = 1 + (ss.toList.flatMap Array.toList).length := by
       rw [← Array.length_toList, hl, Recs.length_eq hrec]
@@ -167,7 +171,8 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
           rw [Array.toList_push, List.take_append_of_le_length (by simp; omega), List.take_of_length_le (by simp; omega)]
         rw [Array.getElem_push_eq, hpush, htake]
         rw [htb _ hi] at e2
-        exact ⟨extras, pf, ic, _, tr', l₂, hex', hic, rfl, rfl, hsz, e2⟩
+        exact ⟨extras, pf, ic, _, tr', l₂, priorOf tabs[ps.size / 2]! ss (ps.size % 2), hex', hic, rfl, rfl, hsz,
+          e2⟩
     · simp only [Transcript.init, List.nil_append] at hrs
       simp only [Array.toList_push, List.flatMap_append, List.flatMap_cons, List.flatMap_nil, List.append_nil, hrs]
       exact Recs.append hrec (by rw [← hsz]; exact hrec')
@@ -176,8 +181,8 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 
 /-- **The honest masked rep proof fits its shape** (`RepShapedZk`), at each table of a good case: on table `i`'s
 `--zk` schedule `v`, its masked level-0 commitment `cm` of its share's packed table, its extra claims `e` at the link's
-points and its pads' commitment `ic`, each masked proof a rep returns (`repRunJ`) is `Shaped` at the shape the masked
-verifier decodes it at. -/
+points and its pads' commitment `ic`, each masked proof a rep returns (`repRunJ`, at any earlier claim points) is
+`Shaped` at the shape the masked verifier decodes it at. -/
 def RepShapedAt (c : Case H rel) : Prop :=
   ∀ i < c.sts.size, ∀ v cm e,
     Zk.schedule (Setup.ofCircuit c.sts[i]!).m = .ok v →
@@ -187,8 +192,8 @@ def RepShapedAt (c : Case H rel) : Prop :=
     (Setup.ofCircuit c.sts[i]!).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e →
     ∀ rep ic, innerCommitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V)
       (padsOf c.ω i rep (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]!).m (Setup.ofCircuit c.sts[i]!).kLog v.1.k0))
-      (c.ω.innerSalt i rep) = .ok ic →
-    Ret (repRunJ H rel c i v cm e rep ic) fun pt =>
+      (c.ω.innerSalt i rep) = .ok ic → ∀ prior,
+    Ret (repRunJ H rel c i v cm e rep ic prior) fun pt =>
       FlockSoundness.Discharge.ZkView.Shaped (shapeZk (Setup.ofCircuit c.sts[i]!) v.1 e.size) pt.1
 
 variable (H rel) in
@@ -225,7 +230,7 @@ theorem Run.repJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.t
   have hrun := o.ran
   unfold sessionS at hrun
   obtain ⟨schs, cms, ss, hsc, hcsz, -, -, -, ⟨bs, hbs, -⟩, hpsz, hfiles⟩ :=
-    sessionPZk_filesJ H _ hct hown hcz (tabsOf o.sts) _ _
+    sessionPZk_filesJ H _ hct hown hcz (tabsOf o.sts) _ _ _
       (fun st hst' => by
         obtain ⟨st', hst'', rfl⟩ := Array.mem_map.1 hst'
         exact (hP st' hst'').2) hst hrun
@@ -279,12 +284,13 @@ theorem Run.repJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.t
     have hi : j / 2 < o.sts.size := by
       rw [hpsz, repStreams_size, hsz] at hj
       omega
-    obtain ⟨e, p, ic, l, t', l', hex, hic, hb, -, -, hp⟩ := hfiles j hj
+    obtain ⟨e, p, ic, l, t', l', prior, hex, hic, hb, -, -, hp⟩ := hfiles j hj
     rw [htab _ hi] at hex hic hb hp
+    rw [MaskRank.masksOf_getElem! hi] at hp
     simp only [ptsOf_coin] at hex
     obtain ⟨hv, hcm⟩ := hsc' _ hi
-    have h1 := Ret.go (hR (j / 2) hi _ _ e hv hcm hex (j % 2) ic hic) hp
-    have h2 := Ret.go (repPZk_fields _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hp
+    have h1 := Ret.go (hR (j / 2) hi _ _ e hv hcm hex (j % 2) ic hic prior) hp
+    have h2 := Ret.go (repPZk_fields _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hp
     exact ⟨e, p, hex, hb, h1, h2.1, h2.2.1, by rw [h2.2.2]; exact innerCommitP_root (hOf_size h64) _ _ hic⟩
   have hpsz2 : o.proofs.size = 2 * o.tabs.size := by
     rw [hpsz, repStreams_size, hsz]
@@ -342,7 +348,7 @@ theorem completeJR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
-    (hOp : OpenJ H rel) : Claims.Flock.Complete H (deployZk rel) :=
-  completeJ H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (filesJ S h64 hSJ hRJ) hOp
+    (hOp : OpenJ H rel) (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk rel) :=
+  completeJ H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (filesJ S h64 hSJ hRJ) hOp hMR
 
 end FlockComplete.ZkTables

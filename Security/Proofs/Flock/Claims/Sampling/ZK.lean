@@ -8,8 +8,10 @@ import Proofs.Flock.Claims.Sampling.Deployed
 simulator, on the honest pairs whose published leaf layer is `l x`, with the simulator given `l x`. Its binding term is
 `γ` times `Fork` of the sampled prover's own two runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled
 protocol itself, with every coin it draws (the selection's and each checked unit's session's) committed at its `Hello`.
-Flock's zero knowledge at each session does not compose to it: a hybrid over the sessions charges each session's `Fork`
-against a verifier that has already simulated the earlier sessions, and no term of the sampled claim bounds those.
+The route of record is the other: Flock's zero knowledge at each session composes to it in turn
+(`SamplingDeploy.zk_seq`, `Sampling/Seq.lean`), since the composed tape guesses which session's `Fork` to charge
+(`Seq.fork_ge`), so `M` sessions cost `Σ_j eB j` and `M·g`. This file's route, one committed-coin protocol for the
+whole sampled run, reads models of that protocol (`Proto.TMsgLink` and the rest) that no session proof gives.
 
 * `Leaky`: a committed-coin protocol (`Claims.ZKMal.Proto`) whose dummy-witness messages and SHVZK simulator also read
   the leakage; `Leaky.proto lx` is the protocol at the leakage `lx`. Its honest prover, coins and opening check read

@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 import Proofs.Flock.Claims.Recursion.VStarCross
 import Proofs.Flock.Recursive.VStarCheck
+import Proofs.Flock.Claims.Recursion.DeployLayout
 
 /-!
 # V*'s part links, shared across the shapes
@@ -21,8 +22,15 @@ that link once for every kind and every shape, with what is the circuit's own pr
   and with `T > 1` the slots' types `sparseT`). So no link carries an existential for them.
 * **The output tie from `Flock.check`** (`unitOuts_of_check`, at every copy `allOuts_of_check`): where the outer
   relation holds, each copy's output columns hold the unit's outputs at the values its input columns read (`UnitOuts`:
-  `LevelOuts`, `ResOuts`, `SparseReadOuts`): `climbAt_of_check`, `partCols_of_check_at`, `partCols_of_check_opening`,
-  `sparseOuts_of_check`.
+  `LevelOuts`, `ResOuts`, `SparseReadOuts`): `climbAt_of_check`, `levelCalls_of_check`, `partCols_of_check_at`,
+  `partCols_of_check_opening`, `sparseOuts_of_check`.
+* **A level's SHA-512 calls** (`LevelCalls`, in `LevelOuts`): every copy of a level, under either name, has gadgets
+  whose forms carry its climb's calls, the leaf's and then each level's (`rowCalls`). The builder with its gadgets
+  (`recOpenC`, `climbRowC`, `climbFromC`) builds the verifier's rows (`recOpenNetC_state`), which force the calls
+  (`sound_climbFromC`, `laid_recOpen_calls`, `laid_unit_calls`). Above the leaf a gadget's input is an XOR of columns,
+  not a run of them, so the calls read off the witness at affine forms over its hidden values (`copyForm`, `readLin`;
+  a position is a one-wire form, `readAt_eq_readLin`), where they are the climb's calls (`levelCalls_read`), recorded
+  wherever the layout records the gadgets (`levelCalls_recorded`).
 * **A part's links** (`PartReads` at one V* statement, `PartReadsTo` at every V* statement the part's coins are shown
   on, with `PartChecks`' fallback): the staging, and every V* copy's read outputs (`AllOuts`) giving the goal on every
   list of messages agreeing with what the part holds; a goal read off one copy is `partReads_of_copy`.
@@ -39,6 +47,11 @@ that link once for every kind and every shape, with what is the circuit's own pr
   holds `b` there, and every agreeing list of messages has `b` at round `i`. Bits read back as the bytes they spell
   (`bytesOf_bitL`). This is the message half of the input tie, at any layout that reads its messages at the copies'
   input columns.
+* **The held tie at `layoutOf`** (`agrees_layoutOf`): M9's layout reads its messages there. At a part shown at
+  `showsPart`, of one table, the circuit `partCircuit` parses off the raw part is the staged statement's
+  (`partCircuit_staged`), whose input leaves are its input words in order (`checkParsed`), so each round the part holds
+  is read at a port's input columns in an instance's copy (`layoutOf_msgAt_staged`), and every agreeing list of
+  messages has there the bytes those columns hold.
 * **A table of V\*'s statement, by its kind** (`StmtUnit`, `stmtUnit_of_check`): a table named as V\*'s statement
   `sv` that passes `checkPart sv` is that kind's unit, with the kind's outputs (`UnitOuts`): a level's `LevelOuts`, an
   algebra part's or R's opening part's `ResOuts` at its parameters, RecSparse's `SparseReadOuts`. With `AllOuts`,
@@ -50,10 +63,231 @@ that link once for every kind and every shape, with what is the circuit's own pr
   words, with at least one table, each named as V\*'s statement `s` at `x`'s inner shape and of that kind
   (`stagedTables`, `stagedReads`).
 * **What is left of a link at `deployRec`** (`StmtReadsTo`: `PartReadsTo` at `showsPart` given `stagedReads` and
-  `StmtCopies`, so the held tie and the goal from the outputs; `StagedLinked` for `LinkedPart`): `partReadsTo_deployRec`,
-  `linkedPart_deployRec`, and the bundles with `Staged` proved, `vstarParts_deployRec_staged` and
-  `vstarAccepts_deployRec_staged`.
+  `StmtCopies`, so the held tie and the goal from the outputs; `StagedLinked` for `LinkedPart`):
+  `partReadsTo_deployRec`, `linkedPart_deployRec`, and the bundles with `Staged` proved,
+  `vstarParts_deployRec_staged` and `vstarAccepts_deployRec_staged`. A level part's calls need only that each logged
+  call is a copy's climb call and that the layout records the copies' gadgets (`LevelLogReads`,
+  `stmtReadsTo_levelLogs`).
 -/
+
+namespace FlockVBridge
+
+open Flock.HmNets hiding and
+open Flock FlockSoundness.Discharge.Hm
+
+/-! ## The climb's SHA-512 calls -/
+
+/-- The SHA-512 calls of a climb from `acc` through the siblings `ss` at the position `idx`: at each level the pair,
+`acc ‖ s` where the position's bit is 0 and `s ‖ acc` where it is 1, and its hash, which the next level climbs from. -/
+def climbCalls (acc : ByteArray) (idx : ℕ) : List ByteArray → List (ByteArray × ByteArray)
+  | [] => []
+  | sb :: ss =>
+    let i := if idx % 2 = 0 then acc ++ sb else sb ++ acc
+    (i, Sha512.hash i) :: climbCalls (Sha512.hash i) (idx / 2) ss
+
+/-- The SHA-512 calls of the climb from a row's leaf: the leaf's (the row's bytes and their hash), then the climb's. -/
+def rowCalls (rb : ByteArray) (idx : ℕ) (ss : List ByteArray) : List (ByteArray × ByteArray) :=
+  (rb, Sha512.hash rb) :: climbCalls (Sha512.hash rb) idx ss
+
+/-- **Gadgets carry calls**: each gadget's input forms and output forms carry the input and the output of the call at
+its place. -/
+def CallsAt (z : Var → Bool) (fs : List (List Lin × List Lin)) (es : List (ByteArray × ByteArray)) : Prop :=
+  List.Forall₂ (fun f e => Carries z f.1 e.1 ∧ Carries z f.2 e.2) fs es
+
+/-- `climbFrom`, with each level's SHA-512 gadget: its input forms (the swapped pair) and its output forms. -/
+def climbFromC (d : List Lin) : ℕ → List Lin → List (List Lin) → M (List Lin × List (List Lin × List Lin))
+  | _, cur, [] => pure (cur, [])
+  | h, cur, s :: rest => do
+    let lr ← swap (d.getD h Lin.zero) cur s
+    let cur' ← shaFrom (preCv [] 0) (lr.1 ++ lr.2) 0
+    let r ← climbFromC d (h + 1) cur' rest
+    pure (r.1, (lr.1 ++ lr.2, cur') :: r.2)
+
+/-- `climbRow`, with its SHA-512 gadgets: the leaf's, then the climb's. -/
+def climbRowC (H : ℕ) (row aux d : List Lin) : M (List Lin × List (List Lin × List Lin)) := do
+  let leaf ← shaFrom (preCv [] 0) row 0
+  let r ← climbFromC d 0 leaf (sibForms aux H)
+  pure (r.1 ++ List.replicate 512 Lin.zero, (row, leaf) :: r.2)
+
+/-- `recOpen`, with its climb's SHA-512 gadgets. -/
+def recOpenC (LANES H : ℕ) (row aux acc coef dirs : List Lin) :
+    M ((List Lin × List Lin) × List (List Lin × List Lin)) := do
+  let t ← residualForms (consStructure LANES) (row ++ acc.take 256) coef
+  let out ← climbRowC H row aux (dirs.take 32)
+  pure ((out.1, t ++ acc.drop 256), out.2)
+
+/-- `recOpenNet`, with its climb's SHA-512 gadgets. -/
+def recOpenNetC (LANES H : ℕ) (p : Ports) : M ((List Lin × List Lin) × List (List Lin × List Lin)) := do
+  let row ← input p.row
+  let aux ← input p.aux
+  let acc ← input p.acc
+  let coef ← input p.coef
+  let dirs ← input p.dirs
+  recOpenC LANES H row aux acc coef dirs
+
+/-- The SHA-512 gadgets of V*'s opening at the ports `p`, from the empty state, in the climb's order. -/
+def recOpenCalls (LANES H : ℕ) (p : Ports) : List (List Lin × List Lin) :=
+  ((recOpenNetC LANES H p).run St.empty).1.2
+
+/-- `climbFromC` builds `climbFrom`'s rows and node. -/
+theorem climbFromC_run (d : List Lin) : ∀ (h : ℕ) (cur : List Lin) (sibs : List (List Lin)) (s : St),
+    ((climbFromC d h cur sibs).run s).1.1 = ((climbFrom d h cur sibs).run s).1 ∧
+      ((climbFromC d h cur sibs).run s).2 = ((climbFrom d h cur sibs).run s).2
+  | _, _, [], _ => ⟨rfl, rfl⟩
+  | h, cur, sb :: rest, s => by
+    rw [climbFromC, climbFrom, run_bind, run_bind, run_bind, run_bind, run_bind, run_pure]
+    generalize (swap (d.getD h Lin.zero) cur sb).run s = p1
+    generalize (shaFrom (preCv [] 0) (p1.1.1 ++ p1.1.2) 0).run p1.2 = p2
+    exact climbFromC_run d (h + 1) p2.1 rest p2.2
+
+theorem climbRowC_run (H : ℕ) (row aux d : List Lin) (s : St) :
+    ((climbRowC H row aux d).run s).1.1 = ((climbRow H row aux d).run s).1 ∧
+      ((climbRowC H row aux d).run s).2 = ((climbRow H row aux d).run s).2 := by
+  rw [climbRowC, climbRow, run_bind, run_bind, run_bind, run_bind, run_pure, run_pure]
+  generalize (shaFrom (preCv [] 0) row 0).run s = p1
+  obtain ⟨h1, h2⟩ := climbFromC_run d 0 p1.1 (sibForms aux H) p1.2
+  exact ⟨by rw [h1], h2⟩
+
+theorem recOpenC_run (LANES H : ℕ) (row aux acc coef dirs : List Lin) (s : St) :
+    ((recOpenC LANES H row aux acc coef dirs).run s).1.1 = ((recOpen LANES H row aux acc coef dirs).run s).1 ∧
+      ((recOpenC LANES H row aux acc coef dirs).run s).2 = ((recOpen LANES H row aux acc coef dirs).run s).2 := by
+  rw [recOpenC, recOpen, run_bind, run_bind, run_bind, run_bind, run_pure, run_pure]
+  generalize (residualForms (consStructure LANES) (row ++ acc.take 256) coef).run s = p1
+  obtain ⟨h1, h2⟩ := climbRowC_run H row aux (dirs.take 32) p1.2
+  exact ⟨by rw [h1], h2⟩
+
+theorem recOpenNetC_run (LANES H : ℕ) (p : Ports) : (recOpenNetC LANES H p).run St.empty =
+    (recOpenC LANES H (vars 0 p.row) (vars p.row p.aux) (vars (p.row + p.aux) p.acc)
+      (vars (p.row + p.aux + p.acc) p.coef) (vars (p.row + p.aux + p.acc + p.coef) p.dirs)).run
+      ⟨p.row + p.aux + p.acc + p.coef + p.dirs, []⟩ := by
+  have h := run_inputs5 p.row p.aux p.acc p.coef p.dirs (recOpenC LANES H) ⟨0, []⟩
+  simp only [Nat.zero_add] at h
+  exact h
+
+/-- `recOpenNetC` builds `recOpenNet`'s rows. -/
+theorem recOpenNetC_state (LANES H : ℕ) (p : Ports) :
+    ((recOpenNetC LANES H p).run St.empty).2 = ((recOpenNet LANES H p).run St.empty).2 := by
+  rw [recOpenNetC_run, recOpenNet_run]
+  exact (recOpenC_run LANES H _ _ _ _ _ _).2
+
+/-- **A climb's gadgets carry its calls**: whenever the rows of `climbFromC d h cur sibs` hold under `z`, if `cur`
+carries 64 bytes `acc`, the sibling forms carry 64-byte siblings `ss` and the direction bits from `h` are the position's
+low bits, each level's gadget carries that level's call (`climbCalls`). -/
+theorem sound_climbFromC (d : List Lin) : ∀ (h : ℕ) (cur : List Lin) (sibs : List (List Lin)),
+    Sound (climbFromC d h cur sibs) fun z oc => ∀ (acc : ByteArray) (idx : ℕ) (ss : List ByteArray),
+      acc.size = 64 → Carries z cur acc → List.Forall₂ (fun w b => b.size = 64 ∧ Carries z w b) sibs ss →
+      (∀ j < sibs.length, ev z (d.getD (h + j) Lin.zero) = idx.testBit j) → CallsAt z oc.2 (climbCalls acc idx ss)
+  | _, cur, [] => Sound.pure' fun z acc idx ss _ _ hss _ => by
+      cases hss
+      exact List.Forall₂.nil
+  | h, cur, s :: rest => by
+      unfold climbFromC
+      refine Sound.bind' (sound_swap _ cur s) fun lr => Sound.bind' (sound_shaIv _) fun cur' =>
+        Sound.bind' (sound_climbFromC d (h + 1) cur' rest) fun r =>
+          Sound.pure' fun z hih hsha hsw acc idx ss hacc hcur hss hdir => ?_
+      obtain _ | ⟨⟨hsb, hs⟩, hss⟩ := hss
+      rename_i sb ss
+      obtain ⟨h1, h2⟩ := hsw acc sb hcur hs (by rw [hacc, hsb])
+      have hd : ev z (d.getD h Lin.zero) = idx.testBit 0 := hdir 0 (by simp)
+      have hin : (if ev z (d.getD h Lin.zero) then sb else acc) ++ (if ev z (d.getD h Lin.zero) then acc else sb) =
+          (if idx % 2 = 0 then acc ++ sb else sb ++ acc) := by
+        rw [hd, Nat.testBit_zero]
+        rcases Nat.mod_two_eq_zero_or_one idx with hp | hp <;> simp [hp]
+      have hpair := carries_append h1 h2
+      rw [hin] at hpair
+      have hcur' := hsha _ hpair
+      exact List.Forall₂.cons ⟨hpair, hcur'⟩ (hih _ (idx / 2) ss (Sha512.hash_size _) hcur' hss fun j hj => by
+        rw [Nat.testBit_div_two, ← hdir (j + 1) (by simp; omega), show h + 1 + j = h + (j + 1) by omega])
+
+/-- **The opening's climb's gadgets carry its calls**: whenever the rows of `climbRowC H row aux d` hold under `z`, if
+`row` carries `rb`, `aux`'s `H` sibling forms carry 64-byte siblings `ss` and the direction bits are the position's
+low bits, the gadgets carry the leaf's call and each level's (`rowCalls`). -/
+theorem sound_climbRowC (H : ℕ) (row aux d : List Lin) : Sound (climbRowC H row aux d) fun z o =>
+    ∀ (rb : ByteArray) (idx : ℕ) (ss : List ByteArray), Carries z row rb →
+      List.Forall₂ (fun w b => b.size = 64 ∧ Carries z w b) (sibForms aux H) ss →
+      (∀ h < H, ev z (d.getD h Lin.zero) = idx.testBit h) → CallsAt z o.2 (rowCalls rb idx ss) := by
+  unfold climbRowC
+  refine Sound.bind' (sound_shaIv row) fun leaf => Sound.bind' (sound_climbFromC d 0 leaf _) fun r =>
+    Sound.pure' fun z hr hleaf rb idx ss hrow hss hdir => ?_
+  refine List.Forall₂.cons ⟨hrow, hleaf rb hrow⟩ (hr _ idx ss (Sha512.hash_size _) (hleaf rb hrow) hss fun j hj => ?_)
+  rw [Nat.zero_add]
+  exact hdir j (by simpa [sibForms] using hj)
+
+theorem sound_recOpenC (LANES H : ℕ) (hH : H ≤ 32) (row aux acc coef dirs : List Lin) :
+    Sound (recOpenC LANES H row aux acc coef dirs) fun z o =>
+      ∀ (rb : ByteArray) (idx : ℕ) (ss : List ByteArray), Carries z row rb →
+        List.Forall₂ (fun w b => b.size = 64 ∧ Carries z w b) (sibForms aux H) ss →
+        (∀ h < H, ev z (dirs.getD h Lin.zero) = idx.testBit h) → CallsAt z o.2 (rowCalls rb idx ss) := by
+  unfold recOpenC
+  refine Sound.bind' (sound_residualForms _ _ _) fun t => Sound.bind' (sound_climbRowC H row aux _) fun out =>
+    Sound.pure' fun z hout _ rb idx ss hrow hss hdir => ?_
+  exact hout rb idx ss hrow hss fun h hh => by rw [getD_take_of_lt (by omega)]; exact hdir h hh
+
+/-- **V*'s laid-out opening's SHA-512 gadgets carry its climb's calls** (`laid_recOpen`'s rows): whenever
+`recOpenLaid`'s rows hold at the column values `v`, if the `row` columns hold `rb`, the `aux` columns the 64-byte
+siblings `ss` one after another and direction column `h < H` bit `h` of the position `idx`, the gadgets
+(`recOpenCalls`), at the wires' columns, carry the leaf's call and each level's (`rowCalls`). -/
+theorem laid_recOpen_calls (LANES H : ℕ) (hH : H ≤ 32) (p : Ports) (outBits : Array ℕ) (v : ℕ → Bool)
+    (h : LaidRows (recOpenLaid LANES H p outBits) (inRowsOf p.bits) v) (rb : ByteArray) (idx : ℕ)
+    (ss : List ByteArray) (hss : ss.length = H) (hrowN : p.row = 8 * rb.size) (hauxN : 512 * H ≤ p.aux)
+    (hdirsN : H ≤ p.dirs) (hrow : ColsHold v 0 rb)
+    (haux : ∀ i (hi : i < ss.length), ss[i].size = 64 ∧ ColsHold v (p.row + 512 * i) ss[i])
+    (hdir : ∀ h < H, v (p.row + p.aux + p.acc + p.coef + h) = idx.testBit h) :
+    CallsAt (fun x => v (col (p.bits.foldl (· + ·) 0) (inRowsOf p.bits) x)) (recOpenCalls LANES H p)
+      (rowCalls rb idx ss) := by
+  have hf := foldl_bits p
+  have hg : Good (p.bits.foldl (· + ·) 0) ((recOpenNet LANES H p).run St.empty).2 := by
+    rw [recOpenNet_run, hf]
+    exact fresh_recOpen LANES H _ _ _ _ _ _ ⟨p.row + p.aux + p.acc + p.coef + p.dirs, []⟩
+      ⟨by simp, fun k r h => by simp at h⟩
+  have hst := laid_rows ((recOpenNet LANES H p).run St.empty).2 p.bits outBits (recOpenOuts LANES H p).toArray v hg h
+  rw [← recOpenNetC_state, recOpenNetC_run] at hst
+  have hP := (sound_recOpenC LANES H hH (vars 0 p.row) (vars p.row p.aux) (vars (p.row + p.aux) p.acc)
+    (vars (p.row + p.aux + p.acc) p.coef) (vars (p.row + p.aux + p.acc + p.coef) p.dirs)
+    ⟨p.row + p.aux + p.acc + p.coef + p.dirs, []⟩).2 _ hst
+  rw [recOpenCalls, recOpenNetC_run]
+  exact hP rb idx ss (carries_vars hrowN (by rw [hf]; omega) hrow) (forall₂_sibs ss hss hauxN (by rw [hf]; omega) haux)
+    fun j hj => (ev_vars_getD (by omega) (by rw [hf])).trans (hdir j hj)
+
+/-- A rec-open unit's wire columns: its input wire `x` at column `x`, every other wire at its row's column (`col` at
+the verifier's word ports). -/
+def unitCol (LANES H : ℕ) (x : Var) : ℕ := col (unitIn LANES H) (inRowsOf (Flock.RecOpen.wordPorts (unitIn LANES H))) x
+
+/-- A rec-open unit's wire values at the column values `v` (`unitCol`). -/
+def unitWires (LANES H : ℕ) (v : ℕ → Bool) : Var → Bool := fun x => v (unitCol LANES H x)
+
+/-- The verifier's rec-open unit's SHA-512 gadgets (`recOpenCalls` at its ports). -/
+def unitCalls (LANES H : ℕ) : List (List Lin × List Lin) := recOpenCalls LANES H (portsOf (Flock.RecOpen.ports LANES H))
+
+/-- **The verifier's laid-out opening's SHA-512 gadgets carry its climb's calls**: `laid_recOpen_calls` at
+`RecOpen.unitLaid`, as `laid_unit` is `laid_recOpen` there. -/
+theorem laid_unit_calls (LANES H : ℕ) (hH : H ≤ 32) (v : ℕ → Bool)
+    (h : LaidRows (Flock.RecOpen.unitLaid LANES H) (inRowsOf (Flock.RecOpen.wordPorts (unitIn LANES H))) v)
+    (rb : ByteArray) (idx : ℕ) (ss : List ByteArray) (hrb : rb.size = 16 * LANES) (hss : ss.length = H)
+    (hrow : ColsHold v 0 rb)
+    (haux : ∀ i (hi : i < ss.length), ss[i].size = 64 ∧ ColsHold v (128 * LANES + 512 * i) ss[i])
+    (hdir : ∀ h < H, v (128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + h) = idx.testBit h) :
+    CallsAt (unitWires LANES H v) (unitCalls LANES H) (rowCalls rb idx ss) := by
+  have hi := foldl_unitIn LANES H
+  have h' : LaidRows (recOpenLaid LANES H (portsOf (Flock.RecOpen.ports LANES H)) (Flock.RecOpen.wordPorts 2048))
+      (inRowsOf (portsOf (Flock.RecOpen.ports LANES H)).bits) v := by
+    simp only [Flock.RecOpen.unitLaid, recOpenNet_eq, recOpenOuts_eq] at h
+    rw [inRowsOf, hi] at h
+    exact (laidRows_layout_congr _ _ hi rfl _ _).1 h
+  have hc := laid_recOpen_calls LANES H hH (portsOf (Flock.RecOpen.ports LANES H)) (Flock.RecOpen.wordPorts 2048) v
+    h' rb idx ss hss (by simp only [portsOf, Flock.RecOpen.ports]; omega)
+    (by simp only [portsOf, Flock.RecOpen.ports]; omega) (by simp only [portsOf, Flock.RecOpen.ports]; omega) hrow
+    haux hdir
+  have hn : (portsOf (Flock.RecOpen.ports LANES H)).bits.foldl (· + ·) 0 = unitIn LANES H := by
+    rw [foldl_bits, unitIn_eq]
+    simp only [portsOf, Flock.RecOpen.ports]
+  have hr : inRowsOf (portsOf (Flock.RecOpen.ports LANES H)).bits =
+      inRowsOf (Flock.RecOpen.wordPorts (unitIn LANES H)) := by
+    simp only [inRowsOf, hi]
+  rw [hn, hr] at hc
+  exact hc
+
+end FlockVBridge
 
 namespace Flock.Readable
 
@@ -98,13 +332,51 @@ theorem sparseIn_reads_any (sh : Flock.RecSparse.Shape) (v : ℕ → Bool) :
   · exact (ofFn_readElems e).trans (readElems_ge he)
   · exact (ofFn_readElems e).trans (readElems_ge he)
 
+/-! ## A level's SHA-512 calls -/
+
+/-- **A level copy's SHA-512 gadgets carry its climb's calls**: at the copy's columns `v`, the verifier's rec-open
+unit's gadgets (`unitCalls`, at the wires' columns `unitWires`) carry the calls of the climb from the leaf of the row
+the copy reads (`openRow`) through the siblings it reads (`openSibs`) at the position whose bits it reads (`openIdx`):
+the leaf's, then each level's (`rowCalls`). A gadget's input forms are XORs of columns above the leaf, not columns. -/
+def LevelCalls (v : ℕ → Bool) (LANES H : ℕ) : Prop :=
+  FlockVBridge.CallsAt (FlockVBridge.unitWires LANES H v) (FlockVBridge.unitCalls LANES H)
+    (FlockVBridge.rowCalls (Flock.MerkleScheme.rowBytes (openRow v LANES)) (openIdx v LANES H) (openSibs v LANES H))
+
+/-- **A level's copies carry its climb's calls at `Flock.check`** (`laid_unit_calls` at every table, at what the
+copy's input columns read, `openIns_reads`): wherever `Flock.check` holds at the deployed parser, at an untyped parsed
+statement without public input words, a table whose unit is named for `LANES` and `H` under either name. -/
+theorem levelCalls_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+    (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
+    (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size) {LANES H : ℕ}
+    (hp : Flock.RecOpen.params p.sts[t].c.unit.name = some (LANES, H) ∨
+      Flock.RecOpen.stackedParams p.sts[t].c.unit.name = some (LANES, H))
+    {o g u : ℕ} (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv) :
+    LevelCalls (copyOf p t htl w o g u) LANES H := by
+  obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
+  obtain ⟨_, P⟩ := parseFacts_of_parse hx ht hpi htl
+  have hnet : ∃ name, H ≤ 32 ∧
+      Flock.HmNets.netOf name (Flock.RecOpen.unitLaid LANES H) = .ok p.sts[t].c.unit := by
+    rcases hp with hp | hp
+    · obtain ⟨hv, hl⟩ := Flock.RecOpen.check_ok P.recNet hp
+      simp only [Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
+      exact ⟨_, hv.2, hl⟩
+    · obtain ⟨hv, hl⟩ := Flock.RecOpen.check_ok_stacked P.recNet hp
+      simp only [Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
+      exact ⟨_, hv.2, hl⟩
+  obtain ⟨name, hH, hl⟩ := hnet
+  obtain ⟨hr, -, -, -, hss, hrow, haux, -, -, hdir⟩ := openIns_reads (copyOf p t htl w o g u) LANES H
+  have hL := laidRows_of_satisfies L regs hz ho hg hu hl
+  rw [FlockVBridge.inWords_unit hl] at hL
+  exact FlockVBridge.laid_unit_calls LANES H hH _ hL _ _ _ (by rw [FlockVBridge.size_rowBytes, hr]) hss hrow haux hdir
+
 /-! ## The units' outputs at the values their inputs read -/
 
 /-- **A level's outputs at what its inputs read** (`OpenOuts` at `openIns_reads`' values, the hm96-sha512 scheme):
-the climb from the row's leaf and the consistency term. -/
+the climb from the row's leaf and the consistency term, and its SHA-512 gadgets carrying the climb's calls
+(`LevelCalls`). -/
 def LevelOuts (v : ℕ → Bool) (LANES H : ℕ) : Prop :=
   OpenOuts v Flock.MerkleScheme.hm96Sha512 LANES H (openRow v LANES) (openAcc v LANES H) (openCoefs v LANES H)
-    (openRest v LANES H) (openIdx v LANES H) (openSibs v LANES H)
+    (openRest v LANES H) (openIdx v LANES H) (openSibs v LANES H) ∧ LevelCalls v LANES H
 
 /-- **A table of residuals' outputs at what its inputs read** (`PartCols` at `rowsRead` and `vRead`). -/
 def ResOuts (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ) (v : ℕ → Bool) : Prop :=
@@ -145,8 +417,9 @@ def UnitOuts (c : Flock.Circuit) (K : (ℕ → Bool) → Prop) : Prop :=
 
 /-- **The output tie from `Flock.check`**: at the deployed parser, wherever the outer relation holds at an untyped
 statement without public input words, every copy of a V* unit holds its outputs at the values its input columns read
-(`climbAt_of_check` at `openIns_reads`, `partCols_of_check_at` or `partCols_of_check_opening` at
-`inCols_readElems`, `sparseOuts_of_check` at `sparseIn_reads_any`; the units' checks from the parse). -/
+(`climbAt_of_check` and `levelCalls_of_check` at `openIns_reads`, `partCols_of_check_at` or
+`partCols_of_check_opening` at `inCols_readElems`, `sparseOuts_of_check` at `sparseIn_reads_any`; the units' checks from
+the parse). -/
 theorem unitOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
@@ -154,8 +427,8 @@ theorem unitOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg}
     (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv) : K (copyOf p t htl w o g u) := by
   obtain ⟨_, P⟩ := parseFacts_of_parse hx ht hpi htl
   rcases hK with ⟨LANES, H, hp, rfl⟩ | ⟨S, ns, nv, hpart, rfl⟩ | ⟨sh, hp, rfl⟩
-  · exact climbAt_of_check h hx ht hpi htl hp ho hg hu Flock.MerkleScheme.hm96Sha512 (fun _ _ => rfl)
-      (openIns_reads _ LANES H)
+  · exact ⟨climbAt_of_check h hx ht hpi htl hp ho hg hu Flock.MerkleScheme.hm96Sha512 (fun _ _ => rfl)
+      (openIns_reads _ LANES H), levelCalls_of_check h hx ht hpi htl hp ho hg hu⟩
   · rcases hpart with ⟨m, k, cl, j, sh, holo, hp, hsh, hh, hpart⟩ | ⟨m, cl, j, sh, hp, hsh, hpart⟩
     · exact partCols_of_check_at h hx ht hpi htl P.recResiduals hp hsh hh hpart ho hg hu _ _
         (fun _ he => readElems_ge he) (fun _ he => readElems_ge he) (inCols_readElems ns nv _)
@@ -592,6 +865,99 @@ theorem agrees_openRow {L : Layout} {x : Msg} {s i : ℕ} {p : Flock.Readable.Pa
 
 end Held
 
+/-! ## A level's calls off the hidden values -/
+
+section Calls
+
+open FlockSoundness.Discharge.Hm (ev)
+open Flock.Readable (copyOf openRow openIdx openSibs LevelCalls)
+
+/-- The bytes affine forms over the hidden values read off a witness, eight to a byte, the low bit first: `readAt` at
+forms, a position being the one-wire form (`readAt_eq_readLin`). -/
+def readLin (w : Flock.Wit) (fs : List Flock.HmNets.Lin) : Msg := bytesOf (fs.map (ev fun q => w.hid.getD q false))
+
+theorem readAt_eq_readLin (w : Flock.Wit) (ps : List ℕ) :
+    readAt w ps = readLin w (ps.map fun q => ⟨[q], false⟩) := by
+  simp [readAt, readLin, List.map_map, Function.comp_def, ev]
+
+/-- A form over a copy's columns, wire `x` at column `cl x`, as a form over the hidden values: each wire at its
+column's hidden value (`copyIdx`), the wires past the copy's columns, which read false, dropped. -/
+def copyForm (p : Flock.Readable.Parsed) (t : ℕ) (ht : t < p.sts.size) (o g u : ℕ) (cl : ℕ → ℕ)
+    (f : Flock.HmNets.Lin) : Flock.HmNets.Lin :=
+  ⟨(f.s.filter fun x => cl x ≤ p.sts[t].c.unit.constPos).map fun x => copyIdx p t ht o g u (cl x), f.c⟩
+
+theorem ev_copyForm {p : Flock.Readable.Parsed} {t : ℕ} {ht : t < p.sts.size} {w : Flock.Wit} {o g u : ℕ}
+    (cl : ℕ → ℕ) (f : Flock.HmNets.Lin) :
+    ev (fun q => w.hid.getD q false) (copyForm p t ht o g u cl f) = ev (fun x => copyOf p t ht w o g u (cl x)) f := by
+  obtain ⟨s, c⟩ := f
+  simp only [copyForm, ev]
+  induction s with
+  | nil => rfl
+  | cons x s ih =>
+    by_cases hx : cl x ≤ p.sts[t].c.unit.constPos
+    · simp only [List.filter_cons, hx, decide_true, ↓reduceIte, List.map_cons, List.foldr_cons, ih, copyOf_eq hx]
+    · have h0 : copyOf p t ht w o g u (cl x) = false := by
+        simp [copyOf, Flock.Readable.copyCol, hx]
+      simp only [List.filter_cons, hx, decide_false, Bool.false_eq_true, ↓reduceIte, List.foldr_cons, ih, h0,
+        Bool.false_xor]
+
+/-- **Forms that carry a byte string read back as it** (`bytesOf_bitL`). -/
+theorem bytesOf_carries {z : Flock.HmNets.Var → Bool} {f : List Flock.HmNets.Lin} {b : ByteArray}
+    (h : FlockVBridge.Carries z f b) : bytesOf (f.map (ev z)) = b.data.toList := by
+  obtain ⟨hl, hb⟩ := h
+  have hbl : b.data.toList.length = b.size := Array.length_toList
+  have e : f.map (ev z) = (List.range (8 * b.data.toList.length)).map (bitL b.data.toList) :=
+    List.ext_getElem (by simp [hl, hbl]) fun q h1 _ => by
+      have hq : q < f.length := by simpa using h1
+      rw [List.getElem_map, List.getElem_map, List.getElem_range, ← hb q hq]
+      simp [FlockSoundness.Discharge.Hm.bit, hq]
+  rw [e, bytesOf_bitL]
+
+/-- **A level copy's calls off the witness**: where a copy's gadgets carry its climb's calls (`LevelCalls`, which every
+copy of a level has at `Flock.check`: `levelCopies`, `stackedCopies`), the gadgets' forms over the hidden values
+(`copyForm` at `unitCol`) read, off the witness, the climb's calls, the leaf's and then each level's, in order. -/
+theorem levelCalls_read {p : Flock.Readable.Parsed} {t : ℕ} {ht : t < p.sts.size} {w : Flock.Wit}
+    {o g u LANES H : ℕ} (h : LevelCalls (copyOf p t ht w o g u) LANES H) :
+    (FlockVBridge.unitCalls LANES H).map (fun f =>
+        (readLin w (f.1.map (copyForm p t ht o g u (FlockVBridge.unitCol LANES H))),
+          readLin w (f.2.map (copyForm p t ht o g u (FlockVBridge.unitCol LANES H))))) =
+      (FlockVBridge.rowCalls (_root_.Flock.MerkleScheme.rowBytes (openRow (copyOf p t ht w o g u) LANES))
+        (openIdx (copyOf p t ht w o g u) LANES H) (openSibs (copyOf p t ht w o g u) LANES H)).map
+        fun e => (e.1.data.toList, e.2.data.toList) := by
+  have hr : ∀ (fs : List Flock.HmNets.Lin) (b : ByteArray),
+      FlockVBridge.Carries (FlockVBridge.unitWires LANES H (copyOf p t ht w o g u)) fs b →
+        readLin w (fs.map (copyForm p t ht o g u (FlockVBridge.unitCol LANES H))) = b.data.toList :=
+    fun fs b hc => by
+      rw [readLin, List.map_map, ← bytesOf_carries hc]
+      congr 1
+      exact List.map_congr_left fun l _ => ev_copyForm _ l
+  unfold LevelCalls FlockVBridge.CallsAt at h
+  generalize FlockVBridge.unitCalls LANES H = fs at h ⊢
+  generalize FlockVBridge.rowCalls _ _ _ = es at h ⊢
+  induction h with
+  | nil => rfl
+  | cons hfe _ ih => rw [List.map_cons, List.map_cons, ih, hr _ _ hfe.1, hr _ _ hfe.2]
+
+/-- **A level copy's climb calls are recorded where its gadgets are**: if the calls part `s` records at `w` include
+what each of a copy's gadgets reads off the witness (`copyForm` at `unitCol`), they include the calls of the copy's
+climb (`levelCalls_read`). What is left of a level's log link is the layout's (that it records the gadgets) and the
+cut's (that each call the part's inner check logs is a climb call of some copy). -/
+theorem levelCalls_recorded {L : Layout} {x : Msg} {s : ℕ} {p : Flock.Readable.Parsed} {t : ℕ}
+    {ht : t < p.sts.size} {w : Flock.Wit} {o g u LANES H : ℕ} (h : LevelCalls (copyOf p t ht w o g u) LANES H)
+    (hrec : ∀ f ∈ FlockVBridge.unitCalls LANES H,
+      (readLin w (f.1.map (copyForm p t ht o g u (FlockVBridge.unitCol LANES H))),
+        readLin w (f.2.map (copyForm p t ht o g u (FlockVBridge.unitCol LANES H)))) ∈ L.calls x s w) :
+    ∀ e ∈ FlockVBridge.rowCalls (_root_.Flock.MerkleScheme.rowBytes (openRow (copyOf p t ht w o g u) LANES))
+        (openIdx (copyOf p t ht w o g u) LANES H) (openSibs (copyOf p t ht w o g u) LANES H),
+      (e.1.data.toList, e.2.data.toList) ∈ L.calls x s w := fun e he => by
+  have hm := List.mem_map_of_mem (f := fun e : ByteArray × ByteArray => (e.1.data.toList, e.2.data.toList)) he
+  rw [← levelCalls_read h] at hm
+  obtain ⟨f, hf, hfe⟩ := List.mem_map.1 hm
+  rw [← hfe]
+  exact hrec f hf
+
+end Calls
+
 /-! ## A part's links, read off its copy's columns -/
 
 section Links
@@ -1021,7 +1387,7 @@ theorem checkStmt_circuit {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables
       · cases h
 
 /-- **A table checked at part `s`** is named as V\*'s statement `s` at the inner shape, and passes its kind's
-`checkPart` (`checkCircuit_ok`, `check_ok`). -/
+`checkPart` and V\*'s parse check (`checkCircuit_ok`, `check_ok`). -/
 theorem stagedTable {i0 : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {registered : Option (Array Flock.Registered.Port)} {s : ℕ} {bindings : Option VStar.Bindings}
@@ -1029,20 +1395,21 @@ theorem stagedTable {i0 : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : Li
     (h : Flock.RecVStar.checkStmt (some i0) tags tables st circuitB partition program registered (some s) bindings
       rows = .ok ()) :
     ∃ ss sv, Flock.RecVStar.statements i0 = .ok ss ∧ ss[s]? = some sv ∧ sv.name = st.c.unit.name ∧
-      Flock.RecVStar.checkPart sv st.c = .ok () := by
+      Flock.RecVStar.checkPart sv st.c = .ok () ∧ Flock.RecVStar.checkParsed sv st.c = .ok () := by
   obtain ⟨j, f, sv, hj, -, hc⟩ := checkStmt_circuit h
   cases hj
-  obtain ⟨hck, -, -, hp⟩ := FlockSoundness.Discharge.Recursion.checkCircuit_ok hc
+  obtain ⟨hck, -, hq, hp⟩ := FlockSoundness.Discharge.Recursion.checkCircuit_ok hc
   obtain ⟨ss, hss, hs, hn, -, -⟩ := FlockSoundness.Discharge.Recursion.check_ok hck
-  exact ⟨ss, sv, hss, hs, hn, hp⟩
+  exact ⟨ss, sv, hss, hs, hn, hp, hq⟩
 
 /-- **A staged part's tables**: it parses untyped, without public input words, at `x`'s inner shape, with at least
-one table, each named as V\*'s statement `s` there and passing its kind's `checkPart`. -/
+one table, each named as V\*'s statement `s` there and passing its kind's `checkPart` and V\*'s parse check. -/
 theorem stagedTables {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x xO) :
     ∃ (p : Flock.Readable.Parsed) (r : XR) (sv : VStar.Stmt),
       Flock.Readable.parseBytes readOfO xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       readX x = some r ∧ (∃ ss, Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) ∧ 0 < p.sts.size ∧
-      ∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ Flock.RecVStar.checkPart sv p.sts[t].c = .ok () := by
+      ∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ Flock.RecVStar.checkPart sv p.sts[t].c = .ok () ∧
+        Flock.RecVStar.checkParsed sv p.sts[t].c = .ok () := by
   obtain ⟨ms, i, spec, sts, rfl, hsu, hck⟩ := h
   obtain ⟨hins, hset⟩ := setupO_some hsu
   obtain ⟨r, hr, hinner, -⟩ := insO_staged hins
@@ -1054,15 +1421,15 @@ theorem stagedTables {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x 
     unfold Flock.Readable.Read.setup at hrd
     rw [hpi] at hrd
     exact (FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hrd).1
-  obtain ⟨ss, sv, hss, hs, -, -⟩ := stagedTable (checks_stmt hC 0 hsz)
+  obtain ⟨ss, sv, hss, hs, -, -, -⟩ := stagedTable (checks_stmt hC 0 hsz)
   refine ⟨{ i.base.read with sts }, r, sv, parse_of_setupO hsu,
     ((Flock.Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hck).1.2.1, hpi, hr, ⟨ss, hss, hs⟩, hsz, fun t ht => ?_⟩
-  obtain ⟨ss', sv', hss', hs', hn, hp⟩ := stagedTable (checks_stmt hC t ht)
+  obtain ⟨ss', sv', hss', hs', hn, hp, hq⟩ := stagedTable (checks_stmt hC t ht)
   rw [hss] at hss'
   cases hss'
   rw [hs] at hs'
   cases hs'
-  exact ⟨hn.symm, hp⟩
+  exact ⟨hn.symm, hp, hq⟩
 
 /-- **What a part shown at `showsPart` reads**: `stagedTables`, with each table's unit and its outputs by kind
 (`StmtUnit`, from the parser's checks: `stmtUnit_of_check`). -/
@@ -1074,7 +1441,206 @@ theorem stagedReads {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} (h : 
   obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := stagedTables h.2
   refine ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, fun t htl => ⟨(htab t htl).1, ?_⟩⟩
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi htl
-  exact Flock.Readable.stmtUnit_of_check P (htab t htl).1 (htab t htl).2
+  exact Flock.Readable.stmtUnit_of_check P (htab t htl).1 (htab t htl).2.1
+
+/-! ## The held tie at `layoutOf`
+
+`layoutOf` (`DeployLayout.lean`) holds round `j + 1` at part `s` at the hidden values of a registered port's row in an
+instance's copy (`partHolds`, `rowHidden`), in the circuit `partCircuit` parses off the raw part. At a staged part that
+circuit is the parsed statement's first table's (`partCircuit_staged`: the staged statement is the raw part with its
+public file swapped, which the circuit's parse doesn't read), whose input leaves are its input words in order (V\*'s
+parse check, `checkParsed_ok`). So, at one table, those hidden values are a run of the copy's input columns
+(`copyPs`), from the port's first word, and every agreeing list of messages has, at the round, the bytes those
+columns hold (`agrees_layoutOf`). -/
+
+theorem mapM_some_eq_map {α β : Type} {f : α → Option β} {g : α → β} :
+    ∀ {l : List α} {l' : List β}, (∀ a ∈ l, ∀ b, f a = some b → b = g a) → l.mapM f = some l' → l' = l.map g
+  | [], l', _, h => by simpa using h.symm
+  | a :: l, l', hf, h => by
+    rw [List.mapM_cons] at h
+    cases ha : f a with
+    | none => simp [ha] at h
+    | some b =>
+      cases hl : l.mapM f with
+      | none => simp [ha, hl] at h
+      | some bs =>
+        simp only [ha, hl, Option.bind_some, Option.some.injEq, bind, pure] at h
+        subst h
+        rw [List.map_cons, hf a (by simp) b ha,
+          mapM_some_eq_map (fun a' ha' => hf a' (List.mem_cons_of_mem _ ha')) hl]
+
+theorem findIdx_range_ofNat {N w k : ℕ}
+    (h : ((Array.range N).map Int.ofNat).findIdx? (· == (w : Int)) = some k) : k = w := by
+  obtain ⟨hk, hp, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 h
+  simp at hp
+  omega
+
+/-- With unit `0`'s input leaves its input words in order, row bit `i` of port `q` is the input column `16 w + i`,
+`w` the port's first word. -/
+theorem portCol_of_leaves {c : Flock.Circuit} {N q i k : ℕ}
+    (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (h : portCol c 0 q i = some k) :
+    k = 16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + i := by
+  unfold portCol at h
+  rw [hl] at h
+  obtain ⟨k', hf, hk⟩ := Option.bind_eq_some_iff.1 h
+  cases hk
+  rw [findIdx_range_ofNat hf]
+  omega
+
+theorem rowHidden_of_leaves {c : Flock.Circuit} {N : ℕ} {nm : String} {n : ℕ} {ps : List ℕ}
+    (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (h : rowHidden c nm n = some ps) :
+    ∃ (q : ℕ) (pt : Flock.Port), c.ports.findIdx? (·.name == nm) = some q ∧ c.ports[q]? = some pt ∧
+      ps = (List.range pt.bits).map fun i => n / c.g * 2 ^ c.kLog +
+        (c.unitRange.slot (n % c.g * c.upv) + (16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + i)) := by
+  unfold rowHidden at h
+  obtain ⟨q, hq, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨pt, hpt, h⟩ := Option.bind_eq_some_iff.1 h
+  refine ⟨q, pt, hq, hpt, mapM_some_eq_map (fun i _ b hb => ?_) h⟩
+  obtain ⟨k, hk, rfl⟩ := Option.map_eq_some_iff.1 hb
+  rw [portCol_of_leaves hl hk]
+
+theorem copyPs_one {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (ht : 0 < p.sts.size) (o g base m : ℕ) :
+    Claims.Recursion.VStar.copyPs p 0 ht o g 0 base m = (List.range m).map fun i =>
+      o * 2 ^ p.sts[0].c.kLog + (p.sts[0].c.unitRange.slot (g * p.sts[0].c.upv) + (base + i)) := by
+  simp [Claims.Recursion.VStar.copyPs, Claims.Recursion.VStar.copyIdx, h1]
+
+theorem mem_partHolds {r : XR} {s j : ℕ} {ps : List ℕ} (h : (j, ps) ∈ partHolds r s) :
+    ∃ sv c rs q k rep, ((Flock.RecVStar.statements r.shape).toOption.bind fun vs => vs[s]?) = some sv ∧
+      r.w.parts[s]?.bind partCircuit = some c ∧ repSched r.shape = some rs ∧ q ∈ Flock.RecVStar.ownPorts sv ∧
+      Flock.RecVStar.cIndex q.2.1 = some k ∧ msgRound rs rep k = some j ∧ rowHidden c q.1 rep = some ps := by
+  unfold partHolds at h
+  split at h
+  · rename_i sv c rs hsv hc hrs
+    obtain ⟨q, hq, h⟩ := List.mem_flatMap.1 h
+    split at h
+    · rename_i k hk
+      obtain ⟨row, -, h⟩ := List.mem_filterMap.1 h
+      obtain ⟨rep, -, h⟩ := Option.bind_eq_some_iff.1 h
+      obtain ⟨j', hj, h⟩ := Option.bind_eq_some_iff.1 h
+      obtain ⟨ps', hps, h⟩ := Option.bind_eq_some_iff.1 h
+      cases h
+      exact ⟨sv, c, rs, q, k, rep, hsv, hc, hrs, hq, hk, hj, hps⟩
+    · cases h
+  · cases h
+
+theorem layoutOf_msgAt_succ {x : Msg} {s j : ℕ} {ps : List ℕ} (h : layoutOf.msgAt x s (j + 1) = some ps) :
+    ∃ r, readX x = some r ∧ (j, ps) ∈ partHolds r s := by
+  obtain ⟨r, hr, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨e, he, rfl⟩ := Option.map_eq_some_iff.1 h
+  have hj : e.1 = j := by simpa using List.find?_some he
+  refine ⟨r, hr, ?_⟩
+  rw [← hj]
+  exact List.mem_of_find?_eq_some he
+
+/-- A raw statement's read: its masking, circuit file, tables, count, and tags (`Raw.ins`), none of them off its public
+file. -/
+theorem rawIns_fields {w : FlockDeploy.Raw} {i : FlockDeploy.Ins} (h : w.ins = .ok i) :
+    i.read.zk = w.zk ∧ i.read.I.circuitFile = w.circuit ∧ i.read.I.tables = w.tables ∧ i.read.I.count = w.count ∧
+      ∃ tags, Flock.Tags.find? w.statement = some tags ∧ i.read.I.tags = tags.withCoins
+        (if w.zk then .tree (Flock.Zk.coinSpec (tags.tableNames w.count)) else if w.osCoins then .os else .seed) := by
+  unfold FlockDeploy.Raw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  all_goals
+    cases h
+    exact ⟨rfl, rfl, rfl, rfl, _, by assumption, by dsimp only; split_ifs; simp_all⟩
+
+/-- **A raw statement with its public file swapped reads the same tags, circuit file and tables.** -/
+theorem rawIns_publicFile {w : FlockDeploy.Raw} {pf : ByteArray} {i i' : FlockDeploy.Ins} (h : w.ins = .ok i)
+    (h' : ({ w with publicFile := pf } : FlockDeploy.Raw).ins = .ok i') :
+    i'.read.tags = i.read.tags ∧ i'.read.I.circuitFile = i.read.I.circuitFile ∧ i'.read.I.tables = i.read.I.tables := by
+  obtain ⟨hz, hc, htb, hn, tags, ht, htg⟩ := rawIns_fields h
+  obtain ⟨hz', hc', htb', hn', tags', ht', htg'⟩ := rawIns_fields h'
+  have e : tags' = tags := Option.some.inj (ht'.symm.trans ht)
+  subst e
+  refine ⟨?_, hc'.trans hc.symm, htb'.trans htb.symm⟩
+  simp only [Flock.Readable.Read.tags, FlockSoundness.Discharge.ZkExec.zkTags, FlockSoundness.Discharge.ZkExec.zkCoins,
+    hz, hz', htg, htg', hn, hn', hc, hc']
+
+theorem tablesOf_of_parse {x : Msg} {p : Flock.Readable.Parsed}
+    (h : Flock.Readable.parseBytes readOfO x = some p) :
+    readOfO x = some p.toRead ∧ p.toRead.tablesOf = some p.sts := by
+  unfold Flock.Readable.parseBytes at h
+  obtain ⟨r, hr, h⟩ := Option.bind_eq_some_iff.1 h
+  unfold Flock.Readable.Read.parse at h
+  obtain ⟨sts, hs, rfl⟩ := Option.map_eq_some_iff.1 h
+  exact ⟨hr, hs⟩
+
+/-- **A staged part's circuit is `partCircuit`'s**: part `s`'s V\* statement parses with first table the circuit
+`partCircuit` parses off the raw part (`table0`: the first table's circuit is `ProvedScope.circuitOf`'s at the read,
+which is the raw part's with its public file swapped, `rawIns_publicFile`). -/
+theorem partCircuit_staged {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x xO)
+    {p : Flock.Readable.Parsed} (hp : Flock.Readable.parseBytes readOfO xO = some p) (ht : p.tags.typed = false)
+    (hpi : p.publicInputs = none) {r : XR} (hr : readX x = some r) {c : Flock.Circuit}
+    (hc : r.w.parts[s]?.bind partCircuit = some c) (h0 : 0 < p.sts.size) : p.sts[0].c = c := by
+  obtain ⟨ms, i, spec, sts, rfl, hsu, -⟩ := h
+  obtain ⟨hins, -⟩ := setupO_some hsu
+  have hread : readOfO (staged st x ms s) = some i.base.read := by rw [readOfO, hins, Option.map_some]
+  have hne : staged st x ms s ≠ [] := fun he => by rw [he, insO_nil] at hins; cases hins
+  obtain ⟨r', pt, hr', hpt, hd⟩ := staged_decode hne
+  rw [hr] at hr'
+  cases hr'
+  rw [hpt, Option.bind_some] at hc
+  unfold partCircuit at hc
+  obtain ⟨ins, hins', hc⟩ := Option.bind_eq_some_iff.1 hc
+  unfold insO at hins
+  rw [hd] at hins
+  simp only [Option.bind_eq_bind, Option.bind_some] at hins
+  split_ifs at hins
+  · simp at hins
+  have h' : (partRaw r st x ms s pt).ins.toOption = some i := by simpa using hins
+  obtain ⟨htg, hcf, htb⟩ := rawIns_publicFile (toOption_eq_some hins') (RecRaw.ins_base (toOption_eq_some h'))
+  obtain ⟨-, hcf', htb', -⟩ := rawIns_fields (toOption_eq_some hins')
+  obtain ⟨hr0, hts⟩ := tablesOf_of_parse hp
+  have he : p.toRead = i.base.read := Option.some.inj (hr0.symm.trans hread)
+  obtain ⟨st0, hst0, hc0, -⟩ := Flock.Readable.table0 hts ht hpi
+  rw [he, htg, hcf, htb, hcf', htb'] at hc0
+  rw [toOption_eq_some hc] at hc0
+  rw [Array.getElem?_eq_getElem h0] at hst0
+  rw [Option.some.inj hst0]
+  exact (Except.ok.inj hc0).symm
+
+/-- **What a staged part holds at `layoutOf` is a run of a copy's input columns**: at one table, the hidden values
+`layoutOf` reads round `j + 1` at are a port's row's bits in some instance `rep`'s copy (block `rep / g`, VU
+`rep % g`), the input columns from the port's first word (`copyPs`). -/
+theorem layoutOf_msgAt_staged {st : Stage} {s j : ℕ} {x xO : Msg} (h : StagedPart st s x xO)
+    {p : Flock.Readable.Parsed} (hp : Flock.Readable.parseBytes readOfO xO = some p) (ht : p.tags.typed = false)
+    (hpi : p.publicInputs = none) (h0 : 0 < p.sts.size) (h1 : p.sts.size = 1) {N : ℕ}
+    (hl : p.sts[0].c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) {ps : List ℕ}
+    (hm : layoutOf.msgAt x s (j + 1) = some ps) :
+    ∃ (q : ℕ) (pt : Flock.Port) (rep : ℕ), p.sts[0].c.ports[q]? = some pt ∧
+      ps = Claims.Recursion.VStar.copyPs p 0 h0 (rep / p.sts[0].c.g) (rep % p.sts[0].c.g) 0
+        (16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) pt.bits := by
+  obtain ⟨r, hr, hmem⟩ := layoutOf_msgAt_succ hm
+  obtain ⟨sv, c, rs, q, k, rep, -, hc, -, -, -, -, hrh⟩ := mem_partHolds hmem
+  have hce := partCircuit_staged h hp ht hpi hr hc h0
+  subst hce
+  obtain ⟨qi, pt, -, hpt, rfl⟩ := rowHidden_of_leaves hl hrh
+  refine ⟨qi, pt, rep, hpt, ?_⟩
+  rw [copyPs_one h1 h0]
+
+/-- **The input tie's messages at `layoutOf`**: at a part shown at `showsPart`, of one table, on every list of
+messages agreeing with what the part holds, each round `j + 1` the part holds is the bytes a port's columns hold in
+some instance's copy, from the port's first word (`layoutOf_msgAt_staged`, `agrees_colsHold`), the port's leaves in
+order by V\*'s parse check (`checkParsed_ok`). -/
+theorem agrees_layoutOf {b : Brings} {s j : ℕ} {x xO : Msg} {c : ℕ → Coin} (hs : showsPart b s x xO c)
+    {p : Flock.Readable.Parsed} (hp : Flock.Readable.parseBytes readOfO xO = some p) (h0 : 0 < p.sts.size)
+    (h1 : p.sts.size = 1) {w : Claims.Flock.Wit} {ms : List Msg}
+    (hA : Claims.Recursion.VStar.Agrees layoutOf x s w ms) (hj : j + 1 < layoutOf.rounds x) {ps : List ℕ}
+    (hm : layoutOf.msgAt x s (j + 1) = some ps) :
+    ∃ (q : ℕ) (pt : Flock.Port) (rep : ℕ), p.sts[0].c.ports[q]? = some pt ∧ ∀ bs : ByteArray, 8 * bs.size = pt.bits →
+      16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0 + pt.bits ≤ p.sts[0].c.unit.constPos + 1 →
+      FlockVBridge.ColsHold (Flock.Readable.copyOf p 0 h0 w (rep / p.sts[0].c.g) (rep % p.sts[0].c.g) 0)
+        (16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) bs → ms.getD (j + 1) [] = bs.data.toList := by
+  obtain ⟨p', r, sv, hp', ht, hpi, -, -, -, htab⟩ := stagedTables hs.2
+  rw [hp] at hp'
+  cases hp'
+  obtain ⟨u, -, -, -, hl, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
+  obtain ⟨q, pt, rep, hpt, hps⟩ := layoutOf_msgAt_staged hs.2 hp ht hpi h0 h1 hl hm
+  refine ⟨q, pt, rep, hpt, fun bs hb htop hcol => ?_⟩
+  rw [hps, ← hb] at hm
+  exact Claims.Recursion.VStar.agrees_colsHold hA hj hm (by omega) hcol
 
 end RecDeploy
 
@@ -1112,6 +1678,50 @@ theorem partReadsTo_deployRec {L : Layout} {shape : Form → Prop}
   obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := RecDeploy.stagedReads hc
   exact ⟨p, hx, ht, hpi, fun w ms hA hO =>
     h x st hst hf xO c hc p r sv hx hr hss hsz w ms hA (Flock.Readable.stmtCopies_of_allOuts htab hO)⟩
+
+/-- **A level part's calls at `deployRec`, with the circuit's half done**: at a part whose V\* statement is a level's
+(`.recOpen` or `.recOpenStacked`, at `LANES` and `H`), on every list of messages agreeing with what the part holds,
+each call its inner check logs is a climb call of some copy (`rowCalls` at what the copy reads), and the layout records
+every copy's gadgets (`copyForm` at `unitCol`, read by `readLin`); or the fallback. What the copies' gadgets carry is
+the circuit's (`LevelCalls`, `levelCalls_recorded`). -/
+def LevelLogReads (L : Layout) (shape : Form → Prop)
+    (logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)) (s : ℕ) : Prop :=
+  ∀ (x : Msg) (st : Stmt), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
+    ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart b s x xO c →
+    ∀ (p : Flock.Readable.Parsed) (r : RecDeploy.XR) (sv : VStar.Stmt),
+      Flock.Readable.parseBytes RecDeploy.readOfO xO = some p → RecDeploy.readX x = some r →
+      (∃ ss, _root_.Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) → 0 < p.sts.size →
+      ∀ (w : Flock.Wit) (ms : List Msg), Agrees L x s w ms →
+        (∃ lv LANES Ht n, (sv = .recOpen lv LANES Ht n ∨ sv = .recOpenStacked lv LANES Ht n) ∧
+          (∀ e ∈ logs s x c ms, ∃ t, ∃ ht : t < p.sts.size, ∃ o g u, o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) ∧
+            g < p.sts[t].c.g ∧ u < p.sts[t].c.upv ∧
+            ∃ e' ∈ FlockVBridge.rowCalls (_root_.Flock.MerkleScheme.rowBytes
+                  (Flock.Readable.openRow (Flock.Readable.copyOf p t ht w o g u) LANES))
+                (Flock.Readable.openIdx (Flock.Readable.copyOf p t ht w o g u) LANES Ht)
+                (Flock.Readable.openSibs (Flock.Readable.copyOf p t ht w o g u) LANES Ht),
+              e = (e'.1.data.toList, e'.2.data.toList)) ∧
+          ∀ t (ht : t < p.sts.size) o g u, o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) → g < p.sts[t].c.g →
+            u < p.sts[t].c.upv → ∀ f ∈ FlockVBridge.unitCalls LANES Ht,
+              (readLin w (f.1.map (copyForm p t ht o g u (FlockVBridge.unitCol LANES Ht))),
+                readLin w (f.2.map (copyForm p t ht o g u (FlockVBridge.unitCol LANES Ht)))) ∈ L.calls x s w) ∨
+        PartColl H (RecDeploy.deployRec I.V ivScope b) L s x xO w
+
+/-- `LevelLogReads` is `StmtReadsTo` toward the part's calls: every copy of a level carries its climb's calls
+(`levelCopies`, `stackedCopies`), recorded where the layout records its gadgets (`levelCalls_recorded`). -/
+theorem stmtReadsTo_levelLogs {L : Layout} {shape : Form → Prop}
+    {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)} {s : ℕ}
+    (h : LevelLogReads H I ivScope b L shape logs s) :
+    StmtReadsTo H I ivScope b L shape (fun x c w ms => ∀ e ∈ logs s x c ms, e ∈ L.calls x s w) s := by
+  intro x st hst hf xO c hc p r sv hx hr hss hsz w ms hA hC
+  rcases h x st hst hf xO c hc p r sv hx hr hss hsz w ms hA with ⟨lv, LANES, Ht, n, hsv, hlog, hrec⟩ | hcoll
+  · refine Or.inl fun e he => ?_
+    obtain ⟨t, ht, o, g, u, ho, hg, hu, e', he', rfl⟩ := hlog e he
+    have hL : Flock.Readable.LevelOuts (Flock.Readable.copyOf p t ht w o g u) LANES Ht := by
+      rcases hsv with rfl | rfl
+      · exact Flock.Readable.levelCopies ht ho hg hu hC
+      · exact Flock.Readable.stackedCopies ht ho hg hu hC
+    exact levelCalls_recorded hL.2 (hrec t ht o g u ho hg hu) e' he'
+  · exact Or.inr hcoll
 
 /-- **A part linked at `deployRec` with the staging done**: `StmtReadsTo` toward its check, and its calls either none
 where its coins are shown (`LogsNil`) or `StmtReadsTo` toward them. -/

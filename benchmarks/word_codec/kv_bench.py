@@ -7,7 +7,8 @@ Nothing is timed before its gate passed, in this order:
   reference's words equals their payloads, and `--gate-words` random words
   go through the device's encode and decode unchanged, the decode's checksum mode giving the payloads' XOR;
 - `gate_bound`: the bound key's launchers (`kv_encode_bound`, `kv_decode_bound`) against `tests/kv_vectors.json`'s
-  "bound" at the keys of the library's field and mask, and against `kv.py` over token-layers across index 2^32;
+  "bound" at the keys of the library's field and mask, and against `kv.py` over token-layers across index 2^32; at the
+  remote audit's codec, against its `vectors.json`'s `codec.coin` too, the append coin's form (`gate_coin`);
   `--gates-only` stops here;
 - `read`: the read rate R over a store of `--store-gib`, the best of a few grids;
 - `rates`: compute-only squarings (ILP 1 and 2 words a thread), decodes and encodes of k rounds, words/s;
@@ -53,6 +54,7 @@ E_70B = K.LAYERS * sum(n * kd for n, kd in SHAPES_70B.values())
 CONTEXTS = (512, 2048, 8192)
 GATE_BASES = (77, (1 << 32) - 20, (1 << 33) + 77)
 BOUND_VECTORS = HERE / "tests" / "kv_vectors.json"
+REMOTE_VECTORS = HERE.parents[1] / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests"
 BOUND_BLOCKS = 6
 ATTN_CYCLE_BYTES = 1 << 30  # a cell's layers cover this much plain KV, 8x the L2
 ATTN_MAX_LAYERS = 256       # and at most this many, so a pass's launches queue behind one spin
@@ -279,7 +281,56 @@ def gate_bound(lib: Lib, torch, log) -> dict:
             f"at block {there} folded; {BOUND_BLOCKS} blocks from index {first * w} against kv.py)")
     if not out:
         log(f"bound {lib.name}: kv_vectors.json pins no bound key of {f.name}{'/masked' if lib.mask else ''}")
+    if (coin := gate_coin(lib, torch, log)) is not None:
+        out["coin"] = coin
     return out
+
+
+def gate_coin(lib: Lib, torch, log) -> dict | None:
+    """The append coin's form of the bound key (remote_bandwidth's PROTOCOL.md §3), for a library at the remote
+    audit's codec (`codec.DEFAULT`; None for another): `vectors.json`'s `codec.coin` blocks, each encoded by
+    `kv_encode_bound` at its own indices under b_j(c_a), equal the pinned words (their SHA-512 and first word), decode
+    back, and don't decode under the form without the coin."""
+    for p in (str(HERE.parents[1]), str(REMOTE_VECTORS)):
+        if p not in sys.path:
+            sys.path.append(p)
+    import remote_bandwidth_vectors as RV
+    from verity.core.protocols.remote_bandwidth import codec as RC
+
+    rc, f = RC.DEFAULT, lib.field
+    if (f.name, lib.mask) != (rc.field.name, rc.masked) or rc.rounds > lib.kmax:
+        return None
+    pinned = json.loads(RV.PATH.read_text())["codec"]
+    seed, coin, k = bytes.fromhex(pinned["seed"]), bytes.fromhex(pinned["coin"]["c_a"]), rc.rounds
+    key, dev = RC.key(seed, rc), K.key(f.name, seed, k, mask=rc.masked)
+    if (dev.c, dev.tau, dev.mask) != (key.c, key.tau, key.mask):
+        raise RuntimeError("kv.py's key is not the remote audit's codec key")
+    set_key(lib, dev)
+    w, st = K.token_layer_words(f), stream(torch)
+    blocks = []
+    for v in pinned["coin"]["bound"]:
+        j = v["j"]
+        pay = RV.payload(j)
+        d = RC.digest(pay)
+        b = RC.binding(d, j, key, coin)
+        m = to_device(torch, K.payloads(pay, f), f)
+        enc, back, other = (torch.empty_like(m) for _ in range(3))
+        ob, pre = offsets(torch, [b], f), offsets(torch, [RC.binding(d, j, key)], f)
+        lib.call("kv_encode_bound", ptr(m), ptr(enc), w, j * w, k, ptr(ob), 0, st)
+        lib.call("kv_decode_bound", ptr(enc), ptr(back), w, j * w, k, ptr(ob), 0, st)
+        lib.call("kv_decode_bound", ptr(enc), ptr(other), w, j * w, k, ptr(pre), 0, st)
+        torch.cuda.synchronize()
+        raw = enc.cpu().numpy().tobytes()
+        r = {"j": j, "digest": d.hex() == v["digest"], "b": format(b, "x") == v["b"],
+             "word_0": raw[:f.word_bytes].hex() == v["word_0"],
+             "block_sha512": hashlib.sha512(raw).hexdigest() == v["block_sha512"],
+             "decode": bool(torch.equal(back, m)), "pre_coin_refused": not torch.equal(other, m)}
+        r["ok"] = all(x for x in r.values() if type(x) is bool)
+        blocks.append(r)
+    ok = all(r["ok"] for r in blocks)
+    log(f"bound {lib.name} coin: {'ok' if ok else 'FAIL ' + str(blocks)} ({len(blocks)} blocks against vectors.json's "
+        "codec.coin, and not under the form without the coin)")
+    return {"codec": rc.name, "c_a": coin.hex(), "blocks": blocks, "ok": ok}
 
 
 # --- rates -------------------------------------------------------------------------------------------------------------

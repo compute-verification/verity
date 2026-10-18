@@ -253,8 +253,9 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
 
 /-- **Flock's claims at the deployed masked verifier at the deployed relation** (`Readable.relation`), at every hash:
 `flock_zk_assembled` with its completeness from the record's JSON and the honest masked run's premises
-(`FlockComplete.ZkTables.complete_json`, at the trimmed record by `Flock.complete_mapCols`). `hKS` (E4), those
-premises and `Flock.zk_deployZk_of_models`' hypotheses are what remains. -/
+(`FlockComplete.ZkTables.complete_json`, at the trimmed record by `Flock.complete_mapCols`) and the mask slots' rank
+bound (`FlockComplete.MaskRank.MaskRankBound`). `hKS` (E4), those premises and `Flock.zk_deployZk_of_models`'
+hypotheses are what remains. -/
 theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployZkTrim Readable.relation))
     (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
@@ -262,6 +263,7 @@ theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
     (hR : ∀ c : FlockComplete.ZkTables.Case H Readable.relation, FlockComplete.ZkTables.RepShapedAt c)
     (hLI : ∀ o : FlockComplete.ZkTables.Run H Readable.relation,
       FlockComplete.ZkTables.LgInnerAt H Readable.relation o)
+    (hMR : FlockComplete.MaskRank.MaskRankBound)
     (G : Claims.ZKMal.Proto Claims.Flock.Wit) (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (V true).k x - 1)
     {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
     [DecidableEq B] (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
@@ -285,7 +287,7 @@ theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
       Claims.Flock.Complete H (deployZkTrim Readable.relation) :=
   flock_zk_assembled Readable.relation H hKS
     ((Claims.Flock.complete_mapCols H (deployZk Readable.relation) trimCol).2
-      (FlockComplete.ZkTables.complete_json H S hPR hR hLI))
+      (FlockComplete.ZkTables.complete_json H S hPR hR hLI hMR))
     G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB hL hS hN hI hC coinOf tapeOf hG
 
 end FlockDeploy.Assembled

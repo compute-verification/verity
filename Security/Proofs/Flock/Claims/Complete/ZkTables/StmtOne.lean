@@ -377,9 +377,9 @@ share, with error `δc H`, at any number of tables: `completeRel` with the state
 (`stmtAt_all`). -/
 theorem completeRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
     (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
-    (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) :
+    (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  completeR H Readable.relation S h64 (stmtAt_all S) hPR hR Run.rsExtras hC
+  completeR H Readable.relation S h64 (stmtAt_all S) hPR hR Run.rsExtras hC hMR
 
 /-- **Flock's completeness at the deployed masked verifier**, at the deployed relation, of the record's reference
 prover (`(deployZk Readable.relation).P`, `honestP`) at the record's error (`(deployZk Readable.relation).δc`, `δc H`),
@@ -387,9 +387,9 @@ at any number of tables: `completeRelS`, the oracle's 64-byte outputs (`Out64`) 
 antecedent. -/
 theorem complete_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
     (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
-    (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) :
+    (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
-  completeRelS H S h64 hPR hR hC h64
+  completeRelS H S h64 hPR hR hC hMR h64
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
 share, with error `δc H`, at any number of tables: `completeJRel` with `StmtOkZk` proved (`stmtOkZk`). -/
@@ -397,8 +397,9 @@ theorem completeJRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
     (hLg : FlockComplete.LigeritoZk H Readable.relation) (hIn : FlockComplete.Inner H Readable.relation)
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)
-    (hCJ : LgInnerJ H Readable.relation) : Claims.Flock.Complete H (deployZk Readable.relation) :=
-  completeJRel H S h64 (stmtOkZk S) hR hPR hLg hIn hPRJ hRJ hCJ
+    (hCJ : LgInnerJ H Readable.relation) (hMR : MaskRank.MaskRankBound) :
+    Claims.Flock.Complete H (deployZk Readable.relation) :=
+  completeJRel H S h64 (stmtOkZk S) hR hPR hLg hIn hPRJ hRJ hCJ hMR
 
 /-- **Flock's completeness at the deployed masked verifier**, at the deployed relation, of the record's reference
 prover at the record's error, at any number of tables: `completeJRelS`, from the one-table premises and the same
@@ -408,16 +409,17 @@ theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec prin
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
     (hLg : FlockComplete.LigeritoZk H Readable.relation) (hIn : FlockComplete.Inner H Readable.relation)
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)
-    (hCJ : LgInnerJ H Readable.relation) : Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
-  completeJRelS H S h64 hR hPR hLg hIn hPRJ hRJ hCJ h64
+    (hCJ : LgInnerJ H Readable.relation) (hMR : MaskRank.MaskRankBound) :
+    Claims.Flock.Complete H (deployZk Readable.relation) :=
+  fun h64 => completeJRelS H S h64 hR hPR hLg hIn hPRJ hRJ hCJ hMR h64
 
 /-- **Flock's masked verifier is complete at the deployed relation** for `honestPZk` with error `δcZk H`:
 `complete_zk_relation`, which proves `StmtOkZk` from `S` itself. -/
 theorem complete_zk_relationS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec)
     (hR : JsonRT.RepShapedZk H Readable.relation)
     (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)
-    (hIn : FlockComplete.Inner H Readable.relation) :
+    (hIn : FlockComplete.Inner H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     CompleteWith H (deployZk Readable.relation) honestPZk (δcZk H) :=
-  FlockComplete.complete_zk_relation H S hR hPR hLg hIn
+  FlockComplete.complete_zk_relation H S hR hPR hLg hIn hMR
 
 end FlockComplete.ZkTables

@@ -29,6 +29,11 @@ import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeployPremises
 import Proofs.Flock.Claims.Recursion.DeployZK
 import Proofs.Flock.Claims.Recursion.Seq
+import Proofs.Flock.Claims.Recursion.SeqSim
+import Proofs.Flock.Claims.Recursion.SeqSession
+import Proofs.Flock.Claims.Recursion.SeqPrefix
+import Proofs.Flock.Claims.Recursion.SeqCap
+import Proofs.Flock.Claims.Recursion.SeqKey
 import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarKS
 import Proofs.Flock.Claims.Recursion.VStarParts
@@ -39,6 +44,7 @@ import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
 import Proofs.Flock.Claims.Recursion.VStarLinks
 import Proofs.Flock.Claims.Recursion.VStarCross
+import Proofs.Flock.Claims.Recursion.DeployLayout
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.Decode
