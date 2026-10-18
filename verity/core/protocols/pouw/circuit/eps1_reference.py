@@ -21,6 +21,14 @@ The verifier computes the seed and, from it, the noise (`noise`), and passes the
 in gates, and the noise is a function of a coin and two commitments, each of which may be public (the everything-ZK rule's
 public kinds).  ncp-v2 instead derives its noise in gates (`ncp2.NcpFormX` from a two-level key).
 
+The receipt folds take their keys, and their chains their starts, from a second seed of the same inputs under its own tag
+(decision 121; main's `seeds.PouwUnitSeeds` returns the pair):
+
+    σ_R = SHA-512(RECEIPT_TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))
+
+so no fold key is a function of the noise seed seed_j.  `noise` derives the dither, coins and keyed word from seed_j and the
+fx1 fold keys `st` from σ_R (`receipt_seed`).
+
 **The served arm and the receipt.** sm_120's H1 (co32c-u16, decision 82; `benchmarks/pouw/edited_gemm/cgemm_ref.py`) serves
 `O = (W + c) Xᵀ` with the dithered `X = V + b` and `W' = W + c + U`, `U` a keyed per-row word with period 32 along k
 (fx1, decision 83: one keyed IMAD a word before duo's fold).  The arm is the s8 family at its noised layout, `S8Dot_v1`
@@ -69,6 +77,9 @@ SCHEME = "eps1-sm120-h1fx1"
 KIND = "h1fx1"
 #: the seed's domain separator (`seed`); a byte string, as every SHA-512 tag here is
 TAG = b"eps1-sm120-h1fx1/seed/v1"
+#: σ_R's domain separator (`receipt_seed`, decision 121): the receipt folds' keys and their chains' starts, under a tag of
+#: their own (main's `seeds.PouwUnitSeeds` RECEIPT_TAG), never the noise seed's, so no fold key is a function of seed_j
+RECEIPT_TAG = b"verity/pouw/receipt/v1"
 #: the fold H1's receipt uses and its receipt layout (`segment.PouwCallCheck`): fx1, the eight chain words a thread
 FOLD, OUT = "fx1", "chains"
 #: the per-dot work the TS conjecture credits is open until proofs link TS to EndToEnd (§5 item 3)
@@ -107,6 +118,13 @@ def seed(salt: bytes, forward: int, position: int, root_a: bytes, root_b: bytes)
     return hashlib.sha512(TAG + bytes(salt) + _u64(forward) + _u64(position) + bytes(root_a) + bytes(root_b)).digest()
 
 
+def receipt_seed(salt: bytes, forward: int, position: int, root_a: bytes, root_b: bytes) -> bytes:
+    """`σ_R = SHA-512(RECEIPT_TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))` (decision 121): seed_j's message under
+    the receipt tag.  It keys the receipt folds and starts their chains, so no fold key is a function of the noise seed
+    seed_j (main's `seeds.PouwUnitSeeds` returns the pair [seed_j, σ_R], one seed role)."""
+    return hashlib.sha512(RECEIPT_TAG + bytes(salt) + _u64(forward) + _u64(position) + bytes(root_a) + bytes(root_b)).digest()
+
+
 class _Stream:
     """A public pseudorandom byte stream from a seed, SHA-512 only (the one-hash rule): block i is SHA-512(seed ‖ label ‖ i).
     The noise is derived outside gates, so this costs nothing on the soundness path."""
@@ -135,17 +153,17 @@ class _Stream:
         return (lo + self.bytes(1)[0] % (hi - lo + 1)) & 0xFF
 
 
-def noise(the_seed: bytes, shape: Shape, tile: int, ctid: int) -> dict[str, Any]:
-    """The public noise of one thread's H1 call, a deterministic function of `seed_j` alone (decision 101): the dither bits
-    `b`, the served coin bits `c`, the keyed word `U`, the digit coins `z` and the fx1 fold keys `st`.  The verifier computes
-    these and passes them as public inputs to `PouwCallCheck_v1`; nothing here is a witness.  `tile`, `ctid` place the thread
-    (the draw's, from the same seed)."""
+def noise(the_seed: bytes, receipt: bytes, shape: Shape, tile: int, ctid: int) -> dict[str, Any]:
+    """The public noise of one thread's H1 call: the dither bits `b`, the served coin bits `c`, the keyed word `U` and the
+    digit coins `z` from `seed_j` (`the_seed`, decision 101), and the fx1 fold keys `st` (the chains' starts) from `σ_R`
+    (`receipt`, decision 121), never from seed_j.  The verifier computes these and passes them as public inputs to
+    `PouwCallCheck_v1`; nothing here is a witness.  `tile`, `ctid` place the thread (the draw's, from the same seed)."""
     ks, m = shape.ks, SG.n_digits(shape.ks)
     sb = _Stream(the_seed, b"b")
     sc = _Stream(the_seed, b"c")
     su = _Stream(the_seed, b"u")
     sz = _Stream(the_seed, b"z")
-    sf = _Stream(the_seed, b"seed")
+    sf = _Stream(receipt, b"fx1")  # the fold keys from σ_R, never from seed_j (decision 121)
     b = [[sb.bits(32) for _ in range(4)] for _ in range(ks)]
     c = [[sc.bits(32) for _ in range(8)] for _ in range(ks)]
     u = [[su.i8word() for _ in range(32)] for _ in range(8)]
@@ -212,14 +230,14 @@ def closure(shape: Shape) -> tuple:
 
 # ---- vectors ------------------------------------------------------------------------------------------------------------
 
-def vector(the_seed: bytes, shape: Shape, tile: int, ctid: int) -> dict[str, Any]:
-    """An honest thread's call and its receipt, with the noise derived from `seed_j` (`noise`): the committed operand leaves
-    (`x`, `w`), the public noise and draw (`xsel`, `wsel`, `b`, `c`, `u`, `z`, `st`), and the receipt leaf (`rc`) and the
-    thread's one-hot position (`rsel`).  `check`'s word view returns 1 on it (`segment.call_check`); the attack library and
-    the one-stage harness build from this."""
+def vector(the_seed: bytes, receipt: bytes, shape: Shape, tile: int, ctid: int) -> dict[str, Any]:
+    """An honest thread's call and its receipt, the noise from `seed_j` and the fold keys from `σ_R` (`noise`): the committed
+    operand leaves (`x`, `w`), the public noise and draw (`xsel`, `wsel`, `b`, `c`, `u`, `z`, `st`), and the receipt leaf
+    (`rc`) and the thread's one-hot position (`rsel`).  `check`'s word view returns 1 on it (`segment.call_check`); the attack
+    library and the one-stage harness build from this."""
     shape.check()
     ks = shape.ks
-    nz = noise(the_seed, shape, tile, ctid)
+    nz = noise(the_seed, receipt, shape, tile, ctid)
     sx = _Stream(the_seed, b"x-rows")
     sw = _Stream(the_seed, b"w-rows")
     x = [[[sx.i8word(-127, 126) for _ in range(32)] for _ in range(SG.RL)] for _ in range(ks)]
@@ -272,8 +290,11 @@ class Eps1Traced:
     def seed(self, salt: bytes, forward: int, position: int, root_a: bytes, root_b: bytes) -> bytes:
         return seed(salt, forward, position, root_a, root_b)
 
-    def noise(self, the_seed: bytes, tile: int, ctid: int) -> dict[str, Any]:
-        return noise(the_seed, self.shape, tile, ctid)
+    def receipt_seed(self, salt: bytes, forward: int, position: int, root_a: bytes, root_b: bytes) -> bytes:
+        return receipt_seed(salt, forward, position, root_a, root_b)
+
+    def noise(self, the_seed: bytes, receipt: bytes, tile: int, ctid: int) -> dict[str, Any]:
+        return noise(the_seed, receipt, self.shape, tile, ctid)
 
     def digest(self) -> str:
         from verity.ml.circuits.codec import program_digest
@@ -289,5 +310,5 @@ def traced_as(m: int, k: int, n: int) -> Eps1Traced:
     return Eps1Traced(SCHEME, shape, arm(k), check(shape.ks), work_ref(shape), closure(shape))
 
 
-__all__ = ["FOLD", "KIND", "LINK_OPEN", "OUT", "SCHEME", "TAG", "Eps1Traced", "Shape", "arm", "check", "check_args",
-           "closure", "noise", "seed", "templates", "traced_as", "unit", "vector", "work_ref"]
+__all__ = ["FOLD", "KIND", "LINK_OPEN", "OUT", "RECEIPT_TAG", "SCHEME", "TAG", "Eps1Traced", "Shape", "arm", "check",
+           "check_args", "closure", "noise", "receipt_seed", "seed", "templates", "traced_as", "unit", "vector", "work_ref"]

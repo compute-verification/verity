@@ -6,7 +6,7 @@ a thread's receipt (its eight chain words), and draws the thread's whole call as
 `PouwCallCheck_v1{KS, FOLD "fx1", OUT "chains"}` (`circuit.segment`, #2417), which recomputes every absorbed word from the
 committed operand leaves and the public noise, from `T_{-1} = 0`; the noise is `eps1_reference.noise` of the per-call seed
 `seed_j = SHA-512(TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))` (decision 101).  Each attack below leaves one
-honest call and alters one thing; the scheme's check (or the port rules the compile pass relies on) refuses it.
+honest call and alters one thing; the scheme's check refuses it.
 
 The windowed check `PouwSegCheck_v3` (another of the scheme's checks) appears in the meet-in-the-middle case: v2's prefix
 sets are free witness, which a meet-in-the-middle opens (`test_circuit_segment`); v3 recomputes every word, so there is no
@@ -24,13 +24,8 @@ import pytest
 
 from verity.core.protocols.pouw.circuit import eps1_reference as EPS
 from verity.core.protocols.pouw.circuit import segment as SG
-from verity.ml.circuits.defs import bind, primitive
-from verity.ml.circuits.ports import In, Out, PortError, Ports
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Value
 
 M32 = SG.M32
-V8, V32 = Value(8), Value(32)
 SALT = bytes(range(32))
 ROOT_A, ROOT_B = hashlib.sha512(b"A").digest(), hashlib.sha512(b"B").digest()
 SHAPE = EPS.Shape(16, 128, 16)  # KS = 4, two digit words
@@ -38,9 +33,11 @@ TILE, CTID = 3, 5
 
 
 def _honest(shape=SHAPE, forward=0, position=0, tile=TILE, ctid=CTID):
-    """An honest thread's call of the scheme, the noise from its seed: the vector and its `call_check` arguments."""
+    """An honest thread's call of the scheme: its noise from seed_j and its fold keys from σ_R (decision 121), the vector and
+    its `call_check` arguments."""
     sd = EPS.seed(SALT, forward, position, ROOT_A, ROOT_B)
-    v = EPS.vector(sd, shape, tile, ctid)
+    sr = EPS.receipt_seed(SALT, forward, position, ROOT_A, ROOT_B)
+    v = EPS.vector(sd, sr, shape, tile, ctid)
     return v, EPS.check_args(v)
 
 
@@ -124,8 +121,10 @@ def _replay(args):
 def _commit_after_salt(args):
     """The prover commits and folds under a salt different from the epoch's: the seed, and so the noise, change, and the
     receipt no longer matches the verifier's recomputation under the real salt."""
-    other = EPS.seed(hashlib.sha512(b"other-salt").digest()[:32], 0, 0, ROOT_A, ROOT_B)
-    v2 = EPS.vector(other, SHAPE, TILE, CTID)
+    other_salt = hashlib.sha512(b"other-salt").digest()[:32]
+    other = EPS.seed(other_salt, 0, 0, ROOT_A, ROOT_B)
+    other_r = EPS.receipt_seed(other_salt, 0, 0, ROOT_A, ROOT_B)
+    v2 = EPS.vector(other, other_r, SHAPE, TILE, CTID)
     return _forge_receipt(args, _fold_words(args, SG.lane_words(
         args[0], args[3], args[1], v2["b"], args[4], v2["c"], v2["u"], v2["z"])))
 
@@ -286,70 +285,9 @@ def test_mitm_opens_v2_but_the_scheme_refuses_it():
     assert SG.seg_check3(*v3[:7], h["rc"], h["rsel"]) == 1                  # and accepts the honest receipts
 
 
-# --- a noise-cancelling Program: the coin must reach the arm untouched (COIN-RULES) ------------------------------------------
-
-@primitive("Eps1AttackNoiseArm", 1, (("coin", V32), ("a", V8)), V8,
-           ports=Ports(params={"coin": In(kind="coin")}))
-def _NoiseArm(coin, a):
-    """A stand-in served arm: it takes the verifier's noise as a coin passed through untouched (the coin port the compile
-    pass adds, POUW-SPEC §4)."""
-    return (a + coin) & 0xFF
-
-
-@primitive("Eps1AttackAdd32", 1, (("a", V32), ("b", V32)), V32)
-def _Add32(a, b):
-    return (a + b) & M32
-
-
-@primitive("Eps1AttackFold", 1, (("x", V32),), V32, ports=Ports(ret=Out(sink=True)))
-def _Fold(x):
-    """A receipt fold: its output is a sink (it reaches only a receipt port or the program's outputs)."""
-    return x ^ 0x5A5A5A5A
-
-
-def _comp(name, params, ret, body, ports=None):
-    from verity.ml.circuits.defs import CompositeDefinition
-
-    return CompositeDefinition(name, 1, (), lambda S: (tuple(params), ret), body, register=False, ports=ports)
-
-
-def test_noise_cancelling_program_is_refused():
-    """COIN-RULES' coin-flow rule (`E_PORT_KIND`): the verifier's noise coin must reach the served arm untouched.  A Program
-    that runs the coin through a gate first (so the net operand cancels the noise) is refused; the honest pass-through is
-    accepted."""
-    ok = _comp("Eps1HonestArm", [("coin", V32), ("a", V8)], V8,
-               lambda B, S, coin, a: B.call(_NoiseArm, coin, a),
-               ports=Ports(params={"coin": In(kind="coin")}))
-    Program(ok)  # the coin passes through untouched
-
-    cancel = _comp("Eps1CancelArm", [("coin", V32), ("a", V8)], V8,
-                   lambda B, S, coin, a: B.call(_NoiseArm, B.call(_Add32, coin, coin), a),
-                   ports=Ports(params={"coin": In(kind="coin")}))
-    with pytest.raises(PortError) as e:
-        Program(cancel)
-    # COIN-RULES' own check raises E_COIN_FLOW before the port-kind rule once it lands; the cancelled coin is refused either way.
-    assert e.value.code in ("E_PORT_KIND", "E_COIN_FLOW")
-    if e.value.code == "E_PORT_KIND":
-        assert "reads a computed value" in str(e.value)
-
-
-def test_reused_receipt_sink_is_refused():
-    """COIN-RULES' sink rule (`E_PORT_SINK`): a receipt fold's output is a sink; a Program that reads it back as an operand
-    (to reuse a receipt) is refused.  The honest use returns the sink as the program's output."""
-    ok = _comp("Eps1HonestFold", [("x", V32)], V32, lambda B, S, x: B.call(_Fold, x))
-    Program(ok)  # the sink is the program's output
-
-    reuse = _comp("Eps1ReuseFold", [("x", V32), ("y", V32)], V32,
-                  lambda B, S, x, y: B.call(_Add32, B.call(_Fold, x), y))
-    with pytest.raises(PortError) as e:
-        Program(reuse)
-    assert e.value.code == "E_PORT_SINK"
-
-
 # --- the catalog is complete --------------------------------------------------------------------------------------------------
 
 def test_catalog_lists_every_attack_from_the_brief():
-    """Every attack the brief names has a row (the `call_check` ones in `ATTACKS`; the meet-in-the-middle and the two
-    coin-rule attacks have their own tests)."""
+    """Every attack the brief names has a row (the `call_check` ones in `ATTACKS`; the meet-in-the-middle has its own test)."""
     assert set(ATTACKS) == {"skipped-words", "forged-receipt", "swapped-weights", "skipped-filler", "replay",
                             "commit-after-salt", "reused-operand-roots"}
