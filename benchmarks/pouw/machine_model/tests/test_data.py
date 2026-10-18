@@ -231,6 +231,22 @@ def test_datasheet_vector(d):
     assert not over, f"data-sheet lines above the kind's measured rate alone: {over}"
 
 
+def test_datasheet_vector_sm120():
+    """DS-120 reads data/'s datasheet rows alone at its own epoch, whose lines close where they open; every kind there is
+    on DS_issue at one SMSP-cycle and every MMA form on DS_tensor, and no data-sheet line prices a kind above its time
+    alone on the current vector's census by more than decision 76's 2%."""
+    v = vector("DS-120")
+    assert {r for r in ROWS if ROWS[r].status == "datasheet"} == set(v.rows) and v.epoch == "DS-120"
+    assert all(d["since"] == d["until"] == "DS-120" for d in census_lines(M) if d["row"] in v.rows)
+    c, cur = census(M, "DS-120"), census(M, vector(M.current).epoch)
+    assert all(row.get("DS_issue") == pytest.approx(M.cycle_u) for row in c.values())
+    assert all("DS_tensor" in c[k] for k, row in cur.items() if "M" in row)
+    alone = {k: max(row.values()) for k, row in cur.items()}
+    over = {(k, r): round(u / alone[k], 4) for k, row in c.items() for r, u in row.items()
+            if r in v.rows and k in alone and u > 1.02 * alone[k]}
+    assert not over, f"data-sheet lines above the kind's time alone: {over}"
+
+
 def test_violated_rows_close():
     """VF3m-16 closes every joint row EPS1's frontiers put a point past (r20261017-034143-b1de, r20261017-035229-7c35):
     R2-R4, the KIMAD, KHFMA2 and KSHFL vertices, and the ASSUMED SHFL; KALU holds and stays."""
