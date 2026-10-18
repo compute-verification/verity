@@ -1166,6 +1166,8 @@ static int check(int argc, char** argv) {
       case 21: me.v5<128, 0>(d, 0, bc); break;
       case 22: me.v1_cg8(d, 0, bc); break;
       case 23: me.v4<256>(d, 0, bc); break;
+      case 24: me.salts(0); me.data<128, 4, false>(d, 0, bc); break;
+      case 25: me.salts(0); me.data<128, 4, false, sr::FULL, 2>(d, 0, bc); break;
       case 12: {
         static cudaStream_t s2;
         static cudaEvent_t e2[2];
@@ -1269,6 +1271,10 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   arms.push_back({"v4_64", true, [&](cudaStream_t s) { me.v4<128>(src, s); }, comps});
   arms.push_back({"v4_128", true, [&](cudaStream_t s) { me.v4<256>(src, s); }, comps});
   arms.push_back({"v1n", true, [&](cudaStream_t s) { me.salts(s); me.data<256, 2, false, sr::FULL, 2>(src, s); }, comps});
+  // 128-thread CTAs: 272 at decode, so no SM holds more than ceil(row warps / sub-partitions) of them (256-thread CTAs put
+  // two on 4 of H200's 132 SMs)
+  arms.push_back({"v1_t128", true, [&](cudaStream_t s) { me.salts(s); me.data<128, 4, false>(src, s); }, comps});
+  arms.push_back({"v1n_t128", true, [&](cudaStream_t s) { me.salts(s); me.data<128, 4, false, sr::FULL, 2>(src, s); }, comps});
   arms.push_back({"v4n_128", true, [&](cudaStream_t s) { me.v4<256, 2>(src, s); }, comps});
   arms.push_back({"v5_128", true, [&](cudaStream_t s) { me.v5<256, 0>(src, s); }, comps});
   arms.push_back({"v5n_128", true, [&](cudaStream_t s) { me.v5<256, 2>(src, s); }, comps});
