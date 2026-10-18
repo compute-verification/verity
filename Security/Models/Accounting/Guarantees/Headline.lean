@@ -16,6 +16,8 @@ Each is proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.Headlin
   event of probability at most `2^-40`, every accepted window runs at least `1 − 0.585%` of its credit.
 * `Sm120MeasuredHeadline`: sm_120 on its measured vector (VF3r-16), H1 + fx1 at SCALAR-ROUTE's `9/8` floors: outside
   an event of probability at most `2^-40`, every accepted window runs at least `1 − 0.540%` of its credit.
+* `Sm80SheetHeadline`: sm_80 (A100) at its data sheet, Dither-2S at L = 16 at SCALAR-ROUTE's ½ floors: outside an
+  event of probability at most `2^-40`, every accepted window runs at least `1 − 0.147%` of its credit.
 -/
 
 namespace Accounting.Guarantees.TS
@@ -66,5 +68,27 @@ def Sm120MeasuredHeadline : Prop :=
     pf.Pins → RightFixed Pl pf Sm120Measured.model.Nw →
     prob (fun x => Pl.accepts x ∧
       (Pl.run x).run.time / Sm120Measured.model.credit Sm120Measured.flat < 1 - 27 / 5000) ≤ (1 / 2) ^ 40
+
+/-- **sm_80's headline at the data sheet.** On DS-80's machine (`Sm80.sheet`), Dither-2S at L = 16's TS model
+(`Sm80.model`, `q = q_T = ½`, `N_w = 128`) and its floor program (`Sm80.flat`), at the ALU pipe's certificate
+(`Sm80.piStar`), luck `p = ¾` a round over `Sm80.checks = 48,000` rounds: for any window's play `Pl` and proof layer
+`pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling splits, A1–A7 and FOLD-OPT hold
+on every run, the rounds' luck is at most `¾`, the play is the proofs' (`Of`), binding fails with probability at most
+`δ_bind` a round, every proof is sound up to `δ_ZK` (`SoundAt`), the relations pin every committed value (`Pins`) and
+E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted window's time is at
+least `1 − 147/100000` (`1 − 0.147%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: Dither-2S has
+no filler, so it holds at any run. -/
+def Sm80SheetHeadline : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm80.checks (Fin 35) (Fin 23) Unit Empty) {V : Type} {nπ : ℕ}
+    (pf : ProofLayer Ω Sm80.checks nπ V) (δbind δzk : ℝ),
+    (Sm80.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
+    (∀ x, SheetClock Sm80.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
+    (∀ x, SheetTensor Sm80.sheet (Pl.run x).run) → (∀ x, SheetPipe Sm80.sheet (Pl.run x).run) →
+    (∀ x, SheetSmem Sm80.sheet (Pl.run x).run) → (∀ x, SheetWords Sm80.model (Pl.run x)) →
+    (∀ x, SheetSemantics Sm80.model (Pl.run x)) → (∀ x, FoldOpt Sm80.model (Pl.run x)) →
+    LuckAt (3 / 4) Pl.game → pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
+    pf.Pins → RightFixed Pl pf Sm80.model.Nw →
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm80.model.credit Sm80.flat < 1 - 147 / 100000) ≤
+      (1 / 2) ^ 40
 
 end Accounting.Guarantees.TS

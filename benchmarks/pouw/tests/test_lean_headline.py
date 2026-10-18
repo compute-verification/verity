@@ -1,4 +1,4 @@
-"""lean_headline: sm_120's headline instances in Lean are the machine model's data, exactly."""
+"""lean_headline: the families' headline instances in Lean are the machine model's data, exactly."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ spec.loader.exec_module(H)
 
 
 def test_the_committed_instances_are_the_exporters():
-    """Security/Definitions/Accounting/Headline/Sm120.lean and Sm120Measured.lean are what lean_headline.py writes from
-    the data, π* included."""
+    """Security/Definitions/Accounting/Headline/Sm120.lean, Sm120Measured.lean and Sm80.lean are what lean_headline.py
+    writes from the data, π* included."""
     assert H.main(["--check"]) == 0
 
 
@@ -38,3 +38,15 @@ def test_the_measured_instance_meets_its_reading():
     assert m.pistar == "JI3s_0" and m.B == H.mload(m, "JI3s_0", n) == max(H.mload(m, r, n) for r in m.rows)
     assert m.wstar == "IMMA16832" and dict(m.writers)["IMMA16832"] == 128 and not set(H.OFF_MENU) & set(dict(m.writers))
     assert H.exact_logs(m) < float(m.bound) < float(H.EPS_M) and H.EPS_M == Fraction(27, 5000)
+
+
+def test_the_sm80_instance_meets_its_headline():
+    """On DS-80 π* is the ALU pipe alone and ♭'s bound is its ALU count; the first writer kind issues nothing there, so
+    w* = κ = 0, and the bound Sm80SheetHeadline's proof reads off the identity, 1 − N_w φ*/B_♭ at φ* = 1/8, is ε_skip,
+    at most 0.147%."""
+    i = H.instance(H.SM80)
+    n = {k: i.nw.get(k, 0) + i.nf.get(k, 0) + i.ns.get(k, 0) for k in {*i.nw, *i.nf, *i.ns}}
+    assert i.pistar == "DS_alu" and i.B == H.load(i, "DS_alu", n)
+    assert H.coef(i, "DS_alu", i.writers[0][0]) == 0 and i.kappa == 0 and i.Nw == 128
+    assert [H.load(i, "DS_alu", f) for f in i.folds] == [Fraction(1, 8)]
+    assert i.bound == 1 - 16 / i.B == i.eps_skip <= i.fam.eps == Fraction(147, 100000)
