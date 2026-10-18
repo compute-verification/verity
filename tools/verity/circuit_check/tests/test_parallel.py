@@ -76,7 +76,8 @@ def _pid(_: int) -> int:
     return os.getpid()
 
 
-def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path):
+def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path, monkeypatch):
+    monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
     (tmp_path / "proc").mkdir()
     (tmp_path / "proc/meminfo").write_text("MemTotal: 2000000000 kB\nMemAvailable: 1600000000 kB\n")
     (tmp_path / "proc/self").mkdir()
