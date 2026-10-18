@@ -213,7 +213,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
         """`driver.run_requests` with one profiler session per engine step (the bare engine: no wrappers at all).
 
         [coverage D87, adapter-level] the same step-indexed arrival rule as `verity_vllm.engine.arrivals.run_requests_arrivals`: request
-        r is admitted right before iteration r["arrive_step"] (all 0 = the historical loop); an idle engine admits the next arrival at
+        r is admitted right before forward r["arrive_step"] (all 0 = the historical loop); an idle engine admits the next arrival at
         once.  The census must profile the batch composition the capture saw, or its per-step kernel counts cannot align with the
         log (G1: "census steps not aligned with log steps" on every B8-mixed cell).  Iterations that launched no device kernel
         (vLLM V1 returns the previous forward's sample, so the loop ends with one drain iteration) carry no census information and
@@ -221,8 +221,8 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
         arrivals = sorted(requests, key=lambda r: int(r.get("arrive_step") or 0))
         steps: list[dict] = []
         tokens: dict[str, list[int]] = {}
-        k = 0            # forward index (steps with device kernels)
-        it = 0           # engine.step() iterations (admission clock, as in arrivals.py)
+        k = 0            # forward index (steps with device kernels; the admission clock, as in arrivals.py)
+        it = 0           # engine.step() iterations
         n_empty = 0
         t_run0 = time.perf_counter()
         realized: dict[str, dict] = {}   # per request: planned arrive_step, admit iteration, first forward, finish forward, n_generated
@@ -234,7 +234,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
                                          "first_step": k, "finish_step": None, "finish_reason": None, "n_generated": None}
 
         while arrivals or engine.has_unfinished_requests():
-            while arrivals and int(arrivals[0].get("arrive_step") or 0) <= it:
+            while arrivals and int(arrivals[0].get("arrive_step") or 0) <= k:
                 _admit(arrivals.pop(0))
             if not engine.has_unfinished_requests():
                 _admit(arrivals.pop(0))

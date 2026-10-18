@@ -5,7 +5,10 @@ request `r` is added to the engine right before engine step `r.arrive_step` (0 =
 behaviour).  Arrivals are keyed to the engine-step counter, never to wall time, so the observer run, the control run and the
 non-interference variants schedule the same batch at every step -- dynamic batch membership becomes a declared, reproducible
 fact of the workload.  If every earlier request has finished before the next arrival's step, the next arrival is admitted at
-once (the engine would otherwise idle); the realized arrival step is what `timing["requests"]` records.
+once (the engine would otherwise idle); the realized arrival step is what `timing["requests"]` records, and
+`realized_arrive_steps` is the same rule over the declaration (what the Build's launch batches read).  The counter is the
+forwards run so far (`ForwardCounter`), not `step()` iterations: under the output lag the drain iteration after an idle gap runs
+no forward, so an iteration clock would admit every later arrival one forward early per gap.
 
 `timing["requests"][rid]` = {arrive_step (planned), arrive_step_realized, first_step (the engine step that ran the request's
 prefill), finish_step, finish_reason, n_generated}.  With every request at step 0 the loop is the driver's loop.
@@ -115,6 +118,48 @@ def scheduled_tokens(computed: list[dict[str, int]], prompt_len: dict[str, int])
     return out
 
 
+def realized_arrive_steps(requests: list[dict[str, Any]]) -> list[int]:
+    """Each request's realized arrival (a forward index, in input order) when every request runs to its max_tokens with an
+    unchunked prefill: its `arrive_step`, or, when every request admitted before it has finished by then, the forward right after
+    the last of them (the idle-gap rule of `run_requests_arrivals`)."""
+    out = [0] * len(requests)
+    last = -1                                   # the last forward of the requests admitted so far
+    for i in sorted(range(len(requests)), key=lambda i: (int(requests[i].get("arrive_step") or 0), i)):
+        out[i] = min(int(requests[i].get("arrive_step") or 0), last + 1)
+        last = max(last, out[i] + max(int(requests[i]["max_tokens"]), 1) - 1)
+    return out
+
+
+class ForwardCounter:
+    """The forwards an engine has run so far, kept across `step()` calls by the rule `run_requests_arrivals` records afterwards
+    (module docstring "Which iterations ran a forward"): the scheduler's `num_computed_tokens` advanced; without it, every
+    iteration under an output lag of 0 (the engine's structural lag, else the lag measured so far), otherwise an iteration after
+    which the engine still has unfinished requests.  `n` is the engine step the next forward runs, the clock arrivals are keyed to."""
+
+    def __init__(self, eng: Any, scheduler: Any | None = None) -> None:
+        self.eng, self.sched, self.structural = eng, scheduler, structural_output_lag(eng)
+        self.n = self.iterations = 0
+        self.first_output: int | None = None
+        self.computed: dict[str, int] = {}
+
+    def stepped(self, outs: list[Any]) -> tuple[bool, dict[str, int] | None]:
+        """Count the `step()` iteration that just returned `outs`: whether it ran a forward, and the scheduler snapshot it read
+        (None once a read fails or without a scheduler; the counter then keeps the lag rule)."""
+        if outs and self.first_output is None:
+            self.first_output = self.iterations
+        snap = _snapshot_computed(self.sched) if self.sched is not None else None
+        if snap is not None:
+            ran = any(nc > self.computed.get(rid, 0) for rid, nc in snap.items())
+            self.computed.update(snap)
+        else:
+            self.sched = None
+            lag = self.structural if self.structural is not None else self.first_output
+            ran = lag == 0 or bool(self.eng.has_unfinished_requests())
+        self.iterations += 1
+        self.n += ran
+        return ran, snap
+
+
 def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[Any], Any], *,
                           on_step: Callable[[list[Any]], None] | None = None, scheduler: Any | None = None,
                           clock: Callable[[], float] = time.perf_counter,
@@ -164,8 +209,9 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
         t_add += clock() - ta
         admit_iter[r.request_id] = steps
 
+    forwards = ForwardCounter(eng, sched)
     while pending or eng.has_unfinished_requests():
-        while pending and int(getattr(reqs[pending[0]], "arrive_step", 0) or 0) <= steps:
+        while pending and int(getattr(reqs[pending[0]], "arrive_step", 0) or 0) <= forwards.n:
             _admit(pending.pop(0))
         if not eng.has_unfinished_requests():
             _admit(pending.pop(0))                 # idle gap: bring the next arrival forward (recorded as its realized step)
@@ -176,8 +222,8 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
             step_s.append(clock() - ts)
             step_outs.append(len(outs))
         nonempty.append(bool(outs))
+        _, snap = forwards.stepped(outs)
         if sched is not None:
-            snap = _snapshot_computed(sched)
             if snap is None:
                 sched = None                        # a failed read: the schedule source is abandoned for this run, not half-used
             else:

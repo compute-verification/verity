@@ -69,7 +69,7 @@ prof.apply_env()
 
 import torch  # noqa: E402
 
-from verity_vllm.engine import served as SV, vllm_adapter as va  # noqa: E402
+from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
@@ -203,10 +203,10 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
     finished: set[str] = set()
     step_t: list[float] = []
     step_tokens: list[int] = []
-    it = 0
+    it, forwards = 0, AR.ForwardCounter(eng, AR.scheduler_of(engine.llm))
     t0 = time.perf_counter()
     while pending or eng.has_unfinished_requests():
-        while pending and int(requests[pending[0]].get("arrive_step") or 0) <= it:
+        while pending and int(requests[pending[0]].get("arrive_step") or 0) <= forwards.n:
             r = requests[pending.pop(0)]
             eng.add_request(request_id=r["request_id"], prompt={"prompt_token_ids": list(r["prompt_token_ids"])},
                             params=va.sampling_params(r, sampling))
@@ -215,7 +215,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
             eng.add_request(request_id=r["request_id"], prompt={"prompt_token_ids": list(r["prompt_token_ids"])},
                             params=va.sampling_params(r, sampling))
             continue
-        outs = eng.step()
+        forwards.stepped(outs := eng.step())
         now = time.perf_counter()
         step_t.append(now)
         n = 0
@@ -284,8 +284,8 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
 def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, declared: dict[str, int], caps: dict[str, int]) -> dict:
     """[R16 compiled, H100 B8] The engine's schedule of record vs the declaration.  `request_rows` is the scheduler's per-committed-step row
     order as the collector recorded it (which requests ran in which step); a request's OBSERVED arrival is the first committed step it ran
-    in.  The serving loop admits a request at its declared arrive_step OR immediately when the engine is idle (nothing running), and an
-    engine iteration that runs no forward pass (the bookkeeping step after the last request of a step finishes) advances no committed step,
+    in.  The serving loop admits a request once the engine's forwards reach its declared arrive_step (`arrivals.ForwardCounter`: the
+    bookkeeping iteration after the last request finishes runs no forward pass) OR immediately when the engine is idle (nothing running),
     so on a workload with gaps (r0's cap shorter than the next arrival) the committed-step axis and the declared arrive_steps drift apart --
     the required population must be placed on the axis the record is written on.  It is USED only when every declared request was
     observed, each ran a contiguous run of steps (no preemption) of exactly its expected count; otherwise the declaration stands and coverage
