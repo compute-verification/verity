@@ -731,6 +731,22 @@ def test_a_vm_can_boot_on_another_ones_kept_data_disk():
         assert 'disk_id "$DATA_NAME"' in (NEBIUS / script).read_text() and '"$VM_NAME-data"' not in (NEBIUS / script).read_text()
 
 
+@pytest.mark.parametrize("path, nodes", [("now", 2), ("quota", 2), ("reattach", 1)])
+def test_n1s_replacement_plan_prints_each_create_for_a_staged_node_and_calls_nothing(path, nodes):
+    """n1_replacement.sh plan (INF-57) prints the creates, which spend, for the coordinator: it runs no Nebius call, and each node it
+    creates is one deploy.toml stages, so the install it prints next has entries to install."""
+    r = subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", path], capture_output=True, text=True,
+                       env={**os.environ, "NEBIUS_BIN": "/bin/false", "PATH": "/usr/bin:/bin"})
+    assert r.returncode == 0, r.stderr
+    creates = re.findall(r"NEBIUS_VM_NAME=(\S+) .*\\\n\s+bash launch.sh --max-hours \d+ --yes --register --deadline \S+\)", r.stdout)
+    staged = {n for n, c in tomllib.loads((NEBIUS / "deploy.toml").read_text())["nodes"].items() if c.get("staged")}
+    assert len(creates) == nodes and set(creates) <= staged
+    for n in creates:
+        assert f"research deploy install {n} --by infra --ref origin/main --apply" in r.stdout
+    assert ("NEBIUS_DATA_DISK=vy-nebius-1-data" in r.stdout) == (path == "reattach")
+    assert subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", "elsewhere"], capture_output=True).returncode == 2
+
+
 def test_launch_refuses_to_spend_without_yes_and_a_lease():
     r = launch("--max-hours", "4")
     assert r.returncode == 1 and "pass --yes" in r.stderr

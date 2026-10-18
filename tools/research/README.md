@@ -202,7 +202,8 @@ A machine that isn't a RunPod pod is `provider = "ssh"`: `host`, and optionally 
 `rate_usd_per_hour` (the attempts' cost rate), reached with the same research key. `research pods register NAME --host ADDR
 --user U --rate R --project P` writes it, refusing a host where `hostname` doesn't answer over ssh; `research pods ssh NAME`
 reaches it. The one such machine is the Nebius server `vy-nebius-1` (`src/research/pods/nebius/`): `launch.sh` brings it up (`--dry-run`
-needs no credentials), `teardown.sh` stops or deletes it, `check.py` is its bootstrap check, `prefetch.py` fills its weight
+needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` prints the steps that replace it with CPU nodes
+at its 19 Oct stop and runs their read-only preflight, `check.py` is its bootstrap check, `prefetch.py` fills its weight
 cache from `weights.tsv`, and its lease is `sh/lease.sh` with `LEASE_MACHINE_ID` and a stop command in place of RunPod's key.
 Its runs share its GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: one flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 
