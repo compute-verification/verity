@@ -35,3 +35,6 @@ def test_the_table_charges_a_longer_life_a_larger_stock():
     assert by[(60.0, 10)]["stock_GB[conjectured]"] == pytest.approx(10 * by[(60.0, 1)]["stock_GB[conjectured]"])
     assert by[(60.0, 1)]["law[conjectured]"] < by[(60.0, 1)]["law[best found]"]
     assert by[(60.0, 2)]["rekey_step_share"] == pytest.approx(2 * by[(60.0, 2)]["rekey_gpu_share"])
+    # under the origin clock a re-key is a recompute: the re-prefill's time on top of the encode's
+    o = F.table({**phase, "frontier_origin": grid}, 1e12, 1e11, 1e4, 1e9, "origin", 3e9)
+    assert o[0]["rekey_gpu_share"] == pytest.approx(rows[0]["rekey_gpu_share"] * (1 + 1 / 3))

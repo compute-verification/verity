@@ -1,7 +1,8 @@
 """`serve.py`'s events and steps as the frontier's inputs: for each phase, `lifetimes.analyze` over the phase after its
 warm-up, at carrier stocks on a grid of the pool (`STOCKS`, shares of `pool_bytes`), and the step model's six
 quantities (T, X, Q, K, n, n0) summed over 1 s windows, each step's spread over its span, so any linear units model
-gives its units a window (`frontier.py`). Writes analysis.json beside the inputs.
+gives its units a window (`frontier.py`), and the token rows a second of the steps with at least `PREFILL_ROWS` rows
+(the rate a recompute from fresh inputs re-prefills at). Writes analysis.json beside the inputs.
 
     python analyze.py OUT_DIR [--warmup S]
 """
@@ -20,6 +21,7 @@ import lifetimes  # noqa: E402
 
 STOCKS = (0.0, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0)
 MODEL = ("T", "X", "Q", "K", "n", "n0")
+PREFILL_ROWS = 2048  # a step of at least this many token rows is mostly prefill: its rows a second are the re-prefill rate
 
 
 def binned(steps: dict[str, np.ndarray], t0: float, t1: float, width: float = 1.0) -> dict[str, list[float]]:
@@ -48,7 +50,7 @@ def main() -> int:
     a = ap.parse_args()
     serve = json.loads((a.out / "serve.json").read_text())
     z = np.load(a.out / "events.npz")
-    ev = {"t": z["t"], "kind": z["kind"], "block": z["block"]}
+    ev = {k: z[k] for k in ("t", "kind", "block", "origin") if k in z.files}
     steps = lifetimes.steps_arrays(z["steps"])
     pool = serve["pool_bytes"]
     res = {"format": "verity-kv-lifetime/analysis/v0", "serve": {k: v for k, v in serve.items() if k != "phases"},
@@ -68,6 +70,9 @@ def main() -> int:
         r["model_windows_1s"] = binned(steps, t0 + warm, t1)
         r["model_totals"] = {k: float(steps[k][busy].sum()) for k in MODEL}
         r["busy_s"] = float((steps["t1"][busy] - steps["t0"][busy]).sum())
+        big = busy & (steps["T"] >= PREFILL_ROWS)
+        r["prefill_rows_per_s"] = float(steps["T"][big].sum()) / max(
+            1e-12, float((steps["t1"][big] - steps["t0"][big]).sum())) if big.any() else None
         res["phases"].append(r)
         print(f"phase {pi} rate {ph['rate']}: held mean {r['occupancy']['held_bytes_mean'] / 1e9:.2f} GB of "
               f"{pool / 1e9:.1f}, held life p50 {r['held_life_s']['quantiles_byte_weighted']['0.5']:.1f} s p90 "

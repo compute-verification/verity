@@ -19,10 +19,13 @@ plan: a cached block no request holds is resident but credited nothing.
 
 - lifetimes: held life (ALLOC to the last release) and resident life (ALLOC to eviction), weighted by bytes (every
   block is `block_bytes`; a request's partly filled last block counts whole);
-- stock ages: the share of held byte-seconds older than x (content age, from ALLOC);
+- stock ages: the share of held byte-seconds older than x, from ALLOC (`stock_age_tail`) and from the content's
+  origin (`stock_origin_age_tail`);
 - occupancy: held and cached blocks on a grid;
 - for each window T and lifetime cap L (an appended block joins its window and no plan L or more windows later may
-  hold it, PROTOCOL.md §4) and each policy, the share of held byte-seconds credited and the encode bytes it costs:
+  hold it, PROTOCOL.md §4) and each policy, the share of held byte-seconds credited and the encode bytes it costs,
+  with caps counted from the block's append (`frontier`, the protocol's cap) and from its content's origin
+  (`frontier_origin`, a life on the whole provenance, where a cap is a recompute from fresh inputs):
     rekey    every resident block is re-keyed (re-encoded under a fresh coin) at each cap it outlives, cached ones
              included, so every held byte-second is credited
     held     a block is re-keyed at a cap only if a request holds it then, and released otherwise (later hits
@@ -46,20 +49,27 @@ STEP_FIELDS = ("t0", "t1", "T", "X", "Q", "K", "n", "n0", "running", "waiting", 
 
 
 class Recorder:
-    """Events of one BlockPool, on `clock` (seconds)."""
+    """Events of one BlockPool, on `clock` (seconds). Each event also carries its block's content origin: the oldest
+    input its values depend on. `origin` is the allocating request's while a caller (`allocating`) names one, and a
+    prefix hit lowers it to the hit content's, so a turn that reuses cached history inherits the history's origin;
+    with no request named a block's origin is its allocation time."""
 
     def __init__(self, clock: Callable[[], float] = time.perf_counter) -> None:
         self.clock = clock
         self.t: list[float] = []
         self.k: list[int] = []
         self.b: list[int] = []
+        self.o: list[float] = []
+        self.origin: float | None = None
+        self.block_origin: dict[int, float] = {}
 
-    def log(self, kind: int, blocks: Iterable[int]) -> None:
-        now = self.clock()
+    def log(self, kind: int, blocks: Iterable[int], now: float | None = None) -> None:
+        now = self.clock() if now is None else now
         for bid in blocks:
             self.t.append(now)
             self.k.append(kind)
             self.b.append(bid)
+            self.o.append(self.block_origin.get(bid, now))
 
     def install(self, pool) -> Callable[[], None]:
         """Wrap `pool`'s get_new_blocks, touch, free_blocks and reset_prefix_cache; returns the uninstaller."""
@@ -67,7 +77,10 @@ class Recorder:
 
         def get_new_blocks(num_blocks):
             out = get0(num_blocks)
-            self.log(ALLOC, (blk.block_id for blk in out))
+            now = self.clock()
+            for blk in out:
+                self.block_origin[blk.block_id] = now if self.origin is None else min(now, self.origin)
+            self.log(ALLOC, (blk.block_id for blk in out), now)
             return out
 
         def touch(blocks):
@@ -77,6 +90,9 @@ class Recorder:
             out = touch0(blocks)
             self.log(HIT, hits)
             self.log(SHARE, shares)
+            if self.origin is not None:
+                for bid in hits + shares:
+                    self.origin = min(self.origin, self.block_origin.get(bid, self.origin))
             return out
 
         def free_blocks(ordered_blocks):
@@ -102,21 +118,27 @@ class Recorder:
 
         return uninstall
 
+    def allocating(self, origin: float | None) -> None:
+        """Name the request whose allocations follow by its origin (None: none)."""
+        self.origin = origin
+
     def arrays(self) -> dict[str, np.ndarray]:
         return {"t": np.asarray(self.t, dtype=np.float64), "kind": np.asarray(self.k, dtype=np.int8),
-                "block": np.asarray(self.b, dtype=np.int32)}
+                "block": np.asarray(self.b, dtype=np.int32), "origin": np.asarray(self.o, dtype=np.float64)}
 
 
-def parse(t: np.ndarray, kind: np.ndarray, block: np.ndarray, t_end: float) -> dict[str, np.ndarray]:
-    """Content epochs, held segments and cached spans from time-ordered events. Spans open at `t_end` close there and
-    are flagged censored."""
+def parse(t: np.ndarray, kind: np.ndarray, block: np.ndarray, t_end: float,
+          origin: np.ndarray | None = None) -> dict[str, np.ndarray]:
+    """Content epochs, held segments and cached spans from time-ordered events, each epoch with its content's origin
+    (the ALLOC event's, at most its time). Spans open at `t_end` close there and are flagged censored."""
     order = np.argsort(block, kind="stable")
-    ep_a, ep_res, ep_held, ep_cens, ep_hits = [], [], [], [], []
+    ep_a, ep_res, ep_held, ep_cens, ep_hits, ep_o = [], [], [], [], [], []
     sg_s, sg_e, sg_ep = [], [], []
     ca_s, ca_e = [], []
     resets = t[kind == RESET]
     # per block: state 0 empty, 1 held, 2 cached; the open epoch's index, the open segment's start, the cached start
     tb, kb, bb = t[order], kind[order], block[order]
+    ob = t[order] if origin is None else origin[order]
     i, n = 0, len(tb)
     while i < n:
         bid = bb[i]
@@ -145,6 +167,7 @@ def parse(t: np.ndarray, kind: np.ndarray, block: np.ndarray, t_end: float) -> d
                     ep_res[ep] = tx
                 ep = len(ep_a)
                 ep_a.append(tx), ep_res.append(t_end), ep_held.append(t_end), ep_cens.append(True), ep_hits.append(0)
+                ep_o.append(min(tx, ob[x]))
                 state, seg0 = 1, tx
             elif kx == HIT:
                 if state != 2:
@@ -174,7 +197,7 @@ def parse(t: np.ndarray, kind: np.ndarray, block: np.ndarray, t_end: float) -> d
         i = j
     f8, i8 = np.float64, np.int64
     return {"a": np.asarray(ep_a, f8), "res_end": np.asarray(ep_res, f8), "held_end": np.asarray(ep_held, f8),
-            "censored": np.asarray(ep_cens, bool), "hits": np.asarray(ep_hits, i8),
+            "censored": np.asarray(ep_cens, bool), "hits": np.asarray(ep_hits, i8), "origin": np.asarray(ep_o, f8),
             "seg_start": np.asarray(sg_s, f8), "seg_end": np.asarray(sg_e, f8), "seg_epoch": np.asarray(sg_ep, i8),
             "cached_start": np.asarray(ca_s, f8), "cached_end": np.asarray(ca_e, f8)}
 
@@ -208,18 +231,25 @@ def caps(a: np.ndarray, T: float, L: int, phase: float) -> np.ndarray:
     return phase + (w0 + L) * T
 
 
-def policy(ep: dict[str, np.ndarray], T: float, L: int, phase: float, name: str) -> dict[str, np.ndarray]:
-    """For one phase: each epoch's re-keys and each held segment's credited span [start, cut) under `name`."""
-    c1 = caps(ep["a"], T, L, phase)
+def policy(ep: dict[str, np.ndarray], T: float, L: int, phase: float, name: str,
+           clock: str = "block") -> dict[str, np.ndarray]:
+    """For one phase: each epoch's re-keys and each held segment's credited span [start, cut) under `name`. The caps
+    run from the block's append (`clock` "block", the protocol's lifetime cap) or from its content's origin
+    ("origin": a life on the whole provenance, where a cap is a recompute from fresh inputs, and a block whose origin's
+    first cap is before its append is never credited under expire)."""
     life = L * T
+    c1 = caps(ep["a"] if clock == "block" else ep["origin"], T, L, phase)
     s, e, k = ep["seg_start"], ep["seg_end"], ep["seg_epoch"]
     if name == "expire":
         return {"rekeys": np.zeros(len(ep["a"]), np.int64), "cut": np.minimum(e, np.maximum(s, c1[k]))}
+    # the first cap after the append: caps past the origin's that fall before the block existed don't count
+    first = c1 + np.where(ep["a"] >= c1, np.floor((ep["a"] - c1) / life) + 1, 0) * life
     if name == "rekey":
-        n = np.where(ep["res_end"] > c1, np.floor((ep["res_end"] - c1) / life) + 1, 0).astype(np.int64)
+        n = np.where(ep["res_end"] > first, np.ceil((ep["res_end"] - first) / life), 0).astype(np.int64)
         return {"rekeys": n, "cut": e.copy()}
     if name != "held":
         raise ValueError(name)
+    c1 = first
     # re-keyed at a cap a request holds it through; released at the first cap it is idle (cached), its later
     # segments uncredited. Segments keyed (epoch, start in ms) to find the one a cap falls in.
     order = np.lexsort((s, k))
@@ -264,7 +294,7 @@ def analyze(ev: dict[str, np.ndarray], steps: dict[str, np.ndarray], t_end: floa
             stocks: Sequence[float] = (), grid_s: float = 1.0) -> dict:
     """The report for events and steps on one clock, over [t_start, t_end): epochs that start before t_start are
     dropped from the lifetime distributions, and credited shares are over steps inside the interval."""
-    ep = parse(ev["t"], ev["kind"], ev["block"], t_end)
+    ep = parse(ev["t"], ev["kind"], ev["block"], t_end, ev.get("origin"))
     keep = ep["a"] >= t_start
     a, he, re, cens = ep["a"][keep], ep["held_end"][keep], ep["res_end"][keep], ep["censored"][keep]
     held_life, res_life = he - a, re - a
@@ -272,7 +302,7 @@ def analyze(ev: dict[str, np.ndarray], steps: dict[str, np.ndarray], t_end: floa
     span = max(1e-12, t_end - t_start)
     points = (0.5, 1, 2, 5, 10, 20, 30, 60, 120, 180, 300, 600, 1200)
     qs = (0.1, 0.25, 0.5, 0.75, 0.9, 0.99)
-    origin = ep["a"][ep["seg_epoch"]]
+    appended, origin = ep["a"][ep["seg_epoch"]], ep["origin"][ep["seg_epoch"]]
     insteps = (steps["t0"] >= t_start) & (steps["t1"] <= t_end)
     st = {k: v[insteps] for k, v in steps.items()}
     grid = np.arange(t_start, t_end, grid_s)
@@ -287,31 +317,34 @@ def analyze(ev: dict[str, np.ndarray], steps: dict[str, np.ndarray], t_end: floa
         "resident_life_s": {"quantiles_byte_weighted": dict(zip(map(str, qs), weighted_quantiles(res_life, w, qs))),
                             "share_longer_than": {str(p): float(np.mean(res_life > p)) if len(a) else 0.0
                                                   for p in points}},
-        "stock_age_tail": {str(p): age_tail(ep["seg_start"], ep["seg_end"], origin, p) for p in points},
+        "stock_age_tail": {str(p): age_tail(ep["seg_start"], ep["seg_end"], appended, p) for p in points},
+        "stock_origin_age_tail": {str(p): age_tail(ep["seg_start"], ep["seg_end"], origin, p) for p in points},
         "occupancy": {"grid_s": grid_s, "t0": t_start,
                       "held_blocks": count_at(ep["seg_start"], ep["seg_end"], grid).tolist(),
                       "cached_blocks": count_at(ep["cached_start"], ep["cached_end"], grid).tolist()},
-        "frontier": {}, "delayed": {},
+        "frontier": {}, "frontier_origin": {}, "delayed": {},
     }
     hb = out["occupancy"]["held_blocks"]
     out["occupancy"]["held_bytes_mean"] = float(np.mean(hb)) * block_bytes if hb else 0.0
     out["occupancy"]["held_bytes_p10_p50_p90"] = [float(np.percentile(hb, q)) * block_bytes for q in (10, 50, 90)] if hb else []
-    for T in windows:
-        for L in caps_L:
-            row = {}
-            for name in ("rekey", "held", "expire"):
-                rk, cred = [], []
-                for ph in range(phases):
-                    p = policy(ep, T, L, T * ph / phases, name)
-                    rk.append(float(p["rekeys"][keep].sum()))
-                    cred.append(step_credit(st, ep["seg_start"], p["cut"], ep["seg_start"], ep["seg_end"],
-                                            block_bytes, stocks))
-                row[name] = {"rekey_bytes_per_s": float(np.mean(rk)) * block_bytes / span,
-                             "credited_before_stock": float(np.mean([c["credited_before_stock"] for c in cred])),
-                             "by_stock": {C: float(np.mean([c["by_stock"][C] for c in cred]))
-                                          for C in cred[0]["by_stock"]},
-                             "held_bytes_mean": cred[0]["held_bytes_mean"]}
-            out["frontier"][f"T={T:g},L={L}"] = row
+    clocks = ("block", "origin") if "origin" in ev else ("block",)
+    for clock, key in zip(clocks, ("frontier", "frontier_origin")):
+        for T in windows:
+            for L in caps_L:
+                row = {}
+                for name in ("rekey", "held", "expire"):
+                    rk, cred = [], []
+                    for ph in range(phases):
+                        p = policy(ep, T, L, T * ph / phases, name, clock)
+                        rk.append(float(p["rekeys"][keep].sum()))
+                        cred.append(step_credit(st, ep["seg_start"], p["cut"], ep["seg_start"], ep["seg_end"],
+                                                block_bytes, stocks))
+                    row[name] = {"rekey_bytes_per_s": float(np.mean(rk)) * block_bytes / span,
+                                 "credited_before_stock": float(np.mean([c["credited_before_stock"] for c in cred])),
+                                 "by_stock": {C: float(np.mean([c["by_stock"][C] for c in cred]))
+                                              for C in cred[0]["by_stock"]},
+                                 "held_bytes_mean": cred[0]["held_bytes_mean"]}
+                out[key][f"T={T:g},L={L}"] = row
     seg_ep = ep["seg_epoch"]
     for tau in taus:
         appended = (he - a) > tau

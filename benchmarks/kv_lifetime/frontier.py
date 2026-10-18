@@ -13,7 +13,9 @@ R_cap is a step model's units (a JSON of `token`, `sample`, attention `coefficie
 `--models` gives them under `--model-name` and `--lever`) over the run's own steps, the largest over 1 s windows
 (`trace`), or a node peak given outright (`--r-cap-node`). The encode cost is bytes a second over `--encode-Bps`, one
 GPU's encode rate: the re-keys' (`rekey`), every written block's append (`write`), and the append of only the blocks
-older than tau (`delayed`, with the credit it loses).
+older than tau (`delayed`, with the credit it loses). `--clock origin` reads the frontier with caps from each block's
+content origin (`lifetimes.policy`), where a re-key is a recompute: the re-prefill at the run's own prefill rate, then
+the encode.
 
     python frontier.py RUN/out/analysis.json --models step_models.json --model-name llama31-8b \
         --lever "+ V' at write + Bf16ToF32 free" --engines 8 [--phase -1] [--json OUT]
@@ -61,12 +63,16 @@ def share_at(by_stock: dict[str, float], pool: float, C: float) -> float:
     return float(np.interp(C / pool, xs[o], ys[o]))
 
 
-def table(phase: dict, pool: float, r_cap_engine: float, r_in_engine: float, encode_bps: float) -> list[dict]:
+def table(phase: dict, pool: float, r_cap_engine: float, r_in_engine: float, encode_bps: float,
+          clock: str = "block", recompute_bps: float | None = None) -> list[dict]:
+    """Rows of the frontier under `clock`'s caps; under "origin" a cap is a recompute, re-prefilled at
+    `recompute_bps` (KV bytes a second) and then encoded."""
     rows = []
     busy_share = phase["busy_s"] / max(1e-12, phase["interval_s"][1] - phase["interval_s"][0])
+    key = "frontier" if clock == "block" else "frontier_origin"
     for T, Ls in GRID:
         for L in Ls:
-            fr = phase["frontier"][f"T={T:g},L={L}"]
+            fr = phase[key][f"T={T:g},L={L}"]
             row = {"T": T, "L": L, "life_s": L * T, "held_GB": fr["rekey"]["held_bytes_mean"] / 1e9}
             for e, E in E_WORD.items():
                 C = (128 * r_cap_engine / E + r_in_engine) * L * T
@@ -76,7 +82,8 @@ def table(phase: dict, pool: float, r_cap_engine: float, r_in_engine: float, enc
                 for p in ("rekey", "held", "expire"):
                     row[f"{p}[{e}]"] = share_at(fr[p]["by_stock"], pool, C)
             for p in ("rekey", "held"):
-                row[f"{p}_gpu_share"] = fr[p]["rekey_bytes_per_s"] / encode_bps
+                row[f"{p}_gpu_share"] = fr[p]["rekey_bytes_per_s"] * (
+                    1 / encode_bps + (1 / recompute_bps if clock == "origin" else 0.0))
                 row[f"{p}_step_share"] = row[f"{p}_gpu_share"] / max(1e-12, busy_share)
             row["expire_uncapped"] = fr["expire"]["credited_before_stock"]
             rows.append(row)
@@ -94,6 +101,8 @@ def main() -> int:
     ap.add_argument("--r-cap-node", type=float, default=None, help="a node peak R_cap instead of the run's own")
     ap.add_argument("--r-in-node", type=float, default=1e5)
     ap.add_argument("--encode-Bps", type=float, default=ENCODE_BPS)
+    ap.add_argument("--clock", choices=("block", "origin"), default="block",
+                    help="caps from each block's append, or from its content's origin (a cap is then a recompute)")
     ap.add_argument("--json", type=Path, default=None)
     a = ap.parse_args()
     an = json.loads(a.analysis.read_text())
@@ -102,9 +111,13 @@ def main() -> int:
     models = json.loads(a.models.read_text())["models"][a.model_name]
     rc = r_cap(models[a.lever], ph)
     r_engine = a.r_cap_node / a.engines if a.r_cap_node else rc["peak"]
-    rows = table(ph, pool, r_engine, a.r_in_node / a.engines, a.encode_Bps)
+    recompute = (ph.get("prefill_rows_per_s") or 0.0) * an["serve"]["kv_bytes_per_token"]
+    if a.clock == "origin" and not (ph.get("frontier_origin") and recompute):
+        raise SystemExit(f"{a.analysis} has no origin-clock frontier or prefill rate: rerun serve.py and analyze.py")
+    rows = table(ph, pool, r_engine, a.r_in_node / a.engines, a.encode_Bps, a.clock, recompute or None)
     write = ph["written_bytes_per_s"] / a.encode_Bps
     out = {"analysis": str(a.analysis), "phase": a.phase, "lever": a.lever, "engines": a.engines, "pool_bytes": pool,
+           "clock": a.clock, "recompute_Bps": recompute or None,
            "r_cap_trace_engine": rc, "r_cap_node_used": r_engine * a.engines, "r_in_node": a.r_in_node,
            "encode_Bps": a.encode_Bps, "write_gpu_share": write,
            "delayed": {tau: {"gpu_share": d["append_bytes_per_s"] / a.encode_Bps, "credit_lost": d["credit_lost"]}

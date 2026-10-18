@@ -17,7 +17,9 @@ Output lengths are forced (`ignore_eos`, `max_tokens` the reply's length).
 aborted, the pending turns dropped and the prefix cache emptied. A step is timed from its `schedule` to its
 `update_from_output` (sync scheduling), and records T (token rows), X (sampled rows), Q (the token rows' keys), K (the
 scheduled requests' keys after the step), n (requests), n0 (requests' first steps), the running and waiting requests
-and the pool's free blocks, on the clock of `lifetimes.Recorder` (seconds from the first phase's start).
+and the pool's free blocks, on the clock of `lifetimes.Recorder` (seconds from the first phase's start). A request's
+blocks carry its origin (`lifetimes.Recorder.allocating`): its submit time, lowered by the prefix hits it takes, so a
+turn that reuses cached history inherits the history's origin while a re-prefilled one starts fresh.
 
 Writes to `--out`: events.npz (the recorder's arrays and the steps), serve.json (arguments, engine facts, each
 phase's throughput, latency and occupancy) and serve.log.
@@ -187,6 +189,19 @@ def main() -> int:
         return out
 
     sched.schedule, sched.update_from_output = schedule, update_from_output
+    origin_by_rid: dict[str, float] = {}
+    alloc0 = sched.kv_cache_manager.allocate_slots
+
+    def allocate_slots(request, *args, **kwargs):
+        rid = request.request_id
+        rec.allocating(origin_by_rid.get(rid, clock()))
+        try:
+            return alloc0(request, *args, **kwargs)
+        finally:
+            origin_by_rid[rid] = rec.origin
+            rec.allocating(None)
+
+    sched.kv_cache_manager.allocate_slots = allocate_slots
 
     rng = random.Random(a.seed)
     order = list(range(len(convs)))
@@ -243,9 +258,10 @@ def main() -> int:
         def submit(prompt, olen, sess=None):
             rid = f"p{pi}-{rid_n[0]}"
             rid_n[0] += 1
+            live[rid] = {"t": clock(), "first": None, "olen": olen, "plen": len(prompt)}
+            origin_by_rid[rid] = live[rid]["t"]
             eng.add_request(rid, TokensPrompt(prompt_token_ids=prompt),
                             SamplingParams(max_tokens=olen, ignore_eos=True, temperature=0.0))
-            live[rid] = {"t": clock(), "first": None, "olen": olen, "plen": len(prompt)}
             if sess is not None:
                 sessions[rid] = sess
 
@@ -275,6 +291,7 @@ def main() -> int:
                         ttft.append(t1 - st["t"])
                     if o.finished:
                         live.pop(o.request_id)
+                        origin_by_rid.pop(o.request_id, None)
                         done_n += 1
                         gen = list(o.outputs[0].token_ids)
                         out_tok += len(gen)

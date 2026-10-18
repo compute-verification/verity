@@ -121,8 +121,41 @@ def test_rekey_counts_the_caps_a_resident_block_outlives():
     assert lt.policy(ep, 10.0, 3, 0.0, "rekey")["rekeys"].tolist() == [0]
     ex = lt.policy(ep, 10.0, 1, 0.0, "expire")
     assert ex["rekeys"].tolist() == [0] and ex["cut"].tolist() == [10.0]
-    # a phase moves the windows: windows start at 5 + 10 j, so the block is in window -1 and its cap is at 5
-    assert lt.policy(ep, 10.0, 1, 5.0, "rekey")["rekeys"].tolist() == [3]
+    # a phase moves the windows: windows start at 5 + 10 j, so the block is in window -1 and its caps are at 5 and 15
+    # (the one at 25 is its eviction)
+    assert lt.policy(ep, 10.0, 1, 5.0, "rekey")["rekeys"].tolist() == [2]
+
+
+def test_the_recorder_carries_a_requests_origin_through_its_prefix_hits():
+    pool, clock = Pool(4), Clock()
+    rec = lt.Recorder(clock)
+    rec.install(pool)
+    rec.allocating(0.0)
+    (a,) = pool.get_new_blocks(1)
+    a.block_hash = "h"
+    pool.free_blocks([a])
+    clock.now = 10.0
+    rec.allocating(10.0)
+    pool.touch([a])  # a later turn hits the cached history and inherits its origin
+    pool.get_new_blocks(1)
+    assert rec.origin == 0.0
+    rec.allocating(None)
+    clock.now = 20.0
+    pool.get_new_blocks(1)
+    ev = rec.arrays()
+    assert ev["kind"].tolist() == [ALLOC, CACHE, HIT, ALLOC, ALLOC]
+    assert ev["origin"].tolist() == [0.0, 0.0, 0.0, 0.0, 20.0]
+
+
+def test_the_origin_clock_caps_a_block_from_its_contents_origin():
+    # appended at 25 from content whose origin is 3, held to 45; T = 10, L = 1
+    t, k, b = events([(25, ALLOC, 0), (45, FREE, 0)])
+    ep = lt.parse(t, k, b, t_end=50.0, origin=np.array([3.0, 3.0]))
+    assert ep["origin"].tolist() == [3.0]
+    assert lt.policy(ep, 10.0, 1, 0.0, "expire")["cut"].tolist() == [30.0]
+    assert lt.policy(ep, 10.0, 1, 0.0, "expire", "origin")["cut"].tolist() == [25.0]  # past life at its append
+    assert lt.policy(ep, 10.0, 1, 0.0, "rekey", "origin")["rekeys"].tolist() == [2]  # recomputed at 30 and 40
+    assert lt.policy(ep, 10.0, 1, 0.0, "held", "origin")["rekeys"].tolist() == [2]
 
 
 def test_held_releases_a_cached_block_at_its_first_idle_cap():
@@ -168,3 +201,9 @@ def test_analyze_reports_lifetimes_occupancy_and_the_frontier():
     assert fr["expire"]["credited_before_stock"] < 0.4
     assert fr["rekey"]["rekey_bytes_per_s"] > r["frontier"]["T=10,L=6"]["rekey"]["rekey_bytes_per_s"]
     assert r["delayed"]["5.0"]["append_bytes_per_s"] < r["delayed"]["0.0"]["append_bytes_per_s"]
+    assert r["frontier_origin"] == {}  # no origins logged: the block clock only
+    o = lt.analyze({"t": t, "kind": k, "block": b, "origin": t - 30.0}, steps, 200.0, 2.0, windows=(10.0,),
+                   caps_L=(1,), phases=2, taus=(), stocks=[0.0])
+    assert o["frontier"]["T=10,L=1"] == fr
+    assert o["frontier_origin"]["T=10,L=1"]["expire"]["credited_before_stock"] == 0.0
+    assert o["stock_origin_age_tail"]["20"] == 1.0
