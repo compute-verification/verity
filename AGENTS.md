@@ -147,6 +147,11 @@ pytest-xdist workers), cached by input. The repository's own suite (`tests/`) ho
 testing skill, `.agents/skills/testing/SKILL.md`, says how to run them, what a suite may read (`[tool.verity.tests]
 inputs`), and the rules for slow tests, fixtures and dummy credentials.
 
+Heavy work runs on a node, never on an agent VM (16 GB, shared by every agent on it): circuit-check (24 GB a
+process), a Lean build of `Security/Proofs` (ArkLib), and the circuit_check and vLLM suites. Run them with `research run
+--on vy-nebius-1 --project verity --source . --cwd source -- …` (the writing-runs skill), or through the quick tier
+(`research queue ready N --on vy-nebius-1`).
+
 No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
 
