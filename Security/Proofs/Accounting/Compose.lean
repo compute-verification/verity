@@ -1,3 +1,4 @@
+import Proofs.Accounting.Compose.ServiceCovers
 import Models.Accounting.Guarantees.Compose
 import Proofs.Accounting.TS
 import Proofs.Pouw.RelativeSecurity
@@ -221,7 +222,7 @@ theorem ServiceBudget : Accounting.Guarantees.Compose.ServiceBudget := by
   sorry
 
 theorem ServiceCovers : Accounting.Guarantees.Compose.ServiceCovers := by
-  sorry
+  exact CoversProof.serviceCovers
 
 theorem BindingOfECR : Accounting.Guarantees.Compose.BindingOfECR := by
   sorry
