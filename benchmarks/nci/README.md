@@ -8,8 +8,9 @@ sides adopt it, how fast can a determined actor still advance frontier capabilit
 - the policies they are evaluated under (`calibrations.json`);
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `slowdown.py`).
 
-Nothing in `verity` reads this directory. The theorems it cites are in `Security/` (`Nci.SecurityProofs.ThreadedTraining`,
-`Security/Models/Nci/Guarantees/Threads.lean`).
+Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `Nci.SecurityProofs.ThreadedTraining`
+(`Security/Models/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
+(`Security/Models/Nci/Guarantees/Contained.lean`).
 
 ## Files
 
@@ -29,7 +30,8 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `render.py` | the whole index as Markdown on stdout |
 
 Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`, `capability-per-bit`, `theory`,
-`governance`, `integration-measures`.
+`governance`, `integration-measures`, `efficiency-metrics`, `strategy-local`, `strategy-lowrank-sparse`,
+`strategy-gradient-free`, `strategy-reuse`, `capability-measures`, `rl-scaling`.
 
 ## Rules for adding to it
 
@@ -64,6 +66,63 @@ Where sources conflict, `merge` names the conflict and the reading taken: matche
 large models on uncontaminated data over small ones. Rates that need training to decompress are excluded from weight
 rates, because decompressing is itself training. "Compression" by soft prompts counts positions, not bits, so it is
 not a bit ratio.
+
+## How we measure compute efficiency
+
+**The yardstick.** Suppose an actor's last pretrain reached held-out loss \(L^*\) with compute \(C^*\). After the deal,
+how much compute must a compliant circuit spend to reach \(L^*\) again? The overhead is
+
+\[
+R \;=\; \frac{1}{g}\,\min_A \frac{\rho_A}{m_A}, \qquad \text{pretraining efficiency } \eta = 1/R.
+\]
+
+- \(\rho_A\) is the policy's slowdown for training strategy \(A\): the board and the library compute it from \(A\)'s traits.
+- \(m_A(C) = C_{\text{ref}}(L_A(C))/C\) is \(A\)'s compute multiplier: the compute the reference recipe needs to reach the
+  held-out loss \(A\) reaches with compute \(C\), divided by \(C\). It is the compute-equivalent gain (`davidson-2023-ceg/1`)
+  and the labs' effective compute (`anthropic-2023-rsp/1`, `deepmind-2024-fsf/1`), with the reference and the test set
+  made explicit. The reference is a compute-optimal dense AdamW Transformer (`hoffmann-2022-chinchilla/1`), with
+  \(C_{\text{ref}}(L)\) from a Chinchilla-form law (`besiroglu-2024-chinchilla-replication/2`).
+- \(g\) is algorithmic progress in the base recipe (architecture, data, optimizer, allocation) since the last pretrain. It
+  applies with or without the policy, so the talk shows it and then brackets it. Loss-based estimates put it near 2.5x
+  per year, range 1.1-5x (`ho-2024-algorithmic-progress/3`, `gundlach-2025-origin/14`, `whitfill-2025-selection-bias/1`).
+  Capability-based measures, which include post-training and data, run faster: 3.5-10x per year
+  (`whitfill-2025-time-horizon/1`, `ho-2025-rosetta-stone/5`, `ho-2026-least-understood/1`). Most of it is
+  scale-dependent (`gundlach-2025-origin/14`).
+
+So the strategies that matter are those that trade compute efficiency for fewer novel reads per block: low-rank and
+sparse state, local or decoupled training, seed-described updates, reuse of registered models. Their \(m_A\) is measured
+against the same base recipe (DiLoCo against data-parallel training of the same model, a student against training from
+scratch). Base-recipe improvements enter only through \(g\).
+
+**The loss.** Bits per UTF-8 byte, which does not depend on the tokenizer (`gao-2020-pile/1`,
+`huang-2024-compression-represents-intelligence/5`), on a broad multi-domain corpus (`magnusson-2023-paloma/1`) written
+after every compared model's training cutoff (`li-2024-compression-time-split/1`), fixed and published in advance. The
+corpus matters: a different validation set can reverse which recipe wins (`lourie-2025-unreliable/2`), and
+quality-filtered data can lose on broad web text while winning benchmarks (`penedo-2024-fineweb/3`). Loss is preferred
+to benchmarks because it scales smoothly and extrapolates within a recipe (`gadre-2024-overtraining/2`,
+`brandfonbrener-2024-loss-to-loss/1`), and equal loss means equal downstream scores when corpus and architecture are
+fixed (`du-2024-emergent-loss/1`). Benchmark-based multipliers appear in the library only flagged.
+
+**Scale.** A multiplier is a function of compute. At 1e24-1e26 FLOP every value is extrapolated, and the library marks
+it so: a 1% loss error is a factor of 2-7 in compute there (`choshen-2024-hitchhiker/1`), and the loss floor itself is
+fitted anywhere from 1.68 to 2.01 (`gundlach-2025-origin/18`). Teacher, generator and rephraser compute would count
+toward \(m_A\) (`ho-2026-least-understood/5`), except that a registered model runs free under the policy, so the library
+counts the student's compute only.
+
+**RL and inference.** Held-out pretraining loss is the right yardstick for "can they train a new base model", but it is
+blind to RL, which is reported in capability, and to inference-time compute. The measure for those is a
+compute-equivalent gain on a stitched capability index (`ho-2025-rosetta-stone/1`), reported as a pair:
+
+- weights-only: the RL model against its base at the same test-time tokens, the part the update carries and the only
+  part NCI meters;
+- deployed: at the model's actual thinking budget, the difference being inference, which the policy leaves free
+  (`ord-2025-mostly-inference-scaling/1`, `ho-2025-reasoning-ceg/3`).
+
+Reasoning RL is worth about 10x deployed (range 1-100x; `ho-2025-reasoning-ceg/1`, `ho-2025-reasoning-ceg/2`), roughly
+3x of it in the weights. Today's RL fits in a block: DeepSeek-R1-Zero's whole RL run carried at most about 5.3 Mbit
+(`schulman-2025-lora-without-regret/3`), well under \(K\). The policy therefore leaves elicitation of a registered model
+unthrottled, about an order of magnitude of effective compute, and bounds it by what a registered model plus \(K\) bits
+of new state per block can reach. What it throttles is moving the base model's frontier.
 
 ## The bracket
 
