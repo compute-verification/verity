@@ -6,8 +6,8 @@
                                                  # what preserves its records instead (default $RESEARCH_LOCAL_ONLY; job.json records it)
   research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (infra/cluster) places the job and runs it under its node's executor
-  research run --on auto [--mem-gb G] [--timeout T] [--wait] -- CMD...   # an agent's suite or build: vy-nebius-cpu-1's research pool,
-                                                 # from this checkout, as project verity, 16 GB and 60 min unless given
+  research run --on auto [--cpus N] [--mem-gb G] [--max-min M | --timeout T] [--wait] -- CMD...   # an agent's suite or build: queued
+                                                 # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -179,8 +179,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap = argparse.ArgumentParser(prog="research run", add_help=True, allow_abbrev=False, description=__doc__.split("\n\n")[1])
     ap.add_argument("--runs-dir", default=None, help="registry root (default $RESEARCH_RUNS or ~/.research/runs)")
     ap.add_argument("--on", default=None, metavar="MACHINE",
-                    help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, in "
-                         "vy-nebius-cpu-1's research pool from this checkout, 16 GB and 60 min unless the run says otherwise")
+                    help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
+                         "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise")
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
@@ -921,32 +921,28 @@ GPU_WAIT_MIN = 120
 THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 
 
-#: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM (every handle, at Daniel's request, 18 Oct). It runs
-#: in vy-nebius-cpu-1's research pool, at nice 19 on the train slot's cores: never a slot a train waits for, and off node 1, whose
-#: CPUs the trains and lanes' direct runs already oversubscribe (top, 18 Oct 02:53Z)
-AUTO_MACHINE, AUTO_POOL, AUTO_PROJECT, AUTO_LANE = "vy-nebius-cpu-1", "research", "verity", "agent"
-AUTO_MEM_GB, AUTO_TIMEOUT = 16.0, "60m"
+#: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM (every handle, at Daniel's request, 18 Oct). It is
+#: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: nice 19 inside its check slots, so never a slot a
+#: train waits for) as kind AUTO_KIND (infra/cluster/kinds/infra.toml). Not node 1, whose CPUs trains and lanes' direct runs already
+#: oversubscribe (top, 02:53Z), nor cpu-1, whose memory a train and proofs' Lean slots have reserved (03:01Z).
+AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
 
 
 def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | None:
-    """`--on auto` is `--on AUTO_MACHINE --pool AUTO_POOL` from this checkout (its --source), as project AUTO_PROJECT, with --mem-gb
-    AUTO_MEM_GB and --timeout AUTO_TIMEOUT unless the run gives its own; the lane is --as, else $RESEARCH_LANE, else AUTO_LANE.
-    Fills `ns` and `harness_opts` in place; a reason when it can't."""
+    """`--on auto` is `--queue --on AUTO_NODE --kind AUTO_KIND` from this checkout (its --source) as project AUTO_PROJECT: the kind
+    gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min). Fills `ns` in place; a reason when it can't."""
     if ns.queue or ns.pool:
-        return "it takes no --queue or --pool: it names a pool itself"
+        return "it takes no --queue or --pool: it is the queue itself"
     if not ns.source:
         top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
         if top.returncode != 0:
             return "--source GITDIR: no git checkout here to ship"
         ns.source = top.stdout.strip()
-    ns.on, ns.pool = AUTO_MACHINE, AUTO_POOL
+    ns.queue, ns.on = True, AUTO_NODE
     ns.project = ns.project or AUTO_PROJECT
-    ns.lane = ns.lane or AUTO_LANE
-    ns.mem_gb = AUTO_MEM_GB if ns.mem_gb is None else ns.mem_gb
-    if remote.flag_value(harness_opts, "--timeout") is None:
-        harness_opts += ["--timeout", AUTO_TIMEOUT]
-    print(f"research run --on auto: {AUTO_MACHINE}'s {AUTO_POOL} pool, from {ns.source} ({ns.mem_gb:g} GB, "
-          f"--timeout {remote.flag_value(harness_opts, '--timeout')})", file=sys.stderr)
+    if ns.queue_kind == "adhoc":
+        ns.queue_kind = AUTO_KIND
+    print(f"research run --on auto: queued onto {AUTO_NODE} as {ns.queue_kind}, from {ns.source}", file=sys.stderr)
     return None
 
 

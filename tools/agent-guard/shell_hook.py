@@ -289,8 +289,8 @@ def available() -> tuple[float, float] | None:
 def local_work_reason(command: str) -> str | None:
     """Why this command may not run on this VM, or None."""
     w = 0 if LOCAL_OK in command else weight(command)
-    remote = (f"Run it on a node: `research run --on auto -- CMD` (vy-nebius-cpu-1's research pool, from this checkout: 16 GB "
-              f"and 60 min unless --mem-gb or --timeout say otherwise; add --wait to block until it ends). For a small local run "
+    remote = (f"Run it on a node: `research run --on auto -- CMD` (queued onto vy-nebius-2 from this checkout: 4 CPUs, 16 GB "
+              f"and 60 min unless --cpus, --mem-gb or --timeout say otherwise; add --wait to block until it ends). For a small local run "
               f"you know fits, put {LOCAL_OK} in the command.")
     if w == ALWAYS:
         return ("builds and tests run on our nodes, not on an agent VM (every handle, at Daniel's request, 18 Oct: OOM kills on "
