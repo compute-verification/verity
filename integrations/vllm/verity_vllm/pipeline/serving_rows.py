@@ -3,16 +3,16 @@ through an opened reader, registered weights for weight slices), committed in M0
 :mod:`verity_vllm.commit.serving_rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
-  "committer"}``, and the in-process C2 replay commits the window after the vllm-v1 roots are final and before its seed (``readers``).
+  "committer"}``, and the in-process C2 replay commits the window after the run root is final and before its seed (``readers``).
   The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
-  hold the values under the vllm-v1 roots.
+  hold the values under the run root.
 * **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
   rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and
   the rank.
 * **From a deferred Commit's bundle** (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``,
   `pipeline.deferred_rows`): the sealed replay bundle opened against the Commit's record as the CPU replay opens it, and the same
-  window written into ``O`` as a ``stand-in``: serving's commitment is the vllm-v1 roots, and these rows are committed afterwards
-  from the bundle, so their link to those roots is provenance (``deferred_rows.stand_in``).
+  window written into ``O`` as a ``stand-in``: serving's commitment is the run root (of record, ``commit.record``), and these rows
+  are committed afterwards from the bundle, so their link to that root is provenance (``deferred_rows.stand_in``).
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | {...}, "scope"?:
 {"op_path_prefix"}, "partition_digest"?}``.  The members are its templates in order, each instance count read off the Build's
@@ -52,6 +52,7 @@ import numpy as np
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.commit import record as REC
 from verity_vllm.commit import serving_rows as CS
 
 ROPE, GEMM = "RoPEHead_v1", "GemmCoordinate"
@@ -317,7 +318,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
                  workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
                  index: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Commit the verifier's partition's units of a run whose vllm-v1 roots are final and write the window's files into ``out_dir``:
+    """Commit the verifier's partition's units of a run whose run root is final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the research run ``run``, the row,
     the committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
@@ -332,7 +333,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     got = [read(m, r, store, weights, arrivals) for m, r in zip(ms, rows, strict=True)]
     t_read = time.perf_counter()
     c = CS.commit(window, [g[0] for g in got], workers=workers or min(16, os.cpu_count() or 1))
-    prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
+    prov = {"commitment": REC.FORMAT if len(window.run) == 2 * REC.NODE else REC.LEGACY_SCHEME, "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
             **({"tp": dict(tp)} if tp else {}), **(stand_in or {})}
     c.seconds["read_s"] = round(t_read - t0, 3)

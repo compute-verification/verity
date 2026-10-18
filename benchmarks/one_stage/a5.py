@@ -1,9 +1,10 @@
 """One-stage audit, run A5: a deferred Commit's window, a stand-in. The registration is over serving rows of the Commit's own
-values, committed after serving from its sealed replay bundle opened against its record and bound to its vllm-v1 run root, and
-the drawn units go to M0's prover and the Lean verifier of record. Serving's commitment is the vllm-v1 roots, so the window is
-core's `stand-in`, its link to them provenance (`of`: the run root, the bundle's manifest digest and `verity-vllm serving-rows`):
-that the rows hold the values under the vllm-v1 roots is the committer's opening, not proved. It becomes `served` once serving's
-record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vllm-v1 SHA-256 leaves (`pipeline.deferred_rows`).
+values, committed after serving from its sealed replay bundle opened against its record and bound to its run root, and the
+drawn units go to M0's prover and the Lean verifier of record. Serving's commitment is the run root of record (hm96-sha512 rows in
+frame-v3-sha512 trees, one row per committer leaf, `verity_vllm.commit.record`), not these unit rows, so the window is core's
+`stand-in`, its link to it provenance (`of`: the run root, the bundle's manifest digest and `verity-vllm serving-rows`): that the
+rows hold the values under the run root is the committer's opening, not proved. It becomes `served` once the window's units are
+read from the record's own rows (`pipeline.deferred_rows`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --partition F --window DIR --template-sets DIR \\

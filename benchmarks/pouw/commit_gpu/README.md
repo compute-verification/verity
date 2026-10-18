@@ -342,9 +342,10 @@ larger share: the same fixed compressions are paid once a 2 KiB leaf instead of 
 
 ## The vLLM integration
 
-`integrations/vllm/`'s GPU committer (`verity_vllm/commit/committer`) implements the record, `vllm-v1`
+`integrations/vllm/`'s GPU committer (`verity_vllm/commit/committer`) hashes its own scheme, `vllm-v1`
 (`verity/ml/commitments/vllm_v1`): SHA-256 position leaves and node / lift trees, with `hm96-sha256/v1` leaves as an option.
-This committer doesn't apply to it; under the one-hash rule the record moves to SHA-512. Its opt-in serving rows
+Its root of record is SHA-512 (`verity_vllm/commit/record.py`: `hm96-sha512/row/v1` rows in `frame-v3-sha512` trees, one row
+per committer leaf), hashed on the host after the run behind a `record_hasher` seam this committer can take over. Its opt-in serving rows
 (`verity_vllm/commit/serving_rows.py`) already commit `frame-v3-sha512` trees of `hm96-sha512/row/v1` leaves, on the CPU,
 and this committer could take them over: `sha512/row/v1`'s first block is a 128-byte constant like `sha512/row/v2`'s (a
 different midstate, a host parameter), the schema strings are the same length, and their ChaCha20 salts are given salts

@@ -24,7 +24,7 @@ _BATCH = 4096
 
 class HidingLeaves:
     """The batch path of one hm96 instance (``hm96.SHA256`` by default, the committer's opt-in; ``hm96.SHA512`` for the
-    benchmark until the re-baseline wires SHA-512 trees) under ``key`` (the instance's pinned key by default)."""
+    benchmark; the root of record's rows are `commit.record`'s) under ``key`` (the instance's pinned key by default)."""
 
     def __init__(self, key: bytes | None = None, instance: hm96.Instance = hm96.SHA256) -> None:
         self.instance = inst = instance

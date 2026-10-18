@@ -1,8 +1,8 @@
 """The integration's one challenge module: every draw over committed values, on `verity.ml.randomness`.
 
-Today's derivations hash the run root, the prover's own commitment (Fiat-Shamir), and their outputs are recorded in
-verdicts.  They stay byte-identical while `LEGACY` is true; decision 42 retires them at the re-baseline epoch.  The
-non-legacy forms draw through `verity.ml.randomness.derive` from a `source` that is an auditor key, with the run root
+The legacy derivations hash the run root, the prover's own commitment (Fiat-Shamir), and their outputs are recorded in
+verdicts.  They read runs recorded before the record (a 32-byte ``vllm-v1`` root) and stay byte-identical for them while `LEGACY`
+is true; decision 42 retires them, and a run of record never takes them.  The non-legacy forms draw through `verity.ml.randomness.derive` from a `source` that is an auditor key, with the run root
 and the draw's other bindings as context:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
@@ -36,7 +36,7 @@ import numpy as np
 
 from verity.ml.randomness import Key, derive
 
-#: Every derivation's default until the re-baseline epoch (decision 42).
+#: The default of the legacy-capable draws: True, so a recorded ``vllm-v1`` run reads its recorded picks (decision 42).
 LEGACY = True
 
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
