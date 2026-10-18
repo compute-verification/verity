@@ -126,22 +126,26 @@ def runs_of(blocks) -> tuple[tuple[int, int], ...]:
 
 
 def plan_change(before: rb.Plan, after: rb.Plan) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
-    """`after` as `before.changed(added, removed, ...)` takes it: (added, removed) runs."""
-    n = max(before.blocks, after.blocks) + 1
-
-    def held(plan: rb.Plan) -> np.ndarray:
+    """`after` as `before.changed(added, removed, ...)` takes it: (added, removed) runs, from the plans' runs alone
+    (each segment between consecutive run boundaries is wholly in or out of each plan)."""
+    def bounds(plan: rb.Plan) -> tuple[np.ndarray, np.ndarray]:
         r = np.frombuffer(plan.encode(), dtype=">u8", offset=4).reshape(-1, 2).astype(np.int64)
-        d = np.zeros(n + 1, np.int64)
-        np.add.at(d, r[:, 0], 1)
-        np.add.at(d, r[:, 0] + r[:, 1], -1)
-        return np.cumsum(d[:-1]) > 0
+        return r[:, 0], r[:, 0] + r[:, 1]
+
+    (a0, a1), (b0, b1) = bounds(before), bounds(after)
+    cuts = np.unique(np.concatenate([a0, a1, b0, b1]))
+    lo = cuts[:-1]
+
+    def held(s: np.ndarray, e: np.ndarray) -> np.ndarray:
+        k = np.searchsorted(s, lo, side="right") - 1
+        return (k >= 0) & (lo < e[np.maximum(k, 0)]) if len(s) else np.zeros(len(lo), bool)
 
     def runs(mask: np.ndarray) -> tuple[tuple[int, int], ...]:
         edge = np.diff(np.concatenate([[False], mask, [False]]).astype(np.int8))
-        starts, ends = np.flatnonzero(edge == 1), np.flatnonzero(edge == -1)
+        starts, ends = cuts[np.flatnonzero(edge == 1)], cuts[np.flatnonzero(edge == -1)]
         return tuple(zip(starts.tolist(), (ends - starts).tolist()))
 
-    a, b = held(before), held(after)
+    a, b = held(a0, a1), held(b0, b1)
     return runs(b & ~a), runs(a & ~b)
 
 
