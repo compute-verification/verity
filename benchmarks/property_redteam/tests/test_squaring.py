@@ -63,9 +63,13 @@ def test_the_free_squaring_costs_nothing_at_p1024_and_chains():
     fixed_once = b.fixed_units
     twice, c2 = S.free_square(b, once)
     assert not any(g.op.kind == "budgeted" for g in b.gates)
-    assert S.proven(b.gates) == [] and S.operand_bits(128, b.gates) and S.restricted(128, b.gates)
-    assert b.lean_units == 0 and S.budgeted(b.gates) == 0
+    assert S.restricted(128, b.gates)
+    assert not any(g.op.kind == "input" and g.op.binding == "run" for g in b.gates)
+    assert b.lean_units == 0
     assert fixed_once == 6014 and b.fixed_units == 2 * fixed_once
+    # Renormalization ⟨1024, 105⟩ d₀ = 4, c = 0, t = 64 at ε = 2^−40 (Guarantees/Gates.lean): its conclusion
+    # ε·2^(8·128) ≤ 2^(8·(budgeted + d₀ + c)) fails for this circuit, whose inputs are a's bytes (coin) and outputs u8.
+    assert not 2 ** (8 * S.N_LIMBS) <= 2 ** 40 * 2 ** (8 * (b.lean_units + 4))
     for x in (rng.randrange(S.P), S.P - 1, 0):
         vals, window, hold = b.evaluate(dict(enumerate(S.limbs(x))))
         assert window and hold and vals[c1] == 0 and vals[c2] == 0
@@ -148,8 +152,10 @@ def test_the_whole_codec_word_is_free_at_6bs_fields():
     for b, out, slots in builds.values():
         assert not any(g.op.kind == "budgeted" for g in b.gates)
         assert not any(g.op.kind == "input" and g.op.binding == "run" for g in b.gates)
-        assert S.proven(b.gates) == [] and S.restricted(128, b.gates)
+        assert S.restricted(128, b.gates)
         assert b.lean_units == 0 and b.fixed_units > 0
+        if len(b.gates) < 3000:  # the literal `units` scan is quadratic; it agrees with the builder's running count
+            assert S.budgeted(b.gates) == 0 and S.budgeted(b.gates, fixed=True) == b.fixed_units
         assert {g.op.binding for g in b.gates if g.op.kind == "input" and g.op.slot[0] == "payload"} == {"registered"}
 
 

@@ -1,7 +1,7 @@
 """Squaring mod p1024 in 6b's circuit model, measured in budgeted units: the attack on `EncodeChainHardness`.
 
-**The target** (`Security/Models/Accounting/Assumptions/EncodeChain.lean`, 6b's branch cursor/circuit-encode-6cd3 at
-a949c3f5ed, unchanged by the proofs PR #2363). The encode bound rests on `EncodeChainHardness F k B E ε`: a restricted
+**The target** (`Security/Models/Accounting/Assumptions/EncodeChain.lean`, 6b's #2362 @ a949c3f5ed; Model.lean is the
+same on the proofs PR #2363 @ d6df95f24a). The encode bound rests on `EncodeChainHardness F k B E ε`: a restricted
 circuit computing `q` words of the codec, less parity, on more than `ε` of the draws costs `q·E` budgeted units less a
 word-per-run-bit discount. Its headline is `E = k·S·e`, `e = L − d(ε)` a squaring, `L = n/8 = 128`, `d = d₀ + ⌈log₂(1/ε)/8⌉`,
 `d₀ = 4`: `e = 119` at `ε = 2^−40` (`E = 364,497` a word), `e = 121` at `ε = 2^−20` (`E = 370,623`). A squaring circuit under
@@ -21,8 +21,9 @@ constant its `units` are `0 − 0 + 0 = 0`: it is free. Its value is `c·[idx �
 `r ← r − 2^k·b_k` (affine, free) peels it off, MSB first. From the bits, bytes and carries are affine, so carry propagation
 — the one step the conjecture argues no free gate can do (`Renormalization`: a byte can't be made from a wide value) — is
 free. `free_square` builds a whole squaring mod p1024 at **0 budgeted units** (Lean's count), congruent to `a²` and in
-byte format for the next squaring. So `EncodeChainHardness` and `Renormalization` are **false as the Lean reads today**, for
-every `E > 0` and every `ε`, not only below a floor. property/v1's Python already charges a one-word range gather one unit
+byte format for the next squaring, and `free_codec.py` builds the whole codec word that way at 6b's `codecRows` fields
+(no budgeted gate, right on every draw). So `EncodeChainHardness` and `Renormalization` are **false as the Lean reads
+today**, for every `E > 0` and every `ε`, not only below a floor. property/v1's Python already charges a one-word range gather one unit
 (`stacking._BITS["range"] = n.bit_length()`), so the gap is Lean-only; the fix is `indexBits := Nat.clog 2 g.args.length`
 (or `Proven` requiring the index in `[0, V−1]`), which this module measures as `fixed=True`.
 
@@ -52,7 +53,6 @@ modeled.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Callable
 

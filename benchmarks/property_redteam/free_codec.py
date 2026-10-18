@@ -22,7 +22,6 @@ circuit costs its comparator count (`Builder.fixed_units`).
 
 from __future__ import annotations
 
-import squaring as S
 from squaring import U8, Builder, free_bit
 
 
