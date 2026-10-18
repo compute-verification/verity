@@ -29,7 +29,7 @@ A record is one of two kinds:
     uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript CASE.json ...
     uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py record VERIFIER.json ... [--out ROWS.json]
 
-One row a session, printed and with `--out` written as JSON. Exit status 1 if the verifiers differ on any session, or a
+One row a session (one for a record with none), printed and with `--out` written as JSON. Exit status 1 if the verifiers differ on any session, or a
 verdict isn't the recorded one.
 """
 
@@ -255,7 +255,9 @@ def replay_record(path: Path, s: D.Server) -> list[dict]:
         row |= replay(case, s) | {"made": made}
         row["held"], row["why"] = held(session, row["lean"]) if row["agree"] else (False, "the verifiers differ")
         rows.append(row)
-    return rows
+    return rows or [{"run": run_of(path), "recorded": "no session", "agree": None, "held": None,
+                     "digest": None if earlier else lean_digest == py_digest == ("output", v["registration"]["digest"]),
+                     "why": "the registration ran no session"}]
 
 
 def replay_transcript(path: Path, s: D.Server) -> list[dict]:

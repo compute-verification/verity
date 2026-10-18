@@ -155,6 +155,14 @@ def test_a_refused_registration_has_no_verdict_to_replay(server, tmp_path) -> No
     assert R.main(["record", str(path)]) == 0
 
 
+def test_a_registration_with_no_session_is_one_row_with_its_digest(server, tmp_path) -> None:
+    v = verifier_json(run("honest")) | {"sessions": []}
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["recorded"] == "no session" and row["agree"] is None and row["digest"] is True
+
+
 def test_case_of_keeps_the_recorded_parameters_and_clock() -> None:
     v = verifier_json(run("honest"))
     s = v["sessions"][0]
