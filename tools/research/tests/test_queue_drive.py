@@ -965,3 +965,38 @@ def test_a_lean_audit_record_failure_ejects_only_the_prs_that_touch_the_failing_
                                       "AUDIT /w/lean-audit-scratch-1-x/pkgB: PASS\n")]
     h.tick()
     assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0] and "Lean package pkgA" in h.posts[0], h.posts
+
+
+def test_a_train_that_passed_by_regenerating_locks_lands_with_them_committed_on_top(world, monkeypatch, tmp_path):
+    """CI-64 (Daniel through top, 18 Oct): lean-audit failed 9 trains in 36 h on lock records each PR had regenerated on its
+    own base.  A train's Lean check now passes by regenerating them, and drive commits those locks onto the train it lands,
+    naming them in a `Regenerated:` trailer that `research merge`'s gate reads (`regenerated_parent`)."""
+    h = Harness(world, monkeypatch)
+    h.d.regenerate_locks = True
+    world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
+    h.tick()
+    tip = _tip(world)
+    _check(world, monkeypatch, tip)
+    rec = tmp_path / "regen.json"
+    rec.write_text('{"records": 2}\n')
+    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
+    assert h.tick().startswith("landed #1")
+    main = _git(world.origin, "rev-parse", "main")
+    assert _git(world.origin, "rev-parse", f"{main}^") == tip                       # the checked train, then its locks
+    assert _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == '{"records": 2}'
+    assert "Regenerated: pkg/lean-audit.json" in _git(world.origin, "log", "-1", "--format=%B", main)
+    assert any("with the locks it regenerated for pkg" in x for x in world.logs)
+
+
+def test_a_train_that_regenerated_locks_waits_for_a_new_check_when_main_moved(world, monkeypatch, tmp_path):
+    h = Harness(world, monkeypatch)
+    h.d.regenerate_locks = True
+    world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world))
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'c.txt': 'outside the queue\n'})}:refs/heads/main")
+    rec = tmp_path / "regen.json"
+    rec.write_text('{"records": 2}\n')
+    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
+    assert not h.tick().startswith("landed")
+    assert any("by regenerating pkg's locks" in x for x in world.logs)
