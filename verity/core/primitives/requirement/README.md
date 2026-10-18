@@ -42,7 +42,6 @@ vLLM tests' tiny configuration and `b1.RMSNormFusedCudaV1` at N = 64.
 Call), and memory-map/v1 as the Commit's builder (`verity_vllm.commit.memory_map`) records it, a session's KV rows in the
 blocks it wrote under the free convention of 21:52Z (step s's record takes effect after step s's reads). The audit
 credits the live rows in complete blocks, and those it doesn't, a page's first rows until its last is born, lie in one
-block per request, layer and plane (`OneBlockEach`). The builder frees each block in the record of its rows' last read,
-and the link holds at every step, but at one: a block whose last read is the step that completes it is read by no step
-while it is resident, so it is in no record (memory-map/v1's ruling), and the builder still writes it and frees it a
-record later; its test is a strict xfail until the builder leaves it out.
+block per request, layer and plane (`OneBlockEach`). The builder frees each block in the record of its rows' last read
+and leaves out a block no step reads while it is resident (one whose last read is the step that completes it), and the
+link holds at every step with no block held dead.
