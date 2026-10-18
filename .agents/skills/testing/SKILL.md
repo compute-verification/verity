@@ -18,6 +18,9 @@ runs the same runner as its pytest step.
 
 ## Run tests
 
+Suites run remotely, never on an agent VM (AGENTS.md "Tests"): there `suites.py` queues itself as an `agent-test` job outside
+the check slots (`research run --on auto --cwd source`, which syncs the shipped tree's environment), as below.
+
 ~~~sh
 uv run tools/verity/check/suites.py                        # every suite whose inputs changed since it last passed on this machine
 uv run tools/verity/check/suites.py flock verity           # these suites (a package name, a directory, or a unique part of one)
@@ -32,8 +35,9 @@ On an agent VM (a Cursor agent's, outside a recorded run) `suites.py` runs on a 
 auto --wait` from the checkout's commit, so commit first (a tree with uncommitted changes is refused). `--list`, `--explain`,
 `--json` and `--logs` stay local, and `--local` or `AGENT_GUARD_LOCAL_OK=1` runs everything here.
 
-Inside one package, plain pytest works too: `cd verity/ml/flock && uv run pytest -m "not slow" -k tanh`. It doesn't cache and
-doesn't load the read guard.
+Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
+`cd verity/ml/flock && uv run pytest tests/test_layouts.py -k typed`. It doesn't cache and doesn't load the read guard. The shell
+hook refuses a local pytest that names no file or `-k`; `AGENT_GUARD_LOCAL_OK=1` is the opt-in.
 
 A pass is cached under a hash of the suite's inputs: its directory, the directories of the workspace packages it depends on,
 the paths it declares, the workspace's metadata (every `pyproject.toml` and `uv.lock`), the installed distributions, Python,
