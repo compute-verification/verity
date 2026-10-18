@@ -80,8 +80,8 @@ simulators `soOf (SF t) (CB t)`, where the inner protocol's rounds are the inner
 `ZKAt` holds at a masked outer record `DF` of `VO`'s rounds (`hF`, `hk`) and the sessions are `Shaped` within the
 record's per-session error and `4t·3^t` (`hsh`); and the witness `wit` gives is in `DF`'s relation (`hW`). -/
 theorem zkBoundM_of_zkAt {Col TF : Type} (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
-    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
-    [Fintype ΩB] [Nonempty ΩB] (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
+    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape) (NB ΩB : Type) [Fintype NB]
+    [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
     (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (DF : Claims.Flock.Deploy Coin Col TF)
     (SF : ℕ → Claims.Simulator) (εF : ℕ → ℝ≥0 → Claims.Msg → ℝ) (γF : ℕ → Claims.Msg → ℝ)
@@ -89,7 +89,7 @@ theorem zkBoundM_of_zkAt {Col TF : Type} (H : Claims.Msg → Claims.Msg) (ivScop
     (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x))
     (h₀ : ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
       Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ → ∀ x,
-        ZKmalAt H (kPre IV x) (preP IV b pre) (Claims.Recursion.R (deployRec IV ivScope b) I x) x
+        ZKmalAt H (kPre IV x) (preP IV b (pre x)) (Claims.Recursion.R (deployRec IV ivScope b) I x) x
           ((simPre (deployRec IV ivScope b) I).C x) ((simPre (deployRec IV ivScope b) I).prog x)
           (2 * (I.V.k (xIOf x) + kS x * b.nC x) * δ₁) 0)
     (hF : ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
@@ -98,15 +98,15 @@ theorem zkBoundM_of_zkAt {Col TF : Type} (H : Claims.Msg → Claims.Msg) (ivScop
     (hk : ∀ xS, DF.V.k xS = VO.k xS)
     (hsh : ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
       Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ → ∀ x,
-        Shaped IV b T₀ (SF t) (εF t δ₁) (γF t) (CB t) (fun x j => ((deployRec IV ivScope b).nums x j).εzk t δ₁)
+        Shaped IV b (T₀ x) (SF t) (εF t δ₁) (γF t) (CB t) (fun x j => ((deployRec IV ivScope b).nums x j).εzk t δ₁)
           (4 * t * 3 ^ t) x)
-    (hW : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → ∀ j < nS x, ∀ (t₀ : T₀.N × T₀.Ω)
-      (u : List (Claims.Msg × Claims.Msg)), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
-        Claims.Flock.R DF.parse (xsOf IV b x j u) (wit w (pre t₀) (u.take (IV.k (xIOf x))) j)) :
+    (hW : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → ∀ j < nS x, ∀ (t₀ : (T₀ x).N × (T₀ x).Ω)
+      (u : List (Claims.Msg × Claims.Msg)), u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
+        Claims.Flock.R DF.parse (xsOf IV b x j u) (wit w (pre x t₀) (u.take (IV.k (xIOf x))) j)) :
     ZKBoundM IV b H ivScope I T₀ NB ΩB pre wit PS fun t => soOf (SF t) (CB t) :=
   zkBoundM_of IV b H ivScope I T₀ NB ΩB pre wit PS _ (Claims.Flock.R DF.parse) hI h₀
-    (fun t ht δ₁ hδ x => sessions_of_zkAt IV b H T₀ DF PS (SF t) (εF t δ₁) (γF t) (hF t ht δ₁ hδ) hk (CB t) _ _ x
-      (hsh t ht δ₁ hδ x)) hW
+    (fun t ht δ₁ hδ x => sessions_of_zkAt IV b H (T₀ x) DF PS (SF t) (εF t δ₁) (γF t) (hF t ht δ₁ hδ) hk (CB t) _ _
+      x (hsh t ht δ₁ hδ x)) hW
 
 end RecDeploy
 
@@ -189,7 +189,7 @@ statement (`hnL`, `hnB`, `hzl`), the coins are in bijection (`hCB`), and the wit
 record's relation (`hW`). -/
 theorem zkBoundM_of_tables (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
-    (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
+    (T₀ : Claims.Msg → SeqTape) (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
     (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
     (G : Proto Claims.Flock.Wit) [Fintype G.Coin] (Mp : ∀ x, G.Nonce → G.TPreModel x)
     (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Claims.Msg → ℕ)
@@ -197,7 +197,7 @@ theorem zkBoundM_of_tables (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg
     (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x))
     (h₀ : ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
       Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ → ∀ x,
-        ZKmalAt H (kPre IV x) (preP IV b pre) (Claims.Recursion.R (deployRec IV ivScope b) I x) x
+        ZKmalAt H (kPre IV x) (preP IV b (pre x)) (Claims.Recursion.R (deployRec IV ivScope b) I x) x
           ((simPre (deployRec IV ivScope b) I).C x) ((simPre (deployRec IV ivScope b) I).prog x)
           (2 * (I.V.k (xIOf x) + kS x * b.nC x) * δ₁) 0)
     (hkey : ∀ δ₁ : ℝ≥0, Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
@@ -205,15 +205,16 @@ theorem zkBoundM_of_tables (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg
     (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink H (Claims.Flock.R (deployZkRec relO).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.Binding H)
-    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
+    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+      u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
       nL (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).1 ∧
         nB (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).2)
     (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
-      u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
+      u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
         Nonempty (CB t x j ≃ ((G.withSim Mc).simulatorE t (t * 3 ^ t)).C (xsOf IV b x j u)))
-    (hW : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → ∀ j < nS x, ∀ (t₀ : T₀.N × T₀.Ω)
-      (u : List (Claims.Msg × Claims.Msg)), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
-        Claims.Flock.R (deployZkRec relO).parse (xsOf IV b x j u) (wit w (pre t₀) (u.take (IV.k (xIOf x))) j)) :
+    (hW : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → ∀ j < nS x, ∀ (t₀ : (T₀ x).N × (T₀ x).Ω)
+      (u : List (Claims.Msg × Claims.Msg)), u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
+        Claims.Flock.R (deployZkRec relO).parse (xsOf IV b x j u) (wit w (pre x t₀) (u.take (IV.k (xIOf x))) j)) :
     ZKBoundM IV b H ivScope I T₀ G.Nonce G.Rand pre wit G.prover
       fun t => soOf ((G.withSim Mc).simulatorE t (t * 3 ^ t)) (CB t) := by
   refine zkBoundM_of_zkAt IV b H ivScope I T₀ G.Nonce G.Rand pre wit G.prover (deployZkRec relO)

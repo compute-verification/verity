@@ -20,7 +20,9 @@ tape of `M` sessions, read at a statement of `n_S(x) ≤ M` sessions down to its
   V\* sessions.
 
 The reading down to `n_S(x)` sessions depends on the statement, so a record on the capped tape reads it in its
-prover (`Deploy.P`), and `ZkDeploy.tapeOf`, which reads no statement, is the identity there.
+prover (`Deploy.P`), and `ZkDeploy.tapeOf`, which reads no statement, is the identity there. The first part is on one
+tape `T₀` too, so where it commits under fresh salts (`PreCommits`), `T₀` splits evenly into each statement's inner and
+staging salts: their numbers are bounded as well.
 -/
 
 namespace Claims.ZKMal
@@ -183,8 +185,9 @@ def ZKBoundMCap (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
         (Claims.Recursion.R (deployRec IV ivScope b) I) (Claims.Recursion.Sim (deployRec IV ivScope b) I (SO t))
         (Claims.Recursion.εzk (deployRec IV ivScope b) I t δ₁) (Claims.Recursion.γzk (deployRec IV ivScope b) t)
 
-/-- **The masked recursion on the nested tape of `M` sessions, from `ZKBoundM`**, wherever the relation's statements
-have at most `M` V\* sessions (`hcap`): at each, the nested tape of `M` sessions reads its own with fibers of one size,
+/-- **The masked recursion on the nested tape of `M` sessions, from `ZKBoundM` with one first-part tape `T₀`**, wherever
+the relation's statements have at most `M` V\* sessions (`hcap`): at each, the nested tape of `M` sessions reads its own
+with fibers of one size,
 nonce and rest apart (`SeqTape.fibersEq_capN`, `SeqTape.fibersEq_capΩ`), so `ZKmalAt` carries over at the same errors
 (`zkmalR_of_rx`). -/
 theorem zkBoundMCap_of (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
@@ -192,7 +195,7 @@ theorem zkBoundMCap_of (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg →
     [Fintype ΩB] [Nonempty ΩB] (M : ℕ) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
     (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (h : ZKBoundM IV b H ivScope I T₀ NB ΩB pre wit PS SO)
+    (h : ZKBoundM IV b H ivScope I (fun _ => T₀) NB ΩB (fun _ => pre) wit PS SO)
     (hcap : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → nS x ≤ M) :
     ZKBoundMCap IV b H ivScope I T₀ NB ΩB M pre wit PS SO := fun t ht δ₁ hδ =>
   Claims.ZKMal.zkmalR_of_rx (h t ht δ₁ hδ) (fun x => T₀.capN 0 NB ΩB M (nS x)) (fun x => T₀.capΩ 0 NB ΩB M (nS x))
