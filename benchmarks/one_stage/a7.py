@@ -424,11 +424,11 @@ def payloads_of(store, j: int) -> bytes:
 @dataclass(frozen=True)
 class UnitsLink:
     """`audit.RequirementLink` on A7's units: it holds when the units' audit is accepted, every drawn unit's public and ok
-    rows open, every witness row is bound to its canonical commitment, the session's check 3 is proved, and the bridge
-    holds the session to the units' public data. `mapped` holds of the chain `appends` the map units' writes make
-    (`units_appends`), once every map unit is drawn and proved (`proved`). `epsilon` and `delta` are what the units' draw
-    established (`uncertified`): the most share of the linked credit the wrong units it allows can carry, at the audit's
-    delta; until they are set, the link credits nothing."""
+    rows open, every witness row is bound to its canonical commitment, and v0's bridge holds the canonical plans and map
+    to the session's own. `mapped` holds of the chain `appends` the map units' writes make (`units_appends`), once every
+    map unit is drawn and proved (`proved`). `epsilon` and `delta` are what the units' draw established (`uncertified`):
+    the most share of the linked credit the wrong units it allows can carry, at the audit's delta; until they are set,
+    the link credits nothing."""
     holds: bool
     density_bits: int
     req: RQ.Requirement
@@ -1145,7 +1145,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
             rs = remote_session(req, layout, store, plans, salts, extra={s: [extra]}, c3=c3)
             br = bridge(rs, plan_m, map_m, req_steps)
             neg[name] = {"refused": f["ok_output"] == 0 and f["satisfied"] and not f["opens_to_1"], "step": s, "block": extra,
-                         "unit": f, "plan_matches": False, "bridge_refuses": not br["ok"]}
+                         "unit": f, "plan_matches": False, "honest_canon_bridge_refuses": not br["ok"]}
             return
         neg[name] = {"refused": False, "why": "no step has such a block"}
 
@@ -1259,8 +1259,8 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     same = rs.accepted and rs.session.record().appends == link.appends
     neg["append-before-its-production-step (bridge: heads)"] = {
         "refused": rs.accepted and not br["ok"], "step": t_early, "detail": br["detail"],
-        "chain_is_the_units'": same, "note": "the chain fixes the appends, not the passes between them: the bridge reads "
-        "each pass's head from the verifier's session (its windows' heads), which the record doesn't carry"}
+        "chain_is_the_units'": same, "note": "the chain fixes the appends, not the passes between them: the record "
+        "carries no per-pass head, so under zero knowledge this needs the remote audit's record to carry each pass's"}
     try:
         audit.ledger(rrec, **common, requirement=replace(link, appends=hashlib.sha512(b"another chain").digest()))
         neg["ledger-on-a-link-whose-units-make-other-appends"] = {"refused": False}
