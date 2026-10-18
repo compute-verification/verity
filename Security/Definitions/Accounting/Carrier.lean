@@ -47,6 +47,12 @@ read of that circuit's data.
 **A steered layout.** `steeredStore` is `coinStore` on a layout that reads the codec and the append coins as well as
 the prefix: the memory map's schedule when inputs chosen after those coins move it.
 
+**Appended tiles.** The registration is append `0`, whose blocks are keyed under the seed alone, so their keys are fixed
+for the registration: the weights, and the filler a KV pool starts with. Every later append keys its blocks under its
+own coin, and a re-key appends a block again under a fresh one. A pass's appended tiles (`appendedTiles`) are those its
+layout puts at positions of appends after the registration, and `Chip.rebuildsIn` counts a program's rebuilds of
+sectors in a set of tiles. The stacking premise charges carriers with the rebuilds of appended tiles only.
+
 **A pass on the devices' clocks.** A pass is bound to an engine step (#2378), and a placed execution
 (`Requirement.Placement`) says at which tick each device begins each step. Pass `j` of window `w` on device `d` is
 the `τ` ticks from the one at which `d` begins the pass's step (`Placement.passTicks`), and window `w` on `d` is its
@@ -187,6 +193,28 @@ def steeredStore {n P N m ρ h ks G d T M : ℕ} {Ω Ca Ch : Type}
     (layout : SketchPrefix n P N m ρ h ks G d → Ω × (Fin T → Ca) → Fin N ↪ Fin T × Fin M)
     (c : SketchPrefix n P N m ρ h ks G d) (y : Ω × (Fin T → Ca)) : SketchStore N m :=
   fun p => appendCoinBlocks enc (choose c) (layout c y) y p.1 p.2
+
+/-- **A pass's appended tiles**: the tiles `i` that the layout `layout c y` puts at a position of an append after the
+registration (append `0`). Their blocks are keyed under their append's coin; a registered block's key is fixed for the
+registration. -/
+def appendedTiles {Pfx Y : Type} {N T M : ℕ} (layout : Pfx → Y → Fin N ↪ Fin T × Fin M) (c : Pfx) (y : Y) :
+    Finset (Fin N) :=
+  Finset.univ.filter fun i => ((layout c y i).1 : ℕ) ≠ 0
+
+namespace Chip
+
+variable {N m ρ h : ℕ} {X Dg α : Type}
+
+/-- The sectors rebuilt in the tiles `U`: one per `rebuild` step at a sector of a tile in `U`. At every tile it is
+`rebuilds`. -/
+def rebuildsIn (U : Finset (Fin N)) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Chip N m ρ h X Dg α → ℕ
+  | done _ => 0
+  | tag x k => (k (O x)).rebuildsIn U O D
+  | mem p k => (k (D (.inl p))).rebuildsIn U O D
+  | link p k => (k (D p)).rebuildsIn U O D
+  | rebuild p k => (k (D (.inl p))).rebuildsIn U O D + if p.1 ∈ U then 1 else 0
+
+end Chip
 
 /-- A stacked session's coins at the deployed parameters (16 sketch rows of 128-sector tiles, 512-bit tags, 2,773
 openings a window): the codec and every append's coin, then its `n` windows'. -/

@@ -10,11 +10,12 @@ remote audit's own and `Accounting.Assumptions.EncodeChainHardness`, each a name
 * `KeyBinding T M δ enc`: under the append-coin rule (`Accounting.appendCoinBlocks`), whatever the writers choose for
   each append from the codec and the coins of the appends before it, the blocks a pass reads at any layout fixed apart
   from the encodings are on every event at most `δ` likelier than uniform blocks (claim `key-binding`).
-* `CircuitCarriers A X life B εnum εden W Aud`: every pass device of the session `A` rebuilds at most `X` bits besides
-  the sectors of one carrier, and that carrier is the declared circuit `W`'s computation over at most `life` of the
-  audit's windows (`RateSketch.Provenance.OfCircuit`).
+* `CircuitCarriers A store layout X life B εnum εden W Aud`: every pass device of the session `A` rebuilds at most `X`
+  bits of its appended tiles besides the sectors of one carrier, and that carrier is the declared circuit `W`'s
+  computation over at most `life` of the audit's windows (`RateSketch.Provenance.OfCircuit`). Registered tiles, whose
+  keys are fixed for the registration, are not bounded.
 * `SteeredLayout a layout`: at each prefix of the session's coins, a pass's layout reads the codec and the append coins
-  through at most `a` bits.
+  through at most `a` bits. What `a` is, is the schedule's code: a check that the engine's schedule is deterministic.
 -/
 
 namespace Accounting.Assumptions
@@ -65,36 +66,42 @@ def KeyBinding {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] (T M : 
     (ev : Set (Fin N → B)),
     pr (fun y : Ω × (Fin T → Ca) => appendCoinBlocks enc choose slot y ∈ ev) ≤ pr (fun E : Fin N → B => E ∈ ev) + δ
 
-/-- **Every rebuild beyond `X` is decoded from a carrier of the declared circuit's.** For the session `A` at the
-deployed parameters, every pass device (window `w` after the earlier windows' coins `η`, pass `j` after the earlier
-passes' coins `pre`, candidate `c`, at signs `σ`) rebuilds at most `X` bits besides the sectors of one carrier
-(`RateSketch.Carrier`), and that carrier's provenance is `W`'s over a set `I` of at most `life` of the audit `Aud`'s
-windows: its inputs are at most `W`'s run-input bits there, and its encodes, at the gate model's `encodeBitsCost` for
-the deployed codec (p1024, 3 rounds) in the restricted class (`B` operand bits, more than `εnum/εden` of the draws),
-cost at most `W`'s budgeted units there (`RateSketch.Provenance.OfCircuit`).
+/-- **Every rebuild of an appended tile beyond `X` is decoded from a carrier of the declared circuit's.** For the
+session `A` at the deployed parameters, every pass device (at the prefix `c` of the session's coins before the pass,
+candidate `g`), on the store `store c y` the pass certifies at the codec and the append coins `y`, rebuilds at most `X`
+bits of its appended tiles (`RateSketch.appendedTiles`: those the layout `layout c y` puts at positions of appends after
+the registration) besides the sectors of one carrier (`RateSketch.Carrier`). That carrier's provenance is `W`'s over a
+set `I` of at most `life` of the audit `Aud`'s windows: its inputs are at most `W`'s run-input bits there, and its
+encodes, at the gate model's `encodeBitsCost` for the deployed codec (p1024, 3 rounds) in the restricted class (`B`
+operand bits, more than `εnum/εden` of the draws), cost at most `W`'s budgeted units there
+(`RateSketch.Provenance.OfCircuit`). Rebuilds of registered tiles (append `0`: the weights, the pool's filler) are not
+bounded, so a guarantee that reads this credits no registered block.
 
 **Why it should hold.** In the verbatim class a device obtains a sector it doesn't hold, read or take over the link by
 rebuilding it: computing it from memory whose contents are a circuit's values. The rebuilds the node's compute pays
 for, beyond the declared circuit's own, are `X`: the squaring ceiling's bits a pass (`b·F/(rounds·c_root)`,
-`SquaringCeiling` with `WorkHardness`, within the pass's deadline). Every other rebuild comes from memory the declared
-circuit wrote after the seed, a credited KV page, so its provenance is `W`'s computation. The windows are the life of
-that provenance back to values that depend on no store sector: the stacking property's life clause on run-produced
-values (registered inputs, the weights, are payloads fixed before the seed, constants in a provenance), and a block
-re-keyed at the life cap re-encodes under a fresh coin, so an older computation's encodes of it are constants too. The
-encodes are in the restricted class when `W` is (`Gates.Restricted`, the IR's one-word rule). Not covered: a carrier
-older than `life` windows of a block it encodes that is never re-keyed, such as a prefix-cached KV page computed from
-the registered weights' encodings more than `life` windows before the pass; a deployment caps a cached page's age at
-`life` or takes `life` as that age. -/
-def CircuitCarriers {n P N ρ S L q G : ℕ} {ι : Type}
-    (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773) (X life B εnum εden : ℕ) (W : Gates.Dag ι)
-    (Aud : Gates.Audit) : Prop :=
-  ∀ w η j pre c σ, ∃ (K : RateSketch.Carrier N 128) (I : Finset ℕ),
-    (∀ Es R O,
-      let dv := (A.window w η).device j pre c
-      let D := RateSketch.Data.ofParts Es R
-      (dv.prog σ D).rebuilds O D * 256 ≤ X + K.carried.card * 256) ∧
-    I ⊆ Finset.range Aud.windows ∧ I.card ≤ life ∧
-    K.provenance.OfCircuit (encodeBitsCost Gates.p1024 3 B εnum εden) W Aud I
+`SquaringCeiling` with `WorkHardness`, within the pass's deadline). Every other rebuild of an appended block comes from
+memory the declared circuit wrote, a credited KV page, so its provenance is `W`'s computation. An appended block's key
+reads its append's coin, drawn after its payload is committed (`KeyBinding`), so what was computed before that coin
+carries nothing about its encoding, and only work after the coin helps rebuild it. No plan holds a block `life` windows
+after its append (`LifetimeCapped`), and a re-key draws a fresh coin. So the work that helps lies in at most `life`
+windows before the pass, however old the carrier's own chain. The encodes are in the restricted class when `W` is
+(`Gates.Restricted`, the IR's one-word rule). Registered tiles are left out because this fails for them: their keys
+never change, so a carrier of one built at any time still helps, it survives same-payload re-keys of its own block and
+free copies, and the stock of such carriers grows without decay. -/
+def CircuitCarriers {n P N ρ S L q G T M : ℕ} {ι Y : Type}
+    (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773)
+    (store : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → RateSketch.SketchStore N 128)
+    (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → Fin N ↪ Fin T × Fin M)
+    (X life B εnum εden : ℕ) (W : Gates.Dag ι) (Aud : Gates.Audit) : Prop :=
+  ∀ (c : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773) (g : Fin G) (y : Y),
+    ∃ (K : RateSketch.Carrier N 128) (I : Finset ℕ),
+      (∀ R O,
+        let dv := (A.window c.w c.windows).device c.j c.passes g
+        let D := RateSketch.Data.ofParts (store c y) R
+        (dv.prog c.signs D).rebuildsIn (RateSketch.appendedTiles layout c y) O D * 256 ≤ X + K.carried.card * 256) ∧
+      I ⊆ Finset.range Aud.windows ∧ I.card ≤ life ∧
+      K.provenance.OfCircuit (encodeBitsCost Gates.p1024 3 B εnum εden) W Aud I
 
 /-- **A pass's layout reads the codec and the append coins through at most `a` bits.** At every prefix `c` of the
 session's coins, the layout `layout c y` takes at most `2^a` values as the codec and the append coins `y` vary: it is
@@ -102,12 +109,13 @@ session's coins, the layout `layout c y` takes at most `2^a` values as the codec
 
 **Why it should hold.** The layout is the memory map's schedule: which blocks are resident and planned when the pass's
 step begins. The memory map makes it a function of the served steps (frees at last read, writes at production, re-keys
-at the life cap only), and the served steps are a function of what the prover chose: the requests' run inputs, their
-arrival times and their scheduling. Whatever of those it chose after an append's coin can follow that append's
-encodings. `a` counts those choices within the life of the blocks the pass holds: the schedule's arrivals, lengths,
-prefix-cache hits and preemptions, and every run input that moves them. A schedule-determinism check (the served steps
-a function of the run inputs, their arrival order and the coins) bounds `a` by those choices; without it, timing is any
-function of the encodings and `a` is unbounded. -/
+at the life cap only). What the prover chose after an append's coin can follow that append's encodings, and `a` counts
+the bits of it the layout reads. This premise is only that count. That the served steps are a function of the run
+inputs, each request's arrival step at the engine and the coins is the engine's code, held by a check that its schedule
+is deterministic (`ScheduleDeterministic`, specified, not written). Under that check `a` is at most the bits of the run
+inputs and arrival steps the prover chose after the coins of the blocks the pass holds, within their life: arrivals,
+lengths, prefix-cache hits and preemptions, and every run input that moves them. Without it the engine's timing may
+follow the encodings, and no `a` is known. -/
 def SteeredLayout {Pfx Y : Type} {N T M : ℕ} (a : ℕ) (layout : Pfx → Y → Fin N ↪ Fin T × Fin M) : Prop :=
   ∃ (slot : Pfx → Pous.Bits a → Fin N ↪ Fin T × Fin M) (steer : Pfx → Y → Pous.Bits a),
     ∀ c y, layout c y = slot c (steer c y)
