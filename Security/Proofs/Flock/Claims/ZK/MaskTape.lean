@@ -15,7 +15,9 @@ component, `Fin nMask → Fin 128 → ZMod 2`), which the tables read through `C
 * `zOf_maskOf`: at that tape, table `j`'s share of `honestPR`'s witness is the tables' `zWith` at the witness's share
   (`wtOf`) and the base's slot bits, the clear table that every round of table `j`'s view reads.
 * `honestPR_atMask`: where no outer coin is `1`, `honestPR` at that tape is `honestP` at that witness.
-* `Flock.zk_deployZk_masked_atMask_gap`: `Flock.zk_deployZk_masked_at_gap` at that tape plan.
+* `Flock.zk_deployZk_masked_atMask_gap`: `Flock.zk_deployZk_masked_at_gap` at that tape plan, and
+  `Flock.zk_deployZk_masked_atMask_stop_gap` at a stopping round plan (`RoundPlan.stop`), where the third round is
+  about `honestPR` alone.
 -/
 
 namespace Claims.ZKMal
@@ -113,5 +115,35 @@ theorem Flock.zk_deployZk_masked_atMask_gap (H : Msg → Msg) (nr : Msg → ℕ 
           8 * t * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t else 1)
       fun _ => 4 * t * 3 ^ t :=
   Flock.zk_deployZk_masked_at_gap H nr P Q x₀ _ t ht hc hpre hfin hoff
+
+open Classical in
+/-- **`Flock.zk_deployZk_masked_atMask_gap` at a stopping round plan** (`RoundPlan.stop`): the last message where a table
+refuses the coins is the empty one, so the third round is `ZkTables.honestPR`'s alone (`honestOffOn_stop_iff`): after
+`refK x` openings whose coins some table refuses, its next message is `[]`. -/
+theorem Flock.zk_deployZk_masked_atMask_stop_gap (H : Msg → Msg) (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
+    (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((tabC P x j).T (cz x c j)).tab.Cut) → Msg)
+    (fin : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((tabC P x j).T (cz x c j)).tab.View) → Msg)
+    (x₀ : Msg) (z : Rand (tabC P) x₀ → FlockComplete.TapeZk) (t : ℕ) (ht : 0 < t)
+    (hc : (RoundPlan.stop cz enc fin).Causal)
+    (hpre : (session nr (tableData P (RoundPlan.stop cz enc fin) (TapePlan.atMask x₀ z))).HonestPreOn
+      (fun x => x = x₀ ∧ Live x) RZk H coinOfD fun ω => (TapePlan.atMask x₀ z).tapeZk ω.2)
+    (hfin : (session nr (tableData P (RoundPlan.stop cz enc fin) (TapePlan.atMask x₀ z))).HonestFinOn
+      (fun x => x = x₀ ∧ Live x) RZk H coinOfD fun ω => (TapePlan.atMask x₀ z).tapeZk ω.2)
+    (hoff : ∀ x, x = x₀ ∧ Live x → ∀ w, RZk x w → ∀ r (ops : List (Msg × Msg)), ops.length = refK x →
+      ¬ (session nr (tableData P (RoundPlan.stop cz enc fin) (TapePlan.atMask x₀ z))).Admits x
+        ((session nr (tableData P (RoundPlan.stop cz enc fin) (TapePlan.atMask x₀ z))).pad
+          (ops.map fun p => rd p.2)) →
+      (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOfD p.2))
+        ((TapePlan.atMask x₀ z).tapeZk r)).eval H).1 = []) :
+    Claims.Flock.ZK H
+      (zkDeployed _root_.Flock.Readable.relation nr
+        (tableData P (RoundPlan.stop cz enc fin) (TapePlan.atMask x₀ z)) t)
+      (fun x => if x = x₀ ∧ Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x then
+        8 * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash +
+          8 * t * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t else 1)
+      fun _ => 4 * t * 3 ^ t :=
+  Flock.zk_deployZk_masked_atMask_gap H nr P (RoundPlan.stop cz enc fin) x₀ z t ht hc hpre hfin
+    ((honestOffOn_stop_iff (TapePlan.atMask x₀ z) nr _ RZk H).2 hoff)
 
 end Claims.ZKMal
