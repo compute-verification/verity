@@ -19,7 +19,6 @@ as the reference, the switch is one reversible line, and the protocol's properti
 `Properties/`. What the Lean doesn't check yet that `audit.py` does:
 
 - `Registry`: one live registration a node, and the session's index `k` in it;
-- the registration's codec seed, drawn by `audit.register` from the node's nonce;
 - a registration that binds PoUW's tiles, which the Lean refuses;
 - the record past the summary `RemoteAudit.Session` returns: the coins' commitment, the integrity profile and the
   ledger's terms.

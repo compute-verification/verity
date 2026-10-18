@@ -12,7 +12,8 @@ A record is one of two kinds:
   releases only their counts. `case_of` makes a case of what it keeps: each pass a root (synthetic) at its arrival, the
   registered store its plan (an accepted pass's recorded length when that is shorter) and its step the recorded one
   (else its count in the session), each boundary at its time and each window drawn at its time, under synthetic coins
-  and with no appends, releases or openings.
+  and with no appends, releases or openings. A session recorded before the window was stated (13 Oct, 36e0ea654) may
+  have a window shorter than its `window_ns`, a boundary today's `Session` refuses; its case states its shortest.
   Both verifiers replay that case as above, and `held` holds their verdict to the recorded one:
   - an accepted session draws every window, each as many receipts as recorded;
   - one rejected for a failure the record keeps the cause of (`KEPT`: too few passes in a window) is rejected the same
@@ -20,7 +21,10 @@ A record is one of two kinds:
   - one rejected for any other failure is rejected nowhere in what is replayed, and draws as many receipts as recorded
     in each window it drew. Its cause is in what the record doesn't keep: its openings, plans, appends or steps, or
     the root it rejected, whose arrival the verifier records only once `Session.receive` takes it (so not a late one).
-  Both verifiers also recompute the registration's digest from its fields, which must be the recorded one.
+  Both verifiers also recompute the registration's digest from its fields, which must be the recorded one, unless the
+  registration was recorded before it named its layout and rows (`LATER`), when the digest bound neither. A record of
+  a registration the verifier's registry refused (a second one for a node with one live) has no session: its row says
+  so, with no verdict to replay, since the Lean has no registry.
 
     uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript CASE.json ...
     uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py record VERIFIER.json ... [--out ROWS.json]
@@ -42,7 +46,7 @@ from typing import Any
 
 import ra_cases as M
 import verity_difftest as D
-from verity.core.protocols.remote_bandwidth import audit
+from verity.core.protocols.remote_bandwidth import audit, receipts
 
 SESSION = D.Port(M.EXE, "session", M.session, None, package=M.PACKAGE)
 #: The failures whose cause a `verifier.json` keeps: a window's passes.
@@ -121,10 +125,15 @@ def codec_of(name: str) -> dict:
     return {"field": field, "masked": masked == ["masked"], "rounds": int(rounds[1:])}
 
 
+#: What a registration has named, and its digest bound, since 13 Oct 09:24Z (36e0ea654). One recorded before names
+#: neither: it had the one layout and its kind's rows, and its digest is one neither verifier computes now.
+LATER = ("layout", "rows")
+
+
 def registration_of(reg: dict) -> dict:
     return {"bind": reg["bind"], "blocks": reg["blocks"], "codec": codec_of(reg["codec"]), "codec_seed": reg["codec_seed"],
-            "layout": reg["layout"], "node": reg["node"], "payload_root": reg["payload_root"],
-            "receipt": reg["receipt"], "rows": reg["rows"]}
+            "layout": reg.get("layout", receipts.LAYOUT), "node": reg["node"], "payload_root": reg["payload_root"],
+            "receipt": reg["receipt"], "rows": reg["rows"] if "rows" in reg else receipts.sketch_rows(reg["receipt"])}
 
 
 def _synthetic(label: bytes, n: int) -> str:
@@ -142,6 +151,12 @@ def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
     failure = session.get("failure") or {}
     made = {"plans": "registered store", "steps": "recorded" if profile and "steps" in profile[0] else "counted"}
     made |= {k: f"{session[k]} recorded, none replayed" for k in ("appended", "released") if session.get(k)}
+    window_ns = session["window_ns"]
+    shortest = min((w["boundary_ns"] - w["released_ns"] for w in seen if w.get("boundary_ns") is not None),
+                   default=window_ns)
+    if shortest < window_ns:
+        made["window_ns"] = f"{shortest}, its shortest window: recorded before the stated window"
+        window_ns = shortest
     timed: list[tuple[int, int, int, int, dict]] = []
     step = 0
     for t, w in enumerate(seen):
@@ -174,8 +189,7 @@ def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
     case = {"registration": registration_of(reg), "not_before_ns": start, "append_coins": [],
             "coins": [_synthetic(b"replay coin %d" % j, 32) for j in range(2 * W)], "events": events,
             "params": {"deadline_ns": session["allowance_ns"], "deferred": False, "lifetime": lifetime,
-                       "min_passes": 1, "samples": session["samples"], "window_ns": session["window_ns"],
-                       "windows": W}}
+                       "min_passes": 1, "samples": session["samples"], "window_ns": window_ns, "windows": W}}
     return case, made
 
 
@@ -219,19 +233,25 @@ def replay_record(path: Path, s: D.Server) -> list[dict]:
     v = json.loads(path.read_text())
     if v.get("schema") != "verity/remote-session/verifier/v0":
         raise ValueError(f"{path}: not a verity/remote-session/verifier/v0 record")
+    if "registration" not in v and "refused" in v:
+        return [{"run": run_of(path), "recorded": "registration refused", "agree": None, "held": None,
+                 "why": f"the registry refused it ({v['refused'][:80]}): no session, and no registry in the Lean"}]
     reg = registration_of(v["registration"])
     lean_digest, py_digest = digests(reg, s)
+    earlier = [k for k in LATER if k not in v["registration"]]
     rows = []
     for session in v.get("sessions", []):
         row = {"run": run_of(path), "session": session.get("k"), "recorded": recorded(session),
                "windows": session["windows"], "passes": sum(w["passes"] for w in session.get("windows_seen") or []),
                "window_ns": session["window_ns"],
-               "digest": lean_digest == py_digest == ("output", v["registration"]["digest"])
+               "digest": None if earlier else lean_digest == py_digest == ("output", v["registration"]["digest"])
                and session.get("registration") == v["registration"]["digest"]}
         if not session.get("windows_seen"):
             rows.append(row | {"agree": None, "held": None, "why": "no window seen"})
             continue
         case, made = case_of(v["registration"], session)
+        if earlier:
+            made["registration"] = f"recorded before it named {' and '.join(earlier)}, its digest not today's"
         row |= replay(case, s) | {"made": made}
         row["held"], row["why"] = held(session, row["lean"]) if row["agree"] else (False, "the verifiers differ")
         rows.append(row)
@@ -247,7 +267,7 @@ def replay_transcript(path: Path, s: D.Server) -> list[dict]:
 def line(row: dict) -> str:
     who = row.get("run", row.get("file"))
     v = row.get("lean", {})
-    got = ("accepted" if v.get("outcome") == "accepted" else
+    got = ("nothing" if not v else "accepted" if v.get("outcome") == "accepted" else
            f"{v['rejected']['failure']} at window {v['rejected']['window']}" if v.get("rejected") else
            f"drew {len(v['drawn'])} windows" if "drawn" in v else next(iter(v.items()), ("?", ""))[0])
     head = f"{who} #{row['session']}: recorded {row['recorded']}; " if "session" in row else f"{who}: "
@@ -275,8 +295,10 @@ def main(argv: list[str] | None = None) -> int:
     if ns.out:
         ns.out.write_text(json.dumps(rows, indent=1) + "\n")
     bad = [r for r in rows if r.get("agree") is False or r.get("held") is False or r.get("digest") is False]
-    print(f"{len(rows)} sessions replayed; {sum(1 for r in rows if r.get('agree') is False)} where the verifiers "
-          f"differ; {sum(1 for r in rows if r.get('held') is False)} not the recorded verdict")
+    print(f"{sum(1 for r in rows if r.get('agree') is not None)} sessions replayed; "
+          f"{sum(1 for r in rows if r.get('agree') is False)} where the verifiers differ; "
+          f"{sum(1 for r in rows if r.get('held') is False)} not the recorded verdict; "
+          f"{sum(1 for r in rows if r.get('agree') is None)} records with no verdict to replay")
     return 1 if bad else 0
 
 

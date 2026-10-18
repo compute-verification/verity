@@ -121,6 +121,40 @@ def test_a_registration_whose_digest_isnt_recorded_is_caught(server, tmp_path) -
     assert R.main(["record", str(path)]) == 1
 
 
+def test_a_registration_from_before_layout_and_rows_replays_without_its_digest(server, tmp_path) -> None:
+    v = verifier_json(run("honest"))
+    for k in R.LATER:
+        del v["registration"][k]
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["agree"] and row["held"] and row["digest"] is None, row
+    assert "layout and rows" in row["made"]["registration"]
+
+
+def test_a_session_from_before_the_stated_window_replays_under_its_shortest(server, tmp_path) -> None:
+    """A window shorter than the record's `window_ns` is a boundary today's `Session` refuses, so the next window's
+    challenge never leaves and its first root fails `order`; the case states the session's shortest window instead."""
+    v = verifier_json(run("honest"))
+    s = v["sessions"][0]
+    shortest = min(w["boundary_ns"] - w["released_ns"] for w in s["windows_seen"])
+    s["window_ns"] = shortest + 1
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["agree"] and row["held"], row
+    assert row["made"]["window_ns"].startswith(f"{shortest},")
+
+
+def test_a_refused_registration_has_no_verdict_to_replay(server, tmp_path) -> None:
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps({"schema": "verity/remote-session/verifier/v0", "refused": "node 00 has a live "
+                                "registration", "registry": audit.Registry().to_json()}))
+    row, = R.replay_record(path, server)
+    assert row["agree"] is None and row["held"] is None and row["recorded"] == "registration refused"
+    assert R.main(["record", str(path)]) == 0
+
+
 def test_case_of_keeps_the_recorded_parameters_and_clock() -> None:
     v = verifier_json(run("honest"))
     s = v["sessions"][0]
