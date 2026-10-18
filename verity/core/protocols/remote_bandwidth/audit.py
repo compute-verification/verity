@@ -583,8 +583,7 @@ class WindowRecord:
     released at `opened_ns`; the openings' law (`profile`); of each pass's reads, `post_seed` of blocks appended
     after the codec seed (none if empty), which the ledger credits only on the property's verdict; the step each
     pass covers, `steps`, strictly increasing; and when each pass's root arrived on the verifier's clock,
-    `arrived_ns`, in `[released_ns, deadline_ns]` and in order (both empty in a record no session made, such as
-    `timing.stated`'s model)."""
+    `arrived_ns`, one a pass (both empty in a record no session made, such as `timing.stated`'s model)."""
 
     window: int
     lengths: tuple[int, ...]
@@ -598,10 +597,8 @@ class WindowRecord:
 
     def __post_init__(self) -> None:
         if self.arrived_ns != () and (
-                len(self.arrived_ns) != len(self.lengths) or any(type(a) is not int for a in self.arrived_ns)
-                or not self.released_ns <= self.arrived_ns[0]
-                or any(a > b for a, b in zip(self.arrived_ns, (*self.arrived_ns[1:], self.deadline_ns)))):
-            raise ValueError("a window's arrivals are each pass's root's, in order, from its challenge to its deadline")
+                len(self.arrived_ns) != len(self.lengths) or any(type(a) is not int for a in self.arrived_ns)):
+            raise ValueError("a window's arrivals are each pass's root's, an integer time each")
         if self.post_seed == ():
             object.__setattr__(self, "post_seed", (0,) * len(self.lengths))
         if len(self.post_seed) != len(self.lengths) or any(

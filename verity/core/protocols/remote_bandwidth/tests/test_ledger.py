@@ -116,11 +116,17 @@ def test_params_refuse_a_pace_without_whole_stretches_and_a_closing_window() -> 
         Pace(0, 1)
 
 
-def test_arrivals_are_in_order_from_the_challenge_to_the_deadline(k1) -> None:
-    w = k1[0].windows[0]
-    for bad in ((349, 350), (w.released_ns - 1,), (w.deadline_ns + 1,), (350.0,)):
+def test_arrivals_are_one_a_pass_and_out_of_order_ones_have_no_time_held_line(k1) -> None:
+    """A record takes any clock's arrivals, one integer a pass (the session's clock is whatever its verifier's is);
+    the time-held line reads them only in order from each window's challenge to its deadline."""
+    r = k1[0]
+    w = r.windows[0]
+    for bad in ((349, 350), (350.0,)):
         with pytest.raises(ValueError, match="arrivals"):
             dataclasses.replace(w, arrived_ns=bad)
+    for bad in ((w.released_ns - 1,), (w.deadline_ns + 1,)):
+        odd = dataclasses.replace(r, windows=(dataclasses.replace(w, arrived_ns=bad), *r.windows[1:]))
+        assert "not in order" in ledger.memory(odd, node())[1].refused
 
 
 def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
