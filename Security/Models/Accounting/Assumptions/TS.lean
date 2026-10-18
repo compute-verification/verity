@@ -33,11 +33,13 @@ Which form each takes:
 * (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
   `δ_bind` and proof soundness `δ_ZK`, with Lemma E1(c) (every adaptive word lies below a committed value wrong for its
   own derivation). E1(c) is proved on paper; it sits inside this premise until the adaptive model is in Lean.
-* `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure. It is false (`Accounting.Guarantees.TS.LinSteerSegments`:
-  a segmented consumer satisfies it only when its noise-active segments carry equal counts), and no guarantee rests on
-  it; `Accounting.Guarantees.TS.SegmentSteer` is the bound that holds.
+* `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
+
+`LinSteer` is false (`Accounting.Guarantees.TS.LinSteerSegments`: a segmented consumer satisfies it only when its
+noise-active segments carry equal counts), and no guarantee rests on it; `Accounting.Guarantees.TS.SegmentSteer` is the
+bound that holds.
 -/
 
 namespace Accounting.Assumptions.TS
@@ -121,8 +123,8 @@ def ProofsSound {Ω : Type} [Fintype Ω] {S : ℕ} (P : Play Ω S K T L U) (Nw �
   ∃ E : Paths Ω S → Prop, prob E ≤ S * (δbind + nπ * δzk) ∧
     ∀ x, P.accepts x → ¬ E x → P.game.accepts x ∧ (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
-/-- LIN-STEER (SAMPLING; falsified, `Accounting.Guarantees.TS.LinSteerSegments` and `LinSteerFalse`). **LIN-STEER**:
-zeroing a fraction `φ = |Z|/|act|` of the row's noise-active coordinates saves at most `φ` of the consumer's work. -/
+/-- `accounting-ts-lin-steer` (SAMPLING; false, `Accounting.Guarantees.TS.LinSteerSegments` and `LinSteerFalse`).
+**LIN-STEER**: zeroing a fraction `φ = |Z|/|act|` of the row's noise-active coordinates saves at most `φ` of the consumer's work. -/
 def LinSteer {m : ℕ} (c : Consumer m) : Prop :=
   ∀ Z ⊆ c.act, c.cost ∅ - c.cost Z ≤ (Z.card : ℝ) / c.act.card * c.cost ∅
 

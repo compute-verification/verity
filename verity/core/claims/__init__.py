@@ -281,14 +281,18 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-luck", "assumption",
           "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
           "most p", "TS luck at p", "proven"),
-    Entry("accounting-ts-proofs-sound", "assumption",
-          "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
-          "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
-          "round's share", "TS proofs sound", "standard"),
     Entry("accounting-ts-stage-luck", "assumption",
           "(L) at p under per-stage coins: in every round, at every stage, whatever the past, a unit of the stage that "
           "the cheater skips passes its proof with probability at most p over the stage's coin",
           "TS stage luck at p", "proven"),
+    Entry("accounting-ts-proofs-sound", "assumption",
+          "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
+          "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
+          "round's share", "TS proofs sound", "standard"),
+    Entry("accounting-ts-lin-steer", "assumption",
+          "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
+          "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
+          "LIN-STEER", "conjectured"),
 )}
 
 
