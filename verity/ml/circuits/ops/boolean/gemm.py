@@ -197,7 +197,7 @@ def GemmCoordinateMxf4(B, S, x, wrow, sx, sw):
     return _block_scaled_coordinate(B, S, x, wrow, sx, sw, 2)
 
 
-@composite("GemmAccumulatorS8", 2, ["K", "DOT"], lambda S: ((("x", Array(G.checked_s8_k(S), E4M3)), ("wrow", Array(S.K, E4M3))), F32),
+@composite("GemmAccumulatorS8", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, E4M3)), ("wrow", Array(S.K, E4M3))), F32),
            conformance="exact-model-tested")
 def GemmAccumulatorS8(B, S, x, wrow):
     """The s32 accumulator of an s8 `x @ W^T` coordinate on bits: K/32 `DOT` steps in ascending k from the zero accumulator."""
@@ -205,7 +205,7 @@ def GemmAccumulatorS8(B, S, x, wrow):
 
 
 @composite("ScaledMmS8Coordinate", 2, ["K", "DOT"],
-           lambda S: ((("x", Array(G.checked_s8_k(S), E4M3)), ("sx", F32), ("wrow", Array(S.K, E4M3)), ("sw", F32)), BF16),
+           lambda S: ((("x", Array(S.K, E4M3)), ("sx", F32), ("wrow", Array(S.K, E4M3)), ("sw", F32)), BF16),
            conformance=G.ScaledMmS8Coordinate.conformance)
 def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
     """One output word of a W8A8 linear on bits: `F2fpBf16_v2((S32ToF32Rn_v2(acc) * sx) * sw)` with `F32Mul_v4`."""

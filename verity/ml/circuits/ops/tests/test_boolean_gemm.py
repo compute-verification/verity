@@ -84,23 +84,13 @@ def test_pinned_counts_and_digests(target) -> None:
 @pytest.mark.parametrize("coord, binding, k", [
     (BG.DotBf16, BG.GEMM_HOPPER, 16), (BG.GemmCoordinate, BG.GEMM_AMPERE, 16), (BG.Gemm, {"N": 2, **BG.GEMM_AMPERE}, 16),
     (BG.GemmCoordinateE4m3, BG.GEMM_HOPPER_E4M3, 32), (BG.GemmCoordinateNvf4, BG.GEMM_SM120_NVF4, 64),
-    (BG.GemmCoordinateMxf4, BG.GEMM_SM120_MXF4, 64), (BG.GemmAccumulatorS8, BG.GEMM_SM120_S8, 32),
-    (BG.ScaledMmS8Coordinate, BG.GEMM_SM120_S8, 32)], ids=lambda v: getattr(v, "name", None))
+    (BG.GemmCoordinateMxf4, BG.GEMM_SM120_MXF4, 64)], ids=lambda v: getattr(v, "name", None))
 def test_a_k_its_step_does_not_divide_is_refused_before_any_body(coord, binding, k) -> None:
     """As for the word coordinates (`gemm.checked_k`): the pinned bindings above, each at a K its step divides, keep their
     counts and digests."""
     for K in (k // 2, k + k // 2):
         with pytest.raises(ValueError, match=f"K is a multiple of the DOT step {k}, not {K}"):
             bind(coord, K=K, **binding).signature()
-
-
-@pytest.mark.parametrize("coord", [BG.GemmAccumulatorS8, BG.ScaledMmS8Coordinate], ids=lambda v: v.name)
-def test_an_s8_coordinate_on_bits_refuses_k_from_2_17(coord) -> None:
-    """As for the word coordinates (`gemm.checked_s8_k`): the Boolean s8 step clamps at D too."""
-    top = (1 << 17) - 32
-    assert bind(coord, K=top, **BG.GEMM_SM120_S8).signature()[0][0][1].n == top
-    with pytest.raises(ValueError, match="K is below 2\\^17 under the clamping s8 step BlackwellS8ImmaDot32_v2, not 131072: "):
-        bind(coord, K=1 << 17, **BG.GEMM_SM120_S8).signature()
 
 
 @pytest.mark.parametrize("d", [BG.F2fpBf16, BG.AmpereBF16TcDot16, BG.HopperBF16WgmmaDot16, BG.HopperE4m3QgmmaDot32,

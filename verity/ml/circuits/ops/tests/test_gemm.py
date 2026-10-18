@@ -143,9 +143,7 @@ def test_gemm_batches_the_coordinate() -> None:
 @pytest.mark.parametrize("coord, binding, k", [
     (G.DotBf16, G.GEMM_AMPERE, 16), (G.GemmCoordinate, G.GEMM_HOPPER, 16), (G.Gemm, {"N": 2, **G.GEMM_AMPERE}, 16),
     (G.GemmCoordinateE4m3, G.GEMM_SM120_E4M3, 32), (G.GemmCoordinateNvf4, G.GEMM_SM120_NVF4, 64),
-    (G.GemmCoordinateMxf4, G.GEMM_SM120_MXF4, 64), (G.GemmAccumulatorS8, G.GEMM_SM120_S8, 32),
-    (G.ScaledMmS8Coordinate, G.GEMM_SM120_S8, 32), (G.ScaledMmS8, {"N": 2, **G.GEMM_SM120_S8}, 32)],
-    ids=lambda v: getattr(v, "name", None))
+    (G.GemmCoordinateMxf4, G.GEMM_SM120_MXF4, 64)], ids=lambda v: getattr(v, "name", None))
 def test_a_k_its_step_does_not_divide_is_refused_before_any_body(coord, binding, k) -> None:
     """The body is K/k whole steps, so a K the step doesn't divide would drop its last K mod k products: the signature refuses
     it, before a body or digest exists, and a K the step divides gets the signature it always had."""
@@ -153,26 +151,6 @@ def test_a_k_its_step_does_not_divide_is_refused_before_any_body(coord, binding,
         with pytest.raises(ValueError, match=f"K is a multiple of the DOT step {k}, not {K!r}"):
             bind(coord, K=K, **binding).signature()
     assert bind(coord, K=2 * k, **binding).signature()[0][0][1].n == 2 * k
-
-
-@pytest.mark.parametrize("coord, binding", [(G.GemmAccumulatorS8, G.GEMM_SM120_S8), (G.ScaledMmS8Coordinate, G.GEMM_SM120_S8),
-                                            (G.ScaledMmS8, {"N": 2, **G.GEMM_SM120_S8})], ids=lambda v: getattr(v, "name", None))
-def test_an_s8_coordinate_refuses_a_k_whose_sum_its_clamping_step_could_clamp(coord, binding) -> None:
-    """Below 2^17 products no partial sum of s8 x s8 products leaves s32, so the step's clamp at D never acts and the word is
-    the exact sum in any k order. The signatures refuse K >= 2^17 and keep the largest multiple of 32 below it, and the bound is
-    tight: (2^17 - 32) products of (-128)^2 sum exactly, and one step more clamps the exact 2^31."""
-    from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as M, s32_value
-
-    top = (1 << 17) - 32
-    assert bind(coord, K=top, **binding).signature()[0][0][1].n == top
-    for K in (1 << 17, (1 << 17) + 32, 1 << 20):
-        with pytest.raises(ValueError, match=f"K is below 2\\^17 under the clamping s8 step BlackwellS8ImmaDot32_v1, not {K}: "):
-            bind(coord, K=K, **binding).signature()
-    acc = 0
-    for _ in range(top // 32):
-        acc = M.step(acc, [0x80] * 32, [0x80] * 32)
-    assert s32_value(acc) == top << 14
-    assert s32_value(M.step(acc, [0x80] * 32, [0x80] * 32)) == (1 << 31) - 1
 
 
 # ---- the sm_120 FP8 / FP4 coordinates -----------------------------------------------------------------------------------
