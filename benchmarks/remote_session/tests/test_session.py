@@ -70,9 +70,12 @@ class PassClock:
 
 
 class TickingBackend(prover.CpuBackend):
-    def __init__(self, clock: PassClock, *args, tiers: dict | None = None, **kw) -> None:
+    def __init__(self, clock: PassClock, *args, tiers: dict | None = None, layout: list | None = None, **kw) -> None:
         super().__init__(*args, **kw)
-        self.clock, self.tiers = clock, tiers
+        self.clock, self.tiers, self._layout = clock, tiers, layout
+
+    def layout(self) -> list | None:
+        return self._layout
 
     def calibrate(self) -> dict:
         return {**super().calibrate(), **({"read_tiers": self.tiers} if self.tiers else {})}
@@ -85,11 +88,12 @@ class TickingBackend(prover.CpuBackend):
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
-        registry: audit.Registry | None = None, **kv):
+        registry: audit.Registry | None = None, layout: list | None = None, **kv):
     clock = PassClock()
     a, b = socket.socketpair()
     vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
-    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers)
+    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
+                             layout=layout)
     p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None, **kv)
     results = []
 
@@ -254,6 +258,91 @@ def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is
     (r,), (p,) = run("kv:2", samples=8, kv_every=4, kv_pool=8, lifetime=1)
     assert not r["accepted"] and not p["accepted"] and p["kv"]["rekeyed"] == 0
     assert r["failure"]["failure"] == "lifetime" and r["failure"]["t"] == 1
+
+
+class CarrierVerdict:
+    """A property verdict that holds, its carriers at most `carrier` bytes a window (`audit.PostSeedVerdict`)."""
+
+    def __init__(self, carrier: float, holds: bool = True) -> None:
+        self.carrier, self.holds = carrier, holds
+
+    def carrier_bytes(self, read_bytes: int) -> float:
+        return self.carrier
+
+
+def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(monkeypatch):
+    """The ledger's memory line on a kv session whose hello labels its store: 8 blocks of weights, then the KV pool's 8
+    pages, in HBM.  At a draw of every receipt the floor is 0, so each window credits the weights every pass holds,
+    less the blocks the node's squarings could rebuild in its span (none here: the clock's spans are ticks, so the
+    session runs at no squarings, and a rate is put back below); the KV the session appended is held and read but
+    credited only on the property's verdict, then less its carriers; the share and residual are of the node's HBM.
+    Unlabelled, the whole registered store is filler and no weights are credited."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
+    seen = {}
+    memory = verifier.memory
+
+    def keep(*a, **kw):
+        seen["args"] = a, kw
+        return memory(*a, **kw)
+
+    monkeypatch.setattr(verifier, "memory", keep)
+    layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
+              {"kind": "kv", "tier": "hbm", "first": 8, "blocks": 8}]
+    (r,), (p,) = run("kv:2", samples=4096, kv_every=4, kv_pool=8, layout=layout)
+    assert r["accepted"] and p["accepted"] and r["appended"] > 0
+    B, mem, pub = rcodec.BLOCK_BYTES, r["ledger"]["memory"], r["record"]["public"]
+    assert mem["labels"] and not mem["kv_credited"] and mem["hbm_bytes"] == verifier.HBM_BYTES == 8 * 96 * 2 ** 30
+    for w, posts in zip(mem["windows"], (w["post_seed"] for w in r["record"]["profile"]["windows"])):
+        assert w["floor"] == 0 == w["lost_blocks"] == w["epsilon"] and w["held"]["weights"] == 8 * B
+        assert w["held"]["kv"] == min(posts) * B and w["read"]["kv"] == sum(posts) * B and w["held"]["host"] == 0
+        assert 8 * B <= w["held"]["hbm"] == w["basis"] == w["credited"]["hbm"] <= 16 * B
+        assert w["credited"]["weights"] == 8 * B and w["credited"]["kv"] == w["credited"]["kv_read"] == 0
+    assert mem["read"]["kv"] == sum(pub["post_seed"]) * B > 0 and mem["kv_bytes"] == mem["kv_read_bytes"] == 0
+    assert mem["credited_bytes"] == min(w["credited"]["hbm"] for w in mem["windows"]) and mem["weights_bytes"] == 8 * B
+    assert mem["share"] == mem["credited_bytes"] / mem["hbm_bytes"] and mem["residual"] == 1 - mem["share"]
+    assert mem["delta"] == 2.0 ** -40 and mem["epsilon"] == 0
+
+    (record, plans, regions), kw = seen["args"]
+    assert regions == (("weights", "hbm", 0, 8), ("kv", "hbm", 8, 8))
+    span = max(w.span_ns for w in record.windows)
+    rate = record.codec.encode_squarings * 1e9 / span / 2
+    rebuilt = verifier.memory(record, plans, regions, hbm_bytes=kw["hbm_bytes"],
+                              rebuild=audit.Rebuild(record.codec, rate))
+    for w, x in zip(record.windows, rebuilt["windows"]):
+        assert x["lost_blocks"] == pytest.approx(w.span_ns / span / 2) and x["lost_blocks"] <= 0.5
+        assert x["credited"]["weights"] == pytest.approx(8 * B - x["lost_blocks"] * B)
+        assert x["epsilon"] == pytest.approx(x["lost_blocks"] * B / x["basis"])
+        assert x["credited"]["hbm"] == pytest.approx((1 - x["epsilon"]) * x["basis"])
+    whole = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), **kw)
+    carried = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(B / 2), **kw)
+    assert whole["kv_credited"] and whole["credited_bytes"] >= mem["credited_bytes"]
+    for w, c, posts in zip(whole["windows"], carried["windows"], (w.post_seed for w in record.windows)):
+        lost = w["lost_blocks"] * B
+        assert w["credited"]["kv_read"] == pytest.approx(max(0, sum(posts) * B - lost))
+        assert c["credited"]["kv_read"] == pytest.approx(max(0, sum(posts) * B - B / 2 * sum(map(bool, posts)) - lost))
+        assert w["credited"]["kv"] == pytest.approx(max(0, min(posts) * B - lost))
+    assert whole["kv_read_bytes"] > carried["kv_read_bytes"] > 0
+    with pytest.raises(ValueError, match="fails"):
+        verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0, holds=False), **kw)
+
+    bare = verifier.memory(record, plans, None, **kw)
+    assert not bare["labels"] and bare["weights_bytes"] == 0 and bare["credited_bytes"] == mem["credited_bytes"]
+
+
+@pytest.mark.parametrize("layout", [
+    [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8}],
+    [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
+     {"kind": "kv", "tier": "hbm", "first": 9, "blocks": 7}],
+    [{"kind": "code", "tier": "hbm", "first": 0, "blocks": 16}],
+    [{"kind": "kv", "tier": "nvme", "first": 0, "blocks": 16}],
+    [{"kind": "kv", "tier": "hbm", "first": 0, "blocks": 0}, {"kind": "kv", "tier": "hbm", "first": 0, "blocks": 16}],
+    {"kind": "kv", "tier": "hbm", "first": 0, "blocks": 16},
+    ["kv"],
+])
+def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
+    with pytest.raises(ValueError):
+        verifier.regions_of(layout, 16)
 
 
 def registering(registry: audit.Registry) -> tuple[str, str]:
