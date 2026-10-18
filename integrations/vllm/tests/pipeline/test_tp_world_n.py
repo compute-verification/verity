@@ -202,13 +202,12 @@ def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: 
                          name="world4-collective", check_registry=True, rank=(4, 0))
 
 
-@pytest.mark.parametrize("M", [1, 256])
-def test_world_4_all_reduce_binds_nccl_s_tree_on_the_rtx_pro_6000_over_shm(monkeypatch, M):
+def test_world_4_all_reduce_binds_nccl_s_tree_on_the_rtx_pro_6000_over_shm(monkeypatch):
     """The TP4 capture's route (batch-invariant pynccl over SHM on 4 RTX PRO 6000) is one `AllReduceNcclTree_v1` call over the
-    flattened [M * N] partials, down the capture's chain."""
-    derived = _derive_world4_all_reduce(monkeypatch, env=TP4_ENV, gpu=RTX_PRO_6000, M=M)
+    flattened [M * N] partials, down the capture's chain (M = 256, the entry's top, is `test_tp_allreduce`'s binding test)."""
+    derived = _derive_world4_all_reduce(monkeypatch, env=TP4_ENV, gpu=RTX_PRO_6000, M=1)
     assert derived.ok, derived.unsupported
-    assert [n.fn.id for n in derived.program.fn.body.nodes] == [f"AllReduceNcclTree_v1{{WORLD=4,SIZE={M * 8192},CHAIN=(0,1,2,3)}}"]
+    assert [n.fn.id for n in derived.program.fn.body.nodes] == ["AllReduceNcclTree_v1{WORLD=4,SIZE=8192,CHAIN=(0,1,2,3)}"]
 
 
 @pytest.mark.parametrize("env,gpu,M,N", [(TP4_ENV, ((9, 0), 132), 1, 8192), ({"VLLM_BATCH_INVARIANT": "1"}, RTX_PRO_6000, 1, 8192),
