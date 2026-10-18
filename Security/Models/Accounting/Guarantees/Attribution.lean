@@ -99,7 +99,7 @@ open Accounting.PouwWork
 
 /-- **PoUW's work floor at one block.** For any salt width `s`, hardware `H`, strategy `S` on coins split into the
 window's coin (an `s`-bit salt and the hiding randomness of its public commitment `com`) and the later draw, verdict `P`,
-boundary-audit verdict `bacc`, location `X` of `H` (the block), sealed record cells `seal` (the salt frame's slot),
+boundary-audit verdict `bacc`, location `X` of `H` (the block), sealed record cells `sealed` (the salt frame's slot),
 credit pricing `π`, marking `m` and noise-hash marking `hash`: if the strategy is causal, the links are as declared and
 the certifiers are trusted (B4's premises), what the outside and the certifiers off `∂X` can tell at `ts` depends on
 the window's coin only through `com`, which hides the salt up to `δhide`, what each certifier sends outside the block
@@ -116,18 +116,18 @@ def PouwBlockCredit : Prop :=
     [Fintype Ωd] [Fintype Ac]
     (s : ℕ) (H : Hardware L E) (S : (Fin (2 ^ s) × Ωh) × Ωd → Actual.Run L)
     (P : Verdict ((Fin (2 ^ s) × Ωh) × Ωd) L) (bacc : (Fin (2 ^ s) × Ωh) × Ωd → Prop) (com : Fin (2 ^ s) × Ωh → C)
-    (X : Finset L) (seal : L → Set ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) (spec : ∀ r, (S r).A.Spec)
+    (X : Finset L) (sealed : L → Set ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) (spec : ∀ r, (S r).A.Spec)
     (π : ∀ r, Fin (S r).A.N → ℕ) (m hash : ∀ r, Finset (Fin (S r).A.N))
     (T Wn : ℕ) (ss : NetTiming.SyncSet) (frames : List In → Ac → Fin Lk → List NetTiming.LogicalFrame)
     (mw D kc q Wb Nmin : ℕ) (δdet δluck δfloor δhide : ℝ),
     X ∈ H.units → mw ≤ Wn → CausalStrategy S H.ℓ → DeclaredLinks S H.ends H.β link →
     TrustedUnits S H.trusted H.cert spec H.record H.bucket H.jitter →
-    Assumptions.SaltFreeJitter S H.cert X (Attribution.openCells H.record seal) H.bucket H.jitter P.window →
+    Assumptions.SaltFreeJitter S H.cert X (Attribution.openCells H.record sealed) H.bucket H.jitter P.window →
     Assumptions.SaltCustody S com H.cert X (Attribution.boundaryCert H X) P.window →
     Assumptions.SaltHiding com δhide →
     Assumptions.SaltContainment S bacc H.cert X P.window kc →
     Assumptions.BoundaryObs K Sz S bacc com H.cert X (Attribution.boundaryCert H X)
-      (Attribution.openCells H.record seal) P.window T Wn ss frames mw D →
+      (Attribution.openCells H.record sealed) P.window T Wn ss frames mw D →
     Assumptions.OutsideQueries S hash H.cert X P.window q →
     Assumptions.PouwDetection S P Nmin δdet → Assumptions.PouwLuck S P Nmin δluck →
     Assumptions.PouwFloorAdvice s S P bacc com X H.cert hash π m Wb Nmin q

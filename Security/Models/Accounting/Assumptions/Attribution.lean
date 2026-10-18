@@ -110,7 +110,7 @@ def SaltContainment {Ωs Ωd L : Type*} (S : Ωs × Ωd → Actual.Run L) (bacc 
   ∀ d, ((fun s => Attribution.leak (S (s, d)) cert X w) '' {s | bacc (s, d)}).encard ≤ ((2 ^ kc : ℕ) : ℕ∞)
 
 /-- **Salt-free jitter, outside the block**: `TrustedUnits`' W2 and J for what each certifier sends outside the block
-`X` until the window `w` ends, with its open record cells `cells` (meant at `Attribution.openCells H.record seal`) in
+`X` until the window `w` ends, with its open record cells `cells` (meant at `Attribution.openCells H.record sealed`) in
 place of all of them and each certifier's jitter word `J d y` a function of the draw `d` alone. For some jitter words,
 one per certifier and draw, each one of `2^jitter` classes a bucket of ticks (`bucket`), what each certifier `y` sends
 to readers outside `X` from the gates it places during `[a, b)`, `b` no later than the window's end, is a function of
@@ -142,7 +142,7 @@ constant-rate Program (`NetTiming.constantRate`, `Wn` windows with advice, the s
 against the operator of that coin's commitment and leak, with jitter classes below `D` (`NetTiming.AccSeqs`); and the
 open records the certifiers `bcert` place before the window `w` ends (`Attribution.records` in `cells`, from tick 0)
 are the same at two such coins whose commitments, leaks and observations are. Meant at `bcert =
-Attribution.boundaryCert H X`, `∂X`'s certifiers, and `cells = Attribution.openCells H.record seal`.
+Attribution.boundaryCert H X`, `∂X`'s certifiers, and `cells = Attribution.openCells H.record sealed`.
 
 Modulo the salt frame: the sealed slot, which holds the salt and its commitment, is outside `cells`, so the window's
 salt frame counts only through its place in the grid, which is the same at every salt (one frame, at the window's first
