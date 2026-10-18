@@ -1,6 +1,6 @@
 """The bridge between the layers: a placement of a circuit onto a datacenter, what it implies, and what of it is public.
 
-A `Placement` mirrors Lean's `Accounting.Placed` (and #2399's `Accounting.Requirement.Placement`): each value has the
+A `Placement` mirrors Lean's `Accounting.Placed` and `Accounting.Requirement.Placement` (#2386): each value has the
 device it is produced on (`leaf`), the engine step it is produced at (`step`) and a cell of that device (`cell`, one
 value a cell a step), and each device maps its steps onto ticks of the trusted clock (`ticks`, strictly increasing).
 The placement is private and committed. A crossing is a value produced in one block and read in another; crossings are
