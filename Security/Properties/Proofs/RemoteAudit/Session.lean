@@ -258,36 +258,39 @@ theorem invOn_append {P R AC ws filling stp extent appends drawnN head}
 
 /-! ## The events -/
 
+/-- An event leaves the session's parameters, registration and append coins as they were. -/
+abbrev Frame (s s' : State) : Prop := s'.params = s.params ∧ s'.reg = s.reg ∧ s'.appendCoins = s.appendCoins
+
 theorem inv_start {s : State} {now : Nat} {r : Result} {s' : State} (h : Inv s) (he : start s now = (r, s')) :
-    Inv s' := by
+    Inv s' ∧ Frame s s' := by
   unfold start at he
   split at he
-  · cases he; exact h
+  · cases he; exact ⟨h, rfl, rfl, rfl⟩
   split at he
-  · cases he; exact h
-  · cases he; exact inv_releaseCoin h _ _
+  · cases he; exact ⟨h, rfl, rfl, rfl⟩
+  · cases he; exact ⟨inv_releaseCoin h _ _, rfl, rfl, rfl⟩
 
 theorem inv_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Inv s) (he : boundary s now = (r, s')) :
-    Inv s' := by
+    Inv s' ∧ Frame s s' := by
   unfold boundary at he
   simp only [Id.run] at he
   repeat' split at he
   all_goals cases he
   all_goals first
-    | exact h
-    | exact inv_releaseCoin (inv_boundaryNs h _ _) _ _
-    | exact inv_boundaryNs h _ _
+    | exact ⟨h, rfl, rfl, rfl⟩
+    | exact ⟨inv_releaseCoin (inv_boundaryNs h _ _) _ _, rfl, rfl, rfl⟩
+    | exact ⟨inv_boundaryNs h _ _, rfl, rfl, rfl⟩
 
 theorem inv_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State} (h : Inv s)
-    (he : append s root count = .ok (r, s')) : Inv s' := by
+    (he : append s root count = .ok (r, s')) : Inv s' ∧ Frame s s' := by
   unfold append at he
   repeat' split at he
   all_goals (try dsimp only at he)
   all_goals cases he
   all_goals first
-    | exact h
-    | exact inv_fail h _ _ _
-    | exact invOn_append h _ _ _ (by assumption)
+    | exact ⟨h, rfl, rfl, rfl⟩
+    | exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
+    | exact ⟨invOn_append h _ _ _ (by assumption), rfl, rfl, rfl⟩
 
 theorem inv_draw {s : State} (h : Inv s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat)
     (hm : ∀ hu : u < s.windows.size, s.params.minPasses ≤ s.windows[u].roots.size) :
@@ -406,38 +409,122 @@ theorem invOn_add {P R AC ws filling stp extent appends drawnN head}
     · intro hi; exact h.heads t (by omega) i hi
 
 theorem inv_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State} (h : Inv s)
-    (he : close s t now = .ok (r, s')) : Inv s' := by
+    (he : close s t now = .ok (r, s')) : Inv s' ∧ Frame s s' := by
   unfold close at he
   dsimp only at he
   repeat' split at he
   all_goals (try dsimp only at he)
   all_goals cases he
   all_goals first
-    | exact h
-    | exact inv_fail (inv_final h _) _ _ _
-    | exact inv_draw (inv_final h _) _ _ _ (fun hu => by dsimp only at hu ⊢; rw [roots_final]; omega)
+    | exact ⟨h, rfl, rfl, rfl⟩
+    | exact ⟨inv_fail (inv_final h _) _ _ _, rfl, rfl, rfl⟩
+    | exact ⟨inv_draw (inv_final h _) _ _ _ (fun hu => by dsimp only at hu ⊢; rw [roots_final]; omega), rfl, rfl, rfl⟩
 
 theorem inv_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State} (h : Inv s)
-    (he : verify s t openings = (r, s')) : Inv s' := by
+    (he : verify s t openings = (r, s')) : Inv s' ∧ Frame s s' := by
   unfold verify at he
   simp only [Id.run] at he
   repeat' split at he
   all_goals (try dsimp only at he)
   all_goals cases he
   all_goals first
-    | exact h
-    | exact inv_fail h _ _ _
-    | exact inv_accept h _ (drawn_of_get! _ _ _ (by assumption))
+    | exact ⟨h, rfl, rfl, rfl⟩
+    | exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
+    | exact ⟨inv_accept h _ (drawn_of_get! _ _ _ (by assumption)), rfl, rfl, rfl⟩
 
 theorem inv_release {s : State} {runs : Array (Int × Int)} {r : Result} {s' : State} (h : Inv s)
-    (he : release s runs = (r, s')) : Inv s' := by
+    (he : release s runs = (r, s')) : Inv s' ∧ Frame s s' := by
   unfold release at he
   simp only [Id.run] at he
   repeat' split at he
   all_goals (try dsimp only at he)
   all_goals cases he
   all_goals first
-    | exact h
-    | exact inv_fail h _ _ _
+    | exact ⟨h, rfl, rfl, rfl⟩
+    | exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
+
+theorem invOn_filling {P R AC ws filling stp extent appends drawnN head}
+    (h : InvOn P R AC ws filling stp extent appends drawnN head) (f' : Nat) (hf : filling ≤ f') :
+    InvOn P R AC ws f' stp extent appends drawnN head :=
+  { h with beyond := fun t ht hl => h.beyond t ht (by omega) }
+
+theorem inv_advance {s : State} (h : Inv s) {t i : Int}
+    (hc : (t == ↑s.filling + 1 && i == 0 && decide (t < ↑s.windows.size)) = true) :
+    Inv { s with windows := s.windows.modify s.filling ({· with final := true}), filling := t.toNat } :=
+  invOn_filling (inv_final h s.filling) _ (by show s.filling ≤ t.toNat; simp at hc; omega)
+
+theorem step_ok {a b c : Int} (h : ¬(!(decide (a < b) && decide (b < c))) = true) : a < b ∧ b < c := by
+  simpa using h
+
+theorem wholeReads (N : Nat) : ReadsDistinct (Plan.whole N) N :=
+  readsDistinct_of N N #[(0, N)] #[N] ⟨rfl, fun i hi => by simp at hi; subst hi; simp⟩ (by simp) (by simp)
+
+theorem inv_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (Array (Int × Int))}
+    {change : Option (Array (Int × Int) × Array (Int × Int))} {step : Option Int} {now : Nat} {r : Result}
+    {s' : State} (h : Inv s) (he : receive s t i root runs change step now = (r, s')) : Inv s' ∧ Frame s s' := by
+  unfold receive at he
+  split at he
+  · cases he; exact ⟨h, rfl, rfl, rfl⟩
+  split at he
+  · cases he; exact ⟨h, rfl, rfl, rfl⟩
+  split at he
+  · cases he; exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
+  change (have s := s; _) = _ at he
+  extract_lets s₀ jp s₁ at he
+  have key : ∀ s₂ : State, Inv s₂ ∧ Frame s s₂ → jp () s₂ = (r, s') → Inv s' ∧ Frame s s' := by
+    intro s₂ ⟨h₂, f₂⟩ hj
+    dsimp -zeta only [jp] at hj
+    extract_lets t₂ N₂ ext₂ plan₂ s₃ below₂ head₂ jp₂ at hj
+    have hP : ∀ plan, plan₂ = some plan → ReadsDistinct plan s₂.extent := by
+      intro plan hp
+      dsimp only [plan₂, ext₂, N₂] at hp
+      split at hp
+      · cases hp
+      · exact changedReadsDistinct _ _ _ _ _ hp
+      · cases hp; exact readsDistinct_mono (wholeReads _) h₂.store
+      · exact planReadsDistinct _ _ _ hp
+    have key₂ : jp₂ () = (r, s') → Inv s' ∧ Frame s s' := by
+      intro hj
+      dsimp only [jp₂] at hj
+      generalize hq : plan₂ = q at hj
+      repeat' split at hj
+      all_goals (try dsimp only at hj)
+      all_goals cases hj
+      all_goals first
+        | exact ⟨inv_fail h₂ _ _ _, f₂⟩
+        | exact ⟨invOn_add h₂ _ _ _ _ (step_ok ‹_›).1 (step_ok ‹_›).2 (hP _ (by first | exact hq | exact hq.trans ‹_›)), f₂⟩
+    split at hj
+    · split at hj
+      · cases hj; exact ⟨inv_fail h₂ _ _ _, f₂⟩
+      · exact key₂ hj
+    · exact key₂ hj
+  split at he
+  · exact key s₁ ⟨inv_advance h ‹_›, rfl, rfl, rfl⟩ he
+  · split at he
+    · cases he; exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
+    · exact key s₀ ⟨h, rfl, rfl, rfl⟩ he
+
+theorem step_inv {s : State} {e : Event} {r : Result} {s' : State} (h : Inv s) (he : step s e = .ok (r, s')) :
+    Inv s' ∧ Frame s s' := by
+  cases e with
+  | start now => injection he with he; exact inv_start h he
+  | boundary now => injection he with he; exact inv_boundary h he
+  | append root count => exact inv_append h he
+  | release runs => injection he with he; exact inv_release h he
+  | receive t i root runs change st now => injection he with he; exact inv_receive h he
+  | close t now => exact inv_close h he
+  | verify t openings => injection he with he; exact inv_verify h he
+
+/-- Every state a run reaches from `State.init` keeps the invariant, with the parameters, registration and append
+coins it started with. -/
+theorem inv_run {params : Params} {reg : Registration} {coins appendCoins : Array ByteArray} {notBeforeNs : Nat}
+    {events : Array Event} {rs : Array Result} {s : State}
+    (h : run (State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s)) :
+    Inv s ∧ s.params = params ∧ s.reg = reg ∧ s.appendCoins = appendCoins :=
+  run_inv (fun s => Inv s ∧ s.params = params ∧ s.reg = reg ∧ s.appendCoins = appendCoins)
+    (fun _ _ _ _ ⟨hs, hp, hr, ha⟩ he =>
+      have ⟨hs', fp, fr, fa⟩ := step_inv hs he
+      ⟨hs', fp.trans hp, fr.trans hr, fa.trans ha⟩)
+    _ _ _ _ ⟨inv_init .., rfl, rfl, rfl⟩ h
 
 end Properties.RemoteAudit
