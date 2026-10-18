@@ -4,7 +4,7 @@ import Definitions.Accounting.TS.ProofLayer
 # A sampled window's proofs: what (I8) reads of its drawn units (trusted)
 
 `ProofLayer`'s counterpart for 𝒫_samp (note:20261018T0449Z-draft-i8-sampled, restated after
-note:20261018T0728Z-draft-rt-i8, decision 114). A round's coins are `Paths C m × B`: on `Paths C m` the `m` coins
+note:20261018T0728Z-draft-rt-i8, decisions 114 and 119). A round's coins are `Paths C m × B`: on `Paths C m` the `m` coins
 released before the draws, in order (the round's σ, or a window's call sites' coins, each after the values it follows
 are committed), and on `B` the live draw coin, which names `s` units (`DrawnLayer.draw`), with the proofs' coins. Each
 drawn unit is proved alone, with its own noise's generation (decision 105); a unit is one output coordinate, or a
@@ -25,17 +25,22 @@ Proofs exist for drawn units only: round `w`'s proof `i` is drawn unit `drawnAt 
 * `spliceAt w k x z`: `x`'s coins before round `w`'s coin `k` (`k = m`: before its draw), then `z`'s.
 * `Alone`, `tally`, `plural`: a path that opens one value only; how many continuations of `x` open `v` alone; the value
   the most do.
-* `DrawnLayer`: the draw; each unit's slots' positions, each position's cut and writer; per path, round and draw,
-  whether the drawn unit's proof was accepted and the values it opened its slots to; each unit's relation and rightness,
-  on its slots' values and the public coins.
+* `DrawnLayer`: the draw; each unit's slots' positions and noise coin, each position's cut and writer; per path, round
+  and draw, whether the drawn unit's proof was accepted and the values it opened its slots to; each unit's relation and
+  rightness, on its slots' values and the public coins.
 * `Opens`, `committed`, `Held`, `view`: a path's accepted openings of a position; its committed value; whether some
   continuation from its cut opens it to that value alone; a unit's committed slots.
 * `Moved`, `MovedIn`, `Forked`: binding's failure, per position and per round, and its fork form; `Unsound`,
   `JointSound`: proof soundness, jointly over a round's draws; `Pins`: each unit's relation pins its rightness.
-* `Feeds`, `Good`: a unit writes a position another reads; a unit whose upstream units (itself included) are held and
-  right at their committed values.
+* `WriterReads`: a position's writer has it among its slots, checked for each layer.
+* `HeldRight`, `Late`, `Good`, `coneWt`: a unit held and right at its committed values; a unit writes a position
+  another reads, committed after the coin the reader's noise reads (decision 119); a unit whose late cone (itself
+  included) is held and right; a unit's late cone's weight, which the share charges a skipped unit.
 * `Of`: the play's tie to its drawn units' proofs; `Covers`: the ideal game's share counts every unit that isn't good,
   a property of the share's definition, proved for each game.
+
+A layer's `cut` must be no later than the protocol's real commitment of each position: a later cut binds less, and
+`UnitFixed` (E1(c) per unit) is claimed only at faithful cuts. That is protocol structure, outside this vocabulary.
 -/
 
 namespace Accounting.TS
@@ -79,8 +84,10 @@ end Plurality
 unit reading its slots `Q`'s positions `Pos`, each position's value in `V`:
 * `draw`: the units the draw coin names;
 * `pos w j k`: the position unit `j` of round `w` reads at slot `k`;
-* `cut ℓ = (w, k)`: `ℓ` is committed before round `w`'s coin `k` (`k = m`: before its draw), after every coin before it;
-* `src ℓ`: the unit whose output `ℓ` is, none for the circuit's inputs;
+* `coin w j`: the coin of round `w` before its draw that unit `j`'s noise reads;
+* `cut ℓ = (w, k)`: `ℓ` is committed before round `w`'s coin `k` (`k = m`: before its draw), after every coin before it,
+  and no later than the protocol commits it;
+* `src ℓ`: the unit whose output `ℓ` is, none for the circuit's inputs (its writer reads it, `WriterReads`);
 * `accepted x w i`, `opened x w i`: on `x`, whether round `w`'s proof of its `i`-th drawn unit was accepted, and the
   values its opening gives that unit's slots;
 * `rel x w j`: unit `j`'s relation in round `w` on its slots' values, the public Program its proof passes, at the
@@ -89,6 +96,7 @@ unit reading its slots `Q`'s positions `Pos`, each position's value in `V`:
 structure DrawnLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) where
   draw : B → Fin s → J
   pos : Fin S → J → Q → Pos
+  coin : Fin S → J → Fin m
   cut : Pos → Fin S × Fin (m + 1)
   src : Pos → Option (Fin S × J)
   accepted : Paths (Paths C m × B) S → Fin S → Fin s → Prop
@@ -159,14 +167,34 @@ check with no absorbed word as witness (`PouwCallCheck_v1`, `PouwWarpCheck_v1`, 
 every word it absorbs from the unit's operands, its seed and its noise. -/
 def Pins : Prop := ∀ x w j v, pf.rel x w j v → pf.right x w j v
 
-/-- Unit `u` writes a position that unit `v` reads. -/
-def Feeds (u v : Fin S × J) : Prop := ∃ k, pf.src (pf.pos v.1 v.2 k) = some u
+/-- **A position's writer reads it**: the unit whose output a position is has it among its slots, so the writer's
+rightness speaks of it. Protocol structure, checked for each layer. -/
+def WriterReads : Prop := ∀ ℓ u, pf.src ℓ = some u → ∃ k, pf.pos u.1 u.2 k = ℓ
 
-/-- **Unit `j` of round `w` is good on `x`**: every unit upstream of it (itself included) has its slots held at their
-committed values, and is right at them. -/
+/-- Unit `u` of round `u.1` is held and right on `x`: its slots are held at their committed values, and it is right at
+them. -/
+def HeldRight [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (u : Fin S × J) : Prop :=
+  (∀ k, pf.Held x (pf.pos u.1 u.2 k)) ∧ pf.right x u.1 u.2 (pf.view x u.1 u.2)
+
+/-- **Unit `u` writes, after `v`'s coin, a position that unit `v` reads**: the position's cut is after the coin `v`'s
+noise reads, so its value can be chosen after that coin (under decision 107, a K-chunk's running sum). A position
+committed before `v`'s coin is fixed when `v`'s noise is drawn, whether its writer is right or not, so it is no edge. -/
+def Late (u v : Fin S × J) : Prop :=
+  ∃ k, pf.src (pf.pos v.1 v.2 k) = some u ∧
+    (v.1 < (pf.cut (pf.pos v.1 v.2 k)).1 ∨
+      v.1 = (pf.cut (pf.pos v.1 v.2 k)).1 ∧ (pf.coin v.1 v.2).castSucc < (pf.cut (pf.pos v.1 v.2 k)).2)
+
+/-- **Unit `j` of round `w` is good on `x`**: every unit of its late cone (itself, and every unit that writes it a value
+after its coin, transitively) is held and right. -/
 def Good [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (w : Fin S) (j : J) : Prop :=
-  ∀ u : Fin S × J, Relation.ReflTransGen pf.Feeds u (w, j) →
-    (∀ k, pf.Held x (pf.pos u.1 u.2 k)) ∧ pf.right x u.1 u.2 (pf.view x u.1 u.2)
+  ∀ u : Fin S × J, Relation.ReflTransGen pf.Late u (w, j) → pf.HeldRight x u
+
+open Classical in
+/-- **Unit `u`'s late cone's weight**: the weights `wt` of every unit `u` reaches along `Late`, itself included. A share
+that charges each skipped unit this covers every unit that isn't good when every unit it doesn't charge is held and
+right; for whole-coordinate units there are no late edges and it is `wt u`. -/
+noncomputable def coneWt [Fintype J] (wt : Fin S → J → ℝ) (u : Fin S × J) : ℝ :=
+  ∑ v : Fin S × J, if Relation.ReflTransGen pf.Late u v then wt v.1 v.2 else 0
 
 /-- **The play is its drawn units' proofs'** (𝒫_samp): the window is accepted only if every drawn unit's proof is, and
 the ideal game's check is the drawn units' committed values, so drawn units right at them are accepted by the ideal
@@ -178,7 +206,8 @@ def Of [Fintype C] [Fintype B] [Nonempty V] {K T L U : Type} (P : Play (Paths C 
 open Classical in
 /-- **The share covers every unit that isn't good**: on an accepted path, the weight `wt w j` (unit `j`'s words in round
 `w`) of the units that aren't good is at most the ideal game's deficiency times `N_w`. A property of the share's
-definition, proved for each game, not assumed. -/
+definition, proved for each game, not assumed: a share that charges each unit that isn't held and right its `coneWt`
+covers (`Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone`). -/
 def Covers [Fintype C] [Fintype B] [Nonempty V] [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
     (wt : Fin S → J → ℝ) (Nw : ℝ) : Prop :=
   ∀ x, P.accepts x → (∑ w, ∑ j, if pf.Good x w j then 0 else wt w j) ≤ P.game.deficiency x * Nw

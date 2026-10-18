@@ -41,8 +41,9 @@ Which form each takes:
   `UnitFixed`. Its crypto half, the drawn units right, is `Accounting.Guarantees.TS.DrawnRightOff`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof service's.
-* `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed. A sampled window's proofs
-  vouch for the drawn units only, so `RightFixed`, which asks for every committed value right, says nothing there.
+* `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed, a unit being good when it
+  and the units that write it values after its coin are held and right. A sampled window's proofs vouch for the drawn
+  units only, so `RightFixed`, which asks for every committed value right, says nothing there.
 * `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
@@ -133,15 +134,19 @@ def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S 
 
 open Classical in
 /-- `accounting-ts-unit-fixed` (Lemma E1(c) per unit, proved on paper; the rounds' equal shares). **The good units'
-words are fixed**: on every accepted path, the run's owned right fixed words per unit are at least the words `wt w j` of
-the good units (`DrawnLayer.Good`: every unit upstream of unit `j` of round `w`, itself included, has its slots held at
-their committed values and is right at them), over `S`. An adaptive word lies below a committed value wrong for its own
-derivation (E1(c)), so no word of a good unit is adaptive. It reads neither the draw nor the proofs: which units are
-good is a function of the committed values, and the proofs only vouch for the drawn ones
-(`Accounting.Guarantees.TS.DrawnRightOff`). With `Σ wt = S·N_w` and the share covering every unit that isn't good
-(`DrawnLayer.Covers`), it gives `(1 − Σ_w d_w / S)·N_w`. It stays an assumption until the adaptive model is in Lean. -/
+words are fixed**: for a layer whose positions' writers read them (`DrawnLayer.WriterReads`) and whose cuts are no later
+than the protocol's commitments, on every accepted path, the run's owned right fixed words per unit are at least the
+words `wt w j` of the good units over `S`. Unit `j` of round `w` is good (`DrawnLayer.Good`, decision 119) when it and
+every unit that writes it a value after the coin its noise reads (`DrawnLayer.Late`, transitively; under decision 107,
+the K-chunks before it in its running sum) are held and right at their committed values. Values committed before a
+unit's coin are fixed when its noise is drawn, and a late value from a right unit is the honest function of fixed ones,
+so no word of a good unit is adaptive (E1(c): an adaptive word lies below a committed value wrong for its own
+derivation). It reads neither the draw nor the proofs: which units are good is a function of the committed values, and
+the proofs only vouch for the drawn ones (`Accounting.Guarantees.TS.DrawnRightOff`). With `Σ wt = S·N_w` and the share
+covering every unit that isn't good (`DrawnLayer.Covers`), it gives `(1 − Σ_w d_w / S)·N_w`. It stays an assumption
+until the play's fixed words are defined from the committed values (the adaptive model). -/
 def UnitFixed {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V : Type} [Fintype J] [Nonempty V]
     (P : Play (Paths C m × B) S K T L U) (pf : DrawnLayer C B S m s J Q Pos V) (wt : Fin S → J → ℝ) : Prop :=
-  ∀ x, P.accepts x → (∑ w, ∑ j, if pf.Good x w j then wt w j else 0) / S ≤ (P.run x).fixed
+  pf.WriterReads → ∀ x, P.accepts x → (∑ w, ∑ j, if pf.Good x w j then wt w j else 0) / S ≤ (P.run x).fixed
 
 end Accounting.Assumptions.TS
