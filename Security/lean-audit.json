@@ -6,6 +6,10 @@
    "owner": "@memory-accounting",
    "digest": "b017852df44b39b0d2fd40e91d34bb852531e4cd039425aff5c9c207edcaafd8"
   },
+  "Accounting.Assumptions.KeyBinding": {
+   "owner": "@memory-accounting",
+   "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+  },
   "Accounting.Assumptions.PouwDetection": {
    "owner": "@compute-accounting",
    "digest": "3fc26faa7c656f11bfca790d2e20bd400fe1d80ed62b71c22fe2f32e056b67e1"
@@ -1036,6 +1040,12 @@
    "assumptions": [],
    "type_hash": "0a39e7949bbfaf219bed8ea794cb61c9d969c72aec4d51d6451736b6201ad9e3"
   },
+  "Accounting.SecurityProofs.CarrierBits": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.CarrierBits : Accounting.Guarantees.CarrierBits"],
+   "assumptions": [],
+   "type_hash": "ea4f70e25ce50c4ed37d62528245c1c2801cb1b6060e5831f971206042aa4789"
+  },
   "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise": {
    "owner": "@compute-accounting",
    "signature": [
@@ -1940,6 +1950,37 @@
    "signature": ["Accounting.SecurityProofs.SketchRankFiber : Accounting.Guarantees.SketchRankFiber"],
    "assumptions": [],
    "type_hash": "285621bb6e07e492d607d97ac1183c00f683ca8459de8b4d593e019714144cd1"
+  },
+  "Accounting.SecurityProofs.StackedRequirementRelay": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay"],
+   "assumptions": [],
+   "type_hash": "a3a2f111c33a27742f50ef0851c78c8dac98a9f21043519ea66e89dce70f77b3"
+  },
+  "Accounting.SecurityProofs.StackedRequirementSketchDeployed": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed"
+   ],
+   "assumptions": [],
+   "type_hash": "24cbb6e95a476836a4c746955e513b133baaf838de6f2e7e0a7ac37d73644eb4"
+  },
+  "Accounting.SecurityProofs.StackedSessionConservationRelay": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionConservationRelay"
+   ],
+   "assumptions": [],
+   "type_hash": "abbda191195b22010fd4cf807c97045ad931470745f8a4d9626348d71ea6c14c"
+  },
+  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed :",
+    "  Accounting.Guarantees.StackedSessionConservationSketchDeployed"
+   ],
+   "assumptions": [],
+   "type_hash": "216e718c3111038cc62a0bf1625b03ee086e5358592804d896b7dfa77dfd15f8"
   },
   "Accounting.SecurityProofs.TS.AdaptSteerFail": {
    "owner": "@compute-accounting",
@@ -6636,38 +6677,6 @@
     "function": "Pouw.Receipt.duoQuad",
     "outcome": "none"
    },
-   "Pouw.SecurityProofs.Receipt.DuoStepBijective": {
-    "function": "Pouw.Receipt.duoWord",
-    "outcome": "none"
-   },
-   "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
-    "function": "Pouw.Receipt.duoRun",
-    "outcome": "none"
-   },
-   "Pouw.SecurityProofs.Receipt.Fx1WordInjective": {
-    "function": "Pouw.Receipt.fx1Word",
-    "outcome": "none"
-   },
-   "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel": {
-    "function": "Pouw.Receipt.fx1Pair",
-    "outcome": "none"
-   },
-   "Pouw.SecurityProofs.Receipt.Fx1TripleNoKernel": {
-    "function": "Pouw.Receipt.fx1Triple",
-    "outcome": "none"
-   },
-   "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel": {
-    "function": "Pouw.Receipt.fx1Quad",
-    "outcome": "none"
-   },
-   "Pouw.SecurityProofs.Receipt.Fx1StepBijective": {
-    "function": "Pouw.Receipt.fx1Word",
-    "outcome": "none"
-   },
-   "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective": {
-    "function": "Pouw.Receipt.fx1Run",
-    "outcome": "none"
-   },
    "Pouw.SecurityProofs.Receipt.LiHalfBijective": {
     "function": "Pouw.Receipt.liHalf",
     "outcome": "none"
@@ -6702,6 +6711,38 @@
    },
    "Accounting.SecurityProofs.Gates.LutSoftmaxRange": {
     "function": "Accounting.Gates.lutSoftmax",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoStepBijective": {
+    "function": "Pouw.Receipt.duoWord",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
+    "function": "Pouw.Receipt.duoRun",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1WordInjective": {
+    "function": "Pouw.Receipt.fx1Word",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel": {
+    "function": "Pouw.Receipt.fx1Pair",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1TripleNoKernel": {
+    "function": "Pouw.Receipt.fx1Triple",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel": {
+    "function": "Pouw.Receipt.fx1Quad",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1StepBijective": {
+    "function": "Pouw.Receipt.fx1Word",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective": {
+    "function": "Pouw.Receipt.fx1Run",
     "outcome": "none"
    },
    "Accounting.SecurityProofs.HMu.CoinPointMass": {
@@ -7255,6 +7296,7 @@
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14.",
    "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier.",
+   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
    "Accounting.SecurityProofs.PouwLocalOff": "frozen (conjecture,no-function,world-unlisted): It is stated over arbitrary strategies (maps from the verifier's coins to Accounting.Actual.Run) and an abstract verdict (Accounting.PouwWork.Verdict, its acceptance a field) rather than a function's acceptance, and it rests on the named open conjecture A3 (Accounting.Assumptions.PouwFloorOff, Security/Models/Accounting/Assumptions/PouwFloor.lean: on paper at L = 32 given a merge price, conjectured at served eta, claimed only at removable markings), a hypothesis that is not on the premises list until shape.conjectures lists it with a falsification test; its other premises, A2, A2b and A5 at 0 (PouwDetection, PouwLuck, PouwHelpBound), are.",
    "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": "frozen (no-function): It is a theorem about every staged spot-check play (StagedPlay, its game's acceptance and deficiency) over any finite cells and bits and any ring, not about a Lean function: the service's staged check has no Lean code yet, and once it has, this is restated as that check's property.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeAffine (Theorem K's proved affine scope: products of bit-affine operands, mixed included, row-pure, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16 (the active vector VF3j-16's prices with B_theta complete, for stages that don't overlap). It is a sibling of StagedFloorKOneSided, a floor of record (Daniel, decision 53), proved on its own scope at the luck 3/4: the affine scope isn't inside the one-sided one; K1 is not claimed outside the two proved scopes.",
@@ -7275,10 +7317,29 @@
    "Accounting.SecurityProofs.TS.TensorSlotCount": "frozen (no-function): T1 of EPS1-TENSOR over any tensor run's slot writes, injective by freshness (a hypothesis), not a Lean function.",
    "Accounting.SecurityProofs.TS.TensorSlotTight": "lemma: T1's tightness criterion (epsilon_tensor = 0 iff L = d_H and rho_H = rho_T), arithmetic.",
    "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
+   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
+   "Accounting.SecurityProofs.CarrierBits": "frozen (no-function): A counting bound over abstract provenances of a circuit's values (Security/Definitions/Accounting/Carrier.lean: the store reached only through the circuit's inputs and its own encodes), about no function of the code.",
+   "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed on a programmed store made with one of at most 2^a choices of its writers (blocks written after the seed under bound keys), for devices whose rebuilds beyond X are their carriers' sectors (Accounting.RateSketch.Carrier), at rebuilt bits X + C with C the carriers' input and encoded bits under the property's budgets, its unpaid terms and delta multiplied by 2^a, under the named assumptions Accounting.Assumptions.EncodeChainHardness and Accounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
+   "Accounting.SecurityProofs.StackedSessionConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationRelay on a programmed store made with one of at most 2^a choices of its writers, for pass devices that also read a carrier at odd side addresses (Accounting.Rate.PassProvenance, whose inputs may depend on the pass's stream and oracle), at side link L + C with C the carriers' input and encoded bits under the property's budgets, the choices' a bits added to the side link and the queries in its error, under the named assumptions Accounting.Assumptions.EncodeChainHardness and Accounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
-   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
-   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
+   "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code.",
+   "Accounting.SecurityProofs.StackedRequirementSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed with its shortfall read against a declared circuit's requirement (Requirement.held and Requirement.read, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan are W's at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's held and read bits are at most the store's n*P*N*32768 by RequirementHeld and RequirementMoved; abstract chip programs in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.SketchRank, SketchHashBudget, EncodeChainHardness and KeyBinding (its writers' choices as advice), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
+   "Accounting.SecurityProofs.StackedRequirementRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationRelay with its shortfall read against a declared circuit's requirement (Requirement.held and Requirement.read): when the memory map and each pass's plan are W's at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's held and read bits are at most the store's n*P*N*b by RequirementHeld and RequirementMoved; abstract pass devices in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.WorkHardness, SquaringCeiling, EncodeChainHardness and KeyBinding (its writers' choices as advice), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
+   "Accounting.SecurityProofs.Gates.Fooling": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
+   "Accounting.SecurityProofs.Gates.SquaringCarry": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the sparse family (Accounting.Gates.sparse), a counting bound from Fooling, not a property of a Lean function.",
+   "Accounting.SecurityProofs.Gates.EncodeBudget": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, over every declared circuit of the gate model that satisfies the stacking property, not a property of a Lean function: the property's check has no Lean code yet.",
+   "Accounting.SecurityProofs.Gates.EncodeCost": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, a bound on Accounting.Gates.encodeCost (an infimum over every circuit of the gate model), not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.FanInCount": "frozen (no-function): the fan-in count over any straight-line dataflow whose outputs see its inputs, not a Lean function.",
+   "Accounting.SecurityProofs.TS.SeesOfInjective": "lemma: a receipt injective in each input sees it, over any dataflow and receipt map.",
+   "Accounting.SecurityProofs.TS.ThinFoldInjective": "lemma: the thin fold's state is injective in each absorbed word and in its start, BitVec arithmetic.",
+   "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
+   "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
+   "Accounting.SecurityProofs.Gates.ProvenWindow": "frozen (no-function): The soundness of the gate model's interval analysis (Accounting.Gates.Proven) over every circuit and input, not a property of a Lean function: property/v1's interval analysis has no Lean code yet.",
+   "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function.",
+   "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port.",
    "Accounting.SecurityProofs.TS.LuckOfReceipt": "lemma: the bridge of LEDGER 1.3-1.5 over every ideal game split at the receipt, the operand and receipt lucks (definitions, not named assumptions) giving (L) at p + (1 - p) pr; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": "lemma: Lemma B of LEDGER 1.3 in case (a), the receipt luck 0 over every game whose rounds are committed duo, fx1 or li units or duo or fx1 checkpoint units (a definition), from DuoRunWordInjective, Fx1RunWordInjective, LiSegmentsBind, DuoSegmentsBind and Fx1SegmentsBind; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LuckCaseA": "lemma: LuckOfReceipt at the receipt luck ReceiptLuckCaseA gives, (L) at the operand luck in case (a); not a property of a Lean function.",
@@ -7287,21 +7348,6 @@
    "Accounting.SecurityProofs.TS.DuoFoldFanIn": "restatable: the fan-in floor of duo's run over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
    "Accounting.SecurityProofs.TS.FoldFanIn": "restatable: the fan-in floor of a fold of binding steps over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
    "Accounting.SecurityProofs.TS.Fx1FoldFanIn": "restatable: the fan-in floor of fx1's run over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
-   "Accounting.SecurityProofs.TS.FanInCount": "frozen (no-function): the fan-in count over any straight-line dataflow whose outputs see its inputs, not a Lean function.",
-   "Accounting.SecurityProofs.TS.SeesOfInjective": "lemma: a receipt injective in each input sees it, over any dataflow and receipt map.",
-   "Accounting.SecurityProofs.TS.ThinFoldInjective": "lemma: the thin fold's state is injective in each absorbed word and in its start, BitVec arithmetic.",
-   "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
-   "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
-   "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code.",
-   "Accounting.SecurityProofs.Gates.Fooling": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
-   "Accounting.SecurityProofs.Gates.SquaringCarry": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the sparse family (Accounting.Gates.sparse), a counting bound from Fooling, not a property of a Lean function.",
-   "Accounting.SecurityProofs.Gates.EncodeBudget": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, over every declared circuit of the gate model that satisfies the stacking property, not a property of a Lean function: the property's check has no Lean code yet.",
-   "Accounting.SecurityProofs.Gates.EncodeCost": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, a bound on Accounting.Gates.encodeCost (an infimum over every circuit of the gate model), not a property of a Lean function.",
-   "Accounting.SecurityProofs.Gates.ProvenWindow": "frozen (no-function): The soundness of the gate model's interval analysis (Accounting.Gates.Proven) over every circuit and input, not a property of a Lean function: property/v1's interval analysis has no Lean code yet.",
-   "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function.",
-   "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port.",
    "Accounting.SecurityProofs.TS.LiSegmentsBind": "lemma: Lemma B for li units (a definition: a warp's window, a checkpoint a segment, one deficient word a segment), from LiCheckpointWordInjective segment by segment; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LiWindowUnbound": "lemma: the counterexample to LiSegmentsBind with the window's last checkpoint alone (two top-bit flips cancel whatever the keys); a statement about li units (a definition), not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LuckCaseAKeyed": "lemma: LuckCaseA at the operand luck 0 that a share of wrong words (a definition, the keyed rounds' share) gives, (L) at 0 in case (a); not a property of a Lean function.",
@@ -7660,6 +7706,55 @@
    },
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
+  "Definitions.Accounting.Carrier": {
+   "digest": "adc38ca4cb29744f904d9a951ebce2aefe085197c0b83bd2d1841ad491459025",
+   "definitions": {
+    "Accounting.Rate.PIChip.linkBitsEven": "664fdfcc22cb307c84e0dced36156f3512a82bd18bac34e67c7f1b1b3020dca6",
+    "Accounting.Rate.PassProvenance": "ee44265e1c690be67eb25e35098885dc2a5c05ae23924c5202dbff4731579ede",
+    "Accounting.Rate.PassProvenance.below": "e0f64354213cb9437ab2256d50a1f7705f8c248ee6e8c03e76665937a9a34926",
+    "Accounting.Rate.PassProvenance.brecOn": "9c0a75028147e728ff9436860fce058f9d281c7507a426f5d4847d16f7effad7",
+    "Accounting.Rate.PassProvenance.brecOn.go": "73d2c36f86637e39368dbc2fd2e9c129554a8f2094a8446f0fc0de969137f2f0",
+    "Accounting.Rate.PassProvenance.casesOn": "7c649aa79f61df3592fe4b0b6ea86be7f6dc648e85a40ab61eabe617bee0765d",
+    "Accounting.Rate.PassProvenance.done": "41f61ddea59c5c57735261a4c21b9d5d5338d6237932765be1b9099b3a58f9f5",
+    "Accounting.Rate.PassProvenance.encode": "046d544635d238ff4d3bf67e62f038f1be30170795d686e4dda23c34779a0d2b",
+    "Accounting.Rate.PassProvenance.gates": "7daa8341b24e8ac99aa82caff283f38bfb5c0d67944537e286261a962da19209",
+    "Accounting.Rate.PassProvenance.input": "8c27a11bdcfc9f88eae3285adcd02684babe08dcce80929b752956529f66ca6a",
+    "Accounting.Rate.PassProvenance.inputs": "fdc089e292097297574b8cec1c92539e55c6625126eb9418c5214341ef0a4c4f",
+    "Accounting.Rate.PassProvenance.rec": "ecc12463377f3d9270b1a297cdf2b8288673685e43cf65d552ec27dbecdc7f9d",
+    "Accounting.Rate.PassProvenance.run": "b52a34a71a5c906868cde1e48e5b000aecf4545496aff88a376fce87f4a9d8a0",
+    "Accounting.RateSketch.Carrier": "959c9fa52081612967bc475abfb0112b80743b558b7330254d408762e8e2fdfa",
+    "Accounting.RateSketch.Carrier.carried": "10f81ebb2467e3794edeb76d3fed9cf3936e3dbc6e271b22f256dd8593daeaeb",
+    "Accounting.RateSketch.Carrier.provenance": "83fe2280f4e4a4cafcf9e61259f2d053aec04fb3fc65a15873296a8a3d6a0df4",
+    "Accounting.RateSketch.Provenance": "e1c403ace5ce67331b8bc30903a25604bdb1c5587793475ffc4fd90c358bd839",
+    "Accounting.RateSketch.Provenance.below": "4a48f157a7503f7554ee492f74fbecd0ceb6fc0bec60f0972ca47d597325c54b",
+    "Accounting.RateSketch.Provenance.brecOn": "ff2bee70e358db270dc1f9003b9314e630160852d793ad5f482f796f4e21359f",
+    "Accounting.RateSketch.Provenance.brecOn.go": "291335639b407bf01e1245cbca082ba4f9a9b58751242c79fe55b0d9ace72021",
+    "Accounting.RateSketch.Provenance.casesOn": "e024091f098819c2b623b84e134958d34e69a67374ed0bc808f449862c98ac86",
+    "Accounting.RateSketch.Provenance.done": "c43787cf2ee765044b765ef897024aaa6a78ee093887b45aabded19cb1836562",
+    "Accounting.RateSketch.Provenance.encode": "5ea4bfb1a205a74ecfd4ad846258204be64974f32369e53342ceac788a7edc7d",
+    "Accounting.RateSketch.Provenance.encoded": "f237c79ca2f8c939b4b063e705190df94531677cb49bd5bac667da77f432a391",
+    "Accounting.RateSketch.Provenance.gates": "845bae33380c10f73eb8368ba6f510f1b3003ace091c03fe97e5f12c23a6a925",
+    "Accounting.RateSketch.Provenance.input": "c952ae83a49c4e2c467dc2c57fd18d800fa5cf21d3fb452bdc0d6656b2f1e198",
+    "Accounting.RateSketch.Provenance.inputs": "6b30c8cf04bfbeceada1175d9d5886cff3f2b3605c1920a3881b4aa8699b083c",
+    "Accounting.RateSketch.Provenance.rec": "29ef2b5e0697a74454072abd56c2e61301503db37e36fc206de6f1d1a32233df",
+    "Accounting.RateSketch.Provenance.run": "f3927eefe53c708fe975d11873e6d296127a232b98f78b1746368901d89641bf",
+    "Accounting.RateSketch.SketchDeployedWindow.correctOn": "dc50e94282b5a9924e9bad4abf22c547b80cf436b8914c64a5c36f8360f2dbc9",
+    "Accounting.RateSketch.SketchDeployedWindow.readsOn": "9582b9fe872e4468f07cb2ad4ebed9dbea2e8d589a9c747a597e04d40da92e82",
+    "Accounting.RateSketch.SketchPrefix": "bc7d444025216fd652270044404eb72ef7443e4bb83aa38cc7b24fad18380e33",
+    "Accounting.RateSketch.SketchPrefix.of": "47c5593dde0b838373447a801b4641585b2b445fb5b4c6aa64e9c2185ae2acd7",
+    "Accounting.RateSketch.coinStore": "d28d5837fcb7dbac5beea7b4c4fd18457ff07959f76a4102f144601eb11bdf0f",
+    "Accounting.RateSketch.programmed": "085b9626b60659b90f27f2315c28c0b59e3a0a53f9ec4a7b4fd08f48890fd2df",
+    "Accounting.appendCoinBlocks": "bc4317475084be00b2ce3d53a254399d6817a4f68ca2bb62363dd99a8fd79903",
+    "Accounting.encodeBitsCost": "1808f6f6b51023f9cfefb8f7ec75fceaadc53a568568bb6e427dd1fd4cb7f64a"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
+   ]
+  },
   "Definitions.Accounting.CoinFlow": {
    "digest": "d92058d46cc0cbd1aab092b6fc14252a58e7426340341c403c62f2e94ee9ad66",
    "definitions": {
@@ -7813,7 +7908,9 @@
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
     "Accounting.SecurityProofs.RateOfAuditPartial",
-    "Accounting.SecurityProofs.RateOfAuditPartialPasses"
+    "Accounting.SecurityProofs.RateOfAuditPartialPasses",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed"
    ]
   },
   "Definitions.Accounting.Filler": {
@@ -7854,7 +7951,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Codec": {
-   "digest": "802aa9b04e67ec30ccf08189c047af85c88ecf4737bd6bc78ac8b56058c0eb1a",
+   "digest": "7212e4cf8b274c11125dfc7d224c3f0a9fce4ef1012175f1a37574a260419357",
    "definitions": {
     "Accounting.Gates.CodecInputs": "6524cf356d674b61ff89e4e77fc979bf4fdf415765b98fc7d50cdaa86792d328",
     "Accounting.Gates.ComputesWords": "85f4401b8abbfdaffb2549e6593b93091410d66af43060b81a1e4e35215ba56c",
@@ -7886,6 +7983,7 @@
     "Accounting.Gates.encodeWord": "554d51815728fecb57794d50b9fa8e5af60363cefaa851eb9b4bf664a685222d",
     "Accounting.Gates.lessParity": "31e8614acb1229ac42def0795071f4ba897d3a8e60746ca526ff33e13bcb305b",
     "Accounting.Gates.nibbles": "c60b1f41d51faa275217f9e6b6a02d6623ed725af591a0f08398faf099670b86",
+    "Accounting.Gates.p1024": "ae4ba7853892f72e67a166ceb12a244157183475c3ec20d602d6e4d79c9ec8ca",
     "Accounting.Gates.rho": "ef65a85f7c61cfd841f11e14a7b06ecb13fd990b89a3e63f1206f51d7ed0126b",
     "Accounting.Gates.sigma": "1fa89715a668bb55c59206af4defc0f120b6544b444645c7cc756b3364163d38",
     "Accounting.Gates.sparse": "7c1a17c12010cff703689a84ee595aa07cc738e98414387aca0b0db81c4ba6a1"
@@ -7896,7 +7994,11 @@
     "Accounting.SecurityProofs.Gates.RhoPairs",
     "Accounting.SecurityProofs.Gates.SquaringCarry",
     "Accounting.SecurityProofs.Gates.SquaringCarryNibbles",
-    "Accounting.SecurityProofs.Gates.SquaringUnits"
+    "Accounting.SecurityProofs.Gates.SquaringUnits",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.Gates.Declared": {
@@ -8098,7 +8200,11 @@
     "Accounting.SecurityProofs.Gates.SquaringCarry",
     "Accounting.SecurityProofs.Gates.SquaringCarryNibbles",
     "Accounting.SecurityProofs.Gates.SquaringUnits",
-    "Accounting.SecurityProofs.Gates.UnitsFooling"
+    "Accounting.SecurityProofs.Gates.UnitsFooling",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.Gates.Ranges": {
@@ -8463,7 +8569,9 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditDeployed": {
@@ -8523,7 +8631,9 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditHorizon": {
@@ -8550,7 +8660,9 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditInteractive": {
@@ -8631,7 +8743,9 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditJoint": {
@@ -8749,7 +8863,9 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Definitions.Accounting.RateAuditSketch": {
@@ -8797,6 +8913,7 @@
     "Accounting.RateSketch.sketch": "47c23a3b18cf61f684a064117ca5c7fd9538652bb88b894cf7848d7a8bf64e1e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.RateAuditSketch",
     "Accounting.SecurityProofs.RateAuditSketchInteractiveRO",
     "Accounting.SecurityProofs.RateAuditTensorSketch",
@@ -8807,7 +8924,9 @@
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
     "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.SketchBinds",
-    "Accounting.SecurityProofs.SketchRankFiber"
+    "Accounting.SecurityProofs.SketchRankFiber",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.RateAuditSketchDeployed": {
@@ -8834,8 +8953,11 @@
     "Accounting.RateSketch.instFintypeSketchWindowCoins": "e347fae6e7192c04c8b3117fcf91c06baacae0afca694194c5074646fa90be99"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
-    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed"
+    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.RateAuditSketchInteractive": {
@@ -8959,7 +9081,7 @@
    ]
   },
   "Definitions.Accounting.Requirement": {
-   "digest": "cefa15ee095bef3b6c06931b359363f99ff95fe2de63a1b24b94a31961f0846f",
+   "digest": "01da8cbbc3b00d299ff9a128cd43adbfe90de14bc4c03e7611494ccf2e58624d",
    "definitions": {
     "Accounting.Requirement.Carries": "93fd6dff6b04c716c5141e9212142e6ea3701b3aa0de94ca12483c0b48591a4d",
     "Accounting.Requirement.Execution": "cd70ee0536fc5bb221c299172e35f32cb7f8664fbf0924096cf40b3a3ee791ea",
@@ -8987,10 +9109,12 @@
     "Accounting.Requirement.bitsAt": "893a7715539d4e1d88db8afcaf3f2f212e325676cfe6bf6dd25816df7f8a050f",
     "Accounting.Requirement.bitsIn": "5440bee8fc2b080cd09ffdf36d4f4c2e490eab2913fd623940cc6a44c783c9b9",
     "Accounting.Requirement.blocks": "43dd99e049f112b0b8fd74d4c35cca07a1cb09150ed5369f33334bdf9d7fe1d7",
+    "Accounting.Requirement.held": "64cdeb5d4430c3aefead5921a08faa7345ce4003f6469f90e8639698aa4a6633",
     "Accounting.Requirement.live": "fc7c4f9b1b45bf183ac91ab06378d9fae1dd203361b5ddb5c99abb723f8fa163",
     "Accounting.Requirement.liveBits": "de62460b5313ef9bdae1bbd45f81196e59929ae2430c0b2ec1c4b664e93f11d5",
     "Accounting.Requirement.liveBlocks": "96782dd578d5b274d1f92a82085f3a5c06ecef44cf189e64d04ea620d0ba09e8",
     "Accounting.Requirement.liveIn": "52436c3c7a6b7a3c6935576d5b86b4b71b69e9e45f3c5a000dd54b3fe9ba2b26",
+    "Accounting.Requirement.read": "9b70831840160d624205252e630720c7c4271001fdccf201007417b2aeaac75f",
     "Accounting.Requirement.readBits": "940ebb457d7936b46131a3e37e10e46cbf7281232b011c0bb9a16af8b8005fa9",
     "Accounting.Requirement.readBlocks": "331777b495aa32b4f7a2d537b06f6c2c15aa89d44145e262922ef53deffa9179",
     "Accounting.Requirement.reads": "1055164e912eff3e5e598f08c907dc222843666d7ddee15fd3753a5f5eb2530a"
@@ -8999,7 +9123,9 @@
     "Accounting.SecurityProofs.RequirementDense",
     "Accounting.SecurityProofs.RequirementHeld",
     "Accounting.SecurityProofs.RequirementHeldLive",
-    "Accounting.SecurityProofs.RequirementMoved"
+    "Accounting.SecurityProofs.RequirementMoved",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed"
    ]
   },
   "Definitions.Accounting.Responder": {
@@ -9498,7 +9624,9 @@
     "Accounting.SecurityProofs.Sketch.SmallCode",
     "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision",
     "Accounting.SecurityProofs.SketchBinds",
-    "Accounting.SecurityProofs.SketchRankFiber"
+    "Accounting.SecurityProofs.SketchRankFiber",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.Window": {
@@ -10704,6 +10832,7 @@
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BoundReceiptLink",
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
+    "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.Colocation",
     "Accounting.SecurityProofs.HorizonSampling",
     "Accounting.SecurityProofs.LengthCode",
@@ -10770,6 +10899,10 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
     "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
@@ -19817,7 +19950,14 @@
    "definitions": {
     "Accounting.Assumptions.EncodeChainHardness": "b017852df44b39b0d2fd40e91d34bb852531e4cd039425aff5c9c207edcaafd8"
    },
-   "guarantees": ["Accounting.SecurityProofs.Gates.EncodeBudget", "Accounting.SecurityProofs.Gates.EncodeCost"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Gates.EncodeBudget",
+    "Accounting.SecurityProofs.Gates.EncodeCost",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
+   ]
   },
   "Models.Accounting.Assumptions.PouwFloor": {
    "digest": "4f9b562c931e2da9c956607655fcd71f416e3789589c2c2a40b16527b84a2885",
@@ -19853,7 +19993,9 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay"
    ]
   },
   "Models.Accounting.Assumptions.RateAuditDeployed": {
@@ -19873,7 +20015,11 @@
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
     "Accounting.SecurityProofs.RemoteWindowRunConservation",
-    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
+    "Accounting.SecurityProofs.RemoteWindowRunConservationRelay",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Models.Accounting.Assumptions.Sheet": {
@@ -19891,6 +20037,18 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf"
+   ]
+  },
+  "Models.Accounting.Assumptions.Stacking": {
+   "digest": "b589a81e2fee78e506a7f7166f7e811e70fd350706f1d22241fe43a3d89e005a",
+   "definitions": {
+    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Models.Accounting.Assumptions.Stages": {
@@ -20501,6 +20659,23 @@
     "Accounting.SecurityProofs.Sketch.NonCollision",
     "Accounting.SecurityProofs.Sketch.SmallCode",
     "Accounting.SecurityProofs.Sketch.TensorCoreNonCollision"
+   ]
+  },
+  "Models.Accounting.Guarantees.Stacking": {
+   "digest": "d6e269fd5febea72adab87a6ae9aeab1f535c92bfe342e209bbf97851ba53369",
+   "definitions": {
+    "Accounting.Guarantees.CarrierBits": "20428995c2321369af63229df03218efa0f480d915fc3d6b52a08f798f159c97",
+    "Accounting.Guarantees.StackedRequirementRelay": "d80a1fe5a94d1f7f5eebb709352b05ab7f91f538dabbbc6657f3ba1694ead06d",
+    "Accounting.Guarantees.StackedRequirementSketchDeployed": "497da6c3ab9e8ed9e1b6d5f5126e9dd598775499de36fe11e9d2e57f7be96691",
+    "Accounting.Guarantees.StackedSessionConservationRelay": "54fa5577b3572c5c07606968727baf4b3e76cf3da121752f8bec4d052940141f",
+    "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "429e50221f92a82bf774c075a87ab5594f56c27e673d5fb81e25df7dd44c1202"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.CarrierBits",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Models.Accounting.Guarantees.TS": {
