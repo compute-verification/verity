@@ -480,11 +480,20 @@ struct World {
   u32 epoch = 0, total = 0;
   int sms = 0;
   // the server's variants: at most 128 registers a thread (4 CTAs an SM's worth), or 80 (6)
-  static constexpr int SRV_MINB[2] = {4, 6};
-  int srv_regs[2] = {0, 0};
+  // and K CTAs an SM (srvB, srvBx2): two where a GEMM CTA leaves room for two
+  struct SrvVar { int minb, k; };
+  static constexpr SrvVar SRV[4] = {{4, 1}, {6, 1}, {4, 2}, {6, 2}};
+  static std::string srv_name(int i) { return "srv" + std::to_string(SRV[i].minb) + (SRV[i].k > 1 ? "x" + std::to_string(SRV[i].k) : ""); }
+  static int srv_index(const std::string& n) {
+    for (int i = 0; i < 4; ++i) if (srv_name(i) == n) return i;
+    fprintf(stderr, "no server %s\n", n.c_str());
+    exit(5);
+  }
+  int srv_regs[2] = {0, 0};   // by minb (4, 6)
+  int sreg(int i) const { return srv_regs[SRV[i].minb == 4 ? 0 : 1]; }
   void srv_init(int L) {
     CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
-    if (sms > 1024) { fprintf(stderr, "server: too many SMs\n"); exit(6); }
+    if (2 * sms > 1024) { fprintf(stderr, "server: too many SMs\n"); exit(6); }
     cudaFuncAttributes fa;
     CK(cudaFuncGetAttributes(&fa, server<4>));
     srv_regs[0] = fa.numRegs;
@@ -525,8 +534,9 @@ struct World {
   // ep 0: every job is ready at once (the server alone)
   void srv_launch(int var, u32 ep, cudaStream_t st) {
     CK(cudaMemsetAsync(ctl, 0, sizeof(SrvCtl), st));
-    if (var == 0) server<4><<<sms, SRV_T, 0, st>>>(djobs, (int)jobs.size(), total, ready, ep, ctl);
-    else server<6><<<sms, SRV_T, 0, st>>>(djobs, (int)jobs.size(), total, ready, ep, ctl);
+    const unsigned g = (unsigned)(SRV[var].k * sms);
+    if (SRV[var].minb == 4) server<4><<<g, SRV_T, 0, st>>>(djobs, (int)jobs.size(), total, ready, ep, ctl);
+    else server<6><<<g, SRV_T, 0, st>>>(djobs, (int)jobs.size(), total, ready, ep, ctl);
   }
   void sig(int j, u32 ep) { srv_signal<<<1, 1, 0, A>>>(ready + j, ep); }
   // the server fits on every SM beside a CTA of this GEMM (else the step would wait on it, and it on the step)
@@ -536,9 +546,10 @@ struct World {
     CK(cudaDeviceGetAttribute(&smem_sm, cudaDevAttrMaxSharedMemoryPerMultiprocessor, 0));
     CK(cudaDeviceGetAttribute(&rsv, cudaDevAttrReservedSharedMemoryPerBlock, 0));
     auto warp_regs = [](int r) { return ((r * 32 + 255) / 256) * 256; };
-    const int need_regs = warp_regs(g.regs) * ((g.threads + 31) / 32) + warp_regs(srv_regs[var]) * (SRV_T / 32);
-    const int need_smem = g.smem + rsv + rsv;
-    return g.threads > 0 && need_regs <= regs_sm && need_smem <= smem_sm && g.threads + SRV_T <= 2048;
+    const int k = SRV[var].k;
+    const int need_regs = warp_regs(g.regs) * ((g.threads + 31) / 32) + k * warp_regs(sreg(var)) * (SRV_T / 32);
+    const int need_smem = g.smem + rsv + k * rsv;
+    return g.threads > 0 && need_regs <= regs_sm && need_smem <= smem_sm && g.threads + k * SRV_T <= 2048;
   }
   // the committed tensor a shape's unit outputs, from its GEMM's output (gate_up: silu(g) u; else the output itself)
   void unit_out(const Shape& s, const bf16* y, int b, cudaStream_t st) {
@@ -894,8 +905,8 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
   }
   w.srv_init(L);
   std::vector<std::pair<std::string, std::string>> sg;   // (server variant, GEMM): the server fits beside the GEMM on every SM
-  for (int sv = 0; sv < 2; ++sv) {
-    const std::string sn = "srv" + std::to_string(World::SRV_MINB[sv]);
+  for (int sv = 0; sv < 4; ++sv) {
+    const std::string sn = World::srv_name(sv);
     chains.push_back({"chain:" + sn, "", sn, 7});
     for (const auto& g : gnames) {
       if (g == "lt") continue;
@@ -903,7 +914,7 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
       for (const auto& s : SHAPES)
         for (const auto& e : w.ext[s.name]) if (e.name == g) fits &= w.srv_fits(e, sv);
       printf("{\"server_fits\": \"%s\", \"server\": \"%s\", \"fits\": %s, \"server_regs\": %d}\n", g.c_str(), sn.c_str(),
-             fits ? "true" : "false", w.srv_regs[sv]);
+             fits ? "true" : "false", w.sreg(sv));
       if (fits) {
         sg.push_back({sn, g});
         chains.push_back({"chain:" + sn + ":" + g, g, sn, 6});
@@ -930,7 +941,7 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
     u32 ep = 0;
     if (c.mode >= 6) {
       ep = c.mode == 6 ? ++w.epoch : 0;
-      w.srv_launch(c.var == "srv4" ? 0 : 1, ep, w.B);
+      w.srv_launch(World::srv_index(c.var), ep, w.B);
     }
     int k = 0;   // the chain's call index
     for (int l = 0; l < L; ++l) {
@@ -1009,7 +1020,7 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
   {
     double hb = 1e30;
     std::string hbn;
-    for (const char* sn : {"srv4", "srv6"})
+    for (const char* sn : {"srv4", "srv6", "srv4x2", "srv6x2"})
       if (cms.count(std::string("chain:") + sn) && median(cms[std::string("chain:") + sn]) < hb) { hb = median(cms[std::string("chain:") + sn]); hbn = sn; }
     for (const auto& v : vs) if (median(cms["chain:hN:" + v.name]) < hb) { hb = median(cms["chain:hN:" + v.name]); hbn = "hN:" + v.name; }
     for (const auto& [sn, g] : sg) {
