@@ -36,6 +36,11 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   audit's certified reads, summed over the windows, and the run inputs are `R_in` a window.
 * `EncodeCost`: under `EncodeChainHardness` at `E`, the encode cost (`encodeCost`) of `q` words is at least `q · E`
   (`⊤` when no circuit computes them): the cost 6a's `encodeBitsCost` reads.
+* `FmaxfRange`, `FminfRange`, `RzByteRange`: property/v1's interval rules for P's producers hold their evaluators'
+  values (`Definitions/Accounting/Gates/Ranges`), the intervals `DeclaredHold` asks of those budgeted gates.
+* `QuantRange`, `DitherRange`, `LutSoftmaxRange`: the quantizers', the dither's and the LUT softmax's values lie in
+  their own intervals: `[lo, lo + w]` for a clamp, `[lo − m, lo + w + m + 1]` for a dither, and the hull of the table
+  and 0 for the LUT.
 -/
 
 namespace Accounting.Guarantees.Gates
@@ -142,5 +147,42 @@ computes them on more than `ε` of the draws. -/
 def EncodeCost : Prop :=
   ∀ (F : Field) (k B E εnum εden q : ℕ),
     EncodeChainHardness F k B E εnum εden → 2 ≤ F.n → ((q * E : ℕ) : ℕ∞) ≤ encodeCost F k B εnum εden q
+
+/-! ## Primitives' output intervals
+
+What `DeclaredHold` asks of a budgeted gate, that its value lies in its declared interval, for the primitives whose
+interval property/v1 derives (P's producers) and the ones it reads as declared: each a theorem over the primitive's
+evaluator (`Definitions/Accounting/Gates/Ranges`). -/
+
+/-- **`F32Fmaxf`'s rule holds.** Where property/v1's rule (`fmaxfRule`, `stacking._fmaxf`) gives an interval `o` for
+operand ranges `a` and `b`, `fmaxf` of any s32 readings in them lies in `o`. -/
+def FmaxfRange : Prop :=
+  ∀ a b o, fmaxfRule a b = some o → ∀ x y, S32 x → S32 y → Rng.Holds a x → Rng.Holds b y → o.Mem (f32Fmaxf x y)
+
+/-- **`F32Fminf`'s rule holds.** Where `fminfRule` (`stacking._fminf`) gives `o` for operand ranges `a` and `b`,
+`fminf` of any s32 readings in them lies in `o`. -/
+def FminfRange : Prop :=
+  ∀ a b o, fminfRule a b = some o → ∀ x y, S32 x → S32 y → Rng.Holds a x → Rng.Holds b y → o.Mem (f32Fminf x y)
+
+/-- **`F32ToU32RzByte`'s rule holds.** Where `rzByteRule` (`stacking._rz_byte`) gives `o` for an operand range `a`,
+the low byte of `cvt.rzi.u32.f32` of any reading in it lies in `o`. -/
+def RzByteRange : Prop :=
+  ∀ a o, rzByteRule a = some o → ∀ x, Rng.Holds a x → o.Mem (f32RzByte x)
+
+/-- **A clamped quantizer's interval.** `clamp(round(x/s), lo, lo + w)` lies in `[lo, lo + w]` whatever the rounding:
+`[−127, 127]` for steps.py's Q, K, V, activations and weights at `top = 127`, `[0, p_top]` for P. -/
+def QuantRange : Prop :=
+  ∀ (lo : ℤ) (w : ℕ) (rnd : ℚ → ℤ) (v : ℚ), Iv.Mem (lo, lo + w) (quantize lo w rnd v)
+
+/-- **The dither's interval.** A `b`-bit dither of `⌊v⌋` clamped to `[lo, lo + w]` lies in `[lo − m, lo + w + m + 1]`,
+`m = 2^(b−1) − 1`: `[−128, 127]` for `floor_quant` at `top = 127` (`lo = m − 128`, `w = 254 − 2m`), and
+`[1 − top, top]` for `act_quant` (`lo = −t`, `w = 2t`, `t = top − 1 − m`). -/
+def DitherRange : Prop :=
+  ∀ (lo : ℤ) (w m : ℕ) (v : ℚ) (R : Fin (2 * m + 2)), Iv.Mem (lo - m, lo + w + m + 1) (dither lo w m v R)
+
+/-- **The LUT softmax's interval.** Its element lies in the hull of its table and 0 (a gather's value outside its
+column): in `[0, 127]` for a table of values in `[0, 127]`. -/
+def LutSoftmaxRange : Prop :=
+  ∀ (T : List ℤ) (d : ℚ), (hull0 T).Mem (lutSoftmax T d)
 
 end Accounting.Guarantees.Gates
