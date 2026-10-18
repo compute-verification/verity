@@ -1,7 +1,7 @@
 import Definitions.Pouw.Basic.Prob
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Data.Real.Basic
-import Mathlib.Order.ConditionallyCompleteLattice.Basic
+import Mathlib.Algebra.Order.Archimedean.Real.Basic
+import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # What a remote audit shows held: the node's memory as a trace (trusted)
