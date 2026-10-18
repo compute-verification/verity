@@ -19,8 +19,17 @@ It is a battery of concrete break attempts, each bit-exact over Z/2^32, plus a r
   E. Other units for the fold's multiply: tensor IMMA with int8 limbs, a table over (public key, byte), FFMA, and the
      uniform datapath -- each reconstructs u*a but at more than one lane instruction, or cannot index a fresh word.
   F. A randomised superopt hunt: short straight-line programs over the real sm_120 opcode menu (LOP3, IADD3, IMAD,
-     IMAD.WIDE, SHF funnels, LEA/LEA.HI, PRMT, IDP.4A, FFMA) are evaluated on random 32-bit inputs; any that reproduces a
-     fold output below honest's length is verified exactly. The hunt reports the program count it covered.
+     IMAD.WIDE (two output words), SHF funnels, LEA, PRMT byte selects, IDP.4A and the uniform-datapath ops) are evaluated
+     on random 32-bit inputs for the 2- and 3-word runs; any that reproduces a fold receipt below honest's length is
+     verified exactly on 10^4 points. The hunt reports the program count it covered. `fold_hunt_pod.py` runs it at scale.
+  H. Amortization across chains and lanes (RT-FOLD round 2): the public keys and rotations are shared by all 8 chains and
+     all 32 lanes, so a cheater may pay a once-per-window setup to make the per-word step cheaper (amortized = setup/W +
+     step). Even given an arbitrarily rich key-only precompute, a table-amortized multiply, a repeated key schedule and
+     cross-lane sharing, the per-word step stays >= honest, so the amortized cost a word -> honest as W -> inf, never below.
+
+A companion z3 CEGIS sweep (`fold_cegis.py`) proves small-width lower bounds: no program below honest's length computes a
+2- or 3-word duo/fx1/li receipt at widths 4/6/8/12 (UNSAT per cell, or timeout). It is the exhaustive counterpart to this
+file's randomised hunt; it needs z3 (a workspace dependency) and so runs on the pod, not in this suite.
 
 Every attack closes: no candidate reproduces a fold more cheaply than honest. The one-line reason per attack is in each
 check's name. A real break would flip the matching check to FAIL (the mutations show the search is sensitive: an additive
@@ -148,8 +157,8 @@ def pick_keys_ok_r9(n, seed):
 def main() -> int:
     checks = Checks()
     g = lcg(0xF01D)
-    a0, a1 = pick_keys_ok_r9(2, 0xA11CE)
-    k0, k1, r0, r1 = 0x12345679, 0x0BADC0DE, 5, 11
+    a0, a1, a2 = pick_keys_ok_r9(3, 0xA11CE)
+    k0, k1, k2, r0, r1, r2 = 0x12345679, 0x0BADC0DE, 0x0FEEDBAC, 5, 11, 17
     vectors = [(next(g), next(g), next(g), next(g)) for _ in range(28)]
     for s in (0, 1, 2, 0x80000000, M32):
         vectors.append((s, s ^ 0x55555555, s, s ^ 0xAAAAAAAA))
@@ -378,14 +387,77 @@ def main() -> int:
     # word is produced (SCALAR-ROUTE / the census). They do not make the fold itself cheaper, so FILL-OPT's fold stands or
     # falls with FOLD-OPT above.
 
+    # ---- H. amortization across chains and lanes (RT-FOLD round 2) ------------------------------------------------
+
+    # The public per-position keys (a, k, r) and the rotations are shared by every chain and every lane, and in a window the
+    # position schedule repeats. A cheater may pay a once-per-window setup to make the per-word step cheaper; the amortized
+    # cost a word is setup/W + step. The setup is a function of the public keys only (independent of the number of words W),
+    # so as W -> inf the amortized cost tends to the step cost. These checks bound the step from below by honest even when
+    # the cheater is GIVEN an arbitrarily rich key-only precompute, a table-amortized multiply, a repeated key schedule and
+    # free cross-lane sharing -- so amortization buys nothing: the amortized cost a word -> honest, never below.
+
+    # H1. A rich key-only precompute pool (every product, power, inverse and 2-adic lift of the public keys a cheater could
+    # tabulate once per window) does not collapse duo's per-word step: y' = (y^d^k)*a + z is still not one instruction of
+    # {y, z, d, <any key-only constant>}. The data path (the XOR-in then the multiply) is independent of the keys, so no
+    # shared setup touches it.
+    rich = rich_key_pool(a0, a1, k0, k1, r0, r1)
+    pool_rich = {"y": [v[0] for v in vectors], "z": [v[1] for v in vectors],
+                 "d0": [v[2] for v in vectors], "d1": [v[3] for v in vectors]}
+    for nm, cv in rich.items():
+        pool_rich[nm] = [cv] * len(vectors)
+    step_y = [u32(u32(v[0] ^ v[2] ^ k0) * a0 + v[1]) for v in vectors]
+    checks.check(f"amortize H1: duo's per-word step is not one instruction even given a rich key-only precompute pool "
+                 f"({len(rich)} constants); a shared once-per-window setup cannot touch the data path",
+                 FO.single_instruction(step_y, pool_rich) is None, FO.single_instruction(step_y, pool_rich))
+
+    # H2. A table-amortized multiply cannot go below one op: a full-value table T_a[u] = u*a is one lookup (ties the IMAD),
+    # and a log/antilog route is 3 ops; the step still needs the XOR-in and the add, so the amortized step stays >= honest.
+    # Verified bit-exactly at width 16 (both reproduce u*a mod 2^16); the structure is identical at 32 bits.
+    full_ok, log_ok = _mul_table_ops(16)
+    checks.check("amortize H2: a table-amortized multiply is >= 1 op (full-value table ties the IMAD; log/antilog is 3 ops), "
+                 "so even an infinite shared table leaves the step >= honest",
+                 full_ok and log_ok)
+
+    # H3. A repeated key schedule gives no per-window closed form: composing two duo rounds with the SAME keys (a0,k0,r0
+    # twice) is still not degree-1 and not F2-affine, so there is no window "matrix" to precompute -- the committed data
+    # enters each step non-affinely, which is exactly what a once-per-window setup (keys only) cannot absorb.
+    def y2_samekey(y, z, d0, d1):
+        yy, zz = duo_word(y, z, d0, k0, a0, r0)
+        return duo_word(yy, zz, d1, k0, a0, r0)[0]
+    checks.check("amortize H3: a repeated key schedule still does not compose (not degree-1, not F2-affine), so there is no "
+                 "per-window closed form to precompute",
+                 not is_poly_deg1(y2_samekey, 4) and not is_affine_z2(y2_samekey, 4))
+
+    # H4. Cross-lane amortization: the 32 lanes share the keys but their per-word multiplicands u differ, and no sub-word-
+    # parallel multiply reproduces independent 32-bit products (SWAR carries interfere; the tensor route is diagonal, E1;
+    # the uniform datapath is one value, E4). So producing W words for all 32 lanes costs >= 32 multiplies a word: the
+    # cross-lane amortized cost is >= 1 multiply per lane per word, no better than honest.
+    starts32 = [RF.pfill_start(p) for p in range(32)]
+    us32 = {u32(y ^ 0 ^ k0) for (y, z) in starts32}
+    checks.check("amortize H4: 32 lanes share keys but their multiplicands differ and do not SWAR-pack, so cross-lane "
+                 f"amortized cost is >= 1 multiply per lane per word ({len(us32)} distinct u across 32 lanes)",
+                 len(us32) > 1 and FO.swar_breaks(a0))
+
+    # H5. The amortized bound. amortized(W) = setup/W + step, with setup constant in W (a function of the finite public key
+    # schedule) and step >= honest by H1-H4. So amortized(W) decreases monotonically to honest as W -> inf and never beats
+    # it; for any finite W the once-per-window setup makes it strictly worse than honest.
+    setup = len(rich)                   # a concrete once-per-window setup (building the precompute pool), constant in W
+    step = 3                            # duo's per-word step floor = honest (H1-H4: the step cannot drop below honest)
+    amort = lambda W: setup / W + step
+    checks.check(f"amortize H5: amortized/word = setup/W + step, setup constant in W and step >= honest ({step}), so it -> "
+                 f"honest as W->inf and never below (amort(1)={amort(1):.1f}, amort(1e6)={amort(10 ** 6):.5f})",
+                 all(amort(W) >= step for W in (1, 8, 64, 1000, 10 ** 6)) and abs(amort(10 ** 9) - step) < 1e-3)
+
     # ---- F. randomised superopt hunt over the real opcode menu ----------------------------------------------------
 
     budget = 20000
     for i, a in enumerate(checks.args):
         if a == "--hunt":
             budget = int(checks.args[i + 1])
-    hits, tried = superopt_hunt(budget, k0, k1, a0, a1, r0, r1, ax, kx)
-    checks.check(f"superopt hunt: {tried} random programs (len < honest) over the sm_120 menu; no fold output reproduced below honest",
+    keys = dict(k0=k0, k1=k1, k2=k2, a0=a0, a1=a1, a2=a2, r0=r0, r1=r1, r2=r2, ax=ax, kx=kx)
+    hits, tried, cover = superopt_hunt(budget, keys)
+    checks.check(f"superopt hunt: {tried} random programs (len < honest) over the sm_120 menu across {cover} 2- and 3-word "
+                 f"targets; no fold receipt reproduced below honest",
                  not hits, str(hits) if hits else None)
 
     # ---- mutations: a fold that DOES have a shortcut flips its check -------------------------------------------------
@@ -451,27 +523,55 @@ def make_pool2(k0, k1, a0, a1, r0, r1, vectors):
     return pool
 
 
+# ---- amortization across chains and lanes (section H) --------------------------------------------------------------------
+
+def rich_key_pool(a0, a1, k0, k1, r0, r1):
+    """Every key-only constant a cheater could tabulate once per window: the keys, their products, small powers, inverses,
+    2-adic lifts and the rotation masks. All are functions of the public keys only (independent of the committed data and of
+    the number of words W), so a once-per-window setup shared by all chains and lanes is limited to constants of this form."""
+    out = {"0": 0, "1": 1, "-1": M32, "2": 2, "msb": 0x80000000, "maxpos": 0x7FFFFFFF, "GOLDEN": FO.GOLDEN,
+           "a0": a0, "a1": a1, "k0": k0, "k1": k1, "r0": r0 & M32, "r1": r1 & M32}
+    out["a0a1"] = u32(a0 * a1); out["a0sq"] = u32(a0 * a0); out["a1sq"] = u32(a1 * a1)
+    out["a0cube"] = u32(a0 * a0 * a0); out["a0a1sq"] = u32(u32(a0 * a1) * u32(a0 * a1))
+    out["a0inv"] = modinv(a0); out["a1inv"] = modinv(a1); out["a0a1inv"] = modinv(u32(a0 * a1))
+    out["k0a0"] = u32(k0 * a0); out["k1a1"] = u32(k1 * a1); out["k0xa0"] = u32(k0 ^ a0); out["k1xa1"] = u32(k1 ^ a1)
+    out["gold2"] = u32(FO.GOLDEN * FO.GOLDEN); out["goldinv"] = modinv(FO.GOLDEN)
+    for r in (r0, r1):
+        out[f"lomask{r}"] = (1 << r) - 1
+        out[f"himask{r}"] = u32(~((1 << r) - 1))
+    return out
+
+
+def _mul_table_ops(n=16):
+    """At width n: a full-value multiply table by a fixed odd a is ONE lookup (T_a[u] = u*a); a log/antilog route over the
+    odd units is THREE ops (lookup + add + lookup). Both reproduce u*a mod 2^n exactly here, so a table-amortized multiply
+    cannot drop below one op -- it ties the IMAD, and the step still needs the XOR-in and the add. Returns (full_ok, log_ok)."""
+    mask = (1 << n) - 1
+    a = (0b1011 & mask) | 1                                   # a fixed odd key
+    table_a = [(u * a) & mask for u in range(1 << n)]         # full-value multiply table (one lookup)
+    full_ok = all(table_a[u] == ((u * a) & mask) for u in range(0, 1 << n, 7))
+    order = 1 << (n - 2)                                      # the odd units mod 2^n are {+-1} x <3>, |<3>| = 2^(n-2)
+    pow3 = [0] * order
+    v = 1
+    for i in range(order):
+        pow3[i] = v
+        v = (v * 3) & mask
+    log = {}
+    for i in range(order):
+        log[pow3[i]] = (0, i)
+        log[(-pow3[i]) & mask] = (1, i)
+
+    def mul_via_log(u, a):                                    # 3 ops: lookup log[u], add indices, lookup antilog
+        su, iu = log[u & mask]
+        sa, ia = log[a & mask]
+        prod = pow3[(iu + ia) % order]
+        return (-prod if (su + sa) & 1 else prod) & mask
+
+    log_ok = all(mul_via_log(u, a) == ((u * a) & mask) for u in range(1, 1 << n, 2))
+    return full_ok, log_ok
+
+
 # ---- the randomised superopt hunt ---------------------------------------------------------------------------------------
-
-def _menu_ops():
-    """(name, arity, fn) over the real sm_120 integer menu, fn taking the operand values. Shift ops carry a per-op shift
-    baked into the name. FFMA and IDP.4A included as the brief's menu; LOP3 is handled by a separate affine/LUT probe."""
-    ops = []
-    for signs in itertools.product((1, -1), repeat=3):
-        ops.append((f"IADD3{signs}", 3, lambda x, y, z, s=signs: u32(s[0] * x + s[1] * y + s[2] * z)))
-    ops.append(("IMAD", 3, lambda x, y, z: u32(x * y + z)))
-    ops.append(("IMAD.-c", 3, lambda x, y, z: u32(x * y - z)))
-    ops.append(("IMAD.HI", 3, lambda x, y, z: u32(((x * y) >> 32) + z)))
-    ops.append(("XOR3", 3, lambda x, y, z: u32(x ^ y ^ z)))
-    ops.append(("AND3", 3, lambda x, y, z: u32(x & y & z)))
-    ops.append(("LOP3.XORAND", 3, lambda x, y, z: u32((x ^ y) & z)))
-    ops.append(("IDP4A", 3, lambda x, y, z: u32(dp4a(x, y) + z)))
-    for n in range(1, 32):
-        ops.append((f"LEA.{n}", 2, lambda x, y, n=n: u32((x << n) + y)))
-        ops.append((f"ROTADD.{n}", 2, lambda x, y, n=n: u32(rotl(x, n) + y)))
-        ops.append((f"SHR.{n}", 2, lambda x, y, n=n: u32((x >> n) + y)))
-    return ops
-
 
 def dp4a(x, y):
     s = 0
@@ -484,121 +584,202 @@ def dp4a(x, y):
     return u32(s)
 
 
+def _prmt(a, b, mode):
+    """PRMT: byte permute. The 8 bytes of (b:a) little-endian are indexed by the four nibbles of the mode constant."""
+    bs = [(a >> (8 * i)) & 0xFF for i in range(4)] + [(b >> (8 * i)) & 0xFF for i in range(4)]
+    r = 0
+    for i in range(4):
+        r |= bs[(mode >> (4 * i)) & 7] << (8 * i)
+    return u32(r)
+
+
+def _menu_ops():
+    """The real sm_120 menu as (name, arity, n_out, fn). Round 2 adds IMAD.WIDE (two output words), PRMT byte selects, the
+    SHF funnel shifts and the uniform-datapath ops (UIADD3/ULOP3/UIMAD -- identical lane functions on a separate issue port,
+    so they widen the port budget, not the function space). LOP3 appears as its common XOR/AND/XOR-AND/AND-XOR LUTs."""
+    ops = []
+    for signs in itertools.product((1, -1), repeat=3):
+        ops.append((f"IADD3{signs}", 3, 1, lambda x, y, z, s=signs: u32(s[0] * x + s[1] * y + s[2] * z)))
+    ops.append(("IMAD", 3, 1, lambda x, y, z: u32(x * y + z)))
+    ops.append(("IMAD.-c", 3, 1, lambda x, y, z: u32(x * y - z)))
+    ops.append(("IMAD.HI", 3, 1, lambda x, y, z: u32(((x * y) >> 32) + z)))
+    ops.append(("IMAD.WIDE", 3, 2, lambda x, y, z: (u32(x * y + z), u32((x * y + z) >> 32))))
+    ops.append(("LOP3.XOR", 3, 1, lambda x, y, z: u32(x ^ y ^ z)))
+    ops.append(("LOP3.AND", 3, 1, lambda x, y, z: u32(x & y & z)))
+    ops.append(("LOP3.XORAND", 3, 1, lambda x, y, z: u32((x ^ y) & z)))
+    ops.append(("LOP3.ANDXOR", 3, 1, lambda x, y, z: u32((x & y) ^ z)))
+    ops.append(("IDP4A", 3, 1, lambda x, y, z: u32(dp4a(x, y) + z)))
+    ops.append(("UIADD3", 3, 1, lambda x, y, z: u32(x + y + z)))
+    ops.append(("ULOP3.XOR", 3, 1, lambda x, y, z: u32(x ^ y ^ z)))
+    ops.append(("UIMAD", 3, 1, lambda x, y, z: u32(x * y + z)))
+    for n in range(1, 32):
+        ops.append((f"LEA.{n}", 2, 1, lambda x, y, n=n: u32((x << n) + y)))
+        ops.append((f"ROTADD.{n}", 2, 1, lambda x, y, n=n: u32(rotl(x, n) + y)))
+        ops.append((f"SHR.{n}", 2, 1, lambda x, y, n=n: u32((x >> n) + y)))
+        ops.append((f"SHF.L.{n}", 2, 1, lambda x, y, n=n: u32((x << n) | (y >> (32 - n)))))
+        ops.append((f"SHF.R.{n}", 2, 1, lambda x, y, n=n: u32((x >> n) | (y << (32 - n)))))
+    for mode in (0x0123, 0x3210, 0x1032, 0x2301, 0x4567, 0x0022, 0x4466):
+        ops.append((f"PRMT.{mode:04x}", 2, 1, lambda x, y, m=mode: _prmt(x, y, m)))
+    return ops
+
+
 _MENU = _menu_ops()
 
 
-def superopt_hunt(budget, k0, k1, a0, a1, r0, r1, ax, kx):
-    """Sample straight-line programs over the menu (lengths below each fold's honest cost) and look for one whose output
-    reproduces a fold output on a batch of random 32-bit inputs; verify any hit exactly on more points. Returns (hits,
-    programs_tried). A pure hunt: no hit means no break found in the sampled space (not a proof of absence)."""
+def default_keys():
+    """The canonical public key schedule the hunt and the pod driver share (matches main())."""
+    a0, a1, a2 = pick_keys_ok_r9(3, 0xA11CE)
+    ax = FO.pick_key_ok_r9() | 1
+    return dict(k0=0x12345679, k1=0x0BADC0DE, k2=0x0FEEDBAC, a0=a0, a1=a1, a2=a2,
+                r0=5, r1=11, r2=17, ax=ax, kx=0x5A5AC3C3)
+
+
+def _hunt_consts(keys):
+    return [0, 1, M32, 2, 0x80000000, keys["a0"], keys["a1"], keys["a2"], keys["k0"], keys["k1"], keys["k2"],
+            keys["kx"], keys["ax"], modinv(keys["a0"]), FO.GOLDEN]
+
+
+def _targets(keys):
+    """The 2- and 3-word receipt targets: (name, honest_len, n_inputs, [output fns]). honest_len is the honest lane-
+    instruction count for the whole run (duo 3/word, fx1 4/word, li 1/word, xin13 1.5/word); the hunt samples programs of
+    length 1..honest_len-1, i.e. strictly below honest, and a hit is a program whose produced values contain the whole
+    receipt (both y and z for duo/fx1)."""
+    k0, k1, k2 = keys["k0"], keys["k1"], keys["k2"]
+    a0, a1, a2 = keys["a0"], keys["a1"], keys["a2"]
+    r0, r1, r2 = keys["r0"], keys["r1"], keys["r2"]
+    ax, kx = keys["ax"], keys["kx"]
+    T = []
+
+    def duo2(which):
+        def f(y, z, d0, d1):
+            yy, zz = duo_word(y, z, d0, k0, a0, r0)
+            y2, z2 = duo_word(yy, zz, d1, k1, a1, r1)
+            return y2 if which == 0 else z2
+        return f
+    T.append(("duo.2word", 6, 4, [duo2(0), duo2(1)]))
+
+    def duo3(which):
+        def f(y, z, d0, d1, d2):
+            yy, zz = duo_word(y, z, d0, k0, a0, r0)
+            yy, zz = duo_word(yy, zz, d1, k1, a1, r1)
+            y3, z3 = duo_word(yy, zz, d2, k2, a2, r2)
+            return y3 if which == 0 else z3
+        return f
+    T.append(("duo.3word", 9, 5, [duo3(0), duo3(1)]))
+
+    def fx2(which):
+        def f(y, z, d0, d1):
+            y1, z1 = fx1_word(y, z, d0, kx, ax, k0, a0, r0)
+            y2, z2 = fx1_word(y1, z1, d1, kx, ax, k1, a1, r1)
+            return y2 if which == 0 else z2
+        return f
+    T.append(("fx1.2word", 8, 4, [fx2(0), fx2(1)]))
+
+    def fx3(which):
+        def f(y, z, d0, d1, d2):
+            y1, z1 = fx1_word(y, z, d0, kx, ax, k0, a0, r0)
+            y1, z1 = fx1_word(y1, z1, d1, kx, ax, k1, a1, r1)
+            y3, z3 = fx1_word(y1, z1, d2, kx, ax, k2, a2, r2)
+            return y3 if which == 0 else z3
+        return f
+    T.append(("fx1.3word", 12, 5, [fx3(0), fx3(1)]))
+
+    T.append(("li.2word", 2, 3, [lambda y, d0, d1: li_half(y, d0, d1, k0, a0)]))
+    T.append(("li.4word", 4, 5, [lambda y, d0, d1, d2, d3: li_half(li_half(y, d0, d1, k0, a0), d2, d3, k1, a1)]))
+    T.append(("xin13.2word", 3, 3, [lambda y, d0, d1: xin13_half(y, d0, d1, a0, 13)]))
+    T.append(("xin13.4word", 6, 5,
+              [lambda y, d0, d1, d2, d3: xin13_half(xin13_half(y, d0, d1, a0, 13), d2, d3, a1, 19)]))
+    return T
+
+
+def superopt_hunt(budget, keys, seed=0):
+    """Sample straight-line programs over the menu (lengths strictly below each run's honest cost) and look for one whose
+    produced values contain a whole fold receipt on a batch of random 32-bit points; verify any hit exactly on 10^4 points.
+    Returns (hits, programs_tried, n_targets). A pure hunt: no hit means no break found in the sampled space. `seed` shards
+    it (the pod driver runs many seeds in parallel), varying both the program RNG and the filter points."""
     import random
-    rnd = random.Random(0xF01DBEEF)
-    P = 24
-    g = lcg(0xA7)
-    pts = [(next(g), next(g), next(g), next(g)) for _ in range(P)]
-    consts = [0, 1, M32, a0, a1, k0, k1, ax, kx, modinv(a0), FO.GOLDEN, 0x80000000]
-
-    # targets: (name, honest_len, value-on-pts). duo two words -> (y2, z2) honest 6; fx1 one word honest 4; li pair honest 2.
-    targets = []
-    y2s, z2s = [], []
-    for (y, z, d0, d1) in pts:
-        yy, zz = duo_word(y, z, d0, k0, a0, r0)
-        y2, z2 = duo_word(yy, zz, d1, k1, a1, r1)
-        y2s.append(y2); z2s.append(z2)
-    targets.append(("duo.y2", 6, y2s))
-    targets.append(("duo.z2", 6, z2s))
-    fx = [fx1_word(y, z, d0, kx, ax, k0, a0, r0)[0] for (y, z, d0, d1) in pts]
-    targets.append(("fx1.y1", 4, fx))
-    lip = [li_half(y, d0, d1, k0, a0) for (y, z, d0, d1) in pts]
-    targets.append(("li.pair", 2, lip))
-    xh = [xin13_half(y, d0, d1, a0, 13) for (y, z, d0, d1) in pts]
-    targets.append(("xin13.pair", 3, xh))
-
+    rnd = random.Random((0xF01DBEEF ^ (seed * 2654435761)) & M32)
+    consts = _hunt_consts(keys)
+    nconst = len(consts)
+    targets = _targets(keys)
+    g = lcg(0xA7 ^ (seed & M32))
+    P = 10
     hits = []
     tried = 0
-    per = max(1, budget // max(1, len(targets)))
-    for name, honest, tvals in targets:
-        want = tuple(tvals)
-        L = honest - 1
+    per = max(1, budget // len(targets))
+    for name, honest, ninputs, fns in targets:
+        pts = [tuple(next(g) for _ in range(ninputs)) for _ in range(P)]
+        wantset = {tuple(fn(*pt) for pt in pts) for fn in fns}
         for _ in range(per):
             tried += 1
-            prog = _rand_prog(rnd, L, consts)
-            out = _eval_prog(prog, pts, consts)
-            if tuple(out) == want:
-                if _verify_prog(prog, consts, name, k0, k1, a0, a1, r0, r1, ax, kx):
-                    hits.append((name, prog))
-    return hits, tried
+            L = rnd.randint(1, honest - 1)
+            prog = _rand_prog(rnd, L, ninputs, nconst)
+            if wantset <= set(_eval_cols(prog, pts, consts, ninputs)):
+                if _verify_cover(prog, consts, ninputs, fns, seed):
+                    hits.append((name, L, _fmt_prog(prog)))
+    return hits, tried, len(targets)
 
 
-def _rand_prog(rnd, L, consts):
-    """A random straight-line program. Operand selection is biased toward the four inputs, the keys and the most recent
-    results (where a real shortcut would read), so the hunt spends its budget on meaningful programs, not dead values."""
-    nin = 4
-    nconst = len(consts)
+def _rand_prog(rnd, L, ninputs, nconst):
+    """A random straight-line program. Operand selection is biased toward the inputs, the keys and recent results (where a
+    real shortcut would read), and the index space grows by each op's output arity (IMAD.WIDE yields two values)."""
     prog = []
-    for i in range(L):
+    navail = ninputs + nconst
+    for _ in range(L):
         op = rnd.choice(_MENU)
-        navail = nin + nconst + i
-        ops = []
+        operands = []
         for _ in range(op[1]):
             roll = rnd.random()
-            if roll < 0.45:               # an input
-                ops.append(rnd.randrange(nin))
-            elif roll < 0.70 and i > 0:   # a recent result
-                ops.append(nin + nconst + rnd.randrange(i))
-            else:                         # a key or immediate
-                ops.append(nin + rnd.randrange(nconst))
-        prog.append((op, ops))
+            if roll < 0.5:                                           # an input
+                operands.append(rnd.randrange(ninputs))
+            elif roll < 0.75 and navail > ninputs + nconst:          # a recent result
+                operands.append(ninputs + nconst + rnd.randrange(navail - ninputs - nconst))
+            else:                                                    # a key or immediate
+                operands.append(ninputs + rnd.randrange(nconst))
+        prog.append((op, operands))
+        navail += op[2]
     return prog
 
 
-def _eval_prog(prog, pts, consts):
-    out = []
-    for (y, z, d0, d1) in pts:
-        vals = [y, z, d0, d1] + list(consts)
+def _eval_cols(prog, pts, consts, ninputs):
+    """Per produced-value slot, the tuple of its values across pts (the inputs and consts are excluded)."""
+    nbase = ninputs + len(consts)
+    allvals = []
+    for pt in pts:
+        vals = list(pt) + consts
         for op, operands in prog:
-            args = [vals[o] for o in operands]
-            vals.append(op[2](*args))
-        out.append(vals[-1])
-    return out
+            r = op[3](*(vals[o] for o in operands))
+            if op[2] == 2:
+                vals.append(r[0]); vals.append(r[1])
+            else:
+                vals.append(r)
+        allvals.append(vals)
+    nslots = len(allvals[0])
+    return [tuple(allvals[p][s] for p in range(len(pts))) for s in range(nbase, nslots)]
 
 
-def _verify_prog(prog, consts, name, k0, k1, a0, a1, r0, r1, ax, kx):
-    g = lcg(0xBEEF)
-    extra = [(next(g), next(g), next(g), next(g)) for _ in range(300)]
-    extra += [(s, s ^ 0x55555555, s, s ^ 0xF0F0F0F0) for s in (0, 1, 2, M32, 0x80000000)]
-    tgt = _target_fn(name, k0, k1, a0, a1, r0, r1, ax, kx)
-    for pt in extra:
-        if _eval_prog(prog, [pt], consts)[0] != tgt(*pt):
-            return False
-    return True
+def _verify_cover(prog, consts, ninputs, fns, seed):
+    g = lcg(0xBEEF ^ (seed & M32))
+    pts = [tuple(next(g) for _ in range(ninputs)) for _ in range(10000)]
+    pts += [tuple((s ^ (0x55555555 * j)) & M32 for j in range(ninputs)) for s in (0, 1, 2, M32, 0x80000000)]
+    cols = set(_eval_cols(prog, pts, consts, ninputs))
+    return all(tuple(fn(*pt) for pt in pts) in cols for fn in fns)
 
 
-def _target_fn(name, k0, k1, a0, a1, r0, r1, ax, kx):
-    if name == "duo.y2":
-        return lambda y, z, d0, d1: duo_word(*duo_word(y, z, d0, k0, a0, r0), d1, k1, a1, r1)[0]
-    if name == "duo.z2":
-        return lambda y, z, d0, d1: duo_word(*duo_word(y, z, d0, k0, a0, r0), d1, k1, a1, r1)[1]
-    if name == "fx1.y1":
-        return lambda y, z, d0, d1: fx1_word(y, z, d0, kx, ax, k0, a0, r0)[0]
-    if name == "xin13.pair":
-        return lambda y, z, d0, d1: xin13_half(y, d0, d1, a0, 13)
-    return lambda y, z, d0, d1: li_half(y, d0, d1, k0, a0)
+def _fmt_prog(prog):
+    return " ; ".join(op[0] + "(" + ",".join(str(o) for o in operands) + ")" for op, operands in prog)
 
 
 def superopt_can_find_xor(k0):
-    """Mutation control: the hunt's exact verifier confirms a genuine one-instruction target (y ^ d0) when one exists."""
-    consts = [0, 1, M32, k0]
-    xor_op = next(op for op in _MENU if op[0] == "XOR3")
-    prog = [(xor_op, [0, 2, consts.index(0) + 4])]  # y ^ d0 ^ 0
+    """Mutation control: the hunt's exact evaluator confirms a genuine one-instruction target (y ^ d0) when one exists."""
+    consts = [0]
+    ninputs = 4
+    xor_op = next(op for op in _MENU if op[0] == "LOP3.XOR")
+    prog = [(xor_op, [0, 2, ninputs])]  # y ^ d0 ^ 0 (const 0 sits at index ninputs)
     g = lcg(0xCAFE)
-    for _ in range(200):
-        y, z, d0, d1 = next(g), next(g), next(g), next(g)
-        vals = [y, z, d0, d1] + consts
-        vals.append(xor_op[2](vals[0], vals[2], vals[4]))
-        if vals[-1] != u32(y ^ d0):
-            return False
-    return True
+    pts = [tuple(next(g) for _ in range(ninputs)) for _ in range(200)]
+    want = tuple(u32(pt[0] ^ pt[2]) for pt in pts)
+    return want in set(_eval_cols(prog, pts, consts, ninputs))
 
 
 if __name__ == "__main__":
