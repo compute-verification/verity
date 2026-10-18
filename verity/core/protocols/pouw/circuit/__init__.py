@@ -20,6 +20,9 @@
   ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
 * `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
   piece fits C-Flock's block.
+* `compile`: PoUW as one pass over a served Program (decision 102, `PROTOCOL.md` §`compile`): `compile(program, scheme)`
+  replaces every registered matmul's dots (`MATMULS`) with the scheme's units, reading the noise as a coin input, and checks
+  the result; `rebuild` is the verifier's side. Its schemes are its own `SCHEMES`, not this module's.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs

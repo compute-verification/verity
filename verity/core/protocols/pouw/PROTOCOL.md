@@ -1259,6 +1259,48 @@ written `+0`. The `pc4` table registers the high half itself (`rows4`), and a ro
 `RowAdmit4` refuses the row, as the circuit's flag (`β ≤ F32_MAX`) does. `pc8Sem`'s forming value is `D_t`'s,
 and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and `D_t` is not NaN.
 
+## `compile`: PoUW as one pass over the served Program (`circuit/compile.py`)
+
+Decision 102's shape: the served Program is the model's own, and PoUW is one compile pass over it. `compile(program, scheme)`
+returns a `Compiled` (the compiled `Program`, the served one, the scheme and its `Site`s); `rebuild(served, scheme,
+descriptor)` is the verifier's side, which compiles itself and refuses any other descriptor (`traced_as` at Program level).
+
+**Find.** `MATMULS` registers each family's A and B ports, (m, k, n) per Call and the arm it is registered at:
+
+~~~text
+family                  A     B      per Call     arm
+S8Dot_v1, S8Dot_v2      a     b      1 × K × 1    the plain arm: NOISE "none", T0 "zero", COMMIT "final", no tail, LIMBS "none"
+S8Matmul_v1             a     b      1 × K × N    the same; each of b's N rows is a dot
+GemmAccumulatorS8_v1    x     wrow   1 × K × 1    any (#2365's W8A8 accumulator, ScaledMmS8Coordinate_v1's node 0)
+GemmAccumulatorS8_v2    x     wrow   1 × K × 1    any (on bits)
+~~~
+
+A Call nested in a Definition is found through it when its operands are that Definition's parameters, at any depth; a
+Program whose root is the matmul is served as one Call of it (`PouwCall_v1{FN}`).
+
+**Replace.** Each dot, a whole dot product, is one unit of the scheme, `(a, b, noise) -> {z, receipt}`: A's and B's rows are
+its committed inputs, its noise is a slice of the Program's one coin input `pouw.noise`, its receipt is a sink only the
+Program's outputs read, and z, the exact product, feeds the Call's consumers in its place. The units sit at the root, one
+batch per site (a root node's dots of one kind), ahead of the node that read them; that node's Definition F becomes
+`PouwRest_v1{FN=F}`, F without its dots, reading their z. The compiled Program is `PouwCompiled_v1{SERVED, SCHEME}`:
+the served parameters and `pouw.noise` to `{served: the served return, receipts}`.
+
+**Check** (`CompileError.code`): a coin read by the served Program (`coin-read`); an edited arm (`edited-arm`), a matmul
+inside a scan (`scan`) or on an operand computed inside its Definition (`operand-inside`); a registered Call or a matmul
+step left outside every unit (`uncovered`); a noise leaf read by anything but one unit's noise port, or twice
+(`noise-flow`, `noise-reuse`, and COIN-RULES' `E_COIN_FLOW` / `E_COIN_REUSE` where port types are on the tree); a unit read
+past its z (`separator`); a node outside the units that commits more than the width rule allows (`width`).
+`Compiled.check_gates` adds the gate-level cut (no value computed in two units), the separator and the width rule by
+reachability, for a Program small enough to flatten.
+
+**Seeds.** seed_j = SHA-512(`verity/pouw/seed/v1` ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)) (`protocol.tagged`),
+position the site's index, so two calls on the same operands get different seeds; unit u's noise is
+`Scheme.noise(seed_j, dot, i, j)` for its A row i and B row j (`Site.pairs`). The noise is public: it is the verifier's
+draw.
+
+Not here yet: a registered scheme (E2E-120's sm_120 H1 + fx1, whose unit is per tile today), #2377's exact s8 S and P·V,
+and the vLLM integration serving the compiled Program.
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
