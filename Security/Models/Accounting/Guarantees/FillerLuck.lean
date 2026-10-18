@@ -18,6 +18,11 @@ Decision 47 (RS-E-REF r6 Part VI.2, Lemma P2) over `Accounting.Filler`, each `de
 * `FillerBlocksDeficit`: Theorem S with each block at its own `p`, the budget `eps.py`'s cheater LP reads: beside any
   block whose one-draw check passes with probability at most `1 − (1 − p₀)·d₀`, outside probability `δ` an accepted
   window has `Σ_w ((1 − p₀)·d₀ + (1 − 0.854)·d_fill) < ln(1/δ)`.
+* `PinnedFillLuckAt`, `PinnedFillBudget`, `PinnedFillBlocksDeficit`: the same three window statements at `p = 0` for a
+  filler whose check recomputes a pinned receipt from committed data and live coins (lfill's tile receipt, a lane chain
+  absorbed into the fold's receipt, keyed rounds in the fold, an FFMA chain recomputed bit for bit). Nothing in such a
+  check is left to guess, so a wrong receipt fails whenever its tile is drawn; what a right receipt cost is FILL-OPT's
+  (FOLD-OPT's for rounds in the fold).
 
 Probability statements put acceptance in the event: the probability that the window is accepted and the bound fails is
 at most `δ`.
@@ -83,6 +88,30 @@ def FillerBlocksDeficit : Prop :=
     [Fintype Ω₀] (φ : A →+* ZMod 2) (c : Y → Fin K → A) (p₀ δ : ℝ) {S : ℕ}
     (g : RoundGame (Ω₀ × (Noise K ρ ν Y × (ρ × ν))) S),
     ParityBalanced φ c → p₀ ≤ 1 → 0 < δ → FillBlocks p₀ c g →
+      prob (fun x => g.accepts x ∧ Real.log (1 / δ) ≤ g.deficiency x) ≤ δ
+
+/-- **A full-checking window of pinned receipts meets (I7) at `0`**: when every round recomputes every tile's receipt
+from the round's committed data and live coins and compares it with the committed one, a round with a wrong receipt
+never passes, whatever the receipt function. -/
+def PinnedFillLuckAt : Prop :=
+  ∀ {D C τ V : Type} [Fintype C] [Fintype τ] (F : D → C → τ → V) {S : ℕ} (g : RoundGame C S),
+    FullPinnedFill F g → Accounting.Assumptions.TS.LuckAt 0 g
+
+/-- **A spot-checked window of pinned receipts meets Lemma C's budget at `p = 0`**: when every round recomputes one
+uniform tile's receipt, drawn after the receipts are committed, `Λ = 1` bounds the round's saving per unit of detection
+(`RoundGame.BudgetAt`), so the window's wrong share is Theorem S's `d̄ = ln(1/δ)/S`. -/
+def PinnedFillBudget : Prop :=
+  ∀ {D C τ V : Type} [Fintype C] [Fintype τ] (F : D → C → τ → V) {S : ℕ} (g : RoundGame (C × τ) S),
+    SpotPinnedFill F g → RoundGame.BudgetAt 1 g
+
+/-- **Theorem S with another block beside pinned receipts** (the budget row of `eps.py`'s cheater LP at the filler's
+`p = 0`). Each round checks another block on its own coins, its share `d₀` fixed before them and passing with
+probability at most `1 − (1 − p₀)·d₀` (`p₀ ≤ 1`), and recomputes one uniform tile's receipt. Outside probability `δ`,
+an accepted window has `Σ_w ((1 − p₀)·d₀_w + wrongShare_w) < ln(1/δ)`. -/
+def PinnedFillBlocksDeficit : Prop :=
+  ∀ {D C τ V Ω₀ : Type} [Fintype C] [Fintype τ] [Fintype Ω₀] (F : D → C → τ → V) (p₀ δ : ℝ) {S : ℕ}
+    (g : RoundGame (Ω₀ × (C × τ)) S),
+    p₀ ≤ 1 → 0 < δ → PinnedFillBlocks p₀ F g →
       prob (fun x => g.accepts x ∧ Real.log (1 / δ) ≤ g.deficiency x) ≤ δ
 
 end Accounting.Guarantees.FillerLuck

@@ -9,6 +9,8 @@ Cauchy–Schwarz and Parseval: `(2p − 1)² ≤ 2^R/2^K`), read at every defici
 parity by splitting the column's noise into its parity and a uniform rest (`exists_parity_equiv`); a word ring's
 equality is read mod 2 through `φ`. A tile's cell is the cell lemma at each setting of the other rows and columns
 (`Equiv.piSplitAt`). The windows are inductions over the rounds; `FillerBlocksDeficit` is `budget_tail` at `Λ = 1`.
+A pinned receipt's draw passes with probability at most one less its wrong share at every setting of the live coins
+(`prob_le_one_sub_not`, `sum_pinned_le`), so its windows are the same inductions at `p = 0`.
 -/
 
 namespace Accounting.SecurityProofs.FillerLuck
@@ -372,6 +374,103 @@ theorem budget_blocks {K : ℕ} {ρ ν Y A Ω₀ : Type} [DecidableEq ρ] [Decid
       _ = Fintype.card (Ω₀ × (Noise K ρ ν Y × (ρ × ν))) := by
           rw [Fintype.card_prod Ω₀ (Noise K ρ ν Y × (ρ × ν)), Nat.cast_mul]
 
+/-- **An event and its complement**: `Pr[q] ≤ 1 − Pr[¬q]` (equality on a nonempty type). -/
+theorem prob_le_one_sub_not {Ω : Type} [Fintype Ω] (q : Ω → Prop) : prob q ≤ 1 - prob fun a => ¬q a := by
+  classical
+  unfold prob
+  rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | h0
+  · simp [h0]
+  · have hC : (0 : ℝ) < Fintype.card Ω := by exact_mod_cast h0
+    have hsum : ((univ.filter q).card : ℝ) + ((univ.filter fun a => ¬q a).card : ℝ) = Fintype.card Ω := by
+      exact_mod_cast (card_filter_add_card_filter_not (s := univ) q).trans (card_univ (α := Ω))
+    have key : ((univ.filter q).card : ℝ) ≤ Fintype.card Ω - ((univ.filter fun a => ¬q a).card : ℝ) := by
+      linarith
+    rw [div_le_iff₀ hC, sub_mul, one_mul, div_mul_cancel₀ _ hC.ne']
+    convert key
+
+/-- **One pinned draw's budget**: a uniform tile's receipt right, weighted by `e^v` with `v` the wrong share at the live
+coins, sums to at most `|C × τ|`. -/
+theorem sum_pinned_le {C τ V : Type} [Fintype C] [Fintype τ] (G R : C → τ → V) (v : C → ℝ)
+    (hv : ∀ c, v c = prob fun t => R c t ≠ G c t) :
+    (∑ a : C × τ, (by classical exact if R a.1 a.2 = G a.1 a.2 then Real.exp (v a.1) else 0)) ≤
+      (Fintype.card (C × τ) : ℝ) := by
+  classical
+  rw [Fintype.sum_prod_type]
+  refine (sum_le_sum fun c _ => sum_exp_le (fun t => R c t = G c t) (v c) ?_).trans ?_
+  · rw [hv c]
+    exact prob_le_one_sub_not _
+  · rw [sum_const, card_univ, Fintype.card_prod, nsmul_eq_mul, Nat.cast_mul]
+
+theorem luckAt_pinned {D C τ V : Type} [Fintype C] [Fintype τ] (F : D → C → τ → V) :
+    ∀ {n : ℕ} (g : RoundGame C n), FullPinnedFill F g → RoundGame.LuckAt 0 g
+  | _, .done, _ => trivial
+  | _, .round d pass next, h => by
+    obtain ⟨⟨w, R, hd, hpass⟩, hnext⟩ := h
+    refine ⟨fun c => ?_, ?_, fun c => luckAt_pinned F (next c) (hnext c)⟩
+    · rw [hd c]
+      exact ⟨prob_nonneg _, prob_le_one _⟩
+    · have : (fun c => pass c ∧ 0 < d c) = fun _ => False := funext fun c => by
+        refine propext ⟨fun ⟨hp, hpos⟩ => ?_, False.elim⟩
+        have : (fun t => R c t ≠ F (w c) c t) = fun _ => False :=
+          funext fun t => propext ⟨fun hne => hne (hpass c hp t), False.elim⟩
+        rw [hd c, wrongShare, this, prob_none] at hpos
+        exact lt_irrefl _ hpos
+      rw [this, prob_none, zero_mul]
+
+theorem budget_spot_pinned {D C τ V : Type} [Fintype C] [Fintype τ] (F : D → C → τ → V) :
+    ∀ {n : ℕ} (g : RoundGame (C × τ) n), SpotPinnedFill F g → RoundGame.BudgetAt 1 g
+  | _, .done, _ => trivial
+  | _, .round d pass next, h => by
+    obtain ⟨⟨w, R, hd, hpass⟩, hnext⟩ := h
+    refine ⟨fun a => by rw [hd a]; exact prob_nonneg _, ?_,
+      fun a => budget_spot_pinned F (next a) (hnext a)⟩
+    simp only [hd, div_one]
+    exact (sum_ite_mono pass _ hpass _ fun _ => (Real.exp_pos _).le).trans
+      (sum_pinned_le (fun c t => F (w c) c t) R (fun c => wrongShare F (w c) c (R c)) fun _ => rfl)
+
+theorem budget_blocks_pinned {D C τ V Ω₀ : Type} [Fintype C] [Fintype τ] [Fintype Ω₀] (F : D → C → τ → V)
+    {p₀ : ℝ} (hp₀ : p₀ ≤ 1) :
+    ∀ {n : ℕ} (g : RoundGame (Ω₀ × (C × τ)) n), PinnedFillBlocks p₀ F g → RoundGame.BudgetAt 1 g
+  | _, .done, _ => trivial
+  | _, .round d pass next, h => by
+    classical
+    obtain ⟨⟨d₀, pass₀, w, R, hd₀, hpass₀, hd, hpass⟩, hnext⟩ := h
+    refine ⟨fun a => ?_, ?_, fun a => budget_blocks_pinned F hp₀ (next a) (hnext a)⟩
+    · rw [hd a]
+      have : 0 ≤ (1 - p₀) * d₀ := mul_nonneg (by linarith) hd₀
+      have := prob_nonneg fun t => R a.1 a.2.1 t ≠ F (w a.1 a.2.1) a.2.1 t
+      unfold wrongShare
+      linarith
+    set v₀ := (1 - p₀) * d₀
+    have h₀ := sum_exp_le pass₀ v₀ hpass₀
+    calc (∑ a, if pass a then Real.exp (d a / 1) else 0)
+        ≤ ∑ a : Ω₀ × (C × τ), (if pass₀ a.1 then Real.exp v₀ else 0) *
+            (if R a.1 a.2.1 a.2.2 = F (w a.1 a.2.1) a.2.1 a.2.2 then
+              Real.exp (wrongShare F (w a.1 a.2.1) a.2.1 (R a.1 a.2.1)) else 0) := by
+          refine sum_le_sum fun a _ => ?_
+          by_cases hp : pass a
+          · obtain ⟨h0, h1⟩ := hpass a hp
+            simp only [hp, h0, h1, ↓reduceIte, hd a, div_one, Real.exp_add]
+            exact le_rfl
+          · rw [ite_eq_right hp]
+            split_ifs <;> positivity
+      _ = ∑ a₀, (if pass₀ a₀ then Real.exp v₀ else 0) *
+            ∑ a₁ : C × τ, if R a₀ a₁.1 a₁.2 = F (w a₀ a₁.1) a₁.1 a₁.2 then
+              Real.exp (wrongShare F (w a₀ a₁.1) a₁.1 (R a₀ a₁.1)) else 0 := by
+          rw [Fintype.sum_prod_type]
+          refine sum_congr rfl fun a₀ _ => ?_
+          rw [Finset.mul_sum]
+      _ ≤ ∑ a₀ : Ω₀, (if pass₀ a₀ then Real.exp v₀ else 0) * (Fintype.card (C × τ) : ℝ) :=
+          sum_le_sum fun a₀ _ => mul_le_mul_of_nonneg_left
+            (sum_pinned_le (fun c t => F (w a₀ c) c t) (R a₀) (fun c => wrongShare F (w a₀ c) c (R a₀ c))
+              fun _ => rfl)
+            (by split_ifs <;> positivity)
+      _ ≤ (Fintype.card Ω₀ : ℝ) * Fintype.card (C × τ) := by
+          rw [← Finset.sum_mul]
+          exact mul_le_mul_of_nonneg_right h₀ (Nat.cast_nonneg _)
+      _ = Fintype.card (Ω₀ × (C × τ)) := by
+          rw [Fintype.card_prod Ω₀ (C × τ), Nat.cast_mul]
+
 end Cell
 
 open Cell
@@ -398,6 +497,21 @@ theorem FillerBudget : Accounting.Guarantees.FillerLuck.FillerBudget := by
 theorem FillerBlocksDeficit : Accounting.Guarantees.FillerLuck.FillerBlocksDeficit := by
   intro K ρ ν Y A Ω₀ _ _ _ _ _ _ _ φ c p₀ δ S g hc hp₀ hδ hg
   have := Accounting.SecurityProofs.TS.budget_tail g 1 one_pos (budget_blocks φ c hc hp₀ g hg) (Real.log (1 / δ))
+  have hexp : Real.exp (-Real.log (1 / δ)) = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
+  rwa [one_mul, hexp] at this
+
+theorem PinnedFillLuckAt : Accounting.Guarantees.FillerLuck.PinnedFillLuckAt := by
+  intro D C τ V _ _ F S g hg
+  exact luckAt_pinned F g hg
+
+theorem PinnedFillBudget : Accounting.Guarantees.FillerLuck.PinnedFillBudget := by
+  intro D C τ V _ _ F S g hg
+  exact budget_spot_pinned F g hg
+
+theorem PinnedFillBlocksDeficit : Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit := by
+  intro D C τ V Ω₀ _ _ _ F p₀ δ S g hp₀ hδ hg
+  have := Accounting.SecurityProofs.TS.budget_tail g 1 one_pos (budget_blocks_pinned F hp₀ g hg)
+    (Real.log (1 / δ))
   have hexp : Real.exp (-Real.log (1 / δ)) = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
   rwa [one_mul, hexp] at this
 
