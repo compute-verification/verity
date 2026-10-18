@@ -493,6 +493,77 @@ DC_DEV void lane_beside_mma(const OpArgs& a) {
   teardown(tmem);
   OP_SINK(v ^ threadIdx.x)
 }
+// TMA bulk-async copies beside the saturated tcgen05.mma (DC EPS1 r10): one side warp's lane 0 issues cp.async.bulk (SASS
+// UBLKCP, a move) or cp.reduce.async.bulk.add.u32 (UBLKRED, a combine), 4 KB (1024 words) an op, DC_BULK_R a trip, into
+// the block's own global region, with a group bound so the queue stays full. Warp 0 runs tcgen05.mma flat out (OP_LOOP),
+// the bulk warp only while it does (OP_UNTIL). A TMA bulk op takes uniform operands (addresses from blockIdx and the op's
+// slot, not the lane), so lane 0 issues one warp instruction an op; the measured tensor fraction says whether that steals
+// the MMA's issue (the facet question), and the bulk's rate is the TMA engine's words a SM-clock.
+enum { BULK_CP, BULK_RED };
+constexpr int DC_BULK_R = 8;
+template <int S>
+DC_DEV void bulk_trip(const OpArgs& a, unsigned sbase) {
+  constexpr unsigned B = 4096;
+  unsigned char* region = a.g + (size_t)blockIdx.x * (DC_BULK_R * B);
+#pragma unroll
+  for (int q = 0; q < DC_BULK_R; q++) {
+    unsigned char* p = region + q * B;
+    if constexpr (S == BULK_CP)
+      asm volatile("cp.async.bulk.global.shared::cta.bulk_group [%0], [%1], %2;" ::"l"(p), "r"(sbase), "n"(B) : "memory");
+    else
+      asm volatile("cp.reduce.async.bulk.global.shared::cta.bulk_group.add.u32 [%0], [%1], %2;" ::"l"(p), "r"(sbase),
+                   "n"(B) : "memory");
+  }
+  asm volatile("cp.async.bulk.commit_group;\n\tcp.async.bulk.wait_group.read 2;" ::: "memory");
+}
+template <int S>
+DC_DEV void bulk_until_mma(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  const uint32_t tmem = setup<0>(s, a.mode);
+  const uint64_t da = desc_a(s), db = desc_b(s);
+  const unsigned sbase = smem_u32(s.tile);
+  const int lane = threadIdx.x & 31;
+  OP_BEGIN_STOP
+  if (warp_u() == 0) {
+    OP_LOOP(it) {
+      if (elect_one()) mma4<0, 128, 256>(tmem, da, db);
+      __syncwarp();
+    }
+    OP_DONE
+  } else if (warp_u() == 4) {
+    OP_UNTIL(n) {
+      if (lane == 0) bulk_trip<S>(a, sbase);
+    }
+    OP_TRIPS(n)
+    if (lane == 0) asm volatile("cp.async.bulk.wait_group 0;" ::: "memory");
+  }
+  OP_END_STOP
+  if (warp_u() == 0) {
+    if (elect_one()) umma_commit(&s.bar);
+    __syncwarp();
+  }
+  mbar_wait(&s.bar, 0);
+  tc_after_sync();
+  const uint32_t v = sink_ld(tmem, 0);
+  teardown(tmem);
+  OP_SINK(v ^ threadIdx.x)
+}
+template <int S>
+DC_DEV void bulk_solo_tc(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[4096];
+  for (uint32_t i = threadIdx.x; i < 1024; i += blockDim.x) reinterpret_cast<uint32_t*>(sm)[i] = i;
+  __syncthreads();
+  const unsigned sbase = smem_u32(sm);
+  const int lane = threadIdx.x & 31;
+  OP_BEGIN
+  OP_LOOP(it) {
+    if (lane == 0) bulk_trip<S>(a, sbase);
+  }
+  if (lane == 0) asm volatile("cp.async.bulk.wait_group 0;" ::: "memory");
+  OP_END
+  OP_SINK(threadIdx.x)
+}
+
 // lane_beside_mma exact on both sides: the MMA warp fixed, the lane warps running only while it does (OP_UNTIL).
 template <int X, int R>
 DC_DEV void lane_until_mma(const OpArgs& a) {
@@ -575,6 +646,10 @@ OP_KERNEL(tclaneU_duo, 512) { lane_until_mma<L_DUO, 48>(a); }
 OP_KERNEL(tcliU_base, 384) { tcli_until_mma<0, 8>(a); }
 OP_KERNEL(tcliU_redux, 384) { tcli_until_mma<1, 8>(a); }
 OP_KERNEL(tcliU_reduce, 384) { tcli_until_mma<2, 8>(a); }
+OP_KERNEL(tcbulk_cp, 256) { bulk_until_mma<BULK_CP>(a); }
+OP_KERNEL(tcbulk_red, 256) { bulk_until_mma<BULK_RED>(a); }
+OP_KERNEL(bulkcp, 32) { bulk_solo_tc<BULK_CP>(a); }
+OP_KERNEL(bulkred, 32) { bulk_solo_tc<BULK_RED>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -632,6 +707,10 @@ static const OpProbe PROBES[] = {
     {.name = "tclaneU_imad", .kernel = (const void*)tclaneU_imad, .tpb = 512, .expect = UI ";IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_redux", .kernel = (const void*)tclaneU_redux, .tpb = 512, .expect = UI ";REDUX*=64", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_reduce", .kernel = (const void*)tclaneU_reduce, .tpb = 512, .expect = UI ";SHFL.BFLY=40,LOP3.LUT=40", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcbulk_cp", .kernel = (const void*)tcbulk_cp, .tpb = 256, .expect = UI ";UBLKCP*=8", .counted = "UBLKCP*", .warps = "1;1", .words = 1024, .iters = 4096, .until = 2},
+    {.name = "tcbulk_red", .kernel = (const void*)tcbulk_red, .tpb = 256, .expect = UI ";UBLKRED*=8", .counted = "UBLKRED*", .warps = "1;1", .words = 1024, .iters = 4096, .until = 2},
+    {.name = "bulkcp", .kernel = (const void*)bulkcp, .tpb = 32, .expect = "UBLKCP*=8", .words = 1024, .iters = 1024},
+    {.name = "bulkred", .kernel = (const void*)bulkred, .tpb = 32, .expect = "UBLKRED*=8", .words = 1024, .iters = 1024},
     {.name = "tcliU_base", .kernel = (const void*)tcliU_base, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
     {.name = "tcliU_redux", .kernel = (const void*)tcliU_redux, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=68,IMAD=64,REDUX*=1", .warps = "1;8", .iters = 2048, .until = 2},
     {.name = "tcliU_reduce", .kernel = (const void*)tcliU_reduce, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=73,IMAD=64,SHFL.BFLY=5", .warps = "1;8", .iters = 2048, .until = 2},

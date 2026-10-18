@@ -10,7 +10,9 @@
 # uniform.py analyze (uniform.json, uniform.txt). Exit: 0 done, 1 build or gate refused, 2 wrong device or no nvcc.
 # DC_BUILD_ONLY=1 stops after the gate (any machine with CUDA 13.0). UNI_TABLES picks the tables (default "uniform imad";
 # "issue" is the issue-saturated stream, the honest step beside 256 FFMA; "async" is the uniform chain beside a saturated
-# async tensor op (wgmma on sm90, tcgen05.mma on sm100): its rows.jsonl carries the K-sweep for an offline slope fit).
+# async tensor op (wgmma on sm90, tcgen05.mma on sm100): its rows.jsonl carries the K-sweep for an offline slope fit;
+# "ldtm" alone is sm100_ldtm.cu, the tcgen05.ld.32x32b.x128 issue price, analyzed by ldtm.py into ldtm.json and
+# ldtm.txt).
 set -uo pipefail
 FAM=${1:?usage: uni.sh sm90|sm100}
 OUT=${OUT:?run under research run}
@@ -64,5 +66,9 @@ mapfile -t bins <"$WORK/built"
 python3 "$PROBE" run "${bins[@]}" --out "$OUT/probes" --reps "${REPS:-5}" >"$OUT/probes/run.txt" 2>&1
 rc=$?
 [ $rc -eq 0 ] || { tail -5 "$OUT/probes/run.txt" >&2; exit 1; }
-python3 "$HERE/uniform.py" analyze "$OUT" --json "$OUT/uniform.json" >"$OUT/uniform.txt" 2>&1 || true
+if [ "${UNI_TABLES:-}" = ldtm ]; then
+  python3 "$HERE/ldtm.py" analyze "$OUT" --json "$OUT/ldtm.json" >"$OUT/ldtm.txt" 2>&1 || true
+else
+  python3 "$HERE/uniform.py" analyze "$OUT" --json "$OUT/uniform.json" >"$OUT/uniform.txt" 2>&1 || true
+fi
 echo "uni.sh: done"

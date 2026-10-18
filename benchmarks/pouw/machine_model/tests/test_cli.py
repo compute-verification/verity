@@ -90,7 +90,9 @@ def test_a_measurement_is_data(tmp_path, capsys):
     assert "JI3n_0" in resolve("VF3n-16", data).census["LDSM_X1"]
     assert "JI3o_0" in resolve("VF3p-16", data).census["LDSM_X1"]
     assert "JI3q_0" in resolve("VF3q-16", data).census["LDSM_X1"]
-    assert "JI3s_0" in new.census["LDSM_X1"] and not {"JI3e_0", "JI3n_0", "JI3o_0", "JI3q_0"} & set(new.census["LDSM_X1"])
+    assert "JI3s_0" in resolve("VF3r-16", data).census["LDSM_X1"]
+    assert "JI3t_0" in new.census["LDSM_X1"]
+    assert not {"JI3e_0", "JI3n_0", "JI3o_0", "JI3q_0", "JI3s_0"} & set(new.census["LDSM_X1"])
     assert vector("TEST", data).published == {}
     assert main(["--data", str(data), "solve", "TEST"]) == 0
     assert "published: nothing yet" in capsys.readouterr().out
