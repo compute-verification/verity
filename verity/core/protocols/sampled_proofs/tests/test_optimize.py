@@ -14,8 +14,8 @@ import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
-                                                           TemplateCost, _hit, _miss, certify, density_bound, for_budget,
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, Policy,
+                                                           ReplayDomain, TemplateCost, _hit, _miss, certify, density_bound, for_budget,
                                                            for_target, frontier, needs_benchmark, overlaps, perturb,
                                                            replay_cost, row_ands, sensitivity, template_cost, touched,
                                                            weigh, work_law)
@@ -82,6 +82,50 @@ def test_zero_statement_cost_gives_achievability_rates(achievability):
     assert dict(plan.sizes) == {"A": 70, "B": 70, "C": 20}
     assert not plan.floor_only
     assert plan.certificate.harm <= plan.certificate.density <= 400.0
+
+
+def test_policies_draw_the_envelope_of_their_rates():
+    """With policies, `Achievability` per policy, q_s = min(1, ln(1/delta) max_P A_P c_P(s) / T_P), certifies all of them
+    at harm 1: the planner draws exactly those rates, and each unit's binding policy is the one setting its rate."""
+    cands = [Candidate("a", "A", 4000, 1, 16), Candidate("b", "B", 500, 8, 2), Candidate("c", "C", 20, 200, 16)]
+    work = Policy("work", 3200.0, amplification=8.0, work=1.0)
+    control = Policy("control", 4000.0, bits=1.0, unit=log(4521, 2))
+    objective = Objective(2.0 ** -10, policies=(work, control))
+    costs = CostModel({c.template: TemplateCost(unit=float(c.work)) for c in cands})
+    plan = for_target(cands, costs, objective, 1.0, by="density", grid=41)
+    rate = {c.template: log(1 / objective.delta) * max(p.amplification * p.cost(c) / p.target for p in (work, control))
+            for c in cands}
+    assert dict(plan.sizes) == {c.template: min(c.units, ceil(min(1.0, rate[c.template]) * c.units)) for c in cands}
+    assert {c.template: objective.binding(c) for c in cands} == {"A": "control", "B": "work", "C": "work"}
+    cert = plan.certificate
+    assert cert.density <= 1.0 and set(cert.policies) == {"work", "control"}
+    assert cert.policies["work"] <= work.target and cert.policies["control"] <= control.target
+    assert Objective(2.0 ** -10).harm(cands[2]) == 200 and Objective(2.0 ** -10).binding(cands[2]) == ""
+
+
+def test_the_joint_plan_meets_every_policy_and_one_binds(batched):
+    """Under C-Flock's batched cost and core's exact bound, the cheapest plan at harm 1 keeps every policy's damage within
+    its target, one of them close to it, and costs at least each policy's own cheapest plan; a policy that dominates
+    every unit's share gives its own plan."""
+    cands, costs, _, _ = batched
+    work = Policy("work", 4e5, amplification=8.0, work=1.0)
+    control = Policy("control", 4e4, bits=1.0, unit=15.0)
+    joint = for_target(cands, costs, Objective(2.0 ** -20, policies=(work, control)), 1.0, grid=41)
+    cert = joint.certificate
+    assert cert.exact and cert.harm <= 1.0
+    shares = {p.name: cert.policies[p.name] / p.target for p in (work, control)}
+    assert max(shares.values()) <= 1.0 and max(shares.values()) > 0.5
+    for p in (work, control):
+        alone = for_target(cands, costs, Objective(2.0 ** -20, policies=(p,)), 1.0, grid=41)
+        assert alone.cost["total"] <= joint.cost["total"] * SLACK
+    loose = Policy("control", 1e9, bits=1.0, unit=15.0)
+    both = for_target(cands, costs, Objective(2.0 ** -20, policies=(work, loose)), 1.0, grid=41)
+    alone = for_target(cands, costs, Objective(2.0 ** -20, policies=(work,)), 1.0, grid=41)
+    assert dict(both.sizes) == dict(alone.sizes)
+    with pytest.raises(ValueError, match="distinct names"):
+        Objective(0.01, policies=(work, work))
+    with pytest.raises(ValueError, match="target > 0"):
+        Policy("x", 0.0, work=1.0)
 
 
 def _registered(plan, cands) -> dict[str, int]:

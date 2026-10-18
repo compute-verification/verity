@@ -29,6 +29,11 @@ weight of the template's block kind, 1 unless the plan weighs kinds), some templ
 whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a unit
 cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates, `q_s = min(1, ln(1/delta) w_s / C)`.
 `weigh` chooses the kinds' weights at a target, under the same stratified certificate.
+
+**Policies.**  An objective may carry policies instead (`Policy`: a public cost per unit, an amplification and a target,
+note:proofs/20261018T2305Z-draft-iop-core-objects's tier 2).  A unit's harm is then the largest share of a target it
+spends, so the draw is weighted by the envelope of the policies' costs, a plan certifying harm 1 meets every policy, and
+`Certificate.policies` says which one binds.
 """
 from __future__ import annotations
 
@@ -204,29 +209,69 @@ class CostModel:
 
 
 @dataclass(frozen=True)
+class Policy:
+    """One policy's bound read off the certificate (note:proofs/20261018T2305Z-draft-iop-core-objects, tier 2): a wrong
+    unit costs `work` times its credited work and influence plus `bits` times its output bits plus `unit`, and the
+    policy's damage is at most `amplification` times the certified cost, A_P H_c(delta), which is to stay within `target`.
+    Integrity: `unit` the outputs in a unit's cone, A = 1.  Control: `bits` 1 and `unit` the location term's
+    log2(|U| + 1) a wrong unit (the 23:02Z schema's), A = 1.  Skippable work: `work` 1, A = F / (1 - p)."""
+
+    name: str
+    target: float
+    amplification: float = 1.0
+    work: float = 0.0
+    bits: float = 0.0
+    unit: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.target > 0 or not self.amplification > 0 \
+                or min(self.work, self.bits, self.unit) < 0 or not self.work + self.bits + self.unit > 0:
+            raise ValueError(f"policy {self.name!r}: needs a name, target > 0, amplification > 0 and costs >= 0 not all 0")
+
+    def cost(self, c) -> float:
+        return self.work * (c.work + c.influence) + self.bits * c.out_bits + self.unit
+
+    def share(self, c) -> float:
+        """What a wrong `c` spends of the policy's target."""
+        return self.amplification * self.cost(c) / self.target
+
+
+@dataclass(frozen=True)
 class Objective:
-    """The harm a wrong unit does: `work` times its credited work and influence plus `bits` times its output bits.  No
-    target: targets and budgets are queries on the frontier.  Every template draws at least `floor` units."""
+    """The harm a wrong unit does: `work` times its credited work and influence plus `bits` times its output bits, or,
+    given `policies`, the largest share of a policy's target it spends, so that a plan certifying harm at most 1 meets
+    every policy (the draw is weighted by the envelope of the policies' costs).  No target: targets and budgets are
+    queries on the frontier.  Every template draws at least `floor` units."""
 
     delta: float
     work: float = 1.0
     bits: float = 0.0
     floor: int = 1
+    policies: tuple[Policy, ...] = ()
 
     def __post_init__(self) -> None:
         if not 0 < self.delta < 1 or self.work < 0 or self.bits < 0 or not self.work + self.bits > 0 or self.floor < 1:
             raise ValueError("an objective needs 0 < delta < 1, weights >= 0 not both 0, and floor >= 1")
+        if len({p.name for p in self.policies}) != len(self.policies):
+            raise ValueError("an objective's policies need distinct names")
 
-    def harm(self, c: Candidate) -> float:
+    def harm(self, c) -> float:
+        if self.policies:
+            return max(p.share(c) for p in self.policies)
         return self.work * (c.work + c.influence) + self.bits * c.out_bits
+
+    def binding(self, c) -> str:
+        """The policy whose share sets `c`'s harm ("" without policies)."""
+        return max(self.policies, key=lambda p: p.share(c)).name if self.policies else ""
 
 
 @dataclass(frozen=True)
 class Certificate:
     """What a plan's law certifies at `delta`, from its sizes alone: `harm` (core's `harm_bound` of the objective's harm),
     `density` (`density_bound` of it), `free_compute` (core's `harm_bound` of credited work and influence) and, when the
-    objective weighs bits, `leak` (`consumers.exfiltration_bound`: `harm_bound` of output bits plus `location_bits`).  When
-    not `exact`, every field is `density_bound`'s and there is no leak."""
+    objective weighs bits, `leak` (`consumers.exfiltration_bound`: `harm_bound` of output bits plus `location_bits`), and
+    per policy its damage bound A_P H_c(delta) (`policies`), the one nearest its target binding.  When not `exact`, every
+    field is `density_bound`'s and there is no leak."""
 
     delta: float
     harm: float
@@ -234,6 +279,7 @@ class Certificate:
     free_compute: float
     leak: float | None = None
     exact: bool = True
+    policies: Mapping[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -362,15 +408,18 @@ def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective
 
     density = dens(objective.harm)
     if not exact:
-        return Certificate(d, density, density, dens(lambda c: float(c.work + c.influence)), None, False)
+        return Certificate(d, density, density, dens(lambda c: float(c.work + c.influence)), None, False,
+                           {p.name: p.amplification * dens(p.cost) for p in objective.policies})
     law = Stratified(tuple(Stratum(c.template, c.units, sizes[c.template]) for c in chosen))
     harm = law.harm_bound({c.template: objective.harm(c) for c in chosen}, d)
     work = law.harm_bound({c.template: float(c.work + c.influence) for c in chosen}, d)
     leak = None
-    if objective.bits:
+    if objective.bits and not objective.policies:
         profile = IntegrityProfile(("unit",), (law.population,), {"unit": law}, d)
         leak = exfiltration_bound(profile, {c.template: float(c.out_bits) for c in chosen})
-    return Certificate(d, harm, density, work, leak)
+    policies = {p.name: p.amplification * law.harm_bound({c.template: p.cost(c) for c in chosen}, d)
+                for p in objective.policies}
+    return Certificate(d, harm, density, work, leak, True, policies)
 
 
 def _k(c: Candidate, objective: Objective, lam: float, weight: float = 1.0) -> int:
