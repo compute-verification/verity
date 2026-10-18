@@ -15,6 +15,9 @@ a heartbeat counts as nothing. A run is
   legitimate);
 - **crashed** when the run ended in ERROR (recorded).
 
+Only RUNNING is judged. WAITING_FOR_BACKGROUND_WORK (an agent waiting on its background workers) is not held. An agent whose latest
+run the runs endpoint won't read (a goal run's `run-goal-...` id gets 400) is recorded once as unreadable and skipped.
+
 Each finding is a line of JSON in `--log`. The control pod holds no Slack credential, so infra's relay reads that file over ssh and
 rings the agent's coordinator. Cancelling and restarting don't wait for it.
 """
@@ -51,7 +54,7 @@ def iso(t: float) -> str:
 class Api:
     """Cursor's Cloud Agents API, v1."""
 
-    def __init__(self, key: str, base: str = API, timeout: float = 30):
+    def __init__(self, key: str, base: str = API, timeout: float = 60):
         self.auth = "Basic " + base64.b64encode(f"{key}:".encode()).decode()
         self.base, self.timeout = base, timeout
 
@@ -202,7 +205,13 @@ class Watch:
                 known = run in self.runs
             if known:
                 continue
-            info = self.api.get(f"/v1/agents/{a['id']}/runs/{run}")
+            try:
+                info = self.api.get(f"/v1/agents/{a['id']}/runs/{run}")
+            except urllib.error.HTTPError as e:     # a goal run's id (run-goal-...) isn't one the runs endpoint takes
+                if run not in self.crashed:
+                    self.crashed.add(run)
+                    self.record("unreadable", Run(a["id"], run, a.get("name") or ""), status=f"HTTP {e.code}")
+                continue
             if info.get("status") == "RUNNING":
                 r = Run(a["id"], run, a.get("name") or "", last_t=t)
                 with self.lock:

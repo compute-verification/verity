@@ -53,8 +53,10 @@ def once() -> None:
         try:
             rec = json.loads(ln)
         except ValueError:
-            rec = {"kind": "unreadable", "agent": "?", "run": "?"}
-        if DRY:
+            rec = {"kind": "garbled", "agent": "?", "run": "?"}
+        if rec.get("kind") == "unreadable":         # a run the API won't read (a goal run's id): nothing to do
+            pass
+        elif DRY:
             log(f"would post: {text(rec)}")
         else:
             slack._post(slack.Slack(os.environ.get("SLACK_BOT_TOKEN")), ALERTS, "infra", text(rec))

@@ -96,6 +96,23 @@ def test_the_same_agent_is_freed_at_most_once_an_hour(tmp_path):
     assert [r["kind"] for r in records(tmp_path)] == ["held", "held_again"]
 
 
+def test_an_unreadable_run_is_recorded_once_and_the_sweep_goes_on(tmp_path):
+    """18 Oct: a goal run's id (run-goal-...) got 400 from the runs endpoint and stopped every sweep."""
+    api = FakeApi([{"id": "bc-g", "status": "ACTIVE", "latestRunId": "run-goal-x"},
+                   {"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "RUNNING"}})
+
+    def get(path, **params):
+        if "run-goal" in path:
+            raise W.urllib.error.HTTPError(path, 400, "Bad Request", {}, None)
+        return api._runs[path.rsplit("/", 1)[1]]
+    api.get = get
+    w, started = W.Watch(api, tmp_path / "events.jsonl", Clock()), []
+    w.sweep(started.append)
+    w.sweep(started.append)
+    assert [r.run for r in started] == ["run-1"]
+    assert [(r["kind"], r["status"]) for r in records(tmp_path)] == [("unreadable", "HTTP 400")]
+
+
 def test_a_crashed_run_is_recorded_once(tmp_path):
     api, clock, w, started = setup(tmp_path, status="ERROR")
     w.sweep(started.append)
