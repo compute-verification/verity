@@ -1120,13 +1120,25 @@ PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
 #: collection but circuit-check's took 18 s on 4 workers of a 4-core VM (18 Oct)
 PREFLIGHT_BUDGET_S = 60.0
-PREFLIGHT_JOBS = 4
+#: collections at once: four torch-importing `--collect-only` runs reach about 8 GB, half of a marker's 16 GB VM (ci, 18 Oct)
+PREFLIGHT_JOBS = 2
+#: below this share of memory available, no suite is collected, so a mark never OOMs the VM's other agents (infra's hook threshold)
+PREFLIGHT_MIN_FREE = 0.25
 #: the temporary worktrees' prefix, `<tmp>/research-preflight-<pid>-*`: one whose process is gone is swept (a kill skips `finally`)
 PREFLIGHT_PREFIX = "research-preflight-"
 #: prints the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2], as JSON
 _TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/verity/check'); import suites as S; "
             "print(json.dumps([s.path for s in S.touched(S.discover(), S.members(), sys.argv[1], sys.argv[2], S.locked())]))")
 #: a line of pytest's short summary: `FAILED tests/x.py::test_y - why`, `ERROR tests/x.py - why` (a collection error)
+def free_memory() -> float | None:
+    """The share of this machine's memory available (`/proc/meminfo`'s MemAvailable over MemTotal), or None where unreadable."""
+    try:
+        info = dict(ln.split(":", 1) for ln in Path("/proc/meminfo").read_text().splitlines() if ":" in ln)
+        return int(info["MemAvailable"].split()[0]) / int(info["MemTotal"].split()[0])
+    except (OSError, KeyError, ValueError, ZeroDivisionError):
+        return None
+
+
 _SUMMARY_RE = re.compile(r"^(?:FAILED|ERROR) (.+?)(?: - (.*))?$", re.M)
 _LOCK_STALE = "needs to be updated"
 
@@ -1149,9 +1161,10 @@ class Preflight:
 
     def __init__(self, repo: Path, remote: str, store, *, sync: tuple[str, ...] | None = PREFLIGHT_SYNC, python: str | None = None,
                  budget_s: float = PREFLIGHT_BUDGET_S, jobs: int = PREFLIGHT_JOBS, clock: Callable[[], float] = time.monotonic,
-                 root: Path | None = None, log: Callable[[str], None] = print):
+                 root: Path | None = None, log: Callable[[str], None] = print,
+                 free: Callable[[], float | None] = free_memory):
         self.repo, self.remote, self.store, self.sync, self.python = Path(repo), remote, store, sync, python
-        self.budget_s, self.jobs, self.clock, self.log = budget_s, jobs, clock, log
+        self.budget_s, self.jobs, self.clock, self.log, self.free = budget_s, jobs, clock, log, free
         self.root = Path(root or tempfile.gettempdir())
 
     def __call__(self, pr: PR, prs: list[PR]) -> str | None:
@@ -1360,6 +1373,10 @@ class Preflight:
         else:
             suites = [n.partition(":")[2] for n in only if n.startswith("collect:")]
         todo = [s for s in suites if (wt / s).is_dir()]
+        if todo and (f := self.free()) is not None and f < PREFLIGHT_MIN_FREE:
+            notes.append(f"no suite collected: {f:.0%} of memory available, under {PREFLIGHT_MIN_FREE:.0%}; the train's check "
+                         "still collects them")
+            todo = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(todo) or 1))) as pool:
             for s, res in zip(todo, pool.map(lambda s: self._pytest(py, wt / s, ["--collect-only"], deadline), todo)):
                 got(f"collect:{s}", res)
