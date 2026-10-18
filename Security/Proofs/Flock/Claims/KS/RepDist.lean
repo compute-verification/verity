@@ -276,8 +276,7 @@ theorem noSlot_lockRec_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : 
   | [], _, _, _, _, _, _ => .ret _
   | [lv], i, st, stC, h, _, _ => noSlot_lockRec_single A r hr n b initial ext C₀ sch _ lv i st stC h
   | lv :: lv' :: rest, i, st, stC, h, 0, hp => by
-      simp only [List.length_cons] at hp
-      omega
+      simp only [List.length_cons] at hp <;> omega
   | lv :: lv' :: rest, i, st, stC, h, p + 1, hp => by
       refine Lock.NoSlot.bind ?_ (noSlot_lockFold A r _ i _ lv.lanes _ _ _ _ _)
       intro i' x y hxy
@@ -307,8 +306,7 @@ theorem noSlot_lockRec_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : 
       · show slotOf r (stC3.level + 1 + 1 + p) = slotOf r (stC.level + 1 + (p + 1))
         unfold slotOf
         omega
-      · simp only [List.length_cons] at hp ⊢
-        omega
+      · simp only [List.length_cons] at hp ⊢ <;> omega
 
 /-- **No cap past Ligerito's last level.** -/
 theorem noSlot_lockLig_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (m k0 : ℕ) (l₀ l₁ : Level)
@@ -345,8 +343,7 @@ theorem noSlot_lockLig_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (m k0 : ℕ) (l
   · show slotOf r (1 + 1 + p) = slotOf r (p + 1 + 1)
     unfold slotOf
     omega
-  · simp only [List.length_cons]
-    omega
+  · simp only [List.length_cons] <;> omega
 
 /-- **No cap past a rep's last level.** -/
 theorem noSlot_lockRep_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
@@ -378,18 +375,16 @@ theorem noSlot_lockRep_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement)
 /-- With four lanes at every level, the recursion's level caps are `11` coins apart. -/
 theorem recSlotDist_eq : ∀ (levs : List Level) (p : ℕ), (∀ lv ∈ levs, lv.lanes = 4) → p + 1 < levs.length →
     recSlotDist levs p = 4 + 11 * p
-  | [], _, _, hp => by simp only [List.length_nil] at hp; omega
-  | [_], _, _, hp => by simp only [List.length_cons, List.length_nil] at hp; omega
+  | [], _, _, hp => by simp only [List.length_nil] at hp <;> omega
+  | [_], _, _, hp => by simp only [List.length_cons, List.length_nil] at hp <;> omega
   | lv :: lv' :: rest, 0, hl, _ => by
       have h1 := hl lv (by simp)
-      simp only [recSlotDist]
-      omega
+      simp only [recSlotDist] <;> omega
   | lv :: lv' :: rest, p + 1, hl, hp => by
       have h1 := hl lv (by simp)
       have h2 := recSlotDist_eq (lv' :: rest) p (fun x hx => hl x (List.mem_cons_of_mem _ hx))
-        (by simp only [List.length_cons] at hp ⊢; omega)
-      simp only [recSlotDist]
-      omega
+        (by simp only [List.length_cons] at hp ⊢ <;> omega)
+      simp only [recSlotDist] <;> omega
 
 /-- **`fast100` folds four lanes at every level after level 0.** -/
 theorem fast100_lanes {m : ℕ} {s : Schedule} (hs : fast100 m = some s) : ∀ lv ∈ s.levels.tail, lv.lanes = 4 := by

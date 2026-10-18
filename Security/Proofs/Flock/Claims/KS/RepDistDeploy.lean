@@ -49,6 +49,6 @@ theorem dist_lockRep_capRound (A : Model.Arith F K) (r : ℕ) (hr : r < 2) (S : 
     rw [← ligSlotDist_capRound k0 (l₁ :: rest) hl ℓ hlt]
     exact h
   · exact .noSlot (noSlot_lockRep_ge A r hr S m k0 l₀ l₁ rest ext hk0 hm C₀ extra ℓ
-      (by simp only [List.length_cons] at hlt ⊢; omega))
+      (by simp only [List.length_cons] at hlt ⊢ <;> omega))
 
 end FlockDeploy.KS
