@@ -6,6 +6,8 @@ prefill, a short prefill and a mixed step.  Each step's routes are the union of 
 fails without it; a layer that recorded no attention rows, or indexers that disagree, fail the step."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import re
 import types
 from typing import Any

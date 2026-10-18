@@ -14,6 +14,8 @@ BLOCK_SIZE_K 32) and its Boolean versions (`boolean_fp8_moe`), and `fp8`'s block
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import json
 from fractions import Fraction
 from pathlib import Path

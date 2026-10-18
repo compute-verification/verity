@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import dataclasses
 
 import pytest
