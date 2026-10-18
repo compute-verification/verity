@@ -156,9 +156,10 @@ def two_sites(blocks: int = 2, *, leaves: int = 2, spines: int = 1, fabric_laten
         top = "spine0" if spines else "leaf0"
         hop = next(l for l in dc.links if l.b == top)
         cert = Device("wan.cert", "certifier")
-        dc = Datacenter(dc.name, dc.blocks, [*dc.fabric, cert], [*dc.links, Link(cert.name, top, hop.capacity, hop.latency)],
-                        dc.cadence)
+        uplink = Link(cert.name, top, hop.capacity, hop.latency)
+        dc = Datacenter(dc.name, dc.blocks, [*dc.fabric, cert], [*dc.links, uplink], dc.cadence)
         sites.append(dc.prefixed(name, keep=frozenset({outside})))
-    wan = Link("east.wan.cert", "west.wan.cert", Assumption("wan/east-west", wan_gbps * 1_000_000_000, "bit/s", "declared"),
+    wan = Link("east.wan.cert", "west.wan.cert",
+               Assumption("wan/east-west", wan_gbps * 1_000_000_000, "bit/s", "declared"),
                Assumption("wan/east-west-latency", wan_latency, "s", "declared"), "wan")
     return Fleet(sites, [wan])
