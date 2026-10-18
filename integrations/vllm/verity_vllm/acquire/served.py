@@ -599,7 +599,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
                "sampled": {"name": SAMPLED, **bound(b1.TokenSelect, V=V)},
                "kernels": dict(sorted(kernels.items())), "values": wired["values"],
                "dispatch": {"capture_sizes": capture_sizes, "max_num_seqs": max_num_seqs, "split_cap": split_cap, "sms": sms}}
-    pdig = hashlib.sha256(json.dumps({"program": program, "steps": plans}, sort_keys=True).encode()).hexdigest()
+    pdig = hashlib.sha512(json.dumps({"program": program, "steps": plans}, sort_keys=True).encode()).hexdigest()
     names = list(wired["values"])
     arrive = {r["request_id"]: r["arrive"] for r in schedule}
     identities = []

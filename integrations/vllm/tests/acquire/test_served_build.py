@@ -68,7 +68,8 @@ def test_the_build_is_the_served_computation(art: Path) -> None:
     assert [s["step"] for s in m["steps_plan"] for r in s["requests"] if r["NS"] > 1] == [7, 8, 9, 10, 11]
     assert {r["NS"] for s in m["steps_plan"] for r in s["requests"]} == {1, 2}
     assert len(m["identities"]) == 6697
-    assert m["program_digest"] == "57f88da16090075e74555416f8e5503ebd52d04f558f1c9e5573693dedaf7ca5"
+    assert m["program_digest"] == ("1f2df5e1029f878debf647a562314108b4e15159e90c5a852adefe9ade198707"
+                                   "7c2b4cbf5621209148cdafbdc1113f15cbafd7a9c3f38d11a70659c291062a6b")
 
 
 def test_the_gemm_route_follows_the_step(art: Path) -> None:
