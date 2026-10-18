@@ -524,10 +524,10 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.transient_peak_bytes = 0                            # largest learning-step transient host copy (given back after the re-hash)
         self.excluded_bytes = 0                                  # retain=host + exclude: bytes NOT copied to host over the run
         self.plan_mismatches = 0
-        # execution-environment knob (candidate B variant, labelled): run the model step on a HIGH-priority CUDA stream so the worker's SHA
-        # kernels (side stream, default priority) yield SM slots to the serving kernels; fenced both ways with wait_stream at the step
-        # boundary (the FA2 tap, the gather flushes and the step event all follow the current stream, so nothing else changes)
-        self.hi_prio = bool(native_hooks) and os.environ.get("VERITY_HI_PRIO", "0") == "1"
+        # the model step runs on a HIGH-priority CUDA stream (VERITY_HI_PRIO, default on; 0 keeps the caller's) so the worker's SHA kernels
+        # (side stream, default priority) yield SM slots to the serving kernels and the gather; fenced both ways with wait_stream at the
+        # step boundary (the FA2 tap, the gather flushes and the step event all follow the current stream, so nothing else changes)
+        self.hi_prio = bool(native_hooks) and os.environ.get("VERITY_HI_PRIO", "1") == "1"
         self._hi = torch.cuda.Stream(priority=-1) if self.hi_prio else None
         # the serving thread's step end as one native call (`end_step_full`; no step event on the windowed path, whose worker waits on the
         # windows' own), and on the windowed path a snapshot of the step's row order that the worker expands into `step_rows` unless a

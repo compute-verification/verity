@@ -892,7 +892,9 @@ struct Collector {
 
   cudaStream_t fork_side(cudaStream_t cur) {
     if (!side_s) {
-      cudaError_t rc = cudaStreamCreateWithFlags(&side_s, cudaStreamNonBlocking);
+      int prio = 0;                                                  // the serving stream's: under VERITY_HI_PRIO, ahead of the hash's blocks
+      cudaError_t rc = cudaStreamGetPriority(cur, &prio);
+      if (rc == cudaSuccess) rc = cudaStreamCreateWithPriority(&side_s, cudaStreamNonBlocking, prio);
       if (rc == cudaSuccess) rc = cudaEventCreateWithFlags(&side_fork, cudaEventDisableTiming);
       if (rc == cudaSuccess) rc = cudaEventCreateWithFlags(&side_done, cudaEventDisableTiming);
       if (rc != cudaSuccess) throw std::runtime_error(std::string("side drain stream: ") + cudaGetErrorString(rc));
