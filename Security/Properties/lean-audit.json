@@ -195,9 +195,9 @@
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
   "Properties.Accounting.Compose": {
-   "imports": ["Definitions.Accounting", "SampledProofs"],
+   "imports": ["Definitions.Accounting", "SampledProofs", "Properties.SampledProofs.Draw"],
    "except": [],
-   "why": "a declared circuit's proof units (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`SampledProofs.Slots.layout`), never a proof"
+   "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`SampledProofs.Slots.layout`) and the challenger's draw from bytes (`SampledProofs.Select.select`, read as `Properties.SampledProofs.bytesOf` reads them), never a proof"
   }
  },
  "reads_exempt": {

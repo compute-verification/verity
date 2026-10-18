@@ -1,38 +1,62 @@
 import Definitions.Accounting.Compose
-import SampledProofs.Slots
+import Properties.SampledProofs.Draw
 
 /-!
-# A declared circuit's proof units are the verifier's (`SampledProofs.Slots.layout`)
+# A declared circuit's proof units, commit coins and draw are the service's (`SampledProofs.Slots.layout`, `Select.select`)
 
-`Accounting.Compose.Declared` gives each gate its proof unit (`Declared.unit`), and the composed credit
-(`Models.Accounting.Guarantees.Compose`) draws, proves and charges tiles by it. The service draws and proves the units
-of the verifier's own partition of its program (`SampledProofs.Slots.layout`: the population's replay units, each one
-proof unit and its gates, then the input class). `UnitsOfLayout` is the statement that the two agree on a program `p`
-and query: every gate of `Cd` that is not an input lies in the gates of the replay unit that is its own unit, every
-input slot's gate is an input of `Cd`, and every population unit is one of `Cd`'s. It reads `Cd`'s gate `i` as `p`'s
-root gate `i`, and a `Q_word` unit's span may hold another unit's gates (`Partition.unitGates`), so it bounds each gate
-inside its own unit's span, not the span inside the unit.
+`Accounting.Compose.Declared` gives each gate its proof unit (`Declared.unit`) and each value its commit coin
+(`Declared.commitRound`), and the composed credit (`Models.Accounting.Guarantees.Compose`) draws, proves and charges
+tiles by them, its draw `Pouw.Window.subsetDraw` (`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that
+the declared circuit is the service's on a program `p` and query:
+* **units**: the service draws and proves the units of the verifier's own partition of its program
+  (`SampledProofs.Slots.layout`: the population's replay units, each one proof unit and its gates, then the input
+  class). Every gate of `Cd` that is not an input lies in the gates of the replay unit that is its own unit, every
+  input slot's gate is an input of `Cd`, and every population unit is one of `Cd`'s. It reads `Cd`'s gate `i` as `p`'s
+  root gate `i`, and a `Q_word` unit's span may hold another unit's gates (`Partition.unitGates`), so it bounds each
+  gate inside its own unit's span, not the span inside the unit;
+* **commit coins**: the code's schedule. PoUW's coins are one salt a window and the draw (`PouwCommit.LABELS`): the
+  salt is opened after the weights' root (`PouwCommit.epochSalt`), and the draw after the transcript's
+  (`PouwCommit.drawCoin` at `PouwCommit.drawAfter`). So a registered input is committed before coin `0`, and every
+  other value the prover writes before the draw, coin `rounds`. Under that schedule `Accounting.Compose.LayerCommitted`
+  fails wherever a value's IR cut is before the draw, which is why the live statements credit nothing on today's code;
+  the seeded statements' binding layer (`Declared.atDraw`) cuts every value at the draw, no earlier than this;
+* **the draw**: the code's draw under the `subset:K_d` law, from `L` uniform bytes (`Select.select`, its drawn units
+  then its closure, `Properties.SampledProofs.bytesOf`), is accepted and draws no unit of a set `U` no more often than
+  `subsetDraw K_d` of a uniform permutation of the population's `N_p` tiles misses `U`.
 
 It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
-faithfulness gap (note:compute-accounting/20261018T1600Z-draft-theorem-compose-r5, Open). The extractor that builds
-one, with this property proved of it, closes it. It covers units only: a proved version must also cover each value's
-commit coin (`Declared.commitRound`, the code's root for it fixed before that coin, and no later than its IR cut by
-`Assumptions.Compose.LayerCommitted`) and the draw (the code's drawn tiles are `Accounting.Compose.drawOf`'s), as
-RT-COMPOSE r4's check 1 asks.
+faithfulness gap (note:compute-accounting/20261018T1758Z-draft-compose-r6, Open). The extractor that builds one, with
+this property proved of it, closes it; tying each value to its leaf under the weights' or the transcript's root is the
+extractor's too. The draw conjunct is over the code alone and could be proved first (`Select.select`'s subset draw from
+bytes, `Draw.drawUnits`), beside `Properties.SampledProofs.DrawMisses`.
 -/
 
 open Lean (Json)
+open Pouw.RelativeSecurity (prob)
 
 namespace Properties.Compose
 
-/-- **`Cd`'s proof units are the layout's** on program `p` under `query`, wherever the layout is defined: each of `Cd`'s
-non-input gates lies in a proof unit of the replay unit that is its own unit, each input slot's gate is an input of
-`Cd`, and each population unit is one of `Cd`'s `units`. -/
-def UnitsOfLayout {ι : Type} (Cd : Accounting.Compose.Declared ι) (p : SampledProofs.Program) (query : Json) : Prop :=
+/-- **`Cd` is the service's** on program `p` under `query`, wherever the layout is defined: each of `Cd`'s non-input
+gates lies in a proof unit of the replay unit that is its own unit, each input slot's gate is an input of `Cd`, each
+population unit is one of `Cd`'s `units`; each value `Cd` writes is committed before coin `0` when it is a registered
+input and before the draw (`Cd.rounds`) otherwise, PoUW's salt-and-draw schedule; and where the population is `N_p`
+units, the code's `subset:K_d` draw from `L` uniform bytes is accepted and misses a set `U` of units with probability
+at most the model's draw's (`Pouw.Window.subsetDraw K_d` of a uniform permutation of `Fin N_p`). -/
+def UnitsOfLayout {ι : Type} (Cd : Accounting.Compose.Declared ι) (Np Kd : ℕ) (p : SampledProofs.Program)
+    (query : Json) : Prop :=
   ∀ l, SampledProofs.Slots.layout p query = .ok l →
     (∀ i, i < Cd.dag.length → Cd.binding i = none →
       ∃ r ∈ l.rus.toList, r.unit = some (Cd.unit i) ∧ ∃ g ∈ r.pus.toList, g.1 ≤ i ∧ i < g.2) ∧
     (∀ r ∈ l.rus.toList, r.unit = none → ∀ g ∈ r.pus.toList, g.1 < Cd.dag.length ∧ (Cd.binding g.1).isSome) ∧
-    ∀ r ∈ l.rus.toList, ∀ u, r.unit = some u → u < Cd.units
+    (∀ r ∈ l.rus.toList, ∀ u, r.unit = some u → u < Cd.units) ∧
+    (∀ ℓ, Cd.Writes ℓ → Cd.commitRound ℓ = match Cd.binding ℓ with
+      | some .registered => 0
+      | _ => Cd.rounds) ∧
+    (SampledProofs.Partition.units p query = .ok Np →
+      ∀ (cm : Option (Array (Int × Array Int))) (L : ℕ) (U : Finset ℕ),
+        prob (fun src : Fin L → Fin 256 => ∃ r,
+            SampledProofs.Select.select (.law ("subset:" ++ toString Kd)) p query none cm
+              (Properties.SampledProofs.bytesOf src) = .ok r ∧ ∀ u ∈ U, u ∉ r.2.1) ≤
+          prob (fun β : Equiv.Perm (Fin Np) => ∀ t ∈ Pouw.Window.subsetDraw Kd β, t.val ∉ U))
 
 end Properties.Compose
