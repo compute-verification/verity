@@ -1,14 +1,16 @@
 """The requirement's two proof units (I4): the plan unit, which holds a pass's plan to the blocks the declared circuit reads at
 the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the blocks a step writes to the
-circuit's values and their frees to those values' last reads (`StoreMatches`' L2 and L4, and L1 for written blocks). Both are
+circuit's values and every free, of a written block or a registered one, to its values' last read (`StoreMatches`' L1, L2 and
+L4). Both are
 Boolean Definitions, one instance per step, each returning one ok word: bit 0 the clause's verdict, bits 1-15 zero in gates.
 
     PlanMatch_v1{P, NR, V, G, TB, RPB}
         (count: U16, regmask: Array<NR / 16, U16>, kvmask: Array<V / 16, U16>, gmask: U16, lam: Array<2 V, U16>,
          plan: Array<P, U16>, tok: Array<G, U16>) -> U16
-    MemoryMapStep_v1{K, C, V, M, N, SLOTS}
-        (t: U16, first: U16, count: U16, present: U16, pos: Array<K, U16>, last: Array<K, U16>, lam: Array<2 V, U16>,
-         phi: Array<2 M, U16>, val: Array<K, Array<VW / 16, U16>>, pay: Array<C, Array<2048, U16>>) -> U16
+    MemoryMapStep_v2{K, C, V, M, N, SLOTS}
+        (t: U16, first: U16, count: U16, present: U16, pos: Array<K, U16>, last: Array<K, U16>, rfree: Array<⌈N / 16⌉, U16>,
+         lam: Array<2 V, U16>, phi: Array<N + 2 M, U16>, val: Array<K, Array<VW / 16, U16>>,
+         pay: Array<C, Array<2048, U16>>) -> U16
         U16 = Array<16, Value<1>>, a word's bits LSB first; VW = 32,768 / SLOTS
 
 **The store.** Blocks are `requirement.BLOCK_BITS` (4,096 bytes), named by store index: the registered ones below N, then the
@@ -16,16 +18,25 @@ written ones from N in the order the memory map wrote them (memory-map/v1's fres
 of VW bits, value s at bits [s VW, (s + 1) VW) of its payload (bit t of a byte string is bit t & 7 of byte t >> 3), the bits
 of an empty slot zero. A written value is named by its position in the run's written values (born step, then the circuit's
 value order): the layout row ``lam`` holds, for position i, its store index (word 2 i) and its slot (word 2 i + 1). The map
-row ``phi`` holds, for written block b = j - N, the step that wrote it (word 2 b) and the step that freed it (word 2 b + 1): a
-free at step f takes effect after f's reads, as `Store.resident` and memory-map/v1 read it.
+row ``phi`` holds, for registered block j, the step that freed it (word j), and for written block b = j - N, the step that
+wrote it (word N + 2 b) and the step that freed it (word N + 2 b + 1), `WORD - 1` for a block no step frees: a free at step f
+takes effect after f's reads, as `Store.resident` and memory-map/v1 read it.
 
 **What is public** is the declared circuit's requirement (the census's schedule: each value's birth, its last read, which
 values each step reads; `requirement.Requirement`), the registered store's layout (which registered block holds which
 registered value), each step's count of written blocks and so its first fresh index, and each pass's plan length. Each
 instance's public row (``count``, ``regmask``, ``kvmask``, ``gmask`` of the plan unit; ``t``, ``first``, ``count``,
-``present``, ``pos``, ``last`` of the memory-map unit) is that data, which the verifier holds the committed row to by its
-opening. The layout, the map, the payloads, the plans and the circuit's values are witness: committed rows, read only inside
-the proof, each bound to its one commitment by its commit string (`b || c`).
+``present``, ``pos``, ``last``, ``rfree`` of the memory-map unit) is that data, which the verifier holds the committed row to
+by its opening. The layout, the map, the payloads, the plans and the circuit's values are witness: committed rows, read only
+inside the proof, each bound to its one commitment by its commit string (`b || c`).
+
+**The appends.** A step's written blocks are the remote audit's append for that step. A payload row's commit string is the
+append leaf's (`hm96-sha512/row/v2` of the same 4,096 bytes under the same salt: the leaf hides ``d_j``), so an append's root
+is a function of its instance's payload rows' ``b || c`` and its public ``first`` and ``count``. The chain over the steps'
+appends is then the record's (remote_bandwidth's `Record.appends`): no dummy append, none out of the map's order, no re-key the
+map doesn't write. That is checked on the commitments, outside the circuit, with no gate. An append's coin ``c_a`` isn't read
+here: it keys the block's encoding, which the opening's decode checks against the same leaf (under zero knowledge, the
+block-decode unit's payload-against-digest check, with ``c_a`` a public input beside the append's root and count).
 
 **PlanMatch**, at step t: the blocks t reads are the registered ones its structural reads hold (``regmask``, bit j block j
 for j < NR), the block of each gathered table row (``gmask``'s bit g for each of the G gathers: the table's row ``tok[g]``,
@@ -42,11 +53,14 @@ no two in one slot, and that block's payload ``pay[j - first]`` carries ``val[k]
 the step wrote: ``phi`` records it written at t (each write at its values' production step), it holds at least one value (so
 a planned block carries at least VW bits: D = VW), its empty slots are zero, and ``phi`` frees it at the last read of its
 values, the greatest ``last[k]`` among them: an earlier free drops a value still to be read (L2), a later one keeps a block
-no step reads (L1). ``first`` is at least N, and ``first - N + count`` at most M.
+no step reads (L1). And each registered block whose values' last read is t (``rfree``'s bit j, from the public schedule and
+the registered layout) is freed at t, ``phi[j] = t``: each registered block's free is pinned by the one instance at its last
+read. ``first`` is at least N, and ``first - N + count`` at most M.
 
 **Cost.** PlanMatch: one 16-bit comparison of each plan entry with each block t may read, P (NR + G + V) of them, about
 P (NR + G + V) 16 ANDs. MemoryMapStep: each present value against each slot of each written block, K C SLOTS VW ANDs, and the
-empty slots' C SLOTS VW, then `lam` and `phi` read by one-hot selection. A statement adds each row's hm96 commitment.
+empty slots' C SLOTS VW, then `lam` and `phi` read by one-hot selection, and a 16-bit comparison a registered block, 16 N. A
+statement adds each row's hm96 commitment.
 
 `plan_match` and `memory_map` are the references, over plain ints; `plan_rows` and `memory_map_rows` name each instance's
 rows (C-Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments from a `requirement.Requirement`, its
@@ -66,7 +80,7 @@ from .requirement import BLOCK_BITS, Layout, Requirement, Store
 from .types import Array
 
 __all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "U16", "layout_words", "map_inputs", "map_words", "memory_map",
-           "memory_map_rows", "plan_inputs", "plan_match", "plan_rows", "row_words", "value_bits"]
+           "memory_map_rows", "plan_inputs", "plan_match", "plan_rows", "registered_frees", "row_words", "value_bits"]
 
 U16 = Array(16, BL.BIT)
 #: a block's payload in u16 words
@@ -129,13 +143,16 @@ def plan_match(S, count: int, regmask: Sequence[int], kvmask: Sequence[int], gma
 
 
 def memory_map(S, t: int, first: int, count: int, present: int, pos: Sequence[int], last: Sequence[int],
-               lam: Sequence[int], phi: Sequence[int], val: Sequence[int], pay: Sequence[int]) -> int:
+               rfree: Sequence[int], lam: Sequence[int], phi: Sequence[int], val: Sequence[int], pay: Sequence[int]) -> int:
     """`MemoryMapStep`'s reference over the values and payloads as ints (bit s VW + u of ``pay[c]`` is slot s's bit u): 1 iff
-    every present value is in a slot of a block the step wrote that carries it, and each such block is written at ``t``,
-    holds a value, has its empty slots zero and is freed at its values' last read."""
+    every present value is in a slot of a block the step wrote that carries it, each such block is written at ``t``, holds a
+    value, has its empty slots zero and is freed at its values' last read, and each registered block ``rfree`` names is freed
+    at ``t``."""
     _check_map(S)
     vw = value_bits(S.SLOTS)
     if first < S.N or count > S.C or first - S.N + count > S.M:
+        return 0
+    if any(b and phi[j] != t for j, b in enumerate(_bits(rfree, S.N))):
         return 0
     held: dict[int, list[int]] = {c: [] for c in range(count)}
     slots: set[tuple[int, int]] = set()
@@ -152,8 +169,8 @@ def memory_map(S, t: int, first: int, count: int, present: int, pos: Sequence[in
             return 0
         held[j - first].append(last[k])
     for c in range(count):
-        b = first - S.N + c
-        if not held[c] or phi[2 * b] != t or phi[2 * b + 1] != max(held[c]):
+        b = S.N + 2 * (first - S.N + c)
+        if not held[c] or phi[b] != t or phi[b + 1] != max(held[c]):
             return 0
         if any((pay[c] >> (s * vw)) % (1 << vw) for s in range(S.SLOTS) if (first + c, s) not in slots):
             return 0
@@ -240,14 +257,18 @@ def _map_build(C, S, *e):
     t, first, count, present = e[:4]
     pos, last = e[4:4 + S.K], e[4 + S.K:4 + 2 * S.K]
     at = 4 + 2 * S.K
-    lam, phi = e[at:at + 2 * S.V], e[at + 2 * S.V:at + 2 * S.V + 2 * S.M]
-    at += 2 * S.V + 2 * S.M
+    rfree = [b for w in e[at:at + _rwords(S)] for b in w][:S.N]
+    at += _rwords(S)
+    lam, phi = e[at:at + 2 * S.V], e[at + 2 * S.V:at + 2 * S.V + S.N + 2 * S.M]
+    at += 2 * S.V + S.N + 2 * S.M
+    rphi, phi = phi[:S.N], phi[S.N:]
     val = [[b for w in e[at + vww * k:at + vww * (k + 1)] for b in w] for k in range(S.K)]
     at += vww * S.K
     pay = [[b for w in e[at + BLOCK_WORDS * c:at + BLOCK_WORDS * (c + 1)] for b in w] for c in range(S.C)]
     pres = present[:S.K]
     b0, borrow = sub(C, first, const_bits(S.N, 16), 16)
     oks = [borrow.inv(), _ltc(C, count, S.C + 1), _ltc(C, add(C, b0, count, width=17), S.M + 1)]
+    oks += [_imp(C, rfree[j], _eq(C, rphi[j], t)) for j in range(S.N)]
     cvalid = [_ltc(C, count, c + 1).inv() for c in range(S.C)]
     firsts = [add(C, first, const_bits(c, 16), width=16) for c in range(S.C)]
     js, ss, sel, slot = [], [], [], []
@@ -290,14 +311,19 @@ def _plan_signature(S):
              ("lam", Array(2 * S.V, U16)), ("plan", Array(S.P, U16)), ("tok", Array(S.G, U16))), U16)
 
 
+def _rwords(S) -> int:
+    """``rfree``'s words: a bit a registered block."""
+    return -(-S.N // 16)
+
+
 def _map_signature(S):
     _check_map(S)
     return ((("t", U16), ("first", U16), ("count", U16), ("present", U16), ("pos", Array(S.K, U16)), ("last", Array(S.K, U16)),
-             ("lam", Array(2 * S.V, U16)), ("phi", Array(2 * S.M, U16)),
+             ("rfree", Array(_rwords(S), U16)), ("lam", Array(2 * S.V, U16)), ("phi", Array(S.N + 2 * S.M, U16)),
              ("val", Array(S.K, Array(value_bits(S.SLOTS) // 16, U16))), ("pay", Array(S.C, Array(BLOCK_WORDS, U16)))), U16)
 
 
-def _unit(name: str, statics: tuple[str, ...], signature, build, doc: str) -> CompositeDefinition:
+def _unit(name: str, version: int, statics: tuple[str, ...], signature, build, doc: str) -> CompositeDefinition:
     @lru_cache(maxsize=None)
     def traced(*key) -> TR.Traced:
         S = SimpleNamespace(**dict(zip(statics, key)))
@@ -308,19 +334,20 @@ def _unit(name: str, statics: tuple[str, ...], signature, build, doc: str) -> Co
         params, ret = signature(S)
         return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
 
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
+    d = CompositeDefinition(name, version, statics, signature, body, conformance="exact-model-tested", doc=doc)
     d.traced = traced  # type: ignore[attr-defined]
     return d
 
 
 PlanMatch = _unit(
-    "PlanMatch", ("P", "NR", "V", "G", "TB", "RPB"), _plan_signature, _plan_build,
+    "PlanMatch", 1, ("P", "NR", "V", "G", "TB", "RPB"), _plan_signature, _plan_build,
     "1 iff plan[0 .. count) is strictly increasing, zero after, and exactly the blocks the step reads: the registered blocks "
     "regmask names, block TB + tok[g] / RPB of each gather gmask names, and block lam[2 i] of each written value kvmask names")
 MemoryMapStep = _unit(
-    "MemoryMapStep", ("K", "C", "V", "M", "N", "SLOTS"), _map_signature, _map_build,
+    "MemoryMapStep", 2, ("K", "C", "V", "M", "N", "SLOTS"), _map_signature, _map_build,
     "1 iff every present value k is in a slot of a block first .. first + count that carries val[k] there, no two in one "
-    "slot, and each such block is written at t, holds a value, has its empty slots zero and is freed at its values' last read")
+    "slot, each such block is written at t, holds a value, has its empty slots zero and is freed at its values' last read, "
+    "and each registered block rfree names is freed at t")
 
 
 # --- each instance's rows -------------------------------------------------------------------------------------------------
@@ -333,8 +360,9 @@ def plan_rows(S) -> list[tuple[str, int, list[str]]]:
 
 def memory_map_rows(S) -> list[tuple[str, int, list[str]]]:
     """MemoryMapStep's rows: (row, bits, params), the public row first."""
-    return ([("pub", 16 * (4 + 2 * S.K), ["t", "first", "count", "present", "pos", "last"]), ("lam", 32 * S.V, ["lam"]),
-             ("phi", 32 * S.M, ["phi"])] + [(f"val{k}", value_bits(S.SLOTS), [f"val[{k}]"]) for k in range(S.K)]
+    return ([("pub", 16 * (4 + 2 * S.K + _rwords(S)), ["t", "first", "count", "present", "pos", "last", "rfree"]),
+             ("lam", 32 * S.V, ["lam"]), ("phi", 16 * (S.N + 2 * S.M), ["phi"])]
+            + [(f"val{k}", value_bits(S.SLOTS), [f"val[{k}]"]) for k in range(S.K)]
             + [(f"pay{c}", BLOCK_BITS, [f"pay[{c}]"]) for c in range(S.C)])
 
 
@@ -364,18 +392,29 @@ def layout_words(S, req: Requirement, layout: Layout, positions: Sequence[int]) 
 
 
 def map_words(S, store: Store) -> list[int]:
-    """The map row: written block N + b's write step and free step at words 2 b and 2 b + 1 (`WORD - 1` for a block no
-    step frees), zero past the blocks written."""
-    out = [0] * (2 * S.M)
+    """The map row: registered block j's free step at word j, and written block N + b's write step and free step at words
+    N + 2 b and N + 2 b + 1 (`WORD - 1` for a block no step frees), zero past the blocks written."""
+    if store.registered != S.N:
+        raise ValueError(f"the store has {store.registered} registered blocks, not N = {S.N}")
+    out = [WORD - 1] * S.N + [0] * (2 * S.M)
     for s, js in store.written.items():
         for j in js:
             if not S.N <= j < S.N + S.M:
                 raise ValueError(f"written block {j} is outside N .. N + M = {S.N} .. {S.N + S.M}")
-            out[2 * (j - S.N)], out[2 * (j - S.N) + 1] = s, WORD - 1
+            out[S.N + 2 * (j - S.N)], out[S.N + 2 * (j - S.N) + 1] = s, WORD - 1
     for s, js in store.freed.items():
         for j in js:
-            if j >= S.N:
-                out[2 * (j - S.N) + 1] = s
+            out[j if j < S.N else S.N + 2 * (j - S.N) + 1] = s
+    return out
+
+
+def registered_frees(req: Requirement, registered_block: dict[int, int]) -> dict[int, int]:
+    """Each registered block's free step from public data alone: the last read of the values the registered layout puts in
+    it (a block holding no value any step reads has none)."""
+    out: dict[int, int] = {}
+    for v, j in registered_block.items():
+        if v in req.last:
+            out[j] = max(out.get(j, -1), req.last[v])
     return out
 
 
@@ -394,10 +433,12 @@ def plan_inputs(S, req: Requirement, t: int, plan: Sequence[int], registered_blo
 
 
 def map_inputs(S, req: Requirement, store: Store, t: int, positions: Sequence[int], lam: Sequence[int],
-               phi: Sequence[int]) -> dict:
+               phi: Sequence[int], registered_block: dict[int, int]) -> dict:
     """MemoryMapStep's arguments at step ``t``: the values t produces that a later step reads, the blocks it wrote and their
-    payloads (``store.payload``), the layout row ``lam`` and the map row ``phi``."""
+    payloads (``store.payload``), the registered blocks whose values t reads last (``registered_block`` each registered
+    value's block, public), the layout row ``lam`` and the map row ``phi``."""
     vw = value_bits(S.SLOTS)
+    rfree = _mask({j for j, f in registered_frees(req, registered_block).items() if f == t}, 16 * _rwords(S))
     made = [i for i, v in enumerate(positions) if req.born[v] == t and req.last.get(v, -1) > t]
     js = sorted(store.written.get(t, ()))
     first = js[0] if js else S.N + sum(len(b) for s, b in store.written.items() if s < t)
@@ -405,7 +446,7 @@ def map_inputs(S, req: Requirement, store: Store, t: int, positions: Sequence[in
         raise ValueError(f"step {t}: {len(made)} values and blocks {js}: at most K = {S.K} values and C = {S.C} consecutive blocks")
     pad = S.K - len(made)
     return {"t": t, "first": first, "count": len(js), "present": (1 << len(made)) - 1, "pos": made + [0] * pad,
-            "last": [req.last[positions[i]] for i in made] + [0] * pad, "lam": list(lam), "phi": list(phi),
+            "last": [req.last[positions[i]] for i in made] + [0] * pad, "rfree": rfree, "lam": list(lam), "phi": list(phi),
             "val": [req.values[positions[i]] % (1 << vw) for i in made] + [0] * pad,
             "pay": [store.payload.get(j, 0) for j in js] + [0] * (S.C - len(js))}
 
