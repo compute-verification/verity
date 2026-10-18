@@ -12,10 +12,15 @@ HOOK = ROOT / "tools/agent-guard/shell_hook.py"
 
 
 def verdict(command: str, **env: str) -> str:
+    return answer(command, **env)["permission"]
+
+
+def answer(command: str, **env: str) -> dict:
+    env = {"AGENT_GUARD_MIN_AVAIL": "0", **env}           # the memory gate only where a test sets it, whatever this VM has free
     out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution",
                                                                      "command": command, "cwd": str(ROOT)}),
                          capture_output=True, text=True, env={**os.environ, **env}, check=True).stdout
-    return json.loads(out)["permission"]
+    return json.loads(out)
 
 
 def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
@@ -147,3 +152,30 @@ def test_the_refusal_tells_the_agent_how_to_list_names_and_input_that_is_not_jso
     assert "compgen -e" in json.loads(out)["agent_message"]
     out = subprocess.run([sys.executable, HOOK], input="env", capture_output=True, text=True, check=True).stdout
     assert json.loads(out)["permission"] == "deny"
+
+
+def test_heavy_local_work_is_refused_while_the_vm_is_short_of_memory_and_passes_elsewhere(tmp_path):
+    """INF-55 g: nine workers on circuits' 15 GB coordinator VM ran their suites and builds there, and the kernel OOM-killed four
+    of their processes (18 Oct). Under a quarter of the memory available, a heavy command run here is refused with what to do;
+    the same command through `research run --on`, over ssh, or with AGENT_GUARD_LOW_MEM_OK=1 passes, as does light work."""
+    meminfo = tmp_path / "meminfo"
+    cgroup = tmp_path / "cg"
+    cgroup.mkdir()
+    (cgroup / "memory.max").write_text("max\n")
+    low = {"AGENT_GUARD_MEMINFO": str(meminfo), "AGENT_GUARD_MIN_AVAIL": "0.25", "AGENT_GUARD_CGROUP": str(cgroup)}
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    2000000 kB\n")
+    for command in ("uv run pytest -q tests/", "cd tools/research && python -m pytest -x", "uv run tools/verity/check/suites.py --quick",
+                    "uv run --extra torch-cpu verity check", "lake build Security", "cd Security && lake env lean X.lean",
+                    "cargo test --release", "timeout 600 /workspace/.venv/bin/python -m pytest tests/test_x.py"):
+        out = answer(command, **low)
+        assert out["permission"] == "deny", command
+        assert "1.9 GiB of 15.3 GiB available" in out["agent_message"] and "research run --on" in out["agent_message"]
+    for command in ("research run --on vy-nebius-cpu-1 --pool research --source . -- uv run pytest -q",
+                    "uv run research run --on m --source . -- lake build", "ssh n1 'cd /w && pytest'", "git status",
+                    "AGENT_GUARD_LOW_MEM_OK=1 uv run pytest -q tests/test_one.py", "rg pytest tools/", "ls"):
+        assert verdict(command, **low) == "allow", command
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
+    assert verdict("uv run pytest -q tests/", **low) == "allow"
+    (cgroup / "memory.max").write_text(f"{8 * 2**30}\n")         # a cgroup limit tighter than the VM: its headroom counts
+    (cgroup / "memory.current").write_text(f"{7 * 2**30}\n")
+    assert verdict("uv run pytest -q tests/", **low) == "deny"

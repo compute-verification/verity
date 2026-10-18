@@ -12,6 +12,12 @@ printed the Nebius key's lines again).
 (`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
 token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
 `grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+
+It also refuses a heavy local command (pytest, the check's suites, `verity check`, `lake build|env|exe`, `cargo build|test|run|check`,
+nvcc) while the VM has less than $AGENT_GUARD_MIN_AVAIL (default 0.25) of its memory available (MemAvailable, or its cgroup's
+limit less its use when that is less): on a VM several agents share, one more such job is how the kernel OOM-kills another
+agent's processes (circuits' coordinator VM, 15 and 18 Oct). The same command through `research run --on NODE`, or over ssh,
+runs elsewhere and passes; `AGENT_GUARD_LOW_MEM_OK=1` anywhere in the command passes it too.
 """
 import json
 import os
@@ -206,6 +212,78 @@ def refused_text(text: str) -> bool:
         return bool(FALLBACK.search(text))
 
 
+HEAVY_PROGRAMS = {"pytest": None, "py.test": None, "nvcc": None, "suites.py": None, "lake": {"build", "env", "exe"},
+                  "cargo": {"build", "test", "run", "check"}, "verity": {"check"}}
+UV_RUN_VALUED = {"--extra", "--with", "--package", "-p", "--python", "--directory", "--project", "--group", "--env-file", "--index"}
+LOW_MEM_OK = "AGENT_GUARD_LOW_MEM_OK=1"
+
+
+def heavy_words(words: list[str]) -> bool:
+    """Whether one simple command runs a heavy program here, seen through `uv run [OPTS]`, `python -m MOD` and `python SCRIPT`."""
+    words = unwrap(strip_redirections(words))
+    while words and re.fullmatch(r"\w+=.*", words[0]):
+        words = words[1:]
+    if not words:
+        return False
+    prog = os.path.basename(words[0])
+    if prog == "uv" and words[1:2] == ["run"]:
+        rest, i = words[2:], 0
+        while i < len(rest) and rest[i].startswith("-"):
+            i += 2 if rest[i] in UV_RUN_VALUED else 1
+        return heavy_words(rest[i:])
+    if re.fullmatch(r"python[\d.]*", prog):
+        args = words[1:]
+        if args[:1] == ["-m"]:
+            return heavy_words(args[1:])
+        script = next((a for a in args if not a.startswith("-")), None)
+        return script is not None and heavy_words([script, *args[args.index(script) + 1:]])
+    if prog not in HEAVY_PROGRAMS:
+        return False
+    subs = HEAVY_PROGRAMS[prog]
+    return subs is None or bool(set(words[1:2]) & subs)
+
+
+def heavy(text: str) -> bool:
+    """Whether a simple command of `text` runs heavy work on this VM: a command through `research run` or over ssh runs elsewhere."""
+    try:
+        commands = words_of(text)
+    except ValueError:
+        return False
+    return any(heavy_words(words) for words, _ in commands)
+
+
+def available() -> tuple[float, float] | None:
+    """(available, total) bytes of this VM's memory: /proc/meminfo's MemAvailable and MemTotal, or this process's cgroup's limit and
+    its headroom where that limit is tighter."""
+    try:
+        info = dict(re.findall(r"^(\w+):\s+(\d+) kB", open(os.environ.get("AGENT_GUARD_MEMINFO", "/proc/meminfo")).read(), re.M))
+        avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
+    except (OSError, KeyError, ValueError):
+        return None
+    try:
+        rel = open("/proc/self/cgroup").read().split("::", 1)[1].strip()
+        cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
+        limit = open(f"{cg}/memory.max").read().strip()
+        if limit != "max" and int(limit) < total:
+            total, avail = int(limit), min(avail, int(limit) - int(open(f"{cg}/memory.current").read()))
+    except (OSError, IndexError, ValueError):
+        pass
+    return avail, total
+
+
+def low_memory_reason(command: str) -> str | None:
+    if LOW_MEM_OK in command or not heavy(command):
+        return None
+    mem = available()
+    floor = float(os.environ.get("AGENT_GUARD_MIN_AVAIL", "0.25"))
+    if mem is None or mem[0] >= floor * mem[1]:
+        return None
+    return (f"this VM has {mem[0] / 2**30:.1f} GiB of {mem[1] / 2**30:.1f} GiB available (under {floor:.0%}), and this command runs "
+            f"heavy work here: on a VM other agents share, the kernel would OOM-kill some agent's processes. Run it on a CPU node "
+            f"(`research run --on vy-nebius-cpu-1 --pool research --source . --mem-gb G -- CMD`, or your lane's pool), or wait "
+            f"for memory; for a small run you know fits, put {LOW_MEM_OK} in the command.")
+
+
 def main() -> int:
     raw = sys.stdin.read()
     try:
@@ -216,10 +294,15 @@ def main() -> int:
         deny = refused_text(command)
     except Exception:                                   # a bug here must not allow what the fallback would refuse
         deny = bool(FALLBACK.search(command) or ENVIRON.search(command))
-    if deny:
+    try:
+        low = None if deny else low_memory_reason(command)
+    except Exception:                                   # a bug in the memory gate must not stop every command
+        low = None
+    if deny or low:
+        reason = REASON if deny else low
         print(json.dumps({"permission": "deny",
-                          "user_message": "Refused by tools/agent-guard/shell_hook.py: " + REASON,
-                          "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + REASON}))
+                          "user_message": "Refused by tools/agent-guard/shell_hook.py: " + reason,
+                          "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
         print(json.dumps({"permission": "allow"}))
     return 0
