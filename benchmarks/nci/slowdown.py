@@ -187,6 +187,30 @@ def sweep(row: dict, calibration: dict, parameters: list[dict], b_ws: list[float
     return out
 
 
+#: training recipes at the rates their matmuls read (weights, activations), each with the compute multiplier of
+#: training that way (``train.compute_multiplier``); BF16 is the reference, m = 1
+RECIPES = [("bf16", 16, 16, None), ("fp8", 8.25, 8.25, "train.compute_multiplier/w8a8"),
+           ("w4-weights", 4.03, 16, "train.compute_multiplier/w4-weights"),
+           ("nvfp4", 4.03, 4.5, "train.compute_multiplier/w4a4"),
+           ("ternary-weights", 1.58, 8.25, "train.compute_multiplier/ternary-weights"),
+           ("w2a2", 2, 2, "train.compute_multiplier/w2a2"), ("w1a1", 1, 1, "train.compute_multiplier/w1a1")]
+
+
+def efficiency(row: dict, calibration: dict, parameters: list[dict]) -> list[dict]:
+    """Pretraining efficiency under the policy, ``m / rho``, for each recipe: ``ceiling`` with the proven chain bound
+    (a ceiling when the recipe's chain is incompressible at its own rates) and ``attack`` with the construction's cost.
+    The best recipe is the attacker's choice."""
+    ests = catalog.estimates(parameters)
+    out = []
+    for name, b_w, b_a, est in RECIPES:
+        m = {"low": 1.0, "central": 1.0, "high": 1.0} if est is None else {k: ests[est][k] for k in catalog.PICKS}
+        cell = sweep(row, calibration, parameters, [b_w], [b_a])[0]
+        out.append({"recipe": name, "b_w": b_w, "b_a": b_a, "m": m, "chain": cell["chain"], "upper": cell["upper"],
+                    "ceiling": m["central"] / cell["chain"] if cell["chain"] else None,
+                    "attack": m["central"] / cell["upper"]})
+    return out
+
+
 def brackets(rows: list[dict], calibrations: list[dict], parameters: list[dict]) -> list[dict]:
     """Every row under every calibration of its model."""
     return [bracket(r, c, parameters) for c in calibrations for r in rows if r["model"] == c["model"]]
@@ -197,10 +221,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--calibration", help="a calibrations.json id (default: every calibration)")
     ap.add_argument("--row", action="append", help="a rows.json id (repeatable; default: every row)")
     ap.add_argument("--sweep", action="store_true", help="the proven bounds over a grid of b_w and b_a, per row")
+    ap.add_argument("--efficiency", action="store_true", help="m / rho for each training recipe, per row")
     args = ap.parse_args(argv)
     parameters, rows = catalog.load("parameters"), catalog.load("rows")
     cals = [c for c in catalog.load("calibrations") if args.calibration in (None, c["id"])]
     rows = [r for r in rows if not args.row or r["id"] in args.row]
+    if args.efficiency:
+        for c in cals:
+            for r in rows:
+                if r["model"] != c["model"] or "chain" not in r:
+                    continue
+                print(f"{r['id']} under {c['id']}: efficiency m / rho")
+                print(f"{'recipe':16} {'b_w':>5} {'b_a':>5} {'m (low-high)':>18} {'chain':>9} {'upper':>9} "
+                      f"{'ceiling':>9} {'attack':>9}")
+                for x in efficiency(r, c, parameters):
+                    m = x["m"]
+                    print(f"{x['recipe']:16} {x['b_w']:5.3g} {x['b_a']:5.3g} "
+                          f"{m['central']:6.2f} ({m['low']:.2f}-{m['high']:.2f}) {x['chain']:9.2g} {x['upper']:9.2g} "
+                          f"{x['ceiling']:9.2g} {x['attack']:9.2g}")
+        return 0
     if args.sweep:
         b_ws, b_as = [16, 8, 4, 2.5, 1.58, 1, 0.5], [16, 8, 4, 2, 1, 0.5]
         for c in cals:

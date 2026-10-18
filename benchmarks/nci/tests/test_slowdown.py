@@ -97,6 +97,17 @@ def test_sweep_at_a_rows_own_rates_is_its_bracket():
     assert (cell["thread"], cell["chain"], cell["upper"]) == pytest.approx((b["lower"], b["chain"], b["upper"]))
 
 
+def test_efficiency_of_bf16_is_one_over_the_bounds():
+    rows, cals, params = catalog.load("rows"), catalog.load("calibrations"), catalog.load("parameters")
+    row = next(r for r in rows if r["id"] == "pretrain-full")
+    cal = next(c for c in cals if c["id"] == "kimi-k2-1m-raw")
+    effs = S.efficiency(row, cal, params)
+    bf16 = next(x for x in effs if x["recipe"] == "bf16")
+    cell = S.sweep(row, cal, params, [16], [16])[0]
+    assert (bf16["ceiling"], bf16["attack"]) == pytest.approx((1 / cell["chain"], 1 / cell["upper"]))
+    assert all(x["attack"] <= x["ceiling"] for x in effs)
+
+
 def test_every_bracket_is_consistent():
     """A proven lower bound above an explicit construction's cost means a row's inputs break the theorem's
     assumptions; the caps in `rates` exist because two rows did."""

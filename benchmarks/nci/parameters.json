@@ -639,6 +639,34 @@
      "su-2025-galore2/1",
      "lialin-2023-relora/2"
     ]
+   },
+   {
+    "id": "train.compute_multiplier/w2a2",
+    "context": "2-bit weights and activations in the forward GEMMs, extrapolated to a Chinchilla-optimal 1e25 FLOP",
+    "low": 0.16,
+    "central": 0.3,
+    "high": 0.3,
+    "confidence": "low",
+    "merge": "Central and high: the unified-law capacity at W2A2, 0.30 (forward-only QAT at 30M-200M, m = rho under its effective-parameter form). Low: QuEST's eff(2) = 0.16 with weights and activations tied. Kumar's law predicts divergence at 2-bit activations. No run near this cell exists above 1.6B, so it is an extrapolation in scale and in method.",
+    "evidence": [
+     "panferov-2025-unified-compressed/2",
+     "panferov-2025-quest/3",
+     "kumar-2024-precision-scaling/7"
+    ]
+   },
+   {
+    "id": "train.compute_multiplier/w1a1",
+    "context": "1-bit weights and activations in the forward GEMMs, extrapolated to a Chinchilla-optimal 1e25 FLOP",
+    "low": 0.02,
+    "central": 0.09,
+    "high": 0.09,
+    "confidence": "low",
+    "merge": "Central and high: the unified-law capacity at W1A1, 0.09. Low: QuEST's eff(1) = 0.02. Kumar's law predicts divergence. An extrapolation in scale and method, kept to show where the attacker's gain stops.",
+    "evidence": [
+     "panferov-2025-unified-compressed/2",
+     "panferov-2025-quest/3",
+     "kumar-2024-precision-scaling/7"
+    ]
    }
   ]
  }

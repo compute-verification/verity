@@ -91,6 +91,11 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   and inner dimension. For Kimi K2 the path is the dense one (MLA projections and the shared expert), 7.5% of training's
   work. The activation rate is capped by a compressed boundary's bits per residual entry. Rows without a chain get none.
 
+`--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
+4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier
+`train.compute_multiplier`, and gives pretraining efficiency \(m/\rho\): a ceiling from the partial-sum law and the
+attack's from the construction. The attacker picks the best recipe.
+
 The invariant `lower <= upper` is tested on every row. The two caps on threading and token rates exist because rows
 violated it without them, so a violation means a row's inputs break the theorem. A tight bracket settles a row; a wide
 one is a research target.
