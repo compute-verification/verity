@@ -181,8 +181,9 @@ def test_derived_costs_read_the_features_and_perturb_scales_one_group():
     c = Candidate("a", "A", 10, 1, 16, ands=1000, rows=(256, 4), commit_bits=64, commit_rows=1.0)
     costs = CostModel(per_and=1e-6, statement_fixed=2.0, statement_per_and=1e-7, staged_per_and=1e-9,
                       staged_per_unit=0.01, commit_per_bit=1e-3, commit_per_row=0.5)
-    assert costs.unit(c) == pytest.approx(1e-6 * (1000 + 290_600 + 174_360))
-    assert costs.statement(c) == pytest.approx((2.0 + 1e-4, 1e-6 + 0.01))
+    ands = 1000 + 290_600 + 174_360
+    assert costs.unit(c) == pytest.approx(1e-6 * ands)
+    assert costs.statement(c) == pytest.approx((2.0 + 1e-7 * ands, 1e-9 * ands + 0.01))
     assert costs.commit(c) == pytest.approx(10 * (0.064 + 0.5))
     assert perturb(costs, "prove", 2.0).unit(c) == pytest.approx(2 * costs.unit(c))
     assert perturb(costs, "prove", 2.0).statement(c) == pytest.approx(costs.statement(c))

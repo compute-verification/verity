@@ -109,9 +109,10 @@ class ReplayDomain:
 
 @dataclass(frozen=True)
 class CostModel:
-    """Measured templates, and the rates that derive the rest from their features: per touched statement
-    `statement_fixed + statement_per_and * ands` (the verifier's parse) and per staged unit `staged_per_and * ands +
-    staged_per_unit`; per proved unit `per_and` times its ANDs and its rows' (`row_ands`).  Serving commits at
+    """Measured templates, and the rates that derive the rest from their features, `ands` being a unit's ANDs with its
+    rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
+    ands` (the session and the verifier's parse), per staged unit `staged_per_and * ands + staged_per_unit`, and per
+    proved unit `per_and * ands`.  Serving commits at
     `commit_per_bit` and `commit_per_row`; `replay` names the replay domains; `sigma` is a derived cost's relative
     uncertainty; `source` is the fit's `art:` id."""
 
@@ -136,16 +137,21 @@ class CostModel:
                            f"TemplateCost")
         return TemplateCost()
 
+    @staticmethod
+    def ands(c: Candidate) -> int:
+        return c.ands + sum(row_ands(r) for r in c.rows)
+
     def statement(self, c: Candidate) -> tuple[float, float]:
         tc = self.of(c)
-        a0 = tc.statement_fixed if tc.statement_fixed is not None else self.statement_fixed + self.statement_per_and * c.ands
-        a1 = tc.statement_per_unit if tc.statement_per_unit is not None else self.staged_per_and * c.ands \
-            + self.staged_per_unit
+        a0 = tc.statement_fixed if tc.statement_fixed is not None else \
+            self.statement_fixed + self.statement_per_and * self.ands(c)
+        a1 = tc.statement_per_unit if tc.statement_per_unit is not None else \
+            self.staged_per_and * self.ands(c) + self.staged_per_unit
         return a0, a1
 
     def unit(self, c: Candidate) -> float:
         tc = self.of(c)
-        return tc.unit if tc.unit is not None else self.per_and * (c.ands + sum(row_ands(r) for r in c.rows))
+        return tc.unit if tc.unit is not None else self.per_and * self.ands(c)
 
     def commit(self, c: Candidate) -> float:
         return c.units * (self.commit_per_bit * c.commit_bits + self.commit_per_row * c.commit_rows)
