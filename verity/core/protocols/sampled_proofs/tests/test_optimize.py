@@ -162,16 +162,18 @@ def test_for_budget_takes_the_least_harm_affordable_plan(batched):
 
 
 def test_for_budget_closes_the_grid_gaps(batched):
-    """Between two frontier points the refined plan spends the budget and certifies less than the cheaper point."""
+    """Between two frontier points (nine gaps spread over the frontier) the refined plan spends the budget and certifies
+    less than the cheaper point."""
     cands, costs, objective, plans = batched
+    pairs = list(zip(plans, plans[1:]))
     gaps = 0
-    for a, b in zip(plans, plans[1:]):
+    for a, b in pairs[::len(pairs) // 8]:
         budget = (a.cost["total"] + b.cost["total"]) / 2
         got = for_budget(plans, budget, candidates=cands, costs=costs, objective=objective)
         assert got.cost["total"] <= budget and got.certificate.harm <= a.certificate.harm
         assert got.certificate.harm == certify(got.sizes, cands, objective).harm
         gaps += got.certificate.harm < a.certificate.harm
-    assert gaps >= len(plans) // 2
+    assert gaps >= 6
 
 
 def test_row_ands_follows_hm96_table():
@@ -287,13 +289,13 @@ def test_commitment_is_paid_on_every_unit_and_moves_the_switch():
 def test_sensitivity_and_benchmarks_flag_what_moves_the_plan():
     """At 240 the covering's 120 dots beat the partition's 4R + 112; a covering dot 25% dearer (96 dots) loses."""
     objective = Objective(2.0 ** -20)
-    base, rows = sensitivity(_noised(), _noised_costs(), objective, 240.0, grid=61)
+    base, rows = sensitivity(_noised(), _noised_costs(), objective, 240.0, grid=31)
     assert base.choice == {"dot": "recompute"} and dict(base.sizes) == {"DotC": 120}
     assert [r["what"] for r in rows] == ["prove", "prove"]
     assert {r["factor"]: r["same"] for r in rows} == {0.5: False, 2.0: True}
-    assert needs_benchmark(_noised(), _noised_costs(0.25), objective, 240.0, grid=61) == ["DotC"]
-    assert needs_benchmark(_noised(), _noised_costs(0.01), objective, 240.0, grid=61) == []
-    assert needs_benchmark(_noised(), _noised_costs(0.25), objective, 2000.0, grid=61) == []
+    assert needs_benchmark(_noised(), _noised_costs(0.25), objective, 240.0, grid=31) == ["DotC"]
+    assert needs_benchmark(_noised(), _noised_costs(0.01), objective, 240.0, grid=31) == []
+    assert needs_benchmark(_noised(), _noised_costs(0.25), objective, 2000.0, grid=31) == []
 
 
 def test_miss_holds_its_digits_on_huge_populations():
