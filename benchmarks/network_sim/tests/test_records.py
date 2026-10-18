@@ -68,7 +68,7 @@ def test_the_certifiers_parameters_are_the_declarations_cadence_and_the_ports_it
 
     _, s = setup
     assert m.records.cadence(s) == Cadence(frame_bits=4096 * 8, bucket_ticks=100, buckets=60, jitter_classes=16)
-    assert m.records.ports(m.graph.leaf_spine(2), "b1", s) == {
+    assert m.records.ports(m.leaf_spine(2), "b1", s) == {
         s.egress_link: Port("b1.cert", "egress"), s.ingress_link: Port("b1.cert", "ingress")}
     with pytest.raises(ValueError, match="frame size, bucket or window"):
         m.records.cadence(type("S", (), {"egress_params": s.egress_params, "sync_set": s.sync_set,
@@ -81,7 +81,7 @@ def test_on_an_injected_clock_honest_publishes_the_declared_records_and_cheating
     report, s = setup
     doc = m.trace()
     honest = m.ar.plan_configuration(doc["configurations"][0], s)
-    dc = m.graph.leaf_spine(1, cadence=m.records.cadence(s))
+    dc = m.leaf_spine(1, cadence=m.records.cadence(s))
     declared = m.records.declared(honest, s, dc, "b0")
     windows = honest["windows"]
     assert sorted(declared, key=repr) == sorted(((p, w) for p in dc.ports for w in range(windows)), key=repr)

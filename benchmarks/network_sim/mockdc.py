@@ -1,7 +1,7 @@
 """The mock datacenter: a `datacenter.Datacenter` declaration stood up on one Linux host as network namespaces, with the
 real network certifier on each block's uplink, then the audit of what each certifier published.
 
-The declaration is `graph.leaf_spine`'s by default: four blocks (each a measured node of 8 GPUs, `graph.rtx_node`), a
+The declaration is `datacenter.examples.leaf_spine`'s by default: four blocks (each a measured node of 8 GPUs, `rtx_node`), a
 certifier on each block's uplink, two leaf switches joined by a spine, and one host outside every block. Any other
 declaration whose blocks each have one uplink, to a certifier, and which has a device of kind `outside`, works too
 (`--declaration FILE.py:NAME`, a `Datacenter` or a function returning one). `up` creates the namespaces of its netns
@@ -55,6 +55,7 @@ import active_replay as ar  # noqa: E402
 import graph  # noqa: E402
 import records  # noqa: E402
 from datacenter import Carried, Datacenter, Refused, check_records  # noqa: E402
+from datacenter.examples import leaf_spine  # noqa: E402
 from verity.core.protocols.certifier import calibration  # noqa: E402
 from verity.core.protocols.certifier.active import Proxy  # noqa: E402
 from verity.core.protocols.certifier.audit import Audit  # noqa: E402
@@ -76,8 +77,7 @@ def lab(args) -> Datacenter:
         dc = getattr(module, name)
         dc = dc() if callable(dc) else dc
     else:
-        dc = graph.leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines,
-                              fabric_latency=args.fabric_latency_us / 1e6)
+        dc = leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines, fabric_latency=args.fabric_latency_us / 1e6)
     graph.check(dc)
     if not any(d.kind == "outside" for d in dc.fabric):
         raise SystemExit(f"{dc.name} has no device of kind `outside` to run the peer on")
@@ -412,7 +412,7 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name)
         p.set_defaults(fn=fn)
         p.add_argument("--declaration", metavar="FILE.py:NAME", help="a Datacenter, or a function returning one, "
-                       "instead of graph.leaf_spine's (which --blocks, --leaves, --spines and --fabric-latency-us shape)")
+                       "instead of datacenter.examples.leaf_spine's (which --blocks, --leaves, --spines and --fabric-latency-us shape)")
         p.add_argument("--blocks", type=int, default=4)
         p.add_argument("--leaves", type=int, default=2)
         p.add_argument("--spines", type=int, default=1)

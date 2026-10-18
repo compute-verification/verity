@@ -41,7 +41,7 @@ def main() -> None:
     print(night())
     print("\nThe same night with an adversary:\n")
     adversary = Deviation(extra={(Port("n0.cert", "egress"), 5): 2},      # covert frames on n0's uplink
-                          moved={"kv": "n1.dram"},                         # KV kept in host DRAM, not on the GPU
+                          moved={"kv": "n1.cpu0"},                         # KV kept in host DRAM, not on the GPU
                           failed_wipes={"n0.bmc"},                         # state hidden in the BMC through the wipe
                           down={(Port("n1.cert", "ingress"), 2)})          # a record withheld as "downtime"
     acc = night(adversary, image=0xBADC0DE)                                # and a swapped container image
