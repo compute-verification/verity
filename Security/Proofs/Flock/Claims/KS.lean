@@ -90,6 +90,7 @@ import Proofs.Flock.Claims.KS.ZkLevels
 import Proofs.Flock.Claims.KS.ZkClashL
 import Proofs.Flock.Claims.KS.ZkFork0
 import Proofs.Flock.Claims.KS.ZkFork
+import Proofs.Flock.Claims.KS.ZkAlign
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -450,5 +451,7 @@ pads clash (`FlockDeploy.KS.zk_KS_of_kinds`, `FlockDeploy.KS.zk_tableBoundJOnAcc
 simulated strategy after `Commit`, the fork at a cap's table node is at most the fork after `zkRd j i` coins of two
 runs recording one cap and opening a position of it to different rows (`FlockDeploy.KS.ZkForkAlign`), and two
 accepting runs whose live outcomes decode to that collide in their logs (`FlockDeploy.KS.ZkForkClash`;
-`FlockDeploy.KS.zkSimForkLeCap_of`, `FlockDeploy.KS.zk_KS_of_align`). `τ` has no such split: the dead
-branches' `τ` opening `(0, default)` opens under some commitments. -/
+`FlockDeploy.KS.zkSimForkLeCap_of`, `FlockDeploy.KS.zk_KS_of_align`). The first is the fork after the slot's coins
+(`ZkAlign`: `FlockDeploy.KS.ZkSlotAlign`, `FlockDeploy.KS.zkForkAlign_of_slot`, `FlockDeploy.KS.zk_KS_of_slot`), since
+pushing a table's answer does not change a fork (`FlockSoundness.Discharge.ZkLink.forkC_pushStrat`). `τ` has no such
+split: the dead branches' `τ` opening `(0, default)` opens under some commitments. -/
