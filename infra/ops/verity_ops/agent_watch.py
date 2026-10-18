@@ -16,9 +16,10 @@ a heartbeat counts as nothing. A run is
 - **crashed** when the run ended in ERROR (recorded).
 
 Only RUNNING is followed. A latest run left in CREATING for 10 min, or in WAITING_FOR_BACKGROUND_WORK (an agent waiting on its
-background workers) for 30 min, by the API's own `updatedAt`, is recorded once as **stuck** and never cancelled: on 18 Oct circuits'
-sat so from 09:49Z while every newer run was cancelled on arrival, and neither cancelling nor a new run moved it. An agent whose latest
-run the runs endpoint won't read (a goal run's `run-goal-...` id gets 400) is recorded once as unreadable and skipped.
+background workers, where a long benchmark legitimately keeps it) for 2 h, by the API's own `updatedAt`, is recorded once as
+**stuck** and never cancelled: on 18 Oct circuits' sat so from 09:49Z while every newer run was cancelled on arrival, and neither
+cancelling nor a new run moved it. An agent whose latest run the runs endpoint won't read (a goal run's `run-goal-...` id gets 400)
+is recorded once as unreadable and skipped.
 
 Each finding is a line of JSON in `--log`; each sweep overwrites `status.json` beside it (its time, the ACTIVE agents, the runs it
 follows), so a reader can tell a quiet watch from a dead one. The control pod holds no Slack credential, so infra's relay reads that file over ssh and
@@ -49,7 +50,7 @@ RECANCEL_S = 3600
 TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
 # a latest run left this long in a non-terminal state that isn't RUNNING (18 Oct: circuits' runs sat in CREATING from 09:49Z and
 # in WAITING_FOR_BACKGROUND_WORK from 09:49Z, and every later run was cancelled on arrival); recorded, never cancelled
-STUCK = {"CREATING": 10 * 60, "WAITING_FOR_BACKGROUND_WORK": 30 * 60}
+STUCK = {"CREATING": 10 * 60, "WAITING_FOR_BACKGROUND_WORK": 2 * 3600}
 CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothing for {mins} min after a finished tool call, and "
             "cancelled it). Read your inbox and carry on from where you stopped.")
 
