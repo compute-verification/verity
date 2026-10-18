@@ -133,8 +133,22 @@ def runs_of(blocks) -> tuple[tuple[int, int], ...]:
 
 def plan_change(before: rb.Plan, after: rb.Plan) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
     """`after` as `before.changed(added, removed, ...)` takes it: (added, removed) runs."""
-    a, b = set(before), set(after)
-    return runs_of(sorted(b - a)), runs_of(sorted(a - b))
+    n = max(before.blocks, after.blocks) + 1
+
+    def held(plan: rb.Plan) -> np.ndarray:
+        r = np.frombuffer(plan.encode(), dtype=">u8", offset=4).reshape(-1, 2).astype(np.int64)
+        d = np.zeros(n + 1, np.int64)
+        np.add.at(d, r[:, 0], 1)
+        np.add.at(d, r[:, 0] + r[:, 1], -1)
+        return np.cumsum(d[:-1]) > 0
+
+    def runs(mask: np.ndarray) -> tuple[tuple[int, int], ...]:
+        edge = np.diff(np.concatenate([[False], mask, [False]]).astype(np.int8))
+        starts, ends = np.flatnonzero(edge == 1), np.flatnonzero(edge == -1)
+        return tuple(zip(starts.tolist(), (ends - starts).tolist()))
+
+    a, b = held(before), held(after)
+    return runs(b & ~a), runs(a & ~b)
 
 
 class ServingTrace:
@@ -317,47 +331,56 @@ class ProverSide:
             self.inbox.put(({"type": "lost", "why": str(e)}, b"", 0))
 
     def _open(self) -> None:
+        """Each window's openings as its draws arrive.  One the backend can't open (a block it no longer holds as
+        its pass read it) fails the session: the session's thread sees the connection lost, with the reason."""
         while True:
             t, draws = self.jobs.get()
-            # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
-            # the verifier may check after all roots are final, and this also makes the measured pass span contain
-            # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
-            if self.defer_openings:
-                self.open_enabled.wait()
-            c0 = time.perf_counter_ns()
-            by_pass = defaultdict(list)
-            for k, (i, p) in enumerate(draws):
-                by_pass[i].append((k, p))
-            out: list = [None] * len(draws)
-            passes = sorted(by_pass.items())
-            with self.lock:
-                handles = [self.kept[(t, i)] for i, _ in passes]
-            c1 = time.perf_counter_ns()
-            fields = self.backend.open_window([(h, [p for _, p in items]) for h, (_, items) in zip(handles, passes)])
-            c2 = time.perf_counter_ns()
-            for j, ((i, items), got) in enumerate(zip(passes, fields)):
-                for (k, p), f in zip(items, got):
-                    out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"",
-                                           f[6] if len(f) > 6 else b"")
-                fields[j] = None
-            del fields
-            parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
-            n = len(out)
-            del out
-            c3, sent = time.perf_counter_ns(), 0
-            for k in range(len(parts)):
-                body = wire.encode_openings(parts[k])
-                self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(parts[k])}, body)
-                parts[k] = None
-                sent += len(body)
-                del body
-            with self.lock:
-                for key in [key for key in self.kept if key[0] == t]:
-                    del self.kept[key]
-            self.opened.append({"t": t, "n": n, "bytes": sent, "ns": time.perf_counter_ns() - c0,
-                                "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
-                                "on_dropped": int(hits(self.dropped, [self.block(t, i, p) for i, p in draws]).sum())})
-            self.jobs.task_done()
+            try:
+                # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
+                # the verifier may check after all roots are final, and this also makes the measured pass span contain
+                # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
+                if self.defer_openings:
+                    self.open_enabled.wait()
+                self._open_window(t, draws)
+            except Exception as e:  # noqa: BLE001  -- handed to the session's thread, which fails with it
+                self.inbox.put(({"type": "lost", "why": f"openings of window {t}: {type(e).__name__}: {e}"}, b"", 0))
+            finally:
+                self.jobs.task_done()
+
+    def _open_window(self, t: int, draws: list) -> None:
+        c0 = time.perf_counter_ns()
+        by_pass = defaultdict(list)
+        for k, (i, p) in enumerate(draws):
+            by_pass[i].append((k, p))
+        out: list = [None] * len(draws)
+        passes = sorted(by_pass.items())
+        with self.lock:
+            handles = [self.kept[(t, i)] for i, _ in passes]
+        c1 = time.perf_counter_ns()
+        fields = self.backend.open_window([(h, [p for _, p in items]) for h, (_, items) in zip(handles, passes)])
+        c2 = time.perf_counter_ns()
+        for j, ((i, items), got) in enumerate(zip(passes, fields)):
+            for (k, p), f in zip(items, got):
+                out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"",
+                                       f[6] if len(f) > 6 else b"")
+            fields[j] = None
+        del fields
+        parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
+        n = len(out)
+        del out
+        c3, sent = time.perf_counter_ns(), 0
+        for k in range(len(parts)):
+            body = wire.encode_openings(parts[k])
+            self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(parts[k])}, body)
+            parts[k] = None
+            sent += len(body)
+            del body
+        with self.lock:
+            for key in [key for key in self.kept if key[0] == t]:
+                del self.kept[key]
+        self.opened.append({"t": t, "n": n, "bytes": sent, "ns": time.perf_counter_ns() - c0,
+                            "backend_ns": c2 - c1, "send_ns": time.perf_counter_ns() - c3,
+                            "on_dropped": int(hits(self.dropped, [self.block(t, i, p) for i, p in draws]).sum())})
 
     def block(self, t: int, i: int, p: int) -> int:
         """The block at position p of pass i of window t: p itself unless the pass's plan was sent."""

@@ -18,7 +18,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, receipts as rb, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
@@ -440,6 +440,18 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
         verifier.Verifier.append(session(), {"type": "append", "root": "zz", "count": 2})
     with pytest.raises(ValueError, match="message of its own"):
         verifier.Verifier.root(session(), {**msg, "appends": [[root, 2]]})
+
+
+def test_a_plan_change_is_the_runs_one_plan_adds_and_removes_from_the_other():
+    rng = random.Random(3)
+    for _ in range(200):
+        n, m = rng.randrange(1, 60), rng.randrange(0, 20)
+        before = rb.Plan.of(sorted(rng.sample(range(n), rng.randrange(1, n + 1))), n)
+        after = rb.Plan.of(sorted(rng.sample(range(n + m), rng.randrange(1, n + m + 1))), n + m)
+        added, removed = prover.plan_change(before, after)
+        a, b = set(before), set(after)
+        assert added == prover.runs_of(sorted(b - a)) and removed == prover.runs_of(sorted(a - b))
+        assert before.changed(added, removed, n + m) == after
 
 
 def test_a_kv_plan_needs_its_pages_a_step():
