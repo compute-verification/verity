@@ -90,4 +90,4 @@ replay's and lanes' rows vanishing at its pads, and `RunsRest` holds (`RunsGo`: 
 rep's proof has the masked PIOP's closed-form lengths, level 0's cap and Ligerito lengths, the inner proof's 192-byte
 salts and 64-byte path entries, and a file under `2^64` bytes at a good case's at most 2,048 extra claims
 (`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four
-(`complete_jsonT_of_level0`). -/
+(`complete_jsonT_of_level0`), which `Zk.Level0Premises` and `Zk.Level0Verifier` prove (`L0.complete_jsonT_closed`). -/

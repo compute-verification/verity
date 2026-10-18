@@ -110,5 +110,5 @@ Ligerito returning on rounds carrying its closed-form model, given its openings 
 `Level0HonestRun` its whole walk: it ends at the model's transcript and meets the model's final identity (`honestZ`);
 `Level0Opens` its openings passing the masked Merkle checks, level 0's over rows `EXTRA_LANES` wider
 (`ligeritoPZk_opens`, `merkleOkZ_of_opens`); `Level0Verifier` the last premise, the verifier returning the prover's
-record at its transcript (`verifier`); `Level0Complete` the four in `complete_jsonT_of_level0`, leaving `ShapeRest`
-(`complete_jsonT_of_shapeRest`). -/
+record at its transcript (`verifier`); `Level0Complete` the four in `complete_jsonT_of_level0`, leaving only the JSON
+specification (`complete_jsonT_closed`). -/

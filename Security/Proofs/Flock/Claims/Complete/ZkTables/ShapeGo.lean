@@ -21,7 +21,8 @@ shape the masked verifier decodes it at.
   proof at most `424 + 16·|y| + 168·(232 + 64·depth)` (`wInner_size_le`); every `--zk` schedule's part is under
   `2^32` (`zkSchedule_file`), and a good case's table has at most 2,050 claims (`Case.extras_le`).
 
-`complete_jsonT_of_level0`: so `complete_jsonT` follows from level 0's four premises alone.
+`complete_jsonT_of_level0`: so `complete_jsonT` follows from level 0's four premises alone (proved in
+`Zk.Level0Premises` and `Zk.Level0Verifier`: `L0.complete_jsonT_closed`).
 -/
 
 namespace FlockComplete.ZkTables
