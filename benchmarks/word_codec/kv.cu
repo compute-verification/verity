@@ -768,7 +768,9 @@ __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ s, 
 }
 
 // what 0: `steps` squarings of ILP words a thread; 1: `steps` decodes of k rounds; 2: `steps` encodes of k rounds, each
-// step's input the previous output and the index advancing. The words start canonical (top limb below p's).
+// step's input the previous output and the index advancing. The words start canonical (top limb below p's). Timing
+// only, the squaring split in two (FOLD 6 builds): 3 FOLD 6's product with its fold replaced by the halves' XOR (every
+// limb of the product still live), 4 the fold alone, of the word and its limbs rotated one place.
 template <int WHAT, int ILP>
 __global__ void __launch_bounds__(WPB) chain_kernel(int k, u64 steps, unsigned long long *xr) {
   const u64 gid = (u64)blockIdx.x * WPB + threadIdx.x;
@@ -792,9 +794,28 @@ __global__ void __launch_bounds__(WPB) chain_kernel(int k, u64 steps, unsigned l
   } else if constexpr (WHAT == 1) {
 #pragma unroll 1
     for (u64 s = 0; s < steps; ++s) decode_word(x[0], gid + s, k);
-  } else {
+  } else if constexpr (WHAT == 2) {
 #pragma unroll 1
     for (u64 s = 0; s < steps; ++s) encode_word(x[0], gid + s, k);
+  } else if constexpr (WHAT == 3) {
+#pragma unroll 1
+    for (u64 s = 0; s < steps; ++s) {
+      u32 t[2 * NL];
+      sqr_fold6(x[0], t);
+#pragma unroll
+      for (int l = 0; l < NL; ++l) x[0][l] = t[l] ^ t[NL + l];
+    }
+  } else {
+#pragma unroll 1
+    for (u64 s = 0; s < steps; ++s) {
+      u32 t[2 * NL];
+#pragma unroll
+      for (int l = 0; l < NL; ++l) {
+        t[l] = x[0][l];
+        t[NL + l] = x[0][(l + 1) % NL];
+      }
+      fold(t, x[0]);
+    }
   }
   u32 acc = 0;
 #pragma unroll
@@ -2298,7 +2319,16 @@ int kv_read(const void *store, uint64_t bytes, unsigned long long *xr, int grid,
 }
 
 int kv_chain(int what, int k, int ilp, uint64_t steps, int grid, unsigned long long *xr, cudaStream_t s) {
-  if (what < 0 || what > 2 || ((what > 0) && (k < 1 || k > kv::KMAX))) return -1;
+  if (what < 0 || what > 4 || ((what == 1 || what == 2) && (k < 1 || k > kv::KMAX))) return -1;
+  if (what > 2) {
+    if constexpr (kv::FOLD6) {
+      if (ilp != 1) return -1;
+      if (what == 3) kv::chain_kernel<3, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
+      else kv::chain_kernel<4, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
+      return launched();
+    }
+    return -1;
+  }
   if (what == 0 && ilp == 1) kv::chain_kernel<0, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
   else if (what == 0 && ilp == 2) kv::chain_kernel<0, 2><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
   else if (what == 1) kv::chain_kernel<1, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
