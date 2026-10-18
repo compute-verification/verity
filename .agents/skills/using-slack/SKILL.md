@@ -22,7 +22,7 @@ The coordination API has one place, three interactions and one lifecycle.
   `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), `@lean`, `@ci`, `@comms`,
   `@vllm`, `@benchmarks`, `@hash` (the commitment hash), `@console` and `@top` (the admin, Daniel's coordinator). The old advisors' handles
   (`@old-accounting`, `@old-circuits-and-proofs`) and `@pr-captain` retired on 17 Oct (COMM-14). Since
-  14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own workers as cloud agents.
+  14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own subagents.
   `@console` is Daniel's desktop agent on his laptop, beside the console's dev server. Nothing wakes it: its inbox holds
   your ask until Daniel opens it, and then it reads every unread doorbell (`names read --as console`) and answers in your
   thread. So put the whole brief in the ask, since it can't open Linear, and card `#ask-daniel` when it can't wait for
