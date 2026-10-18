@@ -7,14 +7,15 @@ pure move, to the same path under `verity/core/`; the Python keeps running until
 
 | module | `window.py` |
 | --- | --- |
-| `PouwWindow.Grid` | `GRID_BITS`, `on_grid`, `floor_point`, `pad`, `level`, `point`, `levels`, `Work`, `bucket`, with their refusals |
+| `PouwWindow.Grid` | `GRID_BITS`, `on_grid`, `floor_point`, `pad`, `level`, `point`, `levels`, `Work` (`Work.at`), `credit`, with their refusals |
 | `PouwWindow.Draw` | `k_prime` (K′, exact: `missAtMost`, then bisection), `sampling` |
 | `PouwWindow.Public` | `PUBLIC`, `REGISTERED`, `KINDS` |
 | `PouwWindow.Json` | integers read as Python's `json` reads them; the items written as Python writes them |
-| `PouwWindow.Entry` | `T_BITS`, `DEPTHS`, `PORT`, `ENTRY_SCHEMA`, `TILE`, `ROW_STEP`, `Entry` (`row`, `words`, `from_row`, `from_words`), `pass_tiles`, `tiles`, `layout_problem`, `tile_in`, `tile_at`, `tile_read`, `entry_digest`, `entry_bc`, `entry_leaf` |
+| `PouwWindow.Entry` | `T_BITS`, `DEPTHS`, `PORT`, `ENTRY_SCHEMA`, `TILE`, `ROW_STEP`, `Entry` (`row`, `words`, `from_row`, `from_words`), `pass_tiles`, `layout_problem`, `tile_read`, `entry_digest`, `entry_bc`, `entry_leaf` |
+| `PouwWindow.Shape` | the window's public shape: `Call`, `shape_of`, `shape_json`, `shape_tiles` (its N), `shape_problem`, `shape_entries`, `public_fields`, `tile_at` (a unit's call, A row and B row, fixed by the shape alone) |
 | `PouwWindow.Record` | `record_digest` (`canonical_json` as Python writes it), `record_problem`, and how Python reads a record's JSON |
-| `PouwWindow.Side` | `SIDE_DOMAIN`, `OWNER`, `SIDE_INDEX_WORDS`, `side_row`, `side_index`, `side_domain`, `pad_node`, `side_levels`, `side_path` |
-| `PouwWindow.Statement` | `window_problem`, the window statement L4 on the entry rows, with the records and side indices |
+| `PouwWindow.Side` | `SIDE_DOMAIN`, `OWNER`, `SIDE_INDEX_WORDS`, `side_row` (a slot's row with its index, `ok` and `admit`), `side_field`, `side_domain`, `pad_node`, `side_levels`, `side_path` |
+| `PouwWindow.Statement` | `window_problem`, the window statement L4 on the entry rows: the entries the shape's, every slot's side field (an unadmitted slot the canonical empty row), and the credit the masked sum of admitted, accepted rows rounded down to the grid |
 | `PouwWindow.Inputs` | `PUBLIC_INPUTS_FORMAT`, `PUBLIC_PORTS`, `M_MAX`, `session_cap`, `sessions`, `instance_ts`, `public_inputs` |
 | `PouwWindow.Rounds` | `COINS`, `MODES` (`CoinMode`), `mode`, `LIVE_SCHEME`, `SALT`, `DRAW`, `ROUND`, `live_families`, `live_epoch_reason`, `rounds_reason`, `round_key`: a live window's round coins over the proof service's challenger (`core_sampled_proofs`'s `SampledProofs.Challenger`) |
 | `PouwWindow.Difftest` | the difftest's table: one `Difftest.Fn` per ported function of `window.py` |
