@@ -1,12 +1,16 @@
-"""`circuit.compile`: one pass over a served Program puts every registered matmul's dots into a scheme's units, and the compiled
-Program's served outputs are the served Program's.
+"""`circuit.compile`: one pass over a served Program puts every registered matmul's dots into a scheme's tile units, and the
+compiled Program's served outputs are the served Program's.
 
-The scheme here (`compile-test`) is a stand-in with a real scheme's shape, ``(a, b, noise) -> {z, receipt}``: the noise added to
-A's row, the noised arm folded into the receipt (the s8 family's prefix arm, or for a Boolean family its own Definition on the
-noised row) and z the exact product. #2365's layer is `TemplatePopulations` over `ScaledMmS8Coordinate_v1` at K = 2048 and
-8192, as `benchmarks/one_stage/a6.py` builds it."""
+The scheme here (`compile-test`, tile 2 × 2; `compile-test-16`, 16 × 16) is a stand-in with a real scheme's shape,
+``(a: r rows of A, b: c rows of B, salt, position, roots) -> {z, receipt}`` (decisions 105 and 106): the unit derives its seed
+from the salt, its position and its roots (`seeds.PouwSeed`), and from the seed one noise block a row of A; it adds the
+noise to its rows, folds each cell's noised arm into the receipt (the s8 family's prefix arm, or for a Boolean family its own
+Definition on the noised row) and returns its cells' exact products as z. #2365's layer is `TemplatePopulations` over
+`ScaledMmS8Coordinate_v1` at K = 2048 and 8192, as `benchmarks/one_stage/a6.py` builds it."""
 from __future__ import annotations
 
+import dataclasses
+import hashlib
 import random
 import struct
 from functools import lru_cache
@@ -25,7 +29,9 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array, Record, Tuple, Value
 from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.protocol import DomainError, tagged
+from verity.core.protocols.pouw.circuit import hashes as H
+from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.core.protocols.pouw.protocol import DomainError
 from verity.core.protocols.sampled_proofs.one_stage import partition as OP
 
 V1, V8, V32 = Value(1), Value(8), Value(32)
@@ -34,9 +40,12 @@ LAYER = ((2048, 21504), (8192, 2048))
 REDUCED = ((2048, 3), (8192, 2))
 BOOLEAN = {"DOT": BG.BlackwellS8ImmaDot32, "TDOT": None}
 PORTS = C._ports
-ports = pytest.mark.skipif(PORTS is None, reason="port types (ml.circuits.ports, COIN-RULES) are not on this tree")
-#: COIN-RULES' one use reads each noise leaf once, so a noised bit can't feed a Boolean multiplier's partial products
-bits = pytest.mark.skipif(PORTS is not None, reason="a Boolean unit's noised bits fan out to the multiplier: E_COIN_REUSE")
+ports = pytest.mark.skipif(PORTS is None, reason="port types (ml.circuits.ports) are not on this tree")
+#: COIN-RULES (`ports._coin_role`) lets a coin reach only a noise primitive's or a receipt fold's coin port, so it refuses the
+#: salt's flow into the seed's gates until it gives the seed a role (`test_coin_rules_refuse_the_seed`)
+COIN_RULES = PORTS is not None and hasattr(PORTS, "_coin_role")
+compiles = pytest.mark.skipif(COIN_RULES, reason="COIN-RULES refuses the salt's flow into PouwSeed: E_COIN_FLOW")
+SALT = hashlib.sha512(b"salt").digest()
 
 
 def _ports(decl):
@@ -56,10 +65,11 @@ def _def(name, statics, signature, body, ports=None):
 
 COIN = {"params": lambda p: {"e": p.In(kind="coin")}}
 FOLD = {"params": lambda p: {"r": p.In(receipt=True)}, "ret": lambda p: p.Out(sink=True)}
-UNIT_PORTS = {"params": lambda p: {"noise": p.In(kind="coin")}, "ret": lambda p: {"receipt": p.Out(sink=True)}}
+UNIT_PORTS = {"params": lambda p: {"salt": p.In(kind="coin")}, "ret": lambda p: {"receipt": p.Out(sink=True)}}
 
-ADD8 = _prim("CompileTestAdd8", (("x", V8), ("e", V8)), V8, lambda x, e: (x + e) & 0xFF, ports=COIN)
-XOR1 = _prim("CompileTestXor1", (("x", V1), ("e", V1)), V1, lambda x, e: x ^ e, ports=COIN)
+ADD8 = _prim("CompileTestAdd8", (("x", V8), ("e", V8)), V8, lambda x, e: (x + e) & 0xFF)
+XOR1 = _prim("CompileTestXor1", (("x", V1), ("e", V1)), V1, lambda x, e: x ^ e)
+BYTES = tuple(_prim(f"CompileTestByte{s}", (("w", V32),), V8, lambda w, s=s: (w >> 8 * s) & 0xFF) for s in range(4))
 FOLD32 = _prim("CompileTestFold32", (("r", V32), ("t", V32)), V32, lambda r, t: (r * 0x9E3779B1 + t) & M32, ports=FOLD)
 FOLD1 = _prim("CompileTestFold1", (("r", V1), ("t", V1)), V1, lambda r, t: r ^ t, ports=FOLD)
 NEG8 = _prim("CompileTestNeg8", (("x", V8),), V8, lambda x: -x & 0xFF)
@@ -69,71 +79,147 @@ ADD32 = _prim("CompileTestAdd32", (("x", V32), ("y", V32)), V32, lambda x, y: (x
 
 # -- the test scheme ---------------------------------------------------------------------------------------------------------
 
-def _words(dot) -> bool:
-    return dot.a == Array(dot.k, V8)
+def _boolean(S) -> bool:
+    return S.EXACT.signature()[0][0][1].homogeneous_width() == 1
+
+
+def _tile_params(S):
+    (_, a), (_, b) = S.EXACT.signature()[0][:2]
+    D, Pt = SD.types(_boolean(S))
+    return ("a", Array(S.R, a)), ("b", Array(S.C, b)), ("salt", D), ("position", Pt), ("roots", Array(2, D))
+
+
+def _tile_ret(S, receipt):
+    return Record(("z", Array(len(S.PAIRS), S.EXACT.signature()[1])), ("receipt", receipt))
 
 
 def _unit_signature(S):
-    (_, a), (_, b) = S.EXACT.signature()[0][:2]
-    return (("a", a), ("b", b), ("noise", a)), Record(("z", S.EXACT.signature()[1]),
-                                                      ("receipt", V1 if S.NOISED is None else V32))
+    return _tile_params(S), _tile_ret(S, V1 if _boolean(S) else V32)
 
 
-def _unit_body(B, S, a, b, noise):
-    words = S.NOISED is not None
-    flat = Array(a.type.leaves, V8 if words else V1)
-    a2 = Coll(a.type, B.batch(ADD8 if words else XOR1, Coll(flat, a.refs), Coll(flat, noise.refs), axes=(0, 0)).refs)
-    if words:
-        T = B.call(S.NOISED, a2, b)
-        r = B.call(P.ZERO32)
+def _noised(B, S, a, seed):
+    """A's rows plus the seed's noise: on bits the stream's first bits, on words a noise block's 64 bytes a row, repeated
+    along k."""
+    row = a.type.elem
+    flat = Array(a.type.leaves, V1 if _boolean(S) else V8)
+    if _boolean(S):
+        e = SD.stream_bits(B, seed, a.type.leaves)
+        return Coll(a.type, B.batch(XOR1, Coll(flat, a.refs), e, axes=(0, 0)).refs)
+    parts = []
+    for blk in SD.noise_blocks(B, seed, S.R, False):
+        by = concat([B.batch(BYTES[s], blk, axes=(0,)).refs for s in range(4)])
+        parts.append(concat([by] * -(-row.leaves // by.count)).slice(0, row.leaves))
+    return Coll(a.type, B.batch(ADD8, Coll(flat, a.refs), Coll(flat, concat(parts)), axes=(0, 0)).refs)
+
+
+def _fold(B, S, noised, b):
+    if _boolean(S):
+        r = None
+        for i, j in S.PAIRS:
+            y = B.call(S.EXACT, noised[i], b[j])
+            for t in range(y.type.leaves):
+                bit = Coll(V1, y.refs.slice(t, t + 1))
+                r = bit if r is None else B.call(FOLD1, r, bit)
+        return r
+    r = B.call(P.ZERO32)
+    for i, j in S.PAIRS:
+        T = B.call(S.NOISED, noised[i], b[j])
         for t in range(T.type.leaves):
             r = B.call(FOLD32, r, Coll(V32, T.refs.slice(t, t + 1)))
-    else:
-        y = B.call(S.EXACT, a2, b)
-        r = Coll(V1, y.refs.slice(0, 1))
-        for i in range(1, y.type.leaves):
-            r = B.call(FOLD1, r, Coll(V1, y.refs.slice(i, i + 1)))
-    z = B.call(S.EXACT, a, b)
-    return Coll(_unit_signature(S)[1], concat([z.refs, r.refs]))
+    return r
 
 
-UNIT = _def("CompileTestUnit", ("EXACT", "NOISED"), _unit_signature, _unit_body, ports=UNIT_PORTS)
+def _z(B, S, a, b):
+    return [B.call(S.EXACT, a[i], b[j]).refs for i, j in S.PAIRS]
 
 
-def _unit(dot):
+def _unit_body(B, S, a, b, salt, position, roots):
+    seed = SD.seed_call(B, salt, position, roots, _boolean(S))
+    r = _fold(B, S, _noised(B, S, a, seed), b)
+    return Coll(_unit_signature(S)[1], concat(_z(B, S, a, b) + [r.refs]))
+
+
+TILE = ("EXACT", "NOISED", "R", "C", "PAIRS")
+UNIT = _def("CompileTestUnit", TILE, _unit_signature, _unit_body, ports=UNIT_PORTS)
+
+
+def _statics(dot, tile):
     noised = None
-    if _words(dot):
+    if not dot.boolean:
         noised = bind(S8.S8Dot, K=dot.k, L=32, T0="zero", C=None, DOT=dot.step, A=(-128, 127), B=dot.b_bound or (-128, 127),
                       TAIL=(), TDOT=None, NOISE="P", LIMBS="none", COMMIT="prefix")
-    return bind(UNIT, EXACT=dot.exact, NOISED=noised)
+    return {"EXACT": dot.exact, "NOISED": noised, "R": tile.r, "C": tile.c, "PAIRS": tile.pairs}
 
 
-def _noise(seed, dot, i, j):
-    out, c = [], 0
-    while len(out) < dot.a.leaves:
-        out += tagged("verity/pouw/compile-test/noise", seed, i, j, c)
-        c += 1
-    return out[:dot.a.leaves] if _words(dot) else [v & 1 for v in out[:dot.a.leaves]]
+def _unit(defn):
+    return lambda dot, tile: bind(defn, **_statics(dot, tile))
 
 
-SCHEME = C.register(C.Scheme("compile-test", _unit, _noise)).name
+SCHEME = C.register(C.Scheme("compile-test", (2, 2), _unit(UNIT))).name
+SCHEME16 = C.register(C.Scheme("compile-test-16", (16, 16), _unit(UNIT))).name
 
 
-def _recompute_signature(S):
-    (_, a), (_, b) = S.EXACT.signature()[0][:2]
-    return (("a", a), ("b", b), ("noise", a)), Record(("z", S.EXACT.signature()[1]), ("receipt", V32))
+def _recompute_body(B, S, a, b, salt, position, roots):
+    seed = SD.seed_call(B, salt, position, roots, False)
+    z = _z(B, S, a, b)
+    r = B.call(FOLD32, B.call(FOLD32, B.call(S.EXACT, a[0], a[0]), Coll(V32, z[0])), seed[0])
+    return Coll(_unit_signature(S)[1], concat(z + [r.refs]))
 
 
-def _recompute_body(B, S, a, b, noise):
-    z = B.call(S.EXACT, a, b)
-    r = B.call(FOLD32, B.call(S.EXACT, a, a), z)
-    return Coll(_recompute_signature(S)[1], concat([z.refs, r.refs]))
+RECOMPUTING = C.register(C.Scheme("compile-test-recompute", (1, 1), _unit(_def("CompileTestRecompute", TILE, _unit_signature,
+                                                                               _recompute_body, ports=UNIT_PORTS)))).name
+WRONG = C.register(C.Scheme("compile-test-wrong", (1, 1), lambda d, t: d.exact)).name
 
 
-RECOMPUTE = _def("CompileTestRecompute", ("EXACT",), _recompute_signature, _recompute_body, ports=UNIT_PORTS)
-RECOMPUTING = C.register(C.Scheme("compile-test-recompute", lambda d: bind(RECOMPUTE, EXACT=d.exact),
-                                  lambda seed, d, i, j: [0] * d.a.leaves)).name
-WRONG = C.register(C.Scheme("compile-test-wrong", lambda d: d.exact, _noise)).name
+def _no_seed(B, S, a, b, salt, position, roots):
+    z = _z(B, S, a, b)
+    return z, B.call(FOLD32, B.call(P.ZERO32), Coll(V32, z[0]))
+
+
+def _two_seeds(B, S, a, b, salt, position, roots):
+    s0, s1 = (SD.seed_call(B, salt, position, roots, False) for _ in range(2))
+    return _z(B, S, a, b), B.call(FOLD32, _fold(B, S, _noised(B, S, a, s0), b), s1[0])
+
+
+def _own_position(B, S, a, b, salt, position, roots):
+    seed = SD.seed_call(B, salt, H.Emit(B).array([0, 7]), roots, False)
+    return _z(B, S, a, b), _fold(B, S, _noised(B, S, a, seed), b)
+
+
+def _own_roots(B, S, a, b, salt, position, roots):
+    seed = SD.seed_call(B, salt, position, Coll(roots.type, concat([roots[0].refs, roots[0].refs])), False)
+    return _z(B, S, a, b), _fold(B, S, _noised(B, S, a, seed), b)
+
+
+def _salt_leak(B, S, a, b, salt, position, roots):
+    seed = SD.seed_call(B, salt, position, roots, False)
+    return _z(B, S, a, b), B.call(FOLD32, _fold(B, S, _noised(B, S, a, seed), b), salt[0])
+
+
+def _noised_z(B, S, a, b, salt, position, roots):
+    noised = _noised(B, S, a, SD.seed_call(B, salt, position, roots, False))
+    return [B.call(S.EXACT, noised[i], b[j]).refs for i, j in S.PAIRS], _fold(B, S, noised, b)
+
+
+def _bad(name, body):
+    """A 1 × 1 scheme whose unit's body is `body(B, S, *params)` -> (its cells' z refs, its receipt)."""
+    def build(B, S, *params):
+        z, r = body(B, S, *params)
+        return Coll(_unit_signature(S)[1], concat(z + [r.refs]))
+
+    defn = _def("CompileTest" + name.title().replace("-", ""), TILE, _unit_signature, build, ports=UNIT_PORTS)
+    return C.register(C.Scheme(f"compile-test-{name}", (1, 1), _unit(defn))).name
+
+
+UNIT_REFUSED = [
+    ("seed", "no-seed", _no_seed),
+    ("seed", "two-seeds", _two_seeds),
+    ("position", "own-position", _own_position),
+    ("position", "own-roots", _own_roots),
+    ("salt-flow", "salt-leak", _salt_leak),
+    ("noise-in-z", "noised-z", _noised_z),
+]
+UNIT_REFUSED = [pytest.param(code, _bad(name, body), id=name) for code, name, body in UNIT_REFUSED]
 
 
 # -- served Programs ---------------------------------------------------------------------------------------------------------
@@ -159,6 +245,17 @@ def _shared_x_body(B, S, x, w):
 
 SHARED_X = _def("CompileTestSharedX", ("K", "N"),
                 lambda S: ((("x", Array(S.K, V8)), ("w", Array(S.N, Array(S.K, V8)))), Array(S.N, V32)), _shared_x_body)
+
+
+def _grid_body(B, S, x, w):
+    n = S.N
+    xs = Coll(Array(n * n, x.type.elem), concat([x[i].refs for i in range(n) for _j in range(n)]))
+    ws = Coll(Array(n * n, w.type.elem), concat([w[j].refs for _i in range(n) for j in range(n)]))
+    return B.batch(_acc(64), xs, ws, axes=(0, 0))
+
+
+GRID = _def("CompileTestGrid", ("N",), lambda S: ((("x", Array(S.N, Array(64, V8))), ("w", Array(S.N, Array(64, V8)))),
+                                                  Array(S.N * S.N, V32)), _grid_body)
 
 
 def _matmul_inc_body(B, S, a, b):
@@ -200,16 +297,16 @@ def _args(fn, rng):
 
 
 def _roots(c):
-    return [(b"A%d" % s.position, b"B%d" % s.position) for s in c.sites]
+    return [(hashlib.sha512(b"A%d" % s.index).digest(), hashlib.sha512(b"B%d" % s.index).digest()) for s in c.sites]
 
 
-def _run(c, args, salt=b"salt", forward=0):
-    return evaluate(c.program.fn, *args, c.noise_input(salt, forward, _roots(c)))
+def _run(c, args, salt=SALT, roots=None, base=0):
+    return evaluate(c.program.fn, *args, *c.inputs(salt, _roots(c) if roots is None else roots, base))
 
 
 def _outside_units(c):
     """Calls of a registered family, and matmul steps, anywhere in the compiled Program but inside a unit."""
-    units = {id(s.unit) for s in c.sites}
+    units = {id(g.unit) for g in c.plan.groups}
     found, todo, seen = [], [c.program.fn], set()
     while todo:
         f = todo.pop()
@@ -235,79 +332,117 @@ def _refused(code, program, scheme=SCHEME):
 
 # -- the layer ---------------------------------------------------------------------------------------------------------------
 
-@pytest.mark.skipif(C._ports is not None, reason="COIN-RULES' one-use check tracks every coin leaf: 61M at full size")
+@compiles
+@pytest.mark.slow
 def test_llama_layer_compiles():
-    """#2365's Llama-3.2-1B layer at full size: one site per K, every coordinate's dot a unit, the coordinates' rest one
-    `PouwRest` batch reading only the scales and z, and the verifier's rebuilt Program the one compiled. Its values are
-    `test_reduced_layer_serves_the_same_outputs`'s; this one catches what only the full counts show (a site's packing and the
-    Program's digest at 23552 units)."""
+    """#2365's Llama-3.2-1B layer at full size, 16 × 16 tiles: one site per K, each 16 coordinates one unit, the coordinates'
+    rest one `PouwRest` batch reading only the scales and z, a position slot a unit, and the verifier's rebuilt Program the
+    one compiled. Its values are `test_reduced_layer_serves_the_same_outputs`'s; this one catches what only the full counts
+    show (a site's tiling and packing, and the Program's digest, at 1472 units over 23552 dots)."""
     served = _layer(LAYER)
-    c = C.compile(served, SCHEME)
+    c = C.compile(served, SCHEME16)
     assert [(s.dot.family, s.dot.k, s.count, s.shape) for s in c.sites] == [
         ("GemmAccumulatorS8_v1", 2048, 21504, (21504, 2048, 21504)), ("GemmAccumulatorS8_v1", 8192, 2048, (2048, 8192, 2048))]
-    assert all(s.pairs == tuple((u, u) for u in range(s.count)) for s in c.sites)
+    diagonal = C.Tile(16, 16, tuple((i, i) for i in range(16)))
+    assert {u.tile for u in c.units} == {diagonal}
+    assert [u.slot for u in c.units] == list(range(1344 + 128))
+    assert (c.units[0].rows, c.units[0].cols) == (tuple(range(16)), tuple(range(16)))
     nodes = c.program.fn.body.nodes
     assert [nd.fn.base_id for nd in nodes] == ["CompileTestUnit_v1", "PouwRest_v1"] * 2
-    assert [nd.n for nd in nodes] == [21504, 21504, 2048, 2048]
+    assert [nd.n for nd in nodes] == [1344, 21504, 128, 2048]
     assert [n for n, _t in nodes[1].fn.signature()[0]] == ["sx", "sw", C.Z]
+    assert [n for n, _t in c.program.fn.signature()[0]][-3:] == [C.SALT, C.POSITIONS, C.ROOTS]
     assert not _outside_units(c)
-    assert C.rebuild(served, SCHEME, encode_program(c.program)).digest == c.digest
+    assert C.rebuild(served, SCHEME16, encode_program(c.program)).digest == c.digest
     with pytest.raises(DomainError):
-        c.check_descriptor(encode_program(C.compile(Program(bind(TWICE)), SCHEME).program))
+        c.check_descriptor(encode_program(C.compile(Program(bind(TWICE)), SCHEME16).program))
 
 
+@compiles
 def test_reduced_layer_serves_the_same_outputs():
-    """The layer's two K's at 3 and 2 coordinates: on random rows and scales the compiled Program's served outputs are the
-    served Program's, its receipts follow the salt, the gate-level checks pass and its partition is one unit per instance."""
+    """The layer's two K's at 3 and 2 coordinates, 2 × 2 tiles: on random rows and scales the compiled Program's served outputs
+    are the served Program's, its receipts follow the salt and the position range, the gate-level checks pass and its
+    partition is one unit per tile and one per rest instance."""
     served = _layer(REDUCED)
     c = C.compile(served, SCHEME)
+    two, one = C.Tile(2, 2, ((0, 0), (1, 1))), C.Tile(1, 1, ((0, 0),))
+    assert [(u.site, u.slot, u.rows, u.tile) for u in c.units] == [(0, 0, (0, 1), two), (0, 1, (2,), one), (1, 2, (0, 1), two)]
     rng = random.Random(7)
     args = _args(served.fn, rng)
     want = evaluate(served.fn, *args)
     got = _run(c, args)
     assert len(want) == c.served_leaves == 5
     assert got[:5] == want
-    assert len(got) == 5 + 5
-    assert _run(c, args, salt=b"other")[:5] == want
-    assert _run(c, args, salt=b"other")[5:] != got[5:]
+    assert len(got) == 5 + 3
+    other = _run(c, args, salt=hashlib.sha512(b"other").digest())
+    assert other[:5] == want and all(x != y for x, y in zip(other[5:], got[5:]))
+    later = _run(c, args, base=len(c.units))
+    assert later[:5] == want and all(x != y for x, y in zip(later[5:], got[5:]))
     gc = c.check_gates()
     assert gc.ok, gc
     assert (gc.reached, gc.z_gates, gc.z_bits) == (0, 5, 5 * 32)
-    assert OP.units(c.program, c.query()) == 3 + 3 + 2 + 2
+    assert OP.units(c.program, c.query()) == 3 + 3 + 2
 
 
 # -- every registered family -------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", [pytest.param(n, marks=bits) if "bits" in n else n for n in sorted(FAMILIES)])
+@compiles
+@pytest.mark.parametrize("name", [pytest.param(n, marks=pytest.mark.slow) if "bits" in n else n for n in sorted(FAMILIES)])
 def test_family_compiles_to_units(name):
-    """Each registered family, at the root, batched, nested or on bits: its dots are the units (one site per call of a kind),
-    no registered Call or matmul step is left outside them, and the served outputs are unchanged."""
+    """Each registered family, at the root, batched, nested or on bits: its dots are the units' cells (one site per call of a
+    kind), no registered Call or matmul step is left outside them, and the served outputs are unchanged. On bits the seed and
+    the noise are SHA-512 in gates (three compressions), which is what makes it slow."""
     build, want_sites = FAMILIES[name]
     served = build()
     c = C.compile(served, SCHEME)
     assert [(s.dot.family, s.shape) for s in c.sites] == want_sites
+    assert c.boolean == ("bits" in name)
     assert not _outside_units(c)
     rng = random.Random(name)
     args = _args(served.fn, rng)
     out = _run(c, args)
     assert out[:c.served_leaves] == evaluate(served.fn, *args)
-    assert len(out) == c.served_leaves + sum(s.count * s.receipt.leaves for s in c.sites)
+    assert len(out) == c.served_leaves + sum(u.receipt.leaves for u in c.units)
 
 
-@bits
+@compiles
+@pytest.mark.slow
 def test_s8dot_on_bits_compiles():
+    """The Boolean s8 family's unit: its salt, positions and roots are bits. Slow: building the seed's and the noise's
+    SHA-512 gates."""
     c = C.compile(Program(bind(BS8.S8Dot, **S8.SMOKE_PLAIN | BOOLEAN)), SCHEME)
-    assert [(s.dot.family, s.shape, s.receipt) for s in c.sites] == [("S8Dot_v2", (1, 64, 1), V1)]
+    assert [(s.dot.family, s.shape) for s in c.sites] == [("S8Dot_v2", (1, 64, 1))]
+    assert [u.receipt for u in c.units] == [V1]
+    assert [t for _n, t in c.program.fn.signature()[0]][-3:] == [SD.DIGEST_BITS, Array(1, SD.POS_BITS),
+                                                                 Array(1, Array(2, SD.DIGEST_BITS))]
     assert not _outside_units(c)
 
 
+@compiles
 def test_shared_operand_is_one_row():
-    """A's row shared by a batch is one committed row: the site's units pair it with each of B's rows."""
+    """A's row shared by a batch is one committed row: the site's tiles pair it with B's rows, two to a tile."""
     c = C.compile(Program(bind(SHARED_X, K=64, N=3)), SCHEME)
     (s,) = c.sites
     assert s.pairs == ((0, 0), (0, 1), (0, 2))
     assert [(r.space, r.idx) for r in s.a_rows] == [("n", 0)]
     assert [(r.space, r.idx) for r in s.b_rows] == [("p", 1)] * 3
+    assert [(u.rows, u.cols, u.tile) for u in c.units] == [((0,), (0, 1), C.Tile(1, 2, ((0, 0), (0, 1)))),
+                                                           ((0,), (2,), C.Tile(1, 1, ((0, 0),)))]
+
+
+@compiles
+def test_grid_site_tiles_into_full_tiles():
+    """One batch over a 4 × 4 grid of (row of A, row of B): four 2 × 2 tiles, each the whole grid of its rows and columns."""
+    served = Program(bind(GRID, N=4))
+    c = C.compile(served, SCHEME)
+    (s,) = c.sites
+    assert s.shape == (4, 64, 4)
+    full = C.Tile(2, 2, ((0, 0), (0, 1), (1, 0), (1, 1)))
+    assert [(u.rows, u.cols, u.tile) for u in c.units] == [((0, 1), (0, 1), full), ((0, 1), (2, 3), full),
+                                                           ((2, 3), (0, 1), full), ((2, 3), (2, 3), full)]
+    assert full.grid
+    args = _args(served.fn, random.Random(3))
+    assert _run(c, args)[:16] == evaluate(served.fn, *args)
 
 
 # -- refusals ----------------------------------------------------------------------------------------------------------------
@@ -339,6 +474,13 @@ def _pair_body(B, S, z):
 
 PAIR = _def("CompileTestPair", (), lambda S: ((("z", V32),), Array(2, V32)), _pair_body)
 
+
+def _seeding_body(B, S, x, w, salt):
+    e = H.Emit(B)
+    seed = SD.seed_call(B, salt, e.array([0, 0]), Coll(Array(2, SD.DIGEST), concat([salt.refs, salt.refs])), False)
+    return B.call(ADD32, B.call(_acc(64), x, w), seed[0])
+
+
 XW = (("x", Array(64, V8)), ("w", Array(64, V8)))
 REFUSED = {
     "uncovered": lambda: _def("CompileTestBareStep", (), lambda S: ((("x", Array(32, V8)), ("w", Array(32, V8))), Array(2, V32)),
@@ -349,13 +491,16 @@ REFUSED = {
                          lambda B, S, c, x, w: B.scan(SCAN_STEP, c, xs=(x, w))),
     "width": lambda: _def("CompileTestWide", (), lambda S: (XW, Array(2, V32)), lambda B, S, x, w: B.call(PAIR, B.call(_acc(64), x, w))),
     "no-matmul": lambda: _def("CompileTestNoMatmul", (), lambda S: ((("z", V32),), Array(2, V32)), lambda B, S, z: B.call(PAIR, z)),
-    "name": lambda: _def("CompileTestNoiseName", (), lambda S: (((C.NOISE, Array(64, V8)), ("w", Array(64, V8))), V32),
+    "name": lambda: _def("CompileTestSaltName", (), lambda S: (((C.SALT, Array(64, V8)), ("w", Array(64, V8))), V32),
                          lambda B, S, x, w: B.call(_acc(64), x, w)),
+    "coin-read": lambda: _def("CompileTestSeeding", (), lambda S: ((*XW, ("salt", SD.DIGEST)), V32), _seeding_body),
 }
 
 
+@compiles
 @pytest.mark.parametrize("code", sorted(REFUSED))
 def test_refused(code):
+    """Each rule's refusal; ``coin-read``: a served Program that derives a seed itself (the salt enters only through compile)."""
     _refused(code, Program(bind(REFUSED[code]())))
 
 
@@ -364,6 +509,7 @@ def test_edited_arm_refused():
     _refused("edited-arm", Program(bind(S8.S8Dot, **S8.SMOKE_EDITED)))
 
 
+@compiles
 def test_compiled_program_reads_a_coin_and_is_refused():
     c = C.compile(Program(bind(TWICE)), SCHEME)
     _refused("coin-read", c.program)
@@ -372,14 +518,42 @@ def test_compiled_program_reads_a_coin_and_is_refused():
 def test_scheme_refused():
     _refused("scheme", Program(bind(TWICE)), "no-such-scheme")
     _refused("scheme", Program(bind(TWICE)), WRONG)
+    with pytest.raises(ValueError):
+        C.register(C.Scheme("compile-test-empty", (0, 2), _unit(UNIT)))
 
 
+@compiles
 def test_recompute_across_units_is_found():
-    """A unit computing a value another unit computes (here each of a shared row's units folds a · a) fails the gate-level
-    cut's no-recompute rule."""
+    """A unit computing a value another unit computes (here each 1 × 1 unit of a shared row folds a · a) fails the gate-level
+    cut's no-recompute rule; the seeds, each reading its own position in every gate, don't."""
     c = C.compile(Program(bind(MATMUL_INC, N=3)), RECOMPUTING)
     gc = c.check_gates()
     assert not gc.ok and "gate-recomputed" in gc.cut.codes
+
+
+@compiles
+@pytest.mark.parametrize("code,scheme", UNIT_REFUSED)
+def test_unit_refused(code, scheme):
+    """A unit that derives no seed or two (``seed``), seeds from a position or roots of its own choosing (``position``: a unit
+    can't choose its position), lets the salt reach anything but the seed (``salt-flow``), or returns a z the seed reaches
+    (``noise-in-z``)."""
+    _refused(code, Program(bind(TWICE)), scheme)
+
+
+@compiles
+def test_shared_position_slots_refused(monkeypatch):
+    """Two unit batches given the same slots of `pouw.positions` (here the second batch reading the first's) would seed two
+    units of a site alike: the root-level check refuses it."""
+    real = C._plan
+
+    def shared(served, name):
+        p = real(served, name)
+        groups = list(p.groups)
+        groups[1] = dataclasses.replace(groups[1], first=0)
+        return dataclasses.replace(p, groups=tuple(groups))
+
+    monkeypatch.setattr(C, "_plan", shared)
+    _refused("position", Program(bind(SHARED_X, K=64, N=5)))
 
 
 def _coin_served_body(B, S, x, w, u):
@@ -388,55 +562,90 @@ def _coin_served_body(B, S, x, w, u):
 
 @ports
 def test_served_coin_parameter_refused():
-    """A served Program that takes a coin (here a noised weight, a valid Program under COIN-RULES) is refused: the noise enters
-    only through compile."""
+    """A served Program that takes a coin is refused: the salt enters only through compile."""
     defn = _def("CompileTestCoin", (), lambda S: ((*XW, ("u", Array(64, V8))), V32), _coin_served_body,
                 ports={"params": lambda p: {"u": p.In(kind="coin")}})
     _refused("coin-read", Program(bind(defn)))
 
 
-def _noise_twice_body(B, S, a, b, noise):
-    flat = Array(a.type.leaves, V8)
-    y = [B.call(S.EXACT, Coll(a.type, B.batch(ADD8, Coll(flat, a.refs), Coll(flat, noise.refs), axes=(0, 0)).refs), b)
-         for _ in range(2)]
-    z = B.call(S.EXACT, a, b)
-    return Coll(_recompute_signature(S)[1], concat([z.refs, B.call(FOLD32, B.call(FOLD32, B.call(P.ZERO32), y[0]), y[1]).refs]))
-
-
-NOISE_TWICE = _def("CompileTestNoiseTwice", ("EXACT",), _recompute_signature, _noise_twice_body, ports=UNIT_PORTS)
-
-
-@ports
-def test_noise_read_twice_refused():
-    """A unit whose noise feeds two noise primitives is refused by COIN-RULES' one use."""
-    name = C.register(C.Scheme("compile-test-noise-twice", lambda d: bind(NOISE_TWICE, EXACT=d.exact), _noise)).name
-    _refused("E_COIN_REUSE", Program(bind(TWICE)), name)
+@pytest.mark.skipif(not COIN_RULES, reason="COIN-RULES (ports._coin_role) is not on this tree")
+def test_coin_rules_refuse_the_seed():
+    """Under COIN-RULES as it stands a coin reaches only a noise primitive's or a receipt fold's coin port, so the salt's flow
+    into the seed's gates is refused: COIN-RULES needs a seed role (the salt port of `seeds.PouwSeed` the coin's terminal,
+    many seeds reading one salt at distinct positions) before any compiled Program is valid."""
+    with pytest.raises(C.CompileError) as e:
+        C.compile(Program(bind(TWICE)), SCHEME)
+    assert e.value.code in ("E_COIN_FLOW", "E_COIN_REUSE"), str(e.value)
 
 
 # -- seeds and the verifier's rebuild ----------------------------------------------------------------------------------------
 
-def test_same_roots_different_seeds():
-    """Two calls on the same operands, so the same roots: their positions differ, so do their seeds, noise and receipts."""
+@compiles
+def test_same_roots_different_positions_different_seeds():
+    """Two calls on the same operands, so the same roots: their positions differ, so do their seeds and receipts, while z is
+    the same; the same (salt, position) under other roots is another seed too."""
     c = C.compile(Program(bind(TWICE)), SCHEME)
-    a, b = c.sites
-    root = (b"same-a", b"same-b")
-    s0, s1 = c.seeds(b"salt", 3, [root, root])
+    assert [u.slot for u in c.units] == [0, 1]
+    root = (hashlib.sha512(b"same-a").digest(), hashlib.sha512(b"same-b").digest())
+    s0, s1 = c.seeds(SALT, [root, root])
     assert s0 != s1
-    assert c.unit_noise(s0, a, 0) != c.unit_noise(s1, b, 0)
+    assert c.seeds(SALT, [root, root], base=2) != [s0, s1]
+    assert c.seeds(SALT, [root, (root[1], root[0])])[1] != s1
     args = _args(c.served.fn, random.Random(1))
-    out = evaluate(c.program.fn, *args, [v for s, sd in zip(c.sites, (s0, s1)) for v in c.unit_noise(sd, s, 0)])
+    out = _run(c, args, roots=[root, root])
     assert out[0] == out[1] and out[2] != out[3]
 
 
+@compiles
+def test_positions_and_inputs():
+    c = C.compile(Program(bind(SHARED_X, K=64, N=3)), SCHEME)
+    assert c.positions() == [0, 1] and c.positions(2) == [2, 3]
+    with pytest.raises(ValueError):
+        c.positions((1 << 64) - 1)
+    salt, pos, roots = c.inputs(SALT, _roots(c), 6)
+    assert salt == SD.halves(SALT) and pos == [0, 6, 0, 7] and roots == SD.halves(b"".join(_roots(c)[0]))
+    with pytest.raises(ValueError):
+        c.inputs(SALT, _roots(c) * 2)
+
+
 def test_seed_reads_every_field():
-    base = (b"salt", 0, 0, b"ra", b"rb")
-    seeds = {C.seed(*base)}
-    for i, v in enumerate((b"salt2", 1, 1, b"ra2", b"rb2")):
-        seeds.add(C.seed(*base[:i], v, *base[i + 1:]))
+    d = [hashlib.sha512(bytes([i])).digest() for i in range(6)]
+    base = (d[0], 0, d[1], d[2])
+    seeds = {SD.seed(*base)}
+    for i, v in enumerate((d[3], 1, d[4], d[5])):
+        seeds.add(SD.seed(*base[:i], v, *base[i + 1:]))
+    seeds.add(SD.seed(d[0], 0, d[2], d[1]))
     assert len(seeds) == 6
-    assert C.seed(*base) == tagged(C.SEED_TAG, *base)
+    assert C.seed is SD.seed
+    with pytest.raises(ValueError):
+        SD.seed(b"short", 0, d[1], d[2])
 
 
+def _seed_args(boolean, salt, position, roots):
+    return [SD.leaves(salt, boolean), SD.position_leaves(position, boolean), SD.leaves(b"".join(roots), boolean)]
+
+
+def test_seed_in_gates_is_the_reference():
+    """`PouwSeed_v1` and `PouwNoiseBlock_v1` on words are `seeds.seed` and `seeds.noise_block`."""
+    roots = (hashlib.sha512(b"ra").digest(), hashlib.sha512(b"rb").digest())
+    want = SD.seed(SALT, 5, *roots)
+    assert list(evaluate(bind(SD.PouwSeed), *_seed_args(False, SALT, 5, roots))) == SD.halves(want)
+    assert list(evaluate(bind(SD.PouwNoiseBlock), SD.halves(want), SD.position_leaves(3, False))) == \
+        SD.halves(SD.noise_block(want, 3))
+
+
+@pytest.mark.slow
+def test_seed_on_bits_is_the_reference():
+    """`PouwSeed_v2` and `PouwNoiseBlock_v2` on bits (three SHA-512 compressions, a few seconds) are the reference."""
+    roots = (hashlib.sha512(b"ra").digest(), hashlib.sha512(b"rb").digest())
+    want = SD.seed(SALT, 1 << 40, *roots)
+    assert list(evaluate(SD.PouwSeedBits, *_seed_args(True, SALT, 1 << 40, roots))) == SD.leaves(want, True)
+    assert list(evaluate(SD.PouwNoiseBlockBits, SD.leaves(want, True), SD.position_leaves(2, True))) == \
+        SD.leaves(SD.noise_block(want, 2), True)
+    assert SD.stream(want, 600) == SD.leaves(SD.noise_block(want, 0), True) + SD.leaves(SD.noise_block(want, 1), True)[:88]
+
+
+@compiles
 def test_rebuild_holds_the_descriptor():
     served = Program(bind(TWICE))
     c = C.compile(served, SCHEME)
