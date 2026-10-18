@@ -3,15 +3,14 @@ import Models.Accounting.Guarantees.Stacking
 /-!
 # A declared circuit's space and bandwidth from an accepted audit (trusted)
 
-Daniel's goal in one statement, `DeclaredCircuitRequirement`: for any declared circuit `W` passing the stacking property
-(`Gates.Property`, its operands within `B` bits: `Gates.Restricted`), any prover, and an audit accepted on a store whose
-memory map and plans are `W`'s (`Requirement.StoreMatches`, `Requirement.PlanMatches`), except with probability `δ_G`
-the node read at least `(1 − ε)` of `W`'s credited live bits (`Requirement.creditedBits`) and of the bits `W` reads from
-complete blocks (`Requirement.creditedReadBits`), with `ε` and `δ_G` explicit in the property's caps, the codec, the
-gate model's `E` and the audit's sampling. It composes three parts: the stacked remote audit in its relay form
-(`StackedSessionConservationRelay`, the general class), the gate model's caps on a carrier of `W`'s (6b's
-`Gates.Property` and `Accounting.Assumptions.EncodeChainHardness`), and `W`'s requirement (A1's
-`Definitions/Accounting/Requirement.lean`). Its proof is in `Security/Proofs/Accounting/DeclaredCircuit.lean`. -/
+Daniel's goal in one statement, `DeclaredCircuitRequirement`: for any declared circuit `W`, any prover, and an accepted
+audit at the deployed parameters (sketch receipts, a store per pass, the append-coin rule), except with probability
+`δ_G` the passes read, from the blocks of `W`'s values each pass's step reads, `W`'s credited bits there less an explicit
+share `ε` of the store. It composes the stacked remote audit in its deployed sketch form
+(`StackedSessionConservationSketchDeployed`), on a layout the prover may steer after the coins, with the carriers' cost
+read from `W`'s census (`Gates.census`, under `Accounting.Assumptions.EncodeChainHardness`) and the audit linked to
+`W`'s requirement (A1's `Definitions/Accounting/Requirement.lean`) pass by pass. Its proof is in
+`Security/Proofs/Accounting/DeclaredCircuit.lean`. -/
 
 namespace Accounting.Guarantees
 
@@ -19,108 +18,122 @@ open Accounting
 open Pous (pr)
 open scoped ENNReal
 
-/-- **A declared circuit's live and read bits from an accepted stacked audit.** For a declared circuit `Wc` that passes
-the stacking property `P(c, R_in, L_P)` at the caps `caps` on the audit's windows and certified reads `Aud`
-(`Gates.Property`), with every operand within `B` bits (`Gates.Restricted`), and any prover: `T` appends of `M` block
-positions made by the append-coin rule (`Accounting.appendCoinBlocks`: each append's choices `choose ω a κ_<a` are fixed
-before its own coin keys its blocks), a session `A` of `n` windows of `P` passes over a store of `N` blocks of `b`
-bits, one for the session, and pass devices each reading a carrier of `Wc`'s at its odd side addresses and taking in at
-most `L` bits over its other side reads and the certified stream. A value's life, the at most `L_P = caps.life` engine
-steps after the step that produced it in which `Wc` may read it, touches at most `life` of the audit's windows. A
-carrier of `Wc`'s is a pass provenance (`Rate.PassProvenance`) whose inputs are at most `Wc`'s run inputs over a set `I`
-of at most `life` of the audit's windows, and whose encodes, charged at the gate model's `encodeBitsCost`, cost at most
-`Wc`'s budgeted units there (`Rate.PassProvenance.OfCircuit`).
+/-- **A declared circuit's held and moved bits from an accepted stacked audit, at the deployed parameters.**
 
-The store's layout is the prover's choice after the coins, within `a = 8·R_in·life` bits: the session reads the blocks
-at `slot (steer y)`, where `y` is the codec's and the appends' coins and `steer` is any function of them into `a` bits.
-On the requirement side the prover chooses everything after every coin: the execution `e x`, the layout of values in
-blocks `ℓ x`, the memory map `mm x` and the plans `plan x` are any functions of all the session's coins `x`. At each of
-the at most `n·P` steps of `win` that the session's passes are bound to (#2378), the memory map is `W`'s with at most
-`N` blocks resident and the plan is `W`'s reads from complete blocks, of at most `N` blocks. Then for every `m`, with
+*The audit.* `StackedSessionConservationSketchDeployed`'s session: `n ≥ 7` windows of `P` passes, sketch receipts at
+16 rows over tiles of 128 sectors, 512-bit tags, 2,773 openings a window, and a store per pass made by the append-coin
+rule (`RateSketch.steeredStore`: the blocks of `T` appends of `M` positions, each append's choices `choose c ω a κ_<a`
+fixed before its own coin keys its blocks). Pass `j` of window `w` certifies the `N` blocks at `layout c y`, where `c` is
+the session's coins before the pass (`RateSketch.SketchPrefix`) and `y` the codec and every append's coin, so the layout
+may follow inputs chosen after those coins: it reads `y` through at most `a` bits (`Accounting.Assumptions.SteeredLayout`).
+Its devices are verbatim (`rate-sketch-verbatim`): within the pass deadline `τ` each holds at most `S` bits on chip,
+takes at most `L_r·τ` bits over the link, makes at most `q_r·τ` oracle queries over its grinding candidates
+(`Accounting.Assumptions.SketchHashBudget`), and rebuilds at most `X_r·τ` bits besides the sectors of a carrier of the
+declared circuit `Wc`'s over at most `life` of the audit `Aud`'s windows (`Accounting.Assumptions.CircuitCarriers`).
 
-  `C = 8·R_in·life + 8·bytes·(c·R̂·life)/E`, `c` the caps' total, `R̂` the most bytes the audit certified a window,
-  `ε = d̄ + γ_pass(L + C, λ + a + m·b) = d̄ + (S + (L + C − ρ) + b·F/(rounds·c_root) + λ + a + m·b)/(N·b)`,
+*The requirement.* The prover chooses everything on `W`'s side after every coin: the execution `e x`, the layout of
+values in blocks `ℓ x`, the groups `grp x` (a KV value's sequence, layer and plane), the step `bind x w j` each pass is
+bound to, strictly increasing over the passes (#2378), and the store position `addr x k` of each block `k`. At each
+bound step `t` the layout packs the live values and the values read into blocks of 32,768 bits, the values `t` reads
+from incomplete blocks lie in one block a group, and the blocks of `W`'s credited reads at `t` are at distinct tiles of
+the pass's store. The pass's tiles of `W` are those tiles, and its credit is the larger of `W`'s credited live bits in
+those blocks (held) and the bits `t` reads less a block a group (moved):
 
-the probability that every opening of every window passes while the session's tier reads fall short of `(1 − ε)` of
-`W`'s credited live bits over `win`, or of its credited read bits there, is at most
+  `credit t = max (bitsAt (credited t) (blocks (creditedReads t))) (readBits t − |grp(reads t \ creditedReads t)|·32768)`.
 
-  `δ_G = (1 − d̄)^(d·n) + (1 − d_w/n)^(d·n) + n·P·G·(C(N, m)·2^(L + C + a)/2^(h·m) + 2^q/2^λ) + δ`.
+*The bound.* With `R̂` and `Û` the most run-input bits and budgeted units `Wc`'s census has in one of `Aud`'s windows,
 
-**The steering, charged as side capacity.** Inputs chosen after an append's coin can steer frees, plans and re-keying
-against freeing at the cap, and so which blocks the session's store holds. The steering is charged as `a` bits of side
-capacity, as the relay form charges a carrier's `C`: `a` enters `ε` once, as slack beside `λ` (`a/(N·b)`), and the relay
-term's exponent beside `L + C`, while the draws' terms and `KeyBinding`'s `δ` are untouched. The bound on `a` is the
-run-input bits a value's life admits, which the property already caps (`R_in` bytes a window, a value read within `L_P`
-steps, so within `life` windows): what the session's layout depends on beyond the writers' choices fixed before each
-coin is the inputs chosen after the coins of the appends it holds, all within the life of a value it holds. That the
-layout is a function of those inputs (frees at last read, appends at production, re-keying no choice) is the memory-map
-unit's, and that the session's store is the memory map's resident blocks is the binding's (`remote_bandwidth`'s Replay
-and #2378); neither is in this game. Counting `a` beside `C`, which also counts the carriers' run inputs, counts those
-bits twice, which is conservative.
+  `C = life·R̂ + 1024·(life·Û)/E`, the carriers' bits a pass,
+  `γ = (S + (L_r·τ − ρ·256) + X_r·τ + C + k·32768)/(N·32768)`,
 
-**Why the relay form.** The deployed sketch form (`StackedSessionConservationSketchDeployed`) can't take the steering
-additively: its per-pass tag term `qtot/2^96` has no slack to trade, so the steering would multiply it by `2^a`, and its
-verbatim class has no side link to add `a` to. The relay form's receipt hashes the whole word, not the deployed
-sketch, and its store is one for the session: blocks written during a session are planned only from the next, the
-stricter of the two audit rules.
+the probability that every opening passes while the passes' distinct sectors read from their tiles of `W` fall short of
+the credit over the bound steps by more than `(0.0015 + γ)` of the session's `n·P·N·32768` bits, or some window's fall
+short of its passes' credit by more than `(0.01 + γ)` of its `P·N·32768`, is at most
 
-**The reading.** When the memory map and the plans are `W`'s, `W`'s credited live and read bits over the bound steps
-are at most the store's `n·P·N·b` bits (`RequirementHeld`, `RequirementMoved`), so an accepted session read at least
-`(1 − ε)` of them. `RequirementUncredited` and `RequirementUnplanned` bound what a block still being written leaves
-out. The two circuits `Wc` (the gate model's, which the property reads) and `W` (the requirement's wiring) are one
-declared circuit: requirement.py builds `W` from the same IR that census/v1 reads, which is the code's to hold, not this
-statement's. A node that re-registers `R` times pays `δ_G` once a session, `R·δ_G` over them.
+  `δ_G = 2·2^-40 + n·ε + n·P·G·N/2^512 + n·P·(2^a·(q_r·τ/2^96)^(k+1) + δ)`.
 
-Proof: `Accounting.SecurityProofs.DeclaredCircuitRequirement`: the property caps each carrier's inputs at
-`8·R_in·life` bits and its encodes at `c·R̂·life` budgeted units, so `StackedSessionConservationRelay`'s argument
-applies at side link `L + C`; `KeyBinding` at the whole layout, with a union over the `2^a` layouts inside the uniform
-store, moves the steered store's unpaid event to uniform blocks at slack `λ + a`; and `W`'s credited bits are at most
-the store's by `RequirementHeld` and `RequirementMoved`.
+**The steering.** The layout reads no window coin, so the draws' term and the signs' rank term (`n·ε`) don't see it,
+and the tag-guess term holds at every store. The query term is a correct digest of a tile with a sector the device
+never obtained, which needs the pass's blocks uniform: key binding gives that per pass at `2^a` times the uniform
+probability, `δ` once. A pass short by `k` more tiles than the slack needs `k + 1` such digests at distinct unobtained
+sectors, at `2^-96` each, so `k` tiles of slack a pass trade for `k·(96 − log₂(q_r·τ))` bits of steering: about 63
+bits a tile at `q_r·τ = 2^33`, the steering costing about 520 bits of `γ`'s numerator a bit. At `a = k = 0` the bound
+is `StackedSessionConservationSketchDeployed`'s.
 
-Frozen (no-function, hash): `StackedSessionConservationRelay`'s game on a store whose layout takes one of `2^a` values
-chosen after the coins, with carriers of a declared circuit within the stacking property's caps and the shortfall read
-against its requirement, in the random-oracle and ideal encoding models, under `EncodeChainHardness`, `KeyBinding`,
-`WorkHardness` and `SquaringCeiling`. -/
+**The reading.** The sectors counted are distinct addresses of the node's device memory read in a pass, so the node held
+those tiles at that pass, and the bound steps' credit is `W`'s: held, `W`'s live bits in the blocks it read then, and
+moved, what it read then. The shortfall is a share of the store: relative to `W` it is `ε_W = (0.0015 + γ)·n·P·N·32768/
+Σ credit`. `Wc` is any declared circuit; one passing the stacking property has `R̂ ≤ 8·R_in` and `Û ≤ c·R_max` (the
+caps `c` a certified byte, `R_max` the most bytes a window certifies), which bounds `ε`. What the game doesn't hold, the
+code does: that `Wc` (the gate model's) and `W` (the requirement's wiring) are one circuit (requirement.py and census/v1
+read one IR), that the blocks at `addr` carry `W`'s credited values (`Requirement.Carries`: the memory-map unit, and the
+appends' digests by `remote_bandwidth`'s Replay), and that each pass's plan is its step's (#2378). A credit across
+circuits needs their credited blocks disjoint. `L_r·τ` is the link only if every bit crossing the node's boundary in
+the deadline is counted (`certifier-coverage`, `trusted-nebius-host`), and device memory is the node's own. A node that
+registers `R` times pays `δ_G` once a registration.
+
+Proof: `Accounting.SecurityProofs.DeclaredCircuitRequirement`: each carrier's inputs are at most `life·R̂` and its
+encodes at most `life·Û` (`OfCircuit`), so every pass rebuilds at most `X_r·τ + C` bits; an unpaid window at slack
+`k` tiles a pass has a rank-poor sign matrix, a guessed tag (at every store), or a pass with `k + 1` correct digests
+of unobtained sectors; `KeyBinding` at the whole layout, with a union over the `2^a` layouts inside the uniform store,
+bounds that pass at `2^a·(q_r·τ/2^96)^(k+1) + δ`; and a pass's reads outside its tiles of `W` are at most a tile's bits
+for each other tile, while its credit is at most a tile's bits for each of its tiles of `W`.
+
+Frozen (no-function, hash): `StackedSessionConservationSketchDeployed`'s game on a store per pass whose layout reads
+the codec and the append coins through at most `a` bits, with carriers of a declared circuit within its census over
+their life, its shortfall read pass by pass against the circuit's credited reads at the step each pass is bound to, in
+the random-oracle and ideal encoding models, under the per-pass hash budget, `EncodeChainHardness`, `KeyBinding`,
+`CircuitCarriers` and `SteeredLayout`. -/
 def DeclaredCircuitRequirement : Prop :=
-  ∀ (n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F E T M life : ℕ) (cost : ℕ → ℕ) (Fc : Gates.Field)
-    (k B εnum εden : ℕ) (tier : ℕ → Fin τ) (δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW) (caps : Gates.Caps)
+  ∀ (n P N ρ S q G Xr Lr qr τ k a life E B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
     (Aud : Gates.Audit) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
-    (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → Pous.Bits b)
-    (choose : Ω → (a : Fin T) → ({c : Fin T // c < a} → Ca) → Ch)
-    (slot : Pous.Bits (8 * caps.runBytes * life) → Fin N ↪ Fin T × Fin M)
-    (steer : Ω × (Fin T → Ca) → Pous.Bits (8 * caps.runBytes * life))
-    (A : Rate.DeployedSession n P N b h ρ S Lall q r s d G) (dbar dw : ℝ)
-    {V : Type} [DecidableEq V] (W : Requirement.Wiring V)
-    (e : (Ω × (Fin T → Ca)) × (Fin n → Rate.WindowCoins P N b h ρ r s d) → Requirement.Execution V)
-    (ℓ : (Ω × (Fin T → Ca)) × (Fin n → Rate.WindowCoins P N b h ρ r s d) → Requirement.Layout V)
-    (mm : (Ω × (Fin T → Ca)) × (Fin n → Rate.WindowCoins P N b h ρ r s d) → Requirement.Store)
-    (plan : (Ω × (Fin T → Ca)) × (Fin n → Rate.WindowCoins P N b h ρ r s d) → ℕ → Finset ℕ) (win : Window),
-    0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 → 0 < E → 0 < Fc.bytes →
+    (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → RateSketch.Sector))
+    (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
+    (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Fin N ↪ Fin T × Fin M)
+    (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S (Lr * τ) q 16 G 2773)
+    {V K : Type} [DecidableEq V] [DecidableEq K] (W : Requirement.Wiring V)
+    (e : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Execution V)
+    (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Layout V)
+    (grp : RateSketch.StackedCoins Ω Ca T n P N ρ G → V → K)
+    (bind : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → ℕ)
+    (addr : RateSketch.StackedCoins Ω Ca T n P N ρ G → ℕ → Fin T × Fin M),
+    7 ≤ n → 0 < P → 0 < N → 0 < E →
+    Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
-    Assumptions.EncodeChainHardness Fc k B E εnum εden →
-    Assumptions.WorkHardness b rounds cRoot cost →
-    (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
-    Gates.Property caps Aud Wc → Gates.Restricted B Wc →
-    (∀ t, ((Finset.range (caps.life + 1)).image fun i => Aud.win (t + i)).card ≤ life) →
-    (∀ w η j ι c, ∃ (K : Rate.PassProvenance N b h ρ (ℕ → Bool)) (I : Finset ℕ),
-      (∀ Es R O v i, ((A.window w η).device j ι c).side Es R O v (2 * i + 1) = K.run Es R O i) ∧
-      (∀ st wd, (((A.window w η).device j ι c).chip st).linkBitsEven wd [] ≤ L) ∧
-      I ⊆ Finset.range Aud.windows ∧ I.card ≤ life ∧
-      K.OfCircuit (encodeBitsCost Fc k B εnum εden) Wc Aud I) →
-    win.len ≤ n * P →
-    (∀ x, ∀ t ∈ win.ticks, Requirement.StoreMatches W (e x) (ℓ x) (mm x) b t ∧ ((mm x).resident t).card ≤ N ∧
-      Requirement.PlanMatches W (e x) (ℓ x) (plan x t) b t ∧ (plan x t).card ≤ N) →
-    let a := 8 * caps.runBytes * life
-    let C := 8 * caps.runBytes * life +
-      8 * Fc.bytes * (caps.total * (Finset.range Aud.windows).sup Aud.reads * life) / E
-    let ε := dbar + Rate.Deployed.gammaPass N b ρ S (L + C) (lam + a + m * b) rounds cRoot F
-    pr (fun x : (Ω × (Fin T → Ca)) × (Fin n → Rate.WindowCoins P N b h ρ r s d) =>
-        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (appendCoinBlocks enc choose (slot (steer x.1)) x.1) (x.2 w).1) ∧
-          ((((∑ w, (A.win w x.2).reads tier (appendCoinBlocks enc choose (slot (steer x.1)) x.1) (x.2 w).1 : ℕ)) : ℝ) <
-              (1 - ε) * (∑ t ∈ win.ticks, Requirement.creditedBits W (e x) (ℓ x) t : ℕ) ∨
-            (((∑ w, (A.win w x.2).reads tier (appendCoinBlocks enc choose (slot (steer x.1)) x.1) (x.2 w).1 : ℕ)) : ℝ) <
-              (1 - ε) * (∑ t ∈ win.ticks, Requirement.creditedReadBits W (e x) (ℓ x) t : ℕ)))
-      ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
-        (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ (L + C + a) / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + δ
+    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden →
+    (∀ w η j pre, Assumptions.SketchHashBudget ((A.window w η).device j pre) (qr * τ)) →
+    Assumptions.CircuitCarriers A (Xr * τ) life B εnum εden Wc Aud →
+    Assumptions.SteeredLayout a layout →
+    Gates.Restricted B Wc →
+    (∀ x, (∀ w j w' j', w < w' ∨ w = w' ∧ j < j' → bind x w j < bind x w' j') ∧
+      ∀ w j,
+        Requirement.Packs W (ℓ x) 32768 (Requirement.live W (e x) (bind x w j)) ∧
+        Requirement.Packs W (ℓ x) 32768 (Requirement.reads W (e x) (bind x w j)) ∧
+        Requirement.OneBlockEach (ℓ x) (grp x)
+          (Requirement.reads W (e x) (bind x w j) \ Requirement.creditedReads W (e x) (ℓ x) (bind x w j)) ∧
+        Set.InjOn (addr x) ↑(Requirement.blocks (ℓ x) (Requirement.creditedReads W (e x) (ℓ x) (bind x w j))) ∧
+        ∀ b ∈ Requirement.blocks (ℓ x) (Requirement.creditedReads W (e x) (ℓ x) (bind x w j)),
+          addr x b ∈ Set.range (layout (RateSketch.SketchPrefix.of x.2 w j) x.1)) →
+    let maxRun := (Finset.range Aud.windows).sup fun v => (Gates.census Wc fun t => Aud.win t = v).runBits
+    let maxBud := (Finset.range Aud.windows).sup fun v => (Gates.census Wc fun t => Aud.win t = v).budgeted
+    let C := life * maxRun + 1024 * (life * maxBud) / E
+    let γ := RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + C + k * 32768)
+    let credit := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (t : ℕ) =>
+      max (Requirement.bitsAt W (ℓ x) (Requirement.credited W (e x) (ℓ x) t)
+          (Requirement.blocks (ℓ x) (Requirement.creditedReads W (e x) (ℓ x) t)))
+        (Requirement.readBits W (e x) t -
+          ((Requirement.reads W (e x) t \ Requirement.creditedReads W (e x) (ℓ x) t).image (grp x)).card * 32768)
+    let tiles := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) =>
+      Finset.univ.filter fun i : Fin N => layout (RateSketch.SketchPrefix.of x.2 w j) x.1 i ∈
+        (Requirement.blocks (ℓ x) (Requirement.creditedReads W (e x) (ℓ x) (bind x w j))).image (addr x)
+    let store := RateSketch.programmed (RateSketch.steeredStore enc choose layout)
+    pr (fun x : RateSketch.StackedCoins Ω Ca T n P N ρ G =>
+      (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctOn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1) ∧
+        ((((∑ w, (A.win w x.2).readsIn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 (tiles x w) : ℕ)) : ℝ) <
+            ((∑ w, ∑ j, credit x (bind x w j) : ℕ) : ℝ) - (0.0015 + γ) * (n * P * N * 32768) ∨
+          ∃ w, (((A.win w x.2).readsIn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 (tiles x w) : ℕ) : ℝ) <
+            ((∑ j, credit x (bind x w j) : ℕ) : ℝ) - (0.01 + γ) * (P * N * 32768)))
+      ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
+        (n * P : ℝ≥0∞) * (2 ^ a * (((qr * τ : ℕ) : ℝ≥0∞) / 2 ^ 96) ^ (k + 1) + δ)
 
 end Accounting.Guarantees

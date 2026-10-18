@@ -2,6 +2,9 @@
  "roots": ["Definitions", "Models"],
  "proved_in": ["Proofs"],
  "assumptions": {
+  "Accounting.Assumptions.CircuitCarriers": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.Assumptions.EncodeChainHardness": {
    "owner": "@memory-accounting",
    "digest": "b017852df44b39b0d2fd40e91d34bb852531e4cd039425aff5c9c207edcaafd8"
@@ -41,6 +44,9 @@
   "Accounting.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
+  },
+  "Accounting.Assumptions.SteeredLayout": {
+   "owner": "@memory-accounting"
   },
   "Accounting.Assumptions.TS.FacetCeilings": {
    "owner": "@compute-accounting",
@@ -5773,7 +5779,7 @@
    "Accounting.SecurityProofs.Gates.ProvenWindow": "frozen (no-function): The soundness of the gate model's interval analysis (Accounting.Gates.Proven) over every circuit and input, not a property of a Lean function: property/v1's interval analysis has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port.",
-   "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationRelay on a store whose layout is one of 2^a chosen by any function of the codec and the appends' coins (a = 8*R_in*life, life the audit's windows a value's life of at most the property's L steps touches, the steering charged as a bits of side capacity: slack lambda + a, and the relay term's exponent L + C + a), for pass devices reading carriers of a declared circuit within the stacking property's caps (Gates.Property, Rate.PassProvenance.OfCircuit over at most life windows), with its shortfall read against the circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits) for an execution, layout, memory map and plans chosen after every coin, W's credited bits at most the store's n*P*N*b by RequirementHeld and RequirementMoved; abstract pass devices in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.WorkHardness, SquaringCeiling, EncodeChainHardness and KeyBinding, not the rate audit's or the engine's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none)."
+   "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through at most a bits (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore), with the pass deadline tau in the device class (link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit within its census over their life (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = life*maxRun + 1024*(life*maxBud)/E from Gates.census), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits less a block a group (Requirement.bitsAt, readBits, OneBlockEach), for an execution, layout, groups, binding and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, EncodeChainHardness, KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none)."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

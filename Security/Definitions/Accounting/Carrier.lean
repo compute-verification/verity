@@ -34,10 +34,17 @@ a pass's certified stream and oracle, receipts it computed elsewhere among them:
 whose inputs are any function of the store, the stream and the oracle. A device reads such a carrier through its side
 sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts the side link without them.
 
-**A carrier of a declared circuit's.** A credited KV page's payload is a declared circuit `W`'s values, so its
-carrier's provenance is `W`'s computation from the chain's first write to the pass: its inputs are `W`'s run inputs in
-those windows of the audit, and its encodes are `W`'s budgeted gates there (`PassProvenance.OfCircuit`), which the
-stacking property caps per window (`Gates.Property`).
+**A carrier of a declared circuit's.** A credited KV page's payload is a declared circuit `W`'s values. Its
+carrier's provenance is `W`'s computation from the chain's first write to the pass. So its inputs are `W`'s run inputs
+in those windows of the audit, and its encodes are `W`'s budgeted gates there (`Provenance.OfCircuit`), which `W`'s
+census counts per window (`Gates.census`).
+
+**The tiles a pass read.** `readsIn` is `readsOn` restricted to the tiles `I j` of each pass `j`: the distinct
+device-memory sectors read from those tiles. With `I j` the tiles of a declared circuit's blocks, it is what a pass
+read of that circuit's data.
+
+**A steered layout.** `steeredStore` is `coinStore` on a layout that reads the codec and the append coins as well as
+the prefix: the memory map's schedule when inputs chosen after those coins move it.
 
 **The encode cost.** An `encode` step of `x` bits is charged `encodeBitsCost`: the gate model's `Gates.encodeCost`
 (`Definitions/Accounting/Gates`) of the codec words `x` bits fill, `⊤` when no circuit of the model's restricted class
@@ -120,6 +127,14 @@ def gates (cost : ℕ → ℕ∞) (E : SketchStore N m) : Provenance N m α → 
   | input _ f k => (k (f E)).gates cost E
   | encode t x _ f k => (k (f fun u => E (t, u))).gates cost E + cost x
 
+/-- **A provenance that is `W`'s over the windows `I`** of the audit `A`: at every store its inputs are at most the
+bits of `W`'s run inputs in those windows, and its encodes, at `cost x` for `x` bits, cost at most `W`'s budgeted units
+there (`Gates.census`, property/v1's units). -/
+def OfCircuit {ι : Type} (K : Provenance N m α) (cost : ℕ → ℕ∞) (W : Gates.Dag ι) (A : Gates.Audit)
+    (I : Finset ℕ) : Prop :=
+  ∀ E, K.inputs E ≤ ∑ v ∈ I, (Gates.census W fun t => A.win t = v).runBits ∧
+    K.gates cost E ≤ ((∑ v ∈ I, (Gates.census W fun t => A.win t = v).budgeted : ℕ) : ℕ∞)
+
 end Provenance
 
 /-- A carrier of the store sectors `carried`: a provenance whose values are those sectors, whole and as they are, at
@@ -155,6 +170,21 @@ def coinStore {n P N m ρ h ks G d T M : ℕ} {Ω Ca Ch : Type}
     (y : Ω × (Fin T → Ca)) : SketchStore N m :=
   fun p => appendCoinBlocks enc (choose c) (slot c) y p.1 p.2
 
+/-- **A pass's store under the append-coin rule on a steered layout**: `coinStore`, with the layout `layout c y` read
+at the codec and the append coins `y` as well as the prefix `c`, so that it may follow inputs chosen after those coins.
+-/
+def steeredStore {n P N m ρ h ks G d T M : ℕ} {Ω Ca Ch : Type}
+    (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin m → Sector))
+    (choose : SketchPrefix n P N m ρ h ks G d → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
+    (layout : SketchPrefix n P N m ρ h ks G d → Ω × (Fin T → Ca) → Fin N ↪ Fin T × Fin M)
+    (c : SketchPrefix n P N m ρ h ks G d) (y : Ω × (Fin T → Ca)) : SketchStore N m :=
+  fun p => appendCoinBlocks enc (choose c) (layout c y) y p.1 p.2
+
+/-- A stacked session's coins at the deployed parameters (16 sketch rows of 128-sector tiles, 512-bit tags, 2,773
+openings a window): the codec and every append's coin, then its `n` windows'. -/
+abbrev StackedCoins (Ω Ca : Type) (T n P N ρ G : ℕ) : Type :=
+  (Ω × (Fin T → Ca)) × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773)
+
 /-- **The stores window `w`'s passes certify**: pass `j`'s is `view c ω` at the prefix `c` before it, `ω` drawn
 independently of the session's coins (in the stacked guarantees, `coinStore` at the codec and the append coins). -/
 def programmed {n P N m ρ h ks G d : ℕ} {Ω : Type} (view : SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m)
@@ -180,6 +210,14 @@ def readsOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → Sket
   ∑ j,
     let D := Data.ofParts (E j) (ω j).1
     (A.dev j (E j) σ ω).footprint σ (A.oracle j (E j) σ ω) D
+
+/-- Device-memory sectors read in the window from the tiles `I j` of each pass `j`, in bits, each pass on its own
+store `E j`: `readsOn` restricted to those tiles. -/
+def readsIn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
+    (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) (I : Fin P → Finset (Fin N)) : ℕ :=
+  ∑ j,
+    let D := Data.ofParts (E j) (ω j).1
+    ((((A.dev j (E j) σ ω).prog σ D).mems (A.oracle j (E j) σ ω) D).filter fun p => p.1 ∈ I j).card * 256
 
 end SketchDeployedWindow
 
@@ -227,14 +265,6 @@ def gates (cost : ℕ → ℕ∞) (E : Store N b) (R : Bits ρ) (O : Oracle N b 
   | done _ => 0
   | input _ f k => (k (f E R O)).gates cost E R O
   | encode j x _ f k => (k (f (E j))).gates cost E R O + cost x
-
-/-- **A pass provenance that is `W`'s over the windows `I`** of the audit `A`: at every store, stream and oracle, its
-inputs are at most the bits of `W`'s run inputs in those windows, and its encodes, at `cost x` for `x` bits, cost at
-most `W`'s budgeted units there (`Gates.census`, property/v1's units). -/
-def OfCircuit {ι : Type} (K : PassProvenance N b h ρ α) (cost : ℕ → ℕ∞) (W : Gates.Dag ι) (A : Gates.Audit)
-    (I : Finset ℕ) : Prop :=
-  ∀ E R O, K.inputs E R O ≤ ∑ v ∈ I, (Gates.census W fun t => A.win t = v).runBits ∧
-    K.gates cost E R O ≤ ((∑ v ∈ I, (Gates.census W fun t => A.win t = v).budgeted : ℕ) : ℕ∞)
 
 end PassProvenance
 
