@@ -38,23 +38,28 @@ def PouwFloorOff (X : Finset L) (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, 
     ∀ r, ¬ Z r → Nmin ≤ goodAll S P → Wb * Nmin ≤ credits S P X π m r + ρ * help S P X r
 
 /-- **The floor at a block whose outside holds advice about the salt** (conjectured; compute attribution's floor,
-`note:20261018T0730Z-draft-attrib`): on coins split into the window's salt and the later draw, if at every draw what
-the outside of the block `X` and the certifiers `cert` does during the window (`Verdict.window`, `[ts, td)`) takes at
-most `A` values across the salts of the event `B` (`Attribution.OutsideAdvice`), and the outside evaluates the noise
-hash at most `q` times in the window (`OutsideQueries`, at the marking `hash`), then for the marking `m` some event `Z`
-of probability at most `δ + q · A / #Ωs` is such that at every coin of `B` outside `Z`, `Nmin` blocks right at every
-coin force the block's own credits outside `m` to at least `Wb · Nmin`. Meant at `B` the boundary audit's acceptance,
-the event on which the advice is counted; off `B` it says nothing.
+`note:20261018T0730Z-draft-attrib`): on coins split into the window's coin, an `s`-bit salt with the hiding randomness
+of its public commitment `com`, and the later draw, if the commitment hides the salt up to `δhide` (`SaltHiding`), at
+every draw and commitment value what the outside of the block `X` and the certifiers `cert` does during the window
+(`Verdict.window`, `[ts, td)`) takes at most `A` values across the window coins of the event `B` with that commitment
+(`Attribution.OutsideAdvice`), and the outside evaluates the noise hash at most `q` times in the window
+(`OutsideQueries`, at the marking `hash`), then for the marking `m` some event `Z` of probability at most
+`δ + q · A / 2^s + δhide` is such that at every coin of `B` outside `Z`, `Nmin` blocks right at every coin force the
+block's own credits outside `m` to at least `Wb · Nmin`. Meant at `B` the boundary audit's acceptance, the event on
+which the advice is counted; off `B` it says nothing.
 
 It rests on TT (`Pouw.Assumptions.TT`: the floor counts post-salt work, so help that is the same at every salt is
 precomputation delivered late, free at any width) and the random-oracle model of the noise hash, not on A3: A3's
 `ρ · help` term survives help of nonzero width, so no union bound over A3 drops it. `δ` is the floor's failure for an
-outside whose help is the same at every salt. The outside's view is a function of one of `A` advice values and its
-oracle answers, and until one of its `q` calls hits the salt those answers don't depend on it, so it finds the salt
-with probability at most `q · A / #Ωs`: `q · 2^(k − 512)` for a 512-bit salt and `A = 2^k`, at most `2^−64` at
-decision 112's `q = 2^128` when `k ≤ 320`. The operands are bound before the salt (decision 114: each operand root is
-hashed before the salt's release at `ts` and transmitted at `td`, and `E₁`'s rows read `A`'s), so the prover can't
-steer operands against the salt.
+outside whose help is the same at every salt. The outside's view is a function of the commitment, one of `A` advice
+values and its oracle answers, and until one of its `q` calls hits the salt those answers don't depend on it. Its `q · A`
+candidate salts at each commitment value hit the salt with probability at most `q · A / 2^s` against a commitment to an
+independent salt, and `δhide` more against the real one: `q · 2^(k − s) + δhide` at `A = 2^k`. At decision 112's
+`q = 2^128` that is at most `2^−64` past `δhide` when `k ≤ s − 192`: `k ≤ 320` at NET-18's 512-bit certifier salt
+(`δhide = 0`, sealed), `k ≤ 64` at PoUW's 256-bit epoch coin (`δhide = 2^−192`, the coins root). The salt is the
+coin the noise seeds read in full: a longer stream of a 256-bit coin is still `s = 256`. The operands are bound before
+the salt (decision 114: each operand root is hashed before the salt's release at `ts` and transmitted at `td`, and
+`E₁`'s rows read `A`'s), so the prover can't steer operands against the salt.
 
 Scoped to the noise whose floor is the committed words' coin × coin products, both factors depending on the salt
 (`note:20261018T1026Z-finding-pv-advice`): advice is a constant to the coins, so it lowers no such product. A product
@@ -86,13 +91,15 @@ its noise space, that every scheme in the PoUW registry and in the compile pass'
 scope or excluded with its reason, that H1 commits a prefix word every 32 keys, that the low-rank counterexample is
 refused, and that a period-32 `U` costs `32 · k / C` products a cell from residue sums, `k` only at `C = 32`. An open
 conjecture, not under `shape.premises`. -/
-def PouwFloorAdvice {Ωs Ωd : Type} [Fintype Ωs] [Fintype Ωd] {L : Type*} [LinearOrder L] [Fintype L]
-    (S : Ωs × Ωd → Actual.Run L) (P : Verdict (Ωs × Ωd) L) (B : Ωs × Ωd → Prop) (X cert : Finset L)
+def PouwFloorAdvice {Ωh Ωd C : Type} [Fintype Ωh] [Fintype Ωd] {L : Type*} [LinearOrder L] [Fintype L] (s : ℕ)
+    (S : (Fin (2 ^ s) × Ωh) × Ωd → Actual.Run L) (P : Verdict ((Fin (2 ^ s) × Ωh) × Ωd) L)
+    (B : (Fin (2 ^ s) × Ωh) × Ωd → Prop) (com : Fin (2 ^ s) × Ωh → C) (X cert : Finset L)
     (hash : ∀ r, Finset (Fin (S r).A.N)) (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, Finset (Fin (S r).A.N))
-    (Wb Nmin q A : ℕ) (δ : ℝ) : Prop :=
-  (∀ d, Attribution.OutsideAdvice (fun s => S (s, d)) (fun s => B (s, d)) cert X P.window A) →
+    (Wb Nmin q A : ℕ) (δ δhide : ℝ) : Prop :=
+  SaltHiding com δhide →
+  (∀ d c, Attribution.OutsideAdvice (fun ω => S (ω, d)) (fun ω => B (ω, d) ∧ com ω = c) cert X P.window A) →
   OutsideQueries S hash cert X P.window q →
-  ∃ Z : Ωs × Ωd → Prop, Pouw.pr Z ≤ δ + ((q * A : ℕ) : ℝ) / Fintype.card Ωs ∧
+  ∃ Z : (Fin (2 ^ s) × Ωh) × Ωd → Prop, Pouw.pr Z ≤ δ + ((q * A : ℕ) : ℝ) / 2 ^ s + δhide ∧
     ∀ r, ¬ Z r → B r → Nmin ≤ goodAll S P → Wb * Nmin ≤ credits S P X π m r
 
 end Accounting.Assumptions

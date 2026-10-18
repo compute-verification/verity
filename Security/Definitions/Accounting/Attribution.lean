@@ -15,6 +15,8 @@ without it its help is the same at every salt.
 * `Verdict.window P`: PoUW's window `[ts, td)` as a `Window`, `td - ts` ticks from `ts`.
 * `boundaryCert H X`: the certifiers on `X`'s boundary links, `∂X`'s.
 * `records R cert cells w`: the certifiers' records placed during the window `w`, as seen.
+* `openCells record seal`: each certifier's record cells but the sealed ones, the slots it keeps from everything
+  outside the block until the window's end (the salt frame's).
 * `leak R cert X w`: what `X` sends, up to the window's end, to readers that aren't certifiers.
 * `OutsideAdvice S B cert X w n`: across the coins of the event `B`, what the outside `(X ∪ cert)ᶜ` does during the
   window `w` takes at most `n` values (`Actual.Run.acts`). Under salt custody (the coin reaches the window only through
@@ -45,6 +47,12 @@ noncomputable def boundaryCert {L E : Type*} [Fintype E] (H : Hardware L E) (X :
 noncomputable def records {L : Type*} (R : Actual.Run L) (cert : Finset L) (cells : L → Set ℕ) (w : Window) :
     Set (ℕ × L × ℕ × ℕ × ℕ) :=
   R.seen '' ↑((R.record cert cells).filter fun g => R.A.t g ∈ w.ticks)
+
+/-- **The certifiers' open record cells**: the record cells each certifier's leaf `y` declares (`record y`,
+`Hardware.record`) but its sealed ones `seal y`. A sealed cell is a slot the certifier holds and keeps from every reader
+outside the block until the window's end: the salt frame's, which holds the window's salt as the certifier writes it
+into the block. What the certifier tells anyone else during the window comes from its open cells alone. -/
+def openCells {L : Type*} (record seal : L → Set ℕ) : L → Set ℕ := fun y => record y \ seal y
 
 /-- **What the block leaks** in the run `R`: what `X` sends, from the gates it places before the window `w` ends, to
 readers that aren't certifiers (`Actual.Run.sent`, its wires to leaves outside `X ∪ cert`): what crosses its links with
