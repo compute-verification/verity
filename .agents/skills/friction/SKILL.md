@@ -113,7 +113,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   derived by Fiat–Shamir, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)) from the epoch's
   live salt: "I'm happy to do Fiat-Shamir for this for now because it's going to happen at such a high-frequency that
   grinding etc. is not a huge problem." This narrows "live coins only" for PoUW's per-call randomness, for now. The
-  noise is a public input the verifier computes, and the guarantee carries a grinding term (T·μ^m). With it went:
+  roots, positions and shapes are private, so a drawn unit derives the seed and its own noise inside its proof, and
+  the guarantee carries a grinding term (T·μ^m). With it went:
   noise is generated after each A·B pair is committed, and a sampled unit proves itself and its own noise's
   generation (18 Oct 02:36–03:06 UTC; compute accounting's decisions 101 and 102).
 - 2026-10-17 (6:18 PM PDT, to memory accounting): no private or trapdoor encoding for KV, such as a trusted device

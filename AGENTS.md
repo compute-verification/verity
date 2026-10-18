@@ -130,8 +130,9 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);
   - PoUW's per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the
-    epoch's live salt and the operands' committed roots. Grinding is a term of the guarantee: a steer that needs m
-    noised coordinates succeeds with probability at most μ^m a try (Daniel, 18 Oct).
+    epoch's live salt and the operands' committed roots, which a drawn unit's proof derives along with its own noise.
+    Grinding is a term of the guarantee: a steer that needs m noised coordinates succeeds with probability at most
+    μ^m a try (Daniel, 18 Oct).
 
   There are no retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the
   firewall one at a time.
