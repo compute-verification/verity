@@ -270,6 +270,27 @@ def units_mapped(record: audit.Record, appends, rekeys=()) -> bool:
     return all(next((b for s, _, b in passes if s > r), -1) > old for r, old in rekeys)
 
 
+def stale_from_public(pub: dict, extents) -> list[list[int]]:
+    """Each pass's stale bound from the public record and the appends' extents as the verifier receives them, (first,
+    count, root) in order: an append joined the window of the first pass whose head chains it, and a pass of window t
+    is bounded at `blocks` plus the counts of the appends that joined window t − `lifetime` or before."""
+    chain, through = None, {None: 0}
+    for n, (first, count, root) in enumerate(extents, 1):
+        chain = audit.append_head(chain, first, count, root)
+        through[chain.hex()] = n
+    joined: dict[int, int] = {}
+    for t, hs in enumerate(pub["heads"]):
+        for h in hs:
+            for a in range(through[h]):
+                joined.setdefault(a, t)
+    return [[pub["blocks"] + sum(c for a, (_, c, _) in enumerate(extents) if joined[a] <= t - pub["lifetime"])
+             for _ in hs] for t, hs in enumerate(pub["heads"])]
+
+
+def extents(r: Run) -> list[tuple[int, int, bytes]]:
+    return [(a.first, a.count, a.root) for a in r.store.appends]
+
+
 @dataclasses.dataclass(frozen=True)
 class Units(Link):
     """A link whose memory-map unit makes `appends` and `rekeys` (`units_mapped`'s), its verdict on a record whether
@@ -350,7 +371,7 @@ def test_a_record_carries_each_pass_s_head_and_stale_bound(honest) -> None:
     assert [w.stale for w in rec.windows] == [(N, N, N), (N, N)]
     pub = rec.public()
     assert pub["heads"] == [[None, h1.hex(), h1.hex()], [h2.hex(), h2.hex()]]
-    assert pub["stale"] == [[N, N, N], [N, N]]
+    assert pub["stale"] == [[N, N, N], [N, N]] == stale_from_public(pub, extents(r))
     assert rec.profile()["windows"][1]["heads"] == [h2.hex(), h2.hex()]
     assert rec.profile()["windows"][1]["stale"] == [N, N]
     assert units_mapped(rec, [(0, first.first, first.count, first.root), (2, second.first, second.count, second.root)])
@@ -361,6 +382,34 @@ def test_a_record_carries_each_pass_s_head_and_stale_bound(honest) -> None:
         bare = dataclasses.replace(rec, windows=(dataclasses.replace(rec.windows[0], **shorn), rec.windows[1]))
         with pytest.raises(ValueError, match="name none"):
             audit.ledger(bare, **common, requirement=Link(True, 8 * 4096, {}))
+
+
+def test_a_stale_bound_is_the_appends_extents_and_windows_and_l_as_the_public_record_gives_them() -> None:
+    """L = 1, two passes a window.  Pages 8 and 9 join window 0; 10 and then 11, 12 join window 1, between its passes;
+    13 joins window 2 between its passes.  Window 1 is bounded past 8 and 9 (N + 2), window 2 past 8 … 12 (N + 5),
+    whether its pass's root comes before 13's append (where the session takes the store's extent) or after (13's first
+    index).  Recomputed from the public record's `blocks`, `lifetime` and `heads` and the appends' extents as the
+    verifier receives them, the same lists: the record lists the extents only as their chain, so they are the one
+    input beyond it."""
+    r = Run(store(), windows=3, lifetime=1)
+    assert r.run() is None
+    r.append(2)
+    assert r.run(change=(((N, 2),), ())) is None
+    r.boundary()
+    r.append(1)
+    assert r.s.release(((N, 2),)) is None
+    assert r.run(change=(((N + 2, 1),), ((N, 2),))) is None
+    r.append(2)
+    assert r.run(change=(((N + 3, 2),), ())) is None
+    r.boundary()
+    assert r.s.release(((N + 2, 3),)) is None
+    assert r.run(change=((), ((N + 2, 3),))) is None
+    r.append(1)
+    assert r.run(change=(((N + 5, 1),), ())) is None
+    r.boundary()
+    assert [v.accepted for v in r.finish()] == [True] * 3
+    pub = r.s.record().public()
+    assert pub["stale"] == [[N, N], [N + 2, N + 2], [N + 5, N + 5]] == stale_from_public(pub, extents(r))
 
 
 def appended_at_step_one(early: bool) -> Run:
@@ -424,7 +473,7 @@ def test_a_re_key_s_old_index_is_below_the_stale_bound_of_the_pass_after_its_ste
     assert [v.accepted for v in r.finish()] == [True] * 4
     rec = r.s.record()
     assert [w.stale for w in rec.windows] == [(N,), (N,), (N + 2,), (N + 3,)]
-    assert rec.public()["stale"] == [[N], [N], [N + 2], [N + 3]]
+    assert rec.public()["stale"] == [[N], [N], [N + 2], [N + 3]] == stale_from_public(rec.public(), extents(r))
     appends = [(s, x.first, x.count, x.root) for s, x in zip((0, 1, 2), r.store.appends)]
     assert units_mapped(rec, appends) and units_mapped(rec, appends, ((2, N), (2, N + 1)))
     assert units_mapped(rec, appends, ((2, N), (2, N + 1), (3, N + 2)))

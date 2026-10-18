@@ -789,13 +789,19 @@ other; and the layout says which bytes a credited block is (§4). Each
 `WindowRecord` carries its passes' lengths \(L_{t,i}\), their post-seed reads \(a_{t,i}\) (`post_seed`, which
 `ledger` credits only on a verdict, §1), their steps (`steps`, strictly increasing, §4), their heads (`heads`, the
 chain over the appends received before each pass's root, which its seed binds, null before the first), their stale
-bounds (`stale`, `Session._stale_below`: the store index below which every appended block joined a window \(L\) or
-more before, \(N\) plus those blocks, the same for every pass of a window), its challenge's release \(b_{t-1}\), its
-deadline \(D_t\) (so its span \(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`.
-`public()` lists the heads and stale bounds per window too (`heads`, `stale`), which the memory-map unit's verdict
-is on (§8): each head is a hiding commitment, a hash over hiding append roots and their public indices like
-`appends`, and each stale bound is protocol structure, a function of the appends' public extents, the windows they
-joined and \(L\). That is every input of
+bounds (`stale`, `Session._stale_below`), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so its span
+\(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`. The stale bound of a pass of window
+\(t\) is \(N + \sum \{\text{count}_a : w_a \le t - L\}\) over the session's appends \(a\), \(w_a\) the window \(a\)
+joined (that of the first root received after it, the first pass whose head chains it): the store index below which
+every appended block is past the cap, the same for every pass of a window. `public()` lists the heads and stale
+bounds per window too (`heads`, `stale`), which the memory-map unit's verdict is on (§8): each head is a hiding
+commitment, a hash over hiding append roots and their public indices like `appends`, and each stale bound is
+protocol structure, a function of \(N\) (`blocks`), \(L\) (`lifetime`), the heads, and the appends' extents (first,
+count), which the verifier sees in the clear with each append and `appends` commits to. So `stale` adds nothing beyond
+the appends' extents and the windows they joined; the record lists the extents only as their chain and total
+(`appended`), so read from it alone `stale` shows the blocks appended \(L\) windows back, window by window. Whether the
+extents should be public at all is a separate question about `appends` (the counts per window depend on the
+workload). That is every input of
 \(\gamma_t\) but the node's measured \(R\) and \(S_{\text{chip}}\) and the models, so the every-window claim is
 checkable from the record (§1). `Record.end_ns` is the last deadline, which the next session over the store waits
 out.
