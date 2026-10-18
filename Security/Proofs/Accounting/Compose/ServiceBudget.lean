@@ -238,7 +238,7 @@ theorem gain_nonneg (K : ℕ) {ρ a b Λ WF W0 LF L0 : ℝ} (h : ρ * ((WF - LF)
     0 ≤ gain K ρ a b Λ WF W0 LF L0 :=
   mul_nonneg (Real.exp_pos _).le (pow_nonneg (sub_nonneg.mpr h) K)
 
-/-- Each stage's unlucky work is at most the window's, so each stage's `gain` is `≥ 0`. -/
+/-- Each stage's unlucky work is at most the tiles' total weight, so each stage's `gain` is `≥ 0`. -/
 theorem stage_un_le [Fintype V] (stg : V → ℕ) (m : ℕ) (mode : C → V → Mode) (same : C → V → Prop)
     {w : V → ℝ} (hw : ∀ v, 0 ≤ w v) {ρ : ℝ} (hρ : 0 ≤ ρ) (htot : ρ * ∑ v, w v ≤ 1) (c : C) :
     ρ * ((stageSum stg m mode same (inF w) c - stageSum stg m mode same (luF w) c) +
