@@ -210,6 +210,49 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
         audit.ledger(rec, **common, credit_post_seed=Verdict(True, float("inf")))
 
 
+@dataclasses.dataclass(frozen=True)
+class Link:
+    """A requirement link that holds or not, at `density_bits`, reading `reads[step]` bits at a step (plenty
+    otherwise)."""
+    holds: bool
+    density_bits: int
+    reads: dict
+
+    def read_bits(self, step: int):
+        return self.reads.get(step, 10**9)
+
+
+def test_on_a_requirement_link_a_pass_is_credited_at_most_the_circuit_s_reads_at_its_step(honest) -> None:
+    """The honest session's passes are steps 0 … 4, with (8, 8, 7) and (7, 7) registered receipts credited.  A link
+    at whole blocks (D = 32,768 bits) and ample reads changes nothing but `linked`.  At D = 8,192 bits each credited
+    receipt counts a quarter block, and step 1's reads, 20,000 bits, cap its pass below its 8 receipts' 65,536.  A link
+    that doesn't hold, a density outside 1 … 32,768 bits, reads that aren't a count, or a record whose passes name no
+    step are refused."""
+    rec = honest[0].s.record()
+    assert [w.steps for w in rec.windows] == [(0, 1, 2), (3, 4)]
+    capacity = 4096 * 10**9 / 10
+    common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    whole = capacity * rec.span_ns / 1e9
+    store_ = audit.ledger(rec, **common)
+    full = audit.ledger(rec, **common, requirement=Link(True, 8 * 4096, {}))
+    assert full.timing == store_.timing and full.linked and not store_.linked
+    assert full.to_json()["linked"] is True and store_.to_json()["linked"] is False
+    quarter = audit.ledger(rec, **common, requirement=Link(True, 8192, {1: 20_000}))
+    w0 = 8 * 8192 + 20_000 + 7 * 8192
+    assert quarter.timing == pytest.approx(1 - (w0 + 14 * 8192) / 8 / whole)
+    assert quarter.windows[0].timing == pytest.approx(1 - w0 / 8 / (capacity * rec.windows[0].span_ns / 1e9))
+    assert quarter.sample == store_.sample and quarter.counting == store_.counting
+    for link, match in ((Link(False, 8192, {}), "don't hold"), (Link(True, 0, {}), "density"),
+                        (Link(True, 8 * 4096 + 1, {}), "density"), (Link(True, True, {}), "density"),
+                        (Link(True, 8192, {2: -1}), "nonnegative integer"),
+                        (Link(True, 8192, {2: 1.5}), "nonnegative integer")):
+        with pytest.raises(ValueError, match=match):
+            audit.ledger(rec, **common, requirement=link)
+    bare = synthetic((10, 12), ())
+    with pytest.raises(ValueError, match="name none"):
+        audit.ledger(bare, **dict(common, rebuild=audit.Rebuild(bare.codec, 0.0)), requirement=Link(True, 8192, {}))
+
+
 def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = ()) -> audit.Record:
     w = audit.WindowRecord(0, lengths, 0, 10**9, 10**9, IntegrityProfile(
         ("receipt",), (sum(lengths),), {"receipt": Subset(1)}, 1e-6, drawn={"receipt": 1}), post, steps)

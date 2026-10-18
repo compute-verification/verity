@@ -106,6 +106,22 @@ def test_a_session_driven_by_a_memory_map_is_accepted() -> None:
     assert (rec.appended, rec.released) == (6, 7)
 
 
+def test_a_registered_block_freed_at_its_values_last_read_leaves_every_later_plan() -> None:
+    """A free of a slot below N releases its registered block: the writer records it at the step that reads the
+    block's values for the last time (a weight only some steps read), so no later pass holds it and none credits it.
+    The verifier takes the release, and a plan that still holds the block is refused (`plan`)."""
+    st = store()
+    replay, run = Replay(Header(st.registration.digest, N), st.registration), Run(st)
+    assert run.run(change=replay.take(0), step=0) is None
+    change = replay.apply(Step(0, (2,), ()))
+    assert (change.count, change.released, replay.holds(2)) == (0, ((2, 1),), None)
+    assert run.s.release(change.released) is None
+    assert replay.take(1) == ((), ((2, 1),))
+    assert run.run(change=((), ((2, 1),)), step=1) is None
+    assert run.plan.runs == ((0, 2), (3, 5))
+    assert run.s.receive(0, 2, bytes(64), change=(((2, 1),), ()), step=2).failure == "plan"
+
+
 def test_a_pass_covers_the_blocks_resident_at_its_step() -> None:
     """A step's record takes effect after the step's reads: the pass at step 3 holds what steps 0 … 2 left, step 3's
     own frees and writes are the next pass's, and a pass whose step is not after every step applied, or after the
