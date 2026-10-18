@@ -36,6 +36,14 @@
 #   research run --on vy-nebius-2 ... --env ROLE=prover --env PORT=7791 --env PLAN=honest,skip:0.0625 \
 #     -- taskset -c 48-95 bash benchmarks/remote_session/run.sh
 #
+# ROLE=verifier is the audit's verifier as a service, on a machine the prover doesn't control (AGENTS.md's
+# auditor-trusted devices), never on PEER. It keeps the registrations in REGISTRY (default
+# /workspace/remote-session/registry.json on its own machine, across its runs: a node with a live registration there is
+# refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
+# the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as they
+# are. A registration left live by a run that ended early refuses the node until CLOSE=NODE_HEX closes it (the same
+# ROLE=verifier run, which closes it in REGISTRY and exits).
+#
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
@@ -56,20 +64,33 @@ VERIFY=(--port "$PORT" --out "$O" --windows "$WINDOWS" --window-ms "$WINDOW_MS" 
   --jitter-ms "$JITTER_MS" --sessions "$SESSIONS" ${QUANTILE:+--quantile "$QUANTILE"}
   ${CHECK_WORKERS:+--check-workers "$CHECK_WORKERS"} ${LIFETIME:+--lifetime "$LIFETIME"})
 if [ "$ROLE" = verifier ]; then
+  REGISTRY=${REGISTRY:-/workspace/remote-session/registry.json}
+  mkdir -p "$(dirname "$REGISTRY")"
+  if [ -n "${CLOSE:-}" ]; then
+    "$PY" $RS/verifier.py --registry "$REGISTRY" --close "$CLOSE" > "$O/verifier.log" 2>&1; W=$?
+    cat "$O/verifier.log"
+    cp "$REGISTRY" "$O/registry.json"
+    exit $W
+  fi
   read -ra TO <<< "$(grep "^${PEER:?} " /etc/vy/peers | cut -d' ' -f2-)"
   [ ${#TO[@]} -gt 0 ] || { echo "no peer $PEER in /etc/vy/peers"; exit 3; }
+  printf '{"verifier": "%s", "listen": "127.0.0.1:%s", "peer": "%s", "remote_verifier": "127.0.0.1:%s"}\n' \
+    "$(hostname)" "$PORT" "$PEER" "$PORT" | tee "$O/address.json"
   # A tty makes the session interactive, so ssh and sshd set TCP_NODELAY (under -N roots were held ~30 ms every few
   # seconds, enough to make a boundary pass's root late); and with keystroke-timing obfuscation off, since it sends an
   # interactive session's packets on a 20 ms clock (tunnel_rtt.py measures each).
   ssh -tt -o ObscureKeystrokeTiming=no -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
-  "$PY" $RS/verifier.py --host 127.0.0.1 "${VERIFY[@]}" > "$O/verifier.log" 2>&1 & V=$!
+  # shellcheck disable=SC2086
+  "$PY" $RS/verifier.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" ${VERIFIER_ARGS:-} \
+    > "$O/verifier.log" 2>&1 & V=$!
   while kill -0 $V 2> /dev/null; do
     kill -0 $T 2> /dev/null || { echo "the tunnel to $PEER ended"; cat "$O/tunnel.log"; kill $V; break; }
     wait -n $V $T
   done
   wait $V; W=$?
   kill $T 2> /dev/null
+  cp "$REGISTRY" "$O/registry.json"
   tail -20 "$O/verifier.log"
   exit $W
 fi
