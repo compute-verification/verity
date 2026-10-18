@@ -305,7 +305,7 @@ def test_the_bandwidth_setup_builds_once_per_source_key_and_every_point_loads_it
 
     def point(run: str, **extra: str) -> str:
         env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
-               "RESEARCH_RUN_DIR": str(tmp_path / run), **extra,
+               "RESEARCH_RUN_DIR": str(tmp_path / run), "VERITY_BENCH_LIB_CACHE": str(tmp_path / "cache"), **extra,
                "VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"}
         ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True,
                              text=True)
@@ -320,6 +320,9 @@ def test_the_bandwidth_setup_builds_once_per_source_key_and_every_point_loads_it
     assert second == "reused " + first.split(" ", 1)[1] and len(calls.read_text().splitlines()) == 4
     other = point("r3", FAKE_NVCC_VERSION="2")
     assert other.startswith("built ") and other != first and len(calls.read_text().splitlines()) == 8
+    (tmp_path / "a-file").write_text("")
+    unwritable = point("r4", VERITY_BENCH_LIB_CACHE=str(tmp_path / "a-file" / "cache"))
+    assert unwritable.startswith(f"built {tmp_path}/r4/setup-build/") and len(calls.read_text().splitlines()) == 12
 
 
 def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():

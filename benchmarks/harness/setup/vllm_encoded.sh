@@ -2,14 +2,20 @@
 # built from this source tree as benchmarks/kv_filler/run.sh builds the encoded stack (STACK=...) at its default field
 # (1024, masked, FOLD6, 32 query heads) and the top-up, and the VERITY_VLLM_BENCH_*_LIB names the arms read exported.
 #
-# wt.cu takes nvcc about 9 minutes, so a build is kept on the node in $WORK/verity-bench/libs/KEY, KEY the hash of
-# nvcc's version, the flags and every file each build reads (nvcc -MM): a point whose sources match an earlier one's
-# reuses its libraries, and one whose sources differ (another commit's ctypes declarations) builds its own. One point
-# builds a KEY while the others wait on its lock; each copies the libraries into $RESEARCH_RUN_DIR/setup, so a retention
-# sweep of the cache never removes a library a running point loads. nvcc's version, the flags, ptxas's reports, every
-# source's and library's sha256 and whether the point built or reused go to $RESEARCH_RUN_DIR/out/setup.
+# wt.cu takes nvcc about 9 minutes, so a build is kept on the node in $VERITY_BENCH_LIB_CACHE/KEY (default
+# /workspace/research/cache/verity-bench-libs), KEY the hash of nvcc's version, the flags and every file each build reads
+# (nvcc -MM): a point whose sources match an earlier one's reuses its libraries, and one whose sources differ (another
+# commit's ctypes declarations) builds its own. One point builds a KEY while the others wait on its lock; each copies the
+# libraries into $RESEARCH_RUN_DIR/setup, so a retention sweep of the cache never removes a library a running point
+# loads. A cache this job can't write is skipped: the point builds in its run directory. nvcc's version, the flags,
+# ptxas's reports, every source's and library's sha256 and whether the point built or reused go to
+# $RESEARCH_RUN_DIR/out/setup.
 VE_RUN=${RESEARCH_RUN_DIR:-$PWD}
-VE_CACHE=${WORK:-/workspace}/verity-bench/libs
+VE_CACHE=${VERITY_BENCH_LIB_CACHE:-/workspace/research/cache/verity-bench-libs}
+if ! { mkdir -p "$VE_CACHE" 2> /dev/null && [ -w "$VE_CACHE" ]; }; then
+  echo "setup: $VE_CACHE is not writable here; building in the run directory" >&2
+  VE_CACHE=$VE_RUN/setup-build
+fi
 VE_FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 VE_FIELD=1024
 VE_ORDER=(wt reader paged topup)
