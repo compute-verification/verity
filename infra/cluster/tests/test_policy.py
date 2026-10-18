@@ -584,24 +584,30 @@ def test_the_files_commands_mark_absent_files_and_read_one_line_of_the_dispatch_
     assert policy._files(_sh(policy.COMMANDS["holds"], tmp_path)) == {DISK: None, QUIET: "provers\n\n"}
 
 
-def _n2(tmp_path: Path, status: str, windows: str | None = None) -> str:
-    """Run the node 2 command with node 2's clock at T: a `date` on PATH that answers `date +%s` and passes the rest on."""
+def _n2(tmp_path: Path, status: str, windows: str | None = None, cmd: str | None = None, pgrep: int = 1) -> str:
+    """Run the node 2 command with node 2's clock at T: a `date` on PATH that answers `date +%s` and passes the rest on, and a
+    `pgrep` that exits `pgrep` (1: no fill runner runs). /run is under tmp_path too."""
     _put(tmp_path, {f"{policy.FILL}/status.txt": status + "\n  running x\n", f"{policy.FILL}/cpu-sets": "0 0-7\n",
-                    "bin/date": f'#!/bin/sh\n[ "$*" = +%s ] && {{ echo {T}; exit 0; }}\nexec {shutil.which("date")} "$@"\n'})
-    (tmp_path / "bin/date").chmod(0o755)
+                    "bin/date": f'#!/bin/sh\n[ "$*" = +%s ] && {{ echo {T}; exit 0; }}\nexec {shutil.which("date")} "$@"\n',
+                    "bin/pgrep": f'#!/bin/sh\necho "$*" >> {tmp_path}/pgrep.log\nexit {pgrep}\n'})
+    for f in ("date", "pgrep"):
+        (tmp_path / "bin" / f).chmod(0o755)
     w = tmp_path / policy.FILL.lstrip("/") / "windows"
     if windows is None:
         w.unlink(missing_ok=True)
     else:
         w.write_text(windows)
-    return _sh(policy.COMMANDS["n2"], tmp_path, str(tmp_path / "bin"))
+    cmd = (cmd or policy.COMMANDS["n2"]).replace("/run/", f"{tmp_path}/run/")
+    return _sh(cmd, tmp_path, str(tmp_path / "bin"))
 
 
 @pytest.mark.parametrize("status, windows, why", [
     (STATUS.replace("timed False", "timed True"), None, "a timed window is on or waiting"),
     (STATUS.replace("window waiting False", "window waiting True"), "2026-10-03T19:41Z 20\n", "a timed window is on or waiting"),
     (STATUS.replace("19:39:59Z", "19:39:29Z"), None, "status.txt is 61 s old: is the fill runner running?"),
-    (STATUS.replace("19:39:59Z", "17:00:00Z"), "2026-10-03T19:30Z 30\n", "status.txt is 9630 s old"),
+    (STATUS.replace("19:39:59Z", "19:30:00Z"), None, "status.txt is 630 s old: is the fill runner running?"),
+    (STATUS.replace("19:39:59Z", "17:00:00Z"), "2026-10-03T19:30Z 30\n", "window 2026-10-03T19:30Z (30 min) is on or starts "
+                                                                          "within 1800 s"),
     (STATUS.replace("19:39:59Z", "19:40:31Z"), None, "status.txt is stamped 1 s ahead of node 2's clock"),
     (STATUS.split(" ", 1)[1], None, "status.txt does not say when it was written"),
     (STATUS, "2026-10-03T19:40Z 20\n", "window 2026-10-03T19:40Z (20 min) is on or starts within 60 s"),
@@ -625,6 +631,81 @@ def test_node_2_s_gate_reads_the_files_while_quiet_fresh_and_clear_of_windows(tm
     files = policy._files(out)
     assert out.startswith(f"status {STATUS}\n") and files[f"{policy.FILL}/cpu-sets"] == "0 0-7\n\n"
     assert files[f"{policy.FILL}/windows"] == (None if windows is None else windows + "\n")
+
+
+STALE = STATUS.replace("19:39:59Z", "17:00:00Z")   # 9630 s old: past STATUS_STALE_S
+STALE_WHY = ("no fill runner runs (status.txt is 9630 s old), and gpu-lease shows no timed lease, no holder or waiter of every "
+             "GPU and no booked window within 1800 s, so it is read as quiet")
+GL = "/run/gpu-lease"
+
+
+def _leases(tmp_path: Path, owners: dict[int, str], waits: dict[str, str] = {}, live: tuple[int, ...] = (), gpus: int = 8):
+    """gpu-lease's directory under tmp_path: `gpus` locks, owner lines and wait files, and /proc entries for the `live` pids."""
+    _put(tmp_path, {**{f"{GL}/{i}.lock": "" for i in range(gpus)}, **{f"{GL}/{i}.owner": o + "\n" for i, o in owners.items()},
+                    **{f"{GL}/{name}": w + "\n" for name, w in waits.items()}})
+    for p in live:
+        (tmp_path / "proc" / str(p)).mkdir(parents=True, exist_ok=True)
+
+
+def test_node_2_with_no_fill_runner_is_read_as_quiet_from_gpu_lease_s_state_and_says_so(tmp_path):
+    _leases(tmp_path, {1: "pid=11 run=- who=a since=x preempt=1 cmd=job", 3: "pid=13 run=- who=b since=x cmd=job",
+                       5: "pid=99 run=- who=c since=x timed=1 cmd=left behind"},
+            {"wait.ns.21": "pid=21 n=2 run=- who=d since=x", "wait.ns.98": "pid=98 n=8 run=- who=e since=x"}, live=(11, 13, 21))
+    out = _n2(tmp_path, STALE, "2026-10-03T20:11Z 30 # 30.5 min ahead\n2026-10-03T18:00Z 30 # ended\n")
+    assert out.startswith(f"stale {STALE_WHY}: {STALE}\n")
+    assert policy._files(out)[f"{policy.FILL}/cpu-sets"] == "0 0-7\n\n", "the files are read after the gate"
+    assert (tmp_path / "pgrep.log").read_text() == f"-f {policy.RUNNER_RE}\n"
+    lv = policy.Live({}, {}, {})
+    policy._read_n2(N2, out, T, lv)
+    assert lv.quiet == f"{STALE_WHY}: {STALE}" and N2 not in lv.unknown
+    assert [k for k in lv.values if ".fill.window." in k] == [f"{N2}.fill.window.2026-10-03T20:11Z"]
+
+
+@pytest.mark.parametrize("owners, waits, live, pgrep, windows, why", [
+    ({}, {}, (), 0, None, "status.txt is 9630 s old while a fill runner runs: it may be stuck"),
+    ({}, {}, (), 2, None, "pgrep exited 2: whether a fill runner runs is not known"),
+    ({}, {}, (), 1, "2026-10-03T20:10Z 30\n", "window 2026-10-03T20:10Z (30 min) is on or starts within 1800 s"),
+    ({}, {}, (), 1, "2026-10-03T19:00Z 45\n", "window 2026-10-03T19:00Z (45 min) is on or starts within 1800 s"),
+    ({4: "pid=14 run=- who=t since=x timed=1 cmd=bench"}, {}, (14,), 1, None,
+     f"lease 4.owner of pid 14 is timed (gpu-lease --timed)"),
+    ({i: f"pid=7 run=- who=w since=x cmd=all" for i in range(8)}, {}, (7,), 1, None, "pid 7 holds all 8 GPUs"),
+    ({}, {"wait.ns.31": "pid=31 n=8 run=- who=w since=x"}, (31,), 1, None, "waiter wait.ns.31 wants all 8 GPUs"),
+    ({}, {"wait.ns.31": "pid=31 run=- who=w since=x"}, (31,), 1, None, "waiter wait.ns.31 does not say how many GPUs it wants"),
+    ({2: "who=x since=y"}, {}, (), 1, None, f"gpu-lease owner line {GL}/2.owner names no pid"),
+])
+def test_node_2_with_no_fill_runner_still_refuses_a_timed_window_on_or_near(tmp_path, owners, waits, live, pgrep, windows, why):
+    _leases(tmp_path, owners, waits, live)
+    out = _n2(tmp_path, STALE, windows, pgrep=pgrep)
+    assert out == f"refused {why}: {STALE}\n"
+
+
+def test_a_write_on_node_2_needs_the_fill_runner_s_fresh_quiet_status(tmp_path):
+    _leases(tmp_path, {})
+    out = _n2(tmp_path, STALE, cmd=policy.N2_WRITE_GATE + "echo wrote\n")
+    assert out == ("refused status.txt is 9630 s old: is the fill runner running? (a write needs its fresh quiet status): "
+                   f"{STALE}\n")
+    assert not (tmp_path / "pgrep.log").exists()
+    assert _n2(tmp_path, STATUS, cmd=policy.N2_WRITE_GATE + "echo wrote\n") == f"status {STATUS}\nwrote\n"
+
+
+@pytest.mark.parametrize("cmdline, runner", [
+    ("python3 /workspace/pouw/infra/bin/fill_runner.py", True), ("/usr/bin/python3 /workspace/pouw/infra/bin/fill_runner.py", True),
+    ("/usr/bin/python3 -u fill_runner.py fence x", True), ("python3.12 fill_runner.py", True),
+    ("bash -c set -f\npgrep -f fill_runner.py", False), ("tail -f /workspace/pouw/fill/fill_runner.py.log", False),
+    ("python3 /x/not_fill_runner.pyc", False)])
+def test_the_runner_pattern_matches_the_fill_runner_and_never_the_gate_s_own_shell(cmdline, runner):
+    assert bool(re.search(policy.RUNNER_RE, cmdline.replace("\n", " "))) is runner
+
+
+def test_diff_says_when_node_2_was_read_as_quiet(capsys):
+    n2 = f"stale {STALE_WHY}: {STALE}\n" + dump(N2_FILES)
+    rc, rows = diff(capsys, "nebius-2", n2=n2)
+    assert rc == 0 and {r["status"] for r in rows.values()} == {"ok"}
+    policy.main_diff(NEBIUS, "nebius-2", True, runner=fake(outputs(n2=n2), None))
+    assert json.loads(capsys.readouterr().out)["nodes"][0]["quiet"] == f"{STALE_WHY}: {STALE}"
+    policy.main_diff(NEBIUS, "nebius-2", False, runner=fake(outputs(n2=n2), None))
+    assert capsys.readouterr().out.splitlines()[:2] == [f"{N2}: 4 as declared, 0 drift, 0 undeclared, 0 unknown",
+                                                        f"  read as quiet: {STALE_WHY}: {STALE}"]
 
 
 def test_node_2_s_gate_fails_when_status_txt_cant_be_read(tmp_path):
