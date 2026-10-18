@@ -395,6 +395,10 @@ def run_benchmark(
         resident_failure = str(e)
         _close_all(engines)
         engines = {}
+    except BaseException:
+        # A live engine is a non-daemon process: left open, it keeps the point from exiting and holds its GPU lease.
+        _close_all(engines)
+        raise
 
     if resident_failure is None:
         try:

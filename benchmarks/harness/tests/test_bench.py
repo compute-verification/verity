@@ -479,6 +479,22 @@ def test_resident_failure_falls_back_to_alternating_blocks():
     assert all(doc["points"][0]["arms"][a.id]["metrics"]["time_per_output_token_s"]["n"] == 3 for a in arms)
 
 
+def test_an_engine_that_fails_to_start_closes_the_engines_already_up():
+    preset, points, arms = inputs()
+    factory = FakeFactory()
+    create = factory.create
+
+    def refuse(arm, preset, *, resident):
+        if arm.id == "candidate":
+            raise RuntimeError("Refused: protocol options refused")
+        return create(arm, preset, resident=resident)
+
+    factory.create = refuse
+    with pytest.raises(RuntimeError, match="Refused"):
+        run_benchmark(preset, arms, points, sweep="quick", reps=1, factory=factory, git_commit="abc")
+    assert factory.events == [("create", "stock-fp8", True), ("close", "stock-fp8")]
+
+
 @pytest.mark.parametrize("factory", [FakeFactory(gate_ok=False), FakeFactory(bad_tokens="candidate")])
 def test_a_failed_gate_records_the_failure_and_stops_before_timing(factory):
     preset, points, arms = inputs()
