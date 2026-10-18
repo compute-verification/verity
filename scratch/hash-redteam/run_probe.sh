@@ -6,4 +6,5 @@ bash tools/verity/lean/setup.sh Security/Properties
 cd Security/Properties
 lake build Definitions.Hash PouwCommit.Rows
 ln -sf "${OUT:-.}/progress.txt" progress.txt 2>/dev/null || true
+export RT_ONLY=${RT_ONLY:-}
 time lake env lean ../../scratch/hash-redteam/RowProbe.lean 2>&1 | tee "${OUT:-.}/probes.txt"

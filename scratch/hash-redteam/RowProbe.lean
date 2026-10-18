@@ -51,6 +51,7 @@ structure Tally where
 def chk (r : IO.Ref Tally) (name : String) (ok : Bool) : IO Unit := do
   r.modify fun t => if ok then { t with pass := t.pass + 1 } else { t with fail := t.fail + 1 }
   unless ok do IO.println s!"FAIL {name}"
+  logT s!"  {if ok then "ok" else "FAIL"} {name}"
 
 /-! `Hm96.commitString` reads `mask key y` once per byte, and the interpreter recomputes it each time (a dense salt's
 mask is ~10⁸ steps). The `…With` forms take the mask as an argument; each is the model's definition with
@@ -139,6 +140,11 @@ def treeCase (r : IO.Ref Tally) (key : Msg) (t : Json) : IO Unit := do
     logT s!"{tag} start"
     -- the mask depends on the key and salt only, so row, rank and path variants share it
     let m := Hm96.mask key salt
+    logT s!"{tag} mask {m.length}"
+    let ld := sha (leafMsgWith sha sha V rank o m)
+    logT s!"{tag} leaf digest {ld 0}"
+    let cl := (Tree.climb sha D 0 rank ld sibs).2
+    logT s!"{tag} climb {cl 0}"
     chk r s!"{tag}: model accepts the Python opening" (acc V root rank o m)
     chk r s!"{tag}: served Lean verify accepts it"
       ((dom.verify (ba rootB) rank "verity/pouw/row/v1" (ba (rowB ++ salt)) ((hexes op "path").map ba)).toOption == some true)
@@ -205,9 +211,12 @@ def main (cases vectors : String) : IO Unit := do
   let key := unhex (str c "key")
   chk r "model key bytes = served Lean Default512.key" (key == Flock.Hm96.Default512.key.data.toList)
   let v ← IO.ofExcept (Json.parse (← IO.FS.readFile vectors))
-  for e in arr v "row_seg_leaves" do segCase r e
+  let only := (← IO.getEnv "RT_ONLY").getD ""
+  if only != "trees" then
+   for e in arr v "row_seg_leaves" do segCase r e
   logT s!"row-seg vectors done: {(← r.get).pass} passed, {(← r.get).fail} failed"
-  for e in arr v "bit_row_hiding_leaves" do hidingCase r key e
+  if only != "trees" then
+   for e in arr v "bit_row_hiding_leaves" do hidingCase r key e
   logT s!"hiding vectors done: {(← r.get).pass} passed, {(← r.get).fail} failed"
   for t in arr c "trees" do
     treeCase r key t
