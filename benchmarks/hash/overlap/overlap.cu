@@ -425,6 +425,14 @@ struct World {
     if (e_ != cudaSuccess) { fprintf(stderr, "CUDA %s after %s\n", cudaGetErrorString(e_), what.c_str()); exit(3); }
   }
   void init(const std::string& pdir) {
+    // An SM runs one shared-memory carveout at a time: a resident hash CTA launched under a small one keeps every GEMM CTA
+    // (up to 227 KiB) off that SM until it exits, which deadlocks the persistent server and slows the data kernels' arms.
+    const void* small[] = {(const void*)server<4>, (const void*)server<6>, (const void*)srv_signal, (const void*)pre,
+                           (const void*)level_kernel, (const void*)node_kernel, (const void*)rms_add, (const void*)silu_mul8,
+                           (const void*)silu_mul};
+    for (const void* f : small) CK(cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+    for (const auto& v : variants())
+      CK(cudaFuncSetAttribute(v.fn, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
     int lo, hi;
     CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
     CK(cudaStreamCreateWithPriority(&A, cudaStreamNonBlocking, hi));
