@@ -40,6 +40,8 @@ if [ -f "$VE_LIBS/build.txt" ]; then
 else
   VE_HOW=built
   VE_TMP=$(mktemp -d "$VE_CACHE/.$VE_KEY.XXXXXX")
+  # A preempted point (SIGTERM) takes its partial build with it.
+  trap 'kill "${VE_PIDS[@]}" 2> /dev/null; wait; rm -rf "$VE_TMP"; exit 143' TERM INT
   declare -A VE_PIDS=()
   for lib in "${VE_ORDER[@]}"; do
     # shellcheck disable=SC2086
@@ -52,6 +54,7 @@ else
   done
   { echo "$VE_RECIPE"; echo "$VE_SOURCES" | xargs sha256sum; (cd "$VE_TMP" && sha256sum -- *.so); } > "$VE_TMP/build.txt"
   mv -T "$VE_TMP" "$VE_LIBS"
+  trap - TERM INT
   "$VENV/bin/python" -m research keep "$VE_LIBS" --owner @benchmarks --expires 7d --priority low \
     --regenerate "a dispatched point of a spec whose setup is benchmarks/harness/setup/vllm_encoded.sh" \
     --why "verity-bench: the bandwidth arms' libraries for sources keyed $VE_KEY" > "$VE_RUN/out/setup/keep.log" 2>&1 ||
