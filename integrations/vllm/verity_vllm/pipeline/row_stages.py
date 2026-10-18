@@ -695,8 +695,8 @@ class SingleRow(Row):
             self.tl("validate.manifest_verify", "end", ("rc", 1))
             self.log(f"manifest of record VERIFY FAILED: {_tail(f'{d}/manifest_verify.log', 200)}")
 
-    def commit_prepare(self) -> tuple[int, list[str]]:
-        """The Commit stage up to its command line -> (its timeout, its command)."""
+    def commit_prepare(self) -> tuple[int, list[str], str]:
+        """The Commit stage up to its command line -> (its timeout, its command, its manifest of record or "")."""
         d, ck = self.d, self.ck_
         kb, kt = max(1, (self.B + 3) // 4), max(1, (self.I + self.O + 287) // 288)
         to = ck.commit_timeout or min(CAP, 2400 * kb * kt)
@@ -732,14 +732,14 @@ class SingleRow(Row):
             self.log(f"WARNING B={self.B}: no {d}/match/instances.jsonl: live C2 oracle-compare NOT armed -- request attribution of decode-step identities unverified")
         cmd += RP.commit_flags(self)
         self.tl("commit.prepare", "end")
-        return to, cmd
+        return to, cmd, man
 
     def commit(self) -> None:
         d, ck = self.d, self.ck_
         if ck.group:
             self.replay_pending = RG.commit(self, CAP)
             return
-        to, cmd = self.commit_prepare()
+        to, cmd, man = self.commit_prepare()
         t0 = int(time.time())
         if ck.hot_engine == "1" and not self.leased:
             self.log(f"HOT_ENGINE=1: Commit on the hot worker (root {self.env.hot_root}, idle {self.env.hot_idle}s)")
