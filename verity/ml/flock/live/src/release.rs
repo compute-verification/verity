@@ -1364,30 +1364,30 @@ mod tests {
         let path = rec.state.join("record.jsonl");
         let before = text(&rec);
         let asked = std::cell::RefCell::new(Vec::new());
-        let agree = |input: &Value| {
+        let agree = |input: &Value| -> Result<Value, String> {
             asked.borrow_mut().push(input.clone());
             Ok(json!({"decision": "go", "why": null, "release_ms": null, "record": std::fs::read_to_string(&path).unwrap()}))
         };
         let o = outer_session(&rec, &sid, "L0", &fake(5), || {}, || Ok(()), |_| Ok(()), |_| (true, ()), Some(&agree)).unwrap();
         assert_eq!(o.outcome, "release");
         assert_eq!(asked.borrow()[0], json!({"now_ms": 5, "part": "L0", "prove": "ok", "ready": "ok", "record": before, "session": sid}));
-        let refuse = |_: &Value| Ok(json!({"decision": "stop", "why": "no", "release_ms": null, "record": ""}));
+        let refuse = |_: &Value| -> Result<Value, String> { Ok(json!({"decision": "stop", "why": "no", "release_ms": null, "record": ""})) };
         let o = outer_session(&rec, &sid, "L1", &fake(0), || {}, || Ok(()), |_| Ok(()), |_| -> (bool, ()) { panic!("sent") },
                               Some(&refuse)).unwrap();
         assert_eq!(o.outcome, "stop");
         assert_eq!(o.why.as_deref(), Some(r#"the Lean firewall decides {"decision":"stop","release_ms":null,"why":"no"}, Rust {"decision":"go","release_ms":null,"why":null}"#));
         assert_eq!(stop_of(&rec, &sid), ("L1".into(), o.why.unwrap()));
         let sid = opened(&rec, None, None);
-        let none = |_: &Value| Err("core-firewall does not start".to_string());
+        let none = |_: &Value| -> Result<Value, String> { Err("core-firewall does not start".into()) };
         let o = outer_session(&rec, &sid, "L0", &fake(0), || {}, || Ok(()), |_| Ok(()), |_| -> (bool, ()) { panic!("sent") },
                               Some(&none)).unwrap();
         assert_eq!(o.why.as_deref(), Some("the Lean firewall decided nothing: core-firewall does not start"));
-        let other = |_: &Value| Ok(json!({"decision": "refused", "why": "x", "release_ms": null, "record": ""}));
+        let other = |_: &Value| -> Result<Value, String> { Ok(json!({"decision": "refused", "why": "x", "release_ms": null, "record": ""})) };
         let o = outer_session(&rec, &sid, "L1", &fake(0), || {}, || -> Result<(), String> { panic!("proved") }, |_| Ok(()),
                               |_| -> (bool, ()) { panic!("sent") }, Some(&other)).unwrap();
         assert_eq!(o.outcome, "refused");
         assert!(o.why.unwrap().ends_with(r#"the Lean firewall decides {"decision":"refused","release_ms":null,"why":"x"}, Rust {"decision":"refused","release_ms":null,"why":"recursive session r0001 stopped at L0: the firewall serves nothing more of it"}"#));
-        let same = |_: &Value| Ok(json!({"decision": "go", "why": null, "release_ms": null, "record": "not the record"}));
+        let same = |_: &Value| -> Result<Value, String> { Ok(json!({"decision": "go", "why": null, "release_ms": null, "record": "not the record"})) };
         let sid = opened(&rec, None, None);
         let o = outer_session(&rec, &sid, "L0", &fake(0), || {}, || Ok(()), |_| Ok(()), |_| -> (bool, ()) { panic!("sent") },
                               Some(&same)).unwrap();
