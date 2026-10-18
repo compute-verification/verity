@@ -231,7 +231,8 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
     (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/core/protocols/pous/lean/`) and
     the certifier program (`verity/core/protocols/certifier/lean/`, `NetworkCertifier`, with its
-    difftest) and the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest).
+    difftest), the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest) and the remote
+    bandwidth audit's verifier (`verity/core/protocols/remote_bandwidth/lean/`, `RemoteAudit`, with its difftest).
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
