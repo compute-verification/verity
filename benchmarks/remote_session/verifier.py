@@ -747,6 +747,9 @@ def main() -> int:
     server = wire.listen(a.host, a.port)
     print(f"verifier: listening on {a.host}:{a.port}", flush=True)
     sock, peer = server.accept()
+    # Read again: another verifier process may have closed a registration while this one listened, and a refusal
+    # saves this process's registry over the file.
+    registry = load_registry(a.registry)
     conn = wire.Conn(sock)
     v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
