@@ -652,6 +652,18 @@ def test_a_prefill_of_at_most_topk_keys_derives_by_dense_mha_and_the_decode_afte
         (NAMES[0], True, 128, 192, 1, 2), (NAMES[1], False, 128, 192, 1, 2)]
 
 
+def test_the_dense_route_exports_q_and_k_as_their_parts(dense):
+    """The shim hands `dsa_dense_mha` q's and k's parts, which the rule assembles as references: an `expand` of k_pe across the heads
+    or a `cat` of the parts is a view over a composite reference sequence, which past 65536 leaves (GLM-5.3's 2048 rows x 8 heads x 64)
+    has no O(1) form and refuses the derive."""
+    model = _model(dense=True)
+    with dsa_leaves(SITE, model):
+        ep = torch.export.export(model, _inputs(model), strict=False)
+    ops = {str(n.target) for n in ep.graph.nodes if n.op == "call_function"}
+    assert "vllm_iface.dsa_dense_mha.default" in ops
+    assert not {o for o in ops if o.startswith(("aten.expand", "aten.cat"))}, ops
+
+
 def test_the_served_dense_prefill_binds_attention_v4_at_the_128_x_80_tile():
     """GLM-5.3 TP8's dense prefill: qk and v head 256 at 8 heads per rank on the H200, `glm53_fa3_prefill_capture`'s geometry."""
     geom = TG.attention_geometry(H200, 256, 2048, 8, 8)

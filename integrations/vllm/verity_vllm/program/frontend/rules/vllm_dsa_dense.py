@@ -1,15 +1,17 @@
 """[GLM-5.3] The prefill a DeepSeek sparse attention layer serves by dense MHA (vLLM d9105ea80 `SparseMLACommonImpl.forward_mha`,
 `FlashAttnPrefillBackend`), over the leaf `export_compat.dsa_leaves` exports in `dsa_indexer_attn`'s place (`vllm_iface`):
 
-    dsa_dense_mha(positions, q, k, v, kv_c, k_pe, index_k?, index_k_scale?, layer_name, topk, scale) -> attention rows [T, NH, DV]
+    dsa_dense_mha(positions, q_nope, q_pe, k_nope, v, kv_c, k_pe, index_k?, index_k_scale?, layer_name, topk, scale)
+        -> attention rows [T, NH, DV]
         a prefill above the decode threshold of at most TOPK keys: the call's cache rows open the layer's history (`vllm_dsa`'s), and
         per query row i `Attention_v4{T=i+1,NH,KVH=NH,D,BN,DOT,INV,MASKED_FROM}` (FA3's causal varlen prefill) over the call's own k, v
-        rows 0..i; no logits or top-k
+        rows 0..i, with q = [q_nope | q_pe] and k = [k_nope | k_pe] per head (k_pe shared by the heads) assembled as references;
+        no logits or top-k
 """
 
 from __future__ import annotations
 
-from verity.ml.circuits.refs import Coll, PartLog, array_of
+from verity.ml.circuits.refs import Coll, Concat, PartLog, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
@@ -20,7 +22,7 @@ from verity_vllm.program.frontend.rules.vllm_dsa import (BF16, E4M3, F32, _appen
                                                          _value)
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 
-_DENSE = ("positions", "q", "k", "v", "kv_c", "k_pe", "index_k", "index_k_scale", "layer_name", "topk", "scale")
+_DENSE = ("positions", "q_nope", "q_pe", "k_nope", "v", "kv_c", "k_pe", "index_k", "index_k_scale", "layer_name", "topk", "scale")
 PREFILL_BACKEND = "vllm.v1.attention.backends.mla.prefill.flash_attn.FlashAttnPrefillBackend"
 
 
@@ -57,8 +59,9 @@ class DsaDenseMhaRule(StateRule):
                                    "the target is compute capability 9.0 under FA3's check-inf-per-iteration construction (Attention_v4)",
                                    "the call is a prefill: T above the decode threshold at the observed query heads per rank (DECODE_THRESHOLD), "
                                    "T <= TOPK, and it opens the layer's history (no chunked context)",
-                                   "q, k [T, NH, D] and v [T, NH, D] bf16 (one head dim, D registered by targets.fa3_kblock_n); "
-                                   "kv_c [T, L], k_pe [T, R] bf16; scale == f32(D^-0.5), the word Attention_v4 folds in",
+                                   "q's and k's parts q_nope, k_nope [T, NH, P], q_pe [T, NH, R], k_pe [T, R], and v [T, NH, D] bf16 "
+                                   "at D = P + R (one head dim, D registered by targets.fa3_kblock_n); kv_c [T, L] bf16; "
+                                   "scale == f32(D^-0.5), the word Attention_v4 folds in",
                                    "FA3 runs the sequence as one split (`fa3_model.split_plan` at the target's SMs, or batch invariance's "
                                    "num_splits = 1): FlashAttnFwdCombine has no Definition",
                                    "no declared launch context other than the call's own rows (a varlen launch's split plan reads every "
@@ -98,13 +101,14 @@ class DsaDenseMhaRule(StateRule):
             return f"a call of {T} query rows is a decode (decode threshold {limit}), which takes the top-k MQA path"
         if T > topk:
             return f"a prefill of {T} rows reaches past TOPK {topk} keys, which vLLM serves by sparse MQA, not dense MHA"
-        NH, D = (shape(ctx, a["q"]) or (0, 0, 0))[1:3]
+        NH, P = (shape(ctx, a["q_nope"]) or (0, 0, 0))[1:3]
+        R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
+        D = P + R
         DV = (shape(ctx, a["v"]) or (0,))[-1]
         L = (shape(ctx, a["kv_c"]) or (0, 0))[-1]
-        R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
-        for r in (_value(ctx, a["q"], BF16, (T, NH, D), "q"), _value(ctx, a["k"], BF16, (T, NH, D), "k"),
-                  _value(ctx, a["v"], BF16, (T, NH, DV), "v"), _value(ctx, a["kv_c"], BF16, (T, L), "kv_c"),
-                  _value(ctx, a["k_pe"], BF16, (T, R), "k_pe")):
+        for r in (_value(ctx, a["q_nope"], BF16, (T, NH, P), "q_nope"), _value(ctx, a["q_pe"], BF16, (T, NH, R), "q_pe"),
+                  _value(ctx, a["k_nope"], BF16, (T, NH, P), "k_nope"), _value(ctx, a["k_pe"], BF16, (T, R), "k_pe"),
+                  _value(ctx, a["v"], BF16, (T, NH, DV), "v"), _value(ctx, a["kv_c"], BF16, (T, L), "kv_c")):
             if r:
                 return r
         if DV != D:
@@ -143,7 +147,8 @@ class DsaDenseMhaRule(StateRule):
         mp, h = ctx.module_path(node), ctx.hint_name(node)
         pos = ctx.static_index(a["positions"]).flat()
         T = len(pos)
-        _, NH, D = shape(ctx, a["q"])
+        _, NH, P = shape(ctx, a["q_nope"])
+        D = P + shape(ctx, a["k_pe"])[-1]
         hist, P0 = _open_history(ctx, node, layer, pos, has)
         if P0:
             refuse("numerics_unregistered", node, mp, f"{layer!r}: a dense-MHA prefill of {T} rows after {P0} history rows runs over a "
@@ -152,17 +157,24 @@ class DsaDenseMhaRule(StateRule):
         _append_rows(ctx, hist, a, has)
         tp = active_target_profile()
         geom = TG.attention_geometry(tp, D, T, NH, NH)
-        q, k, v = _rows(ctx, a["q"], 16), _rows(ctx, a["k"], 16), _rows(ctx, a["v"], 16)
+        qn, qp, kn, kpe = (_rows(ctx, a[n], 16) for n in ("q_nope", "q_pe", "k_nope", "k_pe"))
+        v = _rows(ctx, a["v"], 16)
+        qrow = Array(NH, Array(D, Value(16)))
         klog, vlog = PartLog(), PartLog()
         outs, masked = [], []
         for i in range(T):
-            klog.append(k[i].refs)
+            q = Coll(qrow, concat([r for hd in range(NH) for r in (qn[i][hd].refs, qp[i][hd].refs)]))
+            kp = kpe[i].refs
+            for hd in range(NH):
+                for r in (kn[i][hd].refs, kp):
+                    for p in (r.parts if isinstance(r, Concat) else (r,)):
+                        klog.append(p)
             vlog.append(v[i].refs)
             masked.append(TG.fa3_masked_from(tp, i + 1, NH, NH, D, T, i))
             fn = ctx.kind("attention_dot", node, T=i + 1, NH=NH, KVH=NH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
                           MASKED_FROM=masked[-1])
             rows = Array(i + 1, Array(NH, Array(D, Value(16))))
-            outs.append(ctx.call(fn, q[i], Coll(rows, klog.cut(i + 1)), Coll(rows, vlog.cut(i + 1)), node=node, rule=self,
+            outs.append(ctx.call(fn, q, Coll(rows, klog.cut(len(klog))), Coll(rows, vlog.cut(i + 1)), node=node, rule=self,
                                  name=f"{h}[t={pos[i]}]"))
         ctx.define(node, array_of(outs))
         ctx.record(self, node, {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_rows_after": T, "NH": NH, "D": D,

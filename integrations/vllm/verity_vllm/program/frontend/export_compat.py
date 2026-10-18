@@ -433,12 +433,12 @@ def dsa_leaves(site, model=None):
     for `fused_norm_rope` and `vllm_iface.dsa_q` for `fused_q`, and every module of ``model`` with a `_sparse_indexer_and_attn` gets
     one that calls `vllm_iface.dsa_indexer_attn` and then the absorbed value projection its body ends with, `bmm(attn, W_UV)` into
     `output`.  A call vLLM serves by dense MHA instead (`_takes_dense_mha`) runs `forward_mha`'s body: `kv_b_proj` up projects the
-    latent to k_nope and v, k = [k_nope | k_pe] (`_concat_k_nope_k_pe`'s copies, as one cat), q = [q_nope | q_pe roped], then
-    `vllm_iface.dsa_dense_mha` for the prefill backend's attention and its rows flattened into `output`.  The cache rows the kernels
-    write are the first op's outputs (`kv_c_out`, `k_pe_out`, the index K and its scale) and the attention op's operands, so each
-    layer's cache is the derive's state (`rules/vllm_dsa.py`).  What the shim does not model is refused at export: prefill context
-    parallelism, decode context parallelism, an fp8 query or KV cache, a caller-supplied `q_c_out` or `index_k_out`.  `W_UK_T` and
-    `W_UV` are Parameters the engine registers after loading; a meta model gets them from
+    latent to k_nope and v, then `vllm_iface.dsa_dense_mha` over q's and k's parts (q = [q_nope | q_pe roped], k = [k_nope | k_pe],
+    `_concat_k_nope_k_pe`'s copies, which its rule assembles) for the prefill backend's attention, its rows flattened into `output`.
+    The cache rows the kernels write are the first op's outputs (`kv_c_out`, `k_pe_out`, the index K and its scale) and the attention
+    op's operands, so each layer's cache is the derive's state (`rules/vllm_dsa.py`).  What the shim does not model is refused at
+    export: prefill context parallelism, decode context parallelism, an fp8 query or KV cache, a caller-supplied `q_c_out` or
+    `index_k_out`.  `W_UK_T` and `W_UV` are Parameters the engine registers after loading; a meta model gets them from
     `vllm_meta.mla_absorbed_weights_as_the_loader_does`."""
     from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the ops)
     iface = torch.ops.vllm_iface
@@ -480,9 +480,7 @@ def dsa_leaves(site, model=None):
             if _takes_dense_mha(layer, n, rows, topk):
                 nh, dn, dv = layer.num_heads, layer.qk_nope_head_dim, layer.v_head_dim
                 k_nope, v = layer.kv_b_proj(kv_c)[0].view(-1, nh, dn + dv).split([dn, dv], dim=-1)
-                k = torch.cat((k_nope, k_pe.unsqueeze(1).expand(-1, nh, -1)), dim=-1)
-                o = iface.dsa_dense_mha(positions, torch.cat((q_nope, mqa_q), dim=-1), k, v, kv_c, k_pe, ik, iks, layer.layer_name, topk,
-                                        float(layer.scale))
+                o = iface.dsa_dense_mha(positions, q_nope, mqa_q, k_nope, v, kv_c, k_pe, ik, iks, layer.layer_name, topk, float(layer.scale))
                 output.copy_(o.flatten(start_dim=-2))
                 return
             a = iface.dsa_indexer_attn(positions, ql_nope, mqa_q, kv_c, k_pe, index_q_fp8 if has else None, index_weights_out if has else None,
