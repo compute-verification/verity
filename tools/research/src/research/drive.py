@@ -10,7 +10,8 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
    by files its train doesn't change (and no check tooling), `next` stays on its base so the check isn't wasted (`held`).
 3. Check `next` in trains of `train_size` PRs, each stacked on the one below (every `train_size`-th member's commit, and the
    tip): `train.sh COMMIT MACHINE`, with `--agreement` when the train changes a `lean-audit.json` (the lander's rule; train.sh
-   itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run.
+   itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run, and
+   none above a member whose failure drive is still settling, which it would hold.
 
 What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns: a failed
 check, a conflict, a check that ran and passed but lacks a step the gate needs, a launch that registered no run.  A failed
@@ -18,8 +19,11 @@ train's cause is found by bisection over the checked prefixes of `next` (`Driver
 highest lower prefix whose check passed, or the base.  One member there is ejected (`research queue eject`, by `ci`); of
 several, those whose change touches a file the failure names (a traceback's frames, a lint's offender: `implicated`) are
 ejected at once, and otherwise drive checks the prefix halfway between and acts again when that check ends.  Overlap with
-what failed's declared inputs only informs: no ejection rests on it.  A kill that names nothing, or a failure with no report,
-goes to `@ci`, who ejects the PR that broke it.  The next sync rebuilds `next` without it.
+what failed's declared inputs only informs: no ejection rests on it.  Bisection alone ejects only a failure seen twice (its
+train's check resent, or a bisect check failing as its train did), and the lowest member only once a check of `main` itself
+passed: a failed one is told to `@ci` as `main` red, and nobody is ejected.  A PR pushed since the head that failed is not
+ejected; its new head is checked.  A kill that names nothing, or a failure with no report, goes to `@ci`, who ejects the PR
+that broke it.  The next sync rebuilds `next` without it.
 
 `--shadow` drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
@@ -804,9 +808,11 @@ class Driver:
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
         """Act on a failed train with no lander (16 Oct, Daniel through top) by bisection over the checked prefixes of `next`:
         its cause is among the members above the highest lower prefix whose check passed, or the base.
-        - One member there is the cause: it is ejected.
+        - One member there is the cause: it is ejected, once its failure was seen twice (`_again`; else ``m`` is resent), and,
+          the lowest member, once `main` itself passed (`_main_red`).
         - Of several, those whose change touches a file the failure names (`culprit`) are ejected at once; else drive checks
           the prefix halfway between (`bisect`) and acts again when that check ends: log2 of their count checks at most.
+        - A lower check that passed with `--defer`'s steps still running clears nobody of a failure in one of them.
         - A kill that points at nothing, or a failure nothing in the train reaches, a machine's fault, is checked again once,
           on ``on``'s machines (`resend`); a kill again, or a failure with no report, is told to `CI`.
         A member a lower running check covers is left to that check (18 Oct 01:55Z: ejecting it cancelled that train, and were

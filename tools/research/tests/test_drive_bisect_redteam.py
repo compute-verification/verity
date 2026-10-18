@@ -141,7 +141,7 @@ def test_a_midpoint_failing_on_another_suite_than_its_tip_is_checked_again_befor
     for n in (1, 2, 3):
         world.gh.put(n, world.change({f"pkg/f{n}.py": f"{n}\n"}))
     h.tick()
-    members, tip = h.q.chain(), _tip(world)
+    members = h.q.chain()
     flaked: list[str] = []
 
     def outcome(c):
