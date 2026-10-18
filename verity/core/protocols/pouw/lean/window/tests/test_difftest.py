@@ -8,12 +8,14 @@ parameters over realistic ε and δ (down to 2^-40), grid-derived and random wor
 exactly, and every way out of its domain.
 
 The advice's functions run on entries of the layout and every way off it (`_layout_entry`), rows and words mutated off
-the row format, records that are their entries' and each way they are not, small side domains of up to 2^8 positions
-(the side trees' code is the same at 2^13 and 2^17, which the pinned window exercises), and windows built honestly
-(`_window`: one to four calls, the filler, empty entries, records and side indices) and then broken in one of the ways
-`window_problem` names. Each problem-returning function must reach every one of its reasons (`REACHES`). The pinned
-window of `tests/vectors/window.json` (`window_vectors.py`) and the windows of served runs (`SERVED`, from the evidence
-store) are fixed vectors on top of the drawn ones.
+the row format, records that are their entries' and each way they are not, shapes of the window's form and each way off
+it (`_shape_in`), side rows and their fields with every bit and pad off, small side domains of up to 2^8 positions
+(the side trees' code is the same at 2^13 and 2^17, which the pinned window exercises), and windows built honestly on a
+shape (`_window`: one to four calls whose slots and weight rows are admitted, refused and empty at random, the filler,
+empty entries, records and side rows' fields) and then broken in one of the ways `window_problem` names, among them a
+forged ok on an empty slot or the filler and a forged admit. Each problem-returning function must reach every one of its
+reasons (`REACHES`). The pinned window of `tests/vectors/window.json` (`window_vectors.py`) and the work items of
+served runs (`SERVED`, from the evidence store) are fixed vectors on top of the drawn ones.
 """
 from __future__ import annotations
 
@@ -77,6 +79,17 @@ def grid_ell(rng: random.Random) -> dict:
     return {"bits": rng.randint(0, 6), "ell": rng.choice((rng.randint(0, 60), rng.randint(0, 2000), -rng.randint(1, 5)))}
 
 
+def work_at_in(rng: random.Random) -> dict:
+    return grid_ell(rng) | {"n": rng.choice((rng.randint(0, 300), rng.getrandbits(rng.randint(1, 60))))}
+
+
+def credit_in(rng: random.Random) -> dict:
+    bits = rng.randint(0, 6)
+    n = rng.choice((_number(rng, bits), rng.randint(1, 300), 1 << rng.randint(1, 60)))
+    real = rng.choice((rng.randint(1, max(1, n - 1)), n - 1, n, _number(rng, bits), 0, -1))
+    return {"bits": bits, "real": real, "n": n}
+
+
 def levels_in(rng: random.Random) -> dict:
     bits = rng.randint(0, 6)
     lo, hi = sorted((_number(rng, bits), _number(rng, bits)))
@@ -102,7 +115,8 @@ def _draw_params(rng: random.Random) -> tuple[Fraction, Fraction, int, int, int]
     r = rng.random()
     if r < 0.35:
         bits = rng.choice((3, 3, rng.randint(0, 6)))
-        w = Wd.bucket(rng.choice((rng.randint(1, 5000), rng.getrandbits(rng.randint(1, 40)) + 1)), bits)
+        n = rng.choice((rng.randint(2, 5000), rng.getrandbits(rng.randint(1, 40)) + 2))
+        w = Wd.credit(rng.randint(1, n - 1), n, bits)
         tile = rng.choice((1, 4096, rng.randint(1, 1 << 20)))
         return eps, delta, w.credited * tile, w.n, tile
     if r < 0.55:
@@ -137,7 +151,11 @@ def k_prime_in(rng: random.Random) -> dict:
 
 
 def _some_work(rng: random.Random, bits: int) -> Wd.Work:
-    return Wd.Work.at(rng.randint(0, 400), bits) if rng.random() < 0.6 else Wd.bucket(rng.randint(1, 1 << 40), bits)
+    if rng.random() < 0.6:
+        ell = rng.randint(0, 400)
+        return Wd.Work.at(ell, rng.choice((Wd.point(ell, bits) + rng.randint(1, 1000), rng.randint(0, 1 << 40))), bits)
+    n = rng.randint(2, 1 << 40)
+    return Wd.credit(rng.randint(1, n - 1), n, bits)
 
 
 def sampling_in(rng: random.Random) -> dict:
@@ -289,21 +307,73 @@ def leaf_in(rng: random.Random) -> dict:
     return {"domain": d, "e": rng.randint(0, d["count"]), "bc": rng.randbytes(rng.choice((128,) * 6 + (0, 64, 127, 129))).hex()}
 
 
-def tile_in_in(rng: random.Random) -> dict:
-    e = _layout_entry(rng)
-    t = rng.choice((rng.randint(min(e.lo, e.hi) - 2, max(e.lo, e.hi) + 2), e.lo, e.hi - 1, e.hi, -rng.randint(1, 9)))
-    return {"row": e.row().hex(), "t": t}
+def _shape(rng: random.Random, small: bool = False) -> list[Wd.Call]:
+    """A shape of the window's form: one to four calls, each m in 16s up to 80 (or 2^13), n up to 70 (or 2^17), their
+    pass tiles in order with gaps."""
+    out, in_pass = [], rng.randint(0, 5)
+    for _ in range(rng.randint(1, 4)):
+        m = Wd.ROW_STEP * rng.randint(1, 5 if small or rng.random() < 0.8 else 1 << 9)
+        n = rng.randint(1, rng.choice((3, 70)) if small or rng.random() < 0.8 else 1 << 17)
+        out.append(Wd.Call(m, n, in_pass))
+        in_pass += -(-m // Wd.TILE) * -(-n // Wd.TILE) + rng.choice((0, 0, rng.randint(1, 5)))
+    return out
+
+
+def _shape_in(rng: random.Random) -> tuple[list[Any], int]:
+    """A shape's JSON and an entry bound: of the form, or off it in one of the ways `shape_problem` and `shape_of` name."""
+    shape = _shape(rng)
+    bound = len(shape) + 1 + rng.randint(0, 3)
+    bad = rng.choice(("none",) * 4 + ("calls", "m", "n", "start", "end", "tiles", "json"))
+    c = rng.randrange(len(shape))
+    if bad == "calls":
+        bound = rng.choice((len(shape), 0, -1))
+    elif bad == "m":
+        shape[c] = Wd.Call(rng.choice((0, 8, 17, 8208, 1 << 14)), shape[c].n, shape[c].tile0)
+    elif bad == "n":
+        shape[c] = Wd.Call(shape[c].m, rng.choice((0, (1 << 17) + 1)), shape[c].tile0)
+    elif bad == "start" and c > 0:
+        shape[c] = Wd.Call(shape[c].m, shape[c].n, max(0, shape[c].tile0 - rng.randint(1, 30)))
+    elif bad == "end":
+        shape[-1] = Wd.Call(shape[-1].m, shape[-1].n, max(shape[-1].tile0, (1 << Wd.T_BITS) - rng.randint(0, 3)))
+    elif bad == "tiles":
+        step = (1 << Wd.DEPTHS["a"]) * (1 << Wd.DEPTHS["b"]) // Wd.TILE ** 2
+        shape = [Wd.Call(1 << Wd.DEPTHS["a"], 1 << Wd.DEPTHS["b"], c * step) for c in range(1 << 10)]
+        bound = len(shape) + 1
+    x: list[Any] = Wd.shape_json(shape)
+    if bad == "json":
+        how = rng.choice(("empty", "key", "extra", "neg", "bool", "str", "notlist"))
+        if how == "empty":
+            x = []
+        elif how == "key":
+            del x[c]["tile0"]
+        elif how == "extra":
+            x[c]["k"] = 1
+        elif how == "neg":
+            x[c]["n"] = -1
+        elif how == "bool":
+            x[c]["m"] = True
+        elif how == "str":
+            x[c]["tile0"] = "0"
+        else:
+            x = rng.choice(({"m": 16, "n": 1, "tile0": 0}, None, 3))
+    return x, bound
+
+
+def shape_in(rng: random.Random) -> dict:
+    x, bound = _shape_in(rng)
+    return {"shape": x, "bound": bound}
+
+
+def shape_entries_in(rng: random.Random) -> dict:
+    x, bound = _shape_in(rng)
+    return {"shape": x, "bound": max(0, bound)}
 
 
 def tile_at_in(rng: random.Random) -> dict:
-    if rng.random() < 0.5:
-        w = _window(rng, broken=False)
-        rows = w["rows"]
-        t = rng.randint(-2, w["work"]["n"] + 2)
-    else:
-        rows = [_row(rng) for _ in range(rng.randint(0, 5))]
-        t = rng.randint(-2, 200)
-    return {"rows": rows, "t": t}
+    shape = _shape(rng)
+    n = Wd.shape_tiles(shape)
+    t = rng.choice((rng.randint(-2, n + 2), n - 1, n, rng.randint(0, n - 1), rng.randint(0, n - 1)))
+    return {"shape": Wd.shape_json(shape), "t": t}
 
 
 def tile_read_in(rng: random.Random) -> dict:
@@ -332,9 +402,7 @@ def record_digest_in(rng: random.Random) -> dict:
 
 def _record(rng: random.Random, e: Wd.Entry) -> dict:
     n = rng.randint(max(1, 64 * (e.cols - 1) + 1), 64 * e.cols)
-    n = max(n, e.n_b)
-    return {"call": rng.randint(0, 9), "shape": [e.m, rng.choice((32, 4096)), n], "tile0": e.tile0,
-            "keep": {"a": sorted(rng.sample(range(e.m), e.n_a)), "b": sorted(rng.sample(range(n), e.n_b))}}
+    return {"call": rng.randint(0, 9), "shape": [e.m, rng.choice((32, 4096)), max(n, e.n_b)], "tile0": e.tile0}
 
 
 def _bound(e: Wd.Entry, record: Any) -> tuple[Wd.Entry, Any]:
@@ -344,14 +412,14 @@ def _bound(e: Wd.Entry, record: Any) -> tuple[Wd.Entry, Any]:
 def record_problem_in(rng: random.Random) -> dict:
     e = _call(rng)
     record = _record(rng, e)
-    bad = rng.choice(("none",) * 4 + ("digest", "shape", "notlist", "short", "tile0", "keep", "cols", "m", "n", "count",
-                                      "order", "dup", "range", "neg", "bool", "type", "keepstr", "keepmissing", "boolshape"))
+    bad = rng.choice(("none",) * 4 + ("digest", "shape", "notlist", "short", "tile0", "cols", "m", "n", "boolshape",
+                                      "strshape", "dictshape", "old"))
     if bad == "digest":
         return {"row": e.row().hex(), "record": record}
     if bad == "shape":
-        del record[rng.choice(("shape", "tile0", "keep"))]
+        del record[rng.choice(("shape", "tile0"))]
     elif bad == "notlist":
-        record["shape"] = rng.choice((5, "abc", None))
+        record["shape"] = rng.choice((5, None, [1, 2, 3, 4]))
     elif bad == "short":
         record["shape"] = record["shape"][:2]
     elif bad == "tile0":
@@ -362,49 +430,42 @@ def record_problem_in(rng: random.Random) -> dict:
         record["shape"][0] = rng.choice((e.m + 16, str(e.m)))
     elif bad == "n":
         record["shape"][2] = rng.choice(("64", None, [1]))
-    elif bad == "count":
-        side = rng.choice("ab")
-        record["keep"][side] = record["keep"][side][:-1]
-    elif bad == "order" and e.n_a > 1:
-        record["keep"]["a"] = record["keep"]["a"][::-1]
-    elif bad == "dup" and e.n_b > 1:
-        record["keep"]["b"][1] = record["keep"]["b"][0]
-    elif bad == "range":
-        side = rng.choice("ab")
-        record["keep"][side][-1] = record["shape"][0 if side == "a" else 2] + rng.randint(0, 3)
-    elif bad == "neg":
-        record["keep"]["a"][0] = -1
-    elif bad == "bool":
-        record["keep"]["b"][0] = rng.choice((True, False))
-    elif bad == "type":
-        record["keep"]["a"][0] = rng.choice(("0", None, [0]))
-    elif bad == "keepstr":
-        record["keep"] = rng.choice(("ab", ["a", "b"], 3))
-    elif bad == "keepmissing":
-        del record["keep"][rng.choice("ab")]
     elif bad == "boolshape":
         record["shape"][2] = True
+    elif bad == "strshape":
+        record["shape"] = "abc"
+    elif bad == "dictshape":
+        record["shape"] = {"m": e.m, "k": 32, "n": 64 * e.cols}
+    elif bad == "old":
+        record["keep"] = {"a": list(range(e.n_a)), "b": list(range(e.n_b))}
     e, record = _bound(e, record)
     return {"row": e.row().hex(), "record": record}
+
+
+def _bit_in(rng: random.Random) -> int:
+    return rng.choice((0, 1, 0, 1, 0, 1, 2, -1))
 
 
 def side_row_in(rng: random.Random) -> dict:
     words = [rng.randint(0, 65535) for _ in range(Wd.SIDE_INDEX_WORDS * rng.randint(0, 4) + rng.choice((0,) * 5 + (1, 7)))]
     index = rng.choice((rng.randint(0, 1 << 17), rng.randint(0, (1 << 32) - 1), (1 << 32) - 1, 1 << 32, -1))
-    return {"words": words, "index": index}
+    return {"words": words, "index": index, "ok": _bit_in(rng), "admit": _bit_in(rng)}
 
 
-def side_index_in(rng: random.Random) -> dict:
-    row = Wd.side_row([rng.randint(0, 65535) for _ in range(8 * rng.randint(0, 3))], rng.randint(0, (1 << 32) - 1))
-    bad = rng.choice(("none",) * 4 + ("short", "pad", "big", "negative"))
+def side_field_in(rng: random.Random) -> dict:
+    words = [rng.choice((0, 0, rng.randint(0, 65535))) for _ in range(8 * rng.randint(0, 3))]
+    row = Wd.side_row(words, rng.randint(0, (1 << 32) - 1), rng.randint(0, 1), rng.randint(0, 1))
+    bad = rng.choice(("none",) * 4 + ("short", "pad", "big", "negative", "bit"))
     if bad == "short":
         row = row[-rng.randint(0, 8):]
     elif bad == "pad":
-        row[-rng.randint(1, 6)] = rng.randint(1, 65535)
+        row[-rng.randint(1, 4)] = rng.randint(1, 65535)
     elif bad == "big":
         row[-rng.choice((7, 8))] = 1 << 16
     elif bad == "negative":
         row[-8] = -1
+    elif bad == "bit":
+        row[rng.choice((-6, -5))] = rng.choice((2, -1, 65535))
     return {"row": row}
 
 
@@ -429,36 +490,47 @@ def side_path_in(rng: random.Random) -> dict:
     return x | {"index": rng.randint(0, max(len(x["leaves"]) + 1, x["domain"]["count"]))}
 
 
+def _side_fields(rng: random.Random, count: int) -> list[list[int]]:
+    """One side's honest fields: each row admitted at a rate drawn per side (each admitted row formed or, now and then,
+    refused, and now and then all zero), every other row the canonical empty row [i, 0, 0, 1]."""
+    rate = rng.choice((0.0, 0.3, 0.9, 1.0, 1.0))
+    return [[i, int(rng.random() < 0.9), 1, int(rng.random() < 0.05)] if rng.random() < rate else [i, 0, 0, 1]
+            for i in range(count)]
+
+
 def _window(rng: random.Random, broken: bool = True) -> dict:
-    """An honest window (rows, work, bound, root_h3, bits, records, indices) and, when `broken`, one break of it."""
+    """An honest window of a shape (rows, work, bound, root_h3, shape, fields, bits, records) and, when `broken`, one
+    break of it."""
     bits = rng.choice((3, 3, 3, rng.randint(0, 6)))
     root_h3 = rng.randbytes(64)
-    entries, records, indices, at, in_pass = [], [], [], 0, rng.randint(0, 5)
-    for _ in range(rng.randint(1, 4)):
-        e = _call(rng, at, in_pass)
-        e = Wd.Entry(**(e.__dict__ | {"root_h3": root_h3}))
-        e, record = _bound(e, _record(rng, e))
-        entries.append(e)
+    shape = _shape(rng, small=True)
+    calls, bound = len(shape), len(shape) + 1 + rng.randint(0, 3)
+    public = Wd.shape_entries(shape, bound)
+    entries, records, fields = [], [], []
+    for c, call in enumerate(shape):
+        record = {"call": c, "shape": [call.m, rng.choice((32, 4096)), call.n], "tile0": call.tile0}
+        entries.append(Wd.Entry(**(public[c].__dict__ | {"root_a": _digest(rng), "root_b": _digest(rng),
+                                                          "root_h3": root_h3, "record": Wd.record_digest(record)})))
         records.append(record)
-        indices.append({s: list(record["keep"][s]) for s in "ab"})
-        at, in_pass = e.hi, e.tile0 + Wd.pass_tiles(e) + rng.choice((0, 0, rng.randint(1, 5)))
-    work = Wd.bucket(at, bits)
-    filler = _filler(rng, at, work.n - at)
-    entries.append(filler)
-    indices.append({"a": [0] * filler.n_a, "b": [0] * filler.n_b})
-    entries += [Wd.Entry("none")] * rng.randint(0, 3)
-    records += [None] * (len(entries) - len(records))
-    indices += [rng.choice((None, {"a": [], "b": []}))] * (len(entries) - len(indices))
+        fields.append({"a": _side_fields(rng, call.m), "b": _side_fields(rng, call.n)})
+    if not any(Wd.selected(f)["a"] * Wd.selected(f)["b"] for f in fields):
+        fields[0]["a"][0], fields[0]["b"][0] = [0, 1, 1, 0], [0, 1, 1, 0]
+    entries.append(Wd.Entry(**(public[calls].__dict__ | {"root_a": _digest(rng), "root_b": _digest(rng)})))
+    fields.append({"a": [[0, 0, 0, 1]], "b": [[0, 0, 0, 1]]})
+    entries += public[calls + 1:]
+    records += [None] * (bound - calls)
+    real = sum(Wd.selected(f)["a"] * Wd.selected(f)["b"] for f in fields[:calls])
+    work = Wd.credit(real, Wd.shape_tiles(shape), bits)
     rows = [e.row() for e in entries]
-    calls, bound = len(records) - records.count(None), len(entries)
-    out = {"rows": rows, "work": asdict(work), "bound": bound, "root_h3": root_h3.hex(), "bits": bits,
-           "records": records if rng.random() < 0.7 else None, "indices": None}
-    if out["records"] is not None and rng.random() < 0.7:
-        out["indices"] = indices
-    bad = rng.choice(("none",) * 3 + ("bound", "row", "layout", "kinds", "nofiller", "gap", "empty", "size", "h3", "overlap",
-                                      "fillerbig", "end", "level", "records", "pastcalls", "record", "indices", "fillerindex",
-                                      "noindices", "h3len", "indicesonly", "shortindices")) if broken else "none"
+    out = {"rows": rows, "work": asdict(work), "bound": bound, "root_h3": root_h3.hex(), "shape": Wd.shape_json(shape),
+           "fields": fields, "bits": bits, "records": records if rng.random() < 0.7 else None}
+    bad = rng.choice(("none",) * 3 + ("bound", "row", "layout", "kinds", "nofiller", "gap", "size", "h3", "h3len", "shape",
+                                      "noshape", "fields", "indices", "bits", "filleradmit", "fillerok", "emptyok",
+                                      "emptyrow", "nocredit", "level", "end", "forge", "records", "pastcalls", "record")) \
+        if broken else "none"
     e = rng.randrange(calls)
+    side = rng.choice("ab")
+    empty = [(c, i) for c in range(calls + 1) for i, p in enumerate(fields[c][side]) if not p[2]]
     def put(i: int, **kw) -> None:
         rows[i] = Wd.Entry(**(Wd.Entry.from_row(rows[i]).__dict__ | kw)).row()
     if bad == "bound":
@@ -474,21 +546,48 @@ def _window(rng: random.Random, broken: bool = True) -> dict:
         rows[calls] = Wd.Entry("none").row()
     elif bad == "gap":
         put(e, lo=entries[e].lo + 1, hi=entries[e].hi + 1)
-    elif bad == "empty":
-        put(e, hi=entries[e].lo)
     elif bad == "size":
         put(e, n_b=entries[e].n_b + 1)
     elif bad == "h3":
         put(e, root_h3=rng.randbytes(64))
-    elif bad == "overlap" and calls > 1:
-        put(calls - 1, tile0=max(0, entries[calls - 2].tile0 + Wd.pass_tiles(entries[calls - 2]) - 1))
-    elif bad == "fillerbig":
-        put(calls, n_a=1, n_b=max(1, filler.hi - filler.lo - 1))
+    elif bad == "h3len":
+        out["root_h3"] = rng.randbytes(rng.choice((0, 32))).hex()
+    elif bad == "shape":
+        out["shape"][e][rng.choice(("m", "n", "tile0"))] += rng.choice((1, 16, 64))
+    elif bad == "noshape":
+        out["shape"] = rng.choice(([], None))
+    elif bad == "fields":
+        how = rng.choice(("count", "form", "bool"))
+        if how == "count":
+            out["fields"] = rng.choice((fields[:-1], fields + fields[-1:], []))
+        elif how == "form":
+            fields[e][side][0] = fields[e][side][0][:3]
+        else:
+            fields[e][side][0][rng.randint(0, 3)] = rng.choice((True, False))
+    elif bad == "indices":
+        i = rng.randrange(len(fields[e][side]))
+        fields[e][side][i][0] += rng.choice((1, -1))
+    elif bad == "bits":
+        fields[e][side][rng.randrange(len(fields[e][side]))][rng.randint(1, 3)] = rng.choice((2, -1))
+    elif bad == "filleradmit":
+        fields[calls][side][0] = [0, rng.randint(0, 1), 1, rng.randint(0, 1)]
+    elif bad == "fillerok":
+        fields[calls][side][0] = [0, 1, 0, 1]
+    elif bad == "emptyok":
+        c, i = rng.choice(empty)
+        fields[c][side][i] = [i, 1, 0, 1]
+    elif bad == "emptyrow":
+        c, i = rng.choice(empty)
+        fields[c][side][i] = [i, 0, 0, 0]
+    elif bad == "nocredit":
+        out["fields"] = [{s: [[p[0], 0, 0, 1] for p in f[s]] for s in "ab"} for f in fields]
+    elif bad == "level":
+        out["work"] = asdict(Wd.Work.at(work.level + rng.choice((1, -1) if work.level else (1,)), work.n, bits))
     elif bad == "end":
         out["work"] = asdict(Wd.Work(work.level, work.credited, work.n + rng.choice((-1, 1))))
-    elif bad == "level":
-        lv = Wd.Work.at(work.level + 1, bits)
-        out["work"] = asdict(Wd.Work(lv.level, lv.credited, work.n))
+    elif bad == "forge":
+        c, i = rng.choice([x for x in empty if x[0] < calls] or empty)
+        fields[c][side][i] = [i, 1, 1, rng.randint(0, 1)]
     elif bad == "records" and out["records"]:
         out["records"] = out["records"][:-1]
     elif bad == "pastcalls" and out["records"]:
@@ -496,19 +595,6 @@ def _window(rng: random.Random, broken: bool = True) -> dict:
     elif bad == "record" and out["records"]:
         out["records"] = list(out["records"])
         out["records"][e] = dict(records[e]) | {"call": -1}
-    elif bad == "indices" and out["indices"]:
-        side = rng.choice("ab")
-        out["indices"][e] = dict(indices[e]) | {side: indices[e][side][:-1] + [indices[e][side][-1] + 1]}
-    elif bad == "fillerindex" and out["indices"]:
-        out["indices"][calls] = {"a": [1] * filler.n_a, "b": [0] * filler.n_b}
-    elif bad == "noindices" and out["indices"]:
-        out["indices"][rng.randint(0, calls)] = None
-    elif bad == "shortindices" and out["indices"]:
-        out["indices"] = out["indices"][:rng.randint(0, calls)]
-    elif bad == "h3len":
-        out["root_h3"] = rng.randbytes(rng.choice((0, 32))).hex()
-    elif bad == "indicesonly":
-        out["records"], out["indices"] = None, indices
     out["rows"] = [r.hex() for r in rows]
     return out
 
@@ -602,12 +688,13 @@ def _reason(fn: str, why: str | None, keys: dict[str, str]) -> None:
 LAYOUT = {"range": "its range [", "zero": "zero row", "side": "rows, not 1 to", "h3": "-h3 root is not zero",
           "record": "record is not zero", "pass": "tile0, cols and m are not zero", "m": "its m ", "cols": "its cols ",
           "tile0": "its pass tiles"}
-RECORD = {"digest": "not the one the entry binds", "place": "its tile0, cols and m", "keep": "keep is not",
-          "shape": "has no shape"}
-WINDOW = {"bound": "entries, not the bound", "row": "not an entry row", "layout": "not the layout", "kinds": "the calls, then",
-          "gap": "does not start where", "size": "tiles, not its", "h3": "-h3 root is not the pass's",
-          "overlap": "before the last call's end", "fillerbig": "the filler's range is", "end": "the ranges end at",
-          "level": "real tiles are level", "records": "records, not one per call", "indices": "rows' indices are not",
+RECORD = {"digest": "not the one the entry binds", "place": "its tile0, cols and m", "shape": "has no shape"}
+SHAPE = {"calls": "calls, not 1 to the bound", "m": "its m ", "n": "its n ", "start": "pass tiles start at",
+         "end": "pass tiles end at", "tiles": "tiles are not of"}
+WINDOW = {"bound": "entries, not the bound", "row": "not an entry row", "layout": "not the layout",
+          "public": "are not the shape's", "h3": "-h3 root is not the pass's", "indices": "rows' indices are not",
+          "bits": "ok, admit or blank is not 0 or 1", "filler": "the filler's side-", "empty": "not the canonical empty row",
+          "nocredit": "no tile is credited", "level": "credited tiles of", "records": "records, not one per call",
           "record": "record"}
 
 
@@ -623,10 +710,16 @@ def record_problem(v: dict) -> str | None:
     return why
 
 
+def shape_problem(v: dict) -> str | None:
+    why = Wd.shape_problem(Wd.shape_of(v["shape"]), v["bound"])
+    _reason("shape_problem", why, SHAPE)
+    return why
+
+
 def window_problem(v: dict) -> str | None:
     try:
         why = Wd.window_problem([bytes.fromhex(r) for r in v["rows"]], _work(v["work"]), v["bound"], bytes.fromhex(v["root_h3"]),
-                                v["bits"], v["records"], v["indices"])
+                                Wd.shape_of(v["shape"]), v["fields"], v["bits"], v["records"])
     except ValueError:
         SEEN["window_problem"].add("refused")
         raise
@@ -691,7 +784,8 @@ def layout_constants(_: dict) -> dict:
 #: of each function that returns one, and its accept.
 REACHES = {"k_prime": {"refused", "capped", "k > 10,000", "n > 2^50", "exact"},
            "layout_problem": {"accept", *LAYOUT}, "record_problem": {"accept", *RECORD},
-           "window_problem": {"accept", "refused", *WINDOW}, "live_epoch_reason": {"accept", "scheme", "coins"}}
+           "shape_problem": {"accept", *SHAPE}, "window_problem": {"accept", "refused", *WINDOW},
+           "live_epoch_reason": {"accept", "scheme", "coins"}}
 SEEN: dict[str, set[str]] = {fn: set() for fn in REACHES}
 
 
@@ -720,9 +814,9 @@ PORTS = {
     "floor_point": (_port("floor_point", lambda v: Wd.floor_point(v["n"], v["bits"]), grid_n), 500),
     "pad": (_port("pad", lambda v: Wd.pad(v["n"], v["bits"]), grid_n), 500),
     "level": (_port("level", lambda v: Wd.level(v["n"], v["bits"]), grid_n), 500),
-    "bucket": (_port("bucket", lambda v: asdict(Wd.bucket(v["n"], v["bits"])), grid_n), 500),
+    "credit": (_port("credit", lambda v: asdict(Wd.credit(v["real"], v["n"], v["bits"])), credit_in), 500),
     "point": (_port("point", lambda v: Wd.point(v["ell"], v["bits"]), grid_ell), 500),
-    "work_at": (_port("work_at", lambda v: asdict(Wd.Work.at(v["ell"], v["bits"])), grid_ell), 500),
+    "work_at": (_port("work_at", lambda v: asdict(Wd.Work.at(v["ell"], v["n"], v["bits"])), work_at_in), 500),
     "levels": (_port("levels", lambda v: Wd.levels(v["lo"], v["hi"], v["bits"]), levels_in), 500),
     "k_prime": (_port("k_prime", k_prime, k_prime_in), 3000),
     "sampling": (_port("sampling", lambda v: Wd.sampling(_q(v["eps"]), _q(v["delta"]), _work(v["work"]), v["tile_work"],
@@ -735,21 +829,25 @@ PORTS = {
     "entry_from_words": (_port("entry_from_words", lambda v: Wd.Entry.from_words(v["words"]).to_json(), words_in), 500),
     "layout_problem": (_port("layout_problem", layout_problem, layout_in, need_rejects=False), 1500),
     "pass_tiles": (_port("pass_tiles", lambda v: Wd.pass_tiles(_entry_row(v)), layout_in, need_rejects=False), 200),
-    "tiles": (_port("tiles", lambda v: Wd.tiles(_entry_row(v)), layout_in, need_rejects=False), 200),
     "entry_digest": (_port("entry_digest", lambda v: Wd.entry_digest(_entry_row(v)).hex(), layout_in,
                            need_rejects=False), 200),
     "entry_bc": (_port("entry_bc", lambda v: Wd.entry_bc(_entry_row(v), bytes.fromhex(v["salt"])).hex(), bc_in), 300),
     "entry_leaf": (_port("entry_leaf", lambda v: Wd.entry_leaf(_dom(v["domain"]), v["e"], bytes.fromhex(v["bc"])).hex(),
                          leaf_in), 300),
-    "tile_in": (_port("tile_in", lambda v: Wd.tile_in(_entry_row(v), v["t"]), tile_in_in), 500),
-    "tile_at": (_port("tile_at", lambda v: Wd.tile_at([Wd.Entry.from_row(bytes.fromhex(r)) for r in v["rows"]], v["t"]),
-                      tile_at_in), 500),
+    "shape_of": (_port("shape_of", lambda v: Wd.shape_json(Wd.shape_of(v["shape"])), shape_in), 300),
+    "shape_tiles": (_port("shape_tiles", lambda v: Wd.shape_tiles(Wd.shape_of(v["shape"])), shape_in,
+                          need_rejects=False), 200),
+    "shape_problem": (_port("shape_problem", shape_problem, shape_in), 1500),
+    "shape_entries": (_port("shape_entries", lambda v: [e.to_json() for e in Wd.shape_entries(Wd.shape_of(v["shape"]),
+                                                                                              v["bound"])],
+                            shape_entries_in, need_rejects=False), 200),
+    "tile_at": (_port("tile_at", lambda v: list(Wd.tile_at(Wd.shape_of(v["shape"]), v["t"])), tile_at_in), 500),
     "tile_read": (_port("tile_read", lambda v: Wd.tile_read(_entry_row(v), v["i"], v["j"]), tile_read_in), 500),
     "record_digest": (_port("record_digest", lambda v: Wd.record_digest(v["record"]).hex(), record_digest_in,
                             need_rejects=False), 500),
     "record_problem": (_port("record_problem", record_problem, record_problem_in, need_rejects=False), 2000),
-    "side_row": (_port("side_row", lambda v: Wd.side_row(v["words"], v["index"]), side_row_in), 300),
-    "side_index": (_port("side_index", lambda v: Wd.side_index(v["row"]), side_index_in), 300),
+    "side_row": (_port("side_row", lambda v: Wd.side_row(v["words"], v["index"], v["ok"], v["admit"]), side_row_in), 300),
+    "side_field": (_port("side_field", lambda v: list(Wd.side_field(v["row"])), side_field_in), 300),
     "side_domain": (_port("side_domain", lambda v: Wd.side_domain(bytes.fromhex(v["window"]), v["side"]).domain_id.hex(),
                           side_domain_in), 200),
     "pad_node": (_port("pad_node", lambda v: Wd.pad_node(_dom(v["domain"]), v["level"], v["index"]).hex(), pad_node_in,
@@ -798,7 +896,7 @@ def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -
     """Lean and Python agree on each recorded window's level, work, sampling and side domains, and give what it
     registered."""
     tw, eps, delta = 4096, [1, 2], [1, 10]
-    at = json.loads(D.replay(PORTS["work_at"][0], {"ell": work["level"], "bits": 3}, server)[1])
+    at = json.loads(D.replay(PORTS["work_at"][0], {"ell": work["level"], "n": work["n"], "bits": 3}, server)[1])
     assert json.loads(D.replay(PORTS["work_to_json"][0], {"work": at, "tile_work": tw}, server)[1]) == work
     assert json.loads(D.replay(PORTS["k_prime"][0], {"eps": eps, "delta": delta, "credited": work["credited"],
                                                      "n": at["n"], "w_max": tw}, server)[1]) == k
@@ -807,6 +905,20 @@ def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -
     assert sampling == {"delta": "1/10", "eps": "1/2", "grid_bits": 3, "law": {"k": k, "law": "subset"}}
     for side in ("a", "b"):
         D.replay(PORTS["side_domain"][0], {"window": domain, "side": side}, server)
+
+
+def test_the_pinned_window(server) -> None:
+    """Lean accepts the pinned static window (`tests/vectors/window.json`), with its empty slots and refused rows in
+    place, at the level Python credits, and maps each pinned drawn index to the entry and rows Python does."""
+    w = VECTORS["window"]
+    work = {"level": w["work"]["level"], "credited": w["work"]["credited_tiles"], "n": w["work"]["n"]}
+    x = {"rows": [e["row"] for e in VECTORS["entries"]], "work": work, "bound": len(VECTORS["entries"]),
+         "root_h3": w["root_h3"], "shape": VECTORS["shape"], "fields": VECTORS["fields"], "bits": Wd.GRID_BITS,
+         "records": VECTORS["records"]}
+    assert json.loads(D.replay(PORTS["window_problem"][0], x, server)[1]) is None
+    for r in VECTORS["tile_reads"]:
+        got = D.replay(PORTS["tile_at"][0], {"shape": VECTORS["shape"], "t": r["t"]}, server)[1]
+        assert json.loads(got) == [r["entry"], r["I"], r["J"]]
 
 
 @pytest.mark.parametrize("fn", sorted(PORTS))

@@ -7,7 +7,7 @@ import Lean.Data.Json
 
 The entry binds its call's record by the SHA-512 of its canonical JSON (`canonical_json`: keys sorted, compact,
 `ensure_ascii`, so every character outside space … `~` is a `\uXXXX` escape, above U+FFFF a surrogate pair), and
-`recordProblem` holds the record's `shape` [m, k, n], `tile0` and `keep` to the entry. A record is any JSON value, so
+`recordProblem` holds the record's `shape` [m, k, n] and `tile0` to the entry. A record is any JSON value, so
 `recordProblem` reads it as Python does: an integer where Python computes is an integer or a boolean (Python's `True` is 1),
 and the reasons print values as Python's `str` does (`pyStr`).
 -/
@@ -110,23 +110,13 @@ def ceilTile (n : Int) : Int := -((-n).fdiv tile)
 ValueError)` is the last reason, reached wherever Python would raise one of them. -/
 def recordProblem (e : Entry) (record : Json) : Except String (Option String) := do
   if (← recordDigest record) != e.record then return some "its record is not the one the entry binds"
-  let noShape := some "its record has no shape [m, k, n], tile0 and keep {a, b}"
+  let noShape := some "its record has no shape [m, k, n] and tile0"
   let some (.arr #[m, _, n]) := pyGet? record "shape" | return noShape
-  let (some tile0, some keep) := (pyGet? record "tile0", pyGet? record "keep") | return noShape
+  let some tile0 := pyGet? record "tile0" | return noShape
   let some nInt := pyInt? n | return noShape
   let cols := ceilTile nInt
   if !(pyInt? tile0 == some e.tile0 && cols == e.cols && pyInt? m == some e.m) then
     return some s!"its tile0, cols and m are not its record's {pyStr tile0}, ⌈{pyStr n}/64⌉ and {pyStr m}"
-  for (side, count, top) in [(Side.a, e.nA, m), (Side.b, e.nB, n)] do
-    let some rows := (pyGet? keep side.name).bind pyList? | return noShape
-    let bad := some s!"its record's side-{side.name} keep is not {count} increasing indices of [0, {pyStr top})"
-    if rows.length != count then return bad
-    let some ints := rows.mapM strictInt? | return bad
-    if !increasing ints then return bad
-    match ints.head?, ints.getLast?, pyInt? top with
-    | some first, some last, some t => if !(0 ≤ first && last < t) then return bad
-    | some _, some _, none => return noShape
-    | _, _, _ => pure ()
   return none
 
 end PouwWindow

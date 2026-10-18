@@ -11,19 +11,21 @@ One function per ported function of `window.py`, each on a JSON object of its ar
 (`verity/core/difftest`): an output, or `.error` where Python raises `ValueError` (a reject). The port's
 suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
 
-* `on_grid`, `floor_point`, `pad`, `level`, `bucket` (`bits`, `n`); `point`, `work_at` (`bits`, `ell`); `levels` (`bits`,
-  `lo`, `hi`);
+* `on_grid`, `floor_point`, `pad`, `level` (`bits`, `n`); `point` (`bits`, `ell`); `work_at` (`bits`, `ell`, `n`);
+  `credit` (`bits`, `real`, `n`); `levels` (`bits`, `lo`, `hi`);
 * `k_prime` (`eps`, `delta` as `[num, den]`, `credited`, `n`, `w_max`); `sampling` (`eps`, `delta`, `work`, `tile_work`,
   `bits`); `work_to_json` (`work`, `tile_work`);
 * `constants`: `PUBLIC`, `REGISTERED`, `KINDS` and `GRID_BITS`;
 * the entry row: `entry_row`, `entry_words` (`entry`, as `Entry.to_json`); `entry_from_row` (`row` hex),
-  `entry_from_words` (`words`); `layout_problem`, `pass_tiles`, `tiles`, `entry_digest` (`row`); `entry_bc` (`row`,
-  `salt`); `entry_leaf` (`domain` `{binding, count}`, `e`, `bc`); `tile_in` (`row`, `t`); `tile_at` (`rows`, `t`);
-  `tile_read` (`row`, `i`, `j`);
+  `entry_from_words` (`words`); `layout_problem`, `pass_tiles`, `entry_digest` (`row`); `entry_bc` (`row`, `salt`);
+  `entry_leaf` (`domain` `{binding, count}`, `e`, `bc`); `tile_read` (`row`, `i`, `j`);
+* the shape: `shape_of`, `shape_tiles` (`shape`); `shape_problem`, `shape_entries` (`shape`, `bound`); `tile_at`
+  (`shape`, `t`);
 * a call's record: `record_digest` (`record`); `record_problem` (`row`, `record`);
-* the side trees: `side_row` (`words`, `index`); `side_index` (`row`); `side_domain` (`window`, `side`); `pad_node`
-  (`domain`, `level`, `index`); `side_levels` (`domain`, `leaves`); `side_path` (`domain`, `leaves`, `index`);
-* the window statement: `window_problem` (`rows`, `work`, `bound`, `root_h3`, `bits`, and `records`, `indices` or null);
+* the side trees: `side_row` (`words`, `index`, `ok`, `admit`); `side_field` (`row`); `side_domain` (`window`, `side`);
+  `pad_node` (`domain`, `level`, `index`); `side_levels` (`domain`, `leaves`); `side_path` (`domain`, `leaves`, `index`);
+* the window statement: `window_problem` (`rows`, `work`, `bound`, `root_h3`, `shape`, `fields`, `bits`, and `records`
+  or null);
 * the public inputs: `session_cap` (`k_log`, `per_block`); `sessions` (`k`, `cap`); `instance_ts` (`registration`,
   `drawn`, `sigma`, `cap`); `public_inputs` (those and `domain_h3`); `layout_constants`.
 * a live window: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
@@ -109,6 +111,11 @@ def optList (j : Json) (k : String) : Except String (Option (List Json)) :=
   | some (.arr a) => pure (some a.toList)
   | some _ => throw s!"the input's {k} is not a list or null"
 
+def shapeArg (j : Json) : Except String (List Call) := do
+  match shapeOf? (← get j "shape") with
+  | some s => pure s
+  | none => throw "a window's shape is a non-empty list of calls {m, n, tile0} of natural numbers"
+
 def levelsOf (j : Json) : Except String (PouwCommit.Domain × Array (Array ByteArray)) := do
   let d ← domain j
   pure (d, ← sideLevels? d (← hexes j "leaves"))
@@ -122,9 +129,9 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("floor_point", ofN floorPoint?),
   ("pad", ofN pad?),
   ("level", ofN level?),
-  ("bucket", fun j => do pure ((← bucket? (← nat j "bits") (← int j "n")).toJson)),
+  ("credit", fun j => do pure ((← credit? (← nat j "bits") (← int j "real") (← int j "n")).toJson)),
   ("point", fun j => do pure (toJson (← point? (← nat j "bits") (← int j "ell")))),
-  ("work_at", fun j => do pure ((← Work.at? (← nat j "bits") (← int j "ell")).toJson)),
+  ("work_at", fun j => do pure ((← Work.at? (← nat j "bits") (← int j "ell") (← nat j "n")).toJson)),
   ("levels", fun j => do pure (toJson (← levels? (← nat j "bits") (← int j "lo") (← int j "hi")))),
   ("k_prime", fun j => do
     pure (toJson (← kPrime (← rat j "eps") (← rat j "delta") (← int j "credited") (← int j "n") (← int j "w_max")))),
@@ -139,24 +146,26 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("entry_from_words", fun j => do pure (entryJson (← Entry.fromWords? (← ints j "words")))),
   ("layout_problem", fun j => do pure (toJson (← rowEntry j).layoutProblem)),
   ("pass_tiles", fun j => do pure (toJson (← rowEntry j).passTiles)),
-  ("tiles", fun j => do pure (toJson (← rowEntry j).tiles)),
   ("entry_digest", fun j => do pure (hexJ (← rowEntry j).digest)),
   ("entry_bc", fun j => do pure (hexJ (← (← rowEntry j).bc? (← hex j "salt")))),
   ("entry_leaf", fun j => do pure (hexJ (← entryLeaf? (← domain j) (← nat j "e") (← hex j "bc")))),
-  ("tile_in", fun j => do
-    let (i, b) ← (← rowEntry j).tileIn? (← int j "t")
-    pure (toJson [i, b])),
+  ("shape_of", fun j => do pure (shapeJson (← shapeArg j))),
+  ("shape_tiles", fun j => do pure (toJson (shapeTiles (← shapeArg j)))),
+  ("shape_problem", fun j => do pure (toJson (shapeProblem (← shapeArg j) (← int j "bound")))),
+  ("shape_entries", fun j => do pure (Json.arr ((shapeEntries (← shapeArg j) (← nat j "bound")).map entryJson).toArray)),
   ("tile_at", fun j => do
-    let rows ← hexes j "rows"
-    let (e, i, b) ← tileAt? (← rows.toList.mapM Entry.fromRow?) (← int j "t")
+    let (e, i, b) ← tileAt? (← shapeArg j) (← int j "t")
     pure (toJson [e, i, b])),
   ("tile_read", fun j => do
     let (p, w) ← (← rowEntry j).tileRead? (← int j "i") (← int j "j")
     pure (toJson [(p : Int), w])),
   ("record_digest", fun j => do pure (hexJ (← recordDigest (← get j "record")))),
   ("record_problem", fun j => do pure (toJson (← recordProblem (← rowEntry j) (← get j "record")))),
-  ("side_row", fun j => do pure (toJson (← sideRow? (← ints j "words") (← int j "index")))),
-  ("side_index", fun j => do pure (toJson (← sideIndex? (← ints j "row")))),
+  ("side_row", fun j => do
+    pure (toJson (← sideRow? (← ints j "words") (← int j "index") (← int j "ok") (← int j "admit")))),
+  ("side_field", fun j => do
+    let f ← sideField? (← ints j "row")
+    pure (toJson [f.index, f.ok, f.admit, f.blank])),
   ("side_domain", fun j => do pure (hexJ (← sideDomain? (← hex j "window") (← str j "side")).id)),
   ("pad_node", fun j => do pure (hexJ (padNode (← domain j) (← nat j "level") (← nat j "index")))),
   ("side_levels", fun j => do
@@ -167,8 +176,8 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
     pure (Json.arr ((sidePath d lv (← nat j "index")).map hexJ).toArray)),
   ("window_problem", fun j => do
     let rows ← hexes j "rows"
-    pure (toJson (← windowProblem rows.toList (← work j) (← int j "bound") (← hex j "root_h3") (← nat j "bits")
-      (← optList j "records") (← optList j "indices")))),
+    pure (toJson (← windowProblem rows.toList (← work j) (← int j "bound") (← hex j "root_h3") (← shapeArg j)
+      (← get j "fields") (← nat j "bits") (← optList j "records")))),
   ("session_cap", fun j => do pure (toJson (← sessionCap? (← int j "k_log") (← int j "per_block")))),
   ("sessions", fun j => do pure (toJson (← sessions? (← int j "k") (← int j "cap")))),
   ("instance_ts", fun j => do
