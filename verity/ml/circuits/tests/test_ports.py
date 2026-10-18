@@ -430,6 +430,59 @@ def test_a_harness_evaluates_a_definition_with_coin_and_static_ports():
         decode_program(encode_program(prog), REGISTRY)
 
 
+# --- model weights ------------------------------------------------------------------------------------------------------------
+
+def _weighted(name: str) -> CompositeDefinition:
+    return comp(name, [("prompt", V16), ("weights", Record(("w", Array(2, V16)), ("b", V32))), ("eps", V16)], V16,
+                lambda B, S, prompt, weights, eps: B.call(Add16, B.call(Add16, prompt, weights.field("w")[0]), eps))
+
+
+def _origins(root) -> list[set]:
+    F = P.facts(root)
+    return [set(F.node(k).one.origin) for k in range(4)]
+
+
+def test_the_weights_are_marked_theta_outside_every_digest():
+    """The weights record lowers to input nodes 1 and 2, whose leaves have origin theta whatever their binding time; the marking
+    is the annotation alone, so the descriptor's digest and every definition entry are the unmarked Program's."""
+    f = _weighted("PortsTestTheta")
+    plain, marked = Program(f), Program(f, theta=("weights",))
+    desc = encode_program(marked)
+    assert desc["annotations"] == {"theta": [1, 2]} and encode_program(plain)["annotations"] == {}
+    assert program_digest(desc) == program_digest(plain) and desc["definitions"] == encode_program(plain)["definitions"]
+    assert _origins(plain.root) == [{"input"}] * 4
+    assert _origins(marked.root) == [{"input"}, {"theta"}, {"theta"}, {"input"}]
+    assert _origins(decode_program(desc, REGISTRY).root) == _origins(marked.root)
+    registered = Program(f, theta=("weights",), registered=("weights", "eps"))
+    assert _origins(registered.root) == [{"input"}, {"theta"}, {"theta"}, {"registered"}]
+    assert program_digest(registered) == program_digest(Program(f, registered=("weights", "eps")))
+
+
+def test_a_coin_is_never_a_weight_and_theta_names_parameters():
+    """A theta coin is refused, theta names parameters, and a `theta` annotation passed in (another layout's, when a Program is
+    rebuilt from one) is dropped rather than read."""
+    coin = comp("PortsTestThetaCoin", [("key", V32)], V8, lambda B, S, key: B.call(Noise, key, B.call(Tag)), ports=COIN)
+    refused("E_PORT_KIND", lambda: Program(coin, theta=("key",)), "input node 0: a coin is the verifier's, never a model weight")
+    with pytest.raises(ValueError, match=re.escape("has no parameter ['w'] to mark theta")):
+        Program(_weighted("PortsTestThetaName"), theta=("w",))
+    carried = Program(_weighted("PortsTestThetaAnn"), annotations={"theta": [1], "note": "kept"})
+    assert carried.annotations == {"note": "kept"} and _origins(carried.root) == [{"input"}] * 4
+
+
+def test_the_decoder_ignores_the_marking_and_the_facts_check_it():
+    """The decoder's verdict and digest don't read the annotation; `ports.facts` refuses one that names a coin or anything but
+    the root's input nodes."""
+    desc = encode_program(Program(comp("PortsTestThetaTamper", [("key", V32)], V8,
+                                       lambda B, S, key: B.call(Noise, key, B.call(Tag)), ports=COIN)))
+    for theta, code, needle in (([0], "E_PORT_KIND", "never a model weight"), ([1], "E_PORT_DECL", "lists input nodes"),
+                                ("0", "E_PORT_DECL", "lists input nodes"), ([True], "E_PORT_DECL", "lists input nodes")):
+        bad = copy.deepcopy(desc)
+        bad["annotations"]["theta"] = theta
+        dec = decode_program(bad, REGISTRY)
+        assert program_digest(encode_program(dec)) == program_digest(desc)
+        refused(code, lambda: P.facts(dec.root), needle)
+
+
 # --- rule 5: one type per committed word --------------------------------------------------------------------------------------
 
 def test_a_runtime_word_is_read_only_as_its_producers_type():

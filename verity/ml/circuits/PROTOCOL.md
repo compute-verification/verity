@@ -46,7 +46,8 @@ and strings of a fixed vocabulary, which the decoder checks (§4.6).
 
 A stored descriptor file need not be canonical (builds write it with spaces). The program digest, `program_digest`, is the hex
 SHA-512 of the canonical bytes of the descriptor without `annotations`: the Build's program digest and the `program` field of
-`verity/partition/v1`. `annotations` never enter it and carry no meaning in this format. It carries no domain prefix (the
+`verity/partition/v1`. `annotations` never enter it, and no verdict of this format reads them; one, `theta`, means something
+to the port facts (§12). It carries no domain prefix (the
 partition object's digests do).
 
 Vectors: `canonical_json.in_domain` (value, bytes), `canonical_json.outside` (value, Python's bytes, the JCS bytes, the
@@ -562,7 +563,13 @@ a word type (or none). The origins are:
 - `gate`, for a computed value;
 - `static`, for the output of a primitive without parameters (a constant);
 - `input` and `registered`, for an input node's leaf by its binding time;
-- `coin`, for an input leaf whose port is `"kind": "coin"`.
+- `coin`, for an input leaf whose port is `"kind": "coin"`;
+- `theta`, in place of `input` or `registered`, for a leaf of an input node the Program marks as the model's weights.
+
+`Program(fn, theta=names)` names the parameters that are the model's weights, and the annotation `theta` lists the root's
+input nodes they lower to, ascending. It is outside both digests, so it binds nothing: a consumer that treats a leaf
+differently for being a weight checks it against the weights' commitment. The decoder doesn't read it. `ports.facts` does, on
+a built or a decoded Program, and refuses (`E_PORT_DECL`) a list that names anything but the root's input nodes.
 
 An input leaf's interval and word are its port's `bound` and `word`. A constant's interval is its value: its encoding, read as
 signed when its top bit is set and `w > 1` (none for a constant that reads a table). A node's output leaves carry what its
@@ -589,8 +596,9 @@ as declared, so a composite over exact steps declares the intervals its operands
 - **`E_PORT_SINK`**: a primitive node reads a sink at a port without `receipt`, or a composite other than the root returns a
   sink at a leaf it does not declare `"sink": true`. A sink reaches only receipt ports and the Program's outputs.
 - **`E_PORT_KIND`**: a `"kind": "coin"` port reads a leaf whose origin is not exactly `coin`; a `"kind": "static"` port reads
-  one whose origin is not exactly `static`; an input node's port is `"kind": "static"`; or a registered input node's is
-  `"kind": "coin"`. So a noise derivation whose ports are coins and statics reads live verifier coins, passed through
+  one whose origin is not exactly `static`; an input node's port is `"kind": "static"`; a registered input node's is
+  `"kind": "coin"`; or a theta input node's is `"kind": "coin"` (where the marking is read: `Program` and `ports.facts`). So a
+  noise derivation whose ports are coins and statics reads live verifier coins, passed through
   untouched, and constants only. (A one-Call harness that evaluates a Definition on arbitrary operands, `ports.harness`,
   builds a static port's operand from an input, and is never decoded.)
 - **`E_PORT_WORD`**: a port with `word` `t` reads a leaf whose word type is not `t` when that leaf has one or its origin

@@ -24,6 +24,11 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   passed through untouched. `In(kind="static")` takes only a constant (the output of a primitive without operands). Anything
   else is refused (`E_PORT_KIND`), so a noise derivation whose parameters are coins reads coins and its statics only. A coin is
   never a registered input.
+* **Model weights.** A Program marks the parameters that are the model's weights (`program.Program(fn, theta=names)`), and
+  their input leaves have origin ``theta`` rather than ``input`` or ``registered``: the census and the stacking property tell
+  the weights from a request's inputs by it. The marking is `annotations["theta"]`, the root's input nodes, outside every
+  digest, so it changes no id or digest, and it changes one verdict: a coin is never a weight (`E_PORT_KIND`). It binds
+  nothing, so a consumer that treats a leaf differently for being a weight checks it against the weights' commitment.
 * **Words.** `Out(word="s32")` fixes the type of each word its producer writes; `In(word="s8x4")` reads each word as that type.
   A word has one type: a word computed at run time is read only as the type its producer fixed, a typed input (one whose port
   declares a word) only as its port's, and only an untyped input or constant takes the type its reader declares
@@ -55,8 +60,9 @@ WORD = re.compile(r"[a-z][a-z0-9_]*")
 MAX_SAFE_INT = 2**53 - 1  # the descriptor's integers (`codec.MAX_SAFE_INT`)
 
 #: where a leaf's value comes from: a gate that computes it, a constant (a primitive without operands), a run input, a coin
-#: (a run input of kind coin) or a registered input (a pre-seed word)
-ORIGINS = ("gate", "static", "input", "coin", "registered")
+#: (a run input of kind coin), a registered input (a pre-seed word) or a model weight (an input of a parameter the Program
+#: marks theta, whatever its binding time)
+ORIGINS = ("gate", "static", "input", "coin", "registered", "theta")
 MIXED = "*"  # the word type of a leaf whose instances carry different ones
 
 
@@ -714,7 +720,7 @@ def _producer(f: Fact, w: int | None) -> str:
 
 def _origin(f: Fact) -> str:
     names = {"gate": "a computed value", "static": "a constant", "input": "a run input", "coin": "a coin",
-             "registered": "a registered input"}
+             "registered": "a registered input", "theta": "a model weight"}
     return " or ".join(names[o] for o in ORIGINS if o in f.origin)
 
 
@@ -912,11 +918,11 @@ def _receive(r: Runs, runs: Sequence[Run]) -> Runs:
     return B.done()
 
 
-def _input_facts(root: Any, k: int, node: Any, runs: list, harness: bool) -> Runs:
+def _input_facts(root: Any, k: int, node: Any, runs: list, harness: bool, theta: bool = False) -> Runs:
     from .program import is_registered
 
     reg = is_registered(node.fn)
-    base = fact(origin=("registered",) if reg else ("input",))
+    base = fact(origin=("theta",) if theta else ("registered",) if reg else ("input",))
     B, pos = _Build(), 0
     for lo, hi, p, _w in runs:
         if p.kind == "static" and not harness:
@@ -924,6 +930,9 @@ def _input_facts(root: Any, k: int, node: Any, runs: list, harness: bool) -> Run
         if p.kind == "coin" and reg:
             raise PortError("E_PORT_KIND", f"{root.id} input node {k}: a coin is drawn per run, never registered "
                             f"({node.fn.id})")
+        if p.kind == "coin" and theta:
+            raise PortError("E_PORT_KIND", f"{root.id} input node {k}: a coin is the verifier's, never a model weight: "
+                            f"take it in a parameter the Program doesn't mark theta")
         if hi > node.out.leaves:
             raise _decl(f"{root.id} input node {k}: ports type leaves [{lo}, {hi}) of {node.out.leaves}")
         B.add(lo - pos, base)
@@ -950,6 +959,12 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
     for k in inputs:
         if not (k < len(root.body.nodes) and is_input(root.body.nodes[k].fn)):
             raise _decl(f"{root.id}: ports type the inputs of node {k}, which is no input node")
+    theta = getattr(root, "theta", ())
+    if not (isinstance(theta, (tuple, frozenset)) and all(
+            isinstance(k, int) and not isinstance(k, bool) and 0 <= k < len(root.body.nodes) and is_input(root.body.nodes[k].fn)
+            for k in theta)):
+        raise _decl(f"{root.id}: annotations.theta lists input nodes of the root, not {list(theta) if isinstance(theta, tuple) else theta!r}")
+    theta = frozenset(theta)
     for sp in order:
         body = sp.body
         pt = port_types(sp)
@@ -966,7 +981,7 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
             fn = node.fn
             prim = isinstance(fn, PrimitiveDefinition)
             if prim and is_input(fn):
-                env[("n", k)] = _input_facts(sp, k, node, inputs.get(k, []), harness_)
+                env[("n", k)] = _input_facts(sp, k, node, inputs.get(k, []), harness_, sp is root and k in theta)
                 continue
             fpt = port_types(fn)
             fparams, fret = fn.signature()

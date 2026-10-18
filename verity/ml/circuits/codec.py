@@ -538,6 +538,8 @@ class DecodedProgram:
         from .layout import Circuit
         self.circuit = Circuit(root)
         self.annotations = dict(desc.get("annotations", {}))
+        theta = self.annotations.get("theta", ())
+        root.theta = tuple(theta) if isinstance(theta, list) else theta  # type: ignore[attr-defined]  # `ports.facts` checks it
         self.program_fn_id = desc["program_fn"]
         self.program_fn_functions = program_fn_functions  # the definitions `program_fn`'s record references
 
