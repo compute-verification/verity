@@ -107,7 +107,9 @@ def _source_problems(sources: list[dict]) -> list[str]:
                     out.append(f"finding {fid}: missing {key}")
             if f.get("grade") not in GRADES:
                 out.append(f"finding {fid}: grade {f.get('grade')}")
-            for q in f.get("quantities", []):
+            if not isinstance(f.get("quantities"), list):
+                out.append(f"finding {fid}: quantities must be a list, [] when the finding states none")
+            for q in f.get("quantities") or []:
                 if q.get("param") not in PARAMS:
                     out.append(f"finding {fid}: param {q.get('param')}")
                 if not isinstance(q.get("value"), (int, float)) or isinstance(q.get("value"), bool):
