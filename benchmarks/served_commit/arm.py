@@ -40,6 +40,7 @@ class ServedCommitArm:
     control = "stock"
     resident = True
     commit_scheme: str | None = None
+    batch_copies = True
 
     def __init__(self, id: str, retain: str) -> None:
         self.id, self.retain = id, retain
@@ -53,7 +54,7 @@ class ServedCommitArm:
     def install(self, target: Any) -> ServedCommitArm:
         from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
 
-        self.source = ServedCompiledSource(into=target.hooks)
+        self.source = ServedCompiledSource(into=target.hooks, batch_copies=self.batch_copies)
         self.source.install_hooks()
         return self
 

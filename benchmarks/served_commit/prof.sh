@@ -13,7 +13,11 @@ for a in ${ARMS//,/ }; do
     stock-prof) mods+=(--arm-module served_commit.prof_arm:STOCK_PROF);;
     served-commit-switch) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_SWITCH);;
     served-commit-nativedrain) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_NATIVEDRAIN);;
+    served-commit-nativedrain-base) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_NATIVEDRAIN_BASE);;
+    served-commit-nativedrain-batch) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_NATIVEDRAIN_BATCH);;
     served-commit-rows) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS);;
+    served-commit-rows-base) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_BASE);;
+    served-commit-rows-batch) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_BATCH);;
     served-commit-hiprio) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_HIPRIO);;
     served-commit-rows-hiprio) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_HIPRIO);;
     served-commit-fprof) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_FPROF);;

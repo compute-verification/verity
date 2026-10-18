@@ -110,7 +110,13 @@ class RootsArm(ProfArm):
         w = dict((rc.extra or {}).get("windows") or {})
         st = dict(self.committer._nc.stats()) if hasattr(self.committer._nc, "stats") else {}
         lay = self.committer._layouts
+        com, src = self.committer, self.source
         rec = {"arm": self.id, "committer": self.committer.name, "run": len(self.runs), "name": self.run_name,
+               "toggles": {"batch_copies": bool(src.codegen.get("batch")), "slot_fast": bool(com._nc.slot_fast), "native_end": com.native_end,
+                           "rows_off_thread": com.rows_off_thread, "native_drain": src.native_drain},
+               "source": {k: src.stats.get(k) for k in ("replayed_steps", "eager_steps", "drain_s", "capture_copies", "capture_flushes", "strided_copies")},
+               "codegen": {k: src.codegen.get(k) for k in ("hooks", "flushes", "kept")},
+               "spans_s": {k: round(v, 6) for k, v in com.spans.total.items()}, "spans_calls": dict(com.spans.calls),
                "run_root": bytes(rc.run_root).hex(), "steps": len(lay),
                "learned_only_steps": len(bs.get("learned_only_steps") or ()), "plan_mismatches": bs.get("plan_mismatches"),
                "bounded": bs.get("enabled"), "reupload_bytes": w.get("reupload_bytes"),
@@ -175,17 +181,39 @@ class SwitchArm(RootsArm):
 
 
 class NativeDrainArm(RootsArm):
-    """The prof arm whose compiled source drains a replayed step's slots through the committer's slot plans (one native call)."""
+    """The prof arm whose compiled source drains a replayed step's slots through the committer's slot plans (one native call).
+    ``host_fast`` False puts the committer's step back as it was before its host-cost changes (slots staged as views, the step end in
+    several calls, the row order expanded on the serving thread); ``batch_copies`` False, the source's captured copies one by one."""
+
+    host_fast = True
 
     def ready(self, target: Any) -> None:
         super().ready(target)
         self.source.native_drain = True
+        com = self.committer
+        com._nc.slot_fast = com.native_end = com.rows_off_thread = self.host_fast
+
+
+class NativeDrainBaseArm(NativeDrainArm):
+    batch_copies = host_fast = False
+
+
+class NativeDrainBatchArm(NativeDrainArm):
+    host_fast = False
 
 
 class RowsArm(NativeDrainArm):
     """The nativedrain arm committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
 
     commit_scheme = "rows-sha512"
+
+
+class RowsBaseArm(RowsArm):
+    batch_copies = host_fast = False
+
+
+class RowsBatchArm(RowsArm):
+    host_fast = False
 
 
 class HiPrioArm(NativeDrainArm):
@@ -269,7 +297,11 @@ class NoMemoArm(NativeDrainArm):
 SERVED_COMMIT_PROF = RootsArm("served-commit-prof", retain="none")
 SERVED_COMMIT_SWITCH = SwitchArm("served-commit-switch", retain="none")
 SERVED_COMMIT_NATIVEDRAIN = NativeDrainArm("served-commit-nativedrain", retain="none")
+SERVED_COMMIT_NATIVEDRAIN_BASE = NativeDrainBaseArm("served-commit-nativedrain-base", retain="none")
+SERVED_COMMIT_NATIVEDRAIN_BATCH = NativeDrainBatchArm("served-commit-nativedrain-batch", retain="none")
 SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")
+SERVED_COMMIT_ROWS_BASE = RowsBaseArm("served-commit-rows-base", retain="none")
+SERVED_COMMIT_ROWS_BATCH = RowsBatchArm("served-commit-rows-batch", retain="none")
 SERVED_COMMIT_HIPRIO = HiPrioArm("served-commit-hiprio", retain="none")
 SERVED_COMMIT_ROWS_HIPRIO = RowsHiPrioArm("served-commit-rows-hiprio", retain="none")
 SERVED_COMMIT_FPROF = FinalizeProfArm("served-commit-fprof", retain="none")
