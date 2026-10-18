@@ -132,11 +132,38 @@ class Supplied:
     request: str | None = None
 
 
-Operand = Shared | PerRow | Gather | GatherMany | Pieces | Const | Param | Collective | Supplied
+@dataclass(frozen=True)
+class WeightField:
+    """Every row consumes the whole field at `path` of the weights Record, read from the parameter, not from memory: a weight served
+    only in a layout none of whose words is a leaf of its field (the Marlin experts' repacked codes and permuted scales), whose Root
+    the profile binds to no field."""
+
+    path: tuple
+
+
+@dataclass(frozen=True)
+class Witness:
+    """Row i consumes the next leaves, as many as its parameter has, of request `keys[i]`'s `name` witness parameter
+    (`Profile.witnesses`), allocated in issue order: a value of the run no input states and the circuit checks rather than computes
+    (the Marlin align's key per pair, the GPU's sorted position).  No device view."""
+
+    name: str
+    keys: tuple[str, ...]
+
+
+Operand = Shared | PerRow | Gather | GatherMany | Pieces | Const | Param | Collective | Supplied | WeightField | Witness
+
+
+def scratch_view(near: ViewDesc, event: int, k: int, n: int) -> ViewDesc:
+    """A row-major i32 [n] view in fold-private storage, the `k`-th (< 8) of event `event`: for a value a kernel keeps in registers or
+    shared memory that a later part of the same scope reads.  Its allocation id is negative, never a log's."""
+    if not 0 <= k < 8:
+        raise ValueError(f"scratch view {k} of event {event}: at most 8 per event")
+    return ViewDesc(-(8 * event + k) - 1, 0, (n,), (1,), "int32", near.device)
 
 
 def operand_rows(op: Operand) -> int | None:
-    if isinstance(op, Param):
+    if isinstance(op, (Param, Witness)):
         return len(op.keys)
     if isinstance(op, Pieces):
         return len(op.rows)
@@ -296,6 +323,8 @@ class Profile:
     registered_values: bool = False
     # the `weights` Record `weight_field` paths index, when the profile states it (else `analytic.weights_type` over `config`)
     weights_type: Any = None
+    # the witness parameters `Witness` operands read, one per request and name (the Marlin align's `schedule`)
+    witnesses: tuple[str, ...] = ()
 
 
 class ResolutionError(Exception):

@@ -140,6 +140,8 @@ from verity_vllm.observe.fold.resolver import (
     Supplied,
     Transparent,
     Unsupported,
+    WeightField,
+    Witness,
     external_buffers,
     parts_of,
     resolve_step,
@@ -198,6 +200,8 @@ class FoldResult:
     tp: dict | None = None
     collectives: list[dict] = field(default_factory=list)
     peers_layout: list[dict] = field(default_factory=list)
+    #: the witness parameters (`_Fold._witness_layout`): parameter index, request, witness name and the leaf range each read took
+    witness_layout: list[dict] = field(default_factory=list)
     #: a `registered_values` profile's supplied inputs (`_Fold.supplied`): the registered `values` and each request's `run_<i>`,
     #: every field's name, width, bits and leaf offset; empty otherwise
     supplied: dict = field(default_factory=dict)
@@ -314,6 +318,9 @@ class _Fold:
         self.peers_param: dict[int, int] = {}
         self.peers_fields: dict[int, list[dict]] = {}
         self.peers_leaves: dict[int, int] = {}
+        # `Profile.witnesses`: (request index, name) -> the witness parameter's index, and the reads that took its leaves in issue order
+        self.witness_param: dict[tuple[int, str], int] = {}
+        self.witness_fields: dict[tuple[int, str], list[dict]] = {}
         self.supplied_inputs = SuppliedInputs()   # a `registered_values` profile's run and registered values
         self.collectives: list[dict] = []
         self.cur_coll_k: int = 0
@@ -437,6 +444,13 @@ class _Fold:
                 self.peers_fields[i] = []
                 self.peers_leaves[i] = 0
                 params.append(("peers" if len(reqs) == 1 else f"peers_{i}", Record()))   # placeholder type: fields finalised at _finish
+        # the profile's witness parameters, one `<name>` / `<name>_<i>` per request after the peers: an Array of 32-bit words as long as
+        # the `Witness` reads take, finalised at _finish
+        for name in getattr(self.profile, "witnesses", ()):
+            for i, _r in enumerate(reqs):
+                self.witness_param[(i, name)] = len(params)
+                self.witness_fields[(i, name)] = []
+                params.append((name if len(reqs) == 1 else f"{name}_{i}", Record()))
         if getattr(self.profile, "registered_values", False):
             self.supplied_inputs.declare(params, len(reqs))
         params.append(("weights", self.weights_type))
@@ -743,6 +757,7 @@ class _Fold:
             # checks the identity and the failing part drops its prep (see _parts).
             self._coll_prep[id(c)] = (c, next(iter(coll_prep.values())))
         rows: list[list[Coll]] = []
+        pieces: dict[ViewDesc, Refs] = {}   # a view several rows' pieces read is read once: every read of a Compute precedes its writes
         for i in range(c.rows):
             colls: list[Coll] = []
             for k, (op, (pname, ptype)) in enumerate(zip(c.operands, params)):
@@ -759,18 +774,25 @@ class _Fold:
                         shared[k] = self._const(op, ptype, c, pname)
                     colls.append(shared[k])
                 elif isinstance(op, Pieces):
-                    colls.append(self._pieces(op, i, ptype, c, pname))
+                    colls.append(self._pieces(op, i, ptype, c, pname, pieces))
                 elif isinstance(op, Param):
                     colls.append(self._param(op, i, ptype, c, pname))
                 elif isinstance(op, Supplied):
                     colls.append(Coll(ptype, self.supplied_inputs.leaf(op, ptype, f"{spec_label(c.spec)}.{pname}", self.req_index, FoldError)))
+                elif isinstance(op, WeightField):
+                    if k not in shared:
+                        shared[k] = self._weight_field(op, ptype, f"{spec_label(c.spec)}.{pname}")
+                    colls.append(shared[k])
+                elif isinstance(op, Witness):
+                    colls.append(self._witness(op, i, ptype, c, pname))
                 else:
                     colls.append(self._wrap(ptype, self._read_operand(op, i), op.view, f"{spec_label(c.spec)}.{pname}[row {i}]"))
             rows.append(colls)
         return rows
 
-    def _pieces(self, op: Pieces, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
-        """Row i of a `Pieces` operand: its views' refs and its constants' copies, concatenated in order."""
+    def _pieces(self, op: Pieces, i: int, ptype: Type, c: Compute, pname: str, read: dict[ViewDesc, Refs]) -> Coll:
+        """Row i of a `Pieces` operand: its views' refs (`read`: the views the Compute has read) and its constants' copies, concatenated in
+        order."""
         what, w, parts = f"{spec_label(c.spec)}.{pname}[row {i}]", _width_of(ptype), []
         for piece in op.rows[i]:
             if isinstance(piece, Const):
@@ -779,9 +801,10 @@ class _Fold:
                 parts += [self._const(piece, Value(w), c, pname).refs] * int(piece.count)
             else:
                 self._check_width(ptype, piece, what)
-                r = self._mem("read", self.mem.read, piece)
-                self._journal("read", piece, r, what=f"piece of row {i}")
-                parts.append(r)
+                if piece not in read:
+                    read[piece] = self._mem("read", self.mem.read, piece)
+                    self._journal("read", piece, read[piece], what=f"piece of row {i}")
+                parts.append(read[piece])
         refs = concat(parts)
         if refs.count != ptype.leaves:
             raise FoldError(f"{what}: {refs.count} refs, the parameter type {ptype!r} has {ptype.leaves} leaves")
@@ -826,6 +849,32 @@ class _Fold:
         if leaf.type != ptype:
             raise FoldError(f"{spec_label(c.spec)}.{pname}[row {i}]: seed parameter is {leaf.type!r}, the parameter wants {ptype!r}")
         return leaf
+
+    def _weight_field(self, op: WeightField, ptype: Type, what: str) -> Coll:
+        """The weights Record's field at `op.path`, whole: the parameter's leaves, no memory read."""
+        coll = self.weights_coll
+        try:
+            for k in op.path:
+                coll = coll[k]
+        except (KeyError, IndexError, TypeError, AttributeError) as e:
+            raise FoldError(f"{what}: weight field path {op.path!r} is not in the weights Record: {e}") from None
+        if coll.type.leaves != ptype.leaves or _width_of(coll.type) != _width_of(ptype):
+            raise FoldError(f"{what}: field {op.path!r} is {coll.type!r}, the parameter wants {ptype!r}")
+        return Coll(ptype, coll.refs)
+
+    def _witness(self, op: Witness, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
+        """Row i's next leaves of its request's `op.name` witness parameter, taken in issue order and recorded for `witness_layout`."""
+        what = f"{spec_label(c.spec)}.{pname}[row {i}]"
+        key = (self.req_index.get(op.keys[i], -1), op.name)
+        if key not in self.witness_param:
+            raise FoldError(f"{what}: request {op.keys[i]!r} has no {op.name!r} witness parameter (Profile.witnesses)")
+        if _width_of(ptype) != 32:
+            raise FoldError(f"{what}: a witness parameter holds 32-bit words, the parameter wants {ptype!r}")
+        fields = self.witness_fields[key]
+        base = fields[-1]["offset"] + fields[-1]["leaves"] if fields else 0
+        fields.append({"offset": base, "leaves": ptype.leaves, "step": self.cur_step, "event": min(c.consumed) if c.consumed else self.cur_event,
+                       "spec": spec_label(c.spec), "hint": c.hint})
+        return Coll(ptype, Affine("p", self.witness_param[key], base, ptype.leaves))
 
     # [R17 D90] collectives ------------------------------------------------------------------------------
 
@@ -1201,6 +1250,18 @@ class _Fold:
                 params[pidx] = (params[pidx][0], Record(*[(f["name"], f["type"]) for f in flds]))
             self.params = tuple(params)
             self.B.params = self.params
+        if self.witness_param:
+            params = list(self.params)
+            for (ri, name), pidx in self.witness_param.items():
+                n = sum(f["leaves"] for f in self.witness_fields[(ri, name)])
+                if not n:
+                    msg = (f"request {self.requests[ri]['request_id']!r}: no read took its {params[pidx][0]!r} witness parameter, which "
+                           f"would be empty (input layout shift); refused")
+                    if self.strict:
+                        raise FoldError(msg)
+                    self._problem("WitnessEmpty", msg, {"request": self.requests[ri]["request_id"], "param": params[pidx][0]})
+                params[pidx] = (params[pidx][0], Array(n, I32) if n else Record())
+            self.params = self.B.params = tuple(params)
         if self.supplied_inputs:
             if not self.supplied_inputs.fields["values"]:
                 msg = "registered_values profile: no Definition read a program value; the `values` parameter would be empty"
@@ -1240,8 +1301,8 @@ class _Fold:
                           memory=mem, notes=self.notes, body=body, steps=self.steps, errors=self.errors, timings=self.timings,
                           sampled=sampled, discarded=discarded, refed=list(self.refed), weights_type=self.weights_type, params=self.params,
                           requests=list(self.requests), accesses=self.accesses, tp=dict(self.tp) if self.tp else None,
-                          collectives=list(self.collectives), peers_layout=self._peers_layout(), descriptor=descriptor,
-                          supplied=self.supplied_inputs.layout(self.params, self.requests, program))
+                          collectives=list(self.collectives), peers_layout=self._peers_layout(), witness_layout=self._witness_layout(),
+                          descriptor=descriptor, supplied=self.supplied_inputs.layout(self.params, self.requests, program))
 
     def _peers_layout(self) -> list[dict]:
         """[R17 D90] The `peers_<i>` parameters as the record states them: parameter index, request, and every field (name, step, k, kind,
@@ -1253,6 +1314,13 @@ class _Fold:
                         "request_index": ri, "leaves": self.peers_leaves[ri],
                         "fields": [{k: v for k, v in f.items() if k != "type"} for f in self.peers_fields[ri]]})
         return out
+
+    def _witness_layout(self) -> list[dict]:
+        """The witness parameters as the record states them: parameter index, request, witness name and every read's leaf range in issue
+        order, so a checker binds each to the Program's input of that name."""
+        return [{"param": pidx, "name": self.params[pidx][0], "witness": name, "request": self.requests[ri]["request_id"], "request_index": ri,
+                 "leaves": sum(f["leaves"] for f in self.witness_fields[(ri, name)]), "fields": list(self.witness_fields[(ri, name)])}
+                for (ri, name), pidx in self.witness_param.items()]
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -1270,7 +1338,7 @@ def _operand_capacity(op: Operand) -> int | None:
         return len(op.indices)
     if isinstance(op, Pieces):
         return len(op.rows)
-    if isinstance(op, Param):
+    if isinstance(op, (Param, Witness)):
         return len(op.keys)
     return None
 
@@ -1281,7 +1349,7 @@ def _same_element(a: ViewDesc, b: ViewDesc) -> bool:
 
 
 def _row_operand_view(op: Operand, i: int) -> ViewDesc | None:
-    if isinstance(op, (Const, Param, Supplied, Pieces)):
+    if isinstance(op, (Const, Param, Supplied, Pieces, WeightField, Witness)):
         return None          # [R15 stoch] no device view: a Program constant / a declared parameter / several pieces
     if isinstance(op, Shared):
         return op.view
