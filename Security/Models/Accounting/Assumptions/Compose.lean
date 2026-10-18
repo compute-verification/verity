@@ -16,8 +16,10 @@ and its own:
 
 * (H-μ), `Accounting.Assumptions.TS.OperandHMu`, and B′, `Accounting.Assumptions.TS.ReceiptLuckAt`, taken per tile at
   its stage folded (`PerTile`): a folded tile keeps its honest checked values at `μ + (1 − μ)·r_B`, `7/8` at `¾` and
-  `½` (`Accounting.Guarantees.TS.LuckOfReceipt`), as the headlines' `p`;
-* `GuessLuckAt`: the whole-unit guess bound, per tile at its stage whole;
+  `½` (`Accounting.Guarantees.TS.LuckOfReceipt`), as the headlines' `p`. Compose states no H-μ of its own (round 2's
+  `HMu` is gone): it takes the headlines' definition, so the premise is one Lean statement, counted once;
+* `GuessLuckAt`: the whole-unit guess bound, per tile at its stage whole, a condition at whatever bound a kind's
+  `Scheme.guess` names;
 * the fixed-words claim, #2466's `Accounting.Assumptions.TS.UnitFixed` (Lemma E1(c) per unit with its fold clause),
   at the run's modes (`Accounting.Compose.tileMode`) and the tiles' words. Its good units are the ones the run paid
   for, so a receipt-lucky skipped tile isn't credited (RT-COMPOSE r2's R2-B1), and its fold clause is round 2's
@@ -37,8 +39,9 @@ open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 keeps its honest checked values only by guessing them**: in the ideal game split at the receipt, at every round,
 whatever the past, a deficient round passes with probability at most `p0` (`Accounting.TS.RoundGame.LuckAt` of its
 game). Taken per tile at its stage whole (`tileGame … .whole`, whose check is `same`): a tile whose product and fold
-are both skipped keeps its checked values, the fold state its proof pins, with probability at most `p0`, the guess
-bound `2^-(state bits)`, `2^-64` for a 64-bit fold state. It replaces round 2's `luck0 = 0`, which a guess falsifies
+are both skipped keeps its checked values, the fold state its proof pins, with probability at most `p0`. It is a
+condition at the `p0` it is given: `2^-64` for a 64-bit fold state is the proposed value (card 8b00536a, not yet
+decided), and nothing here takes it as a fact. It replaces round 2's `luck0 = 0`, which a guess falsifies
 (RT-COMPOSE r2's R2-B3). It fails if the cheater's view pins the fold state without the fold: a state that a computed
 word, or a coin read before the skip, determines. -/
 def GuessLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) : Prop :=

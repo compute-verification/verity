@@ -252,7 +252,8 @@ checkpoint (W6), the form of the operand luck its template proves, and the three
 * `mu`: (H-μ)'s point mass at a folded unit's deficient words (#2482's `OperandHMu`, `¾` in the headlines);
 * `rB`: the receipt's luck when they are not all right (#2482's `ReceiptLuckAt`, HMU's B′, card 8b00536a, `½`);
 * `guess`: a unit skipped whole keeps its honest checked value only by a guess of its fold state
-  (`Assumptions.Compose.GuessLuckAt`, `2^-64` for a 64-bit state).
+  (`Assumptions.Compose.GuessLuckAt`, a condition at this value; `2^-64` for a 64-bit state is proposed on card
+  8b00536a, not decided).
 H1's attention matmuls are credited at their floors with no special case (decision 117, ATTN-NOISE r2): `QKᵀ` draws a
 coin per entry on both operands; `P·V`'s `P` carries only the period-32 word `U` and `V` a coin `b` per entry, and its
 floor is `U·b`'s, a cell per `k`, which holds under any salt-independent advice while the kernel commits a prefix word at

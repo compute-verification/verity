@@ -65,11 +65,11 @@ def ServiceBudget : Prop :=
     SplitRate K ρ p p0 a b wmax Λ → RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) stg W w a b K)
 
 /-- **The rate in closed form, whole units lucky at the guess bound.** For `K ≥ 1` draws, `ρ > 0`, `0 ≤ ρ·w_max ≤ 1`,
-folded luck `p ∈ [0, 1)`, whole luck `p0 ∈ [0, 1)` (the guess bound, `2^-64`) and costs `a, b > 0`, `SplitRate` holds at
-`Λ = max(a(1 + Kρw_max)/(ρK(1 − p)), b(1 + Kρw_max)/(ρK(1 − p0)))`, the larger of the folded and the whole branch:
-B1's `max(κ/ln(1/p), (σ_w + σ_f)/s)` for the service's one draw, with `1/(K(1 − p))` in place of `1/(K·ln(1/p))`. At
-`p0 = 2^-64` the whole branch is `b(1 + Kρw_max)/(ρK)` to 20 digits; round 2's `b/(ρK)` at `p0 = 0` was for a luck a
-guess exceeds (R2-B3). -/
+folded luck `p ∈ [0, 1)`, whole luck `p0 ∈ [0, 1)` (the guess bound, at any value) and costs `a, b > 0`, `SplitRate`
+holds at `Λ = max(a(1 + Kρw_max)/(ρK(1 − p)), b(1 + Kρw_max)/(ρK(1 − p0)))`, the larger of the folded and the whole
+branch: B1's `max(κ/ln(1/p), (σ_w + σ_f)/s)` for the service's one draw, with `1/(K(1 − p))` in place of
+`1/(K·ln(1/p))`. If the guess bound holds at `2^-64` (card 8b00536a, not decided), the whole branch is
+`b(1 + Kρw_max)/(ρK)` to 20 digits; round 2's `b/(ρK)` at `p0 = 0` was for a luck a guess exceeds (R2-B3). -/
 def SplitRateClosed : Prop :=
   ∀ (K : ℕ) (ρ p p0 a b wmax : ℝ), 1 ≤ K → 0 < ρ → 0 ≤ wmax → ρ * wmax ≤ 1 → 0 ≤ p → p < 1 → 0 ≤ p0 → p0 < 1 →
     0 < a → 0 < b →
