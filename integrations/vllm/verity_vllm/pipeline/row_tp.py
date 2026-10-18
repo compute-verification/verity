@@ -379,6 +379,7 @@ class TpRow(Row):
             rc_cap, rc_ctl = legs["capture_rc"], legs["control_rc"]
             self.log(f"match: MATCH_PHASE=cpu over the GPU legs already in {M} (capture rc={rc_cap}, control rc={rc_ctl})")
         else:
+            shutil.rmtree(f"{M}/fold_match", ignore_errors=True)      # an earlier capture's folds, which --reuse-fold must never keep
             rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
                                   lease_dir=f"{M}/lease/capture", kept=GL.MATCH_LEG_KEPT)
             ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
@@ -423,11 +424,13 @@ class TpRow(Row):
                 gp = f"{self.rank(r)}/build_workload/workload_program.json"
                 if os.path.isfile(gp):
                     fargs += ["--gprog-rank", f"{r}={gp}"]
+            if phase == "cpu" and cm.reuse_fold == "on":
+                fargs.append("--reuse-fold")
             # --timeout bounds each subprocess: a rank runs three in turn (fold, compare, GM-01), and the cross-rank leg follows them
             rc_fold = self.run_tl("match.fold_match", 4 * to_f, f"{M}/fold_match.log",
                                   self.cli("tp-fold-match", "--capture", f"{M}/capture", "--profile", fp, *fargs, "--workload", self.wl,
-                                           "--tp2-match", f"{M}/tp2_match.json", "--within-step", "dag", "--rank-workers", "0", "--python", self.py,
-                                           "--timeout", str(to_f), "--out", f"{M}/fold_match"))
+                                           "--tp2-match", f"{M}/tp2_match.json", "--within-step", "dag", "--rank-workers", str(cm.fold_rank_workers),
+                                           "--python", self.py, "--timeout", str(to_f), "--out", f"{M}/fold_match"))
             fold = f"fold_match rc={rc_fold} {R.tp_fold_line(M)}"
             self.log(f"match fold ({fp}): {fold}")
         wall = int(time.time()) - t0
