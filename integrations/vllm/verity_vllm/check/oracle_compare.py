@@ -42,9 +42,6 @@ from verity_vllm.commit.opened import ORDINAL_SEP, OPENED_METHOD, OpenedReader, 
 SCHEMA = "verity-sweep/oracle-compare/v1"
 METHOD = "oracle-compare (Match capture of the same attempt: snapshots at the fold's instance output views + SampleEnd ids)"
 NO_ORACLE_FAMILY_PREFIXES = ("fa2.m1/", "fa3.m1/", "moe/")          # kernel-interior streams: no dispatcher-level value in the Match record
-#: members no Match value is: a tap's Call-interior value (query.norm_scales / router_softmax / vocab_range / scale_products MEMBER)
-#: and a KV layer's slots (acquire.sources.kv_slots_source.MEMBER), committed under the module the Match records an output of
-NO_ORACLE_MEMBERS = ("norm_scale", "router_softmax", "vocab_range", "scale_products", "slot_mapping")
 _ITEMSIZE = {"bfloat16": 2, "float16": 2, "float32": 4, "float64": 8, "int32": 4, "int64": 8, "int16": 2, "int8": 1, "uint8": 1, "bool": 1,
              "float8_e4m3fn": 1, "float8_e5m2": 1}
 _ROPE_MEMBER = {"0": "rope.q", "1": "rope.k"}
@@ -496,8 +493,8 @@ def _family_of(entry: dict) -> str:
     if entry.get("kind") == "registered-input" or ident.get("op_path") == "weights":
         return "weights"
     name = str(entry.get("name") or ident.get("op_path") or "")
-    if name.startswith(NO_ORACLE_FAMILY_PREFIXES) or str(ident.get("op_path", "")).startswith(NO_ORACLE_FAMILY_PREFIXES) or ident.get("output_member") in NO_ORACLE_MEMBERS:
-        return "hidden_stream"                                     # ... and a tap's Call-interior value or a KV layer's slots: no Match value
+    if name.startswith(NO_ORACLE_FAMILY_PREFIXES) or str(ident.get("op_path", "")).startswith(NO_ORACLE_FAMILY_PREFIXES) or (m := ident.get("output_member")) == "norm_scale" or m == "router_softmax" or m == "vocab_range" or m == "scale_products":
+        return "hidden_stream"                                     # ... and a tap's Call-interior value (query.norm_scales / router_softmax / vocab_range / scale_products MEMBER): no Match value
     if ident.get("output_member") == "sampled_token_ids":
         return "sampled_token_ids"
     if ident.get("output_member") == "in":
@@ -719,10 +716,11 @@ def _ambiguous_steps(pairs_seen: set[tuple[int, str]], attrib: dict[tuple[int, s
 def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], *,
                    max_report: int = 12, producers: dict[tuple[str, str], dict[str, Any]] | None = None,
                    workload: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
-                   query_families: dict[str, int] | None = None) -> dict[str, Any]:
+                   query_families: dict[str, int] | None = None, own: frozenset[str] = frozenset()) -> dict[str, Any]:
     """Compare every binding-map entry's committed bytes with the Match oracle.  `committed(step, name, byte_lo, byte_hi)` returns the
     bytes of member `name` at `step` in [byte_lo, byte_hi) (None if not retained) -- in the Commit an `OpenedReader`, whose
-    `OpeningNotVerified` makes the entry a mismatch.  `producers` (producers_of(manifest))
+    `OpeningNotVerified` makes the entry a mismatch.  `own` names what the run's sources committed that no module produced (their
+    `own_names`: the KV slots of commit --memory-map), so no Match value: not compared, counted as hidden_stream.  `producers` (producers_of(manifest))
     names each member's producing Program op so exploded-module folds are read at the producer's instances.  `workload` (the run's declared
     requests) is checked against the oracle's request table BY NAME first: a foreign Match record is result False 'foreign oracle' with
     nothing compared [rev-cb M-0301 R3].
@@ -769,7 +767,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             padding_not_cmp[str(e.get("family") or _query_family_of(e))] += 1   # a padding entry carries its Q(P) family (padding_entries)
             padding_pairs.add((step, str(ident.get("request_id", "r0"))))
             continue
-        fam = _family_of(e)
+        fam = "hidden_stream" if e.get("name") in own else _family_of(e)
         steps_seen.add(step)
         if fam in ("weights", "hidden_stream"):
             not_cmp["no oracle family: " + fam] += 1

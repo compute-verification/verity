@@ -7,7 +7,8 @@ The layers are the modules the engine bound a KV cache to (`layer_name`, `kv_cac
 layer's entry of the forward context's `slot_mapping`, the one its cache write reads (FlashAttention's `do_kv_cache_update`,
 MLA's, and the sparse MLA layer's `fused_norm_rope`, which writes the indexer cache at the same slots), and commits a copy,
 one per distinct tensor of the step.  `caches` keeps each layer's cache tensor: its shape and strides are the page layout
-the map's blocks follow, and its bytes what the map's digests are checked against.
+the map's blocks follow, and its bytes what the map's digests are checked against.  `own_names` are the names it commits: no
+module's output, so no module the identity check counts and no value the Match record holds (`oracle_compare`'s ``own``).
 """
 from __future__ import annotations
 
@@ -38,6 +39,7 @@ class KvSlotsSource:
         if not self.layers:
             raise ValueError("kv slots: the model has no module with a bound KV cache (layer_name, kv_cache)")
         self.caches: dict[str, Any] = {n: m.kv_cache for n, m in self.layers.items()}
+        self.own_names = frozenset(f"{n}/{MEMBER}" for n in self.layers)
         self._handles: list[Any] = []
         self._copies: dict[int, Any] = {}
         self.stats: dict[str, Any] = {"layers": len(self.layers), "tensors": 0, "bytes": 0, "errors": 0}

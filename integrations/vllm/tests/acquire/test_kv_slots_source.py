@@ -59,6 +59,7 @@ def test_the_source_commits_each_layers_slots_during_a_step(context):
     src = S.attach(com, m)
     assert list(src.layers) == ["model.layers.0.attn", "model.layers.1.attn"] and src.layers["model.layers.0.attn"] is m.layers[0].attn
     assert com.sources == [src] and src.extra_step_bytes({}, m) == {"per_token_bytes": 16, "per_seq_bytes": 0, "tensors_per_step": 2}
+    assert src.own_names == {"model.layers.0.attn/slot_mapping", "model.layers.1.attn/slot_mapping"}
     src.install()
     slots = torch.tensor([17, 18, 40], dtype=torch.int32)
     context.slot_mapping = {"model.layers.0.attn": slots, "model.layers.1.attn": slots}

@@ -2195,7 +2195,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         _ocr = OC.OpenedReader(com, rc)
                         oc = OC.oracle_compare(_oracle, _bm, _ocr, producers=_prod, workload=_wl,
                                                aliases=(required_manifest.get("op_path_aliases") if isinstance(required_manifest, dict) else None),
-                                               query_families=OC.query_families_of(required_manifest))   # [revb n-2.14-1] identities per Q(P) family
+                                               query_families=OC.query_families_of(required_manifest),   # [revb n-2.14-1] identities per Q(P) family
+                                               own=frozenset().union(*(getattr(s, "own_names", ()) for s in getattr(com, "sources", ()))))
                         oc["producer_facts"] = oracle_producers[1]
                         oc["value_source"] = _ocr.record()
                         print(f"[delta] C2 ORACLE COMPARE opened values (pair {pair}): {OV.filed(row['commit'], 'oracle_compare', oc['value_source'])}", flush=True)

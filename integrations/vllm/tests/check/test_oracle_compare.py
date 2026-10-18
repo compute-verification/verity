@@ -159,7 +159,8 @@ def test_a_kv_layers_slots_are_no_match_value(tmp_path):
                                          "output_member": "slot_mapping", "element_range": [0, ROWS[U0]], "rank": 0}, "kind": "leaf",
                             "name": "model.layers.0.self_attn.qkv_proj/slot_mapping", "element_offset": 0, "encoding": {"dtype": "int64", "shape": [ROWS[U0]]}})
     committed[(0, "model.layers.0.self_attn.qkv_proj/slot_mapping")] = np.arange(ROWS[U0], dtype="<i8").tobytes()
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
+    assert OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))["mismatch_n"] == 1
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), own=frozenset({"model.layers.0.self_attn.qkv_proj/slot_mapping"}))
     assert res["mismatch_n"] == 0 and res["result"] is True and res["complete"], res
     assert res["not_compared_by_family"] == {"hidden_stream": 2, "weights": 1}
 
