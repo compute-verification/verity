@@ -13,7 +13,8 @@ takes its place. Events carry no time, so it times them as they arrive. A heartb
 the API re-sends on every reconnection. Each simple event (`assistant`, `thinking`, `tool_call`) has an `interaction_update`
 twin, which counts as activity but never as what the agent did last. A cloud subagent's `task` call stays `running` while the
 subagent works and the parent goes on (the parent thinks or starts a step while it is open), so such a call counts as
-background work, and its progress (`tool-call-delta`) as the subagent's, not the parent's. A run is
+background work, and its progress (`tool-call-delta`) as the subagent's, not the parent's; so does a `task` call, or in a
+background wait any call, finishing whose start the watch didn't see (it lay before the stream's replay). A run is
 
 - **held** when its last event is a finished tool call, or the end of a turn while it still reads RUNNING, with no tool call
   of its own open, and the parent has streamed nothing since for `HELD_S` (RUNNING) or `HELD_BG_S` (WAITING_FOR_BACKGROUND_WORK,
@@ -274,6 +275,10 @@ class Watch:
                 r.bg_t = t                          # a subagent's progress, or its task call finishing: not the parent's doing
                 return
             if event == "tool_call":
+                if data.get("status") == "completed" and cid not in r.calls and (
+                        data.get("name") == "task" or r.status == "WAITING_FOR_BACKGROUND_WORK"):
+                    r.bg_t = t                      # a worker finishing, its start before the replay: the parent's turn is over
+                    return
                 if data.get("status") == "completed":
                     r.calls.pop(cid, None)
                     r.last_kind = "call" if r.calls else "tool_done"

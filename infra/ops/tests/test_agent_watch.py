@@ -147,7 +147,7 @@ def test_a_background_wait_is_held_only_after_an_hour(tmp_path):
     """top, 18:07Z: a held agent can read WAITING_FOR_BACKGROUND_WORK. Cancelling one may take its local workers, so it waits 1 h."""
     api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
     assert [(r.run, W.FOLLOW[r.status]) for r in started] == [("run-1", W.HELD_BG_S)]
-    w.on_event("run-1", "tool_call", {"callId": "c1", "status": "completed"})
+    held_tool_call(w)
     clock.t += W.HELD_S
     w.sweep(started.append)
     assert api.posts == []
@@ -323,6 +323,22 @@ def test_a_worker_finishing_is_not_the_parent_finishing_a_tool_call(tmp_path):
     clock.t += W.HELD_BG_S
     w.sweep(started.append)
     assert api.posts == [] and records(tmp_path) == []
+
+
+def test_a_call_finishing_that_started_before_the_watch_saw_it_is_background_work_in_a_wait(tmp_path):
+    """Shadow run, 20:06Z 18 Oct: memory-accounting's background wait read as after a finished tool call, a worker's `task`
+    call whose start lay before the stream's replay; an hour without its workers' progress and the watch would cancel it."""
+    api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
+    w.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "completed"})
+    w.on_event("run-1", "tool_call", {"callId": "c9", "name": "run_terminal_cmd", "status": "completed"})
+    clock.t += W.HELD_BG_S + 60
+    w.sweep(started.append)
+    assert api.posts == []
+    api2, clock2, w2, started2 = setup(tmp_path / "running")
+    w2.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "completed"})
+    clock2.t += W.HELD_S
+    w2.sweep(started2.append)
+    assert api2.posts == [], "a worker finishing is not the parent's tool call, whatever the run reads"
 
 
 def test_a_run_behind_one_cancelled_on_arrival_is_followed_and_freed(tmp_path):
