@@ -20,9 +20,12 @@ import pytest
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served as SV
+from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire.inductor_templates import Unmodelled
 
 FIXTURE = Path(__file__).parent / "fixtures" / "served_llama.tar.gz"
+#: the fixture's GPU, an H200
+CC = (9, 0)
 #: (mode, padded, tokens) of each engine step, as the serving process dispatched them (its capture's record)
 SERVED = [("NONE", 137, 137), ("FULL", 2, 2), ("FULL", 2, 2), ("PIECEWISE", 16, 11), ("FULL", 4, 3), ("FULL", 4, 3),
           ("NONE", 303, 303), ("FULL", 4, 4), ("FULL", 4, 4), ("FULL", 4, 3), ("FULL", 4, 3), ("FULL", 2, 2), ("FULL", 1, 1),
@@ -41,7 +44,7 @@ def _build(d: Path, inductor: Path | None = None, **kw):
     wl = json.loads((d / "workload.json").read_text())
     args = dict(split_graph=str(d / "computation_graph.py"), launch_configs=json.loads((d / "launch_configs.json").read_text()),
                 routes=json.loads((d / "routes.json").read_text()), schedule=C.schedule_of_workload(wl), steps=14,
-                capture_sizes=[1, 2, 4, 8, 16], max_num_seqs=8, sms=132)
+                capture_sizes=[1, 2, 4, 8, 16], max_num_seqs=8, device=SD.device_of(CC, 132))
     return SV.build(str(inductor or d / "inductor"), **{**args, **kw})
 
 
@@ -132,17 +135,17 @@ def test_add_norm_storing_its_rows_twice_binds_its_definition_per_buffer(art: Pa
     mutates) is the same Definition once per buffer."""
     configs = json.loads((art / "launch_configs.json").read_text())
     srcs = [(n, s) for p in sorted((art / "inductor").rglob("*.py")) for n, s in T.kernel_sources(p.read_text()).items()]
-    name, src = next((n, s) for n, s in srcs if T.recognize(n, s, T.launch_config(configs, s))["template"] == "ADD_NORM")
+    name, src = next((n, s) for n, s in srcs if T.recognize(n, s, T.launch_config(configs, s), cc=CC)["template"] == "ADD_NORM")
     cfg = T.launch_config(configs, src)
     store = re.search(r"\n( +tl\.store\(out_ptr1 \+ [^\n]*\n)", src).group(1)
     twice = (src.replace("'out_ptr1': '*bf16'", "'out_ptr1': '*bf16', 'out_ptr2': '*bf16'", 1)
              .replace("out_ptr1, xnumel", "out_ptr1, out_ptr2, xnumel", 1).replace(store, store + store.replace("out_ptr1", "out_ptr2"), 1))
-    one, two = T.recognize(name, src, cfg), T.recognize(name, twice, cfg)
+    one, two = T.recognize(name, src, cfg, cc=CC), T.recognize(name, twice, cfg, cc=CC)
     assert two["template"] == "ADD_NORM_COPY" and two["literals"] == one["literals"]
     assert [c["writes"][0]["param"] for c in two["calls"]] == ["out_ptr1", "out_ptr2"]
     assert all({**c, "writes": None} == {**one["calls"][0], "writes": None} for c in two["calls"])
     with pytest.raises(Unmodelled, match="none of the templates"):
-        T.recognize(name, twice.replace(store.replace("out_ptr1", "out_ptr2"), store.replace("out_ptr1", "out_ptr2").replace("tmp22", "tmp20")), cfg)
+        T.recognize(name, twice.replace(store.replace("out_ptr1", "out_ptr2"), store.replace("out_ptr1", "out_ptr2").replace("tmp22", "tmp20")), cfg, cc=CC)
 
 
 @pytest.mark.parametrize("n,uniform,want", [(3, True, ("FULL", 4)), (8, True, ("FULL", 8)), (9, True, ("PIECEWISE", 16)),
@@ -153,5 +156,5 @@ def test_dispatch(n: int, uniform: bool, want: tuple[str, int]) -> None:
 
 def test_the_full_graph_caps_fa3_splits() -> None:
     kw = dict(NH=32, KVH=8, D=64, sms=132)
-    assert SV.fa3_splits([1, 1, 1, 1], [107, 44, 13, 301], split_cap=32, **kw)["NS"] == [1, 1, 1, 2]
-    assert SV.fa3_splits([1, 1, 1, 300], [106, 43, 12, 300], split_cap=0, **kw)["NS"] == [1, 1, 1, 1]
+    assert SD.fa3_splits([1, 1, 1, 1], [107, 44, 13, 301], split_cap=32, **kw)["NS"] == [1, 1, 1, 2]
+    assert SD.fa3_splits([1, 1, 1, 300], [106, 43, 12, 300], split_cap=0, **kw)["NS"] == [1, 1, 1, 1]

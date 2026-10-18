@@ -70,17 +70,28 @@ def schedule_of(wl: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
 
 
 def facts_of(eng: Any) -> dict[str, Any]:
-    """The serving engine's dispatch facts the Build reads (capture sizes, max_num_seqs, the GPU's multiprocessor count, the fused-MoE
-    layers)."""
+    """The serving engine's dispatch facts the Build reads (capture sizes, max_num_seqs, max_model_len, the GPU's compute capability
+    and multiprocessor count, the attention kernels its layers selected, the fused-MoE layers)."""
     import torch
+    from vllm.model_executor.layers.attention.attention import Attention
 
     vc = eng.llm.llm_engine.vllm_config
     cc = vc.compilation_config
+    attention = sorted({(m.get_attn_backend().get_name(), getattr(m.impl, "vllm_flash_attn_version", None))
+                        for m in eng.model.modules() if isinstance(m, Attention)}, key=str)
     return {"case": eng.case, "effective": eng.effective, "cudagraph_capture_sizes": list(cc.cudagraph_capture_sizes or []),
             "max_num_seqs": vc.scheduler_config.max_num_seqs, "max_num_batched_tokens": vc.scheduler_config.max_num_batched_tokens,
             "max_model_len": vc.model_config.max_model_len, "cache_dir": cc.cache_dir, "device": torch.cuda.get_device_name(),
-            "sms": torch.cuda.get_device_properties(0).multi_processor_count,
+            "cc": list(torch.cuda.get_device_capability()), "sms": torch.cuda.get_device_properties(0).multi_processor_count,
+            "attention": [{"backend": b, "fa_version": v} for b, v in attention],
             "versions": {"torch": torch.__version__, "cuda": torch.version.cuda}, "moe": moe_facts(eng.model)}
+
+
+def device_of(facts: dict[str, Any]) -> Any:
+    """The served Build's device (`served_device.device_of`) from the engine's facts; `Unmodelled` names every binding it lacks."""
+    from verity_vllm.acquire import served_device as SD
+
+    return SD.device_of(facts["cc"], facts["sms"], attention=facts["attention"], max_model_len=facts["max_model_len"])
 
 
 def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
@@ -145,12 +156,9 @@ def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], 
     if dirs is None:
         raise UsageError("this process was not given its own compile dirs (engine.env.own_compile_dirs, ops/served_commit.sh)")
     kw = dict(split_graph=graphs[0], launch_configs=configs, schedule=schedule, steps=steps, capture_sizes=facts["cudagraph_capture_sizes"],
-              max_num_seqs=facts["max_num_seqs"], sms=facts["sms"])
+              max_num_seqs=facts["max_num_seqs"], device=device_of(facts))
     if facts.get("moe"):
-        import torch
-
-        kw["moe"] = {"layers": facts["moe"], "pieces": dict(src.moe_pieces), "configs": src.moe_configs,
-                     "cc": list(torch.cuda.get_device_capability())}
+        kw["moe"] = {"layers": facts["moe"], "pieces": dict(src.moe_pieces), "configs": src.moe_configs, "cc": facts["cc"]}
         json.dump(kw["moe"], open(f"{out}/moe.json", "w"), indent=1)
     build = SV.build(dirs["inductor"], routes={}, **kw)
     routes = SV.probe_routes(build["routes_missing"])
@@ -351,6 +359,12 @@ def main(a: Options) -> int:
     src.note_engine(eng.model)
     facts = facts_of(eng)
     log(f"engine {a.case}: {json.dumps(eng.effective, default=str)[:400]}")
+    try:
+        device_of(facts)
+    except Unmodelled as e:
+        log(f"Build refused: {e}")
+        json.dump({"ok": False, "build_refused": str(e), "facts": facts}, open(f"{out}/match.json", "w"), indent=1, default=str)
+        return 3
 
     com = NativeCollectCommitter(eng, run_id="served-match", arena_bytes=None, wrap=True, gather=True, native_hooks=True,
                                  auto_blocks=True, native_worker=True)
