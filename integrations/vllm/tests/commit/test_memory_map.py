@@ -78,31 +78,36 @@ def test_the_record(reqs):
     assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [
         (0, [], page[1]),               # r0's prefill fills its first page
         (1, [], page[3]),               # and r1's its first
-        (3, page[3], []),               # r1's last step is 2
+        (2, page[3], []),               # r1's last step, 2, reads it last: freed in that step's record
         (4, [], page[2]),               # r0's position 7 completes its second page; its third (position 8) stays dirty
+        (5, sorted(page[1] + page[2]), []),  # r0's last step reads both last
     ]
     assert [w.index for s in steps for w in s.written] == list(range(24, 36))
     want = codec.digest(b"".join(_payload("r0", x) for x in reqs["r0"].layers[1][1][4:8]))
-    assert next(w.digest for w in steps[-1].written if w.slot == _slot(1, 2, 1)) == want
+    assert next(w.digest for w in steps[-2].written if w.slot == _slot(1, 2, 1)) == want
     got_head, got = parse(dumps(head, steps).splitlines())
-    rp = Replay(got_head)
-    for s in got:
+    rp, got = Replay(got_head), list(got)
+    for s in got[:-1]:
         rp.apply(s)
     assert rp.extent == 36 and rp.holds(_slot(0, 3, 0)) is None and rp.holds(_slot(0, 2, 0)) == 32
+    rp.apply(got[-1])
+    assert rp.holds(_slot(0, 2, 0)) is None and rp.holds(_slot(0, 1, 0)) is None
 
 
 def test_a_complete_block_is_held_while_its_rows_are_live(reqs):
     head, steps = MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
+    # step t's reads see the blocks resident going into t; its record (frees, then writes) takes effect after them
     by, held = {s.step: s for s in steps}, set()
     for t in range(max(ARRIVE[r] + rs.steps for r, rs in reqs.items())):
-        held -= set(by[t].freed) if t in by else set()
         for r, rs in reqs.items():
             a = ARRIVE[r]
             for q, p in enumerate(TABLES[r][: rs.positions // 4]):
                 for layer, kv in enumerate(rs.layers):
                     for plane, rows in enumerate(kv):
-                        live = all(x.born + a < t <= x.last + a for x in rows[4 * q: 4 * q + 4])
+                        block = rows[4 * q: 4 * q + 4]
+                        live = max(x.born for x in block) + a < t <= max(x.last for x in block) + a
                         assert (_slot(layer, p, plane) in held) == live, (t, r, q, layer, plane)
+        held -= set(by[t].freed) if t in by else set()
         held |= {w.slot for w in by[t].written} if t in by else set()
 
 
@@ -137,7 +142,7 @@ def test_a_packed_page_holds_k_and_v_in_one_plane(reqs):
     assert kv["r0"].layers[1][0][4] == MM.Row(reqs["r0"].layers[1][0][4].group + reqs["r0"].layers[1][1][4].group, 1, 5)
     head, steps = MM.record(kv, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES)
     # a block is two slots of K and V: r0's second page completes its first half at step 2 (positions 4, 5), its second at 4
-    assert head.blocks == 24 and [(s.step, len(s.freed), len(s.written)) for s in steps] == [(0, 0, 4), (1, 0, 4), (2, 0, 2), (3, 4, 0), (4, 0, 2)]
+    assert head.blocks == 24 and [(s.step, len(s.freed), len(s.written)) for s in steps] == [(0, 0, 4), (1, 0, 4), (2, 4, 2), (4, 0, 2), (5, 8, 0)]
     want = codec.digest(b"".join(_payload("r0", x) for x in kv["r0"].layers[0][0][0:2]))
     assert steps[0].written[0].slot == 2 * 1 + 0 and steps[0].written[0].digest == want
 

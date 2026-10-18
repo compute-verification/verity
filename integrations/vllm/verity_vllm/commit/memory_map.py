@@ -16,8 +16,9 @@ block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `first
           numbering: a KV pool of one region per layer)
 written   a block whose rows are all born, at the step of the last; a block with a row no step writes is in no step (it
           stays dirty)
-freed     a written block at the step after its rows' last read, before that step's writes; one past the session's last
-          step is in no step
+freed     a written block in the record of its rows' last read's step (a step's record, its frees then its writes, takes
+          effect after the step's reads: remote_bandwidth's convention, #2378); a block whose last read is the step that
+          completes it is freed the step after, and one past the session's last step is in no step
 j         N plus every block written before it, a step's blocks by slot
 d_j       `codec.digest` of the block's payload: its rows' served words in slot order, each word little-endian
 step      the engine's: request r's step s is `arrive[r] + s`
@@ -302,9 +303,9 @@ def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Cal
                     if len(data) != len(got) * sb:
                         raise ValueError(f"request {r}'s rows are {sb} bytes, and its payload gave {len(data)} for {len(got)}")
                     slot = pool.slot(layer, page, c)
-                    written.setdefault(arrive[r] + max(x.born for x in got), []).append(
-                        (slot, codec.digest(data[off:off + codec.BLOCK_BYTES])))
-                    if (f := arrive[r] + max(x.last for x in got) + 1) < end:
+                    w = arrive[r] + max(x.born for x in got)
+                    written.setdefault(w, []).append((slot, codec.digest(data[off:off + codec.BLOCK_BYTES])))
+                    if (f := max(arrive[r] + max(x.last for x in got), w + 1)) < end:
                         freed.setdefault(f, []).append(slot)
     steps, j = [], layout.blocks if layout.blocks is not None else len(pool.firsts) * pool.region
     head = Header(registration, j)

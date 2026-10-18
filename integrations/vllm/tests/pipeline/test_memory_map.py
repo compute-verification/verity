@@ -99,11 +99,13 @@ def test_the_commits_map_is_the_records_at_the_engines_pages(tmp_path):
     rp = Replay(got_head)
     for s in got:
         rp.apply(s)
-    # positions 0-3 fill page 6 at step 2; 4-5 and 6-7 half page 2 at steps 4 and 6; 8 leaves page 4 dirty
-    assert [(s.step, sorted(w.slot for w in s.written)) for s in steps] == [(2, [12, 13, 28, 29]), (4, [4, 20]), (6, [5, 21])]
+    # positions 0-3 fill page 6 at step 2; 4-5 and 6-7 half page 2 at steps 4 and 6; 8 leaves page 4 dirty; the last step, 7,
+    # reads every written block last, so its record frees them
+    assert [(s.step, sorted(w.slot for w in s.written)) for s in steps] == [(2, [12, 13, 28, 29]), (4, [4, 20]), (6, [5, 21]), (7, [])]
+    assert sorted(steps[-1].freed) == [4, 5, 12, 13, 20, 21, 28, 29]
     assert rp.extent == 2 * 8 * 2 + 8
     assert doc["page"] == {"form": "packed", "pages": 8, "block_size": 4, "head_words": 128} and doc["requests"]["r0"]["pages"] == PAGES
-    assert (doc["blocks"], doc["written"], doc["freed"], doc["engine"]) == (32, 8, 0, {"compared": 8, "equal": 8})
+    assert (doc["blocks"], doc["written"], doc["freed"], doc["engine"]) == (32, 8, 8, {"compared": 8, "equal": 8})
     assert json.loads((tmp_path / "memory_map.jsonl.json").read_text())["engine"] == doc["engine"]
 
 
