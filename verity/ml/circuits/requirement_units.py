@@ -48,8 +48,9 @@ no step reads (L1). ``first`` is at least N, and ``first - N + count`` at most M
 P (NR + G + V) 16 ANDs. MemoryMapStep: each present value against each slot of each written block, K C SLOTS VW ANDs, and the
 empty slots' C SLOTS VW, then `lam` and `phi` read by one-hot selection. A statement adds each row's hm96 commitment.
 
-`plan_match` and `memory_map` are the references, over plain ints; `PLAN_ROWS` and `MEMORY_MAP_ROWS` name each instance's
-rows (C-Flock's `in_rows` params).
+`plan_match` and `memory_map` are the references, over plain ints; `plan_rows` and `memory_map_rows` name each instance's
+rows (C-Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments from a `requirement.Requirement`, its
+`Layout` and `Store` (`layout_words` and `map_words` the shared rows), and `row_words` an instance's rows from them.
 """
 from __future__ import annotations
 
@@ -61,11 +62,11 @@ from . import boolean as BL
 from .boolean import trace as TR
 from .boolean.forms import ONE, ZERO, OR, add, and_reduce, const_bits, mux, or_reduce, sub
 from .defs import CompositeDefinition
-from .requirement import BLOCK_BITS
+from .requirement import BLOCK_BITS, Layout, Requirement, Store
 from .types import Array
 
-__all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "U16", "memory_map", "memory_map_rows", "plan_match", "plan_rows",
-           "value_bits"]
+__all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "U16", "layout_words", "map_inputs", "map_words", "memory_map",
+           "memory_map_rows", "plan_inputs", "plan_match", "plan_rows", "row_words", "value_bits"]
 
 U16 = Array(16, BL.BIT)
 #: a block's payload in u16 words
@@ -335,3 +336,94 @@ def memory_map_rows(S) -> list[tuple[str, int, list[str]]]:
     return ([("pub", 16 * (4 + 2 * S.K), ["t", "first", "count", "present", "pos", "last"]), ("lam", 32 * S.V, ["lam"]),
              ("phi", 32 * S.M, ["phi"])] + [(f"val{k}", value_bits(S.SLOTS), [f"val[{k}]"]) for k in range(S.K)]
             + [(f"pay{c}", BLOCK_BITS, [f"pay[{c}]"]) for c in range(S.C)])
+
+
+# --- a step's arguments from the requirement --------------------------------------------------------------------------------
+
+def _words(x: int, n: int) -> list[int]:
+    return [(x >> (16 * i)) & 0xFFFF for i in range(n)]
+
+
+def _mask(bits, n: int) -> list[int]:
+    out = [0] * (n // 16)
+    for b in bits:
+        out[b >> 4] |= 1 << (b & 15)
+    return out
+
+
+def layout_words(S, req: Requirement, layout: Layout, positions: Sequence[int]) -> list[int]:
+    """The layout row: written value ``positions[i]``'s store index and slot at words 2 i and 2 i + 1, zero past them."""
+    vw, out = value_bits(S.SLOTS), [0] * (2 * S.V)
+    if len(positions) > S.V:
+        raise ValueError(f"{len(positions)} written values, more than V = {S.V}")
+    for i, v in enumerate(positions):
+        if req.width[v] != vw or layout.offset[v] % vw:
+            raise ValueError(f"value {v}: a written value is {vw} bits at a slot's offset, not {req.width[v]} at {layout.offset[v]}")
+        out[2 * i], out[2 * i + 1] = layout.block[v], layout.offset[v] // vw
+    return out
+
+
+def map_words(S, store: Store) -> list[int]:
+    """The map row: written block N + b's write step and free step at words 2 b and 2 b + 1 (`WORD - 1` for a block no
+    step frees), zero past the blocks written."""
+    out = [0] * (2 * S.M)
+    for s, js in store.written.items():
+        for j in js:
+            if not S.N <= j < S.N + S.M:
+                raise ValueError(f"written block {j} is outside N .. N + M = {S.N} .. {S.N + S.M}")
+            out[2 * (j - S.N)], out[2 * (j - S.N) + 1] = s, WORD - 1
+    for s, js in store.freed.items():
+        for j in js:
+            if j >= S.N:
+                out[2 * (j - S.N) + 1] = s
+    return out
+
+
+def plan_inputs(S, req: Requirement, t: int, plan: Sequence[int], registered_block: dict[int, int],
+                gathers: Sequence[int], gathered: frozenset[int], positions: Sequence[int], lam: Sequence[int]) -> dict:
+    """PlanMatch's arguments at step ``t``: ``plan`` the pass's blocks; ``registered_block`` each registered value's block
+    (public); ``gathers`` the table rows t gathers (``tok``, at most G) and ``gathered`` the registered values they are, which
+    the structural reads (``regmask``) leave out; ``positions`` the written values in order; ``lam`` the layout row."""
+    reads = req.reads(t)
+    at = {v: i for i, v in enumerate(positions)}
+    if len(plan) > S.P or len(gathers) > S.G:
+        raise ValueError(f"step {t}: a plan of {len(plan)} and {len(gathers)} gathers, more than P = {S.P} or G = {S.G}")
+    return {"count": len(plan), "regmask": _mask({registered_block[v] for v in reads & (req.registered - gathered)}, S.NR),
+            "kvmask": _mask({at[v] for v in reads - req.registered}, S.V), "gmask": (1 << len(gathers)) - 1, "lam": list(lam),
+            "plan": sorted(plan) + [0] * (S.P - len(plan)), "tok": list(gathers) + [0] * (S.G - len(gathers))}
+
+
+def map_inputs(S, req: Requirement, store: Store, t: int, positions: Sequence[int], lam: Sequence[int],
+               phi: Sequence[int]) -> dict:
+    """MemoryMapStep's arguments at step ``t``: the values t produces that a later step reads, the blocks it wrote and their
+    payloads (``store.payload``), the layout row ``lam`` and the map row ``phi``."""
+    vw = value_bits(S.SLOTS)
+    made = [i for i, v in enumerate(positions) if req.born[v] == t and req.last.get(v, -1) > t]
+    js = sorted(store.written.get(t, ()))
+    first = js[0] if js else S.N + sum(len(b) for s, b in store.written.items() if s < t)
+    if len(made) > S.K or len(js) > S.C or js != list(range(first, first + len(js))):
+        raise ValueError(f"step {t}: {len(made)} values and blocks {js}: at most K = {S.K} values and C = {S.C} consecutive blocks")
+    pad = S.K - len(made)
+    return {"t": t, "first": first, "count": len(js), "present": (1 << len(made)) - 1, "pos": made + [0] * pad,
+            "last": [req.last[positions[i]] for i in made] + [0] * pad, "lam": list(lam), "phi": list(phi),
+            "val": [req.values[positions[i]] % (1 << vw) for i in made] + [0] * pad,
+            "pay": [store.payload.get(j, 0) for j in js] + [0] * (S.C - len(js))}
+
+
+def row_words(S, rows: Sequence[tuple[str, int, list[str]]], args: dict) -> dict[str, list[int]]:
+    """Each row's u16 words from an instance's arguments (`plan_inputs`, `map_inputs`), its params' words in order."""
+    vww = value_bits(S.SLOTS) // 16 if hasattr(S, "SLOTS") else 0
+
+    def words(p: str) -> list[int]:
+        name, _, at = p.partition("[")
+        v = args[name] if not at else args[name][int(at[:-1])]
+        if name == "val":
+            return _words(v, vww)
+        if name == "pay":
+            return _words(v, BLOCK_WORDS)
+        return list(v) if isinstance(v, list) else [v]
+
+    out = {r: [w for p in ps for w in words(p)] for r, _bits, ps in rows}
+    if any(16 * len(out[r]) != bits for r, bits, _ in rows):
+        raise AssertionError("a row's words are not its bits")
+    return out
