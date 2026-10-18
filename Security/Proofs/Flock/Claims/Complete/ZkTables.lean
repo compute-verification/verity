@@ -98,4 +98,5 @@ rep's proof has the masked PIOP's closed-form lengths, level 0's cap and Ligerit
 salts and 64-byte path entries, and a file under `2^64` bytes at a good case's at most 2,048 extra claims
 (`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four and the
 mask-rank bound (`complete_jsonT_of_level0`); `Zk.Level0Premises` and `Zk.Level0Verifier` prove level 0's four
-(`L0.complete_jsonT_closed`). -/
+(`L0.complete_jsonT_closed`), and `Zk.RankDeployed` the bound, so `complete_jsonT` rests on the JSON specification
+alone (`L0.complete_jsonT_of_spec`). -/

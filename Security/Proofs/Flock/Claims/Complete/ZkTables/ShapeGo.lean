@@ -22,7 +22,8 @@ shape the masked verifier decodes it at.
   `2^32` (`zkSchedule_file`), and a good case's table has at most 2,050 claims (`Case.extras_le`).
 
 `complete_jsonT_of_level0`: so `complete_jsonT` follows from level 0's four premises (proved in `Zk.Level0Premises`
-and `Zk.Level0Verifier`) and the mask-rank bound (`L0.complete_jsonT_closed`).
+and `Zk.Level0Verifier`) and the mask-rank bound (`L0.complete_jsonT_closed`; with the bound proved,
+`L0.complete_jsonT_of_spec`).
 -/
 
 namespace FlockComplete.ZkTables

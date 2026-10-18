@@ -1,14 +1,16 @@
 import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
 import Proofs.Flock.Claims.Complete.Zk.Level0Premises
 import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
-import Proofs.Flock.Claims.Complete.Zk.RankBridge
+import Proofs.Flock.Claims.Complete.Zk.RankDeployed
 
 /-!
 # Masked completeness
 
 Level 0's four premises are proved (`proverRuns`, `proverShape`, `lanes`, `verifier`), so `complete_jsonT_of_level0`
 leaves the JSON specification and the mask-rank bound at the verifier's coins (`complete_jsonT_closed`), which
-`MaskRank.maskRankBound_of` gives from `DeployedRankBound` and `SmallSlotBound` (`complete_jsonT_of_rank`).
+`MaskRank.maskRankBound_of` gives from `DeployedRankBound` and `SmallSlotBound` (`complete_jsonT_of_rank`). Both are
+proved (`MaskRank.maskRankBound`), so masked completeness rests on the JSON specification alone
+(`complete_jsonT_of_spec`).
 
 The record's prover is `flock-circuit --zk`'s, `ZkTables.honestPR` (`(deployZk rel).P`), and its error `ZkTables.δc`:
 `complete_of` takes `honestP`'s acceptance outside `BadZk` to `honestPR`'s through `run_honestPR`, at the witness with
@@ -41,5 +43,11 @@ theorem complete_jsonT_honestPR_of_rank (H : Claims.Msg → Claims.Msg) (S : Cla
     (hD : MaskRank.DeployedRankBound) (hS : MaskRank.SmallSlotBound) :
     CompleteWith H (deployZk Readable.relation) ZkTables.honestPR (ZkTables.δc H) :=
   complete_jsonT_of_rank H S hD hS
+
+/-- **Masked completeness at the JSON specification alone**: `complete_jsonT_closed` with its rank premise
+discharged (`MaskRank.maskRankBound`). -/
+theorem complete_jsonT_of_spec (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) :
+    Claims.Flock.Complete H (deployZk Readable.relation) :=
+  complete_jsonT_closed H S MaskRank.maskRankBound
 
 end FlockComplete.L0
