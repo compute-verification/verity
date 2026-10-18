@@ -372,8 +372,9 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     draws a window of its ~320 receipts, so f_t ≈ 0.14.  At every pass (the worst-pass form) a window loses f_t·U_t
     ≈ 44 blocks, more than the store, and credits nothing.  On average a window loses f_t·U_t/P_t ≈ 2 blocks, its
     rebuilds and the chip's block, so it credits the weights less those; with the rebuilds spread over its passes, less
-    again only f_t·N and the chip.  The node line carries both forms, and a recorded session recomputes the same
-    average line (`recorded_memory`)."""
+    again only f_t·N and the chip.  The node line carries both forms and both rebuild readings, the line's error
+    counts AuditRO's slack a pass beside δ, and a recorded session recomputes the same average line
+    (`recorded_memory`)."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
     seen, memory = {}, verifier.memory
@@ -424,6 +425,17 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert a["credited"]["weights"] == pytest.approx(8 * B - lost) == a["credited"]["filler_hbm"]
     assert a["credited_bytes"] == pytest.approx(16 * B - lost) and a["share"]["weights"] == a["credited"]["weights"] / (
         verifier.HBM_BYTES + host)
+    pp = line["average_rebuild_per_pass"]
+    lost_pp = max(x["average"]["lost_blocks_rebuild_per_pass"] for x in m["windows"]) * B
+    assert pp["form"] == verifier.AVERAGE and pp["lost_bytes"] == pytest.approx(lost_pp) and lost_pp < lost
+    assert pp["credited"]["weights"] == pytest.approx(8 * B - lost_pp) == pytest.approx(
+        avg["weights_bytes_rebuild_per_pass"])
+
+    lg = r["ledger"]
+    reading = next(lg[n] for n in ("spec", "measured") if "error" in lg[n])
+    assert lg["memory"]["error"] == verifier.memory_error(lg) == pytest.approx(
+        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"])
+    assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
 
     def same(x, y) -> bool:
         if isinstance(x, dict):

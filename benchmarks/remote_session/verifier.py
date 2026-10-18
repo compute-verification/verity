@@ -125,14 +125,19 @@ WORST_PASS, AVERAGE = "held at every pass", "held on average"
 
 def averaged(held: dict, kv: float, *, wrong_blocks: float, rebuild_blocks: float, passes: int, chip_bytes: int,
              block_bytes: int) -> dict:
-    """One window's memory line held on average over its passes (capacity in bit-ticks, G's "held" and PoUS's S_cert):
-    `held` the mean bytes of each kind (weights, hbm, host) a pass of the window read, `kv` the mean KV bytes a pass
-    credits, and `wrong_blocks` = f_t·U_t/P_t, the receipts the pooled event leaves wrong spread over the passes.  A
-    block missing over the window gives a wrong receipt in every pass that reads it, so m missing blocks make m·P_t
-    wrong receipts ≤ f_t·U_t, and m ≤ f_t·N.  Each kind is credited less that, the window's rebuilds
-    (`rebuild_blocks`, every block the node's squarings could re-encode in its span) and the node's on-chip storage
-    (`chip_bytes`).  `credited_rebuild_per_pass` is the same with the rebuilds spread over the passes too, as G
-    charges them (X_r·τ a pass): the chain's seeds make a rebuilt block answer one pass only."""
+    """One window's memory line held on average over its passes, G's reading: the blocks in node memory when each pass
+    read them, averaged over the window's passes, not what memory held between reads.  The audit doesn't pace passes
+    inside a window (a root can be made early and sent late), so a prover may read in a burst and free the memory
+    until the next window's reads, and this is not memory held over time.  `held` the mean bytes of each kind
+    (weights, hbm, host) a pass of the window read, `kv` the mean KV bytes a pass credits, and `wrong_blocks` =
+    f_t·U_t/P_t, the receipts the pooled event leaves wrong spread over the passes.  A block missing over the window
+    gives a wrong receipt in every pass that reads it, so m missing blocks make m·P_t wrong receipts ≤ f_t·U_t, and
+    m ≤ f_t·N.  Each kind is credited less that, the window's rebuilds (`rebuild_blocks`, every block the node's
+    squarings could re-encode in its span) and the node's on-chip storage (`chip_bytes`).  `credited_rebuild_per_pass`
+    is the same with the rebuilds spread over the passes too, as G charges them (X_r·τ a pass): a correct receipt not
+    read from memory or chip was read from its own rebuild (a rebuilt block kept for a later pass is in memory then),
+    so the passes' shortfalls sum to at most the window's rebuilds.  Both take the side link as carrying no block
+    (Identity); G charges it, L_r·τ a pass."""
     b = block_bytes
     chip = chip_bytes / b
     basis = held["hbm"] + kv
@@ -141,11 +146,11 @@ def averaged(held: dict, kv: float, *, wrong_blocks: float, rebuild_blocks: floa
         return {"hbm": max(0.0, basis - lost * b), "weights": max(0.0, held["weights"] - lost * b),
                 "kv": max(0.0, kv - lost * b)}
 
-    lost = wrong_blocks + rebuild_blocks + chip
+    lost, per_pass = wrong_blocks + rebuild_blocks + chip, wrong_blocks + rebuild_blocks / passes + chip
     return {"form": AVERAGE, "held": held, "kv": kv, "wrong_blocks": wrong_blocks, "rebuild_blocks": rebuild_blocks,
             "chip_blocks": chip, "lost_blocks": lost, "basis": basis,
             "epsilon": min(1.0, lost * b / basis) if basis > 0 else 1.0, "credited": credit(lost),
-            "credited_rebuild_per_pass": credit(wrong_blocks + rebuild_blocks / passes + chip)}
+            "lost_blocks_rebuild_per_pass": per_pass, "credited_rebuild_per_pass": credit(per_pass)}
 
 
 def average_line(windows: list[dict]) -> dict:
@@ -257,9 +262,21 @@ def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_
             chip_bytes=chip_bytes, block_bytes=b)}})
     out = summed(windows, hbm_bytes=mem["hbm_bytes"], block_bytes=b, delta=mem["delta"], labels=mem["labels"],
                  kv_credited=False, chip_bytes=chip_bytes)
+    if (error := memory_error(session["ledger"])) is not None:
+        out["error"] = error
     if host_bytes:
         out["node"] = node_line(out, host_bytes=host_bytes)
     return out
+
+
+def memory_error(ledgers: dict) -> float | None:
+    """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
+    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`); `delta` alone
+    understates it by the passes' slack.  None when no reading has a ledger."""
+    for name in ("spec", "measured"):
+        if "error" in ledgers.get(name, {}):
+            return ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
+    return None
 
 
 def node_line(mem: dict, *, host_bytes: int) -> dict:
@@ -268,24 +285,27 @@ def node_line(mem: dict, *, host_bytes: int) -> dict:
     (as `memory` takes them off each kind), the KV it credits, and in all its held HBM and host less the lost blocks
     once, plus that KV. The line is the worst window's by that total: each kind's bytes and share of the node, and the
     residual, the share it doesn't show used. `held` is the same before the losses, which the line shows beside.
-    `average` is the same line held on average (each window's `average`, `averaged`)."""
+    `average` is the same line held on average (each window's `average`, `averaged`), and `average_rebuild_per_pass`
+    that line with the rebuilds spread over the passes."""
     node, b = mem["hbm_bytes"] + host_bytes, mem["block_bytes"]
 
-    def line(windows: list[dict]) -> dict:
+    def line(windows: list[dict], lost_key: str = "lost_blocks") -> dict:
         rows = []
         for x in windows:
-            h, lost = x["held"], x["lost_blocks"] * b
+            h, lost = x["held"], x[lost_key] * b
             held = {"weights": h["weights"], "filler_hbm": h["hbm"] - h["weights"], "host": h["host"]}
             kinds = {k: max(0.0, v - lost) for k, v in held.items()} | {"kv": x["credited"]["kv"]}
             rows.append((max(0.0, h["hbm"] + h["host"] - lost) + kinds["kv"], kinds, held, x))
         total, kinds, held, x = min(rows, key=lambda r: r[0])
-        return {"window": x["window"], "lost_bytes": x["lost_blocks"] * b, "credited_bytes": total,
+        return {"window": x["window"], "lost_bytes": x[lost_key] * b, "credited_bytes": total,
                 "credited": kinds, "share": {k: v / node for k, v in kinds.items()}, "residual": 1 - total / node,
                 "held": held, "held_share": {k: v / node for k, v in held.items()}}
 
     return {"form": WORST_PASS, "node_bytes": node, "hbm_bytes": mem["hbm_bytes"], "host_bytes": host_bytes,
             **line(mem["windows"]), "kv_read_bytes": mem["read"]["kv"],
-            "average": {"form": AVERAGE, **line([x["average"] for x in mem["windows"]])}}
+            "average": {"form": AVERAGE, **line([x["average"] for x in mem["windows"]])},
+            "average_rebuild_per_pass": {"form": AVERAGE, **line([x["average"] for x in mem["windows"]],
+                                                                  "lost_blocks_rebuild_per_pass")}}
 
 
 class RealClock:
@@ -672,6 +692,8 @@ class Verifier:
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
                                    chip_bytes=timing.CHIP_BYTES)
+            if (error := memory_error(out)) is not None:
+                out["memory"]["error"] = error
             if self.host_bytes:
                 out["memory"]["node"] = node_line(out["memory"], host_bytes=self.host_bytes)
         return out
