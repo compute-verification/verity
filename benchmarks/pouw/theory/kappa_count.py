@@ -41,7 +41,8 @@ LOADS = {"LDG32": 1, "LDG64": 2, "LDG128": 4, "LDG128CG": 4, "LDG128NA": 4, "LDG
 # ldmatrix: .m8n8 and .m8n16 shapes write n registers a lane at .xn; .m16n16 (the sub-byte and 8-bit `T` forms) write 2n
 LDSM = re.compile(r"LDSM(?P<sub>[468]?)(?P<t>T?)_X(?P<n>\d+)(?:T)?")
 TENSOR = re.compile(r".*MMA.*|LDTM_.*")
-NO_DEST = re.compile(r"(ST|RED|SURED|TMAred|UBLKCP|DSMST|LDGSTS).*")
+# TMA box loads (UTMA*, TMA512) and gather4 (G4_*) write shared memory, never a register
+NO_DEST = re.compile(r"(ST|RED|SURED|TMA|UTMA|G4_|UBLKCP|DSMST|LDGSTS).*")
 
 
 def classify(kind: str) -> tuple[str, int]:

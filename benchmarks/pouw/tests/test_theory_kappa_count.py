@@ -25,6 +25,7 @@ def test_sm120():
     assert r["kinds"]["LDG256"]["kappa"] == 520
     assert r["kinds"]["IMADW"]["kappa"] == 130
     assert r["kinds"]["IMMA16832"]["kappa"] is None
+    assert r["kinds"]["UTMA512"]["class"] == r["kinds"]["G4_16"]["class"] == "none"
     assert (r["kappa_vector"], r["kappa_lane"], r["kappa_table"]) == (65, 130, 520)
 
 
