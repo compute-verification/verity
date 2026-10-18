@@ -6,6 +6,8 @@
 * `rules/vllm_dsa.py` derives an indexer layer and an IndexShare layer over a prefill and a decode step: per token the norms and
   RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and either the explicitly
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
+* past TOPK keys the row's top-k order is a field of the `run` input, `DsaTopKOrder_v1` checks it against the row's logits (one
+  of the Program's checks, an output after the source's), and sparse MLA reads `DsaGatherRows_v1`'s rows at it;
 * a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
   exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and `rules/vllm_dsa_dense.py` derives per row
   `Attention_v4{T=i+1,...,MASKED_FROM}` over the call's own k and v, opening the history the decode step after it reads;
@@ -30,6 +32,7 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Affine, runs
 from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
@@ -39,7 +42,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels.serve3_reference import materialize
-from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, fa3_check_inf, fa3_split, hopper, sparse_mla, sparse_mla_split
+from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, fa3_check_inf, fa3_split, hopper, sparse_mla
+from verity_vllm.program.registry import sparse_mla_split
 from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
 from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
@@ -244,10 +248,10 @@ def _words(t: torch.Tensor) -> list[int]:
     return t.contiguous().view(torch.int32).numpy().reshape(-1).astype(np.uint32).tolist()
 
 
-def _run(rep, model: _Model, inputs) -> list[int]:
+def _run(rep, model: _Model, inputs, run: list[int] | None = None) -> list[int]:
     held = {**dict(model.named_parameters()), **dict(model.named_buffers())}
     weights = [v for w in rep.provenance["weights"] for v in _words(held[w["name"]])]
-    t = materialize(rep.program, [_words(x) for x in inputs] + [weights])
+    t = materialize(rep.program, [_words(x) for x in inputs] + ([] if run is None else [run]) + [weights])
     return [int(t[g]) for g in rep.program.circuit.root_outputs()]
 
 
@@ -268,9 +272,10 @@ def _attention_v4(T: int, row: int, seqlen_q: int, heads: int = NH, splits: int 
     return bind(fa3_split.AttentionSplit, **st, PER=fa3_split.split_per(seqlen_q, row, TG.fa3_tile_m(P + R, seqlen_q, 1), BN, splits))
 
 
-def _reference(model: _Model, inputs, splits: int = 1) -> list[int]:
+def _reference(model: _Model, inputs, splits: int = 1, orders: dict[int, list[int]] | None = None) -> list[int]:
     """The module's outputs as the Definitions compose them: per token the norms, the RoPEs and the absorptions, and per row
-    `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped]) and `W_UV`; or on the dense route
+    `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped]) and `W_UV`, past TOPK `SparseMla_v1{T=TOPK}`
+    over the rows at ``orders``[position] in that order; or on the dense route
     `Attention_v4{T=i+1}` (`AttentionSplit_v1` at ``splits`` > 1) over [q_nope | q_pe roped] and the call's rows 0..i of
     k = [k_nope | k_pe roped] and v, k_nope and v each head's halves of the normed latent (the identity `kv_b_proj`)."""
     qn, rope = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(RoPEHeadGptJV2, D=R)
@@ -304,11 +309,36 @@ def _reference(model: _Model, inputs, splits: int = 1) -> list[int]:
                     rows += list(evaluate(_attention_v4(i + 1, i, T, splits=splits), qrow, ks, vs))
                     continue
                 ql = list(evaluate(up, _words(qv[i, :, :P]), wuk))
-                fn = bind(sparse_mla.SparseMla, T=len(h), NH=NH, DR=R, DV=lat, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE)
-                a = list(evaluate(fn, ql, [w for r in qr for w in r], [w for r in h for w in r]))
+                sel = h if len(h) <= layer.topk_indices_buffer.shape[-1] else [h[j] for j in orders[p]]
+                fn = bind(sparse_mla.SparseMla, T=len(sel), NH=NH, DR=R, DV=lat, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE)
+                a = list(evaluate(fn, ql, [w for r in qr for w in r], [w for r in sel for w in r]))
                 rows += list(evaluate(down, a, wuv))
             out += rows + qcs
     return [int(w) for w in out]
+
+
+def _index_logits(model: _Model, inputs) -> dict[int, list[int]]:
+    """The indexer layer's logits per position (f32 words) as the Definitions compute them: `DsaIndexerKRow_v1` per key,
+    `DsaIndexerQ_v1` per query and `DsaMqaLogits_v3{N=n}` over the history's first n slots."""
+    (layer,) = [lay for lay in model.layers if lay.indexer is not None]
+    krow, iqf = bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=EPS), bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE)
+    ics, kw, kb = layer.indexer_rope_emb.cos_sin_cache, _words(layer.indexer.k_norm.weight), _words(layer.indexer.k_norm.bias)
+    slots, scales, out, k = [], [], {}, 0
+    for p0, T in model.steps:
+        for lay in model.layers:
+            xs, k = inputs[k:k + lay.n_inputs], k + lay.n_inputs
+            if lay is not layer:
+                continue
+            for i in range(T):
+                s = list(evaluate(krow, _words(xs[4][i]), kw, kb, _words(ics[p0 + i])))
+                slots.append(s[:D])
+                scales.append(s[D])
+            for i in range(T):
+                q = list(evaluate(iqf, _words(xs[6][i]), _words(ics[p0 + i]), _words(xs[5][i])))
+                n = len(slots) - T + i + 1
+                lg = bind(dsa.DsaMqaLogitsV3, N=n, H=H, D=D)
+                out[p0 + i] = [int(w) for w in evaluate(lg, q[:H * D], q[H * D:], [w for s in slots[:n] for w in s], scales[:n])]
+    return out
 
 
 # -- the export shim ----------------------------------------------------------------------------------------------------------
@@ -486,12 +516,43 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
             want += [attn(p + 1) for p in pos] + [down] * T
     assert ids == want
     assert _run(rep, model, xs) == _reference(model, xs)
+    assert "run_inputs" not in rep.provenance and "checks" not in rep.provenance
     assert rep.dead.total > 0   # the indexer's logits and top-k: with n <= TOPK the selection is rows 0..n-1 whatever they are
     apps = [a for a in rep.provenance["applications"] if a["rule"] == "DsaIndexerAttn[vllm-dsa]_v1"]
     assert [(a["preconditions_checked"]["layer_name"], a["preconditions_checked"]["top_k_from"]) for a in apps] == [
         (NAMES[0], NAMES[0]), (NAMES[1], NAMES[0])] * len(STEPS)
     roles = rep.provenance["weight_roles"]
     assert roles["layers.0.W_UK_T"]["role"] == "mla.absorb" and roles["layers.0.indexer.k_norm.bias"]["role"] == "dsa.indexer.k_norm.bias"
+
+
+def test_a_row_past_topk_reads_the_runs_order_checks_it_against_its_logits_and_gathers_its_rows(served):
+    """TOPK 2: the decode row at position 2 has 3 keys.  The indexer layer reads its order from the `run` input's one field and
+    checks it by `DsaTopKOrder_v1{N=3,TOPK=2}` (the Program's last output, 1 exactly when the order is a permutation of the
+    logits' top-2 set), and both layers' `SparseMla_v1{T=2}` read `DsaGatherRows_v1{N=3,TOPK=2}`'s rows at it, in its order."""
+    model = _model(topk=2)
+    xs = _inputs(model)
+    rep = _derive(model, xs)
+    assert rep.program is not None, rep.unsupported
+    assert rep.provenance["run_inputs"] == {"param": len(xs), "name": "run", "fields": [
+        {"name": f"{NAMES[0]}/topk[t=2]", "type": repr(Array(2, Value(32))), "offset": 0, "leaves": 2}]}
+    assert rep.provenance["checks"]["accept"] == 1 and len(rep.provenance["checks"]["of"]) == 1
+    check = bind(dsa_topk.DsaTopKOrder, N=3, TOPK=2).id
+    gather = bind(dsa_topk.DsaGatherRows, N=3, TOPK=2, W=L + R).id
+    attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
+    assert [i for i in _ids(rep) if i in (check, gather, attn2)] == [attn2, attn2, check, gather, attn2, gather, attn2]
+    (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "DsaIndexerAttn[vllm-dsa]_v1"
+              and a["preconditions_checked"]["indexer"] and a["preconditions_checked"]["past_topk"]]
+    assert app["preconditions_checked"]["past_topk"] == [2]
+
+    logits = _index_logits(model, xs)[2]
+    assert len(set(logits)) == 3
+    top = sorted(dsa_topk.topk_set(logits, 2))
+    for order in (top, top[::-1]):
+        out = _run(rep, model, xs, order)
+        assert out[-1] == 1 and out[:-1] == _reference(model, xs, orders={2: order}), order
+    (other,) = set(range(3)) - set(top)
+    for order in ([top[0], other], [other, top[1]], [top[0], top[0]], [top[0], 3], [top[1], 0xFFFFFFFF]):
+        assert _run(rep, model, xs, order)[-1] == 0, order
 
 
 class _LargeMlaAbsorb(nn.Module):
@@ -574,7 +635,6 @@ def test_the_served_vocabulary_binds_the_norm_and_gptj_rope_roles():
 
 
 @pytest.mark.parametrize("case,needle", [
-    ("topk", "'layers.0.self_attn.attn': position 2 has 3 keys > TOPK 2"),
     ("shared-first", "IndexShare layer 'layers.0.self_attn.attn' reads a top-k no indexer layer selected for positions 0..1"),
     ("prefill-backend", "a call of 2 query rows is a prefill (decode threshold 1 at 2 query heads per rank) that reached the top-k MQA "
                         "op; vLLM serves a prefill by its prefill backend 'FlashAttnMLAPrefill'"),
@@ -583,7 +643,7 @@ def test_the_served_vocabulary_binds_the_norm_and_gptj_rope_roles():
     ("target", "SparseMla_v1 is FA3 at compute capability 9.0; the target is"),
 ])
 def test_each_attention_precondition_refuses_by_name(case, needle, served, monkeypatch):
-    model = _model(order=(False, True) if case == "shared-first" else (True, False), topk=2 if case == "topk" else TOPK)
+    model = _model(order=(False, True) if case == "shared-first" else (True, False))
     monkeypatch.setitem(vllm_dsa.DECODE_THRESHOLD, NH, 1)
     over = {"prefill-backend": {"prefill_backend": "FlashAttnMLAPrefill"},
             "heads": {"prefill_backend": "FlashAttnMLAPrefill", "q_heads_per_rank": None}, "impl": {"impl": "FlashMLASparseImpl"}}.get(case)
@@ -592,7 +652,7 @@ def test_each_attention_precondition_refuses_by_name(case, needle, served, monke
     if case == "target":
         VB.observe_target_profile(TargetProfile(compute_capability=(8, 0), num_sms=108, batch_invariant=False))
     hint = _hint(_derive(model, _inputs(model)))
-    assert needle in hint and (case in ("topk", "shared-first") or "DsaIndexerAttn[vllm-dsa]_v1" in hint), hint
+    assert needle in hint and (case == "shared-first" or "DsaIndexerAttn[vllm-dsa]_v1" in hint), hint
 
 
 @pytest.mark.parametrize("threshold,force_mqa", [(None, False), (1, True)])
