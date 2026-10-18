@@ -1,28 +1,41 @@
-import Definitions.Accounting.TS.Play
+import Definitions.Accounting.TS.ProofLayer
 
 /-!
 # A sampled window's proofs: what (I8) reads of its drawn units (trusted)
 
-`ProofLayer`'s counterpart for 𝒫_samp (note:20261018T0449Z-draft-i8-sampled). A round's coins are `A × B`: on `A` the
-coins released before the draws, after which the round's units, and every input of their seeds, are committed; on `B`
-the live draw coin, which names `s` units (`DrawnLayer.draw`). Each drawn unit is proved alone, with the generation of
-its own noise (decision 105). A unit is a self-contained `r × c` tile (decision 106): its proof opens the unit's values
-(its operand rows, its seed's inputs and its outputs), checks the seed, derives the noise it reads and computes the
-tile, so its relation and its rightness read its own values only, and its position is the unit's index `j`, not a
-value the prover picks.
+`ProofLayer`'s counterpart for 𝒫_samp (note:20261018T0449Z-draft-i8-sampled, restated after
+note:20261018T0728Z-draft-rt-i8, decision 114). A round's coins are `Paths C m × B`: on `Paths C m` the `m` coins
+released before the draws, in order (the round's σ, or a window's call sites' coins, each after the values it follows
+are committed), and on `B` the live draw coin, which names `s` units (`DrawnLayer.draw`), with the proofs' coins. Each
+drawn unit is proved alone, with its own noise's generation (decision 105); a unit is one output coordinate, or a
+K-chunk committing its running sum (decision 107).
 
-`ProofLayer` forks before a round's coins (`splice`), which redraws the round's draws, so proof `i` names a different
-unit on each continuation. Here the fork is at the draw (`spliceDraw`), and unit `j`'s committed values are its
-opening on the plurality continuation (`plurality`), a function of the coins before the draw whoever is drawn.
+Values are per committed position, not per unit: a unit reads its slots' positions (`DrawnLayer.pos`: its operand rows,
+its seed's inputs, a running sum, its outputs), and a position one unit writes is the position another reads, so one
+committed value serves both. Each position is bound before the coin that follows its commitment (`DrawnLayer.cut`):
+round `w`'s coin `k < m` for an operand committed before it, the draw (`k = m`) for a unit's output. Its committed value
+(`DrawnLayer.committed`) is the value its drawn readers' accepted proofs open on the most continuations from that coin,
+each opening it to that value alone, so it is a function of the coins before the cut. Two drawn readers that open one
+position differently on one path move it (`DrawnLayer.Moved`): equivocation is a binding failure, counted in `δ_bind`.
+
+Proofs exist for drawn units only: round `w`'s proof `i` is drawn unit `drawnAt x w i`'s (`DrawnLayer.accepted`,
+`DrawnLayer.opened`), so an accepted proof is a drawn unit's.
 
 * `coinAt x w`: round `w`'s coins on `x`.
-* `spliceDraw w x z`: `x`'s coins up to round `w`'s draw, then `z`'s.
-* `plurality sp acc op x`: among `x`'s continuations `sp x z` on which `acc` holds, one whose `op` is the most frequent.
-* `DrawnLayer`: per path, round `w` and unit `j`, whether unit `j`'s proof was accepted and the values it opened; unit
-  `j`'s relation and rightness; the units the draw coin names (`drawnAt`); and unit `j`'s values as committed before
-  the draw (`committed`).
-* `Moved`, `Forked`: binding's failure for a unit, and its fork form; `Unsound`, `SoundAt`: proof soundness, per draw;
-  `Pins`: pinning, per unit; `Of`: the play's tie to its drawn units' proofs.
+* `spliceAt w k x z`: `x`'s coins before round `w`'s coin `k` (`k = m`: before its draw), then `z`'s.
+* `Alone`, `tally`, `plural`: a path that opens one value only; how many continuations of `x` open `v` alone; the value
+  the most do.
+* `DrawnLayer`: the draw; each unit's slots' positions, each position's cut and writer; per path, round and draw,
+  whether the drawn unit's proof was accepted and the values it opened its slots to; each unit's relation and rightness,
+  on its slots' values and the public coins.
+* `Opens`, `committed`, `Held`, `view`: a path's accepted openings of a position; its committed value; whether some
+  continuation from its cut opens it to that value alone; a unit's committed slots.
+* `Moved`, `MovedIn`, `Forked`: binding's failure, per position and per round, and its fork form; `Unsound`,
+  `JointSound`: proof soundness, jointly over a round's draws; `Pins`: each unit's relation pins its rightness.
+* `Feeds`, `Good`: a unit writes a position another reads; a unit whose upstream units (itself included) are held and
+  right at their committed values.
+* `Of`: the play's tie to its drawn units' proofs; `Covers`: the ideal game's share counts every unit that isn't good,
+  a property of the share's definition, proved for each game.
 -/
 
 namespace Accounting.TS
@@ -35,92 +48,140 @@ def coinAt {Ω : Type} : {n : ℕ} → Paths Ω n → Fin n → Ω
   | _ + 1, x, ⟨0, _⟩ => x.1
   | _ + 1, x, ⟨w + 1, h⟩ => coinAt x.2 ⟨w, Nat.lt_of_succ_lt_succ h⟩
 
-/-- `x`'s coins before round `w`'s draws (its rounds before `w`, and round `w`'s coins on `A`), then `z`'s: the run that
-shares `x`'s commitments up to round `w`'s draws and continues on fresh draws. -/
-def spliceDraw {A B : Type} : {n : ℕ} → ℕ → Paths (A × B) n → Paths (A × B) n → Paths (A × B) n
-  | 0, _, _, _ => ()
-  | _ + 1, 0, x, z => ((x.1.1, z.1.2), z.2)
-  | _ + 1, w + 1, x, z => (x.1, spliceDraw w x.2 z.2)
+/-- `x`'s coins before round `w`'s coin `k` (its rounds before `w`, and round `w`'s coins before `k`; `k = m`: all of
+round `w`'s coins before its draw), then `z`'s: the run that shares what `x` committed before that coin and continues on
+fresh coins. -/
+def spliceAt {C B : Type} {m : ℕ} : {n : ℕ} → ℕ → ℕ → Paths (Paths C m × B) n → Paths (Paths C m × B) n →
+    Paths (Paths C m × B) n
+  | 0, _, _, _, _ => ()
+  | _ + 1, 0, k, x, z => ((splice k x.1.1 z.1.1, z.1.2), z.2)
+  | _ + 1, w + 1, k, x, z => (x.1, spliceAt w k x.2 z.2)
 
 section Plurality
 
-variable {X V : Type} [Fintype X]
+variable {X V : Type}
+
+/-- `y` opens `v` and no other value. -/
+def Alone (opens : X → V → Prop) (y : X) (v : V) : Prop := opens y v ∧ ∀ v', opens y v' → v' = v
 
 open Classical in
-/-- The fresh coins `z` on whose continuation of `x` (`sp x z`) `acc` holds. -/
-noncomputable def accAt (sp : X → X → X) (acc : X → Prop) (x : X) : Finset X :=
-  Finset.univ.filter fun z => acc (sp x z)
+/-- How many continuations `sp x z` of `x` open `v` alone. -/
+noncomputable def tally [Fintype X] (sp : X → X → X) (opens : X → V → Prop) (x : X) (v : V) : ℕ :=
+  (Finset.univ.filter fun z => Alone opens (sp x z) v).card
 
-open Classical in
-/-- How many of `accAt sp acc x` give `op` the value the continuation on `z` gives it. -/
-noncomputable def agree (sp : X → X → X) (acc : X → Prop) (op : X → V) (x z : X) : ℕ :=
-  ((accAt sp acc x).filter fun z' => op (sp x z') = op (sp x z)).card
-
-open Classical in
-/-- **The plurality continuation**: among the continuations of `x` on which `acc` holds, one whose value of `op` is the
-most frequent; `x` when there is none. -/
-noncomputable def plurality (sp : X → X → X) (acc : X → Prop) (op : X → V) (x : X) : X :=
-  if h : (accAt sp acc x).Nonempty then sp x ((accAt sp acc x).exists_max_image (agree sp acc op x) h).choose
-  else x
+/-- **The plurality value**: a value that the most continuations of `x` open alone. -/
+noncomputable def plural [Fintype X] [Nonempty V] (sp : X → X → X) (opens : X → V → Prop) (x : X) : V :=
+  Classical.epsilon fun v => ∀ u, tally sp opens x u ≤ tally sp opens x v
 
 end Plurality
 
-/-- **A sampled window's proofs** over `S` rounds of coins on `A × B`, `s` draws a round of units `J`, each unit's proof
-opening its values in `V`: the units the draw coin names (`draw`); on each path, whether unit `j`'s proof in round `w`
-was accepted (`accepted`) and the values it opened (`opened`); unit `j`'s relation in round `w` (`rel`), the public
-Program its proof passes; and its rightness (`right`): its outputs are its tile's, from its operands, under the noise
-its seed derives. -/
-structure DrawnLayer (A B : Type) (S s : ℕ) (J V : Type) where
+/-- **A sampled window's proofs** over `S` rounds of coins on `Paths C m × B`, `s` draws a round of units `J`, each
+unit reading its slots `Q`'s positions `Pos`, each position's value in `V`:
+* `draw`: the units the draw coin names;
+* `pos w j k`: the position unit `j` of round `w` reads at slot `k`;
+* `cut ℓ = (w, k)`: `ℓ` is committed before round `w`'s coin `k` (`k = m`: before its draw), after every coin before it;
+* `src ℓ`: the unit whose output `ℓ` is, none for the circuit's inputs;
+* `accepted x w i`, `opened x w i`: on `x`, whether round `w`'s proof of its `i`-th drawn unit was accepted, and the
+  values its opening gives that unit's slots;
+* `rel x w j`: unit `j`'s relation in round `w` on its slots' values, the public Program its proof passes, at the
+  public coins of `x` its seed reads;
+* `right x w j`: its rightness: its outputs are its own, from its operands, under the noise its seed derives. -/
+structure DrawnLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) where
   draw : B → Fin s → J
-  accepted : Paths (A × B) S → Fin S → J → Prop
-  opened : Paths (A × B) S → Fin S → J → V
-  rel : Fin S → J → V → Prop
-  right : Fin S → J → V → Prop
+  pos : Fin S → J → Q → Pos
+  cut : Pos → Fin S × Fin (m + 1)
+  src : Pos → Option (Fin S × J)
+  accepted : Paths (Paths C m × B) S → Fin S → Fin s → Prop
+  opened : Paths (Paths C m × B) S → Fin S → Fin s → Q → V
+  rel : Paths (Paths C m × B) S → Fin S → J → (Q → V) → Prop
+  right : Paths (Paths C m × B) S → Fin S → J → (Q → V) → Prop
 
 namespace DrawnLayer
 
-variable {A B : Type} {S s : ℕ} {J V : Type} (pf : DrawnLayer A B S s J V)
+variable {C B : Type} {S m s : ℕ} {J Q Pos V : Type} (pf : DrawnLayer C B S m s J Q Pos V)
 
 /-- The unit round `w`'s draw `i` names on `x`. -/
-def drawnAt (x : Paths (A × B) S) (w : Fin S) (i : Fin s) : J := pf.draw (coinAt x w).2 i
+def drawnAt (x : Paths (Paths C m × B) S) (w : Fin S) (i : Fin s) : J := pf.draw (coinAt x w).2 i
 
-/-- **Unit `j`'s values as round `w` committed them before its draws**: its proof's opening on the plurality
-continuation of `x` from round `w`'s draws, among those on which its proof is accepted. -/
-noncomputable def committed [Fintype A] [Fintype B] (x : Paths (A × B) S) (w : Fin S) (j : J) : V :=
-  pf.opened (plurality (spliceDraw w) (fun y => pf.accepted y w j) (fun y => pf.opened y w j) x) w j
+/-- **`x` opens position `ℓ` to `v`**: in some round, an accepted proof of a drawn unit opens one of its slots, at `ℓ`,
+to `v`. -/
+def Opens (x : Paths (Paths C m × B) S) (ℓ : Pos) (v : V) : Prop :=
+  ∃ w i k, pf.pos w (pf.drawnAt x w i) k = ℓ ∧ pf.accepted x w i ∧ pf.opened x w i k = v
 
-/-- **Binding fails for unit `j` in round `w`**: its proof is accepted and opens values other than those committed
-before the draws. -/
-def Moved [Fintype A] [Fintype B] (x : Paths (A × B) S) (w : Fin S) (j : J) : Prop :=
-  pf.accepted x w j ∧ pf.opened x w j ≠ pf.committed x w j
+/-- The continuations from position `ℓ`'s cut. -/
+def cont (ℓ : Pos) : Paths (Paths C m × B) S → Paths (Paths C m × B) S → Paths (Paths C m × B) S :=
+  spliceAt (pf.cut ℓ).1 (pf.cut ℓ).2
 
-/-- **Two runs off one commitment open a unit differently** (the fork form): on `x` and on its continuation from round
-`w`'s draws on fresh coins `z`, which share every value committed before the draws, unit `j`'s proof is accepted, and
-the two open it differently. Where a unit's values are hm96 rows of one frame-v3-sha512 tree, two openings are two
-inputs hashed to one SHA-512 digest along their paths, which `cr/sha-512` bounds at a finder that runs the window twice
-from round `w`'s draws. -/
-def Forked (w : Fin S) (j : J) (x z : Paths (A × B) S) : Prop :=
-  pf.accepted x w j ∧ pf.accepted (spliceDraw w x z) w j ∧ pf.opened x w j ≠ pf.opened (spliceDraw w x z) w j
+/-- **Position `ℓ`'s value as committed before its cut**: the value its drawn readers' accepted proofs open alone on the
+most continuations of `x` from `ℓ`'s cut. -/
+noncomputable def committed [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (ℓ : Pos) : V :=
+  plural (pf.cont ℓ) (fun y v => pf.Opens y ℓ v) x
 
-/-- Unit `j`'s proof in round `w` is accepted, and its opening fails its relation. -/
-def Unsound (x : Paths (A × B) S) (w : Fin S) (j : J) : Prop := pf.accepted x w j ∧ ¬ pf.rel w j (pf.opened x w j)
+/-- **Position `ℓ` is held at its committed value**: some continuation of `x` from `ℓ`'s cut opens it to that value
+alone. -/
+def Held [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (ℓ : Pos) : Prop :=
+  ∃ z, Alone (fun y v => pf.Opens y ℓ v) (pf.cont ℓ x z) (pf.committed x ℓ)
 
-/-- **Proof soundness at `δ_ZK`, per draw**: the unit round `w`'s draw `i` names has its proof accepted with an opening
-that fails its relation with probability at most `δ_ZK` over the window's coins. -/
-def SoundAt [Fintype A] [Fintype B] (δzk : ℝ) : Prop :=
-  ∀ w i, prob (fun x => pf.Unsound x w (pf.drawnAt x w i)) ≤ δzk
+/-- Unit `j` of round `w`'s slots at their committed values. -/
+noncomputable def view [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (w : Fin S) (j : J) :
+    Q → V :=
+  fun k => pf.committed x (pf.pos w j k)
 
-/-- **Each unit's relation pins its values**: values that satisfy unit `j`'s relation are right. A check with no
-absorbed word as witness (`PouwCallCheck_v1`, `PouwWarpCheck_v1`, `PouwSegCheck_v3`, #2417) recomputes every word it
-absorbs from the unit's operands, its seed and its noise. -/
-def Pins : Prop := ∀ w j v, pf.rel w j v → pf.right w j v
+/-- **Binding fails at position `ℓ`**: an accepted proof of a drawn unit opens `ℓ` to a value other than its committed
+one. Two that open it differently on `x` move it. -/
+def Moved [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (ℓ : Pos) : Prop :=
+  ∃ v, pf.Opens x ℓ v ∧ v ≠ pf.committed x ℓ
+
+/-- **Binding fails in round `w`**: an accepted proof of one of its drawn units opens the unit's slots to values other
+than their committed ones. -/
+def MovedIn [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (w : Fin S) : Prop :=
+  ∃ i, pf.accepted x w i ∧ pf.opened x w i ≠ pf.view x w (pf.drawnAt x w i)
+
+/-- **Two runs off one commitment open a position differently** (the fork form): on `x` and on its continuation from
+`ℓ`'s cut on fresh coins `z`, which share every value committed before that cut, accepted proofs of drawn units open
+`ℓ` to two different values (on one run or across the two). Where `ℓ` is an hm96 row of a frame-v3-sha512 tree whose
+root is committed before the cut, two openings are two inputs hashed to one SHA-512 digest along their paths. The
+openings are witnesses of zero-knowledge proofs, so a finder that runs the window twice from the cut takes them with
+C-Flock's knowledge extractor, at `ε_ks` a proof, before `cr/sha-512` bounds the collision. -/
+def Forked (ℓ : Pos) (x z : Paths (Paths C m × B) S) : Prop :=
+  ∃ v v', pf.Opens x ℓ v ∧ pf.Opens (pf.cont ℓ x z) ℓ v' ∧ v ≠ v'
+
+/-- Round `w`'s proof of its `i`-th drawn unit is accepted, and its opening fails the unit's relation. -/
+def Unsound (x : Paths (Paths C m × B) S) (w : Fin S) (i : Fin s) : Prop :=
+  pf.accepted x w i ∧ ¬ pf.rel x w (pf.drawnAt x w i) (pf.opened x w i)
+
+/-- **Proof soundness at `δ_ks`, jointly over a round's draws**: in each round, some drawn unit's proof is accepted with
+an opening that fails its relation with probability at most `δ_ks` over the window's coins. -/
+def JointSound [Fintype C] [Fintype B] (δks : ℝ) : Prop := ∀ w, prob (fun x => ∃ i, pf.Unsound x w i) ≤ δks
+
+/-- **Each unit's relation pins its rightness**: values of its slots that satisfy unit `j`'s relation are right. A
+check with no absorbed word as witness (`PouwCallCheck_v1`, `PouwWarpCheck_v1`, `PouwSegCheck_v3`, #2417) recomputes
+every word it absorbs from the unit's operands, its seed and its noise. -/
+def Pins : Prop := ∀ x w j v, pf.rel x w j v → pf.right x w j v
+
+/-- Unit `u` writes a position that unit `v` reads. -/
+def Feeds (u v : Fin S × J) : Prop := ∃ k, pf.src (pf.pos v.1 v.2 k) = some u
+
+/-- **Unit `j` of round `w` is good on `x`**: every unit upstream of it (itself included) has its slots held at their
+committed values, and is right at them. -/
+def Good [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (w : Fin S) (j : J) : Prop :=
+  ∀ u : Fin S × J, Relation.ReflTransGen pf.Feeds u (w, j) →
+    (∀ k, pf.Held x (pf.pos u.1 u.2 k)) ∧ pf.right x u.1 u.2 (pf.view x u.1 u.2)
 
 /-- **The play is its drawn units' proofs'** (𝒫_samp): the window is accepted only if every drawn unit's proof is, and
-the ideal game's check is the drawn units' values as committed before the draws, so drawn units right at those values
-are accepted by the ideal game. -/
-def Of [Fintype A] [Fintype B] {K T L U : Type} (P : Play (A × B) S K T L U) : Prop :=
-  (∀ x, P.accepts x → ∀ w i, pf.accepted x w (pf.drawnAt x w i)) ∧
-    ∀ x, (∀ w i, pf.right w (pf.drawnAt x w i) (pf.committed x w (pf.drawnAt x w i))) → P.game.accepts x
+the ideal game's check is the drawn units' committed values, so drawn units right at them are accepted by the ideal
+game. -/
+def Of [Fintype C] [Fintype B] [Nonempty V] {K T L U : Type} (P : Play (Paths C m × B) S K T L U) : Prop :=
+  (∀ x, P.accepts x → ∀ w i, pf.accepted x w i) ∧
+    ∀ x, (∀ w i, pf.right x w (pf.drawnAt x w i) (pf.view x w (pf.drawnAt x w i))) → P.game.accepts x
+
+open Classical in
+/-- **The share covers every unit that isn't good**: on an accepted path, the weight `wt w j` (unit `j`'s words in round
+`w`) of the units that aren't good is at most the ideal game's deficiency times `N_w`. A property of the share's
+definition, proved for each game, not assumed. -/
+def Covers [Fintype C] [Fintype B] [Nonempty V] [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
+    (wt : Fin S → J → ℝ) (Nw : ℝ) : Prop :=
+  ∀ x, P.accepts x → (∑ w, ∑ j, if pf.Good x w j then 0 else wt w j) ≤ P.game.deficiency x * Nw
 
 end DrawnLayer
 
