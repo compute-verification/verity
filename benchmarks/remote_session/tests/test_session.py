@@ -148,7 +148,7 @@ class TickingBackend(prover.CpuBackend):
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
-        registry: audit.Registry | None = None, layout: list | None = None, **kv):
+        registry: audit.Registry | None = None, layout: list | None = None, host_bytes: int = 0, **kv):
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
@@ -166,7 +166,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks, lifetime=lifetime, registry=registry)
+                          checks=checks, lifetime=lifetime, registry=registry, host_bytes=host_bytes)
     v.register()
     allowance = v.allowance(v.ping(4))
     out, not_before = [], None
@@ -318,6 +318,20 @@ def test_kv_pages_are_checked_by_worker_processes_under_seeds_that_bind_the_appe
     assert r["accepted"] and p["accepted"] and r["failure"] is None and r["appended"] > 0
 
 
+def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does():
+    from checks import Checks
+
+    from verity.core.protocols.profile import IntegrityProfile, Subset
+
+    profiles = [IntegrityProfile(("receipt",), (n,), {"receipt": Subset(k)}, 2.0 ** -40, drawn={"receipt": k})
+                for n, k in ((4096, 64), (10 ** 6, 300), (10 ** 6, 301))]
+    checks = Checks(2)
+    try:
+        assert checks.bounds(profiles) == [p.bound() for p in profiles]
+    finally:
+        checks.close(wait=True)
+
+
 def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is_rejected(monkeypatch):
     """Under L = 1 window, sent with the session, every appended page is stale in the window after the one it joined.
     The honest prover re-keys each before that window's first pass (writes its payload again in its slot, at a fresh
@@ -331,6 +345,78 @@ def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is
     (r,), (p,) = run("kv:2", samples=8, kv_every=4, kv_pool=8, lifetime=1)
     assert not r["accepted"] and not p["accepted"] and p["kv"]["rekeyed"] == 0
     assert r["failure"]["failure"] == "lifetime" and r["failure"]["t"] == 1
+
+
+def test_serving_runs_at_most_k_steps_past_the_pass_in_flight_and_reuses_a_freed_block_once_no_pass_needs_it():
+    """`Ahead` at k = 2, serving scripted: it runs steps 0..2 and waits on the bound, so the first pass takes step 3
+    with their records; serving then runs on to the bound past it, 5, but its step 4 reuses a block freed at step 3,
+    which the pass at 3 holds, so it waits until that pass has read.  Then serving runs to 6, the next pass takes 7
+    with the records of 3..6, and serving runs to 9.  Once the session ends serving runs free, and a serving error
+    reaches the next take."""
+    a, ran = prover.Ahead(2, fill=True), []
+
+    def serving() -> None:
+        s = 0
+        while a.begin(s):
+            if s == 4:
+                a.reuse(3)
+            ran.append(s)
+            a.hand(s, f"record {s}")
+            s += 1
+
+    th = threading.Thread(target=serving, daemon=True)
+    th.start()
+    assert a.take() == (3, ["record 0", "record 1", "record 2"])
+    assert ran == [0, 1, 2, 3] and a.waits == {"bound": 1, "fence": 1}
+    a.passed(3)
+    assert a.take() == (7, ["record 3", "record 4", "record 5", "record 6"])
+    assert ran == list(range(10)) and a.waits == {"bound": 3, "fence": 1}
+    a.end()
+    th.join()
+    assert ran == list(range(10)) and a.leads == [1] and a.stats()["steps"] == 10
+    b = prover.Ahead(0)
+    b.fail(ValueError("the engine raised"))
+    with pytest.raises(RuntimeError, match="serving raised"):
+        b.take()
+    with pytest.raises(ValueError):
+        prover.Ahead(-1)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("k", [0, 2])
+def test_a_pipelined_session_with_serving_up_to_k_steps_past_its_passes_is_accepted(monkeypatch, k):
+    """Serving on its own thread (`Ahead`, its furthest schedule) writes a page a step into a slot freed k + 1 steps
+    before, each pass covers the newest step serving has handed and reads every block in its slot, and pages stale
+    under L = 1 are re-keyed at each window's first pass: the session is accepted, no pass read a block serving had
+    overwritten, serving ran more steps than there were passes, every pass read with serving at most k steps past its
+    own and some at exactly k, and the fence held serving once: at the first step, whose write overwrites the pool's
+    filler in place and waits on its own step's pass (the filler the next k + 1 steps write is freed there)."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), (p,) = run("kv:1", windows=2, samples=16, kv_every=1, kv_pool=8, lifetime=1, ahead=k, fill=True,
+                     kv_headroom=k + 1)
+    assert r["accepted"] and p["accepted"] and r["failure"] is None and p["misread"] == []
+    a, kv = p["ahead"], p["kv"]
+    assert all(0 <= lead <= k for lead in a["leads"]) and max(a["leads"]) == k and a["fence_waits"] == 1
+    assert len(a["leads"]) == sum(p["passes"]) + p["discarded"] < a["steps"]
+    assert kv["rekeyed"] > 0 and kv["appended"] == kv["steps"] + kv["rekeyed"]
+    assert r["appended"] == kv["sent_appended"] > 0 and r["released"] == kv["sent_released"] > 0
+
+
+@pytest.mark.slow
+def test_a_pipelined_prover_that_overwrites_a_freed_block_before_its_pass_reads_it_is_rejected_at_that_receipt(
+        monkeypatch):
+    """Serving up to 2 steps past the pass in flight, each write into a slot freed the step before: an honest
+    session's fence holds serving's writes until no pass to come holds the block, and it is accepted; one whose writes
+    skip the fence (`kvoverwrite`) lands pages over blocks the pass in flight still has to read, and is rejected at a
+    receipt of one of them.  Each of its passes but the second (whose steps write the pool's empty slots) misreads 2
+    of its at most 17 blocks, so at 96 draws a window its chance of drawing none in either window is below 2^-30."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (honest, over), (ph, po) = run("kv:1,kvoverwrite:1", sessions=2, windows=2, samples=96, kv_every=1, kv_pool=8,
+                                   ahead=2, fill=True, kv_headroom=1)
+    assert honest["accepted"] and ph["accepted"] and ph["misread"] == []
+    assert ph["ahead"]["fence_waits"] > 0 and all(0 <= lead <= 2 for lead in ph["ahead"]["leads"])
+    assert not over["accepted"] and not po["accepted"] and po["misread"]
+    assert over["failure"]["failure"] == "receipt" and po["failure_on_misread"] is True
 
 
 class CarrierVerdict:
@@ -403,6 +489,62 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     assert not bare["labels"] and bare["weights_bytes"] == 0 and bare["credited_bytes"] == mem["credited_bytes"]
 
 
+def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(monkeypatch):
+    """With the node's host DRAM given, the memory line is also by kind against HBM and DRAM: a store of 8 weights
+    blocks and 4 of filler in HBM, then 4 of filler in host memory, every pass reading all 16, credits each kind what
+    every pass held less the window's lost blocks, and in all every held block less them once, KV nothing without a
+    verdict; each share is of HBM plus DRAM, the residual what the total leaves, and the line is its worst window's."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
+    seen, memory = {}, verifier.memory
+
+    def keep(*a, **kw):
+        seen["args"] = a, kw
+        return memory(*a, **kw)
+
+    monkeypatch.setattr(verifier, "memory", keep)
+    layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
+              {"kind": "filler", "tier": "hbm", "first": 8, "blocks": 4},
+              {"kind": "filler", "tier": "host", "first": 12, "blocks": 4}]
+    host = 1843 * 10 ** 9
+    (r,), (p,) = run("honest", samples=4096, layout=layout, host_bytes=host)
+    assert r["accepted"] and p["accepted"]
+    B, node, whole = rcodec.BLOCK_BYTES, r["ledger"]["memory"]["node"], verifier.HBM_BYTES + host
+    assert node["node_bytes"] == whole and node["host_bytes"] == host and node["lost_bytes"] == 0
+    assert node["held"] == {"weights": 8 * B, "filler_hbm": 4 * B, "host": 4 * B}
+    assert node["credited"] == {"weights": 8 * B, "filler_hbm": 4 * B, "host": 4 * B, "kv": 0}
+    assert node["credited_bytes"] == 16 * B and node["residual"] == 1 - 16 * B / whole
+    assert node["share"] == {k: v / whole for k, v in node["credited"].items()}
+
+    (record, plans, regions), kw = seen["args"]
+    span = max(w.span_ns for w in record.windows)
+    rate = record.codec.encode_squarings * 1e9 / span / 2
+    lossy = verifier.memory(record, plans, regions, hbm_bytes=kw["hbm_bytes"], rebuild=audit.Rebuild(record.codec, rate))
+    line = verifier.node_line(lossy, host_bytes=host)
+    worst = max(lossy["windows"], key=lambda x: x["lost_blocks"])
+    lost = worst["lost_blocks"] * B
+    assert line["window"] == worst["window"] and line["lost_bytes"] == lost == pytest.approx(B / 2)
+    assert line["credited"]["weights"] == pytest.approx(8 * B - lost)
+    assert line["credited"]["filler_hbm"] == pytest.approx(4 * B - lost) == line["credited"]["host"]
+    assert line["credited_bytes"] == pytest.approx(16 * B - lost) and line["held"] == node["held"]
+
+
+def test_an_engines_arena_puts_each_weight_at_a_block_boundary_and_refuses_what_does_not_fit():
+    import engine
+
+    assert engine.pack([1, 4096, 4097, 10], 5 * 4096) == [0, 4096, 8192, 16384]
+    with pytest.raises(ValueError, match="more than the arena"):
+        engine.pack([1, 4096, 4097, 10], 5 * 4096 - 1)
+
+
+def test_aligned_engines_step_at_one_instant_of_the_host_clock_whatever_their_perf_counters_read():
+    import engine
+
+    due = [clock + engine.aligned(perf, clock, 0.5) - perf for perf, clock in ((3.0, 1000.12), (77.25, 1000.31))]
+    assert due == [pytest.approx(1000.5)] * 2
+    assert engine.aligned(10.0, 1001.0, 0.5) == pytest.approx(10.5)
+
+
 @pytest.mark.parametrize("layout", [
     [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8}],
     [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
@@ -440,6 +582,46 @@ def registering(registry: audit.Registry) -> tuple[str, str]:
         v.register()
     th.join()
     return str(refused.value), heard[0]
+
+
+def greeted(lifetime: int, deferred: bool) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
+    """A prover whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`: the verifier, its refusal
+    if it refused, and the reason the prover read in its `bye`."""
+    a, b = socket.socketpair()
+    backend = prover.CpuBackend(16, random.Random(7))
+    backend.deferred = deferred
+    p = prover.ProverSide(wire.Conn(b), backend, b"test-node", prover.parse_plan("honest"), seed=11, log=lambda m: None)
+    heard = []
+
+    def prove() -> None:
+        try:
+            p.register(codec=P512)
+        except wire.Closed as e:
+            heard.append(str(e))
+
+    th = threading.Thread(target=prove, daemon=True)
+    th.start()
+    v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
+                          jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime)
+    refused = None
+    try:
+        v.register()
+    except ValueError as e:
+        refused = e
+    th.join()
+    return v, refused, heard
+
+
+def test_a_prover_that_defers_residency_is_refused_under_a_lifetime_of_one_window():
+    """The hello says whether the prover defers an appended block's residency to its encode: a block appended in window
+    w is then resident from w or w + 1, so its re-key falls at age L − 1, and under L = 1 the verifier refuses it with
+    `bye` before drawing a registration.  At L = 2, or not deferring, the session's parameters carry it."""
+    v, refused, heard = greeted(1, True)
+    assert refused is not None and "lifetime of at least 2 windows, not 1" in str(refused)
+    assert heard == [f"refused: {refused}"] and v.registry.drawn(b"test-node") == 0
+    for lifetime, deferred in ((2, True), (1, False)):
+        v, refused, heard = greeted(lifetime, deferred)
+        assert refused is None and heard == [] and v.deferred is deferred and v.registry.drawn(b"test-node") == 1
 
 
 def test_a_node_with_a_live_registration_is_refused_until_the_verifier_closes_it_with_its_sessions_counted(monkeypatch):
@@ -532,10 +714,43 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
         verifier.Verifier.root(session(), {**msg, "appends": [[root, 2]]})
 
 
+def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
+    """`Verifier.root` hands a message's withdrawn runs to its release (`Session.release(released, withdrawn)`): an
+    appended block no plan held, freed before its encode landed, is withdrawn; one a plan held, a registered one, or a
+    withdrawal outside the message's releases is the session's `release` rejection."""
+    from verity.core.protocols.remote_bandwidth import coins
+
+    reg = audit.register(os.urandom(32), b"test-node", 8, bytes(64), P512)
+    params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows,
+                          lifetime=2, deferred=True)
+    root = (b"\7" * 64).hex()
+
+    def session():
+        s = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: 0,
+                          not_before_ns=0)
+        s.start()
+        verifier.Verifier.append(s, {"type": "append", "root": root, "count": 3})
+        return s
+
+    msg = {"t": 0, "i": 0, "root": root, "released": [[9, 1]], "withdrawn": [[9, 1]],
+           "change": [[[8, 1], [10, 1]], []], "step": 5}
+    s = session()
+    assert verifier.Verifier.root(s, msg) is None and s.released == 1
+    for bad in ({"released": [[3, 1]], "withdrawn": [[3, 1]], "change": [[[8, 3]], [[3, 1]]]},
+                {"released": [[3, 1]], "change": [[[8, 3]], [[3, 1]]]},
+                {"released": []}):
+        v = verifier.Verifier.root(session(), {**msg, **bad})
+        assert v is not None and v.failure == "release"
+    s = session()
+    assert verifier.Verifier.root(s, {**msg, "released": [], "withdrawn": [], "change": [[[8, 3]], []]}) is None
+    v = verifier.Verifier.root(s, {**msg, "i": 1, "change": [[], [[9, 1]]], "step": 6})
+    assert v is not None and v.failure == "release"
+
+
 def test_a_kv_plan_needs_its_pages_a_step():
-    assert prover.parse_plan("honest,kv:4,kvdrop:2,skip:0.5") == [("honest", 0.0), ("kv", 4.0), ("kvdrop", 2.0),
-                                                                  ("skip", 0.5)]
-    for bad in ("kv", "kv:0", "kv:1.5", "kvdrop:", "evict:2"):
+    assert prover.parse_plan("honest,kv:4,kvdrop:2,skip:0.5,kvoverwrite:2") == [
+        ("honest", 0.0), ("kv", 4.0), ("kvdrop", 2.0), ("skip", 0.5), ("kvoverwrite", 2.0)]
+    for bad in ("kv", "kv:0", "kv:1.5", "kvdrop:", "evict:2", "kvoverwrite"):
         with pytest.raises(ValueError):
             prover.parse_plan(bad)
 

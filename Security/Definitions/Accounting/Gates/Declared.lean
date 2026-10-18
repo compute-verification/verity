@@ -13,9 +13,9 @@ only through such a gate. Gathers and the free gates are derived (`Proven`), nev
 Two circuits of the exact-int8 profile (`verity_vllm/program/registry/int8_exact.py`) whose window then holds by
 theorem: `int8Linear`, one coordinate of `Int8Linear{K,N}` (`Int8RowQuant`, then `ScaledMmS8_v1`'s s8·s8 dot), and
 `lutPv`, one channel of `Int8LutAttentionRow`'s `P V'` (P from `LutIndex`, `Exp2Lut127` and `S32LowByte`, V' an s8
-code, both zero-padded to `32·S` keys). The 32-bit primitives whose value no bound reads (`Bf16ToF32`, `F32Div`,
-`F32Rint`, the clamp's `F32Fmaxf` and `F32Fminf`, the row scale's fold) are each `word32 f` for an arbitrary `f`: the
-window holds whatever they compute.
+code, both zero-padded to `32·S` keys). The 32-bit primitives whose value no bound reads (`F32Div`, `F32Rint`, the
+clamp's `F32Fmaxf` and `F32Fminf`, the row scale's fold, each reading the row's `Bf16ToF32` widening, an affine
+`×2^16` folded into them) are each `word32 f` for an arbitrary `f`: the window holds whatever they compute.
 -/
 
 namespace Accounting.Gates
@@ -81,7 +81,7 @@ def pvGate (S n : ℕ) (T : List ℤ) (i : ℕ) : Gate ℕ :=
   else if i < 257 + n then plainGate (.input .run i) [] s32Min s32Max ""
   else if i < 257 + 2 * n then
     plainGate (.budgeted .rounding fun v => lutIndex (v.headD 0) (v.getD 1 0)) [i - n, 256] 0 255 "LutIndex_v1"
-  else if i < 257 + 3 * n then plainGate (.gather (some 8)) ((i - n) :: List.range 256) 0 127 "Exp2Lut127_v1"
+  else if i < 257 + 3 * n then plainGate (.gather (some 8) 0) ((i - n) :: List.range 256) 0 127 "Exp2Lut127_v1"
   else if i < 257 + 3 * n + 32 * S then
     if 1 ≤ i - (257 + 3 * n) ∧ i - (257 + 3 * n) < n then
       plainGate (.budgeted .rounding fun v => s32LowByte (v.headD 0)) [i - n] 0 127 "S32LowByte_v1"

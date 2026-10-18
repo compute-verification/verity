@@ -189,38 +189,23 @@ theorem zeroRows_get (n w u k : ℕ) : ((Flock.RecCoins.zeroRows n w)[u]!)[k]! =
     exact absurd h (Nat.not_lt_zero _)
 
 /-- **A source loaded from the inner-session files has a decodable record**: `Inner.load` reaches
-`Record.decode` only after setting up the statement and checking its shape and schedule. -/
+`Record.decode` only after setting up the statement, checking its shape and schedule and taking the spec at the
+record's draw (`Files.drawnSpec`). -/
 theorem record_decode_of_load {unit : String} {f : Flock.RecCoins.Files} {inn : Flock.RecCoins.Inner}
     (h : Flock.RecCoins.Inner.load unit f = .ok inn) :
     ∃ spec sess, Flock.Record.decode spec f.record = .ok sess := by
   unfold Flock.RecCoins.Inner.load at h
   obtain ⟨⟨spec, st⟩, _, h⟩ := FlockVBridge.PartS.bind_ok h
-  cases hi : f.inner with
-  | none =>
-      cases hs : Flock.Zk.schedule st.m with
-      | error e =>
-          simp [hi, hs, Functor.map, Except.map, Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-      | ok p =>
-          cases hd : Flock.Record.decode spec f.record with
-          | error e =>
-              simp [hi, hs, hd, Functor.map, Except.map, Bind.bind, Except.bind, throw, throwThe,
-                MonadExceptOf.throw] at h
-          | ok sess => exact ⟨spec, sess, hd⟩
-  | some i =>
-      cases hc : Flock.RecVStar.checkInnerStmt i st with
-      | error e =>
-          simp [hi, hc, Functor.map, Except.map, Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-      | ok u =>
-          cases hs : Flock.Zk.schedule st.m with
-          | error e =>
-              simp [hi, hc, hs, Functor.map, Except.map, Bind.bind, Except.bind, throw, throwThe,
-                MonadExceptOf.throw] at h
-          | ok p =>
-              cases hd : Flock.Record.decode spec f.record with
-              | error e =>
-                  simp [hi, hc, hs, hd, Functor.map, Except.map, Bind.bind, Except.bind, throw, throwThe,
-                    MonadExceptOf.throw] at h
-              | ok sess => exact ⟨spec, sess, hd⟩
+  dsimp only at h
+  repeat' split at h
+  all_goals first
+    | (cases h; done)
+    | skip
+  all_goals obtain ⟨spec', -, h⟩ := FlockVBridge.PartS.bind_ok h
+  all_goals split at h
+  all_goals first
+    | (cases h; done)
+    | exact ⟨_, _, by assumption⟩
 
 /-- **Check 5 at a `rec-open` unit runs `checkOpen`** at the inner session and its parameters. -/
 theorem openCheck_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Port} {f : Flock.RecCoins.Source}

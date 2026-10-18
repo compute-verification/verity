@@ -1,0 +1,4 @@
+order = 240
+path = "`floored_gemm/`, `masked_gemm/`, `edited_gemm/`, `hashed_gemm/`"
+runs_on = "RTX PRO 6000"
+what = "The noised GEMMs, from the floored int8 grid to the adopted edited GEMM with its commitments hashed in its own CTAs (below)"
