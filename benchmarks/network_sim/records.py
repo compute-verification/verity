@@ -6,8 +6,8 @@ window, the real frames in each bucket (the grid's occupancy) and a SHA-512 dige
 order. `published` reads a block's from a lab run's directory. `declared` gives the ones the Program says an honest run
 publishes, by port and window: egress, the reference shaper on the Program's frames at the declared syncs; ingress, the
 certifier's bucketer on the plan's requests, each at its arrival bucket, behind each window's salt frame when the salt
-is on. `cadence` is the certifiers' parameters as a
-`datacenter.Cadence`. `datacenter.check_records(published, declared, cadence)` is the audit.
+is on, and none for a window the verifier's plan has the block out for maintenance in. `cadence` is the certifiers'
+parameters as a `datacenter.Cadence`. `datacenter.check_records(published, declared, cadence)` is the audit.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ for _p in (str(HERE), str(HERE.parent / "network_traces")):
 
 import active_replay as ar  # noqa: E402
 import graph  # noqa: E402, F401  (puts `datacenter` on the path)
-from datacenter import Cadence, Datacenter, Port, Record  # noqa: E402
+from datacenter import Cadence, Datacenter, Interval, Plan, Port, Record  # noqa: E402
 from verity.core.protocols.certifier import active  # noqa: E402
 from verity.core.protocols.certifier import grid as cgrid  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync, run_shaper  # noqa: E402
@@ -90,10 +90,20 @@ def published(run: Path, setup: ar.Setup, dc: Datacenter, block: str) -> list[Re
 
 
 def declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str,
-             salts: dict[int, bytes] | None = None) -> dict[tuple[Port, int], Record]:
+             salts: dict[int, bytes] | None = None, verifier: Plan | None = None) -> dict[tuple[Port, int], Record]:
     """The records an honest run of `plan` publishes, from the plan alone, by port and window. With `salts`, the ones
     the certifier's salt was on for, each window's salt as `Proxy.reveal` gives it: the ingress certifier enqueues the
-    salt's frame at each window's first bucket, ahead of that bucket's arrivals."""
+    salt's frame at each window's first bucket, ahead of that bucket's arrivals. With `verifier`, the verifier's plan
+    for the epoch, a window the block is out for maintenance in (`Plan.out`) is left out, as `datacenter.audit`
+    leaves it: its ports owe no record then."""
+    records = _declared(plan, setup, dc, block, salts)
+    per = cadence(setup).window_ticks
+    return {(port, w): r for (port, w), r in records.items()
+            if verifier is None or not verifier.out(block, Interval(w * per, (w + 1) * per))}
+
+
+def _declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str,
+              salts: dict[int, bytes] | None) -> dict[tuple[Port, int], Record]:
     by = ports(dc, block, setup)
     e, i = setup.egress_params, setup.ingress_params
     release = {int(k): v for k, v in plan["model_release"].items()}

@@ -10,7 +10,8 @@ namespace and deletes the namespaces, and their veths with them; the root namesp
 them and checks what can reach what. All three run `ip` through `sudo -n`.
 
 `run` runs one configuration on every block at once, each block with its own strategy (by default the blocks take
-`honest`, `bits`, `late` and `extra` in turn; `--block b1=late` sets one). For each block, three processes, each in its
+`honest`, `bits`, `late`, `extra` and `maintenance` in turn, so the default four blocks take the first four;
+`--block b1=late` sets one). For each block, three processes, each in its
 own namespace as the invoking user (`sudo ip netns exec NS setpriv ...`), on the host's monotonic clock from one origin:
 `benchmarks/network_traces/active_replay.py`'s server, proxy and peer, on the namespaces' addresses, with the
 certifier's own proxy unmodified:
@@ -21,8 +22,9 @@ certifier's own proxy unmodified:
 
 The configuration is `test_active_replay`'s synthetic trace, three windows of 60 buckets of 100 ms, calibrated by the
 library. A block's strategy is its server's: `honest`; `bits`, which writes each session's frames all at once or spread out
-by a random bit (`active_replay.adversary_writes`); `late`, which holds a session in window 0 past every sync; or
-`extra`, honest but for one more event, at a position the Program doesn't have. Each block is audited twice: by the
+by a random bit (`active_replay.adversary_writes`); `late`, which holds a session in window 0 past every sync;
+`extra`, honest but for one more event, at a position the Program doesn't have; or `maintenance`, an honest server
+whose certifier is down for window 1. Each block is audited twice: by the
 certifier's reference verifier, `audit.Audit`, on the raw and committed records (`active_replay.audit_configuration`),
 and by the accounting layer's record check, `datacenter.check_records`, on the records as `datacenter.observe.Record`s
 against the ones the Program declares (`records`). For that check the declaration's cadence is the certifiers' calibrated parameters (`records.cadence`),
@@ -35,6 +37,15 @@ a block's run is over, `run` makes the verifier's "reveal" call to its proxy and
 The record check declares the ingress records with them, and the certifier's audit reads each salt's commitment
 against them and says where the salt frames went (`active_replay.audit_salt`): one in each ingress window, none in
 egress.
+
+Under `maintenance` the block is drained for window 1 (`active_replay.outage_plan`), and its proxy serves window 0,
+closes the link and stops listening, then comes back for window 2 (`Proxy(start=2, position=p)`), and the peer
+connects again: the certifier is inline, so for window 1 the link is dead and no record is published. Its records are
+declared from its own drained plan, the Program its prover registers. The record check runs twice: against the
+verifier's plan with `Maintenance(block, window 1)` (`verifier_plan`), which leaves that window out of the declared
+records, and without it, which refuses both its port-windows "no record". Each comes with the account's charge for the
+block (`charge`, `datacenter.account` on a profile that credits no work): without the plan, the refused port-windows
+at the uplink's full capacity; with it, everything the block's devices hold.
 
     python mockdc.py up | status | down
     python mockdc.py run --out DIR [--salt] [--block b0=honest --block b1=late ...]
@@ -62,7 +73,8 @@ sys.path[:0] = PATHS
 import active_replay as ar  # noqa: E402
 import graph  # noqa: E402
 import records  # noqa: E402
-from datacenter import Carried, Datacenter, Refused, check_records  # noqa: E402
+from datacenter import (Carried, Datacenter, Interval, Maintenance, Plan, Profile, Refused, account,  # noqa: E402
+                        check_records)
 from datacenter.examples import leaf_spine  # noqa: E402
 from verity.core.protocols.certifier import calibration  # noqa: E402
 from verity.core.protocols.certifier.audit import Audit  # noqa: E402
@@ -70,7 +82,8 @@ from verity.core.protocols.certifier.audit import Audit  # noqa: E402
 T = 60
 SERVER_PORT, LINK_PORT = 8000, 9000
 STARTUP_S = 3.0
-STRATEGIES = ("honest", "bits", "late", "extra")
+STRATEGIES = ("honest", "bits", "late", "extra", "maintenance")
+OUTAGE_WINDOW = 1
 RESHAPE = "bring the lab up in this shape (`mockdc.py down`, then `up` with the same declaration and options)"
 
 
@@ -215,7 +228,36 @@ def strategy_plan(plan: dict, setup: ar.Setup, strategy: str) -> dict:
         return plan
     if strategy == "extra":
         return extra_plan(plan)
+    if strategy == "maintenance":
+        return ar.outage_plan(plan, setup, OUTAGE_WINDOW) | {"strategy": "maintenance"}
     return ar.adversary_plan(plan, setup, strategy, seed=1)
+
+
+def verifier_plan(dc: Datacenter, plans: dict) -> Plan:
+    """The verifier's plan for the run's epoch: every block whose plan has an outage is out for maintenance in that
+    window."""
+    per, windows = dc.cadence.window_ticks, next(iter(plans.values()))["windows"]
+    return Plan(Interval(0, windows * per), maintenance=[
+        Maintenance(b, Interval(p["outage"]["window"] * per, (p["outage"]["window"] + 1) * per))
+        for b, p in plans.items() if "outage" in p])
+
+
+def charge(dc: Datacenter, plan: Plan, claims: list, block: str) -> dict:
+    """The account of one block's claims under the verifier's plan (`datacenter.account`), on a profile that credits no
+    work and registers no store: whether it is sound, and its covert budget, which is the carried windows' timing
+    advice, every refused port-window at its uplink's full capacity, and everything a block out for maintenance
+    holds."""
+    acc = account(claims, Profile(dc, plan, {}, {}, {b.name: 0.0 for b in dc.blocks}, {}))
+    return {"sound": acc.sound, "covert_bits": acc.covert_bits, "timing_bits": acc.timing_bits,
+            "refused_bits": acc.refused_bits, "serviced_bits": acc.serviced.get(block, 0.0),
+            "carried_bits": next(x.carried for x in acc.blocks if x.block == block)}
+
+
+def describe(charged: dict) -> str:
+    beyond = [f"{charged['refused_bits']:.3g} on refused windows"] * bool(charged["refused_bits"]) + \
+        [f"{charged['serviced_bits']:.3g} held in maintenance"] * bool(charged["serviced_bits"])
+    return (f"account {'sound' if charged['sound'] else 'NOT sound'}, covert budget {charged['covert_bits']:.3g} bits"
+            + (f" ({', '.join(beyond)})" if beyond else ""))
 
 
 # The three processes, each in its own namespace: active_replay's server, proxy and peer on the namespaces' addresses.
@@ -350,10 +392,21 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
     """Each block's audit by the certifier's verifier and by the accounting layer's record check, its timing, and its
     wire against an honest block's. With `salt`, each block's records are declared with the salts its proxy revealed
     (none if it revealed none, which the record check then refuses), and the certifier's audit reads each salt's
-    commitment (`active_replay.audit_salt`)."""
+    commitment (`active_replay.audit_salt`).
+
+    A block's records are declared from the honest plan, or, for a block down for maintenance, from its own drained
+    plan, and checked against the verifier's plan (`verifier_plan`), which has that block out for its outage window, so
+    the window owes no record. A block out for maintenance is also checked without it (`unplanned`). Each check comes
+    with the account's charge for the block's claims (`charge`)."""
     setup = ar.Setup(report)
-    summary = {"declaration": dc.name, "cadence": {k: v for k, v in vars(dc.cadence).items() if k != "tick"}, "blocks": {}}
+    verifier = verifier_plan(dc, plans)
+    unplanned_plan = Plan(verifier.epoch)
+    summary = {"declaration": dc.name, "cadence": {k: v for k, v in vars(dc.cadence).items() if k != "tick"},
+               "plan": {"epoch": [verifier.epoch.start, verifier.epoch.end],
+                        "maintenance": [[m.block, [m.during.start, m.during.end]] for m in verifier.maintenance]},
+               "blocks": {}}
     honest = next((b for b, s in strategies.items() if s == "honest"), None)
+    width = max(map(len, strategies.values()))
     for b, strategy in strategies.items():
         a = ar.audit_configuration(plans[b], report, out / b, audit=Audit)
         (out / b / "audit.json").write_text(json.dumps(a))
@@ -362,29 +415,45 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
         path = out / b / "salts.json"
         salts = {int(w): bytes.fromhex(s) for w, s in json.loads(path.read_text()).items()} if salt and path.exists() \
             else None
-        claims = check_records(published, records.declared(honest_plan, setup, dc, b, salts), dc.cadence)
+        mine = plans[b] if "outage" in plans[b] else honest_plan
+        claims = check_records(published, records.declared(mine, setup, dc, b, salts, verifier), dc.cadence)
         (out / b / "records.json").write_text(json.dumps([records.to_json(r) for r in published]))
         refused = [f"{c.on}: {c.why}" for c in claims if isinstance(c, Refused)]
         c = a["comparisons"]
         entry = {"strategy": strategy, "accepted": all(r[2] is None and r[3] is None for r in rows), "verdicts": rows,
                  "datacenter": {"accepted": not refused, "refused": refused,
                                 "carried": sum(isinstance(x, Carried) for x in claims),
-                                "advice_bits": sum(x.bits for x in claims if isinstance(x, Carried))},
+                                "advice_bits": sum(x.bits for x in claims if isinstance(x, Carried)),
+                                "account": charge(dc, verifier, claims, b)},
                  "records_are_run_shapers": c["records_are_run_shapers"], "wire_is_the_records": c["wire_is_the_records"],
                  "released_not_the_programs": c["released_not_the_programs"],
                  "slack_ms": a["timing"]["slack_ms"],
                  "tick_late_ms_max": {k: v.get("max") for k, v in a["timing"]["tick_late_ms"].items()},
                  "ticks_over_slack": {k: v["over_slack"] for k, v in a["timing"]["tick_late_ms"].items()},
                  "wire_bucket_lag_ms": a["timing"]["wire_bucket_lag_ms"]}
+        out_for = verifier.out(b, verifier.epoch)
+        if out_for:
+            bare = check_records(published, records.declared(mine, setup, dc, b, salts), dc.cadence)
+            entry["datacenter"]["unplanned"] = {"accepted": not any(isinstance(x, Refused) for x in bare),
+                                                "refused": [f"{x.on}: {x.why}" for x in bare if isinstance(x, Refused)],
+                                                "account": charge(dc, unplanned_plan, bare, b)}
         if salt:
             entry["salt"] = a.get("salt")
-        if honest is not None and b != honest:
+        if honest is not None and b != honest and "outage" not in plans[b]:
             entry["against_honest"] = ar.against_honest(out / b, out / honest)
         summary["blocks"][b] = entry
         failed = [f"{link}[{w}] {raw or committed}" for link, w, raw, committed in rows if raw or committed]
-        line = f"{b} {strategy:6} certifier audit {'ACCEPTED' if entry['accepted'] else 'REFUSED'}"
+        line = f"{b} {strategy:{width}} certifier audit {'ACCEPTED' if entry['accepted'] else 'REFUSED'}"
         line += f" ({', '.join(failed)})" if failed else ""
-        line += "; datacenter records " + ("ACCEPTED" if not refused else f"REFUSED ({'; '.join(refused)})")
+        if out_for:
+            u = entry["datacenter"]["unplanned"]
+            m = next(m for m in verifier.maintenance if m.block == b)
+            line += ("; datacenter records without the plan " + ("ACCEPTED" if u["accepted"] else
+                     f"REFUSED ({'; '.join(u['refused'])})") + f", {describe(u['account'])}"
+                     + f"; with Maintenance({b}, {m.during}) " + ("ACCEPTED" if not refused else
+                     f"REFUSED ({'; '.join(refused)})") + f", {describe(entry['datacenter']['account'])}")
+        else:
+            line += "; datacenter records " + ("ACCEPTED" if not refused else f"REFUSED ({'; '.join(refused)})")
         if "against_honest" in entry:
             line += f"; wire is {honest}'s: {entry['against_honest']['wire_is_honests']}"
         if salt:
