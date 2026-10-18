@@ -653,7 +653,9 @@ coin server's record of the inner session whose `c_k` its rows must be (`--rec-i
 `rec-residuals/…` or `rec-sparse/…` unit) needs the inner transcript, whose link points the inner session's record must
 hold (`RecVStar.innerLink`); a circuit-table level's `out` reads `rec-top-L<l>` at each opening's node (`RecCoins.checkLink`)
 and its rows are the tops the coin server recorded (`RecVStar.checkTopRows`), whose rounds and sizes are the inner
-shape's schedule's (`RecVStar.checkLinkRounds`). At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
+shape's schedule's (`RecVStar.checkLinkRounds`). Where the verifier holds the inner statement's files, its setup first
+checks they are of a form Flock's soundness proof covers at the recursion's inner tags (`RecSetup.innerScope`,
+`ProvedScope.check`). At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
 needs the inner statement's files, on which its setup first checks check 5's sparse refusals (`RecCoins.checkAtC3`), and
 the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`).
 Each DIR holds `session.json`
@@ -839,7 +841,8 @@ Its verifier-registered values are checked against the verifier's coins (`RecCoi
 reads: the inner statement and session (`--rec-inner-public` and its three, or `--rec-inner-coins`), or for R's levels and
 opening the inner transcript and the verifier's inner shape alone; with the inner statement and session, a statement
 whose check 5 reads the link points needs the inner transcript, and a circuit-table level's `out` reads the coin server's
-tops (`RecCoins.checkLink`). At candidate 3's inner shape (`--rec-inner` naming a
+tops (`RecCoins.checkLink`). Given the inner statement's files, it first checks they are of a form Flock's soundness proof
+covers (`RecSetup.innerScope`). At candidate 3's inner shape (`--rec-inner` naming a
 RecSparse shape), every statement needs the inner statement's files, whose sparse range is checked first
 (`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
 def statementCmd (args : List String) : IO UInt32 := do
