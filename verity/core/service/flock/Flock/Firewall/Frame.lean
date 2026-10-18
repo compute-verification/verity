@@ -23,10 +23,16 @@ points of the table's reps so far (`prior`'s, then this rep's, each from its coi
 (`STOP`): nothing of the round leaves. The inner proof is the firewall's own, and its rounds leave through the frame as
 every other round does, unmasked.
 
-Any other stop comes at `Finish`, never before (§10.1): once a round fails the firewall's check, or `round` refuses one, the
-rep is `stopped`. The firewall then sends the statement's scheduled round in the device's place, and every value of the
-algebraic phase leaves as its pad alone (`0 + h_i`), whatever value the round carries, so what leaves before `Finish` has
-the same form and distribution as an honest rep's. A stopped rep's `finish` is `stop`.
+The frame makes the pass decision on each device round (`check`, `passes`): the firewall hands it the device round with
+the statement's scheduled round in its place, the skeleton's round with every value zero in the algebraic phase and the
+firewall's own opening round in the opening, and the device round passes when it is the scheduled round byte for byte but
+for the values the algebraic phase masks. Rust's checks (`firewall::Checker`, `ShadowLink::check`) run first and can only
+fail a round more: a round they fail reaches the frame as the scheduled round alone (`round N LEN fail`).
+
+Any other stop comes at `Finish`, never before (§10.1): once a round fails, or `round` refuses one, the rep is `stopped`.
+The scheduled round then leaves in the device's place, and every value of the algebraic phase leaves as its pad alone
+(`0 + h_i`), whatever value the round carries, so what leaves before `Finish` has the same form and distribution as an
+honest rep's. A stopped rep's `finish` is `stop`.
 
 `flock-firewall frame` serves this to the firewall (`cmd`), which releases only what it returns. Rust's `zk_veil::Masking`
 and `zk_veil::Pads` are its speed references: the firewall holds Rust's masked rounds to this release byte for byte, and
@@ -346,15 +352,13 @@ def Masker.unfinished (c : Cfg) (s : Masker) : Option String :=
     some s!"the rep ended after {s.inner.getD 0} of the inner proof's {INNER_ROUNDS} rounds"
   else none
 
-/-- One device round `content` of the rep configured by `c` that squeezes `n` coins: the round that leaves, and the state
-after it, which owes the
-round's coins; or why the round is not a device round (a frame that overruns it, an unknown op, a squeeze before its end or
-of other than `n` coins, a round without its squeeze, more masked values than the layout's, a masked phase closed early),
-or a stop the coins decide. -/
-def round (c : Cfg) (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray × Masker) := do
+/-- `round`, with the offsets in `content` of the values it absorbs in the algebraic phase (16 bytes each, ascending): the
+values a device round carries freely, since each leaves masked. -/
+def roundFree (c : Cfg) (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray × Masker × Array Nat) := do
   if s.inner == some INNER_ROUNDS then throw s!"a round after the inner proof's {INNER_ROUNDS}"
   let mut s := s
   let mut out := ByteArray.empty
+  let mut free : Array Nat := #[]
   let mut pos := 0
   for _ in [0:content.size + 1] do
     if pos + 16 > content.size then
@@ -384,6 +388,7 @@ def round (c : Cfg) (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray 
       if !(kind == 2 || (kind == 1 && len == 1)) then throw s!"an observe of kind {kind} and length {len}"
       out := out ++ header 3 kind len
       for i in [0:len] do
+        if s.on && s.pos < c.nPiop then free := free.push (pos + 16 * i)
         let (s', v) ← s.absorb c ⟨u64OfLE b (16 * i), u64OfLE b (16 * i + 8)⟩
         s := s'
         out := F128.pushBytes out v
@@ -395,9 +400,55 @@ def round (c : Cfg) (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray 
         if pos != content.size then throw "a squeeze before the round's end"
         if len != n then throw s!"the round squeezes {len} coins, the caller asked for {n}"
         if !(kind == 2 || (kind == 1 && n == 1)) then throw s!"a squeeze of kind {kind} and length {n}"
-        return (out ++ header 4 kind n, { s with owed := some n })
+        return (out ++ header 4 kind n, { s with owed := some n }, free)
     | x => throw s!"unknown frame op {x}"
   throw "a round without its squeeze"
+
+/-- One round `content` of the rep configured by `c` that squeezes `n` coins: the round that leaves, and the state after
+it, which owes the round's coins; or why the round is not a round of the rep (a frame that overruns it, an unknown op, a
+squeeze before its end or of other than `n` coins, a round without its squeeze, more masked values than the layout's, a
+masked phase closed early), or a stop the coins decide. -/
+def round (c : Cfg) (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray × Masker) := do
+  let (out, s', _) ← roundFree c s content n
+  return (out, s')
+
+/-- Whether byte `i` lies in one of the 16-byte words at the offsets `free`. -/
+def inFree (free : Array Nat) (i : Nat) : Bool := free.any fun f => f ≤ i && i < f + 16
+
+/-- The first byte at which `v` differs from `r` outside the 16-byte words at the offsets `free`, if any. -/
+def firstDiff (v r : ByteArray) (free : Array Nat) : Option Nat :=
+  if v == r then none else (List.range v.size).find? fun i => !inFree free i && v.get! i != r.get! i
+
+/-- **The pass decision** on the device round `v` against the statement's scheduled round `r` in its place (`n` coins), at
+the rep's state `s`: why `v` fails, if it does. `v` passes when it is `r` byte for byte but for the values `r` absorbs in
+the algebraic phase (`roundFree`), which may be any, since each leaves masked: in the algebraic phase `r` is the skeleton's
+round with every value zero, so `v` must have its frames, labels, bytes, kinds, lengths, padding and coin count
+(`firewall::Checker`); in the opening `r` is the firewall's own opening round, which `v` must equal byte for byte
+(`ShadowLink::check`), level 0's masked values included. The frame's refusal of `r` itself, or a stop the coins decide at
+it, is an error. -/
+def passes (c : Cfg) (s : Masker) (v r : ByteArray) (n : Nat) : V (Option String) := do
+  let (_, _, free) ← roundFree c s r n
+  if v.size != r.size then return some s!"the device's round has {v.size} bytes where the statement's has {r.size}"
+  return (firstDiff v r free).map fun i => s!"the device's round differs from the statement's at byte {i}"
+
+/-- The scheduled round `r` in the place of a device round that failed (`w`, why): the rep stops, and `r` leaves as a
+stopped rep's. -/
+def standIn (c : Cfg) (s : Masker) (r : ByteArray) (n : Nat) (w : String) : V (ByteArray × Masker × Option String) := do
+  let (out, s') ← round c { s with stopped := true } r n
+  return (out, s', some w)
+
+/-- **The device round `v`, with the statement's scheduled round `r` in its place** (`n` coins): the round that leaves,
+the state after it, and why `v` failed, if it did. A device round of a rep not stopped that `passes` and that `round`
+takes leaves (`round`); else the rep stops and `r` leaves in its place (`standIn`). A stop the coins decide is a stop
+whichever round carries it. -/
+def check (c : Cfg) (s : Masker) (v r : ByteArray) (n : Nat) : V (ByteArray × Masker × Option String) := do
+  let why ← if s.stopped then pure (some "the rep is stopped") else passes c s v r n
+  match why with
+  | some w => standIn c s r n w
+  | none =>
+    match round c s v n with
+    | .ok (out, s') => return (out, s', none)
+    | .error e => if e.startsWith STOP then throw e else standIn c s r n e
 
 /-- The rep's start, from `flock-firewall frame`'s first line: `{"layout": {"n_mlv", "n_lc", "n_ood0", "k0"}, "mask":
 {"w0", "n", "blocks"}}` (`mask` optional: without it, no rank check). Anything else is refused: the frame draws the rep's
@@ -436,14 +487,17 @@ rep (`start`): the frame draws `drawBytes` OS bytes, commits them (`padsRoot`), 
 `LEN` bytes of `Draws.toBytes`, the draws then the root. `prior N` followed by `16 N` bytes, before the first round, is an
 earlier rep of the table's algebraic-phase coins, whose claim points the rank check covers too; it is answered `ok`.
 
-`round N LEN` followed by the device round's `LEN` bytes is answered `ok LEN'` followed by the `LEN'` bytes that leave, and
-then `coins N` followed by the `16 N` bytes of the coins the stream answered it is answered `ok`; no round is taken before
-the last one's coins. `round N LEN fail` is the statement's scheduled round in place of a device round that failed the
-firewall's check: it stops the rep first. A round `round` refuses is answered `err WHY`, releases nothing and stops the rep,
-which stays open for the scheduled round in its place. A round or coins the refusals stop are answered `stop WHY` (`STOP`),
-nothing of the round leaving, and end the rep. The inner proof's `INNER_ROUNDS` rounds, after the opening's, are rounds
-like any other. `finish` is answered `ok`, or `stop` for a stopped rep, when every masked phase closed with every pad used
-and the inner proof's rounds all left. Anything else is answered `err WHY` and ends the rep: nothing after it leaves. -/
+`round N LEN REFLEN` followed by the device round's `LEN` bytes, then the `REFLEN` bytes of the statement's scheduled round
+in its place, is the pass decision (`check`): `ok LEN' pass` followed by the `LEN'` bytes that leave, the device round's
+release, or `ok LEN' fail WHY` followed by the scheduled round's release as a stopped rep's, the rep stopping. Then
+`coins N` followed by the `16 N` bytes of the coins the stream answered it is answered `ok`; no round is taken before the
+last one's coins. `round N LEN fail` is the scheduled round where no device round passed the firewall's own check (a
+worker that failed, or one Rust's checks fail): it stops the rep first, and is answered `ok LEN'`. `round N LEN` alone is
+one of the inner proof's `INNER_ROUNDS` rounds, the firewall's own, after the opening's: answered `ok LEN'`, and refused
+anywhere else. A round `round` refuses is answered `err WHY`, releases nothing and stops the rep. A round or coins the
+refusals stop are answered `stop WHY` (`STOP`), nothing of the round leaving, and end the rep. `finish` is answered `ok`,
+or `stop` for a stopped rep, when every masked phase closed with every pad used and the inner proof's rounds all left.
+Anything else is answered `err WHY` and ends the rep: nothing after it leaves. -/
 def cmd (_ : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
@@ -475,21 +529,39 @@ def cmd (_ : List String) : IO UInt32 := do
     match line.splitOn " " with
     | "round" :: n :: len :: flag =>
       let (some n, some len) := (n.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
-      let fail ← match flag with
-        | [] => pure false
-        | ["fail"] => pure true
+      let ref? : Option (Option Nat) ← match flag with
+        | [] => pure none
+        | ["fail"] => pure (some none)
+        | [r] => match r.toNat? with
+          | some r => pure (some (some r))
+          | none => return (← refuse s!"a request `{line}`")
         | _ => return (← refuse s!"a request `{line}`")
       let content ← readExact stdin len
+      let sched ← match ref? with
+        | some (some r) => readExact stdin r
+        | _ => pure .empty
       if let some k := s.owed then return (← refuse s!"a round before the {k} coins of the last one")
       begun := true
-      if fail then s := { s with stopped := true }
-      match round c s content n with
-      | .ok (out, s') =>
+      let res : V (ByteArray × Masker × Option String) := match ref? with
+        | some (some _) => check c s content sched n
+        | some none => do
+          let (out, s') ← round c { s with stopped := true } content n
+          return (out, s', none)
+        | none => do
+          let (out, s') ← round c s content n
+          if s'.inner.isNone then throw "a round with no scheduled round in its place, outside the inner proof"
+          return (out, s', none)
+      match res with
+      | .ok (out, s', why) =>
         if let (none, some (p, w, r)) := (s.rank, s'.rank) then
           stderr.putStrLn s!"FRAMERANK\t\{\"points\": {p}, \"mask_words\": {w}, \"rank\": {r}}"
           stderr.flush
         s := s'
-        stdout.putStrLn s!"ok {out.size}"
+        let verdict := match ref?, why with
+          | some (some _), none => " pass"
+          | some (some _), some w => s!" fail {w.replace "\n" " "}"
+          | _, _ => ""
+        stdout.putStrLn s!"ok {out.size}{verdict}"
         stdout.write out
         stdout.flush
       | .error e =>

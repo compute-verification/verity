@@ -1370,36 +1370,49 @@ impl Firewall {
         }
     }
 
-    /// One device round before anything of it is sent: the skeleton's in the algebraic phase, the shadow's in the opening.
-    /// Returns the round the masking challenger takes (the device's, if it passed; else the statement's scheduled round in its
-    /// place), the round that leaves (the Lean frame's, `Flock.Firewall.Frame.round`) and its coin count; or nothing, once the
-    /// statement's schedule has no round left. A failed check, or a round the Lean frame refuses, fails the rep: from then on
-    /// every round that leaves is the scheduled one, whatever the device sends. An error is the firewall's own fault.
+    /// One device round before anything of it is sent: Rust's checks (the skeleton's in the algebraic phase, the shadow's in
+    /// the opening), then the Lean frame's pass decision against the statement's scheduled round in its place
+    /// (`Flock.Firewall.Frame.check`), which Rust's checks can only fail a round more than. Returns the round the masking
+    /// challenger takes (the device's, if both passed it; else the scheduled round), the round that leaves (the Lean frame's)
+    /// and its coin count; or nothing, once the statement's schedule has no round left. A failed round fails the rep: from
+    /// then on every round that leaves is the scheduled one, whatever the device sends. An error is the firewall's own fault.
     fn round(&mut self, content: &[u8], n: usize) -> Result<Option<(Vec<u8>, Vec<u8>, usize)>, String> {
         self.seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if !self.rep.as_ref().ok_or_else(|| flock_live::firewall::refused("a round outside a firewalled rep"))?.failed {
             match self.round_inner(content, n) {
-                Ok((c, algebra)) => match self.release(&c, n, false) {
-                    Ok(rel) => return Ok(Some((c, rel, n))),
-                    Err(e) => {
-                        let r = self.rep.as_mut().unwrap();
-                        match r.link.as_mut() {
-                            Some(l) if !algebra => l.last = Some((c, n)),
-                            _ => r.checker.rewind(),
-                        }
-                        self.fail(e);
+                Ok((c, sched, k)) => {
+                    let (rel, why) = self.checked(&c, &sched, k)?;
+                    let Some(why) = why else { return Ok(Some((c, rel, k))) };
+                    let r = self.rep.as_mut().unwrap();
+                    if r.link.is_none() {
+                        r.checker.rewind();
+                        r.checker.scheduled();
                     }
-                },
+                    self.fail(flock_live::firewall::refused(format!("the Lean frame failed the round Rust's checks passed: {why}")));
+                    return Ok(Some((sched, rel, k)));
+                }
                 Err(e) => self.fail(e),
             }
         }
         self.scheduled()
     }
 
-    fn release(&mut self, c: &[u8], n: usize, fail: bool) -> Result<Vec<u8>, String> {
+    /// The Lean frame's pass decision on the device round `c` against the scheduled round `sched` in its place.
+    fn checked(&mut self, c: &[u8], sched: &[u8], k: usize) -> Result<(Vec<u8>, Option<String>), String> {
         let r = self.rep.as_mut().expect("a firewalled rep");
         let t = Instant::now();
-        let release = r.lean.as_mut().ok_or_else(|| flock_live::firewall::refused("a round after the rep's end check"))?.round(c, n, fail)?;
+        let (release, why) = r.lean.as_mut().ok_or_else(|| flock_live::firewall::refused("a round after the rep's end check"))?.check(c, sched, k)?;
+        r.t_lean += t.elapsed().as_secs_f64();
+        r.lean_bytes += release.len();
+        Ok((release, why))
+    }
+
+    /// The scheduled round `c` in place of a device round that never passed Rust's checks: the rep's Lean frame stops the
+    /// rep and releases `c` as a stopped rep's.
+    fn release(&mut self, c: &[u8], n: usize) -> Result<Vec<u8>, String> {
+        let r = self.rep.as_mut().expect("a firewalled rep");
+        let t = Instant::now();
+        let release = r.lean.as_mut().ok_or_else(|| flock_live::firewall::refused("a round after the rep's end check"))?.round(c, n, true)?;
         r.t_lean += t.elapsed().as_secs_f64();
         r.lean_bytes += release.len();
         Ok(release)
@@ -1420,7 +1433,7 @@ impl Firewall {
             r.t_wait += t.elapsed().as_secs_f64();
         }
         let Some((c, k)) = next else { return Ok(None) };
-        let rel = self.release(&c, k, true)?;
+        let rel = self.release(&c, k)?;
         Ok(Some((c, rel, k)))
     }
 
@@ -1447,7 +1460,11 @@ impl Firewall {
         self.scheduled()
     }
 
-    fn round_inner(&mut self, content: &[u8], n: usize) -> Result<(Vec<u8>, bool), String> {
+    /// Rust's checks on the device round `content` (after any tamper): the skeleton's in the algebraic phase, the shadow's in
+    /// the opening. Returns the round with the statement's scheduled round in its place and that round's coin count, for the
+    /// Lean frame's pass decision; a round they fail is an error, the checker left at the round's start and the shadow's round
+    /// kept in `last`, for [`Firewall::scheduled`].
+    fn round_inner(&mut self, content: &[u8], n: usize) -> Result<(Vec<u8>, Vec<u8>, usize), String> {
         let mut c = content.to_vec();
         let tamper = self.tamper.clone();
         let algebra = !self.rep.as_ref().unwrap().checker.done();
@@ -1457,8 +1474,10 @@ impl Firewall {
                 r.algebra_tampered = flip_first(&mut c, if tamper == "label" { OP_LABEL } else { OP_OBSERVE });
             }
             flock_live::firewall_transcript::with(|t| t.candidate(true, &c, n));
+            let (sched, k) = r.checker.scheduled().ok_or_else(|| flock_live::firewall::refused("the skeleton ended before the algebraic phase"))?;
+            r.checker.rewind();
             r.checker.round(&c, n)?;
-            return Ok((c, true));
+            return Ok((c, sched, k));
         }
         if self.rep.as_ref().unwrap().link.is_none() {
             self.start_shadow()?;
@@ -1472,7 +1491,7 @@ impl Firewall {
         let t = Instant::now();
         let res = link.check(&c, n);
         r.t_wait += t.elapsed().as_secs_f64();
-        res.map(|_| (c, false))
+        res.map(|sched| (c, sched, n))
     }
 
     /// The opening's first round: the shadow starts on the algebraic phase's coins (the two claim points) and the hook's extra
