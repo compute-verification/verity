@@ -705,7 +705,7 @@ class SingleRow(Row):
             if served:
                 self.log(f"B=1 EOS-stopped request ({served}, match_shape.json): Program of record at Commit = the CAP-shape build_request; the positions "
                          "past the executed prefix are classified not-executed by rule, not cut from the population (the Match-side served-shape comparison stands)")
-        man = self.manifest_of_record()
+        man = self.man = self.manifest_of_record()
         taps = R.applicable_taps(man, ck) if man else []
         why = R.missing_tap_build(taps, self.env)
         if why:
@@ -747,8 +747,8 @@ class SingleRow(Row):
         if self.config_run:
             self.replay_pending = RC.commit_verdict(self, rck, wall)
             return
-        if rck == 0 and man:
-            self.manifest_verify(man)
+        if rck == 0 and self.man:
+            self.manifest_verify(self.man)
         self.tl("closure.verdict", "start")
         with open(f"{d}/row.log", "a") as f:
             r = subprocess.run(self.cli("verdict", "from-record", d, "--rc", str(rck)), stdout=subprocess.PIPE, stderr=f, text=True,

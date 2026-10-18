@@ -207,8 +207,22 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     return tuple(f"{n}:{got[n]}" for n in PROTOCOLS if n in got)
 
 
+#: pins kept beside a checkpoint manifest in `<stem>-<name>.json`, same schema and append-only too (the int8 recipe pins: the
+#: manifest itself sits at the repository's 256 KiB file cap); `checkpoint_entries` reads them after the manifest's own pins
+SIBLING_MANIFESTS = ("int8",)
+
+
+def sibling_manifests(checkpoints: str | Path = CHECKPOINTS) -> list[Path]:
+    p = Path(checkpoints)
+    return [q for n in SIBLING_MANIFESTS if (q := p.with_name(f"{p.stem}-{n}.json")).is_file()]
+
+
 def checkpoint_entries(checkpoints: str | Path = CHECKPOINTS) -> list[dict[str, Any]]:
-    return list(json.loads(Path(checkpoints).read_text())["checkpoints"])
+    """Every pin of the manifest `checkpoints` and of its sibling manifests (`SIBLING_MANIFESTS`)."""
+    out = list(json.loads(Path(checkpoints).read_text())["checkpoints"])
+    for q in sibling_manifests(checkpoints):
+        out += json.loads(q.read_text())["checkpoints"]
+    return out
 
 
 @dataclass(frozen=True)
