@@ -34,6 +34,11 @@ a pass's certified stream and oracle, receipts it computed elsewhere among them:
 whose inputs are any function of the store, the stream and the oracle. A device reads such a carrier through its side
 sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts the side link without them.
 
+**A carrier of a declared circuit's.** A credited KV page's payload is a declared circuit `W`'s values, so its
+carrier's provenance is `W`'s computation from the chain's first write to the pass: its inputs are `W`'s run inputs in
+those windows of the audit, and its encodes are `W`'s budgeted gates there (`PassProvenance.OfCircuit`), which the
+stacking property caps per window (`Gates.Property`).
+
 **The encode cost.** An `encode` step of `x` bits is charged `encodeBitsCost`: the gate model's `Gates.encodeCost`
 (`Definitions/Accounting/Gates`) of the codec words `x` bits fill, `⊤` when no circuit of the model's restricted class
 computes them, so that such a step exceeds every budget. The provenances' `gates` count them.
@@ -222,6 +227,14 @@ def gates (cost : ℕ → ℕ∞) (E : Store N b) (R : Bits ρ) (O : Oracle N b 
   | done _ => 0
   | input _ f k => (k (f E R O)).gates cost E R O
   | encode j x _ f k => (k (f (E j))).gates cost E R O + cost x
+
+/-- **A pass provenance that is `W`'s over the windows `I`** of the audit `A`: at every store, stream and oracle, its
+inputs are at most the bits of `W`'s run inputs in those windows, and its encodes, at `cost x` for `x` bits, cost at
+most `W`'s budgeted units there (`Gates.census`, property/v1's units). -/
+def OfCircuit {ι : Type} (K : PassProvenance N b h ρ α) (cost : ℕ → ℕ∞) (W : Gates.Dag ι) (A : Gates.Audit)
+    (I : Finset ℕ) : Prop :=
+  ∀ E R O, K.inputs E R O ≤ ∑ v ∈ I, (Gates.census W fun t => A.win t = v).runBits ∧
+    K.gates cost E R O ≤ ((∑ v ∈ I, (Gates.census W fun t => A.win t = v).budgeted : ℕ) : ℕ∞)
 
 end PassProvenance
 

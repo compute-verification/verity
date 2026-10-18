@@ -7,6 +7,7 @@ import Models.Accounting.Guarantees.BoundSketch
 import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Capacity
 import Models.Accounting.Guarantees.Confidence
+import Models.Accounting.Guarantees.DeclaredCircuit
 import Models.Accounting.Guarantees.Gates
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Localization
@@ -43,4 +44,4 @@ receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run f
 a declared circuit's live and read bits from the blocks the audit credits, PoUW's credits and help as its placed
 execution's gates, stacking's carrier lemma with the deployed remote audit for devices that read from carriers, also
 read against a declared circuit's requirement, and the composed guarantee for a declared circuit that passes the
-stacking property. -/
+stacking property: its credited live and read bits from an accepted stacked audit. -/
