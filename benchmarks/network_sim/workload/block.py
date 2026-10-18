@@ -2,7 +2,8 @@
 streams. The client is the same process for `OUTSIDE`: it holds the requests and reads the answers.
 
 **What a block derives** (`Context`, from the run's config, so every process of one run derives the same): the Program, the
-hardware, the placement and φ. The prover runs every block, so the private placement is shared among them. A block holds the
+hardware (`config["hardware"]`, a device graph `config["graph"]` read by `Hardware.from_graph`, or `mock`), the placement
+(one engine step every `step_ticks` ticks, one bucket by default) and φ. The prover runs every block, so the private placement is shared among them. A block holds the
 values the placement puts at its leaves: the registered inputs from the weights' seed, the client the run inputs from the
 requests' seed.
 
@@ -67,9 +68,14 @@ class Context:
         self.config = config
         self.spec = M.Spec(**config["spec"])
         self.model = M.Model(self.spec)
-        self.hw = Hardware.from_json(config["hardware"]) if "hardware" in config else \
-            mock(config["blocks"], config.get("devices", 1), bucket_ticks=config.get("bucket_ticks", 1))
-        self.placement = P.place(self.model, self.hw, P.PLANS[config.get("plan", "pipeline")](self.model, self.hw))
+        if "hardware" in config:
+            self.hw = Hardware.from_json(config["hardware"])
+        elif "graph" in config:
+            self.hw = Hardware.from_graph(config["graph"])
+        else:
+            self.hw = mock(config["blocks"], config.get("devices", 1), bucket_ticks=config.get("bucket_ticks", 1))
+        self.placement = P.place(self.model, self.hw, P.PLANS[config.get("plan", "pipeline")](self.model, self.hw),
+                                 config.get("step_ticks", self.hw.bucket_ticks))
         bad = P.causal(self.model, self.placement, self.hw)
         if bad:
             raise ValueError(f"the placement is not causal: gate {bad[0][0]} reads gate {bad[0][1]} too early")

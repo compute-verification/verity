@@ -3,6 +3,7 @@
     python -m workload.run --out /tmp/netsim-run                        # 3 blocks of 2 devices, in one process
     python -m workload.run --out /tmp/netsim-run --transport tcp        # one localhost TCP process per unit
     python -m workload.run --out /tmp/netsim-run --tamper b0:fill       # a block writes into a frame's zero fill
+    python -m workload.run --out /tmp/netsim-run --graph g.json         # on `graph.py --blocks 2 --json > g.json`
 
 (run from `benchmarks/network_sim/`, or with it on `PYTHONPATH`). The prover's side commits the placement (`statement`),
 the units serve and commit their values, and the check reads what `run` writes to `--out`: `public.json` (the statement:
@@ -99,7 +100,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--groups", type=int, default=1, help="row groups a layer is split into (Calls per layer and request)")
     ap.add_argument("--plan", choices=("pipeline", "tensor"), default="pipeline")
     ap.add_argument("--frame-bytes", type=int, default=64)
-    ap.add_argument("--bucket-ticks", type=int, default=1)
+    ap.add_argument("--bucket-ticks", type=int, default=1, help="the mock's bucket, in ticks")
+    ap.add_argument("--step-ticks", type=int, help="ticks between engine steps (default: one bucket)")
+    ap.add_argument("--graph", type=Path, help="a device graph (`graph.py --json`) to run on instead of the mock")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--transport", choices=("memory", "tcp"), default="memory")
     ap.add_argument("--tamper", help=f"UNIT:MODE, MODE one of {', '.join(TAMPERS)}")
@@ -108,6 +111,10 @@ def main(argv: list[str] | None = None) -> int:
     config = {"spec": {"d": args.d, "layers": args.layers, "requests": args.requests, "groups": args.groups},
               "blocks": args.blocks, "devices": args.devices, "plan": args.plan, "frame_bytes": args.frame_bytes,
               "bucket_ticks": args.bucket_ticks, "seed": args.seed}
+    if args.graph:
+        config["graph"] = json.loads(args.graph.read_text())
+    if args.step_ticks:
+        config["step_ticks"] = args.step_ticks
     if args.tamper:
         unit, _, mode = args.tamper.partition(":")
         config["tamper"] = {"unit": unit, "mode": mode}
@@ -124,8 +131,10 @@ def main(argv: list[str] | None = None) -> int:
         (args.out / f"{name}.json").write_text(json.dumps(obj, indent=1))
     answers = results[OUTSIDE]["answers"]
     ref = M.reference(ctx.spec, M.requests(ctx.spec, ctx.seed), M.weights(ctx.spec, ctx.seed))
+    hw = ctx.hw
     print(f"program {public['program'][:16]}… {ctx.model.n} gates; placement root {public['placement'][:16]}… "
-          f"({args.plan} on {args.blocks} blocks of {args.devices} devices)")
+          f"({args.plan} on {len(hw.units)} blocks of {', '.join(str(len(hw.devices(u))) for u in sorted(hw.units))} "
+          f"devices; ℓ across units {hw.cross_latency} ticks, a bucket {hw.bucket_ticks})")
     print(f"answers {'equal' if answers == ref else 'differ from'} the integer reference: {answers}")
     print(f"{len(ctx.edges)} crossing edges in {len(ctx.phi.messages)} messages, {args.frame_bytes}-byte frames")
     for key, counts in public["occupancy"].items():

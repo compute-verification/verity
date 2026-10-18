@@ -125,6 +125,14 @@ def test_two_logs_of_one_link_direction_must_agree(honest):
     assert [(v.code, v.where) for v in bad] == [("records", key)]
 
 
+def test_a_run_on_a_device_graph_holds_with_one_step_a_bucket(graph):
+    ctx, results, public, witness, records = serve({"spec": CONFIG["spec"], "graph": graph(3), "frame_bytes": 16,
+                                                    "seed": 1})
+    assert ctx.placement.ticks[0][:3] == (0, 10, 20)
+    assert n3.check(public, witness, records).ok
+    assert public["occupancy"]["b1.uplink>b1.nic0"] == [0, 0, 2, 1]
+
+
 def test_a_block_with_no_values_commits_nothing():
     ctx, results, public, witness, records = serve(dict(CONFIG, blocks=4))
     assert results["b3"]["values"] is None and "b3" not in public["values"]

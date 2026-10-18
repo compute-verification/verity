@@ -10,7 +10,8 @@ share a cell.
 
 `place` builds one from a plan that puts each root Call on a device at an engine step; the Call's gates go with it.
 Registered inputs (the weights) are stored at the device of their first reader, and run inputs (the requests) at the
-client's leaf, outside every block. Step 0 is the inputs'; request r's layer l runs at step 1 + r + l.
+client's leaf, outside every block. Step 0 is the inputs'; request r's layer l runs at step 1 + r + l, on one of the
+block's `Hardware.devices`, and every device begins step s at tick s · `step_ticks`.
 
 **Crossing edges** (`crossings`): a value v read by a gate whose leaf is in another unit, one edge per (v, reading unit),
 read at the earliest tick of a reader in that unit. A root output is also an edge, to `OUTSIDE`, read by the client at
@@ -110,7 +111,7 @@ def pipeline(model: Model, hw: Hardware) -> Plan:
     layers = model.spec.layers
 
     def plan(c: CallInfo) -> tuple[int, int]:
-        devices = sorted(hw.units[blocks[c.layer * len(blocks) // layers]])
+        devices = hw.devices(blocks[c.layer * len(blocks) // layers])
         return devices[c.group % len(devices)], 1 + c.request + c.layer
 
     return plan
@@ -121,7 +122,7 @@ def tensor(model: Model, hw: Hardware) -> Plan:
     blocks = sorted(hw.units)
 
     def plan(c: CallInfo) -> tuple[int, int]:
-        devices = sorted(hw.units[blocks[c.group % len(blocks)]])
+        devices = hw.devices(blocks[c.group % len(blocks)])
         return devices[c.layer % len(devices)], 1 + c.request + c.layer
 
     return plan
@@ -130,7 +131,8 @@ def tensor(model: Model, hw: Hardware) -> Plan:
 PLANS = {"pipeline": pipeline, "tensor": tensor}
 
 
-def place(model: Model, hw: Hardware, plan: Plan) -> Placement:
+def place(model: Model, hw: Hardware, plan: Plan, step_ticks: int = 1) -> Placement:
+    """Every device begins step s at tick s · `step_ticks`."""
     n = model.n
     leaf = [-1] * n
     step = [0] * n
@@ -154,7 +156,7 @@ def place(model: Model, hw: Hardware, plan: Plan) -> Placement:
     if unplaced:
         raise ValueError(f"{len(unplaced)} values have no device, the first gate {unplaced[0]} ({kind[unplaced[0]]})")
     steps = max(step) + 2
-    ticks = tuple(tuple(range(steps)) for _ in hw.leaves)
+    ticks = tuple(tuple(s * step_ticks for s in range(steps)) for _ in hw.leaves)
     return Placement(tuple(step), tuple(leaf), ticks)
 
 

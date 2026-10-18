@@ -32,6 +32,19 @@ def test_the_mock_blocks_are_covered_and_routes_cross_both_uplinks():
     assert Hardware.from_json(hw.to_json()) == hw
 
 
+def test_a_device_graph_reads_as_blocks_of_gpus_behind_their_uplinks(graph):
+    hw = Hardware.from_graph(graph())
+    assert hw.leaves[hw.client] == "ext0" and hw.bucket_ticks == 10
+    assert {u: sorted(hw.leaves[x] for x in xs) for u, xs in hw.units.items()} == {
+        "b0": ["b0.gpu0", "b0.hbm0", "b0.nic0"], "b1": ["b1.gpu0", "b1.hbm0", "b1.nic0"]}
+    assert [hw.leaves[x] for x in hw.devices("b1")] == ["b1.gpu0"]
+    assert all(hw.covered(u) for u in hw.units)
+    assert hw.cross_latency == 1 + 2 + 2 + 1
+    src, dst = hw.leaf("b0.gpu0"), hw.leaf("b1.gpu0")
+    assert [hw.key(e, to) for e, to in hw.watched(src, dst)] == ["b0.uplink>b0.cert", "b1.uplink>b1.nic0"]
+    assert Hardware.from_json(hw.to_json()) == hw
+
+
 def test_an_uncertified_boundary_is_not_covered():
     hw = mock(2)
     j = hw.to_json()
