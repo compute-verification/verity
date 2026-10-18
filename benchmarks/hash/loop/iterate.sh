@@ -56,6 +56,7 @@ for m in ${MACHINES:-vy-dc-h200 vy-dc-b200 vy-nebius-2}; do
   [ -n "${REPS:-}" ] && envs+=(--env "REPS=$REPS")
   [ -n "${ARM_NAMES:-}" ] && envs+=(--env "ARM_NAMES=$ARM_NAMES")
   [ -n "${CHECK_TESTS+x}" ] && envs+=(--env "CHECK_TESTS=$CHECK_TESTS")
+  for kv in ${EXTRA_ENV:-}; do envs+=(--env "$kv"); done
   [ -n "${PIN[$m]:-}" ] && envs+=(--send "$LOGS/pin-$m/qwen3-8b-build.json" --env PIN_BUILD_NAME=qwen3-8b-build.json \
     --env "PIN_BUILD_ART=${PIN[$m]}:out/build.json")
   read -r -a launch <<< "${LAUNCH[$m]}"
