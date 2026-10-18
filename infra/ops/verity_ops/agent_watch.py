@@ -36,12 +36,13 @@ held one while every later one was cancelled on arrival, network-accounting's be
 to cancel a CREATING run. A goal run (`run-goal-...`) can't be read or streamed on its own (400), so it is never followed; an
 agent whose latest run the API won't read is recorded once as unreadable.
 
-Each finding is a line of JSON in `--log`; each sweep overwrites `status.json` beside it (its time, the agents read, the runs it
-follows), so a reader can tell a quiet watch from a dead one. `state.json` beside it keeps what must outlive a restart (the
-watch restarts on every deploy): when it last cancelled or restarted each agent, the restart counts, the continue runs still to
-start and the runs already recorded. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack
-credential, so infra's relay reads the log over ssh and posts each finding in #agent-alerts (it rings no inbox). Cancelling and
-restarting don't wait for it.
+Each finding is a line of JSON in `--log`; each sweep ends by replacing `status.json` beside it atomically, in the schema
+`verity/agent-watch-status/v1` (`snapshot`: its time `t`, `poll_s`, and per agent read its id, the run the watch judges,
+statuses, watch state, since and restart count, in categories only), so a reader can tell a quiet watch from a dead one; a
+sweep that fails leaves the last one. `state.json` beside it keeps what must outlive a restart (the watch restarts on every
+deploy): when it last cancelled, restarted or woke each agent, the restart counts, the continue runs still to start and the runs
+already recorded. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack credential, so
+infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
 """
 from __future__ import annotations
 
@@ -52,6 +53,7 @@ import fcntl
 import json
 import os
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -84,6 +86,12 @@ CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothi
 AFTER = {"tool_done": "a finished tool call", "turn_ended": "the end of your turn"}
 AFTER_ERROR = ("continue: your last run ended in ERROR (the agent watch restarted you). Read your inbox and carry on from where "
                "you stopped.")
+SCHEMA = "verity/agent-watch-status/v1"
+AGENT_STATUSES = ("ACTIVE", "IDLE", "ARCHIVED", "unknown")
+RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED", "ERROR", "CANCELLED", "EXPIRED", "unreadable",
+                "unknown")
+WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
+                "crashed", "erroring", "unreadable")
 
 
 def iso(t: float) -> str:
@@ -204,6 +212,8 @@ class Watch:
     def __init__(self, api, log: Path, clock: Callable[[], float] = time.time):
         self.api, self.log, self.clock = api, log, clock
         self.runs: dict[str, Run] = {}
+        self.states: dict[str, tuple[str, str, str]] = {}   # agent -> (run, its last finding's kind, since), for status.json
+        self.status_of: dict[str, tuple[str, str]] = {}     # agent -> (run, its status when the watch last read it)
         self.lock = threading.Lock()
         self.state_path = log.with_name("state.json")
         try:
@@ -227,6 +237,7 @@ class Watch:
 
     def record(self, kind: str, r: Run, **detail) -> None:
         rec = {"t": iso(self.clock()), "kind": kind, "agent": r.agent, "name": r.name, "run": r.run, **detail}
+        self.states[r.agent] = (r.run, kind, str(detail.get("since") or rec["t"]))
         self.log.parent.mkdir(parents=True, exist_ok=True)
         with open(self.log, "a") as f:
             f.write(json.dumps(rec) + "\n")
@@ -243,6 +254,8 @@ class Watch:
         """A new run on an agent whose latest run ended in ERROR, at most once an hour and `MAX_RESTARTS` times in a row."""
         r = Run(a["id"], run, a.get("name") or "")
         n = self.errors.get(a["id"], 0)
+        if run in self.done:                        # restarted already: only the next ERROR run counts
+            return
         if n >= MAX_RESTARTS:
             if a["id"] not in self.left:
                 self.left.add(a["id"])
@@ -330,7 +343,7 @@ class Watch:
         if r.refused_t is not None:
             if t - r.refused_t >= REFUSED_S and "refused" not in r.told:
                 r.told.add("refused")
-                self.record("held", r, since=since, minutes=mins,
+                self.record("cancel_refused", r, since=since, minutes=mins,
                             action=f"none: the API refused the cancel (409) and still reads it {r.status}")
             return
         try:
@@ -415,6 +428,7 @@ class Watch:
             if a.get("latestRunId") and (a.get("status") == "ACTIVE" or (a.get("status") == "IDLE" and recent)):
                 live[a["id"]] = a
         current: dict[str, tuple[dict, dict]] = {}      # run -> (agent, run record)
+        judged: dict[str, dict] = {}                    # run -> agent: the run each agent read is judged by
         for a in live.values():
             latest = a["latestRunId"]
             if a.get("status") == "ACTIVE":
@@ -447,6 +461,10 @@ class Watch:
             last = next((x for x in runs if x.get("id") == latest), None)
             if follow:
                 current[follow["id"]] = (a, follow)
+            judge = follow or next((x for x in runs if started(x) or x.get("status") == "CREATING"), None) or last
+            judged[judge["id"] if judge else latest] = a
+            if judge:
+                self.status_of[a["id"]] = (judge["id"], str(judge.get("status")))
             if last and last.get("status") == "FINISHED":   # not a run going: a restart runs a minute before it errors
                 if self.errors.pop(a["id"], None) is not None or a["id"] in self.left:
                     self.left.discard(a["id"])
@@ -470,9 +488,6 @@ class Watch:
             for run in [run for run in self.runs if run not in current]:
                 self.runs.pop(run)
             runs = list(self.runs.values())
-        status = self.log.with_name("status.json")
-        status.parent.mkdir(parents=True, exist_ok=True)
-        status.write_text(json.dumps({"t": iso(t), "active": len(live), "followed": [r.run for r in runs]}) + "\n")
         for r in runs:
             with self.lock:
                 kind = self.classify(r, t)
@@ -487,6 +502,59 @@ class Watch:
                         self.record(kind, r, status=r.status, since=iso(quiet), minutes=int((t - quiet) // 60))
                 if r.ended:
                     self.runs.pop(r.run, None)
+        with self.lock:
+            write_atomic(self.log.with_name("status.json"), status_bytes(snapshot(self, judged, t)))
+
+
+def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
+    """`status.json`, schema `verity/agent-watch-status/v1`: one entry per agent the sweep read, in categories only (no name,
+    prompt, error text, branch or Slack identity), keyed in `live` by the run the watch judges it by (the run it follows, else
+    its newest run that started or is CREATING, else its latest). `watch_state` is the last finding on that run (a long call
+    only while it lasts), else `followed` or `ok`; `since` is when that finding began; `run_status` is the run's status when
+    the watch last read it. A value outside the pinned enums raises, so the last valid file stays."""
+    agents = []
+    for run, a in live.items():
+        agent, r = a["id"], w.runs.get(run)
+        state_run, state, since = w.states.get(agent, ("", "", None))
+        long_call = r is not None and bool(r.calls) and t - min(r.calls.values()) >= LONG_CALL_S
+        if state_run != run or (state == "long_call" and not long_call):
+            state, since = ("followed" if r is not None else "ok"), None
+        read_run, read_status = w.status_of.get(agent, ("", ""))
+        run_status = ("unreadable" if state == "unreadable" else
+                      read_status if read_run == run and read_status in RUN_STATUSES else "unknown")
+        agent_status = a.get("status") if a.get("status") in AGENT_STATUSES else "unknown"
+        if state not in WATCH_STATES:
+            raise ValueError(f"status.json: watch state {state!r} is not one of WATCH_STATES; add it there")
+        agents.append({"agent_id": agent, "run_id": run, "agent_status": agent_status, "run_status": run_status,
+                       "watch_state": state, "since": since, "restart_count": int(w.errors.get(agent, 0))})
+    return {"schema": SCHEMA, "t": iso(t), "poll_s": POLL_S, "agents": sorted(agents, key=lambda e: e["agent_id"])}
+
+
+def status_bytes(snap: dict) -> bytes:
+    """The same snapshot always gives the same bytes."""
+    return (json.dumps(snap, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n").encode()
+
+
+def write_atomic(path: Path, data: bytes) -> None:
+    """Replace `path` with `data` or leave it as it was: a temporary file in its directory, fsynced, renamed over it, then the
+    directory fsynced."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            os.fchmod(f.fileno(), 0o644)
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+    dfd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
 
 
 def pump(watch: Watch, r: Run) -> None:
