@@ -2,8 +2,9 @@
 # The performance gate on one leased GPU, run by gpu.sh (BENCH=1) after the conformance, with its O, W and VC_LIB. Outside the
 # lease: sharaw.cu with the commit_gpu it includes at their pinned commit and native_rows.cu at its own, fetched from GitHub;
 # native_rows.so built with sharaw's flags; rows.cu and pearl.cu built for this card against libvc. Under one lease: rows.cu at
-# each step (DECODE_N and GIB_N rows of 4 KiB: 142 MB and 1 GiB), then pearl.cu (Pearl-C's decode shapes). Each prints JSON lines:
-# every arm's output compared with the replaced code's first, then the arms interleaved rep by rep with the SM clock of each.
+# each step (DECODE_N and GIB_N rows of 4 KiB: 142 MB and 1 GiB; MID_N between, where AUTO switches form), then pearl.cu
+# (Pearl-C's decode shapes). Each prints JSON lines: every arm's output compared with the replaced code's first, then the arms
+# interleaved rep by rep with the SM clock of each.
 set -uo pipefail
 : "${O:?}" "${W:?}" "${VC_LIB:?}"
 D=benchmarks/hash/lib
@@ -31,8 +32,8 @@ nvcc -O3 -std=c++17 $GEN -cudart shared -Xptxas -v -DSHARAW_CU="\"$B/sr/benchmar
   -o "$B/vc_rows" -L"$LIBDIR" -lvc -Xlinker -rpath="$LIBDIR" -lnvidia-ml -ldl > "$O/build-bench-rows.log" 2>&1 &
 nvcc -O3 -std=c++17 $GEN -cudart shared -Xptxas -v $D/bench/pearl.cu -o "$B/vc_pearl" -L"$LIBDIR" -lvc -Xlinker -rpath="$LIBDIR" \
   -lnvidia-ml > "$O/build-bench-pearl.log" 2>&1 &
-export DECODE_N=${DECODE_N:-34737} GIB_N=${GIB_N:-262144} REPS=${REPS:-9}
-for n in $DECODE_N $GIB_N; do uv run python benchmarks/pouw/commit_gpu/reference.py params "$B/p-$n.bin" "$n" 32768 --ks-seed 11; done \
+export DECODE_N=${DECODE_N:-34737} GIB_N=${GIB_N:-262144} MID_N=${MID_N:-65536 131072} REPS=${REPS:-9}
+for n in $DECODE_N $MID_N $GIB_N; do uv run python benchmarks/pouw/commit_gpu/reference.py params "$B/p-$n.bin" "$n" 32768 --ks-seed 11; done \
   > "$O/bench-params.log" 2>&1
 wait
 for f in native_rows.so vc_rows vc_pearl; do [ -e "$B/$f" ]; echo "build $f rc $?"; done >> "$O/rc.txt"
@@ -42,7 +43,7 @@ export B
 gpu-lease 1 --wait --max-min 14 ${LEASE_ARGS:-} -- bash -c '
   q="index,uuid,name,clocks.sm,clocks.max.sm,clocks.mem,power.draw,power.limit,temperature.gpu,clocks_throttle_reasons.active"
   nvidia-smi --query-gpu=$q --format=csv -i "$GPU_LEASE_UUID" > "$O/bench-gpu-before.txt" 2>&1
-  for n in $DECODE_N $GIB_N; do
+  for n in $DECODE_N $MID_N $GIB_N; do
     "$B/vc_rows" rows "$B/p-$n.bin" "$n" "$REPS" "$B/native_rows.so" > "$O/bench-rows-$n.jsonl" 2> "$O/bench-rows-$n.err"
     echo "bench rows $n rc $?" >> "$O/rc.txt"
   done

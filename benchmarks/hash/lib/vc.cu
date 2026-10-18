@@ -249,6 +249,56 @@ DEV void node(const NodeK& N, int level, u64 index, const u64* L, const u64* R, 
   VC_BY_LEN(index, node_ni, N, level, index, L, R, out)
 }
 
+// sharaw's compress_compact: one 16-round body for all 80 rounds (rounds 0..15 take the message word where later rounds take
+// the schedule's), so a fold whose CTA has mostly idle warps waits on instruction fetch less.
+DEV void compress_compact(u64* st, const u64* m) {
+  u64 w[16];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = m[i];
+  u64 a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+#pragma unroll 1
+  for (int j = 0; j < 80; j += 16) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const u64 sch = sha::add3(sha::add(sha::s1(w[(i - 2) & 15]), w[(i - 7) & 15]), sha::s0(w[(i - 15) & 15]), w[i]);
+      const u64 wi = j ? sch : w[i];
+      w[i] = wi;
+      const u64 t1 = sha::add3(h, sha::S1(e), sha::ch(e, f, g));
+      const u64 t1b = sha::add3(t1, sha::SHA_K_TABLE[j + i], wi);
+      const u64 mj = sha::maj(a, b, c);
+      h = g; g = f; f = e; e = sha::add(d, t1b);
+      d = c; c = b; b = a; a = sha::add3(t1b, sha::S0(b), mj);
+    }
+  }
+  st[0] = sha::add(st[0], a); st[1] = sha::add(st[1], b); st[2] = sha::add(st[2], c); st[3] = sha::add(st[3], d);
+  st[4] = sha::add(st[4], e); st[5] = sha::add(st[5], f); st[6] = sha::add(st[6], g); st[7] = sha::add(st[7], h);
+}
+// node_ni with ni read at run time (sharaw's node_rt): for ni <= 4 the index and both children land in the same words as
+// or_be<2, ni> and or_digest<10 + ni>, <82 + ni> put them, and only the shifts depend on ni, so one compression body serves
+// every length and both blocks.
+DEV void node_c(const NodeK& N, int level, u64 index, const u64* L, const u64* R, u64* out) {
+  const int ni = min(nbytes(index), MAX_NB), S = 8 * (2 + ni);
+  u64 W[32];
+#pragma unroll
+  for (int i = 0; i < 32; ++i) W[i] = N.node_tpl[ni - 1][i];
+  W[0] |= index << (8 * (6 - ni));
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    W[1 + i] |= L[i] >> S;
+    W[2 + i] |= L[i] << (64 - S);
+    W[10 + i] |= R[i] >> S;
+    W[11 + i] |= R[i] << (64 - S);
+  }
+  cpy8(out, N.node_mid[level]);
+#pragma unroll 1
+  for (int k = 0; k < 2; ++k) {
+    u64 w[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) w[i] = k ? W[16 + i] : W[i];
+    compress_compact(out, w);
+  }
+}
+
 // --- hashing bytes -------------------------------------------------------------------------------------------------
 
 // SHA-512 from chaining value cv after `pre` bytes (whole blocks) over lb bytes at p (16-byte aligned; the loads may run up to
@@ -759,7 +809,7 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
     __syncthreads();
     const u32 m = cnt >> l;
     u64 r[8];
-    if (t < m) node(N, l - 1, (u64)blockIdx.x * m + t, sm + 16 * t, sm + 16 * t + 8, r);
+    if (t < m) node_c(N, l - 1, (u64)blockIdx.x * m + t, sm + 16 * t, sm + 16 * t + 8, r);
     __syncthreads();
     if (t < m) {
       cpy8(sm + 8 * t, r);
@@ -781,7 +831,7 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
     const bool right = idx & 1;
 #pragma unroll
     for (int k = 0; k < 8; ++k) { a[k] = right ? sib[k] : cur[k]; b[k] = right ? cur[k] : sib[k]; }
-    node(N, l, p, a, b, r);
+    node_c(N, l, p, a, b, r);
     off += width >> l;
     st_be(levels + 64 * (off + p), r, 8);
     cpy8(cur, r);
@@ -789,6 +839,9 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
   }
 }
 u64 fold_ctrs(u64 width) { return width > THREADS ? width / THREADS - 1 : 0; }
+// AUTO's FOLD up to this width, SPLIT above: past it the CTAs' idle warps in their subtree fold cost more than SPLIT's level
+// launches (B200 at 2^16 leaves FOLD is the faster, at 2^18 SPLIT by 15%).
+constexpr u64 FOLD_MAX_WIDTH = 1ull << 16;
 
 // Both phases a thread (native_rows' rows_leaf_kernel): the mask from the nibble table through L1.
 template <int SX, bool ROWS>
@@ -1407,7 +1460,7 @@ int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* r
   if (form < VC_FORM_AUTO || form > VC_FORM_FOLD) return -1;
   if (!n) return vc_tree_launch(plan, levels, 0, st);
   const u64 width = vc_tree_width(n);
-  if (form == VC_FORM_AUTO) form = VC_FORM_FOLD;
+  if (form == VC_FORM_AUTO) form = width <= FOLD_MAX_WIDTH ? VC_FORM_FOLD : VC_FORM_SPLIT;
   if (form == VC_FORM_FOLD) {
     if (!tables || !scratch) return -1;
     const auto t = static_cast<const uint8_t*>(tables);
