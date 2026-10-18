@@ -50,14 +50,15 @@ def bench_measures(res: dict) -> list[dict]:
         out.append({"name": "tpot_ms", "arm": arm, "value": round(1e3 * m["time_per_output_token_s"]["mean"], 5), "unit": "ms"})
         out.append({"name": "tokens_per_s", "arm": arm, "value": round(m["tokens_per_s"]["mean"], 3), "unit": "1/s"})
         if bench_arm == res.get("baseline", "stock"):
-            reps = [r["metrics"]["time_per_output_token_s"] for r in a["reps"]]
+            reps = [r["metrics"]["time_per_output_token_s"] for r in a.get("reps", ())]
             cv = 100 * statistics.stdev(reps) / statistics.fmean(reps) if len(reps) > 1 else None
             out.append({"name": "noise_tpot_cv_pct", "arm": arm, "value": None if cv is None else round(cv, 3), "unit": "%", "n": len(reps)})
             continue
         for name, key, sign in RATIOS:
             r = m[key]["ratio_to_stock"]
-            lo, hi = (pct(x, sign) for x in r["ci95"])
-            out.append({"name": name, "arm": arm, "value": pct(r["mean"], sign), "unit": "%", "ci95": sorted([lo, hi]), "n": r["n"]})
+            out.append({"name": name, "arm": arm, "value": pct(r["mean"], sign), "unit": "%", "n": r.get("n", 1)})
+            if r.get("ci95"):
+                out[-1]["ci95"] = sorted(pct(x, sign) for x in r["ci95"])
     return out
 
 

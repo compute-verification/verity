@@ -37,7 +37,7 @@ def load() -> list[dict]:
         labels: dict[str, str] = {}
         for lab in json.loads(research("data", "labels", art, "--json")):
             labels[lab["key"]] = str(lab["value"])
-        meta = man.get("meta") or {}
+        meta = (man.get("manifest") or man).get("meta") or {}
         meas = {(m.get("arm", ""), m["name"]): m["value"] for m in meta.get("measurements") or [] if m.get("value") is not None}
         try:
             row = int(labels.get("row", ""))
@@ -115,10 +115,17 @@ def main() -> int:
         ax.set_title(measure)
         ax.set_xlabel("iteration")
         ax.grid(alpha=0.3)
-        ax.xaxis.get_major_locator().set_params(integer=True)
+        top = max((r["row"] for r in results), default=0)
+        ax.set_xticks(range(top + 1))
+        ax.set_xlim(-0.5, top + 0.5)
     for ax in list(axes.flat)[len(measures):]:
         ax.axis("off")
-    handles, labels = axes.flat[0].get_legend_handles_labels()
+    seen: dict[str, object] = {}
+    for ax in axes.flat:
+        for h, lab in zip(*ax.get_legend_handles_labels()):
+            seen.setdefault(lab, h)
+    labels = sorted(seen)
+    handles = [seen[lab] for lab in labels]
     hyps = sorted({(r["row"], r["label"]) for r in results})
     fig.legend(handles, labels, loc="upper center", ncol=6, fontsize=8)
     fig.text(0.01, 0.005, "\n".join(f"{row}: {h}" for row, h in hyps), fontsize=7, va="bottom")

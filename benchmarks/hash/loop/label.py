@@ -12,7 +12,7 @@ import json
 import subprocess
 import sys
 
-HARDWARE = {"vy-dc-h200": "H200", "vy-dc-b200": "B200", "vy-nebius-2": "RTX PRO 6000"}
+HARDWARE = {"vy-dc-h200": "H200", "vy-dc-b200": "B200", "vy-nebius-2": "RTX PRO 6000", "vy-glm53-s1": "H200"}  # the last: circuits' iteration-0 H200 run
 BRANCH = "cursor/hash-commit-loop-15ad"
 
 
@@ -42,15 +42,19 @@ def main() -> int:
     ap.add_argument("--outcome", choices=("kept", "dropped"))
     ap.add_argument("--reason")
     ap.add_argument("--by", default="hash")
+    ap.add_argument("--result-art", help="the result of a run that wrote none (one RUN): collect.py over its outputs, `research data "
+                                         "put --kind bench-result/v1`")
     a = ap.parse_args()
     if bool(a.outcome) != bool(a.reason):
         ap.error("--outcome and --reason go together")
+    if a.result_art and len(a.runs) != 1:
+        ap.error("--result-art labels one run's result")
     rc = 0
     for run in a.runs:
         att = attempt(run)
         machine = (att.get("execution") or {}).get("machine")
         commit = (att.get("source") or {}).get("commit")
-        result = (att.get("outputs") or {}).get("result")
+        result = a.result_art or (att.get("outputs") or {}).get("result")
         if machine not in HARDWARE or not commit:
             print(f"{run}: machine {machine!r} / commit {commit!r}: not a hash-loop run", file=sys.stderr)
             rc = 1
