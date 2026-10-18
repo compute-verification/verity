@@ -9,7 +9,10 @@
 # at once; this script then waits on each run (`--wait`). If this VM stops waiting, the runs go on: label them later with
 # `python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis "..."`.
 set -uo pipefail
-[ $# -ge 2 ] || { sed -n '2,11p' "$0"; exit 2; }
+SELF=$0
+# one function, parsed whole before it runs: editing this file while an iteration waits cannot change what it does
+main() {
+[ $# -ge 2 ] || { sed -n '2,11p' "$SELF"; exit 2; }
 N=$1 HYP=$2
 cd "$(git rev-parse --show-toplevel)"
 BRANCH=$(git rev-parse --abbrev-ref HEAD) HEAD_SHA=$(git rev-parse HEAD)
@@ -51,3 +54,6 @@ for f in "$LOGS"/*.log; do
 done
 python3 benchmarks/hash/loop/label.py "${runs[@]}" --row "$N" --hypothesis "$HYP" --branch "$BRANCH"
 echo "iteration $N at $BRANCH@$HEAD_SHA: ${runs[*]}"
+}
+main "$@"
+exit
