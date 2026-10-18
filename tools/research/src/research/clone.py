@@ -22,7 +22,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-#: git's merge drivers for `lean-audit.json`, `.lean` files and the fixture map (`.gitattributes`), set in every run clone and
+#: git's merge drivers for `lean-audit.json`, `.lean` files, lakefiles and the fixture map (`.gitattributes`), set in every run clone and
 #: for every git a gate runs (research.gates): a clone's config holds it only after `merge.py --install`, and without it git
 #: merges a record line by line (the queue's own clone, a fresh VM's checkout); a tree from before the tools/verity move has it
 #: at tools/lean/merge.py.  Here, not in gates, because the suites that read clone.py (vllm's, evaluate's) don't read gates.py
@@ -30,6 +30,8 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.lean-audit.driver": 'f=tools/verity/lean/merge.py; [ -f "$f" ] || f=tools/lean/merge.py; python3 "$f" %O %A %B %P',
                  "merge.lean-imports.name": ".lean: each side's imports (tools/verity/lean/merge.py)",
                  "merge.lean-imports.driver": "python3 tools/verity/lean/merge.py --lean %O %A %B %P",
+                 "merge.lakefile-lists.name": "lakefile.toml: each side's requires and roots (tools/verity/lean/merge.py)",
+                 "merge.lakefile-lists.driver": "python3 tools/verity/lean/merge.py --lakefile %O %A %B %P",
                  "merge.fixture-map.name": "fixtures/artifacts.json: each side's fixtures (tools/verity/check/merge_map.py)",
                  "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P"}
 
