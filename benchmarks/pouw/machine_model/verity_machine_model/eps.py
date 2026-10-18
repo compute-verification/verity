@@ -86,6 +86,10 @@ NOISE = {                                          # how a product is noised and
     "pv": "P served with a fresh bit, V served, Ycum's base-128 digits committed: every product checked",
     "clean": "served plain, never proved",
 }
+SUMS = {                                           # the kernel forming a peel's sums DG, S and X(0) (eps_budget prices it)
+    "vsum": "BC-KERNEL r2's linear vsum, 35 per-thread instructions an entry",
+    "vfold": "D2S-KERNEL r3's vfold, the V producers in one pass (#2300): 0.69–0.73 warp instructions an entry",
+}
 OWN = ("name", "title", "summary")                 # what a design file states itself, never from its base
 
 
@@ -240,6 +244,7 @@ class Design:
     base: str = ""               # the design this one varies
     ppl: str = ""                # its perplexity arm, benchmarks/ppl/specs/PPL.toml; "": none on main
     noise: dict[str, str] | None = None   # each of PRODUCTS: a leaf of NOISE
+    sums: str = "vsum"           # a peel's sums kernel, a key of SUMS
     unit: str = ""               # the proof unit, a table of data/adapt.toml
     coin_bits: int = 1           # a noised entry's coin on {0, …, 2^coin_bits − 1}
     coins_source: str = ""
@@ -338,6 +343,8 @@ def design(name: str, data: Path = DATA) -> Design:
     noise = dict(t.get("noise", {}))
     if set(noise) != set(PRODUCTS) or set(noise.values()) - set(NOISE):
         raise SystemExit(f"{name}: [noise] names a leaf of NOISE ({', '.join(NOISE)}) for each of {', '.join(PRODUCTS)}")
+    if t.get("sums", "vsum") not in SUMS:
+        raise SystemExit(f"{name}: sums {t['sums']!r} is not a peel sums kernel ({', '.join(SUMS)})")
     if t["unit"] not in adapts(data):
         raise SystemExit(f"{name}: unit {t['unit']!r} is not a proof unit of adapt.toml ({', '.join(adapts(data))})")
     coins = t["coins"]
@@ -356,7 +363,7 @@ def design(name: str, data: Path = DATA) -> Design:
                   uniform=routes.get("uniform", True), q_uniform=routes.get("q_uniform"),
                   index_bits=index_bits, title=t["title"],
                   aliases=tuple(t.get("aliases", ())), base=t.get("base", ""), ppl=t.get("ppl", ""), noise=noise,
-                  unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"])
+                  sums=t.get("sums", "vsum"), unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"])
 
 
 def profiles(data: Path = DATA) -> list[str]:
