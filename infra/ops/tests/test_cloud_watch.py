@@ -163,7 +163,7 @@ def r2_pass(tmp_path, state, now, bucket, page_cap=2):
     cfg = config(tmp_path)
     cfg["r2"] = {**cfg["r2"], "page_cap": page_cap, "bucket": cfg["r2"]["bucket"][:1]}
     rep = W.Report()
-    W.check_r2(ctx(cfg, state, now, R2_ENV, http=bucket), rep)
+    W.check_r2(ctx(cfg, state, now, R2_ENV, http=bucket, clock=lambda: now), rep)
     return rep
 
 
@@ -205,6 +205,18 @@ def test_neon_reads_through_psql_with_the_url_only_in_the_environment(tmp_path, 
     assert rep.lines == ["Neon: 9.00 GiB, 90 of 100 connections; store index last write `store_private` 2.0 h ago"]
 
 
+def test_a_neon_failure_names_no_host_address_or_user(tmp_path, monkeypatch):
+    err = ('psql: error: connection to server at "ep-x.neon.example" (34.205.173.201), port 5432 failed: '
+           "ERROR:  password authentication failed for user 'indexer'\n")
+    monkeypatch.setattr(W.shutil, "which", lambda name, path=None: "/usr/bin/psql")
+    url = "postgresql://indexer:" + "pw-dummy" + "@ep-x.neon.example/store?sslmode=require"
+    with pytest.raises(W.Unreadable) as e:
+        W.check_neon(ctx(config(tmp_path), {}, T0, {"STORE_INDEXER_DATABASE_URL": url}, run=lambda *a: (2, "", err)), W.Report())
+    msg = str(e.value)
+    assert "password authentication failed" in msg
+    assert not any(s in msg for s in ("ep-x.neon.example", "34.205", "indexer", "pw-dummy")), msg
+
+
 BUDGETS = """
 [budgets]
 "vy-cpu-" = { cap_usd = 100, expires = "2026-10-12T17:00Z" }
@@ -217,13 +229,19 @@ BUDGETS = """
 
 def test_runpod_lines_near_their_cap_and_a_short_runway_are_anomalies(tmp_path):
     (tmp_path / "budgets.toml").write_text(BUDGETS)
+    month = float(calendar.timegm((2026, 10, 1, 0, 0, 0)))
+    pods = {"a": {"first_seen": month - 10 * 3600, "last_seen": month + 10 * 3600, "spent": 20.0},     # half of it in October
+            "b": {"first_seen": month + 3600, "last_seen": month + 7200, "spent": 3.0},
+            "c": {"first_seen": month - 7200, "last_seen": month - 3600, "spent": 50.0}}               # all of it in September
     (tmp_path / "guard.json").write_text(json.dumps({
-        "balance": 30.0, "rate_now": 0.0, "budgets": {"balance_floor": 25},
+        "balance": 30.0, "rate_now": 0.0, "budgets": {"balance_floor": 25}, "pods": pods,
         "lines": {"vy-dc-": {"spent": 85.0}, "vy-cpu-": {"spent": 99.0}, "vy-glm53-": {"spent": 1.0}}}))
     (tmp_path / "watch.log").write_text("19:31Z ACCOUNT $30.00 at $0.25/h, runway 120.0h; lane pods $0.00/h (0)\n19:31Z pass 1\n")
     rep = W.Report()
     W.spend_runpod(ctx(config(tmp_path), {}, T0), rep, tomllib.loads(BUDGETS)["budgets"])
     assert sorted(f.key for f in rep.findings) == ["spend|runpod|runway", "spend|runpod|vy-dc-"], "vy-cpu-'s line has expired"
+    hours = (T0 - month) / 3600
+    assert f"this month about {W.usd(10 + 3 + 0.25 * hours)} ($13.00 of guarded pods" in rep.lines[0]
     assert "floor in 20 h* at $0.25/h" in next(f.text for f in rep.findings if f.key == "spend|runpod|runway")
 
 

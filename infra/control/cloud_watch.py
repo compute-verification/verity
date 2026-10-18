@@ -113,6 +113,7 @@ class Ctx:
     http: Callable = http
     run: Callable = run
     pages: int | None = None                            # --pages: override r2.page_cap for this pass
+    clock: Callable[[], float] = time.time              # signing time: R2 refuses a signature over 15 min old, and a long pass outlives `now`
 
 
 # ---- loops -------------------------------------------------------------------------------------------------------------------------
@@ -175,7 +176,8 @@ def check_loops(ctx: Ctx, rep: Report) -> None:
             last = "no success line in its log" if t is None else f"last success {iso(t)}, {ago(late)} ago"
             rep.findings.append(Finding(f"loop|{name}", f"*{name}* has not succeeded in twice its period ({ago(2 * period)}): {last}. "
                                                          f"Marker `{loop['file']}`; started by {loop.get('started_by', 'post_start.sh')}."))
-        rep.lines.append(f"{name}: " + ("no success line" if t is None else f"ok {ago(max(late, 0))} ago"))
+        rep.lines.append(f"{name}: " + ("no success line" if t is None else f"ok {ago(max(late, 0))} ago" if late <= 2 * period
+                                        else f"LATE, last success {ago(late)} ago"))
 
 
 # ---- R2 ------------------------------------------------------------------------------------------------------------------------------
@@ -206,7 +208,7 @@ def list_page(ctx: Ctx, b: dict, after: str | None) -> tuple[list[tuple[str, int
     u = urllib.parse.urlsplit(b["endpoint"])
     query = {"list-type": "2", "max-keys": "1000", **({"start-after": after} if after else {})}
     path = f"/{b['bucket']}"
-    headers = sign("GET", u.netloc, path, query, b["key"], b["secret"], time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(ctx.now)))
+    headers = sign("GET", u.netloc, path, query, b["key"], b["secret"], time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(ctx.clock())))
     status, body = ctx.http("GET", f"{u.scheme}://{u.netloc}{urllib.parse.quote(path, safe='-_.~/')}?{canonical_query(query)}", headers)
     if status != 200:
         raise Unreadable(f"R2 {b['label']}: ListObjectsV2 answered HTTP {status}")
@@ -314,6 +316,15 @@ def pg_env(url: str) -> dict[str, str]:
     return {k: v for k, v in env.items() if v}
 
 
+def scrub(err: str, pg: dict[str, str]) -> str:
+    """psql's last error line without the connection's host, address, user, database or password."""
+    line = err.strip().splitlines()[-1] if err.strip() else ""
+    for k in ("PGPASSWORD", "PGHOST", "PGUSER", "PGDATABASE"):
+        if pg.get(k):
+            line = line.replace(pg[k], "…")
+    return re.sub(r"\(\d+\.\d+\.\d+\.\d+\)|\([0-9a-f:]+:[0-9a-f:]*\)", "(…)", line)[:200]
+
+
 def check_neon(ctx: Ctx, rep: Report) -> None:
     cfg = ctx.cfg["neon"]
     url = ctx.env.get(cfg["url_env"])
@@ -326,10 +337,11 @@ def check_neon(ctx: Ctx, rep: Report) -> None:
     sql = ("select pg_database_size(current_database()), (select count(*) from pg_stat_activity), "
            "(select setting from pg_settings where name = 'max_connections')"
            + "".join(f", (select extract(epoch from max(listed_at)) from {s}.listings)" for s in cfg["schemas"]) + ";")
-    env = {"PATH": ctx.env.get("PATH", "/usr/bin:/bin"), "PGCONNECT_TIMEOUT": "20", **pg_env(url)}
+    pg = pg_env(url)
+    env = {"PATH": ctx.env.get("PATH", "/usr/bin:/bin"), "PGCONNECT_TIMEOUT": "20", **pg}
     rc, out, err = ctx.run([cfg.get("psql", "psql"), "-X", "-q", "-A", "-t", "-F", "\t", "-v", "ON_ERROR_STOP=1", "-f", "-"], env, sql)
     if rc != 0:
-        raise Unreadable(f"Neon: psql exited {rc}: {err.strip().splitlines()[-1][:200] if err.strip() else ''}")
+        raise Unreadable(f"Neon: psql exited {rc}: {scrub(err, pg)}")
     size, conns, maxconn, *writes = out.strip().split("\t")
     size, conns, maxconn = int(size), int(conns), int(maxconn)
     rep.lines.append(f"Neon: {size / GIB:,.2f} GiB, {conns} of {maxconn} connections; store index last write "
@@ -359,15 +371,15 @@ def line_of(name: str, lines: dict) -> str | None:
     return max((p for p in lines if name.startswith(p)), key=len, default=None)
 
 
-def accrue(ctx: Ctx, service: str, rate_per_h: float) -> float:
-    """Spend observed this month at `rate_per_h`, integrated over passes (each counted at most 2 x every_s)."""
+def accrue(ctx: Ctx, service: str, rate_per_h: float) -> str:
+    """Spend this watch has seen this month at `rate_per_h`, integrated over passes (each counted at most 2 x every_s), as text."""
     acc = ctx.state.setdefault("accrued", {}).setdefault(service, {})
     month = iso(ctx.now)[:7]
     if acc.get("month") != month:
         acc.update(month=month, usd=0.0, since=ctx.now, last=ctx.now)
     acc["usd"] += rate_per_h * min(ctx.now - acc["last"], 2 * ctx.cfg["every_s"]) / 3600
     acc["last"] = ctx.now
-    return acc["usd"]
+    return f"{usd(acc['usd'])} seen by this watch since {iso(acc['since'])[:16]}Z"
 
 
 def month_hours(now: float) -> tuple[float, float]:
@@ -390,6 +402,17 @@ def account_rate(log: Path) -> float | None:
     return None if got is None else float(got.replace(",", ""))
 
 
+def pods_this_month(guard: dict, start: float) -> float:
+    """The guarded pods' spend since `start`: each pod's `spent`, prorated over the part of its life seen after `start`."""
+    total = 0.0
+    for p in (guard.get("pods") or {}).values():
+        first, last, spent = float(p.get("first_seen") or 0), float(p.get("last_seen") or 0), float(p.get("spent") or 0)
+        if last <= start or not spent:
+            continue
+        total += spent * (1.0 if first >= start or last <= first else (last - start) / (last - first))
+    return total
+
+
 def spend_runpod(ctx: Ctx, rep: Report, lines: dict) -> None:
     cfg = ctx.cfg["spend"]
     path = Path(cfg["guard_state"])
@@ -403,8 +426,12 @@ def spend_runpod(ctx: Ctx, rep: Report, lines: dict) -> None:
         rate = float(g.get("rate_now") or 0) + ctx.cfg["prices"]["runpod_control_usd_per_hour"]
     elapsed, left = month_hours(ctx.now)
     runway = (balance - floor) / rate if rate > 0 else float("inf")
-    rep.lines.append(f"RunPod: balance {usd(balance)} (floor {usd(floor)}), {usd(rate)}/h for the account, "
-                     f"{usd(accrue(ctx, 'runpod', rate))} seen this month, {usd(rate * left)} more by month end at this rate")
+    pods = pods_this_month(g, ctx.now - elapsed * 3600)
+    standing = max(rate - float(g.get("rate_now") or 0), 0)       # what the guard doesn't count: this pod and the volumes
+    mtd = pods + standing * elapsed
+    rep.lines.append(f"RunPod: balance {usd(balance)} (floor {usd(floor)}), {usd(rate)}/h for the account; this month about "
+                     f"{usd(mtd)} ({usd(pods)} of guarded pods, the rest this pod and the volumes), {usd(mtd + rate * left)} "
+                     f"projected to month end")
     if runway < cfg["runpod_runway_alert_h"]:
         rep.findings.append(Finding("spend|runpod|runway", f"*RunPod balance {usd(balance)} reaches the guard's {usd(floor)} floor in "
                                                            f"{runway:.0f} h* at {usd(rate)}/h; at the floor the guard stops creating pods."))
@@ -476,7 +503,7 @@ def spend_nebius(ctx: Ctx, rep: Report, lines: dict) -> None:
     total = sum(burn.values())
     _, left = month_hours(ctx.now)
     rep.lines.append(f"Nebius: {len(running)} VMs running, {usd(total)}/h known ({usd(total * 24)}/day), "
-                     f"{usd(accrue(ctx, 'nebius', total))} seen this month, {usd(total * left)} more by month end at this rate"
+                     f"{accrue(ctx, 'nebius', total)}, {usd(total * left)} more by month end at this rate"
                      + (f"; no rate registered for {', '.join(f'`{n}`' for n in sorted(unknown))}" if unknown else ""))
     for prefix, rate in sorted(burn.items(), key=lambda kv: -kv[1]):
         line = lines[prefix]
