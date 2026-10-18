@@ -29,8 +29,8 @@ arm's measures, each measurement naming its `arm` (stock, sha512, blake3). The v
   `benchmarks/hash/intpipe/` at `cursor/verity-hash-15ad` 4369ae628.
 - What-if arm (a) (`served-commit-rows-whatif-q`, `arms.py`): the rows arm with the post-RoPE q out of the Commit, as if q norm
   and RoPE ran in the attention unit's prologue; k, v and qkv stay committed. Its roots are no scheme's and it never serves; run
-  it in its own labeled run (`ARMS=stock,stock-prof,served-commit-rows,served-commit-rows-whatif-q
-  ARM_NAMES=served-commit-rows-whatif-q=whatif-q`, row `what-if-a`), so its failure costs no iteration.
+  it in its own labeled run (`SWEEP=what-if ARMS=stock,stock-prof,served-commit-rows,served-commit-rows-whatif-q
+  ARM_NAMES=served-commit-rows-whatif-q=whatif-q bash iterate.sh what-if-a "..."`), so its failure costs no iteration.
 - `collect.py`: the run's measures per arm (its docstring defines them): TPOT and throughput overhead against stock with their 95%
   intervals (the headline), prefill and decode step time, the model's own GPU time per step and its rise over stock, hash GPU time
   per step, the noise (stock's TPOT spread over its interleaved reps), and the first profiled run's wall-time rise and bytes
