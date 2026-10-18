@@ -4,7 +4,10 @@ Each iteration is one commit on the loop branch with a one-line hypothesis, meas
 `vy-dc-h200`, B200 on `vy-dc-b200`, RTX PRO 6000 on `vy-nebius-2`), so that a plot of iteration against each measure shows which
 ideas moved the cost of committing every value of served vLLM. The measurement is circuits' `benchmarks/served_commit/prof.sh`,
 unmodified: Qwen3-8B, B32, vLLM compiled, 4 prefill steps of 2,560 tokens and 64 decode steps, `stock`, `stock-prof` and the
-commit arms interleaved rep by rep (3 reps) under nsys, each commit arm gated token for token against `stock` first.
+commit arms interleaved rep by rep (3 reps) under nsys, each commit arm gated token for token against `stock` first. On the H200
+every arm runs under Qwen3-8B's Build of record (`PIN_BUILD`: r20261018-062957-da83's `out/build.json`, artifact digest 3bd5dcb1,
+seeded into one fresh Inductor dir and checked after); compiled Builds accept only cc 9.0 today, so the B200 and RTX PRO 6000 rows
+are unpinned, and the table says which is which.
 
 One iteration, end to end, from a clean checkout of the loop branch with the iteration committed and pushed:
 
@@ -14,7 +17,7 @@ bash benchmarks/hash/loop/iterate.sh N "one-line hypothesis"
 
 It launches `job.sh` on the three machines through `research run --on M --project verity --campaign hash-loop --source . --cwd
 source`, waits for them, and labels each run and its result (`label.py`): campaign=hash-loop, sweep=iteration, row=N,
-label=hypothesis, source=branch@commit, hardware=GPU. A run's result (`result.json`, published as one `bench-result/v1`) holds every
+arm=workload (qwen3-8b), label=hypothesis, source=branch@commit, hardware=GPU. A run's result (`result.json`, published as one `bench-result/v1`) holds every
 arm's measures, each measurement naming its `arm` (stock, sha512, blake3). The verdict on an iteration is a label too:
 `python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis "..." --outcome kept|dropped --reason "..."`.
 
@@ -38,7 +41,7 @@ arm's measures, each measurement naming its `arm` (stock, sha512, blake3). The v
 - `overlap.py`: from a run's `served.nsys-rep`, each of the model's kernels (and the gather) timed alone and beside the hash
   kernels: the contention, kernel by kernel.
 - `label.py`: the labels, idempotent; rerun it on runs whose launching VM stopped waiting.
-- `plot.py`: iteration against each measure, one line per (GPU, arm), from the evidence store only
+- `plot.py`: iteration against each measure, one line per (GPU, workload:arm), from the evidence store only
   (`research data select --label campaign=hash-loop --kind bench-result/v1`, after `research data refresh`, since each run
   publishes its result from its node); `--table` prints the iteration table.
 
