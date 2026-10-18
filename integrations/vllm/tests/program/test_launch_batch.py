@@ -28,8 +28,8 @@ from verity_vllm.program.registry import tp_allreduce as TA
 
 #: request steps 0 and 1 of the 65-row prompt of GLM-5.3's B8 row: its prefill beside two decoders, then six sequences
 BATCH = [[[1, 17], [1, 231], [65, 0]], [[1, 18], [1, 65], [187, 0]]]
-GLM_B8 = os.path.join(os.path.dirname(__file__), "..", "..", "workloads",
-                      "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json")
+DSV4_B8 = os.path.join(os.path.dirname(__file__), "..", "..", "workloads",
+                       "dsv4-pro__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json")
 
 
 @pytest.fixture
@@ -96,8 +96,8 @@ def test_the_batch_lists_a_step_in_admission_order():
     assert LC.request_launch_batch(reqs, reqs[0])[0] == [[1, 11], [20, 0], [30, 0]]
 
 
-def test_glm53_b8_every_request_sits_in_its_declared_batch():
-    w = json.load(open(GLM_B8))
+def test_dsv4_b8_every_request_sits_in_its_declared_batch():
+    w = json.load(open(DSV4_B8))
     assert LC.batch_dispatch(w)
     reqs = LC._requests(w)
     for r in reqs:
@@ -107,7 +107,7 @@ def test_glm53_b8_every_request_sits_in_its_declared_batch():
             own = [r["prompt_len"], 0] if s == 0 else [1, r["prompt_len"] + s - 1]
             assert own in seqs
     steps = range(max(r["arrive_step"] + r["max_tokens"] for r in reqs))
-    assert sorted({sum(LC.rows_at(q, e) for q in reqs) for e in steps}) == [1, 2, 3, 4, 6, 11, 12, 67, 189, 232, 393]
+    assert sorted({sum(LC.rows_at(q, e) for q in reqs) for e in steps}) == [1, 2, 3, 4, 5, 6, 7, 14, 55, 129, 140, 203, 290]
 
 
 def test_launch_region_tags_the_traced_nodes_and_the_export_keeps_them(declared):
