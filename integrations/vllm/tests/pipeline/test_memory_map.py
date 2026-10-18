@@ -179,6 +179,17 @@ def test_the_census_and_kv_rows_are_computed_once_per_program(tmp_path):
     assert "FileNotFoundError" in PMM.cache_at_build(tmp_path / "gone", program, digest)["error"], "a census failure decides no Build"
 
 
+def test_a_requests_cache_dir_leaves_the_build_dir_untouched(tmp_path):
+    program, lp = _build_dir(tmp_path, 4, 5)
+    d, digest, side = tmp_path / "build_request_LP4_T5", lp["instances"]["digest"], tmp_path / "side"
+    rows, out, before = MM.rows(program), tmp_path / "memory_map.jsonl", sorted(p.name for p in d.iterdir())
+    PMM.write(out, {"path": str(out), "registration": "ab" * 64, "cache_dir": str(side)}, loaded={"r0": lp}, store=_store(rows),
+              arrivals={"r0": ARRIVE}, caches=_caches(MM.packed(rows), _payload(ProgramIndex(lp["instances"]), rows)))
+    assert sorted(p.name for p in d.iterdir()) == before and {p.name for p in (side / digest).iterdir()} == {PMM.CENSUS, PMM.KV_ROWS}
+    (d / "descriptor.json.gz").unlink()
+    assert PMM.of_build(d, digest, side / digest) == rows
+
+
 def test_a_descriptor_of_another_program_is_refused_beside_the_map(tmp_path):
     _, lp = _build_dir(tmp_path, 4, 5)
     _, other = _build_dir(tmp_path, 4, 1)

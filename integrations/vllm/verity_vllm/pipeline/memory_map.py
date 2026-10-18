@@ -15,6 +15,7 @@ The request (``REQUEST_JSON``)::
 
     {"path": <the map's file>, "registration": <hex of the remote audit's Registration.digest>,
      "firsts"?: [<layer l's region's first block>], "blocks"?: <N>,
+     "cache_dir"?: <where each Program's census and KV rows are read and cached, at <cache_dir>/<Program digest>, its Build dir only read>,
      "ranks"?: {"<r>": {<any of the above, for TP rank r>}}}
 
 On a TP rank the request is `at_rank`'s: ``ranks[r]`` over the rest, its map at ``<stem>.rank<r><suffix>`` unless that names one.
@@ -145,19 +146,22 @@ def cache_at_build(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
         return {"error": repr(e)[:300]}
 
 
-def of_build(d: str | Path, digest: str) -> MM.Rows:
+def of_build(d: str | Path, digest: str, at: str | Path | None = None) -> MM.Rows:
     """The KV rows of Build dir ``d``'s request Program ``digest``: its `KV_ROWS` when they name the Program, else computed from its
-    descriptor (refused unless that is Program ``digest``) and cached beside it (`cache`), once per Program digest."""
+    descriptor (refused unless that is Program ``digest``) and cached beside it (`cache`), once per Program digest; read and
+    cached at ``at`` in place of ``d`` when given, ``d`` only read."""
     from verity_vllm.program.boolean import load_program
 
     d = Path(d)
-    doc = _read(d / KV_ROWS, digest, KV_ROWS_SCHEMA)
+    at = d if at is None else Path(at)
+    doc = _read(at / KV_ROWS, digest, KV_ROWS_SCHEMA)
     if doc is None:
         program, got = load_program(d / "descriptor.json.gz")
         if got != digest:
             raise ValueError(f"{d}: descriptor.json.gz is Program {got[:16]}, its instance rows {str(digest)[:16]}")
-        cache(d, program, digest)
-        doc = _read(d / KV_ROWS, digest, KV_ROWS_SCHEMA)
+        at.mkdir(parents=True, exist_ok=True)
+        cache(at, program, digest)
+        doc = _read(at / KV_ROWS, digest, KV_ROWS_SCHEMA)
     if "refused" in doc:
         raise ValueError(f"{d}: {doc['refused']}")
     return MM.rows_of(doc)
@@ -185,8 +189,9 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
     for rid, lp in loaded.items():
         d, digest = str(lp["dir"]), str(lp["instances"].get("digest"))
         if d not in by_dir:
-            by_dir[d] = (of_build(d, digest), ProgramIndex(lp["instances"], attention_paths=list(attention_paths), tp=dict(tp) if tp else None,
-                                                           program_dir=d), digest)
+            at = Path(req["cache_dir"]) / digest if req.get("cache_dir") else None
+            by_dir[d] = (of_build(d, digest, at), ProgramIndex(lp["instances"], attention_paths=list(attention_paths), tp=dict(tp) if tp else None,
+                                                               program_dir=d), digest)
         rows[rid], index[rid], _ = by_dir[d]
     t_ir = time.perf_counter()
 
