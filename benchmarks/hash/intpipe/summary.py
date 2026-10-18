@@ -369,8 +369,85 @@ def lattable(args: list[str]) -> None:
               f"({100 * r['critical_ms'] / s:.1f}%) |")
 
 
+LEVERS = [("base", "kept"), ("top512", "kept"), ("top1024", "kept"), ("host4", "kept"), ("host6", "kept"),
+          ("host8", "kept"), ("k4", "FORMAT CHANGE"), ("k8", "FORMAT CHANGE")]
+
+
+def levertable(args: list[str]) -> None:
+    """Fetched hm96lat.sh runs: per GPU and decode window, each lever's critical path, GPU time and share of the decode
+    step, with the overlap; the 2 KiB leaves against 4 KiB (hm96.sh, same run); and windows of k steps."""
+    lat_r: dict[tuple, dict] = {}
+    ovl_r: dict[tuple, dict] = {}
+    leaf_r: dict[tuple, dict] = {}
+    runs: dict[str, str] = {}
+    for d in args:
+        run = os.path.basename(os.path.normpath(d))
+        for root, _, files in os.walk(d):
+            sub = os.path.basename(root)
+            if "summary-lat.jsonl" in files:
+                for r in lines(os.path.join(root, "summary-lat.jsonl")):
+                    if r["mode"] == "lat":
+                        lat_r[(r["gpu"], r["leaves"], r["lever"])] = r
+                        runs[r["gpu"]] = run
+                    elif r["mode"] == "overlap":
+                        ovl_r[(r["gpu"], r["leaves"], r["commit"], r["prio"])] = r
+            if "summary.jsonl" in files and sub.startswith("leaf"):
+                for r in lines(os.path.join(root, "summary.jsonl")):
+                    leaf_r[(r["gpu"], sub, r["leaves"])] = r
+    gpus = sorted({g for g, _, _ in lat_r}, key=lambda g: ("B200" not in g, "H200" not in g, g))
+    windows = (4614, 6433, 10078)
+    pct = lambda ms, g: f"{100 * ms / step_ms(g):.1f}%"  # noqa: E731
+    print("| GPU | window | lever | format | critical path µs pre / step | GPU busy µs pre / step | % of decode step pre / "
+          "step | run |")
+    print("|---|---|---|---|---|---|---|---|")
+    for g in gpus:
+        for n in windows:
+            mb = f"{n * 4096 / 1e6:.1f} MB"
+            for lever, fmt in LEVERS:
+                r = lat_r.get((g, n, lever))
+                if r:
+                    print(f"| {short(g)} | {mb} | {lever} | {fmt} | {1e3 * r['host_pre_ms']:.0f} / {1e3 * r['host_step_ms']:.0f} | "
+                          f"{1e3 * r['gpu_pre_ms']:.0f} / {1e3 * r['gpu_step_ms']:.0f} | {pct(r['host_pre_ms'], g)} / "
+                          f"{pct(r['host_step_ms'], g)} | {runs[g]} |")
+            b = lat_r.get((g, n, "base"))
+            for p in ("default", "high"):
+                o = {c: ovl_r.get((g, n, c, p)) for c in ("pre", "step")}
+                if o["pre"] and o["step"] and b:
+                    print(f"| {short(g)} | {mb} | overlap, {p} priority (root at {o['pre']['root_ms']:.2f} / "
+                          f"{o['step']['root_ms']:.2f} ms) | kept | {1e3 * o['pre']['critical_ms']:.0f} / "
+                          f"{1e3 * o['step']['critical_ms']:.0f} | {1e3 * b['gpu_pre_ms']:.0f} / {1e3 * b['gpu_step_ms']:.0f} | "
+                          f"{pct(o['pre']['critical_ms'], g)} / {pct(o['step']['critical_ms'], g)} | {runs[g]} |")
+    print()
+    print("| GPU | MB | leaf (segments) | format | graph µs pre / step | eager µs pre / step | segments / leaves / level "
+          "launches / top µs |")
+    print("|---|---|---|---|---|---|---|")
+    for g in gpus:
+        for n in windows:
+            for sub, nn, lab, fmt in (("leaf4k", n, "4 KiB (4 x 1 KiB)", "kept"), ("leaf2k", 2 * n, "2 KiB (2 x 1 KiB)", "kept"),
+                                      ("leaf2k-seg512", 2 * n, "2 KiB (4 x 512 B)", "FORMAT CHANGE")):
+                r = leaf_r.get((g, sub, nn))
+                if r:
+                    print(f"| {short(g)} | {r['bytes'] / 1e6:.1f} | {lab} | {fmt} | {1e3 * r['base_pre_graph_ms']:.0f} / "
+                          f"{1e3 * r['base_step_graph_ms']:.0f} | {1e3 * r['base_pre_ms']:.0f} / {1e3 * r['base_step_ms']:.0f} | "
+                          + " / ".join(f"{1e3 * r['base_' + k]:.0f}" for k in ("seg_ms", "leaf_ms", "levels_ms", "top_ms")) + " |")
+    print()
+    print("| GPU | row window | k steps a window | MB | critical path µs pre / step | per step µs pre / step | % of decode "
+          "step pre / step | delay of the first step's root, ms (pre) |")
+    print("|---|---|---|---|---|---|---|---|")
+    for g in gpus:
+        for n in windows:
+            for k in (1, 2, 4, 8):
+                r = lat_r.get((g, k * n, "base"))
+                if r:
+                    a, s = r["host_pre_ms"], r["host_step_ms"]
+                    print(f"| {short(g)} | {n * 4096 / 1e6:.1f} MB | {k} | {r['bytes'] / 1e6:.1f} | {1e3 * a:.0f} / {1e3 * s:.0f} | "
+                          f"{1e3 * a / k:.0f} / {1e3 * s / k:.0f} | {pct(a / k, g)} / {pct(s / k, g)} | "
+                          f"{(k - 1) * step_ms(g) + a:.2f} |")
+
+
 if __name__ == "__main__":
-    if sys.argv[1] in ("table", "hm96table", "hm96windows", "lattable"):
-        {"table": table, "hm96table": hm96table, "hm96windows": hm96windows, "lattable": lattable}[sys.argv[1]](sys.argv[2:])
+    if sys.argv[1] in ("table", "hm96table", "hm96windows", "lattable", "levertable"):
+        {"table": table, "hm96table": hm96table, "hm96windows": hm96windows, "lattable": lattable,
+         "levertable": levertable}[sys.argv[1]](sys.argv[2:])
     else:
         {"sha512": sha512, "hashes": hashes, "hm96": hm96, "lat": lat}[sys.argv[1]](sys.argv[2])
