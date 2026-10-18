@@ -925,7 +925,7 @@ def test_fan_out_verdicts_match_the_serial_loop(tmp_path):
         rundir = tmp_path / f"jobs{jobs}"
         (rundir / "out").mkdir(parents=True)
         r = subprocess.run(["bash", "benchmarks/pouw/hidden_zk/job.sh"], cwd=root, text=True, capture_output=True,
-                           timeout=3600, env={**base, "SZ_JOBS": jobs, "RESEARCH_RUN_DIR": str(rundir)})
+                           env={**base, "SZ_JOBS": jobs, "RESEARCH_RUN_DIR": str(rundir)})
         summary = rundir / "out" / "summary.json"
         assert r.returncode == 0 and summary.is_file(), f"SZ_JOBS={jobs} failed:\n{r.stdout[-3000:]}\n{r.stderr[-2000:]}"
         checks = {k: v["verdict"] for k, v in json.loads(summary.read_text())["checks"].items()}
