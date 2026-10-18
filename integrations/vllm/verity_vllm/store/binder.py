@@ -234,7 +234,7 @@ class Binder:
     reference's, every block read on the CPU.  With ``tiles`` (the driver's `audit.Tiles`), each receipt is bound to
     ``tiles.output(seed, j)``, PoUW's tile output before block ``j`` is read, and the default receipt is the driver's
     (`RemoteBandwidthReceipt`); without them, the tag receipt, which binds only the block.  With ``passes=False`` the
-    binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.store.remote.serve`).
+    binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.store.remote.CommitSession`).
     With ``weight_blocks`` it registers weight tensors in order while their blocks fit that many, and counts the rest
     unregistered: a store small enough for a remote session's CPU passes (`remote.StoreBackend`)."""
 
