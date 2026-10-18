@@ -20,13 +20,16 @@ steps end after each sampling event (`step_ends`). Inputs belong to no step.
          "instances": <activations in the Program>,               # a primitive's: its gates
          "gates": <gates per instance>,
          "primitives": {<primitive id>: <gates per instance>},
-         "served_macs": <per instance>, "tail_atoms": <per instance>, "receipt_folds": <per instance>}},
+         "served_macs": <per instance>, "tail_atoms": <per instance>, "receipt_folds": <per instance>,
+         "ports": <its descriptor entry's `ports` (`ports.declared`)>}},  # only on a class that declares ports
      "callees": [<descriptor id>],                                # the classes of the root's nodes
      "inputs": <the number of input nodes>,
      "nodes": {"callee": [<index into callees>], "n": [<activations: a batch's members, a scan's iterations, else 1>]},
      "steps": {"ends": [...], "gates": [...], "served_macs": [...], "tail_atoms": [...], "receipt_folds": [...],
                "select_gates": [...], "select_bits": [...]},
-     "values": {"producer": [<root node>], "lo": [...], "hi": [...], "bits": [...], "reads": [[<root node>]], "output": [<bool>]},
+     "values": {"producer": [<root node>], "lo": [...], "hi": [...], "bits": [...], "reads": [[<root node>]], "output": [<bool>],
+                "fact": [<index into facts>]},
+     "facts": [{"interval": [a, b] | null, "origin": [<origin>], "sink": <bool>, "word": <word type> | null}],
      "selects": {"call": [<root node>], "gates": [...], "bits": [...], "values": [[<value>]]},
      "totals": {"gates", "computed_gates", "inputs": {"run" | "registration": {"gates", "bits"}}, "values", "value_bits",
                 "classes", "served_macs", "tail_atoms", "receipt_folds", "select_gates", "select_bits"},
@@ -42,11 +45,17 @@ counters from its rule over its statics instead: that is how a matmul family sta
 its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the same product) and a fold Definition its receipt folds; the
 class's ancestors add up what the rule says.
 
-**Values.** A value is a run `[lo, hi)` of one root node's output leaves whose readers, candidacy and output status are the same
-throughout. `bits` is the sum of its leaves' widths. `reads` are the Calls with a gate that takes one of its leaves as an operand
+**Values.** A value is a run `[lo, hi)` of one root node's output leaves whose readers, candidacy, output status and fact are the
+same throughout. `bits` is the sum of its leaves' widths. `reads` are the Calls with a gate that takes one of its leaves as an operand
 (a direct read, which no value decides), and `output` says the root returns it. A value nobody reads is listed with no reads. A
 leaf a node passes through (a Call that returns one of its arguments, a scan's carry) is not that node's value: whoever reads it
 reads the value passed, and its producer's.
+
+**Facts.** A value's fact is what `ports.facts(root)` knows of its leaves (PROTOCOL.md §12): an interval (null: it spans its
+width), its origins, whether it is a sink, and its word type. An input's interval is its port's bound and a constant's its value;
+a computed value's is what its producer declares or its transfer gives. `facts` lists each distinct fact once, in the order the
+values first name it. A constant wider than the canonical JSON's integers is written with no interval (every declared interval
+is within them). A Program in which no Definition declares ports has only the default facts.
 
 **Selects.** A primitive with `evaluate_lazy` reads its scalar operands directly and selects among its array operands by a value
 (a gather, a table read, an indexed expert): those array operands are candidates, not reads. Per Call with such gates, `gates`
@@ -66,7 +75,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable, Iterable
 
-from .codec import _static_json, canonical_json, descriptor_id, jcs_domain_error
+from . import ports
+from .codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
 from .defs import Node, PrimitiveDefinition
 from .intervals import Intervals, complement, contains, full, isect, norm, ref_intervals, total
 from .layout import resolve
@@ -466,6 +476,8 @@ def _classes(root: Any) -> tuple[dict[str, dict], dict[int, str], dict[int, tupl
         classes[cid] = {"family": family(fn), "statics": statics, "kind": kind, "binding": binding, "instances": inst[id(fn)],
                         "gates": fn.gates, "primitives": dict(sorted(prims[id(fn)].items())),
                         **dict(zip(COUNTERS, counts[id(fn)]))}
+        if (decl := ports.declared(fn)) is not None:
+            classes[cid]["ports"] = decl
     return classes, ids, counts
 
 
@@ -541,6 +553,13 @@ def _segments(L: int, spans: list[tuple[int, int, tuple]]) -> Iterable[tuple[int
         yield run
 
 
+def _fact_json(f: ports.Fact) -> dict:
+    j = f.to_json()
+    if f.interval is not None and max(-f.interval[0], f.interval[1]) > MAX_SAFE_INT:
+        j["interval"] = None
+    return j
+
+
 def census(program: Any, ends: list[int] | None = None, digest: str | None = None) -> dict:
     """The census/v1 of `program` (a `Program` or a `DecodedProgram`) over the steps `ends` (default: one step), naming the
     Program by `digest` (`codec.program_digest`) when given."""
@@ -600,10 +619,12 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
         for p, u, v, tag in moved:  # an earlier node's, or this one's own first naming of a gate
             spans[p].append((u, v, tag))
 
-    values: dict[str, list] = {"producer": [], "lo": [], "hi": [], "bits": [], "reads": [], "output": []}
+    fx = ports.facts(root)
+    facts: dict[ports.Fact, int] = {}
+    values: dict[str, list] = {"producer": [], "lo": [], "hi": [], "bits": [], "reads": [], "output": [], "fact": []}
     pools: dict[int, list[int]] = {k: [] for k in sel}
     for j, nd in enumerate(nodes):
-        for lo, hi, tags in _segments(nd.out.leaves, spans[j]):
+        for lo, hi, tags in _segments(nd.out.leaves, spans[j] + [(a, b, (4, f)) for a, b, f in fx.node(j).segments()]):
             if (3, 0) in tags:
                 continue
             v = len(values["producer"])
@@ -613,6 +634,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
             values["bits"].append(_bits(nd.out, lo, hi))
             values["reads"].append(sorted(k for t, k in tags if t == 0))
             values["output"].append((2, 0) in tags)
+            values["fact"].append(facts.setdefault(next(f for t, f in tags if t == 4), len(facts)))
             for t, k in tags:
                 if t == 1:
                     pools.setdefault(k, []).append(v)
@@ -639,7 +661,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
               "select_gates": sum(g for g, _ in sel.values()), "select_bits": sum(b for _, b in sel.values())}
     return seal({"schema": SCHEMA, "program": digest, "classes": classes, "callees": callees, "inputs": I,
                  "nodes": {"callee": [at[ids[id(nd.fn)]] for nd in nodes], "n": mult}, "steps": steps, "values": values,
-                 "selects": selects, "totals": totals, "approximate": approximate})
+                 "facts": [_fact_json(f) for f in facts], "selects": selects, "totals": totals, "approximate": approximate})
 
 
 def step_of(doc: dict) -> Callable[[int], int]:
