@@ -804,11 +804,11 @@ FAKE_SYNC = (sys.executable, "-c", "import sys; from pathlib import Path; s = Pa
              "'error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.', file=sys.stderr); sys.exit(2 * s)")
 
 
-def _preflight(world: World):
+def _preflight(world: World, free=lambda: 1.0):
     from research.queue import Preflight
 
     return Preflight(world.dev, str(world.origin), world.store, sync=FAKE_SYNC, python=sys.executable, root=world.tmp / "pre",
-                     log=world.logs.append)
+                     log=world.logs.append, free=free)
 
 
 def _preflight_main(world: World, extra: dict[str, str] | None = None) -> str:
@@ -840,6 +840,19 @@ def test_the_preflight_marks_a_head_that_merges_onto_next_cleanly_and_a_failure_
     world.logs.clear()                                         # #1, already on `next`, merges onto what's below its merge there
     assert ready(world.gh, world.store, 1, "lane-1", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
     assert f"merged onto `next` below its merge of #1 at {h1[:8]}" in next(s for s in world.logs if "preflight" in s)
+
+
+def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(world, capsys):
+    """ci, 18 Oct: four torch-importing collections reach about 8 GB of a marker's 16 GB VM. Under a quarter of memory free,
+    the preflight collects nothing, says so, and still marks; the train's check collects."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    world.gh.put(2, h2 := world.change({"pkg/tests/test_more.py": "def test_more():\n    pass\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, free=lambda: 0.1)) == 0
+    said = next(s for s in world.logs if "preflight" in s)
+    assert "no suite collected: 10% of memory available, under 25%" in said and "collected 0 suite(s)" in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
 def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_and_the_pr_that_touched_them(world, capsys):
