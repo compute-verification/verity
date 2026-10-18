@@ -426,7 +426,7 @@ theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} 
   obtain ⟨i, hi, -, hiq, hia⟩ := mem_zkRepCols ha
   obtain ⟨i', hi', -, hiq', hib⟩ := mem_zkRepCols hb
   have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := by
-    have := checks_hm96 hc (setupOf_some hs).2 j hstsj
+    have := checks_hm96 hc (setupOf_some hs).2 (setupOf_zk hs) j hstsj
     rw [hstj] at this
     exact this
   rw [hms] at hmc
@@ -438,17 +438,17 @@ theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} 
   obtain ⟨hcs, hcw⟩ := merkleCheck_cap hpure
   have hop : ∀ i < (positions (sch.levels.getD ℓ default) (y.rounds[zkLevelRound (Setup.ofCircuit st).m
       (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size) (sch.levels.size - 1) ℓ]!).coins).size,
-      Opening (sch.levels.getD ℓ default) (2 ^ (sch.levels.getD ℓ default).lanes)
+      Opening MerkleScheme.hm96Sha512 (sch.levels.getD ℓ default) (2 ^ (sch.levels.getD ℓ default).lanes)
         (zp.proof.ligerito.recursiveCaps[ℓ - 1]!.foldl (· ++ ·) ByteArray.empty) L
         (positions (sch.levels.getD ℓ default) (y.rounds[zkLevelRound (Setup.ofCircuit st).m
           (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size) (sch.levels.size - 1) ℓ]!).coins)[i]!
         (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).1[i]! := fun i hi =>
-    ⟨zp.proof.ligerito.recursiveCaps[ℓ - 1]!,
+    ⟨Or.inl rfl, zp.proof.ligerito.recursiveCaps[ℓ - 1]!,
       (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).2.2.getD i ByteArray.empty,
       sibsOf (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).2.1
         ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap) i,
       hcs, hcw, rfl, merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure i hi, merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure i,
-      hlog i hi⟩
+      by rw [opensInsOf_hm96]; exact hlog i hi⟩
   have ho₁ := hop i hi
   have ho₂ := hop i' hi'
   rw [hiq] at ho₁

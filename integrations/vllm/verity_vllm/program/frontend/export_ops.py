@@ -72,6 +72,22 @@ def ensure_ops() -> None:
     def _(parts: list[torch.Tensor]) -> torch.Tensor:
         return torch.empty_like(parts[0])
 
+    @torch.library.custom_op("verity_tp::fused_allreduce_rms_norm", mutates_args=())
+    def fused_allreduce_rms_norm(parts: list[torch.Tensor], residual: torch.Tensor, weight: torch.Tensor,
+                                 eps: float) -> tuple[torch.Tensor, torch.Tensor]:
+        # This eager body is only a shape/ordinary-arithmetic check.  The frontend binds the op to the captured
+        # FlashInfer MNNVL Definition; it never claims these PyTorch reductions are its implementation.
+        reduced = torch.stack(list(parts), dim=0).float().sum(dim=0).to(parts[0].dtype)
+        residual_out = reduced + residual
+        variance = residual_out.float().pow(2).mean(dim=-1, keepdim=True)
+        normed = (residual_out.float() * torch.rsqrt(variance + eps) * weight.float()).to(residual_out.dtype)
+        return normed, residual_out
+
+    @fused_allreduce_rms_norm.register_fake
+    def _(parts: list[torch.Tensor], residual: torch.Tensor, weight: torch.Tensor,
+          eps: float) -> tuple[torch.Tensor, torch.Tensor]:
+        return torch.empty_like(parts[0]), torch.empty_like(residual)
+
     @torch.library.custom_op("verity_tp::all_gather", mutates_args=())
     def all_gather(parts: list[torch.Tensor]) -> torch.Tensor:
         return torch.cat(list(parts), dim=-1)
@@ -103,6 +119,7 @@ class CollectiveBus:
     mode: str = "probe"
     peers: list[torch.Tensor] = field(default_factory=list)
     record: list[dict] = field(default_factory=list)
+    settings: dict[str, bool] = field(default_factory=dict)
     cursor: int = 0
 
     @property
@@ -156,6 +173,15 @@ class CollectiveBus:
         if self.world == 2:
             return torch.ops.verity_tp.all_gather2(parts[0], parts[1])
         return torch.ops.verity_tp.all_gather(parts)
+
+    def fused_allreduce_rms_norm(self, x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor,
+                                 eps: float) -> tuple[torch.Tensor, torch.Tensor]:
+        """Author the FlashInfer fused leaf after its served dispatch has been established by `export_compat`."""
+        peers = self._peers_of("fused_allreduce_rms_norm", x, tuple(x.shape))
+        if peers is None:
+            return torch.empty_like(x), torch.empty_like(residual)
+        ensure_ops()
+        return torch.ops.verity_tp.fused_allreduce_rms_norm(self._parts(x, peers), residual, weight, float(eps))
 
     def example_peers(self, device: str = "meta") -> tuple[torch.Tensor, ...]:
         """One example peer tensor per (collective k, peer rank j) in flat order `k*(world-1) + j`."""

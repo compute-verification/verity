@@ -189,6 +189,11 @@ def test_export_shims_restore_torch_and_vllm() -> None:
         assert all(m.num_compute_units() == 142 for m in mods if hasattr(m, "num_compute_units"))
     assert vars(cls).get("get_device_capability", hooks.ABSENT) is cap
     assert [vars(m).get("num_compute_units", hooks.ABSENT) for m in mods] == cus
+    flashinfer_fp8 = importlib.import_module("vllm.model_executor.kernels.linear.scaled_mm.flashinfer")
+    flashinfer_supported = flashinfer_fp8.is_flashinfer_fp8_blockscale_gemm_supported
+    with apply_target_profile(SimpleNamespace(compute_capability=(9, 0), num_sms=132)):
+        assert flashinfer_fp8.is_flashinfer_fp8_blockscale_gemm_supported()
+    assert flashinfer_fp8.is_flashinfer_fp8_blockscale_gemm_supported is flashinfer_supported
 
     fm = pytest.importorskip("vllm.model_executor.layers.fused_moe.fused_moe")   # registers torch.ops.vllm.fused_experts
     ns = torch.ops.vllm
@@ -208,6 +213,56 @@ def test_export_shims_restore_torch_and_vllm() -> None:
     assert fe is hooks.ABSENT or inside is fm.fused_experts_op
     assert vars(ns).get("fused_experts", hooks.ABSENT) is fe and vars(ws).get("_manager", hooks.ABSENT) is manager
     assert hooks.live() == live
+
+
+def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() -> None:
+    """A plain kernel object keeps the original scale object; the shim refreshes it after export swaps the module Parameter."""
+    torch = pytest.importorskip("torch")
+    from verity_vllm.program.frontend.export_compat import _expert_weight_scales_through_owner
+
+    class Experts:
+        def __init__(self, w1_scale, w2_scale) -> None:
+            self.quant_config = SimpleNamespace(
+                _w1=SimpleNamespace(scale=w1_scale),
+                _w2=SimpleNamespace(scale=w2_scale),
+            )
+
+        @property
+        def w1_scale(self):
+            return self.quant_config._w1.scale
+
+        @property
+        def w2_scale(self):
+            return self.quant_config._w2.scale
+
+        def apply(self, x):
+            return x * self.w1_scale + self.w2_scale
+
+    class Layer(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.w13_weight_scale_inv = torch.nn.Parameter(torch.ones(4), requires_grad=False)
+            self.w2_weight_scale_inv = torch.nn.Parameter(torch.full((4,), 2.0), requires_grad=False)
+            experts = Experts(self.w13_weight_scale_inv, self.w2_weight_scale_inv)
+            self.quant_method = SimpleNamespace(moe_kernel=SimpleNamespace(fused_experts=experts))
+
+        def forward(self, x):
+            return self.quant_method.moe_kernel.fused_experts.apply(x)
+
+    layer = Layer()
+    inputs = (torch.ones(4),)
+    unshimmed = torch.export.export(layer, inputs, strict=False)
+    assert set(unshimmed.graph_signature.inputs_to_lifted_tensor_constants.values()) == {"lifted_tensor_0", "lifted_tensor_1"}
+    assert set(unshimmed.graph_signature.inputs_to_parameters.values()) == {"w13_weight_scale_inv", "w2_weight_scale_inv"}
+
+    h = hooks.Hooks()
+    _expert_weight_scales_through_owner(layer, layer.quant_method, h)
+    with h:
+        shimmed = torch.export.export(layer, inputs, strict=False)
+        assert not shimmed.graph_signature.inputs_to_lifted_tensor_constants
+        assert set(shimmed.graph_signature.inputs_to_parameters.values()) == {"w13_weight_scale_inv", "w2_weight_scale_inv"}
+    assert layer.quant_method.moe_kernel.fused_experts.w1_scale is layer.w13_weight_scale_inv
+    assert layer.quant_method.moe_kernel.fused_experts.w2_scale is layer.w2_weight_scale_inv
 
 
 def test_tp_group_override_restores_the_group() -> None:

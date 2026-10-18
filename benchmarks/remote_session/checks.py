@@ -8,6 +8,7 @@ checks and there are as many openings as draws.
     snap = checks.snapshot(session, t)    once a window's draws are out
     future = checks.submit(snap, t, draws, bodies)   a batch of the wire's openings frames, checked in a worker
     checks.settle(session, t, results, count)        the window's verdict, set on the session as `verify` sets it
+    checks.bounds(profiles)               each window's bound on wrong receipts (`IntegrityProfile.bound`), one a worker
 """
 from __future__ import annotations
 
@@ -72,13 +73,15 @@ class Checks:
 
     @staticmethod
     def snapshot(session: audit.Session, t: int) -> bytes:
-        """What `_check` reads of window t, pickled: the session's parameters, tiles, registration and payload domain,
-        the window's challenge, plans and roots, and the window before's last root."""
+        """What `_check` reads of window t, pickled: the session's parameters, tiles, registration, payload domain and
+        appends so far with their coins, the window's challenge, plans, roots and the appends' head at each, and the
+        window before's last root."""
         w = session.windows[t]
         view = object.__new__(type(session))
         view.params, view.tiles, view.registration = session.params, session.tiles, session.registration
-        view._payload_domain = session._payload_domain
-        view.windows = {t: SimpleNamespace(challenge=w.challenge, plans=list(w.plans), roots=list(w.roots))}
+        view._payload_domain, view._appends = session._payload_domain, list(session._appends)
+        view.windows = {t: SimpleNamespace(challenge=w.challenge, plans=list(w.plans), roots=list(w.roots),
+                                           heads=list(w.heads))}
         if t > 0:
             view.windows[t - 1] = SimpleNamespace(roots=[session.windows[t - 1].roots[-1]])
         return pickle.dumps(view)
@@ -101,8 +104,21 @@ class Checks:
         w.verdict = audit.Verdict(t, True)
         return w.verdict
 
+    def bounds(self, profiles) -> list[int | float]:
+        """Each profile's `bound()`, exact, its stratified law's `count_bound` computed in the workers side by side (a
+        60 s window's 33273 draws from ~6e10 receipts take 25–75 s each in exact arithmetic); a law without strata in
+        this process."""
+        laws = [p.strata() for p in profiles]
+        futures = [None if law is None else self.pool.submit(_count_bound, law, p.delta)
+                   for p, law in zip(profiles, laws)]
+        return [p.bound() if f is None else f.result() for p, f in zip(profiles, futures)]
+
     def close(self, wait: bool = False) -> None:
         self.pool.shutdown(wait=wait, cancel_futures=True)
+
+
+def _count_bound(law, delta: float) -> int:
+    return law.count_bound(delta)
 
 
 def _warm() -> int:

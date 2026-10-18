@@ -104,8 +104,9 @@ theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
       (link : List ByteArray × List ByteArray) (row : Array F128),
       setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
       linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
-      Opening (sch.levels.getD 0 default) (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES)
-        link.1.toArray[j]! (Claims.run sha512 P (V true) x ω r).vLog q row ∧
+      Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
+        (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[j]!
+        (Claims.run sha512 P (V true) x ω r).vLog q row ∧
       u = row.toList.map FlockLevel3.GF128.of := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
   generalize hL : (Claims.run sha512 P (V true) x ω r).vLog = L at hv ⊢
@@ -180,7 +181,7 @@ theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
     exact hp
   obtain ⟨i, hi, -, hiq, hiu⟩ := mem_zkRepCols hp2
   have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := by
-    have := checks_hm96 hc (setupOf_some hs).2 j hstsj
+    have := checks_hm96 hc (setupOf_some hs).2 (setupOf_zk hs) j hstsj
     rw [hstj] at this
     exact this
   rw [hms] at hmc
@@ -191,14 +192,14 @@ theorem zk_rowJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
   obtain ⟨hpure, hlog⟩ := merkleCheck_logs hruns
   obtain ⟨hcs, hcw⟩ := merkleCheck_cap hpure
   refine ⟨s, spec, sts, st, sch, tPad, link, zp.proof.ligerito.initialProof.rows[i]!, hs, hst, hsch, hlink,
-    ⟨zp.proof.cap, zp.proof.ligerito.initialProof.salts.getD i ByteArray.empty,
+    ⟨Or.inl rfl, zp.proof.cap, zp.proof.ligerito.initialProof.salts.getD i ByteArray.empty,
       sibsOf zp.proof.ligerito.initialProof.siblings
         ((sch.levels.getD 0 default).d - (sch.levels.getD 0 default).cap) i,
       hcs, hcw, ?_, ?_, merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure i, ?_⟩, hiu⟩
   · rw [hcap, hrB, ← hroot, Array.toArray_toList]
   · rw [← hiq]
     exact merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure i hi
-  · rw [← hiq]
+  · rw [opensInsOf_hm96, ← hiq]
     exact hlog i hi
 
 /-- **Two different rows two accepted masked runs open at one position collide in their logs**: the runs share `P`'s

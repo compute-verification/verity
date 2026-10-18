@@ -333,7 +333,8 @@ theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
     (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
     (ha : (q, a) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ)
     (hb : (q, b) ∈ plainRawLevelCols (Claims.run sha512 P (V false) x ω r).seen k ℓ) (hab : a ≠ b) :
-    ∃ (lv : Flock.Level) (lanes : ℕ), PlainLevelClash lv lanes (Claims.run sha512 P (V false) x ω r).vLog := by
+    ∃ (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ),
+      PlainLevelClash ms lv lanes (Claims.run sha512 P (V false) x ω r).vLog := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
   generalize hL : (Claims.run sha512 P (V false) x ω r).vLog = L at hv ⊢
   obtain ⟨hx, lv, hlv, -⟩ := Claims.Bridge.Custody.checks_ok hc
@@ -409,30 +410,34 @@ theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
   rw [hcolsEq] at ha hb
   obtain ⟨j, hj, -, hjq, hja⟩ := mem_zkRepCols ha
   obtain ⟨j', hj', -, hjq', hjb⟩ := mem_zkRepCols hb
-  have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := by
-    have := checks_hm96 hc (setupOf_some hs).2 0 hsts0
-    rw [hst0] at this
-    exact this
-  rw [hms] at hmc
+  have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 ∨
+      (Setup.ofCircuit st).merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
+    rcases checks_leaf hc (setupOf_some hs).2 0 hsts0 with h | ⟨-, h⟩
+    · rw [hst0] at h
+      exact Or.inl h
+    · rw [hst0] at h
+      exact Or.inr h
+  have hdl : (Setup.ofCircuit st).merkle.digestLen = 64 := by
+    rcases hms with e | e <;> rw [e] <;> rfl
   have hruns := With.merkleCheckWith_sim (back (L.map Prod.fst))
-    (With.opsWith_sim (back (L.map Prod.fst)) (back_hashes (L.map Prod.fst)) MerkleScheme.hm96Sha512)
-    MerkleScheme.hm96Sha512 _ _ _ _ _ _ _ _ () hmc
-  rw [opsWith_hm96] at hruns
-  obtain ⟨hpure, hlog⟩ := merkleCheck_logs hruns
+    (With.opsWith_sim (back (L.map Prod.fst)) (back_hashes (L.map Prod.fst)) (Setup.ofCircuit st).merkle)
+    (Setup.ofCircuit st).merkle _ _ _ _ _ _ _ _ () hmc
+  obtain ⟨hpure, hlog⟩ := merkleCheck_logsOf hms hruns
   obtain ⟨hcs, hcw⟩ := merkleCheck_cap hpure
   have hop : ∀ i < (positions (sch.levels.getD ℓ default) (y.rounds[plainLevelRound (Setup.ofCircuit st).m
       (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size) (sch.levels.size - 1) ℓ]!).coins).size,
-      Opening (sch.levels.getD ℓ default) (2 ^ (sch.levels.getD ℓ default).lanes)
+      Opening (Setup.ofCircuit st).merkle (sch.levels.getD ℓ default) (2 ^ (sch.levels.getD ℓ default).lanes)
         (p.ligerito.recursiveCaps[ℓ - 1]!.foldl (· ++ ·) ByteArray.empty) L
         (positions (sch.levels.getD ℓ default) (y.rounds[plainLevelRound (Setup.ofCircuit st).m
           (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size) (sch.levels.size - 1) ℓ]!).coins)[i]!
         (openAt p.ligerito (sch.levels.size - 1) ℓ).1[i]! := fun i hi =>
-    ⟨p.ligerito.recursiveCaps[ℓ - 1]!, (openAt p.ligerito (sch.levels.size - 1) ℓ).2.2.getD i ByteArray.empty,
+    ⟨hms, p.ligerito.recursiveCaps[ℓ - 1]!,
+      (openAt p.ligerito (sch.levels.size - 1) ℓ).2.2.getD i ByteArray.empty,
       sibsOf (openAt p.ligerito (sch.levels.size - 1) ℓ).2.1
         ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap) i,
-      hcs, hcw, rfl, merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure i hi, merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure i,
-      hlog i hi⟩
-  refine ⟨sch.levels.getD ℓ default, 2 ^ (sch.levels.getD ℓ default).lanes,
+      hcs, fun b hb => (hcw b hb).trans hdl, rfl, merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure i hi,
+      fun b hb => (merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure i b hb).trans hdl, hlog i hi⟩
+  refine ⟨(Setup.ofCircuit st).merkle, sch.levels.getD ℓ default, 2 ^ (sch.levels.getD ℓ default).lanes,
     p.ligerito.recursiveCaps[ℓ - 1]!.foldl (· ++ ·) ByteArray.empty, q, _, _, fun he => hab ?_,
     hjq ▸ hop j hj, hjq' ▸ hop j' hj'⟩
   rw [hja, hjb, he]

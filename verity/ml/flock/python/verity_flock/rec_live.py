@@ -1,7 +1,7 @@
 """``rec/inner-transcript/v1``: the inner session of a recursive session (hiding model architectures), run by the unmodified
 C-Flock prover against a verifier that never sees the hidden statement or the prover's messages.
 
-    python -m verity_flock.rec_live --listen 127.0.0.1:PORT --out DIR --schedule FILE [--sessions 1]
+    python -m verity_flock.rec_live --listen 127.0.0.1:PORT --out DIR --schedule FILE [--draw FILE] [--sessions 1]
     python -m verity_flock.rec_live --schedule-for STATEMENT         a statement's schedule (flock-circuit statement's output)
     python -m verity_flock.rec_live --schedule-of PUBLIC_JSON        a record's schedule, to compare with the one it was held to
 
@@ -54,6 +54,13 @@ coin before the session (`CoinServer.commit_coins`, from the schedule alone: one
 points as round 0 of stream ``link``, each to `coin_message` under a fresh salt of the challenger's). A proxy given those
 commitments (``commitments``) stops a session whose coins do not open their commitment or come without an opening, and a
 proxy given none stops one whose coins come with an opening, as the contract decides under the public input's ``coins``.
+
+**The draw.** ``Register`` is answered with the verifier's draw (``--draw``, `full_draw`: the stratified law at K = the
+population over the verifier's own program and partition object, so every stratum draws all its units), or ``null``
+without one; the session record keeps it as ``unit_draw``. The prover then proves the drawn units' statement, the
+population's in order with the draw in its header, so its Σ is the drawn statement's and its shape (and the schedule) the
+population's. ``verify`` holds the draw to its own law (``--stratified N --program --partition``): a session without one
+is refused (D12), and the soundness headline at the full draw has no sampling term.
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (committed as its salted
@@ -496,6 +503,20 @@ def schedule_for(statement: dict, holo: bool = False, stacked: int | None = None
                        for s, rs in streams.items() for k, (n, tops, level0, e) in enumerate(rs)]}
 
 
+def full_draw(program, query: dict) -> dict:
+    """The verifier's draw for an inner session over its own program and partition query: the stratified law at K = the
+    population (`one_stage.draw.derive`), whose every stratum draws all its units (`stratum_k(N, size, N) = size`), so the
+    draw is every unit, ascending. ``verify --stratified N --program --partition`` derives the same law."""
+    from verity.core.protocols.sampled_proofs.one_stage import draw as D
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    n = sum(hi - lo for _, rs in P.strata(program, query) for lo, hi in rs)
+    law = D.derive(program, query, {"law": "stratified", "k": n})
+    if any(s["k"] != sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]):
+        raise ValueError("the stratified law at K = the population leaves a unit undrawn")
+    return {**law, "population": n, "units": list(range(n))}
+
+
 def statement_of(text: str) -> dict:
     """The ``STATEMENT`` record in ``flock-circuit statement``'s output (its other lines ignored), or the text as one JSON
     object."""
@@ -704,12 +725,17 @@ class Proxy:
     (`Flock.Firewall.Contract`'s rule). ``registration``: the circuit registration (``verity/registration/v2``) and
     ``bound`` the digest the statement's META binds, which it must have; ``registered``: by table, the prover's opening of the registered top (`register_top`) of each table the schedule gives
     no root at ``Commit``, which the registration names by the table's name and its stream's binding round must bind
-    (`register`)."""
+    (`register`). ``draw``: the verifier's draw (`full_draw`), answered at ``Register`` and kept as the record's
+    ``unit_draw``."""
 
     def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, *, schedule: dict,
                  commitments: dict[str, list[str]] | None = None, registration: dict | None = None,
-                 registered: dict[str, dict] | None = None, bound: str | None = None):
+                 registered: dict[str, dict] | None = None, bound: str | None = None, draw: dict | None = None):
+        if draw is not None and not (isinstance(draw, dict) and isinstance(draw.get("law"), str)
+                                     and type(draw.get("population")) is int and isinstance(draw.get("units"), list)):
+            raise ValueError("a draw is a unit_draw object: law, population, units")
         self.coins = coins
+        self.draw = draw
         self.fresh_salt = fresh_salt
         self.schedule = check_schedule(schedule)
         self.commitments = commitments
@@ -808,7 +834,7 @@ class Proxy:
         if self.verdict is not None:
             raise ValueError("session finished")
         if t == REQ_REGISTER:
-            return resp_str(RESP_DRAW, "null")
+            return resp_str(RESP_DRAW, "null" if self.draw is None else canonical(self.draw))
         if t == REQ_HELLO:
             if self.hello is not None:
                 raise ValueError("a second Hello")
@@ -951,7 +977,7 @@ class Proxy:
         return {"kind": SESSION_KIND, "hello": self.hello, "link": link, "link_mode": "exchange",
                 "config": {"profile": h["profile"], "reps": h["reps"], "flavor": h["flavor"], "require_link": True, "prime_live": False,
                            "tables": [{"name": t, "binding": "R1cs (rec proxy: the statement digest is the prover's)"} for t in h["tables"]]},
-                "unit_draw": None, "aborted": None, "verdict": self.verdict, "streams": streams, "prime": None, "coin_tree": None,
+                "unit_draw": self.draw, "aborted": None, "verdict": self.verdict, "streams": streams, "prime": None, "coin_tree": None,
                 "coin_seed": None, "link_sha512": _dg(lb),
                 "proof_sha512": [{"stream": f"{t}/rep{r}", "bytes": len(b), "sha512": _dg(b)} for (t, r), b in sorted(self.proofs.items())]}
 
@@ -981,7 +1007,7 @@ class Proxy:
 def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None,
           sessions: int = 1, done: Callable[[dict], None] | None = None, *, schedule: dict, firewall=None,
           parts: list[str] | None = None, stream: str = "rec", budget: int | None = None, release: dict | None = None,
-          now_ms: Callable[[], int] = lambda: time.time_ns() // 1_000_000) -> list[dict]:
+          now_ms: Callable[[], int] = lambda: time.time_ns() // 1_000_000, draw: dict | None = None) -> list[dict]:
     """Accept connections on ``listen`` until ``sessions`` of them have each carried a session, one connection each (several:
     a prover's ``--warm`` and ``--runs`` sessions), write each into ``out``, or ``out/s<k>`` when there are several, and
     return their summaries, each also passed to ``done`` as it ends. A session that finishes is written whole
@@ -997,7 +1023,8 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     statement]}``, public) is each recursive session's release schedule, its ``start_ms`` the time (``now_ms``) its
     connection was accepted, so that no release time depends on how long the inner session took. A recursive session the
     firewall cannot open as given (other than `Refused`: the caller's fault, such as a schedule for other statements)
-    closes the connection unserved, and ``serve`` raises."""
+    closes the connection unserved, and ``serve`` raises. ``draw``: the verifier's draw every session's ``Register`` is
+    answered with (`Proxy`)."""
     host, port = listen.rsplit(":", 1)
     res: list[dict] = []
     if firewall is not None and parts is None:
@@ -1027,7 +1054,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 except BaseException:
                     conn.close()
                     raise
-            proxy = Proxy(CoinServer(rand), schedule=schedule)
+            proxy = Proxy(CoinServer(rand), schedule=schedule, draw=draw)
             try:
                 with conn, conn.makefile("rb") as rf, conn.makefile("wb") as wf:
                     while (req := read_frame(rf)) is not None:
@@ -1075,6 +1102,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out")
     ap.add_argument("--sessions", type=int, default=1, help="sessions to serve, one connection each (several: out/s<k>/)")
     ap.add_argument("--schedule", help="the schedule every session is held to (required to serve: --schedule-for's)")
+    ap.add_argument("--draw", help="the verifier's draw, answered at Register and recorded (rec_inner.py stage's draw.json)")
     ap.add_argument("--schedule-for", metavar="STATEMENT",
                     help="print the schedule of a statement (flock-circuit statement's output, or its STATEMENT record) and exit")
     ap.add_argument("--holo", action="store_true", help="--schedule-for: hidden unit circuits' rounds (h after z_partial)")
@@ -1113,7 +1141,8 @@ def main(argv=None) -> int:
         fw = Firewall(Path(a.firewall))
     serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True), sessions=a.sessions,
           done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True), schedule=json.loads(Path(a.schedule).read_text()),
-          firewall=fw, parts=None if a.parts is None else a.parts.split(","), stream=a.stream, budget=a.budget, release=release)
+          firewall=fw, parts=None if a.parts is None else a.parts.split(","), stream=a.stream, budget=a.budget, release=release,
+          draw=json.loads(Path(a.draw).read_text()) if a.draw else None)
     sys.stdout.flush()
     return 0
 
