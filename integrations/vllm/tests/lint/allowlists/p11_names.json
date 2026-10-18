@@ -423,7 +423,6 @@
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-round", "symbol": "TargetProfile.lag", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-round", "symbol": "TargetProfile.modelled_engine", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-round", "symbol": "TargetProfile.moe_construction_declaration", "detail": "R1N"},
-    {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-round", "symbol": "fp8_block_gemm_kernel_of", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-round", "symbol": "parse_target_arg", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "doc-board-id", "symbol": "StochasticEngineStep", "detail": "M-nnnn"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "doc-board-id", "symbol": "StochasticRequest", "detail": "M-nnnn", "count": 2},

@@ -1252,6 +1252,145 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
         throw s!"rec-pub: {unit}: port {reg.name}'s table row {r} reads row {x} of {reg.value}, and {why}"
       | none => throw s!"rec-pub: {unit}: port {reg.name}: the inner transcript fixes no {reg.value}"
 
+/-! ### The circuit table's tops and the link points, at every shape -/
+
+/-- `rec-top-L<l>`'s `l` (`rec_outer.top_value_name`): the circuit table's level-`l` tops, which that level's openings
+climb to. -/
+def topLevel (value : String) : Option Nat :=
+  if value.startsWith "rec-top-L" then (value.drop 9).toString.toNat? else none
+
+/-- What the coin server's record of the inner session fixes of the circuit table at every shape, dense, holo or
+candidate 3's: Hello's one table (`table`), its level-0 top (`root`, `root_B` from `Commit`, the record's `link.roots`,
+one `b ‖ c` a node), each rep's later salted tops (`tops`, rep `x` at `x`: each top's round and its nodes' `b ‖ c`, in
+round order, `rec_vstar.tops` past level 0) and the link points it drew after `root_B` (`points`, one array of `m` a
+point). -/
+structure InnerLink where
+  table : String
+  root : Array ByteArray
+  tops : Array (Array (Nat × Array ByteArray))
+  points : Array (Array F128)
+  deriving Inhabited
+
+private def f128sOfHex (ctx : String) (xs : Array String) : V (Array F128) :=
+  xs.mapM fun h => (f128OfHex h).mapError (s!"rec inner transcript: {ctx}: " ++ ·)
+
+/-- **The circuit table's tops and the link points, as the coin server recorded them** (`--rec-inner-transcript`,
+`rec/inner-transcript/v1`): Hello's one table `t`, its `root_B` (`link.roots`, `t`'s alone), every salted top of
+`t/rep0`'s and `t/rep1`'s rounds in round order (a round's copies of a level-0 top, `level0`, are not tops of their own),
+and the link points (`link.points`, `hello.link`'s `points × m` coins). The inner session's record `record` (the
+prover's, which check 5 reads, `RecCoins.Inner.load`) must hold those very points: check 5 takes the extra claims at the
+record's points, and only the coin server's were drawn after `root_B`. -/
+def innerLink (tr : Json) (record : String) : V InnerLink := do
+  if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then
+    throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
+  let hello := (tr.getObjVal? "hello").toOption.getD Json.null
+  let tables := (hello.getObjValAs? (Array String) "tables").toOption.getD #[]
+  let some t := (if tables.size == 1 then tables[0]? else none)
+    | throw s!"rec inner transcript: Hello's tables {tables}, not one table"
+  let link := (tr.getObjVal? "link").toOption.getD Json.null
+  let roots ← match link.getObjVal? "roots" with
+    | .ok (.obj kvs) => pure kvs.toArray
+    | _ => throw "rec inner transcript: link.roots is not an object"
+  let some xs := (if roots.size == 1 && roots[0]!.1 == t then (roots[0]!.2.getArr?).toOption else none)
+    | throw s!"rec inner transcript: the committed roots are {roots.toList.map (·.1)}'s, not {t}'s alone, as a list"
+  let root ← hexList s!"{t}'s root_B" (xs.map fun x => (x.getStr?).toOption.getD "")
+  if root.isEmpty then throw s!"rec inner transcript: {t}'s root_B has no nodes"
+  let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
+  let tops ← #[0, 1].mapM fun (x : Nat) => do
+    let s := s!"{t}/rep{x}"
+    let rs := (rounds.filter fun r => (r.getObjValAs? String "stream").toOption == some s).qsort fun a b =>
+      (a.getObjValAs? Nat "k").toOption.getD 0 < (b.getObjValAs? Nat "k").toOption.getD 0
+    if rs.isEmpty then throw s!"rec inner transcript: {s} has no round"
+    let mut out : Array (Nat × Array ByteArray) := #[]
+    for r in rs do
+      let k := (r.getObjValAs? Nat "k").toOption.getD 0
+      let .ok ts := r.getObjValAs? (Array (Array String)) "tops"
+        | throw s!"rec inner transcript: {s} round {k}'s tops are not lists of b ‖ c"
+      for (top, i) in ts.zipIdx do
+        if top.isEmpty then throw s!"rec inner transcript: {s} round {k}'s top {i} has no nodes"
+        out := out.push (k, ← hexList s!"{s} round {k}'s top {i}" top)
+    pure out
+  let spec := (hello.getObjVal? "link").toOption.getD Json.null
+  let (.ok np, .ok m) := (spec.getObjValAs? Nat "points", spec.getObjValAs? Nat "m")
+    | throw "rec inner transcript: Hello's link names no points and m"
+  let .ok flat := link.getObjValAs? (Array String) "points"
+    | throw "rec inner transcript: link.points is not a list of coins"
+  if flat.size != np * m then throw s!"rec inner transcript: {flat.size} link coins for {np} points of {m}"
+  let coins ← f128sOfHex "link.points" flat
+  let points := (Array.range np).map fun i => coins.extract (i * m) (i * m + m)
+  let rec_ ← match Json.parse record with
+    | .ok j => pure j
+    | .error e => throw s!"rec inner transcript: the inner session's record is not JSON: {e}"
+  let .ok rp := (rec_.getObjVal? "link" >>= (·.getObjValAs? (Array (Array String)) "points"))
+    | throw "rec inner transcript: the inner session's record holds no link points (link.points)"
+  let held ← rp.mapM (f128sOfHex "the inner session's record's link points")
+  if held != points then
+    throw ("rec inner transcript: the inner session's record's link points are not the ones the coin server drew " ++
+      "(link.points): check 5 would take the extra claims at points the prover chose")
+  return { table := t, root, tops, points }
+
+/-- Row `x` of `rec-top-L<l>` (`rec_outer.TopValue`): at level 0 node `x` of `root_B`, the one top both reps' openings
+climb to; at a later level `l` rep 0's level-`l` top, then rep 1's (each rep's `l`-th top, `l − 1` past `root_B`). -/
+def topRow (lk : InnerLink) (l x : Nat) : Except String (String × ByteArray) :=
+  if l == 0 then
+    match lk.root[x]? with
+    | some c => .ok (s!"node {x} of {lk.table}'s root_B", c)
+    | none => .error s!"{lk.table}'s root_B has {lk.root.size} nodes, no node {x}"
+  else
+    match (lk.tops[0]?.bind (·[l - 1]?)), (lk.tops[1]?.bind (·[l - 1]?)) with
+    | some (_, t0), some (_, t1) =>
+      match t0[x]?, t1[x - t0.size]? with
+      | some c, _ => .ok (s!"node {x} of rep 0's level {l} top", c)
+      | none, some c => .ok (s!"node {x - t0.size} of rep 1's level {l} top", c)
+      | none, none => .error s!"the reps' level {l} tops have {t0.size + t1.size} nodes, no row {x}"
+    | _, _ => .error s!"the inner transcript has no level {l} top of both reps"
+
+/-- Port `name`'s table rows `row r` of `rec-top-L<l>` (`value`), row `r` at the registered position `positions[r]`, are
+`topRow lk l`'s there. -/
+def checkTopRowsAt (unit name value : String) (lk : InnerLink) (l : Nat) (positions : Array Nat)
+    (row : Nat → ByteArray) : V Unit := do
+  for r in [0:positions.size] do
+    match topRow lk l positions[r]! with
+    | .ok (what, c) =>
+      if row r != c then
+        throw s!"rec-tops: {unit}: port {name}'s table row {r} is not {what}, which the coin server committed"
+    | .error why =>
+      throw s!"rec-tops: {unit}: port {name}'s table row {r} reads row {positions[r]!} of {value}, and {why}"
+
+/-- **`pub.bin`'s rows at its reads of the circuit table's tops are the `b ‖ c` the coin server recorded**: for each port
+of the verifier's reads file registering `rec-top-L<l>` (`topLevel`), every row of the port's table, at the registered
+position `x` it opens, is row `x` of `topRow lk l` (`checkTopRowsAt`). So an opening's `out` row opens a node the firewall
+committed before the coins after it, never a top the prover chose after them. -/
+def checkTopRows (st : Stmt) (registered : Option (Array Registered.Port)) (link : Option InnerLink) : V Unit := do
+  let unit := st.c.unit.name
+  let regs := (registered.getD #[]).filter fun reg => (topLevel reg.value).isSome
+  let some reg0 := regs[0]? | return
+  let some lk := link
+    | throw s!"rec-tops: {unit}: the verifier holds no inner transcript (--rec-inner-transcript with --rec-inner-session), so no committed tops to check port {reg0.name}'s rows of {reg0.value} against"
+  let some t := st.pub.tables | throw s!"rec-tops: {unit}: {reg0.name} is not a table of a shared-row file"
+  for reg in regs do
+    let some l := topLevel reg.value | continue
+    let some p := (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name)
+      | throw s!"rec-tops: {unit}: {reg.name} is not a row of the circuit"
+    let (positions, _) ← Registered.entry st.pub reg
+    checkTopRowsAt unit reg.name reg.value lk l positions (Registered.tableRow st.pub t p)
+
+/-- **The circuit table's tops are its schedule's** (`rec_live.schedule_for`): `root_B` has level 0's `2^cap` nodes, and
+each rep's later tops sit at its schedule's rounds with its node counts (`repRounds` of the inner shape `i`,
+`holoRepRounds` when its circuits are private), so a rep's `l`-th top past `root_B` is level `l`'s, committed in the round
+that absorbs it, before that level's query coins. -/
+def checkLinkRounds (i : Inner) (lk : InnerLink) : V Unit := do
+  let (some sch, some rep) := (fast100 i.m, (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims)
+    | throw s!"rec-inner: the inner shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) has no fast100 schedule"
+  let cap0 := 2 ^ (sch.levels.getD 0 default).cap
+  if lk.root.size != cap0 then
+    throw s!"rec inner transcript: {lk.table}'s root_B has {lk.root.size} nodes, and its schedule's level 0 top {cap0}"
+  let want := (List.range rep.size).flatMap fun k => (rep.getD k default).2.1.toList.map (k, ·)
+  for (tops, x) in lk.tops.toList.zipIdx do
+    let got := tops.toList.map fun (k, t) => (k, t.size)
+    if got != want then
+      throw s!"rec inner transcript: rep {x}'s tops (round, nodes) are {got}, and its schedule's {want}"
+
 /-- Table `j`'s draw among `count` tables of a session drawn by `d`, as `Stmt.setupTables` builds it: `d` at one table,
 else part `j` of `d`'s units, a subset draw of the population. -/
 def tableDraw (d : Json) (count j : Nat) : Json :=
