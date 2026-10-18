@@ -674,10 +674,11 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
     """cuBLAS's route at each (M, K, N) on this GPU, read from the words of `torch.mm(x, w.t(), out=y)` as the served wrapper calls
     it (W rows past the probe's zero): x all ones against `bf16_gemm_check.splitk_count_probe`'s rows reads the split counts a
     partition could have (`fit_cublas_split_k`); of the routes those leave (`cublas_routes_at`), the one whose twin
-    (`cublas_route_rows`) computes every word of `route_probe_rows`' spread and cancelling rows is the route, and none or more
-    than one is refused, naming each route's missed words."""
+    (`cublas_route_rows`) computes every word of `route_probe_rows`' spread and cancelling rows (drawn from the generator of
+    seed (M, K, N)) is the route, and none or more than one is refused, naming each route's missed words."""
     import torch
 
+    from verity_vllm.commit import challenge as CH
     from verity_vllm.program.registry import bf16_gemm_check as BC
 
     to = lambda a: torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
@@ -694,7 +695,8 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
         probe, x = BC.splitk_count_probe(K, N), np.full((M, K), 0x3F80, np.uint16)
         fits = BC.fit_cublas_split_k(x[:1], probe, mm(M, K, N, x, probe)[:1], out="bf16")
         rows = sorted({0, M // 2, M - 1})
-        tests = [(xr[rows], w, mm(M, K, N, xr, w)[rows]) for xr, w in BC.route_probe_rows(M, K, min(N, 256))]
+        tests = [(xr[rows], w, mm(M, K, N, xr, w)[rows])
+                 for xr, w in BC.route_probe_rows(M, K, min(N, 256), CH.generator([M, K, N]))]
         missed = {json.dumps(r): sum(int(np.count_nonzero(BC.cublas_route_rows(r, a, w) != y)) for a, w, y in tests)
                   for r in BC.cublas_routes_at(fits)}
         exact = [r for r, n in missed.items() if n == 0]

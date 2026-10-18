@@ -307,7 +307,7 @@ def test_route_probe_rows_tell_every_candidate_route_apart(M, K, SPLIT_K) -> Non
     """`served routes` keeps the one candidate route (`cublas_routes_at`) whose twin computes every word of `route_probe_rows`; on
     the rows it reads, each pair of candidates at a split count differs somewhere, so the device's route is never ambiguous."""
     rows = sorted({0, M // 2, M - 1})
-    tests = [(x[rows], w) for x, w in C.route_probe_rows(M, K, 64)]
+    tests = [(x[rows], w) for x, w in C.route_probe_rows(M, K, 64, np.random.default_rng([M, K]))]
     outs = [(r, [C.cublas_route_rows(r, x, w) for x, w in tests]) for r in C.cublas_routes_at([SPLIT_K])]
     for i, (a, pa) in enumerate(outs):
         for b, pb in outs[i + 1:]:
