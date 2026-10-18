@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .queue import IDENTITY, Member, Queue, QueueError, _git, _out
+from .queue import IDENTITY, TOUCHED_LOGS, TOUCHED_REPORT, Member, Queue, QueueError, RemoteSuites, _git, _out, touched_suites
 
 #: who hears what drive can't settle (13 Oct: the other Project's lander, its addressee before, acts on none of it)
 CI = "@ci"
@@ -76,8 +76,6 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests")
 #: what a verdict says when it passed with `--defer`'s steps still running
 DEFERRED = "every step but the deferred ones passed"
-#: where a touched-suites run (`train.sh COMMIT MACHINE --against BASE`, the quick tier's job) writes its report and logs
-TOUCHED_REPORT, TOUCHED_LOGS = "out/suites.json", "out/logs"
 #: a Lake package's lock, which a train's Lean check may regenerate (`merge.LOCK`)
 LOCK = "lean-audit.json"
 #: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
@@ -135,16 +133,24 @@ def authed(auth: tuple[str, ...]):
                 os.environ[k] = v
 
 
-def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
-                 against: str | None = None) -> tuple[list[str], str]:
+def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = ()) -> tuple[list[str], str]:
     """`train.sh COMMIT MACHINE [--agreement]` from the queue's clone: (the run ids it printed, its output's tail).  Git never
     prompts (12 Oct: train.sh's fetch in the queue's clone, which has no credential helper, waited on a password at the tty)."""
-    argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
-            *(["--against", against] if against else [])]
+    argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else [])]
     r = subprocess.run(argv, cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL,
                        env={**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"})
     m = RUN_RE.search(r.stdout)
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
+
+
+def touched_launch(repo: Path, commit: str, base: str, auth: tuple[str, ...] = (),
+                   how: RemoteSuites | None = None) -> tuple[list[str], str]:
+    """A train's touched-suites run (`queue.touched_suites` on a node, `RemoteSuites`: `research run --on auto`, outside the check
+    slots) of ``commit`` against ``base``, shipped from a temporary worktree of the queue's clone: (its run ids, its output's
+    tail).  It runs as lane ci, with the queue's credentials, and git never prompts."""
+    how = how or RemoteSuites(env={**auth_env(auth), "RESEARCH_LANE": "ci"})
+    t = touched_suites(repo, commit, base, how)
+    return t.ids, (t.tail or "; ".join(t.notes))[-600:]
 
 
 #: what a running check has written of its steps and suites so far (check.py's `STEPS_LOG`, suites.py's `failing_path` of each
@@ -410,9 +416,10 @@ class Driver:
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
         #: with pytest deferred, the suites a train's change reaches run before it lands (CI-57: #2271 and #2382 each reverted
-        #: landings a 2-minute run of one suite would have caught): `train.sh COMMIT MACHINE --against BASE`
+        #: landings a 2-minute run of one suite would have caught): `touched_launch`, on a node outside the check slots, so
+        #: ``machine`` (the trains') isn't its
         self.launch_touched: Callable[[Path, str, str, str], tuple[list[str], str]] = (
-            lambda repo, commit, machine, base: train_launch(repo, commit, machine, False, auth=q.auth, against=base))
+            lambda repo, commit, machine, base: touched_launch(repo, commit, base, q.auth))
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
         self.repo, self.dry_run, self._seen, self._prs = q.workdir, False, {}, None
         self._drive: dict | None = None

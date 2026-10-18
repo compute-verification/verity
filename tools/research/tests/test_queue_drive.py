@@ -1018,7 +1018,7 @@ def _touched_run(tmp_path, test: str, trace: str):
 def test_with_pytest_deferred_a_train_lands_only_once_its_touched_suites_pass(world, monkeypatch, tmp_path):
     """CI-57: #2271 (17 Oct) and #2382 (18 Oct) each landed with pytest deferred and reverted a landing that a 2-minute run of
     the one suite they touched would have stopped. With pytest deferred, drive runs the suites a train's change reaches
-    (`train.sh COMMIT MACHINE --against BASE`) beside its check, and lands it once both have passed."""
+    (`touched_launch`) beside its check, and lands it once both have passed."""
     from research.drive import CHECK_STEPS
 
     h = Harness(world, monkeypatch)
