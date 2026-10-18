@@ -27,12 +27,12 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. A property of code, stated against its Lean functions, is
   `Properties.<Protocol>`, proved in `Properties.Proofs.<Protocol>` (package `security_properties`, which may require
   `security` and the code, never `security_proofs`). No new package: an area is a directory in each tree.
-- **Code the verifier runs costs O(description)** (AGENTS.md "Design rules"): summarize per Definition and multiply
-  through batch members and scan iterations, never walk the unrolled circuit; `tests/test_verifier_cost.py` refuses the
-  walk, and its failure says the fix.
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
+- **Code the verifier runs costs O(description)** (AGENTS.md "Design rules"): summarize per Definition and multiply
+  through batch members and scan iterations, never walk the unrolled circuit; `tests/test_verifier_cost.py` refuses the
+  walk, and its failure says the fix.
 - **Parallel proof work runs against fixed statements** (Daniel, 8 Oct). Before any worker starts, the final theorem's
   statement and each open piece's statement are on the branch; each worker proves its piece against that statement, and
   integration builds the final theorem against them continuously. What isn't closed by the deadline is a gap list on the
