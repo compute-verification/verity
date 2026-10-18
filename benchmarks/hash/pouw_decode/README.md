@@ -33,12 +33,11 @@ served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/p
     called copy, so the last CTA's tail fetches 5 paired sites cold on its SM instead of 10 (an inlined paired site is
     about 7 KB, the producer's 23 KB); `PD_LATE` (512, with `PD_PAIR`; variants 819, 851 and 979 are 307, 339 and 467
     with it), `pd_commit`'s salt, templates and frame leaf with its pads while warp 0 folds, a warp each on warps 1-3,
-    rather than beside the segments, whose pairs at two segment warps (down) they share SMSPs with; `PD_INSEG` (1024,
-    with `PD_LOOP`), the segments' producer inlined and the tail's alone called, which lost in r20261018-225110-fbef
-    (variants 1843, 1875 and 2003 spill 84-92 bytes and trail 819, 851 and 979 at every shape); `PD_SALT1` (2048, with
-    `PD_LATE`; variants 2867, 2899 and 3027 are 819, 851 and 979 with it), at one segment warp, where the salt's warp has
-    an SMSP of its own beside the segments' pair, the salt there as before, so only the templates and the frame leaf
-    overlap the fold. The counter's fences are acquire-release (`pd_fence`), not `__threadfence`'s
+    rather than beside the segments, whose pairs at two segment warps (down) they share SMSPs with. Measured and
+    removed: under `PD_LOOP` the segments' producer inlined (r20261018-225110-fbef: 84-92 bytes of spill, behind
+    `PD_LATE` at every shape), and under `PD_LATE` the salt kept beside the segments at one segment warp
+    (r20261018-230602-5632: behind `PD_LATE` at every shape; the fold's slowdown under `PD_LATE` comes from the
+    templates and the frame leaf beside it, not the salt). The counter's fences are acquire-release (`pd_fence`), not `__threadfence`'s
     sequentially consistent one. Pearl-C's unrolled
     compression is about 3,500 instructions (56 KB), and a call's serial compressions are each at a site of their own,
     so inlined they are each fetched cold. On its thread the schedule is a third of a compression's cycles.
@@ -69,7 +68,7 @@ research run --on vy-nebius-2 --project verity --campaign hash-loop --source . -
 
 Schedules (`bench.Shape.schedules`): `ref_serial` is the served call, `ref_nohash` the call without hashing, and
 `ref_deferred` the served launches with the tile leaves on a side lane. `pd_serial_V` is pd's call on one stream in
-variant V, for every variant. For the variants in `PD_SIDE` (default 19, 211, 339, 467, 851, 979, 2899 and 3027), `pd_deferred_V` puts pd's tile leaves on a
+variant V, for every variant. For the variants in `PD_SIDE` (default 19, 211, 339, 467, 851 and 979), `pd_deferred_V` puts pd's tile leaves on a
 side lane, and `pd_side_tree_V` also puts A's tree and seed_A on a side lane; its bytes are unchanged only when m16 is a
 multiple of 64. `pd_side_tree_V_proposal` is the same schedule at other m16, where filler rows read line_a, so it is
 timed but its E_A lines are not served bytes.

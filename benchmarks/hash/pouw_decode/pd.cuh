@@ -32,10 +32,7 @@
 // the producer one called copy (`pd_serve`), since each inlined paired site is about 7 KB (the producer's 23 KB) fetched
 // cold on the CTA's SM, and the last CTA's tail runs each of its sites once; PD_LATE (with PD_PAIR), pd_commit's salt,
 // templates and frame leaf with its pads during the fold, a warp each (1, 2, 3), rather than beside the segments, whose
-// pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers; PD_INSEG (with PD_LOOP), the
-// segments' producer inlined, the tail's alone called; PD_SALT1 (with PD_LATE), at cw = 1, where the salt's warp has an
-// SMSP of its own beside the segments' pair, the salt there as before, so that only the templates and the frame leaf
-// overlap the fold (whose lone lane's round chain the helpers slow).
+// pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  pd_host.cpp builds this file for the host tests.
@@ -66,8 +63,8 @@ inline uint32_t pd_smid() { return 0; }
 #endif
 
 constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_STAMP = 32, PD_WHOLE = 64,
-              PD_GROUP = 128, PD_LOOP = 256, PD_LATE = 512, PD_INSEG = 1024, PD_SALT1 = 2048;
-#define PD_VARIANT_LIST(X) X(19) X(211) X(307) X(339) X(467) X(819) X(851) X(979) X(2867) X(2899) X(3027)
+              PD_GROUP = 128, PD_LOOP = 256, PD_LATE = 512;
+#define PD_VARIANT_LIST(X) X(19) X(211) X(307) X(339) X(467) X(819) X(851) X(979)
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
 enum { PD_SEED_A = 0, PD_NOISE_LINE = 1, PD_LINE = 2 };
@@ -320,9 +317,6 @@ DEV void pd_pserve(int pi) {
 __device__ __noinline__ void pd_pserve_call(int pi) { pd_pserve(pi); }
 template <int V> DEV void pd_serve(int pi) {
   if constexpr ((V & PD_LOOP) != 0) pd_pserve_call(pi); else pd_pserve(pi);
-}
-template <int V> DEV void pd_serve_segs(int pi) {
-  if constexpr ((V & PD_INSEG) != 0) pd_pserve(pi); else pd_serve<V>(pi);
 }
 DEV void pd_pstop() {   // the consumer warp: its producer returns
   const int pi = threadIdx.x >= 32;
@@ -859,13 +853,11 @@ template <int V> DEV void pd_commit_t(const Args a) {
   static_assert(PD_KW_BLOCKS * 80 >= PD_NODES && PD_KW_BLOCKS * 80 >= 96 * PD_MAX_LEVELS, "kw holds the builders and the levels");
   constexpr bool PAIR = (V & PD_PAIR) != 0, LATE = (V & PD_LATE) != 0;
   static_assert(!LATE || PAIR, "PD_LATE's helpers are warps 1-3, which PD_PAIR's 2 cw + 2 warps always have");
-  static_assert(!(V & PD_SALT1) || LATE, "PD_SALT1 is PD_LATE's");
   static_assert(!LATE || PD_PAIR_WORDS >= 96 * PD_MAX_LEVELS, "PD_LATE's builders fit in pair 0's buffer");
   const int count = a.i[0], k = a.i[1], s = k / 256, cw = (s + 31) / 32, sw = PAIR ? 2 * cw : cw;
   const int c1 = cw >= 2 ? 1 : 2, p1 = cw >= 2 ? cw + 1 : 3;
   const int r = blockIdx.x, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
   const int width = count <= 1 ? 1 : 1 << (32 - __clz(count - 1)), levels = 31 - __clz(width);
-  const bool salt1 = (V & PD_SALT1) != 0 && cw == 1;
   if (count > PD_MAX_ROWS || ((V & PD_ROUNDS) && s / 2 + 1 > PD_KW_BLOCKS)) __trap();
   if (PAIR && (cw > 2 || pd_dyn_bytes() < (uint32_t)PD_PAIR_SMEM)) __trap();
   const uint64_t dom = a.p[6], scratch = a.p[9], tree = a.p[2], sb = a.p[13];
@@ -933,10 +925,9 @@ template <int V> DEV void pd_commit_t(const Args a) {
       if (tid == 0) pd_stamp<V>(sb, r, PS_SEGS);
       pd_pstop();
     } else {
-      pd_serve_segs<V>(warp - cw);
+      pd_serve<V>(warp - cw);
     }
   } else if (LATE) {
-    if (salt1 && warp == sw) salt();
   } else if (warp < sw) {                           // the row's segments
     if (tid < s) {
       uint64_t st[8], w[16];
@@ -975,7 +966,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
       pd_stamp<V>(sb, r, PS_FOLD);
     }
   } else if (LATE && warp == 1) {
-    if (!salt1) salt();
+    salt();
   } else if (LATE && warp == 2) {                   // a lane a level; the pairs' buffers are idle until the leaf
     templates(lane, pd_dyn());
   } else if (LATE && warp == 3 && lane == 0) {
