@@ -11,8 +11,9 @@ a block of a page is *registered* unless a write reached it and has not complete
   (``encode_slots_`` on the device, `kv_write_reference` here);
 - ``kv_free`` returns pages to filler with their bytes as they are: a registered block stays registered, a dirty block
   (a page freed part-written) stays out of every plan until a later write completes it.  While a memory map records
-  (`record_memory_map`), a freed page's registered blocks are released instead: dirty, so out of every plan until a
-  write completes them again under a new index, as the audit's plans hold only blocks the circuit keeps live.
+  (`record_memory_map`), a freed page's appended blocks (written since the map began) are released instead: dirty, so
+  out of every plan until a write completes them again under a new index, as the audit's plans hold only blocks the
+  circuit keeps live; its untouched blocks stay registered filler until a write reaches them.
 
 A pass reads the weights' regions whole, each KV layer region over the blocks attention reads (the live pages'
 blocks that writes completed), and the filler the `filler_plan` policy picks (`idle_blocks` lists the registered
@@ -477,9 +478,9 @@ class Store:
             raise RuntimeError(f"pages {ix[~p.allocated[ix]][:8].tolist()} are not allocated")
         p.allocated[ix] = False
         if self.memory_map is not None:
-            live = ~p.dirty[ix]
-            p.dirty[ix] = True
-            self.memory_map.free((ix[:, None] * p.per_page + np.arange(p.per_page))[live])
+            keys = (ix[:, None] * p.per_page + np.arange(p.per_page))[~p.dirty[ix]]
+            gone = keys[self.memory_map.free(keys)]
+            p.dirty[gone // p.per_page, gone % p.per_page] = True
         self.counters.add("kv_free", time.perf_counter() - t)
 
     def kv_append(self, appends: Sequence[Append], step: int) -> None:

@@ -10,10 +10,13 @@ d_j       `codec.digest` of the block's payload, its region codec's decoding of 
           (`Store.payload`)
 written   a block `kv_append` completes, at the step that completes it (a dirty block is in no step), and a block
           re-keyed: written again in its slot, the same payload at a fresh j, once its j is as old as the lifetime cap
-freed     a live block of a page `kv_free` returns, though its bytes stay as filler: the audit credits only the blocks
-          the circuit keeps live, so the store releases it (dirty, out of every plan) until a write completes it again
-          under a new j.  And a live block a step's write reaches without completing it: its bytes are no registered
-          block until a write completes it (`Store`'s dirty).  A block is freed once; `kv_alloc` emits nothing
+freed     an appended block (written since the map began, j >= N) of a page `kv_free` returns, though its bytes stay
+          as filler: the audit credits only the blocks the circuit keeps live, so the store releases it (dirty, out of
+          every plan) until a write completes it again under a new j.  A page's untouched blocks, registered before
+          the seed and never written since, stay resident (`kv_free` leaves them in the filler).  And a live block a
+          step's write reaches without completing it: its bytes are no registered block until a write completes it
+          (`Store`'s dirty); a write that completes a block releases the slot's previous one.  A block is freed once;
+          `kv_alloc` emits nothing
 ~~~
 
 Steps.  `Store.kv_append(appends, s)` opens step s's line: the engine has scheduled step s, whose forward is next.  A
@@ -108,10 +111,19 @@ class MemoryMap:
         ids = p.ids[keys // p.per_page, keys % p.per_page]
         return tuple(sorted(int(x) for rn in p.regions for x in (self.store.region(rn).first + ids).tolist()))
 
-    def free(self, keys: np.ndarray) -> None:
-        """`kv_free` released the pool's live blocks ``keys``: freed in the open line, the step whose forward read them
-        last (after the last line closed, in the next)."""
-        (self._open[1] if self._open is not None else self._later).update(self.slots(keys))
+    def free(self, keys: np.ndarray) -> np.ndarray:
+        """`kv_free` returned the pool's live blocks ``keys``: those appended (held at a j of the map's, or written in
+        the open line) are freed in the open line, the step whose forward read them last (after the last line closed,
+        in the next); the rest, registered blocks no write has reached, stay resident.  The mask of those freed."""
+        p, n = self.store.pool, self.header.blocks
+        first = self.store.region(p.regions[0]).first
+        written = self._open[2] if self._open is not None else set()
+        out = np.zeros(len(keys), bool)
+        for u, k in enumerate(np.asarray(keys).tolist()):
+            x = first + int(p.ids[k // p.per_page, k % p.per_page])
+            out[u] = x in written or (self.replay.holds(x) or 0) >= n
+        (self._open[1] if self._open is not None else self._later).update(self.slots(np.asarray(keys)[out]))
+        return out
 
     def check(self, step: int) -> None:
         if type(step) is not int or step <= self.last:

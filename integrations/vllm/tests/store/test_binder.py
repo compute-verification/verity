@@ -198,8 +198,8 @@ def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_reg
 def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     """The binder appends at `Scheduler.schedule`, before the step's forward writes its KV; the memory map takes the
     step's digests at `end` (`Scheduler.update_from_output`), from the bytes the forward wrote.  A page vLLM frees after
-    that (a finished request's, in `update_from_output`) is freed at the same step, whose line closes when the next
-    step opens; each pass names the step it covers.  Without passes (a remote session runs them), the map is the
+    that (a finished request's, in `update_from_output`) frees its appended blocks at the same step, whose line closes
+    when the next step opens, and leaves its untouched filler resident; each pass names the step it covers.  Without passes (a remote session runs them), the map is the
     same."""
     from verity.core.protocols.remote_bandwidth import codec, memory_map
 
@@ -229,7 +229,7 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     kv = s.region("kv/0")
     want = r.kv_caches[0][0, 1].contiguous().view(torch.uint8).numpy().tobytes()
     assert step.step == 0 and [w.slot for w in step.written] == [kv.first + 2, kv.first + 3]
-    assert step.freed == (kv.first + 4, kv.first + 5)
+    assert step.freed == () and {4, 5} <= set(s.idle_blocks("kv/0").tolist())
     assert [w.digest for w in step.written] == [codec.digest(want)] * 2 and want != bytes(4096)
 
 
