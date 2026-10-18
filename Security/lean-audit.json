@@ -784,6 +784,18 @@
    "assumptions": [],
    "type_hash": "0a39e7949bbfaf219bed8ea794cb61c9d969c72aec4d51d6451736b6201ad9e3"
   },
+  "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.CoinFlow.OneReader": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.CoinFlow.PointMass": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.CoinFlow.ViewIndependent": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.Colocation": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Colocation : Accounting.Guarantees.Colocation"],
@@ -5120,6 +5132,22 @@
    "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit": {
     "function": "Pouw.Receipt.liCheckpoint",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.CoinFlow.ViewIndependent": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.CoinFlow.OneReader": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.CoinFlow.PointMass": {
+    "function": "Accounting.CoinFlow.Program.admits",
+    "outcome": "accept"
    }
   },
   "frozen": {

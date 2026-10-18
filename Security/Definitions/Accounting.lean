@@ -6,6 +6,7 @@ import Definitions.Accounting.BoundReceipt
 import Definitions.Accounting.BoundSketch
 import Definitions.Accounting.Bridge
 import Definitions.Accounting.Capacity
+import Definitions.Accounting.CoinFlow
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
 import Definitions.Accounting.Device
@@ -46,7 +47,7 @@ side sources too and for a prover whose memory holds any function of the store, 
 bandwidth audit's node and run, the actual circuit, its physical assumptions, a challenge's reach and the device's
 schedule it induces, the actual circuit's runs, strategies, soundness and the confidence set, a location's window with
 the ring's oracle locations, its provers' cost model, the tags and sketches the audits read, a receipt's skipped values
-and the coin rounds that give (H-μ⁺), the generic-mix game of
+and the coin rounds that give (H-μ⁺), a Program's coin flow under the Build's two coin rules, the generic-mix game of
 receipts bound to the matmul on two locations, the deployed bound receipt's sketch as a two-party protocol, what a
 run's guarantee per run is, PoUW's verdict, credits and help on one node of the actual circuit, and a declared circuit's
 requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are its. -/
