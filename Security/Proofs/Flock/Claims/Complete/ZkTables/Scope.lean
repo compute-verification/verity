@@ -120,7 +120,11 @@ theorem Case.tables (c : Case H rel) :
     unfold Readable.Read.check at this
     rw [hpi] at this
     exact this
-  have hl := (FailClosed.check_ok hc').1.2.2.2.1
+  have hl : p.tags.merkleLeaf = "hm96-sha512/v1" := by
+    rcases (FailClosed.check_ok hc').1.2.2.2.1 with hl | ⟨hz, -⟩
+    · exact hl
+    · rw [hzk] at hz
+      cases hz
   obtain ⟨spec', hset'⟩ := Readable.setup_of_tablesOf htab
   have hset := Ins.setup_read (setupOf_some c.setup).2
   rw [ht] at hset'

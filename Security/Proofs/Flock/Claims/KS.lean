@@ -132,14 +132,16 @@ collisions at both (`ConflictTied`, `FlockDeploy.KS.plain_conflictTied`, `FlockD
 `FlockDeploy.KS.zk_KS_of_table`); the plain scope has one (`FlockDeploy.KS.plain_hone`). Toward `ConflictTied`: a run
 over `OC` within a log, peeled step by step, with the shipped step's verdict alongside (`ConflictOC`,
 `FlockDeploy.KS.Runs`, `FlockDeploy.KS.shadow`); the shipped `hm96-sha512/v1` Merkle check logs every SHA-512 input of
-each opening (`ConflictMerkle`, `FlockDeploy.KS.merkleCheck_logs`), and two accepted openings of one position against
-one cap with different rows collide in the two logs (`FlockDeploy.KS.tiedColl_of_opens`). SHA-512 answered only within a
-log (`ConflictWithin`, `FlockDeploy.KS.hashesIn`) carries a run within its log to a verdict in `V` and back
+each opening (`ConflictMerkle`, `FlockDeploy.KS.merkleCheck_logs`), and so does the plain-leaves one
+(`FlockDeploy.KS.merkleCheck_logsP`), and two accepted openings of one position against one cap with different rows
+collide in the two logs (`FlockDeploy.KS.tiedColl_of_opens`, `FlockDeploy.KS.tiedColl_of_opensP`). SHA-512 answered
+only within a log (`ConflictWithin`, `FlockDeploy.KS.hashesIn`) carries a run within its log to a verdict in `V` and back
 (`FlockDeploy.KS.within`, `FlockDeploy.KS.back`), so the verifier's lemmas under every oracle hold of it: among them
 where level 0's query coins sit in a plain rep's stream, as `ZkQueryRound` has it for the masked one (`PlainQueryRound`,
 `FlockDeploy.KS.plainQueryRound_verifyWithM`). An accepted run decides within its own verifier log, so its verdict
 accepts with SHA-512 answered only within that log, on the link of the tape's first message and on tables committed
-under `hm96-sha512/v1` (`ConflictRun`, `FlockDeploy.KS.acc_within`, `FlockDeploy.KS.checks_hm96`). So an accepted run's
+under `hm96-sha512/v1`, or without `--zk` under plain SHA-512 leaves (`ConflictRun`, `FlockDeploy.KS.acc_within`,
+`FlockDeploy.KS.checks_leaf`, `FlockDeploy.KS.checks_hm96`). So an accepted run's
 column at `q` is an opening of `q` against table 0's `root_B` in the tape's link message, with every SHA-512 input in
 the run's log (`FlockDeploy.KS.Opening`, `FlockDeploy.KS.plain_opening`, `FlockDeploy.KS.zk_opening`), and two runs at
 one tape opening different columns at `q` collide (`FlockDeploy.KS.tiedColl_of_openings`). `TableBoundθ` statement by
@@ -234,11 +236,12 @@ with no level-0 opening off `C` unless it self-clashes, on the outcomes flock-ve
 deployed reader looks up no column off `C` (`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`,
 `Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). At a plain statement in scope with public outputs, that table is
 `plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for (`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`).
-With hidden outputs, the hidden table is `plainTab` too, and the same holds at its openings (`DecodeHidden`:
-`Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`). A statement some run accepts sets
-up at a draw, so the plain chain asks only for the mixture at those decoders, whether or not the outputs are hidden
-(`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`, `FlockDeploy.KS.PlainLiveW`,
-`FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the statement's draw, the event the
+With hidden outputs and `hm96-sha512/v1` leaves, the hidden table is `plainTab` too, and the same holds at its openings
+(`DecodeHidden`: `Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`). A statement some run
+accepts sets up at a draw, so the plain chain asks only for the mixture at those decoders, whether or not the outputs
+are hidden, and for `PlainLiveAccAt` itself at hidden outputs under the plain SHA-512 leaves the scope also admits,
+where the decoders at `leaf512` are not right (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`,
+`FlockDeploy.KS.PlainLiveW`, `FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the statement's draw, the event the
 mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
 `FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the
 rest of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the
@@ -452,7 +455,8 @@ record's view (`FlockDeploy.KS.plainSimPts`, `FlockDeploy.KS.plainSimRun`); wher
 message is empty, and the verdict at the draw refuses an outcome without proof files (`FlockDeploy.KS.PlainSimAbortAt`,
 `FlockDeploy.KS.plainSimAbortAt`). So KS at the deployed plain verifier's trimmed record holds from two parts of the
 concrete simulator: its live self-clashes give `P`'s accepting runs a raw clash, and its fork advantage is at most its
-simulated fork (`PlainParts`: `FlockDeploy.KS.PlainSimClashAt`, `FlockDeploy.KS.PlainSimForkLe`,
+simulated fork, with `PlainLiveAcc` itself at the statements whose outputs are hidden under plain SHA-512 leaves
+(`PlainParts`: `FlockDeploy.KS.PlainSimClashAt`, `FlockDeploy.KS.PlainSimForkLe`, `FlockDeploy.KS.PlainLeavesAcc`,
 `FlockDeploy.KS.plainSimWrPAtD_of_parts`, `FlockDeploy.KS.plain_KS_of_parts`). The level-0 case of that clash holds: a
 level-0 self-clash there is two of the reps' entries at one position with different columns, which are the run's raw
 columns, so the clash needs only its case past level 0 (`PlainClash0`: `FlockDeploy.KS.plainClashQ₀`,

@@ -8,9 +8,24 @@ of the Nebius key reached agents' transcripts at least five times by 6 Oct. Refu
 secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, reading `/proc/*/environ`, and
 `tmux show-environment` (`showenv`) with no name or a secret's (11 Oct: piping tmux's global environment through `cut -d= -f1`
 printed the Nebius key's lines again).
-`compgen -e` lists names only and passes. Also refused: every process's full command line (`ps aux`, `ps -ef`, `ps -eo args`,
-`/proc/*/cmdline`), where a daemon's token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
+`compgen -e` lists names only and passes. Also refused: full command lines of every process or of any selection beyond one pid
+(`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
+token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
 `grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+
+Builds and tests run on our nodes, not on agent VMs (every handle, at Daniel's request, 18 Oct: three OOM kills that day each
+took down every worker on a shared VM). So it refuses, always, a local pytest that names no test file or `-k` selection,
+`lake build|exe`, `cargo build|test|run|check`, nvcc and `circuit-check --all`, pointing to `research run --on auto`; and while
+the VM has less than $AGENT_GUARD_MIN_AVAIL (default 0.25) of its memory available (MemAvailable, or its cgroup's limit less its
+use when that is less) it also refuses the lighter ones: a pytest of named files, `lake env`, the check's suites and `verity
+check`. The same command through `research run`, or over ssh, runs elsewhere and passes; `AGENT_GUARD_LOCAL_OK=1` anywhere in
+the command passes it too.
+
+It also carries messages to running agents, the one channel that reaches a subagent mid-run (`inbox.py send AGENT_ID`).
+A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next allowed
+command is refused once, with the message as the refusal's text, which is what Cursor shows the agent (an `agent_message`
+on an allowed command reaches no one). The agent then re-runs the command. A refused secret-printing command keeps the
+message queued, and the delivered text is appended to `<conversation_id>.delivered`.
 """
 import json
 import os
@@ -19,6 +34,7 @@ import shlex
 import sys
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
+INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
 WRAPPER_ARG_OPTIONS = {"sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t"}, "doas": {"-u", "-C"}, "nice": {"-n"},
                        "timeout": {"-s", "-k", "--signal", "--kill-after"}, "taskset": {"-c", "-p"}}
@@ -109,18 +125,29 @@ def unwrap(words: list[str]) -> list[str]:
     return words
 
 
+def one_pid(args: list[str]) -> bool:
+    """Whether `ps ARGS` selects exactly one process by pid (`-p PID`, `--pid PID`) and nothing else."""
+    sel = [(a, args[i + 1]) for i, a in enumerate(args[:-1]) if a in ("-p", "--pid", "-q", "--quick-pid")]
+    others = any(a in ("--ppid", "-C", "-u", "-U", "-g", "-G", "-t", "--user", "--group", "--sid", "-s") or a.startswith("--ppid=")
+                 for a in args)
+    return len(sel) == 1 and re.fullmatch(r"\d+", sel[0][1]) is not None and not others
+
+
 def every_argv(args: list[str]) -> bool:
-    """Whether `ps ARGS` prints every process's full command line."""
+    """Whether `ps ARGS` prints full command lines of more than one named process: of every process, or of a selection such as
+    `--ppid N`, `-C NAME` or `-u USER` (17 Oct, INF-52: `ps -o pid,etime,cmd --ppid N` printed a git child's token-bearing URL)."""
     fmt = next((args[i + 1] for i, a in enumerate(args[:-1])
                 if a == "--format" or re.fullmatch(r"-?[a-zA-Z]*[oO]", a)), None)
     fmt = fmt or next((a.split("=", 1)[1] for a in args if a.startswith("--format=")), None)
     shown = fmt is None or bool(re.search(r"\b(args|cmd|command)\b", fmt))
-    bsd = [a for a in args if not a.startswith("-") and re.fullmatch(r"[a-zA-Z]+", a) and a != fmt]
+    bsd = [a for i, a in enumerate(args) if not a.startswith("-") and re.fullmatch(r"[a-zA-Z]+", a) and a != fmt
+           and not (i and args[i - 1].startswith("-"))]
     short = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
     if any(set(b) & set("ax") for b in bsd):
         return shown and not any("c" in b for b in bsd)
-    everyone = bool(set(short) & set("eA")) or "--everyone" in args or "--deselect" in args
-    return everyone and (bool(set(short) & set("fF")) if fmt is None else shown)
+    if one_pid(args):
+        return False
+    return bool(set(short) & set("fF")) if fmt is None else shown
 
 
 def refused(words: list[str], filtered: bool = False) -> bool:
@@ -194,22 +221,144 @@ def refused_text(text: str) -> bool:
         return bool(FALLBACK.search(text))
 
 
+ALWAYS, PRESSURE = 2, 1
+#: program -> {first argument: weight} (None: any): ALWAYS is refused locally, PRESSURE only while memory is short
+HEAVY_PROGRAMS = {"nvcc": {None: ALWAYS}, "suites.py": {None: PRESSURE}, "check.py": {None: PRESSURE},
+                  "lake": {"build": ALWAYS, "exe": ALWAYS, "env": PRESSURE}, "verity": {"check": PRESSURE},
+                  "cargo": {"build": ALWAYS, "test": ALWAYS, "run": ALWAYS, "check": ALWAYS}}
+UV_RUN_VALUED = {"--extra", "--with", "--package", "-p", "--python", "--directory", "--project", "--group", "--env-file", "--index"}
+LOCAL_OK = "AGENT_GUARD_LOCAL_OK=1"
+
+
+def weight_words(words: list[str]) -> int:
+    """How heavy one simple command is here (0, PRESSURE or ALWAYS), seen through `uv run [OPTS]`, `python -m MOD` and `python
+    SCRIPT`. A pytest naming test files or a `-k` selection is PRESSURE, any other ALWAYS; `circuit-check --all` is ALWAYS."""
+    words = unwrap(strip_redirections(words))
+    while words and re.fullmatch(r"\w+=.*", words[0]):
+        words = words[1:]
+    if not words:
+        return 0
+    prog, args = os.path.basename(words[0]), words[1:]
+    if prog == "uv" and args[:1] == ["run"]:
+        rest, i = args[1:], 0
+        while i < len(rest) and rest[i].startswith("-"):
+            i += 2 if rest[i] in UV_RUN_VALUED else 1
+        return weight_words(rest[i:])
+    if re.fullmatch(r"python[\d.]*", prog):
+        if args[:1] == ["-m"]:
+            return weight_words(args[1:])
+        script = next((a for a in args if not a.startswith("-")), None)
+        return weight_words([script, *args[args.index(script) + 1:]]) if script is not None else 0
+    if prog in ("pytest", "py.test"):
+        named = any(a.endswith(".py") or "::" in a for a in args) or "-k" in args
+        return PRESSURE if named else ALWAYS
+    if prog == "circuit-check":
+        return ALWAYS if "--all" in args else PRESSURE
+    table = HEAVY_PROGRAMS.get(prog) or {}
+    return table.get(None) or table.get(args[0] if args else "", 0)
+
+
+def weight(text: str) -> int:
+    """The heaviest simple command of `text` run on this VM: a command through `research run` or over ssh runs elsewhere."""
+    try:
+        commands = words_of(text)
+    except ValueError:
+        return 0
+    return max((weight_words(words) for words, _ in commands), default=0)
+
+
+def available() -> tuple[float, float] | None:
+    """(available, total) bytes of this VM's memory: /proc/meminfo's MemAvailable and MemTotal, or this process's cgroup's limit and
+    its headroom where that limit is tighter."""
+    try:
+        info = dict(re.findall(r"^(\w+):\s+(\d+) kB", open(os.environ.get("AGENT_GUARD_MEMINFO", "/proc/meminfo")).read(), re.M))
+        avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
+    except (OSError, KeyError, ValueError):
+        return None
+    try:
+        rel = open("/proc/self/cgroup").read().split("::", 1)[1].strip()
+        cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
+        limit = open(f"{cg}/memory.max").read().strip()
+        if limit != "max" and int(limit) < total:
+            total, avail = int(limit), min(avail, int(limit) - int(open(f"{cg}/memory.current").read()))
+    except (OSError, IndexError, ValueError):
+        pass
+    return avail, total
+
+
+def local_work_reason(command: str) -> str | None:
+    """Why this command may not run on this VM, or None."""
+    w = 0 if LOCAL_OK in command else weight(command)
+    remote = (f"Run it on a node: `research run --on auto -- CMD` (queued onto vy-nebius-2 from this checkout: 4 CPUs, 16 GB "
+              f"and 60 min unless --cpus, --mem-gb or --timeout say otherwise; add --wait to block until it ends). For a small local run "
+              f"you know fits, put {LOCAL_OK} in the command.")
+    if w == ALWAYS:
+        return ("builds and tests run on our nodes, not on an agent VM (every handle, at Daniel's request, 18 Oct: OOM kills on "
+                "shared VMs took down every worker on them). A pytest of named test files or a `-k` selection, or `lake env lean` "
+                "on one file, still runs here while memory allows. " + remote)
+    if w != PRESSURE:
+        return None
+    mem = available()
+    floor = float(os.environ.get("AGENT_GUARD_MIN_AVAIL", "0.25"))
+    if mem is None or mem[0] >= floor * mem[1]:
+        return None
+    return (f"this VM has {mem[0] / 2**30:.1f} GiB of {mem[1] / 2**30:.1f} GiB available (under {floor:.0%}), and this command runs "
+            f"tests or a build here: on a VM other agents share, the kernel would OOM-kill some agent's processes. " + remote)
+
+
+def delivery(conversation: str) -> str | None:
+    """The message queued for agent `conversation` (`inbox.py send`), taken out of its inbox, or None."""
+    if not conversation or "/" in conversation or conversation.startswith("."):
+        return None
+    box = os.path.join(INBOX, conversation + ".md")
+    taking = box + ".taking"
+    try:
+        os.replace(box, taking)
+    except OSError:
+        return None
+    try:
+        with open(taking) as f:
+            text = f.read()
+        with open(os.path.join(INBOX, conversation + ".delivered"), "a") as log:
+            log.write(text)
+    finally:
+        os.remove(taking)
+    return text if text.strip() else None
+
+
 def main() -> int:
     raw = sys.stdin.read()
     try:
-        command = json.loads(raw).get("command") or ""
+        event = json.loads(raw)
+        command = event.get("command") or ""
+        conversation = str(event.get("conversation_id") or "")
     except (ValueError, AttributeError):
-        command = raw
+        command, conversation = raw, ""
     try:
         deny = refused_text(command)
     except Exception:                                   # a bug here must not allow what the fallback would refuse
         deny = bool(FALLBACK.search(command) or ENVIRON.search(command))
-    if deny:
+    try:
+        low = None if deny else local_work_reason(command)
+    except Exception:                                   # a bug in the local-work gate must not stop every command
+        low = None
+    if deny or low:
+        reason = REASON if deny else low
         print(json.dumps({"permission": "deny",
-                          "user_message": "Refused by tools/agent-guard/shell_hook.py: " + REASON,
-                          "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + REASON}))
+                          "user_message": "Refused by tools/agent-guard/shell_hook.py: " + reason,
+                          "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
-        print(json.dumps({"permission": "allow"}))
+        try:
+            message = delivery(conversation)
+        except Exception:                               # an unreadable inbox must not block the agent's command
+            message = None
+        if message:
+            note = ("MESSAGE FROM YOUR COORDINATOR, delivered by the shell hook (tools/agent-guard/inbox.py). This command was "
+                    "refused only to deliver it: nothing is wrong with it, so re-run it exactly as it was, then act on the "
+                    "message.\n\n" + message)
+            print(json.dumps({"permission": "deny", "user_message": note, "agent_message": note}))
+        else:
+            print(json.dumps({"permission": "allow"}))
     return 0
 
 

@@ -12,10 +12,15 @@ HOOK = ROOT / "tools/agent-guard/shell_hook.py"
 
 
 def verdict(command: str, **env: str) -> str:
+    return answer(command, **env)["permission"]
+
+
+def answer(command: str, **env: str) -> dict:
+    env = {"AGENT_GUARD_MIN_AVAIL": "0", **env}           # the memory gate only where a test sets it, whatever this VM has free
     out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution",
                                                                      "command": command, "cwd": str(ROOT)}),
                          capture_output=True, text=True, env={**os.environ, **env}, check=True).stdout
-    return json.loads(out)["permission"]
+    return json.loads(out)
 
 
 def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
@@ -68,6 +73,10 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     "ps --everyone --format=pid,cmd",
     "sudo ps aux | tail",
     "ssh n1 'ps -ef'",
+    "ps -o pid,etime,cmd --ppid 4242",                    # a git child's token-bearing URL, 17 Oct (INF-52)
+    "ps -f -u research",
+    "ps -o args -C git",
+    "ps -p 1,2 -o args",
     "cat /proc/*/cmdline",
     "tmux -f /exec-daemon/tmux.portal.conf show-environment -g | cut -d= -f1",   # the Nebius key's lines again, 11 Oct
     "tmux show-environment",
@@ -95,7 +104,7 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "declare -f my_function",
     "declare -A table",
     "local x=1",
-    "uv run --env-file .env pytest",
+    "uv run --env-file .env pytest tests/test_x.py",
     "python -m venv env && source env/bin/activate",
     "cat .env.example",
     "git commit -m 'never use env | cut, use compgen -e'",
@@ -112,6 +121,8 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "ps ax -o pid,comm",
     "ps",
     "ps -p 1234 -o pid,args",
+    "ps -o pid,etime,comm --ppid 4242",
+    "ps -u research",
     "ps -eo pid,args | grep \"[p]ytest\"",
     "ps aux | rg -i lake",
     "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
@@ -141,3 +152,81 @@ def test_the_refusal_tells_the_agent_how_to_list_names_and_input_that_is_not_jso
     assert "compgen -e" in json.loads(out)["agent_message"]
     out = subprocess.run([sys.executable, HOOK], input="env", capture_output=True, text=True, check=True).stdout
     assert json.loads(out)["permission"] == "deny"
+
+
+def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_it_is_short_of_memory(tmp_path):
+    """Remote by default (every handle, at Daniel's request, 18 Oct): OOM kills on shared agent VMs took down every worker on them.
+    A broad pytest, `lake build`, cargo, nvcc and `circuit-check --all` are refused here always, pointing to `research run --on
+    auto`; a pytest of named files, `lake env`, the suites and `verity check` only under a quarter of the memory available. Through
+    `research run`, over ssh, or with AGENT_GUARD_LOCAL_OK=1 any passes, as does work that is neither."""
+    meminfo = tmp_path / "meminfo"
+    cgroup = tmp_path / "cg"
+    cgroup.mkdir()
+    (cgroup / "memory.max").write_text("max\n")
+    gate = {"AGENT_GUARD_MEMINFO": str(meminfo), "AGENT_GUARD_MIN_AVAIL": "0.25", "AGENT_GUARD_CGROUP": str(cgroup)}
+    always = ("uv run pytest -q tests/", "cd tools/research && python -m pytest -x", "lake build Security", "cargo test --release",
+              "uv run circuit-check --all", "nvcc -O3 k.cu", "timeout 600 /workspace/.venv/bin/python -m pytest")
+    light = ("uv run pytest -q tests/test_x.py", "python -m pytest tests/test_x.py::test_y", "pytest -k mem tools/research/tests",
+             "uv run tools/verity/check/suites.py --quick", "uv run --extra torch-cpu verity check",
+             "cd Security && lake env lean X.lean")
+    passes = ("research run --on auto -- uv run pytest -q", "uv run research run --on m --source . -- lake build",
+              "ssh n1 'cd /w && pytest'", "git status", "AGENT_GUARD_LOCAL_OK=1 uv run pytest -q tests/", "rg pytest tools/", "ls")
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
+    for command in always:
+        out = answer(command, **gate)
+        assert out["permission"] == "deny", command
+        assert "research run --on auto" in out["agent_message"] and "AGENT_GUARD_LOCAL_OK=1" in out["agent_message"]
+    for command in light + passes:
+        assert verdict(command, **gate) == "allow", command
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    2000000 kB\n")
+    for command in light:
+        out = answer(command, **gate)
+        assert out["permission"] == "deny", command
+        assert "1.9 GiB of 15.3 GiB available" in out["agent_message"] and "research run --on auto" in out["agent_message"]
+    for command in passes:
+        assert verdict(command, **gate) == "allow", command
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
+    (cgroup / "memory.max").write_text(f"{8 * 2**30}\n")         # a cgroup limit tighter than the VM: its headroom counts
+    (cgroup / "memory.current").write_text(f"{7 * 2**30}\n")
+    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "deny"
+
+
+INBOX_TOOL = ROOT / "tools/agent-guard/inbox.py"
+
+
+def hook(command: str, conversation: str, inbox: Path) -> dict:
+    out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution",
+                                                                     "command": command, "conversation_id": conversation}),
+                         capture_output=True, text=True, env={**os.environ, "AGENT_INBOX": str(inbox)}, check=True).stdout
+    return json.loads(out)
+
+
+def queue(agent: str, text: str, inbox: Path) -> None:
+    subprocess.run([sys.executable, INBOX_TOOL, "send", agent, "--text", text], env={**os.environ, "AGENT_INBOX": str(inbox)},
+                   check=True, capture_output=True)
+
+
+def test_a_queued_message_refuses_the_agents_next_command_once_with_the_message_as_its_text(tmp_path):
+    queue("bc-worker", "rebase on main first", tmp_path)
+    queue("bc-worker", "then mark nothing", tmp_path)
+    first = hook("ls", "bc-worker", tmp_path)
+    assert first["permission"] == "deny"
+    assert "re-run it exactly as it was" in first["user_message"]
+    assert "rebase on main first" in first["user_message"] and "then mark nothing" in first["user_message"]
+    assert hook("ls", "bc-worker", tmp_path) == {"permission": "allow"}
+    assert "rebase on main first" in (tmp_path / "bc-worker.delivered").read_text()
+
+
+def test_a_message_is_only_its_agents_and_a_secret_refusal_keeps_it_queued(tmp_path):
+    queue("bc-worker", "hello", tmp_path)
+    assert hook("ls", "bc-other", tmp_path) == {"permission": "allow"}
+    refused = hook("env | cut -d= -f1", "bc-worker", tmp_path)
+    assert refused["permission"] == "deny" and "hello" not in refused["user_message"]
+    assert "hello" in hook("ls", "bc-worker", tmp_path)["user_message"]
+
+
+def test_an_unreadable_inbox_or_a_path_as_an_id_never_blocks_a_command(tmp_path):
+    inbox = tmp_path / "not-a-dir"
+    inbox.write_text("")
+    assert hook("ls", "bc-worker", inbox) == {"permission": "allow"}
+    assert hook("ls", "../etc/passwd", tmp_path) == {"permission": "allow"}

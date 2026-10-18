@@ -1,0 +1,34 @@
+# Honest at L = 16 on the RTX PRO 6000 (sm_120), unmeasured: e_l7qs's schedule with IMMA.16816 (k = 16) for IMMA.16832,
+# so a MMA writes the same 128 words and commits every MMA. The fold is e_l7qs's (duo, 12 warp instructions a MMA); every
+# other class is e_l7qs's a k-step, half its count a MMA.
+name = "e-l16-model"
+status = "provisional"
+source = "SAT-120 from PROFILE's e_l7qs (r20261017-040135-d375): the fold kept a MMA, the rest halved a MMA at k = 16 (note:20261017T0842Z-draft-sat-120)"
+L = 16
+
+[mma]
+kind = "IMMA.16816.S32.S8.S8"   # mma.sync m16n8k16 s8: the same tensor-pipe time as IMMA.16832 on sm_120 (16.25 vs 16.50 SMSP-cycles alone), half its MACs
+words = 128
+depth = 16
+form = "IMMA16816"              # its census kind (data/forms.toml)
+
+[per_mma]       # warp instructions a MMA by class, everything the kernel issues (the fold included)
+MMA = 1
+ALU = 8.4398    # the fold's 8 and e_l7qs's other 0.8796 halved
+IMAD = 4.00135  # the fold's 4 and e_l7qs's other 0.0027 halved
+NOROW = 0.43095
+LDSM_X4 = 0.25
+UNI = 0.04595
+SEL = 0.03555
+UTMA16K = 0.00195
+IMADW = 0.0012
+VIMNMX = 0.00025
+
+[operands]      # the least operand delivery a program pays a MMA when the design names none (`--operands floor`)
+floor = { LDSM_X4 = 0.097222 }
+source = "SPEC §3.4's register count for m16n8k16 (CALC, devices-sm89): A in 2 registers a lane, B in 1, accumulators 4; a register tile with 4ab + 2a + b <= 240 delivers >= (2a + b)/(4ab), least 7/72 at (a, b) = (6, 9)"
+
+[fold]          # the fold inside per_mma, lane instructions a committed word (128 words a MMA at L = 16: 12 warp instructions)
+name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)
+ALU = 2
+IMAD = 1
