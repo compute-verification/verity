@@ -137,32 +137,6 @@ VARIANTS = {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0},
 DTYPE_VARIANTS = {"float16": "f16", "half": "f16"}
 
 
-def parse_variants(items: list[str] | None) -> tuple[str, str | None]:
-    """`--variant` values -> (sampling variant, engine dtype or None).  A value `dtype=<x>` selects the numerical format; any other value
-    is a sampling variant (`VARIANTS`).  At most one of each."""
-    samp, dtype = "greedy", None
-    for it in items or []:
-        if it.startswith("dtype="):
-            v = it.partition("=")[2]
-            if v not in DTYPE_VARIANTS:
-                raise KeyError(f"unknown dtype variant {v!r}; known: {sorted(DTYPE_VARIANTS)}")
-            if dtype is not None and dtype != v:
-                raise ValueError(f"two dtype variants given: {dtype!r}, {v!r}")
-            dtype = v
-        else:
-            if it not in VARIANTS:
-                raise KeyError(f"unknown sampling variant {it!r}; known: {sorted(VARIANTS)} or dtype=<{'|'.join(sorted(DTYPE_VARIANTS))}>")
-            if samp != "greedy" and samp != it:
-                raise ValueError(f"two sampling variants given: {samp!r}, {it!r}")
-            samp = it
-    return samp, dtype
-
-
-def file_suffix(*, replicate: int, variant: str, dtype: str | None) -> str:
-    """`_r<r>` (replicate) + `_<variant>` (non-greedy sampling) + `_f16` (dtype variant): `workload_cov_b0_b1_c256_r1_t1_f16.json`."""
-    return (f"_r{replicate}" if replicate else "") + (f"_{variant}" if variant != "greedy" else "") + (f"_{DTYPE_VARIANTS[dtype]}" if dtype else "")
-
-
 # =========================================================================================================
 # [chunked owner, window 2026-09-17] feature variant `--variant chunked=<max_num_batched_tokens>`
 #
@@ -178,7 +152,7 @@ def file_suffix(*, replicate: int, variant: str, dtype: str | None) -> str:
 # comma-separated; the fp16 owner adds `dtype=...` to FEATURE_VARIANTS in its own block -- keep this block self-contained.
 # =========================================================================================================
 def _dtype_variant(v: str) -> str:
-    """[fp16] the value of `dtype=<x>`: one of `DTYPE_VARIANTS` (validated at parse time, as fp16's `parse_variants` did)."""
+    """[fp16] the value of `dtype=<x>`: one of `DTYPE_VARIANTS`, validated at parse time."""
     if v not in DTYPE_VARIANTS:
         raise KeyError(f"unknown dtype variant {v!r}; known: {sorted(DTYPE_VARIANTS)}")
     return v
@@ -215,7 +189,7 @@ def variant_suffix(samp: str, feats: dict) -> str:
     if "chunked" in feats:
         s += f"_ck{int(feats['chunked'])}"
     if feats.get("dtype"):
-        s += f"_{DTYPE_VARIANTS[feats['dtype']]}"       # [fp16] `_f16`, after the chunked suffix (fp16's `file_suffix` order for its own keys)
+        s += f"_{DTYPE_VARIANTS[feats['dtype']]}"       # [fp16] `_f16`, after the chunked suffix
     return s
 
 
