@@ -360,6 +360,17 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Keep chatter low** (contract §3a). Every message, and every background shell you start, reaches the coordinator and
   the human. So run long jobs detached on the pod, write one-line checkpoints, and message someone only to unblock them
   or to change their plan.
+- **Workers run where they can't take you down.** Launch each worker as a cloud subagent (`Task` with
+  `environment: "cloud"`; Daniel's ruling, 18 Oct 10:20 AM PDT) or as a detached `research run`. A local subagent is only
+  for a short read-only lookup. A coordinator's foreground local Task is refused (#2510), and heavy work never runs on an
+  agent VM (the shell hook refuses it).
+- **No step waits long.** No tool call blocks for more than about 20 minutes: launch detached, end the step, and check
+  back on the run.
+- **Workers restart from notes.** Each brief asks for a checkpoint note before long work and every 3 to 4 hours, and
+  words red-team work neutrally. A worker resumed twice, or whose base branch was deleted, is relaunched fresh from its
+  last note.
+- **Outages are caught outside you.** The control pod's agent watch (INF-69) flags a run stopped mid-turn, a stalled or
+  ERROR agent and an out-of-memory kill, and frees what it can. Agents keep no heartbeat of their own.
 - **Reach a running subagent through its next shell command:** `python3 tools/agent-guard/inbox.py send AGENT_ID --text
   '…'`, where AGENT_ID is the `bc-…` id its Task call returned. A subagent never rereads a file mid-run, so don't put
   ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,
