@@ -1,16 +1,18 @@
 import Models.Pouw.Guarantees.Receipt
 import Proofs.Pouw.Receipt.Duo
+import Proofs.Pouw.Receipt.Window
 import Proofs.Pouw.Receipt.Li
 import Proofs.Pouw.Receipt.Fx1
 import Proofs.Pouw.Receipt.Run
-import Proofs.Pouw.Receipt.Window
 
 /-!
 # The receipt folds duo's, fx1's and li's guarantees
 
+duo's four words anywhere in a run, its checkpoints every four words and the kernel of its long runs are in
+`Receipt/Window.lean`.
+
 Each statement of `Models/Pouw/Guarantees/Receipt.lean`: duo's words, pairs, triples and quadruples in
-`Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, four words anywhere in a run,
-checkpoints every four words and the kernel of long runs in `Receipt/Window.lean`, fx1's transport of each in
+`Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, fx1's transport of each in
 `Receipt/Fx1.lean`, and li's half steps and checkpoints in `Receipt/Li.lean`.
 -/
 

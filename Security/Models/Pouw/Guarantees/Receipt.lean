@@ -26,20 +26,22 @@ What is proved about duo's words (`Definitions/Pouw/Receipt/Duo.lean`), at every
 * `DuoCheckpointNoKernel`: a run of any length cut into four-word blocks with those keys, with the state after every
   block committed, has no all-state kernel.
 * `DuoLongRunKernel`: every key schedule has an all-state kernel at every length `L > 2·4ⁿ`, by counting: `2^(nL)`
-  runs, `(4ⁿ)^(4ⁿ)` maps of the states. No statement binds a run's final state at every length, and between five words
-  and `2·4ⁿ + 1` where the deployed schedules' first kernel lies is open.
+  runs, `(4ⁿ)^(4ⁿ)` maps of the states. So no statement binds a whole run's final state at every length, and where
+  the deployed schedules' first kernel lies, between five words and `2·4ⁿ + 1`, is open.
 
 `DuoQuadNoKernel`'s condition on `a₂` is needed: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and
 `a₃ ≡ ±1 (mod 2^(n+1−r₁))`, flipping the top bit of all four words leaves every final state unchanged. pfill's `key_ok`
 rejects `a ≡ −1 (mod 32)` and its rotations are 5 to 29, and no served word's multiplier is `≡ −1` modulo two to the
-previous word's rotation, so both deployed schedules meet it at `n = 32`, at every position, which is what
-`DuoWindowNoKernel` and `DuoCheckpointNoKernel` need. Two runs of five or more words that differ at positions more than
-three apart have no all-state statement here, nor does the served receipt `y ⊕ rotl(z, 16)`, which commits less than
-the whole state.
+previous word's rotation, so both deployed schedules meet it at `n = 32`. Runs of five or more words have no
+all-state statement here (`DuoRunWordInjective` fixes all words but one).
 
 fx1 (`Definitions/Pouw/Receipt/Fx1.lean`) is duo on the word times an odd multiplier `m`, a bijection of the words, so
 each duo statement holds for fx1 with every IMAD multiplier odd (`Fx1WordInjective`, `Fx1PairNoKernel`,
 `Fx1TripleNoKernel`, `Fx1QuadNoKernel`, `Fx1StepBijective`, `Fx1RunWordInjective`).
+
+Both deployed schedules meet `DuoQuadNoKernel`'s conditions at every position, which `DuoWindowNoKernel` and
+`DuoCheckpointNoKernel` need. Neither covers two runs that differ at words more than three positions apart, and none
+of these statements covers the served receipt `y ⊕ rotl(z, 16)`, which commits less than the whole state.
 
 What is proved about li's half steps and checkpoints (`Definitions/Pouw/Receipt/Li.lean`), at every width `n` and for
 odd multipliers alone:
