@@ -83,6 +83,14 @@ def test_int8_lut_attention_is_the_served_attention(n, s, h, g_heads, spread, ks
             assert list(got) == _bf16(want[i, hd]), (i, hd)
 
 
+@pytest.mark.parametrize("s", [1, 2, 33])
+def test_attention_rows_cut_under_q_word(s):
+    """A prefill's first row (S = 1, its softmax over one key) cuts under Q_word like the longer ones: no gate recomputed."""
+    from verity_vllm.query import word as W
+
+    assert W.unit_rule(bind(X.Int8LutAttentionRow, D=128, S=s, SCALE=128 ** -0.5))["violations"] == []
+
+
 @pytest.mark.parametrize("sq,sk,scale", [(0.01, 0.02, 128 ** -0.5), (1e-30 / 127, 1e-30 / 127, 0.125), (3.0, 100.0, 1.0)])
 def test_attn_scale_is_fa_a(sq, sk, scale):
     tq, tk = torch.tensor([sq], dtype=torch.float32), torch.tensor(sk, dtype=torch.float32)

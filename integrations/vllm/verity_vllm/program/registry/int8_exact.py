@@ -244,7 +244,7 @@ def Int8LutSoftmax(B, S, sc, a):
         total = B.call(I32Add, total, e[j])
     lf = B.call(I32ToF32, total)
     r = B.call(P.F32Div, B.call(C_ONE), lf)
-    z = B.call(P.F32Div, B.call(I32ToF32, e[0]), lf)
+    z = B.call(P.F32Div, lf if S.S == 1 else B.call(I32ToF32, e[0]), lf)     # S = 1: L is e_0, converted once (Q_word)
     p = [B.call(ZERO8)] + [B.call(S8.S32LowByte, e[j]) for j in range(1, S.S)]
     return tuple_of(Coll(Array(S.S, V8), concat([c.refs for c in p])), r, z)
 
