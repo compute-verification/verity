@@ -21,6 +21,10 @@ STEER-PROOF's route B (note:20261018T0303Z-draft-steer-proof), each `def G : Pro
   it (a function of `κ` and every other coin). If each segment's noise has point mass at most `μ` (HMU's
   `CoinPointMass` gives `μ` for the dither forms, `2^{-32}` for a uniform word), the chance that some `κ` zeroes some
   `n` segments is at most `|K|·C(G, n)·μ^n`.
+* `GrindUnion`: the same under decision 101's per-matmul seeds `SHA-512(coin ‖ root(A) ‖ root(B))`, where a cheater
+  re-rolls a root for free through its hiding blinds: `T` hash queries get `T` fresh seeds (the random-oracle model),
+  the noise query `q` needs may depend on every other answer but not its own, and the chance that some query zeroes
+  some `n` segments is at most `T·C(G, n)·μ^n`.
 -/
 
 namespace Accounting.Guarantees.TS
@@ -60,5 +64,19 @@ def SteerUnion : Prop :=
     (v : K → Ω₀ → Fin G → N) (μ : ℝ) (n : ℕ), 0 ≤ μ → (∀ g t, prob (fun b : B => η g b = t) ≤ μ) →
     prob (fun ω : Ω₀ × (Fin G → B) => ∃ κ, ∃ S : Finset (Fin G), S.card = n ∧ ∀ g ∈ S, η g (ω.2 g) = v κ ω.1 g) ≤
       Fintype.card K * G.choose n * μ ^ n
+
+/-- **The grinding bound.** On coins `Ω₀ × (Fin T → Fin G → B)`, uniform, the `T` seeds `a q` a cheater's hash queries
+get (each query a choice of wrong values and hiding blinds), with segment `g`'s noise under seed `q` the function
+`η g (a q g)` of point mass at most `μ`, and `v q ω₀ a g` the noise query `q` would need at segment `g` to zero it, a
+function of the other coins and of every answer but its own: the probability that some query zeroes some `n` segments
+is at most `T·C(G, n)·μ^n`. -/
+def GrindUnion : Prop :=
+  ∀ {Ω₀ B N : Type} [Fintype Ω₀] [Fintype B] {T G : ℕ} (η : Fin G → B → N)
+    (v : Fin T → Ω₀ → (Fin T → Fin G → B) → Fin G → N) (μ : ℝ) (n : ℕ), 0 ≤ μ →
+    (∀ g t, prob (fun b : B => η g b = t) ≤ μ) →
+    (∀ q ω₀ a a', (∀ q', q' ≠ q → a q' = a' q') → v q ω₀ a = v q ω₀ a') →
+    prob (fun ω : Ω₀ × (Fin T → Fin G → B) =>
+        ∃ q, ∃ S : Finset (Fin G), S.card = n ∧ ∀ g ∈ S, η g (ω.2 q g) = v q ω.1 ω.2 g) ≤
+      T * G.choose n * μ ^ n
 
 end Accounting.Guarantees.TS

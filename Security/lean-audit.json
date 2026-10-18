@@ -1471,6 +1471,9 @@
    "assumptions": [],
    "type_hash": "22e2320fa4db7ad6c4182cab5d22d9df1ef0ede2c031c256c59be0e9997c4a1e"
   },
+  "Accounting.SecurityProofs.TS.GrindUnion": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.TS.LinSteerFalse": {
    "owner": "@compute-accounting"
   },
@@ -5720,7 +5723,8 @@
    "Accounting.SecurityProofs.TS.LinSteerFalse": "lemma: a segmented consumer of three coordinates in two segments violates LinSteer, the counterexample shape.conjectures cites.",
    "Accounting.SecurityProofs.TS.SegmentSteer": "lemma: the segment bound, zeroing Z saves at most |Z|/a segments when every noise-active segment holds at least a noise-active coordinates; counting over a definition.",
    "Accounting.SecurityProofs.TS.AdaptSteerFail": "lemma: under E1(b)'s accounting LIN-STEER fails for every segmented consumer with fewer noise-active segments than noise-active coordinates; counting over a definition.",
-   "Accounting.SecurityProofs.TS.SteerUnion": "lemma: the steering union bound |K| C(G, n) mu^n over any coins, configurations fixed before sigma and per-segment fresh noise of point mass at most mu (a hypothesis); not a property of a Lean function."
+   "Accounting.SecurityProofs.TS.SteerUnion": "lemma: the steering union bound |K| C(G, n) mu^n over any coins, configurations fixed before sigma and per-segment fresh noise of point mass at most mu (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindUnion": "lemma: the grinding bound T C(G, n) mu^n over any coins, T fresh seeds in the random-oracle model and per-segment noise of point mass at most mu, each query's target independent of its own seed (hypotheses); not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

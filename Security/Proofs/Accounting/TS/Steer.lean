@@ -12,7 +12,8 @@ segment, which with the sum forces equal counts (`Steer.linSteer_fail`, the leas
 
 The union bound runs over `κ ∈ K` and the `C(G, n)` sets of `n` segments; for each, the segments' fresh noises are
 independent of each other and of `ω₀` (`Steer.prob_pi_mem`), so all `n` hit their targets with probability at most
-`μ^n`.
+`μ^n`. The grinding bound is that union over the `T` queries: split query `q`'s seed off the coins (`Steer.splitAt`),
+and since its target doesn't read its own seed, `SteerUnion` with one configuration bounds it by `C(G, n)·μ^n`.
 -/
 
 namespace Accounting.SecurityProofs.TS
@@ -219,6 +220,19 @@ theorem prob_pi_le {B : Type} [Fintype B] (S : Finset (Fin G)) (q : Fin G → B 
   · rw [prob_pi_mem, ← Finset.prod_const]
     exact Finset.prod_le_prod₀ (fun g _ => prob_nonneg _) fun g _ => hq g
 
+/-- The coins with query `q`'s seed split off. -/
+def splitAt {Ω₀ X : Type} {T : ℕ} (q : Fin T) : Ω₀ × (Fin T → X) ≃ (Ω₀ × ({j // j ≠ q} → X)) × X where
+  toFun ω := ((ω.1, fun j => ω.2 j), ω.2 q)
+  invFun z := (z.1.1, fun j => if h : j = q then z.2 else z.1.2 ⟨j, h⟩)
+  left_inv ω := by
+    refine Prod.ext rfl (funext fun j => ?_)
+    by_cases h : j = q
+    · subst h; simp
+    · simp [h]
+  right_inv z := by
+    refine Prod.ext (Prod.ext rfl (funext fun j => ?_)) (by simp)
+    simp [j.2]
+
 end Steer
 
 open Steer
@@ -283,6 +297,41 @@ theorem SteerUnion : Guarantees.TS.SteerUnion := by
     _ = Fintype.card K * G.choose n * μ ^ n := by
         rw [Finset.sum_const, Finset.sum_const, Finset.card_powersetCard, Finset.card_univ, Finset.card_univ,
           Fintype.card_fin, nsmul_eq_mul, nsmul_eq_mul]
+        ring
+
+theorem GrindUnion : Guarantees.TS.GrindUnion := by
+  classical
+  intro Ω₀ B N _ _ T G η v μ n hμ hpt hv
+  set E : Fin T → Ω₀ × (Fin T → Fin G → B) → Prop := fun q ω =>
+    ∃ S : Finset (Fin G), S.card = n ∧ ∀ g ∈ S, η g (ω.2 q g) = v q ω.1 ω.2 g
+  have hq : ∀ q, prob (E q) ≤ G.choose n * μ ^ n := by
+    intro q
+    rcases isEmpty_or_nonempty (Fin G → B) with hX | hX
+    · have : IsEmpty (Ω₀ × (Fin T → Fin G → B)) := ⟨fun ω => hX.false (ω.2 q)⟩
+      have h0 : prob (E q) = 0 := by unfold prob; simp
+      rw [h0]; positivity
+    obtain ⟨x₀⟩ := hX
+    set Φ := splitAt (Ω₀ := Ω₀) (X := Fin G → B) q
+    set w : Unit → Ω₀ × ({j // j ≠ q} → Fin G → B) → Fin G → N := fun _ z => v q z.1 (Φ.symm (z, x₀)).2
+    rw [prob_equiv Φ (E q)]
+    calc prob (fun z => E q (Φ.symm z))
+        ≤ prob (fun z : (Ω₀ × ({j // j ≠ q} → Fin G → B)) × (Fin G → B) =>
+            ∃ κ, ∃ S : Finset (Fin G), S.card = n ∧ ∀ g ∈ S, η g (z.2 g) = w κ z.1 g) := by
+          refine prob_mono fun z ⟨S, hS, h⟩ => ⟨(), S, hS, fun g hg => ?_⟩
+          have hz : (Φ.symm z).2 q = z.2 := by simp [Φ, splitAt]
+          have hw : v q (Φ.symm z).1 (Φ.symm z).2 = w () z.1 := by
+            refine hv q _ _ _ fun q' hq' => ?_
+            simp [Φ, splitAt, hq']
+          rw [← hz, ← hw]
+          exact h g hg
+      _ ≤ Fintype.card Unit * G.choose n * μ ^ n := SteerUnion η w μ n hμ hpt
+      _ = G.choose n * μ ^ n := by rw [Fintype.card_unit, Nat.cast_one, one_mul]
+  calc prob (fun ω : Ω₀ × (Fin T → Fin G → B) => ∃ q, E q ω)
+      ≤ prob (fun ω => ∃ q ∈ Finset.univ, E q ω) := prob_mono fun ω ⟨q, h⟩ => ⟨q, Finset.mem_univ _, h⟩
+    _ ≤ ∑ q ∈ (Finset.univ : Finset (Fin T)), prob (E q) := prob_exists_le _ _
+    _ ≤ ∑ _q ∈ (Finset.univ : Finset (Fin T)), (G.choose n * μ ^ n : ℝ) := Finset.sum_le_sum fun q _ => hq q
+    _ = T * G.choose n * μ ^ n := by
+        rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
         ring
 
 end Accounting.SecurityProofs.TS
