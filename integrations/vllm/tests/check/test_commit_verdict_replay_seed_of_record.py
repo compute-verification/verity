@@ -1,17 +1,11 @@
-"""[R16 rev F-r16-23 / M-0579; fix pin] The sampled replay's seed is post-commitment by LABEL only: commit_delta [O6] derives it from the
-run root after commitment (int.from_bytes(run_root[:8])) or from a verifier challenge (sha256(challenge|root)), but `--replay-seed <int>`
-sets a PROVER-CHOSEN seed known before the run (seed_source '--replay-seed (targeted)'), and a prover who knows the seed knows the picks
-before committing (the population is fixed by the manifest) -- every unpicked VU is free, C3's prechallenge binding is defeated by
-construction.  Neither commit_verdict nor the finalizer read `sample.seed_source`; a seed only had to EXIST.
-
-Behaviour of record (this file): commit_verdict reads the seed source as a FACT.  The root form is RECOMPUTED from the record's run root;
-the challenge form is post-commitment by construction; a prover-chosen seed (or a root-form label whose seed is not the root's, or an
-unknown source) makes the replay a MECHANISM run: C2 of record then rests on form (B) alone (M-0721 (1)) and the PASS names it, and without
-a complete form (B) the Commit FAILS by name.  Plane-fed gaps (F-r16-07) are still named whatever the seed.  Every R16 record of record
-(rev's census: 150/150 say the root form) recomputes equal and is byte-identical in verdict."""
+"""[R16 rev F-r16-23 / M-0579; VLLM-17] The sampled replay's seed is post-commitment as a FACT, never by label: only the service
+challenger's live replay coin, opened after the root of record against a commitment the verifier recorded (`challenge.attested_reason`),
+makes the replay a C2 of record.  A root-derived seed is grindable (the run root takes a free prover string: the red team hid a 10% cheat
+from 64 root-derived openings in ~1,000 tries), a 'verifier challenge' is a string from the prover's own command line with no provenance,
+and `--replay-seed` is prover-chosen: each makes the replay a MECHANISM run, C2 of record then rests on form (B) alone (M-0721 (1)) and the
+PASS names it, and without a complete form (B) the Commit FAILS by name.  Plane-fed gaps (F-r16-07) are still named whatever the seed."""
 from __future__ import annotations
 
-import hashlib
 
 from verity_vllm.check.c2_rules import _replay_seed_of_record
 from verity_vllm.check.verdict import commit_verdict
@@ -42,18 +36,9 @@ OC_COMPLETE = {"result": True, "grade": "complete", "compared": 13199, "equal": 
                "attribution": {"complete": True, "pairs": 67, "unverified_n": 0, "ambiguous_steps": []}}
 
 
-def test_the_root_form_is_recomputed_from_the_records_run_root_not_believed():
-    ok, how = _replay_seed_of_record(_sr(SEED_ROOT, ROOT_FORM), RUN_ROOT)
-    assert ok is True and "recomputed" in how
-    # the LABEL says root form but the seed is another integer: a forged label, refused
-    ok, why = _replay_seed_of_record(_sr(12345, ROOT_FORM), RUN_ROOT)
-    assert ok is False and "!= the run root's first 8 bytes" in why
-    # no run root on the record: cannot recompute -> refused (never believed)
-    ok, why = _replay_seed_of_record(_sr(SEED_ROOT, ROOT_FORM), None)
-    assert ok is False and "no run root" in why
-    # the summary form (components.sampled_replay: seed / seed_source at the top level) reads the same
-    ok, _ = _replay_seed_of_record({"result": True, "seed": SEED_ROOT, "seed_source": ROOT_FORM}, RUN_ROOT)
-    assert ok is True
+ROOT_OF_RECORD, LIVE_KEY = "5a" * 64, "c3" * 64
+CHALLENGE = {"keys": {"opening-positions": "a1" * 64, "opening-identities": "b2" * 64, "replay": LIVE_KEY, "kernel-check": "d4" * 64},
+             "origin": "challenger", "after_run_root": ROOT_OF_RECORD, "provenance": {"stand-in": True}}
 
 
 def _sr_chal(seed: int, src: str, chal: str | None) -> dict:
@@ -63,43 +48,42 @@ def _sr_chal(seed: int, src: str, chal: str | None) -> dict:
     return d
 
 
-def test_the_verifier_challenge_form_is_recomputed_from_the_recorded_challenge_and_a_prover_seed_is_not():
-    """[rev M-0600] the challenge form is a fact only with the FULL challenge on the record (sample.challenge, written by sampled_replay when
-    commit_delta runs --replay-challenge): seed == sha256(challenge|run_root)[:8] recomputed; a label alone (the pre-M-0600 shape, the source
-    text carries challenge[:16] only), another seed under the label, or a source text naming another challenge is refused by name."""
+def _of_record(monkeypatch, sr: dict | None = None) -> dict:
+    """A Commit of record whose replay drew from the stand-in challenge, which the verifier accepts as its challenger's (the check
+    itself: tests/commit/test_challenge.py)."""
+    from verity_vllm.check.replay import replay_codes as RC
+    from verity_vllm.commit import challenge as CH
+
+    monkeypatch.setattr(CH, "attested_reason", lambda ch: None if (ch or {}).get("provenance") == {"stand-in": True} else "not the stand-in")
+    return {**BASE, "run_root": ROOT_OF_RECORD, "extra": {**BASE["extra"], "challenge": CHALLENGE},
+            "sampled_replay": sr if sr is not None else _sr_chal(0, RC.LIVE_KEY_SOURCE, LIVE_KEY)}
+
+
+def test_a_root_derived_seed_is_grindable_and_never_of_record():
+    for sr in (_sr(SEED_ROOT, ROOT_FORM), _sr(12345, ROOT_FORM), {"result": True, "seed": SEED_ROOT, "seed_source": ROOT_FORM}):
+        for root in (RUN_ROOT, None, ROOT_OF_RECORD):
+            ok, why = _replay_seed_of_record(sr, root)
+            assert ok is False and "grindable" in why and "not a C2 of record" in why
+
+
+def test_a_verifier_challenge_from_the_provers_command_line_is_never_of_record():
     seed, src = challenge_seed("audit-2026-09-20", bytes.fromhex(RUN_ROOT))
-    assert seed == int.from_bytes(hashlib.sha256(b"audit-2026-09-20|" + bytes.fromhex(RUN_ROOT)).digest()[:8], "big")
-    ok, how = _replay_seed_of_record(_sr_chal(seed, src, "audit-2026-09-20"), RUN_ROOT)
-    assert ok is True and "recomputed from the recorded challenge" in how
-    ok, why = _replay_seed_of_record(_sr_chal(seed, src, None), RUN_ROOT)                      # the label alone: unverifiable
-    assert ok is False and "challenge is not on the record" in why
-    ok, why = _replay_seed_of_record(_sr_chal(seed + 1, src, "audit-2026-09-20"), RUN_ROOT)     # a forged seed under the true challenge
-    assert ok is False and "!= sha256(challenge|run_root)[:8]" in why
-    ok, why = _replay_seed_of_record(_sr_chal(seed, src, "another-challenge"), RUN_ROOT)        # another challenge: its seed differs
-    assert ok is False and "!= sha256(challenge|run_root)[:8]" in why
-    seed2, _src2 = challenge_seed("another-challenge", bytes.fromhex(RUN_ROOT))
-    ok, why = _replay_seed_of_record(_sr_chal(seed2, src, "another-challenge"), RUN_ROOT)       # right seed, source text names another
-    assert ok is False and "does not name the recorded challenge" in why
-    assert _replay_seed_of_record(_sr_chal(seed, src, "audit-2026-09-20"), None)[0] is False   # no run root to recompute from
-    # the record shape: sampled_replay writes sample.challenge ONLY under the challenge form (root-form records are byte-identical)
-    import inspect
-    from verity_vllm.check.replay import driver as SR
-    assert "seed_challenge" in inspect.signature(SR.sampled_replay).parameters
-    src_txt = inspect.getsource(SR.sampled_replay)
-    assert '**({"challenge": str(seed_challenge)} if seed_challenge is not None else {})' in src_txt
-    cd = "".join(open(__file__.rsplit("/tests/", 1)[0] + f"/verity_vllm/pipeline/{m}.py").read() for m in ("commit", "c2_replay"))
-    assert "_seed_chal = str(args.replay_challenge)" in cd and "seed_challenge=_seed_chal" in cd
+    for chal in ("audit-2026-09-20", None, "another-challenge"):
+        ok, why = _replay_seed_of_record(_sr_chal(seed, src, chal), RUN_ROOT)
+        assert ok is False and "prover's own command line" in why and "not a C2 of record" in why
     ok, why = _replay_seed_of_record(_sr(7, "--replay-seed (targeted)"), RUN_ROOT)
     assert ok is False and "prover-chosen" in why and "not a C2 of record" in why
     ok, why = _replay_seed_of_record(_sr(7, "caller"), RUN_ROOT)
     assert ok is False and "not a post-commitment form" in why
-    # a legacy record without the field is not graded here (the finalizer's ◐ by name), never mistaken for either
+    # a legacy record without the field is not graded here (the finalizer's ◐ by name); a run of record without one is refused
     assert _replay_seed_of_record({"result": True, "sample": {"seed": 7}}, RUN_ROOT)[0] is None
+    ok, why = _replay_seed_of_record({"result": True, "sample": {"seed": 7}}, ROOT_OF_RECORD, CHALLENGE)
+    assert ok is False and "no seed source" in why
 
 
-def test_a_prover_chosen_seed_fails_the_commit_by_name_unless_form_b_is_complete_which_the_pass_then_names():
-    # the honest record of record: root-form seed recomputed -> plain PASS, byte-identical to before F-r16-23
-    ok, why = commit_verdict({**BASE, "sampled_replay": _sr(SEED_ROOT, ROOT_FORM)}, True, min_openings=64)
+def test_a_prover_chosen_seed_fails_the_commit_by_name_unless_form_b_is_complete_which_the_pass_then_names(monkeypatch):
+    # the honest record of record: the service challenger's replay coin after the root -> plain PASS
+    ok, why = commit_verdict(_of_record(monkeypatch), True, min_openings=64)
     assert (ok, why) == (True, "PASS")
     # --replay-seed on a Commit-only rerun (no --match-dir): the replay is a mechanism run, nothing else value-checks -> FAIL by name
     ok, why = commit_verdict({**BASE, "sampled_replay": _sr(7, "--replay-seed (targeted)")}, True, min_openings=64)
@@ -112,9 +96,9 @@ def test_a_prover_chosen_seed_fails_the_commit_by_name_unless_form_b_is_complete
     oc_partial = {**OC_COMPLETE, "result": None, "grade": "attribution-complete", "complete": False, "steps_not_snapshotted": [3]}
     ok, why = commit_verdict({**BASE, "sampled_replay": _sr(7, "--replay-seed (targeted)"), "oracle_compare": oc_partial}, True, min_openings=64)
     assert ok is False and "form (B) does not stand in: form (B) result None" in why
-    # a forged root-form label is the same class
-    ok, why = commit_verdict({**BASE, "sampled_replay": _sr(12345, ROOT_FORM)}, True, min_openings=64)
-    assert ok is False and "!= the run root's first 8 bytes" in why
+    # a root-derived seed is the same class
+    ok, why = commit_verdict({**BASE, "sampled_replay": _sr(SEED_ROOT, ROOT_FORM)}, True, min_openings=64)
+    assert ok is False and why.startswith("C2 of record not established (F-r16-23)") and "grindable" in why and "form (B) absent" in why
 
 
 def test_plane_fed_gaps_are_named_whatever_the_seed_and_a_replay_mismatch_still_leads():
@@ -126,7 +110,7 @@ def test_plane_fed_gaps_are_named_whatever_the_seed_and_a_replay_mismatch_still_
     assert ok is False and why.startswith("C2 sampled replay:")                      # a mismatch is a mismatch, seed or not
 
 
-def test_f_r16_26_the_f_r16_13_fault_rule_runs_before_the_mechanism_lift_whatever_seeded_the_replay():
+def test_f_r16_26_the_f_r16_13_fault_rule_runs_before_the_mechanism_lift_whatever_seeded_the_replay(monkeypatch):
     """[rev F-r16-26 / rel M-0686] a PARTIAL replay from a run-time FAULT (an unevaluated pick inside an evaluated stratum; no fully
     unevaluated stratum -> _partial_replay_named_gap names no gap) fails closed under the root form (F-r16-13) -- and must fail the SAME way
     under a prover-chosen / non-post-commitment seed: form (B) stands in for a NAMED gap, never for a fault.  (The int-5 pod gate caught the
@@ -138,8 +122,10 @@ def test_f_r16_26_the_f_r16_13_fault_rule_runs_before_the_mechanism_lift_whateve
         ok, why = commit_verdict({**BASE, "sampled_replay": {**fault, "sample": {**fault["sample"], "seed_source": src}}, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
         assert not ok and why.startswith("C2 of record not established (DECISIONS-2 §4): sampled replay partial") and "run-time fault" in why, (src, why)
         assert "F-r16-13" in why
-    # the root form fails it by the non-mechanism branch, byte-for-byte the F-r16-13 text (unchanged)
-    ok, why = commit_verdict({**BASE, "sampled_replay": {**fault, "sample": {**fault["sample"], "seed": SEED_ROOT, "seed_source": ROOT_FORM}}, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
+    # a seed of record fails it by the non-mechanism branch, byte-for-byte the F-r16-13 text (unchanged)
+    from verity_vllm.check.replay import replay_codes as RC
+    live = {**fault, "sample": {**fault["sample"], "seed": 0, "seed_source": RC.LIVE_KEY_SOURCE, "challenge": LIVE_KEY}}
+    ok, why = commit_verdict({**_of_record(monkeypatch, live), "oracle_compare": OC_COMPLETE}, True, min_openings=64)
     assert not ok and why.startswith("C2 of record not established (DECISIONS-2 §4): sampled replay partial") and "run-time fault" in why
     # a partial replay with a NAMED gap (a fully unevaluated stratum of a class form (B) covers) is the lift's case: the prover seed PASSES on (B) alone, named
     named = {"result": None, "grade": "partial", "why": "1 stratum unevaluated by name", "strata_unevaluated": ["s1"],
@@ -150,51 +136,55 @@ def test_f_r16_26_the_f_r16_13_fault_rule_runs_before_the_mechanism_lift_whateve
     assert ok is True and "C2 of record by the complete form (B) alone" in why, why
 
 
-def test_the_live_key_form_of_a_run_of_record_is_the_service_challengers_key_drawn_after_its_root(monkeypatch):
-    """A run of record (`commit.record`, 64-byte root) draws its replay sample from the live key `challenge.draw_live` recorded on
+def test_the_live_key_form_of_a_run_of_record_is_the_service_challengers_replay_coin_drawn_after_its_root(monkeypatch):
+    """A run of record (`commit.record`, 64-byte root) draws its replay sample from the replay key `challenge.draw_live` recorded on
     ``extra.challenge`` after the root (`c2_replay.seed_of`: form ``live-key``, the key as ``sample.challenge``).  The verdict holds the
     sample's key to that one: another key, a key drawn after another root, a 32-byte root, or no key on the commit is refused by name.
-    It is of record only as the service challenger's (`challenge.attested_reason`): a key handed to the prover's process, or its own
-    bytes, draws a measurement sample, which passes on a complete form (B) alone and fails without one."""
+    It is of record only as the service challenger's (`challenge.attested_reason`): anything else draws a measurement sample, which
+    passes on a complete form (B) alone and fails without one."""
+    from verity_vllm.check.replay import replay_codes as RC
+
+    rec = _of_record(monkeypatch)
+    sr, root, ch = rec["sampled_replay"], ROOT_OF_RECORD, CHALLENGE
+    assert RC.seed_form(sr) == "live-key"
+    assert "not the live replay key" in _replay_seed_of_record(_sr_chal(0, RC.LIVE_KEY_SOURCE, ch["keys"]["kernel-check"]), root, ch)[1]
+    assert "no live replay key drawn after its root" in _replay_seed_of_record(sr, root, {**ch, "after_run_root": "6b" * 64})[1]
+    assert "no live replay key drawn after its root" in _replay_seed_of_record(sr, root, None)[1]
+    assert "not a 64-byte root of record" in _replay_seed_of_record(sr, RUN_ROOT, {**ch, "after_run_root": RUN_ROOT})[1]
+    ok, how = _replay_seed_of_record(sr, root, ch)
+    assert ok is True and "service challenger's live replay coin" in how
+    for origin in ("unattested", "own"):
+        other = {**ch, "origin": origin, "provenance": None}
+        ok, why = _replay_seed_of_record(sr, root, other)
+        assert ok is False and "measurement sample" in why
+        bad = {**rec, "extra": {**rec["extra"], "challenge": other}}
+        ok, why = commit_verdict(bad, True, min_openings=64)
+        assert ok is False and why.startswith("C2 of record not established (F-r16-23)") and "form (B) absent" in why
+        ok, why = commit_verdict({**bad, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
+        assert ok is True and "C2 of record by the complete form (B) alone" in why
+
+
+def test_a_commit_of_record_passes_on_the_service_challengers_coins_only_once_the_verifier_trusts_their_commitment(monkeypatch):
+    """End to end through the challenger: a `LiveChallenger` under the Commit's scheme answers the root, the replay draws from its replay
+    coin, and the verdict PASSes only once its commitment is one the verifier recorded (`challenge.trust`)."""
+    from types import SimpleNamespace
+
+    import pytest
+
     from verity_vllm.check.replay import replay_codes as RC
     from verity_vllm.commit import challenge as CH
 
-    root, key = "5a" * 64, "c3" * 32
-    ch = {"key": key, "origin": CH.ATTESTED, "after_run_root": root, "provenance": {"opening": "stand-in"}}
-    sr = _sr_chal(0, RC.LIVE_KEY_SOURCE, key)
-    assert RC.seed_form(sr) == "live-key"
-    assert "not the live key" in _replay_seed_of_record(_sr_chal(0, RC.LIVE_KEY_SOURCE, "d4" * 32), root, ch)[1]
-    assert "no live key drawn after its root" in _replay_seed_of_record(sr, root, {**ch, "after_run_root": "6b" * 64})[1]
-    assert "no live key drawn after its root" in _replay_seed_of_record(sr, root, None)[1]
-    assert "not a 64-byte root of record" in _replay_seed_of_record(sr, RUN_ROOT, {**ch, "after_run_root": RUN_ROOT})[1]
-    ok, why = _replay_seed_of_record(sr, root, ch)
-    assert ok is False and "is plugged in yet" in why
-    for origin in ("unattested", "own"):
-        ok, why = _replay_seed_of_record(sr, root, {**ch, "origin": origin})
-        assert ok is False and "not the service challenger's" in why and "measurement sample" in why
-        rec = {**BASE, "run_root": root, "extra": {**BASE["extra"], "challenge": {**ch, "origin": origin}}, "sampled_replay": sr}
-        ok, why = commit_verdict(rec, True, min_openings=64)
-        assert ok is False and why.startswith("C2 of record not established (F-r16-23)") and "form (B) absent" in why
-        ok, why = commit_verdict({**rec, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
-        assert ok is True and "C2 of record by the complete form (B) alone" in why
-    monkeypatch.setattr(CH, "ATTEST", lambda c: None if c.get("provenance") else "no opening")
-    ok, how = _replay_seed_of_record(sr, root, ch)
-    assert ok is True and "service challenger's live key" in how
-    ok, why = commit_verdict({**BASE, "run_root": root, "extra": {**BASE["extra"], "challenge": ch}, "sampled_replay": sr}, True, min_openings=64)
-    assert (ok, why) == (True, "PASS")
-
-
-def test_a_vllm_v1_measurement_run_has_no_seed_of_record():
-    """A run after the record that kept the committer's root (``--root-of-record vllm-v1``, ``extra.root_of_record``) draws from that
-    root, which the prover can regrind: neither the root nor the challenge form is of record on it, though both still read recorded runs."""
-    seed, src = challenge_seed("audit-2026-09-20", bytes.fromhex(RUN_ROOT))
-    extra = {**BASE["extra"], "root_of_record": "vllm-v1"}
-    for sr in (_sr(SEED_ROOT, ROOT_FORM), _sr_chal(seed, src, "audit-2026-09-20")):
-        assert _replay_seed_of_record(sr, RUN_ROOT)[0] is True
-        ok, why = _replay_seed_of_record(sr, RUN_ROOT, measurement=True)
-        assert ok is False and "grindable" in why
-        ok, why = commit_verdict({**BASE, "extra": extra, "sampled_replay": sr}, True, min_openings=64)
-        assert ok is False and "grindable" in why
+    LC = pytest.importorskip("verity.core.protocols.sampled_proofs.challenger",
+                             reason="the service's challenger (compute accounting's #2573 / #2584) is not on this tree")
+    monkeypatch.setattr(CH, "TRUSTED", {})
+    chal = LC.LiveChallenger(CH.SCHEME, 0, CH.layout(1))
+    run = SimpleNamespace(run_root=bytes.fromhex(ROOT_OF_RECORD), extra={})
+    key = CH.draw_live(run, CH.service_challenger(chal)).keys[CH.REPLAY].hex()
+    rec = {**BASE, "run_root": ROOT_OF_RECORD, "extra": {**BASE["extra"], **run.extra}, "sampled_replay": _sr_chal(0, RC.LIVE_KEY_SOURCE, key)}
+    ok, why = commit_verdict(rec, True, min_openings=64)
+    assert ok is False and "not one the verifier recorded from its challenger" in why and "form (B) absent" in why
+    CH.trust(chal.commitment.to_json())
+    assert commit_verdict(rec, True, min_openings=64) == (True, "PASS")
 
 
 def test_the_commit_draws_a_run_of_records_replay_from_its_live_key():
@@ -205,7 +195,7 @@ def test_the_commit_draws_a_run_of_records_replay_from_its_live_key():
 
     root = bytes(range(64))
     run = SimpleNamespace(run_root=root, extra={})
-    key = CH.draw_live(run, "ab" * 16)
+    key = CH.draw_live(run, "ab" * 16).keys[CH.REPLAY]
     args = SimpleNamespace(replay_seed=None, replay_challenge=None)
     seed, src, form, chal = C2.seed_of(args, run)
     assert (form, chal, seed) == ("live-key", key.hex(), 0) and src.startswith("live key")

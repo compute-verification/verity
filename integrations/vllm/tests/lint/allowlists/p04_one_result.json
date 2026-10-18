@@ -2,6 +2,7 @@
   "rule": "P4 (one result type, one verdict)",
   "entries": [
     {"file": "verity_vllm/check/c2_rules.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.c2_rules -> verity_vllm.check.replay.replay_codes"},
+    {"file": "verity_vllm/check/c2_rules.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.c2_rules -> verity_vllm.commit.challenge"},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.c2_rules -> verity_vllm.query.manifest.format"},
     {"file": "verity_vllm/check/executed_prefix.py", "kind": "g-literal", "symbol": "executed_prefix_facts", "detail": "G6"},
     {"file": "verity_vllm/check/executed_prefix.py", "kind": "g-literal", "symbol": "link_to_match_account", "detail": "G6", "count": 5},

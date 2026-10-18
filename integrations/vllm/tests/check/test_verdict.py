@@ -18,6 +18,8 @@ import json
 import pytest
 
 from verity_vllm.check.codes import VerificationCode as VC
+from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.commit import challenge as CH
 
 from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check import verdict as V
@@ -26,9 +28,16 @@ from verity_vllm.check.commit_rules import REJECT
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
 from verity_vllm.properties.record import REGISTRY, PropertyRecord, digest_of, seal
 
-RUN_ROOT = "71f69377" + "ab" * 28
-SEED_ROOT = int.from_bytes(bytes.fromhex(RUN_ROOT)[:8], "big")
-ROOT_FORM = "run root (first 8 bytes, after commitment)"
+RUN_ROOT = "71f69377" + "ab" * 60
+LIVE_KEY = "c3" * 64
+CHALLENGE = {"keys": {"opening-positions": "a1" * 64, "opening-identities": "b2" * 64, "replay": LIVE_KEY, "kernel-check": "d4" * 64},
+             "origin": "challenger", "after_run_root": RUN_ROOT, "provenance": {"stand-in": True}}
+
+
+@pytest.fixture(autouse=True)
+def _stand_in_challenger(monkeypatch):
+    """The record's challenge is a stand-in the verifier accepts as its challenger's (the check itself: tests/commit/test_challenge.py)."""
+    monkeypatch.setattr(CH, "attested_reason", lambda ch: None if (ch or {}).get("provenance") == {"stand-in": True} else "not the stand-in")
 CLASSES = {"input_token_ids": {"how": "bound-as-leaf", "tensors": 4}, "instance_outputs_native": {"how": "bound-as-leaf", "tensors": 400},
            "sampled_token_ids": {"how": "bound-as-leaf", "tensors": 4}, "weights": {"how": "registered-input", "tensors": 100},
            "fa2_hidden_m1_stream": {"how": "bound-as-leaf", "tensors": 64}}
@@ -36,7 +45,7 @@ CLASSES = {"input_token_ids": {"how": "bound-as-leaf", "tensors": 4}, "instance_
 
 def _sr(**kw) -> dict:
     return {"result": True, "grade": "complete", "why": None, "strata_unevaluated": [],
-            "sample": {"per_stratum": 2, "seed": SEED_ROOT, "seed_source": ROOT_FORM, "picked": 407, "evaluated": 407, "equal": 407, "mismatch_n": 0, "not_evaluated_n": 0},
+            "sample": {"per_stratum": 2, "seed": 0, "seed_source": RC.LIVE_KEY_SOURCE, "challenge": LIVE_KEY, "picked": 407, "evaluated": 407, "equal": 407, "mismatch_n": 0, "not_evaluated_n": 0},
             "population": {"vus": 57678, "not_evaluable": {}, "not_evaluable_by_family": {},
                            "query_total": {"identities": 57678}, "query_checks": {"ok": True, "executed_prefix_rule": {"applied": True, "faults": []}}}, **kw}
 
@@ -58,7 +67,7 @@ def _base() -> dict:
     # sampled_replay.executed_prefix_of_record.facts_of_record (sampled_replay executed_prefix=)
     sr = _sr()
     sr["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 8, "cap": 8, "linked": True, "account_missing": []}}}
-    return {"extra": {"expected_tensors": 572, "committed_tensors": 572, "errors_n": 0,
+    return {"extra": {"expected_tensors": 572, "committed_tensors": 572, "errors_n": 0, "challenge": CHALLENGE,
                       "coverage": {"ok": True, "checked": 572, "missing_n": 0, "committed_extras_n": 0, "duplicate_names_n": 0, "manifest_digest": "cd" * 32, "checked_by_family": {"instance_outputs": 400}},
                       "identity_check": {"ok": True, "steps_checked": 4, "violations": [], "violations_n": 0,
                                          "manifest": {"modules": 10, "attention_layers": 2, "fa2_hidden_per_layer": 1, "sampler_ids": 1, "moe_layers": 0, "tp_sites": 0}}},
@@ -194,7 +203,7 @@ def _mutations():
     c = b(); c["weights_pin"] = {"result": False, "why": "1 mismatched", "mismatched": ["model.layers.0.q_proj"]}; yield "checkpoint binding", c, True
     c = b(); c["boundary_linkage"] = {"result": False, "why": "1 unlinked", "unlinked_n": 1}; yield "boundary linkage", c, True
     c = b(); c["sampled_replay"]["result"] = False; c["sampled_replay"]["why"] = "a VU differs"; yield "replay mismatch", c, True
-    c = b(); c["sampled_replay"]["sample"]["seed"] = 12345; c["oracle_compare"] = {"result": True, "complete": False}; yield "prover-chosen seed, no form (B)", c, True
+    c = b(); c["sampled_replay"]["sample"]["challenge"] = "d4" * 64; c["oracle_compare"] = {"result": True, "complete": False}; yield "another replay key, no form (B)", c, True
     c = b(); c["sampled_replay"]["population"]["query_checks"] = {"ok": False, "vus_outside_query": {"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]}}
     yield "population scope", c, True
     c = b(); del c["weights_pin"]; yield "weights unpinned", c, True
@@ -217,7 +226,7 @@ def test_pass_record_passes_in_both_and_names_its_scope():
     (ok, _), out, checks = _both(_base())
     assert ok is True and out == V.PASS
     by = {c.name: c for c in checks}
-    assert by["local_replay/sampled_replay"].scope["sample_size"] == 407 and by["local_replay/sampled_replay"].inputs["sample_seed"] == SEED_ROOT
+    assert by["local_replay/sampled_replay"].scope["sample_size"] == 407 and by["local_replay/sampled_replay"].inputs["sample_seed"] == 0
     assert by["runtime_match/openings"].scope["sample_size"] == 64 and by["runtime_match/openings"].scope["verified"] == 64
     assert by["checkpoint_binding/weights_of_record"].scope["compared"] == 163
     assert by["program_source_identity/identity_layout"].scope["steps_checked"] == 4

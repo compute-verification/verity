@@ -184,7 +184,7 @@ class HostRows:
     forked processes for a batch of `POOL_MIN` leaves or more.  Bit for bit with `leaf_digest` and core's ``FrameV3``."""
 
     def __init__(self, workers: int | None = None) -> None:
-        self.workers = int(workers or os.environ.get("VERITY_RECORD_WORKERS") or min(16, os.cpu_count() or 1))
+        self.workers = int(workers or min(16, os.cpu_count() or 1))
 
     def levels(self, jobs: Sequence[RowJob]) -> list[list[np.ndarray]]:
         if TASK & (TASK - 1):

@@ -126,10 +126,11 @@ RECORD_ROOT = hashlib.sha512(b"record").digest()
 
 def test_a_run_of_record_draws_only_from_its_live_source():
     run = _Run(RECORD_ROOT, [5, 0, 9, 3])
-    with pytest.raises(ValueError, match="no live key"):
+    with pytest.raises(ValueError, match="no live opening-positions key"):
         CH.positions_of(run, 8)
-    key = CH.draw_live(run, AUDITOR_KEY.hex())
-    assert key == AUDITOR_KEY and run.extra["challenge"] == {"key": AUDITOR_KEY.hex(), "origin": "unattested", "after_run_root": RECORD_ROOT.hex()}
+    ch = CH.draw_live(run, AUDITOR_KEY.hex())
+    assert ch.keys == dict.fromkeys(CH.LABELS, AUDITOR_KEY)
+    assert run.extra["challenge"] == {"keys": dict.fromkeys(CH.LABELS, AUDITOR_KEY.hex()), "origin": "unattested", "after_run_root": RECORD_ROOT.hex()}
     want = derive(AUDITOR_KEY, CH.POSITIONS_DOMAIN, {"run_root": RECORD_ROOT, "salt": b"p", "layout": "5,0,9,3"})
     cum = [5, 5, 14, 17]
     got = CH.positions_of(run, 40, b"p")
@@ -140,36 +141,88 @@ def test_a_run_of_record_draws_only_from_its_live_source():
 
 def test_own_coins_are_fresh_and_bound_to_the_root_they_follow():
     a, b = _Run(RECORD_ROOT, [4]), _Run(RECORD_ROOT, [4])
-    assert CH.draw_live(a) != CH.draw_live(b) and a.extra["challenge"]["origin"] == "own"
+    ka, kb = CH.draw_live(a).keys, CH.draw_live(b).keys
+    assert a.extra["challenge"]["origin"] == "own" and all(len(k) == CH.COIN_BYTES for k in ka.values())
+    assert len(set(ka.values()) | set(kb.values())) == 2 * len(CH.LABELS)
     a.run_root = hashlib.sha512(b"another root").digest()
-    with pytest.raises(ValueError, match="no live key"):
+    with pytest.raises(ValueError, match="no live opening-positions key"):
         CH.positions_of(a, 2)
     with pytest.raises(ValueError, match="at least 16 bytes"):
         CH.key_challenger("00" * 8)
 
 
-def test_the_openings_take_their_challenge_from_a_challenger_seam_and_only_the_service_challengers_is_of_record(monkeypatch):
-    """`draw_live` asks a `Challenger` (root in, `LiveChallenge` out); positions are a function of the root and that challenge alone.
-    A key handed in or the run's own bytes are never attested; the service challenger's is, once `ATTEST` accepts its provenance."""
+def test_the_openings_take_their_challenge_from_a_challenger_seam():
+    """`draw_live` asks a `Challenger` (root in, `LiveChallenge` out); positions are a function of the root and that challenge alone,
+    and an answer with a key missing, a short key or another root is refused."""
     asked = []
+    keys = {label: hashlib.sha512(label.encode()).digest() for label in CH.LABELS}
 
     def service(root: bytes) -> CH.LiveChallenge:
         asked.append(root)
-        return CH.LiveChallenge(AUDITOR_KEY, root, CH.ATTESTED, {"opening": "stand-in"})
+        return CH.LiveChallenge(keys, root, CH.ATTESTED, {"stand-in": True})
 
     run = _Run(RECORD_ROOT, [6, 6])
-    assert CH.draw_live(run, service) == AUDITOR_KEY and asked == [RECORD_ROOT]
-    assert run.extra["challenge"]["provenance"] == {"opening": "stand-in"}
-    assert CH.positions_of(run, 5) == CH.record_positions(RECORD_ROOT, [6, 6], 5, source=AUDITOR_KEY)
-    assert "is plugged in yet" in CH.attested_reason(run.extra["challenge"])
-    monkeypatch.setattr(CH, "ATTEST", lambda ch: None if ch.get("provenance") else "no opening")
-    assert CH.attested_reason(run.extra["challenge"]) is None
+    assert CH.draw_live(run, service).keys == keys and asked == [RECORD_ROOT]
+    assert CH.positions_of(run, 5) == CH.record_positions(RECORD_ROOT, [6, 6], 5, source=keys[CH.POSITIONS])
+    assert CH.kernel_seed_of(run) == CH.record_kernel_check_seed(RECORD_ROOT, source=keys[CH.KERNEL_CHECK])
+    for bad in (lambda root: CH.LiveChallenge(keys, bytes(64), CH.ATTESTED),
+                lambda root: CH.LiveChallenge({CH.POSITIONS: keys[CH.POSITIONS]}, root, CH.ATTESTED),
+                lambda root: CH.LiveChallenge({**keys, CH.REPLAY: b"short"}, root, CH.ATTESTED)):
+        with pytest.raises(ValueError, match="not a live challenge after its root"):
+            CH.draw_live(_Run(RECORD_ROOT, [1]), bad)
     for given in (AUDITOR_KEY.hex(), None):
         other = _Run(RECORD_ROOT, [6, 6])
         CH.draw_live(other, given)
         assert "not the service challenger's" in CH.attested_reason(other.extra["challenge"])
-    with pytest.raises(ValueError, match="not a live challenge after its root"):
-        CH.draw_live(_Run(RECORD_ROOT, [1]), lambda root: CH.LiveChallenge(AUDITOR_KEY, bytes(64), CH.ATTESTED))
+
+
+def _live():
+    return pytest.importorskip("verity.core.protocols.sampled_proofs.challenger",
+                               reason="the service's challenger (compute accounting's #2573 / #2584) is not on this tree")
+
+
+def test_the_commit_is_a_client_of_the_service_challenger_and_its_coins_open_once_after_each_root(monkeypatch):
+    """Coin i of each label opens once, after the Commit's i-th root (`service_challenger`); the challenge is of record only when its
+    commitment is one the verifier recorded from its own challenger (`trust`) and every label's 64-byte coin opens against it after the
+    recorded root and is that label's key."""
+    LC = _live()
+    monkeypatch.setattr(CH, "TRUSTED", {})
+    chal = LC.LiveChallenger(CH.SCHEME, 0, CH.layout(2))
+    ask = CH.service_challenger(chal)
+    a, b = _Run(RECORD_ROOT, [6, 6]), _Run(hashlib.sha512(b"second").digest(), [6])
+    ca, cb = CH.draw_live(a, ask), CH.draw_live(b, ask)
+    assert ca.origin == CH.ATTESTED and all(len(k) == 64 for k in ca.keys.values()) and set(ca.keys.values()).isdisjoint(cb.keys.values())
+    prov = a.extra["challenge"]["provenance"]
+    assert prov["commitment"] == chal.commitment.to_json()
+    assert {label: (o["index"], o["after"]) for label, o in prov["openings"].items()} == {label: (0, RECORD_ROOT.hex()) for label in CH.LABELS}
+    assert all(o["index"] == 1 for o in b.extra["challenge"]["provenance"]["openings"].values())
+    with pytest.raises(LC.CoinError):
+        ask(hashlib.sha512(b"third").digest())                    # the layout's coins are spent: a retry never redraws
+
+    assert "not one the verifier recorded" in CH.attested_reason(a.extra["challenge"])
+    CH.trust(chal.commitment.to_json())
+    assert CH.attested_reason(a.extra["challenge"]) is None and CH.attested_reason(b.extra["challenge"]) is None
+
+    rec = a.extra["challenge"]
+    assert "not the coin the challenger opened" in CH.attested_reason({**rec, "keys": {**rec["keys"], CH.REPLAY: "ab" * 64}})
+    assert "not opened after what the verifier recorded" in CH.attested_reason({**rec, "after_run_root": b.run_root.hex()})
+    swapped = {**prov, "openings": {**prov["openings"], CH.REPLAY: prov["openings"][CH.POSITIONS]}}
+    assert "replay" in CH.attested_reason({**rec, "provenance": swapped})
+    other = LC.LiveChallenger(CH.SCHEME, 0, CH.layout(2))
+    forged = {**prov, "commitment": other.commitment.to_json()}
+    assert "not one the verifier recorded" in CH.attested_reason({**rec, "provenance": forged})
+    CH.trust(other.commitment.to_json())
+    assert "does not open against" in CH.attested_reason({**rec, "provenance": forged})
+    with pytest.raises(ValueError, match="scheme"):
+        CH.service_challenger(LC.LiveChallenger("pouw/live", 0, CH.layout(1)))
+
+
+def test_the_commits_challenger_is_the_service_challenger_unless_a_key_is_handed_in():
+    LC = _live()
+    run = _Run(RECORD_ROOT, [2])
+    assert CH.draw_live(run, CH.commit_challenger(None, runs=1)).origin == CH.ATTESTED
+    assert LC.LiveCommitment.from_json(run.extra["challenge"]["provenance"]["commitment"]).families == CH.layout(1)
+    assert CH.draw_live(_Run(RECORD_ROOT, [2]), CH.commit_challenger("ab" * 16, runs=1)).origin == "unattested"
 
 
 def test_reference_rows_from_a_live_key_are_a_subset_of_the_pending_rows():

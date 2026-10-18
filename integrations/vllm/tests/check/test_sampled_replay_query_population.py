@@ -110,16 +110,20 @@ def test_the_record_carries_the_engine_configuration_the_evaluators_were_conditi
     assert SR.engine_facts_of_record()["VLLM_BATCH_INVARIANT"] is None
 
 
-def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliation_and_the_verdict(world):  # noqa: F811
+def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliation_and_the_verdict(world, monkeypatch):  # noqa: F811
     man = _manifest_for(world)
     bad = copy.deepcopy(man)
     ghost = dict(next(r for r in man["identities"] if r["family"] == "instance_outputs"), op_path="model.layers.7.mlp.down_proj", output_member="0")
     bad["identities"].append(ghost)                                              # Q(P) requires something the Program never produces
     bmap, committed = world.bmap_and_reader()
-    # a post-commitment seed of record (root form: seed == run_root[:8]; pin F-r16-23 grades the label as a fact where it is on the tree)
-    run_root = "71f69377" + "ab" * 28
-    seed, seed_src = int.from_bytes(bytes.fromhex(run_root)[:8], "big"), "run root (first 8 bytes, after commitment)"
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=seed, seed_source=seed_src, workers=0, manifest=bad)
+    # a post-commitment seed of record: the replay key a stand-in challenger opened after the root of record, which the verifier accepts
+    from verity_vllm.check.replay import replay_codes as RC
+    from verity_vllm.commit import challenge as CH
+    run_root, key = "71f69377" + "ab" * 60, "c3" * 64
+    challenge = {"keys": dict.fromkeys(CH.LABELS, key), "origin": CH.ATTESTED, "after_run_root": run_root, "provenance": {"stand-in": True}}
+    monkeypatch.setattr(CH, "attested_reason", lambda ch: None if (ch or {}).get("provenance") == {"stand-in": True} else "not the stand-in")
+    live = dict(seed=0, seed_source=RC.LIVE_KEY_SOURCE, seed_challenge=key, challenge_key=CH.replay_key(bytes.fromhex(key), bytes.fromhex(run_root)))
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, workers=0, manifest=bad, **live)
     chk = rep["population"]["query_checks"]
     assert chk["ok"] is False and chk["identities_without_rows"]["n"] == 1
     assert chk["identities_without_rows"]["first"][0]["op_path"] == "model.layers.7.mlp.down_proj"
@@ -127,7 +131,7 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     note, fail = _query_population_scope(rep)
     assert note is None and fail.startswith("C2 population does not reconcile with Q(P) (R17-3)") and "identities_without_rows x1" in fail
     # through the verdict of record: a row-procedure record (binding block) with this replay FAILs by that name, whatever else holds
-    rec = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "run_root": run_root,
+    rec = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0, "challenge": challenge}, "openings": {"n": 64, "verified": 64}, "run_root": run_root,
            "binding": {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}},
            "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
            "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
@@ -135,7 +139,7 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     ok, why = commit_verdict(rec, True, min_openings=64)
     assert ok is False and "does not reconcile with Q(P)" in why, why
     # the honest manifest on the same record: PASS carrying the scope
-    rep_ok = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=seed, seed_source=seed_src, workers=0, manifest=man)
+    rep_ok = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, workers=0, manifest=man, **live)
     ok, why = commit_verdict(dict(rec, sampled_replay=rep_ok), True, min_openings=64)
     assert ok is True and "C2 population scope (R17-3; query of record Q_module_body_v1): Q_module_body_v1(P) = " in why, why
 

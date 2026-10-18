@@ -118,7 +118,7 @@ def cache_key(s: Site) -> str | None:
         if getattr(args, "replay_seed", None) is not None:
             _ks: Any = int(args.replay_seed)
         elif CH.of_record(bytes(rc.run_root)):
-            _ks = "live-key:" + CH.source_of(rc).hex()
+            _ks = "live-key:" + CH.source_of(rc, CH.REPLAY).hex()
         elif getattr(args, "replay_challenge", None):
             _ks = CH.challenge_seed(str(args.replay_challenge), rc.run_root)
         else:
@@ -252,7 +252,7 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
     elif CH.of_record(bytes(rc.run_root)):
         if getattr(args, "replay_challenge", None):
             raise ValueError("--replay-challenge draws over a vllm-v1 root; a run of record takes the auditor's key as --challenge-key")
-        _seed, _seed_src, _seed_form, _seed_chal = 0, RC.LIVE_KEY_SOURCE, "live-key", CH.source_of(rc).hex()
+        _seed, _seed_src, _seed_form, _seed_chal = 0, RC.LIVE_KEY_SOURCE, "live-key", CH.source_of(rc, CH.REPLAY).hex()
     elif getattr(args, "replay_challenge", None):
         (_seed, _seed_src), _seed_form = SR.challenge_seed(str(args.replay_challenge), rc.run_root), "challenge"
         _seed_chal = str(args.replay_challenge)            # [rev M-0600] the full challenge goes on the record (sample.challenge)
@@ -262,10 +262,10 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
 
 
 def live_key_of(args: Any, rc: Any) -> Any:
-    """The replay sample's key over a run of record (`challenge.replay_key` from its live source), else None (the seed draws)."""
+    """The replay sample's key over a run of record (`challenge.replay_key` from its live `REPLAY` key), else None (the seed draws)."""
     if getattr(args, "replay_seed", None) is not None or not CH.of_record(bytes(rc.run_root)):
         return None
-    return CH.replay_key(CH.source_of(rc), bytes(rc.run_root))
+    return CH.replay_key(CH.source_of(rc, CH.REPLAY), bytes(rc.run_root))
 
 
 def draw_of(args: Any) -> str:

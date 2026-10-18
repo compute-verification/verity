@@ -10,12 +10,15 @@ and the draw's other bindings as context:
 * the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of sampled proofs' former derived
   proof-unit draw, with `per_stratum` units of each stratum drawn uniformly at the stratum's index (`stratum_picks`).
 
-A run of record (`commit.record`: a 64-byte root of ``frame-v3-sha512`` / ``hm96-sha512`` rows) has no legacy draw.  Its source is
-a `LiveChallenge` a `Challenger` answers its root with, once the root is fixed (`draw_live`), recorded with the run, and every draw
-over it is a non-legacy form from that source: `record_positions`, `identity_picker(legacy=False)`, `replay_key` and
-`record_kernel_check_seed`, through `positions_of`, `identities_kw` and `kernel_seed_of`, which read a recorded ``vllm-v1`` run with
-the legacy forms.  Only the proof service's challenger's challenge is post-commitment of record (`attested_reason`); the service
-has no call for it yet, so a key handed in (`key_challenger`) or the run's own bytes (`own_challenger`) draw measurement samples.
+A run of record (`commit.record`: a 64-byte root of ``frame-v3-sha512`` / ``hm96-sha512`` rows) has no legacy draw.  Its sources
+are a `LiveChallenge` a `Challenger` answers its root with, once the root is fixed (`draw_live`), recorded with the run: a key per
+label of `LABELS`, and every draw over the root is a non-legacy form from its label's key: `record_positions` (`POSITIONS`),
+`identity_picker(legacy=False)` (`IDENTITIES`), `replay_key` (`REPLAY`) and `record_kernel_check_seed` (`KERNEL_CHECK`), through
+`positions_of`, `identities_kw` and `kernel_seed_of`, which read a recorded ``vllm-v1`` run with the legacy forms.  The Commit is a
+client of the proof service's challenger (`verity.core.protocols.sampled_proofs.challenger`, scheme `SCHEME`, `layout`): coin i of each
+label opens once, after the Commit's i-th root (`service_challenger`).  Only a challenge whose coins open against a commitment the
+verifier recorded from its own challenger is post-commitment of record (`attested_reason`, `trust`); a key handed in
+(`key_challenger`), the run's own bytes (`own_challenger`) or a challenger the prover's process holds draw measurement samples.
 
 The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
 difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
@@ -191,59 +194,132 @@ def of_record(run_root: bytes) -> bool:
     return len(run_root) == RECORD_ROOT_BYTES
 
 
-#: the one origin whose challenge is post-commitment of record: the proof service's challenger, its provenance checked by `ATTEST`
+#: The Commit as a client of the proof service's challenger (`verity.core.protocols.sampled_proofs.challenger`): its scheme, and one
+#: coin family per draw over a run of record, coin i of each opened after the Commit's i-th root of record.
+SCHEME = "vllm/commit"
+POSITIONS, IDENTITIES, REPLAY, KERNEL_CHECK = "opening-positions", "opening-identities", "replay", "kernel-check"
+LABELS = (POSITIONS, IDENTITIES, REPLAY, KERNEL_CHECK)
+COIN_BYTES = 64
+
+#: the one origin whose challenge can be post-commitment of record: an answer of the service's challenger, with its coin openings
 ATTESTED = "challenger"
+
+#: the coin commitments the verifier recorded from its own challenger before their epochs (`trust`; `LiveCommitment.to_json`, by root hex)
+TRUSTED: dict[str, dict[str, Any]] = {}
+
+
+def layout(runs: int) -> tuple[tuple[str, int], ...]:
+    """The coin layout of a Commit of at most ``runs`` runs of record: each label's family holds a coin per run."""
+    return tuple((label, int(runs)) for label in LABELS)
 
 
 @dataclass(frozen=True)
 class LiveChallenge:
-    """A live challenge answering a committed root: the ``key`` every draw over it derives from, the root it came ``after``, its
-    ``origin`` (`ATTESTED`, ``unattested``: a key handed to this process, ``own``: this process's own bytes) and the service
-    challenger's ``provenance`` (its coin opening) when it has one."""
+    """A live challenge answering a committed root: a ``key`` per label in `LABELS`, every draw of that label over the root derives from
+    it; the root it came ``after``; its ``origin`` (`ATTESTED`; ``unattested``: a key handed to this process; ``own``: this process's
+    own bytes) and, from the service's challenger, its ``provenance``: the coin commitment and the label's coin openings."""
 
-    key: bytes
+    keys: dict[str, bytes]
     after: bytes
     origin: str
     provenance: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
-        return {"key": self.key.hex(), "origin": self.origin, "after_run_root": self.after.hex(),
+        return {"keys": {label: k.hex() for label, k in self.keys.items()}, "origin": self.origin, "after_run_root": self.after.hex(),
                 **({"provenance": self.provenance} if self.provenance is not None else {})}
 
 
 #: The openings' seam to the proof service's challenger: a committed root in, the live challenge answering it out.  Positions are
-#: then `record_positions(root, layout, k, salt, source=challenge.key)`, a function of the root and the challenge alone.
+#: then `record_positions(root, layout, k, salt, source=challenge.keys[POSITIONS])`, a function of the root and the challenge alone.
 Challenger = Callable[[bytes], LiveChallenge]
 
-#: The service challenger's check of a recorded challenge's provenance (None: accepted; else why not), plugged in once the
-#: service exposes one.  Until then no challenge is attested, and every replay over a run of record is a mechanism run.
-ATTEST: Callable[[dict[str, Any]], str | None] | None = None
+
+def service_challenger(challenger: Any) -> Challenger:
+    """A `Challenger` over the service's challenger (a `challenger.LiveChallenger` holding `layout(runs)` under `SCHEME`): each label's
+    `LiveRecord` records the Commit's next root and only then opens that label's next coin after it, once.  Origin `ATTESTED`; whether
+    the commitment is the auditor's is the verifier's check (`attested_reason`)."""
+    from verity.core.protocols.sampled_proofs.challenger import LiveRecord
+
+    if challenger.commitment.scheme != SCHEME:
+        raise ValueError(f"the Commit's coins are under scheme {SCHEME!r}, not {challenger.commitment.scheme!r}")
+    records = {label: LiveRecord(challenger, label) for label in LABELS}
+
+    def ask(root: bytes) -> LiveChallenge:
+        openings = {label: r.record(bytes(root)) for label, r in records.items()}
+        return LiveChallenge({label: o.coin for label, o in openings.items()}, bytes(root), ATTESTED,
+                             {"commitment": challenger.commitment.to_json(), "openings": {label: o.to_json() for label, o in openings.items()}})
+    return ask
 
 
 def key_challenger(given: str | bytes) -> Challenger:
-    """A challenger over a key handed to this process (hex or bytes, at least 16): origin ``unattested``, since nothing shows the
-    key came from the service challenger after the root."""
+    """A challenger over a key handed to this process (hex or bytes, at least 16), the key of every label: origin ``unattested``, since
+    nothing shows the key came from the service's challenger after the root."""
     key = bytes.fromhex(given) if isinstance(given, str) else bytes(given)
     if len(key) < 16:
         raise ValueError(f"a challenge key is at least 16 bytes, not {len(key)}")
-    return lambda root: LiveChallenge(key, bytes(root), "unattested")
+    return lambda root: LiveChallenge(dict.fromkeys(LABELS, key), bytes(root), "unattested")
 
 
 def own_challenger(root: bytes) -> LiveChallenge:
-    """The run as its own auditor (as `protocol_options.own_auditor` holds PoUW's coins): 32 OS bytes drawn once the root is fixed,
-    origin ``own``.  A measurement draw, never post-commitment of record."""
-    return LiveChallenge(os.urandom(32), bytes(root), "own")
+    """The run as its own auditor: `COIN_BYTES` OS bytes per label once the root is fixed, origin ``own``.  A measurement draw, never
+    post-commitment of record."""
+    return LiveChallenge({label: os.urandom(COIN_BYTES) for label in LABELS}, bytes(root), "own")
+
+
+def commit_challenger(given: str | bytes | None, runs: int) -> Challenger:
+    """The Commit's challenger: a key handed in (`key_challenger`), else the service's challenger (a `challenger.LiveChallenger` over
+    `layout(runs)`, epoch 0) held by this process.  Its commitment is this process's own, so its draws are measurement samples unless the
+    verifier recorded that commitment from its own challenger (`trust`)."""
+    if given:
+        return key_challenger(given)
+    from verity.core.protocols.sampled_proofs.challenger import LiveChallenger
+
+    return service_challenger(LiveChallenger(SCHEME, 0, layout(runs)))
+
+
+def trust(*commitments: dict[str, Any]) -> None:
+    """Record coin commitments (`LiveCommitment.to_json`) as the verifier's challenger's, published before their epochs."""
+    from verity.core.protocols.sampled_proofs.challenger import LiveCommitment
+
+    for doc in commitments:
+        c = LiveCommitment.from_json(doc)
+        TRUSTED[c.root.hex()] = c.to_json()
 
 
 def attested_reason(challenge: dict[str, Any] | None) -> str | None:
-    """Why a recorded challenge (``extra.challenge``) is not the service challenger's; None when it is (`ATTESTED` origin, its
-    provenance accepted by `ATTEST`)."""
+    """Why a recorded challenge (``extra.challenge``) is not the service's challenger's after its root; None when it is: origin
+    `ATTESTED`, a coin commitment the verifier recorded from its own challenger (`trust`), and per label a `COIN_BYTES` coin that opens
+    against it after the recorded root (`challenger.live_reason`) and is the label's key."""
     ch = challenge or {}
     if ch.get("origin") != ATTESTED:
-        return f"its live key's origin is {ch.get('origin')!r}, not the service challenger's"
-    if ATTEST is None:
-        return "no check of the service challenger's provenance is plugged in yet (challenge.ATTEST)"
-    return ATTEST(ch)
+        return f"its live keys' origin is {ch.get('origin')!r}, not the service challenger's"
+    from verity.core.protocols.sampled_proofs import challenger as LC
+
+    prov, keys = ch.get("provenance") or {}, ch.get("keys") or {}
+    try:
+        com = LC.LiveCommitment.from_json(prov.get("commitment"))
+        after = bytes.fromhex(str(ch.get("after_run_root")))
+        openings = {label: LC.LiveOpening.from_json(o) for label, o in (prov.get("openings") or {}).items()}
+    except (LC.CoinError, ValueError, TypeError, KeyError) as e:
+        return f"its coin commitment or openings are malformed ({e})"
+    if com.scheme != SCHEME:
+        return f"its coins are under scheme {com.scheme!r}, not the Commit's {SCHEME!r}"
+    if TRUSTED.get(com.root.hex()) != com.to_json():
+        return f"its coin commitment {com.root.hex()[:16]} is not one the verifier recorded from its challenger (challenge.trust)"
+    if sorted(openings) != sorted(LABELS) or sorted(keys) != sorted(LABELS):
+        return f"it does not carry one opened coin and one key per label ({', '.join(LABELS)})"
+    for label in LABELS:
+        o = openings[label]
+        if len(o.coin) != COIN_BYTES:
+            return f"its {label} coin is {len(o.coin)} bytes, not a {COIN_BYTES}-byte live coin"
+        if com.position(label, o.index) is None:
+            return f"its {label} coin {o.index} is not in the epoch's layout"
+        why = LC.live_reason(com, o, label, o.index, after)
+        if why is not None:
+            return f"its {label} {why}"
+        if keys[label] != o.coin.hex():
+            return f"its {label} key is not the coin the challenger opened"
+    return None
 
 
 def record_positions(record_root: bytes, leaves_per_step: Sequence[int], k: int, salt: bytes = b"", *, source: bytes) -> list[tuple[int, int]]:
@@ -271,7 +347,7 @@ def record_kernel_check_seed(record_root: bytes, *, source: bytes) -> int:
     return derive(source, KERNEL_CHECK_DOMAIN, {"run_root": bytes(record_root)}).uniform(1 << 32)
 
 
-def draw_live(run: Any, challenger: Challenger | str | bytes | None = None) -> bytes | None:
+def draw_live(run: Any, challenger: Challenger | str | bytes | None = None) -> LiveChallenge | None:
     """Ask ``challenger`` for a run of record's live challenge once its root is fixed, and put it on the run's record (``run.extra
     ["challenge"]``, `LiveChallenge.to_json`; a verifier's coins are public once drawn).  A key (hex or bytes) is `key_challenger`'s,
     None `own_challenger`.  None for a run recorded before the record, whose draws stay the legacy ones."""
@@ -280,39 +356,42 @@ def draw_live(run: Any, challenger: Challenger | str | bytes | None = None) -> b
         return None
     ask = challenger if callable(challenger) else key_challenger(challenger) if challenger else own_challenger
     ch = ask(root)
-    if not isinstance(ch, LiveChallenge) or ch.after != root or len(ch.key) < 16:
+    if (not isinstance(ch, LiveChallenge) or ch.after != root or sorted(ch.keys) != sorted(LABELS)
+            or any(len(k) < 16 for k in ch.keys.values())):
         raise ValueError(f"run of record {root.hex()[:16]}: the challenger's answer is not a live challenge after its root")
     run.extra["challenge"] = ch.to_json()
-    return ch.key
+    return ch
 
 
-def source_of(run: Any) -> bytes:
-    """The live source a run of record drew (`draw_live`), from a `RunCommitment` or a row's ``commit`` record; refused by name when it
-    drew none or drew it after another root."""
+def source_of(run: Any, label: str) -> bytes:
+    """The live key of ``label`` a run of record drew (`draw_live`), from a `RunCommitment` or a row's ``commit`` record; refused by name
+    when it drew none or drew it after another root."""
     extra = run.extra if hasattr(run, "extra") else (run.get("extra") or {})
     root = bytes(run.run_root).hex() if hasattr(run, "run_root") else str(run.get("run_root"))
     ch = (extra or {}).get("challenge") or {}
-    if not ch.get("key") or ch.get("after_run_root") != root:
-        raise ValueError(f"run of record {root[:16]}: no live key drawn after its root (draw_live) -- no challenge without one")
-    return bytes.fromhex(ch["key"])
+    key = (ch.get("keys") or {}).get(label)
+    if not key or ch.get("after_run_root") != root:
+        raise ValueError(f"run of record {root[:16]}: no live {label} key drawn after its root (draw_live) -- no challenge without one")
+    return bytes.fromhex(key)
 
 
 def positions_of(run: Any, k: int, salt: bytes = b"") -> list[tuple[int, int]]:
-    """``k`` opening positions of ``run``: `record_positions` from its live source over a root of record, else the recorded legacy
-    `challenge_positions` over its ``vllm-v1`` root."""
+    """``k`` opening positions of ``run``: `record_positions` from its live `POSITIONS` key over a root of record, else the recorded
+    legacy `challenge_positions` over its ``vllm-v1`` root."""
     leaves = [s.n_leaves for s in run.steps]
     if of_record(bytes(run.run_root)):
-        return record_positions(bytes(run.run_root), leaves, k, salt, source=source_of(run))
+        return record_positions(bytes(run.run_root), leaves, k, salt, source=source_of(run, POSITIONS))
     return challenge_positions(bytes(run.run_root), leaves, k, salt)
 
 
 def identities_kw(run: Any) -> dict[str, Any]:
-    """`identity_picker`'s (and `binding.challenge_identities`') keywords for ``run``: off legacy with its live source over a root of
-    record, else none (the recorded legacy form)."""
-    return {"legacy": False, "source": source_of(run)} if of_record(bytes(run.run_root)) else {}
+    """`identity_picker`'s (and `binding.challenge_identities`') keywords for ``run``: off legacy with its live `IDENTITIES` key over a
+    root of record, else none (the recorded legacy form)."""
+    return {"legacy": False, "source": source_of(run, IDENTITIES)} if of_record(bytes(run.run_root)) else {}
 
 
 def kernel_seed_of(run: Any) -> int:
-    """The compiled-kernel check's step seed for ``run``: `record_kernel_check_seed` over a root of record, else `kernel_check_seed`."""
+    """The compiled-kernel check's step seed for ``run``: `record_kernel_check_seed` from its live `KERNEL_CHECK` key over a root of
+    record, else `kernel_check_seed`."""
     root = bytes(run.run_root)
-    return record_kernel_check_seed(root, source=source_of(run)) if of_record(root) else kernel_check_seed(root)
+    return record_kernel_check_seed(root, source=source_of(run, KERNEL_CHECK)) if of_record(root) else kernel_check_seed(root)

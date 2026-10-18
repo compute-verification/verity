@@ -49,8 +49,8 @@ ROOT_SEED = int.from_bytes(bytes(range(8)), "big")
 
 
 def test_the_seed_form_on_the_record_decides_not_its_source_text():
-    ok, how = _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": "the run root's first bytes", "seed_form": "run-root"}}, ROOT)
-    assert ok is True and "recomputed" in how
+    ok, why = _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": "the run root's first bytes", "seed_form": "run-root"}}, ROOT)
+    assert ok is False and "grindable" in why
     ok, why = _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": RC.ROOT_SEED_SOURCE, "seed_form": "prover-chosen"}}, ROOT)
     assert ok is False and "prover-chosen" in why
     # a record written before `seed_form`: its source text decodes to the form
@@ -58,5 +58,5 @@ def test_the_seed_form_on_the_record_decides_not_its_source_text():
     assert RC.seed_form({"sample": {"seed_source": RC.PROVER_SEED_SOURCE}}) == "prover-chosen"
     assert RC.seed_form({"sample": {"seed_source": RC.challenge_seed_source("abc")}}) == "challenge"
     assert RC.seed_form({"seed_source": "chosen somehow"}) == "unknown" and RC.seed_form({"sample": {}}) is None
-    assert _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": RC.ROOT_SEED_SOURCE}}, ROOT)[0] is True
-    assert _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": RC.PROVER_SEED_SOURCE}}, ROOT)[0] is False
+    assert "grindable" in _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": RC.ROOT_SEED_SOURCE}}, ROOT)[1]
+    assert "prover-chosen" in _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": RC.PROVER_SEED_SOURCE}}, ROOT)[1]

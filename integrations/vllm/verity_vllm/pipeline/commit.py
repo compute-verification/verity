@@ -240,8 +240,8 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
 # [coord ruling 41 / rev F-r16-23] the compiled check's sampled steps are drawn from the run root AFTER commitment: seed = int(run_root.hex()[:8], 16)
 # (first 4 bytes).  Recorded on value_correspondence.compiled_check.seed_source so the finalizer recomputes it from the same runs.jsonl as a fact.
 COMPILED_REPLAY_SEED_SOURCE = "run root (first 4 bytes, after commitment): int(run_root.hex()[:8], 16)"
-#: over a root of record (commit.record) the steps are drawn from the live key the run drew after it (challenge.draw_live)
-COMPILED_RECORD_SEED_SOURCE = "live key drawn after the root of record: challenge.record_kernel_check_seed(run_root, source=extra.challenge.key)"
+#: over a root of record (commit.record) the steps are drawn from the live kernel-check key the run drew after it (challenge.draw_live)
+COMPILED_RECORD_SEED_SOURCE = "live key drawn after the root of record: challenge.record_kernel_check_seed(run_root, source=extra.challenge.keys['kernel-check'])"
 
 
 def admission_lag(wl: dict) -> int:
@@ -1001,7 +1001,7 @@ class Options:
     profile_hooks: bool = option("--profile-hooks", default=False, action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
     expect_root: str | None = option("--expect-root", default=None, help="fail if the instrumented run's committer root (hex; the vllm-v1 root, extra.committer_root of a run of record) differs from this reference root (R10 arm2/arm3 equality gate)")
     root_of_record: str = option("--root-of-record", default="sha512", choices=["sha512", "vllm-v1"], help="sha512 (default): the run root of record is the record's (commit.record: frame-v3-sha512 trees of hm96-sha512 rows, one per committer leaf), hashed on the host after the run, and every challenge is drawn from a live key after it (--challenge-key).  vllm-v1: the committer's own SHA-256 root, NOT of record -- a measurement mode for the retentions the host record cannot serve (--retain none, --retain-exclude) until the committer hashes the record on the GPU")
-    challenge_key: str | None = option("--challenge-key", default=None, help="a key (hex, at least 16 bytes; else env VERITY_CHALLENGE_KEY) every draw over a run of record derives from once its root is fixed (challenge.draw_live, origin 'unattested'); without one this process draws its own 32 bytes (origin 'own').  Either draws a measurement sample: only the proof service's challenger's challenge is of record (challenge.attested_reason)")
+    challenge_key: str | None = option("--challenge-key", env="VERITY_CHALLENGE_KEY", default=None, help="a key (hex, at least 16 bytes) every draw over a run of record derives from once its root is fixed (challenge.draw_live, origin 'unattested'); without one the service's challenger, held by this process, opens one coin per label after each root (challenge.commit_challenger, scheme vllm/commit).  Either draws a measurement sample: only coins opening against a commitment the verifier recorded from its own challenger are of record (challenge.attested_reason, challenge.trust)")
     late_read: str | None = option("--late-read", default=None, help="NEGATIVE TEST (R11 collector-meas): drop this leaf (e.g. qkv_proj) from the gather arm's flush points so the " "staged values are read after the in-place overwriter -> the run root MUST differ from arm 2 (roots_equal_across_arms=false)")
     flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (MAN-09 / rev-cb M-0610 flipweight; BRIEF R16 4A substituted weight input): " "<served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE " "register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming " "that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed " "(--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
     window_mb: int | None = option("--window-mb", type=int, default=None, help="P0 (R13): windowed staging -- lay the packed step stream over a ring of device windows of this size " "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); 0/omitted = per-step blocks")
@@ -1144,11 +1144,12 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if args.bounded_staging:
         os.environ["VERITY_STAGING_BOUNDED"] = "1"
         os.environ["VERITY_LEARN_HOST_BUDGET_MB"] = str(int(args.learn_budget_mb))
+    retain_mode = args.retain or os.environ.get("VERITY_RETAIN")
     if args.retain_exclude:
-        if not args.bounded_staging or (args.retain or os.environ.get("VERITY_RETAIN")) != "host" or not args.open_after_release:
+        if not args.bounded_staging or retain_mode != "host" or not args.open_after_release:
             raise SystemExit("--retain-exclude needs --bounded-staging --retain host --open-after-release (the excluded families open by replay)")
         os.environ["VERITY_RETAIN_EXCLUDE"] = args.retain_exclude
-    if args.root_of_record == "sha512" and ((args.retain or os.environ.get("VERITY_RETAIN")) == "none" or args.retain_exclude):
+    if args.root_of_record == "sha512" and (retain_mode == "none" or args.retain_exclude):
         raise SystemExit("--retain none / --retain-exclude keep only part of the committed bytes, and the root of record (commit.record) is hashed "
                          "on the host from all of them before any challenge: run with --retain device|host, or --root-of-record vllm-v1 (not of "
                          "record) until the committer hashes the record on the GPU")
@@ -1808,6 +1809,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     versions["stop_rule_of_record"] = {k: v for k, v in stop_of_record.items() if k != "srule"} | {"eos_source": (stop_of_record.get("srule") or {}).get("source")}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     arms_all = ["control"] + (kinds if multi else ["instrumented"])
+    challenger = CH.commit_challenger(args.challenge_key, runs=args.pairs * (len(arms_all) - 1))
     # [revb F-r17b-19] the measured runs start here; verdict.host_peak.printed_before_run = admission_monotonic_s < this (timestamps, not a literal)
     _RUN0 = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "monotonic_s": round(time.monotonic(), 3)}
     for pair in range(args.pairs):
@@ -1844,7 +1846,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                                served_tokens=r["tokens"], stop=stop_of_record)
                 rc = com.finalize()
                 t_ready = time.perf_counter()
-                CH.draw_live(rc, args.challenge_key or os.environ.get("VERITY_CHALLENGE_KEY"))      # a run of record: its live source, after its root
+                CH.draw_live(rc, challenger)                                                        # a run of record: its live keys, after its root
                 if args.root_of_record == "vllm-v1":
                     rc.extra["root_of_record"] = "vllm-v1"                                          # a measurement run: no draw of record
                 com.uninstall()

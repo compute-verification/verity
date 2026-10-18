@@ -394,8 +394,9 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
     if isinstance(bnd, dict) and (bnd.get("population") or bnd.get("coverage")):
         _oc = oc if isinstance(oc, dict) else ((vc.get("oracle_compare") if isinstance(vc, dict) else None) or
                                                (_comps.get("oracle_compare") if isinstance(_comps, dict) else None))
-        # [R16 rev F-r16-23 / M-0579] the replay's seed must be POST-COMMITMENT as a fact, not a label: a prover-chosen --replay-seed (or a
-        # root-form label whose seed is not the run root's) makes the replay a mechanism run -- C2 of record then rests on form (B) alone
+        # [R16 rev F-r16-23 / M-0579; VLLM-17] the replay's seed must be POST-COMMITMENT as a fact, not a label: anything but the service
+        # challenger's live replay coin (a root-derived seed, a command-line challenge, a prover-chosen --replay-seed) makes the replay a
+        # mechanism run -- C2 of record then rests on form (B) alone
         # (M-0721 (1)) and the PASS names it; without a complete form (B) the Commit FAILS by name.  Legacy records without a seed source
         # are graded by the finalizer (report), not here.
         _mech = False
