@@ -1,0 +1,23 @@
+version = 1
+revision = 5
+requires-python = ">=3.12"
+
+[[package]]
+name = "verity"
+version = "0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/6b/6261ffeda91e4763e700cf1439038ccbc3b64f520a18f2b61e76c1205b8a/verity-0.1.tar.gz", hash = "sha256:9a90bb94146f937057a10c630386f631018c77b52805ca86031d5a9ff6926b4e", size = 3397, upload-time = "2017-10-29T01:41:15.429Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/be/1f850f675102be9f8f3a4ddac90f8f5eb705fc82e5d2b74792c458faaa92/verity-0.1-py2.py3-none-any.whl", hash = "sha256:0366c9f644a5838064581182e180759181ee37d287fda40400bf6a52231352d9", size = 4072, upload-time = "2017-10-29T01:41:14.112Z" },
+]
+
+[[package]]
+name = "verity-datacenter"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity" }]

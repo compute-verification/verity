@@ -15,7 +15,7 @@ and recording what trusted devices see.
 from .account import FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Account, BlockAccount, Credit, Ledger, account, capacity, double_credit
 from .binding import Crossing, Placement, Profile, crossings, occupancy, place, route, traffic
 from .claims import Carried, Computed, Entered, Held, On, Read, Refused, Scheduled, audit, check_records
-from .logical import Registration, Value, commit, evaluate, names, register, values, work
+from .logical import Registration, Value, commit, evaluate, names, read, register, values, work
 from .memory import (BLOCK_BITS, Append, Challenge, ReadWindow, Rekey, Release, Store, Wipe, answer_time, read_rate,
                      regen_time, serve_time)
 from .observe import Answer, Deviation, Record, Trace, run
@@ -29,6 +29,6 @@ __all__ = [
     "Fleet", "Held", "Interval", "Ledger", "Link", "Maintenance", "On", "Placement", "Plan", "Port", "Profile", "Read",
     "ReadWindow", "Record", "Refused", "Registration", "Rekey", "Release", "Scheduled", "Store", "Trace", "Value", "Wipe",
     "account", "answer_time", "audit", "capacity", "check_records", "commit", "crossings", "double_credit", "evaluate",
-    "names", "occupancy", "place", "read_rate", "regen_time", "register", "route", "run", "serve_time", "traffic",
+    "names", "occupancy", "place", "read", "read_rate", "regen_time", "register", "route", "run", "serve_time", "traffic",
     "values", "work",
 ]

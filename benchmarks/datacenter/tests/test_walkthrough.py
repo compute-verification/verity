@@ -5,23 +5,24 @@ in order, and `python tests/test_walkthrough.py` prints what the guide prints.
 """
 from __future__ import annotations
 
+from verity.ml.circuits.boolean import BIT
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.gemm import GEMM_AMPERE, Gemm
+from verity.ml.circuits.ops.boolean.gemm import GEMM_AMPERE, Gemm
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.circuits.types import Array, Tuple
 
 from datacenter import (FLEET_CLOSED, Append, Assumption, Block, Cadence, Carried, Challenge, Credit, Datacenter,
                         Deviation, Device, Fleet, Interval, Ledger, Link, Maintenance, Plan, Port, ReadWindow, Refused,
                         Release, Store, Wipe, account, audit, commit, crossings, double_credit, evaluate, names,
-                        occupancy, place, register, run, values, work)
+                        occupancy, place, read, register, run, values, work)
 from datacenter.examples import GB
 from datacenter.models import WEIGHTS, X, words
 
 # §1 A computation is a Program
-BF16 = Value(16)
+BF16 = Array(16, BIT)                                   # a BF16 word: its 16 bits, least significant first
 VEC, MAT = Array(32, BF16), Array(32, Array(32, BF16))
-LINEAR = bind(Gemm, K=32, N=32, **GEMM_AMPERE)          # x[32] @ W[32, 32]^T on the BF16 tensor-core step
+LINEAR = bind(Gemm, K=32, N=32, **GEMM_AMPERE)          # x[32] @ W[32, 32]^T on the BF16 tensor-core step, on bits
 
 
 def layer(B, S, x, w1, w2):
@@ -39,7 +40,8 @@ def section_1():
     for v in values(program):
         print(v, "read by", [names(program)[r] for r in v.reads], *(["and returned"] if v.output else []))
     print(work(program))
-    print(hex(evaluate(program, {"x": X} | WEIGHTS)[program.circuit.root_outputs()[0]]))
+    y = values(program)[-1]
+    print([hex(w) for w in read(program, evaluate(program, {"x": X} | WEIGHTS), y)[:4]])
     return program
 
 
@@ -62,7 +64,7 @@ def section_3(program):
 def gpu(name):
     return Device(name, "gpu",
                   rate={"mac:bf16": Assumption(f"{name}.bf16", 1e9, "MAC/s"),
-                        "cuda:op": Assumption(f"{name}.ops", 1e8, "op/s")},
+                        "cuda:gate": Assumption(f"{name}.gates", 1e10, "gate/s")},
                   memory=Assumption(f"{name}.hbm", 96 * GB, "bits"),
                   residual=Assumption(f"{name}.residual", 8e6, "bits", "measured"))
 
@@ -182,7 +184,7 @@ def served(B, S, x, w1, w2, image, temperature):
 
 
 SERVED = CompositeDefinition("Served", 1, (), lambda S: ((("x", VEC), ("w1", MAT), ("w2", MAT), ("image", VEC),
-                                                         ("temperature", Value(16))), Tuple(VEC, Value(16))), served,
+                                                         ("temperature", Array(16, BIT))), Tuple(VEC, Array(16, BIT))), served,
                              register=False)
 
 

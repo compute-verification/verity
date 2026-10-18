@@ -18,8 +18,9 @@ placement itself.
 """
 from __future__ import annotations
 
+import weakref
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
@@ -35,6 +36,24 @@ from .plan import Plan
 #: where a node's bits come from: registration, a trusted device's fresh data (part of the verifier's coins), a device in a
 #: block (telemetry, a clock reading), or anywhere else (the outside world: a request)
 SOURCES = ("registered", "trusted", "inside", "outside")
+
+_partitions: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _partition(evaluate: Callable, program: Program, query: Mapping[str, Any]) -> Any:
+    """`evaluate(program, query)`, once per Program, query and evaluator (a refusal too)."""
+    from verity.core.protocols.sampled_proofs.one_stage.registration import query_digest
+
+    memo = _partitions.setdefault(program, {})
+    key = (evaluate, query_digest(query))
+    if key not in memo:
+        try:
+            memo[key] = evaluate(program, query)
+        except Exception as e:
+            memo[key] = e
+    if isinstance(memo[key], Exception):
+        raise memo[key]
+    return memo[key]
 
 
 @dataclass
@@ -128,38 +147,41 @@ class Placement:
                        L.census_of(self.program)["digest"], partition)
 
     def _units(self, record: Mapping[str, Any] | None, query: Mapping[str, Any] | None) -> tuple[dict[str, int], str | None]:
-        """Each block's proof units under the registered partition (or the served query's, assumed), and which it was."""
+        """Each block's proof units under the registered partition, as core's one-stage verifier evaluates and checks it,
+        or the served query's as circuits evaluates it, assumed; and which it was."""
         from verity.core.protocols.sampled_proofs.one_stage import partition as P
         from verity.core.protocols.sampled_proofs.one_stage.registration import query_digest
-        from verity.ml.circuits import partition_object
+        from verity.ml.circuits import partition_object as PO
 
         program = self.program
         if record is None:
-            query = partition_object.query()
             try:
-                gates = P.unit_gates(program, query)
-            except (partition_object.QueryRefused, ValueError):
+                part = _partition(PO.evaluate, program, PO.query())
+            except (PO.QueryRefused, ValueError):
                 return {}, None
             how = "assumed"
         else:
             if query is None or query_digest(query) != record["query"]:
                 raise ValueError("a registration's partition is read with the verifier's copy of its query")
-            if (P.digest(P.partition(program, query)) != record["partition"]
-                    or P.units(program, query) != record["population"]):
+            part = _partition(P.evaluate, program, query)
+            if P.digest(P.partition(program, query)) != record["partition"] or part.population != record["population"]:
                 raise ValueError("the registration's partition isn't this Program's under its query")
-            gates, how = P.unit_gates(program, query), "registered"
-        units: dict[str, int] = {}
+            how = "registered"
         body = program.root.body
-        for lo, _hi in gates:
-            if (b := self.block(self.device.get(body.node_at(lo)))) is not None:
-                units[b] = units.get(b, 0) + 1
+        per_node = ([(k, c.units) for k, c in part.calls] if isinstance(part, PO.Partition)
+                    else [(body.node_at(part.gates(u)[0]), 1) for u in range(part.population)])
+        units: dict[str, int] = {}
+        for k, n in per_node:
+            if n and (b := self.block(self.device.get(k))) is not None:
+                units[b] = units.get(b, 0) + n
         return units, how
 
     def _custody(self, registration: int, weights: dict[str, float]) -> tuple[dict[str, float], ...]:
         """For each block whose own certifier releases a salt into it: the salt's bits, the bits other than timing that
         could carry it out before registration (the values the salt reaches that cross out, and the block's inside inputs
         that reach anything crossing out, both at the census's grain, which can only over-count), and the credit of the
-        block's work that depends on it, gate by gate (none for a Program too large to expand)."""
+        block's work that depends on it, gate by gate within the Calls it reaches (`logical.reach`; none past the
+        explicit limit)."""
         dc, program = self.datacenter, self.program
         readers: dict[int, set[int]] = {}
         for v in self.values:
@@ -189,28 +211,9 @@ class Placement:
                     reach_k = cone({k})
                     if any(x.value.node in reach_k and self.block(x.src) == b for x in out):
                         salt_out[b] += sum(v.bits for v in self.values if v.node == k)
-            pinned[b] = self._pinned(roots, b, weights)
+            pinned[b] = sum(weights.get(kind, 1.0) * n for k, w in L.reach(self.program, frozenset(roots)).items()
+                            if self.block(self.device.get(k)) == b for kind, n in w.items())
         return salt, salt_out, pinned
-
-    def _pinned(self, roots: set[int], block: str, weights: dict[str, float]) -> float:
-        """The credit of `block`'s work on gates the input nodes `roots` reach, gate by gate."""
-        c = self.program.circuit
-        if c.size > c.explicit_limit:
-            return 0.0
-        body = self.program.root.body
-        readers: dict[int, list[int]] = {}
-        for g in range(c.size):
-            for o in set(c.gate(g).operands):
-                readers.setdefault(o, []).append(g)
-        todo = [g for k in roots for g in range(body.offsets[k], body.offsets[k + 1])]
-        seen = set(todo)
-        while todo:
-            for r in readers.get(todo.pop(), ()):
-                if r not in seen:
-                    seen.add(r)
-                    todo.append(r)
-        return sum(weights.get(kind, 1.0) * n for g in seen if self.block(self.device.get(body.node_at(g))) == block
-                   for kind, n in L.gate_work(c, g).items())
 
 
 @dataclass(frozen=True)

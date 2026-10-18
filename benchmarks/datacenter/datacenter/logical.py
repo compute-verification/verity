@@ -2,14 +2,19 @@
 
 The circuit is a `verity.ml.circuits` `Program`, the format the rest of Verity reads: the sampled proofs partition it into
 proof units, PoUW's compiler rewrites its matmuls into tile units, the census counts it and memory accounting derives its
-requirement from it. It is built constructively from registered Definitions (`verity/ml/circuits/PROTOCOL.md`):
+requirement from it. It is Boolean, its semantics And, Xor and Not on bits, built constructively from registered
+Definitions (`verity/ml/circuits/PROTOCOL.md`):
 
-    linear = bind(Gemm, K=32, N=32, **GEMM_AMPERE)     # x[32] @ W[32, 32]^T on the BF16 tensor-core step
+    linear = bind(Gemm, K=32, N=32, **GEMM_AMPERE)     # ops.boolean.gemm: x[32] @ W[32, 32]^T on the BF16 step, on bits
     def body(B, S, x, w1, w2):
         h = B.call(linear, x, w1, name="h")
         return B.call(linear, h, w2, name="y")
     fn = CompositeDefinition("TwoStage", 1, (), lambda S: ((("x", VEC), ("w1", MAT), ("w2", MAT)), VEC), body)
     program = Program(fn, registered=("w1", "w2"))
+
+Its inputs, commitments and reads are in the word view (`boolean.word_type`): an *element* is a Boolean element's bits
+(a BF16 word's 16) or a word leaf, and each is one word, so a Program and its word twin bind the same inputs and commit
+the same rows.
 
 A Program holds only gates. Its root body is its step structure: an input node for each parameter, bound per run or at
 registration (`program.bindings`), then its Calls. The accounting layer reads it at that grain, the census's
@@ -22,10 +27,11 @@ registration (`program.bindings`), then its Calls. The accounting layer reads it
   a Boolean gate (`cuda:gate`) or any other word operation (`cuda:op`). Inputs, constants and wiring (`cut.WIRING`) are no
   work.
 
-`evaluate` is the reference semantics, gate by gate (`evaluate_region`, so a Program small enough to expand); `register`
-commits the registered inputs before any run, and `commit` gives the hiding commitment a run's values sit under: the
-census values, which are what can cross between devices (a Call's own wires are witness of its proof units). Both are
-hm96-sha512 rows in one frame-v3-sha512 tree (`verity.ml.commitments.advice`), bound to the Program's digest.
+`evaluate` computes the census values, each Call through `verity.ml.circuits.evaluation.evaluate_batch` (a kernel where
+one is registered, a Boolean Definition's word Definition's among them; bit-sliced otherwise); `register` commits the
+registered inputs before any run, and `commit` gives the hiding commitment a run's values sit under: the census values,
+which are what can cross between devices (a Call's own wires are witness of its proof units). Both are hm96-sha512 rows,
+one per element, in one frame-v3-sha512 tree (`verity.ml.commitments.advice`), bound to the Program's digest.
 """
 from __future__ import annotations
 
@@ -35,13 +41,18 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+import numpy as np
+
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits import types as T
 from verity.ml.circuits.census import PRODUCTS, census, family
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.cut import WIRING
 from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.evaluate import evaluate_region
-from verity.ml.circuits.layout import Circuit, resolve
+from verity.ml.circuits.evaluation import evaluate as reference
+from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.circuits.evaluation.batch import type_dtype
+from verity.ml.circuits.layout import Circuit, FunctionCall, resolve
 from verity.ml.circuits.program import REGISTRATION, RUN, Program, input_id, is_input
 from verity.ml.commitments import advice
 
@@ -128,6 +139,56 @@ def gates(program: Program, v: Value) -> list[int]:
     return [resolve(scope, ("n", v.node, j)) for j in range(v.lo, v.hi)]
 
 
+def layout(t: T.Type) -> list[tuple[int, ...]]:
+    """Each element of type `t`, in leaf order, as its leaves' widths: a Boolean element's bits (`boolean.elements`), or
+    one word leaf."""
+    if isinstance(t, T.Value):
+        return [(t.w,)]
+    if isinstance(t, T.Array):
+        return ([(1,) * t.n] if t.n else []) if t.elem == BL.BIT else layout(t.elem) * t.n
+    if isinstance(t, T.Tuple):
+        return [e for f in t.fields for e in layout(f)]
+    if isinstance(t, T.Record):
+        return [e for _, f in t.fields for e in layout(f)]
+    raise TypeError(t)
+
+
+def _node_type(program: Program, k: int) -> T.Type:
+    """Root node `k`'s output type: its parameter's for an input node (whose batch of one-bit inputs is flat), else its own."""
+    nd = program.root.body.nodes[k]
+    if binding(program, k) is not None:
+        for pi, (_, t) in enumerate(program.fn.signature()[0]):
+            refs = program.input_coll(pi).refs
+            if refs.count == nd.out.leaves and program.root.body.node_at(next(iter(refs))[2]) == k:
+                return t
+    return nd.out
+
+
+def rows(program: Program, v: Value) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
+    """Value `v`'s elements, as the gates of each and their widths (the part of an element `v` covers, where it covers
+    part)."""
+    gs, out, at = gates(program, v), [], 0
+    for widths in layout(_node_type(program, v.node)):
+        lo, hi = max(at, v.lo), min(at + len(widths), v.hi)
+        if lo < hi:
+            out.append((tuple(gs[lo - v.lo:hi - v.lo]), widths[lo - at:hi - at]))
+        at += len(widths)
+    return out
+
+
+def _word(transcript: dict[int, int], gs: Sequence[int], widths: Sequence[int]) -> int:
+    word, at = 0, 0
+    for g, w in zip(gs, widths):
+        word |= transcript[g] << at
+        at += w
+    return word
+
+
+def read(program: Program, transcript: dict[int, int], v: Value) -> list[int]:
+    """Value `v`'s words in `transcript`, one per element."""
+    return [_word(transcript, gs, ws) for gs, ws in rows(program, v)]
+
+
 def precision(fam: str) -> str:
     return next(p for key, p in PRECISION if key in fam)
 
@@ -167,7 +228,10 @@ def work(program: Program) -> dict[int, dict[str, int]]:
 
 def gate_work(circuit: Circuit, g: int) -> dict[str, int]:
     """Gate `g`'s share of `work`: a tensor-core step's products sit on its last gate, every other gate of it is none."""
-    gate = circuit.gate(g)
+    return _gate_work(circuit.gate(g))
+
+
+def _gate_work(gate) -> dict[str, int]:
     step, s = None, gate.scope
     while s.parent is not None:
         if family(s.spec) in PRODUCTS:
@@ -175,28 +239,95 @@ def gate_work(circuit: Circuit, g: int) -> dict[str, int]:
         s = s.parent
     if step is None:
         return _own(gate.prim) or {}
-    return _own(step.spec) if g == step.offset + step.spec.gates - 1 else {}
+    return _own(step.spec) if gate.index == step.offset + step.spec.gates - 1 else {}
+
+
+_reach: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def reach(program: Program, roots: frozenset[int]) -> dict[int, dict[str, int]]:
+    """Each root Call's work on the gates the root nodes `roots` reach, gate by gate. Only the Calls their census values
+    reach are expanded, and none past the explicit limit (then nothing is reached)."""
+    memo = _reach.setdefault(program, {})
+    if roots in memo:
+        return memo[roots]
+    readers: dict[int, set[int]] = {}
+    for v in values(program):
+        readers.setdefault(v.node, set()).update(v.reads)
+    calls, todo = set(), list(roots)
+    while todo:
+        for r in readers.get(todo.pop(), ()):
+            if r not in calls:
+                calls.add(r)
+                todo.append(r)
+    c, body = program.circuit, program.root.body
+    if sum(body.offsets[k + 1] - body.offsets[k] for k in calls) > c.explicit_limit:
+        memo[roots] = {}
+        return {}
+    gate_readers: dict[int, list[int]] = {}
+    shares: dict[int, dict[str, int]] = {}
+    for k in calls:
+        for gate in c.region(body.offsets[k], body.offsets[k + 1]):
+            for o in set(gate.operands):
+                gate_readers.setdefault(o, []).append(gate.index)
+            if share := _gate_work(gate):
+                shares[gate.index] = share
+    seen = {g for k in roots for g in range(body.offsets[k], body.offsets[k + 1])}
+    todo = list(seen)
+    while todo:
+        for r in gate_readers.get(todo.pop(), ()):
+            if r not in seen:
+                seen.add(r)
+                todo.append(r)
+    out: dict[int, Counter] = {}
+    for g in seen & shares.keys():
+        out.setdefault(body.node_at(g), Counter()).update(shares[g])
+    memo[roots] = {k: dict(w) for k, w in out.items()}
+    return memo[roots]
 
 
 def bind_inputs(program: Program, inputs: dict[str, int | Sequence[int]]) -> dict[int, int]:
-    """The input gates' values: each parameter's words (an int for a parameter of one leaf), in leaf order."""
+    """The input gates' values: each parameter's words, one per element (an int for a parameter of one element)."""
     out: dict[int, int] = {}
-    for pi, (name, _) in enumerate(parameters(program)):
+    for pi, ((name, _), (_, t)) in enumerate(zip(parameters(program), program.fn.signature()[0])):
         if name not in inputs:
             raise ValueError(f"no value for parameter {name!r}")
         words = inputs[name]
         words = [words] if isinstance(words, int) else list(words)
-        refs = program.input_coll(pi).refs
-        if len(words) != refs.count:
-            raise ValueError(f"parameter {name!r} has {refs.count} leaves, given {len(words)} words")
-        out.update((ref[2], w) for ref, w in zip(refs, words))
+        elements = layout(t)
+        if len(words) != len(elements):
+            raise ValueError(f"parameter {name!r} has {len(elements)} elements, given {len(words)} words")
+        refs = iter(program.input_coll(pi).refs)
+        for word, widths in zip(words, elements):
+            if word >> sum(widths):
+                raise ValueError(f"parameter {name!r}: the word {word:#x} is wider than its {sum(widths)} bits")
+            for w in widths:
+                out[next(refs)[2]] = word & ((1 << w) - 1)
+                word >>= w
     return out
 
 
 def evaluate(program: Program, inputs: dict[str, int | Sequence[int]]) -> dict[int, int]:
-    """Every gate's value on `inputs` (by parameter): the reference semantics."""
-    c = program.circuit
-    return evaluate_region(c, c.region(0, c.size), bind_inputs(program, inputs))
+    """The values on `inputs` (by parameter) of the input gates and of what each root Call returns, by gate: every census
+    value. Each root node is evaluated by `evaluate_batch` (a batch's members as one batch), never gate by gate."""
+    c, t = program.circuit, bind_inputs(program, inputs)
+    for k, nd in enumerate(program.root.body.nodes):
+        if is_input(nd.fn):
+            continue
+        params = [pt for _, pt in nd.fn.signature()[0]]
+        groups = [range(nd.n)] if nd.form != "scan" else [[m] for m in range(nd.n)]
+        for members in groups:
+            fcs = [FunctionCall(c, c.root_scope, k, m) for m in members]
+            args = [[t[g] for g in fc.args] for fc in fcs]
+            arrays, at = [], 0
+            for pt in params:
+                arrays.append(np.array([a[at:at + pt.leaves] for a in args], dtype=type_dtype(pt)))
+                at += pt.leaves
+            out = (np.asarray(evaluate_batch(nd.fn, *arrays)).reshape(len(fcs), -1) if params
+                   else [reference(nd.fn)] * len(fcs))
+            for fc, row in zip(fcs, out):
+                t.update(zip(fc.returns, (int(x) for x in row)))
+    return t
 
 
 def _binding(label: bytes, program: Program) -> bytes:
@@ -224,36 +355,42 @@ class Registration:
 
 
 def register(program: Program, inputs: dict[str, int | Sequence[int]], salts: Sequence[bytes] | None = None) -> Registration:
-    """Commit the values of `program`'s registered parameters, a row per leaf, under a binding to the Program's digest."""
-    regd = {n: inputs[n] if isinstance(inputs[n], int) else tuple(inputs[n])
-            for n, b in parameters(program) if b == REGISTRATION}
-    if not regd:
+    """Commit the values of `program`'s registered parameters, a row per element, under a binding to the Program's
+    digest."""
+    params = [(n, t) for (n, b), (_, t) in zip(parameters(program), program.fn.signature()[0]) if b == REGISTRATION]
+    if not params:
         raise ValueError("the Program registers no parameter")
+    regd = {n: inputs[n] if isinstance(inputs[n], int) else tuple(inputs[n]) for n, _ in params}
     words = [w for n in regd for w in ([regd[n]] if isinstance(regd[n], int) else regd[n])]
-    pis = [pi for pi, (_, b) in enumerate(parameters(program)) if b == REGISTRATION]
-    width = max(program.circuit.gate(program.input_coll(pi).refs[0][2]).prim.ret.w for pi in pis)
+    width = max(sum(e) for _, t in params for e in layout(t))
     return Registration(regd, advice.register(_rows(words, width), width, _binding(b"datacenter/registration/v1", program),
                                               salts))
 
 
-def committed(program: Program) -> list[int]:
-    """The gates a run commits: those of the census values, what the Program's nodes pass each other, each once in value
-    order. A Call's own wires are witness of its proof units, whose commitments are the proof service's."""
-    seen: dict[int, None] = {}
-    for v in values(program):
-        seen.update(dict.fromkeys(gates(program, v)))
-    return list(seen)
+_committed: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def committed(program: Program) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
+    """The rows a run commits: the census values' elements (`rows`), what the Program's nodes pass each other, each once
+    in value order. A Call's own wires are witness of its proof units, whose commitments are the proof service's."""
+    if program not in _committed:
+        seen: dict[tuple[int, ...], tuple[int, ...]] = {}
+        for v in values(program):
+            for gs, ws in rows(program, v):
+                seen.setdefault(gs, ws)
+        _committed[program] = list(seen.items())
+    return _committed[program]
 
 
 def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] | None = None) -> advice.Registration:
-    """The hiding commitment to a run's values (`committed`), a row per gate: its `root` is public, its rows and salts
+    """The hiding commitment to a run's values (`committed`), a row per element: its `root` is public, its rows and salts
     witness."""
-    gs, c = committed(program), program.circuit
-    width = max(c.gate(g).prim.ret.w for g in gs)
-    return advice.register(_rows([transcript[g] for g in gs], width), width, _binding(b"datacenter/values/v1", program),
-                           salts)
+    rs = committed(program)
+    width = max(sum(ws) for _, ws in rs)
+    return advice.register(_rows([_word(transcript, gs, ws) for gs, ws in rs], width),
+                           width, _binding(b"datacenter/values/v1", program), salts)
 
 
 __all__ = ["PRECISION", "REGISTRATION", "RUN", "Registration", "Value", "bind_inputs", "binding", "calls", "census_of",
-           "commit", "committed", "evaluate", "gate_work", "gates", "names", "nodes", "parameters", "precision", "register", "values",
-           "work"]
+           "commit", "committed", "evaluate", "gate_work", "gates", "layout", "names", "nodes", "parameters", "precision", "reach",
+           "read", "register", "rows", "values", "work"]
