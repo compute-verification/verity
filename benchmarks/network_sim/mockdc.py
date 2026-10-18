@@ -258,7 +258,7 @@ class Process:
         config.write_text(json.dumps(cfg))
         self.name, self.log = f"{ns}/{name}", out / f"{name}.log"
         cmd = ["sudo", "-n", "ip", "netns", "exec", ns, "setpriv", f"--reuid={os.getuid()}", f"--regid={os.getgid()}",
-               "--clear-groups", "--", "env", f"PYTHONPATH={os.pathsep.join(PATHS)}", sys.executable, "-u",
+               "--clear-groups", "--", "env", f"PYTHONPATH={os.pathsep.join(PATHS)}", sys.executable, "-B", "-u",
                str(Path(__file__).resolve()), "role", name, str(config)]
         with open(self.log, "w") as err:
             self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, text=True)
