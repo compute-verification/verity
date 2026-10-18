@@ -3,7 +3,7 @@ committer step end. Measurement only."""
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 import torch
 
@@ -69,9 +69,11 @@ class ProfArm(ServedCommitArm):
 
 class RootsArm(ProfArm):
     """Each finished run's root, bounded-staging record and per-step (plan key, predicted length, bytes) appended to
-    $RESEARCH_RUN_DIR/out/roots.jsonl. Every RootsArm commits under one run id, so their roots compare across arms."""
+    $RESEARCH_RUN_DIR/out/roots.jsonl, and each distinct run layout (every step's (name, dtype, shape, bytes), once per process) to
+    out/layouts.jsonl. Every RootsArm commits under one run id, so their roots compare across arms."""
 
     retain_levels = True
+    dumped: ClassVar[set[str]] = set()
 
     def ready(self, target: Any) -> None:
         import hashlib
@@ -97,6 +99,7 @@ class RootsArm(ProfArm):
     def end_run(self, target: Any) -> None:
         cpu = _cpu_delta(self.cpu0, _thread_cpu())
         super().end_run(target)
+        import hashlib
         import json
         import os
 
@@ -114,6 +117,12 @@ class RootsArm(ProfArm):
         out = os.path.join(os.environ.get("RESEARCH_RUN_DIR", "."), "out", "roots.jsonl")
         with open(out, "a") as f:
             f.write(json.dumps(rec) + "\n")
+        steps = {str(s): [[m.name, m.dtype, list(m.shape), int(m.nbytes)] for m in lay[s]] for s in sorted(lay)}
+        sig = hashlib.sha256(json.dumps(steps).encode()).hexdigest()[:16]
+        if sig not in RootsArm.dumped:
+            RootsArm.dumped.add(sig)
+            with open(os.path.join(os.path.dirname(out), "layouts.jsonl"), "a") as f:
+                f.write(json.dumps({"arm": self.id, "run": len(self.runs), "sig": sig, "steps": steps}) + "\n")
 
 
 class BoundedArm(RootsArm):
