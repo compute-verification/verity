@@ -388,7 +388,7 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
     """Check the splits and the records, draw t tiles by the records' credit with the epoch's draw coin, open one tile
     per excluded row, and accept iff every opened tile passes `check_drawn`.
     - The verifier asks `challenger` for the draw coin only once it has recorded the commitment (`draw_after`), and the
-      coin must open against the epoch's coin commitment (`audit.draw_coin`).
+      coin must open against the epoch's coin commitment (`clear_audit.draw_coin`).
     - `split_check(weight, split)` recomputes S from the calibration data by the pinned rule, and is required when any S
       is nonempty.
     - `tile_map(f, picks)` applies `check_drawn` to the opened tiles in order (a process pool's map checks them in
