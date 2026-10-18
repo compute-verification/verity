@@ -3751,6 +3751,12 @@ const CASES: &[(&str, bool, bool)] = &[
     ("tables_proofs_before_the_last_coin_detected", true, false),
     ("tables_unsplittable_draw_refused", false, false),
     ("zk_tables_share_no_randomness", true, false),
+    ("zk_worker_cut_rc", false, false),
+    ("zk_worker_cut_rc240", false, false),
+    ("zk_worker_cut_panic", false, false),
+    ("zk_worker_cut_silent", false, false),
+    ("zk_worker_cut_decode", false, false),
+    ("zk_worker_cut_tree", false, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -3955,6 +3961,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "prover_is_deterministic" {
         return determinism_case(st, inst, gpu);
+    }
+    if let Some(mode) = name.strip_prefix("zk_worker_cut_") {
+        return worker_cut_case(name, mode, gpu);
     }
     if name == "lincheck_modes_agree" {
         return lincheck_modes_case(st, inst, gpu);
@@ -4588,6 +4597,117 @@ fn barrier_holds(order: &[String]) -> bool {
     }
 }
 
+/// Every request that reaches the verifier, in order, as its kind, its stream and its sizes (never its bytes): what a session
+/// shows the challenger beyond the values themselves.
+struct Seen<T: Transport> {
+    inner: T,
+    log: Arc<Mutex<Vec<Value>>>,
+}
+
+impl<T: Transport> Transport for Seen<T> {
+    fn call(&mut self, req: Req) -> Result<Resp, String> {
+        let sizes = |b: &[(String, Vec<u8>)]| b.iter().map(|(k, v)| json!([k, v.len()])).collect::<Vec<_>>();
+        let seen = match &req {
+            Req::Hello(h) => json!(["hello", h.len()]),
+            Req::Link(y) => json!(["link", y.len()]),
+            Req::Commit { root_f, roots, publics } => json!(["commit", root_f.len(), sizes(roots), sizes(publics)]),
+            Req::Open { stream, parent, label, at } => json!(["open", stream, parent, label.len(), at]),
+            Req::Round { stream, content, n } => json!(["round", stream, content.len(), n]),
+            Req::Proof { table, rep, bytes } => json!(["proof", rep_stream(table, *rep as usize), bytes.len()]),
+            Req::Finish => json!(["finish"]),
+            Req::Ping(_) => json!(["ping"]),
+            Req::Prime { state, n } => json!(["prime", state.len(), n]),
+            Req::Register => json!(["register"]),
+        };
+        self.log.lock().unwrap_or_else(PoisonError::into_inner).push(seen);
+        self.inner.call(req)
+    }
+    fn stats(&self) -> (u64, u64, u64) {
+        self.inner.stats()
+    }
+    fn wait_s(&self) -> f64 {
+        self.inner.wait_s()
+    }
+}
+
+/// The selftest's own process for one firewalled session (`--only zk_worker_session`), its controls from this process's
+/// environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`): the session's outcome and what reached the verifier.
+const WORKER_SESSION: &str = "zk_worker_session";
+
+fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
+    let s0 = Arc::new(Mutex::new(server(st, inst)));
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let (v, _) = session(st, inst, shared(Seen { inner: InProc(s0), log: log.clone() }), &Plan::default(), ProverSeed::from_os());
+    let seen = std::mem::take(&mut *log.lock().unwrap_or_else(PoisonError::into_inner));
+    json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "seen": seen})
+}
+
+/// `zk_worker_cut_MODE` (PROTOCOL.md §10.1): a worker that fails in one way (`FC_FIREWALL_TAMPER=cut-MODE`) at its table's device
+/// round `k` never chooses where the session ends. Beside an honest firewalled session, one session per `k` (early, half way and
+/// the last round; `cut-tree` draws its trees in the opening phases, so it takes the first and the half-way round), each a CPU
+/// session in a process of its own: the verifier gets the honest session's every request up to its `Finish`, in its order and
+/// at its sizes (the rounds, the Commit, the Link: the same bytes and public bytes), no proof, then `Finish`, which reports the
+/// firewall's stop. A worker given up gets no coins, and a silent one ticks the firewall's injected clock: no wall clock.
+fn worker_cut_case(name: &str, mode: &str, gpu: bool) -> Value {
+    if gpu {
+        return json!({"case": name, "pass": true, "skipped": "a worker's cut is the CPU device's control"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let run = |tamper: Option<(usize, &str)>| -> Value {
+        let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
+        cmd.arg("selftest").args(if zk_mode() { &["--zk"][..] } else { &[] })
+            .args(["--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
+                   "--only", WORKER_SESSION])
+            .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
+            .env_remove("FC_FIREWALL_DEADLINE_S");
+        if let Some((k, t)) = tamper {
+            cmd.env("FC_FIREWALL_TAMPER", format!("cut-{t}")).env("FC_FIREWALL_CUT_AT", k.to_string());
+        }
+        let out = cmd.output().expect("spawn a firewalled session");
+        let text = String::from_utf8_lossy(&out.stdout);
+        text.lines().find_map(|l| l.strip_prefix("NEG\t")).and_then(|l| serde_json::from_str(l).ok()).unwrap_or_else(|| {
+            let err = String::from_utf8_lossy(&out.stderr);
+            json!({"error": format!("no session record (exit {:?}): {}", out.status.code(), err.lines().rev().take(5).collect::<Vec<_>>().join(" | "))})
+        })
+    };
+    let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    let count = |s: &[Value], k: &str| s.iter().filter(|x| kind(x) == k).count();
+    let n = |x: &Value| x.as_u64().unwrap_or(0);
+    let round_bytes = |s: &[Value]| s.iter().filter(|x| kind(x) == "round").map(|x| n(&x[2])).sum::<u64>();
+    // Hello's, Link's, Commit's (root_F, each table's root and public words) and each stream's label
+    let public_bytes = |s: &[Value]| s.iter().map(|x| match kind(x).as_str() {
+        "hello" | "link" => n(&x[1]),
+        "commit" => n(&x[1]) + [&x[2], &x[3]].iter().flat_map(|l| l.as_array().into_iter().flatten()).map(|p| n(&p[1])).sum::<u64>(),
+        "open" => n(&x[3]),
+        _ => 0,
+    }).sum::<u64>();
+    let honest = run(None);
+    let h = seen(&honest);
+    let rounds = count(&h, "round");
+    let honest_ok = honest["accepted"] == true && count(&h, "proof") == 2 && h.last().map(kind).as_deref() == Some("finish");
+    let want: Vec<Value> = h.iter().filter(|x| kind(x) != "proof").cloned().collect();
+    let ks: Vec<usize> = if mode == "tree" { vec![0, rounds / 2] } else { vec![2.min(rounds.saturating_sub(1)), rounds / 2, rounds.saturating_sub(1)] };
+    let reason = if mode == "tree" { "FIREWALL-REFUSED: " } else { "FIREWALL-REFUSED: the device failed: " };
+    let cuts: Vec<Value> = ks.iter().map(|&k| {
+        let v = run(Some((k, mode)));
+        let s = seen(&v);
+        let stopped = v["prover_stopped"].as_str().unwrap_or("");
+        let first_miss = (0..want.len().max(s.len())).find(|&i| want.get(i) != s.get(i));
+        let ok = v["accepted"] == false && stopped.starts_with(reason) && first_miss.is_none();
+        json!({"k": k, "ok": ok, "accepted": v["accepted"], "prover_stopped": stopped.chars().take(160).collect::<String>(), "error": v["error"],
+               "rounds": count(&s, "round"), "round_bytes": round_bytes(&s), "public_bytes": public_bytes(&s), "proofs": count(&s, "proof"),
+               "requests": s.len(), "last": s.last(), "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "cut": s.get(i)}))})
+    }).collect();
+    json!({"case": name, "expect": "the honest session's every request to its Finish, no proof, and the firewall's stop at Finish",
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "rounds": rounds, "round_bytes": round_bytes(&h),
+                      "public_bytes": public_bytes(&h), "proofs": count(&h, "proof"), "requests": h.len()},
+           "cuts": cuts, "pass": honest_ok && cuts.iter().all(|c| c["ok"] == true)})
+}
+
 /// The public-circuit ZK proof's gap 1, at the session's own draws: two tables' level-0 hiding (every lane's padding, the extra
 /// lanes), both reps' pads (h, μ, the pads' padding, τ's salt), the mask slot, and the salts of their level-0 and later trees
 /// share no 16-byte word. A proving build reads every one from the OS, so the second table drawn at the first's addresses (the
@@ -4801,6 +4921,10 @@ fn relabel(text: &str) -> String {
 fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     let only = arg("--only", "");
     let missing = |name: &str| forged_missing(name).map(|why| json!({"case": name, "gpu": gpu, "accepted": false, "pass": false, "why": why}));
+    if only == WORKER_SESSION {
+        println!("NEG\t{}", worker_session(st, inst));
+        return;
+    }
     if !only.is_empty() {
         println!("NEG\t{}", missing(&only).unwrap_or_else(|| run_case(st, inst, &only, gpu)));
         return;

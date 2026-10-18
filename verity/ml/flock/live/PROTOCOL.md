@@ -762,6 +762,10 @@ the same way at the second table:
 | `cut-tree` | draws its first tree at or after that round one leaf larger than the statement's (the CPU device: its trees draw through the salt context) | `FIREWALL-REFUSED: opening round …` |
 
 `FC_FIREWALL_CUT_AT` counts the table's device rounds over both reps (default 0), and a `cut-` control fires once a table.
+The selftest's `zk_worker_cut_MODE` holds each `cut-` control to the rule on the CPU path, beside an honest firewalled
+session: cut at the table's third, half-way and last device round (`cut-tree` at its first and half-way round), the verifier
+gets the honest session's every request up to its `Finish`, in the same order and at the same sizes, with no proof. It
+needs the Lean frame (`FC_FIREWALL_LEAN`) and skips without it.
 
 With `FC_FIREWALL_TRANSCRIPT=DIR` (the CPU path only, a statement of one table: several are refused), each gated session also writes what the firewall let out as a
 `verity/firewall-transcript/v0` transcript, `DIR/session-<k>.json`, for the firewall's contract (`flock-firewall contract`):
