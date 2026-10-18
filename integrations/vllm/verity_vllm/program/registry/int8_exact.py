@@ -269,7 +269,21 @@ def _row_sig(S):
              ("v0", Array(D, F32))), Array(D, BF16))
 
 
-@composite("Int8LutAttentionRow", 1, ["D", "S", "SCALE"], _row_sig, conformance=_CONF)
+def row_refusal(b: dict) -> str | None:
+    """`bind`'s refusal for a Row: Q' K'^T steps over D, so D is a multiple of 32; P V' steps over the keys zero-padded to
+    `padded(S)`, which stays under `GEMM.S8_K_LIMIT` (2^17), past which an s8 sum can leave s32."""
+    D, K = b.get("D"), b.get("S")
+    if isinstance(D, int) and (D < 32 or D % 32):
+        return f"D={D}: Q' K'^T steps 32 channels at a time, so the head dim is a positive multiple of 32"
+    if isinstance(K, int) and K < 1:
+        return f"S={K}: a row attends to at least its own key"
+    if isinstance(K, int) and padded(K) >= GEMM.S8_K_LIMIT:
+        return (f"S={K}: P V' over {padded(K)} padded keys is at or past {GEMM.S8_K_LIMIT}, where an s8 sum can leave s32; a context "
+                f"of at most {GEMM.S8_K_LIMIT - 32} keys binds")
+    return None
+
+
+@composite("Int8LutAttentionRow", 1, ["D", "S", "SCALE"], _row_sig, conformance=_CONF, refuse=row_refusal)
 def Int8LutAttentionRow(B, S, q, kq, sk, vq, sv, v0):
     """One query row over its S keys 0..pos (pos = S - 1): Q' (`Int8RowQuant`), the scores (`S8Matmul_v1{S, D}`), A
     (`Int8AttnScale`), the LUT softmax (`Int8LutSoftmax`), P V' (`S8Matmul_v1{D, S'}` over the keys zero-padded to a multiple of

@@ -120,6 +120,10 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
         if len(bits) != h.KVH:
             refuse("shape", node, h.mp, f"{len(bits)} K scales for {h.KVH} KV heads")
         S, D, rep = h.P0 + h.T, h.D, h.NH // h.KVH
+        from verity_vllm.program.registry.int8_exact import row_refusal
+
+        if why := row_refusal({"D": D, "S": S}):
+            refuse("shape", node, h.mp, f"Int8LutAttentionRow_v1 {why}")
         hint = ctx.hint_name(node)
         kv = Array(S, Array(h.KVH, Array(D, Value(16))))
         klog, vlog = Coll(kv, h.klog.cut(S)), Coll(kv, h.vlog.cut(S))
