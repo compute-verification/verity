@@ -46,7 +46,7 @@ def _root_.Claims.Recursion.VStarB.LayoutB.readers (L : Claims.Recursion.VStarB.
 /-- A rep's schedule at a table of the session (`rec_live.rep_rounds`, `Flock.RecVStar.repRounds`): at the table's `m`
 and `k_log` and the session's claims, `2 + points · regions` as `FlockDeploy.repRounds` counts them; empty off
 `fast100`. -/
-def repSched (spec : _root_.Flock.SessionSpec) (st : _root_.Flock.Stmt) : List _root_.Flock.RecVStar.SchedRound :=
+def repSchedAt (spec : _root_.Flock.SessionSpec) (st : _root_.Flock.Stmt) : List _root_.Flock.RecVStar.SchedRound :=
   ((_root_.Flock.RecVStar.repRounds st.m st.c.kLog (2 + spec.points * st.regions.size)).map Array.toList).getD []
 
 /-- A table's level-0 top's nodes, `2^{cap₀}` at `fast100`'s first level (`2^7 = 128` at its 218 queries). -/
@@ -64,7 +64,7 @@ def nAtSched (x : Msg) (j : ℕ) : ℕ :=
   | some (_, spec, sts) =>
     if j = 0 then (sts.toList.map level0Nodes).sum
     else
-      match (sts.toList.flatMap fun st => repSched spec st ++ repSched spec st)[j - 1]? with
+      match (sts.toList.flatMap fun st => repSchedAt spec st ++ repSchedAt spec st)[j - 1]? with
       | some r => r.2.1.toList.sum + if r.2.2.2 then 1 else 0
       | none => 0
 
