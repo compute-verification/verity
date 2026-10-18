@@ -1,0 +1,142 @@
+import RemoteAudit
+
+/-!
+# The remote bandwidth audit's verifier: what its Lean verdicts mean (`RemoteAudit`)
+
+The properties of `RemoteAudit` (`verity/core/protocols/remote_bandwidth/lean/`, the port of `audit.py` held to it by
+the difftest `remote-audit-difftest`), stated against its functions as they run, for every input of their types. They
+are the code's half of the bridge from the verifier to the stacked audit's game (`Rate.DeployedSession`, and the
+composed statement `Accounting.Guarantees.DeclaredCircuitRequirement` that reads it): each says what an acceptance
+establishes about the bytes the verifier holds. They take no premise. What the code cannot see (the coins' uniformity,
+the receipts' and the store's meaning as the game's oracle and words, the window's wall time) is not here: it is a
+premise or a proofs unit of the bridge, named in each docstring.
+
+The window (`verifyWindow`):
+
+* `AcceptChecksOpenings`: an accepted window drew its receipts from its openings coin, has one opening a draw, and
+  each drawn opening passes `checkOpening` under the receipter of its pass's seed;
+* `AcceptOpensDraws`: the same, with `checkOpening`'s five checks spelled out (`OpeningPasses`): the opening is the
+  drawn receipt's, its leaf is under its pass's root in the domain of the pass's seed and plan, its block decodes to a
+  payload under the payload tree or its append's tree and coin, and the receipt recomputed from the block is the leaf's.
+
+The draw (`draws`):
+
+* `DrawIsSubset`: the window's draws are the sampler's `min(s, U)`-subset of `[0, U)` (`Randomness.subset` on the key
+  derived from the openings coin, the registration and the window), each value `u` mapped to the receipt `(i, p)` whose
+  index among the window's `U = Σ L_i` receipts in pass order is `u` (`receiptIndex`). So the draws are distinct
+  receipts of the window, as many as the sampler's values, and the map is a bijection: what `Key.subset`'s law gives
+  the values (a uniform `k`-subset over independent uniform streams: `KeyedDraw.subsetOn_escape_le`, a proofs unit,
+  under a uniform live coin, a premise) it gives the receipts.
+
+A pass's plan (`Plan.make?`, `Plan.changed`):
+
+* `PlanReadsDistinct`, `ChangedReadsDistinct`: a plan the code accepts (whole, as runs, or as a change of the previous
+  pass's) reads `L` distinct blocks of the store at its positions `0 … L − 1`.
+-/
+
+open RemoteAudit
+
+namespace Properties.RemoteAudit
+
+/-! ## The window -/
+
+/-- The receipter `checkWindow` checks pass `i`'s openings with: the registration's receipt kind under pass `i`'s
+seed. -/
+def receipterOf (reg : Registration) (w : WindowRecord) (i : Nat) : Receipter :=
+  receipter reg.receipt (w.seedOf i) reg.rows
+
+/-- An accepted window drew `drawn` from its openings coin over its passes' plans, has exactly one opening a draw, and
+each drawn receipt's opening passes `checkOpening` under the receipter of its pass's seed. -/
+def AcceptChecksOpenings : Prop :=
+  ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
+    (openings : Array Opening),
+    verifyWindow reg appends w coin samples openings = some .accept →
+      ∃ drawn, draws reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some drawn ∧
+        openings.size = drawn.size ∧
+        ∀ k (hk : k < drawn.size),
+          checkOpening reg reg.digest appends w (receipterOf reg w drawn[k].1) drawn[k].1 drawn[k].2 openings[k]! = none
+
+/-- Draw `(i, p)`'s opening `o` passes checks 1–5 (`checkOpening`), with `j` the block at position `p` of pass `i`'s
+plan:
+
+1. it is the drawn receipt's (`o.pass = i`, `o.position = p`); its block is 4,096 bytes, it carries no tile, its salts
+   are 192 bytes, its paths' siblings 64 bytes, and it has a payload digest exactly when `j` is an appended block;
+2. its leaf holds a receipt `y` at `p` (the leaf's size is its positions'), and the leaf, under its salt and path, is
+   leaf `p / 16` of pass `i`'s receipt tree under the pass's root, in the domain of the pass's seed and plan;
+3. and 4. its block decodes to a payload: a registered block (`j < N`) under the registration's key, the payload's leaf
+   under its salt and path at `j` under the payload root; an appended block under the bound key of its digest and its
+   append's coin, the payload's leaf at `j` under its append's root (the append holding `j`, `appendOf`);
+5. the receipt recomputed from `j` and the block, under the pass's receipter, is `y`. -/
+def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecord) (i p : Nat) (o : Opening) :
+    Prop :=
+  let pr := w.passes[i]!
+  let j := pr.plan.block p
+  o.pass = i ∧ o.position = p ∧ o.block.size = Codec.BLOCK_BYTES ∧ o.tile.size = 0 ∧
+    o.leafSalt.size = SALT_BYTES ∧ o.payloadSalt.size = SALT_BYTES ∧
+    (∀ x ∈ o.receiptPath, x.size = DIGEST_BYTES) ∧ (∀ x ∈ o.payloadPath, x.size = DIGEST_BYTES) ∧
+    o.digest.size = (if j < reg.blocks then 0 else DIGEST_BYTES) ∧
+    ∃ y, leafReceipt o.leaf p pr.plan.length = some y ∧
+      verifyLeaf (w.seedOf i) pr.plan pr.root p o.leaf o.leafSalt o.receiptPath = true ∧
+      (∃ payload,
+        (j < reg.blocks ∧ Codec.decode o.block j reg.key none = .ok (some payload) ∧
+          FrameV3.verifyOpening reg.payloadDomain reg.payloadRoot j (hidden payload o.payloadSalt) SCHEMA
+            o.payloadPath = true) ∨
+        (reg.blocks ≤ j ∧ ∃ a, appendOf appends j = some a ∧
+          Codec.decode o.block j reg.key (some (o.digest, some a.coin)) = .ok (some payload) ∧
+          FrameV3.verifyOpening (appendDomain reg.digest a.first a.count) a.root j (hidden payload o.payloadSalt)
+            SCHEMA o.payloadPath = true)) ∧
+      (receipterOf reg w i).receipt j o.block = y
+
+/-- An accepted window drew `drawn` from its openings coin, has exactly one opening a draw, and each drawn receipt's
+opening passes checks 1–5 (`OpeningPasses`). -/
+def AcceptOpensDraws : Prop :=
+  ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
+    (openings : Array Opening),
+    verifyWindow reg appends w coin samples openings = some .accept →
+      ∃ drawn, draws reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some drawn ∧
+        openings.size = drawn.size ∧
+        ∀ k (hk : k < drawn.size), OpeningPasses reg appends w drawn[k].1 drawn[k].2 openings[k]!
+
+/-! ## The draw -/
+
+/-- Receipt `(i, p)`'s index among a window's receipts in pass order: the positions of the passes before pass `i`,
+then `p`. -/
+def receiptIndex (lengths : Array Nat) (i p : Nat) : Nat := (lengths.toList.take i).sum + p
+
+/-- The key a window's openings are drawn on: `derive(c, OPENINGS_DOMAIN, {registration, window: t})`. -/
+def openingsKey (registration : ByteArray) (t : Nat) (coin : ByteArray) : ByteArray :=
+  FlockSoundness.Randomness.derive coin OPENINGS_DOMAIN [("registration", .bytes registration), ("window", .int t)]
+
+/-- The draws of window `t` (passes of `lengths` positions, `U` receipts in all) are `Key.subset`'s
+`min(s, U)`-subset of `[0, U)` on the openings key, its stream read to some length `L`, each value `u` mapped to the
+receipt `(i, p)` with `receiptIndex = u`: so they are `min(s, U)` distinct receipts of the window (`i` a pass,
+`p < L_i`), one for each of the sampler's values. -/
+def DrawIsSubset : Prop :=
+  ∀ (registration : ByteArray) (t : Nat) (coin : ByteArray) (samples : Nat) (lengths : Array Nat)
+    (drawn : Array (Nat × Nat)),
+    draws registration t coin samples lengths = some drawn →
+      ∃ L us, FlockSoundness.Randomness.subset (openingsKey registration t coin) (min samples lengths.toList.sum)
+          lengths.toList.sum [.str "openings"] L = some us ∧
+        drawn.size = us.size ∧ us.size = min samples lengths.toList.sum ∧
+        (∀ k (hk : k < drawn.size), drawn[k].1 < lengths.size ∧ drawn[k].2 < lengths[drawn[k].1]! ∧
+          receiptIndex lengths drawn[k].1 drawn[k].2 = us[k]!) ∧
+        (∀ k₁ k₂ (h₁ : k₁ < drawn.size) (h₂ : k₂ < drawn.size), drawn[k₁] = drawn[k₂] → k₁ = k₂)
+
+/-! ## A pass's plan -/
+
+/-- A plan reads `L` distinct blocks of a store of `blocks` blocks: position `p < L` reads block `pl.block p`, below
+`blocks`, and no two positions read one block. -/
+def ReadsDistinct (pl : Plan) (blocks : Nat) : Prop :=
+  (∀ p, p < pl.length → pl.block p < blocks) ∧
+    ∀ p q, p < pl.length → q < pl.length → pl.block p = pl.block q → p = q
+
+/-- A plan given as runs that the code accepts reads distinct blocks of the store. -/
+def PlanReadsDistinct : Prop :=
+  ∀ (runs : Array (Int × Int)) (blocks : Nat) (pl : Plan), Plan.make? runs blocks = some pl → ReadsDistinct pl blocks
+
+/-- A plan given as a change of the previous pass's that the code accepts reads distinct blocks of the store. -/
+def ChangedReadsDistinct : Prop :=
+  ∀ (pl : Plan) (added removed : Array (Int × Int)) (blocks : Nat) (pl' : Plan),
+    pl.changed added removed blocks = some pl' → ReadsDistinct pl' blocks
+
+end Properties.RemoteAudit
