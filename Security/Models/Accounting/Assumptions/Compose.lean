@@ -5,18 +5,21 @@ import Models.Accounting.Assumptions.TS
 # The compiled circuit's named assumptions (trusted)
 
 The premises the composed theorem (`Models.Accounting.Guarantees.Compose`,
-note:compute-accounting/20261018T0618Z-draft-theorem-compose-r2) adds to the tensor–scalar model's, the data sheet's and
-sampled (I8)'s, each a `Prop` taken as a hypothesis, never an `axiom`. None is about a hash: under live
-coins the statement has no random-oracle premise, binding is charged to `δ_bind` per committed position (RT-I8's B1,
-decision 114), and its Fiat–Shamir form reads proofs' `FiatShamirFloor`, stated in the random-oracle model (decision
-112).
+note:compute-accounting/20261018T1230Z-draft-theorem-compose-r3) adds to the tensor–scalar model's, the data sheet's,
+sampled (I8)'s and the headlines' (#2482), each a `Prop` taken as a hypothesis, never an `axiom`. None is about a
+hash: under live coins the statement has no random-oracle premise, binding is charged to `δ_bind` per committed
+position (RT-I8's B1, decision 114), and its Fiat–Shamir form reads proofs' `FiatShamirFloor`, stated in the
+random-oracle model (decision 112).
 
-The logical layer's (decision 113; `CircuitWork`):
+The logical layer (decision 113; `CircuitWork`) rests on four claims, the headlines' (#2482) and its own:
 
-* `HMu`: (H-μ), per template, the one computational claim (decision 110). It replaces round 1's `TemplateNoise`, which
-  restricted the cheater's play and was false at the deployed degree-2 template (RT-COMPOSE B2).
-* `UnitFolded`: Lemma E1(c) for the fold, per tile, sampled (I8)'s `UnitFixed`'s companion (B1: a whole tile's skip
-  costs its fold too). Like `UnitFixed`, it reads neither the draw nor the proofs.
+* (H-μ), `Accounting.Assumptions.TS.OperandHMu`, and B′, `Accounting.Assumptions.TS.ReceiptLuckAt`, taken per tile at
+  its stage folded (`PerTile`): a folded tile keeps its honest checked values at `μ + (1 − μ)·r_B`, `7/8` at `¾` and
+  `½` (`Accounting.Guarantees.TS.LuckOfReceipt`), as the headlines' `p`;
+* `GuessLuckAt`: the whole-unit guess bound, per tile at its stage whole;
+* `RightFixed`: the fixed-words claim in share form, Lemma E1(c) for the sampled window, with the fold as its second
+  clause. It replaces round 2's `UnitFixed` at the tiles' words, whose good tiles were right ones, so a receipt-lucky
+  skipped tile counted as right with wrong words (RT-COMPOSE r2's R2-B1), and round 2's `UnitFolded`.
 
 The physical layer's (`CreditOfWork`):
 
@@ -28,38 +31,38 @@ namespace Accounting.Assumptions.Compose
 
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 
-/-- `accounting-compose-h-mu` ((H-μ), per template; a claim, Daniel's to rule on). **A cheater that hasn't computed a
-product can't predict its honest receipt above its template's luck, from a view that includes the public seed**: in the
-window's stages, at each tile's stage, whatever the past, a folded tile is right with probability at most its kind's
-`luck` times that of being folded, and a whole one with its `luck0` (`SplitStages.LuckAt`). A tile that carries no
-work is held to `1`, so this asks nothing of a filler or of a kind credited `0` (decision 109: a kind whose noise proves
-no floor, as one-sided noise proves none, is credited `0` and is never lucky against it; decision 117: H1's attention
-matmuls are credited at their floors, `QKᵀ`'s from a coin per entry on both operands and `P·V`'s from `U·b`, `Scheme`).
-It is per tile and unchanged by decision 119: the share charges a skipped tile its late cone, so a tile computed
-honestly downstream of a skipped one is paid, and this asks nothing of it.
+/-- `accounting-compose-guess-luck` (the whole-unit guess bound; a claim, Daniel's to rule on). **A unit skipped whole
+keeps its honest checked values only by guessing them**: in the ideal game split at the receipt, at every round,
+whatever the past, a deficient round passes with probability at most `p0` (`Accounting.TS.RoundGame.LuckAt` of its
+game). Taken per tile at its stage whole (`tileGame … .whole`, whose check is `same`): a tile whose product and fold
+are both skipped keeps its checked values, the fold state its proof pins, with probability at most `p0`, the guess
+bound `2^-(state bits)`, `2^-64` for a 64-bit fold state. It replaces round 2's `luck0 = 0`, which a guess falsifies
+(RT-COMPOSE r2's R2-B3). It fails if the cheater's view pins the fold state without the fold: a state that a computed
+word, or a coin read before the skip, determines. -/
+def GuessLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) : Prop :=
+  Accounting.TS.RoundGame.LuckAt p0 G.game
 
-What the template's coins give is proved, and `Scheme.LuckProved` holds the luck to at least it: `¾` for degree-2 cube
-operands within the receipt's binding (`Accounting.Guarantees.TS.LuckCaseACube`, `OperandLuckCube`, #2447's
-`DuoWindowNoKernel`), `Z·C(b, ⌊b/2⌋)/2^b` for `b` fresh bits at fibre `Z` (`Accounting.Guarantees.HMu.CoinPointMass`,
-`ReceiptLuckOfCoins`) and `0` for a pinned value (`Accounting.Guarantees.FillerLuck.PinnedFillLuckAt`). Those are
-stated for the template's own coins under full checking; that a skipping cheater's view, which holds the public seed
-(decisions 101 and 105) and every word it did compute, leaves them so is the claim. It fails if computing one word pins
-the coin of another a skipped word bets on (a dither bit shared across a row segment's columns, `HMu`'s notes). -/
-def HMu {ι K C : Type} [Fintype C] {Np M : ℕ} (Sc : Scheme K) (Cd : Declared ι) (W : SplitStages C (Fin Np) M) :
-    Prop :=
-  W.LuckAt (tileLuck Sc Cd Np) (tileLuck0 Sc Cd Np) (tileStage Cd Np)
-
-/-- `accounting-compose-unit-folded` (Lemma E1(c) for the fold, per tile, proved on paper). **A tile that isn't whole
-has its words folded**: on every accepted path, the run folds at least the committed words of the tiles that aren't
-whole along the window's coins: a paid tile folds its words and a folded tile its committed ones, and only a whole tile
-skips its fold. With the tiles' words summing to `N_w` it gives `(1 − D₀)·N_w`, `D₀` the whole share. It reads neither
-the draw nor the proofs: which tiles are whole is the run's, and the proofs only vouch for the drawn ones
-(`Accounting.Guarantees.TS.DrawnRightOff`). -/
-def UnitFolded {ι K T L U C B : Type} [Fintype C] {Np M : ℕ} (Sc : Scheme K) (Cd : Declared ι)
+/-- `accounting-compose-right-fixed` (Lemma E1(c) for the sampled window in share form, proved on paper; the fixed-words
+claim, as the headlines' `Accounting.Assumptions.TS.RightFixed` is under full checking). **What isn't fixed is in the
+skipped tiles' cones, and what isn't folded is in the whole tiles**: on every accepted path, along the window's coins,
+* the run's owned right fixed words are at least `(1 − (D_F + D₀))·N_w`, `D_F` and `D₀` the late cones' weights
+  (`tileCone`) of the tiles folded and whole: a word of a tile that no skipped tile reaches late (`Declared.Reaches`)
+  is computed from values fixed before its noise's coin, so it is not adaptive (E1(c): an adaptive word lies below a
+  value chosen after its coin);
+* the run folds at least `(1 − D₀')·N_w` committed words, `D₀'` the whole tiles' own weight: a paid tile folds its
+  words and a folded tile its committed ones, and only a whole tile skips its fold (round 2's `UnitFolded`).
+It reads the run's modes, never a tile's rightness or the proofs: a skipped tile counts as skipped however lucky its
+receipt, so this holds for the cheater that skips one unit and guesses its receipt (R2-B1). The cones are the IR's
+(`Declared.Late`, at the cuts `Declared.cutOf`), through glue, run inputs, the KV cache and decode feedback (W1); a
+tile of no words is charged its cone too (W4). -/
+def RightFixed {ι K T L U C B : Type} [Fintype C] {Np M : ℕ} (Sc : Scheme K) (Cd : Declared ι)
     (P : Play (Paths C M × B) 1 K T L U) (W : SplitStages C (Fin Np) M) (folded : Paths (Paths C M × B) 1 → ℝ) :
     Prop :=
   ∀ x, P.accepts x →
-    (∑ t, if W.modeAt (tileStage Cd Np) (coinAt x 0).1 t = .whole then 0 else tileWords Sc Cd Np t) ≤ folded x
+    (1 - (W.share (tileStage Cd Np) (tileCone Sc Cd Np) (coinAt x 0).1 .folded +
+        W.share (tileStage Cd Np) (tileCone Sc Cd Np) (coinAt x 0).1 .whole)) * (wordsOf Sc Cd : ℝ) ≤
+      (P.run x).fixed ∧
+    (1 - W.share (tileStage Cd Np) (tileWeight Sc Cd Np) (coinAt x 0).1 .whole) * (wordsOf Sc Cd : ℝ) ≤ folded x
 
 /-- `accounting-compose-fold-opt` (assumed; FOLD-OPT(fx1)'s mechanical fact, at least 4 issue slots a word folded).
 **FOLD-OPT_μ per word folded**: at every certificate, a run that folds `folded` committed words has its fold priced at
