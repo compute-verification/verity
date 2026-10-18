@@ -366,9 +366,14 @@ LUT_TOP = 127
 LUT_SINK_OCTAVES = 23
 
 
-def lut_table(res: int, size: int, device=None) -> torch.Tensor:
-    """LUT[t] = rint(127 2^(-t / res)) for t in 0..size-1 (fattn.cu's at res 16, size 256), as int64."""
-    return torch.round(LUT_TOP * torch.exp2(-torch.arange(size, dtype=torch.float64) / res)).long().to(device)
+def lut_table(res: int, size: int, device=None, top: int = LUT_TOP) -> torch.Tensor:
+    """LUT[t] = rint(top 2^(-t / res)) for t in 0..size-1 (fattn.cu's at top 127, res 16, size 256), as int64."""
+    return torch.round(top * torch.exp2(-torch.arange(size, dtype=torch.float64) / res)).long().to(device)
+
+
+def lut_norm_size(res: int, bits: int) -> int:
+    """The entries of L's table under `lut_norm` = bits (top 127 2^bits): up to and including its first 0."""
+    return math.ceil(res * math.log2(2 * (LUT_TOP << bits))) + 1
 
 
 def lut_up(res: int, device=None) -> torch.Tensor:
@@ -420,14 +425,19 @@ def calibrated_keys(mm, sink: bool) -> tuple:
     return mm.shared(key, go)
 
 
-def lut_softmax(mm, S: torch.Tensor, sq: torch.Tensor, sk: torch.Tensor, *, res: int, size: int, sink: bool):
+def lut_softmax(mm, S: torch.Tensor, sq: torch.Tensor, sk: torch.Tensor, *, res: int, size: int, sink: bool,
+                rnd: bool = False, norm: int = 0):
     """fattn.cu's integer softmax (fattn_ref.py) on the exact S = Q K^T (rep x rows x s): per query row the fixed-point
     A = rint(s_q s_k log2(e) res / sqrt(d) 2^32) (key 0's own A_0 from its own s_k when K's key 0 has one), the logits
-    lam = S A (key 0: S A_0), m their max over keys 0..pos (1..pos under `sink`), t = floor((m - lam) / 2^32),
-    e = LUT[min(t, size - 1)] (`lut_table`), L = sum of e over keys 0..pos, s_q = float32(1) / float32(L) and z_q =
+    lam = S A (key 0: S A_0), m their max over keys 0..pos (1..pos under `sink`), t = floor((m - lam) / 2^32) (`rnd`:
+    floor((m - lam + 2^31) / 2^32), t to nearest), e = LUT[min(t, size - 1)] (`lut_table`), L = sum of e over keys
+    0..pos, s_q = float32(1) / float32(L) and z_q =
     float32(e(0)) / float32(L). Under `sink`, key 0's t may be negative, u = -t (at most res LUT_SINK_OCTAVES): its
-    weight is H[u mod res] 2^(u div res) (`lut_up`). Returns P = e s_q (z_q at key 0) for P V, which reads e, s_q and
-    z_q from `extra["lut"]`. Gated on every call: A within uint32 and m - S within 32 bits."""
+    weight is H[u mod res] 2^(u div res) (`lut_up`). `norm` = b > 0 sums L over a finer table instead, LUT_L[t] =
+    rint(127 2^b 2^(-t / res)) (key 0 above the max: its weight times 2^b), so L stays the softmax's denominator where
+    e rounds to 0: s_q = float32(2^b) / float32(L), z_q = float32(e_L(0)) / float32(L), P = e as before. Returns P =
+    e s_q (z_q at key 0) for P V, which reads e, s_q and z_q from `extra["lut"]`. Gated on every call: A within uint32
+    and m - S within 32 bits."""
     causal = mm.extra["causal"]
     c = math.log2(math.e) * res * mm.extra["d"] ** -0.5 * 2.0 ** 32
     A = torch.round(sq.double() * sk[-1, 0].double() * c).long()
@@ -448,7 +458,7 @@ def lut_softmax(mm, S: torch.Tensor, sq: torch.Tensor, sk: torch.Tensor, *, res:
     d_max = int(d.max()) if d.numel() else 0
     del d
     mm.gate("lut", a_max < 2 ** 32 and d_max < 2 ** 32, {"A_max": a_max, "m_minus_S_max": d_max})
-    t = span >> 32
+    t = (span + (2 ** 31 if rnd else 0)) >> 32
     del span, lam
     lut = lut_table(res, size, S.device)
     e = lut[t.clamp(0, size - 1)]
@@ -456,10 +466,19 @@ def lut_softmax(mm, S: torch.Tensor, sq: torch.Tensor, sk: torch.Tensor, *, res:
         u = (-t[..., 0]).clamp(0, res * LUT_SINK_OCTAVES)
         e[..., 0] = torch.where(t[..., 0] >= 0, e[..., 0], lut_up(res, S.device)[u % res] << (u // res))
     e = e * causal
-    L = e.sum(-1, keepdim=True)
+    if norm:
+        size_l = lut_norm_size(res, norm)
+        el = lut_table(res, size_l, S.device, LUT_TOP << norm)[t.clamp(0, size_l - 1)]
+        if sink:
+            el[..., 0] = torch.where(t[..., 0] >= 0, el[..., 0], e[..., 0] << norm)
+        el = el * causal
+    else:
+        el = e
+    L = el.sum(-1, keepdim=True)
     Lf = L.float().double()
-    s_q = (1.0 / Lf).float()
-    z_q = (e[..., :1].float().double() / Lf).float()
+    s_q = (float(2 ** norm) / Lf).float()
+    z_q = (el[..., :1].float().double() / Lf).float()
+    del el
     p = e.float() * s_q
     p[..., :1] = z_q
     return Softmaxed(p, {"lut": (e, s_q, z_q)})
@@ -486,8 +505,10 @@ def _check_int8_attention(p):
             raise ValueError("int8.lut_res in 1..64, lut_size in 2..4096")
         if int(lut_table(p["lut_res"], p["lut_size"])[-1]) != 0:
             raise ValueError("int8: the LUT's last entry (where t saturates) must be 0: raise lut_size")
-    elif p["lut_sink"]:
-        raise ValueError("int8.lut_sink is the integer softmax's: softmax = lut")
+        if not 0 <= p["lut_norm"] <= 16:
+            raise ValueError("int8.lut_norm in 0..16")
+    elif p["lut_sink"] or p["lut_round"] or p["lut_norm"]:
+        raise ValueError("int8.lut_sink, lut_round and lut_norm are the integer softmax's: softmax = lut")
     if p["p_block"] and (p["p_block"] % PEEL_L or p["p_block"] > 2 ** 16):
         raise ValueError(f"int8.p_block is a multiple of {PEEL_L} keys, at most 2^16")
     if not all(1 <= p[t] <= 127 for t in ("q_top", "k_top", "p_top", "v_top")):
@@ -500,15 +521,17 @@ def _check_int8_attention(p):
 def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "round", k_top: int = 127,
                    k_scale: str = "token", k_sink: bool = False, p: str = "round", p_top: int = 127, p_block: int = 0,
                    p_sink: bool = False, v: str = "round", v_top: int = 127, v_scale: str = "channel", qk_bits: int = 1,
-                   softmax: str = "float", lut_res: int = 16, lut_size: int = 256, lut_sink: bool = False):
+                   softmax: str = "float", lut_res: int = 16, lut_size: int = 256, lut_sink: bool = False,
+                   lut_round: bool = False, lut_norm: int = 0):
     """Both attention matmuls on one int8 limb. Q, K: one scale per (head, token), Q rounded to [-q_top, q_top] or
     dithered, K rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-top - 1, top), b
     a fresh bit (for K, one for every query head), so the served operand is within [-top - 1, top]). `k_scale`: K's
     scale per token, or one per (layer, KV head) from the window's keys (`head`) or the calibration windows' (`calib`,
     the window's keys clamped into it); `k_sink` gives key 0 its own per-token scale beside it (`key_quant`).
     `softmax = "lut"`: fattn.cu's integer softmax (`lut_softmax`, LUT[t] = rint(127 2^(-t / lut_res)), `lut_size`
-    entries; `lut_sink`: key 0 out of the max) in place of the float one, P = e on keys 1..pos and key 0 as z_q V(0),
-    the block of keys 1..pos scaled by s_q (p_sink's two blocks, whatever `p_sink` says). P: after the
+    entries; `lut_sink`: key 0 out of the max; `lut_round`: t to nearest; `lut_norm`: L over a table 2^lut_norm
+    finer) in place of the float one, P = e on keys 1..pos and key 0 as z_q V(0), the block of keys 1..pos scaled by
+    s_q (p_sink's two blocks, whatever `p_sink` says). P: after the
     softmax, one scale per query row, or per (row, block of `p_block` keys), `p_sink` putting key 0 in a block of its
     own, rounded to [0, p_top], or (`dither`) rounded to [0, p_top - 1] plus a fresh bit where key <= query (so a
     dithered P serves no future key), the bits' mean, half the causal sum of V, taken off the product in the epilogue:
@@ -537,7 +560,8 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
         ki, sk = mm.cached("k", keys)
         prod = nxt(mm.integer(qi, ki))
         if softmax == "lut":
-            return lut_softmax(mm, prod, sq, sk, res=lut_res, size=lut_size, sink=lut_sink)
+            return lut_softmax(mm, prod, sq, sk, res=lut_res, size=lut_size, sink=lut_sink, rnd=lut_round,
+                               norm=lut_norm)
         return prod.float() * (sq * sk.T[None])
     pr = mm.x
     s = pr.shape[-1]
