@@ -6,6 +6,8 @@
 # one, or either, outside the token-select Calls.
 # env: BINARY= PYBIN= (skip the build and the venv: a local dry run)
 #      GRAPH=path/to/<row>.program.json | DEFS=path/to/defs.json | PROGRAM=path/to/module.py:FUNC (a Program's Calls)  SHAPES=path/to/shapes.txt
+#      PARTITION=q-word (partition_units' spec; q-template-instance: a population program's instances, each one unit)
+#      FLOCK_DRAW_LAW=path/to/law.json (each session proves the units the verifier draws by this law at Register: serve --draw-law)
 #      SELECT=table-free  MODULES= (a module-path prefix)
 #      BATCH=auto  WARM=1  RUNS=3  SELFTEST=25  JOBS=1 (shapes staged in parallel)  GPU=1  SM (from nvidia-smi)  PORT=7710
 #      SELFTEST_GPU=1 (the selftests on the GPU, its paths against each other and the CPU's included)  SELFTEST_CASES=a,b (only these)
@@ -91,7 +93,7 @@ SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${SELFTEST_LARGEST
 [ "${STAGE_ONLY:-0}" = 1 ] && SEL+=(--stage-only)
 [ "${STAGE_ONLY:-0}" = 1 ] && [ "${STATEMENT_DIGEST:-0}" = 1 ] && SEL+=(--statement-digest)
 [ -n "${SERVE_ONLY:-}" ] && SEL+=(--serve-only "$SERVE_ONLY" --serve-points "${SERVE_POINTS:-1}")
-$PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition q-word --out $O/classes \
+$PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition "${PARTITION:-q-word}" --out $O/classes \
   --binary $B --selftest-binary $SB "${SEL[@]}" --batch ${BATCH:-auto} ${N:+--n $N} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
   --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} ${SELFTEST_GPU:+--selftest-gpu} ${SELFTEST_CASES:+--selftest-cases "$SELFTEST_CASES"} \
   ${SELFTEST_JOBS:+--selftest-jobs $SELFTEST_JOBS} ${SELFTEST_CASE_MIB:+--selftest-case-mib $SELFTEST_CASE_MIB} $G_

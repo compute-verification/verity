@@ -1,0 +1,64 @@
+# LI-CP-W: the checkpoint XOR-reduced across the warp before the store (5 SHFL.BFLY and 5 LOP3 a lane a segment), so
+# one 4-byte word a warp a segment leaves the SM instead of one a lane: receipt bytes 32x fewer
+# Dither-2S with the LI fold at L = 32 on the H200 (sm_90): two-sided dither serving the last checked word and P·V's
+# peel, LI receipts on every committed word and 0.02 verified FFMA a word. The noise is dither-2s-l32's, and ε_skip is
+# this design's own at its ♭ (eps_budget's `design_skip`); the fold, honest and ε_mand are DC-DESIGN's
+# (note:20261017T0805Z-draft-dc-design §3, §4): LI binds honest on the H200's lane facet, so output counting closes the
+# lane route.
+name = "dither-2s-licpw-redux-l32"
+title = "Dither-2S, LI-CP-W redux, 0.07 FFMA, L = 32"
+summary = "Dither-2S on the H200 at L = 32: two-sided dither serving the last checked word, LI-CP-W receipts (a warp's checkpoint a segment), 0.07 FFMA, P·V's peel"
+honest = "dc90-licpw-redux-l32"
+L = 32
+work = 1.0
+sums = "vfold"
+
+[noise]
+linears = "two-sided"
+lm_head = "two-sided"
+qk = "two-sided"
+pv = "peel"
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { IGMMA_S8_N256 = 0.0 }
+source = "wgmma reads both operands from shared memory by descriptor (TMA fills it), so delivery costs no warp instruction a MMA; the warpgroup fences and commit groups are left out, so it is a lower bound"
+
+[fold]
+name = "li"          # LI plus the per-segment checkpoint: 4 LOP3, then one redux.sync.xor across the warp, and a store a lane a MMA
+ALU = 0.53125
+IMAD = 0.5
+SHFL = 0.0234375
+
+[filler]
+per_word = 0.07
+mix = { FFMA = 1 }
+route = "lanes"
+source = "LI-ALT: LI-CP's checkpoint adds ALU work, so 0.05 FFMA a word no longer holds decision 76's 2% margin at the floor (core 0.723% under it); 0.07 does (0.08 holds 3%), at the DC r8 margin audit's method; FILL-OPT is its named assumption"
+p = 0.0
+luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit, once the filler's receipt is recomputed bit for bit: FFMA is IEEE 754 binary32 fused multiply-add, rounded once (round to nearest even), so with its FTZ mode and NaN's encoding pinned the verifier reproduces every word exactly and a wrong receipt fails whenever its tile is drawn. No FFMA filler kernel or check exists yet; FILL-OPT is where an FFMA chain is weak (with fixed operands it reaches a fixed point or overflows, after which its receipt costs nothing), so the kernel must feed each step fresh operands"
+
+[skip.served]
+eps = 0.00466
+source = "0.00466 is eps_budget.py's design_skip on this device's floor program; DC r9's method gave 0.004489. eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 6.311 SMSP-cycles a 4096-MAC MMA on DC-90 (LI-CP and 0.07 FFMA); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.498%: its tail 0.231%, the sums DG, S and X(0) 0.225%, the served epilogue 0.0425%. With P·V's served output checked it is 0.446% (8B) / 0.174% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 10)"
+
+[mand.fold]
+eps = 0.0
+source = "named assumptions: LI-CP at its lane instructions a word is the cheapest implementation of the fold (FOLD-OPT) and the filler the cheapest of its work (FILL-OPT). With every absorbed word pinned (PIN), the receipt's luck is 0 for a skip that lands on one word of a segment: a checkpoint is injective in each word it absorbed (Lean Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective, odd multipliers only); KLI₂₄, (RT), (G₃) and (HO_U) are not read (note:LI-ALT)"
+
+[clock]
+eps = 0.0
+source = "f_H unmeasured on the H200 (EPS1 DC measured f_max = 1980 MHz at default clocks, 06:01Z): 0 here, so γ with the clock gap is γ, a lower bound"
+
+[luck]
+delta = 4.547473508864641e-13
+p = 0.75
+checks = 48000
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 8 }
+source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
+
+[routes]
+lanes = true
