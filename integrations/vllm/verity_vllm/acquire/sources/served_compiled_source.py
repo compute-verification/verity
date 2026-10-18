@@ -500,9 +500,17 @@ class ServedCompiledSource:
             return {"kwargs": {str(k): v for k, v in (getattr(c, "kwargs", None) or {}).items()},
                     "num_warps": getattr(c, "num_warps", None), "num_stages": getattr(c, "num_stages", None)}
 
+        frozen = gc.get_freeze_count()
+        if frozen:                      # vLLM freezes the heap after capture, and get_objects skips what is frozen
+            gc.unfreeze()
+        try:
+            tuners = [o for o in gc.get_objects() if isinstance(o, CachingAutotuner)]
+        finally:
+            if frozen:
+                gc.freeze()
         out: dict[str, Any] = {}
         sha: dict[str, str] = {}
-        for t in [o for o in gc.get_objects() if isinstance(o, CachingAutotuner)]:
+        for t in tuners:
             path = getattr(t, "filename", None)
             if not path or not os.path.isfile(path):
                 continue
