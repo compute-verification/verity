@@ -270,6 +270,81 @@ __global__ void __launch_bounds__(256) chacha_salts(ChaKey key, u64 nblocks, uin
     out[4 * blk + i] = make_uint4(x[4 * i] + s[4 * i], x[4 * i + 1] + s[4 * i + 1], x[4 * i + 2] + s[4 * i + 2], x[4 * i + 3] + s[4 * i + 3]);
 }
 
+// --- the pipe probe: does SHA-512's integer work hide under tensor-core work on one SM? ---------------------------------
+// MW tensor warps and HW SHA-512 warps in one CTA an SM. mode bit 0 runs the tensor warps (mma.sync m16n8k32 s8 on
+// register operands, 8 independent accumulators; with WG on sm_90a, wgmma m64n64k32 s8 from shared memory instead, a
+// warpgroup per 4 warps), bit 1 the SHA warps (chained compressions on registers). Timing only.
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ == 900) && defined(__CUDA_ARCH_FEAT_SM90_ALL)
+#define HAVE_WGMMA 1
+#endif
+DEV u64 smem_desc(u32 addr) { return (u64)((addr & 0x3FFFF) >> 4) | ((u64)(128 >> 4) << 16) | ((u64)(256 >> 4) << 32); }
+template <int MW, int HW, bool WG>
+__global__ void __launch_bounds__(32 * (MW + HW), 1) probe_kernel(int mma_iters, int sha_iters, int mode, u64* sink) {
+  __shared__ __align__(1024) uint8_t pm[16384];
+  const int tid = threadIdx.x, warp = tid >> 5;
+  for (int i = tid; i < 16384 / 4; i += blockDim.x) reinterpret_cast<u32*>(pm)[i] = i * 2654435761u;
+  __syncthreads();
+  if (warp < MW) {
+    if (!(mode & 1)) return;
+    if constexpr (WG) {
+#ifdef HAVE_WGMMA
+      int d[32];
+#pragma unroll
+      for (int i = 0; i < 32; ++i) d[i] = 0;
+      const u64 da = smem_desc(smem_u32(pm)), db = smem_desc(smem_u32(pm + 8192));
+      asm volatile("wgmma.fence.sync.aligned;" ::: "memory");
+      for (int it = 0; it < mma_iters; ++it) {
+        asm volatile(
+            "{\n.reg .pred p;\nsetp.ne.b32 p, %34, 0;\n"
+            "wgmma.mma_async.sync.aligned.m64n64k32.s32.s8.s8 "
+            "{%0, %1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15, "
+            "%16, %17, %18, %19, %20, %21, %22, %23, %24, %25, %26, %27, %28, %29, %30, %31}, %32, %33, p;\n}\n"
+            : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3]), "+r"(d[4]), "+r"(d[5]), "+r"(d[6]), "+r"(d[7]), "+r"(d[8]),
+              "+r"(d[9]), "+r"(d[10]), "+r"(d[11]), "+r"(d[12]), "+r"(d[13]), "+r"(d[14]), "+r"(d[15]), "+r"(d[16]),
+              "+r"(d[17]), "+r"(d[18]), "+r"(d[19]), "+r"(d[20]), "+r"(d[21]), "+r"(d[22]), "+r"(d[23]), "+r"(d[24]),
+              "+r"(d[25]), "+r"(d[26]), "+r"(d[27]), "+r"(d[28]), "+r"(d[29]), "+r"(d[30]), "+r"(d[31])
+            : "l"(da), "l"(db), "r"(1));
+        asm volatile("wgmma.commit_group.sync.aligned;" ::: "memory");
+        asm volatile("wgmma.wait_group.sync.aligned 4;" ::: "memory");
+      }
+      asm volatile("wgmma.wait_group.sync.aligned 0;" ::: "memory");
+      int s = 0;
+#pragma unroll
+      for (int i = 0; i < 32; ++i) s += d[i];
+      if (s == 0x12345678) sink[tid] = s;
+#endif
+    } else {
+      u32 a[4] = {(u32)tid, (u32)tid * 3u, (u32)tid * 5u, (u32)tid * 7u}, b[8][2];
+      int acc[8][4];
+#pragma unroll
+      for (int j = 0; j < 8; ++j) {
+        b[j][0] = tid * 11u + j; b[j][1] = tid * 13u + j;
+#pragma unroll
+        for (int c = 0; c < 4; ++c) acc[j][c] = 0;
+      }
+      for (int it = 0; it < mma_iters; ++it)
+#pragma unroll
+        for (int j = 0; j < 8; ++j) mma_s8(acc[j], a, b[j]);
+      int s = 0;
+#pragma unroll
+      for (int j = 0; j < 8; ++j) s += acc[j][0] ^ acc[j][1] ^ acc[j][2] ^ acc[j][3];
+      if (s == 0x12345678) sink[tid] = s;
+    }
+    return;
+  }
+  if (!(mode & 2)) return;
+  u64 st[8], w[16];
+  sha::iv(st);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = (u64)tid * 16 + i;
+  for (int r = 0; r < sha_iters; ++r) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) w[i] ^= st[i];
+    sha::compress(st, w);
+  }
+  if (st[0] == 0x0123456789abcdefull) sink[tid] = st[1];
+}
+
 // --- host ---------------------------------------------------------------------------------------------------------------
 
 struct Nv {
@@ -634,11 +709,75 @@ static int chacha(int argc, char** argv) {
   return 0;
 }
 
+// The pipe probe at one configuration: iterations calibrated so the tensor warps alone take ~T_MS and the SHA warps alone
+// `ratio` of that, then the tensor warps alone, the SHA warps alone and both, interleaved. overlap = (T1 + T2 - T3) /
+// min(T1, T2): 1 when the shorter hides entirely, 0 when they serialize, negative when running both costs more than that.
+template <int MW, int HW, bool WG>
+static void probe_cfg(double ratio, int reps, int sms, cudaStream_t st, u64* sink, Nv& nv, const char* gpu) {
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
+  auto time = [&](int mi, int si, int mode) {
+    spin<<<1, 1, 0, st>>>(SPIN);
+    CK(cudaEventRecord(e0, st));
+    probe_kernel<MW, HW, WG><<<sms, 32 * (MW + HW), 0, st>>>(mi, si, mode, sink);
+    CK(cudaEventRecord(e1, st));
+    CK(cudaEventSynchronize(e1));
+    float m; CK(cudaEventElapsedTime(&m, e0, e1));
+    return (double)m;
+  };
+  constexpr double T_MS = 2.0;
+  int mi = 1024, si = 64;
+  for (int k = 0; k < 2; ++k) {
+    const double t1 = time(mi, si, 1), t2 = time(mi, si, 2);
+    mi = std::max(1, (int)(mi * T_MS / t1));
+    si = std::max(1, (int)(si * T_MS * ratio / t2));
+  }
+  std::vector<double> t[3], mz;
+  for (int r = -2; r < reps; ++r)
+    for (int m = 1; m <= 3; ++m) {
+      const double v = time(mi, si, m);
+      if (r >= 0) { t[m - 1].push_back(v); if (m == 3) mz.push_back(nv.sm()); }
+    }
+  CK(cudaGetLastError());
+  const double T1 = median(t[0]), T2 = median(t[1]), T3 = median(t[2]);
+  const double ops = WG ? (double)sms * (MW / 4) * mi * 64 * 64 * 32 * 2 : (double)sms * MW * mi * 8 * 16 * 8 * 32 * 2;
+  const double comps = (double)sms * HW * 32 * si;
+  printf("{\"probe\": {\"gpu\": \"%s\", \"mma_warps\": %d, \"sha_warps\": %d, \"wgmma\": %s, \"ratio\": %.2f, \"mma_iters\": %d, "
+         "\"sha_iters\": %d, \"t_mma_ms\": %.4f, \"t_sha_ms\": %.4f, \"t_both_ms\": %.4f, \"overlap\": %.3f, "
+         "\"tops_alone\": %.1f, \"gcomp_per_s_alone\": %.3f, \"mhz\": %.0f}}\n",
+         gpu, MW, HW, WG ? "true" : "false", ratio, mi, si, T1, T2, T3, (T1 + T2 - T3) / std::min(T1, T2),
+         ops / T1 * 1e-9, comps / T2 * 1e-6, median(mz));
+  fflush(stdout);
+}
+
+static int probe(int argc, char** argv) {
+  const int reps = argc >= 3 ? atoi(argv[2]) : 9;
+  int dev; cudaDeviceProp prop;
+  CK(cudaGetDevice(&dev)); CK(cudaGetDeviceProperties(&prop, dev));
+  cudaStream_t st;
+  CK(cudaStreamCreateWithFlags(&st, cudaStreamNonBlocking));
+  u64* sink;
+  CK(cudaMalloc(&sink, 1024 * 8));
+  Nv nv;
+  const int sms = prop.multiProcessorCount;
+  for (double ratio : {1.0, 0.25}) {
+    probe_cfg<8, 4, false>(ratio, reps, sms, st, sink, nv, prop.name);
+    probe_cfg<8, 8, false>(ratio, reps, sms, st, sink, nv, prop.name);
+    probe_cfg<4, 4, false>(ratio, reps, sms, st, sink, nv, prop.name);
+    if (prop.major == 9) {
+      probe_cfg<8, 4, true>(ratio, reps, sms, st, sink, nv, prop.name);
+      probe_cfg<4, 4, true>(ratio, reps, sms, st, sink, nv, prop.name);
+    }
+  }
+  return 0;
+}
+
 int main(int argc, char** argv) {
+  if (argc >= 2 && !strcmp(argv[1], "probe")) return probe(argc, argv);
   if (argc >= 2 && !strcmp(argv[1], "check")) return check(argc, argv);
   if (argc >= 2 && !strcmp(argv[1], "bench")) return bench(argc, argv);
   if (argc >= 2 && !strcmp(argv[1], "tree")) return tree(argc, argv);
   if (argc >= 2 && !strcmp(argv[1], "chacha")) return chacha(argc, argv);
-  fprintf(stderr, "usage: fuse check|bench|tree|chacha ...\n");
+  fprintf(stderr, "usage: fuse check|bench|tree|chacha|probe ...\n");
   return 2;
 }
