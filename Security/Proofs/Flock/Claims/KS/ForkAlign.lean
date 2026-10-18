@@ -1,4 +1,6 @@
 import Proofs.Flock.Claims.KS.ForkSim
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game.Seq
 
 /-!
 # A fork at a table node, aligned with a fork after a number of coins
@@ -13,6 +15,8 @@ reaches that node after exactly `j` coins on every path, or forks to nothing on 
 * `SlotAt`, `forkE_le_forkC`: the alignment, and the bound it gives;
 * `Aligned.mono_self`, `forkE_mapL`, `SlotAt.mono`, `SlotAt.mapL`: weakening the leaf relation and relabelling the
   oracle side keep the fork and the alignment;
+* `plurMap`, `forkE_map`, `SlotAt.map`, `SlotAt.leftSame_ret`, `SlotAt.batchLock_one`: relabelling both sides keeps
+  them at the chooser read through the relabelling, so the alignment passes up through a batch of one position;
 * `answerWith_send`, `expect_answerWith`, `expect₂_answerWith`, `forkE_answerWith`: against a strategy answering every
   message of one type with `nul` (a dead branch's), the fork is `0` at any chooser where `Φ` is `0` at every two
   outcomes reached with those messages `nul`, so such a branch meets `SlotAt` by `nul`.
@@ -157,6 +161,97 @@ theorem SlotAt.mapL {T D I α α₂ β : Type} {get : I → ℕ → Option (T ×
   | other s hne _ ih => exact .other s hne ih
   | here σ' => exact .here σ'
   | nul h0 => exact .nul ((forkE_mapL _ _ _ f h _ _).trans h0)
+
+/-- **A chooser read through a relabelling**: choose for `g` what `plur` chooses for `g.map f'`. -/
+def plurMap {T D β β₂ : Type} (f' : β → β₂) (plur : Chooser T D β₂) : Chooser T D β :=
+  fun s d g σ' => plur s d (g.map f') (Strategy.map f' g σ')
+
+/-- **Relabelling the outcomes relabels an expectation over two runs.** -/
+theorem expect₂_map {β β₂ : Type} (F : β₂ → β₂ → ℝ) (f' : β → β₂) (g : Game β) (σ' : Strategy g) :
+    expect₂ F (g.map f') (Strategy.map f' g σ') = expect₂ (fun b b' => F (f' b) (f' b')) g σ' := by
+  unfold expect₂
+  rw [expect_map]
+  simp only [expect_map]
+
+/-- **Relabelling both sides keeps the fork**, read at the relabelled chooser and `Φ`. -/
+theorem forkE_map {T D I α α₂ β β₂ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
+    {R₂ : I → α₂ → β₂ → Prop} (plur : Chooser T D β₂) (slot : ℕ) (Φ : D → β₂ → β₂ → ℝ) (f : α → α₂)
+    (f' : β → β₂) (h : ∀ i a b, R i a b → R₂ i (f a) (f' b)) :
+    ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
+      forkE plur slot Φ (Lock.map f f' h L) (Strategy.map f' g' σ') =
+        forkE (plurMap f' plur) slot (fun d b b' => Φ d (f' b) (f' b')) L σ'
+  | _, _, _, .ret _, _ => rfl
+  | _, _, _, @Lock.coin _ _ _ _ _ _ _ _ C _ _ _ _ L, σ' => by
+      simp only [Lock.map, Lock.bind, Strategy.map, Strategy.bind, forkE]
+      exact congrArg (· / _) (Finset.sum_congr rfl fun c _ => forkE_map plur slot Φ f f' h (L c) (σ' c))
+  | _, _, _, .send _ L, σ' => by
+      simp only [Lock.map, Lock.bind, Strategy.map, Strategy.bind, forkE]
+      exact forkE_map plur slot Φ f f' h (L σ'.1) σ'.2
+  | _, _, _, .table s _ _ _ _ L, σ' => by
+      simp only [Lock.map, Lock.bind, Strategy.map, Strategy.bind, forkE]
+      split_ifs
+      · exact expect₂_map _ f' _ σ'.2
+      · exact forkE_map plur slot Φ f f' h _ σ'.2
+
+/-- **The slot is reached after `j` coins through a lockstep relabelled on both sides** where it is through the
+lockstep, at the relabelled chooser and `Φ`. -/
+theorem SlotAt.map {T D I α α₂ β β₂ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
+    {R₂ : I → α₂ → β₂ → Prop} {plur : Chooser T D β₂} {slot : ℕ} {Φ : D → β₂ → β₂ → ℝ} (f : α → α₂)
+    (f' : β → β₂) (h : ∀ i a b, R i a b → R₂ i (f a) (f' b)) {j : ℕ} {i : I} {g : Game α} {g' : Game β}
+    {L : Lock T D get R i g g'} {σ' : Strategy g'}
+    (hs : SlotAt (plurMap f' plur) slot (fun d b b' => Φ d (f' b) (f' b')) j L σ') :
+    SlotAt plur slot Φ j (Lock.map f f' h L) (Strategy.map f' g' σ') := by
+  induction hs with
+  | ret hr σ' => exact .ret (h _ _ _ hr) _
+  | coin C _ ih => exact .coin C ih
+  | send M _ ih => exact .send M ih
+  | other s hne _ ih => exact .other s hne ih
+  | here σ' => exact .here _
+  | nul h0 => exact .nul ((forkE_map _ _ _ f f' h _ _).trans h0)
+
+/-- **Reading a strategy of `g.map f'` back on `g` and relabelling it again gives it back.** -/
+theorem Strategy.map_ofMap {β β₂ : Type} (f' : β → β₂) :
+    ∀ (g : Game β) (σ' : Strategy (g.map f')), Strategy.map f' g (Strategy.ofMap f' g σ') = σ'
+  | .ret _, _ => rfl
+  | .send _ k, σ' => by
+      show (⟨σ'.1, Strategy.map f' (k σ'.1) (Strategy.ofMap f' (k σ'.1) σ'.2)⟩ :
+        Σ m, Strategy ((k m).map f')) = σ'
+      rw [Strategy.map_ofMap f' (k σ'.1) σ'.2]
+      rfl
+  | @Game.coin _ _ _ _ k, σ' => funext fun c => Strategy.map_ofMap f' (k c) (σ' c)
+
+/-- **Interleaving with a finished game** pairs every outcome with its value. -/
+theorem interleave_ret {α γ : Type} (c : γ) : ∀ g : Game α, interleave g (.ret c) = g.map (·, c)
+  | .ret _ => rfl
+  | .send _ _ => rfl
+  | @Game.coin _ _ _ _ _ => rfl
+
+/-- **The slot is reached through `leftSame L (.ret c)`** where it is through `L`, read through the pairing with `c`. -/
+theorem SlotAt.leftSame_ret {T D I α β γ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
+    {plur : Chooser T D (β × γ)} {slot : ℕ} {Φ : D → β × γ → β × γ → ℝ} {j : ℕ} {i : I} {g : Game α}
+    {g' : Game β} (c : γ) (L : Lock T D get R i g g') (σ' : Strategy (interleave g' (.ret c)))
+    (hs : SlotAt (plurMap (·, c) plur) slot (fun d b b' => Φ d (b, c) (b', c)) j L
+      (Strategy.ofMap (·, c) g' (cast (congrArg Strategy (interleave_ret c g')) σ'))) :
+    SlotAt plur slot Φ j (leftSame L (.ret c)) σ' := by
+  have key := SlotAt.map (R₂ := fun i a b => R i a.1 b.1 ∧ a.2 = b.2) (fun a => (a, c)) (fun b => (b, c))
+    (fun _ _ _ hr => ⟨hr, rfl⟩) hs
+  rw [Strategy.map_ofMap] at key
+  cases L <;> exact key
+
+/-- **The slot is reached through a batch of one position** where it is through that position's lockstep, read
+through the batch's outcome list. -/
+theorem SlotAt.batchLock_one {T D I ζ : Type} {get : I → ℕ → Option (T × D)} {R : I → ζ → ζ → Prop}
+    {plur : Chooser T D (List ζ)} {slot : ℕ} {Φ : D → List ζ → List ζ → ℝ} {j : ℕ} {i : I} {g g' : Game ζ}
+    (d : ζ) (L : Lock T D get R i g g') (σ' : Strategy (batch [g']))
+    (hs : SlotAt (plurMap (·, []) (plurMap (fun x : ζ × List ζ => x.1 :: x.2) plur)) slot
+      (fun e b b' => Φ e [b] [b']) j L
+      (Strategy.ofMap (·, []) g' (cast (congrArg Strategy (interleave_ret [] g'))
+        (Strategy.ofMap (fun x : ζ × List ζ => x.1 :: x.2) (g'.interleave (.ret [])) σ')))) :
+    SlotAt plur slot Φ j (batchLock d L [] []) σ' := by
+  have key := SlotAt.map (R₂ := fun i a b => R i (a.getD 0 d) (b.getD 0 d))
+    (fun x : ζ × List ζ => x.1 :: x.2) (fun x : ζ × List ζ => x.1 :: x.2) (fun _ _ _ h => h.1)
+    (SlotAt.leftSame_ret [] L _ hs)
+  exact Strategy.map_ofMap (fun x : ζ × List ζ => x.1 :: x.2) (g'.interleave (.ret [])) σ' ▸ key
 
 /-- `answerWith nul` at a message node sends a message every equation of types takes to `nul`, and plays
 `answerWith nul` below it. -/
