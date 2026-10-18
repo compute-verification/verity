@@ -61,6 +61,19 @@
 #     --env SESSIONS=1 --env WINDOWS=7 --env WINDOW_MS=100 --env LIFETIME=4 -- bash benchmarks/remote_session/run.sh
 #   research run --on vy-nebius-2 --preemptible --gpus 1 ... --env ROLE=prover --env PORT=7797 --env SERVE=row \
 #     --env ROW=<the int8 Llama-3.1-8B row> -- bash benchmarks/remote_session/run.sh
+#
+# SERVE=node serves the whole node: a vLLM engine a leased GPU (`engine.py`), and the prover (`node.py`) registers
+# their weights arenas as the store, where they are served, the engines decoding each weight as they use it
+# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
+# node's host DRAM (its MemTotal) in the memory line. The north-star run, the verifier on vy-nebius-1:
+#
+#   research run --queue --on vy-nebius-1 --phase cpu --cpus 16 ... --env ROLE=verifier --env PEER=vy-nebius-2 \
+#     --env PORT=7799 --env SESSIONS=2 --env WINDOWS=7 --env WINDOW_MS=60000 --env SAMPLES=33273 --env QUANTILE=max \
+#     --env JITTER_MS=50 --env VERIFIER_ARGS='--host-bytes 1843153879040' -- bash benchmarks/remote_session/run.sh
+#   research run --queue --on vy-nebius-2 --gpus 8 --preemptible --mem-gb 200 ... --env ROLE=prover --env PORT=7799 \
+#     --env SERVE=node --env PLAN=honest,skip:0.0625 --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 \
+#     --env ENGINE_ARGS='--step-hz 2' --env NODE_ARGS='--decode-s 60 --warm-openings 33273' \
+#     -- bash benchmarks/remote_session/run.sh
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -131,7 +144,10 @@ if [ -n "${SERVE:-}" ]; then
       read -r CK REPO REV _ < <("$VV" epoch resolve "${ROW:?}")
       # shellcheck disable=SC2086
       RUN=(env "REMOTE_VERIFIER=127.0.0.1:$PORT" "$VV" row run "$ROW" "${CK:?}" "$REPO" "$REV" ${ROW_ARGS:-}) ;;
-    *) echo "SERVE is tiny or row, not $SERVE"; exit 3 ;;
+    node)
+      export VPY
+      RUN=(bash $RS/node.sh) ;;
+    *) echo "SERVE is tiny, row or node, not $SERVE"; exit 3 ;;
   esac
   "${LEASE[@]}" "${RUN[@]}" > "$O/prover.log" 2>&1; P=$?
   tail -20 "$O/prover.log"
