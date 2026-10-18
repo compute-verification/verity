@@ -156,7 +156,9 @@ from verity.core.protocols.sampled_proofs.plan import VerificationPlan
   a work table), `check_draw` holds a draw to the registration and the verifier's sampling design, and `check_proved`
   holds the proved units to the draw; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
-  and the test programs `population_program` and `mixed_population_program`.
+  and the population programs `population_program` (`TemplateInstances_v1{template, N}`) and `mixed_population_program`
+  (`TemplatePopulations_v1{templates, counts}`), whose binding records name their templates by descriptor id. v0 of each
+  (`version=0`), which names only the counts, is kept for the records made with it.
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
