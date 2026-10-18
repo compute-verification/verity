@@ -609,8 +609,10 @@ DEV void mask_words(const u32* m, u64* my) {
 }
 
 // h = SHA-512(leaf_prefix || (x ^ M y) || c), then the frame leaf from its first block's state f
+// RT: through the called bodies, with kwl the leaf padding block's copy in shared memory.
 template <int SX, bool RT = false>
-DEV void finish_leaf(const LeafK& K, u64 pos, const u64* x, const u64* my, const u64* c, u64* f, uint8_t* bc, uint8_t* hs) {
+DEV void finish_leaf(const LeafK& K, u64 pos, const u64* x, const u64* my, const u64* c, u64* f, uint8_t* bc, uint8_t* hs,
+                     const u64* kwl = nullptr) {
   u64 B[16], h[8];
 #pragma unroll
   for (int w = 0; w < 8; ++w) {
@@ -620,7 +622,8 @@ DEV void finish_leaf(const LeafK& K, u64 pos, const u64* x, const u64* my, const
   if (bc) st_be(bc, B, 16);
   cpy8(h, K.mid_leaf);
   cmp<RT>(h, B);
-  cmp_kw<RT>(h, K.kw_leafpad);
+  if constexpr (RT) cmp_kw<true>(h, kwl);
+  else sha::compress_kw(h, K.kw_leafpad);
   if (hs) st_be(hs, h, 8);
   if constexpr (RT) frame_second_rt<SX>(K, pos, h, f);
   else frame_second<SX>(K, pos, h, f);
@@ -963,7 +966,8 @@ u64 fold_ctrs(u64 width) { return width > THREADS ? width / THREADS - 1 : 0; }
 // table in shared memory, c, the frame leaf's first block; or the pad) into shared memory. Then the row threads finish their
 // leaves, fold their warp's 32 through shuffles, and lane 0 climbs while its warp is the second of two siblings to finish.
 // Every compression but compress_from's goes through compress_ni / compress_kw_ni, and the frame, pad and node through the
-// _rt helpers, one call site each, to keep the code small (sharaw's v4 calls its compressions too).
+// _rt helpers, one call site each, to keep the code small (sharaw's v4 calls its compressions too). The scheduled padding
+// blocks reach compress_kw_ni from shared memory (KW): given their address in K, the parameter, its digests were wrong.
 // ctr: a count a node above level log2(min(cnt, 32)), zeroed before the launch.
 constexpr int SPEC_R = 128;
 template <int SX>
@@ -973,15 +977,17 @@ __global__ void __launch_bounds__(2 * SPEC_R, 2)
                 uint8_t* levels, uint8_t* __restrict__ bc, u32* ctr) {
   __shared__ uint4 T[512];
   __shared__ u64 SF[SPEC_R * 24];
+  __shared__ u64 KW[2][80];
   const u32 cnt = blockDim.x / 2, t = threadIdx.x;
   for (u32 i = t; i < 512; i += blockDim.x) T[i] = reinterpret_cast<const uint4*>(tab)[i];
+  for (u32 i = t; i < 80; i += blockDim.x) KW[0][i] = K.kw_xpad[i], KW[1][i] = K.kw_leafpad[i];
   __syncthreads();
   const bool rower = t < cnt;
   const u32 j = rower ? t : t - cnt;
   const u64 pos = (u64)blockIdx.x * cnt + j;
   u64 x[8];
   if (rower) {
-    if (pos < n) hash_tail<true>(K.mid_P, 128, rows + pos * stride, K.lb, x, K.xpad ? K.kw_xpad : nullptr);
+    if (pos < n) hash_tail<true>(K.mid_P, 128, rows + pos * stride, K.lb, x, K.xpad ? KW[0] : nullptr);
   } else {
     u64* s = SF + 24 * j;
     if (pos < n) {
@@ -1010,7 +1016,7 @@ __global__ void __launch_bounds__(2 * SPEC_R, 2)
     u64 my[8], c[8];
     cpy8(my, s);
     cpy8(c, s + 8);
-    finish_leaf<SX, true>(K, pos, x, my, c, o, bc ? bc + 128 * pos : nullptr, nullptr);
+    finish_leaf<SX, true>(K, pos, x, my, c, o, bc ? bc + 128 * pos : nullptr, nullptr, KW[1]);
   }
   st_be(levels + 64 * pos, o, 8);
   const u32 lane = t & 31, wsz = cnt < 32 ? cnt : 32;
