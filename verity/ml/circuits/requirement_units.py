@@ -83,8 +83,7 @@ it is ``pi[W - L]``, and 0 if W < L or no pass follows t (W = T). A block's appe
 after its write step (each writing instance pins the step, and the record's heads pin the append between the passes
 around it: `remote_bandwidth`'s `RequirementLink.mapped`), so a write step below the cap is an age, counted from the
 first root sent after the append, of at least L windows at the first pass after t, and o is below that pass's stale bound
-(the blocks whose appends joined a window at least L before it, a value the record doesn't publish): the cap is that
-bound in step form (`rekey_cap`). It reads the passes' steps only through ``pi``, which is bound to the record's passes
+(the blocks whose appends joined a window at least L before it): the cap is that bound in step form (`rekey_cap`). It reads the passes' steps only through ``pi``, which is bound to the record's passes
 by its commitment.
 
 **Cost.** PlanMatch: one 16-bit comparison of each plan entry with each block t may read, P (NR + G + V) of them, about
