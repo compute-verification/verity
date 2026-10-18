@@ -134,10 +134,10 @@ def workload(v: dict, window_rounds: float, m: Model) -> dict:
             "window_gpu_s": v["round"] * window_rounds}
 
 
-def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -> tuple[Commitment, ...]:
+def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False, rows=None) -> tuple[Commitment, ...]:
     """The window's serve-time commitments under `scheme` (None: none, a plan's sampling spend alone), each priced at
     `commit_per_byte` (`floor`: its measured B), with its decode bytes and gating chain at a B32 step: one tree a call over
-    its leaves, or a tile leaf a call."""
+    its leaves, or a tile leaf a call.  `rows` replaces the scheme's `serve_rows` (a serve-time option's)."""
     if scheme is None:
         return ()
     if scheme == "floor":
@@ -146,7 +146,7 @@ def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -
                            cost=v["commit_floor"] * w["window_gpu_s"]),)
     rate, step = v["commit_per_byte"], int(v["decode_tokens"])
     out = []
-    for r in serve_rows(m, scheme, kv=kv):
+    for r in serve_rows(m, scheme, kv=kv) if rows is None else rows:
         per_call = (r.decode or r.nbytes) * step
         chain = CALLS * leaf_chain(r.leaf, r.fmt) if r.tile else leaf_chain(r.leaf, r.fmt) + tree_chain(per_call / r.leaf)
         nbytes = r.nbytes * w["tokens"] * m.layers
