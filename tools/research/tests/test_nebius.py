@@ -831,6 +831,34 @@ def test_a_direct_run_sees_no_gpu_once_kueue_owns_every_gpu(tmp_path, monkeypatc
         assert ("gpus" in rec) == (want == "")
     split.unlink()
     assert remote._runner_env(req, tmp_path / "runs", None, {})["CUDA_VISIBLE_DEVICES"] == "0"
+    split.write_text("none\n")
+    with pytest.raises(remote.Refused, match="Kueue's"):
+        remote._runner_env({**req, "gpus": 1}, tmp_path / "runs", None, {})
+
+
+def test_a_direct_run_takes_gpus_only_through_the_lease_on_a_gpu_lease_host(tmp_path, monkeypatch):
+    """INF-55: on a GPU VM whose GPUs gpu-lease hands out (/etc/vy/gpu-lease-host), a direct run sees no GPU whatever its --env says,
+    so a TP8 job can't open CUDA beside the lease; `--gpus N` runs the workload under `gpu-lease N --wait` (a FCFS wait, capped at
+    its --mem-gb). A machine without gpu-lease refuses --gpus; a queued job's GPUs stay the queue's."""
+    host = tmp_path / "gpu-lease-host"
+    monkeypatch.setenv("GPU_LEASE_HOST_FILE", str(host))
+    req = {"env": {"CUDA_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7"}, "command": ["python", "serve.py"]}
+    with pytest.raises(remote.Refused, match="aren't handed out by gpu-lease"):
+        remote._runner_env({**req, "gpus": 8}, tmp_path / "runs", None, {})
+    assert remote._runner_env(req, tmp_path / "runs", None, {})["CUDA_VISIBLE_DEVICES"] == "0,1,2,3,4,5,6,7"
+    host.write_text("")
+    rec: dict = {}
+    assert remote._runner_env(req, tmp_path / "runs", None, rec)["CUDA_VISIBLE_DEVICES"] == ""
+    assert rec["gpus"].startswith("none: gpu-lease hands out every GPU here") and remote.gpu_lease_wrap(req) == []
+    rec = {}
+    assert remote._runner_env({**req, "gpus": 8}, tmp_path / "runs", None, rec)["CUDA_VISIBLE_DEVICES"] == ""
+    assert rec["gpus"].startswith("8 through `gpu-lease 8 --wait`")
+    assert remote.gpu_lease_wrap({**req, "gpus": 8}) == ["gpu-lease", "8", "--wait", "--mem-gb", "0", "--"]
+    assert remote.gpu_lease_wrap({**req, "gpus": 1, "mem_gb": 120.5}) == ["gpu-lease", "1", "--wait", "--mem-gb", "120", "--"]
+    queued = {**req, "gpus": 8, remote.QUEUE_WRAP: ["systemd-run"]}
+    rec = {}
+    assert remote._runner_env(queued, tmp_path / "runs", None, rec)["CUDA_VISIBLE_DEVICES"] == "0,1,2,3,4,5,6,7"
+    assert "gpus" not in rec and remote.gpu_lease_wrap(queued) == []
 
 
 def test_a_direct_run_starts_on_the_hosts_direct_cpus_and_may_pin_itself_elsewhere(tmp_path, monkeypatch):
@@ -2674,6 +2702,56 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
     monkeypatch.setattr(m, "compute_apps", lambda: [(10, "GPU-a"), (11, "GPU-b")])
     (pool / "blocked").unlink()
     assert m.check(1_800_000_060.0) == [] and not (pool / "blocked").exists()
+
+
+def test_gpu_adopt_holds_the_lease_of_a_gpu_used_outside_it_until_the_process_exits(monkeypatch, tmp_path):
+    """INF-55: on a GPU VM a process whose GPU no lease of its ancestors covers gets that GPU's lease in its run's name (so gpu-lease
+    hands it to nobody else) until it exits; a GPU another lease holds is a collision; each is logged once."""
+    spec = importlib.util.spec_from_file_location("gpu_adopt_under_test", NEBIUS / "gpu_adopt.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    leases, runs = tmp_path / "gpu-lease", tmp_path / "runs"
+    leases.mkdir()
+    (runs / "r20261018-000000-abcd").mkdir(parents=True)
+    (runs / "r20261018-000000-abcd" / "job.json").write_text(json.dumps({"ownership": {"lane": "circuits"}}))
+    monkeypatch.setattr(m, "LEASE_DIR", leases)
+    monkeypatch.setattr(m, "RUNS", runs)
+    monkeypatch.setattr(m, "LOG", tmp_path / "adopt.jsonl")
+    held = []
+    for i, owner in ((0, os.getpid()), (2, 1)):          # GPU 0 leased by this test (an ancestor of its children), GPU 2 by pid 1
+        fd = os.open(leases / f"{i}.lock", os.O_WRONLY | os.O_CREAT, 0o666)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        (leases / f"{i}.owner").write_text(f"pid={owner} run=r-x who=t uuid=GPU-{i} since=2026-10-18T00:00:00Z cmd=x\n")
+        held.append(fd)
+    block = [sys.executable, "-c", "import sys; sys.stdin.read()"]            # lives until killed
+    leased, stray, other = (subprocess.Popen(block + extra, stdin=subprocess.PIPE)
+                            for extra in ([], ["research", "run", "--id", "r20261018-000000-abcd"], []))
+    try:
+        monkeypatch.setattr(m, "compute_apps", lambda: [(leased.pid, "GPU-a"), (stray.pid, "GPU-b"), (other.pid, "GPU-c")])
+        monkeypatch.setattr(m, "gpu_index", lambda: {"GPU-a": 0, "GPU-b": 1, "GPU-c": 2})
+        a = m.Adopter()
+        monkeypatch.setattr(m, "SPLIT", tmp_path / "direct-gpus")
+        (tmp_path / "direct-gpus").write_text("none\n")
+        assert a.check(1_800_000_000.0) == [], "a cluster node's GPUs are Kueue's, judged by gpu_stray.py"
+        (tmp_path / "direct-gpus").unlink()
+        found = a.check(1_800_000_000.0)
+        assert [(r["kind"], r["gpu"], r["pid"]) for r in found] == [("adopted", 1, stray.pid), ("collision", 2, other.pid)]
+        assert found[0]["run"] == "r20261018-000000-abcd" and found[0]["lane"] == "circuits" and found[1]["lease_owner"] == 1
+        owner = (leases / "1.owner").read_text()
+        assert f"pid={os.getpid()} run=r20261018-000000-abcd who=adopted:circuits uuid=GPU-b" in owner
+        assert m.lease_owner(1) == os.getpid()                 # what gpu-lease sees: GPU 1 is held
+        a.check(1_800_000_030.0)
+        assert len((tmp_path / "adopt.jsonl").read_text().splitlines()) == 2, "each finding is logged once"
+        stray.kill()
+        stray.wait()
+        monkeypatch.setattr(m, "compute_apps", lambda: [(leased.pid, "GPU-a")])
+        assert a.check(1_800_000_060.0) == [] and m.lease_owner(1) is None
+    finally:
+        for p in (leased, stray, other):
+            p.kill()
+            p.wait()
+        for fd in held:
+            os.close(fd)
 
 
 def test_gpu_stray_reads_only_the_gpu_variables_of_a_process(monkeypatch):
