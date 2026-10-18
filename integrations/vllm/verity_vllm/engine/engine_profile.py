@@ -78,17 +78,19 @@ def apply_env() -> dict[str, str]:
 
 
 def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:
-    doc = json.loads(Path(path).read_text())
-    return {c["repo"]: c for c in doc["checkpoints"]}
+    from verity_vllm.config import checkpoint_entries
+
+    return {c["repo"]: c for c in checkpoint_entries(path)}
 
 
 def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
+    from verity_vllm.config import checkpoint_entries
+
     if case in CASES:
         cp = load_checkpoints(checkpoints_path)[CASES[case]["repo"]]
     else:
         # generalization sweep: roles registered by verity_vllm/input_provenance/add_checkpoint.py carry `role == case`
-        doc = json.loads(Path(checkpoints_path).read_text())
-        matches = [c for c in doc["checkpoints"] if c.get("role") == case]
+        matches = [c for c in checkpoint_entries(checkpoints_path) if c.get("role") == case]
         if not matches:
             raise SystemExit(f"case {case!r}: not in CASES and no checkpoints.json entry with role {case!r}")
         cp = matches[0]
