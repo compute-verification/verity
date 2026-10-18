@@ -593,7 +593,7 @@ def main() -> int:
     ap.add_argument("--tries", type=int, default=4, help="Calls tried per kind")
     ap.add_argument("--unit-gates", type=int, default=4096)
     ap.add_argument("--full-gates", type=int, default=4_000_000, help="a Call up to this many gates is evaluated whole")
-    ap.add_argument("--tamper", default=None, help="the kind whose member is tampered (default: the first staged)")
+    ap.add_argument("--tamper", default=None, help="the kind whose member is tampered (default: the first staged; none: no tampered member)")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=7581)
     ap.add_argument("--values-only", action="store_true", help="stop after staging values (no registration or proofs)")
@@ -809,7 +809,8 @@ def main() -> int:
     neg.update(a0.audit_negatives(result, rec["law"], a.delta, session_roots, served=sorted(served)))
 
     # a tampered copy of one kind's member: wrong outputs committed, registered and proved on its own; Lean must refuse it
-    tm = next((m for m in members if m["kind"] == a.tamper), None) or next((m for m in members if m["n"] >= 2), None)
+    tm = None if a.tamper == "none" else (next((m for m in members if m["kind"] == a.tamper), None)
+                                          or next((m for m in members if m["n"] >= 2), None))
     if tm is not None:
         tn = min(tm["n"], 4)
         tdef = tm["defn"]
