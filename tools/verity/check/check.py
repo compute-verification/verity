@@ -527,6 +527,16 @@ def lean_deps_url_file(dest: Path) -> Path | None:
 LEAN_SLOT_WRAP = [sys.executable, str(ROOT / "tools" / "verity" / "check" / "lean_slot.py"), "--pool", "check", "--"]
 
 
+def lean_regenerates() -> bool:
+    """Whether this tree's lean-audit job takes `--regenerate`: a package whose only failures are record differences passes,
+    and its report names the regenerated lock, which drive commits onto the train it lands (CI-64).  Read from the job, so a
+    tree from before it runs as it always did."""
+    try:
+        return '"--regenerate"' in (LEAN_JOBS / "lean_audit.py").read_text()
+    except OSError:
+        return False
+
+
 def lean_audit_misses(cache: bool = True, only: list[str] | None = None) -> bool:
     """Whether the lean-audit step will audit a package (of ``only``, its `--package`s, when given): one whose pass isn't kept
     here under its key (`lean_audit.run`'s test)."""
@@ -609,7 +619,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
             ("lean-audit", [sys.executable, str(Path(__file__).resolve()), "--lean-slot",
                             sys.executable, str(LEAN_JOBS / "lean_audit.py"), "--out", str(out / "lean-audit"),
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
-                            *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else [])], ROOT),
+                            *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else []),
+                            *(["--regenerate"] if lean_regenerates() else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 

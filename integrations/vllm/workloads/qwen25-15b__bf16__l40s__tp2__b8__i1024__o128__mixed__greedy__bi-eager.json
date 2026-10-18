@@ -1,8 +1,20 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen2.5-1.5B",
  "case": "B1",
- "tokenizer_revision": "8faed761d45a263340a0528343f099c05c9a4323",
+ "engine": {
+  "revision": "8faed761d45a263340a0528343f099c05c9a4323",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 3343,
+   "max_model_len": 1152,
+   "tensor_parallel_size": 2,
+   "disable_custom_all_reduce": true
+  },
+  "env": {
+   "NCCL_P2P_DISABLE": "1"
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,12 +40,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 128,
- "engine_args_required": {
-  "max_num_batched_tokens": 3343,
-  "max_model_len": 1152,
-  "tensor_parallel_size": 2,
-  "disable_custom_all_reduce": true
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 c0382117ea329cdf (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   11,
@@ -1089,19 +1095,19 @@
     518,
     1156
    ],
-   "prompt_text": "\u201cMy fingers,\u201d said Elizabeth, \u201cdo not move over this instrument in the masterly manner which I see so many women\u2019s do. They have not the same force or rapidity, and do not produce the same expression. But then I have always supposed it to be my own fault--because I would not take the trouble of practising. It is not that I do not believe _my_ fingers as capable as any other woman\u2019s of superior execution.\u201d \u201cI do not mean to say that a woman may not be settled too near her family. The far and the near must be relative, and depend on many varying circumstances. Where there is fortune to make the expense of travelling unimportant, distance becomes no evil. But that is not the case _here_. Mr. and Mrs. Collins have a comfortable income, but not such a one as will allow of frequent journeys--and I am persuaded my friend would not call herself _near_ her family under less than _half_ the present distance.\u201d She was engaged one day, as she walked, in re-perusing Jane\u2019s last letter, and dwelling on some passages which proved that Jane had not written in spirits, when, instead of being again surprised by Mr. Darcy, she saw, on looking up, that Colonel Fitzwilliam was meeting her. Putting away the letter immediately, and forcing a smile, she said,-- The agitation and tears which the subject occasioned brought on a headache; and it grew so much worse towards the evening that, added to her unwillingness to see Mr. Darcy, it determined her not to attend her cousins to Rosings, where they were engaged to drink tea. Mrs. Collins, seeing that she was really unwell, did not press her to go, and as much as possible prevented her husband from pressing her; but Mr. Collins could not conceal his apprehension of Lady Catherine\u2019s being rather displeased by her staying at home. \u201cI might as well inquire,\u201d replied she, \u201cwhy, with so evident a design of offending and insulting me, you chose to tell me that you liked me against your will, against your reason, and even against your character? Was not this some excuse for incivility, if I _was_ uncivil? But I have other provocations. You know I have. Had not my own feelings decided against you, had they been indifferent, or had they even been favourable, do you think that any consideration would tempt me to accept the man who has been the means of ruining, perhaps for ever, the happiness of a most beloved sister?\u201d Elizabeth awoke the next morning to the same thoughts and meditations which had at length closed her eyes. She could not yet recover from the surprise of what had happened: it was impossible to think of anything else; and, totally indisposed for employment, she resolved soon after breakfast to indulge herself in air and exercise. She was proceeding directly to her favourite walk, when the recollection of Mr. Darcy\u2019s sometimes coming there stopped her, and instead of entering the park, she turned up the lane which led her farther from the turnpike road. The park paling was still the boundary on one side, and she soon passed one of the gates into the ground. She perfectly remembered everything that had passed in conversation between Wickham and herself in their first evening at Mr. Philips\u2019s. Many of his expressions were still fresh in her memory. She was _now_ struck with the impropriety of such communications to a stranger, and wondered it had escaped her before. She saw the indelicacy of putting himself forward as he had done, and the inconsistency of his professions with his conduct. She remembered that he had boasted of having no fear of seeing Mr. Darcy--that Mr. Darcy might leave the country, but that _he_ should stand his ground; yet he had avoided the Netherfield ball the very next week. She remembered, also, that till the Netherfield family had quitted the country, he had told his story to no one but herself; but that after their removal, it had been everywhere discussed; that he had then no reserves, no scruples in sinking Mr. Darcy\u2019s character, though he had assured her that respect for the father would always prevent his exposing the son. The two gentlemen left Rosings the next morning; and Mr. Collins having been in waiting near the lodges, to make them his parting obeisance, was able to bring home the pleasing intelligence of their appearing in very good health, and in as tolerable spirits as could be expected, after the melancholy scene so lately gone through at Rosings. To Rosings he then hastened to console Lady Catherine and her daughter; and on his return brought back, with great satisfaction, a message from her Ladyship, importing that she felt herself so dull as to make her very desirous of having them all to dine with her. Their engagements at Rosings were as frequent during the last week of her stay as they had been at first",
+   "prompt_text": "“My fingers,” said Elizabeth, “do not move over this instrument in the masterly manner which I see so many women’s do. They have not the same force or rapidity, and do not produce the same expression. But then I have always supposed it to be my own fault--because I would not take the trouble of practising. It is not that I do not believe _my_ fingers as capable as any other woman’s of superior execution.” “I do not mean to say that a woman may not be settled too near her family. The far and the near must be relative, and depend on many varying circumstances. Where there is fortune to make the expense of travelling unimportant, distance becomes no evil. But that is not the case _here_. Mr. and Mrs. Collins have a comfortable income, but not such a one as will allow of frequent journeys--and I am persuaded my friend would not call herself _near_ her family under less than _half_ the present distance.” She was engaged one day, as she walked, in re-perusing Jane’s last letter, and dwelling on some passages which proved that Jane had not written in spirits, when, instead of being again surprised by Mr. Darcy, she saw, on looking up, that Colonel Fitzwilliam was meeting her. Putting away the letter immediately, and forcing a smile, she said,-- The agitation and tears which the subject occasioned brought on a headache; and it grew so much worse towards the evening that, added to her unwillingness to see Mr. Darcy, it determined her not to attend her cousins to Rosings, where they were engaged to drink tea. Mrs. Collins, seeing that she was really unwell, did not press her to go, and as much as possible prevented her husband from pressing her; but Mr. Collins could not conceal his apprehension of Lady Catherine’s being rather displeased by her staying at home. “I might as well inquire,” replied she, “why, with so evident a design of offending and insulting me, you chose to tell me that you liked me against your will, against your reason, and even against your character? Was not this some excuse for incivility, if I _was_ uncivil? But I have other provocations. You know I have. Had not my own feelings decided against you, had they been indifferent, or had they even been favourable, do you think that any consideration would tempt me to accept the man who has been the means of ruining, perhaps for ever, the happiness of a most beloved sister?” Elizabeth awoke the next morning to the same thoughts and meditations which had at length closed her eyes. She could not yet recover from the surprise of what had happened: it was impossible to think of anything else; and, totally indisposed for employment, she resolved soon after breakfast to indulge herself in air and exercise. She was proceeding directly to her favourite walk, when the recollection of Mr. Darcy’s sometimes coming there stopped her, and instead of entering the park, she turned up the lane which led her farther from the turnpike road. The park paling was still the boundary on one side, and she soon passed one of the gates into the ground. She perfectly remembered everything that had passed in conversation between Wickham and herself in their first evening at Mr. Philips’s. Many of his expressions were still fresh in her memory. She was _now_ struck with the impropriety of such communications to a stranger, and wondered it had escaped her before. She saw the indelicacy of putting himself forward as he had done, and the inconsistency of his professions with his conduct. She remembered that he had boasted of having no fear of seeing Mr. Darcy--that Mr. Darcy might leave the country, but that _he_ should stand his ground; yet he had avoided the Netherfield ball the very next week. She remembered, also, that till the Netherfield family had quitted the country, he had told his story to no one but herself; but that after their removal, it had been everywhere discussed; that he had then no reserves, no scruples in sinking Mr. Darcy’s character, though he had assured her that respect for the father would always prevent his exposing the son. The two gentlemen left Rosings the next morning; and Mr. Collins having been in waiting near the lodges, to make them his parting obeisance, was able to bring home the pleasing intelligence of their appearing in very good health, and in as tolerable spirits as could be expected, after the melancholy scene so lately gone through at Rosings. To Rosings he then hastened to console Lady Catherine and her daughter; and on his return brought back, with great satisfaction, a message from her Ladyship, importing that she felt herself so dull as to make her very desirous of having them all to dine with her. Their engagements at Rosings were as frequent during the last week of her stay as they had been at first",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b647",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b648",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b649",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b650",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b651",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b652",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b653",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b654",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b655"
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶47",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶48",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶49",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶50",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶51",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶52",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶53",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶54",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶55"
     ]
    }
   },
@@ -1641,11 +1647,11 @@
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b63",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b64",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b65",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b66",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b67"
+     "Project Gutenberg #84: Frankenstein (public domain) ¶3",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶4",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶5",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶6",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶7"
     ]
    }
   },
@@ -1683,7 +1689,7 @@
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b680"
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶80"
     ]
    }
   },
@@ -1905,12 +1911,12 @@
     28605,
     402
    ],
-   "prompt_text": "\u201cA considerable period elapsed before I discovered one of the causes of the uneasiness of this amiable family: it was poverty, and they suffered that evil in a very distressing degree. Their nourishment consisted entirely of the vegetables of their garden and the milk of one cow, which gave very little during the winter, when its masters could scarcely procure food to support it. They often, I believe, suffered the pangs of hunger very poignantly, especially the two younger cottagers, for several times they placed food before the old man when they reserved none for themselves. \u201cI spent the winter in this manner. The gentle manners and beauty of the cottagers greatly endeared them to me; when they were unhappy, I felt depressed; when they rejoiced, I sympathised in their joys. I saw few human beings besides them, and if any other happened to enter the cottage, their harsh manners and rude gait only enhanced to me the superior accomplishments of my friends. The old man, I could perceive, often endeav",
+   "prompt_text": "“A considerable period elapsed before I discovered one of the causes of the uneasiness of this amiable family: it was poverty, and they suffered that evil in a very distressing degree. Their nourishment consisted entirely of the vegetables of their garden and the milk of one cow, which gave very little during the winter, when its masters could scarcely procure food to support it. They often, I believe, suffered the pangs of hunger very poignantly, especially the two younger cottagers, for several times they placed food before the old man when they reserved none for themselves. “I spent the winter in this manner. The gentle manners and beauty of the cottagers greatly endeared them to me; when they were unhappy, I felt depressed; when they rejoiced, I sympathised in their joys. I saw few human beings besides them, and if any other happened to enter the cottage, their harsh manners and rude gait only enhanced to me the superior accomplishments of my friends. The old man, I could perceive, often endeav",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b642",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b643"
+     "Project Gutenberg #84: Frankenstein (public domain) ¶42",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶43"
     ]
    }
   },
@@ -2918,18 +2924,18 @@
     323,
     358
    ],
-   "prompt_text": "\u201cA few days after, the Turk entered his daughter\u2019s apartment and told her hastily that he had reason to believe that his residence at Leghorn had been divulged and that he should speedily be delivered up to the French government; he had consequently hired a vessel to convey him to Constantinople, for which city he should sail in a few hours. He intended to leave his daughter under the care of a confidential servant, to follow at her leisure with the greater part of his property, which had not yet arrived at Leghorn. \u201cI can hardly describe to you the effect of these books. They produced in me an infinity of new images and feelings, that sometimes raised me to ecstasy, but more frequently sunk me into the lowest dejection. In the _Sorrows of Werter_, besides the interest of its simple and affecting story, so many opinions are canvassed and so many lights thrown upon what had hitherto been to me obscure subjects that I found in it a never-ending source of speculation and astonishment. The gentle and domestic manners it described, combined with lofty sentiments and feelings, which had for their object something out of self, accorded well with my experience among my protectors and with the wants which were for ever alive in my own bosom. But I thought Werter himself a more divine being than I had ever beheld or imagined; his character contained no pretension, but it sank deep. The disquisitions upon death and suicide were calculated to fill me with wonder. I did not pretend to enter into the merits of the case, yet I inclined towards the opinions of the hero, whose extinction I wept, without precisely understanding it. \u201cThese were the reflections of my hours of despondency and solitude; but when I contemplated the virtues of the cottagers, their amiable and benevolent dispositions, I persuaded myself that when they should become acquainted with my admiration of their virtues they would compassionate me and overlook my personal deformity. Could they turn from their door one, however monstrous, who solicited their compassion and friendship? I resolved, at least, not to despair, but in every way to fit myself for an interview with them which would decide my fate. I postponed this attempt for some months longer, for the importance attached to its success inspired me with a dread lest I should fail. Besides, I found that my understanding improved so much with every day\u2019s experience that I was unwilling to commence this undertaking until a few more months should have added to my sagacity. \u201cOne day, when the sun shone on the red leaves that strewed the ground and diffused cheerfulness, although it denied warmth, Safie, Agatha, and Felix departed on a long country walk, and the old man, at his own desire, was left alone in the cottage. When his children had departed, he took up his guitar and played several mournful but sweet airs, more sweet and mournful than I had ever heard him play before. At first his countenance was illuminated with pleasure, but as he continued, thoughtfulness and sadness succeeded; at length, laying aside the instrument, he sat absorbed in reflection. \u201cThe old man paused and then continued, \u2018If you will unreservedly confide to me the particulars of your tale, I perhaps may be of use in undeceiving them. I am blind and cannot judge of your countenance, but there is something in your words which persuades me that you are sincere. I am poor and an exile, but it will afford me true pleasure to be in any way serviceable to a human creature.\u2019 \u201cBut this was a luxury of sensation that could not endure; I became fatigued with excess of bodily exertion and sank on the damp grass in the sick impotence of despair. There was none among the myriads of men that existed who would pity or assist me; and should I feel kindness towards my enemies? No; from that moment I declared everlasting war against the species, and more than all, against him who had formed me and sent me forth to this insupportable misery. \u201c\u2018It is utterly useless,\u2019 replied Felix; \u2018we can never again inhabit your cottage. The life of my father is in the greatest danger, owing to the dreadful circumstance that I have related. My wife and my sister will never recover from their horror. I entreat you not to reason with me any more. Take possession of your tenement and let me fly from this place.\u2019 \u201cMy travels were long and the sufferings I endured intense. It was late in autumn when I quitted the district where I had so long resided. I travelled only at night, fearful of encountering the visage of a human being. Nature decayed around me, and the sun became heatless; rain and snow poured around me; mighty rivers were frozen; the surface of the earth was hard and chill, and bare, and I",
+   "prompt_text": "“A few days after, the Turk entered his daughter’s apartment and told her hastily that he had reason to believe that his residence at Leghorn had been divulged and that he should speedily be delivered up to the French government; he had consequently hired a vessel to convey him to Constantinople, for which city he should sail in a few hours. He intended to leave his daughter under the care of a confidential servant, to follow at her leisure with the greater part of his property, which had not yet arrived at Leghorn. “I can hardly describe to you the effect of these books. They produced in me an infinity of new images and feelings, that sometimes raised me to ecstasy, but more frequently sunk me into the lowest dejection. In the _Sorrows of Werter_, besides the interest of its simple and affecting story, so many opinions are canvassed and so many lights thrown upon what had hitherto been to me obscure subjects that I found in it a never-ending source of speculation and astonishment. The gentle and domestic manners it described, combined with lofty sentiments and feelings, which had for their object something out of self, accorded well with my experience among my protectors and with the wants which were for ever alive in my own bosom. But I thought Werter himself a more divine being than I had ever beheld or imagined; his character contained no pretension, but it sank deep. The disquisitions upon death and suicide were calculated to fill me with wonder. I did not pretend to enter into the merits of the case, yet I inclined towards the opinions of the hero, whose extinction I wept, without precisely understanding it. “These were the reflections of my hours of despondency and solitude; but when I contemplated the virtues of the cottagers, their amiable and benevolent dispositions, I persuaded myself that when they should become acquainted with my admiration of their virtues they would compassionate me and overlook my personal deformity. Could they turn from their door one, however monstrous, who solicited their compassion and friendship? I resolved, at least, not to despair, but in every way to fit myself for an interview with them which would decide my fate. I postponed this attempt for some months longer, for the importance attached to its success inspired me with a dread lest I should fail. Besides, I found that my understanding improved so much with every day’s experience that I was unwilling to commence this undertaking until a few more months should have added to my sagacity. “One day, when the sun shone on the red leaves that strewed the ground and diffused cheerfulness, although it denied warmth, Safie, Agatha, and Felix departed on a long country walk, and the old man, at his own desire, was left alone in the cottage. When his children had departed, he took up his guitar and played several mournful but sweet airs, more sweet and mournful than I had ever heard him play before. At first his countenance was illuminated with pleasure, but as he continued, thoughtfulness and sadness succeeded; at length, laying aside the instrument, he sat absorbed in reflection. “The old man paused and then continued, ‘If you will unreservedly confide to me the particulars of your tale, I perhaps may be of use in undeceiving them. I am blind and cannot judge of your countenance, but there is something in your words which persuades me that you are sincere. I am poor and an exile, but it will afford me true pleasure to be in any way serviceable to a human creature.’ “But this was a luxury of sensation that could not endure; I became fatigued with excess of bodily exertion and sank on the damp grass in the sick impotence of despair. There was none among the myriads of men that existed who would pity or assist me; and should I feel kindness towards my enemies? No; from that moment I declared everlasting war against the species, and more than all, against him who had formed me and sent me forth to this insupportable misery. “‘It is utterly useless,’ replied Felix; ‘we can never again inhabit your cottage. The life of my father is in the greatest danger, owing to the dreadful circumstance that I have related. My wife and my sister will never recover from their horror. I entreat you not to reason with me any more. Take possession of your tenement and let me fly from this place.’ “My travels were long and the sufferings I endured intense. It was late in autumn when I quitted the district where I had so long resided. I travelled only at night, fearful of encountering the visage of a human being. Nature decayed around me, and the sun became heatless; rain and snow poured around me; mighty rivers were frozen; the surface of the earth was hard and chill, and bare, and I",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b651",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b652",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b653",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b654",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b655",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b656",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b657",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b658"
+     "Project Gutenberg #84: Frankenstein (public domain) ¶51",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶52",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶53",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶54",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶55",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶56",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶57",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶58"
     ]
    }
   },
@@ -3295,9 +3301,9 @@
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b614",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b615",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b616"
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶14",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶15",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶16"
     ]
    }
   },
@@ -3513,11 +3519,11 @@
     3308,
     323
    ],
-   "prompt_text": "He then told me that he would commence his narrative the next day when I should be at leisure. This promise drew from me the warmest thanks. I have resolved every night, when I am not imperatively occupied by my duties, to record, as nearly as possible in his own words, what he has related during the day. If I should be engaged, I will at least make notes. This manuscript will doubtless afford you the greatest pleasure; but to me, who know him, and who hear it from his own lips\u2014with what interest and sympathy shall I read it in some future day! Even now, as I commence my task, his full-toned voice swells in my ears; his lustrous eyes dwell on me with all their melancholy sweetness; I see his thin hand raised in animation, while the lineaments of his face are irradiated by the soul within. Strange and harrowing must be his story, frightful the storm which embraced the gallant vessel on its course and",
+   "prompt_text": "He then told me that he would commence his narrative the next day when I should be at leisure. This promise drew from me the warmest thanks. I have resolved every night, when I am not imperatively occupied by my duties, to record, as nearly as possible in his own words, what he has related during the day. If I should be engaged, I will at least make notes. This manuscript will doubtless afford you the greatest pleasure; but to me, who know him, and who hear it from his own lips—with what interest and sympathy shall I read it in some future day! Even now, as I commence my task, his full-toned voice swells in my ears; his lustrous eyes dwell on me with all their melancholy sweetness; I see his thin hand raised in animation, while the lineaments of his face are irradiated by the soul within. Strange and harrowing must be his story, frightful the storm which embraced the gallant vessel on its course and",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b67"
+     "Project Gutenberg #84: Frankenstein (public domain) ¶7"
     ]
    }
   },
@@ -3545,7 +3551,7 @@
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b635"
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶35"
     ]
    }
   }

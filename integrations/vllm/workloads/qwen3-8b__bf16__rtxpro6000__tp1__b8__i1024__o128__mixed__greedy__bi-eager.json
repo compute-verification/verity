@@ -1,8 +1,22 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen3-8B",
  "case": "QWEN3_8B",
- "tokenizer_revision": "b968826d9c46dd6066d109eabc6255188de91218",
+ "engine": {
+  "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 3666,
+   "max_model_len": 1152
+  },
+  "target": {
+   "compute_capability": [
+    12,
+    0
+   ],
+   "num_sms": 188
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,10 +42,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 128,
- "engine_args_required": {
-  "max_num_batched_tokens": 3666,
-  "max_model_len": 1152
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 aeb13307a71acd8f (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   8,
@@ -3944,12 +3954,5 @@
   "lengths_only": false,
   "execution": "bi-eager"
  },
- "note": "R12 sweep qwen3-8b__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager: B=8 I<=1024 O<=128 greedy arrivals=none; prompt lens [387, 615, 989, 19, 8, 125, 1024, 491], caps [3, 7, 75, 101, 2, 128, 37, 79], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.",
- "target": {
-  "compute_capability": [
-   12,
-   0
-  ],
-  "num_sms": 188
- }
+ "note": "R12 sweep qwen3-8b__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager: B=8 I<=1024 O<=128 greedy arrivals=none; prompt lens [387, 615, 989, 19, 8, 125, 1024, 491], caps [3, 7, 75, 101, 2, 128, 37, 79], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
 }

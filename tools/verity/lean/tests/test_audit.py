@@ -301,7 +301,13 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
     group = pol["reads"]["P.Defs"]
     hyp = [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
            {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "8" * 32}]
+    applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
+    premised = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
+    premised["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"}]
     for policy, now in [
+            (POLICY, facts()),                                                      # owned, no record yet
+            ({**A.judge(POLICY, facts(pins={"P.t": premised}), FILES, update=True)[1], "assumptions": {}},
+             facts(pins={"P.t": premised})),                                        # a premise the lock doesn't list
             (pol, facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})),
             (pol, facts(pins={"P.t": fact(reads=fact()["reads"] + [{"name": "P.g", "module": "P.More", "kind": "def",
                                                                     "hash": "4" * 32}])})),
@@ -315,7 +321,7 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
         "assumptions: P.Hyp's definition in P.Assumptions changed;")
     signed = facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})
     for policy, now, files in [(pol, facts(), FILES),                                      # passes
-                               (POLICY, facts(), FILES),                                   # no record yet
+                               ({**POLICY, "guarantees": {"P.t": {}}}, facts(), FILES),    # no record and no owner
                                (pol, facts(pins={}), FILES),                               # renamed or gone: `--moved`
                                (pol | {"guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "lean"}}}, facts(), FILES),
                                (pol, signed, FILES | {"Scratch": "Scratch.lean"})]:        # a difference beside an orphan
@@ -649,6 +655,94 @@ def test_a_package_pinning_arklib_is_refused_below_the_memory_floor(tmp_path):
     assert A.memory_refusal([light], 16) is None
     assert A.memory_refusal([light, heavy], 64) is None
     assert A.memory_refusal([heavy], 16, env={"VERITY_LEAN_MEM_FLOOR_GIB": "0"}) is None
+
+
+def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds(tmp_path):
+    """Two queued Security builds were OOM-killed in 64 and 16 GB scopes on 18 Oct, with a `lean` per CPU: Lake runs as many
+    at once as `LEAN_NUM_THREADS`, so a package that pins Mathlib or ArkLib builds with at most one per `BUILD_GIB_PER_JOB`.
+    The scope's limit is read where `/proc/self/cgroup` says the process is, and the smallest of it and its parents' holds."""
+    proc, cg = tmp_path / "proc", tmp_path / "cg"
+    (proc / "self").mkdir(parents=True)
+    (proc / "meminfo").write_text(f"MemTotal: {512 * 2**20} kB\nSwapTotal: 0 kB\n")
+    (proc / "self" / "cgroup").write_text("0::/user.slice/cluster-r1.scope\n")
+    (cg / "user.slice" / "cluster-r1.scope").mkdir(parents=True)
+    (cg / "memory.max").write_text("max\n")
+    assert A.memory_gib(proc, cg) == 512
+    (cg / "user.slice" / "cluster-r1.scope" / "memory.max").write_text(f"{64 * 2**30}\n")
+    assert A.memory_gib(proc, cg) == 64
+    (cg / "user.slice" / "memory.max").write_text(f"{32 * 2**30}\n")
+    assert A.memory_gib(proc, cg) == 32, "a parent's smaller limit holds"
+    heavy, light = tmp_path / "heavy", tmp_path / "light"
+    for p, deps in ((heavy, ["mathlib"]), (light, ["batteries"])):
+        p.mkdir()
+        (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
+    env = {}
+    assert A.build_threads(heavy, env, have_gib=64) == min(A.cores(), 64 // A.BUILD_GIB_PER_JOB)
+    assert A.build_threads(heavy, env, have_gib=4) == 1
+    assert A.build_threads(light, env, have_gib=4) is None
+    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "3"}, have_gib=4) is None, "an explicit setting wins"
+
+
+PLUGGED = '''name = "Dep"
+defaultTargets = ["Dep"]
+
+[[lean_lib]]
+name = "Plug"
+srcDir = "scripts"
+roots = ["Plug"]
+
+[[lean_lib]]
+name = "Dep"
+plugins = ["Plug:shared"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "DepTest"
+plugins = ["Plug:shared"]
+'''
+
+
+def test_the_dependencies_plugins_are_named_once_each():
+    """`plugin_targets`: each plugin a fetched dependency's libraries load, once, under the dependency's name."""
+    import tempfile
+    pkg = Path(tempfile.mkdtemp())
+    for name, text in (("Dep", PLUGGED), ("doc", 'name = "«doc-gen4»"\n[[lean_lib]]\nname = "D"\nplugins = ["P:shared"]\n'),
+                       ("plain", 'name = "plain"\n[[lean_lib]]\nname = "Plain"\n'), ("broken", "name = \n")):
+        (pkg / ".lake" / "packages" / name).mkdir(parents=True)
+        (pkg / ".lake" / "packages" / name / "lakefile.toml").write_text(text)
+    assert A.plugin_targets(pkg) == ["@Dep/Plug:shared", "@doc-gen4/P:shared"]
+    assert A.plugin_targets(pkg / "none") == []
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it_no_more(tmp_path):
+    """INF-62: Lake 4.34 links a plugin twice when a module-system library and a classic one load it, as ArkLib's `ArkLib` and
+    `ArkLibTest` load `ArkLibLintPlugin:shared`, and the two links of one file race (three proofs builds failed so on 18 Oct).
+    Linked alone first (`plugin_targets`), the build finds it up to date and links nothing."""
+    dep, root = tmp_path / "dep", tmp_path / "root"
+    (dep / "scripts").mkdir(parents=True)
+    root.mkdir()
+    toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text()
+    (dep / "lakefile.toml").write_text(PLUGGED)
+    (dep / "scripts" / "Plug.lean").write_text("def plug : Nat := 1\n")
+    (dep / "Dep.lean").write_text("module\npublic def dep : Nat := 2\n")
+    (dep / "DepTest.lean").write_text("def depTest : Nat := 3\n")
+    (root / "lakefile.toml").write_text('name = "root"\ndefaultTargets = ["Root"]\n\n[[require]]\nname = "Dep"\n'
+                                        'path = "../dep"\n\n[[lean_lib]]\nname = "Root"\n')
+    (root / "Root.lean").write_text("import Dep\nimport DepTest\ndef root : Nat := dep + depTest\n")
+    for d in (dep, root):
+        (d / "lean-toolchain").write_text(toolchain)
+    lake = lambda *a: subprocess.run(["lake", *a], cwd=root, capture_output=True, text=True, env=A.lake_env())
+    twice = tmp_path / "twice"
+    shutil.copytree(tmp_path, twice, ignore=lambda d, n: ["twice"] if Path(d) == tmp_path else [])
+    plain = subprocess.run(["lake", "build"], cwd=twice / "root", capture_output=True, text=True, env=A.lake_env())
+    assert plain.stdout.count("Built Plug:shared") == 2, "the double link this guards against"
+    (root / ".lake" / "packages").mkdir(parents=True)
+    (root / ".lake" / "packages" / "Dep").symlink_to(dep)
+    assert A.plugin_targets(root) == ["@Dep/Plug:shared"]
+    assert lake("build", *A.plugin_targets(root)).returncode == 0
+    out = lake("build")
+    assert out.returncode == 0 and "Plug:shared" not in out.stdout, out.stdout
 
 
 def test_update_refuses_a_shared_shipped_tree(tmp_path, capsys):
@@ -1287,6 +1381,35 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
             "A = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(A)\nprint(A.lake_env()['LEAN_NUM_THREADS'])\n")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert r.stdout.strip() == "1"
+
+
+def test_a_trains_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
+    """`--regenerate` (a train's lean-audit step): a package whose every failure is a record difference, so the audit wrote
+    the record `--update` would, passes, and `audit.json` names that record for the train to commit; one with any other
+    failure fails as before, and the packages' own locks are never written."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    for p in (a, b):
+        p.mkdir()
+        (p / A.POLICY).write_text("{}")
+
+    def fake(pkg, out, *args, **_):
+        rec = out / f"audit-{pkg.name}" / A.POLICY
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text("{}")
+        regen = {"regenerated": str(rec)} if pkg.name == "a" else {}
+        return {"package": str(pkg), "seconds": {}, "failures": ["guarantees: they no longer read P.Defs"]} | regen
+
+    monkeypatch.setattr(A, "audit", fake)
+    out = tmp_path / "out"
+    assert A.main([str(a), "--out", str(out), "--repo", str(tmp_path)]) == 1
+    assert A.main([str(a), "--regenerate", "--out", str(out), "--repo", str(tmp_path)]) == 0
+    rep = json.loads((out / "audit.json").read_text())
+    assert rep["regenerated"] == {"a": str(out / "audit-a" / A.POLICY)} and rep["packages"][0]["settled"]
+    assert A.main([str(a), str(b), "--regenerate", "--out", str(out), "--repo", str(tmp_path)]) == 1
+    assert json.loads((out / "audit.json").read_text())["failed"] == [str(b)]
+    assert (a / A.POLICY).read_text() == "{}"
+    with pytest.raises(SystemExit):
+        A.main([str(a), "--regenerate", "--update"])
 
 
 def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_requires(tmp_path, monkeypatch):
