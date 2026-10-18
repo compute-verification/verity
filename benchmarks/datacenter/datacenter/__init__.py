@@ -17,13 +17,13 @@ from .logical import Circuit, Commitment, Input, Value, commit, digest, trace
 from .memory import Challenge, Reads, Store, Wipe, answer_time, serve_time
 from .observe import Answer, Deviation, Record, Trace, run
 from .physical import Assumption, Block, Datacenter, Device, Fleet, Grid, Link, Port
-from .plan import Plan
+from .plan import Maintenance, Plan
 from .time import Interval
 
 __all__ = [
     "FLEET_CLOSED", "Account", "Answer", "Assumption", "Block", "BlockAccount", "Carried", "Challenge", "Circuit",
     "Commitment", "Computed", "Credit", "Crossing", "Datacenter", "Deviation", "Device", "Entered", "Fleet", "Grid", "Held",
-    "Input", "Interval", "Ledger", "Link", "On", "Placement", "Plan", "Port", "Profile", "Read", "Reads", "Record",
+    "Input", "Interval", "Ledger", "Link", "Maintenance", "On", "Placement", "Plan", "Port", "Profile", "Read", "Reads", "Record",
     "Refused", "Scheduled", "Store", "Trace", "Value", "Wipe", "account", "answer_time", "audit", "check_records", "commit", "credits",
     "crossings", "digest", "double_credit", "occupancy", "place", "route", "run", "serve_time", "trace", "traffic",
 ]

@@ -16,6 +16,8 @@ trusted clock:
 - `Refused(on, why)`: something didn't check, and `on` says what: a port's window, a store, a part, an input.
 
 A record must exist for every certifier port and every window of the epoch: a missing one is refused, never silence.
+The one exception is a block the verifier's plan has out for maintenance, whose ports owe no records then; the account
+charges what that costs.
 """
 from __future__ import annotations
 
@@ -140,9 +142,11 @@ def audit(trace: Trace, profile: Profile) -> list[Claim]:
     for port, row in traffic(p).items():
         for b, vs in row.items():
             content.setdefault((port, b // g.window), []).extend((v.id, reference[v.id]) for v in vs)
+    dc, per = profile.datacenter, g.bucket * g.window
     declared = {(port, w): Record(port, w, tuple(profile.occupancy.get(port, {}).get(w * g.window + t, 0)
                                                  for t in range(g.window)), digest(content.get((port, w), [])))
-                for port in profile.datacenter.ports for w in profile.windows}
+                for port in dc.ports for w in profile.windows
+                if not plan.out(dc.watched(port).name, Interval(w * per, (w + 1) * per))}
     out += check_records(trace.records, declared, g)
 
     for a in trace.answers:

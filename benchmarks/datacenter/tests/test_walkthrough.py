@@ -6,7 +6,7 @@ in order, and `python tests/test_walkthrough.py` prints what the guide prints.
 from __future__ import annotations
 
 from datacenter import (FLEET_CLOSED, Assumption, Block, Carried, Challenge, Credit, Datacenter, Deviation, Device, Fleet,
-                        Grid, Input, Interval, Ledger, Link, Plan, Port, Reads, Refused, Store, Wipe, account, audit,
+                        Grid, Input, Interval, Ledger, Link, Maintenance, Plan, Port, Reads, Refused, Store, Wipe, account, audit,
                         commit, crossings, digest, double_credit, occupancy, place, run, trace)
 from datacenter.examples import GB
 
@@ -188,6 +188,10 @@ def section_14(p):
         plan = Plan(Interval(0, 16), wipes=wipes)
         ledger.add(account(audit(run(p, INPUTS, plan), p.public(plan)), p.public(plan)))
     print(ledger)
+    serviced = Plan(Interval(0, 16), maintenance=[Maintenance("b", Interval(12, 16))])
+    off = Deviation(down={(Port("b.cert", "egress"), 3), (Port("b.cert", "ingress"), 3)})
+    acc = account(audit(run(p, INPUTS, serviced, off), p.public(serviced)), p.public(serviced))
+    print(acc.sound, acc.serviced, acc.blocks[1].carried)
     return ledger
 
 
