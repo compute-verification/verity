@@ -25,7 +25,7 @@ sys.path.insert(0, HERE)
 import refs  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_kernel_constants  # noqa: E402
 
-RS_MAX_SEGS, POISON, INDEX, PD_PAIR, PD_STAMP, PD_GROUP, PD_LATE = 128, 0xA5, 5, 16, 32, 128, 512
+RS_MAX_SEGS, POISON, INDEX, PD_PAIR, PD_STAMP, PD_GROUP, PD_LATE, PD_SALT1 = 128, 0xA5, 5, 16, 32, 128, 512, 2048
 SRC = open(os.path.join(HERE, "pd.cuh")).read()
 #: pd.cuh's PD_VARIANT_LIST, a launch each
 VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SRC).group(1)))
@@ -132,7 +132,7 @@ def pd_commit(h: Host, x, m16: int, k: int, kb, dom, hm, mode: int, variant: int
 def stamp_errors(stamps: np.ndarray, m16: int, mode: int, variant: int) -> list[str]:
     """PD_STAMP's stamps: every phase of every row and of the tail written, each after the phases it follows (a row's tail
     after every row's leaf; the salt and the frame leaf before the first barrier, or with PD_LATE after the segments, which
-    precede that barrier, and before the second); without PD_STAMP, none."""
+    precede that barrier, and before the second; with PD_SALT1 the salt in either phase); without PD_STAMP, none."""
     if not variant & PD_STAMP:
         return [] if not stamps.any() else ["stamps written without PD_STAMP"]
     st = stamps.view(np.uint64).reshape(m16 + 1, SLOTS, 2)
@@ -141,7 +141,7 @@ def stamp_errors(stamps: np.ndarray, m16: int, mode: int, variant: int) -> list[
         x = {n: g[r, i] for n, i in PS.items()}
         order = [x["PS_START"], x["PS_SEGS"], x["PS_SYNC1"], x["PS_FOLD"], x["PS_SYNC2"], x["PS_LEAF"]]
         lo, hi = (x["PS_SEGS"], x["PS_SYNC2"]) if variant & PD_LATE else (1, x["PS_SYNC1"])
-        if not (all(0 < a <= b for a, b in zip(order, order[1:])) and lo <= x["PS_SALT"] <= hi
+        if not (all(0 < a <= b for a, b in zip(order, order[1:])) and (1 if variant & PD_SALT1 else lo) <= x["PS_SALT"] <= hi
                 and lo <= x["PS_FRAME"] <= hi and x["PS_SYNC2"] <= x["PS_SEED"]):
             errs.append(f"row {r}'s stamps out of order: {x}")
     t = g[m16]
