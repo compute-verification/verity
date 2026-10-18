@@ -35,6 +35,12 @@ salt is revealed only by `reveal(w)`, which the verifier calls once the prover h
 while w's ingress record is unpublished. `check_salts` is the audit's read of it: the window's raw ingress record holds
 exactly one salt frame of w, whose commitment is the revealed salt's.
 
+**Back from maintenance** (`Proxy(start=k, position=p)`, off by default): a certifier that was down serves from window k
+of the trusted clock on. Its first tick of each grid is the window's first bucket, its first records are window k's, and
+the first egress frame it takes is the Program's at position p, the frames before it being those of the windows before.
+It carries nothing from before: a window it was down for has no record. The windows before k are another proxy's, the
+same certifier's before it went down (`windows`, which ends a proxy's run early), or none.
+
 **Advice.** The proxy runs the windows of its declared syncs, one per window, which the prover gives before the run,
 or which an online prover (`online.Prover`, with a lag of 1 … T − 1 buckets) declares at each window's first tick. A
 frame anchored past them is never handed, nor is any frame behind it (`schedule.handing_buckets`). The online
@@ -180,15 +186,22 @@ class Shaper:
     the first `windows` windows' syncs at the window's first tick, before anything is handed. The proxy's is
     `LaggedChoices`, whose `declare` only takes a choice already made; an `online.Prover` chooses at the tick. A
     declaration it refuses (`online.Refused`) faults the window `monitor-unavailable`, and the next one, on the frames
-    it has read, is the window's."""
+    it has read, is the window's.
+
+    With `start`, it begins at window `start`'s first bucket, its certifier at that window, and the first frame it
+    takes is the one at `position`: a shaper back from maintenance, which carries nothing from before."""
 
     def __init__(self, certifier: Certifier, syncs: Sequence[ClockSync], sync_set: SyncSet,
-                 prover: Prover | LaggedChoices | None = None, windows: int | None = None) -> None:
+                 prover: Prover | LaggedChoices | None = None, windows: int | None = None, start: int = 0,
+                 position: int = 0) -> None:
         self.certifier, self.syncs, self.sync_set = certifier, list(syncs), sync_set
         self.prover, self.windows = prover, len(self.syncs) if windows is None else windows
+        if start:
+            certifier.window = start
         self.pending: dict[int, tuple[LogicalFrame, int]] = {}
-        self.next = 0
-        self.h = self.last = self.t = self.queued = 0
+        self.next = position
+        self.h = self.last = self.queued = 0
+        self.t = start * certifier.params.buckets
         self.hands: list[int] = []
         self._check_advice()
 
@@ -249,13 +262,15 @@ class Bucketer:
     """The ingress certifier on one link, fed frames as they arrive (no I/O): a frame arriving at bucket time s is
     `arrive`d with ⌈s⌉ and enqueued at that tick; `tick` returns the released row, with the record at a window's end.
     With `first`, each window's first tick enqueues the certifier's own frame `first(window)` ahead of that bucket's
-    arrivals."""
+    arrivals. With `start`, it begins at window `start`'s first bucket, its certifier at that window."""
 
-    def __init__(self, certifier: Certifier, first: Callable[[int], bytes] | None = None) -> None:
+    def __init__(self, certifier: Certifier, first: Callable[[int], bytes] | None = None, start: int = 0) -> None:
         self.certifier = certifier
         self.first = first
+        if start:
+            certifier.window = start
         self.waiting: deque[tuple[int, bytes]] = deque()
-        self.t = 0
+        self.t = start * certifier.params.buckets
 
     def arrive(self, frame: bytes, bucket: int) -> None:
         self.waiting.append((bucket, frame))
@@ -408,6 +423,8 @@ class Proxy:
     - with `salt`, a source of one salt per window such as `fresh_salt`, the ingress grid carries each window's salt
       frame, the server receives the salt on its own connection (`salts_released` and `salts_delivered` count them),
       and `reveal(w)` gives the verifier window w's salt once w's ingress record is published;
+    - with `start` and `position`, it is back from maintenance: it serves windows `start` … `windows` − 1, its first
+      egress frame the Program's at `position`;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -417,7 +434,7 @@ class Proxy:
                  publish: Callable[[Record, GridParams], None] | None = None,
                  egress_link: str = "responses", ingress_link: str = "requests",
                  prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None,
-                 salt: Callable[[int], bytes] | None = None) -> None:
+                 salt: Callable[[int], bytes] | None = None, start: int = 0, position: int = 0) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
         if prover is not None and syncs:
@@ -427,16 +444,22 @@ class Proxy:
         self.upstream, self.egress, self.ingress = upstream, egress, ingress
         self.origin, self.slack, self.clock, self.sleep = origin, slack, clock, sleep
         self.windows = len(syncs) if windows is None else windows
+        if not 0 <= start <= self.windows or position < 0:
+            raise ValueError(f"a proxy starts at one of windows 0 … {self.windows}, at a position ≥ 0")
+        if start and prover is not None:
+            raise ValueError("an online prover declares from window 0 on: a proxy back from maintenance takes syncs")
+        self.start = start
         reserve_fds()
         self.choices = None if prover is None else LaggedChoices(prover, executor or worker())
-        self.shaper = Shaper(Certifier(egress_link, egress), syncs, sync_set, self.choices, self.windows)
+        self.shaper = Shaper(Certifier(egress_link, egress), syncs, sync_set, self.choices, self.windows, start,
+                             position)
         self.salt = salt
         self._salts: dict[int, bytes] = {}
         self._salt_frames: dict[int, bytes] = {}
         self._salt_out: asyncio.Queue | None = None
         self._salt_task: asyncio.Task | None = None
         self._ingress_published = self.salts_released = self.salts_delivered = 0
-        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt)
+        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
         self.streams: dict[int, _Stream] = {}
@@ -472,7 +495,7 @@ class Proxy:
 
     async def _ticks(self, params: GridParams, lateness: list[float], certifier: Certifier):
         tau = params.bucket_ms / 1000
-        for t in range(self.windows * params.buckets):
+        for t in range(self.start * params.buckets, self.windows * params.buckets):
             deadline = self.origin + t * tau
             await self.sleep(deadline - self.clock())
             late = self.clock() - deadline
@@ -590,7 +613,7 @@ class Proxy:
         while the window's ingress record is unpublished."""
         if self.salt is None:
             raise ValueError("the salt is off")
-        if not 0 <= window < self._ingress_published:
+        if not self.start <= window < self._ingress_published:
             raise RuntimeError(f"window {window}'s ingress record isn't published, so its salt isn't revealed")
         return self._salts[window]
 
