@@ -11,8 +11,8 @@ outside every block.
 - `records.py`: the certifier's published records as `datacenter.observe.Record`s (port, window, counts, digest), the
   records an honest run declares by port and window, and the certifiers' parameters as the declaration's `Cadence`;
   `datacenter.check_records` audits them.
-- `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each block's uplink, and both
-  audits.
+- `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each block's uplink, both
+  audits, and the account's charge for each block.
 - `workload/`: what runs on the blocks, with its own suite (its modules are listed in `workload/__init__.py`).
   `python -m workload.lab_run run --out DIR`, from this directory in a Python with torch, serves verity_vllm's serving
   Program on the lab, each block in its namespace behind its certifier's proxy and the client on the outside host, then
@@ -59,8 +59,8 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source -- \
 100 ms, on every block at once. In each block runs the server (`active_replay.Server`), in its certifier's namespace the
 proxy (`verity.core.protocols.certifier.active.Proxy`, unmodified), and on the outside host the peer, whose connection
 crosses the fabric. Each block's server plays one strategy: `honest`; `bits`, whose write times carry a random bit per
-session; `late`, which holds a session in window 0 past every sync; or `extra`, which writes one event at a position the
-Program doesn't have. Each block is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and
+session; `late`, which holds a session in window 0 past every sync; `extra`, which writes one event at a position the
+Program doesn't have; or `maintenance`, honest with its certifier down for window 1 (below). Each block is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and
 `check_ingress_link` on its raw and committed records. The datacenter record check is `datacenter.check_records` on its
 records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port (`b0.cert:out`
 for what leaves the block, `b0.cert:in` for what enters it) needs a record for each window, with the declared counts
@@ -99,6 +99,46 @@ Run `r20261018-092640-66bf` (`run --salt`), on vy-nebius-cpu-2 at a load of abou
 every block, under both audits. On every block, each ingress window held one salt frame and egress none, no egress
 frame held a salt or its commitment, the certifier's audit accepted each window's commitment against the revealed
 salt, and the block's server received every salt. The latest tick was 4.3 ms late against the 25 ms slack.
+
+### Maintenance
+
+The fifth strategy, `maintenance`, takes a block's certifier down for window 1. The default four blocks take the first
+four strategies, so it needs `up --blocks 5` and `run --blocks 5`. The block is drained for that window
+(`active_replay.outage_plan`): no request is enqueued in it, and the plan is refused if anything of window 0 would still
+be in flight there. Its proxy serves window 0, then closes the link and stops listening, so for window 1 the link is
+dead and no record is published. Half a window before window 2, a proxy back from maintenance
+(`Proxy(start=2, position=p)`, the certifier's `PROTOCOL.md`) listens on the same port, and the peer connects again. The
+proxy process stays up through the outage, but the proxy back from it is a new `Proxy` with fresh certifiers, so it
+carries nothing from window 0. The block's records are declared from its own drained plan, the Program its prover
+registers.
+
+The record check runs twice on that block, each time with the account's charge for its claims (`mockdc.charge`:
+`datacenter.account` on a profile that credits no work and registers no store, under the verifier's plan for that
+block):
+- **Without a declared maintenance**, the plan is the epoch alone. Both of window 1's port-windows are refused "no
+  record", and the account charges each at the uplink's full capacity, 400 Gbit/s for 6 s.
+- **With `Plan(maintenance=[Maintenance(b4, [6000, 12000))])`** (`mockdc.verifier_plan`), the declared records leave
+  window 1 out (`records.declared(..., verifier=plan)`, as `datacenter.audit` does), and the other four port-windows are
+  carried. The account is sound, but it charges everything the block's devices hold. The plan has no wipe, so nothing
+  bounds what the block holds once it is back.
+
+The certifier's own audit has no verdict for window 1 on either link (`no-verdict`). It has no notion of maintenance:
+excusing a window is the accounting layer's.
+
+Run `r20261018-100310-685b` (`up --blocks 5`, `run --blocks 5`), on vy-nebius-cpu-2 at a load of about 45:
+
+| Block | Strategy | Certifier audit | Datacenter record check | Account's charge (covert budget) |
+|---|---|---|---|---|
+| b0 | honest | accepted | 6 port-windows carried | sound: 24 bits of timing advice |
+| b1 | bits | accepted, wire identical to b0's | 6 port-windows carried | sound: 24 bits |
+| b2 | late | refused: `responses` window 0, `status:coverage-never-established` | refused: `port b2.cert:out [0, 6000)`, occupancy and content | not sound: 20 bits + 2.4e12 on the refused window |
+| b3 | extra | refused: `responses` window 2, `mismatch` | refused: `port b3.cert:out [12000, 18000)`, occupancy and content | not sound: 20 bits + 2.4e12 |
+| b4 | maintenance, no plan | no verdict for window 1 on either link; windows 0 and 2 accepted | refused: `port b4.cert:out` and `port b4.cert:in` `[6000, 12000)`, "no record" | not sound: 16 bits + 4.8e12 on refused windows |
+| b4 | maintenance, planned | the same | 4 port-windows carried, nothing refused | sound: 16 bits + 2.16e13 held in maintenance |
+
+The first four blocks' verdicts are the earlier runs'. On b4 the records of windows 0 and 2 are `run_shaper`'s, and
+the wire is the records. The latest tick was 4.2 ms late against the 25 ms slack. After the run the lab was brought
+back up in its default shape (`mockdc.py down`, then `up`), which `workload/lab_run.py` needs.
 
 ## Limits
 
