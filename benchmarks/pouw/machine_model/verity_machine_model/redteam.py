@@ -186,17 +186,20 @@ def least_filler(design: str, data: Path, mix: dict[str, float] | None = None, t
                  q: float = 1.22, operands: str = "free", credit: str = "floor") -> LeastFill:
     """The least verified filler a word, in class mix `mix` (default the design's), that holds decision 76's margin:
     its joint worst core is ≤ `target` (default the design's base core, the floor it sits at). The filler replaces the
-    design's own and sweeps in `step` up to `cap`. Returns the per_word, the worst core there and honest's γ."""
+    design's own and sweeps in `step` up to `cap`, checked as the design's filler is (its p and luck), or by a receipt
+    the check recomputes (p = 0) when the design has none. Returns the per_word, the worst core there and honest's γ."""
     pi = E.machine("", data)
     d0 = E.design(design, data)
     mix = mix or (d0.filler[0].mix if d0.filler and d0.filler[0].mix else {"FFMA": 1.0})
+    check = d0.filler[0] if d0.filler else E.Filler(p=0.0, luck=E.PINNED)
     base_core = E.eps(d0, pi, q, data, operands=operands, credit=credit).core()
     target = base_core if target is None else target
     base_worst = _joint_worst(lambda p: E.eps(d0, p, q, data, operands=operands, credit=credit).core(), pi,
                               _near_rows(pi, d0, data, q, near_thr, operands, credit), m)
 
     def at(x: float) -> tuple[E.Design, float, float]:
-        d = replace(d0, filler=(E.Filler(per_word=x, mix=mix, route="lanes", source="redteam.least_filler"),))
+        d = replace(d0, filler=(E.Filler(per_word=x, mix=mix, route="lanes", p=check.p, luck=check.luck,
+                                         source="redteam.least_filler"),))
         core = lambda p: E.eps(d, p, q, data, operands=operands, credit=credit).core()
         near = _near_rows(pi, d, data, q, near_thr, operands, credit)
         return d, _joint_worst(core, pi, near, m), E.eps(d, pi, q, data, operands=operands, credit=credit).gamma

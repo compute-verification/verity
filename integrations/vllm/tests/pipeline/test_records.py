@@ -16,8 +16,10 @@ from verity.ml.circuits.evaluation.reference import evaluate
 from verity_vllm import glue, records
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import WORKLOADS, RowId, UsageError
+from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import epoch
 from verity_vllm.pipeline import research_outputs as ro
+from verity_vllm.pipeline import row_records as RR
 from verity_vllm.properties.record import REGISTRY, seal
 
 from tests.program.test_running_example import make_program
@@ -296,6 +298,31 @@ def test_a_checkpoints_staging_is_labelled_and_glue_counts_its_hours_from_it(tmp
     assert h["staged"] == {"at": "2026-10-12T21:42:55Z", "ref": "vy-glm53-eu:/fs/x.verify"} and h["record"] is None and h["hours"] is None
     with pytest.raises(UsageError, match="a UTC time"):
         records.staged(REPO, rev, at="2026-10-12 21:42", ref="x", by="circuits")
+
+
+def test_a_request_programs_census_digest_is_in_the_record_beside_its_program_digest(tmp_path):
+    """The census digest a request Build cached (its result.json's `census`, `pipeline.memory_map.cache`) reaches the Build summary
+    and the record's `census_digests`, keyed as `programs`: per rank on a TP row, and on a TP1 row; a Build with none has no entry."""
+    census = lambda r: {"census": f"c{r}" * 64, "kv_rows": True}  # noqa: E731
+    d = tmp_path / ROW
+    for r in range(2):
+        rd = d / "build" / f"rank{r}"
+        _w(rd / "build_step" / "result.json", {"ok": True, "program": {"digest": f"s{r}"}})
+        _w(rd / "build_request_LP9_T2" / "result.json", {"ok": True, "program": {"digest": f"q{r}"}, "census": census(r)})
+        _w(rd / "build_request_LP9_T3" / "result.json", {"ok": True, "program": {"digest": f"p{r}"}, "census": {"error": "MemoryError()"}})
+        _w(rd / "build_workload" / "workload_program.json", {"workload_digest": f"w{r}"})
+    assert RR.tp_build_summary(str(d / "build"), 2) == "PASS"
+    per = CR.record(d, ROW)["build"]["per_rank"]
+    assert {r: (p["programs"], p["census_digests"]) for r, p in per.items()} == {
+        str(r): ({"build_request_LP9_T2": f"q{r}", "build_request_LP9_T3": f"p{r}", "build_step": f"s{r}"},
+                 {"build_request_LP9_T2": census(r)["census"]}) for r in range(2)}
+
+    one = tmp_path / "tp1"
+    _w(one / "build_step" / "result.json", {"ok": True, "program": {"digest": "s"}})
+    _w(one / "build_request" / "result.json", {"ok": True, "program": {"digest": "q"}, "census": census(0)})
+    assert RR.build_summary(str(one)) == "PASS"
+    b = CR.build_part(one)
+    assert (b["programs"], b["census_digests"]) == ({"request": "q", "step": "s"}, {"request": census(0)["census"]})
 
 
 def test_a_build_without_construction_manifests_is_refused(tmp_path, store):

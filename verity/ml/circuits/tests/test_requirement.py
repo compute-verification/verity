@@ -9,8 +9,10 @@ from itertools import chain, combinations
 import numpy as np
 import pytest
 
+from test_census import programs, request
 from verity.ml.circuits import boundary
 from verity.ml.circuits import requirement as R
+from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.ml.circuits.ops import fp32
 from verity.ml.circuits.parts import Part, n_members
@@ -81,7 +83,10 @@ def test_the_decoders_requirement(run):
     assert req.to_json() == {"steps": 3, "live_bits": [320, 384, 416], "read_bits": [128, 192, 224], "registered_bits": 320}
     assert sorted(req.live(2) - req.registered) == [14, 19, 21]  # k_0, k_1 and tok_2
     assert sorted(req.reads(1)) == [3, 7, 9, 10, 14, 15]  # emb[0][2], emb[1][2], wk, k_0, tok_1
-    assert R.requirement(program, schedule).to_json()["read_bits"] == [320, 384, 416]
+    structural = R.requirement(program, schedule)
+    assert structural.to_json()["read_bits_upper"] == [320, 384, 416]
+    with pytest.raises(ValueError, match="reads_upper"):
+        structural.reads(0)
     assert (req.held(0, 3), req.read(0, 3)) == (1120, 544)
 
 
@@ -91,8 +96,8 @@ def _part(program: Program, nodes) -> Part:
 
 
 def test_live_and_reads_are_the_boundary(run):
-    """live(t) = out(S_<t) ∩ in(S_≥t) with the inputs there before t, and the structural reads(t) = in(S_t) less the run
-    inputs that arrive at t, by `boundary.out_gates` and `boundary.in_gates` over the steps' root Calls."""
+    """live(t) = out(S_<t) ∩ in(S_≥t) with the inputs there before t, and the structural reads_upper(t) = in(S_t) less the
+    run inputs that arrive at t, by `boundary.out_gates` and `boundary.in_gates` over the steps' root Calls."""
     program, starts, schedule, _ = run
     req = R.requirement(program, schedule)
     calls = [k for k, nd in enumerate(program.root.body.nodes) if not is_input(nd.fn)]
@@ -102,7 +107,7 @@ def test_live_and_reads_are_the_boundary(run):
         later = boundary.in_gates(_part(program, chain(*by_step[t:])))
         out = boundary.out_gates(_part(program, chain(*by_step[:t]))) if t else frozenset()
         assert req.live(t) == (out & later) | {v for v in later if v in inputs and req.born[v] < t}
-        assert req.reads(t) == {v for v in boundary.in_gates(_part(program, by_step[t])) if req.born[v] < t}
+        assert req.reads_upper(t) == {v for v in boundary.in_gates(_part(program, by_step[t])) if req.born[v] < t}
 
 
 def _subsets(xs):
@@ -112,16 +117,20 @@ def _subsets(xs):
 
 @pytest.mark.parametrize("B", [64, 128, R.BLOCK_BITS])
 def test_the_honest_store_matches_and_the_transfer_bounds_hold(run, B):
-    """`pack` gives a store and plans that are W's at every step, and on them RequirementHeld, RequirementDense and
-    RequirementMoved hold for every held and moved set of blocks."""
+    """`pack` gives a store and plans that are W's at every step, crediting every live value, and on them
+    RequirementHeld, RequirementHeldLive, RequirementDense and RequirementMoved hold for every held and moved set of
+    blocks."""
     _, _, _, req = run
     layout, store = R.pack(req, B)
     for t in range(req.steps):
         live, reads, resident = req.live(t), req.reads(t), store.resident(t)
         plan = R.read_blocks(req, layout, t)
+        assert R.credited(req, layout, t) == live and R.credited_reads(req, layout, t) == reads
         assert R.store_matches(req, layout, store, B, t) and R.plan_matches(req, layout, plan, B, t)
         for H in _subsets(resident):
             assert req.live_bits(t) <= layout.bits_at(req, live, set(H)) + len(resident - set(H)) * B
+            missing = sum(layout.bits_in(req, live, j) for j in resident - set(H))
+            assert req.live_bits(t) == layout.bits_at(req, live, set(H)) + missing
         dense = min(layout.bits_in(req, live, j) for j in resident)
         assert len(resident) * dense <= req.live_bits(t)
         for M in _subsets(plan):
@@ -140,19 +149,40 @@ def test_the_honest_store_at_64_bit_blocks(run):
     assert [sorted(R.read_blocks(req, layout, t)) for t in range(3)] == [[0, 2, 4], [1, 3, 4, 5], [0, 2, 4, 5, 6]]
 
 
-def test_a_block_or_a_read_w_does_not_have_fails_the_link(run):
-    """A registered block W doesn't keep live, a live block freed early, a planned block W doesn't read at that step and a
-    payload that isn't W's values each break the link."""
+def test_a_credited_block_missing_or_forged_fails_the_link(run):
+    """A live block freed early, a block W reads left out of the plan and a payload that isn't W's values each break the
+    link. Filler keeps it: a registered block W doesn't keep live (index 5, before step 0's append writes it there) and a
+    planned block W doesn't read at that step hold none of W's credited values."""
     _, _, _, req = run
     layout, store = R.pack(req, 64)
-    extra = R.Store(store.registered + 1, store.written, store.freed, {**store.payload, 5: 0})
-    assert not R.store_matches(req, layout, extra, 64, 0)
+    extra = R.Store(store.registered + 1, store.written, store.freed, store.payload)
+    assert all(R.store_matches(req, layout, extra, 64, t) for t in range(req.steps))
+    assert 5 in extra.resident(0) and layout.bits_in(req, R.credited(req, layout, 0), 5) == 0
     early = R.Store(store.registered, store.written, {**store.freed, 1: frozenset({5})}, store.payload)
     assert R.store_matches(req, layout, early, 64, 1) and not R.store_matches(req, layout, early, 64, 2)
-    assert not R.plan_matches(req, layout, R.read_blocks(req, layout, 1) | {6}, 64, 1)
+    assert R.plan_matches(req, layout, R.read_blocks(req, layout, 1) | {6}, 64, 1)
     assert not R.plan_matches(req, layout, R.read_blocks(req, layout, 1) - {5}, 64, 1)
     forged = R.Store(store.registered, store.written, store.freed, {**store.payload, 6: store.payload[6] ^ 1})
     assert not R.store_matches(req, layout, forged, 64, 2)
+
+
+def test_a_block_a_later_step_fills_is_credited_once_complete(run):
+    """With k_1 (born at step 1) beside k_0 and tok_1 in step 0's append, as a KV pool fills a page, that block is
+    incomplete at step 1: its live k_0 and tok_1 aren't credited then, 64 of the live bits, and the store is W's with
+    the block written in step 1's record, the one that completes it. Written in step 0's record, without k_1, it is
+    resident at step 1 crediting nothing, but at step 2 its payload lacks k_1."""
+    _, _, _, req = run
+    layout, store = R.pack(req, 128)
+    assert (store.registered, layout.block[14], layout.block[15], layout.block[19], layout.offset[15]) == (3, 3, 3, 4, 32)
+    paged = R.Layout({**layout.block, 19: 3}, {**layout.offset, 19: 64})
+    filled = R.Store(3, {0: frozenset(), 1: frozenset({3, 4})}, store.freed,
+                     {**store.payload, 3: store.payload[3] | req.values[19] << 64})
+    assert R.incomplete(req, paged, 1) == {3, 4} and not R.incomplete(req, paged, 2)
+    assert R.credited(req, paged, 1) == req.live(1) - {14, 15} and R.credited(req, paged, 2) == req.live(2)
+    assert R.credited_reads(req, paged, 1) == req.reads(1) - {14, 15}
+    assert req.live_bits(1) - req.bits(R.credited(req, paged, 1)) == 64
+    assert all(R.store_matches(req, paged, filled, 128, t) for t in range(req.steps))
+    assert R.store_matches(req, paged, store, 128, 1) and not R.store_matches(req, paged, store, 128, 2)
 
 
 def test_past_the_executed_prefix_nothing_runs(run):
@@ -164,3 +194,120 @@ def test_past_the_executed_prefix_nothing_runs(run):
     assert req.to_json() == {"steps": 2, "live_bits": [320, 384], "read_bits": [128, 192], "registered_bits": 320}
     assert req.last[19] == req.born[19] == 1 and 21 not in req.last
     assert not {19, 21} & (req.live(1) | req.live(2))
+
+
+def test_a_gather_without_the_runs_inputs_leaves_candidates(run):
+    """Without the run's inputs the gathers' selected words are unknown: their columns are candidates, `reads` refuses the
+    steps they leave open, and `reads_upper` counts them, more reads than any run makes."""
+    program, _, schedule, req = run
+    structural = R.requirement(program, schedule)
+    with pytest.raises(ValueError, match="reads_upper"):
+        structural.reads(1)
+    assert structural.live(1) == req.live(1) and req.reads(1) < structural.reads_upper(1)
+
+
+def test_an_execution_that_does_not_follow_its_wiring_is_refused(run):
+    """`Requirement.of` takes only an execution that follows its wiring (`Execution.Follows`): a gate whose operand is
+    produced at a later step, or that uses or may select a value that isn't its operand, is refused."""
+    program, _, schedule, _ = run
+    ex = R.execution(program, schedule, _inputs())
+    assert ex.follows() and R.Requirement.of(ex) == R.requirement(program, schedule, _inputs())
+    late = R.Execution(ex.width, ex.registered, {**ex.step, 14: 2}, ex.ops, ex.uses, ex.values)
+    foreign = R.Execution(ex.width, ex.registered, ex.step, ex.ops, {**ex.uses, 14: ex.uses[14] | {21}}, ex.values)
+    stray = R.Execution(ex.width, ex.registered, ex.step, ex.ops, ex.uses, ex.values, {14: frozenset({21})})
+    for bad in (late, foreign, stray):
+        assert not bad.follows()
+        with pytest.raises(ValueError, match="Follows"):
+            R.Requirement.of(bad)
+
+
+def test_a_placement_credits_the_gates_the_execution_computes(run):
+    """The run's input, the token, is an input gate wherever it is placed: all on one device over the whole run, the
+    credits at each value's width are the computed gates', 576 bits, not 608 with the token's. The wiring is topological,
+    as `RequirementHelp` needs. A placement that leaves a value without a device, or a gate without a tick at its step,
+    is refused, not read as device 0 or tick 0."""
+    program, _, schedule, req = run
+    ex = R.execution(program, schedule, _inputs())
+    assert ex.topological() and ex.inputs == {0} and ex.computed == ex.ran - ex.registered - {0}
+    one, price, T = R.Placement({v: 0 for v in ex.ran}, {0: list(range(req.steps + 1))}), dict(ex.width), req.steps
+    assert one.region(ex, {0}, 0, T) == one.step_region(ex, {0}, 0, T) == ex.computed
+    assert one.credits(ex, price, {0}, (), 0, T) == 576 and one.ingress(ex, {0}, 0, T) == 0
+    for bad in (R.Placement({v: 0 for v in ex.ran - {0}}, one.ticks), R.Placement(one.leaf, {0: [0]})):
+        assert not bad.places(ex)
+        with pytest.raises(ValueError, match="doesn't place"):
+            bad.credits(ex, price, {0}, (), 0, T)
+
+
+def _starts(program: Program, ends: list[int]) -> list[int]:
+    """A census's step ends (root nodes) as `Schedule.by_calls`'s starts (Calls)."""
+    return [0] + [e - sum(1 for nd in program.root.body.nodes if is_input(nd.fn)) for e in ends[:-1]]
+
+
+def _span(req: R.Requirement, v: int) -> tuple:
+    """A value's birth and its last read after it (a read in its own step, such as a scan's carry, keeps nothing live)."""
+    b, last = req.born.get(v), req.last.get(v)
+    return b, last if last is not None and b is not None and last > b else None
+
+
+def _census_path(program: Program, ends: list[int]) -> R.Requirement:
+    """`from_census` is `requirement` without run values: each census value's gates have its birth and last read, and every
+    step's live gates, bounded reads and resolution are its values'."""
+    c = census(program, ends)
+    schedule = R.Schedule.by_calls(program, _starts(program, ends))
+    by_census, by_gates = R.from_census(c, schedule), R.requirement(program, schedule)
+    gates = lambda vs: R.census_gates(program, c, vs)  # noqa: E731
+    assert R.census_offsets(c) == list(program.root.body.offsets) and R.from_census(c) == by_census
+    assert gates(by_census.registered) == by_gates.registered
+    for x in range(len(c["values"]["producer"])):
+        assert {_span(by_gates, g) for g in gates([x])} <= {_span(by_census, x)}
+    for t in range(by_gates.steps):
+        assert gates(by_census.live(t)) == by_gates.live(t) and gates(by_census.reads_upper(t)) == by_gates.reads_upper(t)
+        assert by_census.resolved(t) == by_gates.resolved(t)
+    assert by_census.to_json() == by_gates.to_json()
+    return by_census
+
+
+@pytest.mark.parametrize("label,P", [("decoder", decoder()[0]), *programs()], ids=lambda x: x if isinstance(x, str) else "")
+def test_the_census_path_is_the_expansion(label, P):
+    """On every test Program, with every Call its own step and with one step for all."""
+    calls = [k + 1 for k, nd in enumerate(P.root.body.nodes) if not is_input(nd.fn)]
+    for ends in (calls, calls[-1:]):
+        _census_path(P, ends)
+
+
+def test_the_decoders_census_path(run):
+    """At the decoder's steps: the requirement of `test_the_decoders_requirement`, with its gathers' reads bounded (the
+    whole embedding, 256 bits) and refused, since a census holds no run values."""
+    program, starts, _, req = run
+    nodes = program.root.body.nodes
+    calls = [k for k, nd in enumerate(nodes) if not is_input(nd.fn)]
+    got = _census_path(program, [calls[s] for s in starts[1:]] + [len(nodes)])
+    assert got.to_json() == {"steps": 3, "live_bits": [320, 384, 416], "read_bits_upper": [320, 384, 416], "registered_bits": 320}
+    assert all(got.read_bits_upper(t) - req.read_bits(t) == 6 * 32 for t in range(3))
+    with pytest.raises(ValueError, match="reads_upper"):
+        got.read(0, 1)
+
+
+def test_the_request_census_path():
+    """`test_census.request` at its sampling steps: weights live throughout, a KV row from the step after its write to its
+    last attention, a sampled token into the step that embeds it, the prompt token never (it arrives with step 0); the
+    table's selection leaves every step's reads bounded."""
+    P = request()
+    got = _census_path(P, step_ends(P, {"TSelect_v1"}))
+    assert got.to_json() == {"steps": 3, "live_bits": [1088, 1184, 1248], "read_bits_upper": [1088, 1184, 1248],
+                             "registered_bits": 1088}
+    assert not any(got.resolved(t) for t in range(3))
+
+
+def test_a_split_call_another_schema_and_an_approximate_census_are_refused():
+    program = request()
+    c = census(program)
+    schedule = R.census_schedule(c)
+    lo, hi, s = next(r for r in schedule.ranges if r[1] - r[0] > 1)
+    split = R.Schedule(tuple(r for r in schedule.ranges if r[0] != lo) + ((lo, lo + 1, s), (lo + 1, hi, s)))
+    with pytest.raises(ValueError, match="splits root gates"):
+        R.from_census(c, split)
+    with pytest.raises(ValueError, match="verity/census/v1"):
+        R.from_census(c | {"schema": "verity/census/v0"})
+    with pytest.raises(ValueError, match="approximate"):
+        R.from_census(c | {"approximate": True})

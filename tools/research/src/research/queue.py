@@ -14,7 +14,7 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`)
-    research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--first N,...] [--dry-run]
+    research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--first N,...] [--defer STEPS] [--regenerate-locks] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
                                                    check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest
     research queue report --on MACHINE [--max-running N] [--dry-run]
@@ -1256,6 +1256,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once; "
                                                                       "report: of merge groups")
     ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
+    ap.add_argument("--regenerate-locks", action="store_true",
+                    help="drive: land a train whose Lean check passed by regenerating lock records with those locks committed on "
+                         "top (`Regenerated:`), which `research merge`'s gate accepts on the train's check (CI-64)")
     ap.add_argument("--defer", default="", metavar="STEP[,STEP...]",
                     help="drive: land a train once every other step passed, these still running; one that then fails reverts it")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
@@ -1352,7 +1355,7 @@ def main(argv: list[str]) -> int:
             from .drive import Driver
 
             Driver(q, on=a.on, max_running=a.max_running, train_size=a.train_size,
-                   defer=frozenset(x for x in a.defer.split(",") if x)).tick(dry_run=a.dry_run)
+                   defer=frozenset(x for x in a.defer.split(",") if x), regenerate_locks=a.regenerate_locks).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses
