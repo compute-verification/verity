@@ -443,6 +443,24 @@ def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, re
     assert waits == ([30.0] * slack.RATE_RETRIES if getattr(fail, "code", None) == 429 else [])
 
 
+def test_a_long_thread_is_paged_by_oldest_so_no_reply_at_a_page_boundary_is_lost():
+    """Slack's cursor for conversations.replies skipped the message at each page boundary: a doorbell in a 204-reply inbox
+    read was lost (18 Oct)."""
+    replies = [{"ts": f"1700000000.{i:06d}"} for i in range(1, 6)]
+    asked = []
+
+    def transport(url, data, headers):
+        params = dict(urllib.parse.parse_qsl(data.decode()))
+        asked.append(params.get("oldest"))
+        newer = [m for m in replies if float(m["ts"]) > float(params.get("oldest") or 0)]
+        return {"ok": True, "messages": [{"ts": "1700000000.000000"}] + newer[:2], "has_more": len(newer) > 2,
+                "response_metadata": {"next_cursor": "skips-one" if len(newer) > 2 else ""}}
+
+    got = slack.Slack("xoxb-dummy", transport=transport).paged("conversations.replies", "messages", channel=COORD, ts="1700000000.000000")
+    assert [m["ts"] for m in got] == ["1700000000.000000"] + [m["ts"] for m in replies]
+    assert asked == [None, "1700000000.000002", "1700000000.000004"]
+
+
 def test_a_rate_limited_call_waits_as_asked_then_succeeds(broker, monkeypatch):
     """A burst of doorbells draws a 429 from Slack; giving up there left the last handles unrung (15 Oct review)."""
     waits: list[float] = []
@@ -1557,6 +1575,21 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     assert f"UNANSWERED {retired['ts']} by @top to no one it can ring" in out
     stale = [s["ts"] for s in rep["unanswered"]]
     assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
+
+
+def test_traffic_replay_names_each_post_whose_doorbells_differ_from_route_targets(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "circuits")
+    rung = posted(fake, run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "rang as it should")[1])
+    typed = fake.add(COORD, text="@circuits sent by a client that never delivered", username="proofs", bot_id=BOT)
+    stray = fake.add(COORD, text="for no one in particular", username="lean", bot_id=BOT)
+    fake.add(COORD, text=slack.doorbell("lean", stray["ts"], stray["ts"], stray["text"]), username="router", bot_id=BOT, thread_ts=box)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
+    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
+    assert rc == 0 and rung["ts"] not in rep
+    assert (rep[typed["ts"]]["missed"], rep[typed["ts"]]["extra"]) == (["circuits"], [])
+    assert (rep[stray["ts"]]["missed"], rep[stray["ts"]]["extra"]) == ([], ["circuits"])
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay")
+    assert f"REPLAY {typed['ts']} by @proofs: missed @circuits: @circuits sent by a client" in out and "replayed: 2 post(s)" in out
 
 
 def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
