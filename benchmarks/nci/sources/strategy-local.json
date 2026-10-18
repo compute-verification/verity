@@ -1,1 +1,844 @@
-[]
+[
+ {
+  "id": "douillard-2024-dipaco",
+  "title": "DiPaCo: Distributed Path Composition",
+  "authors": "Arthur Douillard, Qixuan Feng, Andrei A. Rusu, Adhiguna Kuncoro, Yani Donchev, Rachita Chhaparia, Ionel Gog, Marc'Aurelio Ranzato, Jiajun Shen, Arthur Szlam",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2403.10616",
+  "topics": [
+   "strategy-local",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "douillard-2024-dipaco/1",
+    "claim": "256 paths of 150M parameters, each trained on its own shard and synchronized with DiLoCo, match a 1.3B dense model's C4 validation perplexity in 45% less wall-clock time; the comparison is matched in weight-update steps (88,000), not in tokens or FLOPs.",
+    "quote": "matching the performance in terms of validation perplexity of a 1.3 billion model, but with 45% less wall clock training time.",
+    "location": "Section 1; setup in Section 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 21.5,
+      "unit": "x the 1.3B dense model's training FLOPs (derived)",
+      "condition": "256 paths x 150M; 24k shared steps then 64k path steps at 512 x 1024 tokens; 6ND; dense 1.3B for 88k steps on 46B tokens (about 3.6e20 FLOP); derived by this review, not stated by the authors"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The one published design whose unit of training (a path) is several times smaller than the model it matches, so it shrinks the replica and hence per-block reads; but parity costs about 21x the dense model's FLOPs, m_A about 0.05.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "douillard-2024-dipaco/2",
+    "claim": "Negative: the authors state DiPaCo is significantly less FLOP-efficient per evaluation perplexity than a dense compute-optimal model, and that they did not study its scaling.",
+    "quote": "The most salient limitation to DiPaCo is with respect to FLOP efficiency. In this work we made no effort to optimize its FLOP efficiency; and in the results presented, DiPaCo is significantly less FLOP efficient per evaluation perplexity than a standard dense compute optimal model. This work also does not study scaling laws of DiPaCo.",
+    "location": "Section 6 (Limitations)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Direct statement that m_A is well below 1 against the reference the yardstick uses; the per-path size reduction is paid for in compute.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "douillard-2024-dipaco/3",
+    "claim": "At 150M per path and FLOP-matched to the single-path baseline trained 8x longer (14.72 PPL), DiLoCo with 8 replicas reaches 15.02 and DiPaCo 2x4 14.86; DiPaCo 8x8 reaches 13.37 only with 64x the compute and data.",
+    "quote": "DiLoCo $P=8$ | $1\\times$ | $8\\times$ | $150$ M | 15.02 | DiLoCo $P=64$ | $1\\times$ | $64\\times$ | $150$ M | 14.96 | Flat MoE $P=8$ | $1\\times$ | $8\\times$ | $1.2$ B | 14.62 | Flat MoE $P=64$ | $1\\times$ | $64\\times$ | $9.6$ B | 12.76 | DiPaCo $2\\times 4$ | $1\\times$ | $8\\times$ | $0.5$ B | 14.86 | DiPaCo $8\\times 8$ | $1\\times$ | $64\\times$ | $1.2$ B | 13.37 | DiPaCo $8\\times 8+$ Path Specific Modules | $1\\times$ | $64\\times$ | $5.3$ B | 12.70 | Baseline, $8\\times$ steps | $8\\times$ | $8\\times$ | $150$ M | 14.72",
+    "location": "Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 8,
+      "unit": "x compute of the 150M baseline",
+      "condition": "DiLoCo P=8 (15.02 PPL) vs 150M baseline for 8x steps (14.72); C4 validation perplexity"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "At equal FLOPs, 8 independent replicas lose to one replica trained 8x longer, and composing paths does not close the gap: below 1B the between-replica methods are FLOP-inefficient, and DiPaCo's gains come from total parameters, not from compute efficiency.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "douillard-2024-dipaco/4",
+    "claim": "Synchronizing DiPaCo fully (every step) instead of with DiLoCo improves 8x8 perplexity by only 0.1 while communicating hundreds of times more.",
+    "quote": "At $8\\times 8$ DiPaCo trained fully synchronously reaches better perplexity by only $0.1$ perplexity despite communicating hundred of times more.",
+    "location": "Section 4.5",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Between-path communication is not what limits DiPaCo; its FLOP inefficiency comes from training small paths on data shards, which is exactly the within-replica restriction a per-block limit would force.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "gururangan-2023-cbtm",
+  "title": "Scaling Expert Language Models with Unsupervised Domain Discovery",
+  "authors": "Suchin Gururangan, Margaret Li, Mike Lewis, Weijia Shi, Tim Althoff, Noah A. Smith, Luke Zettlemoyer",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2303.14177",
+  "topics": [
+   "strategy-local",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gururangan-2023-cbtm/1",
+    "claim": "Sixteen 1.3B expert LMs trained without communication on k-means clusters of C4, used top-4 at inference (5.2B active), reach a 6.7B dense model's perplexity with 29% of its training FLOPs.",
+    "quote": "training many 1.3B expert LMs, and sparsifying them to a 5.2B parameter LM, achieves the same perplexity as a 6.7B dense model, but with only 29% as many training FLOPs.",
+    "location": "Section 1; Section 4.4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3.5,
+      "unit": "x fewer training FLOPs to equal C4 perplexity",
+      "condition": "16-cluster c-BTM, 1.3B experts from an OPT-1.3B seed, 168B tokens, top-4 inference, vs OPT-6.7B continued on C4; seed pretraining FLOPs included on both sides"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The 3.5x is against a 6.7B dense model whose OPT seed alone costs about 5x the 1.3B seed, not against a compute-optimal dense model, and inference uses 4 experts; against a compute-optimal reference the multiplier is unmeasured and likely near 1. Each expert is a 1.3B replica, so the per-replica size is 4x smaller than the model it matches.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "gururangan-2023-cbtm/2",
+    "claim": "The experts are branched from pretrained OPT checkpoints, and the reported FLOPs include the seed's pretraining; the result is continued pretraining, not training from scratch.",
+    "quote": "The c-BTM model at 168B tokens achieves the same perplexity on C4 as a 6.7B dense model with 3.5x fewer ZFLOPs. The total ZFLOPs includes the cost of pretraining the seed OPT checkpoints.",
+    "location": "Figure 11 caption",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Expert ensembles need a shared seed trained end to end; the evidence does not show independent small models replacing a from-scratch dense pretrain.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "sukhbaatar-2024-btx",
+  "title": "Branch-Train-MiX: Mixing Expert LLMs into a Mixture-of-Experts LLM",
+  "authors": "Sainbayar Sukhbaatar, Olga Golovneva, Vasu Sharma, Hu Xu, Xi Victoria Lin, Baptiste Rozière, Jacob Kahn, Daniel Li, Wen-tau Yih, Jason Weston, Xian Li",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2403.07816",
+  "topics": [
+   "strategy-local",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sukhbaatar-2024-btx/1",
+    "claim": "Negative for BTM: from a Llama-2 7B seed on the same data, the BTM expert ensemble averages 43.1 (top-1) and 43.4 (top-2) across math, code, knowledge, reasoning and general tasks, below the dense continued-pretraining baseline (44.5); merging the experts into an MoE and finetuning it jointly (BTX) reaches 47.9.",
+    "quote": "Dense (DM) | 18.3 | 25.8 | 39.6 | 63.3 | 49.8 | 44.5 | Sparse upcycling (DM), Top-2 | 28.1 | 34.7 | 34.0 | 62.3 | 51.1 | 46.3 | BTM, Top-1 | 21.3 | 36.4 | 26.5 | 61.0 | 44.3 | 43.1 | BTM, Top-2 | 21.5 | 36.6 | 26.9 | 61.2 | 44.3 | 43.4 | BTX, Sample Top-1 | 26.4 | 31.5 | 40.1 | 63.7 | 53.2 | 47.3 | BTX, Top-2 | 27.4 | 34.0 | 41.0 | 63.5 | 52.5 | 47.9",
+    "location": "Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": -1.1,
+      "unit": "points of average downstream accuracy vs dense",
+      "condition": "BTM top-2 (43.4) vs Dense DM (44.5); Llama-2 7B seed, 4 experts, same data; downstream average, not held-out loss"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "At 7B, communication-free expert training alone is worse than the dense baseline on the same data; the gain needs a joint (communicating) MoE finetuning stage, so the within-replica saving of BTM does not hold up as a training method.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "sukhbaatar-2024-btx/2",
+    "claim": "The dense, sparse-upcycling, BTM and BTX rows use the same amount and mixture of data; only BTM skips the final joint finetuning.",
+    "quote": "Dense, sparse upcycling, BTM and BTX are trained on exactly the same amount and mixture of data with the exception that BTM does not have the finetuning stage.",
+    "location": "Table 2 caption",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The baseline is data-matched, but the metric is a downstream average and the start is a pretrained seed, so this cannot be converted to a held-out-loss multiplier.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "filippova-2024-smalltalk",
+  "title": "No Need to Talk: Asynchronous Mixture of Language Models",
+  "authors": "Anastasiia Filippova, Angelos Katharopoulos, David Grangier, Ronan Collobert",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2410.03529",
+  "topics": [
+   "strategy-local",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "filippova-2024-smalltalk/1",
+    "claim": "32 independently trained 335M experts with prefix routing (no communication during training) reach 9.07 test perplexity at 2.5e21 FLOPs, against 9.1 for a 1.3B dense model at 2.2e21, at a third of the inference FLOPs.",
+    "quote": "Notably, our $335$ M parameter model with $32$ experts achieves a perplexity of 9.07, outperforming the $1.3$ B dense baseline’s perplexity of $9.1$ . This improvement is achieved with a training budget of $2.5\\times 10^{21}$ FLOPs, which is comparable to the baseline’s $2.2\\times 10^{21}$ FLOPs",
+    "location": "Section 3.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.5e+21,
+      "unit": "FLOP",
+      "condition": "32 x 335M experts, 9.07 test PPL; dense 1.3B baseline 9.1 PPL at 2.2e21 FLOP"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "An ensemble of small independent models (each replica a quarter of the dense model) roughly matches the dense model at equal training FLOPs; against a Chinchilla-optimal reference at 2.2e21 FLOP (about 4B on 90B tokens) the 1.3B baseline loses only about 0.01 nats, so m_A is about 1, not above it.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "filippova-2024-smalltalk/2",
+    "claim": "The dense baselines are 1.3B models trained on 266B, 1T and 2T tokens, 10-77x the Chinchilla allocation, so the 'same FLOPs' comparisons are against overtrained references.",
+    "quote": "for $1.3$ B parameter dense baselines trained on $266$ B, $1$ T and $2$ T tokens (empty symbols) and mixture models with $1.3$ B parameter experts and $4$ , $16$ and $32$ experts respectively (filled symbols).",
+    "location": "Figure 3 caption",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 266000000000.0,
+      "unit": "tokens",
+      "condition": "smallest dense 1.3B baseline; 20 tokens per parameter would be 26B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The up-to-18% perplexity gains for 1.3B experts are against an inference-matched, not a compute-optimal, dense model; they do not establish m_A > 1 under the yardstick's reference.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "woodworth-2020-localsgd",
+  "title": "Is Local SGD Better than Minibatch SGD?",
+  "authors": "Blake Woodworth, Kumar Kshitij Patel, Sebastian U. Stich, Zhen Dai, Brian Bullins, H. Brendan McMahan, Ohad Shamir, Nathan Srebro",
+  "year": 2020,
+  "venue": "ICML 2020",
+  "url": "https://arxiv.org/abs/2002.07839",
+  "topics": [
+   "strategy-local",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "woodworth-2020-localsgd/1",
+    "claim": "A lower bound shows local SGD does not dominate minibatch SGD: in the worst case its guarantee is worse than minibatch SGD's at the same number of gradients and communication rounds.",
+    "quote": "We show that indeed local SGD does not dominate minibatch SGD by presenting a lower bound on the performance of local SGD that is worse than the minibatch SGD guarantee.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "There is no theorem that local updates are at least as sample-efficient as synchronous training; m_A >= 1 for DiLoCo-type methods is an empirical fact about LMs, not a guarantee.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "stich-2018-localsgd",
+  "title": "Local SGD Converges Fast and Communicates Little",
+  "authors": "Sebastian U. Stich",
+  "year": 2018,
+  "venue": "ICLR 2019",
+  "url": "https://arxiv.org/abs/1805.09767",
+  "topics": [
+   "strategy-local",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "stich-2018-localsgd/1",
+    "claim": "On convex problems local SGD converges at minibatch SGD's rate in gradients evaluated (linear speedup in workers), while cutting communication rounds by up to a factor of T^(1/2).",
+    "quote": "converges at the same rate as mini-batch SGD in terms of number of evaluated gradients, that is, the scheme achieves linear speedup in the number of workers and mini-batch size. The number of communication rounds can be reduced up to a factor of $T^{1/2}$",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The theory saves communication between replicas at no gradient cost; nothing in it reduces what a single replica (or a block within it) reads per step.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "ortiz-2021-localsgd-tradeoffs",
+  "title": "Trade-offs of Local SGD at Scale: An Empirical Study",
+  "authors": "Jose Javier Gonzalez Ortiz, Jonathan Frankle, Mike Rabbat, Ari Morcos, Nicolas Ballas",
+  "year": 2021,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2110.08133",
+  "topics": [
+   "strategy-local"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ortiz-2021-localsgd-tradeoffs/1",
+    "claim": "Negative: on ImageNet (ResNet-50/101), local SGD buys lower communication with lower accuracy, unlike the smaller-scale results in prior work.",
+    "quote": "We find that performing local SGD comes at a price: lower communication costs (and thereby faster training) are accompanied by lower accuracy. This finding is in contrast from the smaller-scale experiments in prior work, suggesting that local SGD encounters challenges at scale.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "In vision at scale, local updates cost accuracy at fixed epochs (m_A < 1); the LM results that match data-parallel depend on outer Nesterov momentum and tuned H, not on local SGD as such.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "liu-2024-async-localsgd",
+  "title": "Asynchronous Local-SGD Training for Language Modeling",
+  "authors": "Bo Liu, Rachita Chhaparia, Arthur Douillard, Satyen Kale, Andrei A. Rusu, Jiajun Shen, Arthur Szlam, Marc'Aurelio Ranzato",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2401.09135",
+  "topics": [
+   "strategy-local",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2024-async-localsgd/1",
+    "claim": "Negative: naive asynchronous Local-SGD needs more iterations to converge than synchronous Local-SGD, despite updating the global parameters more often; stale momentum is the cause.",
+    "quote": "We find that with naive implementations, asynchronous Local-SGD takes more iterations to converge than its synchronous counterpart despite updating the (global) model parameters more frequently.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Staleness is a cost even between replicas; it changes when bits arrive, not how many, so it does not move per-block reads.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "liu-2024-async-localsgd/2",
+    "claim": "At 150M, asynchronous DiLoCo ends at 18.08 perplexity vs 17.23 for synchronous DiLoCo, and the gap does not shrink with model size (20M-150M); the delayed-Nesterov fix recovers 17.26.",
+    "quote": "| Model size | 20M | 60M | 150M | Pretrained (24K) | 61.64 | 30.19 | 22.80 | Finetune (4x batch size) | 42.47 | 24.80 | 17.47 | DiLoCo (Douillard et al., 2023) | 41.35 | 24.55 | 17.23 | Async. DiLoCo | 44.27 | 25.64 | 18.08 | Async. DN + DyLU (ours) | 41.13 | 24.53 | 17.26",
+    "location": "Table 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.048,
+      "unit": "nats of C4 loss above synchronous DiLoCo",
+      "condition": "Async DiLoCo vs DiLoCo at 150M (ln 18.08 - ln 17.23); 4 heterogeneous workers, after a 24k-step pretrain"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Asynchrony between replicas costs about 0.05 nats at 150M unless corrected; the corrected method matches synchronous DiLoCo, so the multiplier is DiLoCo's.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "he-2024-localsgd-scaling",
+  "title": "Exploring Scaling Laws for Local SGD in Large Language Model Training",
+  "authors": "Qiaozhi He, Xiaomin Zhuang, Zhihua Wu",
+  "year": 2024,
+  "venue": "arXiv preprint (technical report)",
+  "url": "https://arxiv.org/abs/2409.13198",
+  "topics": [
+   "strategy-local",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "he-2024-localsgd-scaling/1",
+    "claim": "Fitted laws in non-embedding parameters: DDP L = (6.06e14/N)^0.069 and local SGD L = (3.15e14/N)^0.072, from eight sizes on 8 nodes, each trained to 'adequate convergence', checked at 3B.",
+    "quote": "$L_{DDP}(N)\\approx(\\frac{N_{c}}{N})^{\\alpha_{N}};\\penalty\\ \\penalty\\ \\alpha_{N}\\sim 0.069,\\penalty\\ \\penalty\\ N_{c}\\sim 6.06\\times 10^{14}$ | | (3.1) | | $L_{localSGD}(N)\\approx(\\frac{N_{c}}{N})^{\\alpha_{N}};\\penalty\\ \\penalty\\ \\alpha_{N}\\sim 0.072,\\penalty\\ \\penalty\\ N_{c}\\sim 3.15\\times 10^{14}$",
+    "location": "Section 3, Eqs. 3.1-3.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.072,
+      "unit": "loss exponent in N (local SGD)",
+      "condition": "vs 0.069 for DDP; 8 nodes; SlimPajama; pure power law with no irreducible term"
+     },
+     {
+      "param": "other",
+      "value": 1.11,
+      "unit": "x parameters DDP needs to match local SGD at N = 1e9 (derived)",
+      "condition": "from Eqs. 3.1-3.2; crossover near N = 8e7; derived by this review"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Local SGD's fitted exponent is slightly steeper, so the law predicts a growing advantage (1.1x parameters at 1B, 1.35x at 9e10); but the token budget is not Chinchilla-matched and a law with no irreducible loss exaggerates extrapolated gaps.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "he-2024-localsgd-scaling/2",
+    "claim": "Negative: the authors note limited compute, and that the large-cluster scenarios (near 10,000 GPUs) are unvalidated.",
+    "quote": "Furthermore, the experimental results for Scenarios 2 and 3, which involved nearly $10,000$ GPUs, still lack empirical validation in practical settings.",
+    "location": "Section 4 (Limitation and Future Work)",
+    "quantities": [],
+    "grade": "extrapolated",
+    "bears_on": "The fitted advantage is unreplicated beyond 3B and should not be extrapolated to 1e24 FLOP.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "qi-2025-dilocox",
+  "title": "DiLoCoX: A Low-Communication Large-Scale Training Framework for Decentralized Cluster",
+  "authors": "Ji Qi, WenPeng Zhu, Li Li, Ming Wu, YingJun Wu, Wu He, Xun Gao, Jason Zeng, Michael Heinrich",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2506.21263",
+  "topics": [
+   "strategy-local",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "qi-2025-dilocox/1",
+    "claim": "The 'pretraining' runs are OPT-1.3B and a 107B Qwen1.5 variant on WikiText-103, a corpus of about 100M tokens.",
+    "quote": "We pretrain OPT-1.3B and a modified Qwen1.5-107B model (reducing the total number of layers from 80 to 78 for GPU memory optimization) on the WikiText-103 dataset",
+    "location": "Section 4.1.1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "A 107B model on about 1e8 tokens is nowhere near compute-optimal; this is a systems demonstration, not evidence about the multiplier at frontier scale.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "qi-2025-dilocox/2",
+    "claim": "Negative: at 107B over 1 Gbps, after 4,000 steps the training loss is 3.90 for AllReduce, 4.20 for DiLoCoX and 5.23 for CocktailSGD.",
+    "quote": "after 4,000 training steps, the losses of AllReduce, DiLoCoX, and CocktailSGD reach 3.90, 4.20, and 5.23, respectively.",
+    "location": "Section 4.2.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.3,
+      "unit": "nats of training loss above AllReduce",
+      "condition": "107B, WikiText-103, 4,000 steps; training loss, not held-out; not converged"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Compressed local-update training at 107B trails synchronous training by 0.3 nats at the reported point; the largest-scale DiLoCo-family run with a matched baseline is a loss, though not convertible to a compute multiplier.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "kale-2025-eager-diloco",
+  "title": "Eager Updates For Overlapped Communication and Computation in DiLoCo",
+  "authors": "Satyen Kale, Arthur Douillard, Yanislav Donchev",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2502.12996",
+  "topics": [
+   "strategy-local",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kale-2025-eager-diloco/1",
+    "claim": "At Chinchilla-optimal budgets on C4 at 1B (1.9e20 FLOP), DiLoCo (H = 30) matches data-parallel eval loss (2.49 vs 2.49), 1-inner-step-overlap Streaming DiLoCo reaches 2.48, and the eager outer-step overlap 2.50 (H = 30) or 2.52 (H = 100).",
+    "quote": "1B | 1.9e20 | Data-Parallel | 0 | 0 | 2.49 | 46.60 | 68.93 | 39.65 | DiLoCo | 30 | 0 | 2.49 | 46.56 | 68.82 | 36.84 | Streaming DiLoCo with 1-inner-overlap | 30 | 1 | 2.48 | 46.60 | 69.04 | 39.12 | Streaming DiLoCo with 1-inner-overlap | 100 | 1 | 2.50 | 46.00 | 68.82 | 38.42 | Streaming DiLoCo with 1-outer-eager-overlap | 30 | 30 | 2.50 | 46.45 | 68.50 | 39.47 | Streaming DiLoCo with 1-outer-eager-overlap | 100 | 100 | 2.52 | 44.64 | 68.12 | 36.14",
+    "location": "Table 6",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.92,
+      "unit": "compute multiplier vs data-parallel (derived)",
+      "condition": "eager H=30 at 1B, 1.9e20 FLOP; from a power-law fit to the table's data-parallel losses, slope -0.046 in ln L per ln C; loss resolution 0.01"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Compute-optimal anchors for the DiLoCo family at 1B: DiLoCo and Streaming DiLoCo are at m about 1.0, the eager variant about 0.92 (0.77 at H = 100); all are between-replica methods with backprop's per-block traits.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "kale-2025-eager-diloco/2",
+    "claim": "Below 1B the eager variant's gap is larger: at 100M (9.4e17 FLOP) data-parallel reaches 3.19, DiLoCo 3.21 and eager overlap 3.27.",
+    "quote": "100M | 9.4e17 | Data-Parallel | 0 | 0 | 3.19 | 26.94 | 60.12 | 30.35 | DiLoCo | 30 | 0 | 3.21 | 26.59 | 60.50 | 29.12",
+    "location": "Table 6",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.58,
+      "unit": "compute multiplier vs data-parallel (derived)",
+      "condition": "eager H=30 at 100M, 9.4e17 FLOP (3.27 vs 3.19); same fit as finding 1; DiLoCo itself 0.87"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The overlap penalty shrinks with scale (m about 0.58 at 1e18 to 0.92 at 2e20 FLOP), the same direction as DiLoCo's own replica penalty.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "kolehmainen-2025-noloco",
+  "title": "NoLoCo: No-all-reduce Low Communication Training Method for Large Models",
+  "authors": "Jari Kolehmainen, Nikolay Blagoev, Semih Kara, John Donaghy, Christopher Nies, Oğuzhan Ersoy",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2506.10911",
+  "topics": [
+   "strategy-local",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kolehmainen-2025-noloco/1",
+    "claim": "Negative at 6.8B: with 16 data-parallel replicas x 4 pipeline stages, final C4 validation perplexity is 15.7 for FSDP, 17.3 for DiLoCo and 16.6 for NoLoCo (Reddit: 16.1, 18.0, 17.5).",
+    "quote": "Large | $64$ | $16$ | $4$ | $16.1$ | $18.0$ | $\\mathbb{17.5}$ | $15.7$ | $17.3$ | $\\mathbb{16.6}$",
+    "location": "Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.48,
+      "unit": "compute multiplier of DiLoCo vs FSDP (derived)",
+      "condition": "6.8B, C4, DP 16 x PP 4; 0.097 nats; converted with the DiLoCo-scaling data-parallel law (ln L slope -0.048 per ln C); token budget not Chinchilla-matched"
+     },
+     {
+      "param": "other",
+      "value": 0.66,
+      "unit": "compute multiplier of NoLoCo vs FSDP (derived)",
+      "condition": "same conversion; 0.056 nats"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Against a well-run FSDP baseline at 6.8B and 16 replicas, both local-update methods lose quality worth roughly a third to a half of the compute; the multiplier depends on replica count, not only scale.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "kolehmainen-2025-noloco/2",
+    "claim": "Both methods are typically a few percent worse in perplexity than FSDP, up to 30% (small model, 16 replicas); the gap shrinks with model size and grows with replica count.",
+    "quote": "We observe that both NoLoCo and DiLoCo are slightly worse than fully sharded data parallel (FSDP) training, typically few percent worse, but in some cases even $30\\%$ (C4, Small model, 16 data parallel world size). The PPL gap is generally larger with smaller models and large data parallel world sizes; and decreases when the model size becomes larger or the data parallel world size becomes smaller.",
+    "location": "Section 4.2",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Independent confirmation of the trend in the DiLoCo scaling laws: the gap shrinks with model size and grows with replica count.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "iacob-2025-desloc",
+  "title": "DES-LOC: Desynced Low Communication Adaptive Optimizers for Training Foundation Models",
+  "authors": "Alex Iacob, Lorenzo Sani, Mher Safaryan, Paris Giampouras, Samuel Horváth, Andrej Jovanovic, Meghdad Kurmanji, Preslav Aleksandrov, William F. Shen, Xinchi Qiu, Nicholas D. Lane",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.22549",
+  "topics": [
+   "strategy-local",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "iacob-2025-desloc/1",
+    "claim": "Negative: at 1.7B on 40B tokens (2x compute-optimal), DES-LOC averages 51.6 on ARC-C/ARC-E/PIQA/HellaSwag, Local Adam 51.8, federated averaging with optimizer state 50.7, and DDP 53.8.",
+    "quote": "DES-LOC | $31.8$ | $59.0$ | $70.7$ | $44.9$ | $51.6$ | Local Adam | $31.9$ | $59.0$ | $70.6$ | $45.8$ | $51.8$ | FAVG+OPT | $30.1$ | $58.0$ | $70.0$ | $44.8$ | $50.7$ | DDP | $\\mathbf{33.8}$ | $\\mathbf{62.5}$ | $\\mathbf{71.1}$ | $\\mathbf{47.8}$ | $\\mathbf{53.8}$",
+    "location": "Table 1; setup in Section 4.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": -2.2,
+      "unit": "points of average zero-shot accuracy vs DDP",
+      "condition": "DES-LOC, 1.7B, 40B tokens, M = 4 workers; downstream average, not held-out loss"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "At 1.7B every local-update variant trails synchronous DDP by 2-3 points; the authors' headline ('matches') is relative to Local Adam, not to DDP. Not convertible to a loss multiplier.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "iacob-2025-desloc/2",
+    "claim": "DES-LOC communicates 170x less than DDP and 2x less than Local Adam by syncing parameters and each Adam moment on separate periods.",
+    "quote": "DES-LOC can communicate $\\mathbf{170}\\times$ less than DDP and $\\mathbf{2}\\times$ less than the previous state-of-the-art Local Adam.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "grad.compression_ratio",
+      "value": 170,
+      "unit": "x",
+      "condition": "total communication vs DDP; up to 1.7B; as stated by the authors"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The saving is entirely between replicas; within a replica each block reads parameters, moments and activations as in backprop.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "ajanthan-2025-async-pp",
+  "title": "Nesterov Method for Asynchronous Pipeline Parallel Optimization",
+  "authors": "Thalaiyasingam Ajanthan, Sameera Ramasinghe, Yan Zuo, Gil Avraham, Alexander Long",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.01099",
+  "topics": [
+   "strategy-local",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ajanthan-2025-async-pp/1",
+    "claim": "With an 8-stage pipeline (base model 134M) at 50k iterations, the delay-corrected asynchronous method reaches 27.72 WikiText perplexity vs 30.63 for synchronous GPipe, while PipeDream (99.48) and PipeMare (71.38) degrade badly.",
+    "quote": "GPipe | 30.63 | 42.39 | 65.17 | $O(N)$ | PipeDream | 99.48 | 52.98 | 224.30 | $O(PN)$ | PipeMare | 71.38 | 76.93 | 239.13 | $O(N)$ | Ours | 27.72 | 39.85 | 62.86 | $O(PN)$",
+    "location": "Table 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Uncorrected gradient staleness across pipeline stages is very costly, and a Nesterov-style correction removes it; stage boundaries still pass full activations and gradients, so per-block reads are unchanged.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "ajanthan-2025-async-pp/2",
+    "claim": "The authors train a 1B model to convergence with asynchronous pipeline parallelism, beating the synchronous baseline.",
+    "quote": "Notably, for the first time, we train a 1B parameter model to convergence in the asynchronous PP setup outperforming the synchronous baseline.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Within-replica asynchrony (stale weights per stage) need not cost quality at 1B, but it alters timing, not what crosses a stage boundary.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "chen-2016-sync-sgd",
+  "title": "Revisiting Distributed Synchronous SGD",
+  "authors": "Jianmin Chen, Xinghao Pan, Rajat Monga, Samy Bengio, Rafal Jozefowicz",
+  "year": 2016,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/1604.00981",
+  "topics": [
+   "strategy-local",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "chen-2016-sync-sgd/1",
+    "claim": "Asynchronous SGD is faster per step but often converges to worse results, because of gradient staleness, which deeper models make worse.",
+    "quote": "While asynchronous training have proven to be faster than their synchronous counterparts, they often result in convergence to poorer results.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The historical reason production pretraining is synchronous: stale-gradient training has m_A < 1 unless corrected.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "belilovsky-2019-dgl",
+  "title": "Decoupled Greedy Learning of CNNs",
+  "authors": "Eugene Belilovsky, Michael Eickenberg, Edouard Oyallon",
+  "year": 2019,
+  "venue": "ICML 2020",
+  "url": "https://arxiv.org/abs/1901.08164",
+  "topics": [
+   "strategy-local",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "belilovsky-2019-dgl/1",
+    "claim": "On ImageNet, decoupled greedy learning with 2-4 gradient-isolated modules matches or beats backprop (VGG-13 K=4 67.8 vs 66.6 top-1; VGG-19 K=2 70.8 vs 69.7; ResNet-152 K=2 74.5 vs 74.4), but per-layer training (K=10) drops to 64.4.",
+    "quote": "| Model (training method) | Top-1 | Top-5 | VGG-13 (DGL per Layer, $K=10$ ) | 64.4 | 85.8 | VGG-13 (DGL $K=4$ ) | 67.8 | 88.0 | VGG-13 (backprop) | 66.6 | 87.5 | VGG-19 (DGL $K=4$ ) | 69.2 | 89.0 | VGG-19 (DGL $K=2$ ) | 70.8 | 90.2 | VGG-19 (backprop) | 69.7 | 89.7 | ResNet-152 (DGL $K=2$ ) | 74.5 | 92.0 | ResNet-152 (backprop) | 74.4 | 92.1",
+    "location": "Figure 6 (ImageNet table)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "In vision, few-block local learning costs nothing and per-layer costs about 2 points; it does not transfer to LMs, where the blockwise gap is 0.03-0.11 nats at K = 2-4 even at 400M (moon-2026-greedy-local).",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "belilovsky-2019-dgl/2",
+    "claim": "With a replay buffer, decoupled modules can run asynchronously with large communication delays.",
+    "quote": "With the use of a replay buffer we show this approach can be extended to asynchronous settings, where modules can operate with poossibly large communication delays.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Local learning removes the backward crossing (crossings 1) and tolerates delay, but every module still reads the full forward activation of the module below it.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "belilovsky-2018-greedy-imagenet",
+  "title": "Greedy Layerwise Learning Can Scale to ImageNet",
+  "authors": "Eugene Belilovsky, Michael Eickenberg, Edouard Oyallon",
+  "year": 2018,
+  "venue": "ICML 2019",
+  "url": "https://arxiv.org/abs/1812.11446",
+  "topics": [
+   "strategy-local",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "belilovsky-2018-greedy-imagenet/1",
+    "claim": "Sequential greedy layer-wise training with 3-hidden-layer auxiliary problems trains VGG-11 on ImageNet to 67.6 top-1 vs 67.9 end to end (70.1 with a layer ensemble).",
+    "quote": "VGG-11 ( $k=3$ train) | 67.6 (70.1) | 88.0 (89.2) | VGG-11 (e2e train) | 67.9 | 88.0",
+    "location": "Table 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": -0.3,
+      "unit": "top-1 points vs end-to-end",
+      "condition": "VGG-11, ImageNet, k=3 auxiliary depth; each layer trained with its own schedule; total compute vs end-to-end not reported"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The only from-scratch greedy-layerwise parity result at a large dataset is a 2018 CNN; no greedy layer-wise LM pretraining result at 1B or above exists, so greedy-layerwise has no LM multiplier.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "wang-2021-infopro",
+  "title": "Revisiting Locally Supervised Learning: an Alternative to End-to-end Training",
+  "authors": "Yulin Wang, Zanlin Ni, Shiji Song, Le Yang, Gao Huang",
+  "year": 2021,
+  "venue": "ICLR 2021",
+  "url": "https://arxiv.org/abs/2101.10832",
+  "topics": [
+   "strategy-local",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2021-infopro/1",
+    "claim": "Negative: greedy supervised local learning of ResNet-32 on CIFAR-10 raises test error from 7.37% (end to end) to 10.30%, 16.07%, 21.19% and 24.59% with 2, 4, 8 and 16 modules.",
+    "quote": "| Test Error | 7.37% | 10.30% | 16.07% | 21.19% | 24.59%",
+    "location": "Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 24.59,
+      "unit": "% test error at K = 16",
+      "condition": "ResNet-32, CIFAR-10, greedy local cross-entropy; 7.37% end to end"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The gap from local learning grows steeply with block count, which a per-block limit would push up; naive local losses do not scale to many blocks.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "wang-2021-infopro/2",
+    "claim": "InfoPro's information-preserving local loss reaches competitive accuracy with under 40% of end-to-end training memory.",
+    "quote": "InfoPro is capable of achieving competitive performance with less than 40% memory footprint compared to E2E training",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Better local objectives narrow the gap at K = 2-8 in vision; there is no LM pretraining result.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "shing-2025-diffusionblocks",
+  "title": "DiffusionBlocks: Block-wise Neural Network Training via Diffusion Interpretation",
+  "authors": "Makoto Shing, Masanori Koyama, Takuya Akiba",
+  "year": 2025,
+  "venue": "ICLR 2026",
+  "url": "https://arxiv.org/abs/2506.14202",
+  "topics": [
+   "strategy-local",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shing-2025-diffusionblocks/1",
+    "claim": "Recasting residual blocks as stages of a denoising process lets each block be trained independently by score matching, with gradients for one block at a time.",
+    "quote": "each block can be learned independently by leveraging the score matching objective. This independence enables training with gradients for only one block at a time, thereby reducing memory requirements in proportion to the number of blocks.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The one local-learning scheme where nothing crosses between blocks during training: each block reads data and a noised target, not the activations of the block below, so per-block reads drop to the data rate.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "shing-2025-diffusionblocks/2",
+    "claim": "On a 12-layer AR transformer split into 4 blocks, DiffusionBlocks gives LM1B MAUVE 0.71 vs 0.50 and Llama-2 generative perplexity 12.32 vs 14.58; on OpenWebText MAUVE 0.82 vs 0.85.",
+    "quote": "| Dataset | Method | MAUVE ( $\\uparrow$ ) | PPL (Llama-2) ( $\\downarrow$ ) | PPL (GPT2-XL) ( $\\downarrow$ ) | LM1B | AR | 0.50 | 14.58 | 38.87 | + DiffusionBlocks | 0.71 | 12.32 | 30.99",
+    "location": "Table 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "blocks",
+      "condition": "12-layer, 768-wide Llama-style AR model; 10 epochs; LM1B and OWT"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "About 100M parameters, and generation-quality metrics with different samplers (top-p vs 4-step greedy), not held-out loss at equal compute: no multiplier can be derived.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "shing-2025-diffusionblocks/3",
+    "claim": "The authors state that traditional perplexity is not computable for the block-wise model, so they report MAUVE and generative perplexity instead.",
+    "quote": "Since DiffusionBlocks is not derived from ELBO-based objectives, computing traditional perplexity is non-trivial.",
+    "location": "Appendix E.4 (autoregressive text generation)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The yardstick needs held-out loss; until a likelihood comparison exists, block-independent training of an LM is a capability claim, not a measured multiplier.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "douillard-2026-decoupled-diloco",
+  "title": "Decoupled DiLoCo for Resilient Distributed Pre-training",
+  "authors": "Arthur Douillard, Keith Rush, Yani Donchev, Zachary Charles, Nova Fallen, Ayush Dubey, Ionel Gog, Josef Dean, Blake Woodworth, Zachary Garrett, et al.",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2604.21428",
+  "topics": [
+   "strategy-local",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "douillard-2026-decoupled-diloco/1",
+    "claim": "Asynchronous DiLoCo with 8 learners and a quorum-based syncer matches data-parallel downstream performance at 2B, 5B and 9B dense (26B, 72B and 141B tokens).",
+    "quote": "7(a)reports the downstream performance of a standard data-parallel (DP) baseline versus Decoupled DiLoCo ( $M=8$ learners) at scales of 2B, 5B, and 9B parameters dense models, trained for 26B, 72B, and 141B tokens, respectively. At every scale, Decoupled DiLoCo matches the performance of the centralized monolithic DP baseline.",
+    "location": "Section 5.5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 7.6e+21,
+      "unit": "FLOP (derived, 6ND)",
+      "condition": "9B dense on 141B tokens, M = 8 learners; downstream evaluation"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The largest matched DiLoCo-family comparison near compute-optimal token counts (about 15 tokens per parameter) shows parity at 9B, but on downstream averages, not held-out loss.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "douillard-2026-decoupled-diloco/2",
+    "claim": "At 2B, Decoupled DiLoCo is slightly behind data-parallel at 26B tokens (text average 54.4 vs 55.1) and ahead at 260B (62.1 vs 61.8) and 1.3T (64.9 vs 64.5).",
+    "quote": "Notice that while Decoupled DiLoCo can be slightly weaker at low token budget, its performance surpasses data-parallel as the budget increases. | | | Data-Parallel | Decoupled DiLoCo $M=8$ | # tokens | 26B | 260B | 1.3T | 26B | 260B | 1.3T | Text (avg) | 55.1 | 61.8 | 64.5 | 54.4 | 62.1 | 64.9",
+    "location": "Appendix D.5, Table 12",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The local-update penalty sits at the compute-optimal end and reverses when overtrained; at the yardstick's Chinchilla reference the multiplier is slightly below 1.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "wortsman-2022-lofi",
+  "title": "lo-fi: distributed fine-tuning without communication",
+  "authors": "Mitchell Wortsman, Suchin Gururangan, Shen Li, Ali Farhadi, Ludwig Schmidt, Michael Rabbat, Ari S. Morcos",
+  "year": 2022,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2210.11948",
+  "topics": [
+   "strategy-local",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wortsman-2022-lofi/1",
+    "claim": "Averaging independently fine-tuned copies (no communication) matches the baseline for OPT-125M/1.3B on Common Crawl, but needs more data to exceed it, and the method is framed for fine-tuning from a shared pretrained model.",
+    "quote": "we found that when fine-tuning CLIP ViT-L on ImageNet and WILDS, lo-fi needs to observe more data to exceed the baseline. This is similarly true during language model fine-tuning (Section 3.3).",
+    "location": "Section 5 (Limitations)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Model-soup averaging as a training method works only from a shared pretrained basin and costs extra data; it is no route to pretraining from scratch under a per-block limit.",
+    "from_review": "strategy-local"
+   }
+  ]
+ }
+]

@@ -377,6 +377,40 @@
     "grade": "measured-small",
     "bears_on": "Slope 0.109 nats per e-fold of compute at 1.3-2.4B (0.168 at 35-90M) converts DiLoCo's gaps: M = 4 is m_A about 0.95 at 2.4B and 0.66 at 35M; M = 1-2 are about 1.0-1.1 at 2.4B.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "charles-2025-diloco-scaling/8",
+    "claim": "Independent power-law fits of loss in N at 20 tokens per parameter for data-parallel and DiLoCo at M = 1, 2, 4, 8.",
+    "quote": "Data-Parallel | $18.129$ | $-0.0953$ | DiLoCo, $M=1$ | $18.363$ | $-0.0961$ | DiLoCo, $M=2$ | $18.768$ | $-0.0969$ | DiLoCo, $M=4$ | $19.762$ | $-0.0992$ | DiLoCo, $M=8$ | $21.051$ | $-0.1018$",
+    "location": "Table 7",
+    "quantities": [
+     {
+      "param": "other",
+      "value": -0.0992,
+      "unit": "loss exponent in N",
+      "condition": "DiLoCo M = 4, 20 tokens per parameter"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The fits predict DiLoCo overtakes data-parallel above 2.5-10B, but the measured 10B M = 4 run (m 0.94) contradicts the 1.08 they predict; do not cite their 1e24-1e26 extrapolation.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "charles-2025-diloco-scaling/9",
+    "claim": "Leave-one-out prediction at 2.4B has a mean absolute log residual of 0.012.",
+    "quote": "Average over $M$ | Independent | 0.012 | 0.30 | 0.19 | Joint | 0.012 | 0.19 | 0.19",
+    "location": "Table 11",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.012,
+      "unit": "mean absolute log residual",
+      "condition": "leave-one-out at 2.4B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A 1.2% loss error exceeds the 0.1-1.1% gaps being extrapolated.",
+    "from_review": "strategy-local"
    }
   ]
  },
@@ -1087,6 +1121,26 @@
     "bears_on": "Heavy compression did not visibly cap quality at 72B, though the gap to a matched dense run is unmeasured.",
     "from_review": "gradients",
     "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   },
+   {
+    "id": "lidin-2026-covenant72b/6",
+    "claim": "Covenant-72B reaches about 94.5% compute utilization with 20 peers syncing for 70 s per 20-minute round.",
+    "quote": "This corresponds to a compute utilization of ${\\sim}94.5\\%$ for the 72B model.",
+    "location": "Section 4.3",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Traffic between replicas no longer binds, but each peer holds a full 72B replica, so per-block reads are backprop's.",
+    "from_review": "strategy-local"
+   },
+   {
+    "id": "lidin-2026-covenant72b/7",
+    "claim": "Covenant-72B trails centralized LLaMA-2-70B and LLM360 K2 on 4 of 6 non-MMLU tasks (HellaSwag 80.6 vs 84.3).",
+    "quote": "ARC-Challenge | 44.8 | 31.1 | 56.8 | 53.8 | 45.1 | 57.4 | ARC-Easy | 71.8 | 55.8 | 80.9 | 76.0 | 73.8 | 79.6 | PIQA | 77.4 | 76.1 | 81.6 | 82.5 | 78.7 | 82.6 | OpenBookQA | 43.8 | 35.2 | 44.0 | 48.0 | 44.2 | 49.4 | HellaSwag | 70.3 | 63.7 | 80.6 | 82.9 | 76.2 | 84.3",
+    "location": "Table 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Negative evidence with no matched baseline.",
+    "from_review": "strategy-local"
    }
   ]
  },

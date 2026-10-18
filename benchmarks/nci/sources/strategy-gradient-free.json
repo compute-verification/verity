@@ -1,719 +1,965 @@
 [
-  {
-    "id": "dahal-2026-dust",
-    "title": "Dust: Pretraining Transformers Without Backpropagation",
-    "authors": "Samip Dahal, Bishwas Mandal, Serdar G\u00fclbahar, Akshay Vegesna",
-    "year": 2026,
-    "venue": "Q Labs research report",
-    "url": "https://qlabs.sh/research/dust/",
-    "topics": ["strategy-gradient-free", "gradients"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "dahal-2026-dust/1",
-        "claim": "At the two smallest token budgets (100k and 1M tokens) on a 37.7M-parameter transformer, Dust node perturbation ends at lower test loss than backprop tuned at every budget, from a few hundred to a thousand draws per update.",
-        "quote": "At 100k and 1M tokens Dust ends below backprop, from a few hundred draws at 100k and from a thousand at 1M. At 10M and 20M tokens, the gap with backprop shrinks with population.",
-        "location": "section 3.2 Main Results; Appendix C Table 1",
-        "quantities": [
-          {"param": "other", "value": 5.934, "unit": "nats test loss", "condition": "Dust at 1,024 draws per update, 37.7M parameters (8 blocks, width 512), FineWeb, 4096-token BPE, 1M tokens, SGD with momentum, 3 seeds; backprop tuned on the same grid reaches 5.959 (Appendix C Table 1)"},
-          {"param": "other", "value": 0.0036, "unit": "compute multiplier m vs backprop", "condition": "derived: equal tokens at slightly lower loss; backprop ~3 forward-equivalents per token vs Dust ~0.81 x 1,024 draw-forwards per token (dahal-2026-dust/4), so m ~ 3/830; an upper bound against a compute-optimal reference, since a 37.7M model at 1M tokens is far from Chinchilla-optimal"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "The best published zeroth-order pretraining result: at tiny budgets a forward-only method matches tuned backprop per token, but at a few hundred times backprop's FLOPs per token, so m is ~1e-2 to 4e-3 even where it wins.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "dahal-2026-dust/2",
-        "claim": "At 20M tokens, the largest budget, Dust at 16k draws stays 0.17 nats above tuned backprop; the power-law limit in population falls below backprop, but the authors read it only as the gap closing, not as a measured limit.",
-        "quote": "At 20M the ladder is still falling at 16k draws. Its power law fit puts the limit at 4.431 (95% interval 3.89 to 4.58), below backprop\u2019s 4.633, but with the ladder still falling the fit is loosely constrained, so we read it as evidence that the gap keeps closing with population rather than as a measured limit.",
-        "location": "section 3.2 Main Results; Appendix C Table 1",
-        "quantities": [
-          {"param": "other", "value": 0.169, "unit": "nats test loss above backprop", "condition": "derived: Dust 16,384 draws 4.802 vs tuned backprop 4.633 at 20M tokens, 37.7M parameters (Appendix C Table 1)"},
-          {"param": "other", "value": 0.00023, "unit": "compute multiplier m vs backprop (upper bound)", "condition": "derived: Dust ~0.81 x 16,384 ~ 13,300 forward-equivalents per token vs ~3 for backprop, at higher loss than backprop at the same 20M tokens, so m < 3/13,300; Dust run ~2e19 FLOP (2 x 37.7e6 x 2e7 x 13,300) vs backprop ~4.5e15 FLOP"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "At the largest budget measured, the forward-only method is still behind at four thousand times backprop's FLOPs per token: m < 2.3e-4, and the reference is itself undertrained (Chinchilla would want ~750M tokens for 37.7M parameters).",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "dahal-2026-dust/3",
-        "claim": "The authors conclude Dust needs orders of magnitude more compute efficiency before it is a practical alternative to backprop at current levels of compute.",
-        "quote": "We must have orders of magnitude more compute efficiency before Dust becomes a practical alternative to backprop at current levels of compute.",
-        "location": "section 5 Conclusion",
-        "quantities": [],
-        "grade": "measured-small",
-        "bears_on": "The strongest positive zeroth-order pretraining paper itself puts the family orders of magnitude from parity: m << 1 at today's scales.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "dahal-2026-dust/4",
-        "claim": "A Dust draw costs a little less than a forward pass, because the clean forward is cached and a draw reruns only from the jittered block on; by the Appendix E allocation a draw costs about 0.81 forward passes, so an update with population K costs about 0.8K forward passes against about 3 for a backprop step.",
-        "quote": "A draw is slightly cheaper than a forward pass, because the clean forward is cached and a draw that jitters block $l$ reruns only the blocks from $l$ on.",
-        "location": "section 3.1 Setup; Appendix E Tables 3 and 4",
-        "quantities": [
-          {"param": "other", "value": 0.81, "unit": "forward passes per draw", "condition": "derived: Appendix E at K = 16,384 and 1M tokens: writer-pair and MLP draws 7,040 each over blocks 1-8 (2432, 2048, 1024, 640, 384, 256, 128, 128), attention-output draws 1,664 (384, 384, 256, 128 x 5), token-embedding draws 640 rerunning the whole network; a block-l draw costs (9 - l)/8 of a forward; cheap head-slab and attention-internal draws ignored"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Gives the FLOPs per token per parameter of node perturbation, ~1.6K + 2 (2 per forward x 0.81K draws plus the clean forward), and its activation crossings, ~0.8K forward reruns per update, both linear in population.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "dahal-2026-dust/5",
-        "claim": "At a fixed 10M tokens and 16k draws, Dust's gap to backprop grows only slightly with model size, from -0.009 nats at 2.0M parameters to +0.038 nats at 243M (a 120x range); the size study predates the main tuning protocol.",
-        "quote": "What we observe, however, is that the gap to backprop at the same population and model size increases with model size, but barely noticeable, esp at large population sizes.",
-        "location": "section 4.1 Overparameterization, Figure 4 table",
-        "quantities": [
-          {"param": "other", "value": 0.038, "unit": "nats test loss above backprop", "condition": "Figure 4 table, 10M tokens, 16,384 draws: 243M parameters (L16/d1024) Dust 5.086 vs backprop 5.048; at 2.0M 5.171 vs 5.180, 7.3M 5.065 vs 5.066, 38M 5.036 vs 5.015; learning rate and momentum selected per size and population (Appendix F)"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "The only measurement of how a perturbative method's gap to backprop moves with parameter count at fixed population: weakly upward over 2M-243M, far flatter than the d-linear variance argument predicts, but at 10M tokens only.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "dahal-2026-dust/6",
-        "claim": "Weight-space ES (a transformer implementation of EGGROLL) with 256 times the population still does not reach Dust at 64 draws; it stays 0.4-0.6 nats above Dust-64 from 1M tokens up, and 1.23 nats above tuned backprop at 20M tokens.",
-        "quote": "With 256 times the population, EGGROLL at 16k still does not reach Dust at 64 draws. It comes within 0.02 at 100k tokens and stays 0.4 to 0.6 above at 1M, 10M and 20M (Figure 2).",
-        "location": "section 3.2 Main Results; Appendix C Table 1; Appendix D Table 2",
-        "quantities": [
-          {"param": "other", "value": 1.232, "unit": "nats test loss above backprop", "condition": "derived: EGGROLL-Transformer at 16,384 forward passes per update 5.865 vs tuned backprop 4.633 at 20M tokens, 37.7M parameters (Appendix C Table 1); EGGROLL tuned over its own grid"},
-          {"param": "other", "value": 3000, "unit": "x the 64-draw population (low end)", "condition": "Appendix D Table 2: population EGGROLL would need to match Dust at 64 draws, 3,000x to 23,000x of 64 across fits at 1M-20M tokens; extrapolated"},
-          {"param": "other", "value": 0.000011, "unit": "compute multiplier m vs backprop", "condition": "derived: EGGROLL 16,384 forward passes per token reaches 5.865 at 20M tokens; tuned backprop reaches it at ~1.25M tokens (log-linear interpolation between its 1M and 10M losses), so m ~ (1.25e6 x 3)/(2e7 x 16,384); 4.6e-5 at 1M and 1.6e-5 at 10M tokens; ~2.5e19 FLOP"},
-          {"param": "other", "value": 0.00036, "unit": "compute multiplier m vs backprop", "condition": "derived: EGGROLL at 64 forward passes per token, the cheapest cell, reaches 6.987 at 20M tokens; backprop reaches it at ~1.5e5 tokens by log-linear interpolation, so m ~ (1.5e5 x 3)/(2e7 x 64); 6.3e-4 at 10M tokens"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Seed-described weight-space ES, the form whose update is cheap to describe under NCI, is the least compute-efficient pretrainer measured: over a nat behind backprop at 16k forward passes per update on a 37.7M model.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "dahal-2026-dust/7",
-        "claim": "EGGROLL's gradient estimate has cosine below 0.05 with backprop's at 128k forward passes for every layer type but the head, measured the same way as Dust's.",
-        "quote": "EGGROLL\u2019s estimate, measured the same way at the same number of forward passes, is growing with population but is still below 0.05 in cosine at 128k for every type but the head",
-        "location": "section 4.2 Emergence of Backprop-Like Gradients",
-        "quantities": [
-          {"param": "other", "value": 0.05, "unit": "cosine with backprop gradient (upper bound)", "condition": "EGGROLL-Transformer, 131,072 forward passes per estimate, 37.7M parameters, every layer type except the LM head"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Explains the weight-space ES gap mechanistically: at 1e5 forward passes per step its estimate is still nearly orthogonal to the gradient on a 3.8e7-parameter model.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "dahal-2026-dust/8",
-        "claim": "Dust's weight update is the outer product of a population-estimated output error with the layer's input, summed over tokens, the same form as backprop's weight gradient; it is dense and depends on the per-token rewards and activations.",
-        "quote": "The reward-weighted noise, averaged over draws, is the estimated error at the layer\u2019s output, and its outer product with the layer\u2019s input is the weight gradient.",
-        "location": "section 2.1 Activation-Space Perturbation",
-        "quantities": [
-          {"param": "update.fraction_changed", "value": 1, "unit": "fraction", "condition": "derived: dense outer product of estimated output error and layer input summed over a 16k-token batch"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Dust is not seed-described: its update is fixed only by the seeds plus K x T per-token loss changes (~2.7e8 scalars per update at K = 16,384 and 16k tokens), so the one perturbative method near backprop gives up the cheap update description.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "dahal-2026-dust/9",
-        "claim": "Table 1 gives every token budget and population against backprop tuned at each budget; per FLOP, the smallest population (64 draws, ~51 forward-equivalents per token) is Dust's most compute-efficient cell, and its multiplier falls as the budget grows.",
-        "quote": "Population is draws rewarded with token losses for Dust and forward passes of the batch for EGGROLL (Section 3.1). Backprop is tuned on the same grid at every budget.",
-        "location": "Appendix C Table 1 caption and cells",
-        "quantities": [
-          {"param": "other", "value": 0.032, "unit": "compute multiplier m vs backprop", "condition": "derived: Dust 64 draws reaches 6.290 at 1M tokens; backprop reaches it at ~5.5e5 tokens (log-linear interpolation of its tuned 100k and 1M losses); Dust ~51 forward-equivalents per token at 64 draws (Appendix E 64-draw recipe: 48.5 for rerun draws, plus clean forward and outer product) vs 3 for backprop"},
-          {"param": "other", "value": 0.022, "unit": "compute multiplier m vs backprop", "condition": "derived: Dust 64 draws 5.397 at 10M tokens; backprop reaches it at ~3.8e6 tokens; same costs"},
-          {"param": "other", "value": 0.015, "unit": "compute multiplier m vs backprop", "condition": "derived: Dust 64 draws 5.265 at 20M tokens; backprop reaches it at ~5.2e6 tokens; ~7.7e16 FLOP for Dust (2 x 37.7e6 x 2e7 x 51); at 1,024 draws m ~ 1.9e-3 and at 16,384 draws ~ 1.6e-4 at the same budget; all upper bounds against a compute-optimal AdamW reference, since backprop here is SGD with momentum on a 37.7M model far below Chinchilla tokens"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "The best measured compute multiplier of any gradient-free pretrainer: m ~ 3e-2 at 1M tokens falling to ~1.5e-2 at 20M, at populations where the method is far behind backprop per token; it is not a parity result.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "chaubard-2026-soma",
-    "title": "Scaling Zero-Order Pretraining through Model Sharding",
-    "authors": "Francois Chaubard, Mykel J. Kochenderfer, Chris R\u00e9",
-    "year": 2026,
-    "venue": "arXiv preprint",
-    "url": "https://arxiv.org/abs/2609.37899",
-    "topics": ["strategy-gradient-free", "seed-based", "theory"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "chaubard-2026-soma/1",
-        "claim": "On ~8.44M-parameter byte-level LSTM models, backprop through time reaches lower ensemble validation loss than SOMA zero-order training at every tested budget: 1.01 vs 2.03 nats/byte at 100 GPU-hours for one expert.",
-        "quote": "The measured ZO improvements do not establish an advantage over backpropagation. BPTT reaches lower ensemble validation loss at every tested budget in Table 5.",
-        "location": "Appendix O Limitations; Appendix I Table 5",
-        "quantities": [
-          {"param": "other", "value": 2.0343, "unit": "nats/byte validation loss", "condition": "SOMA N = 1 at 100 aggregate GPU-hours, ~8.44M parameters; BPTT 1.0091 (last checkpoint, 97.3 GPU-hours); at 50 GPU-hours 2.1237 vs 1.0198; hardware and training recipes differ (Table 5)"},
-          {"param": "other", "value": 0.33, "unit": "compute multiplier m vs backprop (loose upper bound)", "condition": "derived: BPTT at 50 GPU-hours (1.02) is already far below the best ZO result, SOMA N = 2 at ~150 GPU-hours (1.76), so m < 50/150; the true m is much smaller"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "A 2026 zero-order pretraining paper with 80,000 GPU-hours of runs finds no budget where ZO beats backprop; the loss gap (~1 nat/byte) is too large to price as a modest multiplier.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "chaubard-2026-soma/2",
-        "claim": "With M jointly perturbed parameters, the relative variance of a zeroth-order gradient estimate scales as M/n_pert, so holding the error fixed needs n_pert proportional to M, and compute per global step grows as M squared.",
-        "quote": "With $M$ jointly perturbed parameters, leading relative gradient variance scales as $M/n_{\\rm pert}$ (Nesterov & Spokoiny, 2017). Controlling that error requires a compute budget of $n_{\\rm pert}\\propto M$.",
-        "location": "section 1 Introduction",
-        "quantities": [],
-        "grade": "theoretical",
-        "bears_on": "The dimension law behind the family: perturbations per step proportional to parameters, so m at fixed estimate quality falls as 1/M (1e-9 to 1e-12 at 1e9-1e12 parameters, extrapolated) unless the effective dimension is far below M.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "chaubard-2026-soma/3",
-        "claim": "Sharding the model into independently trained experts improves ZO compute efficiency over all tested monolithic ZO controls: at ~150 GPU-hours SOMA N = 2 reaches 1.76 test nats/byte vs 2.00-2.11 for SPSA at 64-1,024 perturbations and 2.21 for EGGROLL.",
-        "quote": "Modest sharding improves training compute efficiency over all tested monolithic ZO controls.",
-        "location": "abstract; Figure 1",
-        "quantities": [
-          {"param": "other", "value": 1.76, "unit": "nats/byte test loss", "condition": "SOMA N = 2, 64 perturbations, ~8.44M parameters, ~150 aggregate GPU-hours (RTX 5090), FineWeb-Edu; monolithic SPSA 2.00-2.11 at 64, 256 or 1,024 perturbations; EGGROLL reproduction 2.21"},
-          {"param": "other", "value": 2.21, "unit": "nats/byte test loss", "condition": "EGGROLL reproduction (FP32, GRU-based recipe) at ~150 aggregate GPU-hours, ~8.44M parameters"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Reducing the jointly perturbed dimension is the lever that helps ZO, consistent with the M/n_pert law; raising n_pert 16x in a monolith did not close the gap.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "duchi-2015-two-point-zo",
-    "title": "Optimal rates for zero-order convex optimization: the power of two function evaluations",
-    "authors": "John C. Duchi, Michael I. Jordan, Martin J. Wainwright, Andre Wibisono",
-    "year": 2015,
-    "venue": "IEEE Transactions on Information Theory",
-    "url": "https://arxiv.org/abs/1312.2139",
-    "topics": ["strategy-gradient-free", "theory"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "duchi-2015-two-point-zo/1",
-        "claim": "With pairs of function values, random-perturbation gradient estimates in d dimensions lose at most a factor sqrt(d) in convergence rate against stochastic gradient methods, i.e. about d times more queries for the same accuracy.",
-        "quote": "we show that if pairs of function values are available, algorithms for $d$-dimensional optimization that use gradient estimates based on random perturbations suffer a factor of at most $\\sqrt{d}$ in convergence rate over traditional stochastic gradient methods.",
-        "location": "abstract",
-        "quantities": [
-          {"param": "other", "value": 1000000000, "unit": "x more two-point queries than SGD steps (worst case)", "condition": "derived: a sqrt(d) factor in the 1/sqrt(T) rate means ~d times more iterations; d = 1e9 parameters; extrapolation from convex stochastic optimization"}
-        ],
-        "grade": "theoretical",
-        "bears_on": "The worst-case dimension price of seed-described two-point updates: m ~ (backprop cost ~3 forwards) / (d x 2 forwards) ~ 1.5/d, i.e. 1.5e-9 at 1e9 and 1.5e-12 at 1e12 parameters (extrapolated).",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "duchi-2015-two-point-zo/2",
-        "claim": "Matching information-theoretic lower bounds show the sqrt(d) factor is sharp up to constant (sometimes logarithmic) factors.",
-        "quote": "establishing the sharpness of our achievable results up to constant (sometimes logarithmic) factors.",
-        "location": "abstract",
-        "quantities": [],
-        "grade": "theoretical",
-        "bears_on": "No zeroth-order method beats the d-fold query cost in the worst case over convex problems, so any claim that ZO pretrains efficiently must rest on structure (low effective dimension), not on a better estimator.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "yue-2023-zo-weak-dimension",
-    "title": "Zeroth-order Optimization with Weak Dimension Dependency",
-    "authors": "Pengyun Yue, Long Yang, Cong Fang, Zhouchen Lin",
-    "year": 2023,
-    "venue": "COLT 2023",
-    "url": "https://arxiv.org/abs/2307.05753",
-    "topics": ["strategy-gradient-free", "theory"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "yue-2023-zo-weak-dimension/1",
-        "claim": "Most zeroth-order complexity results depend linearly on the dimension, which would paralyse ZO in high dimension and cannot explain its practical success.",
-        "quote": "However, in theory, most complexity results assert a linear dependency on the dimension of optimization variable, which implies paralyzations of zeroth-order algorithms for high-dimensional problems and cannot explain their effectiveness in practice.",
-        "location": "abstract",
-        "quantities": [],
-        "grade": "theoretical",
-        "bears_on": "Confirms the standard ZO bound is linear in d; the practical success of ZO fine-tuning must come from structure that pretraining from scratch may lack.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "yue-2023-zo-weak-dimension/2",
-        "claim": "Replacing the dimension with an effective dimension (a Hessian-spectrum quantity) gives ZO complexity that is dimension-free for linear regression, a factor d better than the traditional result.",
-        "quote": "For linear regression, such a complexity is dimension-free and outperforms the traditional result by a factor of $d$ under common conditions.",
-        "location": "section 1 Introduction",
-        "quantities": [],
-        "grade": "theoretical",
-        "bears_on": "The optimistic case for the family: m ~ 1.5/ED (effective dimension) rather than 1.5/d; whether pretraining's effective dimension stays small as models grow is unmeasured.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "ren-2023-forward-gradient-local-losses",
-    "title": "Scaling Forward Gradient With Local Losses",
-    "authors": "Mengye Ren, Simon Kornblith, Renjie Liao, Geoffrey Hinton",
-    "year": 2023,
-    "venue": "ICLR 2023",
-    "url": "https://arxiv.org/abs/2210.03310",
-    "topics": ["strategy-gradient-free", "strategy-local", "theory"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "ren-2023-forward-gradient-local-losses/1",
-        "claim": "For both activity and weight perturbation, the variance of the forward-gradient estimate still grows with network size (Table 1: variance terms scale with fan-out q for activity and pq for weight perturbation).",
-        "quote": "However, for both activity and weight perturbation, the variance still grows with larger networks.",
-        "location": "section 3.4, Table 1",
-        "quantities": [],
-        "grade": "theoretical",
-        "bears_on": "Even the activity-perturbation form Dust uses has variance growing with width; Dust's flat size curve (dahal-2026-dust/5) is an empirical exception, not a theorem.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "ren-2023-forward-gradient-local-losses/2",
-        "claim": "Activity perturbation provably yields lower-variance gradient estimates than weight perturbation, by a factor of about Np (minibatch size times fan-in).",
-        "quote": "We prove that activity perturbation yields lower-variance gradient estimates than weight perturbation, and provide a continuous-time rate-based interpretation of our algorithm.",
-        "location": "section 1 Introduction; section 3.4",
-        "quantities": [],
-        "grade": "theoretical",
-        "bears_on": "Separates the family: weight-space (seed-described) perturbation pays an extra Np in variance over activity-space perturbation, whose update is not seed-described.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "ren-2023-forward-gradient-local-losses/3",
-        "claim": "With many local losses, forward gradient on ImageNet reaches top-1 test error 58.37% vs 36.82% (supervised) and 73.24% vs 55.66% (contrastive) for backprop, and the error due to greediness grows as problems get harder.",
-        "quote": "On ImageNet, we achieve reasonable performance compared to backprop (58.37% vs. 36.82% for supervised and 73.24% vs. 55.66% for contrastive).",
-        "location": "section 6 Conclusion",
-        "quantities": [
-          {"param": "other", "value": 21.55, "unit": "percentage points top-1 test error above backprop", "condition": "derived: 58.37% - 36.82%, ImageNet, supervised, local-greedy forward gradient with activity perturbation; downstream error at fixed epochs, not held-out loss at equal compute"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Forward gradient needs an architecture of many local losses to work at all, and still trails backprop by ~20 error points on ImageNet, with the gap widening with task depth.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "baydin-2022-forward-gradient",
-    "title": "Gradients without Backpropagation",
-    "authors": "At\u0131l\u0131m G\u00fcne\u015f Baydin, Barak A. Pearlmutter, Don Syme, Frank Wood, Philip Torr",
-    "year": 2022,
-    "venue": "arXiv preprint",
-    "url": "https://arxiv.org/abs/2202.08587",
-    "topics": ["strategy-gradient-free", "gradients"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "baydin-2022-forward-gradient/1",
-        "claim": "Forward gradient descent (one forward-mode directional derivative per step) trained small problems up to twice as fast in wall-clock in some cases.",
-        "quote": "We demonstrate forward gradient descent in a range of problems, showing substantial savings in computation and enabling training up to twice as fast in some cases.",
-        "location": "abstract",
-        "quantities": [
-          {"param": "other", "value": 2, "unit": "x wall-clock speedup (best case)", "condition": "logistic regression, MLPs and CNNs on MNIST; wall-clock time relative to backprop, not held-out loss at equal compute; flagged"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "The positive claim later work failed to scale: the per-step saving is real but the variance grows with dimension (ren-2023-forward-gradient-local-losses/1, flugel-2025-multi-tangent/1).",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "flugel-2025-multi-tangent",
-    "title": "Beyond Backpropagation: Optimization with Multi-Tangent Forward Gradients",
-    "authors": "Katharina Fl\u00fcgel, Daniel Coquelin, Marie Weiel, Charlotte Debus, Achim Streit, Markus G\u00f6tz",
-    "year": 2025,
-    "venue": "IJCNN 2025",
-    "url": "https://arxiv.org/abs/2410.17764",
-    "topics": ["strategy-gradient-free", "gradients"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "flugel-2025-multi-tangent/1",
-        "claim": "Even with multiple tangents combined by orthogonal projection, forward gradients leave a significant gap to the true gradient on MNIST and CIFAR10 classification with fully connected, residual and vision-transformer networks, larger on harder tasks.",
-        "quote": "Overall, a significant gap between the forward gradients and the true gradient remains, in particular for more complex tasks.",
-        "location": "section 5 Conclusion",
-        "quantities": [],
-        "grade": "measured-small",
-        "bears_on": "Adding directions linearly in compute does not close the forward-gradient gap at 1e7 parameters, consistent with a d-dependent variance.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "launay-2020-dfa-scales",
-    "title": "Direct Feedback Alignment Scales to Modern Deep Learning Tasks and Architectures",
-    "authors": "Julien Launay, Iacopo Poli, Fran\u00e7ois Boniface, Florent Krzakala",
-    "year": 2020,
-    "venue": "NeurIPS 2020",
-    "url": "https://arxiv.org/abs/2006.12878",
-    "topics": ["strategy-gradient-free", "strategy-local"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "launay-2020-dfa-scales/1",
-        "claim": "Direct feedback alignment trains a Transformer language model on WikiText-103 far better than a shallow baseline, but not on par with backprop: best validation perplexity 52.0 (macro) and 93.3 (micro) vs 29.8 for backprop after 20 epochs, sharing hyperparameters.",
-        "quote": "Considering that the perplexity of the shallow baseline is over 400, DFA is clearly able to train Transformers. However, our results are not on par with BP, especially in the micro setting.",
-        "location": "section 3.4; Table 7",
-        "quantities": [
-          {"param": "other", "value": 0.557, "unit": "nats validation loss above backprop", "condition": "derived: ln(52.0/29.8), best DFA macro vs backprop with beta2 = 0.999, 6-layer d512 Transformer, 8192 tokens per batch, 20 epochs of WikiText-103; BP and DFA share hyperparameters, DFA given extra optimizer tuning (Table 7)"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Backward-free credit assignment by fixed random feedback leaves a 0.56-nat gap on a small LM at equal epochs, which no equal-compute multiplier near 1 can absorb.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "launay-2020-dfa-scales/2",
-        "claim": "The authors state that substantial work remains to make DFA competitive with backprop, especially with minimal weight transport.",
-        "quote": "A substantial amount of work remains to make DFA competitive with BP, even more so in a minimal weight transport scenario.",
-        "location": "section 3.4",
-        "quantities": [],
-        "grade": "measured-small",
-        "bears_on": "Records a negative result for the backward-free credit-assignment family on language modelling.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "bartunov-2018-bio-scalability",
-    "title": "Assessing the Scalability of Biologically-Motivated Deep Learning Algorithms and Architectures",
-    "authors": "Sergey Bartunov, Adam Santoro, Blake A. Richards, Luke Marris, Geoffrey E. Hinton, Timothy Lillicrap",
-    "year": 2018,
-    "venue": "NeurIPS 2018",
-    "url": "https://arxiv.org/abs/1807.04587",
-    "topics": ["strategy-gradient-free", "strategy-local"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "bartunov-2018-bio-scalability/1",
-        "claim": "Target propagation and feedback alignment variants do well on MNIST but significantly worse than backprop on CIFAR and ImageNet, especially with locally connected layers.",
-        "quote": "Many of these algorithms perform well for MNIST, but for CIFAR and ImageNet we find that TP and FA variants perform significantly worse than BP, especially for networks composed of locally connected units, opening questions about whether new architectures and algorithms are required to scale these approaches.",
-        "location": "abstract",
-        "quantities": [],
-        "grade": "measured-small",
-        "bears_on": "The pattern for backward-free methods: parity on easy tasks, a gap that opens with task difficulty and scale; downstream accuracy, not loss at equal compute.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "hinton-2022-forward-forward",
-    "title": "The Forward-Forward Algorithm: Some Preliminary Investigations",
-    "authors": "Geoffrey Hinton",
-    "year": 2022,
-    "venue": "arXiv preprint",
-    "url": "https://arxiv.org/abs/2212.13345",
-    "topics": ["strategy-gradient-free", "strategy-local"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "hinton-2022-forward-forward/1",
-        "claim": "Perturbation (reinforcement-learning) learning has variance that forces a learning rate inversely proportional to the number of perturbed variables, so it scales badly and cannot compete with backprop on networks of millions or billions of parameters.",
-        "quote": "But reinforcement learning procedures suffer from high variance: it is hard to see the effect of perturbing one variable when many other variables are being perturbed at the same time. To average away the noise caused by all the other perturbations, the learning rate needs to be inversely proportional to the number of variables that are being perturbed and this means that reinforcement learning scales badly and cannot compete with backpropagation for large networks containing many millions or billions of parameters",
-        "location": "section 1",
-        "quantities": [],
-        "grade": "theoretical",
-        "bears_on": "The informal form of the d-linear law: learning rate ~ 1/(perturbed variables), so steps grow with parameter count and m ~ 1/d at fixed per-step cost.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "ramanujan-2020-hidden-random",
-    "title": "What's Hidden in a Randomly Weighted Neural Network?",
-    "authors": "Vivek Ramanujan, Mitchell Wortsman, Aniruddha Kembhavi, Ali Farhadi, Mohammad Rastegari",
-    "year": 2020,
-    "venue": "CVPR 2020",
-    "url": "https://arxiv.org/abs/1911.13299",
-    "topics": ["strategy-gradient-free", "weights"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "ramanujan-2020-hidden-random/1",
-        "claim": "A subnetwork found by learning a mask over a randomly weighted Wide ResNet-50, with the weights never trained, matches a trained ResNet-34 on ImageNet.",
-        "quote": "Hidden in a randomly weighted Wide ResNet-50 [32] we find a subnetwork (with random weights) that is smaller than, but matches the performance of a ResNet-34 [9] trained on ImageNet [4].",
-        "location": "abstract",
-        "quantities": [
-          {"param": "other", "value": 1, "unit": "bit per random weight (mask)", "condition": "derived: edge-popup learns a binary keep/drop mask over seeded random weights; the mask is found with straight-through backprop scores, not gradient-free"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "A random network plus a 1-bit-per-weight mask reaches trained quality at a larger width; the mask is cheap to state but is found by backprop and costs a full model's compute per step.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "frankle-2021-batchnorm-only",
-    "title": "Training BatchNorm and Only BatchNorm: On the Expressive Power of Random Features in CNNs",
-    "authors": "Jonathan Frankle, David J. Schwab, Ari S. Morcos",
-    "year": 2021,
-    "venue": "ICLR 2021",
-    "url": "https://arxiv.org/abs/2003.00152",
-    "topics": ["strategy-gradient-free", "updates"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "frankle-2021-batchnorm-only/1",
-        "claim": "Training only the BatchNorm affine parameters (at most 0.6% of parameters) of a randomly initialized deep ResNet reaches 82% on CIFAR-10 and 32% top-5 on ImageNet.",
-        "quote": "For example, sufficiently deep ResNets reach 82% (CIFAR-10) and 32% (ImageNet, top-5) accuracy in this configuration, far higher than when training an equivalent number of randomly chosen parameters elsewhere in the network.",
-        "location": "abstract",
-        "quantities": [
-          {"param": "update.fraction_changed", "value": 0.006, "unit": "fraction", "condition": "at most 0.6% of parameters (BatchNorm gamma and beta) trainable, ResNet up to ResNet-866 on CIFAR-10 and ResNet-200 on ImageNet, all other weights frozen at random init"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Training a tiny cheaply described part of a random network goes some way (82% CIFAR-10) but far from trained quality on ImageNet (32% top-5 vs ~93%): the small-part route caps capability.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "frankle-2021-batchnorm-only/2",
-        "claim": "Training an equal number of randomly chosen parameters per channel does far worse than training BatchNorm (56% on CIFAR-10, 4% top-5 on ImageNet): which small part is trained matters.",
-        "quote": "Training an equivalent number of randomly-selected parameters per channel performs far worse (56% on CIFAR-10 and 4% top-5 on ImageNet).",
-        "location": "section 1 Introduction, contributions",
-        "quantities": [
-          {"param": "other", "value": 4, "unit": "% ImageNet top-5 accuracy", "condition": "random per-channel parameters, same count as BatchNorm gamma and beta, rest frozen at random init"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "A random small subset is nearly useless; the useful small part is per-feature scales, which a seed cannot choose for you.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "zhong-2024-random-transformers",
-    "title": "Algorithmic Capabilities of Random Transformers",
-    "authors": "Ziqian Zhong, Jacob Andreas",
-    "year": 2024,
-    "venue": "NeurIPS 2024",
-    "url": "https://arxiv.org/abs/2410.04368",
-    "topics": ["strategy-gradient-free", "updates"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "zhong-2024-random-transformers/1",
-        "claim": "A transformer with random frozen internal weights and only its embedding layers trained (width 512, ~10M trainable parameters) reaches TinyStories cross-entropy 2.64, about a fully trained width-32 model (~0.7M parameters); fully trained models reach 1.35.",
-        "quote": "Our trained random transformer with 512 width and ~10M trainable parameters achieved a cross-entropy loss of 2.64, roughly on par with the fully trained ones with 32 width and only ~0.7M trainable parameters.",
-        "location": "section 5.2 Language Modeling",
-        "quantities": [
-          {"param": "other", "value": 1.29, "unit": "nats cross-entropy above fully trained", "condition": "derived: 2.64 (random transformer, width 512, only embedding layers trained) vs 1.35 (fully trained), TinyStories"},
-          {"param": "other", "value": 14, "unit": "x trainable parameters for the same loss", "condition": "derived: ~10M trainable in the random width-512 model vs ~0.7M in the fully trained width-32 model at about the same loss"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Training only the embeddings of a random transformer buys a small fully trained model's quality at 14x the trainable parameters and far more compute: m << 0.1 for the embedding-only route on language modelling.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "zhong-2024-random-transformers/2",
-        "claim": "Random transformers need comparatively large hidden sizes to match fully trained ones on language modelling.",
-        "quote": "Comparatively large hidden sizes are needed for random models to match the performance of fully trained models.",
-        "location": "Figure 4 caption",
-        "quantities": [],
-        "grade": "measured-small",
-        "bears_on": "The width overhead of frozen-random networks is large for language, not the logarithmic overhead lottery-ticket theory allows.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "shen-2021-reservoir-transformers",
-    "title": "Reservoir Transformers",
-    "authors": "Sheng Shen, Alexei Baevski, Ari S. Morcos, Kurt Keutzer, Michael Auli, Douwe Kiela",
-    "year": 2021,
-    "venue": "ACL 2021",
-    "url": "https://arxiv.org/abs/2012.15045",
-    "topics": ["strategy-gradient-free", "updates"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "shen-2021-reservoir-transformers/1",
-        "claim": "RoBERTa models pretrained from scratch with some layers frozen at random initialization (reservoir layers, alternating with trained layers in the middle of the stack) reach similar perplexity at similar compute, with better downstream performance.",
-        "quote": "These findings suggest that we can train a RoBERTa model without updating all of the layers, achieving similar perplexity at a similar computational cost, but with better downstream performance.",
-        "location": "section 4.3 Masked Language Model Pretraining; Appendix D",
-        "quantities": [],
-        "grade": "measured-small",
-        "bears_on": "Interleaving a minority of seeded random layers costs about nothing in pretraining perplexity (compared by wall-clock AUCC, not FLOPs): a random part is free, but the majority is still trained by backprop, so the trained fraction stays most of the model.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "pensia-2020-subsetsum-lottery",
-    "title": "Optimal Lottery Tickets via SubsetSum: Logarithmic Over-Parameterization is Sufficient",
-    "authors": "Ankit Pensia, Shashank Rajput, Alliot Nagle, Harit Vishwakarma, Dimitris Papailiopoulos",
-    "year": 2020,
-    "venue": "NeurIPS 2020",
-    "url": "https://arxiv.org/abs/2006.07990",
-    "topics": ["strategy-gradient-free", "theory", "weights"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "pensia-2020-subsetsum-lottery/1",
-        "claim": "Any target network of width d and depth l can be approximated by pruning a random network a factor O(log(dl)) wider and twice as deep, and this overhead is essentially optimal for constant depth.",
-        "quote": "We show that any target network of width $d$ and depth $l$ can be approximated by pruning a random network that is a factor $O(\\log(dl))$ wider and twice as deep.",
-        "location": "abstract",
-        "quantities": [],
-        "grade": "theoretical",
-        "bears_on": "Existence only: a seeded random network plus a 1-bit mask can express any trained network at a log-width overhead, but nothing says the mask is found without backprop or at backprop's cost.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "nooralinejad-2023-pranc",
-    "title": "PRANC: Pseudo RAndom Networks for Compacting deep models",
-    "authors": "Parsa Nooralinejad, Ali Abbasi, Soroush Abbasi Koohpayegani, Kossar Pourahmadi Meibodi, Rana Muhammad Shahroz Khan, Soheil Kolouri, Hamed Pirsiavash",
-    "year": 2023,
-    "venue": "ICCV 2023",
-    "url": "https://arxiv.org/abs/2206.08464",
-    "topics": ["strategy-gradient-free", "seed-based", "weights"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "nooralinejad-2023-pranc/1",
-        "claim": "Describing a ResNet-18 as a learned linear combination of seeded pseudo-random networks, with under 1% of its parameters as coefficients, reaches 61.08% on ImageNet-100 vs 82.1% for the full model (Table 1: ResNet-20 on CIFAR-10, 10,000 coefficients 81.48% vs 88.92% for 269,722 parameters).",
-        "quote": "Our method achieves 61.08% accuracy with less than 1% parameters, while the standard ResNet-18 model achieves 82.1% accuracy with more than 11M parameters.",
-        "location": "section 1 Introduction; Table 1",
-        "quantities": [
-          {"param": "update.bits_total", "value": 320000, "unit": "bits", "condition": "derived: 10,000 float32 coefficients over seeded random basis networks, ResNet-20 on CIFAR-10, 81.48% vs 88.92% full model; coefficients learned by backprop"},
-          {"param": "other", "value": 21, "unit": "accuracy points below full model", "condition": "derived: 82.1% - 61.08%, ResNet-18 on ImageNet-100, <1% of parameters as coefficients"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "A whole model described by a seed plus ~3e5 bits loses 7-21 accuracy points on small vision tasks, and the coefficients are fit by backprop through every basis network.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "ha-2017-hypernetworks",
-    "title": "HyperNetworks",
-    "authors": "David Ha, Andrew Dai, Quoc V. Le",
-    "year": 2017,
-    "venue": "ICLR 2017",
-    "url": "https://arxiv.org/abs/1609.09106",
-    "topics": ["strategy-gradient-free", "weights"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "ha-2017-hypernetworks/1",
-        "claim": "Generating a residual network's weights from a small hypernetwork (relaxed weight sharing) costs about 1.25-1.5% accuracy on CIFAR-10 at far fewer parameters, with the main network's compute unchanged.",
-        "quote": "enforcing a relaxed weight sharing constraint to the deep residual network cost us \u223c 1.25-1.5% in classification accuracy",
-        "location": "section 5.2, Table 2",
-        "quantities": [
-          {"param": "other", "value": 15, "unit": "x fewer parameters", "condition": "derived: Hyper Residual Network 40-2 0.148M vs Wide ResNet 40-2 2.236M parameters, CIFAR-10 (Table 2); hypernetwork trained by backprop through the main network"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "A cheaply described generator of weights keeps most quality on CIFAR-10, but saves parameters, not training compute: every step still runs and backpropagates the full network.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "gressmann-2020-random-bases",
-    "title": "Improving Neural Network Training in Low Dimensional Random Bases",
-    "authors": "Frithjof Gressmann, Zach Eaton-Rosen, Carlo Luschi",
-    "year": 2020,
-    "venue": "NeurIPS 2020",
-    "url": "https://arxiv.org/abs/2011.04720",
-    "topics": ["strategy-gradient-free", "updates", "seed-based"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "gressmann-2020-random-bases/1",
-        "claim": "Training in a 400x smaller random subspace re-drawn each step nearly matches full SGD on MNIST but reaches only 78% of SGD's accuracy on CIFAR-10, and training longer does not close the gap.",
-        "quote": "While training in the $400\\times$ smaller subspace can almost match full-dimensional SGD on MNIST, it only reaches 78% of the SGD\u2019s baseline on the harder CIFAR-10 classification task.",
-        "location": "section 4",
-        "quantities": [
-          {"param": "other", "value": 0.78, "unit": "fraction of SGD baseline accuracy", "condition": "random-bases descent in a 400x smaller subspace, CIFAR-10 CNN; gradients projected by backprop, not zeroth-order"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Seed-described subspace updates lose accuracy that more steps do not recover, even with exact projected gradients; a zeroth-order estimator only adds variance.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "gressmann-2020-random-bases/2",
-        "claim": "Black-box evolution strategies at the same subspace dimensionality do far worse than random-bases descent with exact projected gradients.",
-        "quote": "Black-box optimization using evolution strategies for the same dimensionality leads to far inferior optimization outcomes (NES).",
-        "location": "section 4",
-        "quantities": [],
-        "grade": "measured-small",
-        "bears_on": "At equal update description (same seeded subspace), zeroth-order estimation is far worse than the projected gradient: the seed-described update is cheap only if someone computes the gradient.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "larsen-2022-degrees-of-freedom",
-    "title": "How many degrees of freedom do we need to train deep networks: a loss landscape perspective",
-    "authors": "Brett W. Larsen, Stanislav Fort, Nic Becker, Surya Ganguli",
-    "year": 2022,
-    "venue": "ICLR 2022",
-    "url": "https://arxiv.org/abs/2107.05802",
-    "topics": ["strategy-gradient-free", "updates", "theory"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "larsen-2022-degrees-of-freedom/1",
-        "claim": "The number of random subspace dimensions needed to reach a target loss (threshold training dimension) rises as the target loss falls and falls as the initial loss falls.",
-        "quote": "This threshold training dimension increases as the desired final loss decreases, but decreases as the initial loss decreases.",
-        "location": "abstract",
-        "quantities": [],
-        "grade": "measured-small",
-        "bears_on": "Why small-subspace training is cheap for fine-tuning but not for pretraining: from a random init (high initial loss) to a low target loss, the needed dimension, and so the ZO cost, is largest.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "gan-2026-neural-thickets",
-    "title": "Neural Thickets: Diverse Task Experts Are Dense Around Pretrained Weights",
-    "authors": "Yulu Gan, Phillip Isola",
-    "year": 2026,
-    "venue": "arXiv preprint",
-    "url": "https://arxiv.org/abs/2603.12228",
-    "topics": ["strategy-gradient-free", "seed-based", "rl-scaling"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "gan-2026-neural-thickets/1",
-        "claim": "Untrained models have a tiny density of good solutions near their initial weights, so finding one needs structured multi-step search such as gradient descent; pretrained models are surrounded by dense task experts.",
-        "quote": "Untrained models have a tiny density of solutions near their initial weights; they live in a needle in a haystack regime, where finding the solution requires structured multi-step search, such as gradient descent.",
-        "location": "section 1 Introduction",
-        "quantities": [],
-        "grade": "measured-small",
-        "bears_on": "Random-guess and seed-search methods work after pretraining because pretraining made solutions dense; from scratch they face a needle in a haystack, so post-training ES results do not transfer to pretraining.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "gan-2026-neural-thickets/2",
-        "claim": "Pure random guessing around pretrained weights plus ensembling (RandOpt) is competitive with PPO, GRPO and ES at equal post-training FLOPs on 0.5B-8B models.",
-        "quote": "RandOpt achieves accuracy competitive with PPO, GRPO, and ES under the same post-training flops.",
-        "location": "section 1 Introduction",
-        "quantities": [],
-        "grade": "measured-at-scale",
-        "bears_on": "Seed-described post-training at scale can match RL per FLOP, which is the NCI soft spot, but the evidence is post-training accuracy, not pretraining loss.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  },
-  {
-    "id": "raen-2026-which-layers-bp",
-    "title": "Which Layers Need Backpropagation? Position-Dependent Partial Training for Memory-Efficient LLM Pretraining",
-    "authors": "Raen2264",
-    "year": 2026,
-    "venue": "Zenodo preprint",
-    "url": "https://zenodo.org/records/20392068",
-    "topics": ["strategy-gradient-free", "strategy-local", "updates"],
-    "verified": "fetched",
-    "findings": [
-      {
-        "id": "raen-2026-which-layers-bp/1",
-        "claim": "In Llama-1B pretraining from scratch with backprop on a sliding window of layers, updating the other layers by zeroth-order perturbation adds at most ~4 perplexity over simply freezing them at random init.",
-        "quote": "The non-BP layers can be frozen entirely: zeroth-order perturbation contributes at most ~4 PPL beyond freezing.",
-        "location": "abstract (v2)",
-        "quantities": [],
-        "grade": "measured-small",
-        "bears_on": "A direct test of hybrid backprop plus ZO pretraining at 1B parameters: the ZO part contributes almost nothing, so its compute is wasted; single anonymous preprint, short horizons.",
-        "from_review": "strategy-gradient-free"
-      },
-      {
-        "id": "raen-2026-which-layers-bp/2",
-        "claim": "Partial backprop with frozen random layers beats full backprop (perplexity 35.2 vs 39.0) only at short horizons; the crossover between methods lies between 25M and 50M tokens for Llama-1B, about 0.1-0.25% of Chinchilla-optimal tokens.",
-        "quote": "A fine-grained sweep locates the crossover between 25M and 50M tokens on a single dataset, ruling out a dataset confound.",
-        "location": "abstract (v2)",
-        "quantities": [
-          {"param": "other", "value": 50000000, "unit": "tokens (upper end of crossover)", "condition": "Llama-1B from scratch; Chinchilla-optimal would be ~2e10 tokens, so the frozen-partial advantage is confined to the first ~0.25% of a compute-optimal run"}
-        ],
-        "grade": "measured-small",
-        "bears_on": "Frozen-random partial training wins only very early; past the crossover full backprop leads, so it gives no multiplier above 1 at compute-optimal budgets.",
-        "from_review": "strategy-gradient-free"
-      }
-    ]
-  }
+ {
+  "id": "dahal-2026-dust",
+  "title": "Dust: Pretraining Transformers Without Backpropagation",
+  "authors": "Samip Dahal, Bishwas Mandal, Serdar Gülbahar, Akshay Vegesna",
+  "year": 2026,
+  "venue": "Q Labs research report",
+  "url": "https://qlabs.sh/research/dust/",
+  "topics": [
+   "strategy-gradient-free",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dahal-2026-dust/1",
+    "claim": "At the two smallest token budgets (100k and 1M tokens) on a 37.7M-parameter transformer, Dust node perturbation ends at lower test loss than backprop tuned at every budget, from a few hundred to a thousand draws per update.",
+    "quote": "At 100k and 1M tokens Dust ends below backprop, from a few hundred draws at 100k and from a thousand at 1M. At 10M and 20M tokens, the gap with backprop shrinks with population.",
+    "location": "section 3.2 Main Results; Appendix C Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 5.934,
+      "unit": "nats test loss",
+      "condition": "Dust at 1,024 draws per update, 37.7M parameters (8 blocks, width 512), FineWeb, 4096-token BPE, 1M tokens, SGD with momentum, 3 seeds; backprop tuned on the same grid reaches 5.959 (Appendix C Table 1)"
+     },
+     {
+      "param": "other",
+      "value": 0.0036,
+      "unit": "compute multiplier m vs backprop",
+      "condition": "derived: equal tokens at slightly lower loss; backprop ~3 forward-equivalents per token vs Dust ~0.81 x 1,024 draw-forwards per token (dahal-2026-dust/4), so m ~ 3/830; an upper bound against a compute-optimal reference, since a 37.7M model at 1M tokens is far from Chinchilla-optimal"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The best published zeroth-order pretraining result: at tiny budgets a forward-only method matches tuned backprop per token, but at a few hundred times backprop's FLOPs per token, so m is ~1e-2 to 4e-3 even where it wins.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "dahal-2026-dust/2",
+    "claim": "At 20M tokens, the largest budget, Dust at 16k draws stays 0.17 nats above tuned backprop; the power-law limit in population falls below backprop, but the authors read it only as the gap closing, not as a measured limit.",
+    "quote": "At 20M the ladder is still falling at 16k draws. Its power law fit puts the limit at 4.431 (95% interval 3.89 to 4.58), below backprop’s 4.633, but with the ladder still falling the fit is loosely constrained, so we read it as evidence that the gap keeps closing with population rather than as a measured limit.",
+    "location": "section 3.2 Main Results; Appendix C Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.169,
+      "unit": "nats test loss above backprop",
+      "condition": "derived: Dust 16,384 draws 4.802 vs tuned backprop 4.633 at 20M tokens, 37.7M parameters (Appendix C Table 1)"
+     },
+     {
+      "param": "other",
+      "value": 0.00023,
+      "unit": "compute multiplier m vs backprop (upper bound)",
+      "condition": "derived: Dust ~0.81 x 16,384 ~ 13,300 forward-equivalents per token vs ~3 for backprop, at higher loss than backprop at the same 20M tokens, so m < 3/13,300; Dust run ~2e19 FLOP (2 x 37.7e6 x 2e7 x 13,300) vs backprop ~4.5e15 FLOP"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "At the largest budget measured, the forward-only method is still behind at four thousand times backprop's FLOPs per token: m < 2.3e-4, and the reference is itself undertrained (Chinchilla would want ~750M tokens for 37.7M parameters).",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "dahal-2026-dust/3",
+    "claim": "The authors conclude Dust needs orders of magnitude more compute efficiency before it is a practical alternative to backprop at current levels of compute.",
+    "quote": "We must have orders of magnitude more compute efficiency before Dust becomes a practical alternative to backprop at current levels of compute.",
+    "location": "section 5 Conclusion",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The strongest positive zeroth-order pretraining paper itself puts the family orders of magnitude from parity: m << 1 at today's scales.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "dahal-2026-dust/4",
+    "claim": "A Dust draw costs a little less than a forward pass, because the clean forward is cached and a draw reruns only from the jittered block on; by the Appendix E allocation a draw costs about 0.81 forward passes, so an update with population K costs about 0.8K forward passes against about 3 for a backprop step.",
+    "quote": "A draw is slightly cheaper than a forward pass, because the clean forward is cached and a draw that jitters block $l$ reruns only the blocks from $l$ on.",
+    "location": "section 3.1 Setup; Appendix E Tables 3 and 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.81,
+      "unit": "forward passes per draw",
+      "condition": "derived: Appendix E at K = 16,384 and 1M tokens: writer-pair and MLP draws 7,040 each over blocks 1-8 (2432, 2048, 1024, 640, 384, 256, 128, 128), attention-output draws 1,664 (384, 384, 256, 128 x 5), token-embedding draws 640 rerunning the whole network; a block-l draw costs (9 - l)/8 of a forward; cheap head-slab and attention-internal draws ignored"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Gives the FLOPs per token per parameter of node perturbation, ~1.6K + 2 (2 per forward x 0.81K draws plus the clean forward), and its activation crossings, ~0.8K forward reruns per update, both linear in population.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "dahal-2026-dust/5",
+    "claim": "At a fixed 10M tokens and 16k draws, Dust's gap to backprop grows only slightly with model size, from -0.009 nats at 2.0M parameters to +0.038 nats at 243M (a 120x range); the size study predates the main tuning protocol.",
+    "quote": "What we observe, however, is that the gap to backprop at the same population and model size increases with model size, but barely noticeable, esp at large population sizes.",
+    "location": "section 4.1 Overparameterization, Figure 4 table",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.038,
+      "unit": "nats test loss above backprop",
+      "condition": "Figure 4 table, 10M tokens, 16,384 draws: 243M parameters (L16/d1024) Dust 5.086 vs backprop 5.048; at 2.0M 5.171 vs 5.180, 7.3M 5.065 vs 5.066, 38M 5.036 vs 5.015; learning rate and momentum selected per size and population (Appendix F)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The only measurement of how a perturbative method's gap to backprop moves with parameter count at fixed population: weakly upward over 2M-243M, far flatter than the d-linear variance argument predicts, but at 10M tokens only.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "dahal-2026-dust/6",
+    "claim": "Weight-space ES (a transformer implementation of EGGROLL) with 256 times the population still does not reach Dust at 64 draws; it stays 0.4-0.6 nats above Dust-64 from 1M tokens up, and 1.23 nats above tuned backprop at 20M tokens.",
+    "quote": "With 256 times the population, EGGROLL at 16k still does not reach Dust at 64 draws. It comes within 0.02 at 100k tokens and stays 0.4 to 0.6 above at 1M, 10M and 20M (Figure 2).",
+    "location": "section 3.2 Main Results; Appendix C Table 1; Appendix D Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.232,
+      "unit": "nats test loss above backprop",
+      "condition": "derived: EGGROLL-Transformer at 16,384 forward passes per update 5.865 vs tuned backprop 4.633 at 20M tokens, 37.7M parameters (Appendix C Table 1); EGGROLL tuned over its own grid"
+     },
+     {
+      "param": "other",
+      "value": 3000,
+      "unit": "x the 64-draw population (low end)",
+      "condition": "Appendix D Table 2: population EGGROLL would need to match Dust at 64 draws, 3,000x to 23,000x of 64 across fits at 1M-20M tokens; extrapolated"
+     },
+     {
+      "param": "other",
+      "value": 1.1e-05,
+      "unit": "compute multiplier m vs backprop",
+      "condition": "derived: EGGROLL 16,384 forward passes per token reaches 5.865 at 20M tokens; tuned backprop reaches it at ~1.25M tokens (log-linear interpolation between its 1M and 10M losses), so m ~ (1.25e6 x 3)/(2e7 x 16,384); 4.6e-5 at 1M and 1.6e-5 at 10M tokens; ~2.5e19 FLOP"
+     },
+     {
+      "param": "other",
+      "value": 0.00036,
+      "unit": "compute multiplier m vs backprop",
+      "condition": "derived: EGGROLL at 64 forward passes per token, the cheapest cell, reaches 6.987 at 20M tokens; backprop reaches it at ~1.5e5 tokens by log-linear interpolation, so m ~ (1.5e5 x 3)/(2e7 x 64); 6.3e-4 at 10M tokens"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Seed-described weight-space ES, the form whose update is cheap to describe under NCI, is the least compute-efficient pretrainer measured: over a nat behind backprop at 16k forward passes per update on a 37.7M model.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "dahal-2026-dust/7",
+    "claim": "EGGROLL's gradient estimate has cosine below 0.05 with backprop's at 128k forward passes for every layer type but the head, measured the same way as Dust's.",
+    "quote": "EGGROLL’s estimate, measured the same way at the same number of forward passes, is growing with population but is still below 0.05 in cosine at 128k for every type but the head",
+    "location": "section 4.2 Emergence of Backprop-Like Gradients",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.05,
+      "unit": "cosine with backprop gradient (upper bound)",
+      "condition": "EGGROLL-Transformer, 131,072 forward passes per estimate, 37.7M parameters, every layer type except the LM head"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Explains the weight-space ES gap mechanistically: at 1e5 forward passes per step its estimate is still nearly orthogonal to the gradient on a 3.8e7-parameter model.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "dahal-2026-dust/8",
+    "claim": "Dust's weight update is the outer product of a population-estimated output error with the layer's input, summed over tokens, the same form as backprop's weight gradient; it is dense and depends on the per-token rewards and activations.",
+    "quote": "The reward-weighted noise, averaged over draws, is the estimated error at the layer’s output, and its outer product with the layer’s input is the weight gradient.",
+    "location": "section 2.1 Activation-Space Perturbation",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 1,
+      "unit": "fraction",
+      "condition": "derived: dense outer product of estimated output error and layer input summed over a 16k-token batch"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Dust is not seed-described: its update is fixed only by the seeds plus K x T per-token loss changes (~2.7e8 scalars per update at K = 16,384 and 16k tokens), so the one perturbative method near backprop gives up the cheap update description.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "dahal-2026-dust/9",
+    "claim": "Table 1 gives every token budget and population against backprop tuned at each budget; per FLOP, the smallest population (64 draws, ~51 forward-equivalents per token) is Dust's most compute-efficient cell, and its multiplier falls as the budget grows.",
+    "quote": "Population is draws rewarded with token losses for Dust and forward passes of the batch for EGGROLL (Section 3.1). Backprop is tuned on the same grid at every budget.",
+    "location": "Appendix C Table 1 caption and cells",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.032,
+      "unit": "compute multiplier m vs backprop",
+      "condition": "derived: Dust 64 draws reaches 6.290 at 1M tokens; backprop reaches it at ~5.5e5 tokens (log-linear interpolation of its tuned 100k and 1M losses); Dust ~51 forward-equivalents per token at 64 draws (Appendix E 64-draw recipe: 48.5 for rerun draws, plus clean forward and outer product) vs 3 for backprop"
+     },
+     {
+      "param": "other",
+      "value": 0.022,
+      "unit": "compute multiplier m vs backprop",
+      "condition": "derived: Dust 64 draws 5.397 at 10M tokens; backprop reaches it at ~3.8e6 tokens; same costs"
+     },
+     {
+      "param": "other",
+      "value": 0.015,
+      "unit": "compute multiplier m vs backprop",
+      "condition": "derived: Dust 64 draws 5.265 at 20M tokens; backprop reaches it at ~5.2e6 tokens; ~7.7e16 FLOP for Dust (2 x 37.7e6 x 2e7 x 51); at 1,024 draws m ~ 1.9e-3 and at 16,384 draws ~ 1.6e-4 at the same budget; all upper bounds against a compute-optimal AdamW reference, since backprop here is SGD with momentum on a 37.7M model far below Chinchilla tokens"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The best measured compute multiplier of any gradient-free pretrainer: m ~ 3e-2 at 1M tokens falling to ~1.5e-2 at 20M, at populations where the method is far behind backprop per token; it is not a parity result.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "chaubard-2026-soma",
+  "title": "Scaling Zero-Order Pretraining through Model Sharding",
+  "authors": "Francois Chaubard, Mykel J. Kochenderfer, Chris Ré",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2609.37899",
+  "topics": [
+   "strategy-gradient-free",
+   "seed-based",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "chaubard-2026-soma/1",
+    "claim": "On ~8.44M-parameter byte-level LSTM models, backprop through time reaches lower ensemble validation loss than SOMA zero-order training at every tested budget: 1.01 vs 2.03 nats/byte at 100 GPU-hours for one expert.",
+    "quote": "The measured ZO improvements do not establish an advantage over backpropagation. BPTT reaches lower ensemble validation loss at every tested budget in Table 5.",
+    "location": "Appendix O Limitations; Appendix I Table 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.0343,
+      "unit": "nats/byte validation loss",
+      "condition": "SOMA N = 1 at 100 aggregate GPU-hours, ~8.44M parameters; BPTT 1.0091 (last checkpoint, 97.3 GPU-hours); at 50 GPU-hours 2.1237 vs 1.0198; hardware and training recipes differ (Table 5)"
+     },
+     {
+      "param": "other",
+      "value": 0.33,
+      "unit": "compute multiplier m vs backprop (loose upper bound)",
+      "condition": "derived: BPTT at 50 GPU-hours (1.02) is already far below the best ZO result, SOMA N = 2 at ~150 GPU-hours (1.76), so m < 50/150; the true m is much smaller"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A 2026 zero-order pretraining paper with 80,000 GPU-hours of runs finds no budget where ZO beats backprop; the loss gap (~1 nat/byte) is too large to price as a modest multiplier.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "chaubard-2026-soma/2",
+    "claim": "With M jointly perturbed parameters, the relative variance of a zeroth-order gradient estimate scales as M/n_pert, so holding the error fixed needs n_pert proportional to M, and compute per global step grows as M squared.",
+    "quote": "With $M$ jointly perturbed parameters, leading relative gradient variance scales as $M/n_{\\rm pert}$ (Nesterov & Spokoiny, 2017). Controlling that error requires a compute budget of $n_{\\rm pert}\\propto M$.",
+    "location": "section 1 Introduction",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The dimension law behind the family: perturbations per step proportional to parameters, so m at fixed estimate quality falls as 1/M (1e-9 to 1e-12 at 1e9-1e12 parameters, extrapolated) unless the effective dimension is far below M.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "chaubard-2026-soma/3",
+    "claim": "Sharding the model into independently trained experts improves ZO compute efficiency over all tested monolithic ZO controls: at ~150 GPU-hours SOMA N = 2 reaches 1.76 test nats/byte vs 2.00-2.11 for SPSA at 64-1,024 perturbations and 2.21 for EGGROLL.",
+    "quote": "Modest sharding improves training compute efficiency over all tested monolithic ZO controls.",
+    "location": "abstract; Figure 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.76,
+      "unit": "nats/byte test loss",
+      "condition": "SOMA N = 2, 64 perturbations, ~8.44M parameters, ~150 aggregate GPU-hours (RTX 5090), FineWeb-Edu; monolithic SPSA 2.00-2.11 at 64, 256 or 1,024 perturbations; EGGROLL reproduction 2.21"
+     },
+     {
+      "param": "other",
+      "value": 2.21,
+      "unit": "nats/byte test loss",
+      "condition": "EGGROLL reproduction (FP32, GRU-based recipe) at ~150 aggregate GPU-hours, ~8.44M parameters"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Reducing the jointly perturbed dimension is the lever that helps ZO, consistent with the M/n_pert law; raising n_pert 16x in a monolith did not close the gap.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "duchi-2015-two-point-zo",
+  "title": "Optimal rates for zero-order convex optimization: the power of two function evaluations",
+  "authors": "John C. Duchi, Michael I. Jordan, Martin J. Wainwright, Andre Wibisono",
+  "year": 2015,
+  "venue": "IEEE Transactions on Information Theory",
+  "url": "https://arxiv.org/abs/1312.2139",
+  "topics": [
+   "strategy-gradient-free",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "duchi-2015-two-point-zo/1",
+    "claim": "With pairs of function values, random-perturbation gradient estimates in d dimensions lose at most a factor sqrt(d) in convergence rate against stochastic gradient methods, i.e. about d times more queries for the same accuracy.",
+    "quote": "we show that if pairs of function values are available, algorithms for $d$-dimensional optimization that use gradient estimates based on random perturbations suffer a factor of at most $\\sqrt{d}$ in convergence rate over traditional stochastic gradient methods.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1000000000,
+      "unit": "x more two-point queries than SGD steps (worst case)",
+      "condition": "derived: a sqrt(d) factor in the 1/sqrt(T) rate means ~d times more iterations; d = 1e9 parameters; extrapolation from convex stochastic optimization"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "The worst-case dimension price of seed-described two-point updates: m ~ (backprop cost ~3 forwards) / (d x 2 forwards) ~ 1.5/d, i.e. 1.5e-9 at 1e9 and 1.5e-12 at 1e12 parameters (extrapolated).",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "duchi-2015-two-point-zo/2",
+    "claim": "Matching information-theoretic lower bounds show the sqrt(d) factor is sharp up to constant (sometimes logarithmic) factors.",
+    "quote": "establishing the sharpness of our achievable results up to constant (sometimes logarithmic) factors.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "No zeroth-order method beats the d-fold query cost in the worst case over convex problems, so any claim that ZO pretrains efficiently must rest on structure (low effective dimension), not on a better estimator.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "yue-2023-zo-weak-dimension",
+  "title": "Zeroth-order Optimization with Weak Dimension Dependency",
+  "authors": "Pengyun Yue, Long Yang, Cong Fang, Zhouchen Lin",
+  "year": 2023,
+  "venue": "COLT 2023",
+  "url": "https://arxiv.org/abs/2307.05753",
+  "topics": [
+   "strategy-gradient-free",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yue-2023-zo-weak-dimension/1",
+    "claim": "Most zeroth-order complexity results depend linearly on the dimension, which would paralyse ZO in high dimension and cannot explain its practical success.",
+    "quote": "However, in theory, most complexity results assert a linear dependency on the dimension of optimization variable, which implies paralyzations of zeroth-order algorithms for high-dimensional problems and cannot explain their effectiveness in practice.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Confirms the standard ZO bound is linear in d; the practical success of ZO fine-tuning must come from structure that pretraining from scratch may lack.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "yue-2023-zo-weak-dimension/2",
+    "claim": "Replacing the dimension with an effective dimension (a Hessian-spectrum quantity) gives ZO complexity that is dimension-free for linear regression, a factor d better than the traditional result.",
+    "quote": "For linear regression, such a complexity is dimension-free and outperforms the traditional result by a factor of $d$ under common conditions.",
+    "location": "section 1 Introduction",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The optimistic case for the family: m ~ 1.5/ED (effective dimension) rather than 1.5/d; whether pretraining's effective dimension stays small as models grow is unmeasured.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "ren-2023-forward-gradient-local-losses",
+  "title": "Scaling Forward Gradient With Local Losses",
+  "authors": "Mengye Ren, Simon Kornblith, Renjie Liao, Geoffrey Hinton",
+  "year": 2023,
+  "venue": "ICLR 2023",
+  "url": "https://arxiv.org/abs/2210.03310",
+  "topics": [
+   "strategy-gradient-free",
+   "strategy-local",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ren-2023-forward-gradient-local-losses/1",
+    "claim": "For both activity and weight perturbation, the variance of the forward-gradient estimate still grows with network size (Table 1: variance terms scale with fan-out q for activity and pq for weight perturbation).",
+    "quote": "However, for both activity and weight perturbation, the variance still grows with larger networks.",
+    "location": "section 3.4, Table 1",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Even the activity-perturbation form Dust uses has variance growing with width; Dust's flat size curve (dahal-2026-dust/5) is an empirical exception, not a theorem.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "ren-2023-forward-gradient-local-losses/2",
+    "claim": "Activity perturbation provably yields lower-variance gradient estimates than weight perturbation, by a factor of about Np (minibatch size times fan-in).",
+    "quote": "We prove that activity perturbation yields lower-variance gradient estimates than weight perturbation, and provide a continuous-time rate-based interpretation of our algorithm.",
+    "location": "section 1 Introduction; section 3.4",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Separates the family: weight-space (seed-described) perturbation pays an extra Np in variance over activity-space perturbation, whose update is not seed-described.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "ren-2023-forward-gradient-local-losses/3",
+    "claim": "With many local losses, forward gradient on ImageNet reaches top-1 test error 58.37% vs 36.82% (supervised) and 73.24% vs 55.66% (contrastive) for backprop, and the error due to greediness grows as problems get harder.",
+    "quote": "On ImageNet, we achieve reasonable performance compared to backprop (58.37% vs. 36.82% for supervised and 73.24% vs. 55.66% for contrastive).",
+    "location": "section 6 Conclusion",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 21.55,
+      "unit": "percentage points top-1 test error above backprop",
+      "condition": "derived: 58.37% - 36.82%, ImageNet, supervised, local-greedy forward gradient with activity perturbation; downstream error at fixed epochs, not held-out loss at equal compute"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Forward gradient needs an architecture of many local losses to work at all, and still trails backprop by ~20 error points on ImageNet, with the gap widening with task depth.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "baydin-2022-forward-gradient",
+  "title": "Gradients without Backpropagation",
+  "authors": "Atılım Güneş Baydin, Barak A. Pearlmutter, Don Syme, Frank Wood, Philip Torr",
+  "year": 2022,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2202.08587",
+  "topics": [
+   "strategy-gradient-free",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "baydin-2022-forward-gradient/1",
+    "claim": "Forward gradient descent (one forward-mode directional derivative per step) trained small problems up to twice as fast in wall-clock in some cases.",
+    "quote": "We demonstrate forward gradient descent in a range of problems, showing substantial savings in computation and enabling training up to twice as fast in some cases.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x wall-clock speedup (best case)",
+      "condition": "logistic regression, MLPs and CNNs on MNIST; wall-clock time relative to backprop, not held-out loss at equal compute; flagged"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The positive claim later work failed to scale: the per-step saving is real but the variance grows with dimension (ren-2023-forward-gradient-local-losses/1, flugel-2025-multi-tangent/1).",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "flugel-2025-multi-tangent",
+  "title": "Beyond Backpropagation: Optimization with Multi-Tangent Forward Gradients",
+  "authors": "Katharina Flügel, Daniel Coquelin, Marie Weiel, Charlotte Debus, Achim Streit, Markus Götz",
+  "year": 2025,
+  "venue": "IJCNN 2025",
+  "url": "https://arxiv.org/abs/2410.17764",
+  "topics": [
+   "strategy-gradient-free",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "flugel-2025-multi-tangent/1",
+    "claim": "Even with multiple tangents combined by orthogonal projection, forward gradients leave a significant gap to the true gradient on MNIST and CIFAR10 classification with fully connected, residual and vision-transformer networks, larger on harder tasks.",
+    "quote": "Overall, a significant gap between the forward gradients and the true gradient remains, in particular for more complex tasks.",
+    "location": "section 5 Conclusion",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Adding directions linearly in compute does not close the forward-gradient gap at 1e7 parameters, consistent with a d-dependent variance.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "launay-2020-dfa-scales",
+  "title": "Direct Feedback Alignment Scales to Modern Deep Learning Tasks and Architectures",
+  "authors": "Julien Launay, Iacopo Poli, François Boniface, Florent Krzakala",
+  "year": 2020,
+  "venue": "NeurIPS 2020",
+  "url": "https://arxiv.org/abs/2006.12878",
+  "topics": [
+   "strategy-gradient-free",
+   "strategy-local"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "launay-2020-dfa-scales/1",
+    "claim": "Direct feedback alignment trains a Transformer language model on WikiText-103 far better than a shallow baseline, but not on par with backprop: best validation perplexity 52.0 (macro) and 93.3 (micro) vs 29.8 for backprop after 20 epochs, sharing hyperparameters.",
+    "quote": "Considering that the perplexity of the shallow baseline is over 400, DFA is clearly able to train Transformers. However, our results are not on par with BP, especially in the micro setting.",
+    "location": "section 3.4; Table 7",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.557,
+      "unit": "nats validation loss above backprop",
+      "condition": "derived: ln(52.0/29.8), best DFA macro vs backprop with beta2 = 0.999, 6-layer d512 Transformer, 8192 tokens per batch, 20 epochs of WikiText-103; BP and DFA share hyperparameters, DFA given extra optimizer tuning (Table 7)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Backward-free credit assignment by fixed random feedback leaves a 0.56-nat gap on a small LM at equal epochs, which no equal-compute multiplier near 1 can absorb.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "launay-2020-dfa-scales/2",
+    "claim": "The authors state that substantial work remains to make DFA competitive with backprop, especially with minimal weight transport.",
+    "quote": "A substantial amount of work remains to make DFA competitive with BP, even more so in a minimal weight transport scenario.",
+    "location": "section 3.4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Records a negative result for the backward-free credit-assignment family on language modelling.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "bartunov-2018-bio-scalability",
+  "title": "Assessing the Scalability of Biologically-Motivated Deep Learning Algorithms and Architectures",
+  "authors": "Sergey Bartunov, Adam Santoro, Blake A. Richards, Luke Marris, Geoffrey E. Hinton, Timothy Lillicrap",
+  "year": 2018,
+  "venue": "NeurIPS 2018",
+  "url": "https://arxiv.org/abs/1807.04587",
+  "topics": [
+   "strategy-gradient-free",
+   "strategy-local"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "bartunov-2018-bio-scalability/1",
+    "claim": "Target propagation and feedback alignment variants do well on MNIST but significantly worse than backprop on CIFAR and ImageNet, especially with locally connected layers.",
+    "quote": "Many of these algorithms perform well for MNIST, but for CIFAR and ImageNet we find that TP and FA variants perform significantly worse than BP, especially for networks composed of locally connected units, opening questions about whether new architectures and algorithms are required to scale these approaches.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The pattern for backward-free methods: parity on easy tasks, a gap that opens with task difficulty and scale; downstream accuracy, not loss at equal compute.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "hinton-2022-forward-forward",
+  "title": "The Forward-Forward Algorithm: Some Preliminary Investigations",
+  "authors": "Geoffrey Hinton",
+  "year": 2022,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2212.13345",
+  "topics": [
+   "strategy-gradient-free",
+   "strategy-local"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hinton-2022-forward-forward/1",
+    "claim": "Perturbation (reinforcement-learning) learning has variance that forces a learning rate inversely proportional to the number of perturbed variables, so it scales badly and cannot compete with backprop on networks of millions or billions of parameters.",
+    "quote": "But reinforcement learning procedures suffer from high variance: it is hard to see the effect of perturbing one variable when many other variables are being perturbed at the same time. To average away the noise caused by all the other perturbations, the learning rate needs to be inversely proportional to the number of variables that are being perturbed and this means that reinforcement learning scales badly and cannot compete with backpropagation for large networks containing many millions or billions of parameters",
+    "location": "section 1",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "The informal form of the d-linear law: learning rate ~ 1/(perturbed variables), so steps grow with parameter count and m ~ 1/d at fixed per-step cost.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "hinton-2022-forward-forward/2",
+    "claim": "Forward-forward is slower than backprop and generalizes worse on toy problems, so unlikely to replace it where power is not an issue.",
+    "quote": "The forward-forward algorithm is somewhat slower than backpropagation and does not generalize quite as well on several of the toy problems investigated in this paper so it is unlikely to replace backpropagation for applications where power is not an issue.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "A negative result from the author.",
+    "from_review": "strategy-local"
+   }
+  ]
+ },
+ {
+  "id": "ramanujan-2020-hidden-random",
+  "title": "What's Hidden in a Randomly Weighted Neural Network?",
+  "authors": "Vivek Ramanujan, Mitchell Wortsman, Aniruddha Kembhavi, Ali Farhadi, Mohammad Rastegari",
+  "year": 2020,
+  "venue": "CVPR 2020",
+  "url": "https://arxiv.org/abs/1911.13299",
+  "topics": [
+   "strategy-gradient-free",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ramanujan-2020-hidden-random/1",
+    "claim": "A subnetwork found by learning a mask over a randomly weighted Wide ResNet-50, with the weights never trained, matches a trained ResNet-34 on ImageNet.",
+    "quote": "Hidden in a randomly weighted Wide ResNet-50 [32] we find a subnetwork (with random weights) that is smaller than, but matches the performance of a ResNet-34 [9] trained on ImageNet [4].",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "bit per random weight (mask)",
+      "condition": "derived: edge-popup learns a binary keep/drop mask over seeded random weights; the mask is found with straight-through backprop scores, not gradient-free"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A random network plus a 1-bit-per-weight mask reaches trained quality at a larger width; the mask is cheap to state but is found by backprop and costs a full model's compute per step.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "frankle-2021-batchnorm-only",
+  "title": "Training BatchNorm and Only BatchNorm: On the Expressive Power of Random Features in CNNs",
+  "authors": "Jonathan Frankle, David J. Schwab, Ari S. Morcos",
+  "year": 2021,
+  "venue": "ICLR 2021",
+  "url": "https://arxiv.org/abs/2003.00152",
+  "topics": [
+   "strategy-gradient-free",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "frankle-2021-batchnorm-only/1",
+    "claim": "Training only the BatchNorm affine parameters (at most 0.6% of parameters) of a randomly initialized deep ResNet reaches 82% on CIFAR-10 and 32% top-5 on ImageNet.",
+    "quote": "For example, sufficiently deep ResNets reach 82% (CIFAR-10) and 32% (ImageNet, top-5) accuracy in this configuration, far higher than when training an equivalent number of randomly chosen parameters elsewhere in the network.",
+    "location": "abstract",
+    "quantities": [
+     {
+      "param": "update.fraction_changed",
+      "value": 0.006,
+      "unit": "fraction",
+      "condition": "at most 0.6% of parameters (BatchNorm gamma and beta) trainable, ResNet up to ResNet-866 on CIFAR-10 and ResNet-200 on ImageNet, all other weights frozen at random init"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Training a tiny cheaply described part of a random network goes some way (82% CIFAR-10) but far from trained quality on ImageNet (32% top-5 vs ~93%): the small-part route caps capability.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "frankle-2021-batchnorm-only/2",
+    "claim": "Training an equal number of randomly chosen parameters per channel does far worse than training BatchNorm (56% on CIFAR-10, 4% top-5 on ImageNet): which small part is trained matters.",
+    "quote": "Training an equivalent number of randomly-selected parameters per channel performs far worse (56% on CIFAR-10 and 4% top-5 on ImageNet).",
+    "location": "section 1 Introduction, contributions",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "% ImageNet top-5 accuracy",
+      "condition": "random per-channel parameters, same count as BatchNorm gamma and beta, rest frozen at random init"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A random small subset is nearly useless; the useful small part is per-feature scales, which a seed cannot choose for you.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "zhong-2024-random-transformers",
+  "title": "Algorithmic Capabilities of Random Transformers",
+  "authors": "Ziqian Zhong, Jacob Andreas",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2410.04368",
+  "topics": [
+   "strategy-gradient-free",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhong-2024-random-transformers/1",
+    "claim": "A transformer with random frozen internal weights and only its embedding layers trained (width 512, ~10M trainable parameters) reaches TinyStories cross-entropy 2.64, about a fully trained width-32 model (~0.7M parameters); fully trained models reach 1.35.",
+    "quote": "Our trained random transformer with 512 width and ~10M trainable parameters achieved a cross-entropy loss of 2.64, roughly on par with the fully trained ones with 32 width and only ~0.7M trainable parameters.",
+    "location": "section 5.2 Language Modeling",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.29,
+      "unit": "nats cross-entropy above fully trained",
+      "condition": "derived: 2.64 (random transformer, width 512, only embedding layers trained) vs 1.35 (fully trained), TinyStories"
+     },
+     {
+      "param": "other",
+      "value": 14,
+      "unit": "x trainable parameters for the same loss",
+      "condition": "derived: ~10M trainable in the random width-512 model vs ~0.7M in the fully trained width-32 model at about the same loss"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Training only the embeddings of a random transformer buys a small fully trained model's quality at 14x the trainable parameters and far more compute: m << 0.1 for the embedding-only route on language modelling.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "zhong-2024-random-transformers/2",
+    "claim": "Random transformers need comparatively large hidden sizes to match fully trained ones on language modelling.",
+    "quote": "Comparatively large hidden sizes are needed for random models to match the performance of fully trained models.",
+    "location": "Figure 4 caption",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The width overhead of frozen-random networks is large for language, not the logarithmic overhead lottery-ticket theory allows.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "shen-2021-reservoir-transformers",
+  "title": "Reservoir Transformers",
+  "authors": "Sheng Shen, Alexei Baevski, Ari S. Morcos, Kurt Keutzer, Michael Auli, Douwe Kiela",
+  "year": 2021,
+  "venue": "ACL 2021",
+  "url": "https://arxiv.org/abs/2012.15045",
+  "topics": [
+   "strategy-gradient-free",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shen-2021-reservoir-transformers/1",
+    "claim": "RoBERTa models pretrained from scratch with some layers frozen at random initialization (reservoir layers, alternating with trained layers in the middle of the stack) reach similar perplexity at similar compute, with better downstream performance.",
+    "quote": "These findings suggest that we can train a RoBERTa model without updating all of the layers, achieving similar perplexity at a similar computational cost, but with better downstream performance.",
+    "location": "section 4.3 Masked Language Model Pretraining; Appendix D",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Interleaving a minority of seeded random layers costs about nothing in pretraining perplexity (compared by wall-clock AUCC, not FLOPs): a random part is free, but the majority is still trained by backprop, so the trained fraction stays most of the model.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "pensia-2020-subsetsum-lottery",
+  "title": "Optimal Lottery Tickets via SubsetSum: Logarithmic Over-Parameterization is Sufficient",
+  "authors": "Ankit Pensia, Shashank Rajput, Alliot Nagle, Harit Vishwakarma, Dimitris Papailiopoulos",
+  "year": 2020,
+  "venue": "NeurIPS 2020",
+  "url": "https://arxiv.org/abs/2006.07990",
+  "topics": [
+   "strategy-gradient-free",
+   "theory",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "pensia-2020-subsetsum-lottery/1",
+    "claim": "Any target network of width d and depth l can be approximated by pruning a random network a factor O(log(dl)) wider and twice as deep, and this overhead is essentially optimal for constant depth.",
+    "quote": "We show that any target network of width $d$ and depth $l$ can be approximated by pruning a random network that is a factor $O(\\log(dl))$ wider and twice as deep.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Existence only: a seeded random network plus a 1-bit mask can express any trained network at a log-width overhead, but nothing says the mask is found without backprop or at backprop's cost.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "nooralinejad-2023-pranc",
+  "title": "PRANC: Pseudo RAndom Networks for Compacting deep models",
+  "authors": "Parsa Nooralinejad, Ali Abbasi, Soroush Abbasi Koohpayegani, Kossar Pourahmadi Meibodi, Rana Muhammad Shahroz Khan, Soheil Kolouri, Hamed Pirsiavash",
+  "year": 2023,
+  "venue": "ICCV 2023",
+  "url": "https://arxiv.org/abs/2206.08464",
+  "topics": [
+   "strategy-gradient-free",
+   "seed-based",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "nooralinejad-2023-pranc/1",
+    "claim": "Describing a ResNet-18 as a learned linear combination of seeded pseudo-random networks, with under 1% of its parameters as coefficients, reaches 61.08% on ImageNet-100 vs 82.1% for the full model (Table 1: ResNet-20 on CIFAR-10, 10,000 coefficients 81.48% vs 88.92% for 269,722 parameters).",
+    "quote": "Our method achieves 61.08% accuracy with less than 1% parameters, while the standard ResNet-18 model achieves 82.1% accuracy with more than 11M parameters.",
+    "location": "section 1 Introduction; Table 1",
+    "quantities": [
+     {
+      "param": "update.bits_total",
+      "value": 320000,
+      "unit": "bits",
+      "condition": "derived: 10,000 float32 coefficients over seeded random basis networks, ResNet-20 on CIFAR-10, 81.48% vs 88.92% full model; coefficients learned by backprop"
+     },
+     {
+      "param": "other",
+      "value": 21,
+      "unit": "accuracy points below full model",
+      "condition": "derived: 82.1% - 61.08%, ResNet-18 on ImageNet-100, <1% of parameters as coefficients"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A whole model described by a seed plus ~3e5 bits loses 7-21 accuracy points on small vision tasks, and the coefficients are fit by backprop through every basis network.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "ha-2017-hypernetworks",
+  "title": "HyperNetworks",
+  "authors": "David Ha, Andrew Dai, Quoc V. Le",
+  "year": 2017,
+  "venue": "ICLR 2017",
+  "url": "https://arxiv.org/abs/1609.09106",
+  "topics": [
+   "strategy-gradient-free",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ha-2017-hypernetworks/1",
+    "claim": "Generating a residual network's weights from a small hypernetwork (relaxed weight sharing) costs about 1.25-1.5% accuracy on CIFAR-10 at far fewer parameters, with the main network's compute unchanged.",
+    "quote": "enforcing a relaxed weight sharing constraint to the deep residual network cost us ∼ 1.25-1.5% in classification accuracy",
+    "location": "section 5.2, Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 15,
+      "unit": "x fewer parameters",
+      "condition": "derived: Hyper Residual Network 40-2 0.148M vs Wide ResNet 40-2 2.236M parameters, CIFAR-10 (Table 2); hypernetwork trained by backprop through the main network"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A cheaply described generator of weights keeps most quality on CIFAR-10, but saves parameters, not training compute: every step still runs and backpropagates the full network.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "gressmann-2020-random-bases",
+  "title": "Improving Neural Network Training in Low Dimensional Random Bases",
+  "authors": "Frithjof Gressmann, Zach Eaton-Rosen, Carlo Luschi",
+  "year": 2020,
+  "venue": "NeurIPS 2020",
+  "url": "https://arxiv.org/abs/2011.04720",
+  "topics": [
+   "strategy-gradient-free",
+   "updates",
+   "seed-based"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gressmann-2020-random-bases/1",
+    "claim": "Training in a 400x smaller random subspace re-drawn each step nearly matches full SGD on MNIST but reaches only 78% of SGD's accuracy on CIFAR-10, and training longer does not close the gap.",
+    "quote": "While training in the $400\\times$ smaller subspace can almost match full-dimensional SGD on MNIST, it only reaches 78% of the SGD’s baseline on the harder CIFAR-10 classification task.",
+    "location": "section 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.78,
+      "unit": "fraction of SGD baseline accuracy",
+      "condition": "random-bases descent in a 400x smaller subspace, CIFAR-10 CNN; gradients projected by backprop, not zeroth-order"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Seed-described subspace updates lose accuracy that more steps do not recover, even with exact projected gradients; a zeroth-order estimator only adds variance.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "gressmann-2020-random-bases/2",
+    "claim": "Black-box evolution strategies at the same subspace dimensionality do far worse than random-bases descent with exact projected gradients.",
+    "quote": "Black-box optimization using evolution strategies for the same dimensionality leads to far inferior optimization outcomes (NES).",
+    "location": "section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "At equal update description (same seeded subspace), zeroth-order estimation is far worse than the projected gradient: the seed-described update is cheap only if someone computes the gradient.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "larsen-2022-degrees-of-freedom",
+  "title": "How many degrees of freedom do we need to train deep networks: a loss landscape perspective",
+  "authors": "Brett W. Larsen, Stanislav Fort, Nic Becker, Surya Ganguli",
+  "year": 2022,
+  "venue": "ICLR 2022",
+  "url": "https://arxiv.org/abs/2107.05802",
+  "topics": [
+   "strategy-gradient-free",
+   "updates",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "larsen-2022-degrees-of-freedom/1",
+    "claim": "The number of random subspace dimensions needed to reach a target loss (threshold training dimension) rises as the target loss falls and falls as the initial loss falls.",
+    "quote": "This threshold training dimension increases as the desired final loss decreases, but decreases as the initial loss decreases.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Why small-subspace training is cheap for fine-tuning but not for pretraining: from a random init (high initial loss) to a low target loss, the needed dimension, and so the ZO cost, is largest.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "gan-2026-neural-thickets",
+  "title": "Neural Thickets: Diverse Task Experts Are Dense Around Pretrained Weights",
+  "authors": "Yulu Gan, Phillip Isola",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2603.12228",
+  "topics": [
+   "strategy-gradient-free",
+   "seed-based",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gan-2026-neural-thickets/1",
+    "claim": "Untrained models have a tiny density of good solutions near their initial weights, so finding one needs structured multi-step search such as gradient descent; pretrained models are surrounded by dense task experts.",
+    "quote": "Untrained models have a tiny density of solutions near their initial weights; they live in a needle in a haystack regime, where finding the solution requires structured multi-step search, such as gradient descent.",
+    "location": "section 1 Introduction",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Random-guess and seed-search methods work after pretraining because pretraining made solutions dense; from scratch they face a needle in a haystack, so post-training ES results do not transfer to pretraining.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "gan-2026-neural-thickets/2",
+    "claim": "Pure random guessing around pretrained weights plus ensembling (RandOpt) is competitive with PPO, GRPO and ES at equal post-training FLOPs on 0.5B-8B models.",
+    "quote": "RandOpt achieves accuracy competitive with PPO, GRPO, and ES under the same post-training flops.",
+    "location": "section 1 Introduction",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Seed-described post-training at scale can match RL per FLOP, which is the NCI soft spot, but the evidence is post-training accuracy, not pretraining loss.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ },
+ {
+  "id": "raen-2026-which-layers-bp",
+  "title": "Which Layers Need Backpropagation? Position-Dependent Partial Training for Memory-Efficient LLM Pretraining",
+  "authors": "Raen2264",
+  "year": 2026,
+  "venue": "Zenodo preprint",
+  "url": "https://zenodo.org/records/20392068",
+  "topics": [
+   "strategy-gradient-free",
+   "strategy-local",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "raen-2026-which-layers-bp/1",
+    "claim": "In Llama-1B pretraining from scratch with backprop on a sliding window of layers, updating the other layers by zeroth-order perturbation adds at most ~4 perplexity over simply freezing them at random init.",
+    "quote": "The non-BP layers can be frozen entirely: zeroth-order perturbation contributes at most ~4 PPL beyond freezing.",
+    "location": "abstract (v2)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "A direct test of hybrid backprop plus ZO pretraining at 1B parameters: the ZO part contributes almost nothing, so its compute is wasted; single anonymous preprint, short horizons.",
+    "from_review": "strategy-gradient-free"
+   },
+   {
+    "id": "raen-2026-which-layers-bp/2",
+    "claim": "Partial backprop with frozen random layers beats full backprop (perplexity 35.2 vs 39.0) only at short horizons; the crossover between methods lies between 25M and 50M tokens for Llama-1B, about 0.1-0.25% of Chinchilla-optimal tokens.",
+    "quote": "A fine-grained sweep locates the crossover between 25M and 50M tokens on a single dataset, ruling out a dataset confound.",
+    "location": "abstract (v2)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 50000000,
+      "unit": "tokens (upper end of crossover)",
+      "condition": "Llama-1B from scratch; Chinchilla-optimal would be ~2e10 tokens, so the frozen-partial advantage is confined to the first ~0.25% of a compute-optimal run"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Frozen-random partial training wins only very early; past the crossover full backprop leads, so it gives no multiplier above 1 at compute-optimal budgets.",
+    "from_review": "strategy-gradient-free"
+   }
+  ]
+ }
 ]
