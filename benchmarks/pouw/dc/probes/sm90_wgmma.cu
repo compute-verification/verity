@@ -328,6 +328,8 @@ JOINT(lop3, L_LOP3, 64)
 JOINT(lop3, L_LOP3, 256)
 OP_KERNEL(wgmix_shfl_r32, 256) { wg_mix<L_SHFL, 32>(a); }
 OP_KERNEL(wgmix_shfl_r128, 256) { wg_mix<L_SHFL, 128>(a); }
+OP_KERNEL(wgmix_redux_r64, 256) { wg_mix<L_REDUX, 64>(a); }
+OP_KERNEL(wgmix_reduce_r8, 256) { wg_mix<L_REDUCE, 8>(a); }
 JOINT(duo, L_DUO, 96)
 JOINT(duo, L_DUO, 384)
 #undef JOINT
@@ -389,6 +391,10 @@ static const OpProbe PROBES[] = {
      .expect = "IGMMA.64x256x32.S8.S8*=4,SHFL.BFLY=32", .iters = 4096},
     {.name = "wgmix_shfl_r128", .kernel = (const void*)wgmix_shfl_r128, .tpb = 256,
      .expect = "IGMMA.64x256x32.S8.S8*=4,SHFL.BFLY=128", .iters = 4096},
+    {.name = "wgmix_redux_r64", .kernel = (const void*)wgmix_redux_r64, .tpb = 256,
+     .expect = "IGMMA.64x256x32.S8.S8*=4,REDUX*=64", .iters = 4096},
+    {.name = "wgmix_reduce_r8", .kernel = (const void*)wgmix_reduce_r8, .tpb = 256,
+     .expect = "IGMMA.64x256x32.S8.S8*=4,SHFL.BFLY=40,LOP3.LUT=40", .iters = 4096},
     P_JOINT(duo, 96, "LOP3.LUT=32,IMAD=32"),
     P_JOINT(duo, 384, "LOP3.LUT=128,IMAD=128"),
 #undef P_JOINT

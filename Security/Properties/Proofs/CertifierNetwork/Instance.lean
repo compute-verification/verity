@@ -9,8 +9,8 @@ Each completeness statement (`Proofs.Lms.LmsSigns`, `Proofs.Lms.LmsCorrect`, `Pr
 run ticks each grid once and hands nothing. The run's hypotheses are `step` evaluated by the kernel (`decide +kernel`);
 the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its tree, which the kernel need not compute.
 
-`Digested` is the one hypothesis left as one: `parameters` reads `Flock.canon`, a `partial def`, so no proof can
-evaluate it on any configuration (`DeviceOutputAccepted`'s module docstring).
+`Digested` is the one hypothesis left as one: `parameters` reads `Flock.canon`, well-founded recursion the kernel does
+not evaluate, so no proof evaluates it on a configuration (`DeviceOutputAccepted`'s module docstring).
 -/
 
 namespace Properties.CertifierNetwork.Instance
