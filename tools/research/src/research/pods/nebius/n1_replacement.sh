@@ -134,7 +134,6 @@ preflight() {
   local regions
   regions=$(printf '%s\n' "$NODES" | cut -d' ' -f2 | sort -u | tr '\n' ' ')
   echo "== quota (non-GPU vCPU, IPv4, disks) in $regions"
-  python3 "$here/fleet.py" quota > /dev/null 2>&1 || true
   bash -c ". '$here/common.sh' && nebius_auth && nb quotas quota-allowance list --parent-id ${N1R_TENANT:-tenant-e00g3zymmem3epgq3a} --page-size 999" \
     | python3 -c '
 import json, sys
