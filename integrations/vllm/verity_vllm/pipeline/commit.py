@@ -427,7 +427,8 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
                                       gather=(kind in ("native_collect_gather", "native_collect_v2", "native_collect_v2_auto", "native_collect_v2b")),
                                       native_hooks=v2, auto_blocks=(kind in ("native_collect_v2_auto", "native_collect_v2b")),
                                       native_worker=(kind == "native_collect_v2b"), layout=layout,
-                                      profile=bool(getattr(args, "profile_hooks", False)) and not v2, populate_threads=getattr(args, "pinned_populate_threads", None))
+                                      profile=bool(getattr(args, "profile_hooks", False)) and not v2, populate_threads=getattr(args, "pinned_populate_threads", None),
+                                      commit_scheme=getattr(args, "commit_scheme", None))
     if kind == "hooks_only":
         from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
