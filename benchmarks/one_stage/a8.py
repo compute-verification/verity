@@ -532,18 +532,41 @@ def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> 
                                                "layers": a.layers, "per_kind": a.per_kind}, indent=1, sort_keys=True, default=str))
 
 
+def live(fn, registry):
+    """A decoded Definition as the registry's own: a specialization bound again on its composite (the decoded one has no
+    builder, which `Program` and the stager's binding need), function-valued statics likewise."""
+    from verity.ml.circuits.defs import FunctionDefinition, SpecializedDefinition
+    if not isinstance(fn, SpecializedDefinition):
+        return fn
+
+    def static(v):
+        if isinstance(v, FunctionDefinition):
+            return live(v, registry)
+        if isinstance(v, tuple):
+            return tuple(static(x) for x in v)
+        if isinstance(v, dict):
+            return {k: static(x) for k, x in v.items()}
+        return v
+    return registry[f"{fn.defn.name}_v{fn.defn.version}"].bind(**{k: static(v) for k, v in fn.bindings.items()})
+
+
 def load_values(d: Path, lowers: list[str]) -> tuple[dict, dict, dict]:
-    """`save_values`' directory read back: the staged kinds among ``lowers``, each unit decoded from ``units.json``."""
+    """`save_values`' directory read back: the staged kinds among ``lowers``, each unit decoded from ``units.json`` and bound
+    again from the registry, refused unless it encodes as the decoded one."""
     from verity.ml.circuits.codec import decode_program
     from verity_vllm.program.registry.catalog import load as load_registry
+    registry = load_registry()[0]
     doc = json.loads((d / "values.json").read_text())
-    defs = {x.id: x for x in decode_program(json.loads((d / "units.json").read_text()), load_registry()[0]).defs.values()}
+    defs = {x.id: x for x in decode_program(json.loads((d / "units.json").read_text()), registry).defs.values()}
+    enc = lambda u: canonical_json(encode_program(P.mixed_population_program([(u, 1)])))  # noqa: E731
     staged = {f: s for f, s in doc["staged"].items() if f in lowers}
     rows_of_kind = {}
     for f, s in staged.items():
         if not s.get("staged"):
             continue
-        unit = defs[s["unit"]]
+        unit = live(defs[s["unit"]], registry)
+        if unit.id != s["unit"] or enc(unit) != enc(defs[s["unit"]]):
+            raise SystemExit(f"{f}: the registry's {unit.id} is not the saved {s['unit']}")
         z = np.load(d / f"{f}.npz")
         rows_of_kind[f] = {**s, "unit": unit, "rows_spec": K.rows_of(unit),
                            "rows": {k[2:]: z[k] for k in z.files if k.startswith("i.")},
