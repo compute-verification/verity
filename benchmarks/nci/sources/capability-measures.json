@@ -237,6 +237,39 @@
     "grade": "measured-at-scale",
     "bears_on": "A capability unit that is defined for pretrained, RL-trained and scaffolded models alike, so it does not favour pretraining; it measures agents with their inference budget included.",
     "from_review": "capability-measures"
+   },
+   {
+    "id": "kwa-2025-time-horizon/2",
+    "claim": "Frontier models' 50% time horizon on software tasks (o3: about 110 minutes) has doubled about every seven months since 2019, possibly faster since 2024.",
+    "quote": "current frontier AI models such as o3 have a 50% time horizon of around 110 minutes. Furthermore, frontier AI time horizon has doubled approximately every seven months since 2019, though the trend may have accelerated since 2024.",
+    "location": "abstract (v4)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 110,
+      "unit": "minutes (50% time horizon)",
+      "condition": "o3 on RE-Bench, HCAST and 66 shorter software tasks"
+     },
+     {
+      "param": "other",
+      "value": 7,
+      "unit": "months per doubling of the 50% time horizon",
+      "condition": "2019 to 2025 frontier trend"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The capability measure most tied to agentic RL; its post-2024 acceleration is the candidate signature of RL's contribution.",
+    "from_review": "rl-scaling"
+   },
+   {
+    "id": "kwa-2025-time-horizon/3",
+    "claim": "METR attributes the possible post-2024 acceleration to outcome-based agentic RL, but says it may be a one-time boost that slows once low-hanging fruit is exhausted.",
+    "quote": "could be explained by researchers post-training models to be more agentic (that is, capable of taking many sequential actions towards completing a task) using outcome-based RL. Research into making models capable and agentic is likely to continue. Future agency training could be faster than the long-run trend (since post-training may be more compute-efficient than pretraining at increasing horizon length). But 2024–2025 agency training could also be a one-time boost from picking low-hanging fruit, in which case horizon growth will slow once these gains are exhausted.",
+    "location": "section 'Important factors that could change time horizon slope'",
+    "grade": "speculative",
+    "bears_on": "Whether agentic RL is a lasting source of capability growth or a one-time elicitation is open; the paper offers no measurement separating them.",
+    "from_review": "rl-scaling",
+    "quantities": []
    }
   ]
  },
@@ -401,6 +434,46 @@
     "grade": "extrapolated",
     "bears_on": "If RL's marginal CEG is this low, RL cannot cheaply substitute for throttled pretraining at the frontier, which limits the 'small-state RL escapes the policy' worry to the early, cheap part of the RL curve.",
     "from_review": "capability-measures"
+   },
+   {
+    "id": "ord-2025-rl-scaling/3",
+    "claim": "Read off OpenAI's o1 and o3 charts on AIME: 100x RL compute took accuracy from about 33% to 66%, so 20% to 80% needs about 10,000x; 4 orders of magnitude took the model from 26% to 88%.",
+    "quote": "Increasing the RL training compute by 100x as shown in the o1 chart only improved performance from about 33% to 66%. At that rate, going from 20 to 80 would require scaling up the RL training compute by 10,000x.",
+    "location": "main text, o1 and o3 chart analysis",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10000,
+      "unit": "x RL training compute",
+      "condition": "AIME accuracy 20% to 80% at o1's slope; derived slope: 60 points / 4 decades = about 15 points per 10x"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The slope of frontier RL scaling: about 15 benchmark points per 10x RL compute in the linear part of the curve, from unlabeled OpenAI plots.",
+    "from_review": "rl-scaling"
+   },
+   {
+    "id": "ord-2025-rl-scaling/4",
+    "claim": "Ord estimates RL compute had grown about 1,000,000x by October 2025 at no more than 2x total training cost, which puts RL at about pretraining scale; another 10x of RL then costs 5.5x total compute.",
+    "quote": "I estimate that at the time of writing (Oct 2025), we’ve already seen something like a 1,000,000x scale-up in RL training and it required ≤2x the total training cost. But the next 1,000,000x scale-up would require 1,000,000x the total training cost, which is not possible in the foreseeable future.",
+    "location": "main text",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1000000,
+      "unit": "x RL training compute scale-up to date",
+      "condition": "Ord's estimate as of Oct 2025"
+     },
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x total training cost (upper bound)",
+      "condition": "cost of that scale-up relative to pretraining-only training"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "RL scaling is near the point where its cost is set by total training budgets, so its further gains slow to the overall compute trend.",
+    "from_review": "rl-scaling"
    }
   ]
  },
@@ -450,6 +523,35 @@
     "grade": "extrapolated",
     "bears_on": "Range for the inference share of RL-era gains: 63-92% across three benchmarks.",
     "from_review": "capability-measures"
+   },
+   {
+    "id": "ord-2025-mostly-inference-scaling/3",
+    "claim": "Comparing Claude 3.7 Sonnet with its assumed base (Claude 3.5 Sonnet, Oct 2024) at matched output tokens, RL's own boost is 6 of 34 points on MATH level 5, 9 of 24 on GPQA Diamond and 4 of 49 on OTIS Mock AIME; 63-92% of the gain is inference-scaling.",
+    "quote": "the RL Boost for MATH level 5 is quite small at just 6 percentage points. But the RL training also teaches the model how to productively use reasoning chains up to 30 times as long. This costs 30x as much money every time the model is used, but enables a further boost of 28 percentage points via inference-scaling. So in this case, the total performance boost is 34 percentage points with 82% of this coming from inference-scaling.",
+    "location": "main text",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.18,
+      "unit": "fraction of total gain from RL at matched tokens",
+      "condition": "derived: 6 / 34 points, MATH level 5"
+     },
+     {
+      "param": "other",
+      "value": 0.37,
+      "unit": "fraction of total gain from RL at matched tokens",
+      "condition": "derived: 9 / 24 points, GPQA Diamond (63% from inference-scaling)"
+     },
+     {
+      "param": "other",
+      "value": 0.08,
+      "unit": "fraction of total gain from RL at matched tokens",
+      "condition": "derived: 4 / 49 points, OTIS Mock AIME (92% from inference-scaling)"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Most of reasoning RL's benchmark gain is unlocked longer thinking, an inference cost, and only 8-37% is better per-token performance; the base-model pairing is assumed.",
+    "from_review": "rl-scaling"
    }
   ]
  },
@@ -717,6 +819,68 @@
     "grade": "extrapolated",
     "bears_on": "RL compute is already a sizeable fraction of pretraining in open frontier models; its compute (rollouts on a frozen-ish policy) is mostly inference, which the policy leaves free.",
     "from_review": "capability-measures"
+   },
+   {
+    "id": "you-2025-reasoning-scale/2",
+    "claim": "Epoch notes that frontier developers disclose little about reasoning training, with DeepSeek R1 the main exception.",
+    "quote": "Most frontier AI developers have disclosed relatively little about how they train reasoning models. The main exception here is DeepSeek and its R1 reasoning model.",
+    "location": "section 'Insights from DeepSeek-R1'",
+    "grade": "measured-at-scale",
+    "bears_on": "Reporting gap: RL compute is known for one frontier-class model.",
+    "from_review": "rl-scaling",
+    "quantities": []
+   },
+   {
+    "id": "you-2025-reasoning-scale/3",
+    "claim": "Llama-Nemotron Ultra 253B's RL reasoning stage took 140,000 H100-hours, about 1e23 FLOP and under 1% of its base model's pretraining; Phi-4-reasoning's was under 1e20 FLOP, under 0.01%.",
+    "quote": "Llama-Nemotron Ultra’s RL reasoning stage took 140,000 H100-hours, or around 1e23 FLOP, <1% of the pre-training cost of the original base model.",
+    "location": "section 'Insights from other reasoning models'",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 140000,
+      "unit": "H100 GPU-hours",
+      "condition": "Llama-Nemotron Ultra 253B RL reasoning stage, Nvidia's figure"
+     },
+     {
+      "param": "other",
+      "value": 1e+23,
+      "unit": "FLOP",
+      "condition": "Epoch's conversion at 30% utilization of 16-bit peak"
+     },
+     {
+      "param": "other",
+      "value": 0.01,
+      "unit": "fraction of pretraining compute (upper bound)",
+      "condition": "Llama-Nemotron Ultra RL vs its base model's pretraining"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Open reasoning models with disclosed RL put it at under 1% of pretraining, far below frontier closed labs' stated scale.",
+    "from_review": "rl-scaling"
+   },
+   {
+    "id": "you-2025-reasoning-scale/4",
+    "claim": "Epoch projects that if reasoning compute keeps growing 10x every few months (the o1-to-o3 rate) it reaches the frontier of total training compute within about a year, then slows to the overall ~4x per year.",
+    "quote": "If reasoning training continues to scale at 10× every few months, in line with the jump from o1 to o3, it will reach the frontier of total training compute before long, perhaps within a year. At that point, the scaling rate will slow and converge with the overall growth rate in training compute of ~4× per year.",
+    "location": "opening section",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10,
+      "unit": "x growth in reasoning training compute per few months",
+      "condition": "o1 to o3 (Sep 2024 to Apr 2025)"
+     },
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "x growth per year in total frontier training compute",
+      "condition": "Epoch's trend estimate"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "RL's share of frontier compute was projected to approach parity with pretraining by mid-2026, which Grok 4's 'pretraining scale' claim already asserts.",
+    "from_review": "rl-scaling"
    }
   ]
  },
@@ -787,6 +951,39 @@
     "grade": "measured-at-scale",
     "bears_on": "Within one RL-trained model, 1000x samples add ~19 pp on AIME on top of the ~62 pp from GPT-4o to o1 pass@1 (RL training plus o1's default thinking); both levers are large and they compound.",
     "from_review": "capability-measures"
+   },
+   {
+    "id": "openai-2024-o1/2",
+    "claim": "OpenAI states that o1 improves with more RL train-time compute and with more test-time thinking, without giving the compute, the model size or the axis units of its scaling plot.",
+    "quote": "We have found that the performance of o1 consistently improves with more reinforcement learning (train-time compute) and with more time spent thinking (test-time compute). The constraints on scaling this approach differ substantially from those of LLM pretraining, and we are continuing to investigate them.",
+    "location": "main text, below the train-time and test-time compute plots",
+    "grade": "measured-at-scale",
+    "bears_on": "The founding claim of RL compute scaling at frontier scale; the plotted x-axis is log-scale compute with no units, so no FLOP count can be read off it.",
+    "from_review": "rl-scaling",
+    "quantities": []
+   },
+   {
+    "id": "openai-2024-o1/3",
+    "claim": "On AIME 2024, GPT-4o solves 12% and o1 74% with one sample (83% with consensus over 64, 93% re-ranking 1,000 samples).",
+    "quote": "only solved on average 12% (1.8/15) of problems. o1 averaged 74% (11.1/15) with a single sample per problem, 83% (12.5/15) with consensus among 64 samples, and 93% (13.9/15) when re-ranking 1000 samples with a learned scoring function.",
+    "location": "Evals section",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 12,
+      "unit": "% AIME 2024 solved, single sample",
+      "condition": "GPT-4o"
+     },
+     {
+      "param": "other",
+      "value": 74,
+      "unit": "% AIME 2024 solved, single sample",
+      "condition": "o1; 83 with consensus@64, 93 re-ranking 1000 samples"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The size of the frontier gain from reasoning RL on competition math, though o1 and GPT-4o need not share a base, so not all of it is RL's.",
+    "from_review": "rl-scaling"
    }
   ]
  },
@@ -829,6 +1026,55 @@
     "grade": "measured-small",
     "bears_on": "Genuine expansion happens at the edge of the base's competence, so new-capability RL needs many training steps, which is where NCI's per-block update metering would apply.",
     "from_review": "capability-measures"
+   },
+   {
+    "id": "liu-2025-prorl/3",
+    "claim": "Prolonged RL (about 2k steps, about 16k H100-hours) on a 1.5B model raises pass@k beyond the base model's, including on tasks where the base fails at any k; pass@1 rises 14.7 points on math and 54.8 on logic puzzles over DeepSeek-R1-Distill-Qwen-1.5B.",
+    "quote": "RL-trained models consistently outperform base models across a wide range of pass@ $k$ evaluations, including scenarios where base models fail entirely regardless of the number of attempts.",
+    "location": "abstract; Section 3.2 (compute); Section 1 (pass@1 gains)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 16000,
+      "unit": "H100-80GB GPU-hours",
+      "condition": "whole ProRL run, 1.5B model (Nemotron-Research-Reasoning-Qwen-1.5B), 4 nodes x 8 H100 (Section 3.2)"
+     },
+     {
+      "param": "other",
+      "value": 14.7,
+      "unit": "percentage points average pass@1",
+      "condition": "math benchmarks, vs DeepSeek-R1-Distill-Qwen-1.5B"
+     },
+     {
+      "param": "other",
+      "value": 54.8,
+      "unit": "percentage points average pass@1",
+      "condition": "logic puzzles (Reasoning Gym), vs DeepSeek-R1-Distill-Qwen-1.5B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Evidence that long RL can add capability beyond elicitation, at 1.5B only; the authors write that it 'remains unclear' how the approach scales to larger models.",
+    "from_review": "rl-scaling"
+   },
+   {
+    "id": "liu-2025-prorl/4",
+    "claim": "Negative result in the same paper: on math tasks where the base already has high pass@128, RL raises pass@1 but pass@128 often falls; RL there sharpens the distribution rather than widening it.",
+    "quote": "Although pass@1 improves, the pass@128 score, which reflects broader reasoning ability, often declines. These tasks tend to have a high baseline pass@128, suggesting that the base model already possesses sufficient reasoning ability, and RL training merely sharpens the output distribution at the expense of exploration and generality.",
+    "location": "Section 4 (Analysis)",
+    "grade": "measured-small",
+    "bears_on": "Where the base model is competent, RL's gain is elicitation: re-weighting existing solutions, which needs few bits of trainable state.",
+    "from_review": "rl-scaling",
+    "quantities": []
+   },
+   {
+    "id": "liu-2025-prorl/5",
+    "claim": "On some benchmarks the gains arrive early and the remaining prolonged training adds almost nothing.",
+    "quote": "these gains are largely achieved early in training. Comparing the intermediate and final checkpoints shows that ProRL offers negligible additional benefit, implying that the model quickly saturates its learning potential for these tasks.",
+    "location": "Section 4 (Analysis), 'Gains Plateau'",
+    "grade": "measured-small",
+    "bears_on": "Saturation of RL on a fixed task set, consistent with a sigmoid in compute; complex coding tasks kept improving in the same run.",
+    "from_review": "rl-scaling",
+    "quantities": []
    }
   ]
  },
@@ -954,6 +1200,29 @@
     "grade": "measured-small",
     "bears_on": "RL can create genuinely new (compositional) capability from a small update when the base has the parts; the 'RL only elicits' view fails at the edge of competence.",
     "from_review": "capability-measures"
+   },
+   {
+    "id": "yuan-2025-rl-composition/2",
+    "claim": "With outcome reward only, RL on Llama-3.1-8B-Instruct teaches composition of known string functions: unseen Level-3 compositions go from near zero to 30% and Level-4 to 15%; rejection fine-tuning on the same data does not.",
+    "quote": "RL on Level-2 problems, receiving only correctness-based outcome rewards without reasoning demonstrations, substantially improves generalization on more difficult problems: performance on unseen Level-3 tasks improves from near-zero to 30%, and Level-4 to 15%. This generalization does not occur in a baseline trained with rejection fine-tuning (RFT) on the same Level-2 problems.",
+    "location": "Section 1 (findings)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 30,
+      "unit": "% accuracy on unseen Level-3 compositions",
+      "condition": "Llama-3.1-8B-Instruct after RL on Level-2, from near zero"
+     },
+     {
+      "param": "other",
+      "value": 15,
+      "unit": "% accuracy on unseen Level-4 compositions",
+      "condition": "same"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "RL can create capability absent at pass@1 (composition), beyond pure elicitation, on a synthetic task at 8B.",
+    "from_review": "rl-scaling"
    }
   ]
  },

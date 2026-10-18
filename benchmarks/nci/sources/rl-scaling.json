@@ -1,1 +1,963 @@
-[]
+[
+  {
+    "id": "khatri-2025-scalerl",
+    "title": "The Art of Scaling Reinforcement Learning Compute for LLMs",
+    "authors": "Devvrit Khatri, Lovish Madaan, Rishabh Tiwari, Rachit Bansal, Sai Surya Duvvuri, Manzil Zaheer, Inderjit S. Dhillon, David Brandfonbrener, Rishabh Agarwal",
+    "year": 2025,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2510.13786",
+    "topics": [
+      "rl-scaling"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "khatri-2025-scalerl/1",
+        "claim": "The largest public RL compute-scaling study (Meta and collaborators) spent more than 400,000 GB200 GPU-hours and fits RL reward against compute with a sigmoid, not a power law; its largest single run used 100,000 GPU-hours on an 8B dense model.",
+        "quote": "We present the first large-scale systematic study, amounting to more than 400,000 GPU-hours, that defines a principled framework for analyzing and predicting RL scaling in LLMs. We fit sigmoidal compute-performance curves for RL training",
+        "location": "abstract; Section 5",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 400000,
+            "unit": "GPU-hours (Nvidia GB200)",
+            "condition": "whole study, 8B dense and 17Bx16 MoE (Llama-4 Scout) models, math RL on Polaris-53k"
+          },
+          {
+            "param": "other",
+            "value": 100000,
+            "unit": "GPU-hours (Nvidia GB200)",
+            "condition": "largest single RL run, 8B dense, 7,400 steps; the Scout MoE run used 50,000"
+          }
+        ],
+        "grade": "measured-small",
+        "bears_on": "The functional form for RL-compute scaling: reward approaches a ceiling A set by model and data, so returns to RL compute vanish past a few times C_mid. Largest models are 8B dense and 109B-total MoE, not frontier size.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "khatri-2025-scalerl/2",
+        "claim": "ScaleRL on an 8B dense model saturates at a fitted asymptote of 0.61 mean@16 pass rate on held-out math prompts, reaching half its gain at 2,542 GB200-hours (B = 1.92); 90% of the asymptotic gain arrives by about 8,000 GPU-hours, so most of the 100,000-hour run buys the last tenth.",
+        "quote": "ScaleRL surpasses all other methods, achieving an asymptotic reward of $A=0.61$",
+        "location": "Figure 2; Table 1 (C_mid 2542, B 1.92, A 0.610)",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 0.61,
+            "unit": "mean@16 pass rate (fitted asymptote A)",
+            "condition": "ScaleRL, 8B dense, 1,000 held-out Polaris-53k math prompts, 14k-token generation budget; sigmoid R_C - R_0 = (A - R_0)/(1 + (C_mid/C)^B)"
+          },
+          {
+            "param": "other",
+            "value": 2542,
+            "unit": "GB200 GPU-hours (C_mid, half the asymptotic gain)",
+            "condition": "same run, Table 1, B = 1.92"
+          },
+          {
+            "param": "other",
+            "value": 8000,
+            "unit": "GB200 GPU-hours to 90% of the asymptotic gain",
+            "condition": "derived: C_mid x 9^(1/B) = 2542 x 3.14; the 100,000-hour run is about 12x past this point"
+          }
+        ],
+        "grade": "measured-small",
+        "bears_on": "Shape of RL compute scaling on a fixed task distribution: a sigmoid whose useful range spans roughly C_mid/3 to 3 C_mid, about one decade of compute.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "khatri-2025-scalerl/3",
+        "claim": "A larger base raises RL's ceiling: the 17Bx16 MoE (Scout, 109B total) reaches a higher asymptote (0.71) than the 8B dense model (0.61) and beats the 8B's final score with one sixth of its RL compute.",
+        "quote": "the larger 17B×16 MoE exhibits much higher asymptotic RL performance than the 8B dense model, outperforming the 8B’s performance using only $1/6$ of its RL training compute.",
+        "location": "Section 5; Table 1 (ScaleRL-Scout: C_mid 4242, B 1.65, A 0.710)",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 0.71,
+            "unit": "mean@16 pass rate (fitted asymptote A)",
+            "condition": "ScaleRL on Llama-4 Scout 17Bx16 MoE, same held-out Polaris-53k prompts"
+          },
+          {
+            "param": "other",
+            "value": 0.167,
+            "unit": "ratio of RL compute",
+            "condition": "Scout's RL compute to match the 8B dense model's final performance (1/6)"
+          }
+        ],
+        "grade": "measured-small",
+        "bears_on": "RL's asymptote is set mostly by the pretrained base, so the base (free to read under NCI if registered) carries the capability and RL compute buys a bounded increment.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "khatri-2025-scalerl/4",
+        "claim": "Raising the generation budget from 14k to 32k tokens lifts the asymptote (0.61 to 0.645) but quadruples C_mid (2,542 to 11,272 GPU-hours), so the ceiling moves only with longer reasoning, at higher compute.",
+        "quote": "Increasing the generation length from 14k to 32k tokens slows early progress (lower $B$ and higher $C_{mid}$ ) but consistently lifts the fitted asymptote (A), yielding higher final performance once sufficient compute is provided",
+        "location": "Section 5; Table 1 (ScaleRL-32k: C_mid 11272, B 1.89, A 0.645)",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 0.645,
+            "unit": "mean@16 pass rate (fitted asymptote A)",
+            "condition": "ScaleRL-32k, 8B dense, 32k-token generation budget"
+          },
+          {
+            "param": "other",
+            "value": 36000,
+            "unit": "GB200 GPU-hours to 90% of the asymptotic gain",
+            "condition": "derived: 11272 x 9^(1/1.89) = 11272 x 3.20"
+          }
+        ],
+        "grade": "measured-small",
+        "bears_on": "The knob that raises RL's ceiling is test-time reasoning length, which is inference compute rather than accumulated trainable state.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "khatri-2025-scalerl/5",
+        "claim": "Negative result for power-law extrapolation of RL: a power law fitted to 1.5k-50k GPU-hours predicts a perfect asymptote of 1.0 while the observed curve saturates near 0.65; the sigmoid predicts 0.645.",
+        "quote": "it predicts an asymptotic performance of $A=1.0$ , which is clearly incorrect - the actual curve saturates near $0.65$ . In contrast, the sigmoidal fit yields an accurate prediction of $A=0.645$",
+        "location": "Appendix A.4",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 0.65,
+            "unit": "mean@16 pass rate at saturation",
+            "condition": "observed, 8B dense 100k GPU-hour run"
+          },
+          {
+            "param": "other",
+            "value": 1.0,
+            "unit": "mean@16 pass rate (power-law-fitted asymptote)",
+            "condition": "power law fitted between 1.5k and 50k GPU-hours"
+          }
+        ],
+        "grade": "measured-small",
+        "bears_on": "Arguments that RL gains keep growing as a power law of compute are contradicted at 8B on a fixed prompt set; saturation, not unbounded scaling, is the measured behaviour.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "khatri-2025-scalerl/6",
+        "claim": "The paper's framing numbers: DeepSeek-R1-Zero's RL used 100,000 H800 GPU-hours, 3.75% of its pretraining compute, and RL compute grew more than 10x from o1 to o3 with a similar leap from Grok 3 to Grok 4.",
+        "quote": "Deepseek-R1-Zero used 100,000 H800 GPU hours for RL training – 3.75% of its pre-training compute (Guo et al., 2025). This dramatic increase in RL compute is amplified across frontier LLM generations, with more than 10 $\\times$ increase from o1 to o3 (OpenAI, 2025) and a similar leap from Grok-3 to Grok-4",
+        "location": "Section 1 (Introduction)",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 0.0375,
+            "unit": "fraction of pretraining compute",
+            "condition": "DeepSeek-R1-Zero RL stage, as cited from Guo et al. 2025"
+          },
+          {
+            "param": "other",
+            "value": 10,
+            "unit": "ratio of RL training compute (lower bound)",
+            "condition": "o3 vs o1, and similarly Grok 4 vs Grok 3"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "RL's share of frontier training compute: a few percent at R1 (Jan 2025), growing by 10x per generation since.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "openai-2025-o3",
+    "title": "Introducing OpenAI o3 and o4-mini",
+    "authors": "OpenAI",
+    "year": 2025,
+    "venue": "OpenAI blog",
+    "url": "https://openai.com/index/introducing-o3-and-o4-mini/",
+    "topics": [
+      "rl-scaling",
+      "governance"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "openai-2025-o3/1",
+        "claim": "OpenAI says o3 used an order of magnitude more RL training compute than o1 and still showed clear gains; no absolute compute is given.",
+        "quote": "By retracing the scaling path—this time in RL—we’ve pushed an additional order of magnitude in both training compute and inference-time reasoning, yet still see clear performance gains",
+        "location": "section 'Continuing to scale reinforcement learning'",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 10,
+            "unit": "ratio of RL training compute",
+            "condition": "o3 vs o1 ('an additional order of magnitude')"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Frontier RL compute grew 10x in one generation (Sep 2024 to Apr 2025) without visible saturation, as disclosed only as a ratio.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "deepseek-2025-r1-nature",
+    "title": "DeepSeek-R1 incentivizes reasoning in LLMs through reinforcement learning",
+    "authors": "Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, et al. (DeepSeek-AI)",
+    "year": 2025,
+    "venue": "Nature 645, 633-638 (with Supplementary Information and Peer Review File)",
+    "url": "https://www.nature.com/articles/s41586-025-09422-z",
+    "topics": [
+      "rl-scaling",
+      "governance"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "deepseek-2025-r1-nature/1",
+        "claim": "DeepSeek's only first-party RL compute disclosure: R1-Zero's RL took 512 H800s for about 198 hours (101K GPU-hours), the R1 stage 41K, SFT data creation 5K, 147K in all ($294K at $2/GPU-hour), for a 671B-total, 37B-active model; that is about 4% of DeepSeek-V3's pretraining GPU-hours for R1-Zero and 5.5% for everything.",
+        "quote": "For the training of DeepSeek-R1-Zero, we employed 64*8 H800 GPUs, and the process required approximately 198 hours. Additionally, during the training phase of DeepSeek-R1, we utilized the same 64*8 H800 GPUs, completing the process in about 4 days, or roughly 80 hours. To create the SFT datasets, we use 5K GPU hours.",
+        "location": "Supplementary Information 2.4.4 and Supplementary Table 4",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 101000,
+            "unit": "H800 GPU-hours",
+            "condition": "DeepSeek-R1-Zero RL stage, Supplementary Table 4"
+          },
+          {
+            "param": "other",
+            "value": 147000,
+            "unit": "H800 GPU-hours",
+            "condition": "R1-Zero 101K + SFT data creation 5K + DeepSeek-R1 41K, Supplementary Table 4; $294K at $2 per GPU-hour"
+          },
+          {
+            "param": "other",
+            "value": 0.038,
+            "unit": "fraction of pretraining GPU-hours",
+            "condition": "derived: 101K / 2,664K H800-hours of DeepSeek-V3 pretraining (DeepSeek-V3 report)"
+          },
+          {
+            "param": "other",
+            "value": 0.055,
+            "unit": "fraction of pretraining GPU-hours",
+            "condition": "derived: 147K / 2,664K, all post-training stages listed"
+          },
+          {
+            "param": "other",
+            "value": 3.6e+23,
+            "unit": "FLOP (upper bound at 100% utilization)",
+            "condition": "derived: 101K H800-hours x 3600 s x 989 TFLOP/s dense BF16 peak; 7.2e23 at the dense FP8 peak"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "The one audited-by-referees RL compute figure for a frontier-class open model: RL was a few percent of pretraining.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "deepseek-2025-r1-nature/2",
+        "claim": "The disclosed cost excludes the research runs: DeepSeek first ran the experiments on a 30B model on A100s, whose compute is not in the cost table.",
+        "quote": "we utilized the A100 GPUs to prepare for the experiments with a smaller model (30B parameters).",
+        "location": "Supplementary Information 2.4.4 (Training Cost)",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 30000000000,
+            "unit": "parameters",
+            "condition": "the A100 pilot model whose compute is absent from Supplementary Table 4"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Reporting gap: even the most complete disclosure counts only the final runs, not the experiments that found the recipe.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "deepseek-2025-r1-nature/3",
+        "claim": "DeepSeek did not apply large-scale RL to software engineering because evaluations are slow, and R1 shows no large SWE gain over V3 (SWE-bench Verified 42.0 to 49.2); tasks without reliable reward got only hundreds of RL steps.",
+        "quote": "Owing to the long evaluation times, which affect the efficiency of the RL process, large-scale RL has not been applied extensively in software-engineering tasks. As a result, DeepSeek-R1 has not demonstrated a huge improvement over DeepSeek-V3 on software-engineering benchmarks.",
+        "location": "main text, Limitations ('Software-engineering tasks'); Supplementary Table 9",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 7.2,
+            "unit": "percentage points SWE-bench Verified (resolved)",
+            "condition": "DeepSeek-V3 42.0 to DeepSeek-R1 49.2; R1-Zero 43.2 (Supplementary Table 9)"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "In early 2025 frontier RL concentrated on verifiable math and code; agentic and SWE RL, the hard case for small trainable state, was not yet scaled.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "deepseek-2025-r1-nature/4",
+        "claim": "On the same 671B base (V3-Base, V3, R1-Zero, R1 columns), RL's gains are large on math and competitive code and small on knowledge and SWE: AIME 2024 39.2 (V3) to 79.8 (R1), Codeforces percentile 58.7 to 96.3, SWE-bench Verified 42.0 to 49.2, MMLU 87.1 (V3-Base) to 88.8 (R1-Zero) to 90.8 (R1).",
+        "quote": "SWE Verified (Resolved) - 42.0 43.2 49.2 Aider-Polyglot (Acc.) - 49.6 12.2 53.3 AIME 2024 (Pass@1) - 39.2 77.9 79.8",
+        "location": "Supplementary Table 9 (A Comparative Analysis of DeepSeek-V3 and DeepSeek-R1)",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 40.6,
+            "unit": "percentage points AIME 2024 pass@1",
+            "condition": "DeepSeek-V3 39.2 to DeepSeek-R1 79.8; pure-RL R1-Zero 77.9"
+          },
+          {
+            "param": "other",
+            "value": 1.7,
+            "unit": "percentage points MMLU (EM)",
+            "condition": "V3-Base 87.1 to pure-RL R1-Zero 88.8"
+          },
+          {
+            "param": "other",
+            "value": 1.2,
+            "unit": "percentage points SWE-bench Verified",
+            "condition": "V3 42.0 to pure-RL R1-Zero 43.2"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "How much of a frontier model's gain over its base is RL's depends on the domain: most of it in competition math, a small share in knowledge and SWE.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "deepseek-2025-r1-nature/5",
+        "claim": "Negative result: RL on 7B dense and 16B MoE bases failed to improve AIME, and for small models distillation beats RL (Qwen2.5-32B-Zero after more than 10K RL steps: 47.0 AIME 2024 vs 72.6 for R1-Distill-Qwen-32B).",
+        "quote": "we experimented with smaller-scale models, specifically a 7B dense model and a 16B Mixture-of-Experts (MoE) model, as the foundational architectures for RL training. However, these configurations consistently failed to yield meaningful improvements when evaluated on the AIME benchmark",
+        "location": "Supplementary Information 7.1 (Key Findings) and 6.1; Supplementary Table 13",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 47.0,
+            "unit": "% AIME 2024 pass@1",
+            "condition": "Qwen2.5-32B-Zero, large-scale RL directly on the 32B base"
+          },
+          {
+            "param": "other",
+            "value": 72.6,
+            "unit": "% AIME 2024 pass@1",
+            "condition": "DeepSeek-R1-Distill-Qwen-32B, SFT on R1 outputs"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "RL's gain depends on base scale; below a threshold it fails outright, and copying a stronger model's outputs is cheaper.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "deepseek-2025-r1-nature/6",
+        "claim": "The compute disclosure exists because a Nature referee demanded it; DeepSeek answered by adding an appendix saying RL needs fewer GPU-hours than pretraining.",
+        "quote": "More information about the cost. We read that RL training incurs “high demands”. This should be made explicit with actual data of time and compute, and specifications of the hardware used, including cost of RL and all the stages of R1-zero and R1, distillation, etc.",
+        "location": "Peer Review File, Referee comment 7 and response",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "Reporting gap: RL compute is disclosed only under external pressure; the January 2025 arXiv version had none.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "minimax-2025-m1",
+    "title": "MiniMax-M1: Scaling Test-Time Compute Efficiently with Lightning Attention",
+    "authors": "MiniMax",
+    "year": 2025,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2506.13585",
+    "topics": [
+      "rl-scaling"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "minimax-2025-m1/1",
+        "claim": "MiniMax-M1 (456B total, 45.9B active, continued-pretrained on 7.5T tokens) ran its full RL on 512 H800s for three weeks at a $534,700 rental cost, about 2.6e5 GPU-hours, including SWE sandbox tasks.",
+        "quote": "Combining hybrid-attention and CISPO enables MiniMax-M1’s full RL training on 512 H800 GPUs to complete in only three weeks, with a rental cost of just $534,700.",
+        "location": "abstract",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 534700,
+            "unit": "USD (rental)",
+            "condition": "MiniMax-M1 full RL stage"
+          },
+          {
+            "param": "other",
+            "value": 258000,
+            "unit": "H800 GPU-hours",
+            "condition": "derived: 512 GPUs x 21 days x 24 h; $534,700 / 258,048 h = $2.07 per hour"
+          },
+          {
+            "param": "other",
+            "value": 9.2e+23,
+            "unit": "FLOP (upper bound at 100% utilization)",
+            "condition": "derived: 258,000 H800-hours x 3600 s x 989 TFLOP/s dense BF16; continued pretraining alone is about 6 x 45.9e9 x 7.5e12 = 2.1e24 FLOP"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "A Chinese lab's disclosed RL cost for a 456B model: hundreds of thousands of dollars, small next to pretraining.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "qwen-2025-qwen3",
+    "title": "Qwen3 Technical Report",
+    "authors": "Qwen Team (An Yang, Anfeng Li, Baosong Yang, et al.)",
+    "year": 2025,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2505.09388",
+    "topics": [
+      "rl-scaling",
+      "capability-per-bit"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "qwen-2025-qwen3/1",
+        "claim": "Qwen3-235B-A22B's reasoning RL stage used 3,995 query-verifier pairs with GRPO and took AIME'24 from 70.1 to 85.1 in 170 steps; the report gives no RL GPU-hours for the flagship (pretraining was 36T tokens).",
+        "quote": "the AIME’24 score of the Qwen3-235B-A22B model increases from 70.1 to 85.1 over a total of 170 RL training steps.",
+        "location": "Section 4.2 (Reasoning RL)",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 3995,
+            "unit": "query-verifier pairs (RL training set)",
+            "condition": "Section 4.2: 'We ultimately collect a total of 3,995 query-verifier pairs'"
+          },
+          {
+            "param": "other",
+            "value": 170,
+            "unit": "RL steps",
+            "condition": "Qwen3-235B-A22B reasoning RL"
+          },
+          {
+            "param": "other",
+            "value": 15,
+            "unit": "percentage points AIME'24",
+            "condition": "70.1 to 85.1 over the reasoning RL stage"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Frontier reasoning RL can be short and narrow (4k prompts, 170 steps) for a large gain, consistent with elicitation needing little new information.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "qwen-2025-qwen3/2",
+        "claim": "On Qwen3-8B, on-policy distillation from the larger Qwen3 beats RL with a tenth of the GPU-hours: RL spent 17,920 GPU-hours to reach 67.6 on AIME'24 (from 55.0), distillation 1,800 to reach 74.4.",
+        "quote": "distillation achieves significantly better performance than reinforcement learning while requiring approximately only $1/10$ of the GPU hours.",
+        "location": "Section 4.7 (Discussion); Table 21",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 17920,
+            "unit": "GPU-hours (type not given)",
+            "condition": "RL on Qwen3-8B from an off-policy-distilled checkpoint, math and code; AIME'24 pass@1 55.0 to 67.6"
+          },
+          {
+            "param": "other",
+            "value": 1800,
+            "unit": "GPU-hours (type not given)",
+            "condition": "on-policy distillation from the same checkpoint; AIME'24 pass@1 74.4"
+          }
+        ],
+        "grade": "measured-small",
+        "bears_on": "When a stronger model exists, reading its logits (free under NCI if registered) beats RL; this is how Qwen3's small models were trained.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "qwen-2025-qwen3/3",
+        "claim": "Negative result: in the same comparison RL leaves pass@64 unchanged (AIME'24 90.0 before and after), while distillation raises it to 93.3.",
+        "quote": "In contrast, reinforcement learning does not lead to any improvement in pass@64 scores.",
+        "location": "Section 4.7 (Discussion); Table 21",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 90.0,
+            "unit": "% AIME'24 pass@64",
+            "condition": "Qwen3-8B before and after RL (unchanged); 93.3 after on-policy distillation"
+          }
+        ],
+        "grade": "measured-small",
+        "bears_on": "RL's gain here is pass@1 sharpening within the base's pass@k support, the elicitation regime where small trainable state suffices.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "deepseek-2025-v32",
+    "title": "DeepSeek-V3.2: Pushing the Frontier of Open Large Language Models",
+    "authors": "DeepSeek-AI",
+    "year": 2025,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2512.02556",
+    "topics": [
+      "rl-scaling"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "deepseek-2025-v32/1",
+        "claim": "By December 2025 DeepSeek's RL budget for V3.2 (671B total, 37B active) exceeded 10% of pretraining cost, up from about 4% for R1, with gains still tracking RL budget.",
+        "quote": "Over recent months, we have observed consistent performance improvements correlating with extended RL training budget, which already exceeds 10% of the pre-training cost. We hypothesize that reasoning capabilities could be further enhanced with additional computational budget allocation.",
+        "location": "Section 4.1 (Main Results); also Section 1",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 0.1,
+            "unit": "fraction of pretraining cost (lower bound)",
+            "condition": "DeepSeek-V3.2 RL training budget; no absolute FLOP or GPU-hours given"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "RL's share of a Chinese frontier model's training rose from a few percent to over 10% within a year, without saturation reported.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "deepseek-2025-v32/2",
+        "claim": "DeepSeek attributes V3.2's knowledge gap to frontier closed models to fewer total training FLOPs and plans to close it with more pretraining, not more RL.",
+        "quote": "due to fewer total training FLOPs, the breadth of world knowledge in DeepSeek-V3.2 still lags behind that of leading proprietary models.",
+        "location": "Section 5 (Conclusion, Limitation, and Future Work)",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "RL does not substitute for pretraining on knowledge; the knowledge-bearing part of capability still comes from pretraining scale.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "kimiteam-2025-kimi-k15",
+    "title": "Kimi k1.5: Scaling Reinforcement Learning with LLMs",
+    "authors": "Kimi Team",
+    "year": 2025,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2501.12599",
+    "topics": [
+      "rl-scaling",
+      "governance"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "kimiteam-2025-kimi-k15/1",
+        "claim": "The Kimi k1.5 report, titled as an RL-scaling paper, gives neither the model's parameter count nor any RL compute, and its training-dynamics curves come from an undisclosed smaller internal model.",
+        "quote": "Note that the scores above come from an internal long-cot model with much smaller model size than k1.5 long-CoT model.",
+        "location": "Figure 5 caption",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "Reporting gap at a Chinese frontier lab: the RL scaling evidence is shown for a different, undisclosed model, and k1.5's size and RL compute are absent.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "glm-2025-glm45",
+    "title": "GLM-4.5: Agentic, Reasoning, and Coding (ARC) Foundation Models",
+    "authors": "GLM-4.5 Team (Zhipu AI and Tsinghua University)",
+    "year": 2025,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2508.06471",
+    "topics": [
+      "rl-scaling",
+      "governance"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "glm-2025-glm45/1",
+        "claim": "GLM-4.5 (355B total, 32B active, 23T training tokens) reaches 64.2% on SWE-bench Verified after expert-model iteration and RL, but the report discloses no RL compute.",
+        "quote": "Through multi-stage training on 23T tokens and comprehensive post-training with expert model iteration and reinforcement learning, GLM-4.5 achieves strong performance across agentic, reasoning, and coding (ARC) tasks, scoring 70.1% on TAU-Bench, 91.0% on AIME 24, and 64.2% on SWE-bench Verified.",
+        "location": "abstract",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 23000000000000,
+            "unit": "training tokens (pretraining and mid-training)",
+            "condition": "GLM-4.5, 355B total / 32B active"
+          },
+          {
+            "param": "other",
+            "value": 64.2,
+            "unit": "% SWE-bench Verified",
+            "condition": "GLM-4.5 after RL; no RL-free ablation or RL compute reported"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Reporting gap: a Chinese lab doing agentic and SWE RL at 355B reports results but not RL compute or the RL-attributable share.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "google-2025-gemini25",
+    "title": "Gemini 2.5: Pushing the Frontier with Advanced Reasoning, Multimodality, Long Context, and Next Generation Agentic Capabilities",
+    "authors": "Gemini Team, Google",
+    "year": 2025,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2507.06261",
+    "topics": [
+      "rl-scaling",
+      "governance"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "google-2025-gemini25/1",
+        "claim": "Google says only that it increased RL training compute for Gemini 2.5, with no numbers, share or model size.",
+        "quote": "Furthermore, we have increased the training compute allocated to RL, allowing deeper exploration and refinement of model behaviors.",
+        "location": "Section 2.4 (Post-training)",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "Reporting gap: a frontier lab's technical report states the direction of RL compute but not its size.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "xai-2025-grok4",
+    "title": "Grok 4",
+    "authors": "xAI",
+    "year": 2025,
+    "venue": "xAI news post",
+    "url": "https://x.ai/news/grok-4",
+    "topics": [
+      "rl-scaling",
+      "governance"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "xai-2025-grok4/1",
+        "claim": "xAI ran Grok 4's RL on its 200,000-GPU Colossus cluster at 'pretraining scale', with more than 10x the compute of earlier runs, a claimed 6x efficiency gain, and verifiable data expanded beyond math and code.",
+        "quote": "For Grok 4, we utilized Colossus, our 200,000 GPU cluster, to run reinforcement learning training that refines Grok's reasoning abilities at pretraining scale. This was made possible with innovations throughout the stack, including new infrastructure and algorithmic work that increased the compute efficiency of our training by 6x, as well as a massive data collection effort, where we significantly expanded our verifiable training data from primarily math and coding data to many more domains. The resulting training run saw smooth performance gains while training on over an order of magnitude more compute than had been used previously.",
+        "location": "post body",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 200000,
+            "unit": "GPUs (cluster size)",
+            "condition": "Colossus, Grok 4 RL"
+          },
+          {
+            "param": "other",
+            "value": 10,
+            "unit": "ratio of RL training compute (lower bound)",
+            "condition": "Grok 4 RL vs previous runs ('over an order of magnitude')"
+          },
+          {
+            "param": "other",
+            "value": 1.0,
+            "unit": "ratio of RL compute to pretraining compute (stated, order of magnitude)",
+            "condition": "'at pretraining scale'; no FLOP given"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "By July 2025 a frontier lab says RL compute matched pretraining; under NCI, full-weight RL at that scale is the case slowed by about 1e7x.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "amodei-2025-deepseek-export-controls",
+    "title": "On DeepSeek and Export Controls",
+    "authors": "Dario Amodei",
+    "year": 2025,
+    "venue": "personal essay (darioamodei.com)",
+    "url": "https://www.darioamodei.com/post/on-deepseek-and-export-controls",
+    "topics": [
+      "rl-scaling",
+      "governance"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "amodei-2025-deepseek-export-controls/1",
+        "claim": "Anthropic's CEO said in January 2025 that every lab's RL spend was still small, that going from $0.1M to $1M gave huge gains, and that labs were scaling RL to hundreds of millions and billions of dollars.",
+        "quote": "Importantly, because this type of RL is new, we are still very early on the scaling curve: the amount being spent on the second, RL stage is small for all players. Spending $1M instead of $0.1M is enough to get huge gains. Companies are now working very quickly to scale up the second stage to hundreds of millions and billions",
+        "location": "section on DeepSeek-R1",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 1000000,
+            "unit": "USD of RL spend",
+            "condition": "the level said to give 'huge gains' over $0.1M, early 2025"
+          }
+        ],
+        "grade": "speculative",
+        "bears_on": "An insider statement that frontier RL spend is planned to reach $1e8-$1e9, far beyond what any lab has disclosed.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "erdil-2025-epoch-r1",
+    "title": "What went into training DeepSeek-R1?",
+    "authors": "Ege Erdil (Epoch AI)",
+    "year": 2025,
+    "venue": "Epoch AI Gradient Updates",
+    "url": "https://epoch.ai/gradient-updates/what-went-into-training-deepseek-r1",
+    "topics": [
+      "rl-scaling"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "erdil-2025-epoch-r1/1",
+        "claim": "Before DeepSeek disclosed hours, Epoch estimated R1-Zero's RL at 6.1e23 FLOP (about $1M), about 20% of V3's 3e24-FLOP pretraining; at Epoch's assumed pretraining-like utilization that implies about 4.9e5 H800-hours, about 5x the 101K DeepSeek later reported.",
+        "quote": "we come up with a final cost estimate for the initial reasoning RL phase of 6.1e23 FLOP, or around $1M if the RL phase had a similar MFU to pretraining.",
+        "location": "final section",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 6.1e+23,
+            "unit": "FLOP",
+            "condition": "Epoch's estimate of DeepSeek-R1-Zero RL from steps, batch and response length"
+          },
+          {
+            "param": "other",
+            "value": 0.2,
+            "unit": "fraction of pretraining compute",
+            "condition": "derived: 6.1e23 / 3e24 (Epoch's DeepSeek-V3 pretraining estimate)"
+          },
+          {
+            "param": "other",
+            "value": 490000,
+            "unit": "H800 GPU-hours implied",
+            "condition": "derived: 6.1e23 / (23% MFU x 1.5e15 FP8 FLOP/s) / 3600; DeepSeek's Nature SI reports 101K"
+          }
+        ],
+        "grade": "extrapolated",
+        "bears_on": "Outside estimates of RL compute can be off by about 5x even for the best-documented model; the first-party figure is lower.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "sanders-2025-epoch-grok4",
+    "title": "What did it take to train Grok 4?",
+    "authors": "James Sanders, Luke Emberson, Yafah Edelman (Epoch AI)",
+    "year": 2025,
+    "venue": "Epoch AI Data Insights",
+    "url": "https://epoch.ai/data-insights/grok-4-training-resources",
+    "topics": [
+      "rl-scaling",
+      "governance"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "sanders-2025-epoch-grok4/1",
+        "claim": "Epoch estimates Grok 4's whole training at 246 million H100-hours, extrapolated from Grok 3 and xAI's statements, which Epoch calls often vague.",
+        "quote": "We estimate that Grok-4 was trained using 246 million H100-hours, based on known details about Grok-3’s training resources and assumptions about the amount by which training was scaled up for Grok-4.",
+        "location": "Analysis, Power",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 246000000,
+            "unit": "H100 GPU-hours",
+            "condition": "Grok 4 total training (pretraining plus RL), Epoch estimate"
+          }
+        ],
+        "grade": "extrapolated",
+        "bears_on": "If RL was at 'pretraining scale', Grok 4's RL was of order 1e8 H100-hours, about 1,000x DeepSeek-R1's disclosed RL; the figure rests on vague public statements.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "mehta-2026-agentic-coding-rl-transfer",
+    "title": "Cross-Benchmark Transfer from RL on Agentic Coding Tasks",
+    "authors": "Sushant Mehta, Logan Ritchie, Edwin Chen",
+    "year": 2026,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2610.00890",
+    "topics": [
+      "rl-scaling",
+      "updates",
+      "strategy-lowrank-sparse"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "mehta-2026-agentic-coding-rl-transfer/1",
+        "claim": "The largest-scale low-rank agentic RL result: one epoch of GSPO (108 rollout steps) on 1,700 expert-built tasks, training a rank-32 LoRA on the attention and MLP projections of Kimi K2.7 Code (1T total, 32B active) on 64 H200s, improves pass@1 on all six external benchmarks, e.g. Terminal-Bench 2.1 from 67.4 to 82.0. There is no full-parameter baseline, results are single runs, and it is unstated whether routed experts carry adapters.",
+        "quote": "One epoch of GSPO on a rank-32 LoRA adapter improves pass@1 on each of the six external benchmarks we evaluated, across three agent harnesses: SWE-Bench Pro (60.1$\\rightarrow$ 64.8), DeepSWE (31.0$\\rightarrow$ 43.4), Terminal-Bench 2.1 (67.4$\\rightarrow$ 82.0)",
+        "location": "abstract; Section 4 (Method), including 4.2 (low-rank adaptation); Appendix A.1",
+        "quantities": [
+          {
+            "param": "update.rank",
+            "value": 32,
+            "unit": "LoRA rank",
+            "condition": "attention and MLP projections of a 1T-total / 32B-active MoE, alpha 32"
+          },
+          {
+            "param": "update.bits_total",
+            "value": 2700000000.0,
+            "unit": "bits",
+            "condition": "derived, low reading: rank-32 LoRA on MLA attention projections and shared experts only, about 1.7e8 parameters x 16 bits (Kimi K2 shapes: 61 layers, hidden 7168)"
+          },
+          {
+            "param": "update.bits_total",
+            "value": 330000000000.0,
+            "unit": "bits",
+            "condition": "derived, high reading: adapters on all 384 routed experts in 60 MoE layers, about 2.0e10 parameters x 16 bits"
+          },
+          {
+            "param": "other",
+            "value": 14.6,
+            "unit": "percentage points pass@1",
+            "condition": "Terminal-Bench 2.1, 67.4 to 82.0; SWE-Bench Pro +4.7, DeepSWE +12.4"
+          },
+          {
+            "param": "other",
+            "value": 64,
+            "unit": "NVIDIA H200 GPUs",
+            "condition": "whole training run, rollout and update co-located"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Hard agentic coding RL on a frontier-size model works with a low-rank adapter, but that adapter is 1e2-1e4 times larger than a 2e7-bit block, and no full-weight comparison says what fraction is retained.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "mehta-2026-agentic-coding-rl-transfer/2",
+        "claim": "The authors conclude that what agentic RL transferred was not domain knowledge, which the base already had, but a way of finishing work.",
+        "quote": "The evidence points to what transfers: not domain knowledge, which the base model largely had, but a way of finishing work.",
+        "location": "Section 1 (Introduction)",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "Agentic RL's gain at 1T reads as behavioural elicitation (completion habits), the kind of change that may compress to small state, though that is untested.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "kang-2026-trace",
+    "title": "TRACE: Capability-Targeted Agentic Training",
+    "authors": "Hangoo Kang, Tarun Suresh, Jon Saad-Falcon, Azalia Mirhoseini",
+    "year": 2026,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2604.05336",
+    "topics": [
+      "rl-scaling",
+      "updates",
+      "strategy-lowrank-sparse"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "kang-2026-trace/1",
+        "claim": "Agentic RL with per-capability LoRA adapters on Qwen3-30B-A3B lifts SWE-bench Verified pass@1 from 26.0 to 41.0 (and Qwen3.6-27B from 68.0 to 73.2), but each adapter is about 1.6B parameters, 5.3% of the backbone.",
+        "quote": "each LoRA adapter introduces $\\sim\\!1.6$ B trainable parameters ($5.3\\%$ of the backbone)",
+        "location": "Section 4.1 (Experimental setup); Appendix D; Table 2",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 1600000000,
+            "unit": "trainable parameters per LoRA adapter",
+            "condition": "Qwen3-30B-A3B backbone (30.5B, frozen)"
+          },
+          {
+            "param": "update.bits_total",
+            "value": 26000000000.0,
+            "unit": "bits",
+            "condition": "derived: 1.6e9 parameters x 16 bits per adapter"
+          },
+          {
+            "param": "other",
+            "value": 15,
+            "unit": "percentage points SWE-bench Verified pass@1",
+            "condition": "Qwen3-30B-A3B base 26.0 to TRACE 41.0 (Table 2)"
+          }
+        ],
+        "grade": "measured-small",
+        "bears_on": "Published agentic SWE RL with adapters uses state of order 1e10 bits, three orders above K; no rank ablation tests whether 2e7 bits would do.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "yin-2025-peft-rlvr",
+    "title": "Evaluating Parameter Efficient Methods for RLVR",
+    "authors": "Qingyu Yin, Yulun Wu, Zhennan Shen, Sunbowen Li, Zhilin Wang, Yanshu Li, Chak Tou Leong, Jiale Kang, Jinjin Gu",
+    "year": 2025,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2512.23165",
+    "topics": [
+      "rl-scaling",
+      "updates",
+      "strategy-lowrank-sparse"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "yin-2025-peft-rlvr/1",
+        "claim": "Negative result on rank-1 RL: on DeepSeek-R1-Distill-Qwen-1.5B with DAPO-Math-17k, rank-1 LoRA gains nothing (average 40.5, equal to the base), rank 8 reaches 42.3, rank 16 43.9, against 44.9 for full fine-tuning.",
+        "quote": "our ablation across ranks 1, 8, 16, 32 reveals that relatively high ranks e.g., 16 and 32 yield superior results. Specifically, setting $r=1$ consistently underperformed higher-rank configurations.",
+        "location": "Section 3.2 (Ablation), rank table",
+        "quantities": [
+          {
+            "param": "update.rank",
+            "value": 1,
+            "unit": "LoRA rank",
+            "condition": "DeepSeek-R1-Distill-Qwen-1.5B, DAPO-Math-17k, average over math benchmarks"
+          },
+          {
+            "param": "other",
+            "value": 0,
+            "unit": "fraction of full-RL gain retained",
+            "condition": "derived: rank 1 (40.5 - 40.5) / (44.9 - 40.5)"
+          },
+          {
+            "param": "other",
+            "value": 0.41,
+            "unit": "fraction of full-RL gain retained",
+            "condition": "derived: rank 8 (42.3 - 40.5) / 4.4"
+          },
+          {
+            "param": "other",
+            "value": 0.77,
+            "unit": "fraction of full-RL gain retained",
+            "condition": "derived: rank 16 (43.9 - 40.5) / 4.4"
+          }
+        ],
+        "grade": "measured-small",
+        "bears_on": "Contradicts rank-1 sufficiency (Schulman et al., AlphaRL) for a distilled 1.5B reasoner on hard math; retention grows with rank.",
+        "from_review": "rl-scaling"
+      },
+      {
+        "id": "yin-2025-peft-rlvr/2",
+        "claim": "Standard LoRA (1.55% of parameters) reaches 42.5 against 44.9 for full-parameter RL, keeping about 45% of the gain; vector-only methods (VeRA, LayerNorm tuning) collapse toward the base.",
+        "quote": "While standard LoRA ( $42.5\\%$ ) serves as a respectable baseline, it consistently trails behind full-parameter fine-tuning ( $44.9\\%$ )",
+        "location": "Section 3.1 (Main results); Table 4",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 0.45,
+            "unit": "fraction of full-RL gain retained",
+            "condition": "derived: standard LoRA (42.5 - 40.5) / (44.9 - 40.5), 1.5B"
+          }
+        ],
+        "grade": "measured-small",
+        "bears_on": "On hard math RL at small scale, low-rank state loses about half the gain; the gap may close at larger scale, which this paper does not test beyond 7B.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  },
+  {
+    "id": "lv-2025-yicai-kimi-k2-thinking-cost",
+    "title": "Moonshot AI’s CEO Says Reported USD4.6 Million Cost of Training Kimi K2 ‘Isn't Official’",
+    "authors": "Lv Qian (Yicai Global)",
+    "year": 2025,
+    "venue": "Yicai Global",
+    "url": "https://www.yicaiglobal.com/news/kimi-k2-thinkings-reported-usd46-million-training-cost-isnt-official-moonshot-ceo-says",
+    "topics": [
+      "rl-scaling",
+      "governance"
+    ],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "lv-2025-yicai-kimi-k2-thinking-cost/1",
+        "claim": "Moonshot's CEO called the widely reported $4.6M training cost of Kimi K2 Thinking (from an unnamed CNBC source) unofficial and said the cost is hard to quantify because most of it is research and experiments; Moonshot has published no RL compute for K2 or K2 Thinking.",
+        "quote": "said the USD4.6 million being reported as the cost to train Kimi K2 Thinking, the Chinese artificial intelligence startup’s new reasoning model, “is not an official number. “It is hard to quantify the training cost because a major part is research and experiments,”",
+        "location": "article body (Nov 12 2025)",
+        "quantities": [
+          {
+            "param": "other",
+            "value": 4600000,
+            "unit": "USD (reported, unofficial)",
+            "condition": "Kimi K2 Thinking training cost, figure from an unnamed source via CNBC, disowned by the CEO"
+          }
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Reporting gap: Chinese frontier labs' headline costs omit research and experiment compute, and RL compute for 1T models is undisclosed.",
+        "from_review": "rl-scaling"
+      }
+    ]
+  }
+]

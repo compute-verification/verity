@@ -708,6 +708,23 @@
     "grade": "measured-at-scale",
     "bears_on": "Fixes the rate behind deepseekai-2024-deepseek-v3/1: 8.25 bits per activation entry, forward and backward.",
     "from_review": "activations"
+   },
+   {
+    "id": "deepseekai-2024-deepseek-v3/8",
+    "claim": "DeepSeek-V3's pretraining cost 2.664M H800 GPU-hours on 14.8T tokens.",
+    "quote": "At an economical cost of only 2.664M H800 GPU hours, we complete the pre-training of DeepSeek-V3 on 14.8T tokens",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2664000.0,
+      "unit": "H800 GPU-hours",
+      "condition": "DeepSeek-V3 pretraining"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The denominator for DeepSeek-R1's RL share (about 3.8%).",
+    "from_review": "rl-scaling"
    }
   ]
  },
