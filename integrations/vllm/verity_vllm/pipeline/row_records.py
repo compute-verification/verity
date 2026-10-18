@@ -97,6 +97,10 @@ DERIVE_MARGIN = 1.2
 #: fitted on one Build only, Qwen3-235B-A22B TP8 with one shape (LP256 T31, run r20261003-070729-359b): 20.8 GiB per compose
 #: against 14.1 GiB per derive (1.48x); a compose's planned peak is this multiple of its largest shape's `derive_bytes`
 COMPOSE_PEAK_RATIO = 1.5
+#: ... or, as the requests grow, this multiple of all its shapes' `derive_bytes`, the larger: a compose holds every request's Program.
+#: GLM-5.3 TP8 (78 layers), I256 mixed arrivals: B32 composed at 128.8 GiB a rank against 207.6 GiB summed (0.62x, r20261018-005907-aca0),
+#: B8 past 32.2 GiB against 62.7 GiB (0.51x, OOM-killed at its scope's cap, r20261018-074029-94eb)
+COMPOSE_SUM_RATIO = 0.7
 
 
 def derive_bytes(lp: int, t: int, layers: int) -> int:
@@ -104,6 +108,12 @@ def derive_bytes(lp: int, t: int, layers: int) -> int:
     tokens = int(lp) + int(t) + 1
     calls = DERIVE_CALLS_PER_TOKEN_LAYER * layers * tokens
     return int(DERIVE_MARGIN * (DERIVE_BASE_BYTES + DERIVE_BYTES_PER_CALL * calls + DERIVE_BYTES_PER_LAYER_TOKEN2 * layers * tokens * tokens))
+
+
+def compose_bytes(shapes: list[tuple[int, int]], layers: int) -> int:
+    """The planned peak host memory of a TP rank's GP-01 compose over the request Programs of `shapes`."""
+    each = [derive_bytes(lp, t, layers) for lp, t in shapes]
+    return int(max(COMPOSE_PEAK_RATIO * max(each), COMPOSE_SUM_RATIO * sum(each)))
 
 
 def model_layers(ck: str) -> int | None:
@@ -117,19 +127,27 @@ def model_layers(ck: str) -> int | None:
     return None
 
 
-def _memory_headroom() -> int:
-    """cgroup memory.max - memory.current, else MemAvailable."""
+def _memory_headroom(proc: str = "/proc/self/cgroup", root: str = "/sys/fs/cgroup", meminfo: str = "/proc/meminfo") -> int:
+    """The least of MemAvailable and memory.max - memory.current over this process's cgroup and its ancestors (v2: the ``0::`` path
+    of `proc` under `root`; v1: the memory controller's mount): a research queue scope's MemoryMax is its own cgroup's, not the root's."""
     def rd(p: str) -> int | None:
         try:
             v = open(p).read().strip(); return int(v) if v.isdigit() else None
         except OSError:
             return None
-    mx = rd("/sys/fs/cgroup/memory.max") or rd("/sys/fs/cgroup/memory/memory.limit_in_bytes")
-    cur = rd("/sys/fs/cgroup/memory.current") or rd("/sys/fs/cgroup/memory/memory.usage_in_bytes")
-    if mx is None or mx >= (1 << 60) or cur is None:
-        kv = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in open("/proc/meminfo") if ln.split()[1].isdigit()}
-        return kv.get("MemAvailable", 0)
-    return mx - cur
+    kv = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in open(meminfo) if ln.split()[1].isdigit()}
+    try:
+        rel = next((ln.strip().split(":", 2)[2] for ln in open(proc) if ln.startswith("0::")), "")
+    except OSError:
+        rel = ""
+    parts = [p for p in rel.split("/") if p]
+    limits = [(f"{d}/memory.max", f"{d}/memory.current") for d in (os.path.join(root, *parts[:i]) for i in range(len(parts), -1, -1))]
+    heads = [kv.get("MemAvailable", 0)]
+    for a, b in [*limits, (f"{root}/memory/memory.limit_in_bytes", f"{root}/memory/memory.usage_in_bytes")]:
+        mx, cur = rd(a), rd(b)
+        if mx is not None and mx < (1 << 60) and cur is not None:
+            heads.append(mx - cur)
+    return max(0, min(heads))
 
 
 def _cpus() -> int:
@@ -137,18 +155,19 @@ def _cpus() -> int:
 
 
 def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | None = None, *, derives: int | None = None,
-                    peak_ratio: float = 1.0, headroom: int | None = None, cpus: int | None = None, budget_gb: float | None = None) -> int:
+                    peak_ratio: float = 1.0, headroom: int | None = None, cpus: int | None = None, budget_gb: float | None = None,
+                    job_bytes: int | None = None) -> int:
     """``--build-jobs auto`` (the default): as many concurrent derives as 80% of the memory headroom (or of `budget_gb`, when smaller)
-    holds at `peak_ratio` x the largest shape's `derive_bytes`, at most one per CPU this process may use and one per derive (`derives`:
-    by default the step's and each shape's; a TP Build's are every rank's).  Without the shapes or the model's layers: that memory /
-    (`peak_ratio` x 20 GiB), 1..8 (and at most `derives`).  A derive that dies of OOM is rc 137, a Build FAIL by rc, never a wrong
-    Program."""
+    holds at `peak_ratio` x the largest shape's `derive_bytes` (or `job_bytes` a job), at most one per CPU this process may use and
+    one per derive (`derives`: by default the step's and each shape's; a TP Build's are every rank's).  Without the shapes or the
+    model's layers: that memory / (`peak_ratio` x 20 GiB), 1..8 (and at most `derives`).  A derive that dies of OOM is rc 137, a
+    Build FAIL by rc, never a wrong Program."""
     head = _memory_headroom() if headroom is None else headroom
     if budget_gb is not None:
         head = min(head, int(budget_gb * (1 << 30)))
     if not shapes or not layers:
         return max(1, min(8, derives or 8, head // int(peak_ratio * (20 << 30))))
-    per = int(peak_ratio * max(derive_bytes(lp, t, layers) for lp, t in shapes))
+    per = job_bytes or int(peak_ratio * max(derive_bytes(lp, t, layers) for lp, t in shapes))
     n = len(shapes) + 1 if derives is None else derives
     return max(1, min(_cpus() if cpus is None else cpus, n, int(0.8 * head) // per))
 

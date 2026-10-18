@@ -245,10 +245,11 @@ class TpRow(Row):
                     self.cli("global-program", "--workload", self.wl, *der, "--out", f"{self.rank(r)}/build_workload", "--checkpoint-dir", self.ck))
 
     def compose_all(self, ranks: list[int]) -> None:
-        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.COMPOSE_PEAK_RATIO` x the largest shape's
-        derive peak (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
-        n = R.build_jobs_auto(self.shapes, R.model_layers(self.ck), derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO,
-                              budget_gb=self.cb.build_ram_budget_gb)
+        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.compose_bytes` a compose
+        (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
+        layers = R.model_layers(self.ck)
+        n = R.build_jobs_auto(self.shapes, layers, derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO, budget_gb=self.cb.build_ram_budget_gb,
+                              job_bytes=R.compose_bytes(self.shapes, layers) if self.shapes and layers else None)
         self.tl("build.compose_jobs", "mark", ("jobs", n), ("ranks", len(ranks)))
         with ThreadPoolExecutor(max_workers=n) as pool:
             for f in [pool.submit(self.compose, r) for r in ranks]:

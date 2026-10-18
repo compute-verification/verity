@@ -106,6 +106,53 @@ def _tree(d: str) -> dict[str, bytes]:
 def test_the_235b_rank_derive_is_planned_above_its_measured_peak():
     planned = R.derive_bytes(*SHAPE, LAYERS)
     assert 14.1 * GiB < planned < 2 * 14.1 * GiB and 20.8 * GiB < R.COMPOSE_PEAK_RATIO * planned
+    assert R.compose_bytes([SHAPE], LAYERS) == int(R.COMPOSE_PEAK_RATIO * planned)
+
+
+#: GLM-5.3 TP8's I256 mixed-arrivals request shapes: B8 (stochastic) and B32 (greedy)
+GLM_LAYERS = 78
+GLM_B8 = [(8, 28), (13, 31), (25, 6), (91, 2), (103, 12), (175, 10), (245, 22), (256, 1)]
+GLM_B32 = [(103, 26), (105, 2), (117, 4), (11, 24), (13, 16), (149, 14), (151, 14), (15, 8), (171, 9), (177, 28), (17, 22), (19, 18),
+           (201, 31), (21, 16), (225, 21), (237, 26), (23, 8), (256, 8), (25, 24), (29, 12), (31, 6), (37, 2), (41, 1), (55, 20),
+           (59, 18), (61, 2), (65, 30), (69, 24), (81, 10), (8, 18), (91, 26), (9, 18)]
+
+
+def test_a_compose_is_planned_above_its_measured_peak_as_its_requests_grow():
+    """A compose holds every request's Program: GLM-5.3's B32 ranks composed at 128.8 GiB (r20261018-005907-aca0) and B8's passed
+    32.2 GiB before their 250 GB scope killed them (r20261018-074029-94eb), where 1.5x the largest derive plans ~22 GiB."""
+    assert 128.8 * GiB < R.compose_bytes(GLM_B32, GLM_LAYERS) < 2 * 128.8 * GiB
+    assert 32.2 * GiB < R.compose_bytes(GLM_B8, GLM_LAYERS) and R.COMPOSE_PEAK_RATIO * R.derive_bytes(245, 22, GLM_LAYERS) < 32.2 * GiB
+
+
+def test_the_compose_pool_is_sized_by_every_requests_programs(tmp_path, monkeypatch):
+    t, _fake, pools = _tp_row(tmp_path, monkeypatch, shapes=GLM_B8, headroom=250 * GiB)
+    t.build()
+    assert pools.widths[1] == int(0.8 * 250 * GiB) // R.compose_bytes(GLM_B8, LAYERS) == 3
+    assert _marks(t, "build.compose_jobs")[0]["jobs"] == 3
+
+
+def test_the_memory_headroom_is_the_jobs_own_cgroup_chain_and_the_hosts_available(tmp_path):
+    """`research run --queue --mem-gb G` caps the job's own scope, not the mount root: read at the root, the stochastic B8 Build planned
+    its composes from the host's 1.5 TB available and its 250 GB scope OOM-killed them (r20261018-074029-94eb)."""
+    root, proc, meminfo = tmp_path / "cg", tmp_path / "cgroup", tmp_path / "meminfo"
+    scope = root / "user.slice" / "app.slice" / "job.scope"
+    scope.mkdir(parents=True)
+
+    def limit(d: Path, mx: str, cur: int) -> None:
+        (d / "memory.max").write_text(f"{mx}\n")
+        (d / "memory.current").write_text(f"{cur}\n")
+
+    limit(root / "user.slice", str(900 * GiB), 100 * GiB)
+    limit(root / "user.slice" / "app.slice", "max", 50 * GiB)
+    limit(scope, str(250 * GiB), 10 * GiB)
+    meminfo.write_text(f"MemTotal:       {1700 * GiB // 1024} kB\nMemAvailable:   {1500 * GiB // 1024} kB\nHugePages_Total:       0\n")
+    proc.write_text("0::/user.slice/app.slice/job.scope\n")
+    head = lambda: R._memory_headroom(str(proc), str(root), str(meminfo))  # noqa: E731
+    assert head() == 240 * GiB
+    limit(scope, "max", 10 * GiB)
+    assert head() == 800 * GiB                     # the slice's
+    proc.write_text("0::/\n")
+    assert head() == 1500 * GiB                    # no limit on the chain: the host's
 
 
 @pytest.mark.parametrize("budget_gb, derives, composes", [(64, 2, 1), (96, 4, 2), (128, 5, 3), (512, 16, 8)])
