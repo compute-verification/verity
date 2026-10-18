@@ -471,3 +471,21 @@ def test_two_encodes_landing_in_one_line_that_write_one_slot_are_written_a_line_
     assert lines(m) == [(0, tuple(PAGE1), []), (2, (), list(zip(PAGE1, range(37, 45)))),
                         (3, (), list(zip(PAGE1, range(45, 53))))]
     assert sent[0][1] != sent[1][1] and [m.replay.holds(x) for x in PAGE1] == list(range(45, 53))
+
+
+def test_a_block_left_part_written_before_the_map_began_is_registered_as_it_is_and_freed_where_a_write_reaches_it():
+    """A page a run before the session left part written: the registration takes its bytes as they are, so the map
+    begins with it registered, and the session's first write to it frees it there, at the step it reached it, not at
+    the step its deferred write is recorded."""
+    s, _ = store()
+    s.kv_alloc([1])
+    s.kv_write_reference([Append(1, 0, 2)], kv_payload, 0)
+    assert s.pool.dirty[1, [0, 2]].all()
+    m, _ = deferred(s)
+    assert not s.pool.dirty.any() and all(m.replay.holds(x) == x for x in PAGE1)
+    s.kv_write_reference([Append(1, 2, 6)], kv_payload, 1)
+    m.complete()
+    s.kv_append([], 2)
+    m.encoded(37)
+    s.kv_append([], 3)
+    assert lines(m) == [(1, tuple(PAGE1), []), (2, (), list(zip(PAGE1, range(37, 45))))]

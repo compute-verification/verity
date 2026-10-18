@@ -445,8 +445,11 @@ class Store:
         """Record each step's KV blocks as memory-map/v1 into ``path`` (the prover's own file) or kept, beside
         ``registration``, the remote audit's `Registration.digest`, which the session's first window chains from, under
         the session's lifetime cap of ``lifetime`` windows, each append to ``on_append`` and each closed line to
-        ``on_line`` (`memory_map.record`)."""
-        return mm.record(self, path, registration, lifetime, on_line, on_append)
+        ``on_line`` (`memory_map.record`).  The registration took every block as its bytes are, so none is dirty now."""
+        m = mm.record(self, path, registration, lifetime, on_line, on_append)
+        if self._pool is not None:
+            self._pool.dirty[:] = False
+        return m
 
     def end_step(self) -> None:
         """The step's forward has written its KV (`Scheduler.update_from_output`): a memory map takes its digests."""
