@@ -26,7 +26,8 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   of `G`": on the fraction `ε` of the family, `G` has `ε · 2^s` members.
 * `Renormalization`: the step the encode bound needs and no counting argument gives, stated and unproved (the red
   team's Lemma R): returning a square's limbs to byte format takes `L − c − d(ε)` budgeted units, `d(ε) =
-  d₀ + log₂(1/ε)/8`. `EncodeChainHardness` is its composition over the chain.
+  d₀ + log₂(1/ε)/8`, at every `ε` above a floor `2^−t` (claimed at p1024 with `d₀ = 4`, `t = 64`; false with no
+  floor). `EncodeChainHardness` is its composition over the chain.
 * `RhoPairs`: the parity-free target's symmetry. `ρ(p − x) = p − ρ(x)`, and `ρ(x)`'s parity, the bit the target
   drops, is the Legendre symbol of `x`.
 * `EncodeBudget`: the connection. For a declared circuit `W` that satisfies the stacking property `P` and is in the
@@ -35,6 +36,11 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   audit's certified reads, summed over the windows, and the run inputs are `R_in` a window.
 * `EncodeCost`: under `EncodeChainHardness` at `E`, the encode cost (`encodeCost`) of `q` words is at least `q · E`
   (`⊤` when no circuit computes them): the cost 6a's `encodeBitsCost` reads.
+* `FmaxfRange`, `FminfRange`, `RzByteRange`: property/v1's interval rules for P's producers hold their evaluators'
+  values (`Definitions/Accounting/Gates/Ranges`), the intervals `DeclaredHold` asks of those budgeted gates.
+* `QuantRange`, `DitherRange`, `LutSoftmaxRange`: the quantizers', the dither's and the LUT softmax's values lie in
+  their own intervals: `[lo, lo + w]` for a clamp, `[lo − m, lo + w + m + 1]` for a dither, and the hull of the table
+  and 0 for the LUT.
 -/
 
 namespace Accounting.Guarantees.Gates
@@ -74,19 +80,31 @@ def SquaringCarry : Prop :=
     (∀ S ∈ G, InWindow C (x S) ∧ ∀ l < n, val C (x S) (out l) = byte (sparse S ^ 2 % p) l) →
     G.card ≤ volume C
 
-/-- **Re-normalization** (the red team's Lemma R, note:20261017T1859Z-report-property-redteam R3.3; unproved): a
-square's limbs come back to byte format only through budgeted gates, about one a limb. Take a circuit whose window is
-proven, with no run input, whose registered inputs are fixed and whose coin inputs are bytes of `a` or fixed (so units
-count what reads `a`), that on more than `ε` of the `a ∈ [0, p)` holds its declared intervals (so is in its window)
-and outputs `L + c` values (`out l`, `L = n/8`), each within a byte format (`fmt l`), whose base-256 sum is `a²` mod
-`p`. Then `ε · 2^(8L) ≤ 2^(8·(budgeted C + d₀ + c))`, that is `budgeted C ≥ L − c − d(ε)` with
-`d(ε) = d₀ + log₂(1/ε)/8`. The outputs are any byte-format representation (signed digits, extra limbs, unreduced),
-since the chain's next squaring reads any; for one squaring no cap on operand bits is needed. `d₀` is an absolute
-constant: at least 3.46 at p1024 (a no-carry family of `2^27.7` squares), and no `d` below `log₂(1/ε)/9 − 4` holds
-(dropping the honest circuit's carries). The s8 family forms the column sums of `a²` for free; what it can't do is
-carry, and `SquaringCarry` proves only bits of that (63 at p1024), not units. -/
-def Renormalization (F : Field) (d₀ c εnum εden : ℕ) : Prop :=
+/-- **Re-normalization** (the red team's Lemma R, note:20261017T1859Z-report-property-redteam R3.3 and R4.1;
+unproved): a square's limbs come back to byte format only through budgeted gates, about one a limb. Take a circuit
+whose window is proven, with no run input, whose registered inputs are fixed and whose coin inputs are bytes of `a` or
+fixed (so units count what reads `a`), that on more than `ε ≥ 2^−t` of the `a ∈ [0, p)` holds its declared intervals
+(so is in its window) and outputs `L + c` values (`out l`, `L = n/8`), each within a byte format (`fmt l`), whose
+base-256 sum is `a²` mod `p`. Then `ε · 2^(8L) ≤ 2^(8·(budgeted C + d₀ + c))`, that is `budgeted C ≥ L − c − d(ε)`
+with `d(ε) = d₀ + log₂(1/ε)/8`. The outputs are any byte-format representation (signed digits, extra limbs,
+unreduced), since the chain's next squaring reads any; for one squaring no cap on operand bits is needed. The s8
+family forms the column sums of `a²` for free; what it can't do is carry, and `SquaringCarry` proves only bits of that
+(63 at p1024), not units. The claimed instance is p1024 with `d₀ = 4` and `t = 64`.
+
+**`d₀` is not absolute, so the floor.** A circuit with no budgeted gate (`a`'s bytes as coin inputs declared
+`[0, D_l]`, `a²`'s column sums as s8-family steps, folded mod `p`) is exact on every `a` whose column sums don't carry,
+and such families grow with `L` faster than any fixed `d₀` covers: `2^33.30` members at `p = 256^27 − 377` (`d₀ ≥
+4.16`), `2^101.85` at p1024 (`d₀ ≥ 12.73`; the red team's, R4.1), and, sampled, at least `2^159.4` at p1024 (64
+digits from a geometric law; `d₀ ≥ 19.9`), which refutes the slope `1/7` too (`d = 4 + log₂(1/ε)/7` allows at most
+`2^156`). Every one sits at `ε ≤ 2^−182`, and none can reach the floor at p1024: a column holds `a_l²`, so a
+non-carrying `a` has digits below 16 and `ε ≤ 16^L/p ≈ 2^−512`. Above the floor every family found is within `d₀ = 4`:
+the exhaustive toy fields (implied `d₀ ≤ 2.18`), the non-carrying sets of the byte fields `L ≤ 10`, counted exactly
+(`≤ 2.48`), and at p1024 the red team's carry-guessing frontier (modeled, 10 to 15 bits a dropped carry: `d = 1 … 5`
+at `ε = 2^−9.8 … 2^−69.5`, against the formula's `5.2 … 12.7`). `t = 64` keeps the claim inside the range that
+frontier reaches; the bound reads `ε = 2^−40` (the headline) and `2^−20` (the property's carrier threshold). -/
+def Renormalization (F : Field) (d₀ c t εnum εden : ℕ) : Prop :=
   ∀ {ι : Type} (C : Dag ι) (x : ℕ → ι → ℤ) (out : ℕ → ℕ) (fmt : ℕ → Int8Fmt) (good : Finset ℕ),
+    εden ≤ 2 ^ t * εnum →
     Proven C → runBits C = 0 → good ⊆ Finset.range F.p → MoreThan (Finset.range F.p) good εnum εden →
     (∀ i, (∃ g ∈ C, g.op = .input .registered i) → ∀ a ∈ good, ∀ a' ∈ good, x a i = x a' i) →
     (∀ i, (∃ g ∈ C, g.op = .input .coin i) →
@@ -129,5 +147,42 @@ computes them on more than `ε` of the draws. -/
 def EncodeCost : Prop :=
   ∀ (F : Field) (k B E εnum εden q : ℕ),
     EncodeChainHardness F k B E εnum εden → 2 ≤ F.n → ((q * E : ℕ) : ℕ∞) ≤ encodeCost F k B εnum εden q
+
+/-! ## Primitives' output intervals
+
+What `DeclaredHold` asks of a budgeted gate, that its value lies in its declared interval, for the primitives whose
+interval property/v1 derives (P's producers) and the ones it reads as declared: each a theorem over the primitive's
+evaluator (`Definitions/Accounting/Gates/Ranges`). -/
+
+/-- **`F32Fmaxf`'s rule holds.** Where property/v1's rule (`fmaxfRule`, `stacking._fmaxf`) gives an interval `o` for
+operand ranges `a` and `b`, `fmaxf` of any s32 readings in them lies in `o`. -/
+def FmaxfRange : Prop :=
+  ∀ a b o, fmaxfRule a b = some o → ∀ x y, S32 x → S32 y → Rng.Holds a x → Rng.Holds b y → o.Mem (f32Fmaxf x y)
+
+/-- **`F32Fminf`'s rule holds.** Where `fminfRule` (`stacking._fminf`) gives `o` for operand ranges `a` and `b`,
+`fminf` of any s32 readings in them lies in `o`. -/
+def FminfRange : Prop :=
+  ∀ a b o, fminfRule a b = some o → ∀ x y, S32 x → S32 y → Rng.Holds a x → Rng.Holds b y → o.Mem (f32Fminf x y)
+
+/-- **`F32ToU32RzByte`'s rule holds.** Where `rzByteRule` (`stacking._rz_byte`) gives `o` for an operand range `a`,
+the low byte of `cvt.rzi.u32.f32` of any reading in it lies in `o`. -/
+def RzByteRange : Prop :=
+  ∀ a o, rzByteRule a = some o → ∀ x, Rng.Holds a x → o.Mem (f32RzByte x)
+
+/-- **A clamped quantizer's interval.** `clamp(round(x/s), lo, lo + w)` lies in `[lo, lo + w]` whatever the rounding:
+`[−127, 127]` for steps.py's Q, K, V, activations and weights at `top = 127`, `[0, p_top]` for P. -/
+def QuantRange : Prop :=
+  ∀ (lo : ℤ) (w : ℕ) (rnd : ℚ → ℤ) (v : ℚ), Iv.Mem (lo, lo + w) (quantize lo w rnd v)
+
+/-- **The dither's interval.** A `b`-bit dither of `⌊v⌋` clamped to `[lo, lo + w]` lies in `[lo − m, lo + w + m + 1]`,
+`m = 2^(b−1) − 1`: `[−128, 127]` for `floor_quant` at `top = 127` (`lo = m − 128`, `w = 254 − 2m`), and
+`[1 − top, top]` for `act_quant` (`lo = −t`, `w = 2t`, `t = top − 1 − m`). -/
+def DitherRange : Prop :=
+  ∀ (lo : ℤ) (w m : ℕ) (v : ℚ) (R : Fin (2 * m + 2)), Iv.Mem (lo - m, lo + w + m + 1) (dither lo w m v R)
+
+/-- **The LUT softmax's interval.** Its element lies in the hull of its table and 0 (a gather's value outside its
+column): in `[0, 127]` for a table of values in `[0, 127]`. -/
+def LutSoftmaxRange : Prop :=
+  ∀ (T : List ℤ) (d : ℚ), (hull0 T).Mem (lutSoftmax T d)
 
 end Accounting.Guarantees.Gates
