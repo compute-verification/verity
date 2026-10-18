@@ -84,7 +84,9 @@ struct Geo {
   const u64* S;      // the salt phase's records
   u64* lv0;          // level 0
   bool pf;           // an L2 prefetch of each leaf's next block
-  int diag;          // timing only (wrong levels): bit 0 the MMA warps skip the k-loop, bit 1 the hash warps exit
+  int diag;          // timing only (wrong levels): bit 0 the MMA warps skip the k-loop, bit 1 the hash warps exit, bit 2
+                     // no tile handoff (with bit 1 only)
+  bool gpu_fence;    // the tile handoff's fences at GPU scope (the first design) instead of CTA scope
 };
 
 DEV void leaf_at(const Geo& g, u64 br, u64 bc) {
@@ -117,7 +119,8 @@ __global__ void __launch_bounds__(MMA_THREADS + 32 * HW, 1) gemm_kernel(Geo g) {
       if (lane == 0)
         while (done <= kmax) __nanosleep(64);
       __syncwarp();
-      __threadfence();
+      if (g.gpu_fence) __threadfence();
+      else __threadfence_block();
       const u64 s = s0 + lane;
       if (s >= total) continue;
       const int k = (int)(s / L), l = (int)(s % L);
@@ -192,8 +195,9 @@ __global__ void __launch_bounds__(MMA_THREADS + 32 * HW, 1) gemm_kernel(Geo g) {
         if (row + 8 < g.M) *reinterpret_cast<__nv_bfloat162*>(g.C + ((size_t)(row + 8) * g.N + col) * 2) = hi;
       }
     bar_mma();   // every store of tile k is issued, and no warp still reads a stage the next prologue writes
-    if (HW && tid == 0) {
-      __threadfence();
+    if (HW && tid == 0 && !(g.diag & 4)) {   // the consumers are this CTA's hash warps: a CTA-scope release suffices
+      if (g.gpu_fence) __threadfence();
+      else __threadfence_block();
       done = k + 1;
     }
   }
@@ -466,10 +470,11 @@ struct Setup {
     CK(cudaDeviceSynchronize());
     CK(cudaGetLastError());
   }
-  void gemm(int hw, cudaStream_t st, bool pf = false, int diag = 0) {
+  void gemm(int hw, cudaStream_t st, bool pf = false, int diag = 0, bool gpu_fence = false) {
     Geo q = g;
     q.pf = pf;
     q.diag = diag;
+    q.gpu_fence = gpu_fence;
     if (hw == 0) gemm_kernel<0><<<grid, MMA_THREADS, SMEM_GEMM, st>>>(q);
     else if (hw == 4) gemm_kernel<4><<<grid, MMA_THREADS + 128, SMEM_GEMM, st>>>(q);
     else gemm_kernel<8><<<grid, MMA_THREADS + 256, SMEM_GEMM, st>>>(q);
@@ -619,16 +624,21 @@ static int diag(int argc, char** argv) {
   CK(cudaStreamCreateWithFlags(&st, cudaStreamNonBlocking));
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
-  const char* names[] = {"g", "sep", "seppf", "f4", "f4pf", "f4_nohash", "f4_nomma", "f8", "f8pf", "f8_nohash", "f8_nomma"};
-  constexpr int NA = 11;
+  const char* names[] = {"g", "sep", "seppf", "f4", "f4pf", "f4_nohash", "f4_nomma", "f8", "f8pf", "f8_nohash", "f8_nomma",
+                         "f4gf", "f4gf_nohash", "f4_nohash_nosig", "f8gf"};
+  constexpr int NA = 15;
   auto body = [&](int a) {
     if (a == 0) s.gemm(0, st);
     if (a == 1) s.sep(st);
     if (a == 2) { Geo q = s.g; q.pf = true; sep_leaves<<<(unsigned)((s.n + 255) / 256), 256, 0, st>>>(q, s.n); }
-    if (a >= 3) {
+    if (a >= 3 && a < 11) {
       const int hw = a < 7 ? 4 : 8, v = (a - 3) % 4;
       s.gemm(hw, st, v == 1, v == 2 ? 2 : v == 3 ? 1 : 0);
     }
+    if (a == 11) s.gemm(4, st, false, 0, true);
+    if (a == 12) s.gemm(4, st, false, 2, true);
+    if (a == 13) s.gemm(4, st, false, 6);
+    if (a == 14) s.gemm(8, st, false, 0, true);
   };
   std::vector<double> t[NA], mz;
   Nv nv;
