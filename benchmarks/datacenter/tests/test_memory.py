@@ -16,7 +16,7 @@ PCIE, NET = 64e9 * 8, 400e9
 
 
 def node(n: str) -> Block:
-    gpu = Device(f"{n}.gpu", "gpu", rate={"squaring": Assumption("rtx-pro-6000/squarings-p1024", 1.499e10, "1/s")},
+    gpu = Device(f"{n}.gpu", "gpu", rate={"square-1024": Assumption("rtx-pro-6000/squarings-p1024", 1.499e10, "1/s")},
                  memory=Assumption(f"{n}.gpu.hbm", 96 * GB, "bits"),
                  bandwidth=Assumption(f"{n}.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
     dram = Device(f"{n}.dram", "dram", memory=Assumption(f"{n}.dram.size", 512 * GB, "bits"),

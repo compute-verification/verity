@@ -9,9 +9,7 @@ from datacenter.demo import night
 def test_an_honest_night_on_a_rack_is_sound_and_located():
     acc = night()
     assert acc.sound
-    # PCIe isn't measured yet (math.inf), so any of n1's GPUs could have answered the challenge in time
-    assert acc.located == {"kv": [f"n1.gpu{k}" for k in range(8)], "labels@n0.dpu": ["n0.dpu"],
-                           "labels@n0.bmc": ["n0.bmc"]}
+    assert acc.located == {"kv": ["n1.gpu0"], "labels@n0.dpu": ["n0.dpu"], "labels@n0.bmc": ["n0.bmc"]}
     assert acc.input_bits == {"x": 32, "temperature": 16} and acc.advice_bits == 3
     n0, n1 = acc.blocks
     assert n0.credited > 0 and n1.credited > 0 and n1.reads > 0

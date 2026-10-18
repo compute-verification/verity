@@ -68,10 +68,10 @@ def test_the_capacities_are_memory_accountings_and_the_censuss(ex):
     assert [a.name for a in macs] == ["rtx-pro-6000-server/bf16", "rtx-pro-6000-server/e4m3", "rtx-pro-6000-server/e2m1"]
     assert all(2 * a.value == census[a.name]["flop_per_second"] and a.source == "datasheet" for a in macs)
     assert sorted(a.name for a in dc.assumptions() if a.value == math.inf) == [
-        "pcie/gpu", "pcie/nic", "pcie/socket-aggregate", "rtx-pro-6000/cuda-ops", "socket/inter-socket"]
+        "pcie/socket-aggregate", "rtx-pro-6000/cuda-ops", "socket/inter-socket"]
     bits = 8e9
-    # a store registered on a GPU but kept in host DRAM: the pending PCIe path costs nothing, only the host's read
-    assert serve_time(dc, "b0.gpu0", "b0.cpu0", bits) == bits / cpu.bandwidth.value
+    # a store registered on a GPU but kept in host DRAM: the GPU's PCIe 5.0 x16 link is narrower than the host's read
+    assert ex.PCIE_GPU.value < cpu.bandwidth.value and serve_time(dc, "b0.gpu0", "b0.cpu0", bits) == bits / ex.PCIE_GPU.value
 
 
 def walk(plan, src: str, dst: str) -> str | None:

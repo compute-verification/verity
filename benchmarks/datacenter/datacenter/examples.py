@@ -9,8 +9,9 @@ read bandwidth and on-chip state (S_chip), its rate per unit of work (tensor-cor
 and the like, at the dense datasheet peaks that `benchmarks/census/hardware.json` gives under the same names; CUDA cores;
 the SHA-512 oracle; the codec's squarings at each width; and, for the walkthrough's unit of work, Boolean gates at its
 integer rate times 32 lanes), each socket's host DRAM (half the node's online memory), its read bandwidth and caches, and each PCIe link's
-bandwidth. A capacity not measured yet is `math.inf`: every reading of a capacity takes it as an upper bound, and
-infinity is the bound that claims nothing. The residuals of a GPU and of a socket's host DRAM are declared, not measured.
+bandwidth (a GPU's and the NIC's at PCIe 5.0 x16's link rate, until memory accounting measures them). A capacity not
+measured yet is `math.inf`: every reading of a capacity takes it as an upper bound, and infinity is the bound that
+claims nothing. The residuals of a GPU and of a socket's host DRAM are declared, not measured.
 
 `with_dpu` adds an NVIDIA BlueField-3 DPU between a node's NIC and its way out, and the DPU's BMC behind it, with Amodo's
 measured stores and wipe coverage (amododesign.com/notes/2026-10-02-dpu-memory-wipes): what a wipe can't reach on them is
@@ -46,9 +47,10 @@ HOST_CHIP = Assumption("xeon-6776p/caches", 940_435_456 // 2 * 8, "bits", "decla
 HOST_DRAM = Assumption("host-dram/socket-capacity", 1_872_605_741_056 // 2 * 8, "bits", "measured")
 HOST_READ = Assumption("host-dram/socket-read", 303_400_000_000 * 8, "bit/s", "measured")
 HOST_RESIDUAL = Assumption("host-dram/socket-residual", 4 * GB, "bits", "declared")
-PCIE_GPU = Assumption("pcie/gpu", INF, "bit/s", "measured")
+PCIE5_X16 = 32e9 * 16 * 128 / 130          # 32 GT/s a lane, 16 lanes, 128b/130b coding: one direction's bits a second
+PCIE_GPU = Assumption("pcie/gpu", PCIE5_X16, "bit/s", "datasheet")
 PCIE_SOCKET = Assumption("pcie/socket-aggregate", INF, "bit/s", "measured")
-PCIE_NIC = Assumption("pcie/nic", INF, "bit/s", "measured")
+PCIE_NIC = Assumption("pcie/nic", PCIE5_X16, "bit/s", "datasheet")
 SOCKET_LINK = Assumption("socket/inter-socket", INF, "bit/s", "measured")
 
 

@@ -64,7 +64,7 @@ class Link:
     b: str
     capacity: Assumption
     latency: Assumption | None = None
-    kind: Literal["pcie", "nvlink", "ethernet", "wan"] = "ethernet"
+    kind: Literal["pcie", "nvlink", "upi", "ethernet", "wan"] = "ethernet"
 
     @property
     def delay(self) -> float:

@@ -27,8 +27,8 @@ from .time import Interval
 @dataclass(frozen=True)
 class Store:
     """Registered state: `bits` bits that `device` holds, by the registration. `content` says who chose them. `regen` is
-    what rebuilding one bit costs, in squarings, for labels the prover can derive from a seed (0: it can't, as for its
-    own data or labels the challenger streams in)."""
+    what rebuilding one bit costs, in the codec's squarings (`rate["square-1024"]`), for labels the prover can derive
+    from a seed (0: it can't, as for its own data or labels the challenger streams in)."""
 
     name: str
     bits: float
@@ -111,6 +111,6 @@ def answer_time(dc: Datacenter, challenger: str, registered: str, actual: str, b
 
 def regen_time(dc: Datacenter, store: Store, bits: float) -> float:
     """Seconds the prover's fastest device needs to rebuild `bits` of `store` from its seed, at its declared
-    `rate["squaring"]` (μ_rebuild's twin); infinite for a store that can't be rebuilt."""
-    rates = [float(d.rate["squaring"]) for d in dc.devices.values() if "squaring" in d.rate and not d.trusted]
+    `rate["square-1024"]`, the codec's squarings (μ_rebuild's twin); infinite for a store that can't be rebuilt."""
+    rates = [float(d.rate["square-1024"]) for d in dc.devices.values() if "square-1024" in d.rate and not d.trusted]
     return bits * store.regen / max(rates) if store.regen and rates else float("inf")
