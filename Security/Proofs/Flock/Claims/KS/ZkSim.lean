@@ -810,12 +810,13 @@ theorem zk_KSFlock_of_parts (D : Deploy Coin)
     (hε : TableErrNonneg D) (hRd : ∀ decI, SessionRounds D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
     (hS : SessionAccepts D) (hR : ∀ decI, SessionRuns sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
     (hV : ∀ decI, InnerViewRun sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
-    (hC : ∀ decI, CallsRecord sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
-    (hO : ∀ decI, CallsOpen sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO opening)
+    (hT : ∀ decI, CallsTrue sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
+    (hL : ∀ decI, CallsLogColl sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
+    (hO : ∀ decI, CallsOpenPlayed sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO opening)
     (hAcc : ∀ decI, InnerAccepts sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
     (hN0 : CallsNil sha512 D) :
     KSFlock sha512 D (deployZkTrim Readable.relation) DO :=
   zk_KSFlockJR D DO opening hF (zk_tableBoundJOnAccR_of_parts hrun habort hfork hclash) hRef hRounds hN hε hRd hS hR hV
-    hC hO hAcc hN0
+    hT hL hO hAcc hN0
 
 end FlockDeploy.KS

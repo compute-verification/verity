@@ -375,13 +375,14 @@ theorem zk_KSFlockR (rel : Readable.Parsed → Readable.Relation) (D : Deploy Co
     (hRd : ∀ decI, SessionRounds D (Inner.ofFlock (deployZkTrim rel) decI) DO) (hS : SessionAccepts D)
     (hR : ∀ decI, SessionRuns sha512 D (Inner.ofFlock (deployZkTrim rel) decI) DO)
     (hV : ∀ decI, InnerViewRun sha512 D (Inner.ofFlock (deployZkTrim rel) decI) DO)
-    (hC : ∀ decI, CallsRecord sha512 D (Inner.ofFlock (deployZkTrim rel) decI) DO)
-    (hO : ∀ decI, CallsOpen sha512 D (Inner.ofFlock (deployZkTrim rel) decI) DO opening)
+    (hT : ∀ decI, CallsTrue sha512 D (Inner.ofFlock (deployZkTrim rel) decI) DO)
+    (hL : ∀ decI, CallsLogColl sha512 D (Inner.ofFlock (deployZkTrim rel) decI) DO)
+    (hO : ∀ decI, CallsOpenPlayed sha512 D (Inner.ofFlock (deployZkTrim rel) decI) DO opening)
     (hAcc : ∀ decI, InnerAccepts sha512 D (Inner.ofFlock (deployZkTrim rel) decI) DO) (hN0 : CallsNil sha512 D) :
     KSFlock sha512 D (deployZkTrim rel) DO :=
   (KSFlockA_iff_KSFlock _ _ _ _).1 fun decI h => KS_of_flockKS sha512 D _ DO opening decCoin hF
-    (zk_KSAbortR rel hone htab decI h) hRef hRounds hN hε (hRd decI) hS (hR decI) (hV decI) (hC decI) (hO decI)
-    (hAcc decI) (coinsShown_V sha512 true) hN0
+    (zk_KSAbortR rel hone htab decI h) hRef hRounds hN hε (hRd decI) hS (hR decI) (hV decI) (hT decI) (hL decI)
+    (hO decI) (hAcc decI) (coinsShown_V sha512 true) hN0
 
 /-- **The recursion's masked table bound counted per round**, at full-width columns, from a simulator of each prover
 at the statements some run accepts (`zk_tableBoundθAccAtR_of_simWJ`). -/
@@ -412,12 +413,13 @@ theorem zk_KSFlock_of_simWJ (D : Deploy Coin)
     (hε : TableErrNonneg D) (hRd : ∀ decI, SessionRounds D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
     (hS : SessionAccepts D) (hR : ∀ decI, SessionRuns sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
     (hV : ∀ decI, InnerViewRun sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
-    (hC : ∀ decI, CallsRecord sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
-    (hO : ∀ decI, CallsOpen sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO opening)
+    (hT : ∀ decI, CallsTrue sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
+    (hL : ∀ decI, CallsLogColl sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
+    (hO : ∀ decI, CallsOpenPlayed sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO opening)
     (hAcc : ∀ decI, InnerAccepts sha512 D (Inner.ofFlock (deployZkTrim Readable.relation) decI) DO)
     (hN0 : CallsNil sha512 D) :
     KSFlock sha512 D (deployZkTrim Readable.relation) DO :=
   zk_KSFlockR Readable.relation D DO opening hF hone (zk_tableBoundθOnAccR_of_simWJ hs) hRef hRounds hN hε hRd hS hR
-    hV hC hO hAcc hN0
+    hV hT hL hO hAcc hN0
 
 end FlockDeploy.KS
