@@ -13,6 +13,9 @@ import Models.Accounting.Guarantees.Headline
   on 𝒫_samp with an undrawn wrong unit.
 * (D) `adapt_*`: a skipper whose share reads the round's cube bit (skip iff the bit is set, always right) meets `Pinned`
   and `ReceiptLuckAt ½` but no `LuckAt p` for `p < 1`; so `CubeOperands` is the premise that excludes it.
+* (E) `lift_*`: every play's game lifts to a receipt game meeting `Pl.game = G.game`, `Pinned` and `ReceiptLuckAt` at
+  any `pr`; with that split `CubeOperands` forces the round honest. The three are free alone; the luck's content is in
+  `CubeOperands` together with the split the modeler picks.
 -/
 
 namespace RTHeadline
@@ -21,9 +24,9 @@ open Accounting.TS Accounting.Assumptions.TS Accounting.SecurityProofs.TS Pouw.R
 
 theorem prob_of_false {Ω : Type} [Fintype Ω] (p : Ω → Prop) (h : ∀ ω, ¬ p ω) : prob p = 0 := by
   classical
-  first
-    | (unfold prob; rw [Finset.filter_false_of_mem (fun ω _ => h ω)]; simp)
-    | simp [prob, h]
+  unfold prob
+  rw [Finset.filter_false_of_mem (fun ω _ => h ω)]
+  simp
 
 theorem prob_pos_of {Ω : Type} [Fintype Ω] (p : Ω → Prop) (ω : Ω) (h : p ω) : 0 < prob p := by
   classical
@@ -71,7 +74,7 @@ theorem accepts_wrong_le_budget {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V K T L 
 abbrev Ω16 : Type := Fin 16 × Finset (Fin 1)
 
 /-- The sampled round: the wrong unit's share 1/16, and the round passes unless the draw is the wrong unit. -/
-def sampledGame : RoundGame Ω16 1 := .round (fun _ => 1 / 16) (fun ω => ω.1 ≠ 0) (fun _ => .done)
+noncomputable def sampledGame : RoundGame Ω16 1 := .round (fun _ => 1 / 16) (fun ω => ω.1 ≠ 0) (fun _ => .done)
 
 theorem prob_undrawn : prob (fun ω : Ω16 => ω.1 ≠ 0) = 15 / 16 := by
   rw [prob_fst (fun a : Fin 16 => a ≠ 0), prob_eq_card]
@@ -89,9 +92,7 @@ theorem sampled_not_luck : ¬ LuckAt (7 / 8) sampledGame := by
   have h2' : prob (fun ω : Ω16 => ω.1 ≠ 0 ∧ (0 : ℝ) < 1 / 16) ≤
       7 / 8 * prob (fun _ : Ω16 => (0 : ℝ) < 1 / 16) := h2
   have hpass : prob (fun ω : Ω16 => ω.1 ≠ 0 ∧ (0 : ℝ) < 1 / 16) = 15 / 16 := by
-    first
-      | exact (congrArg prob e).trans prob_undrawn
-      | (rw [e]; exact prob_undrawn)
+    exact (congrArg prob e).trans prob_undrawn
   rw [hpass] at h2'
   have := prob_le_one (fun _ : Ω16 => (0 : ℝ) < 1 / 16)
   linarith
@@ -138,6 +139,48 @@ theorem adapt_not_cube (R : Type) [CommRing R] : ¬ adaptG.CubeOperands R := fun
   adapt_not_luck (7 / 8) (by norm_num)
     (Headline.luck_of_receipt_half R adaptG.game adaptG rfl adapt_pinned hC adapt_receipt_luck)
 
+/-! ## (E) the trivial split: `Pl.game = G.game`, `Pinned` and `ReceiptLuckAt` cost nothing on their own -/
+
+/-- Any play's ideal game as a receipt game: every word right, the receipt the honest one exactly when the round
+passes. -/
+def lift {Ω : Type} : {n : ℕ} → RoundGame Ω n → ReceiptGame Ω n
+  | _, .done => .done
+  | _, .round d pass next => .round d pass (fun _ => True) pass (fun ω => lift (next ω))
+
+theorem lift_game {Ω : Type} : ∀ {n : ℕ} (g : RoundGame Ω n), (lift g).game = g
+  | _, .done => rfl
+  | _, .round d pass next => by
+    show RoundGame.round d pass (fun ω => (lift (next ω)).game) = RoundGame.round d pass next
+    congr 1
+    funext ω
+    exact lift_game (next ω)
+
+theorem lift_pinned {Ω : Type} : ∀ {n : ℕ} (g : RoundGame Ω n), (lift g).Pinned
+  | _, .done => trivial
+  | _, .round _ _ next => And.intro (fun _ h => h) (fun ω => lift_pinned (next ω))
+
+theorem lift_receipt_luck {Ω : Type} [Fintype Ω] (pr : ℝ) :
+    ∀ {n : ℕ} (g : RoundGame Ω n), ReceiptLuckAt pr (lift g)
+  | _, .done => trivial
+  | _, .round d pass next => by
+    refine And.intro ?_ (fun ω => lift_receipt_luck pr (next ω))
+    have h0 : prob (fun ω => pass ω ∧ ¬ True ∧ 0 < d ω) = 0 := prob_of_false _ fun ω h => h.2.1 trivial
+    have h1 : prob (fun ω => ¬ True ∧ 0 < d ω) = 0 := prob_of_false _ fun ω h => h.1 trivial
+    show prob (fun ω => pass ω ∧ ¬ True ∧ 0 < d ω) ≤ pr * prob (fun ω => ¬ True ∧ 0 < d ω)
+    rw [h0, h1, mul_zero]
+
+/-- With the trivial split, `CubeOperands` holds only where the round is honest: its content is the cheater's. -/
+theorem lift_cube_honest {α ι : Type} [Fintype ι] [DecidableEq ι] (R : Type) [CommRing R] {n : ℕ}
+    (d : α × Finset ι → ℝ) (pass : α × Finset ι → Prop) (next : α × Finset ι → RoundGame (α × Finset ι) n)
+    (h : (lift (RoundGame.round d pass next)).CubeOperands R) : ∀ ω, d ω = 0 := by
+  obtain ⟨hd01, ⟨δ, e, -, hdδ, hne, hright⟩, -⟩ := h
+  intro ω
+  rcases lt_or_eq_of_le (hd01 ω).1 with hpos | hzero
+  · rw [hdδ ω] at hpos
+    obtain ⟨S, hS⟩ := hne ω.1 hpos
+    exact absurd (hright (ω.1, S) trivial) hS
+  · exact hzero.symm
+
 /-! ## Axioms -/
 
 #print axioms accepts_wrong_le
@@ -148,5 +191,9 @@ theorem adapt_not_cube (R : Type) [CommRing R] : ¬ adaptG.CubeOperands R := fun
 #print axioms adapt_receipt_luck
 #print axioms adapt_not_luck
 #print axioms adapt_not_cube
+#print axioms lift_game
+#print axioms lift_pinned
+#print axioms lift_receipt_luck
+#print axioms lift_cube_honest
 
 end RTHeadline
