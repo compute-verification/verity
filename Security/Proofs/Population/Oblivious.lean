@@ -15,6 +15,9 @@ A program's trace is a `DynPopulation`. Three facts decide what the population t
   sets depend only on the values of the slots `A`, then at each value `a` on `A`, the padding over the assignments
   holding `a` is checked, has exactly the program's read sets in each of them, and the same wrong units. With `A` the
   public inputs it is a circuit indexed by them; with `A = ∅` (`Oblivious`), one circuit.
+* `frozen_circuit` (Theorem O2), **a classically oblivious program compiled to its circuit**: over a set of honest runs
+  that read alike, the padding is a checked population with their wiring, none of them wrong, and no other run without
+  a wrong unit. It judges a unit by that wiring, not the program's: `vm_frozen_reads` is the pointer machine's.
 * `eq_honest_off_downAt`, **locality needs no obliviousness**: in a time-ordered, address-closed trace, every run
   agrees with the honest one off the wrong units' cone in the honest run's own dataflow, and `skipped_mem_downAt`
   puts every skipped unit in that cone or among the lucky. What a program lacks is that this cone be public, and
@@ -134,6 +137,34 @@ theorem population_of_addressedBy [Fintype U] [Fintype S] [Inhabited V] (hsa : D
 theorem pad_reads_of_oblivious [Fintype S] (ho : D.Oblivious) (σ : S → V) (u : U) :
     (D.padOver Set.univ).reads u = D.reads u σ :=
   D.padOver_reads_eq (Set.mem_univ σ) fun τ _ => ho u τ σ
+
+/-- **Theorem O2, a classically oblivious program compiled to its circuit**: for a set `C` of honest runs that all read
+alike (every honest run, for an honestly oblivious program; those holding the public values, relative to them), the
+padding over `C` is a checked population that reads what each of them reads, has none of them wrong, and has no other
+run without a wrong unit holding one's inputs. Its wrong units are its own: a run that moves a read off the honest
+wiring is wrong in it, where in the program it need not be (`vm_leak`). -/
+theorem frozen_circuit [Fintype U] [Fintype S] [Inhabited V] (hsa : D.SingleAssignment) {step : U → ℕ}
+    (ht : D.TimeOrdered step) {C : Set (S → V)} (hC : ∀ σ ∈ C, ∀ v, D.Correct σ v)
+    (hread : ∀ u, ∀ σ ∈ C, ∀ τ ∈ C, D.reads u σ = D.reads u τ) :
+    (D.padOver C).Checked ∧ (∀ σ ∈ C, ∀ u, (D.padOver C).reads u = D.reads u σ) ∧
+      (∀ σ ∈ C, (D.padOver C).wrong (D.padFns C) σ = ∅) ∧
+      ∀ h ∈ C, ∀ σ : S → V, (D.padOver C).wrong (D.padFns C) σ = ∅ → (∀ s ∈ D.input, σ s = h s) → σ = h := by
+  classical
+  have hch := D.padOver_checked C hsa ht
+  have hw : ∀ σ ∈ C, (D.padOver C).wrong (D.padFns C) σ = ∅ := fun σ hσ => by
+    rw [D.wrong_padOver_of_mem hσ]
+    ext u
+    simp [DynPopulation.wrong, hC σ hσ u]
+  refine ⟨hch, fun σ hσ u => D.padOver_reads_eq hσ fun τ hτ => hread u τ hτ σ hσ, hw, fun h hh σ hσ hin => ?_⟩
+  have hc := (D.padOver C).covered_of_singleAssignment hch.1
+  funext s
+  by_cases hs : s ∈ (D.padOver C).input
+  · exact hin s hs
+  · obtain ⟨v, hv⟩ := hc s hs
+    refine (D.padOver C).eq_off_down hc hch.2 (D.padFns C) (B := ∅) hin (by rw [hσ]) (by rw [hw h hh]) v
+      (fun hvd => ?_) s hv
+    obtain ⟨u, hu, -⟩ := (D.padOver C).mem_down.1 hvd
+    simp at hu
 
 /-- **Locality needs no obliviousness**: in a time-ordered, address-closed trace, a run that holds the honest run's
 inputs agrees with it on every slot written outside the wrong units' cone, the cone drawn in the honest run's own
@@ -362,6 +393,16 @@ theorem vm_moved_read {N : ℕ} (i : Fin N) :
       have : s ≠ .ptr := fun e => hs (by simp [vm, e])
       simp [Function.update_of_ne this])
     (by simp [vm]) (by simp [vm]) (by simp) (by simp) (by simp [vm, src]) (by simp [vm, src])
+
+/-- **The pointer machine compiled to its circuit**: over its honest runs, copy step `i` reads the pointer and zero
+word `i`, and no secret, so in that circuit (`frozen_circuit`) no secret is upstream of the egress. -/
+theorem vm_frozen_reads (N : ℕ) (i : Fin N) :
+    ((vm N).padOver {σ | ∀ v, (vm N).Correct σ v}).reads (some i) = {.ptr, .zero i} := by
+  have h0 : (fun _ => false) ∈ {σ : Slot N → Bool | ∀ v, (vm N).Correct σ v} := by
+    intro v s hs
+    cases v <;> simp_all [vm, src]
+  rw [(vm N).padOver_reads_eq h0 fun τ hτ => vm_honestlyOblivious N (some i) τ _ hτ h0]
+  simp [vm, src]
 
 /-- **The pointer machine's padding is its static declaration**: its padded read sets are `vmStatic`'s. -/
 theorem vm_pad (N : ℕ) (u : Option (Fin N)) : ((vm N).padOver Set.univ).reads u = (vmStatic N).reads u := by
