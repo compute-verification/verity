@@ -3,7 +3,6 @@ import CoreProtocol.Profile
 import Flock.Hash
 import PouwCheck.Json
 import PouwCheck.Tile
-import PouwWindow.Rounds
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
@@ -29,22 +28,25 @@ def scheme : String := "frame-v3-sha512/hm96-sha512"
 def formats : List String := ["verity/registration/v1", "verity/registration/v2"]
 def paramsKeys : List String := ["check", "context", "delta", "eps", "grid_bits", "query", "range"]
 def checkKeys : List String := ["entries", "scheme", "template", "tile_work"]
+/-- `window.COINS` and `window.MODES`: the check item's optional key and the coin modes it may name. -/
+def coinsKey : String := "coins"
+def coinModes : List String := ["live", "seeded"]
 
 /-- The `check` item: the tile template, its work per tile, the commitment scheme, the public bound on entries, and the
-window's coin mode when the item names one (`PouwWindow.mode`: seeded when it names none). -/
+window's coin mode when the item names one (`window.mode`: seeded when it names none). -/
 structure CheckItem where
   entries : Nat
   scheme : String
   template : String
   tileWork : Nat
-  coins : Option PouwWindow.CoinMode := none
+  coins : Option String := none
   deriving DecidableEq, Repr
 
 def CheckItem.toJson (c : CheckItem) : Json :=
   let item : List (String × Json) :=
     [("entries", c.entries), ("scheme", c.scheme), ("template", c.template), ("tile_work", c.tileWork)]
   Json.mkObj (match c.coins with
-    | some m => (PouwWindow.COINS, Json.str m.name) :: item
+    | some m => (coinsKey, Json.str m) :: item
     | none => item)
 
 structure Params where
@@ -71,15 +73,12 @@ def ratioField (j : Json) (k : String) (ok : Core.Ratio → Bool) (what : String
 def paramsOf (j : Json) : V Params := do
   unless keys j == some paramsKeys do throw s!"keys are not {", ".intercalate paramsKeys}"
   let c := get j "check"
-  unless (keys c).map (·.filter (· != PouwWindow.COINS)) == some checkKeys do
-    throw s!"check's keys are not {", ".intercalate checkKeys}, and optionally {PouwWindow.COINS}"
-  let notMode := s!"check.{PouwWindow.COINS} is not live or seeded"
-  let coins : Option PouwWindow.CoinMode ← match PouwWindow.field? c PouwWindow.COINS with
+  unless (keys c).map (·.filter (· != coinsKey)) == some checkKeys do
+    throw s!"check's keys are not {", ".intercalate checkKeys}, and optionally {coinsKey}"
+  let coins : Option String ← match PouwWindow.field? c coinsKey with
     | none => pure none
-    | some (.str s) => match PouwWindow.CoinMode.ofName? s with
-      | some m => pure (some m)
-      | none => throw notMode
-    | some _ => throw notMode
+    | some (.str s) => if coinModes.contains s then pure (some s) else throw s!"check.{coinsKey} is not live or seeded"
+    | some _ => throw s!"check.{coinsKey} is not live or seeded"
   let some entries := (nat? (get c "entries")).filter (2 ≤ ·)
     | throw "check.entries is not a natural number of at least 2"
   unless get c "scheme" == .str scheme do throw s!"check.scheme is not {scheme}"
